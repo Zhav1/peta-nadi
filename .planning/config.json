@@ -1,0 +1,30 @@
+{
+  "project": "LRIP / PetaNadi",
+  "version": "1.0.0",
+  "created": "2026-07-05",
+  "workflow": {
+    "require_discussion": true,
+    "require_planning": true,
+    "require_verification": true,
+    "auto_commit": true,
+    "ai_spec_for_ai_phases": true,
+    "use_subagents": true
+  },
+  "model_profile": {
+    "primary": "claude-sonnet",
+    "planner": "claude-sonnet",
+    "reviewer": "claude-sonnet"
+  },
+  "tech_stack": {
+    "backend": "FastAPI (Python)",
+    "agent_framework": "LangGraph",
+    "frontend": "Next.js 14 + Mapbox GL JS + Deck.gl",
+    "database": "Supabase (PostgreSQL + PostGIS + TimescaleDB + pgvector)",
+    "cache_queue": "Redis (Streams + KV)",
+    "ai_models": ["gemini-flash", "deepseek-v3"],
+    "scraping": "Lightpanda"
+  },
+  "pilot_scope": "North Sumatra corridor (Belawan Port → Trans-Sumatra Highway)",
+  "deadline": "~4 weeks (hackathon)",
+  "team_size": 1
+}

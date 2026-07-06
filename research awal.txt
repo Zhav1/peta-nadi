@@ -1,0 +1,157 @@
+Dengan semangat kolaborasi dan inovasi, BI Bersama OJK, Industri, serta Mitra Stratregis lainnya berkolaborasi untuk mengundang Anda menjadi bagian dari PIDI - DIGDAYA X Hackathon 2026, sebuah inisiatif nasional yang dirancang untuk mengintegrasikan kompetisi dan perjalanan inovasi guna menghasilkan talenta dan solusi digital yang siap diimplementasikan dan berdampak bagi perekonomian Indonesia.
+
+Program ini menggabungkan pelatihan terstruktur dan kompetisi hackathon untuk membekali peserta dengan kompetensi teknis, pola pikir inovatif, serta pemahaman konteks nyata kebutuhan industri dan kepentingan publik. Peserta dipersiapkan menjadi talenta digital yang adaptif, kolaboratif, dan berorientasi dampak.
+
+Hackathon ini berfokus pada pencarian inovator dengan growth mentality yang memiliki semangat belajar, kemampuan beradaptasi, dan berkomitmen untuk menghasilkan prototype digital yang bermanfaat untuk menjawab tantangan prioritas nasional, memperkuat layanan publik, serta mendorong inklusi dan produktivitas ekonomi.
+
+Melalui PIDI - DIGDAYA X Hackathon 2026, Ubah idemu jadi inovasi nyata! Tingkatkan skill digital dengan sertifikat profesional, perluas peluang karier lewat job fair, dan raih hadiah hingga ratusan juta rupiah! Daftarkan ide inovasi tim anda sekarang.
+Tujuan utama dari program ini adalah membangun ekosistem inovasi digital nasional sebagai upaya dedikasi untuk negeri, yang mendorong penciptaan lapangan kerja dan pertumbuhan ekonomi melalui penciptaan nilai tambah bagi industri, didukung oleh pengembangan talenta, inovasi siap implementasi serta kebijakan dan kebutuhan publik.
+
+Peserta dapat memilih lebih dari satu problem statement, namun tetap dihitung sesuai dengan relevansi masalah dan solusi yang dihasilkan. Jika terdapat beberapa ide atau tema, dapat dipilih salah satu atau digabungkan dalam 1 deck/proposal.
+
+Peserta dapat menggunakan berbagai macam teknologi yang memiliki keterhubungan terhadap AI/ML dan blockchain dalam Submit Proposal dan/atau Pengembangan Prototype
+
+Terdapat 2 kriteria di tahap semifinal dan final yaitu:
+1) Kriteria penilaian teknis, antara lain Relevansi Problem Statement, Inovasi dan Keunikan, Kualitas Teknis, serta Efektivitas dan Dampak.
+2) Kriteria administratif, yaitu paling sedikit 1 sertifikasi industri sesuai pilihan yang disediakan program DIGDAYA, dan sertifikasi PIDI (online exam, dengan passing grade 70%).
+Khusus untuk tahapan Capstone Project, peserta wajib membuat prototype dan akan dinilai melalui tahapan karantina dan penjurian (pitching) untuk menentukan juara Hackathon 2026.
+
+* Kriteria penilaian teknis juga digunakan untuk memilih proposal di tahap awal.
+
+Program ini terdiri dari beberapa tahapan:
+- Registrasi dan Submit Proposal
+- Seleksi Proposal (Draft Pertama dan Kedua)
+- Essential Training
+- Semifinal (480 tim)
+- Practitioner Training
+- Final Stage (80 tim)
+- Capstone Project & Business Matching
+- Final Judging
+
+Problem Statements
+Penguatan Ketahanan dan Inovasi Keuangan
+Manajemen Risiko
+	Fraud Detection Systems (FDS)
+	APU/PPT, Tracing Transaction termasuk kripto
+	Perlindungan Konsumen
+	Cyber Security & Data Protection
+	Regtech & Suptech
+Elektronifikasi Keuangan Daerah
+	Sistem Pemungutan Pendapatan Daerah yang Cerdas (Smart Revenue Collection)
+	Smart Belanja Daerah
+	Smart City
+	Penasihat Investasi Daerah
+	Project Crowdfunding
+Memperluas Investor Ritel
+	Penasihat Investasi Keuangan
+	Literasi Investor Ritel
+	Asisten Keuangan Pribadi
+	Analisis Perilaku Pasar
+	Rekomendasi Produk Keuangan dan Analisis Risiko
+Digitalisasi Keuangan Syariah
+	Investasi SUKUK Digital
+	Analitik ZISWAF
+	Platform Sertifikasi Halal
+	Komersialisasi Produk Pesantren
+	Pembiayaan UMKM Syariah
+
+Peningkatan Produktivitas, Ketahanan Pangan, dan Penciptaan Lapangan Kerja
+Inklusi Ekonomi (UMKM)
+Pemanfaatan Data Alternatif / Credit Scoring
+Digital Advisor untuk Ekspor UMKM
+Scoring Kesiapan Ekspor
+B2B Matchmaking untuk Bahan Baku
+Matchmaking Pembeli-Penjual Ekspor
+Digitalisasi Ketahanan Pangan
+Platform Penjualan Langsung dari Petani ke Konsumen
+Platform Matching Demand-Supply Antarwilayah
+Pemantauan Inflasi
+Pembiayaan Petani & Penajaman Sasaran Subsidi
+Logistik Pangan Cerdas
+Digitalisasi Penciptaan Lapangan Kerja
+Platform Job Matching Berbasis Kecerdasan Artifisial
+Skill Gap Advisor
+Personalized Training
+Analitik Kesesuaian Pekerjaan dan Tenaga Kerja
+Job Matching Antarwilayah
+
+Percepatan Layanan Publik, Ekonomi Kreatif, dan Ekspor Jasa Digital
+Digitalisasi Layanan Publik & Pariwisata
+Integrated Smart Ticketing
+Personalisasi Pengalaman Pariwisata
+Platform Perizinan dan Pengawasan Vendor MBG
+Pengayaan Data untuk Penyaluran Bantuan Sosial Digital
+Pemantauan dan Restorasi Lingkungan
+Digitalisasi Ekonomi Kreatif
+Permainan untuk Nasionalisme dan Edukasi
+Animasi
+Digitalisasi Museum dan Warisan Budaya
+IP Protection
+Market Insight Industri Kreatif
+Digitalisasi Ekspor Layanan Digital
+Platform Kerja Jarak Jauh (Remote-work)
+Layanan IT & Software
+Penyelesaian Transaksi Lintas Negara (Cross-Border)
+Otomatisasi Layanan Pelanggan Multibahasa
+Local Language AI (LLM)
+
+Past Winning Project 2024 & 2025
+### 1. GardaChain: Lightweight LLM & Security Analysis
+* *Focus:* RegTech & Blockchain Security.
+* *The Problem:* High costs and complexity of smart contract audits leading to vulnerabilities in decentralized finance (DeFi).
+* *The Solution:* A specialized, lightweight LLM optimized for real-time security auditing and vulnerability detection within smart contracts.
+* *Impact:* Reduces the barrier to entry for secure Web3 development and mitigates financial loss from exploits.
+
+### 2. Garda AI (Meaningful Intelligence): Hybrid Graph-AI Federatif
+* *Focus:* Financial Fraud Prevention.
+* *The Problem:* Sophisticated fraud syndicates operating across multiple financial institutions (banks, e-wallets, QRIS) where data is siloed.
+* *The Solution:* A federated learning approach combined with Graph AI that allows institutions to detect fraud patterns collectively without sharing sensitive raw data.
+* *Impact:* Establishes a "National Fraud Knowledge Graph" to identify money laundering and account takeover (ATO) patterns in real-time.
+
+### 3. Chain Intelligence (CIA): Crypto Monitoring & Compliance
+* *Focus:* Crypto Asset Regulation.
+* *The Problem:* Rapid growth of crypto transactions in Indonesia makes it difficult for regulators to monitor compliance and illicit activities.
+* *The Solution:* An on-chain intelligence platform that provides real-time monitoring and compliance scoring for crypto transactions and wallets.
+* *Impact:* Enables regulators (BI/OJK) to maintain financial stability and ensure AML/CFT (Anti-Money Laundering) compliance in the digital asset space.
+
+### 4. Niriksagara: Infrastructure Risk Mapping
+* *Focus:* GovTech & Public Infrastructure.
+* *The Problem:* Inefficient and manual monitoring of infrastructure (roads, bridges) leading to delayed repairs and economic disruption.
+* *The Solution:* Integration of Computer Vision and AI to automate the detection of road damage and infrastructure degradation through visual data feeds.
+* *Impact:* Provides a predictive maintenance dashboard for government agencies to optimize public spending and logistics safety.
+
+### 5. UMKM SIAP: B2B Export Automatching
+* *Focus:* SME Growth & Global Trade.
+* *The Problem:* SMEs struggle to scale internationally due to lack of market knowledge, complex export regulations, and difficulty finding buyers.
+* *The Solution:* An AI-driven "Export Consultant" that automates buyer matching and provides step-by-step regulatory guidance for Indonesian SMEs.
+* *Impact:* Accelerates "Digitally-Delivered Service Exports" and integrates local businesses into the global supply chain.
+
+### 6. SIBISA (Double Core Team): Narrative AI/RAG for Social Assistance
+* *Focus:* Public Welfare Efficiency.
+* *The Problem:* Mis-targeting of social assistance (BLT) due to fragmented data and subjective manual reporting.
+* *The Solution:* Utilizes Narrative AI and Retrieval-Augmented Generation (RAG) to process qualitative field reports and cross-reference them for accurate eligibility scoring.
+* *Impact:* Ensures social aid reaches the correct recipients, reducing leakages and improving the national poverty alleviation strategy.
+
+### 7. Dewantara: AI Bot Builder for SMEs
+* *Focus:* SME Digitalization.
+* *The Problem:* High technical barriers for small businesses to implement AI customer service and operational automation.
+* *The Solution:* A "5-minute" AI builder that allows SMEs to create custom RAG-based chatbots on WhatsApp to handle sales, inquiries, and simple inventory management.
+* *Impact:* Lowers the operational cost of SMEs while increasing their digital responsiveness and "always-on" capability.
+
+### 8. ChatBIJAK: GraphRAG Fraud Detection for Messaging
+* *Focus:* Consumer Protection.
+* *The Problem:* Massive rise in fraud via messaging apps (WhatsApp/Telegram) where users lack immediate tools to verify links or messages.
+* *The Solution:* An AI-powered protection layer using GraphRAG and SearXNG to analyze text, images, and URLs within chat interfaces for potential scams.
+* *Impact:* Provides a first-line defense for the general public, directly reducing financial losses from social engineering and phishing.
+
+### 9. KancaKids: Financial Literacy for the Next Generation
+* *Focus:* Education & Financial Inclusion.
+* *The Problem:* Extremely low financial literacy rates among Indonesian children, leading to poor financial habits in adulthood.
+* *The Solution:* An interactive, story-driven platform that uses AI to personalize financial education through gamified experiences and narrative adventures.
+* *Impact:* Builds a foundation for long-term financial resilience and digital economy participation from an early age.
+
+### 10. Tara by IONIFY: Enterprise Upskilling & Skill-Matching
+* *Focus:* Human Capital & Labor Markets.
+* *The Problem:* A widening skill gap between the needs of the modern digital industry and the current workforce capabilities.
+* *The Solution:* An AI-powered enterprise platform that maps internal employee skills, identifies gaps, and provides personalized upskilling pathways.
+* *Impact:* Increases organizational agility and ensures the Indonesian workforce remains competitive in the global "remote-work" and "digital-service" economy.
