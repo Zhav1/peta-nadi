@@ -11,7 +11,7 @@
 | Phase | Name | Status | Notes |
 |-------|------|--------|-------|
 | 0 | Foundation & Repo Setup | **COMPLETE** ✅ | Git: `f404517`, `4f48e8e` |
-| 1 | Data Ingestion Pipeline & API Adapters | TODO | BMKG + PIHPS partially researched (src/) |
+| 1 | Data Ingestion Pipeline & API Adapters | **PLANNED** | See `.planning/phases/phase-1/PLAN.md` |
 | 2 | OSINT & Headless Scraping (Lightpanda) | TODO | |
 | 3 | LangGraph Agent Swarm — Core Reasoning | TODO | **Requires AI-SPEC** — run `/gsd-ai-integration-phase 3` before planning |
 | 4 | 3D Map Dashboard (Next.js + Mapbox + Deck.gl) | TODO | |

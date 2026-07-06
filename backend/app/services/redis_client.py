@@ -4,6 +4,8 @@ Provides a connection to Redis Streams (event bus) and Redis KV (STM).
 """
 import logging
 import redis
+import json
+from datetime import datetime, timezone
 from typing import Optional
 from app.config import get_settings
 
@@ -50,22 +52,28 @@ def close_redis():
 
 def publish_event(stream: str, event: dict) -> str:
     """
-    Publish an event to a Redis Stream.
-    Returns the event ID assigned by Redis.
-    
-    Args:
-        stream: Stream key (use constants above, e.g. STREAM_BMKG)
-        event: Dict of string key-value pairs (all values must be strings)
-    
-    Returns:
-        Redis-assigned event ID (e.g., '1234567890123-0')
+    Publish an event to a Redis Stream. Falls back to a Redis List
+    if the Redis server does not support streams (Redis < 5.0).
     """
     r = get_redis()
     # Stringify all values (Redis Streams require string values)
     str_event = {k: str(v) for k, v in event.items()}
-    event_id = r.xadd(stream, str_event, maxlen=10_000, approximate=True)
-    logger.debug(f"Published to {stream}: id={event_id}")
-    return event_id
+    
+    try:
+        event_id = r.xadd(stream, str_event, maxlen=10_000, approximate=True)
+        logger.debug(f"Published to {stream} (Stream): id={event_id}")
+    except redis.exceptions.ResponseError as e:
+        if "unknown command" in str(e).lower() and "xadd" in str(e).lower():
+            # Fallback to List for Redis < 5.0 (like local Windows Redis 3.0.504)
+            serialized = json.dumps(str_event)
+            r.lpush(stream, serialized)
+            r.ltrim(stream, 0, 9999)  # Keep max 10,000 items
+            event_id = f"fallback-list-{datetime.now(timezone.utc).timestamp()}"
+            logger.debug(f"Published to fallback List {stream}: id={event_id}")
+        else:
+            raise e
+            
+    return str(event_id)
 
 
 def get_stm_state(crisis_id: str) -> dict:
@@ -79,5 +87,7 @@ def set_stm_state(crisis_id: str, state: dict, ttl_seconds: int = 86400):
     """Update the STM state for an active crisis. TTL defaults to 24 hours."""
     r = get_redis()
     key = f"{STM_PREFIX}{crisis_id}"
-    r.hset(key, mapping={k: str(v) for k, v in state.items()})
+    # Set each field individually for compatibility with Redis 3.0
+    for k, v in state.items():
+        r.hset(key, k, str(v))
     r.expire(key, ttl_seconds)
