@@ -24,7 +24,7 @@ SCENARIOS = {
     "belawan_flood": {
         "description": "Belawan Port closure + Trans-Sumatra Highway flooding — North Sumatra",
         "region": "north_sumatra",
-        "corridor": "Belawan Port → Trans-Sumatra Highway",
+        "corridor": "Belawan Port -> Trans-Sumatra Highway",
         "events": [
             # TODO: Phase 6 — populate with full synthetic event dataset:
             # - NASA FIRMS wildfire polygon (mocked)
