@@ -1,0 +1,24 @@
+# Normalize line endings
+* text=auto
+
+# Force LF for code files (important for cross-platform dev)
+*.py text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.sql text eol=lf
+*.css text eol=lf
+*.env text eol=lf
+*.example text eol=lf
+
+# Binary files — no line ending conversion
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.pdf binary
+*.pptx binary
+*.docx binary
+*.parquet binary
