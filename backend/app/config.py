@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     # External APIs
     tomtom_api_key: str = ""
     aisstream_api_key: str = ""
+    nasa_firms_map_key: str = ""
     gemini_api_key: str = ""
     deepseek_api_key: str = ""
     whatsapp_token: str = ""
