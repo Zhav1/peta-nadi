@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-07-05
 **Active Milestone:** M1 — Hackathon MVP (North Sumatra Corridor)
-**Current Phase:** Phase 0 complete ✅ — run `/gsd-plan-phase 1` to plan Data Ingestion
+**Current Phase:** Phase 1 complete ✅ — run `/gsd-plan-phase 2` to plan OSINT & Scraping
 
 ---
 
@@ -11,7 +11,7 @@
 | Phase | Name | Status | Notes |
 |-------|------|--------|-------|
 | 0 | Foundation & Repo Setup | **COMPLETE** ✅ | Git: `f404517`, `4f48e8e` |
-| 1 | Data Ingestion Pipeline & API Adapters | **PLANNED** | See `.planning/phases/phase-1/PLAN.md` |
+| 1 | Data Ingestion Pipeline & API Adapters | **COMPLETE** ✅ | Git: `a33c94c` |
 | 2 | OSINT & Headless Scraping (Lightpanda) | TODO | |
 | 3 | LangGraph Agent Swarm — Core Reasoning | TODO | **Requires AI-SPEC** — run `/gsd-ai-integration-phase 3` before planning |
 | 4 | 3D Map Dashboard (Next.js + Mapbox + Deck.gl) | TODO | |
