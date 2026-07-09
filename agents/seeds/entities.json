@@ -1,0 +1,170 @@
+[
+  {
+    "name": "Belawan Port",
+    "entity_type": "port",
+    "lat": 3.7802,
+    "lon": 98.6890,
+    "region": "north_sumatra",
+    "metadata": {"importance": "high", "description": "Primary sea port of North Sumatra"}
+  },
+  {
+    "name": "Dumai Port",
+    "entity_type": "port",
+    "lat": 1.6700,
+    "lon": 101.4500,
+    "region": "central_sumatra",
+    "metadata": {"importance": "medium", "description": "Major palm oil exporting port"}
+  },
+  {
+    "name": "Tanjung Balai Port",
+    "entity_type": "port",
+    "lat": 2.9700,
+    "lon": 99.8000,
+    "region": "north_sumatra",
+    "metadata": {"importance": "medium", "description": "Secondary regional port"}
+  },
+  {
+    "name": "Kuala Tanjung Port",
+    "entity_type": "port",
+    "lat": 3.3800,
+    "lon": 99.4500,
+    "region": "north_sumatra",
+    "metadata": {"importance": "medium", "description": "New industrial port hub"}
+  },
+  {
+    "name": "Trans-Sumatra Hwy (Medan–Rantau Prapat)",
+    "entity_type": "route",
+    "lat": 2.8000,
+    "lon": 99.2000,
+    "region": "north_sumatra",
+    "metadata": {"corridor": "trans_sumatra", "lanes": 2}
+  },
+  {
+    "name": "Trans-Sumatra Hwy (Rantau Prapat–Padang)",
+    "entity_type": "route",
+    "lat": 1.2000,
+    "lon": 100.5000,
+    "region": "sumatra",
+    "metadata": {"corridor": "trans_sumatra_south", "lanes": 2}
+  },
+  {
+    "name": "Belawan Access Road",
+    "entity_type": "route",
+    "lat": 3.7300,
+    "lon": 98.6700,
+    "region": "north_sumatra",
+    "metadata": {"corridor": "belawan_access", "lanes": 4}
+  },
+  {
+    "name": "Binjai Bypass",
+    "entity_type": "route",
+    "lat": 3.6300,
+    "lon": 98.5000,
+    "region": "north_sumatra",
+    "metadata": {"corridor": "binjai_bypass", "lanes": 2}
+  },
+  {
+    "name": "Medan Distribution Hub",
+    "entity_type": "warehouse",
+    "lat": 3.5800,
+    "lon": 98.6800,
+    "region": "north_sumatra",
+    "metadata": {"operator": "BULOG", "capacity_tons": 50000}
+  },
+  {
+    "name": "Pematangsiantar Warehouse",
+    "entity_type": "warehouse",
+    "lat": 2.9600,
+    "lon": 99.0600,
+    "region": "north_sumatra",
+    "metadata": {"operator": "BULOG", "capacity_tons": 15000}
+  },
+  {
+    "name": "Rantau Prapat Depot",
+    "entity_type": "warehouse",
+    "lat": 2.1000,
+    "lon": 99.8200,
+    "region": "north_sumatra",
+    "metadata": {"operator": "Pertamina", "capacity_tons": 25000}
+  },
+  {
+    "name": "Stabat Warehouse",
+    "entity_type": "warehouse",
+    "lat": 3.7600,
+    "lon": 98.4500,
+    "region": "north_sumatra",
+    "metadata": {"operator": "BULOG", "capacity_tons": 10000}
+  },
+  {
+    "name": "Beras (rice)",
+    "entity_type": "commodity",
+    "lat": null,
+    "lon": null,
+    "region": "national",
+    "metadata": {"staple": true}
+  },
+  {
+    "name": "Minyak Goreng (cooking oil)",
+    "entity_type": "commodity",
+    "lat": null,
+    "lon": null,
+    "region": "national",
+    "metadata": {"staple": true}
+  },
+  {
+    "name": "BBM Solar (diesel)",
+    "entity_type": "commodity",
+    "lat": null,
+    "lon": null,
+    "region": "national",
+    "metadata": {"staple": false, "type": "fuel"}
+  },
+  {
+    "name": "BBM Pertalite (petrol)",
+    "entity_type": "commodity",
+    "lat": null,
+    "lon": null,
+    "region": "national",
+    "metadata": {"staple": false, "type": "fuel"}
+  },
+  {
+    "name": "Gula (sugar)",
+    "entity_type": "commodity",
+    "lat": null,
+    "lon": null,
+    "region": "national",
+    "metadata": {"staple": true}
+  },
+  {
+    "name": "Tepung Terigu (flour)",
+    "entity_type": "commodity",
+    "lat": null,
+    "lon": null,
+    "region": "national",
+    "metadata": {"staple": true}
+  },
+  {
+    "name": "PT Wilmar International",
+    "entity_type": "supplier",
+    "lat": 3.7900,
+    "lon": 98.6800,
+    "region": "north_sumatra",
+    "metadata": {"industry": "palm_oil"}
+  },
+  {
+    "name": "BULOG North Sumatra",
+    "entity_type": "supplier",
+    "lat": 3.5900,
+    "lon": 98.6700,
+    "region": "north_sumatra",
+    "metadata": {"industry": "grain"}
+  },
+  {
+    "name": "Pertamina Depot Medan",
+    "entity_type": "supplier",
+    "lat": 3.7500,
+    "lon": 98.6900,
+    "region": "north_sumatra",
+    "metadata": {"industry": "petroleum"}
+  }
+]

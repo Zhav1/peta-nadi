@@ -1,0 +1,104 @@
+[
+  {
+    "from_entity": "Belawan Port",
+    "to_entity": "Belawan Access Road",
+    "relation_type": "DEPENDS_ON",
+    "weight": 1.0
+  },
+  {
+    "from_entity": "Belawan Access Road",
+    "to_entity": "Trans-Sumatra Hwy (Medan–Rantau Prapat)",
+    "relation_type": "SHIPS_VIA",
+    "weight": 1.0
+  },
+  {
+    "from_entity": "Trans-Sumatra Hwy (Medan–Rantau Prapat)",
+    "to_entity": "Medan Distribution Hub",
+    "relation_type": "SUPPLIES",
+    "weight": 0.9
+  },
+  {
+    "from_entity": "Medan Distribution Hub",
+    "to_entity": "Pematangsiantar Warehouse",
+    "relation_type": "SUPPLIES",
+    "weight": 0.8
+  },
+  {
+    "from_entity": "Medan Distribution Hub",
+    "to_entity": "Rantau Prapat Depot",
+    "relation_type": "SUPPLIES",
+    "weight": 0.8
+  },
+  {
+    "from_entity": "Medan Distribution Hub",
+    "to_entity": "Stabat Warehouse",
+    "relation_type": "SUPPLIES",
+    "weight": 0.7
+  },
+  {
+    "from_entity": "Medan Distribution Hub",
+    "to_entity": "Beras (rice)",
+    "relation_type": "DISTRIBUTES",
+    "weight": 1.0
+  },
+  {
+    "from_entity": "Medan Distribution Hub",
+    "to_entity": "Minyak Goreng (cooking oil)",
+    "relation_type": "DISTRIBUTES",
+    "weight": 1.0
+  },
+  {
+    "from_entity": "Medan Distribution Hub",
+    "to_entity": "BBM Solar (diesel)",
+    "relation_type": "DISTRIBUTES",
+    "weight": 1.0
+  },
+  {
+    "from_entity": "Medan Distribution Hub",
+    "to_entity": "BBM Pertalite (petrol)",
+    "relation_type": "DISTRIBUTES",
+    "weight": 1.0
+  },
+  {
+    "from_entity": "PT Wilmar International",
+    "to_entity": "Minyak Goreng (cooking oil)",
+    "relation_type": "SUPPLIES",
+    "weight": 0.9
+  },
+  {
+    "from_entity": "PT Wilmar International",
+    "to_entity": "Belawan Port",
+    "relation_type": "SHIPS_VIA",
+    "weight": 0.9
+  },
+  {
+    "from_entity": "Pertamina Depot Medan",
+    "to_entity": "BBM Solar (diesel)",
+    "relation_type": "SUPPLIES",
+    "weight": 1.0
+  },
+  {
+    "from_entity": "Pertamina Depot Medan",
+    "to_entity": "BBM Pertalite (petrol)",
+    "relation_type": "SUPPLIES",
+    "weight": 1.0
+  },
+  {
+    "from_entity": "Pertamina Depot Medan",
+    "to_entity": "Medan Distribution Hub",
+    "relation_type": "SUPPLIES",
+    "weight": 0.9
+  },
+  {
+    "from_entity": "BULOG North Sumatra",
+    "to_entity": "Beras (rice)",
+    "relation_type": "SUPPLIES",
+    "weight": 1.0
+  },
+  {
+    "from_entity": "BULOG North Sumatra",
+    "to_entity": "Medan Distribution Hub",
+    "relation_type": "SUPPLIES",
+    "weight": 1.0
+  }
+]
