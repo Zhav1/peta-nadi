@@ -71,7 +71,38 @@ Examples:
     )
     args = parser.parse_args()
 
-    scenario = SCENARIOS[args.scenario]
+    # Load synthetic dataset from data/synthetic/pihps_sample.json
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    json_path = os.path.join(base_dir, "data", "synthetic", "pihps_sample.json")
+    
+    loaded_events = []
+    if os.path.exists(json_path):
+        try:
+            with open(json_path, 'r') as f:
+                data = json.load(f)
+            
+            # We import here to avoid loading services during arg parsing
+            from app.services.redis_client import STREAM_PIHPS, STREAM_SOCIAL
+            
+            for ev in data.get("events", []):
+                ev_copy = ev.copy()
+                ev_copy["_stream"] = STREAM_PIHPS
+                loaded_events.append(ev_copy)
+                
+            for ev in data.get("social_events", []):
+                ev_copy = ev.copy()
+                ev_copy["_stream"] = STREAM_SOCIAL
+                loaded_events.append(ev_copy)
+                
+        except Exception as e:
+            print(f"Error loading synthetic dataset: {e}")
+    else:
+        print(f"Warning: Synthetic dataset not found at {json_path}")
+
+    # Set events list on scenario
+    scenario = SCENARIOS[args.scenario].copy()
+    scenario["events"] = loaded_events
+
     print_scenario_info(scenario)
 
     if args.dry_run:
@@ -79,12 +110,10 @@ Examples:
         return
 
     if len(scenario["events"]) == 0:
-        print("[STUB] run_demo.py is a Phase 0 skeleton.")
-        print("       Full synthetic event injection is implemented in Phase 6.")
-        print("       Run with --dry-run to confirm the script loads correctly.")
+        print("[STUB] No events to inject. Check if data/synthetic/pihps_sample.json is populated.")
         return
 
-    # Phase 6: inject events into Redis Streams
+    # Ingest events into Redis Streams
     from dotenv import load_dotenv
     load_dotenv()
 
@@ -94,11 +123,38 @@ Examples:
     print(f"[Redis] Connected. Injecting {len(scenario['events'])} events...\n")
 
     for i, event in enumerate(scenario["events"], 1):
-        stream = event.pop("_stream", STREAM_BMKG)
-        event_id = publish_event(stream, event)
-        print(f"  [{i}/{len(scenario['events'])}] → {stream} | id={event_id}")
+        # Pop the stream key so it doesn't pollute the raw event body
+        event_to_publish = event.copy()
+        stream = event_to_publish.pop("_stream", STREAM_BMKG)
+        
+        event_id = publish_event(stream, event_to_publish)
+        print(f"  [{i}/{len(scenario['events'])}] -> {stream} | id={event_id} | {event_to_publish.get('title')}")
+
 
     print(f"\n[DONE] All events injected. Check the dashboard at http://localhost:3000")
+
+    # Phase 3: Trigger agent pipeline with synthetic Belawan crisis event
+    print("\n[DEMO] Triggering LangGraph agent swarm with Belawan Port closure scenario...")
+
+    import asyncio
+    from app.workers.agent_worker import run_crisis_event
+
+    synthetic_crisis = {
+        "event_type": "port_closure",
+        "source": "aisstream",
+        "severity": "high",
+        "lat": 3.7956,
+        "lon": 98.6722,
+        "region": "north_sumatra",
+        "title": "Belawan Port — Simulated Closure (Flooding)",
+        "is_simulated": True,
+    }
+
+    final_state = asyncio.run(run_crisis_event(synthetic_crisis))
+    print(f"[DEMO] Pipeline complete. Status: {final_state['status']}")
+    print(f"[DEMO] Confidence: {final_state.get('overall_confidence', 0):.2%}")
+    if final_state.get("decision_support_output"):
+        print(f"\n[DEMO] Executive Summary:\n{final_state['decision_support_output']}")
 
 
 if __name__ == "__main__":
