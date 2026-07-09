@@ -1,0 +1,152 @@
+[
+  {
+    "title": "Belawan Port Flooding — January 2021",
+    "description": "Severe flooding closed Belawan Port for 12 days in January 2021. Caused by upstream Deli River overflow. Cooking oil supply to Medan disrupted; prices rose 38% in 2 weeks.",
+    "crisis_type": "port_closure",
+    "affected_region": "north_sumatra",
+    "affected_commodities": ["cooking_oil", "rice"],
+    "inflation_multiplier": 1.38,
+    "recovery_days": 12,
+    "sources": ["BPS North Sumatra 2021", "Kompas 2021-01-15"]
+  },
+  {
+    "title": "Trans-Sumatra Highway Landslide — November 2022",
+    "description": "A massive landslide blocked the Trans-Sumatra Highway at km 147 for 7 days. Fuel supply was delayed, causing petrol and diesel prices to spike 22%, and rice prices rose 15% due to transportation delays.",
+    "crisis_type": "landslide",
+    "affected_region": "north_sumatra",
+    "affected_commodities": ["fuel", "rice"],
+    "inflation_multiplier": 1.22,
+    "recovery_days": 7,
+    "sources": ["Tribun News 2022-11-20", "Dishub Sumut"]
+  },
+  {
+    "title": "Belawan Port Congestion Pre-Lebaran — April 2023",
+    "description": "High seasonal traffic and custom clearance bottlenecks caused a 10-day delay at Belawan Port. Port queue depth exceeded 15 vessels, causing general commodity prices to rise 12%.",
+    "crisis_type": "port_congestion",
+    "affected_region": "north_sumatra",
+    "affected_commodities": ["cooking_oil", "rice", "sugar"],
+    "inflation_multiplier": 1.12,
+    "recovery_days": 10,
+    "sources": ["Antara News 2023-04-18"]
+  },
+  {
+    "title": "Dumai Port Strike Disruption — August 2020",
+    "description": "Port workers union strike halted palm oil loading at Dumai Port for 5 days. Palm oil/cooking oil supply chains in North and Central Sumatra stalled, leading to an 18% spike in cooking oil retail prices.",
+    "crisis_type": "port_closure",
+    "affected_region": "central_sumatra",
+    "affected_commodities": ["cooking_oil"],
+    "inflation_multiplier": 1.18,
+    "recovery_days": 5,
+    "sources": ["Bloomberg 2020-08-10"]
+  },
+  {
+    "title": "Trans-Sumatra Highway Flooding Rantau Prapat — December 2019",
+    "description": "Heavy monsoon rains caused flooding up to 1.5 meters on the Trans-Sumatra Highway near Rantau Prapat. Traffic was cut off for 6 days. Fuel trucks could not transit, causing local diesel prices to spike 30%.",
+    "crisis_type": "flood",
+    "affected_region": "north_sumatra",
+    "affected_commodities": ["fuel"],
+    "inflation_multiplier": 1.30,
+    "recovery_days": 6,
+    "sources": ["Kompas 2019-12-28", "Pertamina Regional I"]
+  },
+  {
+    "title": "Tanjung Balai Port Closure Cyclone — October 2021",
+    "description": "A severe tropical cyclone forced the closure of Tanjung Balai Port for 8 days. Cargo operations were suspended. Rice imports and local distribution were delayed, causing a 20% increase in local rice prices.",
+    "crisis_type": "port_closure",
+    "affected_region": "north_sumatra",
+    "affected_commodities": ["rice"],
+    "inflation_multiplier": 1.20,
+    "recovery_days": 8,
+    "sources": ["BMKG Historical Report 2021", "BULOG Sumut"]
+  },
+  {
+    "title": "Medan Distribution Hub Fire — March 2022",
+    "description": "A major fire destroyed 40% of the BULOG Medan Distribution Hub. Cooking oil stocks were incinerated. Local retail prices for branded and bulk cooking oil immediately rose 25% due to panic buying.",
+    "crisis_type": "fire",
+    "affected_region": "north_sumatra",
+    "affected_commodities": ["cooking_oil"],
+    "inflation_multiplier": 1.25,
+    "recovery_days": 15,
+    "sources": ["Waspada Daily 2022-03-05"]
+  },
+  {
+    "title": "Trans-Sumatra Highway Bridge Collapse Binjai — June 2018",
+    "description": "An overloaded multi-axle truck caused a partial bridge collapse on the highway segment near Binjai. Heavy traffic was diverted for 15 days, causing fuel transport costs to rise, translating to a 35% local price hike.",
+    "crisis_type": "bridge_collapse",
+    "affected_region": "north_sumatra",
+    "affected_commodities": ["fuel", "sugar"],
+    "inflation_multiplier": 1.35,
+    "recovery_days": 15,
+    "sources": ["PUPR Report 2018"]
+  },
+  {
+    "title": "Belawan Port Crane Malfunction — September 2023",
+    "description": "A mechanical failure in container handling cranes at Terminal A of Belawan Port reduced container throughput by 50% for 3 days. Cooking oil export shipments delayed, causing a minor 5% price increase.",
+    "crisis_type": "port_congestion",
+    "affected_region": "north_sumatra",
+    "affected_commodities": ["cooking_oil"],
+    "inflation_multiplier": 1.05,
+    "recovery_days": 3,
+    "sources": ["Pelindo I Operational Log"]
+  },
+  {
+    "title": "El Nino Drought and Wildfire — August 2023",
+    "description": "El Nino weather patterns caused extreme drought and widespread wildfires in agricultural regions of North Sumatra. Rice crop yields fell 40%, causing market rice prices to rise 28% over 3 weeks.",
+    "crisis_type": "wildfire",
+    "affected_region": "north_sumatra",
+    "affected_commodities": ["rice"],
+    "inflation_multiplier": 1.28,
+    "recovery_days": 30,
+    "sources": ["BMKG Climate Bulletin 2023", "Kementan regional data"]
+  },
+  {
+    "title": "Pematangsiantar Access Road Flood — May 2020",
+    "description": "Flash flooding on secondary access roads leading to Pematangsiantar cut off local supply routes for 4 days. Fuel trucks had to take a 120km detour, causing local fuel prices to rise 18%.",
+    "crisis_type": "flood",
+    "affected_region": "north_sumatra",
+    "affected_commodities": ["fuel"],
+    "inflation_multiplier": 1.18,
+    "recovery_days": 4,
+    "sources": ["Analisa Daily 2020-05-14"]
+  },
+  {
+    "title": "Stabat Junction Congestion — October 2022",
+    "description": "Severe flooding at Stabat Junction blocked the main highway link between Medan and Aceh for 3 days. Minor supply shocks occurred for perishable goods and cooking oil, leading to a temporary 6% price spike.",
+    "crisis_type": "flood",
+    "affected_region": "north_sumatra",
+    "affected_commodities": ["cooking_oil"],
+    "inflation_multiplier": 1.06,
+    "recovery_days": 3,
+    "sources": ["Aceh Post 2022-10-12"]
+  },
+  {
+    "title": "Lubuk Pakam Toll Closure Maintenance — February 2023",
+    "description": "Scheduled maintenance closed the Lubuk Pakam toll exit for 2 days. Cargo traffic redirected to local arterial roads, causing minor traffic delays and a 3% increase in fuel consumption costs.",
+    "crisis_type": "congestion",
+    "affected_region": "north_sumatra",
+    "affected_commodities": ["fuel"],
+    "inflation_multiplier": 1.03,
+    "recovery_days": 2,
+    "sources": ["Jasa Marga Update"]
+  },
+  {
+    "title": "Kuala Tanjung New Port Disruption — July 2021",
+    "description": "System integration failure during the transition of bulk cargo operations to Kuala Tanjung Port caused terminal operations to stall for 5 days. Cooking oil shipments delayed, raising regional prices 8%.",
+    "crisis_type": "port_congestion",
+    "affected_region": "north_sumatra",
+    "affected_commodities": ["cooking_oil"],
+    "inflation_multiplier": 1.08,
+    "recovery_days": 5,
+    "sources": ["Pelindo I Transition Report"]
+  },
+  {
+    "title": "Trans-Sumatra Highway Rockslide Sibolga — March 2019",
+    "description": "A rockslide closed the mountainous road segment linking Sibolga to Tarutung for 9 days. Fresh food and fish distribution from the coast was blocked, causing commodity prices in Tarutung/Medan to jump 40%.",
+    "crisis_type": "landslide",
+    "affected_region": "north_sumatra",
+    "affected_commodities": ["fish", "rice"],
+    "inflation_multiplier": 1.40,
+    "recovery_days": 9,
+    "sources": ["Sinar Indonesia Baru 2019-03-22"]
+  }
+]

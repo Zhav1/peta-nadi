@@ -29,6 +29,33 @@ class RouteRecommendation(TypedDict):
     risk_score: float                   # 0.0 - 1.0
 
 
+class NormalizedEvent(TypedDict):
+    source: str         # 'bmkg', 'tomtom', 'aisstream', 'nasa_firms', 'osint'
+    event_type: str     # 'flood', 'congestion', 'port_closure', 'fire', 'price_spike'
+    severity: str       # 'low', 'medium', 'high', 'critical'
+    raw_payload: Dict[str, Any]
+    validated: bool
+    validation_errors: List[str]
+
+
+class LTMEpisode(TypedDict):
+    episode_id: str
+    title: str
+    description: str
+    crisis_type: str
+    inflation_multiplier: float
+    recovery_days: int
+    similarity_score: float
+
+
+class GraphRAGNode(TypedDict):
+    entity_id: str
+    entity_type: str    # 'port', 'route', 'warehouse', 'commodity', 'supplier'
+    name: str
+    relation: str       # 'DEPENDS_ON', 'SHIPS_VIA', 'SUPPLIES', 'LOCATED_IN'
+    impact_score: float
+
+
 class CrisisState(TypedDict):
     """
     The central state object shared across all LangGraph agents.
@@ -66,6 +93,15 @@ class CrisisState(TypedDict):
 
     # GraphRAG traversal result
     causal_chain: Optional[List[Dict[str, str]]]   # [{node, relation, node}, ...]
+
+    # New fields for Phase 3
+    normalized_event: Optional[NormalizedEvent]
+    hazard_polygons: Optional[List[Dict]]
+    congestion_forecast: Optional[Dict[str, Any]]
+    ltm_episodes: Optional[List[LTMEpisode]]
+    graphrag_chain: Optional[List[GraphRAGNode]]
+    consensus_breakdown: Optional[Dict[str, float]]
+    validated: bool
 
     # Metadata
     created_at: str                     # ISO 8601
