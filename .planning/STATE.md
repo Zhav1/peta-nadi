@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-07-05
 **Active Milestone:** M1 — Hackathon MVP (North Sumatra Corridor)
-**Current Phase:** Phase 1 complete ✅ — run `/gsd-plan-phase 2` to plan OSINT & Scraping
+**Current Phase:** Phase 4: 3D Map Dashboard (Next.js + Mapbox + Deck.gl)
 
 ---
 
@@ -12,11 +12,12 @@
 |-------|------|--------|-------|
 | 0 | Foundation & Repo Setup | **COMPLETE** ✅ | Git: `f404517`, `4f48e8e` |
 | 1 | Data Ingestion Pipeline & API Adapters | **COMPLETE** ✅ | Git: `a33c94c` |
-| 2 | OSINT & Headless Scraping (Lightpanda) | TODO | |
-| 3 | LangGraph Agent Swarm — Core Reasoning | TODO | **Requires AI-SPEC** — run `/gsd-ai-integration-phase 3` before planning |
+| 2 | OSINT & Headless Scraping (Lightpanda) | **COMPLETE** ✅ | Direct BI API integration + Playwright fallback |
+| 3 | LangGraph Agent Swarm — Core Reasoning | **COMPLETE** ✅ | 6 agents, consensus gate, API routers, and pytest validated |
 | 4 | 3D Map Dashboard (Next.js + Mapbox + Deck.gl) | TODO | |
 | 5 | Notifications & Human-in-the-Loop | TODO | |
 | 6 | Demo Polish & run_demo.py Finalization | TODO | |
+
 
 ---
 

@@ -1,0 +1,20 @@
+[
+  {
+    "scenario": "belawan_port_closure",
+    "disrupted_entity": "Belawan Port",
+    "expected_chain": ["Trans-Sumatra Hwy", "Medan Distribution Hub", "cooking_oil", "rice"],
+    "min_chain_length": 3
+  },
+  {
+    "scenario": "trans_sumatra_hwy_blocked",
+    "disrupted_entity": "Trans-Sumatra Hwy (Medan–Rantau Prapat)",
+    "expected_chain": ["Medan Distribution Hub", "Pematangsiantar Warehouse", "Rantau Prapat Depot"],
+    "min_chain_length": 3
+  },
+  {
+    "scenario": "wildfire_riau_port_approach",
+    "disrupted_entity": "Belawan Access Road",
+    "expected_chain": ["Belawan Port", "Trans-Sumatra Hwy", "Medan Distribution Hub"],
+    "min_chain_length": 3
+  }
+]
