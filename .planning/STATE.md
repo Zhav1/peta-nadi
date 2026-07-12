@@ -1,8 +1,8 @@
 # STATE — LRIP / PetaNadi Project Memory
 
-**Last Updated:** 2026-07-05
+**Last Updated:** 2026-07-09
 **Active Milestone:** M1 — Hackathon MVP (North Sumatra Corridor)
-**Current Phase:** Phase 4: 3D Map Dashboard (Next.js + Mapbox + Deck.gl)
+**Current Phase:** Phase 5: Notifications & Human-in-the-Loop
 
 ---
 
@@ -14,7 +14,7 @@
 | 1 | Data Ingestion Pipeline & API Adapters | **COMPLETE** ✅ | Git: `a33c94c` |
 | 2 | OSINT & Headless Scraping (Lightpanda) | **COMPLETE** ✅ | Direct BI API integration + Playwright fallback |
 | 3 | LangGraph Agent Swarm — Core Reasoning | **COMPLETE** ✅ | 6 agents, consensus gate, API routers, and pytest validated |
-| 4 | 3D Map Dashboard (Next.js + Mapbox + Deck.gl) | TODO | |
+| 4 | 3D Map Dashboard (Next.js + Mapbox + Deck.gl) | **COMPLETE** ✅ | Next.js 14 + Mapbox v3 + Deck.gl v9.3 dashboard with WebSocket streaming |
 | 5 | Notifications & Human-in-the-Loop | TODO | |
 | 6 | Demo Polish & run_demo.py Finalization | TODO | |
 
