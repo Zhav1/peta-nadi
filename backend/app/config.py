@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     deepseek_api_key: str = ""
     whatsapp_token: str = ""
     whatsapp_phone_number_id: str = ""
+    whatsapp_recipient_number: str = ""
+    app_url: str = "http://localhost:3000"
 
     # Frontend (for reference)
     next_public_mapbox_token: str = ""

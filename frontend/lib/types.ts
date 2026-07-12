@@ -118,3 +118,42 @@ export interface PricePoint {
   cabai?: number;       // chili (IDR/kg)
   gula?: number;        // sugar (IDR/kg)
 }
+
+export interface ApprovalPayload {
+  incident_id: string;
+  route_id: string;
+  recommended_route: RouteRecommendation;
+  operator_id?: string;
+}
+
+export interface ApprovalResponse {
+  approval_id: string;
+  approved_at: string;
+  status: string;
+}
+
+export interface ApprovalItem {
+  id: string;
+  incident_id: string;
+  route_id: string;
+  recommended_route: RouteRecommendation;
+  operator_id: string;
+  approved_at: string;
+}
+
+export interface ApprovalListResponse {
+  items: ApprovalItem[];
+  total: number;
+}
+
+export type SourceStatus = 'healthy' | 'degraded' | 'down' | 'unknown';
+
+export interface SourceHealth {
+  name: string;
+  status: SourceStatus;
+  last_seen: string | null;
+}
+
+export interface SourceHealthResponse {
+  sources: SourceHealth[];
+}
