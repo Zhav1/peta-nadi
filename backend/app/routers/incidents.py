@@ -42,7 +42,7 @@ async def list_incidents(
         from app.db.supabase_client import get_client
         sb = get_client()
         query = sb.table("incidents").select(
-            "id, title, type, severity, status, confidence, created_at, lat, lon"
+            "incident_id, title, type, severity, status, confidence, created_at, lat, lon"
         ).order("created_at", desc=True).limit(limit)
         
         if status:
@@ -52,9 +52,17 @@ async def list_incidents(
             
         result = query.execute()
         items = result.data or []
+        
+        # Map incident_id to id for IncidentResponse pydantic model
+        formatted_items = []
+        for item in items:
+            item_copy = dict(item)
+            item_copy["id"] = item_copy.pop("incident_id")
+            formatted_items.append(IncidentResponse(**item_copy))
+
         return IncidentListResponse(
-            items=[IncidentResponse(**item) for item in items],
-            total=len(items),
+            items=formatted_items,
+            total=len(formatted_items),
         )
     except Exception as e:
         logger.warning(f"Supabase unavailable, returning empty incidents list: {e}")
@@ -67,10 +75,14 @@ async def get_incident(incident_id: str):
     try:
         from app.db.supabase_client import get_client
         sb = get_client()
-        result = sb.table("incidents").select("*").eq("id", incident_id).single().execute()
+        result = sb.table("incidents").select("*").eq("incident_id", incident_id).single().execute()
         if not result.data:
             raise HTTPException(status_code=404, detail=f"Incident {incident_id} not found")
-        return result.data
+            
+        data = dict(result.data)
+        data["id"] = data["incident_id"]
+        data["crisis_id"] = data["incident_id"]
+        return data
     except HTTPException:
         raise
     except Exception as e:

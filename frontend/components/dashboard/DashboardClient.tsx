@@ -7,6 +7,8 @@ import { CrisisSidebar } from '@/components/sidebar/CrisisSidebar';
 import { StatusHeader } from '@/components/ui/StatusHeader';
 import { SimulateButton } from '@/components/ui/SimulateButton';
 import { TimelineScrubber } from '@/components/ui/TimelineScrubber';
+import { SourceHealthBanner } from '@/components/ui/SourceHealthBanner';
+import { Toast } from '@/components/ui/Toast';
 import { api } from '@/lib/api';
 import type { CrisisState, WsEvent } from '@/lib/types';
 
@@ -30,6 +32,7 @@ export default function DashboardClient() {
   const [drawModeActive, setDrawModeActive] = useState(false);
   const [simulateLoading, setSimulateLoading] = useState(false);
   const [disasterZones, setDisasterZones] = useState<Array<{ polygon: [number, number][]; type: 'flood'; risk: number }>>([]);
+  const [toast, setToast] = useState<{ message: string; type?: 'success' | 'error' | 'info' } | null>(null);
 
   const handleWsMessage = useCallback((event: WsEvent) => {
     if (event.event === 'node_update') {
@@ -125,6 +128,19 @@ export default function DashboardClient() {
           onClose={handleCloseSidebar}
           onSelectRoute={setActiveRouteIdx}
           activeRouteIdx={activeRouteIdx}
+          onApproveSuccess={(msg) => setToast({ message: msg, type: 'success' })}
+        />
+      )}
+
+      {/* Source health status banner */}
+      <SourceHealthBanner />
+
+      {/* Toast notifications */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
         />
       )}
 

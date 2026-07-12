@@ -47,4 +47,19 @@ export const api = {
         { method: 'POST', body: JSON.stringify(payload) }
       ),
   },
+  approvals: {
+    create: (body: import('./types').ApprovalPayload) =>
+      request<import('./types').ApprovalResponse>('/api/v1/approvals', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    list: (incidentId?: string) => {
+      const qs = incidentId ? `?incident_id=${incidentId}` : '';
+      return request<import('./types').ApprovalListResponse>(`/api/v1/approvals${qs}`);
+    },
+  },
+  sourceHealth: {
+    get: () =>
+      request<import('./types').SourceHealthResponse>('/api/v1/health/sources'),
+  },
 };

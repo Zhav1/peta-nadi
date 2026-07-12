@@ -160,6 +160,7 @@ async def decision_support_copilot(state: CrisisState) -> dict:
                     url,
                     json={
                         "crisis_id": crisis_id,
+                        "incident_id": db_incident_id,
                         "title": state.get("title"),
                         "summary": summary_text
                     },
