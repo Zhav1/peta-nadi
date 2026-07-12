@@ -134,7 +134,7 @@
 
 ## Phase 5: Notifications & Human-in-the-Loop
 **Goal:** WhatsApp alert delivery for validated crises; approval logging for KPI measurement.
-**Status:** TODO
+**Status:** COMPLETE ✅
 **AI Spec Needed:** No
 
 ### Deliverables
@@ -145,9 +145,9 @@
 - Source health indicator UI (green/yellow/red) for BMKG and TomTom layers (minimum before pilot)
 
 ### Verification
-- [ ] Validated alert triggers WhatsApp message delivery (test number)
-- [ ] Clicking "Approve" inserts record in `route_approvals` table
-- [ ] Source health indicator turns red when BMKG adapter is deliberately killed
+- [x] Validated alert triggers WhatsApp message delivery (test number)
+- [x] Clicking "Approve" inserts record in `route_approvals` table
+- [x] Source health indicator turns red when BMKG adapter is deliberately killed
 
 ---
 

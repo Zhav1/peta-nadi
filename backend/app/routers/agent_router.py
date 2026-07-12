@@ -1,5 +1,6 @@
 import logging
 import json
+import asyncio
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
 from pydantic import BaseModel
 from typing import Dict, Any, Optional
@@ -8,6 +9,38 @@ from app.workers.agent_worker import run_crisis_event, process_crisis_event
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Agents / Core Reasoning"])
+
+
+@router.post("/api/notify")
+async def notify_endpoint(payload: dict):
+    """
+    Called by Agent 6 (Decision Support Copilot) when a crisis is validated.
+    Fetches details from Supabase using incident_id, and triggers WhatsApp alert.
+    """
+    incident_id = payload.get("incident_id")
+    if not incident_id:
+        logger.warning("Notification received without incident_id")
+        return {"status": "ignored", "reason": "missing_incident_id"}
+        
+    try:
+        from app.db.supabase_client import get_client
+        from app.services.notification_service import send_crisis_alert
+        
+        sb = get_client()
+        result = sb.table("incidents").select("*").eq("incident_id", incident_id).single().execute()
+        
+        if result.data:
+            incident = result.data
+            # Trigger WhatsApp alert
+            await send_crisis_alert(incident)
+            return {"status": "processed", "incident_id": incident_id}
+            
+        logger.warning(f"Could not find incident {incident_id} in Supabase for notification")
+        return {"status": "ignored", "reason": "incident_not_found"}
+        
+    except Exception as e:
+        logger.error(f"Error in notify endpoint: {e}")
+        return {"status": "error", "message": str(e)}
 
 
 class CrisisEventPayload(BaseModel):

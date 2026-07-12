@@ -15,6 +15,7 @@ interface CrisisSidebarProps {
   onClose: () => void;
   onSelectRoute: (idx: number) => void;
   activeRouteIdx: number | null;
+  onApproveSuccess?: (msg: string) => void;
 }
 
 export function CrisisSidebar({
@@ -22,6 +23,7 @@ export function CrisisSidebar({
   onClose,
   onSelectRoute,
   activeRouteIdx,
+  onApproveSuccess,
 }: CrisisSidebarProps) {
   const [activeTab, setActiveTab] = useState<Tab>('Evidence');
   const [showCausalChain, setShowCausalChain] = useState(false);
@@ -92,6 +94,7 @@ export function CrisisSidebar({
             crisis={crisis}
             activeRouteIdx={activeRouteIdx}
             onSelectRoute={onSelectRoute}
+            onApproveSuccess={onApproveSuccess}
           />
         )}
         {activeTab === 'Economic' && <EconomicTab crisis={crisis} />}
