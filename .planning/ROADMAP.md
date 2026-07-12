@@ -8,7 +8,7 @@
 
 ## Phase 0: Foundation & Repo Setup
 **Goal:** Working project skeleton, environment configured, all tools wired up.
-**Status:** TODO
+**Status:** COMPLETE ✅
 
 ### Deliverables
 - Monorepo structure: `/backend` (FastAPI), `/frontend` (Next.js), `/agents` (LangGraph), `/infra`
@@ -19,16 +19,16 @@
 - `run_demo.py` skeleton (injects synthetic events into Redis Streams)
 
 ### Verification
-- [ ] `docker compose up` starts all services cleanly
-- [ ] FastAPI `/health` endpoint returns 200
-- [ ] Redis Streams connection verified
-- [ ] Supabase PostGIS spatial query returns a result
+- [x] `docker compose up` starts all services cleanly
+- [x] FastAPI `/health` endpoint returns 200
+- [x] Redis Streams connection verified
+- [x] Supabase PostGIS spatial query returns a result
 
 ---
 
 ## Phase 1: Data Ingestion Pipeline & API Adapters
 **Goal:** Real-time data from BMKG, TomTom, AISstream, NASA FIRMS flowing into Redis Streams. Fallback caches implemented.
-**Status:** TODO
+**Status:** COMPLETE ✅
 **AI Spec Needed:** No (deterministic data engineering)
 
 ### Deliverables
@@ -43,16 +43,16 @@
 - Database schema: `incidents`, `data_sources`, `source_health` tables (PostGIS + TimescaleDB)
 
 ### Verification
-- [ ] Live BMKG event ingested and stored in Supabase
-- [ ] TomTom congestion data appears in Redis Streams within polling interval
-- [ ] Simulated API failure triggers fallback cache; `source_health` table shows "degraded"
-- [ ] Unit tests for each adapter (mock API responses)
+- [x] Live BMKG event ingested and stored in Supabase
+- [x] TomTom congestion data appears in Redis Streams within polling interval
+- [x] Simulated API failure triggers fallback cache; `source_health` table shows "degraded"
+- [x] Unit tests for each adapter (mock API responses)
 
 ---
 
 ## Phase 2: OSINT & Headless Scraping (Lightpanda)
 **Goal:** PIHPS commodity prices and social OSINT feeding the agent pipeline.
-**Status:** TODO
+**Status:** COMPLETE ✅
 **AI Spec Needed:** No (data engineering)
 
 ### Deliverables
@@ -66,10 +66,10 @@
 - Synthetic PIHPS JSON dataset for `run_demo.py`
 
 ### Verification
-- [ ] PIHPS scrape returns current commodity prices (rice, cooking oil, chili, etc.)
-- [ ] NER correctly extracts location entities from sample Indonesian news text
-- [ ] Crisis Mode trigger switches scraping interval; reverts when crisis ends
-- [ ] Synthetic PIHPS injection via `run_demo.py` populates Supabase correctly
+- [x] PIHPS scrape returns current commodity prices (rice, cooking oil, chili, etc.)
+- [x] NER correctly extracts location entities from sample Indonesian news text
+- [x] Crisis Mode trigger switches scraping interval; reverts when crisis ends
+- [x] Synthetic PIHPS injection via `run_demo.py` populates Supabase correctly
 
 ---
 
@@ -104,7 +104,7 @@
 
 ## Phase 4: 3D Map Dashboard (Next.js + Mapbox + Deck.gl)
 **Goal:** Stunning 3D real-time map with crisis pins, tri-panel sidebar, timeline scrubber, and TheoTown simulation UI.
-**Status:** TODO
+**Status:** COMPLETE ✅
 **AI Spec Needed:** No (frontend engineering, but see UI-SPEC)
 
 ### Deliverables
@@ -123,12 +123,12 @@
 - Glassmorphism dark UI; smooth animated transitions; premium design
 
 ### Verification
-- [ ] Map loads with all data layers within 3 seconds
-- [ ] Crisis pin click opens tri-panel sidebar with correct data
-- [ ] WebSocket updates cause map to re-render without full page reload
-- [ ] TheoTown: drawing a polygon triggers Crisis Mode and updates map within 30 seconds
-- [ ] Timeline scrubber plays back a stored crisis scenario
-- [ ] Design review: passes 6-pillar UI audit (run `/gsd-ui-review` after)
+- [x] Map loads with all data layers within 3 seconds
+- [x] Crisis pin click opens tri-panel sidebar with correct data
+- [x] WebSocket updates cause map to re-render without full page reload
+- [x] TheoTown: drawing a polygon triggers Crisis Mode and updates map within 30 seconds
+- [x] Timeline scrubber plays back a stored crisis scenario
+- [x] Design review: passes 6-pillar UI audit (run `/gsd-ui-review` after)
 
 ---
 
@@ -153,7 +153,7 @@
 
 ## Phase 6: Demo Polish & `run_demo.py` Finalization
 **Goal:** Hackathon-ready demo that runs flawlessly in < 3 minutes without live internet.
-**Status:** TODO
+**Status:** COMPLETE ✅
 
 ### Deliverables
 - `run_demo.py` finalized: Belawan Port closure + Trans-Sumatra flooding scenario
@@ -164,11 +164,42 @@
 - README: setup instructions, one-command demo launch
 
 ### Verification
-- [ ] `python run_demo.py` runs end-to-end in < 3 minutes
-- [ ] Dashboard shows validated crisis with all three sidebar tabs populated
-- [ ] WhatsApp notification delivered (or logged if no live network)
-- [ ] 60 FPS confirmed in browser dev tools during full dataset render
-- [ ] Team dry-run: judge questions answered from the interface alone
+- [x] `python run_demo.py` runs end-to-end in < 3 minutes
+- [x] Dashboard shows validated crisis with all three sidebar tabs populated
+- [x] WhatsApp notification delivered (or logged if no live network)
+- [x] 60 FPS confirmed in browser dev tools during full dataset render
+- [x] Team dry-run: judge questions answered from the interface alone
+
+---
+
+## Phase 7: Interactive Guided Demo Mode
+**Goal:** An in-game-tutorial-style guided demo experience built directly into the dashboard — a judge or evaluator clicks one button and the system walks them through the entire LRIP platform end-to-end, stage by stage, with explanations, live data, and full presenter control.
+**Status:** TODO
+
+### Deliverables
+- **`GuidedDemoPanel` component** (`frontend/components/demo/GuidedDemoPanel.tsx`):
+  - Floating "▶ Run Demo" trigger button (bottom-right corner of dashboard)
+  - 5-stage stepper UI: Injecting Events → Agent Swarm → Consensus Gate → Validated Alert → Notification
+  - "Next Step" button for manual stage advancement (presenter can pause for judge Q&A)
+  - "Run Automatically" toggle with configurable ~15s pacing between stages
+  - Source data badges animating in as each event type fires (BMKG, TomTom, NASA, AISstream, PIHPS, Social)
+  - Per-stage explainer cards (in-game tutorial style: "What's happening here?" context for each step)
+- **`demo_router.py`** (`backend/app/routers/demo_router.py`):
+  - `POST /api/demo/start` — loads `belawan_scenario.json`, invokes agent pipeline directly (no Redis required)
+  - `GET /api/demo/status/{crisis_id}` — returns current pipeline stage + per-agent status
+  - `--mock-agents` mode: pre-scripted `CrisisState` fixtures bypass LLM calls entirely — 100% deterministic demo
+- **Full offline mode**: Supabase writes stubbed with an in-memory store when `DEMO_OFFLINE=true` — no outbound network required
+- **Mobile presenter remote** (`/demo-remote` page): phone-optimized one-tap stage advancement so the presenter can walk freely
+- **Demo replay**: persist a completed run as a JSON snapshot; replay frame-by-frame without re-running the swarm
+
+### Verification
+- [ ] Clicking "▶ Run Demo" button drives the full 5-stage pipeline without opening a terminal
+- [ ] "Next Step" button pauses correctly between each stage
+- [ ] "Run Automatically" completes end-to-end in < 3 minutes
+- [ ] Per-stage explainer cards are accurate and readable for non-technical judges
+- [ ] `DEMO_OFFLINE=true` runs with no Redis, no Supabase, no outbound network
+- [ ] Mobile remote at `/demo-remote` advances stages correctly from a phone
+- [ ] Demo replay loads a saved snapshot and plays it back faithfully
 
 ---
 
@@ -180,3 +211,4 @@
 - Outcome follow-up system for approved route recommendations
 - Enterprise GraphRAG private deployment
 - Automated CI/CD pipeline with staging → production promotion
+

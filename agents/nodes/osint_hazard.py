@@ -62,13 +62,23 @@ async def osint_hazard_agent(state: CrisisState) -> dict:
                 except Exception:
                     continue
             
-            text = payload.get("text", "").lower()
+            text = payload.get("text", "")
+            if not text and "raw" in payload:
+                try:
+                    raw_data = json.loads(payload["raw"]) if isinstance(payload["raw"], str) else payload["raw"]
+                    text = raw_data.get("raw_text") or raw_data.get("text") or ""
+                except Exception:
+                    pass
+            if not text:
+                text = payload.get("raw_text") or payload.get("title") or ""
+            text = text.lower()
+            
             # Check if keywords match
             if event_type in text or any(kw in text for kw in ["banjir", "gempa", "kebakaran", "macet", "tutup"]):
                 social_corroborations += 1
                 
                 # Check NER location overlap
-                extracted = await extract_locations(payload.get("text", ""))
+                extracted = await extract_locations(text)
                 # If any extracted location is in our corridor
                 if any(loc.lower() in state.get("region", "").lower() for loc in extracted):
                     ner_location_overlap = True

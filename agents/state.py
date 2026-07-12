@@ -6,8 +6,19 @@ Fields are populated progressively as agents execute in sequence.
 
 Phase 3 will implement the full LangGraph state machine using this schema.
 """
-from typing import TypedDict, Optional, List, Dict, Any
-from datetime import datetime
+from typing import TypedDict, Optional, List, Dict, Any, Annotated
+
+def merge_messages(left: list, right: list) -> list:
+    """Reducer to merge message lists from parallel agent nodes without duplicate entries."""
+    if not left:
+        return right or []
+    if not right:
+        return left or []
+    merged = list(left)
+    for item in right:
+        if item not in merged:
+            merged.append(item)
+    return merged
 
 
 class AgentFinding(TypedDict):
@@ -67,6 +78,11 @@ class CrisisState(TypedDict):
     type: str                           # 'flood', 'port_closure', 'wildfire', 'congestion', 'earthquake'
     is_simulated: bool                  # True if triggered via TheoTown simulation
 
+    # Input event parameters to prevent filtering
+    source: Optional[str]
+    severity: Optional[str]
+    event_type: Optional[str]
+
     # Location
     lat: float
     lon: float
@@ -106,4 +122,4 @@ class CrisisState(TypedDict):
     # Metadata
     created_at: str                     # ISO 8601
     updated_at: str                     # ISO 8601
-    messages: List[str]                 # Agent communication log
+    messages: Annotated[List[str], merge_messages]                 # Agent communication log

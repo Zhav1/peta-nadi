@@ -96,19 +96,36 @@ npm run dev
 
 ## Demo (Phase 6)
 
+You can launch the end-to-end simulator either online (using your configured Redis/Supabase credentials) or offline (using local in-memory mock databases and query caching).
+
+### Running Offline Demo (Recommended - No Credentials Required)
+This runs the full 6-agent swarm using in-memory mocks for Redis Streams, Supabase databases, and LTM vector spaces.
 ```bash
 cd backend
-.venv\Scripts\activate
-python run_demo.py --scenario belawan_flood
+# Run fast (0.1s delay between events)
+backend\.venv\Scripts\python run_demo.py --offline --speed fast
+
+# Run normal (1.0s delay between events, mimics live feed)
+backend\.venv\Scripts\python run_demo.py --offline
 ```
 
-Injects synthetic Belawan Port closure + Trans-Sumatra flooding events into Redis Streams,
-triggering the full agent pipeline and populating the 3D dashboard.
-
-For a dry run (no Redis required):
+### Running Online Demo
+Ensure Redis and Supabase are configured in `.env`.
 ```bash
-python run_demo.py --dry-run
+backend\.venv\Scripts\python run_demo.py --scenario belawan_flood
 ```
+
+For a dry run (prints scenario info without injecting):
+```bash
+backend\.venv\Scripts\python run_demo.py --dry-run
+```
+
+To run the performance audit script:
+```bash
+backend\.venv\Scripts\python backend/scripts/perf_check.py
+```
+
+See [DEMO_SCRIPT.md](file:///d:/College/Pidi.id/DEMO_SCRIPT.md) for a step-by-step 3-minute pitch/walkthrough of the system.
 
 ## Project Structure
 
@@ -117,15 +134,12 @@ python run_demo.py --dry-run
 │   └── app/
 │       ├── config.py         Settings (pydantic-settings)
 │       ├── main.py           FastAPI entry point
-│       ├── routers/          API endpoints
-│       ├── services/         Redis client
 │       └── db/               Supabase client
 ├── frontend/         Next.js 14 (Mapbox + Deck.gl)
-├── agents/           LangGraph 6-agent swarm (Phase 3)
+├── agents/           LangGraph 6-agent swarm
 ├── infra/
-│   ├── supabase/migrations/  SQL schema
-│   └── redis/                Redis setup guide
-├── src/              Research scripts (PIHPS/BMKG data analysis)
+│   └── supabase/migrations/  SQL schema
+├── DEMO_SCRIPT.md    3-minute presentation walkthrough script
 └── .planning/        GSD project planning artifacts
 ```
 
@@ -134,9 +148,10 @@ python run_demo.py --dry-run
 | Phase | Focus | Status |
 |-------|-------|--------|
 | 0 | Foundation & Repo Setup | ✅ Complete |
-| 1 | Data Ingestion Pipeline (BMKG, TomTom, AISstream, NASA) | TODO |
-| 2 | OSINT & Headless Scraping (Lightpanda + PIHPS) | TODO |
-| 3 | LangGraph Agent Swarm (6 agents + STM/LTM + GraphRAG) | TODO |
-| 4 | 3D Map Dashboard (Next.js + Mapbox + Deck.gl) | TODO |
-| 5 | Notifications & Human-in-the-Loop | TODO |
-| 6 | Demo Polish & run_demo.py Finalization | TODO |
+| 1 | Data Ingestion Pipeline (BMKG, TomTom, AISstream, NASA) | ✅ Complete |
+| 2 | OSINT & Headless Scraping (Lightpanda + PIHPS) | ✅ Complete |
+| 3 | LangGraph Agent Swarm (6 agents + STM/LTM + GraphRAG) | ✅ Complete |
+| 4 | 3D Map Dashboard (Next.js + Mapbox + Deck.gl) | ✅ Complete |
+| 5 | Notifications & Human-in-the-Loop | ✅ Complete |
+| 6 | Demo Polish & run_demo.py Finalization | ✅ Complete |
+| 7 | Interactive Guided Demo Mode | 📋 Planned |
