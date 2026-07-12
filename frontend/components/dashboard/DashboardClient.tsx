@@ -9,6 +9,7 @@ import { SimulateButton } from '@/components/ui/SimulateButton';
 import { TimelineScrubber } from '@/components/ui/TimelineScrubber';
 import { SourceHealthBanner } from '@/components/ui/SourceHealthBanner';
 import { Toast } from '@/components/ui/Toast';
+import { GuidedDemoPanel } from '@/components/demo/GuidedDemoPanel';
 import { api } from '@/lib/api';
 import type { CrisisState, WsEvent } from '@/lib/types';
 
@@ -162,6 +163,15 @@ export default function DashboardClient() {
           </div>
         </div>
       )}
+
+      {/* Guided Demo Stepper Panel */}
+      <GuidedDemoPanel
+        onCrisisReady={(crisis) => {
+          setSelectedCrisis(crisis);
+          setSelectedCrisisId(crisis.crisis_id);
+          refetch(); // refresh the incident list to display the demo incident
+        }}
+      />
     </div>
   );
 }

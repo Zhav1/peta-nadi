@@ -174,7 +174,7 @@
 
 ## Phase 7: Interactive Guided Demo Mode
 **Goal:** An in-game-tutorial-style guided demo experience built directly into the dashboard — a judge or evaluator clicks one button and the system walks them through the entire LRIP platform end-to-end, stage by stage, with explanations, live data, and full presenter control.
-**Status:** TODO
+**Status:** COMPLETE ✅
 
 ### Deliverables
 - **`GuidedDemoPanel` component** (`frontend/components/demo/GuidedDemoPanel.tsx`):
@@ -193,13 +193,13 @@
 - **Demo replay**: persist a completed run as a JSON snapshot; replay frame-by-frame without re-running the swarm
 
 ### Verification
-- [ ] Clicking "▶ Run Demo" button drives the full 5-stage pipeline without opening a terminal
-- [ ] "Next Step" button pauses correctly between each stage
-- [ ] "Run Automatically" completes end-to-end in < 3 minutes
-- [ ] Per-stage explainer cards are accurate and readable for non-technical judges
-- [ ] `DEMO_OFFLINE=true` runs with no Redis, no Supabase, no outbound network
-- [ ] Mobile remote at `/demo-remote` advances stages correctly from a phone
-- [ ] Demo replay loads a saved snapshot and plays it back faithfully
+- [x] Clicking "▶ Run Demo" button drives the full 5-stage pipeline without opening a terminal
+- [x] "Next Step" button pauses correctly between each stage
+- [x] "Run Automatically" completes end-to-end in < 3 minutes
+- [x] Per-stage explainer cards are accurate and readable for non-technical judges
+- [x] `DEMO_OFFLINE=true` runs with no Redis, no Supabase, no outbound network
+- [x] Mobile remote at `/demo-remote` advances stages correctly from a phone
+- [x] Demo replay loads a saved snapshot and plays it back faithfully
 
 ---
 
