@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.routers import health, incidents, agent_router, approvals
+from app.routers import health, incidents, agent_router, approvals, demo_router
 from app.services.redis_client import get_redis, close_redis
 
 settings = get_settings()
@@ -62,3 +62,4 @@ app.include_router(health.router)
 app.include_router(incidents.router, prefix="/api/v1")
 app.include_router(approvals.router, prefix="/api/v1")
 app.include_router(agent_router.router)
+app.include_router(demo_router.router)

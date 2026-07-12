@@ -1,0 +1,141 @@
+{
+  "scenario": "belawan_closure_transumatra_flood",
+  "generated_at": "2026-07-12T00:00:00Z",
+  "events": [
+    {
+      "source": "bmkg",
+      "event_type": "earthquake",
+      "severity": "critical",
+      "lat": "3.4200",
+      "lon": "98.7100",
+      "title": "M6.2 Earthquake - Deli Serdang, North Sumatra",
+      "raw": "{\"Magnitude\": \"6.2\", \"Wilayah\": \"Deli Serdang, North Sumatra\", \"Coordinates\": \"3.42,98.71\", \"Tanggal\": \"2026-07-12\", \"Jam\": \"12:00:00\"}",
+      "dedup_key": "bmkg:eq:20260712:120000:6.2",
+      "_stream": "lrip:events:bmkg"
+    },
+    {
+      "source": "bmkg",
+      "event_type": "weather_warning",
+      "severity": "high",
+      "lat": "3.5852",
+      "lon": "98.6667",
+      "title": "Weather Warning: Heavy Rain & Thunderstorm expected in Medan",
+      "raw": "{\"desc\": \"Hujan Lebat Disertai Petir\", \"local_datetime\": \"2026-07-12 12:15:00\", \"code\": 95}",
+      "dedup_key": "bmkg:weather:medan:2026-07-12_12:15:00:95",
+      "_stream": "lrip:events:bmkg"
+    },
+    {
+      "source": "nasa_firms",
+      "event_type": "wildfire",
+      "severity": "critical",
+      "lat": "3.6500",
+      "lon": "98.9200",
+      "title": "Wildfire Hazard: Active hotspot near Deli Serdang Corridor (FRP: 520MW)",
+      "raw": "{\"latitude\": 3.6500, \"longitude\": 98.9200, \"frp\": 520.0, \"confidence\": \"high\", \"acq_date\": \"2026-07-12\", \"acq_time\": \"1210\"}",
+      "dedup_key": "firms:fire:2026-07-12:1210:3.65:98.92",
+      "_stream": "lrip:events:nasa_firms"
+    },
+    {
+      "source": "tomtom",
+      "event_type": "congestion",
+      "severity": "high",
+      "lat": "3.7558",
+      "lon": "98.6742",
+      "title": "Severe Traffic Congestion: Tanjung Mulia Interchange (12 km/h)",
+      "raw": "{\"freeFlowSpeed\": 50, \"currentSpeed\": 12, \"roadClosure\": false}",
+      "dedup_key": "tomtom:flow:tanjung_mulia_interchange:2026071212",
+      "_stream": "lrip:events:tomtom"
+    },
+    {
+      "source": "tomtom",
+      "event_type": "road_closure",
+      "severity": "critical",
+      "lat": "2.9595",
+      "lon": "99.0687",
+      "title": "ROAD CLOSED / BLOCKAGE: Pematangsiantar Km 128 (0 km/h)",
+      "raw": "{\"freeFlowSpeed\": 60, \"currentSpeed\": 0, \"roadClosure\": true}",
+      "dedup_key": "tomtom:flow:pematangsiantar_km_128:2026071212",
+      "_stream": "lrip:events:tomtom"
+    },
+    {
+      "source": "aisstream",
+      "event_type": "port_queue",
+      "severity": "critical",
+      "lat": "3.7922",
+      "lon": "98.6776",
+      "title": "Port Congestion Alert: 16 vessels waiting at Belawan Port",
+      "raw": "{\"total_vessels\": 32, \"anchored_vessels\": 16}",
+      "dedup_key": "aisstream:queue_depth:2026071212",
+      "_stream": "lrip:events:aisstream"
+    },
+    {
+      "source": "pihps",
+      "event_type": "price_spike",
+      "severity": "critical",
+      "lat": "3.5952",
+      "lon": "98.6722",
+      "title": "SPIKE: minyak_goreng price rose to Rp 18,500 (+17.1%)",
+      "raw": "{\"commodity\": \"minyak_goreng\", \"price_today\": 18500.0, \"rolling_mean_7d\": 15800.0, \"deviation_pct\": 17.1, \"market\": \"Pasar Sei Sikambing\", \"province\": \"Sumatera Utara\", \"tanggal\": \"2026-07-12\"}",
+      "dedup_key": "pihps:minyak_goreng:sumut:20260712",
+      "_stream": "lrip:events:pihps"
+    },
+    {
+      "source": "pihps",
+      "event_type": "price_spike",
+      "severity": "high",
+      "lat": "3.5952",
+      "lon": "98.6722",
+      "title": "SPIKE: cabai_merah price rose to Rp 48,000 (+12.5%)",
+      "raw": "{\"commodity\": \"cabai_merah\", \"price_today\": 48000.0, \"rolling_mean_7d\": 42666.67, \"deviation_pct\": 12.5, \"market\": \"Pasar Belawan\", \"province\": \"Sumatera Utara\", \"tanggal\": \"2026-07-12\"}",
+      "dedup_key": "pihps:cabai_merah:sumut:20260712",
+      "_stream": "lrip:events:pihps"
+    },
+    {
+      "source": "pihps",
+      "event_type": "price_baseline",
+      "severity": "low",
+      "lat": "3.5952",
+      "lon": "98.6722",
+      "title": "Baseline price update for beras: Rp 13,500",
+      "raw": "{\"commodity\": \"beras\", \"price_today\": 13500.0, \"rolling_mean_7d\": 13450.0, \"deviation_pct\": 0.37, \"market\": \"Pasar Tradisional Sumatera Utara\", \"province\": \"Sumatera Utara\", \"tanggal\": \"2026-07-12\"}",
+      "dedup_key": "pihps:beras:sumut:20260712",
+      "_stream": "lrip:events:pihps"
+    },
+    {
+      "source": "social",
+      "platform": "twitter",
+      "event_type": "osint_report",
+      "severity": "critical",
+      "lat": "3.7944",
+      "lon": "98.6913",
+      "title": "[TWITTER] Pelabuhan Belawan: CRITICAL disruption reported",
+      "raw": "{\"platform\": \"twitter\", \"raw_text\": \"Pelabuhan Belawan tutup lumpuh total! Kapal antri sampai 3 hari dan jalan macet parah. Harga minyak goreng langka di Medan. #bencana #Belawan\", \"author\": \"sopir_lintas\", \"extracted_location\": \"Pelabuhan Belawan\", \"created_at\": \"2026-07-12T12:05:00Z\"}",
+      "dedup_key": "social:twitter:mock_synth_001",
+      "_stream": "lrip:events:social"
+    },
+    {
+      "source": "social",
+      "platform": "tiktok",
+      "event_type": "osint_report",
+      "severity": "high",
+      "lat": "2.9595",
+      "lon": "99.0687",
+      "title": "[TIKTOK] Pematangsiantar: HIGH disruption reported",
+      "raw": "{\"platform\": \"tiktok\", \"raw_text\": \"Info longsor parah dekat Pematangsiantar. Jalan tertutup batu besar, lalu lintas macet total dan ditutup, harus memutar lewat jalur alternatif.\", \"author\": \"kabar_sumut\", \"extracted_location\": \"Pematangsiantar\", \"created_at\": \"2026-07-12T12:12:00Z\"}",
+      "dedup_key": "social:tiktok:mock_synth_002",
+      "_stream": "lrip:events:social"
+    },
+    {
+      "source": "social",
+      "platform": "facebook",
+      "event_type": "osint_report",
+      "severity": "medium",
+      "lat": "3.7558",
+      "lon": "98.6742",
+      "title": "[FACEBOOK] Tanjung Mulia: MODERATE congestion reported",
+      "raw": "{\"platform\": \"facebook\", \"raw_text\": \"Tanjung Mulia interchange banjir parah dan macet total arah Belawan. Ada genangan air setinggi ban mobil.\", \"author\": \"warga_medan\", \"extracted_location\": \"Tanjung Mulia\", \"created_at\": \"2026-07-12T12:20:00Z\"}",
+      "dedup_key": "social:facebook:mock_synth_003",
+      "_stream": "lrip:events:social"
+    }
+  ]
+}

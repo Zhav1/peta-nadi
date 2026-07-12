@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     # Frontend (for reference)
     next_public_mapbox_token: str = ""
 
+    # Demo
+    demo_mock_agents: bool = False
+    demo_offline: bool = False
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

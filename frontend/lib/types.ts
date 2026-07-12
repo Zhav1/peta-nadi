@@ -157,3 +157,14 @@ export interface SourceHealth {
 export interface SourceHealthResponse {
   sources: SourceHealth[];
 }
+
+export interface DemoStatus {
+  crisis_id: string;
+  stage: number;
+  stage_name: string;
+  agent_statuses: Record<string, 'pending' | 'running' | 'done'>;
+  confidence: number;
+  validated: boolean;
+  summary?: string;
+  crisis_state: import('./types').CrisisState;
+}
