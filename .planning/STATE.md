@@ -1,8 +1,8 @@
 # STATE — LRIP / PetaNadi Project Memory
 
-**Last Updated:** 2026-07-09
+**Last Updated:** 2026-07-12
 **Active Milestone:** M1 — Hackathon MVP (North Sumatra Corridor)
-**Current Phase:** Phase 5: Notifications & Human-in-the-Loop
+**Current Phase:** Phase 7: Interactive Guided Demo Mode
 
 ---
 
@@ -16,7 +16,8 @@
 | 3 | LangGraph Agent Swarm — Core Reasoning | **COMPLETE** ✅ | 6 agents, consensus gate, API routers, and pytest validated |
 | 4 | 3D Map Dashboard (Next.js + Mapbox + Deck.gl) | **COMPLETE** ✅ | Next.js 14 + Mapbox v3 + Deck.gl v9.3 dashboard with WebSocket streaming |
 | 5 | Notifications & Human-in-the-Loop | **COMPLETE** ✅ | WhatsApp integration, route approvals table + endpoint, source health panel |
-| 6 | Demo Polish & run_demo.py Finalization | TODO | |
+| 6 | Demo Polish & run_demo.py Finalization | **COMPLETE** ✅ | Offline fallback, pacing controls, mock DB seeding, and performance audit |
+| 7 | Interactive Guided Demo Mode | TODO | Guided tutorial, stepper panel, mock agents mode, mobile remote |
 
 
 ---
@@ -30,6 +31,8 @@
 | 2026-07-05 | Driver mobile app explicitly deferred to v2 | Engineering cost doesn't improve demo; WhatsApp deep-link is MVP replacement |
 | 2026-07-05 | Solo developer, AI-assisted workflow | GSD tooling used throughout |
 | 2026-07-05 | Phase 3 requires `/gsd-ai-integration-phase` before planning | 6-agent LangGraph swarm needs formal AI-SPEC design contract |
+| 2026-07-12 | Implement `merge_messages` list reducer in `CrisisState` | Solves parallel LangGraph node write conflicts (InvalidUpdateError) |
+| 2026-07-12 | Expand offline simulator mock data seeding and filtering | Enables 100% database/LTM coverage without requiring live credentials |
 
 ---
 
