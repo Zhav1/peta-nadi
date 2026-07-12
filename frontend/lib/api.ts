@@ -62,4 +62,23 @@ export const api = {
     get: () =>
       request<import('./types').SourceHealthResponse>('/api/v1/health/sources'),
   },
+  demo: {
+    start: (opts?: { mock_agents?: boolean; offline?: boolean }) =>
+      request<{ crisis_id: string; stage: number; total_stages: number }>(
+        '/api/demo/start',
+        {
+          method: 'POST',
+          body: JSON.stringify(opts ?? {}),
+        }
+      ),
+    status: (crisisId: string) =>
+      request<import('./types').DemoStatus>(`/api/demo/status/${crisisId}`),
+    advance: (crisisId: string) =>
+      request<{ stage: number; stage_name: string }>(
+        `/api/demo/advance/${crisisId}`,
+        { method: 'POST' }
+      ),
+    replay: (crisisId: string) =>
+      request<unknown>(`/api/demo/replay/${crisisId}`),
+  },
 };
