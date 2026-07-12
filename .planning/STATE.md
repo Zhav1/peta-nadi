@@ -17,7 +17,7 @@
 | 4 | 3D Map Dashboard (Next.js + Mapbox + Deck.gl) | **COMPLETE** ✅ | Next.js 14 + Mapbox v3 + Deck.gl v9.3 dashboard with WebSocket streaming |
 | 5 | Notifications & Human-in-the-Loop | **COMPLETE** ✅ | WhatsApp integration, route approvals table + endpoint, source health panel |
 | 6 | Demo Polish & run_demo.py Finalization | **COMPLETE** ✅ | Offline fallback, pacing controls, mock DB seeding, and performance audit |
-| 7 | Interactive Guided Demo Mode | TODO | Guided tutorial, stepper panel, mock agents mode, mobile remote |
+| 7 | Interactive Guided Demo Mode | **COMPLETE** ✅ | Guided stepper panel, mock agent fixture flow, presenter mobile remote, and local replay |
 
 
 ---

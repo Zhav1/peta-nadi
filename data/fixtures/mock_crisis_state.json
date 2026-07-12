@@ -1,0 +1,136 @@
+{
+  "crisis_id": "belawan-demo-001",
+  "title": "Belawan Port Blockage & Trans-Sumatra Flooding",
+  "type": "port_closure",
+  "is_simulated": true,
+  "lat": 3.7922,
+  "lon": 98.6776,
+  "region": "North Sumatra",
+  "affected_polygon": [
+    [98.65, 3.82],
+    [98.71, 3.82],
+    [98.71, 3.76],
+    [98.65, 3.76],
+    [98.65, 3.82]
+  ],
+  "status": "validated",
+  "overall_confidence": 0.91,
+  "data_collection_finding": {
+    "agent": "DataCollectionAgent",
+    "confidence": 0.95,
+    "summary": "Ingested 9 concurrent alerts: 2 severe weather/earthquake warnings, 1 NASA wildfire polygon, 2 TomTom highway blockages, 1 maritime port queue, and 3 PIHPS food price anomalies. High spatial correlation detected around Belawan Port and Deli Serdang Corridor.",
+    "data": {
+      "raw_events_count": 9,
+      "sources_present": ["bmkg", "nasa_firms", "tomtom", "aisstream", "pihps", "social"]
+    },
+    "timestamp": "2026-07-12T12:00:00Z"
+  },
+  "osint_hazard_finding": {
+    "agent": "OSINTHazardAgent",
+    "confidence": 0.88,
+    "summary": "Fused spatial alerts with social media OSINT. Confirmed 3 public reports on Twitter/TikTok/Facebook detailing 'Belawan Port shut down', 'landslides/flooding blocking Trans-Sumatra Hwy Km 41', and 'severe urban flooding at Tanjung Mulia Interchange'. High correlation between reported locations and PostGIS hazard polygons.",
+    "data": {
+      "osint_reports_count": 3,
+      "keywords_matched": ["tutup", "macet", "banjir", "longsor"]
+    },
+    "timestamp": "2026-07-12T12:05:00Z"
+  },
+  "prediction_finding": {
+    "agent": "PredictionAgent",
+    "confidence": 0.90,
+    "summary": "Forecasts indicate Trans-Sumatra Hwy blockage at Pematangsiantar (Km 128) and Tanjung Mulia Interchange flooding will persist for the next 24 to 36 hours. Expected congestion levels along surrounding corridors will increase travel times by 180+ minutes.",
+    "data": {
+      "persistence_forecast_hours": 36,
+      "congestion_increase_pct": 150
+    },
+    "timestamp": "2026-07-12T12:10:00Z"
+  },
+  "route_optimization_finding": {
+    "agent": "RouteOptimizationAgent",
+    "confidence": 0.94,
+    "summary": "Generated alternative route recommendations avoiding the blocked Belawan Port access roads and flooding on the Trans-Sumatra Hwy. Dynamic hazard weights applied to route segments.",
+    "data": {
+      "alternatives_found": 2
+    },
+    "timestamp": "2026-07-12T12:12:00Z"
+  },
+  "economic_intelligence_finding": {
+    "agent": "EconomicIntelligenceAgent",
+    "confidence": 0.89,
+    "summary": "PIHPS price analysis shows immediate commodity spikes: Cooking Oil (minyak_goreng) up 17.1% (Rp 18,500), Chili (cabai_merah) up 12.5% (Rp 48,000). Economic models estimate a 1.25x regional inflation multiplier over the next 14 days if the Belawan port blockage continues.",
+    "data": {
+      "price_spikes_count": 2,
+      "recovery_days_estimate": 14
+    },
+    "timestamp": "2026-07-12T12:15:00Z"
+  },
+  "decision_support_output": "PetaNadi has detected and validated a critical multi-hazard crisis in the North Sumatra Corridor. Belawan Port is experiencing severe maritime congestion (16 vessels waiting) compounded by landside access failure due to flooding at Tanjung Mulia. Additionally, a landslide on the Trans-Sumatra Highway near Pematangsiantar has blocked land transport. Major food commodity prices (cooking oil, chili) are already spiking in local markets. Recommend immediate activation of Route Detour Alternative 1 and dispatching driver rerouting notifications via WhatsApp.",
+  "route_recommendations": [
+    {
+      "description": "Alternative Route 1: Via Tebing Tinggi Bypass (Avoids Km 128 landslide)",
+      "waypoints": [
+        {"lat": 3.7922, "lon": 98.6776},
+        {"lat": 3.6500, "lon": 98.9200},
+        {"lat": 3.4200, "lon": 98.7100},
+        {"lat": 2.9595, "lon": 99.1500}
+      ],
+      "distance_km": 118.5,
+      "eta_minutes": 145,
+      "fuel_increase_pct": 12.4,
+      "risk_score": 0.15
+    },
+    {
+      "description": "Alternative Route 2: Via Pesisir Timur Coastal Highway",
+      "waypoints": [
+        {"lat": 3.7922, "lon": 98.6776},
+        {"lat": 3.7558, "lon": 98.6742},
+        {"lat": 3.2500, "lon": 99.3000},
+        {"lat": 2.9595, "lon": 99.0687}
+      ],
+      "distance_km": 142.0,
+      "eta_minutes": 180,
+      "fuel_increase_pct": 28.5,
+      "risk_score": 0.22
+    }
+  ],
+  "inflation_forecast": {
+    "commodity": "minyak_goreng",
+    "region": "Sumatera Utara",
+    "pct_increase": 17.1,
+    "timeframe_hours": 336
+  },
+  "causal_chain": [
+    {"node": "Belawan Port Closure", "relation": "restricts_supply_of"},
+    {"node": "Minyak Goreng (Cooking Oil)", "relation": "spikes_price_in"},
+    {"node": "Medan Markets", "relation": "impacts"}
+  ],
+  "hazard_polygons": [
+    {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [98.65, 3.82],
+          [98.71, 3.82],
+          [98.71, 3.76],
+          [98.65, 3.76],
+          [98.65, 3.82]
+        ]
+      ],
+      "properties": {
+        "hazard_type": "flood",
+        "severity": "critical"
+      }
+    }
+  ],
+  "consensus_breakdown": {
+    "DataCollectionAgent": 0.95,
+    "OSINTHazardAgent": 0.88,
+    "PredictionAgent": 0.90,
+    "RouteOptimizationAgent": 0.94,
+    "EconomicIntelligenceAgent": 0.89
+  },
+  "validated": true,
+  "created_at": "2026-07-12T12:00:00Z",
+  "updated_at": "2026-07-12T12:20:00Z",
+  "messages": []
+}
