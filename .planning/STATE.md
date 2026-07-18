@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-07-12
 **Active Milestone:** M1 — Hackathon MVP (North Sumatra Corridor)
-**Current Phase:** Phase 8: NVIDIA Architecture Integration (COMPLETE)
+**Current Phase:** Phase 9: Responsive Layout & Stitch Screens Integration (COMPLETE)
 
 ---
 
@@ -19,6 +19,7 @@
 | 6 | Demo Polish & run_demo.py Finalization | **COMPLETE** ✅ | Offline fallback, pacing controls, mock DB seeding, and performance audit |
 | 7 | Interactive Guided Demo Mode | **COMPLETE** ✅ | Guided stepper panel, mock agent fixture flow, presenter mobile remote, and local replay |
 | 8 | NVIDIA Architecture Integration | **COMPLETE** ✅ | NIM gateway, cuOpt dynamic matrix, FourCastNet proactive polling |
+| 9 | Responsive Layout & Stitch Screens Integration | **COMPLETE** ✅ | Desktop scaling fix, ported all remaining Stitch spec UI screens |
 
 
 ---
@@ -36,6 +37,8 @@
 | 2026-07-12 | Expand offline simulator mock data seeding and filtering | Enables 100% database/LTM coverage without requiring live credentials |
 | 2026-07-17 | Fix Mapbox Draw initialization race condition in CrisisMap.tsx | Ensures robust drawing mode switching independently of map load latency |
 | 2026-07-17 | Refactor FastAPI sys.path resolution in app/main.py | Ensures local uvicorn execution works seamlessly without PYTHONPATH configuration |
+| 2026-07-18 | Port remaining Stitch screens as local overlay components in DashboardClient | Avoids full router navigation, keeps state and WebSocket connection alive in memory |
+| 2026-07-18 | Use absolute coordinate constraints on main viewport | Resolves desktop layout cropping across variable monitor resolutions |
 
 ---
 

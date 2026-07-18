@@ -154,4 +154,6 @@ See [DEMO_SCRIPT.md](file:///d:/College/Pidi.id/DEMO_SCRIPT.md) for a step-by-st
 | 4 | 3D Map Dashboard (Next.js + Mapbox + Deck.gl) | ✅ Complete |
 | 5 | Notifications & Human-in-the-Loop | ✅ Complete |
 | 6 | Demo Polish & run_demo.py Finalization | ✅ Complete |
-| 7 | Interactive Guided Demo Mode | 📋 Planned |
+| 7 | Interactive Guided Demo Mode | ✅ Complete |
+| 8 | NVIDIA Architecture Integration (NIM, cuOpt, FourCastNet) | ✅ Complete |
+| 9 | Responsive Layout & Stitch Screens Integration | ✅ Complete |
