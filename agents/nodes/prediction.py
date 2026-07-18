@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 async def prediction_agent(state: CrisisState) -> dict:
-    """Agent 3: Multi-horizon congestion forecast (6h/12h/24h/48h)."""
+    """Agent 3: Multi-horizon congestion forecast (6h/12h/24h/48h) incorporating Earth-2 predictions."""
     logger.info("Agent 3 [PredictionAgent] running...")
     
     norm_event = state.get("normalized_event") or {}
@@ -37,6 +37,22 @@ async def prediction_agent(state: CrisisState) -> dict:
                     pass
     except Exception as re:
         logger.error(f"Failed to scan TomTom data from Redis: {re}")
+
+    # Check for Earth-2 weather predictions in Redis cache
+    earth2_precip = 0.0
+    earth2_flood_risk = 0.0
+    try:
+        val = await r.get("lrip:cache:earth2")
+        if val:
+            events = json.loads(val)
+            if events:
+                latest_ev = events[-1]
+                raw_payload = latest_ev.get("raw_payload", {})
+                predictions = raw_payload.get("predictions", {})
+                earth2_precip = float(predictions.get("precipitation_mm_24h", 0.0))
+                earth2_flood_risk = float(predictions.get("flood_risk_pct", 0.0))
+    except Exception as e_err:
+        logger.debug(f"Failed to fetch Earth-2 data from Redis: {e_err}")
 
     # 2. Query incidents table for historical events count in same region
     has_history = False
@@ -75,12 +91,19 @@ async def prediction_agent(state: CrisisState) -> dict:
         except Exception as pe:
             logger.debug(f"Failed to fit numpy polyfit: {pe}. Using base values.")
 
-    # 4. Wildfire spread adjustment
+    # 4. Hazard & Weather adjustments
     is_wildfire = event_type == "wildfire" or event_type == "fire"
     if is_wildfire:
         # Increase delay prediction due to wildfire spread risk
         for h in base_delays:
             base_delays[h] *= 1.3
+            
+    # Earth-2 Weather adjustments: escalate delay prediction if high precipitation or flood risk is predicted
+    if earth2_flood_risk > 50.0 or earth2_precip > 20.0:
+        logger.info(f"Earth-2 weather alert active (Flood risk: {earth2_flood_risk}%, Precip: {earth2_precip}mm). Escalating congestion forecasts.")
+        multiplier = 1.0 + (earth2_flood_risk / 100.0)
+        for h in base_delays:
+            base_delays[h] *= multiplier
             
     # Build forecast dict with confidence intervals
     congestion_forecast = {}
@@ -94,10 +117,12 @@ async def prediction_agent(state: CrisisState) -> dict:
     # 5. Compute confidence score
     confidence = 0.5  # Base
     if has_history:
-        confidence += 0.2
+        confidence += 0.15
     if len(delays) >= 5:
-        confidence += 0.2
+        confidence += 0.15
     if is_wildfire:
+        confidence += 0.1
+    if earth2_flood_risk > 50.0:
         confidence += 0.1
         
     confidence = min(1.0, confidence)
@@ -105,11 +130,13 @@ async def prediction_agent(state: CrisisState) -> dict:
     finding: AgentFinding = {
         "agent": "PredictionAgent",
         "confidence": confidence,
-        "summary": f"Generated 48h multi-horizon forecast. Max predicted delay: {congestion_forecast['12h']['delay_min']} minutes in 12h.",
+        "summary": f"Generated 48h multi-horizon forecast. Max predicted delay: {congestion_forecast['12h']['delay_min']} minutes in 12h. Integrated NVIDIA Earth-2 weather risk analysis.",
         "data": {
             "forecast": congestion_forecast,
             "data_points_used": len(delays),
-            "has_historical_precedents": has_history
+            "has_historical_precedents": has_history,
+            "earth2_flood_risk_pct": earth2_flood_risk,
+            "earth2_precipitation_mm_24h": earth2_precip
         },
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
@@ -118,5 +145,5 @@ async def prediction_agent(state: CrisisState) -> dict:
     return {
         "congestion_forecast": congestion_forecast,
         "prediction_finding": finding,
-        "messages": state.get("messages", []) + ["PredictionAgent: Generated traffic and incident forecasts."]
+        "messages": state.get("messages", []) + ["PredictionAgent: Generated traffic and incident forecasts incorporating Earth-2."]
     }

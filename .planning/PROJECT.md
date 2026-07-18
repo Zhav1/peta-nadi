@@ -3,7 +3,7 @@
 ## Vision
 An AI-powered decision support platform that shifts logistics and disaster response from **reactive** to **proactive**. PetaNadi ingests real-time physical hazard data (weather, traffic, maritime, wildfire), detects logistics disruptions, predicts cascading economic impacts (commodity price spikes), and delivers actionable intelligence to field coordinators and government executives — all before the crisis escalates.
 
-The core differentiator is the **"TheoTown" Dual-Mode Engine**: a live sentinel in normal operations, and an interactive crisis simulation sandbox where decision-makers drop synthetic disasters onto a 3D map and watch the AI swarm compute reroutes and inflation forecasts in real-time.
+The core differentiator is the **"TheoTown" Dual-Mode Engine**: a live sentinel in normal operations, and an interactive crisis simulation sandbox where decision-makers drop synthetic disasters onto a 3D map and watch the AI swarm compute reroutes and inflation forecasts in real-time, powered by NVIDIA's enterprise routing and weather APIs.
 
 ## Problem Statement
 Indonesia's logistics network is uniquely fragile. A single physical shock — a flooded bridge on the Trans-Sumatra Highway, port congestion at Belawan — creates a domino effect: traffic, commodity shortages, and eventually localized inflation. Decision-makers currently have no way to "see the math" behind these failures before prices surge. Monitoring is fragmented across weather apps, GPS tools, and manual social media trawls.
@@ -21,7 +21,9 @@ Indonesia's logistics network is uniquely fragile. A single physical shock — a
   - TimescaleDB — high-frequency time-series (prices, traffic velocity)
   - pgvector — Long-Term Memory (LTM) semantic storage for historical disaster episodes
 - **Event Bus:** Redis Streams — zero-loss telemetry ingestion; Redis KV — Short-Term Memory (STM) for active crisis state
-- **AI Models:** Gemini Flash (vision/CCTV analysis) + DeepSeek V3 (primary reasoning engine)
+- **AI Models & Fallbacks:** Gemini Flash (vision) + DeepSeek V3 (primary reasoning) with **NVIDIA NIM** (Llama 3.1) as an automatic, seamless failover layer.
+- **Routing Engine:** pgRouting (cost matrix) + **NVIDIA cuOpt** (VRP constraint solving for multi-agent fleets).
+- **Weather Prediction:** **NVIDIA Earth-2 (FourCastNet)** (replaces custom MLOps/LSTMs for macro-weather forecasting).
 - **Headless Scraping:** Lightpanda — PIHPS, marketplace prices, TikTok/social OSINT
 - **Notifications:** WhatsApp Business API (MVP alert delivery for validated crises)
 - **Knowledge Graph:** GraphRAG over entity graph (Ports → Routes → Warehouses → Commodities)
@@ -29,7 +31,10 @@ Indonesia's logistics network is uniquely fragile. A single physical shock — a
 ## External API Dependencies
 | API | Role | Status |
 |-----|------|--------|
-| BMKG | Weather / earthquake alerts | Integration started (src/) |
+| BMKG | Ground truth weather / seismic alerts | Integration started (src/) |
+| NVIDIA Earth-2 (FourCastNet) | Predictive macro-weather forecasting | Planned (Architecture Update) |
+| NVIDIA cuOpt | Complex fleet routing (VRP) optimization | Planned (Architecture Update) |
+| NVIDIA NIM | High-availability LLM failover endpoints | Planned (Architecture Update) |
 | TomTom Traffic | Congestion detection | Pending |
 | AISstream.io | Maritime / vessel tracking | Pending |
 | NASA FIRMS | Wildfire / active fire polygons | Pending |

@@ -9,7 +9,7 @@
 ## Functional Requirements
 
 ### FR-1: Data Ingestion Pipeline
-- **FR-1.1** Ingest live BMKG weather alerts and earthquake notifications via API polling
+- **FR-1.1** Ingest live BMKG weather alerts and earthquake notifications via API polling (Ground Truth / Seismic Baseline)
 - **FR-1.2** Ingest TomTom Traffic API data for congestion detection on monitored corridors
 - **FR-1.3** Ingest AISstream.io data for maritime vessel positions and Belawan port congestion
 - **FR-1.4** Ingest NASA FIRMS active fire polygon data for wildfire hazard detection
@@ -25,12 +25,13 @@
 ### FR-3: The 6-Agent Cognitive Swarm (LangGraph)
 - **FR-3.1** Agent 1 — Data Collection Agent: normalize, validate, and route ingested data
 - **FR-3.2** Agent 2 — OSINT & Hazard Agent: NER-based location extraction from unstructured text, geocode, and map to PostGIS
-- **FR-3.3** Agent 3 — Prediction Agent: multi-horizon forecast (6h / 12h / 24h / 48h) using TFT or proxy model
-- **FR-3.4** Agent 4 — Route Optimization Agent: generate alternative routes with risk scores using pgRouting / NetworkX; dynamic edge weights based on hazard severity
+- **FR-3.3** Agent 3 — Prediction Agent: multi-horizon macro-forecast (6h / 12h / 24h / 48h) via **NVIDIA Earth-2 (FourCastNet) API** (eliminates custom MLOps).
+- **FR-3.4** Agent 4 — Route Optimization Agent: generate alternative routes. Compute cost matrix using pgRouting / NetworkX, then solve multi-agent VRP constraints using **NVIDIA cuOpt**.
 - **FR-3.5** Agent 5 — Economic Intelligence Agent: detect PIHPS anomalies, generate inflation forecasts with LTM historical multipliers
 - **FR-3.6** Agent 6 — Decision Support Copilot: synthesize all agent outputs into executive summaries and actionable recommendations
 - **FR-3.7** All agents share state via LangGraph `MemorySaver` (Redis STM); validated crises published to PostgreSQL
 - **FR-3.8** Consensus Gate: alert promoted to "Validated" only when weighted confidence > 85% (Hazard 30%, Visual/Social 20%, Geospatial 30%, LTM Economics 20%)
+- **FR-3.9** High Availability Engine: All LLM invocations wrap behind a try/except router that seamlessly falls back to **NVIDIA NIM** (e.g., Llama 3.1) upon primary API failure/rate limit.
 
 ### FR-4: GraphRAG Knowledge Graph
 - **FR-4.1** Seed knowledge graph with North Sumatra corridor entities: Belawan Port, Dumai Port, Trans-Sumatra Highway, major warehouses, commodity flows (cooking oil, rice, fuel)
@@ -81,7 +82,8 @@
 | NFR-4 | Map UI: 60 FPS rendering with hundreds of thousands of data points |
 | NFR-5 | API fallback: last-known-good cache prevents data gaps from crashing the system |
 | NFR-6 | Offline resilience: Redis STM preserves crisis state if external APIs go down mid-event |
-| NFR-7 | Cost constraint: cloud/compute overhead Rp10M–Rp40M/month (open APIs + tiered LLM routing) |
+| NFR-7 | Cost constraint: Cloud compute optimized by relying on foundational APIs (FourCastNet) vs expensive custom LSTM training. NVIDIA API scaling costs (cuOpt) gated behind disaster thresholds. |
+| NFR-8 | Inference Resilience: LLM layers must support >99.9% uptime via automatic NVIDIA NIM fallback routing. |
 
 ---
 
