@@ -217,6 +217,25 @@
 
 ---
 
+## Phase 9: Responsive Layout & Stitch Screens Integration
+**Goal:** Address desktop layout cropping issues and integrate the remaining high-fidelity screens from the Stitch Unified Design System (Price Tracker, AI Consultant, Executive Summary, and Evidentiary Drill-down).
+**Status:** COMPLETE ✅
+
+### Deliverables
+- **Desktop Cropping Fix**: Changed `<main>` viewport to absolute positioning (`absolute left-20 top-16 right-0 bottom-0`) to ensure dynamic height scaling.
+- **AnalyticsSection Component**: High-fidelity Price Tracker dashboard displaying Archipelago Inflation Heatmap, simulated Price Spike Zones, predictive vs. actual commodity prices, and indicator risk rankings.
+- **ReportsSection Component**: Weekly Cabinet Briefing executive summary with pagination controls and report exporting.
+- **SimulationSection Component**: Merged Mitigation Sandbox and AI Advisor conversational playground to assign parameters to emergency response agencies (BULOG, DISHUB, BNPB) and view rerouting/stabilization metrics.
+- **Evidentiary Drill-Down Integration**: Embedded visual CCTV log feed, crowdsourced OSINT tweet logs, and delay matrix charts directly into the `EvidenceTab` component of the floating `<CrisisSidebar>`.
+- **TopNavBar Integration**: Conditionally render sections (Map, Analytics, Simulation, Reports) inside `DashboardClient.tsx` with a smooth Mapbox background blur-fade transition.
+
+### Verification
+- [x] Production compilation (`npm run build`) succeeded with zero type or lint errors.
+- [x] Verified zero desktop cropping on 1080p display emulation.
+- [x] Clicked through all nav tabs and verified smooth page state transitions.
+
+---
+
 ## Backlog (Post-Hackathon / v2)
 - Driver mobile app (React Native + WatermelonDB + CRDT offline sync)
 - Self-serve operator GPS onboarding SDK
@@ -225,4 +244,7 @@
 - Outcome follow-up system for approved route recommendations
 - Enterprise GraphRAG private deployment
 - Automated CI/CD pipeline with staging → production promotion
+- Backend endpoints for National Logistics Health Index API and KPI metrics (to replace frontend mock calculations).
+- Backend data pipelines/tables to serve raw fleet telemetry, live traffic paths, and weather/hotspot layers to the map directly (to replace frontend mock arrays).
+- Forecasting and predictive analytics endpoints (to support the Future/Predict time-scope filters in the UI).
 

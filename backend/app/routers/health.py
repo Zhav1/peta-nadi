@@ -24,7 +24,7 @@ async def health_check():
 @router.get("/api/v1/health/sources")
 async def source_health_check():
     """
-    Get per-source health status from Supabase 'source_health' table.
+    Get per-source health status from Supabase 'data_sources' table.
     Falls back gracefully if Supabase is offline.
     """
     default_sources = [
@@ -39,11 +39,11 @@ async def source_health_check():
         sb = get_client()
         
         result = await asyncio.to_thread(
-            lambda: sb.table("source_health").select("*").execute()
+            lambda: sb.table("data_sources").select("*").execute()
         )
         
         db_items = result.data or []
-        db_map = {item["source_name"].lower(): item for item in db_items}
+        db_map = {item["name"].lower(): item for item in db_items}
         
         # Mapping from DB names/statuses to frontend spec
         name_map = {
@@ -54,9 +54,9 @@ async def source_health_check():
         }
         
         status_map = {
-            "green": "healthy",
-            "yellow": "degraded",
-            "red": "down"
+            "ok": "healthy",
+            "degraded": "degraded",
+            "down": "down"
         }
         
         sources = []
@@ -80,3 +80,4 @@ async def source_health_check():
     except Exception as e:
         logger.warning(f"Supabase unavailable, returning unknown status for sources: {e}")
         return {"sources": default_sources}
+
