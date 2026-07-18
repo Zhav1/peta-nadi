@@ -129,6 +129,7 @@
 - [x] TheoTown: drawing a polygon triggers Crisis Mode and updates map within 30 seconds
 - [x] Timeline scrubber plays back a stored crisis scenario
 - [x] Design review: passes 6-pillar UI audit (run `/gsd-ui-review` after)
+- [x] Fixed Mapbox Draw race condition to ensure flawless draw mode toggling
 
 ---
 
@@ -169,6 +170,7 @@
 - [x] WhatsApp notification delivered (or logged if no live network)
 - [x] 60 FPS confirmed in browser dev tools during full dataset render
 - [x] Team dry-run: judge questions answered from the interface alone
+- [x] Ensured flawless local running (uvicorn) by injecting sys.path resolution in main.py
 
 ---
 
@@ -200,6 +202,18 @@
 - [x] `DEMO_OFFLINE=true` runs with no Redis, no Supabase, no outbound network
 - [x] Mobile remote at `/demo-remote` advances stages correctly from a phone
 - [x] Demo replay loads a saved snapshot and plays it back faithfully
+
+---
+
+## Phase 8: NVIDIA Architecture Integration
+**Goal:** Integrate NIM fallbacks, cuOpt dynamic routing, and proactive FourCastNet polling into the cognitive swarm.
+**Status:** COMPLETE ✅
+**AI Spec Needed:** YES
+
+### Deliverables
+- `llm_gateway.py`: Centralized LLM gateway for automatic NVIDIA NIM fallback routing.
+- Agent 3 (Prediction) update: Proactive CRON polling (every 6 hours) of Earth-2/FourCastNet for the North Sumatra bounding box.
+- Agent 4 (Routing) update: Dynamic VRP matrix generation via pgRouting/OSRM fed into cuOpt for multi-agent constraint solving.
 
 ---
 

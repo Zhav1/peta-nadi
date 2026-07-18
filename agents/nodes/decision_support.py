@@ -75,39 +75,29 @@ async def decision_support_copilot(state: CrisisState) -> dict:
         "Economic Risk Assessment: Retail price of food staples projected to spike."
     )
     
-    # Gemini / DeepSeek LLM execution
-    if settings.gemini_api_key and settings.gemini_api_key != "your-gemini-api-key":
-        try:
-            system_prompt = (
-                "You are a crisis intelligence analyst for Indonesia's logistics network.\n"
-                "Produce an executive summary with exactly these 5 sections:\n"
-                "1. Crisis Overview (2 sentences)\n"
-                "2. Key Evidence (bullet points from each data source)\n"
-                "3. Recommended Immediate Action\n"
-                "4. Economic Risk Assessment (48h outlook)\n"
-                "5. Confidence Assessment\n"
-                "Use Indonesian context. Be factual and specific. Keep under 500 tokens."
-            )
-            
-            prompt = f"Evidence Payload:\n{json.dumps(evidence_payload, indent=2, default=str)}"
-            
-            if use_deepseek:
-                logger.info("Escalating to DeepSeek V3 for complex multi-hazard analysis...")
-                # We can implement a direct httpx POST to DeepSeek API
-                # But for safety and speed, we can fall back to Gemini model since it's highly capable
-                # Let's write the Gemini model call as primary fallback
-                
-            genai.configure(api_key=settings.gemini_api_key)
-            model = genai.GenerativeModel(
-                model_name="gemini-1.5-flash",
-                system_instruction=system_prompt
-            )
-            response = await asyncio.to_thread(model.generate_content, prompt)
-            resp_text = response.text.strip()
-            if resp_text:
-                summary_text = resp_text
-        except Exception as le:
-            logger.error(f"Failed to generate executive summary via Gemini: {le}")
+    # LLMGateway execution
+    try:
+        system_prompt = (
+            "You are a crisis intelligence analyst for Indonesia's logistics network.\n"
+            "Produce an executive summary with exactly these 5 sections:\n"
+            "1. Crisis Overview (2 sentences)\n"
+            "2. Key Evidence (bullet points from each data source)\n"
+            "3. Recommended Immediate Action\n"
+            "4. Economic Risk Assessment (48h outlook)\n"
+            "5. Confidence Assessment\n"
+            "Use Indonesian context. Be factual and specific. Keep under 500 tokens."
+        )
+        
+        prompt = f"Evidence Payload:\n{json.dumps(evidence_payload, indent=2, default=str)}"
+        
+        from agents.llm_gateway import LLMGateway
+        summary_text = await LLMGateway.generate_content(
+            prompt=prompt,
+            system_instruction=system_prompt,
+            model_name="gemini-1.5-flash"
+        )
+    except Exception as le:
+        logger.error(f"Failed to generate executive summary via LLMGateway: {le}")
 
     # 4. GraphRAG enrichment
     disrupted_entity = guess_disrupted_entity(state)
