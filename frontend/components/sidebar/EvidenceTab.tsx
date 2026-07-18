@@ -82,6 +82,61 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
           ))}
         </div>
       )}
+      {/* Sensory Evidence Chain (Evidentiary Drill-down integration) */}
+      <div className="space-y-3 pt-3 border-t border-white/10">
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
+          Sensory Evidence Chain
+        </p>
+        
+        {/* CCTV Feed */}
+        <div className="bg-[#1e2024]/40 border border-white/10 rounded-sm overflow-hidden group hover:border-[#00F0FF]/30 transition-all">
+          <div className="flex justify-between items-center px-3 py-1.5 border-b border-white/5 bg-[#0c0e12]/60">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1">
+              <span className="material-symbols-outlined text-[14px] text-[#00F0FF]">videocam</span>
+              Visual CCTV Log
+            </span>
+            <span className="px-1.5 py-0.5 bg-red-500/10 text-red-400 text-[8px] font-black border border-red-500/20">LIVE</span>
+          </div>
+          <div className="relative h-28 bg-[#0c0e12]">
+            <img 
+              className="w-full h-full object-cover grayscale opacity-70 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-300"
+              alt="CCTV queue" 
+              src="https://lh3.googleusercontent.com/aida-public/AB6AXuCSkcMNp9A2WvmF9SddYsYck24hnqLHr4fijdyt6r3VpZFPJf0mtNR27ab7RUKQdQbUBxp2GnZfrSynR1FJLuY48kRgpb95BjrJMSHx3YlteTolzEwqZqCYY232E624HOyhDrtuVlKptQuZQk8jZw-cS1IPN6HT5w6Qc03wlvdM2fruNNTF9p2NEKlXtH29s3B_zPxT6BEpNe_U2WXNAC2PObrXRsYdyjeJox2fDIvMDQTCpyuAYzTNw5lKWbw8U1D-0ajWdrcSrYc"
+            />
+            <div className="absolute top-2 left-2 text-[8px] font-mono bg-black/60 px-1 text-[#00F0FF]">CAM_IDX_92 :: HIGHWAY_CORRIDOR</div>
+          </div>
+        </div>
+
+        {/* Crowdsourced OSINT */}
+        <div className="bg-[#1e2024]/40 border border-white/10 rounded-sm p-3 hover:border-[#00F0FF]/30 transition-all text-[11px] leading-tight">
+          <div className="flex justify-between items-center mb-1">
+            <span className="font-bold text-slate-200">@LogisticsWatcher_ID</span>
+            <span className="text-[9px] font-mono text-[#ffb950]">OSINT VERIFIED</span>
+          </div>
+          <p className="text-slate-400">&quot;Standstill delay at the main highway crossing. Avoid the corridor, queue extends for 3km.&quot;</p>
+        </div>
+
+        {/* Delay Matrix */}
+        <div className="bg-[#1e2024]/40 border border-white/10 rounded-sm p-3 hover:border-[#00F0FF]/30 transition-all">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300">Delay Matrix</span>
+            <span className="text-[9px] font-mono text-red-400 font-bold">+150 MIN</span>
+          </div>
+          <div className="h-10 flex items-end gap-1">
+            <div className="flex-1 bg-[#00F0FF]/15 h-[20%]"></div>
+            <div className="flex-1 bg-[#00F0FF]/15 h-[30%]"></div>
+            <div className="flex-1 bg-[#00F0FF]/15 h-[25%]"></div>
+            <div className="flex-1 bg-[#00F0FF]/30 h-[50%]"></div>
+            <div className="flex-1 bg-[#00F0FF]/40 h-[70%]"></div>
+            <div className="flex-1 bg-red-500/50 h-[90%] shadow-[0_0_8px_rgba(239,68,68,0.5)]"></div>
+          </div>
+          <div className="flex justify-between mt-1 text-[7px] font-mono text-slate-500">
+            <span>-4H</span>
+            <span>-2H</span>
+            <span className="text-red-400">NOW</span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
