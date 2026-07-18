@@ -94,6 +94,22 @@ npm run dev
 ```
 → Dashboard: http://localhost:3000
 
+## Running with Docker (Phase 10)
+
+You can run the entire platform including the Redis event bus, backend API, and Next.js frontend using Docker Compose.
+
+1. Make sure you have Docker installed and running on your system.
+2. In the root directory, run:
+```bash
+docker compose up --build
+```
+This builds and starts:
+- `redis` container on port `6379`
+- `backend` container on port `8000` (including Playwright scraper environment)
+- `frontend` container on port `3000` (built using optimized standalone output)
+
+---
+
 ## Demo (Phase 6)
 
 You can launch the end-to-end simulator either online (using your configured Redis/Supabase credentials) or offline (using local in-memory mock databases and query caching).
@@ -139,6 +155,7 @@ See [DEMO_SCRIPT.md](file:///d:/College/Pidi.id/DEMO_SCRIPT.md) for a step-by-st
 ├── agents/           LangGraph 6-agent swarm
 ├── infra/
 │   └── supabase/migrations/  SQL schema
+├── docs/             Proposals, references, and booklets
 ├── DEMO_SCRIPT.md    3-minute presentation walkthrough script
 └── .planning/        GSD project planning artifacts
 ```
@@ -157,3 +174,4 @@ See [DEMO_SCRIPT.md](file:///d:/College/Pidi.id/DEMO_SCRIPT.md) for a step-by-st
 | 7 | Interactive Guided Demo Mode | ✅ Complete |
 | 8 | NVIDIA Architecture Integration (NIM, cuOpt, FourCastNet) | ✅ Complete |
 | 9 | Responsive Layout & Stitch Screens Integration | ✅ Complete |
+| 10 | Dockerization & Repository Cleanup | ✅ Complete |
