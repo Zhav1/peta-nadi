@@ -87,25 +87,26 @@ async def osint_hazard_agent(state: CrisisState) -> dict:
 
     # 3. Conditional LLM Call (if source is social)
     inferred_severity = norm_event.get("severity", "medium")
-    if source == "social" and settings.gemini_api_key and settings.gemini_api_key != "your-gemini-api-key":
-        try:
-            genai.configure(api_key=settings.gemini_api_key)
-            model = genai.GenerativeModel("gemini-1.5-flash")
-            
-            raw_text = norm_event.get("raw_payload", {}).get("text", "")
-            if raw_text:
+    if source == "social":
+        raw_text = norm_event.get("raw_payload", {}).get("text", "")
+        if raw_text:
+            try:
                 prompt = (
                     "Based on the following citizen report transcript, classify the crisis severity as "
                     "either 'low', 'medium', 'high', or 'critical'. Return ONLY the classification word "
                     "in lowercase (no period, no additional text).\n\n"
                     f"Report: {raw_text}"
                 )
-                response = await asyncio.to_thread(model.generate_content, prompt)
-                inferred = response.text.strip().lower()
+                from agents.llm_gateway import LLMGateway
+                inferred = await LLMGateway.generate_content(
+                    prompt=prompt,
+                    model_name="gemini-1.5-flash"
+                )
+                inferred = inferred.strip().lower()
                 if inferred in ['low', 'medium', 'high', 'critical']:
                     inferred_severity = inferred
-        except Exception as le:
-            logger.error(f"Gemini LLM severity inference failed: {le}")
+            except Exception as le:
+                logger.error(f"LLMGateway severity inference failed: {le}")
 
     # 4. Compute confidence score
     confidence = 0.6  # Base

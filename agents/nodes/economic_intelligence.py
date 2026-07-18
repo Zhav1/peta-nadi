@@ -87,26 +87,25 @@ async def economic_intelligence_agent(state: CrisisState) -> dict:
     if ltm_episodes:
         narrative += f" This is informed by historical precedent: '{ltm_episodes[0]['title']}'."
         
-    if settings.gemini_api_key and settings.gemini_api_key != "your-gemini-api-key":
-        try:
-            genai.configure(api_key=settings.gemini_api_key)
-            model = genai.GenerativeModel("gemini-1.5-flash")
-            
-            prompt = (
-                "Based on the following historical precedents and current price details, generate a short 3-sentence "
-                "economic narrative forecasting inflation in Indonesian logistics. Mention most affected commodities "
-                "and cite the top historical precedent.\n\n"
-                f"Current Event: {event_type} in {region} ({severity} severity)\n"
-                f"Historical Precedents: {json.dumps(ltm_episodes[:2], default=str)}\n"
-                f"Projected Multiplier: {inflation_multiplier}\n"
-                f"Anomalous Commodities: {anomalous_commodities}"
-            )
-            response = await asyncio.to_thread(model.generate_content, prompt)
-            resp_text = response.text.strip()
-            if resp_text:
-                narrative = resp_text
-        except Exception as le:
-            logger.error(f"Gemini LLM narrative generation failed: {le}")
+    try:
+        prompt = (
+            "Based on the following historical precedents and current price details, generate a short 3-sentence "
+            "economic narrative forecasting inflation in Indonesian logistics. Mention most affected commodities "
+            "and cite the top historical precedent.\n\n"
+            f"Current Event: {event_type} in {region} ({severity} severity)\n"
+            f"Historical Precedents: {json.dumps(ltm_episodes[:2], default=str)}\n"
+            f"Projected Multiplier: {inflation_multiplier}\n"
+            f"Anomalous Commodities: {anomalous_commodities}"
+        )
+        from agents.llm_gateway import LLMGateway
+        resp_text = await LLMGateway.generate_content(
+            prompt=prompt,
+            model_name="gemini-1.5-flash"
+        )
+        if resp_text:
+            narrative = resp_text
+    except Exception as le:
+        logger.error(f"LLMGateway narrative generation failed: {le}")
 
     # 5. Compute confidence score
     confidence = 0.4  # Base

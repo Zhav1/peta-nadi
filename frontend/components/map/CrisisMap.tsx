@@ -56,6 +56,12 @@ export default function CrisisMap({
   const overlayRef = useRef<MapboxOverlay | null>(null);
   const drawRef = useRef<InstanceType<typeof MapboxDraw> | null>(null);
 
+  const isDrawReadyRef = useRef(false);
+  const drawModeActiveRef = useRef(drawModeActive);
+  drawModeActiveRef.current = drawModeActive;
+  const onPolygonDrawnRef = useRef(onPolygonDrawn);
+  onPolygonDrawnRef.current = onPolygonDrawn;
+
   // Build and push updated layers to overlay
   const updateLayers = useCallback(() => {
     if (!overlayRef.current) return;
@@ -121,12 +127,22 @@ export default function CrisisMap({
     map.on('load', () => {
       map.addControl(overlay);
       map.addControl(draw, 'top-left');
+      isDrawReadyRef.current = true;
+
+      // Sync initial draw mode if it was toggled during load
+      if (drawModeActiveRef.current) {
+        try {
+          draw.changeMode('draw_polygon');
+        } catch (err) {
+          console.warn('Failed to set initial draw mode:', err);
+        }
+      }
 
       map.on('draw.create', (e: { features: GeoJSON.Feature[] }) => {
         const feature = e.features[0];
         if (feature.geometry.type === 'Polygon') {
           const ring = feature.geometry.coordinates[0] as [number, number][];
-          onPolygonDrawn(ring, feature);
+          onPolygonDrawnRef.current(ring, feature);
           draw.deleteAll(); // clear after capture
         }
       });
@@ -138,6 +154,7 @@ export default function CrisisMap({
       mapRef.current = null;
       overlayRef.current = null;
       drawRef.current = null;
+      isDrawReadyRef.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // mount once
@@ -150,11 +167,15 @@ export default function CrisisMap({
   // Toggle draw mode
   useEffect(() => {
     const draw = drawRef.current;
-    if (!draw) return;
-    if (drawModeActive) {
-      draw.changeMode('draw_polygon');
-    } else {
-      draw.changeMode('simple_select');
+    if (!draw || !isDrawReadyRef.current) return;
+    try {
+      if (drawModeActive) {
+        draw.changeMode('draw_polygon');
+      } else {
+        draw.changeMode('simple_select');
+      }
+    } catch (err) {
+      console.warn('Failed to change draw mode:', err);
     }
   }, [drawModeActive]);
 

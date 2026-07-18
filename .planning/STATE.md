@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-07-12
 **Active Milestone:** M1 — Hackathon MVP (North Sumatra Corridor)
-**Current Phase:** Phase 7: Interactive Guided Demo Mode
+**Current Phase:** Phase 8: NVIDIA Architecture Integration (COMPLETE)
 
 ---
 
@@ -18,6 +18,7 @@
 | 5 | Notifications & Human-in-the-Loop | **COMPLETE** ✅ | WhatsApp integration, route approvals table + endpoint, source health panel |
 | 6 | Demo Polish & run_demo.py Finalization | **COMPLETE** ✅ | Offline fallback, pacing controls, mock DB seeding, and performance audit |
 | 7 | Interactive Guided Demo Mode | **COMPLETE** ✅ | Guided stepper panel, mock agent fixture flow, presenter mobile remote, and local replay |
+| 8 | NVIDIA Architecture Integration | **COMPLETE** ✅ | NIM gateway, cuOpt dynamic matrix, FourCastNet proactive polling |
 
 
 ---
@@ -33,6 +34,8 @@
 | 2026-07-05 | Phase 3 requires `/gsd-ai-integration-phase` before planning | 6-agent LangGraph swarm needs formal AI-SPEC design contract |
 | 2026-07-12 | Implement `merge_messages` list reducer in `CrisisState` | Solves parallel LangGraph node write conflicts (InvalidUpdateError) |
 | 2026-07-12 | Expand offline simulator mock data seeding and filtering | Enables 100% database/LTM coverage without requiring live credentials |
+| 2026-07-17 | Fix Mapbox Draw initialization race condition in CrisisMap.tsx | Ensures robust drawing mode switching independently of map load latency |
+| 2026-07-17 | Refactor FastAPI sys.path resolution in app/main.py | Ensures local uvicorn execution works seamlessly without PYTHONPATH configuration |
 
 ---
 

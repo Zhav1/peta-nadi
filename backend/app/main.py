@@ -2,7 +2,17 @@
 PetaNadi / LRIP — FastAPI Application Entry Point
 """
 import logging
+import os
+import sys
 from contextlib import asynccontextmanager
+
+# Resolve paths so imports like 'agents' and 'app' work regardless of CWD
+backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+root_dir = os.path.dirname(backend_dir)
+if backend_dir not in sys.path:
+    sys.path.insert(0, backend_dir)
+if root_dir not in sys.path:
+    sys.path.insert(0, root_dir)
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware

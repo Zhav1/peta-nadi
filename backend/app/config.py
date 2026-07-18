@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     nasa_firms_map_key: str = ""
     gemini_api_key: str = ""
     deepseek_api_key: str = ""
+    nvidia_deepseek_v4_pro: str = ""
+    nvidia_deepseek_v4_flash: str = ""
+    nvidia_fourcastnet: str = ""
+    nvidia_cuopt: str = ""
     whatsapp_token: str = ""
     whatsapp_phone_number_id: str = ""
     whatsapp_recipient_number: str = ""
@@ -43,6 +47,7 @@ class Settings(BaseSettings):
         env_file = ".env"
         env_file_encoding = "utf-8"
         case_sensitive = False
+        extra = "ignore"
 
     @property
     def cors_origins_list(self) -> list[str]:
