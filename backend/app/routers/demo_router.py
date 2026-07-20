@@ -77,9 +77,18 @@ async def start_demo(payload: StartDemoPayload, background_tasks: BackgroundTask
                     {
                         "description": "Medan-Tebing Tinggi Detour",
                         "waypoints": [
-                            {"lat": 3.59, "lon": 98.67},
-                            {"lat": 3.65, "lon": 98.8},
-                            {"lat": 3.79, "lon": 98.68}
+                            {"lat": 3.7922, "lon": 98.6776},
+                            {"lat": 3.6850, "lon": 98.6700},
+                            {"lat": 3.6420, "lon": 98.6720},
+                            {"lat": 3.5850, "lon": 98.6920},
+                            {"lat": 3.5410, "lon": 98.7180},
+                            {"lat": 3.5520, "lon": 98.8050},
+                            {"lat": 3.5600, "lon": 98.8750},
+                            {"lat": 3.5680, "lon": 98.9560},
+                            {"lat": 3.4850, "lon": 99.0450},
+                            {"lat": 3.3280, "lon": 99.1620},
+                            {"lat": 3.1600, "lon": 99.1150},
+                            {"lat": 2.9595, "lon": 99.0687}
                         ],
                         "distance_km": 42.5,
                         "eta_minutes": 58,

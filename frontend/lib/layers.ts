@@ -21,17 +21,19 @@ export function buildCrisisPinsLayer(
     id: 'crisis-pins',
     slot: 'top',
     data: incidents.filter((i) => i.lat != null && i.lon != null),
-    getPosition: (d) => [d.lon!, d.lat!],
+    getPosition: (d) => [d.lon!, d.lat!, 0],
+    billboard: true,
+    antialiasing: true,
     getRadius: (d) => {
       const base = d.severity === 'critical' ? 2000 : d.severity === 'high' ? 1500 : 1000;
       return d.id === selectedId ? base * 1.5 : base;
     },
-    radiusMinPixels: 6,
+    radiusMinPixels: 8,
     radiusMaxPixels: 36,
     getFillColor: (d) => severityColor(d.severity),
-    getLineColor: (d) => d.id === selectedId ? [255, 255, 255, 220] : [255, 255, 255, 80],
+    getLineColor: (d) => d.id === selectedId ? [255, 255, 255, 240] : [255, 255, 255, 100],
     stroked: true,
-    lineWidthMinPixels: 1,
+    lineWidthMinPixels: 2,
     pickable: true,
     onClick: (info) => info.object && onClick((info.object as IncidentSummary).id),
     updateTriggers: { getRadius: selectedId, getLineColor: selectedId },
@@ -39,24 +41,26 @@ export function buildCrisisPinsLayer(
 }
 
 export function buildRoutePathsLayer(routes: RouteRecommendation[], activeIdx: number | null) {
+  const targetIdx = activeIdx ?? 0;
   return new PathLayer({
     id: 'route-paths',
     slot: 'top',
     data: routes.map((r, i) => ({
       path: r.waypoints.map((wp) => [wp.lon, wp.lat] as [number, number]),
-      isActive: i === activeIdx,
+      isActive: i === targetIdx,
       riskScore: r.risk_score,
     })),
     getPath: (d) => d.path,
     getColor: (d) =>
       d.isActive
         ? [34, 211, 238, 255]          // cyan — selected route
-        : [100, 116, 139, 160],        // muted gray — alternatives
+        : [249, 115, 22, 180],         // orange — alternative route
     getWidth: (d) => (d.isActive ? 6 : 3),
-    widthMinPixels: 2,
-    widthMaxPixels: 10,
+    widthMinPixels: 3,
+    widthMaxPixels: 12,
     capRounded: true,
     jointRounded: true,
+    billboard: true,
     pickable: true,
     updateTriggers: { getColor: activeIdx, getWidth: activeIdx },
   });
