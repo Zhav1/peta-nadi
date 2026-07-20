@@ -101,34 +101,44 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
             <img 
               className="w-full h-full object-cover grayscale opacity-70 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-300"
               alt="CCTV queue" 
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuCSkcMNp9A2WvmF9SddYsYck24hnqLHr4fijdyt6r3VpZFPJf0mtNR27ab7RUKQdQbUBxp2GnZfrSynR1FJLuY48kRgpb95BjrJMSHx3YlteTolzEwqZqCYY232E624HOyhDrtuVlKptQuZQk8jZw-cS1IPN6HT5w6Qc03wlvdM2fruNNTF9p2NEKlXtH29s3B_zPxT6BEpNe_U2WXNAC2PObrXRsYdyjeJox2fDIvMDQTCpyuAYzTNw5lKWbw8U1D-0ajWdrcSrYc"
+              src={crisis.evidence?.cctv_url || "https://lh3.googleusercontent.com/aida-public/AB6AXuCSkcMNp9A2WvmF9SddYsYck24hnqLHr4fijdyt6r3VpZFPJf0mtNR27ab7RUKQdQbUBxp2GnZfrSynR1FJLuY48kRgpb95BjrJMSHx3YlteTolzEwqZqCYY232E624HOyhDrtuVlKptQuZQk8jZw-cS1IPN6HT5w6Qc03wlvdM2fruNNTF9p2NEKlXtH29s3B_zPxT6BEpNe_U2WXNAC2PObrXRsYdyjeJox2fDIvMDQTCpyuAYzTNw5lKWbw8U1D-0ajWdrcSrYc"}
             />
-            <div className="absolute top-2 left-2 text-[8px] font-mono bg-black/60 px-1 text-[#00F0FF]">CAM_IDX_92 :: HIGHWAY_CORRIDOR</div>
+            <div className="absolute top-2 left-2 text-[8px] font-mono bg-black/60 px-1 text-[#00F0FF]">{crisis.evidence?.cctv_label || "CAM_IDX_92 :: HIGHWAY_CORRIDOR"}</div>
           </div>
         </div>
 
         {/* Crowdsourced OSINT */}
         <div className="bg-[#1e2024]/40 border border-white/10 rounded-sm p-3 hover:border-[#00F0FF]/30 transition-all text-[11px] leading-tight">
           <div className="flex justify-between items-center mb-1">
-            <span className="font-bold text-slate-200">@LogisticsWatcher_ID</span>
+            <span className="font-bold text-slate-200">{crisis.evidence?.osint_author || "@LogisticsWatcher_ID"}</span>
             <span className="text-[9px] font-mono text-[#ffb950]">OSINT VERIFIED</span>
           </div>
-          <p className="text-slate-400">&quot;Standstill delay at the main highway crossing. Avoid the corridor, queue extends for 3km.&quot;</p>
+          <p className="text-slate-400">{crisis.evidence?.osint_text || "\"Standstill delay at the main highway crossing. Avoid the corridor, queue extends for 3km.\""}</p>
         </div>
 
         {/* Delay Matrix */}
         <div className="bg-[#1e2024]/40 border border-white/10 rounded-sm p-3 hover:border-[#00F0FF]/30 transition-all">
           <div className="flex justify-between items-center mb-2">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300">Delay Matrix</span>
-            <span className="text-[9px] font-mono text-red-400 font-bold">+150 MIN</span>
+            <span className="text-[9px] font-mono text-red-400 font-bold">{crisis.evidence?.delay_minutes || "+150 MIN"}</span>
           </div>
           <div className="h-10 flex items-end gap-1">
-            <div className="flex-1 bg-[#00F0FF]/15 h-[20%]"></div>
-            <div className="flex-1 bg-[#00F0FF]/15 h-[30%]"></div>
-            <div className="flex-1 bg-[#00F0FF]/15 h-[25%]"></div>
-            <div className="flex-1 bg-[#00F0FF]/30 h-[50%]"></div>
-            <div className="flex-1 bg-[#00F0FF]/40 h-[70%]"></div>
-            <div className="flex-1 bg-red-500/50 h-[90%] shadow-[0_0_8px_rgba(239,68,68,0.5)]"></div>
+            {(crisis.evidence?.delay_history || [20, 30, 25, 50, 70, 90]).map((h: number, i: number) => {
+              const maxVal = Math.max(...(crisis.evidence?.delay_history || [20, 30, 25, 50, 70, 90]), 10);
+              const heightPct = `${(h / maxVal) * 90}%`;
+              const isLast = i === (crisis.evidence?.delay_history || [20, 30, 25, 50, 70, 90]).length - 1;
+              return (
+                <div 
+                  key={i} 
+                  className={`flex-1 transition-all ${
+                    isLast 
+                      ? 'bg-red-500/50 shadow-[0_0_8px_rgba(239,68,68,0.5)]' 
+                      : 'bg-[#00F0FF]/15'
+                  }`} 
+                  style={{ height: heightPct }}
+                />
+              );
+            })}
           </div>
           <div className="flex justify-between mt-1 text-[7px] font-mono text-slate-500">
             <span>-4H</span>

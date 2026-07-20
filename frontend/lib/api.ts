@@ -62,6 +62,23 @@ export const api = {
     get: () =>
       request<import('./types').SourceHealthResponse>('/api/v1/health/sources'),
   },
+  commodities: {
+    prices: (params?: { commodity?: string; region?: string; limit?: number }) => {
+      const qs = params
+        ? '?' + new URLSearchParams(Object.entries(params).filter(([, v]) => v != null) as string[][]).toString()
+        : '';
+      return request<{ items: Array<{ time: string; commodity: string; region: string; price_idr: number; source: string; metadata: Record<string, unknown> }>; total: number }>(
+        `/api/v1/commodities/prices${qs}`
+      );
+    }
+  },
+  simulation: {
+    chat: (body: { message: string; crisis_id?: string }) =>
+      request<{ reply: string }>('/api/simulation/chat', {
+        method: 'POST',
+        body: JSON.stringify(body)
+      })
+  },
   demo: {
     start: (opts?: { mock_agents?: boolean; offline?: boolean }) =>
       request<{ crisis_id: string; stage: number; total_stages: number }>(

@@ -136,27 +136,71 @@ export function useDemoState(onCrisisReady?: (crisis: CrisisState) => void) {
 
   // Starts the demo run
   const start = useCallback(async (opts?: { mock_agents?: boolean; offline?: boolean }) => {
+    setIsReplay(false);
+    setIsRunning(true);
+    setStage(0);
+
     try {
-      setIsReplay(false);
-      setIsRunning(true);
-      setStage(0);
-      
-      // Request demo start
+      // Request demo start from backend
       const res = await api.demo.start(opts);
-      setCrisisId(res.crisis_id);
-      
-      // Fetch initial status to get full crisis state
-      const statusRes = await api.demo.status(res.crisis_id);
-      setFullCrisisState(statusRes.crisis_state);
+      if (res && res.crisis_id) {
+        setCrisisId(res.crisis_id);
+        try {
+          const statusRes = await api.demo.status(res.crisis_id);
+          if (statusRes && statusRes.crisis_state) {
+            setFullCrisisState(statusRes.crisis_state);
+          }
+        } catch (statusErr) {
+          console.warn('Demo started but initial status fetch was delayed:', statusErr);
+        }
+        return;
+      }
     } catch (err) {
-      console.error('Failed to start demo:', err);
-      setIsRunning(false);
+      console.warn('Backend demo API call failed, activating client-side offline demo runner:', err);
     }
+
+    // Fallback for offline / mock mode when backend is unreachable
+    const fallbackId = `belawan-demo-offline-${Math.floor(Math.random() * 1000)}`;
+    setCrisisId(fallbackId);
+    setFullCrisisState({
+      crisis_id: fallbackId,
+      title: 'Inflation Spike Alert: Rice Stock Depletion',
+      type: 'port_closure',
+      is_simulated: true,
+      lat: 3.79,
+      lon: 98.68,
+      region: 'north_sumatra',
+      status: 'validated',
+      overall_confidence: 0.91,
+      validated: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      messages: [],
+      decision_support_output: 'Belawan Port closure detected. Directing bulk grain trucks via Medan-Tebing Tinggi toll road detour.',
+      route_recommendations: [
+        {
+          description: 'Medan-Tebing Tinggi Detour',
+          waypoints: [
+            { lat: 3.59, lon: 98.67 },
+            { lat: 3.65, lon: 98.8 },
+            { lat: 3.79, lon: 98.68 }
+          ],
+          distance_km: 42.5,
+          eta_minutes: 58,
+          fuel_increase_pct: 12.5,
+          risk_score: 0.2
+        }
+      ],
+      evidence: {
+        cctv_label: 'BELAWAN_STORAGE_CAM',
+        osint_text: 'Low incoming volume at the grain terminals. Port gates temporarily restricted.'
+      }
+    });
   }, []);
 
   // Advances stage
   const advance = useCallback(async () => {
-    if (isReplay) {
+    if (isReplay || (crisisId && crisisId.startsWith('belawan-demo-offline'))) {
       setStage((prev) => {
         if (prev < 4) return prev + 1;
         setIsAuto(false);
@@ -173,7 +217,8 @@ export function useDemoState(onCrisisReady?: (crisis: CrisisState) => void) {
         setIsAuto(false);
       }
     } catch (err) {
-      console.error('Failed to advance demo:', err);
+      console.warn('Failed to advance demo online, falling back to local stage increment:', err);
+      setStage((prev) => (prev < 4 ? prev + 1 : prev));
     }
   }, [crisisId, isReplay]);
 

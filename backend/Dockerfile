@@ -3,16 +3,20 @@ FROM mcr.microsoft.com/playwright/python:v1.47.0-jammy
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PORT=8000
+    PORT=8000 \
+    PYTHONPATH=/app
 
 WORKDIR /app
 
-# Copy requirements and install dependencies
-COPY requirements.txt .
+# Copy requirements dari folder backend dan instal dependensinya
+COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application code
-COPY . .
+# Salin isi dari folder backend ke /app
+COPY backend/ .
+
+# Salin folder agents dari root ke /app/agents
+COPY agents/ ./agents/
 
 # Expose the API port
 EXPOSE 8000

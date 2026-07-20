@@ -10,7 +10,7 @@ import uuid
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/demo", tags=["Demo"])
+router = APIRouter(prefix="/api/demo", tags=["Demo"])
 
 # In-memory store for demo runs
 DEMO_STORE: Dict[str, Dict[str, Any]] = {}

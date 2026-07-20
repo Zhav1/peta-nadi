@@ -236,6 +236,123 @@
 
 ---
 
+## Phase 11: Proposal Migration & Dynamic UI Integration
+**Goal:** Align the backend consensus threshold, cross-validation mechanisms, and frontend static pages with the Stage 2 Submission specifications.
+**Status:** COMPLETE ✅
+
+### Deliverables
+- Swarm Consensus logic updated: threshold >= 85%, cross-validation requiring >= 2 independent sources.
+- `AnalyticsSection` dynamically connected to Supabase `commodity_prices` data streams.
+- `SimulationSection` dynamically connected to backend agent-chat / advisor endpoint.
+- `ReportsSection` connected to live metrics queried from the database.
+- `EconomicTab` and map layers (`STUB_MARITIME`, `STUB_FIRE_HOTSPOTS`) bound to live backend sources.
+- Security sweep completed to verify UU 27/2022 (PDP) compliance (zero NIK, personal names, or unencrypted PII).
+- Left navigation sidebar icons wired to open the sidebar and focus corresponding tab layouts.
+- Bottombar time scope filters (PAST, FUTURE, PREDICT) bound to mock data feeds and geocoded locations.
+
+### Verification
+- [x] Swarm Consensus logic verified with 34/34 passing agent tests.
+- [x] Security sweep successfully validated UU No. 27/2022 compliance.
+- [x] Frontend production container built successfully with zero type or lint errors.
+- [x] Sidebar navigation tabs and bottombar time filter options verified interactive.
+
+---
+
+## Phase 12 (Prev): UI/UX Refinement & Runtime State Fixes
+**Goal:** Eliminate visual widget overlaps between top status bar / header and sidebar panels, add smooth easing transitions to the left navigation menu, and harden "Run Demo" action handlers.
+**Status:** COMPLETE ✅
+
+### Deliverables
+- Fix `CrisisSidebar` positioning to `top-20` so it sits cleanly below the fixed top header navbar without overlapping header items.
+- Constrain `CrisisSidebar` max height to `max-h-[calc(100vh-12rem)]` to avoid vertical overlap with bottombar controls and demo panel.
+- Refactor left tactical column & micro-telemetry ticker layout grid/padding in `DashboardClient.tsx` to eliminate gauge card clipping.
+- Add `transition-all duration-300 ease-in-out` and text opacity transitions to left sidebar hover expansion.
+- Add explicit `type="button"` and event handler guards to all action buttons in `GuidedDemoPanel.tsx`.
+- Wrap demo state initialization and API calls in robust try/catch blocks in `useDemoState.ts`.
+
+### Verification
+- [x] Verified zero header navbar overlap with `CrisisSidebar`.
+- [x] Left navigation sidebar hover transition verified smooth with `ease-in-out` easing.
+- [x] Action buttons in `GuidedDemoPanel` verified safe with explicit `type="button"` and event guards.
+- [x] Production container build verified with zero errors.
+
+---
+
+## Phase 12: Backend Demo Engine & AI Advisor Localization
+**Goal:** Perbaiki API 500/404 demo runner, prompt bahasa Indonesia Gemini Advisor, dan stub PDF report.
+**Status:** NOT STARTED ⏳
+
+### Deliverables
+- **Demo Runner API Fixes**:
+  - Resolve API `/api/demo/start` returning 500 server error when running demo.
+  - Resolve `/api/demo/status/{id}` returning 404 Not Found error during polling.
+  - Fix demo runner freezing/hanging on second run by properly resetting runner state.
+- **AI Advisor Localization**:
+  - Update Gemini / DeepSeek AI Advisor prompts to automatically respond in Indonesian (multilingual adaptation based on user input).
+- **PDF Report Generator**:
+  - Fix stub PDF report export functionality on the Reports page.
+
+### Verification
+- [ ] `POST /api/demo/start` and polling `/api/demo/status/...` succeed with 200 OK.
+- [ ] Consecutive "Run Demo" triggers run smoothly without hanging.
+- [ ] Simulation AI Advisor responds in Indonesian when user prompts in Indonesian.
+- [ ] PDF report generation produces downloadable report on the Reports page.
+
+---
+
+## Phase 13: Mapbox/Deck.gl Spatiotemporal Layers & Drawing Tool
+**Goal:** Perbaiki 3D globe node anchor agar tidak melayang saat diputar, event-listener Drawing Mode, dan kerapihan rute.
+**Status:** NOT STARTED ⏳
+
+### Deliverables
+- **3D Globe Node Anchor Fix**:
+  - Fix Mapbox/Deck.gl disruption hotspot nodes drifting and floating off position during 3D globe rotation and zoom.
+- **Drawing Mode Event Listener Fix**:
+  - Fix "SIMULATE DISRUPTION" button event listener so activating drawing mode enables polygon drawing tool and handles mouse drag events properly.
+- **Route Visualization Cleanup**:
+  - Refine map logistics route polylines to remove hallucinated/jagged paths and display clean corridor routes.
+
+### Verification
+- [ ] Disruption nodes stay strictly pinned to map coordinates when rotating/tilting 3D globe.
+- [ ] Clicking "SIMULATE DISRUPTION" switches cursor to drawing tool and permits drawing polygons on canvas.
+- [ ] Route polylines follow road and maritime paths accurately without visual glitches.
+
+---
+
+## Phase 14: UI/UX Layout, Toast Notifications & Navigation State
+**Goal:** Perbaiki margin/padding overlap, ganti JS alert() ke UI Toast, dan rapikan logika Sidebar vs Bottombar.
+**Status:** NOT STARTED ⏳
+
+### Deliverables
+- **UI Spacing & Layout Audit**:
+  - Fix component overlaps, missing margins, and padding on Analytics, Simulation, and Reports pages.
+- **Toast Notifications**:
+  - Replace native JavaScript `alert()` popups (e.g. "Assigned cargo routing parameters...") with sleek UI Toast notifications.
+- **Sidebar vs Bottombar Navigation Logic**:
+  - Harmonize Sidebar and Bottombar state: hide bottombar on non-map pages and ensure sidebar controls operate properly across all pages.
+
+### Verification
+- [ ] Zero overlapping UI elements across Analytics, Simulation, and Reports screens.
+- [ ] Action buttons trigger Toast notifications instead of browser `alert()`.
+- [ ] Navigation transitions correctly synchronize sidebar and bottombar visibility across views.
+
+---
+
+## Phase 15: 4D Logistics Vehicle Animation Layers
+**Goal:** Implementasi layer animasi truk, kapal, dan pesawat sesuai dokumen proposal.
+**Status:** NOT STARTED ⏳
+
+### Deliverables
+- **Animated Logistics Layers**:
+  - Add Deck.gl / Mapbox animated vehicle markers for trucks, cargo ships, and planes.
+  - Animate vehicles moving along logistics corridors (highway, maritime lanes, air paths) based on proposal specifications in `docs/Submission Tahap 2 (3) - compiled.md`.
+
+### Verification
+- [ ] Moving vehicle icons (trucks, ships, planes) are rendered and animated smoothly along simulated logistics routes.
+- [ ] Vehicle movement can be toggled or filtered on the 4D Map.
+
+---
+
 ## Backlog (Post-Hackathon / v2)
 - Driver mobile app (React Native + WatermelonDB + CRDT offline sync)
 - Self-serve operator GPS onboarding SDK

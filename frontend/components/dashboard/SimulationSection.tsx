@@ -1,29 +1,39 @@
 'use client';
 
 import React, { useState } from 'react';
+import { api } from '@/lib/api';
 
-export default function SimulationSection() {
+interface SimulationSectionProps {
+  crisisId?: string | null;
+}
+
+export default function SimulationSection({ crisisId }: SimulationSectionProps) {
   const [activeAgency, setActiveAgency] = useState<string | null>(null);
   const [messages, setMessages] = useState<Array<{ sender: 'user' | 'ai'; text: string }>>([
     { sender: 'ai', text: 'Tactical Advisory Engine active. Operational baseline loaded for North Sumatra logistics corridor.' },
-    { sender: 'user', text: 'Analyze impact of severe flood delays on the Trans-Sumatra Route.' },
-    { sender: 'ai', text: 'ALERT: Flood depth at Demak segment exceeding 80cm. Logistics transit latency projected to spike by +150 minutes. I recommend dispatching a reroute order to the Southern Corridor.' }
   ]);
   const [inputVal, setInputVal] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSend = () => {
-    if (!inputVal.trim()) return;
-    setMessages(prev => [...prev, { sender: 'user', text: inputVal }]);
-    const userQ = inputVal.toLowerCase();
+  const handleSend = async () => {
+    if (!inputVal.trim() || loading) return;
+    const userMsg = inputVal;
+    setMessages(prev => [...prev, { sender: 'user', text: userMsg }]);
     setInputVal('');
+    setLoading(true);
 
-    setTimeout(() => {
-      let reply = 'Inference complete. Real-time GraphRAG shows nominal down-stream flow in the selected corridor.';
-      if (userQ.includes('flood') || userQ.includes('demak') || userQ.includes('reroute')) {
-        reply = 'RECOMMENDATION: Divert 40% of secondary logistics cargo from Belawan corridor to Southern Rail bypass. Projected inflation mitigation: -2.4%.';
-      }
-      setMessages(prev => [...prev, { sender: 'ai', text: reply }]);
-    }, 1000);
+    try {
+      const res = await api.simulation.chat({
+        message: userMsg,
+        crisis_id: crisisId || undefined
+      });
+      setMessages(prev => [...prev, { sender: 'ai', text: res.reply }]);
+    } catch (err) {
+      console.error('Failed to get simulation chat reply:', err);
+      setMessages(prev => [...prev, { sender: 'ai', text: 'Error communicating with AI emergency advisor. Please verify network connection.' }]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

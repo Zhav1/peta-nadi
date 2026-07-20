@@ -84,13 +84,23 @@ export function GuidedDemoPanel({ onCrisisReady }: GuidedDemoPanelProps) {
           className="hidden"
         />
         <button
-          onClick={() => fileInputRef.current?.click()}
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            fileInputRef.current?.click();
+          }}
           className="px-4 py-2 text-xs font-semibold rounded-full border border-slate-700 bg-slate-900/90 text-slate-300 hover:bg-slate-800 hover:text-white transition duration-200 shadow-lg"
         >
           📂 Load Replay
         </button>
         <button
-          onClick={() => start({ mock_agents: true, offline: true })}
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            start({ mock_agents: true, offline: true });
+          }}
           className="flex items-center gap-2 px-5 py-2.5 font-bold rounded-full bg-cyan-500 text-slate-950 hover:bg-cyan-400 active:scale-95 transition duration-200 shadow-lg shadow-cyan-500/20"
         >
           <span>▶</span> Run Demo
@@ -147,7 +157,12 @@ export function GuidedDemoPanel({ onCrisisReady }: GuidedDemoPanelProps) {
           </h4>
         </div>
         <button
-          onClick={reset}
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            reset();
+          }}
           className="text-slate-400 hover:text-slate-200 text-xs transition p-1 hover:bg-slate-900 rounded-md"
         >
           ✕
@@ -266,14 +281,24 @@ export function GuidedDemoPanel({ onCrisisReady }: GuidedDemoPanelProps) {
         <div className="flex gap-2">
           {stage < 4 ? (
             <button
-              onClick={advance}
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                advance();
+              }}
               className="flex-1 py-2 rounded-xl text-xs font-bold bg-cyan-500 text-slate-950 hover:bg-cyan-400 active:scale-98 transition duration-200"
             >
               ⏭ Next Step
             </button>
           ) : (
             <button
-              onClick={saveReplay}
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                saveReplay();
+              }}
               className="flex-1 py-2 rounded-xl text-xs font-bold border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200 active:scale-98 transition duration-200"
             >
               💾 Save Replay
@@ -281,7 +306,12 @@ export function GuidedDemoPanel({ onCrisisReady }: GuidedDemoPanelProps) {
           )}
 
           <button
-            onClick={toggleAuto}
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              toggleAuto();
+            }}
             className={`px-3 py-2 rounded-xl text-xs font-bold transition duration-200 ${
               isAuto
                 ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
@@ -294,13 +324,23 @@ export function GuidedDemoPanel({ onCrisisReady }: GuidedDemoPanelProps) {
 
         <div className="flex justify-between items-center text-[10px] text-slate-500 pt-2 border-t border-slate-900 mt-1">
           <button
-            onClick={() => setQrVisible((prev) => !prev)}
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setQrVisible((prev) => !prev);
+            }}
             className="hover:text-cyan-400 transition"
           >
             {qrVisible ? 'Hide Phone Remote' : '📱 Show Phone Remote'}
           </button>
           <button
-            onClick={() => start({ mock_agents: true, offline: true })}
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              start({ mock_agents: true, offline: true });
+            }}
             className="hover:text-slate-300 transition"
           >
             ↺ Restart Demo
