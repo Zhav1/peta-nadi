@@ -223,6 +223,12 @@ export default function DashboardClient() {
     }
   }, [refetch]);
 
+  const handleDemoCrisisReady = useCallback((crisis: CrisisState) => {
+    setSelectedCrisis(crisis);
+    setSelectedCrisisId(crisis.crisis_id);
+    refetch();
+  }, [refetch]);
+
   // Determine active time filter results
   const filteredIncidents = [...incidents, ...MOCK_PAST_INCIDENTS, ...MOCK_FUTURE_INCIDENTS, ...MOCK_PREDICT_INCIDENTS].filter((incident) => {
     if (activeTimeFilter === 'past') {
@@ -689,13 +695,7 @@ export default function DashboardClient() {
 
       {/* Guided Demo Stepper Panel (Positioned bottom-right above the footer) */}
       <div className="bottom-24 fixed right-6 z-50">
-        <GuidedDemoPanel
-          onCrisisReady={(crisis) => {
-            setSelectedCrisis(crisis);
-            setSelectedCrisisId(crisis.crisis_id);
-            refetch(); // refresh the incident list to display the demo incident
-          }}
-        />
+        <GuidedDemoPanel onCrisisReady={handleDemoCrisisReady} />
       </div>
     </div>
   );

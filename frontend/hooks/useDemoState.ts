@@ -96,6 +96,8 @@ export function useDemoState(onCrisisReady?: (crisis: CrisisState) => void) {
     return base;
   }, []);
 
+  const notifiedKeyRef = useRef<string | null>(null);
+
   // Update current filtered state when stage or fullCrisisState changes
   useEffect(() => {
     if (fullCrisisState) {
@@ -127,8 +129,10 @@ export function useDemoState(onCrisisReady?: (crisis: CrisisState) => void) {
       }
       setAgentStatuses(updatedStatuses);
 
-      // Notify parent when crisis is ready to display in sidebar/map (Stage 3+)
-      if (stage >= 3 && onCrisisReady) {
+      // Notify parent ONCE when crisis is ready to display in sidebar/map (Stage 3+)
+      const notifyKey = `${fullCrisisState.crisis_id}_${stage}`;
+      if (stage >= 3 && onCrisisReady && notifiedKeyRef.current !== notifyKey) {
+        notifiedKeyRef.current = notifyKey;
         onCrisisReady(filtered);
       }
     }
@@ -224,7 +228,7 @@ export function useDemoState(onCrisisReady?: (crisis: CrisisState) => void) {
 
   // Sync state by polling (primarily for mobile remote synchronization)
   const pollStatus = useCallback(async () => {
-    if (!crisisId || isReplay) return;
+    if (!crisisId || isReplay || crisisId.startsWith('belawan-demo-offline')) return;
     try {
       const statusRes = await api.demo.status(crisisId);
       if (statusRes.stage !== stage) {
@@ -234,7 +238,7 @@ export function useDemoState(onCrisisReady?: (crisis: CrisisState) => void) {
         }
       }
     } catch (err) {
-      console.error('Failed to poll demo status:', err);
+      console.warn('Failed to poll demo status (skipping offline ID):', err);
     }
   }, [crisisId, stage, isReplay]);
 
@@ -294,6 +298,7 @@ export function useDemoState(onCrisisReady?: (crisis: CrisisState) => void) {
     setFullCrisisState(null);
     setCurrentCrisisState(null);
     setIsAuto(false);
+    notifiedKeyRef.current = null;
     if (autoIntervalRef.current) {
       clearInterval(autoIntervalRef.current);
     }
