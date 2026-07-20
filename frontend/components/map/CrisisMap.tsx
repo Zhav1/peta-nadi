@@ -160,7 +160,45 @@ export default function CrisisMap({
         },
       });
 
-      // 3. Crisis Pins GeoJSON Layer (Native WebGL 3D Globe Anchored)
+      // 3. Fire Hotspots GeoJSON Layer
+      map.addSource('fire-hotspots-source', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+      map.addLayer({
+        id: 'fire-hotspots-glow',
+        type: 'circle',
+        source: 'fire-hotspots-source',
+        paint: {
+          'circle-radius': 14,
+          'circle-color': '#ef4444',
+          'circle-opacity': 0.6,
+          'circle-blur': 0.7,
+        },
+      });
+
+      // 4. Maritime Vectors GeoJSON Layer
+      map.addSource('maritime-vectors-source', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+      map.addLayer({
+        id: 'maritime-vectors-line',
+        type: 'line',
+        source: 'maritime-vectors-source',
+        layout: {
+          'line-cap': 'round',
+          'line-join': 'round',
+        },
+        paint: {
+          'line-color': '#22d3ee',
+          'line-width': 2,
+          'line-dasharray': [2, 2],
+          'line-opacity': 0.8,
+        },
+      });
+
+      // 5. Crisis Pins GeoJSON Layer (Native WebGL 3D Globe Anchored)
       map.addSource('crisis-pins-source', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
@@ -320,12 +358,38 @@ export default function CrisisMap({
         })),
       });
     }
+
+    // 4. Update Fire Hotspots Source
+    const fireSource = map.getSource('fire-hotspots-source') as mapboxgl.GeoJSONSource;
+    if (fireSource) {
+      fireSource.setData({
+        type: 'FeatureCollection',
+        features: (fireHotspots || []).map((f) => ({
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: f.coordinates },
+          properties: { confidence: f.confidence, severity: f.severity },
+        })),
+      });
+    }
+
+    // 5. Update Maritime Vectors Source
+    const maritimeSource = map.getSource('maritime-vectors-source') as mapboxgl.GeoJSONSource;
+    if (maritimeSource) {
+      maritimeSource.setData({
+        type: 'FeatureCollection',
+        features: (maritimeVectors || []).map((m) => ({
+          type: 'Feature',
+          geometry: { type: 'LineString', coordinates: m.path },
+          properties: { vessel_name: m.vessel_name, type: m.type },
+        })),
+      });
+    }
   };
 
   // Update sources on prop changes
   useEffect(() => {
     updateMapSources();
-  }, [incidents, selectedCrisisId, activeRoutes, activeRouteIdx, disasterZones]);
+  }, [incidents, selectedCrisisId, activeRoutes, activeRouteIdx, fireHotspots, maritimeVectors, disasterZones]);
 
   // Toggle MapboxDraw mode & canvas cursor
   useEffect(() => {
