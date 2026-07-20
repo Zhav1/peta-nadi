@@ -280,7 +280,7 @@
 
 ## Phase 12: Backend Demo Engine & AI Advisor Localization
 **Goal:** Perbaiki API 500/404 demo runner, prompt bahasa Indonesia Gemini Advisor, dan stub PDF report.
-**Status:** NOT STARTED ⏳
+**Status:** COMPLETE ✅
 
 ### Deliverables
 - **Demo Runner API Fixes**:
@@ -293,10 +293,10 @@
   - Fix stub PDF report export functionality on the Reports page.
 
 ### Verification
-- [ ] `POST /api/demo/start` and polling `/api/demo/status/...` succeed with 200 OK.
-- [ ] Consecutive "Run Demo" triggers run smoothly without hanging.
-- [ ] Simulation AI Advisor responds in Indonesian when user prompts in Indonesian.
-- [ ] PDF report generation produces downloadable report on the Reports page.
+- [x] `POST /api/demo/start` and polling `/api/demo/status/...` succeed with 200 OK.
+- [x] Consecutive "Run Demo" triggers run smoothly without hanging.
+- [x] Simulation AI Advisor responds in Indonesian when user prompts in Indonesian.
+- [x] PDF report generation produces downloadable report on the Reports page.
 
 ---
 

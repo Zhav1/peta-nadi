@@ -166,23 +166,33 @@ async def simulation_chat(payload: ChatPayload):
     prompt = (
         f"{context}\n"
         f"User message: {message}\n"
-        f"Provide a brief, tactical response (max 3 sentences) in English."
+        f"IMPORTANT INSTRUCTION: Respond in the EXACT same language as the user message (Indonesian if the user asks in Indonesian, English if in English). "
+        f"Provide a brief, authoritative, and tactical response (max 3 sentences)."
     )
     
     try:
         from agents.llm_gateway import LLMGateway
         reply = await LLMGateway.generate_content(
             prompt=prompt,
-            system_instruction="You are a professional logistics emergency advisor."
+            system_instruction="You are PetaNadi AI Advisor, an expert Indonesian logistics and emergency response consultant."
         )
         return {"reply": reply}
     except Exception as err:
         logger.error(f"Error in simulation chat endpoint: {err}")
-        # Fallback response for offline/mock cases
+        # Detect if user message is in Indonesian
+        lower_msg = message.lower()
+        is_id = any(w in lower_msg for w in ["bagaimana", "apa", "rute", "stok", "pelabuhan", "belawan", "banjir", "truk", "harga", "mitigasi", "tolong", "bisa"])
         import random
-        fallback_replies = [
-            "RECOMMENDATION: Divert 40% of secondary logistics cargo from Belawan corridor to Southern Rail bypass. Projected inflation mitigation: -2.4%.",
-            "ALERT: Flood depth at segment exceeding 80cm. Logistics transit latency projected to spike. I recommend dispatching a reroute order.",
-            "Real-time GraphRAG shows nominal down-stream flow. We continue to monitor the Belawan Port corridor."
-        ]
+        if is_id:
+            fallback_replies = [
+                "REKOMENDASI: Alihkan 40% kargo logistik sekunder dari koridor Belawan ke Jalur Tol Medan-Tebing Tinggi. Proyeksi mitigasi inflasi: -2.4%.",
+                "PERINGATAN: Ketinggian genangan air di segmen Jalinsum melebihi 80cm. Latensi armada diperkirakan naik. Direkomendasikan penerbitan perintah pengalihan rute (reroute).",
+                "GraphRAG Real-time menunjukkan aliran pasokan sembako aman pasca aktivasi rute alternatif depo BULOG."
+            ]
+        else:
+            fallback_replies = [
+                "RECOMMENDATION: Divert 40% of secondary logistics cargo from Belawan corridor to Medan-Tebing Tinggi bypass. Projected inflation mitigation: -2.4%.",
+                "ALERT: Flood depth at segment exceeding 80cm. Logistics transit latency projected to spike. I recommend dispatching a reroute order.",
+                "Real-time GraphRAG shows nominal down-stream flow following activation of BULOG depot bypass."
+            ]
         return {"reply": random.choice(fallback_replies)}
