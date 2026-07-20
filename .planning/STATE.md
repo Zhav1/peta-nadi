@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-07-20
 **Active Milestone:** M1 — Hackathon MVP (North Sumatra Corridor)
-**Current Phase:** Phase 13: Mapbox/Deck.gl Spatiotemporal Layers & Drawing Tool (NOT STARTED ⏳)
+**Current Phase:** Phase 14: UI/UX Layout, Toast Notifications & Navigation State (NOT STARTED ⏳)
 
 ---
 
@@ -23,7 +23,7 @@
 | 10 | Dockerization & Repository Cleanup | **COMPLETE** ✅ | Added multi-stage Dockerfiles and compose orchestration, cleaned root directory |
 | 11 | Proposal Migration & Dynamic UI Integration | **COMPLETE** ✅ | Connected all static frontend views (Analytics, Simulation, Reports) and updated consensus gate validation |
 | 12 | Backend Demo Engine & AI Advisor Localization | **COMPLETE** ✅ | Fixed API 500/404 demo runner, Indonesian prompt for Gemini Advisor, and PDF report generator |
-| 13 | Mapbox/Deck.gl Spatiotemporal Layers & Drawing Tool | **NOT STARTED** ⏳ | 3D globe node anchor fix, Drawing Mode event listener, crisp route polylines |
+| 13 | Mapbox/Deck.gl Spatiotemporal Layers & Drawing Tool | **COMPLETE** ✅ | Fixed 3D globe node anchor, Drawing Mode event listener & pen cursor, and smooth corridor route polylines |
 | 14 | UI/UX Layout, Toast Notifications & Navigation State | **NOT STARTED** ⏳ | Layout margin/padding audit, replace JS alert() with UI Toast, Sidebar vs Bottombar logic |
 | 15 | 4D Logistics Vehicle Animation Layers | **NOT STARTED** ⏳ | Animated vehicle layers (trucks, ships, planes) based on proposal specs |
 

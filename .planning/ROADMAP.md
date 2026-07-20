@@ -302,7 +302,7 @@
 
 ## Phase 13: Mapbox/Deck.gl Spatiotemporal Layers & Drawing Tool
 **Goal:** Perbaiki 3D globe node anchor agar tidak melayang saat diputar, event-listener Drawing Mode, dan kerapihan rute.
-**Status:** NOT STARTED ⏳
+**Status:** COMPLETE ✅
 
 ### Deliverables
 - **3D Globe Node Anchor Fix**:
@@ -313,9 +313,9 @@
   - Refine map logistics route polylines to remove hallucinated/jagged paths and display clean corridor routes.
 
 ### Verification
-- [ ] Disruption nodes stay strictly pinned to map coordinates when rotating/tilting 3D globe.
-- [ ] Clicking "SIMULATE DISRUPTION" switches cursor to drawing tool and permits drawing polygons on canvas.
-- [ ] Route polylines follow road and maritime paths accurately without visual glitches.
+- [x] Disruption nodes stay strictly pinned to map coordinates when rotating/tilting 3D globe.
+- [x] Clicking "SIMULATE DISRUPTION" switches cursor to drawing tool and permits drawing polygons on canvas.
+- [x] Route polylines follow road and maritime paths accurately without visual glitches.
 
 ---
 
