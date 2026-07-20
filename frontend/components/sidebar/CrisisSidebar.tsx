@@ -16,6 +16,8 @@ interface CrisisSidebarProps {
   onSelectRoute: (idx: number) => void;
   activeRouteIdx: number | null;
   onApproveSuccess?: (msg: string) => void;
+  activeTab?: Tab;
+  setActiveTab?: (tab: Tab) => void;
 }
 
 export function CrisisSidebar({
@@ -24,8 +26,13 @@ export function CrisisSidebar({
   onSelectRoute,
   activeRouteIdx,
   onApproveSuccess,
+  activeTab: controlledTab,
+  setActiveTab: controlledSetActiveTab,
 }: CrisisSidebarProps) {
-  const [activeTab, setActiveTab] = useState<Tab>('Evidence');
+  const [internalTab, setInternalTab] = useState<Tab>('Evidence');
+  
+  const activeTab = controlledTab || internalTab;
+  const setActiveTab = controlledSetActiveTab || setInternalTab;
   const [showCausalChain, setShowCausalChain] = useState(false);
 
   const severityColor = {
@@ -38,7 +45,7 @@ export function CrisisSidebar({
   return (
     <GlassPanel
       id="crisis-sidebar"
-      className="absolute top-4 right-4 w-96 max-h-[calc(100vh-2rem)] flex flex-col z-20 overflow-hidden"
+      className="fixed top-20 right-6 w-96 max-h-[calc(100vh-12rem)] flex flex-col z-40 overflow-hidden shadow-2xl"
     >
       {/* Header */}
       <div className="flex items-start justify-between p-4 border-b border-white/10">

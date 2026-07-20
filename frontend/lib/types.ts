@@ -68,6 +68,14 @@ export interface CrisisState {
   consensus_breakdown?: Record<string, number>;
   validated: boolean;
   created_at: string;
+  evidence?: {
+    cctv_url?: string;
+    cctv_label?: string;
+    osint_author?: string;
+    osint_text?: string;
+    delay_minutes?: string;
+    delay_history?: number[];
+  };
   updated_at: string;
   messages: string[];
 }

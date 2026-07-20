@@ -1,8 +1,8 @@
 # STATE — LRIP / PetaNadi Project Memory
 
-**Last Updated:** 2026-07-12
+**Last Updated:** 2026-07-20
 **Active Milestone:** M1 — Hackathon MVP (North Sumatra Corridor)
-**Current Phase:** Phase 9: Responsive Layout & Stitch Screens Integration (COMPLETE)
+**Current Phase:** Phase 12: Backend Demo Engine & AI Advisor Localization (NOT STARTED ⏳)
 
 ---
 
@@ -21,6 +21,11 @@
 | 8 | NVIDIA Architecture Integration | **COMPLETE** ✅ | NIM gateway, cuOpt dynamic matrix, FourCastNet proactive polling |
 | 9 | Responsive Layout & Stitch Screens Integration | **COMPLETE** ✅ | Desktop scaling fix, ported all remaining Stitch spec UI screens |
 | 10 | Dockerization & Repository Cleanup | **COMPLETE** ✅ | Added multi-stage Dockerfiles and compose orchestration, cleaned root directory |
+| 11 | Proposal Migration & Dynamic UI Integration | **COMPLETE** ✅ | Connected all static frontend views (Analytics, Simulation, Reports) and updated consensus gate validation |
+| 12 | Backend Demo Engine & AI Advisor Localization | **NOT STARTED** ⏳ | Fix API 500/404 demo runner, Indonesian prompt for Gemini Advisor, PDF report stub |
+| 13 | Mapbox/Deck.gl Spatiotemporal Layers & Drawing Tool | **NOT STARTED** ⏳ | 3D globe node anchor fix, Drawing Mode event listener, crisp route polylines |
+| 14 | UI/UX Layout, Toast Notifications & Navigation State | **NOT STARTED** ⏳ | Layout margin/padding audit, replace JS alert() with UI Toast, Sidebar vs Bottombar logic |
+| 15 | 4D Logistics Vehicle Animation Layers | **NOT STARTED** ⏳ | Animated vehicle layers (trucks, ships, planes) based on proposal specs |
 
 ---
 
@@ -40,6 +45,7 @@
 | 2026-07-18 | Port remaining Stitch screens as local overlay components in DashboardClient | Avoids full router navigation, keeps state and WebSocket connection alive in memory |
 | 2026-07-18 | Use absolute coordinate constraints on main viewport | Resolves desktop layout cropping across variable monitor resolutions |
 | 2026-07-18 | Dockerize services and organize root repository files | Simplifies local staging/deployment and removes clutter |
+| 2026-07-19 | Establish Phase 11 for Proposal 2 Migration | Aligns project requirements with the Stage 2 Submission specifications, resolving static components |
 
 ---
 

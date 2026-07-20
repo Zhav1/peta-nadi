@@ -1,8 +1,42 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { api } from '@/lib/api';
 
 export default function AnalyticsSection() {
+  const [ricePrice, setRicePrice] = useState<number>(12400);
+  const [shallotsDelta, setShallotsDelta] = useState<string>("+14.2%");
+  const [priceHistory, setPriceHistory] = useState<number[]>([12000, 12200, 12400, 12300, 12500]);
+
+  useEffect(() => {
+    async function loadPrices() {
+      try {
+        const [riceRes, shallotsRes] = await Promise.all([
+          api.commodities.prices({ commodity: 'beras', limit: 5 }),
+          api.commodities.prices({ commodity: 'cabai_merah', limit: 2 })
+        ]);
+        if (riceRes.items.length > 0) {
+          setRicePrice(riceRes.items[0].price_idr);
+          setPriceHistory(riceRes.items.map(item => item.price_idr).reverse());
+        }
+        if (shallotsRes.items.length >= 2) {
+          const latest = shallotsRes.items[0].price_idr;
+          const prev = shallotsRes.items[1].price_idr;
+          const delta = ((latest - prev) / prev) * 100;
+          setShallotsDelta(`${delta >= 0 ? '+' : ''}${delta.toFixed(1)}%`);
+        }
+      } catch (err) {
+        console.error('Failed to load prices for AnalyticsSection:', err);
+      }
+    }
+    loadPrices();
+  }, []);
+
+  // Compute heights for the 5 bars based on priceHistory (min 10%, max 90%)
+  const maxP = Math.max(...priceHistory, 1);
+  const minP = Math.min(...priceHistory, 0) * 0.95;
+  const barHeights = priceHistory.map(p => `${((p - minP) / (maxP - minP)) * 80 + 10}%`);
+
   return (
     <div className="w-full h-full grid grid-cols-12 gap-6 overflow-hidden pointer-events-auto">
       {/* Left Section: Correlation Heatmap */}
@@ -56,8 +90,8 @@ export default function AnalyticsSection() {
               <span className="font-bold uppercase tracking-tighter">JAVA_CENTRAL_HUB</span>
             </div>
             <div className="grid grid-cols-2 gap-x-4">
-              <span className="text-slate-400">RICE_INDEX:</span><span className="text-[#00F0FF]">12,400/KG</span>
-              <span className="text-slate-400">SHALLOTS:</span><span className="text-red-400 font-bold">+14.2%</span>
+              <span className="text-slate-400">RICE_INDEX:</span><span className="text-[#00F0FF] font-mono">{ricePrice.toLocaleString()}/KG</span>
+              <span className="text-slate-400">SHALLOTS:</span><span className="text-red-400 font-bold font-mono">{shallotsDelta}</span>
             </div>
           </div>
 
@@ -75,25 +109,27 @@ export default function AnalyticsSection() {
         <div className="space-y-4">
           <div className="flex justify-between items-end">
             <h3 className="font-headline text-sm font-bold tracking-widest text-on-surface uppercase">Inflation_Variancy</h3>
-            <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">Live Delta: +0.42%</span>
+            <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">Live Delta: {shallotsDelta}</span>
           </div>
-          <div className="h-44 bg-[#1e2024]/40 backdrop-blur-xl border border-white/10 rounded-sm p-4 relative flex items-end gap-1">
-            {/* Neon Cyan (Predictive) Graph Bars (Simulated) */}
-            <div className="flex-1 bg-[#00F0FF]/10 h-[60%] relative group">
-              <div className="absolute bottom-0 w-full h-[100%] bg-[#00F0FF]/25 border-t border-[#00F0FF]"></div>
-            </div>
-            <div className="flex-1 bg-[#00F0FF]/10 h-[65%] relative group">
-              <div className="absolute bottom-0 w-full h-[100%] bg-[#00F0FF]/25 border-t border-[#00F0FF]"></div>
-            </div>
-            <div className="flex-1 bg-[#00F0FF]/10 h-[75%] relative group">
-              <div className="absolute bottom-0 w-full h-[100%] bg-[#00F0FF]/25 border-t border-[#00F0FF]"></div>
-            </div>
-            {/* Glowing Red (Actual) Graph Overlay (Simulated) */}
-            <div className="absolute inset-x-4 bottom-4 h-full flex items-end gap-1 pointer-events-none">
-              <div className="flex-1 bg-red-400/5 h-[65%] border-t-2 border-red-400 shadow-[0_-4px_12px_rgba(255,180,171,0.2)]"></div>
-              <div className="flex-1 bg-red-400/5 h-[72%] border-t-2 border-red-400 shadow-[0_-4px_12px_rgba(255,180,171,0.2)]"></div>
-              <div className="flex-1 bg-red-400/5 h-[88%] border-t-2 border-red-400 shadow-[0_-4px_12px_rgba(255,180,171,0.2)]"></div>
-              <div className="flex-1 bg-red-400/5 h-[92%] border-t-2 border-red-400 shadow-[0_-4px_12px_rgba(255,180,171,0.2)]"></div>
+          <div className="h-44 bg-[#1e2024]/40 backdrop-blur-xl border border-white/10 rounded-sm p-4 relative flex items-end gap-2">
+            {/* Neon Cyan (Predictive) Graph Bars (Dynamic) */}
+            {barHeights.map((h, i) => (
+              <div key={i} className="flex-1 bg-[#00F0FF]/10 relative group h-full">
+                <div 
+                  className="absolute bottom-0 w-full bg-[#00F0FF]/25 border-t border-[#00F0FF] transition-all duration-500" 
+                  style={{ height: h }}
+                />
+              </div>
+            ))}
+            {/* Glowing Red (Actual) Graph Overlay (Simulated dynamic shift) */}
+            <div className="absolute inset-x-4 bottom-4 h-full flex items-end gap-2 pointer-events-none">
+              {barHeights.map((h, i) => (
+                <div 
+                  key={i} 
+                  className="flex-1 bg-red-400/5 border-t-2 border-red-400 shadow-[0_-4px_12px_rgba(255,180,171,0.2)] transition-all duration-500"
+                  style={{ height: `calc(${h} + ${i % 2 === 0 ? '5%' : '-3%'})` }}
+                />
+              ))}
             </div>
             {/* Legend */}
             <div className="absolute top-4 left-4 flex flex-col gap-1">

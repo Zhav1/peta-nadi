@@ -25,6 +25,20 @@ const STUB_MARITIME = [
   { path: [[98.67, 3.79], [98.7, 3.85], [98.72, 3.9]] as [number, number][], vessel_id: 'V001', name: 'Belawan Ferry 1' },
 ];
 
+const MOCK_PAST_INCIDENTS = [
+  { id: 'mock-past-1', title: 'Belawan Toll Road Congestion', type: 'congestion' as const, severity: 'medium' as const, lat: 3.78, lon: 98.67, status: 'resolved' as const, confidence: 0.9, created_at: new Date(Date.now() - 86400000).toISOString() },
+  { id: 'mock-past-2', title: 'Medan Flood Level II', type: 'flood' as const, severity: 'high' as const, lat: 3.61, lon: 98.65, status: 'resolved' as const, confidence: 0.95, created_at: new Date(Date.now() - 172800000).toISOString() }
+];
+
+const MOCK_FUTURE_INCIDENTS = [
+  { id: 'mock-future-1', title: 'Predicted High Rainfall (BMKG Weather Warning)', type: 'flood' as const, severity: 'medium' as const, lat: 3.55, lon: 98.72, status: 'detecting' as const, confidence: 0.72, created_at: new Date().toISOString() },
+  { id: 'mock-future-2', title: 'Expected Toll Delay near Binjai', type: 'congestion' as const, severity: 'low' as const, lat: 3.65, lon: 98.58, status: 'validating' as const, confidence: 0.68, created_at: new Date().toISOString() }
+];
+
+const MOCK_PREDICT_INCIDENTS = [
+  { id: 'mock-predict-1', title: 'Inflation Spike Alert: Rice Stock Depletion', type: 'port_closure' as const, severity: 'critical' as const, lat: 3.79, lon: 98.68, status: 'detecting' as const, confidence: 0.88, created_at: new Date().toISOString() }
+];
+
 export default function DashboardClient() {
   const { incidents, loading, lastUpdated, refetch } = useIncidents();
   const [selectedCrisisId, setSelectedCrisisId] = useState<string | null>(null);
@@ -39,6 +53,8 @@ export default function DashboardClient() {
   const [activeSection, setActiveSection] = useState<'map' | 'analytics' | 'simulation' | 'reports'>('map');
   const [activeLayer, setActiveLayer] = useState<'evidence' | 'traffic' | 'commodities' | 'fleet'>('evidence');
   const [activeTimeFilter, setActiveTimeFilter] = useState<'past' | 'present' | 'future' | 'predict'>('present');
+  const [activeTab, setActiveTab] = useState<'Evidence' | 'Mitigation' | 'Economic'>('Evidence');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const handleWsMessage = useCallback((event: WsEvent) => {
     if (event.event === 'node_update') {
@@ -54,6 +70,115 @@ export default function DashboardClient() {
   const handleCrisisClick = useCallback(async (id: string) => {
     setSelectedCrisisId(id);
     setActiveRouteIdx(null);
+    setIsSidebarOpen(true);
+
+    if (id.startsWith('mock-')) {
+      const mockIncidentsMap: Record<string, CrisisState> = {
+        'mock-past-1': {
+          crisis_id: 'mock-past-1',
+          title: 'Belawan Toll Road Congestion',
+          type: 'congestion',
+          is_simulated: true,
+          lat: 3.78,
+          lon: 98.67,
+          region: 'north_sumatra',
+          status: 'resolved',
+          overall_confidence: 0.9,
+          validated: true,
+          created_at: new Date(Date.now() - 86400000).toISOString(),
+          updated_at: new Date().toISOString(),
+          messages: [],
+          route_recommendations: [],
+          evidence: {
+            cctv_label: 'CAM_BELAWAN_TOLL',
+            osint_text: 'Toll road traffic cleared. Flow returned to baseline.'
+          }
+        },
+        'mock-past-2': {
+          crisis_id: 'mock-past-2',
+          title: 'Medan Flood Level II',
+          type: 'flood',
+          is_simulated: true,
+          lat: 3.61,
+          lon: 98.65,
+          region: 'north_sumatra',
+          status: 'resolved',
+          overall_confidence: 0.95,
+          validated: true,
+          created_at: new Date(Date.now() - 172800000).toISOString(),
+          updated_at: new Date().toISOString(),
+          messages: [],
+          route_recommendations: [],
+          evidence: {
+            cctv_label: 'CAM_MEDAN_INTERCHANGE',
+            osint_text: 'Water receded. Secondary lane reopened.'
+          }
+        },
+        'mock-future-1': {
+          crisis_id: 'mock-future-1',
+          title: 'Predicted High Rainfall (BMKG Weather Warning)',
+          type: 'flood',
+          is_simulated: true,
+          lat: 3.55,
+          lon: 98.72,
+          region: 'north_sumatra',
+          status: 'detecting',
+          overall_confidence: 0.72,
+          validated: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          messages: [],
+          route_recommendations: [],
+          evidence: {
+            cctv_label: 'BMKG_SATELLITE_FEED',
+            osint_text: 'Expected rainfall > 150mm/day in North Sumatra area.'
+          }
+        },
+        'mock-future-2': {
+          crisis_id: 'mock-future-2',
+          title: 'Expected Toll Delay near Binjai',
+          type: 'congestion',
+          is_simulated: true,
+          lat: 3.65,
+          lon: 98.58,
+          region: 'north_sumatra',
+          status: 'validating',
+          overall_confidence: 0.68,
+          validated: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          messages: [],
+          route_recommendations: [],
+          evidence: {
+            cctv_label: 'BINJAI_TOLL_CAM',
+            osint_text: 'Predictive flow indicates bottlenecks on route.'
+          }
+        },
+        'mock-predict-1': {
+          crisis_id: 'mock-predict-1',
+          title: 'Inflation Spike Alert: Rice Stock Depletion',
+          type: 'port_closure',
+          is_simulated: true,
+          lat: 3.79,
+          lon: 98.68,
+          region: 'north_sumatra',
+          status: 'detecting',
+          overall_confidence: 0.88,
+          validated: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          messages: [],
+          route_recommendations: [],
+          evidence: {
+            cctv_label: 'BELAWAN_STORAGE_CAM',
+            osint_text: 'Low incoming volume at the grain terminals.'
+          }
+        }
+      };
+      setSelectedCrisis(mockIncidentsMap[id] || null);
+      return;
+    }
+
     try {
       const detail = await api.incidents.get(id);
       setSelectedCrisis(detail);
@@ -64,7 +189,7 @@ export default function DashboardClient() {
 
   // Subscribe over WS when selectedCrisisId / selectedCrisis is loaded
   useEffect(() => {
-    if (selectedCrisis && selectedCrisisId) {
+    if (selectedCrisis && selectedCrisisId && !selectedCrisisId.startsWith('mock-')) {
       sendWs({
         type: selectedCrisis.type,
         source: 'dashboard_subscribe',
@@ -78,6 +203,7 @@ export default function DashboardClient() {
     setSelectedCrisisId(null);
     setSelectedCrisis(null);
     setActiveRouteIdx(null);
+    setIsSidebarOpen(false);
   }, []);
 
   const handlePolygonDrawn = useCallback(async (polygon: [number, number][]) => {
@@ -98,15 +224,18 @@ export default function DashboardClient() {
   }, [refetch]);
 
   // Determine active time filter results
-  const filteredIncidents = incidents.filter((incident) => {
+  const filteredIncidents = [...incidents, ...MOCK_PAST_INCIDENTS, ...MOCK_FUTURE_INCIDENTS, ...MOCK_PREDICT_INCIDENTS].filter((incident) => {
     if (activeTimeFilter === 'past') {
       return incident.status === 'resolved';
     }
     if (activeTimeFilter === 'present') {
-      return incident.status !== 'resolved';
+      return incident.status !== 'resolved' && !incident.id.startsWith('mock-');
     }
-    // Future / Predict filters (showing forecasted/unconfirmed incidents)
-    return incident.status === 'detecting' || incident.status === 'validating';
+    if (activeTimeFilter === 'future') {
+      return (incident.status === 'detecting' || incident.status === 'validating') && incident.id.startsWith('mock-future');
+    }
+    // predict
+    return incident.id.startsWith('mock-predict');
   });
 
   return (
@@ -188,70 +317,98 @@ export default function DashboardClient() {
       </header>
 
       {/* SideNavBar (Hover to expand) */}
-      <aside className="fixed left-0 top-16 bottom-0 z-40 flex flex-col bg-[#0c0e12]/90 backdrop-blur-2xl border-r border-[#00F0FF]/10 shadow-[4px_0_24px_rgba(0,0,0,0.8)] w-20 hover:w-64 transition-all duration-300 group">
+      <aside className="fixed left-0 top-16 bottom-0 z-40 flex flex-col bg-[#0c0e12]/90 backdrop-blur-2xl border-r border-[#00F0FF]/10 shadow-[4px_0_24px_rgba(0,0,0,0.8)] w-20 hover:w-64 transition-all duration-300 ease-in-out group">
         <div className="p-6 flex items-center gap-4 overflow-hidden whitespace-nowrap border-b border-outline-variant/10">
           <div className="w-8 h-8 rounded-full bg-primary-container/20 flex items-center justify-center border border-primary-container/30 shrink-0">
             <span className="material-symbols-outlined text-primary-container text-sm">person</span>
           </div>
-          <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 ease-in-out">
             <p className="font-bold text-xs font-headline tracking-tighter text-on-surface">OPERATOR_01</p>
             <p className="text-[10px] text-on-surface-variant font-mono uppercase">Sector: SE-ASIA</p>
           </div>
         </div>
         <nav className="flex-1 flex flex-col py-4">
           <button 
-            onClick={() => setActiveLayer('evidence')}
-            className={`flex items-center px-6 py-4 gap-4 transition-all w-full text-left ${
+            onClick={() => {
+              setActiveLayer('evidence');
+              setActiveTab('Evidence');
+              setIsSidebarOpen(true);
+              if (!selectedCrisisId && filteredIncidents.length > 0) {
+                handleCrisisClick(filteredIncidents[0].id);
+              }
+            }}
+            className={`flex items-center px-6 py-4 gap-4 transition-all duration-300 ease-in-out w-full text-left ${
               activeLayer === 'evidence' 
                 ? 'bg-[#00F0FF]/20 text-[#00F0FF] border-r-2 border-[#00F0FF]' 
                 : 'text-[#e2e2e8]/40 hover:text-[#00F0FF]/80 hover:bg-[#1a1c20]'
             }`}
           >
             <span className="material-symbols-outlined">policy</span>
-            <span className="opacity-0 group-hover:opacity-100 font-['Inter'] text-xs tracking-tight uppercase font-bold">Evidence</span>
+            <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 ease-in-out font-['Inter'] text-xs tracking-tight uppercase font-bold">Evidence</span>
           </button>
           <button 
-            onClick={() => setActiveLayer('traffic')}
-            className={`flex items-center px-6 py-4 gap-4 transition-all w-full text-left ${
+            onClick={() => {
+              setActiveLayer('traffic');
+              setActiveTab('Mitigation');
+              setIsSidebarOpen(true);
+              if (!selectedCrisisId && filteredIncidents.length > 0) {
+                handleCrisisClick(filteredIncidents[0].id);
+              }
+            }}
+            className={`flex items-center px-6 py-4 gap-4 transition-all duration-300 ease-in-out w-full text-left ${
               activeLayer === 'traffic' 
                 ? 'bg-[#00F0FF]/20 text-[#00F0FF] border-r-2 border-[#00F0FF]' 
                 : 'text-[#e2e2e8]/40 hover:text-[#00F0FF]/80 hover:bg-[#1a1c20]'
             }`}
           >
             <span className="material-symbols-outlined">traffic</span>
-            <span className="opacity-0 group-hover:opacity-100 font-['Inter'] text-xs tracking-tight uppercase font-bold">Traffic</span>
+            <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 ease-in-out font-['Inter'] text-xs tracking-tight uppercase font-bold">Traffic</span>
           </button>
           <button 
-            onClick={() => setActiveLayer('commodities')}
-            className={`flex items-center px-6 py-4 gap-4 transition-all w-full text-left ${
+            onClick={() => {
+              setActiveLayer('commodities');
+              setActiveTab('Economic');
+              setIsSidebarOpen(true);
+              if (!selectedCrisisId && filteredIncidents.length > 0) {
+                handleCrisisClick(filteredIncidents[0].id);
+              }
+            }}
+            className={`flex items-center px-6 py-4 gap-4 transition-all duration-300 ease-in-out w-full text-left ${
               activeLayer === 'commodities' 
                 ? 'bg-[#00F0FF]/20 text-[#00F0FF] border-r-2 border-[#00F0FF]' 
                 : 'text-[#e2e2e8]/40 hover:text-[#00F0FF]/80 hover:bg-[#1a1c20]'
             }`}
           >
             <span className="material-symbols-outlined">inventory_2</span>
-            <span className="opacity-0 group-hover:opacity-100 font-['Inter'] text-xs tracking-tight uppercase font-bold">Commodities</span>
+            <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 ease-in-out font-['Inter'] text-xs tracking-tight uppercase font-bold">Commodities</span>
           </button>
           <button 
-            onClick={() => setActiveLayer('fleet')}
-            className={`flex items-center px-6 py-4 gap-4 transition-all w-full text-left ${
+            onClick={() => {
+              setActiveLayer('fleet');
+              setActiveTab('Mitigation');
+              setIsSidebarOpen(true);
+              if (!selectedCrisisId && filteredIncidents.length > 0) {
+                handleCrisisClick(filteredIncidents[0].id);
+              }
+            }}
+            className={`flex items-center px-6 py-4 gap-4 transition-all duration-300 ease-in-out w-full text-left ${
               activeLayer === 'fleet' 
                 ? 'bg-[#00F0FF]/20 text-[#00F0FF] border-r-2 border-[#00F0FF]' 
                 : 'text-[#e2e2e8]/40 hover:text-[#00F0FF]/80 hover:bg-[#1a1c20]'
             }`}
           >
             <span className="material-symbols-outlined">local_shipping</span>
-            <span className="opacity-0 group-hover:opacity-100 font-['Inter'] text-xs tracking-tight uppercase font-bold">Fleet</span>
+            <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 ease-in-out font-['Inter'] text-xs tracking-tight uppercase font-bold">Fleet</span>
           </button>
         </nav>
         <div className="mt-auto flex flex-col py-4 border-t border-outline-variant/10">
-          <button className="text-[#e2e2e8]/40 hover:text-[#00F0FF]/80 flex items-center px-6 py-4 gap-4 transition-all hover:bg-[#1a1c20] w-full text-left">
+          <button className="text-[#e2e2e8]/40 hover:text-[#00F0FF]/80 flex items-center px-6 py-4 gap-4 transition-all duration-300 ease-in-out hover:bg-[#1a1c20] w-full text-left">
             <span className="material-symbols-outlined">settings</span>
-            <span className="opacity-0 group-hover:opacity-100 font-['Inter'] text-xs tracking-tight uppercase font-bold">Settings</span>
+            <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 ease-in-out font-['Inter'] text-xs tracking-tight uppercase font-bold">Settings</span>
           </button>
-          <button className="text-[#e2e2e8]/40 hover:text-[#00F0FF]/80 flex items-center px-6 py-4 gap-4 transition-all hover:bg-[#1a1c20] w-full text-left">
+          <button className="text-[#e2e2e8]/40 hover:text-[#00F0FF]/80 flex items-center px-6 py-4 gap-4 transition-all duration-300 ease-in-out hover:bg-[#1a1c20] w-full text-left">
             <span className="material-symbols-outlined">help_center</span>
-            <span className="opacity-0 group-hover:opacity-100 font-['Inter'] text-xs tracking-tight uppercase font-bold">Support</span>
+            <span className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 ease-in-out font-['Inter'] text-xs tracking-tight uppercase font-bold">Support</span>
           </button>
         </div>
       </aside>
@@ -260,7 +417,7 @@ export default function DashboardClient() {
       <main className="absolute left-20 top-16 right-0 bottom-0 overflow-hidden flex flex-col z-10 pointer-events-none">
         
         {/* Micro-Telemetry Ticker */}
-        <div className="w-full bg-surface-container-lowest/80 border-y border-outline-variant/10 py-1 flex items-center overflow-hidden pointer-events-auto">
+        <div className="w-full bg-surface-container-lowest/80 border-y border-outline-variant/10 py-1 flex items-center overflow-hidden pointer-events-auto shrink-0">
           <div className="flex whitespace-nowrap animate-pulse gap-12 px-6">
             <span className="text-[10px] font-mono text-primary-fixed-dim/70 tracking-widest">SYS_STATUS: OPERATIONAL</span>
             <span className="text-[10px] font-mono text-primary-fixed-dim/70 tracking-widest">NETWORK_LATENCY: 12ms</span>
@@ -275,10 +432,10 @@ export default function DashboardClient() {
         {activeSection === 'map' && (
           <>
             {/* Tactical Columns overlay */}
-            <div className="flex-1 p-6 flex justify-between gap-6 overflow-hidden">
+            <div className="flex-1 p-6 pb-24 flex justify-between gap-6 overflow-hidden">
               
               {/* Left Tactical Column */}
-              <div className="w-80 flex flex-col gap-6 shrink-0 pointer-events-auto">
+              <div className="w-80 flex flex-col gap-6 shrink-0 pointer-events-auto max-h-full overflow-y-auto no-scrollbar">
                 {/* National Health Index Gauge */}
                 <div className="glass-panel border border-outline-variant/15 p-6 rounded-sm relative overflow-hidden group">
                   <div className="absolute -right-4 -top-4 w-24 h-24 bg-primary-container/5 rounded-full blur-2xl group-hover:bg-primary-container/10 transition-all"></div>
@@ -488,7 +645,7 @@ export default function DashboardClient() {
 
         {activeSection === 'simulation' && (
           <div className="flex-1 p-6 overflow-hidden">
-            <SimulationSection />
+            <SimulationSection crisisId={selectedCrisisId} />
           </div>
         )}
 
@@ -499,14 +656,15 @@ export default function DashboardClient() {
         )}
       </main>
 
-      {/* Floating Crisis Detail Sidebar */}
-      {selectedCrisis && (
+      {isSidebarOpen && selectedCrisis && (
         <CrisisSidebar
           crisis={selectedCrisis}
           onClose={handleCloseSidebar}
           onSelectRoute={setActiveRouteIdx}
           activeRouteIdx={activeRouteIdx}
           onApproveSuccess={(msg) => setToast({ message: msg, type: 'success' })}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
         />
       )}
 
