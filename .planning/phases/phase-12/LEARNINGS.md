@@ -1,48 +1,52 @@
-# LEARNINGS — Phase 12: UI/UX Refinement & Runtime State Fixes
+# LEARNINGS — Phase 12: Backend Demo Engine & AI Advisor Localization
 
-Dokumen ini mencatat kendala visual, tata letak CSS, dan penanganan event handler yang diselesaikan pada Phase 12.
-
----
-
-## 1. Top Navbar vs Floating Panel Overlap (`top-20` vs `top-4`)
-
-### Masalah
-Komponen `CrisisSidebar` semula menggunakan kelas CSS `absolute top-4 right-4`. Karena kontainer utama `DashboardClient.tsx` menggunakan header fixed dengan tinggi 64px (`fixed top-0 h-16`), posisi `top-4` (y=16px) menempatkan bagian atas `CrisisSidebar` tepat di atas header navbar, menutupi judul dan indikator `UTC+00:00`.
-
-### Solusi Teknis
-1. Ubah positioning `CrisisSidebar` dari `absolute top-4` menjadi `fixed top-20 right-6 w-96 max-h-[calc(100vh-12rem)] z-40`.
-2. Posisi `top-20` (80px) memberikan jarak vertikal sebesar 16px di bawah header fixed 64px.
-3. Batasan `max-h-[calc(100vh-12rem)]` memastikan panel detail tidak menutupi kontrol bottombar dan Guided Demo Panel di kanan bawah.
+Dokumen ini mencatat kendala runtime, infinite rendering loop, penanganan fallback backend, dan lokalisasi AI Advisor yang diselesaikan pada Phase 12.
 
 ---
 
-## 2. Transition Easing untuk Hover Sidebar
+## 1. Infinite Re-render Loop & Socket Resource Exhaustion (`net::ERR_INSUFFICIENT_RESOURCES`)
 
 ### Masalah
-Expand sidebar kiri pada hover (`w-20` ke `w-64`) terasa kasar dan mendadak tanpa kurva transisi CSS.
+Saat aplikasi dijalankan, browser mengalami pembekuan dan memunculkan error beruntun `GET http://localhost:8000/api/v1/incidents?limit=100 net::ERR_INSUFFICIENT_RESOURCES`.
+- **Akar Masalah**: Komponen `GuidedDemoPanel` di `DashboardClient.tsx` menerima callback inline tanpa memoization: `onCrisisReady={(crisis) => { setSelectedCrisis(crisis); refetch(); }}`.
+- Fungsi callback inline ini dimasukkan ke dalam dependency array `useEffect` di `useDemoState.ts`.
+- Setiap kali re-render terjadi di `DashboardClient`, referensi fungsi `onCrisisReady` diperbarui. `useEffect` di `useDemoState` mendeteksi referensi baru ini lalu memanggil `onCrisisReady` kembali.
+- Panggilan `onCrisisReady` memicu `refetch()` yang mengeksekusi request `api.incidents.list({ limit: 100 })`, menderivasi state update baru yang memicu siklus **infinite re-render loop** ratusan kali per detik hingga koneksi socket HTTP browser habis.
 
 ### Solusi Teknis
-Gunakan `transition-all duration-300 ease-in-out` pada elemen `<aside>` dan `transition-opacity duration-300 ease-in-out` pada label teks tersembunyi agar animasi expansi dan pemunculan teks berjalan secara simultan dan halus.
+1. **Memoization Handler**: Bungkus handler `handleDemoCrisisReady` di `DashboardClient.tsx` dengan `useCallback` agar referensi fungsinya stabil.
+2. **Hook Execution Guard (`notifiedKeyRef`)**: Di `useDemoState.ts`, gunakan `useRef` (`notifiedKeyRef`) untuk mencatat string kunci krisis & stage (`${crisis_id}_${stage}`). Callback `onCrisisReady` **hanya dipanggil tepat 1 kali** saat terjadi transisi stage/krisis baru, mengisolasi efek samping re-render komponen induk.
 
 ---
 
-## 3. Form Submission & Event Bubbling Guards pada Tombol React
+## 2. Robust Backend Demo Fallback & Suppression Error 404
 
 ### Masalah
-Tombol bawaan `<button>` tanpa atribut `type="button"` dapat memicu pengiriman form (form submission) atau event bubbling yang tidak disengaja jika diletakkan di dalam hierarki komponen tertentu, yang dapat menyebabkan reload halaman secara tidak sengaja.
+- Panggilan `POST /api/demo/start` melempar HTTP 500 saat API key eksternal (TomTom, BMKG, LLM) atau koneksi database live tidak tersedia.
+- Saat `/api/demo/start` melempar error 500, `useDemoState.ts` mengaktifkan ID fallback client-side (`belawan-demo-offline-XXX`). Namun, fungsi `pollStatus` terus melakukan HTTP GET request `GET /api/demo/status/belawan-demo-offline-XXX` ke FastAPI setiap 2 detik, yang berujung pada error HTTP 404 berulang kali di console log.
 
 ### Solusi Teknis
-Selalu tetapkan `type="button"` dan panggil `e.preventDefault()` serta `e.stopPropagation()` pada event `onClick` tombol kontrol interaktif seperti "Run Demo", "Load Replay", dan tombol stepper.
+1. **Fallback Anggun Backend (`demo_router.py`)**: Set default `mock_agents=True` untuk demo mode. Bungkus eksekusi real agent worker dalam blok `try/except` yang secara otomatis me-load `mock_crisis_state.json` saat terjadi kendala koneksi/kredensial, menjamin `POST /api/demo/start` **selalu mengembalikan HTTP 200 OK**.
+2. **Polling Guard Offline ID (`useDemoState.ts`)**: Tambahkan pemeriksaan `crisisId.startsWith('belawan-demo-offline')` di `pollStatus`. Jika krisis berjalan dalam mode offline client-side, polling HTTP ke backend langsung dihentikan (`return`), menghapus error 404 console secara permanen.
 
 ---
 
-## 4. Demo Router Prefix Mismatch (`/api/demo/start` 404) & 1 ms UI Reset
+## 3. Multilingual System Instruction Adaptation untuk AI Advisor
 
 ### Masalah
-Ketika tombol "Run Demo" diklik, browser menampilkan error `POST http://localhost:8000/api/demo/start 404 (Not Found)` dan komponen guided demo runner langsung berkedip/reset dalam <1ms.
-- **Akar Masalah Router:** `backend/app/routers/demo_router.py` didefinisikan dengan `prefix="/demo"` dan di-include ke `main.py` tanpa `/api` prefix (`app.include_router(demo_router.router)`), sehingga FastAPI mendaftarkan route di `/demo/start` bukan `/api/demo/start`. Frontend `api.ts` menembak `/api/demo/start`, menyebabkan HTTP 404.
-- **Akar Masalah Reset 1ms:** Saat `api.demo.start()` melemparkan exception 404, fungsi `start()` di `useDemoState.ts` mengeksekusi `setIsRunning(true)` tepat sebelum fetch dan `setIsRunning(false)` di dalam block `catch`, sehingga tampilan running hanya bertahan selama 1ms sebelum di-reset secara kasar.
+Prompt `/api/simulation/chat` di `agent_router.py` semula mengunci instruksi jawaban dalam Bahasa Inggris (`Provide a brief, tactical response (max 3 sentences) in English.`), sehingga AI Advisor tetap merespon Bahasa Inggris meskipun pengguna bertanya dalam Bahasa Indonesia.
 
 ### Solusi Teknis
-1. Ubah router prefix di [demo_router.py](file:///c:/Farras/DIGDAYA/peta-nadi/backend/app/routers/demo_router.py) menjadi `prefix="/api/demo"`.
-2. Di `useDemoState.ts`, tambahkan fallback otomatis ke state fixture mock lokal (`belawan-demo-offline`) saat backend tidak terjangkau atau bermasalah dalam mode demo offline, sehingga antarmuka Guided Demo Runner tidak pernah berkedip/reset 1ms.
+1. Ubah system instruction prompt menjadi dynamic language matching: `Respond in the EXACT same language as the user message (Indonesian if the user asks in Indonesian, English if in English).`
+2. Pada mode offline/fallback, gunakan deteksi kata kunci Bahasa Indonesia (`bagaimana`, `apa`, `rute`, `stok`, `mitigasi`, `pelabuhan`) untuk mengembalikan pesan taktis ber-Bahasa Indonesia (contoh: *"REKOMENDASI: Alihkan 40% kargo logistik sekunder dari koridor Belawan ke Jalur Tol Medan-Tebing Tinggi."*).
+
+---
+
+## 4. Pola Generator Dokumen Cetak & Ekspor Data (PDF Export)
+
+### Masalah
+Tombol "Generate PDF Report" di `ReportsSection.tsx` hanya memicu browser `alert('PDF report compilation started...')` tanpa menghasilkan berkas laporan fisik.
+
+### Solusi Teknis
+1. Implementasikan pola `window.open("", "_blank")` dengan stylesheet `@media print` bergaya laporan kabinet sektor publik (*PetaNadi National Logistics Cabinet Briefing*) yang secara otomatis memicu dialog cetak/PDF browser (`window.print()`).
+2. Tambahkan handler `handleExportRawData` untuk mengunduh telemetry raw report dalam format JSON (`PetaNadi_Raw_Report_YYYY-MM-DD.json`).
