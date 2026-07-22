@@ -12,13 +12,37 @@ export interface AgentFinding {
   timestamp: string;
 }
 
+export interface RouteLeg {
+  title: string;
+  mode: 'truck' | 'maritime' | 'air';
+  distance_km: number;
+  eta_minutes: number;
+  from_name: string;
+  to_name: string;
+}
+
+export interface CongestionSegment {
+  coordinates: Array<{ lat: number; lon: number }>;
+  level: 'low' | 'moderate' | 'heavy';
+}
+
 export interface RouteRecommendation {
+  id?: string;
+  route_name?: string;
   description: string;
   waypoints: Array<{ lat: number; lon: number }>;
   distance_km: number;
   eta_minutes: number;
   fuel_increase_pct: number;
   risk_score: number;
+  is_compromised?: boolean;
+  safety_status?: 'SAFE_DETOUR' | 'COMPROMISED' | 'CLEAR';
+  safety_tag?: string;
+  traffic_level?: 'low' | 'moderate' | 'heavy' | 'mixed';
+  congestion_segments?: CongestionSegment[];
+  modality?: 'truck' | 'maritime' | 'air' | 'multimodal' | 'best';
+  legs?: RouteLeg[];
+  color?: string;
 }
 
 export interface LTMEpisode {

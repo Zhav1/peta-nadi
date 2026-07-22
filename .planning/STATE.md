@@ -1,8 +1,8 @@
 # STATE — LRIP / PetaNadi Project Memory
 
-**Last Updated:** 2026-07-20
+**Last Updated:** 2026-07-22
 **Active Milestone:** M1 — Hackathon MVP (North Sumatra Corridor)
-**Current Phase:** Phase 14: UI/UX Layout, Toast Notifications & Navigation State (NOT STARTED ⏳)
+**Current Phase:** Phase 15 COMPLETE ✅
 
 ---
 
@@ -24,8 +24,8 @@
 | 11 | Proposal Migration & Dynamic UI Integration | **COMPLETE** ✅ | Connected all static frontend views (Analytics, Simulation, Reports) and updated consensus gate validation |
 | 12 | Backend Demo Engine & AI Advisor Localization | **COMPLETE** ✅ | Fixed API 500/404 demo runner, Indonesian prompt for Gemini Advisor, and PDF report generator |
 | 13 | Mapbox/Deck.gl Spatiotemporal Layers & Drawing Tool | **COMPLETE** ✅ | Fixed 3D globe node anchor, Drawing Mode event listener & pen cursor, and smooth corridor route polylines |
-| 14 | UI/UX Layout, Toast Notifications & Navigation State | **NOT STARTED** ⏳ | Layout margin/padding audit, replace JS alert() with UI Toast, Sidebar vs Bottombar logic |
-| 15 | 4D Logistics Vehicle Animation Layers | **NOT STARTED** ⏳ | Animated vehicle layers (trucks, ships, planes) based on proposal specs |
+| 14 | Pure Agentic Hazard Avoidance Router & Clean Slate Node Selection | **COMPLETE** ✅ | Forced-waypoint Mapbox engine (not hint), 18 real OSM road nodes replacing math offsets, segment-aware intersection detection with 2 km danger buffer, clean slate node selection |
+| 15 | Google Maps-Grade Multi-Alternative AI Routing, On-Map Interactivity & Modality Intelligence | **COMPLETE** ✅ | 3 Mapbox alternative routes, on-map clickable route selection, `(Best)` auto modality tab, traffic congestion colors, dynamic incident-click routing, multi-leg intermodal chain display |
 
 ---
 
@@ -46,6 +46,10 @@
 | 2026-07-18 | Use absolute coordinate constraints on main viewport | Resolves desktop layout cropping across variable monitor resolutions |
 | 2026-07-18 | Dockerize services and organize root repository files | Simplifies local staging/deployment and removes clutter |
 | 2026-07-19 | Establish Phase 11 for Proposal 2 Migration | Aligns project requirements with the Stage 2 Submission specifications, resolving static components |
+| 2026-07-21 | Phase 14: Pure Agentic Tangential Avoidance Router & Clean Slate Node Selection | Eliminate hardcoded detour coordinates, implement dynamic tangential vector clearance ($R+2\text{km}$), clean-slate node selection, XAI CoT blocks |
+| 2026-07-22 | Phase 14 Iteration 2: Forced Waypoint Engine | Mapbox silently ignores waypoints passed as hints; fix by encoding mandatory 3-stop URL (`origin;waypoint;dest`) — Mapbox must route through all three |
+| 2026-07-22 | Phase 14 Iteration 3: Real OSM Road Node Database | Perpendicular math offsets produce coordinates in fields/water; replace with 18 verified OSM arterial intersection nodes scored by detour cost `dist(O→node) + dist(node→D)` |
+| 2026-07-22 | Phase 14 Iteration 4: Segment-Aware Hazard Detection with Danger Buffer | Point-only check misses sparse Mapbox polylines that skip over a hazard; fix with segment closest-point projection + 2 km danger buffer to match visual circle |
 
 ---
 

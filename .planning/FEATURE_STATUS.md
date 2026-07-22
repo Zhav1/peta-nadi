@@ -2,7 +2,7 @@
 
 **Milestone:** M1 — Hackathon MVP (North Sumatra Corridor)  
 **Architecture Paradigm:** Hybrid Cognitive Swarm (Dijkstra + NVIDIA cuOpt + FourCastNet + OR-Tools Fallback)  
-**Last Updated:** 2026-07-20  
+**Last Updated:** 2026-07-21  
 
 ---
 
@@ -16,6 +16,13 @@ PetaNadi (LRIP) adalah platform intelijen krisis logistik nasional multi-sensor 
 **Status:** READY FOR DEMO & PRODUCTION ✅
 
 ### 1.1 UI/UX & Interactive Dashboard Mode
+- **Pure Agentic Tangential Avoidance Router** (`aiDynamicRouter.ts`)
+  - Mesin rerouting terukur yang memproyeksikan waypoint $W_{left}$ dan $W_{right}$ persis 2 km di luar tepi radius krisis ($R \times 1.15 + 2.0\text{km}$) secara tegak lurus (0% koordinat hardcode).
+  - Menyaring candidate rute dengan point-in-circle check (0 titik di dalam lingkaran krisis) & jarak terpendek via Mapbox Directions API.
+- **Clean Slate Dynamic Node Selection Workflow** (`DashboardClient.tsx`)
+  - State awal netral (`selectedOriginNode = null`, `selectedDestNode = null`), alur interaktif 2-Langkah untuk menentukan node Start (🟢) dan End (🟡), serta tombol `🔄 RESET RUTE`.
+- **Docked MAP 4D AI Copilot & 4 Explainable AI (XAI) Blocks** (`MitigationTab.tsx`)
+  - Blok penjelas AI (Consensus Badge `91% Confidence`, Chain of Impact, Chain-of-Thought reasoning trace, dan tombol HITL `[ APPROVE & DISPATCH REROUTE ]` yang terhubung ke Toast UI).
 - **Guided Demo Runner & Stepper Panel** (`GuidedDemoPanel.tsx`, `useDemoState.ts`)
   - Stepper interaktif 5 tahap (`Injecting Events` ➔ `Agent Swarm` ➔ `Consensus Gate` ➔ `Validated Alert` ➔ `Notification Sent`).
   - Dilengkapi mode otomatis dengan pacing 15 detik, generator QR Code remote HP presenter, dan penanganan krisis offline.
@@ -25,7 +32,7 @@ PetaNadi (LRIP) adalah platform intelijen krisis logistik nasional multi-sensor 
 - **Interactive Disruption Drawing Tool** (`CrisisMap.tsx`, `MapboxDraw`)
   - Tombol "SIMULATE DISRUPTION" otomatis mengatur `pointer-events` overlay Deck.gl, mengaktifkan kursor pen (`crosshair`), dan menangkap poligon GeoJSON untuk memicu simulasi bencana.
 - **Logistics Corridor Route Polylines** (`layers.ts`, `mock_crisis_state.json`)
-  - Visualisasi garis rute pengalihan beresolusi tinggi sepanjang Koridor Tol Medan-Tebing Tinggi / Jalinsum (Belawan ➔ Tanjung Mulia ➔ Amplas ➔ Lubuk Pakam ➔ Perbaungan ➔ Tebing Tinggi ➔ Pematangsiantar) dengan ujung melengkung halus (`jointRounded: true`, `capRounded: true`).
+  - Visualisasi garis rute pengalihan beresolusi tinggi sepanjang Koridor Tol Medan-Tebing Tinggi / Jalinsum dengan ujung melengkung halus (`jointRounded: true`, `capRounded: true`).
 - **Executive Cabinet Briefing PDF Export** (`ReportsSection.tsx`)
   - Jendela cetak laporan resmi *PetaNadi National Logistics Cabinet Briefing* (`window.print()`) dan fitur ekspor raw data JSON.
 
@@ -57,8 +64,8 @@ PetaNadi (LRIP) adalah platform intelijen krisis logistik nasional multi-sensor 
 
 ---
 
-## 3. Strategi Teknis Hibrida & Pekerjaan Aktif (Phases 12-14)
-**Status:** IN PROGRESS 🚀
+## 3. Pekerjaan Aktif & Target Berikutnya (Phase 15)
+**Status:** READY TO START 🚀
 
 ### 3.1 Pendekatan Arsitektur Optimasi Rute & Prediksi Hibrida
 
@@ -71,20 +78,17 @@ PetaNadi menggabungkan algoritma CPU konvensional yang cepat dengan akselerasi G
 | **Fallback API Limit (> 40 RPM)** | **Google OR-Tools + Gemini Flash (CPU)** | Aplikasi tetap jalan, zero UX disruption. |
 | **Prediksi Macet + Hujan Lokal** | **FourCastNet + TFI / Data Histori** | Akurasi maksimal (Fisika makro + pola historis mikro). |
 
-### 3.2 Pekerjaan Aktif Phase 14
-- **Audit Spacing & Margin Widget**: Memperbaiki tata letak UI pada halaman Analytics, Simulation, dan Reports agar tidak bertabrakan.
-- **Migrasi Pop-up Alert ke UI Toast**: Mengganti `alert()` JS browser dengan UI Toast notification glassmorphism.
-- **Harmonisasi Navigasi Sidebar vs Bottombar**: Menyinkronkan visibilitas dan status bottombar di seluruh halaman navigasi.
-
 ---
 
 ## 4. Masih Direncanakan (Phase 15 & Submission Tahap 2)
 **Status:** PLANNED FOR PHASE 15 & POST-MVP ⏳
 
-- **Phase 15: 4D Logistics Vehicle Animation Layers**
-  - Animated Truck Layers (Armada BULOG & Komersial di Tol Medan-Tebing Tinggi / Jalinsum).
-  - Animated Cargo Ship Markers (Pelabuhan Belawan & Selat Malaka).
-  - Animated Air Cargo Vectors (Kargo udara regional).
+- **Phase 15: Google Maps-Grade Multi-Modal AI Routing, Hazard Avoidance & Traffic Congestion Engine**
+  - Multi-alternative candidate routes with sidebar selector UI.
+  - Spatial hazard avoidance (`COMPROMISED` vs `SAFE_DETOUR`).
+  - Google Maps-style traffic congestion colors (`low`, `moderate`, `heavy`).
+  - Absolute clean slate initial state fix (0 routes drawn on initial load).
+  - Intermodal multi-leg logistics routing (Darat ➔ Laut ➔ Udara).
 - **Aplikasi Mobile Pengemudi Logistik (v2 / Post-MVP)**
   - Aplikasi React Native + WatermelonDB dengan sinkronisasi CRDT offline untuk pengemudi truk.
 - **Pengembangan Koridor Multi-Provinsi (v2 / Post-MVP)**
@@ -98,7 +102,7 @@ PetaNadi menggabungkan algoritma CPU konvensional yang cepat dengan akselerasi G
 
 | Kategori Fitur | Jumlah Fitur | Tingkat Kesiapan |
 | :--- | :--- | :--- |
-| **1. Sudah Berfungsi** | 11 Fitur Utama | Production & Demo Ready (100%) |
+| **1. Sudah Berfungsi** | 14 Fitur Utama | Production & Demo Ready (100%) |
 | **2. Simulasi / Stub** | 4 Subsystem | Operational via Mock Seed Data |
-| **3. Sedang Dikembangkan (Phase 14)** | 3 Target UI/UX | Active Development |
-| **4. Masih Direncanakan (Phase 15 & v2)** | 5 Major Modules | Scheduled on Proposal Roadmap |
+| **3. Sedang Dikembangkan (Phase 15)** | 1 Major Module | Scheduled Next |
+| **4. Masih Direncanakan (Post-MVP)** | 4 Major Modules | Scheduled on Proposal Roadmap |

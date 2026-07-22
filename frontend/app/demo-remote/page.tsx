@@ -1,7 +1,7 @@
 'use client';
 import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { api } from '@/lib/api';
+import { api } from '../../lib/api';
 
 function DemoRemoteClient() {
   const searchParams = useSearchParams();
@@ -46,8 +46,7 @@ function DemoRemoteClient() {
       const res = await api.demo.start({ mock_agents: true, offline: true });
       router.push(`/demo-remote?crisis_id=${res.crisis_id}`);
     } catch (err) {
-      alert('Failed to start demo.');
-      console.error(err);
+      console.error('Failed to start demo remote:', err);
     }
   };
 

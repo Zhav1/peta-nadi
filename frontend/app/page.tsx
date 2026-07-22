@@ -1,6 +1,8 @@
+'use client';
+
 import dynamic from 'next/dynamic';
 
-const DashboardClient = dynamic(() => import('@/components/dashboard/DashboardClient'), {
+const DashboardClient = dynamic(() => import('../components/dashboard/DashboardClient'), {
   ssr: false,
   loading: () => (
     <div className="w-full h-screen bg-[#080d14] flex items-center justify-center">
