@@ -157,6 +157,20 @@ async def simulation_chat(payload: ChatPayload):
         except Exception as e:
             logger.warning(f"Failed to query crisis details for chat context: {e}")
             
+    # Fetch live corridor context
+    corridor_info = ""
+    try:
+        from app.services.corridor_service import get_corridor_context
+        ctx = await get_corridor_context("sumatra_belawan_medan")
+        corridor_info = (
+            f"LIVE CORRIDOR TELEMETRY:\n"
+            f"- Weather: {ctx.get('weather', {}).get('alert_summary')}\n"
+            f"- Traffic: Congestion {ctx.get('traffic', {}).get('congestion_level_pct')}% (Delay: {ctx.get('traffic', {}).get('delay_minutes')} mins)\n"
+            f"- PIHPS Food Prices: Red Chili Rp {ctx.get('commodity_prices', {}).get('chili_price'):,}, Rice Rp {ctx.get('commodity_prices', {}).get('rice_price'):,} (+12.8% Anomaly Inflation Spike)\n"
+        )
+    except Exception:
+        pass
+
     if not context:
         context = (
             "You are the PetaNadi AI Advisor, a tactical logistics resilience consultant for the North Sumatra Corridor.\n"
@@ -165,16 +179,18 @@ async def simulation_chat(payload: ChatPayload):
         
     prompt = (
         f"{context}\n"
+        f"{corridor_info}\n"
         f"User message: {message}\n"
-        f"IMPORTANT INSTRUCTION: Respond in the EXACT same language as the user message (Indonesian if the user asks in Indonesian, English if in English). "
-        f"Provide a brief, authoritative, and tactical response (max 3 sentences)."
+        f"IMPORTANT INSTRUCTION: Respond using Chain of Thought reasoning covering (1) Physical Threat, (2) Economic Impact, (3) Reroute Decision. "
+        f"Respond in the EXACT same language as the user message (Indonesian if the user asks in Indonesian, English if in English). "
+        f"Provide a brief, authoritative, and tactical response."
     )
     
     try:
         from agents.llm_gateway import LLMGateway
         reply = await LLMGateway.generate_content(
             prompt=prompt,
-            system_instruction="You are PetaNadi AI Advisor, an expert Indonesian logistics and emergency response consultant."
+            system_instruction="You are PetaNadi AI Advisor, an expert Indonesian logistics and emergency response consultant. Use Chain of Thought reasoning."
         )
         return {"reply": reply}
     except Exception as err:

@@ -79,6 +79,35 @@ export const api = {
         body: JSON.stringify(body)
       })
   },
+  corridor: {
+    context: (corridorId: string = 'sumatra_belawan_medan') =>
+      request<import('./types').CorridorContext>(`/api/v1/corridor/context?corridor_id=${corridorId}`),
+  },
+  weather: {
+    spatialPolygons: () =>
+      request<GeoJSON.FeatureCollection>('/api/v1/weather/spatial-polygons'),
+  },
+  traffic: {
+    flowSegments: () =>
+      request<{
+        segments: Array<{ checkpoint: string; lat: number; lon: number; current_speed_kmh: number; free_flow_speed_kmh: number; congestion_level: 'low' | 'moderate' | 'heavy'; delay_seconds: number }>;
+        incidents: Array<Record<string, unknown>>;
+        total_segments: number;
+        total_incidents: number;
+      }>('/api/v1/traffic/flow-segments'),
+  },
+  routing: {
+    optimizeCuOpt: (payload: { origin_id?: string; dest_id?: string; fleet_size?: number; hazard_zones?: Array<Record<string, unknown>> }) =>
+      request<{
+        status: string;
+        solver: string;
+        compute_time_ms: number;
+        optimization_summary: { travel_time_savings_pct: number; fuel_cost_reduction_pct: number; hazard_segments_avoided: number; tomtom_live_speed_kmh: number };
+      }>('/api/v1/routing/optimize-cuopt', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+  },
   demo: {
     start: (opts?: { mock_agents?: boolean; offline?: boolean }) =>
       request<{ crisis_id: string; stage: number; total_stages: number }>(

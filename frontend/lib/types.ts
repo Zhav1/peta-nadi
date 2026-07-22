@@ -190,6 +190,52 @@ export interface SourceHealthResponse {
   sources: SourceHealth[];
 }
 
+export interface CorridorContext {
+  corridor_id: string;
+  corridor_name: string;
+  timestamp: string;
+  weather: {
+    status: string;
+    rainfall_mm: number;
+    visibility: string;
+    alert_summary: string;
+    code: number;
+    location: string;
+  };
+  traffic: {
+    congestion_level_pct: number;
+    delay_minutes: number;
+    active_incidents: number;
+    flow_speed_kmh: number;
+    status: string;
+    checkpoints: Array<{
+      name: string;
+      speed: number;
+      congestion_pct: number;
+      status: string;
+    }>;
+  };
+  commodity_prices: {
+    chili_price: number;
+    rice_price: number;
+    cooking_oil_price: number;
+    price_anomaly_detected: boolean;
+    inflation_trend_pct: number;
+    commodities: Array<{
+      name: string;
+      price_idr: number;
+      deviation_pct: number;
+      status: string;
+    }>;
+  };
+  data_integrity: {
+    bmkg_status: string;
+    tomtom_status: string;
+    pihps_status: string;
+    consensus_confidence: number;
+  };
+}
+
 export interface DemoStatus {
   crisis_id: string;
   stage: number;
@@ -200,3 +246,4 @@ export interface DemoStatus {
   summary?: string;
   crisis_state: import('./types').CrisisState;
 }
+
