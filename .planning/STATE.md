@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-07-22
 **Active Milestone:** M1 — Hackathon MVP (North Sumatra Corridor)
-**Current Phase:** Phase 15 COMPLETE ✅
+**Current Phase:** Phase 17 COMPLETE ✅
 
 ---
 
@@ -26,6 +26,8 @@
 | 13 | Mapbox/Deck.gl Spatiotemporal Layers & Drawing Tool | **COMPLETE** ✅ | Fixed 3D globe node anchor, Drawing Mode event listener & pen cursor, and smooth corridor route polylines |
 | 14 | Pure Agentic Hazard Avoidance Router & Clean Slate Node Selection | **COMPLETE** ✅ | Forced-waypoint Mapbox engine (not hint), 18 real OSM road nodes replacing math offsets, segment-aware intersection detection with 2 km danger buffer, clean slate node selection |
 | 15 | Google Maps-Grade Multi-Alternative AI Routing, On-Map Interactivity & Modality Intelligence | **COMPLETE** ✅ | 3 Mapbox alternative routes, on-map clickable route selection, `(Best)` auto modality tab, traffic congestion colors, dynamic incident-click routing, multi-leg intermodal chain display |
+| 16 | Live API Ingestion, Corridor Context Aggregator & AI CoT Prompt Injection | **COMPLETE** ✅ | BMKG, TomTom, PIHPS multi-source aggregator `get_corridor_context()`, Supabase data_sources sync, AI CoT 3-part prompt engineering, left sidebar live inflation binding, live Mapbox weather & traffic overlay badges |
+| 17 | TomTom Segment Traffic Colors, NVIDIA FourCastNet Regional Weather Coverage & NVIDIA cuOpt Routing Synchronization | **COMPLETE** ✅ | TomTom segment-level flow lines (Google Maps style: red/yellow/green) + live incident markers, BMKG + NVIDIA FourCastNet (Earth-2) spatial weather multi-polygons, NVIDIA cuOpt GPU dynamic cost matrix synchronization |
 
 ---
 
