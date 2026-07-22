@@ -1,5 +1,6 @@
 import { ScatterplotLayer, PathLayer, PolygonLayer } from '@deck.gl/layers';
 import { HeatmapLayer } from '@deck.gl/aggregation-layers';
+import { densifyPath, type LonLat } from './pathDensifier';
 import type { FireHotspot, MaritimeVector, DisasterZone, IncidentSummary, RouteRecommendation } from './types';
 
 /** Severity → RGBA color */
@@ -21,6 +22,7 @@ export function buildCrisisPinsLayer(
     id: 'crisis-pins',
     slot: 'top',
     data: incidents.filter((i) => i.lat != null && i.lon != null),
+    positionFormat: 'XYZ',
     getPosition: (d) => [d.lon!, d.lat!, 0],
     billboard: true,
     antialiasing: true,
@@ -45,11 +47,15 @@ export function buildRoutePathsLayer(routes: RouteRecommendation[], activeIdx: n
   return new PathLayer({
     id: 'route-paths',
     slot: 'top',
-    data: routes.map((r, i) => ({
-      path: r.waypoints.map((wp) => [wp.lon, wp.lat] as [number, number]),
-      isActive: i === targetIdx,
-      riskScore: r.risk_score,
-    })),
+    data: routes.map((r, i) => {
+      const rawWaypoints: LonLat[] = r.waypoints.map((wp) => [wp.lon, wp.lat]);
+      const densified = densifyPath(rawWaypoints, 30); // densify every 30km for smooth arcs
+      return {
+        path: densified,
+        isActive: i === targetIdx,
+        riskScore: r.risk_score,
+      };
+    }),
     getPath: (d) => d.path,
     getColor: (d) =>
       d.isActive
@@ -61,6 +67,7 @@ export function buildRoutePathsLayer(routes: RouteRecommendation[], activeIdx: n
     capRounded: true,
     jointRounded: true,
     billboard: true,
+    wrapLongitude: true,
     pickable: true,
     updateTriggers: { getColor: activeIdx, getWidth: activeIdx },
   });
@@ -113,12 +120,17 @@ export function buildMaritimeLayer(vectors: MaritimeVector[]) {
   return new PathLayer({
     id: 'maritime-paths',
     slot: 'middle',
-    data: vectors,
+    data: vectors.map((m) => ({
+      ...m,
+      path: densifyPath(m.path as LonLat[], 25),
+    })),
     getPath: (d) => d.path,
     getColor: [34, 211, 238, 120],   // translucent cyan
     getWidth: 2,
     widthMinPixels: 1,
     capRounded: true,
+    jointRounded: true,
+    wrapLongitude: true,
     pickable: false,
     dashArray: [4, 2],               // dashed line for vessels
   });

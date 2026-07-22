@@ -5,6 +5,8 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import MapboxDraw from '@mapbox/mapbox-gl-draw';
 import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css';
+import { densifyPath, type LonLat } from '@/lib/pathDensifier';
+import { HUB_NODES, type HubNode } from '@/lib/mapboxRoutingService';
 
 import type {
   IncidentSummary,
@@ -25,11 +27,48 @@ export interface CrisisMapProps {
   disasterZones: DisasterZone[];
   onPolygonDrawn: (polygon: [number, number][], geojsonFeature: GeoJSON.Feature) => void;
   drawModeActive: boolean;
+  isClickTargeting?: boolean;
+  onMapPointTargeted?: (lat: number, lon: number) => void;
+  simulatedShockwave?: { center: [number, number]; radiusKm: number; hazardType: string } | null;
+  selectedOriginNode?: string | null;
+  selectedDestNode?: string | null;
+  onNodeSelected?: (nodeId: string) => void;
+  onSelectRoute?: (routeIdx: number) => void;
+  hubNodesList?: HubNode[];
 }
 
 // North Sumatra — Belawan Port area
-const INITIAL_CENTER: [number, number] = [98.67, 3.79];
+const INITIAL_CENTER: [number, number] = [98.67, 3.55];
 const INITIAL_ZOOM = 9;
+const DRAG_THRESHOLD_PX = 5;
+
+/** Generates a GeoJSON polygon ring forming a circle around [lon, lat] */
+function createGeoJsonCircleRing(center: [number, number], radiusKm: number, points = 64): [number, number][] {
+  const [lon, lat] = center;
+  const ring: [number, number][] = [];
+  const kmToRad = radiusKm / 6371.0;
+  const latRad = (lat * Math.PI) / 180;
+  const lonRad = (lon * Math.PI) / 180;
+
+  for (let i = 0; i <= points; i++) {
+    const theta = (i * 2 * Math.PI) / points;
+    const pointLatRad = Math.asin(
+      Math.sin(latRad) * Math.cos(kmToRad) +
+        Math.cos(latRad) * Math.sin(kmToRad) * Math.cos(theta)
+    );
+    const pointLonRad =
+      lonRad +
+      Math.atan2(
+        Math.sin(theta) * Math.sin(kmToRad) * Math.cos(latRad),
+        Math.cos(kmToRad) - Math.sin(latRad) * Math.sin(pointLatRad)
+      );
+
+    const pointLon = (pointLonRad * 180) / Math.PI;
+    const pointLat = (pointLatRad * 180) / Math.PI;
+    ring.push([pointLon, pointLat]);
+  }
+  return ring;
+}
 
 export default function CrisisMap({
   incidents,
@@ -42,10 +81,20 @@ export default function CrisisMap({
   disasterZones,
   onPolygonDrawn,
   drawModeActive,
+  isClickTargeting = false,
+  onMapPointTargeted,
+  simulatedShockwave,
+  selectedOriginNode = null,
+  selectedDestNode = null,
+  onNodeSelected,
+  onSelectRoute,
+  hubNodesList,
 }: CrisisMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const drawRef = useRef<InstanceType<typeof MapboxDraw> | null>(null);
+  const htmlMarkersRef = useRef<mapboxgl.Marker[]>([]);
+  const routeEtaMarkersRef = useRef<mapboxgl.Marker[]>([]);
 
   const isMapLoadedRef = useRef(false);
   const onCrisisClickRef = useRef(onCrisisClick);
@@ -54,6 +103,17 @@ export default function CrisisMap({
   onPolygonDrawnRef.current = onPolygonDrawn;
   const drawModeActiveRef = useRef(drawModeActive);
   drawModeActiveRef.current = drawModeActive;
+
+  const isClickTargetingRef = useRef(isClickTargeting);
+  isClickTargetingRef.current = isClickTargeting;
+  const onMapPointTargetedRef = useRef(onMapPointTargeted);
+  onMapPointTargetedRef.current = onMapPointTargeted;
+  const onNodeSelectedRef = useRef(onNodeSelected);
+  onNodeSelectedRef.current = onNodeSelected;
+  const onSelectRouteRef = useRef(onSelectRoute);
+  onSelectRouteRef.current = onSelectRoute;
+
+  const mouseDownPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   // Mount map once
   useEffect(() => {
@@ -68,11 +128,16 @@ export default function CrisisMap({
       style: 'mapbox://styles/mapbox/dark-v11',
       center: INITIAL_CENTER,
       zoom: INITIAL_ZOOM,
-      pitch: 30,
+      pitch: 35,
       projection: { name: 'globe' },
       antialias: true,
     });
     mapRef.current = map;
+
+    // Track mouse down position to separate intentional clicks from map drag
+    map.on('mousedown', (e) => {
+      mouseDownPosRef.current = { x: e.point.x, y: e.point.y };
+    });
 
     // Map controls
     map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), 'top-right');
@@ -81,7 +146,7 @@ export default function CrisisMap({
     // Polygon drawing tool
     const draw = new MapboxDraw({
       displayControlsDefault: false,
-      controls: { polygon: true, trash: true },
+      controls: {},
       defaultMode: 'simple_select',
       styles: [
         {
@@ -136,11 +201,11 @@ export default function CrisisMap({
         source: 'disaster-zones-source',
         paint: {
           'line-color': '#f97316',
-          'line-width': 2,
+          'line-width': 2.5,
         },
       });
 
-      // 2. Route Paths GeoJSON Layer
+      // 2. Route Paths GeoJSON Layer (Real Mapbox Directions Driving Polyline with Alternatives & Congestion Colors)
       map.addSource('route-paths-source', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
@@ -154,57 +219,69 @@ export default function CrisisMap({
           'line-join': 'round',
         },
         paint: {
-          'line-color': ['case', ['get', 'isActive'], '#22d3ee', '#f97316'],
-          'line-width': ['case', ['get', 'isActive'], 6, 3],
-          'line-opacity': 0.9,
+          'line-color': ['coalesce', ['get', 'color'], '#00f0ff'],
+          'line-width': ['case', ['get', 'isActive'], 7, 4],
+          'line-opacity': ['case', ['get', 'isActive'], 0.95, 0.5],
         },
       });
 
-      // 3. Fire Hotspots GeoJSON Layer
-      map.addSource('fire-hotspots-source', {
+      // 2b. Segment-Level Traffic Congestion GeoJSON Layer (Google Maps Traffic Style)
+      map.addSource('congestion-segments-source', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
       });
       map.addLayer({
-        id: 'fire-hotspots-glow',
-        type: 'circle',
-        source: 'fire-hotspots-source',
-        paint: {
-          'circle-radius': 14,
-          'circle-color': '#ef4444',
-          'circle-opacity': 0.6,
-          'circle-blur': 0.7,
-        },
-      });
-
-      // 4. Maritime Vectors GeoJSON Layer
-      map.addSource('maritime-vectors-source', {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] },
-      });
-      map.addLayer({
-        id: 'maritime-vectors-line',
+        id: 'congestion-segments-line',
         type: 'line',
-        source: 'maritime-vectors-source',
+        source: 'congestion-segments-source',
         layout: {
           'line-cap': 'round',
           'line-join': 'round',
         },
         paint: {
-          'line-color': '#22d3ee',
-          'line-width': 2,
-          'line-dasharray': [2, 2],
-          'line-opacity': 0.8,
+          'line-color': [
+            'match',
+            ['get', 'level'],
+            'heavy', '#ef4444',
+            'moderate', '#eab308',
+            '#22c55e'
+          ],
+          'line-width': 5,
+          'line-opacity': 0.85,
         },
       });
 
-      // 5. Crisis Pins GeoJSON Layer (Native WebGL 3D Globe Anchored)
+      // 3. Simulated Shockwave Pulse GeoJSON Layer
+      map.addSource('simulated-shockwave-source', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+      map.addLayer({
+        id: 'simulated-shockwave-fill',
+        type: 'fill',
+        source: 'simulated-shockwave-source',
+        paint: {
+          'fill-color': '#ff9900',
+          'fill-opacity': 0.18,
+        },
+      });
+      map.addLayer({
+        id: 'simulated-shockwave-outline',
+        type: 'line',
+        source: 'simulated-shockwave-source',
+        paint: {
+          'line-color': '#ff9900',
+          'line-width': 2.5,
+          'line-dasharray': [2, 1],
+        },
+      });
+
+      // 4. Crisis Pins GeoJSON Layer (Native WebGL 3D Globe Anchored)
       map.addSource('crisis-pins-source', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
       });
 
-      // Outer pulsing aura ring
       map.addLayer({
         id: 'crisis-pins-glow',
         type: 'circle',
@@ -223,7 +300,6 @@ export default function CrisisMap({
         },
       });
 
-      // Inner solid core pin
       map.addLayer({
         id: 'crisis-pins-core',
         type: 'circle',
@@ -243,8 +319,23 @@ export default function CrisisMap({
         },
       });
 
+      // General map click handler for Game-Like Location Targeting
+      map.on('click', (e) => {
+        if (isClickTargetingRef.current && onMapPointTargetedRef.current) {
+          onMapPointTargetedRef.current(e.lngLat.lat, e.lngLat.lng);
+        }
+      });
+
       // Pin click events
       map.on('click', 'crisis-pins-core', (e) => {
+        if (isClickTargetingRef.current) return;
+
+        if (e.point) {
+          const dx = Math.abs(e.point.x - mouseDownPosRef.current.x);
+          const dy = Math.abs(e.point.y - mouseDownPosRef.current.y);
+          if (dx > DRAG_THRESHOLD_PX || dy > DRAG_THRESHOLD_PX) return;
+        }
+
         if (e.features && e.features[0]) {
           const id = e.features[0].properties?.id;
           if (id && onCrisisClickRef.current) {
@@ -252,11 +343,22 @@ export default function CrisisMap({
           }
         }
       });
-      map.on('mouseenter', 'crisis-pins-core', () => {
-        map.getCanvas().style.cursor = 'pointer';
+
+      // Route line click handler (Click route on map to select)
+      map.on('click', 'route-paths-line', (e) => {
+        if (isClickTargetingRef.current) return;
+        if (e.features && e.features[0]) {
+          const routeIdx = e.features[0].properties?.routeIndex;
+          if (routeIdx !== undefined && onSelectRouteRef.current) {
+            onSelectRouteRef.current(routeIdx);
+          }
+        }
       });
-      map.on('mouseleave', 'crisis-pins-core', () => {
-        if (!drawModeActiveRef.current) map.getCanvas().style.cursor = '';
+      map.on('mouseenter', 'route-paths-line', () => {
+        if (mapRef.current) mapRef.current.getCanvas().style.cursor = 'pointer';
+      });
+      map.on('mouseleave', 'route-paths-line', () => {
+        if (mapRef.current) mapRef.current.getCanvas().style.cursor = '';
       });
 
       // Handle polygon drawing completion
@@ -269,22 +371,16 @@ export default function CrisisMap({
           }
           draw.deleteAll();
           draw.changeMode('simple_select');
-          if (mapRef.current) mapRef.current.getCanvas().style.cursor = '';
+          if (mapRef.current) {
+            mapRef.current.dragPan.enable();
+            mapRef.current.getCanvas().style.cursor = '';
+          }
         }
       });
 
-      // Populate initial layer data
+      // Populate initial layer data & HTML markers
       updateMapSources();
-
-      // Sync initial draw mode if active
-      if (drawModeActiveRef.current) {
-        try {
-          draw.changeMode('draw_polygon');
-          map.getCanvas().style.cursor = 'crosshair';
-        } catch (err) {
-          console.warn('Initial draw mode sync error:', err);
-        }
-      }
+      renderHtmlHubMarkers();
     });
 
     return () => {
@@ -295,6 +391,97 @@ export default function CrisisMap({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Render Interactive Custom HTML Element Markers for Hub Nodes
+  const renderHtmlHubMarkers = () => {
+    const map = mapRef.current;
+    if (!map || !isMapLoadedRef.current) return;
+
+    // Clear previous markers
+    htmlMarkersRef.current.forEach((m) => m.remove());
+    htmlMarkersRef.current = [];
+
+    const nodesToRender = hubNodesList || Object.values(HUB_NODES);
+
+    nodesToRender.forEach((node) => {
+      const isOrigin = node.id === selectedOriginNode;
+      const isDest = node.id === selectedDestNode;
+
+      const el = document.createElement('div');
+      el.className = `cursor-pointer transition-transform transform hover:scale-110 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono font-bold shadow-xl border backdrop-blur-md ${
+        isOrigin
+          ? 'bg-cyan-950/90 text-cyan-300 border-cyan-400 ring-4 ring-cyan-500/30'
+          : isDest
+          ? 'bg-amber-950/90 text-amber-300 border-amber-400 ring-4 ring-amber-500/30'
+          : 'bg-slate-900/80 text-slate-200 border-slate-700 hover:border-cyan-400/60'
+      }`;
+
+      el.innerHTML = `
+        <span>${node.icon}</span>
+        <span>${node.name}</span>
+        ${isOrigin ? '<span class="px-1 bg-cyan-400 text-slate-950 rounded text-[9px]">START</span>' : ''}
+        ${isDest ? '<span class="px-1 bg-amber-400 text-slate-950 rounded text-[9px]">END</span>' : ''}
+      `;
+
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (onNodeSelectedRef.current) {
+          onNodeSelectedRef.current(node.id);
+        }
+      });
+
+      const marker = new mapboxgl.Marker({ element: el, anchor: 'center' })
+        .setLngLat(node.coords)
+        .addTo(map);
+
+      htmlMarkersRef.current.push(marker);
+    });
+
+    // Clear previous route ETA markers
+    routeEtaMarkersRef.current.forEach((m) => m.remove());
+    routeEtaMarkersRef.current = [];
+
+    // Render Floating On-Map Route ETA Badges (Google Maps Style)
+    if (activeRoutes && activeRoutes.length > 0) {
+      activeRoutes.forEach((r, idx) => {
+        if (!r.waypoints || r.waypoints.length === 0) return;
+        const midIdx = Math.floor(r.waypoints.length / 2);
+        const midPt = r.waypoints[midIdx];
+        if (!midPt || midPt.lon == null || midPt.lat == null) return;
+
+        const isActive = (activeRouteIdx ?? 0) === idx;
+        const modeIcon = r.modality === 'air' ? '✈️' : r.modality === 'maritime' ? '⚓' : '🚚';
+
+        const el = document.createElement('div');
+        el.className = `cursor-pointer transition-all transform hover:scale-110 flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold shadow-2xl border backdrop-blur-md ${
+          r.is_compromised
+            ? 'bg-red-950/90 text-red-300 border-red-500 shadow-red-500/30'
+            : isActive
+            ? 'bg-cyan-500 text-slate-950 border-cyan-200 ring-4 ring-cyan-400/40 shadow-cyan-500/40'
+            : 'bg-slate-900/90 text-slate-200 border-slate-700 hover:border-cyan-400'
+        }`;
+
+        el.innerHTML = `
+          <span>${modeIcon}</span>
+          <span>${r.eta_minutes} min</span>
+          <span class="opacity-80 text-[10px]">(${r.distance_km.toFixed(0)} km)</span>
+        `;
+
+        el.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (onSelectRouteRef.current) {
+            onSelectRouteRef.current(idx);
+          }
+        });
+
+        const etaMarker = new mapboxgl.Marker({ element: el, anchor: 'center' })
+          .setLngLat([midPt.lon, midPt.lat])
+          .addTo(map);
+
+        routeEtaMarkersRef.current.push(etaMarker);
+      });
+    }
+  };
 
   // Update native GeoJSON map sources
   const updateMapSources = () => {
@@ -320,21 +507,48 @@ export default function CrisisMap({
       });
     }
 
-    // 2. Update Route Paths Source
+    // 2. Update Route Paths Source (Using Exact Mapbox Directions Road Network Coordinates & Alternatives)
     const routesSource = map.getSource('route-paths-source') as mapboxgl.GeoJSONSource;
     if (routesSource) {
       const targetIdx = activeRouteIdx ?? 0;
       routesSource.setData({
         type: 'FeatureCollection',
-        features: activeRoutes.map((r, idx) => ({
+        features: activeRoutes.map((r, idx) => {
+          const rawWaypoints: LonLat[] = r.waypoints.map((wp) => [wp.lon, wp.lat]);
+          const finalCoordinates = rawWaypoints.length > 5 ? rawWaypoints : densifyPath(rawWaypoints, 25);
+          return {
+            type: 'Feature',
+            geometry: {
+              type: 'LineString',
+              coordinates: finalCoordinates,
+            },
+            properties: {
+              routeIndex: idx,
+              isActive: idx === targetIdx,
+              description: r.description,
+              color: r.color || (idx === targetIdx ? '#00f0ff' : idx === 1 ? '#3b82f6' : '#8b5cf6'),
+            },
+          };
+        }),
+      });
+    }
+
+    // 2b. Update Congestion Segments Source (Google Maps Traffic Style)
+    const congestionSource = map.getSource('congestion-segments-source') as mapboxgl.GeoJSONSource;
+    if (congestionSource) {
+      const targetIdx = activeRouteIdx ?? 0;
+      const activeRoute = activeRoutes[targetIdx];
+      const segments = activeRoute?.congestion_segments || [];
+      congestionSource.setData({
+        type: 'FeatureCollection',
+        features: segments.map((seg) => ({
           type: 'Feature',
           geometry: {
             type: 'LineString',
-            coordinates: r.waypoints.map((wp) => [wp.lon, wp.lat]),
+            coordinates: seg.coordinates.map((c) => [c.lon, c.lat]),
           },
           properties: {
-            isActive: idx === targetIdx,
-            description: r.description,
+            level: seg.level,
           },
         })),
       });
@@ -359,46 +573,56 @@ export default function CrisisMap({
       });
     }
 
-    // 4. Update Fire Hotspots Source
-    const fireSource = map.getSource('fire-hotspots-source') as mapboxgl.GeoJSONSource;
-    if (fireSource) {
-      fireSource.setData({
-        type: 'FeatureCollection',
-        features: (fireHotspots || []).map((f) => ({
-          type: 'Feature',
-          geometry: { type: 'Point', coordinates: f.coordinates },
-          properties: { confidence: f.confidence, severity: f.severity },
-        })),
-      });
-    }
-
-    // 5. Update Maritime Vectors Source
-    const maritimeSource = map.getSource('maritime-vectors-source') as mapboxgl.GeoJSONSource;
-    if (maritimeSource) {
-      maritimeSource.setData({
-        type: 'FeatureCollection',
-        features: (maritimeVectors || []).map((m) => ({
-          type: 'Feature',
-          geometry: { type: 'LineString', coordinates: m.path },
-          properties: { vessel_name: m.vessel_name, type: m.type },
-        })),
-      });
+    // 4. Update Simulated Shockwave Pulse Source
+    const shockwaveSource = map.getSource('simulated-shockwave-source') as mapboxgl.GeoJSONSource;
+    if (shockwaveSource) {
+      if (simulatedShockwave && simulatedShockwave.center) {
+        const ring = createGeoJsonCircleRing(simulatedShockwave.center, simulatedShockwave.radiusKm);
+        shockwaveSource.setData({
+          type: 'FeatureCollection',
+          features: [
+            {
+              type: 'Feature',
+              geometry: { type: 'Polygon', coordinates: [ring] },
+              properties: { type: simulatedShockwave.hazardType },
+            },
+          ],
+        });
+      } else {
+        shockwaveSource.setData({ type: 'FeatureCollection', features: [] });
+      }
     }
   };
 
-  // Update sources on prop changes
+  // Update sources & HTML markers on prop changes
   useEffect(() => {
     updateMapSources();
-  }, [incidents, selectedCrisisId, activeRoutes, activeRouteIdx, fireHotspots, maritimeVectors, disasterZones]);
+    renderHtmlHubMarkers();
+  }, [
+    incidents,
+    selectedCrisisId,
+    activeRoutes,
+    activeRouteIdx,
+    fireHotspots,
+    maritimeVectors,
+    disasterZones,
+    simulatedShockwave,
+    selectedOriginNode,
+    selectedDestNode,
+    hubNodesList,
+  ]);
 
-  // Toggle MapboxDraw mode & canvas cursor
+  // Toggle MapboxDraw mode, dragPan, & canvas cursor
   useEffect(() => {
     const draw = drawRef.current;
     const map = mapRef.current;
     if (!draw || !isMapLoadedRef.current || !map) return;
 
-    if (drawModeActive) {
+    if (isClickTargeting) {
+      map.getCanvas().style.cursor = 'crosshair';
+    } else if (drawModeActive) {
       try {
+        map.dragPan.disable();
         draw.changeMode('draw_polygon');
         map.getCanvas().style.cursor = 'crosshair';
       } catch (err) {
@@ -406,34 +630,63 @@ export default function CrisisMap({
       }
     } else {
       try {
+        map.dragPan.enable();
         draw.changeMode('simple_select');
         map.getCanvas().style.cursor = '';
       } catch (err) {
         console.warn('Failed to switch to simple_select:', err);
       }
     }
-  }, [drawModeActive]);
+  }, [drawModeActive, isClickTargeting]);
 
-  // Fly to selected crisis pin
+  // Fly to selected crisis pin or shockwave
   useEffect(() => {
-    if (!selectedCrisisId || !mapRef.current) return;
-    const incident = incidents.find((i) => i.id === selectedCrisisId);
-    if (incident?.lat != null && incident?.lon != null) {
+    if (!mapRef.current) return;
+
+    if (simulatedShockwave?.center) {
       mapRef.current.flyTo({
-        center: [incident.lon, incident.lat],
-        zoom: 11,
-        duration: 1200,
+        center: simulatedShockwave.center,
+        zoom: 10,
+        duration: 1400,
         essential: true,
       });
+    } else if (selectedCrisisId) {
+      const incident = incidents.find((i) => i.id === selectedCrisisId);
+      if (incident?.lat != null && incident?.lon != null) {
+        mapRef.current.flyTo({
+          center: [incident.lon, incident.lat],
+          zoom: 11,
+          duration: 1200,
+          essential: true,
+        });
+      }
     }
-  }, [selectedCrisisId, incidents]);
+  }, [selectedCrisisId, incidents, simulatedShockwave]);
 
   return (
-    <div
-      ref={containerRef}
-      id="crisis-map"
-      className="w-full h-full"
-      aria-label="PetaNadi crisis intelligence map"
-    />
+    <div className="relative w-full h-full">
+      <div
+        ref={containerRef}
+        id="crisis-map"
+        className="w-full h-full"
+        aria-label="PetaNadi crisis intelligence map"
+      />
+
+      {/* Floating active status badge when freehand drawing mode is active */}
+      {drawModeActive && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[360] px-4 py-2 rounded-full bg-orange-950/90 border border-orange-500/60 backdrop-blur-md shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-orange-500"></span>
+          </span>
+          <span className="font-mono text-xs font-bold text-orange-400 tracking-wider">
+            GAMBAR POLIGON AREA CRISIS...
+          </span>
+          <span className="text-[10px] font-mono text-orange-300/80 border-l border-orange-500/30 pl-2">
+            Klik poin pada peta untuk menutup bentuk poligon
+          </span>
+        </div>
+      )}
+    </div>
   );
 }

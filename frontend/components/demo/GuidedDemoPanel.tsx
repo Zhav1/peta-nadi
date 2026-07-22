@@ -21,13 +21,11 @@ export function GuidedDemoPanel({ onCrisisReady }: GuidedDemoPanelProps) {
     advance,
     toggleAuto,
     reset,
-    loadReplay,
     saveReplay,
   } = useDemoState(onCrisisReady);
 
   const [qrVisible, setQrVisible] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Generate QR Code when demo starts and has a crisisId
   useEffect(() => {
@@ -52,69 +50,41 @@ export function GuidedDemoPanel({ onCrisisReady }: GuidedDemoPanelProps) {
     }
   }, [isRunning, crisisId, qrVisible]);
 
-  // Handle replay file loading
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const snapshot = JSON.parse(event.target?.result as string);
-        if (snapshot && snapshot.crisis_id && snapshot.crisis_state) {
-          loadReplay(snapshot);
-        } else {
-          alert('Invalid replay snapshot format.');
-        }
-      } catch {
-        alert('Failed to parse replay file.');
+  // Auto-advance demo stages every 1.8 seconds when running
+  useEffect(() => {
+    if (!isRunning || !isAuto) return;
+    const timer = setInterval(() => {
+      if (stage < 4) {
+        advance();
       }
-    };
-    reader.readAsText(file);
-  };
+    }, 1800);
+    return () => clearInterval(timer);
+  }, [isRunning, isAuto, stage, advance]);
 
   if (!isRunning) {
     return (
-      <div className="fixed bottom-6 right-6 z-50 flex gap-2">
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={handleFileChange}
-          accept=".json"
-          className="hidden"
-        />
+      <div className="fixed bottom-6 right-6 z-50">
         <button
           type="button"
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            fileInputRef.current?.click();
+            start({ mock_agents: false, offline: false });
           }}
-          className="px-4 py-2 text-xs font-semibold rounded-full border border-slate-700 bg-slate-900/90 text-slate-300 hover:bg-slate-800 hover:text-white transition duration-200 shadow-lg"
+          className="flex items-center gap-2 px-5 py-2.5 font-bold rounded-full bg-cyan-500 text-slate-950 hover:bg-cyan-400 active:scale-95 transition duration-200 shadow-xl shadow-cyan-500/25 border border-cyan-400/50"
         >
-          📂 Load Replay
-        </button>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            start({ mock_agents: true, offline: true });
-          }}
-          className="flex items-center gap-2 px-5 py-2.5 font-bold rounded-full bg-cyan-500 text-slate-950 hover:bg-cyan-400 active:scale-95 transition duration-200 shadow-lg shadow-cyan-500/20"
-        >
-          <span>▶</span> Run Demo
+          <span className="animate-pulse">▶</span> Run Demo
         </button>
       </div>
     );
   }
 
   const stageTitles = [
-    'Injecting Events',
-    'Agent Swarm Running',
-    'Consensus Gate',
-    'Validated Alert',
-    'Notification Sent',
+    'Injecting Real-time Sensors',
+    'Agent Swarm Analysis',
+    'GraphRAG Consensus Gate',
+    'Validated Alert & Reroute',
+    'WhatsApp & Fleet Dispatch',
   ];
 
   const stageExplainers = [
@@ -125,7 +95,6 @@ export function GuidedDemoPanel({ onCrisisReady }: GuidedDemoPanelProps) {
     'A WhatsApp alert has been sent to logistics operators with the crisis summary, recommended detour, and a deep-link back to this dashboard.',
   ];
 
-  // Emojis for source badges in Stage 0/1
   const sources = [
     { name: 'BMKG', icon: '🌩️', color: 'border-yellow-500/30 text-yellow-400 bg-yellow-950/20' },
     { name: 'TomTom', icon: '🚗', color: 'border-orange-500/30 text-orange-400 bg-orange-950/20' },
@@ -145,12 +114,13 @@ export function GuidedDemoPanel({ onCrisisReady }: GuidedDemoPanelProps) {
   ];
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 w-96 rounded-2xl border border-slate-800 bg-slate-950/85 backdrop-blur-md p-5 text-slate-100 shadow-2xl flex flex-col gap-4">
+    <div className="fixed bottom-6 right-6 z-50 w-96 rounded-2xl border border-slate-800 bg-slate-950/90 backdrop-blur-xl p-5 text-slate-100 shadow-2xl flex flex-col gap-4 animate-in slide-in-from-bottom-4 duration-300">
       {/* Header */}
       <div className="flex justify-between items-center border-b border-slate-800/80 pb-3">
         <div className="flex flex-col">
-          <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest">
-            {isReplay ? 'Offline Replay Mode' : 'Guided Demo Runner'}
+          <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+            {isReplay ? 'Offline Replay Mode' : 'Guided Presentation Stepper'}
           </span>
           <h4 className="text-sm font-bold text-slate-100 mt-0.5">
             Stage {stage + 1}: {stageTitles[stage]}
@@ -163,20 +133,20 @@ export function GuidedDemoPanel({ onCrisisReady }: GuidedDemoPanelProps) {
             e.stopPropagation();
             reset();
           }}
-          className="text-slate-400 hover:text-slate-200 text-xs transition p-1 hover:bg-slate-900 rounded-md"
+          className="text-slate-400 hover:text-white text-xs transition p-1 hover:bg-slate-900 rounded-md"
         >
           ✕
         </button>
       </div>
 
       {/* Stepper Progress Indicator */}
-      <div className="flex justify-between items-center gap-1.5 px-1 py-2">
+      <div className="flex justify-between items-center gap-1.5 px-1 py-1">
         {stageTitles.map((_, idx) => (
           <div key={idx} className="flex-1 flex flex-col gap-1 items-center">
             <div
               className={`w-full h-1.5 rounded-full transition-all duration-300 ${
                 idx <= stage
-                  ? 'bg-cyan-500 shadow-sm shadow-cyan-500/40'
+                  ? 'bg-cyan-400 shadow-sm shadow-cyan-500/50'
                   : 'bg-slate-800'
               }`}
             />
@@ -185,16 +155,15 @@ export function GuidedDemoPanel({ onCrisisReady }: GuidedDemoPanelProps) {
       </div>
 
       {/* Stage Explainer tooltip/card */}
-      <div className="rounded-xl border border-slate-800/60 bg-slate-900/40 p-3.5 text-xs text-slate-300 leading-relaxed relative">
+      <div className="rounded-xl border border-slate-800/60 bg-slate-900/60 p-3.5 text-xs text-slate-300 leading-relaxed relative">
         <span className="absolute -top-2 left-4 px-1.5 py-0.5 bg-slate-900 border border-slate-800 rounded text-[9px] font-semibold text-cyan-400 uppercase">
-          How it works
+          AI Stepper
         </span>
         {stageExplainers[stage]}
       </div>
 
       {/* Interactive visual feedback per stage */}
-      <div className="min-h-[110px] border border-slate-850 bg-slate-900/20 rounded-xl p-3 flex flex-col justify-center">
-        {/* Stage 1: Ingesting Events */}
+      <div className="min-h-[110px] border border-slate-850 bg-slate-900/30 rounded-xl p-3 flex flex-col justify-center">
         {stage === 0 && (
           <div className="grid grid-cols-3 gap-2">
             {sources.map((src, i) => (
@@ -210,13 +179,12 @@ export function GuidedDemoPanel({ onCrisisReady }: GuidedDemoPanelProps) {
           </div>
         )}
 
-        {/* Stage 2: Agent Swarm */}
         {stage === 1 && (
           <div className="grid grid-cols-2 gap-2">
             {agents.map((agent) => (
               <div
                 key={agent.key}
-                className="flex items-center gap-2 p-1.5 rounded-lg border border-slate-800 bg-slate-950/40 text-[11px]"
+                className="flex items-center gap-2 p-1.5 rounded-lg border border-slate-800 bg-slate-950/60 text-[11px]"
               >
                 <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
                 <span className="text-slate-300 font-medium">{agent.label}</span>
@@ -225,7 +193,6 @@ export function GuidedDemoPanel({ onCrisisReady }: GuidedDemoPanelProps) {
           </div>
         )}
 
-        {/* Stage 3: Consensus Gate */}
         {stage === 2 && (
           <div className="flex flex-col items-center gap-2 py-1">
             <div className="text-xs text-slate-400">Consensus Confidence Score</div>
@@ -243,11 +210,10 @@ export function GuidedDemoPanel({ onCrisisReady }: GuidedDemoPanelProps) {
                 style={{ width: `${confidence * 100}%` }}
               />
             </div>
-            <span className="text-[10px] text-slate-500">Threshold: &gt; 85% to trigger alert</span>
+            <span className="text-[10px] text-slate-500 font-mono">Threshold: &gt; 85% to trigger alert</span>
           </div>
         )}
 
-        {/* Stage 4: Validated Alert */}
         {stage === 3 && (
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-2">
@@ -262,7 +228,6 @@ export function GuidedDemoPanel({ onCrisisReady }: GuidedDemoPanelProps) {
           </div>
         )}
 
-        {/* Stage 5: Notification Sent */}
         {stage === 4 && (
           <div className="flex flex-col items-center gap-2 text-center py-2">
             <div className="w-9 h-9 rounded-full bg-emerald-950/50 border border-emerald-500/40 flex items-center justify-center text-emerald-400 text-lg shadow-lg shadow-emerald-500/10">
@@ -287,7 +252,7 @@ export function GuidedDemoPanel({ onCrisisReady }: GuidedDemoPanelProps) {
                 e.stopPropagation();
                 advance();
               }}
-              className="flex-1 py-2 rounded-xl text-xs font-bold bg-cyan-500 text-slate-950 hover:bg-cyan-400 active:scale-98 transition duration-200"
+              className="flex-1 py-2 rounded-xl text-xs font-bold bg-cyan-500 text-slate-950 hover:bg-cyan-400 active:scale-98 transition duration-200 shadow-md shadow-cyan-500/20"
             >
               ⏭ Next Step
             </button>
@@ -312,7 +277,7 @@ export function GuidedDemoPanel({ onCrisisReady }: GuidedDemoPanelProps) {
               e.stopPropagation();
               toggleAuto();
             }}
-            className={`px-3 py-2 rounded-xl text-xs font-bold transition duration-200 ${
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition duration-200 ${
               isAuto
                 ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
                 : 'border border-slate-800 bg-slate-900/60 text-slate-300 hover:bg-slate-800'
@@ -322,7 +287,7 @@ export function GuidedDemoPanel({ onCrisisReady }: GuidedDemoPanelProps) {
           </button>
         </div>
 
-        <div className="flex justify-between items-center text-[10px] text-slate-500 pt-2 border-t border-slate-900 mt-1">
+        <div className="flex justify-between items-center text-[10px] text-slate-500 pt-2 border-t border-slate-900 font-mono">
           <button
             type="button"
             onClick={(e) => {
@@ -339,7 +304,7 @@ export function GuidedDemoPanel({ onCrisisReady }: GuidedDemoPanelProps) {
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              start({ mock_agents: true, offline: true });
+              start({ mock_agents: false, offline: false });
             }}
             className="hover:text-slate-300 transition"
           >
@@ -350,7 +315,7 @@ export function GuidedDemoPanel({ onCrisisReady }: GuidedDemoPanelProps) {
 
       {/* QR Code section for Phone Remote */}
       {qrVisible && (
-        <div className="flex flex-col items-center gap-2 bg-slate-900/60 p-4 border border-slate-900 rounded-xl animate-slide-up">
+        <div className="flex flex-col items-center gap-2 bg-slate-900/60 p-4 border border-slate-900 rounded-xl">
           <canvas ref={canvasRef} className="rounded-lg shadow-md" />
           <div className="text-center">
             <div className="text-[10px] font-bold text-cyan-400">Scan QR Code</div>

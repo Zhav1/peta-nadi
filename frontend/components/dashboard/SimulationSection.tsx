@@ -15,6 +15,14 @@ export default function SimulationSection({ crisisId }: SimulationSectionProps) 
   const [inputVal, setInputVal] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Toast notification state replacing native browser alert()
+  const [toast, setToast] = useState<{ message: string; type: 'info' | 'success' | 'warning' } | null>(null);
+
+  const showToast = (message: string, type: 'info' | 'success' | 'warning' = 'info') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4000);
+  };
+
   const handleSend = async () => {
     if (!inputVal.trim() || loading) return;
     const userMsg = inputVal;
@@ -37,7 +45,18 @@ export default function SimulationSection({ crisisId }: SimulationSectionProps) 
   };
 
   return (
-    <div className="w-full h-full grid grid-cols-12 gap-6 overflow-hidden pointer-events-auto">
+    <div className="relative w-full h-full grid grid-cols-12 gap-6 overflow-hidden pointer-events-auto">
+      
+      {/* Toast Notification replacing window.alert() */}
+      {toast && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[10000] px-6 py-3 rounded-md bg-[#090a0f]/95 border border-[#00F0FF]/50 backdrop-blur-xl shadow-[0_0_30px_rgba(0,240,255,0.25)] flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="w-2 h-2 rounded-full bg-[#00F0FF] animate-pulse" />
+          <span className="font-mono text-xs font-bold text-slate-100 uppercase tracking-wider">
+            {toast.message}
+          </span>
+        </div>
+      )}
+
       {/* Left Column: AI Advisor Chat & Scenario Overview */}
       <section className="col-span-12 lg:col-span-8 flex flex-col min-h-0 gap-6">
         
@@ -125,7 +144,7 @@ export default function SimulationSection({ crisisId }: SimulationSectionProps) 
               <button 
                 onClick={() => {
                   setActiveAgency('BULOG');
-                  alert('Assigned cargo routing parameters to BULOG depots.');
+                  showToast('Assigned cargo routing parameters to BULOG depots.', 'success');
                 }}
                 className="mt-2 w-full py-1 bg-surface-container-highest text-[8px] font-bold uppercase tracking-widest hover:bg-[#00F0FF] hover:text-[#00363a] transition-all"
               >
@@ -143,7 +162,7 @@ export default function SimulationSection({ crisisId }: SimulationSectionProps) 
               <button 
                 onClick={() => {
                   setActiveAgency('DISHUB');
-                  alert('Assigned diversion parameters to DISHUB checkpoint arrays.');
+                  showToast('Assigned diversion parameters to DISHUB checkpoint arrays.', 'success');
                 }}
                 className="mt-2 w-full py-1 bg-surface-container-highest text-[8px] font-bold uppercase tracking-widest hover:bg-[#00F0FF] hover:text-[#00363a] transition-all"
               >
@@ -161,7 +180,7 @@ export default function SimulationSection({ crisisId }: SimulationSectionProps) 
               <button 
                 onClick={() => {
                   setActiveAgency('BNPB');
-                  alert('Assigned priority rescue support vectors to BNPB.');
+                  showToast('Assigned priority rescue support vectors to BNPB.', 'warning');
                 }}
                 className="mt-2 w-full py-1 bg-surface-container-highest text-[8px] font-bold uppercase tracking-widest hover:bg-[#00F0FF] hover:text-[#00363a] transition-all"
               >
@@ -174,7 +193,7 @@ export default function SimulationSection({ crisisId }: SimulationSectionProps) 
         {/* Primary Action Button */}
         <div className="mt-auto border-t border-white/10 pt-4">
           <button 
-            onClick={() => alert('Mitigation action plan deployed successfully across all agencies!')}
+            onClick={() => showToast('Mitigation action plan deployed successfully across all agencies!', 'success')}
             className="w-full py-3.5 bg-primary-container text-on-primary font-headline font-black uppercase tracking-[0.15em] hover:scale-[1.02] transition-transform active:scale-95 flex items-center justify-center gap-2 text-xs shadow-[0_0_15px_rgba(0,240,255,0.4)]"
           >
             <span className="material-symbols-outlined text-sm animate-pulse">rocket_launch</span>
