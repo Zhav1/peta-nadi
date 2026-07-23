@@ -208,7 +208,7 @@ export default function CrisisMap({
       isMapLoadedRef.current = true;
       map.addControl(draw, 'top-left');
 
-      // 0. Regional Weather Spatial Coverage Layer (BMKG + NVIDIA FourCastNet / Earth-2)
+      // 0. Regional Administrative Spatial Coverage Layer (Google Maps ADM Style Dashed Borders)
       map.addSource('weather-polygons-source', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
@@ -218,7 +218,7 @@ export default function CrisisMap({
         type: 'fill',
         source: 'weather-polygons-source',
         paint: {
-          'fill-color': ['coalesce', ['get', 'fill_color'], 'rgba(6, 182, 212, 0.12)'],
+          'fill-color': ['coalesce', ['get', 'fill_color'], 'rgba(239, 68, 68, 0.15)'],
           'fill-opacity': 0.85,
         },
       });
@@ -227,9 +227,9 @@ export default function CrisisMap({
         type: 'line',
         source: 'weather-polygons-source',
         paint: {
-          'line-color': ['coalesce', ['get', 'stroke_color'], '#06b6d4'],
-          'line-width': 2.0,
-          'line-dasharray': [2, 2],
+          'line-color': ['coalesce', ['get', 'stroke_color'], '#ef4444'],
+          'line-width': 2.5,
+          'line-dasharray': [4, 3],
         },
       });
 
@@ -683,7 +683,7 @@ export default function CrisisMap({
     }
   };
 
-  // Render Dynamic HTML Badges for Time Horizon Modes (PAST Episodes & FUTURE Predictions)
+  // Render Compact Lucide SVG Badges for Time Horizon Modes (Zero Canvas Clutter!)
   const renderTimeHorizonMarkers = () => {
     const map = mapRef.current;
     if (!map || !isMapLoadedRef.current) return;
@@ -696,15 +696,23 @@ export default function CrisisMap({
         const ep = epItem as Record<string, unknown>;
         const lon = typeof ep.lon === 'number' ? ep.lon : null;
         const lat = typeof ep.lat === 'number' ? ep.lat : null;
+        const id = (ep.incident_id || ep.id) as string;
         if (lon == null || lat == null) return;
+
         const el = document.createElement('div');
-        el.className = 'cursor-pointer z-30 transition-all transform hover:scale-105 flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-mono font-bold shadow-2xl border backdrop-blur-xl bg-[#0c0e12]/90 text-purple-200 border-purple-500/50 ring-2 ring-purple-500/20';
+        el.className = 'cursor-pointer z-30 transition-all transform hover:scale-110 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono font-bold shadow-2xl border backdrop-blur-xl bg-[#0c0e12]/95 text-purple-200 border-purple-500/60 ring-2 ring-purple-500/20';
         el.style.zIndex = '30';
         el.innerHTML = `
           <svg class="w-3.5 h-3.5 text-purple-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6 6h10"/><path d="M6 10h10"/></svg>
-          <span class="truncate max-w-[150px]">${String(ep.title || 'Historical Episode')}</span>
-          ${ep.price_lag_impact ? `<span class="px-2 py-0.5 bg-purple-500/80 text-white rounded-full text-[10px] font-bold">${String(ep.price_lag_impact)}</span>` : ''}
+          <span class="text-[11px] font-bold text-purple-200">${String(ep.type || 'LTM').toUpperCase()}</span>
         `;
+        el.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (id && onCrisisClickRef.current) {
+            onCrisisClickRef.current(id);
+          }
+        });
+
         const marker = new mapboxgl.Marker({ element: el, anchor: 'center' })
           .setLngLat([lon, lat])
           .addTo(map);
@@ -715,23 +723,29 @@ export default function CrisisMap({
         const pr = prItem as Record<string, unknown>;
         const lon = typeof pr.lon === 'number' ? pr.lon : null;
         const lat = typeof pr.lat === 'number' ? pr.lat : null;
+        const id = (pr.risk_id || pr.id) as string;
         if (lon == null || lat == null) return;
+
         const el = document.createElement('div');
-        el.className = 'cursor-pointer z-30 transition-all transform hover:scale-105 flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-mono font-bold shadow-2xl border backdrop-blur-xl bg-[#0c0e12]/90 text-amber-200 border-amber-500/50 ring-2 ring-amber-500/20';
+        el.className = 'cursor-pointer z-30 transition-all transform hover:scale-110 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono font-bold shadow-2xl border backdrop-blur-xl bg-[#0c0e12]/95 text-amber-200 border-amber-500/60 ring-2 ring-amber-500/20';
         el.style.zIndex = '30';
         el.innerHTML = `
           <svg class="w-3.5 h-3.5 text-amber-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-          <span class="truncate max-w-[150px]">${String(pr.title || 'TFT Risk Forecast')}</span>
-          <span class="px-2 py-0.5 bg-amber-500/80 text-slate-950 rounded-full text-[10px] font-bold">Risk ${String(pr.risk_score || 85)}%</span>
+          <span class="text-[11px] font-bold text-amber-300">${String(pr.risk_score || 85)}% RISK</span>
         `;
+        el.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (id && onCrisisClickRef.current) {
+            onCrisisClickRef.current(id);
+          }
+        });
+
         const marker = new mapboxgl.Marker({ element: el, anchor: 'center' })
           .setLngLat([lon, lat])
           .addTo(map);
         timeHorizonMarkersRef.current.push(marker);
       });
     }
-
-
   };
 
 

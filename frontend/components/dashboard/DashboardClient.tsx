@@ -20,6 +20,8 @@ import {
 import { api } from '@/lib/api';
 import type { CrisisState, WsEvent, CrisisType, Severity, RouteRecommendation } from '@/lib/types';
 
+import { TopNavTelemetry } from '@/components/dashboard/TopNavTelemetry';
+
 // Dynamic import for map to avoid SSR issues
 const CrisisMap = dynamic(() => import('@/components/map/CrisisMap'), { ssr: false });
 
@@ -733,34 +735,9 @@ export default function DashboardClient() {
           </nav>
         </div>
 
-        <div className="flex items-center gap-3 text-xs font-mono">
-          {/* Integrated Operations Telemetry Badges (0% Map Overlap!) */}
-          <div className="hidden lg:flex items-center gap-3 px-3.5 py-1.5 rounded-xl bg-slate-950/80 border border-white/10 text-slate-300 backdrop-blur-md shadow-inner">
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-slate-400 uppercase tracking-wider">⚡ cuOpt:</span>
-              <span className="font-bold text-emerald-400">{cuOptInfo?.compute_time_ms ?? 3.2}ms</span>
-              <span className="text-[10px] text-emerald-300">(-{cuOptInfo?.savings_pct ?? 18.5}%)</span>
-            </div>
-            <span className="text-slate-700">|</span>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-slate-400 uppercase tracking-wider">🚗 TomTom:</span>
-              <span className="font-bold text-amber-400">+{corridorContext?.traffic.delay_minutes ?? 10}m</span>
-              <span className="text-[10px] text-slate-400">({corridorContext?.traffic.congestion_level_pct ?? 18}%)</span>
-            </div>
-            <span className="text-slate-700">|</span>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-slate-400 uppercase tracking-wider">🌧️ BMKG:</span>
-              <span className="font-bold text-cyan-400">{corridorContext?.weather.rainfall_mm ?? 68.5}mm</span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-950/80 border border-slate-800 text-slate-300">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span>SUMUT: ACTIVE</span>
-          </div>
-          <div className="text-slate-400">
-            UTC+07:00
-          </div>
+        {/* Top Navbar Telemetry Header */}
+        <div className="flex items-center gap-3">
+          <TopNavTelemetry cuOptInfo={cuOptInfo} corridorContext={corridorContext} />
         </div>
       </header>
 
