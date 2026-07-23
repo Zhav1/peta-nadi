@@ -22,9 +22,23 @@ Phase 22 merefaktor sistem visual spasial PetaNadi sesuai standar **Google Maps*
 - Menghapus badge teks melayang raksasa dari tengah kanvas peta.
 - Mengeklik marker krisis/batas wilayah menampilkan detail lengkap di **Right Sidebar (Evidence & Mitigation Tabs)**.
 
+### 5. Dynamic Incident Binding & Removal of Circle Pin Dots
+- Endpoint `GET /incidents/{incident_id}` dan `handleCrisisClick` mengikat data insiden spesifik (Gempa Pasaman, Banjir Belawan, Longsor Berastagi, Gempa Tarutung) secara dinamis ke Right Sidebar.
+- Layer lingkaran merah/orange (`crisis-pins-glow` & `crisis-pins-core`) dinonaktifkan (`circle-opacity: 0`). Kanvas peta hanya menyajikan poligon batas wilayah bencana organik dan badge SVG Lucide compact.
+
+### 6. Hazard-Differentiated Colors & Gradient Opacity
+- Gempa (Merah Rose `#f43f5e`), Banjir (Cyan `#06b6d4`), Longsor (Amber Earth `#d97706`), Wildfire (Fiery Orange `#f97316`), Congestion (Gold `#eab308`). Pusat krisis pekat (`0.50`), pinggiran pudar (`0.15`).
+
+### 7. Docked Fixed `▶ Run Demo` Button & Dual-Sidebar Viewport Centering
+- Tombol `▶ Run Demo` didok permanen di dalam bottombar dock (`footer`) di samping mode `PREDICT`.
+- Formulasi matematika presisi viewport (`!isLeftCollapsed && isRightOpen ? 'left-[calc(50%-30px)] -translate-x-1/2' : ...`) menjaga posisi kontrol di pusat area peta tanpa pernah bertabrakan dengan Left Sidebar (320px) maupun Right Sidebar (380px).
+
+### 8. LLM Reasoning Service for Natural Indonesian XAI Explanations (`llm_reasoning_service.py`)
+- Service `llm_reasoning_service.py` mengonversi metrik insiden mentah menjadi penjelasan Chain-of-Thought (CoT) Explainable AI dalam Bahasa Indonesia yang natural dan profesional.
+
 ---
 
 ## Verification Results
 - **Frontend Production Build**: `✓ Compiled successfully (6/6 static pages)`
 - **ESLint & Type Checks**: 0 Error.
-- **Interactive Verification**: Hover pada poligon batas wilayah mengaktifkan border cyan menyala dan popup telemetri instan; klik navbar membuka flyout popovers yang informatif.
+- **Interactive Verification**: Mengeklik insiden menampilkan detail spesifik & CoT reasoning natural; bulatan bubble merah hilang 100%; tombol `▶ Run Demo` berada di posisi tetap di bottombar tanpa bergeser-geser.

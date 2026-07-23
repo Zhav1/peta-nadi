@@ -130,9 +130,6 @@ Implementasi 2 layer Mapbox terstruktur ala Google Maps:
 
 ---
 
-### DELIVERABLE 5 — Unifikasi Entitas Episentrum Pin & Poligon Batas Wilayah
-
-**File:** `frontend/components/map/CrisisMap.tsx` [MODIFY]
 
 1. **Unified Hazard Entity Linking:**
    - Menghubungkan ID pin episentrum (`incident_id`) dengan poligon batas wilayah administratifnya (`region_id`).
@@ -155,17 +152,60 @@ Implementasi 2 layer Mapbox terstruktur ala Google Maps:
 
 ---
 
+### DELIVERABLE 7 — Dynamic Incident Detail & Evidence Binding in Right Sidebar
+
+**Files:** `backend/app/routers/incidents.py` [MODIFY] & `frontend/components/dashboard/DashboardClient.tsx` [MODIFY]
+
+- Endpoints `GET /api/v1/incidents/{incident_id}` dan handler `handleCrisisClick` menarik detail insiden spesifik (Gempa Pasaman M6.2, Banjir Belawan 2024, Longsor Berastagi, Gempa Tarutung).
+- Mengeklik marker krisis/zona poligon mengikat detail judul insiden, CCTV log camera, OSINT text, dan dampak inflasi PIHPS secara dinamis ke Right Sidebar (Evidence & Mitigation Tabs).
+
+---
+
+### DELIVERABLE 8 — Removal of Redundant Circle Bubble Pins & Clean Canvas
+
+**File:** `frontend/components/map/CrisisMap.tsx` [MODIFY]
+
+- Menghapus/menonaktifkan layer lingkaran merah/orange melayang (`crisis-pins-glow` dan `crisis-pins-core`) dengan `circle-opacity: 0.0`.
+- Kanvas peta hanya menyajikan poligon batas wilayah administratif/bencana organik dan badge SVG Lucide compact.
+
+---
+
+### DELIVERABLE 9 — Hazard-Differentiated Colors & Opacity Gradients
+
+**Files:** `frontend/components/map/CrisisMap.tsx` [MODIFY] & `backend/app/services/incident_geometry_service.py` [MODIFY]
+
+- Skema warna & gradien opasitas spesifik per jenis bencana:
+  - **Earthquake**: Deep Rose Red (`#f43f5e`), ring pusat opacity `0.50`, ring luar pudar `0.15`.
+  - **Flood**: Deep Cyan (`#06b6d4`), area inti genangan opacity `0.50`, batas luar pudar `0.15`.
+  - **Landslide**: Amber Earth (`#d97706`), hulu longsor opacity `0.50`, kipas akumulasi pudar `0.15`.
+  - **Wildfire**: Fiery Orange (`#f97316`), titik panas opacity `0.50`, sebaran asap pudar `0.15`.
+  - **Congestion**: Golden Amber (`#eab308`), titik botlteneck opacity `0.50`, ekor antrean pudar `0.15`.
+
+---
+
+### DELIVERABLE 10 — Fixed Docked `▶ Run Demo` Button, Exact Viewport Centering & LLM Reasoning Engine
+
+**Files:** `frontend/components/dashboard/DashboardClient.tsx` [MODIFY], `frontend/components/map/CrisisSimulatorBar.tsx` [MODIFY], `frontend/components/demo/GuidedDemoPanel.tsx` [MODIFY], `backend/app/services/llm_reasoning_service.py` [NEW]
+
+- Tombol `▶ Run Demo` didok secara permanen di dalam *Bottom Action Bar Dock* (`footer`) di samping mode `PREDICT`.
+- Formulasi matematika presisi viewport terbuka (`!isLeftCollapsed && isRightOpen ? 'left-[calc(50%-30px)] -translate-x-1/2' : ...`) menjaga posisi kontrol tetap di pusat area peta tanpa pernah bertabrakan dengan Left Sidebar (320px) maupun Right Sidebar (380px).
+- Service `llm_reasoning_service.py` mengonversi metrik insiden mentah menjadi penjelasan Chain-of-Thought (CoT) Explainable AI dalam Bahasa Indonesia yang natural dan profesional.
+
+---
+
 ## 📁 File Changes Summary
 
 | File | Action | Scope |
 |---|---|---|
 | `backend/app/fixtures/north_sumatra_adm_boundaries.json` | NEW | GeoJSON batas wilayah administratif riil Sumut (Google Maps ADM2/ADM3) |
 | `backend/app/services/adm_boundary_service.py` | NEW | Service penyedia GeoJSON ADM batas wilayah Sumut |
-| `backend/app/routers/incidents.py` | MODIFY | Integrasi Supabase real DB & pengayaan ADM GeoJSON |
+| `backend/app/services/llm_reasoning_service.py` | NEW | LLM reasoning service untuk penjelasan Explainable AI natural |
+| `backend/app/routers/incidents.py` | MODIFY | Integrasi Supabase real DB, LLM reasoning, & pengayaan ADM GeoJSON |
 | `backend/app/services/weather_fusion_service.py` | MODIFY | Integrasi poligon ADM cuaca riil BMKG per kecamatan |
 | `frontend/components/dashboard/TopNavTelemetry.tsx` | NEW | Component top navbar telemetry interaktif dengan flyout popovers |
-| `frontend/components/dashboard/DashboardClient.tsx` | MODIFY | Integrasi TopNavTelemetry & manajemen viewport camera offset |
-| `frontend/components/map/CrisisMap.tsx` | MODIFY | Implementation Google Maps dashed stroke layer, unifikasi pin-polygon, eliminasi text pills melayang |
+| `frontend/components/dashboard/DashboardClient.tsx` | MODIFY | Integrasi TopNavTelemetry, dynamic incident binding, & exact viewport centering |
+| `frontend/components/map/CrisisMap.tsx` | MODIFY | Implementation Google Maps dashed stroke layer, hazard-differentiated colors/gradients, removal of circle pin dots |
+| `frontend/components/map/CrisisSimulatorBar.tsx` | MODIFY | Exact dual-sidebar centering math & docked controls |
 | `frontend/components/sidebar/EvidenceTab.tsx` | MODIFY | Off-canvas detail viewer insiden & korelasi inflasi |
 
 ---

@@ -37,9 +37,31 @@ Phase 22 merekayasa ulang seluruh lapisan tampilan GIS dan pengalaman pengguna (
   - Kanvas peta hanya menggunakan **Compact Lucide SVG Badges (`z-30`)** yang bersih dan tidak memakan ruang.
   - Detail insiden lengkap dan korelasi inflasi PIHPS dialihkan secara *off-canvas* ke **Right Sidebar (EvidenceTab & MitigationTab)** saat marker/poligon diklik.
 
-### 4. Unifikasi Entitas Episentrum Pin & Poligon Batas Wilayah
-- **Problem**: Titik lingkaran krisis dan poligon zona bencana sebelumnya berdiri secara terpisah, membingungkan pengguna akan hubungan di antara keduanya.
-- **Solution**: Pin episentrum dan poligon batas wilayah disatukan menjadi 1 entitas krisis utuh. Mengeklik pin episentrum **ATAU** mengeklik poligon batas wilayah akan menyorot kedua elemen secara bersamaan dan membuka Side Drawer yang sama.
+### 4. Dynamic Incident Detail Binding & Removal of Redundant Circle Pins
+- **Problem**: Saat marker krisis diklik di mode PAST/FUTURE, Right Sidebar menampilkan data generik. Selain itu, terdapat lingkaran merah/orange melayang di dalam poligon yang membuat peta berantakan.
+- **Solution**:
+  - Endpoint `GET /incidents/{incident_id}` dan handler `handleCrisisClick` mengikat data insiden spesifik (Gempa Pasaman M6.2, Banjir Belawan 2024, Longsor Berastagi, Gempa Tarutung) secara dinamis ke Right Sidebar.
+  - Layer lingkaran merah/orange (`crisis-pins-glow` & `crisis-pins-core`) dinonaktifkan (`circle-opacity: 0`). Kanvas peta hanya menyajikan poligon batas wilayah bencana organik dan badge SVG Lucide compact.
+
+### 5. Hazard-Differentiated Colors & Opacity Gradients
+- **Problem**: Semua bencana historis sebelumnya berwarna ungu monoton, tidak membedakan jenis bencana maupun tingkat dampak.
+- **Solution**:
+  - Diberikan skema warna khas & gradien opasitas per jenis bencana:
+    - **Earthquake**: Deep Rose Red (`#f43f5e`), ring pusat opacity `0.50`, ring luar pudar `0.15`.
+    - **Flood**: Deep Cyan (`#06b6d4`), area inti genangan opacity `0.50`, batas luar pudar `0.15`.
+    - **Landslide**: Amber Earth (`#d97706`), hulu longsor opacity `0.50`, kipas akumulasi pudar `0.15`.
+    - **Wildfire**: Fiery Orange (`#f97316`), titik panas opacity `0.50`, sebaran pudar `0.15`.
+    - **Congestion**: Golden Amber (`#eab308`), bottleneck opacity `0.50`, ekor antrean pudar `0.15`.
+
+### 6. Fixed Docked `▶ Run Demo` Button & Exact Dual-Sidebar Viewport Centering
+- **Problem**: Tombol `Run Demo` bergeser-geser secara dinamis dan tidak nyaman dipandang saat sidebar dibuka/ditutup. Kontrol bottombar juga bertabrakan dengan Left Sidebar.
+- **Solution**:
+  - Tombol **`▶ Run Demo`** didok secara permanen di dalam *Bottom Action Bar Dock* (`footer`) di samping mode `PREDICT`.
+  - Diterapkan formulasi matematika presisi viewport terbuka (`!isLeftCollapsed && isRightOpen ? 'left-[calc(50%-30px)] -translate-x-1/2' : ...`) yang menjaga posisi kontrol di pusat area peta tanpa pernah bertabrakan dengan Left Sidebar (320px) maupun Right Sidebar (380px).
+
+### 7. LLM Reasoning Engine for Natural Indonesian XAI Explanations (`llm_reasoning_service.py`)
+- **Problem**: Penjelasan evidence dan laporan insiden sebelumnya berupa teks mentah kaku.
+- **Solution**: Dibuat service `backend/app/services/llm_reasoning_service.py` (`generate_natural_incident_reasoning`) yang mengonversi metrik mentah insiden menjadi penjelasan Chain-of-Thought (CoT) Explainable AI dalam Bahasa Indonesia yang natural, logis, dan profesional.
 
 ---
 
@@ -49,6 +71,9 @@ Phase 22 merekayasa ulang seluruh lapisan tampilan GIS dan pengalaman pengguna (
 |---|---|---|
 | Real ADM Boundary Dataset | `backend/app/fixtures/north_sumatra_adm_boundaries.json` | Dataset GeoJSON batas wilayah administratif riil Sumut |
 | ADM Boundary Service | `backend/app/services/adm_boundary_service.py` | Service FastAPI penyedia GeoJSON ADM2/ADM3 |
+| LLM Reasoning Service | `backend/app/services/llm_reasoning_service.py` | Service generator penjelasan Explainable AI natural |
 | Top Nav Telemetry Component | `frontend/components/dashboard/TopNavTelemetry.tsx` | Telemetri top navbar interaktif dengan flyout popovers |
-| Map Layer & Dashed Stroke | `frontend/components/map/CrisisMap.tsx` | Google Maps dashed border layer, unifikasi pin-polygon |
+| Dynamic Dashboard Client | `frontend/components/dashboard/DashboardClient.tsx` | Dynamic incident binding, exact viewport centering & docked Run Demo |
+| Map Layer & Dashed Stroke | `frontend/components/map/CrisisMap.tsx` | Google Maps dashed border layer, hazard colors, circle pins removal |
+| Simulator Control Bar | `frontend/components/map/CrisisSimulatorBar.tsx` | Dual-sidebar centering math & docked controls |
 | Off-Canvas Incident Viewer | `frontend/components/sidebar/EvidenceTab.tsx` | Viewer detail krisis & korelasi inflasi PIHPS off-canvas |
