@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-07-23
 **Active Milestone:** M1 — Hackathon MVP (North Sumatra Corridor)
-**Current Phase:** Phase 23 COMPLETE ✅
+**Current Phase:** Phase 24 COMPLETE ✅
 
 ---
 
@@ -33,7 +33,8 @@
 | 20 | Real District Logistics Boundaries, Non-Colliding Spatial GIS Layout & UI UX Pro Max Refactor | **COMPLETE** ✅ | Real district GeoJSON polygons, interactive boundary hover highlight, HUD repositioning, compact glassmorphic badges |
 | 21 | Full Integration Audit, Organic Hazard Geometries & Live BMKG/OSINT Incident Spatiotemporal Engine | **COMPLETE** ✅ | Algorithmic organic geometries (`incident_geometry_service.py`), BMKG startup poller in `lifespan()`, `GET /osint/live` endpoint, zero hardcoded rectangular boxes |
 | 22 | Google Maps-Grade Administrative Boundary Integration & Clean UI Refactor | **COMPLETE** ✅ | Google Maps style dashed ADM stroke (`line-dasharray: [4, 3]`), top nav telemetry flyout popovers, off-canvas incident detail, unified epicenter-boundary entity |
-| 23 | Run Demo Engine Overhaul — Interactive Stepper & Hook Lift | **COMPLETE** ✅ | Fixed CSS pointer-events inheritance, lifted `useDemoState` hook to `DashboardClient`, stage-wired map & sidebar effects, Lucide SVG icons |s incident detail, unified epicenter-boundary entity |
+| 23 | Run Demo Engine Overhaul — Interactive Stepper & Hook Lift | **COMPLETE** ✅ | Fixed CSS pointer-events inheritance, lifted `useDemoState` hook to `DashboardClient`, stage-wired map & sidebar effects, Lucide SVG icons |
+| 24 | Google Flow-Style Onboarding Landing Page & High-Performance Routing | **COMPLETE** ✅ | Video background, 121-frame scroll sequence canvas, kinetic typography, feature cards, Next.js routing migration |
 
 ---
 

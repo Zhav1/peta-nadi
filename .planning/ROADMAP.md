@@ -562,6 +562,29 @@
 
 ---
 
+## Phase 24: Google Flow-Style Onboarding Landing Page, Video Background, 121-Frame Canvas Sequence & High-Performance Routing
+**Goal:** Membangun halaman Onboarding Landing Page tingkat dunia berbasis bahasa desain Google Flow / Google Labs pada rute utama (`/`) sebelum pengguna masuk ke 4D Crisis Command Center (`/dashboard`). Halaman ini mengombinasikan latar belakang video ambient (`hero-bg.mp4`), kanvas animasi scroll-driven 121-frame image sequence (`action-sequence/`), kinetic split-typography dengan lencana geometris kontras tinggi, kartu fitur interaktif glassmorphic, serta performa 60 FPS tanpa memory leak.
+**Status:** COMPLETE ✅
+
+### Deliverables
+- **Asset Pipeline Setup**:
+  - Menyalin `hero-bg.mp4` dan 121 frame `ezgif-frame-*.jpg` dari root `onboard/` ke `frontend/public/onboard/` untuk static asset delivery Next.js.
+- **Scroll-Driven Image Sequence Canvas Component (`ImageSequenceCanvas.tsx`) [NEW]**:
+  - Canvas HTML5 60 FPS dengan preloading 121 frame ke memori array, passive scroll listener, `requestAnimationFrame` frame diffing, aspect ratio cover math, dan IntersectionObserver hardware offloading.
+- **Google Flow Kinetic Hero Section Component (`OnboardHero.tsx`) [NEW]**:
+  - Hero container dengan `hero-bg.mp4` loop video, dark radial gradient mask, kinetic typography (`Be the first to experiment with 4D Logistics`), dan CTA button `[ Launch Command Center 4D ➔ ]`.
+- **Kinetic Feature Grid & Live Telemetry Showcase (`KineticFeatureGrid.tsx` & `LiveTelemetryShowcase.tsx`) [NEW]**:
+  - Kartu fitur interaktif ala Google Labs dengan lencana geometris berwarna (lime green, tactical cyan, orange hexagon, purple air, amber quad) dan indikator telemetri real-time.
+- **Route Architecture Migration (`app/page.tsx` & `app/dashboard/page.tsx`) [NEW/MODIFY]**:
+  - Mengalihkan `/` untuk me-render `OnboardingHome`, memindahkan `DashboardClient` ke `/dashboard`, dan menambahkan navigasi balik `[ ◄ Onboarding ]` di header dashboard.
+
+### Verification
+- [x] Next.js production build (`npm run build`) 100% sukses tanpa error (`✓ Compiled successfully (7/7 static pages)`).
+- [x] Kanvas sequence me-render 121 frame secara mulus pada 60 FPS tanpa memory leak.
+- [x] Rute `/` menampilkan halaman Onboarding Google Flow dan mengarahkan ke `/dashboard` saat CTA diklik.
+
+---
+
 ## Backlog (Post-Hackathon / v2)
 - Driver mobile app (React Native + WatermelonDB + CRDT offline sync)
 - Self-serve operator GPS onboarding SDK
