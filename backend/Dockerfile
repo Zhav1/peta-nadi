@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/playwright/python:v1.47.0-jammy
+FROM python:3.11-slim
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
@@ -8,14 +8,21 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# Copy requirements dari folder backend dan instal dependensinya
-COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Install system dependencies for network & build tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    git \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
-# Salin isi dari folder backend ke /app
+# Copy requirements from backend directory and install dependencies
+COPY backend/requirements.txt .
+RUN pip install --default-timeout=1000 --retries 10 --no-cache-dir -r requirements.txt
+
+# Copy backend files to /app
 COPY backend/ .
 
-# Salin folder agents dari root ke /app/agents
+# Copy agents directory to /app/agents if present
 COPY agents/ ./agents/
 
 # Expose the API port

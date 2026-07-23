@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-07-22
 **Active Milestone:** M1 — Hackathon MVP (North Sumatra Corridor)
-**Current Phase:** Phase 17 COMPLETE ✅
+**Current Phase:** Phase 18 PLANNED ⏳
 
 ---
 
@@ -28,6 +28,7 @@
 | 15 | Google Maps-Grade Multi-Alternative AI Routing, On-Map Interactivity & Modality Intelligence | **COMPLETE** ✅ | 3 Mapbox alternative routes, on-map clickable route selection, `(Best)` auto modality tab, traffic congestion colors, dynamic incident-click routing, multi-leg intermodal chain display |
 | 16 | Live API Ingestion, Corridor Context Aggregator & AI CoT Prompt Injection | **COMPLETE** ✅ | BMKG, TomTom, PIHPS multi-source aggregator `get_corridor_context()`, Supabase data_sources sync, AI CoT 3-part prompt engineering, left sidebar live inflation binding, live Mapbox weather & traffic overlay badges |
 | 17 | TomTom Segment Traffic Colors, NVIDIA FourCastNet Regional Weather Coverage & NVIDIA cuOpt Routing Synchronization | **COMPLETE** ✅ | TomTom segment-level flow lines (Google Maps style: red/yellow/green) + live incident markers, BMKG + NVIDIA FourCastNet (Earth-2) spatial weather multi-polygons, NVIDIA cuOpt GPU dynamic cost matrix synchronization |
+| 18 | Map UI/UX Refactoring, Unified Telemetry HUD & Localized Weather Animations | **PLANNED** ⏳ | Redesign traffic/solver stats to Map HUD panel and build localized animated SVG weather badges |
 
 ---
 

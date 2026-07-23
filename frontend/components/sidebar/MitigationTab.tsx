@@ -33,8 +33,8 @@ function RouteCard({
   const cardBorderColor = isCompromised
     ? 'border-red-500/50 bg-red-950/20'
     : isActive
-    ? 'border-cyan-400/80 bg-cyan-950/30 ring-2 ring-cyan-400/40'
-    : 'border-white/10 bg-slate-800/40 hover:border-white/20';
+      ? 'border-cyan-400/80 bg-cyan-950/30 ring-2 ring-cyan-400/40'
+      : 'border-white/10 bg-slate-800/40 hover:border-white/20';
 
   const titleText = route.route_name || (idx === 0 ? '★ Recommended AI Route' : `Alternative ${idx + 1}`);
 
@@ -114,9 +114,8 @@ function RouteCard({
                 onApprove();
               }}
               disabled={approving}
-              className={`w-full py-2.5 px-3 rounded-xl text-xs font-black uppercase tracking-wider bg-cyan-500 hover:bg-cyan-400 text-slate-950 transition-all shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2 ${
-                approving ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'
-              }`}
+              className={`w-full py-2.5 px-3 rounded-xl text-xs font-black uppercase tracking-wider bg-cyan-500 hover:bg-cyan-400 text-slate-950 transition-all shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2 ${approving ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'
+                }`}
             >
               {approving ? (
                 <>
@@ -197,7 +196,7 @@ export function MitigationTab({
 
   return (
     <div className="flex flex-col gap-4 text-slate-100">
-      
+
       {/* BLOCK A — CONSENSUS BADGE */}
       <div className="bg-slate-900/80 border border-cyan-500/30 p-3 rounded-xl backdrop-blur-md">
         <div className="flex items-center justify-between mb-1">
@@ -244,11 +243,11 @@ export function MitigationTab({
             crisis.decision_support_output || (
               crisis.route_recommendations && crisis.route_recommendations.length > 0
                 ? (() => {
-                    const selRoute = crisis.route_recommendations[activeRouteIdx ?? 0] || crisis.route_recommendations[0];
-                    return selRoute.is_compromised
-                      ? `Mapbox Directions Engine mendeteksi krisis ${crisis.type?.toUpperCase() || 'BENCANA'} di koridor utama. Rute ${selRoute.route_name} terpotong zona krisis (+${selRoute.eta_minutes} min total waktu). Disarankan beralih ke alternatif rute pengalihan aman.`
-                      : `Mapbox Directions Engine menghitung rute optimal via ${selRoute.route_name} (${selRoute.distance_km} km, ${selRoute.eta_minutes} min). Rute terverifikasi 100% bebas dari zona bencana dan siap di-dispatch ke Fleet Control.`;
-                  })()
+                  const selRoute = crisis.route_recommendations[activeRouteIdx ?? 0] || crisis.route_recommendations[0];
+                  return selRoute.is_compromised
+                    ? `Mapbox Directions Engine mendeteksi krisis ${crisis.type?.toUpperCase() || 'BENCANA'} di koridor utama. Rute ${selRoute.route_name} terpotong zona krisis (+${selRoute.eta_minutes} min total waktu). Disarankan beralih ke alternatif rute pengalihan aman.`
+                    : `Mapbox Directions Engine menghitung rute optimal via ${selRoute.route_name} (${selRoute.distance_km} km, ${selRoute.eta_minutes} min). Rute terverifikasi 100% bebas dari zona bencana dan siap di-dispatch ke Fleet Control.`;
+                })()
                 : 'AI Copilot mengolah sensor BMKG & Mapbox Traffic. Menunggu penentuan titik rute armada.'
             )
           }&quot;
