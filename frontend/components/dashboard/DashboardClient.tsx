@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useIncidents } from '@/hooks/useIncidents';
 import { useCrisisSocket } from '@/hooks/useCrisisSocket';
@@ -22,27 +23,13 @@ import type { CrisisState, WsEvent, CrisisType, Severity, RouteRecommendation } 
 // Dynamic import for map to avoid SSR issues
 const CrisisMap = dynamic(() => import('@/components/map/CrisisMap'), { ssr: false });
 
-const MOCK_PAST_INCIDENTS = [
-  { id: 'mock-past-1', title: 'Belawan Toll Road Congestion', type: 'congestion' as const, severity: 'medium' as const, lat: 3.78, lon: 98.67, status: 'resolved' as const, confidence: 0.9, created_at: new Date(Date.now() - 86400000).toISOString() },
-  { id: 'mock-past-2', title: 'Medan Flood Level II', type: 'flood' as const, severity: 'high' as const, lat: 3.61, lon: 98.65, status: 'resolved' as const, confidence: 0.95, created_at: new Date(Date.now() - 172800000).toISOString() }
-];
-
-const MOCK_FUTURE_INCIDENTS = [
-  { id: 'mock-future-1', title: 'Predicted High Rainfall (BMKG Weather Warning)', type: 'flood' as const, severity: 'medium' as const, lat: 3.55, lon: 98.72, status: 'detecting' as const, confidence: 0.72, created_at: new Date().toISOString() },
-  { id: 'mock-future-2', title: 'Expected Toll Delay near Binjai', type: 'congestion' as const, severity: 'low' as const, lat: 3.65, lon: 98.58, status: 'validating' as const, confidence: 0.68, created_at: new Date().toISOString() }
-];
-
-const MOCK_PREDICT_INCIDENTS = [
-  { id: 'mock-predict-1', title: 'Inflation Spike Alert: Rice Stock Depletion (14-Day GraphRAG Model)', type: 'port_closure' as const, severity: 'critical' as const, lat: 3.79, lon: 98.68, status: 'detecting' as const, confidence: 0.88, created_at: new Date().toISOString() }
-];
-
 export default function DashboardClient() {
   const { incidents, refetch } = useIncidents();
   const [selectedCrisisId, setSelectedCrisisId] = useState<string | null>(null);
   const [selectedCrisis, setSelectedCrisis] = useState<CrisisState | null>(null);
   const [activeRouteIdx, setActiveRouteIdx] = useState<number | null>(null);
   const [currentMapRoutes, setCurrentMapRoutes] = useState<RouteRecommendation[]>([]);
-  
+
   // Dynamic Supabase Hub Nodes List & Clean Slate Selection (Null initial state)
   const [dynamicHubNodes] = useState<HubNode[]>(Object.values(HUB_NODES));
   const [selectedOriginNode, setSelectedOriginNode] = useState<string | null>(null);
@@ -62,6 +49,7 @@ export default function DashboardClient() {
   const [activeTimeFilter, setActiveTimeFilter] = useState<'past' | 'present' | 'future' | 'predict'>('present');
   const [activeTab, setActiveTab] = useState<'Evidence' | 'Mitigation' | 'Economic'>('Evidence');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState(false);
 
   // Live Corridor Context Telemetry State (BMKG + TomTom + PIHPS)
   const [corridorContext, setCorridorContext] = useState<import('@/lib/types').CorridorContext | null>(null);
@@ -261,121 +249,12 @@ export default function DashboardClient() {
     setActiveRouteIdx(null);
     setIsSidebarOpen(true);
 
-    if (id.startsWith('mock-') || id === 'simulated-active') {
-      const mockIncidentsMap: Record<string, CrisisState> = {
-        'mock-past-1': {
-          crisis_id: 'mock-past-1',
-          title: 'Belawan Toll Road Congestion',
-          type: 'congestion',
-          is_simulated: true,
-          lat: 3.78,
-          lon: 98.67,
-          region: 'north_sumatra',
-          status: 'resolved',
-          overall_confidence: 0.9,
-          validated: true,
-          created_at: new Date(Date.now() - 86400000).toISOString(),
-          updated_at: new Date().toISOString(),
-          messages: [],
-          route_recommendations: [],
-          evidence: {
-            cctv_label: 'CAM_BELAWAN_TOLL',
-            osint_text: 'Toll road traffic cleared. Flow returned to baseline.'
-          }
-        },
-        'mock-past-2': {
-          crisis_id: 'mock-past-2',
-          title: 'Medan Flood Level II',
-          type: 'flood',
-          is_simulated: true,
-          lat: 3.61,
-          lon: 98.65,
-          region: 'north_sumatra',
-          status: 'resolved',
-          overall_confidence: 0.95,
-          validated: true,
-          created_at: new Date(Date.now() - 172800000).toISOString(),
-          updated_at: new Date().toISOString(),
-          messages: [],
-          route_recommendations: [],
-          evidence: {
-            cctv_label: 'CAM_MEDAN_FLOOD',
-            osint_text: 'Flood waters receded. Cleanup operations underway.'
-          }
-        },
-        'mock-future-1': {
-          crisis_id: 'mock-future-1',
-          title: 'Predicted High Rainfall (BMKG Warning)',
-          type: 'flood',
-          is_simulated: true,
-          lat: 3.55,
-          lon: 98.72,
-          region: 'north_sumatra',
-          status: 'detecting',
-          overall_confidence: 0.72,
-          validated: false,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          messages: [],
-          route_recommendations: [],
-          evidence: {
-            cctv_label: 'CAM_BMKG_RADAR',
-            osint_text: 'Heavy rain cluster approaching North Sumatra East Coast.'
-          }
-        },
-        'mock-future-2': {
-          crisis_id: 'mock-future-2',
-          title: 'Expected Toll Delay near Binjai',
-          type: 'congestion',
-          is_simulated: true,
-          lat: 3.65,
-          lon: 98.58,
-          region: 'north_sumatra',
-          status: 'validating',
-          overall_confidence: 0.68,
-          validated: false,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          messages: [],
-          route_recommendations: [],
-          evidence: {
-            cctv_label: 'CAM_BINJAI_GATE',
-            osint_text: 'Slow moving traffic detected near Binjai toll gate.'
-          }
-        },
-        'mock-predict-1': {
-          crisis_id: 'mock-predict-1',
-          title: 'Inflation Spike Alert: Rice Stock Depletion',
-          type: 'port_closure',
-          is_simulated: true,
-          lat: 3.79,
-          lon: 98.68,
-          region: 'north_sumatra',
-          status: 'detecting',
-          overall_confidence: 0.88,
-          validated: true,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          messages: [],
-          route_recommendations: currentMapRoutes,
-          evidence: {
-            cctv_label: 'CAM_PORT_BELAWAN_01',
-            cctv_url: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=600&q=80',
-            osint_author: '@BPBD_Sumut',
-            osint_text: 'Anomali pasokan beras di Pelabuhan Belawan memicu risiko lonjakan harga di pasar Medan.',
-            delay_minutes: '180 min',
-            delay_history: [30, 60, 120, 180]
-          }
-        }
-      };
-
-      let baseCrisis = mockIncidentsMap[id];
-      if (!baseCrisis) {
-        try {
-          baseCrisis = await api.incidents.get(id);
-        } catch (err) {
-          console.error('Failed to fetch crisis detail:', err);
-        }
+    if (id !== 'simulated-active') {
+      let baseCrisis: CrisisState | null = null;
+      try {
+        baseCrisis = await api.incidents.get(id);
+      } catch (err) {
+        console.error('Failed to fetch crisis detail:', err);
       }
 
       if (baseCrisis) {
@@ -587,12 +466,20 @@ export default function DashboardClient() {
     });
   }, [selectedOriginNode, selectedDestNode, selectedModality, updateBaselineMapboxRoute]);
 
-  // Filter displayed incidents based on active time scope
+  // Dynamic Incident Stream Integration across 4D Temporal Horizons (0% Hardcode Overwrite)
+  // Dynamic Incident Stream Integration across 4D Temporal Horizons (0% Hardcode!)
   const getDisplayedIncidents = () => {
-    if (activeTimeFilter === 'past') return MOCK_PAST_INCIDENTS;
-    if (activeTimeFilter === 'future') return MOCK_FUTURE_INCIDENTS;
-    if (activeTimeFilter === 'predict') return MOCK_PREDICT_INCIDENTS;
-    return incidents; // Present
+    if (activeTimeFilter === 'past') {
+      return incidents.filter((i) => i.status === 'resolved');
+    }
+    if (activeTimeFilter === 'future') {
+      return incidents.filter((i) => i.status === 'detecting' || i.status === 'validating');
+    }
+    if (activeTimeFilter === 'predict') {
+      return incidents.filter((i) => i.id.includes('predict') || i.type === 'port_closure');
+    }
+    // Present: Live Dynamic Ingested Incidents (Earthquakes, Floods, CCTV alerts)
+    return incidents.filter((i) => i.status !== 'resolved' && !i.id.includes('predict') && i.type !== 'port_closure');
   };
 
   const activeIncidents = getDisplayedIncidents();
@@ -615,41 +502,37 @@ export default function DashboardClient() {
           <nav className="flex items-center gap-1 bg-slate-950/60 p-1 rounded-xl border border-slate-800">
             <button
               onClick={() => setActiveSection('map')}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition ${
-                activeSection === 'map'
+              className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition ${activeSection === 'map'
                   ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
                   : 'text-slate-400 hover:text-white'
-              }`}
+                }`}
             >
               MAP 4D
             </button>
             <button
               onClick={() => setActiveSection('analytics')}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition ${
-                activeSection === 'analytics'
+              className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition ${activeSection === 'analytics'
                   ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
                   : 'text-slate-400 hover:text-white'
-              }`}
+                }`}
             >
               ANALYTICS
             </button>
             <button
               onClick={() => setActiveSection('simulation')}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition ${
-                activeSection === 'simulation'
+              className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition ${activeSection === 'simulation'
                   ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
                   : 'text-slate-400 hover:text-white'
-              }`}
+                }`}
             >
               SIMULATION
             </button>
             <button
               onClick={() => setActiveSection('reports')}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition ${
-                activeSection === 'reports'
+              className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition ${activeSection === 'reports'
                   ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
                   : 'text-slate-400 hover:text-white'
-              }`}
+                }`}
             >
               REPORTS
             </button>
@@ -678,18 +561,73 @@ export default function DashboardClient() {
 
       {/* MAIN CONTENT CANVAS AREA */}
       <main className="absolute left-0 top-16 right-0 bottom-0 overflow-hidden flex">
-        
+
         {/* SECTION 1: 4D GIS MAP WITH RESTORED FIGMA COMMAND CENTER GRID */}
-        <div className={`w-full h-full relative flex ${activeSection === 'map' ? 'block' : 'hidden'}`}>
-          
-          {/* 1. RESTORED FIXED LEFT TACTICAL SIDEBAR (Figma Baseline) */}
-          <aside className="w-80 h-full bg-[#0c0e12]/90 backdrop-blur-xl border-r border-white/10 z-40 p-4 flex flex-col gap-4 overflow-y-auto custom-scrollbar shrink-0 pointer-events-auto">
-            
+        <div className={`w-full h-full relative ${activeSection === 'map' ? 'block' : 'hidden'}`}>
+
+          {/* 1. FULL-BLEED 4D MAPBOX MAP CANVAS (ALWAYS 100% VIEWPORT - ZERO RESIZING BLINK!) */}
+          <div className="absolute inset-0 w-full h-full z-0">
+            <CrisisMap
+              incidents={activeIncidents}
+              selectedCrisisId={selectedCrisisId}
+              onCrisisClick={handleCrisisClick}
+              activeRoutes={
+                selectedCrisis?.route_recommendations || currentMapRoutes
+              }
+              activeRouteIdx={activeRouteIdx}
+              fireHotspots={[]}
+              maritimeVectors={[]}
+              disasterZones={disasterZones}
+              onPolygonDrawn={handlePolygonDrawn}
+              drawModeActive={drawModeActive}
+              isClickTargeting={isClickTargeting}
+              onMapPointTargeted={(lat, lon) => handleMapPointTargeted(lat, lon)}
+              simulatedShockwave={simulatedShockwave}
+              selectedOriginNode={selectedOriginNode || undefined}
+              selectedDestNode={selectedDestNode || undefined}
+              onNodeSelected={handleNodeSelected}
+              onSelectRoute={(idx) => setActiveRouteIdx(idx)}
+              hubNodesList={dynamicHubNodes}
+              corridorContext={corridorContext}
+              spatialWeatherPolygons={spatialWeatherPolygons}
+              cuOptOptimizationInfo={cuOptInfo}
+              isLeftSidebarCollapsed={isLeftSidebarCollapsed}
+            />
+          </div>
+
+          {/* Floating Expand Sidebar Button when Collapsed */}
+          {isLeftSidebarCollapsed && (
+            <button
+              type="button"
+              onClick={() => setIsLeftSidebarCollapsed(false)}
+              className="absolute top-4 left-4 z-[360] px-3 py-2 rounded-xl bg-[#0c0e12]/90 border border-cyan-500/40 backdrop-blur-xl text-cyan-300 hover:text-white hover:bg-slate-900 shadow-2xl transition-all cursor-pointer flex items-center gap-1.5 text-xs font-mono font-bold"
+              title="Tampilkan Tactical Sidebar"
+            >
+              <PanelLeftOpen className="w-4 h-4 text-cyan-400" />
+              <span>SIDEBAR</span>
+            </button>
+          )}
+
+          {/* 2. GPU-ACCELERATED COLLAPSIBLE LEFT TACTICAL SIDEBAR (OVERLAY MODE - ZERO CANVAS BLINK) */}
+          <aside className={`absolute left-0 top-0 bottom-0 z-40 w-80 bg-[#0c0e12]/90 backdrop-blur-xl border-r border-white/10 flex flex-col gap-4 p-4 overflow-y-auto custom-scrollbar pointer-events-auto transition-transform duration-300 ease-in-out shadow-2xl ${
+            isLeftSidebarCollapsed ? '-translate-x-full pointer-events-none' : 'translate-x-0'
+          }`}>
+
             {/* National Logistics Health Score Gauge (SVG CIRCLE RING FIX) */}
             <div className="bg-[#1e2024]/40 border border-white/10 p-4 rounded-xl relative overflow-hidden backdrop-blur-md">
-              <p className="text-[9px] font-mono text-cyan-400 tracking-[0.2em] uppercase mb-2">
-                NATIONAL LOGISTICS HEALTH
-              </p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[9px] font-mono text-cyan-400 tracking-[0.2em] uppercase">
+                  NATIONAL LOGISTICS HEALTH
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setIsLeftSidebarCollapsed(true)}
+                  className="p-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
+                  title="Sembunyikan Sidebar"
+                >
+                  <PanelLeftClose className="w-3.5 h-3.5" />
+                </button>
+              </div>
               <div className="flex items-center justify-between">
                 {/* Crisp SVG Circular Progress Gauge */}
                 <div className="relative w-16 h-16 flex items-center justify-center">
@@ -783,9 +721,9 @@ export default function DashboardClient() {
             </div>
           </aside>
 
-          {/* 2. CENTER 4D MAP CANVAS AREA */}
-          <div className="flex-1 h-full relative">
-            
+          {/* 3. FLOATING OVERLAYS CONTAINER AREA */}
+          <div className="absolute inset-0 w-full h-full pointer-events-none z-10">
+
             {/* Relocated Collapsible Floating Simulator Dock above Bottombar */}
             <CrisisSimulatorBar
               onTriggerPointSimulation={(lat, lon, type, radiusKm, severity) =>
@@ -804,40 +742,19 @@ export default function DashboardClient() {
               selectedModality={selectedModality}
               setSelectedModality={setSelectedModality}
               onResetNodes={handleResetNodes}
-            />
-
-            {/* 4D Mapbox/Deck.gl Map */}
-            <CrisisMap
-              incidents={activeIncidents}
-              selectedCrisisId={selectedCrisisId}
-              onCrisisClick={handleCrisisClick}
-              activeRoutes={
-                selectedCrisis?.route_recommendations || currentMapRoutes
-              }
-              activeRouteIdx={activeRouteIdx}
-              fireHotspots={[]}
-              maritimeVectors={[]}
-              disasterZones={disasterZones}
-              onPolygonDrawn={handlePolygonDrawn}
-              drawModeActive={drawModeActive}
-              isClickTargeting={isClickTargeting}
-              onMapPointTargeted={(lat, lon) => handleMapPointTargeted(lat, lon)}
-              simulatedShockwave={simulatedShockwave}
-              selectedOriginNode={selectedOriginNode || undefined}
-              selectedDestNode={selectedDestNode || undefined}
-              onNodeSelected={handleNodeSelected}
-              onSelectRoute={(idx) => setActiveRouteIdx(idx)}
-              hubNodesList={dynamicHubNodes}
-              corridorContext={corridorContext}
-              spatialWeatherPolygons={spatialWeatherPolygons}
-              cuOptOptimizationInfo={cuOptInfo}
+              isSidebarOpen={isSidebarOpen && !!selectedCrisis}
             />
 
             {/* Guided Presentation Demo Panel */}
-            <GuidedDemoPanel onCrisisReady={handleCrisisReadyFromDemo} />
+            <GuidedDemoPanel
+              onCrisisReady={handleCrisisReadyFromDemo}
+              isSidebarOpen={isSidebarOpen && !!selectedCrisis}
+            />
 
             {/* Bottombar Time Scope Filters */}
-            <footer className="absolute bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 bg-[#080d14]/90 backdrop-blur-xl border border-white/10 px-4 py-2 rounded-2xl shadow-2xl">
+            <footer className={`absolute bottom-6 z-40 flex items-center gap-2 bg-[#080d14]/90 backdrop-blur-xl border border-white/10 px-4 py-2 rounded-2xl shadow-2xl transition-all duration-300 pointer-events-auto ${
+              isSidebarOpen && selectedCrisis ? 'left-[calc(50%-192px)] -translate-x-1/2' : 'left-1/2 -translate-x-1/2'
+            }`}>
               {(['past', 'present', 'future', 'predict'] as const).map((filter) => (
                 <button
                   key={filter}
@@ -847,11 +764,10 @@ export default function DashboardClient() {
                       handleCrisisClick('mock-predict-1');
                     }
                   }}
-                  className={`px-4 py-1.5 rounded-xl font-headline font-bold text-xs uppercase tracking-wider transition ${
-                    activeTimeFilter === filter
+                  className={`px-4 py-1.5 rounded-xl font-headline font-bold text-xs uppercase tracking-wider transition cursor-pointer ${activeTimeFilter === filter
                       ? 'bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/20'
                       : 'text-slate-400 hover:text-white'
-                  }`}
+                    }`}
                 >
                   {filter}
                 </button>

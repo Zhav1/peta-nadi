@@ -74,21 +74,20 @@ PetaNadi menggabungkan algoritma CPU konvensional yang cepat dengan akselerasi G
 | Skenario Kebutuhan | Cara yang Dipakai | Alasan / Benefit |
 | :--- | :--- | :--- |
 | **Navigasi Single (Point A ➔ B)** | **Dijkstra / pgRouting (CPU)** | Cepat, hemat biaya, tak butuh GPU. |
-| **Optimasi 100+ Truk (VRP)** | **NVIDIA cuOpt + FourCastNet (GPU)** | Daya komputasi GPU paralel & estimasi cuaca fisik makro. |
-| **Fallback API Limit (> 40 RPM)** | **Google OR-Tools + Gemini Flash (CPU)** | Aplikasi tetap jalan, zero UX disruption. |
-| **Prediksi Macet + Hujan Lokal** | **FourCastNet + TFI / Data Histori** | Akurasi maksimal (Fisika makro + pola historis mikro). |
+## 3. Pekerjaan Aktif & Target Berikutnya (Phase 18)
+**Status:** IN PROGRESS 🛠️
+
+- **Phase 18: Map UI/UX Refactoring, Unified Telemetry HUD & Localized Weather Animations**
+  - Refactor map overlays to unify TomTom congestion stats and NVIDIA cuOpt GPU optimization metrics in a glassmorphic **Operations Telemetry HUD Panel**.
+  - Replace the single hardcoded weather badge with 4 localized interactive weather cards over regional center points (Belawan, Deli Serdang, Binjai, Tebing Tinggi).
+  - Embed custom animated SVG weather icons (rain fall, storm/lightning flash, cloud drift animations) styled directly with inline performance keyframes.
+  - Remove redundant static map markers to clean up visual clutter on map rotation.
 
 ---
 
-## 4. Masih Direncanakan (Phase 15 & Submission Tahap 2)
-**Status:** PLANNED FOR PHASE 15 & POST-MVP ⏳
+## 4. Masih Direncanakan (Post-MVP)
+**Status:** PLANNED FOR POST-MVP / v2 ⏳
 
-- **Phase 15: Google Maps-Grade Multi-Modal AI Routing, Hazard Avoidance & Traffic Congestion Engine**
-  - Multi-alternative candidate routes with sidebar selector UI.
-  - Spatial hazard avoidance (`COMPROMISED` vs `SAFE_DETOUR`).
-  - Google Maps-style traffic congestion colors (`low`, `moderate`, `heavy`).
-  - Absolute clean slate initial state fix (0 routes drawn on initial load).
-  - Intermodal multi-leg logistics routing (Darat ➔ Laut ➔ Udara).
 - **Aplikasi Mobile Pengemudi Logistik (v2 / Post-MVP)**
   - Aplikasi React Native + WatermelonDB dengan sinkronisasi CRDT offline untuk pengemudi truk.
 - **Pengembangan Koridor Multi-Provinsi (v2 / Post-MVP)**
@@ -102,7 +101,7 @@ PetaNadi menggabungkan algoritma CPU konvensional yang cepat dengan akselerasi G
 
 | Kategori Fitur | Jumlah Fitur | Tingkat Kesiapan |
 | :--- | :--- | :--- |
-| **1. Sudah Berfungsi** | 14 Fitur Utama | Production & Demo Ready (100%) |
+| **1. Sudah Berfungsi** | 19 Fitur Utama | Production & Demo Ready (100%) |
 | **2. Simulasi / Stub** | 4 Subsystem | Operational via Mock Seed Data |
-| **3. Sedang Dikembangkan (Phase 15)** | 1 Major Module | Scheduled Next |
-| **4. Masih Direncanakan (Post-MVP)** | 4 Major Modules | Scheduled on Proposal Roadmap |
+| **3. Sedang Dikembangkan (Phase 18)** | 1 Major Module | In Progress |
+| **4. Masih Direncanakan (Post-MVP)** | 3 Major Modules | Scheduled on Proposal Roadmap |

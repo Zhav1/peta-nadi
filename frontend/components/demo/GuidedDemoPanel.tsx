@@ -6,9 +6,10 @@ import QRCode from 'qrcode';
 
 interface GuidedDemoPanelProps {
   onCrisisReady: (crisis: CrisisState) => void;
+  isSidebarOpen?: boolean;
 }
 
-export function GuidedDemoPanel({ onCrisisReady }: GuidedDemoPanelProps) {
+export function GuidedDemoPanel({ onCrisisReady, isSidebarOpen = false }: GuidedDemoPanelProps) {
   const {
     stage,
     isRunning,
@@ -61,9 +62,11 @@ export function GuidedDemoPanel({ onCrisisReady }: GuidedDemoPanelProps) {
     return () => clearInterval(timer);
   }, [isRunning, isAuto, stage, advance]);
 
+  const dynamicRightOffset = isSidebarOpen ? 'right-[408px]' : 'right-6';
+
   if (!isRunning) {
     return (
-      <div className="fixed bottom-6 right-6 z-50">
+      <div className={`fixed bottom-6 ${dynamicRightOffset} z-50 transition-all duration-300`}>
         <button
           type="button"
           onClick={(e) => {
@@ -71,7 +74,7 @@ export function GuidedDemoPanel({ onCrisisReady }: GuidedDemoPanelProps) {
             e.stopPropagation();
             start({ mock_agents: false, offline: false });
           }}
-          className="flex items-center gap-2 px-5 py-2.5 font-bold rounded-full bg-cyan-500 text-slate-950 hover:bg-cyan-400 active:scale-95 transition duration-200 shadow-xl shadow-cyan-500/25 border border-cyan-400/50"
+          className="flex items-center gap-2 px-5 py-2.5 font-bold rounded-full bg-cyan-500 text-slate-950 hover:bg-cyan-400 active:scale-95 transition duration-200 shadow-xl shadow-cyan-500/25 border border-cyan-400/50 cursor-pointer"
         >
           <span className="animate-pulse">▶</span> Run Demo
         </button>
@@ -114,7 +117,7 @@ export function GuidedDemoPanel({ onCrisisReady }: GuidedDemoPanelProps) {
   ];
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 w-96 rounded-2xl border border-slate-800 bg-slate-950/90 backdrop-blur-xl p-5 text-slate-100 shadow-2xl flex flex-col gap-4 animate-in slide-in-from-bottom-4 duration-300">
+    <div className={`fixed bottom-6 ${dynamicRightOffset} z-50 w-96 rounded-2xl border border-slate-800 bg-slate-950/90 backdrop-blur-xl p-5 text-slate-100 shadow-2xl flex flex-col gap-4 animate-in slide-in-from-bottom-4 duration-300 transition-all`}>
       {/* Header */}
       <div className="flex justify-between items-center border-b border-slate-800/80 pb-3">
         <div className="flex flex-col">

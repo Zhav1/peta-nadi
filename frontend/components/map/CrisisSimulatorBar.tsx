@@ -1,6 +1,25 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  Sparkles,
+  Truck,
+  Ship,
+  Plane,
+  ChevronDown,
+  MapPin,
+  RotateCcw,
+  AlertTriangle,
+  CloudRain,
+  Anchor,
+  Flame,
+  Activity,
+  Target,
+  PenTool,
+  Trash2,
+  Sliders,
+  Check,
+} from 'lucide-react';
 import type { CrisisType, Severity } from '@/lib/types';
 import { HUB_NODES } from '@/lib/mapboxRoutingService';
 import type { TransportModality } from '@/lib/aiDynamicRouter';
@@ -26,6 +45,7 @@ export interface CrisisSimulatorBarProps {
   selectedModality?: TransportModality;
   setSelectedModality?: (modality: TransportModality) => void;
   onResetNodes?: () => void;
+  isSidebarOpen?: boolean;
 }
 
 export function CrisisSimulatorBar({
@@ -39,188 +59,294 @@ export function CrisisSimulatorBar({
   destNodeId = null,
   selectedRadius,
   setSelectedRadius,
-  selectedModality,
+  selectedModality = 'best',
   setSelectedModality,
   onResetNodes,
+  isSidebarOpen = false,
 }: CrisisSimulatorBarProps) {
-  const [selectedType, setSelectedType] = React.useState<CrisisType>('flood');
+  const [selectedType, setSelectedType] = useState<CrisisType>('flood');
+  const [activePopover, setActivePopover] = useState<'modality' | 'nodes' | 'disruption' | 'radius' | null>(null);
 
-  const hazardOptions: Array<{ type: CrisisType; label: string; icon: string }> = [
-    { type: 'flood', label: 'Banjir', icon: '🌊' },
-    { type: 'port_closure', label: 'Pelabuhan Belawan', icon: '⚓' },
-    { type: 'congestion', label: 'Macet Jalinsum', icon: '🚛' },
-    { type: 'wildfire', label: 'Titik Panas', icon: '🔥' },
-    { type: 'earthquake', label: 'Gempa', icon: '🌋' },
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Close popover on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setActivePopover(null);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const hazardOptions: Array<{ type: CrisisType; label: string; icon: React.ReactNode }> = [
+    { type: 'flood', label: 'Banjir Belawan', icon: <CloudRain className="w-3.5 h-3.5 text-cyan-400" /> },
+    { type: 'port_closure', label: 'Pelabuhan Belawan', icon: <Anchor className="w-3.5 h-3.5 text-amber-400" /> },
+    { type: 'congestion', label: 'Macet Jalinsum', icon: <Truck className="w-3.5 h-3.5 text-yellow-400" /> },
+    { type: 'wildfire', label: 'Titik Panas', icon: <Flame className="w-3.5 h-3.5 text-orange-400" /> },
+    { type: 'earthquake', label: 'Gempa Tektonik', icon: <Activity className="w-3.5 h-3.5 text-red-400" /> },
   ];
 
   const originName = originNodeId ? HUB_NODES[originNodeId]?.name || originNodeId : null;
   const destName = destNodeId ? HUB_NODES[destNodeId]?.name || destNodeId : null;
 
-  return (
-    <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center gap-2 pointer-events-auto">
-      {/* Sleek Minimalist Glassmorphic Control Bar */}
-      <div className="px-4 py-2 rounded-2xl bg-[#080d14]/90 border border-cyan-500/30 backdrop-blur-xl shadow-[0_0_25px_rgba(0,240,255,0.15)] flex items-center gap-3 text-xs">
-        
-        {/* Title Badge */}
-        <div className="flex items-center gap-1.5 border-r border-slate-800 pr-3">
-          <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-          <span className="font-headline font-bold uppercase tracking-wider text-cyan-400 text-[10px]">
-            SIMULATOR INTERAKTIF
-          </span>
-        </div>
+  const modalityIcons: Record<string, React.ReactNode> = {
+    best: <Sparkles className="w-3.5 h-3.5 text-cyan-400" />,
+    truck: <Truck className="w-3.5 h-3.5 text-emerald-400" />,
+    maritime: <Ship className="w-3.5 h-3.5 text-blue-400" />,
+    air: <Plane className="w-3.5 h-3.5 text-purple-400" />,
+  };
 
-        {/* Google Maps Style Modality Selection Bar with (Best) Auto Recommendation */}
+  const togglePopover = (popover: 'modality' | 'nodes' | 'disruption' | 'radius') => {
+    setActivePopover((prev) => (prev === popover ? null : popover));
+  };
+
+  return (
+    <div
+      ref={containerRef}
+      className={`absolute bottom-20 z-40 flex flex-col items-center gap-2 pointer-events-auto select-none transition-all duration-300 ${
+        isSidebarOpen ? 'left-[calc(50%-192px)] -translate-x-1/2' : 'left-1/2 -translate-x-1/2'
+      }`}
+    >
+      {/* Floating Action Bubble Pills Row */}
+      <div className="flex items-center gap-2 px-3 py-2 rounded-full bg-[#080d14]/90 border border-white/10 backdrop-blur-xl shadow-2xl">
+        
+        {/* 1. Modality Bubble Pill */}
         {setSelectedModality && (
-          <div className="flex items-center gap-1 bg-slate-950/90 p-1 rounded-xl border border-cyan-500/30 font-mono text-[10px]">
-            {[
-              { mode: 'best', label: '🌟 Best', icon: '' },
-              { mode: 'truck', label: 'Truk', icon: '🚚' },
-              { mode: 'maritime', label: 'Kapal', icon: '⚓' },
-              { mode: 'air', label: 'Udara', icon: '✈️' },
-            ].map((m) => {
-              const active = (selectedModality || 'best') === m.mode;
-              return (
-                <button
-                  key={m.mode}
-                  type="button"
-                  onClick={() => setSelectedModality(m.mode as TransportModality)}
-                  className={`px-2 py-0.5 rounded-lg font-bold transition flex items-center gap-1 ${
-                    active
-                      ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  {m.icon && <span>{m.icon}</span>}
-                  <span>{m.label}</span>
-                </button>
-              );
-            })}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => togglePopover('modality')}
+              className="cursor-pointer px-3.5 py-1.5 rounded-full bg-slate-900/80 border border-cyan-500/30 text-xs font-mono font-bold text-slate-200 hover:border-cyan-400 hover:bg-slate-800 transition-all flex items-center gap-2 shadow-md"
+            >
+              {modalityIcons[selectedModality] || modalityIcons.best}
+              <span className="capitalize">{selectedModality === 'best' ? 'Best Mode' : selectedModality}</span>
+              <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform duration-200 ${activePopover === 'modality' ? 'rotate-180' : ''}`} />
+            </button>
+
+            {/* Modality Dropdown Popover */}
+            {activePopover === 'modality' && (
+              <div className="absolute bottom-full left-0 mb-2 w-48 p-2 rounded-2xl bg-[#0c0e12]/95 border border-white/10 backdrop-blur-2xl shadow-2xl flex flex-col gap-1 z-50 animate-in fade-in slide-in-from-bottom-2 duration-150">
+                <span className="px-2 py-1 text-[9px] font-mono text-cyan-400 uppercase tracking-wider font-bold">PILIH MODALITAS DISTRIBUTION</span>
+                {[
+                  { mode: 'best', label: '🌟 Best Auto', desc: 'Sistem AI Otomatis', icon: <Sparkles className="w-4 h-4 text-cyan-400" /> },
+                  { mode: 'truck', label: 'Truk Logistik', desc: 'Jalur Darat / Tol', icon: <Truck className="w-4 h-4 text-emerald-400" /> },
+                  { mode: 'maritime', label: 'Kapal Laut', desc: 'Pelabuhan Belawan', icon: <Ship className="w-4 h-4 text-blue-400" /> },
+                  { mode: 'air', label: 'Cargo Udara', desc: 'Bandara Kualanamu', icon: <Plane className="w-4 h-4 text-purple-400" /> },
+                ].map((m) => {
+                  const active = selectedModality === m.mode;
+                  return (
+                    <button
+                      key={m.mode}
+                      type="button"
+                      onClick={() => {
+                        setSelectedModality(m.mode as TransportModality);
+                        setActivePopover(null);
+                      }}
+                      className={`cursor-pointer w-full p-2 rounded-xl text-left font-mono transition flex items-center justify-between ${
+                        active ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' : 'hover:bg-slate-800 text-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        {m.icon}
+                        <div className="flex flex-col">
+                          <span className="text-xs font-bold">{m.label}</span>
+                          <span className="text-[9px] text-slate-400">{m.desc}</span>
+                        </div>
+                      </div>
+                      {active && <Check className="w-3.5 h-3.5 text-cyan-400" />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
-        {/* Dynamic Clean Slate Node Selection Status Indicator */}
-        <div className="flex items-center gap-1.5 bg-slate-950/80 px-3 py-1 rounded-xl border border-slate-800 font-mono text-[10px]">
-          {!originName ? (
-            <span className="text-cyan-400 font-bold animate-pulse">
-              🟢 KLIK MARKER KOTA 1 UNTUK SET START
-            </span>
-          ) : !destName ? (
-            <>
-              <span className="text-cyan-400 font-bold">🟢 START: {originName}</span>
-              <span className="text-slate-500">➔</span>
-              <span className="text-amber-400 font-bold animate-pulse">
-                🟡 KLIK MARKER KOTA 2 UNTUK SET END
-              </span>
-            </>
-          ) : (
-            <>
-              <span className="text-cyan-400 font-bold">🟢 START: {originName}</span>
-              <span className="text-slate-500">➔</span>
-              <span className="text-amber-400 font-bold">🟡 END: {destName}</span>
-            </>
-          )}
-
-          {onResetNodes && (originName || destName) && (
-            <button
-              type="button"
-              onClick={onResetNodes}
-              className="ml-1 px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[9px] font-bold transition"
-              title="Reset pilihan titik Asal & Tujuan"
-            >
-              🔄 RESET
-            </button>
-          )}
-        </div>
-
-        {/* Hazard Selector Buttons */}
-        <div className="flex items-center gap-1 bg-slate-950/60 p-1 rounded-xl border border-slate-800/80">
-          {hazardOptions.map((h) => (
-            <button
-              key={h.type}
-              type="button"
-              onClick={() => setSelectedType(h.type)}
-              className={`px-2 py-0.5 rounded-lg font-mono text-[10px] font-bold transition flex items-center gap-1 ${
-                selectedType === h.type
-                  ? 'bg-orange-500 text-slate-950 shadow-md shadow-orange-500/20'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-900'
-              }`}
-            >
-              <span>{h.icon}</span>
-              <span>{h.label}</span>
-            </button>
-          ))}
-        </div>
-
-        {/* Radius Selector */}
-        <div className="flex items-center gap-1 bg-slate-950/60 p-1 rounded-xl border border-slate-800/80">
-          <span className="text-[9px] font-mono text-slate-500 px-1">RADIUS:</span>
-          {[5, 15, 30].map((r) => (
-            <button
-              key={r}
-              type="button"
-              onClick={() => setSelectedRadius(r)}
-              className={`px-2 py-0.5 rounded-md font-mono text-[10px] font-bold transition ${
-                selectedRadius === r
-                  ? 'bg-slate-200 text-slate-950 shadow-sm'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              {r}km
-            </button>
-          ))}
-        </div>
-
-        {/* Game-Like Target Click Button */}
-        <button
-          type="button"
-          onClick={() => {
-            setIsClickTargeting(!isClickTargeting);
-            if (drawModeActive) setDrawModeActive(false);
-          }}
-          className={`px-3.5 py-1.5 rounded-xl font-headline font-bold uppercase tracking-wider text-[10px] transition flex items-center gap-1.5 ${
-            isClickTargeting
-              ? 'bg-amber-500 text-slate-950 animate-pulse shadow-lg shadow-amber-500/20'
-              : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 hover:bg-cyan-500/30'
-          }`}
-        >
-          <span>🎯</span>
-          <span>{isClickTargeting ? 'KLIK KOTA DI PETA...' : 'SET HAZARD'}</span>
-        </button>
-
-        {/* Freehand Draw Mode Toggle */}
-        <button
-          type="button"
-          onClick={() => {
-            setDrawModeActive(!drawModeActive);
-            if (isClickTargeting) setIsClickTargeting(false);
-          }}
-          className={`px-3 py-1.5 rounded-xl font-headline font-bold uppercase tracking-wider text-[10px] transition flex items-center gap-1 ${
-            drawModeActive
-              ? 'bg-orange-500 text-slate-950 shadow-lg shadow-orange-500/20'
-              : 'bg-slate-900 text-slate-400 border border-slate-800 hover:text-white'
-          }`}
-        >
-          <span>✏️</span>
-          <span>GAMBAR AREA</span>
-        </button>
-
-        {/* 1-Click Clear Simulation Button */}
-        {(simulationActive || drawModeActive) && (
+        {/* 2. Node Selector Bubble Pill */}
+        <div className="relative">
           <button
             type="button"
-            onClick={onClearSimulation}
-            className="px-3 py-1.5 rounded-xl font-headline font-bold uppercase tracking-wider text-[10px] bg-red-500/20 text-red-300 border border-red-500/40 hover:bg-red-500/40 transition flex items-center gap-1"
+            onClick={() => togglePopover('nodes')}
+            className={`cursor-pointer px-3.5 py-1.5 rounded-full border text-xs font-mono font-bold transition-all flex items-center gap-2 shadow-md ${
+              originName || destName
+                ? 'bg-cyan-950/80 border-cyan-500/50 text-cyan-300'
+                : 'bg-slate-900/80 border-slate-700 text-slate-300 hover:border-slate-500'
+            }`}
           >
-            <span>🧹</span>
-            <span>HAPUS AREA</span>
+            <MapPin className="w-3.5 h-3.5 text-cyan-400" />
+            <span>
+              {originName ? (destName ? `${originName} ➔ ${destName}` : `Start: ${originName}`) : 'Rute Asal & Tujuan'}
+            </span>
+            <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform duration-200 ${activePopover === 'nodes' ? 'rotate-180' : ''}`} />
           </button>
-        )}
+
+          {/* Node Selector Popover */}
+          {activePopover === 'nodes' && (
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 rounded-2xl bg-[#0c0e12]/95 border border-white/10 backdrop-blur-2xl shadow-2xl flex flex-col gap-2 z-50 animate-in fade-in slide-in-from-bottom-2 duration-150">
+              <span className="text-[9px] font-mono text-cyan-400 uppercase tracking-wider font-bold">TITIK RUTE KORIDOR</span>
+              <div className="p-2 rounded-xl bg-slate-950/80 border border-slate-800 flex flex-col gap-1 text-[10px] font-mono">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                  <span className="text-slate-400">Start:</span>
+                  <span className="text-white font-bold">{originName || 'Klik kota di peta...'}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-amber-400" />
+                  <span className="text-slate-400">End:</span>
+                  <span className="text-white font-bold">{destName || 'Klik kota di peta...'}</span>
+                </div>
+              </div>
+
+              {onResetNodes && (originName || destName) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onResetNodes();
+                    setActivePopover(null);
+                  }}
+                  className="cursor-pointer w-full py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-mono font-bold flex items-center justify-center gap-1.5 transition"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Reset Titik Node</span>
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* 3. Disruption Presets & Tools Bubble Pill */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => togglePopover('disruption')}
+            className={`cursor-pointer px-3.5 py-1.5 rounded-full border text-xs font-mono font-bold transition-all flex items-center gap-2 shadow-md ${
+              isClickTargeting || drawModeActive || simulationActive
+                ? 'bg-amber-950/90 border-amber-500/60 text-amber-300 ring-2 ring-amber-500/20'
+                : 'bg-slate-900/80 border-slate-700 text-slate-300 hover:border-amber-500/50'
+            }`}
+          >
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+            <span>{isClickTargeting ? 'Set Hazard...' : drawModeActive ? 'Gambar Poligon...' : 'Simulasi Bencana'}</span>
+            <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform duration-200 ${activePopover === 'disruption' ? 'rotate-180' : ''}`} />
+          </button>
+
+          {/* Disruption Popover */}
+          {activePopover === 'disruption' && (
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 rounded-2xl bg-[#0c0e12]/95 border border-white/10 backdrop-blur-2xl shadow-2xl flex flex-col gap-2.5 z-50 animate-in fade-in slide-in-from-bottom-2 duration-150 text-left">
+              <span className="text-[9px] font-mono text-amber-400 uppercase tracking-wider font-bold">PRESET SKENARIO CRISIS</span>
+              <div className="grid grid-cols-1 gap-1">
+                {hazardOptions.map((h) => (
+                  <button
+                    key={h.type}
+                    type="button"
+                    onClick={() => {
+                      setSelectedType(h.type);
+                      setIsClickTargeting(true);
+                      if (drawModeActive) setDrawModeActive(false);
+                      setActivePopover(null);
+                    }}
+                    className={`cursor-pointer p-2 rounded-xl text-left font-mono text-xs font-bold transition flex items-center justify-between ${
+                      selectedType === h.type
+                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                        : 'hover:bg-slate-800 text-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      {h.icon}
+                      <span>{h.label}</span>
+                    </div>
+                    <Target className="w-3.5 h-3.5 opacity-60" />
+                  </button>
+                ))}
+              </div>
+
+              <div className="border-t border-white/10 pt-2 flex flex-col gap-1.5">
+                <span className="text-[9px] font-mono text-slate-400 uppercase tracking-wider font-bold">MODES & ALAT MANUVER</span>
+                
+                {/* Freehand Draw Mode Toggle */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDrawModeActive(!drawModeActive);
+                    if (isClickTargeting) setIsClickTargeting(false);
+                    setActivePopover(null);
+                  }}
+                  className={`cursor-pointer w-full p-2 rounded-xl font-mono text-xs font-bold transition flex items-center gap-2 ${
+                    drawModeActive
+                      ? 'bg-orange-500 text-slate-950 shadow-lg shadow-orange-500/20'
+                      : 'bg-slate-900 text-slate-300 border border-slate-800 hover:bg-slate-800'
+                  }`}
+                >
+                  <PenTool className="w-4 h-4 text-orange-400" />
+                  <span>Gambar Poligon Bebas</span>
+                </button>
+
+                {/* 1-Click Clear Simulation Button */}
+                {(simulationActive || drawModeActive) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClearSimulation();
+                      setActivePopover(null);
+                    }}
+                    className="cursor-pointer w-full p-2 rounded-xl font-mono text-xs font-bold bg-red-500/20 text-red-300 border border-red-500/40 hover:bg-red-500/40 transition flex items-center gap-2"
+                  >
+                    <Trash2 className="w-4 h-4 text-red-400" />
+                    <span>Hapus Semua Simulasi</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 4. Radius Selector Bubble Pill */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => togglePopover('radius')}
+            className="cursor-pointer px-3 py-1.5 rounded-full bg-slate-900/80 border border-slate-700 text-xs font-mono font-bold text-slate-300 hover:border-slate-500 transition-all flex items-center gap-1.5 shadow-md"
+          >
+            <Sliders className="w-3.5 h-3.5 text-slate-400" />
+            <span>{selectedRadius}km</span>
+            <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform duration-200 ${activePopover === 'radius' ? 'rotate-180' : ''}`} />
+          </button>
+
+          {/* Radius Popover */}
+          {activePopover === 'radius' && (
+            <div className="absolute bottom-full right-0 mb-2 w-36 p-2 rounded-2xl bg-[#0c0e12]/95 border border-white/10 backdrop-blur-2xl shadow-2xl flex flex-col gap-1 z-50 animate-in fade-in slide-in-from-bottom-2 duration-150">
+              <span className="px-2 py-1 text-[9px] font-mono text-slate-400 uppercase tracking-wider font-bold">RADIUS BAHAYA</span>
+              {[5, 15, 30].map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => {
+                    setSelectedRadius(r);
+                    setActivePopover(null);
+                  }}
+                  className={`cursor-pointer w-full px-3 py-1.5 rounded-xl font-mono text-xs font-bold transition flex items-center justify-between ${
+                    selectedRadius === r
+                      ? 'bg-slate-200 text-slate-950'
+                      : 'hover:bg-slate-800 text-slate-300'
+                  }`}
+                >
+                  <span>{r} kilometer</span>
+                  {selectedRadius === r && <Check className="w-3.5 h-3.5 text-slate-950" />}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
       </div>
 
-      {/* Targeting Helper Message */}
+      {/* Target Mode Helper Banner */}
       {isClickTargeting && (
-        <div className="px-4 py-1.5 rounded-full bg-amber-950/90 border border-amber-500/60 backdrop-blur-md text-[10px] font-mono text-amber-300 animate-in fade-in slide-in-from-top-1 duration-200">
-          🎯 Sasar kota/titik di peta untuk memicu {selectedType.toUpperCase()} ({selectedRadius}km - {selectedModality?.toUpperCase() || 'AUTO'}) pada rute {originName || 'START'} ➔ {destName || 'END'}
+        <div className="px-4 py-1.5 rounded-full bg-amber-950/90 border border-amber-500/60 backdrop-blur-md text-[10px] font-mono text-amber-300 shadow-2xl flex items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+          <Target className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+          <span>Klik lokasi mana saja di peta untuk menargetkan skenario {selectedType.toUpperCase()} ({selectedRadius}km)</span>
         </div>
       )}
     </div>
