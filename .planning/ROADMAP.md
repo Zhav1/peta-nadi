@@ -520,6 +520,27 @@
 
 ---
 
+## Phase 22: Google Maps-Grade Administrative Boundary Integration, Top-Nav Telemetry Popups & Non-Overlapping Clean Canvas UI Refactor
+**Goal:** Integrasikan poligon batas wilayah administratif riil Sumut (Google Maps style dashed stroke), top nav telemetri interaktif dengan flyout popovers, eliminasi 100% tumpang tindih badge teks melayang, dan unifikasi pin episentrum dengan poligon batas.
+**Status:** COMPLETE ✅
+
+### Deliverables
+- **Real ADM2/ADM3 GeoJSON Dataset & Service (`adm_boundary_service.py`) [NEW]**:
+  - Dataset `north_sumatra_adm_boundaries.json` untuk Kota Medan, Belawan, Deli Serdang, Binjai, Karo/Berastagi, dan Tebing Tinggi.
+- **Google Maps-Style Boundary Stroke (`CrisisMap.tsx`)**:
+  - Layer `weather-polygons-outline` mengimplementasikan garis putus-putus merah/cyan (`line-dasharray: [4, 3]`) presisi di sepanjang batas wilayah riil.
+- **Interactive Top Nav Telemetry Popovers (`TopNavTelemetry.tsx`) [NEW]**:
+  - Ikon SVG Lucide murni dengan *flyout popovers* Glassmorphism 2.0 untuk metrik BMKG, TomTom, dan cuOpt.
+- **Off-Canvas Clean Map Refactor (`CrisisMap.tsx` & `EvidenceTab.tsx`)**:
+  - Menghapus badge teks melayang raksasa dari kanvas peta; detail insiden & korelasi inflasi PIHPS disajikan di Sidebar Kanan saat diklik.
+
+### Verification
+- [x] Next.js production build (`next build`) berhasil 100% tanpa error (`✓ Compiled successfully (6/6 pages)`).
+- [x] Hover pada poligon batas mengaktifkan border cyan menyala & popup telemetri instan.
+- [x] Klik navbar telemetri membuka popover card informatif tanpa merusak layout.
+
+---
+
 ## Backlog (Post-Hackathon / v2)
 - Driver mobile app (React Native + WatermelonDB + CRDT offline sync)
 - Self-serve operator GPS onboarding SDK
@@ -531,5 +552,6 @@
 - Backend endpoints for National Logistics Health Index API and KPI metrics (to replace frontend mock calculations).
 - Backend data pipelines/tables to serve raw fleet telemetry, live traffic paths, and weather/hotspot layers to the map directly (to replace frontend mock arrays).
 - Forecasting and predictive analytics endpoints (to support the Future/Predict time-scope filters in the UI).
+
 
 

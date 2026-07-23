@@ -498,4 +498,12 @@ async def get_live_osint():
     return {"items": events, "total": len(events), "source": "redis_stm"}
 
 
+@router.get("/adm-boundaries")
+async def get_adm_boundaries():
+    """Returns North Sumatra ADM2/ADM3 GeoJSON boundary polygons (Google Maps Style)."""
+    from app.services.adm_boundary_service import get_adm_boundaries
+    return get_adm_boundaries()
+
+
+
 

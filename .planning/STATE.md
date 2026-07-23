@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-07-23
 **Active Milestone:** M1 — Hackathon MVP (North Sumatra Corridor)
-**Current Phase:** Phase 21 COMPLETE ✅
+**Current Phase:** Phase 22 COMPLETE ✅
 
 ---
 
@@ -32,6 +32,7 @@
 | 19 | Differentiated Multi-Hazard Map Layers, Time Horizon Engine & Lightpanda OSINT Integration | **COMPLETE** ✅ | Flood water inundation, earthquake concentric shockwaves & fault lines, past/present/future/predict time engine, OSINT bridge |
 | 20 | Real District Logistics Boundaries, Non-Colliding Spatial GIS Layout & UI UX Pro Max Refactor | **COMPLETE** ✅ | Real district GeoJSON polygons, interactive boundary hover highlight, HUD repositioning, compact glassmorphic badges |
 | 21 | Full Integration Audit, Organic Hazard Geometries & Live BMKG/OSINT Incident Spatiotemporal Engine | **COMPLETE** ✅ | Algorithmic organic geometries (`incident_geometry_service.py`), BMKG startup poller in `lifespan()`, `GET /osint/live` endpoint, zero hardcoded rectangular boxes |
+| 22 | Google Maps-Grade Administrative Boundary Integration & Clean UI Refactor | **COMPLETE** ✅ | Google Maps style dashed ADM stroke (`line-dasharray: [4, 3]`), TopNav telemetry flyout popovers, off-canvas incident detail, unified epicenter-boundary entity |
 
 ---
 
@@ -60,6 +61,7 @@
 | 2026-07-23 | Phase 19: Time Horizon Engine & Differentiated Hazard Styling | Dynamic API dataset switching per mode (`PAST | PRESENT | FUTURE | PREDICT`) + custom spatiotemporal Mapbox layer paint properties |
 | 2026-07-23 | Phase 20: Operations HUD Repositioning & Glassmorphism 2.0 | Reposition HUD to top-right corner to clear Belawan & Medan Hub nodes; replace multi-line text boxes with Lucide SVG compact badges |
 | 2026-07-23 | Phase 21: Organic GeoJSON Geometry Service & Startup Poller | Replace hardcoded 4 rectangular boxes with `incident_geometry_service.py` mathematical generators; poll BMKG inside FastAPI `lifespan()` |
+| 2026-07-23 | Phase 22: Google Maps ADM Dashed Stroke & Clean Off-Canvas UI | Google Maps style dashed line stroke (`line-dasharray: [4, 3]`), top nav telemetry flyout popovers, off-canvas incident detail panel, unified pin-boundary entity |
 
 ---
 
