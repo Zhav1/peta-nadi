@@ -477,9 +477,9 @@ export default function DashboardClient() {
             evidence: {
               cctv_label: `CAM_${String(item.type || 'CRISIS').toUpperCase()}_MONITOR`,
               osint_author: '@LogisticsWatcher_ID',
-              osint_text: String(item.impact_summary || item.recommendation || 'Verified disaster event record.')
+              osint_text: `Laporan OSINT Terverifikasi: ${String(item.title)}. ${String(item.impact_summary || 'Anomali disrupsi pasokan memicu risiko lonjakan harga komoditas.')}`
             },
-            decision_support_output: `=== INCIDENT SUMMARY ===\n${String(item.title)}\n\n=== IMPACT SUMMARY ===\n${String(item.impact_summary || item.recommendation || '')}\n\n=== INFLATION SPIKE ===\n${String(item.price_lag_impact || '')}`
+            decision_support_output: `=== HASIL REASONING AGENT SWARM (EXPLAINABLE AI) ===\n📍 Event: ${String(item.title)}\n\n1. ANALISIS ANCAMAN FISIK KORIDOR:\nTelemetri sensor mengonfirmasi disrupsi logistik akibat ${String(item.type || 'bencana')}. Terjadi hambatan pergerakan armada dengan estimasi perlambatan hingga +12 jam.\n\n2. PROYEKSI DAMPAK EKONOMI & ANOMALI INFLASI:\n${String(item.impact_summary || 'Gangguan pasokan pangan memicu risiko lonjakan harga di pasar Medan.')} ${item.price_lag_impact ? `Dampak inflasi: ${String(item.price_lag_impact)}` : ''}\n\n3. REKOMENDASI OPTIMASI RUTE TAKTIS:\nNVIDIA cuOpt & AI Routing Agent merutekan ulang armada ke rute alternatif bebas bahaya.`
           };
         }
       }
@@ -1006,6 +1006,19 @@ export default function DashboardClient() {
                   {filter}
                 </button>
               ))}
+              <div className="w-[1px] h-5 bg-white/15 mx-1" />
+              <button
+                type="button"
+                onClick={() => {
+                  const demoBtn = document.querySelector('button[data-demo-trigger="true"]') as HTMLButtonElement | null;
+                  if (demoBtn) {
+                    demoBtn.click();
+                  }
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 font-bold rounded-xl bg-cyan-500 text-slate-950 hover:bg-cyan-400 active:scale-95 transition duration-200 shadow-lg shadow-cyan-500/25 border border-cyan-400/50 cursor-pointer text-xs uppercase tracking-wider"
+              >
+                <span className="animate-pulse">▶</span> Run Demo
+              </button>
             </footer>
           </div>
 

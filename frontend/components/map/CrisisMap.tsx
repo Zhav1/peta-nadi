@@ -311,7 +311,7 @@ export default function CrisisMap({
         },
       });
 
-      // 1b. Historical Episodes Layer (PAST Mode)
+      // 1b. Historical Episodes Layer (PAST Mode - Hazard Differentiated Colors)
       map.addSource('historical-episodes-source', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
@@ -321,8 +321,16 @@ export default function CrisisMap({
         type: 'fill',
         source: 'historical-episodes-source',
         paint: {
-          'fill-color': 'rgba(168, 85, 247, 0.25)',
-          'fill-opacity': 0.80,
+          'fill-color': [
+            'match', ['get', 'type'],
+            'flood', 'rgba(6, 182, 212, 0.32)',
+            'earthquake', 'rgba(244, 63, 94, 0.32)',
+            'landslide', 'rgba(217, 119, 6, 0.35)',
+            'wildfire', 'rgba(249, 115, 22, 0.35)',
+            'congestion', 'rgba(234, 179, 8, 0.30)',
+            'rgba(168, 85, 247, 0.30)'
+          ],
+          'fill-opacity': ['coalesce', ['get', 'opacity'], 0.80],
         },
       });
       map.addLayer({
@@ -330,7 +338,15 @@ export default function CrisisMap({
         type: 'line',
         source: 'historical-episodes-source',
         paint: {
-          'line-color': '#a855f7',
+          'line-color': [
+            'match', ['get', 'type'],
+            'flood', '#06b6d4',
+            'earthquake', '#f43f5e',
+            'landslide', '#d97706',
+            'wildfire', '#f97316',
+            'congestion', '#eab308',
+            '#a855f7'
+          ],
           'line-width': 2.5,
           'line-dasharray': [4, 2],
         },
@@ -461,7 +477,7 @@ export default function CrisisMap({
         },
       });
 
-      // 4. Crisis Pins GeoJSON Layer (Native WebGL 3D Globe Anchored)
+      // 4. Crisis Pins GeoJSON Layer (Clean Canvas - Hidden Redundant Dots)
       map.addSource('crisis-pins-source', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
@@ -472,16 +488,8 @@ export default function CrisisMap({
         type: 'circle',
         source: 'crisis-pins-source',
         paint: {
-          'circle-radius': ['case', ['get', 'selected'], 22, 14],
-          'circle-color': [
-            'match', ['get', 'severity'],
-            'critical', '#ef4444',
-            'high', '#f97316',
-            'medium', '#eab308',
-            '#22c55e'
-          ],
-          'circle-opacity': 0.2,
-          'circle-blur': 0.6,
+          'circle-radius': 0,
+          'circle-opacity': 0.0,
         },
       });
 
@@ -490,17 +498,8 @@ export default function CrisisMap({
         type: 'circle',
         source: 'crisis-pins-source',
         paint: {
-          'circle-radius': ['case', ['get', 'selected'], 10, 7],
-          'circle-color': [
-            'match', ['get', 'severity'],
-            'critical', '#ef4444',
-            'high', '#f97316',
-            'medium', '#eab308',
-            '#22c55e'
-          ],
-          'circle-stroke-width': 1.5,
-          'circle-stroke-color': '#ffffff',
-          'circle-opacity': 0.85,
+          'circle-radius': 0,
+          'circle-opacity': 0.0,
         },
       });
 

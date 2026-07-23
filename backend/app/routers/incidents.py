@@ -288,6 +288,14 @@ async def get_incident(incident_id: str):
                 for item in all_items:
                     item_id = item.get("incident_id") or item.get("risk_id")
                     if item_id == incident_id:
+                        from app.services.llm_reasoning_service import generate_natural_incident_reasoning
+                        reasoning = generate_natural_incident_reasoning(
+                            incident_id=item_id,
+                            title=item.get("title", "Disaster Episode"),
+                            hazard_type=item.get("type", "flood"),
+                            impact_summary=item.get("impact_summary", ""),
+                            price_impact=item.get("price_lag_impact", "")
+                        )
                         return {
                             "id": item_id,
                             "crisis_id": item_id,
@@ -307,9 +315,9 @@ async def get_incident(incident_id: str):
                             "evidence": {
                                 "cctv_label": f"CAM_{item.get('type', 'CRISIS').upper()}_LOG",
                                 "osint_author": "@LogisticsWatcher_ID",
-                                "osint_text": item.get("impact_summary") or item.get("recommendation") or "Verified event log."
+                                "osint_text": reasoning["osint_text"]
                             },
-                            "decision_support_output": f"=== INCIDENT SUMMARY ===\n{item.get('title')}\n\n=== IMPACT SUMMARY ===\n{item.get('impact_summary', '')}\n\n=== INFLATION SPIKE ===\n{item.get('price_lag_impact', '')}"
+                            "decision_support_output": reasoning["decision_support_output"]
                         }
     except Exception as fix_err:
         logger.debug(f"Fixture lookup check failed: {fix_err}")
@@ -327,12 +335,17 @@ async def get_incident(incident_id: str):
     except Exception as e:
         logger.debug(f"Supabase incident fetch failed: {e}")
 
-    # Final fallback: synthesized crisis state for offline reliability
+    # Final fallback: synthesized crisis state with natural LLM reasoning
+    from app.services.llm_reasoning_service import generate_natural_incident_reasoning
+    title = f"Incident {incident_id.replace('-', ' ').title()}"
+    hazard_type = "flood" if "banjir" in incident_id or "flood" in incident_id or "rob" in incident_id else "earthquake" if "gempa" in incident_id else "landslide" if "longsor" in incident_id else "congestion"
+    reasoning = generate_natural_incident_reasoning(incident_id, title, hazard_type)
+
     return {
         "id": incident_id,
         "crisis_id": incident_id,
-        "title": f"Incident {incident_id.replace('-', ' ').title()}",
-        "type": "flood" if "banjir" in incident_id or "flood" in incident_id or "rob" in incident_id else "earthquake" if "gempa" in incident_id else "landslide" if "longsor" in incident_id else "congestion",
+        "title": title,
+        "type": hazard_type,
         "status": "resolved" if "hist" in incident_id else "predicting" if "pred" in incident_id else "validated",
         "severity": "high",
         "overall_confidence": 0.92,
@@ -347,9 +360,9 @@ async def get_incident(incident_id: str):
         "evidence": {
             "cctv_label": "CAM_SUMUT_MONITOR_01",
             "osint_author": "@LogisticsWatcher_ID",
-            "osint_text": f"Laporan telemetri krisis logistik untuk {incident_id}."
+            "osint_text": reasoning["osint_text"]
         },
-        "decision_support_output": f"=== LAPORAN INSIDEN ===\n{incident_id.upper()}\n\nTelemetri disrupsi rantai pasok koridor Sumatera Utara."
+        "decision_support_output": reasoning["decision_support_output"]
     }
 
 
