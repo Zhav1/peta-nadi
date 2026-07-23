@@ -453,6 +453,37 @@ export default function DashboardClient() {
         console.error('Failed to fetch crisis detail:', err);
       }
 
+      // If backend call fails, check local historical & predictive risk arrays
+      if (!baseCrisis) {
+        const histMatch = historicalEpisodes.find((e) => e.incident_id === id || e.id === id) as Record<string, unknown> | undefined;
+        const predMatch = predictiveRisks.find((p) => p.risk_id === id || p.id === id) as Record<string, unknown> | undefined;
+        const item = histMatch || predMatch;
+        if (item) {
+          baseCrisis = {
+            crisis_id: String(item.incident_id || item.risk_id || id),
+            title: String(item.title || 'Incident Event'),
+            type: (item.type as CrisisType) || 'flood',
+            status: activeTimeFilter === 'past' ? 'resolved' : 'validating',
+            overall_confidence: Number(item.confidence || 0.95),
+            validated: true,
+            is_simulated: true,
+            lat: Number(item.lat || 3.58),
+            lon: Number(item.lon || 98.67),
+            region: 'North Sumatra Corridor',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            messages: [],
+            route_recommendations: [],
+            evidence: {
+              cctv_label: `CAM_${String(item.type || 'CRISIS').toUpperCase()}_MONITOR`,
+              osint_author: '@LogisticsWatcher_ID',
+              osint_text: String(item.impact_summary || item.recommendation || 'Verified disaster event record.')
+            },
+            decision_support_output: `=== INCIDENT SUMMARY ===\n${String(item.title)}\n\n=== IMPACT SUMMARY ===\n${String(item.impact_summary || item.recommendation || '')}\n\n=== INFLATION SPIKE ===\n${String(item.price_lag_impact || '')}`
+          };
+        }
+      }
+
       if (baseCrisis) {
         const originId = selectedOriginNode || 'belawan';
         const destId = selectedDestNode || 'medan';
@@ -474,7 +505,7 @@ export default function DashboardClient() {
         });
       }
     }
-  }, [selectedOriginNode, selectedDestNode, selectedRadius, selectedModality]);
+  }, [selectedOriginNode, selectedDestNode, selectedRadius, selectedModality, historicalEpisodes, predictiveRisks, activeTimeFilter]);
 
   // LIVE VISUAL DEMO STEPPER TRIGGER
   const handleCrisisReadyFromDemo = useCallback(async (crisis: CrisisState) => {
@@ -939,6 +970,7 @@ export default function DashboardClient() {
               setSelectedModality={setSelectedModality}
               onResetNodes={handleResetNodes}
               isSidebarOpen={isSidebarOpen && !!selectedCrisis}
+              isLeftSidebarCollapsed={isLeftSidebarCollapsed}
             />
 
             {/* Guided Presentation Demo Panel */}
@@ -947,9 +979,15 @@ export default function DashboardClient() {
               isSidebarOpen={isSidebarOpen && !!selectedCrisis}
             />
 
-            {/* Bottombar Time Scope Filters */}
+            {/* Bottombar Time Scope Filters (Exact Dual-Sidebar Centering) */}
             <footer className={`absolute bottom-6 z-40 flex items-center gap-2 bg-[#080d14]/90 backdrop-blur-xl border border-white/10 px-4 py-2 rounded-2xl shadow-2xl transition-all duration-300 pointer-events-auto ${
-              isSidebarOpen && selectedCrisis ? 'left-[calc(50%-192px)] -translate-x-1/2' : 'left-1/2 -translate-x-1/2'
+              !isLeftSidebarCollapsed && (isSidebarOpen && !!selectedCrisis)
+                ? 'left-[calc(50%-30px)] -translate-x-1/2'
+                : !isLeftSidebarCollapsed && !(isSidebarOpen && !!selectedCrisis)
+                ? 'left-[calc(50%+160px)] -translate-x-1/2'
+                : isLeftSidebarCollapsed && (isSidebarOpen && !!selectedCrisis)
+                ? 'left-[calc(50%-190px)] -translate-x-1/2'
+                : 'left-1/2 -translate-x-1/2'
             }`}>
               {(['past', 'present', 'future', 'predict'] as const).map((filter) => (
                 <button
