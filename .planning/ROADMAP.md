@@ -541,6 +541,27 @@
 
 ---
 
+## Phase 23: Run Demo Engine Overhaul — Interactive Stepper, Stage-Wired Map Effects & Architectural Hook Lift
+**Goal:** Perbaiki fitur `▶ Run Demo` secara menyeluruh agar stepper card 100% interaktif tanpa kebocoran event klik ke Mapbox, angkat hook `useDemoState` ke `DashboardClient`, hubungkan transisi setiap stage ke efek peta & sidebar, serta perbarui UI dengan ikon SVG Lucide.
+**Status:** COMPLETE ✅
+
+### Deliverables
+- **Fixed CSS Pointer-Events Inheritance (`GuidedDemoPanel.tsx`)**:
+  - Menambahkan `pointer-events-auto` dan penghenti propagasi `onMouseDown` & `onPointerDown` (`e.stopPropagation()`) pada wrapper card stepper.
+- **Architectural Hook Lift & Decoupled DOM Triggers (`DashboardClient.tsx`)**:
+  - `useDemoState` diangkat ke `DashboardClient`. Menghapus 100% DOM selector hack `document.querySelector('button[data-demo-trigger]').click()`. Tombol `▶ Run Demo` memanggil `demoState.start(...)` secara langsung.
+- **Stage-Wired Live Map & Dashboard Effects (`DashboardClient.tsx`)**:
+  - Stage 0 = Clean baseline map, Stage 1 = Rute Belawan-Siantar, Stage 2 = Injeksi hazard flood shockwave, Stage 3 = Rute detour aman + Right Sidebar XAI reasoning otomatis terbuka, Stage 4 = Mitigation tab + Toast notification.
+- **Non-AI Anti-Pattern Compliance & UI Polish (`GuidedDemoPanel.tsx`)**:
+  - Ikon emoji diganti dengan Lucide SVG icons (`CloudLightning`, `Car`, `Satellite`, `Anchor`, `TrendingUp`, `MessageSquare`, `CheckCircle2`), deskripsi stage diperbarui ke Bahasa Indonesia, dan tombol Stage 4 diubah menjadi `↺ Restart Demo`.
+
+### Verification
+- [x] Next.js production build (`next build`) 100% sukses tanpa error (`✓ Compiled successfully (6/6 pages)`).
+- [x] Tombol stepper card 100% dapat diklik tanpa kebocoran event klik ke kanvas Mapbox.
+- [x] Setiap transisi stage demo memperbarui tampilan peta dan sidebar secara dinamis.
+
+---
+
 ## Backlog (Post-Hackathon / v2)
 - Driver mobile app (React Native + WatermelonDB + CRDT offline sync)
 - Self-serve operator GPS onboarding SDK

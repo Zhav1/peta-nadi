@@ -1,36 +1,47 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { useDemoState } from '@/hooks/useDemoState';
-import type { CrisisState } from '@/lib/types';
 import QRCode from 'qrcode';
+import {
+  CloudLightning,
+  Car,
+  Satellite,
+  Anchor,
+  TrendingUp,
+  MessageSquare,
+  CheckCircle2,
+} from 'lucide-react';
 
 interface GuidedDemoPanelProps {
-  onCrisisReady: (crisis: CrisisState) => void;
+  stage: number;
+  isRunning: boolean;
+  isReplay: boolean;
+  crisisId: string | null;
+  confidence: number;
+  summary: string;
+  isAuto: boolean;
+  onStart: () => void;
+  onAdvance: () => void;
+  onToggleAuto: () => void;
+  onReset: () => void;
   isSidebarOpen?: boolean;
-  onStartDemo?: () => void;
 }
 
-export function GuidedDemoPanel({ onCrisisReady, isSidebarOpen = false, onStartDemo }: GuidedDemoPanelProps) {
-  const {
-    stage,
-    isRunning,
-    isReplay,
-    crisisId,
-    confidence,
-    summary,
-    isAuto,
-    start,
-    advance,
-    reset,
-    toggleAuto,
-    saveReplay,
-  } = useDemoState(onCrisisReady);
+export function GuidedDemoPanel({
+  stage,
+  isRunning,
+  isReplay,
+  crisisId,
+  confidence,
+  summary,
+  isAuto,
+  onStart,
+  onAdvance,
+  onToggleAuto,
+  onReset,
+  isSidebarOpen = false,
+}: GuidedDemoPanelProps) {
   const [qrVisible, setQrVisible] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-
-  const handleStart = () => {
-    start({ mock_agents: false, offline: false });
-  };
 
   // Generate QR Code when demo starts and has a crisisId
   useEffect(() => {
@@ -56,25 +67,7 @@ export function GuidedDemoPanel({ onCrisisReady, isSidebarOpen = false, onStartD
   }, [isRunning, crisisId, qrVisible]);
 
   if (!isRunning) {
-    if (onStartDemo) return null; // Rendered docked inside bottombar controls
-
-    const dynamicRightOffset = isSidebarOpen ? 'right-[408px]' : 'right-6';
-    return (
-      <div className={`fixed bottom-6 ${dynamicRightOffset} z-50 transition-all duration-300 hidden`}>
-        <button
-          type="button"
-          data-demo-trigger="true"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            handleStart();
-          }}
-          className="flex items-center gap-2 px-5 py-2.5 font-bold rounded-full bg-cyan-500 text-slate-950 hover:bg-cyan-400 active:scale-95 transition duration-200 shadow-xl shadow-cyan-500/25 border border-cyan-400/50 cursor-pointer"
-        >
-          <span className="animate-pulse">▶</span> Run Demo
-        </button>
-      </div>
-    );
+    return null;
   }
 
   const stageTitles = [
@@ -86,20 +79,20 @@ export function GuidedDemoPanel({ onCrisisReady, isSidebarOpen = false, onStartD
   ];
 
   const stageExplainers = [
-    'PetaNadi is pulling real-time data from 6 sources: weather (BMKG), congestion (TomTom), fire maps (NASA), port queues (AISstream), commodity prices (PIHPS), and social media reports.',
-    '6 AI agents process the data in parallel. Each specializes in a domain: hazard mapping, route optimization, economic forecasting, and crisis decision support.',
-    'The Consensus Gate evaluates confidence scores from all agents. A crisis is only validated when the weighted score exceeds 85% — preventing false alarms.',
-    'The Belawan Port closure is validated. The dashboard now shows the crisis pin, alternative routes, and projected economic impact on commodity prices.',
-    'A WhatsApp alert has been sent to logistics operators with the crisis summary, recommended detour, and a deep-link back to this dashboard.',
+    'PetaNadi menarik data real-time dari 6 sumber: cuaca (BMKG), kemacetan (TomTom), peta kebakaran (NASA), antrean pelabuhan (AISstream), harga pangan (PIHPS), dan laporan media sosial.',
+    '6 agen AI memproses data secara paralel. Setiap agen ahli di satu domain: pemetaan bahaya, optimasi rute, proyeksi ekonomi, dan dukungan keputusan krisis.',
+    'Consensus Gate mengevaluasi skor kepercayaan dari semua agen. Krisis hanya divalidasi ketika skor tertimbang melebihi 85% — mencegah alarm palsu terhadap armada logistik.',
+    'Penutupan Koridor Belawan tervalidasi. Dashboard menampilkan zona bahaya, rute pengalihan aman via cuOpt GPU, dan proyeksi dampak ekonomi terhadap harga komoditas.',
+    'Notifikasi WhatsApp telah dikirim ke operator logistik dengan ringkasan krisis, rute pengalihan NVIDIA cuOpt, dan deep-link kembali ke dashboard PetaNadi.',
   ];
 
   const sources = [
-    { name: 'BMKG', icon: '🌩️', color: 'border-yellow-500/30 text-yellow-400 bg-yellow-950/20' },
-    { name: 'TomTom', icon: '🚗', color: 'border-orange-500/30 text-orange-400 bg-orange-950/20' },
-    { name: 'NASA', icon: '🛰️', color: 'border-red-500/30 text-red-400 bg-red-950/20' },
-    { name: 'AISstream', icon: '⚓', color: 'border-blue-500/30 text-blue-400 bg-blue-950/20' },
-    { name: 'PIHPS', icon: '💰', color: 'border-emerald-500/30 text-emerald-400 bg-emerald-950/20' },
-    { name: 'Social', icon: '📱', color: 'border-purple-500/30 text-purple-400 bg-purple-950/20' },
+    { name: 'BMKG', Icon: CloudLightning, color: 'border-yellow-500/30 text-yellow-400 bg-yellow-950/20' },
+    { name: 'TomTom', Icon: Car, color: 'border-orange-500/30 text-orange-400 bg-orange-950/20' },
+    { name: 'NASA', Icon: Satellite, color: 'border-red-500/30 text-red-400 bg-red-950/20' },
+    { name: 'AISstream', Icon: Anchor, color: 'border-blue-500/30 text-blue-400 bg-blue-950/20' },
+    { name: 'PIHPS', Icon: TrendingUp, color: 'border-emerald-500/30 text-emerald-400 bg-emerald-950/20' },
+    { name: 'Social', Icon: MessageSquare, color: 'border-purple-500/30 text-purple-400 bg-purple-950/20' },
   ];
 
   const agents = [
@@ -113,7 +106,11 @@ export function GuidedDemoPanel({ onCrisisReady, isSidebarOpen = false, onStartD
   const dynamicRightOffset = isSidebarOpen ? 'right-[408px]' : 'right-6';
 
   return (
-    <div className={`fixed bottom-6 ${dynamicRightOffset} z-50 w-96 rounded-2xl border border-slate-800 bg-slate-950/90 backdrop-blur-xl p-5 text-slate-100 shadow-2xl flex flex-col gap-4 animate-in slide-in-from-bottom-4 duration-300 transition-all`}>
+    <div
+      className={`fixed bottom-6 ${dynamicRightOffset} z-50 w-96 rounded-2xl border border-slate-800 bg-slate-950/90 backdrop-blur-xl p-5 text-slate-100 shadow-2xl flex flex-col gap-4 animate-in slide-in-from-bottom-4 duration-300 transition-all pointer-events-auto`}
+      onMouseDown={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+    >
       {/* Header */}
       <div className="flex justify-between items-center border-b border-slate-800/80 pb-3">
         <div className="flex flex-col">
@@ -130,9 +127,9 @@ export function GuidedDemoPanel({ onCrisisReady, isSidebarOpen = false, onStartD
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            reset();
+            onReset();
           }}
-          className="text-slate-400 hover:text-white text-xs transition p-1 hover:bg-slate-900 rounded-md"
+          className="text-slate-400 hover:text-white text-xs transition p-1 hover:bg-slate-900 rounded-md cursor-pointer"
         >
           ✕
         </button>
@@ -171,7 +168,7 @@ export function GuidedDemoPanel({ onCrisisReady, isSidebarOpen = false, onStartD
                 className={`flex items-center gap-1.5 px-2.5 py-2 border rounded-lg text-xs font-semibold select-none ${src.color} animate-fade-in`}
                 style={{ animationDelay: `${i * 150}ms` }}
               >
-                <span>{src.icon}</span>
+                <src.Icon className="w-3.5 h-3.5 shrink-0" />
                 <span>{src.name}</span>
               </div>
             ))}
@@ -229,9 +226,7 @@ export function GuidedDemoPanel({ onCrisisReady, isSidebarOpen = false, onStartD
 
         {stage === 4 && (
           <div className="flex flex-col items-center gap-2 text-center py-2">
-            <div className="w-9 h-9 rounded-full bg-emerald-950/50 border border-emerald-500/40 flex items-center justify-center text-emerald-400 text-lg shadow-lg shadow-emerald-500/10">
-              ✓
-            </div>
+            <CheckCircle2 className="w-9 h-9 text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.5)]" />
             <div className="text-xs font-bold text-slate-200">WhatsApp Alert Delivered</div>
             <div className="text-[10px] text-slate-400 max-w-[240px]">
               Notification dispatched to transport fleet operators on Deli Serdang & Belawan routes.
@@ -249,9 +244,9 @@ export function GuidedDemoPanel({ onCrisisReady, isSidebarOpen = false, onStartD
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                advance();
+                onAdvance();
               }}
-              className="flex-1 py-2 rounded-xl text-xs font-bold bg-cyan-500 text-slate-950 hover:bg-cyan-400 active:scale-98 transition duration-200 shadow-md shadow-cyan-500/20"
+              className="flex-1 py-2 rounded-xl text-xs font-bold bg-cyan-500 text-slate-950 hover:bg-cyan-400 active:scale-98 transition duration-200 shadow-md shadow-cyan-500/20 cursor-pointer"
             >
               ⏭ Next Step
             </button>
@@ -261,11 +256,11 @@ export function GuidedDemoPanel({ onCrisisReady, isSidebarOpen = false, onStartD
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                saveReplay();
+                onStart();
               }}
-              className="flex-1 py-2 rounded-xl text-xs font-bold border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200 active:scale-98 transition duration-200"
+              className="flex-1 py-2 rounded-xl text-xs font-bold bg-cyan-500 text-slate-950 hover:bg-cyan-400 active:scale-95 transition duration-200 shadow-md shadow-cyan-500/20 cursor-pointer"
             >
-              💾 Save Replay
+              ↺ Restart Demo
             </button>
           )}
 
@@ -274,9 +269,9 @@ export function GuidedDemoPanel({ onCrisisReady, isSidebarOpen = false, onStartD
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              toggleAuto();
+              onToggleAuto();
             }}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition duration-200 ${
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition duration-200 cursor-pointer ${
               isAuto
                 ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
                 : 'border border-slate-800 bg-slate-900/60 text-slate-300 hover:bg-slate-800'
@@ -294,7 +289,7 @@ export function GuidedDemoPanel({ onCrisisReady, isSidebarOpen = false, onStartD
               e.stopPropagation();
               setQrVisible((prev) => !prev);
             }}
-            className="hover:text-cyan-400 transition"
+            className="hover:text-cyan-400 transition cursor-pointer"
           >
             {qrVisible ? 'Hide Phone Remote' : '📱 Show Phone Remote'}
           </button>
@@ -303,11 +298,11 @@ export function GuidedDemoPanel({ onCrisisReady, isSidebarOpen = false, onStartD
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              start({ mock_agents: false, offline: false });
+              onStart();
             }}
-            className="hover:text-slate-300 transition"
+            className="hover:text-slate-300 transition cursor-pointer"
           >
-            ↺ Restart Demo
+            ↺ Reset Demo
           </button>
         </div>
       </div>

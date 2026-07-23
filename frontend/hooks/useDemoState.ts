@@ -278,7 +278,7 @@ export function useDemoState(onCrisisReady?: (crisis: CrisisState) => void) {
             return prev;
           }
         });
-      }, 15000); // 15 seconds per stage
+      }, 8000); // 8 seconds per stage — optimal for hackathon live presentation pacing
     } else {
       if (autoIntervalRef.current) {
         clearInterval(autoIntervalRef.current);
