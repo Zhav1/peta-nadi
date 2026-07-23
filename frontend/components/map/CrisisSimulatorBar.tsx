@@ -47,6 +47,7 @@ export interface CrisisSimulatorBarProps {
   setSelectedModality?: (modality: TransportModality) => void;
   onResetNodes?: () => void;
   isSidebarOpen?: boolean;
+  isLeftSidebarCollapsed?: boolean;
 }
 
 export function CrisisSimulatorBar({
@@ -64,6 +65,7 @@ export function CrisisSimulatorBar({
   setSelectedModality,
   onResetNodes,
   isSidebarOpen = false,
+  isLeftSidebarCollapsed = false,
 }: CrisisSimulatorBarProps) {
   const [selectedType, setSelectedType] = useState<CrisisType>('flood');
   const [activePopover, setActivePopover] = useState<'modality' | 'nodes' | 'disruption' | 'radius' | null>(null);
@@ -105,12 +107,20 @@ export function CrisisSimulatorBar({
     setActivePopover((prev) => (prev === popover ? null : popover));
   };
 
+  const isLeftOpen = !isLeftSidebarCollapsed;
+  const isRightOpen = isSidebarOpen;
+  const positionClass = isLeftOpen && isRightOpen
+    ? 'left-[calc(50%-30px)] -translate-x-1/2'
+    : isLeftOpen && !isRightOpen
+    ? 'left-[calc(50%+160px)] -translate-x-1/2'
+    : !isLeftOpen && isRightOpen
+    ? 'left-[calc(50%-190px)] -translate-x-1/2'
+    : 'left-1/2 -translate-x-1/2';
+
   return (
     <div
       ref={containerRef}
-      className={`absolute bottom-20 z-40 flex flex-col items-center gap-2 pointer-events-auto select-none transition-all duration-300 ${
-        isSidebarOpen ? 'left-[calc(50%-192px)] -translate-x-1/2' : 'left-1/2 -translate-x-1/2'
-      }`}
+      className={`absolute bottom-20 z-40 flex flex-col items-center gap-2 pointer-events-auto select-none transition-all duration-300 ${positionClass}`}
     >
       {/* Floating Action Bubble Pills Row */}
       <div className="flex items-center gap-2 px-3 py-2 rounded-full bg-[#080d14]/90 border border-white/10 backdrop-blur-xl shadow-2xl">
