@@ -30,7 +30,12 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(body),
       }),
+    historical: () => request<{ items: Record<string, unknown>[]; total: number }>('/api/v1/incidents/historical/episodes'),
+    predictive: () => request<{ items: Record<string, unknown>[]; total: number }>('/api/v1/incidents/predictive/risks'),
+    osint: () => request<{ items: Record<string, unknown>[]; total: number }>('/api/v1/incidents/osint/feed'),
   },
+
+
   crisis: {
     process: (payload: {
       type: string;

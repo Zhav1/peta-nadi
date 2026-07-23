@@ -14,6 +14,7 @@ import {
   Anchor,
   Flame,
   Activity,
+  Mountain,
   Target,
   PenTool,
   Trash2,
@@ -86,7 +87,9 @@ export function CrisisSimulatorBar({
     { type: 'congestion', label: 'Macet Jalinsum', icon: <Truck className="w-3.5 h-3.5 text-yellow-400" /> },
     { type: 'wildfire', label: 'Titik Panas', icon: <Flame className="w-3.5 h-3.5 text-orange-400" /> },
     { type: 'earthquake', label: 'Gempa Tektonik', icon: <Activity className="w-3.5 h-3.5 text-red-400" /> },
+    { type: 'landslide', label: 'Longsor Berastagi', icon: <Mountain className="w-3.5 h-3.5 text-emerald-400" /> },
   ];
+
 
   const originName = originNodeId ? HUB_NODES[originNodeId]?.name || originNodeId : null;
   const destName = destNodeId ? HUB_NODES[destNodeId]?.name || destNodeId : null;

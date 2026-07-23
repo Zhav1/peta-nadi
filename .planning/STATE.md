@@ -1,8 +1,8 @@
 # STATE — LRIP / PetaNadi Project Memory
 
-**Last Updated:** 2026-07-22
+**Last Updated:** 2026-07-23
 **Active Milestone:** M1 — Hackathon MVP (North Sumatra Corridor)
-**Current Phase:** Phase 18 PLANNED ⏳
+**Current Phase:** Phase 21 COMPLETE ✅
 
 ---
 
@@ -28,7 +28,10 @@
 | 15 | Google Maps-Grade Multi-Alternative AI Routing, On-Map Interactivity & Modality Intelligence | **COMPLETE** ✅ | 3 Mapbox alternative routes, on-map clickable route selection, `(Best)` auto modality tab, traffic congestion colors, dynamic incident-click routing, multi-leg intermodal chain display |
 | 16 | Live API Ingestion, Corridor Context Aggregator & AI CoT Prompt Injection | **COMPLETE** ✅ | BMKG, TomTom, PIHPS multi-source aggregator `get_corridor_context()`, Supabase data_sources sync, AI CoT 3-part prompt engineering, left sidebar live inflation binding, live Mapbox weather & traffic overlay badges |
 | 17 | TomTom Segment Traffic Colors, NVIDIA FourCastNet Regional Weather Coverage & NVIDIA cuOpt Routing Synchronization | **COMPLETE** ✅ | TomTom segment-level flow lines (Google Maps style: red/yellow/green) + live incident markers, BMKG + NVIDIA FourCastNet (Earth-2) spatial weather multi-polygons, NVIDIA cuOpt GPU dynamic cost matrix synchronization |
-| 18 | Map UI/UX Refactoring, Unified Telemetry HUD & Localized Weather Animations | **PLANNED** ⏳ | Redesign traffic/solver stats to Map HUD panel and build localized animated SVG weather badges |
+| 18 | Map UI/UX Refactoring, Unified Telemetry HUD & Localized Weather Animations | **COMPLETE** ✅ | WebGL canvas delay repaint fix, full-bleed GPU transform overlays, pointer event pass-through, contextual spatial node offsets |
+| 19 | Differentiated Multi-Hazard Map Layers, Time Horizon Engine & Lightpanda OSINT Integration | **COMPLETE** ✅ | Flood water inundation, earthquake concentric shockwaves & fault lines, past/present/future/predict time engine, OSINT bridge |
+| 20 | Real District Logistics Boundaries, Non-Colliding Spatial GIS Layout & UI UX Pro Max Refactor | **COMPLETE** ✅ | Real district GeoJSON polygons, interactive boundary hover highlight, HUD repositioning, compact glassmorphic badges |
+| 21 | Full Integration Audit, Organic Hazard Geometries & Live BMKG/OSINT Incident Spatiotemporal Engine | **COMPLETE** ✅ | Algorithmic organic geometries (`incident_geometry_service.py`), BMKG startup poller in `lifespan()`, `GET /osint/live` endpoint, zero hardcoded rectangular boxes |
 
 ---
 
@@ -53,6 +56,10 @@
 | 2026-07-22 | Phase 14 Iteration 2: Forced Waypoint Engine | Mapbox silently ignores waypoints passed as hints; fix by encoding mandatory 3-stop URL (`origin;waypoint;dest`) — Mapbox must route through all three |
 | 2026-07-22 | Phase 14 Iteration 3: Real OSM Road Node Database | Perpendicular math offsets produce coordinates in fields/water; replace with 18 verified OSM arterial intersection nodes scored by detour cost `dist(O→node) + dist(node→D)` |
 | 2026-07-22 | Phase 14 Iteration 4: Segment-Aware Hazard Detection with Danger Buffer | Point-only check misses sparse Mapbox polylines that skip over a hazard; fix with segment closest-point projection + 2 km danger buffer to match visual circle |
+| 2026-07-23 | Phase 18: Map UI/UX Refactoring & Spatial Pass-Through | Full-bleed map canvas + pointer-events-none overlay wrappers + contextual node coordinate offsets prevent element overlap |
+| 2026-07-23 | Phase 19: Time Horizon Engine & Differentiated Hazard Styling | Dynamic API dataset switching per mode (`PAST | PRESENT | FUTURE | PREDICT`) + custom spatiotemporal Mapbox layer paint properties |
+| 2026-07-23 | Phase 20: Operations HUD Repositioning & Glassmorphism 2.0 | Reposition HUD to top-right corner to clear Belawan & Medan Hub nodes; replace multi-line text boxes with Lucide SVG compact badges |
+| 2026-07-23 | Phase 21: Organic GeoJSON Geometry Service & Startup Poller | Replace hardcoded 4 rectangular boxes with `incident_geometry_service.py` mathematical generators; poll BMKG inside FastAPI `lifespan()` |
 
 ---
 

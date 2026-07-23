@@ -1,6 +1,8 @@
 """
 PetaNadi / LRIP — FastAPI Application Entry Point
 """
+import asyncio
+import json
 import logging
 import os
 import sys
@@ -30,6 +32,31 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+async def _poll_bmkg_loop():
+    """Background polling loop for BMKG earthquake and weather warnings."""
+    logger.info("Starting background BMKG poller task...")
+    try:
+        from app.adapters.bmkg_adapter import BMKGAdapter
+        adapter = BMKGAdapter()
+        while True:
+            try:
+                raw = await adapter.fetch()
+                events = await adapter.parse(raw)
+                if events:
+                    r = get_redis()
+                    for ev in events:
+                        r.lpush("lrip:live_events", json.dumps(ev))
+                    r.ltrim("lrip:live_events", 0, 49)  # Retain top 50 recent events
+                    logger.info(f"Ingested {len(events)} live BMKG events into Redis lrip:live_events")
+            except Exception as e:
+                logger.warning(f"BMKG background poll error: {e}")
+            await asyncio.sleep(60)  # Poll every 60 seconds
+    except asyncio.CancelledError:
+        logger.info("BMKG background poller task canceled.")
+    except Exception as e:
+        logger.error(f"Fatal error in BMKG poller loop: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application startup and shutdown lifecycle."""
@@ -42,10 +69,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Redis connection failed: {e} — continuing without Redis")
 
+    # Start background tasks
+    bmkg_task = asyncio.create_task(_poll_bmkg_loop())
+
     yield  # Application runs here
 
     # Shutdown
     logger.info("Shutting down...")
+    bmkg_task.cancel()
     close_redis()
 
 
@@ -76,4 +107,3 @@ app.include_router(routing_router.router, prefix="/api/v1")
 app.include_router(agent_router.router)
 app.include_router(demo_router.router)
 app.include_router(commodity_router.router, prefix="/api/v1")
-
