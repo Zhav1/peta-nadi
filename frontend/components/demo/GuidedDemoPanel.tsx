@@ -7,9 +7,10 @@ import QRCode from 'qrcode';
 interface GuidedDemoPanelProps {
   onCrisisReady: (crisis: CrisisState) => void;
   isSidebarOpen?: boolean;
+  onStartDemo?: () => void;
 }
 
-export function GuidedDemoPanel({ onCrisisReady, isSidebarOpen = false }: GuidedDemoPanelProps) {
+export function GuidedDemoPanel({ onCrisisReady, isSidebarOpen = false, onStartDemo }: GuidedDemoPanelProps) {
   const {
     stage,
     isRunning,
@@ -20,13 +21,16 @@ export function GuidedDemoPanel({ onCrisisReady, isSidebarOpen = false }: Guided
     isAuto,
     start,
     advance,
-    toggleAuto,
     reset,
+    toggleAuto,
     saveReplay,
   } = useDemoState(onCrisisReady);
-
   const [qrVisible, setQrVisible] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  const handleStart = () => {
+    start({ mock_agents: false, offline: false });
+  };
 
   // Generate QR Code when demo starts and has a crisisId
   useEffect(() => {
@@ -51,28 +55,19 @@ export function GuidedDemoPanel({ onCrisisReady, isSidebarOpen = false }: Guided
     }
   }, [isRunning, crisisId, qrVisible]);
 
-  // Auto-advance demo stages every 1.8 seconds when running
-  useEffect(() => {
-    if (!isRunning || !isAuto) return;
-    const timer = setInterval(() => {
-      if (stage < 4) {
-        advance();
-      }
-    }, 1800);
-    return () => clearInterval(timer);
-  }, [isRunning, isAuto, stage, advance]);
-
-  const dynamicRightOffset = isSidebarOpen ? 'right-[408px]' : 'right-6';
-
   if (!isRunning) {
+    if (onStartDemo) return null; // Rendered docked inside bottombar controls
+
+    const dynamicRightOffset = isSidebarOpen ? 'right-[408px]' : 'right-6';
     return (
-      <div className={`fixed bottom-6 ${dynamicRightOffset} z-50 transition-all duration-300`}>
+      <div className={`fixed bottom-6 ${dynamicRightOffset} z-50 transition-all duration-300 hidden`}>
         <button
           type="button"
+          data-demo-trigger="true"
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            start({ mock_agents: false, offline: false });
+            handleStart();
           }}
           className="flex items-center gap-2 px-5 py-2.5 font-bold rounded-full bg-cyan-500 text-slate-950 hover:bg-cyan-400 active:scale-95 transition duration-200 shadow-xl shadow-cyan-500/25 border border-cyan-400/50 cursor-pointer"
         >
@@ -113,8 +108,9 @@ export function GuidedDemoPanel({ onCrisisReady, isSidebarOpen = false }: Guided
     { key: 'PredictionAgent', label: 'Prediction' },
     { key: 'RouteOptimizationAgent', label: 'Route Optimization' },
     { key: 'EconomicIntelligenceAgent', label: 'Economic Intel' },
-    { key: 'DecisionSupportAgent', label: 'Decision Support' },
   ];
+
+  const dynamicRightOffset = isSidebarOpen ? 'right-[408px]' : 'right-6';
 
   return (
     <div className={`fixed bottom-6 ${dynamicRightOffset} z-50 w-96 rounded-2xl border border-slate-800 bg-slate-950/90 backdrop-blur-xl p-5 text-slate-100 shadow-2xl flex flex-col gap-4 animate-in slide-in-from-bottom-4 duration-300 transition-all`}>
