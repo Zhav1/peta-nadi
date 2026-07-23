@@ -7,6 +7,7 @@ import { useIncidents } from '@/hooks/useIncidents';
 import { useCrisisSocket } from '@/hooks/useCrisisSocket';
 import { CrisisSidebar } from '@/components/sidebar/CrisisSidebar';
 import { Toast } from '@/components/ui/Toast';
+import { useDemoState } from '@/hooks/useDemoState';
 import { GuidedDemoPanel } from '@/components/demo/GuidedDemoPanel';
 import AnalyticsSection from '@/components/dashboard/AnalyticsSection';
 import SimulationSection from '@/components/dashboard/SimulationSection';
@@ -540,10 +541,61 @@ export default function DashboardClient() {
     setCurrentMapRoutes(demoRoutes);
     setSelectedCrisis(fullDemoState);
     setSelectedCrisisId(crisis.crisis_id);
-    setIsSidebarOpen(true);
-    setActiveRouteIdx(0);
     setToast({ message: `▶ Live Demo Active: ${crisis.title}`, type: 'success' });
   }, [selectedOriginNode, selectedDestNode, selectedRadius, selectedModality]);
+
+  // Phase 23: Lifted Demo Engine State & Stage-Wired Effects
+  const demoState = useDemoState(handleCrisisReadyFromDemo);
+
+  useEffect(() => {
+    if (!demoState.isRunning) return;
+
+    switch (demoState.stage) {
+      case 0: {
+        // Stage 0: Baseline Data Ingestion — clean map, normal Belawan-Medan route
+        setSimulatedShockwave(null);
+        setSelectedCrisis(null);
+        setIsSidebarOpen(false);
+        setSelectedOriginNode('belawan');
+        setSelectedDestNode('medan');
+        break;
+      }
+
+      case 1: {
+        // Stage 1: Agent Swarm Analyzing — baseline Belawan-Siantar route active
+        setSelectedOriginNode('belawan');
+        setSelectedDestNode('siantar');
+        break;
+      }
+
+      case 2: {
+        // Stage 2: Consensus Gate — inject hazard flood shockwave at Lubuk Pakam
+        setSimulatedShockwave({
+          center: [98.87, 3.56], // Lubuk Pakam flood corridor
+          radiusKm: 15,
+          hazardType: 'flood',
+        });
+        break;
+      }
+
+      case 3: {
+        // Stage 3: Validated Crisis — handleCrisisReadyFromDemo auto-called by useDemoState
+        setIsSidebarOpen(true);
+        setActiveTab('Evidence');
+        break;
+      }
+
+      case 4: {
+        // Stage 4: Dispatch Complete
+        setActiveTab('Mitigation');
+        setToast({
+          message: '✅ WhatsApp Alert Delivered — Armada Berhasil Dialihkan ke Rute Aman',
+          type: 'success',
+        });
+        break;
+      }
+    }
+  }, [demoState.stage, demoState.isRunning]);
 
   // ---------------------------------------------------------------------------
   // PURE AGENTIC AI SPATIAL CLEARANCE PIPELINE ENGINE (0% Hardcode!)
@@ -975,7 +1027,17 @@ export default function DashboardClient() {
 
             {/* Guided Presentation Demo Panel */}
             <GuidedDemoPanel
-              onCrisisReady={handleCrisisReadyFromDemo}
+              stage={demoState.stage}
+              isRunning={demoState.isRunning}
+              isReplay={demoState.isReplay}
+              crisisId={demoState.crisisId}
+              confidence={demoState.confidence}
+              summary={demoState.summary}
+              isAuto={demoState.isAuto}
+              onStart={() => demoState.start({ mock_agents: false, offline: false })}
+              onAdvance={demoState.advance}
+              onToggleAuto={demoState.toggleAuto}
+              onReset={demoState.reset}
               isSidebarOpen={isSidebarOpen && !!selectedCrisis}
             />
 
@@ -1009,12 +1071,7 @@ export default function DashboardClient() {
               <div className="w-[1px] h-5 bg-white/15 mx-1" />
               <button
                 type="button"
-                onClick={() => {
-                  const demoBtn = document.querySelector('button[data-demo-trigger="true"]') as HTMLButtonElement | null;
-                  if (demoBtn) {
-                    demoBtn.click();
-                  }
-                }}
+                onClick={() => demoState.start({ mock_agents: false, offline: false })}
                 className="flex items-center gap-1.5 px-3 py-1.5 font-bold rounded-xl bg-cyan-500 text-slate-950 hover:bg-cyan-400 active:scale-95 transition duration-200 shadow-lg shadow-cyan-500/25 border border-cyan-400/50 cursor-pointer text-xs uppercase tracking-wider"
               >
                 <span className="animate-pulse">▶</span> Run Demo
