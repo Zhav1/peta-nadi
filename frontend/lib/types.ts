@@ -1,7 +1,8 @@
 // Mirror of agents/state.py TypedDicts — keep in sync with backend
 
 export type Severity = 'low' | 'medium' | 'high' | 'critical';
-export type CrisisType = 'flood' | 'port_closure' | 'wildfire' | 'congestion' | 'earthquake';
+export type CrisisType = 'flood' | 'port_closure' | 'wildfire' | 'congestion' | 'earthquake' | 'landslide';
+
 export type CrisisStatus = 'detecting' | 'validating' | 'validated' | 'resolved';
 
 export interface AgentFinding {

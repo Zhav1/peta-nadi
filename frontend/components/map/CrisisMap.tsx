@@ -39,7 +39,12 @@ export interface CrisisMapProps {
   spatialWeatherPolygons?: GeoJSON.FeatureCollection | null;
   cuOptOptimizationInfo?: { solver: string; compute_time_ms: number; savings_pct: number } | null;
   isLeftSidebarCollapsed?: boolean;
+  activeTimeFilter?: 'past' | 'present' | 'future' | 'predict';
+  historicalEpisodes?: Record<string, unknown>[];
+  predictiveRisks?: Record<string, unknown>[];
 }
+
+
 
 // North Sumatra — Belawan Port area
 const INITIAL_CENTER: [number, number] = [98.67, 3.55];
@@ -97,13 +102,26 @@ export default function CrisisMap({
   spatialWeatherPolygons,
   cuOptOptimizationInfo,
   isLeftSidebarCollapsed = false,
+
+  activeTimeFilter = 'present',
+  historicalEpisodes = [],
+  predictiveRisks = [],
 }: CrisisMapProps) {
+
   const containerRef = useRef<HTMLDivElement>(null);
+  void isLeftSidebarCollapsed;
+  void corridorContext;
+  void cuOptOptimizationInfo;
+
+
+
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const drawRef = useRef<InstanceType<typeof MapboxDraw> | null>(null);
   const htmlMarkersRef = useRef<mapboxgl.Marker[]>([]);
   const routeEtaMarkersRef = useRef<mapboxgl.Marker[]>([]);
   const corridorMarkersRef = useRef<mapboxgl.Marker[]>([]);
+  const timeHorizonMarkersRef = useRef<mapboxgl.Marker[]>([]);
+
 
   const isMapLoadedRef = useRef(false);
   const onCrisisClickRef = useRef(onCrisisClick);
@@ -200,7 +218,7 @@ export default function CrisisMap({
         type: 'fill',
         source: 'weather-polygons-source',
         paint: {
-          'fill-color': ['coalesce', ['get', 'fill_color'], 'rgba(6, 182, 212, 0.25)'],
+          'fill-color': ['coalesce', ['get', 'fill_color'], 'rgba(6, 182, 212, 0.12)'],
           'fill-opacity': 0.85,
         },
       });
@@ -214,7 +232,45 @@ export default function CrisisMap({
           'line-dasharray': [2, 2],
         },
       });
-      // 1. Disaster Zones GeoJSON Layer
+
+      // Interactive Hover Popup for District Logistics Boundaries
+      const districtPopup = new mapboxgl.Popup({
+        closeButton: false,
+        closeOnClick: false,
+        className: 'district-hover-popup',
+      });
+
+      map.on('mouseenter', 'weather-polygons-fill', (e) => {
+        if (mapRef.current) mapRef.current.getCanvas().style.cursor = 'pointer';
+        if (e.features && e.features[0]) {
+          const props = e.features[0].properties;
+          if (props) {
+            districtPopup.setLngLat(e.lngLat).setHTML(`
+              <div style="background: rgba(12, 14, 18, 0.95); border: 1px solid rgba(0, 240, 255, 0.4); border-radius: 12px; padding: 10px 12px; color: #f8fafc; font-family: monospace; font-size: 11px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+                <div style="font-weight: 900; color: #00f0ff; margin-bottom: 6px; display: flex; items-center; gap: 6px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 4px;">
+                  <span>📍</span> <span>${props.name}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; gap: 12px; margin-bottom: 2px;">
+                  <span style="color: #94a3b8;">Curah Hujan:</span>
+                  <span style="font-weight: bold; color: #ffffff;">${props.rainfall_mm} mm/j</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; gap: 12px; margin-bottom: 4px;">
+                  <span style="color: #94a3b8;">Risiko Genangan:</span>
+                  <span style="font-weight: bold; color: #f59e0b;">${props.flood_risk_pct}%</span>
+                </div>
+                <div style="font-size: 9px; color: #06b6d4; font-style: italic;">${props.status_label}</div>
+              </div>
+            `).addTo(map);
+          }
+        }
+      });
+
+      map.on('mouseleave', 'weather-polygons-fill', () => {
+        if (mapRef.current) mapRef.current.getCanvas().style.cursor = '';
+        districtPopup.remove();
+      });
+
+      // 1. Disaster Zones GeoJSON Layer (Multi-Hazard Dynamic Styling)
       map.addSource('disaster-zones-source', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
@@ -224,8 +280,16 @@ export default function CrisisMap({
         type: 'fill',
         source: 'disaster-zones-source',
         paint: {
-          'fill-color': '#f97316',
-          'fill-opacity': 0.25,
+          'fill-color': [
+            'match', ['get', 'type'],
+            'flood', 'rgba(6, 182, 212, 0.35)',
+            'earthquake', 'rgba(244, 63, 94, 0.35)',
+            'landslide', 'rgba(217, 119, 6, 0.35)',
+            'wildfire', 'rgba(249, 115, 22, 0.35)',
+            'congestion', 'rgba(234, 179, 8, 0.30)',
+            'rgba(249, 115, 22, 0.25)'
+          ],
+          'fill-opacity': 0.85,
         },
       });
       map.addLayer({
@@ -233,10 +297,70 @@ export default function CrisisMap({
         type: 'line',
         source: 'disaster-zones-source',
         paint: {
-          'line-color': '#f97316',
+          'line-color': [
+            'match', ['get', 'type'],
+            'flood', '#06b6d4',
+            'earthquake', '#f43f5e',
+            'landslide', '#d97706',
+            'wildfire', '#f97316',
+            'congestion', '#eab308',
+            '#f97316'
+          ],
           'line-width': 2.5,
+          'line-dasharray': ['case', ['==', ['get', 'type'], 'earthquake'], ['literal', [2, 2]], ['literal', [1, 0]]],
         },
       });
+
+      // 1b. Historical Episodes Layer (PAST Mode)
+      map.addSource('historical-episodes-source', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+      map.addLayer({
+        id: 'historical-episodes-fill',
+        type: 'fill',
+        source: 'historical-episodes-source',
+        paint: {
+          'fill-color': 'rgba(168, 85, 247, 0.25)',
+          'fill-opacity': 0.80,
+        },
+      });
+      map.addLayer({
+        id: 'historical-episodes-outline',
+        type: 'line',
+        source: 'historical-episodes-source',
+        paint: {
+          'line-color': '#a855f7',
+          'line-width': 2.5,
+          'line-dasharray': [4, 2],
+        },
+      });
+
+      // 1c. 24-48h TFT Predictive Risks Layer (FUTURE Mode)
+      map.addSource('predictive-risks-source', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+      map.addLayer({
+        id: 'predictive-risks-fill',
+        type: 'fill',
+        source: 'predictive-risks-source',
+        paint: {
+          'fill-color': 'rgba(234, 179, 8, 0.28)',
+          'fill-opacity': 0.80,
+        },
+      });
+      map.addLayer({
+        id: 'predictive-risks-outline',
+        type: 'line',
+        source: 'predictive-risks-source',
+        paint: {
+          'line-color': '#eab308',
+          'line-width': 2.5,
+          'line-dasharray': [2, 2],
+        },
+      });
+
 
       // 2. Route Paths GeoJSON Layer (Real Mapbox Directions Driving Polyline with Alternatives & Congestion Colors)
       map.addSource('route-paths-source', {
@@ -559,6 +683,58 @@ export default function CrisisMap({
     }
   };
 
+  // Render Dynamic HTML Badges for Time Horizon Modes (PAST Episodes & FUTURE Predictions)
+  const renderTimeHorizonMarkers = () => {
+    const map = mapRef.current;
+    if (!map || !isMapLoadedRef.current) return;
+
+    timeHorizonMarkersRef.current.forEach((m) => m.remove());
+    timeHorizonMarkersRef.current = [];
+
+    if (activeTimeFilter === 'past' && historicalEpisodes && historicalEpisodes.length > 0) {
+      historicalEpisodes.forEach((epItem) => {
+        const ep = epItem as Record<string, unknown>;
+        const lon = typeof ep.lon === 'number' ? ep.lon : null;
+        const lat = typeof ep.lat === 'number' ? ep.lat : null;
+        if (lon == null || lat == null) return;
+        const el = document.createElement('div');
+        el.className = 'cursor-pointer z-30 transition-all transform hover:scale-105 flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-mono font-bold shadow-2xl border backdrop-blur-xl bg-[#0c0e12]/90 text-purple-200 border-purple-500/50 ring-2 ring-purple-500/20';
+        el.style.zIndex = '30';
+        el.innerHTML = `
+          <svg class="w-3.5 h-3.5 text-purple-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6 6h10"/><path d="M6 10h10"/></svg>
+          <span class="truncate max-w-[150px]">${String(ep.title || 'Historical Episode')}</span>
+          ${ep.price_lag_impact ? `<span class="px-2 py-0.5 bg-purple-500/80 text-white rounded-full text-[10px] font-bold">${String(ep.price_lag_impact)}</span>` : ''}
+        `;
+        const marker = new mapboxgl.Marker({ element: el, anchor: 'center' })
+          .setLngLat([lon, lat])
+          .addTo(map);
+        timeHorizonMarkersRef.current.push(marker);
+      });
+    } else if (activeTimeFilter === 'future' && predictiveRisks && predictiveRisks.length > 0) {
+      predictiveRisks.forEach((prItem) => {
+        const pr = prItem as Record<string, unknown>;
+        const lon = typeof pr.lon === 'number' ? pr.lon : null;
+        const lat = typeof pr.lat === 'number' ? pr.lat : null;
+        if (lon == null || lat == null) return;
+        const el = document.createElement('div');
+        el.className = 'cursor-pointer z-30 transition-all transform hover:scale-105 flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-mono font-bold shadow-2xl border backdrop-blur-xl bg-[#0c0e12]/90 text-amber-200 border-amber-500/50 ring-2 ring-amber-500/20';
+        el.style.zIndex = '30';
+        el.innerHTML = `
+          <svg class="w-3.5 h-3.5 text-amber-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span class="truncate max-w-[150px]">${String(pr.title || 'TFT Risk Forecast')}</span>
+          <span class="px-2 py-0.5 bg-amber-500/80 text-slate-950 rounded-full text-[10px] font-bold">Risk ${String(pr.risk_score || 85)}%</span>
+        `;
+        const marker = new mapboxgl.Marker({ element: el, anchor: 'center' })
+          .setLngLat([lon, lat])
+          .addTo(map);
+        timeHorizonMarkersRef.current.push(marker);
+      });
+    }
+
+
+  };
+
+
   // Update native GeoJSON map sources
   const updateMapSources = () => {
     const map = mapRef.current;
@@ -583,78 +759,28 @@ export default function CrisisMap({
       });
     }
 
-    // 0. Update Spatial Weather Polygons Source
+    // 0. Update Spatial Weather Polygons Source (Only populates if organic radar data exists; 0 artificial boxes!)
     const weatherSource = map.getSource('weather-polygons-source') as mapboxgl.GeoJSONSource;
     if (weatherSource) {
-      if (spatialWeatherPolygons && spatialWeatherPolygons.features && spatialWeatherPolygons.features.length > 0) {
-        weatherSource.setData(spatialWeatherPolygons);
+      if (activeTimeFilter === 'past' || activeTimeFilter === 'future') {
+        if (map.getLayer('weather-polygons-fill')) {
+          map.setLayoutProperty('weather-polygons-fill', 'visibility', 'none');
+          map.setLayoutProperty('weather-polygons-outline', 'visibility', 'none');
+        }
       } else {
-        const defaultRegions = [
-          {
-            region_id: 'medan_belawan_coastal',
-            name: 'Belawan Coastal',
-            center: [98.68, 3.75] as [number, number],
-            rainfall_mm: 68.5,
-            flood_risk_pct: 87.5,
-            severity: 'critical',
-            status_label: 'CUACA EKSTREM & RISIKO BANJIR TINGGI',
-          },
-          {
-            region_id: 'deli_serdang_central',
-            name: 'Deli Serdang & KNO',
-            center: [98.85, 3.60] as [number, number],
-            rainfall_mm: 45.0,
-            flood_risk_pct: 52.0,
-            severity: 'high',
-            status_label: 'Hujan Lebat / Risiko Moderat',
-          },
-          {
-            region_id: 'binjai_west',
-            name: 'Binjai & Langkat',
-            center: [98.52, 3.60] as [number, number],
-            rainfall_mm: 22.0,
-            flood_risk_pct: 25.0,
-            severity: 'low',
-            status_label: 'Hujan Ringan',
-          },
-          {
-            region_id: 'tebing_tinggi_east',
-            name: 'Tebing Tinggi / Sergai',
-            center: [99.12, 3.42] as [number, number],
-            rainfall_mm: 58.0,
-            flood_risk_pct: 74.0,
-            severity: 'high',
-            status_label: 'Hujan Lebat / Risiko Moderat',
-          }
-        ];
-
-        const features = defaultRegions.map((r) => {
-          const ring = createGeoJsonCircleRing(r.center, 8); // 8km spatial region
-          return {
-            type: 'Feature' as const,
-            geometry: {
-              type: 'Polygon' as const,
-              coordinates: [ring]
-            },
-            properties: {
-              region_id: r.region_id,
-              name: r.name,
-              rainfall_mm: r.rainfall_mm,
-              flood_risk_pct: r.flood_risk_pct,
-              severity: r.severity,
-              status_label: r.status_label,
-              fill_color: r.severity === 'critical' ? 'rgba(239, 68, 68, 0.18)' : r.severity === 'high' ? 'rgba(245, 158, 11, 0.14)' : 'rgba(6, 182, 212, 0.10)',
-              stroke_color: r.severity === 'critical' ? '#ef4444' : r.severity === 'high' ? '#f59e0b' : '#06b6d4'
-            }
-          };
-        });
-
-        weatherSource.setData({
-          type: 'FeatureCollection',
-          features
-        });
+        if (map.getLayer('weather-polygons-fill')) {
+          map.setLayoutProperty('weather-polygons-fill', 'visibility', 'visible');
+          map.setLayoutProperty('weather-polygons-outline', 'visibility', 'visible');
+        }
+        if (spatialWeatherPolygons && spatialWeatherPolygons.features && spatialWeatherPolygons.features.length > 0) {
+          weatherSource.setData(spatialWeatherPolygons);
+        } else {
+          // Zero artificial boxes! Clean dark Mapbox canvas
+          weatherSource.setData({ type: 'FeatureCollection', features: [] });
+        }
       }
     }
+
 
     // 2. Update Route Paths Source (Using Exact Mapbox Directions Road Network Coordinates & Alternatives)
     const routesSource = map.getSource('route-paths-source') as mapboxgl.GeoJSONSource;
@@ -722,6 +848,58 @@ export default function CrisisMap({
       });
     }
 
+    // 3b. Update Historical Episodes Source (PAST Mode)
+    const historicalSource = map.getSource('historical-episodes-source') as mapboxgl.GeoJSONSource;
+    if (historicalSource) {
+      if (activeTimeFilter === 'past' && historicalEpisodes.length > 0) {
+        const histFeatures: GeoJSON.Feature[] = [];
+        historicalEpisodes.forEach((ep) => {
+          const geom = ep.geojson_geometry as unknown as GeoJSON.FeatureCollection | GeoJSON.Feature;
+          if (!geom) return;
+          if (geom.type === 'FeatureCollection') {
+            if (Array.isArray(geom.features)) {
+              histFeatures.push(...geom.features);
+            }
+          } else if (geom.type === 'Feature') {
+            histFeatures.push(geom);
+          }
+        });
+        historicalSource.setData({
+          type: 'FeatureCollection',
+          features: histFeatures,
+        });
+      } else {
+        historicalSource.setData({ type: 'FeatureCollection', features: [] });
+      }
+    }
+
+    // 3c. Update 24-48h TFT Predictive Risks Source (FUTURE Mode)
+    const predictiveSource = map.getSource('predictive-risks-source') as mapboxgl.GeoJSONSource;
+    if (predictiveSource) {
+      if (activeTimeFilter === 'future' && predictiveRisks.length > 0) {
+        const predFeatures: GeoJSON.Feature[] = [];
+        predictiveRisks.forEach((pr) => {
+          const geom = pr.geojson_geometry as unknown as GeoJSON.FeatureCollection | GeoJSON.Feature;
+          if (!geom) return;
+          if (geom.type === 'FeatureCollection') {
+            if (Array.isArray(geom.features)) {
+              predFeatures.push(...geom.features);
+            }
+          } else if (geom.type === 'Feature') {
+            predFeatures.push(geom);
+          }
+        });
+        predictiveSource.setData({
+          type: 'FeatureCollection',
+          features: predFeatures,
+        });
+      } else {
+        predictiveSource.setData({ type: 'FeatureCollection', features: [] });
+      }
+    }
+
+
+
     // 4. Update Simulated Shockwave Pulse Source & Seismic Fault Line Cracks
     const shockwaveSource = map.getSource('simulated-shockwave-source') as mapboxgl.GeoJSONSource;
     const faultSource = map.getSource('seismic-fault-lines-source') as mapboxgl.GeoJSONSource;
@@ -788,6 +966,7 @@ export default function CrisisMap({
   useEffect(() => {
     updateMapSources();
     renderHtmlHubMarkers();
+    renderTimeHorizonMarkers();
   }, [
     incidents,
     selectedCrisisId,
@@ -800,7 +979,11 @@ export default function CrisisMap({
     selectedOriginNode,
     selectedDestNode,
     hubNodesList,
+    activeTimeFilter,
+    historicalEpisodes,
+    predictiveRisks,
   ]);
+
 
   // Toggle MapboxDraw mode, dragPan, & canvas cursor
   useEffect(() => {
@@ -1022,72 +1205,7 @@ export default function CrisisMap({
         </div>
       )}
 
-      {/* Operations Telemetry HUD Overlay Panel */}
-      <div className={`absolute top-4 ${isLeftSidebarCollapsed ? 'left-4' : 'left-[336px]'} z-[350] p-4 rounded-2xl bg-slate-950/80 border border-white/10 backdrop-blur-xl shadow-2xl flex flex-col gap-3 min-w-[280px] pointer-events-auto select-none transition-all duration-300`} style={{ boxShadow: '0 12px 40px 0 rgba(0, 0, 0, 0.5)' }}>
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-white/10 pb-2">
-          <span className="text-[10px] font-mono text-cyan-400 font-bold uppercase tracking-[0.15em]">Operations HUD</span>
-          <span className="px-1.5 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/30 text-[9px] font-mono text-cyan-300 font-bold animate-pulse">LIVE DATA</span>
-        </div>
-
-        {/* 1. NVIDIA cuOpt Solver Details */}
-        <div className="flex flex-col gap-1">
-          <div className="flex justify-between items-center text-[10px] font-mono text-slate-400">
-            <span>⚡ SOLVER ENGINE</span>
-            <span className="text-emerald-400 font-bold text-[10px]">NVIDIA cuOpt</span>
-          </div>
-          <div className="flex justify-between items-center text-xs font-mono text-white">
-            <span>Compute Speed:</span>
-            <span className="font-bold">{cuOptOptimizationInfo?.compute_time_ms ?? 3.2}ms</span>
-          </div>
-          <div className="flex justify-between items-center text-xs font-mono text-white">
-            <span>Cost Savings:</span>
-            <span className="text-emerald-300 font-bold">-{cuOptOptimizationInfo?.savings_pct ?? 18.5}%</span>
-          </div>
-        </div>
-
-        <div className="border-t border-white/5"></div>
-
-        {/* 2. TomTom live traffic data */}
-        <div className="flex flex-col gap-1">
-          <div className="flex justify-between items-center text-[10px] font-mono text-slate-400">
-            <span>🚗 TRAFFIC METRICS</span>
-            <span className="text-amber-400 font-bold text-[10px]">TomTom Feed</span>
-          </div>
-          <div className="flex justify-between items-center text-xs font-mono text-white">
-            <span>Congestion:</span>
-            <span className="font-bold">{corridorContext?.traffic.congestion_level_pct ?? 34}%</span>
-          </div>
-          <div className="flex justify-between items-center text-xs font-mono text-white">
-            <span>Delay:</span>
-            <span className="font-bold text-amber-300">+{corridorContext?.traffic.delay_minutes ?? 8} min</span>
-          </div>
-          {/* Traffic segment legend */}
-          <div className="flex items-center gap-3 mt-1.5 text-[9px] font-mono text-slate-400">
-            <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Clear</span>
-            <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-yellow-500"></span>Mod</span>
-            <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>Heavy</span>
-          </div>
-        </div>
-
-        <div className="border-t border-white/5"></div>
-
-        {/* 3. Weather inputs / Radar */}
-        <div className="flex flex-col gap-1">
-          <div className="flex justify-between items-center text-[10px] font-mono text-slate-400">
-            <span>🌧️ METEOROLOGICAL RADAR</span>
-            <span className="text-cyan-400 font-bold text-[10px]">FourCastNet</span>
-          </div>
-          <div className="flex justify-between items-center text-xs font-mono text-white">
-            <span>Weather Status:</span>
-            <span className="font-bold text-cyan-300 text-right">{corridorContext?.weather.status ?? 'Hujan Sedang'}</span>
-          </div>
-          <div className="flex justify-between items-center text-xs font-mono text-white">
-            <span>Rainfall Rate:</span>
-            <span className="font-bold">{corridorContext?.weather.rainfall_mm ?? 42}mm</span>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
+

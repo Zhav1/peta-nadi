@@ -23,6 +23,125 @@ import type { CrisisState, WsEvent, CrisisType, Severity, RouteRecommendation } 
 // Dynamic import for map to avoid SSR issues
 const CrisisMap = dynamic(() => import('@/components/map/CrisisMap'), { ssr: false });
 
+const FALLBACK_HISTORICAL = [
+  {
+    incident_id: "hist-gempa-pasaman-2022",
+    title: "Gempa Tektonik Sesar Sumatra (M6.2 Pasaman)",
+    type: "earthquake",
+    status: "historical",
+    severity: "critical",
+    lat: 3.48,
+    lon: 98.78,
+    impact_summary: "Retakan sesar tanah dan guncangan M6.2 melumpuhkan koridor antarprovinsi Sumatra. Terjadi keterlambatan distribusi 18 jam.",
+    price_lag_impact: "Harga cabai & bawang merah naik +18.4% 3 hari pasca gempa.",
+    geojson_geometry: {
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          geometry: {
+            type: "MultiPolygon",
+            coordinates: [
+              [[[98.78, 3.82], [98.92, 3.75], [99.01, 3.60], [99.04, 3.48], [98.98, 3.32], [98.86, 3.20], [98.72, 3.16], [98.59, 3.22], [98.53, 3.38], [98.54, 3.56], [98.64, 3.74], [98.78, 3.82]]],
+              [[[98.78, 3.70], [98.88, 3.65], [98.94, 3.54], [98.96, 3.48], [98.92, 3.37], [98.84, 3.28], [98.74, 3.26], [98.65, 3.30], [98.60, 3.41], [98.61, 3.53], [98.68, 3.66], [98.78, 3.70]]]
+            ]
+          },
+          properties: { hazard_type: "earthquake", magnitude: 6.2, severity_label: "M6.2 CRITICAL SHOCKWAVE ZONE" }
+        },
+        {
+          type: "Feature",
+          geometry: {
+            type: "MultiLineString",
+            coordinates: [
+              [[98.61, 3.78], [98.70, 3.63], [98.78, 3.48], [98.86, 3.33], [98.95, 3.18]]
+            ]
+          },
+          properties: { hazard_type: "earthquake_crack", strike_deg: 150, severity_label: "TECTONIC FAULT CRACK VECTOR" }
+        }
+      ]
+    }
+  },
+  {
+    incident_id: "hist-banjir-pantura-2024",
+    title: "Banjir Luapan Laut Koridor Belawan 2024",
+    type: "flood",
+    status: "historical",
+    severity: "high",
+    lat: 3.78,
+    lon: 98.67,
+    impact_summary: "Genangan air setinggi 1.6m melumpuhkan akses Pelabuhan Belawan dan Tol Belmera. 450+ truk logistik tertahan 24 jam.",
+    price_lag_impact: "Lonjakan harga bawang merah nasional hingga +55% akibat disrupsi distribusi utama.",
+    geojson_geometry: {
+      type: "Feature",
+      geometry: {
+        type: "Polygon",
+        coordinates: [[[98.66, 3.86], [98.73, 3.84], [98.76, 3.79], [98.74, 3.73], [98.70, 3.71], [98.65, 3.72], [98.60, 3.76], [98.61, 3.82], [98.66, 3.86]]]
+      },
+      properties: { hazard_type: "flood", water_depth: "1.6m", severity_label: "RIVER-VALLEY FLOOD INUNDATION" }
+    }
+  },
+  {
+    incident_id: "hist-longsor-berastagi-2023",
+    title: "Longsor Mountain Slope Jalinsum 2023",
+    type: "landslide",
+    status: "historical",
+    severity: "high",
+    lat: 3.32,
+    lon: 98.50,
+    impact_summary: "Runtuhan material batu dan lumpur di lereng Jalinsum Medan-Berastagi memutus pasokan pasokan sayur & komoditas basah.",
+    price_lag_impact: "Kenaikan harga sayuran komoditas basah +22% di kota Medan.",
+    geojson_geometry: {
+      type: "Feature",
+      geometry: {
+        type: "Polygon",
+        coordinates: [[[98.48, 3.36], [98.52, 3.36], [98.57, 3.29], [98.54, 3.26], [98.47, 3.28], [98.48, 3.36]]]
+      },
+      properties: { hazard_type: "landslide", severity_label: "DOWNSLOPE DEBRIS FLOW FAN" }
+    }
+  }
+];
+
+const FALLBACK_PREDICTIVE = [
+  {
+    risk_id: "pred-rob-belawan-48h",
+    title: "Proyeksi Genangan Rob 48j (Belawan)",
+    type: "flood",
+    risk_score: 88,
+    lat: 3.76,
+    lon: 98.68,
+    forecast_window: "48h TFT Model",
+    recommendation: "Alihkan rute kontainer via Jalan Lintas Barat Kualanamu sebelum air pasang jam 16:00.",
+    geojson_geometry: {
+      type: "Feature",
+      geometry: {
+        type: "Polygon",
+        coordinates: [[[98.66, 3.82], [98.73, 3.81], [98.75, 3.75], [98.71, 3.71], [98.65, 3.73], [98.66, 3.82]]]
+      },
+      properties: { hazard_type: "flood", risk_score: 88, severity_label: "TFT 48H ROB FLOOD" }
+    }
+  },
+  {
+    risk_id: "pred-bottleneck-tebingtinggi-24h",
+    title: "Potensi Bottleneck Tol Tebing Tinggi 24j",
+    type: "congestion",
+    risk_score: 72,
+    lat: 3.33,
+    lon: 99.16,
+    forecast_window: "24h Traffic Network Model",
+    recommendation: "Peringatan penumpukan armada truk >2.5km di gerbang tol Interchange Tebing Tinggi.",
+    geojson_geometry: {
+      type: "Feature",
+      geometry: {
+        type: "Polygon",
+        coordinates: [[[99.11, 3.37], [99.20, 3.36], [99.22, 3.30], [99.15, 3.28], [99.10, 3.32], [99.11, 3.37]]]
+      },
+      properties: { hazard_type: "congestion", risk_score: 72, severity_label: "TFT 24H BOTTLENECK" }
+    }
+  }
+];
+
+
+
 export default function DashboardClient() {
   const { incidents, refetch } = useIncidents();
   const [selectedCrisisId, setSelectedCrisisId] = useState<string | null>(null);
@@ -60,6 +179,45 @@ export default function DashboardClient() {
     savings_pct: 18.5,
   });
 
+  // Time Horizon State Datasets (PAST / PRESENT / FUTURE / PREDICT)
+  const [historicalEpisodes, setHistoricalEpisodes] = useState<Record<string, unknown>[]>([]);
+  const [predictiveRisks, setPredictiveRisks] = useState<Record<string, unknown>[]>([]);
+
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadTimeHorizonData() {
+      if (activeTimeFilter === 'past') {
+        try {
+          const res = await api.incidents.historical();
+          if (isMounted && res.items && res.items.length > 0) {
+            setHistoricalEpisodes(res.items);
+            return;
+          }
+        } catch (e) {
+          console.warn('Backend historical data fallback to local fixture:', e);
+        }
+        if (isMounted) setHistoricalEpisodes(FALLBACK_HISTORICAL);
+      } else if (activeTimeFilter === 'future') {
+        try {
+          const res = await api.incidents.predictive();
+          if (isMounted && res.items && res.items.length > 0) {
+            setPredictiveRisks(res.items);
+            return;
+          }
+        } catch (e) {
+          console.warn('Backend predictive data fallback to local fixture:', e);
+        }
+        if (isMounted) setPredictiveRisks(FALLBACK_PREDICTIVE);
+      }
+    }
+    loadTimeHorizonData();
+    return () => {
+      isMounted = false;
+    };
+  }, [activeTimeFilter]);
+
+
   useEffect(() => {
     let isMounted = true;
     async function loadCorridorContext() {
@@ -90,8 +248,43 @@ export default function DashboardClient() {
     };
   }, []);
 
+
   // Dynamic Reactive Metrics for Left Tactical Sidebar
   const dynamicMetrics = useMemo(() => {
+    if (activeTimeFilter === 'past') {
+      return {
+        healthScore: 58,
+        healthStatus: 'HISTORICAL EPISODES',
+        healthColor: 'text-purple-400',
+        strokeColor: 'text-purple-400',
+        logisticsGdp: '18.4%',
+        gdpStatus: 'LTM Vector Match',
+        gdpColor: 'text-purple-400',
+        foodInflation: '+18.4%',
+        inflationStatus: '📜 HISTORICAL SPIKE (2022-2024)',
+        inflationColor: 'text-purple-400',
+        activeShocks: '3 EPISODES',
+        shocksColor: 'text-purple-400',
+      };
+    }
+
+    if (activeTimeFilter === 'future') {
+      return {
+        healthScore: 78,
+        healthStatus: '24-48H PROJECTION',
+        healthColor: 'text-amber-400',
+        strokeColor: 'text-amber-400',
+        logisticsGdp: '15.6%',
+        gdpStatus: 'TFT Forecast',
+        gdpColor: 'text-amber-400',
+        foodInflation: '+8.5%',
+        inflationStatus: '🔮 FORECAST WARNING',
+        inflationColor: 'text-amber-400',
+        activeShocks: '2 PROJECTIONS',
+        shocksColor: 'text-amber-400',
+      };
+    }
+
     const hasActiveCrisis = !!simulatedShockwave || disasterZones.length > 0 || selectedCrisisId === 'simulated-active' || (selectedCrisis && selectedCrisis.status !== 'resolved');
 
     const foodInflationVal = corridorContext?.commodity_prices ? `${corridorContext.commodity_prices.inflation_trend_pct}%` : (hasActiveCrisis ? '12.8%' : '7.14%');
@@ -128,7 +321,8 @@ export default function DashboardClient() {
       activeShocks: '0 ACTIVE',
       shocksColor: 'text-emerald-400',
     };
-  }, [simulatedShockwave, disasterZones, selectedCrisisId, selectedCrisis, corridorContext]);
+  }, [activeTimeFilter, simulatedShockwave, disasterZones, selectedCrisisId, selectedCrisis, corridorContext]);
+
 
   // Fetch multi-alternative Mapbox driving & hazard detour routes when node selection or modality changes
   const updateBaselineMapboxRoute = useCallback(async (originId: string, destId: string, modality: TransportModality, hazardCenter: [number, number] | null = null, radiusKm: number = 15) => {
@@ -539,16 +733,37 @@ export default function DashboardClient() {
           </nav>
         </div>
 
-        <div className="flex items-center gap-4 text-xs font-mono">
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-950/60 border border-slate-800 text-slate-300">
+        <div className="flex items-center gap-3 text-xs font-mono">
+          {/* Integrated Operations Telemetry Badges (0% Map Overlap!) */}
+          <div className="hidden lg:flex items-center gap-3 px-3.5 py-1.5 rounded-xl bg-slate-950/80 border border-white/10 text-slate-300 backdrop-blur-md shadow-inner">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-slate-400 uppercase tracking-wider">⚡ cuOpt:</span>
+              <span className="font-bold text-emerald-400">{cuOptInfo?.compute_time_ms ?? 3.2}ms</span>
+              <span className="text-[10px] text-emerald-300">(-{cuOptInfo?.savings_pct ?? 18.5}%)</span>
+            </div>
+            <span className="text-slate-700">|</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-slate-400 uppercase tracking-wider">🚗 TomTom:</span>
+              <span className="font-bold text-amber-400">+{corridorContext?.traffic.delay_minutes ?? 10}m</span>
+              <span className="text-[10px] text-slate-400">({corridorContext?.traffic.congestion_level_pct ?? 18}%)</span>
+            </div>
+            <span className="text-slate-700">|</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-slate-400 uppercase tracking-wider">🌧️ BMKG:</span>
+              <span className="font-bold text-cyan-400">{corridorContext?.weather.rainfall_mm ?? 68.5}mm</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-950/80 border border-slate-800 text-slate-300">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span>KORIDOR SUMUT: ACTIVE</span>
+            <span>SUMUT: ACTIVE</span>
           </div>
           <div className="text-slate-400">
             UTC+07:00
           </div>
         </div>
       </header>
+
 
       {/* Toast Notification Container */}
       {toast && (
@@ -592,7 +807,11 @@ export default function DashboardClient() {
               spatialWeatherPolygons={spatialWeatherPolygons}
               cuOptOptimizationInfo={cuOptInfo}
               isLeftSidebarCollapsed={isLeftSidebarCollapsed}
+              activeTimeFilter={activeTimeFilter}
+              historicalEpisodes={historicalEpisodes}
+              predictiveRisks={predictiveRisks}
             />
+
           </div>
 
           {/* Floating Expand Sidebar Button when Collapsed */}

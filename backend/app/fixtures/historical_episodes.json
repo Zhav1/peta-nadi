@@ -1,0 +1,244 @@
+{
+  "historical_episodes": [
+    {
+      "incident_id": "hist-gempa-pasaman-2022",
+      "title": "Gempa Tektonik Sesar Sumatra (M6.2 Pasaman)",
+      "type": "earthquake",
+      "status": "historical",
+      "severity": "critical",
+      "confidence": 0.98,
+      "lat": 3.48,
+      "lon": 98.78,
+      "date": "2022-02-25",
+      "magnitude": 6.2,
+      "fault_line": "Sesar Sumatra Segmen Angkola",
+      "impact_summary": "Retakan sesar tanah dan guncangan M6.2 melumpuhkan koridor antarprovinsi Sumatra. Terjadi keterlambatan distribusi 18 jam.",
+      "price_lag_impact": "Harga cabai & bawang merah naik +18.4% di pasar Medan 3 hari pasca gempa.",
+      "epicenter_coordinates": [98.78, 3.48],
+      "affected_corridors": ["Jalinsum Tebing Tinggi - Pematangsiantar"],
+      "geojson_geometry": {
+        "type": "FeatureCollection",
+        "features": [
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "MultiPolygon",
+              "coordinates": [
+                [[[98.78, 3.82], [98.92, 3.75], [99.01, 3.60], [99.04, 3.48], [98.98, 3.32], [98.86, 3.20], [98.72, 3.16], [98.59, 3.22], [98.53, 3.38], [98.54, 3.56], [98.64, 3.74], [98.78, 3.82]]],
+                [[[98.78, 3.70], [98.88, 3.65], [98.94, 3.54], [98.96, 3.48], [98.92, 3.37], [98.84, 3.28], [98.74, 3.26], [98.65, 3.30], [98.60, 3.41], [98.61, 3.53], [98.68, 3.66], [98.78, 3.70]]],
+                [[[98.78, 3.60], [98.83, 3.57], [98.86, 3.51], [98.87, 3.48], [98.85, 3.42], [98.81, 3.38], [98.76, 3.37], [98.71, 3.39], [98.69, 3.45], [98.69, 3.51], [98.73, 3.58], [98.78, 3.60]]]
+              ]
+            },
+            "properties": {
+              "hazard_type": "earthquake",
+              "magnitude": 6.2,
+              "severity_label": "M6.2 CRITICAL SHOCKWAVE ZONE"
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "MultiLineString",
+              "coordinates": [
+                [[98.61, 3.78], [98.70, 3.63], [98.78, 3.48], [98.86, 3.33], [98.95, 3.18]],
+                [[98.78, 3.48], [98.91, 3.54]]
+              ]
+            },
+            "properties": {
+              "hazard_type": "earthquake_crack",
+              "strike_deg": 150,
+              "severity_label": "TECTONIC FAULT CRACK VECTOR"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "incident_id": "hist-gempa-2024-recent",
+      "title": "Gempa Tektonik Dangkal (M5.2 Sesar Tarutung-Toba)",
+      "type": "earthquake",
+      "status": "historical",
+      "severity": "high",
+      "confidence": 0.96,
+      "lat": 3.58,
+      "lon": 98.62,
+      "date": "2024-05-10",
+      "magnitude": 5.2,
+      "fault_line": "Sesar Tarutung Segmen Renun",
+      "impact_summary": "Guncangan M5.2 dirasakan di Medan & Binjai. Menyebabkan retakan pada struktur jembatan logistik.",
+      "price_lag_impact": "Terjadi perlambatan armada truk semen & material bangunan hingga 12 jam.",
+      "epicenter_coordinates": [98.62, 3.58],
+      "affected_corridors": ["Jalinsum Medan - Binjai"],
+      "geojson_geometry": {
+        "type": "FeatureCollection",
+        "features": [
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "MultiPolygon",
+              "coordinates": [
+                [[[98.62, 3.78], [98.71, 3.72], [98.77, 3.63], [98.78, 3.58], [98.74, 3.47], [98.67, 3.39], [98.57, 3.38], [98.49, 3.43], [98.46, 3.54], [98.47, 3.66], [98.53, 3.75], [98.62, 3.78]]],
+                [[[98.62, 3.70], [98.68, 3.66], [98.72, 3.60], [98.72, 3.58], [98.69, 3.51], [98.64, 3.46], [98.58, 3.45], [98.53, 3.48], [98.51, 3.55], [98.52, 3.63], [98.56, 3.68], [98.62, 3.70]]]
+              ]
+            },
+            "properties": {
+              "hazard_type": "earthquake",
+              "magnitude": 5.2,
+              "severity_label": "M5.2 SHOCKWAVE ZONE"
+            }
+          },
+          {
+            "type": "Feature",
+            "geometry": {
+              "type": "MultiLineString",
+              "coordinates": [
+                [[98.50, 3.79], [98.56, 3.68], [98.62, 3.58], [98.68, 3.48], [98.74, 3.37]],
+                [[98.62, 3.58], [98.71, 3.62]]
+              ]
+            },
+            "properties": {
+              "hazard_type": "earthquake_crack",
+              "strike_deg": 150,
+              "severity_label": "TECTONIC FAULT CRACK VECTOR"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "incident_id": "hist-banjir-pantura-2024",
+      "title": "Banjir Bandang & Luapan Laut Koridor Logistik 2024",
+      "type": "flood",
+      "status": "historical",
+      "severity": "high",
+      "confidence": 0.95,
+      "lat": 3.78,
+      "lon": 98.67,
+      "date": "2024-03-16",
+      "water_depth_m": 1.6,
+      "impact_summary": "Genangan air setinggi 1.6m melumpuhkan akses Pelabuhan Belawan dan Tol Belmera. 450+ truk logistik tertahan 24 jam.",
+      "price_lag_impact": "Lonjakan harga bawang merah nasional hingga +55% akibat disrupsi distribusi utama.",
+      "affected_corridors": ["Tol Belmera", "Kawasan Pelabuhan Belawan"],
+      "geojson_geometry": {
+        "type": "Feature",
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [[
+            [98.66, 3.86], [98.73, 3.84], [98.76, 3.79], [98.74, 3.73], [98.70, 3.71], [98.65, 3.72], [98.60, 3.76], [98.61, 3.82], [98.66, 3.86]
+          ]]
+        },
+        "properties": {
+          "hazard_type": "flood",
+          "water_depth": "1.6m",
+          "severity_label": "RIVER-VALLEY FLOOD INUNDATION (1.6m)"
+        }
+      }
+    },
+    {
+      "incident_id": "hist-longsor-berastagi-2023",
+      "title": "Tanah Longsor Jalur Logistik Sayur Berastagi",
+      "type": "landslide",
+      "status": "historical",
+      "severity": "high",
+      "confidence": 0.92,
+      "lat": 3.32,
+      "lon": 98.50,
+      "date": "2023-11-12",
+      "impact_summary": "Material tebing menutup total jalur Medan-Berastagi. Rantai pasok komoditas holtikultura Medan terhambat 14 jam.",
+      "price_lag_impact": "Kenaikan harga sayuran segar +22% di pasar induk Lau Cih Medan.",
+      "affected_corridors": ["Jalan Medan - Berastagi"],
+      "geojson_geometry": {
+        "type": "Feature",
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [[
+            [98.48, 3.36], [98.52, 3.36], [98.57, 3.29], [98.54, 3.26], [98.47, 3.28], [98.48, 3.36]
+          ]]
+        },
+        "properties": {
+          "hazard_type": "landslide",
+          "slope_angle": 45,
+          "severity_label": "DOWNSLOPE DEBRIS FLOW FAN"
+        }
+      }
+    }
+  ],
+  "predictive_risks": [
+    {
+      "risk_id": "pred-tft-2026-01",
+      "title": "Proyeksi Risiko Genangan Rob 48 Jam (TFT Model)",
+      "type": "flood",
+      "forecast_horizon_hours": 48,
+      "predicted_severity": "high",
+      "confidence": 0.84,
+      "lat": 3.76,
+      "lon": 98.69,
+      "risk_score": 88,
+      "recommendation": "Alihkan armada logistik ke Jalur Tol Medan-Binjai sebelum jam 14:00 WIB.",
+      "affected_corridors": ["Akses Tol Belawan"],
+      "geojson_geometry": {
+        "type": "Feature",
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [[
+            [98.66, 3.82], [98.73, 3.81], [98.75, 3.75], [98.71, 3.71], [98.65, 3.73], [98.66, 3.82]
+          ]]
+        },
+        "properties": {
+          "hazard_type": "flood",
+          "risk_score": 88,
+          "severity_label": "PROBABILISTIC FLOOD RISK (88%)"
+        }
+      }
+    },
+    {
+      "risk_id": "pred-tft-2026-02",
+      "title": "Potensi Kemacetan Bottleneck Tol Tebing Tinggi",
+      "type": "congestion",
+      "forecast_horizon_hours": 24,
+      "predicted_severity": "medium",
+      "confidence": 0.79,
+      "lat": 3.33,
+      "lon": 99.16,
+      "risk_score": 72,
+      "recommendation": "Optimasi jadwal keberangkatan armada sebelum puncak lonjakan muatan jam 17:00 WIB.",
+      "affected_corridors": ["Gerbang Tol Tebing Tinggi"],
+      "geojson_geometry": {
+        "type": "Feature",
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [[
+            [99.11, 3.37], [99.20, 3.36], [99.22, 3.30], [99.15, 3.28], [99.10, 3.32], [99.11, 3.37]
+          ]]
+        },
+        "properties": {
+          "hazard_type": "congestion",
+          "risk_score": 72,
+          "severity_label": "HIGH CONGESTION PROBABILITY (72%)"
+        }
+      }
+    }
+  ],
+  "osint_reports": [
+    {
+      "report_id": "osint-001",
+      "source": "Lightpanda Scraping Daemon (Media Local Sumut & BMKG TEWS)",
+      "timestamp": "2026-07-23T10:30:00Z",
+      "headline": "Peringatan Dini BMKG: Cuaca Ekstrem & Gelombang Tinggi di Pesisir Belawan 24-48 Jam Ke Depan",
+      "sentiment": "negative",
+      "category": "weather_warning",
+      "relevance_score": 0.94,
+      "url": "https://bmkg.go.id/peringatan-dini/belawan-sumut"
+    },
+    {
+      "report_id": "osint-002",
+      "source": "Lightpanda Scraping Daemon (PIHPS & E-Commerce Scraping)",
+      "timestamp": "2026-07-23T09:15:00Z",
+      "headline": "Pantauan Harga PIHPS: Stok Bawang Merah & Beras Medium Stabil di Pasar Induk Lau Cih Medan",
+      "sentiment": "stable",
+      "category": "commodity_price",
+      "relevance_score": 0.89,
+      "url": "https://hargapangan.id/daerah/sumut"
+    }
+  ]
+}
