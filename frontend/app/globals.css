@@ -23,9 +23,8 @@
 }
 
 html, body, #__next {
-  height: 100%;
+  min-height: 100%;
   width: 100%;
-  overflow: hidden;
   font-family: var(--font-sans);
   background-color: var(--color-bg);
   color: #f1f5f9;
@@ -35,6 +34,28 @@ html, body, #__next {
 /* Mapbox canvas must fill its container */
 .mapboxgl-canvas {
   outline: none;
+}
+
+/* Ultra-Modern Futuristic Dark Glassmorphic Global Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #080d14;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(34, 211, 238, 0.35);
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(52, 211, 153, 0.8);
+  box-shadow: 0 0 12px rgba(52, 211, 153, 0.8);
 }
 
 /* Custom scrollbar for sidebar panels */

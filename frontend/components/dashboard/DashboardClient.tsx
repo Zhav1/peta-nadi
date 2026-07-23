@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
+import Link from 'next/link';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useIncidents } from '@/hooks/useIncidents';
@@ -769,12 +770,19 @@ export default function DashboardClient() {
       <header className="fixed top-0 left-0 right-0 h-16 bg-[#080d14]/90 backdrop-blur-md border-b border-white/10 z-50 flex items-center justify-between px-6">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-cyan-500/20 border border-cyan-500/50 flex items-center justify-center font-bold text-cyan-400">
-              PN
+            <div className="w-8 h-8 rounded-lg bg-[#080d14] border border-emerald-500/40 p-1 flex items-center justify-center shadow-md shadow-emerald-500/20">
+              <img src="/logo_petanadi.png" alt="PetaNadi" className="w-6 h-6 object-contain" />
             </div>
             <span className="font-headline font-black text-lg tracking-wider text-slate-100 uppercase">
               PetaNadi
             </span>
+            <Link
+              href="/"
+              className="ml-2 px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-[11px] font-mono text-slate-300 hover:text-cyan-400 hover:border-cyan-400/40 transition flex items-center gap-1 cursor-pointer"
+              title="Kembali ke Halaman Onboarding"
+            >
+              <span>◄ Onboard</span>
+            </Link>
           </div>
 
           {/* Section Navigation Tabs */}
