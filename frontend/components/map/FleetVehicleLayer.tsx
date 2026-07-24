@@ -1,0 +1,332 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import mapboxgl from 'mapbox-gl';
+import type { FleetVehicle } from '@/lib/types';
+import { calculateRouteProgressPosition } from '@/lib/geoUtils';
+
+interface FleetVehicleLayerProps {
+  map: mapboxgl.Map | null;
+  vehicles: FleetVehicle[];
+}
+
+export function FleetVehicleLayer({ map, vehicles }: FleetVehicleLayerProps) {
+  const [selectedVehicle, setSelectedVehicle] = useState<{
+    vehicle: FleetVehicle;
+    x: number;
+    y: number;
+    currentPos: [number, number];
+    bearing: number;
+  } | null>(null);
+
+  const animRef = useRef<number | null>(null);
+  const progressMapRef = useRef<Record<string, number>>({});
+  const lastTimeRef = useRef<number>(performance.now());
+
+  // Generate crisp SVG Canvas Sprites and register with Mapbox
+  useEffect(() => {
+    if (!map) return;
+
+    function addSvgIcon(name: string, svgStr: string, width = 48, height = 48) {
+      if (map!.hasImage(name)) return;
+
+      const img = new Image(width, height);
+      const svg = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(svg);
+
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const imageData = ctx.getImageData(0, 0, width, height);
+          if (!map!.hasImage(name)) {
+            map!.addImage(name, imageData, { pixelRatio: 2 });
+          }
+        }
+        URL.revokeObjectURL(url);
+      };
+      img.src = url;
+    }
+
+    // 🚚 Truck SVG Sprite Icon
+    const truckSvg = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#00f2fe" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="24" cy="24" r="22" fill="#090d16" fill-opacity="0.85" stroke="#06b6d4" stroke-width="2"/>
+        <rect x="1" y="3" width="15" height="13" rx="2" fill="#0284c7" stroke="#38bdf8" stroke-width="1.5"/>
+        <polygon points="16,8 20,8 23,12 23,16 16,16" fill="#0891b2" stroke="#22d3ee" stroke-width="1.5"/>
+        <circle cx="5.5" cy="18.5" r="2.5" fill="#0f172a" stroke="#38bdf8" stroke-width="1.5"/>
+        <circle cx="18.5" cy="18.5" r="2.5" fill="#0f172a" stroke="#22d3ee" stroke-width="1.5"/>
+      </svg>
+    `;
+
+    // ⚓ Vessel SVG Sprite Icon
+    const vesselSvg = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none">
+        <circle cx="24" cy="24" r="22" fill="#06192a" fill-opacity="0.85" stroke="#f59e0b" stroke-width="2"/>
+        <path d="M4 14l2 6h12l2-6H4z" fill="#d97706" stroke="#fbbf24" stroke-width="1.5"/>
+        <rect x="7" y="9" width="10" height="5" rx="1" fill="#0284c7" stroke="#38bdf8" stroke-width="1"/>
+        <path d="M12 4v5" stroke="#fbbf24" stroke-width="2"/>
+      </svg>
+    `;
+
+    // ✈️ Aircraft SVG Sprite Icon
+    const planeSvg = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none">
+        <circle cx="24" cy="24" r="22" fill="#1e1035" fill-opacity="0.85" stroke="#a855f7" stroke-width="2"/>
+        <path d="M17.8 19.2L16 11l3.5-3.5C20 7 20 6 19 6s-1 0-1.5.5L14 10 5.8 8.2c-.5-.1-.9.1-1.1.5l-.3.8c-.2.5 0 1 .4 1.2l5.5 3.3-3 3-1.8-.6c-.3-.1-.7 0-.9.3l-.4.5c-.2.3-.1.7.2 1l2.4 2.4c.3.3.7.4 1 .2l.5-.4c.3-.2.4-.6.3-.9l-.6-1.8 3-3 3.3 5.5c.2.4.7.6 1.2.4l.8-.3c.4-.2.6-.6.5-1.1z" fill="#c084fc" stroke="#e879f9" stroke-width="1"/>
+      </svg>
+    `;
+
+    const onLoad = () => {
+      addSvgIcon('truck-icon', truckSvg);
+      addSvgIcon('vessel-icon', vesselSvg);
+      addSvgIcon('plane-icon', planeSvg);
+    };
+
+    if (map.isStyleLoaded()) {
+      onLoad();
+    } else {
+      map.once('style.load', onLoad);
+    }
+  }, [map]);
+
+  // Setup WebGL Native Layers & 60 FPS Route-Bound Animation Loop
+  useEffect(() => {
+    if (!map || vehicles.length === 0) return;
+
+    const sourceId = 'fleet-vehicles-source';
+    const routesSourceId = 'fleet-routes-source';
+    const layerId = 'fleet-vehicles-layer';
+    const routesLayerId = 'fleet-routes-layer';
+
+    // Build GeoJSON features for routes
+    const routeFeatures = vehicles.map((v) => {
+      const coords = v.route_geometry?.coordinates || v.path || [];
+      return {
+        type: 'Feature' as const,
+        properties: {
+          id: v.vehicle_id,
+          modality: v.modality,
+        },
+        geometry: {
+          type: 'LineString' as const,
+          coordinates: coords.length >= 2 ? coords : [[98.67, 3.58], [98.68, 3.59]],
+        },
+      };
+    });
+
+    const routesGeoJson = {
+      type: 'FeatureCollection' as const,
+      features: routeFeatures,
+    };
+
+    // Add sources & layers to Mapbox WebGL canvas
+    if (!map.getSource(routesSourceId)) {
+      map.addSource(routesSourceId, {
+        type: 'geojson',
+        data: routesGeoJson,
+      });
+
+      map.addLayer({
+        id: routesLayerId,
+        type: 'line',
+        source: routesSourceId,
+        paint: {
+          'line-color': [
+            'match',
+            ['get', 'modality'],
+            'truck', '#06b6d4',
+            'maritime', '#f59e0b',
+            'air', '#a855f7',
+            '#06b6d4'
+          ],
+          'line-width': 2.2,
+          'line-opacity': 0.6,
+          'line-dasharray': [3, 2],
+        },
+      });
+    } else {
+      (map.getSource(routesSourceId) as mapboxgl.GeoJSONSource).setData(routesGeoJson);
+    }
+
+    if (!map.getSource(sourceId)) {
+      map.addSource(sourceId, {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+
+      map.addLayer({
+        id: layerId,
+        type: 'symbol',
+        source: sourceId,
+        layout: {
+          'icon-image': ['get', 'icon'],
+          'icon-size': 0.85,
+          'icon-rotate': ['get', 'bearing'],
+          'icon-rotation-alignment': 'map',
+          'icon-allow-overlap': true,
+          'icon-ignore-placement': true,
+        },
+      });
+    }
+
+    // Hover & Click interaction listeners on WebGL Native Symbol layer
+    const onMouseEnter = () => {
+      map.getCanvas().style.cursor = 'pointer';
+    };
+    const onMouseLeave = () => {
+      map.getCanvas().style.cursor = '';
+    };
+
+    const onClick = (e: mapboxgl.MapLayerMouseEvent) => {
+      if (!e.features || e.features.length === 0) return;
+      const feat = e.features[0];
+      const vId = feat.properties?.id;
+      const v = vehicles.find((item) => item.vehicle_id === vId);
+
+      if (v) {
+        setSelectedVehicle({
+          vehicle: v,
+          x: e.point.x,
+          y: e.point.y,
+          currentPos: feat.geometry.type === 'Point' ? (feat.geometry.coordinates as [number, number]) : [98.67, 3.58],
+          bearing: feat.properties?.bearing || 0,
+        });
+      }
+    };
+
+    map.on('mouseenter', layerId, onMouseEnter);
+    map.on('mouseleave', layerId, onMouseLeave);
+    map.on('click', layerId, onClick);
+
+    // Initial progress setup
+    vehicles.forEach((v) => {
+      if (progressMapRef.current[v.vehicle_id] === undefined) {
+        progressMapRef.current[v.vehicle_id] = v.progress ?? 0.35;
+      }
+    });
+
+    // 60 FPS requestAnimationFrame Loop
+    const animate = (now: number) => {
+      const deltaSec = Math.min((now - lastTimeRef.current) / 1000, 0.1);
+      lastTimeRef.current = now;
+
+      const pointFeatures = vehicles.map((v) => {
+        const coords = v.route_geometry?.coordinates || v.path || [];
+        
+        // Speed-based progress increments
+        const baseSpeed = v.speed_kmh || 60;
+        const increment = v.status === 'anchored' ? 0 : (baseSpeed / 3600) * deltaSec * 0.05;
+
+        let currentProgress = (progressMapRef.current[v.vehicle_id] ?? 0.35) + increment;
+        if (currentProgress > 1.0) currentProgress = 0.0;
+        progressMapRef.current[v.vehicle_id] = currentProgress;
+
+        // Calculate exact route-bound position & bearing
+        const state = calculateRouteProgressPosition(coords, currentProgress);
+
+        const iconName = v.modality === 'maritime' ? 'vessel-icon' : v.modality === 'air' ? 'plane-icon' : 'truck-icon';
+
+        return {
+          type: 'Feature' as const,
+          properties: {
+            id: v.vehicle_id,
+            name: v.name,
+            modality: v.modality,
+            icon: iconName,
+            bearing: state.bearing,
+            progressPct: Math.round(state.progress * 100),
+            speed_kmh: v.speed_kmh,
+            status: v.status,
+            cargo: v.cargo || 'Kargo Logistik',
+            origin: v.origin || 'Asal',
+            destination: v.destination || 'Tujuan',
+          },
+          geometry: {
+            type: 'Point' as const,
+            coordinates: state.currentPosition,
+          },
+        };
+      });
+
+      const pointGeoJson = {
+        type: 'FeatureCollection' as const,
+        features: pointFeatures,
+      };
+
+      const source = map.getSource(sourceId) as mapboxgl.GeoJSONSource;
+      if (source) {
+        source.setData(pointGeoJson);
+      }
+
+      animRef.current = requestAnimationFrame(animate);
+    };
+
+    lastTimeRef.current = performance.now();
+    animRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      if (animRef.current) cancelAnimationFrame(animRef.current);
+      map.off('mouseenter', layerId, onMouseEnter);
+      map.off('mouseleave', layerId, onMouseLeave);
+      map.off('click', layerId, onClick);
+    };
+  }, [map, vehicles]);
+
+  if (!selectedVehicle) return null;
+
+  const { vehicle, x, y } = selectedVehicle;
+
+  return (
+    <div
+      className="absolute z-50 transform -translate-x-1/2 -translate-y-full mb-3 pointer-events-auto"
+      style={{ left: `${x}px`, top: `${y}px` }}
+    >
+      <div className="bg-slate-950/90 border border-cyan-500/40 rounded-xl p-3.5 shadow-2xl backdrop-blur-xl min-w-[240px] text-xs font-mono text-slate-100">
+        <div className="flex items-center justify-between gap-2 border-b border-slate-800 pb-2 mb-2">
+          <div className="flex items-center gap-1.5">
+            <span className="text-base">
+              {vehicle.modality === 'truck' ? '🚚' : vehicle.modality === 'maritime' ? '⚓' : '✈️'}
+            </span>
+            <span className="font-bold text-cyan-300 tracking-wide">{vehicle.vehicle_id}</span>
+          </div>
+          <button
+            onClick={() => setSelectedVehicle(null)}
+            className="text-slate-400 hover:text-white text-sm font-bold px-1"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="space-y-1.5 text-[11px]">
+          <div className="flex justify-between">
+            <span className="text-slate-400">Armada:</span>
+            <span className="font-semibold text-slate-200">{vehicle.name}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-slate-400">Kecepatan:</span>
+            <span className="font-bold text-emerald-400">{vehicle.speed_kmh} km/h</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-slate-400">Status Rute:</span>
+            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-cyan-950 text-cyan-300 border border-cyan-500/30">
+              {vehicle.status}
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-slate-400">Muatan Kargo:</span>
+            <span className="text-amber-300 font-semibold">{vehicle.cargo || 'Logistik Pangan'}</span>
+          </div>
+          <div className="border-t border-slate-800/80 pt-1.5 text-[10px] text-slate-300 flex justify-between">
+            <span>{vehicle.origin}</span>
+            <span>➔</span>
+            <span>{vehicle.destination}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

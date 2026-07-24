@@ -15,6 +15,8 @@ import type {
   FleetVehicle,
   DisasterZone,
 } from '@/lib/types';
+import { FleetVehicleLayer } from './FleetVehicleLayer';
+
 
 export interface CrisisMapProps {
   incidents: IncidentSummary[];
@@ -80,79 +82,8 @@ function createGeoJsonCircleRing(center: [number, number], radiusKm: number, poi
   return ring;
 }
 
-function interpolatePositionByDistance(path: [number, number][], progress: number): [number, number] {
-  if (path.length < 2) return path[0];
-
-  let totalDist = 0;
-  const segDistances: number[] = [];
-  for (let i = 0; i < path.length - 1; i++) {
-    const dx = path[i + 1][0] - path[i][0];
-    const dy = path[i + 1][1] - path[i][1];
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    segDistances.push(dist);
-    totalDist += dist;
-  }
-
-  if (totalDist === 0) return path[0];
-
-  const normalizedProgress = ((progress % 1.0) + 1.0) % 1.0;
-  const targetDist = normalizedProgress * totalDist;
-  let accumulated = 0;
-
-  for (let i = 0; i < segDistances.length; i++) {
-    const segDist = segDistances[i];
-    if (accumulated + segDist >= targetDist) {
-      const segProgress = segDist > 0 ? (targetDist - accumulated) / segDist : 0;
-      const [lon1, lat1] = path[i];
-      const [lon2, lat2] = path[i + 1];
-      return [lon1 + (lon2 - lon1) * segProgress, lat1 + (lat2 - lat1) * segProgress];
-    }
-    accumulated += segDist;
-  }
-
-  return path[path.length - 1];
-}
-
-function createVehicleMarkerElement(vehicle: FleetVehicle, isCrisisActive = false): HTMLDivElement {
-  const el = document.createElement('div');
-
-  const iconSvg = vehicle.modality === 'maritime'
-    ? `<svg class="w-3.5 h-3.5 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="3"/><line x1="12" y1="22" x2="12" y2="8"/><path d="M5 12H2a10 10 0 0 0 20 0h-3"/></svg>`
-    : vehicle.modality === 'air'
-      ? `<svg class="w-3.5 h-3.5 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5 0 1 .4 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.2c.3.4.8.6 1.3.4l.5-.3c.4-.2.6-.6.5-1.1z"/></svg>`
-      : `<svg class="w-3.5 h-3.5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>`;
-
-  const isRerouting = vehicle.status === 'rerouting' || (isCrisisActive && vehicle.vehicle_id.includes('TRK-004'));
-  const isAnchored = vehicle.status === 'anchored';
-
-  const colorClass = isRerouting
-    ? 'bg-amber-950/90 text-amber-300 border-amber-500 ring-2 ring-amber-500/30 animate-pulse'
-    : isAnchored
-      ? 'bg-slate-900/90 text-slate-400 border-slate-700'
-      : vehicle.modality === 'maritime'
-        ? 'bg-cyan-950/90 text-cyan-300 border-cyan-500/60 ring-2 ring-cyan-500/20'
-        : vehicle.modality === 'air'
-          ? 'bg-purple-950/90 text-purple-300 border-purple-500/60 ring-2 ring-purple-500/20'
-          : 'bg-emerald-950/90 text-emerald-300 border-emerald-500/60 ring-2 ring-emerald-500/20';
-
-  // Explicitly NO transition-all to prevent Mapbox setLngLat CSS transform animation collision!
-  el.className = `cursor-pointer z-[25] flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono font-bold shadow-2xl border backdrop-blur-md ${colorClass}`;
-  el.style.zIndex = '25';
-  el.style.willChange = 'transform';
-
-  const shortName = vehicle.name.split('-').pop() || vehicle.name;
-  el.innerHTML = `
-    <span>${iconSvg}</span>
-    <span>${shortName}</span>
-    ${isRerouting ? '<span class="px-1 bg-amber-400 text-slate-950 rounded text-[8px] font-black">DETOUR</span>' : ''}
-  `;
-
-  el.title = `${vehicle.name}\nStatus: ${vehicle.status.toUpperCase()}\nMuatan: ${vehicle.cargo || '-'}\nAsal: ${vehicle.origin || '-'}\nTujuan: ${vehicle.destination || '-'}\nKecepatan: ${vehicle.speed_kmh} km/h`;
-
-  return el;
-}
-
 export default function CrisisMap({
+
   incidents,
   selectedCrisisId,
   onCrisisClick,
@@ -186,6 +117,8 @@ export default function CrisisMap({
   void isLeftSidebarCollapsed;
   void corridorContext;
   void cuOptOptimizationInfo;
+  void demoStage;
+
 
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const drawRef = useRef<InstanceType<typeof MapboxDraw> | null>(null);
@@ -193,9 +126,7 @@ export default function CrisisMap({
   const routeEtaMarkersRef = useRef<mapboxgl.Marker[]>([]);
   const corridorMarkersRef = useRef<mapboxgl.Marker[]>([]);
   const timeHorizonMarkersRef = useRef<mapboxgl.Marker[]>([]);
-  const fleetMarkersRef = useRef<mapboxgl.Marker[]>([]);
-  const fleetIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const fleetProgressRef = useRef<Map<string, number>>(new Map());
+
 
 
   const isMapLoadedRef = useRef(false);
@@ -1071,63 +1002,9 @@ export default function CrisisMap({
     predictiveRisks,
   ]);
 
-  // Animated Multi-Modal Fleet Vehicle Layer (Phase 25)
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !isMapLoadedRef.current || !activeFleet || activeFleet.length === 0) return;
 
-    if (fleetIntervalRef.current) {
-      clearInterval(fleetIntervalRef.current);
-      fleetIntervalRef.current = null;
-    }
+  // WebGL Native Fleet Vehicle Layer is now handled by <FleetVehicleLayer /> component (Phase 28)
 
-    fleetMarkersRef.current.forEach((m) => m.remove());
-    fleetMarkersRef.current = [];
-
-    const isCrisisActive = (demoStage ?? 0) >= 3;
-
-    const markers = activeFleet.map((vehicle) => {
-      const initialProgress = fleetProgressRef.current.get(vehicle.vehicle_id) ?? (Math.random() * 0.5);
-      fleetProgressRef.current.set(vehicle.vehicle_id, initialProgress);
-
-      const initialPos = interpolatePositionByDistance(vehicle.path, initialProgress);
-      const el = createVehicleMarkerElement(vehicle, isCrisisActive);
-      const marker = new mapboxgl.Marker({ element: el, anchor: 'center' })
-        .setLngLat(initialPos)
-        .addTo(map);
-
-      return { marker, vehicle };
-    });
-
-    fleetMarkersRef.current = markers.map((m) => m.marker);
-
-    // 50ms Animation Loop (~20 FPS smooth motion)
-    fleetIntervalRef.current = setInterval(() => {
-      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
-
-      markers.forEach(({ marker, vehicle }) => {
-        if (vehicle.path.length < 2 || vehicle.status === 'anchored') return;
-
-        const prev = fleetProgressRef.current.get(vehicle.vehicle_id) ?? 0;
-        const DEMO_SPEED_FACTOR = 0.00015; // 0.00015 per 50ms tick
-        const increment = (vehicle.speed_kmh * DEMO_SPEED_FACTOR);
-        const next = (prev + increment) % 1.0;
-        fleetProgressRef.current.set(vehicle.vehicle_id, next);
-
-        const nextPos = interpolatePositionByDistance(vehicle.path, next);
-        marker.setLngLat(nextPos);
-      });
-    }, 50);
-
-    return () => {
-      if (fleetIntervalRef.current) {
-        clearInterval(fleetIntervalRef.current);
-        fleetIntervalRef.current = null;
-      }
-      fleetMarkersRef.current.forEach((m) => m.remove());
-      fleetMarkersRef.current = [];
-    };
-  }, [activeFleet, demoStage]);
 
 
   // Toggle MapboxDraw mode, dragPan, & canvas cursor
@@ -1333,6 +1210,10 @@ export default function CrisisMap({
         className="w-full h-full"
         aria-label="PetaNadi crisis intelligence map"
       />
+
+      {/* WebGL Native Fleet Vehicle Layer (Phase 28) */}
+      <FleetVehicleLayer map={mapRef.current} vehicles={activeFleet || []} />
+
 
       {/* Floating active status badge when freehand drawing mode is active */}
       {drawModeActive && (
