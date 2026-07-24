@@ -205,7 +205,6 @@ export function useDemoState(onCrisisReady?: (crisis: CrisisState) => void) {
         }
       ],
       evidence: {
-        cctv_label: 'BELAWAN_STORAGE_CAM',
         osint_text: 'Low incoming volume at the grain terminals. Port gates temporarily restricted.'
       }
     });

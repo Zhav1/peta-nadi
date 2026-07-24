@@ -1,8 +1,8 @@
 # STATE — LRIP / PetaNadi Project Memory
 
-**Last Updated:** 2026-07-23
+**Last Updated:** 2026-07-24
 **Active Milestone:** M1 — Hackathon MVP (North Sumatra Corridor)
-**Current Phase:** Phase 24 COMPLETE ✅
+**Current Phase:** Phase 25 COMPLETE ✅
 
 ---
 
@@ -35,6 +35,7 @@
 | 22 | Google Maps-Grade Administrative Boundary Integration & Clean UI Refactor | **COMPLETE** ✅ | Google Maps style dashed ADM stroke (`line-dasharray: [4, 3]`), top nav telemetry flyout popovers, off-canvas incident detail, unified epicenter-boundary entity |
 | 23 | Run Demo Engine Overhaul — Interactive Stepper & Hook Lift | **COMPLETE** ✅ | Fixed CSS pointer-events inheritance, lifted `useDemoState` hook to `DashboardClient`, stage-wired map & sidebar effects, Lucide SVG icons |
 | 24 | Google Flow-Style Onboarding Landing Page & High-Performance Routing | **COMPLETE** ✅ | Video background, 121-frame scroll sequence canvas, kinetic typography, feature cards, Next.js routing migration |
+| 25 | Animated Multi-Modal Fleet Layer & Dynamic Vehicle Trajectories | **COMPLETE** ✅ | REST endpoint `GET /api/v1/fleet/vehicles`, `useFleetVehicles` hook + offline fallback, 10 FPS DOM-mutating `setLngLat` Mapbox markers (Ships ⚓, Trucks 🚚, Aircraft ✈️), z-index 25, demo stage awareness |
 
 ---
 

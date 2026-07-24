@@ -208,7 +208,7 @@ export function MitigationTab({
           </span>
         </div>
         <p className="text-[11px] text-slate-300 font-mono">
-          Sensor Inputs: <span className="text-cyan-300">BMKG Radar</span> + <span className="text-orange-300">TomTom Traffic</span> + <span className="text-emerald-300">CCTV Stream</span>
+          Sensor Inputs: <span className="text-cyan-300">BMKG Radar</span> + <span className="text-orange-300">TomTom Traffic</span> + <span className="text-emerald-300">AISstream Maritime</span>
         </p>
       </div>
 

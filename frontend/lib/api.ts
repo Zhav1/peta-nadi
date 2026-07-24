@@ -132,4 +132,11 @@ export const api = {
     replay: (crisisId: string) =>
       request<unknown>(`/api/demo/replay/${crisisId}`),
   },
+  fleet: {
+    vehicles: () =>
+      request<{ vehicles: import('./types').FleetVehicle[]; total: number; timestamp: string }>(
+        '/api/v1/fleet/vehicles'
+      ),
+  },
 };
+
