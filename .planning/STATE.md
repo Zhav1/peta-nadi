@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-07-24
 **Active Milestone:** M1 — Hackathon MVP (North Sumatra Corridor)
-**Current Phase:** Phase 25 COMPLETE ✅
+**Current Phase:** Phase 27 COMPLETE ✅
 
 ---
 
@@ -36,6 +36,11 @@
 | 23 | Run Demo Engine Overhaul — Interactive Stepper & Hook Lift | **COMPLETE** ✅ | Fixed CSS pointer-events inheritance, lifted `useDemoState` hook to `DashboardClient`, stage-wired map & sidebar effects, Lucide SVG icons |
 | 24 | Google Flow-Style Onboarding Landing Page & High-Performance Routing | **COMPLETE** ✅ | Video background, 121-frame scroll sequence canvas, kinetic typography, feature cards, Next.js routing migration |
 | 25 | Animated Multi-Modal Fleet Layer & Dynamic Vehicle Trajectories | **COMPLETE** ✅ | REST endpoint `GET /api/v1/fleet/vehicles`, `useFleetVehicles` hook + offline fallback, 10 FPS DOM-mutating `setLngLat` Mapbox markers (Ships ⚓, Trucks 🚚, Aircraft ✈️), z-index 25, demo stage awareness |
+| 26 | Unified News & Market Intelligence Ingestion Pipeline | **COMPLETE** ✅ | Tri-Layer Hybrid: Medsos OSINT + Aegis Grounding News Verification + Globot Market Regime Feeds |
+| 27 | Live Google News Search Grounding & Rich Markdown Reasoning Overhaul | **COMPLETE** ✅ | Real 100% working Google News RSS links, zero 404 fake links, dynamic Markdown XAI renderer (`**bold**` cyan highlights, bullets), zero robotic `=== HASIL ===` headers |
+
+
+
 
 ---
 
