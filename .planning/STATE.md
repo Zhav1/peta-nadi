@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-07-24
 **Active Milestone:** M1 — Hackathon MVP (North Sumatra Corridor)
-**Current Phase:** Phase 27 COMPLETE ✅
+**Current Phase:** Phase 28 COMPLETE ✅
 
 ---
 
@@ -38,6 +38,8 @@
 | 25 | Animated Multi-Modal Fleet Layer & Dynamic Vehicle Trajectories | **COMPLETE** ✅ | REST endpoint `GET /api/v1/fleet/vehicles`, `useFleetVehicles` hook + offline fallback, 10 FPS DOM-mutating `setLngLat` Mapbox markers (Ships ⚓, Trucks 🚚, Aircraft ✈️), z-index 25, demo stage awareness |
 | 26 | Unified News & Market Intelligence Ingestion Pipeline | **COMPLETE** ✅ | Tri-Layer Hybrid: Medsos OSINT + Aegis Grounding News Verification + Globot Market Regime Feeds |
 | 27 | Live Google News Search Grounding & Rich Markdown Reasoning Overhaul | **COMPLETE** ✅ | Real 100% working Google News RSS links, zero 404 fake links, dynamic Markdown XAI renderer (`**bold**` cyan highlights, bullets), zero robotic `=== HASIL ===` headers |
+| 28 | Smooth 60 FPS Route-Bound Fleet Vector Layer & Rotation Engine | **COMPLETE** ✅ | Mapbox WebGL Native Symbol Layer, 0 HTML DOM Markers, 60 FPS `@turf/along` path interpolation, 0°–360° `@turf/bearing` vector rotation, glassmorphic telemetry tooltip |
+
 
 
 

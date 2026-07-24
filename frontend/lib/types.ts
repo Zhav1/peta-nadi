@@ -246,10 +246,11 @@ export interface DemoStatus {
   crisis_state: import('./types').CrisisState;
 }
 
-// Phase 25: Multi-Modal Fleet Vehicle Types
+// Phase 25 & 28: Multi-Modal Fleet Vehicle Types
 export type VehicleModality = 'truck' | 'maritime' | 'air';
 
 export interface FleetVehicle {
+
   vehicle_id: string;
   name: string;
   modality: VehicleModality;
@@ -260,6 +261,11 @@ export interface FleetVehicle {
   origin?: string;                 // e.g., "Pelabuhan Belawan"
   destination?: string;            // e.g., "Hub Logistik Medan"
   progress?: number;               // 0.0-1.0 internal progress tracking
+  route_geometry?: {
+    type: 'LineString';
+    coordinates: [number, number][];
+  };
 }
+
 
 

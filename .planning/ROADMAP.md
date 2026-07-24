@@ -632,6 +632,32 @@
 
 ---
 
+## Phase 28: Smooth 60 FPS Route-Bound Fleet Vector Layer & Rotation Engine
+**Goal:** Perbaikan total sistem rendering dan animasi pergerakan kendaraan logistik (Truck, Cargo Ship, Aircraft) pada Mapbox GL JS / Deck.gl. Mengeliminasi 100% penggunaan `mapboxgl.Marker` HTML DOM yang flickering dan kaku, menggantinya dengan Mapbox WebGL Native Symbol & Line Layer, pergerakan terikat rute GeoJSON LineString (Route-Bound Path Animation) 60 FPS, serta rotasi otomatis 0°–360° yang presisi mengikuti tikungan rute (`@turf/bearing`).
+**Status:** COMPLETE ✅
+
+### Deliverables
+- **Geospatial Path Interpolation & Bearing Engine (`frontend/lib/geoUtils.ts`) [NEW]**:
+  - Uses `@turf/along`, `@turf/bearing`, and `@turf/length` for real-time 60 FPS `[lng, lat]` calculation and 0°–360° forward azimuth angle rotation.
+- **REST API Payload Route Geometry Schema (`backend/app/routers/vehicles_router.py`) [MODIFY]**:
+  - Enriches vehicle payload with `route_geometry` GeoJSON LineString, `progress`, `speed_kmh`, `status`, `modality` ("truck" | "maritime" | "air").
+- **Mapbox WebGL Native Symbol & Path Layer Component (`FleetVehicleLayer.tsx`) [NEW]**:
+  - WebGL Native Canvas SVG Sprite Generator (`truck-icon`, `vessel-icon`, `plane-icon`) loaded via `map.addImage()`.
+  - Continuous 60 FPS `requestAnimationFrame` loop updating GeoJSON source via `map.getSource().setData()`.
+  - Zero HTML DOM `mapboxgl.Marker` nodes. Zero flickering during map zoom/pan.
+  - Precise vector rotation using Mapbox WebGL layout `'icon-rotate': ['get', 'bearing']` and `'icon-rotation-alignment': 'map'`.
+- **Interactive Glassmorphic Telemetry Tooltip Component (`FleetVehicleLayer.tsx`) [NEW]**:
+  - Minimalist glassmorphic telemetry card displaying Fleet ID, Modality, Speed, Cargo, Route Progress %, Origin, Destination on hover/click.
+
+### Verification
+- [x] HTML DOM `mapboxgl.Marker` 100% removed. Rendered entirely in Mapbox WebGL canvas.
+- [x] Vehicles locked to GeoJSON route LineStrings (Road network for trucks, sea channels for vessels, flight corridors for aircraft).
+- [x] Smooth 60 FPS interpolation without jumping or teleportation.
+- [x] 0°–360° vehicle rotation following route bends and headings.
+- [x] Next.js production build and Python AST parse verified 100%.
+
+---
+
 ## Backlog (Post-Hackathon / v2)
 - Driver mobile app (React Native + WatermelonDB + CRDT offline sync)
 - Self-serve operator GPS onboarding SDK
