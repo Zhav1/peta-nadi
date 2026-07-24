@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
+import { HUB_NODES } from '@/lib/mapboxRoutingService';
 import {
   CloudLightning,
   Car,
@@ -19,11 +20,14 @@ interface GuidedDemoPanelProps {
   confidence: number;
   summary: string;
   isAuto: boolean;
-  onStart: () => void;
+  onStart: (opts?: { origin?: string; destination?: string }) => void;
   onAdvance: () => void;
   onToggleAuto: () => void;
   onReset: () => void;
   isSidebarOpen?: boolean;
+  selectedOrigin?: string;
+  selectedDestination?: string;
+  onSelectPreset?: (origin: string, dest: string) => void;
 }
 
 export function GuidedDemoPanel({
@@ -39,9 +43,35 @@ export function GuidedDemoPanel({
   onToggleAuto,
   onReset,
   isSidebarOpen = false,
+  selectedOrigin = 'belawan',
+  selectedDestination = 'tebingtinggi',
+  onSelectPreset,
 }: GuidedDemoPanelProps) {
   const [qrVisible, setQrVisible] = useState(false);
+  void isReplay;
+  void onSelectPreset;
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [logStep, setLogStep] = useState(0);
+
+  useEffect(() => {
+    if (stage === 1 || stage === 2) {
+      const interval = setInterval(() => {
+        setLogStep((prev) => (prev < 5 ? prev + 1 : 5));
+      }, 1200);
+      return () => clearInterval(interval);
+    } else {
+      setLogStep(0);
+    }
+  }, [stage]);
+
+  const swarmLogs = [
+    `> [00:01.2] DataCollectionAgent: Ingesting BMKG radar (68.5mm), TomTom flow (+35m), AISstream vessel feed...`,
+    `> [00:02.1] OSINTHazardAgent: Scraping OSINT feeds & Google News: "Banjir Tebing Tinggi Jalinsum Terputus"...`,
+    `> [00:03.0] PredictionAgent: Simulating FourCastNet Earth-2 48h spatial hazard inundation model...`,
+    `> [00:03.9] RouteOptimizationAgent: Executing NVIDIA cuOpt GPU matrix: Calculating tangential clearance...`,
+    `> [00:04.7] EconomicIntelligenceAgent: Fetching PIHPS price stream: Projected CPO/Minyak inflation +1.8%...`,
+    `> [00:05.5] DecisionSupportAgent: DeepSeek V3.2 CoT reasoning & Consensus Gate: 91.4% (VALIDATED THREAT)...`,
+  ];
 
   // Generate QR Code when demo starts and has a crisisId
   useEffect(() => {
@@ -71,7 +101,7 @@ export function GuidedDemoPanel({
   }
 
   const stageTitles = [
-    'Injecting Real-time Sensors',
+    'User Route & Ingestion Setup',
     'Agent Swarm Analysis',
     'GraphRAG Consensus Gate',
     'Validated Alert & Reroute',
@@ -79,11 +109,11 @@ export function GuidedDemoPanel({
   ];
 
   const stageExplainers = [
-    'PetaNadi menarik data real-time dari 6 sumber: cuaca (BMKG), kemacetan (TomTom), peta kebakaran (NASA), antrean pelabuhan (AISstream), harga pangan (PIHPS), dan laporan media sosial.',
+    'Silakan tentukan rute krisis dengan mengeklik 2 titik marker pada Peta 4D di sebelah kiri (Klik 1: Start 🟢, Klik 2: End 🟡). Sistem akan merender rute baseline hijau sebelum disrupsi disimulasikan.',
     '6 agen AI memproses data secara paralel. Setiap agen ahli di satu domain: pemetaan bahaya, optimasi rute, proyeksi ekonomi, dan dukungan keputusan krisis.',
-    'Consensus Gate mengevaluasi skor kepercayaan dari semua agen. Krisis hanya divalidasi ketika skor tertimbang melebihi 85% — mencegah alarm palsu terhadap armada logistik.',
-    'Penutupan Koridor Belawan tervalidasi. Dashboard menampilkan zona bahaya, rute pengalihan aman via cuOpt GPU, dan proyeksi dampak ekonomi terhadap harga komoditas.',
-    'Notifikasi WhatsApp telah dikirim ke operator logistik dengan ringkasan krisis, rute pengalihan NVIDIA cuOpt, dan deep-link kembali ke dashboard PetaNadi.',
+    'Consensus Gate mengevaluasi skor kepercayaan dari semua agen. Krisis divalidasi ketika skor tertimbang > 85% — mencegah alarm palsu.',
+    'Disrupsi tervalidasi. AI Tangential Avoidance Router menghitung rute pengalihan aman via cuOpt GPU khusus untuk koridor pilihan Anda.',
+    'Notifikasi WhatsApp telah dikirim ke operator logistik dengan ringkasan krisis, rute pengalihan NVIDIA cuOpt, dan deep-link dashboard.',
   ];
 
   const sources = [
@@ -101,6 +131,7 @@ export function GuidedDemoPanel({
     { key: 'PredictionAgent', label: 'Prediction' },
     { key: 'RouteOptimizationAgent', label: 'Route Optimization' },
     { key: 'EconomicIntelligenceAgent', label: 'Economic Intel' },
+    { key: 'DecisionSupportAgent', label: 'Decision Support' },
   ];
 
   const dynamicRightOffset = isSidebarOpen ? 'right-[408px]' : 'right-6';
@@ -116,7 +147,7 @@ export function GuidedDemoPanel({
         <div className="flex flex-col">
           <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-            {isReplay ? 'Offline Replay Mode' : 'Guided Presentation Stepper'}
+            STAGE {stage + 1}/5: {stageTitles[stage].toUpperCase()}
           </span>
           <h4 className="text-sm font-bold text-slate-100 mt-0.5">
             Stage {stage + 1}: {stageTitles[stage]}
@@ -161,52 +192,176 @@ export function GuidedDemoPanel({
       {/* Interactive visual feedback per stage */}
       <div className="min-h-[110px] border border-slate-850 bg-slate-900/30 rounded-xl p-3 flex flex-col justify-center">
         {stage === 0 && (
-          <div className="grid grid-cols-3 gap-2">
-            {sources.map((src, i) => (
-              <div
-                key={src.name}
-                className={`flex items-center gap-1.5 px-2.5 py-2 border rounded-lg text-xs font-semibold select-none ${src.color} animate-fade-in`}
-                style={{ animationDelay: `${i * 150}ms` }}
-              >
-                <src.Icon className="w-3.5 h-3.5 shrink-0" />
-                <span>{src.name}</span>
+          <div className="flex flex-col gap-2.5">
+            {/* Direct Map Click Prompt Banner */}
+            <div className="bg-cyan-950/40 border border-cyan-500/40 p-2.5 rounded-xl flex flex-col gap-1.5 shadow-md">
+              <div className="flex items-center justify-between text-[11px] font-bold text-cyan-300">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+                  📌 Klik Peta 4D Langsung:
+                </span>
+                <span className="text-[9px] font-mono bg-cyan-900/60 px-1.5 py-0.5 rounded border border-cyan-400/40 text-cyan-200">
+                  INTERAKTIF
+                </span>
               </div>
-            ))}
+              <p className="text-[10px] text-slate-300 leading-tight">
+                Klik marker kota/pelabuhan pada canvas peta di sebelah kiri untuk mengeset titik <strong className="text-cyan-400">Start (🟢)</strong> lalu <strong className="text-amber-400">End (🟡)</strong>.
+              </p>
+            </div>
+
+            {/* Selected Node Status Grid */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className={`p-2 rounded-xl border flex flex-col gap-1 text-[10px] transition-all ${selectedOrigin ? 'bg-cyan-950/60 border-cyan-500/50 text-cyan-200 shadow-sm' : 'bg-slate-950/60 border-dashed border-slate-700 text-slate-400'}`}>
+                <span className="font-bold text-cyan-400 flex items-center gap-1">
+                  <span>🟢 START (Klik 1)</span>
+                  {selectedOrigin && <CheckCircle2 className="w-3 h-3 text-cyan-400" />}
+                </span>
+                <span className="font-mono font-bold text-[11px] truncate">
+                  {selectedOrigin ? HUB_NODES[selectedOrigin]?.name || selectedOrigin.toUpperCase() : 'Pilih Marker Peta...'}
+                </span>
+              </div>
+              <div className={`p-2 rounded-xl border flex flex-col gap-1 text-[10px] transition-all ${selectedDestination ? 'bg-amber-950/60 border-amber-500/50 text-amber-200 shadow-sm' : 'bg-slate-950/60 border-dashed border-slate-700 text-slate-400'}`}>
+                <span className="font-bold text-amber-400 flex items-center gap-1">
+                  <span>🟡 END (Klik 2)</span>
+                  {selectedDestination && <CheckCircle2 className="w-3 h-3 text-amber-400" />}
+                </span>
+                <span className="font-mono font-bold text-[11px] truncate">
+                  {selectedDestination ? HUB_NODES[selectedDestination]?.name || selectedDestination.toUpperCase() : 'Pilih Marker Peta...'}
+                </span>
+              </div>
+            </div>
+
+            {/* Sensor feeds */}
+            <div className="grid grid-cols-6 gap-1 pt-1 border-t border-slate-800/40">
+              {sources.map((src) => (
+                <div
+                  key={src.name}
+                  className={`flex items-center justify-center p-1 border rounded text-[9px] font-bold font-mono ${src.color}`}
+                  title={src.name}
+                >
+                  <src.Icon className="w-3 h-3 shrink-0" />
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
         {stage === 1 && (
-          <div className="grid grid-cols-2 gap-2">
-            {agents.map((agent) => (
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between text-[10px] font-mono text-cyan-400 font-bold">
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+                STAGE 2/5: PARALLEL SWARM INGESTION
+              </span>
+              <span>6 AGENT UNITS</span>
+            </div>
+            <div className="w-full bg-slate-950 h-1.5 rounded-full overflow-hidden border border-slate-800">
               <div
-                key={agent.key}
-                className="flex items-center gap-2 p-1.5 rounded-lg border border-slate-800 bg-slate-950/60 text-[11px]"
-              >
-                <div className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-                <span className="text-slate-300 font-medium">{agent.label}</span>
+                className="bg-cyan-400 h-full rounded-full animate-pulse transition-all duration-300"
+                style={{ width: `${Math.min(100, Math.round(((logStep + 1) / 6) * 100))}%` }}
+              />
+            </div>
+            {/* 6 Agent Status Matrix Grid */}
+            <div className="grid grid-cols-2 gap-1.5">
+              {agents.map((agent, i) => {
+                const isRunningAgent = i === logStep;
+                const isDoneAgent = i < logStep;
+                return (
+                  <div
+                    key={agent.key}
+                    className={`flex items-center gap-1.5 p-1.5 rounded-lg border text-[10px] font-mono transition-all ${
+                      isRunningAgent
+                        ? 'border-cyan-400 bg-cyan-950/80 text-cyan-200 shadow-sm ring-2 ring-cyan-500/20'
+                        : isDoneAgent
+                          ? 'border-emerald-500/40 bg-emerald-950/30 text-emerald-300'
+                          : 'border-slate-850 bg-slate-950/40 text-slate-500'
+                    }`}
+                  >
+                    {isDoneAgent ? (
+                      <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
+                    ) : isRunningAgent ? (
+                      <div className="w-2 h-2 rounded-full bg-cyan-400 animate-ping shrink-0" />
+                    ) : (
+                      <div className="w-2 h-2 rounded-full bg-slate-700 shrink-0" />
+                    )}
+                    <span className="truncate">{agent.label}</span>
+                  </div>
+                );
+              })}
+            </div>
+            {/* Live Glass-Box Terminal Stream */}
+            <div className="bg-[#05070a] border border-cyan-500/40 rounded-xl p-2.5 font-mono text-[10px] text-cyan-300 shadow-inner flex flex-col gap-1">
+              <div className="text-[9px] text-slate-500 uppercase tracking-widest border-b border-slate-800/80 pb-1 flex justify-between">
+                <span>Agent Reasoning Terminal Stream</span>
+                <span className={logStep === 5 ? 'text-emerald-400 font-bold' : 'text-cyan-400 animate-pulse'}>
+                  {logStep === 5 ? '● SWARM 100% COMPLETE' : '● SWARM ACTIVE'}
+                </span>
               </div>
-            ))}
+              <p className="line-clamp-2 leading-snug font-medium text-cyan-200">
+                {swarmLogs[logStep]}
+              </p>
+            </div>
+            {logStep === 5 && (
+              <div className="bg-emerald-950/80 border border-emerald-500/60 p-2 rounded-xl flex items-center justify-between text-[10px] font-bold text-emerald-300 shadow-lg shadow-emerald-500/20 animate-in fade-in duration-300">
+                <span className="flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 animate-bounce" />
+                  <span>ANALISIS 6 AI SWARM SELESAI (100%)</span>
+                </span>
+                <span className="text-[9px] font-mono bg-emerald-900/90 px-1.5 py-0.5 rounded text-emerald-200 uppercase font-black tracking-wider border border-emerald-400/50">
+                  SIAP ADVANCE
+                </span>
+              </div>
+            )}
           </div>
         )}
 
         {stage === 2 && (
-          <div className="flex flex-col items-center gap-2 py-1">
-            <div className="text-xs text-slate-400">Consensus Confidence Score</div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-3xl font-black text-emerald-400 font-mono">
+          <div className="flex flex-col gap-2.5 py-0.5">
+            <div className="flex justify-between items-center text-xs text-slate-300">
+              <span className="font-bold font-mono">Consensus Confidence Score</span>
+              <span className="text-sm font-black text-emerald-400 font-mono">
                 {(confidence * 100).toFixed(0)}%
               </span>
-              <span className="text-xs font-semibold text-emerald-500 uppercase px-2 py-0.5 rounded bg-emerald-950/20 border border-emerald-500/20">
-                Validated
-              </span>
             </div>
-            <div className="w-full bg-slate-900 h-2 rounded-full overflow-hidden border border-slate-850">
+            <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-800">
               <div
-                className="bg-gradient-to-r from-yellow-500 to-emerald-500 h-full rounded-full transition-all duration-1000 ease-out"
+                className="bg-gradient-to-r from-yellow-500 to-emerald-400 h-full rounded-full transition-all duration-1000 ease-out"
                 style={{ width: `${confidence * 100}%` }}
               />
             </div>
-            <span className="text-[10px] text-slate-500 font-mono">Threshold: &gt; 85% to trigger alert</span>
+            {/* 6 Agents All Completed Matrix */}
+            <div className="grid grid-cols-3 gap-1">
+              {agents.map((agent) => (
+                <div
+                  key={agent.key}
+                  className="flex items-center gap-1 p-1 rounded-md border border-emerald-500/30 bg-emerald-950/20 text-[9px] font-mono text-emerald-300"
+                >
+                  <CheckCircle2 className="w-2.5 h-2.5 text-emerald-400 shrink-0" />
+                  <span className="truncate">{agent.label}</span>
+                </div>
+              ))}
+            </div>
+            {/* Live Glass-Box Terminal Stream */}
+            <div className="bg-[#05070a] border border-emerald-500/40 rounded-xl p-2.5 font-mono text-[10px] text-emerald-300 shadow-inner flex flex-col gap-1">
+              <div className="text-[9px] text-slate-500 uppercase tracking-widest border-b border-slate-800/80 pb-1 flex justify-between">
+                <span>GraphRAG Consensus Evaluation</span>
+                <span className="text-emerald-400 font-bold">VALIDATED (&gt;85%)</span>
+              </div>
+              <p className="line-clamp-2 leading-snug font-medium text-emerald-200">
+                {swarmLogs[5]}
+              </p>
+            </div>
+            {logStep === 5 && (
+              <div className="bg-emerald-950/80 border border-emerald-500/60 p-2 rounded-xl flex items-center justify-between text-[10px] font-bold text-emerald-300 shadow-lg shadow-emerald-500/20 animate-in fade-in duration-300">
+                <span className="flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 animate-bounce" />
+                  <span>CONSENSUS GATE SIAP (100%)</span>
+                </span>
+                <span className="text-[9px] font-mono bg-emerald-900/90 px-1.5 py-0.5 rounded text-emerald-200 uppercase font-black tracking-wider border border-emerald-400/50">
+                  SIAP ADVANCE
+                </span>
+              </div>
+            )}
           </div>
         )}
 
@@ -246,9 +401,15 @@ export function GuidedDemoPanel({
                 e.stopPropagation();
                 onAdvance();
               }}
-              className="flex-1 py-2 rounded-xl text-xs font-bold bg-cyan-500 text-slate-950 hover:bg-cyan-400 active:scale-98 transition duration-200 shadow-md shadow-cyan-500/20 cursor-pointer"
+              className={`flex-1 py-2 rounded-xl text-xs cursor-pointer flex items-center justify-center gap-1.5 transition duration-200 ${
+                stage === 0
+                  ? 'bg-cyan-500 text-slate-950 font-bold hover:bg-cyan-400 shadow-md shadow-cyan-500/20'
+                  : logStep === 5
+                    ? 'bg-cyan-400 text-slate-950 font-black hover:bg-cyan-300 shadow-lg shadow-cyan-500/50 animate-pulse border-2 border-cyan-300'
+                    : 'bg-cyan-500/80 text-slate-950 font-bold hover:bg-cyan-400'
+              }`}
             >
-              ⏭ Next Step
+              {stage === 0 ? '🚀 Inject Crisis & Run Swarm' : logStep === 5 ? '⏭️ Next Step (Swarm Complete 100%)' : '⏭ Next Step'}
             </button>
           ) : (
             <button
@@ -256,7 +417,7 @@ export function GuidedDemoPanel({
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                onStart();
+                onStart({ origin: selectedOrigin, destination: selectedDestination });
               }}
               className="flex-1 py-2 rounded-xl text-xs font-bold bg-cyan-500 text-slate-950 hover:bg-cyan-400 active:scale-95 transition duration-200 shadow-md shadow-cyan-500/20 cursor-pointer"
             >

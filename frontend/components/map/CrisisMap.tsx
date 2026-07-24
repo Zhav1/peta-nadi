@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import MapboxDraw from '@mapbox/mapbox-gl-draw';
@@ -127,7 +127,7 @@ export default function CrisisMap({
   const corridorMarkersRef = useRef<mapboxgl.Marker[]>([]);
   const timeHorizonMarkersRef = useRef<mapboxgl.Marker[]>([]);
 
-
+  const [mapInstance, setMapInstance] = useState<mapboxgl.Map | null>(null);
 
   const isMapLoadedRef = useRef(false);
   const onCrisisClickRef = useRef(onCrisisClick);
@@ -211,7 +211,11 @@ export default function CrisisMap({
 
     map.on('load', () => {
       isMapLoadedRef.current = true;
+      setMapInstance(map);
       map.addControl(draw, 'top-left');
+
+      // Immediately render interactive Hub Node Markers on map load
+      renderHtmlHubMarkers();
 
       // 0. Regional Administrative Spatial Coverage Layer (Google Maps ADM Style Dashed Borders)
       map.addSource('weather-polygons-source', {
@@ -1211,8 +1215,13 @@ export default function CrisisMap({
         aria-label="PetaNadi crisis intelligence map"
       />
 
-      {/* WebGL Native Fleet Vehicle Layer (Phase 28) */}
-      <FleetVehicleLayer map={mapRef.current} vehicles={activeFleet || []} />
+      {/* WebGL Native Fleet Vehicle Layer (Phase 28 & Phase 29) */}
+      <FleetVehicleLayer
+        map={mapInstance || mapRef.current}
+        vehicles={activeFleet || []}
+        activeRoutes={activeRoutes}
+        activeRouteIdx={activeRouteIdx}
+      />
 
 
       {/* Floating active status badge when freehand drawing mode is active */}
