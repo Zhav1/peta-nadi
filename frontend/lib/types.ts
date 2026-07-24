@@ -94,8 +94,6 @@ export interface CrisisState {
   validated: boolean;
   created_at: string;
   evidence?: {
-    cctv_url?: string;
-    cctv_label?: string;
     osint_author?: string;
     osint_text?: string;
     delay_minutes?: string;
@@ -247,4 +245,21 @@ export interface DemoStatus {
   summary?: string;
   crisis_state: import('./types').CrisisState;
 }
+
+// Phase 25: Multi-Modal Fleet Vehicle Types
+export type VehicleModality = 'truck' | 'maritime' | 'air';
+
+export interface FleetVehicle {
+  vehicle_id: string;
+  name: string;
+  modality: VehicleModality;
+  path: [number, number][];        // Trajectory polyline: [[lon, lat], ...], min 2 points
+  speed_kmh: number;               // Speed in km/h or knots converted
+  status: 'moving' | 'anchored' | 'rerouting';
+  cargo?: string;                  // e.g., "1.200 Ton Beras BULOG"
+  origin?: string;                 // e.g., "Pelabuhan Belawan"
+  destination?: string;            // e.g., "Hub Logistik Medan"
+  progress?: number;               // 0.0-1.0 internal progress tracking
+}
+
 

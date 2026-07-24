@@ -9,6 +9,7 @@ import { useCrisisSocket } from '@/hooks/useCrisisSocket';
 import { CrisisSidebar } from '@/components/sidebar/CrisisSidebar';
 import { Toast } from '@/components/ui/Toast';
 import { useDemoState } from '@/hooks/useDemoState';
+import { useFleetVehicles } from '@/hooks/useFleetVehicles';
 import { GuidedDemoPanel } from '@/components/demo/GuidedDemoPanel';
 import AnalyticsSection from '@/components/dashboard/AnalyticsSection';
 import SimulationSection from '@/components/dashboard/SimulationSection';
@@ -148,6 +149,7 @@ const FALLBACK_PREDICTIVE = [
 
 export default function DashboardClient() {
   const { incidents, refetch } = useIncidents();
+  const { vehicles: activeFleetVehicles } = useFleetVehicles();
   const [selectedCrisisId, setSelectedCrisisId] = useState<string | null>(null);
   const [selectedCrisis, setSelectedCrisis] = useState<CrisisState | null>(null);
   const [activeRouteIdx, setActiveRouteIdx] = useState<number | null>(null);
@@ -477,7 +479,6 @@ export default function DashboardClient() {
             messages: [],
             route_recommendations: [],
             evidence: {
-              cctv_label: `CAM_${String(item.type || 'CRISIS').toUpperCase()}_MONITOR`,
               osint_author: '@LogisticsWatcher_ID',
               osint_text: `Laporan OSINT Terverifikasi: ${String(item.title)}. ${String(item.impact_summary || 'Anomali disrupsi pasokan memicu risiko lonjakan harga komoditas.')}`
             },
@@ -660,8 +661,6 @@ export default function DashboardClient() {
       route_recommendations: dynamicRoadDetourRoutes,
       decision_support_output: `AI Copilot: Disrupsi ${type.toUpperCase()} terdeteksi. Engine Pure Agentic Tangential Vector menghitung pengalihan rute jalan raya otomatis melingkari zona krisis. Tindakan disarankan: Alihkan armada kontainer via Rute Pengalihan 1. Rilis 480 ton cadangan beras BULOG.`,
       evidence: {
-        cctv_label: `CAM_${type.toUpperCase()}_SUMUT_LIVE`,
-        cctv_url: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=600&q=80',
         osint_author: '@PetaNadi_CommandCenter',
         osint_text: `Peringatan AI Dynamic: Disrupsi ${type} diaktifkan pada rute ${originId.toUpperCase()} ➔ ${destId.toUpperCase()}. Jalur logistik utama dialihkan via Pure Agentic Tangential Clearance Detour.`,
         delay_minutes: '120 min',
@@ -859,7 +858,8 @@ export default function DashboardClient() {
               }
               activeRouteIdx={activeRouteIdx}
               fireHotspots={[]}
-              maritimeVectors={[]}
+              activeFleet={activeFleetVehicles}
+              demoStage={demoState.isRunning ? demoState.stage : null}
               disasterZones={disasterZones}
               onPolygonDrawn={handlePolygonDrawn}
               drawModeActive={drawModeActive}

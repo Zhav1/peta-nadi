@@ -87,25 +87,6 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
         <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
           Sensory Evidence Chain
         </p>
-        
-        {/* CCTV Feed */}
-        <div className="bg-[#1e2024]/40 border border-white/10 rounded-sm overflow-hidden group hover:border-[#00F0FF]/30 transition-all">
-          <div className="flex justify-between items-center px-3 py-1.5 border-b border-white/5 bg-[#0c0e12]/60">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1">
-              <span className="material-symbols-outlined text-[14px] text-[#00F0FF]">videocam</span>
-              Visual CCTV Log
-            </span>
-            <span className="px-1.5 py-0.5 bg-red-500/10 text-red-400 text-[8px] font-black border border-red-500/20">LIVE</span>
-          </div>
-          <div className="relative h-28 bg-[#0c0e12]">
-            <img 
-              className="w-full h-full object-cover grayscale opacity-70 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-300"
-              alt="CCTV queue" 
-              src={crisis.evidence?.cctv_url || "https://lh3.googleusercontent.com/aida-public/AB6AXuCSkcMNp9A2WvmF9SddYsYck24hnqLHr4fijdyt6r3VpZFPJf0mtNR27ab7RUKQdQbUBxp2GnZfrSynR1FJLuY48kRgpb95BjrJMSHx3YlteTolzEwqZqCYY232E624HOyhDrtuVlKptQuZQk8jZw-cS1IPN6HT5w6Qc03wlvdM2fruNNTF9p2NEKlXtH29s3B_zPxT6BEpNe_U2WXNAC2PObrXRsYdyjeJox2fDIvMDQTCpyuAYzTNw5lKWbw8U1D-0ajWdrcSrYc"}
-            />
-            <div className="absolute top-2 left-2 text-[8px] font-mono bg-black/60 px-1 text-[#00F0FF]">{crisis.evidence?.cctv_label || "CAM_IDX_92 :: HIGHWAY_CORRIDOR"}</div>
-          </div>
-        </div>
 
         {/* Crowdsourced OSINT */}
         <div className="bg-[#1e2024]/40 border border-white/10 rounded-sm p-3 hover:border-[#00F0FF]/30 transition-all text-[11px] leading-tight">
