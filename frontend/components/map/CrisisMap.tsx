@@ -146,7 +146,7 @@ export default function CrisisMap({
   useEffect(() => {
     if (!containerRef.current) return;
 
-    const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || 'MAPBOX_DEMO_TOKEN_REMOVED';
+    const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || '';
 
     const map = new mapboxgl.Map({
       container: containerRef.current,
