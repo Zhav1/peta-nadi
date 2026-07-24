@@ -138,5 +138,20 @@ export const api = {
         '/api/v1/fleet/vehicles'
       ),
   },
+  news: {
+    live: () =>
+      request<{ items: Array<Record<string, unknown>>; total: number }>('/api/v1/news/live'),
+    verify: (claim: string, location: string = 'Koridor Sumut') =>
+      request<{ verification_status: string; confidence_score: number; attributions: Array<Record<string, unknown>>; reasoning: string }>(
+        `/api/v1/news/verify?claim=${encodeURIComponent(claim)}&location=${encodeURIComponent(location)}`,
+        { method: 'POST' }
+      ),
+    marketRegime: () =>
+      request<{ regime: string; active_crisis_indicators: string[]; commodity_volatility_score: number }>(
+        '/api/v1/news/market-regime'
+      ),
+  },
 };
+
+
 
