@@ -39,11 +39,11 @@ export default function OnboardHero() {
 
       {/* 2. Hero Content (Wide Open Video - Creative Full-Word Badges) */}
       <div className="relative z-10 max-w-5xl mx-auto text-center flex flex-col items-center gap-8">
-        
+
         {/* Status Pill Badge with PetaNadi Logo & Neon Glow Border */}
         <div className="inline-flex items-center gap-3 px-5 py-2.5 rounded-full backdrop-blur-2xl bg-[#080d14]/80 border border-emerald-400/40 text-xs font-mono shadow-[0_0_25px_rgba(52,211,153,0.3)]">
           <img src="/logo_petanadi.png" alt="PetaNadi" className="w-4 h-4 object-contain animate-pulse" />
-          <span className="text-emerald-400 font-bold uppercase tracking-widest">PetaNadi v3.0 Live</span>
+          <span className="text-emerald-400 font-bold uppercase tracking-widest">PetaNadi Live</span>
           <span className="text-slate-500">|</span>
           <span className="text-slate-200">4D Crisis Command Center</span>
         </div>
