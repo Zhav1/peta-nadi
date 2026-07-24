@@ -8,9 +8,11 @@ import { calculateRouteProgressPosition } from '@/lib/geoUtils';
 interface FleetVehicleLayerProps {
   map: mapboxgl.Map | null;
   vehicles: FleetVehicle[];
+  activeRoutes?: import('@/lib/types').RouteRecommendation[];
+  activeRouteIdx?: number | null;
 }
 
-export function FleetVehicleLayer({ map, vehicles }: FleetVehicleLayerProps) {
+export function FleetVehicleLayer({ map, vehicles, activeRoutes, activeRouteIdx }: FleetVehicleLayerProps) {
   const [selectedVehicle, setSelectedVehicle] = useState<{
     vehicle: FleetVehicle;
     x: number;
@@ -44,6 +46,7 @@ export function FleetVehicleLayer({ map, vehicles }: FleetVehicleLayerProps) {
           const imageData = ctx.getImageData(0, 0, width, height);
           if (!map!.hasImage(name)) {
             map!.addImage(name, imageData, { pixelRatio: 2 });
+            map!.triggerRepaint();
           }
         }
         URL.revokeObjectURL(url);
@@ -84,12 +87,15 @@ export function FleetVehicleLayer({ map, vehicles }: FleetVehicleLayerProps) {
       addSvgIcon('truck-icon', truckSvg);
       addSvgIcon('vessel-icon', vesselSvg);
       addSvgIcon('plane-icon', planeSvg);
+      if (map) map.triggerRepaint();
     };
 
+    onLoad();
     if (map.isStyleLoaded()) {
       onLoad();
     } else {
       map.once('style.load', onLoad);
+      map.once('load', onLoad);
     }
   }, [map]);
 
@@ -102,9 +108,15 @@ export function FleetVehicleLayer({ map, vehicles }: FleetVehicleLayerProps) {
     const layerId = 'fleet-vehicles-layer';
     const routesLayerId = 'fleet-routes-layer';
 
-    // Build GeoJSON features for routes
+    // Build GeoJSON features for routes (dynamically synced to active Mapbox road polyline)
     const routeFeatures = vehicles.map((v) => {
-      const coords = v.route_geometry?.coordinates || v.path || [];
+      let coords = v.route_geometry?.coordinates || v.path || [];
+      if (v.modality === 'truck' && activeRoutes && activeRoutes.length > 0) {
+        const selRoute = activeRoutes[activeRouteIdx ?? 0] || activeRoutes[0];
+        if (selRoute && selRoute.waypoints && selRoute.waypoints.length > 1) {
+          coords = selRoute.waypoints.map((w) => [w.lon, w.lat]);
+        }
+      }
       return {
         type: 'Feature' as const,
         properties: {
@@ -215,8 +227,14 @@ export function FleetVehicleLayer({ map, vehicles }: FleetVehicleLayerProps) {
       lastTimeRef.current = now;
 
       const pointFeatures = vehicles.map((v) => {
-        const coords = v.route_geometry?.coordinates || v.path || [];
-        
+        let coords = v.route_geometry?.coordinates || v.path || [];
+        if (v.modality === 'truck' && activeRoutes && activeRoutes.length > 0) {
+          const selRoute = activeRoutes[activeRouteIdx ?? 0] || activeRoutes[0];
+          if (selRoute && selRoute.waypoints && selRoute.waypoints.length > 1) {
+            coords = selRoute.waypoints.map((w) => [w.lon, w.lat]);
+          }
+        }
+
         // Speed-based progress increments
         const baseSpeed = v.speed_kmh || 60;
         const increment = v.status === 'anchored' ? 0 : (baseSpeed / 3600) * deltaSec * 0.05;
@@ -274,7 +292,7 @@ export function FleetVehicleLayer({ map, vehicles }: FleetVehicleLayerProps) {
       map.off('mouseleave', layerId, onMouseLeave);
       map.off('click', layerId, onClick);
     };
-  }, [map, vehicles]);
+  }, [map, vehicles, activeRoutes, activeRouteIdx]);
 
   if (!selectedVehicle) return null;
 

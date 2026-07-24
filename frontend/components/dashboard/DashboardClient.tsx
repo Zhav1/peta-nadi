@@ -513,12 +513,12 @@ export default function DashboardClient() {
   // LIVE VISUAL DEMO STEPPER TRIGGER
   const handleCrisisReadyFromDemo = useCallback(async (crisis: CrisisState) => {
     const originId = selectedOriginNode || 'belawan';
-    const destId = selectedDestNode || 'siantar';
+    const destId = selectedDestNode || 'tebingtinggi';
     setSelectedOriginNode(originId);
     setSelectedDestNode(destId);
 
     const originCoords = HUB_NODES[originId]?.coords || HUB_NODES.belawan.coords;
-    const destCoords = HUB_NODES[destId]?.coords || HUB_NODES.siantar.coords;
+    const destCoords = HUB_NODES[destId]?.coords || HUB_NODES.tebingtinggi.coords;
     const hazardPoint: [number, number] = [98.87, 3.56]; // Lubuk Pakam corridor
 
     setSimulatedShockwave({
@@ -543,6 +543,7 @@ export default function DashboardClient() {
     setCurrentMapRoutes(demoRoutes);
     setSelectedCrisis(fullDemoState);
     setSelectedCrisisId(crisis.crisis_id);
+    setActiveRouteIdx(0); // Force Mapbox canvas to highlight Emerald Safe Detour at index 0
     setToast({ message: `▶ Live Demo Active: ${crisis.title}`, type: 'success' });
   }, [selectedOriginNode, selectedDestNode, selectedRadius, selectedModality]);
 
@@ -554,19 +555,15 @@ export default function DashboardClient() {
 
     switch (demoState.stage) {
       case 0: {
-        // Stage 0: Baseline Data Ingestion — clean map, normal Belawan-Medan route
+        // Stage 0: Baseline Data Ingestion — clean map, respect user's selected origin & destination
         setSimulatedShockwave(null);
         setSelectedCrisis(null);
         setIsSidebarOpen(false);
-        setSelectedOriginNode('belawan');
-        setSelectedDestNode('medan');
         break;
       }
 
       case 1: {
-        // Stage 1: Agent Swarm Analyzing — baseline Belawan-Siantar route active
-        setSelectedOriginNode('belawan');
-        setSelectedDestNode('siantar');
+        // Stage 1: Agent Swarm Analyzing — active user selected corridor remains intact
         break;
       }
 
@@ -584,6 +581,7 @@ export default function DashboardClient() {
         // Stage 3: Validated Crisis — handleCrisisReadyFromDemo auto-called by useDemoState
         setIsSidebarOpen(true);
         setActiveTab('Evidence');
+        setActiveRouteIdx(0); // Highlight emerald detour route at index 0
         break;
       }
 
@@ -789,8 +787,8 @@ export default function DashboardClient() {
             <button
               onClick={() => setActiveSection('map')}
               className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition ${activeSection === 'map'
-                  ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
-                  : 'text-slate-400 hover:text-white'
+                ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
+                : 'text-slate-400 hover:text-white'
                 }`}
             >
               MAP 4D
@@ -798,8 +796,8 @@ export default function DashboardClient() {
             <button
               onClick={() => setActiveSection('analytics')}
               className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition ${activeSection === 'analytics'
-                  ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
-                  : 'text-slate-400 hover:text-white'
+                ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
+                : 'text-slate-400 hover:text-white'
                 }`}
             >
               ANALYTICS
@@ -807,8 +805,8 @@ export default function DashboardClient() {
             <button
               onClick={() => setActiveSection('simulation')}
               className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition ${activeSection === 'simulation'
-                  ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
-                  : 'text-slate-400 hover:text-white'
+                ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
+                : 'text-slate-400 hover:text-white'
                 }`}
             >
               SIMULATION
@@ -816,8 +814,8 @@ export default function DashboardClient() {
             <button
               onClick={() => setActiveSection('reports')}
               className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition ${activeSection === 'reports'
-                  ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
-                  : 'text-slate-400 hover:text-white'
+                ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
+                : 'text-slate-400 hover:text-white'
                 }`}
             >
               REPORTS
@@ -896,9 +894,8 @@ export default function DashboardClient() {
           )}
 
           {/* 2. GPU-ACCELERATED COLLAPSIBLE LEFT TACTICAL SIDEBAR (OVERLAY MODE - ZERO CANVAS BLINK) */}
-          <aside className={`absolute left-0 top-0 bottom-0 z-40 w-80 bg-[#0c0e12]/90 backdrop-blur-xl border-r border-white/10 flex flex-col gap-4 p-4 overflow-y-auto custom-scrollbar pointer-events-auto transition-transform duration-300 ease-in-out shadow-2xl ${
-            isLeftSidebarCollapsed ? '-translate-x-full pointer-events-none' : 'translate-x-0'
-          }`}>
+          <aside className={`absolute left-0 top-0 bottom-0 z-40 w-80 bg-[#0c0e12]/90 backdrop-blur-xl border-r border-white/10 flex flex-col gap-4 p-4 overflow-y-auto custom-scrollbar pointer-events-auto transition-transform duration-300 ease-in-out shadow-2xl ${isLeftSidebarCollapsed ? '-translate-x-full pointer-events-none' : 'translate-x-0'
+            }`}>
 
             {/* National Logistics Health Score Gauge (SVG CIRCLE RING FIX) */}
             <div className="bg-[#1e2024]/40 border border-white/10 p-4 rounded-xl relative overflow-hidden backdrop-blur-md">
@@ -1042,23 +1039,28 @@ export default function DashboardClient() {
               confidence={demoState.confidence}
               summary={demoState.summary}
               isAuto={demoState.isAuto}
-              onStart={() => demoState.start({ mock_agents: false, offline: false })}
+              onStart={(opts) => demoState.start({ mock_agents: false, offline: false, origin: opts?.origin || selectedOriginNode || 'belawan', destination: opts?.destination || selectedDestNode || 'tebingtinggi' })}
               onAdvance={demoState.advance}
               onToggleAuto={demoState.toggleAuto}
               onReset={demoState.reset}
               isSidebarOpen={isSidebarOpen && !!selectedCrisis}
+              selectedOrigin={selectedOriginNode || 'belawan'}
+              selectedDestination={selectedDestNode || 'tebingtinggi'}
+              onSelectPreset={(origin, dest) => {
+                setSelectedOriginNode(origin);
+                setSelectedDestNode(dest);
+              }}
             />
 
             {/* Bottombar Time Scope Filters (Exact Dual-Sidebar Centering) */}
-            <footer className={`absolute bottom-6 z-40 flex items-center gap-2 bg-[#080d14]/90 backdrop-blur-xl border border-white/10 px-4 py-2 rounded-2xl shadow-2xl transition-all duration-300 pointer-events-auto ${
-              !isLeftSidebarCollapsed && (isSidebarOpen && !!selectedCrisis)
+            <footer className={`absolute bottom-6 z-40 flex items-center gap-2 bg-[#080d14]/90 backdrop-blur-xl border border-white/10 px-4 py-2 rounded-2xl shadow-2xl transition-all duration-300 pointer-events-auto ${!isLeftSidebarCollapsed && (isSidebarOpen && !!selectedCrisis)
                 ? 'left-[calc(50%-30px)] -translate-x-1/2'
                 : !isLeftSidebarCollapsed && !(isSidebarOpen && !!selectedCrisis)
-                ? 'left-[calc(50%+160px)] -translate-x-1/2'
-                : isLeftSidebarCollapsed && (isSidebarOpen && !!selectedCrisis)
-                ? 'left-[calc(50%-190px)] -translate-x-1/2'
-                : 'left-1/2 -translate-x-1/2'
-            }`}>
+                  ? 'left-[calc(50%+160px)] -translate-x-1/2'
+                  : isLeftSidebarCollapsed && (isSidebarOpen && !!selectedCrisis)
+                    ? 'left-[calc(50%-190px)] -translate-x-1/2'
+                    : 'left-1/2 -translate-x-1/2'
+              }`}>
               {(['past', 'present', 'future', 'predict'] as const).map((filter) => (
                 <button
                   key={filter}
@@ -1069,8 +1071,8 @@ export default function DashboardClient() {
                     }
                   }}
                   className={`px-4 py-1.5 rounded-xl font-headline font-bold text-xs uppercase tracking-wider transition cursor-pointer ${activeTimeFilter === filter
-                      ? 'bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/20'
-                      : 'text-slate-400 hover:text-white'
+                    ? 'bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/20'
+                    : 'text-slate-400 hover:text-white'
                     }`}
                 >
                   {filter}
@@ -1079,7 +1081,7 @@ export default function DashboardClient() {
               <div className="w-[1px] h-5 bg-white/15 mx-1" />
               <button
                 type="button"
-                onClick={() => demoState.start({ mock_agents: false, offline: false })}
+                onClick={() => demoState.start({ mock_agents: false, offline: false, origin: selectedOriginNode || 'belawan', destination: selectedDestNode || 'tebingtinggi' })}
                 className="flex items-center gap-1.5 px-3 py-1.5 font-bold rounded-xl bg-cyan-500 text-slate-950 hover:bg-cyan-400 active:scale-95 transition duration-200 shadow-lg shadow-cyan-500/25 border border-cyan-400/50 cursor-pointer text-xs uppercase tracking-wider"
               >
                 <span className="animate-pulse">▶</span> Run Demo

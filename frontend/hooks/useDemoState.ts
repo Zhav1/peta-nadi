@@ -139,7 +139,7 @@ export function useDemoState(onCrisisReady?: (crisis: CrisisState) => void) {
   }, [stage, fullCrisisState, getFilteredState, onCrisisReady]);
 
   // Starts the demo run
-  const start = useCallback(async (opts?: { mock_agents?: boolean; offline?: boolean }) => {
+  const start = useCallback(async (opts?: { mock_agents?: boolean; offline?: boolean; origin?: string; destination?: string }) => {
     setIsReplay(false);
     setIsRunning(true);
     setStage(0);
@@ -165,10 +165,13 @@ export function useDemoState(onCrisisReady?: (crisis: CrisisState) => void) {
 
     // Fallback for offline / mock mode when backend is unreachable
     const fallbackId = `belawan-demo-offline-${Math.floor(Math.random() * 1000)}`;
+    const originLabel = opts?.origin ? opts.origin.toUpperCase() : 'BELAWAN';
+    const destLabel = opts?.destination ? opts.destination.toUpperCase() : 'TEBING TINGGI';
+
     setCrisisId(fallbackId);
     setFullCrisisState({
       crisis_id: fallbackId,
-      title: 'Inflation Spike Alert: Rice Stock Depletion',
+      title: `Inflation Spike Alert: Disruption (${originLabel} -> ${destLabel})`,
       type: 'port_closure',
       is_simulated: true,
       lat: 3.79,
@@ -180,10 +183,10 @@ export function useDemoState(onCrisisReady?: (crisis: CrisisState) => void) {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       messages: [],
-      decision_support_output: 'Belawan Port closure detected. Directing bulk grain trucks via Medan-Tebing Tinggi toll road detour.',
+      decision_support_output: `Disruption detected along ${originLabel} -> ${destLabel} corridor. Directing transport fleet via NVIDIA cuOpt dynamic tangential detour.`,
       route_recommendations: [
         {
-          description: 'Medan-Tebing Tinggi Detour',
+          description: `${originLabel} - ${destLabel} Detour`,
           waypoints: [
             { lat: 3.7922, lon: 98.6776 },
             { lat: 3.6850, lon: 98.6700 },
