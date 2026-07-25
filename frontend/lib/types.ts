@@ -155,6 +155,12 @@ export interface ApprovalPayload {
   route_id: string;
   recommended_route: RouteRecommendation;
   operator_id?: string;
+  crisis_id?: string;
+  route_name?: string;
+  origin?: string;
+  destination?: string;
+  approved_by?: string;
+  notes?: string;
 }
 
 export interface ApprovalResponse {
