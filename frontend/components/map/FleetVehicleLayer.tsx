@@ -101,7 +101,7 @@ export function FleetVehicleLayer({ map, vehicles, activeRoutes, activeRouteIdx 
 
   // Setup WebGL Native Layers & 60 FPS Route-Bound Animation Loop
   useEffect(() => {
-    if (!map || vehicles.length === 0) return;
+    if (!map || vehicles.length === 0 || !map.isStyleLoaded()) return;
 
     const sourceId = 'fleet-vehicles-source';
     const routesSourceId = 'fleet-routes-source';
@@ -135,54 +135,60 @@ export function FleetVehicleLayer({ map, vehicles, activeRoutes, activeRouteIdx 
       features: routeFeatures,
     };
 
-    // Add sources & layers to Mapbox WebGL canvas
-    if (!map.getSource(routesSourceId)) {
-      map.addSource(routesSourceId, {
-        type: 'geojson',
-        data: routesGeoJson,
-      });
+    // Add sources & layers to Mapbox WebGL canvas safely
+    try {
+      if (!map.isStyleLoaded()) return;
 
-      map.addLayer({
-        id: routesLayerId,
-        type: 'line',
-        source: routesSourceId,
-        paint: {
-          'line-color': [
-            'match',
-            ['get', 'modality'],
-            'truck', '#06b6d4',
-            'maritime', '#f59e0b',
-            'air', '#a855f7',
-            '#06b6d4'
-          ],
-          'line-width': 2.2,
-          'line-opacity': 0.6,
-          'line-dasharray': [3, 2],
-        },
-      });
-    } else {
-      (map.getSource(routesSourceId) as mapboxgl.GeoJSONSource).setData(routesGeoJson);
-    }
+      if (!map.getSource(routesSourceId)) {
+        map.addSource(routesSourceId, {
+          type: 'geojson',
+          data: routesGeoJson,
+        });
 
-    if (!map.getSource(sourceId)) {
-      map.addSource(sourceId, {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] },
-      });
+        map.addLayer({
+          id: routesLayerId,
+          type: 'line',
+          source: routesSourceId,
+          paint: {
+            'line-color': [
+              'match',
+              ['get', 'modality'],
+              'truck', '#06b6d4',
+              'maritime', '#f59e0b',
+              'air', '#a855f7',
+              '#06b6d4'
+            ],
+            'line-width': 2.2,
+            'line-opacity': 0.6,
+            'line-dasharray': [3, 2],
+          },
+        });
+      } else {
+        (map.getSource(routesSourceId) as mapboxgl.GeoJSONSource).setData(routesGeoJson);
+      }
 
-      map.addLayer({
-        id: layerId,
-        type: 'symbol',
-        source: sourceId,
-        layout: {
-          'icon-image': ['get', 'icon'],
-          'icon-size': 0.85,
-          'icon-rotate': ['get', 'bearing'],
-          'icon-rotation-alignment': 'map',
-          'icon-allow-overlap': true,
-          'icon-ignore-placement': true,
-        },
-      });
+      if (!map.getSource(sourceId)) {
+        map.addSource(sourceId, {
+          type: 'geojson',
+          data: { type: 'FeatureCollection', features: [] },
+        });
+
+        map.addLayer({
+          id: layerId,
+          type: 'symbol',
+          source: sourceId,
+          layout: {
+            'icon-image': ['get', 'icon'],
+            'icon-size': 0.85,
+            'icon-rotate': ['get', 'bearing'],
+            'icon-rotation-alignment': 'map',
+            'icon-allow-overlap': true,
+            'icon-ignore-placement': true,
+          },
+        });
+      }
+    } catch (err) {
+      console.warn('FleetVehicleLayer map style sync deferred:', err);
     }
 
     // Hover & Click interaction listeners on WebGL Native Symbol layer
