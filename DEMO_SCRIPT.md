@@ -1,6 +1,7 @@
-# PetaNadi Hackathon Demo Script (3-Minute Presentation)
+# PetaNadi Hackathon Demo Script (Overview & 90-Second Walkthrough)
 
-This script maps out a 3-minute presentation structure demonstrating PetaNadi's multi-agent crisis consensus framework.
+> [!IMPORTANT]
+> **Dedicated 90-Second Product Demo Script:** For the live product walkthrough pitch (Bagian 2 & 3: End-to-End Routing Use Case, No-Hallucination Forced Waypoint Engine, 60 FPS Fleet, & B2G Action Plan), see [DEMO_SCRIPT_90S.md](file:///c:/Farras/DIGDAYA/peta-nadi/DEMO_SCRIPT_90S.md).
 
 ---
 
