@@ -12,6 +12,35 @@ interface FleetVehicleLayerProps {
   activeRouteIdx?: number | null;
 }
 
+// 🚚 Truck SVG Sprite Icon (48x48)
+const truckSvg = `
+  <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+    <circle cx="24" cy="24" r="21" fill="#090d16" fill-opacity="0.95" stroke="#06b6d4" stroke-width="2.5"/>
+    <rect x="10" y="14" width="18" height="14" rx="2" fill="#0284c7" stroke="#38bdf8" stroke-width="1.5"/>
+    <polygon points="28,19 33,19 37,23 37,28 28,28" fill="#0891b2" stroke="#22d3ee" stroke-width="1.5"/>
+    <circle cx="15" cy="31" r="3.5" fill="#0f172a" stroke="#38bdf8" stroke-width="2"/>
+    <circle cx="31" cy="31" r="3.5" fill="#0f172a" stroke="#22d3ee" stroke-width="2"/>
+  </svg>
+`;
+
+// ⚓ Vessel SVG Sprite Icon (48x48)
+const vesselSvg = `
+  <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+    <circle cx="24" cy="24" r="21" fill="#06192a" fill-opacity="0.95" stroke="#f59e0b" stroke-width="2.5"/>
+    <path d="M10 26l4 10h20l4-10H10z" fill="#d97706" stroke="#fbbf24" stroke-width="1.5"/>
+    <rect x="16" y="18" width="16" height="8" rx="1.5" fill="#0284c7" stroke="#38bdf8" stroke-width="1.5"/>
+    <path d="M24 10v8" stroke="#fbbf24" stroke-width="2.5"/>
+  </svg>
+`;
+
+// ✈️ Aircraft SVG Sprite Icon (48x48)
+const planeSvg = `
+  <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+    <circle cx="24" cy="24" r="21" fill="#1e1035" fill-opacity="0.95" stroke="#a855f7" stroke-width="2.5"/>
+    <path d="M24 10l3 10 10 3-10 3-3 10-3-10-10-3 10-3z" fill="#c084fc" stroke="#e879f9" stroke-width="1.5"/>
+  </svg>
+`;
+
 export function FleetVehicleLayer({ map, vehicles, activeRoutes, activeRouteIdx }: FleetVehicleLayerProps) {
   const [selectedVehicle, setSelectedVehicle] = useState<{
     vehicle: FleetVehicle;
@@ -25,16 +54,15 @@ export function FleetVehicleLayer({ map, vehicles, activeRoutes, activeRouteIdx 
   const progressMapRef = useRef<Record<string, number>>({});
   const lastTimeRef = useRef<number>(performance.now());
 
-  // Generate crisp SVG Canvas Sprites and register with Mapbox
+  // Register SVG icons with Mapbox & handle styleimagemissing fallback
   useEffect(() => {
     if (!map) return;
 
-    function addSvgIcon(name: string, svgStr: string, width = 48, height = 48) {
+    const loadIcon = (name: string, svgStr: string) => {
       if (!map || map.hasImage(name)) return;
-
-      const img = new Image(width, height);
+      const img = new Image(48, 48);
       img.onload = () => {
-        if (map && map.isStyleLoaded() && !map.hasImage(name)) {
+        if (map && !map.hasImage(name)) {
           map.addImage(name, img);
           if (map.getLayer('fleet-vehicles-layer')) {
             map.setLayoutProperty('fleet-vehicles-layer', 'icon-image', ['get', 'icon']);
@@ -43,51 +71,32 @@ export function FleetVehicleLayer({ map, vehicles, activeRoutes, activeRouteIdx 
         }
       };
       img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgStr);
-    }
-
-    // 🚚 Truck SVG Sprite Icon (48x48)
-    const truckSvg = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
-        <circle cx="24" cy="24" r="21" fill="#090d16" fill-opacity="0.9" stroke="#06b6d4" stroke-width="2.5"/>
-        <rect x="10" y="14" width="18" height="14" rx="2" fill="#0284c7" stroke="#38bdf8" stroke-width="1.5"/>
-        <polygon points="28,19 33,19 37,23 37,28 28,28" fill="#0891b2" stroke="#22d3ee" stroke-width="1.5"/>
-        <circle cx="15" cy="31" r="3.5" fill="#0f172a" stroke="#38bdf8" stroke-width="2"/>
-        <circle cx="31" cy="31" r="3.5" fill="#0f172a" stroke="#22d3ee" stroke-width="2"/>
-      </svg>
-    `;
-
-    // ⚓ Vessel SVG Sprite Icon (48x48)
-    const vesselSvg = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
-        <circle cx="24" cy="24" r="21" fill="#06192a" fill-opacity="0.9" stroke="#f59e0b" stroke-width="2.5"/>
-        <path d="M10 26l4 10h20l4-10H10z" fill="#d97706" stroke="#fbbf24" stroke-width="1.5"/>
-        <rect x="16" y="18" width="16" height="8" rx="1.5" fill="#0284c7" stroke="#38bdf8" stroke-width="1.5"/>
-        <path d="M24 10v8" stroke="#fbbf24" stroke-width="2.5"/>
-      </svg>
-    `;
-
-    // ✈️ Aircraft SVG Sprite Icon (48x48)
-    const planeSvg = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
-        <circle cx="24" cy="24" r="21" fill="#1e1035" fill-opacity="0.9" stroke="#a855f7" stroke-width="2.5"/>
-        <path d="M24 10l3 10 10 3-10 3-3 10-3-10-10-3 10-3z" fill="#c084fc" stroke="#e879f9" stroke-width="1.5"/>
-      </svg>
-    `;
-
-    const onLoad = () => {
-      if (!map || !map.isStyleLoaded()) return;
-      addSvgIcon('truck-icon', truckSvg);
-      addSvgIcon('vessel-icon', vesselSvg);
-      addSvgIcon('plane-icon', planeSvg);
-      map.triggerRepaint();
     };
 
+    const registerAllIcons = () => {
+      loadIcon('truck-icon', truckSvg);
+      loadIcon('vessel-icon', vesselSvg);
+      loadIcon('plane-icon', planeSvg);
+    };
+
+    const handleMissingImage = (e: mapboxgl.MapStyleImageMissingEvent) => {
+      if (e.id === 'truck-icon') loadIcon('truck-icon', truckSvg);
+      if (e.id === 'vessel-icon') loadIcon('vessel-icon', vesselSvg);
+      if (e.id === 'plane-icon') loadIcon('plane-icon', planeSvg);
+    };
+
+    map.on('styleimagemissing', handleMissingImage);
+
     if (map.isStyleLoaded()) {
-      onLoad();
+      registerAllIcons();
     } else {
-      map.once('style.load', onLoad);
-      map.once('load', onLoad);
+      map.once('style.load', registerAllIcons);
+      map.once('load', registerAllIcons);
     }
+
+    return () => {
+      map.off('styleimagemissing', handleMissingImage);
+    };
   }, [map]);
 
   // Setup WebGL Native Layers & 60 FPS Route-Bound Animation Loop
@@ -110,7 +119,7 @@ export function FleetVehicleLayer({ map, vehicles, activeRoutes, activeRouteIdx 
         if (v.modality === 'truck' && activeRoutes && activeRoutes.length > 0) {
           const selRoute = activeRoutes[activeRouteIdx ?? 0] || activeRoutes[0];
           if (selRoute && selRoute.waypoints && selRoute.waypoints.length > 1) {
-            coords = selRoute.waypoints.map((w) => [w.lon, w.lat]);
+            coords = selRoute.waypoints.map((w: any) => [w.lon ?? w.lng ?? w[0], w.lat ?? w[1]]);
           }
         }
         return {
@@ -240,7 +249,7 @@ export function FleetVehicleLayer({ map, vehicles, activeRoutes, activeRouteIdx 
           if (v.modality === 'truck' && activeRoutes && activeRoutes.length > 0) {
             const selRoute = activeRoutes[activeRouteIdx ?? 0] || activeRoutes[0];
             if (selRoute && selRoute.waypoints && selRoute.waypoints.length > 1) {
-              coords = selRoute.waypoints.map((w) => [w.lon, w.lat]);
+              coords = selRoute.waypoints.map((w: any) => [w.lon ?? w.lng ?? w[0], w.lat ?? w[1]]);
             }
           }
 
