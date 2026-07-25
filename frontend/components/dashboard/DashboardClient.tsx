@@ -536,12 +536,19 @@ export default function DashboardClient() {
 
       if (baseCrisis) {
         const originId = selectedOriginNode || 'belawan';
-        const destId = selectedDestNode || 'medan';
+        const destId = selectedDestNode || 'tebingtinggi';
         const originCoords = HUB_NODES[originId]?.coords || HUB_NODES.belawan.coords;
-        const destCoords = HUB_NODES[destId]?.coords || HUB_NODES.medan.coords;
+        const destCoords = HUB_NODES[destId]?.coords || HUB_NODES.tebingtinggi.coords;
+        const hazardPoint: [number, number] = simulatedShockwave?.center || [98.87, 3.56];
+
+        setSimulatedShockwave({
+          center: hazardPoint,
+          radiusKm: selectedRadius,
+          hazardType: 'flood',
+        });
 
         const dynamicRoutes = await calculateAIDynamicDetourRoutes(
-          [baseCrisis.lon, baseCrisis.lat],
+          hazardPoint,
           selectedRadius,
           originCoords,
           destCoords,
@@ -553,9 +560,10 @@ export default function DashboardClient() {
           ...baseCrisis,
           route_recommendations: dynamicRoutes,
         });
+        setActiveRouteIdx(0);
       }
     }
-  }, [selectedOriginNode, selectedDestNode, selectedRadius, selectedModality, historicalEpisodes, predictiveRisks, activeTimeFilter]);
+  }, [selectedOriginNode, selectedDestNode, selectedRadius, selectedModality, historicalEpisodes, predictiveRisks, activeTimeFilter, simulatedShockwave]);
 
   // LIVE VISUAL DEMO STEPPER TRIGGER
   const handleCrisisReadyFromDemo = useCallback(async (crisis: CrisisState) => {
