@@ -535,35 +535,34 @@ export default function DashboardClient() {
       }
 
       if (baseCrisis) {
-        const originId = selectedOriginNode || 'belawan';
-        const destId = selectedDestNode || 'tebingtinggi';
-        const originCoords = HUB_NODES[originId]?.coords || HUB_NODES.belawan.coords;
-        const destCoords = HUB_NODES[destId]?.coords || HUB_NODES.tebingtinggi.coords;
-        const hazardPoint: [number, number] = simulatedShockwave?.center || [98.87, 3.56];
+        if (selectedOriginNode && selectedDestNode) {
+          const originCoords = HUB_NODES[selectedOriginNode]?.coords;
+          const destCoords = HUB_NODES[selectedDestNode]?.coords;
+          if (originCoords && destCoords) {
+            const dynamicRoutes = await calculateAIDynamicDetourRoutes(
+              [baseCrisis.lon, baseCrisis.lat],
+              selectedRadius,
+              originCoords,
+              destCoords,
+              selectedModality
+            );
 
-        setSimulatedShockwave({
-          center: hazardPoint,
-          radiusKm: selectedRadius,
-          hazardType: 'flood',
-        });
-
-        const dynamicRoutes = await calculateAIDynamicDetourRoutes(
-          hazardPoint,
-          selectedRadius,
-          originCoords,
-          destCoords,
-          selectedModality
-        );
-
-        setCurrentMapRoutes(dynamicRoutes);
-        setSelectedCrisis({
-          ...baseCrisis,
-          route_recommendations: dynamicRoutes,
-        });
-        setActiveRouteIdx(0);
+            setCurrentMapRoutes(dynamicRoutes);
+            setSelectedCrisis({
+              ...baseCrisis,
+              route_recommendations: dynamicRoutes,
+            });
+          } else {
+            setSelectedCrisis(baseCrisis);
+          }
+        } else {
+          // Clean Slate: If user has not selected Start and End nodes, do not force a mockup route on the map
+          setCurrentMapRoutes(baseCrisis.route_recommendations || []);
+          setSelectedCrisis(baseCrisis);
+        }
       }
     }
-  }, [selectedOriginNode, selectedDestNode, selectedRadius, selectedModality, historicalEpisodes, predictiveRisks, activeTimeFilter, simulatedShockwave]);
+  }, [selectedOriginNode, selectedDestNode, selectedRadius, selectedModality, historicalEpisodes, predictiveRisks, activeTimeFilter]);
 
   // LIVE VISUAL DEMO STEPPER TRIGGER
   const handleCrisisReadyFromDemo = useCallback(async (crisis: CrisisState) => {
