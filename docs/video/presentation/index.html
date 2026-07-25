@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en" data-resolution="landscape">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>PetaNadi — Apple Keynote Video Presentation</title>
+
+    <!-- Google Fonts Inter & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+
+    <!-- CSS Keynote Design System -->
+    <link rel="stylesheet" href="styles/keynote.css">
+
+    <!-- GSAP 3 Animation Library -->
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+
+    <!-- Master Data Configuration -->
+    <script src="src/data-config.js"></script>
+  </head>
+  <body>
+    <div
+      id="root"
+      class="presentation-stage"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="45"
+      data-width="1920"
+      data-height="1080"
+    >
+      <!-- Background Ambient Grid & Glows -->
+      <div class="bg-grid"></div>
+      <div class="ambient-glow" id="glow-main" data-layout-allow-overflow style="top: -100px; left: -100px;"></div>
+      <div class="ambient-glow" id="glow-closing" data-layout-allow-overflow style="bottom: -150px; right: -150px;"></div>
+
+      <!-- 3D Camera World Spatial Layer -->
+      <div id="camera-world">
+        <!-- ========================================== -->
+        <!-- SECTION 5.5: IMPACT & ROI (0.0s - 30.0s)  -->
+        <!-- ========================================== -->
+
+        <!-- SHOT 5.5A: WHO-WHAT STATEMENT (0:00 - 0:07) -->
+        <div id="slide-5-5a" class="slide-container" style="align-items: flex-start;">
+          <div id="s5a-tag" class="label-tag">
+            <span>DAMPAK & NILAI TAMBAH</span>
+          </div>
+          <div id="s5a-line1" class="headline-medium" style="margin-bottom: 24px; color: var(--text-white);">
+            Kami membantu Koordinator Operasional Logistik (PT RMS, Pelindo, BPBD & Pemda)
+          </div>
+          <div id="s5a-line2" class="headline-medium text-accent-green" style="margin-bottom: 24px;">
+            → mendapat early warning krisis berbasis Multi-Agent AI & Multi-Sensor Consensus
+          </div>
+          <div id="s5a-line3" class="headline-medium" style="color: rgba(255,255,255,0.85);">
+            → mengambil keputusan proaktif rerouting dalam menit — sebelum kerugian terjadi
+          </div>
+        </div>
+
+        <!-- SHOT 5.5B: BIG NUMBERS & VALIDATED PROBLEM QUOTE (0:07 - 0:15) -->
+        <div id="slide-5-5b" class="slide-container">
+          <div class="label-tag" style="margin-bottom: 28px;">VALUASI IMPACT & ESTIMASI RETURN ON INVESTMENT</div>
+          
+          <div class="grid-2col" style="margin-bottom: 24px;">
+            <!-- Card 1: Cost Reduction & Latency -->
+            <div id="s5b-card1" class="card-glass active-glow" style="display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 40px 32px;">
+              <div style="font-size: 18px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.1em; margin-bottom: 12px;">
+                OPTIMASI KOST OPERASIONAL LOGISTIK
+              </div>
+              <div class="headline-huge text-accent-green" style="font-size: 76px; margin-bottom: 8px;">
+                10% – 15%
+              </div>
+              <div class="subtitle" style="font-size: 22px;">
+                Penurunan Biaya Operasional Logistik • Respon Mitigasi <span class="text-accent-green">40% Lebih Cepat</span>
+              </div>
+            </div>
+
+            <!-- Card 2: ROI Multiplier -->
+            <div id="s5b-card2" class="card-glass active-glow" style="display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 40px 32px;">
+              <div style="font-size: 18px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.1em; margin-bottom: 12px;">
+                FINANCIAL PROJECTION & ROI
+              </div>
+              <div id="s5b-roi-num" class="headline-huge text-accent-green" style="font-size: 76px; margin-bottom: 8px;">
+                3.4× ROI
+              </div>
+              <div class="metric-pill">
+                <span>Payback period ~22 Bulan (Break-even Thn 2)</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Validated Problem Quote Box -->
+          <div id="s5b-quote" class="quote-box">
+            <div class="quote-text">
+              "Rerouting saat ini baru dilakukan setelah armada berada di perjalanan — kami membutuhkan sistem prediktif sebelum keberangkatan."
+            </div>
+            <div class="quote-author">
+              — Direktur PT Rahmat Mandiri Sentosa (Customer Discovery & Problem Validation)
+            </div>
+          </div>
+        </div>
+
+        <!-- SHOT 5.5C: REVENUE MODEL (B2G + B2B) & SCALE NOTE (0:15 - 0:23) -->
+        <div id="slide-5-5c" class="slide-container">
+          <div class="label-tag" style="margin-bottom: 24px;">MODEL BISNIS HYBRID B2G & B2B</div>
+          
+          <div class="grid-2col" style="margin-bottom: 28px;">
+            <!-- B2G Segment Card -->
+            <div id="s5c-card-b2g" class="card-glass accent-border">
+              <div style="font-size: 17px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 10px;">SEKTOR PUBLIK (B2G)</div>
+              <div class="headline-medium" style="font-size: 36px; margin-bottom: 12px;">Lisensi Tahunan Instansi</div>
+              <div class="subtitle" style="font-size: 24px; color: var(--accent-green-light); margin-bottom: 6px;">
+                Rp 120M – 600M / tahun
+              </div>
+              <div class="subtitle" style="font-size: 18px; color: var(--text-muted);">
+                Setup Fee: Rp 50M – 250M (Dinas Perhubungan, BPBD, Pemda, Bapanas)
+              </div>
+            </div>
+
+            <!-- B2B Segment Card -->
+            <div id="s5c-card-b2b" class="card-glass accent-border">
+              <div style="font-size: 17px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 10px;">SEKTOR SWASTA (B2B)</div>
+              <div class="headline-medium" style="font-size: 36px; margin-bottom: 12px;">Tiered SaaS Berlangganan</div>
+              <div class="subtitle" style="font-size: 24px; color: var(--accent-green-light); margin-bottom: 6px;">
+                Rp 3M – 35M / bulan
+              </div>
+              <div class="subtitle" style="font-size: 18px; color: var(--text-muted);">
+                Pengelola Armada Logistik, Pelabuhan & Distributor Pangan
+              </div>
+            </div>
+          </div>
+
+          <!-- Scale Note Sub-bullet -->
+          <div id="s5c-banner" class="card-glass" style="width: 100%; text-align: center; padding: 24px; background: rgba(76, 175, 80, 0.12); border-color: var(--border-green);">
+            <div class="subtitle" style="font-size: 22px; color: var(--text-white);">
+              📌 <span style="font-style: italic; color: var(--text-secondary);">(Nilai lisensi dan berlangganan disesuaikan tergantung pada skala operasional & jumlah armada instansi/perusahaan)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- SHOT 5.5D: ADOPTION ROADMAP & GDP ALIGNMENT (0:23 - 0:30) -->
+        <div id="slide-5-5d" class="slide-container">
+          <div class="label-tag" style="margin-bottom: 32px;">ADOPTION ROADMAP & TARGET NASIONAL</div>
+
+          <div class="grid-2col" style="gap: 40px;">
+            <div id="s5d-pilot-card" class="card-glass accent-border" style="padding: 44px;">
+              <div style="font-size: 17px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 14px;">PILOT PERDANA</div>
+              <div class="headline-medium text-accent-green" style="font-size: 38px; margin-bottom: 14px;">
+                Mitra Logistik Sumatera Utara
+              </div>
+              <div class="subtitle" style="font-size: 21px;">
+                Validasi koridor krisis Berastagi – Medan – Belawan (Pelindo & PT RMS)
+              </div>
+            </div>
+
+            <div id="s5d-gdp-card" class="card-glass accent-border" style="padding: 44px;">
+              <div style="font-size: 17px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 14px;">TARGET BIAYA LOGISTIK NASIONAL</div>
+              <div class="headline-medium" style="font-size: 38px; margin-bottom: 14px;">
+                14,29% PDB → <span class="text-accent-green">12,5% PDB</span>
+              </div>
+              <div class="subtitle" style="font-size: 21px;">
+                Mendukung target efisiensi logistik nasional Kemenko Perekonomian 2029
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- SECTION 6: TEAM READINESS (30.0s - 45.0s)  -->
+        <!-- ========================================== -->
+
+        <!-- SHOT 6A: TEAM GRID & CAPABILITY REVEAL (30:00 - 38:00) -->
+        <div id="slide-6a" class="slide-container">
+          <div id="s6a-header" style="text-align: center; margin-bottom: 36px;">
+            <div class="label-tag">PROFIL TIM S0848</div>
+            <div class="headline-large" style="font-size: 52px;">PetaNadi Team Execution Readiness</div>
+          </div>
+
+          <div class="grid-4col" style="margin-bottom: 32px;">
+            <!-- Qhanakin -->
+            <div class="team-card team-card-1">
+              <div class="team-avatar-container">
+                <span class="team-avatar-initials">QZ</span>
+              </div>
+              <div class="team-name">Qhanakin A. Zhavi</div>
+              <div class="team-role">Project Lead & System Designer</div>
+              <div class="team-detail">Certified Agentic AI Specialist • Multi-Agent Architect</div>
+            </div>
+
+            <!-- Farras -->
+            <div class="team-card team-card-2">
+              <div class="team-avatar-container">
+                <span class="team-avatar-initials">FP</span>
+              </div>
+              <div class="team-name">M. Farras Prasetya</div>
+              <div class="team-role">Fullstack Developer</div>
+              <div class="team-detail">FastAPI, Next.js, Supabase & GIS Mapping Lead</div>
+            </div>
+
+            <!-- Putera -->
+            <div class="team-card team-card-3">
+              <div class="team-avatar-container">
+                <span class="team-avatar-initials">PS</span>
+              </div>
+              <div class="team-name">Putera N. Shiddieqy</div>
+              <div class="team-role">UI-UX Developer</div>
+              <div class="team-detail">PRD Owner, 4D GIS Dashboard & UX Designer</div>
+            </div>
+
+            <!-- Shabrina -->
+            <div class="team-card team-card-4">
+              <div class="team-avatar-container">
+                <span class="team-avatar-initials">AS</span>
+              </div>
+              <div class="team-name">Atikah Shabrina S.</div>
+              <div class="team-role">Business & Strategy Analyst</div>
+              <div class="team-detail">BMC Owner, GTM Strategy & B2G/B2B Partnerships</div>
+            </div>
+          </div>
+
+          <div id="s6a-footer" class="subtitle" style="font-size: 22px; text-align: center; color: rgba(255,255,255,0.9); font-style: italic;">
+            "Prototype MVP Level 3 Ready • Teruji di 4-Fase Milestones • Validasi Lapangan PT RMS & Pelindo Multi Terminal"
+          </div>
+        </div>
+
+        <!-- SHOT 6B: CLOSING BRAND CARD (38:00 - 45:00) -->
+        <div id="slide-6b" class="slide-container" style="justify-content: center; text-align: center;">
+          <div id="s6b-logo" class="headline-huge" style="font-size: 110px; margin-bottom: 16px; letter-spacing: -0.04em;">
+            PetaNadi
+          </div>
+          <div id="s6b-tagline" class="headline-medium text-accent-green" style="font-size: 42px; font-weight: 500; margin-bottom: 48px;">
+            Navigasi Krisis. Jaga Ketahanan Pangan.
+          </div>
+          <div id="s6b-event" class="subtitle" style="font-size: 24px; color: var(--text-muted); letter-spacing: 0.08em; text-transform: uppercase;">
+            PIDI Digdaya x Hackathon 2026
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Synchronous Timeline Registration for HyperFrames Linter -->
+    <script>
+      window.__timelines = window.__timelines || {};
+    </script>
+
+    <!-- GSAP Master Animation Logic -->
+    <script src="src/gsap-timeline.js"></script>
+  </body>
+</html>
