@@ -23,9 +23,8 @@
 }
 
 html, body, #__next {
-  height: 100%;
+  min-height: 100%;
   width: 100%;
-  overflow: hidden;
   font-family: var(--font-sans);
   background-color: var(--color-bg);
   color: #f1f5f9;
@@ -35,6 +34,28 @@ html, body, #__next {
 /* Mapbox canvas must fill its container */
 .mapboxgl-canvas {
   outline: none;
+}
+
+/* Ultra-Modern Futuristic Dark Glassmorphic Global Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #080d14;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(34, 211, 238, 0.35);
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(52, 211, 153, 0.8);
+  box-shadow: 0 0 12px rgba(52, 211, 153, 0.8);
 }
 
 /* Custom scrollbar for sidebar panels */
@@ -60,49 +81,10 @@ html, body, #__next {
   animation: shimmer 1.5s infinite;
 }
 
-/* Crisis severity pulse ring */
-@keyframes crisis-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.4); }
-  50% { box-shadow: 0 0 0 12px rgba(248, 113, 113, 0); }
-}
-.crisis-pulse {
-  animation: crisis-pulse 2s infinite;
-}
-
-/* Custom Guided Demo animations */
-@keyframes fade-in {
-  from { opacity: 0; transform: scale(0.95); }
-  to { opacity: 1; transform: scale(1); }
-}
-.animate-fade-in {
-  animation: fade-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-@keyframes slide-up {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.animate-slide-up {
-  animation: slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-/* PetaNadi custom visual systems */
-.telemetry-mesh {
-  background-image: radial-gradient(circle, rgba(0, 240, 255, 0.03) 1px, transparent 1px);
-  background-size: 20px 20px;
-}
-.glass-panel {
-  backdrop-filter: blur(20px);
-  background-color: rgba(30, 32, 36, 0.4);
-}
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-.hex-overlay {
-  mask-image: linear-gradient(to bottom, white, transparent);
-  background-image: url("data:image/svg+xml,%3Csvg width='28' height='49' viewBox='0 0 28 49' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15l12.99-7.5zM3 17.91v12.68l10.99 6.34L25 30.59V17.91L14.01 11.57 3 17.91z' fill='%2300F0FF' fill-opacity='0.05' fill-rule='evenodd'/%3E%3C/svg%3E");
+/* Hide Mapbox logo and OpenStreetMap attribution text */
+.mapboxgl-ctrl-bottom-left,
+.mapboxgl-ctrl-bottom-right,
+.mapboxgl-ctrl-attrib,
+.mapboxgl-compact {
+  display: none !important;
 }

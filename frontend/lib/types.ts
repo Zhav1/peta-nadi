@@ -1,7 +1,8 @@
 // Mirror of agents/state.py TypedDicts — keep in sync with backend
 
 export type Severity = 'low' | 'medium' | 'high' | 'critical';
-export type CrisisType = 'flood' | 'port_closure' | 'wildfire' | 'congestion' | 'earthquake';
+export type CrisisType = 'flood' | 'port_closure' | 'wildfire' | 'congestion' | 'earthquake' | 'landslide';
+
 export type CrisisStatus = 'detecting' | 'validating' | 'validated' | 'resolved';
 
 export interface AgentFinding {
@@ -12,13 +13,37 @@ export interface AgentFinding {
   timestamp: string;
 }
 
+export interface RouteLeg {
+  title: string;
+  mode: 'truck' | 'maritime' | 'air';
+  distance_km: number;
+  eta_minutes: number;
+  from_name: string;
+  to_name: string;
+}
+
+export interface CongestionSegment {
+  coordinates: Array<{ lat: number; lon: number }>;
+  level: 'low' | 'moderate' | 'heavy';
+}
+
 export interface RouteRecommendation {
+  id?: string;
+  route_name?: string;
   description: string;
   waypoints: Array<{ lat: number; lon: number }>;
   distance_km: number;
   eta_minutes: number;
   fuel_increase_pct: number;
   risk_score: number;
+  is_compromised?: boolean;
+  safety_status?: 'SAFE_DETOUR' | 'COMPROMISED' | 'CLEAR';
+  safety_tag?: string;
+  traffic_level?: 'low' | 'moderate' | 'heavy' | 'mixed';
+  congestion_segments?: CongestionSegment[];
+  modality?: 'truck' | 'maritime' | 'air' | 'multimodal' | 'best';
+  legs?: RouteLeg[];
+  color?: string;
 }
 
 export interface LTMEpisode {
@@ -68,6 +93,12 @@ export interface CrisisState {
   consensus_breakdown?: Record<string, number>;
   validated: boolean;
   created_at: string;
+  evidence?: {
+    osint_author?: string;
+    osint_text?: string;
+    delay_minutes?: string;
+    delay_history?: number[];
+  };
   updated_at: string;
   messages: string[];
 }
@@ -124,6 +155,12 @@ export interface ApprovalPayload {
   route_id: string;
   recommended_route: RouteRecommendation;
   operator_id?: string;
+  crisis_id?: string;
+  route_name?: string;
+  origin?: string;
+  destination?: string;
+  approved_by?: string;
+  notes?: string;
 }
 
 export interface ApprovalResponse {
@@ -158,6 +195,52 @@ export interface SourceHealthResponse {
   sources: SourceHealth[];
 }
 
+export interface CorridorContext {
+  corridor_id: string;
+  corridor_name: string;
+  timestamp: string;
+  weather: {
+    status: string;
+    rainfall_mm: number;
+    visibility: string;
+    alert_summary: string;
+    code: number;
+    location: string;
+  };
+  traffic: {
+    congestion_level_pct: number;
+    delay_minutes: number;
+    active_incidents: number;
+    flow_speed_kmh: number;
+    status: string;
+    checkpoints: Array<{
+      name: string;
+      speed: number;
+      congestion_pct: number;
+      status: string;
+    }>;
+  };
+  commodity_prices: {
+    chili_price: number;
+    rice_price: number;
+    cooking_oil_price: number;
+    price_anomaly_detected: boolean;
+    inflation_trend_pct: number;
+    commodities: Array<{
+      name: string;
+      price_idr: number;
+      deviation_pct: number;
+      status: string;
+    }>;
+  };
+  data_integrity: {
+    bmkg_status: string;
+    tomtom_status: string;
+    pihps_status: string;
+    consensus_confidence: number;
+  };
+}
+
 export interface DemoStatus {
   crisis_id: string;
   stage: number;
@@ -168,3 +251,27 @@ export interface DemoStatus {
   summary?: string;
   crisis_state: import('./types').CrisisState;
 }
+
+// Phase 25 & 28: Multi-Modal Fleet Vehicle Types
+export type VehicleModality = 'truck' | 'maritime' | 'air';
+
+export interface FleetVehicle {
+
+  vehicle_id: string;
+  name: string;
+  modality: VehicleModality;
+  path: [number, number][];        // Trajectory polyline: [[lon, lat], ...], min 2 points
+  speed_kmh: number;               // Speed in km/h or knots converted
+  status: 'moving' | 'anchored' | 'rerouting';
+  cargo?: string;                  // e.g., "1.200 Ton Beras BULOG"
+  origin?: string;                 // e.g., "Pelabuhan Belawan"
+  destination?: string;            // e.g., "Hub Logistik Medan"
+  progress?: number;               // 0.0-1.0 internal progress tracking
+  route_geometry?: {
+    type: 'LineString';
+    coordinates: [number, number][];
+  };
+}
+
+
+

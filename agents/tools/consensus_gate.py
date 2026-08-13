@@ -5,6 +5,8 @@ def compute_consensus(state: CrisisState) -> dict:
     """
     Computes weighted consensus score and returns routing decision.
     Weights: Hazard 30%, Social 20%, Geospatial 30%, Economics 20%.
+    Requires overall confidence >= 0.85 and at least 2 independent source channels
+    with confidence > 0.5 to promote to "validated".
     """
     # Safe get confidence from findings, default to 0.5 if finding not present
     hazard_finding = state.get("osint_hazard_finding") or {}
@@ -33,8 +35,23 @@ def compute_consensus(state: CrisisState) -> dict:
     
     overall = sum(breakdown.values())
     
+    # Enforce multi-sensor cross-validation (at least 2 independent findings with confidence > 0.5)
+    active_sources = 0
+    if state.get("data_collection_finding") and state["data_collection_finding"].get("confidence", 0.0) > 0.5:
+        active_sources += 1
+    if state.get("osint_hazard_finding") and state["osint_hazard_finding"].get("confidence", 0.0) > 0.5:
+        active_sources += 1
+    if state.get("economic_intelligence_finding") and state["economic_intelligence_finding"].get("confidence", 0.0) > 0.5:
+        active_sources += 1
+    if state.get("prediction_finding") and state["prediction_finding"].get("confidence", 0.0) > 0.5:
+        active_sources += 1
+    if state.get("route_optimization_finding") and state["route_optimization_finding"].get("confidence", 0.0) > 0.5:
+        active_sources += 1
+
+    is_validated = overall >= 0.85 and active_sources >= 2
+    
     return {
         "overall_confidence": round(overall, 4),
         "consensus_breakdown": breakdown,
-        "route": "validated" if overall >= 0.85 else "unconfirmed",
+        "route": "validated" if is_validated else "unconfirmed",
     }

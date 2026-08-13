@@ -1,7 +1,7 @@
 'use client';
 import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { api } from '@/lib/api';
+import { api } from '../../lib/api';
 
 function DemoRemoteClient() {
   const searchParams = useSearchParams();
@@ -46,8 +46,7 @@ function DemoRemoteClient() {
       const res = await api.demo.start({ mock_agents: true, offline: true });
       router.push(`/demo-remote?crisis_id=${res.crisis_id}`);
     } catch (err) {
-      alert('Failed to start demo.');
-      console.error(err);
+      console.error('Failed to start demo remote:', err);
     }
   };
 
@@ -104,8 +103,8 @@ function DemoRemoteClient() {
   if (!isRunning || !crisisId) {
     return (
       <div className="min-h-screen bg-[#080d14] text-slate-100 flex flex-col items-center justify-center p-6 text-center">
-        <div className="w-16 h-16 rounded-full bg-cyan-950/40 border border-cyan-500/30 flex items-center justify-center text-cyan-400 text-2xl mb-6">
-          📱
+        <div className="w-16 h-16 rounded-full bg-cyan-950/40 border border-cyan-500/30 flex items-center justify-center text-cyan-400 mb-6 shadow-lg shadow-cyan-500/20">
+          <img src="/logo_petanadi.png" alt="PetaNadi Logo" className="w-10 h-10 object-contain" />
         </div>
         <h1 className="text-xl font-bold mb-2">PetaNadi Presenter Remote</h1>
         <p className="text-sm text-slate-400 max-w-xs mb-8">

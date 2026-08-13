@@ -1,14 +1,8 @@
 'use client';
+import { useState, useEffect } from 'react';
 import PriceChart from '@/components/charts/PriceChart';
-import type { CrisisState } from '@/lib/types';
-
-// Synthetic PIHPS stub data — will be replaced by real Supabase query in Phase 6
-const STUB_PRICES = Array.from({ length: 30 }, (_, i) => ({
-  date: `D-${30 - i}`,
-  beras: 14000 + Math.round(Math.random() * 1000),
-  minyak: 17000 + Math.round(Math.random() * 1500),
-  cabai: 55000 + Math.round(Math.random() * 20000),
-}));
+import { api } from '@/lib/api';
+import type { CrisisState, PricePoint } from '@/lib/types';
 
 interface EconomicTabProps {
   crisis: CrisisState;
@@ -16,6 +10,42 @@ interface EconomicTabProps {
 
 export function EconomicTab({ crisis }: EconomicTabProps) {
   const forecast = crisis.inflation_forecast;
+  const [chartData, setChartData] = useState<PricePoint[]>([]);
+  const [loadingChart, setLoadingChart] = useState(true);
+
+  useEffect(() => {
+    async function loadPrices() {
+      setLoadingChart(true);
+      try {
+        const [berasRes, minyakRes, cabaiRes] = await Promise.all([
+          api.commodities.prices({ commodity: 'beras', region: crisis.region, limit: 30 }),
+          api.commodities.prices({ commodity: 'minyak_goreng', region: crisis.region, limit: 30 }),
+          api.commodities.prices({ commodity: 'cabai_merah', region: crisis.region, limit: 30 }),
+        ]);
+
+        const merged = [];
+        const length = Math.max(berasRes.items.length, minyakRes.items.length, cabaiRes.items.length);
+        for (let i = 0; i < length; i++) {
+          const b = berasRes.items[i] || { price_idr: 14000 };
+          const m = minyakRes.items[i] || { price_idr: 17000 };
+          const c = cabaiRes.items[i] || { price_idr: 55000 };
+          
+          merged.push({
+            date: `D-${length - 1 - i}`,
+            beras: b.price_idr,
+            minyak: m.price_idr,
+            cabai: c.price_idr,
+          });
+        }
+        setChartData(merged);
+      } catch (err) {
+        console.error('Failed to load dynamic prices in EconomicTab:', err);
+      } finally {
+        setLoadingChart(false);
+      }
+    }
+    loadPrices();
+  }, [crisis.region]);
 
   return (
     <div className="space-y-4">
@@ -37,11 +67,17 @@ export function EconomicTab({ crisis }: EconomicTabProps) {
       )}
 
       {/* Historical price chart */}
-      <PriceChart
-        data={STUB_PRICES}
-        crisisDate={`D-0`}
-        title="PIHPS Commodity Prices (30d)"
-      />
+      {loadingChart ? (
+        <div className="w-full h-[160px] flex items-center justify-center bg-slate-800/40 rounded-xl animate-pulse">
+          <span className="text-[10px] text-slate-500">Loading dynamic chart data...</span>
+        </div>
+      ) : (
+        <PriceChart
+          data={chartData}
+          crisisDate={`D-0`}
+          title="PIHPS Commodity Prices (30d)"
+        />
+      )}
 
       {/* LTM episodes */}
       {Array.isArray(crisis.economic_intelligence_finding?.data?.ltm_episodes) && (
@@ -69,3 +105,4 @@ export function EconomicTab({ crisis }: EconomicTabProps) {
     </div>
   );
 }
+

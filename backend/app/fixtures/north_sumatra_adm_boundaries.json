@@ -1,0 +1,158 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "medan_city",
+      "properties": {
+        "region_id": "medan_city",
+        "name": "Kota Medan",
+        "type": "city",
+        "regency": "Kota Medan",
+        "area_km2": 265.1,
+        "population": 2435000,
+        "is_active_hazard": true,
+        "hazard_type": "flood",
+        "severity": "high",
+        "bmkg_rainfall_mm": 68.5,
+        "fourcast_flood_risk": 87.5,
+        "tomtom_congestion_pct": 74.2,
+        "status_label": "PERINGATAN HUJAN LEBAT & GENANGAN PEKOTAAN"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [98.61, 3.76], [98.67, 3.77], [98.74, 3.74], [98.76, 3.66],
+          [98.75, 3.55], [98.71, 3.50], [98.65, 3.50], [98.59, 3.56],
+          [98.58, 3.66], [98.61, 3.76]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "medan_belawan",
+      "properties": {
+        "region_id": "medan_belawan",
+        "name": "Kecamatan Medan Belawan",
+        "type": "subdistrict",
+        "regency": "Kota Medan Utara",
+        "area_km2": 77.2,
+        "is_active_hazard": true,
+        "hazard_type": "flood",
+        "severity": "critical",
+        "bmkg_rainfall_mm": 82.0,
+        "fourcast_flood_risk": 92.4,
+        "tomtom_congestion_pct": 86.0,
+        "status_label": "PERINGATAN ROB & INUNDASI KAWASAN PELABUHAN"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [98.64, 3.86], [98.73, 3.84], [98.76, 3.79], [98.73, 3.74],
+          [98.66, 3.75], [98.60, 3.79], [98.64, 3.86]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "deli_serdang",
+      "properties": {
+        "region_id": "deli_serdang",
+        "name": "Kabupaten Deli Serdang",
+        "type": "regency",
+        "regency": "Kabupaten Deli Serdang",
+        "area_km2": 2497.7,
+        "is_active_hazard": false,
+        "hazard_type": "normal",
+        "severity": "low",
+        "bmkg_rainfall_mm": 28.0,
+        "fourcast_flood_risk": 32.0,
+        "tomtom_congestion_pct": 38.5,
+        "status_label": "KORIDOR LOGISTIK KUALANAMU STABIL"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [98.74, 3.74], [98.92, 3.70], [98.98, 3.58], [98.95, 3.42],
+          [98.78, 3.40], [98.71, 3.50], [98.75, 3.55], [98.76, 3.66],
+          [98.74, 3.74]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "binjai_west",
+      "properties": {
+        "region_id": "binjai_west",
+        "name": "Kota Binjai & Langkat Barat",
+        "type": "regency",
+        "regency": "Kota Binjai / Langkat",
+        "area_km2": 90.2,
+        "is_active_hazard": false,
+        "hazard_type": "normal",
+        "severity": "low",
+        "bmkg_rainfall_mm": 18.5,
+        "fourcast_flood_risk": 22.0,
+        "tomtom_congestion_pct": 25.0,
+        "status_label": "KORIDOR PASOKAN PANGAN BARAT NORMAL"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [98.42, 3.68], [98.58, 3.66], [98.59, 3.56], [98.43, 3.52],
+          [98.40, 3.60], [98.42, 3.68]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "karo_berastagi",
+      "properties": {
+        "region_id": "karo_berastagi",
+        "name": "Kabupaten Karo (Berastagi)",
+        "type": "regency",
+        "regency": "Kabupaten Karo",
+        "area_km2": 2127.3,
+        "is_active_hazard": true,
+        "hazard_type": "landslide",
+        "severity": "high",
+        "bmkg_rainfall_mm": 54.0,
+        "fourcast_flood_risk": 68.0,
+        "tomtom_congestion_pct": 62.0,
+        "status_label": "PERINGATAN ANCAMAN LONGSOR TEBING JALINSUM"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [98.45, 3.42], [98.62, 3.40], [98.64, 3.24], [98.48, 3.22],
+          [98.42, 3.30], [98.45, 3.42]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "tebing_tinggi",
+      "properties": {
+        "region_id": "tebing_tinggi",
+        "name": "Kota Tebing Tinggi & Sergai",
+        "type": "city",
+        "regency": "Kota Tebing Tinggi",
+        "area_km2": 31.0,
+        "is_active_hazard": false,
+        "hazard_type": "congestion",
+        "severity": "medium",
+        "bmkg_rainfall_mm": 35.0,
+        "fourcast_flood_risk": 48.0,
+        "tomtom_congestion_pct": 72.0,
+        "status_label": "BOTTLENECK GERBANG TOL INTERCHANGE"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [99.08, 3.38], [99.22, 3.36], [99.24, 3.28], [99.10, 3.26],
+          [99.06, 3.32], [99.08, 3.38]
+        ]]
+      }
+    }
+  ]
+}
