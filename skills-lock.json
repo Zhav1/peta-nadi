@@ -1,6 +1,36 @@
 {
   "version": 1,
   "skills": {
+    "mapbox-data-visualization-patterns": {
+      "source": "mapbox/mapbox-agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/mapbox-data-visualization-patterns/SKILL.md",
+      "computedHash": "5c2c2c3a708f2dc97f8d3e08b2be8fcc4e79167cf994a13ebc912453e5fdfe50"
+    },
+    "mapbox-geospatial-operations": {
+      "source": "mapbox/mapbox-agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/mapbox-geospatial-operations/SKILL.md",
+      "computedHash": "533b45ccdb8539678bb6d523f2324f1aed284d20089d1defe5885294f3eb1b0f"
+    },
+    "mapbox-google-maps-migration": {
+      "source": "mapbox/mapbox-agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/mapbox-google-maps-migration/SKILL.md",
+      "computedHash": "af55f0a6c952b19c655d2030909d689c4abd6299d76bec74be3fac6d6e3b2917"
+    },
+    "mapbox-web-integration-patterns": {
+      "source": "mapbox/mapbox-agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/mapbox-web-integration-patterns/SKILL.md",
+      "computedHash": "599e8511ae673009fa53140c269c6f0e55848561c63f1a385bc6dd7d7c11a6dd"
+    },
+    "mapbox-web-performance-patterns": {
+      "source": "mapbox/mapbox-agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/mapbox-web-performance-patterns/SKILL.md",
+      "computedHash": "0bab1e72dc49350b735a8f8fbfa3fe1b602b7f965232bfc1b3b42088d460e276"
+    },
     "supabase": {
       "source": "supabase/agent-skills",
       "sourceType": "github",

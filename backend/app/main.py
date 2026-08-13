@@ -1,6 +1,8 @@
 """
 PetaNadi / LRIP — FastAPI Application Entry Point
 """
+import asyncio
+import json
 import logging
 import os
 import sys
@@ -18,7 +20,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.routers import health, incidents, agent_router, approvals, demo_router
+from app.routers import health, incidents, agent_router, approvals, demo_router, commodity_router, corridor_router, routing_router, vehicles_router
 from app.services.redis_client import get_redis, close_redis
 
 settings = get_settings()
@@ -28,6 +30,31 @@ logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+
+async def _poll_bmkg_loop():
+    """Background polling loop for BMKG earthquake and weather warnings."""
+    logger.info("Starting background BMKG poller task...")
+    try:
+        from app.adapters.bmkg_adapter import BMKGAdapter
+        adapter = BMKGAdapter()
+        while True:
+            try:
+                raw = await adapter.fetch()
+                events = await adapter.parse(raw)
+                if events:
+                    r = get_redis()
+                    for ev in events:
+                        r.lpush("lrip:live_events", json.dumps(ev))
+                    r.ltrim("lrip:live_events", 0, 49)  # Retain top 50 recent events
+                    logger.info(f"Ingested {len(events)} live BMKG events into Redis lrip:live_events")
+            except Exception as e:
+                logger.warning(f"BMKG background poll error: {e}")
+            await asyncio.sleep(60)  # Poll every 60 seconds
+    except asyncio.CancelledError:
+        logger.info("BMKG background poller task canceled.")
+    except Exception as e:
+        logger.error(f"Fatal error in BMKG poller loop: {e}")
 
 
 @asynccontextmanager
@@ -42,10 +69,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Redis connection failed: {e} — continuing without Redis")
 
+    # Start background tasks
+    bmkg_task = asyncio.create_task(_poll_bmkg_loop())
+
     yield  # Application runs here
 
     # Shutdown
     logger.info("Shutting down...")
+    bmkg_task.cancel()
     close_redis()
 
 
@@ -71,5 +102,10 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(incidents.router, prefix="/api/v1")
 app.include_router(approvals.router, prefix="/api/v1")
+app.include_router(corridor_router.router, prefix="/api/v1")
+app.include_router(routing_router.router, prefix="/api/v1")
 app.include_router(agent_router.router)
 app.include_router(demo_router.router)
+app.include_router(commodity_router.router, prefix="/api/v1")
+app.include_router(vehicles_router.router)
+

@@ -12,3 +12,16 @@ To reduce LLM token usage and optimize command execution outputs, all shell comm
    ```powershell
    $env:PATH = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User"); rtk <command>
    ```
+
+
+## UI/UX DESIGN SYSTEM ROUTER
+
+Setiap kali melakukan refactoring, styling Tailwind, atau pembuatan komponen UI di Next.js:
+1. Wajib baca `.agents/skills/ui-ux-pro-max/` dan file `design-system/MASTER.md`.
+2. WAJIB patuhi aturan "Non-AI Anti-Patterns":
+   - ❌ HARAM menggunakan AI gradient ungu/pink generik.
+   - ❌ HARAM memakai Emoji sebagai ikon (wajib SVG dari Lucide/Heroicons).
+   - ❌ HARAM memakai font default tanpa hierarchy jelas.
+   - ✅ WAJIB tambahkan `cursor-pointer` pada semua tombol/elemen interaktif.
+   - ✅ WAJIB gunakan Glassmorphism konsisten (`backdrop-blur-md bg-[#0c0e12]/80 border border-white/10`).
+   - ✅ WAJIB micro-interaction halus (smooth transition 150ms - 300ms).
