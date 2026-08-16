@@ -40,12 +40,12 @@ export default function OnboardHero() {
       {/* 2. Hero Content (Wide Open Video - Creative Full-Word Badges) */}
       <div className="relative z-10 max-w-5xl mx-auto text-center flex flex-col items-center gap-8">
 
-        {/* Status Pill Badge with PetaNadi Logo & Neon Glow Border */}
+        {/* Status Pill Badge with PreHub Logo & Neon Glow Border */}
         <div className="inline-flex items-center gap-3 px-5 py-2.5 rounded-full backdrop-blur-2xl bg-[#080d14]/80 border border-emerald-400/40 text-xs font-mono shadow-[0_0_25px_rgba(52,211,153,0.3)]">
-          <img src="/logo_petanadi.png" alt="PetaNadi" className="w-4 h-4 object-contain animate-pulse" />
-          <span className="text-emerald-400 font-bold uppercase tracking-widest">PetaNadi Live</span>
+          <img src="/logo_prehub.png" alt="PreHub" className="w-4 h-4 object-contain animate-pulse" />
+          <span className="text-emerald-400 font-bold uppercase tracking-widest">PreHub Live</span>
           <span className="text-slate-500">|</span>
-          <span className="text-slate-200">4D Crisis Command Center</span>
+          <span className="text-slate-200">4D Disruption Mitigation Center</span>
         </div>
 
         {/* Google Flow / Apple Event Style Full-Word Kinetic Typography */}
@@ -81,7 +81,7 @@ export default function OnboardHero() {
             href="/dashboard"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-3 px-8 py-4 rounded-2xl bg-gradient-to-r from-cyan-400 via-emerald-400 to-cyan-400 text-slate-950 font-extrabold text-lg shadow-[0_0_35px_rgba(34,211,238,0.4)] hover:shadow-[0_0_50px_rgba(34,211,238,0.6)] hover:scale-[1.03] active:scale-[0.98] transition-all cursor-pointer group border border-cyan-300"
           >
-            <img src="/logo_petanadi.png" alt="PetaNadi Logo" className="w-6 h-6 object-contain" />
+            <img src="/logo_prehub.png" alt="PreHub Logo" className="w-6 h-6 object-contain" />
             <span>Launch Command Center 4D</span>
             <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
           </Link>

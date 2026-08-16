@@ -79,7 +79,7 @@ export function FleetVehicleLayer({ map, vehicles, activeRoutes, activeRouteIdx 
       loadIcon('plane-icon', planeSvg);
     };
 
-    const handleMissingImage = (e: mapboxgl.MapStyleImageMissingEvent) => {
+    const handleMissingImage = (e: { id: string }) => {
       if (e.id === 'truck-icon') loadIcon('truck-icon', truckSvg);
       if (e.id === 'vessel-icon') loadIcon('vessel-icon', vesselSvg);
       if (e.id === 'plane-icon') loadIcon('plane-icon', planeSvg);
@@ -119,7 +119,10 @@ export function FleetVehicleLayer({ map, vehicles, activeRoutes, activeRouteIdx 
         if (v.modality === 'truck' && activeRoutes && activeRoutes.length > 0) {
           const selRoute = activeRoutes[activeRouteIdx ?? 0] || activeRoutes[0];
           if (selRoute && selRoute.waypoints && selRoute.waypoints.length > 1) {
-            coords = selRoute.waypoints.map((w: any) => [w.lon ?? w.lng ?? w[0], w.lat ?? w[1]]);
+            coords = selRoute.waypoints.map((w: [number, number] | { lon?: number; lng?: number; lat?: number }) => {
+              if (Array.isArray(w)) return [w[0], w[1]];
+              return [w.lon ?? w.lng ?? 0, w.lat ?? 0];
+            });
           }
         }
         return {
@@ -249,7 +252,10 @@ export function FleetVehicleLayer({ map, vehicles, activeRoutes, activeRouteIdx 
           if (v.modality === 'truck' && activeRoutes && activeRoutes.length > 0) {
             const selRoute = activeRoutes[activeRouteIdx ?? 0] || activeRoutes[0];
             if (selRoute && selRoute.waypoints && selRoute.waypoints.length > 1) {
-              coords = selRoute.waypoints.map((w: any) => [w.lon ?? w.lng ?? w[0], w.lat ?? w[1]]);
+              coords = selRoute.waypoints.map((w: [number, number] | { lon?: number; lng?: number; lat?: number }) => {
+                if (Array.isArray(w)) return [w[0], w[1]];
+                return [w.lon ?? w.lng ?? 0, w.lat ?? 0];
+              });
             }
           }
 

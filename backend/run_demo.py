@@ -1,5 +1,5 @@
 """
-run_demo.py — PetaNadi Hackathon Demo Injector
+run_demo.py — PreHub Demo Injector
 
 Injects a synthetic Belawan Port closure + Trans-Sumatra Highway flood scenario
 into Redis Streams, triggering the full agent pipeline. Supports offline mode.
@@ -321,7 +321,7 @@ def print_step(step_num: int, title: str):
 
 def print_scenario_info(scenario: dict, offline: bool):
     print(f"\n{'='*60}")
-    print(f"  PetaNadi Demo Injector (Mode: {'OFFLINE' if offline else 'ONLINE'})")
+    print(f"  PreHub Demo Injector (Mode: {'OFFLINE' if offline else 'ONLINE'})")
     print(f"{'='*60}")
     print(f"  Scenario  : {scenario['description']}")
     print(f"  Corridor  : {scenario['corridor']}")
@@ -331,7 +331,7 @@ def print_scenario_info(scenario: dict, offline: bool):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="PetaNadi Demo Injector — injects synthetic crisis events into Redis Streams",
+        description="PreHub Demo Injector — injects synthetic crisis events into Redis Streams",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:

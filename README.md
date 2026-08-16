@@ -1,177 +1,159 @@
-# PetaNadi — Logistics Resilience Intelligence Platform (LRIP)
+# PreHub — Food Logistics Disruption Early Warning & Mitigation Decision Support System
 
-> An AI-powered decision support platform that shifts Indonesia's logistics and disaster response from **reactive** to **proactive**. PetaNadi ingests real-time hazard data, detects disruptions across the North Sumatra logistics corridor, predicts cascading economic impacts (commodity price spikes), and delivers actionable intelligence to field coordinators and government executives — before the crisis escalates.
+> **PreHub** (*Predictive Logistics Hub & Early Warning System*) is an AI-powered decision support platform that shifts Indonesia's food distribution and disaster response from **reactive** to **proactive**. PreHub ingests real-time multisource data, detects logistics disruptions across the North Sumatra corridor, calculates operational and economic risks, and delivers actionable evidence-grounded mitigations (*Continue*, *Reroute*, or *Hold/Delay*) directly to logistics dispatchers and government executives.
 
 ---
 
-## Architecture at a Glance
+## 🏛️ System Architecture
 
 ```
-Physical Hazard (BMKG/NASA) → Redis Streams → LangGraph 6-Agent Swarm
-                                                      ↓
-                        Consensus Gate (>85% confidence)
-                                                      ↓
-                     Supabase (PostGIS + TimescaleDB + pgvector)
-                                                      ↓
-              Next.js + Mapbox 3D Dashboard ← FastAPI WebSocket
+Multisource Telemetry (BMKG, TomTom, Google News OSINT, PIHPS)
+                             ↓
+                Redis 7 Pub/Sub & Ingestion Queue
+                             ↓
+              LangGraph 6-Agent Swarm Reasoning
+                             ↓
+            Risk Assessment & Consensus Gate (≥85%)
+                             ↓
+           GPU Route Optimization (NVIDIA cuOpt / Mapbox)
+                             ↓
+       PreHub Command Center 4D + B2G Cabinet Briefing Center
 ```
 
-## Tech Stack
+---
+
+## 🚀 Key Features
+
+1. **Multi-Source Grounding & Evidence Chain:**
+   * Live BMKG hydrometeorological radar and warnings.
+   * Real-time TomTom traffic speed delta and congestion index.
+   * Automated Google News OSINT crawler with NER geocoding and source credibility weighting.
+   * PIHPS commodity price variance and volatile food inflation tracking.
+
+2. **Multi-Agent Swarm Intelligence (6 Specialist Agents):**
+   * **Weather Agent:** Precipitation radius and flash flood hazard polygons.
+   * **Traffic Agent:** Segment congestion scoring and choke-point bottleneck detection.
+   * **Intelligence Agent:** OSINT news verification and multi-source corroboration.
+   * **Risk Synthesis Agent:** Combined mathematical disruption risk computation:
+     $$\mathcal{R} = P_{\text{disruption}} \times (\alpha \cdot \Delta T_{\text{delay}} + \beta \cdot \Delta C_{\text{fuel}} + \gamma \cdot V_{\text{perishability}})$$
+   * **Logistics Agent:** GPU-accelerated route optimization via NVIDIA cuOpt and Mapbox Navigation.
+   * **Decision Consensus Agent:** Tri-option mitigation recommendations (*Continue*, *Reroute*, *Hold/Delay*) with XAI reasoning and unified multi-agency action plans.
+
+3. **High-Performance Command Center (Next.js 14 + WebGL):**
+   * 60 FPS route-bound fleet vector layer with dynamic bearing rotation.
+   * Deck.gl Arc & Scatterplot spatial commodity flow layers.
+   * Multi-Agency Simulation Sandbox (What-If Advisor with 5–50 km shockwave radius).
+   * B2G Cabinet Briefing Center with Print-to-PDF and JSON telemetry export.
+
+---
+
+## 🛠️ Technology Stack
 
 | Layer | Technology |
-|-------|-----------|
-| Backend API | FastAPI (Python 3.13) |
-| Agent Orchestration | LangGraph |
-| Frontend | Next.js 14 + Mapbox GL JS + Deck.gl |
-| Database | Supabase (PostgreSQL + PostGIS + TimescaleDB + pgvector) |
-| Event Bus | Redis Streams (Upstash) |
-| AI Models | Gemini Flash (vision) + DeepSeek V3 (reasoning) |
-| Scraping | Lightpanda (PIHPS, marketplaces, social OSINT) |
-| Notifications | WhatsApp Business API |
-
-## Prerequisites
-
-- Python 3.13+
-- Node.js 22+
-- [Upstash account](https://upstash.com) — free Redis database
-- [Supabase account](https://supabase.com) — free project
-
-## Setup
-
-### 1. Clone & Configure Environment
-
-```bash
-git clone <repo-url>
-cd Pidi.id
-cp .env.example .env
-# Fill in your credentials in .env
-```
-
-### 2. Backend
-
-```bash
-cd backend
-python -m venv .venv
-.venv\Scripts\activate          # Windows
-pip install -r requirements.txt
-cp .env.example .env
-# Fill in credentials
-```
-
-### 3. Database — Run Initial Migration
-
-In your Supabase project SQL Editor, run the contents of:
-```
-infra/supabase/migrations/000_init.sql
-```
-
-This creates all tables (incidents, commodity_prices, ltm_episodes, kg_entities, etc.)
-and seeds the North Sumatra knowledge graph.
-
-### 4. Frontend
-
-```bash
-cd frontend
-npm install
-cp .env.example .env.local
-# NEXT_PUBLIC_MAPBOX_TOKEN is already filled in .env.example
-```
-
-## Running Locally
-
-**Backend (Terminal 1):**
-```bash
-cd backend
-.venv\Scripts\activate
-uvicorn app.main:app --reload --port 8000
-```
-→ API docs: http://localhost:8000/docs
-
-**Frontend (Terminal 2):**
-```bash
-cd frontend
-npm run dev
-```
-→ Dashboard: http://localhost:3000
-
-## Running with Docker (Phase 10)
-
-You can run the entire platform including the Redis event bus, backend API, and Next.js frontend using Docker Compose.
-
-1. Make sure you have Docker installed and running on your system.
-2. In the root directory, run:
-```bash
-docker compose up --build
-```
-This builds and starts:
-- `redis` container on port `6379`
-- `backend` container on port `8000` (including Playwright scraper environment)
-- `frontend` container on port `3000` (built using optimized standalone output)
+|---|---|
+| **Frontend Web App** | Next.js 14.2+ (App Router), React 18, TypeScript, TailwindCSS (Dark Glassmorphic UI) |
+| **Spatial & GIS Rendering** | Mapbox GL JS v3, Deck.gl v8, Framer Motion, Turf.js |
+| **Backend API** | FastAPI (Python 3.11+ / 3.13), Uvicorn ASGI Server, Pydantic v2 |
+| **Multi-Agent Swarm** | LangGraph, LangChain Core, Google Gemini 2.5 / Claude / DeepSeek |
+| **Database & Spatial Store** | PostgreSQL 15+ with PostGIS 3.3+, Supabase Managed Layer |
+| **Cache & Event Bus** | Redis 7.0+ (Streams & Pub/Sub) |
+| **Optimization Engine** | NVIDIA cuOpt VRP Solver & Mapbox Direction APIs |
+| **E2E & Visual Verification** | Playwright Test Suite (Chromium Headless) |
 
 ---
 
-## Demo (Phase 6)
+## ⚡ Quick Start & 1-Click Launchers
 
-You can launch the end-to-end simulator either online (using your configured Redis/Supabase credentials) or offline (using local in-memory mock databases and query caching).
+### 1. Requirements
+* Python 3.11+ or 3.13+
+* Node.js 18+ or 20+
+* Mapbox Access Token (free at [mapbox.com](https://mapbox.com))
 
-### Running Offline Demo (Recommended - No Credentials Required)
-This runs the full 6-agent swarm using in-memory mocks for Redis Streams, Supabase databases, and LTM vector spaces.
+### 2. Installation
+```bash
+# Clone the repository
+git clone https://github.com/Zhav1/peta-nadi.git prehub
+cd prehub
+
+# Backend setup
+cd backend
+python -m venv .venv
+.\.venv\Scripts\activate          # Windows (PowerShell/CMD)
+pip install -r requirements.txt
+cp .env.example .env
+
+# Frontend setup
+cd ../frontend
+npm install
+cp .env.example .env.local
+```
+
+### 3. Launching Both Backend & Frontend (1-Click)
+
+* **Windows Batch (Double-Clickable):**
+  ```cmd
+  start.bat
+  ```
+* **PowerShell Launcher:**
+  ```powershell
+  .\start.ps1
+  ```
+
+* **URLs:**
+  * **Frontend Web Command Center:** [http://localhost:3000](http://localhost:3000)
+  * **Backend Swagger API Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
+  * **Health Probe:** [http://localhost:8000/health](http://localhost:8000/health)
+
+---
+
+## 🧪 Testing & Verification
+
+### Backend Test Suite (34 Unit & Integration Tests)
 ```bash
 cd backend
-# Run fast (0.1s delay between events)
-backend\.venv\Scripts\python run_demo.py --offline --speed fast
-
-# Run normal (1.0s delay between events, mimics live feed)
-backend\.venv\Scripts\python run_demo.py --offline
+.\.venv\Scripts\pytest
 ```
 
-### Running Online Demo
-Ensure Redis and Supabase are configured in `.env`.
+### Frontend Static Build
 ```bash
-backend\.venv\Scripts\python run_demo.py --scenario belawan_flood
+cd frontend
+npm run build
 ```
 
-For a dry run (prints scenario info without injecting):
+### Automated Playwright Screenshots
 ```bash
-backend\.venv\Scripts\python run_demo.py --dry-run
+cd frontend
+npx playwright test e2e/capture-screenshots.spec.ts
 ```
 
-To run the performance audit script:
-```bash
-backend\.venv\Scripts\python backend/scripts/perf_check.py
-```
+---
 
-See [DEMO_SCRIPT.md](file:///d:/College/Pidi.id/DEMO_SCRIPT.md) for a step-by-step 3-minute pitch/walkthrough of the system.
-
-## Project Structure
+## 📂 Project Directory Structure
 
 ```
-├── backend/          FastAPI API + run_demo.py
-│   └── app/
-│       ├── config.py         Settings (pydantic-settings)
-│       ├── main.py           FastAPI entry point
-│       └── db/               Supabase client
-├── frontend/         Next.js 14 (Mapbox + Deck.gl)
-├── agents/           LangGraph 6-agent swarm
-├── infra/
-│   └── supabase/migrations/  SQL schema
-├── docs/             Proposals, references, and booklets
-├── DEMO_SCRIPT.md    3-minute presentation walkthrough script
-└── .planning/        GSD project planning artifacts
+├── .planning/                  # GSD Project Memory & Milestone Tracking
+├── agents/                     # LangGraph 6-Agent Swarm Nodes & Consensus Gate
+├── backend/                    # FastAPI Backend Application
+│   ├── app/
+│   │   ├── adapters/           # BMKG, TomTom, Earth2/NVIDIA adapters
+│   │   ├── routers/            # Health, Incidents, Approvals, Corridor, Vehicles, Routing
+│   │   ├── services/           # cuOpt, Weather Fusion, Corridor Context, Geocoding
+│   │   └── workers/            # Ingestion & OSINT background workers
+│   ├── tests/                  # 34 pytest unit & integration tests
+│   └── run_demo.py             # Scenario injector & offline demo runner
+├── frontend/                   # Next.js 14 Web Command Center
+│   ├── app/                    # App Router pages (/dashboard, /demo-remote, /)
+│   ├── components/             # Command Center Map, Sidebar, Analytics, Simulation, Reports
+│   └── e2e/                    # Playwright screenshot & E2E test specs
+├── docs/                       # Technical Documentation & Booklets
+│   ├── Dokumen_Pendukung_PreHub.md  # Official Comprehensive Technical Document
+│   └── screenshots/            # Automated 1080p high-fidelity UI screenshots
+├── start.bat                   # Windows 1-click launcher
+└── start.ps1                   # PowerShell unified launcher
 ```
 
-## Build Phases
+---
 
-| Phase | Focus | Status |
-|-------|-------|--------|
-| 0 | Foundation & Repo Setup | ✅ Complete |
-| 1 | Data Ingestion Pipeline (BMKG, TomTom, AISstream, NASA) | ✅ Complete |
-| 2 | OSINT & Headless Scraping (Lightpanda + PIHPS) | ✅ Complete |
-| 3 | LangGraph Agent Swarm (6 agents + STM/LTM + GraphRAG) | ✅ Complete |
-| 4 | 3D Map Dashboard (Next.js + Mapbox + Deck.gl) | ✅ Complete |
-| 5 | Notifications & Human-in-the-Loop | ✅ Complete |
-| 6 | Demo Polish & run_demo.py Finalization | ✅ Complete |
-| 7 | Interactive Guided Demo Mode | ✅ Complete |
-| 8 | NVIDIA Architecture Integration (NIM, cuOpt, FourCastNet) | ✅ Complete |
-| 9 | Responsive Layout & Stitch Screens Integration | ✅ Complete |
-| 10 | Dockerization & Repository Cleanup | ✅ Complete |
+## 📄 License & Submissions
+PreHub is developed for the **AI-Driven Logistics & Food Security Initiative 2026**.
+All rights reserved.

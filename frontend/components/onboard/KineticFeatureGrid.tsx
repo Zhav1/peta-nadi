@@ -112,7 +112,7 @@ export default function KineticFeatureGrid() {
           </h2>
 
           <p className="text-slate-400 text-base md:text-lg max-w-2xl">
-            PetaNadi memadukan enam pilar teknologi mutakhir untuk memberikan visibilitas 4D menyeluruh dan mitigasi risiko logistik yang tepercaya.
+            PreHub memadukan enam pilar teknologi mutakhir untuk memberikan visibilitas 4D menyeluruh dan mitigasi risiko logistik yang tepercaya.
           </p>
         </div>
 

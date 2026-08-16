@@ -1,15 +1,15 @@
-# STATE — LRIP / PetaNadi Project Memory
+# STATE — PreHub Project Memory
 
-**Last Updated:** 2026-07-24
-**Active Milestone:** M1 — Hackathon MVP (North Sumatra Corridor)
-**Current Phase:** Phase 30 COMPLETE ✅
+**Last Updated:** 2026-08-13
+**Active Milestone:** M1 — PreHub MVP (North Sumatra Corridor)
+**Current Phase:** Phase 31 COMPLETE ✅
 
 ---
 
 ## Workflow Status
 
 | Phase | Name | Status | Notes |
-|-------|------|--------|-------|
+|---|---|---|---|
 | 0 | Foundation & Repo Setup | **COMPLETE** ✅ | Git: `f404517`, `4f48e8e` |
 | 1 | Data Ingestion Pipeline & API Adapters | **COMPLETE** ✅ | Git: `a33c94c` |
 | 2 | OSINT & Headless Scraping (Lightpanda) | **COMPLETE** ✅ | Direct BI API integration + Playwright fallback |
@@ -41,6 +41,7 @@
 | 28 | Smooth 60 FPS Route-Bound Fleet Vector Layer & Rotation Engine | **COMPLETE** ✅ | Mapbox WebGL Native Symbol Layer, 0 HTML DOM Markers, 60 FPS `@turf/along` path interpolation, 0°–360° `@turf/bearing` vector rotation, glassmorphic telemetry tooltip |
 | 29 | Interactive Investor Presentation Runner & Dynamic User Route-First Crisis Engine | **COMPLETE** ✅ | Direct 2-node map clicking (🟢 Start / 🟡 End), 6-agent Swarm matrix (0%-100% clamped progress + pulsing buttons), Mapbox road polyline truck trajectory binding, initial load mapInstance state fix |
 | 30 | System-Wide Multi-Page Integration & Tactical UI/UX Refactoring | **COMPLETE** ✅ | Unified Master State Engine in DashboardClient, Mapbox/Deck.gl Analytics Canvas, Multi-Agent Simulation Sandbox with Action Plan Deploy, B2G Cabinet Briefing PDF Reports |
+| 31 | PreHub Rebrand, Error Resolution, Automated Playwright Screenshots & Technical Documentation | **COMPLETE** ✅ | Complete rebrand to PreHub, zero build errors, 34/34 pytest passing, Playwright screenshot test suite passing, Dokumen Pendukung created |
 
 
 

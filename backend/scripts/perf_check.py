@@ -117,7 +117,7 @@ def setup_mock_environment():
 
 async def run_audit():
     print("="*60)
-    print("  PetaNadi Swarm Performance Audit")
+    print("  PreHub Swarm Performance Audit")
     print("="*60)
 
     setup_mock_environment()

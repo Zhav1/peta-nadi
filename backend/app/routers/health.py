@@ -17,7 +17,7 @@ async def health_check():
         "status": "ok",
         "version": settings.version,
         "environment": settings.environment,
-        "service": "lrip-petanadi-api",
+        "service": "prehub-api",
     }
 
 

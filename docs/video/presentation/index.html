@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en" data-resolution="landscape">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>Peta Nadi — Apple Keynote Video Presentation</title>
+
+    <!-- Google Fonts Inter & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+
+    <!-- CSS Keynote Design System -->
+    <link rel="stylesheet" href="styles/keynote.css">
+
+    <!-- GSAP 3 Animation Library -->
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+
+    <!-- Master Data Configuration -->
+    <script src="src/data-config.js"></script>
+  </head>
+  <body>
+    <div
+      id="root"
+      class="presentation-stage"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="38"
+      data-width="1920"
+      data-height="1080"
+    >
+      <!-- Background Ambient Grid & Glows -->
+      <div class="bg-grid"></div>
+      <div class="ambient-glow" id="glow-main" data-layout-allow-overflow style="top: -100px; left: -100px;"></div>
+      <div class="ambient-glow" id="glow-closing" data-layout-allow-overflow style="bottom: -150px; right: -150px;"></div>
+
+      <!-- 3D Camera World Spatial Layer -->
+      <div id="camera-world">
+        <!-- ========================================== -->
+        <!-- SECTION 5: IMPACT & ROI                   -->
+        <!-- ========================================== -->
+
+        <!-- SLIDE 1: Valuasi Impact & ROI (0 - 6s) -->
+        <div id="slide-1" class="slide-container">
+          <div id="s1-tag" class="label-tag">VALUASI IMPACT & ESTIMASI RETURN ON INVESTMENT</div>
+          
+          <div class="grid-3col" style="margin-top: 30px; align-items: center;">
+            <div id="s1-metric1" class="metric-box" style="align-items: center; text-align: center;">
+              <div style="font-size: 20px; color: var(--text-muted); font-weight: 700; letter-spacing: 0.12em; margin-bottom: 16px;">EFISIENSI BIAYA LOGISTIK</div>
+              <div class="metric-value text-accent-green stat-zoom" id="s1-val1" style="font-size: 110px;">10% – 15%</div>
+              <div class="subtitle" style="font-size: 26px;">Optimasi Rantai Pasok</div>
+            </div>
+
+            <div id="s1-metric2" class="metric-box" style="align-items: center; text-align: center; border-left: 2px solid rgba(255,255,255,0.12); border-right: 2px solid rgba(255,255,255,0.12); padding: 0 40px;">
+              <div style="font-size: 20px; color: var(--text-muted); font-weight: 700; letter-spacing: 0.12em; margin-bottom: 16px;">PROYEKSI ROI 3 TAHUN</div>
+              <div class="metric-value text-accent-green stat-zoom" id="s1-val2" style="font-size: 135px;">2.42×</div>
+              <div class="subtitle" style="font-size: 26px;">Break-even Tahun ke-2 (~28 Bln)</div>
+            </div>
+
+            <div id="s1-metric3" class="metric-box" style="align-items: center; text-align: center;">
+              <div style="font-size: 20px; color: var(--text-muted); font-weight: 700; letter-spacing: 0.12em; margin-bottom: 16px;">PERCEPATAN RESPON</div>
+              <div class="metric-value text-accent-green stat-zoom" id="s1-val3" style="font-size: 110px;">40%</div>
+              <div class="subtitle" style="font-size: 26px;">Lebih Cepat (< 15 Menit)</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SLIDE 2: Model Bisnis Hybrid B2G & B2B (6 - 13s) -->
+        <div id="slide-2" class="slide-container">
+          <div id="s2-tag" class="label-tag" style="margin-bottom: 36px;">MODEL BISNIS HYBRID B2G & B2B</div>
+          
+          <div class="grid-2col" style="gap: 50px;">
+            <div id="s2-card-b2g" class="card-glass accent-border" style="padding: 55px;">
+              <div style="font-size: 22px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 16px;">SEKTOR PUBLIK (B2G)</div>
+              <div class="headline-large" style="margin-bottom: 16px;">Lisensi Tahunan Instansi</div>
+              <div id="s2-b2g-val" class="headline-medium text-accent-green stat-zoom" style="font-size: 58px; margin-bottom: 16px;">Rp 120M – 600M / thn</div>
+              <div class="subtitle" style="font-size: 24px;">Setup Fee: Rp 50M – 250M<br>(Dishub, BPBD, Bapanas & Pemda)</div>
+            </div>
+
+            <div id="s2-card-b2b" class="card-glass accent-border" style="padding: 55px;">
+              <div style="font-size: 22px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 16px;">SEKTOR SWASTA (B2B)</div>
+              <div class="headline-large" style="margin-bottom: 16px;">Tiered SaaS Berlangganan</div>
+              <div id="s2-b2b-val" class="headline-medium text-accent-green stat-zoom" style="font-size: 58px; margin-bottom: 16px;">Rp 3M – 35M / bln</div>
+              <div class="subtitle" style="font-size: 24px;">Tergantung Skala Armada & Operasional<br>(Operator Pelabuhan & Logistik)</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SLIDE 3: Growth Projection (13 - 20s) -->
+        <div id="slide-3" class="slide-container">
+          <div id="s3-tag" class="label-tag" style="margin-bottom: 40px;">PROYEKSI PENDAPATAN (3 TAHUN)</div>
+          
+          <div id="s3-chart" class="growth-chart" style="width: 1300px; display: flex; flex-direction: column; gap: 36px;">
+            <!-- Year 1 -->
+            <div class="growth-row" style="display: flex; align-items: center; gap: 30px;">
+              <div style="width: 120px; font-size: 32px; font-weight: 800; color: var(--text-muted);">Thn 1</div>
+              <div class="growth-bar-container" style="flex-grow: 1; height: 44px; background: rgba(255,255,255,0.06); border-radius: 22px; overflow: hidden; position: relative;">
+                <div class="growth-bar" id="bar-y1" style="height: 100%; width: 0%; background: var(--accent-green); border-radius: 22px;"></div>
+              </div>
+              <div id="val-y1" style="width: 280px; font-size: 36px; font-weight: 700; text-align: right; opacity: 0;">Rp 482 Juta</div>
+            </div>
+            
+            <!-- Year 2 -->
+            <div class="growth-row" style="display: flex; align-items: center; gap: 30px;">
+              <div style="width: 120px; font-size: 32px; font-weight: 800; color: var(--text-muted);">Thn 2</div>
+              <div class="growth-bar-container" style="flex-grow: 1; height: 44px; background: rgba(255,255,255,0.06); border-radius: 22px; overflow: hidden; position: relative;">
+                <div class="growth-bar" id="bar-y2" style="height: 100%; width: 0%; background: var(--accent-green-light); border-radius: 22px;"></div>
+              </div>
+              <div id="val-y2" style="width: 280px; font-size: 36px; font-weight: 700; text-align: right; opacity: 0;">Rp 1.169 Miliar</div>
+            </div>
+            
+            <!-- Year 3 -->
+            <div class="growth-row" style="display: flex; align-items: center; gap: 30px;">
+              <div style="width: 120px; font-size: 32px; font-weight: 800; color: var(--text-muted);">Thn 3</div>
+              <div class="growth-bar-container" style="flex-grow: 1; height: 44px; background: rgba(255,255,255,0.06); border-radius: 22px; overflow: hidden; position: relative;">
+                <div class="growth-bar" id="bar-y3" style="height: 100%; width: 0%; background: #69F0AE; border-radius: 22px;"></div>
+              </div>
+              <div id="val-y3" style="width: 280px; font-size: 36px; font-weight: 800; color: #69F0AE; text-align: right; opacity: 0;">Rp 2.761 Miliar</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SLIDE 4: Operational Metrics & Real-Life Transferable Impact (20 - 27s) -->
+        <div id="slide-4" class="slide-container">
+          <div id="s4-tag" class="label-tag" style="margin-bottom: 28px;">METRIK OPERASIONAL & IMPACT SOSIAL NYATA</div>
+          
+          <!-- Top Operational Metrics -->
+          <div class="grid-3col" style="margin-bottom: 32px; align-items: center;">
+            <div id="s4-metric1" class="metric-box" style="align-items: center; text-align: center;">
+              <div style="font-size: 18px; color: var(--text-muted); font-weight: 700; letter-spacing: 0.1em; margin-bottom: 10px;">LATENSI DETEKSI ANOMALI</div>
+              <div class="metric-value text-accent-green stat-zoom" id="s4-val1" style="font-size: 84px;">< 15 Menit</div>
+              <div class="subtitle" style="font-size: 22px;">Early Warning Real-Time</div>
+            </div>
+
+            <div id="s4-metric2" class="metric-box" style="align-items: center; text-align: center; border-left: 2px solid rgba(255,255,255,0.12); border-right: 2px solid rgba(255,255,255,0.12); padding: 0 30px;">
+              <div style="font-size: 18px; color: var(--text-muted); font-weight: 700; letter-spacing: 0.1em; margin-bottom: 10px;">PERCEPATAN RESPON MITIGASI</div>
+              <div class="metric-value text-accent-green stat-zoom" id="s4-val2" style="font-size: 84px;">40%</div>
+              <div class="subtitle" style="font-size: 22px;">Lebih Cepat vs Reaktif</div>
+            </div>
+
+            <div id="s4-metric3" class="metric-box" style="align-items: center; text-align: center;">
+              <div style="font-size: 18px; color: var(--text-muted); font-weight: 700; letter-spacing: 0.1em; margin-bottom: 10px;">AKURASI CONSENSUS GATE</div>
+              <div class="metric-value text-accent-green stat-zoom" id="s4-val3" style="font-size: 84px;">< 10%</div>
+              <div class="subtitle" style="font-size: 22px;">Target False Positive Rate</div>
+            </div>
+          </div>
+
+          <!-- Bottom Real-Life Transferable Impact Quote Box -->
+          <div class="quote-box" id="s4-impact-box" style="margin: 0 auto; max-width: 1450px; background: rgba(20,24,21,0.92); border-left-color: var(--accent-green-bright);">
+            <div class="quote-text" id="s4-impact-text" style="font-size: 28px; line-height: 1.45; margin-bottom: 12px; font-style: normal; font-weight: 600;">
+              "Dengan meningkatkan efisiensi supply chain, Peta Nadi membantu menjaga ketersediaan kebutuhan pokok, mencegah lonjakan inflasi pangan, dan melindungi daya beli masyarakat saat terjadi disrupsi logistik."
+            </div>
+            <div class="quote-author" id="s4-impact-author" style="font-size: 20px; color: var(--accent-green-bright);">
+              — Impact Sosial Nyata & Dampak Publik Ketahanan Pangan
+            </div>
+            <div class="quote-underline" id="s4-underline" style="background: var(--accent-green-bright);"></div>
+          </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- SECTION 6: TEAM READINESS & BRAND CTA      -->
+        <!-- ========================================== -->
+
+        <!-- SLIDE 5: Team Execution Capability & Photos (27 - 33s) -->
+        <div id="slide-5" class="slide-container">
+          <div id="s5-header" style="text-align: center; margin-bottom: 32px;">
+            <div class="label-tag">PROFIL TIM S0848</div>
+            <div class="headline-large" style="font-size: 64px;">Peta Nadi Team Execution Readiness</div>
+          </div>
+
+          <div class="grid-4col" id="team-grid" style="margin-bottom: 32px;">
+            <!-- Rendered dynamically from data-config.js -->
+          </div>
+
+          <div id="s5-footer" class="subtitle" style="text-align: center; color: rgba(255,255,255,0.9); font-size: 26px; font-weight: 600; font-style: italic;">
+            <!-- Rendered dynamically from data-config.js -->
+          </div>
+        </div>
+
+        <!-- SLIDE 6: Brand CTA with Logo Icon + Peta Nadi Title (33 - 38s) -->
+        <div id="slide-6" class="slide-container" style="justify-content: center; text-align: center;">
+          <!-- Logo Icon + Peta Nadi Title Row -->
+          <div id="s6-brand-row" style="display: flex; align-items: center; justify-content: center; gap: 36px; margin-bottom: 24px;">
+            <img src="assets/logo-icon.png" id="s6-logo-icon" alt="Peta Nadi Logo" style="height: 150px; width: auto; filter: drop-shadow(0 0 40px rgba(105, 240, 174, 0.6));">
+            <div id="s6-logo-text" class="headline-huge" style="font-size: 140px; font-weight: 800; letter-spacing: -0.04em; line-height: 1.0;">
+              Peta Nadi
+            </div>
+          </div>
+
+          <!-- Tagline -->
+          <div id="s6-tagline" class="headline-medium text-accent-green" style="font-size: 52px; font-weight: 700; margin-bottom: 44px;">
+            Navigasi Krisis. Jaga Ketahanan Pangan.
+          </div>
+
+          <!-- Event Bumper -->
+          <div id="s6-event" class="subtitle" style="font-size: 28px; font-weight: 700; color: var(--text-muted); letter-spacing: 0.18em; text-transform: uppercase;">
+            PIDI Digdaya x Hackathon 2026
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Synchronous Timeline Registration for HyperFrames Linter -->
+    <script>
+      window.__timelines = window.__timelines || {};
+    </script>
+
+    <!-- GSAP Master Animation Logic -->
+    <script src="src/gsap-timeline.js"></script>
+  </body>
+</html>

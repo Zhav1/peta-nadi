@@ -84,7 +84,7 @@ export default function ReportsSection({
 
   const handleGeneratePDF = () => {
     if (typeof window === 'undefined') return;
-    const reportTitle = "PetaNadi National Logistics Cabinet Briefing";
+    const reportTitle = "PreHub National Logistics Cabinet Briefing";
     const timestamp = new Date().toLocaleString("id-ID");
     
     const printWindow = window.open("", "_blank");
@@ -121,13 +121,13 @@ export default function ReportsSection({
       <body>
         <div class="header">
           <div>
-            <h1 class="title">PetaNadi — Laporan Singkat Kabinet Logistik Nasional</h1>
-            <div class="subtitle">Koridor Sumatra Utara & Selat Malaka — Ringkasan Mitigasi Krisis</div>
+            <h1 class="title">PreHub — Laporan Singkat Kabinet Distribusi Pangan Nasional</h1>
+            <div class="subtitle">Koridor Sumatra Utara & Selat Malaka — Ringkasan Mitigasi Krisis Pangan</div>
           </div>
           <div class="meta">
             <div><strong>Diterbitkan:</strong> ${timestamp}</div>
             <div><strong>Status Sistem:</strong> ${healthScore}% OPTIMAL</div>
-            <div><strong>Otoritas:</strong> Pusat Kendali PetaNadi</div>
+            <div><strong>Otoritas:</strong> Pusat Kendali PreHub</div>
           </div>
         </div>
 
@@ -147,9 +147,9 @@ export default function ReportsSection({
         </div>
 
         <div class="section">
-          <div class="section-title">1. Ringkasan Eksekutif Logistik</div>
+          <div class="section-title">1. Ringkasan Eksekutif Logistik Pangan</div>
           <p class="text">
-            Sistem PetaNadi memantau kondisi rantai pasok secara real-time pada koridor Sumatera Utara. 
+            Sistem PreHub memantau kondisi rantai pasok secara real-time pada koridor Sumatera Utara. 
             Melalui kombinasi analisis cuaca BMKG, data kemacetan TomTom, pergerakan kapal AISstream, dan pemantauan harga PIHPS, 
             sistem berhasil mendeteksi potensi penyumbatan distribusi beras dan minyak goreng akibat penutupan terminal Pelabuhan Belawan.
           </p>
@@ -188,7 +188,7 @@ export default function ReportsSection({
         </div>
 
         <div class="footer">
-          Laporan Resmi Kabinet Republik Indonesia • Diproduksi secara otomatis oleh PetaNadi Sentinel Engine
+          Laporan Resmi Kabinet Republik Indonesia • Diproduksi secara otomatis oleh PreHub Sentinel Engine
         </div>
       </body>
       </html>
@@ -204,7 +204,7 @@ export default function ReportsSection({
 
   const handleExportJSON = () => {
     const payload = {
-      report_title: "PetaNadi National Logistics Cabinet Briefing",
+      report_title: "PreHub National Logistics Cabinet Briefing",
       timestamp: new Date().toISOString(),
       economic_savings: savingsString,
       system_integrity_pct: healthScore,
@@ -218,7 +218,7 @@ export default function ReportsSection({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `PetaNadi_Cabinet_Briefing_${Date.now()}.json`;
+    a.download = `PreHub_Cabinet_Briefing_${Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -287,7 +287,7 @@ export default function ReportsSection({
                 WEEKLY CABINET BRIEFING DOCUMENT
               </h2>
               <p className="text-[10px] font-mono text-slate-400">
-                PetaNadi National Logistics Sentinel • North Sumatra Priority Corridor
+                PreHub National Logistics Sentinel • North Sumatra Priority Corridor
               </p>
             </div>
           </div>
@@ -324,7 +324,7 @@ export default function ReportsSection({
                 <p className="text-[10px] font-mono text-slate-400">Period: Active Operational Cycle 2026</p>
               </div>
               <p>
-                During the current operational cycle, the PetaNadi Sentinel network successfully identified and mitigated kinetic disruptions within the central Logistics Corridor of North Sumatra (Belawan Port - Medan - Tebing Tinggi Interchange).
+                During the current operational cycle, the PreHub Sentinel network successfully identified and mitigated kinetic disruptions within the central Logistics Corridor of North Sumatra (Belawan Port - Medan - Tebing Tinggi Interchange).
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
                 <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30">

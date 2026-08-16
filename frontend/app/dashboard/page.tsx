@@ -9,7 +9,7 @@ const DashboardClient = dynamic(() => import('../../components/dashboard/Dashboa
       <div className="flex flex-col items-center gap-4">
         <div className="w-12 h-12 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
         <span className="text-slate-400 text-sm tracking-widest uppercase font-mono">
-          Initializing PetaNadi Command Center...
+          Initializing PreHub Command Center...
         </span>
       </div>
     </div>

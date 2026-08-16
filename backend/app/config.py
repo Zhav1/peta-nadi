@@ -4,7 +4,7 @@ from functools import lru_cache
 
 class Settings(BaseSettings):
     # App
-    app_name: str = "PetaNadi / LRIP API"
+    app_name: str = "PreHub API"
     version: str = "0.1.0"
     environment: str = "development"
     log_level: str = "INFO"

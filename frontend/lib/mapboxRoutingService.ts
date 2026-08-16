@@ -121,7 +121,7 @@ function fallbackHighwayRoute(
 }
 
 /**
- * Generates turn-by-turn road network detour recommendations for PetaNadi.
+ * Generates turn-by-turn road network detour recommendations for PreHub.
  */
 export async function calculateRoadNetworkDetourRoutes(
   hazardCenter: LonLat,

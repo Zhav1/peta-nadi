@@ -14,11 +14,11 @@ export default function OnboardFooter() {
           {/* Col 1: About */}
           <div className="flex flex-col gap-4">
             <div className="flex items-center gap-3">
-              <img src="/logo_petanadi.png" alt="PetaNadi" className="w-8 h-8 object-contain" />
-              <div className="text-white font-bold text-lg">PetaNadi (LRIP)</div>
+              <img src="/logo_prehub.png" alt="PreHub" className="w-8 h-8 object-contain" />
+              <div className="text-white font-bold text-lg">PreHub</div>
             </div>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Platform Intelijen Krisis Logistik Nasional Multi-Sensor. Menjaga ketahanan pangan dan kelancaran distribusi logistik koridor strategis.
+              Sistem Peringatan Dini dan Rekomendasi Mitigasi Gangguan Distribusi Pangan Berbasis Data Multisumber.
             </p>
           </div>
 
@@ -67,13 +67,13 @@ export default function OnboardFooter() {
         {/* Google Labs Style Massive Typography Footer */}
         <div className="w-full flex items-center justify-center pt-8 border-t border-white/5">
           <h2 className="text-[14vw] font-black text-white/10 tracking-tighter leading-none select-none uppercase font-mono">
-            PetaNadi
+            PreHub
           </h2>
         </div>
 
         {/* Bottom Copyright */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-mono text-slate-500 pt-4">
-          <span>&copy; 2026 PetaNadi Team. All rights reserved.</span>
+          <span>&copy; 2026 PreHub Team. All rights reserved.</span>
           <span>Anti-AI-Slop &bull; Glassmorphism 2.0 &bull; 60 FPS Canvas</span>
         </div>
 
