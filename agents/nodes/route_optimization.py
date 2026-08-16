@@ -66,112 +66,50 @@ async def route_optimization_agent(state: CrisisState) -> dict:
                 
         G[u][v]["weight"] = weight
 
-    # 4. Generate Cost Matrix for cuOpt VRP Solver
-    # Target nodes to optimize routing for
-    locations = ["Belawan Port", "Medan Interchange", "Binjai km 18", "Dumai Port"]
-    
-    # Filter nodes that are actually present in the graph
-    locations = [loc for loc in locations if loc in G]
-    if len(locations) < 2:
-        logger.warning("Fewer than 2 locations present in graph. Skipping VRP solving.")
-        return {
-            "route_recommendations": [],
-            "route_optimization_finding": {
-                "agent": "RouteOptimizationAgent",
-                "confidence": 0.5,
-                "summary": "Graph missing key locations for routing.",
-                "data": {},
-                "timestamp": datetime.now(timezone.utc).isoformat()
-            }
-        }
-
-    # Build matrix using NetworkX shortest path weights
-    cost_matrix = []
-    for u in locations:
-        row = []
-        for v in locations:
-            try:
-                w = nx.shortest_path_length(G, u, v, weight="weight")
-                row.append(float(w))
-            except Exception:
-                row.append(9999.0)
-        cost_matrix.append(row)
-
-    # 5. Call NVIDIA cuOpt Solver
+    # 4. Generate Alternative Routes using NetworkX Shortest Paths
     recommendations = []
     try:
-        from app.adapters.cuopt_adapter import CuOptAdapter
-        logger.info(f"Submitting cost matrix to NVIDIA cuOpt for {len(locations)} locations...")
-        vrp_solution = await CuOptAdapter.solve_vrp(
-            cost_matrix=cost_matrix,
-            locations=locations,
-            fleet_size=3
-        )
+        origin = "Belawan Port"
+        destination = "Dumai Port"
         
-        # Translate cuOpt routes back to RouteRecommendation dicts
-        routes = vrp_solution.get("solution", {}).get("routes", {})
-        for truck_id, route_data in routes.items():
-            route_idxs = route_data.get("route", [])
-            # Only process active routes (more than just origin -> origin)
-            if len(route_idxs) > 2:
-                route_nodes = [locations[idx] for idx in route_idxs]
-                total_time = route_data.get("total_travel_time", 0.0)
-                
-                # Mock waypoint coordinate near North Sumatra corridor
-                waypoints = [{"lat": 3.78, "lon": 98.68}]
-                
-                # Calculate distance
-                distance_km = 0.0
-                for i in range(len(route_nodes) - 1):
-                    u_node = route_nodes[i]
-                    v_node = route_nodes[i+1]
-                    if G.has_edge(u_node, v_node):
-                        distance_km += G[u_node][v_node]["distance_km"]
-                
-                # Estimate fuel increase
-                fuel_increase = max(0.0, round((distance_km - 26.0) * 0.1, 2))  # baseline distance 26km
-                
-                desc = f"cuOpt Optimized Route for {truck_id} via {', '.join(route_nodes[1:-1])}"
-                recommendations.append({
-                    "description": desc,
-                    "waypoints": waypoints,
-                    "distance_km": round(distance_km, 2),
-                    "eta_minutes": int(total_time * 60) if total_time < 9999 else 999,
-                    "fuel_increase_pct": fuel_increase,
-                    "risk_score": 0.2 if "Detour" in desc else 0.1
-                })
-    except Exception as cuopt_err:
-        logger.error(f"Error calculating cuOpt paths: {cuopt_err}")
+        # Ensure endpoints exist in graph or pick first available nodes
+        if origin not in G:
+            origin = list(G.nodes)[0] if len(G.nodes) > 0 else None
+        if destination not in G:
+            destination = list(G.nodes)[-1] if len(G.nodes) > 1 else None
 
-    # Fallback to standard NetworkX Dijkstra if cuOpt produces no active routes
-    if not recommendations:
-        logger.info("cuOpt produced no active routes. Falling back to Dijkstra.")
-        try:
-            origin = "Belawan Port"
-            destination = "Dumai Port"
+        if origin and destination and origin != destination:
             paths = list(nx.shortest_simple_paths(G, origin, destination, weight="weight"))
-            for idx, path in enumerate(paths[:2]):
+            for idx, path in enumerate(paths[:3]):
                 distance_km = 0.0
                 for i in range(len(path) - 1):
                     if G.has_edge(path[i], path[i+1]):
                         distance_km += G[path[i]][path[i+1]]["distance_km"]
                 
-                eta_minutes = int((distance_km / 60.0) * 60)
+                eta_minutes = int((distance_km / 50.0) * 60) # 50 km/h avg logistics speed
+                is_detour = idx > 0
+                desc = (
+                    f"Rute Utama Teroptimasi via {', '.join(path[1:-1])}" if not is_detour
+                    else f"Jalur Pengalihan Alternatif #{idx} via {', '.join(path[1:-1])}"
+                )
+                
+                # Dynamic waypoint along the route
+                waypoints = [{"lat": 3.78 + (idx * 0.02), "lon": 98.68 - (idx * 0.02)}]
                 recommendations.append({
-                    "description": f"Dijkstra Detour {idx} via {', '.join(path[1:-1])}",
-                    "waypoints": [{"lat": 3.78, "lon": 98.68}],
+                    "description": desc,
+                    "waypoints": waypoints,
                     "distance_km": round(distance_km, 2),
                     "eta_minutes": eta_minutes,
-                    "fuel_increase_pct": max(0.0, round((distance_km - 26.0) * 0.1, 2)),
-                    "risk_score": 0.5 + (idx * 0.2)
+                    "fuel_increase_pct": max(0.0, round((distance_km - 26.0) * 0.12, 2)),
+                    "risk_score": 0.15 if not is_detour else round(0.3 + (idx * 0.15), 2)
                 })
-        except Exception as fb_err:
-            logger.error(f"Dijkstra fallback also failed: {fb_err}")
+    except Exception as routing_err:
+        logger.error(f"Error calculating NetworkX shortest paths: {routing_err}")
 
-    # 6. Compute confidence score
-    confidence = 0.7  # Base
+    # 5. Compute confidence score
+    confidence = 0.75  # Base
     if len(recommendations) >= 2:
-        confidence += 0.2
+        confidence += 0.15
     if recommendations and recommendations[0]["risk_score"] < 0.3:
         confidence += 0.1
         
@@ -180,14 +118,20 @@ async def route_optimization_agent(state: CrisisState) -> dict:
     finding: AgentFinding = {
         "agent": "RouteOptimizationAgent",
         "confidence": confidence,
-        "summary": f"Calculated {len(recommendations)} optimal fleet routes using NVIDIA cuOpt VRP optimization.",
+        "summary": f"Calculated {len(recommendations)} optimal fleet routes using NetworkX graph routing with real-time hazard weighting.",
         "data": {"routes": recommendations},
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
     
+    try:
+        from app.routers.agent_router import update_agent_status
+        update_agent_status("RouteOptimizationAgent", "complete", confidence, finding["summary"])
+    except Exception:
+        pass
+
     logger.info(f"Agent 4 finished. Confidence: {confidence}")
     return {
         "route_recommendations": recommendations,
         "route_optimization_finding": finding,
-        "messages": state.get("messages", []) + ["RouteOptimizationAgent: Solved multi-agent fleet routing via cuOpt."]
+        "messages": state.get("messages", []) + ["RouteOptimizationAgent: Solved multi-alternative fleet routing via NetworkX."]
     }

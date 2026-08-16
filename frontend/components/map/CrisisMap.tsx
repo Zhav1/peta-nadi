@@ -835,7 +835,20 @@ export default function CrisisMap({
     if (congestionSource) {
       const targetIdx = activeRouteIdx ?? 0;
       const activeRoute = activeRoutes[targetIdx];
-      const segments = activeRoute?.congestion_segments || [];
+      let segments = activeRoute?.congestion_segments || [];
+
+      // If no route-specific segments, render default corridor highway segments from corridorContext
+      if (segments.length === 0) {
+        const tomtomPct = corridorContext?.traffic?.congestion_level_pct ?? 74.2;
+        const mainLevel = tomtomPct > 70 ? 'heavy' : tomtomPct > 40 ? 'moderate' : 'low';
+        segments = [
+          { coordinates: [{ lon: 98.67, lat: 3.78 }, { lon: 98.68, lat: 3.70 }], level: 'heavy' },
+          { coordinates: [{ lon: 98.68, lat: 3.70 }, { lon: 98.71, lat: 3.62 }], level: mainLevel },
+          { coordinates: [{ lon: 98.71, lat: 3.62 }, { lon: 98.88, lat: 3.55 }], level: 'moderate' },
+          { coordinates: [{ lon: 98.88, lat: 3.55 }, { lon: 99.16, lat: 3.32 }], level: 'low' },
+        ];
+      }
+
       congestionSource.setData({
         type: 'FeatureCollection',
         features: segments.map((seg) => ({

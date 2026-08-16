@@ -169,6 +169,12 @@ async def decision_support_copilot(state: CrisisState) -> dict:
     # Trigger non-blocking task
     asyncio.create_task(send_notification())
     
+    try:
+        from app.routers.agent_router import update_agent_status
+        update_agent_status("DecisionSupportCopilot", "complete", 0.94, summary_text[:120] + "...")
+    except Exception:
+        pass
+
     logger.info("Agent 6 finished. Executive summary generated and written to Supabase.")
     return {
         "decision_support_output": summary_text,

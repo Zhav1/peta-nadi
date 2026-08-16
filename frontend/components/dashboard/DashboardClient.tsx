@@ -10,6 +10,7 @@ import { CrisisSidebar } from '@/components/sidebar/CrisisSidebar';
 import { Toast } from '@/components/ui/Toast';
 import { useDemoState } from '@/hooks/useDemoState';
 import { useFleetVehicles } from '@/hooks/useFleetVehicles';
+import { useCorridorContext } from '@/hooks/useCorridorContext';
 import { GuidedDemoPanel } from '@/components/demo/GuidedDemoPanel';
 import AnalyticsSection from '@/components/dashboard/AnalyticsSection';
 import SimulationSection from '@/components/dashboard/SimulationSection';
@@ -177,8 +178,8 @@ export default function DashboardClient() {
   const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState(false);
   const [approvalsCount, setApprovalsCount] = useState<number>(14);
 
-  // Live Corridor Context Telemetry State (BMKG + TomTom + PIHPS)
-  const [corridorContext, setCorridorContext] = useState<import('@/lib/types').CorridorContext | null>(null);
+  // Live Corridor Context Telemetry Hook (BMKG + TomTom + PIHPS 30s Poller)
+  const { corridorContext, isLoading: isCorridorLoading } = useCorridorContext('sumatra_belawan_medan');
 
   // Synchronize activeSection from URL query parameters
   useEffect(() => {
@@ -219,7 +220,7 @@ export default function DashboardClient() {
 
       setApprovalsCount(prev => prev + 1);
       setToast({
-        message: `🚀 UNIFIED ACTION PLAN DITERAPKAN: Rute Aman Disetujui & Instruksi Dikirim ke ${agencyParams?.agency || 'BULOG/DISHUB'}!`,
+        message: `UNIFIED ACTION PLAN DITERAPKAN: Rute Aman Disetujui & Instruksi Dikirim ke ${agencyParams?.agency || 'BULOG/DISHUB'}!`,
         type: 'success'
       });
 
@@ -229,7 +230,7 @@ export default function DashboardClient() {
       console.error('Failed to deploy unified action plan:', err);
       setApprovalsCount(prev => prev + 1);
       setToast({
-        message: `🚀 UNIFIED ACTION PLAN DITERAPKAN: Rute Aman Disetujui & Ditampilkan di Peta 4D!`,
+        message: `UNIFIED ACTION PLAN DITERAPKAN: Rute Aman Disetujui & Ditampilkan di Peta 4D!`,
         type: 'success'
       });
       setActiveRouteIdx(0);
@@ -284,14 +285,6 @@ export default function DashboardClient() {
 
   useEffect(() => {
     let isMounted = true;
-    async function loadCorridorContext() {
-      try {
-        const data = await api.corridor.context('sumatra_belawan_medan');
-        if (isMounted) setCorridorContext(data);
-      } catch (e) {
-        console.warn('Backend corridor context fallback:', e);
-      }
-    }
     async function loadSpatialWeather() {
       try {
         const geojson = await api.weather.spatialPolygons();
@@ -300,12 +293,8 @@ export default function DashboardClient() {
         console.warn('Backend spatial weather polygons fallback:', e);
       }
     }
-    loadCorridorContext();
     loadSpatialWeather();
-    const interval = setInterval(() => {
-      loadCorridorContext();
-      loadSpatialWeather();
-    }, 30000);
+    const interval = setInterval(loadSpatialWeather, 120000);
     return () => {
       isMounted = false;
       clearInterval(interval);
@@ -364,7 +353,7 @@ export default function DashboardClient() {
         gdpStatus: '▲ +2.6% Risk',
         gdpColor: 'text-red-400',
         foodInflation: foodInflationVal,
-        inflationStatus: '⚠️ PIHPS ANOMALY SPIKE',
+        inflationStatus: 'PIHPS ANOMALY SPIKE',
         inflationColor: 'text-red-400',
         activeShocks: '1 ACTIVE',
         shocksColor: 'text-red-400 animate-pulse',
@@ -894,7 +883,7 @@ export default function DashboardClient() {
 
         {/* Top Navbar Telemetry Header */}
         <div className="flex items-center gap-3">
-          <TopNavTelemetry cuOptInfo={cuOptInfo} corridorContext={corridorContext} />
+          <TopNavTelemetry cuOptInfo={cuOptInfo} corridorContext={corridorContext} isLoading={isCorridorLoading} />
         </div>
       </header>
 

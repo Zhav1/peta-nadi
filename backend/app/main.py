@@ -20,7 +20,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.routers import health, incidents, agent_router, approvals, demo_router, commodity_router, corridor_router, routing_router, vehicles_router
+from app.routers import health, incidents, agent_router, approvals, demo_router, commodity_router, corridor_router, routing_router, vehicles_router, news_router
 from app.services.redis_client import get_redis, close_redis
 
 settings = get_settings()
@@ -57,6 +57,97 @@ async def _poll_bmkg_loop():
         logger.error(f"Fatal error in BMKG poller loop: {e}")
 
 
+async def _poll_tomtom_loop():
+    """Background poller for TomTom traffic speeds & segment delays."""
+    logger.info("Starting background TomTom poller task...")
+    try:
+        from app.adapters.tomtom_adapter import TomTomAdapter
+        adapter = TomTomAdapter()
+        while True:
+            try:
+                raw = await adapter.fetch()
+                flow_items = raw.get("flow", [])
+                if flow_items:
+                    r = get_redis()
+                    for item in flow_items:
+                        seg = item.get("flowSegmentData", {})
+                        name = item.get("_checkpoint_name", "checkpoint")
+                        free_speed = max(1.0, float(seg.get("freeFlowSpeed", 60.0)))
+                        curr_speed = float(seg.get("currentSpeed", 30.0))
+                        delay_min = max(0.0, (1.0 - (curr_speed / free_speed)) * 45.0)
+                        
+                        payload = {
+                            "name": name,
+                            "delay_min": round(delay_min, 1),
+                            "currentTravelTime": seg.get("currentTravelTime", 0),
+                            "currentSpeed": curr_speed,
+                            "freeFlowSpeed": free_speed,
+                            "timestamp": datetime.now(timezone.utc).timestamp()
+                        }
+                        r.set(f"lrip:tomtom:segment:{name}", json.dumps(payload), ex=600)
+                    logger.info(f"TomTom poller cached {len(flow_items)} segment delays in Redis.")
+            except Exception as e:
+                logger.warning(f"TomTom background poll error: {e}")
+            await asyncio.sleep(300)  # Poll every 5 minutes
+    except asyncio.CancelledError:
+        logger.info("TomTom background poller task canceled.")
+    except Exception as e:
+        logger.error(f"Fatal error in TomTom poller loop: {e}")
+
+
+async def _poll_earth2_loop():
+    """Background poller for Open-Meteo atmospheric forecasts."""
+    logger.info("Starting background Earth2/Open-Meteo poller task...")
+    try:
+        from app.adapters.earth2_adapter import Earth2Adapter
+        adapter = Earth2Adapter()
+        while True:
+            try:
+                raw = await adapter.fetch()
+                if raw:
+                    events = await adapter.parse(raw)
+                    r = get_redis()
+                    r.set("lrip:cache:earth2", json.dumps(events), ex=21600)
+                    logger.info("Earth2/Open-Meteo weather forecast cached in Redis.")
+            except Exception as e:
+                logger.warning(f"Earth2/Weather poll error: {e}")
+            await asyncio.sleep(21600)  # Every 6 hours
+    except asyncio.CancelledError:
+        logger.info("Earth2 background poller task canceled.")
+    except Exception as e:
+        logger.error(f"Fatal error in Earth2 poller loop: {e}")
+
+
+async def _run_aisstream():
+    """Background WebSocket listener for AIS maritime vessels."""
+    logger.info("Starting background AISstream WebSocket task...")
+    try:
+        from app.adapters.aisstream_adapter import AISstreamAdapter
+        adapter = AISstreamAdapter()
+        await adapter.run()
+    except asyncio.CancelledError:
+        logger.info("AISstream WebSocket task canceled.")
+    except Exception as e:
+        logger.warning(f"AISstream background error: {e}")
+
+
+async def _poll_news_loop():
+    """Background poller for Google News RSS feeds."""
+    logger.info("Starting background News poller task...")
+    try:
+        from app.routers.news_router import get_live_news
+        while True:
+            try:
+                await get_live_news(force_refresh=True)
+            except Exception as e:
+                logger.warning(f"News poller error: {e}")
+            await asyncio.sleep(300)  # Every 5 minutes
+    except asyncio.CancelledError:
+        logger.info("News poller task canceled.")
+    except Exception as e:
+        logger.error(f"Fatal error in News poller loop: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application startup and shutdown lifecycle."""
@@ -69,14 +160,19 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Redis connection failed: {e} — continuing without Redis")
 
-    # Start background tasks
+    # Start all background tasks
     bmkg_task = asyncio.create_task(_poll_bmkg_loop())
+    tomtom_task = asyncio.create_task(_poll_tomtom_loop())
+    earth2_task = asyncio.create_task(_poll_earth2_loop())
+    ais_task = asyncio.create_task(_run_aisstream())
+    news_task = asyncio.create_task(_poll_news_loop())
 
     yield  # Application runs here
 
     # Shutdown
-    logger.info("Shutting down...")
-    bmkg_task.cancel()
+    logger.info("Shutting down background workers...")
+    for t in [bmkg_task, tomtom_task, earth2_task, ais_task, news_task]:
+        t.cancel()
     close_redis()
 
 
@@ -108,4 +204,5 @@ app.include_router(agent_router.router)
 app.include_router(demo_router.router)
 app.include_router(commodity_router.router, prefix="/api/v1")
 app.include_router(vehicles_router.router)
+app.include_router(news_router.router)
 

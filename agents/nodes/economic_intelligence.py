@@ -130,6 +130,12 @@ async def economic_intelligence_agent(state: CrisisState) -> dict:
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
     
+    try:
+        from app.routers.agent_router import update_agent_status
+        update_agent_status("EconomicIntelligenceAgent", "complete", confidence, finding["summary"])
+    except Exception:
+        pass
+
     logger.info(f"Agent 5 finished. Confidence: {confidence}")
     return {
         "inflation_forecast": inflation_forecast,
