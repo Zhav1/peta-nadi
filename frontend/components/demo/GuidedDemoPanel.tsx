@@ -10,6 +10,10 @@ import {
   TrendingUp,
   MessageSquare,
   CheckCircle2,
+  Play,
+  SkipForward,
+  RotateCcw,
+  Pause,
 } from 'lucide-react';
 
 interface GuidedDemoPanelProps {
@@ -409,7 +413,22 @@ export function GuidedDemoPanel({
                     : 'bg-cyan-500/80 text-slate-950 font-bold hover:bg-cyan-400'
               }`}
             >
-              {stage === 0 ? '🚀 Inject Crisis & Run Swarm' : logStep === 5 ? '⏭️ Next Step (Swarm Complete 100%)' : '⏭ Next Step'}
+              {stage === 0 ? (
+                <>
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  <span>Inject Crisis & Run Swarm</span>
+                </>
+              ) : logStep === 5 ? (
+                <>
+                  <SkipForward className="w-3.5 h-3.5" />
+                  <span>Next Step (Swarm Complete 100%)</span>
+                </>
+              ) : (
+                <>
+                  <SkipForward className="w-3.5 h-3.5" />
+                  <span>Next Step</span>
+                </>
+              )}
             </button>
           ) : (
             <button
@@ -419,9 +438,10 @@ export function GuidedDemoPanel({
                 e.stopPropagation();
                 onStart({ origin: selectedOrigin, destination: selectedDestination });
               }}
-              className="flex-1 py-2 rounded-xl text-xs font-bold bg-cyan-500 text-slate-950 hover:bg-cyan-400 active:scale-95 transition duration-200 shadow-md shadow-cyan-500/20 cursor-pointer"
+              className="flex-1 py-2 rounded-xl text-xs font-bold bg-cyan-500 text-slate-950 hover:bg-cyan-400 active:scale-95 transition duration-200 shadow-md shadow-cyan-500/20 cursor-pointer flex items-center justify-center gap-1.5"
             >
-              ↺ Restart Demo
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Restart Demo</span>
             </button>
           )}
 
@@ -432,13 +452,23 @@ export function GuidedDemoPanel({
               e.stopPropagation();
               onToggleAuto();
             }}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition duration-200 cursor-pointer ${
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition duration-200 cursor-pointer flex items-center justify-center gap-1.5 ${
               isAuto
                 ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
                 : 'border border-slate-800 bg-slate-900/60 text-slate-300 hover:bg-slate-800'
             }`}
           >
-            {isAuto ? '⏸ Pause' : '▶ Auto'}
+            {isAuto ? (
+              <>
+                <Pause className="w-3.5 h-3.5" />
+                <span>Pause</span>
+              </>
+            ) : (
+              <>
+                <Play className="w-3.5 h-3.5 fill-current" />
+                <span>Auto</span>
+              </>
+            )}
           </button>
         </div>
 

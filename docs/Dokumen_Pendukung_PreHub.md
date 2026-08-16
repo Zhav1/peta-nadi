@@ -170,28 +170,27 @@ graph TD
     
     subgraph "PreHub Core Intelligence Layer"
         BE --> AgentOrch[LangGraph Multi-Agent Swarm]
-        AgentOrch --> WAgent[Weather Agent - BMKG]
-        AgentOrch --> TAgent[Traffic Agent - TomTom]
-        AgentOrch --> IAgent[OSINT Intelligence Agent]
-        AgentOrch --> RAgent[Risk Synthesis Agent]
-        AgentOrch --> LAgent[cuOpt Logistics Optimization Agent]
-        AgentOrch --> DAgent[Decision Consensus Agent]
+        AgentOrch --> WAgent[Data Collection Agent - Multi-Sensor Health]
+        AgentOrch --> TAgent[OSINT Hazard Agent - RSS & Social Grounding]
+        AgentOrch --> IAgent[Prediction Agent - Open-Meteo & TomTom 48h]
+        AgentOrch --> RAgent[Route Optimization Agent - NetworkX Dijkstra]
+        AgentOrch --> LAgent[Economic Intelligence Agent - PIHPS Anomaly]
+        AgentOrch --> DAgent[Decision Copilot - DeepSeek R1 via NVIDIA NIM]
     end
 
     subgraph "Data Storage & Message Broker"
-        BE --> Redis[(Redis 7 - Ingestion Queue & PubSub)]
-        BE --> PostGIS[(PostgreSQL + PostGIS / Supabase)]
+        BE --> Redis[(Redis 7 - Streams 'lrip:stream:osint' & Cache)]
+        BE --> PostGIS[(PostgreSQL + PostGIS / Supabase Road Graph)]
     end
 ```
 
 ### 4.2 Topologi 6 Multi-Agent Swarm
-
-1. **Weather Agent:** Melakukan scraping, parsing metar, dan estimasi radius intensitas presipitasi hujan (curah hujan mm/jam) di titik rawan longsor/banjir.
-2. **Traffic Agent:** Menganalisis *speed delta*, indeks kepadatan segmen jalan (*congestion index*), dan waktu tunda (*delay time*) pada jalur arteri vs jalan tol.
-3. **Intelligence Agent (OSINT):** Mengumpulkan berita daring dan laporan insiden lapangan (kecelakaan, aksi blokade jalan, perbaikan gorong-gorong) dengan verifikasi silang kredibilitas sumber (*source reliability weight*).
-4. **Risk Synthesis Agent:** Menghitung probabilitas kegagalan rute dan mengkombinasikan matriks dampak ekonomi.
-5. **Logistics Agent (cuOpt Engine):** Mengoptimasi graf rute alternatif dengan pembobotan *Vehicle Routing Problem with Time Windows (VRPTW)*.
-6. **Decision Consensus Agent:** Merumuskan rekomendasi final (*Continue vs Reroute vs Hold*), justifikasi *Evidence Chain*, serta draf disposisi antar instansi (*Cabinet Briefing*).
+1. **Data Collection & Health Agent:** Melakukan validasi, deduplikasi hash, dan normalisasi telemetri sensor waktu nyata (BMKG, TomTom, dan sumber pangan).
+2. **OSINT & Intelligence Agent:** Mengagregasi berita terkini (Google News RSS) dan postingan lapangan dengan verifikasi silang kredibilitas sumber (*source reliability scoring*) serta fusi geometri bahaya PostGIS.
+3. **Congestion & Weather Forecast Agent:** Menggabungkan prediksi presipitasi curah hujan 24–48 jam dari Open-Meteo dengan proyeksi tren perlambatan kecepatan TomTom.
+4. **Logistics & Graph Routing Agent:** Mengoptimasi graf jaringan jalan Sumatera Utara (berbasis data node OSM dan tabel `road_graph_edges`) menggunakan algoritma NetworkX Dijkstra dengan pembobotan penalti zona bahaya aktif.
+5. **Price & Inflation Intelligence Agent:** Mendeteksi *z-score* anomali harga pangan strategis (cabai merah, beras, minyak goreng) dan memproyeksikan multiplier inflasi regional.
+6. **Decision Support Copilot (DeepSeek R1):** Merumuskan sintesis eksekutif penalaran mendalam (*Chain-of-Thought*), matriks mitigasi 3 arah (*Continue vs Reroute vs Hold*), serta draf rencana aksi gabungan lintas kementerian/lembaga.
 
 ### 4.3 Formulasi Matematika Indeks Risiko Gabungan & Optimasi Rute
 
@@ -199,9 +198,9 @@ graph TD
 Probabilitas disrupsi logistik pada segmen jalan $s$ dimodelkan dengan penggabungan multi-faktor berbobot independen:
 $$P_{\text{disruption}}(s) = 1 - \prod_{k \in \{W, T, I\}} (1 - w_k \cdot p_k(s))$$
 Di mana:
-* $p_W(s)$: Probabilitas risiko hidrometeorologi BMKG ($w_W = 0.35$).
+* $p_W(s)$: Probabilitas risiko hidrometeorologi BMKG / Open-Meteo ($w_W = 0.35$).
 * $p_T(s)$: Probabilitas kemacetan & insiden TomTom ($w_T = 0.40$).
-* $p_I(s)$: Probabilitas validitas laporan OSINT ($w_I = 0.25$).
+* $p_I(s)$: Probabilitas validitas laporan OSINT & Berita RSS ($w_I = 0.25$).
 
 #### B. Total Operational Risk Score ($\mathcal{R}$)
 $$\mathcal{R} = f(P_{\text{disruption}}, \text{Impact}) = P_{\text{disruption}}(s) \times \left( \alpha \cdot \Delta T_{\text{delay}} + \beta \cdot \Delta C_{\text{fuel}} + \gamma \cdot V_{\text{cargo\_perishability}} \right)$$
@@ -217,17 +216,17 @@ Di mana $\alpha, \beta, \gamma$ adalah koefisien sensitivitas waktu, biaya opera
 ## BAB 5: DESKRIPSI FUNGSIONAL MODUL SISTEM
 
 ### 5.1 Modul Ingesti Data Multi-Sumber & Grounding Real-Time
-* **Worker Ingestion:** Bekerja secara *asynchronous* menarik data cuaca BMKG dan telemetri TomTom setiap interval 60 detik.
-* **OSINT Crawler & Geocoder:** Memfilter artikel berita dan laporan kepolisian daerah secara berkala, melakukan ekstraksi entitas geografis (NER Geocoding) ke koordinat lintang/bujur presisi.
+* **Worker Ingestion:** Bekerja secara *asynchronous* menarik data cuaca BMKG, prediksi Open-Meteo, dan telemetri kecepatan TomTom secara terjadwal.
+* **Google News RSS & OSINT Pipeline:** Memfilter artikel berita pangan dan logistik regional Sumatera Utara setiap 5 menit, menghitung skor relevansi, dan mempublikasikan data ke Redis stream `lrip:stream:osint`.
 
 ### 5.2 Modul Peta Komando 4D & Dynamic Fleet Layer
-* **Visualisasi Vektor WebGL 60 FPS:** Menampilkan layer pergerakan armada logistik pangan secara dinamis dengan sudut rotasi bearing nyata.
-* **Zona Bahaya Dinamis (Dynamic Hazard Polygon):** Menampilkan batas spasial area banjir/macet dengan gradien warna intensitas risiko (*cyan/yellow/rose*).
+* **Visualisasi Vektor WebGL 60 FPS:** Menampilkan layer pergerakan armada logistik pangan (truk, kapal laut, pesawat) secara dinamis dengan sudut rotasi bearing nyata.
+* **Peta Always-Alive:** Layer kepadatan lalu lintas TomTom (Google Maps style hijau/kuning/merah) dan zona cuaca otomatis aktif saat aplikasi dibuka pertama kali tanpa harus menjalankan demo.
 * **Multi-Route Detour Overlay:** Menampilkan komparasi rute eksisting vs rute alternatif bebas hambatan (misal: Tol Belmera - Medan - Kualanamu - Tebing Tinggi).
 
 ### 5.3 Modul Analisis Spasial & Causal Chain Graph
 * **Visualisasi Deck.gl Arc & Scatterplot:** Menampilkan aliran komoditas pangan dari sentra produksi (Pelabuhan Belawan / Tanah Karo) ke titik konsumsi utama.
-* **Tracking Disparitas Harga Pangan (PIHPS Grounding):** Grafik fluktuasi harga beras, cabai merah, dan bawang merah dengan kalkulasi lonjakan harga akibat keterlambatan pasokan.
+* **Tracking Disparitas Harga Pangan (PIHPS Grounding):** Grafik fluktuasi harga beras, cabai merah, dan minyak goreng dengan kalkulasi lonjakan harga akibat keterlambatan pasokan.
 
 ### 5.4 Modul Multi-Agency Simulation Sandbox & What-If Advisor
 * **Interactive Disaster Shockwave:** Fitur bagi operator untuk mensimulasikan skenario disrupsi baru dengan radius dampak kustom (5 km – 50 km).
@@ -237,8 +236,9 @@ Di mana $\alpha, \beta, \gamma$ adalah koefisien sensitivitas waktu, biaya opera
   * **BULOG:** Pengalihan pasokan darurat ke pasar induk terdekat.
   * **DISHUB / POLRI:** Rekayasa lalu lintas satu arah (*contraflow*) pada segmen rawan kemacetan.
 
-### 5.5 Modul B2G Executive Cabinet Briefing Center
-* **Laporan Ringkasan Eksekutif Instan:** Menghasilkan dokumen taktis berkas kabinet berformat standar kementerian/lembaga.
+### 5.5 Modul B2G Executive Cabinet Briefing Center & Agent Health
+* **Live 6-Agent Swarm Health Status:** Indikator kesehatan dan keyakinan agen waktu nyata (`GET /api/v1/agents/status`) pada bilah navigasi utama.
+* **Laporan Ringkasan Eksekutif Instan:** Menghasilkan dokumen taktis berkas kabinet berformat standar kementerian/lembaga berbasis penalaran DeepSeek R1.
 * **Fitur Ekspor Multi-Format:** Mendukung cetak langsung (*Print-to-PDF*), unduh berkas JSON Telemetri, dan integrasi pengiriman notifikasi instan WhatsApp Dispatcher.
 
 ---

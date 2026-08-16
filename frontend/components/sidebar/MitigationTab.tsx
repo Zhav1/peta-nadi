@@ -2,6 +2,20 @@
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 import type { CrisisState, RouteRecommendation } from '@/lib/types';
+import { 
+  AlertTriangle, 
+  CheckCircle2, 
+  MapPin, 
+  Clock, 
+  Fuel, 
+  Truck, 
+  Anchor, 
+  Train, 
+  Plane, 
+  Waves, 
+  TrendingUp,
+  Sparkles
+} from 'lucide-react';
 
 interface MitigationTabProps {
   crisis: CrisisState;
@@ -75,7 +89,7 @@ function RouteCard({
       ? 'border-cyan-400/80 bg-cyan-950/30 ring-2 ring-cyan-400/40'
       : 'border-white/10 bg-slate-800/40 hover:border-white/20';
 
-  const titleText = route.route_name || (idx === 0 ? '★ Recommended AI Route' : `Alternative ${idx + 1}`);
+  const titleText = route.route_name || (idx === 0 ? 'Recommended AI Route' : `Alternative ${idx + 1}`);
 
   return (
     <div
@@ -86,16 +100,17 @@ function RouteCard({
       <div className="flex justify-between items-start mb-1.5 gap-2">
         <span className="text-xs font-bold text-slate-100 flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: route.color || (idx === 0 ? '#00f0ff' : '#3b82f6') }} />
+          {idx === 0 && <Sparkles className="w-3.5 h-3.5 text-cyan-400" />}
           <span>{titleText}</span>
         </span>
 
         {isCompromised ? (
-          <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded bg-red-950/80 text-red-300 border border-red-500/40">
-            ⚠️ COMPROMISED
+          <span className="inline-flex items-center gap-1 text-[10px] font-bold font-mono px-2 py-0.5 rounded bg-red-950/80 text-red-300 border border-red-500/40">
+            <AlertTriangle className="w-3 h-3 text-red-400" /> COMPROMISED
           </span>
         ) : (
-          <span className="text-[10px] font-bold font-mono px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-500/40">
-            ✅ SAFE DETOUR
+          <span className="inline-flex items-center gap-1 text-[10px] font-bold font-mono px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-500/40">
+            <CheckCircle2 className="w-3 h-3 text-emerald-400" /> SAFE DETOUR
           </span>
         )}
       </div>
@@ -116,8 +131,8 @@ function RouteCard({
           <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Rincian Leg Logistik Multi-Moda:</span>
           {route.legs.map((leg, lIdx) => (
             <div key={lIdx} className="flex justify-between items-center text-slate-300">
-              <span className="flex items-center gap-1">
-                <span>{leg.mode === 'truck' ? '🚚' : leg.mode === 'maritime' ? '⚓' : (leg.mode as string) === 'rail' ? '🚆' : '✈️'}</span>
+              <span className="flex items-center gap-1.5">
+                {leg.mode === 'truck' ? <Truck className="w-3.5 h-3.5 text-cyan-400" /> : leg.mode === 'maritime' ? <Anchor className="w-3.5 h-3.5 text-amber-400" /> : (leg.mode as string) === 'rail' ? <Train className="w-3.5 h-3.5 text-emerald-400" /> : <Plane className="w-3.5 h-3.5 text-purple-400" />}
                 <span>{leg.title}</span>
               </span>
               <span className="text-cyan-400 font-bold">{leg.eta_minutes} min ({leg.distance_km} km)</span>
@@ -127,23 +142,25 @@ function RouteCard({
       )}
 
       <div className="flex gap-3 text-xs text-slate-300 font-mono mb-1">
-        <span>📍 {route.distance_km.toFixed(0)} km</span>
-        <span>⏱ {route.eta_minutes} min</span>
-        <span>⛽ +{route.fuel_increase_pct.toFixed(0)}%</span>
+        <span className="inline-flex items-center gap-1"><MapPin className="w-3 h-3 text-cyan-400" /> {route.distance_km.toFixed(0)} km</span>
+        <span className="inline-flex items-center gap-1"><Clock className="w-3 h-3 text-amber-400" /> {route.eta_minutes} min</span>
+        <span className="inline-flex items-center gap-1"><Fuel className="w-3 h-3 text-emerald-400" /> +{route.fuel_increase_pct.toFixed(0)}%</span>
       </div>
 
       {isActive && (
         <div className="mt-3 pt-2.5 border-t border-white/10">
           {isApproved ? (
             <div className="w-full py-2 px-3 rounded-lg bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 text-xs font-bold flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
-              <span>APPROVED ✅</span>
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              <span>APPROVED</span>
               <span className="text-[10px] text-emerald-400/80 font-mono">
-                Dispatched to Fleet Control Room
+                · DISPATCHED
               </span>
             </div>
           ) : isCompromised ? (
             <div className="w-full py-2 px-3 rounded-lg bg-red-950/80 border border-red-500/50 text-red-300 text-[11px] font-mono font-bold text-center flex items-center justify-center gap-1.5">
-              <span>⚠️ RUTE TERDAMPAK BENCANA (TIDAK DISARANKAN)</span>
+              <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+              <span>RUTE TERDAMPAK BENCANA (TIDAK DISARANKAN)</span>
             </div>
           ) : (
             <button
@@ -263,15 +280,15 @@ export function MitigationTab({
         </div>
         <div className="flex flex-col gap-1.5 text-xs font-mono">
           <div className="flex items-center gap-2 text-red-300">
-            <span>🌊 Disrupsi Fisik:</span>
+            <span className="flex items-center gap-1"><Waves className="w-3.5 h-3.5 text-blue-400" /> Disrupsi Fisik:</span>
             <span className="font-bold">{crisis.title || 'Banjir Koridor Belawan'}</span>
           </div>
           <div className="flex items-center gap-2 text-amber-300">
-            <span>⏱ Keterlambatan Logistik:</span>
+            <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5 text-amber-400" /> Keterlambatan Logistik:</span>
             <span className="font-bold">+4.2 Jam Delay Pasokan</span>
           </div>
           <div className="flex items-center gap-2 text-emerald-300">
-            <span>📈 Proyeksi Inflasi Pangan:</span>
+            <span className="flex items-center gap-1"><TrendingUp className="w-3.5 h-3.5 text-emerald-400" /> Proyeksi Inflasi Pangan:</span>
             <span className="font-bold">Potensi Inflasi Medan +2.1% (Cabai +14.2%)</span>
           </div>
         </div>

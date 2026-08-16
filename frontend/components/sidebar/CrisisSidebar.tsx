@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import { X, Link2, ChevronUp, ChevronDown } from 'lucide-react';
 import { EvidenceTab } from './EvidenceTab';
 import { MitigationTab } from './MitigationTab';
 import { EconomicTab } from './EconomicTab';
@@ -67,10 +68,10 @@ export function CrisisSidebar({
         <button
           id="sidebar-close-btn"
           onClick={onClose}
-          className="ml-2 w-7 h-7 rounded-lg bg-slate-900 border border-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors flex-shrink-0"
+          className="cursor-pointer ml-2 w-7 h-7 rounded-lg bg-slate-900 border border-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors flex-shrink-0"
           aria-label="Close crisis panel"
         >
-          ✕
+          <X className="w-4 h-4" />
         </button>
       </div>
 
@@ -81,7 +82,7 @@ export function CrisisSidebar({
             key={tab}
             id={`tab-${tab.toLowerCase()}`}
             onClick={() => setActiveTab(tab)}
-            className={`flex-1 py-3 text-xs font-headline font-bold uppercase tracking-wider transition-colors ${
+            className={`cursor-pointer flex-1 py-3 text-xs font-headline font-bold uppercase tracking-wider transition-colors ${
               activeTab === tab
                 ? 'text-cyan-400 border-b-2 border-cyan-400 bg-cyan-500/5'
                 : 'text-slate-500 hover:text-slate-300'
@@ -112,13 +113,13 @@ export function CrisisSidebar({
           <button
             id="causal-chain-toggle"
             onClick={() => setShowCausalChain((v) => !v)}
-            className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-mono text-slate-400 hover:text-slate-200 transition-colors"
+            className="cursor-pointer w-full flex items-center justify-between px-4 py-2.5 text-xs font-mono text-slate-400 hover:text-slate-200 transition-colors"
           >
             <span className="flex items-center gap-1.5">
-              <span>🔗</span>
+              <Link2 className="w-3.5 h-3.5 text-cyan-400" />
               <span>Why this alert? (Causal chain)</span>
             </span>
-            <span>{showCausalChain ? '▲' : '▼'}</span>
+            <span>{showCausalChain ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}</span>
           </button>
           {showCausalChain && (
             <div className="px-4 pb-3">

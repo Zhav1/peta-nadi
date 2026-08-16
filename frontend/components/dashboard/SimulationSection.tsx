@@ -102,7 +102,7 @@ export default function SimulationSection({
     const agencyName = activeAgency || 'Otoritas Gabungan';
     const actionDesc = `Alokasi Stok BULOG ${bulogStockAlloc}%, Rekayasa DISHUB ${dishubDiversion ? 'Aktif' : 'Non-Aktif'}, Unit BNPB ${bnpbRescueUnits} Tim`;
     
-    showToast(`🚀 Deploying Action Plan for ${agencyName}...`, 'success');
+    showToast(`Deploying Action Plan for ${agencyName}...`, 'success');
 
     if (onDeployActionPlan) {
       onDeployActionPlan({ agency: agencyName, action: actionDesc });

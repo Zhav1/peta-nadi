@@ -5,6 +5,8 @@ import mapboxgl from 'mapbox-gl';
 import type { FleetVehicle } from '@/lib/types';
 import { calculateRouteProgressPosition } from '@/lib/geoUtils';
 
+import { Truck, Anchor, Plane, X } from 'lucide-react';
+
 interface FleetVehicleLayerProps {
   map: mapboxgl.Map | null;
   vehicles: FleetVehicle[];
@@ -343,16 +345,17 @@ export function FleetVehicleLayer({ map, vehicles, activeRoutes, activeRouteIdx 
       <div className="bg-slate-950/90 border border-cyan-500/40 rounded-xl p-3.5 shadow-2xl backdrop-blur-xl min-w-[240px] text-xs font-mono text-slate-100">
         <div className="flex items-center justify-between gap-2 border-b border-slate-800 pb-2 mb-2">
           <div className="flex items-center gap-1.5">
-            <span className="text-base">
-              {vehicle.modality === 'truck' ? '🚚' : vehicle.modality === 'maritime' ? '⚓' : '✈️'}
+            <span className="text-cyan-400">
+              {vehicle.modality === 'truck' ? <Truck className="w-4 h-4 text-cyan-400" /> : vehicle.modality === 'maritime' ? <Anchor className="w-4 h-4 text-amber-400" /> : <Plane className="w-4 h-4 text-purple-400" />}
             </span>
             <span className="font-bold text-cyan-300 tracking-wide">{vehicle.vehicle_id}</span>
           </div>
           <button
             onClick={() => setSelectedVehicle(null)}
-            className="text-slate-400 hover:text-white text-sm font-bold px-1"
+            className="cursor-pointer text-slate-400 hover:text-white p-0.5 rounded hover:bg-white/10 transition-colors"
+            title="Tutup Tooltip"
           >
-            ✕
+            <X className="w-3.5 h-3.5" />
           </button>
         </div>
 

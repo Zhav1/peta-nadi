@@ -7,17 +7,17 @@
 ## 🏛️ System Architecture
 
 ```
-Multisource Telemetry (BMKG, TomTom, Google News OSINT, PIHPS)
+Multisource Telemetry (BMKG, TomTom, Google News RSS, Open-Meteo, PIHPS)
                              ↓
-                Redis 7 Pub/Sub & Ingestion Queue
+             Redis 7 Pub/Sub & OSINT Ingestion Queue
                              ↓
-              LangGraph 6-Agent Swarm Reasoning
+       LangGraph 6-Agent Swarm (DeepSeek R1 via NVIDIA NIM)
                              ↓
-            Risk Assessment & Consensus Gate (≥85%)
+           Risk Assessment & Consensus Gate (≥85%)
                              ↓
-           GPU Route Optimization (NVIDIA cuOpt / Mapbox)
+      NetworkX Dijkstra Graph Router & Mapbox Visualizer
                              ↓
-       PreHub Command Center 4D + B2G Cabinet Briefing Center
+   PreHub Command Center 4D + B2G Cabinet Briefing Center
 ```
 
 ---
@@ -25,22 +25,24 @@ Multisource Telemetry (BMKG, TomTom, Google News OSINT, PIHPS)
 ## 🚀 Key Features
 
 1. **Multi-Source Grounding & Evidence Chain:**
-   * Live BMKG hydrometeorological radar and warnings.
-   * Real-time TomTom traffic speed delta and congestion index.
-   * Automated Google News OSINT crawler with NER geocoding and source credibility weighting.
+   * Live BMKG hydrometeorological radar and extreme weather warnings.
+   * Real-time TomTom traffic speed delta and corridor segment delay caching.
+   * Automated Google News RSS OSINT crawler with keyword scoring and Redis stream publishing.
+   * Open-Meteo atmospheric forecast API for 24-hour precipitation and flood risk.
    * PIHPS commodity price variance and volatile food inflation tracking.
 
 2. **Multi-Agent Swarm Intelligence (6 Specialist Agents):**
-   * **Weather Agent:** Precipitation radius and flash flood hazard polygons.
-   * **Traffic Agent:** Segment congestion scoring and choke-point bottleneck detection.
-   * **Intelligence Agent:** OSINT news verification and multi-source corroboration.
-   * **Risk Synthesis Agent:** Combined mathematical disruption risk computation:
-     $$\mathcal{R} = P_{\text{disruption}} \times (\alpha \cdot \Delta T_{\text{delay}} + \beta \cdot \Delta C_{\text{fuel}} + \gamma \cdot V_{\text{perishability}})$$
-   * **Logistics Agent:** GPU-accelerated route optimization via NVIDIA cuOpt and Mapbox Navigation.
-   * **Decision Consensus Agent:** Tri-option mitigation recommendations (*Continue*, *Reroute*, *Hold/Delay*) with XAI reasoning and unified multi-agency action plans.
+   * **Data Collection & Health Agent:** Validates and normalizes multi-source sensor telemetries.
+   * **OSINT & Intelligence Agent:** Corroborates news and grassroots reports with PostGIS hazard polygons.
+   * **Congestion & Weather Forecast Agent:** Computes 48-hour traffic trends & Open-Meteo precipitation risks.
+   * **Logistics & Graph Routing Agent:** Computes optimal detour routes via NetworkX Dijkstra graph solver with dynamic hazard penalty weighting.
+   * **Price & Inflation Intelligence Agent:** Detects price anomalies on staples and projects inflation impacts.
+   * **AI Decision Copilot:** Synthesizes executive multi-agency recommendations (*Continue*, *Reroute*, *Hold/Delay*) with deep reasoning traces using **DeepSeek R1 via NVIDIA NIM**.
 
 3. **High-Performance Command Center (Next.js 14 + WebGL):**
-   * 60 FPS route-bound fleet vector layer with dynamic bearing rotation.
+   * Persistent 6-Agent Swarm Live Health Widget with real-time confidence scores and node execution status.
+   * Always-alive map with real-time TomTom segment traffic colors (green/yellow/red) and weather polygons on initial load.
+   * 60 FPS route-bound fleet vector layer with dynamic bearing rotation (Ships, Trucks, Aircraft).
    * Deck.gl Arc & Scatterplot spatial commodity flow layers.
    * Multi-Agency Simulation Sandbox (What-If Advisor with 5–50 km shockwave radius).
    * B2G Cabinet Briefing Center with Print-to-PDF and JSON telemetry export.
@@ -54,10 +56,11 @@ Multisource Telemetry (BMKG, TomTom, Google News OSINT, PIHPS)
 | **Frontend Web App** | Next.js 14.2+ (App Router), React 18, TypeScript, TailwindCSS (Dark Glassmorphic UI) |
 | **Spatial & GIS Rendering** | Mapbox GL JS v3, Deck.gl v8, Framer Motion, Turf.js |
 | **Backend API** | FastAPI (Python 3.11+ / 3.13), Uvicorn ASGI Server, Pydantic v2 |
-| **Multi-Agent Swarm** | LangGraph, LangChain Core, Google Gemini 2.5 / Claude / DeepSeek |
+| **Multi-Agent Swarm** | LangGraph, LangChain Core, DeepSeek R1 (via NVIDIA NIM) / Google Gemini |
 | **Database & Spatial Store** | PostgreSQL 15+ with PostGIS 3.3+, Supabase Managed Layer |
-| **Cache & Event Bus** | Redis 7.0+ (Streams & Pub/Sub) |
-| **Optimization Engine** | NVIDIA cuOpt VRP Solver & Mapbox Direction APIs |
+| **Cache & Event Bus** | Redis 7.0+ (Streams `lrip:stream:osint` & Pub/Sub) |
+| **Optimization Engine** | NetworkX Dijkstra Shortest Path Solver & Mapbox Direction APIs |
+| **Weather Forecast** | Open-Meteo Free Global Meteorological API & BMKG Observation Stations |
 | **E2E & Visual Verification** | Playwright Test Suite (Chromium Headless) |
 
 ---

@@ -88,6 +88,12 @@ async def data_collection_agent(state: CrisisState) -> dict:
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
     
+    try:
+        from app.routers.agent_router import update_agent_status
+        update_agent_status("DataCollectionAgent", "complete", confidence, finding["summary"])
+    except Exception:
+        pass
+        
     logger.info(f"Agent 1 finished. Confidence: {confidence}")
     return {
         "normalized_event": normalized_event,

@@ -132,6 +132,12 @@ async def osint_hazard_agent(state: CrisisState) -> dict:
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
     
+    try:
+        from app.routers.agent_router import update_agent_status
+        update_agent_status("OSINTHazardAgent", "complete", confidence, finding["summary"])
+    except Exception:
+        pass
+
     logger.info(f"Agent 2 finished. Confidence: {confidence}")
     return {
         "hazard_polygons": hazard_polygons,
