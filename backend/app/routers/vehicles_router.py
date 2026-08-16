@@ -1,6 +1,6 @@
 """
-PetaNadi / LRIP — Multi-Modal Fleet Vehicles Router (Phase 25 & 28)
-Provides real-time AISstream vessel positions and synthetic ground/air logistics fleet telemetry with GeoJSON route_geometry.
+PreHub — Multi-Modal Fleet Vehicles Router
+Provides real-time AISstream vessel positions and synthetic ground/air food logistics fleet telemetry with GeoJSON route_geometry.
 """
 from fastapi import APIRouter
 from datetime import datetime, timezone

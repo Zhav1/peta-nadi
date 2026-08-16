@@ -1,5 +1,5 @@
 """
-PetaNadi / LRIP — FastAPI Application Entry Point
+PreHub — FastAPI Application Entry Point
 """
 import asyncio
 import json
@@ -83,7 +83,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.app_name,
     version=settings.version,
-    description="AI-powered logistics resilience and disaster response intelligence platform.",
+    description="PreHub: Sistem Peringatan Dini dan Rekomendasi Mitigasi Gangguan Distribusi Pangan Berbasis Data Multisumber.",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,

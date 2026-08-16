@@ -1,0 +1,13 @@
+{
+  "name": "prehub-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PreHub: Food Logistics Disruption Early Warning & Mitigation Decision Support System",
+  "scripts": {
+    "dev:frontend": "npm run dev --prefix frontend",
+    "build:frontend": "npm run build --prefix frontend",
+    "start:frontend": "npm run start --prefix frontend",
+    "test:backend": "cd backend && .\\.venv\\Scripts\\pytest",
+    "test:frontend": "cd frontend && npx playwright test"
+  }
+}

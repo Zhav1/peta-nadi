@@ -86,32 +86,40 @@ export default function AnalyticsSection({
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
 
-    const map = new mapboxgl.Map({
-      container: mapContainerRef.current,
-      style: 'mapbox://styles/mapbox/dark-v11',
-      center: [104.5, 1.8], // Center over Indonesia (Sumatra - Java corridor)
-      zoom: 5.2,
-      pitch: 35,
-      bearing: -10,
-      attributionControl: false,
-    });
-
-    mapRef.current = map;
-
-    map.on('load', () => {
-      map.resize();
-      // Setup Deck.gl MapboxOverlay
-      const deckOverlay = new MapboxOverlay({
-        interleaved: false,
-        layers: []
+    try {
+      const map = new mapboxgl.Map({
+        container: mapContainerRef.current,
+        style: 'mapbox://styles/mapbox/dark-v11',
+        center: [104.5, 1.8], // Center over Indonesia (Sumatra - Java corridor)
+        zoom: 5.2,
+        pitch: 35,
+        bearing: -10,
+        attributionControl: false,
       });
 
-      map.addControl(deckOverlay as unknown as mapboxgl.IControl);
-      deckOverlayRef.current = deckOverlay;
+      mapRef.current = map;
 
-      // Update Deck.gl layers
-      updateDeckLayers();
-    });
+      map.on('load', () => {
+        map.resize();
+        // Setup Deck.gl MapboxOverlay
+        try {
+          const deckOverlay = new MapboxOverlay({
+            interleaved: false,
+            layers: []
+          });
+
+          map.addControl(deckOverlay as unknown as mapboxgl.IControl);
+          deckOverlayRef.current = deckOverlay;
+
+          // Update Deck.gl layers
+          updateDeckLayers();
+        } catch (deckErr) {
+          console.warn('Deck.gl overlay initialization error:', deckErr);
+        }
+      });
+    } catch (err) {
+      console.warn('Mapbox initialization error in AnalyticsSection:', err);
+    }
 
     // ResizeObserver to ensure canvas fills container on layout updates / tab switches
     const resizeObserver = new ResizeObserver(() => {

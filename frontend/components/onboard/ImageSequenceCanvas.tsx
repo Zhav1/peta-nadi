@@ -305,7 +305,7 @@ export default function ImageSequenceCanvas() {
 
         {/* Top-Left Telemetry Tag Overlay */}
         <div className="absolute top-8 left-8 z-10 flex items-center gap-3 px-4 py-2 rounded-full backdrop-blur-2xl bg-[#0c0e12]/90 border border-cyan-400/40 text-xs font-mono text-cyan-400 shadow-2xl">
-          <img src="/logo_petanadi.png" alt="PetaNadi" className="w-4 h-4 object-contain animate-pulse" />
+          <img src="/logo_prehub.png" alt="PreHub" className="w-4 h-4 object-contain animate-pulse" />
           <span className="font-bold">4D SEQUENCE RUNTIME</span>
           <span className="text-slate-500">|</span>
           <span className="text-slate-200">FRAME {String(currentFrameNum).padStart(3, '0')} / {TOTAL_FRAMES}</span>
@@ -413,7 +413,7 @@ export default function ImageSequenceCanvas() {
         {/* Initial Loading Overlay State */}
         {!isLoaded && (
           <div className="absolute inset-0 bg-[#080d14]/95 backdrop-blur-xl flex flex-col items-center justify-center gap-4 z-20">
-            <img src="/logo_petanadi.png" alt="PetaNadi" className="w-12 h-12 object-contain animate-bounce" />
+            <img src="/logo_prehub.png" alt="PreHub" className="w-12 h-12 object-contain animate-bounce" />
             <div className="flex flex-col items-center gap-1">
               <span className="text-white text-sm font-bold tracking-wide">
                 Initializing 4D Sequence Player (High-Res 60 FPS)

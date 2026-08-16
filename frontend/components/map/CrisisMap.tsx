@@ -1212,7 +1212,7 @@ export default function CrisisMap({
         ref={containerRef}
         id="crisis-map"
         className="w-full h-full"
-        aria-label="PetaNadi crisis intelligence map"
+        aria-label="PreHub crisis intelligence map"
       />
 
       {/* WebGL Native Fleet Vehicle Layer (Phase 28 & Phase 29) */}

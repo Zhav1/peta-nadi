@@ -12,13 +12,13 @@ export default function OnboardNav() {
         {/* Brand Logo & Status */}
         <Link href="/" className="flex items-center gap-3 group">
           <div className="relative w-10 h-10 rounded-xl bg-[#080d14] border border-emerald-500/30 p-1 flex items-center justify-center shadow-lg shadow-emerald-500/20 group-hover:scale-105 transition-transform">
-            <img src="/logo_petanadi.png" alt="PetaNadi Logo" className="w-8 h-8 object-contain" />
+            <img src="/logo_prehub.png" alt="PreHub Logo" className="w-8 h-8 object-contain" />
           </div>
 
           <div className="flex flex-col">
             <div className="flex items-center gap-2">
               <span className="text-xl font-black tracking-tight text-white group-hover:text-cyan-400 transition-colors">
-                PetaNadi
+                PreHub
               </span>
               <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-cyan-400/10 text-cyan-400 border border-cyan-400/30">
                 4D

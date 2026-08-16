@@ -180,6 +180,17 @@ export default function DashboardClient() {
   // Live Corridor Context Telemetry State (BMKG + TomTom + PIHPS)
   const [corridorContext, setCorridorContext] = useState<import('@/lib/types').CorridorContext | null>(null);
 
+  // Synchronize activeSection from URL query parameters
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const section = params.get('section') as 'map' | 'analytics' | 'simulation' | 'reports';
+      if (section && ['map', 'analytics', 'simulation', 'reports'].includes(section)) {
+        setActiveSection(section);
+      }
+    }
+  }, []);
+
   const handleDeployUnifiedActionPlan = async (agencyParams?: { agency: string; action: string }) => {
     try {
       const routeName = currentMapRoutes[0]?.route_name || currentMapRoutes[0]?.description || "Rute Bypass Medan-Tebing Tinggi";
@@ -713,7 +724,7 @@ export default function DashboardClient() {
       route_recommendations: dynamicRoadDetourRoutes,
       decision_support_output: `AI Copilot: Disrupsi ${type.toUpperCase()} terdeteksi. Engine Pure Agentic Tangential Vector menghitung pengalihan rute jalan raya otomatis melingkari zona krisis. Tindakan disarankan: Alihkan armada kontainer via Rute Pengalihan 1. Rilis 480 ton cadangan beras BULOG.`,
       evidence: {
-        osint_author: '@PetaNadi_CommandCenter',
+        osint_author: '@PreHub_CommandCenter',
         osint_text: `Peringatan AI Dynamic: Disrupsi ${type} diaktifkan pada rute ${originId.toUpperCase()} ➔ ${destId.toUpperCase()}. Jalur logistik utama dialihkan via Pure Agentic Tangential Clearance Detour.`,
         delay_minutes: '120 min',
         delay_history: [20, 45, 90, 120]
@@ -822,10 +833,10 @@ export default function DashboardClient() {
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-[#080d14] border border-emerald-500/40 p-1 flex items-center justify-center shadow-md shadow-emerald-500/20">
-              <img src="/logo_petanadi.png" alt="PetaNadi" className="w-6 h-6 object-contain" />
+              <img src="/logo_prehub.png" alt="PreHub" className="w-6 h-6 object-contain" />
             </div>
             <span className="font-headline font-black text-lg tracking-wider text-slate-100 uppercase">
-              PetaNadi
+              PreHub
             </span>
             <Link
               href="/"
@@ -839,6 +850,7 @@ export default function DashboardClient() {
           {/* Section Navigation Tabs */}
           <nav className="flex items-center gap-1 bg-slate-950/60 p-1 rounded-xl border border-slate-800">
             <button
+              id="nav-map"
               onClick={() => setActiveSection('map')}
               className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition ${activeSection === 'map'
                 ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
@@ -848,6 +860,7 @@ export default function DashboardClient() {
               MAP 4D
             </button>
             <button
+              id="nav-analytics"
               onClick={() => setActiveSection('analytics')}
               className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition ${activeSection === 'analytics'
                 ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
@@ -857,6 +870,7 @@ export default function DashboardClient() {
               ANALYTICS
             </button>
             <button
+              id="nav-simulation"
               onClick={() => setActiveSection('simulation')}
               className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition ${activeSection === 'simulation'
                 ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
@@ -866,6 +880,7 @@ export default function DashboardClient() {
               SIMULATION
             </button>
             <button
+              id="nav-reports"
               onClick={() => setActiveSection('reports')}
               className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition ${activeSection === 'reports'
                 ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'

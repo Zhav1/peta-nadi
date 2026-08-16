@@ -50,10 +50,10 @@ async def simulation_chat(req: ChatRequest):
 
     # Contextual system instruction for Gemini / LLM
     system_instruction = (
-        "Anda adalah PetaNadi Sentinel AI & Tactical Advisory Coordinator untuk Logistik Nasional Indonesia. "
+        "Anda adalah PreHub Sentinel AI & Tactical Advisory Coordinator untuk Distribusi Pangan Nasional Indonesia. "
         "Tugas Anda adalah merespon pertanyaan operator logistik / pemerintah secara profesional, presisi, dan taktis "
         "berdasarkan data aktual koridor Sumatera Utara (Belawan - Medan - Tebing Tinggi).\n\n"
-        "Data Konteks Real-Time PetaNadi:\n"
+        "Data Konteks Real-Time PreHub:\n"
         "- Bencana Aktif: Penutupan Pelabuhan Belawan & Banjir Jalinsum KM 42 (Lubuk Pakam).\n"
         "- Cuaca (BMKG): Curah hujan 68.5 mm/jam, Peringatan Dini Monsoon Aktif.\n"
         "- Lalu Lintas (TomTom): Keterlambatan +35 menit pada rute utama Jalinsum (Saturasi 74.2%).\n"
@@ -119,7 +119,7 @@ async def simulation_chat(req: ChatRequest):
             )
         else:
             ai_reply = (
-                f"Analisis Swarm PetaNadi untuk '{user_msg}':\n"
+                f"Analisis Swarm PreHub untuk '{user_msg}':\n"
                 "Berdasarkan telemetri real-time BMKG & TomTom, kondisi koridor Sumatra Utara berada pada status ALERT (Saturasi 74.2%). "
                 "Rekomendasi utama: Eksekusi Rencana Tindakan Gabungan (Unified Action Plan) untuk mengaktifkan bypass Tol Belmera dan menstabilkan pasokan pangan BULOG."
             )

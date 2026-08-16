@@ -93,7 +93,7 @@ export default function InteractiveDemoShowcase() {
         {/* Section Title */}
         <div className="flex flex-col items-center text-center gap-4">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full backdrop-blur-xl bg-[#0c0e12]/90 border border-cyan-500/30 text-xs font-mono text-cyan-400 shadow-xl">
-            <img src="/logo_petanadi.png" alt="PetaNadi" className="w-4 h-4 object-contain" />
+            <img src="/logo_prehub.png" alt="PreHub" className="w-4 h-4 object-contain" />
             <span>INTERACTIVE SYSTEM PREVIEW</span>
           </div>
 
@@ -104,7 +104,7 @@ export default function InteractiveDemoShowcase() {
             </span>
           </h2>
           <p className="text-slate-400 text-base md:text-lg max-w-2xl">
-            Pilih modul sistem di bawah untuk melihat bagaimana PetaNadi mengolah data spasial, nalar agen AI, dan optimasi GPU dalam satu layar terpadu.
+            Pilih modul sistem di bawah untuk melihat bagaimana PreHub mengolah data spasial, nalar agen AI, dan optimasi GPU dalam satu layar terpadu.
           </p>
         </div>
 
@@ -194,7 +194,7 @@ export default function InteractiveDemoShowcase() {
             <div className="absolute top-4 left-4 right-4 flex items-center justify-between pointer-events-none">
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg backdrop-blur-xl bg-[#080d14]/80 border border-white/10 text-xs font-mono text-cyan-400">
                 <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-                <span>PetaNadi 4D Command Center Window</span>
+                <span>PreHub 4D Command Center Window</span>
               </div>
               <div className="px-3 py-1 rounded-lg backdrop-blur-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 text-xs font-mono font-bold">
                 LIVE STAGING

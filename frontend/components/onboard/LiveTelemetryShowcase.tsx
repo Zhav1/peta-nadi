@@ -92,7 +92,7 @@ export default function LiveTelemetryShowcase() {
               streams.
             </h2>
             <p className="text-slate-400 text-base md:text-lg">
-              PetaNadi tidak menggunakan data buatan tunggal. Setiap sinyal anomali diverifikasi silang dari enam penyedia data terpercaya secara bersamaan.
+              PreHub tidak menggunakan data buatan tunggal. Setiap sinyal anomali diverifikasi silang dari enam penyedia data terpercaya secara bersamaan.
             </p>
           </div>
 
