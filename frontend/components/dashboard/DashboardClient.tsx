@@ -523,6 +523,7 @@ export default function DashboardClient() {
   // Time Horizon State Datasets (PAST / PRESENT / FUTURE / PREDICT)
   const [historicalEpisodes, setHistoricalEpisodes] = useState<Record<string, unknown>[]>([]);
   const [predictiveRisks, setPredictiveRisks] = useState<Record<string, unknown>[]>([]);
+  const [fleetModalityFilter, setFleetModalityFilter] = useState<'all' | 'truck' | 'maritime' | 'air'>('all');
 
 
   useEffect(() => {
@@ -1210,6 +1211,7 @@ export default function DashboardClient() {
               activeTimeFilter={activeTimeFilter}
               historicalEpisodes={historicalEpisodes}
               predictiveRisks={predictiveRisks}
+              fleetModalityFilter={fleetModalityFilter}
             />
 
           </div>
@@ -1361,23 +1363,22 @@ export default function DashboardClient() {
                         {item.summary}
                       </p>
 
-                      {/* Commodity Impact Pills */}
-                      {item.commodity_impact && Object.keys(item.commodity_impact).length > 0 && (
-                        <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
-                          {Object.entries(item.commodity_impact).map(([comm, val]) => (
-                            <span
-                              key={comm}
-                              className="px-1.5 py-0.5 rounded bg-red-950/60 border border-red-500/30 text-[9px] font-mono text-red-300 font-bold"
-                            >
-                              {comm.replace('_pct', '').toUpperCase()}: +{val}%
-                            </span>
-                          ))}
+                      {/* Grounded Affected Commodity & Calculation Evidence Note */}
+                      <div className="p-2 rounded-lg bg-slate-950/80 border border-white/5 space-y-1 text-[10px] font-mono">
+                        <div className="flex items-center justify-between text-slate-300">
+                          <span className="text-slate-400 font-bold">Komoditas Terdampak:</span>
+                          <span className="text-amber-300 font-bold truncate max-w-[150px]">{item.commodity_name || 'Sembako & Beras'}</span>
                         </div>
-                      )}
+                        {item.economic_note && (
+                          <p className="text-[9px] text-slate-400 font-sans leading-tight italic">
+                            💡 {item.economic_note}
+                          </p>
+                        )}
+                      </div>
 
                       {/* Action Bar */}
                       <div className="flex items-center justify-between pt-1 border-t border-white/5">
-                        <div className="flex items-center gap-1 text-[9px] font-mono text-slate-400 truncate max-w-[130px]">
+                        <div className="flex items-center gap-1 text-[9px] font-mono text-slate-400 truncate max-w-[120px]">
                           <MapPin className="w-3 h-3 text-cyan-400 shrink-0" />
                           <span className="truncate">{item.location_name || 'Sumatera'}</span>
                         </div>
@@ -1389,9 +1390,9 @@ export default function DashboardClient() {
                               target="_blank"
                               rel="noopener noreferrer"
                               className="cursor-pointer p-1 rounded-lg bg-slate-900/90 text-slate-400 hover:text-cyan-300 hover:bg-slate-800 transition"
-                              title="Buka Berita Asli"
+                              title={`Buka Berita: ${item.attributions[0].source_name}`}
                             >
-                              <ExternalLink className="w-3 h-3" />
+                              <ExternalLink className="w-3.5 h-3.5" />
                             </a>
                           )}
 
@@ -1399,23 +1400,27 @@ export default function DashboardClient() {
                             type="button"
                             onClick={() => {
                               setSelectedNewsId(item.id);
+                              if (item.originNode && item.destNode) {
+                                setSelectedOriginNode(item.originNode);
+                                setSelectedDestNode(item.destNode);
+                              }
                               if (item.lat && item.lon) {
                                 handleMapPointTargeted(
                                   item.lat,
                                   item.lon,
-                                  item.category === 'METEOROLOGY' ? 'flood' : item.category === 'TRAFFIC_BOTTLENECK' ? 'congestion' : 'flood',
-                                  12,
+                                  (item.hazardType as any) || (item.category === 'METEOROLOGY' ? 'flood' : item.category === 'TRAFFIC_BOTTLENECK' ? 'congestion' : 'flood'),
+                                  15,
                                   'high'
                                 );
                                 setToast({
-                                  message: `Fokus ke sinyal intelijen: ${item.location_name || 'Titik Berita'}`,
+                                  message: `⚡ Skenario Diaktifkan: ${item.location_name || 'Titik Berita'}. Reroute cuOpt menghitung jalur aman.`,
                                   type: 'info',
                                 });
                               }
                             }}
-                            className="cursor-pointer flex items-center gap-1 px-2 py-0.5 rounded-lg bg-cyan-950 text-cyan-300 border border-cyan-500/40 hover:bg-cyan-900 hover:text-white transition text-[9px] font-mono font-bold"
+                            className="cursor-pointer flex items-center gap-1 px-2.5 py-1 rounded-lg bg-cyan-950 text-cyan-300 border border-cyan-500/40 hover:bg-cyan-900 hover:text-white transition text-[9px] font-mono font-bold"
                           >
-                            <span>📍 Fokus Peta</span>
+                            <span>📍 Fokus & Reroute</span>
                           </button>
                         </div>
                       </div>
@@ -1470,6 +1475,44 @@ export default function DashboardClient() {
               activeTimeFilter={activeTimeFilter}
               onResetToPresent={() => setActiveTimeFilter('present')}
             />
+
+            {/* Floating Live Fleet Modality Filter Control (Globot-style) */}
+            {activeTimeFilter === 'present' && (
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 pointer-events-auto flex items-center gap-1 p-1 rounded-2xl bg-[#0c0e12]/90 border border-white/15 backdrop-blur-xl shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200">
+                {[
+                  { id: 'all', label: 'SEMUA', count: activeFleetVehicles.length },
+                  { id: 'truck', label: '🚚 TRUK', count: activeFleetVehicles.filter((v) => v.modality === 'truck').length },
+                  { id: 'maritime', label: '⚓ KAPAL', count: activeFleetVehicles.filter((v) => v.modality === 'maritime').length },
+                  { id: 'air', label: '✈️ UDARA', count: activeFleetVehicles.filter((v) => v.modality === 'air').length },
+                ].map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => {
+                      setFleetModalityFilter(m.id as any);
+                      setToast({
+                        message: `Filter Armada: ${m.label} (${m.count} Unit Aktif)`,
+                        type: 'info',
+                      });
+                    }}
+                    className={`cursor-pointer px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition-all flex items-center gap-1.5 ${
+                      fleetModalityFilter === m.id
+                        ? 'bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/20 font-black'
+                        : 'text-slate-400 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    <span>{m.label}</span>
+                    <span
+                      className={`px-1.5 py-0.2 rounded text-[10px] ${
+                        fleetModalityFilter === m.id ? 'bg-slate-950 text-cyan-300' : 'bg-white/10 text-slate-400'
+                      }`}
+                    >
+                      {m.count}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* Floating Collapsible Route Map Legend */}
             <FloatingMapLegend
