@@ -49,9 +49,9 @@ export interface CrisisMapProps {
 
 
 
-// North Sumatra — Belawan Port area
-const INITIAL_CENTER: [number, number] = [98.67, 3.55];
-const INITIAL_ZOOM = 9;
+// Strategic Sumatra Regional Scale Viewport
+const INITIAL_CENTER: [number, number] = [100.5, 0.5];
+const INITIAL_ZOOM = 6.0;
 const DRAG_THRESHOLD_PX = 5;
 
 /** Generates a GeoJSON polygon ring forming a circle around [lon, lat] */
@@ -600,8 +600,8 @@ export default function CrisisMap({
       const isOrigin = node.id === selectedOriginNode;
       const isDest = node.id === selectedDestNode;
 
-      const isPort = node.id.includes('belawan') || node.id.includes('dumai');
-      const isAir = node.id.includes('kualanamu') || node.id.includes('kno');
+      const isPort = node.type === 'port' || node.id.includes('port') || node.id.includes('belawan') || node.id.includes('dumai');
+      const isAir = node.type === 'airport' || node.id.includes('air') || node.id.includes('kno') || node.id.includes('kualanamu');
 
       const iconSvg = isPort
         ? `<svg class="w-3.5 h-3.5 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="3"/><line x1="12" y1="22" x2="12" y2="8"/><path d="M5 12H2a10 10 0 0 0 20 0h-3"/></svg>`
@@ -619,9 +619,12 @@ export default function CrisisMap({
       }`;
       el.style.zIndex = '30';
 
+      const typeLabel = isPort ? 'PORT' : isAir ? 'AIRPORT' : 'HUB';
+
       el.innerHTML = `
         <span>${iconSvg}</span>
-        <span>${node.name}</span>
+        <span class="truncate max-w-[140px]">${node.name.split('(')[0].trim()}</span>
+        <span class="text-[8px] font-mono px-1 py-0.2 rounded bg-white/10 text-slate-400">${typeLabel}</span>
         ${isOrigin ? '<span class="px-1.5 py-0.5 bg-cyan-400 text-slate-950 rounded text-[9px] font-black">START</span>' : ''}
         ${isDest ? '<span class="px-1.5 py-0.5 bg-amber-400 text-slate-950 rounded text-[9px] font-black">END</span>' : ''}
       `;
@@ -830,24 +833,12 @@ export default function CrisisMap({
       });
     }
 
-    // 2b. Update Congestion Segments Source (Google Maps Traffic Style)
+    // 2b. Update Congestion Segments Source (Google Maps Traffic Style - Only for Road Routes)
     const congestionSource = map.getSource('congestion-segments-source') as mapboxgl.GeoJSONSource;
     if (congestionSource) {
       const targetIdx = activeRouteIdx ?? 0;
       const activeRoute = activeRoutes[targetIdx];
-      let segments = activeRoute?.congestion_segments || [];
-
-      // If no route-specific segments, render default corridor highway segments from corridorContext
-      if (segments.length === 0) {
-        const tomtomPct = corridorContext?.traffic?.congestion_level_pct ?? 74.2;
-        const mainLevel = tomtomPct > 70 ? 'heavy' : tomtomPct > 40 ? 'moderate' : 'low';
-        segments = [
-          { coordinates: [{ lon: 98.67, lat: 3.78 }, { lon: 98.68, lat: 3.70 }], level: 'heavy' },
-          { coordinates: [{ lon: 98.68, lat: 3.70 }, { lon: 98.71, lat: 3.62 }], level: mainLevel },
-          { coordinates: [{ lon: 98.71, lat: 3.62 }, { lon: 98.88, lat: 3.55 }], level: 'moderate' },
-          { coordinates: [{ lon: 98.88, lat: 3.55 }, { lon: 99.16, lat: 3.32 }], level: 'low' },
-        ];
-      }
+      const segments = activeRoute?.congestion_segments || [];
 
       congestionSource.setData({
         type: 'FeatureCollection',
