@@ -2,7 +2,27 @@
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import Link from 'next/link';
-import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import {
+  PanelLeftClose,
+  PanelLeftOpen,
+  HelpCircle,
+  Info,
+  Layers,
+  Radio,
+  RotateCcw,
+  Compass,
+  MapPin,
+  TrendingUp,
+  CheckCircle2,
+  AlertTriangle,
+  FileText,
+  Activity,
+  Zap,
+  Truck,
+  CloudRain,
+  ShieldCheck,
+  X,
+} from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useIncidents } from '@/hooks/useIncidents';
 import { useCrisisSocket } from '@/hooks/useCrisisSocket';
@@ -148,6 +168,225 @@ const FALLBACK_PREDICTIVE = [
 
 
 
+interface MetricCardProps {
+  title: string;
+  value: string | number;
+  status: string;
+  statusColor: string;
+  targetText: string;
+  badgeLabel: string;
+  badgeType: 'live' | 'fixture' | 'calc';
+  explanation: {
+    what: string;
+    source: string;
+    benchmark: string;
+  };
+  isOpen: boolean;
+  onToggle: () => void;
+}
+
+function TacticalMetricCard({
+  title,
+  value,
+  status,
+  statusColor,
+  targetText,
+  badgeLabel,
+  badgeType,
+  explanation,
+  isOpen,
+  onToggle,
+}: MetricCardProps) {
+  return (
+    <div className="bg-[#1e2024]/40 border border-white/10 p-3 rounded-xl backdrop-blur-md transition-all hover:border-white/20">
+      <div className="flex justify-between items-center mb-1">
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] font-mono text-slate-300 uppercase tracking-wider font-bold">{title}</span>
+          <button
+            type="button"
+            onClick={onToggle}
+            className="cursor-pointer text-slate-400 hover:text-cyan-400 transition-colors p-0.5"
+            title={`Pelajari dasar kalkulasi ${title}`}
+            aria-label={`Info ${title}`}
+          >
+            <HelpCircle className="w-3 h-3" />
+          </button>
+        </div>
+        <div className="flex items-center gap-1">
+          <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border ${
+            badgeType === 'live'
+              ? 'bg-emerald-950/60 text-emerald-300 border-emerald-500/30'
+              : badgeType === 'fixture'
+              ? 'bg-amber-950/60 text-amber-300 border-amber-500/30'
+              : 'bg-cyan-950/60 text-cyan-300 border-cyan-500/30'
+          }`}>
+            {badgeLabel}
+          </span>
+          <span className={`text-[10px] font-mono font-bold ${statusColor}`}>
+            {status}
+          </span>
+        </div>
+      </div>
+
+      <p className={`text-xl font-headline font-black ${statusColor.includes('text-red') || statusColor.includes('text-amber') ? statusColor : 'text-white'}`}>{value}</p>
+      <p className="text-[9px] text-slate-500 mt-0.5 font-mono">{targetText}</p>
+
+      {/* Expandable Explanation Drawer */}
+      {isOpen && (
+        <div className="mt-2 pt-2 border-t border-white/10 text-[10px] font-sans text-slate-300 space-y-1 animate-in fade-in slide-in-from-top-1 duration-150">
+          <p><strong className="text-cyan-300">Arti:</strong> {explanation.what}</p>
+          <p><strong className="text-slate-400">Sumber:</strong> <span className="font-mono text-[9px] text-slate-200">{explanation.source}</span></p>
+          <p><strong className="text-slate-400">Konteks:</strong> <span className="text-slate-400 text-[9px]">{explanation.benchmark}</span></p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TimeModeBanner({
+  activeTimeFilter,
+  onResetToPresent,
+}: {
+  activeTimeFilter: 'past' | 'present' | 'future' | 'predict';
+  onResetToPresent: () => void;
+}) {
+  if (activeTimeFilter === 'present') return null;
+
+  const config = {
+    past: {
+      title: 'MODE ARSIP HISTORIS (2022–2024)',
+      badge: 'HISTORICAL REPLAY',
+      badgeColor: 'bg-purple-950/80 text-purple-300 border-purple-500/40',
+      description: 'Menampilkan arsip kejadian disrupsi nyata (Gempa Pasaman 2022, Banjir Belawan 2024, Longsor Berastagi 2023) untuk analisis price lag inflasi komoditas pangan.',
+    },
+    future: {
+      title: 'MODE PROYEKSI DINI (24–48 JAM)',
+      badge: 'PROJECTION FORECAST',
+      badgeColor: 'bg-amber-950/80 text-amber-300 border-amber-500/40',
+      description: 'Peringatan dini berdasarkan akumulasi curah hujan BMKG & potensi bottleneck lalu lintas sebelum armada diberangkatkan.',
+    },
+    predict: {
+      title: 'MODE PREDIKSI AI (TFT & FOURCASTNET)',
+      badge: 'AI PREDICTIVE MODEL',
+      badgeColor: 'bg-cyan-950/80 text-cyan-300 border-cyan-500/40',
+      description: 'Simulasi skenario disrupsi pelabuhan Belawan & koridor pangan menggunakan model prakiraan atmosfer adaptif.',
+    },
+  }[activeTimeFilter];
+
+  return (
+    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 max-w-xl w-[90%] pointer-events-auto">
+      <div className="bg-[#0c0e12]/95 backdrop-blur-xl border border-white/15 px-4 py-2.5 rounded-2xl shadow-2xl flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-0.5">
+            <span className={`text-[9px] font-mono font-black px-2 py-0.5 rounded border ${config.badgeColor}`}>
+              {config.badge}
+            </span>
+            <span className="text-xs font-bold text-white font-sans">{config.title}</span>
+          </div>
+          <p className="text-[10px] text-slate-400 font-sans truncate">{config.description}</p>
+        </div>
+
+        <button
+          type="button"
+          onClick={onResetToPresent}
+          className="cursor-pointer px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-slate-200 hover:text-white border border-white/15 text-[10px] font-mono font-bold transition-all shrink-0 flex items-center gap-1"
+          title="Kembali ke Mode Real-Time Present"
+        >
+          <RotateCcw className="w-3 h-3" />
+          <span>Ke Live</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function FloatingMapLegend({
+  isOpen,
+  onToggle,
+}: {
+  isOpen: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="absolute top-4 right-4 z-30 pointer-events-auto">
+      {!isOpen ? (
+        <button
+          type="button"
+          onClick={onToggle}
+          className="cursor-pointer px-3 py-2 rounded-xl bg-[#0c0e12]/90 border border-cyan-500/40 backdrop-blur-xl text-cyan-300 hover:text-white hover:bg-slate-900 shadow-2xl transition-all flex items-center gap-1.5 text-xs font-mono font-bold"
+          title="Buka Legenda Peta & Rute"
+        >
+          <Info className="w-4 h-4 text-cyan-400" />
+          <span>LEGENDA RUTE</span>
+        </button>
+      ) : (
+        <div className="w-72 bg-[#0c0e12]/95 border border-cyan-500/40 backdrop-blur-2xl p-3.5 rounded-2xl shadow-2xl text-xs space-y-2.5 animate-in fade-in zoom-in-95 duration-150">
+          <div className="flex items-center justify-between border-b border-white/10 pb-2">
+            <span className="font-mono font-bold text-[11px] text-cyan-300 uppercase tracking-wider flex items-center gap-1.5">
+              <Compass className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Legenda Peta & Keputusan</span>
+            </span>
+            <button
+              type="button"
+              onClick={onToggle}
+              className="cursor-pointer p-1 rounded-lg bg-slate-900 text-slate-400 hover:text-white transition"
+              title="Tutup Legenda"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          <div className="space-y-2 font-mono text-[10px]">
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)] shrink-0" />
+              <div>
+                <span className="text-emerald-300 font-bold block">Rute Detour Rekomendasi (cuOpt)</span>
+                <span className="text-[9px] text-slate-400 font-sans">Bebas bahaya, jarak & ETA paling optimal.</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-amber-400 shrink-0" />
+              <div>
+                <span className="text-amber-300 font-bold block">Rute Alternatif Sekunder</span>
+                <span className="text-[9px] text-slate-400 font-sans">Jalur alternatif cadangan dengan deviasi waktu lebih panjang.</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-red-500 shrink-0" />
+              <div>
+                <span className="text-red-400 font-bold block">Koridor Utama Terblokir</span>
+                <span className="text-[9px] text-slate-400 font-sans">Jalur utama yang terhambat genangan / longsor.</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full border-2 border-red-500 bg-red-500/20 shrink-0 animate-pulse" />
+              <div>
+                <span className="text-red-300 font-bold block">Zona Radius Bahaya (Shockwave)</span>
+                <span className="text-[9px] text-slate-400 font-sans">Area bahaya hasil konsensus BMKG & OSINT.</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-cyan-400 shrink-0" />
+              <div>
+                <span className="text-cyan-300 font-bold block">Hub Logistik Pangan</span>
+                <span className="text-[9px] text-slate-400 font-sans">Pelabuhan Belawan, Gudang BULOG, Pasar Induk.</span>
+              </div>
+            </div>
+          </div>
+
+          <p className="text-[9px] text-slate-400 font-sans pt-1 border-t border-white/5 leading-tight">
+            <strong>Transparansi HITL:</strong> PreHub menampilkan semua alternatif rute agar operator dapat membandingkan trade-off waktu dan risiko sebelum persetujuan.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DashboardClient() {
   const { incidents, refetch } = useIncidents();
   const { vehicles: activeFleetVehicles } = useFleetVehicles();
@@ -177,6 +416,11 @@ export default function DashboardClient() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState(false);
   const [approvalsCount, setApprovalsCount] = useState<number>(14);
+
+  // User Transparency States (Metric Tooltips & Map Legend & Sensor Info)
+  const [openMetricTooltip, setOpenMetricTooltip] = useState<'health' | 'gdp' | 'inflation' | 'shocks' | null>(null);
+  const [isMapLegendOpen, setIsMapLegendOpen] = useState(false);
+  const [showSensorInfo, setShowSensorInfo] = useState(false);
 
   // Live Corridor Context Telemetry Hook (BMKG + TomTom + PIHPS 30s Poller)
   const { corridorContext, isLoading: isCorridorLoading } = useCorridorContext('sumatra_belawan_medan');
@@ -952,15 +1196,25 @@ export default function DashboardClient() {
           )}
 
           {/* 2. GPU-ACCELERATED COLLAPSIBLE LEFT TACTICAL SIDEBAR (OVERLAY MODE - ZERO CANVAS BLINK) */}
-          <aside className={`absolute left-0 top-0 bottom-0 z-40 w-80 bg-[#0c0e12]/90 backdrop-blur-xl border-r border-white/10 flex flex-col gap-4 p-4 overflow-y-auto custom-scrollbar pointer-events-auto transition-transform duration-300 ease-in-out shadow-2xl ${isLeftSidebarCollapsed ? '-translate-x-full pointer-events-none' : 'translate-x-0'
+          <aside className={`absolute left-0 top-0 bottom-0 z-40 w-80 bg-[#0c0e12]/95 backdrop-blur-2xl border-r border-white/10 flex flex-col gap-4 p-4 overflow-y-auto custom-scrollbar pointer-events-auto transition-transform duration-300 ease-in-out shadow-2xl ${isLeftSidebarCollapsed ? '-translate-x-full pointer-events-none' : 'translate-x-0'
             }`}>
 
-            {/* National Logistics Health Score Gauge (SVG CIRCLE RING FIX) */}
+            {/* National Logistics Health Score Gauge */}
             <div className="bg-[#1e2024]/40 border border-white/10 p-4 rounded-xl relative overflow-hidden backdrop-blur-md">
               <div className="flex items-center justify-between mb-2">
-                <p className="text-[9px] font-mono text-cyan-400 tracking-[0.2em] uppercase">
-                  NATIONAL LOGISTICS HEALTH
-                </p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-[9px] font-mono text-cyan-400 tracking-[0.2em] uppercase font-bold">
+                    NATIONAL LOGISTICS HEALTH
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setOpenMetricTooltip(prev => prev === 'health' ? null : 'health')}
+                    className="cursor-pointer text-slate-400 hover:text-cyan-400 transition"
+                    title="Pelajari dasar kalkulasi Health Index"
+                  >
+                    <HelpCircle className="w-3 h-3" />
+                  </button>
+                </div>
                 <button
                   type="button"
                   onClick={() => setIsLeftSidebarCollapsed(true)}
@@ -970,6 +1224,7 @@ export default function DashboardClient() {
                   <PanelLeftClose className="w-3.5 h-3.5" />
                 </button>
               </div>
+
               <div className="flex items-center justify-between">
                 {/* Crisp SVG Circular Progress Gauge */}
                 <div className="relative w-16 h-16 flex items-center justify-center">
@@ -1003,68 +1258,128 @@ export default function DashboardClient() {
                   </p>
                 </div>
               </div>
+
+              {openMetricTooltip === 'health' && (
+                <div className="mt-3 pt-2 border-t border-white/10 text-[10px] text-slate-300 font-sans leading-relaxed animate-in fade-in duration-150">
+                  <strong className="text-cyan-300">Indeks Kesehatan Koridor (0-100):</strong> Skor komposit yang mengukur kelancaran fisik jalan, mitigasi bahaya cuaca BMKG, dan stabilitas pasokan komoditas pangan di Sumut.
+                </div>
+              )}
             </div>
 
-            {/* Tactical Metrics Grid (Dynamic Reactive State) */}
+            {/* Tactical Metrics Grid (Overhauled with Transparent Info) */}
             <div className="grid grid-cols-1 gap-3">
-              {/* Logistics-to-GDP */}
-              <div className="bg-[#1e2024]/40 border border-white/10 p-3 rounded-xl backdrop-blur-md">
-                <div className="flex justify-between items-center mb-1">
-                  <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">LOGISTICS-TO-GDP</span>
-                  <span className={`text-[10px] font-mono font-bold ${dynamicMetrics.gdpColor}`}>
-                    {dynamicMetrics.gdpStatus}
-                  </span>
-                </div>
-                <p className="text-xl font-headline font-black text-white">{dynamicMetrics.logisticsGdp}</p>
-                <p className="text-[9px] text-slate-500 mt-0.5">Target: &lt; 14.0% National Baseline</p>
-              </div>
+              {/* 1. Logistics-to-GDP */}
+              <TacticalMetricCard
+                title="LOGISTICS-TO-GDP"
+                value={dynamicMetrics.logisticsGdp}
+                status={dynamicMetrics.gdpStatus}
+                statusColor={dynamicMetrics.gdpColor}
+                targetText="Target Nasional: < 14.0% Bappenas Baseline"
+                badgeLabel={activeTimeFilter === 'present' ? 'BAPPENAS BASELINE' : 'SIMULATION'}
+                badgeType={activeTimeFilter === 'present' ? 'calc' : 'fixture'}
+                explanation={{
+                  what: 'Rasio biaya logistik terhadap Produk Domestik Regional Bruto (PDRB). Lonjakan terjadi ketika armada harus memutar (detour) akibat banjir/longsor.',
+                  source: 'Bappenas Logistics Masterplan + Estimasi Surcharge Disrupsi',
+                  benchmark: 'Normal: 14.2% · Saat Banjir Terputus: 16.8% (+2.6% ekstra biaya BBM & waktu).'
+                }}
+                isOpen={openMetricTooltip === 'gdp'}
+                onToggle={() => setOpenMetricTooltip(prev => prev === 'gdp' ? null : 'gdp')}
+              />
 
-              {/* Food Inflation */}
-              <div className="bg-[#1e2024]/40 border border-white/10 p-3 rounded-xl backdrop-blur-md">
-                <div className="flex justify-between items-center mb-1">
-                  <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">FOOD INFLATION</span>
-                  <span className={`text-[10px] font-mono font-bold ${dynamicMetrics.inflationColor}`}>
-                    {dynamicMetrics.inflationStatus}
-                  </span>
-                </div>
-                <p className={`text-xl font-headline font-black ${dynamicMetrics.inflationColor}`}>
-                  {dynamicMetrics.foodInflation}
-                </p>
-                <p className="text-[9px] text-slate-500 mt-0.5">PIHPS Anomaly Stream Active</p>
-              </div>
+              {/* 2. Food Inflation */}
+              <TacticalMetricCard
+                title="FOOD INFLATION"
+                value={dynamicMetrics.foodInflation}
+                status={dynamicMetrics.inflationStatus}
+                statusColor={dynamicMetrics.inflationColor}
+                targetText="PIHPS Bank Indonesia Stream Active"
+                badgeLabel={corridorContext?.commodity_prices ? 'LIVE PIHPS' : 'FIXTURE'}
+                badgeType={corridorContext?.commodity_prices ? 'live' : 'fixture'}
+                explanation={{
+                  what: 'Volatilitas harga harian pada 3 komoditas pangan pokok (Beras, Minyak Goreng, Cabai Merah) di pasar tradisional kota Medan.',
+                  source: 'Pusat Informasi Harga Pangan Strategis (PIHPS) Bank Indonesia',
+                  benchmark: 'Batas Anomali: Kenaikan harian >5.0% mengindikasikan kelangkaan pasokan antar-wilayah.'
+                }}
+                isOpen={openMetricTooltip === 'inflation'}
+                onToggle={() => setOpenMetricTooltip(prev => prev === 'inflation' ? null : 'inflation')}
+              />
 
-              {/* Active Shocks */}
-              <div className="bg-[#1e2024]/40 border border-white/10 p-3 rounded-xl backdrop-blur-md">
-                <div className="flex justify-between items-center mb-1">
-                  <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">ACTIVE SHOCKS</span>
-                  <span className="text-[10px] font-mono text-cyan-400 font-bold">LIVE</span>
-                </div>
-                <p className={`text-xl font-headline font-black ${dynamicMetrics.shocksColor}`}>
-                  {dynamicMetrics.activeShocks}
-                </p>
-                <p className="text-[9px] text-slate-500 mt-0.5">Belawan-Medan Corridor Monitored</p>
-              </div>
+              {/* 3. Active Shocks */}
+              <TacticalMetricCard
+                title="ACTIVE SHOCKS"
+                value={dynamicMetrics.activeShocks}
+                status="CONSENSUS"
+                statusColor={dynamicMetrics.shocksColor}
+                targetText="Belawan-Medan Corridor Monitored"
+                badgeLabel="CONSENSUS GATE"
+                badgeType="calc"
+                explanation={{
+                  what: 'Jumlah titik bahaya fisik/alam yang telah divalidasi silang oleh Consensus Engine (BMKG + TomTom + Berita).',
+                  source: 'Multi-Agent Consensus Layer (Ground Truth Filtering)',
+                  benchmark: '0 = Aliran Distribusi Normal · 1+ = Memerlukan Analisis Reroute / Hold Armada.'
+                }}
+                isOpen={openMetricTooltip === 'shocks'}
+                onToggle={() => setOpenMetricTooltip(prev => prev === 'shocks' ? null : 'shocks')}
+              />
             </div>
 
-            {/* Quick System Legend */}
-            <div className="mt-auto border-t border-white/10 pt-3 text-[10px] font-mono text-slate-400 space-y-1.5">
-              <div className="flex justify-between items-center">
-                <span>BMKG Radar:</span>
-                <span className="text-emerald-400">ONLINE</span>
+            {/* Honest System Sensor Legend */}
+            <div className="mt-auto border-t border-white/10 pt-3 text-[10px] font-mono text-slate-400 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Status Sensor Pipeline</span>
+                <button
+                  type="button"
+                  onClick={() => setShowSensorInfo(v => !v)}
+                  className="cursor-pointer text-slate-400 hover:text-cyan-400 transition"
+                  title="Transparansi Status Integrasi Data (Proposal Bagian 4.4 & 7.7)"
+                >
+                  <HelpCircle className="w-3 h-3" />
+                </button>
               </div>
-              <div className="flex justify-between items-center">
-                <span>AISstream Vessel Feed:</span>
-                <span className="text-emerald-400">ONLINE</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span>PIHPS Price Stream:</span>
-                <span className="text-emerald-400">ONLINE</span>
+
+              {showSensorInfo && (
+                <div className="p-2 rounded bg-slate-950/90 border border-white/10 text-[9px] font-sans text-slate-300 leading-relaxed">
+                  <strong>Transparansi Data PreHub:</strong> Sesuai Batasan Proposal (Bagian 4.4 & 7.7), data sensor live terhubung via poller background. Saat offline/simulasi, fixture data transparan dilabeli agar tidak menyesatkan evaluator.
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <span>BMKG Radar (Sampali):</span>
+                  <span className="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-500/30 text-[9px] font-bold">
+                    {corridorContext?.weather ? 'LIVE STREAM' : 'SIMULATED FIXTURE'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span>TomTom Traffic Flow:</span>
+                  <span className="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-500/30 text-[9px] font-bold">
+                    {corridorContext?.traffic ? 'LIVE STREAM' : 'SIMULATED FIXTURE'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span>PIHPS Pasar Medan:</span>
+                  <span className="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-500/30 text-[9px] font-bold">
+                    {corridorContext?.commodity_prices ? 'LIVE PIHPS' : 'SIMULATED FIXTURE'}
+                  </span>
+                </div>
               </div>
             </div>
           </aside>
 
           {/* 3. FLOATING OVERLAYS CONTAINER AREA */}
           <div className="absolute inset-0 w-full h-full pointer-events-none z-10">
+
+            {/* Time Horizon Context Banner when in Past / Future / Predict modes */}
+            <TimeModeBanner
+              activeTimeFilter={activeTimeFilter}
+              onResetToPresent={() => setActiveTimeFilter('present')}
+            />
+
+            {/* Floating Collapsible Route Map Legend */}
+            <FloatingMapLegend
+              isOpen={isMapLegendOpen}
+              onToggle={() => setIsMapLegendOpen(v => !v)}
+            />
 
             {/* Relocated Collapsible Floating Simulator Dock above Bottombar */}
             <CrisisSimulatorBar
