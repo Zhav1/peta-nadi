@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: prehub-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    plan: free
+    region: singapore
+    envVars:
+      - key: APP_NAME
+        value: "PreHub API"
+      - key: ENVIRONMENT
+        value: "production"
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: TOMTOM_API_KEY
+        sync: false

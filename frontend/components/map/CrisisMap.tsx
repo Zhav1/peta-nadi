@@ -50,7 +50,6 @@ export interface CrisisMapProps {
 
 const INITIAL_CENTER: [number, number] = [100.5, 0.5];
 const INITIAL_ZOOM = 6.0;
-const DRAG_THRESHOLD_PX = 5;
 
 function createGeoJsonCircleRing(center: [number, number], radiusKm: number, points = 64): [number, number][] {
   const [lon, lat] = center;
@@ -119,7 +118,6 @@ export default function CrisisMap({
   const drawRef = useRef<InstanceType<typeof MapboxDraw> | null>(null);
   const htmlMarkersRef = useRef<mapboxgl.Marker[]>([]);
   const routeEtaMarkersRef = useRef<mapboxgl.Marker[]>([]);
-  const corridorMarkersRef = useRef<mapboxgl.Marker[]>([]);
   const timeHorizonMarkersRef = useRef<mapboxgl.Marker[]>([]);
 
   const [mapInstance, setMapInstance] = useState<mapboxgl.Map | null>(null);

@@ -1,6 +1,6 @@
 'use client';
 import React, { useState } from 'react';
-import { X, Link2, ChevronUp, ChevronDown, ShieldCheck, UserCheck, HelpCircle } from 'lucide-react';
+import { X, Link2, ChevronUp, ChevronDown, UserCheck, HelpCircle } from 'lucide-react';
 import { EvidenceTab } from './EvidenceTab';
 import { MitigationTab } from './MitigationTab';
 import { EconomicTab } from './EconomicTab';

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Zap, Truck, CloudRain, CheckCircle2, ChevronDown } from 'lucide-react';
+import { Zap, Truck, CloudRain, ChevronDown } from 'lucide-react';
 import { AgentStatusWidget } from '@/components/dashboard/AgentStatusWidget';
 
 interface TopNavTelemetryProps {

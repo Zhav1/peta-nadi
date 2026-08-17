@@ -7,28 +7,17 @@ import {
   PanelLeftOpen,
   HelpCircle,
   Info,
-  Layers,
   Radio,
   RotateCcw,
   Compass,
   MapPin,
-  TrendingUp,
-  CheckCircle2,
-  AlertTriangle,
-  FileText,
-  Activity,
-  Zap,
   Truck,
-  CloudRain,
-  ShieldCheck,
   X,
   Newspaper,
   Search,
   ExternalLink,
   Anchor,
   Plane,
-  Clock,
-  Navigation,
   Lock,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
@@ -39,7 +28,7 @@ import { Toast } from '@/components/ui/Toast';
 import { useDemoState } from '@/hooks/useDemoState';
 import { useFleetVehicles } from '@/hooks/useFleetVehicles';
 import { useCorridorContext } from '@/hooks/useCorridorContext';
-import { useNewsVerification, type NewsItem } from '@/hooks/useNewsVerification';
+import { useNewsVerification } from '@/hooks/useNewsVerification';
 import { GuidedDemoPanel } from '@/components/demo/GuidedDemoPanel';
 import AnalyticsSection from '@/components/dashboard/AnalyticsSection';
 import SimulationSection from '@/components/dashboard/SimulationSection';
@@ -174,83 +163,6 @@ const FALLBACK_PREDICTIVE = [
     }
   }
 ];
-
-
-
-interface MetricCardProps {
-  title: string;
-  value: string | number;
-  status: string;
-  statusColor: string;
-  targetText: string;
-  badgeLabel: string;
-  badgeType: 'live' | 'fixture' | 'calc';
-  explanation: {
-    what: string;
-    source: string;
-    benchmark: string;
-  };
-  isOpen: boolean;
-  onToggle: () => void;
-}
-
-function TacticalMetricCard({
-  title,
-  value,
-  status,
-  statusColor,
-  targetText,
-  badgeLabel,
-  badgeType,
-  explanation,
-  isOpen,
-  onToggle,
-}: MetricCardProps) {
-  return (
-    <div className="bg-[#1e2024]/40 border border-white/10 p-3 rounded-xl backdrop-blur-md transition-all hover:border-white/20">
-      <div className="flex justify-between items-center mb-1">
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] font-mono text-slate-300 uppercase tracking-wider font-bold">{title}</span>
-          <button
-            type="button"
-            onClick={onToggle}
-            className="cursor-pointer text-slate-400 hover:text-cyan-400 transition-colors p-0.5"
-            title={`Pelajari dasar kalkulasi ${title}`}
-            aria-label={`Info ${title}`}
-          >
-            <HelpCircle className="w-3 h-3" />
-          </button>
-        </div>
-        <div className="flex items-center gap-1">
-          <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border ${
-            badgeType === 'live'
-              ? 'bg-emerald-950/60 text-emerald-300 border-emerald-500/30'
-              : badgeType === 'fixture'
-              ? 'bg-amber-950/60 text-amber-300 border-amber-500/30'
-              : 'bg-cyan-950/60 text-cyan-300 border-cyan-500/30'
-          }`}>
-            {badgeLabel}
-          </span>
-          <span className={`text-[10px] font-mono font-bold ${statusColor}`}>
-            {status}
-          </span>
-        </div>
-      </div>
-
-      <p className={`text-xl font-headline font-black ${statusColor.includes('text-red') || statusColor.includes('text-amber') ? statusColor : 'text-white'}`}>{value}</p>
-      <p className="text-[9px] text-slate-500 mt-0.5 font-mono">{targetText}</p>
-
-      {/* Expandable Explanation Drawer */}
-      {isOpen && (
-        <div className="mt-2 pt-2 border-t border-white/10 text-[10px] font-sans text-slate-300 space-y-1 animate-in fade-in slide-in-from-top-1 duration-150">
-          <p><strong className="text-cyan-300">Arti:</strong> {explanation.what}</p>
-          <p><strong className="text-slate-400">Sumber:</strong> <span className="font-mono text-[9px] text-slate-200">{explanation.source}</span></p>
-          <p><strong className="text-slate-400">Konteks:</strong> <span className="text-slate-400 text-[9px]">{explanation.benchmark}</span></p>
-        </div>
-      )}
-    </div>
-  );
-}
 
 function TimeModeBanner({
   activeTimeFilter,
@@ -426,8 +338,7 @@ export default function DashboardClient() {
   const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState(false);
   const [approvalsCount, setApprovalsCount] = useState<number>(14);
 
-  // User Transparency States (Metric Tooltips & Map Legend & Sensor Info)
-  const [openMetricTooltip, setOpenMetricTooltip] = useState<'health' | 'gdp' | 'inflation' | 'shocks' | null>(null);
+  // User Transparency States (Map Legend & Sensor Info)
   const [isMapLegendOpen, setIsMapLegendOpen] = useState(false);
   const [showSensorInfo, setShowSensorInfo] = useState(false);
 
@@ -435,7 +346,7 @@ export default function DashboardClient() {
   const { corridorContext, isLoading: isCorridorLoading } = useCorridorContext('sumatra_belawan_medan');
 
   // Live OSINT News & Intelligence Hook (Google News RSS & Verified Sinyal Lapangan)
-  const { newsFeed, marketRegime, isLoading: isNewsLoading } = useNewsVerification();
+  const { newsFeed } = useNewsVerification();
   const [newsSearchQuery, setNewsSearchQuery] = useState('');
   const [selectedNewsCategory, setSelectedNewsCategory] = useState<'ALL' | 'OFFICIAL' | 'WEATHER' | 'OSINT' | 'MARKET'>('ALL');
   const [selectedNewsId, setSelectedNewsId] = useState<string | null>(null);
@@ -581,79 +492,7 @@ export default function DashboardClient() {
   }, []);
 
 
-  // Dynamic Reactive Metrics for Left Tactical Sidebar
-  const dynamicMetrics = useMemo(() => {
-    if (activeTimeFilter === 'past') {
-      return {
-        healthScore: 58,
-        healthStatus: 'HISTORICAL EPISODES',
-        healthColor: 'text-purple-400',
-        strokeColor: 'text-purple-400',
-        logisticsGdp: '18.4%',
-        gdpStatus: 'LTM Vector Match',
-        gdpColor: 'text-purple-400',
-        foodInflation: '+18.4%',
-        inflationStatus: '📜 HISTORICAL SPIKE (2022-2024)',
-        inflationColor: 'text-purple-400',
-        activeShocks: '3 EPISODES',
-        shocksColor: 'text-purple-400',
-      };
-    }
 
-    if (activeTimeFilter === 'future') {
-      return {
-        healthScore: 78,
-        healthStatus: '24-48H PROJECTION',
-        healthColor: 'text-amber-400',
-        strokeColor: 'text-amber-400',
-        logisticsGdp: '15.6%',
-        gdpStatus: 'TFT Forecast',
-        gdpColor: 'text-amber-400',
-        foodInflation: '+8.5%',
-        inflationStatus: '🔮 FORECAST WARNING',
-        inflationColor: 'text-amber-400',
-        activeShocks: '2 PROJECTIONS',
-        shocksColor: 'text-amber-400',
-      };
-    }
-
-    const hasActiveCrisis = !!simulatedShockwave || disasterZones.length > 0 || selectedCrisisId === 'simulated-active' || (selectedCrisis && selectedCrisis.status !== 'resolved');
-
-    const foodInflationVal = corridorContext?.commodity_prices ? `${corridorContext.commodity_prices.inflation_trend_pct}%` : (hasActiveCrisis ? '12.8%' : '7.14%');
-    const isAnomaly = corridorContext?.commodity_prices ? corridorContext.commodity_prices.price_anomaly_detected : hasActiveCrisis;
-
-    if (hasActiveCrisis || isAnomaly) {
-      return {
-        healthScore: 64,
-        healthStatus: 'CRITICAL SHOCK',
-        healthColor: 'text-amber-400',
-        strokeColor: 'text-amber-400',
-        logisticsGdp: '16.8%',
-        gdpStatus: '▲ +2.6% Risk',
-        gdpColor: 'text-red-400',
-        foodInflation: foodInflationVal,
-        inflationStatus: 'PIHPS ANOMALY SPIKE',
-        inflationColor: 'text-red-400',
-        activeShocks: '1 ACTIVE',
-        shocksColor: 'text-red-400 animate-pulse',
-      };
-    }
-
-    return {
-      healthScore: 92,
-      healthStatus: 'OPTIMAL',
-      healthColor: 'text-emerald-400',
-      strokeColor: 'text-cyan-400',
-      logisticsGdp: '14.2%',
-      gdpStatus: '↘ 8.2%',
-      gdpColor: 'text-emerald-400',
-      foodInflation: foodInflationVal,
-      inflationStatus: 'PIHPS Baseline',
-      inflationColor: 'text-amber-400',
-      activeShocks: '0 ACTIVE',
-      shocksColor: 'text-emerald-400',
-    };
-  }, [activeTimeFilter, simulatedShockwave, disasterZones, selectedCrisisId, selectedCrisis, corridorContext]);
 
 
   // Fetch multi-alternative Mapbox driving & hazard detour routes when node selection or modality changes
@@ -1298,7 +1137,7 @@ export default function DashboardClient() {
                   <button
                     key={tab.id}
                     type="button"
-                    onClick={() => setSelectedNewsCategory(tab.id as any)}
+                    onClick={() => setSelectedNewsCategory(tab.id as 'ALL' | 'OFFICIAL' | 'WEATHER' | 'OSINT' | 'MARKET')}
                     className={`cursor-pointer px-2 py-1 rounded-lg border font-bold transition whitespace-nowrap ${
                       selectedNewsCategory === tab.id
                         ? 'bg-cyan-950 text-cyan-300 border-cyan-500/50 shadow-[0_0_8px_rgba(6,182,212,0.3)]'
@@ -1410,7 +1249,7 @@ export default function DashboardClient() {
                                 handleMapPointTargeted(
                                   item.lat,
                                   item.lon,
-                                  (item.hazardType as any) || (item.category === 'METEOROLOGY' ? 'flood' : item.category === 'TRAFFIC_BOTTLENECK' ? 'congestion' : 'flood'),
+                                  (item.hazardType as CrisisType) || (item.category === 'METEOROLOGY' ? 'flood' : item.category === 'TRAFFIC_BOTTLENECK' ? 'congestion' : 'flood'),
                                   15,
                                   'high'
                                 );
@@ -1499,7 +1338,7 @@ export default function DashboardClient() {
                       key={m.id}
                       type="button"
                       onClick={() => {
-                        setFleetModalityFilter(m.id as any);
+                        setFleetModalityFilter(m.id as 'all' | 'truck' | 'maritime' | 'air');
                         setToast({
                           message: `Filter Armada: ${m.label} (${m.count} Unit)`,
                           type: 'info',
