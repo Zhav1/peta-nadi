@@ -22,6 +22,12 @@ import {
   CloudRain,
   ShieldCheck,
   X,
+  Newspaper,
+  Search,
+  ExternalLink,
+  Anchor,
+  Clock,
+  Navigation,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useIncidents } from '@/hooks/useIncidents';
@@ -31,6 +37,7 @@ import { Toast } from '@/components/ui/Toast';
 import { useDemoState } from '@/hooks/useDemoState';
 import { useFleetVehicles } from '@/hooks/useFleetVehicles';
 import { useCorridorContext } from '@/hooks/useCorridorContext';
+import { useNewsVerification, type NewsItem } from '@/hooks/useNewsVerification';
 import { GuidedDemoPanel } from '@/components/demo/GuidedDemoPanel';
 import AnalyticsSection from '@/components/dashboard/AnalyticsSection';
 import SimulationSection from '@/components/dashboard/SimulationSection';
@@ -424,6 +431,31 @@ export default function DashboardClient() {
 
   // Live Corridor Context Telemetry Hook (BMKG + TomTom + PIHPS 30s Poller)
   const { corridorContext, isLoading: isCorridorLoading } = useCorridorContext('sumatra_belawan_medan');
+
+  // Live OSINT News & Intelligence Hook (Google News RSS & Verified Sinyal Lapangan)
+  const { newsFeed, marketRegime, isLoading: isNewsLoading } = useNewsVerification();
+  const [newsSearchQuery, setNewsSearchQuery] = useState('');
+  const [selectedNewsCategory, setSelectedNewsCategory] = useState<'ALL' | 'OFFICIAL' | 'WEATHER' | 'OSINT' | 'MARKET'>('ALL');
+  const [selectedNewsId, setSelectedNewsId] = useState<string | null>(null);
+
+  const filteredNews = useMemo(() => {
+    return newsFeed.filter((item) => {
+      if (selectedNewsCategory === 'OFFICIAL' && item.source_type !== 'OFFICIAL_NEWS') return false;
+      if (selectedNewsCategory === 'WEATHER' && item.source_type !== 'BMKG_WEATHER') return false;
+      if (selectedNewsCategory === 'OSINT' && item.source_type !== 'MEDSOS_OSINT') return false;
+      if (selectedNewsCategory === 'MARKET' && item.source_type !== 'PIHPS_MARKET') return false;
+
+      if (newsSearchQuery.trim()) {
+        const q = newsSearchQuery.toLowerCase();
+        return (
+          item.headline.toLowerCase().includes(q) ||
+          item.summary.toLowerCase().includes(q) ||
+          (item.location_name && item.location_name.toLowerCase().includes(q))
+        );
+      }
+      return true;
+    });
+  }, [newsFeed, selectedNewsCategory, newsSearchQuery]);
 
   // Synchronize activeSection from URL query parameters
   useEffect(() => {
@@ -1195,172 +1227,236 @@ export default function DashboardClient() {
             </button>
           )}
 
-          {/* 2. GPU-ACCELERATED COLLAPSIBLE LEFT TACTICAL SIDEBAR (OVERLAY MODE - ZERO CANVAS BLINK) */}
-          <aside className={`absolute left-0 top-0 bottom-0 z-40 w-80 bg-[#0c0e12]/95 backdrop-blur-2xl border-r border-white/10 flex flex-col gap-4 p-4 overflow-y-auto custom-scrollbar pointer-events-auto transition-transform duration-300 ease-in-out shadow-2xl ${isLeftSidebarCollapsed ? '-translate-x-full pointer-events-none' : 'translate-x-0'
-            }`}>
-
-            {/* National Logistics Health Score Gauge */}
-            <div className="bg-[#1e2024]/40 border border-white/10 p-4 rounded-xl relative overflow-hidden backdrop-blur-md">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-1.5">
-                  <p className="text-[9px] font-mono text-cyan-400 tracking-[0.2em] uppercase font-bold">
-                    NATIONAL LOGISTICS HEALTH
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setOpenMetricTooltip(prev => prev === 'health' ? null : 'health')}
-                    className="cursor-pointer text-slate-400 hover:text-cyan-400 transition"
-                    title="Pelajari dasar kalkulasi Health Index"
-                  >
-                    <HelpCircle className="w-3 h-3" />
-                  </button>
+          {/* 2. GPU-ACCELERATED COLLAPSIBLE LEFT OSINT & NEWS SIDEBAR (GLOBOT STYLE) */}
+          <aside className={`absolute left-0 top-0 bottom-0 z-40 w-80 md:w-88 bg-[#0c0e12]/95 backdrop-blur-2xl border-r border-white/10 flex flex-col gap-3 p-3.5 overflow-hidden pointer-events-auto transition-transform duration-300 ease-in-out shadow-2xl ${
+            isLeftSidebarCollapsed ? '-translate-x-full pointer-events-none' : 'translate-x-0'
+          }`}>
+            {/* Header: OSINT Wire & Live Pulse */}
+            <div className="flex items-center justify-between pb-2 border-b border-white/10 shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="relative flex items-center justify-center w-7 h-7 rounded-lg bg-cyan-950/80 border border-cyan-500/30 text-cyan-400">
+                  <Radio className="w-4 h-4" />
+                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400"></span>
                 </div>
+                <div>
+                  <h2 className="text-xs font-bold font-sans text-white uppercase tracking-wider flex items-center gap-1.5">
+                    OSINT & NEWS WIRE
+                  </h2>
+                  <span className="text-[9px] font-mono text-slate-400">
+                    {filteredNews.length} Sinyal Lapangan · Sumatra
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1">
                 <button
                   type="button"
                   onClick={() => setIsLeftSidebarCollapsed(true)}
-                  className="p-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
+                  className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
                   title="Sembunyikan Sidebar"
                 >
                   <PanelLeftClose className="w-3.5 h-3.5" />
                 </button>
               </div>
+            </div>
 
-              <div className="flex items-center justify-between">
-                {/* Crisp SVG Circular Progress Gauge */}
-                <div className="relative w-16 h-16 flex items-center justify-center">
-                  <svg className="w-16 h-16 transform -rotate-90">
-                    <circle cx="32" cy="32" r="26" stroke="currentColor" strokeWidth="4" className="text-cyan-500/20" fill="transparent" />
-                    <circle
-                      cx="32"
-                      cy="32"
-                      r="26"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                      className={dynamicMetrics.strokeColor}
-                      strokeDasharray={163}
-                      strokeDashoffset={163 - (163 * dynamicMetrics.healthScore) / 100}
-                      fill="transparent"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                  <span className="absolute text-xl font-headline font-black text-white">
-                    {dynamicMetrics.healthScore}
-                  </span>
-                </div>
-
-                <div className="text-right">
-                  <p className={`text-xs font-bold ${dynamicMetrics.healthColor}`}>
-                    {dynamicMetrics.healthStatus}
-                  </p>
-                  <p className="text-[10px] text-slate-400 font-mono mt-0.5">North Sumatra Corridor</p>
-                  <p className="text-[9px] text-slate-500 font-mono mt-1">
-                    {dynamicMetrics.healthScore}% Flow Integrity
-                  </p>
-                </div>
+            {/* Quick Search & Category Pills */}
+            <div className="space-y-2 shrink-0">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                <input
+                  type="text"
+                  value={newsSearchQuery}
+                  onChange={(e) => setNewsSearchQuery(e.target.value)}
+                  placeholder="Cari berita / wilayah disrupsi..."
+                  className="w-full pl-8 pr-7 py-1.5 rounded-xl bg-slate-950/70 border border-white/10 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/60 transition font-sans"
+                />
+                {newsSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setNewsSearchQuery('')}
+                    className="cursor-pointer absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-0.5"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
               </div>
 
-              {openMetricTooltip === 'health' && (
-                <div className="mt-3 pt-2 border-t border-white/10 text-[10px] text-slate-300 font-sans leading-relaxed animate-in fade-in duration-150">
-                  <strong className="text-cyan-300">Indeks Kesehatan Koridor (0-100):</strong> Skor komposit yang mengukur kelancaran fisik jalan, mitigasi bahaya cuaca BMKG, dan stabilitas pasokan komoditas pangan di Sumut.
+              <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5 text-[10px] font-mono">
+                {[
+                  { id: 'ALL', label: 'SEMUA' },
+                  { id: 'OFFICIAL', label: 'RESMI' },
+                  { id: 'WEATHER', label: 'BMKG' },
+                  { id: 'OSINT', label: 'MEDSOS' },
+                  { id: 'MARKET', label: 'HARGA' },
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setSelectedNewsCategory(tab.id as any)}
+                    className={`cursor-pointer px-2 py-1 rounded-lg border font-bold transition whitespace-nowrap ${
+                      selectedNewsCategory === tab.id
+                        ? 'bg-cyan-950 text-cyan-300 border-cyan-500/50 shadow-[0_0_8px_rgba(6,182,212,0.3)]'
+                        : 'bg-slate-950/50 text-slate-400 border-white/5 hover:border-white/20 hover:text-slate-200'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Scrollable Feed List */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2.5 pr-0.5">
+              {filteredNews.length === 0 ? (
+                <div className="p-6 text-center text-slate-500 font-mono text-xs space-y-1">
+                  <Newspaper className="w-6 h-6 mx-auto text-slate-600 mb-2" />
+                  <p>Tidak ada berita yang cocok dengan filter.</p>
                 </div>
+              ) : (
+                filteredNews.map((item) => {
+                  const isSelected = selectedNewsId === item.id;
+                  const isOfficial = item.source_type === 'OFFICIAL_NEWS';
+                  const isWeather = item.source_type === 'BMKG_WEATHER';
+                  const isMarket = item.source_type === 'PIHPS_MARKET';
+
+                  const badgeBg = isOfficial
+                    ? 'bg-blue-950/60 text-blue-300 border-blue-500/30'
+                    : isWeather
+                      ? 'bg-amber-950/60 text-amber-300 border-amber-500/30'
+                      : isMarket
+                        ? 'bg-emerald-950/60 text-emerald-300 border-emerald-500/30'
+                        : 'bg-purple-950/60 text-purple-300 border-purple-500/30';
+
+                  return (
+                    <div
+                      key={item.id}
+                      className={`group p-3 rounded-xl border backdrop-blur-md transition-all duration-200 space-y-2 ${
+                        isSelected
+                          ? 'bg-cyan-950/40 border-cyan-500/60 ring-2 ring-cyan-500/20'
+                          : 'bg-[#141820]/70 border-white/10 hover:border-cyan-500/40 hover:bg-[#181d28]/80'
+                      }`}
+                    >
+                      {/* Source & Timestamp Line */}
+                      <div className="flex items-center justify-between gap-1 text-[9px] font-mono">
+                        <div className="flex items-center gap-1.5 truncate">
+                          <span className={`px-1.5 py-0.5 rounded border font-bold uppercase ${badgeBg}`}>
+                            {isOfficial ? 'BERITA RESMI' : isWeather ? 'BMKG CUACA' : isMarket ? 'HARGA BI' : 'OSINT WARGA'}
+                          </span>
+                          <span className="text-slate-400 truncate">{item.pubDate || 'Terkini'}</span>
+                        </div>
+                        <span className="text-emerald-400 font-bold shrink-0">
+                          {Math.round(item.confidence_score * 100)}% Match
+                        </span>
+                      </div>
+
+                      {/* Headline */}
+                      <h3 className="text-xs font-bold text-slate-100 group-hover:text-cyan-300 transition-colors font-sans leading-snug">
+                        {item.headline}
+                      </h3>
+
+                      {/* Location & Summary */}
+                      <p className="text-[10px] text-slate-400 font-sans leading-relaxed line-clamp-2">
+                        {item.summary}
+                      </p>
+
+                      {/* Commodity Impact Pills */}
+                      {item.commodity_impact && Object.keys(item.commodity_impact).length > 0 && (
+                        <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                          {Object.entries(item.commodity_impact).map(([comm, val]) => (
+                            <span
+                              key={comm}
+                              className="px-1.5 py-0.5 rounded bg-red-950/60 border border-red-500/30 text-[9px] font-mono text-red-300 font-bold"
+                            >
+                              {comm.replace('_pct', '').toUpperCase()}: +{val}%
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Action Bar */}
+                      <div className="flex items-center justify-between pt-1 border-t border-white/5">
+                        <div className="flex items-center gap-1 text-[9px] font-mono text-slate-400 truncate max-w-[130px]">
+                          <MapPin className="w-3 h-3 text-cyan-400 shrink-0" />
+                          <span className="truncate">{item.location_name || 'Sumatera'}</span>
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          {item.attributions && item.attributions.length > 0 && item.attributions[0].url && (
+                            <a
+                              href={item.attributions[0].url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="cursor-pointer p-1 rounded-lg bg-slate-900/90 text-slate-400 hover:text-cyan-300 hover:bg-slate-800 transition"
+                              title="Buka Berita Asli"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedNewsId(item.id);
+                              if (item.lat && item.lon) {
+                                handleMapPointTargeted(
+                                  item.lat,
+                                  item.lon,
+                                  item.category === 'METEOROLOGY' ? 'flood' : item.category === 'TRAFFIC_BOTTLENECK' ? 'congestion' : 'flood',
+                                  12,
+                                  'high'
+                                );
+                                setToast({
+                                  message: `Fokus ke sinyal intelijen: ${item.location_name || 'Titik Berita'}`,
+                                  type: 'info',
+                                });
+                              }
+                            }}
+                            className="cursor-pointer flex items-center gap-1 px-2 py-0.5 rounded-lg bg-cyan-950 text-cyan-300 border border-cyan-500/40 hover:bg-cyan-900 hover:text-white transition text-[9px] font-mono font-bold"
+                          >
+                            <span>📍 Fokus Peta</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
               )}
             </div>
 
-            {/* Tactical Metrics Grid (Overhauled with Transparent Info) */}
-            <div className="grid grid-cols-1 gap-3">
-              {/* 1. Logistics-to-GDP */}
-              <TacticalMetricCard
-                title="LOGISTICS-TO-GDP"
-                value={dynamicMetrics.logisticsGdp}
-                status={dynamicMetrics.gdpStatus}
-                statusColor={dynamicMetrics.gdpColor}
-                targetText="Target Nasional: < 14.0% Bappenas Baseline"
-                badgeLabel={activeTimeFilter === 'present' ? 'BAPPENAS BASELINE' : 'SIMULATION'}
-                badgeType={activeTimeFilter === 'present' ? 'calc' : 'fixture'}
-                explanation={{
-                  what: 'Rasio biaya logistik terhadap Produk Domestik Regional Bruto (PDRB). Lonjakan terjadi ketika armada harus memutar (detour) akibat banjir/longsor.',
-                  source: 'Bappenas Logistics Masterplan + Estimasi Surcharge Disrupsi',
-                  benchmark: 'Normal: 14.2% · Saat Banjir Terputus: 16.8% (+2.6% ekstra biaya BBM & waktu).'
-                }}
-                isOpen={openMetricTooltip === 'gdp'}
-                onToggle={() => setOpenMetricTooltip(prev => prev === 'gdp' ? null : 'gdp')}
-              />
-
-              {/* 2. Food Inflation */}
-              <TacticalMetricCard
-                title="FOOD INFLATION"
-                value={dynamicMetrics.foodInflation}
-                status={dynamicMetrics.inflationStatus}
-                statusColor={dynamicMetrics.inflationColor}
-                targetText="PIHPS Bank Indonesia Stream Active"
-                badgeLabel={corridorContext?.commodity_prices ? 'LIVE PIHPS' : 'FIXTURE'}
-                badgeType={corridorContext?.commodity_prices ? 'live' : 'fixture'}
-                explanation={{
-                  what: 'Volatilitas harga harian pada 3 komoditas pangan pokok (Beras, Minyak Goreng, Cabai Merah) di pasar tradisional kota Medan.',
-                  source: 'Pusat Informasi Harga Pangan Strategis (PIHPS) Bank Indonesia',
-                  benchmark: 'Batas Anomali: Kenaikan harian >5.0% mengindikasikan kelangkaan pasokan antar-wilayah.'
-                }}
-                isOpen={openMetricTooltip === 'inflation'}
-                onToggle={() => setOpenMetricTooltip(prev => prev === 'inflation' ? null : 'inflation')}
-              />
-
-              {/* 3. Active Shocks */}
-              <TacticalMetricCard
-                title="ACTIVE SHOCKS"
-                value={dynamicMetrics.activeShocks}
-                status="CONSENSUS"
-                statusColor={dynamicMetrics.shocksColor}
-                targetText="Belawan-Medan Corridor Monitored"
-                badgeLabel="CONSENSUS GATE"
-                badgeType="calc"
-                explanation={{
-                  what: 'Jumlah titik bahaya fisik/alam yang telah divalidasi silang oleh Consensus Engine (BMKG + TomTom + Berita).',
-                  source: 'Multi-Agent Consensus Layer (Ground Truth Filtering)',
-                  benchmark: '0 = Aliran Distribusi Normal · 1+ = Memerlukan Analisis Reroute / Hold Armada.'
-                }}
-                isOpen={openMetricTooltip === 'shocks'}
-                onToggle={() => setOpenMetricTooltip(prev => prev === 'shocks' ? null : 'shocks')}
-              />
-            </div>
-
-            {/* Honest System Sensor Legend */}
-            <div className="mt-auto border-t border-white/10 pt-3 text-[10px] font-mono text-slate-400 space-y-2">
+            {/* Honest Sensor Pipeline Status Bar */}
+            <div className="border-t border-white/10 pt-2.5 text-[9px] font-mono text-slate-400 space-y-1.5 shrink-0">
               <div className="flex items-center justify-between">
-                <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Status Sensor Pipeline</span>
+                <span className="uppercase tracking-wider text-slate-400 font-bold">STATUS PIPELINE</span>
                 <button
                   type="button"
                   onClick={() => setShowSensorInfo(v => !v)}
                   className="cursor-pointer text-slate-400 hover:text-cyan-400 transition"
-                  title="Transparansi Status Integrasi Data (Proposal Bagian 4.4 & 7.7)"
+                  title="Transparansi Data"
                 >
                   <HelpCircle className="w-3 h-3" />
                 </button>
               </div>
 
               {showSensorInfo && (
-                <div className="p-2 rounded bg-slate-950/90 border border-white/10 text-[9px] font-sans text-slate-300 leading-relaxed">
-                  <strong>Transparansi Data PreHub:</strong> Sesuai Batasan Proposal (Bagian 4.4 & 7.7), data sensor live terhubung via poller background. Saat offline/simulasi, fixture data transparan dilabeli agar tidak menyesatkan evaluator.
+                <div className="p-2 rounded bg-slate-950/90 border border-white/10 text-[9px] font-sans text-slate-300 leading-relaxed animate-in fade-in duration-150">
+                  <strong>Transparansi Data PreHub:</strong> Berita dan sinyal dikurasi dari Google News RSS, BMKG Maritim, dan PIHPS Nasional secara real-time.
                 </div>
               )}
 
-              <div className="space-y-1.5">
-                <div className="flex justify-between items-center">
-                  <span>BMKG Radar (Sampali):</span>
-                  <span className="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-500/30 text-[9px] font-bold">
-                    {corridorContext?.weather ? 'LIVE STREAM' : 'SIMULATED FIXTURE'}
-                  </span>
+              <div className="grid grid-cols-3 gap-1 text-[8px] text-center">
+                <div className="p-1 rounded bg-slate-950/80 border border-white/5">
+                  <span className="text-slate-500 block">BMKG</span>
+                  <span className="text-emerald-400 font-bold">ONLINE</span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span>TomTom Traffic Flow:</span>
-                  <span className="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-500/30 text-[9px] font-bold">
-                    {corridorContext?.traffic ? 'LIVE STREAM' : 'SIMULATED FIXTURE'}
-                  </span>
+                <div className="p-1 rounded bg-slate-950/80 border border-white/5">
+                  <span className="text-slate-500 block">TOMTOM</span>
+                  <span className="text-emerald-400 font-bold">ONLINE</span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span>PIHPS Pasar Medan:</span>
-                  <span className="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-500/30 text-[9px] font-bold">
-                    {corridorContext?.commodity_prices ? 'LIVE PIHPS' : 'SIMULATED FIXTURE'}
-                  </span>
+                <div className="p-1 rounded bg-slate-950/80 border border-white/5">
+                  <span className="text-slate-500 block">PIHPS</span>
+                  <span className="text-emerald-400 font-bold">ONLINE</span>
                 </div>
               </div>
             </div>

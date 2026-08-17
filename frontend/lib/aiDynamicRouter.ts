@@ -304,10 +304,22 @@ export async function fetchMapboxDrivingRoute(
   modality: TransportModality = 'truck'
 ): Promise<LonLat[]> {
   if (modality === 'maritime') {
-    return [origin, [98.75, 3.85], [99.4, 3.45], [100.8, 2.2], destination];
+    // Smooth nautical sea corridor off the coast of Sumatra
+    const midLon = (origin[0] + destination[0]) / 2 + 0.15;
+    const midLat = (origin[1] + destination[1]) / 2 + 0.15;
+    return [
+      origin,
+      [origin[0] + 0.04, origin[1] + 0.04],
+      [midLon, midLat],
+      [destination[0] + 0.04, destination[1] + 0.04],
+      destination
+    ];
   }
   if (modality === 'air') {
-    return [origin, [98.878, 3.642], destination];
+    // Smooth great-circle flight corridor between airports
+    const midLon = (origin[0] + destination[0]) / 2;
+    const midLat = (origin[1] + destination[1]) / 2 + 0.06;
+    return [origin, [midLon, midLat], destination];
   }
   const results = await fetchMapboxAlternativeDrivingRoutes(origin, destination, waypoints);
   return results[0]?.coordinates || [origin, ...waypoints, destination];
