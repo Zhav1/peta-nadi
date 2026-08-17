@@ -43,6 +43,7 @@
 | 30 | System-Wide Multi-Page Integration & Tactical UI/UX Refactoring | **COMPLETE** ✅ | Unified Master State Engine in DashboardClient, Mapbox/Deck.gl Analytics Canvas, Multi-Agent Simulation Sandbox with Action Plan Deploy, B2G Cabinet Briefing PDF Reports |
 | 31 | PreHub Rebrand, Error Resolution, Automated Playwright Screenshots & Technical Documentation | **COMPLETE** ✅ | Complete rebrand to PreHub, zero build errors, 34/34 pytest passing, Playwright screenshot test suite passing, Dokumen Pendukung created |
 | 32 | Real Data, Live Agents & Functional Reality Upgrade | **COMPLETE** ✅ | DeepSeek R1 primary LLM routing via NIM, Open-Meteo live weather adapter, NetworkX Dijkstra canonical routing, Google News RSS live stream, 6-Agent Health status widget & live telemetry poller, Lucide SVG icon sweep |
+| 33 | Sumatra-Wide Pinpoint Tracking, Clean Regional Hubs, Modality Filters & Grounded OSINT Wire | **COMPLETE** ✅ | 25+ Sumatra strategic hubs, 11 pinpoint multi-modal fleets across Trans-Sumatra highways/nautical lanes, zoom-adaptive hub markers (no label collision), floating modality filter bar, grounded OSINT wire with real canonical URLs & 1-click cuOpt corridor reroute |
 
 
 
@@ -76,6 +77,7 @@
 | 2026-07-23 | Phase 20: Operations HUD Repositioning & Glassmorphism 2.0 | Reposition HUD to top-right corner to clear Belawan & Medan Hub nodes; replace multi-line text boxes with Lucide SVG compact badges |
 | 2026-07-23 | Phase 21: Organic GeoJSON Geometry Service & Startup Poller | Replace hardcoded 4 rectangular boxes with `incident_geometry_service.py` mathematical generators; poll BMKG inside FastAPI `lifespan()` |
 | 2026-07-23 | Phase 22: Google Maps ADM Dashed Stroke & Clean Off-Canvas UI | Google Maps style dashed line stroke (`line-dasharray: [4, 3]`), top nav telemetry flyout popovers, off-canvas incident detail panel, unified pin-boundary entity |
+| 2026-08-17 | Phase 33: Sumatra-Wide Pinpoint Fleets, Zoom-Adaptive Hubs, Modality Filters & Grounded OSINT | Expanded to 25+ strategic hubs, 11 multi-modal fleets across real corridors, zoom-adaptive hub rendering (no badge collision at zoom 6), floating fleet modality filter, grounded OSINT wire with real canonical URLs & 1-click cuOpt corridor reroute |
 
 ---
 
