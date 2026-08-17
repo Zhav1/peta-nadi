@@ -654,7 +654,33 @@
 - [x] Vehicles locked to GeoJSON route LineStrings (Road network for trucks, sea channels for vessels, flight corridors for aircraft).
 - [x] Smooth 60 FPS interpolation without jumping or teleportation.
 - [x] 0°–360° vehicle rotation following route bends and headings.
-- [x] Next.js production build and Python AST parse verified 100%.
+---
+
+## Phase 34: Dynamic Fleet Management, Nautical Sea-Lane Routing, Multi-Province Scale & Interface Truthfulness
+**Goal:** Menghadirkan engine rute maritim alur laut tanpa menembus daratan, skala armada multi-provinsi (45 unit di 10 provinsi Sumatra), verifikasi tabrakan bahaya dengan fallback Hold/Delay, kontrol filter layer interaktif, marker kendaraan high-contrast ala Globot dengan rotasi arah terbang, penguncian menu yang belum selesai (Analytics/Simulation/Reports) untuk eliminasi fixture data, serta pembersihan buzzword & status statis.
+**Status:** COMPLETE ✅
+
+### Deliverables
+- **Dynamic Multi-Modal Fleet REST API (`backend/app/routers/vehicles_router.py`)**:
+  - Endpoint `GET /api/v1/fleet/vehicles` melayani 45 armada pangan aktif (24 truk jalur Trans-Sumatra, 14 kapal laut Selat Malaka/Selat Sunda/Pantai Barat, 7 pesawat kargo antar-bandara) dengan koordinat rute GeoJSON dan integrasi AISStream.
+- **Coastal Nautical Sea-Lane Pathfinding (`frontend/lib/aiDynamicRouter.ts`)**:
+  - Jaringan alur laut kepulauan `SUMATRA_NAUTICAL_PERIMETER` melingkari pesisir Sumatra (Selat Malaka, Selat Bangka, Selat Sunda, Samudera Hindia) sehingga rute kapal laut tidak pernah memotong daratan.
+- **Dynamic Air Cargo Routing (`frontend/lib/aiDynamicRouter.ts`)**:
+  - Resolusi bandara kargo terdekat (`CARGO_AIRPORT_NODES`: KNO, BTJ, PKU, BIM, DJB, PLM, TKG) dengan lintasan busur udara dan leg first-mile/last-mile truk darat.
+- **Strict Hazard Intersection & Hold/Delay Fallback (`frontend/lib/aiDynamicRouter.ts`)**:
+  - Evaluasi tabrakan segmen rute dengan radius bahaya bencana. Jika seluruh rute utama dan alternatif terdampak, sistem memberikan rekomendasi taktis "Tunda Keberangkatan (Hold / Delay)" secara jujur.
+- **Globot-Style High-Contrast Fleet Markers (`FleetVehicleLayer.tsx`)**:
+  - Menghapus efek glow neon kabur. Menggantinya dengan badge solid beresolusi tinggi dan rotasi pesawat mengikuti heading azimuth (`state.bearing`). Skala simulasi dikalibrasi ke 12x untuk pergerakan stabil dan mudah diamati.
+- **Interactive Layer Filter Widget (`CrisisMap.tsx`)**:
+  - Kontrol toggle mengambang untuk koridor utama, kemacetan, radar cuaca, dan armada logistik.
+- **Interface Focus & Locked Menus (`DashboardClient.tsx` & `TopNavTelemetry.tsx`)**:
+  - Mengunci tab `ANALYTICS`, `SIMULATION`, dan `REPORTS` dengan ikon gembok dan status "Segera Hadir" untuk memfokuskan pengguna 100% pada Peta 4D terverifikasi. Menghapus badge statis "PREHUB READY".
+
+### Verification
+- [x] Rute kapal laut mengitari laut lepas dan tidak memotong pulau Sumatra.
+- [x] Armada logistik mencakup 45 unit di seluruh 10 provinsi Sumatra dengan pergerakan stabil 12x.
+- [x] Tab menu yang belum siap terkunci dengan rapi.
+- [x] TypeScript type check 0 error dan backend pytest 34/34 passing.
 
 ---
 
