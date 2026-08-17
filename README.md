@@ -35,17 +35,17 @@ Multisource Telemetry (BMKG, TomTom, Google News RSS, Open-Meteo, PIHPS)
    * **Data Collection & Health Agent:** Validates and normalizes multi-source sensor telemetries.
    * **OSINT & Intelligence Agent:** Corroborates news and grassroots reports with PostGIS hazard polygons.
    * **Congestion & Weather Forecast Agent:** Computes 48-hour traffic trends & Open-Meteo precipitation risks.
-   * **Logistics & Graph Routing Agent:** Computes optimal detour routes via NetworkX Dijkstra graph solver with dynamic hazard penalty weighting.
-   * **Price & Inflation Intelligence Agent:** Detects price anomalies on staples and projects inflation impacts.
+   * **Logistics & Graph Routing Agent:** Computes optimal detour routes via NVIDIA cuOpt GPU & NetworkX Dijkstra graph solver with dynamic hazard penalty weighting.
+   * **Price & Inflation Intelligence Agent:** Detects price anomalies on staples and projects inflation impacts based on Bappenas transport surcharge models.
    * **AI Decision Copilot:** Synthesizes executive multi-agency recommendations (*Continue*, *Reroute*, *Hold/Delay*) with deep reasoning traces using **DeepSeek R1 via NVIDIA NIM**.
 
-3. **High-Performance Command Center (Next.js 14 + WebGL):**
-   * Persistent 6-Agent Swarm Live Health Widget with real-time confidence scores and node execution status.
-   * Always-alive map with real-time TomTom segment traffic colors (green/yellow/red) and weather polygons on initial load.
-   * 60 FPS route-bound fleet vector layer with dynamic bearing rotation (Ships, Trucks, Aircraft).
-   * Deck.gl Arc & Scatterplot spatial commodity flow layers.
-   * Multi-Agency Simulation Sandbox (What-If Advisor with 5–50 km shockwave radius).
-   * B2G Cabinet Briefing Center with Print-to-PDF and JSON telemetry export.
+3. **Sumatra-Scale 4D Command Center (Next.js 14 + WebGL):**
+   * **Island-Wide Strategic Node Network:** 25+ major logistics hubs across Sumatra (Pelabuhan Belawan, Dumai, Teluk Bayur, Boom Baru, Panjang, Bakauheni; Bandara KNO, PKU, BIM, PLM, TKG; Sentra Hortikultura Medan, Bukittinggi, Tebing Tinggi, Pekanbaru, Palembang).
+   * **Pinpoint Multi-Modal Fleet Tracking:** Real-world trajectories for cargo trucks along Tol Trans-Sumatra / Jalinsum, vessels sailing Strait of Malacca / Sunda, and air freighters on official airways.
+   * **Zoom-Adaptive Level-of-Detail (LOD):** Clean glowing pins with compact city tags at regional view (`zoom < 8.5`) eliminating label collision; expands seamlessly on hover and selection.
+   * **Live Modality Filter Bar:** Instant 1-click toggling for `[SEMUA]`, `[🚚 TRUK]`, `[⚓ KAPAL]`, and `[✈️ UDARA]`.
+   * **Grounded OSINT & News Wire:** Live dispatches with verified canonical publisher links (Antara, BMKG, PIHPS Bank Indonesia) and 1-click `📍 Fokus & Reroute` triggering dynamic cuOpt/Mapbox bypass calculations.
+   * **Multi-Agency Simulation Sandbox:** 5–50 km interactive shockwave hazard injection with automated B2G Cabinet Briefing PDF report generation.
 
 ---
 
