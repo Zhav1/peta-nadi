@@ -84,12 +84,12 @@ export function CrisisSimulatorBar({
   }, []);
 
   const hazardOptions: Array<{ type: CrisisType; label: string; icon: React.ReactNode }> = [
-    { type: 'flood', label: 'Banjir Belawan', icon: <CloudRain className="w-3.5 h-3.5 text-cyan-400" /> },
-    { type: 'port_closure', label: 'Pelabuhan Belawan', icon: <Anchor className="w-3.5 h-3.5 text-amber-400" /> },
-    { type: 'congestion', label: 'Macet Jalinsum', icon: <Truck className="w-3.5 h-3.5 text-yellow-400" /> },
-    { type: 'wildfire', label: 'Titik Panas', icon: <Flame className="w-3.5 h-3.5 text-orange-400" /> },
+    { type: 'flood', label: 'Banjir Luapan', icon: <CloudRain className="w-3.5 h-3.5 text-cyan-400" /> },
+    { type: 'port_closure', label: 'Penutupan Pelabuhan', icon: <Anchor className="w-3.5 h-3.5 text-amber-400" /> },
+    { type: 'congestion', label: 'Macet Arteri / Tol', icon: <Truck className="w-3.5 h-3.5 text-yellow-400" /> },
+    { type: 'wildfire', label: 'Kebakaran Lahan', icon: <Flame className="w-3.5 h-3.5 text-orange-400" /> },
     { type: 'earthquake', label: 'Gempa Tektonik', icon: <Activity className="w-3.5 h-3.5 text-red-400" /> },
-    { type: 'landslide', label: 'Longsor Berastagi', icon: <Mountain className="w-3.5 h-3.5 text-emerald-400" /> },
+    { type: 'landslide', label: 'Tanah Longsor', icon: <Mountain className="w-3.5 h-3.5 text-emerald-400" /> },
   ];
 
 
@@ -140,13 +140,13 @@ export function CrisisSimulatorBar({
 
             {/* Modality Dropdown Popover */}
             {activePopover === 'modality' && (
-              <div className="absolute bottom-full left-0 mb-2 w-48 p-2 rounded-2xl bg-[#0c0e12]/95 border border-white/10 backdrop-blur-2xl shadow-2xl flex flex-col gap-1 z-50 animate-in fade-in slide-in-from-bottom-2 duration-150">
-                <span className="px-2 py-1 text-[9px] font-mono text-cyan-400 uppercase tracking-wider font-bold">PILIH MODALITAS DISTRIBUTION</span>
+              <div className="absolute bottom-full left-0 mb-2 w-52 p-2 rounded-2xl bg-[#0c0e12]/95 border border-white/10 backdrop-blur-2xl shadow-2xl flex flex-col gap-1 z-50 animate-in fade-in slide-in-from-bottom-2 duration-150">
+                <span className="px-2 py-1 text-[9px] font-mono text-cyan-400 uppercase tracking-wider font-bold">PILIH MODALITAS DISTRIBUSI</span>
                 {[
-                  { mode: 'best', label: '🌟 Best Auto', desc: 'Sistem AI Otomatis', icon: <Sparkles className="w-4 h-4 text-cyan-400" /> },
-                  { mode: 'truck', label: 'Truk Logistik', desc: 'Jalur Darat / Tol', icon: <Truck className="w-4 h-4 text-emerald-400" /> },
-                  { mode: 'maritime', label: 'Kapal Laut', desc: 'Pelabuhan Belawan', icon: <Ship className="w-4 h-4 text-blue-400" /> },
-                  { mode: 'air', label: 'Cargo Udara', desc: 'Bandara Kualanamu', icon: <Plane className="w-4 h-4 text-purple-400" /> },
+                  { mode: 'best', label: 'Best Mode', desc: 'Multi-Moda Otomatis', icon: <Sparkles className="w-4 h-4 text-cyan-400" /> },
+                  { mode: 'truck', label: 'Truk Logistik', desc: 'Transportasi Darat', icon: <Truck className="w-4 h-4 text-emerald-400" /> },
+                  { mode: 'maritime', label: 'Kapal Laut', desc: 'Transportasi Maritim', icon: <Ship className="w-4 h-4 text-blue-400" /> },
+                  { mode: 'air', label: 'Cargo Udara', desc: 'Transportasi Udara', icon: <Plane className="w-4 h-4 text-purple-400" /> },
                 ].map((m) => {
                   const active = selectedModality === m.mode;
                   return (
