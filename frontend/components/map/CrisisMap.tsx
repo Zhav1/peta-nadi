@@ -45,6 +45,7 @@ export interface CrisisMapProps {
   activeTimeFilter?: 'past' | 'present' | 'future' | 'predict';
   historicalEpisodes?: Record<string, unknown>[];
   predictiveRisks?: Record<string, unknown>[];
+  fleetModalityFilter?: 'all' | 'truck' | 'maritime' | 'air';
 }
 
 
@@ -111,6 +112,7 @@ export default function CrisisMap({
   activeTimeFilter = 'present',
   historicalEpisodes = [],
   predictiveRisks = [],
+  fleetModalityFilter = 'all',
 }: CrisisMapProps) {
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -600,34 +602,53 @@ export default function CrisisMap({
       const isOrigin = node.id === selectedOriginNode;
       const isDest = node.id === selectedDestNode;
 
-      const isPort = node.type === 'port' || node.id.includes('port') || node.id.includes('belawan') || node.id.includes('dumai');
-      const isAir = node.type === 'airport' || node.id.includes('air') || node.id.includes('kno') || node.id.includes('kualanamu');
+      const isPort = node.type === 'port' || node.id.includes('port') || node.id.includes('belawan') || node.id.includes('dumai') || node.id.includes('bakauheni') || node.id.includes('bayur');
+      const isAir = node.type === 'airport' || node.id.includes('air') || node.id.includes('kno') || node.id.includes('pku') || node.id.includes('bim') || node.id.includes('plm') || node.id.includes('tkg');
 
       const iconSvg = isPort
-        ? `<svg class="w-3.5 h-3.5 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="3"/><line x1="12" y1="22" x2="12" y2="8"/><path d="M5 12H2a10 10 0 0 0 20 0h-3"/></svg>`
+        ? `<svg class="w-3 h-3 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="3"/><line x1="12" y1="22" x2="12" y2="8"/><path d="M5 12H2a10 10 0 0 0 20 0h-3"/></svg>`
         : isAir
-          ? `<svg class="w-3.5 h-3.5 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5 0 1 .4 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.2c.3.4.8.6 1.3.4l.5-.3c.4-.2.6-.6.5-1.1z"/></svg>`
-          : `<svg class="w-3.5 h-3.5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>`;
+          ? `<svg class="w-3 h-3 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5 0 1 .4 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.2c.3.4.8.6 1.3.4l.5-.3c.4-.2.6-.6.5-1.1z"/></svg>`
+          : `<svg class="w-3 h-3 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>`;
+
+      const rawName = node.name.split('(')[0].trim();
+      const shortCityName = rawName
+        .replace(/^(Hub Utama Pergudangan|Hub Logistik|Interchange Tol|Interchange|Pelabuhan|Bandara Internasional|Bandara|Kota)\s+/i, '')
+        .trim();
 
       const el = document.createElement('div');
-      el.className = `cursor-pointer z-30 transition-transform transform hover:scale-110 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-mono font-bold shadow-2xl border backdrop-blur-md ${
-        isOrigin
-          ? 'bg-cyan-950/90 text-cyan-300 border-cyan-400 ring-4 ring-cyan-500/30'
-          : isDest
-            ? 'bg-amber-950/90 text-amber-300 border-amber-400 ring-4 ring-amber-500/30'
-            : 'bg-slate-900/90 text-slate-200 border-slate-700 hover:border-cyan-400/60'
-      }`;
-      el.style.zIndex = '30';
+      el.className = 'cursor-pointer group relative flex flex-col items-center select-none z-30 transition-transform transform hover:scale-110';
+      el.style.zIndex = isOrigin || isDest ? '40' : '25';
 
-      const typeLabel = isPort ? 'PORT' : isAir ? 'AIRPORT' : 'HUB';
-
-      el.innerHTML = `
-        <span>${iconSvg}</span>
-        <span class="truncate max-w-[140px]">${node.name.split('(')[0].trim()}</span>
-        <span class="text-[8px] font-mono px-1 py-0.2 rounded bg-white/10 text-slate-400">${typeLabel}</span>
-        ${isOrigin ? '<span class="px-1.5 py-0.5 bg-cyan-400 text-slate-950 rounded text-[9px] font-black">START</span>' : ''}
-        ${isDest ? '<span class="px-1.5 py-0.5 bg-amber-400 text-slate-950 rounded text-[9px] font-black">END</span>' : ''}
-      `;
+      if (isOrigin || isDest) {
+        el.innerHTML = `
+          <div class="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold shadow-2xl border backdrop-blur-md ${
+            isOrigin
+              ? 'bg-cyan-950/95 text-cyan-300 border-cyan-400 ring-4 ring-cyan-500/30'
+              : 'bg-amber-950/95 text-amber-300 border-amber-400 ring-4 ring-amber-500/30'
+          }">
+            <span>${iconSvg}</span>
+            <span class="font-bold">${shortCityName}</span>
+            <span class="px-1.5 py-0.5 ${isOrigin ? 'bg-cyan-400 text-slate-950' : 'bg-amber-400 text-slate-950'} rounded text-[9px] font-black">${isOrigin ? 'START' : 'END'}</span>
+          </div>
+        `;
+      } else {
+        el.innerHTML = `
+          <div class="flex flex-col items-center">
+            <div class="w-6 h-6 rounded-full border border-white/20 bg-[#0c0e12]/90 backdrop-blur-md flex items-center justify-center shadow-lg transition group-hover:border-cyan-400 group-hover:scale-110 ${
+              isPort ? 'text-cyan-400 border-cyan-500/40' : isAir ? 'text-purple-400 border-purple-500/40' : 'text-emerald-400 border-emerald-500/40'
+            }">
+              ${iconSvg}
+            </div>
+            <span class="mt-0.5 px-1.5 py-0.2 rounded bg-slate-950/80 border border-white/10 text-[9px] font-mono text-slate-300 group-hover:text-cyan-300 group-hover:border-cyan-500/40 shadow-sm transition whitespace-nowrap">
+              ${shortCityName}
+            </span>
+          </div>
+          <div class="opacity-0 group-hover:opacity-100 absolute -top-8 px-2 py-0.5 rounded-lg bg-[#0c0e12]/95 border border-white/20 text-[10px] font-mono text-white shadow-xl pointer-events-none transition whitespace-nowrap z-50">
+            ${node.name} ${node.province ? `(${node.province})` : ''}
+          </div>
+        `;
+      }
 
       el.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -1225,6 +1246,7 @@ export default function CrisisMap({
         vehicles={activeFleet || []}
         activeRoutes={activeRoutes}
         activeRouteIdx={activeRouteIdx}
+        modalityFilter={fleetModalityFilter}
       />
 
 

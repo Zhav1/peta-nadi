@@ -15,7 +15,12 @@ export interface NewsItem {
   verification_status: 'UNVERIFIED_GRASSROOTS' | 'CORROBORATED_OFFICIAL' | 'MARKET_IMPACT_CONFIRMED' | 'REJECTED_UNFOUNDED';
   confidence_score: number;
   attributions: Array<{ source_name: string; url?: string; credibility_score?: number }>;
-  commodity_impact?: Record<string, number>;
+  // Grounded simulation attributes
+  originNode?: string;
+  destNode?: string;
+  hazardType?: 'flood' | 'landslide' | 'congestion' | 'port_closure' | 'wildfire';
+  commodity_name?: string;
+  economic_note?: string;
 }
 
 export interface MarketRegimeData {
@@ -28,107 +33,132 @@ const MOCK_NEWS_FALLBACK: NewsItem[] = [
   {
     id: 'NEWS-001',
     source_type: 'OFFICIAL_NEWS',
-    headline: 'Banjir Luapan Sungai Padang Rendam Jalur Logistik Tebing Tinggi',
-    summary: 'Debit air meningkat 120cm menutup badan jalan arteri Jalinsum. Puluhan truk sembako dialihkan via Tol Medan-Kualanamu.',
-    location_name: 'Interchange Tebing Tinggi',
+    headline: 'Banjir Luapan Sungai Padang Rendam Jalur Logistik Tebing Tinggi KM 78',
+    summary: 'Debit air meningkat 120cm menutup badan jalan arteri Jalinsum. Puluhan truk sembako dialihkan via Tol Medan-Kualanamu-Tebing Tinggi.',
+    location_name: 'Interchange Tebing Tinggi (Sumut)',
     lat: 3.5680,
     lon: 98.9560,
     pubDate: '10m lalu · Antara Sumut',
     category: 'DISASTER_LOGISTICS',
     verification_status: 'CORROBORATED_OFFICIAL',
     confidence_score: 0.94,
+    originNode: 'belawan',
+    destNode: 'tebingtinggi',
+    hazardType: 'flood',
+    commodity_name: 'Beras BULOG & Minyak Goreng',
+    economic_note: 'cuOpt Detour: Tambahan jarak +14 km via Tol MKTT, perkiraan delay 45 menit.',
     attributions: [
-      { source_name: 'Antara News Sumut', url: 'https://news.google.com/search?q=banjir+tebing+tinggi+antara' },
-      { source_name: 'Kompas.com Regional', url: 'https://news.google.com/search?q=banjir+tebing+tinggi+kompas' }
+      { source_name: 'Antara News Sumut', url: 'https://sumut.antaranews.com' },
+      { source_name: 'BPBD Pemprov Sumatera Utara', url: 'https://bpbd.sumutprov.go.id' }
     ],
-    commodity_impact: { cabai_merah_pct: 14.2, minyak_goreng_pct: 5.8 }
   },
   {
     id: 'NEWS-002',
     source_type: 'OFFICIAL_NEWS',
-    headline: 'Jalur Tol Pekanbaru-Dumai Alami Antrean Truk CPO di Gerbang Dumai',
-    summary: 'Peningkatan volume angkutan minyak kelapa sawit mentah (CPO) dan pupuk menuju Pelabuhan Dumai memicu perlambatan laju armada.',
-    location_name: 'Pelabuhan Dumai (Riau)',
-    lat: 1.6811,
-    lon: 101.4533,
-    pubDate: '25m lalu · Riau Pos',
-    category: 'TRAFFIC_BOTTLENECK',
+    headline: 'Tebing Sitinjau Lauik Longsor, Jalur Distribusi Padang–Solok Terputus',
+    summary: 'Material longsor menutup badan jalan Lintas Barat Sumatera. Truk sayur mayur dan cabai dari sentra pertanian Alahan Panjang tertahan di bahu jalan.',
+    location_name: 'Sitinjau Lauik (Sumbar)',
+    lat: -0.9492,
+    lon: 100.4500,
+    pubDate: '25m lalu · Padang Ekspres',
+    category: 'DISASTER_LOGISTICS',
     verification_status: 'CORROBORATED_OFFICIAL',
-    confidence_score: 0.89,
+    confidence_score: 0.91,
+    originNode: 'padang',
+    destNode: 'bukittinggi',
+    hazardType: 'landslide',
+    commodity_name: 'Cabai Merah & Sayur Agam',
+    economic_note: 'cuOpt Detour: Pengalihan via jalur alternatif Padang Panjang-Malalak (+28 km).',
     attributions: [
-      { source_name: 'Riau Pos Online', url: 'https://news.google.com/search?q=pelabuhan+dumai+logistik' },
-      { source_name: 'Tribun Pekanbaru', url: 'https://news.google.com/search?q=tol+pekanbaru+dumai' }
+      { source_name: 'Padang Ekspres Online', url: 'https://padek.jawapos.com' },
+      { source_name: 'BPBD Sumatera Barat', url: 'https://sumbarprov.go.id' }
     ],
-    commodity_impact: { minyak_goreng_pct: 4.5 }
   },
   {
     id: 'NEWS-003',
-    source_type: 'BMKG_WEATHER',
-    headline: 'Peringatan Dini BMKG: Gelombang Tinggi & Angin Kencang Selat Malaka',
-    summary: 'Tinggi gelombang mencapai 2.5–3.0 meter di perairan timur Sumatera. Kapal kargo curah dan armada nelayan diimbau waspada.',
-    location_name: 'Perairan Selat Malaka - Belawan',
-    lat: 3.7922,
-    lon: 98.6776,
-    pubDate: '40m lalu · BMKG Maritim',
-    category: 'METEOROLOGY',
+    source_type: 'OFFICIAL_NEWS',
+    headline: 'Tol Pekanbaru-Dumai Alami Antrean Truk Tangki CPO di Gerbang Dumai',
+    summary: 'Peningkatan volume angkutan CPO kelapa sawit dan pupuk menuju Pelabuhan Dumai memicu perlambatan kecepatan armada logistik.',
+    location_name: 'Pelabuhan Dumai (Riau)',
+    lat: 1.6811,
+    lon: 101.4533,
+    pubDate: '40m lalu · Riau Pos',
+    category: 'TRAFFIC_BOTTLENECK',
     verification_status: 'CORROBORATED_OFFICIAL',
-    confidence_score: 0.96,
+    confidence_score: 0.89,
+    originNode: 'pekanbaru',
+    destNode: 'dumai_port',
+    hazardType: 'congestion',
+    commodity_name: 'Minyak Goreng & CPO Sawit',
+    economic_note: 'cuOpt Detour: Penataan buffer parking di rest area KM 45 Tol Permai.',
     attributions: [
-      { source_name: 'BMKG Stasiun Maritim Belawan', url: 'https://maritim.bmkg.go.id' }
+      { source_name: 'Riau Pos Online', url: 'https://riaupos.jawapos.com' },
+      { source_name: 'Hutama Karya Tol Permai', url: 'https://www.hutamakarya.com' }
     ],
-    commodity_impact: { beras_pct: 2.1 }
   },
   {
     id: 'NEWS-004',
-    source_type: 'MEDSOS_OSINT',
-    headline: 'Laporan Sopir Truk: Antrean Truk 3 KM Menuju Gate Tol Belmera',
-    summary: 'Genangan pasang rob laut setinggi 30cm di Jl. Pelabuhan Raya memperlambat manuver kontainer pengangkut beras BULOG.',
-    location_name: 'Pelabuhan Belawan',
-    lat: 3.7831,
-    lon: 98.6868,
-    pubDate: '1j lalu · X / Twitter OSINT',
-    category: 'DISASTER_LOGISTICS',
-    verification_status: 'UNVERIFIED_GRASSROOTS',
-    confidence_score: 0.72,
+    source_type: 'BMKG_WEATHER',
+    headline: 'Peringatan Dini BMKG: Gelombang 2.5m & Angin Kencang Selat Malaka',
+    summary: 'Tinggi gelombang mencapai 2.5–3.0 meter di perairan timur Sumatera. Kapal kargo curah basah dan armada nelayan diimbau menunda keberangkatan.',
+    location_name: 'Perairan Selat Malaka - Belawan',
+    lat: 3.7922,
+    lon: 98.6776,
+    pubDate: '1j lalu · BMKG Maritim',
+    category: 'METEOROLOGY',
+    verification_status: 'CORROBORATED_OFFICIAL',
+    confidence_score: 0.96,
+    originNode: 'belawan',
+    destNode: 'dumai_port',
+    hazardType: 'port_closure',
+    commodity_name: 'Gula Pasir & Beras Impor',
+    economic_note: 'Rekomendasi HITL: Penundaan operasi pelayaran 12 jam untuk keselamatan kargo.',
     attributions: [
-      { source_name: 'Komunitas Driver Truk Sumut', url: 'https://twitter.com' }
+      { source_name: 'BMKG Stasiun Meteorologi Maritim Belawan', url: 'https://maritim.bmkg.go.id' }
     ],
-    commodity_impact: { beras_pct: 3.5 }
   },
   {
     id: 'NEWS-005',
     source_type: 'OFFICIAL_NEWS',
-    headline: 'Longsor Tebing Sitinjau Lauik Putus Akses Padang–Solok',
-    summary: 'Material longsor menutup badan jalan Lintas Barat Sumatera. Truk sayuran dari Alahan Panjang tertahan di bahu jalan.',
-    location_name: 'Sitinjau Lauik (Sumbar)',
-    lat: -0.9492,
-    lon: 100.4500,
-    pubDate: '1.5j lalu · Padang Ekspres',
-    category: 'DISASTER_LOGISTICS',
+    headline: 'Lonjakan Arus Truk Logistik Sembako di Gerbang Tol Bakauheni Selatan',
+    summary: 'Arus distribusi bahan pangan pokok Jawa–Sumatera meningkat 35%. Petugas ASDP memberlakukan skema delaying system di kantong parkir pelabuhan.',
+    location_name: 'Pelabuhan Bakauheni (Lampung)',
+    lat: -5.8711,
+    lon: 105.7533,
+    pubDate: '1.5j lalu · Lampung Post',
+    category: 'TRAFFIC_BOTTLENECK',
     verification_status: 'CORROBORATED_OFFICIAL',
-    confidence_score: 0.91,
+    confidence_score: 0.92,
+    originNode: 'bakauheni_port',
+    destNode: 'palembang',
+    hazardType: 'congestion',
+    commodity_name: 'Beras & Sembako Nasional',
+    economic_note: 'cuOpt Detour: Pola distribusi bergilir via Tol Terbanggi Besar-Kayu Agung.',
     attributions: [
-      { source_name: 'Padang Ekspres', url: 'https://news.google.com/search?q=sitinjau+lauik+longsor' },
-      { source_name: 'BPBD Sumbar', url: 'https://sumbarprov.go.id' }
+      { source_name: 'Lampung Post', url: 'https://lampost.co' },
+      { source_name: 'PT ASDP Indonesia Ferry', url: 'https://www.indonesiaferry.co.id' }
     ],
-    commodity_impact: { cabai_merah_pct: 18.5, sayuran_pct: 12.0 }
   },
   {
     id: 'NEWS-006',
     source_type: 'PIHPS_MARKET',
-    headline: 'PIHPS Catat Kenaikan Harga Cabai Merah di Pasar Sentral Medan (+12%)',
-    summary: 'Pasokan dari sentra Karo dan Bukittinggi mengalami keterlambatan logistik 6 jam akibat perbaikan jalan dan hujan lebat.',
-    location_name: 'Pusat Pasar Medan & Bukittinggi',
+    headline: 'PIHPS Bank Indonesia Catat Keterlambatan Pasokan Cabai ke Pasar Sentral',
+    summary: 'Survei harga harian mencatat fluktuasi pasokan sayur & cabai dari sentra Karo dan Bukittinggi akibat perlambatan logistik cuaca buruk.',
+    location_name: 'Pasar Pusat Medan & Pasar Raya Padang',
     lat: 3.5952,
     lon: 98.6722,
     pubDate: '2j lalu · Bank Indonesia PIHPS',
     category: 'PRICE_ANOMALY',
     verification_status: 'MARKET_IMPACT_CONFIRMED',
     confidence_score: 0.98,
+    originNode: 'siantar',
+    destNode: 'medan',
+    hazardType: 'congestion',
+    commodity_name: 'Cabai Merah & Bawang Merah',
+    economic_note: 'Data survei resmi Bank Indonesia untuk acuan disparitas harga antar-wilayah.',
     attributions: [
-      { source_name: 'PIHPS Nasional Bank Indonesia', url: 'https://hargapangan.id' }
+      { source_name: 'Pusat Informasi Harga Pangan Strategis (PIHPS) Bank Indonesia', url: 'https://www.bi.go.id/hargapangan' }
     ],
-    commodity_impact: { cabai_merah_pct: 12.4, bawang_merah_pct: 6.8 }
   }
 ];
 
@@ -136,7 +166,7 @@ export function useNewsVerification() {
   const [newsFeed, setNewsFeed] = useState<NewsItem[]>(MOCK_NEWS_FALLBACK);
   const [marketRegime, setMarketRegime] = useState<MarketRegimeData>({
     regime: 'ELEVATED',
-    active_crisis_indicators: ['Banjir Jalinsum Tebing Tinggi', 'Antrean Port Belawan'],
+    active_crisis_indicators: ['Banjir Sungai Padang Tebing Tinggi', 'Longsor Sitinjau Lauik Sumbar', 'Gelombang Selat Malaka'],
     commodity_volatility_score: 0.25
   });
   const [isLoading, setIsLoading] = useState(true);
@@ -150,10 +180,12 @@ export function useNewsVerification() {
           api.news.marketRegime()
         ]);
         if (isMounted) {
-          if (newsData.items && newsData.items.length > 0) setNewsFeed(newsData.items as unknown as NewsItem[]);
+          if (newsData.items && newsData.items.length > 0) {
+            // Keep grounded attributes if present
+            setNewsFeed(newsData.items as unknown as NewsItem[]);
+          }
           if (regimeData.regime) setMarketRegime(regimeData as MarketRegimeData);
         }
-
       } catch (err) {
         console.warn('Backend news API fallback:', err);
       } finally {
@@ -161,7 +193,7 @@ export function useNewsVerification() {
       }
     }
     load();
-    const interval = setInterval(load, 10000);
+    const interval = setInterval(load, 15000);
     return () => {
       isMounted = false;
       clearInterval(interval);

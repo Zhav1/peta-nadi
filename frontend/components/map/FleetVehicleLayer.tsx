@@ -11,9 +11,16 @@ interface FleetVehicleLayerProps {
   vehicles: FleetVehicle[];
   activeRoutes?: import('@/lib/types').RouteRecommendation[];
   activeRouteIdx?: number | null;
+  modalityFilter?: 'all' | 'truck' | 'maritime' | 'air';
 }
 
-export function FleetVehicleLayer({ map, vehicles, activeRoutes, activeRouteIdx }: FleetVehicleLayerProps) {
+export function FleetVehicleLayer({
+  map,
+  vehicles,
+  activeRoutes,
+  activeRouteIdx,
+  modalityFilter = 'all',
+}: FleetVehicleLayerProps) {
   const [selectedVehicle, setSelectedVehicle] = useState<{
     vehicle: FleetVehicle;
     currentPos: [number, number];
@@ -31,8 +38,22 @@ export function FleetVehicleLayer({ map, vehicles, activeRoutes, activeRouteIdx 
 
     let isCancelled = false;
 
-    // Initialize HTML markers for all vehicles if not already created
-    vehicles.forEach((v) => {
+    // Filter vehicles by active modality filter
+    const visibleVehicles = vehicles.filter((v) => {
+      if (!modalityFilter || modalityFilter === 'all') return true;
+      return v.modality === modalityFilter;
+    });
+
+    // Remove markers for filtered out vehicles
+    Object.keys(markersRef.current).forEach((vId) => {
+      if (!visibleVehicles.some((v) => v.vehicle_id === vId)) {
+        markersRef.current[vId]?.remove();
+        delete markersRef.current[vId];
+      }
+    });
+
+    // Initialize HTML markers for all visible vehicles
+    visibleVehicles.forEach((v) => {
       if (!markersRef.current[v.vehicle_id]) {
         const isMaritime = v.modality === 'maritime';
         const isAir = v.modality === 'air';
@@ -40,8 +61,17 @@ export function FleetVehicleLayer({ map, vehicles, activeRoutes, activeRouteIdx 
         const el = document.createElement('div');
         el.className = 'cursor-pointer group relative flex flex-col items-center select-none transition-transform transform hover:scale-125 z-35';
 
-        const iconColor = isMaritime ? 'text-amber-400 border-amber-400 bg-[#0c192a]' : isAir ? 'text-purple-400 border-purple-400 bg-[#1a0f2b]' : 'text-cyan-400 border-cyan-400 bg-[#081524]';
-        const ringColor = isMaritime ? 'shadow-[0_0_12px_rgba(245,158,11,0.6)]' : isAir ? 'shadow-[0_0_12px_rgba(168,85,247,0.6)]' : 'shadow-[0_0_12px_rgba(6,182,212,0.6)]';
+        const iconColor = isMaritime
+          ? 'text-amber-400 border-amber-400 bg-[#0c192a]'
+          : isAir
+            ? 'text-purple-400 border-purple-400 bg-[#1a0f2b]'
+            : 'text-cyan-400 border-cyan-400 bg-[#081524]';
+
+        const ringColor = isMaritime
+          ? 'shadow-[0_0_12px_rgba(245,158,11,0.6)]'
+          : isAir
+            ? 'shadow-[0_0_12px_rgba(168,85,247,0.6)]'
+            : 'shadow-[0_0_12px_rgba(6,182,212,0.6)]';
 
         const iconSvg = isMaritime
           ? `<svg class="w-4 h-4 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="3"/><line x1="12" y1="22" x2="12" y2="8"/><path d="M5 12H2a10 10 0 0 0 20 0h-3"/></svg>`
@@ -84,7 +114,7 @@ export function FleetVehicleLayer({ map, vehicles, activeRoutes, activeRouteIdx 
           // Smoothly fly camera to vehicle
           map.flyTo({
             center: state.currentPosition,
-            zoom: Math.max(map.getZoom(), 11),
+            zoom: Math.max(map.getZoom(), 10),
             duration: 1000,
           });
         });
@@ -99,14 +129,14 @@ export function FleetVehicleLayer({ map, vehicles, activeRoutes, activeRouteIdx 
       }
     });
 
-    // 60 FPS requestAnimationFrame Loop for all live vehicles
+    // 60 FPS requestAnimationFrame Loop for visible vehicles
     const animate = (now: number) => {
       if (isCancelled || !map) return;
 
       const deltaSec = Math.min((now - lastTimeRef.current) / 1000, 0.1);
       lastTimeRef.current = now;
 
-      vehicles.forEach((v) => {
+      visibleVehicles.forEach((v) => {
         let coords = v.route_geometry?.coordinates || v.path || [];
         if (v.modality === 'truck' && activeRoutes && activeRoutes.length > 0) {
           const selRoute = activeRoutes[activeRouteIdx ?? 0] || activeRoutes[0];
@@ -146,13 +176,13 @@ export function FleetVehicleLayer({ map, vehicles, activeRoutes, activeRouteIdx 
       Object.values(markersRef.current).forEach((m) => m.remove());
       markersRef.current = {};
     };
-  }, [map, vehicles, activeRoutes, activeRouteIdx]);
+  }, [map, vehicles, activeRoutes, activeRouteIdx, modalityFilter]);
 
   return (
     <>
       {/* Floating Detailed Vehicle Cargo Inspection Card */}
       {selectedVehicle && (
-        <div className="absolute top-20 left-4 z-40 w-80 bg-[#0c0e12]/95 border border-cyan-500/40 backdrop-blur-2xl p-4 rounded-2xl shadow-2xl animate-in fade-in slide-in-from-left-2 duration-200 pointer-events-auto text-slate-100">
+        <div className="absolute top-20 left-4 z-40 w-84 bg-[#0c0e12]/95 border border-cyan-500/40 backdrop-blur-2xl p-4 rounded-2xl shadow-2xl animate-in fade-in slide-in-from-left-2 duration-200 pointer-events-auto text-slate-100">
           <div className="flex items-start justify-between border-b border-white/10 pb-2.5 mb-3">
             <div className="flex items-center gap-2">
               <div className={`p-2 rounded-xl border ${
@@ -199,11 +229,11 @@ export function FleetVehicleLayer({ map, vehicles, activeRoutes, activeRouteIdx 
             <div className="grid grid-cols-2 gap-2">
               <div className="p-2 rounded-lg bg-slate-950/60 border border-slate-800/80">
                 <span className="text-[8px] text-slate-400 uppercase block">Asal (Origin)</span>
-                <span className="text-[10px] text-slate-200 font-bold truncate block">{selectedVehicle.vehicle.origin || 'Pelabuhan Belawan'}</span>
+                <span className="text-[10px] text-slate-200 font-bold truncate block">{selectedVehicle.vehicle.origin || 'Asal'}</span>
               </div>
               <div className="p-2 rounded-lg bg-slate-950/60 border border-slate-800/80">
                 <span className="text-[8px] text-slate-400 uppercase block">Tujuan (Dest)</span>
-                <span className="text-[10px] text-cyan-300 font-bold truncate block">{selectedVehicle.vehicle.destination || 'Interchange Tebing Tinggi'}</span>
+                <span className="text-[10px] text-cyan-300 font-bold truncate block">{selectedVehicle.vehicle.destination || 'Tujuan'}</span>
               </div>
             </div>
 
@@ -211,7 +241,7 @@ export function FleetVehicleLayer({ map, vehicles, activeRoutes, activeRouteIdx 
             <div className="flex items-center justify-between p-2 rounded-lg bg-cyan-950/30 border border-cyan-500/20 text-[10px]">
               <span className="flex items-center gap-1 text-slate-300">
                 <Navigation className="w-3 h-3 text-cyan-400" />
-                <span>Kecepatan:</span>
+                <span>Kecepatan Telemetri:</span>
               </span>
               <span className="font-bold text-emerald-400 font-mono">{selectedVehicle.vehicle.speed_kmh} km/j</span>
             </div>
