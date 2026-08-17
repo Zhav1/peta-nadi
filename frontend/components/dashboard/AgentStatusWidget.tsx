@@ -71,7 +71,7 @@ const DEFAULT_AGENTS: AgentInfo[] = [
   }
 ];
 
-export const AgentStatusWidget: React.FC<{ isCompact?: boolean }> = ({ isCompact = false }) => {
+export const AgentStatusWidget: React.FC<{ isCompact?: boolean }> = () => {
   const [agents, setAgents] = useState<AgentInfo[]>(DEFAULT_AGENTS);
   const [avgConfidence, setAvgConfidence] = useState<number>(0.87);
   const [isOpen, setIsOpen] = useState<boolean>(false);
