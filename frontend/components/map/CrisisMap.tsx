@@ -6,7 +6,8 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import MapboxDraw from '@mapbox/mapbox-gl-draw';
 import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css';
 import { densifyPath, type LonLat } from '@/lib/pathDensifier';
-import { HUB_NODES, type HubNode } from '@/lib/mapboxRoutingService';
+import { HUB_NODES, STRATEGIC_BASELINE_CORRIDORS, type HubNode } from '@/lib/mapboxRoutingService';
+import { Layers, Check } from 'lucide-react';
 
 import type {
   IncidentSummary,
@@ -16,7 +17,6 @@ import type {
   DisasterZone,
 } from '@/lib/types';
 import { FleetVehicleLayer } from './FleetVehicleLayer';
-
 
 export interface CrisisMapProps {
   incidents: IncidentSummary[];
@@ -48,14 +48,10 @@ export interface CrisisMapProps {
   fleetModalityFilter?: 'all' | 'truck' | 'maritime' | 'air';
 }
 
-
-
-// Strategic Sumatra Regional Scale Viewport
 const INITIAL_CENTER: [number, number] = [100.5, 0.5];
 const INITIAL_ZOOM = 6.0;
 const DRAG_THRESHOLD_PX = 5;
 
-/** Generates a GeoJSON polygon ring forming a circle around [lon, lat] */
 function createGeoJsonCircleRing(center: [number, number], radiusKm: number, points = 64): [number, number][] {
   const [lon, lat] = center;
   const ring: [number, number][] = [];
@@ -84,7 +80,6 @@ function createGeoJsonCircleRing(center: [number, number], radiusKm: number, poi
 }
 
 export default function CrisisMap({
-
   incidents,
   selectedCrisisId,
   onCrisisClick,
@@ -108,19 +103,17 @@ export default function CrisisMap({
   spatialWeatherPolygons,
   cuOptOptimizationInfo,
   isLeftSidebarCollapsed = false,
-
   activeTimeFilter = 'present',
   historicalEpisodes = [],
   predictiveRisks = [],
   fleetModalityFilter = 'all',
 }: CrisisMapProps) {
-
   const containerRef = useRef<HTMLDivElement>(null);
   void isLeftSidebarCollapsed;
   void corridorContext;
   void cuOptOptimizationInfo;
   void demoStage;
-
+  void fireHotspots;
 
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const drawRef = useRef<InstanceType<typeof MapboxDraw> | null>(null);
@@ -130,8 +123,17 @@ export default function CrisisMap({
   const timeHorizonMarkersRef = useRef<mapboxgl.Marker[]>([]);
 
   const [mapInstance, setMapInstance] = useState<mapboxgl.Map | null>(null);
-
   const isMapLoadedRef = useRef(false);
+
+  // Interactive Map Layer Filters State
+  const [showLayerFilterMenu, setShowLayerFilterMenu] = useState(false);
+  const [layerFilters, setLayerFilters] = useState({
+    baselineCorridors: true,
+    bottlenecks: true,
+    weatherRadar: true,
+    fleetVehicles: true,
+  });
+
   const onCrisisClickRef = useRef(onCrisisClick);
   onCrisisClickRef.current = onCrisisClick;
   const onPolygonDrawnRef = useRef(onPolygonDrawn);
@@ -149,6 +151,30 @@ export default function CrisisMap({
   onSelectRouteRef.current = onSelectRoute;
 
   const mouseDownPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // Toggle map layer visibility
+  const toggleLayerFilter = (key: keyof typeof layerFilters) => {
+    setLayerFilters((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      const map = mapRef.current;
+      if (map && isMapLoadedRef.current) {
+        if (key === 'baselineCorridors') {
+          const vis = next.baselineCorridors ? 'visible' : 'none';
+          if (map.getLayer('baseline-corridors-line')) map.setLayoutProperty('baseline-corridors-line', 'visibility', vis);
+        }
+        if (key === 'bottlenecks') {
+          const vis = next.bottlenecks ? 'visible' : 'none';
+          if (map.getLayer('congestion-segments-line')) map.setLayoutProperty('congestion-segments-line', 'visibility', vis);
+        }
+        if (key === 'weatherRadar') {
+          const vis = next.weatherRadar ? 'visible' : 'none';
+          if (map.getLayer('weather-polygons-fill')) map.setLayoutProperty('weather-polygons-fill', 'visibility', vis);
+          if (map.getLayer('weather-polygons-outline')) map.setLayoutProperty('weather-polygons-outline', 'visibility', vis);
+        }
+      }
+      return next;
+    });
+  };
 
   // Mount map once
   useEffect(() => {
@@ -168,16 +194,13 @@ export default function CrisisMap({
     });
     mapRef.current = map;
 
-    // Track mouse down position to separate intentional clicks from map drag
     map.on('mousedown', (e) => {
       mouseDownPosRef.current = { x: e.point.x, y: e.point.y };
     });
 
-    // Map controls
     map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), 'top-right');
     map.addControl(new mapboxgl.ScaleControl(), 'bottom-right');
 
-    // Polygon drawing tool
     const draw = new MapboxDraw({
       displayControlsDefault: false,
       controls: {},
@@ -216,10 +239,30 @@ export default function CrisisMap({
       setMapInstance(map);
       map.addControl(draw, 'top-left');
 
-      // Immediately render interactive Hub Node Markers on map load
       renderHtmlHubMarkers();
 
-      // 0. Regional Administrative Spatial Coverage Layer (Google Maps ADM Style Dashed Borders)
+      // 0a. Strategic Trans-Sumatra Baseline Corridors Layer (Backbone Transit Network)
+      map.addSource('baseline-corridors-source', {
+        type: 'geojson',
+        data: STRATEGIC_BASELINE_CORRIDORS,
+      });
+      map.addLayer({
+        id: 'baseline-corridors-line',
+        type: 'line',
+        source: 'baseline-corridors-source',
+        paint: {
+          'line-color': [
+            'match', ['get', 'type'],
+            'maritime', '#1e40af',
+            '#334155'
+          ],
+          'line-width': 2.0,
+          'line-dasharray': [3, 2],
+          'line-opacity': 0.6,
+        },
+      });
+
+      // 0b. Regional Weather & Radar Polygons Layer
       map.addSource('weather-polygons-source', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
@@ -239,49 +282,12 @@ export default function CrisisMap({
         source: 'weather-polygons-source',
         paint: {
           'line-color': ['coalesce', ['get', 'stroke_color'], '#ef4444'],
-          'line-width': 2.5,
+          'line-width': 2.0,
           'line-dasharray': [4, 3],
         },
       });
 
-      // Interactive Hover Popup for District Logistics Boundaries
-      const districtPopup = new mapboxgl.Popup({
-        closeButton: false,
-        closeOnClick: false,
-        className: 'district-hover-popup',
-      });
-
-      map.on('mouseenter', 'weather-polygons-fill', (e) => {
-        if (mapRef.current) mapRef.current.getCanvas().style.cursor = 'pointer';
-        if (e.features && e.features[0]) {
-          const props = e.features[0].properties;
-          if (props) {
-            districtPopup.setLngLat(e.lngLat).setHTML(`
-              <div style="background: rgba(12, 14, 18, 0.95); border: 1px solid rgba(0, 240, 255, 0.4); border-radius: 12px; padding: 10px 12px; color: #f8fafc; font-family: monospace; font-size: 11px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
-                <div style="font-weight: 900; color: #00f0ff; margin-bottom: 6px; display: flex; items-center; gap: 6px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 4px;">
-                  <span>📍</span> <span>${props.name}</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; gap: 12px; margin-bottom: 2px;">
-                  <span style="color: #94a3b8;">Curah Hujan:</span>
-                  <span style="font-weight: bold; color: #ffffff;">${props.rainfall_mm} mm/j</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; gap: 12px; margin-bottom: 4px;">
-                  <span style="color: #94a3b8;">Risiko Genangan:</span>
-                  <span style="font-weight: bold; color: #f59e0b;">${props.flood_risk_pct}%</span>
-                </div>
-                <div style="font-size: 9px; color: #06b6d4; font-style: italic;">${props.status_label}</div>
-              </div>
-            `).addTo(map);
-          }
-        }
-      });
-
-      map.on('mouseleave', 'weather-polygons-fill', () => {
-        if (mapRef.current) mapRef.current.getCanvas().style.cursor = '';
-        districtPopup.remove();
-      });
-
-      // 1. Disaster Zones GeoJSON Layer (Multi-Hazard Dynamic Styling)
+      // 1. Disaster Zones GeoJSON Layer
       map.addSource('disaster-zones-source', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
@@ -318,11 +324,10 @@ export default function CrisisMap({
             '#f97316'
           ],
           'line-width': 2.5,
-          'line-dasharray': ['case', ['==', ['get', 'type'], 'earthquake'], ['literal', [2, 2]], ['literal', [1, 0]]],
         },
       });
 
-      // 1b. Historical Episodes Layer (PAST Mode - Hazard Differentiated Colors)
+      // 1b. Historical Episodes Layer (PAST Mode)
       map.addSource('historical-episodes-source', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
@@ -332,16 +337,8 @@ export default function CrisisMap({
         type: 'fill',
         source: 'historical-episodes-source',
         paint: {
-          'fill-color': [
-            'match', ['get', 'type'],
-            'flood', 'rgba(6, 182, 212, 0.32)',
-            'earthquake', 'rgba(244, 63, 94, 0.32)',
-            'landslide', 'rgba(217, 119, 6, 0.35)',
-            'wildfire', 'rgba(249, 115, 22, 0.35)',
-            'congestion', 'rgba(234, 179, 8, 0.30)',
-            'rgba(168, 85, 247, 0.30)'
-          ],
-          'fill-opacity': ['coalesce', ['get', 'opacity'], 0.80],
+          'fill-color': 'rgba(168, 85, 247, 0.25)',
+          'fill-opacity': 0.75,
         },
       });
       map.addLayer({
@@ -349,21 +346,13 @@ export default function CrisisMap({
         type: 'line',
         source: 'historical-episodes-source',
         paint: {
-          'line-color': [
-            'match', ['get', 'type'],
-            'flood', '#06b6d4',
-            'earthquake', '#f43f5e',
-            'landslide', '#d97706',
-            'wildfire', '#f97316',
-            'congestion', '#eab308',
-            '#a855f7'
-          ],
-          'line-width': 2.5,
+          'line-color': '#a855f7',
+          'line-width': 2.0,
           'line-dasharray': [4, 2],
         },
       });
 
-      // 1c. 24-48h TFT Predictive Risks Layer (FUTURE Mode)
+      // 1c. Predictive Risks Layer (FUTURE Mode with opacity proportional to risk score)
       map.addSource('predictive-risks-source', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
@@ -373,7 +362,7 @@ export default function CrisisMap({
         type: 'fill',
         source: 'predictive-risks-source',
         paint: {
-          'fill-color': 'rgba(234, 179, 8, 0.28)',
+          'fill-color': 'rgba(234, 179, 8, 0.30)',
           'fill-opacity': 0.80,
         },
       });
@@ -383,13 +372,12 @@ export default function CrisisMap({
         source: 'predictive-risks-source',
         paint: {
           'line-color': '#eab308',
-          'line-width': 2.5,
+          'line-width': 2.0,
           'line-dasharray': [2, 2],
         },
       });
 
-
-      // 2. Route Paths GeoJSON Layer (Real Mapbox Directions Driving Polyline with Alternatives & Congestion Colors)
+      // 2. Active Route Paths Layer
       map.addSource('route-paths-source', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
@@ -404,12 +392,12 @@ export default function CrisisMap({
         },
         paint: {
           'line-color': ['coalesce', ['get', 'color'], '#00f0ff'],
-          'line-width': ['case', ['get', 'isActive'], 7, 4],
-          'line-opacity': ['case', ['get', 'isActive'], 0.95, 0.5],
+          'line-width': ['case', ['get', 'isActive'], 6, 3.5],
+          'line-opacity': ['case', ['get', 'isActive'], 0.95, 0.45],
         },
       });
 
-      // 2b. Segment-Level Traffic Congestion GeoJSON Layer (Google Maps Traffic Style)
+      // 2b. Traffic Congestion Segments Layer (Google Maps Traffic Style)
       map.addSource('congestion-segments-source', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
@@ -435,7 +423,7 @@ export default function CrisisMap({
         },
       });
 
-      // 3. Simulated Shockwave Pulse GeoJSON Layer
+      // 3. Simulated Shockwave Pulse Layer
       map.addSource('simulated-shockwave-source', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
@@ -445,14 +433,8 @@ export default function CrisisMap({
         type: 'fill',
         source: 'simulated-shockwave-source',
         paint: {
-          'fill-color': [
-            'match', ['get', 'type'],
-            'earthquake', 'rgba(239, 68, 68, 0.28)',
-            'flood', 'rgba(6, 182, 212, 0.30)',
-            'wildfire', 'rgba(249, 115, 22, 0.28)',
-            'rgba(245, 158, 11, 0.25)'
-          ],
-          'fill-opacity': 0.85,
+          'fill-color': 'rgba(239, 68, 68, 0.25)',
+          'fill-opacity': 0.80,
         },
       });
       map.addLayer({
@@ -460,86 +442,20 @@ export default function CrisisMap({
         type: 'line',
         source: 'simulated-shockwave-source',
         paint: {
-          'line-color': [
-            'match', ['get', 'type'],
-            'earthquake', '#ef4444',
-            'flood', '#06b6d4',
-            'wildfire', '#f97316',
-            '#f59e0b'
-          ],
-          'line-width': 3.0,
+          'line-color': '#ef4444',
+          'line-width': 2.5,
           'line-dasharray': [2, 1],
         },
       });
 
-      // 3b. Dynamic Seismic Fault Line Crack Vectors GeoJSON Layer (Earthquake Hazards)
-      map.addSource('seismic-fault-lines-source', {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] },
-      });
-      map.addLayer({
-        id: 'seismic-fault-lines-layer',
-        type: 'line',
-        source: 'seismic-fault-lines-source',
-        paint: {
-          'line-color': '#f43f5e',
-          'line-width': 4.5,
-          'line-dasharray': [1, 1],
-        },
-      });
-
-      // 4. Crisis Pins GeoJSON Layer (Clean Canvas - Hidden Redundant Dots)
-      map.addSource('crisis-pins-source', {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] },
-      });
-
-      map.addLayer({
-        id: 'crisis-pins-glow',
-        type: 'circle',
-        source: 'crisis-pins-source',
-        paint: {
-          'circle-radius': 0,
-          'circle-opacity': 0.0,
-        },
-      });
-
-      map.addLayer({
-        id: 'crisis-pins-core',
-        type: 'circle',
-        source: 'crisis-pins-source',
-        paint: {
-          'circle-radius': 0,
-          'circle-opacity': 0.0,
-        },
-      });
-
-      // General map click handler for Game-Like Location Targeting
+      // Map click handler for point targeting
       map.on('click', (e) => {
         if (isClickTargetingRef.current && onMapPointTargetedRef.current) {
           onMapPointTargetedRef.current(e.lngLat.lat, e.lngLat.lng);
         }
       });
 
-      // Pin click events
-      map.on('click', 'crisis-pins-core', (e) => {
-        if (isClickTargetingRef.current) return;
-
-        if (e.point) {
-          const dx = Math.abs(e.point.x - mouseDownPosRef.current.x);
-          const dy = Math.abs(e.point.y - mouseDownPosRef.current.y);
-          if (dx > DRAG_THRESHOLD_PX || dy > DRAG_THRESHOLD_PX) return;
-        }
-
-        if (e.features && e.features[0]) {
-          const id = e.features[0].properties?.id;
-          if (id && onCrisisClickRef.current) {
-            onCrisisClickRef.current(id);
-          }
-        }
-      });
-
-      // Route line click handler (Click route on map to select)
+      // Route line click handler
       map.on('click', 'route-paths-line', (e) => {
         if (isClickTargetingRef.current) return;
         if (e.features && e.features[0]) {
@@ -573,7 +489,6 @@ export default function CrisisMap({
         }
       });
 
-      // Populate initial layer data & HTML markers
       updateMapSources();
       renderHtmlHubMarkers();
     });
@@ -587,12 +502,11 @@ export default function CrisisMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Render Interactive Custom HTML Element Markers for Hub Nodes
+  // Render HTML Markers for Hub Nodes (Ports, Cities, Airports)
   const renderHtmlHubMarkers = () => {
     const map = mapRef.current;
     if (!map || !isMapLoadedRef.current) return;
 
-    // Clear previous markers
     htmlMarkersRef.current.forEach((m) => m.remove());
     htmlMarkersRef.current = [];
 
@@ -602,14 +516,14 @@ export default function CrisisMap({
       const isOrigin = node.id === selectedOriginNode;
       const isDest = node.id === selectedDestNode;
 
-      const isPort = node.type === 'port' || node.id.includes('port') || node.id.includes('belawan') || node.id.includes('dumai') || node.id.includes('bakauheni') || node.id.includes('bayur');
-      const isAir = node.type === 'airport' || node.id.includes('air') || node.id.includes('kno') || node.id.includes('pku') || node.id.includes('bim') || node.id.includes('plm') || node.id.includes('tkg');
+      const isPort = node.type === 'port';
+      const isAir = node.type === 'airport';
 
       const iconSvg = isPort
-        ? `<svg class="w-3 h-3 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="3"/><line x1="12" y1="22" x2="12" y2="8"/><path d="M5 12H2a10 10 0 0 0 20 0h-3"/></svg>`
+        ? `<svg class="w-3.5 h-3.5 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="3"/><line x1="12" y1="22" x2="12" y2="8"/><path d="M5 12H2a10 10 0 0 0 20 0h-3"/></svg>`
         : isAir
-          ? `<svg class="w-3 h-3 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5 0 1 .4 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.2c.3.4.8.6 1.3.4l.5-.3c.4-.2.6-.6.5-1.1z"/></svg>`
-          : `<svg class="w-3 h-3 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>`;
+          ? `<svg class="w-3.5 h-3.5 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5 0 1 .4 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.2c.3.4.8.6 1.3.4l.5-.3c.4-.2.6-.6.5-1.1z"/></svg>`
+          : `<svg class="w-3.5 h-3.5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>`;
 
       const rawName = node.name.split('(')[0].trim();
       const shortCityName = rawName
@@ -629,7 +543,7 @@ export default function CrisisMap({
           }">
             <span>${iconSvg}</span>
             <span class="font-bold">${shortCityName}</span>
-            <span class="px-1.5 py-0.5 ${isOrigin ? 'bg-cyan-400 text-slate-950' : 'bg-amber-400 text-slate-950'} rounded text-[9px] font-black">${isOrigin ? 'START' : 'END'}</span>
+            <span class="px-1.5 py-0.5 ${isOrigin ? 'bg-cyan-400 text-slate-950' : 'bg-amber-400 text-slate-950'} rounded text-[9px] font-black">${isOrigin ? 'ASAL' : 'TUJUAN'}</span>
           </div>
         `;
       } else {
@@ -668,7 +582,7 @@ export default function CrisisMap({
     routeEtaMarkersRef.current.forEach((m) => m.remove());
     routeEtaMarkersRef.current = [];
 
-    // Render Floating On-Map Route ETA Badges (Google Maps Style)
+    // Render On-Map Route ETA Badges
     if (activeRoutes && activeRoutes.length > 0) {
       activeRoutes.forEach((r, idx) => {
         if (!r.waypoints || r.waypoints.length === 0) return;
@@ -677,25 +591,22 @@ export default function CrisisMap({
         if (!midPt || midPt.lon == null || midPt.lat == null) return;
 
         const isActive = (activeRouteIdx ?? 0) === idx;
-        const modeSvg = r.modality === 'air'
-          ? `<svg class="w-3.5 h-3.5 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5 0 1 .4 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.2c.3.4.8.6 1.3.4l.5-.3c.4-.2.6-.6.5-1.1z"/></svg>`
-          : r.modality === 'maritime'
-            ? `<svg class="w-3.5 h-3.5 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="3"/><line x1="12" y1="22" x2="12" y2="8"/><path d="M5 12H2a10 10 0 0 0 20 0h-3"/></svg>`
-            : `<svg class="w-3.5 h-3.5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>`;
+        const isHold = r.safety_status === 'HOLD_DELAY';
 
         const el = document.createElement('div');
         el.className = `cursor-pointer z-20 transition-all transform hover:scale-110 flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold shadow-2xl border backdrop-blur-md ${
           r.is_compromised
             ? 'bg-red-950/90 text-red-300 border-red-500 shadow-red-500/30'
-            : isActive
-              ? 'bg-cyan-500 text-slate-950 border-cyan-200 ring-4 ring-cyan-400/40 shadow-cyan-500/40'
-              : 'bg-slate-900/90 text-slate-200 border-slate-700 hover:border-cyan-400'
+            : isHold
+              ? 'bg-amber-950/90 text-amber-300 border-amber-500 shadow-amber-500/30'
+              : isActive
+                ? 'bg-cyan-500 text-slate-950 border-cyan-200 ring-4 ring-cyan-400/40 shadow-cyan-500/40'
+                : 'bg-slate-900/90 text-slate-200 border-slate-700 hover:border-cyan-400'
         }`;
         el.style.zIndex = '20';
 
         el.innerHTML = `
-          <span>${modeSvg}</span>
-          <span>${r.eta_minutes} min</span>
+          <span>${isHold ? 'HOLD' : `${r.eta_minutes} min`}</span>
           <span class="opacity-80 text-[10px]">(${r.distance_km.toFixed(0)} km)</span>
         `;
 
@@ -715,7 +626,7 @@ export default function CrisisMap({
     }
   };
 
-  // Render Compact Lucide SVG Badges for Time Horizon Modes (Zero Canvas Clutter!)
+  // Render Time Horizon Badges
   const renderTimeHorizonMarkers = () => {
     const map = mapRef.current;
     if (!map || !isMapLoadedRef.current) return;
@@ -763,7 +674,7 @@ export default function CrisisMap({
         el.style.zIndex = '30';
         el.innerHTML = `
           <svg class="w-3.5 h-3.5 text-amber-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-          <span class="text-[11px] font-bold text-amber-300">${String(pr.risk_score || 85)}% RISK</span>
+          <span class="text-[11px] font-bold text-amber-300">${String(pr.risk_score || 85)}% RISIKO</span>
         `;
         el.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -780,55 +691,22 @@ export default function CrisisMap({
     }
   };
 
-
   // Update native GeoJSON map sources
   const updateMapSources = () => {
     const map = mapRef.current;
     if (!map || !isMapLoadedRef.current) return;
 
-    // 1. Update Crisis Pins Source
-    const pinsSource = map.getSource('crisis-pins-source') as mapboxgl.GeoJSONSource;
-    if (pinsSource) {
-      const validIncidents = incidents.filter((i) => i.lat != null && i.lon != null);
-      pinsSource.setData({
-        type: 'FeatureCollection',
-        features: validIncidents.map((i) => ({
-          type: 'Feature',
-          geometry: { type: 'Point', coordinates: [i.lon!, i.lat!] },
-          properties: {
-            id: i.id,
-            severity: i.severity,
-            title: i.title,
-            selected: i.id === selectedCrisisId,
-          },
-        })),
-      });
-    }
-
-    // 0. Update Spatial Weather Polygons Source (Only populates if organic radar data exists; 0 artificial boxes!)
+    // 1. Update Weather Polygons
     const weatherSource = map.getSource('weather-polygons-source') as mapboxgl.GeoJSONSource;
     if (weatherSource) {
-      if (activeTimeFilter === 'past' || activeTimeFilter === 'future') {
-        if (map.getLayer('weather-polygons-fill')) {
-          map.setLayoutProperty('weather-polygons-fill', 'visibility', 'none');
-          map.setLayoutProperty('weather-polygons-outline', 'visibility', 'none');
-        }
+      if (spatialWeatherPolygons && spatialWeatherPolygons.features && spatialWeatherPolygons.features.length > 0) {
+        weatherSource.setData(spatialWeatherPolygons);
       } else {
-        if (map.getLayer('weather-polygons-fill')) {
-          map.setLayoutProperty('weather-polygons-fill', 'visibility', 'visible');
-          map.setLayoutProperty('weather-polygons-outline', 'visibility', 'visible');
-        }
-        if (spatialWeatherPolygons && spatialWeatherPolygons.features && spatialWeatherPolygons.features.length > 0) {
-          weatherSource.setData(spatialWeatherPolygons);
-        } else {
-          // Zero artificial boxes! Clean dark Mapbox canvas
-          weatherSource.setData({ type: 'FeatureCollection', features: [] });
-        }
+        weatherSource.setData({ type: 'FeatureCollection', features: [] });
       }
     }
 
-
-    // 2. Update Route Paths Source (Using Exact Mapbox Directions Road Network Coordinates & Alternatives)
+    // 2. Update Active Route Paths
     const routesSource = map.getSource('route-paths-source') as mapboxgl.GeoJSONSource;
     if (routesSource) {
       const targetIdx = activeRouteIdx ?? 0;
@@ -854,7 +732,7 @@ export default function CrisisMap({
       });
     }
 
-    // 2b. Update Congestion Segments Source (Google Maps Traffic Style - Only for Road Routes)
+    // 2b. Update Congestion Segments
     const congestionSource = map.getSource('congestion-segments-source') as mapboxgl.GeoJSONSource;
     if (congestionSource) {
       const targetIdx = activeRouteIdx ?? 0;
@@ -876,7 +754,7 @@ export default function CrisisMap({
       });
     }
 
-    // 3. Update Disaster Zones Source
+    // 3. Update Disaster Zones
     const zonesSource = map.getSource('disaster-zones-source') as mapboxgl.GeoJSONSource;
     if (zonesSource) {
       zonesSource.setData({
@@ -895,7 +773,7 @@ export default function CrisisMap({
       });
     }
 
-    // 3b. Update Historical Episodes Source (PAST Mode)
+    // 3b. Update Historical Episodes (PAST Mode)
     const historicalSource = map.getSource('historical-episodes-source') as mapboxgl.GeoJSONSource;
     if (historicalSource) {
       if (activeTimeFilter === 'past' && historicalEpisodes.length > 0) {
@@ -903,24 +781,19 @@ export default function CrisisMap({
         historicalEpisodes.forEach((ep) => {
           const geom = ep.geojson_geometry as unknown as GeoJSON.FeatureCollection | GeoJSON.Feature;
           if (!geom) return;
-          if (geom.type === 'FeatureCollection') {
-            if (Array.isArray(geom.features)) {
-              histFeatures.push(...geom.features);
-            }
+          if (geom.type === 'FeatureCollection' && Array.isArray(geom.features)) {
+            histFeatures.push(...geom.features);
           } else if (geom.type === 'Feature') {
             histFeatures.push(geom);
           }
         });
-        historicalSource.setData({
-          type: 'FeatureCollection',
-          features: histFeatures,
-        });
+        historicalSource.setData({ type: 'FeatureCollection', features: histFeatures });
       } else {
         historicalSource.setData({ type: 'FeatureCollection', features: [] });
       }
     }
 
-    // 3c. Update 24-48h TFT Predictive Risks Source (FUTURE Mode)
+    // 3c. Update Predictive Risks (FUTURE Mode)
     const predictiveSource = map.getSource('predictive-risks-source') as mapboxgl.GeoJSONSource;
     if (predictiveSource) {
       if (activeTimeFilter === 'future' && predictiveRisks.length > 0) {
@@ -928,29 +801,20 @@ export default function CrisisMap({
         predictiveRisks.forEach((pr) => {
           const geom = pr.geojson_geometry as unknown as GeoJSON.FeatureCollection | GeoJSON.Feature;
           if (!geom) return;
-          if (geom.type === 'FeatureCollection') {
-            if (Array.isArray(geom.features)) {
-              predFeatures.push(...geom.features);
-            }
+          if (geom.type === 'FeatureCollection' && Array.isArray(geom.features)) {
+            predFeatures.push(...geom.features);
           } else if (geom.type === 'Feature') {
             predFeatures.push(geom);
           }
         });
-        predictiveSource.setData({
-          type: 'FeatureCollection',
-          features: predFeatures,
-        });
+        predictiveSource.setData({ type: 'FeatureCollection', features: predFeatures });
       } else {
         predictiveSource.setData({ type: 'FeatureCollection', features: [] });
       }
     }
 
-
-
-    // 4. Update Simulated Shockwave Pulse Source & Seismic Fault Line Cracks
+    // 4. Update Simulated Shockwave Pulse
     const shockwaveSource = map.getSource('simulated-shockwave-source') as mapboxgl.GeoJSONSource;
-    const faultSource = map.getSource('seismic-fault-lines-source') as mapboxgl.GeoJSONSource;
-
     if (shockwaveSource) {
       if (simulatedShockwave && simulatedShockwave.center) {
         const ring = createGeoJsonCircleRing(simulatedShockwave.center, simulatedShockwave.radiusKm);
@@ -964,38 +828,12 @@ export default function CrisisMap({
             },
           ],
         });
-
-        // Generate dynamic seismic fault crack lines if hazard is earthquake
-        if (faultSource && simulatedShockwave.hazardType === 'earthquake') {
-          const [cx, cy] = simulatedShockwave.center;
-          const faultCrackCoords: [number, number][] = [
-            [cx - 0.12, cy - 0.08],
-            [cx - 0.05, cy - 0.02],
-            [cx, cy],
-            [cx + 0.04, cy + 0.03],
-            [cx + 0.11, cy + 0.09],
-          ];
-          faultSource.setData({
-            type: 'FeatureCollection',
-            features: [
-              {
-                type: 'Feature',
-                geometry: { type: 'LineString', coordinates: faultCrackCoords },
-                properties: { severity: 'critical' },
-              },
-            ],
-          });
-        } else if (faultSource) {
-          faultSource.setData({ type: 'FeatureCollection', features: [] });
-        }
       } else {
         shockwaveSource.setData({ type: 'FeatureCollection', features: [] });
-        if (faultSource) faultSource.setData({ type: 'FeatureCollection', features: [] });
       }
     }
   };
 
-  // Automatic Map Canvas Resizing (Fixes Black Empty Void on Sidebar Collapse/Expand)
   useEffect(() => {
     if (!containerRef.current) return;
     const resizeObserver = new ResizeObserver(() => {
@@ -1009,7 +847,6 @@ export default function CrisisMap({
     };
   }, []);
 
-  // Update sources & HTML markers on prop changes
   useEffect(() => {
     updateMapSources();
     renderHtmlHubMarkers();
@@ -1019,7 +856,6 @@ export default function CrisisMap({
     selectedCrisisId,
     activeRoutes,
     activeRouteIdx,
-    fireHotspots,
     activeFleet,
     disasterZones,
     simulatedShockwave,
@@ -1031,12 +867,6 @@ export default function CrisisMap({
     predictiveRisks,
   ]);
 
-
-  // WebGL Native Fleet Vehicle Layer is now handled by <FleetVehicleLayer /> component (Phase 28)
-
-
-
-  // Toggle MapboxDraw mode, dragPan, & canvas cursor
   useEffect(() => {
     const draw = drawRef.current;
     const map = mapRef.current;
@@ -1063,7 +893,6 @@ export default function CrisisMap({
     }
   }, [drawModeActive, isClickTargeting]);
 
-  // Fly to selected crisis pin or shockwave
   useEffect(() => {
     if (!mapRef.current) return;
 
@@ -1087,152 +916,8 @@ export default function CrisisMap({
     }
   }, [selectedCrisisId, incidents, simulatedShockwave]);
 
-  // Update Map Sources & Render High-Aesthetic Non-Colliding Weather HTML Overlay Badges
-  useEffect(() => {
-    updateMapSources();
-
-    const map = mapRef.current;
-    if (!map || !isMapLoadedRef.current) return;
-
-    // Clear previous weather markers
-    corridorMarkersRef.current.forEach((m) => m.remove());
-    corridorMarkersRef.current = [];
-
-    // Parse features from spatialWeatherPolygons dynamically
-    const regions = (spatialWeatherPolygons?.features && spatialWeatherPolygons.features.length > 0)
-      ? spatialWeatherPolygons.features.map((f) => {
-          const props = (f.properties as {
-            region_id?: string;
-            name?: string;
-            regency?: string;
-            center?: [number, number];
-            rainfall_mm?: number;
-            flood_risk_pct?: number;
-            severity?: string;
-            status_label?: string;
-          }) || {};
-          return {
-            region_id: props.region_id,
-            name: props.name || props.regency || 'Regional',
-            center: props.center || [98.68, 3.75],
-            rainfall_mm: props.rainfall_mm ?? 45,
-            flood_risk_pct: props.flood_risk_pct ?? 50,
-            severity: props.severity || 'low',
-            status_label: props.status_label || 'Hujan Ringan'
-          };
-        })
-      : [];
-
-    regions.forEach((region) => {
-      const severity = region.severity;
-      let svgIconHtml = '';
-
-      if (severity === 'critical') {
-        svgIconHtml = `
-          <div class="relative w-7 h-7 flex items-center justify-center shrink-0">
-            <svg class="w-7 h-7 text-amber-500 lightning-flash-anim filter drop-shadow-[0_0_4px_rgba(245,158,11,0.5)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M19 16.9A5 5 0 0 0 18 7h-1.26a8 8 0 1 0-11.62 8.58" class="cloud-drift-anim" fill="rgba(15, 23, 42, 0.6)" />
-              <polyline points="13 11 9 17 12 17 10 23" />
-            </svg>
-            <div class="absolute bottom-1 flex gap-0.5 text-cyan-400">
-              <span class="rain-drip-anim inline-block w-[1.5px] h-2 bg-current rounded-full" style="animation-delay: 0s"></span>
-              <span class="rain-drip-anim inline-block w-[1.5px] h-2 bg-current rounded-full" style="animation-delay: 0.3s"></span>
-              <span class="rain-drip-anim inline-block w-[1.5px] h-2 bg-current rounded-full" style="animation-delay: 0.6s"></span>
-            </div>
-          </div>
-        `;
-      } else if (severity === 'high') {
-        svgIconHtml = `
-          <div class="relative w-7 h-7 flex items-center justify-center shrink-0">
-            <svg class="w-7 h-7 text-cyan-400 filter drop-shadow-[0_0_3px_rgba(6,182,212,0.4)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M20 17.58A5 5 0 0 0 18 8h-1.26A8 8 0 1 0 4 16.25" class="cloud-drift-anim" fill="rgba(15, 23, 42, 0.6)" />
-            </svg>
-            <div class="absolute bottom-0.5 flex gap-1 text-cyan-400">
-              <span class="rain-drip-anim inline-block w-[1.5px] h-2 bg-current rounded-full" style="animation-delay: 0.1s"></span>
-              <span class="rain-drip-anim inline-block w-[1.5px] h-2 bg-current rounded-full" style="animation-delay: 0.4s"></span>
-              <span class="rain-drip-anim inline-block w-[1.5px] h-2 bg-current rounded-full" style="animation-delay: 0.7s"></span>
-            </div>
-          </div>
-        `;
-      } else {
-        svgIconHtml = `
-          <div class="relative w-7 h-7 flex items-center justify-center shrink-0">
-            <svg class="w-7 h-7 text-slate-300 filter drop-shadow-[0_0_2px_rgba(255,255,255,0.2)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M17.5 19A3.5 3.5 0 0 0 21 15.5c0-2.79-2.54-4.5-5-4.5h-1a7 7 0 1 0-11.91 5.91" class="cloud-drift-anim" fill="rgba(15, 23, 42, 0.6)" />
-            </svg>
-          </div>
-        `;
-      }
-
-      // Contextual non-colliding offsets relative to region centers
-      let offsetCenter: [number, number] = [region.center[0], region.center[1]];
-      if (region.region_id?.includes('belawan')) {
-        offsetCenter = [region.center[0] - 0.04, region.center[1] + 0.08]; // Over the sea, clear of Pelabuhan Belawan
-      } else if (region.region_id?.includes('deli_serdang')) {
-        offsetCenter = [region.center[0] + 0.09, region.center[1] - 0.02]; // Clear of KNO & Medan
-      } else if (region.region_id?.includes('binjai')) {
-        offsetCenter = [region.center[0] - 0.08, region.center[1] + 0.03]; // West of Binjai
-      } else if (region.region_id?.includes('tebing_tinggi')) {
-        offsetCenter = [region.center[0] + 0.08, region.center[1] - 0.03]; // East of Tebing Tinggi
-      }
-
-      const weatherEl = document.createElement('div');
-      weatherEl.className = 'group relative flex items-center gap-2.5 px-3 py-1.5 rounded-2xl border text-xs font-mono font-bold shadow-xl backdrop-blur-md transition-all duration-300 pointer-events-none';
-      weatherEl.classList.add(
-        severity === 'critical' ? 'bg-red-950/80' : severity === 'high' ? 'bg-amber-950/80' : 'bg-slate-950/80',
-        severity === 'critical' ? 'border-red-500/40' : severity === 'high' ? 'border-amber-500/40' : 'border-slate-700/40',
-        severity === 'critical' ? 'text-red-300' : severity === 'high' ? 'text-amber-300' : 'text-slate-300'
-      );
-      weatherEl.style.zIndex = '15';
-
-      weatherEl.innerHTML = `
-        ${svgIconHtml}
-        <div class="flex flex-col select-none text-left">
-          <span class="text-[8px] uppercase tracking-wider opacity-65">${region.name}</span>
-          <span class="text-[9px] text-white font-bold">${region.rainfall_mm.toFixed(0)} mm | ${region.flood_risk_pct.toFixed(0)}% Risk</span>
-        </div>
-      `;
-
-      const weatherMarker = new mapboxgl.Marker({ element: weatherEl, anchor: 'center' })
-        .setLngLat(offsetCenter)
-        .addTo(map);
-
-      corridorMarkersRef.current.push(weatherMarker);
-    });
-
-    return () => {
-      corridorMarkersRef.current.forEach((m) => m.remove());
-      corridorMarkersRef.current = [];
-    };
-  }, [spatialWeatherPolygons]);
-
   return (
     <div className="relative w-full h-full">
-      <style dangerouslySetInnerHTML={{ __html: `
-        @keyframes rain-fall {
-          0% { transform: translateY(-4px); opacity: 0; }
-          50% { opacity: 0.8; }
-          100% { transform: translateY(6px); opacity: 0; }
-        }
-        @keyframes lightning-strike {
-          0%, 90%, 98%, 100% { opacity: 0.2; }
-          92%, 94%, 96% { opacity: 1; }
-        }
-        @keyframes cloud-drift {
-          0%, 100% { transform: translateX(0); }
-          50% { transform: translateX(3px); }
-        }
-        .rain-drip-anim {
-          animation: rain-fall 1.2s infinite linear;
-        }
-        .lightning-flash-anim {
-          animation: lightning-strike 6s infinite ease-in-out;
-        }
-        .cloud-drift-anim {
-          animation: cloud-drift 10s infinite ease-in-out;
-        }
-      `}} />
-
       <div
         ref={containerRef}
         id="crisis-map"
@@ -1240,17 +925,96 @@ export default function CrisisMap({
         aria-label="PreHub crisis intelligence map"
       />
 
-      {/* WebGL Native Fleet Vehicle Layer (Phase 28 & Phase 29) */}
-      <FleetVehicleLayer
-        map={mapInstance || mapRef.current}
-        vehicles={activeFleet || []}
-        activeRoutes={activeRoutes}
-        activeRouteIdx={activeRouteIdx}
-        modalityFilter={fleetModalityFilter}
-      />
+      {/* Dynamic Fleet Vehicle Layer */}
+      {layerFilters.fleetVehicles && (
+        <FleetVehicleLayer
+          map={mapInstance || mapRef.current}
+          vehicles={activeFleet || []}
+          activeRoutes={activeRoutes}
+          activeRouteIdx={activeRouteIdx}
+          modalityFilter={fleetModalityFilter}
+        />
+      )}
 
+      {/* Floating Map Layer Filters Control */}
+      <div className="absolute top-4 right-44 z-30 pointer-events-auto">
+        <button
+          type="button"
+          onClick={() => setShowLayerFilterMenu((v) => !v)}
+          className={`cursor-pointer px-3 py-2 rounded-xl border backdrop-blur-xl text-xs font-mono font-bold shadow-2xl transition-all flex items-center gap-1.5 ${
+            showLayerFilterMenu
+              ? 'bg-cyan-950 text-cyan-300 border-cyan-400 ring-2 ring-cyan-500/30'
+              : 'bg-[#0c0e12]/90 text-slate-300 border-white/10 hover:text-white hover:border-white/20'
+          }`}
+          title="Filter Layer Peta"
+        >
+          <Layers className="w-3.5 h-3.5 text-cyan-400" />
+          <span>LAYER PETA</span>
+        </button>
 
-      {/* Floating active status badge when freehand drawing mode is active */}
+        {showLayerFilterMenu && (
+          <div className="absolute right-0 mt-2 w-64 bg-[#0c0e12]/95 border border-cyan-500/30 backdrop-blur-2xl p-3 rounded-2xl shadow-2xl text-xs space-y-2 animate-in fade-in zoom-in-95 duration-150">
+            <div className="font-mono font-bold text-[10px] text-cyan-300 uppercase tracking-wider border-b border-white/10 pb-1.5">
+              Filter Visualisasi Layer
+            </div>
+
+            <div className="space-y-1 font-mono text-[11px]">
+              <button
+                type="button"
+                onClick={() => toggleLayerFilter('baselineCorridors')}
+                className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded-lg hover:bg-white/5 transition"
+              >
+                <span className="text-slate-200">Koridor Utama</span>
+                <span className={`w-4 h-4 rounded flex items-center justify-center border ${
+                  layerFilters.baselineCorridors ? 'bg-cyan-500 border-cyan-400 text-slate-950' : 'border-slate-700'
+                }`}>
+                  {layerFilters.baselineCorridors && <Check className="w-3 h-3 stroke-[3]" />}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => toggleLayerFilter('bottlenecks')}
+                className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded-lg hover:bg-white/5 transition"
+              >
+                <span className="text-slate-200">Kemacetan / Bottleneck</span>
+                <span className={`w-4 h-4 rounded flex items-center justify-center border ${
+                  layerFilters.bottlenecks ? 'bg-cyan-500 border-cyan-400 text-slate-950' : 'border-slate-700'
+                }`}>
+                  {layerFilters.bottlenecks && <Check className="w-3 h-3 stroke-[3]" />}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => toggleLayerFilter('weatherRadar')}
+                className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded-lg hover:bg-white/5 transition"
+              >
+                <span className="text-slate-200">Radar Cuaca & Bahaya</span>
+                <span className={`w-4 h-4 rounded flex items-center justify-center border ${
+                  layerFilters.weatherRadar ? 'bg-cyan-500 border-cyan-400 text-slate-950' : 'border-slate-700'
+                }`}>
+                  {layerFilters.weatherRadar && <Check className="w-3 h-3 stroke-[3]" />}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => toggleLayerFilter('fleetVehicles')}
+                className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded-lg hover:bg-white/5 transition"
+              >
+                <span className="text-slate-200">Armada Logistik</span>
+                <span className={`w-4 h-4 rounded flex items-center justify-center border ${
+                  layerFilters.fleetVehicles ? 'bg-cyan-500 border-cyan-400 text-slate-950' : 'border-slate-700'
+                }`}>
+                  {layerFilters.fleetVehicles && <Check className="w-3 h-3 stroke-[3]" />}
+                </span>
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
       {drawModeActive && (
         <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[360] px-4 py-2 rounded-full bg-orange-950/90 border border-orange-500/60 backdrop-blur-md shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
           <span className="relative flex h-2.5 w-2.5">
@@ -1258,15 +1022,13 @@ export default function CrisisMap({
             <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-orange-500"></span>
           </span>
           <span className="font-mono text-xs font-bold text-orange-400 tracking-wider">
-            GAMBAR POLIGON AREA CRISIS...
+            GAMBAR POLIGON AREA DISRUPSI...
           </span>
           <span className="text-[10px] font-mono text-orange-300/80 border-l border-orange-500/30 pl-2">
-            Klik poin pada peta untuk menutup bentuk poligon
+            Klik titik pada peta untuk menutup bentuk poligon
           </span>
         </div>
       )}
-
     </div>
   );
 }
-

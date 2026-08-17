@@ -6,10 +6,9 @@ export type TransportModality = 'best' | 'truck' | 'maritime' | 'air' | 'multimo
 /**
  * Verified Real Arterial Road Network Nodes — Medan & North Sumatra Corridor
  * Coordinates validated against OSM/Google Maps road centerlines.
- * These are ACTUAL road intersections, not mathematical offsets.
  */
 export const HIGHWAY_JUNCTION_NODES: Array<{ id: string; name: string; coords: LonLat; region: string }> = [
-  // === BELAWAN - MEDAN CORRIDOR (North) ===
+  // Belawan - Medan Corridor (North)
   { id: 'jl_yos_sudarso_utara', name: 'Jl. Yos Sudarso (Pelabuhan Belawan)', coords: [98.6868, 3.7831], region: 'belawan' },
   { id: 'jl_kl_yos_sudarso_marelan', name: 'Jl. KL. Yos Sudarso - Marelan Junction', coords: [98.6742, 3.7201], region: 'belawan' },
   { id: 'jl_adam_malik_utara', name: 'Jl. Adam Malik (Titik Utara)', coords: [98.6712, 3.6901], region: 'medan_utara' },
@@ -17,15 +16,15 @@ export const HIGHWAY_JUNCTION_NODES: Array<{ id: string; name: string; coords: L
   { id: 'jl_gagak_hitam_helvetia', name: 'Jl. Gagak Hitam / Ring Road Helvetia', coords: [98.6601, 3.6512], region: 'medan_utara' },
   { id: 'jl_tb_simatupang', name: 'Jl. TB Simatupang (Bypass Barat)', coords: [98.6543, 3.6321], region: 'medan_barat' },
   { id: 'jl_gatot_subroto', name: 'Jl. Gatot Subroto (Ring Road Barat)', coords: [98.6599, 3.6155], region: 'medan_barat' },
-  // === MEDAN KOTA (Central) ===
+  // Medan Kota (Central)
   { id: 'simpang_pos_medan', name: 'Simpang Pos / Jl. Listrik', coords: [98.6712, 3.6013], region: 'medan_kota' },
   { id: 'jl_sisingamangaraja_utara', name: 'Jl. Sisingamangaraja (Utara Amplas)', coords: [98.6891, 3.5801], region: 'medan_selatan' },
   { id: 'interchange_amplas', name: 'Gerbang Tol Amplas', coords: [98.7050, 3.5511], region: 'medan_selatan' },
-  // === MEDAN - DELI SERDANG CORRIDOR (East bypass) ===
+  // Medan - Deli Serdang Corridor (East bypass)
   { id: 'jl_ar_hakim', name: 'Jl. AR. Hakim / Jl. Cemara', coords: [98.7101, 3.6312], region: 'medan_timur' },
   { id: 'jl_letda_sujono', name: 'Jl. Letda Sujono (Kecamatan Percut)', coords: [98.7321, 3.6021], region: 'percut' },
   { id: 'jl_williem_iskandar', name: 'Jl. Williem Iskandar / Medan Area', coords: [98.7201, 3.5811], region: 'medan_timur' },
-  // === TRANS-SUMATRA CORRIDOR (South) ===
+  // Trans-Sumatra Corridor (South)
   { id: 'kualanamu_junction', name: 'Interchange Kualanamu (Tol Belmera)', coords: [98.8780, 3.6421], region: 'deli_serdang' },
   { id: 'lubuk_pakam_interchange', name: 'Interchange Lubuk Pakam', coords: [98.8650, 3.5601], region: 'deli_serdang' },
   { id: 'perbaungan_artlrd', name: 'Jalinsum Perbaungan', coords: [98.9501, 3.5701], region: 'serdang_bedagai' },
@@ -71,15 +70,6 @@ export function isPointStrictlyBetween(pt: LonLat, origin: LonLat, dest: LonLat)
 
 /**
  * Selects real arterial road waypoints that bypass a hazard zone.
- * Strategy:
- * 1. Filter HIGHWAY_JUNCTION_NODES to only those outside hazard radius + 1.5km safety buffer
- * 2. Sort by total detour cost = dist(origin→candidate) + dist(candidate→destination)
- * 3. Return top N cheapest-detour candidates for Mapbox to route through
- *
- * This is fundamentally better than perpendicular math offsets because:
- * - Waypoints are REAL road intersections (Mapbox can snap to them)
- * - Detour cost is minimized (no unnecessarily wide arcs)
- * - No phantom routes to fields/water
  */
 export function generateHazardBypassCandidates(
   hazardCenter: LonLat,
@@ -87,16 +77,13 @@ export function generateHazardBypassCandidates(
   origin: LonLat,
   destination: LonLat
 ): Array<{ name: string; coords: LonLat }> {
-  const safetyBuffer = 1.5; // km buffer beyond hazard radius
+  const safetyBuffer = 2.0; // km buffer beyond hazard radius
   const minClearance = radiusKm + safetyBuffer;
 
-  // 1. Filter: only real road nodes clearly outside the hazard circle
   const safeNodes = HIGHWAY_JUNCTION_NODES.filter(
     (node) => getHaversineDistanceKm(node.coords, hazardCenter) >= minClearance
   );
 
-  // 2. Score each node by total detour cost (origin→node + node→dest)
-  //    Lower score = shorter detour = better candidate
   const scored = safeNodes.map((node) => ({
     name: node.name,
     coords: node.coords,
@@ -105,22 +92,12 @@ export function generateHazardBypassCandidates(
       getHaversineDistanceKm(node.coords, destination),
   }));
 
-  // 3. Sort cheapest detour first, return top 5
   scored.sort((a, b) => a.score - b.score);
   return scored.slice(0, 5).map(({ name, coords }) => ({ name, coords }));
 }
 
 /**
  * Checks if a polyline intersects (or passes dangerously close to) a hazard circle.
- *
- * Uses TWO detection methods:
- * 1. Point-in-circle: any vertex within (radiusKm + dangerBuffer) — catches dense polylines
- * 2. Segment-closest-point: for each segment, find the closest point to hazardCenter on the
- *    segment. If that closest point is within radius + buffer, the route is compromised.
- *    This handles sparse Mapbox polylines that "skip over" the hazard between vertices.
- *
- * dangerBuffer adds a margin so routes grazing the edge of the visual zone are also
- * flagged — matching the user's visual expectation.
  */
 export function isPolylineIntersectingHazardCircle(
   polyline: LonLat[],
@@ -133,16 +110,13 @@ export function isPolylineIntersectingHazardCircle(
   const effectiveRadius = radiusKm + dangerBufferKm;
 
   for (let i = 0; i < polyline.length; i++) {
-    // Method 1: vertex check
     if (getHaversineDistanceKm(polyline[i], hazardCenter) <= effectiveRadius) return true;
 
-    // Method 2: segment closest-point check (between consecutive vertices)
     if (i < polyline.length - 1) {
       const A = polyline[i];
       const B = polyline[i + 1];
       const H = hazardCenter;
 
-      // Project H onto segment AB in lon/lat space (good enough at city scale)
       const dx = B[0] - A[0];
       const dy = B[1] - A[1];
       const lenSq = dx * dx + dy * dy;
@@ -167,8 +141,7 @@ export interface MapboxRouteResult {
 }
 
 /**
- * Fetches a SINGLE forced-waypoint Mapbox route.
- * Uses the Mapbox Directions API with a mandatory intermediate waypoint so Mapbox MUST route through it.
+ * Fetches a single forced-waypoint Mapbox route.
  */
 async function fetchMapboxRouteWithForcedWaypoint(
   origin: LonLat,
@@ -221,7 +194,7 @@ async function fetchMapboxRouteWithForcedWaypoint(
 }
 
 /**
- * Fetches real-world multi-alternative driving routes via Mapbox Directions API.
+ * Fetches multi-alternative driving routes via Mapbox Directions API.
  */
 export async function fetchMapboxAlternativeDrivingRoutes(
   origin: LonLat,
@@ -304,7 +277,6 @@ export async function fetchMapboxDrivingRoute(
   modality: TransportModality = 'truck'
 ): Promise<LonLat[]> {
   if (modality === 'maritime') {
-    // Smooth nautical sea corridor off the coast of Sumatra
     const midLon = (origin[0] + destination[0]) / 2 + 0.15;
     const midLat = (origin[1] + destination[1]) / 2 + 0.15;
     return [
@@ -316,7 +288,6 @@ export async function fetchMapboxDrivingRoute(
     ];
   }
   if (modality === 'air') {
-    // Smooth great-circle flight corridor between airports
     const midLon = (origin[0] + destination[0]) / 2;
     const midLat = (origin[1] + destination[1]) / 2 + 0.06;
     return [origin, [midLon, midLat], destination];
@@ -326,7 +297,7 @@ export async function fetchMapboxDrivingRoute(
 }
 
 /**
- * Computes Intermodal Multi-Leg Logistics Chain for Long-Haul Inter-Island Transportation (> 300 km)
+ * Computes Intermodal Multi-Leg Logistics Chain
  */
 export async function calculateMultiModalLogisticsChain(
   origin: LonLat,
@@ -351,8 +322,8 @@ export async function calculateMultiModalLogisticsChain(
 
   return [{
     id: 'multimodal-air-express',
-    route_name: '✈️ Rantai Logistik Multi-Moda (Truk ➔ Cargo Udara ➔ Truk)',
-    description: 'Solusi Rantai Pasok Terpadu Antar-Pulau: First-Mile Truk & Flight Express',
+    route_name: 'Rantai Logistik Multi-Moda (Truk -> Cargo Udara -> Truk)',
+    description: 'Solusi Rantai Pasok Terpadu: First-Mile Truk & Flight Express',
     waypoints: totalWaypoints,
     distance_km: leg1Dist + leg2Dist,
     eta_minutes: leg1Eta + leg2Eta,
@@ -360,7 +331,7 @@ export async function calculateMultiModalLogisticsChain(
     risk_score: 0.08,
     is_compromised: false,
     safety_status: 'SAFE_DETOUR',
-    safety_tag: '✅ RANTAI LOGISTIK MULTI-MODA AMAN',
+    safety_tag: 'MULTI-MODA AMAN',
     modality: 'multimodal',
     legs,
     color: '#00F0FF',
@@ -368,14 +339,7 @@ export async function calculateMultiModalLogisticsChain(
 }
 
 /**
- * GOOGLE MAPS-GRADE MULTI-ALTERNATIVE AI ROUTING, HAZARD AVOIDANCE & (BEST) AUTO OPTIMIZER ENGINE
- * 
- * HAZARD AVOIDANCE STRATEGY:
- * 1. Fetch Mapbox native routes → mark each as COMPROMISED if it intersects hazard circle
- * 2. If all routes compromised → generate bypass candidates (tangential vectors + known western corridors)
- * 3. For each bypass candidate → call Mapbox with FORCED waypoint (mandatory, not optional)
- * 4. Verify returned Mapbox route does NOT re-enter hazard circle
- * 5. Insert clean bypass as Route 0 (🌟 Best, Emerald Green) at top of recommendations
+ * Multi-alternative routing engine with hazard intersection detection and Hold/Delay fallback.
  */
 export async function calculateAIDynamicDetourRoutes(
   hazardCenter: LonLat | null,
@@ -392,14 +356,18 @@ export async function calculateAIDynamicDetourRoutes(
     const coords = await fetchMapboxDrivingRoute(origin, destination, [], 'maritime');
     return [{
       id: 'maritime-main',
-      route_name: '⚓ Rute Kapal Laut Selat Malaka',
-      description: 'Jalur Pelayaran Maritim Belawan ➔ Selat Malaka',
+      route_name: 'Rute Kapal Laut Selat Malaka',
+      description: 'Jalur Pelayaran Maritim Belawan -> Selat Malaka',
       waypoints: coords.map(([lon, lat]) => ({ lat, lon })),
       distance_km: Math.round(odDistanceKm * 1.3),
       eta_minutes: Math.round((odDistanceKm * 1.3 / 25) * 60),
-      fuel_increase_pct: 0, risk_score: 0.05, is_compromised: false,
-      safety_status: 'SAFE_DETOUR', safety_tag: '⚓ JALUR LAUT OPTIMAL',
-      modality: 'maritime', color: '#3B82F6',
+      fuel_increase_pct: 0,
+      risk_score: 0.05,
+      is_compromised: false,
+      safety_status: 'SAFE_DETOUR',
+      safety_tag: 'JALUR LAUT TERVERIFIKASI',
+      modality: 'maritime',
+      color: '#3B82F6',
     }];
   }
 
@@ -408,7 +376,7 @@ export async function calculateAIDynamicDetourRoutes(
     return calculateMultiModalLogisticsChain(origin, destination);
   }
 
-  // STEP 1: Get native Mapbox routes and assess each against hazard circle
+  // STEP 1: Get native Mapbox routes and evaluate each against hazard circle
   const mapboxResults = await fetchMapboxAlternativeDrivingRoutes(origin, destination);
   const recommendations: RouteRecommendation[] = [];
   let foundCleanRoute = false;
@@ -422,7 +390,7 @@ export async function calculateAIDynamicDetourRoutes(
     if (!isCompromised) foundCleanRoute = true;
 
     const routeColor = isCompromised ? '#EF4444' : i === 0 ? '#00F0FF' : i === 1 ? '#3B82F6' : '#8B5CF6';
-    const routeName = i === 0 ? 'Rute Utama (Jalan Tol Belmera/Medan)' : i === 1 ? 'Alternatif 1 (Jalinsum Arteri Medan-Tebing)' : 'Alternatif 2 (Bypass Sekunder Ring Road)';
+    const routeName = i === 0 ? 'Rute Utama (Jalan Tol)' : i === 1 ? 'Alternatif 1 (Jalinsum Arteri)' : 'Alternatif 2 (Bypass Sekunder)';
 
     recommendations.push({
       id: `route-opt-${i + 1}`,
@@ -430,12 +398,12 @@ export async function calculateAIDynamicDetourRoutes(
       description: `${routeName} via ${res.summary}`,
       waypoints: res.coordinates.map(([lon, lat]) => ({ lat, lon })),
       distance_km: res.distanceKm,
-      eta_minutes: res.durationMinutes + (isCompromised ? 45 : 0),
-      fuel_increase_pct: isCompromised ? 22.5 : i * 5.0,
-      risk_score: isCompromised ? 0.85 : 0.05 + i * 0.08,
+      eta_minutes: res.durationMinutes + (isCompromised ? 60 : 0),
+      fuel_increase_pct: isCompromised ? 25.0 : i * 5.0,
+      risk_score: isCompromised ? 0.90 : 0.05 + i * 0.08,
       is_compromised: isCompromised,
       safety_status: isCompromised ? 'COMPROMISED' : 'SAFE_DETOUR',
-      safety_tag: isCompromised ? '⚠️ TERDAMPAK BANJIR/BENCANA (+45 Min Delay)' : i === 0 ? '🌟 (BEST) RUTE TERCEPAT DAN EFISIEN' : '✅ RUTE ALTERNATIF AMAN',
+      safety_tag: isCompromised ? 'TERDAMPAK ZONA BAHAYA (+60m Delay)' : i === 0 ? 'RUTE UTAMA TERCEPAT' : 'RUTE ALTERNATIF',
       traffic_level: res.congestionSegments.some((s) => s.level === 'heavy') ? 'heavy' : 'low',
       congestion_segments: res.congestionSegments,
       modality: 'truck',
@@ -443,11 +411,10 @@ export async function calculateAIDynamicDetourRoutes(
     });
   }
 
-  // STEP 2: If ALL routes are compromised, trigger AI Tangential Bypass Engine
+  // STEP 2: If ALL default routes are compromised, search bypass arterial nodes
   if (hazardCenter && !foundCleanRoute && token) {
     const bypassCandidates = generateHazardBypassCandidates(hazardCenter, radiusKm, origin, destination);
 
-    // Also add known arterial corridors that are far enough from hazard
     const knownJunctions = HIGHWAY_JUNCTION_NODES.filter(
       (j) => getHaversineDistanceKm(j.coords, hazardCenter) > radiusKm + 2.0
     );
@@ -457,39 +424,58 @@ export async function calculateAIDynamicDetourRoutes(
     ];
 
     for (const cand of allCandidates) {
-      // CRITICAL FIX: Use fetchMapboxRouteWithForcedWaypoint which sends a MANDATORY intermediate waypoint.
-      // Mapbox MUST route through this coordinate — it cannot choose a shorter path that re-enters the hazard zone.
       const bypassResult = await fetchMapboxRouteWithForcedWaypoint(origin, destination, cand.coords, token);
 
       if (bypassResult) {
         const isBypassClean = !isPolylineIntersectingHazardCircle(bypassResult.coordinates, hazardCenter, radiusKm);
 
         if (isBypassClean) {
-          // SUCCESS: Found a clean bypass route. Insert at top with Emerald Green styling.
+          foundCleanRoute = true;
           recommendations.unshift({
             id: 'route-opt-safe-bypass',
-            route_name: `🌟 (BEST) Rekomendasi AI: Pengalihan via ${cand.name}`,
-            description: `AI Detour Engine secara otomatis mendeteksi zona krisis dan mengalihkan armada melingkari bencana via ${cand.name}`,
+            route_name: `Rute Pengalihan: via ${cand.name}`,
+            description: `Pengalihan rute jalan raya otomatis melingkari zona bahaya via ${cand.name}`,
             waypoints: bypassResult.coordinates.map(([lon, lat]) => ({ lat, lon })),
             distance_km: bypassResult.distanceKm,
             eta_minutes: bypassResult.durationMinutes,
-            fuel_increase_pct: 8.5,
-            risk_score: 0.04,
+            fuel_increase_pct: 12.0,
+            risk_score: 0.10,
             is_compromised: false,
             safety_status: 'SAFE_DETOUR',
-            safety_tag: `🛡️ RUTE AMAN — ${cand.name.toUpperCase()}`,
+            safety_tag: `RUTE PENGALIHAN AMAN (${cand.name.toUpperCase()})`,
             traffic_level: 'low',
             congestion_segments: bypassResult.congestionSegments,
             modality: 'truck',
             color: '#10B981', // Emerald green
           });
-          break; // Stop after first clean bypass found
+          break;
         }
       }
     }
   }
 
-  // Sort: safe routes first, then by ETA
+  // STEP 3: If STILL all routes are compromised (disaster covers all options), surface HOLD / DELAY
+  if (hazardCenter && !foundCleanRoute) {
+    recommendations.unshift({
+      id: 'mitigation-hold-delay',
+      route_name: 'Mitigasi Taktis: Tunda Keberangkatan (Hold / Delay)',
+      description: 'Semua jalur utama dan pengalihan terblokir radius bencana. Rekomendasi: Tahan armada di buffer area hingga kondisi dinyatakan aman.',
+      waypoints: recommendations[0]?.waypoints || [],
+      distance_km: recommendations[0]?.distance_km || Math.round(odDistanceKm),
+      eta_minutes: (recommendations[0]?.eta_minutes || 60) + 180, // +3 hours holding
+      fuel_increase_pct: 0,
+      risk_score: 0.15,
+      is_compromised: false,
+      safety_status: 'HOLD_DELAY',
+      safety_tag: 'REKOMENDASI: TUNDA KEBERANGKATAN (HOLD / DELAY)',
+      traffic_level: 'heavy',
+      congestion_segments: [],
+      modality: 'truck',
+      color: '#F59E0B', // Amber warning color
+    });
+  }
+
+  // Sort: safe/hold routes first, then by ETA
   recommendations.sort((a, b) => {
     if (a.is_compromised === b.is_compromised) return a.eta_minutes - b.eta_minutes;
     return a.is_compromised ? 1 : -1;

@@ -6,18 +6,16 @@ export interface HubNode {
   id: string;
   name: string;
   coords: LonLat;
-  icon: string;
   type: 'port' | 'city' | 'hub' | 'interchange' | 'airport';
   province?: string;
 }
 
 export const HUB_NODES: Record<string, HubNode> = {
-  // === SEAPORTS (PELABUHAN UTAMA LOGISTIK & SEMBAKO) ===
+  // Seaports
   belawan: {
     id: 'belawan',
     name: 'Pelabuhan Belawan',
     coords: [98.6776, 3.7922],
-    icon: '⚓',
     type: 'port',
     province: 'Sumatera Utara',
   },
@@ -25,7 +23,6 @@ export const HUB_NODES: Record<string, HubNode> = {
     id: 'dumai_port',
     name: 'Pelabuhan Dumai (Terminal CPO & Pangan)',
     coords: [101.4533, 1.6811],
-    icon: '⚓',
     type: 'port',
     province: 'Riau',
   },
@@ -33,7 +30,6 @@ export const HUB_NODES: Record<string, HubNode> = {
     id: 'teluk_bayur',
     name: 'Pelabuhan Teluk Bayur',
     coords: [100.3700, -0.9980],
-    icon: '⚓',
     type: 'port',
     province: 'Sumatera Barat',
   },
@@ -41,7 +37,6 @@ export const HUB_NODES: Record<string, HubNode> = {
     id: 'boom_baru',
     name: 'Pelabuhan Boom Baru (Sungai Musi)',
     coords: [104.7833, -2.9750],
-    icon: '⚓',
     type: 'port',
     province: 'Sumatera Selatan',
   },
@@ -49,7 +44,6 @@ export const HUB_NODES: Record<string, HubNode> = {
     id: 'panjang_port',
     name: 'Pelabuhan Panjang (Terminal Peti Kemas)',
     coords: [105.3167, -5.4667],
-    icon: '⚓',
     type: 'port',
     province: 'Lampung',
   },
@@ -57,7 +51,6 @@ export const HUB_NODES: Record<string, HubNode> = {
     id: 'bakauheni_port',
     name: 'Pelabuhan Bakauheni (Gerbang Ferry Jawa-Sumatra)',
     coords: [105.7533, -5.8711],
-    icon: '⚓',
     type: 'port',
     province: 'Lampung',
   },
@@ -65,7 +58,6 @@ export const HUB_NODES: Record<string, HubNode> = {
     id: 'malahayati_port',
     name: 'Pelabuhan Malahayati (Krueng Raya)',
     coords: [95.5186, 5.5897],
-    icon: '⚓',
     type: 'port',
     province: 'Aceh',
   },
@@ -73,7 +65,6 @@ export const HUB_NODES: Record<string, HubNode> = {
     id: 'kuala_tanjung',
     name: 'Pelabuhan Kuala Tanjung (Deep Sea Port & KEK)',
     coords: [99.4500, 3.3600],
-    icon: '⚓',
     type: 'port',
     province: 'Sumatera Utara',
   },
@@ -81,7 +72,6 @@ export const HUB_NODES: Record<string, HubNode> = {
     id: 'sibolga_port',
     name: 'Pelabuhan Sibolga (Pantai Barat)',
     coords: [98.7800, 1.7400],
-    icon: '⚓',
     type: 'port',
     province: 'Sumatera Utara',
   },
@@ -89,17 +79,15 @@ export const HUB_NODES: Record<string, HubNode> = {
     id: 'pulau_baai',
     name: 'Pelabuhan Pulau Baai',
     coords: [102.2900, -3.8900],
-    icon: '⚓',
     type: 'port',
     province: 'Bengkulu',
   },
 
-  // === CARGO AIRPORTS (BANDARA KARGO LOGISTIK UDARA) ===
+  // Cargo Airports
   kualanamu_air: {
     id: 'kualanamu_air',
     name: 'Bandara Kualanamu Cargo Hub (KNO)',
     coords: [98.8780, 3.6421],
-    icon: '✈️',
     type: 'airport',
     province: 'Sumatera Utara',
   },
@@ -107,7 +95,6 @@ export const HUB_NODES: Record<string, HubNode> = {
     id: 'pekanbaru_air',
     name: 'Bandara Sultan Syarif Kasim II Cargo (PKU)',
     coords: [101.4447, 0.4619],
-    icon: '✈️',
     type: 'airport',
     province: 'Riau',
   },
@@ -115,7 +102,6 @@ export const HUB_NODES: Record<string, HubNode> = {
     id: 'minangkabau_air',
     name: 'Bandara Minangkabau Cargo (BIM/PDG)',
     coords: [100.2811, -0.7869],
-    icon: '✈️',
     type: 'airport',
     province: 'Sumatera Barat',
   },
@@ -123,7 +109,6 @@ export const HUB_NODES: Record<string, HubNode> = {
     id: 'palembang_air',
     name: 'Bandara Sultan Mahmud Badaruddin II (PLM)',
     coords: [104.7000, -2.8983],
-    icon: '✈️',
     type: 'airport',
     province: 'Sumatera Selatan',
   },
@@ -131,7 +116,6 @@ export const HUB_NODES: Record<string, HubNode> = {
     id: 'radin_inten_air',
     name: 'Bandara Radin Inten II (TKG)',
     coords: [105.1783, -5.2417],
-    icon: '✈️',
     type: 'airport',
     province: 'Lampung',
   },
@@ -139,7 +123,6 @@ export const HUB_NODES: Record<string, HubNode> = {
     id: 'sultan_thaha_air',
     name: 'Bandara Sultan Thaha Cargo (DJB)',
     coords: [103.6444, -1.6389],
-    icon: '✈️',
     type: 'airport',
     province: 'Jambi',
   },
@@ -147,17 +130,15 @@ export const HUB_NODES: Record<string, HubNode> = {
     id: 'iskandar_muda_air',
     name: 'Bandara Sultan Iskandar Muda Cargo (BTJ)',
     coords: [95.4194, 5.5222],
-    icon: '✈️',
     type: 'airport',
     province: 'Aceh',
   },
 
-  // === CITIES, AGRICULTURAL HUBS & INTERCHANGES ===
+  // Cities, Agricultural Hubs & Interchanges
   medan: {
     id: 'medan',
     name: 'Hub Utama Pergudangan Medan',
     coords: [98.6722, 3.5952],
-    icon: '🏙️',
     type: 'city',
     province: 'Sumatera Utara',
   },
@@ -165,7 +146,6 @@ export const HUB_NODES: Record<string, HubNode> = {
     id: 'binjai',
     name: 'Hub Logistik Binjai (Koridor Langkat)',
     coords: [98.4850, 3.6000],
-    icon: '🏬',
     type: 'hub',
     province: 'Sumatera Utara',
   },
@@ -173,7 +153,6 @@ export const HUB_NODES: Record<string, HubNode> = {
     id: 'tebingtinggi',
     name: 'Interchange Tol Tebing Tinggi',
     coords: [98.9560, 3.5680],
-    icon: '🛣️',
     type: 'interchange',
     province: 'Sumatera Utara',
   },
@@ -181,7 +160,6 @@ export const HUB_NODES: Record<string, HubNode> = {
     id: 'siantar',
     name: 'Pematang Siantar (Sentra Hortikultura)',
     coords: [99.0687, 2.9595],
-    icon: '🌾',
     type: 'city',
     province: 'Sumatera Utara',
   },
@@ -189,7 +167,6 @@ export const HUB_NODES: Record<string, HubNode> = {
     id: 'bukittinggi',
     name: 'Bukittinggi (Sentra Sayur & Cabai Agam)',
     coords: [100.3692, -0.3056],
-    icon: '🌾',
     type: 'hub',
     province: 'Sumatera Barat',
   },
@@ -197,7 +174,6 @@ export const HUB_NODES: Record<string, HubNode> = {
     id: 'padang',
     name: 'Kota Padang (Pasar Raya & Pergudangan)',
     coords: [100.3543, -0.9492],
-    icon: '🏙️',
     type: 'city',
     province: 'Sumatera Barat',
   },
@@ -205,7 +181,6 @@ export const HUB_NODES: Record<string, HubNode> = {
     id: 'pekanbaru',
     name: 'Kota Pekanbaru (Hub Distribusi Sentral Riau)',
     coords: [101.4478, 0.5071],
-    icon: '🏙️',
     type: 'city',
     province: 'Riau',
   },
@@ -213,7 +188,6 @@ export const HUB_NODES: Record<string, HubNode> = {
     id: 'dumai',
     name: 'Kota Dumai (Kawasan Industri)',
     coords: [101.4450, 1.6850],
-    icon: '🏭',
     type: 'city',
     province: 'Riau',
   },
@@ -221,7 +195,6 @@ export const HUB_NODES: Record<string, HubNode> = {
     id: 'jambi',
     name: 'Kota Jambi (Simpang Lintas Timur & Tengah)',
     coords: [103.6131, -1.6100],
-    icon: '🏙️',
     type: 'city',
     province: 'Jambi',
   },
@@ -229,7 +202,6 @@ export const HUB_NODES: Record<string, HubNode> = {
     id: 'palembang',
     name: 'Kota Palembang (Sentra Beras & Logistik Musi)',
     coords: [104.7565, -2.9909],
-    icon: '🏙️',
     type: 'city',
     province: 'Sumatera Selatan',
   },
@@ -237,7 +209,6 @@ export const HUB_NODES: Record<string, HubNode> = {
     id: 'bandar_lampung',
     name: 'Kota Bandar Lampung (Hub Tol Trans-Sumatra)',
     coords: [105.2667, -5.4294],
-    icon: '🏙️',
     type: 'city',
     province: 'Lampung',
   },
@@ -245,7 +216,6 @@ export const HUB_NODES: Record<string, HubNode> = {
     id: 'banda_aceh',
     name: 'Kota Banda Aceh (KM 0 Lintas Sumatra)',
     coords: [95.3193, 5.5483],
-    icon: '🏙️',
     type: 'city',
     province: 'Aceh',
   },
@@ -253,7 +223,6 @@ export const HUB_NODES: Record<string, HubNode> = {
     id: 'lhokseumawe',
     name: 'Kota Lhokseumawe (Pantai Timur Aceh)',
     coords: [97.1422, 5.1800],
-    icon: '🏭',
     type: 'city',
     province: 'Aceh',
   },
@@ -261,15 +230,103 @@ export const HUB_NODES: Record<string, HubNode> = {
     id: 'bengkulu',
     name: 'Kota Bengkulu (Lintas Barat Sumatra)',
     coords: [102.2655, -3.8004],
-    icon: '🏙️',
     type: 'city',
     province: 'Bengkulu',
   },
 };
 
+// Strategic Trans-Sumatra Baseline Logistics Corridors (GeoJSON FeatureCollection)
+export const STRATEGIC_BASELINE_CORRIDORS: GeoJSON.FeatureCollection = {
+  type: 'FeatureCollection',
+  features: [
+    {
+      type: 'Feature',
+      properties: {
+        id: 'corridor-jalinsum-north',
+        name: 'Koridor Tol & Jalinsum Sumatera Utara (Belawan - Medan - Tebing Tinggi - Siantar)',
+        type: 'highway',
+      },
+      geometry: {
+        type: 'LineString',
+        coordinates: [
+          [98.6776, 3.7922], // Belawan
+          [98.6742, 3.7201], // Marelan
+          [98.6712, 3.6901], // Medan Utara
+          [98.6712, 3.6013], // Medan Kota
+          [98.7050, 3.5511], // Amplas
+          [98.8780, 3.6421], // Kualanamu
+          [98.8650, 3.5601], // Lubuk Pakam
+          [98.9560, 3.5680], // Tebing Tinggi
+          [99.0687, 2.9595], // Siantar
+        ],
+      },
+    },
+    {
+      type: 'Feature',
+      properties: {
+        id: 'corridor-lintas-timur',
+        name: 'Koridor Lintas Timur (Tebing Tinggi - Pekanbaru - Jambi - Palembang)',
+        type: 'highway',
+      },
+      geometry: {
+        type: 'LineString',
+        coordinates: [
+          [98.9560, 3.5680], // Tebing Tinggi
+          [99.4500, 3.3600], // Kuala Tanjung
+          [100.1000, 2.1000], // Rantauprapat
+          [101.4478, 0.5071], // Pekanbaru
+          [103.6131, -1.6100], // Jambi
+          [104.7565, -2.9909], // Palembang
+          [105.2667, -5.4294], // Bandar Lampung
+          [105.7533, -5.8711], // Bakauheni
+        ],
+      },
+    },
+    {
+      type: 'Feature',
+      properties: {
+        id: 'corridor-lintas-barat',
+        name: 'Koridor Lintas Barat & Tengah (Banda Aceh - Medan - Padang - Bengkulu)',
+        type: 'highway',
+      },
+      geometry: {
+        type: 'LineString',
+        coordinates: [
+          [95.3193, 5.5483], // Banda Aceh
+          [97.1422, 5.1800], // Lhokseumawe
+          [98.4850, 3.6000], // Binjai
+          [98.6722, 3.5952], // Medan
+          [98.7800, 1.7400], // Sibolga
+          [100.3692, -0.3056], // Bukittinggi
+          [100.3543, -0.9492], // Padang
+          [102.2655, -3.8004], // Bengkulu
+        ],
+      },
+    },
+    {
+      type: 'Feature',
+      properties: {
+        id: 'corridor-sea-selat-malaka',
+        name: 'Alur Laut Kepulauan Selat Malaka (Belawan - Dumai - Batam)',
+        type: 'maritime',
+      },
+      geometry: {
+        type: 'LineString',
+        coordinates: [
+          [98.6776, 3.7922],
+          [99.1500, 3.6500],
+          [99.7500, 3.2500],
+          [100.4000, 2.6000],
+          [101.1000, 2.0500],
+          [101.4533, 1.6811],
+        ],
+      },
+    },
+  ],
+};
+
 /**
  * Fetches real-world turn-by-turn road network routing using Mapbox Directions API.
- * Returns exact road-following polyline coordinates ("as the crow drives").
  */
 export async function fetchMapboxDirections(
   origin: LonLat,
@@ -279,11 +336,9 @@ export async function fetchMapboxDirections(
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 
   if (!token) {
-    console.warn('Mapbox token not set, falling back to highway node interpolator.');
     return fallbackHighwayRoute(origin, destination, waypoints);
   }
 
-  // Format waypoints: origin;via1;via2;destination
   const allCoords = [origin, ...waypoints, destination];
   const coordString = allCoords.map(([lon, lat]) => `${lon},${lat}`).join(';');
 
@@ -307,41 +362,32 @@ export async function fetchMapboxDirections(
   return fallbackHighwayRoute(origin, destination, waypoints);
 }
 
-/**
- * High-precision fallback following actual Trans-Sumatra highway node coordinates
- * (Tol Belamera -> Tol Medan-Tebing Tinggi -> Jalinsum).
- */
 function fallbackHighwayRoute(
   origin: LonLat,
   destination: LonLat,
   waypoints: LonLat[] = []
 ): LonLat[] {
-  // Snapped highway waypoints along Tol Trans-Sumatra / Jalinsum
   const highwayNodes: LonLat[] = [
     origin,
-    [98.6750, 3.7500], // Belamera Toll North
-    [98.6710, 3.6800], // Tanjung Mulia Interchange
-    [98.6730, 3.6200], // Amplas Toll Gate
-    [98.7180, 3.5410], // Kualanamu Toll Interchange
-    [98.8050, 3.5520], // Lubuk Pakam Toll Gate
-    [98.8750, 3.5600], // Perbaungan Toll Interchange
-    [98.9560, 3.5680], // Tebing Tinggi Interchange
-    [99.0450, 3.4850], // Tebing Tinggi South / Jalinsum
-    [99.1100, 3.2200], // Raya Jalinsum
+    [98.6750, 3.7500],
+    [98.6710, 3.6800],
+    [98.6730, 3.6200],
+    [98.7180, 3.5410],
+    [98.8050, 3.5520],
+    [98.8750, 3.5600],
+    [98.9560, 3.5680],
+    [99.0450, 3.4850],
+    [99.1100, 3.2200],
     destination,
   ];
 
   if (waypoints.length > 0) {
-    // Insert hazard detour waypoints safely
     return [origin, ...waypoints, destination];
   }
 
   return highwayNodes;
 }
 
-/**
- * Generates turn-by-turn road network detour recommendations for PreHub.
- */
 export async function calculateRoadNetworkDetourRoutes(
   hazardCenter: LonLat,
   radiusKm: number = 15,
@@ -350,7 +396,6 @@ export async function calculateRoadNetworkDetourRoutes(
 ): Promise<RouteRecommendation[]> {
   const [hLon, hLat] = hazardCenter;
 
-  // Tangent arc offset coordinates for avoiding the hazard area on real roads
   const minClearanceKm = radiusKm + 12;
   const offsetLon = (minClearanceKm / 111) * 1.3;
   const offsetLat = minClearanceKm / 111;
@@ -364,7 +409,6 @@ export async function calculateRoadNetworkDetourRoutes(
     [isEastDetour ? hLon + offsetLon * 1.5 : hLon - offsetLon * 1.5, hLat + 0.05],
   ];
 
-  // Fetch real-world road geometry via Mapbox Directions API in parallel
   const [coordsPrimary, coordsAlternative] = await Promise.all([
     fetchMapboxDirections(origin, destination, detourWaypoints1),
     fetchMapboxDirections(origin, destination, detourWaypoints2),
