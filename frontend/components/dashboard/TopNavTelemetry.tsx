@@ -166,12 +166,6 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
           </div>
         )}
       </div>
-
-      {/* 5. System Status */}
-      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/10 bg-[#0c0e12]/80 text-slate-300">
-        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-        <span>PREHUB READY</span>
-      </div>
     </div>
   );
 };

@@ -159,9 +159,9 @@ export function FleetVehicleLayer({
         const baseSpeed = v.speed_kmh || 60;
         const totalDistanceKm = calculatePathDistanceKm(coords);
         
-        // Realistic progression: (speed_kmh / 3600) * deltaSec * SIM_SCALE / totalDistanceKm
-        // SIM_SCALE = 60 (1 real second simulates 1 minute on the road)
-        const simScale = 60.0;
+        // Calibrated realistic progression: (speed_kmh / 3600) * deltaSec * SIM_SCALE / totalDistanceKm
+        // SIM_SCALE = 12.0 (Steady observable movement: 1 real second = 12 seconds of travel)
+        const simScale = 12.0;
         const increment = v.status === 'anchored' ? 0 : (baseSpeed / 3600) * deltaSec * (simScale / totalDistanceKm);
 
         let currentProgress = (progressMapRef.current[v.vehicle_id] ?? 0.35) + increment;

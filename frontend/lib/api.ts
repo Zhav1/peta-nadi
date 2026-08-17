@@ -133,9 +133,11 @@ export const api = {
       request<unknown>(`/api/demo/replay/${crisisId}`),
   },
   fleet: {
-    vehicles: () =>
-      request<{ vehicles: import('./types').FleetVehicle[]; total: number; timestamp: string }>(
-        '/api/v1/fleet/vehicles'
+    vehicles: (modality?: string) =>
+      request<{ vehicles: import('./types').FleetVehicle[]; total_vehicles?: number; timestamp?: string }>(
+        modality && modality !== 'all'
+          ? `/api/v1/fleet/vehicles?modality=${encodeURIComponent(modality)}`
+          : '/api/v1/fleet/vehicles'
       ),
   },
   news: {

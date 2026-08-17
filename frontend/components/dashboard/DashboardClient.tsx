@@ -29,6 +29,7 @@ import {
   Plane,
   Clock,
   Navigation,
+  Lock,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useIncidents } from '@/hooks/useIncidents';
@@ -265,7 +266,7 @@ function TimeModeBanner({
       title: 'MODE ARSIP HISTORIS (2022–2024)',
       badge: 'HISTORICAL REPLAY',
       badgeColor: 'bg-purple-950/80 text-purple-300 border-purple-500/40',
-      description: 'Menampilkan arsip kejadian disrupsi nyata (Gempa Pasaman 2022, Banjir Belawan 2024, Longsor Berastagi 2023) untuk analisis price lag inflasi komoditas pangan.',
+      description: 'Menampilkan arsip kejadian disrupsi pangan nyata di koridor logistik Sumatra untuk analisis perambatan inflasi.',
     },
     future: {
       title: 'MODE PROYEKSI DINI (24–48 JAM)',
@@ -381,7 +382,7 @@ function FloatingMapLegend({
               <span className="w-3 h-3 rounded-full bg-cyan-400 shrink-0" />
               <div>
                 <span className="text-cyan-300 font-bold block">Hub Logistik Pangan</span>
-                <span className="text-[9px] text-slate-400 font-sans">Pelabuhan Belawan, Gudang BULOG, Pasar Induk.</span>
+                <span className="text-[9px] text-slate-400 font-sans">Pelabuhan Utama, Gudang BULOG, Pasar Induk.</span>
               </div>
             </div>
           </div>
@@ -1116,47 +1117,45 @@ export default function DashboardClient() {
             </Link>
           </div>
 
-          {/* Section Navigation Tabs */}
+          {/* Section Navigation Tabs (Locked Incomplete Tabs) */}
           <nav className="flex items-center gap-1 bg-slate-950/60 p-1 rounded-xl border border-slate-800">
             <button
               id="nav-map"
+              type="button"
               onClick={() => setActiveSection('map')}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition ${activeSection === 'map'
-                ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
-                : 'text-slate-400 hover:text-white'
-                }`}
+              className="cursor-pointer px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20"
             >
               MAP 4D
             </button>
             <button
               id="nav-analytics"
-              onClick={() => setActiveSection('analytics')}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition ${activeSection === 'analytics'
-                ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
-                : 'text-slate-400 hover:text-white'
-                }`}
+              type="button"
+              disabled
+              title="Fitur Analytics dalam integrasi pipeline lanjutan"
+              className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition text-slate-500 flex items-center gap-1.5 cursor-not-allowed opacity-60 hover:opacity-80"
             >
-              ANALYTICS
+              <Lock className="w-3 h-3 text-slate-500" />
+              <span>ANALYTICS</span>
             </button>
             <button
               id="nav-simulation"
-              onClick={() => setActiveSection('simulation')}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition ${activeSection === 'simulation'
-                ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
-                : 'text-slate-400 hover:text-white'
-                }`}
+              type="button"
+              disabled
+              title="Fitur Simulasi Lanjutan dalam pengembangan"
+              className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition text-slate-500 flex items-center gap-1.5 cursor-not-allowed opacity-60 hover:opacity-80"
             >
-              SIMULATION
+              <Lock className="w-3 h-3 text-slate-500" />
+              <span>SIMULATION</span>
             </button>
             <button
               id="nav-reports"
-              onClick={() => setActiveSection('reports')}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition ${activeSection === 'reports'
-                ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
-                : 'text-slate-400 hover:text-white'
-                }`}
+              type="button"
+              disabled
+              title="Fitur Laporan Otomatis segera hadir"
+              className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition text-slate-500 flex items-center gap-1.5 cursor-not-allowed opacity-60 hover:opacity-80"
             >
-              REPORTS
+              <Lock className="w-3 h-3 text-slate-500" />
+              <span>REPORTS</span>
             </button>
           </nav>
         </div>
