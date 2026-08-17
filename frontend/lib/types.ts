@@ -37,7 +37,7 @@ export interface RouteRecommendation {
   fuel_increase_pct: number;
   risk_score: number;
   is_compromised?: boolean;
-  safety_status?: 'SAFE_DETOUR' | 'COMPROMISED' | 'CLEAR';
+  safety_status?: 'SAFE_DETOUR' | 'COMPROMISED' | 'CLEAR' | 'HOLD_DELAY';
   safety_tag?: string;
   traffic_level?: 'low' | 'moderate' | 'heavy' | 'mixed';
   congestion_segments?: CongestionSegment[];

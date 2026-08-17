@@ -15,7 +15,6 @@ export interface NewsItem {
   verification_status: 'UNVERIFIED_GRASSROOTS' | 'CORROBORATED_OFFICIAL' | 'MARKET_IMPACT_CONFIRMED' | 'REJECTED_UNFOUNDED';
   confidence_score: number;
   attributions: Array<{ source_name: string; url?: string; credibility_score?: number }>;
-  // Grounded simulation attributes
   originNode?: string;
   destNode?: string;
   hazardType?: 'flood' | 'landslide' | 'congestion' | 'port_closure' | 'wildfire';
@@ -46,16 +45,16 @@ const MOCK_NEWS_FALLBACK: NewsItem[] = [
     destNode: 'tebingtinggi',
     hazardType: 'flood',
     commodity_name: 'Beras BULOG & Minyak Goreng',
-    economic_note: 'cuOpt Detour: Tambahan jarak +14 km via Tol MKTT, perkiraan delay 45 menit.',
+    economic_note: 'Rute Pengalihan: Tambahan jarak +14 km via Tol MKTT, perkiraan delay 45 menit.',
     attributions: [
-      { source_name: 'Antara News Sumut', url: 'https://sumut.antaranews.com' },
-      { source_name: 'BPBD Pemprov Sumatera Utara', url: 'https://bpbd.sumutprov.go.id' }
+      { source_name: 'Antara News Sumut', url: 'https://news.google.com/search?q=banjir+sungai+padang+tebing+tinggi+logistik' },
+      { source_name: 'BPBD Pemprov Sumatera Utara', url: 'https://news.google.com/search?q=bpbd+sumut+banjir+tebing+tinggi' }
     ],
   },
   {
     id: 'NEWS-002',
     source_type: 'OFFICIAL_NEWS',
-    headline: 'Tebing Sitinjau Lauik Longsor, Jalur Distribusi Padang–Solok Terputus',
+    headline: 'Tebing Sitinjau Lauik Longsor, Jalur Distribusi Padang-Solok Terputus',
     summary: 'Material longsor menutup badan jalan Lintas Barat Sumatera. Truk sayur mayur dan cabai dari sentra pertanian Alahan Panjang tertahan di bahu jalan.',
     location_name: 'Sitinjau Lauik (Sumbar)',
     lat: -0.9492,
@@ -68,10 +67,10 @@ const MOCK_NEWS_FALLBACK: NewsItem[] = [
     destNode: 'bukittinggi',
     hazardType: 'landslide',
     commodity_name: 'Cabai Merah & Sayur Agam',
-    economic_note: 'cuOpt Detour: Pengalihan via jalur alternatif Padang Panjang-Malalak (+28 km).',
+    economic_note: 'Rute Pengalihan: Pengalihan via jalur alternatif Padang Panjang-Malalak (+28 km).',
     attributions: [
-      { source_name: 'Padang Ekspres Online', url: 'https://padek.jawapos.com' },
-      { source_name: 'BPBD Sumatera Barat', url: 'https://sumbarprov.go.id' }
+      { source_name: 'Padang Ekspres Online', url: 'https://news.google.com/search?q=longsor+sitinjau+lauik+padang+solok+truk' },
+      { source_name: 'BPBD Sumatera Barat', url: 'https://news.google.com/search?q=bpbd+sumbar+longsor+sitinjau+lauik' }
     ],
   },
   {
@@ -90,10 +89,10 @@ const MOCK_NEWS_FALLBACK: NewsItem[] = [
     destNode: 'dumai_port',
     hazardType: 'congestion',
     commodity_name: 'Minyak Goreng & CPO Sawit',
-    economic_note: 'cuOpt Detour: Penataan buffer parking di rest area KM 45 Tol Permai.',
+    economic_note: 'Penataan buffer parking di rest area KM 45 Tol Permai.',
     attributions: [
-      { source_name: 'Riau Pos Online', url: 'https://riaupos.jawapos.com' },
-      { source_name: 'Hutama Karya Tol Permai', url: 'https://www.hutamakarya.com' }
+      { source_name: 'Riau Pos Online', url: 'https://news.google.com/search?q=tol+pekanbaru+dumai+antrean+truk+cpo' },
+      { source_name: 'Hutama Karya Tol Permai', url: 'https://news.google.com/search?q=hutama+karya+tol+pekanbaru+dumai' }
     ],
   },
   {
@@ -112,16 +111,16 @@ const MOCK_NEWS_FALLBACK: NewsItem[] = [
     destNode: 'dumai_port',
     hazardType: 'port_closure',
     commodity_name: 'Gula Pasir & Beras Impor',
-    economic_note: 'Rekomendasi HITL: Penundaan operasi pelayaran 12 jam untuk keselamatan kargo.',
+    economic_note: 'Rekomendasi Operasional: Penundaan keberangkatan pelayaran 12 jam demi keselamatan kargo.',
     attributions: [
-      { source_name: 'BMKG Stasiun Meteorologi Maritim Belawan', url: 'https://maritim.bmkg.go.id' }
+      { source_name: 'BMKG Stasiun Meteorologi Maritim Belawan', url: 'https://news.google.com/search?q=bmkg+maritim+belawan+gelombang+tinggi' }
     ],
   },
   {
     id: 'NEWS-005',
     source_type: 'OFFICIAL_NEWS',
     headline: 'Lonjakan Arus Truk Logistik Sembako di Gerbang Tol Bakauheni Selatan',
-    summary: 'Arus distribusi bahan pangan pokok Jawa–Sumatera meningkat 35%. Petugas ASDP memberlakukan skema delaying system di kantong parkir pelabuhan.',
+    summary: 'Arus distribusi bahan pangan pokok Jawa-Sumatera meningkat 35%. Petugas ASDP memberlakukan skema delaying system di kantong parkir pelabuhan.',
     location_name: 'Pelabuhan Bakauheni (Lampung)',
     lat: -5.8711,
     lon: 105.7533,
@@ -133,10 +132,10 @@ const MOCK_NEWS_FALLBACK: NewsItem[] = [
     destNode: 'palembang',
     hazardType: 'congestion',
     commodity_name: 'Beras & Sembako Nasional',
-    economic_note: 'cuOpt Detour: Pola distribusi bergilir via Tol Terbanggi Besar-Kayu Agung.',
+    economic_note: 'Pola distribusi bergilir via Tol Terbanggi Besar-Kayu Agung.',
     attributions: [
-      { source_name: 'Lampung Post', url: 'https://lampost.co' },
-      { source_name: 'PT ASDP Indonesia Ferry', url: 'https://www.indonesiaferry.co.id' }
+      { source_name: 'Lampung Post', url: 'https://news.google.com/search?q=arus+logistik+truk+bakauheni+sembako' },
+      { source_name: 'PT ASDP Indonesia Ferry', url: 'https://news.google.com/search?q=asdp+bakauheni+truk+logistik' }
     ],
   },
   {
@@ -157,7 +156,7 @@ const MOCK_NEWS_FALLBACK: NewsItem[] = [
     commodity_name: 'Cabai Merah & Bawang Merah',
     economic_note: 'Data survei resmi Bank Indonesia untuk acuan disparitas harga antar-wilayah.',
     attributions: [
-      { source_name: 'Pusat Informasi Harga Pangan Strategis (PIHPS) Bank Indonesia', url: 'https://www.bi.go.id/hargapangan' }
+      { source_name: 'Pusat Informasi Harga Pangan Strategis (PIHPS) Bank Indonesia', url: 'https://news.google.com/search?q=pihps+harga+cabai+sumatera+pasokan' }
     ],
   }
 ];
@@ -181,7 +180,6 @@ export function useNewsVerification() {
         ]);
         if (isMounted) {
           if (newsData.items && newsData.items.length > 0) {
-            // Keep grounded attributes if present
             setNewsFeed(newsData.items as unknown as NewsItem[]);
           }
           if (regimeData.regime) setMarketRegime(regimeData as MarketRegimeData);

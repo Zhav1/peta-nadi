@@ -26,6 +26,7 @@ import {
   Search,
   ExternalLink,
   Anchor,
+  Plane,
   Clock,
   Navigation,
 } from 'lucide-react';
@@ -705,7 +706,7 @@ export default function DashboardClient() {
       // Step 1: Set Start Node
       setSelectedOriginNode(nodeId);
       setToast({
-        message: `🟢 Start Node Terpilih: ${HUB_NODES[nodeId]?.name || nodeId}. Silakan klik marker kedua untuk mengeset End Node.`,
+        message: `Titik Asal Terpilih: ${HUB_NODES[nodeId]?.name || nodeId}. Silakan klik titik kedua untuk mengeset Titik Tujuan.`,
         type: 'info',
       });
       return;
@@ -723,7 +724,7 @@ export default function DashboardClient() {
       );
 
       setToast({
-        message: `🟡 End Node Terpilih: ${HUB_NODES[nodeId]?.name || nodeId}. Opsi rute multi-alternatif Mapbox siap.`,
+        message: `Titik Tujuan Terpilih: ${HUB_NODES[nodeId]?.name || nodeId}. Rute alternatif siap.`,
         type: 'success',
       });
       return;
@@ -741,7 +742,7 @@ export default function DashboardClient() {
       );
 
       setToast({
-        message: `Tujuan Diperbarui: ${HUB_NODES[selectedOriginNode]?.name} ➔ ${HUB_NODES[nodeId]?.name || nodeId}`,
+        message: `Tujuan Diperbarui: ${HUB_NODES[selectedOriginNode]?.name} -> ${HUB_NODES[nodeId]?.name || nodeId}`,
         type: 'info',
       });
     }
@@ -874,8 +875,8 @@ export default function DashboardClient() {
     setCurrentMapRoutes(demoRoutes);
     setSelectedCrisis(fullDemoState);
     setSelectedCrisisId(crisis.crisis_id);
-    setActiveRouteIdx(0); // Force Mapbox canvas to highlight Emerald Safe Detour at index 0
-    setToast({ message: `▶ Live Demo Active: ${crisis.title}`, type: 'success' });
+    setActiveRouteIdx(0);
+    setToast({ message: `Skenario Aktif: ${crisis.title}`, type: 'success' });
   }, [selectedOriginNode, selectedDestNode, selectedRadius, selectedModality]);
 
   // Phase 23: Lifted Demo Engine State & Stage-Wired Effects
@@ -920,7 +921,7 @@ export default function DashboardClient() {
         // Stage 4: Dispatch Complete
         setActiveTab('Mitigation');
         setToast({
-          message: '✅ WhatsApp Alert Delivered — Armada Berhasil Dialihkan ke Rute Aman',
+          message: 'Notifikasi Terkirim: Armada dialihkan ke rute aman.',
           type: 'success',
         });
         break;
@@ -968,6 +969,8 @@ export default function DashboardClient() {
 
     setCurrentMapRoutes(dynamicRoadDetourRoutes);
 
+    const dynamicConfidence = type === 'flood' ? 0.92 : type === 'landslide' ? 0.90 : type === 'congestion' ? 0.86 : 0.88;
+
     const simulatedState: CrisisState = {
       crisis_id: 'simulated-active',
       title,
@@ -977,21 +980,21 @@ export default function DashboardClient() {
       lon,
       region: 'North Sumatra Corridor',
       status: 'validated',
-      overall_confidence: 0.94,
+      overall_confidence: dynamicConfidence,
       validated: true,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       messages: [
-        `AI CLEARANCE ENGINE: ${type.toUpperCase()} registered at [${lat.toFixed(4)}, ${lon.toFixed(4)}].`,
-        `Pure Agentic tangential vector calculated (${radiusKm + 2}km clearance buffer).`,
-        `Rerouting bulk grain fleets via Mapbox turn-by-turn road network detour.`,
-        `Assigned parameter vectors to BULOG, DISHUB, and BNPB emergency teams.`
+        `ENGINE EVALUASI: ${type.toUpperCase()} terdaftar pada koordinat [${lat.toFixed(4)}, ${lon.toFixed(4)}].`,
+        `Buffer radius dihitung (${radiusKm + 2}km safety clearance).`,
+        `Merutekan ulang armada logistik pangan melalui rute alternatif.`,
+        `Parameter disinkronkan dengan instansi terkait.`
       ],
       route_recommendations: dynamicRoadDetourRoutes,
-      decision_support_output: `AI Copilot: Disrupsi ${type.toUpperCase()} terdeteksi. Engine Pure Agentic Tangential Vector menghitung pengalihan rute jalan raya otomatis melingkari zona krisis. Tindakan disarankan: Alihkan armada kontainer via Rute Pengalihan 1. Rilis 480 ton cadangan beras BULOG.`,
+      decision_support_output: `Disrupsi ${type.toUpperCase()} terdeteksi. Sistem menghitung pengalihan rute jalan raya otomatis melingkari zona krisis. Tindakan disarankan: Alihkan armada kontainer via rute aman. Cadangan pangan diinstruksikan siaga.`,
       evidence: {
         osint_author: '@PreHub_CommandCenter',
-        osint_text: `Peringatan AI Dynamic: Disrupsi ${type} diaktifkan pada rute ${originId.toUpperCase()} ➔ ${destId.toUpperCase()}. Jalur logistik utama dialihkan via Pure Agentic Tangential Clearance Detour.`,
+        osint_text: `Peringatan Disrupsi: Event ${type} diaktifkan pada rute ${originId.toUpperCase()} -> ${destId.toUpperCase()}. Jalur logistik utama dialihkan via Tangential Clearance Detour.`,
         delay_minutes: '120 min',
         delay_history: [20, 45, 90, 120]
       }
@@ -1004,7 +1007,7 @@ export default function DashboardClient() {
     setActiveTab('Mitigation');
 
     setToast({
-      message: `AI Dynamic Engine: Rute pengalihan aman (${selectedModality.toUpperCase()}) dari ${originId.toUpperCase()} ke ${destId.toUpperCase()} berhasil dihitung (0% Hardcode).`,
+      message: `Evaluasi Rute Selesai: Pengalihan (${selectedModality.toUpperCase()}) dari ${originId.toUpperCase()} ke ${destId.toUpperCase()} siap.`,
       type: 'success'
     });
   }, [selectedOriginNode, selectedDestNode, selectedModality]);
@@ -1371,7 +1374,7 @@ export default function DashboardClient() {
                         </div>
                         {item.economic_note && (
                           <p className="text-[9px] text-slate-400 font-sans leading-tight italic">
-                            💡 {item.economic_note}
+                            Catatan Rute: {item.economic_note}
                           </p>
                         )}
                       </div>
@@ -1390,7 +1393,7 @@ export default function DashboardClient() {
                               target="_blank"
                               rel="noopener noreferrer"
                               className="cursor-pointer p-1 rounded-lg bg-slate-900/90 text-slate-400 hover:text-cyan-300 hover:bg-slate-800 transition"
-                              title={`Buka Berita: ${item.attributions[0].source_name}`}
+                              title="Buka Berita di Google News"
                             >
                               <ExternalLink className="w-3.5 h-3.5" />
                             </a>
@@ -1413,14 +1416,14 @@ export default function DashboardClient() {
                                   'high'
                                 );
                                 setToast({
-                                  message: `⚡ Skenario Diaktifkan: ${item.location_name || 'Titik Berita'}. Reroute cuOpt menghitung jalur aman.`,
+                                  message: `Skenario Diaktifkan: ${item.location_name || 'Titik Berita'}. Rute menghitung jalur aman.`,
                                   type: 'info',
                                 });
                               }
                             }}
                             className="cursor-pointer flex items-center gap-1 px-2.5 py-1 rounded-lg bg-cyan-950 text-cyan-300 border border-cyan-500/40 hover:bg-cyan-900 hover:text-white transition text-[9px] font-mono font-bold"
                           >
-                            <span>📍 Fokus & Reroute</span>
+                            <span>Fokus Rute</span>
                           </button>
                         </div>
                       </div>
@@ -1430,10 +1433,10 @@ export default function DashboardClient() {
               )}
             </div>
 
-            {/* Honest Sensor Pipeline Status Bar */}
+            {/* Honest Dynamic Sensor Pipeline Status Bar */}
             <div className="border-t border-white/10 pt-2.5 text-[9px] font-mono text-slate-400 space-y-1.5 shrink-0">
               <div className="flex items-center justify-between">
-                <span className="uppercase tracking-wider text-slate-400 font-bold">STATUS PIPELINE</span>
+                <span className="uppercase tracking-wider text-slate-400 font-bold">STATUS PIPELINE DATA</span>
                 <button
                   type="button"
                   onClick={() => setShowSensorInfo(v => !v)}
@@ -1446,22 +1449,28 @@ export default function DashboardClient() {
 
               {showSensorInfo && (
                 <div className="p-2 rounded bg-slate-950/90 border border-white/10 text-[9px] font-sans text-slate-300 leading-relaxed animate-in fade-in duration-150">
-                  <strong>Transparansi Data PreHub:</strong> Berita dan sinyal dikurasi dari Google News RSS, BMKG Maritim, dan PIHPS Nasional secara real-time.
+                  <strong>Transparansi Data:</strong> Status koneksi telemetri dan integrasi API operasional.
                 </div>
               )}
 
               <div className="grid grid-cols-3 gap-1 text-[8px] text-center">
                 <div className="p-1 rounded bg-slate-950/80 border border-white/5">
                   <span className="text-slate-500 block">BMKG</span>
-                  <span className="text-emerald-400 font-bold">ONLINE</span>
+                  <span className={`font-bold ${corridorContext?.weather ? 'text-emerald-400' : isCorridorLoading ? 'text-cyan-400' : 'text-amber-400'}`}>
+                    {corridorContext?.weather ? 'LIVE' : isCorridorLoading ? 'MEMUAT' : 'FALLBACK'}
+                  </span>
                 </div>
                 <div className="p-1 rounded bg-slate-950/80 border border-white/5">
                   <span className="text-slate-500 block">TOMTOM</span>
-                  <span className="text-emerald-400 font-bold">ONLINE</span>
+                  <span className={`font-bold ${corridorContext?.traffic ? 'text-emerald-400' : isCorridorLoading ? 'text-cyan-400' : 'text-amber-400'}`}>
+                    {corridorContext?.traffic ? 'LIVE' : isCorridorLoading ? 'MEMUAT' : 'FALLBACK'}
+                  </span>
                 </div>
                 <div className="p-1 rounded bg-slate-950/80 border border-white/5">
                   <span className="text-slate-500 block">PIHPS</span>
-                  <span className="text-emerald-400 font-bold">ONLINE</span>
+                  <span className={`font-bold ${corridorContext?.commodity_prices ? 'text-emerald-400' : isCorridorLoading ? 'text-cyan-400' : 'text-amber-400'}`}>
+                    {corridorContext?.commodity_prices ? 'LIVE' : isCorridorLoading ? 'MEMUAT' : 'FALLBACK'}
+                  </span>
                 </div>
               </div>
             </div>
@@ -1476,41 +1485,45 @@ export default function DashboardClient() {
               onResetToPresent={() => setActiveTimeFilter('present')}
             />
 
-            {/* Floating Live Fleet Modality Filter Control (Globot-style) */}
+            {/* Floating Live Fleet Modality Filter Control */}
             {activeTimeFilter === 'present' && (
               <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 pointer-events-auto flex items-center gap-1 p-1 rounded-2xl bg-[#0c0e12]/90 border border-white/15 backdrop-blur-xl shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200">
                 {[
-                  { id: 'all', label: 'SEMUA', count: activeFleetVehicles.length },
-                  { id: 'truck', label: '🚚 TRUK', count: activeFleetVehicles.filter((v) => v.modality === 'truck').length },
-                  { id: 'maritime', label: '⚓ KAPAL', count: activeFleetVehicles.filter((v) => v.modality === 'maritime').length },
-                  { id: 'air', label: '✈️ UDARA', count: activeFleetVehicles.filter((v) => v.modality === 'air').length },
-                ].map((m) => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => {
-                      setFleetModalityFilter(m.id as any);
-                      setToast({
-                        message: `Filter Armada: ${m.label} (${m.count} Unit Aktif)`,
-                        type: 'info',
-                      });
-                    }}
-                    className={`cursor-pointer px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition-all flex items-center gap-1.5 ${
-                      fleetModalityFilter === m.id
-                        ? 'bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/20 font-black'
-                        : 'text-slate-400 hover:text-white hover:bg-white/5'
-                    }`}
-                  >
-                    <span>{m.label}</span>
-                    <span
-                      className={`px-1.5 py-0.2 rounded text-[10px] ${
-                        fleetModalityFilter === m.id ? 'bg-slate-950 text-cyan-300' : 'bg-white/10 text-slate-400'
+                  { id: 'all', label: 'SEMUA', count: activeFleetVehicles.length, icon: null },
+                  { id: 'truck', label: 'TRUK', count: activeFleetVehicles.filter((v) => v.modality === 'truck').length, icon: Truck },
+                  { id: 'maritime', label: 'KAPAL', count: activeFleetVehicles.filter((v) => v.modality === 'maritime').length, icon: Anchor },
+                  { id: 'air', label: 'UDARA', count: activeFleetVehicles.filter((v) => v.modality === 'air').length, icon: Plane },
+                ].map((m) => {
+                  const IconComp = m.icon;
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => {
+                        setFleetModalityFilter(m.id as any);
+                        setToast({
+                          message: `Filter Armada: ${m.label} (${m.count} Unit)`,
+                          type: 'info',
+                        });
+                      }}
+                      className={`cursor-pointer px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition-all flex items-center gap-1.5 ${
+                        fleetModalityFilter === m.id
+                          ? 'bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/20 font-black'
+                          : 'text-slate-400 hover:text-white hover:bg-white/5'
                       }`}
                     >
-                      {m.count}
-                    </span>
-                  </button>
-                ))}
+                      {IconComp && <IconComp className="w-3.5 h-3.5" />}
+                      <span>{m.label}</span>
+                      <span
+                        className={`px-1.5 py-0.2 rounded text-[10px] ${
+                          fleetModalityFilter === m.id ? 'bg-slate-950 text-cyan-300' : 'bg-white/10 text-slate-400'
+                        }`}
+                      >
+                        {m.count}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             )}
 

@@ -4,7 +4,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import type { FleetVehicle } from '@/lib/types';
 import { calculateRouteProgressPosition } from '@/lib/geoUtils';
-import { Truck, Anchor, Plane, X, Navigation, Clock, Fuel, ShieldCheck, MapPin } from 'lucide-react';
+import { getHaversineDistanceKm } from '@/lib/aiDynamicRouter';
+import { Truck, Anchor, Plane, X, Navigation, ShieldCheck } from 'lucide-react';
 
 interface FleetVehicleLayerProps {
   map: mapboxgl.Map | null;
@@ -12,6 +13,15 @@ interface FleetVehicleLayerProps {
   activeRoutes?: import('@/lib/types').RouteRecommendation[];
   activeRouteIdx?: number | null;
   modalityFilter?: 'all' | 'truck' | 'maritime' | 'air';
+}
+
+function calculatePathDistanceKm(coords: [number, number][]): number {
+  if (!coords || coords.length < 2) return 50.0;
+  let total = 0;
+  for (let i = 0; i < coords.length - 1; i++) {
+    total += getHaversineDistanceKm(coords[i], coords[i + 1]);
+  }
+  return Math.max(10.0, total);
 }
 
 export function FleetVehicleLayer({
@@ -32,7 +42,7 @@ export function FleetVehicleLayer({
   const progressMapRef = useRef<Record<string, number>>({});
   const lastTimeRef = useRef<number>(performance.now());
 
-  // Setup HTML Mapbox Markers & 60 FPS Route-Bound Animation Loop
+  // Setup HTML Mapbox Markers & Route-Bound Calibrated Animation Loop
   useEffect(() => {
     if (!map || !vehicles || vehicles.length === 0) return;
 
@@ -68,10 +78,10 @@ export function FleetVehicleLayer({
             : 'text-cyan-400 border-cyan-400 bg-[#081524]';
 
         const ringColor = isMaritime
-          ? 'shadow-[0_0_12px_rgba(245,158,11,0.6)]'
+          ? 'shadow-[0_0_12px_rgba(245,158,11,0.5)]'
           : isAir
-            ? 'shadow-[0_0_12px_rgba(168,85,247,0.6)]'
-            : 'shadow-[0_0_12px_rgba(6,182,212,0.6)]';
+            ? 'shadow-[0_0_12px_rgba(168,85,247,0.5)]'
+            : 'shadow-[0_0_12px_rgba(6,182,212,0.5)]';
 
         const iconSvg = isMaritime
           ? `<svg class="w-4 h-4 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="3"/><line x1="12" y1="22" x2="12" y2="8"/><path d="M5 12H2a10 10 0 0 0 20 0h-3"/></svg>`
@@ -82,18 +92,17 @@ export function FleetVehicleLayer({
         el.innerHTML = `
           <div class="relative flex items-center justify-center w-8 h-8 rounded-full border-2 ${iconColor} ${ringColor} backdrop-blur-md transition-all duration-300">
             <span class="vehicle-icon-wrapper">${iconSvg}</span>
-            <span class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 border border-slate-950 animate-ping"></span>
-            <span class="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 border border-slate-950"></span>
+            <span class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 border border-slate-950"></span>
           </div>
           <div class="opacity-0 group-hover:opacity-100 absolute -bottom-7 px-2 py-0.5 rounded-lg bg-[#0c0e12]/95 border border-white/20 text-[9px] font-mono font-bold text-white shadow-xl pointer-events-none transition whitespace-nowrap z-50">
-            ${v.name} (${v.speed_kmh} km/h)
+            ${v.name} (${v.speed_kmh} km/j)
           </div>
         `;
 
         el.addEventListener('click', (e) => {
           e.stopPropagation();
           const curProg = progressMapRef.current[v.vehicle_id] ?? 0.35;
-          let coords = v.route_geometry?.coordinates || v.path || [];
+          let coords = (v.route_geometry?.coordinates || v.path || []) as [number, number][];
           if (v.modality === 'truck' && activeRoutes && activeRoutes.length > 0) {
             const selRoute = activeRoutes[activeRouteIdx ?? 0] || activeRoutes[0];
             if (selRoute && selRoute.waypoints && selRoute.waypoints.length > 1) {
@@ -111,10 +120,9 @@ export function FleetVehicleLayer({
             bearing: state.bearing,
           });
 
-          // Smoothly fly camera to vehicle
           map.flyTo({
             center: state.currentPosition,
-            zoom: Math.max(map.getZoom(), 10),
+            zoom: Math.max(map.getZoom(), 9.5),
             duration: 1000,
           });
         });
@@ -129,7 +137,7 @@ export function FleetVehicleLayer({
       }
     });
 
-    // 60 FPS requestAnimationFrame Loop for visible vehicles
+    // Calibrated requestAnimationFrame Loop (Simulation Scale 60x: 1s = 1min transit)
     const animate = (now: number) => {
       if (isCancelled || !map) return;
 
@@ -137,7 +145,7 @@ export function FleetVehicleLayer({
       lastTimeRef.current = now;
 
       visibleVehicles.forEach((v) => {
-        let coords = v.route_geometry?.coordinates || v.path || [];
+        let coords = (v.route_geometry?.coordinates || v.path || []) as [number, number][];
         if (v.modality === 'truck' && activeRoutes && activeRoutes.length > 0) {
           const selRoute = activeRoutes[activeRouteIdx ?? 0] || activeRoutes[0];
           if (selRoute && selRoute.waypoints && selRoute.waypoints.length > 1) {
@@ -149,7 +157,12 @@ export function FleetVehicleLayer({
         }
 
         const baseSpeed = v.speed_kmh || 60;
-        const increment = v.status === 'anchored' ? 0 : (baseSpeed / 3600) * deltaSec * 0.05;
+        const totalDistanceKm = calculatePathDistanceKm(coords);
+        
+        // Realistic progression: (speed_kmh / 3600) * deltaSec * SIM_SCALE / totalDistanceKm
+        // SIM_SCALE = 60 (1 real second simulates 1 minute on the road)
+        const simScale = 60.0;
+        const increment = v.status === 'anchored' ? 0 : (baseSpeed / 3600) * deltaSec * (simScale / totalDistanceKm);
 
         let currentProgress = (progressMapRef.current[v.vehicle_id] ?? 0.35) + increment;
         if (currentProgress > 1.0) currentProgress = 0.0;
@@ -180,7 +193,7 @@ export function FleetVehicleLayer({
 
   return (
     <>
-      {/* Floating Detailed Vehicle Cargo Inspection Card */}
+      {/* Detailed Vehicle Inspection Card */}
       {selectedVehicle && (
         <div className="absolute top-20 left-4 z-40 w-84 bg-[#0c0e12]/95 border border-cyan-500/40 backdrop-blur-2xl p-4 rounded-2xl shadow-2xl animate-in fade-in slide-in-from-left-2 duration-200 pointer-events-auto text-slate-100">
           <div className="flex items-start justify-between border-b border-white/10 pb-2.5 mb-3">
@@ -222,17 +235,17 @@ export function FleetVehicleLayer({
             {/* Cargo Box */}
             <div className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1">
               <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">Muatan Kargo Strategis:</span>
-              <p className="text-xs font-bold text-cyan-300 font-sans">{selectedVehicle.vehicle.cargo || 'Logistik Sembako Nasional'}</p>
+              <p className="text-xs font-bold text-cyan-300 font-sans">{selectedVehicle.vehicle.cargo || 'Logistik Pangan Nasional'}</p>
             </div>
 
             {/* Route Status */}
             <div className="grid grid-cols-2 gap-2">
               <div className="p-2 rounded-lg bg-slate-950/60 border border-slate-800/80">
-                <span className="text-[8px] text-slate-400 uppercase block">Asal (Origin)</span>
+                <span className="text-[8px] text-slate-400 uppercase block">Asal</span>
                 <span className="text-[10px] text-slate-200 font-bold truncate block">{selectedVehicle.vehicle.origin || 'Asal'}</span>
               </div>
               <div className="p-2 rounded-lg bg-slate-950/60 border border-slate-800/80">
-                <span className="text-[8px] text-slate-400 uppercase block">Tujuan (Dest)</span>
+                <span className="text-[8px] text-slate-400 uppercase block">Tujuan</span>
                 <span className="text-[10px] text-cyan-300 font-bold truncate block">{selectedVehicle.vehicle.destination || 'Tujuan'}</span>
               </div>
             </div>
@@ -249,10 +262,10 @@ export function FleetVehicleLayer({
             <div className="flex items-center justify-between text-[9px] text-slate-400 pt-1">
               <span className="flex items-center gap-1">
                 <ShieldCheck className="w-3 h-3 text-emerald-400" />
-                <span>Status AIS / GPS:</span>
+                <span>Status Pelacakan:</span>
               </span>
-              <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-500/30 font-bold uppercase">
-                {selectedVehicle.vehicle.status === 'anchored' ? 'LABUH JANGKAR' : 'BERGERAK (LIVE)'}
+              <span className="px-2 py-0.5 rounded bg-slate-900 text-slate-300 border border-slate-700 font-bold uppercase">
+                {selectedVehicle.vehicle.vehicle_id.startsWith('MMSI:') ? 'AIS AKTIF' : 'SIMULASI KORIDOR'}
               </span>
             </div>
           </div>

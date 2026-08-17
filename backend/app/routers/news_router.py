@@ -37,7 +37,7 @@ FALLBACK_ARTICLES = [
     {
         "id": "NEWS-001",
         "title": "Banjir Luapan Sungai Padang Rendam Jalur Logistik Tebing Tinggi KM 78",
-        "link": "https://sumut.antaranews.com/berita/589412/banjir-rendam-jalan-lintas-sumatera",
+        "link": "https://news.google.com/search?q=banjir+sungai+padang+tebing+tinggi+logistik",
         "source": "Antara News Sumut",
         "pubDate": "10m lalu",
         "relevance_score": 0.94,
@@ -49,12 +49,12 @@ FALLBACK_ARTICLES = [
         "origin_node": "belawan",
         "dest_node": "tebingtinggi",
         "commodity_name": "Beras BULOG & Minyak Goreng",
-        "economic_note": "cuOpt Detour: Tambahan jarak +14 km via Tol MKTT, perkiraan delay 45 menit."
+        "economic_note": "Evaluasi Rute: Tambahan jarak +14 km via Tol MKTT, estimasi perlambatan 45 menit."
     },
     {
         "id": "NEWS-002",
-        "title": "Tebing Sitinjau Lauik Longsor, Jalur Distribusi Padang–Solok Terputus",
-        "link": "https://padek.jawapos.com/sumbar/padang/longsor-sitinjau-lauik",
+        "title": "Tebing Sitinjau Lauik Longsor, Jalur Distribusi Padang-Solok Terputus",
+        "link": "https://news.google.com/search?q=longsor+sitinjau+lauik+padang+solok+truk",
         "source": "Padang Ekspres Online",
         "pubDate": "25m lalu",
         "relevance_score": 0.91,
@@ -66,12 +66,12 @@ FALLBACK_ARTICLES = [
         "origin_node": "padang",
         "dest_node": "bukittinggi",
         "commodity_name": "Cabai Merah & Sayur Agam",
-        "economic_note": "cuOpt Detour: Pengalihan via jalur alternatif Padang Panjang-Malalak (+28 km)."
+        "economic_note": "Evaluasi Rute: Pengalihan via jalur alternatif Padang Panjang-Malalak (+28 km)."
     },
     {
         "id": "NEWS-003",
         "title": "Tol Pekanbaru-Dumai Alami Antrean Truk Tangki CPO di Gerbang Dumai",
-        "link": "https://riaupos.jawapos.com/riau/pekanbaru/antrean-truk-cpo-dumai",
+        "link": "https://news.google.com/search?q=tol+pekanbaru+dumai+antrean+truk+cpo",
         "source": "Riau Pos Online",
         "pubDate": "40m lalu",
         "relevance_score": 0.89,
@@ -83,12 +83,12 @@ FALLBACK_ARTICLES = [
         "origin_node": "pekanbaru",
         "dest_node": "dumai_port",
         "commodity_name": "Minyak Goreng & CPO Sawit",
-        "economic_note": "cuOpt Detour: Penataan buffer parking di rest area KM 45 Tol Permai."
+        "economic_note": "Penataan buffer parking di rest area KM 45 Tol Permai."
     },
     {
         "id": "NEWS-004",
         "title": "Peringatan Dini BMKG: Gelombang 2.5m & Angin Kencang Selat Malaka",
-        "link": "https://maritim.bmkg.go.id/peringatan-dini",
+        "link": "https://news.google.com/search?q=bmkg+peringatan+dini+gelombang+selat+malaka",
         "source": "BMKG Maritim Belawan",
         "pubDate": "1j lalu",
         "relevance_score": 0.96,
@@ -100,29 +100,29 @@ FALLBACK_ARTICLES = [
         "origin_node": "belawan",
         "dest_node": "dumai_port",
         "commodity_name": "Gula Pasir & Beras Impor",
-        "economic_note": "Rekomendasi HITL: Penundaan operasi pelayaran 12 jam untuk keselamatan muatan."
+        "economic_note": "Rekomendasi Operasional: Penundaan keberangkatan pelayaran 12 jam demi keselamatan kargo."
     },
     {
         "id": "NEWS-005",
         "title": "Lonjakan Arus Truk Logistik Sembako di Gerbang Tol Bakauheni Selatan",
-        "link": "https://lampost.co/berita/arus-logistik-bakauheni",
+        "link": "https://news.google.com/search?q=arus+logistik+truk+bakauheni+sembako",
         "source": "Lampung Post",
         "pubDate": "1.5j lalu",
         "relevance_score": 0.92,
         "verification_status": "CORROBORATED_OFFICIAL",
         "sentiment": "NEUTRAL",
-        "summary": "Arus distribusi bahan pangan pokok Jawa–Sumatera meningkat 35%. Petugas ASDP memberlakukan skema delaying system di kantong parkir pelabuhan.",
+        "summary": "Arus distribusi bahan pangan pokok Jawa-Sumatera meningkat 35%. Petugas ASDP memberlakukan skema delaying system di kantong parkir pelabuhan.",
         "region": "Lampung",
         "category": "TRAFFIC_BOTTLENECK",
         "origin_node": "bakauheni_port",
         "dest_node": "palembang",
         "commodity_name": "Beras & Sembako Nasional",
-        "economic_note": "cuOpt Detour: Pola distribusi bergilir via Tol Terbanggi Besar-Kayu Agung."
+        "economic_note": "Pola distribusi bergilir via Tol Terbanggi Besar-Kayu Agung."
     },
     {
         "id": "NEWS-006",
         "title": "PIHPS Bank Indonesia Catat Keterlambatan Pasokan Cabai ke Pasar Sentral",
-        "link": "https://www.bi.go.id/hargapangan",
+        "link": "https://news.google.com/search?q=pihps+harga+cabai+sumatera+pasokan",
         "source": "PIHPS Bank Indonesia",
         "pubDate": "2j lalu",
         "relevance_score": 0.98,
@@ -154,7 +154,7 @@ async def fetch_rss_feed(query: str) -> List[Dict[str, Any]]:
                 if channel is not None:
                     for item in channel.findall("item")[:6]:
                         title = item.findtext("title", "Berita Logistik")
-                        link = item.findtext("link", "https://news.google.com")
+                        link = item.findtext("link", f"https://news.google.com/search?q={urllib.parse.quote(title)}")
                         pub_date = item.findtext("pubDate", "")
                         source_elem = item.find("source")
                         source_name = source_elem.text if source_elem is not None and source_elem.text else "Google News"
@@ -192,7 +192,7 @@ async def fetch_rss_feed(query: str) -> List[Dict[str, Any]]:
 
 
 async def ingest_news_to_redis(articles: List[Dict[str, Any]]):
-    """Pushes fresh news events into Redis stream for Agent 2 consumption."""
+    """Pushes fresh news events into Redis stream for Agent consumption."""
     if not articles:
         return
     try:
@@ -208,7 +208,6 @@ async def ingest_news_to_redis(articles: List[Dict[str, Any]]):
                 "relevance_score": str(art.get("relevance_score", 0.7)),
                 "created_at": datetime.now(timezone.utc).isoformat()
             }
-            # Add to stream
             r.xadd("lrip:stream:osint", payload)
         logger.info(f"Ingested {min(5, len(articles))} articles into Redis lrip:stream:osint")
     except Exception as re:
@@ -241,16 +240,12 @@ async def get_live_news(force_refresh: bool = Query(False, description="Force re
             seen_titles.add(a["title"])
             unique_articles.append(a)
             
-    # Sort by relevance score desc
     unique_articles.sort(key=lambda x: x["relevance_score"], reverse=True)
-    
-    # Fallback to rich pre-configured articles if network is offline
     final_articles = unique_articles[:12] if unique_articles else FALLBACK_ARTICLES
     
     _NEWS_CACHE["articles"] = final_articles
     _NEWS_CACHE["last_fetched_at"] = now
     
-    # Push to Redis stream in background
     asyncio.create_task(ingest_news_to_redis(final_articles))
     
     return {
