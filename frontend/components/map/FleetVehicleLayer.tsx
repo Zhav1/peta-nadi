@@ -62,39 +62,33 @@ export function FleetVehicleLayer({
       }
     });
 
-    // Initialize HTML markers for all visible vehicles
+    // Initialize HTML markers for all visible vehicles (Globot Clean Aesthetic)
     visibleVehicles.forEach((v) => {
       if (!markersRef.current[v.vehicle_id]) {
         const isMaritime = v.modality === 'maritime';
         const isAir = v.modality === 'air';
 
         const el = document.createElement('div');
-        el.className = 'cursor-pointer group relative flex flex-col items-center select-none transition-transform transform hover:scale-125 z-35';
+        el.className = 'cursor-pointer group relative flex flex-col items-center select-none transition-transform transform hover:scale-110 z-30';
 
-        const iconColor = isMaritime
-          ? 'text-amber-400 border-amber-400 bg-[#0c192a]'
+        const boxClass = isMaritime
+          ? 'bg-[#0a1626] border border-sky-400 text-sky-400 rounded-lg'
           : isAir
-            ? 'text-purple-400 border-purple-400 bg-[#1a0f2b]'
-            : 'text-cyan-400 border-cyan-400 bg-[#081524]';
-
-        const ringColor = isMaritime
-          ? 'shadow-[0_0_12px_rgba(245,158,11,0.5)]'
-          : isAir
-            ? 'shadow-[0_0_12px_rgba(168,85,247,0.5)]'
-            : 'shadow-[0_0_12px_rgba(6,182,212,0.5)]';
+            ? 'bg-[#150f24] border border-purple-400 text-purple-300 rounded-full'
+            : 'bg-[#0a141e] border border-emerald-400 text-emerald-400 rounded-lg';
 
         const iconSvg = isMaritime
-          ? `<svg class="w-4 h-4 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="3"/><line x1="12" y1="22" x2="12" y2="8"/><path d="M5 12H2a10 10 0 0 0 20 0h-3"/></svg>`
+          ? `<svg class="w-4 h-4 text-sky-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20a6 6 0 0 0 4-1.5 6 6 0 0 1 8 0 6 6 0 0 0 8 0"/><path d="M3.5 16.5 6 7h12l2.5 9.5a2 2 0 0 1-2 2.5H5.5a2 2 0 0 1-2-2.5Z"/><path d="M12 7V3"/><path d="M8 7V5"/><path d="M16 7V5"/></svg>`
           : isAir
-            ? `<svg class="w-4 h-4 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5 0 1 .4 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.2c.3.4.8.6 1.3.4l.5-.3c.4-.2.6-.6.5-1.1z"/></svg>`
-            : `<svg class="w-4 h-4 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>`;
+            ? `<svg class="w-4 h-4 text-purple-300 shrink-0 plane-icon" style="transition: transform 0.15s linear;" viewBox="0 0 24 24" fill="currentColor"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>`
+            : `<svg class="w-4 h-4 text-emerald-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14v10"/><circle cx="17" cy="18.5" r="2.5"/><circle cx="7" cy="18.5" r="2.5"/></svg>`;
 
         el.innerHTML = `
-          <div class="relative flex items-center justify-center w-8 h-8 rounded-full border-2 ${iconColor} ${ringColor} backdrop-blur-md transition-all duration-300">
-            <span class="vehicle-icon-wrapper">${iconSvg}</span>
-            <span class="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 border border-slate-950"></span>
+          <div class="relative flex items-center justify-center w-7 h-7 ${boxClass} shadow-md backdrop-blur-sm">
+            <span class="vehicle-icon-wrapper flex items-center justify-center">${iconSvg}</span>
+            <span class="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-400 border border-slate-950"></span>
           </div>
-          <div class="opacity-0 group-hover:opacity-100 absolute -bottom-7 px-2 py-0.5 rounded-lg bg-[#0c0e12]/95 border border-white/20 text-[9px] font-mono font-bold text-white shadow-xl pointer-events-none transition whitespace-nowrap z-50">
+          <div class="opacity-0 group-hover:opacity-100 absolute -bottom-6 px-2 py-0.5 rounded bg-slate-900/95 border border-slate-700 text-[9px] font-mono font-bold text-slate-100 shadow-lg pointer-events-none transition whitespace-nowrap z-50">
             ${v.name} (${v.speed_kmh} km/j)
           </div>
         `;
@@ -137,7 +131,7 @@ export function FleetVehicleLayer({
       }
     });
 
-    // Calibrated requestAnimationFrame Loop (Simulation Scale 60x: 1s = 1min transit)
+    // Calibrated requestAnimationFrame Loop (Simulation Scale 12x: 1s = 12s transit)
     const animate = (now: number) => {
       if (isCancelled || !map) return;
 
@@ -160,7 +154,6 @@ export function FleetVehicleLayer({
         const totalDistanceKm = calculatePathDistanceKm(coords);
         
         // Calibrated realistic progression: (speed_kmh / 3600) * deltaSec * SIM_SCALE / totalDistanceKm
-        // SIM_SCALE = 12.0 (Steady observable movement: 1 real second = 12 seconds of travel)
         const simScale = 12.0;
         const increment = v.status === 'anchored' ? 0 : (baseSpeed / 3600) * deltaSec * (simScale / totalDistanceKm);
 
@@ -173,6 +166,14 @@ export function FleetVehicleLayer({
         const marker = markersRef.current[v.vehicle_id];
         if (marker) {
           marker.setLngLat(state.currentPosition);
+          // Rotate plane icon according to flight bearing
+          if (v.modality === 'air') {
+            const el = marker.getElement();
+            const planeSvg = el.querySelector('.plane-icon') as HTMLElement | null;
+            if (planeSvg) {
+              planeSvg.style.transform = `rotate(${state.bearing}deg)`;
+            }
+          }
         }
       });
 
@@ -200,10 +201,10 @@ export function FleetVehicleLayer({
             <div className="flex items-center gap-2">
               <div className={`p-2 rounded-xl border ${
                 selectedVehicle.vehicle.modality === 'maritime'
-                  ? 'bg-amber-950/60 text-amber-400 border-amber-500/40'
+                  ? 'bg-sky-950/60 text-sky-400 border-sky-500/40'
                   : selectedVehicle.vehicle.modality === 'air'
                     ? 'bg-purple-950/60 text-purple-400 border-purple-500/40'
-                    : 'bg-cyan-950/60 text-cyan-400 border-cyan-500/40'
+                    : 'bg-emerald-950/60 text-emerald-400 border-emerald-500/40'
               }`}>
                 {selectedVehicle.vehicle.modality === 'maritime' ? (
                   <Anchor className="w-4 h-4" />
