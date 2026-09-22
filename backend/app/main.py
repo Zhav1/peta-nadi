@@ -203,6 +203,7 @@ app.include_router(routing_router.router, prefix="/api/v1")
 app.include_router(agent_router.router)
 app.include_router(demo_router.router)
 app.include_router(commodity_router.router, prefix="/api/v1")
+app.include_router(commodity_router.router, prefix="/api/v1/commodity", include_in_schema=False)
 app.include_router(vehicles_router.router)
 app.include_router(news_router.router)
 

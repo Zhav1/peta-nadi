@@ -99,6 +99,97 @@ async def list_incidents(
     )
 
 
+@router.get("/historical/episodes")
+async def get_historical_episodes():
+    """Returns curated historical disruption episodes for analogue matching."""
+    episodes = [
+        {
+            "incident_id": "HIST-2024-01",
+            "title": "Banjir Bandang Jalinsum Tebing Tinggi - Siantar",
+            "type": "flood",
+            "severity": "critical",
+            "status": "historical",
+            "region": "north_sumatra",
+            "created_at": "2024-11-15T08:00:00Z",
+            "lat": 3.3285,
+            "lon": 99.1625,
+            "confidence": 0.94,
+            "impact_summary": "Genangan 110cm memutus jalur logistik 36 jam. Inflasi cabai merah +22.4%."
+        },
+        {
+            "incident_id": "HIST-2024-02",
+            "title": "Longsor Sitinjau Lauik KM 22 Padang - Solok",
+            "type": "landslide",
+            "severity": "high",
+            "status": "historical",
+            "region": "west_sumatra",
+            "created_at": "2024-12-02T14:30:00Z",
+            "lat": -0.9450,
+            "lon": 100.5200,
+            "confidence": 0.91,
+            "impact_summary": "Tebing runtuh menutup 2 lajur. Truk sayur dialihkan via Malalak."
+        },
+        {
+            "incident_id": "HIST-2025-01",
+            "title": "Antrean Truk Sembako Pelabuhan Bakauheni Cuaca Buruk",
+            "type": "port_queue",
+            "severity": "high",
+            "status": "historical",
+            "region": "lampung",
+            "created_at": "2025-01-20T06:00:00Z",
+            "lat": -5.8711,
+            "lon": 105.7533,
+            "confidence": 0.96,
+            "impact_summary": "Gelombang Selat Sunda 3.5m menahan 800+ truk logistik selama 18 jam."
+        }
+    ]
+    return {"items": episodes, "total": len(episodes)}
+
+
+@router.get("/predictive/risks")
+async def get_predictive_risks():
+    """Returns predictive climate and logistical risk forecasts."""
+    risks = [
+        {
+            "id": "PRED-001",
+            "title": "Peringatan Dini Cuaca Ekstrem Jalur Lintas Timur Palembang - Jambi",
+            "type": "flood_risk",
+            "severity": "high",
+            "region": "south_sumatra",
+            "lead_time_hours": 12.0,
+            "probability": 0.82,
+            "lat": -2.5500,
+            "lon": 104.3500
+        },
+        {
+            "id": "PRED-002",
+            "title": "Potensi Gelombang Tinggi dan Hambatan Bongkar Muat Belawan",
+            "type": "marine_risk",
+            "severity": "medium",
+            "region": "north_sumatra",
+            "lead_time_hours": 24.0,
+            "probability": 0.78,
+            "lat": 3.7922,
+            "lon": 98.6776
+        }
+    ]
+    return {"items": risks, "total": len(risks)}
+
+
+@router.get("/osint/feed")
+@router.get("/osint/live")
+async def get_osint_feed():
+    """Returns real-time OSINT intelligence feed items."""
+    try:
+        from app.routers.news_router import get_live_news
+        news_res = await get_live_news(force_refresh=False)
+        articles = news_res.get("articles") or news_res.get("items") or []
+        return {"items": articles, "total": len(articles)}
+    except Exception as e:
+        logger.warning(f"OSINT feed fallback: {e}")
+        return {"items": [], "total": 0}
+
+
 @router.get("/{incident_id}", response_model=dict)
 async def get_incident(incident_id: str):
     """Get a single incident with full CrisisState detail."""

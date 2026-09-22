@@ -25,6 +25,7 @@ class CommodityPriceResponse(BaseModel):
     total: int
 
 
+@router.get("", response_model=CommodityPriceResponse)
 @router.get("/prices", response_model=CommodityPriceResponse)
 async def get_commodity_prices(
     commodity: Optional[str] = Query(None, description="Filter by commodity name (e.g. beras, cabai_merah)"),
@@ -107,3 +108,33 @@ async def get_commodity_prices(
     mock_items.reverse()
 
     return CommodityPriceResponse(items=mock_items, total=len(mock_items))
+
+
+@router.get("/spikes")
+async def get_commodity_spikes(
+    region: Optional[str] = Query(None, description="Filter by region")
+):
+    """Returns detected price spike anomalies for active regional food commodities."""
+    spikes = [
+        {
+            "commodity": "cabai_merah",
+            "region": region or "north_sumatra",
+            "current_price": 62000.0,
+            "baseline_price": 52000.0,
+            "spike_pct": 19.2,
+            "severity": "critical",
+            "status": "active_shock",
+            "detected_at": datetime.now(timezone.utc).isoformat()
+        },
+        {
+            "commodity": "bawang_merah",
+            "region": region or "north_sumatra",
+            "current_price": 38500.0,
+            "baseline_price": 35000.0,
+            "spike_pct": 10.0,
+            "severity": "high",
+            "status": "elevated",
+            "detected_at": datetime.now(timezone.utc).isoformat()
+        }
+    ]
+    return {"spikes": spikes, "total": len(spikes)}

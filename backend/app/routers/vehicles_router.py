@@ -381,6 +381,7 @@ BASE_FLEET: List[Dict[str, Any]] = [
 
 
 @router.get("/vehicles")
+@router.get("/api/v1/fleet/vehicles")
 async def get_active_fleet(
     modality: Optional[str] = Query(None, description="Filter modality: truck, maritime, air"),
     status: Optional[str] = Query(None, description="Filter status: moving, anchored, rerouting")
