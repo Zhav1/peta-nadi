@@ -16,3 +16,4 @@ langgraph-checkpoint==1.0.12
 networkx==3.3
 numpy>=1.26.4
 scipy>=1.13.1
+pytest-cov>=5.0.0

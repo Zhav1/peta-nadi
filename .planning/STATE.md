@@ -2,16 +2,16 @@
 
 **Last Updated:** 2026-09-23
 **Active Milestone:** M2 - PreHub Final Defense: Empirical Evaluation, Tactical HUD & Multi-Source Maturity
-**Current Phase:** Phase 36 (PLANNED) | Ready to Execute
+**Current Phase:** Phase 37 (PLANNED) | Ready to Plan & Execute
 
 ---
 
 ## Current Position
 
-Phase: Phase 36: Ground-Truth Benchmark Dataset & Automated Test Coverage Engine
-Status: PLANNED (Ready for execution)
-Last activity: 2026-09-23: Phase 36 context, research, validation strategy, and execution plans generated
-Next action: Run `/gsd-execute-phase 36` to execute Phase 36 plans
+Phase: Phase 37: Mathematical Consensus Formulation, Probability Calibration & CPU Routing Consolidation
+Status: PLANNED (Ready for planning & execution)
+Last activity: 2026-09-23: Phase 36 completed (N=60 ground-truth dataset, empirical metrics harness with 100% precision/94.3% recall, 50 automated tests with pytest-cov, test matrix documentation)
+Next action: Run `/gsd-plan-phase 37` to begin Phase 37
 
 ---
 
@@ -55,7 +55,7 @@ Next action: Run `/gsd-execute-phase 36` to execute Phase 36 plans
 | 33 | Sumatra-Wide Pinpoint Tracking, Clean Regional Hubs, Modality Filters & Grounded OSINT Wire | **COMPLETE** ✅ | 25+ Sumatra strategic hubs, 11 pinpoint multi-modal fleets across Trans-Sumatra highways/nautical lanes, zoom-adaptive hub markers (no label collision), floating modality filter bar, grounded OSINT wire with real canonical URLs & 1-click cuOpt corridor reroute |
 | 34 | Dynamic Fleet Scale, Nautical Sea-Lane Pathfinding & Globot Honesty Alignment | **COMPLETE** ✅ | Real coastal nautical sea-lane graph around Sumatra, 45-unit multi-province fleet, strict hazard collision + Hold/Delay tactical fallback, interactive map layer filter widget, Globot-style high-contrast markers with bearing rotation, locked unfinished menus |
 | 35 | Pan-Sumatra Multi-Outlet News Intelligence, Early Warning Engine & Autonomous Swarm Triggering | **COMPLETE** ✅ | Ingestion from 8 LKBN ANTARA Sumatra bureaus + ANTARA Ekonomi, Gemini 1.5 Flash NLP extraction with heuristic fallback, Pan-Sumatra NER gazetteer, live endpoints `/api/v1/news/live` & `/api/v1/news/market-regime`, autonomous background dispatch on critical disruptions, dynamic agent gate penalties (Agent 2 +0.15, Agent 4 x5.0 arterial penalty, Agent 5 +15-35% inflation shock, Agent 6 evidence citations), minimalist UI |
-| 36 | Ground-Truth Benchmark Dataset & Automated Test Coverage Engine | **PLANNED** | 2 plans generated: benchmark dataset + eval harness & coverage engine + test matrix |
+| 36 | Ground-Truth Benchmark Dataset & Automated Test Coverage Engine | **COMPLETE** ✅ | Standardized N=60 Sumatra benchmark dataset, empirical evaluation harness (100% precision, 94.3% recall, F1 0.971, 0.024ms latency), 50 automated tests with pytest-cov, complete test matrix in docs/test_matrix.md |
 | 37 | Mathematical Consensus Formulation, Probability Calibration & CPU Routing Consolidation | **PLANNED** | Formal probabilistic independence formula, Brier calibration, CPU OR-Tools/NetworkX, Open-Meteo fusion |
 | 38 | Closed-Loop Operator Decision Trace & Ground-Truth Outcome Engine | **PLANNED** | Multi-action ACCEPT/REJECT/OVERRIDE logging, POST /api/v1/outcomes at T+12/24h, feedback loop |
 | 39 | Tactical Multi-Modal Telemetry & God's-Eye HUD Console | **PLANNED** | AISstream Redis link, ADS-B cargo, target lock crosshairs, bearing vectors, follow-camera |

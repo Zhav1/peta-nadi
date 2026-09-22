@@ -1,0 +1,21 @@
+[run]
+branch = True
+source =
+    app
+    agents
+omit =
+    */tests/*
+    */.venv/*
+    */adapters/*_mock.py
+    */mock_*
+
+[report]
+show_missing = True
+skip_covered = False
+precision = 1
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    if __name__ == .__main__.:
+    raise NotImplementedError
+    pass
