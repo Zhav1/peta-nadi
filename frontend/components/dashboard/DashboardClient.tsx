@@ -1079,15 +1079,14 @@ export default function DashboardClient() {
               <div className="flex items-center gap-2">
                 <div className="relative flex items-center justify-center w-7 h-7 rounded-lg bg-cyan-950/80 border border-cyan-500/30 text-cyan-400">
                   <Radio className="w-4 h-4" />
-                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-400"></span>
+                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-cyan-400"></span>
                 </div>
                 <div>
-                  <h2 className="text-xs font-bold font-sans text-white uppercase tracking-wider flex items-center gap-1.5">
-                    OSINT & NEWS WIRE
+                  <h2 className="text-xs font-bold font-sans text-white uppercase tracking-wider">
+                    Intelijen Berita Resmi
                   </h2>
                   <span className="text-[9px] font-mono text-slate-400">
-                    {filteredNews.length} Sinyal Lapangan · Sumatra
+                    {filteredNews.length} Sumber Terverifikasi
                   </span>
                 </div>
               </div>
@@ -1097,14 +1096,14 @@ export default function DashboardClient() {
                   type="button"
                   onClick={() => setIsLeftSidebarCollapsed(true)}
                   className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
-                  title="Sembunyikan Sidebar"
+                  title="Sembunyikan Panel"
                 >
                   <PanelLeftClose className="w-3.5 h-3.5" />
                 </button>
               </div>
             </div>
 
-            {/* Quick Search & Category Pills */}
+            {/* Quick Search & Category Filter */}
             <div className="space-y-2 shrink-0">
               <div className="relative">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
@@ -1112,7 +1111,7 @@ export default function DashboardClient() {
                   type="text"
                   value={newsSearchQuery}
                   onChange={(e) => setNewsSearchQuery(e.target.value)}
-                  placeholder="Cari berita / wilayah disrupsi..."
+                  placeholder="Cari berita atau lokasi..."
                   className="w-full pl-8 pr-7 py-1.5 rounded-xl bg-slate-950/70 border border-white/10 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/60 transition font-sans"
                 />
                 {newsSearchQuery && (
@@ -1128,19 +1127,18 @@ export default function DashboardClient() {
 
               <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5 text-[10px] font-mono">
                 {[
-                  { id: 'ALL', label: 'SEMUA' },
-                  { id: 'OFFICIAL', label: 'RESMI' },
+                  { id: 'ALL', label: 'Semua' },
+                  { id: 'OFFICIAL', label: 'ANTARA' },
                   { id: 'WEATHER', label: 'BMKG' },
-                  { id: 'OSINT', label: 'MEDSOS' },
-                  { id: 'MARKET', label: 'HARGA' },
+                  { id: 'MARKET', label: 'Harga' },
                 ].map((tab) => (
                   <button
                     key={tab.id}
                     type="button"
                     onClick={() => setSelectedNewsCategory(tab.id as 'ALL' | 'OFFICIAL' | 'WEATHER' | 'OSINT' | 'MARKET')}
-                    className={`cursor-pointer px-2 py-1 rounded-lg border font-bold transition whitespace-nowrap ${
+                    className={`cursor-pointer px-2.5 py-1 rounded-lg border font-medium transition whitespace-nowrap ${
                       selectedNewsCategory === tab.id
-                        ? 'bg-cyan-950 text-cyan-300 border-cyan-500/50 shadow-[0_0_8px_rgba(6,182,212,0.3)]'
+                        ? 'bg-cyan-950 text-cyan-300 border-cyan-500/50'
                         : 'bg-slate-950/50 text-slate-400 border-white/5 hover:border-white/20 hover:text-slate-200'
                     }`}
                   >
@@ -1155,115 +1153,102 @@ export default function DashboardClient() {
               {filteredNews.length === 0 ? (
                 <div className="p-6 text-center text-slate-500 font-mono text-xs space-y-1">
                   <Newspaper className="w-6 h-6 mx-auto text-slate-600 mb-2" />
-                  <p>Tidak ada berita yang cocok dengan filter.</p>
+                  <p>Tidak ada berita yang cocok.</p>
                 </div>
               ) : (
                 filteredNews.map((item) => {
                   const isSelected = selectedNewsId === item.id;
-                  const isOfficial = item.source_type === 'OFFICIAL_NEWS';
-                  const isWeather = item.source_type === 'BMKG_WEATHER';
-                  const isMarket = item.source_type === 'PIHPS_MARKET';
-
-                  const badgeBg = isOfficial
-                    ? 'bg-blue-950/60 text-blue-300 border-blue-500/30'
-                    : isWeather
-                      ? 'bg-amber-950/60 text-amber-300 border-amber-500/30'
-                      : isMarket
-                        ? 'bg-emerald-950/60 text-emerald-300 border-emerald-500/30'
-                        : 'bg-purple-950/60 text-purple-300 border-purple-500/30';
+                  const isOfficial = item.source_tier === 'TIER_1_OFFICIAL' || item.source_type === 'OFFICIAL_NEWS';
+                  const isEarlyWarning = item.temporal_phase === 'forecast_early_warning';
 
                   return (
                     <div
                       key={item.id}
-                      className={`group p-3 rounded-xl border backdrop-blur-md transition-all duration-200 space-y-2 ${
+                      className={`p-3 rounded-xl border backdrop-blur-md transition-all duration-200 space-y-2 ${
                         isSelected
-                          ? 'bg-cyan-950/40 border-cyan-500/60 ring-2 ring-cyan-500/20'
+                          ? 'bg-cyan-950/40 border-cyan-500/60 ring-1 ring-cyan-500/30'
                           : 'bg-[#141820]/70 border-white/10 hover:border-cyan-500/40 hover:bg-[#181d28]/80'
                       }`}
                     >
-                      {/* Source & Timestamp Line */}
+                      {/* Source & Timestamp */}
                       <div className="flex items-center justify-between gap-1 text-[9px] font-mono">
                         <div className="flex items-center gap-1.5 truncate">
-                          <span className={`px-1.5 py-0.5 rounded border font-bold uppercase ${badgeBg}`}>
-                            {isOfficial ? 'BERITA RESMI' : isWeather ? 'BMKG CUACA' : isMarket ? 'HARGA BI' : 'OSINT WARGA'}
+                          <span className={`px-1.5 py-0.5 rounded border font-semibold uppercase ${
+                            isOfficial
+                              ? 'bg-cyan-950/60 text-cyan-300 border-cyan-500/30'
+                              : 'bg-slate-800 text-slate-300 border-slate-700'
+                          }`}>
+                            {item.source_name || (isOfficial ? 'ANTARA' : 'BERITA')}
                           </span>
                           <span className="text-slate-400 truncate">{item.pubDate || 'Terkini'}</span>
                         </div>
-                        <span className="text-emerald-400 font-bold shrink-0">
-                          {Math.round(item.confidence_score * 100)}% Match
-                        </span>
+                        {isEarlyWarning && (
+                          <span className="text-cyan-400 font-semibold shrink-0">
+                            Early Warning {item.lead_time_hours ? `(${item.lead_time_hours}j)` : ''}
+                          </span>
+                        )}
                       </div>
 
                       {/* Headline */}
-                      <h3 className="text-xs font-bold text-slate-100 group-hover:text-cyan-300 transition-colors font-sans leading-snug">
+                      <h3 className="text-xs font-semibold text-slate-100 leading-snug font-sans">
                         {item.headline}
                       </h3>
 
-                      {/* Location & Summary */}
+                      {/* Summary */}
                       <p className="text-[10px] text-slate-400 font-sans leading-relaxed line-clamp-2">
                         {item.summary}
                       </p>
 
-                      {/* Grounded Affected Commodity & Calculation Evidence Note */}
-                      <div className="p-2 rounded-lg bg-slate-950/80 border border-white/5 space-y-1 text-[10px] font-mono">
-                        <div className="flex items-center justify-between text-slate-300">
-                          <span className="text-slate-400 font-bold">Komoditas Terdampak:</span>
-                          <span className="text-amber-300 font-bold truncate max-w-[150px]">{item.commodity_name || 'Sembako & Beras'}</span>
+                      {/* Commodity & Location */}
+                      <div className="flex items-center justify-between text-[9px] font-mono text-slate-400 pt-1 border-t border-white/5">
+                        <div className="flex items-center gap-1 truncate max-w-[140px]">
+                          <MapPin className="w-3 h-3 text-cyan-400 shrink-0" />
+                          <span className="truncate">{item.location_name || 'Koridor Sumut'}</span>
                         </div>
-                        {item.economic_note && (
-                          <p className="text-[9px] text-slate-400 font-sans leading-tight italic">
-                            Catatan Rute: {item.economic_note}
-                          </p>
+
+                        {item.commodity_name && (
+                          <span className="text-slate-300 truncate max-w-[120px]">
+                            {item.commodity_name}
+                          </span>
                         )}
                       </div>
 
-                      {/* Action Bar */}
-                      <div className="flex items-center justify-between pt-1 border-t border-white/5">
-                        <div className="flex items-center gap-1 text-[9px] font-mono text-slate-400 truncate max-w-[120px]">
-                          <MapPin className="w-3 h-3 text-cyan-400 shrink-0" />
-                          <span className="truncate">{item.location_name || 'Sumatera'}</span>
-                        </div>
-
-                        <div className="flex items-center gap-1">
-                          {item.attributions && item.attributions.length > 0 && item.attributions[0].url && (
-                            <a
-                              href={item.attributions[0].url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="cursor-pointer p-1 rounded-lg bg-slate-900/90 text-slate-400 hover:text-cyan-300 hover:bg-slate-800 transition"
-                              title="Buka Berita di Google News"
-                            >
-                              <ExternalLink className="w-3.5 h-3.5" />
-                            </a>
-                          )}
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedNewsId(item.id);
-                              if (item.originNode && item.destNode) {
-                                setSelectedOriginNode(item.originNode);
-                                setSelectedDestNode(item.destNode);
-                              }
-                              if (item.lat && item.lon) {
-                                handleMapPointTargeted(
-                                  item.lat,
-                                  item.lon,
-                                  (item.hazardType as CrisisType) || (item.category === 'METEOROLOGY' ? 'flood' : item.category === 'TRAFFIC_BOTTLENECK' ? 'congestion' : 'flood'),
-                                  15,
-                                  'high'
-                                );
-                                setToast({
-                                  message: `Skenario Diaktifkan: ${item.location_name || 'Titik Berita'}. Rute menghitung jalur aman.`,
-                                  type: 'info',
-                                });
-                              }
-                            }}
-                            className="cursor-pointer flex items-center gap-1 px-2.5 py-1 rounded-lg bg-cyan-950 text-cyan-300 border border-cyan-500/40 hover:bg-cyan-900 hover:text-white transition text-[9px] font-mono font-bold"
+                      {/* Action Link / Focus */}
+                      <div className="flex items-center justify-end gap-1.5 pt-0.5">
+                        {item.link && (
+                          <a
+                            href={item.link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="cursor-pointer p-1 rounded-lg bg-slate-900 text-slate-400 hover:text-cyan-300 transition"
+                            title="Tautan Sumber"
                           >
-                            <span>Fokus Rute</span>
-                          </button>
-                        </div>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedNewsId(item.id);
+                            if (item.originNode && item.destNode) {
+                              setSelectedOriginNode(item.originNode);
+                              setSelectedDestNode(item.destNode);
+                            }
+                            if (item.lat && item.lon) {
+                              handleMapPointTargeted(
+                                item.lat,
+                                item.lon,
+                                (item.hazardType as CrisisType) || 'flood',
+                                15,
+                                'high'
+                              );
+                            }
+                          }}
+                          className="cursor-pointer flex items-center gap-1 px-2 py-0.5 rounded-lg bg-cyan-950/80 text-cyan-300 border border-cyan-500/30 hover:bg-cyan-900 transition text-[9px] font-mono font-medium"
+                        >
+                          <span>Fokus</span>
+                        </button>
                       </div>
                     </div>
                   );

@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 async def route_optimization_agent(state: CrisisState) -> dict:
-    """Agent 4: NetworkX pgRouting matrix computation + NVIDIA cuOpt dynamic VRP routing."""
+    """Agent 4: NetworkX pgRouting matrix computation + dynamic hazard/news-weighted routing."""
     logger.info("Agent 4 [RouteOptimizationAgent] running...")
     
     # 1. Load road graph edges
@@ -38,15 +38,29 @@ async def route_optimization_agent(state: CrisisState) -> dict:
             corridor=edge.get("corridor")
         )
         
-    # 3. Apply hazard penalties
+    # 3. Apply hazard & news intelligence penalties
     hazard_polygons = state.get("hazard_polygons") or []
+    blocked_corridors = state.get("blocked_corridors") or []
+    osint_finding = state.get("osint_hazard_finding", {})
+    osint_data = osint_finding.get("data", {}) if isinstance(osint_finding, dict) else {}
+    if not blocked_corridors and osint_data.get("blocked_corridors"):
+        blocked_corridors = osint_data["blocked_corridors"]
+
     disrupted_corridors = set()
     for hazard in hazard_polygons:
         event_type = state.get("type") or state.get("event_type")
-        if event_type == "port_closure" or event_type == "port_congestion":
+        if event_type in ["port_closure", "port_congestion"]:
             disrupted_corridors.add("belawan_access")
         else:
             disrupted_corridors.add("trans_sumatra")
+            
+    # Include news-verified blockages
+    if blocked_corridors:
+        for bc in blocked_corridors:
+            if "jalinsum" in bc.lower() or "arteri" in bc.lower():
+                disrupted_corridors.add("trans_sumatra")
+            if "belawan" in bc.lower():
+                disrupted_corridors.add("belawan_access")
             
     # Apply weights
     for u, v, data in G.edges(data=True):
@@ -61,8 +75,8 @@ async def route_optimization_agent(state: CrisisState) -> dict:
                 weight *= 3.0
             elif severity == "high":
                 weight *= 10.0
-            elif severity == "critical":
-                weight = 9999.0  # blocked
+            elif severity == "critical" or blocked_corridors:
+                weight = 9999.0  # blocked / severed
                 
         G[u][v]["weight"] = weight
 
@@ -118,8 +132,8 @@ async def route_optimization_agent(state: CrisisState) -> dict:
     finding: AgentFinding = {
         "agent": "RouteOptimizationAgent",
         "confidence": confidence,
-        "summary": f"Calculated {len(recommendations)} optimal fleet routes using NetworkX graph routing with real-time hazard weighting.",
-        "data": {"routes": recommendations},
+        "summary": f"Calculated {len(recommendations)} optimal fleet routes with real-time hazard and news blockage weights.",
+        "data": {"routes": recommendations, "disrupted_corridors": list(disrupted_corridors)},
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
     
