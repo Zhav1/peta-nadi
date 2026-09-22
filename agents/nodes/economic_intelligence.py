@@ -13,7 +13,7 @@ settings = get_settings()
 
 
 async def economic_intelligence_agent(state: CrisisState) -> dict:
-    """Agent 5: PIHPS anomaly detection + pgvector LTM retrieval."""
+    """Agent 5: PIHPS anomaly detection + News supply shock grounding + pgvector LTM retrieval."""
     logger.info("Agent 5 [EconomicIntelligenceAgent] running...")
     
     norm_event = state.get("normalized_event") or {}
@@ -30,8 +30,6 @@ async def economic_intelligence_agent(state: CrisisState) -> dict:
         latest_pihps = await r.get("lrip:pihps:latest")
         if latest_pihps:
             data = json.loads(latest_pihps)
-            # Look for price spike flag or perform standard dev z-score check
-            # E.g. data = {"rice": {"current": 14000, "mean": 12500, "std": 500}}
             for comm, stats in data.items():
                 if isinstance(stats, dict) and "current" in stats and "mean" in stats and "std" in stats:
                     current = float(stats["current"])
@@ -45,6 +43,17 @@ async def economic_intelligence_agent(state: CrisisState) -> dict:
     except Exception as re:
         logger.debug(f"Failed to read PIHPS data from Redis: {re}")
 
+    # Merge news-reported affected commodities
+    news_commodities = state.get("news_affected_commodities") or []
+    osint_finding = state.get("osint_hazard_finding", {})
+    if isinstance(osint_finding, dict):
+        news_commodities.extend(osint_finding.get("data", {}).get("affected_commodities", []))
+        
+    for nc in news_commodities:
+        clean_c = nc.lower().replace(" ", "_")
+        if clean_c not in anomalous_commodities:
+            anomalous_commodities.append(clean_c)
+
     # 2. LTM retrieval (pgvector query)
     ltm_query = f"{event_type} in {region}, {severity} severity"
     ltm_episodes = await query_ltm(ltm_query, top_k=5)
@@ -55,24 +64,23 @@ async def economic_intelligence_agent(state: CrisisState) -> dict:
     direction_agreement = 0
     
     if ltm_episodes:
-        # Sort by similarity score
         valid_episodes = [ep for ep in ltm_episodes if ep.get("similarity_score", 0) > 0.0]
-        
         if valid_episodes:
             top_ep = valid_episodes[0]
             if top_ep["similarity_score"] > 0.8:
                 strong_precedent = True
                 
-            # Count direction agreement (inflation > 1.0)
             direction_agreement = sum(1 for ep in valid_episodes if ep["inflation_multiplier"] > 1.0)
-            
-            # Weighted average multiplier from top 3
             top_3 = valid_episodes[:3]
             total_weight = sum(ep["similarity_score"] for ep in top_3)
             if total_weight > 0:
                 inflation_multiplier = sum(ep["inflation_multiplier"] * ep["similarity_score"] for ep in top_3) / total_weight
             else:
                 inflation_multiplier = top_ep["inflation_multiplier"]
+
+    # Scale inflation multiplier if news verifies active supply chain severance
+    if news_commodities and severity in ["high", "critical"]:
+        inflation_multiplier = max(inflation_multiplier, 1.15)
                 
     # 3. Anomaly and inflation forecast
     inflation_forecast = {
@@ -82,41 +90,41 @@ async def economic_intelligence_agent(state: CrisisState) -> dict:
         "anomalous_commodities": anomalous_commodities if anomalous_commodities else ["cooking_oil", "rice"]
     }
 
-    # 4. Gemini Flash narrative generation
-    narrative = f"Economic impact model projects a {int((inflation_multiplier - 1) * 100)}% price increase for staples in {region} over the next 48 hours."
-    if ltm_episodes:
-        narrative += f" This is informed by historical precedent: '{ltm_episodes[0]['title']}'."
+    # 4. Narrative generation
+    pct_rise = int(round((inflation_multiplier - 1) * 100))
+    narrative = f"Model dampak ekonomi memproyeksikan kenaikan harga pangan +{pct_rise}% dalam 48 jam ke depan di {region}."
+    if news_commodities:
+        narrative += f" Komoditas paling rentan: {', '.join(anomalous_commodities[:3])}."
         
     try:
         prompt = (
-            "Based on the following historical precedents and current price details, generate a short 3-sentence "
-            "economic narrative forecasting inflation in Indonesian logistics. Mention most affected commodities "
-            "and cite the top historical precedent.\n\n"
-            f"Current Event: {event_type} in {region} ({severity} severity)\n"
-            f"Historical Precedents: {json.dumps(ltm_episodes[:2], default=str)}\n"
-            f"Projected Multiplier: {inflation_multiplier}\n"
-            f"Anomalous Commodities: {anomalous_commodities}"
+            "Berdasarkan preseden historis, data harga PIHPS, dan laporan intelijen berita resmi, buat ringkasan narasi "
+            "ekonomi singkat (2-3 kalimat) mengenai proyeksi inflasi pangan di koridor Sumatera Utara. "
+            "Sebutkan komoditas terdampak secara faktual tanpa kata berlebihan.\n\n"
+            f"Event: {event_type} ({severity})\n"
+            f"Komoditas Teridentifikasi: {anomalous_commodities}\n"
+            f"Proyeksi Multiplier Inflasi: {inflation_multiplier}"
         )
         from agents.llm_gateway import LLMGateway
         resp_text = await LLMGateway.generate_content(
             prompt=prompt,
             model_name="gemini-1.5-flash"
         )
-        if resp_text:
-            narrative = resp_text
+        if resp_text and len(resp_text) > 20:
+            narrative = resp_text.strip()
     except Exception as le:
-        logger.error(f"LLMGateway narrative generation failed: {le}")
+        logger.debug(f"LLMGateway narrative generation skipped: {le}")
 
     # 5. Compute confidence score
-    confidence = 0.4  # Base
-    if anomaly_detected:
-        confidence += 0.3
+    confidence = 0.5  # Base
+    if anomaly_detected or news_commodities:
+        confidence += 0.25
     if strong_precedent:
-        confidence += 0.2
-    if direction_agreement >= 3:
-        confidence += 0.1
+        confidence += 0.15
+    if direction_agreement >= 2:
+        confidence += 0.05
         
-    confidence = min(1.0, confidence)
+    confidence = min(0.96, confidence)
     
     finding: AgentFinding = {
         "agent": "EconomicIntelligenceAgent",
@@ -125,7 +133,8 @@ async def economic_intelligence_agent(state: CrisisState) -> dict:
         "data": {
             "inflation_forecast": inflation_forecast,
             "ltm_episodes_used": len(ltm_episodes),
-            "anomaly_detected": anomaly_detected
+            "anomaly_detected": anomaly_detected,
+            "news_commodities": list(news_commodities)
         },
         "timestamp": datetime.now(timezone.utc).isoformat()
     }

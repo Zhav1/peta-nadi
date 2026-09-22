@@ -119,6 +119,11 @@ class CrisisState(TypedDict):
     consensus_breakdown: Optional[Dict[str, float]]
     validated: bool
 
+    # News Intelligence & Corridor Grounding
+    verified_news_citations: Optional[List[Dict[str, Any]]]
+    blocked_corridors: Optional[List[str]]
+    news_affected_commodities: Optional[List[str]]
+
     # Metadata
     created_at: str                     # ISO 8601
     updated_at: str                     # ISO 8601

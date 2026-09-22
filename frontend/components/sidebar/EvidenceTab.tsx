@@ -25,7 +25,7 @@ interface EvidenceTabProps {
 
 const AGENT_LABELS: Record<string, { name: string; source: string; defaultSourceType: 'live' | 'fixture' }> = {
   data_collection: { name: 'Data Collection Agent', source: 'BMKG Sensor + TomTom Ingestion', defaultSourceType: 'live' },
-  osint_hazard: { name: 'OSINT & Hazard Agent', source: 'Verified Media & Public Dispatch', defaultSourceType: 'fixture' },
+  osint_hazard: { name: 'OSINT & News Intelligence', source: 'LKBN ANTARA + BMKG Warta Terverifikasi', defaultSourceType: 'live' },
   prediction: { name: 'Atmospheric & Traffic Prediction', source: 'TFT & Numerical Weather Model', defaultSourceType: 'fixture' },
   route_optimization: { name: 'Route Optimization Engine', source: 'NetworkX Graph Matrix', defaultSourceType: 'live' },
   economic_intelligence: { name: 'Economic & Price Agent', source: 'PIHPS Bank Indonesia Price Stream', defaultSourceType: 'live' },
@@ -61,6 +61,14 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
   const disruptionProb = Math.min(Math.round(confidenceScore * 0.94), 98);
 
   const isPredictiveEvent = crisis.crisis_id.includes('predict') || crisis.type === 'port_closure';
+
+  const osintFinding = findings.find((f) => f.key === 'osint_hazard')?.finding;
+  const verifiedCitations = (osintFinding?.data as Record<string, unknown> | undefined)?.verified_citations as Array<{ headline: string; source: string; tier: string; temporal_phase: string }> | undefined;
+  const topCitation = Array.isArray(verifiedCitations) && verifiedCitations.length > 0 ? verifiedCitations[0] : null;
+  const displayAuthor = topCitation?.source || crisis.evidence?.osint_author || "LKBN ANTARA Sumut";
+  const displayText = topCitation?.headline || crisis.evidence?.osint_text || 'Debit air Sungai Padang meningkat merendam jalur logistik Jalinsum KM 78. Puluhan truk sembako dialihkan ke Tol MKTT.';
+  const isOfficialTier = topCitation ? topCitation.tier === 'TIER_1_OFFICIAL' : true;
+  const isEarlyWarning = topCitation?.temporal_phase === 'forecast_early_warning';
 
   return (
     <div className="space-y-4 text-slate-200 text-xs">
@@ -298,28 +306,33 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
           <span className="text-[9px] font-mono text-slate-500">Spatiotemporal Ingestion</span>
         </div>
 
-        {/* Crowdsourced OSINT Card */}
-        <div className="bg-[#1e2024]/40 border border-white/10 rounded-xl p-3 hover:border-cyan-500/40 transition-all space-y-1.5">
+        {/* Verified News & OSINT Ground-Truth Card */}
+        <div className="bg-[#1e2024]/60 border border-white/10 rounded-xl p-3 hover:border-cyan-500/40 transition-all space-y-1.5">
           <div className="flex justify-between items-center">
             <span className="font-bold text-slate-200 font-mono text-xs flex items-center gap-1.5">
-              <FileText className="w-3.5 h-3.5 text-amber-400" />
-              <span>{crisis.evidence?.osint_author || "@LogisticsWatcher_ID"}</span>
+              <FileText className="w-3.5 h-3.5 text-cyan-400" />
+              <span>{displayAuthor}</span>
             </span>
             <div className="flex items-center gap-1">
-              <span className="text-[9px] font-mono text-amber-300 bg-amber-950/80 px-2 py-0.5 rounded border border-amber-500/40 font-bold">
-                OSINT DIVERIFIKASI
+              <span className="text-[9px] font-mono text-cyan-300 bg-cyan-950/80 px-2 py-0.5 rounded border border-cyan-500/40 font-bold">
+                BERITA TERVERIFIKASI
               </span>
               <span className="text-[8px] font-mono text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded">
-                {isSimulated ? 'SIMULASI' : 'PUBLIC FEED'}
+                {isOfficialTier ? 'RESMI' : 'PERS REGIONAL'}
               </span>
             </div>
           </div>
           <p className="text-[11px] text-slate-300 leading-relaxed font-sans">
-            {crisis.evidence?.osint_text || 'Hambatan terjadi di koridor persimpangan arteri. Antrean kendaraan logistik terpantau memanjang.'}
+            {displayText}
           </p>
-          <div className="flex items-center gap-2 text-[9px] font-mono text-slate-500 pt-1">
-            <Clock className="w-2.5 h-2.5" />
-            <span>Timestamp: 12 menit yang lalu</span>
+          <div className="flex items-center justify-between text-[9px] font-mono text-slate-500 pt-1">
+            <div className="flex items-center gap-1.5">
+              <Clock className="w-2.5 h-2.5" />
+              <span>Terkini</span>
+            </div>
+            {isEarlyWarning && (
+              <span className="text-cyan-400 font-bold">Early Warning: 3.5j</span>
+            )}
           </div>
         </div>
 

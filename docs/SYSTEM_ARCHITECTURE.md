@@ -14,9 +14,23 @@ The platform continuously ingests heterogeneous data streams into standardized s
 |---|---|---|---|
 | **BMKG Radar** | REST / XML / GeoJSON | 15 minutes | Precipitation intensity (mm/h), flood warnings, observation station health |
 | **TomTom Traffic Flow** | REST / JSON | 60 seconds | Current speed, free-flow speed, segment delay (seconds), congestion level |
-| **Google News OSINT** | RSS Stream / XML | 5 minutes | Disruption event keyword scoring, geographic entity tagging, canonical search links |
-| **PIHPS Bank Indonesia** | REST / JSON | Daily / Real-time | Price deviations for rice, shallots, bird's eye chili, and cooking oil |
-| **AISStream Maritime** | WebSocket / JSON | Real-time | Vessel MMSI, ship name, speed over ground, heading, coordinates |
+| **Pan-Sumatra Official News & Press (ANTARA 8 Biro & Press)** | XML RSS & REST / JSON | 3 minutes (TTL Cached) | Tier 1 (ANTARA 8 Biro, BMKG, BNPB) & Tier 2 (CNBC, CNN, Regional Press), NLP structured entities, corridor segment, lead-time hours |
+| **PIHPS Bank Indonesia** | REST / JSON | Daily / Real-time | Price deviations for rice, shallots, bird's eye chili, and cooking oil across Sumatra markets |
+| **AISStream Maritime** | WebSocket / JSON | Real-time | Vessel MMSI, ship name, speed over ground, heading, coordinates along Sumatra coastline |
+
+---
+
+## 1.1 Multi-Outlet News Intelligence Engine (Pan-Sumatra)
+
+The news intelligence subsystem (`backend/app/services/news_aggregator.py` and `backend/app/nlp/news_extractor.py`) ingests authoritative news and official bulletins across all 8 mainland provinces of Sumatra:
+
+- **Tier 1 Official Feeds ($w_{\text{tier}} = 0.95$):** LKBN ANTARA regional bureaus (Sumut, Sumbar, Riau, Aceh, Sumsel, Lampung, Jambi, Bengkulu) and ANTARA Ekonomi.
+- **Tier 2 Authoritative Press ($w_{\text{tier}} = 0.85$):** CNN Indonesia, CNBC Indonesia Market, and targeted Google News RSS queries for key logistics bottlenecks (Sitinjau Lauik, Bakauheni, Selat Malaka, Jalintim, Jalinsum).
+- **Structured NLP Extraction (Gemini Flash + Fast Deterministic Fallback):**
+  - **Incident & Temporal Classification:** Detects incident types (*flood, landslide, marine wave, port congestion, supply buffer*) and phases (*forecast early warning with 3–6h lead-time, active disruption, clearing recovery*).
+  - **Pan-Sumatra Location & Corridor Gazetteer:** Matches entities against an expanded gazetteer of Sumatra ports, arterial junctions, and toll roads.
+  - **Ground-Truth Metrics:** Extracts flood water levels (cm), debris lengths (m), and lane blockade status.
+- **Autonomous Swarm Dispatch:** Critical road blockages (`severity == "critical"` or `lane_status == "BLOCKED"`) automatically trigger background LangGraph swarm execution (`run_crisis_event`) with deduplication.
 
 ---
 

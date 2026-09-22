@@ -29,27 +29,32 @@ Multisource Telemetry (BMKG Sensor, TomTom Speed Flow, Google News RSS, PIHPS Pr
 
 ## Core Capabilities & Technical Implementations
 
-### 1. Multi-Source Grounding & Evidence Chain
+### 1. Multi-Source Grounding & Pan-Sumatra News Intelligence
+- **Pan-Sumatra Multi-Biro News Ingestion:** Real-time ingestion from LKBN ANTARA regional bureaus across 8 mainland Sumatra provinces (Sumut, Sumbar, Riau, Aceh, Sumsel, Lampung, Jambi, Bengkulu) and national economic outlets (ANTARA Ekonomi, CNBC, CNN).
+- **Structured NLP Extraction:** Automated entity recognition for arterial corridor segments, 3–6h pre-disruption lead times, affected food commodities (rice, chili, shallots, oil), and physical ground-truth metrics (water depth cm, road blockades).
 - **BMKG Hydrometeorological Telemetry:** Real-time precipitation intensity, flood alerts, and observation station monitoring.
 - **TomTom Traffic Speed Flow:** Live segment-level speed deltas, delay metrics, and congestion index caching.
-- **Direct OSINT News Ingestion:** Automated RSS stream ingestion linking directly to specific Google News query topics rather than bare domain homepages.
-- **PIHPS Price Stream:** Monitoring volatility and price spikes for strategic staple commodities (rice, chili, cooking oil).
+- **PIHPS Price Stream:** Monitoring volatility and price spikes for strategic staple commodities.
 
 ### 2. Multi-Agent Swarm Intelligence (6 Specialist Agents)
-- **Data Collection & Health Agent:** Ingests and normalizes multi-source sensor telemetries into unified spatial representations.
-- **OSINT & Intelligence Agent:** Corroborates news and grassroots reports against PostGIS hazard polygons.
+- **Data Collection & Health Agent:** Ingests and normalizes multi-source sensor and news telemetries.
+- **OSINT & Hazard Intelligence Agent:** Aggregates and cross-corroborates official news reports and social alerts against PostGIS hazard polygons with $+0.15$ confidence boost for Tier 1 official sources.
 - **Congestion & Weather Forecast Agent:** Projects 24-48 hour congestion trends and atmospheric precipitation risks.
-- **Logistics & Graph Routing Agent:** Computes optimal detour routes via NetworkX Dijkstra graph matrix with dynamic hazard penalties.
-- **Price & Inflation Intelligence Agent:** Detects price anomalies on staple foods and projects regional price lag.
-- **AI Decision Copilot:** Synthesizes executive multi-agency recommendations (*Continue*, *Reroute*, *Hold/Delay*) with deep Chain-of-Thought reasoning.
+- **Route Optimization Agent:** Computes optimal detour routes via NetworkX Dijkstra graph matrix, applying dynamic $\times 5.0$ edge penalties to blocked arterial corridors (e.g. Jalinsum KM 78 $\rightarrow$ Tol MKTT detour).
+- **Price & Inflation Intelligence Agent:** Combines PIHPS price anomalies with news-reported commodity disruptions to project regional food inflation shocks ($+15\%$ to $+35\%$).
+- **Decision Support Agent:** Synthesizes executive multi-agency recommendations (*Continue*, *Reroute*, *Hold/Delay*) backed by verified news citations and chain-of-thought reasoning.
 
-### 3. Coastal Nautical Sea-Lane & Air Multi-Modal Routing
+### 3. Dedicated Intelligence Endpoints
+- `GET /api/v1/news/live?force_refresh={bool}`: Returns aggregated, structured real-time news articles across Sumatra with corridor impact metrics.
+- `GET /api/v1/news/market-regime`: Computes real-time market risk status (*NORMAL_SUPPLY*, *EARLY_WARNING_ACTIVE*, *CRITICAL_DISRUPTION*) and active corridor crisis indicators.
+
+### 4. Coastal Nautical Sea-Lane & Air Multi-Modal Routing
 - **Authentic Coastal Maritime Sea-Lanes:** Navigates along verified Indonesian nautical fairways (Malacca Strait, Sunda Strait, Indian Ocean West Coast) ensuring maritime routes around Sumatra never traverse landmasses.
 - **Air Cargo Express Corridors:** Connects regional cargo airport nodes (KNO, BTJ, PKU, BIM, DJB, PLM, TKG) via Great Circle flight trajectories with first-mile and last-mile road feeder transport.
 - **Hazard Collision & Hold/Delay Fallback:** When all primary and arterial bypass routes intersect disaster zones, the system surfaces an honest **Mitigasi Taktis: Tunda Keberangkatan (Hold / Delay)** recommendation instead of proposing compromised detours.
 
-### 4. High-Contrast Fleet Tracking & Interactive Layer Controls
-- **45 Active Multi-Modal Fleet Units:** Scaled distribution of trucks, maritime vessels, and cargo flights across all 10 provinces of Sumatra.
+### 5. High-Contrast Fleet Tracking & Interactive Layer Controls
+- **45 Active Multi-Modal Fleet Units:** Scaled distribution of trucks, maritime vessels, and cargo flights across all provinces of Sumatra.
 - **Calibrated Observable Movement:** Calibrated simulation pace (12x) driven by route distance in kilometers using the Haversine formula.
 - **Globot-Style High-Contrast Markers:** Clean solid vehicle badges with bearing rotation for aircraft and zero neon glow halos.
 - **Interactive Layer Filter Widget:** Real-time toggle controls for Trans-Sumatra baseline corridors, traffic bottleneck segments, weather radar polygons, and active logistics fleet.

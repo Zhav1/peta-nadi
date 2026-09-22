@@ -7,13 +7,35 @@ from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-# List of known locations in the North Sumatra logistics corridor
+# Strategic locations across Pan-Sumatra logistics corridors (Sumut, Sumbar, Riau, Aceh, Sumsel, Lampung, Jambi, Bengkulu)
 LOCATION_GAZETTEER = [
+    # North Sumatra
     "belawan", "medan", "binjai", "pematangsiantar", "simalungun",
-    "toba", "danau toba", "trans sumatra", "sibolga", "dumai",
-    "tanjung mulia", "tanjung balai", "rantau prapat", "kisaran",
-    "lubuk pakam", "stabat", "langkat", "karo", "dairi", "tebing tinggi",
-    "jalan lintas sumatera", "tol belawan", "pelabuhan belawan",
+    "toba", "danau toba", "trans sumatra", "sibolga", "tanjung mulia",
+    "tanjung balai", "rantau prapat", "kisaran", "lubuk pakam", "stabat",
+    "langkat", "karo", "dairi", "tebing tinggi", "kuala tanjung",
+    # West Sumatra
+    "padang", "bukittinggi", "solok", "sitinjau lauik", "teluk bayur",
+    "agam", "payakumbuh", "pariaman", "padang pariaman", "tanah datar",
+    # Riau & Riau Islands
+    "pekanbaru", "dumai", "siak", "kampar", "rokan hilir", "rokan hulu",
+    "indragiri hilir", "pelabuhan dumai",
+    # Aceh
+    "banda aceh", "lhokseumawe", "langsa", "krueng raya", "malahayati",
+    "aceh besar", "bireuen", "meulaboh", "aceh barat",
+    # South Sumatra
+    "palembang", "boom baru", "prabumulih", "lubuklinggau", "banyuasin",
+    "ogan ilir", "kayuagung", "muara enim",
+    # Lampung
+    "bandar lampung", "bakauheni", "pelabuhan panjang", "terbanggi besar",
+    "lampung selatan", "metro",
+    # Jambi & Bengkulu
+    "jambi", "muaro jambi", "batanghari", "talang duku", "bengkulu",
+    "pulau baai", "rejang lebong", "mukomuko",
+    # Key Arterial Corridors & Tollways
+    "jalan lintas sumatera", "jalinsum", "jalintim", "jalinbar", "jalinteng",
+    "tol trans sumatera", "tol belmera", "tol mktt", "tol pekanbaru-dumai",
+    "tol bakauheni-terbanggi besar", "tol kayuagung-palembang", "selat malaka"
 ]
 
 def extract_locations_gazetteer(text: str) -> List[str]:
