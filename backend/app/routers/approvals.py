@@ -11,10 +11,16 @@ router = APIRouter(prefix="/approvals", tags=["approvals"])
 
 
 class ApprovalCreate(BaseModel):
-    incident_id: str
+    incident_id: Optional[str] = None
+    crisis_id: Optional[str] = None
     route_id: str
     recommended_route: Dict[str, Any]
-    operator_id: Optional[str] = "anonymous"
+    operator_id: Optional[str] = None
+    approved_by: Optional[str] = None
+    route_name: Optional[str] = None
+    origin: Optional[str] = None
+    destination: Optional[str] = None
+    notes: Optional[str] = None
 
 
 class ApprovalResponse(BaseModel):
@@ -41,11 +47,14 @@ async def create_approval(payload: ApprovalCreate):
         from app.db.supabase_client import get_client
         sb = get_client()
         
+        inc_id = payload.incident_id or payload.crisis_id or "INC-DEFAULT"
+        op_id = payload.operator_id or payload.approved_by or "anonymous"
+        
         db_payload = {
-            "incident_id": payload.incident_id,
+            "incident_id": inc_id,
             "route_id": payload.route_id,
             "recommended_route": payload.recommended_route,
-            "operator_id": payload.operator_id or "anonymous"
+            "operator_id": op_id
         }
         
         # Run in thread pool to avoid blocking async event loop
