@@ -5,11 +5,11 @@
 
 **Identitas Dokumen & Aplikasi:**
 * **Nama Sistem / Produk:** PreHub (*Predictive Logistics Hub & Early Warning System*)
-* **Versi Rilis:** MVP v1.2.0-PROD (Phase 34 Multi-Modal Sumatra Release)
+* **Versi Rilis:** MVP v2.0.0-PROD (Phase 35 Pan-Sumatra Multi-Outlet News & Early Warning Release)
 * **Kategori:** Sistem Pendukung Keputusan (Decision Support System - DSS) / AI-Driven Geo-Logistics
-* **Fokus Wilayah Operasional:** Seluruh Koridor Strategis Pulau Sumatera (Darat, Laut, Udara: Belawan – Medan – Tebing Tinggi – Batam – Padang – Pekanbaru – Palembang – Lampung – Jakarta)
+* **Fokus Wilayah Operasional:** Seluruh Koridor Strategis Pulau Sumatera (8 Provinsi Daratan: Sumut, Sumbar, Riau, Aceh, Sumsel, Lampung, Jambi, Bengkulu; plus Alur Laut ALKI Selat Malaka & Selat Sunda, serta Koridor Kargo Udara)
 * **Target Pengguna:** Badan Pangan Nasional (BAPANAS), Kementerian Perhubungan (Kemenhub), Perum BULOG, Dinas Perhubungan / Satlantas POLRI, dan Dispatcher/Operator Armada Logistik Pangan Nasional.
-* **Tanggal Rilis:** 17 Agustus 2026
+* **Tanggal Rilis:** 22 September 2026
 
 ---
 
@@ -176,12 +176,12 @@ graph TD
 ```
 
 ### 4.2 Topologi 6 Agen Swarm
-1. **Data Collection & Health Agent:** Melakukan deduplikasi hash, validasi skema, dan normalisasi telemetri sensor waktu nyata (BMKG, TomTom, Open-Meteo).
-2. **OSINT & Intelligence Agent:** Mengagregasi berita terkini (Google News RSS) dengan *Source Reliability Scoring* (0.0–1.0) serta kalkulasi zona dampak spasial.
+1. **Data Collection & Health Agent:** Melakukan deduplikasi hash, validasi skema, dan normalisasi telemetri sensor waktu nyata (BMKG, TomTom, Open-Meteo, AISStream, dan stream berita `lrip:stream:osint`).
+2. **OSINT & Hazard Intelligence Agent:** Mengagregasi buletin resmi (LKBN ANTARA 8 biro regional Sumatera, BMKG, BNPB) dengan dorongan keyakinan $+0.15$ untuk sumber resmi Tier 1, mendeteksi sinyal peringatan dini (lead time 3–6 jam), dan mengekstrak parameter koridor yang terdampak.
 3. **Congestion & Weather Forecast Agent:** Menggabungkan prediksi presipitasi curah hujan 24–48 jam dengan proyeksi tren perlambatan kecepatan lalu lintas.
-4. **Logistics & Multi-Modal Routing Agent:** Mengoptimasi graf jaringan darat (Tol & Arteri), laut (Tol Laut Selat Malaka & Selat Sunda), serta udara menggunakan algoritma NetworkX Dijkstra berpenalti zona bahaya.
-5. **Price & Inflation Intelligence Agent:** Mendeteksi anomali *z-score* harga komoditas strategis (cabai merah, beras, minyak goreng) dan memproyeksikan multiplier inflasi regional.
-6. **Decision Support Copilot (DeepSeek R1):** Merumuskan sintesis eksekutif penalaran mendalam (*Chain-of-Thought*), matriks mitigasi 3 arah (*Continue vs Reroute vs Hold*), serta draf rencana aksi gabungan lintas kementerian/lembaga.
+4. **Logistics & Multi-Modal Routing Agent:** Mengoptimasi graf jaringan darat (Tol & Arteri), laut (Tol Laut Selat Malaka & Selat Sunda), serta udara menggunakan algoritma NetworkX Dijkstra berpenalti zona bahaya. Menerapkan penalti $\times 5.0$ pada koridor arteri yang terkonfirmasi terputus oleh berita resmi.
+5. **Price & Inflation Intelligence Agent:** Mengombinasikan anomali harga pasar PIHPS dengan laporan disrupsi pasokan pangan untuk menghitung proyeksi kenaikan inflasi pangan ($+15\%$ hingga $+35\%$).
+6. **Decision Support Copilot (DeepSeek R1):** Merumuskan sintesis eksekutif penalaran mendalam (*Chain-of-Thought*), matriks mitigasi 3 arah (*Continue vs Reroute vs Hold*), serta draf rencana aksi gabungan lintas kementerian/lembaga dengan kutipan bukti berita terverifikasi.
 
 ### 4.3 Formulasi Matematika Indeks Risiko Gabungan & Optimasi Rute
 
@@ -189,8 +189,8 @@ graph TD
 $$P_{\text{disruption}}(s) = 1 - \prod_{k \in \{W, T, I\}} (1 - w_k \cdot p_k(s))$$
 Di mana:
 * $p_W(s)$: Probabilitas risiko cuaca BMKG / Open-Meteo ($w_W = 0.35$).
-* $p_T(s)$: Probabilitas kemacetan & insiden TomTom ($w_T = 0.40$).
-* $p_I(s)$: Probabilitas validitas laporan OSINT ($w_I = 0.25$).
+* $p_T(s)$: Probabilitas kemacetan & insiden TomTom ($w_T = 0.35$).
+* $p_I(s)$: Probabilitas validitas laporan resmi LKBN ANTARA & OSINT ($w_I = 0.30$).
 
 #### B. Total Skor Risiko Operasional ($\mathcal{R}$)
 $$\mathcal{R} = P_{\text{disruption}}(s) \times \left( \alpha \cdot \Delta T_{\text{delay}} + \beta \cdot \Delta C_{\text{fuel}} + \gamma \cdot V_{\text{cargo\_perishability}} \right)$$
@@ -205,9 +205,11 @@ Di mana $\alpha, \beta, \gamma$ adalah koefisien penalti keterlambatan waktu, bi
 
 ## BAB 5: DESKRIPSI FUNGSIONAL MODUL SISTEM
 
-### 5.1 Modul Ingesti Data Multi-Sumber & Grounding Real-Time
+### 5.1 Modul Ingesti Data Multi-Sumber & Pan-Sumatra News Intelligence
 * **Worker Ingestion:** Menarik data gempa/cuaca BMKG, proyeksi curah hujan Open-Meteo, dan telemetri kecepatan TomTom secara terjadwal.
-* **Google News RSS & OSINT Pipeline:** Memfilter artikel berita logistik pangan regional, menghitung skor kredibilitas sumber, dan menyimpan telemetri ke Redis stream `lrip:stream:osint`.
+* **Pan-Sumatra Multi-Biro News Aggregator (`news_aggregator.py`):** Mengagregasi feed XML RSS langsung dari 8 biro regional LKBN ANTARA (Sumut, Sumbar, Riau, Aceh, Sumsel, Lampung, Jambi, Bengkulu), ANTARA Ekonomi, dan media nasional kredibel.
+* **Structured NLP Extractor (`news_extractor.py`):** Mengekstrak jenis insiden, fase temporal (*early warning* 3–6 jam vs *active disruption*), segmen koridor, komoditas pangan terdampak, dan metrik penutupan jalan.
+* **Autonomous Early Warning Trigger (`news_router.py`):** Secara otonom memicu alur kerja LangGraph 6-Agent Swarm saat terdeteksi berita penutupan jalur kritis tanpa menunggu klik manual.
 
 ### 5.2 Modul Peta Komando 4D & Dynamic Fleet Layer
 * **Visualisasi Multimoda 60 FPS:** Menampilkan layer pergerakan truk darat, kapal kargo Tol Laut via jalur laut nyata, dan pesawat kargo udara dengan sudut rotasi bearing dinamis.
