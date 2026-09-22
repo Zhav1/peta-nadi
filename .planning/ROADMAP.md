@@ -1,8 +1,8 @@
-# ROADMAP — LRIP / PetaNadi MVP
+# ROADMAP: PreHub (Logistics Resilience Intelligence Platform)
 
-**Milestone:** M1 — Hackathon MVP (North Sumatra Corridor)
-**Target Deadline:** ~4 weeks from 2026-07-05
-**Development Mode:** Solo, AI-assisted
+**Active Milestone:** M2 - PreHub Final Defense: Empirical Evaluation, Tactical HUD & Multi-Source Maturity
+**Previous Milestone:** M1 - Hackathon MVP (Pan-Sumatra Logistics & Swarm Intelligence) [COMPLETED]
+**Development Mode:** Solo, AI-assisted (GSD Disciplined Workflow)
 
 ---
 
@@ -33,10 +33,10 @@
 
 ### Deliverables
 - `DataCollectionAgent` adapter modules:
-  - `bmkg_adapter.py` — weather alerts + earthquake polygons (already partially researched in `src/`)
-  - `tomtom_adapter.py` — congestion data for Trans-Sumatra Highway segments
-  - `aisstream_adapter.py` — vessel positions + Belawan port queue
-  - `nasa_firms_adapter.py` — active fire/hotspot polygons
+  - `bmkg_adapter.py`: weather alerts + earthquake polygons (already partially researched in `src/`)
+  - `tomtom_adapter.py`: congestion data for Trans-Sumatra Highway segments
+  - `aisstream_adapter.py`: vessel positions + Belawan port queue
+  - `nasa_firms_adapter.py`: active fire/hotspot polygons
 - Each adapter: publish raw events to Redis Streams
 - Each adapter: last-known-good cache with configurable TTL + degraded-source flag
 - Redis Streams consumer that normalizes and routes events to agent pipeline
@@ -57,9 +57,9 @@
 
 ### Deliverables
 - `OSINTAgent` scraping modules via Lightpanda:
-  - `pihps_scraper.py` — daily baseline + spike detection (partially researched in `src/`)
-  - `marketplace_scraper.py` — Tokopedia/Shopee price comparison
-  - `social_scraper.py` — TikTok iFrame + Twitter/X citizen reports
+  - `pihps_scraper.py`: daily baseline + spike detection (partially researched in `src/`)
+  - `marketplace_scraper.py`: Tokopedia/Shopee price comparison
+  - `social_scraper.py`: TikTok iFrame + Twitter/X citizen reports
 - NER pipeline for location extraction from scraped text (spaCy or LLM-based)
 - Geocoding service: extracted locations → lat/lon → PostGIS point
 - Crisis Mode trigger: scraping interval shifts from daily → 15 minutes when Redis receives crisis event
@@ -73,23 +73,23 @@
 
 ---
 
-## Phase 3: LangGraph Agent Swarm — Core Reasoning
+## Phase 3: LangGraph Agent Swarm: Core Reasoning
 **Goal:** All 6 agents wired in LangGraph; STM/LTM memory systems working; consensus gate functional.
 **Status:** COMPLETE ✅
 **AI Spec Needed:** YES → run `/gsd-ai-integration-phase 3` before planning this phase
 
 ### Deliverables
 - LangGraph state schema: `CrisisState` (active hazards, agent findings, confidence scores, validated alerts)
-- Agent 1 — Data Collection Agent: normalize + validate incoming Redis events
-- Agent 2 — OSINT & Hazard Agent: fuse NER locations with PostGIS hazard polygons
-- Agent 3 — Prediction Agent: 6h/12h/24h/48h congestion + economic impact forecasts
-- Agent 4 — Route Optimization Agent: pgRouting / NetworkX alternative routes with dynamic hazard-weighted edges
-- Agent 5 — Economic Intelligence Agent: PIHPS anomaly detection + LTM inflation multiplier forecast
-- Agent 6 — Decision Support Copilot: synthesize all findings → executive summary + recommendations
-- STM: Redis KV via LangGraph `MemorySaver` — live crisis state across all agents
-- LTM: pgvector in Supabase — historical disaster-inflation episode embeddings
+- Agent 1 (Data Collection Agent): normalize + validate incoming Redis events
+- Agent 2 (OSINT & Hazard Agent): fuse NER locations with PostGIS hazard polygons
+- Agent 3 (Prediction Agent): 6h/12h/24h/48h congestion + economic impact forecasts
+- Agent 4 (Route Optimization Agent): pgRouting / NetworkX alternative routes with dynamic hazard-weighted edges
+- Agent 5 (Economic Intelligence Agent): PIHPS anomaly detection + LTM inflation multiplier forecast
+- Agent 6 (Decision Support Copilot): synthesize all findings → executive summary + recommendations
+- STM: Redis KV via LangGraph `MemorySaver`: live crisis state across all agents
+- LTM: pgvector in Supabase: historical disaster-inflation episode embeddings
 - Consensus Gate: weighted confidence scoring → promote to "Validated" at > 85%
-- GraphRAG: Neo4j or pg-graphql over Supabase — entity graph seeded with North Sumatra corridor data
+- GraphRAG: Neo4j or pg-graphql over Supabase: entity graph seeded with North Sumatra corridor data
 
 ### Verification
 - [ ] Injecting a synthetic flood event into Redis triggers the full agent pipeline
@@ -113,9 +113,9 @@
 - WebSocket connection to FastAPI backend for real-time crisis state updates
 - Crisis pin rendering: validated alerts appear as interactive map markers
 - Tri-Panel Sidebar (on crisis pin click):
-  - Tab 1 — Evidence: raw data sources (TomTom graph, NASA signature, OSINT transcript)
-  - Tab 2 — Mitigation Detour: alternative route polyline on map
-  - Tab 3 — Economic Fallout: PIHPS price chart + inflation arc
+  - Tab 1: Evidence: raw data sources (TomTom graph, NASA signature, OSINT transcript)
+  - Tab 2: Mitigation Detour: alternative route polyline on map
+  - Tab 3: Economic Fallout: PIHPS price chart + inflation arc
 - Timeline Scrubber: hour-by-hour playback of crisis unfolding
 - "Simulate Disaster" UI: polygon drawing tool → triggers TheoTown Crisis Mode
 - Data freshness badges on each data layer
@@ -175,7 +175,7 @@
 ---
 
 ## Phase 7: Interactive Guided Demo Mode
-**Goal:** An in-game-tutorial-style guided demo experience built directly into the dashboard — a judge or evaluator clicks one button and the system walks them through the entire LRIP platform end-to-end, stage by stage, with explanations, live data, and full presenter control.
+**Goal:** An in-game-tutorial-style guided demo experience built directly into the dashboard: a judge or evaluator clicks one button and the system walks them through the entire LRIP platform end-to-end, stage by stage, with explanations, live data, and full presenter control.
 **Status:** COMPLETE ✅
 
 ### Deliverables
@@ -187,10 +187,10 @@
   - Source data badges animating in as each event type fires (BMKG, TomTom, NASA, AISstream, PIHPS, Social)
   - Per-stage explainer cards (in-game tutorial style: "What's happening here?" context for each step)
 - **`demo_router.py`** (`backend/app/routers/demo_router.py`):
-  - `POST /api/demo/start` — loads `belawan_scenario.json`, invokes agent pipeline directly (no Redis required)
-  - `GET /api/demo/status/{crisis_id}` — returns current pipeline stage + per-agent status
-  - `--mock-agents` mode: pre-scripted `CrisisState` fixtures bypass LLM calls entirely — 100% deterministic demo
-- **Full offline mode**: Supabase writes stubbed with an in-memory store when `DEMO_OFFLINE=true` — no outbound network required
+  - `POST /api/demo/start`: loads `belawan_scenario.json`, invokes agent pipeline directly (no Redis required)
+  - `GET /api/demo/status/{crisis_id}`: returns current pipeline stage + per-agent status
+  - `--mock-agents` mode: pre-scripted `CrisisState` fixtures bypass LLM calls entirely (100% deterministic demo)
+- **Full offline mode**: Supabase writes stubbed with an in-memory store when `DEMO_OFFLINE=true` (no outbound network required)
 - **Mobile presenter remote** (`/demo-remote` page): phone-optimized one-tap stage advancement so the presenter can walk freely
 - **Demo replay**: persist a completed run as a JSON snapshot; replay frame-by-frame without re-running the swarm
 
@@ -541,7 +541,7 @@
 
 ---
 
-## Phase 23: Run Demo Engine Overhaul — Interactive Stepper, Stage-Wired Map Effects & Architectural Hook Lift
+## Phase 23: Run Demo Engine Overhaul: Interactive Stepper, Stage-Wired Map Effects & Architectural Hook Lift
 **Goal:** Perbaiki fitur `▶ Run Demo` secara menyeluruh agar stepper card 100% interaktif tanpa kebocoran event klik ke Mapbox, angkat hook `useDemoState` ke `DashboardClient`, hubungkan transisi setiap stage ke efek peta & sidebar, serta perbarui UI dengan ikon SVG Lucide.
 **Status:** COMPLETE ✅
 
@@ -688,6 +688,181 @@
 - [x] Live HTTP API ingestion berhasil menarik berita riil dari 8 biro ANTARA Sumatera.
 - [x] Eksekusi end-to-end LangGraph Swarm dengan data berita riil berhasil dijalankan tanpa error.
 - [x] Next.js `npm run build` berhasil mengompilasi 7/7 static routes dengan 0 error.
+
+---
+
+# Milestone M2: Final Defense, Empirical Evaluation & Tactical HUD Operations
+
+Milestone M2 addresses critical feedback from competition judges (Development Process score 5/10 and Idea/Software Conformance score 3/10) by eliminating theoretical NVIDIA H100 GPU dependencies (cuOpt, FourCastNet), establishing empirical validation with ground-truth benchmark datasets and line/branch test coverage, deploying real transponder telemetry with a Tactical HUD inspired by `gods-eye-view`, calibrating probability distributions via genuine Brier Score computation, closing the feedback loop with operator decision traces and ground-truth field outcomes, and sanitizing the operator UI.
+
+---
+
+## Phase 36: Ground-Truth Benchmark Dataset & Automated Test Coverage Engine
+**Requirements Covered:** FR-10.1, FR-10.2, FR-10.3, FR-10.4, NFR-2, NFR-3, NFR-9
+**Goal:** Build a standardized Sumatra disruption ground-truth benchmark dataset ($N=60$), automate metric calculation (Precision, Recall, F1, Detection Latency), and establish a formal pytest coverage engine with documented test matrices.
+**Status:** READY TO EXECUTE
+**AI Spec Needed:** No (deterministic evaluation engineering)
+
+### Deliverables
+- **Ground-Truth Benchmark Dataset (`data/benchmark/sumatra_disruptions_ground_truth.json`)**:
+  - 60 curated, labeled historical and synthetic disruption scenarios across 8 Sumatra provinces.
+  - Multi-sensor attributes: BMKG weather severity, Open-Meteo precipitation rate (mm/h), TomTom traffic delay index, OSINT news verification status.
+  - Labeled targets: binary disruption label ($y \in \{0, 1\}$), ground-truth delay (hours), and market price inflation impact (%).
+- **Empirical Evaluation Engine (`scripts/evaluate_metrics.py`)**:
+  - Automated evaluation harness running backend anomaly detection against the benchmark dataset.
+  - Computes Precision, Recall, F1-Score, False Positive Rate (FPR), and Detection Latency deterministically.
+  - Outputs summary metrics in structured JSON and Markdown tables.
+- **Coverage Engine Configuration (`backend/requirements.txt` & `.coveragerc`)**:
+  - Install `pytest-cov` in backend environment.
+  - Configure `.coveragerc` targeting `app` and `agents` with branch coverage enabled.
+  - Automated coverage reporting target: >=80% on critical logic modules.
+- **Test Suite Inventory (`docs/test_matrix.md`)**:
+  - Detailed catalog of all 39+ existing pytest test cases with test ID, module path, test purpose, and verification outcome.
+
+### Verification Criteria
+- [ ] `data/benchmark/sumatra_disruptions_ground_truth.json` contains 60 valid scenarios with schema validation passing.
+- [ ] `python scripts/evaluate_metrics.py` executes without errors and generates empirical metrics (Precision > 85%, Recall > 80%, F1 > 82%).
+- [ ] `pytest backend/tests -v --cov=app --cov=agents` executes 39+ tests and produces line and branch coverage report.
+- [ ] `docs/test_matrix.md` contains comprehensive test matrix for judge inspection.
+
+---
+
+## Phase 37: Mathematical Consensus Formulation, Probability Calibration & CPU Routing Consolidation
+**Requirements Covered:** FR-11.1, FR-11.2, FR-11.3, FR-11.4, FR-11.5, NFR-4, NFR-5, NFR-7
+**Goal:** Align Consensus Gate with the formal probabilistic independence equation from the proposal, implement genuine probability calibration (Brier Score, ECE, Platt Scaling), consolidate routing on deterministic CPU solvers (NetworkX + Google OR-Tools) with local road network cache, and standardize open weather fusion.
+**Status:** PLANNED
+**AI Spec Needed:** No
+
+### Deliverables
+- **Formal Probabilistic Consensus Gate (`agents/tools/consensus_gate.py`)**:
+  - Refactor from linear sums to the technical proposal's probabilistic independence formulation:
+    $$P_{\text{disruption}}(s) = 1 - \prod_{k} (1 - w_k \cdot p_k(s))$$
+  - Integrate exponential temporal decay ($e^{-\lambda \Delta t}$) and spatial distance decay ($e^{-d / d_0}$).
+  - Strictly decouple sensor inputs (BMKG, Open-Meteo, TomTom, OSINT) from internal derived outputs (reroute plans).
+- **Probability Calibration Service (`backend/app/services/probability_calibration.py`)**:
+  - Empirical Brier Score calculation function: $BS = \frac{1}{N}\sum (f_i - o_i)^2$.
+  - Expected Calibration Error (ECE) and reliability binning (10 probability deciles).
+  - Calibration transforms: Platt Scaling (logistic sigmoid) and Isotonic Regression.
+  - Replace static `disruptionProb = Math.min(Math.round(confidenceScore * 0.94), 98)` in frontend with calibrated backend values.
+- **Deterministic CPU Routing Engine (`backend/app/adapters/cpu_routing_adapter.py` & `agents/nodes/route_optimization.py`)**:
+  - Replace mock `cuopt_adapter.py` with CPU-based NetworkX Dijkstra / A* and Google OR-Tools VRP.
+  - Build local Sumatra arterial road network graph cache (`data/road_network_sumatra.json`) for zero-latency offline pathfinding.
+  - Sub-second computation (<150 ms for 50 nodes) with realistic vehicle capacity and time window constraints.
+- **Standardized Weather Fusion Service (`backend/app/services/weather_fusion_service.py`)**:
+  - Official fusion of Open-Meteo API (ECMWF/GFS numerical forecast) and BMKG warning radar with zero GPU dependencies.
+
+### Verification Criteria
+- [ ] Unit tests verify consensus formula mathematically matches proposal equation across edge cases (single sensor, conflicting sensors, stale signals).
+- [ ] Calibration service calculates Brier Score <= 0.10 on benchmark predictions.
+- [ ] CPU routing solver solves 50-stop VRP in <150 ms on CPU and handles offline network cache seamlessly.
+- [ ] All cuOpt and FourCastNet mock calls completely replaced by deterministic CPU and open API adapters.
+
+---
+
+## Phase 38: Closed-Loop Operator Decision Trace & Ground-Truth Outcome Engine
+**Requirements Covered:** FR-12.1, FR-12.2, FR-12.3, FR-12.4, NFR-8
+**Goal:** Complete the operational feedback loop by expanding operator decision logging (ACCEPT, REJECT, OVERRIDE, HOLD, REROUTE) and recording field outcomes at T+12h / T+24h post-incident.
+**Status:** PLANNED
+**AI Spec Needed:** No
+
+### Deliverables
+- **Extended Operator Decision Logging (`backend/app/routers/approvals.py`)**:
+  - Support multi-action operator decisions: `ACCEPT`, `REJECT`, `OVERRIDE`.
+  - Record tactical mitigation selections: `CONTINUE`, `REROUTE`, `HOLD`.
+  - Capture operator rationale notes and custom constraint overrides (speed limit, weight capacity).
+- **Ground-Truth Field Outcome Endpoint (`backend/app/routers/outcomes_router.py`)**:
+  - `POST /api/v1/outcomes`: Record verified field conditions post-disruption (actual clearance timestamp, observed vehicle delay, actual regional commodity price spike).
+  - `GET /api/v1/outcomes`: Retrieve outcome verification records for historical crisis incidents.
+- **Prediction vs Outcome Evaluation Engine**:
+  - Compare predicted disruption timeline and price impact against verified field outcomes.
+  - Produce operational accuracy metrics to inform dynamic sensor weight adjustments.
+- **Resilient Local Persistence Fallback**:
+  - Local SQLite / JSON persistence layer for decision logs and outcomes when Supabase connectivity is unavailable.
+
+### Verification Criteria
+- [ ] Operator decision endpoint logs ACCEPT, REJECT, and OVERRIDE payloads with custom parameters.
+- [ ] `POST /api/v1/outcomes` accepts ground-truth outcomes and links them to incident IDs.
+- [ ] Evaluation comparison correctly measures prediction error vs field reality.
+- [ ] Offline local persistence stores and retrieves logs without cloud database connection.
+
+---
+
+## Phase 39: Tactical Multi-Modal Telemetry & God's-Eye HUD Console
+**Requirements Covered:** FR-13.1, FR-13.2, FR-13.3, NFR-6
+**Goal:** Implement real multi-modal transponder telemetry (AISstream maritime, ADS-B cargo aviation, dynamic truck GPS) and build a tactical HUD inspired by `gods-eye-view` with target locking crosshairs, bearing vectors, and follow-camera controls.
+**Status:** PLANNED
+**AI Spec Needed:** No
+
+### Deliverables
+- **Real Multi-Modal Fleet Telemetry Ingestion (`backend/app/routers/vehicles_router.py`)**:
+  - Connect to Redis Streams for live AISstream.io maritime vessel transponders (MMSI, IMO, SOG, COG, Draught, NavStatus).
+  - Ingest OpenSky Network ADS-B transponder data for air cargo freighters (ICAO24, Callsign, Altitude, GroundSpeed).
+  - Dynamic truck GPS interpolation along arterial road polylines with commodity and cold-chain temperature telemetry.
+- **Tactical HUD Console (`frontend/components/map/FleetVehicleLayer.tsx`)**:
+  - Interactive Target Locking Crosshair: High-contrast tactical reticle locks onto clicked vehicle/vessel with corner brackets.
+  - Dynamic Bearing Vectors: Visual direction-of-travel lines projecting forward from assets based on speed and heading.
+  - Target Follow Camera Mode: Dynamic camera panning keeping the locked vehicle centered on the canvas.
+  - Monospaced Tactical Telemetry Card: Clean HUD overlay with asset identifiers, kinematic metrics, cargo specifications, and signal freshness.
+  - Breadcrumb Trajectory Trails: Visual history path rendered in subtle tactical lines.
+- **Native WebGL Rendering Engine**:
+  - 100% WebGL-based asset rendering on Mapbox canvas; zero DOM marker thrashing; stable 60 FPS under 100+ active assets.
+
+### Verification Criteria
+- [ ] Vehicles router returns real multi-modal transponder payloads from Redis/OpenSky/GPS sources.
+- [ ] Clicking a fleet unit locks crosshairs, opens monospaced HUD card, and activates follow-camera smoothly.
+- [ ] Bearing vectors accurately indicate asset direction of travel.
+- [ ] WebGL rendering maintains 60 FPS with zero DOM marker stuttering during map rotation and tilt.
+
+---
+
+## Phase 40: Dedicated Evaluation & Benchmark Dashboard
+**Requirements Covered:** FR-14.1, FR-14.2, NFR-1
+**Goal:** Build an operator-grade Evaluation & Benchmark Dashboard tab presenting empirical metrics, interactive Reliability Diagrams, test suite breakdowns, and closed-loop decision audit logs.
+**Status:** PLANNED
+**AI Spec Needed:** No
+
+### Deliverables
+- **Navigation Activation (`DashboardClient.tsx`)**:
+  - Activate `ANALYTICS`, `SIMULATION`, `REPORTS`, and the new `EVALUATION` tab cleanly without regressions.
+- **Evaluation Dashboard Component (`frontend/components/dashboard/EvaluationSection.tsx`)**:
+  - Empirical Metrics Overview: Precision, Recall, F1, Brier Score, and Detection Latency cards with target thresholds.
+  - Interactive Reliability Diagram: Binned chart displaying predicted probability vs observed empirical event frequency.
+  - Test Suite Matrix & Code Coverage: Interactive table of all 39+ unit and integration tests with line and branch coverage indicators.
+  - Corridor Reroute Efficiency Benchmark: Travel time, distance, and fuel savings comparison between CPU-optimized routes and blocked corridors.
+  - Closed-Loop Decision Audit Log: Table tracking operator actions (ACCEPT/REJECT/OVERRIDE) alongside predicted vs actual field outcomes.
+
+### Verification Criteria
+- [ ] Tab switching between Map, Analytics, Simulation, Reports, and Evaluation operates smoothly without state loss.
+- [ ] EvaluationSection displays empirical metric values computed from benchmark datasets.
+- [ ] Reliability diagram renders probability bins and calibration curve accurately.
+- [ ] Test matrix table accurately displays all 39+ tests and module coverage statistics.
+
+---
+
+## Phase 41: UI/UX Minimalist Sanitization & Technical Report Finalization
+**Requirements Covered:** FR-15.1, FR-15.2, FR-15.3, NFR-10
+**Goal:** Sanitize all UI components according to non-AI minimalist operator-first principles (remove emojis, boasting text, and GPU claims) and update the official technical documentation with empirical evidence.
+**Status:** PLANNED
+**AI Spec Needed:** No
+
+### Deliverables
+- **UI/UX Minimalist Sanitization**:
+  - Complete sweep of frontend codebase: replace all emojis with monochrome Lucide SVG icons.
+  - Strip exaggerated labels and buzzwords: change "LAUNCH COMMAND CENTER 4D" to "Command Center", "MAP 4D" to "Peta Operasi", "NVIDIA FourCastNet" to "Model Cuaca Open-Meteo & BMKG", "NVIDIA cuOpt" to "Solver Rute Koridor (NetworkX / OR-Tools)".
+  - Replace static fake "Brier Calibrated" labels with real calculated Brier Score values.
+- **Technical Documentation Finalization (`docs/Dokumen_Pendukung_PreHub.md`)**:
+  - Update architecture chapters to accurately reflect CPU-based routing and Open-Meteo / BMKG weather fusion.
+  - Include formal 39+ test suite execution matrix with test IDs, scenarios, and results.
+  - Include test coverage report (line and branch coverage percentages).
+  - Include empirical benchmark evaluation results table (Precision, Recall, F1, Brier Score, Latency).
+  - Update DOCX generation script (`scripts/generate_docx_technical_doc.py`) to match updated documentation.
+
+### Verification Criteria
+- [ ] Zero emoji characters found in UI code (`grep` check across `frontend/components`).
+- [ ] Zero fictional GPU / cuOpt claims remaining in UI.
+- [ ] `docs/Dokumen_Pendukung_PreHub.md` and generated DOCX include complete test matrices, coverage numbers, and empirical benchmark tables.
+- [ ] Next.js `npm run build` compiles with zero lint and type errors.
+- [ ] Pytest full test suite passes 100%.
 
 ---
 

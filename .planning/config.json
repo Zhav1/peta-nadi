@@ -1,6 +1,7 @@
 {
-  "project": "LRIP / PetaNadi",
-  "version": "1.0.0",
+  "project": "PreHub",
+  "version": "2.0.0",
+  "active_milestone": "M2 - PreHub Final Defense: Empirical Evaluation, Tactical HUD & Multi-Source Maturity",
   "created": "2026-07-05",
   "workflow": {
     "require_discussion": true,
@@ -22,9 +23,10 @@
     "database": "Supabase (PostgreSQL + PostGIS + TimescaleDB + pgvector)",
     "cache_queue": "Redis (Streams + KV)",
     "ai_models": ["gemini-flash", "deepseek-v3"],
+    "routing": "NetworkX Dijkstra/A* + Google OR-Tools (CPU VRP Solver)",
+    "weather": "Open-Meteo API (ECMWF/GFS) + BMKG API",
     "scraping": "Lightpanda"
   },
-  "pilot_scope": "North Sumatra corridor (Belawan Port → Trans-Sumatra Highway)",
-  "deadline": "~4 weeks (hackathon)",
+  "operational_scope": "Pan-Sumatra Island-Wide Logistics Corridors (8 mainland provinces, 25+ strategic hubs, Trans-Sumatra highways, nautical fairways)",
   "team_size": 1
 }

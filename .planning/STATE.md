@@ -1,8 +1,17 @@
-# STATE — PreHub Project Memory
+# STATE: PreHub Project Memory
 
-**Last Updated:** 2026-08-17
-**Active Milestone:** M1 — PreHub MVP (Sumatra Island-Wide & National Logistics Corridor)
-**Current Phase:** Phase 34 COMPLETE ✅
+**Last Updated:** 2026-09-22
+**Active Milestone:** M2 - PreHub Final Defense: Empirical Evaluation, Tactical HUD & Multi-Source Maturity
+**Current Phase:** Phase 35 COMPLETE | Ready for Phase 36
+
+---
+
+## Current Position
+
+Phase: Phase 36: Ground-Truth Benchmark Dataset & Automated Test Coverage Engine
+Status: READY TO EXECUTE
+Last activity: 2026-09-22: Milestone M2 initialized
+Next action: Run `/gsd-plan-phase 36` to plan and execute benchmark dataset and test coverage engine
 
 ---
 
@@ -13,7 +22,7 @@
 | 0 | Foundation & Repo Setup | **COMPLETE** ✅ | Git: `f404517`, `4f48e8e` |
 | 1 | Data Ingestion Pipeline & API Adapters | **COMPLETE** ✅ | Git: `a33c94c` |
 | 2 | OSINT & Headless Scraping (Lightpanda) | **COMPLETE** ✅ | Direct BI API integration + Playwright fallback |
-| 3 | LangGraph Agent Swarm — Core Reasoning | **COMPLETE** ✅ | 6 agents, consensus gate, API routers, and pytest validated |
+| 3 | LangGraph Agent Swarm: Core Reasoning | **COMPLETE** ✅ | 6 agents, consensus gate, API routers, and pytest validated |
 | 4 | 3D Map Dashboard (Next.js + Mapbox + Deck.gl) | **COMPLETE** ✅ | Next.js 14 + Mapbox v3 + Deck.gl v9.3 dashboard with WebSocket streaming |
 | 5 | Notifications & Human-in-the-Loop | **COMPLETE** ✅ | WhatsApp integration, route approvals table + endpoint, source health panel |
 | 6 | Demo Polish & run_demo.py Finalization | **COMPLETE** ✅ | Offline fallback, pacing controls, mock DB seeding, and performance audit |
@@ -33,7 +42,7 @@
 | 20 | Real District Logistics Boundaries, Non-Colliding Spatial GIS Layout & UI UX Pro Max Refactor | **COMPLETE** ✅ | Real district GeoJSON polygons, interactive boundary hover highlight, HUD repositioning, compact glassmorphic badges |
 | 21 | Full Integration Audit, Organic Hazard Geometries & Live BMKG/OSINT Incident Spatiotemporal Engine | **COMPLETE** ✅ | Algorithmic organic geometries (`incident_geometry_service.py`), BMKG startup poller in `lifespan()`, `GET /osint/live` endpoint, zero hardcoded rectangular boxes |
 | 22 | Google Maps-Grade Administrative Boundary Integration & Clean UI Refactor | **COMPLETE** ✅ | Google Maps style dashed ADM stroke (`line-dasharray: [4, 3]`), top nav telemetry flyout popovers, off-canvas incident detail, unified epicenter-boundary entity |
-| 23 | Run Demo Engine Overhaul — Interactive Stepper & Hook Lift | **COMPLETE** ✅ | Fixed CSS pointer-events inheritance, lifted `useDemoState` hook to `DashboardClient`, stage-wired map & sidebar effects, Lucide SVG icons |
+| 23 | Run Demo Engine Overhaul: Interactive Stepper & Hook Lift | **COMPLETE** ✅ | Fixed CSS pointer-events inheritance, lifted `useDemoState` hook to `DashboardClient`, stage-wired map & sidebar effects, Lucide SVG icons |
 | 24 | Google Flow-Style Onboarding Landing Page & High-Performance Routing | **COMPLETE** ✅ | Video background, 121-frame scroll sequence canvas, kinetic typography, feature cards, Next.js routing migration |
 | 25 | Animated Multi-Modal Fleet Layer & Dynamic Vehicle Trajectories | **COMPLETE** ✅ | REST endpoint `GET /api/v1/fleet/vehicles`, `useFleetVehicles` hook + offline fallback, 10 FPS DOM-mutating `setLngLat` Mapbox markers (Ships ⚓, Trucks 🚚, Aircraft ✈️), z-index 25, demo stage awareness |
 | 26 | Unified News & Market Intelligence Ingestion Pipeline | **COMPLETE** ✅ | Tri-Layer Hybrid: Medsos OSINT + Aegis Grounding News Verification + Globot Market Regime Feeds |
@@ -46,6 +55,12 @@
 | 33 | Sumatra-Wide Pinpoint Tracking, Clean Regional Hubs, Modality Filters & Grounded OSINT Wire | **COMPLETE** ✅ | 25+ Sumatra strategic hubs, 11 pinpoint multi-modal fleets across Trans-Sumatra highways/nautical lanes, zoom-adaptive hub markers (no label collision), floating modality filter bar, grounded OSINT wire with real canonical URLs & 1-click cuOpt corridor reroute |
 | 34 | Dynamic Fleet Scale, Nautical Sea-Lane Pathfinding & Globot Honesty Alignment | **COMPLETE** ✅ | Real coastal nautical sea-lane graph around Sumatra, 45-unit multi-province fleet, strict hazard collision + Hold/Delay tactical fallback, interactive map layer filter widget, Globot-style high-contrast markers with bearing rotation, locked unfinished menus |
 | 35 | Pan-Sumatra Multi-Outlet News Intelligence, Early Warning Engine & Autonomous Swarm Triggering | **COMPLETE** ✅ | Ingestion from 8 LKBN ANTARA Sumatra bureaus + ANTARA Ekonomi, Gemini 1.5 Flash NLP extraction with heuristic fallback, Pan-Sumatra NER gazetteer, live endpoints `/api/v1/news/live` & `/api/v1/news/market-regime`, autonomous background dispatch on critical disruptions, dynamic agent gate penalties (Agent 2 +0.15, Agent 4 x5.0 arterial penalty, Agent 5 +15-35% inflation shock, Agent 6 evidence citations), minimalist UI |
+| 36 | Ground-Truth Benchmark Dataset & Automated Test Coverage Engine | **READY** | Labeled dataset N=60 Sumatra scenarios, evaluate_metrics.py, pytest-cov, test matrix doc |
+| 37 | Mathematical Consensus Formulation, Probability Calibration & CPU Routing Consolidation | **PLANNED** | Formal probabilistic independence formula, Brier calibration, CPU OR-Tools/NetworkX, Open-Meteo fusion |
+| 38 | Closed-Loop Operator Decision Trace & Ground-Truth Outcome Engine | **PLANNED** | Multi-action ACCEPT/REJECT/OVERRIDE logging, POST /api/v1/outcomes at T+12/24h, feedback loop |
+| 39 | Tactical Multi-Modal Telemetry & God's-Eye HUD Console | **PLANNED** | AISstream Redis link, ADS-B cargo, target lock crosshairs, bearing vectors, follow-camera |
+| 40 | Dedicated Evaluation & Benchmark Dashboard | **PLANNED** | EVALUATION tab, Reliability Diagram, test suite & coverage matrix, route efficiency savings |
+| 41 | UI/UX Minimalist Sanitization & Technical Report Finalization | **PLANNED** | Zero emojis, strip GPU/boasting slop, Dokumen Pendukung & docx documentation sync |
 
 ---
 
@@ -67,7 +82,7 @@
 | 2026-07-18 | Dockerize services and organize root repository files | Simplifies local staging/deployment and removes clutter |
 | 2026-07-19 | Establish Phase 11 for Proposal 2 Migration | Aligns project requirements with the Stage 2 Submission specifications, resolving static components |
 | 2026-07-21 | Phase 14: Pure Agentic Tangential Avoidance Router & Clean Slate Node Selection | Eliminate hardcoded detour coordinates, implement dynamic tangential vector clearance ($R+2\text{km}$), clean-slate node selection, XAI CoT blocks |
-| 2026-07-22 | Phase 14 Iteration 2: Forced Waypoint Engine | Mapbox silently ignores waypoints passed as hints; fix by encoding mandatory 3-stop URL (`origin;waypoint;dest`) — Mapbox must route through all three |
+| 2026-07-22 | Phase 14 Iteration 2: Forced Waypoint Engine | Mapbox silently ignores waypoints passed as hints; fix by encoding mandatory 3-stop URL (`origin;waypoint;dest`); Mapbox must route through all three |
 | 2026-07-22 | Phase 14 Iteration 3: Real OSM Road Node Database | Perpendicular math offsets produce coordinates in fields/water; replace with 18 verified OSM arterial intersection nodes scored by detour cost `dist(O→node) + dist(node→D)` |
 | 2026-07-22 | Phase 14 Iteration 4: Segment-Aware Hazard Detection with Danger Buffer | Point-only check misses sparse Mapbox polylines that skip over a hazard; fix with segment closest-point projection + 2 km danger buffer to match visual circle |
 | 2026-07-23 | Phase 18: Map UI/UX Refactoring & Spatial Pass-Through | Full-bleed map canvas + pointer-events-none overlay wrappers + contextual node coordinate offsets prevent element overlap |
@@ -78,17 +93,19 @@
 | 2026-08-17 | Phase 33: Sumatra-Wide Pinpoint Fleets, Zoom-Adaptive Hubs, Modality Filters & Grounded OSINT | Expanded to 25+ strategic hubs, 11 multi-modal fleets across real corridors, zoom-adaptive hub rendering (no badge collision at zoom 6), floating fleet modality filter, grounded OSINT wire with real canonical URLs & 1-click cuOpt corridor reroute |
 | 2026-08-17 | Phase 34: Nautical Sea-Lane Routing, 45-Unit Fleet Scale, Menu Locks & Globot Honesty | Built `SUMATRA_NAUTICAL_PERIMETER` sea-lane pathfinding (no mainland clipping), scaled to 45 active units across 10 provinces with 12x calm pace, Hold/Delay mitigation fallback, Globot high-contrast markers, locked ungrounded tabs |
 | 2026-09-22 | Phase 35: Pan-Sumatra Multi-Outlet News Intelligence, Early Warning & Swarm Triggering | Expanded news pipeline across 8 LKBN ANTARA provincial bureaus, Gemini Flash structured NLP extraction, Pan-Sumatra NER gazetteer, live endpoints `/api/v1/news/live` & `/api/v1/news/market-regime`, autonomous background dispatch on critical disruptions, dynamic agent gate penalties (Agent 2 +0.15, Agent 4 x5.0 arterial penalty, Agent 5 +15-35% inflation shock, Agent 6 evidence citations), minimalist UI |
+| 2026-09-22 | Zero GPU Architecture Transition: Remove cuOpt & FourCastNet | Eliminate theoretical H100 GPU costs and unverified claims noted in judge feedback (Score 3). Replaced with deterministic CPU routing (NetworkX Dijkstra + Google OR-Tools VRP) and open numerical weather fusion (Open-Meteo + BMKG). |
+| 2026-09-22 | Milestone M2 Scope: Empirical Validation & Tactical HUD | Address judge scores (Development Process 5/10, Conformance 3/10) with 6 focused phases: N=60 benchmark dataset, test coverage engine, proposal consensus equation, Brier calibration, closed-loop outcome verification, gods-eye-view tactical HUD, dedicated evaluation tab, and minimalist UI sanitization. |
 
 ---
 
 ## Pre-existing Assets
-- `src/01_data_prep.py` — PIHPS food price time-series cleaning + spline interpolation
-- `src/02_lag_analysis.py` — lag correlation analysis (disasters → price spikes)
-- `src/03_fsvi_pca.py` — feature selection / PCA for economic model
-- `src/04_modeling.py` — predictive modeling (likely TFT or baseline regression)
-- `src/05_generate_figures.ipynb` — visualization generation
+- `src/01_data_prep.py`: PIHPS food price time-series cleaning + spline interpolation
+- `src/02_lag_analysis.py`: lag correlation analysis (disasters -> price spikes)
+- `src/03_fsvi_pca.py`: feature selection / PCA for economic model
+- `src/04_modeling.py`: predictive modeling (likely TFT or baseline regression)
+- `src/05_generate_figures.ipynb`: visualization generation
 
-These scripts validate the economic correlation hypotheses that underpin Agent 5 (Economic Intelligence Agent). They are research artifacts, not production code — but their outputs inform the LTM seeding and inflation forecast logic.
+These scripts validate the economic correlation hypotheses that underpin Agent 5 (Economic Intelligence Agent). They are research artifacts, not production code, but their outputs inform the LTM seeding and inflation forecast logic.
 
 ---
 
