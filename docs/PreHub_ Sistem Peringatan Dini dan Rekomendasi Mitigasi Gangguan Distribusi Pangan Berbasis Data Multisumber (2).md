@@ -1,6 +1,18 @@
-PreHub: Sistem Peringatan Dini dan Rekomendasi Mitigasi Gangguan Distribusi Pangan Berbasis Data Multisumber 
+PreHub: Sistem Peringatan Dini dan Rekomendasi Mitigasi Gangguan Distribusi Pangan Berbasis Data Multisumber&nbsp;
+
+## **ABSTRAK**
+
+Keberlangsungan distribusi pangan menjadi salah satu faktor penting dalam menjaga ketersediaan komoditas antarwilayah dan mendukung agenda Asta Cita Swasembada Pangan. Namun, gangguan seperti kondisi cuaca ekstrem, perubahan lalu lintas, gangguan infrastruktur, dan kejadian lokal dapat memengaruhi kelancaran perjalanan logistik. Dalam menghadapi kondisi tersebut, informasi yang relevan sering kali tersedia secara terpisah pada berbagai sumber, sehingga operator perlu mengumpulkan, memverifikasi, dan menginterpretasikan informasi secara manual sebelum menentukan respons operasional. Kondisi ini berpotensi memperlambat identifikasi gangguan dan pengambilan keputusan mitigasi.
+
+PreHub dikembangkan sebagai sistem peringatan dini dan rekomendasi mitigasi gangguan distribusi pangan berbasis data multisumber untuk membantu *Operations Coordinator* atau *Logistics Dispatcher* memahami kondisi gangguan secara lebih terstruktur. Sistem mengintegrasikan informasi cuaca, lalu lintas, perjalanan, serta kejadian dari sumber publik ke dalam konteks spasial-temporal. Data yang masuk tidak langsung dianggap sebagai gangguan terkonfirmasi, tetapi diproses menjadi *evidence* dan dievaluasi berdasarkan kualitas, kebaruan, kesesuaian spasial-temporal, konsistensi, serta independensi antarsumber melalui mekanisme *Consensus Engine*. Indikasi yang memenuhi kriteria kemudian dianalisis untuk menentukan probabilitas gangguan, dampak terhadap perjalanan, dan risiko operasional.
+
+Berdasarkan hasil analisis tersebut, PreHub membandingkan alternatif mitigasi berupa *Continue*, *Reroute*, dan *Hold/Delay* dengan mempertimbangkan estimasi perjalanan, kendala operasional, dan eksposur risiko. Seluruh proses disajikan melalui *Evidence Chain* agar pengguna dapat menelusuri hubungan antara sumber data, bukti, analisis, validasi, dampak, risiko, dan rekomendasi. PreHub menerapkan pendekatan *human-in-the-loop*, sehingga sistem berperan sebagai pendukung keputusan dan keputusan akhir tetap berada pada operator. Melalui peningkatan kemampuan deteksi dini, pemahaman dampak, dan respons adaptif terhadap gangguan, PreHub diharapkan dapat mendukung keberlangsungan distribusi pangan sebagai salah satu kontribusi terhadap agenda Asta Cita Swasembada Pangan.
+
+**Kata kunci:** *decision support system*, deteksi dini, distribusi pangan, mitigasi, data multisumber.
 
 **2\. Latar Belakang Ide Perangkat Lunak**
+
+Pemerintah Indonesia menempatkan swasembada pangan sebagai salah satu arah strategis pembangunan nasional dalam Asta Cita dan RPJMN 2025–2029. Arah tersebut tidak hanya berkaitan dengan peningkatan kapasitas produksi, tetapi secara lebih luas berkaitan dengan kemampuan menjaga ketersediaan pangan dan memperkuat kemandirian bangsa melalui sistem pangan yang mampu memenuhi kebutuhan masyarakat secara berkelanjutan (Sekretariat Negara Republik Indonesia, 2025). Pada tahun 2026, pemerintah juga secara resmi menyatakan telah tercapainya swasembada pangan nasional pada tahun 2025\. Namun, keberlanjutan capaian tersebut tetap memerlukan kemampuan sistem pangan untuk menghadapi berbagai gangguan yang dapat memengaruhi ketersediaan dan kelancaran aliran pangan antarwilayah (Sekretariat Negara Republik Indonesia, 2026).
 
 Ketahanan pangan tidak hanya ditentukan oleh ketersediaan komoditas, tetapi juga oleh kemampuan sistem distribusi menjaga kesinambungan pasokan antarwilayah. Di Indonesia, rantai pasok pangan melibatkan jaringan produksi, penyimpanan, perdagangan, dan transportasi yang menghubungkan wilayah dengan karakteristik geografis dan infrastruktur yang berbeda. Perspektif rantai pasok dan logistik menunjukkan bahwa ketahanan pangan berkaitan erat dengan kemampuan sistem distribusi menghadapi gangguan dan menjaga kelancaran aliran komoditas (Islah et al., 2021).
 
@@ -12,7 +24,9 @@ Kebutuhan terhadap kemampuan tersebut menjadi semakin nyata ketika gangguan berk
 
 Di sisi lain, penelitian mengenai ketahanan rantai pasok pertanian di Indonesia menekankan pentingnya digitalisasi, kolaborasi, fleksibilitas, dan kemampuan adaptasi dalam menghadapi gangguan (Keefe et al., 2024; Wangke et al., 2026). Digitalisasi dapat meningkatkan koordinasi dan efisiensi rantai pasok, tetapi manfaat tersebut bergantung pada kemampuan sistem dalam menghubungkan informasi yang relevan dengan kebutuhan operasional pengguna.
 
-Berdasarkan kondisi tersebut, terdapat kebutuhan akan perangkat lunak yang tidak hanya mengumpulkan informasi, tetapi mengubah data multisumber menjadi konteks operasional yang dapat digunakan untuk merespons gangguan. PreHub dikembangkan sebagai sistem peringatan dini dan rekomendasi mitigasi gangguan distribusi pangan berbasis data multisumber. Sistem mengintegrasikan informasi mengenai kondisi cuaca, lalu lintas, perjalanan, serta kejadian dari sumber publik; mengidentifikasi indikasi gangguan; memvalidasi bukti dari sumber yang relevan; menganalisis dampaknya terhadap koridor distribusi; dan membandingkan alternatif mitigasi seperti Continue, Reroute, atau Hold/Delay. PreHub dirancang sebagai human-in-the-loop decision-support system, sehingga rekomendasi sistem menjadi dasar pertimbangan, sedangkan keputusan akhir tetap berada pada operator.
+Berdasarkan kondisi tersebut, terdapat kebutuhan akan perangkat lunak yang tidak hanya mengumpulkan informasi, tetapi mengubah data multisumber menjadi konteks operasional yang dapat digunakan untuk merespons gangguan. PreHub dikembangkan sebagai sistem peringatan dini dan rekomendasi mitigasi gangguan distribusi pangan berbasis data multisumber. Sistem mengintegrasikan informasi mengenai kondisi cuaca, lalu lintas, perjalanan, serta kejadian dari sumber publik; mengidentifikasi indikasi gangguan; memvalidasi bukti dari sumber yang relevan; menganalisis dampaknya terhadap koridor distribusi; dan membandingkan alternatif mitigasi seperti Continue, Reroute, atau Hold/Delay. PreHub dirancang sebagai human-in-the-loop decision-support system, sehingga rekomendasi sistem menjadi dasar pertimbangan, sedangkan keputusan akhir tetap berada pada operator. Melalui penguatan kemampuan pelaku distribusi dalam mendeteksi dan merespons gangguan secara lebih terstruktur dan adaptif, PreHub diposisikan sebagai kontribusi pada penguatan keberlangsungan distribusi pangan dalam mendukung agenda Asta Cita Swasembada Pangan.
+
+&nbsp;
 
 **3\. Tujuan dan Manfaat Dikembangkannya Perangkat Lunak**
 
@@ -26,7 +40,8 @@ Pengembangan PreHub bertujuan untuk:
 4. **Menerjemahkan indikasi gangguan menjadi estimasi dampak operasional**, meliputi koridor terdampak, perubahan estimasi waktu perjalanan, tingkat eksposur perjalanan, serta konsekuensi terhadap operasi distribusi.  
 5. **Menyediakan alternatif mitigasi yang dapat dibandingkan secara operasional**, termasuk melanjutkan perjalanan (*Continue*), melakukan pengalihan rute (*Reroute*), atau menunda perjalanan (*Hold/Delay*) berdasarkan kondisi, kendala, dan risiko yang tersedia.  
 6. **Mendukung pengambilan keputusan yang dapat ditelusuri dan tetap berada dalam kendali operator**, melalui penyajian *Evidence Chain* yang menghubungkan sumber data, hasil analisis, penilaian risiko, dan rekomendasi tindakan.  
-7. **Mengevaluasi efektivitas PreHub secara kuantitatif dan end-to-end**, mencakup kinerja deteksi, kualitas kalibrasi probabilitas, ketepatan estimasi dampak, kelayakan alternatif mitigasi, waktu penyelesaian tugas, serta usability sistem.
+7. **Mengevaluasi efektivitas PreHub secara kuantitatif dan end-to-end**, mencakup kinerja deteksi, kualitas kalibrasi probabilitas, ketepatan estimasi dampak, kelayakan alternatif mitigasi, waktu penyelesaian tugas, serta usability sistem.  
+8. **Mendukung penguatan keberlangsungan dan kemampuan adaptasi distribusi pangan terhadap gangguan** melalui penyediaan informasi, analisis, dan alternatif mitigasi yang dapat digunakan oleh operator sebagai bagian dari kontribusi pada agenda Asta Cita Swasembada Pangan.&nbsp;
 
 **3.2 Manfaat**
 
@@ -38,9 +53,11 @@ PreHub membantu operator mengurangi beban pengumpulan dan interpretasi informasi
 
 PreHub menyediakan dukungan untuk merespons gangguan secara lebih proaktif melalui deteksi awal, pemantauan risiko koridor, analisis perubahan perjalanan, dan perbandingan alternatif mitigasi. Digitalisasi dan integrasi informasi dalam rantai pasok pertanian Indonesia telah dikaitkan dengan peningkatan koordinasi, efisiensi logistik, serta kemampuan menghadapi gangguan, meskipun penerapannya tetap menghadapi kendala infrastruktur dan kualitas data (Keefe et al., 2024).
 
-3\. Bagi Ketahanan Distribusi Pangan
+3\. Bagi Ketahanan dan Keberlangsungan Distribusi Pangan
 
 PreHub mendukung aspek adaptasi distribusi ketika terjadi gangguan dengan membantu pelaku logistik mempertahankan pilihan operasional, seperti melanjutkan perjalanan, mengalihkan rute, atau menunda perjalanan. Kemampuan mempertahankan aliran distribusi melalui kombinasi kapasitas yang tersedia dan respons adaptif merupakan salah satu aspek penting dalam ketahanan operasi logistik rantai pasok pangan (Umar & Wilson, 2024).
+
+Pada konteks yang lebih luas, kemampuan menjaga keberlangsungan distribusi menjadi salah satu lapisan pendukung dalam mempertahankan ketersediaan pangan ketika terjadi gangguan. Oleh karena itu, PreHub tidak diposisikan sebagai solusi yang mengelola produksi atau seluruh kebijakan pangan nasional, melainkan sebagai *decision-support layer* pada proses distribusi yang membantu meningkatkan kesiapan dan kemampuan respons terhadap gangguan. Melalui fungsi tersebut, PreHub berkontribusi pada penguatan sistem distribusi pangan dalam mendukung agenda Asta Cita Swasembada Pangan.
 
 4\. Bagi Kualitas Pengambilan Keputusan
 
@@ -52,7 +69,7 @@ PreHub menyimpan informasi mengenai peringatan, keputusan, dan hasil aktual sehi
 
 3.3 Indikator Manfaat yang Dapat Diukur
 
-Manfaat PreHub dievaluasi melalui indikator yang menghubungkan kemampuan perangkat lunak dengan hasil operasional yang diharapkan: 
+Manfaat PreHub dievaluasi melalui indikator yang menghubungkan kemampuan perangkat lunak dengan hasil operasional yang diharapkan:&nbsp;
 
 | Aspek manfaat | Indikator evaluasi |
 | ----- | ----- |
@@ -64,6 +81,8 @@ Manfaat PreHub dievaluasi melalui indikator yang menghubungkan kemampuan perangk
 | Usability | Task completion, error rate, dan penilaian usability |
 | Keputusan operator | Accept, reject, atau override terhadap rekomendasi |
 | Hasil aktual | Perbandingan prediksi dengan kondisi aktual setelah keputusan |
+
+Indikator tersebut digunakan untuk mengukur kontribusi PreHub pada tingkat kemampuan sistem dan hasil operasional, bukan untuk secara langsung mengklaim perubahan pada tingkat swasembada pangan nasional. Hubungan antara PreHub dan agenda Asta Cita Swasembada Pangan ditempatkan melalui rantai dampak bertingkat, yaitu peningkatan kemampuan deteksi dan pengambilan keputusan → peningkatan kesiapan dan kemampuan adaptasi distribusi → dukungan terhadap keberlangsungan aliran pangan. Dengan pendekatan tersebut, dampak yang diklaim tetap berada dalam batas yang dapat dievaluasi sesuai dengan ruang lingkup perangkat lunak.
 
 **4\. Batasan Perangkat Lunak yang Dikembangkan**
 
@@ -84,6 +103,8 @@ Keluaran AI, termasuk hasil interpretasi informasi tidak terstruktur dan rekomen
 4.3 Batasan Data
 
 PreHub menggunakan kombinasi data terstruktur dan tidak terstruktur, meliputi informasi cuaca, lalu lintas, perjalanan atau posisi armada apabila tersedia, serta berita dan laporan publik/OSINT. Setiap sumber memiliki perbedaan dalam cakupan geografis, frekuensi pembaruan, kelengkapan, dan reliabilitas.
+
+&nbsp;
 
 Karena itu, PreHub tidak menjamin ketersediaan maupun kelengkapan informasi kondisi lapangan secara real-time. Keterlambatan, kehilangan, atau konflik antarsumber dapat menyebabkan sistem menurunkan tingkat keyakinan, mempertahankan suatu kejadian sebagai indikasi, atau meminta verifikasi operator.
 
@@ -157,29 +178,31 @@ Setelah sistem dapat menjalankan alur end-to-end, dilakukan evaluasi terhadap pe
 
 Hasil evaluasi digunakan untuk menentukan kebutuhan iterasi berikutnya, baik pada antarmuka, workflow, integrasi data, konfigurasi agen, maupun parameter keputusan. Untuk komponen AI, hasil pengujian juga dibandingkan dengan versi sebelumnya untuk memastikan perubahan menghasilkan perbaikan atau setidaknya tidak menurunkan performa secara material. Praktik membandingkan versi dan memonitor kualitas secara berkelanjutan merupakan bagian penting dari pengembangan sistem ML yang dapat dipelihara (Google for Developers, 2025).
 
+&nbsp;
+
 Siklus tersebut berlangsung secara berulang hingga tercapai increment yang memenuhi kriteria fungsional dan evaluasi yang telah ditentukan. Dengan demikian, metodologi PreHub tidak berhenti pada penyelesaian fitur, tetapi memastikan bahwa setiap penambahan fungsi menghasilkan perangkat lunak yang dapat dijalankan, diuji, diukur, dan diperbaiki berdasarkan bukti.
 
-6\. Analisis Kebutuhan dan Desain Solusi Perangkat Lunak 
+6\. Analisis Kebutuhan dan Desain Solusi Perangkat Lunak&nbsp;
 
 6.1 Analisis Kebutuhan Pengguna
 
-PreHub dirancang untuk *Operations Coordinator* atau *Logistics Dispatcher*, yaitu pengguna yang memantau perjalanan distribusi dan menentukan respons ketika kondisi operasional berubah. Dalam menghadapi gangguan, pengguna membutuhkan informasi yang tidak hanya menunjukkan kondisi saat ini, tetapi juga membantu menjawab lima pertanyaan operasional: 
+PreHub dirancang untuk *Operations Coordinator* atau *Logistics Dispatcher*, yaitu pengguna yang memantau perjalanan distribusi dan menentukan respons ketika kondisi operasional berubah. Dalam menghadapi gangguan, pengguna membutuhkan informasi yang tidak hanya menunjukkan kondisi saat ini, tetapi juga membantu menjawab lima pertanyaan operasional:&nbsp;
 
-| Pertanyaan pengguna  | Kebutuhan sistem  |
+| Pertanyaan pengguna&nbsp; | Kebutuhan sistem&nbsp; |
 | ----- | ----- |
-| Apa yang terjadi?  | Deteksi kejadian dan identifikasi lokasi, waktu, serta jenis gangguan  |
-| Seberapa kuat buktinya?  | Penyajian sumber, kualitas, kebaruan, dan validasi bukti  |
-| Apakah perjalanan terdampak?  | Analisis hubungan gangguan dengan koridor dan perjalanan |
-| Seberapa besar dampaknya?  | Estimasi keterlambatan, eksposur, dan risiko operasional  |
-| Apa yang dapat dilakukan?  | Perbandingan Continue, Reroute, dan Hold/Delay  |
+| Apa yang terjadi?&nbsp; | Deteksi kejadian dan identifikasi lokasi, waktu, serta jenis gangguan&nbsp; |
+| Seberapa kuat buktinya?&nbsp; | Penyajian sumber, kualitas, kebaruan, dan validasi bukti&nbsp; |
+| Apakah perjalanan terdampak?&nbsp; | Analisis hubungan gangguan dengan koridor dan perjalanan |
+| Seberapa besar dampaknya?&nbsp; | Estimasi keterlambatan, eksposur, dan risiko operasional&nbsp; |
+| Apa yang dapat dilakukan?&nbsp; | Perbandingan Continue, Reroute, dan Hold/Delay&nbsp; |
 
-Kebutuhan tersebut diterjemahkan menjadi fungsi utama PreHub: integrasi data multisumber, deteksi indikasi gangguan, validasi bukti, estimasi probabilitas, analisis dampak, penilaian risiko, optimasi alternatif mitigasi, penyajian *Evidence Chain*, serta pencatatan keputusan dan hasil aktual. Sistem tidak menggantikan TMS, sistem navigasi, atau kewenangan operator. PreHub berfungsi sebagai lapisan *decision support* yang mengubah informasi terfragmentasi menjadi konteks operasional yang dapat digunakan untuk mengambil keputusan. 
+Kebutuhan tersebut diterjemahkan menjadi fungsi utama PreHub: integrasi data multisumber, deteksi indikasi gangguan, validasi bukti, estimasi probabilitas, analisis dampak, penilaian risiko, optimasi alternatif mitigasi, penyajian *Evidence Chain*, serta pencatatan keputusan dan hasil aktual. Sistem tidak menggantikan TMS, sistem navigasi, atau kewenangan operator. PreHub berfungsi sebagai lapisan *decision support* yang mengubah informasi terfragmentasi menjadi konteks operasional yang dapat digunakan untuk mengambil keputusan.&nbsp;
 
 6.2 Desain Solusi dan Integrasi Data
 
 PreHub menggunakan arsitektur pengolahan data multisumber untuk menggabungkan data terstruktur dan tidak terstruktur. Data terstruktur dapat berasal dari informasi cuaca BMKG, kondisi lalu lintas TomTom, data posisi armada apabila tersedia, serta keluaran model prakiraan cuaca. Sementara itu, berita dan laporan publik/OSINT digunakan untuk menangkap informasi kejadian lokal yang belum tentu segera tersedia pada sistem operasional terstruktur. Sebelum digunakan oleh modul analitik, setiap sumber melalui tahapan normalisasi format, sinkronisasi waktu, geocoding, deduplikasi, serta penyelarasan spasial terhadap koridor distribusi. Setiap informasi juga mempertahankan metadata seperti sumber, waktu pengambilan, lokasi, tipe informasi, dan status kualitas sehingga asal-usul bukti tetap dapat ditelusuri.
 
-Untuk informasi tidak terstruktur, Intelligence Agent mengolah berita dan laporan publik menjadi representasi kejadian terstruktur yang sekurang-kurangnya memuat lokasi, waktu kejadian, jenis gangguan, tingkat keparahan, sumber informasi, serta bukti yang mendukung ekstraksi tersebut. 
+Untuk informasi tidak terstruktur, Intelligence Agent mengolah berita dan laporan publik menjadi representasi kejadian terstruktur yang sekurang-kurangnya memuat lokasi, waktu kejadian, jenis gangguan, tingkat keparahan, sumber informasi, serta bukti yang mendukung ekstraksi tersebut.&nbsp;
 
 Untuk data prakiraan, FourCastNet digunakan sebagai komponen pembentuk sinyal cuaca masa depan. FourCastNet merupakan model prakiraan cuaca berbasis Adaptive Fourier Neural Operator yang menghasilkan prakiraan variabel atmosfer seperti angin dan presipitasi pada rentang waktu pendek hingga menengah (Pathak et al., 2022). Dalam PreHub, keluaran tersebut tidak dianggap sebagai prediksi langsung terhadap keterlambatan armada. Hasil prakiraan terlebih dahulu diterjemahkan menjadi sinyal kondisi cuaca, kemudian disejajarkan secara spasial dan temporal dengan koridor distribusi untuk menilai potensi gangguan operasional.
 
@@ -217,7 +240,7 @@ PreHub tidak menentukan risiko hanya berdasarkan nilai confidence. Suatu kejadia
 
 Secara konseptual, mekanisme tersebut direpresentasikan sebagai:
 
-Operational Risk \= f(Disruption Probability, Operational Impact) 
+Operational Risk \= f(Disruption Probability, Operational Impact)&nbsp;
 
 Bentuk fungsi, bobot, dan ambang kategorisasi risiko ditentukan berdasarkan karakteristik data dan **dikembangkan serta dievaluasi menggunakan skenario pengujian**, bukan ditetapkan sebagai nilai universal. Threshold kemudian dibandingkan terhadap outcome aktual untuk mengidentifikasi false alarm, missed disruption, dan kesalahan prioritas risiko.
 
@@ -237,6 +260,8 @@ PreHub membagi proses analitik menjadi beberapa komponen spesialis berdasarkan d
 | **Decision Agent** | Menyusun hasil menjadi alternatif/rekomendasi yang dapat dipahami | Decision support |
 
 Pembagian tersebut digunakan karena setiap domain memiliki sumber data, metode analisis, dan bentuk keluaran yang berbeda. Agen tidak menghasilkan keputusan final secara independen, tetapi menghasilkan structured outputs yang dapat diproses oleh tahap berikutnya.
+
+&nbsp;
 
 Orkestrasi dilakukan menggunakan LangGraph, yang memang dirancang sebagai framework/runtime untuk workflow agen yang stateful dan menyediakan mekanisme graph-based orchestration, termasuk node, edge, branching, persistence, dan human-in-the-loop (LangChain, 2026).
 
@@ -262,9 +287,9 @@ PreHub menyediakan **Evidence Chain** sebagai mekanisme penelusuran hubungan ant
 
 **Sumber data → Evidence → Analisis → Validasi → Probabilitas → Dampak → Risiko → Alternatif → Rekomendasi**
 
-Informasi yang ditampilkan meliputi sumber data, waktu pengambilan, lokasi, hasil analisis agen, tingkat confidence bukti, hasil validasi antarsumber, probabilitas gangguan, tingkat risiko, serta aturan atau kondisi yang menyebabkan sistem menghasilkan peringatan. Evidence Chain tidak dimaksudkan untuk menampilkan proses internal model yang tidak dapat diverifikasi. Fokusnya adalah menyediakan **evidence dan decision trace yang relevan bagi operator**. 
+Informasi yang ditampilkan meliputi sumber data, waktu pengambilan, lokasi, hasil analisis agen, tingkat confidence bukti, hasil validasi antarsumber, probabilitas gangguan, tingkat risiko, serta aturan atau kondisi yang menyebabkan sistem menghasilkan peringatan. Evidence Chain tidak dimaksudkan untuk menampilkan proses internal model yang tidak dapat diverifikasi. Fokusnya adalah menyediakan **evidence dan decision trace yang relevan bagi operator**.&nbsp;
 
-Apabila terdapat informasi yang bertentangan atau sumber utama tidak tersedia, sistem tidak memaksakan keputusan. Sistem dapat menurunkan tingkat keyakinan, mempertahankan status sebagai indikasi, atau meminta verifikasi operator apabila bukti yang tersedia belum memenuhi kriteria validasi. Mekanisme tersebut memungkinkan graceful degradation dan mengurangi risiko sistem menghasilkan peringatan dengan kepastian yang tidak didukung oleh data. Operator juga dapat mengoreksi atau membatalkan rekomendasi, sedangkan keputusan dan hasil akhirnya dicatat untuk kebutuhan audit dan evaluasi. Desain ini mendukung transparansi dan interpretabilitas sistem AI, yang merupakan bagian dari karakteristik AI yang dapat dipercaya menurut NIST AI RMF (Tabassi, 2023). 
+Apabila terdapat informasi yang bertentangan atau sumber utama tidak tersedia, sistem tidak memaksakan keputusan. Sistem dapat menurunkan tingkat keyakinan, mempertahankan status sebagai indikasi, atau meminta verifikasi operator apabila bukti yang tersedia belum memenuhi kriteria validasi. Mekanisme tersebut memungkinkan graceful degradation dan mengurangi risiko sistem menghasilkan peringatan dengan kepastian yang tidak didukung oleh data. Operator juga dapat mengoreksi atau membatalkan rekomendasi, sedangkan keputusan dan hasil akhirnya dicatat untuk kebutuhan audit dan evaluasi. Desain ini mendukung transparansi dan interpretabilitas sistem AI, yang merupakan bagian dari karakteristik AI yang dapat dipercaya menurut NIST AI RMF (Tabassi, 2023).&nbsp;
 
 6.9 Desain Evaluasi Solusi
 
@@ -322,7 +347,7 @@ Dalam implementasi MVP, mekanisme tersebut menggunakan parameter awal yang dapat
 
 Apabila bukti tidak mencukupi, sumber saling bertentangan, atau sumber utama tidak tersedia, sistem tidak memaksakan status risiko tinggi. Kondisi tersebut dapat menghasilkan status indikasi, menurunkan tingkat keyakinan, atau meminta pemeriksaan operator. Mekanisme ini juga memungkinkan graceful degradation ketika salah satu API eksternal mengalami gangguan. Dengan demikian, kegagalan satu sumber tidak otomatis menghentikan keseluruhan sistem maupun menghasilkan rekomendasi tanpa bukti yang memadai.
 
-7.5 Implementasi Analisis Kondisi dan Optimasi Mitigasi 
+7.5 Implementasi Analisis Kondisi dan Optimasi Mitigasi&nbsp;
 
 PreHub mengintegrasikan informasi kondisi yang relevan terhadap perjalanan sebagai bagian dari proses pembentukan konteks gangguan. Pada implementasi MVP, sumber dan metode analisis yang tersedia digunakan untuk menghasilkan evidence mengenai kondisi yang dapat memengaruhi kelancaran perjalanan. Keluaran tersebut tidak secara langsung dianggap sebagai gangguan, tetapi diteruskan ke tahap validasi dan penilaian dampak bersama evidence dari sumber lain.
 
@@ -342,7 +367,7 @@ Pada tahap mitigasi, antarmuka menyajikan alternatif seperti **Continue, Reroute
 
 7.7 Status Implementasi Perangkat Lunak
 
-Untuk menjaga kesesuaian antara proposal, perangkat lunak, dan demonstrasi, status setiap komponen PreHub dibedakan berdasarkan tingkat kesiapan implementasinya. Status tersebut menunjukkan apakah suatu komponen telah dapat dijalankan pada MVP, masih berupa prototype, menggunakan data simulasi, sedang dikembangkan, atau direncanakan untuk pengembangan berikutnya. Klasifikasi ini digunakan agar rancangan sistem tidak disalahartikan sebagai seluruhnya telah terimplementasi. 
+Untuk menjaga kesesuaian antara proposal, perangkat lunak, dan demonstrasi, status setiap komponen PreHub dibedakan berdasarkan tingkat kesiapan implementasinya. Status tersebut menunjukkan apakah suatu komponen telah dapat dijalankan pada MVP, masih berupa prototype, menggunakan data simulasi, sedang dikembangkan, atau direncanakan untuk pengembangan berikutnya. Klasifikasi ini digunakan agar rancangan sistem tidak disalahartikan sebagai seluruhnya telah terimplementasi.&nbsp;
 
 | Komponen | Status | Keterangan |
 | ----- | ----- | ----- |
@@ -362,6 +387,8 @@ Untuk menjaga kesesuaian antara proposal, perangkat lunak, dan demonstrasi, stat
 | Route optimization | **Prototype / Scenario-based** |  |
 | Operator decision history | **Implemented / Planned** |  |
 | Outcome feedback loop | **In Development** |  |
+
+&nbsp;
 
 7.8 Pengujian dan Evaluasi Implementasi
 
@@ -391,12 +418,16 @@ Selanjutnya, pengguna membuka Mitigation Recommendation untuk membandingkan alte
 
 PreHub menggunakan beberapa mekanisme untuk mengurangi kesalahan pengambilan keputusan. Peringatan dibedakan berdasarkan status validasi dan tingkat risiko sehingga pengguna dapat membedakan antara indikasi awal dan gangguan yang telah memperoleh dukungan bukti yang memadai. Informasi sumber dan confidence juga dapat ditelusuri melalui Evidence Chain. Apabila data tidak lengkap atau sumber mengalami gangguan, kondisi tersebut ditampilkan kepada pengguna dan tidak secara otomatis dianggap sebagai bukti positif. Pada tahap rekomendasi, operator tetap memiliki kewenangan untuk menerima, menolak, atau mengoreksi hasil sistem. Keputusan tersebut dicatat sehingga dapat ditinjau kembali dan digunakan dalam evaluasi berikutnya. Pendekatan ini konsisten dengan batasan PreHub sebagai human-in-the-loop decision-support system.
 
+&nbsp;
+
+&nbsp;
+
 DAFTAR PUSTAKA  
 Azis, A. M., Irjayanti, M., & Murti, Y. R. (2026). Advancing traceability and sustainability through a digital information system in Indonesia’s rice supply chain. *Discover Sustainability, 7*, 184\. https://doi.org/10.1007/s43621-025-02544-4
 
 Badan Nasional Penanggulangan Bencana. (2025, December 9). UPT BNPB beroperasi dukung manajemen logistik bencana Sumbar. BNPB.
 
-Freichel, S. L. K., Rütten, P., & Wörtge, J. K. (2022). Challenges of supply chain visibility in distribution logistics: A literature review. *Ekonomski Vjesnik/Econviews, 35*(2), 453–466. https://doi.org/10.51680/ev.35.2.16 
+Freichel, S. L. K., Rütten, P., & Wörtge, J. K. (2022). Challenges of supply chain visibility in distribution logistics: A literature review. *Ekonomski Vjesnik/Econviews, 35*(2), 453–466. https://doi.org/10.51680/ev.35.2.16&nbsp;
 
 Yudha, E. P., & Roche, J. (2023). How was the staple food supply chain in Indonesia affected by COVID-19? Economies, 11(12), 292\. https://doi.org/10.3390/economies11120292
 
@@ -412,7 +443,7 @@ Islah, K., Vikaliana, R., Subagiyo, A., Rofiyanti, E., & Zakia. (2021). Food res
 
 Mishra, R., Singh, R. K., & Gunasekaran, A. (2024). Disruptions in the food supply chain: A literature review. *Heliyon, 10*(14), e34730. https://doi.org/10.1016/j.heliyon.2024.e34730
 
-Wangke, S. J. C., Tumiwa, J. R., Tuegeh, O. D. M., & Paat, F. B. (2026). Agricultural food supply chain robustness and environmental health: The roles of collaboration, flexibility, and agility. *Jurnal Ilmiah PLATAX, 14*(1), 227–239. https://doi.org/10.35800/jip.v14i1.67297 
+Wangke, S. J. C., Tumiwa, J. R., Tuegeh, O. D. M., & Paat, F. B. (2026). Agricultural food supply chain robustness and environmental health: The roles of collaboration, flexibility, and agility. *Jurnal Ilmiah PLATAX, 14*(1), 227–239. https://doi.org/10.35800/jip.v14i1.67297&nbsp;
 
 Heidari, R., Ghazanfari, M., & Rasouli, M. R. (2024). A decision support system for resilient vehicle route planning using mathematical modeling and artificial neural networks: A case study. Kybernetes, 55(2), 944–964. https://doi.org/10.1108/K-10-2024-2935
 
@@ -420,7 +451,7 @@ Keefe, D. H. S., Jang, H., & Sur, J.-M. (2024). Digitalization for agricultural 
 
 Sharma, J., Tyagi, M., & Kazançoğlu, Y. (2024). Impact of digital technologies on the risk assessment in food supply chain: A wake towards digitalisation. *International Journal of Food Science & Technology, 59*(5), 3491–3504. [https://doi.org/10.1111/ijfs.17035](https://doi.org/10.1111/ijfs.17035)
 
-Tabassi, E. (2023). *Artificial intelligence risk management framework (AI RMF 1.0).* National Institute of Standards and Technology. [https://doi.org/10.6028/NIST.AI.100-1](https://doi.org/10.6028/NIST.AI.100-1) 
+Tabassi, E. (2023). *Artificial intelligence risk management framework (AI RMF 1.0).* National Institute of Standards and Technology. [https://doi.org/10.6028/NIST.AI.100-1](https://doi.org/10.6028/NIST.AI.100-1)&nbsp;
 
 ffrench-Constant, M., Yang, D., Huang, X., & Kapoor, S. (2026). ConfidenceBench: Evaluating confidence calibration in large language models. arXiv.
 
@@ -432,7 +463,7 @@ Pathak, J., Subramanian, S., Harrington, P., Raja, S., Chattopadhyay, A., Mardan
 
 Wang, L., Ma, C., Feng, X., Zhang, Z., Yang, H., Zhang, J., Chen, Z., Tang, J., Chen, X., Lin, Y., Zhao, W. X., Wei, Z., & Wen, J.-R. (2024). A survey on large language model based autonomous agents. Frontiers of Computer Science, 18, 186345\.
 
-Umar, M., & Wilson, M. M. J. (2024). Inherent and adaptive resilience of logistics operations in food supply chains. *Journal of Business Logistics, 45*(1), e12362. [https://doi.org/10.1111/jbl.12362](https://doi.org/10.1111/jbl.12362) 
+Umar, M., & Wilson, M. M. J. (2024). Inherent and adaptive resilience of logistics operations in food supply chains. *Journal of Business Logistics, 45*(1), e12362. [https://doi.org/10.1111/jbl.12362](https://doi.org/10.1111/jbl.12362)&nbsp;
 
 Zhao, T., He, Y., Zheng, W., Zhang, Y., & Chen, C. (2026). Wired for overconfidence: A mechanistic perspective on inflated verbalized confidence in LLMs. arXiv
 
@@ -452,3 +483,16 @@ Uber. (2026). *H3: A hierarchical geospatial indexing system*. [H3 Documentation
 
 Vercel. (2026). *Next.js documentation*. [Next.js Documentation](https://nextjs.org/docs?utm_source=chatgpt.com)
 
+Sekretariat Negara Republik Indonesia. (2025). *RPJMN 2025–2029: Fondasi awal wujudkan Visi Indonesia Emas 2045*. [Sekretariat Negara Republik Indonesia](https://setneg.go.id/baca/index/rpjmn_2025_2029_fondasi_awal_wujudkan_visi_indonesia_emas_2045?utm_source=chatgpt.com)
+
+Sekretariat Negara Republik Indonesia. (2026). *Presiden Prabowo umumkan swasembada pangan nasional 2025*. [Sekretariat Negara Republik Indonesia](https://www.setneg.go.id/baca/index/presiden_prabowo_umumkan_swasembada_pangan_nasional_2025?utm_source=chatgpt.com)
+
+&nbsp;
+
+&nbsp;
+
+&nbsp;
+
+&nbsp;
+
+&nbsp;
