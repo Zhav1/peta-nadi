@@ -56,7 +56,7 @@ supabase/.branches/
 supabase/.temp/
 
 # Data & outputs (large files from research scripts)
-data/
+data/*
 !data/benchmark/
 !data/benchmark/**
 !data/fixtures/
