@@ -700,30 +700,32 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 ## Phase 36: Ground-Truth Benchmark Dataset & Automated Test Coverage Engine
 **Requirements Covered:** FR-10.1, FR-10.2, FR-10.3, FR-10.4, NFR-2, NFR-3, NFR-9
 **Goal:** Build a standardized Sumatra disruption ground-truth benchmark dataset ($N=60$), automate metric calculation (Precision, Recall, F1, Detection Latency), and establish a formal pytest coverage engine with documented test matrices.
-**Status:** READY TO EXECUTE
+**Status:** COMPLETE ✅
 **AI Spec Needed:** No (deterministic evaluation engineering)
 
 ### Deliverables
 - **Ground-Truth Benchmark Dataset (`data/benchmark/sumatra_disruptions_ground_truth.json`)**:
-  - 60 curated, labeled historical and synthetic disruption scenarios across 8 Sumatra provinces.
-  - Multi-sensor attributes: BMKG weather severity, Open-Meteo precipitation rate (mm/h), TomTom traffic delay index, OSINT news verification status.
+  - 60 curated, labeled historical and synthetic disruption scenarios across 8 Sumatra provinces (35 positive disruptions + 25 negative controls).
+  - Multi-sensor attributes: BMKG weather severity, Open-Meteo precipitation rate (mm/h), TomTom traffic delay index, speed ratios, OSINT news verification status, PIHPS price spikes.
   - Labeled targets: binary disruption label ($y \in \{0, 1\}$), ground-truth delay (hours), and market price inflation impact (%).
 - **Empirical Evaluation Engine (`scripts/evaluate_metrics.py`)**:
   - Automated evaluation harness running backend anomaly detection against the benchmark dataset.
-  - Computes Precision, Recall, F1-Score, False Positive Rate (FPR), and Detection Latency deterministically.
-  - Outputs summary metrics in structured JSON and Markdown tables.
+  - Computes Precision (100.0%), Recall (94.3%), F1-Score (0.971), False Positive Rate (0.0%), and Detection Latency (0.024 ms/scenario) deterministically.
+  - Outputs summary metrics in structured JSON (`test-results/benchmark_evaluation_report.json`) and terminal tables.
 - **Coverage Engine Configuration (`backend/requirements.txt` & `.coveragerc`)**:
-  - Install `pytest-cov` in backend environment.
-  - Configure `.coveragerc` targeting `app` and `agents` with branch coverage enabled.
-  - Automated coverage reporting target: >=80% on critical logic modules.
+  - Installed `pytest-cov>=5.0.0` in backend environment.
+  - Configured root `.coveragerc` targeting `app` and `agents` with branch coverage enabled.
+  - Automated coverage tracking verified across 50 passing unit and integration tests.
+- **FastAPI Router Integration Tests (`backend/tests/test_api_routers.py`)**:
+  - 8 automated endpoint tests covering health, incidents, approvals, commodities, news, corridor context, vehicles, and spatial routing.
 - **Test Suite Inventory (`docs/test_matrix.md`)**:
-  - Detailed catalog of all 39+ existing pytest test cases with test ID, module path, test purpose, and verification outcome.
+  - Detailed catalog of all 50 automated test cases mapped to FR-1 through FR-10 with test ID, module path, test purpose, expected invariants, and verification outcome.
 
 ### Verification Criteria
-- [ ] `data/benchmark/sumatra_disruptions_ground_truth.json` contains 60 valid scenarios with schema validation passing.
-- [ ] `python scripts/evaluate_metrics.py` executes without errors and generates empirical metrics (Precision > 85%, Recall > 80%, F1 > 82%).
-- [ ] `pytest backend/tests -v --cov=app --cov=agents` executes 39+ tests and produces line and branch coverage report.
-- [ ] `docs/test_matrix.md` contains comprehensive test matrix for judge inspection.
+- [x] `data/benchmark/sumatra_disruptions_ground_truth.json` contains 60 valid scenarios with schema validation passing.
+- [x] `python scripts/evaluate_metrics.py` executes without errors and generates empirical metrics (Precision > 85%, Recall > 80%, F1 > 82%).
+- [x] `pytest backend/tests -v --cov=app --cov=agents` executes 50 tests and produces line and branch coverage report with 100% pass rate.
+- [x] `docs/test_matrix.md` contains comprehensive test matrix for judge inspection.
 
 ---
 

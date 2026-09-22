@@ -1,0 +1,60 @@
+{
+  "scenario": "belawan_closure_transumatra_flood",
+  "generated_at": "2026-07-06T00:00:00Z",
+  "events": [
+    {
+      "source": "pihps",
+      "event_type": "price_spike",
+      "severity": "critical",
+      "lat": "3.5952",
+      "lon": "98.6722",
+      "title": "SPIKE: minyak_goreng price rose to Rp 18,500 (+17.1%)",
+      "raw": "{\"commodity\": \"minyak_goreng\", \"price_today\": 18500.0, \"rolling_mean_7d\": 15800.0, \"deviation_pct\": 17.1, \"market\": \"Pasar Sei Sikambing\", \"province\": \"Sumatera Utara\", \"tanggal\": \"2026-07-06\"}",
+      "dedup_key": "pihps:minyak_goreng:sumut:20260706"
+    },
+    {
+      "source": "pihps",
+      "event_type": "price_spike",
+      "severity": "high",
+      "lat": "3.5952",
+      "lon": "98.6722",
+      "title": "SPIKE: cabai_merah price rose to Rp 48,000 (+12.5%)",
+      "raw": "{\"commodity\": \"cabai_merah\", \"price_today\": 48000.0, \"rolling_mean_7d\": 42666.67, \"deviation_pct\": 12.5, \"market\": \"Pasar Belawan\", \"province\": \"Sumatera Utara\", \"tanggal\": \"2026-07-06\"}",
+      "dedup_key": "pihps:cabai_merah:sumut:20260706"
+    },
+    {
+      "source": "pihps",
+      "event_type": "price_baseline",
+      "severity": "low",
+      "lat": "3.5952",
+      "lon": "98.6722",
+      "title": "Baseline price update for beras: Rp 13,500",
+      "raw": "{\"commodity\": \"beras\", \"price_today\": 13500.0, \"rolling_mean_7d\": 13450.0, \"deviation_pct\": 0.37, \"market\": \"Pasar Tradisional Sumatera Utara\", \"province\": \"Sumatera Utara\", \"tanggal\": \"2026-07-06\"}",
+      "dedup_key": "pihps:beras:sumut:20260706"
+    }
+  ],
+  "social_events": [
+    {
+      "source": "social",
+      "platform": "twitter",
+      "event_type": "osint_report",
+      "severity": "critical",
+      "lat": "3.7944",
+      "lon": "98.6913",
+      "title": "[TWITTER] Pelabuhan Belawan: CRITICAL disruption reported",
+      "raw": "{\"platform\": \"twitter\", \"raw_text\": \"Pelabuhan Belawan lumpuh total! Kapal antri sampai 3 hari. Harga minyak goreng langka di Medan. #bencana #Belawan\", \"author\": \"sopir_lintas\", \"extracted_location\": \"Pelabuhan Belawan\", \"created_at\": \"2026-07-06T05:45:00Z\"}",
+      "dedup_key": "social:twitter:mock_synth_001"
+    },
+    {
+      "source": "social",
+      "platform": "tiktok",
+      "event_type": "osint_report",
+      "severity": "high",
+      "lat": "2.9595",
+      "lon": "99.0687",
+      "title": "[TIKTOK] Pematangsiantar: HIGH disruption reported",
+      "raw": "{\"platform\": \"tiktok\", \"raw_text\": \"Info longsor terbaru di jalan lintas Sumatera dekat Pematangsiantar. Jalan tertutup batu besar, harus memutar lewat jalur alternatif.\", \"author\": \"kabar_sumut\", \"extracted_location\": \"Pematangsiantar\", \"created_at\": \"2026-07-06T06:12:00Z\"}",
+      "dedup_key": "social:tiktok:mock_synth_002"
+    }
+  ]
+}
