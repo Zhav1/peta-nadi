@@ -656,31 +656,38 @@
 - [x] 0°–360° vehicle rotation following route bends and headings.
 ---
 
-## Phase 34: Dynamic Fleet Management, Nautical Sea-Lane Routing, Multi-Province Scale & Interface Truthfulness
-**Goal:** Menghadirkan engine rute maritim alur laut tanpa menembus daratan, skala armada multi-provinsi (45 unit di 10 provinsi Sumatra), verifikasi tabrakan bahaya dengan fallback Hold/Delay, kontrol filter layer interaktif, marker kendaraan high-contrast ala Globot dengan rotasi arah terbang, penguncian menu yang belum selesai (Analytics/Simulation/Reports) untuk eliminasi fixture data, serta pembersihan buzzword & status statis.
+## Phase 35: Pan-Sumatra Multi-Outlet News Intelligence, Early Warning System & Autonomous Swarm Triggering
+**Goal:** Membangun pipeline intelijen berita resmi multi-biro di seluruh Pulau Sumatera (8 biro LKBN ANTARA + ANTARA Ekonomi), ekstraksi parameter terstruktur via Gemini 1.5 Flash NLP dengan fallback deterministik, pemetaan entitas lokasi Pan-Sumatra, integrasi bobot dinamis ke dalam LangGraph 6-Agent Swarm (penalti rute arteri $\times 5.0$, pengali inflasi $+15\%\text{--}35\%$), pemicu otonom background dispatch untuk disrupsi kritis, serta UI drawer News Wire yang minimalis, bebas emoji/hype, dengan tombol 1-klik "Fokus".
 **Status:** COMPLETE ✅
 
 ### Deliverables
-- **Dynamic Multi-Modal Fleet REST API (`backend/app/routers/vehicles_router.py`)**:
-  - Endpoint `GET /api/v1/fleet/vehicles` melayani 45 armada pangan aktif (24 truk jalur Trans-Sumatra, 14 kapal laut Selat Malaka/Selat Sunda/Pantai Barat, 7 pesawat kargo antar-bandara) dengan koordinat rute GeoJSON dan integrasi AISStream.
-- **Coastal Nautical Sea-Lane Pathfinding (`frontend/lib/aiDynamicRouter.ts`)**:
-  - Jaringan alur laut kepulauan `SUMATRA_NAUTICAL_PERIMETER` melingkari pesisir Sumatra (Selat Malaka, Selat Bangka, Selat Sunda, Samudera Hindia) sehingga rute kapal laut tidak pernah memotong daratan.
-- **Dynamic Air Cargo Routing (`frontend/lib/aiDynamicRouter.ts`)**:
-  - Resolusi bandara kargo terdekat (`CARGO_AIRPORT_NODES`: KNO, BTJ, PKU, BIM, DJB, PLM, TKG) dengan lintasan busur udara dan leg first-mile/last-mile truk darat.
-- **Strict Hazard Intersection & Hold/Delay Fallback (`frontend/lib/aiDynamicRouter.ts`)**:
-  - Evaluasi tabrakan segmen rute dengan radius bahaya bencana. Jika seluruh rute utama dan alternatif terdampak, sistem memberikan rekomendasi taktis "Tunda Keberangkatan (Hold / Delay)" secara jujur.
-- **Globot-Style High-Contrast Fleet Markers (`FleetVehicleLayer.tsx`)**:
-  - Menghapus efek glow neon kabur. Menggantinya dengan badge solid beresolusi tinggi dan rotasi pesawat mengikuti heading azimuth (`state.bearing`). Skala simulasi dikalibrasi ke 12x untuk pergerakan stabil dan mudah diamati.
-- **Interactive Layer Filter Widget (`CrisisMap.tsx`)**:
-  - Kontrol toggle mengambang untuk koridor utama, kemacetan, radar cuaca, dan armada logistik.
-- **Interface Focus & Locked Menus (`DashboardClient.tsx` & `TopNavTelemetry.tsx`)**:
-  - Mengunci tab `ANALYTICS`, `SIMULATION`, dan `REPORTS` dengan ikon gembok dan status "Segera Hadir" untuk memfokuskan pengguna 100% pada Peta 4D terverifikasi. Menghapus badge statis "PREHUB READY".
+- **Pan-Sumatra Multi-Outlet Aggregator (`backend/app/services/news_aggregator.py`)**:
+  - Ingesti XML RSS langsung dari 8 biro regional LKBN ANTARA (*Sumut, Sumbar, Riau, Aceh, Sumsel, Lampung, Jambi, Bengkulu*) dan LKBN ANTARA Ekonomi (Tier 1 Official, bobot 0.95).
+  - Penarikan terarah dari portal pers kredibel (*CNBC Indonesia, CNN Indonesia, Detik, Tribun, Kompas*) untuk titik rawan logistik pulau (*Sitinjau Lauik, Bakauheni, Selat Malaka, Jalintim, Jalinsum*).
+- **Structured Crisis NLP Extractor (`backend/app/nlp/news_extractor.py`)**:
+  - Ekstraksi parameter krisis menggunakan Gemini 1.5 Flash via `LLMGateway` dengan in-memory MD5 cache dan fast heuristic fallback.
+  - Parameter terekstraksi: `incident_type`, `severity`, `temporal_phase` (*forecast_early_warning*, *active_disruption*, *clearing_recovery*), `lead_time_hours` (3–6 jam), `region` (8 provinsi), `corridor_segment`, komoditas pangan terdampak (*Beras, Cabai, Bawang, Minyak*), dan ground-truth metrics (`lane_status: BLOCKED`, `water_level_cm`).
+- **Pan-Sumatra Location Gazetteer (`backend/app/nlp/ner_pipeline.py`)**:
+  - Memperluas kamus entitas lokasi untuk seluruh simpul pelabuhan, bandara kargo, kabupaten/kota, dan ruas tol di 8 provinsi daratan Sumatera.
+- **Dedicated REST API Endpoints (`backend/app/routers/news_router.py`)**:
+  - `GET /api/v1/news/live`: Mengembalikan daftar artikel berita terstruktur dengan caching TTL 3 menit dan dual-aliased keys (`articles`/`items`, `count`/`total`).
+  - `GET /api/v1/news/market-regime`: Mengklasifikasikan rezim pasar logistik (*NORMAL_SUPPLY*, *EARLY_WARNING_ACTIVE*, *CRITICAL_DISRUPTION*) dan daftar indikator krisis aktif.
+- **Autonomous Early Warning Trigger (`backend/app/routers/news_router.py`)**:
+  - Deteksi penutupan jalur kritis (`lane_status: BLOCKED` atau `severity: critical`) langsung memicu `asyncio.create_task(run_crisis_event(crisis_event))` di latar belakang dengan deduplikasi ID.
+- **Dynamic Swarm Gate Grounding (`agents/nodes/`)**:
+  - **Agent 2 (OSINT Hazard):** Konsumsi stream `lrip:stream:osint` dengan dorongan keyakinan $+0.15$ untuk sumber resmi Tier 1.
+  - **Agent 4 (Route Optimization):** Penerapan penalti bobot $\times 5.0$ / pemutusan segmen arteri pada graf NetworkX saat terdeteksi berita penutupan jalan.
+  - **Agent 5 (Economic Intelligence):** Penggabungan sinyal disrupsi komoditas berita dengan anomali PIHPS untuk menskalakan pengali inflasi 48 jam ($+15\%$ hingga $+35\%$).
+  - **Agent 6 (Decision Support):** Injeksi kutipan berita lapangan langsung ke dalam ringkasan eksekutif B2G.
+- **Minimalist Command Center UI (`DashboardClient.tsx` & `EvidenceTab.tsx`)**:
+  - Drawer News Wire yang bersih dengan filter chips (`Semua`, `ANTARA`, `BMKG`, `Harga`), zero emoji/hype words, dan tombol 1-klik "Fokus" untuk memusatkan peta dan memicu simulasi rute.
+  - Badge bukti resmi LKBN ANTARA dan counter lead-time peringatan dini di panel Evidence Chain.
 
 ### Verification
-- [x] Rute kapal laut mengitari laut lepas dan tidak memotong pulau Sumatra.
-- [x] Armada logistik mencakup 45 unit di seluruh 10 provinsi Sumatra dengan pergerakan stabil 12x.
-- [x] Tab menu yang belum siap terkunci dengan rapi.
-- [x] TypeScript type check 0 error dan backend pytest 34/34 passing.
+- [x] Backend unit & integration test 39/39 passing (`pytest`).
+- [x] Live HTTP API ingestion berhasil menarik berita riil dari 8 biro ANTARA Sumatera.
+- [x] Eksekusi end-to-end LangGraph Swarm dengan data berita riil berhasil dijalankan tanpa error.
+- [x] Next.js `npm run build` berhasil mengompilasi 7/7 static routes dengan 0 error.
 
 ---
 

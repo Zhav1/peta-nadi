@@ -43,11 +43,25 @@ Indonesia's logistics network is uniquely fragile. A single physical shock — a
 | Mapbox GL JS | 3D map rendering | Pending (frontend) |
 | OpenSky Network | Aviation bottleneck detection | Pending |
 
-## MVP Scope — North Sumatra Corridor (Pilot)
-- **Geographic Scope:** Belawan Port → Trans-Sumatra Highway corridor (North Sumatra)
-- **Synthetic Data:** `run_demo.py` injects realistic mock crisis events into Redis Streams for demo reliability
-- **Real API Data:** BMKG + PIHPS live (already partially integrated)
-- **Deferred to v2:** Driver mobile app (WatermelonDB/CRDT), self-serve operator onboarding, full multi-province rollout
+## Operational Scope — Pan-Sumatra Island-Wide Logistics & Early Warning Operations
+- **Geographic Scope (Pan-Sumatra):** Full island-wide coverage across all 8 mainland Sumatra provinces:
+  - **Sumatera Utara:** Belawan Port, KEK Kuala Tanjung, Sibolga, Kualanamu Cargo, Tol Belmera & Tol MKTT.
+  - **Sumatera Barat:** Teluk Bayur Port, Sitinjau Lauik KM 22, Solok, Padang, Bukittinggi.
+  - **Riau:** Dumai Port (CPO & Food Terminal), Tol Pekanbaru–Dumai, SSK II Airport.
+  - **Aceh:** Malahayati Port (Krueng Raya), Banda Aceh, Lhokseumawe, Langsa.
+  - **Sumatera Selatan:** Boom Baru Port (Sungai Musi), Palembang, Tol Kayuagung–Palembang.
+  - **Lampung:** Panjang Container Port, Bakauheni Ferry Gateway (Java–Sumatra supply link), Tol Bakauheni–Terbanggi Besar.
+  - **Jambi & Bengkulu:** Talang Duku River Port, Pulau Baai Seaport, and trans-provincial connectors.
+- **Corridor Networks:**
+  - **Arterial Highways:** Jalan Lintas Timur (Jalintim), Jalan Lintas Barat (Jalinbar), Jalan Lintas Tengah (Jalinteng), and Jalinsum.
+  - **Toll Road Network:** Jalan Tol Trans Sumatera (JTTS).
+  - **Coastal Maritime & Air Cargo:** ALKI fairways along Malacca Strait & Indian Ocean + regional cargo airports.
+- **Multi-Outlet News & Early Warning Ingestion:**
+  - **Tier 1 Official:** 8 LKBN ANTARA regional bureaus (*Sumut, Sumbar, Riau, Aceh, Sumsel, Lampung, Jambi, Bengkulu*), ANTARA Ekonomi, BMKG, and BNPB.
+  - **Tier 2 Authoritative Press:** CNN Indonesia, CNBC Indonesia Market, and targeted regional logistics queries.
+  - **Autonomous Early Warning Trigger:** Critical road/port closures automatically dispatch background tasks to the 6-agent swarm with deduplication.
+- **Real & Live Data Integration:** Live XML RSS news feeds, Open-Meteo & BMKG weather, TomTom traffic flow, and PIHPS price volatility stream.
+- **Deferred to v2:** Driver mobile application (WatermelonDB/CRDT offline sync), self-serve third-party operator onboarding.
 
 ## Success Metrics (MVP)
 1. `< 15 minutes` from physical disruption → validated dashboard alert
