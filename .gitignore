@@ -57,6 +57,12 @@ supabase/.temp/
 
 # Data & outputs (large files from research scripts)
 data/
+!data/benchmark/
+!data/benchmark/**
+!data/fixtures/
+!data/fixtures/**
+!data/synthetic/
+!data/synthetic/**
 outputs/
 *.parquet
 *.csv
