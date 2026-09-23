@@ -185,3 +185,57 @@ def test_outcomes_endpoint(client):
     item = get_data["items"][0]
     assert item["observed_delay_hours"] == 3.0
     assert item["actual_price_spike_pct"] == 18.5
+
+
+def test_variance_recalibration():
+    """Test mathematical computation of prediction error variances and sensor weight recalibration."""
+    from app.services.outcome_evaluation_service import compute_variance, compute_recalibration_advisory
+
+    # Test 1: Exact prediction
+    var_exact = compute_variance(pred_delay=4.0, actual_delay=4.0, pred_price=10.0, actual_price=10.0)
+    assert var_exact.delay_error_hours == 0.0
+    assert var_exact.price_variance_pct == 0.0
+    assert var_exact.accuracy_score == 1.0
+
+    # Test 2: Inexact prediction with error
+    var_err = compute_variance(pred_delay=6.0, actual_delay=3.0, pred_price=25.0, actual_price=15.0)
+    assert var_err.delay_error_hours == 3.0
+    assert var_err.price_variance_pct == 10.0
+    assert 0.0 < var_err.accuracy_score < 1.0
+
+    # Test 3: Recalibration advisory sums to 1.0 with learning rate eta=0.05
+    advisory = compute_recalibration_advisory(var_err, learning_rate=0.05)
+    assert abs(sum(advisory.recommended_weights.values()) - 1.0) < 0.001
+    assert advisory.learning_rate == 0.05
+    assert len(advisory.channel_adjustments) == 3
+
+
+def test_benchmark_linking():
+    """Test linking outcomes evaluation across the N=60 benchmark dataset."""
+    from app.services.outcome_evaluation_service import evaluate_benchmark_outcomes
+
+    summary = evaluate_benchmark_outcomes()
+    assert summary["total_scenarios"] == 60
+    assert summary["evaluated_positive_scenarios"] == 35
+    assert summary["mean_absolute_delay_error"] >= 0.0
+    assert summary["mean_absolute_price_error"] >= 0.0
+    assert 0.0 < summary["average_accuracy_score"] <= 1.0
+    assert len(summary["reports"]) == 35
+
+
+def test_evaluation_endpoints(client):
+    """Test /api/v1/outcomes/evaluation/{id} and /benchmark/summary endpoints."""
+    # 1. Benchmark summary endpoint
+    resp1 = client.get("/api/v1/outcomes/benchmark/summary")
+    assert resp1.status_code == 200
+    data1 = resp1.json()
+    assert data1["total_scenarios"] == 60
+    assert data1["evaluated_positive_scenarios"] == 35
+
+    # 2. Specific incident evaluation endpoint
+    resp2 = client.get("/api/v1/outcomes/evaluation/SUMATRA-SCN-001")
+    assert resp2.status_code == 200
+    data2 = resp2.json()
+    assert "variance" in data2
+    assert "recalibration" in data2
+    assert "recommended_weights" in data2["recalibration"]

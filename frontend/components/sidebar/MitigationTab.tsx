@@ -1,7 +1,13 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
-import type { CrisisState, RouteRecommendation } from '@/lib/types';
+import type { 
+  CrisisState, 
+  RouteRecommendation, 
+  DecisionAction, 
+  TacticalManeuver,
+  ApprovalItem
+} from '@/lib/types';
 import { 
   AlertTriangle, 
   CheckCircle2, 
@@ -14,7 +20,12 @@ import {
   Plane, 
   Waves, 
   TrendingUp,
-  Sparkles
+  Sparkles,
+  PauseCircle,
+  SlidersHorizontal,
+  Send,
+  X,
+  FileText
 } from 'lucide-react';
 
 interface MitigationTabProps {
@@ -30,8 +41,9 @@ interface RouteCardProps {
   isActive: boolean;
   onSelect: () => void;
   isApproved: boolean;
+  approvalData?: ApprovalItem | null;
   approving: boolean;
-  onApprove: () => void;
+  onApprove: (action: DecisionAction, tacticalAction: TacticalManeuver, notes?: string) => Promise<void>;
 }
 
 function FormattedMarkdown({ content }: { content: string }) {
@@ -79,9 +91,15 @@ function RouteCard({
   isActive,
   onSelect,
   isApproved,
+  approvalData,
   approving,
   onApprove,
 }: RouteCardProps) {
+  const [showOverrideModal, setShowOverrideModal] = useState(false);
+  const [overrideNotes, setOverrideNotes] = useState('');
+  const [overrideTactical, setOverrideTactical] = useState<TacticalManeuver>('CONTINUE');
+  const [validationError, setValidationError] = useState<string | null>(null);
+
   const isCompromised = route.is_compromised;
   const cardBorderColor = isCompromised
     ? 'border-red-500/50 bg-red-950/20'
@@ -90,6 +108,16 @@ function RouteCard({
       : 'border-white/10 bg-slate-800/40 hover:border-white/20';
 
   const titleText = route.route_name || (idx === 0 ? 'Recommended AI Route' : `Alternative ${idx + 1}`);
+
+  const handleExecuteOverride = async () => {
+    if (!overrideNotes.trim()) {
+      setValidationError('Catatan alasan wajib diisi untuk tindakan Override / Modifikasi.');
+      return;
+    }
+    setValidationError(null);
+    await onApprove('OVERRIDE', overrideTactical, overrideNotes.trim());
+    setShowOverrideModal(false);
+  };
 
   return (
     <div
@@ -148,14 +176,30 @@ function RouteCard({
       </div>
 
       {isActive && (
-        <div className="mt-3 pt-2.5 border-t border-white/10">
+        <div className="mt-3 pt-2.5 border-t border-white/10 flex flex-col gap-2">
           {isApproved ? (
-            <div className="w-full py-2 px-3 rounded-lg bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 text-xs font-bold flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              <span>APPROVED</span>
-              <span className="text-[10px] text-emerald-400/80 font-mono">
-                · DISPATCHED
-              </span>
+            <div className="w-full py-2.5 px-3 rounded-lg bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 text-xs font-bold flex flex-col gap-1 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <span>
+                    {approvalData?.action === 'OVERRIDE'
+                      ? 'OPERATOR OVERRIDE'
+                      : approvalData?.tactical_action === 'HOLD'
+                        ? 'FLEET HOLD DIRECTIVE'
+                        : 'APPROVED & DISPATCHED'}
+                  </span>
+                </span>
+                <span className="text-[10px] text-emerald-400/80 font-mono">
+                  {approvalData?.tactical_action || 'REROUTE'}
+                </span>
+              </div>
+              {approvalData?.notes && (
+                <div className="text-[11px] font-normal text-slate-300 bg-slate-950/60 p-1.5 rounded border border-emerald-500/30 flex items-start gap-1.5 mt-1 font-mono">
+                  <FileText className="w-3 h-3 text-emerald-400 shrink-0 mt-0.5" />
+                  <span>{approvalData.notes}</span>
+                </div>
+              )}
             </div>
           ) : isCompromised ? (
             <div className="w-full py-2 px-3 rounded-lg bg-red-950/80 border border-red-500/50 text-red-300 text-[11px] font-mono font-bold text-center flex items-center justify-center gap-1.5">
@@ -163,28 +207,139 @@ function RouteCard({
               <span>RUTE TERDAMPAK BENCANA (TIDAK DISARANKAN)</span>
             </div>
           ) : (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onApprove();
-              }}
-              disabled={approving}
-              className={`w-full py-2.5 px-3 rounded-xl text-xs font-black uppercase tracking-wider bg-cyan-500 hover:bg-cyan-400 text-slate-950 transition-all shadow-lg shadow-cyan-500/20 flex items-center justify-center gap-2 ${approving ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'
-                }`}
-            >
-              {approving ? (
-                <>
-                  <div className="w-3.5 h-3.5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
-                  Mengirim Notifikasi Fleet...
-                </>
-              ) : (
-                <>
-                  <span>✓</span>
-                  <span>APPROVE & DISPATCH REROUTE</span>
-                </>
+            <>
+              {/* Tactical Buttons Grid */}
+              <div className="grid grid-cols-2 gap-2">
+                {/* 1. Primary: Approve Reroute */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onApprove('ACCEPT', 'REROUTE');
+                  }}
+                  disabled={approving}
+                  className="py-2.5 px-2 rounded-xl text-[11px] font-black uppercase tracking-wider bg-cyan-500 hover:bg-cyan-400 text-slate-950 transition-all shadow-md shadow-cyan-500/20 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+                  title="Setujui dan instruksikan armada rute alternatif"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5 text-slate-950 shrink-0" />
+                  <span>REROUTE</span>
+                </button>
+
+                {/* 2. Secondary: Hold Fleet */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onApprove('ACCEPT', 'HOLD', 'Armada diinstruksikan menahan laju di safe point terdekat.');
+                  }}
+                  disabled={approving}
+                  className="py-2.5 px-2 rounded-xl text-[11px] font-black uppercase tracking-wider bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+                  title="Instruksikan armada parkir aman sementara waktu"
+                >
+                  <PauseCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <span>TAHAN ARMADA</span>
+                </button>
+              </div>
+
+              {/* 3. Tertiary: Override with Custom Notes */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowOverrideModal(!showOverrideModal);
+                }}
+                disabled={approving}
+                className="w-full py-2 px-2.5 rounded-xl text-[11px] font-bold text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-700/80 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5 text-cyan-400" />
+                <span>{showOverrideModal ? 'Tutup Panel Override' : 'Override / Modifikasi Mandiri'}</span>
+              </button>
+
+              {/* Override Expanded Form */}
+              {showOverrideModal && (
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  className="p-3 bg-slate-950/90 border border-cyan-500/40 rounded-xl flex flex-col gap-2.5 backdrop-blur-md"
+                >
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-cyan-300 flex items-center gap-1">
+                      <FileText className="w-3 h-3 text-cyan-400" />
+                      Catatan Keputusan Operator
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowOverrideModal(false)}
+                      className="text-slate-400 hover:text-white cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  <div className="flex gap-2 text-[10px] font-mono">
+                    <button
+                      type="button"
+                      onClick={() => setOverrideTactical('CONTINUE')}
+                      className={`flex-1 py-1 rounded border cursor-pointer transition-all ${
+                        overrideTactical === 'CONTINUE'
+                          ? 'bg-cyan-950 border-cyan-400 text-cyan-300 font-bold'
+                          : 'bg-slate-900 border-slate-700 text-slate-400'
+                      }`}
+                    >
+                      CONTINUE
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOverrideTactical('REROUTE')}
+                      className={`flex-1 py-1 rounded border cursor-pointer transition-all ${
+                        overrideTactical === 'REROUTE'
+                          ? 'bg-cyan-950 border-cyan-400 text-cyan-300 font-bold'
+                          : 'bg-slate-900 border-slate-700 text-slate-400'
+                      }`}
+                    >
+                      REROUTE
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOverrideTactical('HOLD')}
+                      className={`flex-1 py-1 rounded border cursor-pointer transition-all ${
+                        overrideTactical === 'HOLD'
+                          ? 'bg-amber-950 border-amber-400 text-amber-300 font-bold'
+                          : 'bg-slate-900 border-slate-700 text-slate-400'
+                      }`}
+                    >
+                      HOLD
+                    </button>
+                  </div>
+
+                  <textarea
+                    value={overrideNotes}
+                    onChange={(e) => {
+                      setOverrideNotes(e.target.value);
+                      if (e.target.value.trim()) setValidationError(null);
+                    }}
+                    placeholder="Contoh: Dikawal patroli kepolisian daerah atau diprioritaskan via jalur tol..."
+                    rows={2}
+                    className="w-full bg-slate-900 border border-slate-700 focus:border-cyan-400 rounded-lg p-2 text-xs font-mono text-slate-200 placeholder:text-slate-500 focus:outline-none"
+                  />
+
+                  {validationError && (
+                    <span className="text-[10px] font-mono text-red-400">
+                      {validationError}
+                    </span>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={handleExecuteOverride}
+                    disabled={approving || !overrideNotes.trim()}
+                    className="w-full py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer transition-all"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>Kirim Keputusan Override</span>
+                  </button>
+                </div>
               )}
-            </button>
+            </>
           )}
         </div>
       )}
@@ -199,6 +354,7 @@ export function MitigationTab({
   onApproveSuccess,
 }: MitigationTabProps) {
   const [approvedRouteId, setApprovedRouteId] = useState<string | null>(null);
+  const [latestApproval, setLatestApproval] = useState<ApprovalItem | null>(null);
   const [approvingIdx, setApprovingIdx] = useState<number | null>(null);
 
   // Load existing approvals on mount for this incident
@@ -210,6 +366,7 @@ export function MitigationTab({
         if (res.items && res.items.length > 0) {
           const latest = res.items[0];
           setApprovedRouteId(latest.route_id);
+          setLatestApproval(latest);
         }
       } catch (err) {
         console.warn('Failed to load approvals:', err);
@@ -218,29 +375,63 @@ export function MitigationTab({
     loadApprovals();
   }, [crisis.crisis_id]);
 
-  const handleApprove = async (idx: number, route: RouteRecommendation) => {
+  const handleApprove = async (
+    idx: number, 
+    route: RouteRecommendation,
+    action: DecisionAction = 'ACCEPT',
+    tacticalAction: TacticalManeuver = 'REROUTE',
+    notes?: string
+  ) => {
     if (!crisis.crisis_id) return;
     setApprovingIdx(idx);
     try {
-      await api.approvals.create({
+      const res = await api.approvals.create({
         incident_id: crisis.crisis_id,
         route_id: String(idx),
         recommended_route: route,
+        action,
+        tactical_action: tacticalAction,
+        notes,
       });
       setApprovedRouteId(String(idx));
+      setLatestApproval({
+        id: res.approval_id || res.id || String(Date.now()),
+        incident_id: crisis.crisis_id,
+        route_id: String(idx),
+        action,
+        tactical_action: tacticalAction,
+        recommended_route: route,
+        operator_id: 'OP-CHIEF-01',
+        notes,
+        approved_at: res.approved_at || new Date().toISOString(),
+      });
 
       if (onApproveSuccess) {
-        onApproveSuccess(
-          `Rute pengalihan #${idx + 1} berhasil disetujui! Notifikasi WhatsApp telah dikirimkan ke operator armada.`
-        );
+        const actionLabel = action === 'OVERRIDE' 
+          ? 'Override rute tersimpan' 
+          : tacticalAction === 'HOLD' 
+            ? 'Instruksi Tahan Armada (HOLD) terkirim' 
+            : 'Rute pengalihan disetujui & dikirimkan ke armada';
+        onApproveSuccess(`${actionLabel} (#${idx + 1})!`);
       }
     } catch (err) {
       console.error('Failed to approve route:', err);
       // Optimistic fallback for simulated crises
       setApprovedRouteId(String(idx));
+      setLatestApproval({
+        id: String(Date.now()),
+        incident_id: crisis.crisis_id,
+        route_id: String(idx),
+        action,
+        tactical_action: tacticalAction,
+        recommended_route: route,
+        operator_id: 'OP-CHIEF-01',
+        notes,
+        approved_at: new Date().toISOString(),
+      });
       if (onApproveSuccess) {
         onApproveSuccess(
-          `Rute pengalihan #${idx + 1} disetujui! Dispatched to Fleet Control Room.`
+          `Keputusan rute #${idx + 1} (${action}/${tacticalAction}) tersimpan secara lokal!`
         );
       }
     } finally {
@@ -376,8 +567,9 @@ export function MitigationTab({
                 isActive={isActive}
                 onSelect={() => onSelectRoute(idx)}
                 isApproved={isApproved}
+                approvalData={isApproved ? latestApproval : null}
                 approving={approving}
-                onApprove={() => handleApprove(idx, route)}
+                onApprove={(action, tacticalAction, notes) => handleApprove(idx, route, action, tacticalAction, notes)}
               />
             );
           })

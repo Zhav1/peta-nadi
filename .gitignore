@@ -18,6 +18,8 @@ build/
 htmlcov/
 .coverage
 *.log
+*.db
+backend/data/*.db
 
 # Node / Next.js
 node_modules/

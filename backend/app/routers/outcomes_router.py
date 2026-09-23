@@ -168,3 +168,22 @@ async def list_outcomes(
             )
         )
     return OutcomeListResponse(items=responses, total=len(responses))
+
+
+@router.get("/evaluation/{incident_id}")
+async def get_incident_evaluation(incident_id: str):
+    """
+    Get prediction vs. actual outcome evaluation and recalibration advisory for an incident.
+    """
+    from app.services.outcome_evaluation_service import evaluate_incident_outcome
+    report = evaluate_incident_outcome(incident_id=incident_id)
+    return report.model_dump()
+
+
+@router.get("/benchmark/summary")
+async def get_benchmark_outcomes_summary():
+    """
+    Evaluate closed-loop outcome prediction variance across benchmark scenarios.
+    """
+    from app.services.outcome_evaluation_service import evaluate_benchmark_outcomes
+    return evaluate_benchmark_outcomes()

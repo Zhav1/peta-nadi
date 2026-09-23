@@ -764,7 +764,7 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 ## Phase 38: Closed-Loop Operator Decision Trace & Ground-Truth Outcome Engine
 **Requirements Covered:** FR-12.1, FR-12.2, FR-12.3, FR-12.4, NFR-8
 **Goal:** Complete the operational feedback loop by expanding operator decision logging (ACCEPT, REJECT, OVERRIDE, HOLD, REROUTE) and recording field outcomes at T+12h / T+24h post-incident.
-**Status:** PLANNED
+**Status:** COMPLETE ✅
 **AI Spec Needed:** No
 
 ### Deliverables
@@ -775,17 +775,17 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 - **Ground-Truth Field Outcome Endpoint (`backend/app/routers/outcomes_router.py`)**:
   - `POST /api/v1/outcomes`: Record verified field conditions post-disruption (actual clearance timestamp, observed vehicle delay, actual regional commodity price spike).
   - `GET /api/v1/outcomes`: Retrieve outcome verification records for historical crisis incidents.
-- **Prediction vs Outcome Evaluation Engine**:
+- **Prediction vs Outcome Evaluation Engine (`backend/app/services/outcome_evaluation_service.py`)**:
   - Compare predicted disruption timeline and price impact against verified field outcomes.
-  - Produce operational accuracy metrics to inform dynamic sensor weight adjustments.
-- **Resilient Local Persistence Fallback**:
-  - Local SQLite / JSON persistence layer for decision logs and outcomes when Supabase connectivity is unavailable.
+  - Produce operational accuracy metrics to inform dynamic sensor weight adjustments ($\eta = 0.05$).
+- **Resilient Local Persistence Fallback (`backend/app/db/local_storage.py`)**:
+  - Local SQLite persistence layer for decision logs and outcomes with zero data loss.
 
 ### Verification Criteria
-- [ ] Operator decision endpoint logs ACCEPT, REJECT, and OVERRIDE payloads with custom parameters.
-- [ ] `POST /api/v1/outcomes` accepts ground-truth outcomes and links them to incident IDs.
-- [ ] Evaluation comparison correctly measures prediction error vs field reality.
-- [ ] Offline local persistence stores and retrieves logs without cloud database connection.
+- [x] Operator decision endpoint logs ACCEPT, REJECT, and OVERRIDE payloads with custom parameters.
+- [x] `POST /api/v1/outcomes` accepts ground-truth outcomes and links them to incident IDs.
+- [x] Evaluation comparison correctly measures prediction error vs field reality.
+- [x] Offline local persistence stores and retrieves logs without cloud database connection.
 
 ---
 
