@@ -19,7 +19,8 @@ This document provides the complete empirical verification inventory for PreHub,
 | **FR-9** | Human-in-the-Loop Decision Copilot & Incident Management API | 4 | `test_agents.py`, `test_api_routers.py` | Passed |
 | **FR-10** | System Health, Adaptive Polling & Infrastructure Resilience | 3 | `test_adapters.py`, `test_scrapers.py`, `test_api_routers.py` | Passed |
 | **FR-11** | Mathematical Consensus Formulation, Probability Calibration & CPU Routing | 17 | `test_consensus_calibration.py`, `test_cpu_routing_weather.py` | Passed |
-| **TOTAL** | **Comprehensive Automated Verification Suite** | **67** | **8 Test Suites across Backend & Swarm** | **100% Passed** |
+| **FR-12** | Closed-Loop Operator Decision Trace & Ground-Truth Outcome Engine | 8 | `test_outcomes_decisions.py` | Passed |
+| **TOTAL** | **Comprehensive Automated Verification Suite** | **75** | **9 Test Suites across Backend, Swarm & Local Persistence** | **100% Passed** |
 
 ---
 
@@ -137,6 +138,19 @@ This document provides the complete empirical verification inventory for PreHub,
 | TEST-FR11-15 | `test_cpu_routing_weather.py::test_agent4_offline_cache_resilience` | Unit | Supabase `load_road_graph()` returning empty list | Agent 4 gracefully falls back to local cache with valid detours | Passed |
 | TEST-FR11-16 | `test_cpu_routing_weather.py::test_cuopt_service_backwards_compatibility` | Integration | `optimize_fleet_routes_with_cuopt()` execution | Backward compatibility preserved, solver runs on CPU in $< 150\text{ ms}$ | Passed |
 | TEST-FR11-17 | `test_cpu_routing_weather.py::test_cpu_routing_alias_resolution` | Unit | Frontend HubNode IDs and API payload IDs resolution | Resolves aliases ('belawan', 'tebingtinggi') to correct topology nodes without fallback drift | Passed |
+
+### FR-12: Closed-Loop Operator Decision Trace & Ground-Truth Outcome Engine (Phase 38)
+| Test ID | Module / Test Function | Test Type | Scenario & Input Vectors | Expected Invariant / Assertion | Result |
+| :--- | :--- | :--- | :--- | :--- | :---: |
+| TEST-FR12-01 | `test_outcomes_decisions.py::test_decision_schema_validation` | Unit | DecisionTraceCreate payload with REJECT/OVERRIDE action | Validates mandatory notes enforcement, rejecting empty notes with ValueError | Passed |
+| TEST-FR12-02 | `test_outcomes_decisions.py::test_decision_storage_sqlite` | Unit | Save decision trace with multi-action schema to SQLite | ACID write to `route_decision_traces` table and retrieval verification | Passed |
+| TEST-FR12-03 | `test_outcomes_decisions.py::test_outcomes_storage_sqlite` | Unit | Record T+12h / T+24h ground-truth outcome | Persistence in `ground_truth_outcomes` and horizon retrieval filter | Passed |
+| TEST-FR12-04 | `test_outcomes_decisions.py::test_approvals_endpoint_multi_action` | Integration | POST /api/v1/approvals with tactical maneuvers (REROUTE, HOLD, OVERRIDE) | 201 Created response, SQLite audit trace and Redis pub/sub dispatch | Passed |
+| TEST-FR12-05 | `test_outcomes_decisions.py::test_outcomes_endpoint` | Integration | POST /api/v1/outcomes and GET /api/v1/outcomes with horizon filters | Valid response schema, persistence and verified list retrieval | Passed |
+| TEST-FR12-06 | `test_outcomes_decisions.py::test_variance_recalibration` | Unit | Compute variance between predicted and actual outcome vectors | Accurate MAE/MAPE variance calculation and conservative weight recalibration ($\eta=0.05$, $\sum w=1.0$) | Passed |
+| TEST-FR12-07 | `test_outcomes_decisions.py::test_benchmark_linking` | Integration | Evaluate benchmark ground-truth scenarios ($N=60$) against prediction engine | Deterministic MAE delay error calculation on positive disruption cases | Passed |
+| TEST-FR12-08 | `test_outcomes_decisions.py::test_evaluation_endpoints` | Integration | GET /api/v1/outcomes/evaluation/{id} and GET /api/v1/outcomes/benchmark/summary | Returns complete OutcomeEvaluationReport and benchmark evaluation metrics | Passed |
+| TEST-NFR08-01 | `test_outcomes_decisions.py::test_decision_storage_sqlite` | Resilience | Local SQLite engine self-initialization and offline schema migration | Automatic table creation and fallback persistence under offline/cold-start conditions | Passed |
 
 ---
 

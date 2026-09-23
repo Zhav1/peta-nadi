@@ -150,22 +150,31 @@ export interface PricePoint {
   gula?: number;        // sugar (IDR/kg)
 }
 
+export type DecisionAction = 'ACCEPT' | 'REJECT' | 'OVERRIDE';
+export type TacticalManeuver = 'REROUTE' | 'HOLD' | 'CONTINUE';
+
 export interface ApprovalPayload {
   incident_id: string;
   route_id: string;
-  recommended_route: RouteRecommendation;
+  recommended_route?: RouteRecommendation;
+  action?: DecisionAction;
+  tactical_action?: TacticalManeuver;
   operator_id?: string;
   crisis_id?: string;
   route_name?: string;
   origin?: string;
   destination?: string;
   approved_by?: string;
+  custom_constraints?: Record<string, any>;
   notes?: string;
 }
 
 export interface ApprovalResponse {
-  approval_id: string;
+  id?: string;
+  approval_id?: string;
   approved_at: string;
+  action?: DecisionAction;
+  tactical_action?: TacticalManeuver;
   status: string;
 }
 
@@ -173,14 +182,68 @@ export interface ApprovalItem {
   id: string;
   incident_id: string;
   route_id: string;
-  recommended_route: RouteRecommendation;
+  action?: DecisionAction;
+  tactical_action?: TacticalManeuver;
+  recommended_route?: RouteRecommendation;
   operator_id: string;
+  custom_constraints?: Record<string, any>;
+  notes?: string;
   approved_at: string;
 }
 
 export interface ApprovalListResponse {
   items: ApprovalItem[];
   total: number;
+}
+
+export interface OutcomePayload {
+  incident_id: string;
+  horizon: 'T+12h' | 'T+24h';
+  actual_clearance_time?: string;
+  observed_delay_hours: number;
+  actual_price_spike_pct: number;
+  verified_by: string;
+  verification_source: 'FIELD_REPORT' | 'ANTARA_NEWS' | 'BMKG_ALL_CLEAR' | 'POLDA_TRAFFIC_POLICE';
+  notes?: string;
+}
+
+export interface OutcomeResponseItem {
+  id: string;
+  incident_id: string;
+  horizon: 'T+12h' | 'T+24h';
+  actual_clearance_time?: string | null;
+  observed_delay_hours: number;
+  actual_price_spike_pct: number;
+  verified_by: string;
+  verification_source: string;
+  notes?: string;
+  sync_status: string;
+  created_at: string;
+}
+
+export interface OutcomeListResponse {
+  items: OutcomeResponseItem[];
+  total: number;
+}
+
+export interface OutcomeEvaluationReport {
+  incident_id: string;
+  predicted_delay_hours: number;
+  actual_delay_hours: number;
+  predicted_price_spike_pct: number;
+  actual_price_spike_pct: number;
+  variance: {
+    delay_error_hours: number;
+    relative_delay_error: number;
+    price_variance_pct: number;
+    accuracy_score: number;
+  };
+  recalibration: {
+    channel_adjustments: Record<string, number>;
+    recommended_weights: Record<string, number>;
+    learning_rate: number;
+    advisory_rationale: string;
+  };
 }
 
 export type SourceStatus = 'healthy' | 'degraded' | 'down' | 'unknown';

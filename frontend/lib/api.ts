@@ -63,6 +63,24 @@ export const api = {
       return request<import('./types').ApprovalListResponse>(`/api/v1/approvals${qs}`);
     },
   },
+  outcomes: {
+    record: (body: import('./types').OutcomePayload) =>
+      request<{ id: string; incident_id: string; horizon: string; status: string }>('/api/v1/outcomes', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    list: (incidentId?: string, horizon?: string) => {
+      const params = new URLSearchParams();
+      if (incidentId) params.append('incident_id', incidentId);
+      if (horizon) params.append('horizon', horizon);
+      const qs = params.toString() ? `?${params.toString()}` : '';
+      return request<import('./types').OutcomeListResponse>(`/api/v1/outcomes${qs}`);
+    },
+    evaluation: (incidentId: string) =>
+      request<import('./types').OutcomeEvaluationReport>(`/api/v1/outcomes/evaluation/${incidentId}`),
+    benchmarkSummary: () =>
+      request<any>('/api/v1/outcomes/benchmark/summary'),
+  },
   sourceHealth: {
     get: () =>
       request<import('./types').SourceHealthResponse>('/api/v1/health/sources'),
