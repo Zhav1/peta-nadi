@@ -102,7 +102,7 @@ async def list_approvals(
         from app.db.supabase_client import get_client
         sb = get_client()
         
-        query = sb.table("route_approvals").select("*").order("created_at", desc=True).limit(limit)
+        query = sb.table("route_approvals").select("*").order("approved_at", desc=True).limit(limit)
         if incident_id:
             query = query.eq("incident_id", incident_id)
             
@@ -125,7 +125,8 @@ async def list_approvals(
                         custom_constraints=item.get("custom_constraints"),
                         notes=item.get("notes"),
                         sync_status="synced",
-                        created_at=created_dt
+                        created_at=created_dt,
+                        approved_at=created_dt
                     )
                 )
             return DecisionTraceListResponse(items=responses, total=len(responses))
@@ -153,7 +154,8 @@ async def list_approvals(
                 custom_constraints=item.get("custom_constraints"),
                 notes=item.get("notes"),
                 sync_status=item.get("sync_status", "pending"),
-                created_at=created_dt
+                created_at=created_dt,
+                approved_at=created_dt
             )
         )
     return DecisionTraceListResponse(items=responses, total=len(responses))

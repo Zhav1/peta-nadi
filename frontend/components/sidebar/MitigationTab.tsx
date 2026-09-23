@@ -178,10 +178,22 @@ function RouteCard({
       {isActive && (
         <div className="mt-3 pt-2.5 border-t border-white/10 flex flex-col gap-2">
           {isApproved ? (
-            <div className="w-full py-2.5 px-3 rounded-lg bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 text-xs font-bold flex flex-col gap-1 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
+            <div className={`w-full py-2.5 px-3 rounded-lg border text-xs font-bold flex flex-col gap-1 ${
+              approvalData?.action === 'OVERRIDE'
+                ? 'bg-indigo-950/40 border-indigo-500/50 text-indigo-300 shadow-[0_0_15px_rgba(99,102,241,0.2)]'
+                : approvalData?.tactical_action === 'HOLD'
+                  ? 'bg-amber-950/40 border-amber-500/50 text-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.2)]'
+                  : 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.2)]'
+            }`}>
               <div className="flex items-center justify-between">
                 <span className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  {approvalData?.action === 'OVERRIDE' ? (
+                    <SlidersHorizontal className="w-4 h-4 text-indigo-400" />
+                  ) : approvalData?.tactical_action === 'HOLD' ? (
+                    <PauseCircle className="w-4 h-4 text-amber-400" />
+                  ) : (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  )}
                   <span>
                     {approvalData?.action === 'OVERRIDE'
                       ? 'OPERATOR OVERRIDE'
@@ -190,13 +202,19 @@ function RouteCard({
                         : 'APPROVED & DISPATCHED'}
                   </span>
                 </span>
-                <span className="text-[10px] text-emerald-400/80 font-mono">
+                <span className="text-[10px] opacity-80 font-mono">
                   {approvalData?.tactical_action || 'REROUTE'}
                 </span>
               </div>
               {approvalData?.notes && (
-                <div className="text-[11px] font-normal text-slate-300 bg-slate-950/60 p-1.5 rounded border border-emerald-500/30 flex items-start gap-1.5 mt-1 font-mono">
-                  <FileText className="w-3 h-3 text-emerald-400 shrink-0 mt-0.5" />
+                <div className={`text-[11px] font-normal p-1.5 rounded border flex items-start gap-1.5 mt-1 font-mono ${
+                  approvalData?.action === 'OVERRIDE'
+                    ? 'bg-slate-950/70 border-indigo-500/30 text-indigo-200'
+                    : approvalData?.tactical_action === 'HOLD'
+                      ? 'bg-slate-950/70 border-amber-500/30 text-amber-200'
+                      : 'bg-slate-950/70 border-emerald-500/30 text-slate-300'
+                }`}>
+                  <FileText className="w-3 h-3 shrink-0 mt-0.5 opacity-80" />
                   <span>{approvalData.notes}</span>
                 </div>
               )}
@@ -367,6 +385,9 @@ export function MitigationTab({
           const latest = res.items[0];
           setApprovedRouteId(latest.route_id);
           setLatestApproval(latest);
+        } else {
+          setApprovedRouteId(null);
+          setLatestApproval(null);
         }
       } catch (err) {
         console.warn('Failed to load approvals:', err);

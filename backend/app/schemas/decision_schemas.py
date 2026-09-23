@@ -63,6 +63,7 @@ class DecisionTraceResponse(BaseModel):
     notes: Optional[str] = None
     sync_status: str = "synced"
     created_at: datetime
+    approved_at: Optional[datetime] = None
 
 
 class DecisionTraceListResponse(BaseModel):
