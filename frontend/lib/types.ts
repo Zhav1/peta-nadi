@@ -172,7 +172,8 @@ export interface ApprovalPayload {
 export interface ApprovalResponse {
   id?: string;
   approval_id?: string;
-  approved_at: string;
+  approved_at?: string;
+  created_at?: string;
   action?: DecisionAction;
   tactical_action?: TacticalManeuver;
   status: string;
@@ -188,7 +189,8 @@ export interface ApprovalItem {
   operator_id: string;
   custom_constraints?: Record<string, any>;
   notes?: string;
-  approved_at: string;
+  approved_at?: string;
+  created_at?: string;
 }
 
 export interface ApprovalListResponse {

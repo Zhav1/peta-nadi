@@ -120,6 +120,15 @@ def evaluate_incident_outcome(
         outcomes = local_storage.list_outcomes(incident_id=incident_id, limit=1)
         if outcomes:
             act = outcomes[0]
+
+    # Query decision traces if predicted not supplied
+    if not pred:
+        decisions = local_storage.list_decision_traces(incident_id=incident_id, limit=1)
+        if decisions:
+            rec = decisions[0].get("recommended_route") or {}
+            eta_min = rec.get("eta_minutes")
+            if eta_min:
+                pred["predicted_delay_hours"] = round(float(eta_min) / 60.0, 2)
             
     # Default fallbacks
     pred_delay = float(pred.get("estimated_delay_hours") or pred.get("predicted_delay_hours") or 4.0)
