@@ -201,11 +201,10 @@ async def get_demo_status(crisis_id: str):
         confidence = full_state.get("overall_confidence", 0.91)
         filtered["overall_confidence"] = confidence
         filtered["consensus_breakdown"] = full_state.get("consensus_breakdown", {
-            "DataCollectionAgent": 0.95,
-            "OSINTHazardAgent": 0.88,
-            "PredictionAgent": 0.90,
-            "RouteOptimizationAgent": 0.94,
-            "EconomicIntelligenceAgent": 0.89
+            "weather": 0.95,
+            "traffic": 0.90,
+            "osint": 0.88,
+            "economics": 0.89
         })
         
     if stage >= 3:

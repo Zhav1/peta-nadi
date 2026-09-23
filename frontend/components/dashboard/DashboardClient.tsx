@@ -428,8 +428,8 @@ export default function DashboardClient() {
   };
   const [spatialWeatherPolygons, setSpatialWeatherPolygons] = useState<GeoJSON.FeatureCollection | null>(null);
   const [cuOptInfo, setCuOptInfo] = useState<{ solver: string; compute_time_ms: number; savings_pct: number } | null>({
-    solver: 'NVIDIA cuOpt GPU Solver',
-    compute_time_ms: 3.2,
+    solver: 'Deterministic CPU Routing Solver (NetworkX + OR-Tools)',
+    compute_time_ms: 1.5,
     savings_pct: 18.5,
   });
 
@@ -501,7 +501,7 @@ export default function DashboardClient() {
     const destNode = HUB_NODES[destId]?.coords;
     if (!originNode || !destNode) return;
 
-    // Synchronize NVIDIA cuOpt VRP GPU Engine
+    // Synchronize Deterministic CPU Route Solver (NetworkX + OR-Tools)
     try {
       const cuoptRes = await api.routing.optimizeCuOpt({
         origin_id: originId,
@@ -511,13 +511,13 @@ export default function DashboardClient() {
       });
       if (cuoptRes && cuoptRes.optimization_summary) {
         setCuOptInfo({
-          solver: cuoptRes.solver || 'NVIDIA cuOpt GPU Solver',
-          compute_time_ms: cuoptRes.compute_time_ms || 3.2,
+          solver: cuoptRes.solver || 'Deterministic CPU Routing Solver (NetworkX + OR-Tools)',
+          compute_time_ms: cuoptRes.compute_time_ms || 1.5,
           savings_pct: cuoptRes.optimization_summary.fuel_cost_reduction_pct || 18.5
         });
       }
     } catch (err) {
-      console.warn('cuOpt GPU solver API fallback:', err);
+      console.warn('CPU routing solver API fallback:', err);
     }
 
     const routes = await calculateAIDynamicDetourRoutes(hazardCenter, radiusKm, originNode, destNode, modality);

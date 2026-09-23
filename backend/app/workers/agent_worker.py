@@ -1,6 +1,7 @@
 import hashlib
 import json
 import logging
+from datetime import datetime, timezone
 from typing import AsyncIterator
 from langgraph.checkpoint.memory import MemorySaver
 from agents.graph import build_crisis_graph
@@ -25,7 +26,7 @@ async def process_crisis_event(event: dict) -> AsyncIterator[dict]:
     crisis_id = generate_crisis_id(event)
     config = {"configurable": {"thread_id": crisis_id}}
     
-    # Initialize state
+    now_iso = datetime.now(timezone.utc).isoformat()
     initial_state = {
         **event,
         "crisis_id": crisis_id,
@@ -39,14 +40,9 @@ async def process_crisis_event(event: dict) -> AsyncIterator[dict]:
         "consensus_breakdown": {},
         "validated": False,
         "overall_confidence": 0.0,
-        "created_at": datetime.now(timezone.utc).isoformat() if 'datetime' in globals() else "",
-        "updated_at": datetime.now(timezone.utc).isoformat() if 'datetime' in globals() else ""
+        "created_at": now_iso,
+        "updated_at": now_iso
     }
-    
-    # Standardize datetime helper if not imported
-    from datetime import datetime, timezone
-    initial_state["created_at"] = datetime.now(timezone.utc).isoformat()
-    initial_state["updated_at"] = datetime.now(timezone.utc).isoformat()
     
     logger.info(f"Starting async streaming execution for crisis: {crisis_id}")
     async for chunk in _compiled.astream(initial_state, config=config):
@@ -58,7 +54,7 @@ async def run_crisis_event(event: dict) -> CrisisState:
     crisis_id = generate_crisis_id(event)
     config = {"configurable": {"thread_id": crisis_id}}
     
-    from datetime import datetime, timezone
+    now_iso = datetime.now(timezone.utc).isoformat()
     initial_state = {
         **event,
         "crisis_id": crisis_id,
@@ -72,8 +68,8 @@ async def run_crisis_event(event: dict) -> CrisisState:
         "consensus_breakdown": {},
         "validated": False,
         "overall_confidence": 0.0,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "updated_at": datetime.now(timezone.utc).isoformat()
+        "created_at": now_iso,
+        "updated_at": now_iso
     }
     
     logger.info(f"Starting one-shot execution for crisis: {crisis_id}")

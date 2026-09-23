@@ -136,11 +136,10 @@
     }
   ],
   "consensus_breakdown": {
-    "DataCollectionAgent": 0.95,
-    "OSINTHazardAgent": 0.88,
-    "PredictionAgent": 0.90,
-    "RouteOptimizationAgent": 0.94,
-    "EconomicIntelligenceAgent": 0.89
+    "weather": 0.95,
+    "traffic": 0.90,
+    "osint": 0.88,
+    "economics": 0.89
   },
   "validated": true,
   "created_at": "2026-07-12T12:00:00Z",
