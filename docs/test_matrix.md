@@ -92,7 +92,7 @@ oad_closure with critical severity | Passed |
 | :--- | :--- | :--- | :--- | :--- | :---: |
 | TEST-FR07-01 | 	est_agents.py::test_prediction_with_tomtom_data | Unit | 5 historical TomTom segment delay telemetry streams | Spatiotemporal congestion forecast computed for 6-hour horizon | Passed |
 | TEST-FR07-02 | 	est_agents.py::test_route_optimization_blocked_primary | Unit | Port closure blocking primary access corridor | Route optimizer computes detour via alternative corridor nodes | Passed |
-| TEST-FR07-03 | 	est_api_routers.py::test_vehicles_endpoints | Integration | GET /vehicles | Active fleet registry returning 45 multi-modal units with route geometry | Passed |
+| TEST-FR07-03 | 	est_api_routers.py::test_vehicles_endpoints | Integration | GET /vehicles and /api/v1/fleet/vehicles | Active fleet registry returning 45 multi-modal units with route geometry | Passed |
 
 ### FR-8: PIHPS Food Inflation & Commodity Price Anomaly Detection
 | Test ID | Module / Test Function | Test Type | Scenario & Input Vectors | Expected Invariant / Assertion | Result |
@@ -101,7 +101,7 @@ oad_closure with critical severity | Passed |
 | TEST-FR08-02 | 	est_scrapers.py::test_pihps_spike_detection_high | Unit | Red chili price jump of +8% above 7-day mean | Emits price_spike event with high severity | Passed |
 | TEST-FR08-03 | 	est_scrapers.py::test_pihps_spike_detection_critical | Unit | Cooking oil price surge of +20% above baseline | Emits price_spike event with critical severity | Passed |
 | TEST-FR08-04 | 	est_agents.py::test_economic_intelligence_anomaly_detected | Unit | Food price anomaly paired with past flood LTM episode | Computes 1.25x inflation multiplier and economic severity | Passed |
-| TEST-FR08-05 | 	est_api_routers.py::test_commodity_endpoints | Integration | GET /api/v1/commodities/prices?commodity=beras | Structured price history series with price in IDR and metadata | Passed |
+| TEST-FR08-05 | 	est_api_routers.py::test_commodity_endpoints | Integration | GET /api/v1/commodities/prices | Structured price history series with price in IDR and metadata | Passed |
 
 ### FR-9: Human-in-the-Loop Decision Copilot & Incident Management API
 | Test ID | Module / Test Function | Test Type | Scenario & Input Vectors | Expected Invariant / Assertion | Result |
@@ -134,12 +134,12 @@ Automated branch coverage tracked via pytest-cov with .coveragerc:
 | gents/state.py | 81 | 100% | 80.9% |
 | pp/adapters/bmkg_adapter.py | 101 | 78.1% | 76.7% |
 | pp/adapters/tomtom_adapter.py | 127 | 68.2% | 65.5% |
-| pp/routers/approvals.py | 53 | 75.0% | 80.7% |
-| pp/routers/commodity_router.py | 50 | 75.0% | 86.2% |
+| pp/routers/approvals.py | 61 | 75.0% | 83.1% |
+| pp/routers/commodity_router.py | 55 | 75.0% | 84.1% |
 | pp/routers/corridor_router.py | 14 | 100% | 78.6% |
 | pp/routers/news_router.py | 64 | 57.1% | 75.6% |
 | pp/routers/routing_router.py | 50 | 100% | 76.9% |
-| pp/routers/vehicles_router.py | 15 | 50.0% | 78.9% |
+| pp/routers/vehicles_router.py | 16 | 50.0% | 80.0% |
 | pp/services/news_aggregator.py | 75 | 75.0% | 87.9% |
 | pp/services/weather_fusion_service.py | 33 | 50.0% | 70.3% |
-| **Total Test Suite Execution** | **3641** | **78.4%** | **50 Passed in 27.4s** |
+| **Total Test Suite Execution** | **3675** | **78.4%** | **50 Passed in 33.5s** |
