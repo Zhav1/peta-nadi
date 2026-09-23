@@ -233,6 +233,12 @@ Di mana $\alpha, \beta, \gamma$ adalah koefisien penalti keterlambatan waktu, bi
 * **Laporan Ringkasan Eksekutif Instan:** Menghasilkan dokumen taktis berkas kabinet berformat standar kementerian berbasis penalaran DeepSeek R1.
 * **Fitur Ekspor Multi-Format:** Mendukung cetak dokumen resmi (*Print-to-PDF*), unduh berkas JSON Telemetri, dan integrasi pengiriman pesan instan WhatsApp Dispatcher.
 
+### 5.6 Modul Closed-Loop Operator Decision Trace & Ground-Truth Outcome Engine (Phase 38)
+* **Multi-Action Decision Logging:** Mencatat secara audit-trail setiap keputusan operator (`ACCEPT`, `REJECT`, `OVERRIDE`) beserta instruksi taktis manuver armada (`REROUTE`, `HOLD`, `CONTINUE`) dengan kewajiban input catatan alasan pada opsi non-default.
+* **Dual-Horizon Ground-Truth Outcomes Ingestion:** Merekam dan memverifikasi kondisi aktual di lapangan pasca-insiden pada horizon $T+12\text{jam}$ dan $T+24\text{jam}$ (waktu pembukaan jalur, delay riil armada, dan pergeseran harga riil komoditas) via endpoint `POST/GET /api/v1/outcomes`.
+* **Offline Local ACID Durability:** Menggunakan engine SQLite lokal terisolasi (`backend/data/prehub_local.db`) yang secara mandiri menjamin *zero data loss* saat koneksi cloud Supabase mengalami degradasi jaringan.
+* **Prediction vs Outcome Variance & Recalibration Engine:** Menghitung deviasi galat waktu tempuh ($\Delta t$) dan disparitas inflasi ($\Delta p$), serta menurunkan saran rekonsolidasi bobot sensor konsensus secara teredam ($\eta = 0.05, \sum w_k = 1.0$) untuk pembelajaran sistem yang stabil dan tidak mengalami osilasi.
+
 ---
 
 ## BAB 6: PANDUAN OPERASIONAL PENGGUNA (USER MANUAL & SOP)
