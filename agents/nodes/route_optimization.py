@@ -12,8 +12,29 @@ async def route_optimization_agent(state: CrisisState) -> dict:
     """Agent 4: NetworkX pgRouting matrix computation + dynamic hazard/news-weighted routing."""
     logger.info("Agent 4 [RouteOptimizationAgent] running...")
     
-    # 1. Load road graph edges
+    # 1. Load road graph edges (with local offline cache fallback)
     edges = await load_road_graph()
+    if not edges:
+        try:
+            import os, json
+            cache_file = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../data/road_network_sumatra.json"))
+            if os.path.exists(cache_file):
+                with open(cache_file, "r", encoding="utf-8") as f:
+                    cached_data = json.load(f)
+                    edges = [
+                        {
+                            "from_node": e["from_node"],
+                            "to_node": e["to_node"],
+                            "distance_km": e.get("distance_km", 10.0),
+                            "base_weight": 1.0,
+                            "corridor": e.get("corridor_name", "trans_sumatra")
+                        }
+                        for e in cached_data.get("edges", [])
+                    ]
+                logger.info(f"Agent 4: Loaded {len(edges)} edges from offline Sumatra road graph cache.")
+        except Exception as cache_err:
+            logger.warning(f"Agent 4 local cache fallback error: {cache_err}")
+
     if not edges:
         logger.warning("Empty road graph loaded. Returning base findings.")
         return {
