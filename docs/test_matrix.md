@@ -1,6 +1,6 @@
 # PreHub Test Matrix & Verification Inventory
 
-This document provides the complete empirical verification inventory for PreHub, mapping all 66 automated tests to Functional Requirements (FR-1 through FR-11). It details test types, scenario parameters, expected invariants, execution outcomes, and architectural coverage.
+This document provides the complete empirical verification inventory for PreHub, mapping all 67 automated tests to Functional Requirements (FR-1 through FR-11). It details test types, scenario parameters, expected invariants, execution outcomes, and architectural coverage.
 
 ---
 
@@ -18,8 +18,8 @@ This document provides the complete empirical verification inventory for PreHub,
 | **FR-8** | PIHPS Food Inflation & Commodity Price Anomaly Detection | 5 | `test_scrapers.py`, `test_agents.py`, `test_api_routers.py` | Passed |
 | **FR-9** | Human-in-the-Loop Decision Copilot & Incident Management API | 4 | `test_agents.py`, `test_api_routers.py` | Passed |
 | **FR-10** | System Health, Adaptive Polling & Infrastructure Resilience | 3 | `test_adapters.py`, `test_scrapers.py`, `test_api_routers.py` | Passed |
-| **FR-11** | Mathematical Consensus Formulation, Probability Calibration & CPU Routing | 16 | `test_consensus_calibration.py`, `test_cpu_routing_weather.py` | Passed |
-| **TOTAL** | **Comprehensive Automated Verification Suite** | **66** | **8 Test Suites across Backend & Swarm** | **100% Passed** |
+| **FR-11** | Mathematical Consensus Formulation, Probability Calibration & CPU Routing | 17 | `test_consensus_calibration.py`, `test_cpu_routing_weather.py` | Passed |
+| **TOTAL** | **Comprehensive Automated Verification Suite** | **67** | **8 Test Suites across Backend & Swarm** | **100% Passed** |
 
 ---
 
@@ -136,6 +136,7 @@ This document provides the complete empirical verification inventory for PreHub,
 | TEST-FR11-14 | `test_cpu_routing_weather.py::test_weather_fusion_service_openmeteo` | Integration | `get_fused_spatial_weather()` execution | Valid GeoJSON FeatureCollection with honest Open-Meteo provenance | Passed |
 | TEST-FR11-15 | `test_cpu_routing_weather.py::test_agent4_offline_cache_resilience` | Unit | Supabase `load_road_graph()` returning empty list | Agent 4 gracefully falls back to local cache with valid detours | Passed |
 | TEST-FR11-16 | `test_cpu_routing_weather.py::test_cuopt_service_backwards_compatibility` | Integration | `optimize_fleet_routes_with_cuopt()` execution | Backward compatibility preserved, solver runs on CPU in $< 150\text{ ms}$ | Passed |
+| TEST-FR11-17 | `test_cpu_routing_weather.py::test_cpu_routing_alias_resolution` | Unit | Frontend HubNode IDs and API payload IDs resolution | Resolves aliases ('belawan', 'tebingtinggi') to correct topology nodes without fallback drift | Passed |
 
 ---
 

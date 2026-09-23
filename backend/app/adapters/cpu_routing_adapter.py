@@ -30,6 +30,43 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return R * c
 
 
+NODE_ALIASES: Dict[str, str] = {
+    # Belawan Seaport aliases
+    "belawan": "belawan_port",
+    "Belawan Port": "belawan_port",
+    "pelabuhan_belawan": "belawan_port",
+    # Tebing Tinggi Toll Gate aliases
+    "tebing_tinggi": "tebing_tinggi_toll",
+    "tebingtinggi": "tebing_tinggi_toll",
+    "Tebing Tinggi": "tebing_tinggi_toll",
+    "gerbang_tol_tebing_tinggi": "tebing_tinggi_toll",
+    # Medan city / hubs
+    "medan": "medan_kim",
+    "Medan": "medan_kim",
+    "medan_kota": "medan_kim",
+    "medan_utara": "medan_kim",
+    "marelan_jct": "medan_kim",
+    "amplas_interchange": "medan_amplas",
+    "Medan Interchange": "medan_amplas",
+    # Airport & Interchanges
+    "kualanamu_jct": "kualanamu_airport",
+    "kualanamu_air": "kualanamu_airport",
+    "kualanamu": "kualanamu_airport",
+    "lubuk_pakam": "kualanamu_airport",
+    # Other strategic Sumatra cities
+    "binjai": "binjai_hub",
+    "Binjai km 18": "binjai_hub",
+    "siantar": "pematangsiantar_hub",
+    "Pematangsiantar": "pematangsiantar_hub",
+    "dumai": "dumai_port",
+    "dumai_port": "dumai_port",
+    "Dumai Port": "dumai_port",
+    "bukittinggi": "bukittinggi_hub",
+    "padang": "padang_teluk_bayur",
+    "pekanbaru": "pekanbaru_hub",
+}
+
+
 class CPURoutingAdapter:
     """Deterministic CPU-based routing and VRP solver."""
 
@@ -49,45 +86,33 @@ class CPURoutingAdapter:
                 for node in data.get("nodes", []):
                     node_id = node["id"]
                     self.nodes_dict[node_id] = node
-                    self.graph.add_node(
-                        node_id,
-                        name=node["name"],
-                        lat=node["lat"],
-                        lon=node["lon"],
-                        province=node.get("province", ""),
-                        node_type=node.get("type", "junction")
-                    )
+                    self.graph.add_node(node_id, **node)
 
                 for edge in data.get("edges", []):
                     u = edge["from_node"]
                     v = edge["to_node"]
                     dist = float(edge.get("distance_km", 10.0))
                     speed = float(edge.get("base_speed_kmh", 50.0))
-                    is_toll = bool(edge.get("is_toll", False))
-                    corridor = edge.get("corridor_name", "")
-                    
-                    # Weight = base travel time in minutes
-                    base_travel_time_min = (dist / max(10.0, speed)) * 60.0
-
+                    time_min = (dist / max(10.0, speed)) * 60.0
                     self.graph.add_edge(
                         u, v,
                         distance_km=dist,
                         base_speed_kmh=speed,
-                        travel_time_min=base_travel_time_min,
-                        weight=base_travel_time_min,
-                        is_toll=is_toll,
-                        corridor_name=corridor
+                        travel_time_min=time_min,
+                        weight=time_min,
+                        corridor_name=edge.get("corridor_name", "")
                     )
-                logger.info(f"CPURoutingAdapter: Loaded {len(self.graph.nodes)} nodes and {len(self.graph.edges)} edges.")
+                logger.info(f"CPURoutingAdapter loaded {len(self.graph.nodes)} nodes and {len(self.graph.edges)} edges.")
             else:
                 logger.warning(f"Road network cache not found at {self.cache_path}. Initializing empty graph.")
         except Exception as e:
-            logger.error(f"Failed to load road network cache: {e}")
+            logger.error(f"Failed to load road graph network cache: {e}")
 
     def get_node_coords(self, node_id: str) -> Optional[Tuple[float, float]]:
-        """Returns (lat, lon) of a node."""
-        if node_id in self.nodes_dict:
-            return self.nodes_dict[node_id]["lat"], self.nodes_dict[node_id]["lon"]
+        """Returns (lat, lon) coordinates for a given node ID."""
+        resolved = NODE_ALIASES.get(node_id, node_id)
+        if resolved in self.nodes_dict:
+            return self.nodes_dict[resolved]["lat"], self.nodes_dict[resolved]["lon"]
         return None
 
     def solve_shortest_path(
@@ -103,10 +128,17 @@ class CPURoutingAdapter:
         """
         t0 = time.perf_counter()
 
-        # Handle node resolution / defaults
-        if origin_id not in self.graph:
+        # Handle node resolution / aliases / defaults
+        orig_resolved = NODE_ALIASES.get(origin_id, origin_id)
+        if orig_resolved in self.graph:
+            origin_id = orig_resolved
+        elif origin_id not in self.graph:
             origin_id = list(self.graph.nodes)[0] if len(self.graph.nodes) > 0 else "belawan_port"
-        if dest_id not in self.graph:
+
+        dest_resolved = NODE_ALIASES.get(dest_id, dest_id)
+        if dest_resolved in self.graph:
+            dest_id = dest_resolved
+        elif dest_id not in self.graph:
             dest_id = list(self.graph.nodes)[-1] if len(self.graph.nodes) > 1 else "tebing_tinggi_toll"
 
         # Build dynamic weighted copy of graph
@@ -167,7 +199,7 @@ class CPURoutingAdapter:
                     "coordinates": path_coords,
                     "distance_km": round(dist_km, 2),
                     "eta_minutes": int(round(time_min)),
-                    "fuel_increase_pct": max(0.0, round((dist_km - (routes[0]["distance_km"] if routes else dist_km)) * 0.12, 2)),
+                    "fuel_increase_pct": max(0.0, round(((dist_km - routes[0]["distance_km"]) / routes[0]["distance_km"] * 100.0), 1)) if routes and routes[0]["distance_km"] > 0 else 0.0,
                     "risk_score": 0.12 if not is_detour else round(0.25 + (idx * 0.12), 2),
                     "is_detour": is_detour
                 })

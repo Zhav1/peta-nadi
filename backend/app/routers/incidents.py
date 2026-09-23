@@ -81,10 +81,12 @@ async def list_incidents(
         result = query.execute()
         items = result.data or []
         
-        # Map incident_id to id for IncidentResponse pydantic model
+        # Map incident_id or id for IncidentResponse pydantic model
         for item in items:
             item_copy = dict(item)
-            item_copy["id"] = item_copy.pop("incident_id")
+            item_copy["id"] = item_copy.pop("incident_id", item_copy.get("id", ""))
+            if "confidence" not in item_copy and "overall_confidence" in item_copy:
+                item_copy["confidence"] = item_copy["overall_confidence"]
             # Avoid duplicates if already in demo items
             if any(x.id == item_copy["id"] for x in formatted_items):
                 continue
@@ -209,13 +211,25 @@ async def get_incident(incident_id: str):
     try:
         from app.db.supabase_client import get_client
         sb = get_client()
-        result = sb.table("incidents").select("*").eq("incident_id", incident_id).single().execute()
-        if not result.data:
+        result = None
+        try:
+            result = sb.table("incidents").select("*").eq("incident_id", incident_id).single().execute()
+        except Exception:
+            pass
+        if not result or not result.data:
+            try:
+                result = sb.table("incidents").select("*").eq("id", incident_id).single().execute()
+            except Exception:
+                pass
+
+        if not result or not result.data:
             raise HTTPException(status_code=404, detail=f"Incident {incident_id} not found")
             
         data = dict(result.data)
-        data["id"] = data["incident_id"]
-        data["crisis_id"] = data["incident_id"]
+        inc_id = data.get("incident_id") or data.get("id", incident_id)
+        data["id"] = inc_id
+        data["crisis_id"] = inc_id
+        data["incident_id"] = inc_id
         return data
     except HTTPException:
         raise

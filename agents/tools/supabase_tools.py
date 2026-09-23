@@ -31,6 +31,7 @@ async def write_incident(state: CrisisState) -> str:
             "region": state.get("region"),
             "affected_polygon": state.get("affected_polygon"),
             "status": state.get("status", "validated"),
+            "confidence": state.get("overall_confidence", 0.0),
             "overall_confidence": state.get("overall_confidence", 0.0),
             "evidence_chain": evidence_chain,
             "route_recommendations": state.get("route_recommendations", []),
@@ -46,7 +47,7 @@ async def write_incident(state: CrisisState) -> str:
             lambda: supabase.table("incidents").insert(db_payload).execute()
         )
         if res.data:
-            incident_id = res.data[0]["incident_id"]
+            incident_id = res.data[0].get("incident_id") or res.data[0].get("id", "")
             logger.info(f"Successfully saved incident to Supabase: {incident_id}")
             return str(incident_id)
         return ""

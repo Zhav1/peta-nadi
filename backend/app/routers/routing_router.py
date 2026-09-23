@@ -18,7 +18,7 @@ router = APIRouter(tags=["Routing Optimization & Spatial Telemetry"])
 @router.get("/weather/spatial-polygons")
 async def fetch_spatial_weather_polygons() -> Dict[str, Any]:
     """
-    Returns GeoJSON multi-polygons combining BMKG station warnings + NVIDIA FourCastNet (Earth-2)
+    Returns GeoJSON multi-polygons combining BMKG station warnings + Open-Meteo Global NWP
     spatial weather predictions with data-driven rainfall_mm and flood_risk_pct.
     """
     try:
@@ -38,8 +38,8 @@ class CuOptRequestPayload(BaseModel):
 @router.post("/routing/optimize-cuopt")
 async def optimize_cuopt_routing(payload: CuOptRequestPayload = Body(...)) -> Dict[str, Any]:
     """
-    Invokes GPU-accelerated NVIDIA cuOpt VRP solver using dynamic travel time matrices
-    weighted by TomTom live speeds and BMKG/FourCastNet hazard avoidance penalties.
+    Invokes deterministic CPU routing solver (NetworkX + OR-Tools) using dynamic travel time matrices
+    weighted by TomTom live speeds and BMKG/Open-Meteo hazard avoidance penalties.
     """
     try:
         result = await optimize_fleet_routes_with_cuopt(

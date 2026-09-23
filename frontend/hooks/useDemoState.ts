@@ -70,11 +70,10 @@ export function useDemoState(onCrisisReady?: (crisis: CrisisState) => void) {
     if (currentStage >= 2) {
       base.overall_confidence = full.overall_confidence || 0.91;
       base.consensus_breakdown = full.consensus_breakdown || {
-        DataCollectionAgent: 0.95,
-        OSINTHazardAgent: 0.88,
-        PredictionAgent: 0.90,
-        RouteOptimizationAgent: 0.94,
-        EconomicIntelligenceAgent: 0.89
+        weather: 0.95,
+        traffic: 0.90,
+        osint: 0.88,
+        economics: 0.89
       };
     }
 

@@ -21,16 +21,20 @@ async def route_optimization_agent(state: CrisisState) -> dict:
             if os.path.exists(cache_file):
                 with open(cache_file, "r", encoding="utf-8") as f:
                     cached_data = json.load(f)
-                    edges = [
-                        {
+                    edges = []
+                    for e in cached_data.get("edges", []):
+                        raw_c = e.get("corridor_name", "")
+                        if "belmera" in raw_c.lower() or "belawan" in raw_c.lower():
+                            c_id = "belawan_access"
+                        else:
+                            c_id = "trans_sumatra"
+                        edges.append({
                             "from_node": e["from_node"],
                             "to_node": e["to_node"],
                             "distance_km": e.get("distance_km", 10.0),
                             "base_weight": 1.0,
-                            "corridor": e.get("corridor_name", "trans_sumatra")
-                        }
-                        for e in cached_data.get("edges", [])
-                    ]
+                            "corridor": c_id
+                        })
                 logger.info(f"Agent 4: Loaded {len(edges)} edges from offline Sumatra road graph cache.")
         except Exception as cache_err:
             logger.warning(f"Agent 4 local cache fallback error: {cache_err}")
@@ -104,14 +108,8 @@ async def route_optimization_agent(state: CrisisState) -> dict:
     # 4. Generate Alternative Routes using NetworkX Shortest Paths
     recommendations = []
     try:
-        origin = "Belawan Port"
-        destination = "Dumai Port"
-        
-        # Ensure endpoints exist in graph or pick first available nodes
-        if origin not in G:
-            origin = list(G.nodes)[0] if len(G.nodes) > 0 else None
-        if destination not in G:
-            destination = list(G.nodes)[-1] if len(G.nodes) > 1 else None
+        origin = "belawan_port" if "belawan_port" in G else ("Belawan Port" if "Belawan Port" in G else (list(G.nodes)[0] if len(G.nodes) > 0 else None))
+        destination = "dumai_port" if "dumai_port" in G else ("Dumai Port" if "Dumai Port" in G else (list(G.nodes)[-1] if len(G.nodes) > 1 else None))
 
         if origin and destination and origin != destination:
             paths = list(nx.shortest_simple_paths(G, origin, destination, weight="weight"))

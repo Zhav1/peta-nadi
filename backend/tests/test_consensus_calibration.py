@@ -49,6 +49,8 @@ def test_consensus_formula_independence():
     assert pytest.approx(res["raw_probability"], 0.001) == round(expected_p, 4)
     assert res["active_sources"] == 3  # weather(0.8), traffic(0.8), osint(0.9) > 0.5; econ(0.4) <= 0.5
     assert res["route"] == "validated"
+    assert set(res["consensus_breakdown"].keys()) == {"weather", "traffic", "osint", "economics"}
+    assert "RouteOptimizationAgent" not in res["consensus_breakdown"]
 
 
 def test_consensus_temporal_decay():

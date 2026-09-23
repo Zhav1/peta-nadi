@@ -134,3 +134,20 @@ async def test_cuopt_service_backwards_compatibility():
     assert "Deterministic CPU" in res["solver"]
     assert res["compute_time_ms"] < 150.0
     assert "cuopt_solution" in res
+
+
+def test_cpu_routing_alias_resolution():
+    """Verify that frontend HubNode IDs (e.g. 'belawan', 'tebingtinggi') and legacy IDs resolve correctly."""
+    router = get_cpu_router()
+    # Frontend Mapbox HubNode IDs
+    res_frontend = router.solve_shortest_path("belawan", "tebingtinggi")
+    assert res_frontend["status"] == "success"
+    assert res_frontend["origin"] == "belawan_port"
+    assert res_frontend["destination"] == "tebing_tinggi_toll"
+    assert res_frontend["routes_count"] >= 1
+
+    # Router default payload ID
+    res_router = router.solve_shortest_path("belawan_port", "tebing_tinggi")
+    assert res_router["status"] == "success"
+    assert res_router["destination"] == "tebing_tinggi_toll"
+
