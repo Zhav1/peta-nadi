@@ -164,7 +164,7 @@ Which phases cover which Milestone M2 requirements.
 | FR-12.2 (Post-Incident Outcome Engine T+12h/T+24h) | Phase 38 | Pending |
 | FR-12.3 (Closed-Loop Validation & Recalibration) | Phase 38 | Pending |
 | FR-12.4 (Resilient Local Persistence Fallback) | Phase 38 | Pending |
-| FR-13.1 (Real Multi-Modal Telemetry Ingestion) | Phase 39 | Pending |
+| FR-13.1 (Real Multi-Modal Telemetry Ingestion) | Phase 39 | Complete |
 | FR-13.2 (God's-Eye Tactical HUD Console) | Phase 39 | Pending |
 | FR-13.3 (Native WebGL Rendering Optimization) | Phase 39 | Pending |
 | FR-14.1 (Full Navigation Access Activation) | Phase 40 | Pending |
