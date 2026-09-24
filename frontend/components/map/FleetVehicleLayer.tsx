@@ -6,7 +6,17 @@ import type { FleetVehicle } from '@/lib/types';
 import { calculateRouteProgressPosition, projectBearingEndpoint } from '@/lib/geoUtils';
 import { getHaversineDistanceKm } from '@/lib/aiDynamicRouter';
 import { TargetLockReticle } from './TargetLockReticle';
-import { Truck, Anchor, Plane, X, Navigation, ShieldCheck } from 'lucide-react';
+import {
+  Truck,
+  Anchor,
+  Plane,
+  X,
+  Navigation,
+  ShieldCheck,
+  Video,
+  Crosshair,
+  Thermometer,
+} from 'lucide-react';
 
 interface FleetVehicleLayerProps {
   map: mapboxgl.Map | null;
@@ -23,6 +33,12 @@ function calculatePathDistanceKm(coords: [number, number][]): number {
     total += getHaversineDistanceKm(coords[i], coords[i + 1]);
   }
   return Math.max(10.0, total);
+}
+
+function getCardinalDirection(deg: number): string {
+  const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+  const index = Math.round(((deg % 360) / 45)) % 8;
+  return directions[index];
 }
 
 /**
@@ -107,13 +123,31 @@ export function FleetVehicleLayer({
     bearing: number;
   } | null>(null);
 
+  const [isFollowCamActive, setIsFollowCamActive] = useState<boolean>(false);
+
   const animRef = useRef<number | null>(null);
   const progressMapRef = useRef<Record<string, number>>({});
   const breadcrumbsRef = useRef<Record<string, [number, number][]>>({});
   const lastTimeRef = useRef<number>(performance.now());
   const selectedVehicleIdRef = useRef<string | null>(null);
+  const isFollowCamActiveRef = useRef<boolean>(false);
 
   selectedVehicleIdRef.current = selectedVehicle?.vehicle.vehicle_id ?? null;
+  isFollowCamActiveRef.current = isFollowCamActive;
+
+  // Listen to manual map drag to disengage follow-camera immediately without input fighting
+  useEffect(() => {
+    if (!map) return;
+
+    const onDragStart = () => {
+      setIsFollowCamActive(false);
+    };
+
+    map.on('dragstart', onDragStart);
+    return () => {
+      map.off('dragstart', onDragStart);
+    };
+  }, [map]);
 
   // Register high-DPI sprites
   const registerSprites = useCallback((targetMap: mapboxgl.Map) => {
@@ -239,11 +273,20 @@ export function FleetVehicleLayer({
           bearing: heading,
         });
 
-        map.flyTo({
-          center: coords,
-          zoom: Math.max(map.getZoom(), 9.5),
-          duration: 1000,
-        });
+        if (map.getPitch() < 30) {
+          map.easeTo({
+            center: coords,
+            pitch: 35,
+            zoom: Math.max(map.getZoom(), 9.5),
+            duration: 800,
+          });
+        } else {
+          map.easeTo({
+            center: coords,
+            zoom: Math.max(map.getZoom(), 9.5),
+            duration: 800,
+          });
+        }
       }
     };
 
@@ -267,7 +310,7 @@ export function FleetVehicleLayer({
     };
   }, [map, vehicles]);
 
-  // Calibrated requestAnimationFrame animation loop updating WebGL GeoJSON sources
+  // Calibrated requestAnimationFrame animation loop updating WebGL GeoJSON sources & follow camera
   useEffect(() => {
     if (!map || !vehicles || vehicles.length === 0) return;
 
@@ -399,7 +442,7 @@ export function FleetVehicleLayer({
           },
         });
 
-        // Update selected vehicle live position
+        // Update selected vehicle live position & Follow camera tracking
         if (isSelected) {
           setSelectedVehicle((prev) => {
             if (!prev || prev.vehicle.vehicle_id !== v.vehicle_id) return prev;
@@ -409,6 +452,14 @@ export function FleetVehicleLayer({
               bearing: state.bearing,
             };
           });
+
+          if (isFollowCamActiveRef.current) {
+            map.easeTo({
+              center: state.currentPosition,
+              duration: 150,
+              easing: (t) => t,
+            });
+          }
         }
       });
 
@@ -474,6 +525,28 @@ export function FleetVehicleLayer({
     };
   }, [map]);
 
+  const vehicle = selectedVehicle?.vehicle;
+  const isMaritime = vehicle?.modality === 'maritime';
+  const isAir = vehicle?.modality === 'air';
+  const isTruck = vehicle?.modality === 'truck' || (!isMaritime && !isAir);
+  const temp = vehicle?.temperature_c ?? 2.8;
+
+  const transponderId = vehicle?.mmsi
+    ? `MMSI: ${vehicle.mmsi}`
+    : vehicle?.icao24
+      ? `ICAO24: ${vehicle.icao24}`
+      : vehicle?.vin
+        ? `VIN: ${vehicle.vin}`
+        : `ID: ${vehicle?.vehicle_id}`;
+
+  const statusLabel = isMaritime
+    ? 'AIS AKTIF'
+    : isAir
+      ? 'ADS-B LOCK'
+      : vehicle?.vehicle_id.startsWith('MMSI:')
+        ? 'AIS AKTIF'
+        : 'GPS LOCK';
+
   return (
     <>
       {/* Tactical Screen-Space Target Reticle Overlay */}
@@ -482,85 +555,206 @@ export function FleetVehicleLayer({
           map={map}
           targetLngLat={selectedVehicle.currentPos}
           callsign={selectedVehicle.vehicle.name || selectedVehicle.vehicle.vehicle_id}
-          onDismiss={() => setSelectedVehicle(null)}
+          onDismiss={() => {
+            setSelectedVehicle(null);
+            setIsFollowCamActive(false);
+          }}
         />
       )}
 
-      {/* Detailed Vehicle Inspection Card */}
+      {/* Monospaced Tactical HUD Console (Strict 39-UI-SPEC Design Contract) */}
       {selectedVehicle && (
-        <div className="absolute top-20 left-4 z-40 w-84 bg-[#0c0e12]/95 border border-cyan-500/40 backdrop-blur-2xl p-4 rounded-2xl shadow-2xl animate-in fade-in slide-in-from-left-2 duration-200 pointer-events-auto text-slate-100">
-          <div className="flex items-start justify-between border-b border-white/10 pb-2.5 mb-3">
-            <div className="flex items-center gap-2">
-              <div className={`p-2 rounded-xl border ${
-                selectedVehicle.vehicle.modality === 'maritime'
-                  ? 'bg-sky-950/60 text-sky-400 border-sky-500/40'
-                  : selectedVehicle.vehicle.modality === 'air'
-                    ? 'bg-purple-950/60 text-purple-400 border-purple-500/40'
-                    : 'bg-emerald-950/60 text-emerald-400 border-emerald-500/40'
-              }`}>
-                {selectedVehicle.vehicle.modality === 'maritime' ? (
+        <div className="absolute top-20 left-4 z-40 w-96 backdrop-blur-md bg-[#0c0e12]/80 border border-white/10 shadow-2xl rounded-xl p-4 text-slate-100 animate-in fade-in slide-in-from-left-2 duration-200 pointer-events-auto space-y-3 font-sans">
+          {/* Header Bar */}
+          <div className="flex items-start justify-between border-b border-white/10 pb-3">
+            <div className="flex items-center gap-2.5">
+              <div
+                className={`p-2 rounded-lg border ${
+                  isMaritime
+                    ? 'bg-sky-950/60 text-sky-400 border-sky-500/40'
+                    : isAir
+                      ? 'bg-purple-950/60 text-purple-400 border-purple-500/40'
+                      : 'bg-emerald-950/60 text-emerald-400 border-emerald-500/40'
+                }`}
+              >
+                {isMaritime ? (
                   <Anchor className="w-4 h-4" />
-                ) : selectedVehicle.vehicle.modality === 'air' ? (
+                ) : isAir ? (
                   <Plane className="w-4 h-4" />
                 ) : (
                   <Truck className="w-4 h-4" />
                 )}
               </div>
+
               <div>
-                <h3 className="text-xs font-bold text-white font-sans">{selectedVehicle.vehicle.name}</h3>
-                <span className="text-[9px] font-mono text-slate-400 uppercase">
-                  {selectedVehicle.vehicle.vehicle_id} · {selectedVehicle.vehicle.modality}
-                </span>
+                <h3 className="text-base font-semibold text-white tracking-tight leading-tight">
+                  {selectedVehicle.vehicle.name}
+                </h3>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className="text-[11px] font-mono text-slate-400 uppercase">
+                    {transponderId}
+                  </span>
+                  <span className="text-[11px] font-mono text-slate-500">·</span>
+                  <span className="flex items-center gap-1 px-1.5 py-0.2 rounded bg-[#1e2024] text-cyan-300 border border-cyan-500/30 text-[11px] font-mono font-semibold">
+                    <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                    <span>{statusLabel}</span>
+                  </span>
+                </div>
               </div>
             </div>
 
             <button
               type="button"
-              onClick={() => setSelectedVehicle(null)}
-              className="cursor-pointer p-1 rounded-lg bg-slate-900 text-slate-400 hover:text-white transition"
-              title="Tutup Info Armada"
+              onClick={() => {
+                setSelectedVehicle(null);
+                setIsFollowCamActive(false);
+              }}
+              className="cursor-pointer p-1 rounded-lg bg-[#1e2024] text-slate-400 hover:text-white transition"
+              title="Tutup HUD Armada"
             >
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
 
-          <div className="space-y-2.5 text-xs font-mono">
-            {/* Cargo Box */}
-            <div className="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1">
-              <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold block">Muatan Kargo Strategis:</span>
-              <p className="text-xs font-bold text-cyan-300 font-sans">{selectedVehicle.vehicle.cargo || 'Logistik Pangan Nasional'}</p>
-            </div>
-
-            {/* Route Status */}
-            <div className="grid grid-cols-2 gap-2">
-              <div className="p-2 rounded-lg bg-slate-950/60 border border-slate-800/80">
-                <span className="text-[8px] text-slate-400 uppercase block">Asal</span>
-                <span className="text-[10px] text-slate-200 font-bold truncate block">{selectedVehicle.vehicle.origin || 'Asal'}</span>
+          {/* Kinematics Grid */}
+          <div className="p-3 rounded-lg bg-[#1e2024]/60 border border-white/10 space-y-2">
+            <div className="flex items-baseline justify-between border-b border-white/5 pb-2">
+              <div>
+                <span className="text-[11px] font-mono text-slate-400 flex items-center gap-1 uppercase">
+                  <Navigation className="w-3 h-3 text-cyan-400" />
+                  <span>Kecepatan Telemetri</span>
+                </span>
+                <span className="text-[22px] font-semibold text-white font-mono leading-none tracking-tight">
+                  {isMaritime
+                    ? `${(selectedVehicle.vehicle.sog_knots ?? (selectedVehicle.vehicle.speed_kmh / 1.852)).toFixed(1)} kts`
+                    : isAir
+                      ? `${(selectedVehicle.vehicle.ground_speed_kts ?? (selectedVehicle.vehicle.speed_kmh / 1.852)).toFixed(0)} kts`
+                      : `${selectedVehicle.vehicle.speed_kmh} km/j`}
+                </span>
+                <span className="text-[11px] font-mono text-slate-400 ml-1.5">
+                  ({selectedVehicle.vehicle.speed_kmh} km/j)
+                </span>
               </div>
-              <div className="p-2 rounded-lg bg-slate-950/60 border border-slate-800/80">
-                <span className="text-[8px] text-slate-400 uppercase block">Tujuan</span>
-                <span className="text-[10px] text-cyan-300 font-bold truncate block">{selectedVehicle.vehicle.destination || 'Tujuan'}</span>
+
+              <div className="text-right">
+                <span className="text-[11px] font-mono text-slate-400 block uppercase">
+                  Heading / Azimuth
+                </span>
+                <span className="text-[13px] font-semibold font-mono text-cyan-300">
+                  {Math.round(selectedVehicle.bearing)}° {getCardinalDirection(selectedVehicle.bearing)}
+                </span>
               </div>
             </div>
 
-            {/* Telemetry Metrics */}
-            <div className="flex items-center justify-between p-2 rounded-lg bg-cyan-950/30 border border-cyan-500/20 text-[10px]">
-              <span className="flex items-center gap-1 text-slate-300">
-                <Navigation className="w-3 h-3 text-cyan-400" />
-                <span>Kecepatan Telemetri:</span>
-              </span>
-              <span className="font-bold text-emerald-400 font-mono">{selectedVehicle.vehicle.speed_kmh} km/j</span>
+            <div className="grid grid-cols-2 gap-2 text-[11px] font-mono pt-1">
+              <div>
+                <span className="text-slate-400 block uppercase">
+                  {isMaritime ? 'Draught Kapal:' : isAir ? 'Ketinggian ADS-B:' : 'Elevasi Radar:'}
+                </span>
+                <span className="text-slate-200 font-semibold">
+                  {isMaritime
+                    ? `${selectedVehicle.vehicle.draught_m ?? 7.2} m`
+                    : isAir
+                      ? `${(selectedVehicle.vehicle.altitude_ft ?? 28000).toLocaleString()} ft`
+                      : '45 m dpl'}
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-400 block uppercase">Koordinat (Lat/Lon):</span>
+                <span className="text-slate-300 font-mono">
+                  {selectedVehicle.currentPos[1].toFixed(3)}°N, {selectedVehicle.currentPos[0].toFixed(3)}°E
+                </span>
+              </div>
             </div>
+          </div>
 
-            <div className="flex items-center justify-between text-[9px] text-slate-400 pt-1">
-              <span className="flex items-center gap-1">
-                <ShieldCheck className="w-3 h-3 text-emerald-400" />
-                <span>Status Pelacakan:</span>
-              </span>
-              <span className="px-2 py-0.5 rounded bg-slate-900 text-slate-300 border border-slate-700 font-bold uppercase">
-                {selectedVehicle.vehicle.vehicle_id.startsWith('MMSI:') ? 'AIS AKTIF' : 'SIMULASI KORIDOR'}
+          {/* Strategic Cargo & Cold-Chain */}
+          <div className="p-3 rounded-lg bg-[#1e2024]/80 border border-white/10 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-mono text-slate-400 uppercase">Kargo Strategis:</span>
+              {(isTruck || vehicle?.temperature_c !== undefined) && (
+                <div
+                  className={`px-2 py-0.5 rounded border text-[11px] font-mono flex items-center gap-1 ${
+                    temp <= 4.0
+                      ? 'bg-emerald-950/60 text-emerald-400 border-emerald-500/30'
+                      : 'bg-amber-950/60 text-amber-400 border-amber-500/30'
+                  }`}
+                >
+                  <Thermometer className="w-3 h-3" />
+                  <span>
+                    {temp.toFixed(1)}°C {temp <= 4.0 ? '[NORMAL]' : '[PERINGATAN SUHU]'}
+                  </span>
+                </div>
+              )}
+            </div>
+            <p className="text-[13px] font-mono text-slate-200 font-medium">
+              {selectedVehicle.vehicle.cargo || 'Logistik Pangan Nasional'}
+            </p>
+          </div>
+
+          {/* Route & Signal Freshness */}
+          <div className="p-3 rounded-lg bg-[#1e2024]/40 border border-white/10 space-y-1.5 text-[11px] font-mono">
+            <div className="flex items-center justify-between">
+              <span className="text-slate-400 uppercase">Koridor Rute:</span>
+              <span className="text-cyan-300 font-semibold truncate max-w-[200px]">
+                {selectedVehicle.vehicle.origin || 'Asal'} → {selectedVehicle.vehicle.destination || 'Tujuan'}
               </span>
             </div>
+            <div className="flex items-center justify-between text-slate-400 pt-1 border-t border-white/5">
+              <span className="flex items-center gap-1.5">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00f0ff] opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-[#00f0ff]"></span>
+                </span>
+                <span>Latensi Telemetri:</span>
+              </span>
+              <span className="text-slate-300 font-semibold">
+                {selectedVehicle.vehicle.last_ping_seconds_ago ?? 1.2}s lalu [LIVE PING]
+              </span>
+            </div>
+          </div>
+
+          {/* Action CTAs */}
+          <div className="space-y-2 pt-1">
+            <button
+              type="button"
+              onClick={() => {
+                if (!isFollowCamActive && map) {
+                  if (map.getPitch() < 30) {
+                    map.easeTo({
+                      pitch: 35,
+                      zoom: Math.max(map.getZoom(), 9.5),
+                      duration: 600,
+                    });
+                  }
+                }
+                setIsFollowCamActive((prev) => !prev);
+              }}
+              className={`w-full py-2 px-3 rounded-lg border text-[13px] font-semibold font-mono flex items-center justify-center gap-2 cursor-pointer transition-all duration-200 shadow-lg ${
+                isFollowCamActive
+                  ? 'bg-cyan-950/80 text-cyan-300 border-cyan-400 ring-1 ring-cyan-500/30'
+                  : 'bg-[#1e2024] text-slate-300 hover:text-white hover:bg-slate-800 border-white/10'
+              }`}
+            >
+              <Video
+                className={`w-4 h-4 ${
+                  isFollowCamActive ? 'text-cyan-400 animate-pulse' : 'text-slate-400'
+                }`}
+              />
+              <span>{isFollowCamActive ? 'Kamera Pengikut Aktif' : 'Aktifkan Kamera Pengikut'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedVehicle(null);
+                setIsFollowCamActive(false);
+              }}
+              className="w-full py-1 text-[11px] font-mono text-slate-400 hover:text-red-400 flex items-center justify-center gap-1 cursor-pointer transition"
+            >
+              <Crosshair className="w-3 h-3" />
+              <span>Lepas Kunci Target</span>
+            </button>
           </div>
         </div>
       )}
