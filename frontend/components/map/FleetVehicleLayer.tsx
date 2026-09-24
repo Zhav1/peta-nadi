@@ -3,8 +3,9 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import mapboxgl from 'mapbox-gl';
 import type { FleetVehicle } from '@/lib/types';
-import { calculateRouteProgressPosition } from '@/lib/geoUtils';
+import { calculateRouteProgressPosition, projectBearingEndpoint } from '@/lib/geoUtils';
 import { getHaversineDistanceKm } from '@/lib/aiDynamicRouter';
+import { TargetLockReticle } from './TargetLockReticle';
 import { Truck, Anchor, Plane, X, Navigation, ShieldCheck } from 'lucide-react';
 
 interface FleetVehicleLayerProps {
@@ -156,7 +157,27 @@ export function FleetVehicleLayer({
       });
     }
 
-    // 2. Telemetry points source & symbol layer
+    // 2. Bearing vectors source & layer
+    if (!targetMap.getSource('fleet-bearing-vectors')) {
+      targetMap.addSource('fleet-bearing-vectors', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+    }
+    if (!targetMap.getLayer('fleet-bearing-vectors-layer')) {
+      targetMap.addLayer({
+        id: 'fleet-bearing-vectors-layer',
+        type: 'line',
+        source: 'fleet-bearing-vectors',
+        paint: {
+          'line-color': ['get', 'color'],
+          'line-width': 1.5,
+          'line-dasharray': [2, 2],
+        },
+      });
+    }
+
+    // 3. Telemetry points source & symbol layer
     if (!targetMap.getSource('fleet-telemetry-points')) {
       targetMap.addSource('fleet-telemetry-points', {
         type: 'geojson',
@@ -273,6 +294,7 @@ export function FleetVehicleLayer({
 
       const pointFeatures: GeoJSON.Feature<GeoJSON.Point>[] = [];
       const trailFeatures: GeoJSON.Feature<GeoJSON.LineString>[] = [];
+      const vectorFeatures: GeoJSON.Feature<GeoJSON.LineString>[] = [];
 
       visibleVehicles.forEach((v) => {
         let coords = (v.route_geometry?.coordinates || v.path || []) as [number, number][];
@@ -326,6 +348,36 @@ export function FleetVehicleLayer({
         const icon = v.modality === 'maritime' ? 'vessel-icon' : v.modality === 'air' ? 'plane-icon' : 'truck-icon';
         const isSelected = selectedVehicleIdRef.current === v.vehicle_id;
 
+        // Forward geodesic bearing vector
+        if (v.status !== 'anchored' && (v.speed_kmh || 0) > 0) {
+          const vectorColor = isSelected
+            ? '#00f0ff'
+            : v.modality === 'maritime'
+              ? '#38bdf8'
+              : v.modality === 'air'
+                ? '#c084fc'
+                : '#34d399';
+
+          const endPoint = projectBearingEndpoint(
+            state.currentPosition,
+            state.bearing,
+            v.speed_kmh || 60,
+            v.modality === 'air' ? 0.08 : 0.05
+          );
+
+          vectorFeatures.push({
+            type: 'Feature',
+            properties: {
+              id: v.vehicle_id,
+              color: vectorColor,
+            },
+            geometry: {
+              type: 'LineString',
+              coordinates: [state.currentPosition, endPoint],
+            },
+          });
+        }
+
         pointFeatures.push({
           type: 'Feature',
           properties: {
@@ -377,6 +429,14 @@ export function FleetVehicleLayer({
             features: trailFeatures,
           });
         }
+
+        const vectorsSource = map.getSource('fleet-bearing-vectors') as mapboxgl.GeoJSONSource | undefined;
+        if (vectorsSource) {
+          vectorsSource.setData({
+            type: 'FeatureCollection',
+            features: vectorFeatures,
+          });
+        }
       } catch {
         // Handle race conditions during style reload
       }
@@ -400,8 +460,10 @@ export function FleetVehicleLayer({
       if (!map) return;
       try {
         if (map.getLayer('fleet-telemetry-points-layer')) map.removeLayer('fleet-telemetry-points-layer');
+        if (map.getLayer('fleet-bearing-vectors-layer')) map.removeLayer('fleet-bearing-vectors-layer');
         if (map.getLayer('fleet-breadcrumb-trails-layer')) map.removeLayer('fleet-breadcrumb-trails-layer');
         if (map.getSource('fleet-telemetry-points')) map.removeSource('fleet-telemetry-points');
+        if (map.getSource('fleet-bearing-vectors')) map.removeSource('fleet-bearing-vectors');
         if (map.getSource('fleet-breadcrumb-trails')) map.removeSource('fleet-breadcrumb-trails');
         if (map.hasImage('truck-icon')) map.removeImage('truck-icon');
         if (map.hasImage('vessel-icon')) map.removeImage('vessel-icon');
@@ -414,6 +476,16 @@ export function FleetVehicleLayer({
 
   return (
     <>
+      {/* Tactical Screen-Space Target Reticle Overlay */}
+      {selectedVehicle && (
+        <TargetLockReticle
+          map={map}
+          targetLngLat={selectedVehicle.currentPos}
+          callsign={selectedVehicle.vehicle.name || selectedVehicle.vehicle.vehicle_id}
+          onDismiss={() => setSelectedVehicle(null)}
+        />
+      )}
+
       {/* Detailed Vehicle Inspection Card */}
       {selectedVehicle && (
         <div className="absolute top-20 left-4 z-40 w-84 bg-[#0c0e12]/95 border border-cyan-500/40 backdrop-blur-2xl p-4 rounded-2xl shadow-2xl animate-in fade-in slide-in-from-left-2 duration-200 pointer-events-auto text-slate-100">
