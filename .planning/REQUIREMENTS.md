@@ -151,36 +151,36 @@ Which phases cover which Milestone M2 requirements.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FR-10.1 (Ground-Truth Benchmark Dataset N=60) | Phase 36 | Pending |
-| FR-10.2 (Empirical Metric Evaluation Engine) | Phase 36 | Pending |
-| FR-10.3 (Test Coverage Engine pytest-cov) | Phase 36 | Pending |
-| FR-10.4 (Test Suite Matrix Documentation) | Phase 36 | Pending |
-| FR-11.1 (Probabilistic Consensus Independence Formula) | Phase 37 | Pending |
-| FR-11.2 (Independent Sensor Decoupling) | Phase 37 | Pending |
-| FR-11.3 (Probability Calibration Service & Brier Score) | Phase 37 | Pending |
-| FR-11.4 (CPU Routing Engine Consolidation NetworkX / OR-Tools) | Phase 37 | Pending |
-| FR-11.5 (Weather Fusion Service Standardization Open-Meteo / BMKG) | Phase 37 | Pending |
-| FR-12.1 (Extended Operator Decision Audit Log) | Phase 38 | Pending |
-| FR-12.2 (Post-Incident Outcome Engine T+12h/T+24h) | Phase 38 | Pending |
-| FR-12.3 (Closed-Loop Validation & Recalibration) | Phase 38 | Pending |
-| FR-12.4 (Resilient Local Persistence Fallback) | Phase 38 | Pending |
+| FR-10.1 (Ground-Truth Benchmark Dataset N=60) | Phase 36 | Complete |
+| FR-10.2 (Empirical Metric Evaluation Engine) | Phase 36 | Complete |
+| FR-10.3 (Test Coverage Engine pytest-cov) | Phase 36 | Complete |
+| FR-10.4 (Test Suite Matrix Documentation) | Phase 36 | Complete |
+| FR-11.1 (Probabilistic Consensus Independence Formula) | Phase 37 | Complete |
+| FR-11.2 (Independent Sensor Decoupling) | Phase 37 | Complete |
+| FR-11.3 (Probability Calibration Service & Brier Score) | Phase 37 | Complete |
+| FR-11.4 (CPU Routing Engine Consolidation NetworkX / OR-Tools) | Phase 37 | Complete |
+| FR-11.5 (Weather Fusion Service Standardization Open-Meteo / BMKG) | Phase 37 | Complete |
+| FR-12.1 (Extended Operator Decision Audit Log) | Phase 38 | Complete |
+| FR-12.2 (Post-Incident Outcome Engine T+12h/T+24h) | Phase 38 | Complete |
+| FR-12.3 (Closed-Loop Validation & Recalibration) | Phase 38 | Complete |
+| FR-12.4 (Resilient Local Persistence Fallback) | Phase 38 | Complete |
 | FR-13.1 (Real Multi-Modal Telemetry Ingestion) | Phase 39 | Complete |
-| FR-13.2 (God's-Eye Tactical HUD Console) | Phase 39 | Pending |
-| FR-13.3 (Native WebGL Rendering Optimization) | Phase 39 | Pending |
+| FR-13.2 (God's-Eye Tactical HUD Console) | Phase 39 | Complete |
+| FR-13.3 (Native WebGL Rendering Optimization) | Phase 39 | Complete |
 | FR-14.1 (Full Navigation Access Activation) | Phase 40 | Pending |
 | FR-14.2 (Dedicated Evaluation Tab EvaluationSection) | Phase 40 | Pending |
 | FR-15.1 (Non-AI Minimalist UI Sanitization) | Phase 41 | Pending |
 | FR-15.2 (Boasting & GPU Slop Elimination) | Phase 41 | Pending |
 | FR-15.3 (Technical Document Finalization) | Phase 41 | Pending |
 | NFR-1 (Alert Detection Latency < 15 min) | Phase 40 | Pending |
-| NFR-2 (Alert Precision > 85%) | Phase 36 | Pending |
-| NFR-3 (Alert Recall > 80%) | Phase 36 | Pending |
-| NFR-4 (Probability Calibration Brier <= 0.10) | Phase 37 | Pending |
-| NFR-5 (CPU Routing Latency < 150 ms) | Phase 37 | Pending |
-| NFR-6 (Map UI WebGL 60 FPS) | Phase 39 | Pending |
-| NFR-7 (Zero GPU Cost Architecture) | Phase 37 | Pending |
-| NFR-8 (High Availability & Offline Resilience) | Phase 38 | Pending |
-| NFR-9 (Test Suite Rigor 39+ Tests & Coverage) | Phase 36 | Pending |
+| NFR-2 (Alert Precision > 85%) | Phase 36 | Complete |
+| NFR-3 (Alert Recall > 80%) | Phase 36 | Complete |
+| NFR-4 (Probability Calibration Brier <= 0.10) | Phase 37 | Complete |
+| NFR-5 (CPU Routing Latency < 150 ms) | Phase 37 | Complete |
+| NFR-6 (Map UI WebGL 60 FPS) | Phase 39 | Complete |
+| NFR-7 (Zero GPU Cost Architecture) | Phase 37 | Complete |
+| NFR-8 (High Availability & Offline Resilience) | Phase 38 | Complete |
+| NFR-9 (Test Suite Rigor 39+ Tests & Coverage) | Phase 36 | Complete |
 | NFR-10 (Operator UI Usability & Zero Slop) | Phase 41 | Pending |
 
 **Coverage:**
