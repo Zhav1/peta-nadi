@@ -317,11 +317,12 @@ export interface DemoStatus {
   crisis_state: import('./types').CrisisState;
 }
 
-// Phase 25 & 28: Multi-Modal Fleet Vehicle Types
+// Phase 25, 28 & 39: Multi-Modal Fleet Vehicle & Transponder Types
 export type VehicleModality = 'truck' | 'maritime' | 'air';
+export type TelemetrySignalStatus = 'LIVE_STREAM' | 'CACHE_FALLBACK' | 'SIMULATION_CACHE';
+export type ColdChainStatus = 'NORMAL' | 'WARNING_EXCURSION';
 
 export interface FleetVehicle {
-
   vehicle_id: string;
   name: string;
   modality: VehicleModality;
@@ -336,7 +337,26 @@ export interface FleetVehicle {
     type: 'LineString';
     coordinates: [number, number][];
   };
+  // Transponder kinematics & identifiers
+  mmsi?: string;
+  imo?: string;
+  sog_knots?: number;
+  cog_deg?: number;
+  draught_m?: number;
+  nav_status?: string;
+  icao24?: string;
+  callsign?: string;
+  altitude_ft?: number;
+  ground_speed_kts?: number;
+  vin?: string;
+  temperature_c?: number;
+  cold_chain_status?: ColdChainStatus;
+  signal_status?: TelemetrySignalStatus;
+  telemetry_source?: string;
+  heading_deg?: number;
+  last_ping_seconds_ago?: number;
 }
+
 
 
 
