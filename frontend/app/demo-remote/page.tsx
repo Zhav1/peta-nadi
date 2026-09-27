@@ -1,6 +1,7 @@
 'use client';
 import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { CheckCircle2, SkipForward, Pause, Play, RotateCcw } from 'lucide-react';
 import { api } from '../../lib/api';
 
 function DemoRemoteClient() {
@@ -112,7 +113,7 @@ function DemoRemoteClient() {
         </p>
         <button
           onClick={handleStartDemo}
-          className="w-full max-w-xs py-4 rounded-xl font-bold bg-cyan-500 text-slate-950 active:scale-95 transition shadow-lg shadow-cyan-500/10"
+          className="w-full max-w-xs py-4 rounded-xl font-bold bg-cyan-500 text-slate-950 active:scale-95 transition shadow-lg shadow-cyan-500/10 cursor-pointer"
         >
           Start New Demo Run
         </button>
@@ -158,33 +159,46 @@ function DemoRemoteClient() {
         {stage < 4 ? (
           <button
             onClick={handleNextStep}
-            className="w-full py-5 rounded-2xl text-base font-bold bg-cyan-500 text-slate-950 active:scale-95 hover:bg-cyan-400 transition shadow-lg shadow-cyan-500/15"
+            className="w-full py-5 rounded-2xl text-base font-bold bg-cyan-500 text-slate-950 active:scale-95 hover:bg-cyan-400 transition shadow-lg shadow-cyan-500/15 cursor-pointer flex items-center justify-center gap-2"
           >
-            ⏭ Next Step
+            <SkipForward className="w-5 h-5" />
+            <span>Next Step</span>
           </button>
         ) : (
-          <div className="w-full py-4 text-center border border-emerald-500/20 bg-emerald-950/10 rounded-2xl text-emerald-400 font-bold text-sm">
-            ✓ Demo Run Completed
+          <div className="w-full py-4 text-center border border-emerald-500/20 bg-emerald-950/20 rounded-2xl text-emerald-400 font-bold text-sm flex items-center justify-center gap-2">
+            <CheckCircle2 className="w-5 h-5" />
+            <span>Demo Run Completed</span>
           </div>
         )}
 
         <div className="flex gap-3">
           <button
             onClick={() => setIsAuto((prev) => !prev)}
-            className={`flex-1 py-4 rounded-xl text-xs font-bold border transition ${
+            className={`flex-1 py-4 rounded-xl text-xs font-bold border transition cursor-pointer flex items-center justify-center gap-1.5 ${
               isAuto
                 ? 'bg-orange-500/20 text-orange-400 border-orange-500/30'
                 : 'border-slate-800 bg-slate-900/40 text-slate-300 active:scale-95'
             }`}
           >
-            {isAuto ? '⏸ Pause Auto' : '▶ Auto Advance'}
+            {isAuto ? (
+              <>
+                <Pause className="w-3.5 h-3.5" />
+                <span>Pause Auto</span>
+              </>
+            ) : (
+              <>
+                <Play className="w-3.5 h-3.5" />
+                <span>Auto Advance</span>
+              </>
+            )}
           </button>
 
           <button
             onClick={handleRestart}
-            className="flex-1 py-4 rounded-xl text-xs font-bold border border-slate-800 bg-slate-900/40 text-slate-300 active:scale-95 transition"
+            className="flex-1 py-4 rounded-xl text-xs font-bold border border-slate-800 bg-slate-900/40 text-slate-300 active:scale-95 transition cursor-pointer flex items-center justify-center gap-1.5"
           >
-            ↺ Restart Demo
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Restart Demo</span>
           </button>
         </div>
       </div>

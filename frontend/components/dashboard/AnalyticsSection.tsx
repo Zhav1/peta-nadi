@@ -152,7 +152,7 @@ export default function AnalyticsSection({
   const updateDeckLayers = () => {
     if (!deckOverlayRef.current) return;
 
-    // Archipelago Logistics Arcs (Belawan ➔ Medan ➔ Tebing ➔ Java)
+    // Archipelago Logistics Arcs (Belawan -> Medan -> Tebing -> Java)
     const arcData: CommodityArcItem[] = [
       {
         from: [98.68, 3.78], // Belawan Port
@@ -296,7 +296,7 @@ export default function AnalyticsSection({
                 </span>
               </div>
               <span className="text-[9px] font-mono text-slate-400 uppercase">
-                Corridor: Belawan ➔ Medan ➔ Trans-Sumatra
+                Corridor: Belawan -&gt; Medan -&gt; Trans-Sumatra
               </span>
             </div>
 

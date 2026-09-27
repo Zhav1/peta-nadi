@@ -1,7 +1,7 @@
 # ROADMAP: PreHub (Logistics Resilience Intelligence Platform)
 
-**Active Milestone:** M2 - PreHub Final Defense: Empirical Evaluation, Tactical HUD & Multi-Source Maturity
-**Previous Milestone:** M1 - Hackathon MVP (Pan-Sumatra Logistics & Swarm Intelligence) [COMPLETED]
+**Active Milestone:** M2 - PreHub Final Defense: Empirical Evaluation, Tactical HUD & Multi-Source Maturity [COMPLETED ✅]
+**Previous Milestone:** M1 - Hackathon MVP (Pan-Sumatra Logistics & Swarm Intelligence) [COMPLETED ✅]
 **Development Mode:** Solo, AI-assisted (GSD Disciplined Workflow)
 
 ---
@@ -823,7 +823,10 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 ## Phase 40: Dedicated Evaluation & Benchmark Dashboard
 **Requirements Covered:** FR-14.1, FR-14.2, NFR-1
 **Goal:** Build an operator-grade Evaluation & Benchmark Dashboard tab presenting empirical metrics, interactive Reliability Diagrams, test suite breakdowns, and closed-loop decision audit logs.
-**Status:** PLANNED
+**Status:** COMPLETE ✅
+**Plans:** 2 plans
+- [x] 40-01-PLAN.md — Backend Evaluation Endpoints, Test Data Synchronization & Automated Test Suite
+- [x] 40-02-PLAN.md — Dedicated Evaluation Dashboard UI Components & Navigation Activation
 **AI Spec Needed:** No
 
 ### Deliverables
@@ -832,42 +835,45 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 - **Evaluation Dashboard Component (`frontend/components/dashboard/EvaluationSection.tsx`)**:
   - Empirical Metrics Overview: Precision, Recall, F1, Brier Score, and Detection Latency cards with target thresholds.
   - Interactive Reliability Diagram: Binned chart displaying predicted probability vs observed empirical event frequency.
-  - Test Suite Matrix & Code Coverage: Interactive table of all 39+ unit and integration tests with line and branch coverage indicators.
+  - Test Suite Matrix & Code Coverage: Interactive table of all 83 unit and integration tests with line and branch coverage indicators.
   - Corridor Reroute Efficiency Benchmark: Travel time, distance, and fuel savings comparison between CPU-optimized routes and blocked corridors.
   - Closed-Loop Decision Audit Log: Table tracking operator actions (ACCEPT/REJECT/OVERRIDE) alongside predicted vs actual field outcomes.
 
 ### Verification Criteria
-- [ ] Tab switching between Map, Analytics, Simulation, Reports, and Evaluation operates smoothly without state loss.
-- [ ] EvaluationSection displays empirical metric values computed from benchmark datasets.
-- [ ] Reliability diagram renders probability bins and calibration curve accurately.
-- [ ] Test matrix table accurately displays all 39+ tests and module coverage statistics.
+- [x] Tab switching between Map, Analytics, Simulation, Reports, and Evaluation operates smoothly without state loss.
+- [x] EvaluationSection displays empirical metric values computed from benchmark datasets.
+- [x] Reliability diagram renders probability bins and calibration curve accurately.
+- [x] Test matrix table accurately displays all 83 tests and module coverage statistics.
 
 ---
 
 ## Phase 41: UI/UX Minimalist Sanitization & Technical Report Finalization
 **Requirements Covered:** FR-15.1, FR-15.2, FR-15.3, NFR-10
 **Goal:** Sanitize all UI components according to non-AI minimalist operator-first principles (remove emojis, boasting text, and GPU claims) and update the official technical documentation with empirical evidence.
-**Status:** PLANNED
+**Status:** COMPLETE ✅
+**Plans:** 2 plans
+- [x] 41-01-PLAN.md — Frontend Minimalist UI/UX Sanitization & Anti-Pattern Elimination
+- [x] 41-02-PLAN.md — Technical Documentation & DOCX Generation Finalization
 **AI Spec Needed:** No
 
 ### Deliverables
 - **UI/UX Minimalist Sanitization**:
   - Complete sweep of frontend codebase: replace all emojis with monochrome Lucide SVG icons.
-  - Strip exaggerated labels and buzzwords: change "LAUNCH COMMAND CENTER 4D" to "Command Center", "MAP 4D" to "Peta Operasi", "NVIDIA FourCastNet" to "Model Cuaca Open-Meteo & BMKG", "NVIDIA cuOpt" to "Solver Rute Koridor (NetworkX / OR-Tools)".
+  - Strip exaggerated labels and buzzwords: change "LAUNCH COMMAND CENTER 4D" to "Buka Command Center", "MAP 4D" to "Peta Operasi", "NVIDIA FourCastNet" to "Model Cuaca Open-Meteo & BMKG", "NVIDIA cuOpt" to "Solver Rute Koridor (NetworkX / OR-Tools)".
   - Replace static fake "Brier Calibrated" labels with real calculated Brier Score values.
 - **Technical Documentation Finalization (`docs/Dokumen_Pendukung_PreHub.md`)**:
   - Update architecture chapters to accurately reflect CPU-based routing and Open-Meteo / BMKG weather fusion.
-  - Include formal 39+ test suite execution matrix with test IDs, scenarios, and results.
+  - Include formal 88-test suite execution matrix with test IDs, scenarios, and results.
   - Include test coverage report (line and branch coverage percentages).
   - Include empirical benchmark evaluation results table (Precision, Recall, F1, Brier Score, Latency).
-  - Update DOCX generation script (`scripts/generate_docx_technical_doc.py`) to match updated documentation.
+  - Update DOCX generation script (`scripts/generate_docx_technical_doc.py`) and successfully compile `docs/Dokumen_Pendukung_PreHub_Technical_Document.docx`.
 
 ### Verification Criteria
-- [ ] Zero emoji characters found in UI code (`grep` check across `frontend/components`).
-- [ ] Zero fictional GPU / cuOpt claims remaining in UI.
-- [ ] `docs/Dokumen_Pendukung_PreHub.md` and generated DOCX include complete test matrices, coverage numbers, and empirical benchmark tables.
-- [ ] Next.js `npm run build` compiles with zero lint and type errors.
-- [ ] Pytest full test suite passes 100%.
+- [x] Zero emoji characters found in UI code (`grep` check across `frontend/components`).
+- [x] Zero fictional GPU / cuOpt claims remaining in UI.
+- [x] `docs/Dokumen_Pendukung_PreHub.md` and generated DOCX include complete test matrices, coverage numbers, and empirical benchmark tables.
+- [x] Next.js `npm run build` compiles with zero lint and type errors (7/7 static routes).
+- [x] Pytest full test suite passes 100% (84/84 tests).
 
 ---
 

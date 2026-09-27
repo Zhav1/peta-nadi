@@ -69,9 +69,9 @@ export default function OnboardHero() {
           </span>
           , optimasi rute{' '}
           <span className="text-emerald-400 font-bold underline decoration-emerald-400 decoration-2 underline-offset-4 drop-shadow-[0_0_12px_rgba(52,211,153,0.8)]">
-            NVIDIA cuOpt
+            NetworkX & OR-Tools
           </span>
-          , dan pemetaan spasial 4D real-time.
+          , dan pemetaan spasial real-time.
         </p>
 
         {/* Action Buttons */}
@@ -82,7 +82,7 @@ export default function OnboardHero() {
             className="w-full sm:w-auto inline-flex items-center justify-center gap-3 px-8 py-4 rounded-2xl bg-gradient-to-r from-cyan-400 via-emerald-400 to-cyan-400 text-slate-950 font-extrabold text-lg shadow-[0_0_35px_rgba(34,211,238,0.4)] hover:shadow-[0_0_50px_rgba(34,211,238,0.6)] hover:scale-[1.03] active:scale-[0.98] transition-all cursor-pointer group border border-cyan-300"
           >
             <img src="/logo_prehub.png" alt="PreHub Logo" className="w-6 h-6 object-contain" />
-            <span>Launch Command Center 4D</span>
+            <span>Buka Command Center</span>
             <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
           </Link>
 

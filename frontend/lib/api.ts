@@ -171,7 +171,17 @@ export const api = {
         '/api/v1/news/market-regime'
       ),
   },
+  evaluation: {
+    getBenchmark: () =>
+      request<import('./types').BenchmarkReportResponse>('/api/v1/evaluation/benchmark'),
+    getTestMatrix: (params?: { fr_id?: string; search?: string }) => {
+      const sp = new URLSearchParams();
+      if (params?.fr_id && params.fr_id !== 'all') sp.append('fr_id', params.fr_id);
+      if (params?.search) sp.append('search', params.search);
+      const qs = sp.toString() ? `?${sp.toString()}` : '';
+      return request<import('./types').TestMatrixResponse>(`/api/v1/evaluation/test-matrix${qs}`);
+    },
+    getCorridorEfficiency: () =>
+      request<import('./types').CorridorEfficiencyResponse>('/api/v1/evaluation/corridor-efficiency'),
+  },
 };
-
-
-

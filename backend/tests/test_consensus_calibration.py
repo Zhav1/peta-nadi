@@ -21,7 +21,12 @@ from app.services.probability_calibration import (
     IsotonicRegressionCalibrator,
     calibrate_disruption_probability
 )
+import os
+from pathlib import Path
 from scripts.evaluate_metrics import evaluate_benchmark_dataset
+
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+BENCHMARK_PATH = os.path.join(PROJECT_ROOT, "data", "benchmark", "sumatra_disruptions_ground_truth.json")
 
 
 def test_consensus_formula_independence():
@@ -162,7 +167,7 @@ def test_isotonic_regression_calibrator():
 
 def test_benchmark_brier_score_threshold_nfr4():
     """NFR-4: Validates Brier Score <= 0.10 on N=60 ground-truth Sumatra benchmark."""
-    report = evaluate_benchmark_dataset("data/benchmark/sumatra_disruptions_ground_truth.json")
+    report = evaluate_benchmark_dataset(BENCHMARK_PATH)
     bs = report["calibration"]["brier_score"]
     assert bs <= 0.10, f"Brier score {bs} exceeded NFR-4 target of 0.10"
     assert report["gating_passed"] is True

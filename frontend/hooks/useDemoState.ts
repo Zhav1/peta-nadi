@@ -182,7 +182,7 @@ export function useDemoState(onCrisisReady?: (crisis: CrisisState) => void) {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       messages: [],
-      decision_support_output: `Disruption detected along ${originLabel} -> ${destLabel} corridor. Directing transport fleet via NVIDIA cuOpt dynamic tangential detour.`,
+      decision_support_output: `Disruption detected along ${originLabel} -> ${destLabel} corridor. Directing transport fleet via deterministic NetworkX / OR-Tools tangential detour.`,
       route_recommendations: [
         {
           description: `${originLabel} - ${destLabel} Detour`,

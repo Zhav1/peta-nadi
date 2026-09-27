@@ -357,6 +357,98 @@ export interface FleetVehicle {
   last_ping_seconds_ago?: number;
 }
 
+// Phase 40: Dedicated Evaluation & Benchmark Dashboard Types
+export interface ConfusionMatrix {
+  true_positives: number;
+  false_positives: number;
+  true_negatives: number;
+  false_negatives: number;
+}
 
+export interface EvaluationMetrics {
+  precision: number;
+  recall: number;
+  f1_score: number;
+  false_positive_rate: number;
+  accuracy: number;
+  mean_latency_ms: number;
+  total_latency_ms: number;
+}
 
+export interface ReliabilityBinItem {
+  bin_index: number;
+  range: [number, number];
+  sample_count: number;
+  mean_confidence: number;
+  empirical_accuracy: number;
+  calibration_error: number;
+}
 
+export interface CalibrationReport {
+  brier_score: number;
+  expected_calibration_error: number;
+  platt_calibrated_brier: number;
+  isotonic_calibrated_brier: number;
+  reliability_bins: ReliabilityBinItem[];
+}
+
+export interface BenchmarkThresholds {
+  min_precision: number;
+  min_recall: number;
+  min_f1: number;
+  max_brier_score: number;
+}
+
+export interface BenchmarkReportResponse {
+  status: string;
+  timestamp: string;
+  total_scenarios: number;
+  confusion_matrix: ConfusionMatrix;
+  metrics: EvaluationMetrics;
+  calibration: CalibrationReport;
+  thresholds: BenchmarkThresholds;
+  gating_passed: boolean;
+}
+
+export interface TestCaseItem {
+  test_id: string;
+  fr_id: string;
+  category: string;
+  module: string;
+  test_type: string;
+  scenario: string;
+  expected_invariant: string;
+  result: string;
+  execution_time_ms?: number;
+}
+
+export interface TestMatrixResponse {
+  status: string;
+  total_tests: number;
+  passed_tests: number;
+  failed_tests: number;
+  fr_domain_counts: Record<string, number>;
+  tests: TestCaseItem[];
+}
+
+export interface CorridorEfficiencyItem {
+  corridor_name: string;
+  origin: string;
+  destination: string;
+  modality: 'truck' | 'maritime' | 'air';
+  baseline_distance_km: number;
+  blocked_delay_hours: number;
+  reroute_distance_km: number;
+  reroute_delay_minutes: number;
+  time_saved_hours: number;
+  fuel_saved_liters: number;
+  cost_saved_idr: number;
+  solver_latency_ms: number;
+}
+
+export interface CorridorEfficiencyResponse {
+  status: string;
+  corridors: CorridorEfficiencyItem[];
+  total_cost_saved_idr: number;
+  avg_time_saved_hours: number;
+}

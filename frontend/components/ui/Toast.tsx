@@ -1,5 +1,6 @@
 'use client';
 import { useEffect } from 'react';
+import { X } from 'lucide-react';
 
 export interface ToastMessage {
   id: string;
@@ -36,9 +37,10 @@ export function Toast({ message, type = 'success', onClose, duration = 3000 }: T
       <span className="text-xs font-medium">{message}</span>
       <button
         onClick={onClose}
-        className="ml-2 text-slate-500 hover:text-slate-300 text-xs transition-colors"
+        className="ml-2 text-slate-500 hover:text-slate-300 transition-colors cursor-pointer p-0.5 rounded hover:bg-white/10"
+        aria-label="Tutup notifikasi"
       >
-        ✕
+        <X className="w-3.5 h-3.5" />
       </button>
     </div>
   );

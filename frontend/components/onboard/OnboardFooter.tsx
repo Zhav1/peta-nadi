@@ -28,7 +28,7 @@ export default function OnboardFooter() {
               Quick Routes
             </div>
             <Link href="/dashboard" className="hover:text-cyan-400 transition-colors flex items-center gap-1">
-              <span>4D Command Center</span>
+              <span>Command Center</span>
               <ArrowUpRight className="w-3.5 h-3.5" />
             </Link>
             <Link href="/demo-remote" className="hover:text-cyan-400 transition-colors flex items-center gap-1">
@@ -46,7 +46,7 @@ export default function OnboardFooter() {
               <span className="px-2.5 py-1 rounded-md bg-white/5 border border-white/10 text-slate-300">Next.js 14</span>
               <span className="px-2.5 py-1 rounded-md bg-white/5 border border-white/10 text-slate-300">Mapbox v3</span>
               <span className="px-2.5 py-1 rounded-md bg-white/5 border border-white/10 text-slate-300">Deck.gl v9.3</span>
-              <span className="px-2.5 py-1 rounded-md bg-white/5 border border-white/10 text-slate-300">NVIDIA cuOpt</span>
+              <span className="px-2.5 py-1 rounded-md bg-white/5 border border-white/10 text-slate-300">NetworkX &amp; OR-Tools</span>
               <span className="px-2.5 py-1 rounded-md bg-white/5 border border-white/10 text-slate-300">LangGraph</span>
               <span className="px-2.5 py-1 rounded-md bg-white/5 border border-white/10 text-slate-300">Supabase</span>
             </div>
@@ -58,8 +58,8 @@ export default function OnboardFooter() {
               Deployment Status
             </div>
             <div className="text-xs text-slate-300 leading-relaxed font-mono">
-              Milestone 1 — Hackathon MVP<br />
-              Corridor: North Sumatra (Medan - Belawan - Tebing Tinggi)
+              Milestone M2 — Final Defense<br />
+              Corridor: Pan-Sumatra (8 Provinces)
             </div>
           </div>
         </div>
