@@ -877,17 +877,126 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 
 ---
 
+# MILESTONE M3: PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform
+
+**Active Milestone:** M3 - PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform [ACTIVE 🚀]
+**Previous Milestones:** M1 (Hackathon MVP) [COMPLETE ✅], M2 (Final Defense & Empirical Verification) [COMPLETE ✅]
+
+---
+
+## Phase 42: Supabase Authentication & Multi-Role Workspace Management
+**Requirements Covered:** FR-15.1, FR-15.2, FR-15.3, FR-15.4, NFR-11.1, NFR-11.2, NFR-11.3
+**Goal:** Implement multi-tenant Supabase authentication and Role-Based Access Control (RBAC) to support Dispatchers, Government Regulators, and Guest Evaluators with tailored views and permissions, with offline session fallback.
+**Status:** READY TO PLAN 📋
+**AI Spec Needed:** No
+
+### Deliverables
+- **FastAPI JWT Authentication Middleware (`backend/app/auth/supabase_auth.py`)**:
+  - JWT token validation against Supabase JWKS with local secret fallback.
+  - Role verification decorator (`@require_roles(["DISPATCHER", "REGULATOR"])`).
+- **User Identity & Role Router (`backend/app/routers/auth_router.py`)**:
+  - `GET /api/v1/auth/me`: Return authenticated user metadata, assigned role, and organization context.
+  - Fallback guest session generator for local/offline demonstrations.
+- **Frontend Authentication Modal & Context (`frontend/components/auth/AuthModal.tsx` & `frontend/lib/authContext.tsx`)**:
+  - Minimalist glassmorphic modal with Email/Password, Magic Link, and a 1-Click Role Switcher for seamless evaluator inspection.
+  - Global Auth Context maintaining active user session, organization name, and role permissions.
+- **Role-Adaptive Top Navigation (`DashboardClient.tsx`)**:
+  - Dispatcher mode: Full routing, fleet management, and approval buttons.
+  - Regulator mode: Macro vulnerability heatmaps, PIHPS price analytics, and B2G report generator.
+  - Guest/Evaluator mode: Unrestricted interactive sandbox and empirical benchmark tabs.
+- **Minimalist Ergonomics Enforcement**:
+  - Zero emojis across all auth dialogs and role selectors (100% monochrome Lucide SVG icons).
+
+### Verification Criteria
+- [ ] Backend unit tests verify JWT validation and unauthorized role rejection.
+- [ ] Guest session fallback functions reliably without internet connectivity.
+- [ ] Switching roles in the UI instantly adapts navigation tabs and action controls without full page reload.
+
+---
+
+## Phase 43: Self-Serve Fleet Onboarding & Live GPS Ingestion Engine
+**Requirements Covered:** FR-16.1, FR-16.2, FR-16.3, FR-16.4, NFR-11.1, NFR-11.2, NFR-11.3
+**Goal:** Enable logistics dispatchers to onboard custom vehicle fleets and delivery manifests via single-vehicle input, drag-and-drop CSV/Excel parsing, or TMS GPS telematics webhooks.
+**Status:** PLANNED 📋
+**AI Spec Needed:** No
+
+### Deliverables
+- **Fleet Ingestion REST Endpoints (`backend/app/routers/fleet_ingest_router.py`)**:
+  - `POST /api/v1/fleet/register`: Register individual vehicle and cargo manifest.
+  - `POST /api/v1/fleet/upload-manifest`: Parse and validate bulk CSV/Excel manifest files.
+  - `POST /api/v1/fleet/telemetry/ingest`: Standard webhook endpoint for external TMS (Traccar, EasyGo, McEasy) streaming live GPS coordinates.
+- **Local Persistence & SQLite Fallback (`backend/app/db/local_storage.py`)**:
+  - Persistent storage for user-uploaded fleets and active manifests with zero data loss.
+- **Self-Serve Fleet Modal (`frontend/components/fleet/FleetOnboardingModal.tsx`)**:
+  - Tab 1: Single vehicle manual form (Plate, Driver Phone, Vehicle Class, Commodity, Origin/Destination Hubs).
+  - Tab 2: Bulk CSV/Excel manifest drag-and-drop uploader with downloadable template and instant schema validation.
+- **Dynamic WebGL Fleet Layer Synchronization (`FleetVehicleLayer.tsx`)**:
+  - User-registered vehicles dynamically render on Mapbox WebGL symbol layers at 60 FPS with targeting crosshairs and bearing vectors.
+
+### Verification Criteria
+- [ ] Uploading a sample CSV manifest registers all vehicles and validates coordinate waypoints.
+- [ ] Telemetry webhook accepts live GPS pings and updates vehicle map coordinates in real time.
+- [ ] All forms adhere strictly to the zero-emoji minimalist design system.
+
+---
+
+## Phase 44: Intermodal Terminal Dashboard, Spoilage Hedging & Compliance Inspector
+**Requirements Covered:** FR-17.1, FR-17.2, FR-18.1, FR-18.2, FR-19.1, FR-19.2, NFR-11.1, NFR-11.2, NFR-11.3
+**Goal:** Build intermodal sea-land gate choke-point tracking (Belawan & Bakauheni), calculate operational food spoilage hedging economics, and verify digital *Surat Jalan* & quarantine compliance.
+**Status:** PLANNED 📋
+**AI Spec Needed:** No
+
+### Deliverables
+- **Intermodal Gate Queue Synchronizer (`backend/app/services/intermodal_sync_service.py` & `intermodal_router.py`)**:
+  - Fuse AIS vessel roadstead queues with highway truck arrivals to calculate port gate dwelling times.
+  - Compute automated Intermodal Delay Multiplier ($M_{\text{intermodal}} = 1.0 + 0.15 \times N_{\text{anchored vessels}}$).
+- **Operational Spoilage Hedging Calculator (`backend/app/services/spoilage_hedging_service.py`)**:
+  - Financial cost matrix solver comparing monetary exposure:
+    $$\text{Cost}(\text{Continue}) \quad \text{vs} \quad \text{Cost}(\text{Reroute}) \quad \text{vs} \quad \text{Cost}(\text{Hold})$$
+    factoring commodity perishability half-life ($T_{\text{spoil}}$), Trans-Sumatra toll tariffs, extra fuel, and cold-chain diesel costs.
+- **Digital Cargo Manifest & Quarantine Compliance Inspector (`backend/app/services/compliance_service.py`)**:
+  - Verify *Surat Jalan*, *Sertifikat Karantina Pertanian (BKHIT)*, and axle-load limits (*MST*) for detour routes.
+- **Frontend Intermodal & Hedging UI Components**:
+  - `IntermodalTerminalPanel.tsx`: Sea-land terminal status widget in Map & Analytics views.
+  - Spoilage Hedging Card inside `CrisisSidebar.tsx`: Visual breakdown highlighting the optimal financial mitigation policy.
+  - Digital Compliance Badge in Evidence panel.
+
+### Verification Criteria
+- [ ] Hedging calculator accurately computes toll, fuel, and spoilage tradeoffs dynamically.
+- [ ] Intermodal delay multiplier correctly adjusts transit ETAs based on port queue conditions.
+- [ ] Compliance inspector correctly flags axle-load or quarantine boundary constraints.
+
+---
+
+## Phase 45: Pilot Verification, Scenario Drills & Final End-to-End Packaging
+**Requirements Covered:** FR-20.1, FR-20.2, FR-20.3, NFR-11.1, NFR-11.2, NFR-11.3
+**Goal:** Execute full end-to-end pilot validation drills, harden multi-container Docker Compose deployment, and compile the official operator onboarding manual.
+**Status:** PLANNED 📋
+**AI Spec Needed:** No
+
+### Deliverables
+- **Automated End-to-End Pilot Test Suite (`backend/tests/test_pilot_e2e.py`)**:
+  - Full operational cycle test: Auth $\to$ CSV Fleet Ingest $\to$ Disruption Injection $\to$ Consensus Gate $\to$ Intermodal Sync $\to$ Spoilage Hedging $\to$ Detour Approval $\to$ WhatsApp Link $\to$ Outcome Logging.
+- **Docker Compose Hardening (`docker-compose.yml`)**:
+  - Multi-container setup for FastAPI, Next.js, Redis, and Supabase with health checks and persistent storage.
+- **Official Pilot Onboarding & User Manual (`docs/PreHub_Pilot_Onboarding_Manual.md`)**:
+  - Complete operational documentation tailored for dispatchers, port coordinators, and government task forces.
+- **Test Matrix & Technical Document Synchronization**:
+  - Synchronize `docs/test_matrix.md` and compile final DOCX report with 100+ passing tests.
+
+### Verification Criteria
+- [ ] Complete automated test suite passes 100% (100+ tests).
+- [ ] `docker compose up` launches all services cleanly with passing health checks.
+- [ ] Operator manual is complete, clear, and fully aligned with the implemented software.
+
+---
+
 ## Backlog (Post-Hackathon / v2)
 - Driver mobile app (React Native + WatermelonDB + CRDT offline sync)
-- Self-serve operator GPS onboarding SDK
-- OpenSky aviation layer (full integration)
-- Multi-province rollout (Java corridor + others)
-- Outcome follow-up system for approved route recommendations
-- Enterprise GraphRAG private deployment
-- Automated CI/CD pipeline with staging → production promotion
-- Backend endpoints for National Logistics Health Index API and KPI metrics (to replace frontend mock calculations).
-- Backend data pipelines/tables to serve raw fleet telemetry, live traffic paths, and weather/hotspot layers to the map directly (to replace frontend mock arrays).
-- Forecasting and predictive analytics endpoints (to support the Future/Predict time-scope filters in the UI).
+- Enterprise GraphRAG private self-hosted deployment
+- Automated CI/CD pipeline with staging $\to$ production promotion
+- Multi-province rollout (Java corridor & Eastern Indonesia)
+
 
 
 
