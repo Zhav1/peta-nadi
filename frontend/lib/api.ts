@@ -176,6 +176,54 @@ export const api = {
           ? `/api/v1/fleet/vehicles?modality=${encodeURIComponent(modality)}`
           : '/api/v1/fleet/vehicles'
       ),
+    register: (payload: import('./types').CustomVehicleRegisterPayload) =>
+      request<import('./types').FleetIngestResponse>('/api/v1/fleet/register', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+    uploadManifest: (payload: { vehicles?: import('./types').CustomVehicleRegisterPayload[]; csv_text?: string; manifest_name?: string; notes?: string }) =>
+      request<import('./types').FleetIngestResponse>('/api/v1/fleet/upload-manifest', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+    uploadManifestFile: async (file: File, manifestName?: string) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      if (manifestName) formData.append('manifest_name', manifestName);
+      
+      const headers: Record<string, string> = {};
+      if (currentAuthToken) {
+        headers['Authorization'] = `Bearer ${currentAuthToken}`;
+      }
+      
+      const res = await fetch(`${BASE_URL}/api/v1/fleet/upload-manifest/file`, {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+      if (!res.ok) throw new Error(`API /api/v1/fleet/upload-manifest/file → ${res.status}`);
+      return res.json() as Promise<import('./types').FleetIngestResponse>;
+    },
+    ingestTelemetry: (payload: import('./types').TMSWebhookPingPayload) =>
+      request<{ status: string; message: string; data: any }>('/api/v1/fleet/telemetry/ingest', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+    listCustom: (modality?: string) => {
+      const qs = modality && modality !== 'all' ? `?modality=${encodeURIComponent(modality)}` : '';
+      return request<import('./types').FleetVehicle[]>(`/api/v1/fleet/custom${qs}`);
+    },
+    deleteCustom: (vehicleId: string) =>
+      request<{ status: string; message: string; vehicle_id: string }>(`/api/v1/fleet/custom/${encodeURIComponent(vehicleId)}`, {
+        method: 'DELETE',
+      }),
+    getManifestTemplate: () =>
+      request<import('./types').ManifestTemplateInfo>('/api/v1/fleet/manifest/template'),
+    simulatePing: (payload: import('./types').TMSWebhookPingPayload) =>
+      request<{ status: string; message: string; data: any }>('/api/v1/fleet/telemetry/simulate-ping', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
   },
   news: {
     live: () =>

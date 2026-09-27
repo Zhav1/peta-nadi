@@ -217,10 +217,24 @@ export function useFleetVehicles(modality?: string) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const fetchFleet = async () => {
+    try {
+      const res = await api.fleet.vehicles(modality);
+      if (res.vehicles && res.vehicles.length > 0) {
+        setVehicles(res.vehicles);
+        setError(null);
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Gagal memuat telemetri armada');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
     let isMounted = true;
 
-    async function fetchFleet() {
+    async function initialFetch() {
       try {
         const res = await api.fleet.vehicles(modality);
         if (isMounted && res.vehicles && res.vehicles.length > 0) {
@@ -236,7 +250,7 @@ export function useFleetVehicles(modality?: string) {
       }
     }
 
-    fetchFleet();
+    initialFetch();
     const interval = setInterval(fetchFleet, 10000); // 10s sync
 
     return () => {
@@ -245,5 +259,9 @@ export function useFleetVehicles(modality?: string) {
     };
   }, [modality]);
 
-  return { vehicles, isLoading, error };
+  const customCount = vehicles.filter(
+    (v) => v.telemetry_source === 'CUSTOM_DISPATCHER' || v.telemetry_source === 'TMS_GPS_WEBHOOK'
+  ).length;
+
+  return { vehicles, isLoading, error, refetch: fetchFleet, customCount };
 }

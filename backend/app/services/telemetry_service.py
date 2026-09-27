@@ -17,8 +17,81 @@ from app.schemas.fleet import (
     FleetVehicleTelemetry,
 )
 from app.services.redis_client import get_redis, STREAM_AISSTREAM
+from app.db.local_storage import (
+    save_custom_vehicle,
+    save_batch_custom_vehicles,
+    list_custom_vehicles as db_list_custom_vehicles,
+    get_custom_vehicle as db_get_custom_vehicle,
+    delete_custom_vehicle as db_delete_custom_vehicle,
+    log_telemetry_ping as db_log_telemetry_ping,
+    get_latest_telemetry_ping as db_get_latest_telemetry_ping,
+)
 
 logger = logging.getLogger(__name__)
+
+# Known Sumatra strategic hub coordinates [lng, lat] for automatic route synthesis
+SUMATRA_STRATEGIC_HUBS: Dict[str, List[float]] = {
+    "Pelabuhan Belawan": [98.6776, 3.7922],
+    "Belawan": [98.6776, 3.7922],
+    "Medan": [98.6722, 3.5952],
+    "Pasar Induk Lau Cih Medan": [98.6722, 3.5952],
+    "Binjai": [98.4856, 3.6006],
+    "Tebing Tinggi": [99.1625, 3.3285],
+    "Pematang Siantar": [99.0687, 2.9595],
+    "Siantar": [99.0687, 2.9595],
+    "Kabanjahe (Karo)": [98.5067, 3.1833],
+    "Kabanjahe": [98.5067, 3.1833],
+    "Berastagi": [98.5067, 3.1833],
+    "Kisaran": [99.6200, 2.9800],
+    "Rantauprapat": [100.0000, 2.1000],
+    "Sibolga": [98.7800, 1.7400],
+    "Pelabuhan Sibolga": [98.7800, 1.7400],
+    "Tarutung": [98.9800, 2.0100],
+    "Balige": [99.0600, 2.3300],
+    "Banda Aceh": [95.3238, 5.5483],
+    "Lhokseumawe": [97.1400, 5.1800],
+    "Kota Langsa": [97.9600, 4.4700],
+    "Meulaboh": [96.1200, 4.1400],
+    "Tapaktuan": [97.1800, 3.2500],
+    "Pekanbaru": [101.4478, 0.5071],
+    "Pekanbaru (Riau)": [101.4478, 0.5071],
+    "Pelabuhan Dumai": [101.4533, 1.6811],
+    "Dumai": [101.4533, 1.6811],
+    "Duri": [101.2100, 1.2800],
+    "Padang": [100.3543, -0.9492],
+    "Pelabuhan Teluk Bayur": [100.3700, -0.9980],
+    "Bukittinggi": [100.3692, -0.3056],
+    "Bukittinggi (Sumbar)": [100.3692, -0.3056],
+    "Payakumbuh": [100.6300, -0.2200],
+    "Kota Solok": [100.6500, -0.8000],
+    "Kota Jambi": [103.6131, -1.6100],
+    "Jambi": [103.6131, -1.6100],
+    "Muara Tembesi": [103.1200, -1.7800],
+    "Kota Bengkulu": [102.2655, -3.8004],
+    "Bengkulu": [102.2655, -3.8004],
+    "Curup (Rejang Lebong)": [102.5200, -3.4700],
+    "Palembang": [104.7565, -2.9909],
+    "Lubuklinggau": [102.8600, -3.2900],
+    "Prabumulih": [104.2300, -3.4300],
+    "Kayu Agung": [104.8500, -3.3800],
+    "Bandar Lampung": [105.2667, -5.4294],
+    "Pelabuhan Panjang": [105.3167, -5.4667],
+    "Kotabumi": [104.8800, -4.8200],
+    "Kota Metro": [105.3000, -5.1200],
+    "Terbanggi Besar": [105.1800, -4.8500],
+    "Pelabuhan Bakauheni": [105.7533, -5.8711],
+    "Bakauheni": [105.7533, -5.8711],
+    "Bandara Kualanamu (KNO)": [98.8780, 3.6421],
+    "Kualanamu": [98.8780, 3.6421],
+    "Bandara Minangkabau (BIM)": [100.2811, -0.7869],
+    "Bandara Sultan Mahmud Badaruddin II (PLM)": [104.7000, -2.8983],
+    "Bandara Radin Inten II (TKG)": [105.1783, -5.2417],
+    "Bandara Sultan Syarif Kasim II (PKU)": [101.4447, 0.4619],
+    "Bandara Sultan Iskandar Muda (BTJ)": [95.4194, 5.5222],
+    "Bandara Sultan Thaha (DJB)": [103.6444, -1.6389],
+    "Soekarno-Hatta (CGK)": [106.6500, -6.1256],
+    "Halim Perdanakusuma (HLP)": [106.8856, -6.2656],
+}
 
 
 def calculate_bearing(coord1: List[float], coord2: List[float]) -> float:
@@ -468,13 +541,15 @@ class TelemetryService:
     """
     Multi-modal telemetry ingestion and cache service.
     Combines live Redis AIS streams, rate-limited OpenSky ADS-B flights (60s cache),
-    and arterial cold-chain truck GPS with resilient offline simulation fallback.
+    arterial cold-chain truck GPS, and self-serve custom onboarded fleet with
+    resilient offline simulation fallback.
     """
 
     def __init__(self):
         self._opensky_cache: Dict[str, Any] = {}
         self._opensky_cache_ts: float = 0.0
         self._opensky_ttl_seconds: float = 60.0
+        self._live_pings: Dict[str, Dict[str, Any]] = {}
 
     async def fetch_opensky_states(self) -> Optional[List[List[Any]]]:
         """
@@ -505,6 +580,78 @@ class TelemetryService:
             logger.warning(f"Error connecting to OpenSky Network API: {e}. Utilizing fallback.")
 
         return self._opensky_cache.get("states")
+
+    def _resolve_vehicle_path(self, origin: Optional[str], destination: Optional[str]) -> List[List[float]]:
+        """Synthesizes coordinate waypoints for an origin and destination pair using Sumatra strategic hubs."""
+        c_orig = SUMATRA_STRATEGIC_HUBS.get(origin or "") if origin else None
+        c_dest = SUMATRA_STRATEGIC_HUBS.get(destination or "") if destination else None
+
+        if not c_orig and origin:
+            for k, v in SUMATRA_STRATEGIC_HUBS.items():
+                if k.lower() in origin.lower() or origin.lower() in k.lower():
+                    c_orig = v
+                    break
+
+        if not c_dest and destination:
+            for k, v in SUMATRA_STRATEGIC_HUBS.items():
+                if k.lower() in destination.lower() or destination.lower() in k.lower():
+                    c_dest = v
+                    break
+
+        if c_orig and c_dest:
+            mid = [round((c_orig[0] + c_dest[0]) / 2, 4), round((c_orig[1] + c_dest[1]) / 2, 4)]
+            return [c_orig, mid, c_dest]
+        elif c_orig:
+            return [c_orig, [round(c_orig[0] + 0.1, 4), round(c_orig[1] + 0.1, 4)]]
+        elif c_dest:
+            return [[round(c_dest[0] - 0.1, 4), round(c_dest[1] - 0.1, 4)], c_dest]
+        
+        # Default fallback: Belawan Port to Medan Hub
+        return [[98.6776, 3.7922], [98.6749, 3.6937], [98.6722, 3.5952]]
+
+    def register_custom_vehicle(self, vehicle_data: Dict[str, Any], db_path: Optional[str] = None) -> Dict[str, Any]:
+        """Registers an individual custom vehicle, generating route coordinates if needed and saving to SQLite."""
+        data = dict(vehicle_data)
+        path = data.get("path")
+        if not path or len(path) < 2:
+            data["path"] = self._resolve_vehicle_path(data.get("origin"), data.get("destination"))
+
+        saved = save_custom_vehicle(data, db_path=db_path)
+        logger.info(f"Registered custom fleet vehicle: {saved.get('vehicle_id')} ({saved.get('name')})")
+        return saved
+
+    def register_batch_custom_vehicles(self, vehicle_list: List[Dict[str, Any]], db_path: Optional[str] = None) -> int:
+        """Registers a batch of custom vehicles from a manifest."""
+        processed = []
+        for item in vehicle_list:
+            d = dict(item)
+            if not d.get("path") or len(d.get("path", [])) < 2:
+                d["path"] = self._resolve_vehicle_path(d.get("origin"), d.get("destination"))
+            processed.append(d)
+        count = save_batch_custom_vehicles(processed, db_path=db_path)
+        logger.info(f"Registered batch manifest of {count} custom fleet vehicles.")
+        return count
+
+    def ingest_gps_ping(self, ping: Dict[str, Any], db_path: Optional[str] = None) -> Dict[str, Any]:
+        """Ingests a real-time TMS GPS ping, caching in memory and logging to SQLite."""
+        vid = ping.get("vehicle_id")
+        if not vid:
+            raise ValueError("vehicle_id is required for GPS telematics ping")
+        
+        logged = db_log_telemetry_ping(ping, db_path=db_path)
+        self._live_pings[vid] = ping
+        logger.debug(f"Ingested live GPS ping for vehicle {vid}: lat={ping.get('latitude')}, lon={ping.get('longitude')}")
+        return logged
+
+    def remove_custom_vehicle(self, vehicle_id: str, db_path: Optional[str] = None) -> bool:
+        """Deletes a custom vehicle from local storage and in-memory caches."""
+        if vehicle_id in self._live_pings:
+            del self._live_pings[vehicle_id]
+        return db_delete_custom_vehicle(vehicle_id, db_path=db_path)
+
+    def list_custom_vehicles(self, modality: Optional[str] = None, db_path: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Retrieves list of custom registered fleet vehicles."""
+        return db_list_custom_vehicles(modality=modality, db_path=db_path)
 
     def _enrich_maritime_vessel(self, vessel: Dict[str, Any], live_ais: Dict[str, Any]) -> Dict[str, Any]:
         """Enriches maritime vessel with transponder kinematics and live AIS stream data if present."""
@@ -588,21 +735,82 @@ class TelemetryService:
         item["last_ping_seconds_ago"] = round(random.uniform(0.6, 1.8), 1)
         return item
 
+    def _enrich_custom_vehicle(self, custom_unit: Dict[str, Any]) -> Dict[str, Any]:
+        """Enriches a custom user-registered vehicle with real-time GPS telemetry and kinematics."""
+        item = dict(custom_unit)
+        vid = item.get("vehicle_id")
+        path = item.get("path") or []
+
+        # Check for live GPS ping in cache or DB
+        live_ping = self._live_pings.get(vid)
+        if not live_ping and vid:
+            db_ping = db_get_latest_telemetry_ping(vid)
+            if db_ping:
+                live_ping = db_ping
+
+        if live_ping:
+            # Update coordinate and telemetry metrics from live GPS fix
+            lat = float(live_ping["latitude"])
+            lon = float(live_ping["longitude"])
+            item["speed_kmh"] = float(live_ping.get("speed_kmh") or item.get("speed_kmh") or 60.0)
+            
+            if live_ping.get("heading_deg") is not None:
+                item["heading_deg"] = float(live_ping["heading_deg"])
+            elif len(path) >= 2:
+                item["heading_deg"] = calculate_bearing(path[0], path[1])
+            else:
+                item["heading_deg"] = 0.0
+
+            if live_ping.get("temperature_c") is not None:
+                item["temperature_c"] = float(live_ping["temperature_c"])
+
+            # Prefix or update path so live position is included
+            if not path:
+                path = [[lon, lat], [lon + 0.05, lat + 0.05]]
+            item["path"] = path
+            item["signal_status"] = SignalStatus.LIVE_STREAM.value
+            item["telemetry_source"] = "TMS_GPS_WEBHOOK"
+            item["last_ping_seconds_ago"] = 0.5
+        else:
+            if len(path) >= 2:
+                item["heading_deg"] = calculate_bearing(path[0], path[1])
+            else:
+                item["heading_deg"] = 0.0
+            item["signal_status"] = SignalStatus.SIMULATION_CACHE.value
+            item["telemetry_source"] = "CUSTOM_DISPATCHER"
+            item["last_ping_seconds_ago"] = 1.2
+
+        # Route geometry
+        if path:
+            item["route_geometry"] = {"type": "LineString", "coordinates": path}
+
+        # Cold chain evaluation
+        temp = item.get("temperature_c")
+        if temp is not None:
+            item["cold_chain_status"] = evaluate_cold_chain_status(temp).value
+        else:
+            item["cold_chain_status"] = None
+
+        if "progress" not in item:
+            item["progress"] = 0.5
+
+        return item
+
     def get_unified_fleet(
         self,
         modality: Optional[str] = None,
-        status: Optional[str] = None
+        status: Optional[str] = None,
+        db_path: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
-        Merges all 45 multi-modal fleet units, applying live telemetry,
-        caching, cold-chain checks, and query filters.
+        Merges custom user-registered fleets and baseline 45-unit multi-modal assets,
+        applying live telemetry, caching, cold-chain checks, and query filters.
         """
         # 1. Attempt to inspect live Redis AIS stream or active vessels
         live_ais: Dict[str, Any] = {}
         try:
             r = get_redis()
             if r is not None:
-                # Check for recent events in STREAM_AISSTREAM
                 try:
                     events = r.xrevrange(STREAM_AISSTREAM, count=20)
                     for _, event_data in events:
@@ -614,9 +822,17 @@ class TelemetryService:
         except Exception as e:
             logger.debug(f"Redis unavailable for live AIS stream: {e}")
 
-        # 2. Enrich and assemble the full fleet
-        enriched_fleet: List[Dict[str, Any]] = []
+        # 2. Enrich custom registered vehicles from SQLite
+        enriched_custom: List[Dict[str, Any]] = []
+        try:
+            custom_units = db_list_custom_vehicles(db_path=db_path)
+            for c in custom_units:
+                enriched_custom.append(self._enrich_custom_vehicle(c))
+        except Exception as e:
+            logger.error(f"Error loading custom vehicles from SQLite: {e}")
 
+        # 3. Enrich master baseline units
+        enriched_baseline: List[Dict[str, Any]] = []
         for unit in MASTER_FLEET_DEFINITIONS:
             unit_modality = unit.get("modality")
             if unit_modality == "maritime":
@@ -627,11 +843,13 @@ class TelemetryService:
                 enriched = self._enrich_truck(unit)
             else:
                 enriched = dict(unit)
+            enriched_baseline.append(enriched)
 
-            enriched_fleet.append(enriched)
+        # Merge custom units first, followed by baseline
+        full_fleet = enriched_custom + enriched_baseline
 
-        # 3. Apply Query Filters
-        filtered_fleet = enriched_fleet
+        # 4. Apply Query Filters
+        filtered_fleet = full_fleet
         if modality and modality != "all":
             filtered_fleet = [v for v in filtered_fleet if v.get("modality") == modality]
 
