@@ -22,7 +22,8 @@ This document provides the complete empirical verification inventory for PreHub,
 | **FR-12** | Closed-Loop Operator Decision Trace & Ground-Truth Outcome Engine | 8 | `test_outcomes_decisions.py` | Passed |
 | **FR-13** | Tactical Multi-Modal Telemetry, WebGL God's-Eye HUD & Transponder Ingestion | 6 | `test_vehicles_telemetry.py`, `FleetVehicleLayer.tsx`, `TargetLockReticle.tsx` | Passed |
 | **FR-14** | Dedicated Evaluation & Benchmark Dashboard (Reliability, Matrix & Savings) | 5 | `test_evaluation_router.py`, `EvaluationSection.tsx`, `ReliabilityDiagram.tsx` | Passed |
-| **TOTAL** | **Comprehensive Automated Verification Suite** | **88** | **11 Test Suites across Backend, Frontend WebGL, Swarm & Persistence** | **100% Passed** |
+| **FR-15** | Supabase Authentication & Multi-Role Workspace Management (RBAC) | 15 | `test_auth_rbac.py`, `AuthModal.tsx`, `MitigationTab.tsx` | Passed |
+| **TOTAL** | **Comprehensive Automated Verification Suite** | **103** | **12 Test Suites across Backend, Frontend WebGL, RBAC, Swarm & Persistence** | **100% Passed** |
 
 ---
 
@@ -172,6 +173,25 @@ This document provides the complete empirical verification inventory for PreHub,
 | TEST-FR14-03 | `test_evaluation_router.py::test_get_test_matrix_filtered_by_fr` | Unit | Query filters (`?fr_id=FR-11` and `?search=Dijkstra`) | Filtered test list matching domain constraint and search tokens | Passed |
 | TEST-FR14-04 | `test_evaluation_router.py::test_get_corridor_efficiency` | Unit | GET /api/v1/evaluation/corridor-efficiency (5 Sumatra corridors) | Positive time and cost savings, CPU solver latency < 10.0 ms | Passed |
 | TEST-FR14-05 | `ReliabilityDiagram.tsx` & `EvaluationSection.tsx` | UI / Canvas | Native SVG 10-bin probability calibration plot & 5 KPI scorecards | Responsive SVG canvas, cyan ideal diagonal line, hover tooltip telemetry, zero emoji | Passed |
+
+### FR-15: Supabase Authentication & Multi-Role Workspace Management (RBAC) (Phase 42)
+| Test ID | Module / Test Function | Test Type | Scenario & Input Vectors | Expected Invariant / Assertion | Result |
+| :--- | :--- | :--- | :--- | :--- | :---: |
+| TEST-FR15-01 | `test_auth_rbac.py::test_create_and_decode_dispatcher_token` | Unit | Generate signed JWT for DISPATCHER persona with permissions | Decoded session reflects DISPATCHER role, PT Samudera org, and permissions | Passed |
+| TEST-FR15-02 | `test_auth_rbac.py::test_create_and_decode_regulator_token` | Unit | Generate signed JWT for REGULATOR persona | Decoded session reflects REGULATOR role and Badan Pangan Nasional org | Passed |
+| TEST-FR15-03 | `test_auth_rbac.py::test_create_and_decode_guest_token` | Unit | Generate signed JWT for GUEST sandbox persona | Decoded session reflects GUEST role and sandbox permissions | Passed |
+| TEST-FR15-04 | `test_auth_rbac.py::test_invalid_token_rejected` | Security | Provide malformed/tampered JWT string to decode engine | Raises HTTP 401 Unauthorized with INVALID_TOKEN error detail | Passed |
+| TEST-FR15-05 | `test_auth_rbac.py::test_expired_token_rejected` | Security | Decode token signed with negative expires_delta_hours (-1) | Raises HTTP 401 Unauthorized with TOKEN_EXPIRED error detail | Passed |
+| TEST-FR15-06 | `test_auth_rbac.py::test_api_auth_me_endpoint` | Integration | GET /api/v1/auth/me with Bearer token header | Returns 200 OK with authenticated user profile payload | Passed |
+| TEST-FR15-07 | `test_auth_rbac.py::test_api_auth_me_unauthorized` | Security | GET /api/v1/auth/me without Authorization header | Raises HTTP 401 Unauthorized | Passed |
+| TEST-FR15-08 | `test_auth_rbac.py::test_api_auth_session_fallback` | Integration | GET /api/v1/auth/session without Authorization header | Returns 200 OK with default GUEST fallback profile | Passed |
+| TEST-FR15-09 | `test_auth_rbac.py::test_api_create_guest_session` | Integration | POST /api/v1/auth/guest-session with target role DISPATCHER | Returns 200 OK with valid access_token, expires_in, and user session | Passed |
+| TEST-FR15-10 | `test_auth_rbac.py::test_api_create_guest_session_invalid_role` | Validation | POST /api/v1/auth/guest-session with role='SUPERADMIN' | Returns HTTP 400 Bad Request with INVALID_ROLE detail | Passed |
+| TEST-FR15-11 | `test_auth_rbac.py::test_api_switch_role` | Integration | POST /api/v1/auth/switch-role switching to REGULATOR | Returns freshly signed token and updated session for REGULATOR | Passed |
+| TEST-FR15-12 | `test_auth_rbac.py::test_api_roles_catalog` | Integration | GET /api/v1/auth/roles | Returns complete catalog of DISPATCHER, REGULATOR, and GUEST definitions | Passed |
+| TEST-FR15-13 | `test_auth_rbac.py::test_rbac_approval_allowed_for_dispatcher` | RBAC | POST /api/v1/approvals with DISPATCHER Bearer token | Decision trace accepted and logged (201 Created) | Passed |
+| TEST-FR15-14 | `test_auth_rbac.py::test_rbac_approval_rejected_for_regulator` | RBAC | POST /api/v1/approvals with REGULATOR Bearer token | Rejected with HTTP 403 Forbidden (Only Dispatchers may approve) | Passed |
+| TEST-FR15-15 | `test_auth_rbac.py::test_rbac_approval_allowed_for_guest` | RBAC | POST /api/v1/approvals with GUEST Bearer token | Permitted in sandbox mode (201 Created) | Passed |
 
 ---
 
