@@ -145,49 +145,75 @@
 
 ---
 
-## Traceability
+## Milestone M3: MVP Pilot Operations & Multi-Persona Dispatcher Platform (Active Scoped Requirements)
 
-Which phases cover which Milestone M2 requirements.
+### FR-15: Supabase Multi-Role Authentication & Workspace Access Control (Phase 42)
+- **FR-15.1 Supabase Auth & JWT Verification:** Implement Supabase Auth integration (Sign Up, Sign In, Magic Link / Passwordless) with FastAPI JWT token verification middleware (`backend/app/auth/supabase_auth.py`).
+- **FR-15.2 Role-Based Access Control (RBAC):** Provide 3 distinct operational roles with customized permissions and data access:
+  - `DISPATCHER`: Full route planning, fleet management, custom manifest upload, and mitigation approval authority.
+  - `REGULATOR`: Read-only macro corridor vulnerability heatmaps, PIHPS staple price analytics, and 1-click exportable B2G executive briefing reports.
+  - `GUEST / EVALUATOR`: Full interactive demo mode, guided scenario runner, and empirical benchmark audit inspection.
+- **FR-15.3 Offline Session Fallback:** Implement local guest session fallback mode allowing full dashboard functionality when cloud auth is offline.
+- **FR-15.4 Role-Adaptive Top Navigation:** Top navigation and action buttons dynamically adapt based on active user role without full page reload.
+
+### FR-16: Self-Serve Fleet Onboarding & Live GPS Ingestion Engine (Phase 43)
+- **FR-16.1 Single Vehicle Registration Modal:** Interactive operator form allowing dispatchers to register ad-hoc trucks (Plate number, driver phone, vehicle class: Tronton/Fuso/CDD, cargo commodity, origin/destination hubs, cold-chain temperature thresholds).
+- **FR-16.2 Drag-and-Drop Bulk CSV/Excel Manifest Parser:** Upload and validate bulk vehicle delivery manifests with downloadable standard templates and instant row-level error reporting (`POST /api/v1/fleet/upload-manifest`).
+- **FR-16.3 Standardized TMS GPS Telematics Webhook:** REST endpoint (`POST /api/v1/fleet/telemetry/ingest`) for external telematics providers (Traccar, EasyGo, McEasy) streaming live GPS coordinates into the system.
+- **FR-16.4 Dynamic WebGL Asset Binding:** User-uploaded fleet units instantly bind to Mapbox WebGL symbol layers at 60 FPS, with dynamic bearing vectors and tactical target locking reticles.
+
+### FR-17: Intermodal Sea-Land Terminal Synchronization & Gate Choke-Point Monitoring (Phase 44)
+- **FR-17.1 Port & Ferry Gate Queue Synchronizer:** Compute combined terminal dwelling time at Belawan Port and Bakauheni Ferry Gateway by fusing AIS vessel roadstead queues with incoming Trans-Sumatra highway truck volumes (`GET /api/v1/intermodal/terminal-status`).
+- **FR-17.2 Automated Intermodal Delay Multiplier:** Apply dynamic multiplier formula ($M_{\text{intermodal}} = 1.0 + 0.15 \times N_{\text{anchored vessels}}$) to corridor transit ETAs when maritime bottlenecks occur.
+
+### FR-18: Operational Spoilage Hedging & Economic Cost-Benefit Calculator (Phase 44)
+- **FR-18.1 Financial Cost Matrix Solver:** Evaluate the monetary exposure of mitigation alternatives:
+  - $\text{Cost}(\text{Continue}) = P(\text{Stuck}) \times \text{Cargo Value} + \text{Driver Downtime Cost}$
+  - $\text{Cost}(\text{Reroute}) = \Delta \text{Distance} \times \text{Fuel Rate} + \text{Trans-Sumatra Toll Tariff} + \Delta \text{Time} \times \text{Driver Overtime}$
+  - $\text{Cost}(\text{Hold}) = \text{Wait Hours} \times (\text{Cold-Chain Genset Fuel} + \text{Depot Storage Fee})$
+- **FR-18.2 Financial Policy Recommendation Card:** Highlight the optimal financial mitigation policy in `CrisisSidebar.tsx` factoring commodity perishability half-life ($T_{\text{spoil}}$).
+
+### FR-19: Digital Cargo Manifest & Agricultural Quarantine Compliance Inspector (Phase 44)
+- **FR-19.1 Digital Compliance Inspector:** Automatically check *Surat Jalan* (Cargo Delivery Order), *Sertifikat Karantina Pertanian (BKHIT)*, and axle-load limits (*Muatan Sumbu Terberat / MST*) for alternative detour corridors.
+- **FR-19.2 Evidence Panel Compliance Clearance:** Display real-time compliance clearance badges in the Evidence panel before route approval.
+
+### FR-20: Pilot Verification, Scenario Drills & Production Deployment Packaging (Phase 45)
+- **FR-20.1 Automated End-to-End Pilot Test Suite:** Comprehensive test suite (`backend/tests/test_pilot_e2e.py`) validating the full lifecycle: Auth $\to$ CSV Fleet Ingestion $\to$ Hazard Detection $\to$ Consensus Gate $\to$ Intermodal Sync $\to$ Spoilage Hedging $\to$ Detour Approval $\to$ WhatsApp Link $\to$ Outcome Verification.
+- **FR-20.2 Production Docker Compose Hardening:** Multi-container configuration for FastAPI, Next.js, Redis, and Supabase with container health checks and persistent volumes.
+- **FR-20.3 Official Pilot Onboarding & User Manual:** Complete operator onboarding guide (`docs/PreHub_Pilot_Onboarding_Manual.md`) for dispatchers and government regulators.
+
+### NFR-11: Strict Minimalist Operator-First UI Ergonomics (Cross-Cutting across M3)
+- **NFR-11.1 Zero Emojis:** Zero emoji characters in any UI component; 100% monochrome SVG icons from `lucide-react`.
+- **NFR-11.2 Zero Boasting & Zero Clutter:** Elimination of buzzwords (e.g. no "4D COMMAND CENTER", "NVIDIA H100 GPU", "SUPER QUANTUM"). Only functional, operator-relevant labels and numbers.
+- **NFR-11.3 High-Contrast Glassmorphic Design:** Standardized dark theme (`backdrop-blur-xl bg-[#0c0e12]/80 border border-white/10`) with sub-100ms interaction response and `cursor-pointer` on all interactive triggers.
+
+---
+
+## Traceability (Milestone M3)
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FR-10.1 (Ground-Truth Benchmark Dataset N=60) | Phase 36 | Complete |
-| FR-10.2 (Empirical Metric Evaluation Engine) | Phase 36 | Complete |
-| FR-10.3 (Test Coverage Engine pytest-cov) | Phase 36 | Complete |
-| FR-10.4 (Test Suite Matrix Documentation) | Phase 36 | Complete |
-| FR-11.1 (Probabilistic Consensus Independence Formula) | Phase 37 | Complete |
-| FR-11.2 (Independent Sensor Decoupling) | Phase 37 | Complete |
-| FR-11.3 (Probability Calibration Service & Brier Score) | Phase 37 | Complete |
-| FR-11.4 (CPU Routing Engine Consolidation NetworkX / OR-Tools) | Phase 37 | Complete |
-| FR-11.5 (Weather Fusion Service Standardization Open-Meteo / BMKG) | Phase 37 | Complete |
-| FR-12.1 (Extended Operator Decision Audit Log) | Phase 38 | Complete |
-| FR-12.2 (Post-Incident Outcome Engine T+12h/T+24h) | Phase 38 | Complete |
-| FR-12.3 (Closed-Loop Validation & Recalibration) | Phase 38 | Complete |
-| FR-12.4 (Resilient Local Persistence Fallback) | Phase 38 | Complete |
-| FR-13.1 (Real Multi-Modal Telemetry Ingestion) | Phase 39 | Complete |
-| FR-13.2 (God's-Eye Tactical HUD Console) | Phase 39 | Complete |
-| FR-13.3 (Native WebGL Rendering Optimization) | Phase 39 | Complete |
-| FR-14.1 (Full Navigation Access Activation) | Phase 40 | Pending |
-| FR-14.2 (Dedicated Evaluation Tab EvaluationSection) | Phase 40 | Pending |
-| FR-15.1 (Non-AI Minimalist UI Sanitization) | Phase 41 | Pending |
-| FR-15.2 (Boasting & GPU Slop Elimination) | Phase 41 | Pending |
-| FR-15.3 (Technical Document Finalization) | Phase 41 | Pending |
-| NFR-1 (Alert Detection Latency < 15 min) | Phase 40 | Pending |
-| NFR-2 (Alert Precision > 85%) | Phase 36 | Complete |
-| NFR-3 (Alert Recall > 80%) | Phase 36 | Complete |
-| NFR-4 (Probability Calibration Brier <= 0.10) | Phase 37 | Complete |
-| NFR-5 (CPU Routing Latency < 150 ms) | Phase 37 | Complete |
-| NFR-6 (Map UI WebGL 60 FPS) | Phase 39 | Complete |
-| NFR-7 (Zero GPU Cost Architecture) | Phase 37 | Complete |
-| NFR-8 (High Availability & Offline Resilience) | Phase 38 | Complete |
-| NFR-9 (Test Suite Rigor 39+ Tests & Coverage) | Phase 36 | Complete |
-| NFR-10 (Operator UI Usability & Zero Slop) | Phase 41 | Pending |
-
-**Coverage:**
-- Milestone M2 requirements: 21 functional, 10 non-functional (31 total)
-- Mapped to phases: 31
-- Unmapped: 0
+| FR-15.1 (Supabase Auth & JWT Verification) | Phase 42 | Planned |
+| FR-15.2 (Role-Based Access Control RBAC) | Phase 42 | Planned |
+| FR-15.3 (Offline Session Fallback) | Phase 42 | Planned |
+| FR-15.4 (Role-Adaptive Top Navigation) | Phase 42 | Planned |
+| FR-16.1 (Single Vehicle Registration Modal) | Phase 43 | Planned |
+| FR-16.2 (Drag-and-Drop Bulk CSV/Excel Manifest Parser) | Phase 43 | Planned |
+| FR-16.3 (Standardized TMS GPS Telematics Webhook) | Phase 43 | Planned |
+| FR-16.4 (Dynamic WebGL Asset Binding) | Phase 43 | Planned |
+| FR-17.1 (Port & Ferry Gate Queue Synchronizer) | Phase 44 | Planned |
+| FR-17.2 (Automated Intermodal Delay Multiplier) | Phase 44 | Planned |
+| FR-18.1 (Financial Cost Matrix Solver) | Phase 44 | Planned |
+| FR-18.2 (Financial Policy Recommendation Card) | Phase 44 | Planned |
+| FR-19.1 (Digital Compliance Inspector Surat Jalan & BKHIT) | Phase 44 | Planned |
+| FR-19.2 (Evidence Panel Compliance Clearance) | Phase 44 | Planned |
+| FR-20.1 (Automated End-to-End Pilot Test Suite) | Phase 45 | Planned |
+| FR-20.2 (Production Docker Compose Hardening) | Phase 45 | Planned |
+| FR-20.3 (Official Pilot Onboarding & User Manual) | Phase 45 | Planned |
+| NFR-11.1 (Zero Emojis Policy) | Phase 42-45 | Planned |
+| NFR-11.2 (Zero Boasting & Zero Clutter) | Phase 42-45 | Planned |
+| NFR-11.3 (High-Contrast Glassmorphic Design) | Phase 42-45 | Planned |
 
 ---
-*Requirements defined: 2026-09-22*
-*Last updated: 2026-09-22 after Milestone M2 initialization*
+*Requirements defined: 2026-09-28*
+*Active Milestone: M3 - PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform*

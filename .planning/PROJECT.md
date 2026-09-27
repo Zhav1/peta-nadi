@@ -1,28 +1,29 @@
 # PROJECT: PreHub (Logistics Resilience Intelligence Platform)
 
-**Active Milestone:** M2 - PreHub Final Defense: Empirical Evaluation, Tactical HUD & Multi-Source Maturity
-**Previous Milestone:** M1 - Hackathon MVP (Pan-Sumatra Logistics & Swarm Intelligence) [COMPLETED]
+**Active Milestone:** M3 - PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform
+**Previous Milestones:** 
+- M1 - Hackathon MVP (Pan-Sumatra Logistics & Swarm Intelligence) [COMPLETED ✅]
+- M2 - PreHub Final Defense: Empirical Evaluation, Tactical HUD & Multi-Source Maturity [COMPLETED ✅]
 
-## Current Milestone: M2 - PreHub Final Defense: Empirical Evaluation, Tactical HUD & Multi-Source Maturity
+## Current Milestone: M3 - PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform
 
-**Goal:** Address competition judge evaluations (Development Process score 5/10 and Idea Conformance score 3/10) by eliminating theoretical NVIDIA H100 GPU dependencies (cuOpt, FourCastNet), establishing empirical validation with ground-truth benchmark datasets and line/branch test coverage, deploying real transponder telemetry with a Tactical HUD inspired by gods-eye-view, calibrating probability distributions via genuine Brier Score computation, closing the feedback loop with operator decision traces and ground-truth field outcomes, and sanitizing the operator UI.
+**Goal:** Transform PreHub into a defense-grade, pilot-ready operational workspace tailored for real-world logistics dispatchers (BULOG, 3PL, Trucking Fleets), intermodal maritime coordinators (Pelindo Belawan, ASDP Ferry), and government food security regulators (Bapanas, Dinas Perhubungan). Deliver multi-tenant Supabase Auth & Role-Based Access Control (RBAC), self-serve fleet & bulk CSV manifest onboarding, live TMS telematics webhooks, sea-land intermodal terminal synchronization, operational food spoilage hedging economics (inspired by Globot), digital *Surat Jalan* & quarantine compliance inspection, and an uncompromising minimalist, clutter-free operator-first UI (zero emojis, zero boasting buzzwords, clean high-contrast monochrome design).
 
 **Target features:**
-- Ground-truth benchmark dataset (N=60 Sumatra scenarios) and automated empirical metric evaluation (Precision, Recall, F1, Latency)
-- Pytest-cov automated line and branch coverage engine and test suite matrix documentation
-- Mathematical consensus gate using formal probabilistic independence formulation
-- Brier Score and Expected Calibration Error (ECE) probability calibration service
-- CPU-based corridor routing (NetworkX + Google OR-Tools) with local road network cache
-- Fused Open-Meteo numerical forecast and official BMKG warning weather service
-- Closed-loop operator decision logging (ACCEPT, REJECT, OVERRIDE) and post-incident outcome engine (T+12h / T+24h)
-- Real multi-modal telemetry ingestion (AISstream Redis, ADS-B cargo, dynamic truck GPS)
-- Tactical HUD console (target locking reticle, bearing vectors, follow camera, monospaced telemetry cards, WebGL 60 FPS)
-- Dedicated Evaluation and Benchmark dashboard tab with interactive reliability diagrams
-- UI/UX minimalist operator-first sanitization (zero emojis, monochrome Lucide SVG icons, zero GPU boasting claims)
+- Multi-tenant Supabase Authentication (Sign In, Sign Up, Magic Link) with role-based access control (Dispatcher, Regulator, Guest/Evaluator)
+- Self-serve fleet onboarding modal with single-truck manual input and drag-and-drop CSV/Excel bulk manifest parser
+- Standardized REST webhook endpoint (`POST /api/v1/fleet/telemetry/ingest`) for external TMS GPS telematics ingestion
+- Intermodal sea-land terminal synchronization fusing AIS vessel roadstead queues with highway volumes and applying automated delay multipliers
+- Operational food spoilage hedging calculator computing monetary tradeoffs between Continue (spoilage loss), Reroute (toll + fuel), and Hold (cold-chain genset diesel)
+- Digital *Surat Jalan* (Cargo Manifest) and *Sertifikat Karantina Pangan (BKHIT)* compliance inspector for alternative detour corridors
+- End-to-end pilot verification test suite (`test_pilot_e2e.py`) validating the complete dispatcher workflow
+- Hardened Docker Compose setup and official Pilot Onboarding Manual (`docs/PreHub_Pilot_Onboarding_Manual.md`)
+- Strict Minimalist Non-AI UI Ergonomics (zero emojis, 100% SVG Lucide icons, zero boasting language, clutter-free glassmorphic design)
 
 ## Milestones Overview
-- **M1 - Pan-Sumatra Logistics & Swarm Intelligence MVP**: Completed (Phases 0 to 35). Shipped multi-agent swarm, 4D Mapbox canvas, live news pipeline across 8 ANTARA bureaus, and 39 passing pytest tests.
-- **M2 - PreHub Final Defense: Empirical Evaluation, Tactical HUD & Multi-Source Maturity**: Active (Phases 36 to 41). Establishing empirical rigor, deterministic CPU routing, real transponder telemetry, and closed-loop field outcome verification.
+- **M1 - Pan-Sumatra Logistics & Swarm Intelligence MVP**: Completed (Phases 0 to 35). Shipped 6-agent swarm, Mapbox canvas, live news pipeline across 8 ANTARA bureaus, and 39 pytest tests.
+- **M2 - PreHub Final Defense: Empirical Evaluation, Tactical HUD & Multi-Source Maturity**: Completed (Phases 36 to 41). Delivered ground-truth benchmark ($N=60$), 88-test matrix, mathematical consensus formula, Brier probability calibration, deterministic CPU routing, God's-Eye HUD telemetry, and sanitized UI.
+- **M3 - PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform**: Active (Phases 42 to 45). Delivering multi-role auth, self-serve fleet/CSV manifest ingestion, spoilage hedging economics, intermodal port synchronization, and pilot deployment packaging.
 
 ## Vision
 An AI-powered decision support platform that shifts logistics and disaster response from **reactive** to **proactive**. PreHub ingests real-time physical hazard data (weather, traffic, maritime, wildfire), detects logistics disruptions, predicts cascading economic impacts (commodity price spikes), and delivers actionable intelligence to field coordinators and government executives, all before the crisis escalates.
