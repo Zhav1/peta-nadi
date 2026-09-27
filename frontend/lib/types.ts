@@ -483,3 +483,56 @@ export interface RoleCatalogItem {
   primary_tabs: string[];
   permissions: string[];
 }
+
+// Phase 43: Self-Serve Fleet Onboarding & Live GPS Ingestion Types
+export interface CustomVehicleRegisterPayload {
+  vehicle_id: string;
+  name: string;
+  modality: VehicleModality;
+  driver_name?: string;
+  driver_phone?: string;
+  cargo?: string;
+  origin?: string;
+  destination?: string;
+  speed_kmh?: number;
+  temperature_c?: number;
+  path?: [number, number][];
+  status?: string;
+  mmsi?: string;
+  imo?: string;
+  vin?: string;
+  icao24?: string;
+  callsign?: string;
+}
+
+export interface TMSWebhookPingPayload {
+  vehicle_id: string;
+  latitude: number;
+  longitude: number;
+  speed_kmh?: number;
+  heading_deg?: number;
+  altitude_m?: number;
+  temperature_c?: number;
+  timestamp?: string;
+  battery_level?: number;
+  ignition?: boolean;
+}
+
+export interface StrategicHubItem {
+  name: string;
+  coordinates: [number, number];
+}
+
+export interface ManifestTemplateInfo {
+  headers: string[];
+  sample_csv: string;
+  supported_hubs: StrategicHubItem[];
+}
+
+export interface FleetIngestResponse {
+  status: string;
+  message: string;
+  registered_count: number;
+  vehicles: FleetVehicle[];
+}
+

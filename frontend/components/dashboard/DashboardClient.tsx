@@ -19,6 +19,7 @@ import {
   Anchor,
   Plane,
   Lock,
+  PlusCircle,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useIncidents } from '@/hooks/useIncidents';
@@ -44,6 +45,7 @@ import { api } from '@/lib/api';
 import type { CrisisState, WsEvent, CrisisType, Severity, RouteRecommendation } from '@/lib/types';
 import { useAuth } from '@/lib/authContext';
 import { AuthModal } from '@/components/auth/AuthModal';
+import { FleetOnboardingModal } from '@/components/fleet/FleetOnboardingModal';
 
 import { TopNavTelemetry } from '@/components/dashboard/TopNavTelemetry';
 
@@ -314,7 +316,8 @@ function FloatingMapLegend({
 export default function DashboardClient() {
   const { user, role, openAuthModal, isAuthModalOpen, closeAuthModal } = useAuth();
   const { incidents, refetch } = useIncidents();
-  const { vehicles: activeFleetVehicles } = useFleetVehicles();
+  const { vehicles: activeFleetVehicles, refetch: refetchFleet, customCount: customFleetCount } = useFleetVehicles();
+  const [isOnboardingModalOpen, setIsOnboardingModalOpen] = useState(false);
   const [selectedCrisisId, setSelectedCrisisId] = useState<string | null>(null);
   const [selectedCrisis, setSelectedCrisis] = useState<CrisisState | null>(null);
   const [activeRouteIdx, setActiveRouteIdx] = useState<number | null>(null);
@@ -1029,6 +1032,26 @@ export default function DashboardClient() {
         <div className="flex items-center gap-3">
           <TopNavTelemetry cuOptInfo={cuOptInfo} corridorContext={corridorContext} isLoading={isCorridorLoading} />
 
+          {/* Phase 43: Self-Serve Fleet Onboarding Action Button */}
+          <button
+            type="button"
+            onClick={() => setIsOnboardingModalOpen(true)}
+            className={`cursor-pointer px-3 py-1.5 rounded-xl border text-xs font-semibold tracking-wide transition-all flex items-center gap-1.5 shadow-lg ${
+              role === 'REGULATOR'
+                ? 'bg-white/5 border-white/10 text-slate-400 hover:text-slate-300'
+                : 'bg-cyan-500/10 border-cyan-500/30 hover:bg-cyan-500/20 text-cyan-300 shadow-cyan-500/10'
+            }`}
+            title="Onboard Armada & Unggah Manifest Pengiriman"
+          >
+            <PlusCircle className="w-3.5 h-3.5 text-cyan-400" />
+            <span>+ Onboard Armada</span>
+            {customFleetCount > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full bg-cyan-500 text-slate-950 font-mono text-[10px] font-black">
+                {customFleetCount}
+              </span>
+            )}
+          </button>
+
           {/* 1-Click Role & Workspace Persona Badge */}
           <button
             type="button"
@@ -1064,6 +1087,20 @@ export default function DashboardClient() {
 
       {/* Multi-Role Workspace Auth Modal */}
       <AuthModal isOpen={isAuthModalOpen} onClose={closeAuthModal} />
+
+      {/* Self-Serve Fleet Onboarding Modal */}
+      <FleetOnboardingModal
+        isOpen={isOnboardingModalOpen}
+        onClose={() => setIsOnboardingModalOpen(false)}
+        onSuccess={() => {
+          refetchFleet();
+          setToast({
+            message: 'Sinkronisasi armada kustom berhasil diperbarui.',
+            type: 'success',
+          });
+        }}
+        userRole={role}
+      />
 
       {/* Toast Notification Container */}
       {toast && (

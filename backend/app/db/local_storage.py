@@ -84,6 +84,67 @@ def init_db(db_path: Optional[str] = None) -> None:
                 CREATE INDEX IF NOT EXISTS idx_outcomes_sync 
                 ON ground_truth_outcomes(sync_status);
             """)
+
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS custom_fleet_vehicles (
+                    id TEXT PRIMARY KEY,
+                    vehicle_id TEXT UNIQUE NOT NULL,
+                    name TEXT NOT NULL,
+                    driver_name TEXT,
+                    driver_phone TEXT,
+                    modality TEXT NOT NULL,
+                    cargo TEXT,
+                    origin TEXT,
+                    destination TEXT,
+                    speed_kmh REAL DEFAULT 60.0,
+                    temperature_c REAL,
+                    path_json TEXT,
+                    status TEXT DEFAULT 'moving',
+                    mmsi TEXT,
+                    imo TEXT,
+                    vin TEXT,
+                    icao24 TEXT,
+                    callsign TEXT,
+                    organization_id TEXT DEFAULT 'org-prehub-pilot',
+                    created_by TEXT DEFAULT 'dispatcher',
+                    sync_status TEXT DEFAULT 'pending',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_custom_vehicles_modality 
+                ON custom_fleet_vehicles(modality);
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_custom_vehicles_sync 
+                ON custom_fleet_vehicles(sync_status);
+            """)
+
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS fleet_telemetry_logs (
+                    id TEXT PRIMARY KEY,
+                    vehicle_id TEXT NOT NULL,
+                    latitude REAL NOT NULL,
+                    longitude REAL NOT NULL,
+                    speed_kmh REAL DEFAULT 0.0,
+                    heading_deg REAL DEFAULT 0.0,
+                    altitude_m REAL DEFAULT 0.0,
+                    temperature_c REAL,
+                    battery_level REAL,
+                    ignition INTEGER,
+                    raw_payload TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_telemetry_logs_vehicle 
+                ON fleet_telemetry_logs(vehicle_id);
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_telemetry_logs_created 
+                ON fleet_telemetry_logs(created_at);
+            """)
         logger.debug(f"Local SQLite database initialized at {db_path or DEFAULT_DB_PATH}")
     finally:
         conn.close()
@@ -310,7 +371,334 @@ def mark_as_synced(table_name: str, record_id: str, db_path: Optional[str] = Non
     conn = get_db_connection(db_path)
     try:
         with conn:
-            if table_name in ("route_decision_traces", "ground_truth_outcomes"):
+            if table_name in ("route_decision_traces", "ground_truth_outcomes", "custom_fleet_vehicles"):
                 conn.execute(f"UPDATE {table_name} SET sync_status = 'synced' WHERE id = ?", (record_id,))
     finally:
         conn.close()
+
+
+# ==========================================
+# CUSTOM FLEET & TELEMETRY PERSISTENCE
+# ==========================================
+
+def save_custom_vehicle(data: Dict[str, Any], db_path: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Save or update a custom onboarded vehicle in SQLite.
+    """
+    conn = get_db_connection(db_path)
+    record_id = data.get("id") or f"VEH-{uuid.uuid4().hex[:10]}"
+    vehicle_id = data.get("vehicle_id") or record_id
+    created_at = data.get("created_at") or datetime.now().isoformat()
+    updated_at = datetime.now().isoformat()
+
+    path_data = data.get("path") or data.get("path_json")
+    if isinstance(path_data, (list, dict)):
+        path_json = json.dumps(path_data)
+    elif isinstance(path_data, str):
+        path_json = path_data
+    else:
+        path_json = None
+
+    try:
+        with conn:
+            conn.execute("""
+                INSERT INTO custom_fleet_vehicles (
+                    id, vehicle_id, name, driver_name, driver_phone,
+                    modality, cargo, origin, destination, speed_kmh,
+                    temperature_c, path_json, status, mmsi, imo, vin,
+                    icao24, callsign, organization_id, created_by,
+                    sync_status, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(vehicle_id) DO UPDATE SET
+                    name = excluded.name,
+                    driver_name = excluded.driver_name,
+                    driver_phone = excluded.driver_phone,
+                    modality = excluded.modality,
+                    cargo = excluded.cargo,
+                    origin = excluded.origin,
+                    destination = excluded.destination,
+                    speed_kmh = excluded.speed_kmh,
+                    temperature_c = excluded.temperature_c,
+                    path_json = excluded.path_json,
+                    status = excluded.status,
+                    mmsi = excluded.mmsi,
+                    imo = excluded.imo,
+                    vin = excluded.vin,
+                    icao24 = excluded.icao24,
+                    callsign = excluded.callsign,
+                    updated_at = excluded.updated_at
+            """, (
+                record_id,
+                vehicle_id,
+                data.get("name") or vehicle_id,
+                data.get("driver_name"),
+                data.get("driver_phone"),
+                data.get("modality") or "truck",
+                data.get("cargo"),
+                data.get("origin"),
+                data.get("destination"),
+                float(data.get("speed_kmh") if data.get("speed_kmh") is not None else 60.0),
+                float(data["temperature_c"]) if data.get("temperature_c") is not None else None,
+                path_json,
+                data.get("status") or "moving",
+                data.get("mmsi"),
+                data.get("imo"),
+                data.get("vin"),
+                data.get("icao24"),
+                data.get("callsign"),
+                data.get("organization_id") or "org-prehub-pilot",
+                data.get("created_by") or "dispatcher",
+                data.get("sync_status") or "pending",
+                created_at,
+                updated_at
+            ))
+
+        return {
+            "id": record_id,
+            "vehicle_id": vehicle_id,
+            "name": data.get("name") or vehicle_id,
+            "driver_name": data.get("driver_name"),
+            "driver_phone": data.get("driver_phone"),
+            "modality": data.get("modality") or "truck",
+            "cargo": data.get("cargo"),
+            "origin": data.get("origin"),
+            "destination": data.get("destination"),
+            "speed_kmh": float(data.get("speed_kmh") if data.get("speed_kmh") is not None else 60.0),
+            "temperature_c": float(data["temperature_c"]) if data.get("temperature_c") is not None else None,
+            "path": json.loads(path_json) if path_json else None,
+            "status": data.get("status") or "moving",
+            "mmsi": data.get("mmsi"),
+            "imo": data.get("imo"),
+            "vin": data.get("vin"),
+            "icao24": data.get("icao24"),
+            "callsign": data.get("callsign"),
+            "organization_id": data.get("organization_id") or "org-prehub-pilot",
+            "created_by": data.get("created_by") or "dispatcher",
+            "sync_status": data.get("sync_status") or "pending",
+            "created_at": created_at,
+            "updated_at": updated_at
+        }
+    finally:
+        conn.close()
+
+
+def save_batch_custom_vehicles(data_list: List[Dict[str, Any]], db_path: Optional[str] = None) -> int:
+    """Save a batch of custom vehicles in a single transaction."""
+    saved_count = 0
+    for item in data_list:
+        try:
+            save_custom_vehicle(item, db_path=db_path)
+            saved_count += 1
+        except Exception as e:
+            logger.error(f"Error saving batch vehicle item {item.get('vehicle_id')}: {e}")
+    return saved_count
+
+
+def list_custom_vehicles(
+    modality: Optional[str] = None,
+    db_path: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """Retrieve all custom registered vehicles from SQLite."""
+    conn = get_db_connection(db_path)
+    try:
+        if modality and modality != "all":
+            cursor = conn.execute("""
+                SELECT * FROM custom_fleet_vehicles 
+                WHERE modality = ?
+                ORDER BY created_at DESC
+            """, (modality,))
+        else:
+            cursor = conn.execute("""
+                SELECT * FROM custom_fleet_vehicles 
+                ORDER BY created_at DESC
+            """)
+        
+        rows = cursor.fetchall()
+        results = []
+        for r in rows:
+            path_val = None
+            if r["path_json"]:
+                try:
+                    path_val = json.loads(r["path_json"])
+                except Exception:
+                    path_val = None
+            results.append({
+                "id": r["id"],
+                "vehicle_id": r["vehicle_id"],
+                "name": r["name"],
+                "driver_name": r["driver_name"],
+                "driver_phone": r["driver_phone"],
+                "modality": r["modality"],
+                "cargo": r["cargo"],
+                "origin": r["origin"],
+                "destination": r["destination"],
+                "speed_kmh": float(r["speed_kmh"]) if r["speed_kmh"] is not None else 60.0,
+                "temperature_c": float(r["temperature_c"]) if r["temperature_c"] is not None else None,
+                "path": path_val,
+                "status": r["status"],
+                "mmsi": r["mmsi"],
+                "imo": r["imo"],
+                "vin": r["vin"],
+                "icao24": r["icao24"],
+                "callsign": r["callsign"],
+                "organization_id": r["organization_id"],
+                "created_by": r["created_by"],
+                "sync_status": r["sync_status"],
+                "created_at": r["created_at"],
+                "updated_at": r["updated_at"]
+            })
+        return results
+    finally:
+        conn.close()
+
+
+def get_custom_vehicle(vehicle_id: str, db_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Retrieve a single custom vehicle by its vehicle_id."""
+    conn = get_db_connection(db_path)
+    try:
+        cursor = conn.execute("""
+            SELECT * FROM custom_fleet_vehicles WHERE vehicle_id = ?
+        """, (vehicle_id,))
+        r = cursor.fetchone()
+        if not r:
+            return None
+        path_val = None
+        if r["path_json"]:
+            try:
+                path_val = json.loads(r["path_json"])
+            except Exception:
+                path_val = None
+        return {
+            "id": r["id"],
+            "vehicle_id": r["vehicle_id"],
+            "name": r["name"],
+            "driver_name": r["driver_name"],
+            "driver_phone": r["driver_phone"],
+            "modality": r["modality"],
+            "cargo": r["cargo"],
+            "origin": r["origin"],
+            "destination": r["destination"],
+            "speed_kmh": float(r["speed_kmh"]) if r["speed_kmh"] is not None else 60.0,
+            "temperature_c": float(r["temperature_c"]) if r["temperature_c"] is not None else None,
+            "path": path_val,
+            "status": r["status"],
+            "mmsi": r["mmsi"],
+            "imo": r["imo"],
+            "vin": r["vin"],
+            "icao24": r["icao24"],
+            "callsign": r["callsign"],
+            "organization_id": r["organization_id"],
+            "created_by": r["created_by"],
+            "sync_status": r["sync_status"],
+            "created_at": r["created_at"],
+            "updated_at": r["updated_at"]
+        }
+    finally:
+        conn.close()
+
+
+def delete_custom_vehicle(vehicle_id: str, db_path: Optional[str] = None) -> bool:
+    """Delete a custom registered vehicle from SQLite."""
+    conn = get_db_connection(db_path)
+    try:
+        with conn:
+            cursor = conn.execute("DELETE FROM custom_fleet_vehicles WHERE vehicle_id = ?", (vehicle_id,))
+            return cursor.rowcount > 0
+    finally:
+        conn.close()
+
+
+def log_telemetry_ping(ping: Dict[str, Any], db_path: Optional[str] = None) -> Dict[str, Any]:
+    """Log a live GPS telematics ping to SQLite."""
+    conn = get_db_connection(db_path)
+    record_id = ping.get("id") or f"PING-{uuid.uuid4().hex[:10]}"
+    created_at = ping.get("timestamp") or datetime.now().isoformat()
+    raw = ping.get("raw_payload")
+    raw_json = json.dumps(raw) if isinstance(raw, (dict, list)) else (raw if isinstance(raw, str) else None)
+
+    try:
+        with conn:
+            conn.execute("""
+                INSERT INTO fleet_telemetry_logs (
+                    id, vehicle_id, latitude, longitude, speed_kmh,
+                    heading_deg, altitude_m, temperature_c, battery_level,
+                    ignition, raw_payload, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                record_id,
+                ping["vehicle_id"],
+                float(ping["latitude"]),
+                float(ping["longitude"]),
+                float(ping.get("speed_kmh") or 0.0),
+                float(ping["heading_deg"]) if ping.get("heading_deg") is not None else None,
+                float(ping.get("altitude_m") or 0.0),
+                float(ping["temperature_c"]) if ping.get("temperature_c") is not None else None,
+                float(ping["battery_level"]) if ping.get("battery_level") is not None else None,
+                1 if ping.get("ignition") else (0 if ping.get("ignition") is False else None),
+                raw_json,
+                created_at
+            ))
+        return {
+            "id": record_id,
+            "vehicle_id": ping["vehicle_id"],
+            "latitude": float(ping["latitude"]),
+            "longitude": float(ping["longitude"]),
+            "speed_kmh": float(ping.get("speed_kmh") or 0.0),
+            "heading_deg": ping.get("heading_deg"),
+            "altitude_m": float(ping.get("altitude_m") or 0.0),
+            "temperature_c": ping.get("temperature_c"),
+            "battery_level": ping.get("battery_level"),
+            "ignition": ping.get("ignition"),
+            "created_at": created_at
+        }
+    finally:
+        conn.close()
+
+
+def list_telemetry_logs(
+    vehicle_id: Optional[str] = None,
+    limit: int = 50,
+    db_path: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """Retrieve telemetry pings sorted newest first."""
+    conn = get_db_connection(db_path)
+    try:
+        if vehicle_id:
+            cursor = conn.execute("""
+                SELECT * FROM fleet_telemetry_logs 
+                WHERE vehicle_id = ?
+                ORDER BY created_at DESC 
+                LIMIT ?
+            """, (vehicle_id, limit))
+        else:
+            cursor = conn.execute("""
+                SELECT * FROM fleet_telemetry_logs 
+                ORDER BY created_at DESC 
+                LIMIT ?
+            """, (limit,))
+        
+        rows = cursor.fetchall()
+        results = []
+        for r in rows:
+            results.append({
+                "id": r["id"],
+                "vehicle_id": r["vehicle_id"],
+                "latitude": float(r["latitude"]),
+                "longitude": float(r["longitude"]),
+                "speed_kmh": float(r["speed_kmh"]),
+                "heading_deg": float(r["heading_deg"]) if r["heading_deg"] is not None else None,
+                "altitude_m": float(r["altitude_m"]),
+                "temperature_c": float(r["temperature_c"]) if r["temperature_c"] is not None else None,
+                "battery_level": float(r["battery_level"]) if r["battery_level"] is not None else None,
+                "ignition": bool(r["ignition"]) if r["ignition"] is not None else None,
+                "created_at": r["created_at"]
+            })
+        return results
+    finally:
+        conn.close()
+
+
+def get_latest_telemetry_ping(vehicle_id: str, db_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Retrieve the most recent GPS ping for a vehicle."""
+    logs = list_telemetry_logs(vehicle_id=vehicle_id, limit=1, db_path=db_path)
+    return logs[0] if logs else None
