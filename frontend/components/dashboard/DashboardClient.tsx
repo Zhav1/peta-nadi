@@ -33,6 +33,7 @@ import { GuidedDemoPanel } from '@/components/demo/GuidedDemoPanel';
 import AnalyticsSection from '@/components/dashboard/AnalyticsSection';
 import SimulationSection from '@/components/dashboard/SimulationSection';
 import ReportsSection from '@/components/dashboard/ReportsSection';
+import EvaluationSection from '@/components/dashboard/EvaluationSection';
 import { CrisisSimulatorBar } from '@/components/map/CrisisSimulatorBar';
 import { HUB_NODES, type HubNode } from '@/lib/mapboxRoutingService';
 import {
@@ -187,10 +188,10 @@ function TimeModeBanner({
       description: 'Peringatan dini berdasarkan akumulasi curah hujan BMKG & potensi bottleneck lalu lintas sebelum armada diberangkatkan.',
     },
     predict: {
-      title: 'MODE PREDIKSI AI (TFT & FOURCASTNET)',
+      title: 'MODE PREDIKSI AI (TFT & OPEN-METEO)',
       badge: 'AI PREDICTIVE MODEL',
       badgeColor: 'bg-cyan-950/80 text-cyan-300 border-cyan-500/40',
-      description: 'Simulasi skenario disrupsi pelabuhan Belawan & koridor pangan menggunakan model prakiraan atmosfer adaptif.',
+      description: 'Simulasi skenario disrupsi pelabuhan Belawan & koridor pangan menggunakan model prakiraan cuaca Open-Meteo & BMKG.',
     },
   }[activeTimeFilter];
 
@@ -261,7 +262,7 @@ function FloatingMapLegend({
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)] shrink-0" />
               <div>
-                <span className="text-emerald-300 font-bold block">Rute Detour Rekomendasi (cuOpt)</span>
+                <span className="text-emerald-300 font-bold block">Rute Detour Rekomendasi (CPU Solver)</span>
                 <span className="text-[9px] text-slate-400 font-sans">Bebas bahaya, jarak & ETA paling optimal.</span>
               </div>
             </div>
@@ -331,7 +332,7 @@ export default function DashboardClient() {
   const [toast, setToast] = useState<{ message: string; type?: 'success' | 'error' | 'info' } | null>(null);
 
   // Layout & Navigation States
-  const [activeSection, setActiveSection] = useState<'map' | 'analytics' | 'simulation' | 'reports'>('map');
+  const [activeSection, setActiveSection] = useState<'map' | 'analytics' | 'simulation' | 'reports' | 'evaluation'>('map');
   const [activeTimeFilter, setActiveTimeFilter] = useState<'past' | 'present' | 'future' | 'predict'>('present');
   const [activeTab, setActiveTab] = useState<'Evidence' | 'Mitigation' | 'Economic'>('Evidence');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -374,8 +375,8 @@ export default function DashboardClient() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      const section = params.get('section') as 'map' | 'analytics' | 'simulation' | 'reports';
-      if (section && ['map', 'analytics', 'simulation', 'reports'].includes(section)) {
+      const section = params.get('section') as 'map' | 'analytics' | 'simulation' | 'reports' | 'evaluation';
+      if (section && ['map', 'analytics', 'simulation', 'reports', 'evaluation'].includes(section)) {
         setActiveSection(section);
       }
     }
@@ -647,7 +648,7 @@ export default function DashboardClient() {
               osint_author: '@LogisticsWatcher_ID',
               osint_text: `Laporan OSINT Terverifikasi: ${String(item.title)}. ${String(item.impact_summary || 'Anomali disrupsi pasokan memicu risiko lonjakan harga komoditas.')}`
             },
-            decision_support_output: `=== HASIL REASONING AGENT SWARM (EXPLAINABLE AI) ===\n📍 Event: ${String(item.title)}\n\n1. ANALISIS ANCAMAN FISIK KORIDOR:\nTelemetri sensor mengonfirmasi disrupsi logistik akibat ${String(item.type || 'bencana')}. Terjadi hambatan pergerakan armada dengan estimasi perlambatan hingga +12 jam.\n\n2. PROYEKSI DAMPAK EKONOMI & ANOMALI INFLASI:\n${String(item.impact_summary || 'Gangguan pasokan pangan memicu risiko lonjakan harga di pasar Medan.')} ${item.price_lag_impact ? `Dampak inflasi: ${String(item.price_lag_impact)}` : ''}\n\n3. REKOMENDASI OPTIMASI RUTE TAKTIS:\nNVIDIA cuOpt & AI Routing Agent merutekan ulang armada ke rute alternatif bebas bahaya.`
+            decision_support_output: `**Ringkasan Penalaran AI Swarm (Explainable AI)**\n\n**Peristiwa:** ${String(item.title)}\n\n**1. Analisis Ancaman Fisik Koridor:**\nTelemetri sensor mengonfirmasi disrupsi logistik akibat ${String(item.type || 'bencana')}. Terjadi hambatan pergerakan armada dengan estimasi perlambatan hingga +12 jam.\n\n**2. Proyeksi Dampak Ekonomi & Anomali Inflasi:**\n${String(item.impact_summary || 'Gangguan pasokan pangan memicu risiko lonjakan harga di pasar Medan.')} ${item.price_lag_impact ? `Dampak inflasi: ${String(item.price_lag_impact)}` : ''}\n\n**3. Rekomendasi Optimasi Rute Taktis:**\nSolver Rute CPU (NetworkX & OR-Tools) merutekan ulang armada ke rute alternatif bebas bahaya.`
           };
         }
       }
@@ -956,45 +957,67 @@ export default function DashboardClient() {
             </Link>
           </div>
 
-          {/* Section Navigation Tabs (Locked Incomplete Tabs) */}
+          {/* Section Navigation Tabs */}
           <nav className="flex items-center gap-1 bg-slate-950/60 p-1 rounded-xl border border-slate-800">
             <button
               id="nav-map"
               type="button"
               onClick={() => setActiveSection('map')}
-              className="cursor-pointer px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20"
+              className={`cursor-pointer px-3.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition ${
+                activeSection === 'map'
+                  ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+              }`}
             >
-              MAP 4D
+              PETA OPERASI
             </button>
             <button
               id="nav-analytics"
               type="button"
-              disabled
-              title="Fitur Analytics dalam integrasi pipeline lanjutan"
-              className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition text-slate-500 flex items-center gap-1.5 cursor-not-allowed opacity-60 hover:opacity-80"
+              onClick={() => setActiveSection('analytics')}
+              className={`cursor-pointer px-3.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition ${
+                activeSection === 'analytics'
+                  ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+              }`}
             >
-              <Lock className="w-3 h-3 text-slate-500" />
-              <span>ANALYTICS</span>
+              ANALYTICS
             </button>
             <button
               id="nav-simulation"
               type="button"
-              disabled
-              title="Fitur Simulasi Lanjutan dalam pengembangan"
-              className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition text-slate-500 flex items-center gap-1.5 cursor-not-allowed opacity-60 hover:opacity-80"
+              onClick={() => setActiveSection('simulation')}
+              className={`cursor-pointer px-3.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition ${
+                activeSection === 'simulation'
+                  ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+              }`}
             >
-              <Lock className="w-3 h-3 text-slate-500" />
-              <span>SIMULATION</span>
+              SIMULATION
             </button>
             <button
               id="nav-reports"
               type="button"
-              disabled
-              title="Fitur Laporan Otomatis segera hadir"
-              className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition text-slate-500 flex items-center gap-1.5 cursor-not-allowed opacity-60 hover:opacity-80"
+              onClick={() => setActiveSection('reports')}
+              className={`cursor-pointer px-3.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition ${
+                activeSection === 'reports'
+                  ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+              }`}
             >
-              <Lock className="w-3 h-3 text-slate-500" />
-              <span>REPORTS</span>
+              REPORTS
+            </button>
+            <button
+              id="nav-evaluation"
+              type="button"
+              onClick={() => setActiveSection('evaluation')}
+              className={`cursor-pointer px-3.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition ${
+                activeSection === 'evaluation'
+                  ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+              }`}
+            >
+              EVALUATION
             </button>
           </nav>
         </div>
@@ -1070,7 +1093,7 @@ export default function DashboardClient() {
             </button>
           )}
 
-          {/* 2. GPU-ACCELERATED COLLAPSIBLE LEFT OSINT & NEWS SIDEBAR (GLOBOT STYLE) */}
+          {/* 2. COLLAPSIBLE LEFT OSINT & NEWS SIDEBAR (GLOBOT STYLE) */}
           <aside className={`absolute left-0 top-0 bottom-0 z-40 w-80 md:w-88 bg-[#0c0e12]/95 backdrop-blur-2xl border-r border-white/10 flex flex-col gap-3 p-3.5 overflow-hidden pointer-events-auto transition-transform duration-300 ease-in-out shadow-2xl ${
             isLeftSidebarCollapsed ? '-translate-x-full pointer-events-none' : 'translate-x-0'
           }`}>
@@ -1476,6 +1499,15 @@ export default function DashboardClient() {
         <div className={`w-full h-full p-4 lg:p-6 ${activeSection === 'reports' ? 'block' : 'hidden'}`}>
           <ReportsSection 
             approvalsCount={approvalsCount}
+            corridorContext={corridorContext}
+            selectedCrisis={selectedCrisis}
+            activeRoutes={currentMapRoutes}
+          />
+        </div>
+
+        {/* Section 5: Dedicated Evaluation & Benchmark Dashboard */}
+        <div className={`w-full h-full p-4 lg:p-6 overflow-y-auto ${activeSection === 'evaluation' ? 'block' : 'hidden'}`}>
+          <EvaluationSection 
             corridorContext={corridorContext}
             selectedCrisis={selectedCrisis}
             activeRoutes={currentMapRoutes}

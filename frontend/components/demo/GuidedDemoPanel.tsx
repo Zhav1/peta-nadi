@@ -14,6 +14,10 @@ import {
   SkipForward,
   RotateCcw,
   Pause,
+  X,
+  MapPin,
+  Circle,
+  Smartphone,
 } from 'lucide-react';
 
 interface GuidedDemoPanelProps {
@@ -71,10 +75,10 @@ export function GuidedDemoPanel({
   const swarmLogs = [
     `> [00:01.2] DataCollectionAgent: Ingesting BMKG radar (68.5mm), TomTom flow (+35m), AISstream vessel feed...`,
     `> [00:02.1] OSINTHazardAgent: Scraping OSINT feeds & Google News: "Banjir Tebing Tinggi Jalinsum Terputus"...`,
-    `> [00:03.0] PredictionAgent: Simulating FourCastNet Earth-2 48h spatial hazard inundation model...`,
-    `> [00:03.9] RouteOptimizationAgent: Executing NVIDIA cuOpt GPU matrix: Calculating tangential clearance...`,
+    `> [00:03.0] PredictionAgent: Fusing Open-Meteo & BMKG 48h spatial hazard inundation model...`,
+    `> [00:03.9] RouteOptimizationAgent: Executing CPU NetworkX & OR-Tools solver: Calculating tangential detour...`,
     `> [00:04.7] EconomicIntelligenceAgent: Fetching PIHPS price stream: Projected CPO/Minyak inflation +1.8%...`,
-    `> [00:05.5] DecisionSupportAgent: DeepSeek V3.2 CoT reasoning & Consensus Gate: 91.4% (VALIDATED THREAT)...`,
+    `> [00:05.5] DecisionSupportAgent: DeepSeek R1 CoT reasoning & Consensus Gate: 91.4% (VALIDATED THREAT)...`,
   ];
 
   // Generate QR Code when demo starts and has a crisisId
@@ -113,11 +117,11 @@ export function GuidedDemoPanel({
   ];
 
   const stageExplainers = [
-    'Silakan tentukan rute krisis dengan mengeklik 2 titik marker pada Peta 4D di sebelah kiri (Klik 1: Start 🟢, Klik 2: End 🟡). Sistem akan merender rute baseline hijau sebelum disrupsi disimulasikan.',
+    'Silakan tentukan rute krisis dengan mengeklik 2 titik marker pada Peta Operasi di sebelah kiri (Klik 1: Start, Klik 2: End). Sistem akan merender rute baseline hijau sebelum disrupsi disimulasikan.',
     '6 agen AI memproses data secara paralel. Setiap agen ahli di satu domain: pemetaan bahaya, optimasi rute, proyeksi ekonomi, dan dukungan keputusan krisis.',
     'Consensus Gate mengevaluasi skor kepercayaan dari semua agen. Krisis divalidasi ketika skor tertimbang > 85% — mencegah alarm palsu.',
-    'Disrupsi tervalidasi. AI Tangential Avoidance Router menghitung rute pengalihan aman via cuOpt GPU khusus untuk koridor pilihan Anda.',
-    'Notifikasi WhatsApp telah dikirim ke operator logistik dengan ringkasan krisis, rute pengalihan NVIDIA cuOpt, dan deep-link dashboard.',
+    'Disrupsi tervalidasi. AI Tangential Avoidance Router menghitung rute pengalihan aman via solver CPU NetworkX/OR-Tools khusus untuk koridor pilihan Anda.',
+    'Notifikasi WhatsApp telah dikirim ke operator logistik dengan ringkasan krisis, rute pengalihan teroptimasi, dan deep-link dashboard.',
   ];
 
   const sources = [
@@ -165,8 +169,9 @@ export function GuidedDemoPanel({
             onReset();
           }}
           className="text-slate-400 hover:text-white text-xs transition p-1 hover:bg-slate-900 rounded-md cursor-pointer"
+          aria-label="Tutup panel demo"
         >
-          ✕
+          <X className="w-4 h-4" />
         </button>
       </div>
 
@@ -201,15 +206,15 @@ export function GuidedDemoPanel({
             <div className="bg-cyan-950/40 border border-cyan-500/40 p-2.5 rounded-xl flex flex-col gap-1.5 shadow-md">
               <div className="flex items-center justify-between text-[11px] font-bold text-cyan-300">
                 <span className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-                  📌 Klik Peta 4D Langsung:
+                  <MapPin className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                  <span>Pilih Simpul Peta Operasi:</span>
                 </span>
                 <span className="text-[9px] font-mono bg-cyan-900/60 px-1.5 py-0.5 rounded border border-cyan-400/40 text-cyan-200">
                   INTERAKTIF
                 </span>
               </div>
               <p className="text-[10px] text-slate-300 leading-tight">
-                Klik marker kota/pelabuhan pada canvas peta di sebelah kiri untuk mengeset titik <strong className="text-cyan-400">Start (🟢)</strong> lalu <strong className="text-amber-400">End (🟡)</strong>.
+                Klik marker kota/pelabuhan pada kanvas peta untuk mengeset titik <strong className="text-cyan-400">Start (Titik Asal)</strong> lalu <strong className="text-amber-400">End (Titik Tujuan)</strong>.
               </p>
             </div>
 
@@ -217,7 +222,8 @@ export function GuidedDemoPanel({
             <div className="grid grid-cols-2 gap-2">
               <div className={`p-2 rounded-xl border flex flex-col gap-1 text-[10px] transition-all ${selectedOrigin ? 'bg-cyan-950/60 border-cyan-500/50 text-cyan-200 shadow-sm' : 'bg-slate-950/60 border-dashed border-slate-700 text-slate-400'}`}>
                 <span className="font-bold text-cyan-400 flex items-center gap-1">
-                  <span>🟢 START (Klik 1)</span>
+                  <Circle className="w-2.5 h-2.5 fill-cyan-400 text-cyan-400" />
+                  <span>START (Klik 1)</span>
                   {selectedOrigin && <CheckCircle2 className="w-3 h-3 text-cyan-400" />}
                 </span>
                 <span className="font-mono font-bold text-[11px] truncate">
@@ -226,7 +232,8 @@ export function GuidedDemoPanel({
               </div>
               <div className={`p-2 rounded-xl border flex flex-col gap-1 text-[10px] transition-all ${selectedDestination ? 'bg-amber-950/60 border-amber-500/50 text-amber-200 shadow-sm' : 'bg-slate-950/60 border-dashed border-slate-700 text-slate-400'}`}>
                 <span className="font-bold text-amber-400 flex items-center gap-1">
-                  <span>🟡 END (Klik 2)</span>
+                  <Circle className="w-2.5 h-2.5 fill-amber-400 text-amber-400" />
+                  <span>END (Klik 2)</span>
                   {selectedDestination && <CheckCircle2 className="w-3 h-3 text-amber-400" />}
                 </span>
                 <span className="font-mono font-bold text-[11px] truncate">
@@ -480,9 +487,10 @@ export function GuidedDemoPanel({
               e.stopPropagation();
               setQrVisible((prev) => !prev);
             }}
-            className="hover:text-cyan-400 transition cursor-pointer"
+            className="hover:text-cyan-400 transition cursor-pointer flex items-center gap-1.5"
           >
-            {qrVisible ? 'Hide Phone Remote' : '📱 Show Phone Remote'}
+            <Smartphone className="w-3 h-3 text-cyan-400" />
+            <span>{qrVisible ? 'Sembunyikan Remote' : 'Remote Ponsel'}</span>
           </button>
           <button
             type="button"
@@ -491,9 +499,10 @@ export function GuidedDemoPanel({
               e.stopPropagation();
               onStart();
             }}
-            className="hover:text-slate-300 transition cursor-pointer"
+            className="hover:text-slate-300 transition cursor-pointer flex items-center gap-1"
           >
-            ↺ Reset Demo
+            <RotateCcw className="w-3 h-3" />
+            <span>Reset Demo</span>
           </button>
         </div>
       </div>

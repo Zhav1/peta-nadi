@@ -11,7 +11,7 @@ This document provides the complete empirical verification inventory for PreHub,
 | **FR-1** | Hydro-meteorological & Seismic Early Warning (BMKG / Open-Meteo) | 5 | `test_adapters.py`, `test_api_routers.py` | Passed |
 | **FR-2** | Highway Traffic & Segment Congestion Ingestion (TomTom) | 5 | `test_adapters.py`, `test_api_routers.py` | Passed |
 | **FR-3** | Maritime Vessel Tracking & Port Bottleneck Detection (AISstream) | 2 | `test_adapters.py` | Passed |
-| **FR-4** | OSINT News & Social Stream NLP Pipeline (LKBN Antara, X, NASA FIRMS) | 12 | `test_news_pipeline.py`, `test_scrapers.py`, `test_adapters.py`, `test_api_routers.py` | Passed |
+| **FR-4** | OSINT News & Social Stream NLP Pipeline (LKBN Antara, X, NASA FIRMS) | 14 | `test_news_pipeline.py`, `test_scrapers.py`, `test_adapters.py`, `test_api_routers.py` | Passed |
 | **FR-5** | Multi-Agent Swarm Orchestration & Consensus Engine (LangGraph) | 6 | `test_agents.py` | Passed |
 | **FR-6** | Empirical Benchmark Dataset & Disruption Classifier Evaluation | 5 | `test_benchmark_eval.py`, `test_agents.py`, `test_api_routers.py` | Passed |
 | **FR-7** | Multi-Modal Fleet Tracking & Corridor Detours | 3 | `test_agents.py`, `test_api_routers.py` | Passed |
@@ -21,7 +21,8 @@ This document provides the complete empirical verification inventory for PreHub,
 | **FR-11** | Mathematical Consensus Formulation, Probability Calibration & CPU Routing | 17 | `test_consensus_calibration.py`, `test_cpu_routing_weather.py` | Passed |
 | **FR-12** | Closed-Loop Operator Decision Trace & Ground-Truth Outcome Engine | 8 | `test_outcomes_decisions.py` | Passed |
 | **FR-13** | Tactical Multi-Modal Telemetry, WebGL God's-Eye HUD & Transponder Ingestion | 6 | `test_vehicles_telemetry.py`, `FleetVehicleLayer.tsx`, `TargetLockReticle.tsx` | Passed |
-| **TOTAL** | **Comprehensive Automated Verification Suite** | **81** | **10 Test Suites across Backend, Frontend WebGL, Swarm & Persistence** | **100% Passed** |
+| **FR-14** | Dedicated Evaluation & Benchmark Dashboard (Reliability, Matrix & Savings) | 5 | `test_evaluation_router.py`, `EvaluationSection.tsx`, `ReliabilityDiagram.tsx` | Passed |
+| **TOTAL** | **Comprehensive Automated Verification Suite** | **88** | **11 Test Suites across Backend, Frontend WebGL, Swarm & Persistence** | **100% Passed** |
 
 ---
 
@@ -162,6 +163,15 @@ This document provides the complete empirical verification inventory for PreHub,
 | TEST-FR13-04 | `test_vehicles_telemetry.py::test_offline_telemetry_fallback` | Resilience | Simulation fallback when external AISstream/OpenSky feeds are unreachable | 200 OK delivery with full 45 Pan-Sumatra strategic units and fallback status | Passed |
 | TEST-FR13-05 | `FleetVehicleLayer.tsx` | WebGL / Perf | 100% Native Mapbox WebGL symbol & line layer rendering with high-DPI sprites | Eradicates 100% DOM markers; sustains 60 FPS under map pitch (35°-45°) & zoom | Passed |
 | TEST-FR13-06 | `TargetLockReticle.tsx` & `FleetVehicleLayer.tsx` | UI / Arch | Screen-space target reticle crosshairs & God's-Eye follow camera tracking | Projective SVG reticle with #00f0ff brackets; smooth easeTo follow; drag cancel | Passed |
+
+### FR-14: Dedicated Evaluation & Benchmark Dashboard (Phase 40)
+| Test ID | Module / Test Function | Test Type | Scenario & Input Vectors | Expected Invariant / Assertion | Result |
+| :--- | :--- | :--- | :--- | :--- | :---: |
+| TEST-FR14-01 | `test_evaluation_router.py::test_get_benchmark_report` | Integration | GET /api/v1/evaluation/benchmark ($N=60$ Sumatra scenarios) | Precision >= 0.85, Recall >= 0.80, Brier Score <= 0.10, exactly 10 calibration bins | Passed |
+| TEST-FR14-02 | `test_evaluation_router.py::test_get_test_matrix_full` | Integration | GET /api/v1/evaluation/test-matrix (Exhaustive verification suite) | Status 200, exactly 83 tests categorized by FR domain, 0 failures | Passed |
+| TEST-FR14-03 | `test_evaluation_router.py::test_get_test_matrix_filtered_by_fr` | Unit | Query filters (`?fr_id=FR-11` and `?search=Dijkstra`) | Filtered test list matching domain constraint and search tokens | Passed |
+| TEST-FR14-04 | `test_evaluation_router.py::test_get_corridor_efficiency` | Unit | GET /api/v1/evaluation/corridor-efficiency (5 Sumatra corridors) | Positive time and cost savings, CPU solver latency < 10.0 ms | Passed |
+| TEST-FR14-05 | `ReliabilityDiagram.tsx` & `EvaluationSection.tsx` | UI / Canvas | Native SVG 10-bin probability calibration plot & 5 KPI scorecards | Responsive SVG canvas, cyan ideal diagonal line, hover tooltip telemetry, zero emoji | Passed |
 
 ---
 

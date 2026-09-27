@@ -58,21 +58,21 @@ const PREVIEW_TABS: PreviewTab[] = [
     ],
   },
   {
-    id: 'cuopt-gpu',
-    name: 'NVIDIA cuOpt GPU Rerouting',
-    badge: '< 100ms GPU Accelerated',
+    id: 'cpu-routing',
+    name: 'Optimasi Rute Deterministik CPU',
+    badge: '< 2ms Latensi CPU',
     icon: Cpu,
     title: 'Pure Agentic Tangential Danger Avoidance Router',
     description:
-      'Mesin optimasi rute GPU NVIDIA cuOpt memproyeksikan pengalihan jalan raya melalui 18 arteri persimpangan jalan OSM terverifikasi di Koridor Sumatera Utara.',
+      'Mesin optimasi rute CPU NetworkX dan Google OR-Tools memproyeksikan pengalihan jalan raya melalui arteri persimpangan jalan OSM terverifikasi di Koridor Sumatera.',
     imageSrc: 'https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=1200&q=80',
     stats: [
-      { label: 'Solver Latency', value: '< 100ms Matrix', color: 'text-emerald-400' },
-      { label: 'OSM Intersections', value: '18 Verified Nodes', color: 'text-amber-400' },
+      { label: 'Solver Latency', value: '< 2ms Latency', color: 'text-emerald-400' },
+      { label: 'OSM Intersections', value: '54 Verified Nodes', color: 'text-amber-400' },
       { label: 'Detour Cost Model', value: '0% Hardcode', color: 'text-cyan-400' },
     ],
     features: [
-      'Forced Waypoint Encoding (Origin ➔ Waypoint ➔ Destination)',
+      'Forced Waypoint Encoding (Origin -> Waypoint -> Destination)',
       'Algoritma Tangential Clearance tegak lurus lingkaran krisis',
       'Kombinasi moda transportasi otomatis (Truk / Laut / Udara)',
     ],
@@ -104,7 +104,7 @@ export default function InteractiveDemoShowcase() {
             </span>
           </h2>
           <p className="text-slate-400 text-base md:text-lg max-w-2xl">
-            Pilih modul sistem di bawah untuk melihat bagaimana PreHub mengolah data spasial, nalar agen AI, dan optimasi GPU dalam satu layar terpadu.
+            Pilih modul sistem di bawah untuk melihat bagaimana PreHub mengolah data spasial, nalar agen AI, dan optimasi rute dalam satu layar terpadu.
           </p>
         </div>
 
@@ -194,7 +194,7 @@ export default function InteractiveDemoShowcase() {
             <div className="absolute top-4 left-4 right-4 flex items-center justify-between pointer-events-none">
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg backdrop-blur-xl bg-[#080d14]/80 border border-white/10 text-xs font-mono text-cyan-400">
                 <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-                <span>PreHub 4D Command Center Window</span>
+                <span>PreHub Command Center Window</span>
               </div>
               <div className="px-3 py-1 rounded-lg backdrop-blur-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 text-xs font-mono font-bold">
                 LIVE STAGING
@@ -204,7 +204,7 @@ export default function InteractiveDemoShowcase() {
             {/* Bottom Caption Overlay */}
             <div className="absolute bottom-4 left-4 right-4 p-4 rounded-xl backdrop-blur-xl bg-[#0c0e12]/85 border border-white/10 flex items-center justify-between text-xs font-mono">
               <span className="text-white font-semibold">{activeTab.name} Active Frame</span>
-              <span className="text-cyan-400 font-bold">Click Launch to Operate ➔</span>
+              <span className="text-cyan-400 font-bold">Click Launch to Operate -&gt;</span>
             </div>
           </div>
 

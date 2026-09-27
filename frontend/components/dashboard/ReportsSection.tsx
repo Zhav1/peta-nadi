@@ -361,7 +361,7 @@ export default function ReportsSection({
               <div className="p-4 rounded-xl bg-[#080d14] border border-cyan-500/30 font-mono text-[11px] space-y-2 text-slate-300">
                 <div className="text-cyan-400 font-bold">AGENT 1 (DATA): Ingesting BMKG rainfall (68.5 mm/h) & TomTom traffic (+35m delay)</div>
                 <div className="text-amber-400 font-bold">AGENT 2 (OSINT): Confirmed flood inundation on Jalinsum KM 42</div>
-                <div className="text-emerald-400 font-bold">AGENT 4 (ROUTE OPTIMIZATION): Solved NVIDIA cuOpt GPU matrix detour via Medan-Tebing Toll</div>
+                <div className="text-emerald-400 font-bold">AGENT 4 (ROUTE OPTIMIZATION): Solved CPU NetworkX & OR-Tools detour via Medan-Tebing Toll</div>
                 <div className="text-cyan-400 font-bold">AGENT 5 (ECONOMIC): Prevented +18.5% shallots retail price shock in Medan</div>
               </div>
             </div>

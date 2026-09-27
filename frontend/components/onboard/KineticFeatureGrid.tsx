@@ -41,16 +41,16 @@ const FEATURES: FeatureCard[] = [
     metrics: 'DeepSeek V3 + Gemini 3.1',
   },
   {
-    id: 'cuopt-routing',
-    title: 'NVIDIA cuOpt Avoidance Rerouting',
-    category: 'GPU ACCELERATION',
-    badgeText: '18 OSM Intersections',
+    id: 'cpu-routing',
+    title: 'Optimasi Rute Bypass Multi-Koridor',
+    category: 'ALGORITMA DETERMINISTIK',
+    badgeText: '54 Simpul Arteri',
     badgeBg: 'bg-orange-400',
     badgeTextColor: 'text-slate-950',
     icon: Navigation,
     description:
-      'Mesin rerouting terukur yang memproyeksikan rute pengalihan 2 km di luar radius bahaya secara tegak lurus, menyusuri arteri persimpangan jalan nyata.',
-    metrics: '< 100ms Matrix Solving',
+      'Mesin rerouting terukur yang memproyeksikan rute pengalihan di luar radius bahaya secara tegak lurus, menyusuri arteri persimpangan jalan nyata.',
+    metrics: '< 2ms Matrix Solving',
   },
   {
     id: 'graphrag-causal',
@@ -61,7 +61,7 @@ const FEATURES: FeatureCard[] = [
     badgeTextColor: 'text-slate-950',
     icon: Network,
     description:
-      'Memetakan keterhubungan sebab-akibat antar simpul logistik (Penutupan Pelabuhan Belawan ➔ Penurunan Pasokan Minyak Goreng ➔ Inflasi Kota Medan).',
+      'Memetakan keterhubungan sebab-akibat antar simpul logistik (Penutupan Pelabuhan Belawan -> Penurunan Pasokan Minyak Goreng -> Inflasi Kota Medan).',
     metrics: 'Multi-hop Propagation',
   },
   {

@@ -1,4 +1,5 @@
 'use client';
+import { Pencil, Zap } from 'lucide-react';
 
 interface SimulateButtonProps {
   isActive: boolean;
@@ -16,7 +17,7 @@ export function SimulateButton({ isActive, onClick, isLoading }: SimulateButtonP
         absolute top-4 left-4 z-20
         flex items-center gap-2 px-4 py-2.5
         rounded-xl text-xs font-semibold uppercase tracking-wider
-        border transition-all duration-200
+        border transition-all duration-200 cursor-pointer
         ${isActive
           ? 'bg-orange-500/20 border-orange-400/60 text-orange-400 ring-1 ring-orange-400/30'
           : 'bg-slate-900/60 backdrop-blur-lg border-white/10 text-slate-300 hover:text-white hover:border-white/20'
@@ -25,9 +26,11 @@ export function SimulateButton({ isActive, onClick, isLoading }: SimulateButtonP
       `}
     >
       {isLoading ? (
-        <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+        <span className="w-3.5 h-3.5 border border-current border-t-transparent rounded-full animate-spin" />
+      ) : isActive ? (
+        <Pencil className="w-3.5 h-3.5" />
       ) : (
-        <span>{isActive ? '✏' : '⚡'}</span>
+        <Zap className="w-3.5 h-3.5" />
       )}
       {isActive ? 'Draw Zone' : 'Simulate Disaster'}
     </button>

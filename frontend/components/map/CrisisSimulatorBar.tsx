@@ -190,7 +190,7 @@ export function CrisisSimulatorBar({
           >
             <MapPin className="w-3.5 h-3.5 text-cyan-400" />
             <span>
-              {originName ? (destName ? `${originName} ➔ ${destName}` : `Start: ${originName}`) : 'Rute Asal & Tujuan'}
+              {originName ? (destName ? `${originName} -> ${destName}` : `Start: ${originName}`) : 'Rute Asal & Tujuan'}
             </span>
             <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform duration-200 ${activePopover === 'nodes' ? 'rotate-180' : ''}`} />
           </button>

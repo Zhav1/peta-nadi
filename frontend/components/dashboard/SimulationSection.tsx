@@ -32,7 +32,7 @@ export default function SimulationSection({
   const [messages, setMessages] = useState<Array<{ sender: 'user' | 'ai'; text: string; thoughtSignature?: string }>>([
     { 
       sender: 'ai', 
-      text: 'Tactical Advisory Engine active. Operational baseline loaded for North Sumatra logistics corridor (Belawan ➔ Medan ➔ Tebing Tinggi). Multi-agent swarm consensus validated.',
+      text: 'Tactical Advisory Engine active. Operational baseline loaded for North Sumatra logistics corridor (Belawan -> Medan -> Tebing Tinggi). Multi-agent swarm consensus validated.',
       thoughtSignature: 'SIG-GEMINI-3.1-FL-9f8a2b'
     },
   ]);
@@ -83,7 +83,7 @@ export default function SimulationSection({
       } else if (lower.includes("stok") || lower.includes("beras") || lower.includes("bulog")) {
         dynamicReply = `Analisis Swarm (${activeAgency}): Stok cadangan beras pemerintah di Gudang Tebing Tinggi memadai (360 Ton). Pelepasan 50 Ton disarankan untuk stabilisasi harga.`;
       } else if (lower.includes("rute") || lower.includes("alternatif") || lower.includes("hitung")) {
-        dynamicReply = `Rekomendasi Rute GPU NVIDIA cuOpt: Rute Detour Belawan ➔ Tol Belmera ➔ Tebing Tinggi menghemat waktu 18 menit dan efisiensi BBM +4.2%.`;
+        dynamicReply = `Rekomendasi Rute Solver CPU NetworkX / OR-Tools: Rute Detour Belawan -> Tol Belmera -> Tebing Tinggi menghemat waktu 18 menit dan efisiensi BBM +4.2%.`;
       } else {
         dynamicReply = `Analisis Intelijen Swarm (${activeAgency}): Memproses skenario "${textToSend}". Parameter koridor Sumut terkendali (Consensus Gate 91% Passed).`;
       }
