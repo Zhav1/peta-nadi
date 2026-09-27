@@ -4,33 +4,33 @@ milestone: M3
 milestone_name: PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform
 current_phase: 43
 current_phase_name: Self-Serve Fleet Onboarding & Live GPS Ingestion Engine
-status: ready_to_plan
-stopped_at: Phase 42 Complete
-last_updated: "2026-09-28T01:18:00.000Z"
+status: ready_to_execute
+stopped_at: Phase 43 Planning Complete
+last_updated: "2026-09-28T01:21:00.000Z"
 last_activity: 2026-09-28
-last_activity_desc: Phase 42 executed and verified. Supabase JWT auth, RBAC middleware, 1-click persona switcher, and role-adaptive top navigation completed with 99 passing tests and 0 build errors.
+last_activity_desc: Phase 43 planned with 2 detailed execution plans (43-01-PLAN.md, 43-02-PLAN.md) and 43-RESEARCH.md.
 progress:
   total_phases: 46
   completed_phases: 43
-  total_plans: 50
+  total_plans: 52
   completed_plans: 46
-  percent: 92
+  percent: 88
 ---
 
 # STATE: PreHub Project Memory
 
 **Last Updated:** 2026-09-28
 **Active Milestone:** M3 - PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform [ACTIVE 🚀]
-**Current Phase:** Phase 43: Self-Serve Fleet Onboarding & Live GPS Ingestion Engine (READY TO PLAN 📋)
+**Current Phase:** Phase 43: Self-Serve Fleet Onboarding & Live GPS Ingestion Engine (READY TO EXECUTE 📋)
 
 ---
 
 ## Current Position
 
 Phase: Phase 43: Self-Serve Fleet Onboarding & Live GPS Ingestion Engine
-Status: **READY TO PLAN** 📋
-Last activity: 2026-09-28: Phase 42 completed successfully (99 backend tests passing, 0 frontend build errors).
-Next action: Run `/gsd-plan-phase 43` to begin planning Phase 43.
+Status: **READY TO EXECUTE** 📋
+Last activity: 2026-09-28: Phase 43 planned (Backend Ingestion Engine + Frontend Onboarding Modal & WebGL Sync).
+Next action: Run `/gsd-execute-phase 43` to execute Phase 43.
 
 ---
 
@@ -80,7 +80,7 @@ Next action: Run `/gsd-plan-phase 43` to begin planning Phase 43.
 | 39 | Tactical Multi-Modal Telemetry & God's-Eye HUD Console | **COMPLETE** ✅ | Real AIS/ADS-B/GPS telemetry, 100% WebGL symbol/line layers, target lock reticle, follow camera, monospaced HUD card |
 | 40 | Dedicated Evaluation & Benchmark Dashboard | **COMPLETE** ✅ | Dedicated EVALUATION tab, native SVG Reliability Diagram, 83-test matrix table, corridor savings benchmark, 84/84 tests passing |
 | 41 | UI/UX Minimalist Sanitization & Technical Report Finalization | **COMPLETE** ✅ | Zero emojis, 100% SVG Lucide icons, sanitized CPU claims, 88-test matrix & DOCX compiled (6.58 MB) |
-| 42 | Supabase Authentication & Multi-Role Workspace Management | **COMPLETE** ✅ | Multi-tenant Supabase Auth, RBAC (Dispatcher, Regulator, Guest), JWT middleware, role-adaptive top navigation |
+| 42 | Supabase Authentication & Multi-Role Workspace Management | **COMPLETE** ✅ | Multi-tenant Supabase Auth, RBAC (Dispatcher, Regulator, Guest), JWT middleware, role-adaptive top navigation. Git: `38153e7` |
 | 43 | Self-Serve Fleet Onboarding & Live GPS Ingestion Engine | **PLANNED** 📋 | Single-vehicle input modal, drag-and-drop CSV manifest parser, TMS GPS webhook endpoint, WebGL asset binding |
 | 44 | Intermodal Terminal Dashboard, Spoilage Hedging & Compliance Inspector | **PLANNED** 📋 | Intermodal sea-land gate sync, operational food spoilage hedging calculator, digital Surat Jalan & BKHIT compliance |
 | 45 | Pilot Verification, Scenario Drills & Final End-to-End Packaging | **PLANNED** 📋 | Automated E2E test suite (100+ tests), hardened Docker Compose, official Pilot Onboarding Manual |
