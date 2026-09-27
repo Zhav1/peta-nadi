@@ -25,7 +25,7 @@ interface AnalyticsSectionProps {
   selectedCrisis?: CrisisState | null;
   corridorContext?: CorridorContext | null;
   activeRoutes?: RouteRecommendation[];
-  onSwitchTab?: (tab: 'map' | 'analytics' | 'simulation' | 'reports') => void;
+  onSwitchTab?: (tab: 'map' | 'analytics' | 'simulation' | 'reports' | 'evaluation') => void;
 }
 
 interface CommodityArcItem {
