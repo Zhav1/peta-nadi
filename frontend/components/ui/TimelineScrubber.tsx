@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { Play, Pause } from 'lucide-react';
 
 export interface TimelineSnapshot {
   timestamp: string;      // ISO 8601
@@ -56,10 +57,10 @@ export function TimelineScrubber({ snapshots, onSeek, isLive = true }: TimelineS
           <button
             id="timeline-play-btn"
             onClick={() => setIsPlaying((v) => !v)}
-            className="text-cyan-400 hover:text-cyan-300 transition-colors text-lg w-8 flex-shrink-0"
+            className="text-cyan-400 hover:text-cyan-300 transition-colors text-lg w-8 flex-shrink-0 flex items-center justify-center cursor-pointer"
             aria-label={isPlaying ? 'Pause playback' : 'Play timeline'}
           >
-            {isPlaying ? '⏸' : '▶'}
+            {isPlaying ? <Pause className="w-4 h-4 text-cyan-400" /> : <Play className="w-4 h-4 text-cyan-400" />}
           </button>
 
           {/* Slider */}

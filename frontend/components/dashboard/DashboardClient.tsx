@@ -42,6 +42,8 @@ import {
 } from '@/lib/aiDynamicRouter';
 import { api } from '@/lib/api';
 import type { CrisisState, WsEvent, CrisisType, Severity, RouteRecommendation } from '@/lib/types';
+import { useAuth } from '@/lib/authContext';
+import { AuthModal } from '@/components/auth/AuthModal';
 
 import { TopNavTelemetry } from '@/components/dashboard/TopNavTelemetry';
 
@@ -310,6 +312,7 @@ function FloatingMapLegend({
 }
 
 export default function DashboardClient() {
+  const { user, role, openAuthModal, isAuthModalOpen, closeAuthModal } = useAuth();
   const { incidents, refetch } = useIncidents();
   const { vehicles: activeFleetVehicles } = useFleetVehicles();
   const [selectedCrisisId, setSelectedCrisisId] = useState<string | null>(null);
@@ -1022,12 +1025,45 @@ export default function DashboardClient() {
           </nav>
         </div>
 
-        {/* Top Navbar Telemetry Header */}
+        {/* Top Navbar Telemetry Header & Role Persona Selector */}
         <div className="flex items-center gap-3">
           <TopNavTelemetry cuOptInfo={cuOptInfo} corridorContext={corridorContext} isLoading={isCorridorLoading} />
+
+          {/* 1-Click Role & Workspace Persona Badge */}
+          <button
+            type="button"
+            onClick={openAuthModal}
+            className={`cursor-pointer px-3 py-1.5 rounded-xl border backdrop-blur-xl transition-all flex items-center gap-2 group shadow-lg ${
+              role === 'DISPATCHER'
+                ? 'bg-cyan-950/40 border-cyan-500/40 hover:border-cyan-400 hover:bg-cyan-950/60 text-cyan-300'
+                : role === 'REGULATOR'
+                ? 'bg-amber-950/40 border-amber-500/40 hover:border-amber-400 hover:bg-amber-950/60 text-amber-300'
+                : 'bg-emerald-950/40 border-emerald-500/40 hover:border-emerald-400 hover:bg-emerald-950/60 text-emerald-300'
+            }`}
+            title="Ganti Persona Akses & Ruang Kerja (RBAC)"
+          >
+            <div className={`w-2 h-2 rounded-full animate-pulse ${
+              role === 'DISPATCHER' ? 'bg-cyan-400' : role === 'REGULATOR' ? 'bg-amber-400' : 'bg-emerald-400'
+            }`} />
+            <div className="text-left leading-none">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-mono font-black uppercase tracking-wider">
+                  {role}
+                </span>
+                <span className="text-[8px] font-mono text-slate-400 group-hover:text-white transition">
+                  ▼
+                </span>
+              </div>
+              <span className="text-[9px] font-sans text-slate-300 max-w-[130px] truncate block opacity-80 pt-0.5">
+                {user.org_name || (role === 'DISPATCHER' ? 'PT Samudera Logistik' : role === 'REGULATOR' ? 'Badan Pangan Nasional' : 'Sandbox LRIP')}
+              </span>
+            </div>
+          </button>
         </div>
       </header>
 
+      {/* Multi-Role Workspace Auth Modal */}
+      <AuthModal isOpen={isAuthModalOpen} onClose={closeAuthModal} />
 
       {/* Toast Notification Container */}
       {toast && (

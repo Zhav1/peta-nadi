@@ -14,6 +14,8 @@ export const metadata: Metadata = {
   },
 };
 
+import { AuthProvider } from '@/lib/authContext';
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="id" className="dark scroll-smooth">
@@ -22,7 +24,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="icon" href="/logo_prehub.png" type="image/png" />
       </head>
       <body className="bg-[#080d14] text-slate-100 min-h-screen w-full font-sans antialiased selection:bg-cyan-500 selection:text-slate-950">
-        {children}
+        <AuthProvider>
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );

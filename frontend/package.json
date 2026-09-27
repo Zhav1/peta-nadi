@@ -14,6 +14,7 @@
     "@deck.gl/layers": "^9.3.6",
     "@deck.gl/mapbox": "^9.3.6",
     "@mapbox/mapbox-gl-draw": "^1.5.1",
+    "@supabase/supabase-js": "^2.117.2",
     "@turf/along": "^7.3.5",
     "@turf/bearing": "^7.3.5",
     "@turf/length": "^7.3.5",
