@@ -452,3 +452,34 @@ export interface CorridorEfficiencyResponse {
   total_cost_saved_idr: number;
   avg_time_saved_hours: number;
 }
+
+// Authentication & Multi-Persona Workspace Types (Phase 42)
+export type UserRole = 'DISPATCHER' | 'REGULATOR' | 'GUEST';
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  role: UserRole;
+  org_name: string;
+  name: string;
+  permissions: string[];
+  is_offline_guest: boolean;
+  exp?: number;
+}
+
+export interface AuthTokenResponse {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+  user: UserProfile;
+}
+
+export interface RoleCatalogItem {
+  id: UserRole;
+  name: string;
+  title: string;
+  organization: string;
+  description: string;
+  primary_tabs: string[];
+  permissions: string[];
+}

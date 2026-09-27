@@ -2,7 +2,7 @@ import logging
 import asyncio
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.schemas.decision_schemas import (
     DecisionAction,
@@ -12,6 +12,7 @@ from app.schemas.decision_schemas import (
     DecisionTraceListResponse
 )
 from app.db import local_storage
+from app.auth.supabase_auth import UserSession, get_optional_user, ROLE_REGULATOR
 
 logger = logging.getLogger(__name__)
 
@@ -24,13 +25,28 @@ ApprovalListResponse = DecisionTraceListResponse
 
 
 @router.post("", response_model=Dict[str, Any], status_code=status.HTTP_201_CREATED)
-async def create_approval(payload: DecisionTraceCreate):
+async def create_approval(
+    payload: DecisionTraceCreate,
+    current_user: UserSession = Depends(get_optional_user),
+):
     """
     Log an operator decision trace in Supabase with local SQLite fallback.
     Supports multi-action decisions: ACCEPT, REJECT, and OVERRIDE with tactical maneuvers.
+    RBAC: Enforces DISPATCHER or GUEST authorization. Rejects REGULATOR role with 403.
     """
+    if current_user.role == ROLE_REGULATOR:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": "FORBIDDEN",
+                "message": "Akses ditolak: Hanya operator Dispatcher yang memiliki wewenang menyetujui pengalihan rute armada. Peran Anda saat ini adalah REGULATOR (Pengawas).",
+                "current_role": current_user.role,
+                "required_roles": ["DISPATCHER", "GUEST"]
+            }
+        )
+
     inc_id = payload.incident_id or payload.crisis_id or "INC-DEFAULT"
-    op_id = payload.operator_id or payload.approved_by or "anonymous"
+    op_id = payload.operator_id or payload.approved_by or current_user.name or "anonymous"
     
     db_payload = {
         "incident_id": inc_id,

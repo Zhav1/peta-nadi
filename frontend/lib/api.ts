@@ -1,9 +1,28 @@
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 
+let currentAuthToken: string | null = null;
+
+export function setAuthToken(token: string | null) {
+  currentAuthToken = token;
+}
+
+export function getAuthToken(): string | null {
+  return currentAuthToken;
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options?.headers as Record<string, string>),
+  };
+
+  if (currentAuthToken) {
+    headers['Authorization'] = `Bearer ${currentAuthToken}`;
+  }
+
   const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
     ...options,
+    headers,
   });
   if (!res.ok) throw new Error(`API ${path} → ${res.status}`);
   return res.json() as Promise<T>;
@@ -183,5 +202,23 @@ export const api = {
     },
     getCorridorEfficiency: () =>
       request<import('./types').CorridorEfficiencyResponse>('/api/v1/evaluation/corridor-efficiency'),
+  },
+  auth: {
+    me: () =>
+      request<import('./types').UserProfile>('/api/v1/auth/me'),
+    session: () =>
+      request<import('./types').UserProfile>('/api/v1/auth/session'),
+    createGuestSession: (payload: { role: string; org_name?: string; name?: string; email?: string }) =>
+      request<import('./types').AuthTokenResponse>('/api/v1/auth/guest-session', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+    switchRole: (role: string) =>
+      request<import('./types').AuthTokenResponse>('/api/v1/auth/switch-role', {
+        method: 'POST',
+        body: JSON.stringify({ role }),
+      }),
+    roles: () =>
+      request<import('./types').RoleCatalogItem[]>('/api/v1/auth/roles'),
   },
 };

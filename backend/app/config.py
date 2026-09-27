@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     supabase_url: str = ""
     supabase_anon_key: str = ""
     supabase_service_role_key: str = ""
+    supabase_jwt_secret: str = "prehub-dev-jwt-secret-key-32-chars-minimum-length-2026"
 
     # Redis
     redis_url: str = "redis://localhost:6379"
