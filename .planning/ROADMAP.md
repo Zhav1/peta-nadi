@@ -920,7 +920,10 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 ## Phase 43: Self-Serve Fleet Onboarding & Live GPS Ingestion Engine
 **Requirements Covered:** FR-16.1, FR-16.2, FR-16.3, FR-16.4, NFR-11.1, NFR-11.2, NFR-11.3
 **Goal:** Enable logistics dispatchers to onboard custom vehicle fleets and delivery manifests via single-vehicle input, drag-and-drop CSV/Excel parsing, or TMS GPS telematics webhooks.
-**Status:** PLANNED 📋
+**Status:** READY TO EXECUTE 📋
+**Plans:** 2 plans
+- [ ] 43-01-PLAN.md — Backend Fleet Ingestion Engine, Telemetry Webhook & SQLite Persistence
+- [ ] 43-02-PLAN.md — Frontend Fleet Onboarding Modal, CSV Parser, Webhook Simulator & WebGL Dynamic Sync
 **AI Spec Needed:** No
 
 ### Deliverables
