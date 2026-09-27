@@ -2,6 +2,8 @@ import asyncio
 import logging
 import random
 import json
+import re
+import httpx
 from datetime import datetime, timezone
 from typing import List, Dict, Any
 
