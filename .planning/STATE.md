@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: M3
 milestone_name: PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform
-current_phase: 43
-current_phase_name: Self-Serve Fleet Onboarding & Live GPS Ingestion Engine
-status: completed
-stopped_at: Phase 43 Execution Complete
-last_updated: "2026-09-28T02:00:00.000Z"
+current_phase: 44
+current_phase_name: Intermodal Terminal Dashboard, Spoilage Hedging & Compliance Inspector
+status: ready_to_plan
+stopped_at: Phase 44 Context Discussion Complete
+last_updated: "2026-09-28T08:46:00.000Z"
 last_activity: 2026-09-28
-last_activity_desc: Phase 43 executed (Single Registration + Bulk CSV Manifest Upload + TMS Webhook Ingestion + WebGL Sync, 108/108 pytest passed, 0-error Next.js build).
+last_activity_desc: Phase 44 Context established (4-tier perishability decay model, Continue/Reroute/Hold hedging solver, strict Surat Jalan/BKHIT/MST compliance, CrisisSidebar embedded UI).
 progress:
   total_phases: 46
   completed_phases: 44
@@ -21,16 +21,16 @@ progress:
 
 **Last Updated:** 2026-09-28
 **Active Milestone:** M3 - PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform [ACTIVE 🚀]
-**Current Phase:** Phase 43: Self-Serve Fleet Onboarding & Live GPS Ingestion Engine (COMPLETE ✅)
+**Current Phase:** Phase 44: Intermodal Terminal Dashboard, Spoilage Hedging & Compliance Inspector (READY TO PLAN 📋)
 
 ---
 
 ## Current Position
 
-Phase: Phase 43: Self-Serve Fleet Onboarding & Live GPS Ingestion Engine
-Status: **COMPLETE** ✅
-Last activity: 2026-09-28: Phase 43 completed with 108/108 passing tests and Next.js static compilation.
-Next action: Run `/gsd-plan-phase 44` to plan Phase 44 (Intermodal Terminal Dashboard, Spoilage Hedging & Compliance Inspector).
+Phase: Phase 44: Intermodal Terminal Dashboard, Spoilage Hedging & Compliance Inspector
+Status: **READY TO PLAN** 📋
+Last activity: 2026-09-28: Context and architectural decisions finalized in `44-CONTEXT.md`.
+Next action: Run `/gsd-plan-phase 44` to create detailed plan for Phase 44.
 
 ---
 
@@ -82,6 +82,7 @@ Next action: Run `/gsd-plan-phase 44` to plan Phase 44 (Intermodal Terminal Dash
 | 41 | UI/UX Minimalist Sanitization & Technical Report Finalization | **COMPLETE** ✅ | Zero emojis, 100% SVG Lucide icons, sanitized CPU claims, 88-test matrix & DOCX compiled (6.58 MB) |
 | 42 | Supabase Authentication & Multi-Role Workspace Management | **COMPLETE** ✅ | Multi-tenant Supabase Auth, RBAC (Dispatcher, Regulator, Guest), JWT middleware, role-adaptive top navigation. Git: `38153e7` |
 | 43 | Self-Serve Fleet Onboarding & Live GPS Ingestion Engine | **COMPLETE** ✅ | Single-vehicle input modal, drag-and-drop CSV manifest parser, TMS GPS webhook endpoint, WebGL asset binding |
+| 43.5 | Live API Audit, Endpoint Hardening & Ops Observability Console | **COMPLETE** ✅ | Live Render probe (28 endpoints), news verify route, native in-app diagnostics console & log terminal. Git: `ef5f2a2` |
 | 44 | Intermodal Terminal Dashboard, Spoilage Hedging & Compliance Inspector | **PLANNED** 📋 | Intermodal sea-land gate sync, operational food spoilage hedging calculator, digital Surat Jalan & BKHIT compliance |
 | 45 | Pilot Verification, Scenario Drills & Final End-to-End Packaging | **PLANNED** 📋 | Automated E2E test suite (100+ tests), hardened Docker Compose, official Pilot Onboarding Manual |
 
