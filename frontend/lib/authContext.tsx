@@ -144,7 +144,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             newRole === 'DISPATCHER'
               ? 'Budi Santoso (Lead Dispatcher)'
               : newRole === 'REGULATOR'
-              ? 'Dr. Hendra Wijaya (Analis Pangan)'
+              ? 'Dr. Hendra Wijaya (Analis Ketahanan Pangan)'
               : 'Evaluator Sandbox (Guest)',
           org_name:
             newRole === 'DISPATCHER'
