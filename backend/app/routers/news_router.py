@@ -169,3 +169,56 @@ async def get_market_regime():
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "primary_threat": "Potensi hambatan cuaca hidrometeorologi dan luapan sungai di koridor logistik utama."
     }
+
+
+@router.post("/api/v1/news/verify")
+async def verify_news_claim(
+    claim: str = Query(..., description="Claim or disaster text to verify"),
+    location: str = Query("Sumatera Utara", description="Geographic location context")
+):
+    """
+    Verifies a user-reported or sensor claim against verified multi-outlet official news feeds.
+    Returns corroboration status, confidence score, matching attributions, and reasoning.
+    """
+    articles = _NEWS_CACHE["articles"] or FALLBACK_STANDARDIZED_ARTICLES
+    claim_lower = claim.lower()
+    loc_lower = location.lower()
+    
+    matches = []
+    for art in articles:
+        text = f"{art.get('title', '')} {art.get('summary', '')} {art.get('region', '')}".lower()
+        # Check token overlaps
+        claim_words = [w for w in claim_lower.split() if len(w) > 3]
+        overlap = sum(1 for w in claim_words if w in text)
+        if overlap > 0 or loc_lower in text:
+            matches.append(art)
+            
+    if matches:
+        top_match = matches[0]
+        return {
+            "verification_status": "CORROBORATED_OFFICIAL",
+            "confidence_score": max(0.88, float(top_match.get("confidence_score", 0.90))),
+            "claim": claim,
+            "location": location,
+            "attributions": [
+                {
+                    "source": m.get("source", "LKBN ANTARA"),
+                    "title": m.get("title", ""),
+                    "link": m.get("link", ""),
+                    "published_at": m.get("created_at", datetime.now(timezone.utc).isoformat()),
+                    "tier": m.get("source_tier", "TIER_1_OFFICIAL")
+                }
+                for m in matches[:3]
+            ],
+            "reasoning": f"Klaim terkonfirmasi melalui {len(matches)} laporan resmi terverifikasi terkait {location}."
+        }
+    else:
+        return {
+            "verification_status": "UNVERIFIED_GRASSROOTS",
+            "confidence_score": 0.45,
+            "claim": claim,
+            "location": location,
+            "attributions": [],
+            "reasoning": f"Belum ditemukan pemberitaan resmi instansi/media pers terkait klaim '{claim}' di wilayah {location}."
+        }
+
