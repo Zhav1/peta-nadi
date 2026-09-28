@@ -34,7 +34,7 @@ async def create_approval(
     Supports multi-action decisions: ACCEPT, REJECT, and OVERRIDE with tactical maneuvers.
     RBAC: Enforces DISPATCHER or GUEST authorization. Rejects REGULATOR role with 403.
     """
-    if current_user.role == ROLE_REGULATOR:
+    if current_user.role.upper() == ROLE_REGULATOR:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
