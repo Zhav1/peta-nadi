@@ -41,6 +41,11 @@
 - **Architecture Win**: Instead of recreating React DOM markers on every GPS ping (which degrades FPS when tracking dozens of units), fleet vehicles are rendered natively into Mapbox GL WebGL layers (`fleet-vehicles-layer` and `fleet-labels-layer`).
 - **Telemetry Fusion**: `TelemetryService.get_unified_fleet()` merges SQLite custom onboarded vehicles with the baseline 45-unit multi-modal fleet, updating position, heading azimuth via forward geodesic calculation (`calculate_bearing`), and cold-chain status evaluation (`NORMAL` vs `WARNING_EXCURSION` at 4.0°C threshold).
 
+### 6. Production Container Dependencies for FastAPI Form/File Endpoints
+- **Problem**: FastAPI endpoints using `UploadFile = File(...)` or `Form(...)` (such as `/api/fleet/upload-manifest/file`) strictly require `python-multipart`. While often auto-installed or present in local development environments, if omitted from `backend/requirements.txt`, containerized deployment targets (e.g. Render, Docker) crash on startup with `RuntimeError: Form data requires "python-multipart" to be installed.` during route registration.
+- **Fix Applied**: Added `python-multipart>=0.0.9` explicitly to `backend/requirements.txt`.
+- **Prevention Rule**: Whenever introducing `File()` or `Form()` parameters in FastAPI routers, immediately verify that `python-multipart` is pinned in the root/backend `requirements.txt`.
+
 ---
 
 ## Verification Evidence
