@@ -32,6 +32,7 @@ import type {
 import ReliabilityDiagram from './ReliabilityDiagram';
 import TestMatrixTable from './TestMatrixTable';
 import RouteEfficiencyCard from './RouteEfficiencyCard';
+import SystemObservabilitySection from './SystemObservabilitySection';
 
 interface EvaluationSectionProps {
   corridorContext?: CorridorContext | null;
@@ -87,6 +88,7 @@ export default function EvaluationSection({
   selectedCrisis,
   activeRoutes
 }: EvaluationSectionProps) {
+  const [activeSubTab, setActiveSubTab] = useState<'benchmarks' | 'observability'>('benchmarks');
   const [report, setReport] = useState<BenchmarkReportResponse | null>(null);
   const [testMatrix, setTestMatrix] = useState<TestMatrixResponse | null>(null);
   const [efficiency, setEfficiency] = useState<CorridorEfficiencyResponse | null>(null);
@@ -137,45 +139,71 @@ export default function EvaluationSection({
 
   return (
     <div className="flex flex-col space-y-5 max-w-7xl mx-auto pb-12">
-      {/* Top Banner Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[#13161c]/90 backdrop-blur-md border border-white/10 rounded-2xl p-5 shadow-2xl">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
-            <Award className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-lg md:text-xl font-bold text-white tracking-wide font-sans">
-                Evaluasi Empiris & Tolok Ukur Validasi
-              </h1>
-              <span className="px-2.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 text-[11px] font-mono font-semibold">
-                Milestone M2
-              </span>
-            </div>
-            <p className="text-xs text-slate-400 font-mono mt-0.5">
-              Bukti empiris keandalan model kecerdasan logistik PreHub berdasarkan dataset ground truth Sumatra (N=60), pengujian otomatis, dan kalibrasi probabilitas.
-            </p>
-          </div>
-        </div>
-
-        {/* Action Controls */}
-        <div className="flex items-center gap-3 self-end md:self-center font-mono text-xs">
-          {lastRefreshed && (
-            <span className="text-[11px] text-slate-400">
-              Sinkronisasi: <strong className="text-slate-200">{lastRefreshed}</strong>
-            </span>
-          )}
+      {/* Sub-Tab Navigation Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-1.5 rounded-2xl bg-[#13161c]/90 backdrop-blur-md border border-white/10 shadow-lg">
+        <div className="flex items-center gap-1.5 font-mono text-xs">
           <button
             type="button"
-            onClick={loadAllEvaluationData}
-            disabled={isLoading}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 border border-cyan-500/30 transition disabled:opacity-50 cursor-pointer font-semibold"
+            onClick={() => setActiveSubTab('benchmarks')}
+            className={`cursor-pointer px-4 py-2 rounded-xl transition font-bold ${activeSubTab === 'benchmarks' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30' : 'text-slate-400 hover:text-white'}`}
           >
-            <RotateCcw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-            <span>Muat Ulang Evaluasi</span>
+            Tolok Ukur Model (83 Tests)
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('observability')}
+            className={`cursor-pointer px-4 py-2 rounded-xl transition font-bold ${activeSubTab === 'observability' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30' : 'text-slate-400 hover:text-white'}`}
+          >
+            Diagnostik API & Observabilitas
           </button>
         </div>
+
+        {activeSubTab === 'benchmarks' && (
+          <div className="flex items-center gap-3 pr-2 font-mono text-xs">
+            {lastRefreshed && (
+              <span className="text-[11px] text-slate-400 hidden md:inline">
+                Sinkronisasi: <strong className="text-slate-200">{lastRefreshed}</strong>
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={loadAllEvaluationData}
+              disabled={isLoading}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 border border-cyan-500/30 transition disabled:opacity-50 cursor-pointer font-semibold text-xs"
+            >
+              <RotateCcw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+              <span>Muat Ulang</span>
+            </button>
+          </div>
+        )}
       </div>
+
+      {activeSubTab === 'observability' ? (
+        <SystemObservabilitySection />
+      ) : (
+        <>
+          {/* Top Banner Header */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[#13161c]/90 backdrop-blur-md border border-white/10 rounded-2xl p-5 shadow-2xl">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+                <Award className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-lg md:text-xl font-bold text-white tracking-wide font-sans">
+                    Evaluasi Empiris & Tolok Ukur Validasi
+                  </h1>
+                  <span className="px-2.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 text-[11px] font-mono font-semibold">
+                    Milestone M2
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 font-mono mt-0.5">
+                  Bukti empiris keandalan model kecerdasan logistik PreHub berdasarkan dataset ground truth Sumatra (N=60), pengujian otomatis, dan kalibrasi probabilitas.
+                </p>
+              </div>
+            </div>
+          </div>
+
 
       {/* 5 Empirical Benchmark Scorecards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
@@ -398,6 +426,8 @@ export default function EvaluationSection({
           </table>
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }
