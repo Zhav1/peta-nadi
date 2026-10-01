@@ -1,0 +1,1613 @@
+{
+  "metadata": {
+    "network_name": "Sumatra Arterial & Expressway Logistics Graph",
+    "version": "2.0.0",
+    "nodes_count": 56,
+    "edges_count": 144,
+    "generated_at": "2026-09-23"
+  },
+  "nodes": [
+    {
+      "id": "belawan_port",
+      "name": "Pelabuhan Belawan",
+      "province": "Sumatera Utara",
+      "lat": 3.7922,
+      "lon": 98.6776,
+      "type": "port"
+    },
+    {
+      "id": "medan_kim",
+      "name": "Kawasan Industri Medan (KIM)",
+      "province": "Sumatera Utara",
+      "lat": 3.67,
+      "lon": 98.68,
+      "type": "hub"
+    },
+    {
+      "id": "medan_amplas",
+      "name": "Simpang Amplas Medan",
+      "province": "Sumatera Utara",
+      "lat": 3.535,
+      "lon": 98.712,
+      "type": "interchange"
+    },
+    {
+      "id": "kualanamu_airport",
+      "name": "Bandara Kualanamu Cargo Hub",
+      "province": "Sumatera Utara",
+      "lat": 3.6421,
+      "lon": 98.878,
+      "type": "airport"
+    },
+    {
+      "id": "binjai_hub",
+      "name": "Terminal Kargo Binjai",
+      "province": "Sumatera Utara",
+      "lat": 3.6,
+      "lon": 98.485,
+      "type": "hub"
+    },
+    {
+      "id": "tebing_tinggi_toll",
+      "name": "Gerbang Tol Tebing Tinggi",
+      "province": "Sumatera Utara",
+      "lat": 3.3285,
+      "lon": 99.1625,
+      "type": "interchange"
+    },
+    {
+      "id": "kuala_tanjung_port",
+      "name": "Pelabuhan Kuala Tanjung",
+      "province": "Sumatera Utara",
+      "lat": 3.36,
+      "lon": 99.45,
+      "type": "port"
+    },
+    {
+      "id": "pematangsiantar_hub",
+      "name": "Hub Logistik Pematangsiantar",
+      "province": "Sumatera Utara",
+      "lat": 2.96,
+      "lon": 99.06,
+      "type": "city"
+    },
+    {
+      "id": "kisaran_junction",
+      "name": "Simpang Empat Kisaran",
+      "province": "Sumatera Utara",
+      "lat": 2.98,
+      "lon": 99.62,
+      "type": "interchange"
+    },
+    {
+      "id": "rantauprapat_hub",
+      "name": "Depot Logistik Rantauprapat",
+      "province": "Sumatera Utara",
+      "lat": 2.095,
+      "lon": 99.83,
+      "type": "hub"
+    },
+    {
+      "id": "tarutung_pass",
+      "name": "Celah Bukit Barisan Tarutung",
+      "province": "Sumatera Utara",
+      "lat": 2.025,
+      "lon": 98.9667,
+      "type": "mountain_pass"
+    },
+    {
+      "id": "sibolga_port",
+      "name": "Pelabuhan Laut Sibolga",
+      "province": "Sumatera Utara",
+      "lat": 1.74,
+      "lon": 98.78,
+      "type": "port"
+    },
+    {
+      "id": "padang_sidempuan_hub",
+      "name": "Hub Padang Sidempuan",
+      "province": "Sumatera Utara",
+      "lat": 1.3733,
+      "lon": 99.2733,
+      "type": "city"
+    },
+    {
+      "id": "banda_aceh_hub",
+      "name": "Pusat Distribusi Banda Aceh",
+      "province": "Aceh",
+      "lat": 5.5483,
+      "lon": 95.3238,
+      "type": "city"
+    },
+    {
+      "id": "malahayati_port",
+      "name": "Pelabuhan Malahayati",
+      "province": "Aceh",
+      "lat": 5.5897,
+      "lon": 95.5186,
+      "type": "port"
+    },
+    {
+      "id": "sigli_hub",
+      "name": "Simpang Jalinsum Sigli",
+      "province": "Aceh",
+      "lat": 5.385,
+      "lon": 95.96,
+      "type": "interchange"
+    },
+    {
+      "id": "lhokseumawe_port",
+      "name": "Pelabuhan Krueng Geukueh",
+      "province": "Aceh",
+      "lat": 5.18,
+      "lon": 97.14,
+      "type": "port"
+    },
+    {
+      "id": "langsa_hub",
+      "name": "Terminal Logistik Langsa",
+      "province": "Aceh",
+      "lat": 4.47,
+      "lon": 97.965,
+      "type": "hub"
+    },
+    {
+      "id": "kuala_simpang_hub",
+      "name": "Gerbang Perbatasan Kuala Simpang",
+      "province": "Aceh",
+      "lat": 4.28,
+      "lon": 98.05,
+      "type": "interchange"
+    },
+    {
+      "id": "duri_junction",
+      "name": "Simpang Duri Koridor Riau",
+      "province": "Riau",
+      "lat": 1.27,
+      "lon": 101.215,
+      "type": "interchange"
+    },
+    {
+      "id": "dumai_port",
+      "name": "Pelabuhan Dumai Terminal CPO",
+      "province": "Riau",
+      "lat": 1.6811,
+      "lon": 101.4533,
+      "type": "port"
+    },
+    {
+      "id": "kandis_toll",
+      "name": "Gerbang Tol Kandis",
+      "province": "Riau",
+      "lat": 0.95,
+      "lon": 101.25,
+      "type": "interchange"
+    },
+    {
+      "id": "pekanbaru_hub",
+      "name": "Sentra Pergudangan Pekanbaru",
+      "province": "Riau",
+      "lat": 0.5333,
+      "lon": 101.45,
+      "type": "city"
+    },
+    {
+      "id": "bangkinang_junction",
+      "name": "Simpang Tol Bangkinang",
+      "province": "Riau",
+      "lat": 0.3367,
+      "lon": 101.0267,
+      "type": "interchange"
+    },
+    {
+      "id": "rengat_hub",
+      "name": "Hub Logistik Indragiri Rengat",
+      "province": "Riau",
+      "lat": -0.37,
+      "lon": 102.55,
+      "type": "hub"
+    },
+    {
+      "id": "pangkalan_junction",
+      "name": "Simpang Batas Riau-Sumbar Pangkalan",
+      "province": "Sumatera Barat",
+      "lat": 0.08,
+      "lon": 100.67,
+      "type": "interchange"
+    },
+    {
+      "id": "payakumbuh_junction",
+      "name": "Hub Agribisnis Payakumbuh",
+      "province": "Sumatera Barat",
+      "lat": -0.22,
+      "lon": 100.63,
+      "type": "hub"
+    },
+    {
+      "id": "bukittinggi_hub",
+      "name": "Simpang Jam Gadang Bukittinggi",
+      "province": "Sumatera Barat",
+      "lat": -0.3056,
+      "lon": 100.3692,
+      "type": "city"
+    },
+    {
+      "id": "padang_panjang_hub",
+      "name": "Perlintasan Padang Panjang",
+      "province": "Sumatera Barat",
+      "lat": -0.465,
+      "lon": 100.4,
+      "type": "interchange"
+    },
+    {
+      "id": "sitinjau_lauik",
+      "name": "Celah Kritis Sitinjau Lauik",
+      "province": "Sumatera Barat",
+      "lat": -0.945,
+      "lon": 100.485,
+      "type": "mountain_pass"
+    },
+    {
+      "id": "padang_teluk_bayur",
+      "name": "Pelabuhan Teluk Bayur",
+      "province": "Sumatera Barat",
+      "lat": -0.998,
+      "lon": 100.37,
+      "type": "port"
+    },
+    {
+      "id": "solok_hub",
+      "name": "Sentra Beras Solok",
+      "province": "Sumatera Barat",
+      "lat": -0.7989,
+      "lon": 100.6539,
+      "type": "hub"
+    },
+    {
+      "id": "dharmasraya_hub",
+      "name": "Koridor Lintas Tengah Dharmasraya",
+      "province": "Sumatera Barat",
+      "lat": -1.05,
+      "lon": 101.6,
+      "type": "interchange"
+    },
+    {
+      "id": "muara_bungo_hub",
+      "name": "Simpang Lintas Muara Bungo",
+      "province": "Jambi",
+      "lat": -1.495,
+      "lon": 102.125,
+      "type": "city"
+    },
+    {
+      "id": "bangko_hub",
+      "name": "Terminal Agribisnis Bangko",
+      "province": "Jambi",
+      "lat": -2.065,
+      "lon": 102.265,
+      "type": "hub"
+    },
+    {
+      "id": "jambi_city_hub",
+      "name": "Hub Pelabuhan Talang Duku Jambi",
+      "province": "Jambi",
+      "lat": -1.61,
+      "lon": 103.615,
+      "type": "city"
+    },
+    {
+      "id": "muara_bulian_hub",
+      "name": "Simpang Tiga Muara Bulian",
+      "province": "Jambi",
+      "lat": -1.725,
+      "lon": 103.28,
+      "type": "interchange"
+    },
+    {
+      "id": "kuala_tungkal_port",
+      "name": "Pelabuhan Kuala Tungkal",
+      "province": "Jambi",
+      "lat": -0.8167,
+      "lon": 103.4667,
+      "type": "port"
+    },
+    {
+      "id": "lubuklinggau_hub",
+      "name": "Hub Simpang Tiga Lubuklinggau",
+      "province": "Sumatera Selatan",
+      "lat": -3.295,
+      "lon": 102.86,
+      "type": "city"
+    },
+    {
+      "id": "lahat_hub",
+      "name": "Sentra Komoditas Lahat",
+      "province": "Sumatera Selatan",
+      "lat": -3.79,
+      "lon": 103.54,
+      "type": "hub"
+    },
+    {
+      "id": "muara_enim_hub",
+      "name": "Terminal Kargo Muara Enim",
+      "province": "Sumatera Selatan",
+      "lat": -3.65,
+      "lon": 103.78,
+      "type": "hub"
+    },
+    {
+      "id": "prabumulih_junction",
+      "name": "Simpang Tol Prabumulih",
+      "province": "Sumatera Selatan",
+      "lat": -3.43,
+      "lon": 104.23,
+      "type": "interchange"
+    },
+    {
+      "id": "palembang_boom_baru",
+      "name": "Pelabuhan Boom Baru Palembang",
+      "province": "Sumatera Selatan",
+      "lat": -2.975,
+      "lon": 104.7833,
+      "type": "port"
+    },
+    {
+      "id": "betung_junction",
+      "name": "Simpang Jalintim Betung",
+      "province": "Sumatera Selatan",
+      "lat": -2.6,
+      "lon": 104.18,
+      "type": "interchange"
+    },
+    {
+      "id": "kayu_agung_toll",
+      "name": "Gerbang Tol Kayu Agung",
+      "province": "Sumatera Selatan",
+      "lat": -3.39,
+      "lon": 104.845,
+      "type": "interchange"
+    },
+    {
+      "id": "baturaja_hub",
+      "name": "Depot Distribusi Baturaja",
+      "province": "Sumatera Selatan",
+      "lat": -4.13,
+      "lon": 104.17,
+      "type": "city"
+    },
+    {
+      "id": "mukomuko_hub",
+      "name": "Koridor Jalinbar Mukomuko",
+      "province": "Bengkulu",
+      "lat": -2.58,
+      "lon": 101.12,
+      "type": "interchange"
+    },
+    {
+      "id": "curup_pass",
+      "name": "Celah Bukit Daun Curup",
+      "province": "Bengkulu",
+      "lat": -3.47,
+      "lon": 102.525,
+      "type": "mountain_pass"
+    },
+    {
+      "id": "bengkulu_pulau_baai",
+      "name": "Pelabuhan Samudera Pulau Baai",
+      "province": "Bengkulu",
+      "lat": -3.89,
+      "lon": 102.29,
+      "type": "port"
+    },
+    {
+      "id": "manna_hub",
+      "name": "Terminal Agribisnis Manna",
+      "province": "Bengkulu",
+      "lat": -4.475,
+      "lon": 102.905,
+      "type": "hub"
+    },
+    {
+      "id": "liwa_pass",
+      "name": "Perlintasan Bukit Barisan Liwa",
+      "province": "Lampung",
+      "lat": -5.035,
+      "lon": 104.075,
+      "type": "mountain_pass"
+    },
+    {
+      "id": "kotabumi_hub",
+      "name": "Simpang Jalinteng Kotabumi",
+      "province": "Lampung",
+      "lat": -4.825,
+      "lon": 104.88,
+      "type": "hub"
+    },
+    {
+      "id": "terbanggi_besar_toll",
+      "name": "Interchange Tol Terbanggi Besar",
+      "province": "Lampung",
+      "lat": -4.865,
+      "lon": 105.215,
+      "type": "interchange"
+    },
+    {
+      "id": "bandar_lampung_hub",
+      "name": "Pusat Pergudangan Bandar Lampung",
+      "province": "Lampung",
+      "lat": -5.425,
+      "lon": 105.265,
+      "type": "city"
+    },
+    {
+      "id": "panjang_port",
+      "name": "Pelabuhan Peti Kemas Panjang",
+      "province": "Lampung",
+      "lat": -5.4667,
+      "lon": 105.3167,
+      "type": "port"
+    },
+    {
+      "id": "bakauheni_port",
+      "name": "Pelabuhan Bakauheni Gerbang Logistik",
+      "province": "Lampung",
+      "lat": -5.8711,
+      "lon": 105.7533,
+      "type": "port"
+    }
+  ],
+  "edges": [
+    {
+      "from_node": "banda_aceh_hub",
+      "to_node": "malahayati_port",
+      "distance_km": 28.0,
+      "base_speed_kmh": 60.0,
+      "corridor_name": "Jl. Malahayati",
+      "is_toll": false
+    },
+    {
+      "from_node": "malahayati_port",
+      "to_node": "banda_aceh_hub",
+      "distance_km": 28.0,
+      "base_speed_kmh": 60.0,
+      "corridor_name": "Jl. Malahayati",
+      "is_toll": false
+    },
+    {
+      "from_node": "banda_aceh_hub",
+      "to_node": "sigli_hub",
+      "distance_km": 98.0,
+      "base_speed_kmh": 75.0,
+      "corridor_name": "Tol Sigli-Banda Aceh (Sibanceh)",
+      "is_toll": true
+    },
+    {
+      "from_node": "sigli_hub",
+      "to_node": "banda_aceh_hub",
+      "distance_km": 98.0,
+      "base_speed_kmh": 75.0,
+      "corridor_name": "Tol Sigli-Banda Aceh (Sibanceh)",
+      "is_toll": true
+    },
+    {
+      "from_node": "sigli_hub",
+      "to_node": "lhokseumawe_port",
+      "distance_km": 135.0,
+      "base_speed_kmh": 50.0,
+      "corridor_name": "Jalinsum Aceh Timur",
+      "is_toll": false
+    },
+    {
+      "from_node": "lhokseumawe_port",
+      "to_node": "sigli_hub",
+      "distance_km": 135.0,
+      "base_speed_kmh": 50.0,
+      "corridor_name": "Jalinsum Aceh Timur",
+      "is_toll": false
+    },
+    {
+      "from_node": "lhokseumawe_port",
+      "to_node": "langsa_hub",
+      "distance_km": 130.0,
+      "base_speed_kmh": 50.0,
+      "corridor_name": "Jalinsum Langsa",
+      "is_toll": false
+    },
+    {
+      "from_node": "langsa_hub",
+      "to_node": "lhokseumawe_port",
+      "distance_km": 130.0,
+      "base_speed_kmh": 50.0,
+      "corridor_name": "Jalinsum Langsa",
+      "is_toll": false
+    },
+    {
+      "from_node": "langsa_hub",
+      "to_node": "kuala_simpang_hub",
+      "distance_km": 35.0,
+      "base_speed_kmh": 50.0,
+      "corridor_name": "Jalinsum Aceh Tamiang",
+      "is_toll": false
+    },
+    {
+      "from_node": "kuala_simpang_hub",
+      "to_node": "langsa_hub",
+      "distance_km": 35.0,
+      "base_speed_kmh": 50.0,
+      "corridor_name": "Jalinsum Aceh Tamiang",
+      "is_toll": false
+    },
+    {
+      "from_node": "kuala_simpang_hub",
+      "to_node": "binjai_hub",
+      "distance_km": 75.0,
+      "base_speed_kmh": 50.0,
+      "corridor_name": "Jalinsum Sumut-Aceh",
+      "is_toll": false
+    },
+    {
+      "from_node": "binjai_hub",
+      "to_node": "kuala_simpang_hub",
+      "distance_km": 75.0,
+      "base_speed_kmh": 50.0,
+      "corridor_name": "Jalinsum Sumut-Aceh",
+      "is_toll": false
+    },
+    {
+      "from_node": "belawan_port",
+      "to_node": "medan_kim",
+      "distance_km": 12.0,
+      "base_speed_kmh": 70.0,
+      "corridor_name": "Tol Belmera (Belawan-KIM)",
+      "is_toll": true
+    },
+    {
+      "from_node": "medan_kim",
+      "to_node": "belawan_port",
+      "distance_km": 12.0,
+      "base_speed_kmh": 70.0,
+      "corridor_name": "Tol Belmera (Belawan-KIM)",
+      "is_toll": true
+    },
+    {
+      "from_node": "medan_kim",
+      "to_node": "medan_amplas",
+      "distance_km": 18.0,
+      "base_speed_kmh": 75.0,
+      "corridor_name": "Tol Belmera (KIM-Amplas)",
+      "is_toll": true
+    },
+    {
+      "from_node": "medan_amplas",
+      "to_node": "medan_kim",
+      "distance_km": 18.0,
+      "base_speed_kmh": 75.0,
+      "corridor_name": "Tol Belmera (KIM-Amplas)",
+      "is_toll": true
+    },
+    {
+      "from_node": "medan_amplas",
+      "to_node": "kualanamu_airport",
+      "distance_km": 22.0,
+      "base_speed_kmh": 80.0,
+      "corridor_name": "Tol Medan-Kualanamu (JMKT)",
+      "is_toll": true
+    },
+    {
+      "from_node": "kualanamu_airport",
+      "to_node": "medan_amplas",
+      "distance_km": 22.0,
+      "base_speed_kmh": 80.0,
+      "corridor_name": "Tol Medan-Kualanamu (JMKT)",
+      "is_toll": true
+    },
+    {
+      "from_node": "kualanamu_airport",
+      "to_node": "tebing_tinggi_toll",
+      "distance_km": 42.0,
+      "base_speed_kmh": 85.0,
+      "corridor_name": "Tol MKTT (Kualanamu-Tebing Tinggi)",
+      "is_toll": true
+    },
+    {
+      "from_node": "tebing_tinggi_toll",
+      "to_node": "kualanamu_airport",
+      "distance_km": 42.0,
+      "base_speed_kmh": 85.0,
+      "corridor_name": "Tol MKTT (Kualanamu-Tebing Tinggi)",
+      "is_toll": true
+    },
+    {
+      "from_node": "medan_amplas",
+      "to_node": "tebing_tinggi_toll",
+      "distance_km": 64.0,
+      "base_speed_kmh": 80.0,
+      "corridor_name": "Tol MKTT Arterial",
+      "is_toll": true
+    },
+    {
+      "from_node": "tebing_tinggi_toll",
+      "to_node": "medan_amplas",
+      "distance_km": 64.0,
+      "base_speed_kmh": 80.0,
+      "corridor_name": "Tol MKTT Arterial",
+      "is_toll": true
+    },
+    {
+      "from_node": "belawan_port",
+      "to_node": "binjai_hub",
+      "distance_km": 26.0,
+      "base_speed_kmh": 55.0,
+      "corridor_name": "Ringroad Luar Medan-Binjai",
+      "is_toll": false
+    },
+    {
+      "from_node": "binjai_hub",
+      "to_node": "belawan_port",
+      "distance_km": 26.0,
+      "base_speed_kmh": 55.0,
+      "corridor_name": "Ringroad Luar Medan-Binjai",
+      "is_toll": false
+    },
+    {
+      "from_node": "medan_kim",
+      "to_node": "binjai_hub",
+      "distance_km": 22.0,
+      "base_speed_kmh": 55.0,
+      "corridor_name": "Tol Medan-Binjai Connector",
+      "is_toll": true
+    },
+    {
+      "from_node": "binjai_hub",
+      "to_node": "medan_kim",
+      "distance_km": 22.0,
+      "base_speed_kmh": 55.0,
+      "corridor_name": "Tol Medan-Binjai Connector",
+      "is_toll": true
+    },
+    {
+      "from_node": "binjai_hub",
+      "to_node": "tebing_tinggi_toll",
+      "distance_km": 78.0,
+      "base_speed_kmh": 50.0,
+      "corridor_name": "Jalinsum Outer Bypass Tebing Tinggi",
+      "is_toll": false
+    },
+    {
+      "from_node": "tebing_tinggi_toll",
+      "to_node": "binjai_hub",
+      "distance_km": 78.0,
+      "base_speed_kmh": 50.0,
+      "corridor_name": "Jalinsum Outer Bypass Tebing Tinggi",
+      "is_toll": false
+    },
+    {
+      "from_node": "binjai_hub",
+      "to_node": "pematangsiantar_hub",
+      "distance_km": 92.0,
+      "base_speed_kmh": 48.0,
+      "corridor_name": "Jalinteng Binjai-Siantar",
+      "is_toll": false
+    },
+    {
+      "from_node": "pematangsiantar_hub",
+      "to_node": "binjai_hub",
+      "distance_km": 92.0,
+      "base_speed_kmh": 48.0,
+      "corridor_name": "Jalinteng Binjai-Siantar",
+      "is_toll": false
+    },
+    {
+      "from_node": "tebing_tinggi_toll",
+      "to_node": "kuala_tanjung_port",
+      "distance_km": 38.0,
+      "base_speed_kmh": 75.0,
+      "corridor_name": "Tol Tebing Tinggi-Indrapura-Kuala Tanjung",
+      "is_toll": true
+    },
+    {
+      "from_node": "kuala_tanjung_port",
+      "to_node": "tebing_tinggi_toll",
+      "distance_km": 38.0,
+      "base_speed_kmh": 75.0,
+      "corridor_name": "Tol Tebing Tinggi-Indrapura-Kuala Tanjung",
+      "is_toll": true
+    },
+    {
+      "from_node": "tebing_tinggi_toll",
+      "to_node": "pematangsiantar_hub",
+      "distance_km": 45.0,
+      "base_speed_kmh": 70.0,
+      "corridor_name": "Tol Tebing Tinggi-Sinaksak (Siantar)",
+      "is_toll": true
+    },
+    {
+      "from_node": "pematangsiantar_hub",
+      "to_node": "tebing_tinggi_toll",
+      "distance_km": 45.0,
+      "base_speed_kmh": 70.0,
+      "corridor_name": "Tol Tebing Tinggi-Sinaksak (Siantar)",
+      "is_toll": true
+    },
+    {
+      "from_node": "tebing_tinggi_toll",
+      "to_node": "kisaran_junction",
+      "distance_km": 55.0,
+      "base_speed_kmh": 80.0,
+      "corridor_name": "Tol Indrapura-Kisaran",
+      "is_toll": true
+    },
+    {
+      "from_node": "kisaran_junction",
+      "to_node": "tebing_tinggi_toll",
+      "distance_km": 55.0,
+      "base_speed_kmh": 80.0,
+      "corridor_name": "Tol Indrapura-Kisaran",
+      "is_toll": true
+    },
+    {
+      "from_node": "pematangsiantar_hub",
+      "to_node": "kisaran_junction",
+      "distance_km": 60.0,
+      "base_speed_kmh": 45.0,
+      "corridor_name": "Arteri Perkebunan Siantar-Asahan",
+      "is_toll": false
+    },
+    {
+      "from_node": "kisaran_junction",
+      "to_node": "pematangsiantar_hub",
+      "distance_km": 60.0,
+      "base_speed_kmh": 45.0,
+      "corridor_name": "Arteri Perkebunan Siantar-Asahan",
+      "is_toll": false
+    },
+    {
+      "from_node": "kisaran_junction",
+      "to_node": "rantauprapat_hub",
+      "distance_km": 105.0,
+      "base_speed_kmh": 50.0,
+      "corridor_name": "Jalintim Labuhanbatu",
+      "is_toll": false
+    },
+    {
+      "from_node": "rantauprapat_hub",
+      "to_node": "kisaran_junction",
+      "distance_km": 105.0,
+      "base_speed_kmh": 50.0,
+      "corridor_name": "Jalintim Labuhanbatu",
+      "is_toll": false
+    },
+    {
+      "from_node": "pematangsiantar_hub",
+      "to_node": "tarutung_pass",
+      "distance_km": 115.0,
+      "base_speed_kmh": 40.0,
+      "corridor_name": "Jalinteng Danau Toba-Tarutung",
+      "is_toll": false
+    },
+    {
+      "from_node": "tarutung_pass",
+      "to_node": "pematangsiantar_hub",
+      "distance_km": 115.0,
+      "base_speed_kmh": 40.0,
+      "corridor_name": "Jalinteng Danau Toba-Tarutung",
+      "is_toll": false
+    },
+    {
+      "from_node": "tarutung_pass",
+      "to_node": "sibolga_port",
+      "distance_km": 62.0,
+      "base_speed_kmh": 35.0,
+      "corridor_name": "Kelok Tarutung-Sibolga",
+      "is_toll": false
+    },
+    {
+      "from_node": "sibolga_port",
+      "to_node": "tarutung_pass",
+      "distance_km": 62.0,
+      "base_speed_kmh": 35.0,
+      "corridor_name": "Kelok Tarutung-Sibolga",
+      "is_toll": false
+    },
+    {
+      "from_node": "tarutung_pass",
+      "to_node": "padang_sidempuan_hub",
+      "distance_km": 85.0,
+      "base_speed_kmh": 45.0,
+      "corridor_name": "Jalinteng Tapanuli",
+      "is_toll": false
+    },
+    {
+      "from_node": "padang_sidempuan_hub",
+      "to_node": "tarutung_pass",
+      "distance_km": 85.0,
+      "base_speed_kmh": 45.0,
+      "corridor_name": "Jalinteng Tapanuli",
+      "is_toll": false
+    },
+    {
+      "from_node": "sibolga_port",
+      "to_node": "padang_sidempuan_hub",
+      "distance_km": 82.0,
+      "base_speed_kmh": 45.0,
+      "corridor_name": "Jalinbar Pantai Barat Sibolga",
+      "is_toll": false
+    },
+    {
+      "from_node": "padang_sidempuan_hub",
+      "to_node": "sibolga_port",
+      "distance_km": 82.0,
+      "base_speed_kmh": 45.0,
+      "corridor_name": "Jalinbar Pantai Barat Sibolga",
+      "is_toll": false
+    },
+    {
+      "from_node": "rantauprapat_hub",
+      "to_node": "duri_junction",
+      "distance_km": 138.0,
+      "base_speed_kmh": 50.0,
+      "corridor_name": "Jalintim Sumut-Riau",
+      "is_toll": false
+    },
+    {
+      "from_node": "duri_junction",
+      "to_node": "rantauprapat_hub",
+      "distance_km": 138.0,
+      "base_speed_kmh": 50.0,
+      "corridor_name": "Jalintim Sumut-Riau",
+      "is_toll": false
+    },
+    {
+      "from_node": "padang_sidempuan_hub",
+      "to_node": "duri_junction",
+      "distance_km": 185.0,
+      "base_speed_kmh": 45.0,
+      "corridor_name": "Lanjutan Jalinteng Tapanuli-Riau",
+      "is_toll": false
+    },
+    {
+      "from_node": "duri_junction",
+      "to_node": "padang_sidempuan_hub",
+      "distance_km": 185.0,
+      "base_speed_kmh": 45.0,
+      "corridor_name": "Lanjutan Jalinteng Tapanuli-Riau",
+      "is_toll": false
+    },
+    {
+      "from_node": "duri_junction",
+      "to_node": "dumai_port",
+      "distance_km": 65.0,
+      "base_speed_kmh": 80.0,
+      "corridor_name": "Tol Permai Seksi Duri-Dumai",
+      "is_toll": true
+    },
+    {
+      "from_node": "dumai_port",
+      "to_node": "duri_junction",
+      "distance_km": 65.0,
+      "base_speed_kmh": 80.0,
+      "corridor_name": "Tol Permai Seksi Duri-Dumai",
+      "is_toll": true
+    },
+    {
+      "from_node": "duri_junction",
+      "to_node": "kandis_toll",
+      "distance_km": 58.0,
+      "base_speed_kmh": 85.0,
+      "corridor_name": "Tol Permai Seksi Kandis-Duri",
+      "is_toll": true
+    },
+    {
+      "from_node": "kandis_toll",
+      "to_node": "duri_junction",
+      "distance_km": 58.0,
+      "base_speed_kmh": 85.0,
+      "corridor_name": "Tol Permai Seksi Kandis-Duri",
+      "is_toll": true
+    },
+    {
+      "from_node": "kandis_toll",
+      "to_node": "pekanbaru_hub",
+      "distance_km": 42.0,
+      "base_speed_kmh": 85.0,
+      "corridor_name": "Tol Pekanbaru-Dumai (Permai)",
+      "is_toll": true
+    },
+    {
+      "from_node": "pekanbaru_hub",
+      "to_node": "kandis_toll",
+      "distance_km": 42.0,
+      "base_speed_kmh": 85.0,
+      "corridor_name": "Tol Pekanbaru-Dumai (Permai)",
+      "is_toll": true
+    },
+    {
+      "from_node": "pekanbaru_hub",
+      "to_node": "bangkinang_junction",
+      "distance_km": 38.0,
+      "base_speed_kmh": 80.0,
+      "corridor_name": "Tol Pekanbaru-Bangkinang",
+      "is_toll": true
+    },
+    {
+      "from_node": "bangkinang_junction",
+      "to_node": "pekanbaru_hub",
+      "distance_km": 38.0,
+      "base_speed_kmh": 80.0,
+      "corridor_name": "Tol Pekanbaru-Bangkinang",
+      "is_toll": true
+    },
+    {
+      "from_node": "bangkinang_junction",
+      "to_node": "pangkalan_junction",
+      "distance_km": 52.0,
+      "base_speed_kmh": 45.0,
+      "corridor_name": "Jalinsum Riau-Sumbar",
+      "is_toll": false
+    },
+    {
+      "from_node": "pangkalan_junction",
+      "to_node": "bangkinang_junction",
+      "distance_km": 52.0,
+      "base_speed_kmh": 45.0,
+      "corridor_name": "Jalinsum Riau-Sumbar",
+      "is_toll": false
+    },
+    {
+      "from_node": "pangkalan_junction",
+      "to_node": "payakumbuh_junction",
+      "distance_km": 40.0,
+      "base_speed_kmh": 45.0,
+      "corridor_name": "Kelok 9 Pangkalan-Payakumbuh",
+      "is_toll": false
+    },
+    {
+      "from_node": "payakumbuh_junction",
+      "to_node": "pangkalan_junction",
+      "distance_km": 40.0,
+      "base_speed_kmh": 45.0,
+      "corridor_name": "Kelok 9 Pangkalan-Payakumbuh",
+      "is_toll": false
+    },
+    {
+      "from_node": "payakumbuh_junction",
+      "to_node": "bukittinggi_hub",
+      "distance_km": 32.0,
+      "base_speed_kmh": 50.0,
+      "corridor_name": "Arteri Agam Payakumbuh-Bukittinggi",
+      "is_toll": false
+    },
+    {
+      "from_node": "bukittinggi_hub",
+      "to_node": "payakumbuh_junction",
+      "distance_km": 32.0,
+      "base_speed_kmh": 50.0,
+      "corridor_name": "Arteri Agam Payakumbuh-Bukittinggi",
+      "is_toll": false
+    },
+    {
+      "from_node": "bukittinggi_hub",
+      "to_node": "padang_panjang_hub",
+      "distance_km": 18.0,
+      "base_speed_kmh": 45.0,
+      "corridor_name": "Jalinteng Lembah Anai",
+      "is_toll": false
+    },
+    {
+      "from_node": "padang_panjang_hub",
+      "to_node": "bukittinggi_hub",
+      "distance_km": 18.0,
+      "base_speed_kmh": 45.0,
+      "corridor_name": "Jalinteng Lembah Anai",
+      "is_toll": false
+    },
+    {
+      "from_node": "padang_panjang_hub",
+      "to_node": "padang_teluk_bayur",
+      "distance_km": 65.0,
+      "base_speed_kmh": 45.0,
+      "corridor_name": "Arteri Padang Panjang-Teluk Bayur",
+      "is_toll": false
+    },
+    {
+      "from_node": "padang_teluk_bayur",
+      "to_node": "padang_panjang_hub",
+      "distance_km": 65.0,
+      "base_speed_kmh": 45.0,
+      "corridor_name": "Arteri Padang Panjang-Teluk Bayur",
+      "is_toll": false
+    },
+    {
+      "from_node": "padang_panjang_hub",
+      "to_node": "solok_hub",
+      "distance_km": 52.0,
+      "base_speed_kmh": 45.0,
+      "corridor_name": "Arteri Danau Singkarak",
+      "is_toll": false
+    },
+    {
+      "from_node": "solok_hub",
+      "to_node": "padang_panjang_hub",
+      "distance_km": 52.0,
+      "base_speed_kmh": 45.0,
+      "corridor_name": "Arteri Danau Singkarak",
+      "is_toll": false
+    },
+    {
+      "from_node": "bukittinggi_hub",
+      "to_node": "sitinjau_lauik",
+      "distance_km": 72.0,
+      "base_speed_kmh": 40.0,
+      "corridor_name": "By-pass Bukit Barisan",
+      "is_toll": false
+    },
+    {
+      "from_node": "sitinjau_lauik",
+      "to_node": "bukittinggi_hub",
+      "distance_km": 72.0,
+      "base_speed_kmh": 40.0,
+      "corridor_name": "By-pass Bukit Barisan",
+      "is_toll": false
+    },
+    {
+      "from_node": "sitinjau_lauik",
+      "to_node": "padang_teluk_bayur",
+      "distance_km": 25.0,
+      "base_speed_kmh": 35.0,
+      "corridor_name": "Turunan Ekstrem Sitinjau Lauik",
+      "is_toll": false
+    },
+    {
+      "from_node": "padang_teluk_bayur",
+      "to_node": "sitinjau_lauik",
+      "distance_km": 25.0,
+      "base_speed_kmh": 35.0,
+      "corridor_name": "Turunan Ekstrem Sitinjau Lauik",
+      "is_toll": false
+    },
+    {
+      "from_node": "sitinjau_lauik",
+      "to_node": "solok_hub",
+      "distance_km": 35.0,
+      "base_speed_kmh": 35.0,
+      "corridor_name": "Kelok Sitinjau Lauik Solok",
+      "is_toll": false
+    },
+    {
+      "from_node": "solok_hub",
+      "to_node": "sitinjau_lauik",
+      "distance_km": 35.0,
+      "base_speed_kmh": 35.0,
+      "corridor_name": "Kelok Sitinjau Lauik Solok",
+      "is_toll": false
+    },
+    {
+      "from_node": "pekanbaru_hub",
+      "to_node": "rengat_hub",
+      "distance_km": 145.0,
+      "base_speed_kmh": 50.0,
+      "corridor_name": "Jalintim Pelalawan-Inhu",
+      "is_toll": false
+    },
+    {
+      "from_node": "rengat_hub",
+      "to_node": "pekanbaru_hub",
+      "distance_km": 145.0,
+      "base_speed_kmh": 50.0,
+      "corridor_name": "Jalintim Pelalawan-Inhu",
+      "is_toll": false
+    },
+    {
+      "from_node": "rengat_hub",
+      "to_node": "kuala_tungkal_port",
+      "distance_km": 125.0,
+      "base_speed_kmh": 45.0,
+      "corridor_name": "Arteri Pesisir Riau-Jambi",
+      "is_toll": false
+    },
+    {
+      "from_node": "kuala_tungkal_port",
+      "to_node": "rengat_hub",
+      "distance_km": 125.0,
+      "base_speed_kmh": 45.0,
+      "corridor_name": "Arteri Pesisir Riau-Jambi",
+      "is_toll": false
+    },
+    {
+      "from_node": "rengat_hub",
+      "to_node": "jambi_city_hub",
+      "distance_km": 168.0,
+      "base_speed_kmh": 50.0,
+      "corridor_name": "Jalintim Jambi-Riau",
+      "is_toll": false
+    },
+    {
+      "from_node": "jambi_city_hub",
+      "to_node": "rengat_hub",
+      "distance_km": 168.0,
+      "base_speed_kmh": 50.0,
+      "corridor_name": "Jalintim Jambi-Riau",
+      "is_toll": false
+    },
+    {
+      "from_node": "solok_hub",
+      "to_node": "dharmasraya_hub",
+      "distance_km": 110.0,
+      "base_speed_kmh": 45.0,
+      "corridor_name": "Jalinsum Sawahlunto-Dharmasraya",
+      "is_toll": false
+    },
+    {
+      "from_node": "dharmasraya_hub",
+      "to_node": "solok_hub",
+      "distance_km": 110.0,
+      "base_speed_kmh": 45.0,
+      "corridor_name": "Jalinsum Sawahlunto-Dharmasraya",
+      "is_toll": false
+    },
+    {
+      "from_node": "dharmasraya_hub",
+      "to_node": "muara_bungo_hub",
+      "distance_km": 68.0,
+      "base_speed_kmh": 50.0,
+      "corridor_name": "Jalinsum Batas Sumbar-Jambi",
+      "is_toll": false
+    },
+    {
+      "from_node": "muara_bungo_hub",
+      "to_node": "dharmasraya_hub",
+      "distance_km": 68.0,
+      "base_speed_kmh": 50.0,
+      "corridor_name": "Jalinsum Batas Sumbar-Jambi",
+      "is_toll": false
+    },
+    {
+      "from_node": "muara_bungo_hub",
+      "to_node": "bangko_hub",
+      "distance_km": 75.0,
+      "base_speed_kmh": 50.0,
+      "corridor_name": "Jalinteng Jambi Barat",
+      "is_toll": false
+    },
+    {
+      "from_node": "bangko_hub",
+      "to_node": "muara_bungo_hub",
+      "distance_km": 75.0,
+      "base_speed_kmh": 50.0,
+      "corridor_name": "Jalinteng Jambi Barat",
+      "is_toll": false
+    },
+    {
+      "from_node": "muara_bungo_hub",
+      "to_node": "muara_bulian_hub",
+      "distance_km": 140.0,
+      "base_speed_kmh": 50.0,
+      "corridor_name": "Jalinsum Tengah Jambi",
+      "is_toll": false
+    },
+    {
+      "from_node": "muara_bulian_hub",
+      "to_node": "muara_bungo_hub",
+      "distance_km": 140.0,
+      "base_speed_kmh": 50.0,
+      "corridor_name": "Jalinsum Tengah Jambi",
+      "is_toll": false
+    },
+    {
+      "from_node": "muara_bulian_hub",
+      "to_node": "jambi_city_hub",
+      "distance_km": 55.0,
+      "base_speed_kmh": 55.0,
+      "corridor_name": "Arteri Batanghari Jambi",
+      "is_toll": false
+    },
+    {
+      "from_node": "jambi_city_hub",
+      "to_node": "muara_bulian_hub",
+      "distance_km": 55.0,
+      "base_speed_kmh": 55.0,
+      "corridor_name": "Arteri Batanghari Jambi",
+      "is_toll": false
+    },
+    {
+      "from_node": "kuala_tungkal_port",
+      "to_node": "jambi_city_hub",
+      "distance_km": 98.0,
+      "base_speed_kmh": 50.0,
+      "corridor_name": "Arteri Tanjung Jabung Barat",
+      "is_toll": false
+    },
+    {
+      "from_node": "jambi_city_hub",
+      "to_node": "kuala_tungkal_port",
+      "distance_km": 98.0,
+      "base_speed_kmh": 50.0,
+      "corridor_name": "Arteri Tanjung Jabung Barat",
+      "is_toll": false
+    },
+    {
+      "from_node": "jambi_city_hub",
+      "to_node": "betung_junction",
+      "distance_km": 195.0,
+      "base_speed_kmh": 55.0,
+      "corridor_name": "Jalintim Jambi-Palembang",
+      "is_toll": false
+    },
+    {
+      "from_node": "betung_junction",
+      "to_node": "jambi_city_hub",
+      "distance_km": 195.0,
+      "base_speed_kmh": 55.0,
+      "corridor_name": "Jalintim Jambi-Palembang",
+      "is_toll": false
+    },
+    {
+      "from_node": "bangko_hub",
+      "to_node": "lubuklinggau_hub",
+      "distance_km": 128.0,
+      "base_speed_kmh": 50.0,
+      "corridor_name": "Jalinteng Jambi-Sumsel",
+      "is_toll": false
+    },
+    {
+      "from_node": "lubuklinggau_hub",
+      "to_node": "bangko_hub",
+      "distance_km": 128.0,
+      "base_speed_kmh": 50.0,
+      "corridor_name": "Jalinteng Jambi-Sumsel",
+      "is_toll": false
+    },
+    {
+      "from_node": "betung_junction",
+      "to_node": "palembang_boom_baru",
+      "distance_km": 58.0,
+      "base_speed_kmh": 75.0,
+      "corridor_name": "Tol Kayu Agung-Palembang-Betung (Kapalbetung)",
+      "is_toll": true
+    },
+    {
+      "from_node": "palembang_boom_baru",
+      "to_node": "betung_junction",
+      "distance_km": 58.0,
+      "base_speed_kmh": 75.0,
+      "corridor_name": "Tol Kayu Agung-Palembang-Betung (Kapalbetung)",
+      "is_toll": true
+    },
+    {
+      "from_node": "palembang_boom_baru",
+      "to_node": "prabumulih_junction",
+      "distance_km": 65.0,
+      "base_speed_kmh": 80.0,
+      "corridor_name": "Tol Indralaya-Prabumulih",
+      "is_toll": true
+    },
+    {
+      "from_node": "prabumulih_junction",
+      "to_node": "palembang_boom_baru",
+      "distance_km": 65.0,
+      "base_speed_kmh": 80.0,
+      "corridor_name": "Tol Indralaya-Prabumulih",
+      "is_toll": true
+    },
+    {
+      "from_node": "palembang_boom_baru",
+      "to_node": "kayu_agung_toll",
+      "distance_km": 52.0,
+      "base_speed_kmh": 85.0,
+      "corridor_name": "Tol Kapalbetung Seksi Kayu Agung",
+      "is_toll": true
+    },
+    {
+      "from_node": "kayu_agung_toll",
+      "to_node": "palembang_boom_baru",
+      "distance_km": 52.0,
+      "base_speed_kmh": 85.0,
+      "corridor_name": "Tol Kapalbetung Seksi Kayu Agung",
+      "is_toll": true
+    },
+    {
+      "from_node": "lubuklinggau_hub",
+      "to_node": "curup_pass",
+      "distance_km": 48.0,
+      "base_speed_kmh": 40.0,
+      "corridor_name": "Celah Bukit Barisan Curup",
+      "is_toll": false
+    },
+    {
+      "from_node": "curup_pass",
+      "to_node": "lubuklinggau_hub",
+      "distance_km": 48.0,
+      "base_speed_kmh": 40.0,
+      "corridor_name": "Celah Bukit Barisan Curup",
+      "is_toll": false
+    },
+    {
+      "from_node": "curup_pass",
+      "to_node": "bengkulu_pulau_baai",
+      "distance_km": 75.0,
+      "base_speed_kmh": 40.0,
+      "corridor_name": "Kelok Liku Sembilan Bengkulu",
+      "is_toll": false
+    },
+    {
+      "from_node": "bengkulu_pulau_baai",
+      "to_node": "curup_pass",
+      "distance_km": 75.0,
+      "base_speed_kmh": 40.0,
+      "corridor_name": "Kelok Liku Sembilan Bengkulu",
+      "is_toll": false
+    },
+    {
+      "from_node": "lubuklinggau_hub",
+      "to_node": "lahat_hub",
+      "distance_km": 95.0,
+      "base_speed_kmh": 45.0,
+      "corridor_name": "Jalinteng Musi Rawas-Lahat",
+      "is_toll": false
+    },
+    {
+      "from_node": "lahat_hub",
+      "to_node": "lubuklinggau_hub",
+      "distance_km": 95.0,
+      "base_speed_kmh": 45.0,
+      "corridor_name": "Jalinteng Musi Rawas-Lahat",
+      "is_toll": false
+    },
+    {
+      "from_node": "lahat_hub",
+      "to_node": "muara_enim_hub",
+      "distance_km": 42.0,
+      "base_speed_kmh": 50.0,
+      "corridor_name": "Arteri Batubara Lahat-Muara Enim",
+      "is_toll": false
+    },
+    {
+      "from_node": "muara_enim_hub",
+      "to_node": "lahat_hub",
+      "distance_km": 42.0,
+      "base_speed_kmh": 50.0,
+      "corridor_name": "Arteri Batubara Lahat-Muara Enim",
+      "is_toll": false
+    },
+    {
+      "from_node": "muara_enim_hub",
+      "to_node": "prabumulih_junction",
+      "distance_km": 50.0,
+      "base_speed_kmh": 55.0,
+      "corridor_name": "Arteri Muara Enim-Prabumulih",
+      "is_toll": false
+    },
+    {
+      "from_node": "prabumulih_junction",
+      "to_node": "muara_enim_hub",
+      "distance_km": 50.0,
+      "base_speed_kmh": 55.0,
+      "corridor_name": "Arteri Muara Enim-Prabumulih",
+      "is_toll": false
+    },
+    {
+      "from_node": "lahat_hub",
+      "to_node": "baturaja_hub",
+      "distance_km": 115.0,
+      "base_speed_kmh": 45.0,
+      "corridor_name": "Jalinteng Lahat-Ogan Komering Ulu",
+      "is_toll": false
+    },
+    {
+      "from_node": "baturaja_hub",
+      "to_node": "lahat_hub",
+      "distance_km": 115.0,
+      "base_speed_kmh": 45.0,
+      "corridor_name": "Jalinteng Lahat-Ogan Komering Ulu",
+      "is_toll": false
+    },
+    {
+      "from_node": "prabumulih_junction",
+      "to_node": "baturaja_hub",
+      "distance_km": 78.0,
+      "base_speed_kmh": 50.0,
+      "corridor_name": "Arteri Prabumulih-Baturaja",
+      "is_toll": false
+    },
+    {
+      "from_node": "baturaja_hub",
+      "to_node": "prabumulih_junction",
+      "distance_km": 78.0,
+      "base_speed_kmh": 50.0,
+      "corridor_name": "Arteri Prabumulih-Baturaja",
+      "is_toll": false
+    },
+    {
+      "from_node": "padang_teluk_bayur",
+      "to_node": "mukomuko_hub",
+      "distance_km": 190.0,
+      "base_speed_kmh": 45.0,
+      "corridor_name": "Jalinbar Pesisir Selatan",
+      "is_toll": false
+    },
+    {
+      "from_node": "mukomuko_hub",
+      "to_node": "padang_teluk_bayur",
+      "distance_km": 190.0,
+      "base_speed_kmh": 45.0,
+      "corridor_name": "Jalinbar Pesisir Selatan",
+      "is_toll": false
+    },
+    {
+      "from_node": "mukomuko_hub",
+      "to_node": "bengkulu_pulau_baai",
+      "distance_km": 240.0,
+      "base_speed_kmh": 45.0,
+      "corridor_name": "Jalinbar Bengkulu Utara",
+      "is_toll": false
+    },
+    {
+      "from_node": "bengkulu_pulau_baai",
+      "to_node": "mukomuko_hub",
+      "distance_km": 240.0,
+      "base_speed_kmh": 45.0,
+      "corridor_name": "Jalinbar Bengkulu Utara",
+      "is_toll": false
+    },
+    {
+      "from_node": "bengkulu_pulau_baai",
+      "to_node": "manna_hub",
+      "distance_km": 135.0,
+      "base_speed_kmh": 45.0,
+      "corridor_name": "Jalinbar Bengkulu Selatan",
+      "is_toll": false
+    },
+    {
+      "from_node": "manna_hub",
+      "to_node": "bengkulu_pulau_baai",
+      "distance_km": 135.0,
+      "base_speed_kmh": 45.0,
+      "corridor_name": "Jalinbar Bengkulu Selatan",
+      "is_toll": false
+    },
+    {
+      "from_node": "manna_hub",
+      "to_node": "liwa_pass",
+      "distance_km": 115.0,
+      "base_speed_kmh": 40.0,
+      "corridor_name": "Jalinbar Krui-Liwa",
+      "is_toll": false
+    },
+    {
+      "from_node": "liwa_pass",
+      "to_node": "manna_hub",
+      "distance_km": 115.0,
+      "base_speed_kmh": 40.0,
+      "corridor_name": "Jalinbar Krui-Liwa",
+      "is_toll": false
+    },
+    {
+      "from_node": "liwa_pass",
+      "to_node": "kotabumi_hub",
+      "distance_km": 85.0,
+      "base_speed_kmh": 45.0,
+      "corridor_name": "Jalinteng Lampung Barat",
+      "is_toll": false
+    },
+    {
+      "from_node": "kotabumi_hub",
+      "to_node": "liwa_pass",
+      "distance_km": 85.0,
+      "base_speed_kmh": 45.0,
+      "corridor_name": "Jalinteng Lampung Barat",
+      "is_toll": false
+    },
+    {
+      "from_node": "baturaja_hub",
+      "to_node": "kotabumi_hub",
+      "distance_km": 98.0,
+      "base_speed_kmh": 50.0,
+      "corridor_name": "Jalinteng Sumsel-Lampung",
+      "is_toll": false
+    },
+    {
+      "from_node": "kotabumi_hub",
+      "to_node": "baturaja_hub",
+      "distance_km": 98.0,
+      "base_speed_kmh": 50.0,
+      "corridor_name": "Jalinteng Sumsel-Lampung",
+      "is_toll": false
+    },
+    {
+      "from_node": "kotabumi_hub",
+      "to_node": "terbanggi_besar_toll",
+      "distance_km": 52.0,
+      "base_speed_kmh": 50.0,
+      "corridor_name": "Arteri Lintas Tengah Lampung",
+      "is_toll": false
+    },
+    {
+      "from_node": "terbanggi_besar_toll",
+      "to_node": "kotabumi_hub",
+      "distance_km": 52.0,
+      "base_speed_kmh": 50.0,
+      "corridor_name": "Arteri Lintas Tengah Lampung",
+      "is_toll": false
+    },
+    {
+      "from_node": "kayu_agung_toll",
+      "to_node": "terbanggi_besar_toll",
+      "distance_km": 189.0,
+      "base_speed_kmh": 90.0,
+      "corridor_name": "Tol Terbanggi Besar-Pematang Panggang-Kayu Agung (Terpeka)",
+      "is_toll": true
+    },
+    {
+      "from_node": "terbanggi_besar_toll",
+      "to_node": "kayu_agung_toll",
+      "distance_km": 189.0,
+      "base_speed_kmh": 90.0,
+      "corridor_name": "Tol Terbanggi Besar-Pematang Panggang-Kayu Agung (Terpeka)",
+      "is_toll": true
+    },
+    {
+      "from_node": "terbanggi_besar_toll",
+      "to_node": "bandar_lampung_hub",
+      "distance_km": 68.0,
+      "base_speed_kmh": 85.0,
+      "corridor_name": "Tol Bakauheni-Terbanggi Besar (Bakter)",
+      "is_toll": true
+    },
+    {
+      "from_node": "bandar_lampung_hub",
+      "to_node": "terbanggi_besar_toll",
+      "distance_km": 68.0,
+      "base_speed_kmh": 85.0,
+      "corridor_name": "Tol Bakauheni-Terbanggi Besar (Bakter)",
+      "is_toll": true
+    },
+    {
+      "from_node": "bandar_lampung_hub",
+      "to_node": "panjang_port",
+      "distance_km": 15.0,
+      "base_speed_kmh": 60.0,
+      "corridor_name": "By-pass Soekarno-Hatta Panjang",
+      "is_toll": false
+    },
+    {
+      "from_node": "panjang_port",
+      "to_node": "bandar_lampung_hub",
+      "distance_km": 15.0,
+      "base_speed_kmh": 60.0,
+      "corridor_name": "By-pass Soekarno-Hatta Panjang",
+      "is_toll": false
+    },
+    {
+      "from_node": "bandar_lampung_hub",
+      "to_node": "bakauheni_port",
+      "distance_km": 82.0,
+      "base_speed_kmh": 90.0,
+      "corridor_name": "Tol Bakter Seksi Bakauheni",
+      "is_toll": true
+    },
+    {
+      "from_node": "bakauheni_port",
+      "to_node": "bandar_lampung_hub",
+      "distance_km": 82.0,
+      "base_speed_kmh": 90.0,
+      "corridor_name": "Tol Bakter Seksi Bakauheni",
+      "is_toll": true
+    },
+    {
+      "from_node": "panjang_port",
+      "to_node": "bakauheni_port",
+      "distance_km": 76.0,
+      "base_speed_kmh": 85.0,
+      "corridor_name": "Tol Bakter Akses Port Panjang",
+      "is_toll": true
+    },
+    {
+      "from_node": "bakauheni_port",
+      "to_node": "panjang_port",
+      "distance_km": 76.0,
+      "base_speed_kmh": 85.0,
+      "corridor_name": "Tol Bakter Akses Port Panjang",
+      "is_toll": true
+    }
+  ]
+}

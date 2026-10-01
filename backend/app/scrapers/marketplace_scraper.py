@@ -7,7 +7,10 @@ import httpx
 from datetime import datetime, timezone
 from typing import List, Dict, Any
 
-from playwright.async_api import async_playwright
+try:
+    from playwright.async_api import async_playwright
+except ImportError:
+    async_playwright = None
 from app.scrapers.base_scraper import BaseScraper
 from app.services.redis_client import STREAM_PIHPS
 from app.config import get_settings
@@ -65,6 +68,10 @@ class MarketplaceScraper(BaseScraper):
         use_cdp = bool(settings.lightpanda_url)
         
         logger.info(f"Starting marketplace scrape. Mode: {'Lightpanda CDP' if use_cdp else 'Local Chromium'}")
+        
+        if not async_playwright:
+            logger.warning("Playwright not installed, returning default marketplace data")
+            return DEFAULT_MARKETPLACE_DATA
         
         try:
             async with async_playwright() as p:
