@@ -65,6 +65,7 @@ data/*
 !data/fixtures/**
 !data/synthetic/
 !data/synthetic/**
+!data/road_network_sumatra.json
 outputs/
 *.parquet
 *.csv
