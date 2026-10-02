@@ -982,29 +982,35 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 
 ## Phase 44: Intermodal Terminal Dashboard, Spoilage Hedging & Compliance Inspector
 **Requirements Covered:** FR-17.1, FR-17.2, FR-18.1, FR-18.2, FR-19.1, FR-19.2, NFR-11.1, NFR-11.2, NFR-11.3
-**Goal:** Build intermodal sea-land gate choke-point tracking (Belawan & Bakauheni), calculate operational food spoilage hedging economics, and verify digital *Surat Jalan* & quarantine compliance.
-**Status:** PLANNED 📋
+**Goal:** Build intermodal sea-land gate choke-point tracking (20+ Pan-Sumatra hubs), calculate operational food spoilage hedging economics with real BPJT toll & fuel rates, and verify digital *Surat Jalan* & quarantine compliance.
+**Status:** COMPLETE ✅
+**Plans:** 2 plans
+- [x] 44-01-PLAN.md — Backend Choke-Point Synchronization, Spoilage Hedging Solver & Digital Compliance Engine
+- [x] 44-02-PLAN.md — Frontend Spoilage Hedging Matrix, Compliance Inspector & Intermodal Popover HUD
 **AI Spec Needed:** No
 
 ### Deliverables
-- **Intermodal Gate Queue Synchronizer (`backend/app/services/intermodal_sync_service.py` & `intermodal_router.py`)**:
-  - Fuse AIS vessel roadstead queues with highway truck arrivals to calculate port gate dwelling times.
-  - Compute automated Intermodal Delay Multiplier ($M_{\text{intermodal}} = 1.0 + 0.15 \times N_{\text{anchored vessels}}$).
+- **Pan-Sumatra Choke-Point & Terminal Synchronizer (`backend/app/services/intermodal_sync_service.py` & `intermodal_router.py`)**:
+  - Track 20+ strategic Sumatra transport hubs (7 sea/ferry ports + 11 mountain/toll bottlenecks), calculating dwelling times, vessel/truck queues, and status (`NORMAL`, `CONGESTED`, `RESTRICTED`, `BLOCKED`).
+  - Compute automated Intermodal Delay Multiplier ($M_{\text{intermodal}} = 1.0 + 0.15 \times N_{\text{queue}} \times \text{SeverityWeight}$) clamped to $[1.0, 3.5]$.
 - **Operational Spoilage Hedging Calculator (`backend/app/services/spoilage_hedging_service.py`)**:
-  - Financial cost matrix solver comparing monetary exposure:
+  - Dynamic closed-form cost matrix solver comparing monetary exposure:
     $$\text{Cost}(\text{Continue}) \quad \text{vs} \quad \text{Cost}(\text{Reroute}) \quad \text{vs} \quad \text{Cost}(\text{Hold})$$
-    factoring commodity perishability half-life ($T_{\text{spoil}}$), Trans-Sumatra toll tariffs, extra fuel, and cold-chain diesel costs.
+    factoring 4-tier commodity perishability decay ($\delta$), real BPJT Trans-Sumatra toll tariffs (Golongan II–V), Pertamina fuel rates modulated by Market Regime inflation shock, and PIHPS spot cargo valuations.
 - **Digital Cargo Manifest & Quarantine Compliance Inspector (`backend/app/services/compliance_service.py`)**:
-  - Verify *Surat Jalan*, *Sertifikat Karantina Pertanian (BKHIT)*, and axle-load limits (*MST*) for detour routes.
+  - Differentiated enforcement: Hard Block on missing BKHIT agricultural quarantine certificates for inter-island routes; Tactical Warning & Reroute advisory on MST axle-load limits (>8 Ton on Class III roads).
+  - Validates *Surat Jalan* Delivery Order metadata (vehicle plate, driver phone, cargo commodity, manifest hash).
 - **Frontend Intermodal & Hedging UI Components**:
-  - `IntermodalTerminalPanel.tsx`: Sea-land terminal status widget in Map & Analytics views.
-  - Spoilage Hedging Card inside `CrisisSidebar.tsx`: Visual breakdown highlighting the optimal financial mitigation policy.
-  - Digital Compliance Badge in Evidence panel.
+  - `SpoilageHedgingCard.tsx`: Glassmorphic comparison card in `MitigationTab.tsx` displaying the 3 policies, optimal recommendation, and net savings in IDR.
+  - `ComplianceInspectorCard.tsx`: Digital checklist in `MitigationTab.tsx` with BKHIT certification and MST axle-load override controls.
+  - `IntermodalTerminalPopover.tsx`: Popover in `TopNavTelemetry.tsx` showing real-time choke-point and port queue statuses.
 
 ### Verification Criteria
-- [ ] Hedging calculator accurately computes toll, fuel, and spoilage tradeoffs dynamically.
-- [ ] Intermodal delay multiplier correctly adjusts transit ETAs based on port queue conditions.
-- [ ] Compliance inspector correctly flags axle-load or quarantine boundary constraints.
+- [x] Hedging calculator accurately computes toll, fuel, and spoilage tradeoffs dynamically using BPJT matrices and PIHPS spot prices.
+- [x] Intermodal delay multiplier correctly adjusts transit ETAs based on 20+ Sumatra port and mountain pass conditions ($1.0 \le M \le 3.5$).
+- [x] Compliance inspector correctly hard-blocks missing BKHIT certificates and flags MST axle-load limits with detour advisories.
+- [x] Next.js production build passes with 0 type or lint errors and 100% monochrome SVG icons.
+- [x] Full backend test suite passes with 120+ tests (16 new intermodal/hedging tests passing 100%).
 
 ---
 

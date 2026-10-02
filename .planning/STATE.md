@@ -2,35 +2,34 @@
 gsd_state_version: 1.0
 milestone: M3
 milestone_name: PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform
-current_phase: 44
-current_phase_name: Intermodal Terminal Dashboard, Spoilage Hedging & Compliance Inspector
-status: ready_to_plan
-stopped_at: Phase 44 Context Discussion Complete
-last_updated: "2026-09-28T08:46:00.000Z"
-last_activity: 2026-09-28
-last_activity_desc: Phase 44 Context established (4-tier perishability decay model, Continue/Reroute/Hold hedging solver, strict Surat Jalan/BKHIT/MST compliance, CrisisSidebar embedded UI).
+current_phase: 45
+status: ready
+stopped_at: Phase 44 complete and verified. Ready for Phase 45 (Pilot Verification, Scenario Drills & Final End-to-End Packaging)
+last_updated: "2026-10-02T02:45:00.000Z"
+last_activity: "2026-10-02: Completed Phase 44 (Intermodal Terminal Dashboard, Spoilage Hedging & Compliance Inspector) — 16/16 backend tests pass, clean Next.js production build."
 progress:
-  total_phases: 46
-  completed_phases: 44
-  total_plans: 52
-  completed_plans: 48
+  total_phases: 5
+  completed_phases: 4
+  total_plans: 8
+  completed_plans: 8
   percent: 92
+current_phase_name: Pilot Verification, Scenario Drills & Final End-to-End Packaging
 ---
 
 # STATE: PreHub Project Memory
 
-**Last Updated:** 2026-09-28
+**Last Updated:** 2026-10-02
 **Active Milestone:** M3 - PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform [ACTIVE 🚀]
-**Current Phase:** Phase 44: Intermodal Terminal Dashboard, Spoilage Hedging & Compliance Inspector (READY TO PLAN 📋)
+**Current Phase:** Phase 45: Pilot Verification, Scenario Drills & Final End-to-End Packaging (READY 📋)
 
 ---
 
 ## Current Position
 
-Phase: Phase 44: Intermodal Terminal Dashboard, Spoilage Hedging & Compliance Inspector
-Status: **READY TO PLAN** 📋
-Last activity: 2026-09-28: Context and architectural decisions finalized in `44-CONTEXT.md`.
-Next action: Run `/gsd-plan-phase 44` to create detailed plan for Phase 44.
+Phase: Phase 45: Pilot Verification, Scenario Drills & Final End-to-End Packaging
+Status: **READY** 📋 (Phase 44 complete and verified)
+Last activity: 2026-10-02: Executed Plans 44-01 and 44-02; all 16 backend unit/integration tests passing (100%), Next.js production build 100% clean.
+Next action: Run `/gsd-discuss-phase 45` or `/gsd-plan-phase 45` to initiate the final milestone validation phase.
 
 ---
 
@@ -83,7 +82,7 @@ Next action: Run `/gsd-plan-phase 44` to create detailed plan for Phase 44.
 | 42 | Supabase Authentication & Multi-Role Workspace Management | **COMPLETE** ✅ | Multi-tenant Supabase Auth, RBAC (Dispatcher, Regulator, Guest), JWT middleware, role-adaptive top navigation. Git: `38153e7` |
 | 43 | Self-Serve Fleet Onboarding & Live GPS Ingestion Engine | **COMPLETE** ✅ | Single-vehicle input modal, drag-and-drop CSV manifest parser, TMS GPS webhook endpoint, WebGL asset binding |
 | 43.5 | Live API Audit, Endpoint Hardening & Ops Observability Console | **COMPLETE** ✅ | Live Render probe (28 endpoints), news verify route, native in-app diagnostics console & log terminal. Git: `ef5f2a2` |
-| 44 | Intermodal Terminal Dashboard, Spoilage Hedging & Compliance Inspector | **PLANNED** 📋 | Intermodal sea-land gate sync, operational food spoilage hedging calculator, digital Surat Jalan & BKHIT compliance |
+| 44 | Intermodal Terminal Dashboard, Spoilage Hedging & Compliance Inspector | **COMPLETE** ✅ | 18+ Choke-points & proximity delay multiplier ($1.0 \le M \le 3.5$), BPJT toll tariffs (Gol I-V), Pertamina fuel rate modulation, 4-tier perishability decay, BKHIT quarantine hard block, MST axle-load warning, 16/16 tests pass, 100% clean Next.js build. |
 | 45 | Pilot Verification, Scenario Drills & Final End-to-End Packaging | **PLANNED** 📋 | Automated E2E test suite (100+ tests), hardened Docker Compose, official Pilot Onboarding Manual |
 
 ---
@@ -92,6 +91,9 @@ Next action: Run `/gsd-plan-phase 44` to create detailed plan for Phase 44.
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
+| 2026-10-02 | Phase 44: 18+ Pan-Sumatra Choke-Point Registry & Proximity Delay Multiplier | Registered 7 maritime/ferry ports (Belawan, Bakauheni, Dumai, Teluk Bayur, Panjang, Sibolga, Kuala Tanjung) and 11 mountain passes/conjunctions (Sitinjau Lauik, Kelok 9, Malalak, Tarutung, Tebing Tinggi, Betung, etc.) with clamped delay multiplier $M_{\text{intermodal}} \in [1.0, 3.5]$. |
+| 2026-10-02 | Phase 44: Closed-Form Operational Spoilage Hedging Matrix | Evaluates Continue vs Reroute vs Hold factoring 4-tier exponential perishability decay ($\delta = 0.025$ to $0.0005/\text{hr}$), official BPJT Sumatra toll tariffs across Golongan I–V, and Pertamina fuel consumption modulated by inflation shocks. |
+| 2026-10-02 | Phase 44: Differentiated Digital Regulatory Compliance | Enforces non-negotiable `HARD_BLOCK` for inter-island / strait crossing shipments lacking BKHIT agricultural quarantine certificates, while issuing tactical `WARNING` & reroute advisories (with operator override capability) for heavy vehicles ($>8$ Ton) traversing Class III collector/mountain roads. |
 | 2026-07-05 | Pilot genesis: North Sumatra corridor (Belawan + Trans-Sumatra Hwy) | Initial concept scope; superseded in Phase 33–35 to Pan-Sumatra |
 | 2026-07-05 | AI models: Gemini Flash (vision/extraction) + DeepSeek (reasoning) | Cost-efficient; matches blueprint dual-model design with NVIDIA NIM failover |
 | 2026-07-05 | Driver mobile app explicitly deferred to v2 | Engineering cost doesn't improve demo; WhatsApp deep-link is MVP replacement |
@@ -152,7 +154,6 @@ These scripts validate the economic correlation hypotheses that underpin Agent 5
 
 ## Session
 
-**Last session:** 2026-09-28T07:40:00.000Z
-**Stopped at:** Phase 43 Verification & Documentation Complete
-**Resume file:** .planning/phases/44-intermodal-terminal-dashboard-spoilage-hedging-compliance-inspector/44-PLAN.md
-
+**Last session:** 2026-10-01T08:41:12.396Z
+**Stopped at:** Phase 44 context gathered
+**Resume file:** .planning/phases/44-intermodal-terminal-dashboard-spoilage-hedging-compliance-inspector/44-CONTEXT.md

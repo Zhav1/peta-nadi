@@ -536,3 +536,114 @@ export interface FleetIngestResponse {
   vehicles: FleetVehicle[];
 }
 
+// ==========================================
+// Phase 44: Intermodal, Spoilage Hedging & Compliance Types
+// ==========================================
+
+export type ChokePointType =
+  | "SEAPORT"
+  | "FERRY_TERMINAL"
+  | "MOUNTAIN_PASS"
+  | "TOLL_HIGHWAY_JUNCTION"
+  | "FREIGHT_CORRIDOR"
+  | "HIGHWAY_BOTTLENECK";
+
+export type ChokePointStatus = "NORMAL" | "CONGESTED" | "RESTRICTED" | "BLOCKED";
+
+export interface ChokePointItem {
+  id: string;
+  name: string;
+  type: ChokePointType;
+  coords: [number, number];
+  province: string;
+  status: ChokePointStatus;
+  dwelling_time_hours: number;
+  queue_count: number;
+  intermodal_delay_multiplier: number;
+  hazard_type?: string;
+  capacity?: number;
+  updated_at: string;
+}
+
+export interface ChokePointsListResponse {
+  items: ChokePointItem[];
+  total: number;
+  congested_count: number;
+  restricted_count: number;
+}
+
+export interface HedgingSolveRequest {
+  vehicle_id: string;
+  commodity: string;
+  cargo_tonnage?: number;
+  origin: string;
+  destination: string;
+  vehicle_golongan?: "GOL_I" | "GOL_II" | "GOL_III" | "GOL_IV" | "GOL_V";
+  fuel_type?: "biosolar" | "dexlite" | "pertamina_dex";
+  p_disruption?: number;
+  disruption_delay_hours?: number;
+  detour_distance_km?: number;
+  detour_time_hours?: number;
+  toll_segments?: string[];
+  hold_wait_hours?: number;
+  downtime_fixed_fee_idr?: number;
+}
+
+export interface PolicyBreakdown {
+  policy: "CONTINUE" | "REROUTE" | "HOLD";
+  cost_idr: number;
+  breakdown: Record<string, number>;
+  explanation: string;
+  risk_level: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+}
+
+export interface HedgingSolveResponse {
+  vehicle_id: string;
+  commodity: string;
+  perishability_tier: string;
+  decay_rate_per_hour: number;
+  cargo_value_idr: number;
+  spoilage_loss_idr: number;
+  continue_policy: PolicyBreakdown;
+  reroute_policy: PolicyBreakdown;
+  hold_policy: PolicyBreakdown;
+  optimal_policy: "CONTINUE" | "REROUTE" | "HOLD";
+  net_savings_idr: number;
+  recommendation_reason: string;
+}
+
+export interface ComplianceVerifyRequest {
+  vehicle_id: string;
+  origin: string;
+  destination: string;
+  traversed_roads?: string[];
+  vehicle_gross_weight_ton: number;
+  commodity: string;
+  driver_name?: string;
+  driver_phone?: string;
+  license_plate?: string;
+  has_bkhit_cert?: boolean;
+  bkhit_cert_id?: string;
+  manifest_hash?: string;
+}
+
+export type ComplianceCheckStatus = "PASSED" | "WARNING" | "HARD_BLOCK";
+
+export interface ComplianceCheckDetail {
+  category: "QUARANTINE_BKHIT" | "AXLE_LOAD_MST" | "SURAT_JALAN_MANIFEST";
+  status: ComplianceCheckStatus;
+  title: string;
+  detail: string;
+  remedy_action?: string | null;
+}
+
+export interface ComplianceVerifyResponse {
+  vehicle_id: string;
+  overall_status: ComplianceCheckStatus;
+  can_dispatch: boolean;
+  requires_override: boolean;
+  checks: ComplianceCheckDetail[];
+  timestamp: string;
+}
+
+

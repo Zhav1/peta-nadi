@@ -30,6 +30,8 @@ import {
   Shield
 } from 'lucide-react';
 import { useAuth } from '@/lib/authContext';
+import { SpoilageHedgingCard } from './SpoilageHedgingCard';
+import { ComplianceInspectorCard } from './ComplianceInspectorCard';
 
 interface MitigationTabProps {
   crisis: CrisisState;
@@ -590,6 +592,21 @@ export function MitigationTab({
         <FormattedMarkdown content={crisis.decision_support_output || ''} />
       </div>
 
+      {/* BLOCK C2 — SPOILAGE HEDGING COST MATRIX (PHASE 44 / FR-18) */}
+      <SpoilageHedgingCard
+        commodity={((crisis as unknown as Record<string, unknown>).commodities_affected as string[])?.[0] || 'Cabai Merah Keriting'}
+        vehicleId={((crisis as unknown as Record<string, unknown>).vehicle_id as string) || 'TRK-MEDAN-08'}
+        cargoTonnage={10.0}
+        origin={crisis.route_recommendations?.[activeRouteIdx ?? 0]?.route_name?.split('→')?.[0]?.trim() || 'Medan'}
+        destination={crisis.route_recommendations?.[activeRouteIdx ?? 0]?.route_name?.split('→')?.[1]?.trim() || 'Pekanbaru'}
+        detourDistanceKm={crisis.route_recommendations?.[activeRouteIdx ?? 0]?.distance_km || 85.0}
+        detourTimeHours={crisis.route_recommendations?.[activeRouteIdx ?? 0]?.eta_minutes ? (crisis.route_recommendations[activeRouteIdx ?? 0].eta_minutes / 60) : 2.5}
+        onApplyPolicy={(policy) => {
+          if (policy === 'REROUTE' && onSelectRoute) {
+            onSelectRoute(0);
+          }
+        }}
+      />
 
       {/* BLOCK D — HUMAN-IN-THE-LOOP (HITL) ROUTE RECOMMENDATIONS & ACTION */}
       <div className="flex flex-col gap-2.5">
@@ -624,6 +641,16 @@ export function MitigationTab({
         )}
       </div>
 
+      {/* BLOCK E — DIGITAL COMPLIANCE INSPECTOR (PHASE 44 / FR-19) */}
+      <ComplianceInspectorCard
+        vehicleId={((crisis as unknown as Record<string, unknown>).vehicle_id as string) || 'BK-8902-XG'}
+        origin="Medan"
+        destination="Pekanbaru"
+        traversedRoads={['Jalan Tol Medan - Tebing Tinggi', 'Lintas Timur Sumatera']}
+        vehicleGrossWeightTon={12.5}
+        commodity={((crisis as unknown as Record<string, unknown>).commodities_affected as string[])?.[0] || 'Cabai Merah'}
+        hasBkhitCert={false}
+      />
     </div>
   );
 }

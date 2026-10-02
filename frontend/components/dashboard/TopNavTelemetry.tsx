@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Zap, Truck, CloudRain, ChevronDown } from 'lucide-react';
 import { AgentStatusWidget } from '@/components/dashboard/AgentStatusWidget';
+import { IntermodalTerminalPopover } from '@/components/dashboard/IntermodalTerminalPopover';
 
 interface TopNavTelemetryProps {
   cuOptInfo?: { solver: string; compute_time_ms: number; savings_pct: number } | null;
@@ -166,6 +167,9 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
           </div>
         )}
       </div>
+
+      {/* 5. Pan-Sumatra Intermodal Choke-Points Popover */}
+      <IntermodalTerminalPopover />
     </div>
   );
 };
