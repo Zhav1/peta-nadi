@@ -59,7 +59,7 @@ async def extract_locations_llm(text: str) -> List[str]:
 
     try:
         genai.configure(api_key=settings.gemini_api_key)
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("gemini-3.5-flash-lite")
         
         prompt = (
             "Extract all Indonesian location names (roads, ports, cities, regencies, landmarks) from the text below. "

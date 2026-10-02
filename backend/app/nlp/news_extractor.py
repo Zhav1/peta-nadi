@@ -207,7 +207,7 @@ async def extract_structured_news(art: Dict[str, Any]) -> Dict[str, Any]:
             
             # Execute with short timeout to protect latency
             gen_text = await asyncio.wait_for(
-                LLMGateway.generate_content(prompt=prompt, model_name="gemini-1.5-flash"),
+                LLMGateway.generate_content(prompt=prompt, model_name="gemini-3.5-flash-lite"),
                 timeout=4.0
             )
             if gen_text:
