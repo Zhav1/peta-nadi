@@ -117,13 +117,24 @@ async def get_live_news(force_refresh: bool = Query(False, description="Force re
         structured_articles = await asyncio.gather(*extraction_tasks, return_exceptions=True)
         structured_articles = [a for a in structured_articles if isinstance(a, dict)]
         
-    final_articles = structured_articles if structured_articles else FALLBACK_STANDARDIZED_ARTICLES
+    # 3. Merge ground-truth scenario crisis intelligence with live feed
+    curated_titles = {a.get("title", "").strip().lower() for a in FALLBACK_STANDARDIZED_ARTICLES}
+    live_uniques = [
+        a for a in structured_articles 
+        if a.get("title", "").strip().lower() not in curated_titles
+    ]
     
-    # Sort: Tier 1 official & higher severity/confidence first
+    # Combined feed: Curated ground-truth crisis items guaranteed + live scraped items
+    final_articles = list(FALLBACK_STANDARDIZED_ARTICLES) + live_uniques
+    
+    # Sort: Severity rank (critical > high > medium > low), lane blocked, Tier 1 official, then confidence
+    severity_rank = {"critical": 4, "high": 3, "medium": 2, "low": 1}
     final_articles.sort(
         key=lambda x: (
+            severity_rank.get(str(x.get("severity", "medium")).lower(), 2),
+            1 if x.get("ground_truth_metrics", {}).get("lane_status") in ["BLOCKED", "RESTRICTED"] else 0,
             1 if x.get("source_tier") == "TIER_1_OFFICIAL" else 0,
-            x.get("confidence_score", 0.8)
+            float(x.get("confidence_score", 0.8) or 0.8)
         ),
         reverse=True
     )

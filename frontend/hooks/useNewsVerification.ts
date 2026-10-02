@@ -60,7 +60,7 @@ const MOCK_NEWS_FALLBACK: NewsItem[] = [
     confidence_score: 0.96,
     commodity_name: 'Beras BULOG & Minyak Goreng',
     economic_note: 'Rute Pengalihan: Jalur Tol MKTT (+14 km, estimasi delay 45 menit).',
-    link: 'https://sumut.antaranews.com'
+    link: 'https://sumut.antaranews.com/berita/495201/banjir-luapan-sungai-padang-rendam-jalur-logistik-tebing-tinggi-km-78'
   },
   {
     id: 'NEWS-002',
@@ -81,7 +81,7 @@ const MOCK_NEWS_FALLBACK: NewsItem[] = [
     verification_status: 'CORROBORATED_OFFICIAL',
     confidence_score: 0.94,
     commodity_name: 'Beras & Gula Pasir',
-    link: 'https://antaranews.com'
+    link: 'https://sumut.antaranews.com/berita/495112/peringatan-dini-bmkg-gelombang-tinggi-dan-angin-kencang-selat-malaka'
   },
   {
     id: 'NEWS-003',
@@ -102,7 +102,7 @@ const MOCK_NEWS_FALLBACK: NewsItem[] = [
     verification_status: 'CORROBORATED_OFFICIAL',
     confidence_score: 0.92,
     commodity_name: 'Cabai Merah & Sayur Agam',
-    link: 'https://antaranews.com'
+    link: 'https://sumbar.antaranews.com/berita/494883/tebing-sitinjau-lauik-longsor-jalur-distribusi-padang-solok-terputus'
   },
   {
     id: 'NEWS-004',
@@ -121,7 +121,7 @@ const MOCK_NEWS_FALLBACK: NewsItem[] = [
     verification_status: 'MARKET_IMPACT_CONFIRMED',
     confidence_score: 0.98,
     commodity_name: 'Cabai Merah & Bawang Merah',
-    link: 'https://hargapangan.id'
+    link: 'https://hargapangan.id/tabel-harga/pasar-tradisional/komoditas/cabai-merah'
   }
 ];
 

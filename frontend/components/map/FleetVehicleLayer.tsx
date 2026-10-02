@@ -158,9 +158,13 @@ export function FleetVehicleLayer({
     ];
 
     sprites.forEach(({ id, type, color }) => {
-      if (!targetMap.hasImage(id)) {
-        const imgData = createModalitySprite(type, color);
-        targetMap.addImage(id, imgData, { pixelRatio: 2 });
+      try {
+        if (!targetMap.hasImage(id)) {
+          const imgData = createModalitySprite(type, color);
+          targetMap.addImage(id, imgData, { pixelRatio: 2 });
+        }
+      } catch {
+        // Sprite may already exist or context not ready
       }
     });
   }, []);
@@ -169,68 +173,79 @@ export function FleetVehicleLayer({
   const setupLayers = useCallback((targetMap: mapboxgl.Map) => {
     if (!targetMap.isStyleLoaded()) return;
 
-    registerSprites(targetMap);
+    try {
+      registerSprites(targetMap);
 
-    // 1. Breadcrumb trails source & layer
-    if (!targetMap.getSource('fleet-breadcrumb-trails')) {
-      targetMap.addSource('fleet-breadcrumb-trails', {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] },
-      });
-    }
-    if (!targetMap.getLayer('fleet-breadcrumb-trails-layer')) {
-      targetMap.addLayer({
-        id: 'fleet-breadcrumb-trails-layer',
-        type: 'line',
-        source: 'fleet-breadcrumb-trails',
-        paint: {
-          'line-color': 'rgba(255, 255, 255, 0.15)',
-          'line-width': 1.0,
-          'line-dasharray': [1, 2],
-        },
-      });
-    }
+      // 1. Breadcrumb trails source & layer
+      if (!targetMap.getSource('fleet-breadcrumb-trails')) {
+        targetMap.addSource('fleet-breadcrumb-trails', {
+          type: 'geojson',
+          data: { type: 'FeatureCollection', features: [] },
+        });
+      }
+      if (!targetMap.getLayer('fleet-breadcrumb-trails-layer')) {
+        targetMap.addLayer({
+          id: 'fleet-breadcrumb-trails-layer',
+          type: 'line',
+          source: 'fleet-breadcrumb-trails',
+          paint: {
+            'line-color': 'rgba(255, 255, 255, 0.15)',
+            'line-width': 1.0,
+            'line-dasharray': [1, 2],
+          },
+        });
+      }
 
-    // 2. Bearing vectors source & layer
-    if (!targetMap.getSource('fleet-bearing-vectors')) {
-      targetMap.addSource('fleet-bearing-vectors', {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] },
-      });
-    }
-    if (!targetMap.getLayer('fleet-bearing-vectors-layer')) {
-      targetMap.addLayer({
-        id: 'fleet-bearing-vectors-layer',
-        type: 'line',
-        source: 'fleet-bearing-vectors',
-        paint: {
-          'line-color': ['get', 'color'],
-          'line-width': 1.5,
-          'line-dasharray': [2, 2],
-        },
-      });
-    }
+      // 2. Bearing vectors source & layer
+      if (!targetMap.getSource('fleet-bearing-vectors')) {
+        targetMap.addSource('fleet-bearing-vectors', {
+          type: 'geojson',
+          data: { type: 'FeatureCollection', features: [] },
+        });
+      }
+      if (!targetMap.getLayer('fleet-bearing-vectors-layer')) {
+        targetMap.addLayer({
+          id: 'fleet-bearing-vectors-layer',
+          type: 'line',
+          source: 'fleet-bearing-vectors',
+          paint: {
+            'line-color': ['get', 'color'],
+            'line-width': 1.5,
+            'line-dasharray': [2, 2],
+          },
+        });
+      }
 
-    // 3. Telemetry points source & symbol layer
-    if (!targetMap.getSource('fleet-telemetry-points')) {
-      targetMap.addSource('fleet-telemetry-points', {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] },
-      });
-    }
-    if (!targetMap.getLayer('fleet-telemetry-points-layer')) {
-      targetMap.addLayer({
-        id: 'fleet-telemetry-points-layer',
-        type: 'symbol',
-        source: 'fleet-telemetry-points',
-        layout: {
-          'icon-image': ['get', 'icon'],
-          'icon-rotate': ['get', 'heading'],
-          'icon-rotation-alignment': 'map',
-          'icon-allow-overlap': true,
-          'icon-ignore-placement': true,
-        },
-      });
+      // 3. Telemetry points source & symbol layer
+      if (!targetMap.getSource('fleet-telemetry-points')) {
+        targetMap.addSource('fleet-telemetry-points', {
+          type: 'geojson',
+          data: { type: 'FeatureCollection', features: [] },
+        });
+      }
+      if (!targetMap.getLayer('fleet-telemetry-points-layer')) {
+        targetMap.addLayer({
+          id: 'fleet-telemetry-points-layer',
+          type: 'symbol',
+          source: 'fleet-telemetry-points',
+          layout: {
+            'icon-image': ['get', 'icon'],
+            'icon-rotate': ['get', 'heading'],
+            'icon-rotation-alignment': 'map',
+            'icon-allow-overlap': true,
+            'icon-ignore-placement': true,
+          },
+        });
+
+        // Ensure newly added symbol layer has its layout properties immediately initialized
+        const styleAny = (targetMap as any).style;
+        const layerInst = styleAny?._layers?.['fleet-telemetry-points-layer'] || styleAny?._mergedLayers?.['fleet-telemetry-points-layer'];
+        if (layerInst && !layerInst.layout && typeof layerInst.recalculate === 'function') {
+          layerInst.recalculate({ zoom: targetMap.getZoom() }, styleAny?._availableImages || {});
+        }
+      }
+    } catch {
+      // Style was mutating, retry on idle
     }
   }, [registerSprites]);
 
@@ -238,19 +253,22 @@ export function FleetVehicleLayer({
   useEffect(() => {
     if (!map) return;
 
+    const handleSetup = () => {
+      if (map.isStyleLoaded()) {
+        setupLayers(map);
+      }
+    };
+
     if (map.isStyleLoaded()) {
       setupLayers(map);
-    } else {
-      map.once('style.load', () => setupLayers(map));
     }
 
-    const onStyleData = () => {
-      setupLayers(map);
-    };
-    map.on('styledata', onStyleData);
+    map.on('idle', handleSetup);
+    map.on('styledata', handleSetup);
 
     return () => {
-      map.off('styledata', onStyleData);
+      map.off('idle', handleSetup);
+      map.off('styledata', handleSetup);
     };
   }, [map, setupLayers]);
 
@@ -465,6 +483,12 @@ export function FleetVehicleLayer({
 
       // Update Mapbox WebGL sources
       try {
+        const styleAny = (map as any).style;
+        const layerInst = styleAny?._layers?.['fleet-telemetry-points-layer'] || styleAny?._mergedLayers?.['fleet-telemetry-points-layer'];
+        if (layerInst && !layerInst.layout && typeof layerInst.recalculate === 'function') {
+          layerInst.recalculate({ zoom: map.getZoom() }, styleAny?._availableImages || {});
+        }
+
         const pointsSource = map.getSource('fleet-telemetry-points') as mapboxgl.GeoJSONSource | undefined;
         if (pointsSource) {
           pointsSource.setData({
@@ -508,6 +532,10 @@ export function FleetVehicleLayer({
   // Clean up sources and layers on unmount
   useEffect(() => {
     return () => {
+      if (animRef.current) {
+        cancelAnimationFrame(animRef.current);
+        animRef.current = null;
+      }
       if (!map) return;
       try {
         if (map.getLayer('fleet-telemetry-points-layer')) map.removeLayer('fleet-telemetry-points-layer');
@@ -516,9 +544,6 @@ export function FleetVehicleLayer({
         if (map.getSource('fleet-telemetry-points')) map.removeSource('fleet-telemetry-points');
         if (map.getSource('fleet-bearing-vectors')) map.removeSource('fleet-bearing-vectors');
         if (map.getSource('fleet-breadcrumb-trails')) map.removeSource('fleet-breadcrumb-trails');
-        if (map.hasImage('truck-icon')) map.removeImage('truck-icon');
-        if (map.hasImage('vessel-icon')) map.removeImage('vessel-icon');
-        if (map.hasImage('plane-icon')) map.removeImage('plane-icon');
       } catch {
         // Map may be tearing down
       }

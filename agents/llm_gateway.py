@@ -27,7 +27,7 @@ class LLMGateway:
         cls, 
         prompt: str, 
         system_instruction: str = None, 
-        model_name: str = "gemini-1.5-flash",
+        model_name: str = "gemini-3.5-flash-lite",
         temperature: float = 0.2
     ) -> str:
         """

@@ -157,7 +157,7 @@ async def simulation_chat(req: ChatRequest):
         ai_reply = await LLMGateway.generate_content(
             prompt=prompt,
             system_instruction=system_instruction,
-            model_name="gemini-1.5-flash",
+            model_name="gemini-3.5-flash-lite",
             temperature=0.3
         )
     except Exception as e:

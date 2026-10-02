@@ -191,6 +191,7 @@ export default function CrisisMap({
       antialias: true,
     });
     mapRef.current = map;
+    if (typeof window !== 'undefined') (window as any)._mapboxMap = map;
 
     map.on('mousedown', (e) => {
       mouseDownPosRef.current = { x: e.point.x, y: e.point.y };
@@ -235,6 +236,7 @@ export default function CrisisMap({
     map.on('load', () => {
       isMapLoadedRef.current = true;
       setMapInstance(map);
+      (window as any)._mapboxMap = map;
       map.addControl(draw, 'top-left');
 
       renderHtmlHubMarkers();
@@ -924,9 +926,9 @@ export default function CrisisMap({
       />
 
       {/* Dynamic Fleet Vehicle Layer */}
-      {layerFilters.fleetVehicles && (
+      {mapInstance && layerFilters.fleetVehicles && (
         <FleetVehicleLayer
-          map={mapInstance || mapRef.current}
+          map={mapInstance}
           vehicles={activeFleet || []}
           activeRoutes={activeRoutes}
           activeRouteIdx={activeRouteIdx}

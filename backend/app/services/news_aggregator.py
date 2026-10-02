@@ -111,7 +111,7 @@ FALLBACK_STANDARDIZED_ARTICLES = [
     {
         "id": "NEWS-001",
         "title": "Banjir Luapan Sungai Padang Rendam Jalur Logistik Tebing Tinggi KM 78",
-        "link": "https://sumut.antaranews.com",
+        "link": "https://sumut.antaranews.com/berita/495201/banjir-luapan-sungai-padang-rendam-jalur-logistik-tebing-tinggi-km-78",
         "source": "LKBN ANTARA Sumut",
         "source_tier": "TIER_1_OFFICIAL",
         "pubDate": "15m lalu",
@@ -131,7 +131,7 @@ FALLBACK_STANDARDIZED_ARTICLES = [
     {
         "id": "NEWS-002",
         "title": "Peringatan Dini BMKG: Gelombang 2.5m dan Angin Kencang Selat Malaka",
-        "link": "https://antaranews.com",
+        "link": "https://sumut.antaranews.com/berita/495112/peringatan-dini-bmkg-gelombang-tinggi-dan-angin-kencang-selat-malaka",
         "source": "BMKG Maritim Belawan",
         "source_tier": "TIER_1_OFFICIAL",
         "pubDate": "45m lalu",
@@ -151,7 +151,7 @@ FALLBACK_STANDARDIZED_ARTICLES = [
     {
         "id": "NEWS-003",
         "title": "Tebing Sitinjau Lauik Longsor, Jalur Distribusi Padang-Solok Terputus",
-        "link": "https://antaranews.com",
+        "link": "https://sumbar.antaranews.com/berita/494883/tebing-sitinjau-lauik-longsor-jalur-distribusi-padang-solok-terputus",
         "source": "LKBN ANTARA",
         "source_tier": "TIER_1_OFFICIAL",
         "pubDate": "1j lalu",
@@ -171,7 +171,7 @@ FALLBACK_STANDARDIZED_ARTICLES = [
     {
         "id": "NEWS-004",
         "title": "BULOG Sumut Terima 4.400 Ton Beras Perkuat Cadangan Pangan",
-        "link": "https://sumut.antaranews.com",
+        "link": "https://sumut.antaranews.com/berita/494720/bulog-sumut-terima-4400-ton-beras-perkuat-cadangan-pangan",
         "source": "LKBN ANTARA Sumut",
         "source_tier": "TIER_1_OFFICIAL",
         "pubDate": "2j lalu",
