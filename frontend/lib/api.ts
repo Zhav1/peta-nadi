@@ -269,4 +269,27 @@ export const api = {
     roles: () =>
       request<import('./types').RoleCatalogItem[]>('/api/v1/auth/roles'),
   },
+  intermodal: {
+    listChokePoints: (params?: { status?: string; type?: string }) => {
+      const sp = new URLSearchParams();
+      if (params?.status) sp.append('status_filter', params.status);
+      if (params?.type) sp.append('chokepoint_type', params.type);
+      const qs = sp.toString() ? `?${sp.toString()}` : '';
+      return request<import('./types').ChokePointsListResponse>(`/api/v1/intermodal/chokepoints${qs}`);
+    },
+    getChokePoint: (id: string) =>
+      request<import('./types').ChokePointItem>(`/api/v1/intermodal/chokepoints/${id}`),
+    solveHedging: (req: import('./types').HedgingSolveRequest, inflationShock: number = 0.05) =>
+      request<import('./types').HedgingSolveResponse>(`/api/v1/intermodal/hedging/solve?inflation_shock_factor=${inflationShock}`, {
+        method: 'POST',
+        body: JSON.stringify(req),
+      }),
+    verifyCompliance: (req: import('./types').ComplianceVerifyRequest) =>
+      request<import('./types').ComplianceVerifyResponse>('/api/v1/intermodal/compliance/verify', {
+        method: 'POST',
+        body: JSON.stringify(req),
+      }),
+    getTollTariffs: () =>
+      request<Record<string, any>>('/api/v1/intermodal/toll-tariffs'),
+  },
 };
