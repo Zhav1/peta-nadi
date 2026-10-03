@@ -23,7 +23,12 @@ This document provides the complete empirical verification inventory for PreHub,
 | **FR-13** | Tactical Multi-Modal Telemetry, WebGL God's-Eye HUD & Transponder Ingestion | 6 | `test_vehicles_telemetry.py`, `FleetVehicleLayer.tsx`, `TargetLockReticle.tsx` | Passed |
 | **FR-14** | Dedicated Evaluation & Benchmark Dashboard (Reliability, Matrix & Savings) | 5 | `test_evaluation_router.py`, `EvaluationSection.tsx`, `ReliabilityDiagram.tsx` | Passed |
 | **FR-15** | Supabase Authentication & Multi-Role Workspace Management (RBAC) | 15 | `test_auth_rbac.py`, `AuthModal.tsx`, `MitigationTab.tsx` | Passed |
-| **TOTAL** | **Comprehensive Automated Verification Suite** | **103** | **12 Test Suites across Backend, Frontend WebGL, RBAC, Swarm & Persistence** | **100% Passed** |
+| **FR-16** | Self-Serve Fleet Onboarding & GPS Telematics Ingestion (Phase 43) | 9 | `test_fleet_ingest.py`, `FleetOnboardingModal.tsx` | Passed |
+| **FR-17** | Intermodal Sea-Land Terminal & Choke-Point Synchronization (Phase 44) | 6 | `test_intermodal_hedging_compliance.py`, `IntermodalTerminalPopover.tsx` | Passed |
+| **FR-18** | Operational Spoilage Hedging & Economic Cost-Benefit Solver (Phase 44) | 5 | `test_intermodal_hedging_compliance.py`, `SpoilageHedgingCard.tsx` | Passed |
+| **FR-19** | Digital Cargo Manifest & Agricultural Quarantine Compliance (Phase 44) | 6 | `test_intermodal_hedging_compliance.py`, `ComplianceInspectorCard.tsx` | Passed |
+| **FR-20** | Pilot Verification, Scenario Drills & Production Packaging (Phase 45) | 8 | `test_pilot_e2e.py`, `docker-compose.yml`, `PreHub_Pilot_Onboarding_Manual.md` | Passed |
+| **TOTAL** | **Comprehensive Automated Verification Suite** | **133** | **15 Test Modules across Backend, WebGL, RBAC, Swarm & Persistence** | **100% Passed** |
 
 ---
 
@@ -192,6 +197,60 @@ This document provides the complete empirical verification inventory for PreHub,
 | TEST-FR15-13 | `test_auth_rbac.py::test_rbac_approval_allowed_for_dispatcher` | RBAC | POST /api/v1/approvals with DISPATCHER Bearer token | Decision trace accepted and logged (201 Created) | Passed |
 | TEST-FR15-14 | `test_auth_rbac.py::test_rbac_approval_rejected_for_regulator` | RBAC | POST /api/v1/approvals with REGULATOR Bearer token | Rejected with HTTP 403 Forbidden (Only Dispatchers may approve) | Passed |
 | TEST-FR15-15 | `test_auth_rbac.py::test_rbac_approval_allowed_for_guest` | RBAC | POST /api/v1/approvals with GUEST Bearer token | Permitted in sandbox mode (201 Created) | Passed |
+
+### FR-16: Self-Serve Fleet Onboarding & GPS Telematics Ingestion (Phase 43)
+| Test ID | Module / Test Function | Test Type | Scenario & Input Vectors | Expected Invariant / Assertion | Result |
+| :--- | :--- | :--- | :--- | :--- | :---: |
+| TEST-FR16-01 | `test_fleet_ingest.py::test_manifest_template_endpoint` | Unit | GET /api/v1/fleet/onboarding/template | Returns text/csv template containing mandatory column headers | Passed |
+| TEST-FR16-02 | `test_fleet_ingest.py::test_register_single_vehicle_success` | Integration | POST /api/v1/fleet/onboarding/single-vehicle with valid manifest | 201 Created and vehicle persisted in SQLite local DB | Passed |
+| TEST-FR16-03 | `test_fleet_ingest.py::test_register_single_vehicle_regulator_forbidden` | RBAC | POST single-vehicle endpoint using REGULATOR role Bearer token | Rejected with HTTP 403 Forbidden | Passed |
+| TEST-FR16-04 | `test_fleet_ingest.py::test_bulk_manifest_upload_json` | Integration | POST /api/v1/fleet/onboarding/bulk-manifest with JSON records | Batch validates rows and inserts into custom vehicle store | Passed |
+| TEST-FR16-05 | `test_fleet_ingest.py::test_bulk_manifest_upload_csv_file` | Integration | POST /api/v1/fleet/onboarding/upload-csv with multipart CSV file | Ingests valid vehicle records and reports invalid format rows | Passed |
+| TEST-FR16-06 | `test_fleet_ingest.py::test_tms_telemetry_webhook_ingestion` | Integration | POST /api/v1/fleet/telemetry/ingest with dynamic GPS coordinate packet | Ingests position and updates instantaneous speed and bearing | Passed |
+| TEST-FR16-07 | `test_fleet_ingest.py::test_telemetry_service_dynamic_fusion` | Unit | `telemetry_service.get_all_vehicles()` | Fuses base simulation units and custom onboarded fleet cleanly | Passed |
+| TEST-FR16-08 | `test_fleet_ingest.py::test_cold_chain_excursion_evaluation_on_custom_fleet` | Unit | Custom reefer truck with cargo temperature > 4.0°C | Evaluates status as `EXCURSION` and triggers advisory | Passed |
+| TEST-FR16-09 | `test_fleet_ingest.py::test_custom_vehicle_listing_and_deletion` | Integration | GET /api/v1/fleet/custom-vehicles and DELETE by vehicle ID | Successfully lists active custom vehicles and handles deletion | Passed |
+
+### FR-17: Intermodal Sea-Land Terminal & Choke-Point Synchronization (Phase 44)
+| Test ID | Module / Test Function | Test Type | Scenario & Input Vectors | Expected Invariant / Assertion | Result |
+| :--- | :--- | :--- | :--- | :--- | :---: |
+| TEST-FR17-01 | `test_intermodal_hedging_compliance.py::test_chokepoints_registry_integrity` | Unit | Query full Pan-Sumatra strategic gateways registry | Exactly 18 gateways verified (7 maritime ports, 11 mountain passes) | Passed |
+| TEST-FR17-02 | `test_intermodal_hedging_compliance.py::test_intermodal_delay_multiplier_clamping` | Unit | Simulated queue variation ($N_{\text{queue}} = 0$ to $50$) | Delay multiplier dynamically calculated and clamped strictly to $[1.0, 3.5]$ | Passed |
+| TEST-FR17-03 | `test_intermodal_hedging_compliance.py::test_haversine_and_route_intermodal_delay` | Unit | Route polyline intersecting Pelabuhan Belawan and Tebing Tinggi | Computes Haversine proximity delay without false positives on distant routes | Passed |
+| TEST-FR17-04 | `test_intermodal_hedging_compliance.py::test_api_chokepoints_list` | Integration | GET /api/v1/intermodal/chokepoints | Returns list of all 18 choke-points with status, coordinates, and dwelling times | Passed |
+| TEST-FR17-05 | `test_intermodal_hedging_compliance.py::test_api_chokepoints_detail_and_404` | Integration | GET /api/v1/intermodal/chokepoints/{id} | Returns 200 OK for valid ID; returns 404 Not Found for non-existent ID | Passed |
+| TEST-FR17-06 | `test_intermodal_hedging_compliance.py::test_bpjt_toll_tariffs_endpoint` | Integration | GET /api/v1/spoilage/hedging/toll-tariffs | Returns full BPJT tariff lookup matrix for Golongan I through Golongan V | Passed |
+
+### FR-18: Operational Spoilage Hedging & Economic Cost-Benefit Solver (Phase 44)
+| Test ID | Module / Test Function | Test Type | Scenario & Input Vectors | Expected Invariant / Assertion | Result |
+| :--- | :--- | :--- | :--- | :--- | :---: |
+| TEST-FR18-01 | `test_intermodal_hedging_compliance.py::test_bpjt_toll_segment_tariffs` | Unit | Lookup BPJT toll tariffs across 7 Trans-Sumatra segments | Verified exact tariffs across Golongan I through V | Passed |
+| TEST-FR18-02 | `test_intermodal_hedging_compliance.py::test_4_tier_perishability_decay` | Unit | Evaluates 4-tier exponential perishability decay formula | $\text{Loss}(t) = \text{Value} \times (1 - e^{-\delta t})$ with $\delta \in [0.0005, 0.025]$ | Passed |
+| TEST-FR18-03 | `test_intermodal_hedging_compliance.py::test_spoilage_hedging_solve_perishable_high_risk` | Unit | Vehicle carrying Cabai Merah encountering high disruption risk | Evaluates Continue vs Reroute vs Hold; recommends REROUTE with net IDR savings | Passed |
+| TEST-FR18-04 | `test_intermodal_hedging_compliance.py::test_spoilage_hedging_solve_dry_bulk_low_risk` | Unit | Vehicle carrying Beras SPHP encountering minor delay | Recommends CONTINUE policy, avoiding unnecessary toll expenditure | Passed |
+| TEST-FR18-05 | `test_intermodal_hedging_compliance.py::test_api_hedging_solve` | Integration | POST /api/v1/spoilage/hedging/solve | Returns optimal policy, net savings in IDR, and policy breakdowns | Passed |
+
+### FR-19: Digital Cargo Manifest & Agricultural Quarantine Compliance (Phase 44)
+| Test ID | Module / Test Function | Test Type | Scenario & Input Vectors | Expected Invariant / Assertion | Result |
+| :--- | :--- | :--- | :--- | :--- | :---: |
+| TEST-FR19-01 | `test_intermodal_hedging_compliance.py::test_compliance_bkhit_inter_island_hard_block` | Compliance | Inter-island / strait crossing route missing BKHIT quarantine cert | Emits `HARD_BLOCK` status; `can_dispatch: False`, `requires_override: False` | Passed |
+| TEST-FR19-02 | `test_intermodal_hedging_compliance.py::test_compliance_bkhit_inter_island_passed` | Compliance | Inter-island route with valid BKHIT certificate attached | Emits `PASSED` status; `can_dispatch: True` | Passed |
+| TEST-FR19-03 | `test_intermodal_hedging_compliance.py::test_compliance_bkhit_intra_sumatra_no_block` | Compliance | Intra-Sumatra road transit without strait crossing | Emits `PASSED` status; quarantine check is not triggered | Passed |
+| TEST-FR19-04 | `test_intermodal_hedging_compliance.py::test_compliance_mst_axle_load_warning` | Compliance | Gross vehicle weight >8.0 Tons on Class III collector road | Emits tactical `WARNING` advisory; `requires_override: True` | Passed |
+| TEST-FR19-05 | `test_intermodal_hedging_compliance.py::test_compliance_surat_jalan_manifest_warning` | Compliance | Delivery Order missing driver phone or cryptographic manifest hash | Emits advisory warning while allowing conditional dispatch | Passed |
+| TEST-FR19-06 | `test_intermodal_hedging_compliance.py::test_api_compliance_verify` | Integration | POST /api/v1/compliance/verify with manifest and route | Returns complete compliance checks detail array and overall status | Passed |
+
+### FR-20: Pilot Verification, Scenario Drills & Production Packaging (Phase 45)
+| Test ID | Module / Test Function | Test Type | Scenario & Input Vectors | Expected Invariant / Assertion | Result |
+| :--- | :--- | :--- | :--- | :--- | :---: |
+| TEST-FR20-01 | `test_pilot_e2e.py::test_drill1_belawan_pekanbaru_spoilage_hedging_e2e` | End-to-End | Drill 1: `BK 8812 XL`, 4.5T Cabai Merah, flood at Tebing Tinggi Km 42 | REROUTE policy recommended, net savings >IDR 60M, BPJT Gol II toll IDR 85,000 | Passed |
+| TEST-FR20-02 | `test_pilot_e2e.py::test_drill1_whatsapp_link_generation_and_decision_logging` | Integration | Detour approval by Dispatcher, driver phone `+6281234567891` | Generates valid `https://wa.me/` URI; logs ACCEPT to SQLite `route_decision_traces` | Passed |
+| TEST-FR20-03 | `test_pilot_e2e.py::test_drill1_outcome_verification_t12h` | Integration | T+12h field outcome post at Tebing Tinggi corridor | SQLite stores record in `ground_truth_outcomes`, variance accuracy verified | Passed |
+| TEST-FR20-04 | `test_pilot_e2e.py::test_drill2_bakauheni_merak_bkhit_quarantine_hard_block` | Compliance | Drill 2: `BE 9123 QP`, 18.0T frozen beef, Sunda Strait route, missing BKHIT cert | Emits `HARD_BLOCK`, `can_dispatch: False`, non-negotiable block | Passed |
+| TEST-FR20-05 | `test_pilot_e2e.py::test_drill2_bakauheni_merak_bkhit_quarantine_release` | Compliance | Attach `BKHIT-SUM-2026-9921`, query Bakauheni port queue (22 vessels) | Emits `PASSED`, `can_dispatch: True`, $M_{\text{intermodal}} \in [1.0, 3.5]$ applied | Passed |
+| TEST-FR20-06 | `test_pilot_e2e.py::test_drill3_sitinjau_lauik_mst_axle_load_warning` | Compliance | Drill 3: `BA 8452 NM`, 14.2T gross weight on Class III Sitinjau Lauik pass (8T limit) | Emits `WARNING`, `can_dispatch: True`, `requires_override: True` | Passed |
+| TEST-FR20-07 | `test_pilot_e2e.py::test_drill3_sitinjau_lauik_operator_override_with_notes` | HITL Audit | Operator submits OVERRIDE with Satgas Pangan escort justification | Rejects empty notes with 422; accepts justified payload; logs audit trail | Passed |
+| TEST-FR20-08 | `test_pilot_e2e.py::test_pilot_real_data_integrity_invariants` | Integrity Audit | Audit toll tariffs, fuel rates, gateway coords, and road topology | 0% mockup data, 100% BPJT tariff match, 54 nodes connected, 18 gateways valid | Passed |
 
 ---
 

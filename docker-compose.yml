@@ -1,50 +1,74 @@
 services:
   redis:
     image: redis:7-alpine
-    container_name: petanadi-redis
+    container_name: prehub-redis
     ports:
       - "6379:6379"
+    volumes:
+      - redis_data:/data
     restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
 
   backend:
     build:
       context: .
       dockerfile: backend/Dockerfile
-    container_name: petanadi-backend
+    container_name: prehub-backend
     ports:
       - "8000:8000"
     volumes:
-      - ./backend:/app/backend
-      - ./agents:/app/agents
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+      - prehub_data:/app/data
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
     env_file:
       - .env
     environment:
-      - REDIS_URL=redis://redis:6379
+      - PYTHONUNBUFFERED=1
+      - PORT=8000
+      - REDIS_URL=redis://prehub-redis:6379
       - REDIS_PASSWORD=
-      - WATCHFILES_FORCE_POLLING=true
+      - PREHUB_DB_PATH=/app/data/prehub_local.db
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile.dev
-    container_name: petanadi-frontend
+      dockerfile: Dockerfile
+    container_name: prehub-frontend
     ports:
       - "3000:3000"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-      - /app/.next
     environment:
-      - WATCHPACK_POLLING=true
-      - CHOKIDAR_USEPOLLING=true
-      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
-      - NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL:-ws://localhost:8000}
-      - NEXT_PUBLIC_MAPBOX_TOKEN=${NEXT_PUBLIC_MAPBOX_TOKEN}
-      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
-      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
-    command: npm run dev
+      - NODE_ENV=production
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_WS_URL=ws://localhost:8000
+    depends_on:
+      backend:
+        condition: service_healthy
     restart: always
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  prehub_data:
+    name: prehub_data
+  redis_data:
+    name: prehub_redis_data
