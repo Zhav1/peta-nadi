@@ -140,19 +140,27 @@ export default function EvaluationSection({
   return (
     <div className="flex flex-col space-y-5 max-w-7xl mx-auto pb-12">
       {/* Sub-Tab Navigation Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-1.5 rounded-2xl bg-[#13161c]/90 backdrop-blur-md border border-white/10 shadow-lg">
-        <div className="flex items-center gap-1.5 font-mono text-xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-1.5 rounded-xl bg-[#0c1017] border border-white/10 shadow-lg">
+        <div className="flex items-center gap-1.5 font-sans text-xs">
           <button
             type="button"
             onClick={() => setActiveSubTab('benchmarks')}
-            className={`cursor-pointer px-4 py-2 rounded-xl transition font-bold ${activeSubTab === 'benchmarks' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30' : 'text-slate-400 hover:text-white'}`}
+            className={`cursor-pointer px-4 py-2 rounded-lg transition font-medium ${
+              activeSubTab === 'benchmarks' 
+                ? 'bg-white text-[#080d14] font-semibold' 
+                : 'text-slate-400 hover:text-white hover:bg-white/5'
+            }`}
           >
-            Tolok Ukur Model ({testMatrix?.total_tests || 133} Tests)
+            Tolok Ukur Model ({testMatrix?.total_tests || 133} Uji)
           </button>
           <button
             type="button"
             onClick={() => setActiveSubTab('observability')}
-            className={`cursor-pointer px-4 py-2 rounded-xl transition font-bold ${activeSubTab === 'observability' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30' : 'text-slate-400 hover:text-white'}`}
+            className={`cursor-pointer px-4 py-2 rounded-lg transition font-medium ${
+              activeSubTab === 'observability' 
+                ? 'bg-white text-[#080d14] font-semibold' 
+                : 'text-slate-400 hover:text-white hover:bg-white/5'
+            }`}
           >
             Diagnostik API & Observabilitas
           </button>
@@ -161,7 +169,7 @@ export default function EvaluationSection({
         {activeSubTab === 'benchmarks' && (
           <div className="flex items-center gap-3 pr-2 font-mono text-xs">
             {lastRefreshed && (
-              <span className="text-[11px] text-slate-400 hidden md:inline">
+              <span className="text-xs text-slate-400 hidden md:inline">
                 Sinkronisasi: <strong className="text-slate-200">{lastRefreshed}</strong>
               </span>
             )}
@@ -169,7 +177,7 @@ export default function EvaluationSection({
               type="button"
               onClick={loadAllEvaluationData}
               disabled={isLoading}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 border border-cyan-500/30 transition disabled:opacity-50 cursor-pointer font-semibold text-xs"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 text-slate-300 hover:text-white hover:bg-white/10 border border-white/10 transition disabled:opacity-50 cursor-pointer font-medium text-xs"
             >
               <RotateCcw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
               <span>Muat Ulang</span>
@@ -183,125 +191,59 @@ export default function EvaluationSection({
       ) : (
         <>
           {/* Top Banner Header */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[#13161c]/90 backdrop-blur-md border border-white/10 rounded-2xl p-5 shadow-2xl">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[#0c1017] border border-white/10 rounded-xl p-5 shadow-xl">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
-                <Award className="w-6 h-6" />
+              <div className="p-2.5 rounded-lg bg-white/5 border border-white/10 text-slate-300">
+                <Award className="w-5 h-5" />
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-lg md:text-xl font-bold text-white tracking-wide font-sans">
-                    Evaluasi Empiris & Tolok Ukur Validasi
-                  </h1>
-                  <span className="px-2.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 text-[11px] font-mono font-semibold">
-                    Milestone M3: Pilot Operations & Verified Multi-Persona Platform
-                  </span>
-                </div>
-                <p className="text-xs text-slate-400 font-mono mt-0.5">
+                <h1 className="text-base md:text-lg font-bold text-white tracking-wide font-headline">
+                  Evaluasi Empiris & Tolok Ukur Validasi
+                </h1>
+                <p className="text-xs text-slate-400 font-sans mt-0.5">
                   Bukti empiris keandalan model kecerdasan logistik PreHub berdasarkan dataset ground truth Sumatra (N=60), pengujian otomatis, dan kalibrasi probabilitas.
                 </p>
               </div>
             </div>
           </div>
 
+          {/* 5 Empirical Benchmark Ledger Row */}
+          <div className="bg-[#0c1017] border border-white/10 p-5 rounded-xl shadow-xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 divide-y lg:divide-y-0 lg:divide-x divide-white/10">
+            {/* Metric 1: Precision */}
+            <div className="lg:px-4 first:pl-0 last:pr-0 py-3 lg:py-0">
+              <span className="text-xs font-mono text-slate-400 uppercase tracking-wider block mb-1">Presisi Deteksi</span>
+              <p className="text-2xl font-mono font-bold text-white">{(precision * 100).toFixed(1)}%</p>
+              <p className="text-xs font-mono text-slate-400 mt-1">Target: &gt; 85.0%</p>
+            </div>
 
-      {/* 5 Empirical Benchmark Scorecards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
-        {/* Metric 1: Precision */}
-        <div className="p-4 rounded-2xl bg-[#13161c]/90 backdrop-blur-md border border-white/10 flex flex-col justify-between shadow-lg">
-          <div className="flex items-center justify-between text-xs font-mono text-slate-400">
-            <span>Presisi Deteksi</span>
-            <span className="p-1 rounded bg-emerald-500/10 text-emerald-400">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-            </span>
-          </div>
-          <div className="my-2">
-            <div className="text-2xl font-bold font-mono text-emerald-400">
-              {(precision * 100).toFixed(1)}%
+            {/* Metric 2: Recall */}
+            <div className="lg:px-4 first:pl-0 last:pr-0 py-3 lg:py-0">
+              <span className="text-xs font-mono text-slate-400 uppercase tracking-wider block mb-1">Sensitivitas (Recall)</span>
+              <p className="text-2xl font-mono font-bold text-white">{(recall * 100).toFixed(1)}%</p>
+              <p className="text-xs font-mono text-slate-400 mt-1">Target: &gt; 80.0%</p>
+            </div>
+
+            {/* Metric 3: F1-Score */}
+            <div className="lg:px-4 first:pl-0 last:pr-0 py-3 lg:py-0">
+              <span className="text-xs font-mono text-slate-400 uppercase tracking-wider block mb-1">Skor F1 Komposit</span>
+              <p className="text-2xl font-mono font-bold text-white">{f1Score.toFixed(3)}</p>
+              <p className="text-xs font-mono text-slate-400 mt-1">Target: &gt; 0.820</p>
+            </div>
+
+            {/* Metric 4: Brier Score */}
+            <div className="lg:px-4 first:pl-0 last:pr-0 py-3 lg:py-0">
+              <span className="text-xs font-mono text-slate-400 uppercase tracking-wider block mb-1">Brier Kalibrasi</span>
+              <p className="text-2xl font-mono font-bold text-white">{brierScore.toFixed(4)}</p>
+              <p className="text-xs font-mono text-slate-400 mt-1">Target: &le; 0.100</p>
+            </div>
+
+            {/* Metric 5: Latency */}
+            <div className="lg:px-4 first:pl-0 last:pr-0 py-3 lg:py-0">
+              <span className="text-xs font-mono text-slate-400 uppercase tracking-wider block mb-1">Latensi Inferensi</span>
+              <p className="text-2xl font-mono font-bold text-white">{latencyMs.toFixed(1)} ms</p>
+              <p className="text-xs font-mono text-slate-400 mt-1">Target: &lt; 5.0 ms</p>
             </div>
           </div>
-          <div className="flex items-center justify-between text-[11px] font-mono pt-2 border-t border-white/5">
-            <span className="text-slate-500">Target: &gt; 85.0%</span>
-            <span className="text-emerald-400 font-semibold">Tercapai</span>
-          </div>
-        </div>
-
-        {/* Metric 2: Recall */}
-        <div className="p-4 rounded-2xl bg-[#13161c]/90 backdrop-blur-md border border-white/10 flex flex-col justify-between shadow-lg">
-          <div className="flex items-center justify-between text-xs font-mono text-slate-400">
-            <span>Sensitivitas (Recall)</span>
-            <span className="p-1 rounded bg-emerald-500/10 text-emerald-400">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-            </span>
-          </div>
-          <div className="my-2">
-            <div className="text-2xl font-bold font-mono text-emerald-400">
-              {(recall * 100).toFixed(1)}%
-            </div>
-          </div>
-          <div className="flex items-center justify-between text-[11px] font-mono pt-2 border-t border-white/5">
-            <span className="text-slate-500">Target: &gt; 80.0%</span>
-            <span className="text-emerald-400 font-semibold">Tercapai</span>
-          </div>
-        </div>
-
-        {/* Metric 3: F1-Score */}
-        <div className="p-4 rounded-2xl bg-[#13161c]/90 backdrop-blur-md border border-white/10 flex flex-col justify-between shadow-lg">
-          <div className="flex items-center justify-between text-xs font-mono text-slate-400">
-            <span>Skor F1 Komposit</span>
-            <span className="p-1 rounded bg-cyan-500/10 text-cyan-400">
-              <Activity className="w-3.5 h-3.5" />
-            </span>
-          </div>
-          <div className="my-2">
-            <div className="text-2xl font-bold font-mono text-cyan-400">
-              {f1Score.toFixed(3)}
-            </div>
-          </div>
-          <div className="flex items-center justify-between text-[11px] font-mono pt-2 border-t border-white/5">
-            <span className="text-slate-500">Target: &gt; 0.820</span>
-            <span className="text-cyan-400 font-semibold">Tercapai</span>
-          </div>
-        </div>
-
-        {/* Metric 4: Brier Score */}
-        <div className="p-4 rounded-2xl bg-[#13161c]/90 backdrop-blur-md border border-white/10 flex flex-col justify-between shadow-lg">
-          <div className="flex items-center justify-between text-xs font-mono text-slate-400">
-            <span>Brier Score Kalibrasi</span>
-            <span className="p-1 rounded bg-emerald-500/10 text-emerald-400">
-              <ShieldCheck className="w-3.5 h-3.5" />
-            </span>
-          </div>
-          <div className="my-2">
-            <div className="text-2xl font-bold font-mono text-emerald-400">
-              {brierScore.toFixed(4)}
-            </div>
-          </div>
-          <div className="flex items-center justify-between text-[11px] font-mono pt-2 border-t border-white/5">
-            <span className="text-slate-500">Target: ≤ 0.100</span>
-            <span className="text-emerald-400 font-semibold">Terkalibrasi</span>
-          </div>
-        </div>
-
-        {/* Metric 5: Inference Latency */}
-        <div className="p-4 rounded-2xl bg-[#13161c]/90 backdrop-blur-md border border-white/10 flex flex-col justify-between shadow-lg">
-          <div className="flex items-center justify-between text-xs font-mono text-slate-400">
-            <span>Latensi Inferensi Solver</span>
-            <span className="p-1 rounded bg-cyan-500/10 text-cyan-400">
-              <Clock className="w-3.5 h-3.5" />
-            </span>
-          </div>
-          <div className="my-2">
-            <div className="text-2xl font-bold font-mono text-cyan-400">
-              {latencyMs.toFixed(3)} ms
-            </div>
-          </div>
-          <div className="flex items-center justify-between text-[11px] font-mono pt-2 border-t border-white/5">
-            <span className="text-slate-500">Target: &lt; 15 mnt</span>
-            <span className="text-cyan-400 font-semibold">Sub-Milidetik</span>
-          </div>
-        </div>
-      </div>
 
       {/* Split Analytical Canvas: Reliability Diagram + Corridor Efficiency */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -317,25 +259,25 @@ export default function EvaluationSection({
       <TestMatrixTable tests={testMatrix?.tests} isLoading={isLoading} />
 
       {/* Closed-Loop Decision Trace & Ground-Truth Outcome Audit Log */}
-      <div className="flex flex-col bg-[#13161c]/90 backdrop-blur-md border border-white/10 rounded-2xl p-5 shadow-2xl overflow-hidden">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-4 border-b border-white/10">
+      <div className="flex flex-col bg-[#0c1017] border border-[#1c2432] rounded-lg p-5 shadow-xl overflow-hidden">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-4 border-b border-[#1c2432]">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+            <div className="p-2 rounded-md bg-white/5 border border-white/10 text-slate-300">
               <History className="w-4 h-4" />
             </div>
             <div>
               <h3 className="text-sm font-semibold text-white tracking-wide font-sans">
                 Audit Keputusan Operator & Verifikasi Realitas Lapangan (T+12h / T+24h)
               </h3>
-              <p className="text-[11px] text-slate-400 font-mono">
+              <p className="text-xs text-slate-400 font-mono">
                 Pencatatan Keputusan Tindakan Mitigasi, Verifikasi Lapangan Pasca-Disrupsi & Faktor Rekalibrasi Bobot
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 font-mono text-[11px]">
-            <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium flex items-center gap-1.5">
-              <Sliders className="w-3.5 h-3.5" />
+          <div className="flex items-center gap-2 font-mono text-xs">
+            <span className="px-2.5 py-1 rounded bg-[#121822] text-emerald-400 border border-[#1c2432] font-medium flex items-center gap-1.5">
+              <Sliders className="w-3.5 h-3.5 text-slate-400" />
               Laju Rekalibrasi: η = 0.05
             </span>
           </div>
@@ -343,30 +285,30 @@ export default function EvaluationSection({
 
         {/* Adaptive Sensor Weights Banner */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 my-4">
-          <div className="p-3 rounded-xl bg-black/40 border border-white/5 flex items-center justify-between font-mono text-xs">
+          <div className="p-3 rounded-lg bg-[#121822] border border-[#1c2432] flex items-center justify-between font-mono text-xs">
             <span className="text-slate-400">Bobot Sensor Cuaca (BMKG/NWP):</span>
             <div className="flex items-center gap-1.5 font-bold">
               <span className="text-slate-400">0.35</span>
-              <span className="text-cyan-400">→</span>
-              <span className="text-emerald-400">0.36 (+0.01)</span>
+              <span className="text-slate-500">→</span>
+              <span className="text-emerald-400 tabular-nums">0.36 (+0.01)</span>
             </div>
           </div>
 
-          <div className="p-3 rounded-xl bg-black/40 border border-white/5 flex items-center justify-between font-mono text-xs">
+          <div className="p-3 rounded-lg bg-[#121822] border border-[#1c2432] flex items-center justify-between font-mono text-xs">
             <span className="text-slate-400">Bobot Trafik Jalan (TomTom):</span>
             <div className="flex items-center gap-1.5 font-bold">
               <span className="text-slate-400">0.35</span>
-              <span className="text-cyan-400">→</span>
-              <span className="text-amber-400">0.34 (-0.01)</span>
+              <span className="text-slate-500">→</span>
+              <span className="text-amber-400 tabular-nums">0.34 (-0.01)</span>
             </div>
           </div>
 
-          <div className="p-3 rounded-xl bg-black/40 border border-white/5 flex items-center justify-between font-mono text-xs">
+          <div className="p-3 rounded-lg bg-[#121822] border border-[#1c2432] flex items-center justify-between font-mono text-xs">
             <span className="text-slate-400">Bobot Berita & OSINT (Antara):</span>
             <div className="flex items-center gap-1.5 font-bold">
               <span className="text-slate-400">0.30</span>
-              <span className="text-cyan-400">→</span>
-              <span className="text-slate-200">0.30 (Stabil)</span>
+              <span className="text-slate-500">→</span>
+              <span className="text-slate-200 tabular-nums">0.30 (Stabil)</span>
             </div>
           </div>
         </div>
@@ -375,7 +317,7 @@ export default function EvaluationSection({
         <div className="overflow-x-auto -mx-5 px-5">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="border-b border-white/10 text-[11px] font-mono text-slate-400 uppercase tracking-wider">
+              <tr className="border-b border-[#1c2432] text-xs font-mono text-slate-400 uppercase tracking-wider">
                 <th className="py-2.5 px-3">ID Log / Waktu</th>
                 <th className="py-2.5 px-3">Insiden Disrupsi</th>
                 <th className="py-2.5 px-3">Horizon</th>
@@ -385,12 +327,12 @@ export default function EvaluationSection({
                 <th className="py-2.5 px-3">Catatan Observasi</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5 font-mono">
+            <tbody className="divide-y divide-[#1c2432] font-mono">
               {outcomes.map((item) => (
-                <tr key={item.id} className="hover:bg-white/5 transition-colors">
-                  <td className="py-3 px-3 text-slate-400 whitespace-nowrap text-[11px]">
-                    <span className="text-cyan-400 font-bold block">{item.id}</span>
-                    <span className="text-[10px] text-slate-500">
+                <tr key={item.id} className="hover:bg-white/[0.02] transition-colors">
+                  <td className="py-3 px-3 text-slate-400 whitespace-nowrap text-xs">
+                    <span className="text-white font-bold block">{item.id}</span>
+                    <span className="text-xs text-slate-500 tabular-nums">
                       {new Date(item.created_at).toLocaleDateString('id-ID')}
                     </span>
                   </td>
@@ -400,20 +342,20 @@ export default function EvaluationSection({
                   </td>
 
                   <td className="py-3 px-3 whitespace-nowrap">
-                    <span className="px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 text-[10px]">
+                    <span className="px-2 py-0.5 rounded bg-white/10 text-slate-200 border border-white/20 text-xs">
                       {item.horizon}
                     </span>
                   </td>
 
-                  <td className="py-3 px-3 text-right whitespace-nowrap text-amber-400 font-bold">
+                  <td className="py-3 px-3 text-right whitespace-nowrap text-amber-400 font-bold tabular-nums">
                     {item.observed_delay_hours.toFixed(1)} Jam
                   </td>
 
-                  <td className="py-3 px-3 text-right whitespace-nowrap text-red-400 font-bold">
+                  <td className="py-3 px-3 text-right whitespace-nowrap text-rose-400 font-bold tabular-nums">
                     +{item.actual_price_spike_pct.toFixed(1)}%
                   </td>
 
-                  <td className="py-3 px-3 text-slate-300 text-[11px] whitespace-nowrap">
+                  <td className="py-3 px-3 text-slate-300 text-xs whitespace-nowrap">
                     {item.verified_by}
                   </td>
 

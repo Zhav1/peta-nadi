@@ -261,42 +261,42 @@ export function FleetOnboardingModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 animate-fade-in"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       <div
-        className="relative w-full max-w-3xl overflow-hidden rounded-2xl border border-white/10 bg-[#0c0e12]/95 backdrop-blur-xl shadow-2xl text-slate-100 flex flex-col max-h-[90vh]"
+        className="relative w-full max-w-3xl overflow-hidden rounded-lg border border-[#1c2432] bg-[#0c1017] shadow-xl text-slate-100 flex flex-col max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-white/[0.02]">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#1c2432] bg-[#121822]">
           <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
-              <PlusCircle className="w-5 h-5" />
+            <div className="flex items-center justify-center w-8 h-8 rounded-md bg-[#0c1017] border border-[#1c2432] text-slate-200">
+              <PlusCircle className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-slate-100 tracking-wide">
-                Self-Serve Fleet Onboarding & Live GPS
+              <h2 className="text-sm font-semibold text-white tracking-wide">
+                Integrasi Armada & Telemetri GPS
               </h2>
               <p className="text-xs text-slate-400">
-                Integrasi armada kustom, unggah manifest logistik, dan streaming telemetri TMS
+                Pendaftaran armada mandiri, unggah manifest logistik, dan streaming telemetri TMS
               </p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-white/5 transition-colors cursor-pointer"
+            className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-[#0c1017] transition-colors cursor-pointer"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Role Warning Banner for Regulator */}
         {isRegulator && (
-          <div className="px-6 py-2.5 bg-amber-500/10 border-b border-amber-500/20 flex items-center gap-2 text-xs text-amber-300">
+          <div className="px-6 py-2.5 bg-amber-950/30 border-b border-amber-500/20 flex items-center gap-2 text-xs text-amber-300">
             <AlertTriangle className="w-4 h-4 shrink-0" />
             <span>
               Mode Regulator (Read-Only): Anda dapat melihat spesifikasi dan format integrasi, namun perubahan dibatasi.
@@ -305,21 +305,21 @@ export function FleetOnboardingModal({
         )}
 
         {/* Tab Selector */}
-        <div className="flex border-b border-white/10 bg-black/40 px-6 pt-2 gap-2">
+        <div className="flex border-b border-[#1c2432] bg-[#080d14] px-6 pt-2 gap-2">
           <button
             type="button"
             onClick={() => {
               setActiveTab('single');
               setFeedback(null);
             }}
-            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-medium rounded-t-lg transition-all cursor-pointer border-b-2 ${
+            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-medium rounded-t-md transition-colors cursor-pointer border-b-2 ${
               activeTab === 'single'
-                ? 'border-cyan-400 text-cyan-300 bg-cyan-500/10'
-                : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-white/5'
+                ? 'border-white text-white bg-[#0c1017]'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
             <Truck className="w-3.5 h-3.5" />
-            Pendaftaran Manual (Single)
+            Pendaftaran Manual
           </button>
           <button
             type="button"
@@ -327,10 +327,10 @@ export function FleetOnboardingModal({
               setActiveTab('manifest');
               setFeedback(null);
             }}
-            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-medium rounded-t-lg transition-all cursor-pointer border-b-2 ${
+            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-medium rounded-t-md transition-colors cursor-pointer border-b-2 ${
               activeTab === 'manifest'
-                ? 'border-cyan-400 text-cyan-300 bg-cyan-500/10'
-                : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-white/5'
+                ? 'border-white text-white bg-[#0c1017]'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
             <FileText className="w-3.5 h-3.5" />
@@ -342,10 +342,10 @@ export function FleetOnboardingModal({
               setActiveTab('webhook');
               setFeedback(null);
             }}
-            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-medium rounded-t-lg transition-all cursor-pointer border-b-2 ${
+            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-medium rounded-t-md transition-colors cursor-pointer border-b-2 ${
               activeTab === 'webhook'
-                ? 'border-cyan-400 text-cyan-300 bg-cyan-500/10'
-                : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-white/5'
+                ? 'border-white text-white bg-[#0c1017]'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
             <Radio className="w-3.5 h-3.5" />
@@ -563,18 +563,18 @@ export function FleetOnboardingModal({
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-white/10 flex justify-end gap-3">
+              <div className="pt-3 border-t border-[#1c2432] flex justify-end gap-3">
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-4 py-2 text-xs font-medium rounded-lg text-slate-400 hover:text-slate-200 hover:bg-white/5 transition-colors cursor-pointer"
+                  className="px-4 py-2 text-xs font-medium rounded-md text-slate-400 hover:text-slate-200 hover:bg-[#121822] transition-colors cursor-pointer"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting || isRegulator}
-                  className="flex items-center gap-2 px-5 py-2 text-xs font-medium rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold shadow-lg shadow-cyan-500/20 transition-all cursor-pointer disabled:opacity-50"
+                  className="flex items-center gap-2 px-5 py-2 text-xs font-semibold rounded-md bg-white hover:bg-slate-200 text-[#080d14] shadow-sm transition-colors cursor-pointer disabled:opacity-50"
                 >
                   {isSubmitting ? (
                     <RefreshCw className="w-3.5 h-3.5 animate-spin" />
@@ -593,14 +593,14 @@ export function FleetOnboardingModal({
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-xs font-semibold text-slate-200">Unggah File Manifest Pengiriman</h3>
-                  <p className="text-[11px] text-slate-400">
+                  <p className="text-xs text-slate-400">
                     Mendukung format CSV standar dengan kolom ID, nama, moda, asal, tujuan, dan suhu.
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={handleDownloadTemplate}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-white/5 border border-white/10 text-cyan-300 hover:bg-white/10 transition-colors cursor-pointer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-[#121822] border border-[#1c2432] text-slate-200 hover:bg-[#1a2230] transition-colors cursor-pointer"
                 >
                   <Download className="w-3.5 h-3.5" />
                   <span>Unduh Template CSV</span>
@@ -610,10 +610,10 @@ export function FleetOnboardingModal({
               {/* Dropzone */}
               <div
                 onClick={() => !isRegulator && fileInputRef.current?.click()}
-                className={`border-2 border-dashed rounded-xl p-6 text-center transition-all ${
+                className={`border-2 border-dashed rounded-md p-6 text-center transition-colors ${
                   isRegulator
-                    ? 'border-white/5 bg-white/[0.01] cursor-not-allowed opacity-60'
-                    : 'border-white/15 hover:border-cyan-500/40 bg-white/[0.02] hover:bg-white/[0.04] cursor-pointer'
+                    ? 'border-[#1c2432] bg-[#0c1017] cursor-not-allowed opacity-60'
+                    : 'border-[#1c2432] hover:border-slate-500 bg-[#121822] hover:bg-[#1a2230] cursor-pointer'
                 }`}
               >
                 <input
@@ -624,14 +624,14 @@ export function FleetOnboardingModal({
                   onChange={handleFileChange}
                 />
                 <div className="flex flex-col items-center gap-2">
-                  <div className="w-10 h-10 rounded-full bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
-                    <Upload className="w-5 h-5" />
+                  <div className="w-9 h-9 rounded-md bg-[#0c1017] border border-[#1c2432] flex items-center justify-center text-slate-300">
+                    <Upload className="w-4 h-4" />
                   </div>
                   <div>
                     <span className="text-xs font-medium text-slate-200">
                       {csvFile ? csvFile.name : 'Pilih file CSV atau tarik ke sini'}
                     </span>
-                    <p className="text-[10px] text-slate-400 mt-0.5">
+                    <p className="text-xs text-slate-400 mt-0.5">
                       Ukuran maksimal 5 MB. Otomatis memvalidasi koordinat hub Sumatra.
                     </p>
                   </div>
@@ -643,24 +643,24 @@ export function FleetOnboardingModal({
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-xs text-slate-300 font-medium">
                     <span>Pratinjau Data ({parsedRows.length} Unit)</span>
-                    <span className="text-emerald-400 font-mono text-[11px]">Valid & Siap Diimpor</span>
+                    <span className="text-emerald-400 font-mono text-xs tabular-nums">Valid & Siap Diimpor</span>
                   </div>
-                  <div className="border border-white/10 rounded-xl overflow-hidden max-h-48 overflow-y-auto">
-                    <table className="w-full text-[11px] text-left">
-                      <thead className="bg-white/5 text-slate-400 sticky top-0">
+                  <div className="border border-[#1c2432] rounded-md overflow-hidden max-h-48 overflow-y-auto">
+                    <table className="w-full text-xs text-left">
+                      <thead className="bg-[#121822] text-slate-400 sticky top-0">
                         <tr>
-                          <th className="p-2">ID</th>
-                          <th className="p-2">Nama</th>
-                          <th className="p-2">Moda</th>
-                          <th className="p-2">Asal</th>
-                          <th className="p-2">Tujuan</th>
-                          <th className="p-2">Muatan</th>
+                          <th className="p-2 font-medium">ID</th>
+                          <th className="p-2 font-medium">Nama</th>
+                          <th className="p-2 font-medium">Moda</th>
+                          <th className="p-2 font-medium">Asal</th>
+                          <th className="p-2 font-medium">Tujuan</th>
+                          <th className="p-2 font-medium">Muatan</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-white/5 text-slate-300 font-mono">
+                      <tbody className="divide-y divide-[#1c2432] text-slate-300 font-mono tabular-nums">
                         {parsedRows.slice(0, 8).map((row, idx) => (
-                          <tr key={idx} className="hover:bg-white/[0.02]">
-                            <td className="p-2 text-cyan-300 font-semibold">{row.vehicle_id}</td>
+                          <tr key={idx} className="hover:bg-[#121822]/60">
+                            <td className="p-2 text-white font-semibold">{row.vehicle_id}</td>
                             <td className="p-2 font-sans">{row.name}</td>
                             <td className="p-2 capitalize">{row.modality || 'truck'}</td>
                             <td className="p-2">{row.origin}</td>
@@ -674,11 +674,11 @@ export function FleetOnboardingModal({
                 </div>
               )}
 
-              <div className="pt-3 border-t border-white/10 flex justify-end gap-3">
+              <div className="pt-3 border-t border-[#1c2432] flex justify-end gap-3">
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-4 py-2 text-xs font-medium rounded-lg text-slate-400 hover:text-slate-200 hover:bg-white/5 transition-colors cursor-pointer"
+                  className="px-4 py-2 text-xs font-medium rounded-md text-slate-400 hover:text-slate-200 hover:bg-[#121822] transition-colors cursor-pointer"
                 >
                   Batal
                 </button>
@@ -686,7 +686,7 @@ export function FleetOnboardingModal({
                   type="button"
                   disabled={isSubmitting || !csvFile || isRegulator}
                   onClick={handleBulkSubmit}
-                  className="flex items-center gap-2 px-5 py-2 text-xs font-medium rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold shadow-lg shadow-cyan-500/20 transition-all cursor-pointer disabled:opacity-50"
+                  className="flex items-center gap-2 px-5 py-2 text-xs font-semibold rounded-md bg-white hover:bg-slate-200 text-[#080d14] shadow-sm transition-colors cursor-pointer disabled:opacity-50"
                 >
                   {isSubmitting ? (
                     <RefreshCw className="w-3.5 h-3.5 animate-spin" />
@@ -703,62 +703,62 @@ export function FleetOnboardingModal({
           {activeTab === 'webhook' && (
             <div className="space-y-4">
               {/* Webhook Endpoint Box */}
-              <div className="p-4 rounded-xl bg-white/[0.02] border border-white/10 space-y-2">
+              <div className="p-4 rounded-md bg-[#121822] border border-[#1c2432] space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-200">Endpoint Webhook TMS External</span>
+                  <span className="text-xs font-semibold text-slate-200">Endpoint Webhook TMS Eksternal</span>
                   <button
                     type="button"
                     onClick={handleCopyWebhookUrl}
-                    className="flex items-center gap-1 text-[11px] text-cyan-300 hover:text-cyan-200 cursor-pointer"
+                    className="flex items-center gap-1 text-xs text-slate-300 hover:text-white cursor-pointer"
                   >
-                    {copiedUrl ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    {copiedUrl ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                     <span>{copiedUrl ? 'Tersalin' : 'Salin URL'}</span>
                   </button>
                 </div>
-                <div className="p-2 rounded bg-black/60 font-mono text-[11px] text-cyan-400 border border-white/5 overflow-x-auto select-all">
+                <div className="p-2 rounded bg-[#080d14] font-mono text-xs text-slate-200 border border-[#1c2432] overflow-x-auto select-all">
                   POST {apiBase}/api/v1/fleet/telemetry/ingest
                 </div>
-                <p className="text-[11px] text-slate-400">
+                <p className="text-xs text-slate-400">
                   Kompatibel dengan streaming telemetri Traccar, EasyGo, McEasy, dan GPS IoT Tracker standar.
                 </p>
               </div>
 
               {/* Simulator Section */}
-              <div className="p-4 rounded-xl bg-cyan-500/[0.03] border border-cyan-500/20 space-y-3">
+              <div className="p-4 rounded-md bg-[#121822] border border-[#1c2432] space-y-3">
                 <div className="flex items-center gap-2">
-                  <Radio className="w-4 h-4 text-cyan-400 animate-pulse" />
-                  <h3 className="text-xs font-semibold text-slate-200">Simulator Test Ping GPS Live</h3>
+                  <Radio className="w-4 h-4 text-slate-400" />
+                  <h3 className="text-xs font-semibold text-slate-200">Simulator Pengujian Ping GPS</h3>
                 </div>
-                <p className="text-[11px] text-slate-400">
+                <p className="text-xs text-slate-400">
                   Kirim koordinat GPS instan untuk menggerakkan armada di peta secara real-time.
                 </p>
 
                 <form onSubmit={handleWebhookPingSubmit} className="space-y-3">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-[11px] text-slate-300 mb-1">ID Armada Sasaran *</label>
+                      <label className="block text-xs text-slate-300 mb-1">ID Armada Sasaran *</label>
                       <input
                         type="text"
                         required
                         placeholder="Contoh: TRK-003-BELAWAN-TEBING"
                         value={webhookForm.vehicle_id}
                         onChange={(e) => setWebhookForm({ ...webhookForm, vehicle_id: e.target.value })}
-                        className="w-full px-3 py-1.5 text-xs rounded-lg bg-white/5 border border-white/10 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50"
+                        className="w-full px-3 py-1.5 text-xs rounded-md bg-[#0c1017] border border-[#1c2432] text-slate-100 placeholder-slate-500 focus:outline-none focus:border-slate-500"
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] text-slate-300 mb-1">Kecepatan (km/j)</label>
+                      <label className="block text-xs text-slate-300 mb-1">Kecepatan (km/j)</label>
                       <input
                         type="number"
                         value={webhookForm.speed_kmh}
                         onChange={(e) =>
                           setWebhookForm({ ...webhookForm, speed_kmh: parseFloat(e.target.value) || 0 })
                         }
-                        className="w-full px-3 py-1.5 text-xs rounded-lg bg-white/5 border border-white/10 text-slate-100 focus:outline-none focus:border-cyan-500/50"
+                        className="w-full px-3 py-1.5 text-xs rounded-md bg-[#0c1017] border border-[#1c2432] text-slate-100 focus:outline-none focus:border-slate-500 font-mono tabular-nums"
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] text-slate-300 mb-1">Latitude</label>
+                      <label className="block text-xs text-slate-300 mb-1">Latitude</label>
                       <input
                         type="number"
                         step="0.0001"
@@ -766,11 +766,11 @@ export function FleetOnboardingModal({
                         onChange={(e) =>
                           setWebhookForm({ ...webhookForm, latitude: parseFloat(e.target.value) || 0 })
                         }
-                        className="w-full px-3 py-1.5 text-xs rounded-lg bg-white/5 border border-white/10 text-slate-100 focus:outline-none focus:border-cyan-500/50"
+                        className="w-full px-3 py-1.5 text-xs rounded-md bg-[#0c1017] border border-[#1c2432] text-slate-100 focus:outline-none focus:border-slate-500 font-mono tabular-nums"
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] text-slate-300 mb-1">Longitude</label>
+                      <label className="block text-xs text-slate-300 mb-1">Longitude</label>
                       <input
                         type="number"
                         step="0.0001"
@@ -778,11 +778,11 @@ export function FleetOnboardingModal({
                         onChange={(e) =>
                           setWebhookForm({ ...webhookForm, longitude: parseFloat(e.target.value) || 0 })
                         }
-                        className="w-full px-3 py-1.5 text-xs rounded-lg bg-white/5 border border-white/10 text-slate-100 focus:outline-none focus:border-cyan-500/50"
+                        className="w-full px-3 py-1.5 text-xs rounded-md bg-[#0c1017] border border-[#1c2432] text-slate-100 focus:outline-none focus:border-slate-500 font-mono tabular-nums"
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] text-slate-300 mb-1">Suhu Reefer (°C)</label>
+                      <label className="block text-xs text-slate-300 mb-1">Suhu Reefer (°C)</label>
                       <input
                         type="number"
                         step="0.1"
@@ -793,18 +793,18 @@ export function FleetOnboardingModal({
                             temperature_c: e.target.value ? parseFloat(e.target.value) : undefined,
                           })
                         }
-                        className="w-full px-3 py-1.5 text-xs rounded-lg bg-white/5 border border-white/10 text-slate-100 focus:outline-none focus:border-cyan-500/50"
+                        className="w-full px-3 py-1.5 text-xs rounded-md bg-[#0c1017] border border-[#1c2432] text-slate-100 focus:outline-none focus:border-slate-500 font-mono tabular-nums"
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] text-slate-300 mb-1">Arah Heading (°)</label>
+                      <label className="block text-xs text-slate-300 mb-1">Arah Heading (°)</label>
                       <input
                         type="number"
                         value={webhookForm.heading_deg ?? 90}
                         onChange={(e) =>
                           setWebhookForm({ ...webhookForm, heading_deg: parseFloat(e.target.value) || 0 })
                         }
-                        className="w-full px-3 py-1.5 text-xs rounded-lg bg-white/5 border border-white/10 text-slate-100 focus:outline-none focus:border-cyan-500/50"
+                        className="w-full px-3 py-1.5 text-xs rounded-md bg-[#0c1017] border border-[#1c2432] text-slate-100 focus:outline-none focus:border-slate-500 font-mono tabular-nums"
                       />
                     </div>
                   </div>
@@ -813,7 +813,7 @@ export function FleetOnboardingModal({
                     <button
                       type="submit"
                       disabled={isSubmitting}
-                      className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 transition-all cursor-pointer disabled:opacity-50"
+                      className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-md bg-white hover:bg-slate-200 text-[#080d14] shadow-sm transition-colors cursor-pointer disabled:opacity-50"
                     >
                       <Send className="w-3.5 h-3.5" />
                       <span>Kirim Ping Telemetri</span>

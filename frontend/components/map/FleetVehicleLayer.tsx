@@ -587,19 +587,19 @@ export function FleetVehicleLayer({
         />
       )}
 
-      {/* Monospaced Tactical HUD Console (Strict 39-UI-SPEC Design Contract) */}
+      {/* Telemetry Inspector Console */}
       {selectedVehicle && (
-        <div className="absolute top-20 left-4 z-40 w-96 backdrop-blur-md bg-[#0c0e12]/80 border border-white/10 shadow-2xl rounded-xl p-4 text-slate-100 animate-in fade-in slide-in-from-left-2 duration-200 pointer-events-auto space-y-3 font-sans">
+        <div className="absolute top-20 left-4 z-40 w-96 bg-[#0c1017] border border-[#1c2432] shadow-xl rounded-lg p-4 text-slate-100 animate-in fade-in slide-in-from-left-2 duration-200 pointer-events-auto space-y-3 font-sans">
           {/* Header Bar */}
-          <div className="flex items-start justify-between border-b border-white/10 pb-3">
+          <div className="flex items-start justify-between border-b border-[#1c2432] pb-3">
             <div className="flex items-center gap-2.5">
               <div
                 className={`p-2 rounded-lg border ${
                   isMaritime
-                    ? 'bg-sky-950/60 text-sky-400 border-sky-500/40'
+                    ? 'bg-sky-950/50 text-sky-400 border-sky-500/30'
                     : isAir
-                      ? 'bg-purple-950/60 text-purple-400 border-purple-500/40'
-                      : 'bg-emerald-950/60 text-emerald-400 border-emerald-500/40'
+                      ? 'bg-purple-950/50 text-purple-400 border-purple-500/30'
+                      : 'bg-emerald-950/50 text-emerald-400 border-emerald-500/30'
                 }`}
               >
                 {isMaritime ? (
@@ -612,16 +612,16 @@ export function FleetVehicleLayer({
               </div>
 
               <div>
-                <h3 className="text-base font-semibold text-white tracking-tight leading-tight">
+                <h3 className="text-sm font-semibold text-white tracking-tight leading-tight">
                   {selectedVehicle.vehicle.name}
                 </h3>
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  <span className="text-[11px] font-mono text-slate-400 uppercase">
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-xs font-mono tabular-nums text-slate-400 uppercase">
                     {transponderId}
                   </span>
-                  <span className="text-[11px] font-mono text-slate-500">·</span>
-                  <span className="flex items-center gap-1 px-1.5 py-0.2 rounded bg-[#1e2024] text-cyan-300 border border-cyan-500/30 text-[11px] font-mono font-semibold">
-                    <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                  <span className="text-slate-600">·</span>
+                  <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#121822] text-slate-300 border border-[#1c2432] text-xs font-mono">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
                     <span>{statusLabel}</span>
                   </span>
                 </div>
@@ -634,49 +634,49 @@ export function FleetVehicleLayer({
                 setSelectedVehicle(null);
                 setIsFollowCamActive(false);
               }}
-              className="cursor-pointer p-1 rounded-lg bg-[#1e2024] text-slate-400 hover:text-white transition"
-              title="Tutup HUD Armada"
+              className="cursor-pointer p-1 rounded-md bg-[#121822] text-slate-400 hover:text-white border border-[#1c2432] transition"
+              title="Tutup Inspeksi Armada"
             >
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
 
           {/* Kinematics Grid */}
-          <div className="p-3 rounded-lg bg-[#1e2024]/60 border border-white/10 space-y-2">
-            <div className="flex items-baseline justify-between border-b border-white/5 pb-2">
+          <div className="p-3 rounded-lg bg-[#121822] border border-[#1c2432] space-y-2.5">
+            <div className="flex items-baseline justify-between border-b border-[#1c2432]/60 pb-2">
               <div>
-                <span className="text-[11px] font-mono text-slate-400 flex items-center gap-1 uppercase">
-                  <Navigation className="w-3 h-3 text-cyan-400" />
+                <span className="text-xs font-medium text-slate-400 flex items-center gap-1.5 uppercase tracking-wider">
+                  <Navigation className="w-3.5 h-3.5 text-slate-400" />
                   <span>Kecepatan Telemetri</span>
                 </span>
-                <span className="text-[22px] font-semibold text-white font-mono leading-none tracking-tight">
+                <span className="text-xl font-semibold text-white font-mono tabular-nums leading-none tracking-tight mt-1 inline-block">
                   {isMaritime
                     ? `${(selectedVehicle.vehicle.sog_knots ?? (selectedVehicle.vehicle.speed_kmh / 1.852)).toFixed(1)} kts`
                     : isAir
                       ? `${(selectedVehicle.vehicle.ground_speed_kts ?? (selectedVehicle.vehicle.speed_kmh / 1.852)).toFixed(0)} kts`
                       : `${selectedVehicle.vehicle.speed_kmh} km/j`}
                 </span>
-                <span className="text-[11px] font-mono text-slate-400 ml-1.5">
+                <span className="text-xs font-mono tabular-nums text-slate-400 ml-1.5">
                   ({selectedVehicle.vehicle.speed_kmh} km/j)
                 </span>
               </div>
 
               <div className="text-right">
-                <span className="text-[11px] font-mono text-slate-400 block uppercase">
-                  Heading / Azimuth
+                <span className="text-xs font-medium text-slate-400 block uppercase tracking-wider">
+                  Heading
                 </span>
-                <span className="text-[13px] font-semibold font-mono text-cyan-300">
+                <span className="text-xs font-mono tabular-nums text-slate-200 mt-1 inline-block">
                   {Math.round(selectedVehicle.bearing)}° {getCardinalDirection(selectedVehicle.bearing)}
                 </span>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 text-[11px] font-mono pt-1">
+            <div className="grid grid-cols-2 gap-2 text-xs pt-0.5">
               <div>
-                <span className="text-slate-400 block uppercase">
+                <span className="text-slate-400 block">
                   {isMaritime ? 'Draught Kapal:' : isAir ? 'Ketinggian ADS-B:' : 'Elevasi Radar:'}
                 </span>
-                <span className="text-slate-200 font-semibold">
+                <span className="text-slate-200 font-mono tabular-nums font-medium">
                   {isMaritime
                     ? `${selectedVehicle.vehicle.draught_m ?? 7.2} m`
                     : isAir
@@ -685,8 +685,8 @@ export function FleetVehicleLayer({
                 </span>
               </div>
               <div>
-                <span className="text-slate-400 block uppercase">Koordinat (Lat/Lon):</span>
-                <span className="text-slate-300 font-mono">
+                <span className="text-slate-400 block">Koordinat:</span>
+                <span className="text-slate-300 font-mono tabular-nums">
                   {selectedVehicle.currentPos[1].toFixed(3)}°N, {selectedVehicle.currentPos[0].toFixed(3)}°E
                 </span>
               </div>
@@ -694,47 +694,44 @@ export function FleetVehicleLayer({
           </div>
 
           {/* Strategic Cargo & Cold-Chain */}
-          <div className="p-3 rounded-lg bg-[#1e2024]/80 border border-white/10 space-y-2">
+          <div className="p-3 rounded-lg bg-[#121822] border border-[#1c2432] space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-mono text-slate-400 uppercase">Kargo Strategis:</span>
+              <span className="text-xs font-medium text-slate-400">Muatan Logistik:</span>
               {(isTruck || vehicle?.temperature_c !== undefined) && (
                 <div
-                  className={`px-2 py-0.5 rounded border text-[11px] font-mono flex items-center gap-1 ${
+                  className={`px-2 py-0.5 rounded border text-xs font-mono flex items-center gap-1 ${
                     temp <= 4.0
-                      ? 'bg-emerald-950/60 text-emerald-400 border-emerald-500/30'
-                      : 'bg-amber-950/60 text-amber-400 border-amber-500/30'
+                      ? 'bg-emerald-950/40 text-emerald-400 border-emerald-500/30'
+                      : 'bg-amber-950/40 text-amber-400 border-amber-500/30'
                   }`}
                 >
                   <Thermometer className="w-3 h-3" />
                   <span>
-                    {temp.toFixed(1)}°C {temp <= 4.0 ? '[NORMAL]' : '[PERINGATAN SUHU]'}
+                    {temp.toFixed(1)}°C {temp <= 4.0 ? 'Normal' : 'Peringatan'}
                   </span>
                 </div>
               )}
             </div>
-            <p className="text-[13px] font-mono text-slate-200 font-medium">
+            <p className="text-xs text-slate-200 font-medium">
               {selectedVehicle.vehicle.cargo || 'Logistik Pangan Nasional'}
             </p>
           </div>
 
           {/* Route & Signal Freshness */}
-          <div className="p-3 rounded-lg bg-[#1e2024]/40 border border-white/10 space-y-1.5 text-[11px] font-mono">
+          <div className="p-3 rounded-lg bg-[#121822] border border-[#1c2432] space-y-2 text-xs">
             <div className="flex items-center justify-between">
-              <span className="text-slate-400 uppercase">Koridor Rute:</span>
-              <span className="text-cyan-300 font-semibold truncate max-w-[200px]">
+              <span className="text-slate-400">Koridor Rute:</span>
+              <span className="text-slate-200 font-medium truncate max-w-[200px]">
                 {selectedVehicle.vehicle.origin || 'Asal'} → {selectedVehicle.vehicle.destination || 'Tujuan'}
               </span>
             </div>
-            <div className="flex items-center justify-between text-slate-400 pt-1 border-t border-white/5">
+            <div className="flex items-center justify-between text-slate-400 pt-1.5 border-t border-[#1c2432]">
               <span className="flex items-center gap-1.5">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00f0ff] opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-[#00f0ff]"></span>
-                </span>
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
                 <span>Latensi Telemetri:</span>
               </span>
-              <span className="text-slate-300 font-semibold">
-                {selectedVehicle.vehicle.last_ping_seconds_ago ?? 1.2}s lalu [LIVE PING]
+              <span className="text-slate-300 font-mono tabular-nums">
+                {selectedVehicle.vehicle.last_ping_seconds_ago ?? 1.2}s lalu
               </span>
             </div>
           </div>
@@ -755,17 +752,13 @@ export function FleetVehicleLayer({
                 }
                 setIsFollowCamActive((prev) => !prev);
               }}
-              className={`w-full py-2 px-3 rounded-lg border text-[13px] font-semibold font-mono flex items-center justify-center gap-2 cursor-pointer transition-all duration-200 shadow-lg ${
+              className={`w-full py-2 px-3 rounded-md border text-xs font-medium flex items-center justify-center gap-2 cursor-pointer transition-colors duration-150 ${
                 isFollowCamActive
-                  ? 'bg-cyan-950/80 text-cyan-300 border-cyan-400 ring-1 ring-cyan-500/30'
-                  : 'bg-[#1e2024] text-slate-300 hover:text-white hover:bg-slate-800 border-white/10'
+                  ? 'bg-white text-[#080d14] border-white font-semibold'
+                  : 'bg-[#121822] text-slate-200 hover:text-white hover:bg-[#1a2230] border-[#1c2432]'
               }`}
             >
-              <Video
-                className={`w-4 h-4 ${
-                  isFollowCamActive ? 'text-cyan-400 animate-pulse' : 'text-slate-400'
-                }`}
-              />
+              <Video className="w-3.5 h-3.5" />
               <span>{isFollowCamActive ? 'Kamera Pengikut Aktif' : 'Aktifkan Kamera Pengikut'}</span>
             </button>
 
@@ -775,10 +768,10 @@ export function FleetVehicleLayer({
                 setSelectedVehicle(null);
                 setIsFollowCamActive(false);
               }}
-              className="w-full py-1 text-[11px] font-mono text-slate-400 hover:text-red-400 flex items-center justify-center gap-1 cursor-pointer transition"
+              className="w-full py-1 text-xs text-slate-400 hover:text-slate-200 flex items-center justify-center gap-1.5 cursor-pointer transition"
             >
               <Crosshair className="w-3 h-3" />
-              <span>Lepas Kunci Target</span>
+              <span>Tutup Inspeksi</span>
             </button>
           </div>
         </div>

@@ -130,23 +130,23 @@ export function SpoilageHedgingCard({
   };
 
   return (
-    <div className="bg-[#0c0e12]/80 backdrop-blur-md border border-white/10 p-3.5 rounded-xl text-slate-200">
+    <div className="bg-[#121822] border border-[#1c2432] p-3.5 rounded-md text-slate-200">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-white/10 pb-2 mb-3">
+      <div className="flex items-center justify-between border-b border-[#1c2432] pb-2 mb-3">
         <div className="flex items-center gap-2">
-          <div className="p-1 rounded bg-amber-500/20 border border-amber-500/40 text-amber-400">
+          <div className="p-1 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400">
             <DollarSign className="w-4 h-4" />
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-100">
+              <span className="text-xs font-sans font-bold text-slate-100">
                 Hedging Biaya & Risiko Pembusukan
               </span>
-              <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-cyan-950 text-cyan-400 border border-cyan-500/30">
+              <span className="px-1.5 py-0.5 rounded text-xs font-mono bg-cyan-950 text-cyan-400 border border-cyan-500/30">
                 FR-18
               </span>
             </div>
-            <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono">
+            <div className="flex items-center gap-2 text-xs text-slate-400 font-mono mt-0.5">
               <span className="flex items-center gap-1">
                 <ThermometerSnowflake className="w-3 h-3 text-cyan-400" />
                 {data?.perishability_tier || 'Ultra-Perishable'}
@@ -160,7 +160,7 @@ export function SpoilageHedgingCard({
         <button
           onClick={executeSolve}
           disabled={loading}
-          className="p-1 rounded bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 text-slate-300 hover:text-white transition-colors cursor-pointer"
+          className="p-1.5 rounded bg-[#0c1017] hover:bg-slate-800 border border-[#1c2432] text-slate-300 hover:text-white transition-colors cursor-pointer"
           title="Kalkulasi Ulang Hedging"
         >
           <RotateCcw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-cyan-400' : ''}`} />
@@ -169,17 +169,17 @@ export function SpoilageHedgingCard({
 
       {/* Net Savings Highlight Box */}
       {data && (
-        <div className="mb-3 p-2.5 rounded-lg bg-emerald-950/40 border border-emerald-500/40 flex items-center justify-between">
+        <div className="mb-3 p-2.5 rounded-md bg-emerald-950/30 border border-emerald-500/30 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-emerald-400" />
             <div>
-              <p className="text-[9px] font-mono text-emerald-300/80 uppercase">Rekomendasi Finansial Terpilih</p>
+              <p className="text-xs font-sans text-emerald-300/80">Rekomendasi Finansial Terpilih</p>
               <p className="text-xs font-mono font-bold text-emerald-300">
                 Optimal: {data.optimal_policy} • Hemat {formatIDR(data.net_savings_idr)}
               </p>
             </div>
           </div>
-          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+          <span className="px-2 py-0.5 rounded text-xs font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
             NET SAVINGS
           </span>
         </div>
@@ -191,22 +191,22 @@ export function SpoilageHedgingCard({
           {/* CONTINUE */}
           <div 
             onClick={() => setSelectedPolicy('CONTINUE')}
-            className={`p-2.5 rounded-lg border transition-all cursor-pointer ${
+            className={`p-2.5 rounded-md border transition-all cursor-pointer ${
               selectedPolicy === 'CONTINUE' 
-                ? 'bg-red-950/40 border-red-500/60 ring-1 ring-red-400/50' 
-                : 'bg-slate-900/60 border-white/5 hover:border-white/15'
+                ? 'bg-rose-950/40 border-rose-500/60' 
+                : 'bg-[#0c1017] border-[#1c2432] hover:border-slate-700'
             }`}
           >
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] font-mono font-bold text-slate-300">CONTINUE</span>
-              <span className="px-1 rounded text-[8px] font-mono bg-red-950 text-red-400 border border-red-500/30">
-                RISK: CRITICAL
+              <span className="text-xs font-mono font-bold text-slate-300">CONTINUE</span>
+              <span className="px-1 py-0.5 rounded text-xs font-mono bg-rose-950 text-rose-400 border border-rose-500/30">
+                KRITIS
               </span>
             </div>
-            <p className="text-xs font-mono font-extrabold text-red-400">
+            <p className="text-xs font-mono font-bold text-rose-400">
               {formatIDR(data.continue_policy.cost_idr)}
             </p>
-            <p className="text-[9px] text-slate-400 mt-1 line-clamp-2 leading-tight">
+            <p className="text-xs text-slate-400 mt-1 line-clamp-2 leading-tight font-sans">
               Biaya pembusukan muatan saat macet.
             </p>
           </div>
@@ -214,27 +214,27 @@ export function SpoilageHedgingCard({
           {/* REROUTE */}
           <div 
             onClick={() => setSelectedPolicy('REROUTE')}
-            className={`p-2.5 rounded-lg border transition-all cursor-pointer ${
+            className={`p-2.5 rounded-md border transition-all cursor-pointer ${
               selectedPolicy === 'REROUTE' 
-                ? 'bg-cyan-950/40 border-cyan-400/70 ring-1 ring-cyan-400/50' 
-                : 'bg-slate-900/60 border-white/5 hover:border-white/15'
+                ? 'bg-cyan-950/40 border-cyan-400/70' 
+                : 'bg-[#0c1017] border-[#1c2432] hover:border-slate-700'
             } ${data.optimal_policy === 'REROUTE' ? 'relative' : ''}`}
           >
             {data.optimal_policy === 'REROUTE' && (
-              <span className="absolute -top-2 right-2 px-1.5 py-0.2 bg-emerald-500 text-slate-950 text-[8px] font-mono font-black rounded-full shadow">
+              <span className="absolute -top-2 right-2 px-1.5 py-0.5 bg-emerald-500 text-slate-950 text-xs font-mono font-bold rounded">
                 OPTIMAL
               </span>
             )}
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] font-mono font-bold text-slate-300">REROUTE</span>
-              <span className="px-1 rounded text-[8px] font-mono bg-cyan-950 text-cyan-300 border border-cyan-500/30">
-                LOW RISK
+              <span className="text-xs font-mono font-bold text-slate-300">REROUTE</span>
+              <span className="px-1 py-0.5 rounded text-xs font-mono bg-cyan-950 text-cyan-300 border border-cyan-500/30">
+                AMAN
               </span>
             </div>
-            <p className="text-xs font-mono font-extrabold text-cyan-300">
+            <p className="text-xs font-mono font-bold text-cyan-300">
               {formatIDR(data.reroute_policy.cost_idr)}
             </p>
-            <p className="text-[9px] text-slate-400 mt-1 line-clamp-2 leading-tight">
+            <p className="text-xs text-slate-400 mt-1 line-clamp-2 leading-tight font-sans">
               Tol BPJT + BBM Biosolar + Lembur.
             </p>
           </div>
@@ -242,22 +242,22 @@ export function SpoilageHedgingCard({
           {/* HOLD */}
           <div 
             onClick={() => setSelectedPolicy('HOLD')}
-            className={`p-2.5 rounded-lg border transition-all cursor-pointer ${
+            className={`p-2.5 rounded-md border transition-all cursor-pointer ${
               selectedPolicy === 'HOLD' 
-                ? 'bg-amber-950/40 border-amber-500/60 ring-1 ring-amber-400/50' 
-                : 'bg-slate-900/60 border-white/5 hover:border-white/15'
+                ? 'bg-amber-950/40 border-amber-500/60' 
+                : 'bg-[#0c1017] border-[#1c2432] hover:border-slate-700'
             }`}
           >
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] font-mono font-bold text-slate-300">HOLD</span>
-              <span className="px-1 rounded text-[8px] font-mono bg-amber-950 text-amber-300 border border-amber-500/30">
-                MED RISK
+              <span className="text-xs font-mono font-bold text-slate-300">HOLD</span>
+              <span className="px-1 py-0.5 rounded text-xs font-mono bg-amber-950 text-amber-300 border border-amber-500/30">
+                SEDANG
               </span>
             </div>
-            <p className="text-xs font-mono font-extrabold text-amber-300">
+            <p className="text-xs font-mono font-bold text-amber-300">
               {formatIDR(data.hold_policy.cost_idr)}
             </p>
-            <p className="text-[9px] text-slate-400 mt-1 line-clamp-2 leading-tight">
+            <p className="text-xs text-slate-400 mt-1 line-clamp-2 leading-tight font-sans">
               Sewa Depo + Genset Reefer.
             </p>
           </div>
@@ -266,8 +266,8 @@ export function SpoilageHedgingCard({
 
       {/* Selected Policy Justification Rationale */}
       {data && (
-        <div className="p-2.5 rounded-lg bg-slate-950/60 border border-white/5 text-[11px] font-sans leading-relaxed text-slate-300 mb-3">
-          <span className="text-[9px] font-mono font-bold text-slate-400 uppercase tracking-wider block mb-1">
+        <div className="p-2.5 rounded-md bg-[#0c1017] border border-[#1c2432] text-xs font-sans leading-relaxed text-slate-300 mb-3">
+          <span className="text-xs font-mono font-bold text-slate-400 block mb-1">
             Penalaran Operasional ({selectedPolicy}):
           </span>
           {selectedPolicy === 'CONTINUE' && data.continue_policy.explanation}
@@ -279,7 +279,7 @@ export function SpoilageHedgingCard({
       {/* Action Button */}
       <button
         onClick={() => onApplyPolicy && onApplyPolicy(selectedPolicy)}
-        className="w-full py-2 px-3 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-mono font-bold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-md hover:shadow-cyan-500/20"
+        className="cursor-pointer w-full py-2 px-3 rounded-md bg-white hover:bg-slate-200 text-[#080d14] font-sans font-semibold text-xs flex items-center justify-center gap-2 transition"
       >
         <span>Terapkan Kebijakan Mitigasi: {selectedPolicy}</span>
         <ArrowRight className="w-3.5 h-3.5" />

@@ -1,19 +1,16 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
   --color-bg: #080d14;
-  --color-surface: rgba(15, 23, 42, 0.6);
+  --color-surface: #0c1017;
   --color-border: rgba(255, 255, 255, 0.08);
-  --color-accent: #22d3ee;        /* cyan-400 */
-  --color-danger: #f87171;        /* red-400 */
-  --color-warning: #fb923c;       /* orange-400 */
-  --color-success: #34d399;       /* emerald-400 */
-  --color-muted: #64748b;         /* slate-500 */
-  --font-sans: 'Inter', system-ui, sans-serif;
+  --color-accent: #ffffff;
+  --color-danger: #ef4444;
+  --color-warning: #f59e0b;
+  --color-success: #10b981;
+  --color-muted: #64748b;
 }
 
 * {
@@ -25,7 +22,6 @@
 html, body, #__next {
   min-height: 100%;
   width: 100%;
-  font-family: var(--font-sans);
   background-color: var(--color-bg);
   color: #f1f5f9;
   -webkit-font-smoothing: antialiased;
@@ -36,7 +32,7 @@ html, body, #__next {
   outline: none;
 }
 
-/* Ultra-Modern Futuristic Dark Glassmorphic Global Scrollbar */
+/* Restrained Architectural Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -47,38 +43,41 @@ html, body, #__next {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(34, 211, 238, 0.35);
+  background: rgba(255, 255, 255, 0.15);
   border-radius: 9999px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  transition: all 0.2s ease;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: background 0.2s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(52, 211, 153, 0.8);
-  box-shadow: 0 0 12px rgba(52, 211, 153, 0.8);
+  background: rgba(255, 255, 255, 0.25);
 }
 
 /* Custom scrollbar for sidebar panels */
-.panel-scroll::-webkit-scrollbar {
+.panel-scroll::-webkit-scrollbar,
+.custom-scrollbar::-webkit-scrollbar {
   width: 4px;
 }
-.panel-scroll::-webkit-scrollbar-track {
+.panel-scroll::-webkit-scrollbar-track,
+.custom-scrollbar::-webkit-scrollbar-track {
   background: transparent;
 }
-.panel-scroll::-webkit-scrollbar-thumb {
-  background: rgba(100, 116, 139, 0.4);
+.panel-scroll::-webkit-scrollbar-thumb,
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
   border-radius: 2px;
 }
-
-/* Animated pulse for loading states */
-@keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+.panel-scroll::-webkit-scrollbar-thumb:hover,
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
 }
-.shimmer {
-  background: linear-gradient(90deg, #0f172a 25%, #1e293b 50%, #0f172a 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 /* Hide Mapbox logo and OpenStreetMap attribution text */

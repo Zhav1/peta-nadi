@@ -92,22 +92,22 @@ export default function TestMatrixTable({
   };
 
   return (
-    <div className="flex flex-col bg-[#13161c]/90 backdrop-blur-md border border-white/10 rounded-2xl p-5 shadow-2xl overflow-hidden">
+    <div className="flex flex-col bg-[#0c1017] border border-[#1c2432] rounded-lg p-5 shadow-xl overflow-hidden">
       {/* Table Header Controls */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-4 border-b border-white/10">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-4 border-b border-[#1c2432]">
         <div className="flex items-center gap-2.5">
-          <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+          <div className="p-2 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
             <ShieldCheck className="w-4 h-4" />
           </div>
           <div>
             <h3 className="text-sm font-semibold text-white tracking-wide font-sans flex items-center gap-2">
               <span>Matriks Uji Otomatis & Inventaris Verifikasi</span>
-              <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[11px] font-mono">
+              <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-mono">
                 {tests.length} Skenario • 100% Passed
               </span>
             </h3>
-            <p className="text-[11px] text-slate-400 font-mono">
-              Pemetaan Kebutuhan Fungsional FR-1 s.d. FR-13 dengan Pengujian Pytest & WebGL
+            <p className="text-xs text-slate-400 font-sans mt-0.5">
+              Pemetaan Kebutuhan Fungsional FR-1 s.d. FR-20 dengan Pengujian Pytest & WebGL
             </p>
           </div>
         </div>
@@ -120,13 +120,13 @@ export default function TestMatrixTable({
             value={search}
             onChange={handleSearchChange}
             placeholder="Cari ID uji, modul, atau skenario..."
-            className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-black/40 border border-white/10 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-400/50 font-mono"
+            className="w-full pl-9 pr-3 py-1.5 rounded-md bg-[#121822] border border-[#1c2432] text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-400 font-sans"
           />
         </div>
       </div>
 
       {/* Domain Filter Pills Bar */}
-      <div className="flex items-center gap-1.5 overflow-x-auto py-3 no-scrollbar border-b border-white/5">
+      <div className="flex items-center gap-1.5 overflow-x-auto py-3 no-scrollbar border-b border-[#1c2432]">
         {DOMAIN_OPTIONS.map((opt) => {
           const isActive = selectedDomain === opt.id;
           return (
@@ -134,10 +134,10 @@ export default function TestMatrixTable({
               key={opt.id}
               type="button"
               onClick={() => handleDomainSelect(opt.id)}
-              className={`px-3 py-1 rounded-lg text-[11px] font-mono tracking-wider transition whitespace-nowrap cursor-pointer ${
+              className={`px-3 py-1 rounded-md text-xs font-sans transition whitespace-nowrap cursor-pointer ${
                 isActive
-                  ? 'bg-cyan-500 text-slate-950 font-bold shadow-md shadow-cyan-500/20'
-                  : 'bg-white/5 text-slate-400 hover:text-slate-200 hover:bg-white/10 border border-white/5'
+                  ? 'bg-white text-[#080d14] font-semibold'
+                  : 'bg-[#121822] text-slate-400 hover:text-slate-200 border border-[#1c2432]'
               }`}
             >
               {opt.label}
@@ -150,7 +150,7 @@ export default function TestMatrixTable({
       <div className="overflow-x-auto mt-2 -mx-5 px-5">
         <table className="w-full text-left text-xs border-collapse">
           <thead>
-            <tr className="border-b border-white/10 text-[11px] font-mono text-slate-400 uppercase tracking-wider">
+            <tr className="border-b border-[#1c2432] text-xs font-sans text-slate-400">
               <th className="py-2.5 px-3">Test ID</th>
               <th className="py-2.5 px-3">FR Domain</th>
               <th className="py-2.5 px-3">Modul Pengujian</th>

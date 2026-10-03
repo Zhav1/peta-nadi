@@ -246,21 +246,16 @@ export default function SystemObservabilitySection() {
   return (
     <div className="flex flex-col space-y-5 max-w-7xl mx-auto pb-8">
       {/* Top Diagnostics Control Bar */}
-      <div className="bg-[#13161c]/90 backdrop-blur-md border border-white/10 rounded-2xl p-5 shadow-2xl">
+      <div className="bg-[#0c1017] border border-[#1c2432] rounded-lg p-5 shadow-xl">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+            <div className="p-2.5 rounded-md bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
               <Server className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-lg font-bold text-white tracking-wide font-sans">
-                  Diagnostik Backend & Telemetri API
-                </h1>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-bold">
-                  LIVE PROBE
-                </span>
-              </div>
+              <h1 className="text-base font-bold text-white tracking-wide font-sans">
+                Diagnostik Backend & Telemetri API
+              </h1>
               <p className="text-xs text-slate-400 font-sans mt-0.5">
                 Audit latensi, ketersediaan endpoint REST, dan integritas background worker.
               </p>
@@ -269,25 +264,25 @@ export default function SystemObservabilitySection() {
 
           {/* Target Host Selector & Probe Trigger */}
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center rounded-xl bg-slate-950 border border-white/10 p-1 text-xs font-mono">
+            <div className="flex items-center rounded-md bg-[#121822] border border-[#1c2432] p-1 text-xs font-mono">
               <button
                 type="button"
                 onClick={() => { setIsCustom(false); setTargetUrl('https://peta-nadi.onrender.com'); }}
-                className={`cursor-pointer px-3 py-1.5 rounded-lg transition ${!isCustom && targetUrl.includes('onrender') ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/30' : 'text-slate-400 hover:text-white'}`}
+                className={`cursor-pointer px-3 py-1.5 rounded transition ${!isCustom && targetUrl.includes('onrender') ? 'bg-cyan-500/20 text-cyan-300 font-bold' : 'text-slate-400 hover:text-white'}`}
               >
                 Render Cloud
               </button>
               <button
                 type="button"
                 onClick={() => { setIsCustom(false); setTargetUrl('http://localhost:8000'); }}
-                className={`cursor-pointer px-3 py-1.5 rounded-lg transition ${!isCustom && targetUrl.includes('localhost') ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/30' : 'text-slate-400 hover:text-white'}`}
+                className={`cursor-pointer px-3 py-1.5 rounded transition ${!isCustom && targetUrl.includes('localhost') ? 'bg-cyan-500/20 text-cyan-300 font-bold' : 'text-slate-400 hover:text-white'}`}
               >
                 Localhost:8000
               </button>
               <button
                 type="button"
                 onClick={() => setIsCustom(true)}
-                className={`cursor-pointer px-3 py-1.5 rounded-lg transition ${isCustom ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/30' : 'text-slate-400 hover:text-white'}`}
+                className={`cursor-pointer px-3 py-1.5 rounded transition ${isCustom ? 'bg-cyan-500/20 text-cyan-300 font-bold' : 'text-slate-400 hover:text-white'}`}
               >
                 Custom URL
               </button>
@@ -299,7 +294,7 @@ export default function SystemObservabilitySection() {
                 value={customUrl}
                 onChange={(e) => setCustomUrl(e.target.value)}
                 placeholder="https://..."
-                className="px-3 py-1.5 bg-slate-950 border border-white/15 rounded-xl text-xs text-white font-mono placeholder:text-slate-600 focus:outline-none focus:border-cyan-400"
+                className="px-3 py-1.5 bg-[#121822] border border-[#1c2432] rounded-md text-xs text-white font-mono placeholder:text-slate-600 focus:outline-none focus:border-cyan-400"
               />
             )}
 
@@ -307,7 +302,7 @@ export default function SystemObservabilitySection() {
               type="button"
               disabled={isTesting}
               onClick={runAllProbes}
-              className="cursor-pointer flex items-center gap-1.5 px-4 py-2 bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 text-slate-950 rounded-xl font-bold text-xs transition shadow-lg shadow-cyan-500/20"
+              className="cursor-pointer flex items-center gap-1.5 px-3.5 py-1.5 bg-white hover:bg-slate-200 disabled:opacity-50 text-[#080d14] rounded-md font-semibold text-xs transition"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isTesting ? 'animate-spin' : ''}`} />
               <span>{isTesting ? 'Memeriksa...' : 'Uji Semua API'}</span>
@@ -316,30 +311,30 @@ export default function SystemObservabilitySection() {
         </div>
 
         {/* Quick KPI Overview */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4 pt-4 border-t border-white/10">
-          <div className="p-3 rounded-xl bg-slate-950/60 border border-white/5">
-            <div className="text-[11px] font-mono text-slate-400">Target Host</div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4 pt-4 border-t border-[#1c2432]">
+          <div className="p-3 rounded-md bg-[#121822] border border-[#1c2432]">
+            <div className="text-xs font-sans text-slate-400">Target Host</div>
             <div className="text-xs font-mono font-bold text-cyan-300 truncate mt-0.5" title={activeUrl}>
               {activeUrl}
             </div>
           </div>
-          <div className="p-3 rounded-xl bg-slate-950/60 border border-white/5">
-            <div className="text-[11px] font-mono text-slate-400">Tingkat Keberhasilan</div>
+          <div className="p-3 rounded-md bg-[#121822] border border-[#1c2432]">
+            <div className="text-xs font-sans text-slate-400">Tingkat Keberhasilan</div>
             <div className="flex items-center gap-2 mt-0.5">
               <span className={`text-base font-bold font-mono ${passRate >= 90 ? 'text-emerald-400' : passRate >= 70 ? 'text-amber-400' : 'text-rose-400'}`}>
                 {passRate}%
               </span>
-              <span className="text-[10px] font-mono text-slate-500">({totalPassed}/{totalTested})</span>
+              <span className="text-xs font-mono text-slate-500">({totalPassed}/{totalTested})</span>
             </div>
           </div>
-          <div className="p-3 rounded-xl bg-slate-950/60 border border-white/5">
-            <div className="text-[11px] font-mono text-slate-400">Rata-rata Latensi</div>
+          <div className="p-3 rounded-md bg-[#121822] border border-[#1c2432]">
+            <div className="text-xs font-sans text-slate-400">Rata-rata Latensi</div>
             <div className="text-base font-bold font-mono text-white mt-0.5">
               {avgLatency} <span className="text-xs font-normal text-slate-400">ms</span>
             </div>
           </div>
-          <div className="p-3 rounded-xl bg-slate-950/60 border border-white/5">
-            <div className="text-[11px] font-mono text-slate-400">Pembaruan Terakhir</div>
+          <div className="p-3 rounded-md bg-[#121822] border border-[#1c2432]">
+            <div className="text-xs font-sans text-slate-400">Pembaruan Terakhir</div>
             <div className="text-xs font-mono text-slate-300 mt-1">
               {lastRunTime || 'Sedang memuat...'}
             </div>
@@ -352,10 +347,10 @@ export default function SystemObservabilitySection() {
         
         {/* Left: Endpoint Matrix */}
         <div className="lg:col-span-8 space-y-4">
-          <div className="bg-[#13161c]/90 backdrop-blur-md border border-white/10 rounded-2xl p-5 shadow-2xl space-y-4">
+          <div className="bg-[#0c1017] border border-[#1c2432] rounded-lg p-5 shadow-xl space-y-4">
             
             {/* Table Header & Search Filters */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/10">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#1c2432]">
               <div className="flex items-center gap-2">
                 <Radio className="w-4 h-4 text-cyan-400" />
                 <h2 className="text-sm font-bold text-white font-sans">
@@ -372,7 +367,7 @@ export default function SystemObservabilitySection() {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Cari endpoint..."
-                    className="pl-8 pr-3 py-1 bg-slate-950 border border-white/10 rounded-lg text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-cyan-400 w-36 sm:w-48"
+                    className="pl-8 pr-3 py-1 bg-[#121822] border border-[#1c2432] rounded-md text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-cyan-400 w-36 sm:w-48"
                   />
                 </div>
 
@@ -381,7 +376,7 @@ export default function SystemObservabilitySection() {
                   value={selectedCategory}
                   onChange={(e) => setSelectedCategory(e.target.value)}
                   aria-label="Filter kategori endpoint"
-                  className="px-2.5 py-1 bg-slate-950 border border-white/10 rounded-lg text-xs text-slate-300 font-mono focus:outline-none focus:border-cyan-400"
+                  className="px-2.5 py-1 bg-[#121822] border border-[#1c2432] rounded-md text-xs text-slate-300 font-sans focus:outline-none focus:border-cyan-400"
                 >
                   <option value="ALL">Semua Kategori</option>
                   <option value="System">System</option>
@@ -400,7 +395,7 @@ export default function SystemObservabilitySection() {
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs font-mono">
                 <thead>
-                  <tr className="border-b border-white/10 text-slate-400 text-[11px]">
+                  <tr className="border-b border-[#1c2432] text-slate-400 text-xs font-sans">
                     <th className="pb-2 font-medium">STATUS</th>
                     <th className="pb-2 font-medium">METODE</th>
                     <th className="pb-2 font-medium">ENDPOINT</th>
@@ -419,35 +414,35 @@ export default function SystemObservabilitySection() {
                       <tr key={item.id} className="hover:bg-white/[0.02] transition">
                         <td className="py-2.5">
                           {isPass && (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded">
+                            <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded">
                               <CheckCircle2 className="w-3 h-3" />
                               {item.httpCode || 200}
                             </span>
                           )}
                           {isFail && (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded" title={item.error}>
+                            <span className="inline-flex items-center gap-1 text-xs font-bold text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded" title={item.error}>
                               <XCircle className="w-3 h-3" />
                               {item.httpCode || 'ERR'}
                             </span>
                           )}
                           {isPending && (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded">
-                              <Clock className="w-3 h-3 animate-pulse" />
+                            <span className="inline-flex items-center gap-1 text-xs font-bold text-slate-400 bg-slate-800 px-2 py-0.5 rounded">
+                              <Clock className="w-3 h-3" />
                               PROBE
                             </span>
                           )}
                         </td>
                         <td className="py-2.5">
-                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${item.method === 'GET' ? 'text-cyan-400 bg-cyan-500/10' : 'text-amber-400 bg-amber-500/10'}`}>
+                          <span className={`px-2 py-0.5 rounded text-xs font-bold ${item.method === 'GET' ? 'text-cyan-400 bg-cyan-500/10' : 'text-amber-400 bg-amber-500/10'}`}>
                             {item.method}
                           </span>
                         </td>
                         <td className="py-2.5 font-sans">
                           <div className="font-bold text-slate-200 text-xs">{item.name}</div>
-                          <div className="font-mono text-[10px] text-slate-500 truncate max-w-xs">{item.path}</div>
+                          <div className="font-mono text-xs text-slate-500 truncate max-w-xs">{item.path}</div>
                         </td>
                         <td className="py-2.5">
-                          <span className="text-[10px] text-slate-400 bg-slate-900 border border-white/5 px-2 py-0.5 rounded">
+                          <span className="text-xs text-slate-400 bg-[#121822] border border-[#1c2432] px-2 py-0.5 rounded font-sans">
                             {item.category}
                           </span>
                         </td>
@@ -460,7 +455,7 @@ export default function SystemObservabilitySection() {
                             <span className="text-slate-600">-</span>
                           )}
                         </td>
-                        <td className="py-2.5 text-right font-mono text-slate-400 text-[11px]">
+                        <td className="py-2.5 text-right font-mono text-slate-400 text-xs">
                           {item.responseBytes ? `${(item.responseBytes / 1024).toFixed(1)} KB` : '-'}
                         </td>
                       </tr>
@@ -476,8 +471,8 @@ export default function SystemObservabilitySection() {
         <div className="lg:col-span-4 space-y-4">
           
           {/* Data Sources Gateway */}
-          <div className="bg-[#13161c]/90 backdrop-blur-md border border-white/10 rounded-2xl p-4 shadow-2xl space-y-3">
-            <div className="flex items-center gap-2 pb-2 border-b border-white/10">
+          <div className="bg-[#0c1017] border border-[#1c2432] rounded-lg p-4 shadow-xl space-y-3">
+            <div className="flex items-center gap-2 pb-2 border-b border-[#1c2432]">
               <Database className="w-4 h-4 text-cyan-400" />
               <h2 className="text-sm font-bold text-white font-sans">Data Source Adapters</h2>
             </div>
@@ -491,16 +486,16 @@ export default function SystemObservabilitySection() {
                 { name: 'LKBN Antara RSS', desc: 'Berita & early warning', interval: '180s', status: 'ACTIVE' },
                 { name: 'Supabase PostGIS', desc: 'LTM & simpanan entitas', interval: 'SYNC', status: 'ACTIVE' },
               ].map((src) => (
-                <div key={src.name} className="flex items-center justify-between p-2 rounded-xl bg-slate-950/60 border border-white/5">
+                <div key={src.name} className="flex items-center justify-between p-2.5 rounded-md bg-[#121822] border border-[#1c2432]">
                   <div>
                     <div className="font-bold text-slate-200 text-xs font-sans">{src.name}</div>
-                    <div className="text-[10px] text-slate-500 font-sans">{src.desc}</div>
+                    <div className="text-xs text-slate-400 font-sans">{src.desc}</div>
                   </div>
                   <div className="text-right">
-                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/20">
+                    <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/20">
                       {src.status}
                     </span>
-                    <div className="text-[9px] font-mono text-slate-500 mt-0.5">{src.interval}</div>
+                    <div className="text-xs font-mono text-slate-500 mt-0.5">{src.interval}</div>
                   </div>
                 </div>
               ))}
@@ -508,19 +503,19 @@ export default function SystemObservabilitySection() {
           </div>
 
           {/* Live Background Worker Logs Terminal */}
-          <div className="bg-[#13161c]/90 backdrop-blur-md border border-white/10 rounded-2xl p-4 shadow-2xl space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-white/10">
+          <div className="bg-[#0c1017] border border-[#1c2432] rounded-lg p-4 shadow-xl space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-[#1c2432]">
               <div className="flex items-center gap-2">
                 <Terminal className="w-4 h-4 text-cyan-400" />
                 <h2 className="text-sm font-bold text-white font-sans">Event & Worker Logs</h2>
               </div>
-              <div className="flex items-center gap-1 text-[10px] font-mono">
+              <div className="flex items-center gap-1 text-xs font-mono">
                 {(['ALL', 'INFO', 'WARN', 'ERROR'] as const).map(lvl => (
                   <button
                     key={lvl}
                     type="button"
                     onClick={() => setLogFilter(lvl)}
-                    className={`cursor-pointer px-1.5 py-0.5 rounded ${logFilter === lvl ? 'bg-cyan-500/20 text-cyan-300 font-bold' : 'text-slate-500 hover:text-slate-300'}`}
+                    className={`cursor-pointer px-2 py-0.5 rounded ${logFilter === lvl ? 'bg-cyan-500/20 text-cyan-300 font-bold' : 'text-slate-500 hover:text-slate-300'}`}
                   >
                     {lvl}
                   </button>
@@ -528,17 +523,17 @@ export default function SystemObservabilitySection() {
               </div>
             </div>
 
-            <div className="bg-slate-950 border border-white/10 rounded-xl p-3 font-mono text-[10px] h-64 overflow-y-auto space-y-2">
+            <div className="bg-[#080d14] border border-[#1c2432] rounded-md p-3 font-mono text-xs h-64 overflow-y-auto space-y-2">
               {filteredLogs.map((log, idx) => (
                 <div key={idx} className="leading-relaxed border-b border-white/5 pb-1 last:border-0">
-                  <div className="flex items-center gap-1.5 text-slate-500 text-[9px]">
+                  <div className="flex items-center gap-1.5 text-slate-500 text-xs">
                     <span>{log.timestamp}</span>
-                    <span className={`px-1 rounded text-[8px] font-bold ${log.level === 'ERROR' ? 'bg-rose-500/20 text-rose-300' : log.level === 'WARN' ? 'bg-amber-500/20 text-amber-300' : 'bg-cyan-500/10 text-cyan-300'}`}>
+                    <span className={`px-1 rounded text-xs font-bold ${log.level === 'ERROR' ? 'bg-rose-500/20 text-rose-300' : log.level === 'WARN' ? 'bg-amber-500/20 text-amber-300' : 'bg-cyan-500/10 text-cyan-300'}`}>
                       {log.level}
                     </span>
                     <span className="text-slate-400">[{log.component}]</span>
                   </div>
-                  <div className="text-slate-300 mt-0.5 font-mono text-[10px] break-words">
+                  <div className="text-slate-300 mt-0.5 font-mono text-xs break-words">
                     {log.message}
                   </div>
                 </div>

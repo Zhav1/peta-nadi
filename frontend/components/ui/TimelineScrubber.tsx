@@ -51,7 +51,7 @@ export function TimelineScrubber({ snapshots, onSeek, isLive = true }: TimelineS
       id="timeline-scrubber"
       className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[560px] z-20"
     >
-      <div className="bg-slate-900/70 backdrop-blur-lg border border-white/10 rounded-2xl shadow-2xl px-5 py-3">
+      <div className="bg-[#0c1017] border border-[#1c2432] rounded-lg shadow-xl px-5 py-3">
         <div className="flex items-center gap-3">
           {/* Play/Pause */}
           <button

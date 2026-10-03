@@ -104,8 +104,8 @@ function DemoRemoteClient() {
   if (!isRunning || !crisisId) {
     return (
       <div className="min-h-screen bg-[#080d14] text-slate-100 flex flex-col items-center justify-center p-6 text-center">
-        <div className="w-16 h-16 rounded-full bg-cyan-950/40 border border-cyan-500/30 flex items-center justify-center text-cyan-400 mb-6 shadow-lg shadow-cyan-500/20">
-          <img src="/logo_prehub.png" alt="PreHub Logo" className="w-10 h-10 object-contain" />
+        <div className="w-16 h-16 rounded-full bg-[#0c1017] border border-[#1c2432] flex items-center justify-center mb-6 shadow-xl">
+          <img src="/logo_prehub.png" alt="PreHub Logo" className="w-9 h-9 object-contain" />
         </div>
         <h1 className="text-xl font-bold mb-2">PreHub Presenter Remote</h1>
         <p className="text-sm text-slate-400 max-w-xs mb-8">
@@ -113,7 +113,7 @@ function DemoRemoteClient() {
         </p>
         <button
           onClick={handleStartDemo}
-          className="w-full max-w-xs py-4 rounded-xl font-bold bg-cyan-500 text-slate-950 active:scale-95 transition shadow-lg shadow-cyan-500/10 cursor-pointer"
+          className="w-full max-w-xs py-3 rounded-md font-semibold bg-white hover:bg-slate-200 text-[#080d14] transition-colors shadow-sm cursor-pointer text-sm"
         >
           Start New Demo Run
         </button>
@@ -124,8 +124,8 @@ function DemoRemoteClient() {
   return (
     <div className="min-h-screen bg-[#080d14] text-slate-100 flex flex-col p-6 select-none justify-between">
       {/* Top Bar */}
-      <div className="text-center py-4 border-b border-slate-900">
-        <span className="text-[10px] font-bold tracking-widest text-cyan-400 uppercase">
+      <div className="text-center py-4 border-b border-[#1c2432]">
+        <span className="text-xs font-semibold tracking-wider text-slate-300 uppercase">
           Presenter Remote Control
         </span>
         <div className="text-xs text-slate-400 font-mono mt-1">ID: {crisisId}</div>
@@ -134,21 +134,21 @@ function DemoRemoteClient() {
       {/* Main Control Panel */}
       <div className="flex-1 flex flex-col items-center justify-center py-10 gap-6">
         <div className="text-center">
-          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest block mb-1">
+          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">
             Current Stage
           </span>
-          <h2 className="text-2xl font-black text-slate-100 px-4">
+          <h2 className="text-2xl font-bold text-slate-100 px-4 font-sans">
             {stageName}
           </h2>
-          <span className="text-xs text-cyan-400 font-bold block mt-2">
+          <span className="text-xs text-slate-300 font-mono font-medium block mt-2">
             Stage {stage + 1} of 5
           </span>
         </div>
 
         {/* Progress Bar */}
-        <div className="w-full max-w-xs bg-slate-950/80 border border-slate-900 h-3 rounded-full overflow-hidden">
+        <div className="w-full max-w-xs bg-[#0c1017] border border-[#1c2432] h-2 rounded-full overflow-hidden">
           <div
-            className="bg-cyan-500 h-full rounded-full transition-all duration-300"
+            className="bg-white h-full rounded-full transition-all duration-300"
             style={{ width: `${((stage + 1) / 5) * 100}%` }}
           />
         </div>
@@ -159,14 +159,14 @@ function DemoRemoteClient() {
         {stage < 4 ? (
           <button
             onClick={handleNextStep}
-            className="w-full py-5 rounded-2xl text-base font-bold bg-cyan-500 text-slate-950 active:scale-95 hover:bg-cyan-400 transition shadow-lg shadow-cyan-500/15 cursor-pointer flex items-center justify-center gap-2"
+            className="w-full py-3.5 rounded-md text-sm font-semibold bg-white hover:bg-slate-200 text-[#080d14] transition-colors shadow-sm cursor-pointer flex items-center justify-center gap-2"
           >
-            <SkipForward className="w-5 h-5" />
+            <SkipForward className="w-4 h-4 text-[#080d14]" />
             <span>Next Step</span>
           </button>
         ) : (
-          <div className="w-full py-4 text-center border border-emerald-500/20 bg-emerald-950/20 rounded-2xl text-emerald-400 font-bold text-sm flex items-center justify-center gap-2">
-            <CheckCircle2 className="w-5 h-5" />
+          <div className="w-full py-3.5 text-center border border-emerald-500/20 bg-emerald-500/10 rounded-md text-emerald-400 font-semibold text-sm flex items-center justify-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
             <span>Demo Run Completed</span>
           </div>
         )}
@@ -174,10 +174,10 @@ function DemoRemoteClient() {
         <div className="flex gap-3">
           <button
             onClick={() => setIsAuto((prev) => !prev)}
-            className={`flex-1 py-4 rounded-xl text-xs font-bold border transition cursor-pointer flex items-center justify-center gap-1.5 ${
+            className={`flex-1 py-3 rounded-md text-xs font-semibold border transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
               isAuto
-                ? 'bg-orange-500/20 text-orange-400 border-orange-500/30'
-                : 'border-slate-800 bg-slate-900/40 text-slate-300 active:scale-95'
+                ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                : 'border-[#1c2432] bg-[#121822] text-slate-300 hover:text-white'
             }`}
           >
             {isAuto ? (
@@ -195,7 +195,7 @@ function DemoRemoteClient() {
 
           <button
             onClick={handleRestart}
-            className="flex-1 py-4 rounded-xl text-xs font-bold border border-slate-800 bg-slate-900/40 text-slate-300 active:scale-95 transition cursor-pointer flex items-center justify-center gap-1.5"
+            className="flex-1 py-3 rounded-md text-xs font-semibold border border-[#1c2432] bg-[#121822] text-slate-300 hover:text-white transition-colors cursor-pointer flex items-center justify-center gap-1.5"
           >
             <RotateCcw className="w-3.5 h-3.5" />
             <span>Restart Demo</span>

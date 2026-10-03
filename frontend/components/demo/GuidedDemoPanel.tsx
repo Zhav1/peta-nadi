@@ -146,19 +146,16 @@ export function GuidedDemoPanel({
 
   return (
     <div
-      className={`fixed bottom-6 ${dynamicRightOffset} z-50 w-96 rounded-2xl border border-slate-800 bg-slate-950/90 backdrop-blur-xl p-5 text-slate-100 shadow-2xl flex flex-col gap-4 animate-in slide-in-from-bottom-4 duration-300 transition-all pointer-events-auto`}
+      className={`fixed bottom-6 ${dynamicRightOffset} z-50 w-96 rounded-lg border border-[#1c2432] bg-[#0c1017] p-4 text-slate-100 shadow-xl flex flex-col gap-3 animate-in slide-in-from-bottom-4 duration-200 transition-all pointer-events-auto font-sans`}
       onMouseDown={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}
     >
       {/* Header */}
-      <div className="flex justify-between items-center border-b border-slate-800/80 pb-3">
-        <div className="flex flex-col">
-          <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-            STAGE {stage + 1}/5: {stageTitles[stage].toUpperCase()}
-          </span>
-          <h4 className="text-sm font-bold text-slate-100 mt-0.5">
-            Stage {stage + 1}: {stageTitles[stage]}
+      <div className="flex justify-between items-center border-b border-[#1c2432] pb-2.5">
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-cyan-400 shrink-0" />
+          <h4 className="text-xs font-semibold text-slate-200 tracking-wide uppercase">
+            Tahap {stage + 1} dari 5: {stageTitles[stage]}
           </h4>
         </div>
         <button
@@ -168,7 +165,7 @@ export function GuidedDemoPanel({
             e.stopPropagation();
             onReset();
           }}
-          className="text-slate-400 hover:text-white text-xs transition p-1 hover:bg-slate-900 rounded-md cursor-pointer"
+          className="text-slate-400 hover:text-white text-xs transition p-1 hover:bg-[#121822] rounded cursor-pointer"
           aria-label="Tutup panel demo"
         >
           <X className="w-4 h-4" />
@@ -176,78 +173,73 @@ export function GuidedDemoPanel({
       </div>
 
       {/* Stepper Progress Indicator */}
-      <div className="flex justify-between items-center gap-1.5 px-1 py-1">
+      <div className="flex justify-between items-center gap-1 px-0.5">
         {stageTitles.map((_, idx) => (
           <div key={idx} className="flex-1 flex flex-col gap-1 items-center">
             <div
-              className={`w-full h-1.5 rounded-full transition-all duration-300 ${
-                idx <= stage
-                  ? 'bg-cyan-400 shadow-sm shadow-cyan-500/50'
-                  : 'bg-slate-800'
+              className={`w-full h-1 rounded-full transition-all duration-200 ${
+                idx <= stage ? 'bg-cyan-400' : 'bg-[#1c2432]'
               }`}
             />
           </div>
         ))}
       </div>
 
-      {/* Stage Explainer tooltip/card */}
-      <div className="rounded-xl border border-slate-800/60 bg-slate-900/60 p-3.5 text-xs text-slate-300 leading-relaxed relative">
-        <span className="absolute -top-2 left-4 px-1.5 py-0.5 bg-slate-900 border border-slate-800 rounded text-[9px] font-semibold text-cyan-400 uppercase">
-          AI Stepper
-        </span>
+      {/* Stage Explainer */}
+      <div className="rounded-md border border-[#1c2432] bg-[#121822] p-3 text-xs text-slate-300 leading-relaxed">
         {stageExplainers[stage]}
       </div>
 
       {/* Interactive visual feedback per stage */}
-      <div className="min-h-[110px] border border-slate-850 bg-slate-900/30 rounded-xl p-3 flex flex-col justify-center">
+      <div className="min-h-[110px] border border-[#1c2432] bg-[#121822] rounded-md p-3 flex flex-col justify-center">
         {stage === 0 && (
           <div className="flex flex-col gap-2.5">
-            {/* Direct Map Click Prompt Banner */}
-            <div className="bg-cyan-950/40 border border-cyan-500/40 p-2.5 rounded-xl flex flex-col gap-1.5 shadow-md">
-              <div className="flex items-center justify-between text-[11px] font-bold text-cyan-300">
+            {/* Direct Map Click Prompt */}
+            <div className="bg-[#0c1017] border border-[#1c2432] p-2.5 rounded-md flex flex-col gap-1">
+              <div className="flex items-center justify-between text-xs font-medium text-slate-200">
                 <span className="flex items-center gap-1.5">
                   <MapPin className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
                   <span>Pilih Simpul Peta Operasi:</span>
                 </span>
-                <span className="text-[9px] font-mono bg-cyan-900/60 px-1.5 py-0.5 rounded border border-cyan-400/40 text-cyan-200">
-                  INTERAKTIF
+                <span className="text-xs font-mono text-cyan-400">
+                  Interaktif
                 </span>
               </div>
-              <p className="text-[10px] text-slate-300 leading-tight">
-                Klik marker kota/pelabuhan pada kanvas peta untuk mengeset titik <strong className="text-cyan-400">Start (Titik Asal)</strong> lalu <strong className="text-amber-400">End (Titik Tujuan)</strong>.
+              <p className="text-xs text-slate-400 leading-normal">
+                Klik marker kota/pelabuhan pada peta untuk mengeset titik <strong className="text-cyan-300 font-medium">Asal</strong> lalu <strong className="text-amber-300 font-medium">Tujuan</strong>.
               </p>
             </div>
 
             {/* Selected Node Status Grid */}
             <div className="grid grid-cols-2 gap-2">
-              <div className={`p-2 rounded-xl border flex flex-col gap-1 text-[10px] transition-all ${selectedOrigin ? 'bg-cyan-950/60 border-cyan-500/50 text-cyan-200 shadow-sm' : 'bg-slate-950/60 border-dashed border-slate-700 text-slate-400'}`}>
-                <span className="font-bold text-cyan-400 flex items-center gap-1">
+              <div className={`p-2 rounded-md border flex flex-col gap-1 text-xs transition-colors ${selectedOrigin ? 'bg-[#0c1017] border-[#1c2432] text-slate-200' : 'bg-[#0c1017]/50 border-dashed border-[#1c2432] text-slate-500'}`}>
+                <span className="font-medium text-cyan-400 flex items-center gap-1">
                   <Circle className="w-2.5 h-2.5 fill-cyan-400 text-cyan-400" />
-                  <span>START (Klik 1)</span>
-                  {selectedOrigin && <CheckCircle2 className="w-3 h-3 text-cyan-400" />}
+                  <span>Asal (Klik 1)</span>
+                  {selectedOrigin && <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400 ml-auto" />}
                 </span>
-                <span className="font-mono font-bold text-[11px] truncate">
+                <span className="font-mono tabular-nums text-xs truncate">
                   {selectedOrigin ? HUB_NODES[selectedOrigin]?.name || selectedOrigin.toUpperCase() : 'Pilih Marker Peta...'}
                 </span>
               </div>
-              <div className={`p-2 rounded-xl border flex flex-col gap-1 text-[10px] transition-all ${selectedDestination ? 'bg-amber-950/60 border-amber-500/50 text-amber-200 shadow-sm' : 'bg-slate-950/60 border-dashed border-slate-700 text-slate-400'}`}>
-                <span className="font-bold text-amber-400 flex items-center gap-1">
+              <div className={`p-2 rounded-md border flex flex-col gap-1 text-xs transition-colors ${selectedDestination ? 'bg-[#0c1017] border-[#1c2432] text-slate-200' : 'bg-[#0c1017]/50 border-dashed border-[#1c2432] text-slate-500'}`}>
+                <span className="font-medium text-amber-400 flex items-center gap-1">
                   <Circle className="w-2.5 h-2.5 fill-amber-400 text-amber-400" />
-                  <span>END (Klik 2)</span>
-                  {selectedDestination && <CheckCircle2 className="w-3 h-3 text-amber-400" />}
+                  <span>Tujuan (Klik 2)</span>
+                  {selectedDestination && <CheckCircle2 className="w-3.5 h-3.5 text-amber-400 ml-auto" />}
                 </span>
-                <span className="font-mono font-bold text-[11px] truncate">
+                <span className="font-mono tabular-nums text-xs truncate">
                   {selectedDestination ? HUB_NODES[selectedDestination]?.name || selectedDestination.toUpperCase() : 'Pilih Marker Peta...'}
                 </span>
               </div>
             </div>
 
             {/* Sensor feeds */}
-            <div className="grid grid-cols-6 gap-1 pt-1 border-t border-slate-800/40">
+            <div className="grid grid-cols-6 gap-1 pt-1 border-t border-[#1c2432]">
               {sources.map((src) => (
                 <div
                   key={src.name}
-                  className={`flex items-center justify-center p-1 border rounded text-[9px] font-bold font-mono ${src.color}`}
+                  className={`flex items-center justify-center p-1 border rounded text-xs font-mono ${src.color}`}
                   title={src.name}
                 >
                   <src.Icon className="w-3 h-3 shrink-0" />
@@ -259,16 +251,16 @@ export function GuidedDemoPanel({
 
         {stage === 1 && (
           <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between text-[10px] font-mono text-cyan-400 font-bold">
+            <div className="flex items-center justify-between text-xs font-medium text-slate-300">
               <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-                STAGE 2/5: PARALLEL SWARM INGESTION
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
+                <span>Pemrosesan Swarm Agen</span>
               </span>
-              <span>6 AGENT UNITS</span>
+              <span className="font-mono text-slate-400 text-xs">6 Unit Agen</span>
             </div>
-            <div className="w-full bg-slate-950 h-1.5 rounded-full overflow-hidden border border-slate-800">
+            <div className="w-full bg-[#080d14] h-1.5 rounded-full overflow-hidden border border-[#1c2432]">
               <div
-                className="bg-cyan-400 h-full rounded-full animate-pulse transition-all duration-300"
+                className="bg-cyan-400 h-full rounded-full transition-all duration-300"
                 style={{ width: `${Math.min(100, Math.round(((logStep + 1) / 6) * 100))}%` }}
               />
             </div>
@@ -280,18 +272,18 @@ export function GuidedDemoPanel({
                 return (
                   <div
                     key={agent.key}
-                    className={`flex items-center gap-1.5 p-1.5 rounded-lg border text-[10px] font-mono transition-all ${
+                    className={`flex items-center gap-1.5 p-1.5 rounded border text-xs transition-colors ${
                       isRunningAgent
-                        ? 'border-cyan-400 bg-cyan-950/80 text-cyan-200 shadow-sm ring-2 ring-cyan-500/20'
+                        ? 'border-cyan-500/50 bg-[#0c1017] text-cyan-200'
                         : isDoneAgent
-                          ? 'border-emerald-500/40 bg-emerald-950/30 text-emerald-300'
-                          : 'border-slate-850 bg-slate-950/40 text-slate-500'
+                          ? 'border-emerald-500/30 bg-[#0c1017] text-emerald-300'
+                          : 'border-[#1c2432] bg-[#0c1017]/60 text-slate-500'
                     }`}
                   >
                     {isDoneAgent ? (
-                      <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                     ) : isRunningAgent ? (
-                      <div className="w-2 h-2 rounded-full bg-cyan-400 animate-ping shrink-0" />
+                      <div className="w-2 h-2 rounded-full bg-cyan-400 shrink-0" />
                     ) : (
                       <div className="w-2 h-2 rounded-full bg-slate-700 shrink-0" />
                     )}
@@ -300,26 +292,26 @@ export function GuidedDemoPanel({
                 );
               })}
             </div>
-            {/* Live Glass-Box Terminal Stream */}
-            <div className="bg-[#05070a] border border-cyan-500/40 rounded-xl p-2.5 font-mono text-[10px] text-cyan-300 shadow-inner flex flex-col gap-1">
-              <div className="text-[9px] text-slate-500 uppercase tracking-widest border-b border-slate-800/80 pb-1 flex justify-between">
-                <span>Agent Reasoning Terminal Stream</span>
-                <span className={logStep === 5 ? 'text-emerald-400 font-bold' : 'text-cyan-400 animate-pulse'}>
-                  {logStep === 5 ? '● SWARM 100% COMPLETE' : '● SWARM ACTIVE'}
+            {/* Live Terminal Stream */}
+            <div className="bg-[#080d14] border border-[#1c2432] rounded-md p-2.5 font-mono text-xs text-slate-300 flex flex-col gap-1">
+              <div className="text-xs text-slate-400 border-b border-[#1c2432] pb-1 flex justify-between">
+                <span>Alur Penalaran Agen</span>
+                <span className={logStep === 5 ? 'text-emerald-400 font-medium' : 'text-cyan-400'}>
+                  {logStep === 5 ? 'Selesai 100%' : 'Aktif'}
                 </span>
               </div>
-              <p className="line-clamp-2 leading-snug font-medium text-cyan-200">
+              <p className="line-clamp-2 leading-relaxed text-slate-200">
                 {swarmLogs[logStep]}
               </p>
             </div>
             {logStep === 5 && (
-              <div className="bg-emerald-950/80 border border-emerald-500/60 p-2 rounded-xl flex items-center justify-between text-[10px] font-bold text-emerald-300 shadow-lg shadow-emerald-500/20 animate-in fade-in duration-300">
+              <div className="bg-emerald-950/40 border border-emerald-500/30 p-2 rounded-md flex items-center justify-between text-xs font-medium text-emerald-300 animate-in fade-in duration-200">
                 <span className="flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 animate-bounce" />
-                  <span>ANALISIS 6 AI SWARM SELESAI (100%)</span>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span>Analisis Swarm 6 Agen Selesai</span>
                 </span>
-                <span className="text-[9px] font-mono bg-emerald-900/90 px-1.5 py-0.5 rounded text-emerald-200 uppercase font-black tracking-wider border border-emerald-400/50">
-                  SIAP ADVANCE
+                <span className="font-mono text-xs bg-emerald-900/60 px-1.5 py-0.5 rounded text-emerald-200 border border-emerald-400/30">
+                  Siap Lanjut
                 </span>
               </div>
             )}
@@ -329,14 +321,14 @@ export function GuidedDemoPanel({
         {stage === 2 && (
           <div className="flex flex-col gap-2.5 py-0.5">
             <div className="flex justify-between items-center text-xs text-slate-300">
-              <span className="font-bold font-mono">Consensus Confidence Score</span>
-              <span className="text-sm font-black text-emerald-400 font-mono">
+              <span className="font-medium">Skor Keyakinan Konsensus</span>
+              <span className="text-xs font-semibold text-emerald-400 font-mono tabular-nums">
                 {(confidence * 100).toFixed(0)}%
               </span>
             </div>
-            <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-800">
+            <div className="w-full bg-[#080d14] h-1.5 rounded-full overflow-hidden border border-[#1c2432]">
               <div
-                className="bg-gradient-to-r from-yellow-500 to-emerald-400 h-full rounded-full transition-all duration-1000 ease-out"
+                className="bg-emerald-400 h-full rounded-full transition-all duration-500 ease-out"
                 style={{ width: `${confidence * 100}%` }}
               />
             </div>
@@ -345,57 +337,46 @@ export function GuidedDemoPanel({
               {agents.map((agent) => (
                 <div
                   key={agent.key}
-                  className="flex items-center gap-1 p-1 rounded-md border border-emerald-500/30 bg-emerald-950/20 text-[9px] font-mono text-emerald-300"
+                  className="flex items-center gap-1 p-1 rounded border border-emerald-500/30 bg-[#0c1017] text-xs text-emerald-300"
                 >
-                  <CheckCircle2 className="w-2.5 h-2.5 text-emerald-400 shrink-0" />
+                  <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
                   <span className="truncate">{agent.label}</span>
                 </div>
               ))}
             </div>
-            {/* Live Glass-Box Terminal Stream */}
-            <div className="bg-[#05070a] border border-emerald-500/40 rounded-xl p-2.5 font-mono text-[10px] text-emerald-300 shadow-inner flex flex-col gap-1">
-              <div className="text-[9px] text-slate-500 uppercase tracking-widest border-b border-slate-800/80 pb-1 flex justify-between">
-                <span>GraphRAG Consensus Evaluation</span>
-                <span className="text-emerald-400 font-bold">VALIDATED (&gt;85%)</span>
+            {/* Live Terminal Stream */}
+            <div className="bg-[#080d14] border border-[#1c2432] rounded-md p-2.5 font-mono text-xs text-slate-300 flex flex-col gap-1">
+              <div className="text-xs text-slate-400 border-b border-[#1c2432] pb-1 flex justify-between">
+                <span>Evaluasi Konsensus GraphRAG</span>
+                <span className="text-emerald-400 font-medium">Tervalidasi (&gt;85%)</span>
               </div>
-              <p className="line-clamp-2 leading-snug font-medium text-emerald-200">
+              <p className="line-clamp-2 leading-relaxed text-slate-200">
                 {swarmLogs[5]}
               </p>
             </div>
-            {logStep === 5 && (
-              <div className="bg-emerald-950/80 border border-emerald-500/60 p-2 rounded-xl flex items-center justify-between text-[10px] font-bold text-emerald-300 shadow-lg shadow-emerald-500/20 animate-in fade-in duration-300">
-                <span className="flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 animate-bounce" />
-                  <span>CONSENSUS GATE SIAP (100%)</span>
-                </span>
-                <span className="text-[9px] font-mono bg-emerald-900/90 px-1.5 py-0.5 rounded text-emerald-200 uppercase font-black tracking-wider border border-emerald-400/50">
-                  SIAP ADVANCE
-                </span>
-              </div>
-            )}
           </div>
         )}
 
         {stage === 3 && (
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-2">
-              <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping" />
-              <span className="text-xs font-bold text-red-400 uppercase tracking-wider">
-                Active Crisis Alert
+              <div className="w-2 h-2 rounded-full bg-rose-500" />
+              <span className="text-xs font-semibold text-rose-400 uppercase tracking-wider">
+                Peringatan Krisis Aktif
               </span>
             </div>
-            <p className="text-[11px] text-slate-300 line-clamp-3 italic">
-              &quot;{summary || 'Processing Decision Support recommendations...'}&quot;
+            <p className="text-xs text-slate-300 line-clamp-3 italic leading-relaxed">
+              &quot;{summary || 'Memproses rekomendasi Dukungan Keputusan...'}&quot;
             </p>
           </div>
         )}
 
         {stage === 4 && (
           <div className="flex flex-col items-center gap-2 text-center py-2">
-            <CheckCircle2 className="w-9 h-9 text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.5)]" />
-            <div className="text-xs font-bold text-slate-200">WhatsApp Alert Delivered</div>
-            <div className="text-[10px] text-slate-400 max-w-[240px]">
-              Notification dispatched to transport fleet operators on Deli Serdang & Belawan routes.
+            <CheckCircle2 className="w-8 h-8 text-emerald-400" />
+            <div className="text-xs font-semibold text-slate-200">Notifikasi Dispatched</div>
+            <div className="text-xs text-slate-400 max-w-[260px] leading-normal">
+              Notifikasi operasional telah dikirim ke operator armada rute Deli Serdang & Belawan.
             </div>
           </div>
         )}
@@ -412,28 +393,22 @@ export function GuidedDemoPanel({
                 e.stopPropagation();
                 onAdvance();
               }}
-              className={`flex-1 py-2 rounded-xl text-xs cursor-pointer flex items-center justify-center gap-1.5 transition duration-200 ${
-                stage === 0
-                  ? 'bg-cyan-500 text-slate-950 font-bold hover:bg-cyan-400 shadow-md shadow-cyan-500/20'
-                  : logStep === 5
-                    ? 'bg-cyan-400 text-slate-950 font-black hover:bg-cyan-300 shadow-lg shadow-cyan-500/50 animate-pulse border-2 border-cyan-300'
-                    : 'bg-cyan-500/80 text-slate-950 font-bold hover:bg-cyan-400'
-              }`}
+              className="flex-1 py-2 px-3 rounded-md text-xs font-semibold bg-white text-[#080d14] hover:bg-slate-200 transition-colors shadow-sm cursor-pointer flex items-center justify-center gap-1.5"
             >
               {stage === 0 ? (
                 <>
                   <Play className="w-3.5 h-3.5 fill-current" />
-                  <span>Inject Crisis & Run Swarm</span>
+                  <span>Simulasi Krisis & Jalankan Swarm</span>
                 </>
               ) : logStep === 5 ? (
                 <>
                   <SkipForward className="w-3.5 h-3.5" />
-                  <span>Next Step (Swarm Complete 100%)</span>
+                  <span>Langkah Berikutnya</span>
                 </>
               ) : (
                 <>
                   <SkipForward className="w-3.5 h-3.5" />
-                  <span>Next Step</span>
+                  <span>Langkah Berikutnya</span>
                 </>
               )}
             </button>
@@ -445,10 +420,10 @@ export function GuidedDemoPanel({
                 e.stopPropagation();
                 onStart({ origin: selectedOrigin, destination: selectedDestination });
               }}
-              className="flex-1 py-2 rounded-xl text-xs font-bold bg-cyan-500 text-slate-950 hover:bg-cyan-400 active:scale-95 transition duration-200 shadow-md shadow-cyan-500/20 cursor-pointer flex items-center justify-center gap-1.5"
+              className="flex-1 py-2 px-3 rounded-md text-xs font-semibold bg-white text-[#080d14] hover:bg-slate-200 transition-colors shadow-sm cursor-pointer flex items-center justify-center gap-1.5"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              <span>Restart Demo</span>
+              <span>Mulai Ulang Demo</span>
             </button>
           )}
 
@@ -459,27 +434,27 @@ export function GuidedDemoPanel({
               e.stopPropagation();
               onToggleAuto();
             }}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition duration-200 cursor-pointer flex items-center justify-center gap-1.5 ${
+            className={`px-3 py-2 rounded-md text-xs font-medium transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
               isAuto
-                ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
-                : 'border border-slate-800 bg-slate-900/60 text-slate-300 hover:bg-slate-800'
+                ? 'bg-amber-950/40 text-amber-300 border border-amber-500/40'
+                : 'border border-[#1c2432] bg-[#121822] text-slate-300 hover:text-white hover:bg-[#1a2230]'
             }`}
           >
             {isAuto ? (
               <>
                 <Pause className="w-3.5 h-3.5" />
-                <span>Pause</span>
+                <span>Jeda</span>
               </>
             ) : (
               <>
                 <Play className="w-3.5 h-3.5 fill-current" />
-                <span>Auto</span>
+                <span>Otomatis</span>
               </>
             )}
           </button>
         </div>
 
-        <div className="flex justify-between items-center text-[10px] text-slate-500 pt-2 border-t border-slate-900 font-mono">
+        <div className="flex justify-between items-center text-xs text-slate-400 pt-2 border-t border-[#1c2432]">
           <button
             type="button"
             onClick={(e) => {
@@ -487,9 +462,9 @@ export function GuidedDemoPanel({
               e.stopPropagation();
               setQrVisible((prev) => !prev);
             }}
-            className="hover:text-cyan-400 transition cursor-pointer flex items-center gap-1.5"
+            className="hover:text-slate-200 transition cursor-pointer flex items-center gap-1.5"
           >
-            <Smartphone className="w-3 h-3 text-cyan-400" />
+            <Smartphone className="w-3.5 h-3.5 text-slate-400" />
             <span>{qrVisible ? 'Sembunyikan Remote' : 'Remote Ponsel'}</span>
           </button>
           <button
@@ -499,7 +474,7 @@ export function GuidedDemoPanel({
               e.stopPropagation();
               onStart();
             }}
-            className="hover:text-slate-300 transition cursor-pointer flex items-center gap-1"
+            className="hover:text-slate-200 transition cursor-pointer flex items-center gap-1"
           >
             <RotateCcw className="w-3 h-3" />
             <span>Reset Demo</span>
@@ -509,12 +484,12 @@ export function GuidedDemoPanel({
 
       {/* QR Code section for Phone Remote */}
       {qrVisible && (
-        <div className="flex flex-col items-center gap-2 bg-slate-900/60 p-4 border border-slate-900 rounded-xl">
-          <canvas ref={canvasRef} className="rounded-lg shadow-md" />
+        <div className="flex flex-col items-center gap-2 bg-[#121822] p-4 border border-[#1c2432] rounded-md">
+          <canvas ref={canvasRef} className="rounded" />
           <div className="text-center">
-            <div className="text-[10px] font-bold text-cyan-400">Scan QR Code</div>
-            <div className="text-[9px] text-slate-400 mt-0.5">
-              Open the presenter remote control on your phone
+            <div className="text-xs font-semibold text-slate-200">Scan QR Code</div>
+            <div className="text-xs text-slate-400 mt-0.5">
+              Buka pengendali jarak jauh pada ponsel
             </div>
           </div>
         </div>

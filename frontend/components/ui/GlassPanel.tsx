@@ -13,10 +13,8 @@ export function GlassPanel({ children, className, id }: GlassPanelProps) {
     <div
       id={id}
       className={cn(
-        'bg-slate-900/60 backdrop-blur-lg',
-        'border border-white/10',
-        'rounded-2xl shadow-2xl shadow-black/60',
-        'ring-1 ring-white/5',
+        'bg-[#0c1017] border border-[#1c2432]',
+        'rounded-lg shadow-xl',
         className
       )}
     >

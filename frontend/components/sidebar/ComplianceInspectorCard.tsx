@@ -134,23 +134,23 @@ export function ComplianceInspectorCard({
   };
 
   return (
-    <div className="bg-[#0c0e12]/80 backdrop-blur-md border border-white/10 p-3.5 rounded-xl text-slate-200">
+    <div className="bg-[#121822] border border-[#1c2432] p-3.5 rounded-md text-slate-200">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-white/10 pb-2 mb-3">
+      <div className="flex items-center justify-between border-b border-[#1c2432] pb-2 mb-3">
         <div className="flex items-center gap-2">
-          <div className="p-1 rounded bg-cyan-500/20 border border-cyan-500/40 text-cyan-400">
+          <div className="p-1 rounded bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
             <Scale className="w-4 h-4" />
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-100">
+              <span className="text-xs font-sans font-bold text-slate-100">
                 Inspektur Kepatuhan & Regulasi Manifest
               </span>
-              <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-cyan-950 text-cyan-400 border border-cyan-500/30">
+              <span className="px-1.5 py-0.5 rounded text-xs font-mono bg-cyan-950 text-cyan-400 border border-cyan-500/30">
                 FR-19
               </span>
             </div>
-            <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono">
+            <div className="flex items-center gap-2 text-xs text-slate-400 font-mono mt-0.5">
               <span>Armada: {vehicleId}</span>
               <span>•</span>
               <span>MST: {vehicleGrossWeightTon} Ton</span>
@@ -161,7 +161,7 @@ export function ComplianceInspectorCard({
         <button
           onClick={executeVerify}
           disabled={loading}
-          className="p-1 rounded bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 text-slate-300 hover:text-white transition-colors cursor-pointer"
+          className="p-1.5 rounded bg-[#0c1017] hover:bg-slate-800 border border-[#1c2432] text-slate-300 hover:text-white transition-colors cursor-pointer"
           title="Verifikasi Kepatuhan Ulang"
         >
           <RotateCcw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-cyan-400' : ''}`} />
@@ -170,25 +170,25 @@ export function ComplianceInspectorCard({
 
       {/* Dispatch Clearance Banner */}
       {data && (
-        <div className={`mb-3 p-2.5 rounded-lg border flex items-center justify-between ${
+        <div className={`mb-3 p-2.5 rounded-md border flex items-center justify-between ${
           data.overall_status === 'HARD_BLOCK'
-            ? 'bg-red-950/40 border-red-500/50 text-red-200'
+            ? 'bg-rose-950/40 border-rose-500/40 text-rose-200'
             : data.overall_status === 'WARNING'
               ? overrideAcknowledged
-                ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-200'
-                : 'bg-amber-950/40 border-amber-500/50 text-amber-200'
-              : 'bg-emerald-950/40 border-emerald-500/50 text-emerald-200'
+                ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200'
+                : 'bg-amber-950/40 border-amber-500/40 text-amber-200'
+              : 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200'
         }`}>
           <div className="flex items-center gap-2">
             {data.overall_status === 'HARD_BLOCK' ? (
-              <ShieldAlert className="w-4 h-4 text-red-400" />
+              <ShieldAlert className="w-4 h-4 text-rose-400" />
             ) : data.overall_status === 'WARNING' && !overrideAcknowledged ? (
               <AlertTriangle className="w-4 h-4 text-amber-400" />
             ) : (
               <CheckCircle2 className="w-4 h-4 text-emerald-400" />
             )}
             <div>
-              <p className="text-[9px] font-mono uppercase tracking-wider opacity-80">
+              <p className="text-xs font-sans opacity-80">
                 Status Izin Keberangkatan (Dispatch Clearance)
               </p>
               <p className="text-xs font-mono font-bold">
@@ -202,9 +202,9 @@ export function ComplianceInspectorCard({
               </p>
             </div>
           </div>
-          <span className={`px-2 py-0.5 rounded text-[9px] font-mono font-black border ${
+          <span className={`px-2 py-0.5 rounded text-xs font-mono font-bold border ${
             data.overall_status === 'HARD_BLOCK'
-              ? 'bg-red-900/60 text-red-300 border-red-500/40'
+              ? 'bg-rose-900/60 text-rose-300 border-rose-500/40'
               : data.overall_status === 'WARNING' && !overrideAcknowledged
                 ? 'bg-amber-900/60 text-amber-300 border-amber-500/40'
                 : 'bg-emerald-900/60 text-emerald-300 border-emerald-500/40'
@@ -220,18 +220,18 @@ export function ComplianceInspectorCard({
           {data.checks.map((chk, cIdx) => (
             <div 
               key={cIdx} 
-              className="p-2.5 rounded-lg bg-slate-900/60 border border-white/5 flex flex-col gap-1"
+              className="p-2.5 rounded-md bg-[#0c1017] border border-[#1c2432] flex flex-col gap-1"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
                   {chk.category === 'QUARANTINE_BKHIT' && <Shield className="w-3.5 h-3.5 text-cyan-400" />}
                   {chk.category === 'AXLE_LOAD_MST' && <Scale className="w-3.5 h-3.5 text-amber-400" />}
                   {chk.category === 'SURAT_JALAN_MANIFEST' && <FileText className="w-3.5 h-3.5 text-blue-400" />}
-                  <span className="text-[10px] font-mono font-bold text-slate-200">{chk.title}</span>
+                  <span className="text-xs font-sans font-bold text-slate-200">{chk.title}</span>
                 </div>
-                <span className={`px-1.5 py-0.2 rounded text-[8px] font-mono font-bold border ${
+                <span className={`px-1.5 py-0.5 rounded text-xs font-mono font-bold border ${
                   chk.status === 'HARD_BLOCK'
-                    ? 'bg-red-950 text-red-400 border-red-500/30'
+                    ? 'bg-rose-950 text-rose-400 border-rose-500/30'
                     : chk.status === 'WARNING'
                       ? 'bg-amber-950 text-amber-400 border-amber-500/30'
                       : 'bg-emerald-950 text-emerald-400 border-emerald-500/30'
@@ -239,11 +239,11 @@ export function ComplianceInspectorCard({
                   {chk.status}
                 </span>
               </div>
-              <p className="text-[10px] font-sans text-slate-300 leading-tight">
+              <p className="text-xs font-sans text-slate-300 leading-normal">
                 {chk.detail}
               </p>
               {chk.remedy_action && (
-                <p className="text-[9px] font-mono text-cyan-300 mt-0.5">
+                <p className="text-xs font-mono text-cyan-300 mt-0.5">
                   Tindakan: {chk.remedy_action}
                 </p>
               )}
@@ -265,7 +265,7 @@ export function ComplianceInspectorCard({
             </button>
           ) : (
             <div className="p-2.5 rounded-lg bg-amber-950/40 border border-amber-500/40 space-y-2">
-              <label className="text-[10px] font-mono text-amber-200 block">
+              <label className="text-xs font-mono text-amber-300 block">
                 Alasan Dispensasi Angkutan Muatan Berat:
               </label>
               <input
