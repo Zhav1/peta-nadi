@@ -71,9 +71,14 @@ const INITIAL_ENDPOINTS: EndpointProbeItem[] = [
   
   // Evaluation
   { id: 'ep-20', name: 'Benchmark Report', path: '/api/v1/evaluation/benchmark', method: 'GET', category: 'Evaluation', status: 'PENDING' },
-  { id: 'ep-21', name: 'Test Matrix (83 tests)', path: '/api/v1/evaluation/test-matrix', method: 'GET', category: 'Evaluation', status: 'PENDING' },
+  { id: 'ep-21', name: 'Test Matrix (133 tests)', path: '/api/v1/evaluation/test-matrix', method: 'GET', category: 'Evaluation', status: 'PENDING' },
   { id: 'ep-22', name: 'Corridor Efficiency', path: '/api/v1/evaluation/corridor-efficiency', method: 'GET', category: 'Evaluation', status: 'PENDING' },
   { id: 'ep-23', name: 'Ground-Truth Outcomes', path: '/api/v1/outcomes', method: 'GET', category: 'Evaluation', status: 'PENDING' },
+  
+  // Phase 44 & 45 Probes
+  { id: 'ep-24', name: 'API v1 Health Probe', path: '/api/v1/health', method: 'GET', category: 'System', status: 'PENDING' },
+  { id: 'ep-25', name: 'Intermodal Choke-Points', path: '/api/v1/intermodal/chokepoints', method: 'GET', category: 'Fleet', status: 'PENDING' },
+  { id: 'ep-26', name: 'Toll Tariffs & Fuel Benchmark', path: '/api/v1/intermodal/toll-tariffs', method: 'GET', category: 'Commodities', status: 'PENDING' },
 ];
 
 interface LogEntry {

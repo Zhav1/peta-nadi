@@ -22,7 +22,7 @@ interface TestMatrixTableProps {
 }
 
 const DOMAIN_OPTIONS = [
-  { id: 'all', label: 'Semua Kategori' },
+  { id: 'all', label: 'Semua Kategori (133 Uji)' },
   { id: 'FR-1', label: 'FR-1 Cuaca & Seismik' },
   { id: 'FR-2', label: 'FR-2 Trafik TomTom' },
   { id: 'FR-3', label: 'FR-3 Pelabuhan & AIS' },
@@ -36,6 +36,13 @@ const DOMAIN_OPTIONS = [
   { id: 'FR-11', label: 'FR-11 Kalibrasi & CPU' },
   { id: 'FR-12', label: 'FR-12 Audit Keputusan' },
   { id: 'FR-13', label: 'FR-13 Telemetri WebGL' },
+  { id: 'FR-14', label: 'FR-14 Evaluasi & Dashboard' },
+  { id: 'FR-15', label: 'FR-15 Auth & RBAC (Supabase)' },
+  { id: 'FR-16', label: 'FR-16 Onboarding Armada & GPS' },
+  { id: 'FR-17', label: 'FR-17 Choke-Point & Intermodal' },
+  { id: 'FR-18', label: 'FR-18 Spoilage Hedging Matrix' },
+  { id: 'FR-19', label: 'FR-19 Kepatuhan Regulasi & BKHIT' },
+  { id: 'FR-20', label: 'FR-20 Pilot Verification & E2E Drills' },
 ];
 
 export default function TestMatrixTable({
