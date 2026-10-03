@@ -147,7 +147,7 @@ export default function EvaluationSection({
             onClick={() => setActiveSubTab('benchmarks')}
             className={`cursor-pointer px-4 py-2 rounded-xl transition font-bold ${activeSubTab === 'benchmarks' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30' : 'text-slate-400 hover:text-white'}`}
           >
-            Tolok Ukur Model (83 Tests)
+            Tolok Ukur Model ({testMatrix?.total_tests || 133} Tests)
           </button>
           <button
             type="button"
@@ -194,7 +194,7 @@ export default function EvaluationSection({
                     Evaluasi Empiris & Tolok Ukur Validasi
                   </h1>
                   <span className="px-2.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 text-[11px] font-mono font-semibold">
-                    Milestone M2
+                    Milestone M3: Pilot Operations & Verified Multi-Persona Platform
                   </span>
                 </div>
                 <p className="text-xs text-slate-400 font-mono mt-0.5">
