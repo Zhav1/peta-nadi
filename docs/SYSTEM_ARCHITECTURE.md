@@ -17,6 +17,7 @@ The platform continuously ingests heterogeneous data streams into standardized s
 | **Pan-Sumatra Official News & Press (ANTARA 8 Biro & Press)** | XML RSS & REST / JSON | 3 minutes (TTL Cached) | Tier 1 (ANTARA 8 Biro, BMKG, BNPB) & Tier 2 (CNBC, CNN, Regional Press), NLP structured entities, corridor segment, lead-time hours |
 | **PIHPS Bank Indonesia** | REST / JSON | Daily / Real-time | Price deviations for rice, shallots, bird's eye chili, and cooking oil across Sumatra markets |
 | **AISStream Maritime** | WebSocket / JSON | Real-time | Vessel MMSI, ship name, speed over ground, heading, coordinates along Sumatra coastline |
+| **BPJT & Pertamina** | Local Cache & Ingestion | Static / Calibrated | Official Trans-Sumatra toll tariffs (Golongan I–V) and subsidized/industrial diesel fuel consumption |
 
 ---
 
@@ -70,35 +71,66 @@ The core reasoning engine consists of 6 specialized agents orchestrated through 
 
 ---
 
-## 3. Routing Engine & Multi-Modal Corridors
+## 3. Operational Hedging, Compliance & Intermodal Engine (Milestone M3)
 
-### 3.1 Ground Freight Routing (Trans-Sumatra Highway)
+### 3.1 Intermodal Choke-Point Registry & Delay Multiplier
+- Tracks 18+ strategic hubs across Sumatra (7 maritime/ferry ports and 11 mountain passes/conjunctions).
+- Evaluates queue dwell times and calculates the dynamic Intermodal Delay Multiplier:
+  $$M_{\text{intermodal}} = 1.0 + 0.15 \times N_{\text{queue}} \times \text{SeverityWeight}$$
+  clamped to the interval $[1.0, 3.5]$.
+
+### 3.2 Spoilage Hedging Calculator
+- Evaluates closed-form monetary tradeoffs across three actionable policies:
+  $$\text{Cost}(\text{Continue}) \quad \text{vs} \quad \text{Cost}(\text{Reroute}) \quad \text{vs} \quad \text{Cost}(\text{Hold})$$
+- Factors 4-tier exponential perishability decay ($\delta = 0.025$ to $0.0005/\text{hr}$), official BPJT Sumatra toll tariffs across Golongan I-V, Pertamina diesel rates modulated by market inflation, and cargo spot valuations.
+
+### 3.3 Digital Regulatory Compliance & Enforcement
+- **BKHIT Quarantine Gate:** Strictly enforces `HARD_BLOCK` on inter-island / strait crossing shipments lacking verified agricultural quarantine certificates.
+- **MST Axle-Load Constraint:** Evaluates vehicle gross vehicle weight (GVW) against Indonesian road classes, issuing `WARNING` and bypass advisories on Class III collector/mountain corridors for vehicles exceeding 8.0 Ton MST, with human-in-the-loop liability transfer override logging.
+
+---
+
+## 4. Routing Engine & Multi-Modal Corridors
+
+### 4.1 Ground Freight Routing (Trans-Sumatra Highway)
 - Primary routing calculates Mapbox driving traffic paths across the Trans-Sumatra Highway network.
-- Every polyline is evaluated against active hazard radii using the Haversine line-segment clearance algorithm (`isPolylineIntersectingHazardCircle`).
+- Evaluates polyline clearance against active hazard radii using the Haversine line-segment clearance algorithm (`isPolylineIntersectingHazardCircle`).
 - If primary routes are compromised, the engine searches nearest clean arterial bypass nodes (`HIGHWAY_JUNCTION_NODES`).
 
-### 3.2 Nautical Sea-Lane Routing (ALKI Corridors)
+### 4.2 Nautical Sea-Lane Routing (ALKI Corridors)
 - Coastal maritime routing utilizes `SUMATRA_NAUTICAL_PERIMETER`, an ordered sequence of verified coastal waypoints along the Malacca Strait, Sunda Strait, and Indian Ocean.
 - Pathfinding resolves shortest open-water nautical routes between ports without traversing landmasses.
 
-### 3.3 Air Cargo Corridors
+### 4.3 Air Cargo Corridors
 - Connects regional airport nodes (`CARGO_AIRPORT_NODES`: KNO, BTJ, PKU, BIM, DJB, PLM, TKG) using Great Circle flight vectors with first-mile and last-mile truck feeder connections.
 
-### 3.4 Hold / Delay Tactical Fallback
+### 4.4 Hold / Delay Tactical Fallback
 - When all primary and bypass road corridors intersect the disaster perimeter, the router marks all routes `COMPROMISED` and provides a tactical **Hold / Delay** recommendation to stage vehicles safely at buffer hubs.
 
 ---
 
-## 4. Frontend Command Center (Next.js 14 + Mapbox GL JS)
+## 5. Storage, Concurrency & Containerization
 
-- **Dark Glassmorphic UI:** Built with Tailwind CSS and glassmorphism styling (`backdrop-blur-md bg-[#0c0e12]/80 border border-white/10`).
-- **Globot-Style Vehicle Markers:** High-contrast solid badges for trucks, maritime vessels, and aircraft with bearing rotation and zero neon glow halos.
-- **Layer Filter Controls:** Independent toggles for baseline corridors, traffic bottlenecks, weather radar polygons, and active fleet units.
-- **Focused Navigation:** Clean focus on the 4D Map with unfinished sections locked to eliminate ungrounded fixture dashboards.
+### 5.1 SQLite Local Persistence with Write-Ahead Logging (WAL)
+- Operates local database `prehub_local.db` with `PRAGMA journal_mode=WAL;` and `PRAGMA busy_timeout=5000;`.
+- Provides thread-safe concurrent reads and writes across FastAPI worker processes without locking deadlocks.
+- Stores operator decision traces, ground-truth trip outcomes (T+12h, T+24h), custom fleet assets, and offline session records.
+
+### 5.2 Multi-Container Production Orchestration
+- Orchestrated via `docker-compose.yml` with dual-profile support (production and development override).
+- Next.js frontend compiled via multi-stage Alpine runner executing as non-root user `nextjs` (UID 1001) using Next.js standalone output.
+- Uvicorn backend with persistent data volumes for SQLite and native container healthcheck probes (`GET /api/v1/health`).
+- Redis 7 alpine message broker with persistent storage.
 
 ---
 
-## 5. Verification & Testing
+## 6. Verification & Automated Testing
 
-- **Backend Unit & Integration Tests:** 34 tests covering adapters, agents, and scrapers in `backend/tests/`.
-- **Static Type Safety:** 100% TypeScript type check coverage via `tsc --noEmit`.
+- **Automated Test Suite:** 133 automated unit, integration, and end-to-end tests cataloged across Functional Requirements FR-1 through FR-20 in `backend/tests/`.
+- **Pilot E2E Drills (`test_pilot_e2e.py`):** 8 automated tests validating the complete lifecycle under real Pan-Sumatra geographic constraints:
+  - Drill 1: Belawan - Pekanbaru perishable detour with spoilage hedging.
+  - Drill 2: Bakauheni strait crossing quarantine block and certificate release.
+  - Drill 3: Sitinjau Lauik MST axle-load mountain pass warning and liability override.
+  - Data integrity invariant validation across 54/56 road nodes, BPJT tariffs, and Pertamina rates.
+- **Static Type Safety:** 100% TypeScript type check coverage via `npx tsc -p frontend/tsconfig.json --noEmit`.
+- **Non-AI Aesthetic Compliance (NFR-11):** 100% monochrome SVG Lucide icons, dark glassmorphism styling, zero emojis, and zero marketing boasting.
