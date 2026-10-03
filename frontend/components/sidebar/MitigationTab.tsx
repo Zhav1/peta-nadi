@@ -396,6 +396,7 @@ export function MitigationTab({
   onSelectRoute,
   onApproveSuccess,
 }: MitigationTabProps) {
+  const { user } = useAuth();
   const [approvedRouteId, setApprovedRouteId] = useState<string | null>(null);
   const [latestApproval, setLatestApproval] = useState<ApprovalItem | null>(null);
   const [approvingIdx, setApprovingIdx] = useState<number | null>(null);
@@ -430,6 +431,7 @@ export function MitigationTab({
   ) => {
     if (!crisis.crisis_id) return;
     setApprovingIdx(idx);
+    const opId = user?.name || user?.email || user?.id || 'OP-CHIEF-01';
     try {
       const res = await api.approvals.create({
         incident_id: crisis.crisis_id,
@@ -437,6 +439,8 @@ export function MitigationTab({
         recommended_route: route,
         action,
         tactical_action: tacticalAction,
+        operator_id: opId,
+        approved_by: opId,
         notes,
       });
       setApprovedRouteId(String(idx));
@@ -447,7 +451,7 @@ export function MitigationTab({
         action,
         tactical_action: tacticalAction,
         recommended_route: route,
-        operator_id: 'OP-CHIEF-01',
+        operator_id: opId,
         notes,
         approved_at: res.approved_at || new Date().toISOString(),
       });
@@ -593,64 +597,109 @@ export function MitigationTab({
       </div>
 
       {/* BLOCK C2 — SPOILAGE HEDGING COST MATRIX (PHASE 44 / FR-18) */}
-      <SpoilageHedgingCard
-        commodity={((crisis as unknown as Record<string, unknown>).commodities_affected as string[])?.[0] || 'Cabai Merah Keriting'}
-        vehicleId={((crisis as unknown as Record<string, unknown>).vehicle_id as string) || 'TRK-MEDAN-08'}
-        cargoTonnage={10.0}
-        origin={crisis.route_recommendations?.[activeRouteIdx ?? 0]?.route_name?.split('→')?.[0]?.trim() || 'Medan'}
-        destination={crisis.route_recommendations?.[activeRouteIdx ?? 0]?.route_name?.split('→')?.[1]?.trim() || 'Pekanbaru'}
-        detourDistanceKm={crisis.route_recommendations?.[activeRouteIdx ?? 0]?.distance_km || 85.0}
-        detourTimeHours={crisis.route_recommendations?.[activeRouteIdx ?? 0]?.eta_minutes ? (crisis.route_recommendations[activeRouteIdx ?? 0].eta_minutes / 60) : 2.5}
-        onApplyPolicy={(policy) => {
-          if (policy === 'REROUTE' && onSelectRoute) {
-            onSelectRoute(0);
+      {(() => {
+        const activeRoute = crisis.route_recommendations?.[activeRouteIdx ?? 0];
+        const resolvedCommodity =
+          crisis.inflation_forecast?.commodity ||
+          ((crisis as unknown as Record<string, unknown>).commodities_affected as string[])?.[0] ||
+          'Cabai Merah Keriting';
+        const resolvedVehicleId =
+          ((crisis as unknown as Record<string, unknown>).vehicle_id as string) ||
+          'TRK-MEDAN-08';
+        const resolvedOrigin = (() => {
+          if (activeRoute?.legs && activeRoute.legs.length > 0 && activeRoute.legs[0].from_name) {
+            return activeRoute.legs[0].from_name;
           }
-        }}
-      />
+          if (activeRoute?.route_name) {
+            const parts = activeRoute.route_name.split(/→|->|\bto\b/i);
+            if (parts.length > 1 && parts[0].trim()) return parts[0].trim();
+          }
+          if (crisis.region) {
+            return crisis.region.includes('Sumut') || crisis.region.includes('Medan') ? 'Medan' : crisis.region;
+          }
+          return 'Medan';
+        })();
+        const resolvedDestination = (() => {
+          if (activeRoute?.legs && activeRoute.legs.length > 0 && activeRoute.legs[activeRoute.legs.length - 1].to_name) {
+            return activeRoute.legs[activeRoute.legs.length - 1].to_name;
+          }
+          if (activeRoute?.route_name) {
+            const parts = activeRoute.route_name.split(/→|->|\bto\b/i);
+            if (parts.length > 1 && parts[1].trim()) return parts[1].trim();
+          }
+          return 'Pekanbaru';
+        })();
+        const resolvedTraversedRoads = (() => {
+          const roads: string[] = [];
+          if (activeRoute?.description) roads.push(activeRoute.description);
+          if (activeRoute?.route_name) roads.push(activeRoute.route_name);
+          if (roads.length === 0) return ['Jalan Tol Medan - Tebing Tinggi', 'Lintas Timur Sumatera'];
+          return roads;
+        })();
 
-      {/* BLOCK D — HUMAN-IN-THE-LOOP (HITL) ROUTE RECOMMENDATIONS & ACTION */}
-      <div className="flex flex-col gap-2.5">
-        <span className="text-[10px] font-mono text-slate-400 uppercase tracking-widest font-bold">
-          RECOMMENDED DETOUR ROUTES (SELECT & APPROVE)
-        </span>
+        return (
+          <>
+            <SpoilageHedgingCard
+              commodity={resolvedCommodity}
+              vehicleId={resolvedVehicleId}
+              cargoTonnage={10.0}
+              origin={resolvedOrigin}
+              destination={resolvedDestination}
+              detourDistanceKm={activeRoute?.distance_km || 85.0}
+              detourTimeHours={activeRoute?.eta_minutes ? (activeRoute.eta_minutes / 60) : 2.5}
+              onApplyPolicy={(policy) => {
+                if (policy === 'REROUTE' && onSelectRoute) {
+                  onSelectRoute(0);
+                }
+              }}
+            />
 
-        {crisis.route_recommendations && crisis.route_recommendations.length > 0 ? (
-          crisis.route_recommendations.map((route, idx) => {
-            const isActive = (activeRouteIdx ?? 0) === idx;
-            const isApproved = approvedRouteId === String(idx);
-            const approving = approvingIdx === idx;
+            {/* BLOCK D — HUMAN-IN-THE-LOOP (HITL) ROUTE RECOMMENDATIONS & ACTION */}
+            <div className="flex flex-col gap-2.5">
+              <span className="text-[10px] font-mono text-slate-400 uppercase tracking-widest font-bold">
+                RECOMMENDED DETOUR ROUTES (SELECT & APPROVE)
+              </span>
 
-            return (
-              <RouteCard
-                key={idx}
-                route={route}
-                idx={idx}
-                isActive={isActive}
-                onSelect={() => onSelectRoute(idx)}
-                isApproved={isApproved}
-                approvalData={isApproved ? latestApproval : null}
-                approving={approving}
-                onApprove={(action, tacticalAction, notes) => handleApprove(idx, route, action, tacticalAction, notes)}
-              />
-            );
-          })
-        ) : (
-          <p className="text-xs text-slate-500 text-center py-4 font-mono">
-            No route alternatives generated yet.
-          </p>
-        )}
-      </div>
+              {crisis.route_recommendations && crisis.route_recommendations.length > 0 ? (
+                crisis.route_recommendations.map((route, idx) => {
+                  const isActive = (activeRouteIdx ?? 0) === idx;
+                  const isApproved = approvedRouteId === String(idx);
+                  const approving = approvingIdx === idx;
 
-      {/* BLOCK E — DIGITAL COMPLIANCE INSPECTOR (PHASE 44 / FR-19) */}
-      <ComplianceInspectorCard
-        vehicleId={((crisis as unknown as Record<string, unknown>).vehicle_id as string) || 'BK-8902-XG'}
-        origin="Medan"
-        destination="Pekanbaru"
-        traversedRoads={['Jalan Tol Medan - Tebing Tinggi', 'Lintas Timur Sumatera']}
-        vehicleGrossWeightTon={12.5}
-        commodity={((crisis as unknown as Record<string, unknown>).commodities_affected as string[])?.[0] || 'Cabai Merah'}
-        hasBkhitCert={false}
-      />
+                  return (
+                    <RouteCard
+                      key={idx}
+                      route={route}
+                      idx={idx}
+                      isActive={isActive}
+                      onSelect={() => onSelectRoute(idx)}
+                      isApproved={isApproved}
+                      approvalData={isApproved ? latestApproval : null}
+                      approving={approving}
+                      onApprove={(action, tacticalAction, notes) => handleApprove(idx, route, action, tacticalAction, notes)}
+                    />
+                  );
+                })
+              ) : (
+                <p className="text-xs text-slate-500 text-center py-4 font-mono">
+                  No route alternatives generated yet.
+                </p>
+              )}
+            </div>
+
+            {/* BLOCK E — DIGITAL COMPLIANCE INSPECTOR (PHASE 44 / FR-19) */}
+            <ComplianceInspectorCard
+              vehicleId={resolvedVehicleId}
+              origin={resolvedOrigin}
+              destination={resolvedDestination}
+              traversedRoads={resolvedTraversedRoads}
+              vehicleGrossWeightTon={12.5}
+              commodity={resolvedCommodity}
+              hasBkhitCert={false}
+            />
+          </>
+        );
+      })()}
     </div>
   );
 }

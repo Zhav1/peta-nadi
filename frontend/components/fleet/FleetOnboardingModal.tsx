@@ -125,9 +125,10 @@ export function FleetOnboardingModal({
   if (!isOpen) return null;
 
   const isRegulator = userRole.toUpperCase() === 'REGULATOR';
+  const apiBase = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' && window.location.hostname !== 'localhost' ? window.location.origin : 'http://localhost:8000');
 
   const handleCopyWebhookUrl = () => {
-    const url = `${window.location.origin}/api/v1/fleet/telemetry/ingest`;
+    const url = `${apiBase}/api/v1/fleet/telemetry/ingest`;
     navigator.clipboard.writeText(url);
     setCopiedUrl(true);
     setTimeout(() => setCopiedUrl(false), 2000);
@@ -715,7 +716,7 @@ export function FleetOnboardingModal({
                   </button>
                 </div>
                 <div className="p-2 rounded bg-black/60 font-mono text-[11px] text-cyan-400 border border-white/5 overflow-x-auto select-all">
-                  POST {typeof window !== 'undefined' ? window.location.origin : ''}/api/v1/fleet/telemetry/ingest
+                  POST {apiBase}/api/v1/fleet/telemetry/ingest
                 </div>
                 <p className="text-[11px] text-slate-400">
                   Kompatibel dengan streaming telemetri Traccar, EasyGo, McEasy, dan GPS IoT Tracker standar.

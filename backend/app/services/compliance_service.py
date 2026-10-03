@@ -40,13 +40,18 @@ class ComplianceService:
         orig_lower = origin.lower()
         dest_lower = destination.lower()
         all_roads = " ".join(r.lower() for r in traversed_roads)
+        combined_text = f"{orig_lower} {dest_lower} {all_roads}"
 
-        # Check explicit ferry / port mentions
-        ferry_cues = ["bakauheni", "merak", "selat sunda", "pelabuhan feri", "penyeberangan"]
-        if any(cue in orig_lower or cue in dest_lower or cue in all_roads for cue in ferry_cues):
+        # 1. Check explicit ferry / maritime strait crossing cues in traversed roads
+        ferry_road_cues = ["selat sunda", "pelabuhan feri", "penyeberangan", "kapal roro", "ferry", "feri"]
+        if any(cue in all_roads for cue in ferry_road_cues):
             return True
 
-        # Check Java vs Sumatra origin/destination pair
+        # 2. Both Merak (Java) and Bakauheni (Sumatra) present in route endpoints or roads
+        if "merak" in combined_text and "bakauheni" in combined_text:
+            return True
+
+        # 3. Check Java vs Sumatra origin/destination pair
         orig_is_java = any(k in orig_lower for k in INTER_ISLAND_KEYWORDS["java"])
         orig_is_sumatra = any(k in orig_lower for k in INTER_ISLAND_KEYWORDS["sumatra"])
         dest_is_java = any(k in dest_lower for k in INTER_ISLAND_KEYWORDS["java"])
@@ -55,7 +60,7 @@ class ComplianceService:
         if (orig_is_java and dest_is_sumatra) or (orig_is_sumatra and dest_is_java):
             return True
 
-        # Check other archipelagic islands (e.g. Batam, Bangka)
+        # 4. Check other archipelagic islands (e.g. Batam, Bangka, Belitung, Nias, Mentawai)
         for island in INTER_ISLAND_KEYWORDS["islands"]:
             if (island in orig_lower and island not in dest_lower) or (island in dest_lower and island not in orig_lower):
                 return True
