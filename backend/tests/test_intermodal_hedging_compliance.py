@@ -229,6 +229,27 @@ def test_compliance_bkhit_inter_island_passed():
     assert resp.can_dispatch is True
 
 
+def test_compliance_bkhit_intra_sumatra_no_block():
+    """Verify intra-Sumatra journey originating at Bakauheni does NOT trigger BKHIT HARD_BLOCK."""
+    req = ComplianceVerifyRequest(
+        vehicle_id="TRK-COMP-02B",
+        origin="Pelabuhan Bakauheni",
+        destination="Palembang",
+        traversed_roads=["Tol Bakauheni - Terbanggi Besar", "Tol Terbanggi Besar - Kayu Agung"],
+        vehicle_gross_weight_ton=7.5,
+        commodity="Beras Solok",
+        has_bkhit_cert=False,  # No certificate required for intra-island!
+        manifest_hash="abc123sha256",
+        driver_phone="+628123456789"
+    )
+
+    resp = compliance_service.verify_compliance(req)
+    bkhit_check = next(c for c in resp.checks if c.category == "QUARANTINE_BKHIT")
+    assert bkhit_check.status == "PASSED"
+    assert "Intra-pulau" in bkhit_check.detail or "intra-pulau" in bkhit_check.detail.lower()
+    assert resp.can_dispatch is True
+
+
 def test_compliance_mst_axle_load_warning():
     """Verify heavy vehicle (>8 ton) traversing Class III road gets WARNING and requires override."""
     req = ComplianceVerifyRequest(

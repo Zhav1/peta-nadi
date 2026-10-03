@@ -119,9 +119,11 @@ export function ComplianceInspectorCard({
     }
   };
 
+  const traversedRoadsKey = JSON.stringify(traversedRoads);
+
   useEffect(() => {
     executeVerify();
-  }, [vehicleId, origin, destination, vehicleGrossWeightTon, hasBkhitCert]);
+  }, [vehicleId, origin, destination, vehicleGrossWeightTon, hasBkhitCert, commodity, traversedRoadsKey]);
 
   const handleConfirmOverride = () => {
     setOverrideAcknowledged(true);
