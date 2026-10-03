@@ -23,6 +23,9 @@ Multisource Telemetry (BMKG Sensor, TomTom Speed Flow, Google News RSS, PIHPS Pr
                                       |
                                       v
            PreHub 4D Decision Map & Multi-Modal Fleet Command Center
+                                      |
+                                      v
+     Multi-Persona Operations (Dispatcher, Port Coordinator, Regulator, Admin)
 ```
 
 ---
@@ -44,20 +47,24 @@ Multisource Telemetry (BMKG Sensor, TomTom Speed Flow, Google News RSS, PIHPS Pr
 - **Price & Inflation Intelligence Agent:** Combines PIHPS price anomalies with news-reported commodity disruptions to project regional food inflation shocks ($+15\%$ to $+35\%$).
 - **Decision Support Agent:** Synthesizes executive multi-agency recommendations (*Continue*, *Reroute*, *Hold/Delay*) backed by verified news citations and chain-of-thought reasoning.
 
-### 3. Dedicated Intelligence Endpoints
+### 3. Dedicated Intelligence & Observability Endpoints
 - `GET /api/v1/news/live?force_refresh={bool}`: Returns aggregated, structured real-time news articles across Sumatra with corridor impact metrics.
 - `GET /api/v1/news/market-regime`: Computes real-time market risk status (*NORMAL_SUPPLY*, *EARLY_WARNING_ACTIVE*, *CRITICAL_DISRUPTION*) and active corridor crisis indicators.
+- `GET /api/v1/health` and `GET /health`: Dual-alias system health probe monitoring database connectivity, Redis broker status, and service latency.
+- `GET /api/v1/intermodal/chokepoints`: Live status of 18+ strategic Pan-Sumatra maritime ports and mountain passes.
+- `POST /api/v1/compliance/verify`: Digital manifest verification for BKHIT quarantine certification and MST Class III axle-load constraints.
 
 ### 4. Coastal Nautical Sea-Lane & Air Multi-Modal Routing
 - **Authentic Coastal Maritime Sea-Lanes:** Navigates along verified Indonesian nautical fairways (Malacca Strait, Sunda Strait, Indian Ocean West Coast) ensuring maritime routes around Sumatra never traverse landmasses.
 - **Air Cargo Express Corridors:** Connects regional cargo airport nodes (KNO, BTJ, PKU, BIM, DJB, PLM, TKG) via Great Circle flight trajectories with first-mile and last-mile road feeder transport.
 - **Hazard Collision & Hold/Delay Fallback:** When all primary and arterial bypass routes intersect disaster zones, the system surfaces an honest **Mitigasi Taktis: Tunda Keberangkatan (Hold / Delay)** recommendation instead of proposing compromised detours.
 
-### 5. High-Contrast Fleet Tracking & Interactive Layer Controls
-- **45 Active Multi-Modal Fleet Units:** Scaled distribution of trucks, maritime vessels, and cargo flights across all provinces of Sumatra.
-- **Calibrated Observable Movement:** Calibrated simulation pace (12x) driven by route distance in kilometers using the Haversine formula.
-- **Globot-Style High-Contrast Markers:** Clean solid vehicle badges with bearing rotation for aircraft and zero neon glow halos.
-- **Interactive Layer Filter Widget:** Real-time toggle controls for Trans-Sumatra baseline corridors, traffic bottleneck segments, weather radar polygons, and active logistics fleet.
+### 5. Multi-Persona Operations & Digital Compliance (Milestone M3)
+- **Supabase Authentication & Multi-Role RBAC:** Role-based access control partitioning features for `DISPATCHER` (routing, rerouting approvals), `REGULATOR` (BKHIT quarantine audit, price volatility monitoring), and `GUEST` (evaluation sandbox).
+- **Self-Serve Fleet Onboarding:** Drag-and-drop CSV manifest ingestion, manual vehicle onboarding modal, and TMS GPS telemetry ingestion webhooks.
+- **Pan-Sumatra Intermodal Choke-Points:** Tracking 7 maritime/ferry ports (Belawan, Bakauheni, Dumai, Teluk Bayur, Panjang, Sibolga, Kuala Tanjung) and 11 mountain passes (Sitinjau Lauik, Kelok 9, Malalak, etc.) with automated delay multipliers ($1.0 \le M_{\text{intermodal}} \le 3.5$).
+- **Closed-Form Spoilage Hedging Matrix:** Closed-form monetary tradeoff solver evaluating Continue vs Reroute vs Hold factoring 4-tier exponential perishability decay ($\delta = 0.025$ to $0.0005/\text{hr}$), official BPJT toll tariffs across Golongan I-V, and Pertamina fuel consumption.
+- **Differentiated Regulatory Enforcement:** Deterministic `HARD_BLOCK` on missing BKHIT agricultural quarantine certificates for inter-island transits; tactical `WARNING` & bypass advisory with operator liability transfer override for heavy vehicles ($>8$ Ton) traversing Class III mountain corridors.
 
 ---
 
@@ -69,10 +76,11 @@ Multisource Telemetry (BMKG Sensor, TomTom Speed Flow, Google News RSS, PIHPS Pr
 | **Spatial & GIS Rendering** | Mapbox GL JS v3, Deck.gl v8, Framer Motion, Turf.js |
 | **Backend API** | FastAPI (Python 3.11+ / 3.13), Uvicorn ASGI Server, Pydantic v2 |
 | **Multi-Agent Swarm** | LangGraph, LangChain Core, DeepSeek R1 / Google Gemini |
-| **Database & Spatial Store** | PostgreSQL 15+ with PostGIS 3.3+, Supabase Managed Layer |
+| **Database & Persistence** | SQLite 3 (WAL Mode + 5s Busy Timeout), PostgreSQL 15+ / PostGIS 3.3+, Supabase Managed Layer |
 | **Cache & Event Bus** | Redis 7.0+ (Streams `lrip:stream:osint` & Pub/Sub) |
 | **Optimization Engine** | NetworkX Dijkstra Shortest Path Solver & Mapbox Direction APIs |
 | **Weather & Observations** | Open-Meteo Global Meteorological API & BMKG Observation Stations |
+| **Containerization** | Docker Engine 24+, Docker Compose v2 (Multi-stage Next.js standalone runner) |
 
 ---
 
@@ -80,10 +88,12 @@ Multisource Telemetry (BMKG Sensor, TomTom Speed Flow, Google News RSS, PIHPS Pr
 
 ### 1. Requirements
 - Python 3.11+ or 3.13+
-- Node.js 18+ or 20+
-- Mapbox Access Token (configured in `frontend/.env.local`)
+- Node.js 20+
+- Mapbox Access Token (configured in `frontend/.env.local` or root `.env`)
+- Docker Engine & Docker Compose (optional for containerized deployment)
 
-### 2. Installation
+### 2. Local Installation
+
 ```bash
 # Clone the repository
 git clone https://github.com/Zhav1/peta-nadi.git prehub
@@ -102,36 +112,48 @@ npm install
 cp .env.example .env.local
 ```
 
-### 3. Launching (1-Click)
+### 3. Launching (Local)
 
-- **Windows Batch:**
+- **Windows Batch Launcher:**
   ```cmd
   start.bat
   ```
-- **PowerShell Launcher:**
+- **PowerShell Unified Launcher:**
   ```powershell
   .\start.ps1
   ```
 
+### 4. Launching with Docker Compose
+
+```bash
+# Production multi-container launch
+docker compose up --build -d
+
+# Development mode with hot-reloading
+docker compose -f docker-compose.yml -f docker-compose.override.yml up
+```
+
 - **URLs:**
   - **Frontend Web Command Center:** [http://localhost:3000](http://localhost:3000)
   - **Backend Swagger API Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
-  - **Health Probe:** [http://localhost:8000/health](http://localhost:8000/health)
+  - **System Health Probes:** [http://localhost:8000/api/v1/health](http://localhost:8000/api/v1/health) and [http://localhost:8000/health](http://localhost:8000/health)
 
 ---
 
 ## Testing & Verification
 
-### Backend Test Suite (34 Unit & Integration Tests)
+### Complete Backend Test Suite (133 Unit, Integration & E2E Tests)
 ```bash
 cd backend
-.\.venv\Scripts\python -m pytest tests/
+.\.venv\Scripts\python -m pytest tests/ -v
 ```
+All 133 automated tests across Functional Requirements FR-1 through FR-20 pass with 100% reliability, covering data adapters, swarm agents, Dijkstra routing, economic hedging, BKHIT/MST compliance, and full pilot drills.
 
-### Frontend Type Check
+### Frontend Type Check & Production Build
 ```bash
 cd frontend
-npx tsc --noEmit
+npx tsc -p tsconfig.json --noEmit
+npm run build
 ```
 
 ---
@@ -140,22 +162,31 @@ npx tsc --noEmit
 
 ```
 ├── .agents/                    # Design system and agent orchestration rules
-├── .planning/                  # Project memory and roadmap tracking
+├── .planning/                  # Project memory, milestones, and phase roadmaps
+│   └── phases/                 # Phase directories with plans, summaries, and walkthroughs
 ├── agents/                     # LangGraph 6-agent swarm nodes and consensus gate
 ├── backend/                    # FastAPI backend application
 │   ├── app/
 │   │   ├── adapters/           # BMKG, TomTom, Earth2/NVIDIA adapters
-│   │   ├── routers/            # Health, Incidents, Approvals, Corridor, Vehicles, News, Routing
-│   │   ├── services/           # NetworkX routing, weather fusion, corridor context
+│   │   ├── db/                 # Local SQLite storage with WAL concurrency
+│   │   ├── routers/            # Health, Incidents, Approvals, Corridor, Vehicles, News, Routing, Intermodal, Compliance
+│   │   ├── services/           # NetworkX routing, weather fusion, hedging, compliance
 │   │   └── workers/            # Ingestion and OSINT background workers
-│   ├── tests/                  # 34 pytest unit & integration tests
+│   ├── tests/                  # 133 pytest unit, integration & E2E tests
+│   ├── Dockerfile              # Backend production container
 │   └── run_demo.py             # Scenario injector & demo runner
 ├── frontend/                   # Next.js 14 Web Command Center
 │   ├── app/                    # App Router pages (/dashboard, /demo-remote, /)
-│   ├── components/             # Command Center Map, Sidebar, Telemetry, Layers
+│   ├── components/             # Command Center Map, Sidebar, Telemetry, Layers, Dashboard
 │   ├── hooks/                  # useFleetVehicles, useNewsVerification, useCrisisSocket
-│   └── lib/                    # aiDynamicRouter, mapboxRoutingService, types, api
-├── docs/                       # Technical blueprints and documentation
+│   ├── lib/                    # aiDynamicRouter, mapboxRoutingService, types, api
+│   └── Dockerfile              # Multi-stage Next.js standalone container
+├── docs/                       # Technical blueprints, manuals, and test matrix
+│   ├── PreHub_Pilot_Onboarding_Manual.md  # Official multi-persona pilot operational manual
+│   ├── test_matrix.md                     # Complete inventory of 133 automated tests
+│   └── SYSTEM_ARCHITECTURE.md             # System architecture and technical specifications
+├── docker-compose.yml          # Production multi-container orchestration
+├── docker-compose.override.yml # Local development bind-mount configuration
 ├── start.bat                   # Windows batch launcher
 └── start.ps1                   # PowerShell unified launcher
 ```
