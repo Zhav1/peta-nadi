@@ -24,6 +24,8 @@ def get_db_connection(db_path: Optional[str] = None) -> sqlite3.Connection:
     target_path = Path(db_path) if db_path else DEFAULT_DB_PATH
     target_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(target_path), check_same_thread=False)
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA busy_timeout=5000;")
     conn.row_factory = sqlite3.Row
     return conn
 
