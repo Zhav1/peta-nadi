@@ -1,175 +1,119 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Map, Bot, Navigation, Network, TrendingUp, ShieldCheck, ChevronRight } from 'lucide-react';
+import React from 'react';
+import { Map, Bot, Navigation, Network } from 'lucide-react';
 
-interface FeatureCard {
+interface CapabilityItem {
   id: string;
-  title: string;
   category: string;
-  badgeText: string;
-  badgeBg: string;
-  badgeTextColor: string;
-  icon: React.ElementType;
+  title: string;
+  engine: string;
   description: string;
-  metrics: string;
+  metricLabel: string;
+  metricValue: string;
+  icon: React.ElementType;
 }
 
-const FEATURES: FeatureCard[] = [
+const CAPABILITIES: CapabilityItem[] = [
   {
-    id: '4d-map',
-    title: '4D Spatial Map & Dynamic Polylines',
-    category: 'GEOSPATIAL ENGINE',
-    badgeText: 'Mapbox v3 + Deck.gl',
-    badgeBg: 'bg-emerald-400',
-    badgeTextColor: 'text-slate-950',
-    icon: Map,
+    id: 'geospatial',
+    category: 'SISTEM SPASIAL 4D',
+    title: 'Pemetaan Spasial Multilapis & Pemodelan Koridor',
+    engine: 'Mapbox GL v3 + Deck.gl v9.3',
     description:
-      'Visualisasi peta 3D Globe dan MapView berpresisi tinggi. Menampilkan poligon bencana organik, shockwave gempa, dan garis kontur banjir real-time.',
-    metrics: '60 FPS Canvas Render',
+      'Memetakan kontur jalan arteri nasional, perimeter genangan banjir, gelombang kejut seismik, dan kepadatan lalu lintas secara real-time pada kanvas GPU berkinerja tinggi.',
+    metricLabel: 'Performa Visualisasi',
+    metricValue: '60 FPS Native Canvas',
+    icon: Map,
   },
   {
     id: 'agent-swarm',
-    title: 'LangGraph 6-Agent Cognitive Swarm',
-    category: 'AI COGNITIVE CORE',
-    badgeText: 'Dual-LLM Synergy',
-    badgeBg: 'bg-cyan-400',
-    badgeTextColor: 'text-slate-950',
+    category: 'INTELIJEN KOGNITIF',
+    title: 'LangGraph 6-Agent Swarm & Gerbang Konsensus',
+    engine: 'DeepSeek V3 + Gemini 3.1 Flash',
+    description:
+      'Enam agen cerdas memvalidasi silang laporan lapangan OSINT, pantauan satelit, dan sensor hidrologi. Peringatan krisis diterbitkan hanya jika memenuhi ambang konsensus >85%.',
+    metricLabel: 'Ambang Batas Verifikasi',
+    metricValue: '> 85% Multi-Sensor',
     icon: Bot,
-    description:
-      'Swarm 6 agen cerdas yang bekerja secara terstruktur: Data Ingestion, OSINT Hazard, TFT Prediction, Route Optimization, Economic Intel, dan Copilot XAI.',
-    metrics: 'DeepSeek V3 + Gemini 3.1',
   },
   {
-    id: 'cpu-routing',
-    title: 'Optimasi Rute Bypass Multi-Koridor',
-    category: 'ALGORITMA DETERMINISTIK',
-    badgeText: '54 Simpul Arteri',
-    badgeBg: 'bg-orange-400',
-    badgeTextColor: 'text-slate-950',
+    id: 'routing',
+    category: 'OPTIMASI DETERMINISTIK',
+    title: 'Kalkulasi Rute Pengalihan Tangensial (Bypass)',
+    engine: 'NetworkX & Google OR-Tools',
+    description:
+      'Algoritma CPU menghitung rute alternatif di luar radius bahaya secara tangensial, mengarahkan armada komoditas melalui simpul persimpangan jalan arteri OSM terverifikasi.',
+    metricLabel: 'Latensi Solver CPU',
+    metricValue: '< 2 ms per Kalkulasi',
     icon: Navigation,
-    description:
-      'Mesin rerouting terukur yang memproyeksikan rute pengalihan di luar radius bahaya secara tegak lurus, menyusuri arteri persimpangan jalan nyata.',
-    metrics: '< 2ms Matrix Solving',
   },
   {
-    id: 'graphrag-causal',
-    title: 'GraphRAG Supply Chain Causal Graph',
-    category: 'CAUSAL INTELLIGENCE',
-    badgeText: 'Knowledge Graph',
-    badgeBg: 'bg-purple-400',
-    badgeTextColor: 'text-slate-950',
+    id: 'causal-graph',
+    category: 'SIMULASI EKONOMI',
+    title: 'Analisis Causal Graph & Proyeksi Inflasi Pangan',
+    engine: 'Supply Chain Graph Engine + PIHPS',
+    description:
+      'Melacak propagasi dampak disrupsi dari simpul pelabuhan terhadap pasokan pasar lokal, memproyeksikan lonjakan harga komoditas strategis sebelum kelangkaan terjadi.',
+    metricLabel: 'Integrasi Komoditas',
+    metricValue: 'Beras, Minyak Goreng, Cabai',
     icon: Network,
-    description:
-      'Memetakan keterhubungan sebab-akibat antar simpul logistik (Penutupan Pelabuhan Belawan -> Penurunan Pasokan Minyak Goreng -> Inflasi Kota Medan).',
-    metrics: 'Multi-hop Propagation',
-  },
-  {
-    id: 'pihps-economic',
-    title: 'PIHPS Economic Intelligence',
-    category: 'COMMODITY INTELLIGENCE',
-    badgeText: 'Food Inflation',
-    badgeBg: 'bg-amber-400',
-    badgeTextColor: 'text-slate-950',
-    icon: TrendingUp,
-    description:
-      'Integrasi data harga pangan strategis harian dari PIHPS Nasional. Mengkalkulasikan multiplier dampak inflasi pangan pasca-bencana secara prediktif.',
-    metrics: '2-5 Days Lag Correlation',
-  },
-  {
-    id: 'consensus-gate',
-    title: 'Multi-Sensor Consensus Gate',
-    category: 'TRUST ENGINE',
-    badgeText: '> 85% Confidence',
-    badgeBg: 'bg-emerald-500',
-    badgeTextColor: 'text-white',
-    icon: ShieldCheck,
-    description:
-      'Gerbang verifikasi otomatis yang mensyaratkan konfirmasi minimal dari 2 sumber independen (BMKG, TomTom, AISstream, OSINT) sebelum peringatan diterbitkan.',
-    metrics: '< 10% False Positive',
   },
 ];
 
 export default function KineticFeatureGrid() {
-  const [activeCard, setActiveCard] = useState<string>(FEATURES[0].id);
-
   return (
-    <section className="relative w-full bg-[#080d14] py-24 px-4 md:px-8 border-t border-white/10">
+    <section id="capabilities" className="relative w-full bg-[#080d14] py-28 px-4 md:px-8 border-t border-white/8">
       <div className="max-w-7xl mx-auto flex flex-col gap-16">
         
-        {/* Section Header */}
-        <div className="flex flex-col items-center text-center gap-4">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full backdrop-blur-xl bg-[#0c0e12]/80 border border-white/10 text-xs font-mono text-cyan-400">
-            <span>ARCHITECTURAL CAPABILITIES</span>
-          </div>
-
-          <h2 className="text-3xl sm:text-5xl md:text-6xl font-black text-white tracking-tight leading-tight max-w-3xl">
-            Discover the technology shape
-            <span className="bg-cyan-400 text-slate-950 px-3 py-0.5 mx-2 rounded-full font-black inline-block transform -rotate-1">
-              ing
-            </span>
-            national supply chain resilience.
+        {/* Editorial Section Header — No Eyebrow Pill */}
+        <div className="max-w-3xl flex flex-col gap-4">
+          <h2 className="font-headline text-3xl sm:text-5xl font-bold text-white tracking-tight leading-tight">
+            Kemampuan Inti Arsitektur PreHub
           </h2>
-
-          <p className="text-slate-400 text-base md:text-lg max-w-2xl">
-            PreHub memadukan enam pilar teknologi mutakhir untuk memberikan visibilitas 4D menyeluruh dan mitigasi risiko logistik yang tepercaya.
+          <p className="font-sans text-base sm:text-lg text-slate-300 leading-relaxed">
+            PreHub memadukan visualisasi spasial presisi tinggi, penalaran agen berbasis data resmi, dan optimasi rute terukur untuk melindungi stabilitas rantai pasok pangan nasional.
           </p>
         </div>
 
-        {/* Feature Grid Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {FEATURES.map((feature) => {
-            const Icon = feature.icon;
-            const isActive = activeCard === feature.id;
-
+        {/* 2-Column Clean Editorial Grid — No Nested Cards, Pure Flat Charcoal */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {CAPABILITIES.map((item) => {
+            const Icon = item.icon;
             return (
               <div
-                key={feature.id}
-                onMouseEnter={() => setActiveCard(feature.id)}
-                className={`group relative rounded-3xl p-8 backdrop-blur-xl transition-all duration-300 cursor-pointer flex flex-col justify-between border ${
-                  isActive
-                    ? 'bg-[#0c0e12]/90 border-cyan-400/50 shadow-2xl shadow-cyan-500/10 -translate-y-1'
-                    : 'bg-[#0c0e12]/60 border-white/10 hover:border-white/20 hover:bg-[#0c0e12]/80'
-                }`}
+                key={item.id}
+                className="bg-[#0c1017] border border-white/8 rounded-lg p-8 flex flex-col justify-between gap-6"
               >
-                {/* Top Badge & Icon */}
-                <div className="flex items-center justify-between gap-4 mb-6">
-                  <div
-                    className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110 ${
-                      isActive ? 'bg-cyan-400/20 text-cyan-400' : 'bg-white/5 text-slate-400'
-                    }`}
-                  >
-                    <Icon className="w-6 h-6" />
+                <div className="flex flex-col gap-4">
+                  {/* Category Header */}
+                  <div className="flex items-center justify-between border-b border-white/8 pb-4">
+                    <span className="font-mono text-xs font-semibold text-slate-400 tracking-wider">
+                      {item.category}
+                    </span>
+                    <Icon className="w-4 h-4 text-slate-400" />
                   </div>
 
-                  <span
-                    className={`px-3 py-1 rounded-full text-xs font-bold font-mono ${feature.badgeBg} ${feature.badgeTextColor}`}
-                  >
-                    {feature.badgeText}
-                  </span>
-                </div>
+                  {/* Title & Engine */}
+                  <div>
+                    <h3 className="font-headline text-xl font-bold text-white tracking-tight leading-snug">
+                      {item.title}
+                    </h3>
+                    <span className="font-mono text-xs text-slate-400 mt-1 block">
+                      {item.engine}
+                    </span>
+                  </div>
 
-                {/* Content */}
-                <div className="flex flex-col gap-3">
-                  <span className="text-xs font-mono text-slate-500 uppercase tracking-wider">
-                    {feature.category}
-                  </span>
-                  <h3 className="text-xl font-bold text-white tracking-tight group-hover:text-cyan-400 transition-colors">
-                    {feature.title}
-                  </h3>
-                  <p className="text-sm text-slate-300 leading-relaxed">
-                    {feature.description}
+                  {/* Narrative Body */}
+                  <p className="font-sans text-sm text-slate-300 leading-relaxed">
+                    {item.description}
                   </p>
                 </div>
 
-                {/* Footer Metric */}
-                <div className="mt-8 pt-4 border-t border-white/10 flex items-center justify-between text-xs font-mono">
-                  <span className="text-slate-400">{feature.metrics}</span>
-                  <ChevronRight
-                    className={`w-4 h-4 transition-transform ${
-                      isActive ? 'text-cyan-400 translate-x-1' : 'text-slate-600'
-                    }`}
-                  />
+                {/* Footer Metric Line */}
+                <div className="pt-4 border-t border-white/8 flex items-center justify-between text-xs font-mono">
+                  <span className="text-slate-400">{item.metricLabel}</span>
+                  <span className="text-white font-semibold">{item.metricValue}</span>
                 </div>
               </div>
             );

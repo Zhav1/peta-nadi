@@ -68,8 +68,8 @@ export function EconomicTab({ crisis }: EconomicTabProps) {
 
       {/* Historical price chart */}
       {loadingChart ? (
-        <div className="w-full h-[160px] flex items-center justify-center bg-slate-800/40 rounded-xl animate-pulse">
-          <span className="text-[10px] text-slate-500">Loading dynamic chart data...</span>
+        <div className="w-full h-[160px] flex items-center justify-center bg-[#121822] border border-[#1c2432] rounded-md">
+          <span className="text-xs font-mono text-slate-400">Loading dynamic chart data...</span>
         </div>
       ) : (
         <PriceChart

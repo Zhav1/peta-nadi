@@ -536,29 +536,29 @@ export default function CrisisMap({
 
       if (isOrigin || isDest) {
         el.innerHTML = `
-          <div class="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold shadow-2xl border backdrop-blur-md ${
+          <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-medium shadow-md border ${
             isOrigin
-              ? 'bg-cyan-950/95 text-cyan-300 border-cyan-400 ring-4 ring-cyan-500/30'
-              : 'bg-amber-950/95 text-amber-300 border-amber-400 ring-4 ring-amber-500/30'
+              ? 'bg-[#0c1017] text-white border-white'
+              : 'bg-[#121822] text-amber-300 border-amber-500/40'
           }">
             <span>${iconSvg}</span>
-            <span class="font-bold">${shortCityName}</span>
-            <span class="px-1.5 py-0.5 ${isOrigin ? 'bg-cyan-400 text-slate-950' : 'bg-amber-400 text-slate-950'} rounded text-[9px] font-black">${isOrigin ? 'ASAL' : 'TUJUAN'}</span>
+            <span class="font-medium">${shortCityName}</span>
+            <span class="px-1.5 py-0.5 ${isOrigin ? 'bg-white text-[#080d14]' : 'bg-amber-400 text-slate-950'} rounded text-xs font-semibold">${isOrigin ? 'ASAL' : 'TUJUAN'}</span>
           </div>
         `;
       } else {
         el.innerHTML = `
           <div class="flex flex-col items-center">
-            <div class="w-6 h-6 rounded-full border border-white/20 bg-[#0c0e12]/90 backdrop-blur-md flex items-center justify-center shadow-lg transition group-hover:border-cyan-400 group-hover:scale-110 ${
-              isPort ? 'text-cyan-400 border-cyan-500/40' : isAir ? 'text-purple-400 border-purple-500/40' : 'text-emerald-400 border-emerald-500/40'
+            <div class="w-6 h-6 rounded-md border border-[#1c2432] bg-[#0c1017] flex items-center justify-center shadow-md transition group-hover:border-slate-400 ${
+              isPort ? 'text-sky-400' : isAir ? 'text-purple-400' : 'text-emerald-400'
             }">
               ${iconSvg}
             </div>
-            <span class="mt-0.5 px-1.5 py-0.2 rounded bg-slate-950/80 border border-white/10 text-[9px] font-mono text-slate-300 group-hover:text-cyan-300 group-hover:border-cyan-500/40 shadow-sm transition whitespace-nowrap">
+            <span class="mt-1 px-1.5 py-0.5 rounded bg-[#0c1017] border border-[#1c2432] text-xs font-mono tabular-nums text-slate-300 group-hover:text-white group-hover:border-slate-500 shadow-sm transition whitespace-nowrap">
               ${shortCityName}
             </span>
           </div>
-          <div class="opacity-0 group-hover:opacity-100 absolute -top-8 px-2 py-0.5 rounded-lg bg-[#0c0e12]/95 border border-white/20 text-[10px] font-mono text-white shadow-xl pointer-events-none transition whitespace-nowrap z-50">
+          <div class="opacity-0 group-hover:opacity-100 absolute -top-8 px-2 py-0.5 rounded bg-[#0c1017] border border-[#1c2432] text-xs text-white shadow-lg pointer-events-none transition whitespace-nowrap z-50">
             ${node.name} ${node.province ? `(${node.province})` : ''}
           </div>
         `;
@@ -594,20 +594,20 @@ export default function CrisisMap({
         const isHold = r.safety_status === 'HOLD_DELAY';
 
         const el = document.createElement('div');
-        el.className = `cursor-pointer z-20 transition-all transform hover:scale-110 flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold shadow-2xl border backdrop-blur-md ${
+        el.className = `cursor-pointer z-20 transition-colors flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-medium shadow-md border ${
           r.is_compromised
-            ? 'bg-red-950/90 text-red-300 border-red-500 shadow-red-500/30'
+            ? 'bg-[#1a0f12] text-red-300 border-red-500/40'
             : isHold
-              ? 'bg-amber-950/90 text-amber-300 border-amber-500 shadow-amber-500/30'
+              ? 'bg-[#1a170f] text-amber-300 border-amber-500/40'
               : isActive
-                ? 'bg-cyan-500 text-slate-950 border-cyan-200 ring-4 ring-cyan-400/40 shadow-cyan-500/40'
-                : 'bg-slate-900/90 text-slate-200 border-slate-700 hover:border-cyan-400'
+                ? 'bg-white text-[#080d14] border-white font-semibold'
+                : 'bg-[#0c1017] text-slate-200 border-[#1c2432] hover:border-slate-500'
         }`;
         el.style.zIndex = '20';
 
         el.innerHTML = `
           <span>${isHold ? 'HOLD' : `${r.eta_minutes} min`}</span>
-          <span class="opacity-80 text-[10px]">(${r.distance_km.toFixed(0)} km)</span>
+          <span class="opacity-75 text-xs font-mono tabular-nums">(${r.distance_km.toFixed(0)} km)</span>
         `;
 
         el.addEventListener('click', (e) => {
@@ -643,11 +643,11 @@ export default function CrisisMap({
         if (lon == null || lat == null) return;
 
         const el = document.createElement('div');
-        el.className = 'cursor-pointer z-30 transition-all transform hover:scale-110 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono font-bold shadow-2xl border backdrop-blur-xl bg-[#0c0e12]/95 text-purple-200 border-purple-500/60 ring-2 ring-purple-500/20';
+        el.className = 'cursor-pointer z-30 transition-colors flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-medium shadow-md border bg-[#0c1017] text-purple-200 border-purple-500/40 hover:border-purple-400';
         el.style.zIndex = '30';
         el.innerHTML = `
           <svg class="w-3.5 h-3.5 text-purple-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6 6h10"/><path d="M6 10h10"/></svg>
-          <span class="text-[11px] font-bold text-purple-200">${String(ep.type || 'LTM').toUpperCase()}</span>
+          <span class="text-xs font-semibold text-purple-200">${String(ep.type || 'LTM').toUpperCase()}</span>
         `;
         el.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -670,11 +670,11 @@ export default function CrisisMap({
         if (lon == null || lat == null) return;
 
         const el = document.createElement('div');
-        el.className = 'cursor-pointer z-30 transition-all transform hover:scale-110 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-mono font-bold shadow-2xl border backdrop-blur-xl bg-[#0c0e12]/95 text-amber-200 border-amber-500/60 ring-2 ring-amber-500/20';
+        el.className = 'cursor-pointer z-30 transition-colors flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-medium shadow-md border bg-[#0c1017] text-amber-200 border-amber-500/40 hover:border-amber-400';
         el.style.zIndex = '30';
         el.innerHTML = `
           <svg class="w-3.5 h-3.5 text-amber-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-          <span class="text-[11px] font-bold text-amber-300">${String(pr.risk_score || 85)}% RISIKO</span>
+          <span class="text-xs font-semibold text-amber-300 tabular-nums">${String(pr.risk_score || 85)}% Risiko</span>
         `;
         el.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -941,32 +941,32 @@ export default function CrisisMap({
         <button
           type="button"
           onClick={() => setShowLayerFilterMenu((v) => !v)}
-          className={`cursor-pointer px-3 py-2 rounded-xl border backdrop-blur-xl text-xs font-mono font-bold shadow-2xl transition-all flex items-center gap-1.5 ${
+          className={`cursor-pointer px-3 py-2 rounded-lg border text-xs font-medium transition-colors flex items-center gap-2 shadow-lg ${
             showLayerFilterMenu
-              ? 'bg-cyan-950 text-cyan-300 border-cyan-400 ring-2 ring-cyan-500/30'
-              : 'bg-[#0c0e12]/90 text-slate-300 border-white/10 hover:text-white hover:border-white/20'
+              ? 'bg-white text-[#080d14] border-white font-semibold'
+              : 'bg-[#0c1017] text-slate-300 border-[#1c2432] hover:text-white hover:border-slate-500'
           }`}
           title="Filter Layer Peta"
         >
-          <Layers className="w-3.5 h-3.5 text-cyan-400" />
-          <span>LAYER PETA</span>
+          <Layers className="w-3.5 h-3.5 text-slate-400" />
+          <span>Layer Peta</span>
         </button>
 
         {showLayerFilterMenu && (
-          <div className="absolute right-0 mt-2 w-64 bg-[#0c0e12]/95 border border-cyan-500/30 backdrop-blur-2xl p-3 rounded-2xl shadow-2xl text-xs space-y-2 animate-in fade-in zoom-in-95 duration-150">
-            <div className="font-mono font-bold text-[10px] text-cyan-300 uppercase tracking-wider border-b border-white/10 pb-1.5">
+          <div className="absolute right-0 mt-2 w-64 bg-[#0c1017] border border-[#1c2432] p-3 rounded-lg shadow-xl text-xs space-y-2 animate-in fade-in duration-150">
+            <div className="font-sans font-medium text-xs text-slate-300 uppercase tracking-wider border-b border-[#1c2432] pb-1.5">
               Filter Visualisasi Layer
             </div>
 
-            <div className="space-y-1 font-mono text-[11px]">
+            <div className="space-y-1 text-xs">
               <button
                 type="button"
                 onClick={() => toggleLayerFilter('baselineCorridors')}
-                className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded-lg hover:bg-white/5 transition"
+                className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-[#121822] transition"
               >
                 <span className="text-slate-200">Koridor Utama</span>
                 <span className={`w-4 h-4 rounded flex items-center justify-center border ${
-                  layerFilters.baselineCorridors ? 'bg-cyan-500 border-cyan-400 text-slate-950' : 'border-slate-700'
+                  layerFilters.baselineCorridors ? 'bg-white border-white text-[#080d14]' : 'border-[#1c2432]'
                 }`}>
                   {layerFilters.baselineCorridors && <Check className="w-3 h-3 stroke-[3]" />}
                 </span>
@@ -975,11 +975,11 @@ export default function CrisisMap({
               <button
                 type="button"
                 onClick={() => toggleLayerFilter('bottlenecks')}
-                className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded-lg hover:bg-white/5 transition"
+                className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-[#121822] transition"
               >
                 <span className="text-slate-200">Kemacetan / Bottleneck</span>
                 <span className={`w-4 h-4 rounded flex items-center justify-center border ${
-                  layerFilters.bottlenecks ? 'bg-cyan-500 border-cyan-400 text-slate-950' : 'border-slate-700'
+                  layerFilters.bottlenecks ? 'bg-white border-white text-[#080d14]' : 'border-[#1c2432]'
                 }`}>
                   {layerFilters.bottlenecks && <Check className="w-3 h-3 stroke-[3]" />}
                 </span>
@@ -988,11 +988,11 @@ export default function CrisisMap({
               <button
                 type="button"
                 onClick={() => toggleLayerFilter('weatherRadar')}
-                className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded-lg hover:bg-white/5 transition"
+                className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-[#121822] transition"
               >
                 <span className="text-slate-200">Radar Cuaca & Bahaya</span>
                 <span className={`w-4 h-4 rounded flex items-center justify-center border ${
-                  layerFilters.weatherRadar ? 'bg-cyan-500 border-cyan-400 text-slate-950' : 'border-slate-700'
+                  layerFilters.weatherRadar ? 'bg-white border-white text-[#080d14]' : 'border-[#1c2432]'
                 }`}>
                   {layerFilters.weatherRadar && <Check className="w-3 h-3 stroke-[3]" />}
                 </span>
@@ -1001,11 +1001,11 @@ export default function CrisisMap({
               <button
                 type="button"
                 onClick={() => toggleLayerFilter('fleetVehicles')}
-                className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded-lg hover:bg-white/5 transition"
+                className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-[#121822] transition"
               >
                 <span className="text-slate-200">Armada Logistik</span>
                 <span className={`w-4 h-4 rounded flex items-center justify-center border ${
-                  layerFilters.fleetVehicles ? 'bg-cyan-500 border-cyan-400 text-slate-950' : 'border-slate-700'
+                  layerFilters.fleetVehicles ? 'bg-white border-white text-[#080d14]' : 'border-[#1c2432]'
                 }`}>
                   {layerFilters.fleetVehicles && <Check className="w-3 h-3 stroke-[3]" />}
                 </span>
@@ -1016,15 +1016,12 @@ export default function CrisisMap({
       </div>
 
       {drawModeActive && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[360] px-4 py-2 rounded-full bg-orange-950/90 border border-orange-500/60 backdrop-blur-md shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
-          <span className="relative flex h-2.5 w-2.5">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-orange-500"></span>
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[360] px-3.5 py-1.5 rounded-md bg-[#1a120b] border border-amber-500/40 shadow-xl flex items-center gap-2.5 animate-in fade-in duration-200">
+          <span className="h-2 w-2 rounded-full bg-amber-400"></span>
+          <span className="text-xs font-medium text-amber-300">
+            Gambar Poligon Area Disrupsi
           </span>
-          <span className="font-mono text-xs font-bold text-orange-400 tracking-wider">
-            GAMBAR POLIGON AREA DISRUPSI...
-          </span>
-          <span className="text-[10px] font-mono text-orange-300/80 border-l border-orange-500/30 pl-2">
+          <span className="text-xs text-amber-200/60 border-l border-amber-500/30 pl-2">
             Klik titik pada peta untuk menutup bentuk poligon
           </span>
         </div>

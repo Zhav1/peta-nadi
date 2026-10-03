@@ -20,6 +20,9 @@ import {
   Plane,
   Lock,
   PlusCircle,
+  ArrowLeft,
+  ChevronDown,
+  Play,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useIncidents } from '@/hooks/useIncidents';
@@ -180,45 +183,45 @@ function TimeModeBanner({
 
   const config = {
     past: {
-      title: 'MODE ARSIP HISTORIS (2022–2024)',
+      title: 'Mode Arsip Historis (2022-2024)',
       badge: 'HISTORICAL REPLAY',
-      badgeColor: 'bg-purple-950/80 text-purple-300 border-purple-500/40',
+      badgeColor: 'bg-[#121822] text-slate-300 border-[#1c2432]',
       description: 'Menampilkan arsip kejadian disrupsi pangan nyata di koridor logistik Sumatra untuk analisis perambatan inflasi.',
     },
     future: {
-      title: 'MODE PROYEKSI DINI (24–48 JAM)',
+      title: 'Mode Proyeksi Dini (24-48 Jam)',
       badge: 'PROJECTION FORECAST',
-      badgeColor: 'bg-amber-950/80 text-amber-300 border-amber-500/40',
-      description: 'Peringatan dini berdasarkan akumulasi curah hujan BMKG & potensi bottleneck lalu lintas sebelum armada diberangkatkan.',
+      badgeColor: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
+      description: 'Peringatan dini berdasarkan akumulasi curah hujan BMKG dan potensi bottleneck lalu lintas sebelum armada diberangkatkan.',
     },
     predict: {
-      title: 'MODE PREDIKSI AI (TFT & OPEN-METEO)',
+      title: 'Mode Prediksi Multi-Model (TFT & Open-Meteo)',
       badge: 'AI PREDICTIVE MODEL',
-      badgeColor: 'bg-cyan-950/80 text-cyan-300 border-cyan-500/40',
-      description: 'Simulasi skenario disrupsi pelabuhan Belawan & koridor pangan menggunakan model prakiraan cuaca Open-Meteo & BMKG.',
+      badgeColor: 'bg-white/10 text-slate-200 border-white/20',
+      description: 'Simulasi skenario disrupsi pelabuhan Belawan dan koridor pangan menggunakan model prakiraan cuaca Open-Meteo dan BMKG.',
     },
   }[activeTimeFilter];
 
   return (
     <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 max-w-xl w-[90%] pointer-events-auto">
-      <div className="bg-[#0c0e12]/95 backdrop-blur-xl border border-white/15 px-4 py-2.5 rounded-2xl shadow-2xl flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
+      <div className="bg-[#0c1017] border border-[#1c2432] px-4 py-2.5 rounded-lg shadow-xl flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-0.5">
-            <span className={`text-[9px] font-mono font-black px-2 py-0.5 rounded border ${config.badgeColor}`}>
+            <span className={`text-xs font-mono font-semibold px-2 py-0.5 rounded border ${config.badgeColor}`}>
               {config.badge}
             </span>
             <span className="text-xs font-bold text-white font-sans">{config.title}</span>
           </div>
-          <p className="text-[10px] text-slate-400 font-sans truncate">{config.description}</p>
+          <p className="text-xs text-slate-400 font-sans truncate">{config.description}</p>
         </div>
 
         <button
           type="button"
           onClick={onResetToPresent}
-          className="cursor-pointer px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-slate-200 hover:text-white border border-white/15 text-[10px] font-mono font-bold transition-all shrink-0 flex items-center gap-1"
+          className="cursor-pointer px-2.5 py-1 rounded-md bg-[#121822] hover:bg-slate-800 text-slate-300 hover:text-white border border-[#1c2432] text-xs font-mono font-medium transition-colors shrink-0 flex items-center gap-1.5"
           title="Kembali ke Mode Real-Time Present"
         >
-          <RotateCcw className="w-3 h-3" />
+          <RotateCcw className="w-3.5 h-3.5" />
           <span>Ke Live</span>
         </button>
       </div>
@@ -239,72 +242,72 @@ function FloatingMapLegend({
         <button
           type="button"
           onClick={onToggle}
-          className="cursor-pointer px-3 py-2 rounded-xl bg-[#0c0e12]/90 border border-cyan-500/40 backdrop-blur-xl text-cyan-300 hover:text-white hover:bg-slate-900 shadow-2xl transition-all flex items-center gap-1.5 text-xs font-mono font-bold"
+          className="cursor-pointer px-3 py-1.5 rounded-md bg-[#0c1017] border border-[#1c2432] text-slate-300 hover:text-white hover:bg-[#121822] shadow-xl transition-colors flex items-center gap-1.5 text-xs font-semibold"
           title="Buka Legenda Peta & Rute"
         >
-          <Info className="w-4 h-4 text-cyan-400" />
+          <Info className="w-4 h-4 text-slate-300" />
           <span>LEGENDA RUTE</span>
         </button>
       ) : (
-        <div className="w-72 bg-[#0c0e12]/95 border border-cyan-500/40 backdrop-blur-2xl p-3.5 rounded-2xl shadow-2xl text-xs space-y-2.5 animate-in fade-in zoom-in-95 duration-150">
-          <div className="flex items-center justify-between border-b border-white/10 pb-2">
-            <span className="font-mono font-bold text-[11px] text-cyan-300 uppercase tracking-wider flex items-center gap-1.5">
-              <Compass className="w-3.5 h-3.5 text-cyan-400" />
+        <div className="w-72 bg-[#0c1017] border border-[#1c2432] p-3.5 rounded-lg shadow-xl text-xs space-y-2.5 animate-in fade-in zoom-in-95 duration-150">
+          <div className="flex items-center justify-between border-b border-[#1c2432] pb-2">
+            <span className="font-mono font-semibold text-xs text-white uppercase tracking-wider flex items-center gap-1.5">
+              <Compass className="w-3.5 h-3.5 text-slate-300" />
               <span>Legenda Peta & Keputusan</span>
             </span>
             <button
               type="button"
               onClick={onToggle}
-              className="cursor-pointer p-1 rounded-lg bg-slate-900 text-slate-400 hover:text-white transition"
+              className="cursor-pointer p-1 rounded-md bg-[#121822] text-slate-400 hover:text-white border border-[#1c2432] transition-colors"
               title="Tutup Legenda"
             >
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
 
-          <div className="space-y-2 font-mono text-[10px]">
+          <div className="space-y-2 font-mono text-xs">
             <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)] shrink-0" />
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0" />
               <div>
-                <span className="text-emerald-300 font-bold block">Rute Detour Rekomendasi (CPU Solver)</span>
-                <span className="text-[9px] text-slate-400 font-sans">Bebas bahaya, jarak & ETA paling optimal.</span>
+                <span className="text-slate-200 font-medium block">Rute Detour Rekomendasi (CPU Solver)</span>
+                <span className="text-xs text-slate-400 font-sans">Bebas bahaya, jarak & ETA paling optimal.</span>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-amber-400 shrink-0" />
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shrink-0" />
               <div>
-                <span className="text-amber-300 font-bold block">Rute Alternatif Sekunder</span>
-                <span className="text-[9px] text-slate-400 font-sans">Jalur alternatif cadangan dengan deviasi waktu lebih panjang.</span>
+                <span className="text-slate-200 font-medium block">Rute Alternatif Sekunder</span>
+                <span className="text-xs text-slate-400 font-sans">Jalur alternatif cadangan dengan deviasi waktu lebih panjang.</span>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-red-500 shrink-0" />
+              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
               <div>
-                <span className="text-red-400 font-bold block">Koridor Utama Terblokir</span>
-                <span className="text-[9px] text-slate-400 font-sans">Jalur utama yang terhambat genangan / longsor.</span>
+                <span className="text-slate-200 font-medium block">Koridor Utama Terblokir</span>
+                <span className="text-xs text-slate-400 font-sans">Jalur utama yang terhambat genangan atau longsor.</span>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full border-2 border-red-500 bg-red-500/20 shrink-0 animate-pulse" />
+              <span className="w-2.5 h-2.5 rounded-full border border-rose-500 bg-rose-500/20 shrink-0" />
               <div>
-                <span className="text-red-300 font-bold block">Zona Radius Bahaya (Shockwave)</span>
-                <span className="text-[9px] text-slate-400 font-sans">Area bahaya hasil konsensus BMKG & OSINT.</span>
+                <span className="text-slate-200 font-medium block">Zona Radius Bahaya (Shockwave)</span>
+                <span className="text-xs text-slate-400 font-sans">Area bahaya hasil konsensus BMKG dan OSINT.</span>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-cyan-400 shrink-0" />
+              <span className="w-2.5 h-2.5 rounded-full bg-white shrink-0" />
               <div>
-                <span className="text-cyan-300 font-bold block">Hub Logistik Pangan</span>
-                <span className="text-[9px] text-slate-400 font-sans">Pelabuhan Utama, Gudang BULOG, Pasar Induk.</span>
+                <span className="text-slate-200 font-medium block">Hub Logistik Pangan</span>
+                <span className="text-xs text-slate-400 font-sans">Pelabuhan Utama, Gudang BULOG, Pasar Induk.</span>
               </div>
             </div>
           </div>
 
-          <p className="text-[9px] text-slate-400 font-sans pt-1 border-t border-white/5 leading-tight">
+          <p className="text-xs text-slate-400 font-sans pt-1 border-t border-[#1c2432] leading-tight">
             <strong>Transparansi HITL:</strong> PreHub menampilkan semua alternatif rute agar operator dapat membandingkan trade-off waktu dan risiko sebelum persetujuan.
           </p>
         </div>
@@ -945,108 +948,64 @@ export default function DashboardClient() {
   return (
     <div className="relative w-full h-screen bg-[#080d14] text-slate-100 overflow-hidden select-none">
       {/* Top Header Navbar */}
-      <header className="fixed top-0 left-0 right-0 h-16 bg-[#080d14]/90 backdrop-blur-md border-b border-white/10 z-50 flex items-center justify-between px-6">
+      <header className="fixed top-0 left-0 right-0 h-16 bg-[#0c1017] border-b border-white/10 z-50 flex items-center justify-between px-6 select-none">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-[#080d14] border border-emerald-500/40 p-1 flex items-center justify-center shadow-md shadow-emerald-500/20">
+            <div className="w-8 h-8 rounded-lg bg-[#080d14] border border-white/15 p-1 flex items-center justify-center">
               <img src="/logo_prehub.png" alt="PreHub" className="w-6 h-6 object-contain" />
             </div>
-            <span className="font-headline font-black text-lg tracking-wider text-slate-100 uppercase">
+            <span className="font-headline font-bold text-base tracking-wider text-slate-100 uppercase">
               PreHub
             </span>
             <Link
               href="/"
-              className="ml-2 px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-[11px] font-mono text-slate-300 hover:text-cyan-400 hover:border-cyan-400/40 transition flex items-center gap-1 cursor-pointer"
-              title="Kembali ke Halaman Onboarding"
+              className="ml-2 px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs font-sans text-slate-300 hover:text-white hover:border-white/20 transition flex items-center gap-1.5 cursor-pointer"
+              title="Kembali ke Beranda"
             >
-              <span>◄ Onboard</span>
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Beranda</span>
             </Link>
           </div>
 
           {/* Section Navigation Tabs */}
-          <nav className="flex items-center gap-1 bg-slate-950/60 p-1 rounded-xl border border-slate-800">
-            <button
-              id="nav-map"
-              type="button"
-              onClick={() => setActiveSection('map')}
-              className={`cursor-pointer px-3.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition ${
-                activeSection === 'map'
-                  ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
-              }`}
-            >
-              PETA OPERASI
-            </button>
-            <button
-              id="nav-analytics"
-              type="button"
-              onClick={() => setActiveSection('analytics')}
-              className={`cursor-pointer px-3.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition ${
-                activeSection === 'analytics'
-                  ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
-              }`}
-            >
-              ANALYTICS
-            </button>
-            <button
-              id="nav-simulation"
-              type="button"
-              onClick={() => setActiveSection('simulation')}
-              className={`cursor-pointer px-3.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition ${
-                activeSection === 'simulation'
-                  ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
-              }`}
-            >
-              SIMULATION
-            </button>
-            <button
-              id="nav-reports"
-              type="button"
-              onClick={() => setActiveSection('reports')}
-              className={`cursor-pointer px-3.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition ${
-                activeSection === 'reports'
-                  ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
-              }`}
-            >
-              REPORTS
-            </button>
-            <button
-              id="nav-evaluation"
-              type="button"
-              onClick={() => setActiveSection('evaluation')}
-              className={`cursor-pointer px-3.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition ${
-                activeSection === 'evaluation'
-                  ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
-              }`}
-            >
-              EVALUATION
-            </button>
+          <nav className="flex items-center gap-1 bg-[#080d14] p-1 rounded-lg border border-white/10">
+            {[
+              { id: 'map', label: 'Peta Operasi' },
+              { id: 'analytics', label: 'Analitik' },
+              { id: 'simulation', label: 'Simulasi' },
+              { id: 'reports', label: 'Laporan' },
+              { id: 'evaluation', label: 'Evaluasi' },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                id={`nav-${tab.id}`}
+                type="button"
+                onClick={() => setActiveSection(tab.id as typeof activeSection)}
+                className={`cursor-pointer px-3.5 py-1.5 rounded-md text-xs font-medium transition whitespace-nowrap ${
+                  activeSection === tab.id
+                    ? 'bg-white text-[#080d14] font-semibold'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
           </nav>
         </div>
 
-        {/* Top Navbar Telemetry Header & Role Persona Selector */}
-        <div className="flex items-center gap-3">
-          <TopNavTelemetry cuOptInfo={cuOptInfo} corridorContext={corridorContext} isLoading={isCorridorLoading} />
-
+        {/* Workspace Actions */}
+        <div className="flex items-center gap-3 shrink-0">
           {/* Phase 43: Self-Serve Fleet Onboarding Action Button */}
           <button
             type="button"
             onClick={() => setIsOnboardingModalOpen(true)}
-            className={`cursor-pointer px-3 py-1.5 rounded-xl border text-xs font-semibold tracking-wide transition-all flex items-center gap-1.5 shadow-lg ${
-              role === 'REGULATOR'
-                ? 'bg-white/5 border-white/10 text-slate-400 hover:text-slate-300'
-                : 'bg-cyan-500/10 border-cyan-500/30 hover:bg-cyan-500/20 text-cyan-300 shadow-cyan-500/10'
-            }`}
+            className="cursor-pointer px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-slate-200 hover:text-white text-xs font-medium transition flex items-center gap-1.5"
             title="Onboard Armada & Unggah Manifest Pengiriman"
           >
-            <PlusCircle className="w-3.5 h-3.5 text-cyan-400" />
-            <span>+ Onboard Armada</span>
+            <PlusCircle className="w-3.5 h-3.5 text-slate-300" />
+            <span>Onboard Armada</span>
             {customFleetCount > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full bg-cyan-500 text-slate-950 font-mono text-[10px] font-black">
+              <span className="px-1.5 py-0.5 rounded bg-white text-[#080d14] font-mono text-xs font-bold">
                 {customFleetCount}
               </span>
             )}
@@ -1056,28 +1015,20 @@ export default function DashboardClient() {
           <button
             type="button"
             onClick={openAuthModal}
-            className={`cursor-pointer px-3 py-1.5 rounded-xl border backdrop-blur-xl transition-all flex items-center gap-2 group shadow-lg ${
-              role === 'DISPATCHER'
-                ? 'bg-cyan-950/40 border-cyan-500/40 hover:border-cyan-400 hover:bg-cyan-950/60 text-cyan-300'
-                : role === 'REGULATOR'
-                ? 'bg-amber-950/40 border-amber-500/40 hover:border-amber-400 hover:bg-amber-950/60 text-amber-300'
-                : 'bg-emerald-950/40 border-emerald-500/40 hover:border-emerald-400 hover:bg-emerald-950/60 text-emerald-300'
-            }`}
+            className="cursor-pointer px-3 py-1.5 rounded-lg border border-white/10 bg-[#080d14] hover:border-white/20 transition flex items-center gap-2 group text-left"
             title="Ganti Persona Akses & Ruang Kerja (RBAC)"
           >
-            <div className={`w-2 h-2 rounded-full animate-pulse ${
+            <div className={`w-2 h-2 rounded-full shrink-0 ${
               role === 'DISPATCHER' ? 'bg-cyan-400' : role === 'REGULATOR' ? 'bg-amber-400' : 'bg-emerald-400'
             }`} />
-            <div className="text-left leading-none">
+            <div className="leading-tight">
               <div className="flex items-center gap-1.5">
-                <span className="text-[10px] font-mono font-black uppercase tracking-wider">
+                <span className="text-xs font-mono font-bold uppercase tracking-wider text-slate-200">
                   {role}
                 </span>
-                <span className="text-[8px] font-mono text-slate-400 group-hover:text-white transition">
-                  ▼
-                </span>
+                <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-white transition" />
               </div>
-              <span className="text-[9px] font-sans text-slate-300 max-w-[130px] truncate block opacity-80 pt-0.5">
+              <span className="text-xs font-sans text-slate-400 max-w-[140px] truncate block">
                 {user.org_name || (role === 'DISPATCHER' ? 'PT Samudera Logistik' : role === 'REGULATOR' ? 'Badan Pangan Nasional' : 'Sandbox LRIP')}
               </span>
             </div>
@@ -1116,6 +1067,13 @@ export default function DashboardClient() {
 
         {/* SECTION 1: 4D GIS MAP WITH RESTORED FIGMA COMMAND CENTER GRID */}
         <div className={`w-full h-full relative ${activeSection === 'map' ? 'block' : 'hidden'}`}>
+
+          {/* Floating Operational Telemetry HUD Strip */}
+          <div className={`absolute top-3.5 z-30 pointer-events-auto transition-all duration-300 ${
+            isLeftSidebarCollapsed ? 'left-32' : 'left-[340px]'
+          }`}>
+            <TopNavTelemetry cuOptInfo={cuOptInfo} corridorContext={corridorContext} isLoading={isCorridorLoading} />
+          </div>
 
           {/* 1. FULL-BLEED 4D MAPBOX MAP CANVAS (ALWAYS 100% VIEWPORT - ZERO RESIZING BLINK!) */}
           <div className="absolute inset-0 w-full h-full z-0">
@@ -1158,30 +1116,30 @@ export default function DashboardClient() {
             <button
               type="button"
               onClick={() => setIsLeftSidebarCollapsed(false)}
-              className="absolute top-4 left-4 z-[360] px-3 py-2 rounded-xl bg-[#0c0e12]/90 border border-cyan-500/40 backdrop-blur-xl text-cyan-300 hover:text-white hover:bg-slate-900 shadow-2xl transition-all cursor-pointer flex items-center gap-1.5 text-xs font-mono font-bold"
+              className="absolute top-4 left-4 z-[360] px-3 py-1.5 rounded-md bg-[#0c1017] border border-[#1c2432] text-slate-300 hover:text-white hover:bg-[#121822] shadow-xl transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-semibold"
               title="Tampilkan Tactical Sidebar"
             >
-              <PanelLeftOpen className="w-4 h-4 text-cyan-400" />
+              <PanelLeftOpen className="w-4 h-4 text-slate-300" />
               <span>SIDEBAR</span>
             </button>
           )}
 
           {/* 2. COLLAPSIBLE LEFT OSINT & NEWS SIDEBAR (GLOBOT STYLE) */}
-          <aside className={`absolute left-0 top-0 bottom-0 z-40 w-80 md:w-88 bg-[#0c0e12]/95 backdrop-blur-2xl border-r border-white/10 flex flex-col gap-3 p-3.5 overflow-hidden pointer-events-auto transition-transform duration-300 ease-in-out shadow-2xl ${
+          <aside className={`absolute left-0 top-0 bottom-0 z-40 w-80 md:w-88 bg-[#0c1017] border-r border-[#1c2432] flex flex-col gap-3 p-3.5 overflow-hidden pointer-events-auto transition-transform duration-300 ease-in-out shadow-xl ${
             isLeftSidebarCollapsed ? '-translate-x-full pointer-events-none' : 'translate-x-0'
           }`}>
             {/* Header: OSINT Wire & Live Pulse */}
-            <div className="flex items-center justify-between pb-2 border-b border-white/10 shrink-0">
+            <div className="flex items-center justify-between pb-2 border-b border-[#1c2432] shrink-0">
               <div className="flex items-center gap-2">
-                <div className="relative flex items-center justify-center w-7 h-7 rounded-lg bg-cyan-950/80 border border-cyan-500/30 text-cyan-400">
+                <div className="relative flex items-center justify-center w-7 h-7 rounded-md bg-[#121822] border border-[#1c2432] text-slate-300">
                   <Radio className="w-4 h-4" />
-                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-cyan-400"></span>
+                  <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
                 </div>
                 <div>
                   <h2 className="text-xs font-bold font-sans text-white uppercase tracking-wider">
                     Intelijen Berita Resmi
                   </h2>
-                  <span className="text-[9px] font-mono text-slate-400">
+                  <span className="text-xs font-mono text-slate-400">
                     {filteredNews.length} Sumber Terverifikasi
                   </span>
                 </div>
@@ -1260,26 +1218,26 @@ export default function DashboardClient() {
                   return (
                     <div
                       key={item.id}
-                      className={`p-3 rounded-xl border backdrop-blur-md transition-all duration-200 space-y-2 ${
+                      className={`p-3 rounded-lg border transition-colors space-y-2 ${
                         isSelected
-                          ? 'bg-cyan-950/40 border-cyan-500/60 ring-1 ring-cyan-500/30'
-                          : 'bg-[#141820]/70 border-white/10 hover:border-cyan-500/40 hover:bg-[#181d28]/80'
+                          ? 'bg-[#121822] border-white/40 ring-1 ring-white/20'
+                          : 'bg-[#0c1017] border-[#1c2432] hover:border-slate-600 hover:bg-[#121822]'
                       }`}
                     >
                       {/* Source & Timestamp */}
-                      <div className="flex items-center justify-between gap-1 text-[9px] font-mono">
+                      <div className="flex items-center justify-between gap-1 text-xs font-mono">
                         <div className="flex items-center gap-1.5 truncate">
-                          <span className={`px-1.5 py-0.5 rounded border font-semibold uppercase ${
+                          <span className={`px-1.5 py-0.5 rounded border text-xs font-semibold uppercase ${
                             isOfficial
-                              ? 'bg-cyan-950/60 text-cyan-300 border-cyan-500/30'
-                              : 'bg-slate-800 text-slate-300 border-slate-700'
+                              ? 'bg-white/10 text-slate-200 border-white/20'
+                              : 'bg-[#121822] text-slate-400 border-[#1c2432]'
                           }`}>
                             {item.source_name || (isOfficial ? 'ANTARA' : 'BERITA')}
                           </span>
                           <span className="text-slate-400 truncate">{item.pubDate || 'Terkini'}</span>
                         </div>
                         {isEarlyWarning && (
-                          <span className="text-cyan-400 font-semibold shrink-0">
+                          <span className="text-amber-400 font-semibold text-xs shrink-0">
                             Early Warning {item.lead_time_hours ? `(${item.lead_time_hours}j)` : ''}
                           </span>
                         )}
@@ -1291,14 +1249,14 @@ export default function DashboardClient() {
                       </h3>
 
                       {/* Summary */}
-                      <p className="text-[10px] text-slate-400 font-sans leading-relaxed line-clamp-2">
+                      <p className="text-xs text-slate-400 font-sans leading-relaxed line-clamp-2">
                         {item.summary}
                       </p>
 
                       {/* Commodity & Location */}
-                      <div className="flex items-center justify-between text-[9px] font-mono text-slate-400 pt-1 border-t border-white/5">
+                      <div className="flex items-center justify-between text-xs font-mono text-slate-400 pt-1 border-t border-[#1c2432]">
                         <div className="flex items-center gap-1 truncate max-w-[140px]">
-                          <MapPin className="w-3 h-3 text-cyan-400 shrink-0" />
+                          <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                           <span className="truncate">{item.location_name || 'Koridor Sumut'}</span>
                         </div>
 
@@ -1316,10 +1274,10 @@ export default function DashboardClient() {
                             href={item.link}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="cursor-pointer p-1 rounded-lg bg-slate-900 text-slate-400 hover:text-cyan-300 transition"
+                            className="cursor-pointer p-1 rounded bg-[#121822] text-slate-400 hover:text-white border border-[#1c2432] transition-colors"
                             title="Tautan Sumber"
                           >
-                            <ExternalLink className="w-3 h-3" />
+                            <ExternalLink className="w-3.5 h-3.5" />
                           </a>
                         )}
 
@@ -1341,7 +1299,7 @@ export default function DashboardClient() {
                               );
                             }
                           }}
-                          className="cursor-pointer flex items-center gap-1 px-2 py-0.5 rounded-lg bg-cyan-950/80 text-cyan-300 border border-cyan-500/30 hover:bg-cyan-900 transition text-[9px] font-mono font-medium"
+                          className="cursor-pointer flex items-center gap-1 px-2.5 py-1 rounded bg-white hover:bg-slate-200 text-[#080d14] text-xs font-mono font-semibold transition-colors shadow-sm"
                         >
                           <span>Fokus</span>
                         </button>
@@ -1405,8 +1363,8 @@ export default function DashboardClient() {
             />
 
             {/* Floating Live Fleet Modality Filter Control */}
-            {activeTimeFilter === 'present' && (
-              <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 pointer-events-auto flex items-center gap-1 p-1 rounded-2xl bg-[#0c0e12]/90 border border-white/15 backdrop-blur-xl shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200">
+            {activeTimeFilter === 'present' && !(isSidebarOpen && selectedCrisis) && (
+              <div className="absolute top-3.5 right-36 z-30 pointer-events-auto hidden xl:flex items-center gap-1 p-1 rounded-lg bg-[#0c1017] border border-white/10 shadow-xl">
                 {[
                   { id: 'all', label: 'SEMUA', count: activeFleetVehicles.length, icon: null },
                   { id: 'truck', label: 'TRUK', count: activeFleetVehicles.filter((v) => v.modality === 'truck').length, icon: Truck },
@@ -1425,17 +1383,17 @@ export default function DashboardClient() {
                           type: 'info',
                         });
                       }}
-                      className={`cursor-pointer px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition-all flex items-center gap-1.5 ${
+                      className={`cursor-pointer px-2.5 py-1 rounded-md text-xs font-mono font-medium transition-all flex items-center gap-1.5 ${
                         fleetModalityFilter === m.id
-                          ? 'bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/20 font-black'
+                          ? 'bg-white text-[#080d14] font-bold'
                           : 'text-slate-400 hover:text-white hover:bg-white/5'
                       }`}
                     >
                       {IconComp && <IconComp className="w-3.5 h-3.5" />}
                       <span>{m.label}</span>
                       <span
-                        className={`px-1.5 py-0.2 rounded text-[10px] ${
-                          fleetModalityFilter === m.id ? 'bg-slate-950 text-cyan-300' : 'bg-white/10 text-slate-400'
+                        className={`px-1.5 py-0.5 rounded text-xs ${
+                          fleetModalityFilter === m.id ? 'bg-[#080d14] text-white' : 'bg-white/10 text-slate-400'
                         }`}
                       >
                         {m.count}
@@ -1497,7 +1455,7 @@ export default function DashboardClient() {
             />
 
             {/* Bottombar Time Scope Filters (Exact Dual-Sidebar Centering) */}
-            <footer className={`absolute bottom-6 z-40 flex items-center gap-2 bg-[#080d14]/90 backdrop-blur-xl border border-white/10 px-4 py-2 rounded-2xl shadow-2xl transition-all duration-300 pointer-events-auto ${!isLeftSidebarCollapsed && (isSidebarOpen && !!selectedCrisis)
+            <footer className={`absolute bottom-6 z-40 flex items-center gap-1.5 bg-[#0c1017] border border-[#1c2432] p-1.5 rounded-lg shadow-xl transition-all duration-300 pointer-events-auto ${!isLeftSidebarCollapsed && (isSidebarOpen && !!selectedCrisis)
                 ? 'left-[calc(50%-30px)] -translate-x-1/2'
                 : !isLeftSidebarCollapsed && !(isSidebarOpen && !!selectedCrisis)
                   ? 'left-[calc(50%+160px)] -translate-x-1/2'
@@ -1514,21 +1472,22 @@ export default function DashboardClient() {
                       handleCrisisClick('mock-predict-1');
                     }
                   }}
-                  className={`px-4 py-1.5 rounded-xl font-headline font-bold text-xs uppercase tracking-wider transition cursor-pointer ${activeTimeFilter === filter
-                    ? 'bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/20'
-                    : 'text-slate-400 hover:text-white'
+                  className={`px-3 py-1 rounded text-xs font-semibold uppercase tracking-wider transition-colors cursor-pointer ${activeTimeFilter === filter
+                    ? 'bg-white text-[#080d14] shadow-sm'
+                    : 'text-slate-400 hover:text-white hover:bg-[#121822]'
                     }`}
                 >
                   {filter}
                 </button>
               ))}
-              <div className="w-[1px] h-5 bg-white/15 mx-1" />
+              <div className="w-[1px] h-4 bg-[#1c2432] mx-1" />
               <button
                 type="button"
                 onClick={() => demoState.start({ mock_agents: false, offline: false, origin: selectedOriginNode || 'belawan', destination: selectedDestNode || 'tebingtinggi' })}
-                className="flex items-center gap-1.5 px-3 py-1.5 font-bold rounded-xl bg-cyan-500 text-slate-950 hover:bg-cyan-400 active:scale-95 transition duration-200 shadow-lg shadow-cyan-500/25 border border-cyan-400/50 cursor-pointer text-xs uppercase tracking-wider"
+                className="flex items-center gap-1.5 px-3 py-1 rounded bg-white hover:bg-slate-200 text-[#080d14] font-semibold text-xs uppercase tracking-wider transition-colors shadow-sm cursor-pointer"
               >
-                <span className="animate-pulse">▶</span> Run Demo
+                <Play className="w-3 h-3 fill-current" />
+                <span>Run Demo</span>
               </button>
             </footer>
           </div>

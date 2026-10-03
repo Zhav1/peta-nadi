@@ -226,86 +226,77 @@ export default function ReportsSection({
   return (
     <div className="w-full h-full flex flex-col gap-6 overflow-hidden pointer-events-auto">
       
-      {/* TOP KPI SCORECARD (3 Glassmorphic Tiles) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 shrink-0">
+      {/* TOP KPI ROW (Single Ledger Row with Hairline Dividers) */}
+      <div className="bg-[#0c1017] border border-white/10 p-5 rounded-xl shadow-xl shrink-0 grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-white/10">
         
-        {/* Tile 1 */}
-        <div className="bg-[#0c0e12]/80 backdrop-blur-xl border border-white/10 p-5 rounded-2xl shadow-xl border-l-4 border-l-cyan-400">
-          <div className="flex justify-between items-start mb-2">
-            <span className="text-[10px] font-mono text-cyan-400 uppercase font-bold tracking-widest">
-              TOTAL IMPACT MITIGATION
-            </span>
-            <TrendingUp className="w-4 h-4 text-cyan-400" />
-          </div>
-          <p className="text-3xl font-headline font-black text-white">{savingsString}</p>
-          <p className="text-[10px] text-emerald-400 font-mono mt-1 flex items-center gap-1 font-bold">
-            <CheckCircle2 className="w-3 h-3" /> +12.4% vs Projected Unmitigated Shocks
+        {/* Metric 1 */}
+        <div className="sm:px-6 first:pl-0 last:pr-0 py-2 sm:py-0">
+          <span className="text-xs font-mono text-slate-400 uppercase tracking-wider block mb-1">
+            Total Mitigasi Dampak
+          </span>
+          <p className="text-2xl font-mono font-bold text-white">{savingsString}</p>
+          <p className="text-xs text-emerald-400 font-mono mt-1">
+            +12.4% vs Proyeksi Tanpa Mitigasi
           </p>
         </div>
 
-        {/* Tile 2 */}
-        <div className="bg-[#0c0e12]/80 backdrop-blur-xl border border-white/10 p-5 rounded-2xl shadow-xl border-l-4 border-l-emerald-400">
-          <div className="flex justify-between items-start mb-2">
-            <span className="text-[10px] font-mono text-emerald-400 uppercase font-bold tracking-widest">
-              OPERATIONAL INTEGRITY
-            </span>
-            <ShieldCheck className="w-4 h-4 text-emerald-400" />
-          </div>
-          <p className="text-3xl font-headline font-black text-white">{healthScore}%</p>
-          <p className="text-[10px] text-slate-400 font-mono mt-1">
-            {corridorContext?.weather?.status ? `BMKG ${corridorContext.weather.status.toUpperCase()}` : 'BMKG'} • {corridorContext?.traffic?.status ? `TomTom ${corridorContext.traffic.status.toUpperCase()}` : 'TomTom'} • {activeRoutes?.length ? `${activeRoutes.length} Routes` : 'PIHPS Sync'}
+        {/* Metric 2 */}
+        <div className="sm:px-6 first:pl-0 last:pr-0 py-2 sm:py-0">
+          <span className="text-xs font-mono text-slate-400 uppercase tracking-wider block mb-1">
+            Integritas Operasional
+          </span>
+          <p className="text-2xl font-mono font-bold text-white">{healthScore}%</p>
+          <p className="text-xs text-slate-400 font-mono mt-1">
+            BMKG, TomTom, & PIHPS Terverifikasi
           </p>
         </div>
 
-        {/* Tile 3 */}
-        <div className="bg-[#0c0e12]/80 backdrop-blur-xl border border-white/10 p-5 rounded-2xl shadow-xl border-l-4 border-l-amber-400">
-          <div className="flex justify-between items-start mb-2">
-            <span className="text-[10px] font-mono text-amber-400 uppercase font-bold tracking-widest">
-              DISPATCHED REROUTE APPROVALS
-            </span>
-            <Award className="w-4 h-4 text-amber-400" />
-          </div>
-          <p className="text-3xl font-headline font-black text-white">{liveApprovals}</p>
-          <p className="text-[10px] text-amber-400 font-mono mt-1 font-bold">
-            All Waypoint Reroutes Audited & Logged
+        {/* Metric 3 */}
+        <div className="sm:px-6 first:pl-0 last:pr-0 py-2 sm:py-0">
+          <span className="text-xs font-mono text-slate-400 uppercase tracking-wider block mb-1">
+            Persetujuan Pengalihan Rute
+          </span>
+          <p className="text-2xl font-mono font-bold text-white">{liveApprovals}</p>
+          <p className="text-xs text-slate-400 font-mono mt-1">
+            Terekam dalam Audit Trail
           </p>
         </div>
 
       </div>
 
       {/* MAIN DOCUMENT WORKSPACE & INTERACTIVE CABINET BRIEFING VIEWER */}
-      <div className="flex-1 bg-[#0c0e12]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-6 flex flex-col min-h-0 shadow-2xl overflow-hidden">
+      <div className="flex-1 bg-[#0c1017] border border-white/10 rounded-xl p-6 flex flex-col min-h-0 shadow-xl overflow-hidden">
         
         {/* Document Header Bar */}
         <div className="flex flex-wrap justify-between items-center pb-4 border-b border-white/10 shrink-0 gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center">
-              <FileText className="w-5 h-5 text-cyan-400" />
+            <div className="w-10 h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center">
+              <FileText className="w-5 h-5 text-slate-300" />
             </div>
             <div>
-              <h2 className="font-headline font-bold text-base text-white uppercase tracking-wide">
-                WEEKLY CABINET BRIEFING DOCUMENT
+              <h2 className="font-headline font-semibold text-base text-white tracking-wide">
+                Dokumen Briefing Kabinet Logistik Nasional
               </h2>
-              <p className="text-[10px] font-mono text-slate-400">
-                PreHub National Logistics Sentinel • North Sumatra Priority Corridor
+              <p className="text-xs font-sans text-slate-400">
+                PreHub Sentinel Logistik • Koridor Prioritas Sumatera Utara
               </p>
             </div>
           </div>
 
           {/* Page Switcher */}
-          <div className="flex items-center gap-2 bg-[#141820] border border-white/10 px-3 py-1.5 rounded-xl font-mono text-xs">
+          <div className="flex items-center gap-2 bg-[#121822] border border-white/10 px-3 py-1.5 rounded-lg font-mono text-xs">
             <button
               onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
               disabled={currentPage === 1}
-              className="hover:text-cyan-400 disabled:opacity-30 cursor-pointer"
+              className="hover:text-white disabled:opacity-30 cursor-pointer"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
-            <span className="text-slate-300 font-bold">PAGE 0{currentPage} / 03</span>
+            <span className="text-slate-300 font-medium">Halaman {currentPage} / 3</span>
             <button
               onClick={() => setCurrentPage(prev => Math.min(3, prev + 1))}
               disabled={currentPage === 3}
-              className="hover:text-cyan-400 disabled:opacity-30 cursor-pointer"
+              className="hover:text-white disabled:opacity-30 cursor-pointer"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -313,7 +304,7 @@ export default function ReportsSection({
         </div>
 
         {/* Dynamic Page Content */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar my-4 p-4 bg-[#141820]/60 rounded-xl border border-white/5 space-y-4">
+        <div className="flex-1 overflow-y-auto custom-scrollbar my-4 p-5 bg-[#121822] rounded-xl border border-white/5 space-y-4">
           
           {currentPage === 1 && (
             <div className="space-y-4 text-xs leading-relaxed text-slate-200">
@@ -425,24 +416,24 @@ export default function ReportsSection({
         </div>
 
         {/* Executive Action Toolbar */}
-        <div className="flex flex-wrap justify-between items-center pt-3 border-t border-white/10 shrink-0 gap-3">
-          <span className="text-[10px] font-mono text-slate-400">
+        <div className="flex flex-wrap justify-between items-center pt-3 border-t border-[#1c2432] shrink-0 gap-3">
+          <span className="text-xs font-mono text-slate-400">
             Document ID: PETA-NADI-CABINET-2026-0725
           </span>
 
           <div className="flex items-center gap-3">
             <button
               onClick={handleExportJSON}
-              className="px-4 py-2 bg-[#141820] hover:bg-white/10 text-slate-300 border border-white/15 rounded-xl text-xs font-headline font-bold uppercase tracking-wider transition flex items-center gap-1.5 cursor-pointer"
+              className="px-3.5 py-2 bg-[#121822] hover:bg-slate-800 text-slate-200 border border-[#1c2432] rounded-md text-xs font-semibold uppercase tracking-wider transition-colors flex items-center gap-1.5 cursor-pointer"
             >
               <FileSpreadsheet className="w-4 h-4 text-emerald-400" /> Export JSON Data
             </button>
 
             <button
               onClick={handleGeneratePDF}
-              className="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-emerald-500 text-slate-950 hover:opacity-95 text-xs font-headline font-black uppercase tracking-wider rounded-xl transition flex items-center gap-2 shadow-lg shadow-cyan-500/20 active:scale-95 cursor-pointer"
+              className="px-4 py-2 bg-white hover:bg-slate-200 text-[#080d14] text-xs font-semibold uppercase tracking-wider rounded-md transition-colors flex items-center gap-2 shadow-sm cursor-pointer"
             >
-              <Printer className="w-4 h-4" /> Generate Cabinet Briefing PDF
+              <Printer className="w-4 h-4 text-[#080d14]" /> Generate Cabinet Briefing PDF
             </button>
           </div>
         </div>

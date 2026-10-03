@@ -139,12 +139,12 @@ function RouteCard({
         </span>
 
         {isCompromised ? (
-          <span className="inline-flex items-center gap-1 text-[10px] font-bold font-mono px-2 py-0.5 rounded bg-red-950/80 text-red-300 border border-red-500/40">
-            <AlertTriangle className="w-3 h-3 text-red-400" /> COMPROMISED
+          <span className="inline-flex items-center gap-1 text-xs font-semibold font-mono px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20">
+            <AlertTriangle className="w-3.5 h-3.5 text-rose-400" /> COMPROMISED
           </span>
         ) : (
-          <span className="inline-flex items-center gap-1 text-[10px] font-bold font-mono px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-500/40">
-            <CheckCircle2 className="w-3 h-3 text-emerald-400" /> SAFE DETOUR
+          <span className="inline-flex items-center gap-1 text-xs font-semibold font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> SAFE DETOUR
           </span>
         )}
       </div>
@@ -154,53 +154,47 @@ function RouteCard({
       </p>
 
       {route.safety_tag && (
-        <div className="mb-2 text-[10px] font-mono font-bold text-cyan-300 bg-cyan-950/40 px-2 py-1 rounded border border-cyan-500/30">
+        <div className="mb-2 text-xs font-mono font-medium text-slate-300 bg-[#121822] px-2 py-1 rounded border border-[#1c2432]">
           {route.safety_tag}
         </div>
       )}
 
       {/* Multi-modal Leg Breakdown if available */}
       {route.legs && route.legs.length > 0 && (
-        <div className="mb-2 p-2 rounded-lg bg-slate-950/80 border border-slate-800 flex flex-col gap-1 text-[11px] font-mono">
-          <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Rincian Leg Logistik Multi-Moda:</span>
+        <div className="mb-2 p-2.5 rounded-md bg-[#121822] border border-[#1c2432] flex flex-col gap-1 text-xs font-mono">
+          <span className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Rincian Leg Logistik Multi-Moda:</span>
           {route.legs.map((leg, lIdx) => (
             <div key={lIdx} className="flex justify-between items-center text-slate-300">
               <span className="flex items-center gap-1.5">
-                {leg.mode === 'truck' ? <Truck className="w-3.5 h-3.5 text-cyan-400" /> : leg.mode === 'maritime' ? <Anchor className="w-3.5 h-3.5 text-amber-400" /> : (leg.mode as string) === 'rail' ? <Train className="w-3.5 h-3.5 text-emerald-400" /> : <Plane className="w-3.5 h-3.5 text-purple-400" />}
+                {leg.mode === 'truck' ? <Truck className="w-3.5 h-3.5 text-slate-300" /> : leg.mode === 'maritime' ? <Anchor className="w-3.5 h-3.5 text-amber-400" /> : (leg.mode as string) === 'rail' ? <Train className="w-3.5 h-3.5 text-emerald-400" /> : <Plane className="w-3.5 h-3.5 text-purple-400" />}
                 <span>{leg.title}</span>
               </span>
-              <span className="text-cyan-400 font-bold">{leg.eta_minutes} min ({leg.distance_km} km)</span>
+              <span className="text-white font-semibold tabular-nums">{leg.eta_minutes} min ({leg.distance_km} km)</span>
             </div>
           ))}
         </div>
       )}
 
       <div className="flex gap-3 text-xs text-slate-300 font-mono mb-1">
-        <span className="inline-flex items-center gap-1"><MapPin className="w-3 h-3 text-cyan-400" /> {route.distance_km.toFixed(0)} km</span>
+        <span className="inline-flex items-center gap-1"><MapPin className="w-3 h-3 text-slate-400" /> {route.distance_km.toFixed(0)} km</span>
         <span className="inline-flex items-center gap-1"><Clock className="w-3 h-3 text-amber-400" /> {route.eta_minutes} min</span>
         <span className="inline-flex items-center gap-1"><Fuel className="w-3 h-3 text-emerald-400" /> +{route.fuel_increase_pct.toFixed(0)}%</span>
       </div>
 
       {isActive && (
-        <div className="mt-3 pt-2.5 border-t border-white/10 flex flex-col gap-2">
+        <div className="mt-3 pt-2.5 border-t border-[#1c2432] flex flex-col gap-2">
           {isApproved ? (
-            <div className={`w-full py-2.5 px-3 rounded-lg border text-xs font-bold flex flex-col gap-1 ${
-              approvalData?.action === 'OVERRIDE'
-                ? 'bg-indigo-950/40 border-indigo-500/50 text-indigo-300 shadow-[0_0_15px_rgba(99,102,241,0.2)]'
-                : approvalData?.tactical_action === 'HOLD'
-                  ? 'bg-amber-950/40 border-amber-500/50 text-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.2)]'
-                  : 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.2)]'
-            }`}>
+            <div className="w-full py-2.5 px-3 rounded-md border border-[#1c2432] bg-[#121822] text-xs font-bold flex flex-col gap-1 shadow-sm">
               <div className="flex items-center justify-between">
                 <span className="flex items-center gap-2">
                   {approvalData?.action === 'OVERRIDE' ? (
-                    <SlidersHorizontal className="w-4 h-4 text-indigo-400" />
+                    <SlidersHorizontal className="w-4 h-4 text-purple-400" />
                   ) : approvalData?.tactical_action === 'HOLD' ? (
                     <PauseCircle className="w-4 h-4 text-amber-400" />
                   ) : (
                     <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                   )}
-                  <span>
+                  <span className="text-white">
                     {approvalData?.action === 'OVERRIDE'
                       ? 'OPERATOR OVERRIDE'
                       : approvalData?.tactical_action === 'HOLD'
@@ -208,43 +202,37 @@ function RouteCard({
                         : 'APPROVED & DISPATCHED'}
                   </span>
                 </span>
-                <span className="text-[10px] opacity-80 font-mono">
+                <span className="text-xs text-slate-400 font-mono">
                   {approvalData?.tactical_action || 'REROUTE'}
                 </span>
               </div>
               {approvalData?.notes && (
-                <div className={`text-[11px] font-normal p-1.5 rounded border flex items-start gap-1.5 mt-1 font-mono ${
-                  approvalData?.action === 'OVERRIDE'
-                    ? 'bg-slate-950/70 border-indigo-500/30 text-indigo-200'
-                    : approvalData?.tactical_action === 'HOLD'
-                      ? 'bg-slate-950/70 border-amber-500/30 text-amber-200'
-                      : 'bg-slate-950/70 border-emerald-500/30 text-slate-300'
-                }`}>
-                  <FileText className="w-3 h-3 shrink-0 mt-0.5 opacity-80" />
+                <div className="text-xs font-normal p-2 rounded border border-[#1c2432] bg-[#0c1017] text-slate-300 flex items-start gap-1.5 mt-1 font-mono">
+                  <FileText className="w-3.5 h-3.5 shrink-0 mt-0.5 text-slate-400" />
                   <span>{approvalData.notes}</span>
                 </div>
               )}
             </div>
           ) : isCompromised ? (
-            <div className="w-full py-2 px-3 rounded-lg bg-red-950/80 border border-red-500/50 text-red-300 text-[11px] font-mono font-bold text-center flex items-center justify-center gap-1.5">
-              <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+            <div className="w-full py-2 px-3 rounded-md bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs font-mono font-semibold text-center flex items-center justify-center gap-1.5">
+              <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
               <span>RUTE TERDAMPAK BENCANA (TIDAK DISARANKAN)</span>
             </div>
           ) : (
             <>
               {role === 'REGULATOR' ? (
-                <div className="w-full p-3 rounded-xl bg-amber-950/40 border border-amber-500/40 text-amber-300 flex flex-col gap-1 text-[11px] font-mono">
+                <div className="w-full p-3 rounded-md bg-[#121822] border border-[#1c2432] text-slate-200 flex flex-col gap-1 text-xs font-mono">
                   <div className="flex items-center justify-between font-bold">
                     <span className="flex items-center gap-1.5">
-                      <Scale className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                      <span>AKSES REGULATOR (PENGAWAS)</span>
+                      <Scale className="w-3.5 h-3.5 text-slate-300 shrink-0" />
+                      <span className="text-white">AKSES REGULATOR (PENGAWAS)</span>
                     </span>
-                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-white/10 text-slate-300 border border-white/20">
                       READ ONLY
                     </span>
                   </div>
-                  <p className="text-[10px] font-sans text-slate-300 leading-snug pt-0.5">
-                    Mode Regulator berwenang memantau koridor makro & disparitas harga. Persetujuan pengalihan rute armada didelegasikan kepada Dispatcher logistik.
+                  <p className="text-xs font-sans text-slate-400 leading-snug pt-0.5">
+                    Mode Regulator berwenang memantau koridor makro dan disparitas harga. Persetujuan pengalihan rute armada didelegasikan kepada Dispatcher logistik.
                   </p>
                 </div>
               ) : (
@@ -259,10 +247,10 @@ function RouteCard({
                         onApprove('ACCEPT', 'REROUTE');
                       }}
                       disabled={approving}
-                      className="py-2.5 px-2 rounded-xl text-[11px] font-black uppercase tracking-wider bg-cyan-500 hover:bg-cyan-400 text-slate-950 transition-all shadow-md shadow-cyan-500/20 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+                      className="py-2 px-2.5 rounded-md text-xs font-semibold uppercase tracking-wider bg-white hover:bg-slate-200 text-[#080d14] transition-colors shadow-sm flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Setujui dan instruksikan armada rute alternatif"
                     >
-                      <CheckCircle2 className="w-3.5 h-3.5 text-slate-950 shrink-0" />
+                      <CheckCircle2 className="w-3.5 h-3.5 text-[#080d14] shrink-0" />
                       <span>REROUTE</span>
                     </button>
 
@@ -274,7 +262,7 @@ function RouteCard({
                         onApprove('ACCEPT', 'HOLD', 'Armada diinstruksikan menahan laju di safe point terdekat.');
                       }}
                       disabled={approving}
-                      className="py-2.5 px-2 rounded-xl text-[11px] font-black uppercase tracking-wider bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+                      className="py-2 px-2.5 rounded-md text-xs font-semibold uppercase tracking-wider bg-[#121822] hover:bg-slate-800 border border-[#1c2432] text-amber-300 transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Instruksikan armada parkir aman sementara waktu"
                     >
                       <PauseCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
@@ -290,9 +278,9 @@ function RouteCard({
                       setShowOverrideModal(!showOverrideModal);
                     }}
                     disabled={approving}
-                    className="w-full py-2 px-2.5 rounded-xl text-[11px] font-bold text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-700/80 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                    className="w-full py-2 px-2.5 rounded-md text-xs font-semibold text-slate-300 hover:text-white bg-[#0c1017] hover:bg-[#121822] border border-[#1c2432] transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                   >
-                    <SlidersHorizontal className="w-3.5 h-3.5 text-cyan-400" />
+                    <SlidersHorizontal className="w-3.5 h-3.5 text-slate-400" />
                     <span>{showOverrideModal ? 'Tutup Panel Override' : 'Override / Modifikasi Mandiri'}</span>
                   </button>
                 </>
@@ -302,10 +290,10 @@ function RouteCard({
               {showOverrideModal && (
                 <div
                   onClick={(e) => e.stopPropagation()}
-                  className="p-3 bg-slate-950/90 border border-cyan-500/40 rounded-xl flex flex-col gap-2.5 backdrop-blur-md"
+                  className="p-3 bg-[#0c1017] border border-[#1c2432] rounded-md flex flex-col gap-2.5 shadow-xl"
                 >
                   <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-cyan-300 flex items-center gap-1">
+                    <span className="text-xs font-sans font-bold text-cyan-300 flex items-center gap-1">
                       <FileText className="w-3 h-3 text-cyan-400" />
                       Catatan Keputusan Operator
                     </span>
@@ -318,14 +306,14 @@ function RouteCard({
                     </button>
                   </div>
 
-                  <div className="flex gap-2 text-[10px] font-mono">
+                  <div className="flex gap-2 text-xs font-mono">
                     <button
                       type="button"
                       onClick={() => setOverrideTactical('CONTINUE')}
-                      className={`flex-1 py-1 rounded border cursor-pointer transition-all ${
+                      className={`flex-1 py-1.5 rounded-md border text-xs cursor-pointer transition-colors ${
                         overrideTactical === 'CONTINUE'
-                          ? 'bg-cyan-950 border-cyan-400 text-cyan-300 font-bold'
-                          : 'bg-slate-900 border-slate-700 text-slate-400'
+                          ? 'bg-white border-white text-[#080d14] font-semibold'
+                          : 'bg-[#121822] border-[#1c2432] text-slate-400 hover:text-white'
                       }`}
                     >
                       CONTINUE
@@ -333,10 +321,10 @@ function RouteCard({
                     <button
                       type="button"
                       onClick={() => setOverrideTactical('REROUTE')}
-                      className={`flex-1 py-1 rounded border cursor-pointer transition-all ${
+                      className={`flex-1 py-1.5 rounded-md border text-xs cursor-pointer transition-colors ${
                         overrideTactical === 'REROUTE'
-                          ? 'bg-cyan-950 border-cyan-400 text-cyan-300 font-bold'
-                          : 'bg-slate-900 border-slate-700 text-slate-400'
+                          ? 'bg-white border-white text-[#080d14] font-semibold'
+                          : 'bg-[#121822] border-[#1c2432] text-slate-400 hover:text-white'
                       }`}
                     >
                       REROUTE
@@ -344,10 +332,10 @@ function RouteCard({
                     <button
                       type="button"
                       onClick={() => setOverrideTactical('HOLD')}
-                      className={`flex-1 py-1 rounded border cursor-pointer transition-all ${
+                      className={`flex-1 py-1.5 rounded-md border text-xs cursor-pointer transition-colors ${
                         overrideTactical === 'HOLD'
-                          ? 'bg-amber-950 border-amber-400 text-amber-300 font-bold'
-                          : 'bg-slate-900 border-slate-700 text-slate-400'
+                          ? 'bg-amber-400 border-amber-400 text-[#080d14] font-semibold'
+                          : 'bg-[#121822] border-[#1c2432] text-slate-400 hover:text-white'
                       }`}
                     >
                       HOLD
@@ -362,11 +350,11 @@ function RouteCard({
                     }}
                     placeholder="Contoh: Dikawal patroli kepolisian daerah atau diprioritaskan via jalur tol..."
                     rows={2}
-                    className="w-full bg-slate-900 border border-slate-700 focus:border-cyan-400 rounded-lg p-2 text-xs font-mono text-slate-200 placeholder:text-slate-500 focus:outline-none"
+                    className="w-full bg-[#121822] border border-[#1c2432] focus:border-white/40 rounded-md p-2 text-xs font-mono text-slate-200 placeholder:text-slate-500 focus:outline-none"
                   />
 
                   {validationError && (
-                    <span className="text-[10px] font-mono text-red-400">
+                    <span className="text-xs font-mono text-rose-400">
                       {validationError}
                     </span>
                   )}
@@ -375,9 +363,9 @@ function RouteCard({
                     type="button"
                     onClick={handleExecuteOverride}
                     disabled={approving || !overrideNotes.trim()}
-                    className="w-full py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer transition-all"
+                    className="w-full py-2 rounded-md bg-white hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed text-[#080d14] text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer transition-colors shadow-sm"
                   >
-                    <Send className="w-3.5 h-3.5" />
+                    <Send className="w-3.5 h-3.5 text-[#080d14]" />
                     <span>Kirim Keputusan Override</span>
                   </button>
                 </div>
@@ -495,32 +483,32 @@ export function MitigationTab({
     <div className="flex flex-col gap-4 text-slate-100">
 
       {/* BLOCK A — CONSENSUS BADGE */}
-      <div className="bg-slate-900/80 border border-cyan-500/30 p-3 rounded-xl backdrop-blur-md">
+      <div className="bg-[#121822] border border-[#1c2432] p-3 rounded-md">
         <div className="flex items-center justify-between mb-1">
-          <span className="text-[10px] font-mono text-cyan-400 uppercase tracking-widest font-bold">
-            CONSENSUS GATE BADGE
+          <span className="text-xs font-sans text-cyan-400 font-bold">
+            Konsensus Sistem & Keyakinan
           </span>
-          <span className="text-xs font-black font-mono text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-500/30">
+          <span className="text-xs font-bold font-mono text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-500/30">
             {confidenceScore}% CONFIDENCE
           </span>
         </div>
-        <p className="text-[11px] text-slate-300 font-mono">
-          Sensor Inputs: <span className="text-cyan-300">BMKG Radar</span> + <span className="text-orange-300">TomTom Traffic</span> + <span className="text-emerald-300">AISstream Maritime</span>
+        <p className="text-xs text-slate-300 font-mono">
+          Sensor: <span className="text-cyan-300">BMKG Radar</span> + <span className="text-amber-300">TomTom Traffic</span> + <span className="text-emerald-300">AISstream Maritime</span>
         </p>
       </div>
 
       {/* BLOCK B — PHYSICAL & ECONOMIC IMPACT CHAIN & MARKET REGIME */}
-      <div className="bg-slate-900/80 border border-amber-500/30 p-3 rounded-xl backdrop-blur-md">
+      <div className="bg-[#121822] border border-[#1c2432] p-3 rounded-md">
         <div className="flex items-center justify-between mb-1.5">
-          <span className="text-[10px] font-mono text-amber-400 uppercase tracking-widest font-bold">
-            PHYSICAL & ECONOMIC IMPACT CHAIN
+          <span className="text-xs font-sans text-amber-400 font-bold">
+            Dampak Fisik & Rantai Ekonomi
           </span>
-          <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold bg-cyan-950/80 text-cyan-300 border border-cyan-500/40">
+          <span className="px-2 py-0.5 rounded text-xs font-mono font-bold bg-[#0c1017] text-cyan-300 border border-[#1c2432]">
             MARKET REGIME: ELEVATED
           </span>
         </div>
         <div className="flex flex-col gap-1.5 text-xs font-mono">
-          <div className="flex items-center gap-2 text-red-300">
+          <div className="flex items-center gap-2 text-rose-300">
             <span className="flex items-center gap-1"><Waves className="w-3.5 h-3.5 text-blue-400" /> Disrupsi Fisik:</span>
             <span className="font-bold">{crisis.title || 'Banjir Koridor Belawan'}</span>
           </div>
@@ -536,7 +524,7 @@ export function MitigationTab({
       </div>
 
       {/* BLOCK B2 — AEGIS OFFICIAL NEWS GROUNDING VERIFICATION (PHASE 26 & 27) */}
-      <div className="bg-slate-900/80 border border-emerald-500/30 p-3 rounded-xl backdrop-blur-md">
+      <div className="bg-[#121822] border border-[#1c2432] p-3 rounded-md">
 
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
@@ -544,11 +532,11 @@ export function MitigationTab({
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
               <path d="m9 12 2 2 4-4"/>
             </svg>
-            <span className="text-[10px] font-mono font-bold text-slate-200 uppercase tracking-wider">
+            <span className="text-xs font-sans font-bold text-slate-200">
               Grounding Verifikasi Berita Resmi
             </span>
           </div>
-          <span className="px-2 py-0.5 rounded text-[9px] font-mono font-black bg-emerald-950 text-emerald-300 border border-emerald-500/40">
+          <span className="px-2 py-0.5 rounded text-xs font-mono font-bold bg-emerald-950 text-emerald-300 border border-emerald-500/40">
             TERVERIFIKASI (94% CONF)
           </span>
         </div>
@@ -566,11 +554,11 @@ export function MitigationTab({
             }
           ]).map((attr, aIdx) => (
             <a 
-              key={aIdx}
+              key={aIdx} 
               href={attr.url} 
               target="_blank" 
               rel="noreferrer"
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[10px] font-mono text-cyan-300 border border-cyan-500/30 transition-all cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#0c1017] hover:bg-slate-800 text-xs font-mono text-cyan-300 border border-[#1c2432] transition-all cursor-pointer"
               title={`Buka Berita Asli: ${attr.source_name}`}
             >
               <svg className="w-3 h-3 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -583,15 +571,15 @@ export function MitigationTab({
           ))}
         </div>
 
-        <p className="mt-2 text-[11px] text-slate-300 leading-relaxed font-sans">
+        <p className="mt-2 text-xs text-slate-300 leading-relaxed font-sans">
           <strong className="text-slate-200">Penalaran Aegis Grounding:</strong> Berita sosmed dikonfirmasi oleh kantor berita resmi online. Laporan dinyatakan <span className="text-emerald-400 font-semibold">Valid & Bukan Hoaks</span>.
         </p>
       </div>
 
       {/* BLOCK C — CHAIN-OF-THOUGHT (CoT) REASONING TRACE */}
-      <div className="bg-slate-900/80 border border-slate-700/80 p-3.5 rounded-xl backdrop-blur-md">
-        <span className="text-[10px] font-mono text-cyan-400 uppercase tracking-widest font-bold block mb-2">
-          AI REASONING TRACE (CoT)
+      <div className="bg-[#121822] border border-[#1c2432] p-3.5 rounded-md">
+        <span className="text-xs font-sans text-cyan-400 font-bold block mb-2">
+          Penalaran Operasional Otomatis (CoT)
         </span>
         <FormattedMarkdown content={crisis.decision_support_output || ''} />
       </div>
@@ -656,7 +644,7 @@ export function MitigationTab({
 
             {/* BLOCK D — HUMAN-IN-THE-LOOP (HITL) ROUTE RECOMMENDATIONS & ACTION */}
             <div className="flex flex-col gap-2.5">
-              <span className="text-[10px] font-mono text-slate-400 uppercase tracking-widest font-bold">
+              <span className="text-xs font-mono text-slate-400 uppercase tracking-wider font-semibold">
                 RECOMMENDED DETOUR ROUTES (SELECT & APPROVE)
               </span>
 

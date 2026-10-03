@@ -22,14 +22,14 @@ export function Toast({ message, type = 'success', onClose, duration = 3000 }: T
   }, [onClose, duration]);
 
   const bgColors = {
-    success: 'bg-emerald-950/90 border-emerald-500/30 text-emerald-300',
-    error: 'bg-red-950/90 border-red-500/30 text-red-300',
-    info: 'bg-cyan-950/90 border-cyan-500/30 text-cyan-300',
+    success: 'bg-[#0c1017] border-emerald-500/40 text-emerald-300',
+    error: 'bg-[#0c1017] border-rose-500/40 text-rose-300',
+    info: 'bg-[#0c1017] border-cyan-500/40 text-cyan-300',
   }[type];
 
   return (
     <div
-      className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2.5 rounded-xl border backdrop-blur-md shadow-lg transition-all duration-300 ${bgColors}`}
+      className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2 rounded-lg border shadow-xl transition-all duration-300 ${bgColors}`}
       style={{
         animation: 'slideDown 0.3s ease-out'
       }}

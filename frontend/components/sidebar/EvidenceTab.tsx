@@ -74,16 +74,16 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
     <div className="space-y-4 text-slate-200 text-xs">
       
       {/* 1. DECISION TRACE PIPELINE HEADER */}
-      <div className="bg-[#1e2024]/60 border border-cyan-500/30 rounded-xl p-3 backdrop-blur-md">
+      <div className="bg-[#121822] border border-[#1c2432] rounded-md p-3">
         <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-1.5 text-cyan-300 font-bold font-mono text-[11px] uppercase tracking-wider">
+          <div className="flex items-center gap-1.5 text-slate-100 font-bold font-sans text-xs">
             <GitBranch className="w-3.5 h-3.5 text-cyan-400" />
             <span>Rantai Bukti (Evidence Chain) PreHub</span>
           </div>
           <button
             type="button"
             onClick={() => setShowFullTrace((v) => !v)}
-            className="cursor-pointer flex items-center gap-1 px-2 py-0.5 rounded bg-cyan-950/80 border border-cyan-500/30 text-[10px] font-mono text-cyan-300 hover:bg-cyan-900/60 transition-colors"
+            className="cursor-pointer flex items-center gap-1 px-2 py-0.5 rounded bg-[#0c1017] border border-[#1c2432] text-xs font-mono text-cyan-300 hover:text-white transition-colors"
             title="Buka rincian alur 8-tahap Evidence Chain"
           >
             <span>{showFullTrace ? 'Ringkas Trace' : 'Buka 8-Tahap Trace'}</span>
@@ -92,77 +92,77 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
         </div>
 
         {/* Mini Stepper Summary */}
-        <div className="flex items-center justify-between text-[9px] font-mono text-slate-400 pt-1 border-t border-white/5">
-          <span className="text-cyan-400 font-bold">1. Sensor</span>
+        <div className="flex items-center justify-between text-xs font-mono text-slate-400 pt-1.5 border-t border-[#1c2432]">
+          <span className="text-cyan-400 font-medium">1. Sensor</span>
           <span>-&gt;</span>
-          <span className="text-cyan-400 font-bold">2. Bukti</span>
+          <span className="text-cyan-400 font-medium">2. Bukti</span>
           <span>-&gt;</span>
-          <span className="text-emerald-400 font-bold">3. Validasi</span>
+          <span className="text-emerald-400 font-medium">3. Validasi</span>
           <span>-&gt;</span>
-          <span className="text-amber-400 font-bold">4. Risiko</span>
+          <span className="text-amber-400 font-medium">4. Risiko</span>
           <span>-&gt;</span>
-          <span className="text-cyan-400 font-bold">5. Mitigasi</span>
+          <span className="text-cyan-400 font-medium">5. Mitigasi</span>
         </div>
 
         {/* Expanded 8-Step Architectural Trace */}
         {showFullTrace && (
-          <div className="mt-3 pt-3 border-t border-cyan-500/20 space-y-2 text-[10px] font-mono animate-in fade-in slide-in-from-top-1 duration-200">
-            <div className="p-2 rounded bg-slate-950/80 border border-slate-800 space-y-1">
-              <div className="text-cyan-300 font-bold flex items-center gap-1">
+          <div className="mt-3 pt-3 border-t border-[#1c2432] space-y-2 text-xs font-sans animate-in fade-in slide-in-from-top-1 duration-200">
+            <div className="p-2 rounded-md bg-[#0c1017] border border-[#1c2432] space-y-1">
+              <div className="text-cyan-300 font-medium flex items-center gap-1">
                 <Database className="w-3 h-3 text-cyan-400" />
                 <span>Tahap 1: Akuisisi & Normalisasi Multisumber</span>
               </div>
-              <p className="text-slate-400 text-[9px] leading-relaxed">
+              <p className="text-slate-400 text-xs leading-relaxed">
                 Ingesti stream cuaca BMKG, volume TomTom, AIS maritim, dan teks berita/sosmed dinormalisasi ke indeks spasial H3.
               </p>
             </div>
 
-            <div className="p-2 rounded bg-slate-950/80 border border-slate-800 space-y-1">
-              <div className="text-cyan-300 font-bold flex items-center gap-1">
+            <div className="p-2 rounded-md bg-[#0c1017] border border-[#1c2432] space-y-1">
+              <div className="text-cyan-300 font-medium flex items-center gap-1">
                 <Layers className="w-3 h-3 text-cyan-400" />
                 <span>Tahap 2: Ekstraksi Evidence Terstruktur</span>
               </div>
-              <p className="text-slate-400 text-[9px] leading-relaxed">
+              <p className="text-slate-400 text-xs leading-relaxed">
                 Spesialis agen mengonversi sinyal mentah menjadi objek bukti terstruktur berisi lokasi koordinat, timestamp, dan domain bahaya.
               </p>
             </div>
 
-            <div className="p-2 rounded bg-slate-950/80 border border-slate-800 space-y-1">
-              <div className="text-emerald-300 font-bold flex items-center gap-1">
+            <div className="p-2 rounded-md bg-[#0c1017] border border-[#1c2432] space-y-1">
+              <div className="text-emerald-300 font-medium flex items-center gap-1">
                 <ShieldCheck className="w-3 h-3 text-emerald-400" />
                 <span>Tahap 3: Consensus Engine & Grounding Gate</span>
               </div>
-              <p className="text-slate-400 text-[9px] leading-relaxed">
+              <p className="text-slate-400 text-xs leading-relaxed">
                 Validasi silang antar-sumber independen (Cuaca vs Lalu Lintas vs Berita). Indikasi palsu otomatis dieliminasi.
               </p>
             </div>
 
-            <div className="p-2 rounded bg-slate-950/80 border border-slate-800 space-y-1">
-              <div className="text-amber-300 font-bold flex items-center gap-1">
+            <div className="p-2 rounded-md bg-[#0c1017] border border-[#1c2432] space-y-1">
+              <div className="text-amber-300 font-medium flex items-center gap-1">
                 <TrendingUp className="w-3 h-3 text-amber-400" />
                 <span>Tahap 4 & 5: Probabilitas & Estimasi Dampak Operasional</span>
               </div>
-              <p className="text-slate-400 text-[9px] leading-relaxed">
+              <p className="text-slate-400 text-xs leading-relaxed">
                 Menghitung keterlambatan koridor ({crisis.evidence?.delay_minutes || '+120 min'}), eksposur armada truk, dan risiko lag harga pangan.
               </p>
             </div>
 
-            <div className="p-2 rounded bg-slate-950/80 border border-slate-800 space-y-1">
-              <div className="text-cyan-300 font-bold flex items-center gap-1">
+            <div className="p-2 rounded-md bg-[#0c1017] border border-[#1c2432] space-y-1">
+              <div className="text-cyan-300 font-medium flex items-center gap-1">
                 <Cpu className="w-3 h-3 text-cyan-400" />
                 <span>Tahap 6 & 7: Optimasi Mitigasi (NetworkX Matrix)</span>
               </div>
-              <p className="text-slate-400 text-[9px] leading-relaxed">
+              <p className="text-slate-400 text-xs leading-relaxed">
                 Algoritma graf menghitung multi-alternatif rute aman (Lanjut vs Pengalihan vs Tunda) dengan constraint kapasitas.
               </p>
             </div>
 
-            <div className="p-2 rounded bg-emerald-950/40 border border-emerald-500/30 space-y-1">
-              <div className="text-emerald-300 font-bold flex items-center gap-1">
+            <div className="p-2 rounded-md bg-emerald-950/30 border border-emerald-500/30 space-y-1">
+              <div className="text-emerald-300 font-medium flex items-center gap-1">
                 <CheckCircle2 className="w-3 h-3 text-emerald-400" />
                 <span>Tahap 8: Human-in-the-Loop Operator Gate</span>
               </div>
-              <p className="text-slate-300 text-[9px] leading-relaxed">
+              <p className="text-slate-300 text-xs leading-relaxed">
                 Keputusan akhir berada pada operator logistik. Tidak ada intervensi armada tanpa persetujuan manual manusia.
               </p>
             </div>
@@ -172,36 +172,36 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
 
       {/* 2. PREDICTION MODEL CARD (IF PREDICTIVE MODE) */}
       {isPredictiveEvent && (
-        <div className="bg-amber-950/30 border border-amber-500/30 rounded-xl p-3 space-y-2">
-          <div className="flex items-center justify-between text-amber-300 font-mono font-bold text-[10px] uppercase">
-            <span className="flex items-center gap-1">
+        <div className="bg-[#121822] border border-[#1c2432] rounded-md p-3 space-y-2.5">
+          <div className="flex items-center justify-between text-amber-400 font-mono font-semibold text-xs uppercase">
+            <span className="flex items-center gap-1.5">
               <TrendingUp className="w-3.5 h-3.5 text-amber-400" />
               <span>Model Prediksi Prospektif (Horizon 24-48 Jam)</span>
             </span>
-            <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 text-[8px] font-mono font-bold">
+            <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 text-xs font-mono font-medium">
               PROSPEKTIF
             </span>
           </div>
-          <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
-            <div className="p-1.5 rounded bg-slate-950/70 border border-white/5">
-              <span className="text-slate-500 block text-[8px]">Arsitektur Model</span>
+          <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+            <div className="p-2 rounded bg-[#0c1017] border border-[#1c2432]">
+              <span className="text-slate-400 block text-xs">Arsitektur Model</span>
               <span className="text-slate-200 font-bold">TFT / Spatiotemporal</span>
             </div>
-            <div className="p-1.5 rounded bg-slate-950/70 border border-white/5">
-              <span className="text-slate-500 block text-[8px]">Interval Keyakinan</span>
-              <span className="text-emerald-400 font-bold">88% (+- 6%)</span>
+            <div className="p-2 rounded bg-[#0c1017] border border-[#1c2432]">
+              <span className="text-slate-400 block text-xs">Interval Keyakinan</span>
+              <span className="text-emerald-400 font-bold tabular-nums">88% (+- 6%)</span>
             </div>
           </div>
-          <p className="text-[10px] text-slate-400 font-sans leading-relaxed">
+          <p className="text-xs text-slate-400 font-sans leading-relaxed">
             Prediksi dihitung dari akumulasi anomali presipitasi BMKG regional dan pola historis bottleneck lalu lintas Trans-Sumatra.
           </p>
         </div>
       )}
 
       {/* 3. STATISTICAL CONFIDENCE VS DISRUPTION PROBABILITY CARD */}
-      <div className="bg-[#1e2024]/40 border border-white/10 rounded-xl p-3 backdrop-blur-md space-y-2">
+      <div className="bg-[#121822] border border-[#1c2432] rounded-md p-3 space-y-2">
         <div className="flex items-center justify-between">
-          <span className="text-[10px] font-mono text-slate-300 uppercase tracking-wider font-bold flex items-center gap-1">
+          <span className="text-xs font-sans text-slate-200 font-bold flex items-center gap-1.5">
             <BarChart3 className="w-3.5 h-3.5 text-cyan-400" />
             <span>Kekuatan Bukti vs Probabilitas Disrupsi</span>
           </span>
@@ -216,34 +216,34 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
         </div>
 
         {showProvenanceInfo && (
-          <div className="p-2 rounded bg-slate-950 border border-cyan-500/20 text-[10px] text-slate-300 leading-relaxed font-sans">
+          <div className="p-2.5 rounded-md bg-[#0c1017] border border-[#1c2432] text-xs text-slate-300 leading-relaxed font-sans">
             <strong>Prinsip Transparansi PreHub:</strong> Evidence Confidence mengukur seberapa kuat data mendukung indikasi (kualitas/kesegaran sumber), sedangkan Disruption Probability mengukur kemungkinan terjadinya hambatan fisik di lapangan.
           </div>
         )}
 
         <div className="grid grid-cols-2 gap-2 pt-1 font-mono">
-          <div className="p-2 rounded-lg bg-slate-950/70 border border-slate-800">
-            <span className="text-[9px] text-slate-400 block mb-0.5 uppercase">Evidence Confidence</span>
-            <span className="text-sm font-black text-emerald-400">{confidenceScore}%</span>
-            <span className="text-[8px] text-slate-500 block">5 Sumber Konsisten</span>
+          <div className="p-2.5 rounded-md bg-[#0c1017] border border-[#1c2432]">
+            <span className="text-xs text-slate-400 block mb-0.5 font-sans">Evidence Confidence</span>
+            <span className="text-sm font-bold text-emerald-400">{confidenceScore}%</span>
+            <span className="text-xs text-slate-500 block font-sans">5 Sumber Konsisten</span>
           </div>
 
-          <div className="p-2 rounded-lg bg-slate-950/70 border border-slate-800">
-            <span className="text-[9px] text-slate-400 block mb-0.5 uppercase">Disruption Probability</span>
-            <span className="text-sm font-black text-cyan-400">{disruptionProb}%</span>
-            <span className="text-[8px] text-slate-500 block">Brier Calibrated</span>
+          <div className="p-2.5 rounded-md bg-[#0c1017] border border-[#1c2432]">
+            <span className="text-xs text-slate-400 block mb-0.5 font-sans">Disruption Probability</span>
+            <span className="text-sm font-bold text-cyan-400">{disruptionProb}%</span>
+            <span className="text-xs text-slate-500 block font-sans">Brier Calibrated</span>
           </div>
         </div>
       </div>
 
       {/* 4. EXECUTIVE REASONING SUMMARY */}
       {crisis.decision_support_output && (
-        <div className="bg-cyan-950/20 border border-cyan-500/20 rounded-xl p-3">
-          <div className="flex items-center gap-1.5 mb-1.5 text-cyan-400 font-mono font-bold text-[10px] uppercase tracking-wider">
+        <div className="bg-[#121822] border border-[#1c2432] rounded-md p-3">
+          <div className="flex items-center gap-1.5 mb-1.5 text-cyan-400 font-sans font-bold text-xs">
             <Activity className="w-3.5 h-3.5 text-cyan-400" />
             <span>Sintesis Analitik</span>
           </div>
-          <p className="text-[11px] text-slate-300 leading-relaxed font-sans">
+          <p className="text-xs text-slate-300 leading-relaxed font-sans">
             {crisis.decision_support_output}
           </p>
         </div>
@@ -251,12 +251,12 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
 
       {/* 5. AGENT FINDINGS WITH PROVENANCE LABELS */}
       {findings.length > 0 && (
-        <div className="space-y-2 pt-2 border-t border-white/10">
+        <div className="space-y-2 pt-2 border-t border-[#1c2432]">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">
+            <span className="text-xs font-bold text-slate-400 font-sans">
               Temuan Spesialis Agen & Sumber
             </span>
-            <span className="text-[9px] font-mono text-cyan-400">Provenance Verified</span>
+            <span className="text-xs font-mono text-cyan-400">Provenance Verified</span>
           </div>
 
           {findings.map(({ key, finding }) => {
@@ -264,20 +264,20 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
             const isFixtureItem = isSimulated || meta.defaultSourceType === 'fixture';
 
             return (
-              <div key={key} className="bg-slate-900/60 rounded-xl p-3 border border-slate-800 space-y-2">
+              <div key={key} className="bg-[#0c1017] rounded-md p-3 border border-[#1c2432] space-y-2">
                 <div className="flex justify-between items-start gap-2">
                   <div>
                     <span className="text-xs font-bold text-slate-200 block font-sans">
                       {meta.name}
                     </span>
-                    <span className="text-[9px] font-mono text-slate-400 flex items-center gap-1 mt-0.5">
+                    <span className="text-xs font-mono text-slate-400 flex items-center gap-1 mt-0.5">
                       <Radio className="w-2.5 h-2.5 text-cyan-400" />
                       <span>{meta.source}</span>
                     </span>
                   </div>
 
                   <span
-                    className={`shrink-0 px-2 py-0.5 rounded text-[9px] font-mono font-bold border ${
+                    className={`shrink-0 px-2 py-0.5 rounded text-xs font-mono font-bold border ${
                       isFixtureItem
                         ? 'bg-amber-950/60 text-amber-300 border-amber-500/40'
                         : 'bg-emerald-950/60 text-emerald-300 border-emerald-500/40'
@@ -288,7 +288,7 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
                 </div>
 
                 <ConfidenceBar value={finding!.confidence} />
-                <p className="text-[11px] text-slate-300 leading-relaxed font-sans pt-1 border-t border-white/5">
+                <p className="text-xs text-slate-300 leading-relaxed font-sans pt-1 border-t border-[#1c2432]">
                   {finding!.summary}
                 </p>
               </div>
@@ -298,34 +298,34 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
       )}
 
       {/* 6. SENSORY EVIDENCE CHAIN & TOMTOM DELAY MATRIX */}
-      <div className="space-y-3 pt-3 border-t border-white/10">
+      <div className="space-y-3 pt-3 border-t border-[#1c2432]">
         <div className="flex items-center justify-between">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider font-mono">
+          <span className="text-xs font-bold text-slate-400 font-sans">
             Rantai Bukti Lapangan
           </span>
-          <span className="text-[9px] font-mono text-slate-500">Spatiotemporal Ingestion</span>
+          <span className="text-xs font-mono text-slate-500">Spatiotemporal Ingestion</span>
         </div>
 
         {/* Verified News & OSINT Ground-Truth Card */}
-        <div className="bg-[#1e2024]/60 border border-white/10 rounded-xl p-3 hover:border-cyan-500/40 transition-all space-y-1.5">
+        <div className="bg-[#0c1017] border border-[#1c2432] rounded-md p-3 hover:border-slate-600 transition-all space-y-1.5">
           <div className="flex justify-between items-center">
-            <span className="font-bold text-slate-200 font-mono text-xs flex items-center gap-1.5">
+            <span className="font-bold text-slate-200 font-sans text-xs flex items-center gap-1.5">
               <FileText className="w-3.5 h-3.5 text-cyan-400" />
               <span>{displayAuthor}</span>
             </span>
             <div className="flex items-center gap-1">
-              <span className="text-[9px] font-mono text-cyan-300 bg-cyan-950/80 px-2 py-0.5 rounded border border-cyan-500/40 font-bold">
+              <span className="text-xs font-mono text-cyan-300 bg-cyan-950/80 px-2 py-0.5 rounded border border-cyan-500/40 font-bold">
                 BERITA TERVERIFIKASI
               </span>
-              <span className="text-[8px] font-mono text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded">
+              <span className="text-xs font-mono text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded">
                 {isOfficialTier ? 'RESMI' : 'PERS REGIONAL'}
               </span>
             </div>
           </div>
-          <p className="text-[11px] text-slate-300 leading-relaxed font-sans">
+          <p className="text-xs text-slate-300 leading-relaxed font-sans">
             {displayText}
           </p>
-          <div className="flex items-center justify-between text-[9px] font-mono text-slate-500 pt-1">
+          <div className="flex items-center justify-between text-xs font-mono text-slate-500 pt-1">
             <div className="flex items-center gap-1.5">
               <Clock className="w-2.5 h-2.5" />
               <span>Terkini</span>
@@ -337,23 +337,23 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
         </div>
 
         {/* Delay Matrix */}
-        <div className="bg-[#1e2024]/40 border border-white/10 rounded-xl p-3 hover:border-cyan-500/40 transition-all space-y-2">
+        <div className="bg-[#0c1017] border border-[#1c2432] rounded-md p-3 hover:border-slate-600 transition-all space-y-2">
           <div className="flex justify-between items-center">
             <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300 font-mono block">
+              <span className="text-xs font-bold text-slate-300 font-sans block">
                 Histori Keterlambatan Koridor
               </span>
-              <span className="text-[8px] font-mono text-slate-500">Speed Flow Matrix (Menit Delay)</span>
+              <span className="text-xs font-mono text-slate-500">Speed Flow Matrix (Menit Delay)</span>
             </div>
             <div className="text-right">
-              <span className="text-xs font-mono text-red-400 font-black block">
+              <span className="text-xs font-mono text-rose-400 font-bold block">
                 {crisis.evidence?.delay_minutes || "+120 MIN"}
               </span>
-              <span className="text-[8px] font-mono text-slate-400">Puncak Disrupsi</span>
+              <span className="text-xs font-mono text-slate-400">Puncak Disrupsi</span>
             </div>
           </div>
 
-          <div className="h-12 flex items-end gap-1.5 bg-slate-950/60 p-2 rounded-lg border border-slate-800">
+          <div className="h-12 flex items-end gap-1.5 bg-[#080d14] p-2 rounded-md border border-[#1c2432]">
             {(crisis.evidence?.delay_history || [20, 30, 25, 50, 70, 90, 120]).map((h: number, i: number) => {
               const historyArray = crisis.evidence?.delay_history || [20, 30, 25, 50, 70, 90, 120];
               const maxVal = Math.max(...historyArray, 10);
@@ -368,12 +368,12 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
                   <div
                     className={`w-full rounded-sm transition-all duration-300 ${
                       isLast
-                        ? 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.6)]'
+                        ? 'bg-rose-500'
                         : 'bg-cyan-500/40 hover:bg-cyan-400'
                     }`}
                     style={{ height: heightPct }}
                   />
-                  <div className="opacity-0 group-hover:opacity-100 absolute -top-6 bg-slate-900 border border-white/20 px-1.5 py-0.5 rounded text-[8px] font-mono text-white pointer-events-none transition whitespace-nowrap z-20">
+                  <div className="opacity-0 group-hover:opacity-100 absolute -top-6 bg-slate-900 border border-white/20 px-1.5 py-0.5 rounded text-xs font-mono text-white pointer-events-none transition whitespace-nowrap z-20">
                     +{h}m
                   </div>
                 </div>
@@ -381,10 +381,10 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
             })}
           </div>
 
-          <div className="flex justify-between text-[8px] font-mono text-slate-500 pt-0.5">
+          <div className="flex justify-between text-xs font-mono text-slate-500 pt-0.5">
             <span>-4 Jam (Normal)</span>
             <span>-2 Jam (Hambatan)</span>
-            <span className="text-red-400 font-bold">Saat Ini (Puncak)</span>
+            <span className="text-rose-400 font-bold">Saat Ini (Puncak)</span>
           </div>
         </div>
 

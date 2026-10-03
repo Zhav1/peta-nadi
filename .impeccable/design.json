@@ -1,0 +1,170 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-03T13:38:50Z",
+  "title": "Design System: PreHub",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Architectural White",
+        "canonical": "#ffffff",
+        "tonalRamp": ["#1f242d", "#333c4a", "#4b5668", "#6b788c", "#8f9cb0", "#b7c2d4", "#e2e8f0", "#ffffff"]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Deep Void Ground",
+        "canonical": "#080d14",
+        "tonalRamp": ["#04070a", "#080d14", "#0c121c", "#121a28", "#1a2538", "#24324a", "#304260", "#405579"]
+      },
+      "surface-elevated": {
+        "role": "neutral",
+        "displayName": "Elevated Ledger Charcoal",
+        "canonical": "#0c1017",
+        "tonalRamp": ["#06080c", "#0c1017", "#131822", "#1b2230", "#252e40", "#313c52", "#3f4c66", "#506080"]
+      },
+      "status-critical": {
+        "role": "tertiary",
+        "displayName": "Disruption Red",
+        "canonical": "#ef4444",
+        "tonalRamp": ["#450a0a", "#7f1d1d", "#991b1b", "#b91c1c", "#dc2626", "#ef4444", "#f87171", "#fca5a5"]
+      },
+      "status-warning": {
+        "role": "tertiary",
+        "displayName": "Risk Warning Amber",
+        "canonical": "#f59e0b",
+        "tonalRamp": ["#451a03", "#78350f", "#92400e", "#b45309", "#d97706", "#f59e0b", "#fbbf24", "#fde68a"]
+      },
+      "status-clear": {
+        "role": "tertiary",
+        "displayName": "Clear Flow Emerald",
+        "canonical": "#10b981",
+        "tonalRamp": ["#022c22", "#064e3b", "#065f46", "#047857", "#059669", "#10b981", "#34d399", "#6ee7b7"]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Hero headline editorial assertions only."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Primary section titles and narrative anchors."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Module card headings and table section titles."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Narrative explanation, causal descriptions, and briefing reports."
+      },
+      "label": {
+        "displayName": "Tabular Label",
+        "purpose": "Monospaced numerals, geographic coordinates, and live timestamps."
+      }
+    },
+    "shadows": [
+      {
+        "name": "functional-overlay",
+        "value": "0 12px 32px rgba(0, 0, 0, 0.4)",
+        "purpose": "Applied only to detached modal sheets and map tooltips."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-precise",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Clean, understated state transition easing (150ms to 200ms)."
+      }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Action Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "High-contrast architectural white button for single primary user actions.",
+      "html": "<button class=\"ds-btn-primary\">Buka Pusat Komando</button>",
+      "css": ".ds-btn-primary { background: #ffffff; color: #080d14; font-family: Inter, sans-serif; font-size: 14px; font-weight: 600; padding: 12px 24px; border: none; border-radius: 8px; cursor: pointer; transition: opacity 0.15s ease; } .ds-btn-primary:hover { opacity: 0.92; } .ds-btn-primary:focus-visible { outline: 2px solid #ffffff; outline-offset: 2px; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Subtle surface button with crisp hairline border for secondary actions.",
+      "html": "<button class=\"ds-btn-secondary\">Lihat Bukti Lapangan</button>",
+      "css": ".ds-btn-secondary { background: #0c1017; color: #f1f5f9; font-family: Inter, sans-serif; font-size: 14px; font-weight: 500; padding: 12px 20px; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; cursor: pointer; transition: border-color 0.15s ease, background 0.15s ease; } .ds-btn-secondary:hover { border-color: rgba(255, 255, 255, 0.25); background: #121822; } .ds-btn-secondary:focus-visible { outline: 1px solid #ffffff; outline-offset: 2px; }"
+    },
+    {
+      "name": "Editorial Ledger Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Single-layer flat surface card with crisp 1px hairline border.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-label\">SIMPUL BELAWAN</div><div class=\"ds-card-title\">Penutupan Akses Truk CPO</div><p class=\"ds-card-desc\">Banjir rob setinggi 120cm melumpuhkan Jalinsum KM 78. Rekomendasi mitigasi: Reroute via Tol Belmera.</p></div>",
+      "css": ".ds-card { background: #0c1017; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 24px; color: #f1f5f9; font-family: Inter, sans-serif; } .ds-card-label { font-family: ui-monospace, monospace; font-size: 12px; color: #94a3b8; font-weight: 500; margin-bottom: 8px; } .ds-card-title { font-family: 'Space Grotesk', sans-serif; font-size: 18px; font-weight: 600; color: #ffffff; margin-bottom: 8px; } .ds-card-desc { font-size: 14px; line-height: 1.6; color: #94a3b8; margin: 0; }"
+    },
+    {
+      "name": "Status Indicator",
+      "kind": "chip",
+      "refersTo": "status-critical",
+      "description": "Un-animated operational signal dot paired with clean 12px tabular indicator.",
+      "html": "<div class=\"ds-status\"><span class=\"ds-status-dot\"></span><span class=\"ds-status-text\">DISRUPSI TINGGI (14 NODES)</span></div>",
+      "css": ".ds-status { display: inline-flex; align-items: center; gap: 8px; font-family: ui-monospace, monospace; font-size: 12px; font-weight: 500; color: #f1f5f9; } .ds-status-dot { width: 6px; height: 6px; border-radius: 9999px; background: #ef4444; flex-shrink: 0; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Strategic Sentinel",
+    "overview": "PreHub is a high-stakes national infrastructure dispatch and food logistics intelligence platform. Its visual language rejects generic tech-product decoration, synthetic neon glows, and template cardification. Instead, it adopts the austere clarity of an editorial ledger and geopolitical operational dossier: stark contrast, disciplined typography, intentional whitespace, and zero decorative chrome.",
+    "keyCharacteristics": [
+      "Pure tonal flatness with no artificial blur, glow halos, or floating glassmorphic novelty.",
+      "Monochrome high-contrast chrome where chromatic color is strictly reserved for operational hazard status.",
+      "Content-first editorial layout with generous breathing room (32px to 64px rhythm) replacing card-cluttered grids.",
+      "Authentic data presentation with no simulated liveness, stock photography, or decorative metrics."
+    ],
+    "rules": [
+      {
+        "name": "The Functional Status Rule",
+        "body": "Chromatic color is restricted 100% to live operational state, risk severity, and geospatial map layers. Colored badge chips, neon gradients, and decorative accent text on standard marketing paragraphs are strictly forbidden.",
+        "section": "colors"
+      },
+      {
+        "name": "The Monochromatic Chrome Rule",
+        "body": "All navigation bars, interactive container borders, buttons, and tab controls must use pure architectural white, slate, and charcoal. The UI chrome remains neutral so hazard alerts immediately command attention.",
+        "section": "colors"
+      },
+      {
+        "name": "The 12px Baseline Rule",
+        "body": "No text element anywhere in the interface may be rendered smaller than 12px. Microscopic 8px to 10px labels are forbidden.",
+        "section": "typography"
+      },
+      {
+        "name": "The Pure Flatness Rule",
+        "body": "No backdrop-filter: blur(), no glowing drop-shadows, and no semi-transparent layered frosted glass. Information clarity requires high contrast against opaque or near-opaque dark surfaces.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do lead with the authentic supply chain narrative: Belawan Port status, CPO transport flow, and Medan market inflation.",
+      "Do use Architectural White for primary interactive triggers and key metric figures.",
+      "Do maintain a strict 12px minimum font size across all screens and components.",
+      "Do respect the user's prefers-reduced-motion settings on all scroll interactions and animations.",
+      "Do maintain generous whitespace between editorial sections (minimum 64px to 96px gaps).",
+      "Do adhere to the Bilingual Operational Standard: Indonesian for operational content, English for technical infrastructure terms."
+    ],
+    "donts": [
+      "Don't use multi-colored highlighter chips or rotated spans (+/-1 deg) inside headings.",
+      "Don't apply neon glowing drop-shadows or ambient blur halos.",
+      "Don't use generic stock photography to simulate product capabilities.",
+      "Don't nest bordered cards inside other bordered cards.",
+      "Don't set narrative descriptions or body copy in monospace.",
+      "Don't add decorative pulsing dots, bouncing arrows, or artificial liveness labels to static data.",
+      "Don't display unverified, invented metrics or internal engineering sprint numbers in visitor-facing interfaces."
+    ]
+  }
+}

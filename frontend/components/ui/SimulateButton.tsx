@@ -15,12 +15,12 @@ export function SimulateButton({ isActive, onClick, isLoading }: SimulateButtonP
       disabled={isLoading}
       className={`
         absolute top-4 left-4 z-20
-        flex items-center gap-2 px-4 py-2.5
-        rounded-xl text-xs font-semibold uppercase tracking-wider
+        flex items-center gap-2 px-3.5 py-2
+        rounded-lg text-xs font-semibold
         border transition-all duration-200 cursor-pointer
         ${isActive
-          ? 'bg-orange-500/20 border-orange-400/60 text-orange-400 ring-1 ring-orange-400/30'
-          : 'bg-slate-900/60 backdrop-blur-lg border-white/10 text-slate-300 hover:text-white hover:border-white/20'
+          ? 'bg-amber-950/80 border-amber-500/60 text-amber-300'
+          : 'bg-[#0c1017] border-[#1c2432] text-slate-300 hover:text-white hover:border-slate-600'
         }
         disabled:opacity-50 disabled:cursor-not-allowed
       `}
@@ -32,7 +32,7 @@ export function SimulateButton({ isActive, onClick, isLoading }: SimulateButtonP
       ) : (
         <Zap className="w-3.5 h-3.5" />
       )}
-      {isActive ? 'Draw Zone' : 'Simulate Disaster'}
+      {isActive ? 'Gambar Zona' : 'Simulasi Bencana'}
     </button>
   );
 }

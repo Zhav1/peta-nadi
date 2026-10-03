@@ -89,22 +89,22 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-[600] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[600] flex items-center justify-center p-4 bg-black/75 animate-in fade-in duration-150">
       <div
-        className="relative w-full max-w-xl bg-[#0c0e12]/95 border border-white/10 rounded-2xl shadow-2xl backdrop-blur-2xl overflow-hidden flex flex-col pointer-events-auto"
+        className="relative w-full max-w-xl bg-[#0c1017] border border-[#1c2432] rounded-lg shadow-xl overflow-hidden flex flex-col pointer-events-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-slate-950/40">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#1c2432] bg-[#121822]">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-cyan-950/80 border border-cyan-500/40 flex items-center justify-center text-cyan-400">
+            <div className="w-8 h-8 rounded-md bg-[#0c1017] border border-[#1c2432] flex items-center justify-center text-slate-300">
               <Shield className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-sm font-bold font-sans text-white uppercase tracking-wider">
+              <h2 className="text-sm font-semibold font-sans text-white">
                 Manajemen Ruang Kerja & Akses Persona
               </h2>
-              <p className="text-[10px] font-mono text-slate-400">
+              <p className="text-xs font-mono text-slate-400">
                 Otentikasi Multi-Tenant Supabase & Kontrol Akses Berbasis Peran (RBAC)
               </p>
             </div>
@@ -113,7 +113,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
+            className="p-1.5 rounded-md bg-[#0c1017] text-slate-400 hover:text-white transition cursor-pointer"
             title="Tutup Modal"
           >
             <X className="w-4 h-4" />
@@ -121,7 +121,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex items-center gap-1 px-6 pt-3 border-b border-white/5 bg-slate-950/20 text-xs font-mono">
+        <div className="flex items-center gap-1 px-6 pt-3 border-b border-[#1c2432] bg-[#080d14] text-xs">
           <button
             type="button"
             onClick={() => {
@@ -130,7 +130,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
             }}
             className={`cursor-pointer px-4 py-2 border-b-2 font-medium transition flex items-center gap-1.5 ${
               activeTab === 'persona'
-                ? 'border-cyan-400 text-cyan-300 bg-cyan-950/20'
+                ? 'border-white text-white bg-[#0c1017]'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
@@ -146,7 +146,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
             }}
             className={`cursor-pointer px-4 py-2 border-b-2 font-medium transition flex items-center gap-1.5 ${
               activeTab === 'password'
-                ? 'border-cyan-400 text-cyan-300 bg-cyan-950/20'
+                ? 'border-white text-white bg-[#0c1017]'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
@@ -162,7 +162,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
             }}
             className={`cursor-pointer px-4 py-2 border-b-2 font-medium transition flex items-center gap-1.5 ${
               activeTab === 'magic'
-                ? 'border-cyan-400 text-cyan-300 bg-cyan-950/20'
+                ? 'border-white text-white bg-[#0c1017]'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
@@ -174,10 +174,10 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
         {/* Status Alerts */}
         {statusMessage && (
           <div
-            className={`mx-6 mt-4 p-3 rounded-xl border text-xs font-sans flex items-center gap-2 ${
+            className={`mx-6 mt-4 p-3 rounded-md border text-xs font-sans flex items-center gap-2 ${
               statusMessage.type === 'success'
-                ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300'
-                : 'bg-red-950/40 border-red-500/40 text-red-300'
+                ? 'bg-emerald-950/30 border-emerald-500/30 text-emerald-300'
+                : 'bg-red-950/30 border-red-500/30 text-red-300'
             }`}
           >
             <CheckCircle2 className="w-4 h-4 shrink-0" />
@@ -190,7 +190,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
           {/* TAB 1: 1-KLIK PERSONA (EVALUATOR) */}
           {activeTab === 'persona' && (
             <div className="space-y-4">
-              <div className="p-3 rounded-xl bg-slate-900/60 border border-white/5 text-[11px] font-sans text-slate-300 leading-relaxed">
+              <div className="p-3 rounded-md bg-[#121822] border border-[#1c2432] text-xs font-sans text-slate-300 leading-relaxed">
                 Pilih persona di bawah untuk menguji adaptasi antarmuka, hak akses navigasi, dan wewenang operasional secara instan tanpa perlu mendaftar ulang.
               </div>
 
@@ -200,48 +200,48 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                   type="button"
                   onClick={() => handlePersonaSelect('DISPATCHER')}
                   disabled={isLoading}
-                  className={`cursor-pointer w-full text-left p-4 rounded-xl border transition-all duration-200 flex flex-col gap-2 relative overflow-hidden group ${
+                  className={`cursor-pointer w-full text-left p-4 rounded-md border transition-colors duration-150 flex flex-col gap-2 relative overflow-hidden group ${
                     role === 'DISPATCHER'
-                      ? 'bg-cyan-950/40 border-cyan-500 ring-1 ring-cyan-500/40 shadow-lg shadow-cyan-950/50'
-                      : 'bg-[#141820]/70 border-white/10 hover:border-cyan-500/40 hover:bg-[#181d28]'
+                      ? 'bg-[#121822] border-white shadow-sm'
+                      : 'bg-[#0c1017] border-[#1c2432] hover:border-slate-500 hover:bg-[#121822]'
                   }`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-lg bg-cyan-950/80 border border-cyan-500/30 text-cyan-400 flex items-center justify-center">
+                      <div className="w-8 h-8 rounded-md bg-[#0c1017] border border-[#1c2432] text-slate-300 flex items-center justify-center">
                         <Truck className="w-4 h-4" />
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-white uppercase tracking-wider">
+                          <span className="text-xs font-semibold text-white uppercase tracking-wider">
                             Dispatcher Logistik
                           </span>
                           {role === 'DISPATCHER' && (
-                            <span className="px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-cyan-500 text-slate-950">
-                              AKTIF
+                            <span className="px-2 py-0.5 rounded text-xs font-mono font-semibold bg-white text-[#080d14]">
+                              Aktif
                             </span>
                           )}
                         </div>
-                        <span className="text-[10px] font-mono text-cyan-400/90">
+                        <span className="text-xs font-mono text-slate-400">
                           PT Samudera Logistik Sumatra
                         </span>
                       </div>
                     </div>
-                    <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-cyan-400 transition-transform group-hover:translate-x-1" />
+                    <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-white transition-transform group-hover:translate-x-0.5" />
                   </div>
 
-                  <p className="text-[11px] font-sans text-slate-400 leading-relaxed">
+                  <p className="text-xs font-sans text-slate-400 leading-relaxed">
                     Wewenang penuh koordinasi rute bypass, manajemen armada truk/kapal, manifest kargo, serta menyetujui pengalihan rute darurat.
                   </p>
 
-                  <div className="flex items-center gap-1.5 pt-1 border-t border-white/5 text-[9px] font-mono text-slate-300">
-                    <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-white/5">
+                  <div className="flex items-center gap-1.5 pt-1 border-t border-[#1c2432] text-xs font-mono text-slate-400">
+                    <span className="px-1.5 py-0.5 rounded bg-[#080d14] border border-[#1c2432]">
                       Rute Darurat
                     </span>
-                    <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-white/5">
+                    <span className="px-1.5 py-0.5 rounded bg-[#080d14] border border-[#1c2432]">
                       Persetujuan Detour
                     </span>
-                    <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-white/5">
+                    <span className="px-1.5 py-0.5 rounded bg-[#080d14] border border-[#1c2432]">
                       Unggah Manifest
                     </span>
                   </div>
@@ -252,48 +252,48 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                   type="button"
                   onClick={() => handlePersonaSelect('REGULATOR')}
                   disabled={isLoading}
-                  className={`cursor-pointer w-full text-left p-4 rounded-xl border transition-all duration-200 flex flex-col gap-2 relative overflow-hidden group ${
+                  className={`cursor-pointer w-full text-left p-4 rounded-md border transition-colors duration-150 flex flex-col gap-2 relative overflow-hidden group ${
                     role === 'REGULATOR'
-                      ? 'bg-amber-950/40 border-amber-500 ring-1 ring-amber-500/40 shadow-lg shadow-amber-950/50'
-                      : 'bg-[#141820]/70 border-white/10 hover:border-amber-500/40 hover:bg-[#181d28]'
+                      ? 'bg-[#121822] border-white shadow-sm'
+                      : 'bg-[#0c1017] border-[#1c2432] hover:border-slate-500 hover:bg-[#121822]'
                   }`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-lg bg-amber-950/80 border border-amber-500/30 text-amber-400 flex items-center justify-center">
+                      <div className="w-8 h-8 rounded-md bg-[#0c1017] border border-[#1c2432] text-slate-300 flex items-center justify-center">
                         <Scale className="w-4 h-4" />
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-white uppercase tracking-wider">
+                          <span className="text-xs font-semibold text-white uppercase tracking-wider">
                             Regulator Pemerintah
                           </span>
                           {role === 'REGULATOR' && (
-                            <span className="px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-amber-500 text-slate-950">
-                              AKTIF
+                            <span className="px-2 py-0.5 rounded text-xs font-mono font-semibold bg-white text-[#080d14]">
+                              Aktif
                             </span>
                           )}
                         </div>
-                        <span className="text-[10px] font-mono text-amber-400/90">
+                        <span className="text-xs font-mono text-slate-400">
                           Badan Pangan Nasional / Kemenhub
                         </span>
                       </div>
                     </div>
-                    <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-amber-400 transition-transform group-hover:translate-x-1" />
+                    <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-white transition-transform group-hover:translate-x-0.5" />
                   </div>
 
-                  <p className="text-[11px] font-sans text-slate-400 leading-relaxed">
-                    Pengawasan stabilitas koridor makro, analisis disparitas harga komoditas pangan PIHPS, dan ekspor laporan kabinet B2G. (Aksi approval dibatasi).
+                  <p className="text-xs font-sans text-slate-400 leading-relaxed">
+                    Pengawasan stabilitas koridor makro, analisis disparitas harga komoditas pangan PIHPS, dan ekspor laporan kabinet B2G.
                   </p>
 
-                  <div className="flex items-center gap-1.5 pt-1 border-t border-white/5 text-[9px] font-mono text-slate-300">
-                    <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-white/5">
+                  <div className="flex items-center gap-1.5 pt-1 border-t border-[#1c2432] text-xs font-mono text-slate-400">
+                    <span className="px-1.5 py-0.5 rounded bg-[#080d14] border border-[#1c2432]">
                       Heatmap Kerentanan
                     </span>
-                    <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-white/5">
+                    <span className="px-1.5 py-0.5 rounded bg-[#080d14] border border-[#1c2432]">
                       Analitik PIHPS
                     </span>
-                    <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-white/5">
+                    <span className="px-1.5 py-0.5 rounded bg-[#080d14] border border-[#1c2432]">
                       Briefing Kabinet
                     </span>
                   </div>
@@ -304,48 +304,48 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                   type="button"
                   onClick={() => handlePersonaSelect('GUEST')}
                   disabled={isLoading}
-                  className={`cursor-pointer w-full text-left p-4 rounded-xl border transition-all duration-200 flex flex-col gap-2 relative overflow-hidden group ${
+                  className={`cursor-pointer w-full text-left p-4 rounded-md border transition-colors duration-150 flex flex-col gap-2 relative overflow-hidden group ${
                     role === 'GUEST'
-                      ? 'bg-emerald-950/40 border-emerald-500 ring-1 ring-emerald-500/40 shadow-lg shadow-emerald-950/50'
-                      : 'bg-[#141820]/70 border-white/10 hover:border-emerald-500/40 hover:bg-[#181d28]'
+                      ? 'bg-[#121822] border-white shadow-sm'
+                      : 'bg-[#0c1017] border-[#1c2432] hover:border-slate-500 hover:bg-[#121822]'
                   }`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-lg bg-emerald-950/80 border border-emerald-500/30 text-emerald-400 flex items-center justify-center">
+                      <div className="w-8 h-8 rounded-md bg-[#0c1017] border border-[#1c2432] text-slate-300 flex items-center justify-center">
                         <FlaskConical className="w-4 h-4" />
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-white uppercase tracking-wider">
+                          <span className="text-xs font-semibold text-white uppercase tracking-wider">
                             Evaluator Sandbox
                           </span>
                           {role === 'GUEST' && (
-                            <span className="px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-emerald-500 text-slate-950">
-                              AKTIF
+                            <span className="px-2 py-0.5 rounded text-xs font-mono font-semibold bg-white text-[#080d14]">
+                              Aktif
                             </span>
                           )}
                         </div>
-                        <span className="text-[10px] font-mono text-emerald-400/90">
+                        <span className="text-xs font-mono text-slate-400">
                           Kompetisi LRIP Demo Sandbox
                         </span>
                       </div>
                     </div>
-                    <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-emerald-400 transition-transform group-hover:translate-x-1" />
+                    <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-white transition-transform group-hover:translate-x-0.5" />
                   </div>
 
-                  <p className="text-[11px] font-sans text-slate-400 leading-relaxed">
+                  <p className="text-xs font-sans text-slate-400 leading-relaxed">
                     Akses terbuka penuh tanpa batasan untuk simulasi bencana interaktif, audit benchmark empiris, dan peninjauan seluruh modul teknis.
                   </p>
 
-                  <div className="flex items-center gap-1.5 pt-1 border-t border-white/5 text-[9px] font-mono text-slate-300">
-                    <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-white/5">
+                  <div className="flex items-center gap-1.5 pt-1 border-t border-[#1c2432] text-xs font-mono text-slate-400">
+                    <span className="px-1.5 py-0.5 rounded bg-[#080d14] border border-[#1c2432]">
                       Sandbox Peta
                     </span>
-                    <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-white/5">
+                    <span className="px-1.5 py-0.5 rounded bg-[#080d14] border border-[#1c2432]">
                       Audit Benchmark
                     </span>
-                    <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-white/5">
+                    <span className="px-1.5 py-0.5 rounded bg-[#080d14] border border-[#1c2432]">
                       Akses Penuh
                     </span>
                   </div>
@@ -359,7 +359,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
             <form onSubmit={handlePasswordSubmit} className="space-y-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-mono text-slate-300 flex items-center gap-1.5">
-                  <Mail className="w-3.5 h-3.5 text-cyan-400" />
+                  <Mail className="w-3.5 h-3.5 text-slate-400" />
                   <span>Alamat Email</span>
                 </label>
                 <input
@@ -367,14 +367,14 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="operator@logistik.id"
-                  className="w-full px-3.5 py-2 rounded-xl bg-slate-950/70 border border-white/10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/60 font-sans transition"
+                  className="w-full px-3.5 py-2 rounded-md bg-[#080d14] border border-[#1c2432] text-xs text-white placeholder-slate-500 focus:outline-none focus:border-slate-400 font-sans transition"
                   required
                 />
               </div>
 
               <div className="space-y-1.5">
                 <label className="text-xs font-mono text-slate-300 flex items-center gap-1.5">
-                  <Lock className="w-3.5 h-3.5 text-cyan-400" />
+                  <Lock className="w-3.5 h-3.5 text-slate-400" />
                   <span>Kata Sandi</span>
                 </label>
                 <input
@@ -382,7 +382,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full px-3.5 py-2 rounded-xl bg-slate-950/70 border border-white/10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/60 font-sans transition"
+                  className="w-full px-3.5 py-2 rounded-md bg-[#080d14] border border-[#1c2432] text-xs text-white placeholder-slate-500 focus:outline-none focus:border-slate-400 font-sans transition"
                   required
                 />
               </div>
@@ -390,13 +390,13 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
               {isSignUp && (
                 <div className="space-y-1.5">
                   <label className="text-xs font-mono text-slate-300 flex items-center gap-1.5">
-                    <Building className="w-3.5 h-3.5 text-cyan-400" />
+                    <Building className="w-3.5 h-3.5 text-slate-400" />
                     <span>Peran Akun Baru</span>
                   </label>
                   <select
                     value={selectedSignupRole}
                     onChange={(e) => setSelectedSignupRole(e.target.value as UserRole)}
-                    className="w-full px-3.5 py-2 rounded-xl bg-slate-950/70 border border-white/10 text-xs text-white focus:outline-none focus:border-cyan-500/60 font-sans transition"
+                    className="w-full px-3.5 py-2 rounded-md bg-[#080d14] border border-[#1c2432] text-xs text-white focus:outline-none focus:border-slate-400 font-sans transition"
                   >
                     <option value="DISPATCHER">Dispatcher Logistik (PT Samudera)</option>
                     <option value="REGULATOR">Regulator Pemerintah (Bapanas/Kemenhub)</option>
@@ -408,7 +408,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold font-sans uppercase tracking-wider transition shadow-lg shadow-cyan-500/20 cursor-pointer flex items-center justify-center gap-2"
+                className="w-full py-2.5 rounded-md bg-white hover:bg-slate-200 text-[#080d14] text-xs font-semibold font-sans transition shadow-sm cursor-pointer flex items-center justify-center gap-2"
               >
                 {isLoading ? (
                   <span>Memproses...</span>
@@ -423,7 +423,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                 <button
                   type="button"
                   onClick={() => setIsSignUp(!isSignUp)}
-                  className="text-xs font-mono text-slate-400 hover:text-cyan-400 transition cursor-pointer"
+                  className="text-xs font-sans text-slate-400 hover:text-white transition cursor-pointer"
                 >
                   {isSignUp
                     ? 'Sudah punya akun? Masuk di sini'
@@ -436,13 +436,13 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
           {/* TAB 3: MAGIC LINK */}
           {activeTab === 'magic' && (
             <form onSubmit={handleMagicLinkSubmit} className="space-y-4">
-              <div className="p-3 rounded-xl bg-slate-900/60 border border-white/5 text-[11px] font-sans text-slate-300 leading-relaxed">
+              <div className="p-3 rounded-md bg-[#121822] border border-[#1c2432] text-xs font-sans text-slate-300 leading-relaxed">
                 Masuk tanpa sandi menggunakan tautan instan yang dikirim langsung ke alamat email Anda melalui Supabase Auth.
               </div>
 
               <div className="space-y-1.5">
                 <label className="text-xs font-mono text-slate-300 flex items-center gap-1.5">
-                  <Mail className="w-3.5 h-3.5 text-cyan-400" />
+                  <Mail className="w-3.5 h-3.5 text-slate-400" />
                   <span>Alamat Email</span>
                 </label>
                 <input
@@ -450,7 +450,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="operator@logistik.id"
-                  className="w-full px-3.5 py-2 rounded-xl bg-slate-950/70 border border-white/10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/60 font-sans transition"
+                  className="w-full px-3.5 py-2 rounded-md bg-[#080d14] border border-[#1c2432] text-xs text-white placeholder-slate-500 focus:outline-none focus:border-slate-400 font-sans transition"
                   required
                 />
               </div>
@@ -458,7 +458,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold font-sans uppercase tracking-wider transition shadow-lg shadow-cyan-500/20 cursor-pointer flex items-center justify-center gap-2"
+                className="w-full py-2.5 rounded-md bg-white hover:bg-slate-200 text-[#080d14] text-xs font-semibold font-sans transition shadow-sm cursor-pointer flex items-center justify-center gap-2"
               >
                 {isLoading ? <span>Mengirim...</span> : <span>Kirim Tautan Masuk Instan</span>}
               </button>
@@ -467,12 +467,12 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
         </div>
 
         {/* Modal Footer */}
-        <div className="px-6 py-3 border-t border-white/10 bg-slate-950/40 flex items-center justify-between text-[10px] font-mono text-slate-400">
+        <div className="px-6 py-3 border-t border-[#1c2432] bg-[#080d14] flex items-center justify-between text-xs font-mono text-slate-400">
           <div className="flex items-center gap-1.5">
-            <User className="w-3.5 h-3.5 text-cyan-400" />
+            <User className="w-3.5 h-3.5 text-slate-400" />
             <span>Sesi Aktif: <strong className="text-slate-200">{user.name}</strong></span>
           </div>
-          <span className="px-2 py-0.5 rounded bg-slate-900 border border-white/10 text-cyan-300">
+          <span className="px-2 py-0.5 rounded bg-[#121822] border border-[#1c2432] text-slate-300">
             {role}
           </span>
         </div>

@@ -53,26 +53,26 @@ export default function ReliabilityDiagram({
   }).join(' ');
 
   return (
-    <div className="flex flex-col h-full bg-[#13161c]/90 backdrop-blur-md border border-white/10 rounded-2xl p-5 shadow-2xl relative overflow-hidden">
+    <div className="flex flex-col h-full bg-[#0c1017] border border-[#1c2432] rounded-lg p-5 shadow-xl relative overflow-hidden">
       {/* Card Header */}
-      <div className="flex items-center justify-between pb-3 border-b border-white/10">
+      <div className="flex items-center justify-between pb-3 border-b border-[#1c2432]">
         <div className="flex items-center gap-2.5">
-          <div className="p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+          <div className="p-2 rounded-md bg-[#121822] border border-[#1c2432] text-slate-300">
             <Target className="w-4 h-4" />
           </div>
           <div>
             <h3 className="text-sm font-semibold text-white tracking-wide font-sans">
-              Diagram Kalibrasi Probabilitas (Reliability Curve)
+              Diagram Kalibrasi Probabilitas
             </h3>
-            <p className="text-[11px] text-slate-400 font-mono">
-              Evaluasi Kejujuran Model P(Disrupsi) vs. Frekuensi Kejadian Empiris (N=60)
+            <p className="text-xs text-slate-400 font-mono tabular-nums">
+              Evaluasi Model P(Disrupsi) vs Frekuensi Empiris (N=60)
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-mono font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-            <ShieldCheck className="w-3.5 h-3.5" />
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-medium bg-[#121822] text-slate-200 border border-[#1c2432] tabular-nums">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
             BS: {brierScore.toFixed(4)} (Lulus ≤ 0.10)
           </span>
         </div>
@@ -246,46 +246,46 @@ export default function ReliabilityDiagram({
 
         {/* Interactive Hover Tooltip Overlay */}
         {hoveredBin && (
-          <div className="absolute top-4 right-4 bg-[#0c0e12]/95 border border-cyan-500/40 backdrop-blur-md rounded-xl p-3 shadow-xl pointer-events-none transition-all z-20 min-w-[200px]">
-            <div className="text-[11px] font-mono font-bold text-cyan-400 border-b border-white/10 pb-1 mb-1.5 flex items-center justify-between">
+          <div className="absolute top-4 right-4 bg-[#121822] border border-[#1c2432] rounded-md p-3 shadow-lg pointer-events-none transition-all z-20 min-w-[200px]">
+            <div className="text-xs font-mono text-slate-200 border-b border-[#1c2432] pb-1 mb-1.5 flex items-center justify-between">
               <span>Interval [{(hoveredBin.range[0] * 100).toFixed(0)}% - {(hoveredBin.range[1] * 100).toFixed(0)}%]</span>
               <span className="text-slate-400 font-normal">Bin #{hoveredBin.bin_index + 1}</span>
             </div>
-            <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] font-mono">
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs font-mono tabular-nums">
               <span className="text-slate-400">Jumlah Sampel:</span>
-              <span className="text-white text-right font-bold">{hoveredBin.sample_count} skenario</span>
+              <span className="text-white text-right font-medium">{hoveredBin.sample_count} skenario</span>
               <span className="text-slate-400">Rata Konfidensi:</span>
-              <span className="text-cyan-300 text-right">{(hoveredBin.mean_confidence * 100).toFixed(1)}%</span>
+              <span className="text-slate-200 text-right">{(hoveredBin.mean_confidence * 100).toFixed(1)}%</span>
               <span className="text-slate-400">Akurasi Empiris:</span>
               <span className="text-emerald-400 text-right">{(hoveredBin.empirical_accuracy * 100).toFixed(1)}%</span>
               <span className="text-slate-400">Error Kalibrasi:</span>
-              <span className="text-amber-400 text-right font-bold">{hoveredBin.calibration_error.toFixed(4)}</span>
+              <span className="text-amber-400 text-right font-medium">{hoveredBin.calibration_error.toFixed(4)}</span>
             </div>
           </div>
         )}
       </div>
 
       {/* Legend & Calibration Footnotes */}
-      <div className="pt-3 border-t border-white/10 flex flex-wrap items-center justify-between gap-3 text-[11px] font-mono">
+      <div className="pt-3 border-t border-[#1c2432] flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-1.5">
-            <span className="w-3 h-0.5 border-t-2 border-dashed border-cyan-400 inline-block" />
+            <span className="w-3 h-0.5 border-t-2 border-dashed border-slate-400 inline-block" />
             <span className="text-slate-300">Garis Ideal (y = x)</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 border border-emerald-500 inline-block" />
-            <span className="text-slate-300">Kurva Empiris PreHub</span>
+            <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
+            <span className="text-slate-300">Kurva Empiris</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded bg-sky-500/20 border border-sky-400/40 inline-block" />
+            <span className="w-2 h-2 rounded bg-sky-500/30 border border-sky-400/40 inline-block" />
             <span className="text-slate-300">Distribusi Sampel</span>
           </div>
         </div>
 
         <div className="flex items-center gap-3 text-slate-400">
-          <span>ECE: <strong className="text-white font-mono">{(ece * 100).toFixed(2)}%</strong></span>
-          <span>•</span>
-          <span>Platt Brier: <strong className="text-emerald-400 font-mono">0.0000</strong></span>
+          <span>ECE: <strong className="text-white font-mono tabular-nums">{(ece * 100).toFixed(2)}%</strong></span>
+          <span>·</span>
+          <span>Platt Brier: <strong className="text-emerald-400 font-mono tabular-nums">0.0000</strong></span>
         </div>
       </div>
     </div>

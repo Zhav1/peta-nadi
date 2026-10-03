@@ -13,7 +13,7 @@ export function StatusHeader({ incidentCount, validatedCount, lastUpdated }: Sta
       id="status-header"
       className="absolute top-4 left-1/2 -translate-x-1/2 z-20 pointer-events-none"
     >
-      <div className="bg-slate-900/60 backdrop-blur-lg border border-white/10 rounded-2xl px-5 py-2.5 shadow-xl pointer-events-auto">
+      <div className="bg-[#0c1017] border border-[#1c2432] rounded-lg px-5 py-2 shadow-xl pointer-events-auto">
         <div className="flex items-center gap-5">
           {/* Brand */}
           <div>

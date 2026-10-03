@@ -1,5 +1,19 @@
 import type { Metadata } from 'next';
+import { Inter, Space_Grotesk } from 'next/font/google';
 import './globals.css';
+import { AuthProvider } from '@/lib/authContext';
+
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-sans',
+  display: 'swap',
+});
+
+const spaceGrotesk = Space_Grotesk({
+  subsets: ['latin'],
+  variable: '--font-headline',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: 'PreHub — Sistem Peringatan Dini & Rekomendasi Mitigasi Gangguan Distribusi Pangan',
@@ -14,16 +28,13 @@ export const metadata: Metadata = {
   },
 };
 
-import { AuthProvider } from '@/lib/authContext';
-
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="id" className="dark scroll-smooth">
+    <html lang="id" className={`dark scroll-smooth ${inter.variable} ${spaceGrotesk.variable}`}>
       <head>
-        <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
         <link rel="icon" href="/logo_prehub.png" type="image/png" />
       </head>
-      <body className="bg-[#080d14] text-slate-100 min-h-screen w-full font-sans antialiased selection:bg-cyan-500 selection:text-slate-950">
+      <body className="bg-[#080d14] text-slate-100 min-h-screen w-full font-sans antialiased selection:bg-white selection:text-[#080d14]">
         <AuthProvider>
           {children}
         </AuthProvider>
