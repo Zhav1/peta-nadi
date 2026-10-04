@@ -268,21 +268,21 @@ export default function SystemObservabilitySection() {
               <button
                 type="button"
                 onClick={() => { setIsCustom(false); setTargetUrl('https://peta-nadi.onrender.com'); }}
-                className={`cursor-pointer px-3 py-1.5 rounded transition ${!isCustom && targetUrl.includes('onrender') ? 'bg-cyan-500/20 text-cyan-300 font-bold' : 'text-slate-400 hover:text-white'}`}
+                className={`cursor-pointer px-3 py-1.5 rounded transition ${!isCustom && targetUrl.includes('onrender') ? 'bg-white text-[#080d14] font-semibold' : 'text-slate-400 hover:text-white'}`}
               >
                 Render Cloud
               </button>
               <button
                 type="button"
                 onClick={() => { setIsCustom(false); setTargetUrl('http://localhost:8000'); }}
-                className={`cursor-pointer px-3 py-1.5 rounded transition ${!isCustom && targetUrl.includes('localhost') ? 'bg-cyan-500/20 text-cyan-300 font-bold' : 'text-slate-400 hover:text-white'}`}
+                className={`cursor-pointer px-3 py-1.5 rounded transition ${!isCustom && targetUrl.includes('localhost') ? 'bg-white text-[#080d14] font-semibold' : 'text-slate-400 hover:text-white'}`}
               >
                 Localhost:8000
               </button>
               <button
                 type="button"
                 onClick={() => setIsCustom(true)}
-                className={`cursor-pointer px-3 py-1.5 rounded transition ${isCustom ? 'bg-cyan-500/20 text-cyan-300 font-bold' : 'text-slate-400 hover:text-white'}`}
+                className={`cursor-pointer px-3 py-1.5 rounded transition ${isCustom ? 'bg-white text-[#080d14] font-semibold' : 'text-slate-400 hover:text-white'}`}
               >
                 Custom URL
               </button>
@@ -515,7 +515,7 @@ export default function SystemObservabilitySection() {
                     key={lvl}
                     type="button"
                     onClick={() => setLogFilter(lvl)}
-                    className={`cursor-pointer px-2 py-0.5 rounded ${logFilter === lvl ? 'bg-cyan-500/20 text-cyan-300 font-bold' : 'text-slate-500 hover:text-slate-300'}`}
+                    className={`cursor-pointer px-2.5 py-0.5 rounded font-mono text-xs transition ${logFilter === lvl ? 'bg-white text-[#080d14] font-semibold' : 'text-slate-400 hover:text-white'}`}
                   >
                     {lvl}
                   </button>

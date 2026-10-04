@@ -7,7 +7,6 @@ import {
   Clock, 
   Fuel, 
   ThermometerSnowflake, 
-  Sparkles, 
   ShieldAlert, 
   CheckCircle2, 
   ArrowRight,
@@ -171,7 +170,7 @@ export function SpoilageHedgingCard({
       {data && (
         <div className="mb-3 p-2.5 rounded-md bg-emerald-950/30 border border-emerald-500/30 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-emerald-400" />
+            <TrendingDown className="w-4 h-4 text-emerald-400" />
             <div>
               <p className="text-xs font-sans text-emerald-300/80">Rekomendasi Finansial Terpilih</p>
               <p className="text-xs font-mono font-bold text-emerald-300">
@@ -180,7 +179,7 @@ export function SpoilageHedgingCard({
             </div>
           </div>
           <span className="px-2 py-0.5 rounded text-xs font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-            NET SAVINGS
+            PENGHEMATAN BERSIH
           </span>
         </div>
       )}
@@ -221,7 +220,7 @@ export function SpoilageHedgingCard({
             } ${data.optimal_policy === 'REROUTE' ? 'relative' : ''}`}
           >
             {data.optimal_policy === 'REROUTE' && (
-              <span className="absolute -top-2 right-2 px-1.5 py-0.5 bg-emerald-500 text-slate-950 text-xs font-mono font-bold rounded">
+              <span className="absolute -top-2 right-2 px-1.5 py-0.5 bg-emerald-400 text-emerald-950 text-xs font-mono font-bold rounded">
                 OPTIMAL
               </span>
             )}

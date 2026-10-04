@@ -43,7 +43,7 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
       {/* 1. Swarm Agent Health Widget */}
       <AgentStatusWidget />
 
-      {/* 2. Routing Optimizer Solver Telemetry */}
+      {/* 2. Routing Telemetry */}
       <div className="relative">
         <button
           onClick={() => togglePopover('solver')}
@@ -52,10 +52,10 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
               ? 'bg-white/10 border-white/30 text-emerald-300'
               : 'bg-[#0c1017] border-white/10 text-emerald-400 hover:border-white/20'
           }`}
-          title="Telemetri Solver Rute NetworkX"
+          title="Status Perhitungan Rute Alternatif"
         >
           <Zap className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-          <span>ROUTER: {cuOptInfo?.compute_time_ms ?? 3.2}ms</span>
+          <span>RUTE: {cuOptInfo?.compute_time_ms ?? 3.2}ms</span>
           <ChevronDown className="w-3 h-3 opacity-60 ml-0.5" />
         </button>
 
@@ -63,19 +63,19 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
           <div className="absolute top-full left-0 mt-2 w-80 p-4 rounded-xl bg-[#0c1017] border border-white/10 shadow-2xl z-50 text-slate-200">
             <div className="flex items-center gap-2 border-b border-white/10 pb-2.5 mb-2.5">
               <Zap className="w-4 h-4 text-emerald-400" />
-              <span className="font-sans font-bold text-sm text-emerald-400">PreHub Routing Matrix Engine</span>
+              <span className="font-sans font-bold text-sm text-emerald-400">Perhitungan Rute Alternatif</span>
             </div>
             <div className="space-y-2 text-xs font-sans">
               <div className="flex justify-between items-center text-slate-300">
-                <span className="text-slate-400">Waktu Komputasi Graf:</span>
+                <span className="text-slate-400">Waktu Perhitungan:</span>
                 <span className="font-mono font-bold text-emerald-300">{cuOptInfo?.compute_time_ms ?? 3.2} ms</span>
               </div>
               <div className="flex justify-between items-center text-slate-300">
-                <span className="text-slate-400">Status Solver Engine:</span>
-                <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-xs font-mono font-bold">NETWORKX DIJKSTRA</span>
+                <span className="text-slate-400">Metode:</span>
+                <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-xs font-mono font-bold">JARINGAN JALUR AMAN</span>
               </div>
               <p className="text-xs text-slate-400 pt-2 border-t border-white/10 leading-relaxed">
-                Algoritma graf NetworkX memproyeksikan matriks biaya rute mitigasi antar-hub logistik dengan pembobotan hazard real-time.
+                Menghitung estimasi rute mitigasi antar-simpul logistik dengan mempertimbangkan titik hambatan secara langsung.
               </p>
             </div>
           </div>
@@ -95,9 +95,9 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
         >
           <Truck className="w-3.5 h-3.5 text-amber-400 shrink-0" />
           {isLoading && !corridorContext ? (
-            <span>TOMTOM: ...</span>
+            <span>LALULINTAS: ...</span>
           ) : (
-            <span>TOMTOM: +{tomtomDelayMin}m ({tomtomIndex}%)</span>
+            <span>LALULINTAS: +{tomtomDelayMin}m ({tomtomIndex}%)</span>
           )}
           <ChevronDown className="w-3 h-3 opacity-60 ml-0.5" />
         </button>
@@ -106,19 +106,19 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
           <div className="absolute top-full left-0 mt-2 w-80 p-4 rounded-xl bg-[#0c1017] border border-white/10 shadow-2xl z-50 text-slate-200">
             <div className="flex items-center gap-2 border-b border-white/10 pb-2.5 mb-2.5">
               <Truck className="w-4 h-4 text-amber-400" />
-              <span className="font-sans font-bold text-sm text-amber-400">TomTom Traffic Flow Stream</span>
+              <span className="font-sans font-bold text-sm text-amber-400">Pantauan Lalu Lintas TomTom</span>
             </div>
             <div className="space-y-2 text-xs font-sans">
               <div className="flex justify-between items-center text-slate-300">
-                <span className="text-slate-400">Keterlambatan Rata-rata:</span>
+                <span className="text-slate-400">Estimasi Keterlambatan:</span>
                 <span className="font-mono font-bold text-amber-300">+{tomtomDelayMin} Menit</span>
               </div>
               <div className="flex justify-between items-center text-slate-300">
-                <span className="text-slate-400">Indeks Kemacetan Segmen:</span>
+                <span className="text-slate-400">Kepadatan Jalur:</span>
                 <span className="font-mono font-bold text-amber-300">{tomtomIndex}%</span>
               </div>
               <p className="text-xs text-slate-400 pt-2 border-t border-white/10 leading-relaxed">
-                Stream data TomTom mendeteksi penumpukan volume armada logistik akibat penutupan lajur tol dan genangan air.
+                Memonitor perlambatan kendaraan logistik akibat penyempitan jalan atau genangan air.
               </p>
             </div>
           </div>
@@ -149,11 +149,11 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
           <div className="absolute top-full left-0 mt-2 w-80 p-4 rounded-xl bg-[#0c1017] border border-white/10 shadow-2xl z-50 text-slate-200">
             <div className="flex items-center gap-2 border-b border-white/10 pb-2.5 mb-2.5">
               <CloudRain className="w-4 h-4 text-sky-400" />
-              <span className="font-sans font-bold text-sm text-sky-400">BMKG Weather Observation</span>
+              <span className="font-sans font-bold text-sm text-sky-400">Pantauan Cuaca BMKG</span>
             </div>
             <div className="space-y-2 text-xs font-sans">
               <div className="flex justify-between items-center text-slate-300">
-                <span className="text-slate-400">Intensitas Presipitasi:</span>
+                <span className="text-slate-400">Intensitas Hujan:</span>
                 <span className="font-mono font-bold text-sky-300">{bmkgRainfall} mm/jam</span>
               </div>
               <div className="flex justify-between items-center text-slate-300">
@@ -161,7 +161,7 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
                 <span className="px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 text-xs font-mono font-bold">OPERASIONAL</span>
               </div>
               <p className="text-xs text-slate-400 pt-2 border-t border-white/10 leading-relaxed">
-                Stasiun Meteorologi Maritim BMKG Belawan mendeteksi anomali hujan lebat di pesisir timur Sumatra.
+                Memonitor kondisi hujan lebat dan potensi genangan air di sepanjang koridor transportasi.
               </p>
             </div>
           </div>

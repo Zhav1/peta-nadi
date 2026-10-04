@@ -212,36 +212,36 @@ export default function EvaluationSection({
             {/* Metric 1: Precision */}
             <div className="lg:px-4 first:pl-0 last:pr-0 py-3 lg:py-0">
               <span className="text-xs font-mono text-slate-400 uppercase tracking-wider block mb-1">Presisi Deteksi</span>
-              <p className="text-2xl font-mono font-bold text-white">{(precision * 100).toFixed(1)}%</p>
-              <p className="text-xs font-mono text-slate-400 mt-1">Target: &gt; 85.0%</p>
+              <p className="text-2xl font-mono font-bold text-white tabular-nums">{(precision * 100).toFixed(1)}%</p>
+              <p className="text-xs font-mono text-slate-400 mt-1 tabular-nums">Target: &gt; 85.0%</p>
             </div>
 
             {/* Metric 2: Recall */}
             <div className="lg:px-4 first:pl-0 last:pr-0 py-3 lg:py-0">
               <span className="text-xs font-mono text-slate-400 uppercase tracking-wider block mb-1">Sensitivitas (Recall)</span>
-              <p className="text-2xl font-mono font-bold text-white">{(recall * 100).toFixed(1)}%</p>
-              <p className="text-xs font-mono text-slate-400 mt-1">Target: &gt; 80.0%</p>
+              <p className="text-2xl font-mono font-bold text-white tabular-nums">{(recall * 100).toFixed(1)}%</p>
+              <p className="text-xs font-mono text-slate-400 mt-1 tabular-nums">Target: &gt; 80.0%</p>
             </div>
 
             {/* Metric 3: F1-Score */}
             <div className="lg:px-4 first:pl-0 last:pr-0 py-3 lg:py-0">
               <span className="text-xs font-mono text-slate-400 uppercase tracking-wider block mb-1">Skor F1 Komposit</span>
-              <p className="text-2xl font-mono font-bold text-white">{f1Score.toFixed(3)}</p>
-              <p className="text-xs font-mono text-slate-400 mt-1">Target: &gt; 0.820</p>
+              <p className="text-2xl font-mono font-bold text-white tabular-nums">{f1Score.toFixed(3)}</p>
+              <p className="text-xs font-mono text-slate-400 mt-1 tabular-nums">Target: &gt; 0.820</p>
             </div>
 
             {/* Metric 4: Brier Score */}
             <div className="lg:px-4 first:pl-0 last:pr-0 py-3 lg:py-0">
               <span className="text-xs font-mono text-slate-400 uppercase tracking-wider block mb-1">Brier Kalibrasi</span>
-              <p className="text-2xl font-mono font-bold text-white">{brierScore.toFixed(4)}</p>
-              <p className="text-xs font-mono text-slate-400 mt-1">Target: &le; 0.100</p>
+              <p className="text-2xl font-mono font-bold text-white tabular-nums">{brierScore.toFixed(4)}</p>
+              <p className="text-xs font-mono text-slate-400 mt-1 tabular-nums">Target: &le; 0.100</p>
             </div>
 
             {/* Metric 5: Latency */}
             <div className="lg:px-4 first:pl-0 last:pr-0 py-3 lg:py-0">
               <span className="text-xs font-mono text-slate-400 uppercase tracking-wider block mb-1">Latensi Inferensi</span>
-              <p className="text-2xl font-mono font-bold text-white">{latencyMs.toFixed(1)} ms</p>
-              <p className="text-xs font-mono text-slate-400 mt-1">Target: &lt; 5.0 ms</p>
+              <p className="text-2xl font-mono font-bold text-white tabular-nums">{latencyMs.toFixed(1)} ms</p>
+              <p className="text-xs font-mono text-slate-400 mt-1 tabular-nums">Target: &lt; 5.0 ms</p>
             </div>
           </div>
 

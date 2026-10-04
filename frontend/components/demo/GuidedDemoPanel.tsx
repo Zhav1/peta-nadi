@@ -73,12 +73,12 @@ export function GuidedDemoPanel({
   }, [stage]);
 
   const swarmLogs = [
-    `> [00:01.2] DataCollectionAgent: Ingesting BMKG radar (68.5mm), TomTom flow (+35m), AISstream vessel feed...`,
-    `> [00:02.1] OSINTHazardAgent: Scraping OSINT feeds & Google News: "Banjir Tebing Tinggi Jalinsum Terputus"...`,
-    `> [00:03.0] PredictionAgent: Fusing Open-Meteo & BMKG 48h spatial hazard inundation model...`,
-    `> [00:03.9] RouteOptimizationAgent: Executing CPU NetworkX & OR-Tools solver: Calculating tangential detour...`,
-    `> [00:04.7] EconomicIntelligenceAgent: Fetching PIHPS price stream: Projected CPO/Minyak inflation +1.8%...`,
-    `> [00:05.5] DecisionSupportAgent: DeepSeek R1 CoT reasoning & Consensus Gate: 91.4% (VALIDATED THREAT)...`,
+    `> [00:01.2] Akuisisi Data: Membaca radar BMKG (68.5mm), arus TomTom (+35m), telemetri kapal AIS...`,
+    `> [00:02.1] Verifikasi Informasi: Berita resmi "Banjir Tebing Tinggi Jalinsum Terputus" terkonfirmasi...`,
+    `> [00:03.0] Pemodelan Spasial: Mengolah radius genangan bahaya Open-Meteo & BMKG...`,
+    `> [00:03.9] Optimasi Rute: Menghitung koridor pengalihan aman di luar perimeter banjir...`,
+    `> [00:04.7] Analisis Harga Pasar: Menghubungkan data historis PIHPS untuk proyeksi dampak pangan...`,
+    `> [00:05.5] Konsensus Sistem: Tingkat keyakinan multi-sumber 91.4% (Gangguan Tervalidasi)...`,
   ];
 
   // Generate QR Code when demo starts and has a crisisId
@@ -109,19 +109,19 @@ export function GuidedDemoPanel({
   }
 
   const stageTitles = [
-    'User Route & Ingestion Setup',
-    'Agent Swarm Analysis',
-    'GraphRAG Consensus Gate',
-    'Validated Alert & Reroute',
-    'WhatsApp & Fleet Dispatch',
+    'Penyiapan Rute & Titik Pantau',
+    'Analisis Data Multi-Sumber',
+    'Verifikasi Konsensus Risiko',
+    'Peringatan Tervalidasi & Pengalihan',
+    'Notifikasi Armada Logistik',
   ];
 
   const stageExplainers = [
     'Silakan tentukan rute krisis dengan mengeklik 2 titik marker pada Peta Operasi di sebelah kiri (Klik 1: Start, Klik 2: End). Sistem akan merender rute baseline hijau sebelum disrupsi disimulasikan.',
-    '6 agen AI memproses data secara paralel. Setiap agen ahli di satu domain: pemetaan bahaya, optimasi rute, proyeksi ekonomi, dan dukungan keputusan krisis.',
-    'Consensus Gate mengevaluasi skor kepercayaan dari semua agen. Krisis divalidasi ketika skor tertimbang > 85% — mencegah alarm palsu.',
-    'Disrupsi tervalidasi. AI Tangential Avoidance Router menghitung rute pengalihan aman via solver CPU NetworkX/OR-Tools khusus untuk koridor pilihan Anda.',
-    'Notifikasi WhatsApp telah dikirim ke operator logistik dengan ringkasan krisis, rute pengalihan teroptimasi, dan deep-link dashboard.',
+    'Modul analisis memproses data secara terpadu untuk pemetaan bahaya, rute alternatif, dan proyeksi dampak ekonomi pasar.',
+    'Sistem mengevaluasi tingkat keyakinan data multi-sumber guna menyaring peringatan palsu sebelum diterbitkan.',
+    'Gangguan tervalidasi. Sistem menghitung rute pengalihan aman di luar zona bahaya khusus untuk koridor pilihan Anda.',
+    'Notifikasi telah dikirim ke operator logistik dengan ringkasan krisis, rute pengalihan teroptimasi, dan tautan dasbor.',
   ];
 
   const sources = [

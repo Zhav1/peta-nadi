@@ -196,7 +196,7 @@ function TimeModeBanner({
     },
     predict: {
       title: 'Mode Prediksi Multi-Model (TFT & Open-Meteo)',
-      badge: 'AI PREDICTIVE MODEL',
+      badge: 'PREDIKSI PROSPEKTIF',
       badgeColor: 'bg-white/10 text-slate-200 border-white/20',
       description: 'Simulasi skenario disrupsi pelabuhan Belawan dan koridor pangan menggunakan model prakiraan cuaca Open-Meteo dan BMKG.',
     },
@@ -269,8 +269,8 @@ function FloatingMapLegend({
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0" />
               <div>
-                <span className="text-slate-200 font-medium block">Rute Detour Rekomendasi (CPU Solver)</span>
-                <span className="text-xs text-slate-400 font-sans">Bebas bahaya, jarak & ETA paling optimal.</span>
+                <span className="text-slate-200 font-medium block">Rute Rekomendasi Tercepat</span>
+                <span className="text-xs text-slate-400 font-sans">Bebas bahaya dengan jarak dan waktu tempuh paling efisien.</span>
               </div>
             </div>
 
@@ -948,27 +948,27 @@ export default function DashboardClient() {
   return (
     <div className="relative w-full h-screen bg-[#080d14] text-slate-100 overflow-hidden select-none">
       {/* Top Header Navbar */}
-      <header className="fixed top-0 left-0 right-0 h-16 bg-[#0c1017] border-b border-white/10 z-50 flex items-center justify-between px-6 select-none">
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2">
+      <header className="fixed top-0 left-0 right-0 h-16 bg-[#0c1017] border-b border-white/10 z-50 flex items-center justify-between px-3 md:px-6 select-none">
+        <div className="flex items-center gap-2 sm:gap-6 min-w-0">
+          <div className="flex items-center gap-2 shrink-0">
             <div className="w-8 h-8 rounded-lg bg-[#080d14] border border-white/15 p-1 flex items-center justify-center">
               <img src="/logo_prehub.png" alt="PreHub" className="w-6 h-6 object-contain" />
             </div>
-            <span className="font-headline font-bold text-base tracking-wider text-slate-100 uppercase">
+            <span className="font-headline font-bold text-base tracking-wider text-slate-100 uppercase hidden sm:inline">
               PreHub
             </span>
             <Link
               href="/"
-              className="ml-2 px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs font-sans text-slate-300 hover:text-white hover:border-white/20 transition flex items-center gap-1.5 cursor-pointer"
+              className="ml-1 sm:ml-2 px-2 sm:px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs font-sans text-slate-300 hover:text-white hover:border-white/20 transition flex items-center gap-1.5 cursor-pointer shrink-0"
               title="Kembali ke Beranda"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Beranda</span>
+              <span className="hidden md:inline">Beranda</span>
             </Link>
           </div>
 
           {/* Section Navigation Tabs */}
-          <nav className="flex items-center gap-1 bg-[#080d14] p-1 rounded-lg border border-white/10">
+          <nav className="flex items-center gap-1 bg-[#080d14] p-1 rounded-lg border border-white/10 overflow-x-auto no-scrollbar shrink">
             {[
               { id: 'map', label: 'Peta Operasi' },
               { id: 'analytics', label: 'Analitik' },
@@ -981,7 +981,7 @@ export default function DashboardClient() {
                 id={`nav-${tab.id}`}
                 type="button"
                 onClick={() => setActiveSection(tab.id as typeof activeSection)}
-                className={`cursor-pointer px-3.5 py-1.5 rounded-md text-xs font-medium transition whitespace-nowrap ${
+                className={`cursor-pointer px-3 sm:px-3.5 py-1.5 rounded-md text-xs font-medium transition whitespace-nowrap ${
                   activeSection === tab.id
                     ? 'bg-white text-[#080d14] font-semibold'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
@@ -994,18 +994,18 @@ export default function DashboardClient() {
         </div>
 
         {/* Workspace Actions */}
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           {/* Phase 43: Self-Serve Fleet Onboarding Action Button */}
           <button
             type="button"
             onClick={() => setIsOnboardingModalOpen(true)}
-            className="cursor-pointer px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-slate-200 hover:text-white text-xs font-medium transition flex items-center gap-1.5"
+            className="cursor-pointer px-2.5 sm:px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-slate-200 hover:text-white text-xs font-medium transition flex items-center gap-1.5"
             title="Onboard Armada & Unggah Manifest Pengiriman"
           >
             <PlusCircle className="w-3.5 h-3.5 text-slate-300" />
-            <span>Onboard Armada</span>
+            <span className="hidden sm:inline">Onboard Armada</span>
             {customFleetCount > 0 && (
-              <span className="px-1.5 py-0.5 rounded bg-white text-[#080d14] font-mono text-xs font-bold">
+              <span className="px-1.5 py-0.5 rounded bg-white text-[#080d14] font-mono text-xs font-bold tabular-nums">
                 {customFleetCount}
               </span>
             )}
@@ -1015,7 +1015,7 @@ export default function DashboardClient() {
           <button
             type="button"
             onClick={openAuthModal}
-            className="cursor-pointer px-3 py-1.5 rounded-lg border border-white/10 bg-[#080d14] hover:border-white/20 transition flex items-center gap-2 group text-left"
+            className="cursor-pointer px-2.5 sm:px-3 py-1.5 rounded-lg border border-white/10 bg-[#080d14] hover:border-white/20 transition flex items-center gap-2 group text-left"
             title="Ganti Persona Akses & Ruang Kerja (RBAC)"
           >
             <div className={`w-2 h-2 rounded-full shrink-0 ${
@@ -1028,7 +1028,7 @@ export default function DashboardClient() {
                 </span>
                 <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-white transition" />
               </div>
-              <span className="text-xs font-sans text-slate-400 max-w-[140px] truncate block">
+              <span className="text-xs font-sans text-slate-400 max-w-[120px] truncate hidden sm:block">
                 {user.org_name || (role === 'DISPATCHER' ? 'PT Samudera Logistik' : role === 'REGULATOR' ? 'Badan Pangan Nasional' : 'Sandbox LRIP')}
               </span>
             </div>
@@ -1069,8 +1069,8 @@ export default function DashboardClient() {
         <div className={`w-full h-full relative ${activeSection === 'map' ? 'block' : 'hidden'}`}>
 
           {/* Floating Operational Telemetry HUD Strip */}
-          <div className={`absolute top-3.5 z-30 pointer-events-auto transition-all duration-300 ${
-            isLeftSidebarCollapsed ? 'left-32' : 'left-[340px]'
+          <div className={`absolute top-3.5 z-30 pointer-events-auto transition-all duration-300 hidden md:flex max-w-[calc(100vw-360px)] overflow-x-auto no-scrollbar ${
+            isLeftSidebarCollapsed ? 'left-4 sm:left-32' : 'left-4 sm:left-32 lg:left-[340px]'
           }`}>
             <TopNavTelemetry cuOptInfo={cuOptInfo} corridorContext={corridorContext} isLoading={isCorridorLoading} />
           </div>
@@ -1454,14 +1454,14 @@ export default function DashboardClient() {
               }}
             />
 
-            {/* Bottombar Time Scope Filters (Exact Dual-Sidebar Centering) */}
-            <footer className={`absolute bottom-6 z-40 flex items-center gap-1.5 bg-[#0c1017] border border-[#1c2432] p-1.5 rounded-lg shadow-xl transition-all duration-300 pointer-events-auto ${!isLeftSidebarCollapsed && (isSidebarOpen && !!selectedCrisis)
-                ? 'left-[calc(50%-30px)] -translate-x-1/2'
+            {/* Bottombar Time Scope Filters (Exact Dual-Sidebar Centering on Desktop, Centered on Mobile) */}
+            <footer className={`absolute bottom-4 sm:bottom-6 z-40 flex items-center gap-1.5 bg-[#0c1017] border border-[#1c2432] p-1.5 rounded-lg shadow-xl transition-all duration-300 pointer-events-auto left-1/2 -translate-x-1/2 max-w-[95vw] overflow-x-auto no-scrollbar ${!isLeftSidebarCollapsed && (isSidebarOpen && !!selectedCrisis)
+                ? 'lg:left-[calc(50%-30px)]'
                 : !isLeftSidebarCollapsed && !(isSidebarOpen && !!selectedCrisis)
-                  ? 'left-[calc(50%+160px)] -translate-x-1/2'
+                  ? 'lg:left-[calc(50%+160px)]'
                   : isLeftSidebarCollapsed && (isSidebarOpen && !!selectedCrisis)
-                    ? 'left-[calc(50%-190px)] -translate-x-1/2'
-                    : 'left-1/2 -translate-x-1/2'
+                    ? 'lg:left-[calc(50%-190px)]'
+                    : 'lg:left-1/2'
               }`}>
               {(['past', 'present', 'future', 'predict'] as const).map((filter) => (
                 <button
@@ -1472,7 +1472,7 @@ export default function DashboardClient() {
                       handleCrisisClick('mock-predict-1');
                     }
                   }}
-                  className={`px-3 py-1 rounded text-xs font-semibold uppercase tracking-wider transition-colors cursor-pointer ${activeTimeFilter === filter
+                  className={`px-3 py-1 rounded text-xs font-semibold uppercase tracking-wider transition-colors cursor-pointer shrink-0 ${activeTimeFilter === filter
                     ? 'bg-white text-[#080d14] shadow-sm'
                     : 'text-slate-400 hover:text-white hover:bg-[#121822]'
                     }`}
@@ -1480,11 +1480,11 @@ export default function DashboardClient() {
                   {filter}
                 </button>
               ))}
-              <div className="w-[1px] h-4 bg-[#1c2432] mx-1" />
+              <div className="w-[1px] h-4 bg-[#1c2432] mx-1 shrink-0" />
               <button
                 type="button"
                 onClick={() => demoState.start({ mock_agents: false, offline: false, origin: selectedOriginNode || 'belawan', destination: selectedDestNode || 'tebingtinggi' })}
-                className="flex items-center gap-1.5 px-3 py-1 rounded bg-white hover:bg-slate-200 text-[#080d14] font-semibold text-xs uppercase tracking-wider transition-colors shadow-sm cursor-pointer"
+                className="flex items-center gap-1.5 px-3 py-1 rounded bg-white hover:bg-slate-200 text-[#080d14] font-semibold text-xs uppercase tracking-wider transition-colors shadow-sm cursor-pointer shrink-0"
               >
                 <Play className="w-3 h-3 fill-current" />
                 <span>Run Demo</span>
@@ -1508,7 +1508,7 @@ export default function DashboardClient() {
         </div>
 
         {/* Section 2: Analytics Dashboard */}
-        <div className={`w-full h-full p-4 lg:p-6 ${activeSection === 'analytics' ? 'block' : 'hidden'}`}>
+        <div className={`w-full h-full p-4 lg:p-6 overflow-y-auto ${activeSection === 'analytics' ? 'block' : 'hidden'}`}>
           <AnalyticsSection 
             selectedCrisis={selectedCrisis}
             corridorContext={corridorContext}
@@ -1518,7 +1518,7 @@ export default function DashboardClient() {
         </div>
 
         {/* Section 3: Simulation Sandbox */}
-        <div className={`w-full h-full p-4 lg:p-6 ${activeSection === 'simulation' ? 'block' : 'hidden'}`}>
+        <div className={`w-full h-full p-4 lg:p-6 overflow-y-auto ${activeSection === 'simulation' ? 'block' : 'hidden'}`}>
           <SimulationSection 
             crisisId={selectedCrisisId}
             selectedCrisis={selectedCrisis}
@@ -1528,7 +1528,7 @@ export default function DashboardClient() {
         </div>
 
         {/* Section 4: Executive Reports */}
-        <div className={`w-full h-full p-4 lg:p-6 ${activeSection === 'reports' ? 'block' : 'hidden'}`}>
+        <div className={`w-full h-full p-4 lg:p-6 overflow-y-auto ${activeSection === 'reports' ? 'block' : 'hidden'}`}>
           <ReportsSection 
             approvalsCount={approvalsCount}
             corridorContext={corridorContext}

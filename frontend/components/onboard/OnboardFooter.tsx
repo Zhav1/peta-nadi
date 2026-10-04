@@ -22,7 +22,7 @@ export default function OnboardFooter() {
               </span>
             </div>
             <p className="font-sans text-xs text-slate-400 leading-relaxed">
-              Sistem Peringatan Dini dan Rekomendasi Mitigasi Gangguan Distribusi Pangan Berbasis Data Multisumber. Mengamankan rantai pasok komoditas pangan strategis nasional.
+              Sistem Peringatan Dini dan Rekomendasi Mitigasi Gangguan Distribusi Pangan Nasional. Membantu menjaga kelancaran rantai pasok komoditas pangan pokok.
             </p>
           </div>
 
@@ -33,13 +33,13 @@ export default function OnboardFooter() {
                 Navigasi
               </span>
               <Link href="/dashboard" className="hover:text-white transition-colors">
-                Pusat Komando
+                Dashboard
               </Link>
               <a href="#sequence" className="hover:text-white transition-colors">
-                Kronologi Krisis
+                Alur Mitigasi
               </a>
               <a href="#capabilities" className="hover:text-white transition-colors">
-                Kemampuan Sistem
+                Fitur Utama
               </a>
               <a href="#telemetry" className="hover:text-white transition-colors">
                 Sumber Data
@@ -61,7 +61,7 @@ export default function OnboardFooter() {
         {/* Bottom Bar */}
         <div className="pt-8 border-t border-white/8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-mono text-slate-400">
           <span>&copy; 2026 PreHub. Hak Cipta Dilindungi Undang-Undang.</span>
-          <span className="text-slate-400">Platform Intelijen Logistik Pangan</span>
+          <span className="text-slate-400">Platform Mitigasi Distribusi Pangan</span>
         </div>
 
       </div>

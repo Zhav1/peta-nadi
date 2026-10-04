@@ -52,7 +52,7 @@ interface RouteCardProps {
 }
 
 function FormattedMarkdown({ content }: { content: string }) {
-  if (!content) return <p className="text-xs text-slate-400 italic">AI Copilot mengolah sensor BMKG & Mapbox Traffic. Menunggu penentuan titik rute armada.</p>;
+  if (!content) return <p className="text-xs text-slate-400 italic">Sistem memadukan sensor cuaca BMKG dan telemetri arus jalan. Menunggu penetapan rute armada.</p>;
 
   // Remove robotic header if present
   const cleaned = content.replace(/^===.*===\s*/g, '');
@@ -113,7 +113,7 @@ function RouteCard({
       ? 'border-cyan-400/80 bg-cyan-950/30 ring-2 ring-cyan-400/40'
       : 'border-white/10 bg-slate-800/40 hover:border-white/20';
 
-  const titleText = route.route_name || (idx === 0 ? 'Recommended AI Route' : `Alternative ${idx + 1}`);
+  const titleText = route.route_name || (idx === 0 ? 'Rute Rekomendasi Utama' : `Rute Alternatif ${idx + 1}`);
 
   const handleExecuteOverride = async () => {
     if (!overrideNotes.trim()) {
@@ -134,17 +134,16 @@ function RouteCard({
       <div className="flex justify-between items-start mb-1.5 gap-2">
         <span className="text-xs font-bold text-slate-100 flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: route.color || (idx === 0 ? '#00f0ff' : '#3b82f6') }} />
-          {idx === 0 && <Sparkles className="w-3.5 h-3.5 text-cyan-400" />}
           <span>{titleText}</span>
         </span>
 
         {isCompromised ? (
           <span className="inline-flex items-center gap-1 text-xs font-semibold font-mono px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20">
-            <AlertTriangle className="w-3.5 h-3.5 text-rose-400" /> COMPROMISED
+            <AlertTriangle className="w-3.5 h-3.5 text-rose-400" /> TERDAMPAK
           </span>
         ) : (
           <span className="inline-flex items-center gap-1 text-xs font-semibold font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> SAFE DETOUR
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> JALUR AMAN
           </span>
         )}
       </div>
@@ -196,10 +195,10 @@ function RouteCard({
                   )}
                   <span className="text-white">
                     {approvalData?.action === 'OVERRIDE'
-                      ? 'OPERATOR OVERRIDE'
+                      ? 'MODIFIKASI OPERATOR'
                       : approvalData?.tactical_action === 'HOLD'
-                        ? 'FLEET HOLD DIRECTIVE'
-                        : 'APPROVED & DISPATCHED'}
+                        ? 'INSTRUKSI TAHAN ARMADA'
+                        : 'DISETUJUI & DIKIRIM'}
                   </span>
                 </span>
                 <span className="text-xs text-slate-400 font-mono">
@@ -216,7 +215,7 @@ function RouteCard({
           ) : isCompromised ? (
             <div className="w-full py-2 px-3 rounded-md bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs font-mono font-semibold text-center flex items-center justify-center gap-1.5">
               <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
-              <span>RUTE TERDAMPAK BENCANA (TIDAK DISARANKAN)</span>
+              <span>Rute Terdampak Gangguan (Tidak Disarankan)</span>
             </div>
           ) : (
             <>
@@ -225,10 +224,10 @@ function RouteCard({
                   <div className="flex items-center justify-between font-bold">
                     <span className="flex items-center gap-1.5">
                       <Scale className="w-3.5 h-3.5 text-slate-300 shrink-0" />
-                      <span className="text-white">AKSES REGULATOR (PENGAWAS)</span>
+                      <span className="text-white">Akses Regulator (Pengawas)</span>
                     </span>
                     <span className="text-xs px-1.5 py-0.5 rounded bg-white/10 text-slate-300 border border-white/20">
-                      READ ONLY
+                      HANYA LIHAT
                     </span>
                   </div>
                   <p className="text-xs font-sans text-slate-400 leading-snug pt-0.5">
@@ -489,7 +488,7 @@ export function MitigationTab({
             Konsensus Sistem & Keyakinan
           </span>
           <span className="text-xs font-bold font-mono text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-500/30">
-            {confidenceScore}% CONFIDENCE
+            {confidenceScore}% Keyakinan
           </span>
         </div>
         <p className="text-xs text-slate-300 font-mono">
@@ -504,7 +503,7 @@ export function MitigationTab({
             Dampak Fisik & Rantai Ekonomi
           </span>
           <span className="px-2 py-0.5 rounded text-xs font-mono font-bold bg-[#0c1017] text-cyan-300 border border-[#1c2432]">
-            MARKET REGIME: ELEVATED
+            Regim Pasar: Waspada
           </span>
         </div>
         <div className="flex flex-col gap-1.5 text-xs font-mono">
@@ -523,7 +522,7 @@ export function MitigationTab({
         </div>
       </div>
 
-      {/* BLOCK B2 — AEGIS OFFICIAL NEWS GROUNDING VERIFICATION (PHASE 26 & 27) */}
+      {/* BLOCK B2 — OFFICIAL NEWS GROUNDING VERIFICATION */}
       <div className="bg-[#121822] border border-[#1c2432] p-3 rounded-md">
 
         <div className="flex items-center justify-between mb-2">
@@ -533,11 +532,11 @@ export function MitigationTab({
               <path d="m9 12 2 2 4-4"/>
             </svg>
             <span className="text-xs font-sans font-bold text-slate-200">
-              Grounding Verifikasi Berita Resmi
+              Verifikasi Berita Resmi
             </span>
           </div>
           <span className="px-2 py-0.5 rounded text-xs font-mono font-bold bg-emerald-950 text-emerald-300 border border-emerald-500/40">
-            TERVERIFIKASI (94% CONF)
+            TERVERIFIKASI
           </span>
         </div>
 
@@ -572,14 +571,14 @@ export function MitigationTab({
         </div>
 
         <p className="mt-2 text-xs text-slate-300 leading-relaxed font-sans">
-          <strong className="text-slate-200">Penalaran Aegis Grounding:</strong> Berita sosmed dikonfirmasi oleh kantor berita resmi online. Laporan dinyatakan <span className="text-emerald-400 font-semibold">Valid & Bukan Hoaks</span>.
+          <strong className="text-slate-200">Verifikasi Silang Berita:</strong> Informasi dikonfirmasi oleh kantor berita resmi regional. Laporan dinyatakan <span className="text-emerald-400 font-semibold">Valid</span>.
         </p>
       </div>
 
-      {/* BLOCK C — CHAIN-OF-THOUGHT (CoT) REASONING TRACE */}
+      {/* BLOCK C — OPERATIONAL REASONING TRACE */}
       <div className="bg-[#121822] border border-[#1c2432] p-3.5 rounded-md">
         <span className="text-xs font-sans text-cyan-400 font-bold block mb-2">
-          Penalaran Operasional Otomatis (CoT)
+          Analisis Operasional & Rekomendasi
         </span>
         <FormattedMarkdown content={crisis.decision_support_output || ''} />
       </div>
@@ -645,7 +644,7 @@ export function MitigationTab({
             {/* BLOCK D — HUMAN-IN-THE-LOOP (HITL) ROUTE RECOMMENDATIONS & ACTION */}
             <div className="flex flex-col gap-2.5">
               <span className="text-xs font-mono text-slate-400 uppercase tracking-wider font-semibold">
-                RECOMMENDED DETOUR ROUTES (SELECT & APPROVE)
+                REKOMENDASI JALUR ALTERNATIF
               </span>
 
               {crisis.route_recommendations && crisis.route_recommendations.length > 0 ? (
@@ -670,7 +669,7 @@ export function MitigationTab({
                 })
               ) : (
                 <p className="text-xs text-slate-500 text-center py-4 font-mono">
-                  No route alternatives generated yet.
+                  Belum ada alternatif rute yang dihasilkan.
                 </p>
               )}
             </div>

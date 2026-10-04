@@ -50,18 +50,18 @@ export function EconomicTab({ crisis }: EconomicTabProps) {
   return (
     <div className="space-y-4">
       {forecast && (
-        <div className="bg-orange-400/5 border border-orange-400/20 rounded-xl p-3 space-y-2">
-          <p className="text-xs font-semibold text-orange-400 uppercase tracking-wide">
-            Inflation Forecast
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 space-y-2">
+          <p className="text-xs font-semibold text-amber-400 uppercase tracking-wide">
+            Proyeksi Kenaikan Harga
           </p>
           <div className="flex justify-between items-center">
-            <span className="text-xs text-slate-400">{forecast.commodity}</span>
-            <span className="text-sm font-bold text-orange-400">
+            <span className="text-xs text-slate-300">{forecast.commodity}</span>
+            <span className="text-sm font-bold text-amber-400 tabular-nums">
               +{forecast.pct_increase.toFixed(1)}%
             </span>
           </div>
-          <p className="text-xs text-slate-500">
-            Projected over next {forecast.timeframe_hours}h · {forecast.region.replace(/_/g, ' ')}
+          <p className="text-xs text-slate-400">
+            Estimasi {forecast.timeframe_hours} jam ke depan · {forecast.region.replace(/_/g, ' ')}
           </p>
         </div>
       )}
@@ -69,13 +69,13 @@ export function EconomicTab({ crisis }: EconomicTabProps) {
       {/* Historical price chart */}
       {loadingChart ? (
         <div className="w-full h-[160px] flex items-center justify-center bg-[#121822] border border-[#1c2432] rounded-md">
-          <span className="text-xs font-mono text-slate-400">Loading dynamic chart data...</span>
+          <span className="text-xs font-mono text-slate-400">Memuat riwayat harga pangan...</span>
         </div>
       ) : (
         <PriceChart
           data={chartData}
           crisisDate={`D-0`}
-          title="PIHPS Commodity Prices (30d)"
+          title="Riwayat Harga Komoditas PIHPS (30 Hari)"
         />
       )}
 
@@ -83,20 +83,20 @@ export function EconomicTab({ crisis }: EconomicTabProps) {
       {Array.isArray(crisis.economic_intelligence_finding?.data?.ltm_episodes) && (
         <div className="space-y-2">
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
-            Historical Analogues
+            Preseden Disrupsi Serupa
           </p>
           {(crisis.economic_intelligence_finding.data.ltm_episodes as Array<{
             title: string; inflation_multiplier: number; recovery_days: number; similarity_score: number;
           }>).map((ep, i) => (
-            <div key={i} className="bg-slate-800/50 rounded-xl p-3 space-y-1">
+            <div key={i} className="bg-[#121822] border border-[#1c2432] rounded-lg p-3 space-y-1">
               <div className="flex justify-between">
-                <span className="text-xs font-medium text-slate-300">{ep.title}</span>
-                <span className="text-xs text-cyan-400">
-                  {Math.round(ep.similarity_score * 100)}% similar
+                <span className="text-xs font-medium text-slate-200">{ep.title}</span>
+                <span className="text-xs text-cyan-300 font-mono font-semibold tabular-nums">
+                  {Math.round(ep.similarity_score * 100)}% kemiripan
                 </span>
               </div>
-              <p className="text-xs text-slate-500">
-                ×{ep.inflation_multiplier.toFixed(1)} inflation · {ep.recovery_days}d recovery
+              <p className="text-xs text-slate-400">
+                Kenaikan ×{ep.inflation_multiplier.toFixed(1)} · pemulihan {ep.recovery_days} hari
               </p>
             </div>
           ))}

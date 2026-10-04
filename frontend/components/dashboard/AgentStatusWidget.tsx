@@ -51,7 +51,7 @@ const DEFAULT_AGENTS: AgentInfo[] = [
     status: 'complete',
     confidence: 0.90,
     last_run_at: new Date().toISOString(),
-    summary: 'Komputasi rute mitigasi NetworkX Dijkstra dengan penalti bahaya.'
+    summary: 'Perhitungan rute pengalihan logistik dengan pembobotan hambatan rute.'
   },
   {
     agent_id: 'EconomicIntelligenceAgent',
@@ -63,11 +63,11 @@ const DEFAULT_AGENTS: AgentInfo[] = [
   },
   {
     agent_id: 'DecisionSupportCopilot',
-    name: 'AI Decision Copilot',
+    name: 'Rekomendasi Kebijakan Mitigasi',
     status: 'complete',
     confidence: 0.94,
     last_run_at: new Date().toISOString(),
-    summary: 'Sintesis CoT eksekutif multi-instansi dengan penalaran DeepSeek R1.'
+    summary: 'Sintesis rekomendasi tindakan koordinasi antar-lembaga.'
   }
 ];
 
@@ -126,11 +126,11 @@ export const AgentStatusWidget: React.FC<{ isCompact?: boolean }> = () => {
             ? 'bg-white border-white text-[#080d14] font-semibold'
             : 'bg-[#0c1017] border-[#1c2432] text-slate-300 hover:text-white hover:border-slate-500'
         }`}
-        title="Status 6-Agent Swarm Intelligence PreHub"
+        title="Status Modul Analisis Otomatis PreHub"
       >
         <Bot className="w-3.5 h-3.5 text-slate-400 shrink-0" />
         <span className="font-mono text-xs tabular-nums">
-          Swarm: {agents.filter((a) => a.status === 'complete').length}/6 Aktif ({Math.round(avgConfidence * 100)}%)
+          Analisis: {agents.filter((a) => a.status === 'complete').length}/6 Siap ({Math.round(avgConfidence * 100)}%)
         </span>
         <ChevronDown className={`w-3 h-3 opacity-60 ml-0.5 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
       </button>
@@ -140,11 +140,11 @@ export const AgentStatusWidget: React.FC<{ isCompact?: boolean }> = () => {
           <div className="flex items-center justify-between border-b border-[#1c2432] pb-2.5 mb-3">
             <div className="flex items-center gap-2">
               <Activity className="w-4 h-4 text-slate-400" />
-              <span className="font-sans font-semibold text-xs text-white">Status Operasional Agen Swarm</span>
+              <span className="font-sans font-semibold text-xs text-white">Status Modul Analisis</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="px-2 py-0.5 rounded bg-[#121822] border border-[#1c2432] text-slate-300 text-xs font-mono">
-                DeepSeek R1
+                Aktif
               </span>
               <button
                 onClick={() => {

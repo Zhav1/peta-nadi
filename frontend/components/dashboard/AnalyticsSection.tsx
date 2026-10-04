@@ -227,16 +227,16 @@ export default function AnalyticsSection({
   const minP = Math.min(...priceHistory, 0) * 0.95;
   const barHeights = priceHistory.map(p => `${((p - minP) / (maxP - minP)) * 75 + 15}%`);
 
-  // GraphRAG Chain of Impact Nodes
+  // Causal Chain of Impact Nodes
   const causalChain = [
-    { label: 'Belawan Port Closed', sub: 'Flash Flood + High Waves', status: 'CRITICAL', color: 'text-red-400 border-red-500/40 bg-red-500/10' },
-    { label: 'CPO & Rice Truck Stalled', sub: 'Jalinsum 4.2 km Congestion', status: 'WARNING', color: 'text-amber-400 border-amber-500/40 bg-amber-500/10' },
-    { label: 'Medan Market Supply Drop', sub: '-35% Daily Volume Delivered', status: 'WARNING', color: 'text-amber-400 border-amber-500/40 bg-amber-500/10' },
-    { label: 'Retail Price Spike +18.5%', sub: 'Predicted 48h Market Impact', status: 'ALERT', color: 'text-cyan-400 border-cyan-500/40 bg-cyan-500/10' }
+    { label: 'Pelabuhan Belawan Terhambat', sub: 'Gelombang Tinggi & Genangan Air', status: 'KRITIS', color: 'text-red-400 border-red-500/40 bg-red-500/10' },
+    { label: 'Perlambatan Arteri Jalinsum', sub: 'Antrean Kendaraan Logistik', status: 'WASPADA', color: 'text-amber-400 border-amber-500/40 bg-amber-500/10' },
+    { label: 'Penurunan Pasokan Pasar Medan', sub: 'Penurunan Pasokan Komoditas Harian', status: 'WASPADA', color: 'text-amber-400 border-amber-500/40 bg-amber-500/10' },
+    { label: 'Risiko Kenaikan Harga Eceran', sub: 'Proyeksi Kenaikan Harga Pokok', status: 'PERINGATAN', color: 'text-cyan-400 border-cyan-500/40 bg-cyan-500/10' }
   ];
 
   return (
-    <div className="w-full h-full grid grid-cols-12 gap-6 overflow-hidden pointer-events-auto">
+    <div className="w-full min-h-full lg:h-full grid grid-cols-12 gap-6 pointer-events-auto">
       
       {/* LEFT SECTION: 4D Mapbox/Deck.gl Spatial Canvas & GraphRAG Chain */}
       <section className="col-span-12 lg:col-span-8 flex flex-col min-h-0 gap-4">
@@ -251,7 +251,7 @@ export default function AnalyticsSection({
               </h2>
             </div>
             <p className="text-xs font-sans text-slate-400 mt-1">
-              Korelasi spasial Deck.gl: aliran komoditas strategis dan pemantauan volatilitas harga pasar.
+              Pemantauan spasial aliran komoditas pangan pokok dan pergerakan harga pasar.
             </p>
           </div>
 
@@ -260,7 +260,7 @@ export default function AnalyticsSection({
               <Activity className="w-4 h-4 text-slate-300" />
               <div>
                 <span className="text-xs text-slate-400 font-medium block">Koridor Terpantau</span>
-                <span className="text-xs font-mono font-bold text-white">4 Jalur Utama</span>
+                <span className="text-xs font-mono font-bold text-white tabular-nums">4 Jalur Utama</span>
               </div>
             </div>
 
@@ -268,7 +268,7 @@ export default function AnalyticsSection({
               <ShieldAlert className="w-4 h-4 text-red-400" />
               <div>
                 <span className="text-xs text-red-400 font-medium block">Simpul Terdampak</span>
-                <span className="text-xs font-mono font-bold text-red-400">1 Titik (Belawan)</span>
+                <span className="text-xs font-mono font-bold text-red-400 tabular-nums">1 Titik (Belawan)</span>
               </div>
             </div>
 
@@ -276,7 +276,7 @@ export default function AnalyticsSection({
               <TrendingUp className="w-4 h-4 text-amber-400" />
               <div>
                 <span className="text-xs text-amber-400 font-medium block">Risiko Volatilitas</span>
-                <span className="text-xs font-mono font-bold text-amber-400">{shallotsDelta}</span>
+                <span className="text-xs font-mono font-bold text-amber-400 tabular-nums">{shallotsDelta}</span>
               </div>
             </div>
           </div>
@@ -333,9 +333,9 @@ export default function AnalyticsSection({
             </div>
             <div className="grid grid-cols-2 gap-x-4 pt-1 font-mono text-xs">
               <span className="text-slate-400">Harga Beras:</span>
-              <span className="text-slate-200 font-bold">Rp {ricePrice.toLocaleString('id-ID')} / kg</span>
+              <span className="text-slate-200 font-bold tabular-nums">Rp {ricePrice.toLocaleString('id-ID')} / kg</span>
               <span className="text-slate-400">Delta Bawang:</span>
-              <span className="text-red-400 font-bold">{shallotsDelta}</span>
+              <span className="text-red-400 font-bold tabular-nums">{shallotsDelta}</span>
             </div>
             {onSwitchTab && (
               <button
@@ -352,48 +352,33 @@ export default function AnalyticsSection({
       {/* RIGHT SECTION: Sidebar (Inflation Variance & Commodity Risk Ranking) */}
       <section className="col-span-12 lg:col-span-4 bg-[#0c1017] border border-white/10 p-5 flex flex-col gap-6 overflow-y-auto no-scrollbar rounded-xl shadow-xl">
         
-        {/* Inflation Variance Card */}
+        {/* Price History Card */}
         <div className="space-y-3">
           <div className="flex justify-between items-end">
             <h3 className="text-sm font-semibold tracking-wide text-white flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-slate-300" /> Variansi Inflasi Pasar
+              <TrendingUp className="w-4 h-4 text-slate-300" /> Riwayat Harga Beras (PIHPS)
             </h3>
-            <span className="text-xs font-mono text-slate-300 font-medium">
-              Delta: {shallotsDelta}
+            <span className="text-xs font-mono text-slate-300 font-medium tabular-nums">
+              Rp {ricePrice.toLocaleString('id-ID')} / kg
             </span>
           </div>
 
-          <div className="h-44 bg-[#121822] border border-white/10 rounded-lg p-4 relative flex items-end gap-2 overflow-hidden">
-            {/* Legend */}
-            <div className="absolute top-3 left-3 flex items-center gap-4 z-10">
-              <div className="flex items-center gap-1.5">
-                <div className="w-2.5 h-2.5 rounded bg-slate-300" />
-                <span className="text-xs text-slate-300 font-mono">Prediktif</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-2.5 h-2.5 rounded bg-red-400" />
-                <span className="text-xs text-red-400 font-mono">Aktual</span>
-              </div>
+          <div className="h-44 bg-[#121822] border border-white/10 rounded-lg p-4 relative flex flex-col justify-between">
+            <div className="flex justify-between items-center text-xs text-slate-400 font-mono">
+              <span>Tren 5 Titik Terakhir</span>
+              <span className="text-slate-300">Sumber: PIHPS Bank Indonesia</span>
             </div>
 
-            {/* Bars */}
-            {barHeights.map((h, i) => (
-              <div key={i} className="flex-1 bg-white/5 relative group h-full rounded-t-sm overflow-hidden">
-                <div 
-                  className="absolute bottom-0 w-full bg-white/20 border-t-2 border-white/40 transition-all duration-300" 
-                  style={{ height: h }}
-                />
-              </div>
-            ))}
-
-            {/* Actual Overlay Bars */}
-            <div className="absolute inset-x-4 bottom-4 h-full flex items-end gap-2 pointer-events-none">
+            {/* Authentic Single-Dataset Bars */}
+            <div className="h-28 flex items-end gap-2 pt-2">
               {barHeights.map((h, i) => (
-                <div 
-                  key={i} 
-                  className="flex-1 bg-red-500/10 border-t-2 border-red-400 transition-all duration-300"
-                  style={{ height: `calc(${h} + ${i % 2 === 0 ? '6%' : '-4%'})` }}
-                />
+                <div key={i} className="flex-1 bg-white/5 relative group h-full rounded-t-sm overflow-hidden flex flex-col justify-end items-center">
+                  <div 
+                    className="w-full bg-white/20 border-t-2 border-white/60 hover:bg-white/30 transition-all duration-300" 
+                    style={{ height: h }}
+                  />
+                  <span className="font-mono text-[10px] text-slate-400 mt-1">T-{priceHistory.length - 1 - i}</span>
+                </div>
               ))}
             </div>
           </div>
@@ -424,7 +409,7 @@ export default function AnalyticsSection({
               <p className="text-xs text-slate-400">Penyempitan Pasokan Jalur Sumatera</p>
               <div className="flex justify-between items-center mt-2 pt-2 border-t border-white/5 font-mono text-xs">
                 <span className="text-slate-400">Volatilitas:</span>
-                <span className="text-red-400 font-bold">+18.5%</span>
+                <span className="text-red-400 font-bold tabular-nums">+18.5%</span>
               </div>
             </div>
 
@@ -442,7 +427,7 @@ export default function AnalyticsSection({
               <p className="text-xs text-slate-400">Anomali Cuaca Sumatera Barat</p>
               <div className="flex justify-between items-center mt-2 pt-2 border-t border-white/5 font-mono text-xs">
                 <span className="text-slate-400">Volatilitas:</span>
-                <span className="text-amber-400 font-bold">+6.2%</span>
+                <span className="text-amber-400 font-bold tabular-nums">+6.2%</span>
               </div>
             </div>
 
@@ -460,7 +445,7 @@ export default function AnalyticsSection({
               <p className="text-xs text-slate-400">Injeksi Cadangan Beras Pemerintah (Bulog)</p>
               <div className="flex justify-between items-center mt-2 pt-2 border-t border-white/5 font-mono text-xs">
                 <span className="text-slate-400">Volatilitas:</span>
-                <span className="text-emerald-400 font-bold">-1.2%</span>
+                <span className="text-emerald-400 font-bold tabular-nums">-1.2%</span>
               </div>
             </div>
 
@@ -478,7 +463,7 @@ export default function AnalyticsSection({
               <p className="text-xs text-slate-400">Kongesti Arteri Pelabuhan Belawan</p>
               <div className="flex justify-between items-center mt-2 pt-2 border-t border-white/5 font-mono text-xs">
                 <span className="text-slate-400">Volatilitas:</span>
-                <span className="text-red-400 font-bold">+24.5%</span>
+                <span className="text-red-400 font-bold tabular-nums">+24.5%</span>
               </div>
             </div>
 

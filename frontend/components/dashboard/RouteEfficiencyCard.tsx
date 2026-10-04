@@ -119,7 +119,7 @@ export default function RouteEfficiencyCard({
               Efisiensi Reroute vs Koridor Terblokir
             </h3>
             <p className="text-xs text-slate-400 font-mono tabular-nums">
-              Evaluasi Penghematan Operasional Solver Dijkstra
+              Evaluasi Penghematan Operasional Pengalihan Rute
             </p>
           </div>
         </div>
@@ -179,14 +179,14 @@ export default function RouteEfficiencyCard({
           </div>
         </div>
 
-        {/* Scenario 2: Dynamic CPU Detour */}
+        {/* Scenario 2: Dynamic Detour */}
         <div className="p-3.5 rounded-md bg-[#121822] border border-[#1c2432] flex flex-col justify-between">
           <div className="flex items-center justify-between text-xs mb-2">
             <span className="text-emerald-400 font-medium flex items-center gap-1.5">
               <CheckCircle2 className="w-3.5 h-3.5" />
-              Reroute Cerdas PreHub
+              Rute Pengalihan Optimal
             </span>
-            <span className="text-slate-400 text-xs font-mono">Dijkstra Solver</span>
+            <span className="text-slate-400 text-xs font-mono">Solver Graf</span>
           </div>
 
           <div className="space-y-2 text-xs">
@@ -252,7 +252,7 @@ export default function RouteEfficiencyCard({
           </div>
 
           <div className="p-2.5 rounded-md bg-[#0c1017] border border-[#1c2432]">
-            <span className="text-xs text-slate-400 block mb-1">Total Biaya Operasional</span>
+            <span className="text-xs text-slate-400 block mb-1">Estimasi Penghematan Biaya</span>
             <strong className="text-sm md:text-base text-emerald-400 font-semibold font-mono tabular-nums">
               Rp {(totalFleetCostSaved).toLocaleString('id-ID')}
             </strong>

@@ -17,55 +17,55 @@ const DATA_SOURCES: DataSource[] = [
   {
     id: 'bmkg',
     name: 'BMKG Indonesia',
-    category: 'CUACA & HIDROLOGI',
-    detail: 'Peringatan dini cuaca ekstrem regional, poligon genangan banjir, dan katalog gempa sesar tektonik Sumatra.',
-    protocol: 'REST API GeoJSON',
-    cadence: 'Polling 60s',
+    category: 'CUACA & BENCANA',
+    detail: 'Peringatan dini cuaca ekstrem, pantauan intensitas hujan, dan katalog gempa sesar tektonik regional.',
+    protocol: 'Data Cuaca & Hidrologi',
+    cadence: 'Pembaruan Berkala',
     icon: CloudLightning,
   },
   {
     id: 'tomtom',
     name: 'TomTom Traffic Index',
-    category: 'KEPADATAN ARTERI',
-    detail: 'Kecepatan segmen jalan raya Jalinsum, indeks perlambatan truk logistik, dan insiden penyempitan jalur.',
-    protocol: 'Flow & Incident API',
-    cadence: 'Streaming Real-time',
+    category: 'LALU LINTAS DARAT',
+    detail: 'Kecepatan segmen jalur arteri Jalinsum, indeks perlambatan kendaraan logistik, dan insiden penutupan jalan.',
+    protocol: 'Arus & Hambatan Jalan',
+    cadence: 'Waktu Nyata',
     icon: Navigation2,
   },
   {
     id: 'aisstream',
     name: 'AISstream.io Maritim',
-    category: 'ANTREAN PELABUHAN',
-    detail: 'Posisi kapal kontainer dan tongkang CPO, kedalaman antrean dermaga Pelabuhan Internasional Belawan.',
-    protocol: 'WSS Telemetry',
-    cadence: 'Live WebSocket',
+    category: 'LOGISTIK MARITIM',
+    detail: 'Posisi kapal kargo dan tongkang pengangkut bahan pangan di Pelabuhan Belawan.',
+    protocol: 'Telemetri Kapal',
+    cadence: 'Waktu Nyata',
     icon: Ship,
   },
   {
     id: 'firms',
     name: 'NASA FIRMS',
-    category: 'DETEKSI TERMAL',
-    detail: 'Deteksi titik api kebakaran hutan/lahan di sepanjang koridor distribusi via sensor satelit MODIS & VIIRS.',
-    protocol: 'Satellite GeoTIFF',
-    cadence: 'Siklus Satelit Harian',
+    category: 'PANTAUAN WILAYAH',
+    detail: 'Deteksi titik panas di sekitar koridor transportasi darat untuk antisipasi gangguan asap atau kebakaran.',
+    protocol: 'Citra Satelit Terbuka',
+    cadence: 'Pembaruan Harian',
     icon: Flame,
   },
   {
     id: 'pihps',
     name: 'PIHPS Nasional (Bank Indonesia)',
-    category: 'HARGA KOMODITAS',
-    detail: 'Pemantauan harga harian beras, minyak goreng, cabai merah, dan bawang merah di pasar konsumen utama.',
-    protocol: 'Central Bank Feed',
-    cadence: 'Sinkronisasi Harian',
+    category: 'HARGA PANGAN',
+    detail: 'Pemantauan harga harian beras, minyak goreng, cabai, dan bahan pangan pokok di pasar konsumen utama.',
+    protocol: 'Pencatatan Pasar',
+    cadence: 'Pembaruan Harian',
     icon: DollarSign,
   },
   {
     id: 'osint',
-    name: 'OSINT & Kantor Berita Terverifikasi',
-    category: 'VERIFIKASI LAPANGAN',
-    detail: 'Ekstraksi entitas lokasi (NER spaCy) dari warta resmi LKBN ANTARA dan laporan darurat pemerintah daerah.',
-    protocol: 'News Ingest Engine',
-    cadence: 'Analisis Tiap 5 Menit',
+    name: 'Laporan Resmi & Berita Terverifikasi',
+    category: 'LAPORAN LAPANGAN',
+    detail: 'Verifikasi kejadian bencana dan pengumuman kedaruratan dari instansi pemerintah daerah dan kantor berita resmi.',
+    protocol: 'Laporan Kedinasan',
+    cadence: 'Sesuai Kejadian',
     icon: Newspaper,
   },
 ];
@@ -75,13 +75,13 @@ export default function LiveTelemetryShowcase() {
     <section id="telemetry" className="relative w-full bg-[#080d14] py-28 px-4 md:px-8 border-t border-white/8">
       <div className="max-w-7xl mx-auto flex flex-col gap-16">
         
-        {/* Editorial Header — No Eyebrow Pill, No Highlighter Chips */}
+        {/* Editorial Header */}
         <div className="max-w-3xl flex flex-col gap-4">
           <h2 className="font-headline text-3xl sm:text-5xl font-bold text-white tracking-tight leading-tight">
-            Integrasi Data Resmi Lintas Lembaga
+            Integrasi Sumber Data Resmi
           </h2>
           <p className="font-sans text-base sm:text-lg text-slate-300 leading-relaxed">
-            PreHub tidak beroperasi di atas data tunggal atau sintetis. Setiap proyeksi krisis divalidasi silang dari enam penyedia data resmi untuk menjamin akurasi sebelum rekomendasi intervensi diterbitkan.
+            PreHub mengintegrasikan data cuaca, kondisi jalan, pergerakan maritim, dan harga pangan dari berbagai lembaga resmi guna memastikan akurasi analisis sebelum rekomendasi mitigasi diterbitkan.
           </p>
         </div>
 

@@ -2,35 +2,35 @@
 gsd_state_version: 1.0
 milestone: M3
 milestone_name: PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform
-current_phase: 46
-current_phase_name: Editorial Sentinel UI/UX Distillation & AI-Slop Eradication
+current_phase: 47
+current_phase_name: Impeccable Grounding, Typeset & Layout Refinement
 status: completed
-stopped_at: Phase 46 execution completed (UI/UX distillation complete)
-last_updated: "2026-10-03T14:40:00.000Z"
-last_activity: 2026-10-03
-last_activity_desc: Phase 46 completed (Eradicated 58 backdrop-blur instances, 36 glow shadows, 82 rounded-2xl/3xl, sub-12px microtext across 45 files; 0 TypeScript errors)
+stopped_at: Phase 47 execution completed (Grounding, typeset & layout complete)
+last_updated: "2026-10-04T13:50:00.000Z"
+last_activity: 2026-10-04
+last_activity_desc: Phase 47 completed (Resolved 14 detector findings to 0, applied tabular-nums across all data ledgers, hardened mobile/tablet layout across 25 files; 0 TypeScript errors)
 progress:
-  total_phases: 6
-  completed_phases: 6
-  total_plans: 11
-  completed_plans: 11
+  total_phases: 7
+  completed_phases: 7
+  total_plans: 13
+  completed_plans: 13
   percent: 100
 ---
 
 # STATE: PreHub Project Memory
 
-**Last Updated:** 2026-10-03
+**Last Updated:** 2026-10-04
 **Active Milestone:** M3 - PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform [COMPLETED 🏁]
-**Current Phase:** 46
+**Current Phase:** 47
 
 ---
 
 ## Current Position
 
-Phase: 46 (Editorial Sentinel UI/UX Distillation & AI-Slop Eradication) - COMPLETE
-Status: Phase 46 Complete (45 files distilled, 0 TypeScript errors)
-Last activity: 2026-10-03 - Purged 58 backdrop-blur instances, eliminated glowing halos, floored type to 12px, deleted redundant showcase component, verified 100% clean Next.js build
-Next action: Conclude Phase 46 documentation and commit changes.
+Phase: 47 (Impeccable Grounding, Typeset & Layout Refinement) - COMPLETE
+Status: Phase 47 Complete (25 files refined, 0 detector findings, 0 TypeScript errors)
+Last activity: 2026-10-04 - Eradicated ungrounded AI boasting, enforced tabular-nums, resolved 14 AST detector violations, hardened mobile/tablet responsive layout, verified 100% clean Next.js build
+Next action: Maintain strict design tokens and responsive constraints in future work.
 
 ---
 
@@ -86,6 +86,7 @@ Next action: Conclude Phase 46 documentation and commit changes.
 | 44 | Intermodal Terminal Dashboard, Spoilage Hedging & Compliance Inspector | **COMPLETE** ✅ | 18+ Choke-points & proximity delay multiplier ($1.0 \le M \le 3.5$), BPJT toll tariffs (Gol I-V), Pertamina fuel rate modulation, 4-tier perishability decay, BKHIT quarantine hard block, MST axle-load warning, 16/16 tests pass, 100% clean Next.js build. |
 | 45 | Pilot Verification, Scenario Drills & Final End-to-End Packaging | **COMPLETE** ✅ | Automated E2E test suite (133 tests), hardened dual-profile Docker Compose, official Pilot Onboarding Manual (30KB, 0 emojis). |
 | 46 | Editorial Sentinel UI/UX Distillation & AI-Slop Eradication | **COMPLETE** ✅ | Purged 58 backdrop-blur instances (0 remaining), eliminated 36 glow shadows, deleted duplicate component, floored functional type to 12px, zero TypeScript errors. |
+| 47 | Impeccable Grounding, Typeset & Layout Refinement | **COMPLETE** ✅ | Eradicated ungrounded boasting across 25 files, enforced tabular-nums, resolved all 14 AST detector violations to 0, hardened mobile/tablet viewport scrolling and layout. |
 
 ---
 
@@ -93,6 +94,7 @@ Next action: Conclude Phase 46 documentation and commit changes.
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
+| 2026-10-04 | Phase 47: Impeccable Grounding, Typeset & Layout Refinement | Full empirical grounding pass: linked all data streams to official sources (BMKG, LKBN ANTARA, TomTom, PIHPS, AISstream, NASA FIRMS), resolved all 14 AST design detector anti-patterns (0 findings), enforced tabular numerals across all ledgers, eliminated multi-column clipping on mobile by replacing h-full overflow-hidden with min-h-full lg:h-full and adding overflow-y-auto to section wrappers. |
 | 2026-10-03 | Phase 46: The Strategic Sentinel Design Contract & Slop Eradication | Full forensic audit and distillation across 45 files (-650 net lines). Replaced heavy backdrop-blur compositing with solid elevated panels (#0c1017, #121822) to resolve 60 FPS WebGL map stutter, eliminated generic AI gradients in favor of architectural white buttons, deleted redundant showcase components, and enforced a strict 12px floor for all functional type. |
 | 2026-10-03 | Phase 45: Pilot Verification & Multi-Persona Operations Package | Implemented 8 real-data E2E tests (Drill 1 Belawan perishable detour, Drill 2 Bakauheni strait crossing quarantine lock, Drill 3 Sitinjau Lauik MST axle-load override), hardened multi-container Docker Compose with Next.js standalone runner and SQLite WAL mode, compiled 30KB multi-persona operational manual with zero emojis, synchronized test matrix to 133 passing tests. |
 | 2026-10-02 | Phase 44: 18+ Pan-Sumatra Choke-Point Registry & Proximity Delay Multiplier | Registered 7 maritime/ferry ports (Belawan, Bakauheni, Dumai, Teluk Bayur, Panjang, Sibolga, Kuala Tanjung) and 11 mountain passes/conjunctions (Sitinjau Lauik, Kelok 9, Malalak, Tarutung, Tebing Tinggi, Betung, etc.) with clamped delay multiplier $M_{\text{intermodal}} \in [1.0, 3.5]$. |

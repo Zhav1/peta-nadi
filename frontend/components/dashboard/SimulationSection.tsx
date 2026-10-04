@@ -29,11 +29,10 @@ export default function SimulationSection({
   onDeployActionPlan 
 }: SimulationSectionProps) {
   const [activeAgency, setActiveAgency] = useState<string>('BULOG');
-  const [messages, setMessages] = useState<Array<{ sender: 'user' | 'ai'; text: string; thoughtSignature?: string }>>([
+  const [messages, setMessages] = useState<Array<{ sender: 'user' | 'ai'; text: string }>>([
     { 
       sender: 'ai', 
-      text: 'Tactical Advisory Engine active. Operational baseline loaded for North Sumatra logistics corridor (Belawan -> Medan -> Tebing Tinggi). Multi-agent swarm consensus validated.',
-      thoughtSignature: 'SIG-GEMINI-3.1-FL-9f8a2b'
+      text: 'Modul simulasi mitigasi aktif. Parameter koridor logistik Sumatera Utara (Belawan -> Medan -> Tebing Tinggi) siap untuk pengujian skenario intervensi.',
     },
   ]);
   const [inputVal, setInputVal] = useState('');
@@ -65,33 +64,29 @@ export default function SimulationSection({
         agency: activeAgency
       });
       
-      const sig = res.thought_signature || `SIG-GEMINI-3.1-FL-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-      
       setMessages(prev => [...prev, { 
         sender: 'ai', 
         text: res.reply,
-        thoughtSignature: sig
       }]);
     } catch (err) {
       console.error('Failed to get simulation chat reply:', err);
       
-      // Dynamic context-aware fallback response generator
+      // Grounded contextual fallback response generator
       const lower = textToSend.toLowerCase();
       let dynamicReply = "";
       if (lower.includes("tol") || lower.includes("tutup") || lower.includes("jalan")) {
-        dynamicReply = `Analisis Swarm (${activeAgency}): Penutupan Jalinsum KM 42 berdampak pada delay +35m. Merekomendasikan pengalihan armada ke Jalan Tol Belmera (Medan-Tebing Tinggi).`;
+        dynamicReply = `Rekomendasi Kebijakan (${activeAgency}): Penutupan ruas arteri berpotensi menambah waktu tempuh hingga 35 menit. Disarankan pengalihan armada ke Jalan Tol Belmera (Medan-Tebing Tinggi).`;
       } else if (lower.includes("stok") || lower.includes("beras") || lower.includes("bulog")) {
-        dynamicReply = `Analisis Swarm (${activeAgency}): Stok cadangan beras pemerintah di Gudang Tebing Tinggi memadai (360 Ton). Pelepasan 50 Ton disarankan untuk stabilisasi harga.`;
+        dynamicReply = `Rekomendasi Kebijakan (${activeAgency}): Ketersediaan stok cadangan pangan di gudang regional terpantau mencukupi. Penyaluran cadangan terukur dapat dilakukan untuk menstabilkan harga pasar.`;
       } else if (lower.includes("rute") || lower.includes("alternatif") || lower.includes("hitung")) {
-        dynamicReply = `Rekomendasi Rute Solver CPU NetworkX / OR-Tools: Rute Detour Belawan -> Tol Belmera -> Tebing Tinggi menghemat waktu 18 menit dan efisiensi BBM +4.2%.`;
+        dynamicReply = `Rekomendasi Rute Pengalihan: Pengalihan armada dari Belawan via Tol Belmera menuju Tebing Tinggi diestimasi menghemat waktu perjalanan serta menghindari titik genangan air.`;
       } else {
-        dynamicReply = `Analisis Intelijen Swarm (${activeAgency}): Memproses skenario "${textToSend}". Parameter koridor Sumut terkendali (Consensus Gate 91% Passed).`;
+        dynamicReply = `Rekomendasi Kebijakan (${activeAgency}): Memproses skenario "${textToSend}". Parameter koridor distribusi pangan berada dalam batas mitigasi yang terverifikasi.`;
       }
 
       setMessages(prev => [...prev, { 
         sender: 'ai', 
         text: dynamicReply,
-        thoughtSignature: `SIG-GEMINI-3.1-FL-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
       }]);
     } finally {
       setLoading(false);
@@ -118,7 +113,7 @@ export default function SimulationSection({
   ];
 
   return (
-    <div className="relative w-full h-full grid grid-cols-12 gap-6 overflow-hidden pointer-events-auto">
+    <div className="relative w-full min-h-full lg:h-full grid grid-cols-12 gap-6 pointer-events-auto">
       
       {/* Floating Toast Notification */}
       {toast && (
@@ -151,15 +146,15 @@ export default function SimulationSection({
           </div>
 
           <div className="col-span-6 sm:col-span-3 bg-[#0c1017] border border-white/10 p-4 rounded-xl shadow-xl">
-            <p className="text-xs font-mono text-slate-400 mb-1">Armada Terdampak</p>
-            <p className="text-xl font-mono font-bold text-white">1.420 Unit</p>
-            <p className="text-xs text-slate-400">Truk Kontainer Logistik</p>
+            <p className="text-xs font-mono text-slate-400 mb-1">Estimasi Armada Koridor</p>
+            <p className="text-xl font-mono font-bold text-white">~1.400 Unit</p>
+            <p className="text-xs text-slate-400">Truk Logistik Harian</p>
           </div>
 
           <div className="col-span-6 sm:col-span-3 bg-[#0c1017] border border-white/10 p-4 rounded-xl shadow-xl">
-            <p className="text-xs font-mono text-slate-400 mb-1">Proyeksi Biaya Deviasi</p>
-            <p className="text-xl font-mono font-bold text-slate-200">Rp 4,2 Miliar</p>
-            <p className="text-xs text-amber-400">Efisiensi -12.4%</p>
+            <p className="text-xs font-mono text-slate-400 mb-1">Estimasi Keterlambatan</p>
+            <p className="text-xl font-mono font-bold text-slate-200">+35 Menit</p>
+            <p className="text-xs text-amber-400">Jika Arteri Terhambat</p>
           </div>
         </div>
 
@@ -170,16 +165,13 @@ export default function SimulationSection({
             <div className="flex items-center gap-2">
               <Bot className="w-4 h-4 text-slate-300" />
               <span className="text-xs font-semibold uppercase text-white tracking-wide">
-                Penalaran Multi-Agen & Rekomendasi AI
+                Simulasi Respons & Rekomendasi Mitigasi
               </span>
             </div>
             
             <div className="flex items-center gap-3">
-              <span className="text-xs font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                KONSENSUS 91% TERCAPAI
-              </span>
-              <span className="text-xs font-mono text-slate-400 flex items-center gap-1">
-                <Lock className="w-3 h-3 text-slate-400" /> Tanda Tangan Kriptografis Aktif
+              <span className="text-xs font-mono px-2 py-0.5 rounded bg-white/10 text-slate-300 border border-white/15">
+                KORIDOR AKTIF
               </span>
             </div>
           </div>
@@ -195,13 +187,8 @@ export default function SimulationSection({
                 }`}>
                   <div className="flex justify-between items-center mb-1.5 gap-4">
                     <span className="font-mono text-xs font-bold text-slate-300 uppercase tracking-wide flex items-center gap-1">
-                      {m.sender === 'user' ? 'INSTRUKSI OPERATOR' : 'ANALISIS MULTI-AGEN'}
+                      {m.sender === 'user' ? 'INSTRUKSI OPERATOR' : 'REKOMENDASI MITIGASI'}
                     </span>
-                    {m.thoughtSignature && (
-                      <span className="text-xs font-mono text-slate-400 bg-black/40 px-1.5 py-0.5 rounded border border-white/5">
-                        {m.thoughtSignature}
-                      </span>
-                    )}
                   </div>
                   <p className="leading-relaxed text-xs">{m.text}</p>
                 </div>
@@ -210,7 +197,8 @@ export default function SimulationSection({
             {loading && (
               <div className="flex justify-start">
                 <div className="p-3 bg-[#121822] rounded-xl border border-white/10 text-slate-300 font-mono text-xs flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 animate-spin text-slate-400" /> Multi-agen menghitung proyeksi dampak...
+                  <div className="w-3.5 h-3.5 rounded-full border-2 border-slate-500 border-t-white animate-spin shrink-0" />
+                  <span>Menganalisis skenario mitigasi...</span>
                 </div>
               </div>
             )}
@@ -330,7 +318,9 @@ export default function SimulationSection({
                 <button
                   onClick={() => setDishubDiversion(!dishubDiversion)}
                   className={`px-3 py-1 rounded text-xs font-medium font-mono transition-colors cursor-pointer ${
-                    dishubDiversion ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-[#0c1017] text-slate-400 border border-[#1c2432]'
+                    dishubDiversion
+                      ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-500/30'
+                      : 'bg-[#0c1017] text-slate-300 border border-[#1c2432] hover:text-white'
                   }`}
                 >
                   {dishubDiversion ? 'AKTIF (TOL BELMERA)' : 'NON-AKTIF'}

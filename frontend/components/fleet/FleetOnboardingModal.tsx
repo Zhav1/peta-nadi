@@ -312,9 +312,9 @@ export function FleetOnboardingModal({
               setActiveTab('single');
               setFeedback(null);
             }}
-            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-medium rounded-t-md transition-colors cursor-pointer border-b-2 ${
+            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-medium transition-colors cursor-pointer border-b-2 ${
               activeTab === 'single'
-                ? 'border-white text-white bg-[#0c1017]'
+                ? 'border-white text-white'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
@@ -327,9 +327,9 @@ export function FleetOnboardingModal({
               setActiveTab('manifest');
               setFeedback(null);
             }}
-            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-medium rounded-t-md transition-colors cursor-pointer border-b-2 ${
+            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-medium transition-colors cursor-pointer border-b-2 ${
               activeTab === 'manifest'
-                ? 'border-white text-white bg-[#0c1017]'
+                ? 'border-white text-white'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
@@ -342,9 +342,9 @@ export function FleetOnboardingModal({
               setActiveTab('webhook');
               setFeedback(null);
             }}
-            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-medium rounded-t-md transition-colors cursor-pointer border-b-2 ${
+            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-medium transition-colors cursor-pointer border-b-2 ${
               activeTab === 'webhook'
-                ? 'border-white text-white bg-[#0c1017]'
+                ? 'border-white text-white'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >

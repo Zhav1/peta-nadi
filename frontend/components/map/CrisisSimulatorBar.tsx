@@ -110,20 +110,20 @@ export function CrisisSimulatorBar({
   const isLeftOpen = !isLeftSidebarCollapsed;
   const isRightOpen = isSidebarOpen;
   const positionClass = isLeftOpen && isRightOpen
-    ? 'left-[calc(50%-30px)] -translate-x-1/2'
+    ? 'lg:left-[calc(50%-30px)]'
     : isLeftOpen && !isRightOpen
-    ? 'left-[calc(50%+160px)] -translate-x-1/2'
+    ? 'lg:left-[calc(50%+160px)]'
     : !isLeftOpen && isRightOpen
-    ? 'left-[calc(50%-190px)] -translate-x-1/2'
-    : 'left-1/2 -translate-x-1/2';
+    ? 'lg:left-[calc(50%-190px)]'
+    : 'lg:left-1/2';
 
   return (
     <div
       ref={containerRef}
-      className={`absolute bottom-20 z-40 flex flex-col items-center gap-2 pointer-events-auto select-none transition-all duration-300 ${positionClass}`}
+      className={`absolute bottom-16 sm:bottom-20 z-40 flex flex-col items-center gap-2 pointer-events-auto select-none transition-all duration-300 left-1/2 -translate-x-1/2 max-w-[95vw] ${positionClass}`}
     >
       {/* Floating Action Bubble Pills Row */}
-      <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#0c1017] border border-[#1c2432] shadow-xl">
+      <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#0c1017] border border-[#1c2432] shadow-xl max-w-full overflow-x-auto no-scrollbar">
         
         {/* 1. Modality Bubble Pill */}
         {setSelectedModality && (
@@ -158,7 +158,7 @@ export function CrisisSimulatorBar({
                         setActivePopover(null);
                       }}
                       className={`cursor-pointer w-full p-2 rounded-md text-left font-sans transition flex items-center justify-between ${
-                        active ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' : 'hover:bg-slate-800 text-slate-300'
+                        active ? 'bg-white/10 text-white border border-white/20' : 'hover:bg-white/5 text-slate-300'
                       }`}
                     >
                       <div className="flex items-center gap-2.5">
@@ -288,11 +288,11 @@ export function CrisisSimulatorBar({
                   }}
                   className={`cursor-pointer w-full p-2 rounded-md font-sans text-xs font-medium transition flex items-center gap-2 ${
                     drawModeActive
-                      ? 'bg-amber-500 text-slate-950 font-bold'
+                      ? 'bg-amber-400 text-amber-950 font-bold'
                       : 'bg-[#121822] text-slate-300 border border-[#1c2432] hover:bg-slate-800'
                   }`}
                 >
-                  <PenTool className="w-4 h-4 text-amber-400" />
+                  <PenTool className={`w-4 h-4 ${drawModeActive ? 'text-amber-950' : 'text-amber-400'}`} />
                   <span>Gambar Poligon Bebas</span>
                 </button>
 

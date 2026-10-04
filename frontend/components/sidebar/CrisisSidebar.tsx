@@ -48,7 +48,7 @@ export function CrisisSidebar({
   return (
     <div
       id="crisis-sidebar"
-      className="fixed top-20 right-6 w-[400px] max-h-[calc(100vh-7.5rem)] bg-[#0c1017] border border-[#1c2432] rounded-lg flex flex-col z-40 overflow-hidden shadow-xl animate-in slide-in-from-right-4 duration-300 pointer-events-auto"
+      className="fixed top-20 right-3 sm:right-6 w-[calc(100vw-1.5rem)] sm:w-[400px] max-h-[calc(100vh-6rem)] sm:max-h-[calc(100vh-7.5rem)] bg-[#0c1017] border border-[#1c2432] rounded-lg flex flex-col z-40 overflow-hidden shadow-xl animate-in slide-in-from-right-4 duration-300 pointer-events-auto"
     >
       {/* Header */}
       <div className="p-4 border-b border-[#1c2432] bg-[#0c1017] space-y-2">
@@ -59,7 +59,7 @@ export function CrisisSidebar({
                 {crisis.status}
               </span>
               <span className="text-xs text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded font-mono font-bold">
-                {confidencePct}% CONFIDENCE
+                {confidencePct}% Keyakinan
               </span>
               {crisis.is_simulated && (
                 <span className="text-xs text-amber-300 bg-amber-950/60 border border-amber-500/30 px-2 py-0.5 rounded font-mono font-bold">
@@ -90,13 +90,13 @@ export function CrisisSidebar({
           <div className="flex items-center justify-between text-xs font-sans text-slate-300 bg-[#121822] border border-[#1c2432] px-3 py-1.5 rounded-md">
             <span className="flex items-center gap-1.5 text-cyan-300 font-medium">
               <UserCheck className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Decision Support · HITL Active</span>
+              <span>Dukungan Keputusan · Kendali Operator</span>
             </span>
             <button
               type="button"
               onClick={() => setShowHitlExplainer((v) => !v)}
               className="cursor-pointer text-slate-400 hover:text-cyan-300 transition"
-              title="Penjelasan Tata Kelola Keputusan PreHub"
+              title="Penjelasan Tata Kelola Keputusan Sistem"
             >
               <HelpCircle className="w-3.5 h-3.5" />
             </button>
@@ -104,8 +104,8 @@ export function CrisisSidebar({
 
           {showHitlExplainer && (
             <div className="mt-2 p-2.5 rounded-md bg-[#080d14] border border-[#1c2432] text-xs text-slate-300 font-sans leading-relaxed animate-in fade-in duration-150">
-              <strong className="text-cyan-300 font-bold block mb-1">Prinsip Human-in-the-Loop (Proposal Bagian 4.2):</strong>
-              PreHub tidak melakukan intervensi kendaraan otomatis. Sistem hanya menyediakan analisis bukti multisumber & estimasi risiko. Persetujuan rute pengalihan mutlak berada pada kewenangan operator.
+              <strong className="text-cyan-300 font-bold block mb-1">Prinsip Kendali Operator (Human-in-the-Loop):</strong>
+              Sistem tidak melakukan intervensi kendaraan otomatis. Sistem hanya menyediakan analisis bukti multisumber & estimasi risiko. Persetujuan rute pengalihan mutlak berada pada kewenangan operator logistik.
             </div>
           )}
         </div>
@@ -113,19 +113,23 @@ export function CrisisSidebar({
 
       {/* Tabs */}
       <div className="flex border-b border-[#1c2432] bg-[#0c1017]">
-        {TABS.map((tab) => (
+        {[
+          { id: 'Evidence', label: 'Bukti & Sensor' },
+          { id: 'Mitigation', label: 'Mitigasi & Rute' },
+          { id: 'Economic', label: 'Dampak Ekonomi' },
+        ].map((tab) => (
           <button
-            key={tab}
-            id={`tab-${tab.toLowerCase()}`}
+            key={tab.id}
+            id={`tab-${tab.id.toLowerCase()}`}
             type="button"
-            onClick={() => setActiveTab(tab)}
+            onClick={() => setActiveTab(tab.id as Tab)}
             className={`cursor-pointer flex-1 py-2 text-xs font-sans font-medium transition-colors ${
-              activeTab === tab
+              activeTab === tab.id
                 ? 'text-white border-b-2 border-white bg-white/5 font-semibold'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            {tab}
+            {tab.label}
           </button>
         ))}
       </div>

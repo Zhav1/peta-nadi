@@ -1065,6 +1065,40 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 
 ---
 
+## Phase 47: Impeccable Grounding, Typeset & Layout Refinement
+**Requirements Covered:** UX-Impeccable-1.0, NFR-11.4, Responsive-Hardening-1.0
+**Goal:** Comprehensive pass using the Impeccable design suite: empirical grounding of all claims, elimination of all 14 AST design detector anti-pattern findings, tabular numeral formatting, and responsive viewport hardening across 25 frontend components.
+**Status:** COMPLETE ✅
+**AI Spec Needed:** No
+**Plans:** 47-01-PLAN.md, 47-02-PLAN.md
+
+### Deliverables
+- **Design Detector Anti-Pattern Resolution (`npx impeccable detect`)**:
+  - Eliminated all 14 anti-pattern findings across 7 files down to 0 findings.
+  - Resolved `[gray-on-color]` across buttons, badges, and filters in `SimulationSection.tsx`, `SystemObservabilitySection.tsx`, `CrisisMap.tsx`, `CrisisSimulatorBar.tsx`, `ComplianceInspectorCard.tsx`, and `SpoilageHedgingCard.tsx`.
+  - Resolved `[border-accent-on-rounded]` in `FleetOnboardingModal.tsx` by removing top radii on bottom-accent bordered tabs.
+- **Empirical Grounding & Slop Eradication**:
+  - Replaced vague "AI Swarm" slogans and unscientific accuracy percentages with authentic supply chain capabilities and official data sources (BMKG, LKBN ANTARA, TomTom, PIHPS, AISstream.io, NASA FIRMS).
+  - Standardized the 5-point empirical benchmark ledger in `EvaluationSection.tsx` (Precision 100%, Recall 94.3%, F1-Score 0.971, Brier Score 0.0782, Latency 0.024ms).
+  - Replaced robotic prompt prefixes (`=== HASIL PENALARAN ===`) with structured Markdown explainability.
+- **Typeset & Tabular Numeral Discipline**:
+  - Applied `tabular-nums` across all quantitative data ledgers, benchmark rows, commodity prices, volatility deltas, and fleet counters.
+  - Verified 45ch to 75ch measure on body copy across the landing page (`OnboardHero.tsx`, `KineticFeatureGrid.tsx`, `LiveTelemetryShowcase.tsx`).
+- **Responsive Layout & Viewport Hardening**:
+  - Converted `CrisisSidebar.tsx` to `w-[calc(100vw-1.5rem)] sm:w-[400px]` with right offset `right-3 sm:right-6`, preventing mobile horizontal overflow.
+  - Scoped dual-sidebar centering offsets on `CrisisSimulatorBar.tsx` and bottombar time filters to `lg:` breakpoints, defaulting to centered alignment with horizontal scroll on mobile.
+  - Added `overflow-y-auto` to `analytics`, `simulation`, and `reports` tab wrappers in `DashboardClient.tsx` and changed inner containers to `min-h-full lg:h-full` to allow smooth vertical scrolling when columns collapse.
+  - Added `overflow-x-auto no-scrollbar` to navigation tabs and collapsed secondary text labels on small viewports.
+
+### Verification Criteria
+- [x] `rtk npx impeccable detect frontend/components/` returns 0 findings.
+- [x] `rtk npx tsc --noEmit` returns 0 type errors.
+- [x] Zero horizontal clipping on viewports from 360px up.
+- [x] Zero ungrounded AI boasting or unscientific marketing slogans.
+- [x] Zero em dashes in code or documentation.
+
+---
+
 ## Backlog (Post-Hackathon / v2)
 - Driver mobile app (React Native + WatermelonDB + CRDT offline sync)
 - Enterprise GraphRAG private self-hosted deployment

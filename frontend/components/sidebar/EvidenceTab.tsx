@@ -24,11 +24,11 @@ interface EvidenceTabProps {
 }
 
 const AGENT_LABELS: Record<string, { name: string; source: string; defaultSourceType: 'live' | 'fixture' }> = {
-  data_collection: { name: 'Data Collection Agent', source: 'BMKG Sensor + TomTom Ingestion', defaultSourceType: 'live' },
-  osint_hazard: { name: 'OSINT & News Intelligence', source: 'LKBN ANTARA + BMKG Warta Terverifikasi', defaultSourceType: 'live' },
-  prediction: { name: 'Atmospheric & Traffic Prediction', source: 'TFT & Numerical Weather Model', defaultSourceType: 'fixture' },
-  route_optimization: { name: 'Route Optimization Engine', source: 'NetworkX Graph Matrix', defaultSourceType: 'live' },
-  economic_intelligence: { name: 'Economic & Price Agent', source: 'PIHPS Bank Indonesia Price Stream', defaultSourceType: 'live' },
+  data_collection: { name: 'Koleksi Sensor Cuaca & Jalan', source: 'Sensor BMKG + TomTom Traffic', defaultSourceType: 'live' },
+  osint_hazard: { name: 'Verifikasi Berita & Lapangan', source: 'LKBN ANTARA + Warta BMKG', defaultSourceType: 'live' },
+  prediction: { name: 'Prakiraan Spasial & Cuaca', source: 'Model Numerik Open-Meteo & BMKG', defaultSourceType: 'fixture' },
+  route_optimization: { name: 'Optimasi Rute Koridor', source: 'Solver Graf Koridor Pangan', defaultSourceType: 'live' },
+  economic_intelligence: { name: 'Pemantauan Harga Pangan', source: 'Data Harga Harian PIHPS BI', defaultSourceType: 'live' },
 };
 
 function ConfidenceBar({ value }: { value: number }) {
@@ -78,15 +78,15 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-1.5 text-slate-100 font-bold font-sans text-xs">
             <GitBranch className="w-3.5 h-3.5 text-cyan-400" />
-            <span>Rantai Bukti (Evidence Chain) PreHub</span>
+            <span>Rantai Bukti Operasional</span>
           </div>
           <button
             type="button"
             onClick={() => setShowFullTrace((v) => !v)}
             className="cursor-pointer flex items-center gap-1 px-2 py-0.5 rounded bg-[#0c1017] border border-[#1c2432] text-xs font-mono text-cyan-300 hover:text-white transition-colors"
-            title="Buka rincian alur 8-tahap Evidence Chain"
+            title="Buka rincian alur proses verifikasi"
           >
-            <span>{showFullTrace ? 'Ringkas Trace' : 'Buka 8-Tahap Trace'}</span>
+            <span>{showFullTrace ? 'Ringkas Alur' : 'Buka Rincian Alur'}</span>
             {showFullTrace ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
           </button>
         </div>
@@ -150,7 +150,7 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
             <div className="p-2 rounded-md bg-[#0c1017] border border-[#1c2432] space-y-1">
               <div className="text-cyan-300 font-medium flex items-center gap-1">
                 <Cpu className="w-3 h-3 text-cyan-400" />
-                <span>Tahap 6 & 7: Optimasi Mitigasi (NetworkX Matrix)</span>
+                <span>Tahap 6 & 7: Optimasi Mitigasi Jalur Graf</span>
               </div>
               <p className="text-slate-400 text-xs leading-relaxed">
                 Algoritma graf menghitung multi-alternatif rute aman (Lanjut vs Pengalihan vs Tunda) dengan constraint kapasitas.
@@ -217,21 +217,21 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
 
         {showProvenanceInfo && (
           <div className="p-2.5 rounded-md bg-[#0c1017] border border-[#1c2432] text-xs text-slate-300 leading-relaxed font-sans">
-            <strong>Prinsip Transparansi PreHub:</strong> Evidence Confidence mengukur seberapa kuat data mendukung indikasi (kualitas/kesegaran sumber), sedangkan Disruption Probability mengukur kemungkinan terjadinya hambatan fisik di lapangan.
+            <strong>Prinsip Transparansi Sistem:</strong> Keyakinan Bukti mengukur konsistensi data multi-sumber, sedangkan Probabilitas Disrupsi mengukur kemungkinan terjadinya hambatan fisik di lapangan.
           </div>
         )}
 
         <div className="grid grid-cols-2 gap-2 pt-1 font-mono">
           <div className="p-2.5 rounded-md bg-[#0c1017] border border-[#1c2432]">
-            <span className="text-xs text-slate-400 block mb-0.5 font-sans">Evidence Confidence</span>
+            <span className="text-xs text-slate-400 block mb-0.5 font-sans">Keyakinan Bukti</span>
             <span className="text-sm font-bold text-emerald-400">{confidenceScore}%</span>
             <span className="text-xs text-slate-500 block font-sans">5 Sumber Konsisten</span>
           </div>
 
           <div className="p-2.5 rounded-md bg-[#0c1017] border border-[#1c2432]">
-            <span className="text-xs text-slate-400 block mb-0.5 font-sans">Disruption Probability</span>
+            <span className="text-xs text-slate-400 block mb-0.5 font-sans">Probabilitas Disrupsi</span>
             <span className="text-sm font-bold text-cyan-400">{disruptionProb}%</span>
-            <span className="text-xs text-slate-500 block font-sans">Brier Calibrated</span>
+            <span className="text-xs text-slate-500 block font-sans">Terkalibrasi Brier</span>
           </div>
         </div>
       </div>

@@ -543,7 +543,7 @@ export default function CrisisMap({
           }">
             <span>${iconSvg}</span>
             <span class="font-medium">${shortCityName}</span>
-            <span class="px-1.5 py-0.5 ${isOrigin ? 'bg-white text-[#080d14]' : 'bg-amber-400 text-slate-950'} rounded text-xs font-semibold">${isOrigin ? 'ASAL' : 'TUJUAN'}</span>
+            <span class="px-1.5 py-0.5 ${isOrigin ? 'bg-white text-[#080d14]' : 'bg-amber-400 text-amber-950'} rounded text-xs font-semibold">${isOrigin ? 'ASAL' : 'TUJUAN'}</span>
           </div>
         `;
       } else {

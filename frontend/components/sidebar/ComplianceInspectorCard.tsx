@@ -258,7 +258,7 @@ export function ComplianceInspectorCard({
           {!showOverrideDialog ? (
             <button
               onClick={() => setShowOverrideDialog(true)}
-              className="w-full py-1.5 px-3 rounded-lg bg-amber-600 hover:bg-amber-500 text-slate-950 font-mono font-bold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
+              className="w-full py-1.5 px-3 rounded-lg bg-amber-500 hover:bg-amber-400 text-amber-950 font-mono font-bold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
             >
               <AlertTriangle className="w-3.5 h-3.5" />
               <span>Konfirmasi Dispensasi MST (Operator Override)</span>
@@ -277,7 +277,7 @@ export function ComplianceInspectorCard({
               <div className="flex gap-2">
                 <button
                   onClick={handleConfirmOverride}
-                  className="flex-1 py-1 rounded bg-amber-500 hover:bg-amber-400 text-slate-950 font-mono font-bold text-xs flex items-center justify-center gap-1 cursor-pointer"
+                  className="flex-1 py-1 rounded bg-amber-400 hover:bg-amber-300 text-amber-950 font-mono font-bold text-xs flex items-center justify-center gap-1 cursor-pointer"
                 >
                   <Check className="w-3.5 h-3.5" />
                   <span>Setujui Dispensasi</span>

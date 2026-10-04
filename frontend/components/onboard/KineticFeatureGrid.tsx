@@ -17,45 +17,45 @@ interface CapabilityItem {
 const CAPABILITIES: CapabilityItem[] = [
   {
     id: 'geospatial',
-    category: 'SISTEM SPASIAL 4D',
-    title: 'Pemetaan Spasial Multilapis & Pemodelan Koridor',
-    engine: 'Mapbox GL v3 + Deck.gl v9.3',
+    category: 'PEMANTAUAN KORIDOR',
+    title: 'Pemetaan Spasial Jalur Logistik & Titik Rawan',
+    engine: 'Visualisasi Spasial',
     description:
-      'Memetakan kontur jalan arteri nasional, perimeter genangan banjir, gelombang kejut seismik, dan kepadatan lalu lintas secara real-time pada kanvas GPU berkinerja tinggi.',
-    metricLabel: 'Performa Visualisasi',
-    metricValue: '60 FPS Native Canvas',
+      'Memantau jalur distribusi darat, kawasan rawan genangan banjir, dan kepadatan lalu lintas secara terpadu pada peta interaktif.',
+    metricLabel: 'Wilayah Pantauan',
+    metricValue: 'Sumatera Utara & Jalinsum',
     icon: Map,
   },
   {
     id: 'agent-swarm',
-    category: 'INTELIJEN KOGNITIF',
-    title: 'LangGraph 6-Agent Swarm & Gerbang Konsensus',
-    engine: 'DeepSeek V3 + Gemini 3.1 Flash',
+    category: 'VALIDASI GANGGUAN',
+    title: 'Verifikasi Silang Laporan & Sensor Lapangan',
+    engine: 'Penyaringan Multi-Sumber',
     description:
-      'Enam agen cerdas memvalidasi silang laporan lapangan OSINT, pantauan satelit, dan sensor hidrologi. Peringatan krisis diterbitkan hanya jika memenuhi ambang konsensus >85%.',
-    metricLabel: 'Ambang Batas Verifikasi',
-    metricValue: '> 85% Multi-Sensor',
+      'Mencocokkan informasi lapangan dengan data resmi BMKG dan pantauan lalu lintas guna menyaring laporan palsu sebelum peringatan diterbitkan.',
+    metricLabel: 'Standar Validasi',
+    metricValue: 'Konsensus Multi-Sumber',
     icon: Bot,
   },
   {
     id: 'routing',
-    category: 'OPTIMASI DETERMINISTIK',
-    title: 'Kalkulasi Rute Pengalihan Tangensial (Bypass)',
-    engine: 'NetworkX & Google OR-Tools',
+    category: 'PENGALIHAN RUTE',
+    title: 'Kalkulasi Rute Alternatif Bebas Hambatan',
+    engine: 'Optimasi Jalur Logistik',
     description:
-      'Algoritma CPU menghitung rute alternatif di luar radius bahaya secara tangensial, mengarahkan armada komoditas melalui simpul persimpangan jalan arteri OSM terverifikasi.',
-    metricLabel: 'Latensi Solver CPU',
-    metricValue: '< 2 ms per Kalkulasi',
+      'Menghitung rute pengalihan di luar area terdampak bencana atau kemacetan agar armada distribusi tetap bergerak lancar.',
+    metricLabel: 'Sasaran Pengalihan',
+    metricValue: 'Keamanan Jalur & Efisiensi Waktu',
     icon: Navigation,
   },
   {
     id: 'causal-graph',
-    category: 'SIMULASI EKONOMI',
-    title: 'Analisis Causal Graph & Proyeksi Inflasi Pangan',
-    engine: 'Supply Chain Graph Engine + PIHPS',
+    category: 'DAMPAK PASAR',
+    title: 'Proyeksi Keterlambatan Pasokan & Harga Pokok',
+    engine: 'Analisis Rantai Pasok',
     description:
-      'Melacak propagasi dampak disrupsi dari simpul pelabuhan terhadap pasokan pasar lokal, memproyeksikan lonjakan harga komoditas strategis sebelum kelangkaan terjadi.',
-    metricLabel: 'Integrasi Komoditas',
+      'Menghubungkan hambatan di simpul pelabuhan atau jalur darat dengan proyeksi ketersediaan dan harga komoditas pangan di pasar lokal.',
+    metricLabel: 'Komoditas Pantauan',
     metricValue: 'Beras, Minyak Goreng, Cabai',
     icon: Network,
   },
@@ -66,13 +66,13 @@ export default function KineticFeatureGrid() {
     <section id="capabilities" className="relative w-full bg-[#080d14] py-28 px-4 md:px-8 border-t border-white/8">
       <div className="max-w-7xl mx-auto flex flex-col gap-16">
         
-        {/* Editorial Section Header — No Eyebrow Pill */}
+        {/* Editorial Section Header */}
         <div className="max-w-3xl flex flex-col gap-4">
           <h2 className="font-headline text-3xl sm:text-5xl font-bold text-white tracking-tight leading-tight">
-            Kemampuan Inti Arsitektur PreHub
+            Fitur Utama Pemantauan & Mitigasi
           </h2>
           <p className="font-sans text-base sm:text-lg text-slate-300 leading-relaxed">
-            PreHub memadukan visualisasi spasial presisi tinggi, penalaran agen berbasis data resmi, dan optimasi rute terukur untuk melindungi stabilitas rantai pasok pangan nasional.
+            PreHub memadukan pemantauan jalur distribusi pangan, validasi gangguan otomatis, dan rekomendasi rute pengalihan untuk menjaga kestabilan pasokan.
           </p>
         </div>
 

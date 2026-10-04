@@ -28,10 +28,10 @@ export default function OnboardNav() {
         {/* Editorial Nav Links */}
         <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-300">
           <a href="#sequence" className="hover:text-white transition-colors cursor-pointer">
-            Kronologi Krisis
+            Alur Mitigasi
           </a>
           <a href="#capabilities" className="hover:text-white transition-colors cursor-pointer">
-            Kemampuan Sistem
+            Fitur Utama
           </a>
           <a href="#telemetry" className="hover:text-white transition-colors cursor-pointer">
             Sumber Data
@@ -43,7 +43,7 @@ export default function OnboardNav() {
           href="/dashboard"
           className="inline-flex items-center gap-2 px-5 py-2.5 rounded-md bg-white text-[#080d14] font-semibold text-sm hover:bg-slate-200 active:scale-[0.99] transition-all cursor-pointer"
         >
-          <span>Pusat Komando</span>
+          <span>Dashboard</span>
           <ArrowRight className="w-4 h-4" />
         </Link>
 

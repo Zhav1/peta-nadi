@@ -35,23 +35,23 @@ export default function OnboardHero() {
       {/* Hero Content — Restrained Editorial Composition */}
       <div className="relative z-10 max-w-4xl mx-auto text-center flex flex-col items-center gap-8">
         
-        {/* Editorial Headline — Continuous Sentence, No Highlighter Chips */}
+        {/* Editorial Headline */}
         <h1 className="font-headline text-4xl sm:text-6xl md:text-7xl font-bold text-white tracking-tight leading-[1.12]">
-          Intelijen Mitigasi Krisis Distribusi Pangan Nasional
+          Peringatan Dini & Mitigasi Gangguan Distribusi Pangan
         </h1>
 
-        {/* Subtitle — Plain, Authoritative Domain Copy */}
+        {/* Subtitle — Factual, Grounded Domain Copy */}
         <p className="font-sans text-base sm:text-lg md:text-xl text-slate-300 max-w-2xl leading-relaxed">
-          Memantau kerentanan koridor arteri logistik, memvalidasi sinyal anomali multi-sensor secara real-time, dan memproyeksikan rute pengalihan tangensial sebelum krisis melumpuhkan pasokan komoditas pangan strategis.
+          Memantau kelancaran koridor logistik, memvalidasi gangguan berbasis data multi-sumber, dan merekomendasikan rute pengalihan secara dini sebelum pasokan pangan pokok terhambat.
         </p>
 
-        {/* Dual Actions — Architectural White Primary, Quiet Hairline Secondary */}
+        {/* Dual Actions */}
         <div className="flex flex-col sm:flex-row items-center gap-4 mt-2">
           <Link
             href="/dashboard"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-7 py-3.5 rounded-md bg-white text-[#080d14] font-semibold text-base hover:bg-slate-200 active:scale-[0.99] transition-all cursor-pointer"
           >
-            <span>Buka Pusat Komando</span>
+            <span>Buka Dashboard</span>
             <ArrowRight className="w-4 h-4" />
           </Link>
 
@@ -60,7 +60,7 @@ export default function OnboardHero() {
             onClick={scrollToCanvas}
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-md bg-[#0c1017] border border-white/10 text-slate-200 font-medium text-base hover:border-white/25 hover:bg-[#121822] transition-all cursor-pointer"
           >
-            <span>Kronologi Krisis</span>
+            <span>Alur Mitigasi</span>
             <ChevronDown className="w-4 h-4 text-slate-400" />
           </button>
         </div>
