@@ -22,7 +22,8 @@ async def data_collection_agent(state: CrisisState) -> dict:
     
     event_type = state.get("type") or state.get("event_type") or "unknown"
     severity = state.get("severity") or "medium"
-    source = state.get("source") or "unknown"
+    is_sim = bool(state.get("is_simulated"))
+    source = state.get("source") or ("simulation" if is_sim else "unknown")
     lat = state.get("lat")
     lon = state.get("lon")
     region = state.get("region")
@@ -44,18 +45,19 @@ async def data_collection_agent(state: CrisisState) -> dict:
         severity = 'medium'
         validation_errors.append(f"Normalized invalid severity to 'medium'")
         
-    # 2. Deduplication check
+    # 2. Deduplication check (simulations always execute)
     event_hash = generate_event_hash(state)
     logger.debug(f"Computed event hash: {event_hash}")
     
-    if await is_seen(event_hash):
-        logger.info(f"Duplicate event detected for hash: {event_hash}. Terminating path.")
-        return {
-            "status": "duplicate",
-            "messages": state.get("messages", []) + ["DataCollectionAgent: Duplicate event suppressed."]
-        }
-        
-    await mark_seen(event_hash)
+    if not is_sim and source not in ["simulation", "simulated", "test"]:
+        if await is_seen(event_hash):
+            logger.info(f"Duplicate event detected for hash: {event_hash}. Terminating path.")
+            return {
+                "status": "duplicate",
+                "messages": state.get("messages", []) + ["DataCollectionAgent: Duplicate event suppressed."]
+            }
+            
+        await mark_seen(event_hash)
     
     # 3. Lookup source health
     health_status = await get_source_health(source)

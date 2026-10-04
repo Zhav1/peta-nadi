@@ -119,3 +119,34 @@ def test_spatial_weather_and_traffic_endpoints():
     assert res_traffic.status_code == 200
     traffic_data = res_traffic.json()
     assert "segments" in traffic_data
+
+
+def test_simulate_crisis_stream_endpoint():
+    """Verify that POST /api/v1/simulate/stream returns real-time SSE stream events."""
+    payload = {
+        "title": "Banjir Jalinsum Lubuk Pakam",
+        "type": "flood",
+        "severity": "critical",
+        "lat": 3.56,
+        "lon": 98.87,
+        "region": "north_sumatra",
+        "commodity": "cabai_merah",
+        "cargo_tonnage": 10.0,
+        "has_bkhit_cert": True
+    }
+    
+    # Test /api/v1/simulate/stream
+    res = client.post("/api/v1/simulate/stream", json=payload)
+    assert res.status_code == 200
+    assert "text/event-stream" in res.headers["content-type"]
+    assert "data: " in res.text
+    assert "simulation_started" in res.text
+    assert "node_update" in res.text
+    assert "simulation_complete" in res.text
+
+    # Verify AGENT_STATUS_STORE updated
+    res_status = client.get("/api/v1/agents/status")
+    assert res_status.status_code == 200
+    status_data = res_status.json()
+    assert "agents" in status_data
+    assert len(status_data["agents"]) == 6

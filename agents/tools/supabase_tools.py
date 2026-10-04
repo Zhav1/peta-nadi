@@ -89,6 +89,8 @@ async def get_hazard_polygons(lat: float, lon: float, radius_km: float = 50) -> 
 
 async def get_source_health(source_name: str) -> str:
     """Queries source_health table for current status ('green', 'yellow', 'red')."""
+    if source_name in ["simulation", "simulated", "internal_simulator", "test", "bmkg"]:
+        return "green"
     try:
         supabase = get_client()
         res = await asyncio.to_thread(

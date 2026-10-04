@@ -44,6 +44,23 @@ export interface RouteRecommendation {
   modality?: 'truck' | 'maritime' | 'air' | 'multimodal' | 'best';
   legs?: RouteLeg[];
   color?: string;
+  hedging?: {
+    optimal_policy: 'CONTINUE' | 'REROUTE' | 'HOLD' | string;
+    net_savings_idr: number;
+    spoilage_loss_idr: number;
+    cargo_value_idr: number;
+    continue_cost_idr: number;
+    reroute_cost_idr: number;
+    hold_cost_idr: number;
+    recommendation_reason: string;
+  };
+  compliance?: {
+    status: 'PASSED' | 'WARNING' | 'HARD_BLOCK' | string;
+    summary: string;
+    is_compliant: boolean;
+    requires_override: boolean;
+  };
+  chokepoint_delay_multiplier?: number;
 }
 
 export interface LTMEpisode {
@@ -68,6 +85,7 @@ export interface CrisisState {
   crisis_id: string;
   title: string;
   type: CrisisType;
+  severity?: Severity;
   is_simulated: boolean;
   lat: number;
   lon: number;
@@ -82,6 +100,8 @@ export interface CrisisState {
   economic_intelligence_finding?: AgentFinding;
   decision_support_output?: string;
   route_recommendations: RouteRecommendation[];
+  hedging_breakdown?: Record<string, unknown>;
+  compliance_status?: Record<string, unknown>;
   inflation_forecast?: {
     commodity: string;
     region: string;

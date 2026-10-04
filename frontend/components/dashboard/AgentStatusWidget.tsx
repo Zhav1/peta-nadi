@@ -96,7 +96,32 @@ export const AgentStatusWidget: React.FC<{ isCompact?: boolean }> = () => {
   useEffect(() => {
     fetchStatus();
     const interval = setInterval(fetchStatus, 15000); // 15s polling
-    return () => clearInterval(interval);
+
+    const handleStreamingUpdate = (e: Event) => {
+      const customEvent = e as CustomEvent<{ agent_id: string; status: string; confidence: number; summary: string }>;
+      if (customEvent.detail?.agent_id) {
+        setAgents((prev) =>
+          prev.map((a) =>
+            a.agent_id === customEvent.detail.agent_id
+              ? {
+                  ...a,
+                  status: customEvent.detail.status || 'complete',
+                  confidence: customEvent.detail.confidence ?? a.confidence,
+                  summary: customEvent.detail.summary || a.summary,
+                  last_run_at: new Date().toISOString(),
+                }
+              : a
+          )
+        );
+      }
+    };
+
+    window.addEventListener('prehub:agent_status_updated', handleStreamingUpdate);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('prehub:agent_status_updated', handleStreamingUpdate);
+    };
   }, []);
 
   const getStatusIcon = (status: string) => {

@@ -58,10 +58,26 @@ export default function SimulationSection({
     setLoading(true);
 
     try {
+      const activeRoute = selectedCrisis?.route_recommendations?.[0];
+      const hedging = selectedCrisis?.hedging_breakdown || activeRoute?.hedging;
+
       const res = await api.simulation.chat({
         message: textToSend,
-        crisis_id: crisisId || selectedCrisis?.title || 'belawan-flash-flood',
-        agency: activeAgency
+        crisis_id: crisisId || selectedCrisis?.crisis_id || 'belawan-flash-flood',
+        agency: activeAgency,
+        parameters: {
+          active_crisis: {
+            title: selectedCrisis?.title,
+            type: selectedCrisis?.type,
+            region: selectedCrisis?.region,
+            severity: selectedCrisis?.severity,
+          },
+          active_route: activeRoute,
+          cargo_type: (selectedCrisis as any)?.commodity || 'cabai_merah',
+          tonnage: (selectedCrisis as any)?.cargo_tonnage || 10.0,
+          spoilage_hedging: hedging,
+          user_role: activeAgency
+        }
       });
       
       setMessages(prev => [...prev, { 

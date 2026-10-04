@@ -26,50 +26,58 @@ def consensus_gate_node(state: CrisisState) -> dict:
 
 def route_after_gate(state: CrisisState) -> str:
     """Determines branching logic based on validation status."""
-    return "decision_support" if state.get("validated") else "archive"
+    return "economic_intelligence" if state.get("validated") else "archive"
 
 
 def build_crisis_graph() -> StateGraph:
-    """Assembles and compiles the LangGraph agent swarm StateGraph."""
+    """
+    Assembles and compiles the LangGraph agent swarm StateGraph.
+    4-Stage Architecture:
+    Stage 1: Ingestion (DataCollectionAgent)
+    Stage 2: Sensory Observation (OSINTHazardAgent + PredictionAgent in parallel) -> Consensus Gate
+    Stage 3: Impact Assessment (EconomicIntelligenceAgent, conditional on validation)
+    Stage 4: Optimization & Decision (RouteOptimizationAgent -> DecisionSupportCopilot)
+    """
     graph = StateGraph(CrisisState)
 
     # 1. Add all nodes
     graph.add_node("data_collection", data_collection_agent)
     graph.add_node("osint_hazard", osint_hazard_agent)
     graph.add_node("prediction", prediction_agent)
-    graph.add_node("route_optimization", route_optimization_agent)
-    graph.add_node("economic_intelligence", economic_intelligence_agent)
     graph.add_node("consensus_gate", consensus_gate_node)
+    graph.add_node("economic_intelligence", economic_intelligence_agent)
+    graph.add_node("route_optimization", route_optimization_agent)
     graph.add_node("decision_support", decision_support_copilot)
     graph.add_node("archive", archive_unconfirmed)
 
-    # 2. Set entry point
+    # 2. Set entry point (Stage 1)
     graph.set_entry_point("data_collection")
 
-    # 3. Add edges (Fan-out)
+    # 3. Stage 1 -> Stage 2: Sensory observation fan-out
     graph.add_edge("data_collection", "osint_hazard")
     graph.add_edge("data_collection", "prediction")
-    graph.add_edge("data_collection", "route_optimization")
-    graph.add_edge("data_collection", "economic_intelligence")
 
-    # 4. Add edges (Fan-in)
+    # 4. Stage 2 -> Consensus Gate fan-in
     graph.add_edge("osint_hazard", "consensus_gate")
     graph.add_edge("prediction", "consensus_gate")
-    graph.add_edge("route_optimization", "consensus_gate")
-    graph.add_edge("economic_intelligence", "consensus_gate")
 
-    # 5. Add conditional edges from consensus_gate
+    # 5. Consensus Gate -> Conditional Branching
     graph.add_conditional_edges(
         "consensus_gate",
         route_after_gate,
         {
-            "decision_support": "decision_support",
+            "economic_intelligence": "economic_intelligence",
             "archive": "archive"
         }
     )
 
-    # 6. Add terminal edges
+    # 6. Stage 3 -> Stage 4: Sequential Impact & Optimization Pipeline
+    graph.add_edge("economic_intelligence", "route_optimization")
+    graph.add_edge("route_optimization", "decision_support")
+
+    # 7. Terminal edges
     graph.add_edge("decision_support", END)
     graph.add_edge("archive", END)
 
     return graph
+

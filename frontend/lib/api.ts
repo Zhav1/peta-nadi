@@ -115,7 +115,7 @@ export const api = {
     }
   },
   simulation: {
-    chat: (body: { message: string; crisis_id?: string; agency?: string }) =>
+    chat: (body: { message: string; crisis_id?: string; agency?: string; parameters?: Record<string, any> }) =>
       request<{ reply: string; thought_signature?: string; confidence_score?: number }>('/api/simulation/chat', {
         method: 'POST',
         body: JSON.stringify(body)

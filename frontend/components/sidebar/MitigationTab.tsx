@@ -38,6 +38,7 @@ interface MitigationTabProps {
   activeRouteIdx: number | null;
   onSelectRoute: (idx: number) => void;
   onApproveSuccess?: (msg: string) => void;
+  onCommitOperationalRoute?: (route: RouteRecommendation, action: DecisionAction, tactical: TacticalManeuver) => void;
 }
 
 interface RouteCardProps {
@@ -382,6 +383,7 @@ export function MitigationTab({
   activeRouteIdx,
   onSelectRoute,
   onApproveSuccess,
+  onCommitOperationalRoute,
 }: MitigationTabProps) {
   const { user } = useAuth();
   const [approvedRouteId, setApprovedRouteId] = useState<string | null>(null);
@@ -443,6 +445,10 @@ export function MitigationTab({
         approved_at: res.approved_at || new Date().toISOString(),
       });
 
+      if (onCommitOperationalRoute) {
+        onCommitOperationalRoute(route, action, tacticalAction);
+      }
+
       if (onApproveSuccess) {
         const actionLabel = action === 'OVERRIDE' 
           ? 'Override rute tersimpan' 
@@ -466,6 +472,11 @@ export function MitigationTab({
         notes,
         approved_at: new Date().toISOString(),
       });
+
+      if (onCommitOperationalRoute) {
+        onCommitOperationalRoute(route, action, tacticalAction);
+      }
+
       if (onApproveSuccess) {
         onApproveSuccess(
           `Keputusan rute #${idx + 1} (${action}/${tacticalAction}) tersimpan secara lokal!`

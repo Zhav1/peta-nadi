@@ -422,3 +422,96 @@ def test_pilot_real_data_integrity_invariants():
     assert "COLD_CHAIN" in PERISHABILITY_TIERS
     assert "SEMI_PERISHABLE" in PERISHABILITY_TIERS
     assert "DRY_BULK" in PERISHABILITY_TIERS
+
+
+def test_drill4_closed_loop_orchestration_and_rerouting_e2e():
+    """
+    Drill 4: Closed-Loop Swarm Orchestration, Spoilage Hedging Detour Approval & Telematics Re-Route.
+    1. Triggers real-time SSE stream for simulated disruption at Lubuk Pakam KM 42.
+    2. Validates multi-agent DAG transitions, spoilage hedging valuations, and compliance.
+    3. Simulates Dispatcher approval of REROUTE policy.
+    4. Confirms outbound TMS telematics dispatch ping and closed-loop outcome evaluation tracking.
+    """
+    sim_payload = {
+        "title": "Banjir Jalinsum Lubuk Pakam KM 42",
+        "type": "flood",
+        "severity": "critical",
+        "lat": 3.56,
+        "lon": 98.87,
+        "region": "north_sumatra",
+        "commodity": "cabai_merah",
+        "cargo_tonnage": 10.0,
+        "vehicle_gross_weight_ton": 18.0,
+        "has_bkhit_cert": True
+    }
+
+    # 1. Trigger SSE stream
+    res_stream = client.post("/api/v1/simulate/stream", json=sim_payload)
+    assert res_stream.status_code == 200
+    assert "text/event-stream" in res_stream.headers["content-type"]
+    stream_text = res_stream.text
+
+    assert "simulation_started" in stream_text
+    assert "node_update" in stream_text
+    assert "simulation_complete" in stream_text
+
+    # Extract simulation_complete data
+    complete_line = None
+    for line in stream_text.split("\n"):
+        if line.startswith("data: ") and "simulation_complete" in line:
+            complete_line = line[6:].strip()
+            break
+    
+    assert complete_line is not None
+    complete_data = json.loads(complete_line)
+    crisis_id = complete_data["crisis_id"]
+    routes = complete_data.get("routes", [])
+    hedging = complete_data.get("hedging")
+    
+    assert len(routes) > 0
+    assert hedging is not None
+    assert hedging["optimal_policy"] in ("CONTINUE", "REROUTE", "HOLD")
+    assert hedging["net_savings_idr"] > 0
+    assert "Spoilage Hedging" in complete_data.get("copilot_summary", "")
+
+    # 2. Dispatcher Approval
+    guest_token = create_guest_token(role=ROLE_DISPATCHER, name="Chief Dispatcher Sumut")
+    auth_headers = {"Authorization": f"Bearer {guest_token}"}
+
+    approval_payload = {
+        "incident_id": crisis_id,
+        "route_id": "0",
+        "action": "ACCEPT",
+        "tactical_action": "REROUTE",
+        "operator_id": "OP-SUMUT-CHIEF",
+        "recommended_route": routes[0],
+        "notes": "Setujui pengalihan rute via Tol MKTT untuk mengamankan nilai muatan cabai."
+    }
+
+    res_appr = client.post("/api/v1/approvals", json=approval_payload, headers=auth_headers)
+    assert res_appr.status_code in (200, 201)
+    appr_data = res_appr.json()
+    assert appr_data.get("action") == "ACCEPT"
+    assert appr_data.get("tactical_action") == "REROUTE"
+
+    # 3. Outbound Telematics Ping
+    ping_payload = {
+        "vehicle_id": "TRK-003-BELAWAN-TEBING",
+        "latitude": 3.6013,
+        "longitude": 98.6712,
+        "speed_kmh": 65.0,
+        "heading_deg": 135.0,
+        "temperature_c": 4.5,
+        "ignition": True
+    }
+    res_ping = client.post("/api/v1/fleet/telemetry/simulate-ping", json=ping_payload, headers=auth_headers)
+    assert res_ping.status_code == 200
+    ping_data = res_ping.json()
+    assert ping_data.get("status") == "success"
+
+    # 4. Verify Outcome Evaluation Registered
+    outcomes = local_storage.list_ground_truth_outcomes(incident_id=crisis_id)
+    assert len(outcomes) > 0
+    assert outcomes[0]["incident_id"] == crisis_id
+    assert outcomes[0]["horizon"] == "12h"
+

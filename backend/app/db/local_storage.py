@@ -357,6 +357,11 @@ def list_outcomes(
         conn.close()
 
 
+# Convenience aliases for pilot outcome queries
+list_ground_truth_outcomes = list_outcomes
+save_ground_truth_outcome = save_outcome
+
+
 def get_pending_sync_count(db_path: Optional[str] = None) -> int:
     """Return count of records waiting for cloud sync."""
     conn = get_db_connection(db_path)

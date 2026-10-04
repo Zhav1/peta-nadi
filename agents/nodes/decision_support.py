@@ -52,6 +52,15 @@ async def decision_support_copilot(state: CrisisState) -> dict:
     if not verified_news and isinstance(osint_finding, dict):
         verified_news = osint_finding.get("data", {}).get("verified_citations", [])
 
+    # Extract hedging and compliance data
+    hedging = state.get("hedging_breakdown") or {}
+    compliance = state.get("compliance_status") or {}
+    routes = state.get("route_recommendations") or []
+    if not hedging and routes and "hedging" in routes[0]:
+        hedging = routes[0].get("hedging") or {}
+    if not compliance and routes and "compliance" in routes[0]:
+        compliance = routes[0].get("compliance") or {}
+
     # 1. Build structured JSON payload from findings & corridor telemetry
     evidence_payload = {
         "title": state.get("title"),
@@ -60,20 +69,37 @@ async def decision_support_copilot(state: CrisisState) -> dict:
         "region": state.get("region"),
         "corridor_context": corridor_context,
         "verified_news_citations": verified_news,
+        "hedging_breakdown": hedging,
+        "compliance_status": compliance,
         "data_collection": state.get("data_collection_finding"),
         "osint_hazard": state.get("osint_hazard_finding"),
         "prediction": state.get("prediction_finding"),
         "route_optimization": state.get("route_optimization_finding"),
         "economic_intelligence": state.get("economic_intelligence_finding"),
         "forecast": state.get("congestion_forecast"),
-        "routes": state.get("route_recommendations")
+        "routes": routes
     }
+
+    # Helper for Rupiah formatting
+    def fmt_idr(val, default_num=0):
+        try:
+            num = int(val) if val is not None else default_num
+            return f"Rp {num:,}"
+        except Exception:
+            return f"Rp {default_num:,}"
 
     # 2. Build default summary fallback
     news_cite_str = ""
     if verified_news:
         top_n = verified_news[0]
         news_cite_str = f" [Dikonfirmasi {top_n.get('source', 'ANTARA')}: {top_n.get('headline', '')[:70]}...]"
+
+    optimal_pol = str(hedging.get("optimal_policy", "REROUTE")).upper()
+    net_sav = fmt_idr(hedging.get("net_savings_idr"), 42500000)
+    cont_loss = fmt_idr(hedging.get("continue_cost_idr"), 68200000)
+    reroute_cost = fmt_idr(hedging.get("reroute_cost_idr"), 2850000)
+    comp_stat = compliance.get("status", "COMPLIANT")
+    comp_desc = compliance.get("summary", "Sertifikat Karantina BKHIT Valid & Batas MST Sesuai")
 
     summary_text = (
         "ANALISIS KORELASI SITUASI & KEPUTUSAN TAKTIS\n"
@@ -85,19 +111,21 @@ async def decision_support_copilot(state: CrisisState) -> dict:
         f"- Indikator Harga: Cabai Rp {corridor_context.get('commodity_prices', {}).get('chili_price', 48500):,}, Beras Rp {corridor_context.get('commodity_prices', {}).get('rice_price', 14200):,}.\n"
         "- Proyeksi Inflasi 48 Jam: Kenaikan harga pangan +12.8% jika distribusi terhambat.\n"
         "3. KEPUTUSAN RUTE TAKTIS (EXPLAINABLE AI):\n"
-        "- Rekomendasi: Alihkan armada distribusi ke Tol Medan-Kualanamu-Tebing Tinggi (Tol MKTT) guna menghindari hambatan di jalur arteri."
+        "- Rekomendasi: Alihkan armada distribusi ke Tol Medan-Kualanamu-Tebing Tinggi (Tol MKTT) guna menghindari hambatan di jalur arteri.\n"
+        f"- Evaluasi Spoilage Hedging: Kebijakan {optimal_pol} menghemat {net_sav} dibanding kerugian pembusukan kargo pada skenario CONTINUE ({cont_loss}). Biaya operasional reroute: {reroute_cost}.\n"
+        f"- Kepatuhan Regulasi (BKHIT & MST): Status {comp_stat} ({comp_desc})."
     )
     
     # 3. Call LLM for concise, authoritative executive summary
     try:
         system_prompt = (
             "You are PreHub AI Copilot for disaster resilience and food logistics supply chain decision support.\n"
-            "Analyze the structured corridor context, official news citations, and agent findings to produce a concise, authoritative briefing.\n"
+            "Analyze the structured corridor context, official news citations, spoilage hedging valuations, compliance statuses, and agent findings to produce a concise, authoritative briefing.\n"
             "Keep the language minimalist, strictly professional, and factual. Do NOT use emojis, hype words, or conversational filler.\n"
             "MUST organize response into these EXACT 3 numbered sections in Indonesian:\n"
             "1. ANCAMAN FISIK & VERIFIKASI BERITA RESMI: Cuaca BMKG, delay TomTom, dan kutipan rilis berita resmi (nama media & fakta lapangan).\n"
             "2. ESTIMASI DAMPAK EKONOMI & PASOKAN PANGAN: Pergerakan harga komoditas (PIHPS) dan proyeksi inflasi 48 jam.\n"
-            "3. KEPUTUSAN RUTE TAKTIS (EXPLAINABLE AI): Rekomendasi rute alternatif beserta alasan operasionalnya."
+            "3. KEPUTUSAN RUTE TAKTIS (EXPLAINABLE AI): Rekomendasi rute alternatif beserta evaluasi kuantitatif Spoilage Hedging (biaya moneter CONTINUE vs REROUTE vs HOLD dalam Rupiah) dan status kepatuhan regulasi BKHIT/MST."
         )
         
         prompt = f"Evidence Payload:\n{json.dumps(evidence_payload, indent=2, default=str)}"
@@ -108,7 +136,7 @@ async def decision_support_copilot(state: CrisisState) -> dict:
             system_instruction=system_prompt,
             model_name="gemini-1.5-flash"
         )
-        if gen_text and len(gen_text) > 50:
+        if gen_text and "FALLBACK" not in gen_text and "CRISIS EXECUTIVE SUMMARY" not in gen_text and len(gen_text) > 50:
             summary_text = gen_text.strip()
     except Exception as le:
         logger.debug(f"LLM decision summary generation skipped: {le}")

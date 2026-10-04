@@ -124,7 +124,13 @@ class CrisisState(TypedDict):
     blocked_corridors: Optional[List[str]]
     news_affected_commodities: Optional[List[str]]
 
+    # Operational Decision & Intermodal Solvers
+    hedging_breakdown: Optional[Dict[str, Any]]
+    compliance_status: Optional[Dict[str, Any]]
+    chokepoint_delay_multiplier: Optional[float]
+
     # Metadata
     created_at: str                     # ISO 8601
     updated_at: str                     # ISO 8601
     messages: Annotated[List[str], merge_messages]                 # Agent communication log
+

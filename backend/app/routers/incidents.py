@@ -281,3 +281,61 @@ async def simulate_incident(body: dict):
     except Exception as e:
         logger.error(f"Simulation failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/simulate/stream")
+async def simulate_incident_stream(body: dict):
+    """
+    Streaming SSE endpoint running the 4-stage LangGraph swarm with real-time node outputs.
+    """
+    import json
+    from fastapi.responses import StreamingResponse
+    from app.workers.agent_worker import process_crisis_event
+
+    polygon = body.get("polygon", [])
+    crisis_type = body.get("type", "flood")
+    region = body.get("region", "north_sumatra")
+    
+    if polygon:
+        lons = [p[0] for p in polygon]
+        lats = [p[1] for p in polygon]
+        lat = sum(lats) / len(lats)
+        lon = sum(lons) / len(lons)
+    else:
+        lat = float(body.get("lat", 3.79))
+        lon = float(body.get("lon", 98.67))
+
+    scenario_id = body.get("crisis_id") or str(uuid.uuid4())
+    event = {
+        **body,
+        "type": crisis_type,
+        "source": "simulation",
+        "severity": body.get("severity", "high"),
+        "lat": lat,
+        "lon": lon,
+        "region": region,
+        "title": body.get("title") or f"[Simulasi] {crisis_type.replace('_', ' ').title()} — {region.replace('_', ' ').title()}",
+        "is_simulated": True,
+        "crisis_id": scenario_id,
+        "affected_polygon": polygon,
+    }
+
+    async def sse_generator():
+        try:
+            async for item in process_crisis_event(event):
+                data_str = json.dumps(item, default=str)
+                yield f"data: {data_str}\n\n"
+        except Exception as e:
+            err_str = json.dumps({"event": "error", "message": str(e)})
+            yield f"data: {err_str}\n\n"
+
+    return StreamingResponse(
+        sse_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
+

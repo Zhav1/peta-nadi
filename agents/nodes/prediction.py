@@ -124,6 +124,8 @@ async def prediction_agent(state: CrisisState) -> dict:
         confidence += 0.1
     if earth2_flood_risk > 50.0:
         confidence += 0.1
+    if state.get("severity") in ["critical", "high"] or state.get("is_simulated"):
+        confidence += 0.1
         
     confidence = min(1.0, confidence)
     

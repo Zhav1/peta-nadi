@@ -5,7 +5,7 @@ import { EvidenceTab } from './EvidenceTab';
 import { MitigationTab } from './MitigationTab';
 import { EconomicTab } from './EconomicTab';
 import { CausalChainPanel } from './CausalChainPanel';
-import type { CrisisState } from '@/lib/types';
+import type { CrisisState, RouteRecommendation } from '@/lib/types';
 
 const TABS = ['Evidence', 'Mitigation', 'Economic'] as const;
 type Tab = typeof TABS[number];
@@ -18,6 +18,7 @@ interface CrisisSidebarProps {
   onApproveSuccess?: (msg: string) => void;
   activeTab?: Tab;
   setActiveTab?: (tab: Tab) => void;
+  onCommitOperationalRoute?: (route: RouteRecommendation, action: any, tactical: any) => void;
 }
 
 export function CrisisSidebar({
@@ -26,6 +27,7 @@ export function CrisisSidebar({
   onSelectRoute,
   activeRouteIdx,
   onApproveSuccess,
+  onCommitOperationalRoute,
   activeTab: controlledTab,
   setActiveTab: controlledSetActiveTab,
 }: CrisisSidebarProps) {
@@ -143,6 +145,7 @@ export function CrisisSidebar({
             activeRouteIdx={activeRouteIdx}
             onSelectRoute={onSelectRoute}
             onApproveSuccess={onApproveSuccess}
+            onCommitOperationalRoute={onCommitOperationalRoute}
           />
         )}
         {activeTab === 'Economic' && <EconomicTab crisis={crisis} />}

@@ -317,3 +317,126 @@ def test_graph_compiles():
     graph = build_crisis_graph()
     compiled = graph.compile()
     assert compiled is not None
+
+
+@pytest.mark.asyncio
+async def test_four_stage_pipeline_execution(mock_redis, mock_supabase):
+    """Verifies that the compiled LangGraph executes in 4 stages and passes state correctly."""
+    # Mock data collection health and incident history
+    mock_supabase.table().select().eq().execute.return_value = MagicMock(data=[{"status": "green"}] * 6)
+    mock_redis.get_return_value = None
+
+    # Mock official ANTARA news in Redis stream to corroborate hazard
+    mock_redis.xrange = AsyncMock(return_value=[
+        (
+            "12345-0",
+            {
+                "title": "Banjir Luapan Rendam Jalinsum dan Pelabuhan Belawan",
+                "summary": "Banjir merendam jalan nasional Medan-Belawan di Sumut dan memutus akses truk logistik.",
+                "source": "ANTARA Sumut",
+                "source_tier": "TIER_1_OFFICIAL",
+                "lane_status": "BLOCKED",
+                "corridor_segment": "Jalinsum KM 42",
+                "commodities_affected": "cabai,beras",
+                "temporal_phase": "active_disruption"
+            }
+        )
+    ])
+    
+    # Mock TomTom traffic delay and Earth-2 prediction in Redis
+    mock_redis.keys_return_value = ["lrip:tomtom:segment:medan"]
+    async def custom_get(key, *args, **kwargs):
+        if "tomtom:segment" in key:
+            return '{"delay_min": 55.0, "currentTravelTime": 3300, "timestamp": 1720000000}'
+        if key == "lrip:cache:earth2":
+            return '[{"raw_payload": {"predictions": {"precipitation_mm_24h": 45.0, "flood_risk_pct": 75.0}}}]'
+        if key == "lrip:pihps:latest":
+            return '{"rice": {"current": 16000, "mean": 12000, "std": 1000}}'
+        return None
+    mock_redis._get_override = custom_get
+
+
+
+    
+    # Mock Supabase insert for decision support
+    mock_supabase.table().insert().execute.return_value = MagicMock(data=[{"incident_id": "inc-48"}])
+    # Mock GraphRAG query
+    mock_supabase.table().select().ilike().execute.return_value = MagicMock(data=[])
+    mock_supabase.table().select().execute.return_value = MagicMock(data=[])
+
+    graph = build_crisis_graph()
+    compiled = graph.compile()
+
+    initial_event = {
+        "crisis_id": "test-e2e-4stage",
+        "title": "Banjir Bandang Jalinsum & Belawan",
+        "type": "flood",
+        "source": "bmkg",
+        "severity": "critical",
+        "lat": 3.78,
+        "lon": 98.68,
+        "region": "Sumatera Utara",
+        "status": "detecting",
+        "messages": [],
+        "route_recommendations": []
+    }
+
+    final_state = await compiled.ainvoke(initial_event)
+    
+    # Assert Stage 1 completed
+    assert "data_collection_finding" in final_state
+    # Assert Stage 2 completed & consensus passed
+    assert final_state.get("validated") is True
+    # Assert Stage 3 completed
+    assert "economic_intelligence_finding" in final_state
+    # Assert Stage 4 completed
+    assert "route_optimization_finding" in final_state
+    assert "decision_support_output" in final_state
+    assert "hedging_breakdown" in final_state
+    assert "compliance_status" in final_state
+    assert "Spoilage Hedging" in final_state["decision_support_output"]
+    assert "Kepatuhan Regulasi" in final_state["decision_support_output"]
+
+
+@pytest.mark.asyncio
+async def test_route_optimization_hedging_and_bkhit_block(mock_supabase):
+    """Verifies that route_optimization_agent calculates hedging valuations and detects BKHIT quarantine block."""
+    mock_supabase.table().select().execute.return_value = MagicMock(data=[
+        {"from_node": "Belawan Port", "to_node": "Medan Interchange", "distance_km": 26.0, "corridor": "belawan_access"},
+        {"from_node": "Medan Interchange", "to_node": "Merak Port", "distance_km": 1500.0, "corridor": "trans_sumatra_java"}
+    ])
+
+    state: CrisisState = {
+        "type": "flood",
+        "severity": "critical",
+        "hazard_polygons": [],
+        "region": "sumatra",
+        "has_bkhit_cert": False, # Missing certificate for inter-island (Java/Merak)
+        "cargo_tonnage": 12.0,
+        "vehicle_gross_weight_ton": 20.0,
+        "news_affected_commodities": ["cabai_merah"]
+    }
+
+    result = await route_optimization_agent(state)
+    assert "route_recommendations" in result
+    routes = result["route_recommendations"]
+    assert len(routes) > 0
+    top_route = routes[0]
+    
+    # Verify Hedging
+    assert "hedging" in top_route
+    hedging = top_route["hedging"]
+    assert hedging["optimal_policy"] in ["CONTINUE", "REROUTE", "HOLD"]
+    assert hedging["cargo_value_idr"] > 0
+    assert hedging["continue_cost_idr"] > 0
+    assert hedging["reroute_cost_idr"] > 0
+
+    # Verify Compliance Hard Block for inter-island route lacking BKHIT
+    assert "compliance" in top_route
+    comp = top_route["compliance"]
+    assert comp["status"] == "HARD_BLOCK"
+    assert comp["is_compliant"] is False
+    assert comp["requires_override"] is False
+
+
+

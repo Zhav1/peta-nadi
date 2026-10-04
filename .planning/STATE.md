@@ -2,35 +2,35 @@
 gsd_state_version: 1.0
 milestone: M3
 milestone_name: PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform
-current_phase: 47
-current_phase_name: Impeccable Grounding, Typeset & Layout Refinement
-status: completed
-stopped_at: Phase 47 execution completed (Grounding, typeset & layout complete)
-last_updated: "2026-10-04T13:50:00.000Z"
+current_phase: 48
+current_phase_name: Unified Orchestrator, Decision Engine & Closed-Loop Workflow
+status: complete
+stopped_at: Phase 48 execution and verification completed
+last_updated: "2026-10-04T15:00:00.000Z"
 last_activity: 2026-10-04
-last_activity_desc: Phase 47 completed (Resolved 14 detector findings to 0, applied tabular-nums across all data ledgers, hardened mobile/tablet layout across 25 files; 0 TypeScript errors)
+last_activity_desc: Phase 48 completed (4-stage LangGraph DAG, Spoilage Hedging & BKHIT compliance embedded in RouteOptimization and DecisionCopilot, real-time SSE streaming endpoint and hook, interactive closed-loop fleet rerouting, 137/137 tests passing)
 progress:
-  total_phases: 7
-  completed_phases: 7
-  total_plans: 13
-  completed_plans: 13
+  total_phases: 8
+  completed_phases: 8
+  total_plans: 18
+  completed_plans: 18
   percent: 100
 ---
 
 # STATE: PreHub Project Memory
 
 **Last Updated:** 2026-10-04
-**Active Milestone:** M3 - PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform [COMPLETED 🏁]
-**Current Phase:** 47
+**Active Milestone:** M3 - PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform
+**Current Phase:** 48
 
 ---
 
 ## Current Position
 
-Phase: 47 (Impeccable Grounding, Typeset & Layout Refinement) - COMPLETE
-Status: Phase 47 Complete (25 files refined, 0 detector findings, 0 TypeScript errors)
-Last activity: 2026-10-04 - Eradicated ungrounded AI boasting, enforced tabular-nums, resolved 14 AST detector violations, hardened mobile/tablet responsive layout, verified 100% clean Next.js build
-Next action: Maintain strict design tokens and responsive constraints in future work.
+Phase: 48 (Unified Orchestrator, Decision Engine & Closed-Loop Workflow) - COMPLETE ✅
+Status: Phase 48 fully executed and verified across all 5 plans (48-01 through 48-05).
+Last activity: 2026-10-04 - Unified LangGraph DAG topology, embedded Spoilage Hedging & BKHIT/MST compliance into routing/copilot, exposed SSE streaming simulation, wired live dashboard execution, and verified closed-loop fleet rerouting with 137/137 tests passing.
+Next action: Milestone review or pilot operational demo.
 
 ---
 
@@ -87,6 +87,7 @@ Next action: Maintain strict design tokens and responsive constraints in future 
 | 45 | Pilot Verification, Scenario Drills & Final End-to-End Packaging | **COMPLETE** ✅ | Automated E2E test suite (133 tests), hardened dual-profile Docker Compose, official Pilot Onboarding Manual (30KB, 0 emojis). |
 | 46 | Editorial Sentinel UI/UX Distillation & AI-Slop Eradication | **COMPLETE** ✅ | Purged 58 backdrop-blur instances (0 remaining), eliminated 36 glow shadows, deleted duplicate component, floored functional type to 12px, zero TypeScript errors. |
 | 47 | Impeccable Grounding, Typeset & Layout Refinement | **COMPLETE** ✅ | Eradicated ungrounded boasting across 25 files, enforced tabular-nums, resolved all 14 AST detector violations to 0, hardened mobile/tablet viewport scrolling and layout. |
+| 48 | Unified Orchestrator, Decision Engine & Closed-Loop Workflow | **COMPLETE** ✅ | LangGraph 4-stage DAG re-architecture, Spoilage Hedging & Compliance tool embedding, real-time SSE streaming, interactive closed-loop fleet rerouting, and 137/137 tests passing. |
 
 ---
 
@@ -94,6 +95,7 @@ Next action: Maintain strict design tokens and responsive constraints in future 
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
+| 2026-10-04 | Phase 48: Unified Orchestrator, Decision Engine & Closed-Loop Workflow | Resolved architectural disconnects inspired by Globot & God's Eye View: re-wired 6-agent swarm into a 4-stage DAG (Ingestion -> Sensory Observation & Consensus Gate -> Economic Impact -> Route Optimization & Decision Copilot), embedded Spoilage Hedging monetary solver and BKHIT/MST regulatory inspection directly into RouteOptimization and DecisionSupport nodes, exposed `POST /api/v1/simulate/stream` streaming SSE chunks to animate 6-agent HUD live, replaced client mock with real SSE stream hook, dynamically injected tactical telemetry into `/simulation/chat`, and linked route approvals to live map corridor commitments and TMS dispatch pings with dual-horizon ground-truth outcome verification. All 137 backend tests pass. |
 | 2026-10-04 | Phase 47: Impeccable Grounding, Typeset & Layout Refinement | Full empirical grounding pass: linked all data streams to official sources (BMKG, LKBN ANTARA, TomTom, PIHPS, AISstream, NASA FIRMS), resolved all 14 AST design detector anti-patterns (0 findings), enforced tabular numerals across all ledgers, eliminated multi-column clipping on mobile by replacing h-full overflow-hidden with min-h-full lg:h-full and adding overflow-y-auto to section wrappers. |
 | 2026-10-03 | Phase 46: The Strategic Sentinel Design Contract & Slop Eradication | Full forensic audit and distillation across 45 files (-650 net lines). Replaced heavy backdrop-blur compositing with solid elevated panels (#0c1017, #121822) to resolve 60 FPS WebGL map stutter, eliminated generic AI gradients in favor of architectural white buttons, deleted redundant showcase components, and enforced a strict 12px floor for all functional type. |
 | 2026-10-03 | Phase 45: Pilot Verification & Multi-Persona Operations Package | Implemented 8 real-data E2E tests (Drill 1 Belawan perishable detour, Drill 2 Bakauheni strait crossing quarantine lock, Drill 3 Sitinjau Lauik MST axle-load override), hardened multi-container Docker Compose with Next.js standalone runner and SQLite WAL mode, compiled 30KB multi-persona operational manual with zero emojis, synchronized test matrix to 133 passing tests. |

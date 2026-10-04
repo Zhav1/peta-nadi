@@ -1095,7 +1095,38 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 - [x] `rtk npx tsc --noEmit` returns 0 type errors.
 - [x] Zero horizontal clipping on viewports from 360px up.
 - [x] Zero ungrounded AI boasting or unscientific marketing slogans.
-- [x] Zero em dashes in code or documentation.
+---
+
+## Phase 48: Unified Orchestrator, Decision Engine & Closed-Loop Workflow
+**Requirements Covered:** ORCH-48.1, ORCH-48.2, DEC-48.1, FLEET-48.1, E2E-48.1
+**Goal:** Unify PreHub's 6-agent cognitive swarm, standalone decision engines (Spoilage Hedging, Intermodal Choke-Points, Regulatory Compliance), real-time SSE streaming, and active fleet rerouting into a defense-grade, closed-loop operational decision-support platform.
+**Status:** COMPLETE ✅
+**AI Spec Needed:** Yes (LangGraph DAG re-architecture contract)
+**Plans:** 48-01-PLAN.md, 48-02-PLAN.md, 48-03-PLAN.md, 48-04-PLAN.md, 48-05-PLAN.md
+
+### Deliverables
+- **LangGraph 4-Stage DAG Re-architecture (`agents/graph.py`, `agents/state.py`)**:
+  - Re-wired 6-agent swarm from flawed parallel fan-out into a 4-stage sequential-parallel pipeline: Stage 1 (Ingestion) -> Stage 2 (Sensory Observation & Consensus Gate) -> Stage 3 (Economic Impact) -> Stage 4 (Route Optimization & Decision Copilot).
+  - Eradicated state-reading race conditions across Agent 4 and Agent 5.
+- **Embedded Decision Solvers in Swarm (Agent 4 & Agent 6)**:
+  - Embedded `spoilage_hedging_service.py` (monetary solver for Continue vs Reroute vs Hold factoring perishability, BPJT tolls, and fuel inflation).
+  - Embedded `compliance_service.py` (BKHIT agricultural quarantine hard block & Class III road 8-Ton MST axle limit warnings).
+  - Embedded `intermodal_sync_service.py` (18+ choke-point delay multiplier application).
+- **Streaming Orchestrator SSE Endpoint (`backend/app/routers/incidents.py`, `agent_worker.py`)**:
+  - Exposed `POST /api/v1/simulate/stream` streaming LangGraph node checkpoint transitions as Server-Sent Events to animate the 6-agent HUD live.
+- **Frontend Live Streaming Hook & Dynamic Copilot (`DashboardClient.tsx`, `useCrisisSimulationStream.ts`)**:
+  - Replaced client-side simulation mock with live SSE stream subscription (`useCrisisSimulationStream`).
+  - Dynamically injected active incident, corridor, cargo, and hedging telemetry into the AI Tactical Copilot (`/simulation/chat`).
+- **Closed-Loop Operational Fleet Re-routing (`MitigationTab.tsx`, `DashboardClient.tsx`, `approvals.py`)**:
+  - On operator route approval, commits active operational corridor to Mapbox WebGL canvas, re-binds relevant truck trajectory to the detour polyline, simulates outbound TMS telematics ping, and registers action for T+12h/T+24h ground-truth outcome verification.
+
+### Verification Criteria
+- [x] `pytest backend/tests/test_agents.py` passes with zero race condition warnings.
+- [x] Candidate routes from Agent 4 contain verified Spoilage Hedging monetary comparisons and BKHIT compliance tags.
+- [x] `POST /api/v1/simulate/stream` emits valid sequential SSE events (`simulation_started`, `node_update`, `simulation_complete`).
+- [x] TheoTown disaster drop in the frontend streams real backend swarm execution and pulses 6-agent HUD indicators via custom event dispatcher.
+- [x] Approving a route in the sidebar actively commits the corridor and redirects the truck's 60 FPS animated trajectory along the detour path on the map.
+- [x] All 137 existing backend tests pass; `rtk npx tsc --noEmit` returns 0 errors.
 
 ---
 
@@ -1104,6 +1135,7 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 - Enterprise GraphRAG private self-hosted deployment
 - Automated CI/CD pipeline with staging $\to$ production promotion
 - Multi-province rollout (Java corridor & Eastern Indonesia)
+
 
 
 
