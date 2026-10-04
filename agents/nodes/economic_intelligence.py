@@ -82,11 +82,16 @@ async def economic_intelligence_agent(state: CrisisState) -> dict:
     if news_commodities and severity in ["high", "critical"]:
         inflation_multiplier = max(inflation_multiplier, 1.15)
                 
+    primary_commodity = anomalous_commodities[0] if anomalous_commodities else "cabai_merah"
+    pct_increase = float(round((inflation_multiplier - 1.0) * 100.0, 1))
+
     # 3. Anomaly and inflation forecast
     inflation_forecast = {
         "region": region,
         "timeframe_hours": 48,
         "inflation_multiplier": round(inflation_multiplier, 2),
+        "commodity": primary_commodity,
+        "pct_increase": pct_increase,
         "anomalous_commodities": anomalous_commodities if anomalous_commodities else ["cooking_oil", "rice"]
     }
 

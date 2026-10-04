@@ -9,7 +9,8 @@ from app.schemas.decision_schemas import (
     TacticalManeuver,
     DecisionTraceCreate,
     DecisionTraceResponse,
-    DecisionTraceListResponse
+    DecisionTraceListResponse,
+    OutcomeHorizon
 )
 from app.db import local_storage
 from app.auth.supabase_auth import UserSession, get_optional_user, ROLE_REGULATOR
@@ -81,10 +82,12 @@ async def create_approval(
             
             # Register closed-loop outcome verification tracking
             try:
+                route_dict = payload.recommended_route or {}
+                delay_hrs = float(route_dict.get("eta_hours") or ((route_dict.get("eta_minutes") or 150) / 60.0))
                 local_storage.save_ground_truth_outcome({
                     "incident_id": inc_id,
-                    "horizon": "12h",
-                    "observed_delay_hours": float(payload.recommended_route.get("eta_hours", 2.5) if payload.recommended_route else 2.5),
+                    "horizon": OutcomeHorizon.T_12H.value,
+                    "observed_delay_hours": delay_hrs,
                     "actual_price_spike_pct": 12.0,
                     "verified_by": op_id,
                     "verification_source": "DISPATCHER_APPROVAL",
@@ -111,10 +114,12 @@ async def create_approval(
 
     # Register closed-loop outcome verification tracking in local fallback
     try:
+        route_dict = payload.recommended_route or {}
+        delay_hrs = float(route_dict.get("eta_hours") or ((route_dict.get("eta_minutes") or 150) / 60.0))
         local_storage.save_ground_truth_outcome({
             "incident_id": inc_id,
-            "horizon": "12h",
-            "observed_delay_hours": float(payload.recommended_route.get("eta_hours", 2.5) if payload.recommended_route else 2.5),
+            "horizon": OutcomeHorizon.T_12H.value,
+            "observed_delay_hours": delay_hrs,
             "actual_price_spike_pct": 12.0,
             "verified_by": op_id,
             "verification_source": "DISPATCHER_APPROVAL",

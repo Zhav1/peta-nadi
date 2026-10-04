@@ -51,8 +51,8 @@ def test_get_test_matrix_full():
     data = response.json()
 
     assert data["status"] == "success"
-    assert data["total_tests"] == 133
-    assert data["passed_tests"] == 133
+    assert data["total_tests"] == 137
+    assert data["passed_tests"] == 137
     assert data["failed_tests"] == 0
 
     # Verify FR domains are properly tracked
@@ -61,12 +61,12 @@ def test_get_test_matrix_full():
     assert "FR-2" in domains and domains["FR-2"] == 4
     assert "FR-3" in domains and domains["FR-3"] == 2
     assert "FR-4" in domains and domains["FR-4"] == 15
-    assert "FR-5" in domains and domains["FR-5"] == 9
+    assert "FR-5" in domains and domains["FR-5"] == 11
     assert "FR-6" in domains and domains["FR-6"] == 3
     assert "FR-7" in domains and domains["FR-7"] == 3
     assert "FR-8" in domains and domains["FR-8"] == 4
     assert "FR-9" in domains and domains["FR-9"] == 3
-    assert "FR-10" in domains and domains["FR-10"] == 2
+    assert "FR-10" in domains and domains["FR-10"] == 3
     assert "FR-11" in domains and domains["FR-11"] == 17
     assert "FR-12" in domains and domains["FR-12"] == 8
     assert "FR-13" in domains and domains["FR-13"] == 4
@@ -76,9 +76,9 @@ def test_get_test_matrix_full():
     assert "FR-17" in domains and domains["FR-17"] == 5
     assert "FR-18" in domains and domains["FR-18"] == 6
     assert "FR-19" in domains and domains["FR-19"] == 6
-    assert "FR-20" in domains and domains["FR-20"] == 8
+    assert "FR-20" in domains and domains["FR-20"] == 9
 
-    assert len(data["tests"]) == 133
+    assert len(data["tests"]) == 137
     first_test = data["tests"][0]
     assert "test_id" in first_test
     assert "category" in first_test

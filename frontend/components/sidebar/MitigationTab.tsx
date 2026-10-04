@@ -27,7 +27,8 @@ import {
   X,
   FileText,
   Scale,
-  Shield
+  Shield,
+  MessageSquare
 } from 'lucide-react';
 import { useAuth } from '@/lib/authContext';
 import { SpoilageHedgingCard } from './SpoilageHedgingCard';
@@ -212,6 +213,27 @@ function RouteCard({
                   <span>{approvalData.notes}</span>
                 </div>
               )}
+
+              {/* WhatsApp Driver Dispatch Action (Phase 45/48 Drill 1) */}
+              <a
+                href={`https://wa.me/6281234567891?text=${encodeURIComponent(
+                  `PERINTAH DISPATCH RESMI - PIDI\n` +
+                  `Armada: TRK-003-BELAWAN-TEBING (BK 8812 XL)\n` +
+                  `Tindakan: ${approvalData?.tactical_action || 'REROUTE'}\n` +
+                  `Rute: ${route.route_name || route.description}\n` +
+                  `Status: Jalur utama ditutup/terdampak. Ikuti jalur alternatif mitigasi.\n` +
+                  (approvalData?.notes ? `Catatan: ${approvalData.notes}\n` : '') +
+                  `Harap segera konfirmasi penerimaan instruksi ini.`
+                )}`}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="w-full mt-2 py-2 px-3 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-sm"
+                title="Kirim instruksi pengalihan rute ke WhatsApp Pengemudi"
+              >
+                <MessageSquare className="w-3.5 h-3.5 shrink-0" />
+                <span>Kirim Disposisi WhatsApp ke Driver</span>
+              </a>
             </div>
           ) : isCompromised ? (
             <div className="w-full py-2 px-3 rounded-md bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs font-mono font-semibold text-center flex items-center justify-center gap-1.5">
@@ -553,32 +575,59 @@ export function MitigationTab({
 
         {/* Dynamic Source Attribution Pills with Real Working Links */}
         <div className="flex flex-wrap gap-1.5 mt-2">
-          {((crisis as unknown as Record<string, unknown>).news_attributions as Array<{ source_name: string; url: string }> || [
-            {
-              source_name: 'Antara News Sumut',
-              url: `https://news.google.com/search?q=${encodeURIComponent((crisis.title || 'banjir Sumut') + ' Antara')}&hl=id-ID&gl=ID&ceid=ID:id`
-            },
-            {
-              source_name: 'Kompas.com Regional',
-              url: `https://news.google.com/search?q=${encodeURIComponent((crisis.title || 'logistik Sumut') + ' Kompas')}&hl=id-ID&gl=ID&ceid=ID:id`
-            }
-          ]).map((attr, aIdx) => (
-            <a 
-              key={aIdx} 
-              href={attr.url} 
-              target="_blank" 
-              rel="noreferrer"
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#0c1017] hover:bg-slate-800 text-xs font-mono text-cyan-300 border border-[#1c2432] transition-all cursor-pointer"
-              title={`Buka Berita Asli: ${attr.source_name}`}
-            >
-              <svg className="w-3 h-3 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                <polyline points="15 3 21 3 21 9"/>
-                <line x1="10" y1="14" x2="21" y2="3"/>
-              </svg>
-              <span>{attr.source_name}</span>
-            </a>
-          ))}
+          {(() => {
+            const rawVerified = crisis.verified_news_citations || (crisis as unknown as Record<string, unknown>).verified_news_citations as Array<Record<string, unknown>> | undefined;
+            const rawAttrs = crisis.news_attributions || (crisis as unknown as Record<string, unknown>).news_attributions as Array<{ source_name: string; url: string }> | undefined;
+
+            const citations: Array<{ source_name: string; headline?: string; tier?: string; url: string }> = 
+              (rawVerified && rawVerified.length > 0)
+                ? rawVerified.map(c => ({
+                    source_name: String(c.source || c.source_name || 'Berita Resmi'),
+                    headline: c.headline ? String(c.headline) : undefined,
+                    tier: c.tier ? String(c.tier) : undefined,
+                    url: c.url ? String(c.url) : `https://news.google.com/search?q=${encodeURIComponent((String(c.headline || c.source || crisis.title || 'berita')) + ' ' + String(c.source || ''))}&hl=id-ID&gl=ID&ceid=ID:id`
+                  }))
+                : (rawAttrs && rawAttrs.length > 0)
+                ? rawAttrs.map(a => ({
+                    source_name: a.source_name || 'Berita Resmi',
+                    url: a.url || `https://news.google.com/search?q=${encodeURIComponent((crisis.title || 'berita') + ' ' + (a.source_name || ''))}&hl=id-ID&gl=ID&ceid=ID:id`
+                  }))
+                : [
+                    {
+                      source_name: 'Antara News Sumut',
+                      tier: 'Tier-1 Resmi',
+                      url: `https://news.google.com/search?q=${encodeURIComponent((crisis.title || 'banjir Sumut') + ' Antara')}&hl=id-ID&gl=ID&ceid=ID:id`
+                    },
+                    {
+                      source_name: 'Kompas.com Regional',
+                      tier: 'Media Nasional',
+                      url: `https://news.google.com/search?q=${encodeURIComponent((crisis.title || 'logistik Sumut') + ' Kompas')}&hl=id-ID&gl=ID&ceid=ID:id`
+                    }
+                  ];
+
+            return citations.map((attr, aIdx) => (
+              <a 
+                key={aIdx} 
+                href={attr.url} 
+                target="_blank" 
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#0c1017] hover:bg-slate-800 text-xs font-mono text-cyan-300 border border-[#1c2432] transition-all cursor-pointer"
+                title={attr.headline ? `${attr.source_name}: ${attr.headline}` : `Buka Berita Asli: ${attr.source_name}`}
+              >
+                <svg className="w-3 h-3 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                  <polyline points="15 3 21 3 21 9"/>
+                  <line x1="10" y1="14" x2="21" y2="3"/>
+                </svg>
+                <span>{attr.source_name}</span>
+                {attr.tier && (
+                  <span className="text-[10px] px-1 py-0.5 rounded bg-cyan-950/60 text-cyan-400 border border-cyan-500/30 uppercase font-sans">
+                    {attr.tier}
+                  </span>
+                )}
+              </a>
+            ));
+          })()}
         </div>
 
         <p className="mt-2 text-xs text-slate-300 leading-relaxed font-sans">

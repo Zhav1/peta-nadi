@@ -103,15 +103,39 @@ export interface CrisisState {
   hedging_breakdown?: Record<string, unknown>;
   compliance_status?: Record<string, unknown>;
   inflation_forecast?: {
-    commodity: string;
-    region: string;
-    pct_increase: number;
-    timeframe_hours: number;
+    commodity?: string;
+    region?: string;
+    pct_increase?: number;
+    inflation_multiplier?: number;
+    anomalous_commodities?: string[];
+    timeframe_hours?: number;
   };
-  causal_chain?: Array<{ node: string; relation: string }>;
+  causal_chain?: Array<{
+    node?: string;
+    name?: string;
+    entity_id?: string;
+    entity_type?: string;
+    relation: string;
+    impact_score?: number;
+  }>;
   hazard_polygons?: Array<Record<string, unknown>>;
   consensus_breakdown?: Record<string, number>;
   validated: boolean;
+  verified_news_citations?: Array<{
+    headline?: string;
+    source?: string;
+    source_name?: string;
+    tier?: string;
+    url?: string;
+    temporal_phase?: string;
+    lane_status?: string;
+  }>;
+  news_attributions?: Array<{
+    source_name?: string;
+    url?: string;
+  }>;
+  blocked_corridors?: string[];
+  news_affected_commodities?: string[];
   created_at: string;
   evidence?: {
     osint_author?: string;

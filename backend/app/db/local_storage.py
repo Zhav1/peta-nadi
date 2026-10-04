@@ -328,8 +328,13 @@ def list_outcomes(
             conditions.append("incident_id = ?")
             params.append(incident_id)
         if horizon:
-            conditions.append("horizon = ?")
-            params.append(horizon)
+            if horizon in ("T+12h", "12h"):
+                conditions.append("horizon IN ('T+12h', '12h')")
+            elif horizon in ("T+24h", "24h"):
+                conditions.append("horizon IN ('T+24h', '24h')")
+            else:
+                conditions.append("horizon = ?")
+                params.append(horizon)
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
         query += " ORDER BY created_at DESC LIMIT ?"

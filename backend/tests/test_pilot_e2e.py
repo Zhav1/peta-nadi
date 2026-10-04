@@ -513,5 +513,5 @@ def test_drill4_closed_loop_orchestration_and_rerouting_e2e():
     outcomes = local_storage.list_ground_truth_outcomes(incident_id=crisis_id)
     assert len(outcomes) > 0
     assert outcomes[0]["incident_id"] == crisis_id
-    assert outcomes[0]["horizon"] == "12h"
+    assert outcomes[0]["horizon"] in ("T+12h", "12h")
 

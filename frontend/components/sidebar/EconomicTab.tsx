@@ -55,13 +55,19 @@ export function EconomicTab({ crisis }: EconomicTabProps) {
             Proyeksi Kenaikan Harga
           </p>
           <div className="flex justify-between items-center">
-            <span className="text-xs text-slate-300">{forecast.commodity}</span>
+            <span className="text-xs text-slate-300">
+              {forecast.commodity || (forecast as any).anomalous_commodities?.[0] || 'Komoditas Pangan'}
+            </span>
             <span className="text-sm font-bold text-amber-400 tabular-nums">
-              +{forecast.pct_increase.toFixed(1)}%
+              +{typeof forecast.pct_increase === 'number'
+                ? forecast.pct_increase.toFixed(1)
+                : typeof (forecast as any).inflation_multiplier === 'number'
+                ? (((forecast as any).inflation_multiplier - 1) * 100).toFixed(1)
+                : '0.0'}%
             </span>
           </div>
           <p className="text-xs text-slate-400">
-            Estimasi {forecast.timeframe_hours} jam ke depan · {forecast.region.replace(/_/g, ' ')}
+            Estimasi {forecast.timeframe_hours ?? 48} jam ke depan · {(forecast.region || 'Sumut').replace(/_/g, ' ')}
           </p>
         </div>
       )}
