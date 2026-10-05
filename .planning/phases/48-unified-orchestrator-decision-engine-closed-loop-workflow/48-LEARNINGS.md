@@ -14,3 +14,8 @@
 
 ## 4. Closed-Loop Operational Verification
 - **Closing the Loop:** An advisory system that ends at displaying a recommendation is open-loop and untestable against reality. By capturing operator decisions, re-binding active WebGL fleet trajectories, simulating outbound telematics pings, and automatically scheduling dual-horizon (`T+12h`/`T+24h`) outcome evaluations, the system creates a self-healing feedback loop that continuously recalibrates sensor weights.
+
+---
+
+## 5. Detailed Diagnostics & Implementation Pitfalls
+For full technical details on runtime environment variables, PowerShell vs Unix command differences, the 6 post-Phase-45 schema fixes, and TypeScript compilation gotchas, refer to [48-ENVIRONMENT-FIXES-AND-PITFALLS.md](file:///d:/College/Pidi.id/.planning/phases/48-unified-orchestrator-decision-engine-closed-loop-workflow/48-ENVIRONMENT-FIXES-AND-PITFALLS.md).
