@@ -1130,11 +1130,43 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 
 ---
 
+## Phase 49: Pan-Sumatra Spatial Engine & Ingestion Adapter Generalization
+**Requirements Covered:** SPAT-49.1, ADAPT-49.1, ROUTE-49.1, UI-49.1
+**Goal:** Eliminate legacy North Sumatra (Belawan/Medan) hardcoded boundaries and expand the spatial engine, ingestion adapters, agent swarm, and frontend dashboards to full Pan-Sumatra scope (8 mainland provinces + ALKI I maritime corridors).
+**Status:** COMPLETE ✅
+**Plans:** 49-PLAN.md, 49-WALKTHROUGH.md, 49-ENVIRONMENT-FIXES-AND-PITFALLS.md, 49-LEARNINGS.md
+
+### Deliverables
+- **Ingestion Adapters Generalized to Pan-Sumatra**:
+  - Expanded NASA FIRMS bbox (`-6.0 to 6.0 lat, 94.0 to 108.0 lon`) and 18 Trans-Sumatra highway checkpoints.
+  - Expanded AISstream adapter to 8 strategic Sumatra seaports (Belawan, Kuala Tanjung, Dumai, Teluk Bayur, Boom Baru, Panjang, Bakauheni, Malahayati) with per-port queue depth analysis.
+  - Expanded TomTom traffic incident bbox to `95.0, -6.0, 106.5, 6.0` and added 12 regional flow checkpoints.
+  - Dynamically resolved BMKG weather municipality names and coordinates.
+  - Configured `CORRIDOR_NAMES` registry in `corridor_service.py`.
+- **Multi-Agent Swarm Generalization**:
+  - Agent 4: Dynamically penalizes disrupted ports (Dumai, Teluk Bayur, Panjang, Bakauheni, Boom Baru, Belawan) and derives authentic waypoints from traversed nodes.
+  - Agent 5: Dynamic `{region}` interpolation in LLM narrative prompt.
+  - Agent 2: Island-wide province and city location token detection.
+  - Enriched knowledge base fixtures (`entities.json`, `historical_episodes.json`) with Pan-Sumatra hubs and disaster episodes.
+- **Frontend Routing Engine & UI Modernization**:
+  - `mapboxRoutingService.ts`: Dynamic bezier-style interpolated waypoints and normal tangent detour vectors for arbitrary Sumatra endpoints.
+  - `aiDynamicRouter.ts`: Integrated arterial nodes for Aceh, West Sumatra (Sitinjau Lauik Apex), Bengkulu, and Lampung.
+  - Removed obsolete `dynamicRouteCalculator.ts`.
+  - Sanitized hardcoded labels across `AnalyticsSection`, `ReportsSection`, `SimulationSection`, `DashboardClient`, `EvidenceTab`, `MitigationTab`, `EconomicTab`, `OnboardFooter`, and `KineticFeatureGrid`.
+
+### Verification Criteria
+- [x] All 137 backend tests pass (`pytest backend/tests`).
+- [x] Frontend Next.js production build succeeds with 0 TypeScript/compilation errors.
+- [x] Git commits cleanly recorded on `main`.
+
+---
+
 ## Backlog (Post-Hackathon / v2)
 - Driver mobile app (React Native + WatermelonDB + CRDT offline sync)
 - Enterprise GraphRAG private self-hosted deployment
 - Automated CI/CD pipeline with staging $\to$ production promotion
 - Multi-province rollout (Java corridor & Eastern Indonesia)
+
 
 
 
