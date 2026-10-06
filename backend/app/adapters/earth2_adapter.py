@@ -105,9 +105,9 @@ class Earth2Adapter(BaseAdapter):
                 "event_type": "weather_prediction",
                 "title": f"PreHub Atmospheric Risk ({raw_data.get('model', 'open-meteo')})",
                 "severity": severity,
-                "region": "North Sumatra",
-                "lat": 3.59,
-                "lon": 98.67,
+                "region": raw_data.get("region", "Sumatra Logistics Corridor"),
+                "lat": float(raw_data.get("latitude", 3.59)),
+                "lon": float(raw_data.get("longitude", 98.67)),
                 "raw_payload": raw_data,
                 "created_at": datetime.now(timezone.utc).isoformat()
             })

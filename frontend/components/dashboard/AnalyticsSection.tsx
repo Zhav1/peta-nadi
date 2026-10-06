@@ -152,39 +152,47 @@ export default function AnalyticsSection({
   const updateDeckLayers = () => {
     if (!deckOverlayRef.current) return;
 
-    // Archipelago Logistics Arcs (Belawan -> Medan -> Tebing -> Java)
+    // Archipelago Logistics Arcs across Sumatra Island and Java Corridor
     const arcData: CommodityArcItem[] = [
       {
         from: [98.68, 3.78], // Belawan Port
         to: [98.67, 3.59],   // Medan Hub
-        status: 'critical',  // Flooded corridor
+        status: 'critical',  // Disrupted corridor
         commodity: 'CPO / Cooking Oil'
       },
       {
-        from: [98.68, 3.78], // Belawan Port
-        to: [106.84, -6.20], // Jakarta / Java Central Hub
-        status: 'disrupted', // Maritime Delay
-        commodity: 'Rice & Flour Freight'
-      },
-      {
-        from: [99.16, 3.33], // Tebing Tinggi Interchange
-        to: [98.67, 3.59],   // Medan
-        status: 'clear',     // Safe Detour
-        commodity: 'Shallots & Vegetables'
-      },
-      {
-        from: [104.75, -2.99], // Palembang Hub
-        to: [106.84, -6.20],   // Jakarta
+        from: [101.45, 1.68], // Dumai Port
+        to: [101.45, 0.51],   // Pekanbaru Hub
         status: 'clear',
-        commodity: 'General Goods'
+        commodity: 'CPO Freight & Grains'
+      },
+      {
+        from: [100.37, -1.00], // Teluk Bayur Port
+        to: [100.37, -0.31],   // Bukittinggi / Solok
+        status: 'disrupted',   // Mountain Corridor Delay
+        commodity: 'Shallots & Horticulture'
+      },
+      {
+        from: [104.76, -2.99], // Palembang Hub
+        to: [105.75, -5.87],   // Bakauheni Ferry Port
+        status: 'clear',
+        commodity: 'Rice & Food Staple Reserve'
+      },
+      {
+        from: [105.75, -5.87], // Bakauheni Port
+        to: [106.84, -6.20],   // Jakarta / Java Central Hub
+        status: 'clear',
+        commodity: 'Inter-Island Food Logistics'
       }
     ];
 
     const scatterData: MarketScatterItem[] = [
       { position: [98.68, 3.78], name: 'Belawan Port', status: 'critical', radius: 35000 },
-      { position: [98.67, 3.59], name: 'Medan Hub', status: 'warning', radius: 25000 },
-      { position: [99.16, 3.33], name: 'Tebing Tinggi', status: 'clear', radius: 20000 },
-      { position: [106.84, -6.20], name: 'Java Central Hub', status: 'warning', radius: 45000 },
+      { position: [101.45, 1.68], name: 'Dumai Port', status: 'clear', radius: 30000 },
+      { position: [100.37, -1.00], name: 'Teluk Bayur', status: 'warning', radius: 25000 },
+      { position: [104.76, -2.99], name: 'Palembang Hub', status: 'clear', radius: 30000 },
+      { position: [105.75, -5.87], name: 'Bakauheni Port', status: 'warning', radius: 35000 },
+      { position: [106.84, -6.20], name: 'Java Central Hub', status: 'clear', radius: 45000 },
     ];
 
     const arcLayer = new ArcLayer<CommodityArcItem>({
@@ -229,10 +237,10 @@ export default function AnalyticsSection({
 
   // Causal Chain of Impact Nodes
   const causalChain = [
-    { label: 'Pelabuhan Belawan Terhambat', sub: 'Gelombang Tinggi & Genangan Air', status: 'KRITIS', color: 'text-red-400 border-red-500/40 bg-red-500/10' },
-    { label: 'Perlambatan Arteri Jalinsum', sub: 'Antrean Kendaraan Logistik', status: 'WASPADA', color: 'text-amber-400 border-amber-500/40 bg-amber-500/10' },
-    { label: 'Penurunan Pasokan Pasar Medan', sub: 'Penurunan Pasokan Komoditas Harian', status: 'WASPADA', color: 'text-amber-400 border-amber-500/40 bg-amber-500/10' },
-    { label: 'Risiko Kenaikan Harga Eceran', sub: 'Proyeksi Kenaikan Harga Pokok', status: 'PERINGATAN', color: 'text-cyan-400 border-cyan-500/40 bg-cyan-500/10' }
+    { label: 'Simpul Pelabuhan / Gerbang Terhambat', sub: 'Cuaca Ekstrem / Antrean Dermaga', status: 'KRITIS', color: 'text-red-400 border-red-500/40 bg-red-500/10' },
+    { label: 'Perlambatan Arteri Trans-Sumatera', sub: 'Antrean Kendaraan & Bottleneck Jalan', status: 'WASPADA', color: 'text-amber-400 border-amber-500/40 bg-amber-500/10' },
+    { label: 'Penurunan Pasokan Pasar Konsumen', sub: 'Penurunan Inflow Komoditas Harian', status: 'WASPADA', color: 'text-amber-400 border-amber-500/40 bg-amber-500/10' },
+    { label: 'Risiko Kenaikan Harga Eceran', sub: 'Proyeksi Kenaikan Harga Pokok Wilayah', status: 'PERINGATAN', color: 'text-cyan-400 border-cyan-500/40 bg-cyan-500/10' }
   ];
 
   return (
@@ -268,7 +276,7 @@ export default function AnalyticsSection({
               <ShieldAlert className="w-4 h-4 text-red-400" />
               <div>
                 <span className="text-xs text-red-400 font-medium block">Simpul Terdampak</span>
-                <span className="text-xs font-mono font-bold text-red-400 tabular-nums">1 Titik (Belawan)</span>
+                <span className="text-xs font-mono font-bold text-red-400 tabular-nums">1 Simpul Kritis</span>
               </div>
             </div>
 
@@ -298,7 +306,7 @@ export default function AnalyticsSection({
                 </span>
               </div>
               <span className="text-xs font-mono text-slate-400">
-                Koridor: Belawan &rarr; Medan &rarr; Trans-Sumatera
+                Koridor: Simpul Bahaya &rarr; Arteri Logistik &rarr; Pusat Konsumsi
               </span>
             </div>
 

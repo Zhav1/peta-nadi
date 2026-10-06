@@ -104,7 +104,7 @@ async def economic_intelligence_agent(state: CrisisState) -> dict:
     try:
         prompt = (
             "Berdasarkan preseden historis, data harga PIHPS, dan laporan intelijen berita resmi, buat ringkasan narasi "
-            "ekonomi singkat (2-3 kalimat) mengenai proyeksi inflasi pangan di koridor Sumatera Utara. "
+            f"ekonomi singkat (2-3 kalimat) mengenai proyeksi inflasi pangan di koridor {region}. "
             "Sebutkan komoditas terdampak secara faktual tanpa kata berlebihan.\n\n"
             f"Event: {event_type} ({severity})\n"
             f"Komoditas Teridentifikasi: {anomalous_commodities}\n"

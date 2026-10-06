@@ -21,7 +21,7 @@ async def osint_hazard_agent(state: CrisisState) -> dict:
     lon = state.get("lon")
     source = norm_event.get("source")
     event_type = norm_event.get("event_type", "unknown")
-    region = state.get("region", "Sumatera Utara")
+    region = state.get("region", "Sumatra")
     
     # 1. Hazard fusion (Query Supabase)
     hazard_polygons = []
@@ -95,9 +95,10 @@ async def osint_hazard_agent(state: CrisisState) -> dict:
                         if c.strip():
                             affected_commodities.add(c.strip())
                             
-                # Check NER location overlap
+                # Check NER location overlap across Sumatra island
                 extracted = await extract_locations(text)
-                if any(loc.lower() in region.lower() for loc in extracted) or "sumut" in text or "medan" in text:
+                sumatra_provinces = ["aceh", "sumut", "medan", "riau", "pekanbaru", "dumai", "sumbar", "padang", "jambi", "bengkulu", "sumsel", "palembang", "lampung"]
+                if any(loc.lower() in region.lower() for loc in extracted) or any(p in text for p in sumatra_provinces):
                     ner_location_overlap = True
                     
                 if len(verified_citations) < 3:

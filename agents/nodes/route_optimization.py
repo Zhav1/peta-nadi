@@ -78,18 +78,37 @@ async def route_optimization_agent(state: CrisisState) -> dict:
     disrupted_corridors = set()
     for hazard in hazard_polygons:
         event_type = state.get("type") or state.get("event_type")
+        hz_title = str(state.get("title", "")).lower()
         if event_type in ["port_closure", "port_congestion"]:
-            disrupted_corridors.add("belawan_access")
+            if "dumai" in hz_title:
+                disrupted_corridors.add("dumai_access")
+            elif "bayur" in hz_title or "padang" in hz_title:
+                disrupted_corridors.add("teluk_bayur_access")
+            elif "panjang" in hz_title:
+                disrupted_corridors.add("panjang_access")
+            elif "bakauheni" in hz_title:
+                disrupted_corridors.add("bakauheni_access")
+            elif "boom" in hz_title or "palembang" in hz_title:
+                disrupted_corridors.add("boom_baru_access")
+            else:
+                disrupted_corridors.add("belawan_access")
         else:
             disrupted_corridors.add("trans_sumatra")
             
     # Include news-verified blockages
     if blocked_corridors:
         for bc in blocked_corridors:
-            if "jalinsum" in bc.lower() or "arteri" in bc.lower():
+            bc_low = bc.lower()
+            if "jalinsum" in bc_low or "arteri" in bc_low or "lintas" in bc_low:
                 disrupted_corridors.add("trans_sumatra")
-            if "belawan" in bc.lower():
+            if "belawan" in bc_low:
                 disrupted_corridors.add("belawan_access")
+            if "dumai" in bc_low:
+                disrupted_corridors.add("dumai_access")
+            if "bayur" in bc_low:
+                disrupted_corridors.add("teluk_bayur_access")
+            if "bakauheni" in bc_low:
+                disrupted_corridors.add("bakauheni_access")
             
     # Apply weights
     for u, v, data in G.edges(data=True):

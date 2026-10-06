@@ -5,7 +5,7 @@ import { CorridorContext } from '@/lib/types';
 
 const DEFAULT_FALLBACK_CORRIDOR: CorridorContext = {
   corridor_id: 'sumatra_belawan_medan',
-  corridor_name: 'Koridor Strategis Distribusi Pangan Sumatera Utara (Belawan - Medan)',
+  corridor_name: 'Koridor Arteri Utama Belawan–Medan–Tebing Tinggi',
   timestamp: new Date().toISOString(),
   weather: {
     status: 'MODERATE_RAIN',

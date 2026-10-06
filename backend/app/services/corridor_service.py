@@ -17,10 +17,19 @@ from app.db.supabase_client import get_client
 logger = logging.getLogger(__name__)
 
 
+CORRIDOR_NAMES = {
+    "sumatra_belawan_medan": "Koridor Arteri Utama Belawan–Medan–Tebing Tinggi",
+    "sumatra_riau_pekanbaru": "Koridor Logistik Riau–Dumai–Pekanbaru",
+    "sumatra_sumbar_padang": "Koridor Maritim & Arteri Teluk Bayur–Padang–Bukittinggi",
+    "sumatra_sumsel_palembang": "Koridor Lintas Timur Palembang–Boom Baru",
+    "sumatra_lampung_bakauheni": "Koridor Gerbang Selat Sunda Bakauheni–Panjang–Terbanggi Besar",
+    "sumatra_aceh_malahayati": "Koridor Pintu Masuk Aceh–Malahayati–Banda Aceh",
+}
+
 async def get_corridor_context(corridor_id: str = "sumatra_belawan_medan") -> Dict[str, Any]:
     """
     Aggregates real-time weather (BMKG), traffic congestion (TomTom), and commodity prices (PIHPS)
-    for the specified North Sumatra logistics corridor.
+    for Sumatra logistics corridors.
     """
     logger.info(f"Aggregating corridor context for '{corridor_id}'...")
 
@@ -159,7 +168,7 @@ async def get_corridor_context(corridor_id: str = "sumatra_belawan_medan") -> Di
 
     result_payload = {
         "corridor_id": corridor_id,
-        "corridor_name": "Koridor Logistik Utama Sumatera Utara (Belawan–Medan–Tebing Tinggi)",
+        "corridor_name": CORRIDOR_NAMES.get(corridor_id, f"Koridor Logistik Terpadu Sumatera ({corridor_id})"),
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "weather": weather_context,
         "traffic": traffic_context,

@@ -129,6 +129,10 @@ class BMKGAdapter(BaseAdapter):
                 data_list = weather_raw.get("data", [])
                 
                 for location_data in data_list:
+                    loc_info = location_data.get("lokasi", {})
+                    loc_name = loc_info.get("kotkab") or loc_info.get("provinsi") or "Medan"
+                    loc_lat = loc_info.get("lat", "3.5852")
+                    loc_lon = loc_info.get("lon", "98.6667")
                     cuaca_forecasts = location_data.get("cuaca", [])
                     for time_slice in cuaca_forecasts:
                         for forecast in time_slice:
@@ -140,13 +144,19 @@ class BMKGAdapter(BaseAdapter):
                                 warnings_found.append({
                                     "desc": forecast.get("desc"),
                                     "time": forecast.get("local_datetime"),
-                                    "code": code
+                                    "code": code,
+                                    "location_name": loc_name,
+                                    "lat": loc_lat,
+                                    "lon": loc_lon
                                 })
                                 
                 if warnings_found:
                     # Select the most immediate warning
                     warning = warnings_found[0]
-                    dedup_key = f"bmkg:weather:medan:{warning['time']}:{warning['code']}"
+                    loc_name = warning.get("location_name", "Medan")
+                    loc_lat = warning.get("lat", "3.5852")
+                    loc_lon = warning.get("lon", "98.6667")
+                    dedup_key = f"bmkg:weather:{loc_name.lower()}:{warning['time']}:{warning['code']}"
                     
                     r = get_redis()
                     if not r.get(f"lrip:dedup:{dedup_key}"):
@@ -156,9 +166,9 @@ class BMKGAdapter(BaseAdapter):
                             "source": self.source_name,
                             "event_type": "weather_warning",
                             "severity": "medium" if warning['code'] == 60 else "high",
-                            "lat": "3.5852", # Medan coords
-                            "lon": "98.6667",
-                            "title": f"Weather Warning: {warning['desc']} expected in Medan",
+                            "lat": str(loc_lat),
+                            "lon": str(loc_lon),
+                            "title": f"Weather Warning: {warning['desc']} expected in {loc_name}",
                             "raw": json.dumps(warning),
                             "ts": datetime.now(timezone.utc).isoformat(),
                             "dedup_key": dedup_key

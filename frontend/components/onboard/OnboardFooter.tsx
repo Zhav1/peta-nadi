@@ -50,9 +50,9 @@ export default function OnboardFooter() {
               <span className="font-mono text-white font-semibold uppercase tracking-wider">
                 Cakupan Koridor
               </span>
-              <span className="text-slate-400">Sumatera Utara</span>
-              <span className="text-slate-400">Jalur Lintas Sumatera (Jalinsum)</span>
-              <span className="text-slate-400">Pelabuhan Belawan</span>
+              <span className="text-slate-400">Seluruh Pulau Sumatera (8 Provinsi)</span>
+              <span className="text-slate-400">Tol Trans-Sumatera & Jalinsum (Timur, Tengah, Barat)</span>
+              <span className="text-slate-400">Gerbang Maritim & Selat Sunda (ALKI I)</span>
             </div>
           </div>
 

@@ -50,7 +50,7 @@ class OpenMeteoAdapter(BaseAdapter):
             return self._generate_fallback_forecast()
 
     def _generate_fallback_forecast(self) -> Dict[str, Any]:
-        """Generates realistic offline atmospheric predictions for North Sumatra corridors."""
+        """Generates realistic offline atmospheric predictions for Pan-Sumatra corridors."""
         return {
             "latitude": self.lat,
             "longitude": self.lon,

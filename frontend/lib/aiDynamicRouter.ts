@@ -27,16 +27,22 @@ export const HIGHWAY_JUNCTION_NODES: Array<{ id: string; name: string; coords: L
   { id: 'sei_rampah_interchange', name: 'Interchange Sei Rampah', coords: [99.1501, 3.4801], region: 'serdang_bedagai' },
   { id: 'tebing_tinggi_toll', name: 'Gerbang Tol Tebing Tinggi', coords: [99.1621, 3.3251], region: 'tebing_tinggi' },
   // Trans-Sumatra Highway Corridors
+  { id: 'banda_aceh_arterial', name: 'Simpang Lima Banda Aceh', coords: [95.3190, 5.5528], region: 'aceh' },
+  { id: 'lhokseumawe_jct', name: 'Simpang Empat Lhokseumawe', coords: [97.1420, 5.1780], region: 'aceh' },
+  { id: 'langsa_gate', name: 'Gerbang Jalintim Langsa', coords: [97.9620, 4.4720], region: 'aceh' },
   { id: 'kuala_tanjung_jct', name: 'Simpang Kuala Tanjung', coords: [99.4500, 3.3600], region: 'batu_bara' },
   { id: 'rantauprapat_jct', name: 'Simpang Lintas Timur Rantauprapat', coords: [100.0000, 2.1000], region: 'labuhan_batu' },
   { id: 'pekanbaru_tol_in', name: 'Gerbang Tol Pekanbaru', coords: [101.4478, 0.5071], region: 'riau' },
   { id: 'dumai_tol_out', name: 'Gerbang Tol Dumai', coords: [101.4533, 1.6811], region: 'riau' },
   { id: 'jambi_arterial', name: 'Simpang Tugu Juang Jambi', coords: [103.6131, -1.6100], region: 'jambi' },
-  { id: 'palembang_kramasan', name: 'Interchange Kramasan Palembang', coords: [104.7565, -2.9909], region: 'sumsel' },
-  { id: 'terbanggi_besar_tol', name: 'Interchange Terbanggi Besar', coords: [105.1800, -4.8500], region: 'lampung' },
-  { id: 'bakauheni_tol_gate', name: 'Gerbang Tol Pelabuhan Bakauheni', coords: [105.7533, -5.8711], region: 'lampung' },
+  { id: 'bengkulu_jalinbar', name: 'Simpang Lima Ratu Samban Bengkulu', coords: [102.2655, -3.8004], region: 'bengkulu' },
   { id: 'padang_by_pass', name: 'By Pass Kota Padang', coords: [100.3543, -0.9492], region: 'sumbar' },
   { id: 'bukittinggi_sentral', name: 'Simpang Aur Kuning Bukittinggi', coords: [100.3692, -0.3056], region: 'sumbar' },
+  { id: 'sitinjau_lauik_apex', name: 'Panorama Sitinjau Lauik Apex', coords: [100.5200, -0.9500], region: 'sumbar' },
+  { id: 'palembang_kramasan', name: 'Interchange Kramasan Palembang', coords: [104.7565, -2.9909], region: 'sumsel' },
+  { id: 'terbanggi_besar_tol', name: 'Interchange Terbanggi Besar', coords: [105.1800, -4.8500], region: 'lampung' },
+  { id: 'panjang_port_gate', name: 'Gerbang Logistik Pelabuhan Panjang', coords: [105.3167, -5.4667], region: 'lampung' },
+  { id: 'bakauheni_tol_gate', name: 'Gerbang Tol Pelabuhan Bakauheni', coords: [105.7533, -5.8711], region: 'lampung' },
 ];
 
 /**

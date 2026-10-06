@@ -65,7 +65,7 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
   const osintFinding = findings.find((f) => f.key === 'osint_hazard')?.finding;
   const verifiedCitations = (osintFinding?.data as Record<string, unknown> | undefined)?.verified_citations as Array<{ headline: string; source: string; tier: string; temporal_phase: string }> | undefined;
   const topCitation = Array.isArray(verifiedCitations) && verifiedCitations.length > 0 ? verifiedCitations[0] : null;
-  const displayAuthor = topCitation?.source || crisis.evidence?.osint_author || "LKBN ANTARA Sumut";
+  const displayAuthor = topCitation?.source || crisis.evidence?.osint_author || "LKBN ANTARA Biro Sumatera";
   const displayText = topCitation?.headline || crisis.evidence?.osint_text || 'Debit air Sungai Padang meningkat merendam jalur logistik Jalinsum KM 78. Puluhan truk sembako dialihkan ke Tol MKTT.';
   const isOfficialTier = topCitation ? topCitation.tier === 'TIER_1_OFFICIAL' : true;
   const isEarlyWarning = topCitation?.temporal_phase === 'forecast_early_warning';

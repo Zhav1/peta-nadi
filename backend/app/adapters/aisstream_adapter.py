@@ -17,8 +17,53 @@ class AISstreamAdapter(BaseAdapter):
     stream_key = STREAM_AISSTREAM
     poll_interval_seconds = 60  # Check queue depth every 60s in memory
 
-    # Belawan Port area bounding box
-    BBOX = [[[3.7, 98.6], [3.9, 98.8]]]
+    # Strategic Sumatra Seaports Bounding Boxes:
+    # format: [[[lat_min, lon_min], [lat_max, lon_max]]]
+    PORTS = {
+        "belawan": {
+            "name": "Pelabuhan Belawan",
+            "bbox": [[3.70, 98.60], [3.90, 98.80]],
+            "center": {"lat": 3.7922, "lon": 98.6776},
+        },
+        "kuala_tanjung": {
+            "name": "Pelabuhan Kuala Tanjung",
+            "bbox": [[3.25, 99.35], [3.45, 99.55]],
+            "center": {"lat": 3.3600, "lon": 99.4500},
+        },
+        "dumai": {
+            "name": "Pelabuhan Dumai",
+            "bbox": [[1.60, 101.35], [1.78, 101.55]],
+            "center": {"lat": 1.6811, "lon": 101.4533},
+        },
+        "teluk_bayur": {
+            "name": "Pelabuhan Teluk Bayur",
+            "bbox": [[-1.08, 100.30], [-0.92, 100.45]],
+            "center": {"lat": -0.9980, "lon": 100.3700},
+        },
+        "boom_baru": {
+            "name": "Pelabuhan Boom Baru (Palembang)",
+            "bbox": [[-3.05, 104.70], [-2.90, 104.85]],
+            "center": {"lat": -2.9750, "lon": 104.7833},
+        },
+        "panjang": {
+            "name": "Pelabuhan Panjang (Lampung)",
+            "bbox": [[-5.55, 105.25], [-5.40, 105.40]],
+            "center": {"lat": -5.4667, "lon": 105.3167},
+        },
+        "bakauheni": {
+            "name": "Pelabuhan Bakauheni (Sunda Strait Ferry)",
+            "bbox": [[-5.95, 105.68], [-5.80, 105.82]],
+            "center": {"lat": -5.8711, "lon": 105.7533},
+        },
+        "malahayati": {
+            "name": "Pelabuhan Malahayati (Aceh)",
+            "bbox": [[5.50, 95.45], [5.68, 95.60]],
+            "center": {"lat": 5.5897, "lon": 95.5186},
+        },
+    }
+
+    # Combined bounding boxes for AISstream subscription
+    BBOX = [info["bbox"] for info in PORTS.values()]
 
     def __init__(self):
         super().__init__()
@@ -140,37 +185,54 @@ class AISstreamAdapter(BaseAdapter):
             for mmsi in to_delete:
                 del self.vessels[mmsi]
 
-            # Count anchored vessels (SOG < 0.5 knots)
-            anchored_vessels = [v for v in self.vessels.values() if v["sog"] < 0.5]
-            anchored_count = len(anchored_vessels)
-            total_count = len(self.vessels)
+            # Group vessels by port based on bounding box
+            port_vessels: Dict[str, List[Dict[str, Any]]] = {pid: [] for pid in self.PORTS.keys()}
+            for v in self.vessels.values():
+                v_lat, v_lon = v.get("lat"), v.get("lon")
+                if v_lat is None or v_lon is None:
+                    continue
+                for pid, pdata in self.PORTS.items():
+                    bbox = pdata["bbox"]
+                    if bbox[0][0] <= v_lat <= bbox[1][0] and bbox[0][1] <= v_lon <= bbox[1][1]:
+                        port_vessels[pid].append(v)
+                        break
 
-            logger.debug(f"Belawan Port status: {anchored_count} anchored, {total_count} total vessels")
+            events_to_publish = []
+            for pid, vessels_at_port in port_vessels.items():
+                port_meta = self.PORTS[pid]
+                anchored_vessels = [v for v in vessels_at_port if v.get("sog", 1.0) < 0.5]
+                anchored_count = len(anchored_vessels)
+                total_count = len(vessels_at_port)
 
-            # If queue depth exceeds threshold, trigger warning
-            if anchored_count >= 8:
-                severity = "critical" if anchored_count >= 15 else "high"
-                dedup_key = f"aisstream:queue_depth:{current_hour}"
-                
-                if not r.get(f"lrip:dedup:{dedup_key}"):
-                    r.set(f"lrip:dedup:{dedup_key}", "1", ex=3600)  # 1 hour dedup
+                logger.debug(f"{port_meta['name']} status: {anchored_count} anchored, {total_count} total vessels")
+
+                # If queue depth exceeds threshold, trigger warning
+                if anchored_count >= 8:
+                    severity = "critical" if anchored_count >= 15 else "high"
+                    dedup_key = f"aisstream:queue_depth:{pid}:{current_hour}"
                     
-                    event_payload = {
-                        "source": self.source_name,
-                        "event_type": "port_queue",
-                        "severity": severity,
-                        "lat": "3.7922",  # Belawan Port center
-                        "lon": "98.6776",
-                        "title": f"Port Congestion Alert: {anchored_count} vessels waiting at Belawan Port",
-                        "raw": json.dumps({
-                            "total_vessels": total_count,
-                            "anchored_vessels": anchored_count,
-                            "vessel_details": [{"name": v["name"], "sog": v["sog"]} for v in anchored_vessels]
-                        }),
-                        "ts": now.isoformat(),
-                        "dedup_key": dedup_key
-                    }
-                    self.publish([event_payload])
+                    if not r.get(f"lrip:dedup:{dedup_key}"):
+                        r.set(f"lrip:dedup:{dedup_key}", "1", ex=3600)  # 1 hour dedup
+                        
+                        events_to_publish.append({
+                            "source": self.source_name,
+                            "event_type": "port_queue",
+                            "severity": severity,
+                            "lat": str(port_meta["center"]["lat"]),
+                            "lon": str(port_meta["center"]["lon"]),
+                            "title": f"Port Congestion Alert: {anchored_count} vessels waiting at {port_meta['name']}",
+                            "raw": json.dumps({
+                                "port_id": pid,
+                                "port_name": port_meta["name"],
+                                "total_vessels": total_count,
+                                "anchored_vessels": anchored_count,
+                                "vessel_details": [{"name": v["name"], "sog": v["sog"]} for v in anchored_vessels]
+                            }),
+                            "ts": now.isoformat(),
+                            "dedup_key": dedup_key
+                        })
+            if events_to_publish:
+                self.publish(events_to_publish)
                     
         except Exception as e:
             logger.error(f"Error in AIS queue processing: {e}", exc_info=True)

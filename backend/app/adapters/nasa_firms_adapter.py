@@ -22,17 +22,38 @@ class NASAFIRMSAdapter(BaseAdapter):
     # Sumatra Bounding Box (lon_west, lat_south, lon_east, lat_north)
     SUMATRA_BBOX = "94,-6,108,6"
 
-    # North Sumatra Bounding Box filter
-    MIN_LAT, MAX_LAT = 1.0, 5.5
-    MIN_LON, MAX_LON = 97.5, 100.5
+    # Pan-Sumatra Bounding Box filter (covering Aceh, Sumut, Sumbar, Riau, Jambi, Bengkulu, Sumsel, Lampung)
+    MIN_LAT, MAX_LAT = -6.0, 6.0
+    MIN_LON, MAX_LON = 94.0, 108.0
 
-    # Highway spines for proximity check (Medan, Belawan, Toba, etc.)
+    # Pan-Sumatra Highway Spines (Jalintim, Jalinteng, Jalinbar, Tol Trans-Sumatera)
     HIGHWAY_SPINE = [
+        # Aceh
+        {"name": "Banda Aceh - Malahayati Corridor", "lat": 5.55, "lon": 95.32},
+        {"name": "Lhokseumawe Jalintim Segment", "lat": 5.18, "lon": 97.14},
+        {"name": "Langsa Gateway Segment", "lat": 4.47, "lon": 97.96},
+        # North Sumatra (Sumut)
         {"name": "Belawan Port Corridor", "lat": 3.80, "lon": 98.69},
         {"name": "Medan Hub", "lat": 3.58, "lon": 98.68},
+        {"name": "Tebing Tinggi Interchange", "lat": 3.33, "lon": 99.16},
         {"name": "Pematangsiantar Route", "lat": 2.96, "lon": 99.07},
-        {"name": "Simalungun Segment", "lat": 2.32, "lon": 99.15},
-        {"name": "Toba Lake Segment", "lat": 1.75, "lon": 98.95},
+        {"name": "Rantauprapat Jalintim Segment", "lat": 2.10, "lon": 99.83},
+        # West Sumatra (Sumbar)
+        {"name": "Bukittinggi Jalinteng Segment", "lat": -0.30, "lon": 100.37},
+        {"name": "Padang - Teluk Bayur Corridor", "lat": -0.95, "lon": 100.36},
+        # Riau
+        {"name": "Dumai Port Corridor", "lat": 1.68, "lon": 101.45},
+        {"name": "Pekanbaru Logistics Hub", "lat": 0.51, "lon": 101.45},
+        # Jambi
+        {"name": "Jambi City Jalintim Segment", "lat": -1.61, "lon": 103.61},
+        # Bengkulu
+        {"name": "Bengkulu Jalinbar Segment", "lat": -3.80, "lon": 102.26},
+        # South Sumatra (Sumsel)
+        {"name": "Palembang Boom Baru Corridor", "lat": -2.98, "lon": 104.76},
+        # Lampung
+        {"name": "Terbanggi Besar Toll Interchange", "lat": -4.85, "lon": 105.18},
+        {"name": "Bandar Lampung - Panjang Port", "lat": -5.45, "lon": 105.30},
+        {"name": "Bakauheni Port Gateway", "lat": -5.87, "lon": 105.75},
     ]
 
     async def health_check(self) -> bool:
@@ -74,7 +95,7 @@ class NASAFIRMSAdapter(BaseAdapter):
         return ""
 
     async def parse(self, raw_data: str) -> List[Dict[str, Any]]:
-        """Parse FIRMS CSV data, filter for North Sumatra and proximity to Trans-Sumatra Highway, map to events."""
+        """Parse FIRMS CSV data, filter for Pan-Sumatra and proximity to Trans-Sumatra Highway, map to events."""
         events = []
         if not raw_data or raw_data.strip() == "":
             return events
@@ -99,7 +120,7 @@ class NASAFIRMSAdapter(BaseAdapter):
                     if confidence == "low":
                         continue
 
-                    # 2. Filter geographically for North Sumatra bbox
+                    # 2. Filter geographically for Pan-Sumatra bbox
                     if not (self.MIN_LAT <= lat <= self.MAX_LAT and self.MIN_LON <= lon <= self.MAX_LON):
                         continue
 

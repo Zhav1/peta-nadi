@@ -228,7 +228,7 @@ export const api = {
   news: {
     live: () =>
       request<{ items: Array<Record<string, unknown>>; total: number }>('/api/v1/news/live'),
-    verify: (claim: string, location: string = 'Koridor Sumut') =>
+    verify: (claim: string, location: string = 'Koridor Sumatera') =>
       request<{ verification_status: string; confidence_score: number; attributions: Array<Record<string, unknown>>; reasoning: string }>(
         `/api/v1/news/verify?claim=${encodeURIComponent(claim)}&location=${encodeURIComponent(location)}`,
         { method: 'POST' }

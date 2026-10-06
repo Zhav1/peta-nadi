@@ -117,7 +117,7 @@ export default function ReportsSection({
         <div class="header">
           <div>
             <h1 class="title">PreHub — Laporan Operasional Mitigasi Logistik Pangan</h1>
-            <div class="subtitle">Koridor Sumatera Utara — Pemantauan dan Rekomendasi Rute Alternatif</div>
+            <div class="subtitle">Koridor ${selectedCrisis?.region || 'Logistik Terpadu Pulau Sumatera'} — Pemantauan dan Rekomendasi Rute Alternatif</div>
           </div>
           <div class="meta">
             <div><strong>Diterbitkan:</strong> ${timestamp}</div>
@@ -144,8 +144,8 @@ export default function ReportsSection({
         <div class="section">
           <div class="section-title">1. Ringkasan Eksekutif Logistik Pangan</div>
           <p class="text">
-            Sistem PreHub memantau kelancaran rantai pasok secara berkala pada koridor Sumatera Utara. 
-            Melalui integrasi data cuaca BMKG, kepadatan jalan TomTom, arus maritim, dan pemantauan harga pangan PIHPS, 
+            Sistem PreHub memantau kelancaran rantai pasok secara berkala pada koridor logistik strategis Sumatera (${selectedCrisis?.region || 'Lintas Arteri & Maritim'}). 
+            Melalui integrasi data cuaca BMKG, kepadatan jalan TomTom, arus maritim AIS, dan pemantauan harga pangan PIHPS, 
             sistem mendeteksi potensi hambatan distribusi dan merekomendasikan langkah mitigasi secara dini.
           </p>
         </div>
@@ -172,8 +172,8 @@ export default function ReportsSection({
             <tbody>
               <tr>
                 <td>${timestamp}</td>
-                <td>Genangan Air & Hambatan Arteri</td>
-                <td>Koridor Sumatera Utara</td>
+                <td>${selectedCrisis?.title || 'Hambatan Arteri Logistik'}</td>
+                <td>${selectedCrisis?.region || 'Koridor Lintas Sumatera'}</td>
                 <td>Terkonfirmasi Multi-Sumber</td>
                 <td>Rute Alternatif Diteruskan</td>
               </tr>
@@ -202,7 +202,7 @@ export default function ReportsSection({
       timestamp: new Date().toISOString(),
       system_integrity_pct: healthScore,
       total_approvals: liveApprovals,
-      corridor: "North Sumatra (Belawan - Medan - Tebing Tinggi)",
+      corridor: selectedCrisis?.region || "Pan-Sumatra Strategic Corridors",
       corridor_status: "Terkendali",
       active_crisis: selectedCrisis?.title || "Pantauan Koridor",
       approvals_log: approvalList
@@ -272,7 +272,7 @@ export default function ReportsSection({
                 Laporan Ringkasan Mitigasi Logistik Pangan
               </h2>
               <p className="text-xs font-sans text-slate-400">
-                PreHub Logistik • Koridor Prioritas Sumatera Utara
+                PreHub Logistik • {selectedCrisis?.region || 'Koridor Prioritas Pulau Sumatera'}
               </p>
             </div>
           </div>
@@ -309,7 +309,7 @@ export default function ReportsSection({
                 <p className="text-[10px] font-mono text-slate-400">Periode: Siklus Pemantauan Aktif</p>
               </div>
               <p>
-                Sistem PreHub memantau kelancaran jalur distribusi bahan pangan pada koridor arteri Sumatera Utara (Pelabuhan Belawan - Medan - Tebing Tinggi). Informasi hambatan dipetakan secara real-time guna mendukung kelancaran pengiriman komoditas strategis.
+                Sistem PreHub memantau kelancaran jalur distribusi bahan pangan pada koridor logistik terpadu Sumatera ({selectedCrisis?.region || 'Jalur Arteri Lintas Timur, Barat, Tengah & Jalur Laut'}). Informasi hambatan dipetakan secara real-time guna mendukung kelancaran pengiriman komoditas strategis.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
                 <div className="p-3.5 rounded-xl bg-[#0c1017] border border-white/10">

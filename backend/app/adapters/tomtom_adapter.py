@@ -16,17 +16,29 @@ class TomTomAdapter(BaseAdapter):
     stream_key = STREAM_TOMTOM
     poll_interval_seconds = 300  # Poll every 5 minutes
 
-    # Checkpoints on Trans-Sumatra Highway
+    # Strategic Checkpoints across Trans-Sumatra Highway Corridors
     CHECKPOINTS = [
+        # North Sumatra (Sumut)
         {"name": "Belawan Toll Gate", "lat": 3.8012, "lon": 98.6890},
         {"name": "Tanjung Mulia Interchange", "lat": 3.7558, "lon": 98.6742},
         {"name": "Binjai Km 18", "lat": 3.6789, "lon": 98.5123},
+        {"name": "Tebing Tinggi Toll Gate", "lat": 3.3251, "lon": 99.1621},
         {"name": "Pematangsiantar Km 128", "lat": 2.9595, "lon": 99.0687},
+        # Riau
+        {"name": "Pekanbaru Toll Gate", "lat": 0.5071, "lon": 101.4478},
+        {"name": "Dumai Port Corridor", "lat": 1.6811, "lon": 101.4533},
+        # West Sumatra (Sumbar)
+        {"name": "Padang By Pass Km 12", "lat": -0.9492, "lon": 100.3543},
+        {"name": "Bukittinggi Aur Kuning", "lat": -0.3056, "lon": 100.3692},
+        # South Sumatra & Lampung
+        {"name": "Palembang Kramasan Interchange", "lat": -2.9909, "lon": 104.7565},
+        {"name": "Terbanggi Besar Toll Gate", "lat": -4.8500, "lon": 105.1800},
+        {"name": "Bakauheni Toll Terminal", "lat": -5.8711, "lon": 105.7533},
     ]
 
-    # Bounding Box for traffic incidents (Medan-Belawan region)
-    # format: minLon,minLat,maxLon,maxLat
-    BBOX = "98.5,3.5,99.2,3.9"
+    # Bounding Box for traffic incidents across Sumatra Island
+    # format: minLon,minLat,maxLon,maxLat (lon_west, lat_south, lon_east, lat_north)
+    BBOX = "95.0,-6.0,106.5,6.0"
 
     async def health_check(self) -> bool:
         """Check if TomTom API is responsive by querying a single checkpoint."""

@@ -158,7 +158,7 @@ export function useNewsVerification() {
                 source_name: src,
                 headline: a.title || a.headline || 'Laporan Lapangan',
                 summary: a.summary || a.title || '',
-                location_name: a.corridor_segment || (a.corridor_nodes && a.corridor_nodes[0]) || a.region || 'Koridor Sumut',
+                location_name: a.corridor_segment || (a.corridor_nodes && a.corridor_nodes[0]) || a.region || 'Koridor Sumatera',
                 pubDate: a.pubDate || 'Terkini',
                 category: a.category || 'DISASTER_LOGISTICS',
                 incident_type: a.incident_type || 'flood',

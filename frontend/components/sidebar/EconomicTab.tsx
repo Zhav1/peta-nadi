@@ -67,7 +67,7 @@ export function EconomicTab({ crisis }: EconomicTabProps) {
             </span>
           </div>
           <p className="text-xs text-slate-400">
-            Estimasi {forecast.timeframe_hours ?? 48} jam ke depan · {(forecast.region || 'Sumut').replace(/_/g, ' ')}
+            Estimasi {forecast.timeframe_hours ?? 48} jam ke depan · {(forecast.region || 'Sumatera').replace(/_/g, ' ')}
           </p>
         </div>
       )}

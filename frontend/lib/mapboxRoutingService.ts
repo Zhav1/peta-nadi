@@ -367,47 +367,57 @@ function fallbackHighwayRoute(
   destination: LonLat,
   waypoints: LonLat[] = []
 ): LonLat[] {
-  const highwayNodes: LonLat[] = [
-    origin,
-    [98.6750, 3.7500],
-    [98.6710, 3.6800],
-    [98.6730, 3.6200],
-    [98.7180, 3.5410],
-    [98.8050, 3.5520],
-    [98.8750, 3.5600],
-    [98.9560, 3.5680],
-    [99.0450, 3.4850],
-    [99.1100, 3.2200],
-    destination,
-  ];
-
   if (waypoints.length > 0) {
     return [origin, ...waypoints, destination];
   }
 
-  return highwayNodes;
+  // Generate 5 interpolated intermediate waypoints with slight curved deviation
+  const [oLon, oLat] = origin;
+  const [dLon, dLat] = destination;
+  const intermediate: LonLat[] = [];
+  const steps = 6;
+
+  for (let i = 1; i < steps; i++) {
+    const t = i / steps;
+    // Linear interpolation
+    const lon = oLon + (dLon - oLon) * t;
+    const lat = oLat + (dLat - oLat) * t;
+    // Slight lateral bow to simulate road curves rather than pure straight flight
+    const bow = Math.sin(t * Math.PI) * 0.05;
+    intermediate.push([Number((lon + bow).toFixed(4)), Number((lat + bow * 0.5).toFixed(4))]);
+  }
+
+  return [origin, ...intermediate, destination];
 }
 
 export async function calculateRoadNetworkDetourRoutes(
   hazardCenter: LonLat,
   radiusKm: number = 15,
   origin: LonLat = HUB_NODES.belawan.coords,
-  destination: LonLat = HUB_NODES.siantar.coords
+  destination: LonLat = HUB_NODES.pekanbaru ? HUB_NODES.pekanbaru.coords : HUB_NODES.siantar.coords
 ): Promise<RouteRecommendation[]> {
   const [hLon, hLat] = hazardCenter;
+  const [oLon, oLat] = origin;
+  const [dLon, dLat] = destination;
 
   const minClearanceKm = radiusKm + 12;
   const offsetLon = (minClearanceKm / 111) * 1.3;
   const offsetLat = minClearanceKm / 111;
 
-  const isEastDetour = hLon <= 98.75;
-  const tangentLon1 = isEastDetour ? hLon + offsetLon : hLon - offsetLon;
-  const tangentLat1 = hLat > 3.5 ? hLat - offsetLat * 0.4 : hLat + offsetLat * 0.4;
+  // Compute tangent normal vector relative to origin-destination vector
+  const dX = dLon - oLon;
+  const dY = dLat - oLat;
+  const len = Math.sqrt(dX * dX + dY * dY) || 1;
+  const normX = -dY / len;
+  const normY = dX / len;
 
-  const detourWaypoints1: LonLat[] = [[tangentLon1, tangentLat1]];
-  const detourWaypoints2: LonLat[] = [
-    [isEastDetour ? hLon + offsetLon * 1.5 : hLon - offsetLon * 1.5, hLat + 0.05],
-  ];
+  const tangentLon1 = hLon + normX * offsetLon;
+  const tangentLat1 = hLat + normY * offsetLat;
+  const tangentLon2 = hLon - normX * offsetLon * 1.2;
+  const tangentLat2 = hLat - normY * offsetLat * 1.2;
+
+  const detourWaypoints1: LonLat[] = [[Number(tangentLon1.toFixed(4)), Number(tangentLat1.toFixed(4))]];
+  const detourWaypoints2: LonLat[] = [[Number(tangentLon2.toFixed(4)), Number(tangentLat2.toFixed(4))]];
 
   const [coordsPrimary, coordsAlternative] = await Promise.all([
     fetchMapboxDirections(origin, destination, detourWaypoints1),
@@ -416,7 +426,7 @@ export async function calculateRoadNetworkDetourRoutes(
 
   return [
     {
-      description: `Rute Pengalihan Tangensial Jalan Tol (Menghindari Zona Krisis ${radiusKm}km)`,
+      description: `Rute Pengalihan Tangensial Bebas Hambatan (Menghindari Radius Bahaya ${radiusKm}km)`,
       waypoints: coordsPrimary.map(([lon, lat]) => ({ lat, lon })),
       distance_km: 118,
       eta_minutes: 112,
@@ -424,7 +434,7 @@ export async function calculateRoadNetworkDetourRoutes(
       risk_score: 0.15,
     },
     {
-      description: `Rute Arteri Pesisir Timur (Jalur Alternatif 2)`,
+      description: `Rute Arteri Alternatif Sekunder (Jalur Pengalihan Mandiri)`,
       waypoints: coordsAlternative.map(([lon, lat]) => ({ lat, lon })),
       distance_km: 136,
       eta_minutes: 145,

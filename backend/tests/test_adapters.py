@@ -343,16 +343,14 @@ async def test_nasa_firms_proximity_filter(mock_get_redis):
 
     adapter = NASAFIRMSAdapter()
     
-    # Hotspot far away from highway spine checkpoints (e.g. out in the ocean or distant forest)
-    # Medvedev/Medan region coordinate is ~3.5, 98.6. Let's put a hotspot at lat 5.0, lon 98.0
-    # Nearest segment would be Belawan Toll Gate (~3.80, 98.69) or Binjai (~3.68, 98.51).
-    # Distance from 5.0, 98.0 to 3.80, 98.69 is > 100km, which is > 20km threshold.
+    # Hotspot far away from Pan-Sumatra highway spine checkpoints (e.g. out in central Java or Indian Ocean)
+    # Coordinate: -7.50, 110.00 (Central Java) is far outside Pan-Sumatra BBOX or highway corridors.
     csv_data_distant = """latitude,longitude,bright_ti4,scan,track,acq_date,acq_time,satellite,instrument,confidence,version,bright_ti5,frp,daynight
-5.00,98.00,345.5,0.4,0.4,2026-07-06,0630,N,VIIRS,nominal,2.0NRT,295.2,15.2,D
+-7.50,110.00,345.5,0.4,0.4,2026-07-06,0630,N,VIIRS,nominal,2.0NRT,295.2,15.2,D
 """
     events = await adapter.parse(csv_data_distant)
     
-    # Should be filtered out due to proximity check
+    # Should be filtered out due to proximity/bbox check
     assert len(events) == 0
 
 

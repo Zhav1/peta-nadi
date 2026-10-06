@@ -148,5 +148,35 @@
     "inflation_multiplier": 1.40,
     "recovery_days": 9,
     "sources": ["Sinar Indonesia Baru 2019-03-22"]
+  },
+  {
+    "title": "Sitinjau Lauik Landslide & Padang-Solok Cutoff — May 2024",
+    "description": "Severe flash flood and debris flow severed the vital Sitinjau Lauik arterial road connecting Padang to Solok/Jambi for 8 days. Trucked food supply including shallots and chilies from West Sumatra highlands halted, driving wholesale price inflation up 32% across central Sumatra.",
+    "crisis_type": "landslide",
+    "affected_region": "west_sumatra",
+    "affected_commodities": ["chili", "shallot", "rice"],
+    "inflation_multiplier": 1.32,
+    "recovery_days": 8,
+    "sources": ["BPBD Sumbar 2024", "Antara Sumbar 2024-05-14"]
+  },
+  {
+    "title": "Bakauheni-Merak Extreme Weather Ferry Suspension — December 2022",
+    "description": "High waves and extreme wind in the Sunda Strait halted ferry operations at Bakauheni Port for 4 days. Over 2,500 logistics trucks stranded along the Bakauheni toll access corridor, delaying egg, broiler meat, and vegetable distribution between Java and Southern Sumatra with 19% price inflation.",
+    "crisis_type": "port_closure",
+    "affected_region": "lampung",
+    "affected_commodities": ["eggs", "chicken", "vegetables"],
+    "inflation_multiplier": 1.19,
+    "recovery_days": 4,
+    "sources": ["ASDP Indonesia Ferry 2022", "Kompas Lampung"]
+  },
+  {
+    "title": "Boom Baru Port Musi River Siltation & Low Tide — September 2023",
+    "description": "Extreme dry season caused Musi River draft to decrease below 5.5 meters, restricting container vessels from docking at Boom Baru Port Palembang. Rice freight and fertilizer deliveries were delayed 7 days, causing a 14% regional staple price spike.",
+    "crisis_type": "port_congestion",
+    "affected_region": "south_sumatra",
+    "affected_commodities": ["rice", "fertilizer"],
+    "inflation_multiplier": 1.14,
+    "recovery_days": 7,
+    "sources": ["Pelindo Regional II Palembang 2023"]
   }
 ]

@@ -656,7 +656,7 @@ export default function DashboardClient() {
             is_simulated: true,
             lat: Number(item.lat || 3.58),
             lon: Number(item.lon || 98.67),
-            region: 'North Sumatra Corridor',
+            region: String(item.region || 'Sumatra Logistics Corridor'),
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
             messages: [],
@@ -1309,7 +1309,7 @@ export default function DashboardClient() {
                       <div className="flex items-center justify-between text-xs font-mono text-slate-400 pt-1 border-t border-[#1c2432]">
                         <div className="flex items-center gap-1 truncate max-w-[140px]">
                           <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                          <span className="truncate">{item.location_name || 'Koridor Sumut'}</span>
+                          <span className="truncate">{item.location_name || 'Koridor Sumatera'}</span>
                         </div>
 
                         {item.commodity_name && (

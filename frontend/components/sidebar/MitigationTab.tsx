@@ -594,14 +594,14 @@ export function MitigationTab({
                   }))
                 : [
                     {
-                      source_name: 'Antara News Sumut',
+                      source_name: 'Antara News Sumatera',
                       tier: 'Tier-1 Resmi',
-                      url: `https://news.google.com/search?q=${encodeURIComponent((crisis.title || 'banjir Sumut') + ' Antara')}&hl=id-ID&gl=ID&ceid=ID:id`
+                      url: `https://news.google.com/search?q=${encodeURIComponent((crisis.title || 'bencana logistik Sumatera') + ' Antara')}&hl=id-ID&gl=ID&ceid=ID:id`
                     },
                     {
                       source_name: 'Kompas.com Regional',
                       tier: 'Media Nasional',
-                      url: `https://news.google.com/search?q=${encodeURIComponent((crisis.title || 'logistik Sumut') + ' Kompas')}&hl=id-ID&gl=ID&ceid=ID:id`
+                      url: `https://news.google.com/search?q=${encodeURIComponent((crisis.title || 'jalur logistik Sumatera') + ' Kompas')}&hl=id-ID&gl=ID&ceid=ID:id`
                     }
                   ];
 

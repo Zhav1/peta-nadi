@@ -32,7 +32,7 @@ export default function SimulationSection({
   const [messages, setMessages] = useState<Array<{ sender: 'user' | 'ai'; text: string }>>([
     { 
       sender: 'ai', 
-      text: 'Modul simulasi mitigasi aktif. Parameter koridor logistik Sumatera Utara (Belawan -> Medan -> Tebing Tinggi) siap untuk pengujian skenario intervensi.',
+      text: `Modul simulasi mitigasi aktif. Parameter koridor logistik ${selectedCrisis?.region || 'Pulau Sumatera'} siap untuk pengujian skenario intervensi taktis.`,
     },
   ]);
   const [inputVal, setInputVal] = useState('');
@@ -122,10 +122,10 @@ export default function SimulationSection({
 
   // Quick Action Prompt Pills
   const quickPrompts = [
-    "Simulasikan Penutupan Tol Medan",
+    "Simulasikan Blokade Jalur Logistik",
     "Hitung Rute Alternatif BULOG",
-    "Proyeksikan Stok 48 Jam",
-    "Buka Gudang Darurat Tebing"
+    "Proyeksikan Ketahanan Stok 48 Jam",
+    "Buka Gudang Cadangan Darurat"
   ];
 
   return (
@@ -154,10 +154,10 @@ export default function SimulationSection({
               </p>
             </div>
             <h1 className="text-base font-bold text-white">
-              {selectedCrisis?.title || 'Krisis Aktif: Banjir Bandang & Longsor Belawan'}
+              {selectedCrisis?.title || 'Krisis Aktif: Disrupsi Koridor Strategis'}
             </h1>
             <p className="text-xs text-slate-400 font-mono mt-1">
-              {selectedCrisis?.lat || 3.7922}° LU, {selectedCrisis?.lon || 98.6776}° BT • Koridor Sumatera Utara
+              {selectedCrisis?.lat ? `${Number(selectedCrisis.lat).toFixed(4)}° LU, ` : ''}{selectedCrisis?.lon ? `${Number(selectedCrisis.lon).toFixed(4)}° BT • ` : ''}{selectedCrisis?.region || 'Koridor Terpadu Sumatera'}
             </p>
           </div>
 

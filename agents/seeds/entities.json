@@ -166,5 +166,69 @@
     "lon": 98.6900,
     "region": "north_sumatra",
     "metadata": {"industry": "petroleum"}
+  },
+  {
+    "name": "Teluk Bayur Port",
+    "entity_type": "port",
+    "lat": -0.9980,
+    "lon": 100.3700,
+    "region": "west_sumatra",
+    "metadata": {"importance": "high", "description": "Primary sea port of West Sumatra on Indian Ocean"}
+  },
+  {
+    "name": "Panjang Port",
+    "entity_type": "port",
+    "lat": -5.4667,
+    "lon": 105.3167,
+    "region": "lampung",
+    "metadata": {"importance": "high", "description": "Strategic container & agro terminal in Southern Sumatra"}
+  },
+  {
+    "name": "Bakauheni Port",
+    "entity_type": "port",
+    "lat": -5.8711,
+    "lon": 105.7533,
+    "region": "lampung",
+    "metadata": {"importance": "critical", "description": "Strategic inter-island ferry gateway connecting Java and Sumatra"}
+  },
+  {
+    "name": "Boom Baru Port",
+    "entity_type": "port",
+    "lat": -2.9750,
+    "lon": 104.7833,
+    "region": "south_sumatra",
+    "metadata": {"importance": "high", "description": "Inland river port on Musi River serving South Sumatra"}
+  },
+  {
+    "name": "Malahayati Port",
+    "entity_type": "port",
+    "lat": 5.5897,
+    "lon": 95.5186,
+    "region": "aceh",
+    "metadata": {"importance": "high", "description": "Northern maritime terminal in Aceh province"}
+  },
+  {
+    "name": "BULOG Kanwil Sumbar",
+    "entity_type": "supplier",
+    "lat": -0.9492,
+    "lon": 100.3543,
+    "region": "west_sumatra",
+    "metadata": {"industry": "grain", "role": "Regional food reserve warehouse"}
+  },
+  {
+    "name": "BULOG Kanwil Sumsel & Babel",
+    "entity_type": "supplier",
+    "lat": -2.9909,
+    "lon": 104.7565,
+    "region": "south_sumatra",
+    "metadata": {"industry": "grain", "role": "Southern Sumatra grain logistics depot"}
+  },
+  {
+    "name": "BULOG Kanwil Lampung",
+    "entity_type": "supplier",
+    "lat": -5.4500,
+    "lon": 105.2600,
+    "region": "lampung",
+    "metadata": {"industry": "grain", "role": "Sunda Strait food reserve gateway"}
   }
 ]

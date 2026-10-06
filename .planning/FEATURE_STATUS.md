@@ -1,14 +1,14 @@
 # FEATURE STATUS — PetaNadi System Matrix
 
-**Milestone:** M1 — Hackathon MVP (North Sumatra Corridor)  
-**Architecture Paradigm:** Hybrid Cognitive Swarm (Dijkstra + NVIDIA cuOpt + FourCastNet + OR-Tools Fallback)  
-**Last Updated:** 2026-07-21  
+**Milestone:** M2/M3 — Pan-Sumatra Island Production Scope (8 Mainland Provinces + ALKI I Corridors)  
+**Architecture Paradigm:** Hybrid Cognitive Swarm (Dijkstra + Deterministic CPU Router + Open-Meteo NWP + OR-Tools VRP)  
+**Last Updated:** 2026-10-06  
 
 ---
 
 ## Executive Summary
 
-PetaNadi (LRIP) adalah platform intelijen krisis logistik nasional multi-sensor berbasis AI. Sistem ini menggabungkan agen cerdas (LangGraph Swarm), visualisasi 4D (Mapbox GL + Deck.gl), serta mesin optimasi rute hibrida yang memadukan keunggulan komputasi CPU ringan dengan daya akselerasi GPU NVIDIA.
+PetaNadi (PreHub/LRIP) adalah platform intelijen krisis logistik nasional multi-sensor berbasis AI. Sistem ini beroperasi di seluruh Pulau Sumatera (Aceh, Sumatera Utara, Sumatera Barat, Riau, Jambi, Bengkulu, Sumatera Selatan, Lampung) serta koridor maritim ALKI I, menghubungkan produsen komoditas pangan pokok dengan simpul pelabuhan strategis dan jaringan jalan tol Trans-Sumatera.
 
 ---
 

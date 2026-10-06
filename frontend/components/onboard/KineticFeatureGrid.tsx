@@ -23,7 +23,7 @@ const CAPABILITIES: CapabilityItem[] = [
     description:
       'Memantau jalur distribusi darat, kawasan rawan genangan banjir, dan kepadatan lalu lintas secara terpadu pada peta interaktif.',
     metricLabel: 'Wilayah Pantauan',
-    metricValue: 'Sumatera Utara & Jalinsum',
+    metricValue: 'Pan-Sumatera & Koridor ALKI',
     icon: Map,
   },
   {

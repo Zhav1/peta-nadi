@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   description:
     'Sistem peringatan dini dan rekomendasi mitigasi gangguan distribusi pangan berbasis data multisumber. ' +
     'Memantau koridor distribusi, validasi bukti cuaca & lalu lintas, serta perbandingan mitigasi Continue, Reroute, dan Hold/Delay.',
-  keywords: ['PreHub', 'distribusi pangan', 'logistik', 'mitigasi gangguan', 'early warning', 'Sumatera Utara', 'AI'],
+  keywords: ['PreHub', 'distribusi pangan', 'logistik', 'mitigasi gangguan', 'early warning', 'Pulau Sumatera', 'Pan-Sumatera', 'AI'],
   icons: {
     icon: '/logo_prehub.png',
     shortcut: '/logo_prehub.png',
