@@ -18,6 +18,7 @@ async def route_optimization_agent(state: CrisisState) -> dict:
     
     # 1. Load road graph edges (with local offline cache fallback)
     edges = await load_road_graph()
+    node_coords: dict = {}
     if not edges:
         try:
             import os, json
@@ -25,6 +26,8 @@ async def route_optimization_agent(state: CrisisState) -> dict:
             if os.path.exists(cache_file):
                 with open(cache_file, "r", encoding="utf-8") as f:
                     cached_data = json.load(f)
+                    for n in cached_data.get("nodes", []):
+                        node_coords[n["id"]] = {"lat": float(n["lat"]), "lon": float(n["lon"])}
                     edges = []
                     for e in cached_data.get("edges", []):
                         raw_c = e.get("corridor_name", "")
@@ -39,7 +42,7 @@ async def route_optimization_agent(state: CrisisState) -> dict:
                             "base_weight": 1.0,
                             "corridor": c_id
                         })
-                logger.info(f"Agent 4: Loaded {len(edges)} edges from offline Sumatra road graph cache.")
+                logger.info(f"Agent 4: Loaded {len(edges)} edges and {len(node_coords)} node coordinates from offline Sumatra road graph cache.")
         except Exception as cache_err:
             logger.warning(f"Agent 4 local cache fallback error: {cache_err}")
 
@@ -195,8 +198,13 @@ async def route_optimization_agent(state: CrisisState) -> dict:
                     if G.has_edge(path[i], path[i+1]):
                         distance_km += G[path[i]][path[i+1]]["distance_km"]
                 
-                # Dynamic waypoint along the route
-                waypoints = [{"lat": 3.78 + (idx * 0.02), "lon": 98.68 - (idx * 0.02)}]
+                # Dynamic waypoints along traversed path nodes
+                waypoints = []
+                for p_node in path:
+                    if p_node in node_coords:
+                        waypoints.append(node_coords[p_node])
+                if not waypoints:
+                    waypoints = [{"lat": 3.78 + (idx * 0.02), "lon": 98.68 - (idx * 0.02)}]
                 wp_coords = [[wp["lon"], wp["lat"]] for wp in waypoints]
                 
                 # Intermodal Choke-Point Proximity Delay Multiplier
