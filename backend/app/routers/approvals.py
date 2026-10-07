@@ -61,6 +61,22 @@ async def create_approval(
         "sync_status": "synced"
     }
 
+    # Closed-loop Fleet Reroute Sync: If recommended route has geometry, bind it to target vehicle
+    try:
+        route_dict = payload.recommended_route or {}
+        target_vid = (payload.custom_constraints or {}).get("vehicle_id") or route_dict.get("vehicle_id") or "TRK-003-BELAWAN-TEBING"
+        rec_geom = route_dict.get("route_geometry") or route_dict.get("geometry")
+        if rec_geom and target_vid:
+            from app.services.telemetry_service import telemetry_service
+            telemetry_service.reroute_vehicle(
+                vehicle_id=target_vid,
+                new_route_geometry=rec_geom,
+                new_eta_minutes=float(route_dict.get("eta_minutes") or 120.0)
+            )
+            logger.info(f"Closed-loop sync: rerouted fleet vehicle {target_vid} following operator approval.")
+    except Exception as re_err:
+        logger.debug(f"Fleet reroute sync notice: {re_err}")
+
     # Attempt Supabase cloud insertion
     try:
         from app.db.supabase_client import get_client

@@ -344,6 +344,7 @@ export default function DashboardClient() {
 
   // Interactive Simulation Controls
   const [selectedRadius, setSelectedRadius] = useState<number>(15);
+  const [simSpeed, setSimSpeed] = useState<number>(1);
   const [drawModeActive, setDrawModeActive] = useState(false);
   const [isClickTargeting, setIsClickTargeting] = useState(false);
   const [simulatedShockwave, setSimulatedShockwave] = useState<{ center: [number, number]; radiusKm: number; hazardType: string } | null>(null);
@@ -1185,6 +1186,7 @@ export default function DashboardClient() {
               historicalEpisodes={historicalEpisodes}
               predictiveRisks={predictiveRisks}
               fleetModalityFilter={fleetModalityFilter}
+              simSpeed={simSpeed}
             />
 
           </div>
@@ -1529,6 +1531,8 @@ export default function DashboardClient() {
               onResetNodes={handleResetNodes}
               isSidebarOpen={isSidebarOpen && !!selectedCrisis}
               isLeftSidebarCollapsed={isLeftSidebarCollapsed}
+              simSpeed={simSpeed}
+              setSimSpeed={setSimSpeed}
             />
 
             {/* Guided Presentation Demo Panel */}

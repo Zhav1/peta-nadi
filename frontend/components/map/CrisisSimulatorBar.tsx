@@ -20,6 +20,7 @@ import {
   Trash2,
   Sliders,
   Check,
+  Gauge,
 } from 'lucide-react';
 import type { CrisisType, Severity } from '@/lib/types';
 import { HUB_NODES } from '@/lib/mapboxRoutingService';
@@ -48,6 +49,8 @@ export interface CrisisSimulatorBarProps {
   onResetNodes?: () => void;
   isSidebarOpen?: boolean;
   isLeftSidebarCollapsed?: boolean;
+  simSpeed?: number;
+  setSimSpeed?: (speed: number) => void;
 }
 
 export function CrisisSimulatorBar({
@@ -66,9 +69,11 @@ export function CrisisSimulatorBar({
   onResetNodes,
   isSidebarOpen = false,
   isLeftSidebarCollapsed = false,
+  simSpeed = 1,
+  setSimSpeed,
 }: CrisisSimulatorBarProps) {
   const [selectedType, setSelectedType] = useState<CrisisType>('flood');
-  const [activePopover, setActivePopover] = useState<'modality' | 'nodes' | 'disruption' | 'radius' | null>(null);
+  const [activePopover, setActivePopover] = useState<'modality' | 'nodes' | 'disruption' | 'radius' | 'speed' | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -103,7 +108,7 @@ export function CrisisSimulatorBar({
     air: <Plane className="w-3.5 h-3.5 text-purple-400" />,
   };
 
-  const togglePopover = (popover: 'modality' | 'nodes' | 'disruption' | 'radius') => {
+  const togglePopover = (popover: 'modality' | 'nodes' | 'disruption' | 'radius' | 'speed') => {
     setActivePopover((prev) => (prev === popover ? null : popover));
   };
 
@@ -352,6 +357,51 @@ export function CrisisSimulatorBar({
             </div>
           )}
         </div>
+
+        {/* 5. Tactical Simulation Speed Selector Pill */}
+        {setSimSpeed && (
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => togglePopover('speed')}
+              className="cursor-pointer px-3 py-1.5 rounded-md bg-[#121822] border border-[#1c2432] text-xs font-sans font-medium text-slate-300 hover:border-slate-600 transition-all flex items-center gap-1.5"
+              title="Kecepatan Simulasi Telemetri Peta"
+            >
+              <Gauge className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="font-mono text-cyan-400 font-bold">{simSpeed}x</span>
+              <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform duration-200 ${activePopover === 'speed' ? 'rotate-180' : ''}`} />
+            </button>
+
+            {/* Speed Popover */}
+            {activePopover === 'speed' && (
+              <div className="absolute bottom-full right-0 mb-2 w-36 p-2 rounded-md bg-[#0c1017] border border-[#1c2432] shadow-xl flex flex-col gap-1 z-50 animate-in fade-in slide-in-from-bottom-2 duration-150">
+                <span className="px-2 py-1 text-xs font-sans text-slate-400 font-bold uppercase tracking-wider">Pacing Peta</span>
+                {[
+                  { speed: 1, label: '1x (Realistis)' },
+                  { speed: 5, label: '5x (Taktis)' },
+                  { speed: 15, label: '15x (Cepat)' },
+                ].map(({ speed, label }) => (
+                  <button
+                    key={speed}
+                    type="button"
+                    onClick={() => {
+                      setSimSpeed(speed);
+                      setActivePopover(null);
+                    }}
+                    className={`cursor-pointer w-full px-3 py-1.5 rounded-md font-sans text-xs font-medium transition flex items-center justify-between ${
+                      simSpeed === speed
+                        ? 'bg-cyan-500 text-[#080d14] font-bold'
+                        : 'hover:bg-slate-800 text-slate-300'
+                    }`}
+                  >
+                    <span>{label}</span>
+                    {simSpeed === speed && <Check className="w-3.5 h-3.5 text-[#080d14]" />}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
       </div>
 

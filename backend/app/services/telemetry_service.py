@@ -2,6 +2,8 @@
 PreHub — Multi-Modal Telemetry Ingestion & Resilient Fallback Service.
 Fuses Maritime AIS, Aviation ADS-B, and Truck GPS IoT Cold-Chain streams.
 """
+import os
+import json
 import math
 import time
 import random
@@ -622,6 +624,57 @@ class TelemetryService:
         self._opensky_cache_ts: float = 0.0
         self._opensky_ttl_seconds: float = 60.0
         self._live_pings: Dict[str, Dict[str, Any]] = {}
+        self._snapped_corridors: Dict[str, Any] = {}
+        self._active_reroutes: Dict[str, Dict[str, Any]] = {}
+        self._load_snapped_corridors()
+
+    def _load_snapped_corridors(self):
+        """Loads pre-baked high-density snapped polylines for Pan-Sumatra fleet corridors."""
+        cache_file = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../data/fleet_corridors_snapped.json"))
+        if os.path.exists(cache_file):
+            try:
+                with open(cache_file, "r", encoding="utf-8") as f:
+                    self._snapped_corridors = json.load(f)
+                logger.info(f"Loaded {len(self._snapped_corridors)} high-precision snapped fleet corridors.")
+            except Exception as e:
+                logger.warning(f"Failed to load snapped fleet corridors cache: {e}")
+        else:
+            logger.debug(f"Snapped corridors cache not found at {cache_file}.")
+
+    def reroute_vehicle(
+        self,
+        vehicle_id: str,
+        new_route_geometry: Any,
+        new_eta_minutes: Optional[float] = None
+    ) -> Dict[str, Any]:
+        """
+        Dynamically binds an approved alternative detour corridor to a specific fleet vehicle.
+        Swaps vehicle route geometry, flags status as 'rerouting', and resets progress to beginning of detour.
+        Accepts either a GeoJSON LineString dictionary or a list of [lon, lat] coordinates.
+        """
+        if not vehicle_id:
+            raise ValueError("vehicle_id is required to reroute vehicle")
+
+        if isinstance(new_route_geometry, list):
+            coords = new_route_geometry
+            geom_dict = {"type": "LineString", "coordinates": coords}
+        elif isinstance(new_route_geometry, dict):
+            coords = new_route_geometry.get("coordinates", [])
+            geom_dict = new_route_geometry
+        else:
+            raise ValueError("new_route_geometry must be either a GeoJSON dict or a list of coordinates")
+
+        if not coords or len(coords) < 2:
+            raise ValueError("Valid coordinates required for vehicle reroute")
+
+        self._active_reroutes[vehicle_id] = {
+            "route_geometry": geom_dict,
+            "eta_minutes": new_eta_minutes,
+            "progress": 0.05,
+            "timestamp": time.time(),
+        }
+        logger.info(f"Dynamically rerouted vehicle {vehicle_id} onto new corridor ({len(coords)} vertices)")
+        return self._active_reroutes[vehicle_id]
 
     async def fetch_opensky_states(self) -> Optional[List[List[Any]]]:
         """
@@ -728,6 +781,21 @@ class TelemetryService:
     def _enrich_maritime_vessel(self, vessel: Dict[str, Any], live_ais: Dict[str, Any]) -> Dict[str, Any]:
         """Enriches maritime vessel with transponder kinematics and live AIS stream data if present."""
         item = dict(vessel)
+        vid = item.get("vehicle_id")
+
+        if vid and vid in self._active_reroutes:
+            rr = self._active_reroutes[vid]
+            item["route_geometry"] = rr["route_geometry"]
+            item["path"] = rr["route_geometry"].get("coordinates", item.get("path"))
+            item["status"] = "rerouting"
+            if rr.get("eta_minutes"):
+                item["eta_minutes"] = rr["eta_minutes"]
+        elif vid and vid in self._snapped_corridors:
+            snapped = self._snapped_corridors[vid]
+            item["path"] = snapped["coordinates"]
+            item["route_geometry"] = {"type": "LineString", "coordinates": snapped["coordinates"]}
+            item["total_distance_km"] = snapped["total_distance_km"]
+
         path = item.get("path", [])
         
         # Calculate heading & COG
@@ -761,6 +829,21 @@ class TelemetryService:
     def _enrich_air_cargo(self, flight: Dict[str, Any]) -> Dict[str, Any]:
         """Enriches aviation cargo flight with ADS-B transponder data and cold-chain evaluation."""
         item = dict(flight)
+        vid = item.get("vehicle_id")
+
+        if vid and vid in self._active_reroutes:
+            rr = self._active_reroutes[vid]
+            item["route_geometry"] = rr["route_geometry"]
+            item["path"] = rr["route_geometry"].get("coordinates", item.get("path"))
+            item["status"] = "rerouting"
+            if rr.get("eta_minutes"):
+                item["eta_minutes"] = rr["eta_minutes"]
+        elif vid and vid in self._snapped_corridors:
+            snapped = self._snapped_corridors[vid]
+            item["path"] = snapped["coordinates"]
+            item["route_geometry"] = {"type": "LineString", "coordinates": snapped["coordinates"]}
+            item["total_distance_km"] = snapped["total_distance_km"]
+
         path = item.get("path", [])
         
         if len(path) >= 2:
@@ -787,6 +870,21 @@ class TelemetryService:
     def _enrich_truck(self, truck: Dict[str, Any]) -> Dict[str, Any]:
         """Enriches arterial highway truck with IoT cold-chain temperature telemetry."""
         item = dict(truck)
+        vid = item.get("vehicle_id")
+
+        if vid and vid in self._active_reroutes:
+            rr = self._active_reroutes[vid]
+            item["route_geometry"] = rr["route_geometry"]
+            item["path"] = rr["route_geometry"].get("coordinates", item.get("path"))
+            item["status"] = "rerouting"
+            if rr.get("eta_minutes"):
+                item["eta_minutes"] = rr["eta_minutes"]
+        elif vid and vid in self._snapped_corridors:
+            snapped = self._snapped_corridors[vid]
+            item["path"] = snapped["coordinates"]
+            item["route_geometry"] = {"type": "LineString", "coordinates": snapped["coordinates"]}
+            item["total_distance_km"] = snapped["total_distance_km"]
+
         path = item.get("path", [])
         
         if len(path) >= 2:

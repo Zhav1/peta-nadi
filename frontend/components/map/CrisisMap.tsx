@@ -46,6 +46,7 @@ export interface CrisisMapProps {
   historicalEpisodes?: Record<string, unknown>[];
   predictiveRisks?: Record<string, unknown>[];
   fleetModalityFilter?: 'all' | 'truck' | 'maritime' | 'air';
+  simSpeed?: number;
 }
 
 const INITIAL_CENTER: [number, number] = [100.5, 0.5];
@@ -106,6 +107,7 @@ export default function CrisisMap({
   historicalEpisodes = [],
   predictiveRisks = [],
   fleetModalityFilter = 'all',
+  simSpeed = 1,
 }: CrisisMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   void isLeftSidebarCollapsed;
@@ -116,9 +118,6 @@ export default function CrisisMap({
 
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const drawRef = useRef<InstanceType<typeof MapboxDraw> | null>(null);
-  const htmlMarkersRef = useRef<mapboxgl.Marker[]>([]);
-  const routeEtaMarkersRef = useRef<mapboxgl.Marker[]>([]);
-  const timeHorizonMarkersRef = useRef<mapboxgl.Marker[]>([]);
 
   const [mapInstance, setMapInstance] = useState<mapboxgl.Map | null>(null);
   const isMapLoadedRef = useRef(false);
@@ -238,8 +237,6 @@ export default function CrisisMap({
       setMapInstance(map);
       (window as any)._mapboxMap = map;
       map.addControl(draw, 'top-left');
-
-      renderHtmlHubMarkers();
 
       // 0a. Strategic Trans-Sumatra Baseline Corridors Layer (Backbone Transit Network)
       map.addSource('baseline-corridors-source', {
@@ -448,6 +445,131 @@ export default function CrisisMap({
         },
       });
 
+      // 4. Hub Nodes Native WebGL Layers (Ports, Airports, Strategic Distribution Hubs)
+      map.addSource('hub-nodes-source', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+      map.addLayer({
+        id: 'hub-nodes-circle',
+        type: 'circle',
+        source: 'hub-nodes-source',
+        paint: {
+          'circle-radius': ['case', ['get', 'isKeyNode'], 8, 5],
+          'circle-color': [
+            'match', ['get', 'type'],
+            'port', '#38bdf8',
+            'airport', '#c084fc',
+            '#34d399'
+          ],
+          'circle-stroke-width': ['case', ['get', 'isKeyNode'], 2.5, 1.5],
+          'circle-stroke-color': '#ffffff',
+          'circle-opacity': 0.95,
+        },
+      });
+      map.addLayer({
+        id: 'hub-nodes-label',
+        type: 'symbol',
+        source: 'hub-nodes-source',
+        layout: {
+          'text-field': ['get', 'shortName'],
+          'text-font': ['DIN Pro Medium', 'Arial Unicode MS Regular'],
+          'text-size': ['case', ['get', 'isKeyNode'], 12, 10.5],
+          'text-offset': [0, 1.2],
+          'text-anchor': 'top',
+          'text-allow-overlap': false,
+          'text-ignore-placement': false,
+        },
+        paint: {
+          'text-color': '#f8fafc',
+          'text-halo-color': '#0c1017',
+          'text-halo-width': 2.0,
+        },
+      });
+
+      // Hub node WebGL click & hover handlers
+      map.on('click', 'hub-nodes-circle', (e) => {
+        if (e.features && e.features[0] && e.features[0].properties) {
+          const nodeId = e.features[0].properties.id;
+          if (nodeId && onNodeSelectedRef.current) {
+            onNodeSelectedRef.current(nodeId);
+          }
+        }
+      });
+      map.on('mouseenter', 'hub-nodes-circle', () => {
+        if (mapRef.current) mapRef.current.getCanvas().style.cursor = 'pointer';
+      });
+      map.on('mouseleave', 'hub-nodes-circle', () => {
+        if (mapRef.current) mapRef.current.getCanvas().style.cursor = '';
+      });
+
+      // 5. Route ETA Badges Native WebGL Layer
+      map.addSource('route-eta-badges-source', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+      map.addLayer({
+        id: 'route-eta-badges-layer',
+        type: 'symbol',
+        source: 'route-eta-badges-source',
+        layout: {
+          'text-field': ['get', 'label'],
+          'text-font': ['DIN Pro Bold', 'Arial Unicode MS Bold'],
+          'text-size': 11,
+          'text-allow-overlap': true,
+          'text-ignore-placement': true,
+        },
+        paint: {
+          'text-color': ['get', 'textColor'],
+          'text-halo-color': '#0c1017',
+          'text-halo-width': 2.5,
+        },
+      });
+      map.on('click', 'route-eta-badges-layer', (e) => {
+        if (e.features && e.features[0]) {
+          const rIdx = Number(e.features[0].properties?.routeIndex ?? 0);
+          if (onSelectRouteRef.current) onSelectRouteRef.current(rIdx);
+        }
+      });
+      map.on('mouseenter', 'route-eta-badges-layer', () => {
+        if (mapRef.current) mapRef.current.getCanvas().style.cursor = 'pointer';
+      });
+      map.on('mouseleave', 'route-eta-badges-layer', () => {
+        if (mapRef.current) mapRef.current.getCanvas().style.cursor = '';
+      });
+
+      // 6. Time Horizon Badges Native WebGL Layer
+      map.addSource('time-horizon-badges-source', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+      map.addLayer({
+        id: 'time-horizon-badges-layer',
+        type: 'symbol',
+        source: 'time-horizon-badges-source',
+        layout: {
+          'text-field': ['get', 'label'],
+          'text-font': ['DIN Pro Bold', 'Arial Unicode MS Bold'],
+          'text-size': 11,
+          'text-allow-overlap': true,
+        },
+        paint: {
+          'text-color': ['get', 'textColor'],
+          'text-halo-color': '#0c1017',
+          'text-halo-width': 2.0,
+        },
+      });
+      map.on('click', 'time-horizon-badges-layer', (e) => {
+        const incidentId = e.features?.[0]?.properties?.incidentId;
+        if (incidentId && onCrisisClickRef.current) onCrisisClickRef.current(incidentId);
+      });
+      map.on('mouseenter', 'time-horizon-badges-layer', () => {
+        if (mapRef.current) mapRef.current.getCanvas().style.cursor = 'pointer';
+      });
+      map.on('mouseleave', 'time-horizon-badges-layer', () => {
+        if (mapRef.current) mapRef.current.getCanvas().style.cursor = '';
+      });
+
       // Map click handler for point targeting
       map.on('click', (e) => {
         if (isClickTargetingRef.current && onMapPointTargetedRef.current) {
@@ -490,7 +612,6 @@ export default function CrisisMap({
       });
 
       updateMapSources();
-      renderHtmlHubMarkers();
     });
 
     return () => {
@@ -501,195 +622,6 @@ export default function CrisisMap({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Render HTML Markers for Hub Nodes (Ports, Cities, Airports)
-  const renderHtmlHubMarkers = () => {
-    const map = mapRef.current;
-    if (!map || !isMapLoadedRef.current) return;
-
-    htmlMarkersRef.current.forEach((m) => m.remove());
-    htmlMarkersRef.current = [];
-
-    const nodesToRender = hubNodesList || Object.values(HUB_NODES);
-
-    nodesToRender.forEach((node) => {
-      const isOrigin = node.id === selectedOriginNode;
-      const isDest = node.id === selectedDestNode;
-
-      const isPort = node.type === 'port';
-      const isAir = node.type === 'airport';
-
-      const iconSvg = isPort
-        ? `<svg class="w-3.5 h-3.5 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="3"/><line x1="12" y1="22" x2="12" y2="8"/><path d="M5 12H2a10 10 0 0 0 20 0h-3"/></svg>`
-        : isAir
-          ? `<svg class="w-3.5 h-3.5 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5 0 1 .4 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.2c.3.4.8.6 1.3.4l.5-.3c.4-.2.6-.6.5-1.1z"/></svg>`
-          : `<svg class="w-3.5 h-3.5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>`;
-
-      const rawName = node.name.split('(')[0].trim();
-      const shortCityName = rawName
-        .replace(/^(Hub Utama Pergudangan|Hub Logistik|Interchange Tol|Interchange|Pelabuhan|Bandara Internasional|Bandara|Kota)\s+/i, '')
-        .trim();
-
-      const el = document.createElement('div');
-      el.className = 'cursor-pointer group relative flex flex-col items-center select-none z-30 transition-transform transform hover:scale-110';
-      el.style.zIndex = isOrigin || isDest ? '40' : '25';
-
-      if (isOrigin || isDest) {
-        el.innerHTML = `
-          <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-medium shadow-md border ${
-            isOrigin
-              ? 'bg-[#0c1017] text-white border-white'
-              : 'bg-[#121822] text-amber-300 border-amber-500/40'
-          }">
-            <span>${iconSvg}</span>
-            <span class="font-medium">${shortCityName}</span>
-            <span class="px-1.5 py-0.5 ${isOrigin ? 'bg-white text-[#080d14]' : 'bg-amber-400 text-amber-950'} rounded text-xs font-semibold">${isOrigin ? 'ASAL' : 'TUJUAN'}</span>
-          </div>
-        `;
-      } else {
-        el.innerHTML = `
-          <div class="flex flex-col items-center">
-            <div class="w-6 h-6 rounded-md border border-[#1c2432] bg-[#0c1017] flex items-center justify-center shadow-md transition group-hover:border-slate-400 ${
-              isPort ? 'text-sky-400' : isAir ? 'text-purple-400' : 'text-emerald-400'
-            }">
-              ${iconSvg}
-            </div>
-            <span class="mt-1 px-1.5 py-0.5 rounded bg-[#0c1017] border border-[#1c2432] text-xs font-mono tabular-nums text-slate-300 group-hover:text-white group-hover:border-slate-500 shadow-sm transition whitespace-nowrap">
-              ${shortCityName}
-            </span>
-          </div>
-          <div class="opacity-0 group-hover:opacity-100 absolute -top-8 px-2 py-0.5 rounded bg-[#0c1017] border border-[#1c2432] text-xs text-white shadow-lg pointer-events-none transition whitespace-nowrap z-50">
-            ${node.name} ${node.province ? `(${node.province})` : ''}
-          </div>
-        `;
-      }
-
-      el.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (onNodeSelectedRef.current) {
-          onNodeSelectedRef.current(node.id);
-        }
-      });
-
-      const marker = new mapboxgl.Marker({ element: el, anchor: 'center' })
-        .setLngLat(node.coords)
-        .addTo(map);
-
-      htmlMarkersRef.current.push(marker);
-    });
-
-    // Clear previous route ETA markers
-    routeEtaMarkersRef.current.forEach((m) => m.remove());
-    routeEtaMarkersRef.current = [];
-
-    // Render On-Map Route ETA Badges
-    if (activeRoutes && activeRoutes.length > 0) {
-      activeRoutes.forEach((r, idx) => {
-        if (!r.waypoints || r.waypoints.length === 0) return;
-        const midIdx = Math.floor(r.waypoints.length / 2);
-        const midPt = r.waypoints[midIdx];
-        if (!midPt || midPt.lon == null || midPt.lat == null) return;
-
-        const isActive = (activeRouteIdx ?? 0) === idx;
-        const isHold = r.safety_status === 'HOLD_DELAY';
-
-        const el = document.createElement('div');
-        el.className = `cursor-pointer z-20 transition-colors flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-medium shadow-md border ${
-          r.is_compromised
-            ? 'bg-[#1a0f12] text-red-300 border-red-500/40'
-            : isHold
-              ? 'bg-[#1a170f] text-amber-300 border-amber-500/40'
-              : isActive
-                ? 'bg-white text-[#080d14] border-white font-semibold'
-                : 'bg-[#0c1017] text-slate-200 border-[#1c2432] hover:border-slate-500'
-        }`;
-        el.style.zIndex = '20';
-
-        el.innerHTML = `
-          <span>${isHold ? 'HOLD' : `${r.eta_minutes} min`}</span>
-          <span class="opacity-75 text-xs font-mono tabular-nums">(${r.distance_km.toFixed(0)} km)</span>
-        `;
-
-        el.addEventListener('click', (e) => {
-          e.stopPropagation();
-          if (onSelectRouteRef.current) {
-            onSelectRouteRef.current(idx);
-          }
-        });
-
-        const etaMarker = new mapboxgl.Marker({ element: el, anchor: 'center' })
-          .setLngLat([midPt.lon, midPt.lat])
-          .addTo(map);
-
-        routeEtaMarkersRef.current.push(etaMarker);
-      });
-    }
-  };
-
-  // Render Time Horizon Badges
-  const renderTimeHorizonMarkers = () => {
-    const map = mapRef.current;
-    if (!map || !isMapLoadedRef.current) return;
-
-    timeHorizonMarkersRef.current.forEach((m) => m.remove());
-    timeHorizonMarkersRef.current = [];
-
-    if (activeTimeFilter === 'past' && historicalEpisodes && historicalEpisodes.length > 0) {
-      historicalEpisodes.forEach((epItem) => {
-        const ep = epItem as Record<string, unknown>;
-        const lon = typeof ep.lon === 'number' ? ep.lon : null;
-        const lat = typeof ep.lat === 'number' ? ep.lat : null;
-        const id = (ep.incident_id || ep.id) as string;
-        if (lon == null || lat == null) return;
-
-        const el = document.createElement('div');
-        el.className = 'cursor-pointer z-30 transition-colors flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-medium shadow-md border bg-[#0c1017] text-purple-200 border-purple-500/40 hover:border-purple-400';
-        el.style.zIndex = '30';
-        el.innerHTML = `
-          <svg class="w-3.5 h-3.5 text-purple-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6 6h10"/><path d="M6 10h10"/></svg>
-          <span class="text-xs font-semibold text-purple-200">${String(ep.type || 'LTM').toUpperCase()}</span>
-        `;
-        el.addEventListener('click', (e) => {
-          e.stopPropagation();
-          if (id && onCrisisClickRef.current) {
-            onCrisisClickRef.current(id);
-          }
-        });
-
-        const marker = new mapboxgl.Marker({ element: el, anchor: 'center' })
-          .setLngLat([lon, lat])
-          .addTo(map);
-        timeHorizonMarkersRef.current.push(marker);
-      });
-    } else if (activeTimeFilter === 'future' && predictiveRisks && predictiveRisks.length > 0) {
-      predictiveRisks.forEach((prItem) => {
-        const pr = prItem as Record<string, unknown>;
-        const lon = typeof pr.lon === 'number' ? pr.lon : null;
-        const lat = typeof pr.lat === 'number' ? pr.lat : null;
-        const id = (pr.risk_id || pr.id) as string;
-        if (lon == null || lat == null) return;
-
-        const el = document.createElement('div');
-        el.className = 'cursor-pointer z-30 transition-colors flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-medium shadow-md border bg-[#0c1017] text-amber-200 border-amber-500/40 hover:border-amber-400';
-        el.style.zIndex = '30';
-        el.innerHTML = `
-          <svg class="w-3.5 h-3.5 text-amber-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-          <span class="text-xs font-semibold text-amber-300 tabular-nums">${String(pr.risk_score || 85)}% Risiko</span>
-        `;
-        el.addEventListener('click', (e) => {
-          e.stopPropagation();
-          if (id && onCrisisClickRef.current) {
-            onCrisisClickRef.current(id);
-          }
-        });
-
-        const marker = new mapboxgl.Marker({ element: el, anchor: 'center' })
-          .setLngLat([lon, lat])
-          .addTo(map);
-        timeHorizonMarkersRef.current.push(marker);
-      });
-    }
-  };
 
   // Update native GeoJSON map sources
   const updateMapSources = () => {
@@ -832,6 +764,101 @@ export default function CrisisMap({
         shockwaveSource.setData({ type: 'FeatureCollection', features: [] });
       }
     }
+
+    // 5. Update Native WebGL Hub Nodes (Ports, Airports, Distribution Hubs)
+    const hubSource = map.getSource('hub-nodes-source') as mapboxgl.GeoJSONSource;
+    if (hubSource) {
+      const nodesToRender = hubNodesList || Object.values(HUB_NODES);
+      const hubFeatures: GeoJSON.Feature<GeoJSON.Point>[] = nodesToRender.map((node) => {
+        const isOrigin = node.id === selectedOriginNode;
+        const isDest = node.id === selectedDestNode;
+        const rawName = node.name.split('(')[0].trim();
+        const shortCityName = rawName
+          .replace(/^(Hub Utama Pergudangan|Hub Logistik|Interchange Tol|Interchange|Pelabuhan|Bandara Internasional|Bandara|Kota)\s+/i, '')
+          .trim();
+        return {
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: node.coords },
+          properties: {
+            id: node.id,
+            name: node.name,
+            shortName: isOrigin ? `${shortCityName} (ASAL)` : isDest ? `${shortCityName} (TUJUAN)` : shortCityName,
+            type: node.type,
+            isKeyNode: isOrigin || isDest,
+          },
+        };
+      });
+      hubSource.setData({ type: 'FeatureCollection', features: hubFeatures });
+    }
+
+    // 6. Update Native WebGL Route ETA Badges
+    const etaSource = map.getSource('route-eta-badges-source') as mapboxgl.GeoJSONSource;
+    if (etaSource) {
+      const etaFeatures: GeoJSON.Feature<GeoJSON.Point>[] = [];
+      if (activeRoutes && activeRoutes.length > 0) {
+        activeRoutes.forEach((r, idx) => {
+          if (!r.waypoints || r.waypoints.length === 0) return;
+          const midIdx = Math.floor(r.waypoints.length / 2);
+          const midPt = r.waypoints[midIdx];
+          if (!midPt || midPt.lon == null || midPt.lat == null) return;
+          const isActive = (activeRouteIdx ?? 0) === idx;
+          const isHold = r.safety_status === 'HOLD_DELAY';
+          const label = isHold ? `HOLD (${r.distance_km.toFixed(0)} km)` : `${r.eta_minutes} min (${r.distance_km.toFixed(0)} km)`;
+          etaFeatures.push({
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: [midPt.lon, midPt.lat] },
+            properties: {
+              routeIndex: idx,
+              label,
+              textColor: r.is_compromised ? '#fca5a5' : isHold ? '#fcd34d' : isActive ? '#00f0ff' : '#94a3b8',
+            },
+          });
+        });
+      }
+      etaSource.setData({ type: 'FeatureCollection', features: etaFeatures });
+    }
+
+    // 7. Update Native WebGL Time Horizon Badges (Historical & Predictive)
+    const thSource = map.getSource('time-horizon-badges-source') as mapboxgl.GeoJSONSource;
+    if (thSource) {
+      const thFeatures: GeoJSON.Feature<GeoJSON.Point>[] = [];
+      if (activeTimeFilter === 'past' && historicalEpisodes && historicalEpisodes.length > 0) {
+        historicalEpisodes.forEach((epItem) => {
+          const ep = epItem as Record<string, unknown>;
+          const lon = typeof ep.lon === 'number' ? ep.lon : null;
+          const lat = typeof ep.lat === 'number' ? ep.lat : null;
+          if (lon != null && lat != null) {
+            thFeatures.push({
+              type: 'Feature',
+              geometry: { type: 'Point', coordinates: [lon, lat] },
+              properties: {
+                incidentId: (ep.incident_id || ep.id) as string,
+                label: String(ep.type || 'LTM').toUpperCase(),
+                textColor: '#c084fc',
+              },
+            });
+          }
+        });
+      } else if (activeTimeFilter === 'future' && predictiveRisks && predictiveRisks.length > 0) {
+        predictiveRisks.forEach((prItem) => {
+          const pr = prItem as Record<string, unknown>;
+          const lon = typeof pr.lon === 'number' ? pr.lon : null;
+          const lat = typeof pr.lat === 'number' ? pr.lat : null;
+          if (lon != null && lat != null) {
+            thFeatures.push({
+              type: 'Feature',
+              geometry: { type: 'Point', coordinates: [lon, lat] },
+              properties: {
+                incidentId: (pr.risk_id || pr.id) as string,
+                label: `${String(pr.risk_score || 85)}% RISIKO`,
+                textColor: '#fcd34d',
+              },
+            });
+          }
+        });
+      }
+      thSource.setData({ type: 'FeatureCollection', features: thFeatures });
+    }
   };
 
   useEffect(() => {
@@ -849,8 +876,6 @@ export default function CrisisMap({
 
   useEffect(() => {
     updateMapSources();
-    renderHtmlHubMarkers();
-    renderTimeHorizonMarkers();
   }, [
     incidents,
     selectedCrisisId,
@@ -933,6 +958,7 @@ export default function CrisisMap({
           activeRoutes={activeRoutes}
           activeRouteIdx={activeRouteIdx}
           modalityFilter={fleetModalityFilter}
+          simSpeed={simSpeed}
         />
       )}
 

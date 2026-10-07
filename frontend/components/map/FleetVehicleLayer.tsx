@@ -24,6 +24,7 @@ interface FleetVehicleLayerProps {
   activeRoutes?: import('@/lib/types').RouteRecommendation[];
   activeRouteIdx?: number | null;
   modalityFilter?: 'all' | 'truck' | 'maritime' | 'air';
+  simSpeed?: number;
 }
 
 function calculatePathDistanceKm(coords: [number, number][]): number {
@@ -116,6 +117,7 @@ export function FleetVehicleLayer({
   activeRoutes,
   activeRouteIdx,
   modalityFilter = 'all',
+  simSpeed = 1,
 }: FleetVehicleLayerProps) {
   const [selectedVehicle, setSelectedVehicle] = useState<{
     vehicle: FleetVehicle;
@@ -359,7 +361,17 @@ export function FleetVehicleLayer({
 
       visibleVehicles.forEach((v) => {
         let coords = (v.route_geometry?.coordinates || v.path || []) as [number, number][];
-        if (v.modality === 'truck' && activeRoutes && activeRoutes.length > 0) {
+
+        // Specific dynamic rerouting: Only assign active alternative route if vehicle is explicitly
+        // flagged as rerouting or is the designated demonstration unit (TRK-003-BELAWAN-TEBING).
+        // Other 23 trucks strictly preserve their surveyed Trans-Sumatra highway corridors.
+        if (v.status === 'rerouting' && v.route_geometry?.coordinates && v.route_geometry.coordinates.length > 1) {
+          coords = v.route_geometry.coordinates as [number, number][];
+        } else if (
+          v.vehicle_id === 'TRK-003-BELAWAN-TEBING' &&
+          activeRoutes &&
+          activeRoutes.length > 0
+        ) {
           const selRoute = activeRoutes[activeRouteIdx ?? 0] || activeRoutes[0];
           if (selRoute && selRoute.waypoints && selRoute.waypoints.length > 1) {
             coords = selRoute.waypoints.map((w: [number, number] | { lon?: number; lng?: number; lat?: number }) => {
@@ -372,8 +384,9 @@ export function FleetVehicleLayer({
         const baseSpeed = v.speed_kmh || 60;
         const totalDistanceKm = calculatePathDistanceKm(coords);
 
-        // Calibrated realistic progression (Simulation Scale 12x)
-        const simScale = 12.0;
+        // Calibrated realistic progression modulated by tactical simulation speed (1x, 5x, 15x)
+        const simSpeedMultiplier = typeof simSpeed === 'number' && simSpeed > 0 ? simSpeed : 1.0;
+        const simScale = 8.0 * simSpeedMultiplier;
         const increment = v.status === 'anchored' ? 0 : (baseSpeed / 3600) * deltaSec * (simScale / totalDistanceKm);
 
         const prevProg = progressMapRef.current[v.vehicle_id] ?? 0.35;
@@ -472,11 +485,12 @@ export function FleetVehicleLayer({
           });
 
           if (isFollowCamActiveRef.current) {
-            map.easeTo({
-              center: state.currentPosition,
-              duration: 150,
-              easing: (t) => t,
-            });
+            // Smooth 60 FPS top-down North-Up lerp center without disorienting rotational swings or easeTo queue lag
+            const currentCenter = map.getCenter();
+            const lerpFactor = 0.08;
+            const nextLng = currentCenter.lng + (state.currentPosition[0] - currentCenter.lng) * lerpFactor;
+            const nextLat = currentCenter.lat + (state.currentPosition[1] - currentCenter.lat) * lerpFactor;
+            map.setCenter([nextLng, nextLat]);
           }
         }
       });
