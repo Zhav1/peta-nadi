@@ -541,7 +541,7 @@ export function FleetVehicleLayer({
       isCancelled = true;
       if (animRef.current) cancelAnimationFrame(animRef.current);
     };
-  }, [map, vehicles, activeRoutes, activeRouteIdx, modalityFilter]);
+  }, [map, vehicles, activeRoutes, activeRouteIdx, modalityFilter, simSpeed]);
 
   // Clean up sources and layers on unmount
   useEffect(() => {
