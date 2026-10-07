@@ -33,8 +33,8 @@ jobs:
 
       - name: Directly Ping Supabase REST API (Database Activity)
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'https://ulpmmacsdkohwkmyhlwj.supabase.co' }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVscG1tYWNzZGtvaHdrbXlobHdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxOTAzNDgsImV4cCI6MjA5OTc2NjM0OH0.hfBpganpe_fU4b3b88ARdtvxJPRa2RAvCZY6ZdAIw3k' }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
           echo "=== 3. Executing Direct REST Query against Supabase ==="
           # Query data_sources table with count to generate genuine database query traffic
