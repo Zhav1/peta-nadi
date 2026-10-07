@@ -1,0 +1,56 @@
+name: Keep-Alive Pinger (Render & Supabase)
+
+on:
+  schedule:
+    # Runs every 10 minutes (cron: '*/10 * * * *')
+    # Ensures Render never sleeps (15m idle limit) and Supabase stays active (7d inactivity rule)
+    - cron: '*/10 * * * *'
+  workflow_dispatch: # Allows manual trigger from GitHub Actions tab
+
+jobs:
+  ping-services:
+    name: Ping Render & Supabase
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Ping Render Backend Health
+        run: |
+          echo "=== 1. Probing Render Web Service ==="
+          RENDER_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 45 "https://peta-nadi.onrender.com/health")
+          echo "Render /health HTTP Status: $RENDER_HTTP_CODE"
+          if [ "$RENDER_HTTP_CODE" -ge 200 ] && [ "$RENDER_HTTP_CODE" -lt 400 ]; then
+            echo "Render backend is alive and warm."
+          else
+            echo "Warning: Render returned status $RENDER_HTTP_CODE (cold start may be underway)"
+          fi
+
+      - name: Ping Backend Data Sources (Wakes Render & Probes DB)
+        run: |
+          echo "=== 2. Probing Render Data Sources Endpoint ==="
+          SOURCES_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 45 "https://peta-nadi.onrender.com/api/v1/health/sources")
+          echo "Render /api/v1/health/sources HTTP Status: $SOURCES_HTTP_CODE"
+
+      - name: Directly Ping Supabase REST API (Database Activity)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'https://ulpmmacsdkohwkmyhlwj.supabase.co' }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVscG1tYWNzZGtvaHdrbXlobHdqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxOTAzNDgsImV4cCI6MjA5OTc2NjM0OH0.hfBpganpe_fU4b3b88ARdtvxJPRa2RAvCZY6ZdAIw3k' }}
+        run: |
+          echo "=== 3. Executing Direct REST Query against Supabase ==="
+          # Query data_sources table with count to generate genuine database query traffic
+          SB_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" --max-time 20 \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            "$SUPABASE_URL/rest/v1/data_sources?select=name&limit=1")
+          
+          HTTP_STATUS=$(echo "$SB_RESPONSE" | grep "HTTP_STATUS" | cut -d':' -f2)
+          BODY=$(echo "$SB_RESPONSE" | grep -v "HTTP_STATUS")
+          
+          echo "Supabase REST Status: $HTTP_STATUS"
+          echo "Supabase Body: $BODY"
+          
+          if [ "$HTTP_STATUS" -eq 200 ] || [ "$HTTP_STATUS" -eq 206 ]; then
+            echo "Supabase query succeeded. Database inactivity timer refreshed."
+          else
+            echo "Supabase response code: $HTTP_STATUS"
+          fi
