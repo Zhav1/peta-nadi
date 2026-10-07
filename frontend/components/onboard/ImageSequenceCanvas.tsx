@@ -12,52 +12,32 @@ const CHAPTERS = [
     range: [0, 30],
     phase: 'TAHAP 01',
     title: 'Deteksi Genangan Air & Hambatan Jalur',
-    desc: 'Peringatan cuaca BMKG dan penurunan kecepatan lalu lintas mengindikasikan adanya gangguan distribusi di ruas jalan lintas utama.',
+    desc: 'Peringatan cuaca BMKG dan penurunan kecepatan lalu lintas mengindikasikan gangguan distribusi di jalur lintas utama.',
     icon: AlertTriangle,
-    metrics: [
-      { label: 'Kondisi Jalur', val: 'Genangan Air' },
-      { label: 'Kecepatan Kendaraan', val: '12 km/jam' },
-      { label: 'Status Koridor', val: 'Perlambatan Parah' },
-    ],
   },
   {
     id: 2,
     range: [31, 60],
     phase: 'TAHAP 02',
     title: 'Validasi Multi-Sumber & Analisis Dampak Pasar',
-    desc: 'Sistem memverifikasi laporan lapangan dengan data cuaca dan lalu lintas untuk memproyeksikan potensi keterlambatan pasokan komoditas pokok.',
+    desc: 'Sistem memverifikasi laporan lapangan dengan data cuaca dan lalu lintas untuk memproyeksikan keterlambatan pasokan komoditas pokok.',
     icon: Zap,
-    metrics: [
-      { label: 'Verifikasi Silang', val: 'Data Terkonfirmasi' },
-      { label: 'Sumber Validasi', val: 'BMKG + TomTom' },
-      { label: 'Komoditas Prioritas', val: 'Beras & Cabai' },
-    ],
   },
   {
     id: 3,
     range: [61, 90],
     phase: 'TAHAP 03',
     title: 'Kalkulasi Rute Pengalihan Distribusi',
-    desc: 'Menghitung rute alternatif di luar area terdampak guna memastikan armada pengangkut bahan pangan tetap dapat bergerak aman.',
+    desc: 'Menghitung rute alternatif di luar area terdampak guna memastikan armada pangan tetap bergerak aman.',
     icon: Navigation,
-    metrics: [
-      { label: 'Jalur Pengalihan', val: 'Jalan Nasional / Tol' },
-      { label: 'Jalur Aman', val: 'Bebas Hambatan' },
-      { label: 'Simpul Alternatif', val: 'Tebing Tinggi' },
-    ],
   },
   {
     id: 4,
     range: [91, 120],
     phase: 'TAHAP 04',
     title: 'Penerusan Rekomendasi ke Operator Armada',
-    desc: 'Panduan rute alternatif diteruskan ke operator armada logistik guna mencegah antrean panjang dan menjaga ketepatan waktu pengiriman.',
+    desc: 'Panduan rute alternatif diteruskan ke operator armada logistik untuk menjaga ketepatan waktu pengiriman.',
     icon: CheckCircle,
-    metrics: [
-      { label: 'Status Pengalihan', val: 'Rute Aktif' },
-      { label: 'Arus Kendaraan', val: 'Lancar Terkendali' },
-      { label: 'Keterlambatan', val: 'Terminimalisasi' },
-    ],
   },
 ];
 
@@ -240,17 +220,6 @@ export default function ImageSequenceCanvas() {
     };
   }, [drawFrame]);
 
-  // Jump to specific chapter on click
-  const jumpToChapter = (chapterRangeStart: number) => {
-    const container = containerRef.current;
-    if (!container) return;
-    const totalScrollable = container.clientHeight - window.innerHeight;
-    const targetProgress = chapterRangeStart / (TOTAL_FRAMES - 1);
-    const targetScrollY = container.offsetTop + targetProgress * totalScrollable;
-
-    window.scrollTo({ top: targetScrollY, behavior: 'smooth' });
-  };
-
   const activeChapter = CHAPTERS[activeChapterIndex] || CHAPTERS[0];
   const ChapterIcon = activeChapter.icon;
 
@@ -268,70 +237,22 @@ export default function ImageSequenceCanvas() {
         {/* Subtle Dark Gradient Overlay for Typographic Contrast */}
         <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-[#080d14]/70 via-transparent to-[#080d14]/90" />
 
-        {/* Right Editorial Chapter Navigation Rail */}
-        <div className="absolute right-6 md:right-10 top-1/2 -translate-y-1/2 z-30 hidden md:flex flex-col gap-2">
-          {CHAPTERS.map((chap, idx) => {
-            const isActive = idx === activeChapterIndex;
-            return (
-              <button
-                key={chap.id}
-                onClick={() => jumpToChapter(chap.range[0])}
-                className={`flex items-center gap-3 px-3.5 py-2 rounded-md transition-all cursor-pointer text-left ${
-                  isActive
-                    ? 'bg-[#121822] border border-white/20 text-white'
-                    : 'bg-[#0c1017]/80 border border-white/8 text-slate-400 hover:text-slate-200 hover:border-white/15'
-                }`}
-              >
-                <span className="font-mono text-xs font-semibold text-slate-400">
-                  0{chap.id}
-                </span>
-                <span className="text-xs font-medium max-w-[130px] truncate">
-                  {chap.title.split(' ')[0]} {chap.title.split(' ')[1]}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
         {/* Bottom Editorial Narrative Card */}
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-30 w-full max-w-2xl px-4 pointer-events-auto">
-          <div className="bg-[#0c1017] border border-white/10 rounded-lg p-6 shadow-2xl flex flex-col gap-4">
-            
-            {/* Stage Identification Header */}
-            <div className="flex items-center justify-between gap-4 border-b border-white/8 pb-3">
-              <div className="flex items-center gap-2.5">
-                <ChapterIcon className="w-4 h-4 text-white shrink-0" />
-                <span className="font-mono text-xs font-bold text-slate-400 tracking-wider">
-                  {activeChapter.phase}
-                </span>
-              </div>
-              <span className="font-mono text-xs text-slate-400">
-                Tahap {activeChapterIndex + 1} dari {CHAPTERS.length}
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-30 w-full max-w-xl px-4 pointer-events-auto">
+          <div className="bg-[#0c1017] border border-white/10 rounded-lg p-5 shadow-2xl flex flex-col gap-2.5">
+            <div className="flex items-center gap-2">
+              <ChapterIcon className="w-4 h-4 text-white shrink-0" />
+              <span className="font-mono text-xs font-semibold text-slate-400 tracking-wider">
+                {activeChapter.phase}
               </span>
             </div>
 
-            {/* Title & Description */}
-            <div className="space-y-1.5">
-              <h3 className="font-headline text-lg sm:text-xl font-bold text-white tracking-tight leading-snug">
-                {activeChapter.title}
-              </h3>
-              <p className="font-sans text-sm text-slate-300 leading-relaxed">
-                {activeChapter.desc}
-              </p>
-            </div>
-
-            {/* Tabular Telemetry Row */}
-            <div className="grid grid-cols-3 gap-3 pt-3 border-t border-white/8">
-              {activeChapter.metrics.map((m, idx) => (
-                <div key={idx} className="flex flex-col">
-                  <span className="font-sans text-[11px] text-slate-400">{m.label}</span>
-                  <span className="font-mono text-xs sm:text-sm font-semibold text-white mt-0.5">
-                    {m.val}
-                  </span>
-                </div>
-              ))}
-            </div>
-
+            <h3 className="font-headline text-lg sm:text-xl font-bold text-white tracking-tight leading-snug">
+              {activeChapter.title}
+            </h3>
+            <p className="font-sans text-xs sm:text-sm text-slate-300 leading-relaxed">
+              {activeChapter.desc}
+            </p>
           </div>
         </div>
 

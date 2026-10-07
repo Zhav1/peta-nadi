@@ -1231,7 +1231,7 @@ export default function DashboardClient() {
                 )}
               </div>
 
-              <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5 text-[10px] font-mono">
+              <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5 text-xs font-mono">
                 {[
                   { id: 'ALL', label: 'Semua' },
                   { id: 'OFFICIAL', label: 'ANTARA' },
@@ -1363,7 +1363,7 @@ export default function DashboardClient() {
             </div>
 
             {/* Honest Dynamic Sensor Pipeline Status Bar */}
-            <div className="border-t border-white/10 pt-2.5 text-[9px] font-mono text-slate-400 space-y-1.5 shrink-0">
+            <div className="border-t border-white/10 pt-2.5 text-xs font-mono text-slate-400 space-y-1.5 shrink-0">
               <div className="flex items-center justify-between">
                 <span className="uppercase tracking-wider text-slate-400 font-bold">STATUS PIPELINE DATA</span>
                 <button
@@ -1377,12 +1377,12 @@ export default function DashboardClient() {
               </div>
 
               {showSensorInfo && (
-                <div className="p-2 rounded bg-slate-950/90 border border-white/10 text-[9px] font-sans text-slate-300 leading-relaxed animate-in fade-in duration-150">
+                <div className="p-2 rounded bg-slate-950/90 border border-white/10 text-xs font-sans text-slate-300 leading-relaxed animate-in fade-in duration-150">
                   <strong>Transparansi Data:</strong> Status koneksi telemetri dan integrasi API operasional.
                 </div>
               )}
 
-              <div className="grid grid-cols-3 gap-1 text-[8px] text-center">
+              <div className="grid grid-cols-3 gap-1 text-xs text-center">
                 <div className="p-1 rounded bg-slate-950/80 border border-white/5">
                   <span className="text-slate-500 block">BMKG</span>
                   <span className={`font-bold ${corridorContext?.weather ? 'text-emerald-400' : isCorridorLoading ? 'text-cyan-400' : 'text-amber-400'}`}>

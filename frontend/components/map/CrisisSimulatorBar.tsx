@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  Sparkles,
+  Compass,
   Truck,
   Ship,
   Plane,
@@ -97,7 +97,7 @@ export function CrisisSimulatorBar({
   const destName = destNodeId ? HUB_NODES[destNodeId]?.name || destNodeId : null;
 
   const modalityIcons: Record<string, React.ReactNode> = {
-    best: <Sparkles className="w-3.5 h-3.5 text-cyan-400" />,
+    best: <Compass className="w-3.5 h-3.5 text-cyan-400" />,
     truck: <Truck className="w-3.5 h-3.5 text-emerald-400" />,
     maritime: <Ship className="w-3.5 h-3.5 text-blue-400" />,
     air: <Plane className="w-3.5 h-3.5 text-purple-400" />,
@@ -134,7 +134,7 @@ export function CrisisSimulatorBar({
               className="cursor-pointer px-3 py-1.5 rounded-md bg-[#121822] border border-[#1c2432] text-xs font-sans font-medium text-slate-200 hover:border-slate-600 transition-all flex items-center gap-2"
             >
               {modalityIcons[selectedModality] || modalityIcons.best}
-              <span className="capitalize">{selectedModality === 'best' ? 'Best Mode' : selectedModality}</span>
+              <span className="capitalize">{selectedModality === 'best' ? 'Multi-Moda' : selectedModality}</span>
               <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform duration-200 ${activePopover === 'modality' ? 'rotate-180' : ''}`} />
             </button>
 
@@ -143,7 +143,7 @@ export function CrisisSimulatorBar({
               <div className="absolute bottom-full left-0 mb-2 w-52 p-2 rounded-md bg-[#0c1017] border border-[#1c2432] shadow-xl flex flex-col gap-1 z-50 animate-in fade-in slide-in-from-bottom-2 duration-150">
                 <span className="px-2 py-1 text-xs font-sans text-cyan-400 font-bold">PILIH MODALITAS DISTRIBUSI</span>
                 {[
-                  { mode: 'best', label: 'Best Mode', desc: 'Multi-Moda Otomatis', icon: <Sparkles className="w-4 h-4 text-cyan-400" /> },
+                  { mode: 'best', label: 'Multi-Moda Terpadu', desc: 'Optimasi Rute Multi-Moda', icon: <Compass className="w-4 h-4 text-cyan-400" /> },
                   { mode: 'truck', label: 'Truk Logistik', desc: 'Transportasi Darat', icon: <Truck className="w-4 h-4 text-emerald-400" /> },
                   { mode: 'maritime', label: 'Kapal Laut', desc: 'Transportasi Maritim', icon: <Ship className="w-4 h-4 text-blue-400" /> },
                   { mode: 'air', label: 'Cargo Udara', desc: 'Transportasi Udara', icon: <Plane className="w-4 h-4 text-purple-400" /> },

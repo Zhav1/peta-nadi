@@ -89,9 +89,6 @@ export const IntermodalTerminalPopover: React.FC = () => {
                 </p>
               </div>
             </div>
-            <span className="px-2 py-0.5 rounded text-xs font-mono text-slate-300 bg-[#121822] border border-[#1c2432]">
-              FR-17
-            </span>
           </div>
 
           {/* Navigation Tabs */}

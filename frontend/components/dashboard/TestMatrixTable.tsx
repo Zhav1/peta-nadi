@@ -188,13 +188,13 @@ export default function TestMatrixTable({
 
                       {/* FR Domain */}
                       <td className="py-2.5 px-3 whitespace-nowrap">
-                        <span className="px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 font-mono text-[10px]">
+                        <span className="px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 font-mono text-xs">
                           {t.fr_id}
                         </span>
                       </td>
 
                       {/* Module Path */}
-                      <td className="py-2.5 px-3 font-mono text-slate-400 text-[11px] max-w-[180px] truncate" title={t.module}>
+                      <td className="py-2.5 px-3 font-mono text-slate-400 text-xs max-w-[180px] truncate" title={t.module}>
                         {t.module}
                       </td>
 
@@ -209,13 +209,13 @@ export default function TestMatrixTable({
                       </td>
 
                       {/* Execution Time */}
-                      <td className="py-2.5 px-3 font-mono text-slate-400 text-right whitespace-nowrap text-[11px]">
+                      <td className="py-2.5 px-3 font-mono text-slate-400 text-right whitespace-nowrap text-xs">
                         {t.execution_time_ms ? `${t.execution_time_ms.toFixed(1)} ms` : '< 5 ms'}
                       </td>
 
                       {/* Status */}
                       <td className="py-2.5 px-3 text-center whitespace-nowrap">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono text-[10px] font-bold">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono text-xs font-bold">
                           <CheckCircle2 className="w-3 h-3" />
                           {t.result.toUpperCase()}
                         </span>
@@ -228,11 +228,11 @@ export default function TestMatrixTable({
                         <td colSpan={7} className="py-3 px-6">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
                             <div className="space-y-1.5">
-                              <span className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Vektor Masukan & Skenario:</span>
+                              <span className="text-slate-400 text-xs uppercase font-bold tracking-wider">Vektor Masukan & Skenario:</span>
                               <p className="text-slate-200 bg-white/5 p-2.5 rounded-lg border border-white/10">
                                 {t.scenario}
                               </p>
-                              <div className="flex items-center gap-3 text-[11px] text-slate-400 pt-1">
+                              <div className="flex items-center gap-3 text-xs text-slate-400 pt-1">
                                 <span>Tipe Uji: <strong className="text-cyan-300">{t.test_type}</strong></span>
                                 <span>•</span>
                                 <span>Kategori: <strong className="text-slate-200">{t.category}</strong></span>
@@ -240,11 +240,11 @@ export default function TestMatrixTable({
                             </div>
 
                             <div className="space-y-1.5">
-                              <span className="text-slate-400 text-[10px] uppercase font-bold tracking-wider">Invarian Logika & Asersi:</span>
+                              <span className="text-slate-400 text-xs uppercase font-bold tracking-wider">Invarian Logika & Asersi:</span>
                               <p className="text-emerald-300 bg-emerald-950/30 p-2.5 rounded-lg border border-emerald-500/20">
                                 {t.expected_invariant}
                               </p>
-                              <div className="flex items-center gap-2 text-[11px] text-slate-400 pt-1">
+                              <div className="flex items-center gap-2 text-xs text-slate-400 pt-1">
                                 <Code className="w-3.5 h-3.5 text-cyan-400" />
                                 <span>Modul: <code className="text-slate-300">{t.module}</code></span>
                               </div>
@@ -262,7 +262,7 @@ export default function TestMatrixTable({
       </div>
 
       {/* Pagination Footer */}
-      <div className="flex items-center justify-between pt-4 border-t border-white/10 text-[11px] font-mono text-slate-400">
+      <div className="flex items-center justify-between pt-4 border-t border-white/10 text-xs font-mono text-slate-400">
         <div>
           Menampilkan <strong className="text-white">{paginatedTests.length}</strong> dari <strong className="text-white">{filteredTests.length}</strong> skenario terfilter ({tests.length} total)
         </div>

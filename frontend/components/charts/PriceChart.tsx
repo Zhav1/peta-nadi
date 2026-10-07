@@ -31,7 +31,7 @@ export default function PriceChart({ data, crisisDate, title }: PriceChartProps)
   if (!isMounted) {
     return (
       <div className="w-full h-[160px] flex items-center justify-center bg-slate-800/40 rounded-xl animate-pulse">
-        <span className="text-[10px] text-slate-500">Loading chart...</span>
+        <span className="text-xs text-slate-500">Loading chart...</span>
       </div>
     );
   }

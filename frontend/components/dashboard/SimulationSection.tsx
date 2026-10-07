@@ -2,17 +2,16 @@
 
 import React, { useState } from 'react';
 import { 
-  Bot, 
-  Send, 
   ShieldAlert, 
   Truck, 
   Building2, 
-  Sparkles, 
-  Lock, 
   SlidersHorizontal,
-  Rocket
+  CheckCircle2,
+  Clock,
+  TrendingDown,
+  Layers,
+  ArrowRight
 } from 'lucide-react';
-import { api } from '@/lib/api';
 import type { CrisisState } from '@/lib/types';
 
 interface SimulationSectionProps {
@@ -23,25 +22,18 @@ interface SimulationSectionProps {
 }
 
 export default function SimulationSection({ 
-  crisisId, 
   selectedCrisis, 
   demoState,
   onDeployActionPlan 
 }: SimulationSectionProps) {
   const [activeAgency, setActiveAgency] = useState<string>('BULOG');
-  const [messages, setMessages] = useState<Array<{ sender: 'user' | 'ai'; text: string }>>([
-    { 
-      sender: 'ai', 
-      text: `Modul simulasi mitigasi aktif. Parameter koridor logistik ${selectedCrisis?.region || 'Pulau Sumatera'} siap untuk pengujian skenario intervensi taktis.`,
-    },
-  ]);
-  const [inputVal, setInputVal] = useState('');
-  const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'info' | 'success' | 'warning' } | null>(null);
 
-  // Agency specific slider states
-  const [bulogStockAlloc, setBulogStockAlloc] = useState<number>(75);
+  // Scenario parameter sliders
+  const [closureHours, setClosureHours] = useState<number>(12);
+  const [cargoTonnage, setCargoTonnage] = useState<number>(20);
   const [dishubDiversion, setDishubDiversion] = useState<boolean>(true);
+  const [bulogStockAlloc, setBulogStockAlloc] = useState<number>(75);
   const [bnpbRescueUnits, setBnpbRescueUnits] = useState<number>(12);
 
   const showToast = (message: string, type: 'info' | 'success' | 'warning' = 'info') => {
@@ -49,84 +41,30 @@ export default function SimulationSection({
     setTimeout(() => setToast(null), 4000);
   };
 
-  const handleSend = async (promptOverride?: string) => {
-    const textToSend = promptOverride || inputVal;
-    if (!textToSend.trim() || loading) return;
+  // Dynamic impact calculations based on simulation parameters
+  const calculatedDelayMinutes = dishubDiversion 
+    ? Math.round(25 + closureHours * 0.8) 
+    : Math.round(90 + closureHours * 3.5);
 
-    setMessages(prev => [...prev, { sender: 'user', text: textToSend }]);
-    if (!promptOverride) setInputVal('');
-    setLoading(true);
+  const calculatedPriceSpikePct = Math.max(
+    1.5,
+    Number(((closureHours * 0.6) - (bulogStockAlloc * 0.05)).toFixed(1))
+  );
 
-    try {
-      const activeRoute = selectedCrisis?.route_recommendations?.[0];
-      const hedging = selectedCrisis?.hedging_breakdown || activeRoute?.hedging;
-
-      const res = await api.simulation.chat({
-        message: textToSend,
-        crisis_id: crisisId || selectedCrisis?.crisis_id || 'belawan-flash-flood',
-        agency: activeAgency,
-        parameters: {
-          active_crisis: {
-            title: selectedCrisis?.title,
-            type: selectedCrisis?.type,
-            region: selectedCrisis?.region,
-            severity: selectedCrisis?.severity,
-          },
-          active_route: activeRoute,
-          cargo_type: (selectedCrisis as any)?.commodity || 'cabai_merah',
-          tonnage: (selectedCrisis as any)?.cargo_tonnage || 10.0,
-          spoilage_hedging: hedging,
-          user_role: activeAgency
-        }
-      });
-      
-      setMessages(prev => [...prev, { 
-        sender: 'ai', 
-        text: res.reply,
-      }]);
-    } catch (err) {
-      console.error('Failed to get simulation chat reply:', err);
-      
-      // Grounded contextual fallback response generator
-      const lower = textToSend.toLowerCase();
-      let dynamicReply = "";
-      if (lower.includes("tol") || lower.includes("tutup") || lower.includes("jalan")) {
-        dynamicReply = `Rekomendasi Kebijakan (${activeAgency}): Penutupan ruas arteri berpotensi menambah waktu tempuh hingga 35 menit. Disarankan pengalihan armada ke Jalan Tol Belmera (Medan-Tebing Tinggi).`;
-      } else if (lower.includes("stok") || lower.includes("beras") || lower.includes("bulog")) {
-        dynamicReply = `Rekomendasi Kebijakan (${activeAgency}): Ketersediaan stok cadangan pangan di gudang regional terpantau mencukupi. Penyaluran cadangan terukur dapat dilakukan untuk menstabilkan harga pasar.`;
-      } else if (lower.includes("rute") || lower.includes("alternatif") || lower.includes("hitung")) {
-        dynamicReply = `Rekomendasi Rute Pengalihan: Pengalihan armada dari Belawan via Tol Belmera menuju Tebing Tinggi diestimasi menghemat waktu perjalanan serta menghindari titik genangan air.`;
-      } else {
-        dynamicReply = `Rekomendasi Kebijakan (${activeAgency}): Memproses skenario "${textToSend}". Parameter koridor distribusi pangan berada dalam batas mitigasi yang terverifikasi.`;
-      }
-
-      setMessages(prev => [...prev, { 
-        sender: 'ai', 
-        text: dynamicReply,
-      }]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const spoilageRiskPct = dishubDiversion
+    ? Math.max(1.0, Number((closureHours * 0.25).toFixed(1)))
+    : Math.min(45.0, Number((closureHours * 1.2).toFixed(1)));
 
   const handleDeploy = () => {
     const agencyName = activeAgency || 'Otoritas Gabungan';
     const actionDesc = `Alokasi Stok BULOG ${bulogStockAlloc}%, Rekayasa DISHUB ${dishubDiversion ? 'Aktif' : 'Non-Aktif'}, Unit BNPB ${bnpbRescueUnits} Tim`;
     
-    showToast(`Deploying Action Plan for ${agencyName}...`, 'success');
+    showToast(`Rencana Mitigasi ${agencyName} Berhasil Diterapkan`, 'success');
 
     if (onDeployActionPlan) {
       onDeployActionPlan({ agency: agencyName, action: actionDesc });
     }
   };
-
-  // Quick Action Prompt Pills
-  const quickPrompts = [
-    "Simulasikan Blokade Jalur Logistik",
-    "Hitung Rute Alternatif BULOG",
-    "Proyeksikan Ketahanan Stok 48 Jam",
-    "Buka Gudang Cadangan Darurat"
-  ];
 
   return (
     <div className="relative w-full min-h-full lg:h-full grid grid-cols-12 gap-6 pointer-events-auto">
@@ -141,115 +79,175 @@ export default function SimulationSection({
         </div>
       )}
 
-      {/* LEFT SECTION: AI Advisor Glass Box Reasoning & Conversation (8 Cols) */}
+      {/* LEFT SECTION: Scenario Levers & Dynamic Calculated Impacts (8 Cols) */}
       <section className="col-span-12 lg:col-span-8 flex flex-col min-h-0 gap-4">
         
-        {/* Scenario Overview Card */}
+        {/* Scenario Overview Header */}
         <div className="grid grid-cols-12 gap-4 shrink-0">
-          <div className="col-span-12 sm:col-span-6 bg-[#0c1017] border border-white/10 p-4 rounded-xl shadow-xl relative overflow-hidden">
+          <div className="col-span-12 sm:col-span-6 bg-[#0c1017] border border-white/10 p-4 rounded-xl shadow-xl">
             <div className="flex items-center gap-2 mb-1">
               <span className="w-2 h-2 rounded-full bg-red-400" />
               <p className="text-xs font-mono text-slate-300 uppercase font-medium">
-                Skenario Simulasi: {demoState && typeof demoState.stage === 'number' ? `Tahap ${demoState.stage}` : 'Krisis Aktif'}
+                Skenario Disrupsi: {demoState && typeof demoState.stage === 'number' ? `Tahap ${demoState.stage}` : 'Aktif'}
               </p>
             </div>
             <h1 className="text-base font-bold text-white">
-              {selectedCrisis?.title || 'Krisis Aktif: Disrupsi Koridor Strategis'}
+              {selectedCrisis?.title || 'Banjir Luapan & Disrupsi Jalur Logistik'}
             </h1>
             <p className="text-xs text-slate-400 font-mono mt-1">
-              {selectedCrisis?.lat ? `${Number(selectedCrisis.lat).toFixed(4)}° LU, ` : ''}{selectedCrisis?.lon ? `${Number(selectedCrisis.lon).toFixed(4)}° BT • ` : ''}{selectedCrisis?.region || 'Koridor Terpadu Sumatera'}
+              {selectedCrisis?.region || 'Koridor Prioritas Sumatera'}
             </p>
           </div>
 
           <div className="col-span-6 sm:col-span-3 bg-[#0c1017] border border-white/10 p-4 rounded-xl shadow-xl">
-            <p className="text-xs font-mono text-slate-400 mb-1">Estimasi Armada Koridor</p>
-            <p className="text-xl font-mono font-bold text-white">~1.400 Unit</p>
+            <p className="text-xs font-mono text-slate-400 mb-1">Armada Terdampak</p>
+            <p className="text-xl font-mono font-bold text-white tabular-nums">~1.400 Unit</p>
             <p className="text-xs text-slate-400">Truk Logistik Harian</p>
           </div>
 
           <div className="col-span-6 sm:col-span-3 bg-[#0c1017] border border-white/10 p-4 rounded-xl shadow-xl">
-            <p className="text-xs font-mono text-slate-400 mb-1">Estimasi Keterlambatan</p>
-            <p className="text-xl font-mono font-bold text-slate-200">+35 Menit</p>
-            <p className="text-xs text-amber-400">Jika Arteri Terhambat</p>
+            <p className="text-xs font-mono text-slate-400 mb-1">Waktu Estimasi Reroute</p>
+            <p className="text-xl font-mono font-bold text-emerald-400 tabular-nums">+{calculatedDelayMinutes} Menit</p>
+            <p className="text-xs text-slate-400">Via Tol / Jalur Alternatif</p>
           </div>
         </div>
 
-        {/* AI Conversation & Reasoning Log */}
-        <div className="flex-1 bg-[#0c1017] border border-white/10 rounded-xl p-5 flex flex-col min-h-0 shadow-xl">
+        {/* Operational Levers & Impact Workspace */}
+        <div className="flex-1 bg-[#0c1017] border border-white/10 rounded-xl p-5 flex flex-col min-h-0 shadow-xl gap-5 overflow-y-auto custom-scrollbar">
           
-          <div className="flex flex-wrap justify-between items-center pb-3 border-b border-white/10 shrink-0 gap-2">
+          <div className="flex items-center justify-between pb-3 border-b border-white/10 shrink-0">
             <div className="flex items-center gap-2">
-              <Bot className="w-4 h-4 text-slate-300" />
-              <span className="text-xs font-semibold uppercase text-white tracking-wide">
-                Simulasi Respons & Rekomendasi Mitigasi
-              </span>
+              <SlidersHorizontal className="w-4 h-4 text-slate-300" />
+              <h2 className="text-xs font-semibold uppercase text-white tracking-wide">
+                Parameter Rekayasa Skenario
+              </h2>
             </div>
+            <span className="text-xs font-mono px-2 py-0.5 rounded bg-white/10 text-slate-300 border border-white/15">
+              KALKULASI LANGSUNG
+            </span>
+          </div>
+
+          {/* Scenario Levers Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-mono px-2 py-0.5 rounded bg-white/10 text-slate-300 border border-white/15">
-                KORIDOR AKTIF
-              </span>
+            {/* Lever 1: Disruption Duration */}
+            <div className="bg-[#121822] border border-[#1c2432] p-4 rounded-lg space-y-2.5">
+              <div className="flex justify-between items-center text-xs font-mono">
+                <span className="text-slate-300">Estimasi Durasi Hambatan:</span>
+                <span className="text-white font-bold tabular-nums">{closureHours} Jam</span>
+              </div>
+              <input 
+                type="range" 
+                min="2" 
+                max="48" 
+                value={closureHours}
+                onChange={(e) => setClosureHours(Number(e.target.value))}
+                className="w-full accent-white cursor-pointer"
+              />
+              <p className="text-xs text-slate-400">
+                Lama penutupan ruas jalan arteri sebelum jalur dinyatakan aman dilalui.
+              </p>
             </div>
-          </div>
 
-          {/* Messages Log */}
-          <div className="flex-1 overflow-y-auto space-y-3.5 p-2 my-2 custom-scrollbar text-xs">
-            {messages.map((m, idx) => (
-              <div key={idx} className={`flex ${m.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`p-4 max-w-[85%] rounded-xl transition-all ${
-                  m.sender === 'user' 
-                    ? 'bg-white/10 text-white border border-white/20' 
-                    : 'bg-[#121822] text-slate-200 border border-white/10'
-                }`}>
-                  <div className="flex justify-between items-center mb-1.5 gap-4">
-                    <span className="font-mono text-xs font-bold text-slate-300 uppercase tracking-wide flex items-center gap-1">
-                      {m.sender === 'user' ? 'INSTRUKSI OPERATOR' : 'REKOMENDASI MITIGASI'}
-                    </span>
-                  </div>
-                  <p className="leading-relaxed text-xs">{m.text}</p>
-                </div>
+            {/* Lever 2: Commodity Tonnage */}
+            <div className="bg-[#121822] border border-[#1c2432] p-4 rounded-lg space-y-2.5">
+              <div className="flex justify-between items-center text-xs font-mono">
+                <span className="text-slate-300">Muatan Komoditas Rentan:</span>
+                <span className="text-white font-bold tabular-nums">{cargoTonnage} Ton</span>
               </div>
-            ))}
-            {loading && (
-              <div className="flex justify-start">
-                <div className="p-3 bg-[#121822] rounded-xl border border-white/10 text-slate-300 font-mono text-xs flex items-center gap-2">
-                  <div className="w-3.5 h-3.5 rounded-full border-2 border-slate-500 border-t-white animate-spin shrink-0" />
-                  <span>Menganalisis skenario mitigasi...</span>
-                </div>
+              <input 
+                type="range" 
+                min="5" 
+                max="60" 
+                value={cargoTonnage}
+                onChange={(e) => setCargoTonnage(Number(e.target.value))}
+                className="w-full accent-white cursor-pointer"
+              />
+              <p className="text-xs text-slate-400">
+                Volume bahan pangan pokok (cabai merah, bawang, beras) dalam antrean koridor.
+              </p>
+            </div>
+
+            {/* Lever 3: Bypass Highway Routing */}
+            <div className="bg-[#121822] border border-[#1c2432] p-4 rounded-lg flex flex-col justify-between gap-3">
+              <div>
+                <span className="text-xs font-semibold text-white block">Pengalihan Tol / Koridor Alternatif</span>
+                <p className="text-xs text-slate-400 mt-1">
+                  Mengarahkan truk angkutan pangan langsung ke jalan tol untuk menghindari genangan air.
+                </p>
               </div>
-            )}
+              <div className="flex justify-between items-center pt-2 border-t border-white/5">
+                <span className="text-xs font-mono text-slate-400">Status Pengalihan:</span>
+                <button
+                  type="button"
+                  onClick={() => setDishubDiversion(!dishubDiversion)}
+                  className={`px-3 py-1.5 rounded text-xs font-medium font-mono transition-colors cursor-pointer ${
+                    dishubDiversion
+                      ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-500/40'
+                      : 'bg-[#0c1017] text-slate-400 border border-[#1c2432] hover:text-white'
+                  }`}
+                >
+                  {dishubDiversion ? 'AKTIF (TOL BELMERA / MKTT)' : 'NON-AKTIF (JALUR BIASA)'}
+                </button>
+              </div>
+            </div>
+
+            {/* Lever 4: Emergency Buffer Allocation */}
+            <div className="bg-[#121822] border border-[#1c2432] p-4 rounded-lg space-y-2.5">
+              <div className="flex justify-between items-center text-xs font-mono">
+                <span className="text-slate-300">Buffer Stok Cadangan:</span>
+                <span className="text-white font-bold tabular-nums">{bulogStockAlloc}%</span>
+              </div>
+              <input 
+                type="range" 
+                min="0" 
+                max="100" 
+                value={bulogStockAlloc}
+                onChange={(e) => setBulogStockAlloc(Number(e.target.value))}
+                className="w-full accent-white cursor-pointer"
+              />
+              <p className="text-xs text-slate-400">
+                Penyaluran cadangan pangan dari gudang terdekat guna menahan lonjakan harga.
+              </p>
+            </div>
+
           </div>
 
-          {/* Quick Prompts Bar */}
-          <div className="flex flex-wrap gap-2 pt-2 border-t border-white/5 shrink-0">
-            {quickPrompts.map((prompt, pIdx) => (
-              <button
-                key={pIdx}
-                onClick={() => handleSend(prompt)}
-                className="px-2.5 py-1 bg-[#121822] hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 hover:border-white/20 rounded-lg text-xs font-sans transition cursor-pointer"
-              >
-                {prompt}
-              </button>
-            ))}
-          </div>
+          {/* Direct Impact Readout Cards */}
+          <div className="bg-[#121822] border border-white/10 rounded-lg p-5 space-y-4">
+            <h3 className="text-xs font-semibold uppercase text-slate-200 tracking-wider">
+              Proyeksi Dampak Berdasarkan Skenario
+            </h3>
 
-          {/* Chat Input */}
-          <div className="flex gap-2 pt-3 shrink-0">
-            <input 
-              type="text" 
-              value={inputVal}
-              onChange={(e) => setInputVal(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-              placeholder="Tanyakan analisis skenario pengalihan rute..."
-              className="flex-1 bg-[#080d14] border border-white/15 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-white/40 transition"
-            />
-            <button 
-              onClick={() => handleSend()}
-              disabled={loading}
-              className="px-4 py-2.5 bg-white hover:bg-slate-200 text-[#080d14] font-semibold text-xs tracking-wider rounded-md transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50"
-            >
-              <Send className="w-4 h-4" /> Send
-            </button>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="p-3.5 rounded bg-[#0c1017] border border-white/10">
+                <span className="text-xs font-mono text-slate-400 block mb-1">Perlambatan Bersih</span>
+                <p className="text-xl font-mono font-bold text-white tabular-nums">+{calculatedDelayMinutes} Menit</p>
+                <p className="text-xs text-slate-400 mt-1">
+                  {dishubDiversion ? 'Terpangkas via pengalihan' : 'Antrean penuh tanpa rekayasa'}
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded bg-[#0c1017] border border-white/10">
+                <span className="text-xs font-mono text-slate-400 block mb-1">Deviasi Harga Pasar</span>
+                <p className={`text-xl font-mono font-bold tabular-nums ${calculatedPriceSpikePct > 10 ? 'text-rose-400' : 'text-amber-400'}`}>
+                  +{calculatedPriceSpikePct}%
+                </p>
+                <p className="text-xs text-slate-400 mt-1">
+                  Diredam buffer gudang regional
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded bg-[#0c1017] border border-white/10">
+                <span className="text-xs font-mono text-slate-400 block mb-1">Risiko Kerusakan Kargo</span>
+                <p className={`text-xl font-mono font-bold tabular-nums ${spoilageRiskPct > 15 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                  {spoilageRiskPct}%
+                </p>
+                <p className="text-xs text-slate-400 mt-1">
+                  {dishubDiversion ? 'Batas aman terproteksi' : 'Waspada pembusukan'}
+                </p>
+              </div>
+            </div>
           </div>
 
         </div>
@@ -257,12 +255,12 @@ export default function SimulationSection({
       </section>
 
       {/* RIGHT SECTION: Multi-Department Agency Orchestration Board (4 Cols) */}
-      <section className="col-span-12 lg:col-span-4 bg-[#0c1017] border border-[#1c2432] p-5 flex flex-col gap-4 overflow-y-auto no-scrollbar rounded-lg shadow-xl">
+      <section className="col-span-12 lg:col-span-4 bg-[#0c1017] border border-[#1c2432] p-5 flex flex-col gap-4 overflow-y-auto no-scrollbar rounded-xl shadow-xl">
         
         <div className="flex items-center space-x-2 pb-2 border-b border-[#1c2432]">
           <Building2 className="w-4 h-4 text-slate-300" />
           <h2 className="font-semibold text-xs uppercase tracking-wider text-white">
-            Agency Orchestration
+            Koordinasi Antar-Lembaga
           </h2>
         </div>
 
@@ -293,25 +291,21 @@ export default function SimulationSection({
                 <span className="text-xs font-semibold uppercase text-white flex items-center gap-1.5">
                   <Truck className="w-4 h-4 text-emerald-400" /> BULOG (Logistik Pangan)
                 </span>
-                <span className="text-xs font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">READY</span>
+                <span className="text-xs font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">SIAP</span>
               </div>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Manajemen Cadangan Beras & Minyak Goreng. 480 Storage units tersedia di Medan & Tebing Tinggi.
+                Manajemen Cadangan Beras & Minyak Goreng. Gudang regional di Medan & Tebing Tinggi siap dibuka.
               </p>
               
-              <div className="space-y-1.5 pt-2">
-                <div className="flex justify-between text-xs font-mono">
-                  <span className="text-slate-300">Alokasi Stok Darurat:</span>
-                  <span className="text-white font-bold">{bulogStockAlloc}% (360 Ton)</span>
+              <div className="space-y-1.5 pt-2 border-t border-white/5 font-mono text-xs">
+                <div className="flex justify-between text-slate-300">
+                  <span>Alokasi Buffer:</span>
+                  <span className="text-white font-bold">{bulogStockAlloc}%</span>
                 </div>
-                <input 
-                  type="range" 
-                  min="10" 
-                  max="100" 
-                  value={bulogStockAlloc}
-                  onChange={(e) => setBulogStockAlloc(Number(e.target.value))}
-                  className="w-full accent-white cursor-pointer"
-                />
+                <div className="flex justify-between text-slate-400">
+                  <span>Target Penyaluran:</span>
+                  <span className="text-slate-200">Pasar Konsumen Utama</span>
+                </div>
               </div>
             </div>
           )}
@@ -323,24 +317,21 @@ export default function SimulationSection({
                 <span className="text-xs font-semibold uppercase text-white flex items-center gap-1.5">
                   <SlidersHorizontal className="w-4 h-4 text-slate-300" /> DISHUB (Perhubungan)
                 </span>
-                <span className="text-xs font-mono px-2 py-0.5 rounded bg-white/10 text-slate-200 border border-white/20 font-medium">ACTIVE</span>
+                <span className="text-xs font-mono px-2 py-0.5 rounded bg-white/10 text-slate-200 border border-white/20 font-medium">AKTIF</span>
               </div>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Rekayasa Lalu Lintas & Pembatasan Tonase Truk Logistik. Diversion active di Jalinsum KM 42.
+                Rekayasa Lalu Lintas & Prioritas Angkutan Pangan Pokok pada gerbang tol dan jalur arteri.
               </p>
 
-              <div className="flex justify-between items-center pt-2">
-                <span className="text-xs font-mono text-slate-300">Bypass Rerouting:</span>
-                <button
-                  onClick={() => setDishubDiversion(!dishubDiversion)}
-                  className={`px-3 py-1 rounded text-xs font-medium font-mono transition-colors cursor-pointer ${
-                    dishubDiversion
-                      ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-500/30'
-                      : 'bg-[#0c1017] text-slate-300 border border-[#1c2432] hover:text-white'
-                  }`}
-                >
-                  {dishubDiversion ? 'AKTIF (TOL BELMERA)' : 'NON-AKTIF'}
-                </button>
+              <div className="space-y-1.5 pt-2 border-t border-white/5 font-mono text-xs">
+                <div className="flex justify-between text-slate-300">
+                  <span>Rekayasa Arus:</span>
+                  <span className="text-emerald-400 font-bold">{dishubDiversion ? 'Aktif' : 'Non-Aktif'}</span>
+                </div>
+                <div className="flex justify-between text-slate-400">
+                  <span>Prioritas:</span>
+                  <span className="text-slate-200">Truk Sembako & Pendingin</span>
+                </div>
               </div>
             </div>
           )}
@@ -352,25 +343,21 @@ export default function SimulationSection({
                 <span className="text-xs font-semibold uppercase text-white flex items-center gap-1.5">
                   <ShieldAlert className="w-4 h-4 text-rose-400" /> BNPB / BPBD (Bencana)
                 </span>
-                <span className="text-xs font-mono px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 font-medium">CRITICAL</span>
+                <span className="text-xs font-mono px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 font-medium">SIAGA</span>
               </div>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Penanggulangan Bencana Banjir Lubuk Pakam. Evakuasi & perbaikan tanggul darurat.
+                Penanganan Titik Genangan Air & Evakuasi Jalur Trans-Sumatera.
               </p>
 
-              <div className="space-y-1.5 pt-2">
-                <div className="flex justify-between text-xs font-mono">
-                  <span className="text-slate-300">Tim Evakuasi Lapangan:</span>
-                  <span className="text-rose-400 font-bold">{bnpbRescueUnits} Unit Perahu</span>
+              <div className="space-y-1.5 pt-2 border-t border-white/5 font-mono text-xs">
+                <div className="flex justify-between text-slate-300">
+                  <span>Unit Reaksi Cepat:</span>
+                  <span className="text-rose-400 font-bold">{bnpbRescueUnits} Tim</span>
                 </div>
-                <input 
-                  type="range" 
-                  min="2" 
-                  max="30" 
-                  value={bnpbRescueUnits}
-                  onChange={(e) => setBnpbRescueUnits(Number(e.target.value))}
-                  className="w-full accent-white cursor-pointer"
-                />
+                <div className="flex justify-between text-slate-400">
+                  <span>Status Tanggul:</span>
+                  <span className="text-slate-200">Pemantauan Pompa Air</span>
+                </div>
               </div>
             </div>
           )}
@@ -382,7 +369,7 @@ export default function SimulationSection({
           onClick={handleDeploy}
           className="mt-auto w-full py-2.5 bg-white hover:bg-slate-200 text-[#080d14] font-semibold text-xs uppercase tracking-wider rounded-md transition-colors shadow-sm flex items-center justify-center gap-2 cursor-pointer"
         >
-          <Rocket className="w-4 h-4 text-[#080d14]" /> Deploy Unified Action Plan
+          <CheckCircle2 className="w-4 h-4 text-[#080d14]" /> Terapkan Skenario Terpadu
         </button>
 
       </section>

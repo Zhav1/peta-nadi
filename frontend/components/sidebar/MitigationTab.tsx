@@ -20,7 +20,6 @@ import {
   Plane, 
   Waves, 
   TrendingUp,
-  Sparkles,
   PauseCircle,
   SlidersHorizontal,
   Send,
@@ -621,7 +620,7 @@ export function MitigationTab({
                 </svg>
                 <span>{attr.source_name}</span>
                 {attr.tier && (
-                  <span className="text-[10px] px-1 py-0.5 rounded bg-cyan-950/60 text-cyan-400 border border-cyan-500/30 uppercase font-sans">
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-cyan-950/60 text-cyan-400 border border-cyan-500/30 uppercase font-sans">
                     {attr.tier}
                   </span>
                 )}

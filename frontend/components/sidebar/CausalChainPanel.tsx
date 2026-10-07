@@ -22,7 +22,7 @@ export function CausalChainPanel({ chain }: CausalChainPanelProps) {
             {i < chain.length - 1 && (
               <>
                 <span className="text-slate-600">→</span>
-                <span className="text-slate-400 italic truncate font-mono text-[11px]">{item.relation}</span>
+                <span className="text-slate-400 italic truncate font-mono text-xs">{item.relation}</span>
                 <span className="text-slate-600">→</span>
               </>
             )}

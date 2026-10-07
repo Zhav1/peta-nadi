@@ -1,6 +1,6 @@
 'use client';
 import React, { useState } from 'react';
-import { X, Link2, ChevronUp, ChevronDown, UserCheck, HelpCircle } from 'lucide-react';
+import { X, Link2, ChevronUp, ChevronDown } from 'lucide-react';
 import { EvidenceTab } from './EvidenceTab';
 import { MitigationTab } from './MitigationTab';
 import { EconomicTab } from './EconomicTab';
@@ -32,7 +32,6 @@ export function CrisisSidebar({
   setActiveTab: controlledSetActiveTab,
 }: CrisisSidebarProps) {
   const [internalTab, setInternalTab] = useState<Tab>('Evidence');
-  const [showHitlExplainer, setShowHitlExplainer] = useState(false);
   
   const activeTab = controlledTab || internalTab;
   const setActiveTab = controlledSetActiveTab || setInternalTab;
@@ -87,30 +86,6 @@ export function CrisisSidebar({
           </button>
         </div>
 
-        {/* HITL Decision Support Context Strip */}
-        <div className="pt-2 border-t border-[#1c2432]">
-          <div className="flex items-center justify-between text-xs font-sans text-slate-300 bg-[#121822] border border-[#1c2432] px-3 py-1.5 rounded-md">
-            <span className="flex items-center gap-1.5 text-cyan-300 font-medium">
-              <UserCheck className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Dukungan Keputusan · Kendali Operator</span>
-            </span>
-            <button
-              type="button"
-              onClick={() => setShowHitlExplainer((v) => !v)}
-              className="cursor-pointer text-slate-400 hover:text-cyan-300 transition"
-              title="Penjelasan Tata Kelola Keputusan Sistem"
-            >
-              <HelpCircle className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          {showHitlExplainer && (
-            <div className="mt-2 p-2.5 rounded-md bg-[#080d14] border border-[#1c2432] text-xs text-slate-300 font-sans leading-relaxed animate-in fade-in duration-150">
-              <strong className="text-cyan-300 font-bold block mb-1">Prinsip Kendali Operator (Human-in-the-Loop):</strong>
-              Sistem tidak melakukan intervensi kendaraan otomatis. Sistem hanya menyediakan analisis bukti multisumber & estimasi risiko. Persetujuan rute pengalihan mutlak berada pada kewenangan operator logistik.
-            </div>
-          )}
-        </div>
       </div>
 
       {/* Tabs */}

@@ -72,14 +72,7 @@ export function GuidedDemoPanel({
     }
   }, [stage]);
 
-  const swarmLogs = [
-    `> [00:01.2] Akuisisi Data: Membaca radar BMKG (68.5mm), arus TomTom (+35m), telemetri kapal AIS...`,
-    `> [00:02.1] Verifikasi Informasi: Berita resmi "Banjir Tebing Tinggi Jalinsum Terputus" terkonfirmasi...`,
-    `> [00:03.0] Pemodelan Spasial: Mengolah radius genangan bahaya Open-Meteo & BMKG...`,
-    `> [00:03.9] Optimasi Rute: Menghitung koridor pengalihan aman di luar perimeter banjir...`,
-    `> [00:04.7] Analisis Harga Pasar: Menghubungkan data historis PIHPS untuk proyeksi dampak pangan...`,
-    `> [00:05.5] Konsensus Sistem: Tingkat keyakinan multi-sumber 91.4% (Gangguan Tervalidasi)...`,
-  ];
+
 
   // Generate QR Code when demo starts and has a crisisId
   useEffect(() => {
@@ -133,14 +126,7 @@ export function GuidedDemoPanel({
     { name: 'Social', Icon: MessageSquare, color: 'border-purple-500/30 text-purple-400 bg-purple-950/20' },
   ];
 
-  const agents = [
-    { key: 'DataCollectionAgent', label: 'Data Collection' },
-    { key: 'OSINTHazardAgent', label: 'OSINT & Hazard' },
-    { key: 'PredictionAgent', label: 'Prediction' },
-    { key: 'RouteOptimizationAgent', label: 'Route Optimization' },
-    { key: 'EconomicIntelligenceAgent', label: 'Economic Intel' },
-    { key: 'DecisionSupportAgent', label: 'Decision Support' },
-  ];
+
 
   const dynamicRightOffset = isSidebarOpen ? 'right-[408px]' : 'right-6';
 
@@ -250,13 +236,15 @@ export function GuidedDemoPanel({
         )}
 
         {stage === 1 && (
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2.5">
             <div className="flex items-center justify-between text-xs font-medium text-slate-300">
               <span className="flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
-                <span>Pemrosesan Swarm Agen</span>
+                <span>Pemrosesan Telemetri Lapangan</span>
               </span>
-              <span className="font-mono text-slate-400 text-xs">6 Unit Agen</span>
+              <span className="font-mono text-slate-400 text-xs">
+                {logStep === 5 ? 'Selesai' : 'Memproses...'}
+              </span>
             </div>
             <div className="w-full bg-[#080d14] h-1.5 rounded-full overflow-hidden border border-[#1c2432]">
               <div
@@ -264,64 +252,23 @@ export function GuidedDemoPanel({
                 style={{ width: `${Math.min(100, Math.round(((logStep + 1) / 6) * 100))}%` }}
               />
             </div>
-            {/* 6 Agent Status Matrix Grid */}
-            <div className="grid grid-cols-2 gap-1.5">
-              {agents.map((agent, i) => {
-                const isRunningAgent = i === logStep;
-                const isDoneAgent = i < logStep;
-                return (
-                  <div
-                    key={agent.key}
-                    className={`flex items-center gap-1.5 p-1.5 rounded border text-xs transition-colors ${
-                      isRunningAgent
-                        ? 'border-cyan-500/50 bg-[#0c1017] text-cyan-200'
-                        : isDoneAgent
-                          ? 'border-emerald-500/30 bg-[#0c1017] text-emerald-300'
-                          : 'border-[#1c2432] bg-[#0c1017]/60 text-slate-500'
-                    }`}
-                  >
-                    {isDoneAgent ? (
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                    ) : isRunningAgent ? (
-                      <div className="w-2 h-2 rounded-full bg-cyan-400 shrink-0" />
-                    ) : (
-                      <div className="w-2 h-2 rounded-full bg-slate-700 shrink-0" />
-                    )}
-                    <span className="truncate">{agent.label}</span>
-                  </div>
-                );
-              })}
-            </div>
-            {/* Live Terminal Stream */}
-            <div className="bg-[#080d14] border border-[#1c2432] rounded-md p-2.5 font-mono text-xs text-slate-300 flex flex-col gap-1">
-              <div className="text-xs text-slate-400 border-b border-[#1c2432] pb-1 flex justify-between">
-                <span>Alur Penalaran Agen</span>
-                <span className={logStep === 5 ? 'text-emerald-400 font-medium' : 'text-cyan-400'}>
-                  {logStep === 5 ? 'Selesai 100%' : 'Aktif'}
-                </span>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="p-2 rounded border border-[#1c2432] bg-[#0c1017] text-slate-300">
+                <span className="text-slate-400 block mb-0.5">Sensor & Arus Jalan</span>
+                <span className="font-mono text-cyan-300 font-medium">BMKG & TomTom</span>
               </div>
-              <p className="line-clamp-2 leading-relaxed text-slate-200">
-                {swarmLogs[logStep]}
-              </p>
-            </div>
-            {logStep === 5 && (
-              <div className="bg-emerald-950/40 border border-emerald-500/30 p-2 rounded-md flex items-center justify-between text-xs font-medium text-emerald-300 animate-in fade-in duration-200">
-                <span className="flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                  <span>Analisis Swarm 6 Agen Selesai</span>
-                </span>
-                <span className="font-mono text-xs bg-emerald-900/60 px-1.5 py-0.5 rounded text-emerald-200 border border-emerald-400/30">
-                  Siap Lanjut
-                </span>
+              <div className="p-2 rounded border border-[#1c2432] bg-[#0c1017] text-slate-300">
+                <span className="text-slate-400 block mb-0.5">Pemetaan Bahaya</span>
+                <span className="font-mono text-cyan-300 font-medium">Radius Terkonfirmasi</span>
               </div>
-            )}
+            </div>
           </div>
         )}
 
         {stage === 2 && (
           <div className="flex flex-col gap-2.5 py-0.5">
             <div className="flex justify-between items-center text-xs text-slate-300">
-              <span className="font-medium">Skor Keyakinan Konsensus</span>
+              <span className="font-medium">Skor Keyakinan Multi-Sumber</span>
               <span className="text-xs font-semibold text-emerald-400 font-mono tabular-nums">
                 {(confidence * 100).toFixed(0)}%
               </span>
@@ -332,27 +279,12 @@ export function GuidedDemoPanel({
                 style={{ width: `${confidence * 100}%` }}
               />
             </div>
-            {/* 6 Agents All Completed Matrix */}
-            <div className="grid grid-cols-3 gap-1">
-              {agents.map((agent) => (
-                <div
-                  key={agent.key}
-                  className="flex items-center gap-1 p-1 rounded border border-emerald-500/30 bg-[#0c1017] text-xs text-emerald-300"
-                >
-                  <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
-                  <span className="truncate">{agent.label}</span>
-                </div>
-              ))}
-            </div>
-            {/* Live Terminal Stream */}
-            <div className="bg-[#080d14] border border-[#1c2432] rounded-md p-2.5 font-mono text-xs text-slate-300 flex flex-col gap-1">
-              <div className="text-xs text-slate-400 border-b border-[#1c2432] pb-1 flex justify-between">
-                <span>Evaluasi Konsensus GraphRAG</span>
-                <span className="text-emerald-400 font-medium">Tervalidasi (&gt;85%)</span>
-              </div>
-              <p className="line-clamp-2 leading-relaxed text-slate-200">
-                {swarmLogs[5]}
-              </p>
+            <div className="p-2.5 rounded border border-emerald-500/30 bg-[#0c1017] flex items-center justify-between text-xs text-emerald-300">
+              <span className="flex items-center gap-1.5 font-medium">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                <span>Konsensus Peringatan Tervalidasi</span>
+              </span>
+              <span className="font-mono text-xs text-emerald-400">&gt;85% Sesuai</span>
             </div>
           </div>
         )}
@@ -398,7 +330,7 @@ export function GuidedDemoPanel({
               {stage === 0 ? (
                 <>
                   <Play className="w-3.5 h-3.5 fill-current" />
-                  <span>Simulasi Krisis & Jalankan Swarm</span>
+                  <span>Mulai Simulasi Disrupsi</span>
                 </>
               ) : logStep === 5 ? (
                 <>

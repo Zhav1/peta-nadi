@@ -1,22 +1,12 @@
 'use client';
-import React, { useState } from 'react';
+import React from 'react';
 import type { CrisisState } from '@/lib/types';
 import {
   FileText,
   Activity,
-  Layers,
-  ChevronDown,
-  ChevronUp,
   Radio,
   Clock,
-  HelpCircle,
-  Database,
-  GitBranch,
-  ShieldCheck,
-  TrendingUp,
-  Cpu,
   BarChart3,
-  CheckCircle2,
 } from 'lucide-react';
 
 interface EvidenceTabProps {
@@ -45,9 +35,6 @@ function ConfidenceBar({ value }: { value: number }) {
 }
 
 export function EvidenceTab({ crisis }: EvidenceTabProps) {
-  const [showFullTrace, setShowFullTrace] = useState(false);
-  const [showProvenanceInfo, setShowProvenanceInfo] = useState(false);
-
   const findings = [
     { key: 'data_collection', finding: crisis.data_collection_finding },
     { key: 'osint_hazard', finding: crisis.osint_hazard_finding },
@@ -60,8 +47,6 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
   const confidenceScore = Math.round((crisis.overall_confidence || 0.92) * 100);
   const disruptionProb = Math.min(Math.round(confidenceScore * 0.94), 98);
 
-  const isPredictiveEvent = crisis.crisis_id.includes('predict') || crisis.type === 'port_closure';
-
   const osintFinding = findings.find((f) => f.key === 'osint_hazard')?.finding;
   const verifiedCitations = (osintFinding?.data as Record<string, unknown> | undefined)?.verified_citations as Array<{ headline: string; source: string; tier: string; temporal_phase: string }> | undefined;
   const topCitation = Array.isArray(verifiedCitations) && verifiedCitations.length > 0 ? verifiedCitations[0] : null;
@@ -73,153 +58,14 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
   return (
     <div className="space-y-4 text-slate-200 text-xs">
       
-      {/* 1. DECISION TRACE PIPELINE HEADER */}
-      <div className="bg-[#121822] border border-[#1c2432] rounded-md p-3">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-1.5 text-slate-100 font-bold font-sans text-xs">
-            <GitBranch className="w-3.5 h-3.5 text-cyan-400" />
-            <span>Rantai Bukti Operasional</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowFullTrace((v) => !v)}
-            className="cursor-pointer flex items-center gap-1 px-2 py-0.5 rounded bg-[#0c1017] border border-[#1c2432] text-xs font-mono text-cyan-300 hover:text-white transition-colors"
-            title="Buka rincian alur proses verifikasi"
-          >
-            <span>{showFullTrace ? 'Ringkas Alur' : 'Buka Rincian Alur'}</span>
-            {showFullTrace ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-          </button>
-        </div>
-
-        {/* Mini Stepper Summary */}
-        <div className="flex items-center justify-between text-xs font-mono text-slate-400 pt-1.5 border-t border-[#1c2432]">
-          <span className="text-cyan-400 font-medium">1. Sensor</span>
-          <span>-&gt;</span>
-          <span className="text-cyan-400 font-medium">2. Bukti</span>
-          <span>-&gt;</span>
-          <span className="text-emerald-400 font-medium">3. Validasi</span>
-          <span>-&gt;</span>
-          <span className="text-amber-400 font-medium">4. Risiko</span>
-          <span>-&gt;</span>
-          <span className="text-cyan-400 font-medium">5. Mitigasi</span>
-        </div>
-
-        {/* Expanded 8-Step Architectural Trace */}
-        {showFullTrace && (
-          <div className="mt-3 pt-3 border-t border-[#1c2432] space-y-2 text-xs font-sans animate-in fade-in slide-in-from-top-1 duration-200">
-            <div className="p-2 rounded-md bg-[#0c1017] border border-[#1c2432] space-y-1">
-              <div className="text-cyan-300 font-medium flex items-center gap-1">
-                <Database className="w-3 h-3 text-cyan-400" />
-                <span>Tahap 1: Akuisisi & Normalisasi Multisumber</span>
-              </div>
-              <p className="text-slate-400 text-xs leading-relaxed">
-                Ingesti stream cuaca BMKG, volume TomTom, AIS maritim, dan teks berita/sosmed dinormalisasi ke indeks spasial H3.
-              </p>
-            </div>
-
-            <div className="p-2 rounded-md bg-[#0c1017] border border-[#1c2432] space-y-1">
-              <div className="text-cyan-300 font-medium flex items-center gap-1">
-                <Layers className="w-3 h-3 text-cyan-400" />
-                <span>Tahap 2: Ekstraksi Evidence Terstruktur</span>
-              </div>
-              <p className="text-slate-400 text-xs leading-relaxed">
-                Spesialis agen mengonversi sinyal mentah menjadi objek bukti terstruktur berisi lokasi koordinat, timestamp, dan domain bahaya.
-              </p>
-            </div>
-
-            <div className="p-2 rounded-md bg-[#0c1017] border border-[#1c2432] space-y-1">
-              <div className="text-emerald-300 font-medium flex items-center gap-1">
-                <ShieldCheck className="w-3 h-3 text-emerald-400" />
-                <span>Tahap 3: Consensus Engine & Grounding Gate</span>
-              </div>
-              <p className="text-slate-400 text-xs leading-relaxed">
-                Validasi silang antar-sumber independen (Cuaca vs Lalu Lintas vs Berita). Indikasi palsu otomatis dieliminasi.
-              </p>
-            </div>
-
-            <div className="p-2 rounded-md bg-[#0c1017] border border-[#1c2432] space-y-1">
-              <div className="text-amber-300 font-medium flex items-center gap-1">
-                <TrendingUp className="w-3 h-3 text-amber-400" />
-                <span>Tahap 4 & 5: Probabilitas & Estimasi Dampak Operasional</span>
-              </div>
-              <p className="text-slate-400 text-xs leading-relaxed">
-                Menghitung keterlambatan koridor ({crisis.evidence?.delay_minutes || '+120 min'}), eksposur armada truk, dan risiko lag harga pangan.
-              </p>
-            </div>
-
-            <div className="p-2 rounded-md bg-[#0c1017] border border-[#1c2432] space-y-1">
-              <div className="text-cyan-300 font-medium flex items-center gap-1">
-                <Cpu className="w-3 h-3 text-cyan-400" />
-                <span>Tahap 6 & 7: Optimasi Mitigasi Jalur Graf</span>
-              </div>
-              <p className="text-slate-400 text-xs leading-relaxed">
-                Algoritma graf menghitung multi-alternatif rute aman (Lanjut vs Pengalihan vs Tunda) dengan constraint kapasitas.
-              </p>
-            </div>
-
-            <div className="p-2 rounded-md bg-emerald-950/30 border border-emerald-500/30 space-y-1">
-              <div className="text-emerald-300 font-medium flex items-center gap-1">
-                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                <span>Tahap 8: Human-in-the-Loop Operator Gate</span>
-              </div>
-              <p className="text-slate-300 text-xs leading-relaxed">
-                Keputusan akhir berada pada operator logistik. Tidak ada intervensi armada tanpa persetujuan manual manusia.
-              </p>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* 2. PREDICTION MODEL CARD (IF PREDICTIVE MODE) */}
-      {isPredictiveEvent && (
-        <div className="bg-[#121822] border border-[#1c2432] rounded-md p-3 space-y-2.5">
-          <div className="flex items-center justify-between text-amber-400 font-mono font-semibold text-xs uppercase">
-            <span className="flex items-center gap-1.5">
-              <TrendingUp className="w-3.5 h-3.5 text-amber-400" />
-              <span>Model Prediksi Prospektif (Horizon 24-48 Jam)</span>
-            </span>
-            <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 text-xs font-mono font-medium">
-              PROSPEKTIF
-            </span>
-          </div>
-          <div className="grid grid-cols-2 gap-2 text-xs font-mono">
-            <div className="p-2 rounded bg-[#0c1017] border border-[#1c2432]">
-              <span className="text-slate-400 block text-xs">Arsitektur Model</span>
-              <span className="text-slate-200 font-bold">TFT / Spatiotemporal</span>
-            </div>
-            <div className="p-2 rounded bg-[#0c1017] border border-[#1c2432]">
-              <span className="text-slate-400 block text-xs">Interval Keyakinan</span>
-              <span className="text-emerald-400 font-bold tabular-nums">88% (+- 6%)</span>
-            </div>
-          </div>
-          <p className="text-xs text-slate-400 font-sans leading-relaxed">
-            Prediksi dihitung dari akumulasi anomali presipitasi BMKG regional dan pola historis bottleneck lalu lintas Trans-Sumatra.
-          </p>
-        </div>
-      )}
-
-      {/* 3. STATISTICAL CONFIDENCE VS DISRUPTION PROBABILITY CARD */}
+      {/* 1. STATISTICAL CONFIDENCE VS DISRUPTION PROBABILITY CARD */}
       <div className="bg-[#121822] border border-[#1c2432] rounded-md p-3 space-y-2">
         <div className="flex items-center justify-between">
           <span className="text-xs font-sans text-slate-200 font-bold flex items-center gap-1.5">
             <BarChart3 className="w-3.5 h-3.5 text-cyan-400" />
             <span>Kekuatan Bukti vs Probabilitas Disrupsi</span>
           </span>
-          <button
-            type="button"
-            onClick={() => setShowProvenanceInfo((v) => !v)}
-            className="cursor-pointer text-slate-400 hover:text-cyan-400 transition"
-            title="Penjelasan Pemisahan Confidence & Probabilitas"
-          >
-            <HelpCircle className="w-3.5 h-3.5" />
-          </button>
         </div>
-
-        {showProvenanceInfo && (
-          <div className="p-2.5 rounded-md bg-[#0c1017] border border-[#1c2432] text-xs text-slate-300 leading-relaxed font-sans">
-            <strong>Prinsip Transparansi Sistem:</strong> Keyakinan Bukti mengukur konsistensi data multi-sumber, sedangkan Probabilitas Disrupsi mengukur kemungkinan terjadinya hambatan fisik di lapangan.
-          </div>
-        )}
 
         <div className="grid grid-cols-2 gap-2 pt-1 font-mono">
           <div className="p-2.5 rounded-md bg-[#0c1017] border border-[#1c2432]">
@@ -254,9 +100,8 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
         <div className="space-y-2 pt-2 border-t border-[#1c2432]">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-slate-400 font-sans">
-              Temuan Spesialis Agen & Sumber
+              Verifikasi Sensor & Sumber Resmi
             </span>
-            <span className="text-xs font-mono text-cyan-400">Provenance Verified</span>
           </div>
 
           {findings.map(({ key, finding }) => {

@@ -2,34 +2,34 @@
 gsd_state_version: 1.0
 milestone: M3
 milestone_name: PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform
-current_phase: 48
-current_phase_name: Unified Orchestrator, Decision Engine & Closed-Loop Workflow
+current_phase: 50
+current_phase_name: Anti-AI-Slop & Editorial Distillation Audit
 status: complete
-stopped_at: Phase 48 execution and verification completed
-last_updated: "2026-10-04T15:00:00.000Z"
-last_activity: 2026-10-04
-last_activity_desc: Phase 48 completed (4-stage LangGraph DAG, Spoilage Hedging & BKHIT compliance embedded in RouteOptimization and DecisionCopilot, real-time SSE streaming endpoint and hook, interactive closed-loop fleet rerouting, 137/137 tests passing)
+stopped_at: Phase 50 execution and verification completed
+last_updated: "2026-10-07T07:55:00.000Z"
+last_activity: 2026-10-07
+last_activity_desc: Phase 50 completed (Full anti-slop audit across Landing Page and Dashboard surfaces: stripped right chapter rail, synthetic telemetry pills, agent swarm widget, 320px modal essays, pseudo-terminal streams, replaced static 3-page essay with Audit Ledger table, replaced chatbot with Scenario Workbench, removed governance banner, enforced strict 12px floor across 7 components, 0 TS errors, clean Next.js build)
 progress:
-  total_phases: 8
-  completed_phases: 8
-  total_plans: 18
-  completed_plans: 18
+  total_phases: 10
+  completed_phases: 10
+  total_plans: 20
+  completed_plans: 20
   percent: 100
 ---
 
 # STATE: PreHub Project Memory
 
-**Last Updated:** 2026-10-04
+**Last Updated:** 2026-10-07
 **Active Milestone:** M3 - PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform
-**Current Phase:** 48
+**Current Phase:** 50
 
 ---
 
 ## Current Position
 
-Phase: 48 (Unified Orchestrator, Decision Engine & Closed-Loop Workflow) - COMPLETE ✅
-Status: Phase 48 fully executed and verified across all 5 plans (48-01 through 48-05).
-Last activity: 2026-10-04 - Unified LangGraph DAG topology, embedded Spoilage Hedging & BKHIT/MST compliance into routing/copilot, exposed SSE streaming simulation, wired live dashboard execution, and verified closed-loop fleet rerouting with 137/137 tests passing.
+Phase: 50 (Anti-AI-Slop & Editorial Distillation Audit) - COMPLETE ✅
+Status: Phase 50 fully executed and verified across all components.
+Last activity: 2026-10-07 - Eradicated speculative AI slop, decorative kickers, pseudo-terminal logs, conversational chatbots, and sub-12px microtext across both Landing Page and Dashboard surfaces.
 Next action: Milestone review or pilot operational demo.
 
 ---
@@ -88,6 +88,8 @@ Next action: Milestone review or pilot operational demo.
 | 46 | Editorial Sentinel UI/UX Distillation & AI-Slop Eradication | **COMPLETE** ✅ | Purged 58 backdrop-blur instances (0 remaining), eliminated 36 glow shadows, deleted duplicate component, floored functional type to 12px, zero TypeScript errors. |
 | 47 | Impeccable Grounding, Typeset & Layout Refinement | **COMPLETE** ✅ | Eradicated ungrounded boasting across 25 files, enforced tabular-nums, resolved all 14 AST detector violations to 0, hardened mobile/tablet viewport scrolling and layout. |
 | 48 | Unified Orchestrator, Decision Engine & Closed-Loop Workflow | **COMPLETE** ✅ | LangGraph 4-stage DAG re-architecture, Spoilage Hedging & Compliance tool embedding, real-time SSE streaming, interactive closed-loop fleet rerouting, and 137/137 tests passing. |
+| 49 | Pan-Sumatra Spatial Engine & Ingestion Adapter Generalization | **COMPLETE** ✅ | Expanded spatial engine, adapters (NASA FIRMS, AIS seaports, TomTom, BMKG), Agent 4 port penalties, and dynamic Mapbox routing to all 8 mainland Sumatra provinces. |
+| 50 | Anti-AI-Slop & Editorial Distillation Audit | **COMPLETE** ✅ | Eradicated speculative AI slop, decorative kickers, pseudo-terminal streams, conversational chatbots, and sub-12px microtext across both Landing Page and Dashboard surfaces. Clean Next.js build. |
 
 ---
 
@@ -95,6 +97,8 @@ Next action: Milestone review or pilot operational demo.
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
+| 2026-10-07 | Phase 50: Anti-AI-Slop & Editorial Distillation Audit | Conducted a comprehensive audit and cleanup across Landing Page and Dashboard surfaces: stripped right chapter rail nav, synthetic telemetry pills, and stage counter from ImageSequenceCanvas; removed kickers and replaced Bot with ShieldCheck in KineticFeatureGrid; simplified LiveTelemetryShowcase into a 3-column provenance ledger; removed AgentStatusWidget and 320px popover essays from TopNavTelemetry; removed pseudo-terminal stream and 6-agent matrix from GuidedDemoPanel; replaced 3-page static textbook essay with an interactive Audit Ledger table in ReportsSection; replaced conversational chatbot with an interactive Scenario Workbench in SimulationSection; removed Human-in-the-Loop governance essay banner in CrisisSidebar; removed 8-step decision trace header in EvidenceTab; replaced Sparkles icon with Compass in CrisisSimulatorBar; enforced strict 12px floor across 7 components (0 sub-12px classes remaining); 0 TypeScript errors and clean Next.js build. |
+| 2026-10-07 | Phase 49: Pan-Sumatra Spatial Engine & Ingestion Adapter Generalization | Expanded spatial engine and adapters from North Sumatra to all 8 mainland Sumatra provinces (Aceh, North Sumatra, West Sumatra, Riau, Riau Islands, Jambi, South Sumatra, Bengkulu, Lampung) plus ALKI I seaports. Enriched road network and hazard boundaries, resolved all 137 tests passing. |
 | 2026-10-04 | Phase 48: Unified Orchestrator, Decision Engine & Closed-Loop Workflow | Resolved architectural disconnects inspired by Globot & God's Eye View: re-wired 6-agent swarm into a 4-stage DAG (Ingestion -> Sensory Observation & Consensus Gate -> Economic Impact -> Route Optimization & Decision Copilot), embedded Spoilage Hedging monetary solver and BKHIT/MST regulatory inspection directly into RouteOptimization and DecisionSupport nodes, exposed `POST /api/v1/simulate/stream` streaming SSE chunks to animate 6-agent HUD live, replaced client mock with real SSE stream hook, dynamically injected tactical telemetry into `/simulation/chat`, and linked route approvals to live map corridor commitments and TMS dispatch pings with dual-horizon ground-truth outcome verification. All 137 backend tests pass. |
 | 2026-10-04 | Phase 47: Impeccable Grounding, Typeset & Layout Refinement | Full empirical grounding pass: linked all data streams to official sources (BMKG, LKBN ANTARA, TomTom, PIHPS, AISstream, NASA FIRMS), resolved all 14 AST design detector anti-patterns (0 findings), enforced tabular numerals across all ledgers, eliminated multi-column clipping on mobile by replacing h-full overflow-hidden with min-h-full lg:h-full and adding overflow-y-auto to section wrappers. |
 | 2026-10-03 | Phase 46: The Strategic Sentinel Design Contract & Slop Eradication | Full forensic audit and distillation across 45 files (-650 net lines). Replaced heavy backdrop-blur compositing with solid elevated panels (#0c1017, #121822) to resolve 60 FPS WebGL map stutter, eliminated generic AI gradients in favor of architectural white buttons, deleted redundant showcase components, and enforced a strict 12px floor for all functional type. |

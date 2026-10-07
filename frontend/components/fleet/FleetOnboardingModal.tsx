@@ -532,7 +532,7 @@ export function FleetOnboardingModal({
                     />
                     {singleForm.temperature_c !== undefined && (
                       <span
-                        className={`text-[10px] font-mono px-2 py-1 rounded shrink-0 border ${
+                        className={`text-xs font-mono px-2 py-1 rounded shrink-0 border ${
                           singleForm.temperature_c <= 4.0
                             ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
                             : 'bg-rose-500/10 border-rose-500/20 text-rose-300'

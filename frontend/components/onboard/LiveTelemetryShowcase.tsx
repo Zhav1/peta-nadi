@@ -72,49 +72,40 @@ const DATA_SOURCES: DataSource[] = [
 
 export default function LiveTelemetryShowcase() {
   return (
-    <section id="telemetry" className="relative w-full bg-[#080d14] py-28 px-4 md:px-8 border-t border-white/8">
-      <div className="max-w-7xl mx-auto flex flex-col gap-16">
+    <section id="telemetry" className="relative w-full bg-[#080d14] py-24 px-4 md:px-8 border-t border-white/8">
+      <div className="max-w-7xl mx-auto flex flex-col gap-12">
         
-        {/* Editorial Header */}
-        <div className="max-w-3xl flex flex-col gap-4">
-          <h2 className="font-headline text-3xl sm:text-5xl font-bold text-white tracking-tight leading-tight">
+        {/* Section Header */}
+        <div className="max-w-3xl flex flex-col gap-3">
+          <h2 className="font-headline text-3xl sm:text-4xl font-bold text-white tracking-tight leading-tight">
             Integrasi Sumber Data Resmi
           </h2>
-          <p className="font-sans text-base sm:text-lg text-slate-300 leading-relaxed">
-            PreHub mengintegrasikan data cuaca, kondisi jalan, pergerakan maritim, dan harga pangan dari berbagai lembaga resmi guna memastikan akurasi analisis sebelum rekomendasi mitigasi diterbitkan.
+          <p className="font-sans text-base text-slate-300 leading-relaxed">
+            Data cuaca, kondisi jalan, pergerakan armada, dan harga pasar dari instansi resmi untuk memastikan validitas analisis.
           </p>
         </div>
 
-        {/* 2-Column Disciplined Data Ledger */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Clean 3-Column Data Ledger */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {DATA_SOURCES.map((source) => {
             const Icon = source.icon;
             return (
               <div
                 key={source.id}
-                className="bg-[#0c1017] border border-white/8 rounded-lg p-6 flex flex-col justify-between gap-6"
+                className="bg-[#0c1017] border border-white/8 rounded-lg p-5 flex flex-col gap-3"
               >
-                <div className="flex flex-col gap-3">
-                  <div className="flex items-center justify-between border-b border-white/8 pb-3">
-                    <span className="font-mono text-xs font-semibold text-slate-400 tracking-wider">
-                      {source.category}
-                    </span>
-                    <Icon className="w-4 h-4 text-slate-400" />
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-md bg-[#121822] border border-white/10 flex items-center justify-center text-slate-300">
+                    <Icon className="w-4 h-4 text-white" />
                   </div>
-
-                  <h3 className="font-headline text-lg font-bold text-white">
+                  <h3 className="font-headline text-base font-bold text-white">
                     {source.name}
                   </h3>
-
-                  <p className="font-sans text-sm text-slate-300 leading-relaxed">
-                    {source.detail}
-                  </p>
                 </div>
 
-                <div className="pt-3 border-t border-white/8 flex items-center justify-between font-mono text-xs text-slate-400">
-                  <span>{source.protocol}</span>
-                  <span className="text-white font-medium">{source.cadence}</span>
-                </div>
+                <p className="font-sans text-xs sm:text-sm text-slate-300 leading-relaxed">
+                  {source.detail}
+                </p>
               </div>
             );
           })}

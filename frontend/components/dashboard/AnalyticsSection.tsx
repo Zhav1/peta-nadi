@@ -385,7 +385,7 @@ export default function AnalyticsSection({
                     className="w-full bg-white/20 border-t-2 border-white/60 hover:bg-white/30 transition-all duration-300" 
                     style={{ height: h }}
                   />
-                  <span className="font-mono text-[10px] text-slate-400 mt-1">T-{priceHistory.length - 1 - i}</span>
+                  <span className="font-mono text-xs text-slate-400 mt-1">T-{priceHistory.length - 1 - i}</span>
                 </div>
               ))}
             </div>

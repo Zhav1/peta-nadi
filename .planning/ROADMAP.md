@@ -1161,6 +1161,38 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 
 ---
 
+## Phase 50: Anti-AI-Slop & Editorial Distillation Audit
+**Requirements Covered:** UI-50.1, UX-50.1, CLEAN-50.1, TYPO-50.1
+**Goal:** Eradicate speculative AI slop, decorative kickers, pseudo-terminal streams, conversational chatbots, and sub-12px microtext across both Landing Page and Dashboard surfaces, transforming PreHub into a defense-grade, high-density operational workbench.
+**Status:** COMPLETE ✅
+**Plans:** 50-PLAN.md, 50-WALKTHROUGH.md, 50-ENVIRONMENT-FIXES-AND-PITFALLS.md, 50-LEARNINGS.md, 50-SUMMARY.md
+
+### Deliverables
+- **Landing Surface Distillation**:
+  - `ImageSequenceCanvas.tsx`: Stripped right chapter rail navigation, stage counter, and synthetic telemetry pills row; condensed narrative overlay into 1 headline and 1 sentence.
+  - `KineticFeatureGrid.tsx`: Removed artificial kickers, engine tags, and fake metric footers; replaced `Bot` icon with `ShieldCheck`.
+  - `LiveTelemetryShowcase.tsx`: Stripped protocol chips and category badges, distilling into a 3-column provenance ledger.
+- **Dashboard Telemetry & Navigation Sanitization**:
+  - `TopNavTelemetry.tsx`: Removed `AgentStatusWidget` (agent swarm matrix) and 320px popover essays; preserved compact direct status indicators (`RUTE: 3.2ms`, `LALULINTAS: +25m`, `BMKG: 45mm/j`).
+  - `IntermodalTerminalPopover.tsx`: Removed speculative requirement chip `FR-17`.
+  - `GuidedDemoPanel.tsx`: Removed pseudo-terminal logs and 6-agent matrix; introduced 4 operational verification checks and grounded action copy ("Mulai Simulasi Disrupsi").
+- **Dedicated Functional Views**:
+  - `ReportsSection.tsx`: Replaced 3-page static textbook document with an operational Audit Ledger table and export triggers.
+  - `SimulationSection.tsx`: Replaced conversational chatbot with Scenario Workbench (sliders for disruption duration, tonnage, highway bypass, emergency buffer, and real-time calculated impacts).
+- **Crisis Triage & Map Overlays**:
+  - `CrisisSidebar.tsx`: Removed theoretical Human-in-the-Loop governance essay banner and help popover.
+  - `EvidenceTab.tsx`: Removed 8-step decision trace pipeline header and provenance explainer modal; resolved unclosed JSX structures.
+  - `CrisisSimulatorBar.tsx`: Replaced AI `Sparkles` icon with `Compass`; renamed "Best Mode" to "Multi-Moda Terpadu".
+- **Typography Floor Enforcement**:
+  - Upgraded all 17 sub-12px microtext classes (`text-[8px]`, `text-[9px]`, `text-[10px]`, `text-[11px]`) across 7 frontend components to strict 12px floor (`text-xs`).
+
+### Verification Criteria
+- [x] `rtk npx tsc --noEmit` returns 0 errors.
+- [x] Next.js production build (`npm run build`) succeeds (7/7 static pages generated).
+- [x] Zero em dashes across all documentation, code, and interface copy.
+
+---
+
 ## Backlog (Post-Hackathon / v2)
 - Driver mobile app (React Native + WatermelonDB + CRDT offline sync)
 - Enterprise GraphRAG private self-hosted deployment

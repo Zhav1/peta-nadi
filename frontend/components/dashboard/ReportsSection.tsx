@@ -4,12 +4,6 @@ import React, { useState, useEffect } from 'react';
 import { 
   FileText, 
   Printer, 
-  ChevronLeft, 
-  ChevronRight, 
-  ShieldCheck, 
-  TrendingUp, 
-  CheckCircle2, 
-  Award, 
   FileSpreadsheet
 } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -42,7 +36,6 @@ export default function ReportsSection({
   selectedCrisis,
   activeRoutes
 }: ReportsSectionProps) {
-  const [currentPage, setCurrentPage] = useState<number>(1);
   const [liveApprovals, setLiveApprovals] = useState<number>(approvalsCount);
   const [healthScore, setHealthScore] = useState<number>(92);
   const [approvalList, setApprovalList] = useState<ApprovalLogItem[]>([]);
@@ -259,6 +252,7 @@ export default function ReportsSection({
       </div>
 
       {/* MAIN DOCUMENT WORKSPACE */}
+      {/* MAIN AUDIT LEDGER WORKSPACE */}
       <div className="flex-1 bg-[#0c1017] border border-white/10 rounded-xl p-6 flex flex-col min-h-0 shadow-xl overflow-hidden">
         
         {/* Document Header Bar */}
@@ -269,144 +263,60 @@ export default function ReportsSection({
             </div>
             <div>
               <h2 className="font-headline font-semibold text-base text-white tracking-wide">
-                Laporan Ringkasan Mitigasi Logistik Pangan
+                Catatan Audit Mitigasi Logistik Pangan
               </h2>
               <p className="text-xs font-sans text-slate-400">
-                PreHub Logistik • {selectedCrisis?.region || 'Koridor Prioritas Pulau Sumatera'}
+                Riwayat persetujuan tindakan pengalihan dan verifikasi koridor • {selectedCrisis?.region || 'Pulau Sumatera'}
               </p>
             </div>
-          </div>
-
-          {/* Page Switcher */}
-          <div className="flex items-center gap-2 bg-[#121822] border border-white/10 px-3 py-1.5 rounded-lg font-mono text-xs">
-            <button
-              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-              disabled={currentPage === 1}
-              className="hover:text-white disabled:opacity-30 cursor-pointer"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <span className="text-slate-300 font-medium">Halaman {currentPage} / 3</span>
-            <button
-              onClick={() => setCurrentPage(prev => Math.min(3, prev + 1))}
-              disabled={currentPage === 3}
-              className="hover:text-white disabled:opacity-30 cursor-pointer"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
           </div>
         </div>
 
-        {/* Dynamic Page Content */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar my-4 p-5 bg-[#121822] rounded-xl border border-white/5 space-y-4">
-          
-          {currentPage === 1 && (
-            <div className="space-y-4 text-xs leading-relaxed text-slate-200">
-              <div className="border-b border-white/10 pb-3">
-                <h3 className="font-headline text-base font-bold text-white uppercase tracking-wide">
-                  1. Ringkasan Pemantauan Koridor Logistik
-                </h3>
-                <p className="text-[10px] font-mono text-slate-400">Periode: Siklus Pemantauan Aktif</p>
-              </div>
-              <p>
-                Sistem PreHub memantau kelancaran jalur distribusi bahan pangan pada koridor logistik terpadu Sumatera ({selectedCrisis?.region || 'Jalur Arteri Lintas Timur, Barat, Tengah & Jalur Laut'}). Informasi hambatan dipetakan secara real-time guna mendukung kelancaran pengiriman komoditas strategis.
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                <div className="p-3.5 rounded-xl bg-[#0c1017] border border-white/10">
-                  <span className="font-bold text-white uppercase font-headline block mb-1">Kesiapan Mitigasi</span>
-                  <ul className="list-disc list-inside text-xs space-y-1 text-slate-300">
-                    <li>Rekomendasi rute alternatif siap digunakan saat terjadi hambatan jalur.</li>
-                    <li>Pemetaan titik genangan air dan kepadatan lalu lintas secara berkala.</li>
-                    <li>Sinergi rute jalan tol dan jalan nasional untuk menjaga arus distribusi.</li>
-                  </ul>
-                </div>
-                <div className="p-3.5 rounded-xl bg-[#0c1017] border border-white/10">
-                  <span className="font-bold text-slate-300 uppercase font-headline block mb-1">Faktor Risiko Dipantau</span>
-                  <ul className="list-disc list-inside text-xs space-y-1 text-slate-300">
-                    <li>Peringatan cuaca ekstrem BMKG untuk antisipasi genangan air di pesisir Belawan.</li>
-                    <li>Tingkat kepadatan lalu lintas pada ruas jalan lintas utama Jalinsum.</li>
-                    <li>Perkembangan harga harian bahan pangan pokok di pasar konsumen utama.</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {currentPage === 2 && (
-            <div className="space-y-4 text-xs leading-relaxed text-slate-200">
-              <div className="border-b border-white/10 pb-3">
-                <h3 className="font-headline text-base font-bold text-white uppercase tracking-wide">
-                  2. Verifikasi Data Multi-Sumber
-                </h3>
-                <p className="text-[10px] font-mono text-slate-400">Integrasi Data Cuaca, Lalu Lintas, dan Kondisi Pasar</p>
-              </div>
-              <p>
-                Peringatan gangguan divalidasi silang dari penyedia data resmi untuk memastikan keakuratan informasi sebelum rekomendasi rute alternatif diterbitkan kepada operator.
-              </p>
-              <div className="p-4 rounded-xl bg-[#080d14] border border-white/10 font-mono text-xs space-y-2 text-slate-300">
-                <div className="text-slate-200 font-semibold">• DATA CUACA (BMKG): Pemantauan intensitas curah hujan dan peringatan dini regional.</div>
-                <div className="text-slate-200 font-semibold">• DATA LALU LINTAS (TomTom): Pantauan kecepatan kendaraan dan titik perlambatan arteri.</div>
-                <div className="text-slate-200 font-semibold">• OPTIMASI RUTE: Perhitungan jalur alternatif menghindari titik hambatan jalan.</div>
-                <div className="text-slate-200 font-semibold">• DATA HARGA (PIHPS): Pemantauan kestabilan harga beras, minyak goreng, dan cabai.</div>
-              </div>
-            </div>
-          )}
-
-          {currentPage === 3 && (
-            <div className="space-y-4 text-xs leading-relaxed text-slate-200">
-              <div className="border-b border-white/10 pb-3">
-                <h3 className="font-headline text-base font-bold text-white uppercase tracking-wide">
-                  3. Catatan Persetujuan Pengalihan Rute
-                </h3>
-                <p className="text-[10px] font-mono text-slate-400">Riwayat Keputusan Operator Logistik</p>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-left font-mono text-xs">
-                  <thead>
-                    <tr className="border-b border-white/15 text-slate-300 uppercase">
-                      <th className="py-2 px-3">Waktu</th>
-                      <th className="py-2 px-3">Insiden</th>
-                      <th className="py-2 px-3">Rute Rekomendasi</th>
-                      <th className="py-2 px-3">Penyetuju</th>
-                      <th className="py-2 px-3">Status</th>
+        {/* Audit Ledger Table View */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar my-4 bg-[#121822] rounded-xl border border-white/5 p-4">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left font-mono text-xs">
+              <thead>
+                <tr className="border-b border-white/15 text-slate-300 uppercase">
+                  <th className="py-2.5 px-3">Waktu</th>
+                  <th className="py-2.5 px-3">Insiden</th>
+                  <th className="py-2.5 px-3">Rute Rekomendasi</th>
+                  <th className="py-2.5 px-3">Penyetuju</th>
+                  <th className="py-2.5 px-3">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {approvalList.length > 0 ? (
+                  approvalList.map((item, idx) => (
+                    <tr key={idx} className="hover:bg-white/5">
+                      <td className="py-2.5 px-3 text-slate-400">{new Date(item.created_at || item.approved_at || Date.now()).toLocaleTimeString()}</td>
+                      <td className="py-2.5 px-3 font-semibold text-white">{item.crisis_id || item.incident_id || 'Genangan Air Jalinsum'}</td>
+                      <td className="py-2.5 px-3 text-slate-300">{item.route_name || item.recommended_route?.description || 'Bypass Medan-Tebing Tinggi'}</td>
+                      <td className="py-2.5 px-3 text-slate-400">{item.approved_by || item.operator_id || 'Operator Logistik'}</td>
+                      <td className="py-2.5 px-3 text-emerald-400 font-semibold">DISETUJUI</td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {approvalList.length > 0 ? (
-                      approvalList.map((item, idx) => (
-                        <tr key={idx} className="hover:bg-white/5">
-                          <td className="py-2 px-3 text-slate-400">{new Date(item.created_at || item.approved_at || Date.now()).toLocaleTimeString()}</td>
-                          <td className="py-2 px-3 font-semibold text-white">{item.crisis_id || item.incident_id || 'Genangan Air Jalinsum'}</td>
-                          <td className="py-2 px-3 text-slate-300">{item.route_name || item.recommended_route?.description || 'Bypass Medan-Tebing Tinggi'}</td>
-                          <td className="py-2 px-3 text-slate-400">{item.approved_by || item.operator_id || 'Operator Logistik'}</td>
-                          <td className="py-2 px-3 text-emerald-400 font-semibold">DISETUJUI</td>
-                        </tr>
-                      ))
-                    ) : (
-                      <>
-                        <tr className="hover:bg-white/5">
-                          <td className="py-2 px-3 text-slate-400">09:15</td>
-                          <td className="py-2 px-3 font-semibold text-white">Genangan Air Jalinsum</td>
-                          <td className="py-2 px-3 text-slate-300">Tol Belmera - Tebing Tinggi</td>
-                          <td className="py-2 px-3 text-slate-400">Operator Logistik Pangan</td>
-                          <td className="py-2 px-3 text-emerald-400 font-semibold">DISETUJUI</td>
-                        </tr>
-                        <tr className="hover:bg-white/5">
-                          <td className="py-2 px-3 text-slate-400">08:40</td>
-                          <td className="py-2 px-3 font-semibold text-white">Hambatan Arteri Sei Rampah</td>
-                          <td className="py-2 px-3 text-slate-300">Jalur Alternatif Lintas Timur</td>
-                          <td className="py-2 px-3 text-slate-400">Operator Armada</td>
-                          <td className="py-2 px-3 text-emerald-400 font-semibold">DISETUJUI</td>
-                        </tr>
-                      </>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
+                  ))
+                ) : (
+                  <>
+                    <tr className="hover:bg-white/5">
+                      <td className="py-2.5 px-3 text-slate-400">09:15</td>
+                      <td className="py-2.5 px-3 font-semibold text-white">Genangan Air Jalinsum</td>
+                      <td className="py-2.5 px-3 text-slate-300">Tol Belmera - Tebing Tinggi</td>
+                      <td className="py-2.5 px-3 text-slate-400">Operator Logistik Pangan</td>
+                      <td className="py-2.5 px-3 text-emerald-400 font-semibold">DISETUJUI</td>
+                    </tr>
+                    <tr className="hover:bg-white/5">
+                      <td className="py-2.5 px-3 text-slate-400">08:40</td>
+                      <td className="py-2.5 px-3 font-semibold text-white">Hambatan Arteri Sei Rampah</td>
+                      <td className="py-2.5 px-3 text-slate-300">Jalur Alternatif Lintas Timur</td>
+                      <td className="py-2.5 px-3 text-slate-400">Operator Armada</td>
+                      <td className="py-2.5 px-3 text-emerald-400 font-semibold">DISETUJUI</td>
+                    </tr>
+                  </>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         {/* Executive Action Toolbar */}
