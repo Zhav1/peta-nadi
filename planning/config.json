@@ -1,0 +1,32 @@
+{
+  "project": "PreHub",
+  "version": "2.0.0",
+  "active_milestone": "M2 - PreHub Final Defense: Empirical Evaluation, Tactical HUD & Multi-Source Maturity",
+  "created": "2026-07-05",
+  "workflow": {
+    "require_discussion": true,
+    "require_planning": true,
+    "require_verification": true,
+    "auto_commit": true,
+    "ai_spec_for_ai_phases": true,
+    "use_subagents": true
+  },
+  "model_profile": {
+    "primary": "claude-sonnet",
+    "planner": "claude-sonnet",
+    "reviewer": "claude-sonnet"
+  },
+  "tech_stack": {
+    "backend": "FastAPI (Python)",
+    "agent_framework": "LangGraph",
+    "frontend": "Next.js 14 + Mapbox GL JS + Deck.gl",
+    "database": "Supabase (PostgreSQL + PostGIS + TimescaleDB + pgvector)",
+    "cache_queue": "Redis (Streams + KV)",
+    "ai_models": ["gemini-flash", "deepseek-v3"],
+    "routing": "NetworkX Dijkstra/A* + Google OR-Tools (CPU VRP Solver)",
+    "weather": "Open-Meteo API (ECMWF/GFS) + BMKG API",
+    "scraping": "Lightpanda"
+  },
+  "operational_scope": "Pan-Sumatra Island-Wide Logistics Corridors (8 mainland provinces, 25+ strategic hubs, Trans-Sumatra highways, nautical fairways)",
+  "team_size": 1
+}
