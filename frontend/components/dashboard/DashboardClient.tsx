@@ -52,6 +52,8 @@ import { FleetOnboardingModal } from '@/components/fleet/FleetOnboardingModal';
 import { useCrisisSimulationStream } from '@/hooks/useCrisisSimulationStream';
 
 import { TopNavTelemetry } from '@/components/dashboard/TopNavTelemetry';
+import { DispatcherAlertQueue } from '@/components/dashboard/DispatcherAlertQueue';
+import type { DisruptionImpactResponse, ImpactedVehicleAssessment } from '@/lib/types';
 
 // Dynamic import for map to avoid SSR issues
 const CrisisMap = dynamic(() => import('@/components/map/CrisisMap'), { ssr: false });
@@ -347,6 +349,11 @@ export default function DashboardClient() {
   const [simulatedShockwave, setSimulatedShockwave] = useState<{ center: [number, number]; radiusKm: number; hazardType: string } | null>(null);
   const [disasterZones, setDisasterZones] = useState<Array<{ polygon: [number, number][]; type: 'flood'; risk: number }>>([]);
   const [toast, setToast] = useState<{ message: string; type?: 'success' | 'error' | 'info' } | null>(null);
+
+  // Decision Support System (DSS) Impact Assessment States
+  const [impactAssessmentData, setImpactAssessmentData] = useState<DisruptionImpactResponse | null>(null);
+  const [selectedImpactedVehicle, setSelectedImpactedVehicle] = useState<ImpactedVehicleAssessment | null>(null);
+  const [isAlertQueueDismissed, setIsAlertQueueDismissed] = useState(false);
 
   // Layout & Navigation States
   const [activeSection, setActiveSection] = useState<'map' | 'analytics' | 'simulation' | 'reports' | 'evaluation'>('map');
@@ -671,6 +678,25 @@ export default function DashboardClient() {
       }
 
       if (baseCrisis) {
+        // Trigger Decision Support System (DSS) Impact Assessment
+        try {
+          const impactRes = await api.incidents.assessImpact({
+            incident_id: id,
+            lat: baseCrisis.lat || 3.32,
+            lon: baseCrisis.lon || 99.16,
+            radius_km: selectedRadius || 25,
+            expected_delay_hours: 14.0,
+            hazard_type: baseCrisis.type || 'flood',
+          });
+          setImpactAssessmentData(impactRes);
+          setIsAlertQueueDismissed(false);
+          if (impactRes.impacted_assessments && impactRes.impacted_assessments.length > 0) {
+            setSelectedImpactedVehicle(impactRes.impacted_assessments[0]);
+          }
+        } catch (impactErr) {
+          console.warn('Impact assessment offline/fallback:', impactErr);
+        }
+
         if (selectedOriginNode && selectedDestNode) {
           const originCoords = HUB_NODES[selectedOriginNode]?.coords;
           const destCoords = HUB_NODES[selectedDestNode]?.coords;
@@ -1408,6 +1434,27 @@ export default function DashboardClient() {
           {/* 3. FLOATING OVERLAYS CONTAINER AREA */}
           <div className="absolute inset-0 w-full h-full pointer-events-none z-10">
 
+            {/* Decision Support System (DSS): Dispatcher Alert Queue Strip */}
+            {!isAlertQueueDismissed && impactAssessmentData && impactAssessmentData.impacted_assessments.length > 0 && (
+              <DispatcherAlertQueue
+                impactData={impactAssessmentData}
+                selectedVehicleId={selectedImpactedVehicle?.vehicle_id || null}
+                onSelectVehicle={(assessment) => {
+                  setSelectedImpactedVehicle(assessment);
+                  setActiveTab('Mitigation');
+                  setIsSidebarOpen(true);
+                  if (assessment.detour_route) {
+                    setActiveRouteIdx(0);
+                  }
+                  setToast({
+                    message: `Fokus Armada: ${assessment.vehicle_id} (${assessment.commodity_key}). Matriks susut dimuat.`,
+                    type: 'info',
+                  });
+                }}
+                onDismiss={() => setIsAlertQueueDismissed(true)}
+              />
+            )}
+
             {/* Time Horizon Context Banner when in Past / Future / Predict modes */}
             <TimeModeBanner
               activeTimeFilter={activeTimeFilter}
@@ -1555,6 +1602,7 @@ export default function DashboardClient() {
               onSelectRoute={(idx) => setActiveRouteIdx(idx)}
               onApproveSuccess={(msg) => setToast({ message: msg, type: 'success' })}
               onCommitOperationalRoute={handleCommitOperationalRoute}
+              selectedImpactedVehicle={selectedImpactedVehicle}
             />
           )}
 

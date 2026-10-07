@@ -39,6 +39,7 @@ interface MitigationTabProps {
   onSelectRoute: (idx: number) => void;
   onApproveSuccess?: (msg: string) => void;
   onCommitOperationalRoute?: (route: RouteRecommendation, action: DecisionAction, tactical: TacticalManeuver) => void;
+  selectedImpactedVehicle?: import('@/lib/types').ImpactedVehicleAssessment | null;
 }
 
 interface RouteCardProps {
@@ -50,6 +51,7 @@ interface RouteCardProps {
   approvalData?: ApprovalItem | null;
   approving: boolean;
   onApprove: (action: DecisionAction, tacticalAction: TacticalManeuver, notes?: string) => Promise<void>;
+  selectedImpactedVehicle?: import('@/lib/types').ImpactedVehicleAssessment | null;
 }
 
 function FormattedMarkdown({ content }: { content: string }) {
@@ -100,6 +102,7 @@ function RouteCard({
   approvalData,
   approving,
   onApprove,
+  selectedImpactedVehicle,
 }: RouteCardProps) {
   const { role } = useAuth();
   const [showOverrideModal, setShowOverrideModal] = useState(false);
@@ -214,25 +217,35 @@ function RouteCard({
               )}
 
               {/* WhatsApp Driver Dispatch Action (Phase 45/48 Drill 1) */}
-              <a
-                href={`https://wa.me/6281234567891?text=${encodeURIComponent(
-                  `PERINTAH DISPATCH RESMI - PIDI\n` +
-                  `Armada: TRK-003-BELAWAN-TEBING (BK 8812 XL)\n` +
-                  `Tindakan: ${approvalData?.tactical_action || 'REROUTE'}\n` +
-                  `Rute: ${route.route_name || route.description}\n` +
-                  `Status: Jalur utama ditutup/terdampak. Ikuti jalur alternatif mitigasi.\n` +
-                  (approvalData?.notes ? `Catatan: ${approvalData.notes}\n` : '') +
-                  `Harap segera konfirmasi penerimaan instruksi ini.`
-                )}`}
-                target="_blank"
-                rel="noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="w-full mt-2 py-2 px-3 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-sm"
-                title="Kirim instruksi pengalihan rute ke WhatsApp Pengemudi"
-              >
-                <MessageSquare className="w-3.5 h-3.5 shrink-0" />
-                <span>Kirim Disposisi WhatsApp ke Driver</span>
-              </a>
+              {(() => {
+                const targetPhone = (selectedImpactedVehicle?.driver_phone || '6281234567891').replace(/^\+/, '').replace(/\s+/g, '');
+                const targetTruck = selectedImpactedVehicle?.vehicle_id || 'TRK-003-BELAWAN-TEBING';
+                const targetPlate = selectedImpactedVehicle?.license_plate || 'BK 8812 XL';
+                const targetCargo = selectedImpactedVehicle ? `${selectedImpactedVehicle.cargo_tonnage}T ${selectedImpactedVehicle.commodity_key}` : 'Cabai Merah';
+                
+                return (
+                  <a
+                    href={`https://wa.me/${targetPhone}?text=${encodeURIComponent(
+                      `PERINTAH DISPATCH RESMI - PIDI\n` +
+                      `Armada: ${targetTruck} (${targetPlate})\n` +
+                      `Muatan: ${targetCargo}\n` +
+                      `Tindakan: ${approvalData?.tactical_action || 'REROUTE'}\n` +
+                      `Rute Pengalihan: ${route.route_name || route.description}\n` +
+                      `Status: Jalur utama terblokir gangguan. Ikuti koordinat alternatif mitigasi.\n` +
+                      (approvalData?.notes ? `Catatan: ${approvalData.notes}\n` : '') +
+                      `Harap segera konfirmasi penerimaan instruksi ini.`
+                    )}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-full mt-2 py-2 px-3 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-sm"
+                    title="Kirim instruksi pengalihan rute ke WhatsApp Pengemudi"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5 shrink-0" />
+                    <span>Kirim Disposisi WhatsApp ke Driver ({targetTruck})</span>
+                  </a>
+                );
+              })()}
             </div>
           ) : isCompromised ? (
             <div className="w-full py-2 px-3 rounded-md bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs font-mono font-semibold text-center flex items-center justify-center gap-1.5">
@@ -405,6 +418,7 @@ export function MitigationTab({
   onSelectRoute,
   onApproveSuccess,
   onCommitOperationalRoute,
+  selectedImpactedVehicle,
 }: MitigationTabProps) {
   const { user } = useAuth();
   const [approvedRouteId, setApprovedRouteId] = useState<string | null>(null);
@@ -646,13 +660,16 @@ export function MitigationTab({
       {(() => {
         const activeRoute = crisis.route_recommendations?.[activeRouteIdx ?? 0];
         const resolvedCommodity =
+          selectedImpactedVehicle?.commodity_key?.replace(/_/g, ' ') ||
           crisis.inflation_forecast?.commodity ||
           ((crisis as unknown as Record<string, unknown>).commodities_affected as string[])?.[0] ||
           'Cabai Merah Keriting';
         const resolvedVehicleId =
+          selectedImpactedVehicle?.vehicle_id ||
           ((crisis as unknown as Record<string, unknown>).vehicle_id as string) ||
           'TRK-MEDAN-08';
         const resolvedOrigin = (() => {
+          if (selectedImpactedVehicle?.origin) return selectedImpactedVehicle.origin;
           if (activeRoute?.legs && activeRoute.legs.length > 0 && activeRoute.legs[0].from_name) {
             return activeRoute.legs[0].from_name;
           }
@@ -666,6 +683,7 @@ export function MitigationTab({
           return 'Medan';
         })();
         const resolvedDestination = (() => {
+          if (selectedImpactedVehicle?.destination) return selectedImpactedVehicle.destination;
           if (activeRoute?.legs && activeRoute.legs.length > 0 && activeRoute.legs[activeRoute.legs.length - 1].to_name) {
             return activeRoute.legs[activeRoute.legs.length - 1].to_name;
           }
@@ -675,7 +693,13 @@ export function MitigationTab({
           }
           return 'Pekanbaru';
         })();
+        const resolvedCargoTonnage = selectedImpactedVehicle?.cargo_tonnage ?? 10.0;
+        const resolvedDetourDist = selectedImpactedVehicle?.detour_route?.distance_km ?? activeRoute?.distance_km ?? 85.0;
+        const resolvedDetourHours = selectedImpactedVehicle?.detour_route?.eta_hours ?? (activeRoute?.eta_minutes ? (activeRoute.eta_minutes / 60) : 2.5);
         const resolvedTraversedRoads = (() => {
+          if (selectedImpactedVehicle?.detour_route?.waypoints && selectedImpactedVehicle.detour_route.waypoints.length > 0) {
+            return selectedImpactedVehicle.detour_route.waypoints;
+          }
           const roads: string[] = [];
           if (activeRoute?.description) roads.push(activeRoute.description);
           if (activeRoute?.route_name) roads.push(activeRoute.route_name);
@@ -688,11 +712,11 @@ export function MitigationTab({
             <SpoilageHedgingCard
               commodity={resolvedCommodity}
               vehicleId={resolvedVehicleId}
-              cargoTonnage={10.0}
+              cargoTonnage={resolvedCargoTonnage}
               origin={resolvedOrigin}
               destination={resolvedDestination}
-              detourDistanceKm={activeRoute?.distance_km || 85.0}
-              detourTimeHours={activeRoute?.eta_minutes ? (activeRoute.eta_minutes / 60) : 2.5}
+              detourDistanceKm={resolvedDetourDist}
+              detourTimeHours={resolvedDetourHours}
               onApplyPolicy={(policy) => {
                 if (policy === 'REROUTE' && onSelectRoute) {
                   onSelectRoute(0);
@@ -712,19 +736,20 @@ export function MitigationTab({
                   const isApproved = approvedRouteId === String(idx);
                   const approving = approvingIdx === idx;
 
-                  return (
-                    <RouteCard
-                      key={idx}
-                      route={route}
-                      idx={idx}
-                      isActive={isActive}
-                      onSelect={() => onSelectRoute(idx)}
-                      isApproved={isApproved}
-                      approvalData={isApproved ? latestApproval : null}
-                      approving={approving}
-                      onApprove={(action, tacticalAction, notes) => handleApprove(idx, route, action, tacticalAction, notes)}
-                    />
-                  );
+                      return (
+                        <RouteCard
+                          key={idx}
+                          route={route}
+                          idx={idx}
+                          isActive={isActive}
+                          onSelect={() => onSelectRoute(idx)}
+                          isApproved={isApproved}
+                          approvalData={isApproved ? latestApproval : null}
+                          approving={approving}
+                          onApprove={(action, tacticalAction, notes) => handleApprove(idx, route, action, tacticalAction, notes)}
+                          selectedImpactedVehicle={selectedImpactedVehicle}
+                        />
+                      );
                 })
               ) : (
                 <p className="text-xs text-slate-500 text-center py-4 font-mono">
@@ -739,9 +764,10 @@ export function MitigationTab({
               origin={resolvedOrigin}
               destination={resolvedDestination}
               traversedRoads={resolvedTraversedRoads}
-              vehicleGrossWeightTon={12.5}
+              vehicleGrossWeightTon={selectedImpactedVehicle?.cargo_tonnage ? (selectedImpactedVehicle.cargo_tonnage + 5.0) : 12.5}
               commodity={resolvedCommodity}
-              hasBkhitCert={false}
+              hasBkhitCert={selectedImpactedVehicle ? selectedImpactedVehicle.compliance_check.quarantine_clear : false}
+              driverPhone={selectedImpactedVehicle?.driver_phone || '+6281234567891'}
             />
           </>
         );

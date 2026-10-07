@@ -260,7 +260,16 @@ MASTER_FLEET_DEFINITIONS: List[Dict[str, Any]] = [
         "path": [[105.7533, -5.8711], [105.5900, -5.7300], [105.2667, -5.4294], [105.1800, -4.8500], [104.9800, -4.1500], [104.8500, -3.3800], [104.7565, -2.9909]],
         "route_geometry": {"type": "LineString", "coordinates": [[105.7533, -5.8711], [105.5900, -5.7300], [105.2667, -5.4294], [105.1800, -4.8500], [104.9800, -4.1500], [104.8500, -3.3800], [104.7565, -2.9909]]},
         "speed_kmh": 75.0, "status": "moving", "progress": 0.52, "cargo": "24 Ton Beras BULOG Lampung", "origin": "Pelabuhan Bakauheni", "destination": "Palembang",
-        "vin": "MHF12TRK001PLM"
+        "vin": "MHF12TRK001PLM",
+        "commodity_key": "beras",
+        "cargo_tonnage": 24.0,
+        "cargo_value_idr": 360000000.0,
+        "vehicle_golongan": "GOL_III",
+        "gross_weight_ton": 28.5,
+        "sla_deadline_hours": 16.0,
+        "has_bkhit_cert": True,
+        "driver_name": "Agus Setiawan",
+        "driver_phone": "6281198765431"
     },
     {
         "vehicle_id": "TRK-002-HORTI-SUMBAR",
@@ -269,16 +278,34 @@ MASTER_FLEET_DEFINITIONS: List[Dict[str, Any]] = [
         "path": [[100.3692, -0.3056], [100.6300, -0.2200], [100.7000, -0.1500], [100.8200, 0.0500], [101.0300, 0.3300], [101.4478, 0.5071]],
         "route_geometry": {"type": "LineString", "coordinates": [[100.3692, -0.3056], [100.6300, -0.2200], [100.7000, -0.1500], [100.8200, 0.0500], [101.0300, 0.3300], [101.4478, 0.5071]]},
         "speed_kmh": 62.0, "status": "moving", "progress": 0.38, "cargo": "14 Ton Cabai Merah & Sayur Agam", "origin": "Bukittinggi (Sumbar)", "destination": "Pekanbaru (Riau)",
-        "vin": "MHF12TRK002BKT", "temperature_c": 3.2
+        "vin": "MHF12TRK002BKT", "temperature_c": 3.2,
+        "commodity_key": "cabai_merah",
+        "cargo_tonnage": 14.0,
+        "cargo_value_idr": 770000000.0,
+        "vehicle_golongan": "GOL_II",
+        "gross_weight_ton": 14.5,
+        "sla_deadline_hours": 8.0,
+        "has_bkhit_cert": False,
+        "driver_name": "Rahmat Hidayat",
+        "driver_phone": "6281277665544"
     },
     {
         "vehicle_id": "TRK-003-BELAWAN-TEBING",
-        "name": "Truk Sembako 03 (Tol Medan-Tebing)",
+        "name": "Truk Cabai 03 (BK 8812 XL)",
         "modality": "truck",
-        "path": [[98.6776, 3.7922], [98.6742, 3.7201], [98.6712, 3.6901], [98.6601, 3.6512], [98.6712, 3.6013], [98.7050, 3.5511], [98.8780, 3.6421], [98.9560, 3.5680], [99.0687, 2.9595]],
-        "route_geometry": {"type": "LineString", "coordinates": [[98.6776, 3.7922], [98.6742, 3.7201], [98.6712, 3.6901], [98.6601, 3.6512], [98.6712, 3.6013], [98.7050, 3.5511], [98.8780, 3.6421], [98.9560, 3.5680], [99.0687, 2.9595]]},
-        "speed_kmh": 70.0, "status": "moving", "progress": 0.60, "cargo": "20 Ton Minyak Goreng Curah", "origin": "Pelabuhan Belawan", "destination": "Pematang Siantar",
-        "vin": "MHF12TRK003MDN"
+        "path": [[98.6776, 3.7922], [98.6742, 3.7201], [98.6712, 3.6901], [98.6601, 3.6512], [98.6712, 3.6013], [98.7050, 3.5511], [98.8780, 3.6421], [98.9560, 3.5680], [99.0687, 2.9595], [99.1625, 3.3285]],
+        "route_geometry": {"type": "LineString", "coordinates": [[98.6776, 3.7922], [98.6742, 3.7201], [98.6712, 3.6901], [98.6601, 3.6512], [98.6712, 3.6013], [98.7050, 3.5511], [98.8780, 3.6421], [98.9560, 3.5680], [99.0687, 2.9595], [99.1625, 3.3285]]},
+        "speed_kmh": 70.0, "status": "moving", "progress": 0.60, "cargo": "4.5 Ton Cabai Merah Keriting", "origin": "Pelabuhan Belawan", "destination": "Pekanbaru Hub",
+        "vin": "MHF12TRK003MDN",
+        "commodity_key": "cabai_merah",
+        "cargo_tonnage": 4.5,
+        "cargo_value_idr": 247500000.0,
+        "vehicle_golongan": "GOL_II",
+        "gross_weight_ton": 8.5,
+        "sla_deadline_hours": 6.0,
+        "has_bkhit_cert": False,
+        "driver_name": "Budi Santoso",
+        "driver_phone": "6281234567891"
     },
     {
         "vehicle_id": "TRK-004-CPO-DUMAI",
@@ -287,7 +314,16 @@ MASTER_FLEET_DEFINITIONS: List[Dict[str, Any]] = [
         "path": [[101.4478, 0.5071], [101.4300, 0.7200], [101.2800, 0.9500], [101.2100, 1.2800], [101.3500, 1.5200], [101.4533, 1.6811]],
         "route_geometry": {"type": "LineString", "coordinates": [[101.4478, 0.5071], [101.4300, 0.7200], [101.2800, 0.9500], [101.2100, 1.2800], [101.3500, 1.5200], [101.4533, 1.6811]]},
         "speed_kmh": 68.0, "status": "moving", "progress": 0.44, "cargo": "28 Ton Minyak Sawit Mentah", "origin": "Pekanbaru", "destination": "Kawasan Industri Dumai",
-        "vin": "MHF12TRK004DMI"
+        "vin": "MHF12TRK004DMI",
+        "commodity_key": "minyak_goreng",
+        "cargo_tonnage": 28.0,
+        "cargo_value_idr": 420000000.0,
+        "vehicle_golongan": "GOL_IV",
+        "gross_weight_ton": 32.0,
+        "sla_deadline_hours": 12.0,
+        "has_bkhit_cert": False,
+        "driver_name": "Irfan Hakim",
+        "driver_phone": "6281399887766"
     },
     {
         "vehicle_id": "TRK-005-BANDA-ACEH-MEDAN",
@@ -296,7 +332,16 @@ MASTER_FLEET_DEFINITIONS: List[Dict[str, Any]] = [
         "path": [[95.3238, 5.5483], [95.9500, 5.2500], [97.1400, 5.1800], [97.9600, 4.4700], [98.6722, 3.5952]],
         "route_geometry": {"type": "LineString", "coordinates": [[95.3238, 5.5483], [95.9500, 5.2500], [97.1400, 5.1800], [97.9600, 4.4700], [98.6722, 3.5952]]},
         "speed_kmh": 65.0, "status": "moving", "progress": 0.32, "cargo": "16 Ton Beras & Komoditas Aceh", "origin": "Banda Aceh", "destination": "Medan",
-        "vin": "MHF12TRK005BTJ"
+        "vin": "MHF12TRK005BTJ",
+        "commodity_key": "beras",
+        "cargo_tonnage": 16.0,
+        "cargo_value_idr": 240000000.0,
+        "vehicle_golongan": "GOL_III",
+        "gross_weight_ton": 18.0,
+        "sla_deadline_hours": 20.0,
+        "has_bkhit_cert": False,
+        "driver_name": "Teuku Iskandar",
+        "driver_phone": "6281266554433"
     },
     {
         "vehicle_id": "TRK-006-JAMBI-PALEMBANG",
@@ -305,7 +350,16 @@ MASTER_FLEET_DEFINITIONS: List[Dict[str, Any]] = [
         "path": [[103.6131, -1.6100], [103.9500, -2.1500], [104.3500, -2.5500], [104.7565, -2.9909]],
         "route_geometry": {"type": "LineString", "coordinates": [[103.6131, -1.6100], [103.9500, -2.1500], [104.3500, -2.5500], [104.7565, -2.9909]]},
         "speed_kmh": 60.0, "status": "moving", "progress": 0.58, "cargo": "18 Ton Gula & Tepung Terigu", "origin": "Kota Jambi", "destination": "Palembang",
-        "vin": "MHF12TRK006JMB"
+        "vin": "MHF12TRK006JMB",
+        "commodity_key": "beras",
+        "cargo_tonnage": 18.0,
+        "cargo_value_idr": 270000000.0,
+        "vehicle_golongan": "GOL_III",
+        "gross_weight_ton": 20.0,
+        "sla_deadline_hours": 10.0,
+        "has_bkhit_cert": False,
+        "driver_name": "Joko Widodo",
+        "driver_phone": "6281311223344"
     },
     {
         "vehicle_id": "TRK-007-PADANG-BENGKULU",
@@ -314,7 +368,16 @@ MASTER_FLEET_DEFINITIONS: List[Dict[str, Any]] = [
         "path": [[100.3543, -0.9492], [100.5800, -1.3500], [101.1200, -2.5500], [101.7800, -3.2500], [102.2655, -3.8004]],
         "route_geometry": {"type": "LineString", "coordinates": [[100.3543, -0.9492], [100.5800, -1.3500], [101.1200, -2.5500], [101.7800, -3.2500], [102.2655, -3.8004]]},
         "speed_kmh": 55.0, "status": "moving", "progress": 0.40, "cargo": "15 Ton Minyak Goreng & Pangan Pokok", "origin": "Kota Padang", "destination": "Kota Bengkulu",
-        "vin": "MHF12TRK007PDG"
+        "vin": "MHF12TRK007PDG",
+        "commodity_key": "minyak_goreng",
+        "cargo_tonnage": 15.0,
+        "cargo_value_idr": 225000000.0,
+        "vehicle_golongan": "GOL_III",
+        "gross_weight_ton": 17.5,
+        "sla_deadline_hours": 14.0,
+        "has_bkhit_cert": False,
+        "driver_name": "Syahrul Ramadhan",
+        "driver_phone": "6281244332211"
     },
     {
         "vehicle_id": "TRK-008-MEDAN-BERASTAGI",
@@ -323,7 +386,16 @@ MASTER_FLEET_DEFINITIONS: List[Dict[str, Any]] = [
         "path": [[98.6722, 3.5952], [98.5800, 3.3500], [98.5067, 3.1833]],
         "route_geometry": {"type": "LineString", "coordinates": [[98.6722, 3.5952], [98.5800, 3.3500], [98.5067, 3.1833]]},
         "speed_kmh": 45.0, "status": "moving", "progress": 0.70, "cargo": "12 Ton Kol, Kentang, Wortel Karo", "origin": "Kabanjahe (Karo)", "destination": "Pasar Induk Lau Cih Medan",
-        "vin": "MHF12TRK008KBJ", "temperature_c": 2.8
+        "vin": "MHF12TRK008KBJ", "temperature_c": 2.8,
+        "commodity_key": "sayur_segar",
+        "cargo_tonnage": 12.0,
+        "cargo_value_idr": 180000000.0,
+        "vehicle_golongan": "GOL_II",
+        "gross_weight_ton": 13.0,
+        "sla_deadline_hours": 5.0,
+        "has_bkhit_cert": False,
+        "driver_name": "Sabar Ginting",
+        "driver_phone": "6281288990011"
     },
     {
         "vehicle_id": "TRK-009-LAMPUNG-KOTABUMI",
@@ -857,6 +929,10 @@ class TelemetryService:
             filtered_fleet = [v for v in filtered_fleet if v.get("status") == status]
 
         return filtered_fleet
+
+    async def get_all_vehicles(self) -> List[Dict[str, Any]]:
+        """Convenience async accessor returning all unified fleet vehicles."""
+        return self.get_unified_fleet()
 
 
 # Global singleton instance

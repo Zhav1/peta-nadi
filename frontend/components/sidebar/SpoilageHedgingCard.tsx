@@ -122,7 +122,7 @@ export function SpoilageHedgingCard({
 
   useEffect(() => {
     executeSolve();
-  }, [commodity, vehicleId, detourDistanceKm]);
+  }, [commodity, vehicleId, cargoTonnage, origin, destination, detourDistanceKm, detourTimeHours]);
 
   const formatIDR = (val: number) => {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val);

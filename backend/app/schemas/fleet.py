@@ -85,6 +85,18 @@ class FleetVehicleTelemetry(BaseModel):
     temperature_c: Optional[float] = Field(None, description="Cargo compartment reefer temperature in Celsius")
     cold_chain_status: Optional[ColdChainStatus] = Field(None, description="Reefer safety evaluation: NORMAL (<=4.0C) or WARNING_EXCURSION (>4.0C)")
 
+    # --- Shipment Profile & Business Constraints ---
+    commodity_key: Optional[str] = Field(None, description="Standardized commodity key (e.g. 'cabai_merah', 'beras', 'daging_sapi')")
+    cargo_tonnage: Optional[float] = Field(None, ge=0.0, description="Gross cargo weight in Metric Tons")
+    cargo_value_idr: Optional[float] = Field(None, ge=0.0, description="Estimated total cargo valuation in IDR")
+    vehicle_golongan: Optional[str] = Field("GOL_II", description="BPJT toll vehicle class (GOL_I - GOL_V)")
+    gross_weight_ton: Optional[float] = Field(None, ge=0.0, description="Total gross vehicle weight in Metric Tons (for MST checks)")
+    sla_deadline_hours: Optional[float] = Field(None, ge=0.0, description="SLA delivery deadline duration in hours from departure")
+    deadline_buffer_hours: Optional[float] = Field(None, description="Buffer hours remaining before SLA penalty")
+    has_bkhit_cert: bool = Field(False, description="Whether agricultural quarantine certificate is active")
+    driver_name: Optional[str] = Field(None, description="Driver full name")
+    driver_phone: Optional[str] = Field(None, description="Driver WhatsApp contact number (+62...)")
+
     # --- Signal & Telemetry Metadata ---
     signal_status: SignalStatus = Field(SignalStatus.SIMULATION_CACHE, description="Telemetry stream status")
     telemetry_source: str = Field("PREHUB_RADAR", description="Source sensor or radar feed ID")

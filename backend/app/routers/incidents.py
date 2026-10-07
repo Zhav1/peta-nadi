@@ -339,3 +339,31 @@ async def simulate_incident_stream(body: dict):
         }
     )
 
+
+@router.post(
+    "/impact-assessment",
+    response_model=dict,
+    summary="Assess disruption impact on active fleet shipments"
+)
+async def assess_impact(body: dict):
+    """
+    Evaluates spatial intersection of a physical disruption with all active fleet vehicles.
+    Executes Spoilage Hedging, Regulatory Compliance, and CPU Detour Optimization
+    to produce an explainable dispatcher recommendation and driver WhatsApp dispatch action.
+    """
+    from app.schemas.impact_schemas import DisruptionImpactRequest
+    from app.services.impact_assessment_service import impact_assessment_service
+
+    req = DisruptionImpactRequest(
+        incident_id=body.get("incident_id"),
+        lat=float(body.get("lat", 3.3285)),
+        lon=float(body.get("lon", 99.1625)),
+        radius_km=float(body.get("radius_km", 15.0)),
+        hazard_type=str(body.get("hazard_type", body.get("type", "flood"))),
+        severity=str(body.get("severity", "critical")).lower(),
+        title=body.get("title")
+    )
+    res = await impact_assessment_service.assess_disruption_impact(req)
+    return res.model_dump()
+
+

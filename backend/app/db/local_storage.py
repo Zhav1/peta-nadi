@@ -96,6 +96,13 @@ def init_db(db_path: Optional[str] = None) -> None:
                     driver_phone TEXT,
                     modality TEXT NOT NULL,
                     cargo TEXT,
+                    commodity_key TEXT,
+                    cargo_tonnage REAL DEFAULT 10.0,
+                    cargo_value_idr REAL,
+                    vehicle_golongan TEXT DEFAULT 'GOL_II',
+                    gross_weight_ton REAL DEFAULT 12.0,
+                    sla_deadline_hours REAL DEFAULT 8.0,
+                    has_bkhit_cert INTEGER DEFAULT 0,
                     origin TEXT,
                     destination TEXT,
                     speed_kmh REAL DEFAULT 60.0,
@@ -123,6 +130,21 @@ def init_db(db_path: Optional[str] = None) -> None:
                 ON custom_fleet_vehicles(sync_status);
             """)
 
+            # Dynamic column migrations for existing SQLite databases
+            for col_def in [
+                ("commodity_key", "TEXT"),
+                ("cargo_tonnage", "REAL DEFAULT 10.0"),
+                ("cargo_value_idr", "REAL"),
+                ("vehicle_golongan", "TEXT DEFAULT 'GOL_II'"),
+                ("gross_weight_ton", "REAL DEFAULT 12.0"),
+                ("sla_deadline_hours", "REAL DEFAULT 8.0"),
+                ("has_bkhit_cert", "INTEGER DEFAULT 0"),
+            ]:
+                try:
+                    conn.execute(f"ALTER TABLE custom_fleet_vehicles ADD COLUMN {col_def[0]} {col_def[1]};")
+                except Exception:
+                    pass  # Column already exists
+
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS fleet_telemetry_logs (
                     id TEXT PRIMARY KEY,
@@ -146,6 +168,31 @@ def init_db(db_path: Optional[str] = None) -> None:
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_telemetry_logs_created 
                 ON fleet_telemetry_logs(created_at);
+            """)
+
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS incident_impact_assessments (
+                    id TEXT PRIMARY KEY,
+                    incident_id TEXT NOT NULL,
+                    hazard_type TEXT NOT NULL DEFAULT 'flood',
+                    latitude REAL NOT NULL,
+                    longitude REAL NOT NULL,
+                    radius_km REAL NOT NULL DEFAULT 15.0,
+                    severity TEXT NOT NULL DEFAULT 'critical',
+                    total_fleet_scanned INTEGER NOT NULL DEFAULT 0,
+                    impacted_vehicles_count INTEGER NOT NULL DEFAULT 0,
+                    impacted_vehicles TEXT NOT NULL DEFAULT '[]',
+                    evaluated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_impact_assessments_incident 
+                ON incident_impact_assessments(incident_id);
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_impact_assessments_evaluated 
+                ON incident_impact_assessments(evaluated_at DESC);
             """)
         logger.debug(f"Local SQLite database initialized at {db_path or DEFAULT_DB_PATH}")
     finally:
@@ -416,17 +463,26 @@ def save_custom_vehicle(data: Dict[str, Any], db_path: Optional[str] = None) -> 
             conn.execute("""
                 INSERT INTO custom_fleet_vehicles (
                     id, vehicle_id, name, driver_name, driver_phone,
-                    modality, cargo, origin, destination, speed_kmh,
+                    modality, cargo, commodity_key, cargo_tonnage, cargo_value_idr,
+                    vehicle_golongan, gross_weight_ton, sla_deadline_hours, has_bkhit_cert,
+                    origin, destination, speed_kmh,
                     temperature_c, path_json, status, mmsi, imo, vin,
                     icao24, callsign, organization_id, created_by,
                     sync_status, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(vehicle_id) DO UPDATE SET
                     name = excluded.name,
                     driver_name = excluded.driver_name,
                     driver_phone = excluded.driver_phone,
                     modality = excluded.modality,
                     cargo = excluded.cargo,
+                    commodity_key = excluded.commodity_key,
+                    cargo_tonnage = excluded.cargo_tonnage,
+                    cargo_value_idr = excluded.cargo_value_idr,
+                    vehicle_golongan = excluded.vehicle_golongan,
+                    gross_weight_ton = excluded.gross_weight_ton,
+                    sla_deadline_hours = excluded.sla_deadline_hours,
+                    has_bkhit_cert = excluded.has_bkhit_cert,
                     origin = excluded.origin,
                     destination = excluded.destination,
                     speed_kmh = excluded.speed_kmh,
@@ -447,6 +503,13 @@ def save_custom_vehicle(data: Dict[str, Any], db_path: Optional[str] = None) -> 
                 data.get("driver_phone"),
                 data.get("modality") or "truck",
                 data.get("cargo"),
+                data.get("commodity_key"),
+                float(data.get("cargo_tonnage") if data.get("cargo_tonnage") is not None else 10.0),
+                float(data["cargo_value_idr"]) if data.get("cargo_value_idr") is not None else None,
+                data.get("vehicle_golongan") or "GOL_II",
+                float(data.get("gross_weight_ton") if data.get("gross_weight_ton") is not None else 12.0),
+                float(data.get("sla_deadline_hours") if data.get("sla_deadline_hours") is not None else 8.0),
+                1 if data.get("has_bkhit_cert") else 0,
                 data.get("origin"),
                 data.get("destination"),
                 float(data.get("speed_kmh") if data.get("speed_kmh") is not None else 60.0),
@@ -473,6 +536,13 @@ def save_custom_vehicle(data: Dict[str, Any], db_path: Optional[str] = None) -> 
             "driver_phone": data.get("driver_phone"),
             "modality": data.get("modality") or "truck",
             "cargo": data.get("cargo"),
+            "commodity_key": data.get("commodity_key"),
+            "cargo_tonnage": float(data.get("cargo_tonnage") if data.get("cargo_tonnage") is not None else 10.0),
+            "cargo_value_idr": float(data["cargo_value_idr"]) if data.get("cargo_value_idr") is not None else None,
+            "vehicle_golongan": data.get("vehicle_golongan") or "GOL_II",
+            "gross_weight_ton": float(data.get("gross_weight_ton") if data.get("gross_weight_ton") is not None else 12.0),
+            "sla_deadline_hours": float(data.get("sla_deadline_hours") if data.get("sla_deadline_hours") is not None else 8.0),
+            "has_bkhit_cert": bool(data.get("has_bkhit_cert")),
             "origin": data.get("origin"),
             "destination": data.get("destination"),
             "speed_kmh": float(data.get("speed_kmh") if data.get("speed_kmh") is not None else 60.0),
@@ -542,6 +612,13 @@ def list_custom_vehicles(
                 "driver_phone": r["driver_phone"],
                 "modality": r["modality"],
                 "cargo": r["cargo"],
+                "commodity_key": r["commodity_key"] if "commodity_key" in r.keys() else None,
+                "cargo_tonnage": float(r["cargo_tonnage"]) if ("cargo_tonnage" in r.keys() and r["cargo_tonnage"] is not None) else 10.0,
+                "cargo_value_idr": float(r["cargo_value_idr"]) if ("cargo_value_idr" in r.keys() and r["cargo_value_idr"] is not None) else None,
+                "vehicle_golongan": r["vehicle_golongan"] if "vehicle_golongan" in r.keys() else "GOL_II",
+                "gross_weight_ton": float(r["gross_weight_ton"]) if ("gross_weight_ton" in r.keys() and r["gross_weight_ton"] is not None) else 12.0,
+                "sla_deadline_hours": float(r["sla_deadline_hours"]) if ("sla_deadline_hours" in r.keys() and r["sla_deadline_hours"] is not None) else 8.0,
+                "has_bkhit_cert": bool(r["has_bkhit_cert"]) if "has_bkhit_cert" in r.keys() else False,
                 "origin": r["origin"],
                 "destination": r["destination"],
                 "speed_kmh": float(r["speed_kmh"]) if r["speed_kmh"] is not None else 60.0,
@@ -588,6 +665,13 @@ def get_custom_vehicle(vehicle_id: str, db_path: Optional[str] = None) -> Option
             "driver_phone": r["driver_phone"],
             "modality": r["modality"],
             "cargo": r["cargo"],
+            "commodity_key": r["commodity_key"] if "commodity_key" in r.keys() else None,
+            "cargo_tonnage": float(r["cargo_tonnage"]) if ("cargo_tonnage" in r.keys() and r["cargo_tonnage"] is not None) else 10.0,
+            "cargo_value_idr": float(r["cargo_value_idr"]) if ("cargo_value_idr" in r.keys() and r["cargo_value_idr"] is not None) else None,
+            "vehicle_golongan": r["vehicle_golongan"] if "vehicle_golongan" in r.keys() else "GOL_II",
+            "gross_weight_ton": float(r["gross_weight_ton"]) if ("gross_weight_ton" in r.keys() and r["gross_weight_ton"] is not None) else 12.0,
+            "sla_deadline_hours": float(r["sla_deadline_hours"]) if ("sla_deadline_hours" in r.keys() and r["sla_deadline_hours"] is not None) else 8.0,
+            "has_bkhit_cert": bool(r["has_bkhit_cert"]) if "has_bkhit_cert" in r.keys() else False,
             "origin": r["origin"],
             "destination": r["destination"],
             "speed_kmh": float(r["speed_kmh"]) if r["speed_kmh"] is not None else 60.0,
@@ -605,6 +689,87 @@ def get_custom_vehicle(vehicle_id: str, db_path: Optional[str] = None) -> Option
             "created_at": r["created_at"],
             "updated_at": r["updated_at"]
         }
+    finally:
+        conn.close()
+
+
+def save_impact_assessment(data: Dict[str, Any], db_path: Optional[str] = None) -> Dict[str, Any]:
+    """Save a disruption impact assessment trace to SQLite."""
+    conn = get_db_connection(db_path)
+    record_id = data.get("id") or f"IMP-{uuid.uuid4().hex[:10]}"
+    now_iso = datetime.now().isoformat()
+    vehicles_json = json.dumps(data.get("impacted_vehicles") or [])
+
+    try:
+        with conn:
+            conn.execute("""
+                INSERT INTO incident_impact_assessments (
+                    id, incident_id, hazard_type, latitude, longitude,
+                    radius_km, severity, total_fleet_scanned,
+                    impacted_vehicles_count, impacted_vehicles,
+                    evaluated_at, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                record_id,
+                data.get("incident_id") or "INC-DISRUPTION",
+                data.get("hazard_type") or "flood",
+                float(data.get("latitude") or 0.0),
+                float(data.get("longitude") or 0.0),
+                float(data.get("radius_km") or 15.0),
+                data.get("severity") or "critical",
+                int(data.get("total_fleet_scanned") or 0),
+                int(data.get("impacted_vehicles_count") or 0),
+                vehicles_json,
+                data.get("evaluated_at") or now_iso,
+                now_iso
+            ))
+        return {
+            "id": record_id,
+            "incident_id": data.get("incident_id") or "INC-DISRUPTION",
+            "hazard_type": data.get("hazard_type") or "flood",
+            "latitude": float(data.get("latitude") or 0.0),
+            "longitude": float(data.get("longitude") or 0.0),
+            "radius_km": float(data.get("radius_km") or 15.0),
+            "severity": data.get("severity") or "critical",
+            "total_fleet_scanned": int(data.get("total_fleet_scanned") or 0),
+            "impacted_vehicles_count": int(data.get("impacted_vehicles_count") or 0),
+            "impacted_vehicles": data.get("impacted_vehicles") or [],
+            "evaluated_at": data.get("evaluated_at") or now_iso
+        }
+    finally:
+        conn.close()
+
+
+def list_impact_assessments(limit: int = 20, db_path: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Retrieve recent impact assessments."""
+    conn = get_db_connection(db_path)
+    try:
+        cursor = conn.execute("""
+            SELECT * FROM incident_impact_assessments
+            ORDER BY evaluated_at DESC LIMIT ?
+        """, (limit,))
+        rows = cursor.fetchall()
+        results = []
+        for r in rows:
+            try:
+                vehs = json.loads(r["impacted_vehicles"])
+            except Exception:
+                vehs = []
+            results.append({
+                "id": r["id"],
+                "incident_id": r["incident_id"],
+                "hazard_type": r["hazard_type"],
+                "latitude": float(r["latitude"]),
+                "longitude": float(r["longitude"]),
+                "radius_km": float(r["radius_km"]),
+                "severity": r["severity"],
+                "total_fleet_scanned": int(r["total_fleet_scanned"]),
+                "impacted_vehicles_count": int(r["impacted_vehicles_count"]),
+                "impacted_vehicles": vehs,
+                "evaluated_at": r["evaluated_at"],
+                "created_at": r["created_at"]
+            })
+        return results
     finally:
         conn.close()
 

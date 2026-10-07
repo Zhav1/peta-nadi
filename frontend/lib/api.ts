@@ -52,6 +52,11 @@ export const api = {
     historical: () => request<{ items: Record<string, unknown>[]; total: number }>('/api/v1/incidents/historical/episodes'),
     predictive: () => request<{ items: Record<string, unknown>[]; total: number }>('/api/v1/incidents/predictive/risks'),
     osint: () => request<{ items: Record<string, unknown>[]; total: number }>('/api/v1/incidents/osint/feed'),
+    assessImpact: (body: import('./types').DisruptionImpactRequest) =>
+      request<import('./types').DisruptionImpactResponse>('/api/v1/incidents/impact-assessment', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
   },
 
 

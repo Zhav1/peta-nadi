@@ -399,6 +399,19 @@ export interface FleetVehicle {
   telemetry_source?: string;
   heading_deg?: number;
   last_ping_seconds_ago?: number;
+  // Shipment & Compliance Context
+  commodity_key?: string;
+  cargo_tonnage?: number;
+  cargo_value_idr?: number;
+  vehicle_golongan?: string;
+  gross_weight_ton?: number;
+  sla_deadline_hours?: number;
+  deadline_buffer_hours?: number;
+  has_bkhit_cert?: boolean;
+  bkhit_cert_id?: string;
+  driver_phone?: string;
+  driver_name?: string;
+  license_plate?: string;
 }
 
 // Phase 40: Dedicated Evaluation & Benchmark Dashboard Types
@@ -688,6 +701,69 @@ export interface ComplianceVerifyResponse {
   requires_override: boolean;
   checks: ComplianceCheckDetail[];
   timestamp: string;
+}
+
+// Disruption Impact Assessment & Decision Engine Types
+export interface DisruptionImpactRequest {
+  incident_id: string;
+  lat: number;
+  lon: number;
+  radius_km?: number;
+  expected_delay_hours?: number;
+  hazard_type?: string;
+  road_class_blockade?: string[];
+}
+
+export interface ImpactedVehicleAssessment {
+  vehicle_id: string;
+  name: string;
+  commodity_key: string;
+  cargo_tonnage: number;
+  cargo_value_idr: number;
+  distance_to_incident_km: number;
+  is_direct_intersection: boolean;
+  driver_name: string;
+  driver_phone: string;
+  license_plate: string;
+  origin: string;
+  destination: string;
+  current_location: [number, number];
+  sla_deadline_hours: number;
+  baseline_spoilage_prob: number;
+  delayed_spoilage_prob: number;
+  at_risk_spoilage_idr: number;
+  spoilage_recommendation: {
+    recommended_policy: "CONTINUE" | "REROUTE" | "HOLD";
+    expected_savings_idr: number;
+    explanation: string;
+  };
+  compliance_check: {
+    is_compliant: boolean;
+    quarantine_clear: boolean;
+    mst_clear: boolean;
+    issues: string[];
+  };
+  detour_route?: {
+    distance_km: number;
+    eta_hours: number;
+    toll_cost_idr: number;
+    fuel_cost_idr: number;
+    total_cost_idr: number;
+    waypoints: string[];
+    geometry_geojson?: Record<string, unknown>;
+  } | null;
+  recommended_action: "REROUTE_IMMEDIATE" | "PROCEED_WITH_CAUTION" | "HOLD_AT_SAFE_POINT";
+  justification: string;
+}
+
+export interface DisruptionImpactResponse {
+  incident_id: string;
+  timestamp: string;
+  total_fleet_scanned: number;
+  impacted_vehicles_count: number;
+  total_value_at_risk_idr: number;
+  critical_spoilage_count: number;
+  impacted_assessments: ImpactedVehicleAssessment[];
 }
 
 
