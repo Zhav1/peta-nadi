@@ -311,11 +311,17 @@ export function FleetVehicleLayer({
     };
 
     const onMouseEnter = () => {
-      map.getCanvas().style.cursor = 'pointer';
+      try {
+        const canvas = map?.getCanvas();
+        if (canvas?.style) canvas.style.cursor = 'pointer';
+      } catch {}
     };
 
     const onMouseLeave = () => {
-      map.getCanvas().style.cursor = '';
+      try {
+        const canvas = map?.getCanvas();
+        if (canvas?.style) canvas.style.cursor = '';
+      } catch {}
     };
 
     map.on('click', 'fleet-telemetry-points-layer', onLayerClick);
@@ -323,10 +329,13 @@ export function FleetVehicleLayer({
     map.on('mouseleave', 'fleet-telemetry-points-layer', onMouseLeave);
 
     return () => {
-      map.off('click', 'fleet-telemetry-points-layer', onLayerClick);
-      map.off('mouseenter', 'fleet-telemetry-points-layer', onMouseEnter);
-      map.off('mouseleave', 'fleet-telemetry-points-layer', onMouseLeave);
-      map.getCanvas().style.cursor = '';
+      try {
+        map.off('click', 'fleet-telemetry-points-layer', onLayerClick);
+        map.off('mouseenter', 'fleet-telemetry-points-layer', onMouseEnter);
+        map.off('mouseleave', 'fleet-telemetry-points-layer', onMouseLeave);
+        const canvas = map?.getCanvas();
+        if (canvas?.style) canvas.style.cursor = '';
+      } catch {}
     };
   }, [map, vehicles]);
 

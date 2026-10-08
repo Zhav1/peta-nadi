@@ -3,6 +3,8 @@
 @tailwind utilities;
 
 :root {
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-headline: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --color-bg: #080d14;
   --color-surface: #0c1017;
   --color-border: rgba(255, 255, 255, 0.08);

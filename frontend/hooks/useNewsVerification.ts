@@ -60,7 +60,7 @@ const MOCK_NEWS_FALLBACK: NewsItem[] = [
     confidence_score: 0.96,
     commodity_name: 'Beras BULOG & Minyak Goreng',
     economic_note: 'Rute Pengalihan: Jalur Tol MKTT (+14 km, estimasi delay 45 menit).',
-    link: 'https://sumut.antaranews.com/berita/495201/banjir-luapan-sungai-padang-rendam-jalur-logistik-tebing-tinggi-km-78'
+    link: 'https://news.google.com/search?q=Banjir+Luapan+Sungai+Padang+Tebing+Tinggi+KM+78+ANTARA&hl=id-ID&gl=ID&ceid=ID:id'
   },
   {
     id: 'NEWS-002',
@@ -81,7 +81,7 @@ const MOCK_NEWS_FALLBACK: NewsItem[] = [
     verification_status: 'CORROBORATED_OFFICIAL',
     confidence_score: 0.94,
     commodity_name: 'Beras & Gula Pasir',
-    link: 'https://sumut.antaranews.com/berita/495112/peringatan-dini-bmkg-gelombang-tinggi-dan-angin-kencang-selat-malaka'
+    link: 'https://news.google.com/search?q=Peringatan+Dini+BMKG+Gelombang+Tinggi+Selat+Malaka&hl=id-ID&gl=ID&ceid=ID:id'
   },
   {
     id: 'NEWS-003',
@@ -102,7 +102,7 @@ const MOCK_NEWS_FALLBACK: NewsItem[] = [
     verification_status: 'CORROBORATED_OFFICIAL',
     confidence_score: 0.92,
     commodity_name: 'Cabai Merah & Sayur Agam',
-    link: 'https://sumbar.antaranews.com/berita/494883/tebing-sitinjau-lauik-longsor-jalur-distribusi-padang-solok-terputus'
+    link: 'https://news.google.com/search?q=Tebing+Sitinjau+Lauik+Longsor+Padang+Solok+ANTARA&hl=id-ID&gl=ID&ceid=ID:id'
   },
   {
     id: 'NEWS-004',
@@ -147,13 +147,17 @@ export function useNewsVerification() {
           if (rawArticles && rawArticles.length > 0) {
             const mapped: NewsItem[] = rawArticles.map((a: any) => {
               const src = a.source || 'ANTARA';
-              const isOfficial = a.source_tier === 'TIER_1_OFFICIAL' || /antara|bmkg|bnpb|kemenhub|bulog/i.test(src);
-              const isWeather = /bmkg|cuaca|gelombang/i.test(src) || a.incident_type === 'marine_wave';
-              const isMarket = /pihps|bi\.go\.id|harga|bank indonesia/i.test(src) || a.incident_type === 'price_shock';
+              const isWeather = /bmkg|cuaca|gelombang|hujan|angin/i.test(src) || a.incident_type === 'marine_wave' || /cuaca|gelombang/i.test(a.title || a.headline || '');
+              const isMarket = /pihps|bi\.go\.id|harga|bank indonesia|pasar/i.test(src) || a.incident_type === 'price_shock' || /harga|pangan/i.test(a.title || a.headline || '');
+              const isOfficial = !isWeather && !isMarket && (a.source_tier === 'TIER_1_OFFICIAL' || /antara|bnpb|kemenhub|bulog/i.test(src));
+
+              const fallbackSearchUrl = `https://news.google.com/search?q=${encodeURIComponent((a.title || a.headline || 'berita logistik') + ' ' + src)}&hl=id-ID&gl=ID&ceid=ID:id`;
+              const isDeadMockUrl = !a.link || (typeof a.link === 'string' && a.link.includes('/berita/49')) || !a.link.startsWith('http');
+              const cleanLink = isDeadMockUrl ? fallbackSearchUrl : a.link;
 
               return {
                 id: a.id || `NEWS-${Math.random().toString(36).substr(2, 6)}`,
-                source_type: isOfficial ? 'OFFICIAL_NEWS' : isWeather ? 'BMKG_WEATHER' : isMarket ? 'PIHPS_MARKET' : 'MEDSOS_OSINT',
+                source_type: isWeather ? 'BMKG_WEATHER' : isMarket ? 'PIHPS_MARKET' : isOfficial ? 'OFFICIAL_NEWS' : 'MEDSOS_OSINT',
                 source_tier: a.source_tier || (isOfficial ? 'TIER_1_OFFICIAL' : 'TIER_2_AUTHORITATIVE_PRESS'),
                 source_name: src,
                 headline: a.title || a.headline || 'Laporan Lapangan',
@@ -170,7 +174,7 @@ export function useNewsVerification() {
                 verification_status: isOfficial ? 'CORROBORATED_OFFICIAL' : 'UNVERIFIED_GRASSROOTS',
                 confidence_score: Number(a.confidence_score || a.relevance_score || 0.90),
                 commodity_name: Array.isArray(a.commodities_affected) ? a.commodities_affected.join(', ') : a.commodities_affected || 'Komoditas Pokok',
-                link: a.link || ''
+                link: cleanLink
               };
             });
             setNewsFeed(mapped);

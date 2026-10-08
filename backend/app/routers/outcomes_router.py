@@ -116,16 +116,28 @@ async def list_outcomes(
                     except Exception:
                         pass
 
+                v_source = VerificationSource.FIELD_REPORT
+                try:
+                    v_source = VerificationSource(item.get("verification_source", "FIELD_REPORT"))
+                except (ValueError, KeyError):
+                    pass
+
+                v_horizon = OutcomeHorizon.T_12H
+                try:
+                    v_horizon = OutcomeHorizon(item.get("horizon", "T+12h"))
+                except (ValueError, KeyError):
+                    pass
+
                 responses.append(
                     OutcomeResponse(
                         id=str(item.get("id")),
                         incident_id=item.get("incident_id", "INC-DEFAULT"),
-                        horizon=OutcomeHorizon(item.get("horizon", "T+12h")),
+                        horizon=v_horizon,
                         actual_clearance_time=clearance_dt,
                         observed_delay_hours=float(item.get("observed_delay_hours", 0.0)),
                         actual_price_spike_pct=float(item.get("actual_price_spike_pct", 0.0)),
                         verified_by=item.get("verified_by", "anonymous"),
-                        verification_source=VerificationSource(item.get("verification_source", "FIELD_REPORT")),
+                        verification_source=v_source,
                         notes=item.get("notes"),
                         sync_status="synced",
                         created_at=created_dt
@@ -152,16 +164,28 @@ async def list_outcomes(
             except Exception:
                 pass
 
+        v_source = VerificationSource.FIELD_REPORT
+        try:
+            v_source = VerificationSource(item.get("verification_source", "FIELD_REPORT"))
+        except (ValueError, KeyError):
+            pass
+
+        v_horizon = OutcomeHorizon.T_12H
+        try:
+            v_horizon = OutcomeHorizon(item.get("horizon", "T+12h"))
+        except (ValueError, KeyError):
+            pass
+
         responses.append(
             OutcomeResponse(
                 id=item["id"],
                 incident_id=item["incident_id"],
-                horizon=OutcomeHorizon(item["horizon"]),
+                horizon=v_horizon,
                 actual_clearance_time=clearance_dt,
-                observed_delay_hours=item["observed_delay_hours"],
-                actual_price_spike_pct=item["actual_price_spike_pct"],
-                verified_by=item["verified_by"],
-                verification_source=VerificationSource(item["verification_source"]),
+                observed_delay_hours=float(item.get("observed_delay_hours", 0.0)),
+                actual_price_spike_pct=float(item.get("actual_price_spike_pct", 0.0)),
+                verified_by=item.get("verified_by", "operator-1"),
+                verification_source=v_source,
                 notes=item.get("notes"),
                 sync_status=item.get("sync_status", "pending"),
                 created_at=created_dt

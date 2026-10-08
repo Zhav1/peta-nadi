@@ -59,16 +59,17 @@ export const IntermodalTerminalPopover: React.FC = () => {
   return (
     <div ref={popoverRef} className="relative">
       <button
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className={`cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-colors duration-150 ${
+        className={`cursor-pointer flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs transition-colors duration-150 shrink-0 ${
           isOpen
             ? 'bg-white border-white text-[#080d14] font-semibold'
             : 'bg-[#0c1017] border-[#1c2432] text-slate-300 hover:text-white hover:border-slate-500'
         }`}
-        title="Pan-Sumatra Intermodal Sea-Land Gateways & Mountain Passes"
+        title={`Pan-Sumatra Intermodal: ${totalCount} Hub (${congestedCount + restrictedCount} Padat/Terbatas)`}
       >
         <Ship className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-        <span className="font-mono text-xs tabular-nums">Intermodal: {totalCount} Hub ({congestedCount + restrictedCount} Padat)</span>
+        <span className="font-mono text-xs tabular-nums">Intermodal: {totalCount} Hub</span>
         <ChevronDown className="w-3 h-3 opacity-60 ml-0.5" />
       </button>
 

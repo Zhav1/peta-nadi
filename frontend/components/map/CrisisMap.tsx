@@ -47,6 +47,7 @@ export interface CrisisMapProps {
   predictiveRisks?: Record<string, unknown>[];
   fleetModalityFilter?: 'all' | 'truck' | 'maritime' | 'air';
   simSpeed?: number;
+  isRightSidebarOpen?: boolean;
 }
 
 const INITIAL_CENTER: [number, number] = [100.5, 0.5];
@@ -108,6 +109,7 @@ export default function CrisisMap({
   predictiveRisks = [],
   fleetModalityFilter = 'all',
   simSpeed = 1,
+  isRightSidebarOpen = false,
 }: CrisisMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   void isLeftSidebarCollapsed;
@@ -963,7 +965,9 @@ export default function CrisisMap({
       )}
 
       {/* Floating Map Layer Filters Control */}
-      <div className="absolute top-4 right-44 z-30 pointer-events-auto">
+      <div className={`absolute top-3.5 z-30 pointer-events-auto transition-all duration-300 ${
+        isRightSidebarOpen ? 'right-[560px]' : 'right-[156px]'
+      }`}>
         <button
           type="button"
           onClick={() => setShowLayerFilterMenu((v) => !v)}

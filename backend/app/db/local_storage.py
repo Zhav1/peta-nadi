@@ -384,7 +384,7 @@ def list_outcomes(
                 params.append(horizon)
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
-        query += " ORDER BY created_at DESC LIMIT ?"
+        query += " ORDER BY rowid DESC, created_at DESC LIMIT ?"
         params.append(limit)
 
         cursor = conn.execute(query, tuple(params))

@@ -20,10 +20,10 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
   const tomtomIndex = corridorContext?.traffic?.congestion_level_pct ?? 62.5;
 
   return (
-    <div className="relative flex items-center gap-2 text-xs font-mono select-none">
+    <div className="relative flex items-center gap-1.5 text-xs font-mono select-none">
       {/* 1. Routing Compute Latency */}
       <div
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-[#0c1017] border-white/10 text-emerald-400"
+        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border bg-[#0c1017] border-white/10 text-emerald-400 shrink-0"
         title="Latensi solver optimasi rute mitigasi"
       >
         <Zap className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
@@ -32,20 +32,20 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
 
       {/* 2. TomTom Traffic Delay */}
       <div
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-[#0c1017] border-white/10 text-amber-400"
-        title="Pantauan keterlambatan lalu lintas arteri TomTom"
+        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border bg-[#0c1017] border-white/10 text-amber-400 shrink-0"
+        title={`Pantauan keterlambatan arteri TomTom: +${tomtomDelayMin}m (${tomtomIndex}%)`}
       >
         <Truck className="w-3.5 h-3.5 text-amber-400 shrink-0" />
         {isLoading && !corridorContext ? (
           <span>LALULINTAS: ...</span>
         ) : (
-          <span>LALULINTAS: +{tomtomDelayMin}m ({tomtomIndex}%)</span>
+          <span>LALULINTAS: +{tomtomDelayMin}m</span>
         )}
       </div>
 
       {/* 3. BMKG Rainfall */}
       <div
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-[#0c1017] border-white/10 text-sky-400"
+        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border bg-[#0c1017] border-white/10 text-sky-400 shrink-0"
         title="Intensitas curah hujan stasiun BMKG terdekat"
       >
         <CloudRain className="w-3.5 h-3.5 text-sky-400 shrink-0" />

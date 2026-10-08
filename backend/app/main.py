@@ -18,7 +18,7 @@ if backend_dir not in sys.path:
 if root_dir not in sys.path:
     sys.path.insert(0, root_dir)
 
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
@@ -187,10 +187,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS — allow Next.js frontend
+# CORS — allow Next.js frontend on localhost and 127.0.0.1
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -213,4 +214,30 @@ app.include_router(evaluation_router.router, prefix="/api/v1")
 app.include_router(auth_router.router, prefix="/api/v1")
 app.include_router(fleet_ingest_router.router, prefix="/api/v1")
 app.include_router(intermodal_router.router, prefix="/api/v1")
+
+
+@app.websocket("/ws/crisis/{crisis_id}")
+async def websocket_crisis_endpoint(websocket: WebSocket, crisis_id: str):
+    """Real-time WebSocket endpoint for crisis streaming telemetry and agent events."""
+    await websocket.accept()
+    logger.info(f"WebSocket client connected for crisis: {crisis_id}")
+    try:
+        await websocket.send_json({
+            "event": "connected",
+            "data": {
+                "crisis_id": crisis_id,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "status": "active"
+            }
+        })
+        while True:
+            # Keep connection open, receive client heartbeat or commands
+            data = await websocket.receive_text()
+            if data == "ping":
+                await websocket.send_text("pong")
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket client disconnected for crisis: {crisis_id}")
+    except Exception as e:
+        logger.warning(f"WebSocket error for crisis {crisis_id}: {e}")
+
 

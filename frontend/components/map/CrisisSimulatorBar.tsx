@@ -128,7 +128,7 @@ export function CrisisSimulatorBar({
       className={`absolute bottom-16 sm:bottom-20 z-40 flex flex-col items-center gap-2 pointer-events-auto select-none transition-all duration-300 left-1/2 -translate-x-1/2 max-w-[95vw] ${positionClass}`}
     >
       {/* Floating Action Bubble Pills Row */}
-      <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#0c1017] border border-[#1c2432] shadow-xl max-w-full overflow-x-auto no-scrollbar">
+      <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#0c1017] border border-[#1c2432] shadow-xl max-w-full overflow-visible">
         
         {/* 1. Modality Bubble Pill */}
         {setSelectedModality && (

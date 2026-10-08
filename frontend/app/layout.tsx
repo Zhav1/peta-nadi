@@ -1,19 +1,6 @@
 import type { Metadata } from 'next';
-import { Inter, Space_Grotesk } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '@/lib/authContext';
-
-const inter = Inter({
-  subsets: ['latin'],
-  variable: '--font-sans',
-  display: 'swap',
-});
-
-const spaceGrotesk = Space_Grotesk({
-  subsets: ['latin'],
-  variable: '--font-headline',
-  display: 'swap',
-});
 
 export const metadata: Metadata = {
   title: 'PreHub — Sistem Peringatan Dini & Rekomendasi Mitigasi Gangguan Distribusi Pangan',
@@ -30,7 +17,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="id" className={`dark scroll-smooth ${inter.variable} ${spaceGrotesk.variable}`}>
+    <html lang="id" className="dark scroll-smooth">
       <head>
         <link rel="icon" href="/logo_prehub.png" type="image/png" />
       </head>

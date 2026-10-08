@@ -79,3 +79,10 @@ docs/references/
 .agents
 
 design-system
+
+repo
+
+# E2E Test runner and artifacts
+tests/e2e-runner/
+.e2e-artifacts/
+e2e/
