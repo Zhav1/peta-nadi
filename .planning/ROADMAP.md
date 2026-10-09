@@ -1224,11 +1224,47 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 
 ---
 
+## Phase 52: Dynamic Pan-Sumatra News Aggregator & Supabase-Native HITL Decision Pipeline
+**Requirements Covered:** NEWS-52.1, GEO-52.1, SUPA-52.1, HITL-52.1, MOCK-FREE-52.1
+**Goal:** Transform news intelligence and fleet alerts from static North Sumatra mocks into an end-to-end dynamic Pan-Sumatra spatial intelligence engine backed natively by Supabase (PostgreSQL 17 + PostGIS + Realtime), with automated incident synthesis and a Globot-style Human-in-the-Loop decision review drawer.
+**Status:** COMPLETE ✅
+**Plans:** 52-PLAN.md, 52-WALKTHROUGH.md, 52-ENVIRONMENT-FIXES-AND-PITFALLS.md, 52-LEARNINGS.md
+
+### Deliverables
+- **Supabase Cloud Backbone & Realtime**:
+  - `008_news_articles_and_realtime.sql`: DDL for `public.news_articles` with PostGIS `GEOGRAPHY(Point, 4326)` and GiST indexes.
+  - Enabled Supabase Realtime publication on `news_articles`, `incidents`, and `route_approvals`.
+- **Pan-Sumatra Spatial Intelligence**:
+  - `gazetteer_data.py`: Comprehensive logistics dictionary covering 10 provinces, 154 regencies/cities, passes, ports, and corridors.
+  - `geocoding_service.py`: 3-tier resolver (Gazetteer $\to$ Redis $\to$ Sumatra-bounded Nominatim).
+  - `news_extractor.py`: Attached true coordinates and PostGIS WKT points to articles.
+- **Dynamic Ingestion & Incident Synthesis**:
+  - `news_aggregator.py`: Live scraping across 10 LKBN Antara bureaus + Google News targeted queries.
+  - `unified_news_ingestor.py`: Ingestion orchestrator that detects road closures, synthesizes physical incidents in `public.incidents`, and triggers `ImpactAssessmentService`.
+- **Globot-Style Human-in-the-Loop Interface**:
+  - `HitlDecisionDrawer.tsx`: Ground truth news citations, cargo spoilage vs detour cost matrix, and action buttons (`[SETUJUI DETOUR]`, `[TAHAN BUFFER]`, `[TETAP RUTE AWAL]`).
+  - `TopNavTelemetry.tsx` & `DashboardClient.tsx`: Real-time HUD button with pulsing pending item counter badge.
+  - `news_router.py`: REST endpoints `GET /api/v1/news/hitl-pending` and `POST /api/v1/news/hitl-action`.
+- **Complete Static Mock Removal**:
+  - Removed `MOCK_NEWS_FALLBACK` from `useNewsVerification.ts`.
+  - Removed `FALLBACK_STANDARDIZED_ARTICLES` from `news_router.py`.
+  - Removed `MOCK_SOCIAL_POSTS` from `social_scraper.py`.
+  - Removed synthetic `random.seed()` prices from `commodity_router.py`.
+
+### Verification Criteria
+- [x] Pytest suite passes cleanly: `pytest backend/tests/test_news_pipeline.py` (5/5 tests passing).
+- [x] TypeScript compiler passes with 0 errors (`npx tsc --noEmit`).
+- [x] Supabase project `ulpmmacsdkohwkmyhlwj` live verification: 30+ dynamic Sumatra news records upserted with PostGIS coordinates, incidents synced, and approval records committed.
+- [x] Next.js 100% zoom layout verified: clearance $\ge 96.4\text{px}$ between top telemetry HUD and right map controls.
+
+---
+
 ## Backlog (Post-Hackathon / v2)
 - Driver mobile app (React Native + WatermelonDB + CRDT offline sync)
 - Enterprise GraphRAG private self-hosted deployment
 - Automated CI/CD pipeline with staging $\to$ production promotion
 - Multi-province rollout (Java corridor & Eastern Indonesia)
+
 
 
 
