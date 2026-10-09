@@ -1,9 +1,9 @@
 """
-PreHub — Unified Multi-Outlet News & Official Agency Ingestion Service
-Aggregates live news and bulletins from:
-1. Tier 1 (Official & Government Agencies): LKBN ANTARA Sumut, LKBN ANTARA Ekonomi, BMKG, BNPB
+PreHub — Unified Multi-Outlet News & Official Agency Ingestion Service (Supabase-Native)
+Aggregates live news and bulletins across all 10 provinces of Sumatra:
+1. Tier 1 (Official & Government Agencies): LKBN ANTARA (10 Sumatra Bureaus), BMKG, BNPB
 2. Tier 2 (Authoritative Regional & National Press): Targeted queries for DetikSumut, Tribun Medan, Kompas, CNBC
-3. Public News APIs (Optional NewsAPI.org / GNews.io when configured)
+3. Direct Persistence: Upserts structured news with PostGIS points directly into Supabase public.news_articles
 """
 import logging
 import asyncio
@@ -16,7 +16,6 @@ from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-# Direct Official RSS Feeds (Tier 1 Authority)
 # Direct Official RSS Feeds (Tier 1 Authority Across Pan-Sumatra Bureaus)
 OFFICIAL_RSS_FEEDS = [
     {
@@ -76,6 +75,13 @@ OFFICIAL_RSS_FEEDS = [
         "province": "Bengkulu"
     },
     {
+        "source": "LKBN ANTARA Babel",
+        "url": "https://babel.antaranews.com/rss/terkini.xml",
+        "tier": "TIER_1_OFFICIAL",
+        "category": "REGIONAL_DISASTER",
+        "province": "Bangka Belitung"
+    },
+    {
         "source": "LKBN ANTARA Ekonomi",
         "url": "https://www.antaranews.com/rss/ekonomi.xml",
         "tier": "TIER_1_OFFICIAL",
@@ -107,9 +113,10 @@ TARGETED_PRESS_QUERIES = [
     "(site:antaranews.com OR site:kompas.com) (jalan lintas timur OR jalintim OR jalinbar OR jembatan putus OR amblas) (Palembang OR Jambi OR Lampung)"
 ]
 
-FALLBACK_STANDARDIZED_ARTICLES = [
+# Dedicated test fixtures reserved strictly for synthetic offline unit tests / demo runner
+DEMO_STANDARDIZED_SCENARIOS = [
     {
-        "id": "NEWS-001",
+        "id": "NEWS-DEMO-01",
         "title": "Banjir Luapan Sungai Padang Rendam Jalur Logistik Tebing Tinggi KM 78",
         "link": "https://news.google.com/search?q=Banjir+Luapan+Sungai+Padang+Tebing+Tinggi+KM+78+ANTARA&hl=id-ID&gl=ID&ceid=ID:id",
         "source": "LKBN ANTARA Sumut",
@@ -117,6 +124,9 @@ FALLBACK_STANDARDIZED_ARTICLES = [
         "pubDate": "15m lalu",
         "summary": "Debit air meningkat 120cm menutup badan jalan arteri Jalinsum KM 78. Akses truk sembako dialihkan via Tol Medan-Kualanamu-Tebing Tinggi.",
         "region": "Sumatera Utara",
+        "province": "Sumatera Utara",
+        "latitude": 3.3285,
+        "longitude": 99.1625,
         "category": "DISASTER_LOGISTICS",
         "corridor_nodes": ["Medan", "Tebing Tinggi", "Belawan"],
         "corridor_segment": "Jalinsum KM 78",
@@ -129,34 +139,17 @@ FALLBACK_STANDARDIZED_ARTICLES = [
         "confidence_score": 0.96
     },
     {
-        "id": "NEWS-002",
-        "title": "Peringatan Dini BMKG: Gelombang 2.5m dan Angin Kencang Selat Malaka",
-        "link": "https://news.google.com/search?q=Peringatan+Dini+BMKG+Gelombang+Tinggi+Selat+Malaka&hl=id-ID&gl=ID&ceid=ID:id",
-        "source": "BMKG Maritim Belawan",
-        "source_tier": "TIER_1_OFFICIAL",
-        "pubDate": "45m lalu",
-        "summary": "Tinggi gelombang diprediksi mencapai 2.5–3.0 meter dalam 24 jam ke depan. Armada kargo Tol Laut diimbau menunda keberangkatan.",
-        "region": "Selat Malaka",
-        "category": "METEOROLOGY",
-        "corridor_nodes": ["Belawan", "Dumai"],
-        "corridor_segment": "Jalur Laut Selat Malaka",
-        "incident_type": "marine_wave",
-        "severity": "high",
-        "temporal_phase": "forecast_early_warning",
-        "lead_time_hours": 6.0,
-        "commodities_affected": ["Beras Impor", "Gula Pasir"],
-        "ground_truth_metrics": {"wave_height_m": 2.8, "port_clearance": "RESTRICTED"},
-        "confidence_score": 0.94
-    },
-    {
-        "id": "NEWS-003",
+        "id": "NEWS-DEMO-02",
         "title": "Tebing Sitinjau Lauik Longsor, Jalur Distribusi Padang-Solok Terputus",
         "link": "https://news.google.com/search?q=Tebing+Sitinjau+Lauik+Longsor+Padang+Solok+ANTARA&hl=id-ID&gl=ID&ceid=ID:id",
-        "source": "LKBN ANTARA",
+        "source": "LKBN ANTARA Sumbar",
         "source_tier": "TIER_1_OFFICIAL",
         "pubDate": "1j lalu",
         "summary": "Material longsor menutupi badan jalan nasional. Truk pasokan hortikultura dan cabai dialihkan via jalur alternatif Malalak.",
         "region": "Sumatera Barat",
+        "province": "Sumatera Barat",
+        "latitude": -0.9525,
+        "longitude": 100.5183,
         "category": "DISASTER_LOGISTICS",
         "corridor_nodes": ["Padang", "Solok", "Bukittinggi"],
         "corridor_segment": "Sitinjau Lauik KM 22",
@@ -167,26 +160,6 @@ FALLBACK_STANDARDIZED_ARTICLES = [
         "commodities_affected": ["Cabai Merah", "Sayuran Segar"],
         "ground_truth_metrics": {"debris_length_m": 45, "lane_status": "BLOCKED"},
         "confidence_score": 0.92
-    },
-    {
-        "id": "NEWS-004",
-        "title": "BULOG Sumut Terima 4.400 Ton Beras Perkuat Cadangan Pangan",
-        "link": "https://news.google.com/search?q=BULOG+Sumut+Terima+Beras+Perkuat+Cadangan+Pangan+ANTARA&hl=id-ID&gl=ID&ceid=ID:id",
-        "source": "LKBN ANTARA Sumut",
-        "source_tier": "TIER_1_OFFICIAL",
-        "pubDate": "2j lalu",
-        "summary": "Perum BULOG Kanwil Sumut mengoptimalkan stok cadangan pangan di buffer gudang Medan dan Pematang Siantar untuk antisipasi gangguan cuaca.",
-        "region": "Sumatera Utara",
-        "category": "SUPPLY_BUFFER",
-        "corridor_nodes": ["Medan", "Belawan", "Pematang Siantar"],
-        "corridor_segment": "Gudang Buffer Bulog",
-        "incident_type": "supply_buffer",
-        "severity": "low",
-        "temporal_phase": "forecast_early_warning",
-        "lead_time_hours": 12.0,
-        "commodities_affected": ["Beras BULOG"],
-        "ground_truth_metrics": {"buffer_tonnage": 4400, "status": "AVAILABLE"},
-        "confidence_score": 0.95
     }
 ]
 
@@ -203,7 +176,7 @@ async def fetch_rss_feed_items(feed_config: Dict[str, Any], timeout: float = 6.0
             resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0 (PreHub Logistics Bot 2.0)"})
             if resp.status_code == 200:
                 root = ET.fromstring(resp.text)
-                for item in root.findall(".//item")[:8]:
+                for item in root.findall(".//item")[:10]:
                     title = item.findtext("title", "").strip()
                     link = item.findtext("link", "").strip()
                     pub_date = item.findtext("pubDate", "").strip()
@@ -237,7 +210,7 @@ async def fetch_google_news_targeted(query: str, timeout: float = 6.0) -> List[D
             resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0 (PreHub Logistics Bot 2.0)"})
             if resp.status_code == 200:
                 root = ET.fromstring(resp.text)
-                for item in root.findall(".//item")[:6]:
+                for item in root.findall(".//item")[:8]:
                     title = item.findtext("title", "").strip()
                     link = item.findtext("link", "").strip()
                     pub_date = item.findtext("pubDate", "").strip()
@@ -266,8 +239,8 @@ async def fetch_google_news_targeted(query: str, timeout: float = 6.0) -> List[D
 
 async def fetch_all_multi_outlet_news() -> List[Dict[str, Any]]:
     """
-    Aggregates all incoming raw news items from direct official RSS feeds
-    and targeted regional press queries concurrently.
+    Aggregates all incoming raw news items dynamically from direct official RSS feeds
+    and targeted regional press queries concurrently across all 10 Sumatra bureaus.
     """
     tasks = []
     
@@ -295,4 +268,96 @@ async def fetch_all_multi_outlet_news() -> List[Dict[str, Any]]:
             seen_titles.add(t)
             unique_articles.append(art)
             
+    logger.info(f"Dynamically fetched {len(unique_articles)} unique news articles from Pan-Sumatra feeds.")
     return unique_articles
+
+
+async def upsert_articles_to_supabase(articles: List[Dict[str, Any]]) -> int:
+    """
+    Persists structured articles with PostGIS coordinates directly into Supabase public.news_articles.
+    Uses link as unique constraint to avoid duplicate entries.
+    """
+    if not articles:
+        return 0
+
+    try:
+        from app.db.supabase_client import get_service_client
+        sb = get_service_client()
+    except Exception as e:
+        logger.warning(f"Supabase client unavailable for news upsert: {e}")
+        return 0
+
+    upsert_count = 0
+    records = []
+    
+    for a in articles:
+        link = a.get("link")
+        if not link:
+            continue
+
+        lat = a.get("latitude")
+        lon = a.get("longitude")
+        
+        # PostGIS geography format for Supabase REST is WKT string e.g. "SRID=4326;POINT(lon lat)"
+        postgis_loc = f"SRID=4326;POINT({lon} {lat})" if (lat is not None and lon is not None) else None
+
+        record = {
+            "id": a.get("id"),
+            "title": a.get("title"),
+            "link": link,
+            "source": a.get("source", "Media"),
+            "source_tier": a.get("source_tier", "TIER_2_AUTHORITATIVE_PRESS"),
+            "category": a.get("category", "GENERAL_LOGISTICS"),
+            "province": a.get("province") or a.get("region") or "Sumatera",
+            "location": postgis_loc,
+            "latitude": lat,
+            "longitude": lon,
+            "corridor_segment": a.get("corridor_segment"),
+            "corridor_nodes": a.get("corridor_nodes") or [],
+            "incident_type": a.get("incident_type", "logistics_news"),
+            "severity": a.get("severity", "low"),
+            "temporal_phase": a.get("temporal_phase", "active_disruption"),
+            "lead_time_hours": float(a.get("lead_time_hours") or 0.0),
+            "commodities_affected": a.get("commodities_affected") or [],
+            "ground_truth_metrics": a.get("ground_truth_metrics") or {},
+            "confidence_score": float(a.get("confidence_score") or 0.85),
+            "raw_description": a.get("raw_description") or a.get("summary"),
+            "summary": a.get("summary") or a.get("title"),
+            "published_at": datetime.now(timezone.utc).isoformat()
+        }
+        records.append(record)
+
+    # Batch upsert in chunks of 50
+    chunk_size = 50
+    for i in range(0, len(records), chunk_size):
+        chunk = records[i:i + chunk_size]
+        try:
+            res = sb.table("news_articles").upsert(chunk, on_conflict="link").execute()
+            if res.data:
+                upsert_count += len(res.data)
+        except Exception as ue:
+            logger.error(f"Error upserting news chunk to Supabase: {ue}")
+
+    logger.info(f"Successfully upserted {upsert_count} articles to Supabase public.news_articles")
+    return upsert_count
+
+
+async def fetch_news_from_supabase(limit: int = 50, province: Optional[str] = None, severity: Optional[str] = None) -> List[Dict[str, Any]]:
+    """
+    Retrieves dynamic verified news articles from Supabase public.news_articles.
+    """
+    try:
+        from app.db.supabase_client import get_client
+        sb = get_client()
+        query = sb.table("news_articles").select("*").order("created_at", desc=True).limit(limit)
+        
+        if province:
+            query = query.eq("province", province)
+        if severity:
+            query = query.eq("severity", severity)
+            
+        res = query.execute()
+        return res.data or []
+    except Exception as e:
+        logger.warning(f"Error fetching news articles from Supabase: {e}")
+        return []

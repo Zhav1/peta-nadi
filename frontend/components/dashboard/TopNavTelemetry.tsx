@@ -8,12 +8,16 @@ interface TopNavTelemetryProps {
   cuOptInfo?: { solver: string; compute_time_ms: number; savings_pct: number } | null;
   corridorContext?: import('@/lib/types').CorridorContext | null;
   isLoading?: boolean;
+  onOpenHitl?: () => void;
+  pendingHitlCount?: number;
 }
 
 export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
   cuOptInfo = { solver: 'NetworkX Graph Matrix', compute_time_ms: 3.2, savings_pct: 18.5 },
   corridorContext,
   isLoading = false,
+  onOpenHitl,
+  pendingHitlCount = 0,
 }) => {
   const bmkgRainfall = corridorContext?.weather?.rainfall_mm ?? 45.0;
   const tomtomDelayMin = corridorContext?.traffic?.delay_minutes ?? 25;
@@ -58,6 +62,24 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
 
       {/* 4. Pan-Sumatra Intermodal Choke-Points Popover */}
       <IntermodalTerminalPopover />
+
+      {/* 5. Globot HITL Review Drawer Trigger */}
+      {onOpenHitl && (
+        <button
+          type="button"
+          onClick={onOpenHitl}
+          className="cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-amber-950/40 border-amber-500/40 text-amber-300 hover:bg-amber-900/50 hover:text-white transition shadow-sm"
+          title="Buka Panel Tinjauan Keputusan Operator (HITL)"
+        >
+          <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+          <span>HITL REVIEW</span>
+          {pendingHitlCount > 0 && (
+            <span className="px-1.5 py-0.2 rounded bg-amber-500 text-black font-bold text-[10px]">
+              {pendingHitlCount}
+            </span>
+          )}
+        </button>
+      )}
     </div>
   );
 };

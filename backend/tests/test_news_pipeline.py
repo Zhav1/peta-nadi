@@ -2,7 +2,6 @@ import pytest
 from app.services.news_aggregator import (
     OFFICIAL_RSS_FEEDS,
     TARGETED_PRESS_QUERIES,
-    FALLBACK_STANDARDIZED_ARTICLES,
     fetch_rss_feed_items,
     fetch_google_news_targeted
 )

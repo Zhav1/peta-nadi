@@ -39,98 +39,12 @@ export interface MarketRegimeData {
   early_warning_count?: number;
 }
 
-const MOCK_NEWS_FALLBACK: NewsItem[] = [
-  {
-    id: 'NEWS-001',
-    source_type: 'OFFICIAL_NEWS',
-    source_tier: 'TIER_1_OFFICIAL',
-    source_name: 'LKBN ANTARA Sumut',
-    headline: 'Banjir Luapan Sungai Padang Rendam Jalur Logistik Tebing Tinggi KM 78',
-    summary: 'Debit air meningkat 120cm menutup badan jalan arteri Jalinsum KM 78. Akses truk sembako dialihkan via Tol Medan-Kualanamu-Tebing Tinggi.',
-    location_name: 'Jalinsum KM 78 (Tebing Tinggi)',
-    pubDate: '15m lalu',
-    category: 'DISASTER_LOGISTICS',
-    incident_type: 'flood',
-    severity: 'critical',
-    temporal_phase: 'active_disruption',
-    lead_time_hours: 3.5,
-    commodities_affected: ['Beras BULOG', 'Minyak Goreng'],
-    ground_truth_metrics: { lane_status: 'BLOCKED', water_level_cm: 120 },
-    verification_status: 'CORROBORATED_OFFICIAL',
-    confidence_score: 0.96,
-    commodity_name: 'Beras BULOG & Minyak Goreng',
-    economic_note: 'Rute Pengalihan: Jalur Tol MKTT (+14 km, estimasi delay 45 menit).',
-    link: 'https://news.google.com/search?q=Banjir+Luapan+Sungai+Padang+Tebing+Tinggi+KM+78+ANTARA&hl=id-ID&gl=ID&ceid=ID:id'
-  },
-  {
-    id: 'NEWS-002',
-    source_type: 'BMKG_WEATHER',
-    source_tier: 'TIER_1_OFFICIAL',
-    source_name: 'BMKG Maritim Belawan',
-    headline: 'Peringatan Dini BMKG: Gelombang 2.5m dan Angin Kencang Selat Malaka',
-    summary: 'Tinggi gelombang diprediksi mencapai 2.5–3.0 meter dalam 24 jam ke depan. Armada kargo Tol Laut diimbau menunda keberangkatan.',
-    location_name: 'Pelabuhan Belawan / Selat Malaka',
-    pubDate: '45m lalu',
-    category: 'METEOROLOGY',
-    incident_type: 'marine_wave',
-    severity: 'high',
-    temporal_phase: 'forecast_early_warning',
-    lead_time_hours: 6.0,
-    commodities_affected: ['Beras Impor', 'Gula Pasir'],
-    ground_truth_metrics: { lane_status: 'RESTRICTED' },
-    verification_status: 'CORROBORATED_OFFICIAL',
-    confidence_score: 0.94,
-    commodity_name: 'Beras & Gula Pasir',
-    link: 'https://news.google.com/search?q=Peringatan+Dini+BMKG+Gelombang+Tinggi+Selat+Malaka&hl=id-ID&gl=ID&ceid=ID:id'
-  },
-  {
-    id: 'NEWS-003',
-    source_type: 'OFFICIAL_NEWS',
-    source_tier: 'TIER_1_OFFICIAL',
-    source_name: 'LKBN ANTARA',
-    headline: 'Tebing Sitinjau Lauik Longsor, Jalur Distribusi Padang-Solok Terputus',
-    summary: 'Material longsor menutupi badan jalan nasional. Truk pasokan hortikultura dan cabai dialihkan via jalur alternatif Malalak.',
-    location_name: 'Sitinjau Lauik KM 22',
-    pubDate: '1j lalu',
-    category: 'DISASTER_LOGISTICS',
-    incident_type: 'landslide',
-    severity: 'high',
-    temporal_phase: 'active_disruption',
-    lead_time_hours: 0.0,
-    commodities_affected: ['Cabai Merah', 'Sayur Agam'],
-    ground_truth_metrics: { lane_status: 'BLOCKED' },
-    verification_status: 'CORROBORATED_OFFICIAL',
-    confidence_score: 0.92,
-    commodity_name: 'Cabai Merah & Sayur Agam',
-    link: 'https://news.google.com/search?q=Tebing+Sitinjau+Lauik+Longsor+Padang+Solok+ANTARA&hl=id-ID&gl=ID&ceid=ID:id'
-  },
-  {
-    id: 'NEWS-004',
-    source_type: 'PIHPS_MARKET',
-    source_tier: 'TIER_1_OFFICIAL',
-    source_name: 'PIHPS Bank Indonesia',
-    headline: 'PIHPS Catat Disparitas Pasokan Cabai ke Pasar Induk Medan',
-    summary: 'Survei mencatat perlambatan distribusi dari sentra Karo akibat cuaca buruk. Disparitas harga antar-pasar mencapai 18.2%.',
-    location_name: 'Pasar Induk Medan & Sentra Karo',
-    pubDate: '2j lalu',
-    category: 'PRICE_ANOMALY',
-    incident_type: 'price_shock',
-    severity: 'medium',
-    temporal_phase: 'active_disruption',
-    commodities_affected: ['Cabai Merah', 'Bawang Merah'],
-    verification_status: 'MARKET_IMPACT_CONFIRMED',
-    confidence_score: 0.98,
-    commodity_name: 'Cabai Merah & Bawang Merah',
-    link: 'https://hargapangan.id/tabel-harga/pasar-tradisional/komoditas/cabai-merah'
-  }
-];
-
 export function useNewsVerification() {
-  const [newsFeed, setNewsFeed] = useState<NewsItem[]>(MOCK_NEWS_FALLBACK);
+  const [newsFeed, setNewsFeed] = useState<NewsItem[]>([]);
   const [marketRegime, setMarketRegime] = useState<MarketRegimeData>({
-    regime: 'EARLY_WARNING_ACTIVE',
-    critical_news_count: 2,
-    early_warning_count: 1
+    regime: 'NORMAL',
+    critical_news_count: 0,
+    early_warning_count: 0
   });
   const [isLoading, setIsLoading] = useState(true);
 
@@ -163,6 +77,8 @@ export function useNewsVerification() {
                 headline: a.title || a.headline || 'Laporan Lapangan',
                 summary: a.summary || a.title || '',
                 location_name: a.corridor_segment || (a.corridor_nodes && a.corridor_nodes[0]) || a.region || 'Koridor Sumatera',
+                lat: a.latitude != null ? Number(a.latitude) : undefined,
+                lon: a.longitude != null ? Number(a.longitude) : undefined,
                 pubDate: a.pubDate || 'Terkini',
                 category: a.category || 'DISASTER_LOGISTICS',
                 incident_type: a.incident_type || 'flood',

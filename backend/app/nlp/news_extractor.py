@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 
 from app.config import get_settings
 from app.nlp.ner_pipeline import extract_locations_gazetteer
+from app.nlp.geocoding_service import resolve_sumatra_location_and_corridor
 
 logger = logging.getLogger(__name__)
 
@@ -68,41 +69,16 @@ def _fast_heuristic_extraction(art: Dict[str, Any]) -> Dict[str, Any]:
     elif any(w in full_text for w in ["stok aman", "normal", "terkendali", "bantuan", "surut"]):
         severity = "low"
 
-    # 4. Corridor Nodes & Segment
+    # 4. Pan-Sumatra Location, Corridor & Coordinate Resolution
+    loc_info = resolve_sumatra_location_and_corridor(full_text, fallback_province=art.get("province", "Sumatera"))
     nodes = extract_locations_gazetteer(full_text)
     if not nodes:
-        prov = art.get("province", "Sumatera")
-        nodes = [prov, "Pulau Sumatera"]
+        nodes = [loc_info["matched_node"]]
     
-    corridor_segment = "Jalur Arteri Logistik Sumatera"
-    if "sitinjau" in full_text:
-        corridor_segment = "Sitinjau Lauik KM 22"
-    elif "jalintim" in full_text or "lintas timur" in full_text:
-        corridor_segment = "Jalan Lintas Timur Sumatera (Jalintim)"
-    elif "jalinbar" in full_text or "lintas barat" in full_text:
-        corridor_segment = "Jalan Lintas Barat Sumatera (Jalinbar)"
-    elif "jalinteng" in full_text or "lintas tengah" in full_text:
-        corridor_segment = "Jalan Lintas Tengah Sumatera (Jalinteng)"
-    elif "jalinsum" in full_text or "lintas sumatera" in full_text:
-        corridor_segment = "Jalinsum Arteri Utama"
-    elif "pekanbaru" in full_text and "dumai" in full_text:
-        corridor_segment = "Tol Pekanbaru - Dumai"
-    elif "bakauheni" in full_text and "terbanggi" in full_text:
-        corridor_segment = "Tol Bakauheni - Terbanggi Besar"
-    elif "kayuagung" in full_text or "palembang" in full_text:
-        corridor_segment = "Koridor Logistik Palembang - Kayuagung"
-    elif "mktt" in full_text or ("medan" in full_text and "tebing" in full_text):
-        corridor_segment = "Tol Medan - Kualanamu - Tebing Tinggi"
-    elif "belawan" in full_text:
-        corridor_segment = "Akses Pelabuhan Belawan"
-    elif "teluk bayur" in full_text:
-        corridor_segment = "Akses Pelabuhan Teluk Bayur"
-    elif "pelabuhan panjang" in full_text or "dermaga panjang" in full_text:
-        corridor_segment = "Akses Pelabuhan Panjang"
-    elif "boom baru" in full_text:
-        corridor_segment = "Akses Pelabuhan Boom Baru"
-    elif "jalan tol" in full_text or "ruas tol" in full_text or "gerbang tol" in full_text:
-        corridor_segment = "Jalan Tol Trans Sumatera (JTTS)"
+    corridor_segment = loc_info["corridor_segment"]
+    latitude = loc_info["latitude"]
+    longitude = loc_info["longitude"]
+    region = loc_info["province"]
 
     # 5. Commodities Affected
     commodities = []
@@ -114,43 +90,35 @@ def _fast_heuristic_extraction(art: Dict[str, Any]) -> Dict[str, Any]:
         commodities.append("Minyak Goreng")
     if any(w in full_text for w in ["bawang"]):
         commodities.append("Bawang Merah")
+    if any(w in full_text for w in ["telur"]):
+        commodities.append("Telur Ayam")
+    if any(w in full_text for w in ["gula"]):
+        commodities.append("Gula Pasir")
     if not commodities:
         commodities = ["Komoditas Pangan Pokok"]
 
-    # 6. Province / Region Resolution
-    region = art.get("province")
-    if not region or region == "Nasional":
-        if any(n in ["Padang", "Bukittinggi", "Solok", "Sitinjau Lauik", "Agam", "Payakumbuh"] for n in nodes):
-            region = "Sumatera Barat"
-        elif any(n in ["Pekanbaru", "Dumai", "Siak", "Kampar", "Rokan Hilir"] for n in nodes):
-            region = "Riau"
-        elif any(n in ["Banda Aceh", "Lhokseumawe", "Langsa", "Krueng Raya", "Malahayati"] for n in nodes):
-            region = "Aceh"
-        elif any(n in ["Palembang", "Boom Baru", "Prabumulih", "Lubuklinggau", "Banyuasin"] for n in nodes):
-            region = "Sumatera Selatan"
-        elif any(n in ["Bandar Lampung", "Bakauheni", "Pelabuhan Panjang", "Terbanggi Besar"] for n in nodes):
-            region = "Lampung"
-        elif any(n in ["Jambi", "Muaro Jambi", "Talang Duku"] for n in nodes):
-            region = "Jambi"
-        elif any(n in ["Bengkulu", "Pulau Baai"] for n in nodes):
-            region = "Bengkulu"
-        elif any(n in ["Medan", "Belawan", "Binjai", "Tebing Tinggi", "Pematangsiantar", "Kisaran", "Sibolga"] for n in nodes):
-            region = "Sumatera Utara"
-        else:
-            region = "Pulau Sumatera"
-
-    # 7. Confidence Score
+    # 6. Confidence Score
     base_conf = 0.94 if source_tier == "TIER_1_OFFICIAL" else 0.86
 
+    # 7. PostGIS WKT Point representation
+    postgis_wkt = f"POINT({longitude} {latitude})" if (latitude and longitude) else None
+
+    art_link = art.get("link", "")
+    art_id = f"NEWS-{hashlib.md5(f'{title}:{art_link}'.encode()).hexdigest()[:8]}"
+
     return {
-        "id": f"NEWS-{hashlib.md5(title.encode()).hexdigest()[:6]}",
+        "id": art_id,
         "title": title,
-        "link": art.get("link", ""),
+        "link": art_link,
         "source": source,
         "source_tier": source_tier,
         "pubDate": art.get("pubDate", "Terkini"),
         "summary": title,
         "region": region,
+        "province": region,
+        "latitude": latitude,
+        "longitude": longitude,
+        "postgis_location": postgis_wkt,
         "category": "DISASTER_LOGISTICS" if incident_type in ["flood", "landslide", "marine_wave"] else "TRAFFIC_BOTTLENECK",
         "corridor_nodes": nodes,
         "corridor_segment": corridor_segment,

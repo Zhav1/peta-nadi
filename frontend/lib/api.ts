@@ -242,6 +242,13 @@ export const api = {
       request<{ regime: string; active_crisis_indicators: string[]; commodity_volatility_score: number }>(
         '/api/v1/news/market-regime'
       ),
+    hitlPending: () =>
+      request<{ items: Array<Record<string, unknown>>; count: number }>('/api/v1/news/hitl-pending'),
+    hitlAction: (payload: { approval_id: string; decision: 'APPROVE' | 'REJECT' | 'HOLD'; approved_by?: string; notes?: string }) =>
+      request<{ status: string; approval_id: string; decision: string; message: string }>('/api/v1/news/hitl-action', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
   },
   evaluation: {
     getBenchmark: () =>

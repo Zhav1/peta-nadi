@@ -66,48 +66,10 @@ async def get_commodity_prices(
             )
 
     except Exception as e:
-        logger.warning(f"Supabase unavailable for commodity prices query, generating mock response: {e}")
+        logger.warning(f"Error querying commodity_prices from Supabase: {e}")
 
-    # Offline/fallback mode: Generate realistic mock prices
-    mock_items = []
-    base_prices = {
-        "beras": 14000.0,
-        "minyak_goreng": 17000.0,
-        "cabai_merah": 55000.0,
-        "cabai_rawit": 60000.0,
-        "bawang_merah": 35000.0,
-        "bawang_putih": 40000.0,
-        "telur_ayam": 28000.0,
-        "gula_pasir": 18000.0
-    }
-    
-    target_commodity = commodity or "beras"
-    target_region = region or "north_sumatra"
-    base_price = base_prices.get(target_commodity, 20000.0)
-    
-    now = datetime.now(timezone.utc)
-    for i in range(limit):
-        day_offset = limit - 1 - i
-        timestamp = now - timedelta(days=day_offset)
-        random.seed(day_offset + hash(target_commodity))
-        fluctuation = (random.random() - 0.5) * (base_price * 0.05) # max 5% volatility
-        price = round(base_price + fluctuation, 2)
-        
-        mock_items.append(
-            PricePoint(
-                time=timestamp,
-                commodity=target_commodity,
-                region=target_region,
-                price_idr=price,
-                source="pihps_mock",
-                metadata={"status": "mocked_fallback"}
-            )
-        )
-
-    # Sort descending (newest first)
-    mock_items.reverse()
-
-    return CommodityPriceResponse(items=mock_items, total=len(mock_items))
+    # Honest empty response when no historical records exist in database
+    return CommodityPriceResponse(items=[], total=0)
 
 
 @router.get("/spikes")

@@ -83,14 +83,9 @@ class SocialScraper(BaseScraper):
             except Exception as e:
                 logger.error(f"Error calling Twitter API: {e}. Falling back.")
         
-        # Fall back to mock posts if real fetch failed or was skipped
+        # If no tweets were fetched (e.g. no bearer token or empty response), return empty list honestly
         if not posts:
-            logger.info("Using mock/simulated social media posts for OSINT feeds")
-            now_iso = datetime.now(timezone.utc).isoformat()
-            for p in MOCK_SOCIAL_POSTS:
-                p_copy = p.copy()
-                p_copy["created_at"] = now_iso
-                posts.append(p_copy)
+            logger.info("No active Twitter/X OSINT posts retrieved; returning empty list without mock synthesis.")
 
         return posts
 

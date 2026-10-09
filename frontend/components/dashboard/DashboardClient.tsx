@@ -54,6 +54,7 @@ import { useCrisisSimulationStream } from '@/hooks/useCrisisSimulationStream';
 
 import { TopNavTelemetry } from '@/components/dashboard/TopNavTelemetry';
 import { DispatcherAlertQueue } from '@/components/dashboard/DispatcherAlertQueue';
+import { HitlDecisionDrawer } from '@/components/dashboard/HitlDecisionDrawer';
 import type { DisruptionImpactResponse, ImpactedVehicleAssessment } from '@/lib/types';
 
 // Dynamic import for map to avoid SSR issues
@@ -360,6 +361,8 @@ export default function DashboardClient() {
   const [impactAssessmentData, setImpactAssessmentData] = useState<DisruptionImpactResponse | null>(null);
   const [selectedImpactedVehicle, setSelectedImpactedVehicle] = useState<ImpactedVehicleAssessment | null>(null);
   const [isAlertQueueDismissed, setIsAlertQueueDismissed] = useState(false);
+  const [isHitlDrawerOpen, setIsHitlDrawerOpen] = useState(false);
+  const [pendingHitlCount, setPendingHitlCount] = useState<number>(0);
 
   // Layout & Navigation States
   const [activeSection, setActiveSection] = useState<'map' | 'analytics' | 'simulation' | 'reports' | 'evaluation'>('map');
@@ -410,6 +413,27 @@ export default function DashboardClient() {
         setActiveSection(section);
       }
     }
+  }, []);
+
+  // Poll for pending HITL items from Supabase
+  useEffect(() => {
+    let isMounted = true;
+    const checkHitl = async () => {
+      try {
+        const res = await api.news.hitlPending();
+        if (isMounted && res) {
+          setPendingHitlCount(res.count || (res.items ? res.items.length : 0));
+        }
+      } catch (e) {
+        // quiet fallback
+      }
+    };
+    checkHitl();
+    const interval = setInterval(checkHitl, 15000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, []);
 
   const handleDeployUnifiedActionPlan = async (agencyParams?: { agency: string; action: string }) => {
@@ -1156,7 +1180,13 @@ export default function DashboardClient() {
           <div className={`absolute top-3.5 z-30 pointer-events-auto transition-all duration-300 hidden md:flex w-fit overflow-visible ${
             isLeftSidebarCollapsed ? 'left-4 sm:left-32' : 'left-4 sm:left-32 lg:left-[368px]'
           }`}>
-            <TopNavTelemetry cuOptInfo={cuOptInfo} corridorContext={corridorContext} isLoading={isCorridorLoading} />
+            <TopNavTelemetry
+              cuOptInfo={cuOptInfo}
+              corridorContext={corridorContext}
+              isLoading={isCorridorLoading}
+              onOpenHitl={() => setIsHitlDrawerOpen(true)}
+              pendingHitlCount={pendingHitlCount}
+            />
           </div>
 
           {/* 1. FULL-BLEED 4D MAPBOX MAP CANVAS (ALWAYS 100% VIEWPORT - ZERO RESIZING BLINK!) */}
@@ -1638,6 +1668,19 @@ export default function DashboardClient() {
               selectedImpactedVehicle={selectedImpactedVehicle}
             />
           )}
+
+          {/* 4. GLOBOT-STYLE HUMAN-IN-THE-LOOP DECISION DRAWER */}
+          <HitlDecisionDrawer
+            isOpen={isHitlDrawerOpen}
+            onClose={() => setIsHitlDrawerOpen(false)}
+            onDecisionApplied={(approvalId, decision) => {
+              setToast({
+                message: `Keputusan HITL Disimpan: [${decision}] untuk ${approvalId}. Status diperbarui di Supabase.`,
+                type: 'success'
+              });
+              setApprovalsCount((prev) => prev + 1);
+            }}
+          />
 
         </div>
 

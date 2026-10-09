@@ -7,46 +7,18 @@ from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-# Strategic locations across Pan-Sumatra logistics corridors (Sumut, Sumbar, Riau, Aceh, Sumsel, Lampung, Jambi, Bengkulu)
-LOCATION_GAZETTEER = [
-    # North Sumatra
-    "belawan", "medan", "binjai", "pematangsiantar", "simalungun",
-    "toba", "danau toba", "trans sumatra", "sibolga", "tanjung mulia",
-    "tanjung balai", "rantau prapat", "kisaran", "lubuk pakam", "stabat",
-    "langkat", "karo", "dairi", "tebing tinggi", "kuala tanjung",
-    # West Sumatra
-    "padang", "bukittinggi", "solok", "sitinjau lauik", "teluk bayur",
-    "agam", "payakumbuh", "pariaman", "padang pariaman", "tanah datar",
-    # Riau & Riau Islands
-    "pekanbaru", "dumai", "siak", "kampar", "rokan hilir", "rokan hulu",
-    "indragiri hilir", "pelabuhan dumai",
-    # Aceh
-    "banda aceh", "lhokseumawe", "langsa", "krueng raya", "malahayati",
-    "aceh besar", "bireuen", "meulaboh", "aceh barat",
-    # South Sumatra
-    "palembang", "boom baru", "prabumulih", "lubuklinggau", "banyuasin",
-    "ogan ilir", "kayuagung", "muara enim",
-    # Lampung
-    "bandar lampung", "bakauheni", "pelabuhan panjang", "terbanggi besar",
-    "lampung selatan", "metro",
-    # Jambi & Bengkulu
-    "jambi", "muaro jambi", "batanghari", "talang duku", "bengkulu",
-    "pulau baai", "rejang lebong", "mukomuko",
-    # Key Arterial Corridors & Tollways
-    "jalan lintas sumatera", "jalinsum", "jalintim", "jalinbar", "jalinteng",
-    "tol trans sumatera", "tol belmera", "tol mktt", "tol pekanbaru-dumai",
-    "tol bakauheni-terbanggi besar", "tol kayuagung-palembang", "selat malaka"
-]
+from app.nlp.gazetteer_data import PAN_SUMATRA_GAZETTEER
+
+LOCATION_GAZETTEER = list(PAN_SUMATRA_GAZETTEER.keys())
 
 def extract_locations_gazetteer(text: str) -> List[str]:
     """Extract location names from text using a regex gazetteer (fast path)."""
     found = []
     text_lower = text.lower()
     for loc in LOCATION_GAZETTEER:
-        # Match word boundaries to prevent substring collisions (e.g., 'toba' matching 'tobasa')
+        # Match word boundaries to prevent substring collisions
         pattern = r'\b' + re.escape(loc) + r'\b'
         if re.search(pattern, text_lower):
-            # Capitalize properly based on matching index
             found.append(loc.title())
     return found
 
