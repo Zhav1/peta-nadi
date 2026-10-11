@@ -113,10 +113,11 @@ async def create_guest_session(request: GuestSessionRequest):
 
 
 @router.post("/switch-role", response_model=AuthTokenResponse, summary="Switch active user persona")
-async def switch_role(request: RoleSwitchRequest, current_user: UserSession = Depends(get_optional_user)):
+async def switch_role(request: RoleSwitchRequest, current_user: UserSession = Depends(get_current_user)):
     """
     Switch the active persona to DISPATCHER, REGULATOR, or GUEST.
-    Returns a freshly signed JWT and updated session context.
+    Requires an existing authenticated session (valid Bearer token): unauthenticated
+    persona flipping is rejected with 401. Returns a freshly signed JWT.
     """
     target_role = request.role.upper()
     if target_role not in VALID_ROLES:

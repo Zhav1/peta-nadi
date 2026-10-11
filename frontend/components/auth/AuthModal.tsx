@@ -16,7 +16,7 @@ import {
   KeyRound,
   Sparkles,
 } from 'lucide-react';
-import { useAuth } from '@/lib/authContext';
+import { useAuth, GUEST_LOCK_MESSAGE } from '@/lib/authContext';
 import type { UserRole } from '@/lib/types';
 
 interface AuthModalProps {
@@ -25,8 +25,8 @@ interface AuthModalProps {
 }
 
 export function AuthModal({ isOpen, onClose }: AuthModalProps) {
-  const { user, role, switchRole, login, signUp, loginWithMagicLink, isLoading } = useAuth();
-  const [activeTab, setActiveTab] = useState<'persona' | 'password' | 'magic'>('persona');
+  const { user, role, switchRole, login, signUp, loginWithMagicLink, isLoading, isAuthenticated } = useAuth();
+  const [activeTab, setActiveTab] = useState<'persona' | 'password' | 'magic'>('password');
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -36,9 +36,20 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
   if (!isOpen) return null;
 
   const handlePersonaSelect = async (targetRole: UserRole) => {
+    // Locked mode: send the evaluator to the account tab instead of flipping personas.
+    if (!isAuthenticated) {
+      setStatusMessage({ type: 'error', text: GUEST_LOCK_MESSAGE });
+      setActiveTab('password');
+      return;
+    }
+
     setStatusMessage(null);
-    await switchRole(targetRole);
-    onClose();
+    const res = await switchRole(targetRole);
+    if (res.success) {
+      onClose();
+    } else {
+      setStatusMessage({ type: 'error', text: res.error || GUEST_LOCK_MESSAGE });
+    }
   };
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
@@ -136,6 +147,12 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
           >
             <Sparkles className="w-3.5 h-3.5" />
             <span>1-Klik Persona (Evaluator)</span>
+            {!isAuthenticated && (
+              <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/40 text-amber-300 text-[10px] font-mono font-semibold uppercase">
+                <Lock className="w-2.5 h-2.5" />
+                <span>Terkunci</span>
+              </span>
+            )}
           </button>
 
           <button
@@ -144,6 +161,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
               setActiveTab('password');
               setStatusMessage(null);
             }}
+            title="Masuk dengan Kata Sandi / Akun"
             className={`cursor-pointer px-4 py-2 border-b-2 font-medium transition flex items-center gap-1.5 ${
               activeTab === 'password'
                 ? 'border-white text-white bg-[#0c1017]'
@@ -151,7 +169,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
             }`}
           >
             <KeyRound className="w-3.5 h-3.5" />
-            <span>Email & Sandi</span>
+            <span>Masuk / Akun</span>
           </button>
 
           <button
@@ -190,9 +208,34 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
           {/* TAB 1: 1-KLIK PERSONA (EVALUATOR) */}
           {activeTab === 'persona' && (
             <div className="space-y-4">
-              <div className="p-3 rounded-md bg-[#121822] border border-[#1c2432] text-xs font-sans text-slate-300 leading-relaxed">
-                Pilih persona di bawah untuk menguji adaptasi antarmuka, hak akses navigasi, dan wewenang operasional secara instan tanpa perlu mendaftar ulang.
-              </div>
+              {!isAuthenticated ? (
+                <div className="p-3 rounded-md bg-amber-950/30 border border-amber-500/30 text-xs font-sans text-amber-200 leading-relaxed flex items-start gap-2.5">
+                  <Lock className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+                  <div className="space-y-2">
+                    <div>
+                      <strong className="block text-amber-300 uppercase tracking-wide text-xs font-mono mb-0.5">
+                        Peran Operasional Terkunci
+                      </strong>
+                      <span>{GUEST_LOCK_MESSAGE}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStatusMessage(null);
+                        setActiveTab('password');
+                      }}
+                      className="cursor-pointer px-2.5 py-1 rounded-md bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 hover:text-white text-xs font-semibold transition flex items-center gap-1.5"
+                    >
+                      <KeyRound className="w-3 h-3" />
+                      <span>Masuk dengan Kata Sandi / Akun</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3 rounded-md bg-[#121822] border border-[#1c2432] text-xs font-sans text-slate-300 leading-relaxed">
+                  Pilih persona di bawah untuk menguji adaptasi antarmuka, hak akses navigasi, dan wewenang operasional secara instan tanpa perlu mendaftar ulang.
+                </div>
+              )}
 
               <div className="grid grid-cols-1 gap-3">
                 {/* 1. DISPATCHER */}
@@ -200,7 +243,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                   type="button"
                   onClick={() => handlePersonaSelect('DISPATCHER')}
                   disabled={isLoading}
-                  className={`cursor-pointer w-full text-left p-4 rounded-md border transition-colors duration-150 flex flex-col gap-2 relative overflow-hidden group ${
+                  className={`cursor-pointer w-full text-left p-4 rounded-md border transition-colors duration-150 flex flex-col gap-2 relative overflow-hidden group ${!isAuthenticated ? 'opacity-50 ' : ''}${
                     role === 'DISPATCHER'
                       ? 'bg-[#121822] border-white shadow-sm'
                       : 'bg-[#0c1017] border-[#1c2432] hover:border-slate-500 hover:bg-[#121822]'
@@ -252,7 +295,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                   type="button"
                   onClick={() => handlePersonaSelect('REGULATOR')}
                   disabled={isLoading}
-                  className={`cursor-pointer w-full text-left p-4 rounded-md border transition-colors duration-150 flex flex-col gap-2 relative overflow-hidden group ${
+                  className={`cursor-pointer w-full text-left p-4 rounded-md border transition-colors duration-150 flex flex-col gap-2 relative overflow-hidden group ${!isAuthenticated ? 'opacity-50 ' : ''}${
                     role === 'REGULATOR'
                       ? 'bg-[#121822] border-white shadow-sm'
                       : 'bg-[#0c1017] border-[#1c2432] hover:border-slate-500 hover:bg-[#121822]'
@@ -304,7 +347,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                   type="button"
                   onClick={() => handlePersonaSelect('GUEST')}
                   disabled={isLoading}
-                  className={`cursor-pointer w-full text-left p-4 rounded-md border transition-colors duration-150 flex flex-col gap-2 relative overflow-hidden group ${
+                  className={`cursor-pointer w-full text-left p-4 rounded-md border transition-colors duration-150 flex flex-col gap-2 relative overflow-hidden group ${!isAuthenticated ? 'opacity-50 ' : ''}${
                     role === 'GUEST'
                       ? 'bg-[#121822] border-white shadow-sm'
                       : 'bg-[#0c1017] border-[#1c2432] hover:border-slate-500 hover:bg-[#121822]'

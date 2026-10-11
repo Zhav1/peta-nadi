@@ -84,6 +84,25 @@ def test_expired_token_rejected():
     assert "401" in str(exc_info.value) or "kedaluwarsa" in str(exc_info.value).lower() or "expired" in str(exc_info.value).lower()
 
 
+def test_forged_signature_token_rejected():
+    """Verify that a token signed with an attacker-controlled secret is rejected (no unsigned fallback)."""
+    forged_token = jwt.encode(
+        {
+            "sub": "forged-attacker",
+            "email": "attacker@prehub.id",
+            "app_metadata": {"role": "DISPATCHER"},
+            "iat": int(time.time()),
+            "exp": int(time.time()) + 3600,
+        },
+        "attacker-controlled-secret",
+        algorithm="HS256",
+    )
+
+    with pytest.raises(Exception) as exc_info:
+        decode_and_verify_token(forged_token)
+    assert "401" in str(exc_info.value) or "signature" in str(exc_info.value).lower() or "tanda tangan" in str(exc_info.value).lower()
+
+
 def test_api_auth_me_endpoint():
     """Verify GET /api/v1/auth/me with valid Bearer token."""
     token = create_guest_token(role=ROLE_DISPATCHER, name="Operator Alpha")
@@ -135,15 +154,45 @@ def test_api_create_guest_session_invalid_role():
 
 
 def test_api_switch_role():
-    """Verify POST /api/v1/auth/switch-role dynamically switches active persona."""
+    """Verify POST /api/v1/auth/switch-role switches persona for an authenticated session."""
+    token = create_guest_token(role=ROLE_GUEST)
     response = client.post(
         "/api/v1/auth/switch-role",
         json={"role": "DISPATCHER"},
+        headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 200
     data = response.json()
     assert data["user"]["role"] == ROLE_DISPATCHER
     assert "access_token" in data
+
+
+def test_api_switch_role_requires_authentication():
+    """Verify POST /api/v1/auth/switch-role without a token is rejected (401)."""
+    response = client.post(
+        "/api/v1/auth/switch-role",
+        json={"role": "DISPATCHER"},
+    )
+    assert response.status_code == 401
+
+
+def test_api_switch_role_rejects_forged_signature():
+    """Verify POST /api/v1/auth/switch-role rejects a forged (unverifiable) Bearer token."""
+    forged_token = jwt.encode(
+        {
+            "sub": "forged-attacker",
+            "app_metadata": {"role": "DISPATCHER"},
+            "exp": int(time.time()) + 3600,
+        },
+        "attacker-controlled-secret",
+        algorithm="HS256",
+    )
+    response = client.post(
+        "/api/v1/auth/switch-role",
+        json={"role": "DISPATCHER"},
+        headers={"Authorization": f"Bearer {forged_token}"},
+    )
+    assert response.status_code == 401
 
 
 def test_api_roles_catalog():

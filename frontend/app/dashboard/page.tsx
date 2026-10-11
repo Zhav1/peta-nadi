@@ -1,6 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import { GuestEvaluationBanner } from '../../components/dashboard/GuestEvaluationBanner';
 
 const DashboardClient = dynamic(() => import('../../components/dashboard/DashboardClient'), {
   ssr: false,
@@ -17,5 +18,10 @@ const DashboardClient = dynamic(() => import('../../components/dashboard/Dashboa
 });
 
 export default function DashboardPage() {
-  return <DashboardClient />;
+  return (
+    <>
+      <GuestEvaluationBanner />
+      <DashboardClient />
+    </>
+  );
 }

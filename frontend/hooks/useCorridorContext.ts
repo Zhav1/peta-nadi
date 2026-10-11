@@ -47,6 +47,33 @@ const DEFAULT_FALLBACK_CORRIDOR: CorridorContext = {
   }
 };
 
+export interface OperationalImpact {
+  delayMinutes: number;
+  fuelIncreasePct: number;
+  commoditySpikePct?: number;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function round1(value: number): number {
+  return Math.round(value * 10) / 10;
+}
+
+function resolveTrafficStatus(congestionPct: number): string {
+  if (congestionPct >= 85) return 'SEVERE_CONGESTION';
+  if (congestionPct >= 65) return 'HEAVY_CONGESTION';
+  if (congestionPct >= 40) return 'MODERATE_CONGESTION';
+  return 'LIGHT_TRAFFIC';
+}
+
+function resolveCommodityStatus(deviationPct: number): string {
+  if (deviationPct >= 15) return 'spike';
+  if (deviationPct >= 5) return 'elevated';
+  return 'normal';
+}
+
 export function useCorridorContext(corridorId: string = 'sumatra_belawan_medan') {
   const [corridorContext, setCorridorContext] = useState<CorridorContext | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -74,11 +101,66 @@ export function useCorridorContext(corridorId: string = 'sumatra_belawan_medan')
     }
   }, [corridorId]);
 
+  // Reactive operational recalculation: an approved detour immediately propagates
+  // into corridor telemetry (speed, delay, congestion) and commodity inflation.
+  const applyOperationalImpact = useCallback((impact: OperationalImpact) => {
+    setCorridorContext((prev) => {
+      if (!prev) return prev;
+
+      const addedDelayMinutes = Math.max(0, impact.delayMinutes);
+      const fuelIncreasePct = Math.max(0, impact.fuelIncreasePct);
+      const congestionDelta = clamp(fuelIncreasePct * 0.8 + addedDelayMinutes * 0.35, 0, 100);
+      const congestionPct = clamp(prev.traffic.congestion_level_pct + congestionDelta, 0, 100);
+      const speedFactor = clamp(1 - congestionDelta / 100, 0.15, 1);
+      const commoditySpikePct =
+        impact.commoditySpikePct ?? round1(fuelIncreasePct * 0.6 + addedDelayMinutes * 0.12);
+      const priceFactor = 1 + commoditySpikePct / 100;
+
+      return {
+        ...prev,
+        timestamp: new Date().toISOString(),
+        traffic: {
+          ...prev.traffic,
+          congestion_level_pct: round1(congestionPct),
+          delay_minutes: Math.round(prev.traffic.delay_minutes + addedDelayMinutes),
+          flow_speed_kmh: Math.max(5, round1(prev.traffic.flow_speed_kmh * speedFactor)),
+          status: resolveTrafficStatus(congestionPct),
+          checkpoints: prev.traffic.checkpoints.map((checkpoint) => {
+            const checkpointCongestion = clamp(checkpoint.congestion_pct + congestionDelta, 0, 100);
+            return {
+              ...checkpoint,
+              speed: Math.max(5, round1(checkpoint.speed * speedFactor)),
+              congestion_pct: round1(checkpointCongestion),
+              status: checkpointCongestion >= 80 ? 'critical' : checkpointCongestion >= 55 ? 'medium' : 'low',
+            };
+          }),
+        },
+        commodity_prices: {
+          ...prev.commodity_prices,
+          chili_price: Math.round(prev.commodity_prices.chili_price * priceFactor),
+          rice_price: Math.round(prev.commodity_prices.rice_price * priceFactor),
+          cooking_oil_price: Math.round(prev.commodity_prices.cooking_oil_price * priceFactor),
+          inflation_trend_pct: round1(prev.commodity_prices.inflation_trend_pct + commoditySpikePct),
+          price_anomaly_detected: prev.commodity_prices.price_anomaly_detected || commoditySpikePct > 0,
+          commodities: prev.commodity_prices.commodities.map((commodity) => {
+            const deviationPct = round1(commodity.deviation_pct + commoditySpikePct);
+            return {
+              ...commodity,
+              price_idr: Math.round(commodity.price_idr * priceFactor),
+              deviation_pct: deviationPct,
+              status: resolveCommodityStatus(deviationPct),
+            };
+          }),
+        },
+      };
+    });
+  }, []);
+
   useEffect(() => {
     fetchCorridor();
     const interval = setInterval(fetchCorridor, 30000); // 30s polling
     return () => clearInterval(interval);
   }, [fetchCorridor]);
 
-  return { corridorContext, isLoading, error, refetch: fetchCorridor };
+  return { corridorContext, isLoading, error, refetch: fetchCorridor, applyOperationalImpact };
 }

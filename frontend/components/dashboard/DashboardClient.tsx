@@ -465,7 +465,7 @@ export default function DashboardClient() {
   const [showSensorInfo, setShowSensorInfo] = useState(false);
 
   // Live Corridor Context Telemetry Hook (BMKG + TomTom + PIHPS 30s Poller)
-  const { corridorContext, isLoading: isCorridorLoading } = useCorridorContext('sumatra_belawan_medan');
+  const { corridorContext, isLoading: isCorridorLoading, applyOperationalImpact } = useCorridorContext('sumatra_belawan_medan');
 
   // Live OSINT News & Intelligence Hook (Google News RSS & Verified Sinyal Lapangan)
   const { newsFeed } = useNewsVerification();
@@ -589,6 +589,13 @@ export default function DashboardClient() {
       );
       setActiveRouteIdx(0);
     }
+
+    // Reactive telemetry: the approved detour immediately recalculates corridor
+    // traffic delays, congestion levels, and commodity inflation indicators.
+    applyOperationalImpact({
+      delayMinutes: Math.round(approvedRoute?.eta_minutes ?? 38),
+      fuelIncreasePct: approvedRoute?.fuel_increase_pct ?? 4,
+    });
 
     // Navigation stays with the user: only the explicit "Tampilkan di Peta 4D" / "Lihat Dampak di Laporan" buttons switch sections.
   };
@@ -1124,12 +1131,19 @@ export default function DashboardClient() {
         }
       }
 
+      // 4. Reactive telemetry: propagate the approved route's detour cost into the
+      //    corridor context so delays, congestion, and commodity prices update instantly.
+      applyOperationalImpact({
+        delayMinutes: Math.round(route.eta_minutes || 0),
+        fuelIncreasePct: route.fuel_increase_pct || 0,
+      });
+
       setToast({
         message: `Armada TRK-003 berhasil dialihkan ke koridor operasional aktif (${tactical}). Telemetri TMS terverifikasi.`,
         type: 'success',
       });
     },
-    []
+    [applyOperationalImpact]
   );
 
   // Triggered by Game-Like Map Location Click

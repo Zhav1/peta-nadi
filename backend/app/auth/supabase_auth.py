@@ -166,15 +166,16 @@ def decode_and_verify_token(token: str) -> UserSession:
             detail={"error": "TOKEN_EXPIRED", "message": "Sesi token telah kedaluwarsa. Silakan masuk kembali."},
         )
     except jwt.InvalidSignatureError:
-        # Check if running in offline demo mode with mock token
-        try:
-            payload = jwt.decode(token, options={"verify_signature": False})
-            logger.warning("Decoded token without signature verification in offline/demo fallback mode.")
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail={"error": "INVALID_TOKEN", "message": f"Tanda tangan token tidak valid: {str(e)}"},
-            )
+        # Security: never fall back to unverified decoding. A token whose signature
+        # cannot be validated must be rejected outright (no unsigned JWT trust).
+        logger.warning("Rejected token with invalid signature — unverified decode fallback is disabled.")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "error": "INVALID_SIGNATURE",
+                "message": "Tanda tangan token tidak valid. Sesi ditolak; silakan masuk kembali.",
+            },
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
