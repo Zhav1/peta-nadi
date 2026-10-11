@@ -187,6 +187,23 @@ function styleApprovedRoutes(routes: RouteRecommendation[], approved: RouteRecom
   );
 }
 
+// Relative detour delay: approved ETA minus the fastest ETA in the same route set
+// (never the total ETA, never a hardcoded baseline).
+function resolveApprovedDelayMinutes(
+  approved: RouteRecommendation | undefined,
+  routes: RouteRecommendation[]
+): number {
+  const approvedEta = approved?.eta_minutes;
+  if (typeof approvedEta !== 'number' || !Number.isFinite(approvedEta)) return 0;
+
+  const etaMinutes = routes
+    .map((r) => r.eta_minutes)
+    .filter((eta): eta is number => typeof eta === 'number' && Number.isFinite(eta));
+  if (etaMinutes.length === 0) return 0;
+
+  return Math.max(0, approvedEta - Math.min(...etaMinutes));
+}
+
 // Deterministic tangential bypass: bends a corridor around a hazard circle at radius + 6 km clearance
 // so demo/offline routes never cross straight through the disaster zone.
 function buildHazardBypassRoute(
@@ -593,7 +610,7 @@ export default function DashboardClient() {
     // Reactive telemetry: the approved detour immediately recalculates corridor
     // traffic delays, congestion levels, and commodity inflation indicators.
     applyOperationalImpact({
-      delayMinutes: Math.round(approvedRoute?.eta_minutes ?? 38),
+      delayMinutes: resolveApprovedDelayMinutes(approvedRoute, allRoutes),
       fuelIncreasePct: approvedRoute?.fuel_increase_pct ?? 4,
     });
 
@@ -798,13 +815,18 @@ export default function DashboardClient() {
 
     if (id !== 'simulated-active') {
       let baseCrisis: CrisisState | null = null;
-      try {
-        baseCrisis = await api.incidents.get(id);
-      } catch (err) {
-        console.error('Failed to fetch crisis detail:', err);
+
+      // Predictive risk ids (pred-*) are local catalog entries: skip the backend
+      // lookup entirely and let the local catalog branch below resolve them.
+      if (!id.startsWith('pred-')) {
+        try {
+          baseCrisis = await api.incidents.get(id);
+        } catch (err) {
+          console.error('Failed to fetch crisis detail:', err);
+        }
       }
 
-      // If backend call fails, check local historical & predictive risk arrays
+      // If backend call fails (or was skipped for a predictive id), check local historical & predictive risk arrays
       if (!baseCrisis) {
         const histMatch = ([...historicalEpisodes, ...FALLBACK_HISTORICAL] as Record<string, unknown>[]).find((e) => e.incident_id === id || e.id === id) as Record<string, unknown> | undefined;
         const predMatch = ([...predictiveRisks, ...FALLBACK_PREDICTIVE] as Record<string, unknown>[]).find((p) => p.risk_id === id || p.id === id) as Record<string, unknown> | undefined;
@@ -1134,7 +1156,10 @@ export default function DashboardClient() {
       // 4. Reactive telemetry: propagate the approved route's detour cost into the
       //    corridor context so delays, congestion, and commodity prices update instantly.
       applyOperationalImpact({
-        delayMinutes: Math.round(route.eta_minutes || 0),
+        delayMinutes: resolveApprovedDelayMinutes(
+          route,
+          currentMapRoutes.length > 0 ? currentMapRoutes : [route]
+        ),
         fuelIncreasePct: route.fuel_increase_pct || 0,
       });
 
@@ -1143,7 +1168,7 @@ export default function DashboardClient() {
         type: 'success',
       });
     },
-    [applyOperationalImpact]
+    [applyOperationalImpact, currentMapRoutes]
   );
 
   // Triggered by Game-Like Map Location Click
@@ -1644,20 +1669,20 @@ export default function DashboardClient() {
               <div className="grid grid-cols-3 gap-1 text-xs text-center">
                 <div className="p-1 rounded bg-slate-950/80 border border-white/5">
                   <span className="text-slate-500 block">BMKG</span>
-                  <span className={`font-bold ${corridorContext?.weather ? 'text-emerald-400' : isCorridorLoading ? 'text-cyan-400' : 'text-amber-400'}`}>
-                    {corridorContext?.weather ? 'LIVE' : isCorridorLoading ? 'MEMUAT' : 'FALLBACK'}
+                  <span className={`font-bold ${corridorContext?.is_fallback ? 'text-amber-400' : isCorridorLoading ? 'text-cyan-400' : 'text-emerald-400'}`}>
+                    {corridorContext?.is_fallback ? 'FALLBACK' : isCorridorLoading ? 'MEMUAT' : 'LIVE'}
                   </span>
                 </div>
                 <div className="p-1 rounded bg-slate-950/80 border border-white/5">
                   <span className="text-slate-500 block">TOMTOM</span>
-                  <span className={`font-bold ${corridorContext?.traffic ? 'text-emerald-400' : isCorridorLoading ? 'text-cyan-400' : 'text-amber-400'}`}>
-                    {corridorContext?.traffic ? 'LIVE' : isCorridorLoading ? 'MEMUAT' : 'FALLBACK'}
+                  <span className={`font-bold ${corridorContext?.is_fallback ? 'text-amber-400' : isCorridorLoading ? 'text-cyan-400' : 'text-emerald-400'}`}>
+                    {corridorContext?.is_fallback ? 'FALLBACK' : isCorridorLoading ? 'MEMUAT' : 'LIVE'}
                   </span>
                 </div>
                 <div className="p-1 rounded bg-slate-950/80 border border-white/5">
                   <span className="text-slate-500 block">PIHPS</span>
-                  <span className={`font-bold ${corridorContext?.commodity_prices ? 'text-emerald-400' : isCorridorLoading ? 'text-cyan-400' : 'text-amber-400'}`}>
-                    {corridorContext?.commodity_prices ? 'LIVE' : isCorridorLoading ? 'MEMUAT' : 'FALLBACK'}
+                  <span className={`font-bold ${corridorContext?.is_fallback ? 'text-amber-400' : isCorridorLoading ? 'text-cyan-400' : 'text-emerald-400'}`}>
+                    {corridorContext?.is_fallback ? 'FALLBACK' : isCorridorLoading ? 'MEMUAT' : 'LIVE'}
                   </span>
                 </div>
               </div>

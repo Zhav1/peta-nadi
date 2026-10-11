@@ -2,6 +2,7 @@
 Unit & Integration Tests for Supabase JWT Auth & RBAC (Phase 42).
 """
 
+import io
 import time
 import pytest
 import jwt
@@ -16,6 +17,8 @@ from app.auth.supabase_auth import (
     decode_and_verify_token,
     get_jwt_secret,
 )
+from app.db.local_storage import init_db, delete_custom_vehicle
+from app.services.telemetry_service import telemetry_service
 
 client = TestClient(app)
 
@@ -53,12 +56,12 @@ def test_create_and_decode_regulator_token():
 
 
 def test_create_and_decode_guest_token():
-    """Verify that a signed Guest token decodes with sandbox permissions."""
+    """Verify that a signed Guest token decodes as strictly read-only."""
     token = create_guest_token(role=ROLE_GUEST)
     session = decode_and_verify_token(token)
 
     assert session.role == ROLE_GUEST
-    assert "all:sandbox" in session.permissions
+    assert session.permissions == ["benchmark:read", "reports:read"]
 
 
 def test_invalid_token_rejected():
@@ -248,9 +251,8 @@ def test_rbac_approval_rejected_for_regulator():
     assert "Akses ditolak" in str(data["detail"])
 
 
-def test_rbac_approval_allowed_for_guest():
-    """Verify that GUEST in sandbox mode can submit an approval (201 Created)."""
-    token = create_guest_token(role=ROLE_GUEST, name="Evaluator Guest")
+def test_rbac_approval_rejected_for_guest():
+    """Verify that a GUEST token and the default guest profile are both denied approval writes (403)."""
     approval_payload = {
         "incident_id": "test-inc-42-guest",
         "route_id": "route-bypass-03",
@@ -258,9 +260,192 @@ def test_rbac_approval_allowed_for_guest():
         "tactical_action": "REROUTE",
         "notes": "Sandbox approval test."
     }
-    response = client.post(
+
+    token = create_guest_token(role=ROLE_GUEST, name="Evaluator Guest")
+    token_response = client.post(
         "/api/v1/approvals",
         json=approval_payload,
         headers={"Authorization": f"Bearer {token}"},
     )
-    assert response.status_code in [200, 201]
+    assert token_response.status_code == 403
+    assert token_response.json()["detail"]["current_role"] == ROLE_GUEST
+
+    profile_response = client.post("/api/v1/approvals", json=approval_payload)
+    assert profile_response.status_code == 403
+    assert "Akses ditolak" in str(profile_response.json()["detail"])
+
+
+RBAC_FLEET_VEHICLE_IDS = [
+    "RBAC-GUEST-TRK-01",
+    "RBAC-GUEST-CSV-01",
+    "RBAC-DISP-TRK-01",
+    "RBAC-DISP-JSON-01",
+    "RBAC-DISP-CSV-01",
+    "RBAC-DISP-DEL-01",
+]
+
+
+@pytest.fixture(autouse=True)
+def cleanup_rbac_fleet_vehicles():
+    """Ensure fleet units created by RBAC tests are removed before and after each test."""
+    init_db()
+    for vid in RBAC_FLEET_VEHICLE_IDS:
+        delete_custom_vehicle(vid)
+    yield
+    for vid in RBAC_FLEET_VEHICLE_IDS:
+        delete_custom_vehicle(vid)
+
+
+def test_rbac_fleet_register_rejected_for_guest():
+    """Verify that a GUEST token and the default guest profile cannot register fleet units (403)."""
+    payload = {"vehicle_id": "RBAC-GUEST-TRK-01", "name": "Truk Guest Ilegal", "modality": "truck"}
+
+    token = create_guest_token(role=ROLE_GUEST, name="Evaluator Guest")
+    token_response = client.post(
+        "/api/v1/fleet/register",
+        json=payload,
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert token_response.status_code == 403
+    assert token_response.json()["detail"]["current_role"] == ROLE_GUEST
+
+    profile_response = client.post("/api/v1/fleet/register", json=payload)
+    assert profile_response.status_code == 403
+    assert "Akses ditolak" in str(profile_response.json()["detail"])
+
+
+def test_rbac_fleet_register_allowed_for_dispatcher():
+    """Verify that DISPATCHER can register a fleet unit (200)."""
+    token = create_guest_token(role=ROLE_DISPATCHER, name="Dispatcher Budi")
+    payload = {"vehicle_id": "RBAC-DISP-TRK-01", "name": "Truk Dispatcher RBAC", "modality": "truck"}
+
+    response = client.post(
+        "/api/v1/fleet/register",
+        json=payload,
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["registered_count"] == 1
+    assert data["vehicles"][0]["vehicle_id"] == "RBAC-DISP-TRK-01"
+
+
+def test_rbac_fleet_upload_manifest_rejected_for_guest():
+    """Verify that a GUEST token and the default guest profile cannot upload JSON manifests (403)."""
+    payload = {
+        "manifest_name": "Manifest Guest Ilegal",
+        "vehicles": [{"vehicle_id": "RBAC-GUEST-CSV-01", "name": "Truk Manifest Guest", "modality": "truck"}],
+    }
+
+    token = create_guest_token(role=ROLE_GUEST, name="Evaluator Guest")
+    token_response = client.post(
+        "/api/v1/fleet/upload-manifest",
+        json=payload,
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert token_response.status_code == 403
+    assert token_response.json()["detail"]["current_role"] == ROLE_GUEST
+
+    profile_response = client.post("/api/v1/fleet/upload-manifest", json=payload)
+    assert profile_response.status_code == 403
+    assert "Akses ditolak" in str(profile_response.json()["detail"])
+
+
+def test_rbac_fleet_upload_manifest_allowed_for_dispatcher():
+    """Verify that DISPATCHER can upload a JSON manifest (200)."""
+    token = create_guest_token(role=ROLE_DISPATCHER, name="Dispatcher Budi")
+    payload = {
+        "manifest_name": "Manifest Dispatcher RBAC",
+        "vehicles": [{"vehicle_id": "RBAC-DISP-JSON-01", "name": "Truk Manifest Dispatcher", "modality": "truck"}],
+    }
+
+    response = client.post(
+        "/api/v1/fleet/upload-manifest",
+        json=payload,
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+    assert response.json()["registered_count"] == 1
+
+
+def test_rbac_fleet_upload_manifest_file_rejected_for_guest():
+    """Verify that a GUEST token and the default guest profile cannot upload CSV manifests (403)."""
+    csv_data = (
+        "vehicle_id,name,modality\n"
+        "RBAC-GUEST-CSV-01,Truk Guest CSV,truck\n"
+    )
+
+    def _files_payload():
+        return {"file": ("manifest.csv", io.BytesIO(csv_data.encode("utf-8")), "text/csv")}
+
+    token = create_guest_token(role=ROLE_GUEST, name="Evaluator Guest")
+    token_response = client.post(
+        "/api/v1/fleet/upload-manifest/file",
+        files=_files_payload(),
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert token_response.status_code == 403
+    assert token_response.json()["detail"]["current_role"] == ROLE_GUEST
+
+    profile_response = client.post("/api/v1/fleet/upload-manifest/file", files=_files_payload())
+    assert profile_response.status_code == 403
+    assert "Akses ditolak" in str(profile_response.json()["detail"])
+
+
+def test_rbac_fleet_upload_manifest_file_allowed_for_dispatcher():
+    """Verify that DISPATCHER can upload a CSV manifest file (200)."""
+    csv_data = (
+        "vehicle_id,name,modality\n"
+        "RBAC-DISP-CSV-01,Truk Dispatcher CSV,truck\n"
+    )
+    files = {"file": ("manifest.csv", io.BytesIO(csv_data.encode("utf-8")), "text/csv")}
+
+    token = create_guest_token(role=ROLE_DISPATCHER, name="Dispatcher Budi")
+    response = client.post(
+        "/api/v1/fleet/upload-manifest/file",
+        files=files,
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+    assert response.json()["registered_count"] == 1
+
+
+def test_rbac_fleet_delete_rejected_for_guest():
+    """Verify that a GUEST token and the default guest profile cannot delete fleet units (403)."""
+    telemetry_service.register_custom_vehicle({
+        "vehicle_id": "RBAC-DISP-DEL-01",
+        "name": "Truk Hapus RBAC",
+        "modality": "truck",
+    })
+
+    token = create_guest_token(role=ROLE_GUEST, name="Evaluator Guest")
+    token_response = client.delete(
+        "/api/v1/fleet/custom/RBAC-DISP-DEL-01",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert token_response.status_code == 403
+    assert token_response.json()["detail"]["current_role"] == ROLE_GUEST
+
+    profile_response = client.delete("/api/v1/fleet/custom/RBAC-DISP-DEL-01")
+    assert profile_response.status_code == 403
+    assert "Akses ditolak" in str(profile_response.json()["detail"])
+
+    remaining = client.get("/api/v1/fleet/custom").json()
+    assert any(u["vehicle_id"] == "RBAC-DISP-DEL-01" for u in remaining)
+
+
+def test_rbac_fleet_delete_allowed_for_dispatcher():
+    """Verify that DISPATCHER can delete a fleet unit (200)."""
+    telemetry_service.register_custom_vehicle({
+        "vehicle_id": "RBAC-DISP-DEL-01",
+        "name": "Truk Hapus Dispatcher RBAC",
+        "modality": "truck",
+    })
+
+    token = create_guest_token(role=ROLE_DISPATCHER, name="Dispatcher Budi")
+    response = client.delete(
+        "/api/v1/fleet/custom/RBAC-DISP-DEL-01",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "success"

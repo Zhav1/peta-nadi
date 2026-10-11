@@ -1,6 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 from app.main import app
+from app.auth.supabase_auth import create_guest_token, ROLE_DISPATCHER
 
 client = TestClient(app)
 
@@ -56,7 +57,12 @@ def test_approvals_endpoints():
         },
         "operator_id": "OPERATOR-JUDGE-01"
     }
-    res_post = client.post("/api/v1/approvals", json=approval_payload)
+    dispatcher_token = create_guest_token(role=ROLE_DISPATCHER)
+    res_post = client.post(
+        "/api/v1/approvals",
+        json=approval_payload,
+        headers={"Authorization": f"Bearer {dispatcher_token}"},
+    )
     assert res_post.status_code in [200, 201]
     post_data = res_post.json()
     assert "approval_id" in post_data

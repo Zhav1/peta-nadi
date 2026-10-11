@@ -13,7 +13,7 @@ from app.schemas.decision_schemas import (
     OutcomeHorizon
 )
 from app.db import local_storage
-from app.auth.supabase_auth import UserSession, get_optional_user, ROLE_REGULATOR
+from app.auth.supabase_auth import UserSession, get_optional_user
 
 logger = logging.getLogger(__name__)
 
@@ -33,16 +33,16 @@ async def create_approval(
     """
     Log an operator decision trace in Supabase with local SQLite fallback.
     Supports multi-action decisions: ACCEPT, REJECT, and OVERRIDE with tactical maneuvers.
-    RBAC: Enforces DISPATCHER or GUEST authorization. Rejects REGULATOR role with 403.
+    RBAC: Requires the 'approvals:write' permission (Dispatcher). GUEST and REGULATOR roles are denied with 403.
     """
-    if current_user.role.upper() == ROLE_REGULATOR:
+    if "approvals:write" not in (current_user.permissions or []):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "error": "FORBIDDEN",
-                "message": "Akses ditolak: Hanya operator Dispatcher yang memiliki wewenang menyetujui pengalihan rute armada. Peran Anda saat ini adalah REGULATOR (Pengawas).",
+                "message": f"Akses ditolak: Hanya operator dengan wewenang 'approvals:write' (Dispatcher) yang dapat menyetujui pengalihan rute armada. Peran Anda saat ini adalah {current_user.role}.",
                 "current_role": current_user.role,
-                "required_roles": ["DISPATCHER", "GUEST"]
+                "required_permissions": ["approvals:write"],
             }
         )
 

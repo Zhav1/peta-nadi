@@ -48,15 +48,8 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         "scenarios:run",
     ],
     ROLE_GUEST: [
-        "all:sandbox",
         "benchmark:read",
-        "scenarios:run",
-        "simulation:write",
-        "approvals:write",
-        "fleet:read",
-        "routes:plan",
         "reports:read",
-        "reports:export",
     ],
 }
 

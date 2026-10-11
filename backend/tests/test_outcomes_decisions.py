@@ -7,6 +7,7 @@ from datetime import datetime
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.auth.supabase_auth import create_guest_token, ROLE_DISPATCHER
 from app.schemas.decision_schemas import (
     DecisionAction,
     TacticalManeuver,
@@ -127,6 +128,8 @@ def test_outcomes_storage_sqlite(tmp_path):
 
 def test_approvals_endpoint_multi_action(client):
     """Test FastAPI /api/v1/approvals endpoint with multi-action payloads."""
+    operator_headers = {"Authorization": f"Bearer {create_guest_token(role=ROLE_DISPATCHER)}"}
+
     # 1. Post ACCEPT
     resp1 = client.post("/api/v1/approvals", json={
         "incident_id": "INC-API-01",
@@ -134,7 +137,7 @@ def test_approvals_endpoint_multi_action(client):
         "action": "ACCEPT",
         "tactical_action": "REROUTE",
         "operator_id": "op-unit-1"
-    })
+    }, headers=operator_headers)
     assert resp1.status_code == 201
     data1 = resp1.json()
     assert data1["action"] == "ACCEPT"
@@ -148,7 +151,7 @@ def test_approvals_endpoint_multi_action(client):
         "tactical_action": "HOLD",
         "operator_id": "op-unit-1",
         "notes": "Delaying departure until daylight hours due to landslide risk."
-    })
+    }, headers=operator_headers)
     assert resp2.status_code == 201
     data2 = resp2.json()
     assert data2["action"] == "OVERRIDE"

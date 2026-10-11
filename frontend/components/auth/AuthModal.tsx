@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import {
+  AlertCircle,
   X,
   Shield,
   User,
@@ -26,6 +28,8 @@ interface AuthModalProps {
 
 export function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const { user, role, switchRole, login, signUp, loginWithMagicLink, isLoading, isAuthenticated } = useAuth();
+  const router = useRouter();
+  const pathname = usePathname();
   const [activeTab, setActiveTab] = useState<'persona' | 'password' | 'magic'>('password');
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
@@ -34,6 +38,16 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   if (!isOpen) return null;
+
+  // A verified session supersedes the middleware guest-evaluation flag: drop ?guest=1
+  // from the URL while keeping every other query parameter intact.
+  const dismissGuestQuery = () => {
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has('guest')) return;
+    params.delete('guest');
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname);
+  };
 
   const handlePersonaSelect = async (targetRole: UserRole) => {
     // Locked mode: send the evaluator to the account tab instead of flipping personas.
@@ -64,6 +78,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
       const res = await signUp(email, password, selectedSignupRole);
       if (res.success) {
         setStatusMessage({ type: 'success', text: 'Akun berhasil dibuat. Sesi aktif siap digunakan.' });
+        dismissGuestQuery();
         setTimeout(onClose, 800);
       } else {
         setStatusMessage({ type: 'error', text: res.error || 'Gagal mendaftarkan akun.' });
@@ -72,6 +87,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
       const res = await login(email, password);
       if (res.success) {
         setStatusMessage({ type: 'success', text: 'Berhasil masuk.' });
+        dismissGuestQuery();
         setTimeout(onClose, 800);
       } else {
         setStatusMessage({ type: 'error', text: res.error || 'Email atau kata sandi salah.' });
@@ -93,6 +109,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
         type: 'success',
         text: 'Tautan autentikasi telah diproses. Sesi akses aktif diterapkan.',
       });
+      dismissGuestQuery();
       setTimeout(onClose, 1000);
     } else {
       setStatusMessage({ type: 'error', text: res.error || 'Gagal memproses Magic Link.' });
@@ -198,7 +215,11 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                 : 'bg-red-950/30 border-red-500/30 text-red-300'
             }`}
           >
-            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            {statusMessage.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+            ) : (
+              <AlertCircle className="w-4 h-4 shrink-0" />
+            )}
             <span>{statusMessage.text}</span>
           </div>
         )}
@@ -378,7 +399,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                   </div>
 
                   <p className="text-xs font-sans text-slate-400 leading-relaxed">
-                    Akses terbuka penuh tanpa batasan untuk simulasi bencana interaktif, audit benchmark empiris, dan peninjauan seluruh modul teknis.
+                    Mode Pratinjau Terbatas (Evaluasi Tamu): Akses pemantauan peta dasar tanpa hak wewenang persetujuan atau mutasi rute operasional.
                   </p>
 
                   <div className="flex items-center gap-1.5 pt-1 border-t border-[#1c2432] text-xs font-mono text-slate-400">
@@ -389,7 +410,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                       Audit Benchmark
                     </span>
                     <span className="px-1.5 py-0.5 rounded bg-[#080d14] border border-[#1c2432]">
-                      Akses Penuh
+                      Akses Terbatas
                     </span>
                   </div>
                 </button>

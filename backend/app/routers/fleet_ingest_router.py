@@ -16,15 +16,7 @@ from app.schemas.fleet_ingest import (
     FleetIngestResponse,
     ManifestTemplateResponse,
 )
-from app.auth.supabase_auth import (
-    get_current_user,
-    get_optional_user,
-    require_roles,
-    UserSession,
-    ROLE_DISPATCHER,
-    ROLE_REGULATOR,
-    ROLE_GUEST,
-)
+from app.auth.supabase_auth import get_optional_user, UserSession
 from app.services.telemetry_service import (
     telemetry_service,
     SUMATRA_STRATEGIC_HUBS,
@@ -111,15 +103,16 @@ async def register_single_vehicle(
 ):
     """
     Register an individual vehicle and cargo manifest.
-    Authorized for DISPATCHER and GUEST roles. Regulators are denied.
+    RBAC: Requires the 'fleet:write' permission (Dispatcher). Guest and Regulator roles are denied with 403.
     """
-    if user.role.upper() == ROLE_REGULATOR:
+    if "fleet:write" not in (user.permissions or []):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "error": "FORBIDDEN",
-                "message": "Akses ditolak: Regulator hanya memiliki izin pantau (read-only) dan tidak dapat mendaftarkan armada.",
+                "message": f"Akses ditolak: Hanya operator dengan wewenang 'fleet:write' (Dispatcher) yang dapat mendaftarkan armada. Peran Anda saat ini adalah {user.role}.",
                 "current_role": user.role,
+                "required_permissions": ["fleet:write"],
             },
         )
 
@@ -150,15 +143,16 @@ async def upload_fleet_manifest(
 ):
     """
     Upload and parse a batch manifest via JSON payload (list of vehicles or raw csv_text).
-    Authorized for DISPATCHER and GUEST roles. Regulators are denied.
+    RBAC: Requires the 'manifests:upload' permission (Dispatcher). Guest and Regulator roles are denied with 403.
     """
-    if user.role.upper() == ROLE_REGULATOR:
+    if "manifests:upload" not in (user.permissions or []):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "error": "FORBIDDEN",
-                "message": "Akses ditolak: Regulator tidak diizinkan mengunggah manifest armada.",
+                "message": f"Akses ditolak: Hanya operator dengan wewenang 'manifests:upload' (Dispatcher) yang dapat mengunggah manifest armada. Peran Anda saat ini adalah {user.role}.",
                 "current_role": user.role,
+                "required_permissions": ["manifests:upload"],
             },
         )
 
@@ -205,15 +199,16 @@ async def upload_fleet_manifest_file(
 ):
     """
     Upload and parse a batch manifest via multipart CSV file.
-    Authorized for DISPATCHER and GUEST roles. Regulators are denied.
+    RBAC: Requires the 'manifests:upload' permission (Dispatcher). Guest and Regulator roles are denied with 403.
     """
-    if user.role.upper() == ROLE_REGULATOR:
+    if "manifests:upload" not in (user.permissions or []):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "error": "FORBIDDEN",
-                "message": "Akses ditolak: Regulator tidak diizinkan mengunggah manifest armada.",
+                "message": f"Akses ditolak: Hanya operator dengan wewenang 'manifests:upload' (Dispatcher) yang dapat mengunggah manifest armada. Peran Anda saat ini adalah {user.role}.",
                 "current_role": user.role,
+                "required_permissions": ["manifests:upload"],
             },
         )
 
@@ -287,15 +282,16 @@ async def delete_custom_fleet_unit(
 ):
     """
     Delete a custom registered fleet unit.
-    Authorized for DISPATCHER and GUEST roles. Regulators are denied.
+    RBAC: Requires the 'fleet:write' permission (Dispatcher). Guest and Regulator roles are denied with 403.
     """
-    if user.role.upper() == ROLE_REGULATOR:
+    if "fleet:write" not in (user.permissions or []):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "error": "FORBIDDEN",
-                "message": "Akses ditolak: Regulator tidak diizinkan menghapus armada.",
+                "message": f"Akses ditolak: Hanya operator dengan wewenang 'fleet:write' (Dispatcher) yang dapat menghapus armada. Peran Anda saat ini adalah {user.role}.",
                 "current_role": user.role,
+                "required_permissions": ["fleet:write"],
             },
         )
 

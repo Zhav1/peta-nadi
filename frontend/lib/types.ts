@@ -308,6 +308,7 @@ export interface CorridorContext {
   corridor_id: string;
   corridor_name: string;
   timestamp: string;
+  is_fallback: boolean;
   weather: {
     status: string;
     rainfall_mm: number;

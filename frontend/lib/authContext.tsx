@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { api, setAuthToken } from '@/lib/api';
 import { getSupabaseClient } from '@/lib/supabaseClient';
 import type { UserProfile, UserRole, AuthTokenResponse } from '@/lib/types';
@@ -19,6 +19,14 @@ export const DEFAULT_GUEST_PROFILE: UserProfile = {
 
 export const GUEST_LOCK_MESSAGE =
   'Diperlukan autentikasi akun resmi untuk beralih peran operasional.';
+
+const AUTH_SERVICE_UNAVAILABLE_MESSAGE = 'Layanan autentikasi database sedang tidak tersedia';
+
+function isAuthServiceUnavailable(err: unknown): boolean {
+  if (err instanceof TypeError) return true;
+  const candidate = err as { status?: number; name?: string } | null;
+  return candidate?.status === 0 || candidate?.name === 'AuthRetryableFetchError';
+}
 
 interface AuthContextType {
   user: UserProfile;
@@ -58,6 +66,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setTokenState] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const applyToken = useCallback((newToken: string | null, newUser: UserProfile) => {
     setTokenState(newToken);
@@ -137,7 +153,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!res || !res.access_token) {
           return { success: false, error: 'Server tidak mengembalikan sesi peran baru.' };
         }
-        applyToken(res.access_token, res.user);
+        if (isMountedRef.current) {
+          applyToken(res.access_token, res.user);
+        }
         return { success: true };
       } catch (err) {
         console.warn('Switch role API failed:', err);
@@ -146,7 +164,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           error: 'Gagal beralih peran: sesi autentikasi tidak dapat diverifikasi oleh server.',
         };
       } finally {
-        setIsLoading(false);
+        if (isMountedRef.current) {
+          setIsLoading(false);
+        }
       }
     },
     [token, applyToken]
@@ -157,33 +177,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(true);
       try {
         const sb = getSupabaseClient();
-        if (sb) {
-          const { data, error } = await sb.auth.signInWithPassword({ email, password });
-          if (error) throw error;
-          if (data.session) {
-            const token = data.session.access_token;
-            setAuthToken(token);
-            const profile = await api.auth.me();
-            applyToken(token, profile);
-            setIsAuthModalOpen(false);
-            return { success: true };
-          }
+        if (!sb) {
+          return { success: false, error: AUTH_SERVICE_UNAVAILABLE_MESSAGE };
         }
 
-        // Offline / demo fallback login
-        const res = await api.auth.createGuestSession({
-          role: 'DISPATCHER',
-          email,
-          name: email.split('@')[0],
-        });
-        applyToken(res.access_token, res.user);
-        setIsAuthModalOpen(false);
+        const { data, error } = await sb.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        if (!data.session) {
+          return { success: false, error: AUTH_SERVICE_UNAVAILABLE_MESSAGE };
+        }
+
+        const token = data.session.access_token;
+        setAuthToken(token);
+        const profile = await api.auth.me();
+        if (isMountedRef.current) {
+          applyToken(token, profile);
+          setIsAuthModalOpen(false);
+        }
         return { success: true };
       } catch (err: any) {
         console.error('Login error:', err);
-        return { success: false, error: err?.message || 'Gagal masuk. Periksa email dan kata sandi Anda.' };
+        return {
+          success: false,
+          error: isAuthServiceUnavailable(err)
+            ? AUTH_SERVICE_UNAVAILABLE_MESSAGE
+            : err?.message || 'Gagal masuk. Periksa email dan kata sandi Anda.',
+        };
       } finally {
-        setIsLoading(false);
+        if (isMountedRef.current) {
+          setIsLoading(false);
+        }
       }
     },
     [applyToken]
@@ -194,39 +217,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(true);
       try {
         const sb = getSupabaseClient();
-        if (sb) {
-          const { data, error } = await sb.auth.signUp({
-            email,
-            password,
-            options: {
-              data: { role: selectedRole },
-            },
-          });
-          if (error) throw error;
-          if (data.session) {
-            const token = data.session.access_token;
-            setAuthToken(token);
-            const profile = await api.auth.me();
-            applyToken(token, profile);
-            setIsAuthModalOpen(false);
-            return { success: true };
-          }
+        if (!sb) {
+          return { success: false, error: AUTH_SERVICE_UNAVAILABLE_MESSAGE };
         }
 
-        // Demo fallback
-        const res = await api.auth.createGuestSession({
-          role: selectedRole,
+        const { data, error } = await sb.auth.signUp({
           email,
-          name: email.split('@')[0],
+          password,
+          options: {
+            data: { role: selectedRole },
+          },
         });
-        applyToken(res.access_token, res.user);
-        setIsAuthModalOpen(false);
+        if (error) throw error;
+        if (!data.session) {
+          return { success: false, error: AUTH_SERVICE_UNAVAILABLE_MESSAGE };
+        }
+
+        const token = data.session.access_token;
+        setAuthToken(token);
+        const profile = await api.auth.me();
+        if (isMountedRef.current) {
+          applyToken(token, profile);
+          setIsAuthModalOpen(false);
+        }
         return { success: true };
       } catch (err: any) {
         console.error('Sign up error:', err);
-        return { success: false, error: err?.message || 'Gagal mendaftar akun baru.' };
+        return {
+          success: false,
+          error: isAuthServiceUnavailable(err)
+            ? AUTH_SERVICE_UNAVAILABLE_MESSAGE
+            : err?.message || 'Gagal mendaftar akun baru.',
+        };
       } finally {
-        setIsLoading(false);
+        if (isMountedRef.current) {
+          setIsLoading(false);
+        }
       }
     },
     [applyToken]
@@ -237,29 +263,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(true);
       try {
         const sb = getSupabaseClient();
-        if (sb) {
-          const { error } = await sb.auth.signInWithOtp({ email });
-          if (error) throw error;
-          return { success: true };
+        if (!sb) {
+          return { success: false, error: AUTH_SERVICE_UNAVAILABLE_MESSAGE };
         }
 
-        // Demo fallback
-        const res = await api.auth.createGuestSession({
-          role: 'REGULATOR',
-          email,
-          name: email.split('@')[0],
-        });
-        applyToken(res.access_token, res.user);
-        setIsAuthModalOpen(false);
+        const { error } = await sb.auth.signInWithOtp({ email });
+        if (error) throw error;
         return { success: true };
       } catch (err: any) {
         console.error('Magic link error:', err);
-        return { success: false, error: err?.message || 'Gagal mengirim tautan masuk.' };
+        return {
+          success: false,
+          error: isAuthServiceUnavailable(err)
+            ? AUTH_SERVICE_UNAVAILABLE_MESSAGE
+            : err?.message || 'Gagal mengirim tautan masuk.',
+        };
       } finally {
-        setIsLoading(false);
+        if (isMountedRef.current) {
+          setIsLoading(false);
+        }
       }
     },
-    [applyToken]
+    []
   );
 
   const logout = useCallback(async () => {

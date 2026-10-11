@@ -12,7 +12,6 @@ from app.auth.supabase_auth import (
     create_guest_token,
     ROLE_DISPATCHER,
     ROLE_REGULATOR,
-    ROLE_GUEST,
 )
 from app.services.telemetry_service import telemetry_service
 from app.db.local_storage import (
@@ -151,7 +150,7 @@ def test_bulk_manifest_upload_json():
 
 def test_bulk_manifest_upload_csv_file():
     """Test uploading a batch manifest via multipart CSV file."""
-    token = create_guest_token(role=ROLE_GUEST)
+    token = create_guest_token(role=ROLE_DISPATCHER)
     headers = {"Authorization": f"Bearer {token}"}
 
     csv_data = (
