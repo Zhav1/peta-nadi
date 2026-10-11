@@ -1292,9 +1292,10 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 
 ---
 
-## Phase 54: Post-Audit Plothole Remediation, Guest Lockdown Enforcement & Poller-Resilient Corridor Telemetry
-**Goal:** Resolve all plotholes from `POST_IMPLEMENTATION_AUDIT_REPORT.md`: relative detour delay delta, corridor impact persistence across the 30s poller, `is_fallback` sensor badges, backend guest permission alignment, offline login bypass removal, and auth UX guardrails.
+## Phase 54: Post-Audit Plothole Remediation, Guest Lockdown Enforcement & PIHPS Persistence
+**Goal:** Resolve all plotholes from `POST_IMPLEMENTATION_AUDIT_REPORT.md`: relative detour delay delta, corridor impact persistence across the 30s poller, `is_fallback` sensor badges, backend guest permission alignment, offline login bypass removal, and auth UX guardrails. Close the commodity data-availability gap by persisting PIHPS scraper output to `commodity_prices`, running it on startup, and unblocking public reads via migration 009.
 **Status:** COMPLETE ✅
+**Plans:** 54-PLAN.md, 54-WALKTHROUGH.md, 54-ENVIRONMENT-FIXES-AND-PITFALLS.md, 54-LEARNINGS.md
 
 ### Deliverables
 - **Runtime Contract Alignment**:
@@ -1304,13 +1305,43 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
   - `supabase_auth.py`: `ROLE_GUEST` permissions trimmed to read-only `['benchmark:read', 'reports:read']`.
   - `authContext.tsx`: offline guest login bypass removed (explicit *"Layanan autentikasi database sedang tidak tersedia"*), `isMountedRef` race guard on all auth flows.
   - `AuthModal.tsx`: `AlertCircle` error icon, `?guest=1` query cleanup after login, guest persona card copy corrected to limited read-only preview.
+  - `approvals.py` & `fleet_ingest_router.py`: role-name denylists replaced with capability gates (`approvals:write`, `fleet:write`, `manifests:upload`) denying guests and regulators with HTTP 403.
 - **Predictive Risk Guardrail**:
   - `DashboardClient.tsx`: `pred-` prefixed risk catalog IDs bypass the 404-prone `/api/v1/incidents/{id}` round-trip.
+- **PIHPS Persistence & DB Read Policy**:
+  - `pihps_scraper.py`: every weekly PIHPS period point persisted into `commodity_prices` (idempotent delete-then-insert per `(commodity, region, time)`, service-role write client, never raises) — 7 commodities × ~5 periods ≈ 35 rows per cycle.
+  - `main.py`: new `_poll_pihps_loop()` registered as a lifespan task (24h normal / 15m crisis cadence) and added to shutdown cancellation.
+  - `infra/supabase/migrations/009_commodity_prices_public_read.sql`: public SELECT policy unblocking anon reads; writes remain service-role only.
 
 ### Verification Criteria
 - [x] `pytest backend/tests/test_auth_rbac.py` passes (18/18), including guest-denial (HTTP 403) and forged-signature rejection security tests.
+- [x] `pytest backend/tests/test_scrapers.py` passes with the new PIHPS persistence coverage (all period points written to `commodity_prices`).
 - [x] `npx tsc --noEmit` returns 0 type errors.
+- [x] Live `/api/v1/commodities/prices` returns a non-empty series after migration 009 + startup persistence (~35 rows).
 - [x] Documented as Done 2026-10-11 in `NEXT_CONTEXT_TASKS.md`; `POST_IMPLEMENTATION_AUDIT_REPORT.md` marked resolved.
+
+---
+
+## Phase 55: Comprehensive Engines Audit & Stabilization Blueprint
+**Goal:** Stabilize all audited backend engines in the next context window: OpenMeteo `health_check` instantiation fix, NVIDIA NIM catalog model ID, News Extractor model ID, TomTom bbox compliance & credit fallback, `/api/v1/incidents` DB query fix, Redis OSINT stream `maxlen` trimming, and Data Layer RLS hardening — under the Phase 54 principle that no engine may silently mask a failure.
+**Status:** READY FOR IMPLEMENTATION
+**Plans:** 55-PLAN.md, 55-WALKTHROUGH.md, 55-ENVIRONMENT-FIXES-AND-PITFALLS.md, 55-LEARNINGS.md
+**Audit Report:** `SYSTEM_ENGINES_AUDIT_REPORT.md`
+
+### Deliverables (planned)
+- **S1 (P0) — OpenMeteo Instantiation Fix**: implement the abstract `health_check` and correct the `__init__` signature so BMKG + Open-Meteo fusion actually runs (`openmeteo_adapter.py`, `weather_fusion_service.py`).
+- **S2 (P0) — NIM Gateway Model & Fail-Loud Contract**: point `PRIMARY_NIM_MODEL` at the account catalog ID (`deepseek-ai/deepseek-v4.1-flash`), add a startup catalog preflight, replace the canned fallback string with a typed degradation, and filter fallback content in Agent 5.
+- **S3 (P0) — News Extractor / NER Model ID**: replace the invalid `gemini-3.5-flash-lite` with a config-driven valid model; log heuristic fallbacks at warning level.
+- **S4 (P0) — `/api/v1/incidents` Restoration**: fix the 200-`[]` mystery (RLS policy + column alignment + fail-loud error handling) so the 108-row table reaches the API.
+- **S5 (P1) — TomTom Bbox & Credit Fallback**: corridor-anchored tiles ≤ 10,000 km², 403 `InsufficientFunds` latch/backoff, honest `is_fallback`/degraded status, health wiring.
+- **S6 (P1) — Redis OSINT Trimming**: `XADD … MAXLEN ~ 10000` + backlog `XTRIM` + Redis memory guard (43,640 items observed).
+- **S7 (P1) — RLS Hardening**: explicit RLS decisions and read policies for the 7 core tables + `ground_truth_outcomes`; fix the policy-only migration 009 pattern.
+
+### Verification Criteria (planned)
+- [ ] `pytest backend/tests` 100% pass including new engine-contract tests (openmeteo instantiation, fallback rejection, incidents populated query, tile area ≤ 10k km², XADD maxlen).
+- [ ] `npx tsc --noEmit` returns 0 type errors.
+- [ ] Live `/api/v1/incidents` returns rows; `XLEN lrip:stream:osint` ≤ 10,000; NIM returns real completions with explicit degradation when unavailable.
+- [ ] `SYSTEM_ENGINES_AUDIT_REPORT.md` findings S1–S7 all resolved and documented in Phase 55 walkthrough results.
 
 ---
 
