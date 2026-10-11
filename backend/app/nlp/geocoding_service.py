@@ -11,6 +11,8 @@ logger = logging.getLogger(__name__)
 
 GEOCODE_CACHE_TTL = 7 * 24 * 3600  # 7 days in seconds
 
+KNOWN_POIS = {k: v["coords"] for k, v in PAN_SUMATRA_GAZETTEER.items()}
+
 
 def is_within_sumatra(lat: float, lon: float) -> bool:
     """Verifies that coordinates fall strictly within Sumatra island boundaries."""

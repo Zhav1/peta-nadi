@@ -149,6 +149,19 @@ async def _poll_news_loop():
         logger.error(f"Fatal error in News poller loop: {e}")
 
 
+async def _poll_pihps_loop():
+    """Background poller for Bank Indonesia PIHPS commodity prices (24h normal / 15m crisis)."""
+    logger.info("Starting background PIHPS poller task...")
+    try:
+        from app.scrapers.pihps_scraper import PIHPSScraper
+        scraper = PIHPSScraper()
+        await scraper.run()
+    except asyncio.CancelledError:
+        logger.info("PIHPS background poller task canceled.")
+    except Exception as e:
+        logger.error(f"Fatal error in PIHPS poller loop: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application startup and shutdown lifecycle."""
@@ -167,12 +180,13 @@ async def lifespan(app: FastAPI):
     earth2_task = asyncio.create_task(_poll_earth2_loop())
     ais_task = asyncio.create_task(_run_aisstream())
     news_task = asyncio.create_task(_poll_news_loop())
+    pihps_task = asyncio.create_task(_poll_pihps_loop())
 
     yield  # Application runs here
 
     # Shutdown
     logger.info("Shutting down background workers...")
-    for t in [bmkg_task, tomtom_task, earth2_task, ais_task, news_task]:
+    for t in [bmkg_task, tomtom_task, earth2_task, ais_task, news_task, pihps_task]:
         t.cancel()
     close_redis()
 

@@ -9,8 +9,24 @@ from typing import List, Dict, Any, Optional
 import httpx
 from app.scrapers.base_scraper import BaseScraper
 from app.services.redis_client import STREAM_PIHPS, get_redis
+from app.db.supabase_client import get_client, get_service_client
 
 logger = logging.getLogger(__name__)
+
+REGION = "north_sumatra"
+
+
+def _get_write_client():
+    """
+    Supabase client for ingestion writes: prefer the service-role client
+    (bypasses Row Level Security), falling back to the shared anon client
+    when no service key is configured.
+    """
+    try:
+        return get_service_client()
+    except Exception:
+        return get_client()
+
 
 COMCAT_IDS = {
     "beras": "com_3",
@@ -112,15 +128,26 @@ class PIHPSScraper(BaseScraper):
             if not rows:
                 continue
 
-            # Find commodity row (level 2)
+            # Prefer the commodity detail row (level 2, e.g. "Beras Kualitas Medium I")
             com_row = None
             for row in rows:
-                if isinstance(row, dict) and row.get('level') == 2:
+                if isinstance(row, dict) and str(row.get('level')) == '2':
                     com_row = row
                     break
 
-            if not com_row:
-                continue
+            if com_row is None:
+                # Some commodities (e.g. cabai_merah) only expose the province-level
+                # aggregate row (level 1, e.g. "Cabai Merah") with no level-2 detail row.
+                first_row = rows[0] if rows and isinstance(rows[0], dict) else None
+                if first_row is not None and str(first_row.get('level')) == '1':
+                    logger.warning(
+                        f"No level-2 PIHPS row for {com_name}; falling back to province-level "
+                        f"aggregate row '{first_row.get('name')}' (level 1)"
+                    )
+                    com_row = first_row
+                else:
+                    logger.warning(f"No usable PIHPS commodity row for {com_name}; skipping")
+                    continue
 
             # Extract date columns
             period_cols = [k for k in com_row.keys() if re.match(r'\w+ \d{4} \(', k)]
@@ -134,14 +161,22 @@ class PIHPSScraper(BaseScraper):
                     price = float(val_str)
                     date_str = self.parse_period_to_date(col)
                     if price > 0 and date_str:
-                        price_readings.append((date_str, price))
+                        price_readings.append({"date": date_str, "price": price, "period": col})
                 except ValueError:
                     continue
 
             # Sort price readings by date ascending
-            price_readings.sort(key=lambda x: x[0])
+            price_readings.sort(key=lambda x: x["date"])
             if not price_readings:
                 continue
+
+            # Persist every per-period price point (idempotent; never raises)
+            await self.persist_price_points(
+                com_name,
+                price_readings,
+                row_name=com_row.get("name"),
+                level=com_row.get("level"),
+            )
 
             # Retrieve rolling history from Redis
             redis_key = f"lrip:pihps:rolling:{com_name}"
@@ -155,14 +190,14 @@ class PIHPSScraper(BaseScraper):
             # Populate history with prior readings if empty
             if not history and len(price_readings) > 1:
                 # Use up to 7 oldest readings to seed baseline (leaving the latest one for evaluation)
-                history = [p[1] for p in price_readings[:-1]][-7:]
+                history = [p["price"] for p in price_readings[:-1]][-7:]
                 try:
                     r.set(redis_key, json.dumps(history), ex=86400 * 10)
                 except Exception as e:
                     logger.error(f"Failed to seed baseline in Redis: {e}")
 
             # Process the latest reading
-            latest_date, latest_price = price_readings[-1]
+            latest_date, latest_price = price_readings[-1]["date"], price_readings[-1]["price"]
             dedup_key = f"pihps:{com_name}:sumut:{latest_date.replace('-', '')}"
 
             # Check if this reading has already been published/processed
@@ -224,6 +259,74 @@ class PIHPSScraper(BaseScraper):
                 logger.error(f"Failed to update rolling history in Redis: {e}")
 
         return events
+
+    async def persist_price_points(
+        self,
+        com_name: str,
+        readings: List[Dict[str, Any]],
+        row_name: Optional[str] = None,
+        level: Any = None,
+    ) -> int:
+        """
+        Persist per-period PIHPS readings into the Supabase commodity_prices table.
+
+        Idempotent per (time, commodity, region) key: the table has no unique
+        constraint, so any existing row for the key is deleted before inserting
+        (no schema migration required).
+
+        Never raises: missing credentials, an offline Supabase, or a failed write
+        are logged as warnings and skipped so the scraper keeps running.
+        Returns the number of price points successfully written.
+        """
+        if not readings:
+            return 0
+
+        try:
+            sb = _get_write_client()
+        except Exception as e:
+            logger.warning(f"Supabase unavailable, skipping PIHPS persistence for {com_name}: {e}")
+            return 0
+
+        def _delete_point(time_iso: str):
+            return (
+                sb.table("commodity_prices")
+                .delete()
+                .eq("commodity", com_name)
+                .eq("region", REGION)
+                .eq("time", time_iso)
+                .execute()
+            )
+
+        def _insert_point(record: Dict[str, Any]):
+            return sb.table("commodity_prices").insert(record).execute()
+
+        written = 0
+        for reading in readings:
+            time_iso = f"{reading['date']}T00:00:00+00:00"
+            record = {
+                "time": time_iso,
+                "commodity": com_name,
+                "region": REGION,
+                "price_idr": reading["price"],
+                "source": self.source_name,
+                "metadata": {
+                    "period": reading["period"],
+                    "province": "Sumatera Utara",
+                    "market": "Pasar Tradisional Sumatera Utara",
+                    "row_name": row_name,
+                    "level": level,
+                },
+            }
+            try:
+                await asyncio.to_thread(_delete_point, time_iso)
+                await asyncio.to_thread(_insert_point, record)
+                written += 1
+            except Exception as e:
+                logger.warning(f"Failed to persist PIHPS price point {com_name}@{reading['date']}: {e}")
+
+        if written:
+            logger.info(f"Persisted {written} PIHPS price points for {com_name} into commodity_prices")
+        return written
 
     async def health_check(self) -> bool:
         """Check if BI website endpoint is reachable."""

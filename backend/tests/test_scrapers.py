@@ -1,21 +1,34 @@
 import json
+import logging
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
 from datetime import datetime, timezone
 
-from app.scrapers.pihps_scraper import PIHPSScraper
+from app.scrapers.pihps_scraper import PIHPSScraper, _get_write_client
 from app.scrapers.marketplace_scraper import MarketplaceScraper
 from app.scrapers.social_scraper import SocialScraper
 from app.nlp.ner_pipeline import extract_locations, extract_locations_gazetteer
 from app.nlp.geocoding_service import geocode, KNOWN_POIS
+
+
+@pytest.fixture(autouse=True)
+def mock_pihps_service_client():
+    """Guarantee tests never use the real service-role Supabase credentials."""
+    with patch(
+        "app.scrapers.pihps_scraper.get_service_client",
+        side_effect=RuntimeError("service key not configured in tests"),
+    ) as mock_service_client:
+        yield mock_service_client
+
 
 # ==============================================================================
 # PIHPS Scraper Tests
 # ==============================================================================
 
 @pytest.mark.asyncio
+@patch("app.scrapers.pihps_scraper.get_client")
 @patch("app.scrapers.pihps_scraper.get_redis")
-async def test_pihps_no_spike(mock_get_redis):
+async def test_pihps_no_spike(mock_get_redis, mock_get_client):
     # Setup mock Redis
     mock_redis = MagicMock()
     mock_redis.get.side_effect = [
@@ -48,8 +61,9 @@ async def test_pihps_no_spike(mock_get_redis):
 
 
 @pytest.mark.asyncio
+@patch("app.scrapers.pihps_scraper.get_client")
 @patch("app.scrapers.pihps_scraper.get_redis")
-async def test_pihps_spike_detection_high(mock_get_redis):
+async def test_pihps_spike_detection_high(mock_get_redis, mock_get_client):
     mock_redis = MagicMock()
     # 7-day mean of these is 15000.
     # New price of 16200 is +8% (>= 5%, so "high" spike)
@@ -77,8 +91,9 @@ async def test_pihps_spike_detection_high(mock_get_redis):
 
 
 @pytest.mark.asyncio
+@patch("app.scrapers.pihps_scraper.get_client")
 @patch("app.scrapers.pihps_scraper.get_redis")
-async def test_pihps_spike_detection_critical(mock_get_redis):
+async def test_pihps_spike_detection_critical(mock_get_redis, mock_get_client):
     mock_redis = MagicMock()
     # 7-day mean of these is 15000.
     # New price of 18000 is +20% (>= 15%, so "critical" spike)
@@ -103,6 +118,170 @@ async def test_pihps_spike_detection_critical(mock_get_redis):
     assert len(events) == 1
     assert events[0]["event_type"] == "price_spike"
     assert events[0]["severity"] == "critical"
+
+
+# ==============================================================================
+# PIHPS Persistence to Supabase commodity_prices
+# ==============================================================================
+
+def test_pihps_write_client_prefers_service_role_client():
+    """Ingestion writes prefer the RLS-bypassing service client when configured."""
+    with patch("app.scrapers.pihps_scraper.get_service_client", return_value="service-role") as mock_service:
+        assert _get_write_client() == "service-role"
+        mock_service.assert_called_once()
+
+    with patch(
+        "app.scrapers.pihps_scraper.get_service_client", side_effect=RuntimeError("no key")
+    ), patch("app.scrapers.pihps_scraper.get_client", return_value="anon"):
+        assert _get_write_client() == "anon"
+
+
+@pytest.mark.asyncio
+@patch("app.scrapers.pihps_scraper.get_client")
+@patch("app.scrapers.pihps_scraper.get_redis")
+async def test_pihps_persists_all_period_points_to_supabase(mock_get_redis, mock_get_client):
+    mock_redis = MagicMock()
+    mock_redis.get.side_effect = [None, None]  # empty rolling history, no dedup hit
+    mock_get_redis.return_value = mock_redis
+
+    scraper = PIHPSScraper()
+    raw_data = {
+        "beras": {
+            "data": [
+                {
+                    "level": 2,
+                    "name": "Beras Kualitas Medium I",
+                    "Jan 2026 (I)": "13,000",
+                    "Jan 2026 (II)": "13,200",
+                    "Jan 2026 (III)": "13,500",
+                }
+            ]
+        }
+    }
+
+    events = await scraper.parse(raw_data)
+    assert len(events) == 1  # event stream behaviour unchanged
+
+    builder = mock_get_client.return_value.table.return_value
+    mock_get_client.return_value.table.assert_called_with("commodity_prices")
+
+    inserted = [call.args[0] for call in builder.insert.call_args_list]
+    assert len(inserted) == 3  # all periods persisted, not just the latest
+    assert [r["price_idr"] for r in inserted] == [13000.0, 13200.0, 13500.0]
+    assert [r["metadata"]["period"] for r in inserted] == ["Jan 2026 (I)", "Jan 2026 (II)", "Jan 2026 (III)"]
+    for record in inserted:
+        assert record["commodity"] == "beras"
+        assert record["region"] == "north_sumatra"
+        assert record["source"] == "pihps"
+        assert record["metadata"]["row_name"] == "Beras Kualitas Medium I"
+        assert record["metadata"]["level"] == 2
+
+    # Idempotency: each (time, commodity, region) key is deleted before insert
+    delete_time_eq = builder.delete.return_value.eq.return_value.eq.return_value.eq
+    assert [call.args[1] for call in delete_time_eq.call_args_list] == [
+        "2026-01-04T00:00:00+00:00",
+        "2026-01-11T00:00:00+00:00",
+        "2026-01-18T00:00:00+00:00",
+    ]
+    assert delete_time_eq.return_value.execute.call_count == 3
+
+
+@pytest.mark.asyncio
+@patch("app.scrapers.pihps_scraper.get_client")
+@patch("app.scrapers.pihps_scraper.get_redis")
+async def test_pihps_persistence_skips_when_supabase_unavailable(mock_get_redis, mock_get_client, caplog):
+    mock_redis = MagicMock()
+    mock_redis.get.side_effect = [None, None]
+    mock_get_redis.return_value = mock_redis
+    mock_get_client.side_effect = RuntimeError("Supabase credentials not configured")
+
+    scraper = PIHPSScraper()
+    raw_data = {"beras": {"data": [{"level": 2, "Jan 2026 (I)": "13,400"}]}}
+
+    with caplog.at_level(logging.WARNING):
+        events = await scraper.parse(raw_data)
+
+    assert len(events) == 1  # parse still succeeds without Supabase
+    assert any("skipping PIHPS persistence" in rec.getMessage() for rec in caplog.records)
+
+
+@pytest.mark.asyncio
+@patch("app.scrapers.pihps_scraper.get_client")
+@patch("app.scrapers.pihps_scraper.get_redis")
+async def test_pihps_persistence_skips_on_write_failure(mock_get_redis, mock_get_client, caplog):
+    mock_redis = MagicMock()
+    mock_redis.get.side_effect = [None, None]
+    mock_get_redis.return_value = mock_redis
+
+    builder = mock_get_client.return_value.table.return_value
+    builder.insert.return_value.execute.side_effect = Exception("connection reset")
+
+    scraper = PIHPSScraper()
+    raw_data = {"beras": {"data": [{"level": 2, "Jan 2026 (I)": "13,400"}]}}
+
+    with caplog.at_level(logging.WARNING):
+        events = await scraper.parse(raw_data)
+
+    assert len(events) == 1  # a failed write never crashes the scraper
+    assert any("Failed to persist PIHPS price point" in rec.getMessage() for rec in caplog.records)
+
+
+@pytest.mark.asyncio
+@patch("app.scrapers.pihps_scraper.get_client")
+@patch("app.scrapers.pihps_scraper.get_redis")
+async def test_pihps_cabai_merah_falls_back_to_province_level_row(mock_get_redis, mock_get_client, caplog):
+    mock_redis = MagicMock()
+    mock_redis.get.side_effect = [None, None]
+    mock_get_redis.return_value = mock_redis
+
+    scraper = PIHPSScraper()
+    raw_data = {
+        "cabai_merah": {
+            "data": [
+                {
+                    "level": 1,
+                    "name": "Cabai Merah",
+                    "Sep 2026 (I)": "56,050",
+                    "Sep 2026 (II)": "58,000",
+                }
+            ]
+        }
+    }
+
+    with caplog.at_level(logging.WARNING):
+        events = await scraper.parse(raw_data)
+
+    assert len(events) == 1
+    assert any("No level-2 PIHPS row for cabai_merah" in rec.getMessage() for rec in caplog.records)
+
+    builder = mock_get_client.return_value.table.return_value
+    inserted = [call.args[0] for call in builder.insert.call_args_list]
+    assert len(inserted) == 2
+    assert all(r["commodity"] == "cabai_merah" for r in inserted)
+    assert inserted[0]["metadata"]["level"] == 1
+    assert inserted[0]["metadata"]["row_name"] == "Cabai Merah"
+
+
+@pytest.mark.asyncio
+@patch("app.scrapers.pihps_scraper.get_client")
+@patch("app.scrapers.pihps_scraper.get_redis")
+async def test_pihps_skips_when_no_level2_or_aggregate_row(mock_get_redis, mock_get_client, caplog):
+    mock_redis = MagicMock()
+    mock_get_redis.return_value = mock_redis
+
+    scraper = PIHPSScraper()
+    raw_data = {
+        "cabai_merah": {
+            "data": [{"level": 3, "name": "Pasar Tradisional X", "Jan 2026 (I)": "60,000"}]
+        }
+    }
+
+    with caplog.at_level(logging.WARNING):
+        events = await scraper.parse(raw_data)
+
+    assert events == []
+    mock_get_client.assert_not_called()
+    assert any("No usable PIHPS commodity row" in rec.getMessage() for rec in caplog.records)
 
 
 # ==============================================================================
