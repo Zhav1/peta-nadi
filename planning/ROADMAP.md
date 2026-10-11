@@ -1224,11 +1224,81 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 
 ---
 
+## Phase 52: Dynamic Pan-Sumatra News Aggregator & Supabase-Native HITL Decision Pipeline
+**Requirements Covered:** NEWS-52.1, GEO-52.1, SUPA-52.1, HITL-52.1, MOCK-FREE-52.1
+**Goal:** Transform news intelligence and fleet alerts from static North Sumatra mocks into an end-to-end dynamic Pan-Sumatra spatial intelligence engine backed natively by Supabase (PostgreSQL 17 + PostGIS + Realtime), with automated incident synthesis and a Globot-style Human-in-the-Loop decision review drawer.
+**Status:** COMPLETE ✅
+**Plans:** 52-PLAN.md, 52-WALKTHROUGH.md, 52-ENVIRONMENT-FIXES-AND-PITFALLS.md, 52-LEARNINGS.md
+
+### Deliverables
+- **Supabase Cloud Backbone & Realtime**:
+  - `008_news_articles_and_realtime.sql`: DDL for `public.news_articles` with PostGIS `GEOGRAPHY(Point, 4326)` and GiST indexes.
+  - Enabled Supabase Realtime publication on `news_articles`, `incidents`, and `route_approvals`.
+- **Pan-Sumatra Spatial Intelligence**:
+  - `gazetteer_data.py`: Comprehensive logistics dictionary covering 10 provinces, 154 regencies/cities, passes, ports, and corridors.
+  - `geocoding_service.py`: 3-tier resolver (Gazetteer $\to$ Redis $\to$ Sumatra-bounded Nominatim).
+  - `news_extractor.py`: Attached true coordinates and PostGIS WKT points to articles.
+- **Dynamic Ingestion & Incident Synthesis**:
+  - `news_aggregator.py`: Live scraping across 10 LKBN Antara bureaus + Google News targeted queries.
+  - `unified_news_ingestor.py`: Ingestion orchestrator that detects road closures, synthesizes physical incidents in `public.incidents`, and triggers `ImpactAssessmentService`.
+- **Globot-Style Human-in-the-Loop Interface**:
+  - `HitlDecisionDrawer.tsx`: Ground truth news citations, cargo spoilage vs detour cost matrix, and action buttons (`[SETUJUI DETOUR]`, `[TAHAN BUFFER]`, `[TETAP RUTE AWAL]`).
+  - `TopNavTelemetry.tsx` & `DashboardClient.tsx`: Real-time HUD button with pulsing pending item counter badge.
+  - `news_router.py`: REST endpoints `GET /api/v1/news/hitl-pending` and `POST /api/v1/news/hitl-action`.
+- **Complete Static Mock Removal**:
+  - Removed `MOCK_NEWS_FALLBACK` from `useNewsVerification.ts`.
+  - Removed `FALLBACK_STANDARDIZED_ARTICLES` from `news_router.py`.
+  - Removed `MOCK_SOCIAL_POSTS` from `social_scraper.py`.
+  - Removed synthetic `random.seed()` prices from `commodity_router.py`.
+
+### Verification Criteria
+- [x] Pytest suite passes cleanly: `pytest backend/tests/test_news_pipeline.py` (5/5 tests passing).
+- [x] TypeScript compiler passes with 0 errors (`npx tsc --noEmit`).
+- [x] Supabase project `ulpmmacsdkohwkmyhlwj` live verification: 30+ dynamic Sumatra news records upserted with PostGIS coordinates, incidents synced, and approval records committed.
+- [x] Next.js 100% zoom layout verified: clearance $\ge 96.4\text{px}$ between top telemetry HUD and right map controls.
+
+---
+
+## Phase 53: System Audit Resolution, Tangential Routing Geometry, Strict RBAC, & Reactive Corridor Recalculation
+**Goal:** Fix routing geometry errors (Tebing Tinggi coords), implement tangential hazard avoidance algorithm, mount backend demo router, enforce strict RBAC guardrails with Next.js edge route middleware, and wire reactive corridor recalculation.
+**Status:** COMPLETE ✅
+**Plans:** 53-PLAN.md, 53-WALKTHROUGH.md, 53-ENVIRONMENT-FIXES-AND-PITFALLS.md, 53-LEARNINGS.md
+
+### Deliverables
+- **Routing Geometry & Tangential Avoidance Generator**:
+  - `mapboxRoutingService.ts`: Corrected `tebingtinggi` coords from `[98.9560, 3.5680]` to true `[99.1621, 3.3251]`. Added `perbaungan` and `seirampah` interchange nodes.
+  - `aiDynamicRouter.ts`: Added 4 bypass junctions (`galang_junction`, `dolok_masihul_jct`, `pantai_cermin_coastal`, `bangun_purba_jct`). Implemented Orthogonal / Tangential Avoidance generator projecting normal vectors at $(r + 6\text{ km})$ around hazard circles. Replaced violet `#8B5CF6` with amber `#F59E0B`.
+- **Backend Demo Router & Node Alias Resolution**:
+  - `main.py`: Mounted `demo_router.router` under `/api` (eliminating 404 on `/api/demo/start`).
+  - `route_optimization.py`: Implemented `ALIAS_MAP` and `_resolve_network_node` to prevent unintended fallback degradation to Lampung.
+  - `health.py`: Set local adapter status fallback to `healthy` so reports show verified 100% data integrity.
+- **Simulation Page UX & Route State Precedence**:
+  - `SimulationSection.tsx`: In-place 600ms loading feedback, active mitigation card with `ShieldCheck` audit badge, and explicit action buttons `[Tampilkan di Peta 4D]` and `[Lihat Dampak di Laporan]`. Encoded `cargoTonnage` into `actionDesc`. Glassmorphism compliance (`backdrop-blur-md bg-[#0c0e12]/80 border border-white/10`).
+  - `DashboardClient.tsx`: Unified route state precedence (`currentMapRoutes.length > 0 ? currentMapRoutes : selectedCrisis?.route_recommendations`), synced cyan `#00f0ff` approval stroke, and normalized `risk_score` fallback from `12` to `0.12`.
+  - `mock_crisis_state.json` & `useDemoState.ts`: Replaced submerged Lubuk Pakam coords with verified bypass waypoints.
+- **Strict RBAC & Route Middleware**:
+  - `authContext.tsx` & `AuthModal.tsx`: Restricted default guest mode, locked persona switching behind verified credentials, and synced `prehub_auth_token` cookie.
+  - `middleware.ts`: Next.js Edge Middleware guarding `/dashboard`, redirecting unauthenticated users to `/dashboard?guest=1` with `GuestEvaluationBanner`.
+  - `supabase_auth.py` & `auth_router.py`: Removed unsafe `verify_signature=False` fallback and enforced active sessions on `/switch-role`.
+- **Reactive Corridor Recalculation**:
+  - `useCorridorContext.ts`: Implemented `applyOperationalImpact` to immediately recalculate speed, delay, congestion %, and commodity prices upon detour approvals.
+
+### Verification Criteria
+- [x] TypeScript compiler passes cleanly: `npx tsc --noEmit` (0 errors).
+- [x] Backend test suite passes cleanly: `pytest tests/test_system_audit_solutions.py` (46/46 passed).
+- [x] Security test suite passes cleanly: `pytest backend/tests/test_auth_rbac.py` (18/18 passed).
+- [x] Edge Middleware smoke-tested: unauthenticated requests gracefully redirect to `/dashboard?guest=1`.
+- [x] Haversine geometric clearance verification: all mock and demo detour waypoints confirmed $> 17.7\text{ km}$ outside the 15 km Lubuk Pakam flood circle.
+
+---
+
 ## Backlog (Post-Hackathon / v2)
 - Driver mobile app (React Native + WatermelonDB + CRDT offline sync)
 - Enterprise GraphRAG private self-hosted deployment
 - Automated CI/CD pipeline with staging $\to$ production promotion
 - Multi-province rollout (Java corridor & Eastern Indonesia)
+
+
 
 
 

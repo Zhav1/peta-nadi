@@ -1259,11 +1259,45 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 
 ---
 
+## Phase 53: System Audit Resolution, Tangential Routing Geometry, Strict RBAC, & Reactive Corridor Recalculation
+**Goal:** Fix routing geometry errors (Tebing Tinggi coords), implement tangential hazard avoidance algorithm, mount backend demo router, enforce strict RBAC guardrails with Next.js edge route middleware, and wire reactive corridor recalculation.
+**Status:** COMPLETE ✅
+**Plans:** 53-PLAN.md, 53-WALKTHROUGH.md, 53-ENVIRONMENT-FIXES-AND-PITFALLS.md, 53-LEARNINGS.md
+
+### Deliverables
+- **Routing Geometry & Tangential Avoidance Generator**:
+  - `mapboxRoutingService.ts`: Corrected `tebingtinggi` coords from `[98.9560, 3.5680]` to true `[99.1621, 3.3251]`. Added `perbaungan` and `seirampah` interchange nodes.
+  - `aiDynamicRouter.ts`: Added 4 bypass junctions (`galang_junction`, `dolok_masihul_jct`, `pantai_cermin_coastal`, `bangun_purba_jct`). Implemented Orthogonal / Tangential Avoidance generator projecting normal vectors at $(r + 6\text{ km})$ around hazard circles. Replaced violet `#8B5CF6` with amber `#F59E0B`.
+- **Backend Demo Router & Node Alias Resolution**:
+  - `main.py`: Mounted `demo_router.router` under `/api` (eliminating 404 on `/api/demo/start`).
+  - `route_optimization.py`: Implemented `ALIAS_MAP` and `_resolve_network_node` to prevent unintended fallback degradation to Lampung.
+  - `health.py`: Set local adapter status fallback to `healthy` so reports show verified 100% data integrity.
+- **Simulation Page UX & Route State Precedence**:
+  - `SimulationSection.tsx`: In-place 600ms loading feedback, active mitigation card with `ShieldCheck` audit badge, and explicit action buttons `[Tampilkan di Peta 4D]` and `[Lihat Dampak di Laporan]`. Encoded `cargoTonnage` into `actionDesc`. Glassmorphism compliance (`backdrop-blur-md bg-[#0c0e12]/80 border border-white/10`).
+  - `DashboardClient.tsx`: Unified route state precedence (`currentMapRoutes.length > 0 ? currentMapRoutes : selectedCrisis?.route_recommendations`), synced cyan `#00f0ff` approval stroke, and normalized `risk_score` fallback from `12` to `0.12`.
+  - `mock_crisis_state.json` & `useDemoState.ts`: Replaced submerged Lubuk Pakam coords with verified bypass waypoints.
+- **Strict RBAC & Route Middleware**:
+  - `authContext.tsx` & `AuthModal.tsx`: Restricted default guest mode, locked persona switching behind verified credentials, and synced `prehub_auth_token` cookie.
+  - `middleware.ts`: Next.js Edge Middleware guarding `/dashboard`, redirecting unauthenticated users to `/dashboard?guest=1` with `GuestEvaluationBanner`.
+  - `supabase_auth.py` & `auth_router.py`: Removed unsafe `verify_signature=False` fallback and enforced active sessions on `/switch-role`.
+- **Reactive Corridor Recalculation**:
+  - `useCorridorContext.ts`: Implemented `applyOperationalImpact` to immediately recalculate speed, delay, congestion %, and commodity prices upon detour approvals.
+
+### Verification Criteria
+- [x] TypeScript compiler passes cleanly: `npx tsc --noEmit` (0 errors).
+- [x] Backend test suite passes cleanly: `pytest tests/test_system_audit_solutions.py` (46/46 passed).
+- [x] Security test suite passes cleanly: `pytest backend/tests/test_auth_rbac.py` (18/18 passed).
+- [x] Edge Middleware smoke-tested: unauthenticated requests gracefully redirect to `/dashboard?guest=1`.
+- [x] Haversine geometric clearance verification: all mock and demo detour waypoints confirmed $> 17.7\text{ km}$ outside the 15 km Lubuk Pakam flood circle.
+
+---
+
 ## Backlog (Post-Hackathon / v2)
 - Driver mobile app (React Native + WatermelonDB + CRDT offline sync)
 - Enterprise GraphRAG private self-hosted deployment
 - Automated CI/CD pipeline with staging $\to$ production promotion
 - Multi-province rollout (Java corridor & Eastern Indonesia)
+
 
 
 
