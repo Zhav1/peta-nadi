@@ -11,6 +11,56 @@ from app.schemas.intermodal import HedgingSolveRequest, ComplianceVerifyRequest
 
 logger = logging.getLogger(__name__)
 
+# Frontend/operator node keys -> canonical backend road network graph node ids
+ALIAS_MAP = {
+    "belawan": "belawan_port",
+    "belawan port": "belawan_port",
+    "medan": "medan_kim",
+    "medan kim": "medan_kim",
+    "tebingtinggi": "tebing_tinggi_hub",
+    "tebing tinggi": "tebing_tinggi_hub",
+    "siantar": "siantar_hub",
+    "pematang siantar": "siantar_hub",
+    "pematangsiantar": "siantar_hub",
+    "dumai": "dumai_port",
+    "bakauheni": "bakauheni_port",
+}
+
+
+def _normalize_node_key(raw) -> str:
+    if raw is None:
+        return ""
+    return str(raw).strip().lower().replace("-", "_").replace(" ", "_")
+
+
+_NORMALIZED_ALIAS_MAP = {_normalize_node_key(k): v for k, v in ALIAS_MAP.items()}
+
+
+def _resolve_network_node(raw, node_lookup: dict):
+    """Resolve a frontend/operator node key to the matching graph node id."""
+    key = _normalize_node_key(raw)
+    if not key:
+        return None
+
+    candidates = []
+    alias = _NORMALIZED_ALIAS_MAP.get(key)
+    if alias:
+        candidates.append(alias)
+    candidates.append(key)
+
+    for candidate in candidates:
+        if candidate in node_lookup:
+            return node_lookup[candidate]
+
+    # Graph ids may use longer canonical names than the alias target
+    # (e.g. tebing_tinggi_hub -> tebing_tinggi_toll, siantar_hub -> pematangsiantar_hub)
+    for candidate in candidates:
+        base = candidate.replace("_hub", "").replace("_port", "")
+        for node_key, node in node_lookup.items():
+            if node_key.startswith(base) or base in node_key:
+                return node
+    return None
+
 
 async def route_optimization_agent(state: CrisisState) -> dict:
     """Agent 4: NetworkX pgRouting matrix computation + dynamic hazard/news-weighted routing + Spoilage Hedging & Compliance."""
@@ -151,24 +201,16 @@ async def route_optimization_agent(state: CrisisState) -> dict:
         
         node_lookup = {str(n).lower(): n for n in G.nodes}
         
-        origin = None
-        if req_origin and str(req_origin).lower() in node_lookup:
-            origin = node_lookup[str(req_origin).lower()]
-        elif "belawan_port" in G:
-            origin = "belawan_port"
-        elif "Belawan Port" in G:
-            origin = "Belawan Port"
-        elif len(G.nodes) > 0:
+        origin = _resolve_network_node(req_origin, node_lookup)
+        if origin is None:
+            origin = _resolve_network_node("belawan", node_lookup)
+        if origin is None and len(G.nodes) > 0:
             origin = list(G.nodes)[0]
 
-        destination = None
-        if req_dest and str(req_dest).lower() in node_lookup:
-            destination = node_lookup[str(req_dest).lower()]
-        elif "dumai_port" in G:
-            destination = "dumai_port"
-        elif "Dumai Port" in G:
-            destination = "Dumai Port"
-        elif len(G.nodes) > 1:
+        destination = _resolve_network_node(req_dest, node_lookup)
+        if destination is None:
+            destination = _resolve_network_node("dumai", node_lookup)
+        if destination is None and len(G.nodes) > 1:
             destination = list(G.nodes)[-1]
 
         if origin and destination and origin != destination:

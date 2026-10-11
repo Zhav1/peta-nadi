@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import {
   PanelLeftClose,
@@ -18,9 +18,7 @@ import {
   ExternalLink,
   Anchor,
   Plane,
-  Lock,
   PlusCircle,
-  ArrowLeft,
   ChevronDown,
   Play,
   Home,
@@ -36,13 +34,15 @@ import { useCorridorContext } from '@/hooks/useCorridorContext';
 import { useNewsVerification } from '@/hooks/useNewsVerification';
 import { GuidedDemoPanel } from '@/components/demo/GuidedDemoPanel';
 import AnalyticsSection from '@/components/dashboard/AnalyticsSection';
-import SimulationSection from '@/components/dashboard/SimulationSection';
+import SimulationSection, { type ActionPlanParams } from '@/components/dashboard/SimulationSection';
 import ReportsSection from '@/components/dashboard/ReportsSection';
 import EvaluationSection from '@/components/dashboard/EvaluationSection';
 import { CrisisSimulatorBar } from '@/components/map/CrisisSimulatorBar';
 import { HUB_NODES, type HubNode } from '@/lib/mapboxRoutingService';
 import {
   calculateAIDynamicDetourRoutes,
+  getHaversineDistanceKm,
+  isPolylineIntersectingHazardCircle,
   type TransportModality,
 } from '@/lib/aiDynamicRouter';
 import { api } from '@/lib/api';
@@ -176,6 +176,94 @@ const FALLBACK_PREDICTIVE = [
     }
   }
 ];
+
+// Applies operational approval styling: the approved corridor turns cyan, its alternatives dim out.
+// Shared by handleDeployUnifiedActionPlan and handleCommitOperationalRoute so both route stores stay identical.
+function styleApprovedRoutes(routes: RouteRecommendation[], approved: RouteRecommendation): RouteRecommendation[] {
+  return routes.map((r) =>
+    (r.id && r.id === approved.id) || (r.description && r.description === approved.description)
+      ? { ...r, color: '#00f0ff', is_compromised: false, safety_status: 'SAFE_DETOUR' }
+      : { ...r, color: '#334155' }
+  );
+}
+
+// Deterministic tangential bypass: bends a corridor around a hazard circle at radius + 6 km clearance
+// so demo/offline routes never cross straight through the disaster zone.
+function buildHazardBypassRoute(
+  origin: [number, number],
+  destination: [number, number],
+  hazardCenter: [number, number],
+  radiusKm: number
+): RouteRecommendation | null {
+  const effectiveRadiusKm = radiusKm + 2.0;
+  if (
+    getHaversineDistanceKm(origin, hazardCenter) <= effectiveRadiusKm ||
+    getHaversineDistanceKm(destination, hazardCenter) <= effectiveRadiusKm
+  ) {
+    return null;
+  }
+
+  const clearanceKm = radiusKm + 6.0;
+  const kmPerLon = 111.32 * Math.cos((hazardCenter[1] * Math.PI) / 180);
+  const kmPerLat = 110.574;
+
+  const odLonKm = (destination[0] - origin[0]) * kmPerLon;
+  const odLatKm = (destination[1] - origin[1]) * kmPerLat;
+  const odLengthKm = Math.sqrt(odLonKm * odLonKm + odLatKm * odLatKm);
+  if (odLengthKm < 1.0) return null;
+
+  const dirLon = odLonKm / odLengthKm;
+  const dirLat = odLatKm / odLengthKm;
+
+  let best: { coordinates: [number, number][]; lengthKm: number } | null = null;
+
+  for (const side of [1, -1]) {
+    const normLon = -dirLat * side;
+    const normLat = dirLon * side;
+
+    const bend1: [number, number] = [
+      hazardCenter[0] + (normLon * clearanceKm - dirLon * clearanceKm) / kmPerLon,
+      hazardCenter[1] + (normLat * clearanceKm - dirLat * clearanceKm) / kmPerLat,
+    ];
+    const bend2: [number, number] = [
+      hazardCenter[0] + (normLon * clearanceKm + dirLon * clearanceKm) / kmPerLon,
+      hazardCenter[1] + (normLat * clearanceKm + dirLat * clearanceKm) / kmPerLat,
+    ];
+
+    const candidate: [number, number][] = [origin, bend1, bend2, destination];
+    if (isPolylineIntersectingHazardCircle(candidate, hazardCenter, radiusKm)) continue;
+
+    let lengthKm = 0;
+    for (let i = 0; i < candidate.length - 1; i++) {
+      lengthKm += getHaversineDistanceKm(candidate[i], candidate[i + 1]);
+    }
+
+    if (!best || lengthKm < best.lengthKm) {
+      best = { coordinates: candidate, lengthKm };
+    }
+  }
+
+  if (!best) return null;
+
+  const roadDistanceKm = Math.round(best.lengthKm * 1.15);
+  return {
+    id: 'demo-clean-bypass',
+    route_name: 'Rute Pengalihan Bebas Bencana',
+    description: 'Pengalihan geometris melingkari zona bahaya tanpa melintasi pusat genangan',
+    waypoints: best.coordinates.map(([lon, lat]) => ({ lat, lon })),
+    distance_km: roadDistanceKm,
+    eta_minutes: Math.round((roadDistanceKm / 55) * 60),
+    fuel_increase_pct: 13.0,
+    risk_score: 0.07,
+    is_compromised: false,
+    safety_status: 'SAFE_DETOUR',
+    safety_tag: 'RUTE PENGALIHAN BEBAS BENCANA',
+    traffic_level: 'low',
+    congestion_segments: [],
+    modality: 'truck',
+    color: '#10B981',
+  };
+}
 
 function TimeModeBanner({
   activeTimeFilter,
@@ -436,50 +524,73 @@ export default function DashboardClient() {
     };
   }, []);
 
-  const handleDeployUnifiedActionPlan = async (agencyParams?: { agency: string; action: string }) => {
+  const handleDeployUnifiedActionPlan = async (planParams?: ActionPlanParams) => {
+    const allRoutes =
+      currentMapRoutes.length > 0 ? currentMapRoutes : (selectedCrisis?.route_recommendations || []);
+    const approvedRoute = allRoutes[0];
+
     try {
-      const routeName = currentMapRoutes[0]?.route_name || currentMapRoutes[0]?.description || "Rute Bypass Medan-Tebing Tinggi";
+      const routeName = approvedRoute?.route_name || approvedRoute?.description || "Rute Bypass Medan-Tebing Tinggi";
       const origin = selectedOriginNode || 'belawan';
       const destination = selectedDestNode || 'tebingtinggi';
 
       await api.approvals.create({
         incident_id: selectedCrisisId || 'belawan-flash-flood',
-        route_id: currentMapRoutes[0]?.id || 'route-detour-1',
-        recommended_route: currentMapRoutes[0] || {
+        route_id: approvedRoute?.id || 'route-detour-1',
+        recommended_route: approvedRoute || {
           description: routeName,
           waypoints: [],
           distance_km: 42,
           eta_minutes: 38,
           fuel_increase_pct: 4,
-          risk_score: 12
+          risk_score: 0.12
         },
-        operator_id: agencyParams?.agency ? `Otoritas Gabungan (${agencyParams.agency})` : 'Tim Komando Bapanas / Kemenhub',
+        operator_id: planParams?.agency ? `Otoritas Gabungan (${planParams.agency})` : 'Tim Komando Bapanas / Kemenhub',
         crisis_id: selectedCrisisId || 'belawan-flash-flood',
         route_name: routeName,
         origin: origin,
         destination: destination,
-        approved_by: agencyParams?.agency ? `Otoritas Gabungan (${agencyParams.agency})` : 'Tim Komando Bapanas / Kemenhub',
-        notes: agencyParams?.action || 'Rencana Tindakan Gabungan (Unified Action Plan) Berhasil Diterapkan & Ditayangkan di Peta 4D.'
+        approved_by: planParams?.agency ? `Otoritas Gabungan (${planParams.agency})` : 'Tim Komando Bapanas / Kemenhub',
+        notes: planParams?.action || 'Rencana Tindakan Gabungan (Unified Action Plan) Berhasil Diterapkan.'
       });
 
       setApprovalsCount(prev => prev + 1);
       setToast({
-        message: `UNIFIED ACTION PLAN DITERAPKAN: Rute Aman Disetujui & Instruksi Dikirim ke ${agencyParams?.agency || 'BULOG/DISHUB'}!`,
+        message: `UNIFIED ACTION PLAN DITERAPKAN: Rute Aman Disetujui & Instruksi Dikirim ke ${planParams?.agency || 'BULOG/DISHUB'}!`,
         type: 'success'
       });
-
-      setActiveRouteIdx(0);
-      setActiveSection('map');
     } catch (err) {
       console.error('Failed to deploy unified action plan:', err);
-      setApprovalsCount(prev => prev + 1);
       setToast({
-        message: `UNIFIED ACTION PLAN DITERAPKAN: Rute Aman Disetujui & Ditampilkan di Peta 4D!`,
-        type: 'success'
+        message: `Gagal Menerapkan Skenario: ${err instanceof Error ? err.message : String(err)}`,
+        type: 'error'
       });
-      setActiveRouteIdx(0);
-      setActiveSection('map');
     }
+
+    // Single source of truth: keep currentMapRoutes AND selectedCrisis.route_recommendations in lockstep
+    if (approvedRoute) {
+      const styledRoutes = styleApprovedRoutes(
+        currentMapRoutes.length > 0 ? currentMapRoutes : allRoutes,
+        approvedRoute
+      );
+      setCurrentMapRoutes(styledRoutes);
+      setSelectedCrisis((prev) =>
+        prev
+          ? {
+              ...prev,
+              route_recommendations: styleApprovedRoutes(
+                prev.route_recommendations && prev.route_recommendations.length > 0
+                  ? prev.route_recommendations
+                  : styledRoutes,
+                approvedRoute
+              ),
+            }
+          : prev
+      );
+      setActiveRouteIdx(0);
+    }
+
+    // Navigation stays with the user: only the explicit "Tampilkan di Peta 4D" / "Lihat Dampak di Laporan" buttons switch sections.
   };
   const [spatialWeatherPolygons, setSpatialWeatherPolygons] = useState<GeoJSON.FeatureCollection | null>(null);
   const [cuOptInfo, setCuOptInfo] = useState<{ solver: string; compute_time_ms: number; savings_pct: number } | null>({
@@ -653,6 +764,15 @@ export default function DashboardClient() {
     setToast({ message: 'Titik rute dibersihkan. Silakan klik marker kota 1 untuk mengeset Start Node.', type: 'info' });
   }, []);
 
+  // Two-way modality sync: fleet layer filter and route calculation modality stay in lockstep,
+  // so picking KAPAL switches both the maritime vehicle layer and the route visualization.
+  const handleModalityChange = useCallback((modality: TransportModality) => {
+    setSelectedModality(modality);
+    const fleetFilter: 'all' | 'truck' | 'maritime' | 'air' =
+      modality === 'maritime' ? 'maritime' : modality === 'air' ? 'air' : modality === 'truck' ? 'truck' : 'all';
+    setFleetModalityFilter(fleetFilter);
+  }, []);
+
   const handleWsMessage = useCallback((event: WsEvent) => {
     if (event.event === 'node_update') {
       setSelectedCrisis((prev) => prev ? { ...prev, ...event.data } : prev);
@@ -679,8 +799,8 @@ export default function DashboardClient() {
 
       // If backend call fails, check local historical & predictive risk arrays
       if (!baseCrisis) {
-        const histMatch = historicalEpisodes.find((e) => e.incident_id === id || e.id === id) as Record<string, unknown> | undefined;
-        const predMatch = predictiveRisks.find((p) => p.risk_id === id || p.id === id) as Record<string, unknown> | undefined;
+        const histMatch = ([...historicalEpisodes, ...FALLBACK_HISTORICAL] as Record<string, unknown>[]).find((e) => e.incident_id === id || e.id === id) as Record<string, unknown> | undefined;
+        const predMatch = ([...predictiveRisks, ...FALLBACK_PREDICTIVE] as Record<string, unknown>[]).find((p) => p.risk_id === id || p.id === id) as Record<string, unknown> | undefined;
         const item = histMatch || predMatch;
         if (item) {
           baseCrisis = {
@@ -781,12 +901,28 @@ export default function DashboardClient() {
       selectedModality
     );
 
+    // Guarantee the demo route loops around the flood circle: if the primary corridor is
+    // submerged (offline straight-line fallback), substitute a deterministic bypass detour.
+    const primarySubmerged =
+      demoRoutes.length === 0 ||
+      isPolylineIntersectingHazardCircle(
+        demoRoutes[0].waypoints.map((wp) => [wp.lon, wp.lat] as [number, number]),
+        hazardPoint,
+        selectedRadius
+      );
+    const cleanBypass = primarySubmerged
+      ? buildHazardBypassRoute(originCoords, destCoords, hazardPoint, selectedRadius)
+      : null;
+    const resolvedRoutes = cleanBypass
+      ? [cleanBypass, ...demoRoutes.filter((r) => r.is_compromised !== true && r.safety_status !== 'HOLD_DELAY')]
+      : demoRoutes;
+
     const fullDemoState: CrisisState = {
       ...crisis,
-      route_recommendations: demoRoutes,
+      route_recommendations: resolvedRoutes,
     };
 
-    setCurrentMapRoutes(demoRoutes);
+    setCurrentMapRoutes(resolvedRoutes);
     setSelectedCrisis(fullDemoState);
     setSelectedCrisisId(crisis.crisis_id);
     setActiveRouteIdx(0);
@@ -795,6 +931,13 @@ export default function DashboardClient() {
 
   // Phase 23: Lifted Demo Engine State & Stage-Wired Effects
   const demoState = useDemoState(handleCrisisReadyFromDemo);
+
+  // Latest corridor nodes in refs: the demo stage effect reads fresh values
+  // without re-running its side effects on every map node click.
+  const demoOriginRef = useRef<string | null>(null);
+  const demoDestRef = useRef<string | null>(null);
+  demoOriginRef.current = selectedOriginNode;
+  demoDestRef.current = selectedDestNode;
 
   useEffect(() => {
     if (!demoState.isRunning) return;
@@ -815,11 +958,22 @@ export default function DashboardClient() {
 
       case 2: {
         // Stage 2: Consensus Gate — inject hazard flood shockwave at Lubuk Pakam
+        const hazardCenter: [number, number] = [98.87, 3.56]; // Lubuk Pakam flood corridor
         setSimulatedShockwave({
-          center: [98.87, 3.56], // Lubuk Pakam flood corridor
+          center: hazardCenter,
           radiusKm: 15,
           hazardType: 'flood',
         });
+
+        // Preview a clean bypass corridor so the demo route visibly loops around the
+        // 15 km flood circle instead of passing straight through its center.
+        const demoOriginCoords = HUB_NODES[demoOriginRef.current || 'belawan']?.coords || HUB_NODES.belawan.coords;
+        const demoDestCoords = HUB_NODES[demoDestRef.current || 'tebingtinggi']?.coords || HUB_NODES.tebingtinggi.coords;
+        const bypassPreview = buildHazardBypassRoute(demoOriginCoords, demoDestCoords, hazardCenter, 15);
+        if (bypassPreview) {
+          setCurrentMapRoutes([bypassPreview]);
+          setActiveRouteIdx(0);
+        }
         break;
       }
 
@@ -932,13 +1086,21 @@ export default function DashboardClient() {
 
   const handleCommitOperationalRoute = useCallback(
     async (route: RouteRecommendation, action: any, tactical: any) => {
-      // 1. Highlight approved route with operational styling on map
-      setCurrentMapRoutes((prev) =>
-        prev.map((r) =>
-          r.description === route.description
-            ? { ...r, color: '#00f0ff', is_compromised: false, safety_status: 'SAFE_DETOUR' }
-            : { ...r, color: '#334155' }
-        )
+      // 1. Highlight approved route on BOTH route stores so the cyan operational corridor
+      //    reflects instantly on the map canvas (single source of truth, no state fighting)
+      setCurrentMapRoutes((prev) => styleApprovedRoutes(prev.length > 0 ? prev : [route], route));
+      setSelectedCrisis((prev) =>
+        prev
+          ? {
+              ...prev,
+              route_recommendations: styleApprovedRoutes(
+                prev.route_recommendations && prev.route_recommendations.length > 0
+                  ? prev.route_recommendations
+                  : [route],
+                route
+              ),
+            }
+          : prev
       );
       setActiveRouteIdx(0);
 
@@ -1035,7 +1197,6 @@ export default function DashboardClient() {
     });
   }, [selectedOriginNode, selectedDestNode, selectedModality, updateBaselineMapboxRoute]);
 
-  // Dynamic Incident Stream Integration across 4D Temporal Horizons (0% Hardcode Overwrite)
   // Dynamic Incident Stream Integration across 4D Temporal Horizons (0% Hardcode!)
   const getDisplayedIncidents = () => {
     if (activeTimeFilter === 'past') {
@@ -1196,7 +1357,7 @@ export default function DashboardClient() {
               selectedCrisisId={selectedCrisisId}
               onCrisisClick={handleCrisisClick}
               activeRoutes={
-                selectedCrisis?.route_recommendations || currentMapRoutes
+                currentMapRoutes.length > 0 ? currentMapRoutes : (selectedCrisis?.route_recommendations || [])
               }
               activeRouteIdx={activeRouteIdx}
               fireHotspots={[]}
@@ -1536,9 +1697,10 @@ export default function DashboardClient() {
                       key={m.id}
                       type="button"
                       onClick={() => {
-                        setFleetModalityFilter(m.id as 'all' | 'truck' | 'maritime' | 'air');
+                        const fleetFilter = m.id as 'all' | 'truck' | 'maritime' | 'air';
+                        handleModalityChange(fleetFilter === 'all' ? 'best' : fleetFilter);
                         setToast({
-                          message: `Filter Armada: ${m.label} (${m.count} Unit)`,
+                          message: `Filter Armada: ${m.label} (${m.count} Unit) — modalitas rute disinkronkan`,
                           type: 'info',
                         });
                       }}
@@ -1586,7 +1748,7 @@ export default function DashboardClient() {
               selectedRadius={selectedRadius}
               setSelectedRadius={setSelectedRadius}
               selectedModality={selectedModality}
-              setSelectedModality={setSelectedModality}
+              setSelectedModality={handleModalityChange}
               onResetNodes={handleResetNodes}
               isSidebarOpen={isSidebarOpen && !!selectedCrisis}
               isLeftSidebarCollapsed={isLeftSidebarCollapsed}
@@ -1631,7 +1793,11 @@ export default function DashboardClient() {
                   onClick={() => {
                     setActiveTimeFilter(filter);
                     if (filter === 'predict') {
-                      handleCrisisClick('mock-predict-1');
+                      const firstPredictive = predictiveRisks[0];
+                      const predictiveId = firstPredictive
+                        ? String(firstPredictive.risk_id || firstPredictive.id || 'pred-rob-belawan-48h')
+                        : 'pred-rob-belawan-48h';
+                      handleCrisisClick(predictiveId);
                     }
                   }}
                   className={`px-3 py-1 rounded text-xs font-semibold uppercase tracking-wider transition-colors cursor-pointer shrink-0 ${activeTimeFilter === filter
@@ -1701,6 +1867,7 @@ export default function DashboardClient() {
             selectedCrisis={selectedCrisis}
             demoState={demoState}
             onDeployActionPlan={handleDeployUnifiedActionPlan}
+            onNavigateSection={(section) => setActiveSection(section)}
           />
         </div>
 

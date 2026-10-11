@@ -185,25 +185,30 @@ export function useDemoState(onCrisisReady?: (crisis: CrisisState) => void) {
       decision_support_output: `Disruption detected along ${originLabel} -> ${destLabel} corridor. Directing transport fleet via deterministic NetworkX / OR-Tools tangential detour.`,
       route_recommendations: [
         {
-          description: `${originLabel} - ${destLabel} Detour`,
+          id: 'offline-bypass-pesisir',
+          route_name: `${originLabel} - ${destLabel} Bypass Pesisir`,
+          description: `${originLabel} - ${destLabel} Detour via Jalur Pesisir Pantai Cermin (melingkari zona bahaya Lubuk Pakam)`,
           waypoints: [
             { lat: 3.7922, lon: 98.6776 },
-            { lat: 3.6850, lon: 98.6700 },
-            { lat: 3.6420, lon: 98.6720 },
-            { lat: 3.5850, lon: 98.6920 },
-            { lat: 3.5410, lon: 98.7180 },
-            { lat: 3.5520, lon: 98.8050 },
-            { lat: 3.5600, lon: 98.8750 },
-            { lat: 3.5680, lon: 98.9560 },
-            { lat: 3.4850, lon: 99.0450 },
-            { lat: 3.3280, lon: 99.1620 },
+            { lat: 3.7300, lon: 98.7200 },
+            { lat: 3.7300, lon: 98.8000 },
+            { lat: 3.7300, lon: 98.9200 },
+            { lat: 3.6420, lon: 99.0350 },
+            { lat: 3.5400, lon: 99.1200 },
+            { lat: 3.4801, lon: 99.1501 },
+            { lat: 3.3251, lon: 99.1621 },
             { lat: 3.1600, lon: 99.1150 },
             { lat: 2.9595, lon: 99.0687 }
           ],
-          distance_km: 42.5,
-          eta_minutes: 58,
+          distance_km: 142.0,
+          eta_minutes: 168,
           fuel_increase_pct: 12.5,
-          risk_score: 0.2
+          risk_score: 0.12,
+          is_compromised: false,
+          safety_status: 'SAFE_DETOUR',
+          safety_tag: 'BYPASS PESISIR BEBAS BANJIR',
+          modality: 'truck',
+          color: '#10B981'
         }
       ],
       evidence: {

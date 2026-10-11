@@ -26,6 +26,10 @@ export const HIGHWAY_JUNCTION_NODES: Array<{ id: string; name: string; coords: L
   { id: 'perbaungan_artlrd', name: 'Jalinsum Perbaungan', coords: [98.9501, 3.5701], region: 'serdang_bedagai' },
   { id: 'sei_rampah_interchange', name: 'Interchange Sei Rampah', coords: [99.1501, 3.4801], region: 'serdang_bedagai' },
   { id: 'tebing_tinggi_toll', name: 'Gerbang Tol Tebing Tinggi', coords: [99.1621, 3.3251], region: 'tebing_tinggi' },
+  { id: 'galang_junction', name: 'Junction Galang (Bypass Lubuk Pakam)', coords: [98.9050, 3.4450], region: 'deli_serdang' },
+  { id: 'dolok_masihul_jct', name: 'Simpang Dolok Masihul', coords: [99.0480, 3.3850], region: 'serdang_bedagai' },
+  { id: 'pantai_cermin_coastal', name: 'Jalur Pesisir Pantai Cermin', coords: [99.0350, 3.6420], region: 'serdang_bedagai' },
+  { id: 'bangun_purba_jct', name: 'Simpang Bangun Purba', coords: [98.8500, 3.3800], region: 'deli_serdang' },
   // Trans-Sumatra Highway Corridors
   { id: 'banda_aceh_arterial', name: 'Simpang Lima Banda Aceh', coords: [95.3190, 5.5528], region: 'aceh' },
   { id: 'lhokseumawe_jct', name: 'Simpang Empat Lhokseumawe', coords: [97.1420, 5.1780], region: 'aceh' },
@@ -551,7 +555,7 @@ export async function calculateAIDynamicDetourRoutes(
 
     if (!isCompromised) foundCleanRoute = true;
 
-    const routeColor = isCompromised ? '#EF4444' : i === 0 ? '#00F0FF' : i === 1 ? '#3B82F6' : '#8B5CF6';
+    const routeColor = isCompromised ? '#EF4444' : i === 0 ? '#00F0FF' : i === 1 ? '#3B82F6' : '#F59E0B';
     const routeName = i === 0 ? 'Rute Utama (Jalan Tol / Jalinsum)' : i === 1 ? 'Alternatif 1 (Jalur Arteri)' : 'Alternatif 2 (Bypass Sekunder)';
 
     recommendations.push({
@@ -621,7 +625,62 @@ export async function calculateAIDynamicDetourRoutes(
     }
   }
 
-  // STEP 3: If STILL all routes are compromised, surface HOLD / DELAY
+  // STEP 3: Orthogonal / Tangential Avoidance — compute perpendicular bypass waypoints around the hazard circle
+  if (hazardCenter && !foundCleanRoute && token) {
+    const [hazardLon, hazardLat] = hazardCenter;
+    const clearanceKm = radiusKm + 6.0;
+    const kmPerLonDegree = 111.32 * Math.cos((hazardLat * Math.PI) / 180);
+    const kmPerLatDegree = 110.574;
+
+    const odLonKm = (destination[0] - origin[0]) * kmPerLonDegree;
+    const odLatKm = (destination[1] - origin[1]) * kmPerLatDegree;
+    const odLengthKm = Math.sqrt(odLonKm * odLonKm + odLatKm * odLatKm) || 1;
+
+    const perpLonKm = -odLatKm / odLengthKm;
+    const perpLatKm = odLonKm / odLengthKm;
+
+    const offsetLon = (perpLonKm * clearanceKm) / kmPerLonDegree;
+    const offsetLat = (perpLatKm * clearanceKm) / kmPerLatDegree;
+
+    const orthogonalWaypoints: LonLat[] = [
+      [hazardLon + offsetLon, hazardLat + offsetLat],
+      [hazardLon - offsetLon, hazardLat - offsetLat],
+    ];
+
+    for (const waypoint of orthogonalWaypoints) {
+      const orthogonalResult = await fetchMapboxRouteWithForcedWaypoint(origin, destination, waypoint, token);
+      if (!orthogonalResult) continue;
+
+      const isOrthogonalClean = !isPolylineIntersectingHazardCircle(
+        orthogonalResult.coordinates,
+        hazardCenter,
+        radiusKm
+      );
+      if (!isOrthogonalClean) continue;
+
+      foundCleanRoute = true;
+      recommendations.unshift({
+        id: 'route-opt-orthogonal-detour',
+        route_name: 'Rute Pengalihan Bebas Bencana',
+        description: `Rute belok geometris tegak lurus (kiri/kanan) pada jarak ${clearanceKm} km dari pusat bahaya`,
+        waypoints: orthogonalResult.coordinates.map(([lon, lat]) => ({ lat, lon })),
+        distance_km: orthogonalResult.distanceKm,
+        eta_minutes: orthogonalResult.durationMinutes,
+        fuel_increase_pct: 13.5,
+        risk_score: 0.08,
+        is_compromised: false,
+        safety_status: 'SAFE_DETOUR',
+        safety_tag: 'RUTE PENGALIHAN BEBAS BENCANA',
+        traffic_level: 'low',
+        congestion_segments: orthogonalResult.congestionSegments,
+        modality: 'truck',
+        color: '#10B981',
+      });
+      break;
+    }
+  }
+
+  // STEP 4: If STILL all routes are compromised, surface HOLD / DELAY
   if (hazardCenter && !foundCleanRoute) {
     recommendations.unshift({
       id: 'mitigation-hold-delay',

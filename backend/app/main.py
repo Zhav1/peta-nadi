@@ -8,7 +8,6 @@ import os
 import sys
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
 
 # Resolve paths so imports like 'agents' and 'app' work regardless of CWD
 backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -204,7 +203,8 @@ app.include_router(approvals.router, prefix="/api/v1")
 app.include_router(corridor_router.router, prefix="/api/v1")
 app.include_router(routing_router.router, prefix="/api/v1")
 app.include_router(agent_router.router)
-app.include_router(demo_router.router)
+app.include_router(demo_router.router, prefix="/api")
+app.include_router(demo_router.router, include_in_schema=False)  # Keep backward compatibility if anything hits /demo
 app.include_router(commodity_router.router, prefix="/api/v1")
 app.include_router(commodity_router.router, prefix="/api/v1/commodity", include_in_schema=False)
 app.include_router(vehicles_router.router)

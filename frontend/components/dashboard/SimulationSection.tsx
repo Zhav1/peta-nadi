@@ -1,33 +1,58 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   ShieldAlert, 
   Truck, 
   Building2, 
   SlidersHorizontal,
   CheckCircle2,
-  Clock,
-  TrendingDown,
-  Layers,
-  ArrowRight
+  ShieldCheck,
+  Loader2,
+  Map as MapIcon,
+  FileText,
+  RotateCcw,
 } from 'lucide-react';
 import type { CrisisState } from '@/lib/types';
+
+export interface ActionPlanParams {
+  agency: string;
+  action: string;
+  closureHours: number;
+  cargoTonnage: number;
+  dishubDiversion: boolean;
+  bulogStockAlloc: number;
+  bnpbRescueUnits: number;
+}
 
 interface SimulationSectionProps {
   crisisId?: string | null;
   selectedCrisis?: CrisisState | null;
   demoState?: Record<string, unknown> | null;
-  onDeployActionPlan?: (params?: { agency: string; action: string }) => void;
+  onDeployActionPlan?: (params: ActionPlanParams) => void;
+  onNavigateSection?: (section: 'map' | 'reports') => void;
 }
 
 export default function SimulationSection({ 
   selectedCrisis, 
   demoState,
-  onDeployActionPlan 
+  onDeployActionPlan,
+  onNavigateSection 
 }: SimulationSectionProps) {
   const [activeAgency, setActiveAgency] = useState<string>('BULOG');
   const [toast, setToast] = useState<{ message: string; type: 'info' | 'success' | 'warning' } | null>(null);
+  const [isApplying, setIsApplying] = useState<boolean>(false);
+  const [appliedScenario, setAppliedScenario] = useState<ActionPlanParams | null>(null);
+  const isScenarioActive = appliedScenario !== null;
+  const applyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (applyTimerRef.current) clearTimeout(applyTimerRef.current);
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
 
   // Scenario parameter sliders
   const [closureHours, setClosureHours] = useState<number>(12);
@@ -37,8 +62,9 @@ export default function SimulationSection({
   const [bnpbRescueUnits, setBnpbRescueUnits] = useState<number>(12);
 
   const showToast = (message: string, type: 'info' | 'success' | 'warning' = 'info') => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast({ message, type });
-    setTimeout(() => setToast(null), 4000);
+    toastTimerRef.current = setTimeout(() => setToast(null), 4000);
   };
 
   // Dynamic impact calculations based on simulation parameters
@@ -56,14 +82,27 @@ export default function SimulationSection({
     : Math.min(45.0, Number((closureHours * 1.2).toFixed(1)));
 
   const handleDeploy = () => {
-    const agencyName = activeAgency || 'Otoritas Gabungan';
-    const actionDesc = `Alokasi Stok BULOG ${bulogStockAlloc}%, Rekayasa DISHUB ${dishubDiversion ? 'Aktif' : 'Non-Aktif'}, Unit BNPB ${bnpbRescueUnits} Tim`;
-    
-    showToast(`Rencana Mitigasi ${agencyName} Berhasil Diterapkan`, 'success');
+    if (isApplying) return;
 
-    if (onDeployActionPlan) {
-      onDeployActionPlan({ agency: agencyName, action: actionDesc });
-    }
+    const agencyName = activeAgency || 'Otoritas Gabungan';
+    const actionDesc = `Muatan Komoditas ${cargoTonnage} Ton, Alokasi Stok BULOG ${bulogStockAlloc}%, Rekayasa DISHUB ${dishubDiversion ? 'Aktif' : 'Non-Aktif'}, Unit BNPB ${bnpbRescueUnits} Tim`;
+    const params: ActionPlanParams = {
+      agency: agencyName,
+      action: actionDesc,
+      closureHours,
+      cargoTonnage,
+      dishubDiversion,
+      bulogStockAlloc,
+      bnpbRescueUnits,
+    };
+
+    setIsApplying(true);
+    applyTimerRef.current = setTimeout(() => {
+      setIsApplying(false);
+      setAppliedScenario(params);
+      showToast(`Rencana Mitigasi ${agencyName} Berhasil Diterapkan`, 'success');
+      onDeployActionPlan?.(params);
+    }, 600);
   };
 
   return (
@@ -84,7 +123,7 @@ export default function SimulationSection({
         
         {/* Scenario Overview Header */}
         <div className="grid grid-cols-12 gap-4 shrink-0">
-          <div className="col-span-12 sm:col-span-6 bg-[#0c1017] border border-white/10 p-4 rounded-xl shadow-xl">
+          <div className="col-span-12 sm:col-span-6 backdrop-blur-md bg-[#0c0e12]/80 border border-white/10 p-4 rounded-xl shadow-xl">
             <div className="flex items-center gap-2 mb-1">
               <span className="w-2 h-2 rounded-full bg-red-400" />
               <p className="text-xs font-mono text-slate-300 uppercase font-medium">
@@ -99,13 +138,13 @@ export default function SimulationSection({
             </p>
           </div>
 
-          <div className="col-span-6 sm:col-span-3 bg-[#0c1017] border border-white/10 p-4 rounded-xl shadow-xl">
+          <div className="col-span-6 sm:col-span-3 backdrop-blur-md bg-[#0c0e12]/80 border border-white/10 p-4 rounded-xl shadow-xl">
             <p className="text-xs font-mono text-slate-400 mb-1">Armada Terdampak</p>
             <p className="text-xl font-mono font-bold text-white tabular-nums">~1.400 Unit</p>
             <p className="text-xs text-slate-400">Truk Logistik Harian</p>
           </div>
 
-          <div className="col-span-6 sm:col-span-3 bg-[#0c1017] border border-white/10 p-4 rounded-xl shadow-xl">
+          <div className="col-span-6 sm:col-span-3 backdrop-blur-md bg-[#0c0e12]/80 border border-white/10 p-4 rounded-xl shadow-xl">
             <p className="text-xs font-mono text-slate-400 mb-1">Waktu Estimasi Reroute</p>
             <p className="text-xl font-mono font-bold text-emerald-400 tabular-nums">+{calculatedDelayMinutes} Menit</p>
             <p className="text-xs text-slate-400">Via Tol / Jalur Alternatif</p>
@@ -113,7 +152,7 @@ export default function SimulationSection({
         </div>
 
         {/* Operational Levers & Impact Workspace */}
-        <div className="flex-1 bg-[#0c1017] border border-white/10 rounded-xl p-5 flex flex-col min-h-0 shadow-xl gap-5 overflow-y-auto custom-scrollbar">
+        <div className="flex-1 backdrop-blur-md bg-[#0c0e12]/80 border border-white/10 rounded-xl p-5 flex flex-col min-h-0 shadow-xl gap-5 overflow-y-auto custom-scrollbar">
           
           <div className="flex items-center justify-between pb-3 border-b border-white/10 shrink-0">
             <div className="flex items-center gap-2">
@@ -255,7 +294,7 @@ export default function SimulationSection({
       </section>
 
       {/* RIGHT SECTION: Multi-Department Agency Orchestration Board (4 Cols) */}
-      <section className="col-span-12 lg:col-span-4 bg-[#0c1017] border border-[#1c2432] p-5 flex flex-col gap-4 overflow-y-auto no-scrollbar rounded-xl shadow-xl">
+      <section className="col-span-12 lg:col-span-4 backdrop-blur-md bg-[#0c0e12]/80 border border-white/10 p-5 flex flex-col gap-4 overflow-y-auto no-scrollbar rounded-xl shadow-xl">
         
         <div className="flex items-center space-x-2 pb-2 border-b border-[#1c2432]">
           <Building2 className="w-4 h-4 text-slate-300" />
@@ -364,13 +403,89 @@ export default function SimulationSection({
 
         </div>
 
-        {/* Action Trigger Button */}
-        <button
-          onClick={handleDeploy}
-          className="mt-auto w-full py-2.5 bg-white hover:bg-slate-200 text-[#080d14] font-semibold text-xs uppercase tracking-wider rounded-md transition-colors shadow-sm flex items-center justify-center gap-2 cursor-pointer"
-        >
-          <CheckCircle2 className="w-4 h-4 text-[#080d14]" /> Terapkan Skenario Terpadu
-        </button>
+        {/* Action Trigger & Active Mitigation Summary Card */}
+        {isScenarioActive ? (
+          <div className="mt-auto w-full bg-[#121822] border border-emerald-500/30 rounded-lg p-3.5 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 text-xs font-mono font-semibold uppercase tracking-wider">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Skenario Aktif Terverifikasi</span>
+              </span>
+              <span className="text-xs font-mono text-slate-400">AUDIT OK</span>
+            </div>
+
+            <p className="text-xs text-slate-400 font-sans leading-relaxed">
+              {appliedScenario.action}
+            </p>
+
+            <div className="space-y-1.5 pt-2 border-t border-white/5 font-mono text-xs">
+              <div className="flex justify-between text-slate-300">
+                <span className="text-slate-400">BULOG Buffer:</span>
+                <span className="text-white font-bold tabular-nums">{appliedScenario.bulogStockAlloc}%</span>
+              </div>
+              <div className="flex justify-between text-slate-300">
+                <span className="text-slate-400">DISHUB Rekayasa:</span>
+                <span className={`font-bold ${appliedScenario.dishubDiversion ? 'text-emerald-400' : 'text-amber-400'}`}>
+                  {appliedScenario.dishubDiversion ? 'AKTIF' : 'NON-AKTIF'}
+                </span>
+              </div>
+              <div className="flex justify-between text-slate-300">
+                <span className="text-slate-400">BNPB Unit:</span>
+                <span className="text-white font-bold tabular-nums">{appliedScenario.bnpbRescueUnits} Tim</span>
+              </div>
+              <div className="flex justify-between text-slate-300">
+                <span className="text-slate-400">Durasi Hambatan:</span>
+                <span className="text-white font-bold tabular-nums">{appliedScenario.closureHours} Jam</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => onNavigateSection?.('map')}
+                className="cursor-pointer w-full py-2 rounded-md bg-white hover:bg-slate-200 text-[#080d14] font-semibold text-xs uppercase tracking-wider transition-colors shadow-sm flex items-center justify-center gap-2"
+              >
+                <MapIcon className="w-4 h-4 text-[#080d14]" />
+                <span>Tampilkan di Peta 4D</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigateSection?.('reports')}
+                className="cursor-pointer w-full py-2 rounded-md bg-[#0c1017] border border-[#1c2432] hover:border-white/30 text-slate-200 font-semibold text-xs uppercase tracking-wider transition-colors flex items-center justify-center gap-2"
+              >
+                <FileText className="w-4 h-4 text-slate-300" />
+                <span>Lihat Dampak di Laporan</span>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setAppliedScenario(null)}
+              className="cursor-pointer w-full py-1.5 rounded-md text-slate-400 hover:text-white text-xs font-mono transition-colors flex items-center justify-center gap-1.5"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Reset & Konfigurasi Ulang Skenario</span>
+            </button>
+          </div>
+        ) : isApplying ? (
+          <div className="mt-auto w-full py-2.5 px-4 rounded-md bg-[#121822] border border-emerald-500/40 flex flex-col gap-2">
+            <div className="flex items-center justify-center gap-2 text-xs font-mono font-semibold text-emerald-300 uppercase tracking-wider">
+              <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
+              <span>Menerapkan Skenario Terpadu...</span>
+            </div>
+            <div className="w-full h-1 rounded-full bg-[#0c1017] overflow-hidden">
+              <div className="h-full w-full bg-emerald-400 animate-pulse" />
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={handleDeploy}
+            className="mt-auto w-full py-2.5 bg-white hover:bg-slate-200 text-[#080d14] font-semibold text-xs uppercase tracking-wider rounded-md transition-colors shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <CheckCircle2 className="w-4 h-4 text-[#080d14]" /> Terapkan Skenario Terpadu
+          </button>
+        )}
 
       </section>
 

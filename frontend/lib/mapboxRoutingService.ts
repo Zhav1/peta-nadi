@@ -152,7 +152,21 @@ export const HUB_NODES: Record<string, HubNode> = {
   tebingtinggi: {
     id: 'tebingtinggi',
     name: 'Interchange Tol Tebing Tinggi',
-    coords: [98.9560, 3.5680],
+    coords: [99.1621, 3.3251],
+    type: 'interchange',
+    province: 'Sumatera Utara',
+  },
+  perbaungan: {
+    id: 'perbaungan',
+    name: 'Jalinsum Perbaungan',
+    coords: [98.9501, 3.5701],
+    type: 'interchange',
+    province: 'Sumatera Utara',
+  },
+  seirampah: {
+    id: 'seirampah',
+    name: 'Interchange Sei Rampah',
+    coords: [99.1501, 3.4801],
     type: 'interchange',
     province: 'Sumatera Utara',
   },
