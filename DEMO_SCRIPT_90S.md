@@ -3,7 +3,10 @@
 **Target Duration:** 90 Seconds (1.5 Minutes)  
 **Pitchman Role:** Live Product Demo & Core Value Proposition  
 **Scope Context:** Intro, Problem Statement, ROI, and CTA handled separately by teammates.  
-**Platform URL:** `http://localhost:3000/dashboard` or `http://localhost:3000/` (Command Center)  
+**Platform URL:** `http://localhost:3000/dashboard` or `http://localhost:3000/` (Command Center)
+
+> [!IMPORTANT]
+> **Prerequisites (read-only guest & Supabase required):** Configure Supabase (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` in `frontend/.env.local`) and sign in with a verified `DISPATCHER` account before recording — there is no offline login fallback. Unauthenticated visitors stay in a read-only guest preview (backend `ROLE_GUEST` grants only `benchmark:read` and `reports:read`), so approval/dispatch segments require a real session.  
 
 ---
 

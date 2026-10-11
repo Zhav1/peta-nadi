@@ -191,7 +191,7 @@ This document provides the complete empirical verification inventory for PreHub,
 | TEST-FR15-12 | `test_auth_rbac.py::test_api_roles_catalog` | Integration | GET /api/v1/auth/roles | Returns catalog containing DISPATCHER, REGULATOR, and GUEST definitions | Passed |
 | TEST-FR15-13 | `test_auth_rbac.py::test_rbac_approval_allowed_for_dispatcher` | Security | Dispatcher attempts to approve route detour via /api/v1/approvals | Authorized: returns 201 Created and logs approval | Passed |
 | TEST-FR15-14 | `test_auth_rbac.py::test_rbac_approval_rejected_for_regulator` | Security | Regulator attempts to approve route detour via /api/v1/approvals | Denied: raises HTTP 403 Forbidden with role limitation explanation | Passed |
-| TEST-FR15-15 | `test_auth_rbac.py::test_rbac_approval_allowed_for_guest` | Security | Guest in sandbox mode approves route detour via /api/v1/approvals | Authorized in sandbox: returns 201 Created and logs approval | Passed |
+| TEST-FR15-15 | `test_auth_rbac.py::test_rbac_approval_rejected_for_guest` | Security | GUEST token and default guest profile attempt route-detour approval via /api/v1/approvals | Denied: raises HTTP 403 Forbidden with current_role GUEST; no operational write permissions | Passed |
 
 ### FR-16: Self-Serve Fleet Onboarding & GPS Telematics Ingestion (Phase 43)
 | Test ID | Module / Test Function | Test Type | Scenario & Input Vectors | Expected Invariant / Assertion | Result |

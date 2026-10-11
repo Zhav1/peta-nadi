@@ -1,7 +1,7 @@
 # ROADMAP: PreHub (Logistics Resilience Intelligence Platform)
 
-**Active Milestone:** M2 - PreHub Final Defense: Empirical Evaluation, Tactical HUD & Multi-Source Maturity [COMPLETED ✅]
-**Previous Milestone:** M1 - Hackathon MVP (Pan-Sumatra Logistics & Swarm Intelligence) [COMPLETED ✅]
+**Active Milestone:** M3 - PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform [ACTIVE 🚀]
+**Previous Milestones:** M1 - Hackathon MVP (Pan-Sumatra Logistics & Swarm Intelligence) [COMPLETED ✅], M2 - PreHub Final Defense: Empirical Evaluation, Tactical HUD & Multi-Source Maturity [COMPLETED ✅]
 **Development Mode:** Solo, AI-assisted (GSD Disciplined Workflow)
 
 ---
@@ -1289,6 +1289,28 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 - [x] Security test suite passes cleanly: `pytest backend/tests/test_auth_rbac.py` (18/18 passed).
 - [x] Edge Middleware smoke-tested: unauthenticated requests gracefully redirect to `/dashboard?guest=1`.
 - [x] Haversine geometric clearance verification: all mock and demo detour waypoints confirmed $> 17.7\text{ km}$ outside the 15 km Lubuk Pakam flood circle.
+
+---
+
+## Phase 54: Post-Audit Plothole Remediation, Guest Lockdown Enforcement & Poller-Resilient Corridor Telemetry
+**Goal:** Resolve all plotholes from `POST_IMPLEMENTATION_AUDIT_REPORT.md`: relative detour delay delta, corridor impact persistence across the 30s poller, `is_fallback` sensor badges, backend guest permission alignment, offline login bypass removal, and auth UX guardrails.
+**Status:** COMPLETE ✅
+
+### Deliverables
+- **Runtime Contract Alignment**:
+  - `DashboardClient.tsx`: `resolveApprovedDelayMinutes` passes the incremental detour delay (approved ETA minus fastest baseline ETA) instead of the route's total `eta_minutes`.
+  - `useCorridorContext.ts` & `types.ts`: durable `activeImpact` re-applied on every `/api/v1/corridor/context` refresh (30s poller) and `is_fallback` flag on `CorridorContext` driving `LIVE` / `MEMUAT` / `FALLBACK` sensor badges.
+- **Strict Guest Lockdown**:
+  - `supabase_auth.py`: `ROLE_GUEST` permissions trimmed to read-only `['benchmark:read', 'reports:read']`.
+  - `authContext.tsx`: offline guest login bypass removed (explicit *"Layanan autentikasi database sedang tidak tersedia"*), `isMountedRef` race guard on all auth flows.
+  - `AuthModal.tsx`: `AlertCircle` error icon, `?guest=1` query cleanup after login, guest persona card copy corrected to limited read-only preview.
+- **Predictive Risk Guardrail**:
+  - `DashboardClient.tsx`: `pred-` prefixed risk catalog IDs bypass the 404-prone `/api/v1/incidents/{id}` round-trip.
+
+### Verification Criteria
+- [x] `pytest backend/tests/test_auth_rbac.py` passes (18/18), including guest-denial (HTTP 403) and forged-signature rejection security tests.
+- [x] `npx tsc --noEmit` returns 0 type errors.
+- [x] Documented as Done 2026-10-11 in `NEXT_CONTEXT_TASKS.md`; `POST_IMPLEMENTATION_AUDIT_REPORT.md` marked resolved.
 
 ---
 

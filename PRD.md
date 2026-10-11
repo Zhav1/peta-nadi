@@ -3,8 +3,8 @@
 **Platform Name:** PreHub (*Predictive Logistics Hub & Early Warning Decision Support System*)  
 **Platform Name:** PreHub (*Predictive Logistics Hub & Early Warning Decision Support System*)  
 **Target Region:** Pan-Sumatra Strategic Food Logistics Corridors (8 Mainland Provinces: Sumatera Utara, Sumatera Barat, Riau, Aceh, Sumatera Selatan, Lampung, Jambi, Bengkulu; plus Coastal Maritime Sea-Lanes & Air Cargo Routes)  
-**Version:** 2.0.0-PROD (Pan-Sumatra Multi-Outlet News & Early Warning Release)  
-**Last Updated:** 2026-09-22  
+**Version:** 2.1.0-PROD (Guest Lockdown, Strict RBAC & Phase 53 Stream Resilience Release)
+**Last Updated:** 2026-10-11
 
 ---
 
@@ -61,3 +61,24 @@ graph TD
 * **Test Coverage:** Seluruh 39 unit & integration test pada backend lulus (`pytest` 100% pass rate).
 * **Automated Visual Verification:** Playwright E2E test suite memvalidasi seluruh tampilan antarmuka sistem.
 * **Respon Waktu Nyata:** Waktu kalkulasi reroute $< 1.5$ detik untuk skenario pengalihan koridor lintas provinsi.
+
+---
+
+## 5. Release 2.1 — Guest Lockdown, Phases 52–53 & Runtime Hardening
+
+### 5.1 Guest Lockdown & Strict RBAC
+* Mode tamu kini **read-only terkunci**: pengunjung tanpa sesi terverifikasi tidak memperoleh izin operasional apa pun. `ROLE_GUEST` di backend hanya memegang `benchmark:read` dan `reports:read`.
+* Login/sign-up **wajib melalui Supabase Auth** — tidak ada lagi fallback sesi offline; bila layanan auth tidak tersedia, sistem menolak dengan pesan *"Layanan autentikasi database sedang tidak tersedia"*.
+* Middleware rute Next.js (`frontend/middleware.ts`) menjaga `/dashboard`: sesi JWT valid diperlukan, dan pengunjung anonim dialihkan ke `/dashboard?guest=1` dengan banner evaluasi read-only.
+
+### 5.2 Phase 52 — Dynamic Pan-Sumatra News Aggregator & Supabase-Native HITL Pipeline
+* Agregasi berita dinamis 10 biro LKBN ANTARA + Google News, geocoding 3-tier, sintesis insiden otomatis di PostGIS, serta HITL Decision Drawer (Setujui Detour / Tahan Buffer / Tetap Rute Awal) tanpa mock statis.
+
+### 5.3 Phase 53 — System Audit Resolution, Tangential Routing & Reactive Corridor
+* Koreksi geometri koordinat Tebing Tinggi + node interchange baru; generator hindaran tangensial ortogonal pada radius bahaya.
+* Perhitungan dampak koridor reaktif: persetujuan detour memicu rekalkulasi kecepatan, keterlambatan, kemacetan, dan harga komoditas.
+
+### 5.4 Runtime Fixes Pasca-Audit
+* **Relative detour delay:** inflasi keterlambatan dihitung sebagai delta relatif terhadap baseline rute tercepat (`resolveApprovedDelayMinutes`), bukan total `eta_minutes` rute.
+* **Persistensi dampak koridor:** `activeImpact` disimpan dan diterapkan ulang di atas hasil polling `/api/v1/corridor/context` sehingga rekalkulasi tidak kembali ke baseline setiap 30 detik.
+* **Badge sensor `is_fallback`:** telemetri BMKG/TomTom/PIHPS kini membedakan status `LIVE`, `MEMUAT`, dan `FALLBACK` secara akurat melalui flag `is_fallback` pada `CorridorContext`.

@@ -1,7 +1,10 @@
 # PetaNadi Hackathon Demo Script (Overview & 90-Second Walkthrough)
 
 > [!IMPORTANT]
-> **Dedicated 90-Second Product Demo Script:** For the live product walkthrough pitch (Bagian 2 & 3: End-to-End Routing Use Case, No-Hallucination Forced Waypoint Engine, 60 FPS Fleet, & B2G Action Plan), see [DEMO_SCRIPT_90S.md](file:///c:/Farras/DIGDAYA/peta-nadi/DEMO_SCRIPT_90S.md).
+> **Dedicated 90-Second Product Demo Script:** For the live product walkthrough pitch (Bagian 2 & 3: End-to-End Routing Use Case, No-Hallucination Forced Waypoint Engine, 60 FPS Fleet, & B2G Action Plan), see [DEMO_SCRIPT_90S.md](file:///d:/College/Pidi.id/DEMO_SCRIPT_90S.md).
+
+> [!IMPORTANT]
+> **Guest mode is read-only & Supabase must be configured.** Unauthenticated visitors only receive locked, read-only guest access (backend `ROLE_GUEST`: `benchmark:read`, `reports:read`); operational actions such as route approval/dispatch require a verified `DISPATCHER` login. Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in `frontend/.env.local` before demoing — there is no offline login fallback.
 
 ---
 

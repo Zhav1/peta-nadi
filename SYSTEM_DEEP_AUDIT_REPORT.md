@@ -1,5 +1,8 @@
 # SYSTEM DEEP AUDIT: TRUTH, REALITY VS. MOCKUPS, & STRUCTURAL INTEGRITY
 
+> [!WARNING]
+> **SUPERSEDED:** This audit is superseded by [`POST_IMPLEMENTATION_AUDIT_REPORT.md`](POST_IMPLEMENTATION_AUDIT_REPORT.md). Its core findings have been remediated: Next.js route middleware now exists (`frontend/middleware.ts` guards `/dashboard`), invalid JWT signatures are rejected (no unverified-signature fallback), and strict RBAC guest lockdown is enforced.
+
 Tanggal Audit: 11 Oktober 2026  
 Auditor: Lead Systems Architect & AI Engineering Auditor  
 Cakupan: Validasi Klaim Proposal vs Realita Kode Sumber, Keamanan RBAC, Keaslian Telemetri Armada, Modus Prospektif, dan Integritas Antar-Halaman  

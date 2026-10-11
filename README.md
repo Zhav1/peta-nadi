@@ -25,7 +25,7 @@ Multisource Telemetry (BMKG Sensor, TomTom Speed Flow, Google News RSS, PIHPS Pr
            PreHub 4D Decision Map & Multi-Modal Fleet Command Center
                                       |
                                       v
-     Multi-Persona Operations (Dispatcher, Port Coordinator, Regulator, Admin)
+     Multi-Persona Operations (Dispatcher, Regulator, Guest Evaluator)
 ```
 
 ---
@@ -60,11 +60,17 @@ Multisource Telemetry (BMKG Sensor, TomTom Speed Flow, Google News RSS, PIHPS Pr
 - **Hazard Collision & Hold/Delay Fallback:** When all primary and arterial bypass routes intersect disaster zones, the system surfaces an honest **Mitigasi Taktis: Tunda Keberangkatan (Hold / Delay)** recommendation instead of proposing compromised detours.
 
 ### 5. Multi-Persona Operations & Digital Compliance (Milestone M3)
-- **Supabase Authentication & Multi-Role RBAC:** Role-based access control partitioning features for `DISPATCHER` (routing, rerouting approvals), `REGULATOR` (BKHIT quarantine audit, price volatility monitoring), and `GUEST` (evaluation sandbox).
+- **Supabase Authentication & Multi-Role RBAC:** Role-based access control partitioning features for `DISPATCHER` (fleet routing and reroute approvals), `REGULATOR` (BKHIT quarantine audit, price volatility monitoring, reports), and `GUEST` (strictly read-only evaluation sandbox).
 - **Self-Serve Fleet Onboarding:** Drag-and-drop CSV manifest ingestion, manual vehicle onboarding modal, and TMS GPS telemetry ingestion webhooks.
 - **Pan-Sumatra Intermodal Choke-Points:** Tracking 7 maritime/ferry ports (Belawan, Bakauheni, Dumai, Teluk Bayur, Panjang, Sibolga, Kuala Tanjung) and 11 mountain passes (Sitinjau Lauik, Kelok 9, Malalak, etc.) with automated delay multipliers ($1.0 \le M_{\text{intermodal}} \le 3.5$).
 - **Closed-Form Spoilage Hedging Matrix:** Closed-form monetary tradeoff solver evaluating Continue vs Reroute vs Hold factoring 4-tier exponential perishability decay ($\delta = 0.025$ to $0.0005/\text{hr}$), official BPJT toll tariffs across Golongan I-V, and Pertamina fuel consumption.
 - **Differentiated Regulatory Enforcement:** Deterministic `HARD_BLOCK` on missing BKHIT agricultural quarantine certificates for inter-island transits; tactical `WARNING` & bypass advisory with operator liability transfer override for heavy vehicles ($>8$ Ton) traversing Class III mountain corridors.
+
+### 6. Strict RBAC, Route Middleware & Guest Read-Only Mode
+- **Supabase Authentication Required:** Login, sign-up, and magic links run through Supabase Auth (`frontend/lib/authContext.tsx`). There is **no offline login fallback** — when the auth service is unavailable the modal returns *"Layanan autentikasi database sedang tidak tersedia"* and no operational session is ever issued.
+- **Read-Only Guest Mode:** Unauthenticated visitors enter a locked guest profile (`DEFAULT_GUEST_PROFILE`) with zero operational permissions. Backend `ROLE_GUEST` is restricted to `benchmark:read` and `reports:read` only (`backend/app/auth/supabase_auth.py`), so approvals, fleet mutation, and persona switching are rejected server-side with HTTP 403.
+- **Next.js Route Middleware (`frontend/middleware.ts`):** `/dashboard` requires a well-formed, unexpired session JWT (`prehub_auth_token` cookie). Unauthenticated visits are redirected to `/dashboard?guest=1` and rendered as an explicitly-flagged read-only evaluation preview instead of an operational session.
+- **Verified-Signature Enforcement:** FastAPI validates JWT signatures and active sessions with no `verify_signature=False` fallback; forged or expired tokens are rejected with HTTP 401.
 
 ---
 
