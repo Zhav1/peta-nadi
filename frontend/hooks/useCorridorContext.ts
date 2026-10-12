@@ -8,6 +8,9 @@ const DEFAULT_FALLBACK_CORRIDOR: CorridorContext = {
   corridor_name: 'Koridor Arteri Utama Belawan–Medan–Tebing Tinggi',
   timestamp: new Date().toISOString(),
   is_fallback: true,
+  fallback_reasons: [
+    'corridor context API unreachable; seeded Belawan–Medan fallback telemetry in use'
+  ],
   weather: {
     status: 'MODERATE_RAIN',
     rainfall_mm: 68.5,
@@ -41,9 +44,9 @@ const DEFAULT_FALLBACK_CORRIDOR: CorridorContext = {
     ]
   },
   data_integrity: {
-    bmkg_status: 'healthy',
-    tomtom_status: 'healthy',
-    pihps_status: 'healthy',
+    bmkg_status: 'ONLINE',
+    tomtom_status: 'ONLINE',
+    pihps_status: 'ONLINE',
     consensus_confidence: 0.92
   }
 };
@@ -142,7 +145,7 @@ export function useCorridorContext(corridorId: string = 'sumatra_belawan_medan')
         throw new Error(`HTTP error ${res.status}`);
       }
       const data = await res.json();
-      const fresh: CorridorContext = { ...data, is_fallback: false };
+      const fresh: CorridorContext = { ...data, is_fallback: data.is_fallback === true };
       const activeImpact = activeImpactRef.current;
       setCorridorContext(activeImpact ? applyImpactToContext(fresh, activeImpact) : fresh);
       setError(null);

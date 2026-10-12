@@ -25,6 +25,10 @@ logger = logging.getLogger(__name__)
 class UnifiedNewsIngestor:
     """Orchestrates dynamic Pan-Sumatra news extraction, PostGIS persistence, and HITL disruption dispatch."""
 
+    OSINT_STREAM_KEY = "lrip:stream:osint"
+    OSINT_STREAM_MAXLEN = 10_000
+    OSINT_STREAM_WARN_LENGTH = 15_000
+
     def __init__(self):
         self.is_running = False
         self._processed_disruption_ids = set()
@@ -96,7 +100,18 @@ class UnifiedNewsIngestor:
                     "confidence_score": str(art.get("confidence_score", 0.85)),
                     "created_at": datetime.now(timezone.utc).isoformat()
                 }
-                r.xadd("lrip:stream:osint", payload)
+                r.xadd(self.OSINT_STREAM_KEY, payload, maxlen=self.OSINT_STREAM_MAXLEN, approximate=True)
+
+            try:
+                stream_length = r.xlen(self.OSINT_STREAM_KEY)
+                logger.debug(f"OSINT stream length after publish: {stream_length}")
+                if stream_length > self.OSINT_STREAM_WARN_LENGTH:
+                    logger.warning(
+                        f"OSINT stream {self.OSINT_STREAM_KEY} length {stream_length} "
+                        f"exceeds operational threshold {self.OSINT_STREAM_WARN_LENGTH}"
+                    )
+            except Exception:
+                pass
         except Exception as e:
             logger.debug(f"Redis news publishing skipped: {e}")
 

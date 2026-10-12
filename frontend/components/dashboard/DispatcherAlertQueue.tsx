@@ -1,16 +1,10 @@
 'use client';
 
 import React from 'react';
-import { 
-  AlertTriangle, 
-  ShieldAlert, 
-  ArrowRight, 
-  Truck, 
-  Clock, 
-  DollarSign, 
-  CheckCircle2, 
+import {
+  ShieldAlert,
+  Truck,
   ChevronRight,
-  Sparkles,
   X
 } from 'lucide-react';
 import type { ImpactedVehicleAssessment, DisruptionImpactResponse } from '@/lib/types';
@@ -28,7 +22,7 @@ export function DispatcherAlertQueue({
   onSelectVehicle,
   onDismiss,
 }: DispatcherAlertQueueProps) {
-  if (!impactData || !impactData.impacted_assessments || impactData.impacted_assessments.length === 0) {
+  if (!impactData || !impactData.impacted_vehicles || impactData.impacted_vehicles.length === 0) {
     return null;
   }
 
@@ -38,12 +32,15 @@ export function DispatcherAlertQueue({
     return `Rp ${val.toLocaleString('id-ID')}`;
   };
 
-  const criticalCount = impactData.critical_spoilage_count;
-  const totalValueAtRisk = impactData.total_value_at_risk_idr;
+  const criticalCount = impactData.critical_count;
+  const totalValueAtRisk = impactData.impacted_vehicles.reduce(
+    (sum, item) => sum + item.cargo_value_idr,
+    0
+  );
 
   return (
     <div className="absolute top-16 left-4 sm:left-32 lg:left-[340px] right-4 sm:right-16 z-30 pointer-events-auto max-w-4xl animate-in slide-in-from-top-3 duration-200">
-      <div className="bg-[#0c1017]/95 backdrop-blur-md border border-rose-500/30 rounded-lg shadow-2xl p-3 text-slate-200">
+      <div className="bg-[#0c1017] border border-white/10 rounded-lg shadow-2xl p-3 text-slate-200">
         {/* Header Ribbon */}
         <div className="flex items-center justify-between pb-2 mb-2 border-b border-[#1c2432]">
           <div className="flex items-center gap-2">
@@ -84,9 +81,9 @@ export function DispatcherAlertQueue({
 
         {/* Impacted Fleet Cards Strip */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-48 overflow-y-auto no-scrollbar">
-          {impactData.impacted_assessments.map((item) => {
+          {impactData.impacted_vehicles.map((item) => {
             const isSelected = selectedVehicleId === item.vehicle_id;
-            const isCritical = item.delayed_spoilage_prob > 0.5;
+            const isCritical = item.optimal_policy === 'REROUTE' || item.late_arrival_risk_pct >= 70;
 
             return (
               <div
@@ -101,22 +98,24 @@ export function DispatcherAlertQueue({
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
                     <Truck className={`w-3.5 h-3.5 shrink-0 ${isCritical ? 'text-rose-400' : 'text-cyan-400'}`} />
                     <span className="text-xs font-mono font-bold text-white">
                       {item.vehicle_id}
                     </span>
-                    <span className="text-xs font-mono text-slate-400 truncate max-w-[110px]">
-                      ({item.license_plate})
+                    <span className="text-xs font-sans text-slate-400 truncate">
+                      {item.vehicle_name}
                     </span>
                   </div>
 
-                  <span className={`text-xs font-mono px-1.5 py-0.5 rounded uppercase font-bold ${
-                    item.recommended_action === 'REROUTE_IMMEDIATE'
+                  <span className={`text-xs font-mono px-1.5 py-0.5 rounded uppercase font-bold shrink-0 ${
+                    item.optimal_policy === 'REROUTE'
                       ? 'bg-amber-950 text-amber-300 border border-amber-500/40'
-                      : 'bg-slate-900 text-slate-300 border border-slate-700'
+                      : item.optimal_policy === 'CONTINUE'
+                        ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/40'
+                        : 'bg-slate-900 text-slate-300 border border-slate-700'
                   }`}>
-                    {item.recommended_action === 'REROUTE_IMMEDIATE' ? 'REROUTE' : item.recommended_action}
+                    {item.optimal_policy}
                   </span>
                 </div>
 
@@ -126,23 +125,26 @@ export function DispatcherAlertQueue({
                     {item.cargo_tonnage}T {item.commodity_key.replace(/_/g, ' ')}
                   </span>
                   <span className="font-mono text-rose-400 font-bold">
-                    Risiko Rusak {(item.delayed_spoilage_prob * 100).toFixed(0)}%
+                    Risiko Terlambat {item.late_arrival_risk_pct.toFixed(0)}%
                   </span>
                 </div>
 
                 {/* Economic Value & Recommendation CTA */}
-                <div className="mt-2 pt-1.5 border-t border-[#1c2432] flex items-center justify-between">
+                <div className="mt-2 pt-1.5 border-t border-[#1c2432] flex items-center justify-between gap-2">
                   <span className="text-xs font-mono text-slate-400">
-                    Potensi Susut: <strong className="text-rose-300">{formatIDR(item.at_risk_spoilage_idr)}</strong>
+                    Susut: <strong className="text-rose-300">{formatIDR(item.spoilage_loss_idr)}</strong>
                   </span>
-                  
+                  <span className="text-xs font-mono text-slate-400">
+                    Hemat: <strong className="text-emerald-300">{formatIDR(item.net_savings_idr)}</strong>
+                  </span>
+
                   <button
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       onSelectVehicle(item);
                     }}
-                    className="inline-flex items-center gap-1 text-xs font-sans font-semibold text-cyan-400 hover:text-cyan-300 cursor-pointer"
+                    className="inline-flex items-center gap-1 text-xs font-sans font-semibold text-cyan-400 hover:text-cyan-300 cursor-pointer shrink-0"
                   >
                     <span>Mitigasi Rute</span>
                     <ChevronRight className="w-3.5 h-3.5" />

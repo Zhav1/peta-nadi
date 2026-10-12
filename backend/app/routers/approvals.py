@@ -79,8 +79,8 @@ async def create_approval(
 
     # Attempt Supabase cloud insertion
     try:
-        from app.db.supabase_client import get_client
-        sb = get_client()
+        from app.db.supabase_client import get_write_client
+        sb = get_write_client()
         
         # Insert into route_decision_traces or legacy route_approvals
         result = await asyncio.to_thread(
@@ -165,8 +165,8 @@ async def list_approvals(
     """List logged decision traces, falling back to local SQLite if Supabase is offline."""
     # Attempt cloud read first
     try:
-        from app.db.supabase_client import get_client
-        sb = get_client()
+        from app.db.supabase_client import get_write_client
+        sb = get_write_client()
         
         query = sb.table("route_approvals").select("*").order("approved_at", desc=True).limit(limit)
         if incident_id:

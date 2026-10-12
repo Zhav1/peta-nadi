@@ -6,13 +6,21 @@ Maintains backwards compatibility for existing /api/v1/routing/optimize-cuopt en
 """
 import logging
 import math
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timezone
 
 from app.adapters.cpu_routing_adapter import get_cpu_router, haversine_km
 from app.adapters.tomtom_adapter import TomTomAdapter
 
 logger = logging.getLogger(__name__)
+
+# Seed speeds used only when live TomTom flow is unavailable (reported as degraded)
+DEFAULT_CHECKPOINT_SPEEDS = {
+    "Belawan Toll Gate": 22.0,
+    "Tanjung Mulia Interchange": 30.0,
+    "Binjai Km 18": 45.0,
+    "Pematangsiantar Km 128": 50.0
+}
 
 # Junction Nodes for North Sumatra Corridor Matrix
 CORRIDOR_JUNCTION_NODES = [
@@ -27,31 +35,34 @@ CORRIDOR_JUNCTION_NODES = [
 ]
 
 
-async def build_dynamic_tomtom_cost_matrix(hazard_zones: Optional[List[Dict[str, Any]]] = None) -> List[List[float]]:
+async def _fetch_live_checkpoint_speeds() -> Tuple[Dict[str, float], bool, Optional[str]]:
     """
-    Builds an N x N travel time matrix (in minutes) dynamically weighted by:
-    1. TomTom live checkpoint speeds.
-    2. Severe weather / hazard avoidance penalties (10x penalty if segment crosses hazard).
+    Returns (checkpoint_speeds, is_live, degraded_reason).
+    is_live is True only when TomTom returned actual flow segment data.
     """
-    nodes = CORRIDOR_JUNCTION_NODES
-    N = len(nodes)
-
-    checkpoint_speeds = {
-        "Belawan Toll Gate": 22.0,
-        "Tanjung Mulia Interchange": 30.0,
-        "Binjai Km 18": 45.0,
-        "Pematangsiantar Km 128": 50.0
-    }
+    speeds = dict(DEFAULT_CHECKPOINT_SPEEDS)
     try:
         tomtom = TomTomAdapter()
         raw = await tomtom.fetch()
+        live_points = 0
         for f in raw.get("flow", []):
             name = f.get("_checkpoint_name")
             curr_speed = f.get("flowSegmentData", {}).get("currentSpeed")
             if name and curr_speed:
-                checkpoint_speeds[name] = float(curr_speed)
+                speeds[name] = float(curr_speed)
+                live_points += 1
+        if live_points:
+            return speeds, True, None
+        return speeds, False, raw.get("degraded_reason") or "no live TomTom flow data"
     except Exception as e:
         logger.warning(f"TomTom live speed matrix fallback: {e}")
+        return speeds, False, f"tomtom_fetch_error: {e}"
+
+
+def _build_cost_matrix(checkpoint_speeds: Dict[str, float], hazard_zones: Optional[List[Dict[str, Any]]]) -> List[List[float]]:
+    """Builds the N x N travel time matrix (minutes) from checkpoint speeds + hazard penalties."""
+    nodes = CORRIDOR_JUNCTION_NODES
+    N = len(nodes)
 
     avg_corridor_speed = sum(checkpoint_speeds.values()) / max(1, len(checkpoint_speeds))
 
@@ -87,6 +98,16 @@ async def build_dynamic_tomtom_cost_matrix(hazard_zones: Optional[List[Dict[str,
     return matrix
 
 
+async def build_dynamic_tomtom_cost_matrix(hazard_zones: Optional[List[Dict[str, Any]]] = None) -> List[List[float]]:
+    """
+    Builds an N x N travel time matrix (in minutes) dynamically weighted by:
+    1. TomTom live checkpoint speeds (seeded fallback when live data is unavailable).
+    2. Severe weather / hazard avoidance penalties (10x penalty if segment crosses hazard).
+    """
+    checkpoint_speeds, _, _ = await _fetch_live_checkpoint_speeds()
+    return _build_cost_matrix(checkpoint_speeds, hazard_zones)
+
+
 async def optimize_fleet_routes_with_cuopt(
     origin_id: str = "belawan_port",
     dest_id: str = "tebing_tinggi",
@@ -100,8 +121,9 @@ async def optimize_fleet_routes_with_cuopt(
     logger.info(f"Running Deterministic CPU Fleet Route Optimization ({origin_id} -> {dest_id})...")
     start_time = datetime.now(timezone.utc)
 
-    # 1. Build dynamic cost matrix
-    cost_matrix = await build_dynamic_tomtom_cost_matrix(hazard_zones)
+    # 1. Build dynamic cost matrix from live TomTom speeds (or explicitly flagged seed fallback)
+    speeds, tomtom_live, degraded_reason = await _fetch_live_checkpoint_speeds()
+    cost_matrix = _build_cost_matrix(speeds, hazard_zones)
     locations = [node["id"] for node in CORRIDOR_JUNCTION_NODES]
 
     # 2. Invoke deterministic CPU routing solver
@@ -115,9 +137,18 @@ async def optimize_fleet_routes_with_cuopt(
 
     solver_compute_ms = vrp_solution.get("compute_time_ms", 1.5)
     elapsed_ms = round((datetime.now(timezone.utc) - start_time).total_seconds() * 1000.0, 1)
+    telemetry_reason = None if tomtom_live else (degraded_reason or "no live TomTom flow data")
+    avg_corridor_speed = round(sum(speeds.values()) / max(1, len(speeds)), 1)
 
     return {
         "status": "success",
+        "is_fallback": not tomtom_live,
+        "degraded_reason": telemetry_reason,
+        "traffic_telemetry": {
+            "status": "OK" if tomtom_live else "DEGRADED",
+            "is_fallback": not tomtom_live,
+            "reason": telemetry_reason,
+        },
         "solver": "Deterministic CPU VRP Solver (NetworkX + Google OR-Tools)",
         "compute_time_ms": solver_compute_ms,
         "total_pipeline_time_ms": elapsed_ms,
@@ -131,7 +162,8 @@ async def optimize_fleet_routes_with_cuopt(
             "travel_time_savings_pct": 18.5,
             "fuel_cost_reduction_pct": 14.2,
             "hazard_segments_avoided": len(hazard_zones) if hazard_zones else 0,
-            "tomtom_live_speed_kmh": round(sum(cost_matrix[0][1:]) / len(cost_matrix[0][1:]), 1)
+            "avg_corridor_speed_kmh": avg_corridor_speed,
+            "speed_source": "tomtom_live" if tomtom_live else "seed_fallback"
         },
         "timestamp": datetime.now(timezone.utc).isoformat()
     }

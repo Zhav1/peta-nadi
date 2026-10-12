@@ -213,7 +213,7 @@ export default function EvaluationSection({
             <div className="lg:px-4 first:pl-0 last:pr-0 py-3 lg:py-0">
               <span className="text-xs font-mono text-slate-400 uppercase tracking-wider block mb-1">Presisi Deteksi</span>
               <p className="text-2xl font-mono font-bold text-white tabular-nums">{(precision * 100).toFixed(1)}%</p>
-              <p className="text-xs font-mono text-slate-400 mt-1 tabular-nums">Target: &gt; 85.0%</p>
+              <p className="text-xs font-mono text-slate-400 mt-1 tabular-nums">Target: &gt; 85.0% (N=60 Sumatra)</p>
             </div>
 
             {/* Metric 2: Recall */}

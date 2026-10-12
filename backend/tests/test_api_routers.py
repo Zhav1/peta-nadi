@@ -38,6 +38,177 @@ def test_incidents_endpoints():
     assert isinstance(filtered_data["items"], list)
 
 
+def test_incidents_wkt_location_parsing():
+    """S4: WKT 'POINT(lon lat)' strings parse into float lat/lon; missing/malformed input degrades to None."""
+    from app.routers.incidents import _parse_wkt_point
+
+    assert _parse_wkt_point("POINT(98.6667 3.5833)") == pytest.approx((3.5833, 98.6667))
+    assert _parse_wkt_point("SRID=4326;POINT(99.1625 3.3285)") == pytest.approx((3.3285, 99.1625))
+    assert _parse_wkt_point(None) == (None, None)
+    assert _parse_wkt_point("") == (None, None)
+    assert _parse_wkt_point("not-a-wkt-point") == (None, None)
+
+
+def test_incidents_supabase_rows_map_wkt_location_to_lat_lon(monkeypatch):
+    """S4: Supabase rows (WKT 'location', null concrete coords) surface as float coords in the API."""
+    import app.db.supabase_client as sb_client_module
+
+    class FakeResult:
+        data = [{
+            "incident_id": "INC-WKT-1",
+            "title": "Banjir Belawan",
+            "type": "flood",
+            "severity": "high",
+            "status": "validated",
+            "confidence": 0.9,
+            "created_at": "2026-10-01T00:00:00Z",
+            "location": "POINT(98.6890 3.8012)",
+            "lat": None,
+            "lon": None,
+            "description": "Akses pelabuhan terendam",
+            "affected_area": "Belawan",
+        }]
+
+    class FakeQuery:
+        def select(self, columns, *args, **kwargs):
+            assert "location" in columns
+            return self
+
+        def order(self, *args, **kwargs):
+            return self
+
+        def limit(self, *args, **kwargs):
+            return self
+
+        def eq(self, *args, **kwargs):
+            return self
+
+        def execute(self):
+            return FakeResult()
+
+    class FakeClient:
+        def table(self, name):
+            assert name == "incidents"
+            return FakeQuery()
+
+    monkeypatch.setattr(sb_client_module, "get_client", lambda: FakeClient())
+
+    res = client.get("/api/v1/incidents?limit=5")
+    assert res.status_code == 200
+    items = res.json()["items"]
+    incident = next((item for item in items if item["id"] == "INC-WKT-1"), None)
+    assert incident is not None
+    assert incident["lat"] == pytest.approx(3.8012)
+    assert incident["lon"] == pytest.approx(98.6890)
+
+
+def test_incidents_prefers_concrete_lat_lon_over_wkt(monkeypatch):
+    """S4/S7: concrete lat/lon columns (migration 010) take precedence over WKT 'location'."""
+    import app.db.supabase_client as sb_client_module
+
+    class FakeResult:
+        data = [{
+            "incident_id": "INC-COORD-1",
+            "title": "Longsor Sitinjau Lauik",
+            "type": "landslide",
+            "severity": "critical",
+            "status": "validated",
+            "confidence": 0.93,
+            "created_at": "2026-10-02T00:00:00Z",
+            "location": "POINT(100.5200 -0.9450)",
+            "lat": -0.9451,
+            "lon": 100.5201,
+            "description": "Tebing runtuh",
+            "affected_area": "Padang",
+        }]
+
+    class FakeQuery:
+        def select(self, columns, *args, **kwargs):
+            assert "location" in columns
+            assert "lat" in columns and "lon" in columns
+            return self
+
+        def order(self, *args, **kwargs):
+            return self
+
+        def limit(self, *args, **kwargs):
+            return self
+
+        def eq(self, *args, **kwargs):
+            return self
+
+        def execute(self):
+            return FakeResult()
+
+    class FakeClient:
+        def table(self, name):
+            assert name == "incidents"
+            return FakeQuery()
+
+    monkeypatch.setattr(sb_client_module, "get_client", lambda: FakeClient())
+
+    res = client.get("/api/v1/incidents?limit=5")
+    assert res.status_code == 200
+    items = res.json()["items"]
+    incident = next((item for item in items if item["id"] == "INC-COORD-1"), None)
+    assert incident is not None
+    assert incident["lat"] == pytest.approx(-0.9451)
+    assert incident["lon"] == pytest.approx(100.5201)
+
+
+def test_incidents_falls_back_to_legacy_projection(monkeypatch):
+    """S4: when the lat/lon projection fails (pre-migration schema), the legacy WKT-only query is used."""
+    import app.db.supabase_client as sb_client_module
+
+    class FakeResult:
+        data = [{
+            "incident_id": "INC-LEGACY-1",
+            "title": "Banjir Jalinsum",
+            "type": "flood",
+            "severity": "high",
+            "status": "validated",
+            "confidence": 0.88,
+            "created_at": "2026-10-03T00:00:00Z",
+            "location": "POINT(99.1625 3.3285)",
+            "description": "Genangan",
+            "affected_area": "Tebing Tinggi",
+        }]
+
+    class FakeQuery:
+        def select(self, columns, *args, **kwargs):
+            if "lat" in columns or "lon" in columns:
+                raise RuntimeError("column incidents.lat does not exist")
+            assert "location" in columns
+            return self
+
+        def order(self, *args, **kwargs):
+            return self
+
+        def limit(self, *args, **kwargs):
+            return self
+
+        def eq(self, *args, **kwargs):
+            return self
+
+        def execute(self):
+            return FakeResult()
+
+    class FakeClient:
+        def table(self, name):
+            assert name == "incidents"
+            return FakeQuery()
+
+    monkeypatch.setattr(sb_client_module, "get_client", lambda: FakeClient())
+
+    res = client.get("/api/v1/incidents?limit=5")
+    assert res.status_code == 200
+    items = res.json()["items"]
+    incident = next((item for item in items if item["id"] == "INC-LEGACY-1"), None)
+    assert incident is not None
+    assert incident["lat"] == pytest.approx(3.3285)
+    assert incident["lon"] == pytest.approx(99.1625)
+
+
 def test_approvals_endpoints():
     """Verify approvals GET returns list and POST logs operator decisions."""
     res_list = client.get("/api/v1/approvals")

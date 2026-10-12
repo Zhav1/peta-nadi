@@ -617,11 +617,7 @@ export default function DashboardClient() {
     // Navigation stays with the user: only the explicit "Tampilkan di Peta 4D" / "Lihat Dampak di Laporan" buttons switch sections.
   };
   const [spatialWeatherPolygons, setSpatialWeatherPolygons] = useState<GeoJSON.FeatureCollection | null>(null);
-  const [cuOptInfo, setCuOptInfo] = useState<{ solver: string; compute_time_ms: number; savings_pct: number } | null>({
-    solver: 'Deterministic CPU Routing Solver (NetworkX + OR-Tools)',
-    compute_time_ms: 1.5,
-    savings_pct: 18.5,
-  });
+  const [cuOptInfo, setCuOptInfo] = useState<{ solver: string; compute_time_ms: number; savings_pct: number } | null>(null);
 
   // Time Horizon State Datasets (PAST / PRESENT / FUTURE / PREDICT)
   const [historicalEpisodes, setHistoricalEpisodes] = useState<Record<string, unknown>[]>([]);
@@ -864,13 +860,12 @@ export default function DashboardClient() {
             lat: baseCrisis.lat || 3.32,
             lon: baseCrisis.lon || 99.16,
             radius_km: selectedRadius || 25,
-            expected_delay_hours: 14.0,
             hazard_type: baseCrisis.type || 'flood',
           });
           setImpactAssessmentData(impactRes);
           setIsAlertQueueDismissed(false);
-          if (impactRes.impacted_assessments && impactRes.impacted_assessments.length > 0) {
-            setSelectedImpactedVehicle(impactRes.impacted_assessments[0]);
+          if (impactRes.impacted_vehicles && impactRes.impacted_vehicles.length > 0) {
+            setSelectedImpactedVehicle(impactRes.impacted_vehicles[0]);
           }
         } catch (impactErr) {
           console.warn('Impact assessment offline/fallback:', impactErr);
@@ -1693,7 +1688,7 @@ export default function DashboardClient() {
           <div className="absolute inset-0 w-full h-full pointer-events-none z-10">
 
             {/* Decision Support System (DSS): Dispatcher Alert Queue Strip */}
-            {!isAlertQueueDismissed && impactAssessmentData && impactAssessmentData.impacted_assessments.length > 0 && (
+            {!isAlertQueueDismissed && impactAssessmentData && impactAssessmentData.impacted_vehicles.length > 0 && (
               <DispatcherAlertQueue
                 impactData={impactAssessmentData}
                 selectedVehicleId={selectedImpactedVehicle?.vehicle_id || null}

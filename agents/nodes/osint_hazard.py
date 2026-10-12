@@ -127,7 +127,7 @@ async def osint_hazard_agent(state: CrisisState) -> dict:
                 from agents.llm_gateway import LLMGateway
                 inferred = await LLMGateway.generate_content(
                     prompt=prompt,
-                    model_name="gemini-1.5-flash"
+                    model_name=settings.gemini_model
                 )
                 inferred = inferred.strip().lower()
                 if inferred in ['low', 'medium', 'high', 'critical']:

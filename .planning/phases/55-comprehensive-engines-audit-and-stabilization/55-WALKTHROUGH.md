@@ -303,3 +303,17 @@ No server-side timing middleware exists (`main.py:203-211` adds CORS only); timi
 | Unbounded `lrip:stream:osint` | **S6** |
 | RLS missing across core tables; migration 009 policy-only | **S7** |
 | AIS mmsi bridge; FIRMS registration; health-loop wiring; savings/latency literals; `api.ts` dead path | Deferred watchlist (`55-PLAN.md` §6) |
+
+---
+
+## 7. Implementation & Verification Ledger (Phase 55 Complete)
+
+| Workstream | Implemented Resolution | Verified State |
+|---|---|---|
+| **S1 (OpenMeteo)** | Corrected `__init__` signature to match `BaseAdapter`; implemented `health_check()` with 5s timeout GET to `api.open-meteo.com`. | `OpenMeteoAdapter` instantiates without TypeError; 100% pass on adapter tests. |
+| **S2 (NIM Gateway)** | Synced `NVIDIA_*` keys between root `.env` and `backend/.env`; updated `PRIMARY_NIM_MODEL` to catalog model `deepseek-ai/deepseek-v4.1-flash`; raised typed `LLMGatewayUnavailable` on failure; Agent 5 rejects fallback markers. | Gateway contract verified; no canned prose returned or accepted. |
+| **S3 (Gemini Centralization)** | Added `settings.gemini_model = "gemini-1.5-flash"` in `config.py`; updated all 5 occurrences across codebase; moved `import asyncio` to top in `ner_pipeline.py`. | Config-driven model ID; warning logged on heuristic fallback. |
+| **S4 (Incidents API)** | SELECT queries valid columns; added `_parse_wkt_point()` regex for WKT `POINT(lon lat)`; transparent schema fallback; warning logs on query errors. | WKT geometries parse into float `lat`/`lon` on `IncidentResponse`; no 400 bad request. |
+| **S5 (TomTom Adapter)** | Replaced ~1.7M km² bbox with 10 corridor-anchored tiles (0.5° × 0.75° ≈ ≤4,600 km²); deduplication by ID; 403 `credit_exhausted` latch with 900s backoff; honest `is_fallback: true` + `status: 'DEGRADED'` flags; wired `health_check()` into poller. | All tiles ≤10,000 km² verified; health status dynamically written to `data_sources`. |
+| **S6 (Redis Bounding)** | Added `maxlen=10_000, approximate=True` to `unified_news_ingestor.py` XADD; executed live `XTRIM`. | `lrip:stream:osint` stabilized at exactly 10,000 items. |
+| **S7 (RLS & Migration 010)** | Created `010_core_tables_rls_and_incident_coordinates.sql` with concrete `lat`/`lon` columns and Public-Read + Privileged-Write RLS policies across 7 core tables; added `get_write_client()` for service-role writes. | Idempotent migration ready; backend writes use service-role; 178 backend tests passed; 0 TypeScript errors. |

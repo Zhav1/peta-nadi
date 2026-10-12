@@ -136,6 +136,55 @@ async def test_cuopt_service_backwards_compatibility():
     assert "cuopt_solution" in res
 
 
+@pytest.mark.asyncio
+async def test_cuopt_service_flags_seed_fallback_when_tomtom_unavailable(monkeypatch):
+    """S5: seed speeds are explicitly flagged as degraded fallback, never labeled live."""
+    from app.adapters.tomtom_adapter import TomTomAdapter
+
+    async def empty_fetch(self):
+        return {
+            "flow": [],
+            "incidents": [],
+            "status": "degraded",
+            "degraded_reason": "tomtom_api_key_missing",
+        }
+
+    monkeypatch.setattr(TomTomAdapter, "fetch", empty_fetch)
+
+    res = await optimize_fleet_routes_with_cuopt(origin_id="belawan_port", dest_id="tebing_tinggi", fleet_size=2)
+    assert res["status"] == "success"
+    assert res["is_fallback"] is True
+    assert res["degraded_reason"] == "tomtom_api_key_missing"
+    assert res["traffic_telemetry"]["status"] == "DEGRADED"
+    assert res["optimization_summary"]["speed_source"] == "seed_fallback"
+    assert "tomtom_live_speed_kmh" not in res["optimization_summary"]
+
+
+@pytest.mark.asyncio
+async def test_cuopt_service_uses_live_speeds_when_available(monkeypatch):
+    """S5: live TomTom flow is reported as non-fallback with tomtom_live speed source."""
+    from app.adapters.tomtom_adapter import TomTomAdapter
+
+    async def live_fetch(self):
+        return {
+            "flow": [
+                {"_checkpoint_name": "Belawan Toll Gate", "flowSegmentData": {"currentSpeed": 55.0}},
+                {"_checkpoint_name": "Tebing Tinggi Toll Gate", "flowSegmentData": {"currentSpeed": 60.0}},
+            ],
+            "incidents": [],
+            "status": "ok",
+            "degraded_reason": None,
+        }
+
+    monkeypatch.setattr(TomTomAdapter, "fetch", live_fetch)
+
+    res = await optimize_fleet_routes_with_cuopt(origin_id="belawan_port", dest_id="tebing_tinggi", fleet_size=2)
+    assert res["is_fallback"] is False
+    assert res["degraded_reason"] is None
+    assert res["traffic_telemetry"]["status"] == "OK"
+    assert res["optimization_summary"]["speed_source"] == "tomtom_live"
+
+
 def test_cpu_routing_alias_resolution():
     """Verify that frontend HubNode IDs (e.g. 'belawan', 'tebingtinggi') and legacy IDs resolve correctly."""
     router = get_cpu_router()

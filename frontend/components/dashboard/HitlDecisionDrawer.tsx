@@ -150,7 +150,7 @@ export function HitlDecisionDrawer({
               <h2 className="text-sm font-mono font-bold text-white uppercase tracking-wider">
                 Human-in-the-Loop Review
               </h2>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
+              <span className="text-xs font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
                 GLOBOT PROTOCOL
               </span>
             </div>
@@ -262,21 +262,21 @@ export function HitlDecisionDrawer({
 
               <div className="grid grid-cols-2 gap-2 text-xs font-mono">
                 <div className="p-2.5 rounded-lg bg-[#080d14] border border-rose-500/30">
-                  <span className="text-slate-400 text-[10px] block">POTENSI SUSUT / SPOILAGE</span>
+                  <span className="text-slate-400 text-xs block">POTENSI SUSUT / SPOILAGE</span>
                   <span className="text-sm font-bold text-rose-400 block mt-0.5">
                     {formatIDR(topVehicle?.spoilage_loss_idr || activeAssessment?.total_value_at_risk_idr)}
                   </span>
-                  <span className="text-[10px] text-slate-500 mt-1 block">
+                  <span className="text-xs text-slate-500 mt-1 block">
                     Jika tertahan di titik macet
                   </span>
                 </div>
 
                 <div className="p-2.5 rounded-lg bg-[#080d14] border border-cyan-500/30">
-                  <span className="text-slate-400 text-[10px] block">BIAYA DETOUR (+SOLAR/TOL)</span>
+                  <span className="text-slate-400 text-xs block">BIAYA DETOUR (+SOLAR/TOL)</span>
                   <span className="text-sm font-bold text-cyan-400 block mt-0.5">
                     {formatIDR(topVehicle?.detour_fuel_cost_idr || 185000)}
                   </span>
-                  <span className="text-[10px] text-slate-500 mt-1 block">
+                  <span className="text-xs text-slate-500 mt-1 block">
                     +{topVehicle?.detour_distance_km || 42} km | +{topVehicle?.detour_time_hours || 1.5} jam
                   </span>
                 </div>

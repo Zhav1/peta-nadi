@@ -42,3 +42,14 @@ def get_service_client() -> Client:
         settings.supabase_url,
         settings.supabase_service_role_key,
     )
+
+
+def get_write_client() -> Client:
+    """
+    Client for backend write paths (ingestors, workers, routers).
+    Prefers the service-role key so RLS-restricted mutations succeed; falls back
+    to the anon client when the service key is not configured (local/demo).
+    """
+    if settings.supabase_service_role_key:
+        return get_service_client()
+    return get_client()

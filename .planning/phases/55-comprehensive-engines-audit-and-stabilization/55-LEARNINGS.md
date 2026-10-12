@@ -145,3 +145,32 @@ LIVE  →  CACHED (last-known-good, timestamped)  →  MODELED FALLBACK (labeled
 ```
 
 The audit's core failure was collapsing rungs 2–4 into rung 1 (or into empty lists and prose). Phase 55's mandate is to make the ladder explicit, tested, and visible from the UI down to the logs.
+
+---
+
+## 13. Context Window Learnings, Edge Cases & Post-Audit Discoveries
+
+### 13.1 Impact Assessment P0 Contract Divergence
+- **Failure:** Backend `impact_assessment_service.py` emitted `impacted_vehicles`, `critical_count`, `optimal_policy`, and `spoilage_loss_idr`, while frontend `types.ts` and `DispatcherAlertQueue.tsx` expected `impacted_assessments`, `critical_spoilage_count`, `license_plate`, and `delayed_spoilage_prob`.
+- **Impact:** The queue silently failed to render any alert items (`impactData.impacted_assessments` was perpetually undefined) with zero console or network errors.
+- **Rule:** Never author or modify backend Pydantic response schemas without updating corresponding frontend TypeScript interfaces in the same commit.
+
+### 13.2 LLM Extraction Timeout Budgeting
+- **Failure:** In `news_extractor.py`, the LLM extraction call was wrapped in `asyncio.wait_for(..., timeout=4.0)`.
+- **Impact:** Because LLM generation (DNS + TLS + token generation) frequently exceeds 4 seconds, every single call timed out, causing the system to silently revert to regex heuristics 100% of the time while claiming to use LLM extraction.
+- **Rule:** Set remote LLM network timeouts to at least **12.0s–15.0s**. If a 4s latency budget is strictly required, design an explicit local SLM or asynchronous background worker rather than a clipped synchronous HTTP call.
+
+### 13.3 Gemini Model Centralization & Environment Desync
+- **Update:** Centralized `settings.gemini_model = "gemini-3.8-flash"` in `backend/app/config.py`.
+- **Environment trap:** Root `.env` and `backend/.env` desynchronization frequently masks API availability. Always ensure `.env` values are mirrored between root and `backend/.env`.
+
+### 13.4 Strict Non-AI Anti-Patterns & "Zero Invented Metrics"
+- **Failure:** `TopNavTelemetry.tsx` defaulted missing corridor data to `45.0 mm/j` rainfall and `+25m` delay.
+- **Impact:** Misleads operators into believing live sensor data is flowing when the pipeline is actually offline or loading.
+- **Rule:** Replace invented fallback numbers with an honest neutral state (`—`). Enforce the 12px font baseline (`text-xs` minimum) and eliminate chromatic purple accents on utilitarian transport chrome.
+
+### 13.5 Deferred Watchlist for Subsequent Context Window
+1. **AISStream `mmsi` Bridge:** Ensure published `port_queue` Redis events include top-level `mmsi` so maritime units activate `LIVE_STREAM` badges.
+2. **NASA FIRMS Registration:** Register `NASAFIRMSAdapter` in `main.py` lifespan once `NASA_FIRMS_MAP_KEY` is provisioned.
+3. **Database Migration Deployment:** Execute `infra/supabase/migrations/010_core_tables_rls_and_incident_coordinates.sql` against the remote Supabase project.
+4. **Calculated Corridor Savings:** Replace static literals (`18.5%` travel time savings, `14.2%` fuel savings) in `cuopt_tomtom_service.py` with runtime-evaluated delta calculations between baseline Dijkstra and optimized routes.

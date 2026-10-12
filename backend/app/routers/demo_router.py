@@ -97,8 +97,8 @@ async def start_demo(payload: StartDemoPayload, background_tasks: BackgroundTask
     if not offline:
         def save_to_db(state):
             try:
-                from app.db.supabase_client import get_client
-                sb = get_client()
+                from app.db.supabase_client import get_write_client
+                sb = get_write_client()
                 # Create a database-compatible row
                 db_row = dict(state)
                 # Map route recommendations etc if schema requires

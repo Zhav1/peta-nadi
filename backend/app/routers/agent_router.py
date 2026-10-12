@@ -119,7 +119,7 @@ class ChatResponse(BaseModel):
 @router.post("/api/v1/agent/chat", response_model=ChatResponse)
 async def simulation_chat(req: ChatRequest):
     """
-    Real-time AI Chat Advisor powered by Gemini 1.5 / NVIDIA NIM & Multi-Agent Swarm Intelligence.
+    Real-time AI Chat Advisor powered by Gemini 3.8 Flash / NVIDIA NIM & Multi-Agent Swarm Intelligence.
     Ingests live telemetry parameters (BMKG, TomTom, PIHPS, cuOpt) and dynamic simulation telemetry to generate real responses.
     """
     user_msg = req.message.strip()
@@ -190,7 +190,6 @@ async def simulation_chat(req: ChatRequest):
         ai_reply = await LLMGateway.generate_content(
             prompt=prompt,
             system_instruction=system_instruction,
-            model_name="gemini-3.5-flash-lite",
             temperature=0.3
         )
     except Exception as e:
@@ -200,7 +199,7 @@ async def simulation_chat(req: ChatRequest):
     if not ai_reply or "CRISIS EXECUTIVE SUMMARY" in ai_reply or "mocked fallback" in ai_reply.lower() or "RINGKASAN EKSEKUTIF PREHUB (FALLBACK MODE)" in ai_reply:
         msg_lower = user_msg.lower()
         sig_hash = hashlib.md5(f"{user_msg}{time.time()}".encode()).hexdigest()[:6].upper()
-        thought_sig = f"SIG-GEMINI-3.1-FL-{sig_hash}"
+        thought_sig = f"SIG-GEMINI-3.8-FL-{sig_hash}"
 
         if "biaya" in msg_lower or "anggaran" in msg_lower or "tarif" in msg_lower or "rupiah" in msg_lower or "hedging" in msg_lower or "rugi" in msg_lower:
             ai_reply = (
@@ -234,7 +233,7 @@ async def simulation_chat(req: ChatRequest):
             )
     else:
         sig_hash = hashlib.md5(ai_reply.encode()).hexdigest()[:6].upper()
-        thought_sig = f"SIG-GEMINI-3.1-FL-{sig_hash}"
+        thought_sig = f"SIG-GEMINI-3.8-FL-{sig_hash}"
 
     return ChatResponse(
         reply=ai_reply,

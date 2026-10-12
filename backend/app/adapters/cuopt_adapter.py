@@ -1,3 +1,9 @@
+"""
+DEPRECATED: NVIDIA cuOpt & FourCastNet Adapter.
+Superseded by Deterministic CPURoutingAdapter (NetworkX + OR-Tools / 2-Opt)
+in `app.adapters.cpu_routing_adapter.py`.
+Maintained strictly as an inert fallback stub for legacy endpoint backwards compatibility.
+"""
 import logging
 import httpx
 from typing import Dict, Any, List
@@ -7,6 +13,7 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 class CuOptAdapter:
+    """DEPRECATED: Use app.adapters.cpu_routing_adapter.CPURoutingAdapter instead."""
     @staticmethod
     def get_nvidia_key() -> str:
         """Helper to get a valid NVIDIA API Key from config."""

@@ -113,12 +113,19 @@ async def economic_intelligence_agent(state: CrisisState) -> dict:
         from agents.llm_gateway import LLMGateway
         resp_text = await LLMGateway.generate_content(
             prompt=prompt,
-            model_name="gemini-1.5-flash"
+            model_name=settings.gemini_model
         )
-        if resp_text and len(resp_text) > 20:
+        degraded_markers = ("FALLBACK", "CRISIS EXECUTIVE SUMMARY", "RINGKASAN EKSEKUTIF PREHUB", "MOCKED")
+        if (
+            resp_text
+            and len(resp_text) > 20
+            and not any(marker in resp_text.upper() for marker in degraded_markers)
+        ):
             narrative = resp_text.strip()
+        else:
+            logger.warning("EconomicIntelligenceAgent: LLM narrative rejected as degraded/fallback text; using deterministic narrative.")
     except Exception as le:
-        logger.debug(f"LLMGateway narrative generation skipped: {le}")
+        logger.warning(f"EconomicIntelligenceAgent: LLM narrative generation unavailable; using deterministic narrative: {le}")
 
     # 5. Compute confidence score
     confidence = 0.5  # Base

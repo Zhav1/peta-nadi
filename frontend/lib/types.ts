@@ -309,6 +309,7 @@ export interface CorridorContext {
   corridor_name: string;
   timestamp: string;
   is_fallback: boolean;
+  fallback_reasons: string[];
   weather: {
     status: string;
     rainfall_mm: number;
@@ -705,66 +706,75 @@ export interface ComplianceVerifyResponse {
 }
 
 // Disruption Impact Assessment & Decision Engine Types
+// Mirror of backend/app/schemas/impact_schemas.py — keep in sync with the API contract
 export interface DisruptionImpactRequest {
-  incident_id: string;
+  incident_id?: string;
   lat: number;
   lon: number;
   radius_km?: number;
-  expected_delay_hours?: number;
   hazard_type?: string;
-  road_class_blockade?: string[];
+  severity?: Severity;
+  title?: string;
+}
+
+export interface DisruptionContext {
+  incident_id: string;
+  title: string;
+  hazard_type: string;
+  severity: Severity;
+  latitude: number;
+  longitude: number;
+  radius_km: number;
+}
+
+// Deterministic CPU detour geometry emitted by the routing adapter
+export interface DetourRoute {
+  route_index: number;
+  description: string;
+  nodes: string[];
+  coordinates: [number, number][];
+  distance_km: number;
+  eta_minutes: number;
+  fuel_increase_pct: number;
+  risk_score: number;
+  is_detour: boolean;
 }
 
 export interface ImpactedVehicleAssessment {
   vehicle_id: string;
-  name: string;
+  vehicle_name: string;
+  modality: string;
+  driver_name?: string | null;
+  driver_phone?: string | null;
+  commodity: string;
   commodity_key: string;
   cargo_tonnage: number;
   cargo_value_idr: number;
-  distance_to_incident_km: number;
-  is_direct_intersection: boolean;
-  driver_name: string;
-  driver_phone: string;
-  license_plate: string;
+  vehicle_golongan: string;
   origin: string;
   destination: string;
-  current_location: [number, number];
+  distance_to_hazard_km: number;
+  estimated_delay_hours: number;
   sla_deadline_hours: number;
-  baseline_spoilage_prob: number;
-  delayed_spoilage_prob: number;
-  at_risk_spoilage_idr: number;
-  spoilage_recommendation: {
-    recommended_policy: "CONTINUE" | "REROUTE" | "HOLD";
-    expected_savings_idr: number;
-    explanation: string;
-  };
-  compliance_check: {
-    is_compliant: boolean;
-    quarantine_clear: boolean;
-    mst_clear: boolean;
-    issues: string[];
-  };
-  detour_route?: {
-    distance_km: number;
-    eta_hours: number;
-    toll_cost_idr: number;
-    fuel_cost_idr: number;
-    total_cost_idr: number;
-    waypoints: string[];
-    geometry_geojson?: Record<string, unknown>;
-  } | null;
-  recommended_action: "REROUTE_IMMEDIATE" | "PROCEED_WITH_CAUTION" | "HOLD_AT_SAFE_POINT";
-  justification: string;
+  late_arrival_risk_pct: number;
+  optimal_policy: "REROUTE" | "HOLD" | "CONTINUE";
+  net_savings_idr: number;
+  spoilage_loss_idr: number;
+  detour_cost_idr: number;
+  compliance_status: "PASSED" | "WARNING" | "HARD_BLOCK";
+  recommendation_rationale: string;
+  whatsapp_dispatch_text: string;
+  detour_route?: DetourRoute | null;
 }
 
 export interface DisruptionImpactResponse {
-  incident_id: string;
-  timestamp: string;
+  disruption: DisruptionContext;
   total_fleet_scanned: number;
   impacted_vehicles_count: number;
-  total_value_at_risk_idr: number;
-  critical_spoilage_count: number;
-  impacted_assessments: ImpactedVehicleAssessment[];
+  critical_count: number;
+  warning_count: number;
+  impacted_vehicles: ImpactedVehicleAssessment[];
+  evaluated_at: string;
 }
 
 

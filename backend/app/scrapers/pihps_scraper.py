@@ -9,23 +9,11 @@ from typing import List, Dict, Any, Optional
 import httpx
 from app.scrapers.base_scraper import BaseScraper
 from app.services.redis_client import STREAM_PIHPS, get_redis
-from app.db.supabase_client import get_client, get_service_client
+from app.db.supabase_client import get_write_client
 
 logger = logging.getLogger(__name__)
 
 REGION = "north_sumatra"
-
-
-def _get_write_client():
-    """
-    Supabase client for ingestion writes: prefer the service-role client
-    (bypasses Row Level Security), falling back to the shared anon client
-    when no service key is configured.
-    """
-    try:
-        return get_service_client()
-    except Exception:
-        return get_client()
 
 
 COMCAT_IDS = {
@@ -282,7 +270,7 @@ class PIHPSScraper(BaseScraper):
             return 0
 
         try:
-            sb = _get_write_client()
+            sb = get_write_client()
         except Exception as e:
             logger.warning(f"Supabase unavailable, skipping PIHPS persistence for {com_name}: {e}")
             return 0

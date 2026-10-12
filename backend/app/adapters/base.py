@@ -6,7 +6,7 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 
 from app.services.redis_client import publish_event, get_redis, SOURCE_CACHE_PREFIX
-from app.db.supabase_client import get_client
+from app.db.supabase_client import get_write_client
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +99,7 @@ class BaseAdapter(ABC):
 
         # 2. Update Supabase data_sources table (gracefully skip if no credentials)
         try:
-            supabase = get_client()
+            supabase = get_write_client()
             update_data = {
                 "status": status,
                 "updated_at": now_str

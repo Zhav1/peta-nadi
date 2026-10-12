@@ -1,4 +1,5 @@
 import logging
+from typing import Optional
 import httpx
 import google.generativeai as genai
 from app.config import get_settings
@@ -6,7 +7,13 @@ from app.config import get_settings
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
-PRIMARY_NIM_MODEL = "deepseek-ai/deepseek-r1"
+PRIMARY_NIM_MODEL = "deepseek-ai/deepseek-v4.1-flash"
+NVIDIA_NIM_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
+
+
+class LLMGatewayUnavailable(RuntimeError):
+    """Raised when no LLM provider (Gemini or NVIDIA NIM) can produce a real completion."""
+
 
 class LLMGateway:
     @staticmethod
@@ -26,14 +33,16 @@ class LLMGateway:
     async def generate_content(
         cls, 
         prompt: str, 
-        system_instruction: str = None, 
-        model_name: str = "gemini-3.5-flash-lite",
+        system_instruction: Optional[str] = None, 
+        model_name: Optional[str] = None,
         temperature: float = 0.2
     ) -> str:
         """
         Tries to call Gemini API first. If it fails or is unconfigured, 
         falls back to NVIDIA NIM DeepSeek OpenAI-compatible API.
+        Raises LLMGatewayUnavailable when no provider succeeds; never returns canned prose.
         """
+        model_name = model_name or settings.gemini_model
         # Force offline/mock mode if configured
         if settings.demo_offline:
             logger.info("LLMGateway: Demo offline mode active. Returning mock response.")
@@ -67,17 +76,20 @@ class LLMGateway:
                 if text:
                     logger.info("LLMGateway: Gemini call succeeded.")
                     return text
+                logger.warning("LLMGateway: Gemini returned an empty response. Falling back to NVIDIA NIM.")
             except Exception as e:
                 logger.warning(f"LLMGateway: Gemini call failed: {e}. Falling back to NVIDIA NIM ({PRIMARY_NIM_MODEL})...")
 
-        # Fallback to NVIDIA NIM (DeepSeek R1)
+        # Fallback to NVIDIA NIM (DeepSeek V4.1 Flash)
         nvidia_key = cls.get_nvidia_key()
         if not nvidia_key:
-            logger.warning("LLMGateway: No API keys found. Returning default fallback response.")
-            return "CRISIS EXECUTIVE SUMMARY\nEvent: Flood / Port Congestion\nLocation/Region: North Sumatra\nKey Evidence: Ingested sensors show anomalies.\nRecommended Action: Divert traffic.\nConfidence Assessment: High (mocked fallback)."
+            logger.error("LLMGateway: No usable API keys found (Gemini unconfigured/failed and NVIDIA NIM key missing).")
+            raise LLMGatewayUnavailable(
+                "No usable LLM API keys configured: Gemini is unconfigured or failed and no NVIDIA NIM key is available."
+            )
 
         logger.info(f"LLMGateway: Routing LLM request to NVIDIA NIM ({PRIMARY_NIM_MODEL})...")
-        url = "https://integrate.api.nvidia.com/v1/chat/completions"
+        url = NVIDIA_NIM_URL
         
         headers = {
             "Authorization": f"Bearer {nvidia_key}",
@@ -102,14 +114,10 @@ class LLMGateway:
                 response.raise_for_status()
                 res_data = response.json()
                 text = res_data["choices"][0]["message"]["content"].strip()
+                if not text:
+                    raise ValueError("NVIDIA NIM returned an empty completion")
                 logger.info("LLMGateway: NVIDIA NIM DeepSeek call succeeded.")
                 return text
         except Exception as nim_err:
-            logger.error(f"LLMGateway Error: NVIDIA NIM call failed: {nim_err}")
-            # Graceful fallback string rather than unhandled exception crash
-            return (
-                "RINGKASAN EKSEKUTIF PREHUB (FALLBACK MODE)\n"
-                "1. Ancaman Fisik: Curah hujan tinggi terdeteksi di koridor Belawan-Medan.\n"
-                "2. Dampak Ekonomi: Potensi kenaikan harga komoditas pangan 8-15% dalam 48 jam.\n"
-                "3. Mitigasi: Pengalihan rute melalui Tol Medan-Tebing Tinggi disarankan."
-            )
+            logger.error(f"LLMGateway: NVIDIA NIM call failed ({PRIMARY_NIM_MODEL}): {nim_err}", exc_info=True)
+            raise LLMGatewayUnavailable(f"NVIDIA NIM call failed ({PRIMARY_NIM_MODEL}): {nim_err}") from nim_err

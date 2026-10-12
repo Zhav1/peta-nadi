@@ -205,8 +205,8 @@ async def get_pending_hitl_approvals():
     where operator action is required.
     """
     try:
-        from app.db.supabase_client import get_client
-        sb = get_client()
+        from app.db.supabase_client import get_write_client
+        sb = get_write_client()
         res = sb.table("route_approvals").select("*").eq("sync_status", "pending_operator_review").order("approved_at", desc=True).limit(10).execute()
         raw_items = res.data or []
 

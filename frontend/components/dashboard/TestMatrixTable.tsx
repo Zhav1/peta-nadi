@@ -91,6 +91,11 @@ export default function TestMatrixTable({
     setExpandedId((prev) => (prev === id ? null : id));
   };
 
+  const passedCount = useMemo(() => {
+    return tests.filter((t) => t.result?.toUpperCase() === 'PASSED').length;
+  }, [tests]);
+  const passRatePct = tests.length > 0 ? ((passedCount / tests.length) * 100).toFixed(1) : '100.0';
+
   return (
     <div className="flex flex-col bg-[#0c1017] border border-[#1c2432] rounded-lg p-5 shadow-xl overflow-hidden">
       {/* Table Header Controls */}
@@ -103,11 +108,11 @@ export default function TestMatrixTable({
             <h3 className="text-sm font-semibold text-white tracking-wide font-sans flex items-center gap-2">
               <span>Matriks Uji Otomatis & Inventaris Verifikasi</span>
               <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-mono">
-                {tests.length} Skenario • 100% Passed
+                {tests.length} Skenario • {passedCount}/{tests.length} ({passRatePct}%) Lolos
               </span>
             </h3>
             <p className="text-xs text-slate-400 font-sans mt-0.5">
-              Pemetaan Kebutuhan Fungsional FR-1 s.d. FR-20 dengan Pengujian Pytest & WebGL
+              Pemetaan Kebutuhan Fungsional FR-1 s.d. FR-20 dengan Pengujian Otomatis Pytest & WebGL
             </p>
           </div>
         </div>

@@ -169,7 +169,7 @@ function RouteCard({
           {route.legs.map((leg, lIdx) => (
             <div key={lIdx} className="flex justify-between items-center text-slate-300">
               <span className="flex items-center gap-1.5">
-                {leg.mode === 'truck' ? <Truck className="w-3.5 h-3.5 text-slate-300" /> : leg.mode === 'maritime' ? <Anchor className="w-3.5 h-3.5 text-amber-400" /> : (leg.mode as string) === 'rail' ? <Train className="w-3.5 h-3.5 text-emerald-400" /> : <Plane className="w-3.5 h-3.5 text-purple-400" />}
+                {leg.mode === 'truck' ? <Truck className="w-3.5 h-3.5 text-slate-300" /> : leg.mode === 'maritime' ? <Anchor className="w-3.5 h-3.5 text-amber-400" /> : (leg.mode as string) === 'rail' ? <Train className="w-3.5 h-3.5 text-emerald-400" /> : <Plane className="w-3.5 h-3.5 text-sky-400" />}
                 <span>{leg.title}</span>
               </span>
               <span className="text-white font-semibold tabular-nums">{leg.eta_minutes} min ({leg.distance_km} km)</span>
@@ -191,7 +191,7 @@ function RouteCard({
               <div className="flex items-center justify-between">
                 <span className="flex items-center gap-2">
                   {approvalData?.action === 'OVERRIDE' ? (
-                    <SlidersHorizontal className="w-4 h-4 text-purple-400" />
+                    <SlidersHorizontal className="w-4 h-4 text-sky-400" />
                   ) : approvalData?.tactical_action === 'HOLD' ? (
                     <PauseCircle className="w-4 h-4 text-amber-400" />
                   ) : (
@@ -220,14 +220,14 @@ function RouteCard({
               {(() => {
                 const targetPhone = (selectedImpactedVehicle?.driver_phone || '6281234567891').replace(/^\+/, '').replace(/\s+/g, '');
                 const targetTruck = selectedImpactedVehicle?.vehicle_id || 'TRK-003-BELAWAN-TEBING';
-                const targetPlate = selectedImpactedVehicle?.license_plate || 'BK 8812 XL';
+                const targetVehicleName = selectedImpactedVehicle?.vehicle_name || 'Unit Logistik';
                 const targetCargo = selectedImpactedVehicle ? `${selectedImpactedVehicle.cargo_tonnage}T ${selectedImpactedVehicle.commodity_key}` : 'Cabai Merah';
                 
                 return (
                   <a
                     href={`https://wa.me/${targetPhone}?text=${encodeURIComponent(
                       `PERINTAH DISPATCH RESMI - PIDI\n` +
-                      `Armada: ${targetTruck} (${targetPlate})\n` +
+                      `Armada: ${targetTruck} (${targetVehicleName})\n` +
                       `Muatan: ${targetCargo}\n` +
                       `Tindakan: ${approvalData?.tactical_action || 'REROUTE'}\n` +
                       `Rute Pengalihan: ${route.route_name || route.description}\n` +
@@ -695,10 +695,12 @@ export function MitigationTab({
         })();
         const resolvedCargoTonnage = selectedImpactedVehicle?.cargo_tonnage ?? 10.0;
         const resolvedDetourDist = selectedImpactedVehicle?.detour_route?.distance_km ?? activeRoute?.distance_km ?? 85.0;
-        const resolvedDetourHours = selectedImpactedVehicle?.detour_route?.eta_hours ?? (activeRoute?.eta_minutes ? (activeRoute.eta_minutes / 60) : 2.5);
+        const resolvedDetourHours = selectedImpactedVehicle?.detour_route?.eta_minutes
+          ? selectedImpactedVehicle.detour_route.eta_minutes / 60
+          : (activeRoute?.eta_minutes ? (activeRoute.eta_minutes / 60) : 2.5);
         const resolvedTraversedRoads = (() => {
-          if (selectedImpactedVehicle?.detour_route?.waypoints && selectedImpactedVehicle.detour_route.waypoints.length > 0) {
-            return selectedImpactedVehicle.detour_route.waypoints;
+          if (selectedImpactedVehicle?.detour_route?.nodes && selectedImpactedVehicle.detour_route.nodes.length > 0) {
+            return selectedImpactedVehicle.detour_route.nodes;
           }
           const roads: string[] = [];
           if (activeRoute?.description) roads.push(activeRoute.description);
@@ -766,7 +768,7 @@ export function MitigationTab({
               traversedRoads={resolvedTraversedRoads}
               vehicleGrossWeightTon={selectedImpactedVehicle?.cargo_tonnage ? (selectedImpactedVehicle.cargo_tonnage + 5.0) : 12.5}
               commodity={resolvedCommodity}
-              hasBkhitCert={selectedImpactedVehicle ? selectedImpactedVehicle.compliance_check.quarantine_clear : false}
+              hasBkhitCert={selectedImpactedVehicle ? selectedImpactedVehicle.compliance_status === 'PASSED' : false}
               driverPhone={selectedImpactedVehicle?.driver_phone || '+6281234567891'}
             />
           </>

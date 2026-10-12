@@ -256,6 +256,32 @@ async def test_economic_intelligence_anomaly_detected(mock_query_ltm, mock_redis
     assert result["economic_intelligence_finding"]["confidence"] >= 0.7
 
 
+@pytest.mark.asyncio
+@patch("agents.nodes.economic_intelligence.query_ltm")
+async def test_economic_intelligence_rejects_degraded_llm_text(mock_query_ltm, mock_redis, mock_supabase):
+    """S2: canned fallback text must never satisfy Agent 5's narrative."""
+    mock_query_ltm.return_value = []
+    degraded_text = (
+        "RINGKASAN EKSEKUTIF PREHUB (FALLBACK MODE)\n"
+        "1. Ancaman Fisik: Curah hujan tinggi terdeteksi di koridor Belawan-Medan.\n"
+        "2. Dampak Ekonomi: Potensi kenaikan harga komoditas pangan 8-15% dalam 48 jam.\n"
+        "3. Mitigasi: Pengalihan rute melalui Tol Medan-Tebing Tinggi disarankan."
+    )
+
+    state: CrisisState = {
+        "normalized_event": {"event_type": "flood", "severity": "high"},
+        "region": "north_sumatra"
+    }
+
+    from agents.llm_gateway import LLMGateway
+    with patch.object(LLMGateway, "generate_content", AsyncMock(return_value=degraded_text)):
+        result = await economic_intelligence_agent(state)
+
+    summary = result["economic_intelligence_finding"]["summary"]
+    assert "RINGKASAN EKSEKUTIF PREHUB" not in summary
+    assert "Model dampak ekonomi" in summary
+
+
 def test_consensus_gate_validates_at_85pct():
     state: CrisisState = {
         "osint_hazard_finding": {"confidence": 0.9},

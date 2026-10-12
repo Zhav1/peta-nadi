@@ -1,6 +1,6 @@
 """
 PreHub — Structured News & Early Warning Information Extractor
-Uses Gemini 1.5 Flash via LLMGateway to extract structured crisis intelligence:
+Uses Gemini 3.8 Flash via LLMGateway to extract structured crisis intelligence:
 - Incident type, severity, temporal phase (forecast_early_warning, active_disruption, clearing_recovery)
 - Estimated lead-time in hours
 - Corridor nodes and specific arterial road segments (e.g. Jalinsum KM 78)
@@ -173,10 +173,11 @@ async def extract_structured_news(art: Dict[str, Any]) -> Dict[str, Any]:
                 f"Content: {art.get('raw_description', '')}"
             )
             
-            # Execute with short timeout to protect latency
+            # Bounded 12s budget: a full Gemini 3.8 Flash completion fits within it,
+            # and only then do we drop to the heuristic baseline.
             gen_text = await asyncio.wait_for(
-                LLMGateway.generate_content(prompt=prompt, model_name="gemini-3.5-flash-lite"),
-                timeout=4.0
+                LLMGateway.generate_content(prompt=prompt, model_name=settings.gemini_model),
+                timeout=12.0
             )
             if gen_text:
                 clean_text = gen_text.strip()
@@ -203,7 +204,9 @@ async def extract_structured_news(art: Dict[str, Any]) -> Dict[str, Any]:
                     if parsed.get("ground_truth_metrics"):
                         structured["ground_truth_metrics"].update(parsed["ground_truth_metrics"])
         except Exception as e:
-            logger.debug(f"LLM extraction skipped for '{title[:30]}': {e}")
+            logger.warning(
+                f"LLM structured extraction unavailable for '{title[:30]}' ({type(e).__name__}: {e}); using heuristic baseline."
+            )
 
     # Store in memory cache
     if len(_EXTRACTION_CACHE) > MAX_CACHE_ENTRIES:

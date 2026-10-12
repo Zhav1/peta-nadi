@@ -105,7 +105,7 @@ export function CrisisSimulatorBar({
     best: <Compass className="w-3.5 h-3.5 text-cyan-400" />,
     truck: <Truck className="w-3.5 h-3.5 text-emerald-400" />,
     maritime: <Ship className="w-3.5 h-3.5 text-blue-400" />,
-    air: <Plane className="w-3.5 h-3.5 text-purple-400" />,
+    air: <Plane className="w-3.5 h-3.5 text-sky-400" />,
   };
 
   const togglePopover = (popover: 'modality' | 'nodes' | 'disruption' | 'radius' | 'speed') => {
@@ -151,7 +151,7 @@ export function CrisisSimulatorBar({
                   { mode: 'best', label: 'Multi-Moda Terpadu', desc: 'Optimasi Rute Multi-Moda', icon: <Compass className="w-4 h-4 text-cyan-400" /> },
                   { mode: 'truck', label: 'Truk Logistik', desc: 'Transportasi Darat', icon: <Truck className="w-4 h-4 text-emerald-400" /> },
                   { mode: 'maritime', label: 'Kapal Laut', desc: 'Transportasi Maritim', icon: <Ship className="w-4 h-4 text-blue-400" /> },
-                  { mode: 'air', label: 'Cargo Udara', desc: 'Transportasi Udara', icon: <Plane className="w-4 h-4 text-purple-400" /> },
+                  { mode: 'air', label: 'Cargo Udara', desc: 'Transportasi Udara', icon: <Plane className="w-4 h-4 text-sky-400" /> },
                 ].map((m) => {
                   const active = selectedModality === m.mode;
                   return (

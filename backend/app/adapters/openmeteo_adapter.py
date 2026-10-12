@@ -19,10 +19,27 @@ OPEN_METEO_FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 class OpenMeteoAdapter(BaseAdapter):
     """Adapter for Open-Meteo global numerical weather prediction models."""
 
+    source_name = "openmeteo"
+    stream_key = "lrip:events:openmeteo"
+    poll_interval_seconds = 3600  # Hourly refresh to track shifting NWP projections
+
     def __init__(self, latitude: float = 3.5833, longitude: float = 98.6667):
-        super().__init__(source_name="openmeteo")
+        super().__init__()
         self.lat = latitude
         self.lon = longitude
+
+    async def health_check(self) -> bool:
+        """Checks if the Open-Meteo forecast endpoint is reachable (lightweight GET)."""
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                res = await client.get(
+                    OPEN_METEO_FORECAST_URL,
+                    params={"latitude": self.lat, "longitude": self.lon, "hourly": "precipitation", "forecast_days": 1},
+                )
+                return res.status_code == 200
+        except Exception as e:
+            logger.warning(f"OpenMeteoAdapter health check failed: {e}")
+            return False
 
     async def fetch(self) -> Dict[str, Any]:
         """Fetches hourly precipitation and atmospheric predictions from Open-Meteo."""

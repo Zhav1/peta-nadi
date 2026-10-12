@@ -1,4 +1,5 @@
 import logging
+import re
 from fastapi import APIRouter, HTTPException, Query
 from typing import Optional
 from pydantic import BaseModel
@@ -9,6 +10,67 @@ import asyncio
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/incidents", tags=["incidents"])
+
+_WKT_POINT_RE = re.compile(
+    r"POINT\s*\(\s*([-+]?\d+(?:\.\d+)?)\s+([-+]?\d+(?:\.\d+)?)\s*\)",
+    re.IGNORECASE,
+)
+
+# Migration 010 projection: concrete lat/lon columns alongside the legacy WKT 'location'
+INCIDENT_COLUMNS_WITH_COORDS = (
+    "incident_id, title, type, severity, status, confidence, created_at, "
+    "location, lat, lon, description, affected_area"
+)
+# Pre-migration-010 projection (WKT 'location' only)
+INCIDENT_COLUMNS_LEGACY = (
+    "incident_id, title, type, severity, status, confidence, created_at, "
+    "location, description, affected_area"
+)
+
+
+def _parse_wkt_point(location) -> tuple[Optional[float], Optional[float]]:
+    """Parse a WKT 'POINT(lon lat)' string into (lat, lon) floats; (None, None) if missing/unparseable."""
+    if not location:
+        return None, None
+    match = _WKT_POINT_RE.search(str(location))
+    if not match:
+        return None, None
+    lon = float(match.group(1))
+    lat = float(match.group(2))
+    return lat, lon
+
+
+def _coerce_coord(value) -> Optional[float]:
+    """Normalize a concrete lat/lon column value (float or numeric string) to float."""
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _fetch_incident_rows(sb, limit: int, status: Optional[str], severity: Optional[str]):
+    """
+    Query incidents preferring the concrete lat/lon projection; fall back to the
+    legacy WKT-only projection when the schema predates migration 010.
+    """
+    def _execute(columns: str):
+        query = sb.table("incidents").select(columns).order("created_at", desc=True).limit(limit)
+        if status:
+            query = query.eq("status", status)
+        if severity:
+            query = query.eq("severity", severity)
+        return query.execute()
+
+    try:
+        return _execute(INCIDENT_COLUMNS_WITH_COORDS)
+    except Exception as exc:
+        logger.warning(
+            f"Incidents: concrete lat/lon projection unavailable ({exc}); "
+            "falling back to WKT 'location' parsing"
+        )
+        return _execute(INCIDENT_COLUMNS_LEGACY)
 
 
 class IncidentResponse(BaseModel):
@@ -69,16 +131,7 @@ async def list_incidents(
     try:
         from app.db.supabase_client import get_client
         sb = get_client()
-        query = sb.table("incidents").select(
-            "incident_id, title, type, severity, status, confidence, created_at, lat, lon"
-        ).order("created_at", desc=True).limit(limit)
-        
-        if status:
-            query = query.eq("status", status)
-        if severity:
-            query = query.eq("severity", severity)
-            
-        result = query.execute()
+        result = _fetch_incident_rows(sb, limit, status, severity)
         items = result.data or []
         
         # Map incident_id or id for IncidentResponse pydantic model
@@ -87,13 +140,29 @@ async def list_incidents(
             item_copy["id"] = item_copy.pop("incident_id", item_copy.get("id", ""))
             if "confidence" not in item_copy and "overall_confidence" in item_copy:
                 item_copy["confidence"] = item_copy["overall_confidence"]
+            # Prefer concrete lat/lon columns; fall back to parsing WKT 'location'
+            lat = _coerce_coord(item_copy.get("lat"))
+            lon = _coerce_coord(item_copy.get("lon"))
+            if lat is None or lon is None:
+                wkt_lat, wkt_lon = _parse_wkt_point(item_copy.get("location"))
+                lat = lat if lat is not None else wkt_lat
+                lon = lon if lon is not None else wkt_lon
+            item_copy["lat"] = lat
+            item_copy["lon"] = lon
+            if lat is None and item_copy.get("location"):
+                logger.warning(
+                    f"Incidents: unparseable WKT location for incident {item_copy['id']}: {item_copy.get('location')!r}"
+                )
             # Avoid duplicates if already in demo items
             if any(x.id == item_copy["id"] for x in formatted_items):
                 continue
             formatted_items.append(IncidentResponse(**item_copy))
 
     except Exception as e:
-        logger.warning(f"Supabase unavailable: {e}")
+        logger.warning(
+            f"Supabase incidents query failed ({type(e).__name__}: {e}); returning {len(formatted_items)} items",
+            exc_info=True,
+        )
         
     return IncidentListResponse(
         items=formatted_items,

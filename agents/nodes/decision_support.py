@@ -134,7 +134,7 @@ async def decision_support_copilot(state: CrisisState) -> dict:
         gen_text = await LLMGateway.generate_content(
             prompt=prompt,
             system_instruction=system_prompt,
-            model_name="gemini-1.5-flash"
+            model_name=settings.gemini_model
         )
         if gen_text and "FALLBACK" not in gen_text and "CRISIS EXECUTIVE SUMMARY" not in gen_text and len(gen_text) > 50:
             summary_text = gen_text.strip()

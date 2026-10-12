@@ -9,6 +9,7 @@ from app.adapters.bmkg_adapter import BMKGAdapter
 from app.adapters.tomtom_adapter import TomTomAdapter
 from app.adapters.aisstream_adapter import AISstreamAdapter
 from app.adapters.nasa_firms_adapter import NASAFIRMSAdapter
+from app.adapters.openmeteo_adapter import OpenMeteoAdapter
 
 # ==============================================================================
 # BMKG Adapter Tests
@@ -242,6 +243,177 @@ async def test_tomtom_no_alert_normal():
 
 
 # ==============================================================================
+# TomTom S5: Bbox Compliance, Tiling & Credit Fallback Tests
+# ==============================================================================
+
+def test_tomtom_corridor_tiles_within_bbox_limit():
+    """S5: corridor tiles stay strictly below the 10,000 km2 TomTom bbox ceiling."""
+    tiles = TomTomAdapter.build_corridor_tiles()
+    assert len(tiles) >= 6
+    for tile in tiles:
+        assert tile["area_km2"] <= TomTomAdapter.MAX_BBOX_AREA_KM2
+        assert TomTomAdapter.bbox_area_km2(tile["bbox"]) <= TomTomAdapter.MAX_BBOX_AREA_KM2
+
+
+def test_tomtom_corridor_tiles_cover_checkpoints_and_dedupe():
+    """S5: every checkpoint is covered by a tile and duplicate tile cells are merged."""
+    tiles = TomTomAdapter.build_corridor_tiles()
+    bboxes = [tile["bbox"] for tile in tiles]
+    assert len(bboxes) == len(set(bboxes))
+
+    def covered(cp):
+        for tile in tiles:
+            min_lon, min_lat, max_lon, max_lat = (float(v) for v in tile["bbox"].split(","))
+            if min_lat <= cp["lat"] <= max_lat and min_lon <= cp["lon"] <= max_lon:
+                return True
+        return False
+
+    for cp in TomTomAdapter.CHECKPOINTS:
+        assert covered(cp), f"{cp['name']} is not covered by any corridor tile"
+
+    anchors = sorted(name for tile in tiles for name in tile["anchors"])
+    assert anchors == sorted(cp["name"] for cp in TomTomAdapter.CHECKPOINTS)
+
+
+def _mock_tomtom_response(status_code, payload):
+    response = MagicMock()
+    response.status_code = status_code
+    response.json.return_value = payload
+    return response
+
+
+@pytest.mark.asyncio
+@patch("app.adapters.tomtom_adapter.httpx.AsyncClient")
+@patch("app.adapters.tomtom_adapter.settings")
+async def test_tomtom_incident_tiles_dedupe_by_id(mock_settings, mock_client_cls, monkeypatch):
+    """S5: incidents are queried per tile sequentially with sleeps and deduplicated by ID."""
+    mock_settings.tomtom_api_key = "test-key"
+    TomTomAdapter.reset_credit_latch()
+    monkeypatch.setattr(TomTomAdapter, "TILE_REQUEST_SLEEP_SECONDS", 0)
+
+    shared_incident = {
+        "properties": {"id": "INC-42", "iconCategory": 6, "delay": 900},
+        "geometry": {"type": "Point", "coordinates": [98.68, 3.8]},
+    }
+    unique_incident = {
+        "properties": {"id": "INC-43", "iconCategory": 7, "delay": 1200},
+        "geometry": {"type": "LineString", "coordinates": [[99.16, 3.32], [99.17, 3.33]]},
+    }
+    requested_bboxes = []
+
+    async def fake_get(url, params=None, **kwargs):
+        if "flowSegmentData" in url:
+            return _mock_tomtom_response(200, {"flowSegmentData": {"currentSpeed": 40, "freeFlowSpeed": 60}})
+        requested_bboxes.append(params["bbox"])
+        incidents = [shared_incident, shared_incident]
+        if len(requested_bboxes) == 1:
+            incidents.append(unique_incident)
+        return _mock_tomtom_response(200, {"incidents": incidents})
+
+    mock_client = AsyncMock()
+    mock_client.get.side_effect = fake_get
+    mock_client_cls.return_value.__aenter__.return_value = mock_client
+
+    adapter = TomTomAdapter()
+    data = await adapter.fetch()
+
+    assert data["status"] == "ok"
+    assert data["degraded_reason"] is None
+    assert len(data["incidents"]) == 2
+    ids = {inc["properties"]["id"] for inc in data["incidents"]}
+    assert ids == {"INC-42", "INC-43"}
+
+    tiles = TomTomAdapter.build_corridor_tiles()
+    assert len(requested_bboxes) == len(tiles)
+    for bbox in requested_bboxes:
+        assert TomTomAdapter.bbox_area_km2(bbox) <= TomTomAdapter.MAX_BBOX_AREA_KM2
+
+    assert len(data["flow"]) == len(TomTomAdapter.CHECKPOINTS)
+
+
+@pytest.mark.asyncio
+@patch("app.adapters.tomtom_adapter.httpx.AsyncClient")
+@patch("app.adapters.tomtom_adapter.settings")
+async def test_tomtom_403_sets_credit_latch_and_skips_further_calls(mock_settings, mock_client_cls):
+    """S5: a 403 InsufficientFunds latches credit exhaustion, logs once, and halts further TomTom calls."""
+    mock_settings.tomtom_api_key = "test-key"
+    TomTomAdapter.reset_credit_latch()
+
+    mock_client = AsyncMock()
+    mock_client_cls.return_value.__aenter__.return_value = mock_client
+    mock_client.get.return_value = _mock_tomtom_response(
+        403, {"detailedError": {"code": "InsufficientFunds"}}
+    )
+
+    adapter = TomTomAdapter()
+    first = await adapter.fetch()
+    assert first["status"] == "degraded"
+    assert first["credit_exhausted"] is True
+    assert TomTomAdapter.is_credit_exhausted() is True
+    calls_after_first = mock_client.get.call_count
+    assert calls_after_first == 1  # short-circuits on the first 403
+
+    second = await adapter.fetch()
+    assert second["status"] == "degraded"
+    assert "credit_exhausted" in (second["degraded_reason"] or "")
+    assert mock_client.get.call_count == calls_after_first  # latched: no further HTTP calls
+
+    assert await adapter.health_check() is False
+    assert mock_client.get.call_count == calls_after_first
+
+    TomTomAdapter.reset_credit_latch()
+    assert TomTomAdapter.is_credit_exhausted() is False
+
+
+@pytest.mark.asyncio
+@patch("app.adapters.tomtom_adapter.httpx.AsyncClient")
+@patch("app.adapters.tomtom_adapter.settings")
+async def test_tomtom_health_check_reflects_endpoint_status(mock_settings, mock_client_cls):
+    """S5: health_check reports the real endpoint status instead of a static seeded 'ok'."""
+    mock_settings.tomtom_api_key = "test-key"
+    TomTomAdapter.reset_credit_latch()
+
+    mock_client = AsyncMock()
+    mock_client_cls.return_value.__aenter__.return_value = mock_client
+
+    adapter = TomTomAdapter()
+    mock_client.get.return_value = _mock_tomtom_response(200, {"flowSegmentData": {}})
+    assert await adapter.health_check() is True
+
+    mock_client.get.return_value = _mock_tomtom_response(500, {})
+    assert await adapter.health_check() is False
+
+    mock_client.get.side_effect = RuntimeError("network down")
+    assert await adapter.health_check() is False
+    TomTomAdapter.reset_credit_latch()
+
+
+@pytest.mark.asyncio
+@patch("app.adapters.tomtom_adapter.httpx.AsyncClient")
+@patch("app.adapters.tomtom_adapter.settings")
+async def test_tomtom_flow_failures_report_degraded_status(mock_settings, mock_client_cls):
+    """S5: non-403 flow failures surface as an explicit degraded status, not silent empty data."""
+    mock_settings.tomtom_api_key = "test-key"
+    TomTomAdapter.reset_credit_latch()
+
+    async def fake_get(url, params=None, **kwargs):
+        if "flowSegmentData" in url:
+            return _mock_tomtom_response(500, {})
+        return _mock_tomtom_response(200, {"incidents": []})
+
+    mock_client = AsyncMock()
+    mock_client.get.side_effect = fake_get
+    mock_client_cls.return_value.__aenter__.return_value = mock_client
+
+    adapter = TomTomAdapter()
+    data = await adapter.fetch()
+
+    assert data["status"] == "down"
+    assert data["flow"] == []
+    assert "all_flow_requests_failed" in (data["degraded_reason"] or "")
+
+
+# ==============================================================================
 # AISstream Adapter Tests
 # ==============================================================================
 
@@ -355,20 +527,48 @@ async def test_nasa_firms_proximity_filter(mock_get_redis):
 
 
 # ==============================================================================
+# Open-Meteo Adapter Tests
+# ==============================================================================
+
+def test_openmeteo_adapter_instantiates():
+    """Regression (S1): OpenMeteoAdapter must instantiate with the base signature and implement health_check."""
+    adapter = OpenMeteoAdapter()
+    assert adapter.source_name == "openmeteo"
+    assert adapter.stream_key == "lrip:events:openmeteo"
+    assert adapter.lat == 3.5833
+    assert adapter.lon == 98.6667
+
+
+@pytest.mark.asyncio
+@patch("app.adapters.openmeteo_adapter.httpx.AsyncClient")
+async def test_openmeteo_health_check_reflects_endpoint_status(mock_client_cls):
+    mock_client = AsyncMock()
+    mock_client_cls.return_value.__aenter__.return_value = mock_client
+
+    adapter = OpenMeteoAdapter()
+
+    mock_client.get.return_value = MagicMock(status_code=200)
+    assert await adapter.health_check() is True
+
+    mock_client.get.side_effect = RuntimeError("network down")
+    assert await adapter.health_check() is False
+
+
+# ==============================================================================
 # Base Adapter Tests
 # ==============================================================================
 
 @pytest.mark.asyncio
-@patch("app.adapters.base.get_client")
+@patch("app.adapters.base.get_write_client")
 @patch("app.adapters.base.get_redis")
-async def test_base_adapter_health_update(mock_get_redis, mock_get_client):
+async def test_base_adapter_health_update(mock_get_redis, mock_get_write_client):
     # Mock Redis client
     mock_redis = MagicMock()
     mock_get_redis.return_value = mock_redis
     
-    # Mock Supabase client
+    # Mock Supabase write client (service role preferred for RLS-restricted writes)
     mock_supabase = MagicMock()
-    mock_get_client.return_value = mock_supabase
+    mock_get_write_client.return_value = mock_supabase
     
     # Instantiate an adapter and call health update
     adapter = BMKGAdapter()

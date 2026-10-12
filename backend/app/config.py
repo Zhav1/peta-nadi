@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     aisstream_api_key: str = ""
     nasa_firms_map_key: str = ""
     gemini_api_key: str = ""
+    gemini_model: str = "gemini-3.8-flash"
     deepseek_api_key: str = ""
     nvidia_deepseek_v4_pro: str = ""
     nvidia_deepseek_v4_flash: str = ""

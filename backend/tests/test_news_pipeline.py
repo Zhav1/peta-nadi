@@ -1,4 +1,5 @@
 import pytest
+from unittest.mock import MagicMock
 from app.services.news_aggregator import (
     OFFICIAL_RSS_FEEDS,
     TARGETED_PRESS_QUERIES,
@@ -64,3 +65,22 @@ async def test_extract_structured_news_caching():
     res1 = await extract_structured_news(raw_article)
     res2 = await extract_structured_news(raw_article)
     assert any("Beras" in c for c in res1["commodities_affected"])
+
+
+@pytest.mark.asyncio
+async def test_osint_stream_publish_is_bounded(monkeypatch):
+    """S6: XADD to lrip:stream:osint is capped at maxlen=10_000 (approximate)."""
+    from app.services import unified_news_ingestor as ingestor_module
+
+    mock_redis = MagicMock()
+    mock_redis.xlen.return_value = 42
+    monkeypatch.setattr(ingestor_module, "get_redis", lambda: mock_redis)
+
+    ingestor = ingestor_module.UnifiedNewsIngestor()
+    await ingestor._publish_to_redis([{"id": "news-1", "title": "Banjir Jalinsum"}])
+
+    assert mock_redis.xadd.called
+    args, kwargs = mock_redis.xadd.call_args
+    assert args[0] == "lrip:stream:osint"
+    assert kwargs.get("maxlen") == 10_000
+    assert kwargs.get("approximate") is True

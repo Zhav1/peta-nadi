@@ -1,22 +1,28 @@
 # Phase 55: Comprehensive Engines Audit & Stabilization (Master Blueprint)
 
-**Status:** READY FOR IMPLEMENTATION
-**Scope:** Next context window
-**Inputs:** `SYSTEM_ENGINES_AUDIT_REPORT.md` (4 audit passes) · `55-WALKTHROUGH.md` (file:line evidence) · `55-ENVIRONMENT-FIXES-AND-PITFALLS.md` (external constraints) · `55-LEARNINGS.md` (design principles)
-**Constraint reminder:** backend engines must keep running with zero regressions; every fallback must become *visible* rather than silent.
+**Status:** ALIGNED & READY FOR IMPLEMENTATION (Wave 1: P0, Wave 2: P1)
+**Scope:** Phase 55 Engine Stabilization
+**Inputs:** `SYSTEM_ENGINES_AUDIT_REPORT.md` (4 audit passes) · Mimo v2.6 Pro Live Diagnostic Probe · User `/grill-me` Architectural Decisions · `55-WALKTHROUGH.md` · `55-ENVIRONMENT-FIXES-AND-PITFALLS.md`
+**Constraint reminder:** backend engines must keep running with zero regressions; every fallback must become *visible* rather than silent; no canned prose masquerading as live AI.
 
 ---
 
-## 1. Objective
+## 1. Objective & Empirical Baseline
 
-Stabilize the seven audited failure clusters across Telemetry, Intelligence/NLP, and Data Layer. The unifying acceptance criterion, per Phase 54's learnings: **no engine may silently mask a failure — every degradation must be flagged, logged, and surfaced.** The specific outcomes:
+Stabilize the seven audited failure clusters across Telemetry, Intelligence/NLP, and Data Layer.
+Empirical diagnostics established by subagent probe prior to implementation:
+- **NVIDIA NIM:** Key confirmed valid (`200 OK` on `/v1/models`). Verified catalog model is `deepseek-ai/deepseek-v4.1-flash` (`deepseek-ai/deepseek-r1` returns 404). Backend `.env` was out of sync with root `.env`.
+- **Supabase Incidents:** `public.incidents` has 112 rows, PK is `incident_id`, geometry stored in `location` (WKT). Columns `lat` and `lon` do NOT exist, causing `/api/v1/incidents` to throw 400 and swallow into `[]`.
+- **Supabase RLS:** `data_sources` has RLS enabled with 0 anon policies (blocking anon reads); `incidents` and `route_approvals` had RLS disabled (open to anon mutations).
+- **Redis OSINT:** `lrip:stream:osint` held 43,890 unbounded entries.
 
-1. Weather fusion actually runs both providers (OpenMeteo no longer throws `TypeError`).
-2. The LLM layer either produces real model output or explicitly reports degradation (NIM + Gemini model IDs fixed).
-3. TomTom obeys the 10,000 km² bbox limit and reports credit exhaustion honestly.
-4. Incident data actually reaches the API (fix `[]` despite 108 rows).
-5. The OSINT event stream is bounded.
-6. Core Supabase tables have deliberate RLS policies instead of accidental lockouts.
+The unifying acceptance criteria:
+1. Weather fusion actually runs both providers (`OpenMeteoAdapter` properly inherits and instantiates with working `health_check`).
+2. The LLM layer either produces real model output or explicitly reports degradation (`deepseek-ai/deepseek-v4.1-flash` + centralized `gemini-1.5-flash`).
+3. TomTom obeys the 10,000 km² bbox limit via corridor-anchored tiling (≤4,600 km²) and reports credit exhaustion honestly (`is_fallback: true`).
+4. Incident data actually reaches the API (dual-layer fix: parse WKT `location` into `lat`/`lon` in router + Migration 010 schema enhancement).
+5. The OSINT event stream is capped at `maxlen=10_000` with historical backlog trimmed.
+6. Core Supabase tables have deliberate Public-Read + Privileged-Write RLS policies.
 
 ---
 
@@ -56,14 +62,14 @@ Stabilize the seven audited failure clusters across Telemetry, Intelligence/NLP,
 | **Remedy** | (1) Centralize the Gemini model in `Settings` (e.g. `gemini_model: str = "gemini-1.5-flash"`) and reference it from all three sites. (2) Upgrade the heuristic-fallback log to `warning` with the failure reason. (3) Hygiene: move the bottom-of-file `import asyncio` (`ner_pipeline.py:88`) to the top. |
 | **Acceptance** | Structured extraction visibly uses the LLM path (log/metric when falling back); model ID appears in exactly one config location; unit test asserts the configured model is not the known-invalid placeholder. |
 
-### S4 (P0) — `/api/v1/incidents` Returns `[]` Despite 108 Rows
+### S4 (P0) — `/api/v1/incidents` Returns `[]` Despite 112 Rows (Dual-Layer Resolution)
 
 | | |
 |---|---|
-| **Finding** | The endpoint returns a 22-byte `{"items":[],"total":0}` while the DB holds ~108 rows. Compounding causes: (a) `incidents` has **RLS enabled with no policy** → anon select yields HTTP 200 `[]`; (b) the query selects `incident_id, lat, lon` while the writer path inserts `incident_id` + WKT `location` (never `lat`/`lon`) → column mismatch 400; (c) exceptions are swallowed, so both cases are indistinguishable. |
-| **Evidence** | `backend/app/routers/incidents.py:33-35,69-96` (anon client `:71`, select `:72-74`, swallow `:95-96`); writer `backend/app/services/unified_news_ingestor.py:153-164,184`; live probe `test-results/live_api_audit_report.json:28-36`; schema drift `000_init.sql:41,49` vs `005:5` / `008:27`. |
-| **Remedy** | (1) **Diagnose first** (one-shot script): probe as anon vs service-role; introspect live `information_schema.columns` for `incidents`. (2) **Migration 010**: explicit `alter table public.incidents enable row level security;` + a SELECT policy for `anon, authenticated` (public safety data), leaving writes to service-role/authenticated paths. (3) Align the SELECT list to the live schema; if only `location` exists, select it and derive `lat/lon` via PostGIS (`ST_Y/ST_X`) or backfill concrete columns. (4) Replace the bare swallow: log at `warning` with the Supabase error and add a `degraded` marker (or 503) so empty ≠ broken silently. (5) Optional: raise/parameterize the 50-row `limit` for the 108-row table. |
-| **Acceptance** | Live endpoint returns rows (count > 0 against the 108-row table); a deliberately failing query is observable in logs + response; regression test covers populated-table behavior. |
+| **Finding** | The endpoint returns a 22-byte `{"items":[],"total":0}` while the DB holds 112 rows. Root causes: (a) the query selects non-existent columns `lat, lon` (schema has `location` WKT only) → Supabase returns HTTP 400; (b) exceptions are swallowed into `[]`; (c) `incidents` currently lacks explicit RLS policies. |
+| **Evidence** | `backend/app/routers/incidents.py:33-35,69-96` (selects `lat, lon` `:73`, swallow `:95-96`); DB probe confirms columns are `incident_id, title, description, type, severity, status, confidence, location, affected_area, evidence, recommendations, created_at, updated_at, resolved_at`. |
+| **Remedy** | (1) **Dual-Layer Layer 1 (Python)**: In `backend/app/routers/incidents.py`, update SELECT to omit `lat, lon` and query valid columns including `location`. Parse WKT `POINT(lon lat)` in Python with robust regex/WKT parser into float `lat` and `lon` for `IncidentResponse` (with POI fallback if null). Replace bare exception swallow with structured logging and error reporting. (2) **Dual-Layer Layer 2 (DB Migration 010)**: Add generated or backfilled numeric `lat` and `lon` columns to `public.incidents` for database indexability. (3) Parameterize/increase default limit so full dataset is queryable. |
+| **Acceptance** | Live `/api/v1/incidents` returns populated incident objects with valid `lat` and `lon` floats; errors fail loud with warnings in logs; regression tests verify WKT parsing with diverse geometries. |
 
 ### S5 (P1) — TomTom Bbox Compliance, Credit Fallback & Honest Degradation
 
@@ -71,38 +77,44 @@ Stabilize the seven audited failure clusters across Telemetry, Intelligence/NLP,
 |---|---|
 | **Finding** | The incidents request ships a ~1.7M km² bbox (~170× the 10,000 km² limit) → guaranteed HTTP 400; flow requests hit HTTP 403 `InsufficientFunds` on credit exhaustion. Both are silently discarded, and three layers of hardcoded speeds pass as live data. |
 | **Evidence** | `backend/app/adapters/tomtom_adapter.py:41` (bbox), `:72-87` / `:90-101` (silent discard), `:67-68` (empty when key missing); hardcoded layers: `cuopt_tomtom_service.py:39-44,71-72,134` (misleading `tomtom_live_speed_kmh` label), `corridor_service.py:46-57` (+ `"ONLINE"` labels `:175-181`), `agents/nodes/prediction.py` `base_delays`; loop `main.py:61-96`. |
-| **Remedy** | (1) **Tile the requests**: split coverage into corridor-anchored cells ≤ 10,000 km² each (example: 0.5° lat × 0.75° lon ≈ ≤ 4,600 km² at Sumatra latitudes; per-checkpoint 0.5°×0.5° ≈ 3,070 km² boxes around the 12 checkpoints), dedupe incidents by ID. Full-island coverage via Incident Details v5 is infeasible — scope to monitored corridors. (2) **Credit handling**: on 403, set a `credit_exhausted` state, log once at `warning`, and back off (stop hammering per poll). (3) **Honest fallback**: corridor payloads carry `is_fallback: true` + `status: "DEGRADED"` with the reason; remove/replace the `tomtom_live_speed_kmh` label when values are seed constants. (4) Wire `TomTomAdapter.health_check()` (`:43-61`) into the loop and write `update_source_health()`. |
-| **Acceptance** | No request exceeds 10,000 km²; incidents return for corridor tiles when credits exist; with credits exhausted, `/api/v1/corridor/context` exposes the degraded flag and the UI renders `FALLBACK` (Phase 54 contract); health endpoint shows TomTom as degraded, not `healthy`. |
+| **Remedy** | (1) **Tile the requests**: split coverage into corridor-anchored cells ≤ 10,000 km² each (0.5° lat × 0.75° lon ≈ ≤ 4,600 km² at Sumatra latitudes around arterial checkpoints and key hubs), dedupe incidents across tiles by ID. (2) **Credit handling**: on 403, set a `credit_exhausted` state latch, log once at `warning`, and back off. (3) **Honest fallback**: corridor payloads carry `is_fallback: true` + `status: "DEGRADED"` with the reason; remove/replace the `tomtom_live_speed_kmh` label when values are seed constants. (4) Wire `TomTomAdapter.health_check()` (`:43-61`) into the loop and write `update_source_health()`. |
+| **Acceptance** | No request exceeds 10,000 km²; incidents return for corridor tiles when credits exist; with credits exhausted, `/api/v1/corridor/context` exposes the degraded flag and the UI renders `FALLBACK`; health endpoint shows TomTom as degraded, not `healthy`. |
 
 ### S6 (P1) — Redis `lrip:stream:osint` Maxlen Trimming
 
 | | |
 |---|---|
-| **Finding** | The stream held **43,640 unbounded items**: the only hand-rolled `XADD` in the codebase omits `maxlen`, while every adapter stream is capped at 10,000. |
-| **Evidence** | `backend/app/services/unified_news_ingestor.py:99` vs `backend/app/services/redis_client.py:63` (`maxlen=10_000, approximate=True`) and list fallback `:70`; consumers `agents/nodes/osint_hazard.py:43-60`; Redis service config has no `maxmemory` (`docker-compose.yml:2-15`). |
-| **Remedy** | (1) `r.xadd("lrip:stream:osint", payload, maxlen=10_000, approximate=True)`. (2) Optionally trim the existing backlog (`XTRIM lrip:stream:osint MAXLEN ~ 10000`). (3) Add `maxmemory`/`maxmemory-policy` to the compose Redis service as defense-in-depth. (4) Log `XLEN` after publish (debug) and add an operational threshold warning. |
+| **Finding** | The stream held **43,890 unbounded items**: the only hand-rolled `XADD` in the codebase omits `maxlen`, while every adapter stream is capped at 10,000. |
+| **Evidence** | `backend/app/services/unified_news_ingestor.py:99` vs `backend/app/services/redis_client.py:63` (`maxlen=10_000, approximate=True`) and list fallback `:70`; consumers `agents/nodes/osint_hazard.py:43-60`. |
+| **Remedy** | (1) `r.xadd("lrip:stream:osint", payload, maxlen=10_000, approximate=True)`. (2) Trim the existing backlog (`XTRIM lrip:stream:osint MAXLEN ~ 10000`). (3) Add `maxmemory`/`maxmemory-policy` to the compose Redis service as defense-in-depth. (4) Log `XLEN` after publish (debug) and add an operational threshold warning. |
 | **Acceptance** | `XLEN` stabilizes ≤ 10,000 after trimming; consumer (`osint_hazard`) still reads its 3h window correctly; no regression in news ingestion. |
 
 ### S7 (P1) — Data Layer RLS Hardening Across Core Tables
 
 | | |
 |---|---|
-| **Finding** | Seven core `000_init.sql` tables have **no RLS policies** (`data_sources`, `incidents`, `route_approvals`, `commodity_prices`, `ltm_episodes`, `kg_entities`, `kg_relationships`) plus `ground_truth_outcomes`; the live project's RLS-enabled state turns this into silent empty reads and `42501` write failures. Migration 009 is policy-only (assumes RLS enabled out-of-band). |
-| **Evidence** | `infra/supabase/migrations/000_init.sql:16-23,40-56,80-89,95-106,116-123,134-141,150-158`; `006:16-28` (ground_truth_outcomes); `007:43,86` and `008:40` (the protected pattern to copy); `009_commodity_prices_public_read.sql:1` (policy without enable). |
-| **Remedy** | (1) **Migration 010/011**: for each table ship an explicit decision — `alter table … enable row level security;` + SELECT policies for public-read tables (`incidents`, `commodity_prices`, `data_sources`, `kg_*` as appropriate); writes remain service-role/authenticated by design (documented in the migration comments). (2) Align with S4's incidents policy in a single migration to avoid double-enabling. (3) Backfill the missing `enable row level security` for `commodity_prices` so fresh replays match the live project. (4) Post-migration verification query (pg_class `relrowsecurity`) + anon read smoke tests. |
-| **Acceptance** | Every core table has an explicit RLS state and documented policies; anon reads return data (not silent `[]`); anon writes are rejected as designed; fresh-database replay applies RLS identically to prod. |
+| **Finding** | Seven core tables lack comprehensive RLS configuration. Specifically: `data_sources` has RLS enabled with zero anon policies (blocking anon reads); `incidents`, `route_approvals`, and `news_articles` have RLS disabled (permitting open anon writes). |
+| **Evidence** | Mimo subagent empirical audit: `data_sources` returns 42501 on anon; `route_approvals` allows anon insert; `000_init.sql:16-23,40-56,80-89`; `009_commodity_prices_public_read.sql:1`. |
+| **Remedy** | (1) **Migration 010 (Public-Read + Privileged-Write)**: Explicitly `enable row level security` on `incidents`, `data_sources`, `route_approvals`, `news_articles`, `commodity_prices`, `kg_entities`, and `kg_relationships`. (2) Grant `SELECT` to `anon, authenticated` on public domain tables (`incidents`, `data_sources`, `news_articles`, `commodity_prices`, `kg_*`). (3) Restrict write operations (`INSERT`, `UPDATE`, `DELETE`) exclusively to `service_role` (backend ingestors/workers) and authenticated operators for approvals. (4) Document policies and verify via anon smoke reads. |
+| **Acceptance** | Every core table has an explicit RLS state and documented policies; anon reads return public data (not silent `[]`); anon writes are rejected with 42501; backend service-role paths retain full write access. |
 
 ---
 
-## 3. Execution Order (Recommended)
+## 3. Execution Order (Two-Wave Phased Execution)
 
-1. **Diagnostics first:** one-shot live-schema probe (incidents columns + RLS state), NIM `/v1/models` catalog check — these two reads decide S2/S4 details.
-2. **S1 + S3** (independent, low blast radius) → run weather-fusion and NLP tests.
-3. **S4 + S7 together** (one migration authoring pass; S4 depends on S7's incidents policy).
-4. **S2** (gateway contract change + caller filters + tests).
-5. **S5** (TomTom adapter rewrite: tiling + credit state + health wiring) → corridor context regression tests.
-6. **S6** (one-line XADD + trim + compose memory) → verify XLEN.
-7. **Close-out (P2):** full `pytest backend/tests`, `npx tsc --noEmit`, live probe via `scripts/audit_backend_apis.py`, then write Phase 55 walkthrough results and update `ROADMAP.md` status to COMPLETE.
+### Wave 1: P0 Correctness & Production Blockers
+1. **S1 (OpenMeteo Adapter)**: Implement `health_check()` and align `__init__` signature in `backend/app/adapters/openmeteo_adapter.py`.
+2. **S2 (NVIDIA NIM Gateway)**: Sync `backend/.env` with root `.env`, switch model to catalog-verified `deepseek-ai/deepseek-v4.1-flash`, replace canned fallback prose with structured degradation in `agents/llm_gateway.py`, and enforce rejection of degraded text in `economic_intelligence.py`.
+3. **S3 (NLP / NER Extraction)**: Centralize Gemini model to `gemini-1.5-flash` in `Settings`, clean up `ner_pipeline.py` and `news_extractor.py`, and upgrade failure logs to warning.
+4. **S4 (Incidents API - Dual-Layer Layer 1)**: Update `backend/app/routers/incidents.py` to query valid columns (omit missing `lat, lon`, fetch `location`), parse WKT `POINT(lon lat)` in Python into float coordinates for `IncidentResponse`, and log Supabase query errors visibly.
+
+### Wave 2: P1 Resilience & Data Hygiene
+5. **S5 (TomTom Bbox Compliance & Degradation)**: Refactor `backend/app/adapters/tomtom_adapter.py` to use corridor-anchored tiling (≤4,600 km² cells around key checkpoints), deduplicate incidents across tiles by ID, add a 403 credit-exhausted latch, flag `is_fallback: true` in corridor payloads, and wire health reporting.
+6. **S6 (Redis OSINT Maxlen Trimming)**: Add `maxlen=10_000, approximate=True` to `unified_news_ingestor.py` XADD, and execute backlog trim on `lrip:stream:osint`.
+7. **S7 & S4-Layer 2 (Supabase RLS & Schema Migration 010)**: Author Migration 010 to add concrete `lat`/`lon` columns to `incidents` (backfilled from `location`) and establish Public-Read + Privileged-Write RLS policies across `incidents`, `data_sources`, `route_approvals`, `news_articles`, and `commodity_prices`.
+
+### Close-out (P2)
+8. **End-to-end verification**: `pytest backend/tests`, `npx tsc --noEmit`, live API probe script, and write Phase 55 summary.
 
 ---
 

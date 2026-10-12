@@ -122,3 +122,22 @@ select tablename, policyname, cmd, roles from pg_policies where schemaname = 'pu
 - `.env` cwd trap and process-scope env masking apply directly to the NIM/TomTom credential checks above — see `../54-post-audit-plothole-remediation-guest-lockdown-pihps-persistence/54-ENVIRONMENT-FIXES-AND-PITFALLS.md` §1–§2.
 - Windows PowerShell PATH refresh and `rtk` command proxying rules — see `../53-system-audit-routing-geometry-and-strict-rbac-guardrails/53-ENVIRONMENT-FIXES-AND-PITFALLS.md` §1–§2.
 - Deployment topology: `docker-compose.yml:26` runs `uvicorn --workers 2` → every lifespan poller runs twice. Keep all Phase 55 fixes (health writes, TomTom credit latch, stream trims) idempotent under duplicate execution.
+
+---
+
+## 6. Post-Audit Runtime Traps & Contract Discoveries
+
+### 6.1 Impact Assessment Type Drift
+- **Symptom:** `DispatcherAlertQueue.tsx` displayed no vehicle disruption cards despite backend processing.
+- **Root Cause:** Backend returns `impacted_vehicles`, `critical_count`, `optimal_policy`, and `spoilage_loss_idr`, while frontend expected `impacted_assessments`, `critical_spoilage_count`, and `delayed_spoilage_prob`.
+- **Resolution:** Realigned `frontend/lib/types.ts` to mirror `backend/app/schemas/impact_schemas.py`.
+
+### 6.2 LLM Call Timeout Floor
+- **Symptom:** `news_extractor.py` silently fell back to heuristics 100% of the time.
+- **Root Cause:** Hardcoded `timeout=4.0` in `asyncio.wait_for(...)`. Real LLM network round-trips over TLS typically take 5–8 seconds, guaranteeing a timeout every time.
+- **Resolution:** Floor raised to `12.0s`.
+
+### 6.3 Invented Telemetry Metrics Violation
+- **Symptom:** `TopNavTelemetry.tsx` hardcoded fallback values (`45.0 mm/j`, `+25m`, `3.2ms`, `18.5%`) when corridor context or solver was uninitialized.
+- **Root Cause:** Attempting to avoid empty badges by filling in plausible numbers violates the Anti-AI-slop and ground-truth integrity rules.
+- **Resolution:** Replaced with explicit offline/loading indicator (`—`). Enforced `text-xs` (12px minimum) across all telemetry and drawer typography.
