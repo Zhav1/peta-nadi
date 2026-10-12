@@ -3,10 +3,14 @@ import type { RouteRecommendation, CongestionSegment, RouteLeg } from './types';
 
 export type TransportModality = 'best' | 'truck' | 'maritime' | 'air' | 'multimodal' | 'auto';
 
+export const HAZARD_RADIUS_OPTIONS_KM = [5, 8, 15] as const;
+export const DEFAULT_HAZARD_RADIUS_KM = 8;
+export const TOLL_CORRIDOR_BUFFER_KM = 2.0;
+
 /**
  * Verified Real Arterial Road Network Nodes — Sumatra Logistics Corridors
  */
-export const HIGHWAY_JUNCTION_NODES: Array<{ id: string; name: string; coords: LonLat; region: string }> = [
+export const HIGHWAY_JUNCTION_NODES: Array<{ id: string; name: string; coords: LonLat; region: string; isTollGate?: boolean }> = [
   // North Sumatra / Belawan - Medan - Tebing - Siantar
   { id: 'jl_yos_sudarso_utara', name: 'Jl. Yos Sudarso (Pelabuhan Belawan)', coords: [98.6868, 3.7831], region: 'belawan' },
   { id: 'jl_kl_yos_sudarso_marelan', name: 'Jl. KL. Yos Sudarso - Marelan Junction', coords: [98.6742, 3.7201], region: 'belawan' },
@@ -17,16 +21,16 @@ export const HIGHWAY_JUNCTION_NODES: Array<{ id: string; name: string; coords: L
   { id: 'jl_gatot_subroto', name: 'Jl. Gatot Subroto (Ring Road Barat)', coords: [98.6599, 3.6155], region: 'medan_barat' },
   { id: 'simpang_pos_medan', name: 'Simpang Pos / Jl. Listrik', coords: [98.6712, 3.6013], region: 'medan_kota' },
   { id: 'jl_sisingamangaraja_utara', name: 'Jl. Sisingamangaraja (Utara Amplas)', coords: [98.6891, 3.5801], region: 'medan_selatan' },
-  { id: 'interchange_amplas', name: 'Gerbang Tol Amplas', coords: [98.7050, 3.5511], region: 'medan_selatan' },
+  { id: 'interchange_amplas', name: 'Gerbang Tol Amplas', coords: [98.7050, 3.5511], region: 'medan_selatan', isTollGate: true },
   { id: 'jl_ar_hakim', name: 'Jl. AR. Hakim / Jl. Cemara', coords: [98.7101, 3.6312], region: 'medan_timur' },
   { id: 'jl_letda_sujono', name: 'Jl. Letda Sujono (Kecamatan Percut)', coords: [98.7321, 3.6021], region: 'percut' },
   { id: 'jl_williem_iskandar', name: 'Jl. Williem Iskandar / Medan Area', coords: [98.7201, 3.5811], region: 'medan_timur' },
-  { id: 'kualanamu_junction', name: 'Interchange Kualanamu (Tol Belmera)', coords: [98.8780, 3.6421], region: 'deli_serdang' },
-  { id: 'lubuk_pakam_interchange', name: 'Interchange Lubuk Pakam', coords: [98.8650, 3.5601], region: 'deli_serdang' },
+  { id: 'kualanamu_junction', name: 'Interchange Kualanamu (Tol Belmera)', coords: [98.8780, 3.6421], region: 'deli_serdang', isTollGate: true },
+  { id: 'lubuk_pakam_interchange', name: 'Interchange Lubuk Pakam', coords: [98.8650, 3.5601], region: 'deli_serdang', isTollGate: true },
   { id: 'perbaungan_artlrd', name: 'Jalinsum Perbaungan', coords: [98.9501, 3.5701], region: 'serdang_bedagai' },
-  { id: 'sei_rampah_interchange', name: 'Interchange Sei Rampah', coords: [99.1501, 3.4801], region: 'serdang_bedagai' },
-  { id: 'tebing_tinggi_toll', name: 'Gerbang Tol Tebing Tinggi', coords: [99.1621, 3.3251], region: 'tebing_tinggi' },
-  { id: 'galang_junction', name: 'Junction Galang (Bypass Lubuk Pakam)', coords: [98.9050, 3.4450], region: 'deli_serdang' },
+  { id: 'sei_rampah_interchange', name: 'Interchange Sei Rampah', coords: [99.1501, 3.4801], region: 'serdang_bedagai', isTollGate: true },
+  { id: 'tebing_tinggi_toll', name: 'Gerbang Tol Tebing Tinggi', coords: [99.1621, 3.3251], region: 'tebing_tinggi', isTollGate: true },
+  { id: 'galang_junction', name: 'Junction Galang (Bypass Lubuk Pakam)', coords: [98.9050, 3.4450], region: 'deli_serdang', isTollGate: true },
   { id: 'dolok_masihul_jct', name: 'Simpang Dolok Masihul', coords: [99.0480, 3.3850], region: 'serdang_bedagai' },
   { id: 'pantai_cermin_coastal', name: 'Jalur Pesisir Pantai Cermin', coords: [99.0350, 3.6420], region: 'serdang_bedagai' },
   { id: 'bangun_purba_jct', name: 'Simpang Bangun Purba', coords: [98.8500, 3.3800], region: 'deli_serdang' },
@@ -36,17 +40,17 @@ export const HIGHWAY_JUNCTION_NODES: Array<{ id: string; name: string; coords: L
   { id: 'langsa_gate', name: 'Gerbang Jalintim Langsa', coords: [97.9620, 4.4720], region: 'aceh' },
   { id: 'kuala_tanjung_jct', name: 'Simpang Kuala Tanjung', coords: [99.4500, 3.3600], region: 'batu_bara' },
   { id: 'rantauprapat_jct', name: 'Simpang Lintas Timur Rantauprapat', coords: [100.0000, 2.1000], region: 'labuhan_batu' },
-  { id: 'pekanbaru_tol_in', name: 'Gerbang Tol Pekanbaru', coords: [101.4478, 0.5071], region: 'riau' },
-  { id: 'dumai_tol_out', name: 'Gerbang Tol Dumai', coords: [101.4533, 1.6811], region: 'riau' },
+  { id: 'pekanbaru_tol_in', name: 'Gerbang Tol Pekanbaru', coords: [101.4478, 0.5071], region: 'riau', isTollGate: true },
+  { id: 'dumai_tol_out', name: 'Gerbang Tol Dumai', coords: [101.4533, 1.6811], region: 'riau', isTollGate: true },
   { id: 'jambi_arterial', name: 'Simpang Tugu Juang Jambi', coords: [103.6131, -1.6100], region: 'jambi' },
   { id: 'bengkulu_jalinbar', name: 'Simpang Lima Ratu Samban Bengkulu', coords: [102.2655, -3.8004], region: 'bengkulu' },
   { id: 'padang_by_pass', name: 'By Pass Kota Padang', coords: [100.3543, -0.9492], region: 'sumbar' },
   { id: 'bukittinggi_sentral', name: 'Simpang Aur Kuning Bukittinggi', coords: [100.3692, -0.3056], region: 'sumbar' },
   { id: 'sitinjau_lauik_apex', name: 'Panorama Sitinjau Lauik Apex', coords: [100.5200, -0.9500], region: 'sumbar' },
-  { id: 'palembang_kramasan', name: 'Interchange Kramasan Palembang', coords: [104.7565, -2.9909], region: 'sumsel' },
-  { id: 'terbanggi_besar_tol', name: 'Interchange Terbanggi Besar', coords: [105.1800, -4.8500], region: 'lampung' },
+  { id: 'palembang_kramasan', name: 'Interchange Kramasan Palembang', coords: [104.7565, -2.9909], region: 'sumsel', isTollGate: true },
+  { id: 'terbanggi_besar_tol', name: 'Interchange Terbanggi Besar', coords: [105.1800, -4.8500], region: 'lampung', isTollGate: true },
   { id: 'panjang_port_gate', name: 'Gerbang Logistik Pelabuhan Panjang', coords: [105.3167, -5.4667], region: 'lampung' },
-  { id: 'bakauheni_tol_gate', name: 'Gerbang Tol Pelabuhan Bakauheni', coords: [105.7533, -5.8711], region: 'lampung' },
+  { id: 'bakauheni_tol_gate', name: 'Gerbang Tol Pelabuhan Bakauheni', coords: [105.7533, -5.8711], region: 'lampung', isTollGate: true },
 ];
 
 /**
@@ -245,11 +249,73 @@ export interface MapboxRouteResult {
   summary: string;
 }
 
+export interface MapboxDirectionsRoute {
+  distance: number;
+  duration: number;
+  geometry: { coordinates: LonLat[] };
+  legs?: Array<{ summary?: string; annotation?: { congestion?: string[] } }>;
+}
+
+export interface MapboxDirectionsResponse {
+  code?: string;
+  message?: string;
+  routes?: MapboxDirectionsRoute[];
+}
+
+export type MapboxDirectionsProfile = 'driving' | 'driving-traffic';
+
+const MAPBOX_DIRECTIONS_ENDPOINT = 'https://api.mapbox.com/directions/v5/mapbox';
+
+/**
+ * Toll corridors are only avoided when the hazard actually threatens a toll gate or
+ * interchange (radius + 2 km buffer), per D2.
+ */
+export function isHazardNearTollCorridor(
+  hazardCenter: LonLat,
+  radiusKm: number,
+  bufferKm: number = TOLL_CORRIDOR_BUFFER_KM
+): boolean {
+  return HIGHWAY_JUNCTION_NODES.some(
+    (node) => node.isTollGate === true && getHaversineDistanceKm(hazardCenter, node.coords) <= radiusKm + bufferKm
+  );
+}
+
+/**
+ * Requests Mapbox Directions. When `excludeToll` is applied and Mapbox answers NoRoute, the
+ * request is retried once without the toll exclusion so routing never fails closed.
+ */
+export async function requestMapboxDirections(
+  coordString: string,
+  profile: MapboxDirectionsProfile,
+  params: string,
+  token: string,
+  excludeToll: boolean
+): Promise<MapboxDirectionsResponse | null> {
+  const buildUrl = (exclude: boolean) =>
+    `${MAPBOX_DIRECTIONS_ENDPOINT}/${profile}/${coordString}?${params}${
+      exclude ? '&exclude=toll' : ''
+    }&access_token=${token}`;
+
+  const attempt = async (exclude: boolean) => {
+    const res = await fetch(buildUrl(exclude));
+    const data = (await res.json().catch(() => null)) as MapboxDirectionsResponse | null;
+    const isNoRoute = data?.code === 'NoRoute' || (res.ok && !data?.routes?.length);
+    return { data, isNoRoute };
+  };
+
+  const first = await attempt(excludeToll);
+  if (excludeToll && first.isNoRoute) {
+    return (await attempt(false)).data;
+  }
+  return first.data;
+}
+
 async function fetchMapboxRouteWithForcedWaypoint(
   origin: LonLat,
   destination: LonLat,
   forcedWaypoint: LonLat,
-  token: string
+  token: string,
+  excludeToll: boolean = false
 ): Promise<MapboxRouteResult | null> {
   const coordString = [
     `${origin[0].toFixed(6)},${origin[1].toFixed(6)}`,
@@ -257,13 +323,15 @@ async function fetchMapboxRouteWithForcedWaypoint(
     `${destination[0].toFixed(6)},${destination[1].toFixed(6)}`,
   ].join(';');
 
-  const url = `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${coordString}?overview=full&geometries=geojson&annotations=congestion&access_token=${token}`;
-
   try {
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (!data.routes || data.routes.length === 0) return null;
+    const data = await requestMapboxDirections(
+      coordString,
+      'driving-traffic',
+      'overview=full&geometries=geojson&annotations=congestion',
+      token,
+      excludeToll
+    );
+    if (!data?.routes || data.routes.length === 0) return null;
 
     const route = data.routes[0];
     const coords: LonLat[] = route.geometry.coordinates;
@@ -298,7 +366,8 @@ async function fetchMapboxRouteWithForcedWaypoint(
 export async function fetchMapboxAlternativeDrivingRoutes(
   origin: LonLat,
   destination: LonLat,
-  waypoints: LonLat[] = []
+  waypoints: LonLat[] = [],
+  excludeToll: boolean = false
 ): Promise<MapboxRouteResult[]> {
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
   const fallbackCoords = [origin, ...waypoints, destination];
@@ -308,43 +377,45 @@ export async function fetchMapboxAlternativeDrivingRoutes(
   if (token) {
     const allCoords = [origin, ...waypoints, destination];
     const coordString = allCoords.map(([lon, lat]) => `${lon.toFixed(6)},${lat.toFixed(6)}`).join(';');
-    const url = `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${coordString}?alternatives=true&annotations=congestion,distance,duration,speed&geometries=geojson&overview=full&access_token=${token}`;
 
     try {
-      const res = await fetch(url);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.routes && data.routes.length > 0) {
-          for (let index = 0; index < data.routes.length; index++) {
-            const route = data.routes[index];
-            const coords: LonLat[] = route.geometry.coordinates;
-            const distanceKm = Math.round((route.distance / 1000) * 10) / 10;
-            const durationMinutes = Math.round(route.duration / 60);
+      const data = await requestMapboxDirections(
+        coordString,
+        'driving-traffic',
+        'alternatives=true&annotations=congestion,distance,duration,speed&geometries=geojson&overview=full',
+        token,
+        excludeToll
+      );
+      if (data?.routes && data.routes.length > 0) {
+        for (let index = 0; index < data.routes.length; index++) {
+          const route = data.routes[index];
+          const coords: LonLat[] = route.geometry.coordinates;
+          const distanceKm = Math.round((route.distance / 1000) * 10) / 10;
+          const durationMinutes = Math.round(route.duration / 60);
 
-            const congestionSegments: CongestionSegment[] = [];
-            const annotations = route.legs?.[0]?.annotation?.congestion;
-            if (annotations && annotations.length > 0 && coords.length > 1) {
-              let currentLevel: 'low' | 'moderate' | 'heavy' = 'low';
-              let currentCoords: Array<{ lat: number; lon: number }> = [];
-              for (let i = 0; i < annotations.length; i++) {
-                const level: 'low' | 'moderate' | 'heavy' =
-                  annotations[i] === 'heavy' || annotations[i] === 'severe' ? 'heavy'
-                  : annotations[i] === 'moderate' ? 'moderate' : 'low';
-                const pt = coords[Math.min(i, coords.length - 1)];
-                const pointObj = { lat: pt[1], lon: pt[0] };
-                if (i === 0) { currentLevel = level; currentCoords.push(pointObj); }
-                else if (level !== currentLevel) {
-                  if (currentCoords.length > 1) congestionSegments.push({ coordinates: currentCoords, level: currentLevel });
-                  currentLevel = level;
-                  currentCoords = [currentCoords[currentCoords.length - 1], pointObj];
-                } else { currentCoords.push(pointObj); }
-              }
-              if (currentCoords.length > 1) congestionSegments.push({ coordinates: currentCoords, level: currentLevel });
+          const congestionSegments: CongestionSegment[] = [];
+          const annotations = route.legs?.[0]?.annotation?.congestion;
+          if (annotations && annotations.length > 0 && coords.length > 1) {
+            let currentLevel: 'low' | 'moderate' | 'heavy' = 'low';
+            let currentCoords: Array<{ lat: number; lon: number }> = [];
+            for (let i = 0; i < annotations.length; i++) {
+              const level: 'low' | 'moderate' | 'heavy' =
+                annotations[i] === 'heavy' || annotations[i] === 'severe' ? 'heavy'
+                : annotations[i] === 'moderate' ? 'moderate' : 'low';
+              const pt = coords[Math.min(i, coords.length - 1)];
+              const pointObj = { lat: pt[1], lon: pt[0] };
+              if (i === 0) { currentLevel = level; currentCoords.push(pointObj); }
+              else if (level !== currentLevel) {
+                if (currentCoords.length > 1) congestionSegments.push({ coordinates: currentCoords, level: currentLevel });
+                currentLevel = level;
+                currentCoords = [currentCoords[currentCoords.length - 1], pointObj];
+              } else { currentCoords.push(pointObj); }
             }
-
-            const routeName = index === 0 ? 'Rute Utama (Jalan Tol / Jalinsum)' : index === 1 ? 'Alternatif 1 (Jalur Arteri)' : 'Alternatif 2 (Bypass Sekunder)';
-            results.push({ coordinates: coords, distanceKm, durationMinutes, congestionSegments, summary: route.legs?.[0]?.summary || routeName });
+            if (currentCoords.length > 1) congestionSegments.push({ coordinates: currentCoords, level: currentLevel });
           }
+
+          const routeName = index === 0 ? 'Rute Utama (Jalan Tol / Jalinsum)' : index === 1 ? 'Alternatif 1 (Jalur Arteri)' : 'Alternatif 2 (Bypass Sekunder)';
+          results.push({ coordinates: coords, distanceKm, durationMinutes, congestionSegments, summary: route.legs?.[0]?.summary || routeName });
         }
       }
     } catch (err) {
@@ -503,13 +574,14 @@ export async function calculateMultiModalLogisticsChain(
  */
 export async function calculateAIDynamicDetourRoutes(
   hazardCenter: LonLat | null,
-  radiusKm: number = 15,
+  radiusKm: number = DEFAULT_HAZARD_RADIUS_KM,
   origin: LonLat,
   destination: LonLat,
   modality: TransportModality = 'best'
 ): Promise<RouteRecommendation[]> {
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
   const odDistanceKm = getHaversineDistanceKm(origin, destination);
+  const excludeToll = hazardCenter ? isHazardNearTollCorridor(hazardCenter, radiusKm) : false;
 
   // Handle explicit Maritime mode (Coastal Nautical Sea Lane Pathfinding)
   if (modality === 'maritime') {
@@ -543,7 +615,7 @@ export async function calculateAIDynamicDetourRoutes(
   }
 
   // STEP 1: Get native Mapbox routes and evaluate each against hazard circle
-  const mapboxResults = await fetchMapboxAlternativeDrivingRoutes(origin, destination);
+  const mapboxResults = await fetchMapboxAlternativeDrivingRoutes(origin, destination, [], excludeToll);
   const recommendations: RouteRecommendation[] = [];
   let foundCleanRoute = false;
 
@@ -595,7 +667,7 @@ export async function calculateAIDynamicDetourRoutes(
     const topCandidates = scored.slice(0, 5);
 
     for (const cand of topCandidates) {
-      const bypassResult = await fetchMapboxRouteWithForcedWaypoint(origin, destination, cand.coords, token);
+      const bypassResult = await fetchMapboxRouteWithForcedWaypoint(origin, destination, cand.coords, token, excludeToll);
 
       if (bypassResult) {
         const isBypassClean = !isPolylineIntersectingHazardCircle(bypassResult.coordinates, hazardCenter, radiusKm);
@@ -648,7 +720,7 @@ export async function calculateAIDynamicDetourRoutes(
     ];
 
     for (const waypoint of orthogonalWaypoints) {
-      const orthogonalResult = await fetchMapboxRouteWithForcedWaypoint(origin, destination, waypoint, token);
+      const orthogonalResult = await fetchMapboxRouteWithForcedWaypoint(origin, destination, waypoint, token, excludeToll);
       if (!orthogonalResult) continue;
 
       const isOrthogonalClean = !isPolylineIntersectingHazardCircle(
@@ -686,12 +758,12 @@ export async function calculateAIDynamicDetourRoutes(
       id: 'mitigation-hold-delay',
       route_name: 'Mitigasi Taktis: Tunda Keberangkatan (Hold / Delay)',
       description: 'Semua jalur utama dan pengalihan terblokir radius bencana. Rekomendasi: Tahan armada di buffer area hingga kondisi dinyatakan aman.',
-      waypoints: recommendations[0]?.waypoints || [],
+      waypoints: [],
       distance_km: recommendations[0]?.distance_km || Math.round(odDistanceKm),
       eta_minutes: (recommendations[0]?.eta_minutes || 60) + 180,
       fuel_increase_pct: 0,
       risk_score: 0.15,
-      is_compromised: false,
+      is_compromised: true,
       safety_status: 'HOLD_DELAY',
       safety_tag: 'REKOMENDASI: TUNDA KEBERANGKATAN (HOLD / DELAY)',
       traffic_level: 'heavy',
@@ -703,8 +775,11 @@ export async function calculateAIDynamicDetourRoutes(
 
   // Sort: safe/hold routes first, then by ETA
   recommendations.sort((a, b) => {
-    if (a.is_compromised === b.is_compromised) return a.eta_minutes - b.eta_minutes;
-    return a.is_compromised ? 1 : -1;
+    const rank = (route: RouteRecommendation) =>
+      route.is_compromised === true && route.safety_status !== 'HOLD_DELAY' ? 1 : 0;
+    const rankDelta = rank(a) - rank(b);
+    if (rankDelta === 0) return a.eta_minutes - b.eta_minutes;
+    return rankDelta;
   });
 
   return recommendations.slice(0, 3);

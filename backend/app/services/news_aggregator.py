@@ -323,6 +323,7 @@ async def upsert_articles_to_supabase(articles: List[Dict[str, Any]]) -> int:
             "confidence_score": float(a.get("confidence_score") or 0.85),
             "raw_description": a.get("raw_description") or a.get("summary"),
             "summary": a.get("summary") or a.get("title"),
+            "link_alive": a.get("link_alive", "unknown"),
             "published_at": datetime.now(timezone.utc).isoformat()
         }
         records.append(record)

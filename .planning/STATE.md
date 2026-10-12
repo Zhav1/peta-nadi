@@ -2,35 +2,35 @@
 gsd_state_version: 1.0
 milestone: M3
 milestone_name: PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform
-current_phase: 55
-current_phase_name: Comprehensive Engines Audit & Stabilization
+current_phase: 56
+current_phase_name: Post-Audit Integrity Routing & Mock Purge
 status: complete
-stopped_at: Phase 55 execution and verification completed
-last_updated: "2026-10-11T23:59:00.000Z"
-last_activity: 2026-10-11
-last_activity_desc: Phase 55 completed (Stabilized all 7 audited backend failure clusters across Telemetry, Intelligence/NLP, and Data Layer. OpenMeteo adapter instantiates cleanly; NIM gateway points to catalog deepseek-v4.1-flash with typed fail-loud degradation; Gemini model centralized to gemini-1.5-flash; incidents API restored via dual-layer WKT coordinate parsing; TomTom corridor-anchored tiling <=4,600 km2 with 403 backoff and honest fallback flags; Redis OSINT stream capped at 10,000 items; Supabase Migration 010 authored with Public-Read and Privileged-Write RLS policies across 7 core tables; 178 backend tests passed; 0 TypeScript errors).
+stopped_at: Phase 56 execution, multi-agent verification, and documentation completed
+last_updated: "2026-10-12T14:30:00.000Z"
+last_activity: 2026-10-12
+last_activity_desc: Phase 56 completed (Closed all 5 remaining system audit items: WP1 1366x768 anti-collision dock layout & 424px drawer offset; WP2 Mapbox exclude=toll dynamic toll avoidance, [5,8,15]km radius, and safe HOLD routing; WP3 Guided demo economic integration with payload-bound metrics, root ltm_episodes, and Evidence->Economic->Mitigation pacing; WP4 News link integrity with live checking, link_alive tagging, and cached excerpt modal fallback; WP5 Mock data purge across social scrapers, /spikes 30-day baseline % change, honest FALLBACK_OUTCOMES empty states, Simulation Mode toggle for fleet fallback, and derived causal chain. 183 backend pytest passed, 0 TypeScript errors, clean Next.js 14 production build, 7/7 Playwright tests passed).
 progress:
-  total_phases: 55
-  completed_phases: 55
-  total_plans: 65
-  completed_plans: 65
+  total_phases: 56
+  completed_phases: 56
+  total_plans: 66
+  completed_plans: 66
   percent: 100
 ---
 
 # STATE: PreHub Project Memory
 
-**Last Updated:** 2026-10-11
+**Last Updated:** 2026-10-12
 **Active Milestone:** M3 - PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform
-**Current Phase:** 55
+**Current Phase:** 56
 
 ---
 
 ## Current Position
 
-Phase: 55 (Comprehensive Engines Audit & Stabilization) - COMPLETE ✅
-Status: Phase 55 fully executed and verified across all backend engines and data layers.
-Last activity: 2026-10-11 - Fixed OpenMeteo adapter, NIM catalog model, centralized Gemini model, restored incidents API with WKT parsing, TomTom corridor tiling & 403 backoff, Redis OSINT stream capping, and authored Supabase Migration 010.
-Next action: Apply Migration 010 to remote Supabase project when deploying.
+Phase: 56 (Post-Audit Integrity Routing & Mock Purge) - COMPLETE ✅
+Status: Phase 56 fully executed, verified, and documented across frontend, backend, and data contracts.
+Last activity: 2026-10-12 - Closed WP1-WP5 audit items, verified 183 pytest tests, 0 tsc errors, 1366x768 zero-collision layout, clean Next.js build.
+Next action: Ready for production deployment or next milestone initiatives.
 
 ---
 
@@ -90,6 +90,12 @@ Next action: Apply Migration 010 to remote Supabase project when deploying.
 | 48 | Unified Orchestrator, Decision Engine & Closed-Loop Workflow | **COMPLETE** ✅ | LangGraph 4-stage DAG re-architecture, Spoilage Hedging & Compliance tool embedding, real-time SSE streaming, interactive closed-loop fleet rerouting, and 137/137 tests passing. |
 | 49 | Pan-Sumatra Spatial Engine & Ingestion Adapter Generalization | **COMPLETE** ✅ | Expanded spatial engine, adapters (NASA FIRMS, AIS seaports, TomTom, BMKG), Agent 4 port penalties, and dynamic Mapbox routing to all 8 mainland Sumatra provinces. |
 | 50 | Anti-AI-Slop & Editorial Distillation Audit | **COMPLETE** ✅ | Eradicated speculative AI slop, decorative kickers, pseudo-terminal streams, conversational chatbots, and sub-12px microtext across both Landing Page and Dashboard surfaces. Clean Next.js build. |
+| 51 | Shipment Profile Impact Assessment & Decision Support | **COMPLETE** ✅ | Real perishable commodity profiles, intermodal risk scores, and tactical recommendation ranking. |
+| 52 | Pan-Sumatra Dynamic News & HITL Decision Pipeline | **COMPLETE** ✅ | Live LKBN ANTARA regional news feeds, real-time NLP classification, and interactive dispatcher approval loops. |
+| 53 | System Audit, Routing Geometry & Strict RBAC Guardrails | **COMPLETE** ✅ | Corrected Tebing Tinggi node coordinates, verified zero-mock spatial polygons, and locked down dispatcher roles. |
+| 54 | Post-Audit Plothole Remediation, Guest Lockdown & PIHPS Persistence | **COMPLETE** ✅ | Strict read-only guest permissions, verified PIHPS database persistence, and resilient incident route handlers. |
+| 55 | Comprehensive Engines Audit & Stabilization | **COMPLETE** ✅ | OpenMeteo adapter instantiation fix, NIM catalog deepseek-v4.1-flash fail-loud gate, centralized Gemini model, TomTom bbox tiling & 403 backoff, Redis OSINT stream capping, Supabase Migration 010. |
+| 56 | Post-Audit Integrity Routing & Mock Purge | **COMPLETE** ✅ | WP1 1366x768 anti-collision map dock math; WP2 Mapbox exclude=toll dynamic toll bypass & [5,8,15]km radius; WP3 Guided demo economic integration & Evidence->Economic->Mitigation tab pacing; WP4 Live news link_alive tagging & cached excerpt modal fallback; WP5 Mock data purge (social, /spikes 30d baseline, honest outcomes, simulation fleet toggle, derived causal chain). 183 pytest passed, 0 tsc errors. |
 
 ---
 
@@ -97,6 +103,7 @@ Next action: Apply Migration 010 to remote Supabase project when deploying.
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
+| 2026-10-12 | Phase 56: Post-Audit Integrity Routing & Mock Purge | Comprehensive remediation of remaining 5 system audit items: (1) Anti-collision dock layout at 1366x768 with centralized mapDockLayout math (24px simulator dock clearance, 92px footer clearance, 424px drawer offset); (2) Dynamic &exclude=toll query parameter with NoRoute retry and [5,8,15]km radius; (3) Guided demo economic integration routing Evidence -> Economic -> Mitigation without hardcoded figures; (4) News link integrity validation with link_alive tagging and cached excerpt modal fallback; (5) Mock data purge across social scrapers, /spikes 30-day baseline calculation, honest FALLBACK_OUTCOMES empty states, opt-in Simulation Mode toggle for fleet fallback, and derived causal chain. 183 pytest passed, 0 tsc errors. |
 | 2026-10-07 | Phase 50: Anti-AI-Slop & Editorial Distillation Audit | Conducted a comprehensive audit and cleanup across Landing Page and Dashboard surfaces: stripped right chapter rail nav, synthetic telemetry pills, and stage counter from ImageSequenceCanvas; removed kickers and replaced Bot with ShieldCheck in KineticFeatureGrid; simplified LiveTelemetryShowcase into a 3-column provenance ledger; removed AgentStatusWidget and 320px popover essays from TopNavTelemetry; removed pseudo-terminal stream and 6-agent matrix from GuidedDemoPanel; replaced 3-page static textbook essay with an interactive Audit Ledger table in ReportsSection; replaced conversational chatbot with an interactive Scenario Workbench in SimulationSection; removed Human-in-the-Loop governance essay banner in CrisisSidebar; removed 8-step decision trace header in EvidenceTab; replaced Sparkles icon with Compass in CrisisSimulatorBar; enforced strict 12px floor across 7 components (0 sub-12px classes remaining); 0 TypeScript errors and clean Next.js build. |
 | 2026-10-07 | Phase 49: Pan-Sumatra Spatial Engine & Ingestion Adapter Generalization | Expanded spatial engine and adapters from North Sumatra to all 8 mainland Sumatra provinces (Aceh, North Sumatra, West Sumatra, Riau, Riau Islands, Jambi, South Sumatra, Bengkulu, Lampung) plus ALKI I seaports. Enriched road network and hazard boundaries, resolved all 137 tests passing. |
 | 2026-10-04 | Phase 48: Unified Orchestrator, Decision Engine & Closed-Loop Workflow | Resolved architectural disconnects inspired by Globot & God's Eye View: re-wired 6-agent swarm into a 4-stage DAG (Ingestion -> Sensory Observation & Consensus Gate -> Economic Impact -> Route Optimization & Decision Copilot), embedded Spoilage Hedging monetary solver and BKHIT/MST regulatory inspection directly into RouteOptimization and DecisionSupport nodes, exposed `POST /api/v1/simulate/stream` streaming SSE chunks to animate 6-agent HUD live, replaced client mock with real SSE stream hook, dynamically injected tactical telemetry into `/simulation/chat`, and linked route approvals to live map corridor commitments and TMS dispatch pings with dual-horizon ground-truth outcome verification. All 137 backend tests pass. |
@@ -166,7 +173,7 @@ These scripts validate the economic correlation hypotheses that underpin Agent 5
 
 ## Session
 
-**Last session:** 2026-10-03T11:30:00.000Z
-**Stopped at:** Phase 45 verification, learnings extraction, and documentation update completed
-**Resume file:** .planning/phases/45-pilot-verification-scenario-drills-final-end-to-end-packagin/45-WALKTHROUGH.md
+**Last session:** 2026-10-12T14:30:00.000Z
+**Stopped at:** Phase 56 verification, mock purge, and documentation completed
+**Resume file:** .planning/phases/56-post-audit-integrity-routing-and-mock-purge/56-WALKTHROUGH.md
 

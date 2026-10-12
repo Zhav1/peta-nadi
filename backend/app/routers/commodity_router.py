@@ -4,7 +4,6 @@ from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
 from datetime import datetime, timedelta, timezone
 import asyncio
-import random
 
 logger = logging.getLogger(__name__)
 
@@ -76,27 +75,89 @@ async def get_commodity_prices(
 async def get_commodity_spikes(
     region: Optional[str] = Query(None, description="Filter by region")
 ):
-    """Returns detected price spike anomalies for active regional food commodities."""
-    spikes = [
-        {
-            "commodity": "cabai_merah",
-            "region": region or "north_sumatra",
-            "current_price": 62000.0,
-            "baseline_price": 52000.0,
-            "spike_pct": 19.2,
-            "severity": "critical",
-            "status": "active_shock",
-            "detected_at": datetime.now(timezone.utc).isoformat()
-        },
-        {
-            "commodity": "bawang_merah",
-            "region": region or "north_sumatra",
-            "current_price": 38500.0,
-            "baseline_price": 35000.0,
-            "spike_pct": 10.0,
-            "severity": "high",
-            "status": "elevated",
-            "detected_at": datetime.now(timezone.utc).isoformat()
-        }
-    ]
+    """
+    Returns detected price spike anomalies for active regional food commodities.
+    Per D5: computes percent change vs 30-day baseline from Supabase commodity_prices
+    with a minimum-records guard (>= 3 records in 30-day window per commodity),
+    returning an honest empty list if data is insufficient.
+    """
+    MIN_RECORDS_GUARD = 3
+    spikes: List[Dict[str, Any]] = []
+
+    try:
+        from app.db.supabase_client import get_client
+        sb = get_client()
+
+        now = datetime.now(timezone.utc)
+        thirty_days_ago = (now - timedelta(days=30)).isoformat()
+
+        query = sb.table("commodity_prices").select("*").gte("time", thirty_days_ago).order("time", desc=True).limit(500)
+        if region:
+            query = query.eq("region", region)
+
+        result = await asyncio.to_thread(lambda: query.execute())
+        items = result.data or []
+
+        # Group by commodity (and region if not explicitly filtered)
+        grouped: Dict[tuple, List[Dict[str, Any]]] = {}
+        for item in items:
+            key = (item["commodity"], item.get("region", "north_sumatra"))
+            if key not in grouped:
+                grouped[key] = []
+            grouped[key].append(item)
+
+        for (commodity_name, reg), records in grouped.items():
+            if len(records) < MIN_RECORDS_GUARD:
+                continue
+
+            # First record is latest because of order("time", desc=True)
+            current_record = records[0]
+            try:
+                current_price = float(current_record["price_idr"])
+            except (ValueError, TypeError):
+                continue
+
+            baseline_prices = []
+            for r in records:
+                try:
+                    p = float(r.get("price_idr", 0))
+                    if p > 0:
+                        baseline_prices.append(p)
+                except (ValueError, TypeError):
+                    continue
+
+            if len(baseline_prices) < MIN_RECORDS_GUARD:
+                continue
+
+            baseline_price = sum(baseline_prices) / len(baseline_prices)
+            if baseline_price <= 0:
+                continue
+
+            spike_pct = ((current_price - baseline_price) / baseline_price) * 100.0
+
+            if spike_pct >= 5.0:
+                if spike_pct >= 15.0:
+                    severity = "critical"
+                    status = "active_shock"
+                elif spike_pct >= 10.0:
+                    severity = "high"
+                    status = "elevated"
+                else:
+                    severity = "medium"
+                    status = "warning"
+
+                spikes.append({
+                    "commodity": commodity_name,
+                    "region": reg,
+                    "current_price": round(current_price, 2),
+                    "baseline_price": round(baseline_price, 2),
+                    "spike_pct": round(spike_pct, 1),
+                    "severity": severity,
+                    "status": status,
+                    "detected_at": current_record.get("time") or now.isoformat()
+                })
+
+    except Exception as e:
+        logger.warning(f"Error querying commodity_prices for spikes: {e}")
+
     return {"spikes": spikes, "total": len(spikes)}

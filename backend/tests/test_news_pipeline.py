@@ -1,5 +1,10 @@
 import pytest
+from types import SimpleNamespace
+from typing import Any, Dict
 from unittest.mock import MagicMock
+
+import httpx
+
 from app.services.news_aggregator import (
     OFFICIAL_RSS_FEEDS,
     TARGETED_PRESS_QUERIES,
@@ -84,3 +89,148 @@ async def test_osint_stream_publish_is_bounded(monkeypatch):
     assert args[0] == "lrip:stream:osint"
     assert kwargs.get("maxlen") == 10_000
     assert kwargs.get("approximate") is True
+
+
+# ---------------------------------------------------------------------------
+# WP4: source link integrity (link_alive provenance)
+# ---------------------------------------------------------------------------
+
+def _fake_response(status_code: int, url: str):
+    return SimpleNamespace(status_code=status_code, url=url)
+
+
+def _install_fake_httpx(monkeypatch, responses: Dict[str, Any]) -> Dict[str, Any]:
+    """Replaces httpx.AsyncClient used by the ingestor with a deterministic fake."""
+    from app.services import unified_news_ingestor as ingestor_module
+
+    captured: Dict[str, Any] = {"calls": [], "client_kwargs": {}}
+
+    class FakeAsyncClient:
+        def __init__(self, **kwargs):
+            captured["client_kwargs"] = kwargs
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc_info):
+            return False
+
+        async def get(self, url):
+            captured["calls"].append(url)
+            outcome = responses[url]
+            if isinstance(outcome, Exception):
+                raise outcome
+            return outcome
+
+    monkeypatch.setattr(ingestor_module.httpx, "AsyncClient", FakeAsyncClient)
+    return captured
+
+
+@pytest.mark.asyncio
+async def test_news_link_liveness_verdicts(monkeypatch):
+    """Dead = 4xx/5xx, redirect to site root, or redirect to another host. Timeouts stay unknown."""
+    from app.services import unified_news_ingestor as ingestor_module
+
+    alive_url = "https://sumut.antaranews.com/berita/banjir-jalinsum"
+    root_redirect_url = "https://sumut.antaranews.com/berita/kedaluwarsa"
+    other_host_url = "https://agregator.example.com/artikel/123"
+    missing_url = "https://sumut.antaranews.com/berita/hilang"
+    timeout_url = "https://sumut.antaranews.com/berita/lambat"
+
+    captured = _install_fake_httpx(monkeypatch, {
+        alive_url: _fake_response(200, alive_url),
+        root_redirect_url: _fake_response(200, "https://sumut.antaranews.com/"),
+        other_host_url: _fake_response(200, "https://sindikasi.example.net/berita/123"),
+        missing_url: _fake_response(404, missing_url),
+        timeout_url: httpx.TimeoutException("timed out"),
+    })
+
+    ingestor = ingestor_module.UnifiedNewsIngestor()
+    articles = [
+        {"id": "n1", "link": alive_url},
+        {"id": "n2", "link": root_redirect_url},
+        {"id": "n3", "link": other_host_url},
+        {"id": "n4", "link": missing_url},
+        {"id": "n5", "link": timeout_url},
+        {"id": "n6"},
+    ]
+
+    await ingestor._attach_link_liveness(articles)
+
+    verdicts = {a["id"]: a["link_alive"] for a in articles}
+    assert verdicts == {
+        "n1": "alive",
+        "n2": "dead",
+        "n3": "dead",
+        "n4": "dead",
+        "n5": "unknown",
+        "n6": "unknown",
+    }
+    assert captured["client_kwargs"]["follow_redirects"] is True
+    assert captured["client_kwargs"]["timeout"] == ingestor.LINK_CHECK_TIMEOUT_SECONDS
+    assert len(captured["calls"]) == 5  # the article without a link is never probed
+
+
+@pytest.mark.asyncio
+async def test_news_link_liveness_cache_avoids_second_probe(monkeypatch):
+    from app.services import unified_news_ingestor as ingestor_module
+
+    url = "https://sumut.antaranews.com/berita/banjir"
+    captured = _install_fake_httpx(monkeypatch, {url: _fake_response(200, url)})
+
+    ingestor = ingestor_module.UnifiedNewsIngestor()
+    first_batch = [{"id": "a", "link": url}]
+    second_batch = [{"id": "b", "link": url}]
+
+    await ingestor._attach_link_liveness(first_batch)
+    await ingestor._attach_link_liveness(second_batch)
+
+    assert first_batch[0]["link_alive"] == "alive"
+    assert second_batch[0]["link_alive"] == "alive"
+    assert captured["calls"] == [url]  # second probe served from the TTL cache
+
+
+@pytest.mark.asyncio
+async def test_news_link_liveness_cache_expires_after_ttl(monkeypatch):
+    from app.services import unified_news_ingestor as ingestor_module
+
+    url = "https://sumut.antaranews.com/berita/banjir"
+    captured = _install_fake_httpx(monkeypatch, {url: _fake_response(200, url)})
+
+    ingestor = ingestor_module.UnifiedNewsIngestor()
+    await ingestor._attach_link_liveness([{"id": "a", "link": url}])
+
+    verdict, checked_at = ingestor._link_liveness_cache[url]
+    ingestor._link_liveness_cache[url] = (verdict, checked_at - (ingestor.LINK_LIVENESS_TTL_SECONDS + 1))
+
+    await ingestor._attach_link_liveness([{"id": "b", "link": url}])
+    assert captured["calls"] == [url, url]
+
+
+@pytest.mark.asyncio
+async def test_link_alive_is_persisted_to_supabase(monkeypatch):
+    """The upsert whitelist must carry link_alive, otherwise the dashboard can never see it."""
+    from app.services import news_aggregator
+
+    captured_chunks = []
+
+    class FakeTable:
+        def upsert(self, chunk, on_conflict=None):
+            captured_chunks.append(chunk)
+            return self
+
+        def execute(self):
+            return SimpleNamespace(data=[{"id": "n1"}])
+
+    class FakeSupabase:
+        def table(self, name):
+            return FakeTable()
+
+    monkeypatch.setattr("app.db.supabase_client.get_service_client", lambda: FakeSupabase())
+
+    count = await news_aggregator.upsert_articles_to_supabase([
+        {"id": "n1", "title": "Banjir Jalinsum", "link": "https://sumut.antaranews.com/berita/1", "link_alive": "dead"}
+    ])
+
+    assert count == 1
+    assert captured_chunks[0][0]["link_alive"] == "dead"

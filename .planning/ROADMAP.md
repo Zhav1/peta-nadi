@@ -1345,6 +1345,47 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 
 ---
 
+## Phase 56: Post-Audit Integrity Routing & Mock Purge
+**Goal:** Close the 5 remaining system audit items from `SYSTEM_AUDIT_AND_ROOT_CAUSE_ANALYSIS.md`: 1366x768 anti-collision map dock math, dynamic `&exclude=toll` routing with [5,8,15]km radius, guided demo economic integration and Evidence->Economic->Mitigation tab pacing, news link integrity validation with cached excerpt fallback, and a complete mock data purge across backend scrapers, pricing, and evaluation components.
+**Status:** COMPLETE ✅
+**Plans:** 56-PLAN.md, 56-WALKTHROUGH.md, 56-ENVIRONMENT-FIXES-AND-PITFALLS.md, 56-LEARNINGS.md
+**Audit Report:** `SYSTEM_AUDIT_AND_ROOT_CAUSE_ANALYSIS.md` (Items 2, 4, 5, 6, 8)
+
+### Deliverables
+- [x] **WP1 (P0) — Anti-Collision Map Dock Layout (1366x768)**:
+  - Centralized dock math into `frontend/components/dashboard/mapDockLayout.ts` with dynamic `lg:left-[calc((100vw-424px)/2)]` and `max-w-[calc(100vw-460px)]`.
+  - Fixed GuidedDemoPanel drawer overlap by aligning offset to `right-[424px]`.
+  - Verified 0 collision across all 4 drawer/sidebar states (24px simulator dock clearance, 92px footer clearance).
+- [x] **WP2 (P0) — Mapbox Routing Toll Avoidance & Hazard Geometry**:
+  - Added dynamic `&exclude=toll` query parameter to Mapbox Directions in `aiDynamicRouter.ts` and `mapboxRoutingService.ts` when hazard intersects toll corridor ($R+2\text{ km}$).
+  - Added single fallback retry without `exclude=toll` on Mapbox `NoRoute` responses to prevent dead routing.
+  - Standardized hazard radius toggle to `[5, 8, 15] km` with default `8 km` in `CrisisSimulatorBar.tsx` and `DashboardClient.tsx`.
+  - Hardened HOLD/Delay card to return empty `waypoints: []` with `is_compromised: true`, eliminating compromised polyline rendering through flood zones.
+- [x] **WP3 (P0) — Guided Demo Economic Integration & Tab Pacing**:
+  - Re-paced guided demo sequence: Stage 3 (Evidence) $\to$ Stage 4 (Economic) $\to$ Stage 5 (Mitigation) with operator CTA `Buka Mitigasi & Setujui`.
+  - Replaced hardcoded demo figures with dynamic payload values from `crisis.inflation_forecast` and `economic_intelligence_finding.data`, backed by honest empty states.
+  - Aligned LTM precedent resolution in `EconomicTab.tsx` to read root `crisis.ltm_episodes`.
+  - Synchronized `DEMO_SCRIPT_90S.md` with CPU solver architecture and payload-driven narrative.
+- [x] **WP4 (P1) — News Link Integrity & Cached Excerpt**:
+  - Implemented async `_is_link_alive()` in `unified_news_ingestor.py` with 4s timeout, redirect detection (marking redirects to root portal as dead), and tagged `link_alive: 'alive' | 'dead' | 'unknown'`.
+  - Authored Supabase Migration `011_news_articles_link_alive.sql`.
+  - Added cached excerpt snapshot modal and "Tautan asli kedaluwarsa" fallback in `EvidenceTab.tsx` and `DashboardClient.tsx`.
+- [x] **WP5 (P1) — Full Mock Data Purge & Empirical Calibration**:
+  - Removed `MOCK_SOCIAL_POSTS` and stale mock comments from `social_scraper.py`.
+  - Replaced static `/spikes` values (62,000 / 38,500) in `commodity_router.py` with dynamic 30-day baseline percentage change calculation ($\ge 8\%$ anomaly threshold) and minimum record guard ($\ge 3$ records).
+  - Purged `FALLBACK_OUTCOMES` and `?? 1.0` defaults from `EvaluationSection.tsx` and `ReliabilityDiagram.tsx`, rendering honest "Belum Dihitung" when uncalculated.
+  - Placed `FALLBACK_FLEET` behind an explicit operator "Mode Simulasi" toggle in `useFleetVehicles.ts` defaulting to off.
+  - Derived causal chain in `demo_router.py` dynamically labeled "Rantai Sebab-Akibat (Simulasi)".
+
+### Verification Criteria
+- [x] `python -m pytest backend/tests`: 183 passed, 0 failed (baseline 178 + 5 new unit tests in `test_api_routers.py` and `test_news_pipeline.py`).
+- [x] `npx tsc --noEmit` in `frontend/`: 0 type errors.
+- [x] `npm run build` in `frontend/`: exit code 0, all 7 pages generated cleanly.
+- [x] Playwright headless test at 1366x768 confirms zero component collision and 7/7 route avoidance tests passed (`toll-bypass-routing.spec.ts`).
+- [x] Codebase search confirms 0 remaining hits for `MOCK_SOCIAL_POSTS`, `FALLBACK_OUTCOMES`, `62000`, and `38500`.
+
+---
+
 ## Backlog (Post-Hackathon / v2)
 - Driver mobile app (React Native + WatermelonDB + CRDT offline sync)
 - Enterprise GraphRAG private self-hosted deployment

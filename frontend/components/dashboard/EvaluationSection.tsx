@@ -40,49 +40,6 @@ interface EvaluationSectionProps {
   activeRoutes?: RouteRecommendation[];
 }
 
-// Verified Fallback Closed-Loop Outcomes
-const FALLBACK_OUTCOMES: OutcomeResponseItem[] = [
-  {
-    id: 'OUT-BELAWAN-001',
-    incident_id: 'INC-2026-BELAWAN-ROB',
-    horizon: 'T+12h',
-    actual_clearance_time: '2026-09-24T18:30:00Z',
-    observed_delay_hours: 8.2,
-    actual_price_spike_pct: 18.5,
-    verified_by: 'BPS Sumut & Pelindo',
-    verification_source: 'FIELD_REPORT',
-    notes: 'Jalur Tol Belmera surut jam 18:30. Rekomendasi reroute jalur barat terbukti menghindari antrean 8 jam.',
-    sync_status: 'synced',
-    created_at: '2026-09-24T20:00:00Z'
-  },
-  {
-    id: 'OUT-SITINJAU-002',
-    incident_id: 'INC-2026-SITINJAU-LONGSOR',
-    horizon: 'T+24h',
-    actual_clearance_time: '2026-09-23T14:00:00Z',
-    observed_delay_hours: 11.5,
-    actual_price_spike_pct: 22.0,
-    verified_by: 'Polda Sumbar & Dishub',
-    verification_source: 'FIELD_REPORT',
-    notes: 'Pembersihan material tebing selesai 24 jam. Disrupsi pasokan cabai diantisipasi via jalur alternatif Malalak.',
-    sync_status: 'synced',
-    created_at: '2026-09-23T16:00:00Z'
-  },
-  {
-    id: 'OUT-BETUNG-003',
-    incident_id: 'INC-2026-BETUNG-BANJIR',
-    horizon: 'T+12h',
-    actual_clearance_time: '2026-09-22T08:00:00Z',
-    observed_delay_hours: 6.0,
-    actual_price_spike_pct: 12.4,
-    verified_by: 'BPBD Musi Banyuasin',
-    verification_source: 'FIELD_REPORT',
-    notes: 'Genangan air Sungai Musi surut sesuai prakiraan Open-Meteo. Deviasi harga komoditas terkendali < 15%.',
-    sync_status: 'synced',
-    created_at: '2026-09-22T10:00:00Z'
-  }
-];
-
 export default function EvaluationSection({
   corridorContext,
   selectedCrisis,
@@ -92,7 +49,7 @@ export default function EvaluationSection({
   const [report, setReport] = useState<BenchmarkReportResponse | null>(null);
   const [testMatrix, setTestMatrix] = useState<TestMatrixResponse | null>(null);
   const [efficiency, setEfficiency] = useState<CorridorEfficiencyResponse | null>(null);
-  const [outcomes, setOutcomes] = useState<OutcomeResponseItem[]>(FALLBACK_OUTCOMES);
+  const [outcomes, setOutcomes] = useState<OutcomeResponseItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [lastRefreshed, setLastRefreshed] = useState<string>('');
 
@@ -115,7 +72,7 @@ export default function EvaluationSection({
       if (eRes.status === 'fulfilled' && eRes.value) {
         setEfficiency(eRes.value);
       }
-      if (oRes.status === 'fulfilled' && oRes.value && Array.isArray(oRes.value.items) && oRes.value.items.length > 0) {
+      if (oRes.status === 'fulfilled' && oRes.value && Array.isArray(oRes.value.items)) {
         setOutcomes(oRes.value.items);
       }
       setLastRefreshed(new Date().toLocaleTimeString('id-ID'));
@@ -131,11 +88,11 @@ export default function EvaluationSection({
   }, [loadAllEvaluationData]);
 
   // Default metric fallbacks
-  const precision = report?.metrics?.precision ?? 1.0;
-  const recall = report?.metrics?.recall ?? 0.9714;
-  const f1Score = report?.metrics?.f1_score ?? 0.9855;
-  const brierScore = report?.calibration?.brier_score ?? 0.0782;
-  const latencyMs = report?.metrics?.mean_latency_ms ?? 0.019;
+  const precision = report?.metrics?.precision ?? null;
+  const recall = report?.metrics?.recall ?? null;
+  const f1Score = report?.metrics?.f1_score ?? null;
+  const brierScore = report?.calibration?.brier_score ?? null;
+  const latencyMs = report?.metrics?.mean_latency_ms ?? null;
 
   return (
     <div className="flex flex-col space-y-5 max-w-7xl mx-auto pb-12">
@@ -212,35 +169,55 @@ export default function EvaluationSection({
             {/* Metric 1: Precision */}
             <div className="lg:px-4 first:pl-0 last:pr-0 py-3 lg:py-0">
               <span className="text-xs font-mono text-slate-400 uppercase tracking-wider block mb-1">Presisi Deteksi</span>
-              <p className="text-2xl font-mono font-bold text-white tabular-nums">{(precision * 100).toFixed(1)}%</p>
+              {precision !== null ? (
+                <p className="text-2xl font-mono font-bold text-white tabular-nums">{(precision * 100).toFixed(1)}%</p>
+              ) : (
+                <p className="text-base font-mono text-slate-500 py-1">Belum dihitung</p>
+              )}
               <p className="text-xs font-mono text-slate-400 mt-1 tabular-nums">Target: &gt; 85.0% (N=60 Sumatra)</p>
             </div>
 
             {/* Metric 2: Recall */}
             <div className="lg:px-4 first:pl-0 last:pr-0 py-3 lg:py-0">
               <span className="text-xs font-mono text-slate-400 uppercase tracking-wider block mb-1">Sensitivitas (Recall)</span>
-              <p className="text-2xl font-mono font-bold text-white tabular-nums">{(recall * 100).toFixed(1)}%</p>
+              {recall !== null ? (
+                <p className="text-2xl font-mono font-bold text-white tabular-nums">{(recall * 100).toFixed(1)}%</p>
+              ) : (
+                <p className="text-base font-mono text-slate-500 py-1">Belum dihitung</p>
+              )}
               <p className="text-xs font-mono text-slate-400 mt-1 tabular-nums">Target: &gt; 80.0%</p>
             </div>
 
             {/* Metric 3: F1-Score */}
             <div className="lg:px-4 first:pl-0 last:pr-0 py-3 lg:py-0">
               <span className="text-xs font-mono text-slate-400 uppercase tracking-wider block mb-1">Skor F1 Komposit</span>
-              <p className="text-2xl font-mono font-bold text-white tabular-nums">{f1Score.toFixed(3)}</p>
+              {f1Score !== null ? (
+                <p className="text-2xl font-mono font-bold text-white tabular-nums">{f1Score.toFixed(3)}</p>
+              ) : (
+                <p className="text-base font-mono text-slate-500 py-1">Belum dihitung</p>
+              )}
               <p className="text-xs font-mono text-slate-400 mt-1 tabular-nums">Target: &gt; 0.820</p>
             </div>
 
             {/* Metric 4: Brier Score */}
             <div className="lg:px-4 first:pl-0 last:pr-0 py-3 lg:py-0">
               <span className="text-xs font-mono text-slate-400 uppercase tracking-wider block mb-1">Brier Kalibrasi</span>
-              <p className="text-2xl font-mono font-bold text-white tabular-nums">{brierScore.toFixed(4)}</p>
+              {brierScore !== null ? (
+                <p className="text-2xl font-mono font-bold text-white tabular-nums">{brierScore.toFixed(4)}</p>
+              ) : (
+                <p className="text-base font-mono text-slate-500 py-1">Belum dihitung</p>
+              )}
               <p className="text-xs font-mono text-slate-400 mt-1 tabular-nums">Target: &le; 0.100</p>
             </div>
 
             {/* Metric 5: Latency */}
             <div className="lg:px-4 first:pl-0 last:pr-0 py-3 lg:py-0">
               <span className="text-xs font-mono text-slate-400 uppercase tracking-wider block mb-1">Latensi Inferensi</span>
-              <p className="text-2xl font-mono font-bold text-white tabular-nums">{latencyMs.toFixed(1)} ms</p>
+              {latencyMs !== null ? (
+                <p className="text-2xl font-mono font-bold text-white tabular-nums">{latencyMs.toFixed(1)} ms</p>
+              ) : (
+                <p className="text-base font-mono text-slate-500 py-1">Belum dihitung</p>
+              )}
               <p className="text-xs font-mono text-slate-400 mt-1 tabular-nums">Target: &lt; 5.0 ms</p>
             </div>
           </div>
@@ -249,8 +226,8 @@ export default function EvaluationSection({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <ReliabilityDiagram
           bins={report?.calibration?.reliability_bins}
-          brierScore={brierScore}
-          ece={report?.calibration?.expected_calibration_error ?? 0.1899}
+          brierScore={brierScore ?? undefined}
+          ece={report?.calibration?.expected_calibration_error ?? undefined}
         />
         <RouteEfficiencyCard corridors={efficiency?.corridors} />
       </div>
@@ -328,42 +305,50 @@ export default function EvaluationSection({
               </tr>
             </thead>
             <tbody className="divide-y divide-[#1c2432] font-mono">
-              {outcomes.map((item) => (
-                <tr key={item.id} className="hover:bg-white/[0.02] transition-colors">
-                  <td className="py-3 px-3 text-slate-400 whitespace-nowrap text-xs">
-                    <span className="text-white font-bold block">{item.id}</span>
-                    <span className="text-xs text-slate-500 tabular-nums">
-                      {new Date(item.created_at).toLocaleDateString('id-ID')}
-                    </span>
-                  </td>
-
-                  <td className="py-3 px-3 text-slate-200 font-semibold text-xs whitespace-nowrap">
-                    {item.incident_id}
-                  </td>
-
-                  <td className="py-3 px-3 whitespace-nowrap">
-                    <span className="px-2 py-0.5 rounded bg-white/10 text-slate-200 border border-white/20 text-xs">
-                      {item.horizon}
-                    </span>
-                  </td>
-
-                  <td className="py-3 px-3 text-right whitespace-nowrap text-amber-400 font-bold tabular-nums">
-                    {item.observed_delay_hours.toFixed(1)} Jam
-                  </td>
-
-                  <td className="py-3 px-3 text-right whitespace-nowrap text-rose-400 font-bold tabular-nums">
-                    +{item.actual_price_spike_pct.toFixed(1)}%
-                  </td>
-
-                  <td className="py-3 px-3 text-slate-300 text-xs whitespace-nowrap">
-                    {item.verified_by}
-                  </td>
-
-                  <td className="py-3 px-3 text-slate-400 text-xs max-w-[280px] truncate" title={item.notes || ''}>
-                    {item.notes || 'Verifikasi lapangan telah sinkron.'}
+              {outcomes.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-8 text-center text-xs text-slate-500 font-mono">
+                    Belum ada log verifikasi lapangan (outcomes) yang tersinkronisasi.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                outcomes.map((item) => (
+                  <tr key={item.id} className="hover:bg-white/[0.02] transition-colors">
+                    <td className="py-3 px-3 text-slate-400 whitespace-nowrap text-xs">
+                      <span className="text-white font-bold block">{item.id}</span>
+                      <span className="text-xs text-slate-500 tabular-nums">
+                        {new Date(item.created_at).toLocaleDateString('id-ID')}
+                      </span>
+                    </td>
+
+                    <td className="py-3 px-3 text-slate-200 font-semibold text-xs whitespace-nowrap">
+                      {item.incident_id}
+                    </td>
+
+                    <td className="py-3 px-3 whitespace-nowrap">
+                      <span className="px-2 py-0.5 rounded bg-white/10 text-slate-200 border border-white/20 text-xs">
+                        {item.horizon}
+                      </span>
+                    </td>
+
+                    <td className="py-3 px-3 text-right whitespace-nowrap text-amber-400 font-bold tabular-nums">
+                      {item.observed_delay_hours.toFixed(1)} Jam
+                    </td>
+
+                    <td className="py-3 px-3 text-right whitespace-nowrap text-rose-400 font-bold tabular-nums">
+                      +{item.actual_price_spike_pct.toFixed(1)}%
+                    </td>
+
+                    <td className="py-3 px-3 text-slate-300 text-xs whitespace-nowrap">
+                      {item.verified_by}
+                    </td>
+
+                    <td className="py-3 px-3 text-slate-400 text-xs max-w-[280px] truncate" title={item.notes || ''}>
+                      {item.notes || 'Verifikasi lapangan telah sinkron.'}
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

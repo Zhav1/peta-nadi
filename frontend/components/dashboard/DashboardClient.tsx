@@ -5,6 +5,7 @@ import Link from 'next/link';
 import {
   PanelLeftClose,
   PanelLeftOpen,
+  AlertTriangle,
   HelpCircle,
   Info,
   Radio,
@@ -38,9 +39,11 @@ import SimulationSection, { type ActionPlanParams } from '@/components/dashboard
 import ReportsSection from '@/components/dashboard/ReportsSection';
 import EvaluationSection from '@/components/dashboard/EvaluationSection';
 import { CrisisSimulatorBar } from '@/components/map/CrisisSimulatorBar';
+import { resolveMapDockClasses } from '@/components/dashboard/mapDockLayout';
 import { HUB_NODES, type HubNode } from '@/lib/mapboxRoutingService';
 import {
   calculateAIDynamicDetourRoutes,
+  DEFAULT_HAZARD_RADIUS_KM,
   getHaversineDistanceKm,
   isPolylineIntersectingHazardCircle,
   type TransportModality,
@@ -433,7 +436,13 @@ function FloatingMapLegend({
 export default function DashboardClient() {
   const { user, role, openAuthModal, isAuthModalOpen, closeAuthModal } = useAuth();
   const { incidents, refetch } = useIncidents();
-  const { vehicles: activeFleetVehicles, refetch: refetchFleet, customCount: customFleetCount } = useFleetVehicles();
+  const {
+    vehicles: activeFleetVehicles,
+    refetch: refetchFleet,
+    customCount: customFleetCount,
+    isSimulationMode: isFleetSimMode,
+    setIsSimulationMode: setIsFleetSimMode,
+  } = useFleetVehicles();
   const [isOnboardingModalOpen, setIsOnboardingModalOpen] = useState(false);
   const [selectedCrisisId, setSelectedCrisisId] = useState<string | null>(null);
   const [selectedCrisis, setSelectedCrisis] = useState<CrisisState | null>(null);
@@ -454,7 +463,7 @@ export default function DashboardClient() {
   } = useCrisisSimulationStream();
 
   // Interactive Simulation Controls
-  const [selectedRadius, setSelectedRadius] = useState<number>(15);
+  const [selectedRadius, setSelectedRadius] = useState<number>(DEFAULT_HAZARD_RADIUS_KM);
   const [simSpeed, setSimSpeed] = useState<number>(1);
   const [drawModeActive, setDrawModeActive] = useState(false);
   const [isClickTargeting, setIsClickTargeting] = useState(false);
@@ -489,6 +498,7 @@ export default function DashboardClient() {
   const [newsSearchQuery, setNewsSearchQuery] = useState('');
   const [selectedNewsCategory, setSelectedNewsCategory] = useState<'ALL' | 'OFFICIAL' | 'WEATHER' | 'OSINT' | 'MARKET'>('ALL');
   const [selectedNewsId, setSelectedNewsId] = useState<string | null>(null);
+  const [expandedNewsId, setExpandedNewsId] = useState<string | null>(null);
 
   const filteredNews = useMemo(() => {
     return newsFeed.filter((item) => {
@@ -682,7 +692,7 @@ export default function DashboardClient() {
 
 
   // Fetch multi-alternative Mapbox driving & hazard detour routes when node selection or modality changes
-  const updateBaselineMapboxRoute = useCallback(async (originId: string, destId: string, modality: TransportModality, hazardCenter: [number, number] | null = null, radiusKm: number = 15) => {
+  const updateBaselineMapboxRoute = useCallback(async (originId: string, destId: string, modality: TransportModality, hazardCenter: [number, number] | null = null, radiusKm: number = DEFAULT_HAZARD_RADIUS_KM) => {
     const originNode = HUB_NODES[originId]?.coords;
     const destNode = HUB_NODES[destId]?.coords;
     if (!originNode || !destNode) return;
@@ -960,8 +970,10 @@ export default function DashboardClient() {
   // without re-running its side effects on every map node click.
   const demoOriginRef = useRef<string | null>(null);
   const demoDestRef = useRef<string | null>(null);
+  const demoRadiusRef = useRef<number>(DEFAULT_HAZARD_RADIUS_KM);
   demoOriginRef.current = selectedOriginNode;
   demoDestRef.current = selectedDestNode;
+  demoRadiusRef.current = selectedRadius;
 
   useEffect(() => {
     if (!demoState.isRunning) return;
@@ -983,17 +995,18 @@ export default function DashboardClient() {
       case 2: {
         // Stage 2: Consensus Gate — inject hazard flood shockwave at Lubuk Pakam
         const hazardCenter: [number, number] = [98.87, 3.56]; // Lubuk Pakam flood corridor
+        const demoRadiusKm = demoRadiusRef.current;
         setSimulatedShockwave({
           center: hazardCenter,
-          radiusKm: 15,
+          radiusKm: demoRadiusKm,
           hazardType: 'flood',
         });
 
         // Preview a clean bypass corridor so the demo route visibly loops around the
-        // 15 km flood circle instead of passing straight through its center.
+        // active flood circle instead of passing straight through its center.
         const demoOriginCoords = HUB_NODES[demoOriginRef.current || 'belawan']?.coords || HUB_NODES.belawan.coords;
         const demoDestCoords = HUB_NODES[demoDestRef.current || 'tebingtinggi']?.coords || HUB_NODES.tebingtinggi.coords;
-        const bypassPreview = buildHazardBypassRoute(demoOriginCoords, demoDestCoords, hazardCenter, 15);
+        const bypassPreview = buildHazardBypassRoute(demoOriginCoords, demoDestCoords, hazardCenter, demoRadiusKm);
         if (bypassPreview) {
           setCurrentMapRoutes([bypassPreview]);
           setActiveRouteIdx(0);
@@ -1010,8 +1023,8 @@ export default function DashboardClient() {
       }
 
       case 4: {
-        // Stage 4: Dispatch Complete
-        setActiveTab('Mitigation');
+        // Stage 4: Dispatch Complete — review the economic impact before approving the mitigation plan
+        setActiveTab('Economic');
         setToast({
           message: 'Notifikasi Terkirim: Armada dialihkan ke rute aman.',
           type: 'success',
@@ -1247,6 +1260,9 @@ export default function DashboardClient() {
   };
 
   const activeIncidents = getDisplayedIncidents();
+
+  const isCrisisDrawerOpen = isSidebarOpen && !!selectedCrisis;
+  const footerDockClass = resolveMapDockClasses({ isLeftSidebarCollapsed, isCrisisDrawerOpen });
 
   return (
     <div className="relative w-full h-screen bg-[#080d14] text-slate-100 overflow-hidden select-none">
@@ -1526,10 +1542,9 @@ export default function DashboardClient() {
                   const isOfficial = item.source_tier === 'TIER_1_OFFICIAL' || item.source_type === 'OFFICIAL_NEWS';
                   const isEarlyWarning = item.temporal_phase === 'forecast_early_warning';
 
-                  const isDeadMockUrl = !item.link || item.link.includes('/berita/49') || !item.link.startsWith('http');
-                  const targetNewsUrl = isDeadMockUrl
-                    ? `https://news.google.com/search?q=${encodeURIComponent(item.headline + ' ' + (item.source_name || 'ANTARA'))}&hl=id-ID&gl=ID&ceid=ID:id`
-                    : item.link;
+                  const canOpenSource = Boolean(item.link) && item.link_alive !== 'dead';
+                  const isExpiredLink = item.link_alive === 'dead';
+                  const isExcerptExpanded = expandedNewsId === item.id;
 
                   const handleFocusMap = () => {
                     setSelectedNewsId(item.id);
@@ -1542,7 +1557,7 @@ export default function DashboardClient() {
                         item.lat,
                         item.lon,
                         (item.hazardType as CrisisType) || 'flood',
-                        15,
+                        selectedRadius,
                         'high'
                       );
                     }
@@ -1579,21 +1594,31 @@ export default function DashboardClient() {
 
                       {/* Headline with external link */}
                       <h3 className="text-xs font-semibold text-slate-100 leading-snug font-sans group">
-                        <a
-                          href={targetNewsUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="hover:text-cyan-300 hover:underline transition-colors flex items-start gap-1 cursor-pointer"
-                          title="Buka Berita Asli (Tab Baru)"
-                        >
-                          <span className="flex-1">{item.headline}</span>
-                          <ExternalLink className="w-3 h-3 text-slate-500 group-hover:text-cyan-400 shrink-0 mt-0.5" />
-                        </a>
+                        {canOpenSource ? (
+                          <a
+                            href={item.link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="hover:text-cyan-300 hover:underline transition-colors flex items-start gap-1 cursor-pointer"
+                            title="Buka Berita Asli (Tab Baru)"
+                          >
+                            <span className="flex-1">{item.headline}</span>
+                            <ExternalLink className="w-3 h-3 text-slate-500 group-hover:text-cyan-400 shrink-0 mt-0.5" />
+                          </a>
+                        ) : (
+                          <span className="flex items-start gap-1">
+                            <span className="flex-1">{item.headline}</span>
+                          </span>
+                        )}
                       </h3>
 
-                      {/* Summary */}
-                      <p className="text-xs text-slate-400 font-sans leading-relaxed line-clamp-2">
+                      {/* Stored excerpt — clamped until the operator expands it */}
+                      <p
+                        className={`text-xs text-slate-400 font-sans leading-relaxed transition-all duration-200 ${
+                          isExcerptExpanded ? '' : 'line-clamp-2'
+                        }`}
+                      >
                         {item.summary}
                       </p>
 
@@ -1612,17 +1637,44 @@ export default function DashboardClient() {
                       </div>
 
                       {/* Action Link / Focus */}
-                      <div className="flex items-center justify-end gap-1.5 pt-0.5">
-                        <a
-                          href={targetNewsUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="cursor-pointer p-1 rounded bg-[#121822] text-slate-400 hover:text-white border border-[#1c2432] transition-colors"
-                          title="Buka Berita Asli di Tab Baru"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </a>
+                      <div className="flex flex-wrap items-center justify-between gap-1.5 pt-0.5">
+                        <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                          {canOpenSource ? (
+                            <a
+                              href={item.link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="cursor-pointer p-1 rounded bg-[#121822] text-slate-400 hover:text-white border border-[#1c2432] transition-colors"
+                              title="Buka Berita Asli di Tab Baru"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </a>
+                          ) : (
+                            <>
+                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded border border-amber-500/40 bg-amber-950/40 text-amber-300 text-xs font-mono">
+                                <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />
+                                <span>{isExpiredLink ? 'Tautan asli kedaluwarsa' : 'Tautan sumber tidak tersedia'}</span>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setExpandedNewsId(isExcerptExpanded ? null : item.id);
+                                }}
+                                className="cursor-pointer inline-flex items-center gap-1 px-2 py-1 rounded bg-[#121822] text-slate-300 hover:text-white border border-[#1c2432] transition-colors text-xs font-mono"
+                                title={isExcerptExpanded ? 'Sembunyikan kutipan tersimpan' : 'Tampilkan kutipan tersimpan'}
+                              >
+                                <ChevronDown
+                                  className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                                    isExcerptExpanded ? 'rotate-180' : ''
+                                  }`}
+                                />
+                                <span>{isExcerptExpanded ? 'Sembunyikan kutipan' : 'Kutipan tersimpan'}</span>
+                              </button>
+                            </>
+                          )}
+                        </div>
 
                         <button
                           type="button"
@@ -1630,7 +1682,7 @@ export default function DashboardClient() {
                             e.stopPropagation();
                             handleFocusMap();
                           }}
-                          className="cursor-pointer flex items-center gap-1 px-2.5 py-1 rounded bg-white hover:bg-slate-200 text-[#080d14] text-xs font-mono font-semibold transition-colors shadow-sm"
+                          className="cursor-pointer flex items-center gap-1 px-2.5 py-1 rounded bg-white hover:bg-slate-200 text-[#080d14] text-xs font-mono font-semibold transition-colors shadow-sm shrink-0"
                         >
                           <span>Fokus</span>
                         </button>
@@ -1756,6 +1808,33 @@ export default function DashboardClient() {
                     </button>
                   );
                 })}
+                <div className="w-[1px] h-4 bg-white/10 mx-1 shrink-0" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextMode = !isFleetSimMode;
+                    setIsFleetSimMode(nextMode);
+                    setToast({
+                      message: nextMode
+                        ? 'Mode Simulasi Armada diaktifkan (Armada fallback sintetis dimuat)'
+                        : 'Mode Simulasi Armada dimatikan (Tampilan armada riil/offline cache)',
+                      type: 'info',
+                    });
+                  }}
+                  className={`cursor-pointer px-2.5 py-1 rounded-md text-xs font-mono font-medium transition-all flex items-center gap-1.5 ${
+                    isFleetSimMode
+                      ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40 font-bold'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  }`}
+                  title="Toggle Mode Simulasi Armada Fallback"
+                >
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      isFleetSimMode ? 'bg-amber-400 animate-pulse' : 'bg-slate-500'
+                    }`}
+                  />
+                  <span>Mode Simulasi</span>
+                </button>
               </div>
             )}
 
@@ -1806,6 +1885,12 @@ export default function DashboardClient() {
               isSidebarOpen={isSidebarOpen && !!selectedCrisis}
               selectedOrigin={selectedOriginNode || 'belawan'}
               selectedDestination={selectedDestNode || 'tebingtinggi'}
+              inflationForecast={demoState.currentCrisisState?.inflation_forecast}
+              economicFinding={demoState.currentCrisisState?.economic_intelligence_finding}
+              onOpenMitigation={() => {
+                setActiveTab('Mitigation');
+                setIsSidebarOpen(true);
+              }}
               onSelectPreset={(origin, dest) => {
                 setSelectedOriginNode(origin);
                 setSelectedDestNode(dest);
@@ -1813,14 +1898,7 @@ export default function DashboardClient() {
             />
 
             {/* Bottombar Time Scope Filters (Exact Dual-Sidebar Centering on Desktop, Centered on Mobile) */}
-            <footer className={`absolute bottom-4 sm:bottom-6 z-40 flex items-center gap-1.5 bg-[#0c1017] border border-[#1c2432] p-1.5 rounded-lg shadow-xl transition-all duration-300 pointer-events-auto left-1/2 -translate-x-1/2 max-w-[95vw] overflow-x-auto no-scrollbar ${!isLeftSidebarCollapsed && (isSidebarOpen && !!selectedCrisis)
-                ? 'lg:left-[calc(50%-30px)]'
-                : !isLeftSidebarCollapsed && !(isSidebarOpen && !!selectedCrisis)
-                  ? 'lg:left-[calc(50%+160px)]'
-                  : isLeftSidebarCollapsed && (isSidebarOpen && !!selectedCrisis)
-                    ? 'lg:left-[calc(50%-190px)]'
-                    : 'lg:left-1/2'
-              }`}>
+            <footer className={`absolute bottom-4 sm:bottom-6 z-40 flex items-center gap-1.5 bg-[#0c1017] border border-[#1c2432] p-1.5 rounded-lg shadow-xl transition-all duration-300 pointer-events-auto left-1/2 -translate-x-1/2 max-w-[95vw] overflow-x-auto no-scrollbar ${footerDockClass}`}>
               {(['past', 'present', 'future', 'predict'] as const).map((filter) => (
                 <button
                   key={filter}

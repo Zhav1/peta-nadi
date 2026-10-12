@@ -7,9 +7,13 @@ and public.route_approvals for Globot-style Human-In-The-Loop review.
 """
 import asyncio
 import logging
+import time
 import uuid
 from datetime import datetime, timezone
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
+from urllib.parse import urlparse
+
+import httpx
 
 from app.services.news_aggregator import (
     fetch_all_multi_outlet_news,
@@ -29,18 +33,27 @@ class UnifiedNewsIngestor:
     OSINT_STREAM_MAXLEN = 10_000
     OSINT_STREAM_WARN_LENGTH = 15_000
 
+    LINK_CHECK_TIMEOUT_SECONDS = 4.0
+    LINK_CHECK_CONCURRENCY = 5
+    LINK_LIVENESS_TTL_SECONDS = 900.0
+    LINK_ALIVE = "alive"
+    LINK_DEAD = "dead"
+    LINK_UNKNOWN = "unknown"
+
     def __init__(self):
         self.is_running = False
         self._processed_disruption_ids = set()
+        self._link_liveness_cache: Dict[str, Tuple[str, float]] = {}
 
     async def run_ingestion_cycle(self, force_refresh: bool = False) -> Dict[str, Any]:
         """
         Executes a complete ingestion run:
         1. Fetch dynamic RSS & search feeds from 10 Sumatra bureaus
         2. Extract structured NLP intelligence + PostGIS coordinates
-        3. Upsert to Supabase public.news_articles
-        4. Push to Redis stream lrip:stream:osint
-        5. Synthesize high-severity events into public.incidents & public.route_approvals
+        3. Probe original article links so expired URLs are never presented as valid
+        4. Upsert to Supabase public.news_articles
+        5. Push to Redis stream lrip:stream:osint
+        6. Synthesize high-severity events into public.incidents & public.route_approvals
         """
         logger.info("Starting Pan-Sumatra news ingestion cycle...")
         
@@ -55,13 +68,16 @@ class UnifiedNewsIngestor:
         structured_results = await asyncio.gather(*tasks, return_exceptions=True)
         structured_articles = [a for a in structured_results if isinstance(a, dict)]
 
-        # 3. Upsert to Supabase
+        # 3. Verify original source links (dead / alive / unknown provenance)
+        await self._attach_link_liveness(structured_articles)
+
+        # 4. Upsert to Supabase
         upserted_count = await upsert_articles_to_supabase(structured_articles)
 
-        # 4. Push to Redis Stream
+        # 5. Push to Redis Stream
         await self._publish_to_redis(structured_articles)
 
-        # 5. Evaluate and trigger disruptions for road-blocking or critical events
+        # 6. Evaluate and trigger disruptions for road-blocking or critical events
         disruptions_triggered = await self._process_critical_disruptions(structured_articles)
 
         return {
@@ -72,6 +88,73 @@ class UnifiedNewsIngestor:
             "disruptions_triggered": disruptions_triggered,
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
+
+    @staticmethod
+    def _same_host(original_url: str, final_url: str) -> bool:
+        """Compares hosts while ignoring case and a leading `www.` prefix.
+
+        A redirect that lands on a different site (e.g. a paywall or aggregator) is
+        treated as a dead source link, while a plain http→https or www hop is not.
+        """
+        def host_of(url: str) -> str:
+            host = (urlparse(url).hostname or "").lower()
+            return host[4:] if host.startswith("www.") else host
+
+        original_host = host_of(original_url)
+        return original_host == "" or host_of(final_url) == original_host
+
+    async def _is_link_alive(self, url: str, client: "httpx.AsyncClient") -> str:
+        """Probes a source URL and returns `alive`, `dead`, or `unknown`.
+
+        Dead means the server answered with status >= 400, redirected to the site root,
+        or redirected to another host. Timeouts and transport errors stay `unknown`:
+        the source is never declared expired without a response that proves it.
+        """
+        cached = self._link_liveness_cache.get(url)
+        if cached and (time.monotonic() - cached[1]) < self.LINK_LIVENESS_TTL_SECONDS:
+            return cached[0]
+
+        verdict = self.LINK_UNKNOWN
+        try:
+            response = await client.get(url)
+            final_url = str(response.url)
+            if response.status_code >= 400:
+                verdict = self.LINK_DEAD
+            elif urlparse(final_url).path in ("", "/"):
+                verdict = self.LINK_DEAD
+            elif not self._same_host(url, final_url):
+                verdict = self.LINK_DEAD
+            else:
+                verdict = self.LINK_ALIVE
+        except httpx.TimeoutException:
+            logger.debug(f"News link liveness probe timed out for {url}")
+        except httpx.HTTPError as exc:
+            logger.debug(f"News link liveness probe failed for {url}: {exc}")
+
+        if verdict != self.LINK_UNKNOWN:
+            self._link_liveness_cache[url] = (verdict, time.monotonic())
+        return verdict
+
+    async def _attach_link_liveness(self, articles: List[Dict[str, Any]]) -> None:
+        """Tags every article with `link_alive` for downstream Supabase, Redis and UI consumers."""
+        if not articles:
+            return
+
+        semaphore = asyncio.Semaphore(self.LINK_CHECK_CONCURRENCY)
+
+        async with httpx.AsyncClient(
+            follow_redirects=True,
+            timeout=self.LINK_CHECK_TIMEOUT_SECONDS,
+        ) as client:
+            async def probe(article: Dict[str, Any]) -> None:
+                link = article.get("link")
+                if not link:
+                    article["link_alive"] = self.LINK_UNKNOWN
+                    return
+                async with semaphore:
+                    article["link_alive"] = await self._is_link_alive(str(link), client)
+
+            await asyncio.gather(*(probe(article) for article in articles))
 
     async def _publish_to_redis(self, articles: List[Dict[str, Any]]):
         """Pushes structured news to Redis stream lrip:stream:osint for multi-agent ingestion."""
@@ -97,6 +180,7 @@ class UnifiedNewsIngestor:
                     "commodities_affected": ",".join(art.get("commodities_affected", ["Komoditas Pangan Pokok"])),
                     "lane_status": str(art.get("ground_truth_metrics", {}).get("lane_status", "CLEAR")),
                     "link": str(art.get("link", "")),
+                    "link_alive": str(art.get("link_alive", "unknown")),
                     "confidence_score": str(art.get("confidence_score", 0.85)),
                     "created_at": datetime.now(timezone.utc).isoformat()
                 }

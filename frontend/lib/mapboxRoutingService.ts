@@ -1,5 +1,10 @@
 import type { LonLat } from './pathDensifier';
 import type { RouteRecommendation } from './types';
+import {
+  DEFAULT_HAZARD_RADIUS_KM,
+  isHazardNearTollCorridor,
+  requestMapboxDirections,
+} from './aiDynamicRouter';
 
 // Strategic Sumatra Logistics Hub Nodes (Ports, Airports, Production Centers, Interchanges)
 export interface HubNode {
@@ -345,7 +350,8 @@ export const STRATEGIC_BASELINE_CORRIDORS: GeoJSON.FeatureCollection = {
 export async function fetchMapboxDirections(
   origin: LonLat,
   destination: LonLat,
-  waypoints: LonLat[] = []
+  waypoints: LonLat[] = [],
+  excludeToll: boolean = false
 ): Promise<LonLat[]> {
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 
@@ -356,17 +362,16 @@ export async function fetchMapboxDirections(
   const allCoords = [origin, ...waypoints, destination];
   const coordString = allCoords.map(([lon, lat]) => `${lon},${lat}`).join(';');
 
-  const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordString}?geometries=geojson&overview=full&access_token=${token}`;
-
   try {
-    const res = await fetch(url);
-    if (!res.ok) {
-      throw new Error(`Mapbox Directions API status ${res.status}`);
-    }
-
-    const data = await res.json();
-    if (data.routes && data.routes.length > 0 && data.routes[0].geometry) {
-      const coords: [number, number][] = data.routes[0].geometry.coordinates;
+    const data = await requestMapboxDirections(
+      coordString,
+      'driving',
+      'geometries=geojson&overview=full',
+      token,
+      excludeToll
+    );
+    if (data?.routes && data.routes.length > 0 && data.routes[0].geometry) {
+      const coords: LonLat[] = data.routes[0].geometry.coordinates;
       return coords;
     }
   } catch (err) {
@@ -406,13 +411,14 @@ function fallbackHighwayRoute(
 
 export async function calculateRoadNetworkDetourRoutes(
   hazardCenter: LonLat,
-  radiusKm: number = 15,
+  radiusKm: number = DEFAULT_HAZARD_RADIUS_KM,
   origin: LonLat = HUB_NODES.belawan.coords,
   destination: LonLat = HUB_NODES.pekanbaru ? HUB_NODES.pekanbaru.coords : HUB_NODES.siantar.coords
 ): Promise<RouteRecommendation[]> {
   const [hLon, hLat] = hazardCenter;
   const [oLon, oLat] = origin;
   const [dLon, dLat] = destination;
+  const excludeToll = isHazardNearTollCorridor(hazardCenter, radiusKm);
 
   const minClearanceKm = radiusKm + 12;
   const offsetLon = (minClearanceKm / 111) * 1.3;
@@ -434,8 +440,8 @@ export async function calculateRoadNetworkDetourRoutes(
   const detourWaypoints2: LonLat[] = [[Number(tangentLon2.toFixed(4)), Number(tangentLat2.toFixed(4))]];
 
   const [coordsPrimary, coordsAlternative] = await Promise.all([
-    fetchMapboxDirections(origin, destination, detourWaypoints1),
-    fetchMapboxDirections(origin, destination, detourWaypoints2),
+    fetchMapboxDirections(origin, destination, detourWaypoints1, excludeToll),
+    fetchMapboxDirections(origin, destination, detourWaypoints2, excludeToll),
   ]);
 
   return [

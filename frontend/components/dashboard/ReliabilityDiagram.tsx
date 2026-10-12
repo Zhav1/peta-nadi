@@ -12,8 +12,8 @@ interface ReliabilityDiagramProps {
 
 export default function ReliabilityDiagram({
   bins = [],
-  brierScore = 0.0782,
-  ece = 0.1899,
+  brierScore,
+  ece,
 }: ReliabilityDiagramProps) {
   const [hoveredBin, setHoveredBin] = useState<ReliabilityBinItem | null>(null);
 
@@ -73,7 +73,7 @@ export default function ReliabilityDiagram({
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-medium bg-[#121822] text-slate-200 border border-[#1c2432] tabular-nums">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-            BS: {brierScore.toFixed(4)} (Lulus ≤ 0.10)
+            {brierScore != null ? `BS: ${brierScore.toFixed(4)} (Lulus ≤ 0.10)` : 'BS: Belum Dihitung'}
           </span>
         </div>
       </div>
@@ -283,7 +283,7 @@ export default function ReliabilityDiagram({
         </div>
 
         <div className="flex items-center gap-3 text-slate-400">
-          <span>ECE: <strong className="text-white font-mono tabular-nums">{(ece * 100).toFixed(2)}%</strong></span>
+          <span>ECE: <strong className="text-white font-mono tabular-nums">{ece != null ? `${(ece * 100).toFixed(2)}%` : 'Belum Dihitung'}</strong></span>
           <span>·</span>
           <span>Platt Brier: <strong className="text-emerald-400 font-mono tabular-nums">0.0000</strong></span>
         </div>

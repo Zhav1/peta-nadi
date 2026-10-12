@@ -128,9 +128,9 @@
     "timeframe_hours": 336
   },
   "causal_chain": [
-    {"node": "Belawan Port Closure", "relation": "restricts_supply_of"},
-    {"node": "Minyak Goreng (Cooking Oil)", "relation": "spikes_price_in"},
-    {"node": "Medan Markets", "relation": "impacts"}
+    {"node": "Belawan Port Closure", "relation": "restricts_supply_of", "label": "Rantai Sebab-Akibat (Simulasi)"},
+    {"node": "Minyak Goreng (Cooking Oil)", "relation": "spikes_price_in", "label": "Rantai Sebab-Akibat (Simulasi)"},
+    {"node": "Medan Markets", "relation": "impacts", "label": "Rantai Sebab-Akibat (Simulasi)"}
   ],
   "hazard_polygons": [
     {

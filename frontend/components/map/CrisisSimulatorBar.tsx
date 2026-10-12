@@ -24,7 +24,8 @@ import {
 } from 'lucide-react';
 import type { CrisisType, Severity } from '@/lib/types';
 import { HUB_NODES } from '@/lib/mapboxRoutingService';
-import type { TransportModality } from '@/lib/aiDynamicRouter';
+import { HAZARD_RADIUS_OPTIONS_KM, type TransportModality } from '@/lib/aiDynamicRouter';
+import { resolveMapDockClasses } from '@/components/dashboard/mapDockLayout';
 
 export interface CrisisSimulatorBarProps {
   onTriggerPointSimulation: (
@@ -112,23 +113,21 @@ export function CrisisSimulatorBar({
     setActivePopover((prev) => (prev === popover ? null : popover));
   };
 
-  const isLeftOpen = !isLeftSidebarCollapsed;
-  const isRightOpen = isSidebarOpen;
-  const positionClass = isLeftOpen && isRightOpen
-    ? 'lg:left-[calc(50%-30px)]'
-    : isLeftOpen && !isRightOpen
-    ? 'lg:left-[calc(50%+160px)]'
-    : !isLeftOpen && isRightOpen
-    ? 'lg:left-[calc(50%-190px)]'
-    : 'lg:left-1/2';
+  const dockPositionClass = resolveMapDockClasses({
+    isLeftSidebarCollapsed,
+    isCrisisDrawerOpen: isSidebarOpen,
+  });
+  const pillsRowClass = `flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#0c1017] border border-[#1c2432] shadow-xl max-w-full overflow-visible ${
+    isSidebarOpen ? 'flex-wrap justify-center' : ''
+  }`;
 
   return (
     <div
       ref={containerRef}
-      className={`absolute bottom-16 sm:bottom-20 z-40 flex flex-col items-center gap-2 pointer-events-auto select-none transition-all duration-300 left-1/2 -translate-x-1/2 max-w-[95vw] ${positionClass}`}
+      className={`absolute bottom-16 sm:bottom-20 z-40 flex flex-col items-center gap-2 pointer-events-auto select-none transition-all duration-300 left-1/2 -translate-x-1/2 max-w-[95vw] ${dockPositionClass}`}
     >
       {/* Floating Action Bubble Pills Row */}
-      <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#0c1017] border border-[#1c2432] shadow-xl max-w-full overflow-visible">
+      <div className={pillsRowClass}>
         
         {/* 1. Modality Bubble Pill */}
         {setSelectedModality && (
@@ -336,7 +335,7 @@ export function CrisisSimulatorBar({
           {activePopover === 'radius' && (
             <div className="absolute bottom-full right-0 mb-2 w-36 p-2 rounded-md bg-[#0c1017] border border-[#1c2432] shadow-xl flex flex-col gap-1 z-50 animate-in fade-in slide-in-from-bottom-2 duration-150">
               <span className="px-2 py-1 text-xs font-sans text-slate-400 font-bold">RADIUS BAHAYA</span>
-              {[5, 15, 30].map((r) => (
+              {HAZARD_RADIUS_OPTIONS_KM.map((r) => (
                 <button
                   key={r}
                   type="button"

@@ -7,10 +7,24 @@ import {
   Radio,
   Clock,
   BarChart3,
+  AlertTriangle,
+  ExternalLink,
+  Info,
 } from 'lucide-react';
 
 interface EvidenceTabProps {
   crisis: CrisisState;
+}
+
+interface NewsCitation {
+  headline?: string;
+  source?: string;
+  source_name?: string;
+  tier?: string;
+  url?: string;
+  link?: string;
+  link_alive?: 'alive' | 'dead' | 'unknown';
+  temporal_phase?: string;
 }
 
 const AGENT_LABELS: Record<string, { name: string; source: string; defaultSourceType: 'live' | 'fixture' }> = {
@@ -48,11 +62,20 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
   const disruptionProb = Math.min(Math.round(confidenceScore * 0.94), 98);
 
   const osintFinding = findings.find((f) => f.key === 'osint_hazard')?.finding;
-  const verifiedCitations = (osintFinding?.data as Record<string, unknown> | undefined)?.verified_citations as Array<{ headline: string; source: string; tier: string; temporal_phase: string }> | undefined;
-  const topCitation = Array.isArray(verifiedCitations) && verifiedCitations.length > 0 ? verifiedCitations[0] : null;
-  const displayAuthor = topCitation?.source || crisis.evidence?.osint_author || "LKBN ANTARA Biro Sumatera";
-  const displayText = topCitation?.headline || crisis.evidence?.osint_text || 'Debit air Sungai Padang meningkat merendam jalur logistik Jalinsum KM 78. Puluhan truk sembako dialihkan ke Tol MKTT.';
-  const isOfficialTier = topCitation ? topCitation.tier === 'TIER_1_OFFICIAL' : true;
+  const nestedCitations = (osintFinding?.data as Record<string, unknown> | undefined)?.verified_citations;
+  const rootCitation = Array.isArray(crisis.verified_news_citations) ? crisis.verified_news_citations[0] : undefined;
+  const topCitation: NewsCitation | undefined =
+    Array.isArray(nestedCitations) && nestedCitations.length > 0
+      ? (nestedCitations[0] as NewsCitation)
+      : rootCitation;
+
+  const sourceName = topCitation?.source || topCitation?.source_name || crisis.evidence?.osint_author || null;
+  const citationHeadline = topCitation?.headline || null;
+  const storedExcerpt = crisis.evidence?.osint_text || null;
+  const sourceUrl = topCitation?.url || topCitation?.link || null;
+  const sourceIsDead = topCitation?.link_alive === 'dead';
+  const canOpenSource = Boolean(sourceUrl) && !sourceIsDead;
+  const isOfficialTier = topCitation?.tier ? topCitation.tier === 'TIER_1_OFFICIAL' : true;
   const isEarlyWarning = topCitation?.temporal_phase === 'forecast_early_warning';
 
   return (
@@ -151,12 +174,12 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
           <span className="text-xs font-mono text-slate-500">Spatiotemporal Ingestion</span>
         </div>
 
-        {/* Verified News & OSINT Ground-Truth Card */}
+        {/* Verified News & OSINT Ground-Truth Card (excerpt-first) */}
         <div className="bg-[#0c1017] border border-[#1c2432] rounded-md p-3 hover:border-slate-600 transition-all space-y-1.5">
           <div className="flex justify-between items-center">
             <span className="font-bold text-slate-200 font-sans text-xs flex items-center gap-1.5">
               <FileText className="w-3.5 h-3.5 text-cyan-400" />
-              <span>{displayAuthor}</span>
+              <span>{sourceName || 'Kutipan lapangan tersimpan'}</span>
             </span>
             <div className="flex items-center gap-1">
               <span className="text-xs font-mono text-cyan-300 bg-cyan-950/80 px-2 py-0.5 rounded border border-cyan-500/40 font-bold">
@@ -167,17 +190,53 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
               </span>
             </div>
           </div>
-          <p className="text-xs text-slate-300 leading-relaxed font-sans">
-            {displayText}
-          </p>
+          {citationHeadline && (
+            <p className="text-xs font-semibold text-slate-200 leading-snug font-sans">
+              {citationHeadline}
+            </p>
+          )}
+          {storedExcerpt ? (
+            <p className="text-xs text-slate-300 leading-relaxed font-sans">
+              {storedExcerpt}
+            </p>
+          ) : (
+            !citationHeadline && (
+              <p className="text-xs text-slate-500 font-mono flex items-center gap-1.5">
+                <Info className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                <span>Belum ada kutipan lapangan tersimpan untuk krisis ini.</span>
+              </p>
+            )
+          )}
           <div className="flex items-center justify-between text-xs font-mono text-slate-500 pt-1">
             <div className="flex items-center gap-1.5">
               <Clock className="w-2.5 h-2.5" />
               <span>Terkini</span>
             </div>
-            {isEarlyWarning && (
-              <span className="text-cyan-400 font-bold">Early Warning: 3.5j</span>
-            )}
+            <div className="flex items-center gap-2">
+              {isEarlyWarning && <span className="text-cyan-400 font-bold">Early Warning</span>}
+              {canOpenSource && (
+                <a
+                  href={sourceUrl ?? undefined}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="cursor-pointer inline-flex items-center gap-1 px-2 py-1 rounded bg-[#121822] text-slate-300 hover:text-white border border-[#1c2432] transition-colors"
+                  title={
+                    topCitation?.link_alive === 'unknown'
+                      ? 'Buka sumber asli (status tautan belum diverifikasi)'
+                      : 'Buka sumber asli di tab baru'
+                  }
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  <span>Buka sumber</span>
+                </a>
+              )}
+              {sourceIsDead && (
+                <span className="inline-flex items-center gap-1 text-amber-300">
+                  <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />
+                  <span>Tautan asli kedaluwarsa</span>
+                </span>
+              )}
+            </div>
           </div>
         </div>
 

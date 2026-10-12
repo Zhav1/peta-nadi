@@ -110,6 +110,7 @@ export interface CrisisState {
     anomalous_commodities?: string[];
     timeframe_hours?: number;
   };
+  ltm_episodes?: LTMEpisode[];
   causal_chain?: Array<{
     node?: string;
     name?: string;
@@ -127,6 +128,7 @@ export interface CrisisState {
     source_name?: string;
     tier?: string;
     url?: string;
+    link_alive?: 'alive' | 'dead' | 'unknown';
     temporal_phase?: string;
     lane_status?: string;
   }>;

@@ -14,30 +14,6 @@ from app.nlp.geocoding_service import geocode
 
 logger = logging.getLogger(__name__)
 
-# Sample mock social media posts for fallback/demo purposes
-MOCK_SOCIAL_POSTS = [
-    {
-        "id": "mock_tw_001",
-        "platform": "twitter",
-        "text": "Banjir parah di daerah Tanjung Mulia! Air naik sampai sepinggang, jalan tol Belawan macet total ga bisa jalan.",
-        "author": "sumut_report",
-        "created_at": None  # Will be dynamically populated
-    },
-    {
-        "id": "mock_tw_002",
-        "platform": "twitter",
-        "text": "Antrian truk di Pelabuhan Belawan mengular panjang hari ini. Driver bilang gara-gara sistem gate error.",
-        "author": "sopir_lintas",
-        "created_at": None
-    },
-    {
-        "id": "mock_tk_001",
-        "platform": "tiktok",
-        "text": "Info longsor terbaru di jalan lintas Sumatera dekat Pematangsiantar. Jalan tertutup batu besar, harus memutar lewat jalur alternatif.",
-        "author": "kabar_sumut",
-        "created_at": None
-    }
-]
 
 class SocialScraper(BaseScraper):
     source_name = "social"
@@ -79,9 +55,9 @@ class SocialScraper(BaseScraper):
                             })
                         logger.info(f"Successfully fetched {len(posts)} tweets from Twitter/X API")
                     else:
-                        logger.warning(f"Twitter API returned status {resp.status_code}. Falling back to mock data.")
+                        logger.warning(f"Twitter API returned status {resp.status_code}.")
             except Exception as e:
-                logger.error(f"Error calling Twitter API: {e}. Falling back.")
+                logger.error(f"Error calling Twitter API: {e}.")
         
         # If no tweets were fetched (e.g. no bearer token or empty response), return empty list honestly
         if not posts:
@@ -155,5 +131,5 @@ class SocialScraper(BaseScraper):
         return events
 
     async def health_check(self) -> bool:
-        """Social scraper health is always OK (uses mock fallback if API fails)."""
+        """Social scraper health is always OK."""
         return True

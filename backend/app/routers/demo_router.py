@@ -3,7 +3,7 @@ import os
 import json
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from datetime import datetime, timezone
 import uuid
 
@@ -14,6 +14,42 @@ router = APIRouter(prefix="/demo", tags=["Demo"])
 
 # In-memory store for demo runs
 DEMO_STORE: Dict[str, Dict[str, Any]] = {}
+
+
+def _derive_causal_chain(full_state: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Derives or formats causal chain nodes with explicit simulation label."""
+    existing = full_state.get("causal_chain")
+    if existing and isinstance(existing, list) and len(existing) > 0:
+        return [
+            {
+                **item,
+                "label": "Rantai Sebab-Akibat (Simulasi)"
+            }
+            for item in existing
+        ]
+
+    title = full_state.get("title") or "Disrupsi Koridor Pelabuhan Belawan"
+    inflation = full_state.get("inflation_forecast") or {}
+    commodity = inflation.get("commodity") or "Minyak Goreng"
+    region = full_state.get("region") or "Sumatera Utara"
+
+    return [
+        {
+            "node": title,
+            "relation": "restricts_supply_of",
+            "label": "Rantai Sebab-Akibat (Simulasi)"
+        },
+        {
+            "node": f"{str(commodity).replace('_', ' ').title()}",
+            "relation": "spikes_price_in",
+            "label": "Rantai Sebab-Akibat (Simulasi)"
+        },
+        {
+            "node": f"Pasar Konsumen {region}",
+            "relation": "impacts",
+            "label": "Rantai Sebab-Akibat (Simulasi)"
+        }
+    ]
 
 class StartDemoPayload(BaseModel):
     mock_agents: Optional[bool] = None
@@ -214,7 +250,7 @@ async def get_demo_status(crisis_id: str):
         filtered["decision_support_output"] = full_state.get("decision_support_output")
         filtered["route_recommendations"] = full_state.get("route_recommendations", [])
         filtered["inflation_forecast"] = full_state.get("inflation_forecast")
-        filtered["causal_chain"] = full_state.get("causal_chain")
+        filtered["causal_chain"] = _derive_causal_chain(full_state)
         filtered["hazard_polygons"] = full_state.get("hazard_polygons")
         filtered["affected_polygon"] = full_state.get("affected_polygon")
         for agent in agent_statuses:
@@ -229,7 +265,7 @@ async def get_demo_status(crisis_id: str):
         filtered["decision_support_output"] = full_state.get("decision_support_output")
         filtered["route_recommendations"] = full_state.get("route_recommendations", [])
         filtered["inflation_forecast"] = full_state.get("inflation_forecast")
-        filtered["causal_chain"] = full_state.get("causal_chain")
+        filtered["causal_chain"] = _derive_causal_chain(full_state)
         filtered["hazard_polygons"] = full_state.get("hazard_polygons")
         filtered["affected_polygon"] = full_state.get("affected_polygon")
         for agent in agent_statuses:

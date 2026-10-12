@@ -22,7 +22,7 @@ DEFAULT_MARKETPLACE_DATA = [
     {
         "commodity": "minyak_goreng",
         "product_name": "Minyak Goreng SunCo 2L",
-        "price": 38500.0,
+        "price": 38000.0,
         "seller": "Sumatera Jaya Utama",
         "market": "Tokopedia Medan"
     },
@@ -140,7 +140,7 @@ class MarketplaceScraper(BaseScraper):
                                 price_str = (await price_el.text_content() or '').strip()
                                 shop = (await shop_el.text_content() or '').strip() if shop_el else "Official Store"
                                 
-                                # Clean price string (e.g. "Rp38.500" -> 38500.0)
+                                # Clean price string (e.g. "Rp38.000" -> 38000.0)
                                 clean_price = float(re.sub(r'[^\d]', '', price_str))
                                 
                                 scraped_products.append({

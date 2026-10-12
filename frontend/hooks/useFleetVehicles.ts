@@ -212,8 +212,18 @@ const FALLBACK_FLEET: FleetVehicle[] = [
   },
 ];
 
-export function useFleetVehicles(modality?: string) {
-  const [vehicles, setVehicles] = useState<FleetVehicle[]>(FALLBACK_FLEET);
+export interface UseFleetVehiclesOptions {
+  enableSimulationFallback?: boolean;
+}
+
+export function useFleetVehicles(
+  modality?: string,
+  options?: UseFleetVehiclesOptions
+) {
+  const [isSimulationMode, setIsSimulationMode] = useState<boolean>(
+    options?.enableSimulationFallback ?? false
+  );
+  const [vehicles, setVehicles] = useState<FleetVehicle[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -223,9 +233,27 @@ export function useFleetVehicles(modality?: string) {
       if (res.vehicles && res.vehicles.length > 0) {
         setVehicles(res.vehicles);
         setError(null);
+      } else {
+        if (isSimulationMode) {
+          const simFleet = modality
+            ? FALLBACK_FLEET.filter((v) => v.modality === modality)
+            : FALLBACK_FLEET;
+          setVehicles(simFleet);
+        } else {
+          setVehicles([]);
+        }
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Gagal memuat telemetri armada');
+      if (isSimulationMode) {
+        const simFleet = modality
+          ? FALLBACK_FLEET.filter((v) => v.modality === modality)
+          : FALLBACK_FLEET;
+        setVehicles(simFleet);
+        setError(null);
+      } else {
+        setVehicles([]);
+        setError(err instanceof Error ? err.message : 'Gagal memuat telemetri armada');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -237,13 +265,33 @@ export function useFleetVehicles(modality?: string) {
     async function initialFetch() {
       try {
         const res = await api.fleet.vehicles(modality);
-        if (isMounted && res.vehicles && res.vehicles.length > 0) {
-          setVehicles(res.vehicles);
-          setError(null);
+        if (isMounted) {
+          if (res.vehicles && res.vehicles.length > 0) {
+            setVehicles(res.vehicles);
+            setError(null);
+          } else {
+            if (isSimulationMode) {
+              const simFleet = modality
+                ? FALLBACK_FLEET.filter((v) => v.modality === modality)
+                : FALLBACK_FLEET;
+              setVehicles(simFleet);
+            } else {
+              setVehicles([]);
+            }
+          }
         }
       } catch (err: unknown) {
         if (isMounted) {
-          setError(err instanceof Error ? err.message : 'Gagal memuat telemetri armada');
+          if (isSimulationMode) {
+            const simFleet = modality
+              ? FALLBACK_FLEET.filter((v) => v.modality === modality)
+              : FALLBACK_FLEET;
+            setVehicles(simFleet);
+            setError(null);
+          } else {
+            setVehicles([]);
+            setError(err instanceof Error ? err.message : 'Gagal memuat telemetri armada');
+          }
         }
       } finally {
         if (isMounted) setIsLoading(false);
@@ -257,11 +305,30 @@ export function useFleetVehicles(modality?: string) {
       isMounted = false;
       clearInterval(interval);
     };
-  }, [modality]);
+  }, [modality, isSimulationMode]);
+
+  useEffect(() => {
+    if (isSimulationMode && vehicles.length === 0 && !isLoading) {
+      const simFleet = modality
+        ? FALLBACK_FLEET.filter((v) => v.modality === modality)
+        : FALLBACK_FLEET;
+      setVehicles(simFleet);
+    } else if (!isSimulationMode && error) {
+      setVehicles([]);
+    }
+  }, [isSimulationMode, modality, vehicles.length, isLoading, error]);
 
   const customCount = vehicles.filter(
     (v) => v.telemetry_source === 'CUSTOM_DISPATCHER' || v.telemetry_source === 'TMS_GPS_WEBHOOK'
   ).length;
 
-  return { vehicles, isLoading, error, refetch: fetchFleet, customCount };
+  return {
+    vehicles,
+    isLoading,
+    error,
+    refetch: fetchFleet,
+    customCount,
+    isSimulationMode,
+    setIsSimulationMode,
+  };
 }

@@ -249,7 +249,69 @@ def test_commodity_endpoints():
     assert "total" in data
     assert isinstance(data["items"], list)
     assert len(data["items"]) > 0
-    assert "price_idr" in data["items"][0]
+    res_spikes = client.get("/api/v1/commodities/spikes")
+    assert res_spikes.status_code == 200
+    spikes_data = res_spikes.json()
+    assert "spikes" in spikes_data
+    assert "total" in spikes_data
+    assert isinstance(spikes_data["spikes"], list)
+
+
+def test_commodity_spikes_calculation_and_guard(monkeypatch):
+    """Verify D5: % change vs 30-day baseline with min-records guard (honest [] if insufficient)."""
+    import app.db.supabase_client as sb_client_module
+
+    # Test 1: insufficient records (< 3) returns honest []
+    class InsufficientQuery:
+        def select(self, *a, **kw): return self
+        def gte(self, *a, **kw): return self
+        def order(self, *a, **kw): return self
+        def limit(self, *a, **kw): return self
+        def eq(self, *a, **kw): return self
+        def execute(self):
+            class R: data = [{"commodity": "cabai_merah", "region": "north_sumatra", "price_idr": 60000.0, "time": "2026-10-10T00:00:00Z"}]
+            return R()
+
+    class FakeClientInsufficient:
+        def table(self, name): return InsufficientQuery()
+
+    monkeypatch.setattr(sb_client_module, "get_client", lambda: FakeClientInsufficient())
+    res1 = client.get("/api/v1/commodities/spikes")
+    assert res1.status_code == 200
+    assert res1.json()["spikes"] == []
+    assert res1.json()["total"] == 0
+
+    # Test 2: sufficient records (>= 3) computes percent change
+    class SufficientQuery:
+        def select(self, *a, **kw): return self
+        def gte(self, *a, **kw): return self
+        def order(self, *a, **kw): return self
+        def limit(self, *a, **kw): return self
+        def eq(self, *a, **kw): return self
+        def execute(self):
+            class R:
+                data = [
+                    {"commodity": "cabai_merah", "region": "north_sumatra", "price_idr": 60000.0, "time": "2026-10-10T12:00:00Z"},
+                    {"commodity": "cabai_merah", "region": "north_sumatra", "price_idr": 48000.0, "time": "2026-10-05T12:00:00Z"},
+                    {"commodity": "cabai_merah", "region": "north_sumatra", "price_idr": 50000.0, "time": "2026-10-01T12:00:00Z"},
+                ]
+            return R()
+
+    class FakeClientSufficient:
+        def table(self, name): return SufficientQuery()
+
+    monkeypatch.setattr(sb_client_module, "get_client", lambda: FakeClientSufficient())
+    res2 = client.get("/api/v1/commodities/spikes")
+    assert res2.status_code == 200
+    spikes2 = res2.json()["spikes"]
+    assert len(spikes2) == 1
+    assert spikes2[0]["commodity"] == "cabai_merah"
+    assert spikes2[0]["current_price"] == 60000.0
+    # baseline is (60000 + 48000 + 50000) / 3 = 52666.67
+    assert spikes2[0]["baseline_price"] == pytest.approx(52666.67, 0.1)
+    # spike_pct is ((60000 - 52666.67) / 52666.67) * 100 = 13.9%
+    assert spikes2[0]["spike_pct"] == pytest.approx(13.9, 0.2)
+    assert spikes2[0]["severity"] == "high"
 
 
 def test_news_endpoints():

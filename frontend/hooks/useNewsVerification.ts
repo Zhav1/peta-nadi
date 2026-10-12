@@ -29,6 +29,7 @@ export interface NewsItem {
   commodity_name?: string;
   economic_note?: string;
   link?: string;
+  link_alive?: 'alive' | 'dead' | 'unknown';
 }
 
 export interface MarketRegimeData {
@@ -65,9 +66,9 @@ export function useNewsVerification() {
               const isMarket = /pihps|bi\.go\.id|harga|bank indonesia|pasar/i.test(src) || a.incident_type === 'price_shock' || /harga|pangan/i.test(a.title || a.headline || '');
               const isOfficial = !isWeather && !isMarket && (a.source_tier === 'TIER_1_OFFICIAL' || /antara|bnpb|kemenhub|bulog/i.test(src));
 
-              const fallbackSearchUrl = `https://news.google.com/search?q=${encodeURIComponent((a.title || a.headline || 'berita logistik') + ' ' + src)}&hl=id-ID&gl=ID&ceid=ID:id`;
-              const isDeadMockUrl = !a.link || (typeof a.link === 'string' && a.link.includes('/berita/49')) || !a.link.startsWith('http');
-              const cleanLink = isDeadMockUrl ? fallbackSearchUrl : a.link;
+              const sourceLink = typeof a.link === 'string' && a.link.length > 0 ? a.link : undefined;
+              const linkAlive: 'alive' | 'dead' | 'unknown' =
+                a.link_alive === 'dead' || a.link_alive === 'alive' ? a.link_alive : 'unknown';
 
               return {
                 id: a.id || `NEWS-${Math.random().toString(36).substr(2, 6)}`,
@@ -90,7 +91,8 @@ export function useNewsVerification() {
                 verification_status: isOfficial ? 'CORROBORATED_OFFICIAL' : 'UNVERIFIED_GRASSROOTS',
                 confidence_score: Number(a.confidence_score || a.relevance_score || 0.90),
                 commodity_name: Array.isArray(a.commodities_affected) ? a.commodities_affected.join(', ') : a.commodities_affected || 'Komoditas Pokok',
-                link: cleanLink
+                link: sourceLink,
+                link_alive: linkAlive
               };
             });
             setNewsFeed(mapped);

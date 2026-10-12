@@ -83,6 +83,7 @@ export function useDemoState(onCrisisReady?: (crisis: CrisisState) => void) {
       base.decision_support_output = full.decision_support_output;
       base.route_recommendations = full.route_recommendations || [];
       base.inflation_forecast = full.inflation_forecast;
+      base.ltm_episodes = full.ltm_episodes;
       base.causal_chain = full.causal_chain;
       base.hazard_polygons = full.hazard_polygons;
       base.affected_polygon = full.affected_polygon;
