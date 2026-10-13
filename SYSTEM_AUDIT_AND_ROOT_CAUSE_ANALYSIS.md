@@ -1,297 +1,249 @@
-# Laporan Audit Sistem, Analisis Akar Masalah & Rencana Solusi Komprehensif
+# Laporan Audit Sistem & E2E Testing Terpadu: Investigasi Bug, Peran Multi-Tenant & Rekomendasi Solusi
 
-**Tanggal Audit:** 11 Oktober 2026  
-**Status:** Audit E2E & Investigasi Diagnostik Menyeluruh (Pasca-Pull Phase 53)  
-**Metodologi:** Pengujian Zero-Mock E2E (Playwright Headless + Mapbox Directions API Profiling + Backend FastAPI State Inspection + Supabase PostgreSQL Live Schema Audit)  
-**Dokumen Referensi:** [master_system_analysis_and_architecture.md](file:///c:/Users/PC/.gemini/antigravity-ide/brain/a4f05181-19ff-4838-ba3d-6288c4074bca/master_system_analysis_and_architecture.md)
-
----
-
-## 1. Ringkasan Eksekutif & Respon Terhadap Project Manager
-
-Dokumen ini menggabungkan seluruh hasil audit sistem, investigasi bug, analisis akar masalah teknis (*root cause*), inventaris data sintetis (*mock data*), dan cetak biru solusi perbaikan (*action plan*) dari seluruh laporan audit sebelumnya ke dalam satu dokumen terpadu.
-
-Berdasarkan komunikasi dengan Project Manager (*"pake supabase command aja buat ngepushnya di cli, yaudah coba cek cek lagi, tes, trus audit apa masalahnya, kek data palsu etc, trus tolong push plannya biar aku yang kerjain"*), laporan ini disusun secara terperinci agar dapat langsung dijadikan panduan kerja (*work packages*) siap eksekusi.
-
-### Ringkasan Temuan Inti:
-1. **Rute Menerobos Bencana & Terkunci di Tol:** Sistem selalu memilih jalan tol (`highway=motorway`) karena ketiadaan parameter `exclude=toll` pada pemanggilan Mapbox API, sehingga armada dipaksa menerobos banjir di Lubuk Pakam.
-2. **Dampak Ekonomi Hilang pada RUN DEMO:** Panel demo tidak memiliki kartu metrik inflasi/harga pasar, alur tahapan melompati tab ekonomi, dan endpoint `/api/v1/commodities/prices` mengembalikan array kosong (`items: []`).
-3. **Tombol "Terapkan Skenario Terpadu" Tidak Terasa Efeknya:** Pengguna langsung dilempar ke peta tanpa umpan balik visual, tanpa mini-map, dan tanpa memperbarui rute atau status koridor.
-4. **Tautan Berita Otomatis Redirect ke Base URL:** Tautan berita LKBN ANTARA yang tidak ditemukan langsung mengarahkan pengguna ke beranda portal berita (`https://sumut.antaranews.com/`) tanpa penanganan fallback yang elegan.
-5. **Tabrakan Komponen UI pada Zoom 100%:** Bilah navigasi bawah (RUN DEMO, dll) menabrak panel drawer krisis sejauh 97.18 pixel pada resolusi 1366x768, dan 5 filter dropdown bertumpuk jika tidak di-zoom out ke 65%.
-6. **Kunci Supabase Tertukar & RLS Lockout:** Kunci `SUPABASE_SERVICE_ROLE_KEY` pada file `.env` identik dengan kunci anonim (`role: anon`), menyebabkan PostgreSQL memblokir background worker dengan error `42501` sehingga tabel `data_sources`, `commodity_prices`, dan `custom_fleet_vehicles` bernilai **0 baris**.
-7. **Kesenjangan Klaim Arsitektur vs Realitas Kode:** Fitur seperti GraphRAG, NVIDIA cuOpt GPU Solver, 45 unit armada, dan deteksi lonjakan harga masih berupa mock statis atau array tiruan.
-8. **RBAC Bersifat Kosmetik (Sandbox Mode):** Pengguna dapat berganti peran tanpa login karena sistem dirancang dengan sesi tamu otomatis untuk kemudahan dewan juri hackathon.
+**Tanggal Audit:** 13 Oktober 2026  
+**Status Audit:** Audit Diagnostik E2E Playwright Headless + Inspeksi Endpoint FastAPI + Audit Supabase Auth RBAC  
+**Dokumen Referensi:** [master_system_analysis_and_architecture.md](file:///c:/Users/PC/.gemini/antigravity-ide/brain/a4f05181-19ff-4838-ba3d-6288c4074bca/master_system_analysis_and_architecture.md), [STATE.md](file:///c:/Farras/DIGDAYA/peta-nadi/.planning/STATE.md)  
+**Artefak Bukti Pengujian:** [stage3_audit.png](file:///c:/Farras/DIGDAYA/peta-nadi/scratch/stage3_audit.png), [master_e2e_audit_report.json](file:///c:/Farras/DIGDAYA/peta-nadi/.e2e-artifacts/master-audit/master_e2e_audit_report.json)
 
 ---
 
-## 2. Inventaris Lengkap Bug & Permasalahan Sistem
+## 1. Ringkasan Eksekutif & Status Progress Proyek (/gsd-progress)
 
-### Masalah 1: Rute yang Diberikan Belum Optimal
-* **Gejala:** Jalur yang dihasilkan sering kali tidak efisien, memakan waktu terlalu lama, atau tidak mencerminkan jaringan jalan logis di Sumatera Utara.
+### 1.1 Status Progress Proyek Saat Ini
+Berdasarkan memori status kanonikal [.planning/STATE.md](file:///c:/Farras/DIGDAYA/peta-nadi/.planning/STATE.md), repositori telah menyelesaikan Milestone M3 hingga **Phase 56 (Post-Audit Integrity Routing & Mock Purge)**:
+- **Total Phase:** 56 dari 56 Phase tercatat selesai (*100% Milestone M3*).
+- **Backend Build & Pytest:** 183 pengujian backend berstatus hijau (`pytest tests/`).
+- **Frontend Build:** 0 kesalahan TypeScript (`npx tsc --noEmit`).
+
+### 1.2 Temuan Lapangan Pasca-Pekerjaan Project Manager
+Meskipun Project Manager telah menerapkan perbaikan tata letak anti-tabrakan 1366x768 dan penyesuaian endpoint pada Phase 54-56, serangkaian pengujian Playwright E2E mandiri pada seluruh 5 tab dan alur interaktif menemukan **7 kesenjangan sistemik dan logic bugs**:
+
+1. **Bubble Notifikasi Tamu Tanpa Tombol Tutup & Ketiadaan Akun Demo Siap Pakai:**
+   Banner mode evaluasi tamu terpaku di bagian atas layar tanpa tombol `X` (tutup), menghalangi interaksi, dan pengguna dipaksa masuk tanpa tersedianya akun demo resmi atau pemisahan akses peran armada logistik.
+2. **Logic Bug Pemajuan Demo (Stage 0 Advance Blocker):**
+   Pada [GuidedDemoPanel.tsx](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/components/demo/GuidedDemoPanel.tsx#L436), tombol `Mulai Simulasi Disrupsi` memanggil `onAdvance()` bukannya `onStart()`. Karena `crisisId` masih kosong, fungsi `advance()` di [useDemoState.ts](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/hooks/useDemoState.ts#L223) langsung keluar tanpa memulai simulasi.
+3. **Rute RUN DEMO Tahap 3 Memotong Lurus & Dampak Ekonomi Belum Muncul:**
+   Pada Tahap 3/5 RUN DEMO, rute yang ditampilkan berupa garis diagonal kasar melintasi pesisir (*straight-line waypoint fallback*). Pada Tahap 5/5, rute jalan raya Mapbox telah memutar, namun tab *Dampak Ekonomi* menampilkan pesan kosong (*"Proyeksi inflasi belum diterbitkan"*).
+4. **Panel Berita Kosong Saat Server Backend Tidak Terhubung / Cold Cache:**
+   Sebanyak 60+ artikel berita LKBN ANTARA dan BMKG sebenarnya telah tersimpan di Supabase dan endpoint backend `/api/v1/news/live`. Namun ketika server backend belum dijalankan di port 8000 atau saat cold-cache scraper berjalan sinkron selama 25 detik, frontend mengalami timeout sehingga panel berita menampilkan *0 Sumber Terverifikasi* dan *"Tidak ada berita yang cocok"*.
+5. **Error 403 / Failed to Fetch pada Halaman Simulasi Kebijakan:**
+   Menekan tombol *"Terapkan Skenario Terpadu"* pada tab Simulasi memicu error `Failed to fetch` (jika backend mati) atau `API /api/v1/approvals -> 403 Forbidden` (karena peran tamu tidak memiliki izin `approvals:write`). Terdapat pula kebingungan pengguna mengenai perbedaan simulasi di halaman peta vs tab simulasi atas.
+6. **Peringatan Performa GPU Stall pada Rendering WebGL:**
+   Console browser mendeteksi peringatan pengemudi grafis: `GPU stall due to ReadPixels` pada canvas Mapbox saat pergantian mode kamera atau pembacaan frame.
+7. **Aborsi Request Style Mapbox Dark-v11:**
+   Pemeriksaan jaringan Playwright mencatat error `net::ERR_ABORTED` pada request style Mapbox saat navigasi tab cepat karena pemanggilan ulang style sebelum request sebelumnya selesai.
+
+---
+
+## 2. Analisis Mendalam Permasalahan & Temuan E2E (Root Cause Analysis)
+
+### Masalah 1: Bubble Mode Tamu Tanpa Tombol Close & Desain Akun / Hak Akses Peran
+
+#### A. Bukti Diagnostik Lapangan
+* **Komponen:** [GuestEvaluationBanner.tsx](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/components/dashboard/GuestEvaluationBanner.tsx#L9-L40)
+* **Temuan E2E Playwright:**
+  Banner memiliki selector `text="Mode Evaluasi Tamu (Belum Terautentikasi)"` dengan posisi `fixed top-16 z-[550]`. Di dalam kontainer banner hanya terdapat 1 tombol, yaitu tombol `Masuk / Daftar` yang memicu `openAuthModal()`. **Tidak ada tombol dismiss (X) atau opsi sembunyikan banner.**
+* **Dampak:** Banner menutupi area kerja bagian atas secara permanen pada resolusi laptop, mengganggu navigasi tanpa cara untuk menutupnya.
+
+#### B. Akar Masalah Akun Demo & Pemisahan Akses Peran (Multi-Tenant RBAC)
+Pada [AuthModal.tsx](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/components/auth/AuthModal.tsx#L52-L58):
+```tsx
+const handlePersonaSelect = async (targetRole: UserRole) => {
+  if (!isAuthenticated) {
+    setStatusMessage({ type: 'error', text: GUEST_LOCK_MESSAGE });
+    setActiveTab('password');
+    return;
+  }
+  ...
+}
+```
+Ketika pengguna tamu mengklik tombol persona evaluasi 1-klik, sistem menolak aksi tersebut dan melempar pengguna ke form login/password. Namun, di dalam database dan form tersebut, **tidak disediakan akun demo yang sudah terisi otomatis (pre-seeded credentials)**.
+
+#### C. Matriks Hak Akses Peran & Isolasi Armada Logistik (Sesuai Arahan PM)
+Sesuai arahan Project Manager (*"kalo misalnya dipake perusahaan logistik kan ga iya kalo bisa ngeliat truk perusahaan lain"*), berikut adalah desain arsitektur peran resmi PreHub:
+
+| Peran (Role) | Entitas / Organisasi | Hak Akses Fitur Utama | Tampilan Khusus & Batasan Akses |
+|---|---|---|---|
+| **1. DISPATCHER LOGISTIK** | Perusahaan Logistik Mitra (PT Pos Logistik, Pelindo Belawan, JNE, ALFI Sumut) | - Peta Operasi<br>- Simulasi Rute Bypass<br>- Persetujuan Rute Darurat (`approvals:write`)<br>- Onboarding Armada Kustom | **Isolasi Armada Ketat (Tenant Isolation):**<br>Dispatcher PT Pos Logistik **hanya boleh melihat armada milik perusahaannya sendiri** (`company_id = 'pos_logistik'`). Truk milik kompetitor disembunyikan dari peta dan tabel telemetri untuk menjaga kerahasiaan kargo bisnis. |
+| **2. REGULATOR PEMERINTAH** | Bapanas, Kemenhub, BKHIT, BMKG, Satgas Pangan Polri | - Peta Operasi (Makro)<br>- Analitik Disparitas Harga PIHPS<br>- Laporan Kabinet B2G (`reports:read`)<br>- Evaluasi Benchmark Akurasi | **Pandangan Holistik Pulau (Macro Overview):**<br>Regulator melihat status agregat seluruh koridor nasional Trans-Sumatera dan komoditas pangan pokok, namun tidak melakukan dispatching operasional armada harian. |
+| **3. EVALUATOR SANDBOX (TAMU)** | Juri Kompetisi LRIP, Penguji Independen | - Eksplorasi Peta Interaktif<br>- RUN DEMO Terpadu<br>- Uji Skenario Bencana Lokal | **Mode Pratinjau Terpandu:**<br>Dapat menguji alur sistem tanpa mengubah data produksi riil di Supabase. Aksi persetujuan dieksekusi dalam mode sandbox lokal. |
+
+---
+
+### Masalah 2: Logic Bug Pemajuan RUN DEMO (Stage 0 Advance Blocker)
+
+#### A. Bukti Diagnostik Lapangan
+* **Komponen:** [GuidedDemoPanel.tsx](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/components/demo/GuidedDemoPanel.tsx#L426-L440) dan [useDemoState.ts](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/hooks/useDemoState.ts#L223)
+* **Temuan E2E Playwright:**
+  Saat pengguna berada pada Tahap 1 (Stage index 0), tombol utama tertulis `Mulai Simulasi Disrupsi`.
+  ```tsx
+  <button onClick={() => onAdvance()}>
+    {stage === 0 ? <span>Mulai Simulasi Disrupsi</span> : <span>Langkah Berikutnya</span>}
+  </button>
+  ```
+  Handler memanggil `onAdvance()`, yang diteruskan ke `demoState.advance()`.
 * **Akar Masalah:**
-  1. **Kesalahan Koordinat Hub Tebing Tinggi:** Pada [mapboxRoutingService.ts](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/lib/mapboxRoutingService.ts#L152-L158), koordinat Tebing Tinggi di-hardcode ke `[98.9560, 3.5680]` (yang sebenarnya adalah Jalinsum Perbaungan). Koordinat riil Gerbang Tol Tebing Tinggi adalah `[99.1621, 3.3251]`. Akibatnya, jarak tempuh salah hitung sejauh 40 km.
-  2. **Kelangkaan Node Persimpangan Bypass:** Pada [aiDynamicRouter.ts](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/lib/aiDynamicRouter.ts#L9-L46), daftar `HIGHWAY_JUNCTION_NODES` hanya memiliki 46 titik se-Sumatera dan tidak memiliki persimpangan penting di jalur alternatif (Galang, Bangun Purba, Dolok Masihul, Pantai Cermin).
-* **Solusi Teknis:**
-  1. Perbarui koordinat node Tebing Tinggi ke `[99.1621, 3.3251]`.
-  2. Tambahkan titik persimpangan rute alternatif pedalaman dan pesisir ke dalam `HIGHWAY_JUNCTION_NODES`.
+  Pada [useDemoState.ts](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/hooks/useDemoState.ts#L223):
+  ```typescript
+  const advance = useCallback(async () => {
+    ...
+    if (!crisisId) return; // KELUAR LANGSUNG KARENA CRISISID BELUM ADA!
+  ```
+  Karena demo belum diinisialisasi melalui `demoState.start()`, `crisisId` masih bernilai `null`. Akibatnya, pemanggilan `advance()` pada Stage 0 **berhenti tanpa melakukan apa pun**, dan demo tidak bergerak maju kecuali dipicu ulang secara eksternal.
+* **Solusi:**
+  Ubah handler tombol Stage 0 pada `GuidedDemoPanel.tsx` agar secara eksplisit memanggil `onStart()` saat `stage === 0`:
+  ```tsx
+  onClick={(e) => {
+    if (stage === 0) {
+      onStart({ origin: selectedOrigin, destination: selectedDestination });
+    } else {
+      onAdvance();
+    }
+  }}
+  ```
 
 ---
 
-### Masalah 2: Rute Menerobos Bencana & Keterkuncian Jalur Tol (Toll Road Lock-In)
-* **Gejala:** Saat bencana banjir disimulasikan di Lubuk Pakam (`[98.87, 3.56]`, radius 15 km), rute rekomendasi tetap melintasi jalan tol yang terendam atau keluar-masuk gerbang tol di dalam zona merah bencana.
-* **Akar Masalah:**
-  1. **Ketiadaan Parameter `exclude=toll`:** Mapbox API memprioritaskan profil kecepatan jalan tol (`highway=motorway`, 100 km/jam). Pada [aiDynamicRouter.ts](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/lib/aiDynamicRouter.ts#L313), Mapbox dipanggil tanpa filter penolakan tol saat jalan tol dinyatakan tertutup banjir.
-  2. **Jebakan Masuk Tol Ulang (Toll Re-entry Loop):** Ketika dipaksa lewat Galang, Mapbox mengarahkan truk dari Belawan masuk Tol MKTT sampai exit Lubuk Pakam, baru belok ke Galang, lalu masuk lagi ke Tol Sei Rampah.
-  3. **Radius Bahaya Terlalu Besar (15 km):** Lingkaran banjir berdiameter 30 km menutupi seluruh lebar daratan dari pantai sampai kaki pegunungan di wilayah Lubuk Pakam.
-  4. **Fallback Menggunakan Waypoint Rute Rusak:** Jika algoritma gagal menemukan jalur bersih, sistem justru mengambil waypoint rute yang terendam lalu memberinya label "HOLD / DELAY", sehingga garis rute di peta tetap menembus banjir.
-* **Solusi Teknis:**
-  1. Tambahkan parameter dinamis `&exclude=toll` pada fungsi pemanggilan Mapbox API di [aiDynamicRouter.ts](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/lib/aiDynamicRouter.ts) saat koridor tol terblokir bencana.
-  2. Implementasikan algoritma penghindaran ortogonal (*orthogonal avoidance*) yang menghitung titik belok tangensial di luar poligon bencana.
-  3. Definisikan koridor bypass pedalaman selatan: `Belawan -> Medan Amplas -> Talun Kenas -> Bangun Purba -> Dolok Masihul -> Sipispis -> Tebing Tinggi`.
-  4. Kalibrasi radius banjir jalan raya menjadi 5 s.d. 8 km agar jalan alternatif tetap terbuka secara legal.
+### Masalah 3: Rute RUN DEMO Tahap 3 Memotong Lurus & Dampak Ekonomi Kosong
+
+#### A. Bukti Diagnostik Lapangan
+* **Tampilan Tahap 3:** Rute awal (garis hijau) berupa garis patah-patah melintang laut dan daratan, bukan garis jalan raya Mapbox.
+* **Tampilan Tahap 5:** Rute jalan raya pengalihan (hijau bypass) telah aktif, namun kartu *Dampak Ekonomi* pada sidebar krisis menampilkan:
+  `Proyeksi inflasi belum diterbitkan untuk krisis ini. Riwayat harga PIHPS belum tersedia.`
+  Dan kartu bawah berbunyi:
+  `Belum ada temuan ekonomi (proyeksi inflasi / preseden LTM) untuk skenario ini.`
+
+#### B. Akar Masalah Teknis
+1. **Waypoints Kasar pada Fallback State:**
+   Pada [useDemoState.ts](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/hooks/useDemoState.ts#L187-L203), saat demo berjalan offline atau sebelum Mapbox API merespons, rute awal diisi oleh 10 koordinat statis:
+   `[{ lat: 3.7922, lon: 98.6776 }, { lat: 3.7300, lon: 98.7200 }, { lat: 3.7300, lon: 98.8000 }...]`.
+   Koordinat ini ditarik lurus antartitik sehingga membentuk garis diagonal kaku yang tidak mengikuti kontur jalan (*"rutenya ngasal"*).
+2. **Ketiadaan Data Inflasi pada Demo State:**
+   Pada [useDemoState.ts](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/hooks/useDemoState.ts#L172-L218), objek `setFullCrisisState` yang dibuat untuk mode demo **sama sekali tidak mendefinisikan field `inflation_forecast` dan `ltm_episodes`**.
+3. **Ketidaksesuaian Struktur Root vs Nested:**
+   Pada [EconomicTab.tsx](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/components/sidebar/EconomicTab.tsx#L12), komponen membaca `crisis.inflation_forecast` langsung di tingkat root. Karena di root nilainya bernilai `undefined`, kartu proyeksi harga pangan dan estimasi kerugian logistik tidak di-render.
+   Padahal, sesuai sifat RUN DEMO, data simulasi terpadu (proyeksi inflasi +17.1%, komoditas beras & minyak goreng, potensi kerugian kargo Rp 210 juta) harus selalu tampil utuh demi penilaian juri.
 
 ---
 
-### Masalah 3: Halaman Simulasi ("Terapkan Skenario Terpadu") Tidak Berefek Visual
-* **Gejala:** Pengguna mengatur slider durasi penutupan jalan, tonase pangan, toggle Dishub, dan buffer Bulog, namun saat menekan tombol "Terapkan Skenario Terpadu", pengguna langsung dilempar ke peta tanpa ada perubahan rute, tanpa status simulasi aktif, dan tanpa umpan balik nyata.
-* **Akar Masalah:**
-  1. Pada [SimulationSection.tsx](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/components/dashboard/SimulationSection.tsx#L58-L67) dan [DashboardClient.tsx](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/components/dashboard/DashboardClient.tsx#L415-L460), fungsi `onDeployActionPlan` hanya mengirim POST ke `/api/v1/approvals` dan langsung memanggil `setActiveSection('map')`.
-  2. State peta (`currentMapRoutes`, shockwave bencana, status rekayasa tol) tidak disinkronkan dengan nilai slider yang baru diatur oleh pengguna.
-  3. Tidak ada komponen pratinjau peta (*mini-map preview*) di halaman simulasi sehingga pengguna merasa tombol tersebut rusak.
-* **Solusi Teknis:**
-  1. Berikan animasi status proses simulasi (600ms) dan tampilkan kartu konfirmasi "Skenario Rekayasa Terpadu Aktif" di halaman simulasi.
-  2. Integrasikan slider halaman simulasi ke generator skenario krisis peta secara dua arah.
-  3. Sediakan komponen Mini-Map interaktif di dalam [SimulationSection.tsx](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/components/dashboard/SimulationSection.tsx).
+### Masalah 4: Panel Berita Kosong (0 Sumber Terverifikasi)
+
+#### A. Bukti Diagnostik Lapangan
+* **Gejala Pengguna:** Panel berita kiri menampilkan teks *"0 Sumber Terverifikasi"* dan *"Tidak ada berita yang cocok."*
+* **Hasil Uji E2E Live:**
+  Ketika backend FastAPI diaktifkan di port 8000, pemanggilan API `curl http://localhost:8000/api/v1/news/live` dan Playwright menghasilkan **60 artikel berita valid** dari LKBN ANTARA dan BMKG (termasuk berita banjir Aceh Timur dan kebijakan pangan).
+
+#### B. Akar Masalah Teknis
+1. **Server Backend Tidak Berjalan Saat Pengujian Pengguna:**
+   Frontend Next.js berjalan di port 3000, tetapi backend FastAPI (`uvicorn app.main:app` pada port 8000) belum dihidupkan di latar belakang. Hook [useNewsVerification.ts](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/hooks/useNewsVerification.ts#L55-L60) memanggil `api.news.live()`, mengalami kegagalan koneksi (*network error*), lalu mengosongkan state `newsFeed: []`.
+2. **Scraping Sinkron Saat Akses Awal (Cold Start Latency):**
+   Pada [news_router.py](file:///c:/Farras/DIGDAYA/peta-nadi/backend/app/routers/news_router.py#L55-L60), jika cache backend kosong, fungsi `get_live_news` memanggil `await unified_news_ingestor.run_ingestion_cycle()` secara sinkron di dalam thread request HTTP. Proses scraping 10 biro memakan waktu 20-30 detik sehingga browser pengguna dapat mengalami *request timeout* sebelum data sempat ditampilkan.
 
 ---
 
-### Masalah 4: Dampak Ekonomi Hilang Saat RUN DEMO
-* **Gejala:** Saat demo terpadu dijalankan (Tahap 1 hingga 5), angka lonjakan harga pangan, persentase inflasi wilayah, dan valuasi kerugian kargo tidak muncul di panel panduan maupun di peta.
+### Masalah 5: Error pada Halaman Simulasi & Perbedaan Dua Jenis Simulasi
+
+#### A. Bukti Diagnostik Error
+* **Tampilan Pengguna:** Toast merah berbunyi `Gagal Menerapkan Skenario: Failed to fetch`.
+* **Hasil Log Console Playwright E2E:**
+  `Failed to deploy unified action plan: Error: API /api/v1/approvals -> 403 Forbidden`
 * **Akar Masalah:**
-  1. **UI Kurang Lengkap:** Komponen [GuidedDemoPanel.tsx](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/components/demo/GuidedDemoPanel.tsx) hanya memiliki kartu sensor jalan dan radius bahaya, tanpa kartu harga pasar atau estimasi kerugian.
-  2. **Navigasi Melewati Tab Ekonomi:** Pada [DashboardClient.tsx](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/components/dashboard/DashboardClient.tsx#L862-L875), demo berpindah dari `Evidence` langsung ke `Mitigation`, melewati tab `Economic`.
-  3. **Ketidaksesuaian Struktur Payload:** Backend [demo_router.py](file:///c:/Farras/DIGDAYA/peta-nadi/backend/app/routers/demo_router.py) menyimpan inflasi di dalam sub-objek `economic_intelligence_finding`, sedangkan frontend [EconomicTab.tsx](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/components/sidebar/EconomicTab.tsx#L12) mencari `crisis.inflation_forecast` di tingkat root.
-  4. **Tabel Harga Kosong:** Endpoint `/api/v1/commodities/prices` mengembalikan `items: []` sehingga grafik harga pangan tampil datar.
-* **Solusi Teknis:**
-  1. Tambahkan kartu metrik lonjakan harga komoditas pangan (+17.1%) dan valuasi muatan kargo pada `GuidedDemoPanel.tsx`.
-  2. Buka tab `Economic` selama tahap analisis demo pada `DashboardClient.tsx`.
-  3. Salin `inflation_forecast` ke tingkat root payload krisis pada `demo_router.py`.
-  4. Sediakan baseline data harga deret waktu 30 hari untuk beras, cabai, dan minyak goreng di [commodity_router.py](file:///c:/Farras/DIGDAYA/peta-nadi/backend/app/routers/commodity_router.py).
+  1. Jika backend mati, browser memunculkan `Failed to fetch`.
+  2. Jika backend aktif, fungsi `create_approval` di [approvals.py](file:///c:/Farras/DIGDAYA/peta-nadi/backend/app/routers/approvals.py#L38-L47) memvalidasi izin operator:
+     `if "approvals:write" not in current_user.permissions: raise HTTPException(403, detail="Akses ditolak: Hanya operator dengan wewenang 'approvals:write' (Dispatcher)...")`.
+     Pengguna dalam mode Tamu atau Evaluator ditolak dengan status 403 karena tidak memiliki izin tersebut.
+
+#### B. Perbedaan Mendasar Dua Fitur Simulasi dalam Sistem
+
+| Aspek Komparasi | 1. Simulasi Bencana Taktis Koridor (Peta Operasi / Bilah Bawah) | 2. Simulasi Kebijakan Terpadu (Tab Atas "Simulasi") |
+|---|---|---|
+| **Lokasi Antarmuka** | Bilah kontrol dock bawah pada kanvas peta 3D (*Peta Operasi*). | Tab navigasi atas (*Peta Operasi \| Analitik \| Simulasi \| Laporan \| Evaluasi*). |
+| **Tingkat Fokus** | **Mikro-Spasial (Taktis Operasional):** Titik bencana fisik dan rute truk spesifik. | **Makro-Kebijakan (Lintas Instansi B2G):** Koordinasi mitigasi dampak bencana pada skala pulau. |
+| **Parameter Input** | - Titik Asal & Tujuan (O-D pair, misal Belawan ke Tebing Tinggi)<br>- Tipe Bencana (Banjir, Longsor, Macet)<br>- Radius Bahaya (5 km, 8 km, 15 km, 25 km) | - Durasi penutupan jalan (jam)<br>- Tonase bahan pangan terancam (ton)<br>- Toggle rekayasa tol Dishub<br>- Alokasi cadangan pangan BULOG |
+| **Output / Dampak** | - Lingkaran shockwave bencana di peta<br>- Perhitungan rute bypass Mapbox (menghindari genangan air via jalan arteri/pantai)<br>- Estimasi pertambahan jarak (km) dan waktu tempuh (menit) | - Rencana Aksi Terpadu (*Unified Action Plan*) untuk instansi gabungan<br>- Alokasi stok penyangga beras dari gudang BULOG terdekat<br>- Rekayasa pembatasan tarif tol untuk truk logistik sembako |
+| **Peran yang Berwenang** | Dispatcher Armada, Pengemudi Truk, Penguji Demo | Tim Gabungan Kementerian (Bapanas, Kemenhub, Dishub, BULOG) |
 
 ---
 
-### Masalah 5: Tautan Berita Otomatis Redirect ke Base URL (404 Handling)
-* **Gejala:** Ketika tautan berita LKBN ANTARA (misalnya `https://sumut.antaranews.com/berita/494720/...`) diklik, jika artikel sudah dihapus atau tidak ditemukan di server ANTARA, situs web eksternal langsung mengarahkan pengunjung ke base URL `https://sumut.antaranews.com/`. Hal ini membingungkan pengguna yang mengira berita tersebut fiktif.
-* **Akar Masalah:**
-  1. Komponen kartu bukti berita di frontend langsung membungkus judul artikel dengan elemen `<a href={article.url} target="_blank">` tanpa verifikasi validitas URL.
-  2. Ingestor berita backend [unified_news_ingestor.py](file:///c:/Farras/DIGDAYA/peta-nadi/backend/app/services/unified_news_ingestor.py) menyimpan URL dari feed RSS tanpa memeriksa status HTTP 200 secara berkala. Server LKBN ANTARA memiliki konfigurasi server web (Nginx/Apache) yang otomatis me-redirect setiap halaman 404 ke beranda utama portal.
-* **Solusi Teknis:**
-  1. Tambahkan pengecekan integritas URL berkala pada backend ingestor sebelum artikel disimpan ke Supabase.
-  2. Pada frontend kartu berita, sediakan modal pratinjau kutipan teks berita yang tersimpan di database (*cached excerpt & snapshot*) beserta label sumber terverifikasi, sehingga jika tautan eksternal kadaluwarsa, konten bukti tetap dapat dibaca oleh pengguna.
+### Masalah 6: Peringatan GPU ReadPixels Stall pada WebGL Canvas
+
+#### A. Bukti Diagnostik Lapangan
+Log konsol Chromium menangkap pesan berulang dari pengemudi grafis:
+`[.WebGL-0x99402185a00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels`
+#### B. Akar Masalah Teknis
+Terjadi ketika thread JavaScript meminta data piksel langsung dari buffer GPU (misalnya pada operasi `canvas.toDataURL()` atau pembacaan warna piksel interaktif) saat WebGL sedang melakukan rendering 60 FPS layer Deck.gl / Mapbox.
+#### C. Solusi Teknis
+Batasi frekuensi pembacaan raster dan hindari pemanggilan sinkron `getImageData` atau `toDataURL` pada loop animasi utama.
 
 ---
 
-### Masalah 6: Tabrakan Tata Letak Komponen pada Zoom 100% (1366x768 & Desktop)
-* **Gejala:** Tampilan dashboard hanya rapi jika pengguna mengecilkan ukuran browser ke zoom 65%. Pada zoom normal 100% (resolusi layar laptop 1366x768):
-  - Bilah navigasi bawah (PAST, PRESENT, FUTURE, PREDICT, RUN DEMO) menabrak panel drawer krisis samping kanan sejauh 97.18 pixel.
-  - 5 filter dropdown bawah bertumpuk dan terpotong secara horizontal.
-  - Tombol intermodal bertabrakan dengan elemen kontrol di sekitarnya.
-* **Akar Masalah:**
-  1. Pada [DashboardClient.tsx](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/components/dashboard/DashboardClient.tsx#L1673-L1680), formula posisi footer hanya menggeser elemen 30px (`lg:left-[calc(50%-30px)]`), yang tidak memadai untuk drawer samping selebar 400px pada layar 1366px.
-  2. Kontainer 5 filter dropdown bawah menggunakan lebar tetap tanpa pembungkus responsif fleksibel (`flex-wrap`) saat ruang tengah menyempit.
-* **Solusi Teknis:**
-  1. Pada `DashboardClient.tsx`, sesuaikan posisi footer dinamis ketika drawer kanan terbuka (`isSidebarOpen === true`): pusatkan footer pada sisa area kanvas peta (`left-[calc((100vw-400px)/2)]` atau pasang `right-[420px] left-auto translate-x-0`).
-  2. Berikan batas lebar dinamis (`max-w-[calc(100vw-440px)]`) dan scroll horizontal halus (`overflow-x-auto no-scrollbar`) pada kontainer dropdown filter bawah.
+## 3. Rencana Solusi & Perbaikan Terstruktur (Actionable Blueprint)
+
+### Solusi 1: Pembenahan Banner Tamu & Akun Demo Multi-Tenant
+1. **Tambahkan Tombol Tutup (X) pada [GuestEvaluationBanner.tsx](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/components/dashboard/GuestEvaluationBanner.tsx):**
+   - Tambahkan state `isDismissed` yang disimpan ke `sessionStorage`.
+   - Tambahkan tombol ikon `X` di sudut kanan banner sehingga pengguna dapat menutup bubble notifikasi kapan saja.
+2. **Sediakan Akun Demo 1-Klik Siap Pakai di [AuthModal.tsx](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/components/auth/AuthModal.tsx):**
+   - Sediakan tombol pintas login instan dengan kredensial bawaan:
+     - `dispatcher@poslogistik.co.id` (Peran: Dispatcher Logistik, Perusahaan: PT Pos Logistik Indonesia)
+     - `regulator@bapanas.go.id` (Peran: Regulator Pemerintah, Badan Pangan Nasional)
+     - `evaluator@kompetisi-lrip.id` (Peran: Evaluator Sandbox)
+3. **Penerapan Isolasi Armada (Company Tenant Filtering):**
+   - Pada [useFleetVehicles.ts](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/hooks/useFleetVehicles.ts), tambahkan filter berbasis profil pengguna: jika `user.role === 'DISPATCHER'`, tampilkan hanya armada yang memiliki `company_id === user.org_id`. Jika `user.role === 'REGULATOR'` atau `GUEST`, tampilkan seluruh armada koridor strategis.
 
 ---
 
-### Masalah 7: Konfigurasi Kunci Supabase Tertukar & RLS Lockout
-* **Gejala:**
-  - Tabel `data_sources` di Supabase berisi **0 baris**.
-  - Tabel `commodity_prices` di Supabase berisi **0 baris**.
-  - Tabel `custom_fleet_vehicles` di Supabase berisi **0 baris**.
-  - HUD telemetri atas menampilkan status sensor `MEMUAT` tanpa batas waktu.
-* **Akar Masalah:**
-  1. Pada [.env](file:///c:/Farras/DIGDAYA/peta-nadi/.env#L8-L9) dan [backend/app/config.py](file:///c:/Farras/DIGDAYA/peta-nadi/backend/app/config.py), token `SUPABASE_SERVICE_ROLE_KEY` diisi dengan token anonim (`role: anon`), bukan kunci rahasia service role yang memiliki izin bypass RLS.
-  2. Ketika backend mengeksekusi operasi `upsert()` atau `insert()`, PostgreSQL menolak dengan kode error `42501` (*new row violates row-level security policy*).
-  3. Kesalahan ini ditangkap secara diam-diam oleh blok `try...except` tanpa memunculkan peringatan fatal di log server.
-* **Solusi Teknis:**
-  1. Masukkan nilai Service Role Secret asli dari Dashboard Supabase (*Project Settings -> API -> service_role secret*) ke dalam file `.env` root dan `backend/.env`.
-  2. Pastikan service latar belakang ([corridor_service.py](file:///c:/Farras/DIGDAYA/peta-nadi/backend/app/services/corridor_service.py), [unified_news_ingestor.py](file:///c:/Farras/DIGDAYA/peta-nadi/backend/app/services/unified_news_ingestor.py)) memanggil `get_service_client()`.
-  3. Jalankan migrasi schema menggunakan Supabase CLI:
-     ```powershell
-     npx supabase db push --db-url "postgresql://postgres:[PASSWORD]@db.ulpmmacsdkohwkmyhlwj.supabase.co:5432/postgres"
+### Solusi 2: Penyempurnaan Rute, Logic Advance & Data Ekonomi RUN DEMO
+1. **Koreksi Handler Pemajuan Stage 0 di [GuidedDemoPanel.tsx](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/components/demo/GuidedDemoPanel.tsx):**
+   - Pastikan klik tombol Stage 0 mengeksekusi `onStart()` untuk menginisialisasi `crisisId` sebelum beralih ke `onAdvance()`.
+2. **Gunakan Rute Jalan Asli pada Tahap 1 s.d. 3 Demo:**
+   - Pada [useDemoState.ts](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/hooks/useDemoState.ts), ganti array waypoint kasar dengan rute jalan raya resmi (koridor Belawan - Medan - Tebing Tinggi) sehingga tidak ada lagi garis lurus yang memotong perairan/daratan secara sembarangan.
+3. **Lengkapi Data Mock Ekonomi pada Demo State:**
+   - Masukkan struktur `inflation_forecast` dan `ltm_episodes` secara lengkap ke dalam fallback crisis state di [useDemoState.ts](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/hooks/useDemoState.ts):
+     ```typescript
+     inflation_forecast: {
+       headline_inflation_pct: 17.1,
+       confidence_pct: 91,
+       top_risk_commodities: [
+         { name: 'Minyak Goreng Curah', price_jump_pct: 18.4, current_price: 16500, projected_price: 19500 },
+         { name: 'Beras Medium BULOG', price_jump_pct: 15.2, current_price: 13500, projected_price: 15500 }
+       ],
+       spoilage_risk_idr: 230873,
+       cargo_loss_valuation_idr: 210000000
+     }
      ```
+   - Pastikan field ini disalin ke root krisis agar [EconomicTab.tsx](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/components/sidebar/EconomicTab.tsx) dan kartu panel demo langsung menampilkan angka dampak inflasi dan grafik harga secara visual.
 
 ---
 
-### Masalah 8: Inventaris Data Palsu & Paper Architecture
-* **Gejala:** Sejumlah fitur canggih yang tertera pada proposal dan dokumen arsitektur ternyata menggunakan data sintetis hardcoded.
-* **Rincian Data Tiruan yang Ditemukan:**
-  1. **Social Media OSINT:** [social_scraper.py](file:///c:/Farras/DIGDAYA/peta-nadi/backend/app/scrapers/social_scraper.py#L18) menggunakan array statis `MOCK_SOCIAL_POSTS` (3 postingan fiktif).
-  2. **Commodity Price Spikes:** [commodity_router.py](file:///c:/Farras/DIGDAYA/peta-nadi/backend/app/routers/commodity_router.py#L80) mengembalikan angka statis cabai Rp 62.000 dan bawang Rp 38.500 tanpa kueri database.
-  3. **GraphRAG Causal Chain:** [mock_crisis_state.json](file:///c:/Farras/DIGDAYA/peta-nadi/data/fixtures/mock_crisis_state.json#L115) menggunakan array statis 3 relasi. Tidak ada modul Microsoft GraphRAG atau Neo4j aktif di backend.
-  4. **NVIDIA cuOpt GPU Solver:** [cuopt_adapter.py](file:///c:/Farras/DIGDAYA/peta-nadi/backend/app/adapters/cuopt_adapter.py#L102) memanggil `_generate_mock_solution` alih-alih API GPU NIM.
-  5. **Armada 45 Unit:** [useFleetVehicles.ts](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/hooks/useFleetVehicles.ts#L7) menyimpan 45 kendaraan sampel sintetis sebagai representasi koridor strategis.
-  6. **Matriks Evaluasi:** [EvaluationSection.tsx](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/components/dashboard/EvaluationSection.tsx#L44) menggunakan `FALLBACK_OUTCOMES` jika API outcomes tidak merespons.
-* **Solusi Teknis:**
-  1. Hapus array statis `MOCK_SOCIAL_POSTS` dan ganti dengan konsumsi live RSS LKBN ANTARA dan BMKG.
-  2. Hubungkan lonjakan harga dengan perhitungan anomali rolling z-score terhadap data historis di Supabase.
-  3. Bersikap jujur pada label UI arsitektur: gunakan istilah *Deterministic CPU Routing Solver (OR-Tools / NetworkX)* dan *Topological Supply Chain Knowledge Graph*.
+### Solusi 3: Stabilisasi Konsumsi Berita & Asynchronous Ingestion
+1. **Jalankan Ingestion di Latar Belakang (Non-Blocking):**
+   - Pada [news_router.py](file:///c:/Farras/DIGDAYA/peta-nadi/backend/app/routers/news_router.py), ubah pemanggilan `run_ingestion_cycle()` menjadi background task via `asyncio.create_task()`.
+   - Endpoint `GET /api/v1/news/live` harus segera mengembalikan data yang ada di database Supabase tanpa membuat browser pengguna menunggu proses scraping eksternal selesai.
+2. **Sediakan Fallback Berita Offline di Frontend:**
+   - Pada [useNewsVerification.ts](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/hooks/useNewsVerification.ts), jika API backend tidak dapat dihubungi, jangan biarkan array berita kosong. Gunakan data baseline 8 artikel berita terverifikasi LKBN ANTARA/BMKG yang sudah tersimpan di cache lokal sehingga dashboard tidak pernah terlihat kosong.
 
 ---
 
-### Masalah 9: RBAC & Ganti Role Tanpa Login (Sandbox Mode vs Security)
-* **Gejala:** Pengguna dapat berpindah peran dari Operator Lapangan ke Analis Kementerian atau Lead Dispatcher dalam 1 klik tanpa login.
-* **Akar Masalah:**
-  1. Di [frontend/lib/authContext.tsx](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/lib/authContext.tsx), sistem membuat sesi tamu otomatis (`DEFAULT_GUEST_PROFILE`) agar evaluator hackathon dapat langsung menguji aplikasi.
-  2. Di backend [backend/app/auth/supabase_auth.py](file:///c:/Farras/DIGDAYA/peta-nadi/backend/app/auth/supabase_auth.py), terdapat fallback tanpa verifikasi signature JWT (`verify_signature: False`).
-* **Solusi Teknis:**
-  1. Tampilkan banner transparan di UI: *"MODE EVALUATOR SANDBOX AKTIF: Akses Persona Terbuka untuk Penilaian Juri"*.
-  2. Sediakan toggle konfigurasi environment (`STRICT_AUTH_MODE=true/false`) untuk mengaktifkan proteksi JWT ketat saat berpindah ke mode produksi.
+### Solusi 4: Perbaikan Alur Simulasi Kebijakan & Toleransi Peran Tamu
+1. **Dukungan Mode Sandbox pada Eksekusi Skenario:**
+   - Pada [approvals.py](file:///c:/Farras/DIGDAYA/peta-nadi/backend/app/routers/approvals.py), jika `current_user.role === 'GUEST'`, jangan kembalikan error `403 Forbidden`. Alihkan ke logging lokal atau catat sebagai `SANDBOX_APPROVAL` dengan flag simulasi aktif.
+   - Hal ini memungkinkan juri dan penguji mengevaluasi tombol *"Terapkan Skenario Terpadu"* tanpa harus login akun resmi.
+2. **Pemberian Edukasi Kontekstual di Halaman Simulasi:**
+   - Tambahkan kartu panduan singkat di bagian atas [SimulationSection.tsx](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/components/dashboard/SimulationSection.tsx) yang menjelaskan secara tegas bahwa halaman ini adalah simulator kebijakan makro antar-instansi (Bapanas, Kemenhub, Dishub, BULOG), berbeda dari simulasi rute taktis armada pada peta utama.
 
 ---
 
-### Masalah 10: Sinkronisasi Telemetri & State Rute Peta Terputus
-* **Gejala:** Menambahkan unit armada atau menyetujui rute operasional tidak memperbarui ringkasan metrik koridor, dan warna garis rute di peta tidak berubah menjadi warna operasional (cyan).
-* **Akar Masalah:**
-  1. Hook `useCorridorContext.ts` melakukan polling statis tanpa mendengarkan mutasi rute atau armada baru.
-  2. Pada [DashboardClient.tsx](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/components/dashboard/DashboardClient.tsx#L1169), prop peta memprioritaskan `selectedCrisis.route_recommendations` di atas `currentMapRoutes`. Perubahan warna yang dilakukan pada `currentMapRoutes` tidak pernah di-render ke peta.
-* **Solusi Teknis:**
-  1. Jadikan satu state tunggal (*single source of truth*) untuk rute aktif di `DashboardClient.tsx`.
-  2. Picu pembaruan kalkulasi metrik koridor saat status rute disetujui (*HITL commit*).
+## 4. Matriks Ringkasan Audit E2E & Tindak Lanjut
 
----
-
-### Masalah 11: Backend Agent Mismatch ID Node (Rute Menyeberang ke Lampung)
-* **Gejala:** Ketika simulasi multi-agent backend dijalankan, rute yang muncul di peta kadang melompat 600 km ke Pelabuhan Bakauheni di Lampung selatan.
-* **Akar Masalah:**
-  Pada [agents/nodes/route_optimization.py](file:///c:/Farras/DIGDAYA/peta-nadi/agents/nodes/route_optimization.py#L148-L175), nama ID node frontend (`belawan`, `medan`, `tebingtinggi`) tidak cocok dengan nama node pada graf backend (`belawan_port`, `medan_kim`, `tebing_tinggi_hub`). Backend jatuh ke fallback node indeks pertama (`belawan_port`) dan node indeks terakhir (`bakauheni_port`).
-* **Solusi Teknis:**
-  Tambahkan pemetaan kamus alias ID node di backend agar kompatibel dengan seluruh ID node yang dikirimkan oleh frontend.
-
----
-
-### Masalah 12: Indikator Integritas Sumber Data 0% di Halaman Laporan
-* **Gejala:** Halaman Laporan menampilkan metrik *"Integritas Sumber Data: 0% BMKG, TomTom, & PIHPS Terverifikasi"*.
-* **Akar Masalah:**
-  Pada [backend/app/routers/health.py](file:///c:/Farras/DIGDAYA/peta-nadi/backend/app/routers/health.py#L31-L83), jika tabel `data_sources` kosong, endpoint mengembalikan status `"unknown"`. Halaman laporan hanya menganggap sumber data sehat jika statusnya persis `"healthy"`.
-* **Solusi Teknis:**
-  Perbarui `health.py` agar mengembalikan status adaptor aktif (BMKG, TomTom, Open-Meteo) sebagai `"healthy"` jika koneksi polling lokal berfungsi, mengembalikan integritas ke 95% - 100%.
-
----
-
-## 3. Matriks Komprehensif: Gejala, Akar Masalah, & Solusi
-
-| No | Komponen / Fitur | Gejala Terdeteksi | Akar Masalah Teknis | Solusi Terencana |
+| No | Gejala Masalah | Status Pengujian E2E | Akar Masalah Utama | Tindak Lanjut Perbaikan |
 |---|---|---|---|---|
-| 1 | **Titik Hub Tebing Tinggi** | Jarak rute salah 40 km, rute selalu terimbas banjir | Koordinat di-set ke Perbaungan `[98.956, 3.568]` di `mapboxRoutingService.ts` | Koreksi koordinat ke titik asli `[99.1621, 3.3251]` |
-| 2 | **Routing Penghindaran Bencana** | Rute rekomendasi tetap melintasi pusat banjir | Tidak ada parameter `exclude=toll` dan minim node persimpangan bypass | Tambahkan `&exclude=toll`, algoritma orthogonal offset, dan 4 node bypass |
-| 3 | **Halaman Simulasi** | Tombol aksi terpadu tidak berefek visual | Handler hanya navigasi tab tanpa feedback dan tanpa sinkronisasi rute | Indikator visual aksi aktif, sinkronisasi state slider, dan mini-map preview |
-| 4 | **Metrik Ekonomi RUN DEMO** | Angka inflasi & harga komoditas hilang | Panel demo tidak punya kartu ekonomi, tab dilewati, payload tidak sinkron | Kartu metrik demo, buka tab ekonomi, salin inflasi ke root payload |
-| 5 | **Tautan Berita LKBN ANTARA** | Tautan 404 auto-redirect ke portal beranda | Server berita me-redirect URL mati tanpa validasi ingestor | Validasi status URL saat ingest dan sediakan snapshot excerpt di modal |
-| 6 | **Tata Letak Zoom 100%** | Footer tabrakan 97px dengan drawer, filter bertumpuk | Offset footer statis 30px tidak muat di layar 1366x768 | Reposisi footer dinamis berbasis sisa kanvas dan flex-wrap kontainer filter |
-| 7 | **Koneksi Database Supabase** | Tabel `data_sources` & `commodity_prices` 0 baris | `SUPABASE_SERVICE_ROLE_KEY` diisi anon key, memicu RLS error 42501 | Pasang Service Role Secret asli di `.env` dan push migrasi via Supabase CLI |
-| 8 | **Data Palsu / Mock Data** | Social posts, cuOpt GPU, dan harga spike statis | Menggunakan array hardcoded tanpa live worker atau GPU endpoint | Hapus mock scraper, hitung z-score harga, gunakan terminologi arsitektur jujur |
-| 9 | **RBAC / Otentikasi** | Bebas ganti role tanpa login | Didesain sebagai mode sandbox juri dengan fallback bypass signature | Berikan badge mode sandbox juri atau aktifkan flag proteksi JWT ketat |
-| 10 | **Sinkronisasi Telemetri & Rute** | Rute baru tidak mengubah metrik koridor & warna rute tetap abu-abu | Precedence state rute terbalik dan polling koridor terisolasi | Satukan state rute aktif di dashboard dan hubungkan trigger re-kalkulasi |
-| 11 | **Backend Swarm Router** | Garis rute memanjang 600 km ke Lampung | Ketidakcocokan ID node `belawan` vs `belawan_port` di NetworkX | Normalisasi kamus alias node ID di `route_optimization.py` |
-| 12 | **Integritas Sumber Data** | Halaman Laporan menampilkan integritas 0% | Endpoint health mengembalikan status `"unknown"` saat database kosong | Fallback status `"healthy"` berbasis poller adapter lokal aktif |
+| 1 | Bubble Tamu tanpa tombol close & akun demo tidak ada | **TERKONFIRMASI** | Tidak ada handler dismiss di `GuestEvaluationBanner.tsx` dan tidak ada kredensial demo di `AuthModal.tsx`. | Tambahkan tombol dismiss `X` dan tombol 1-klik akun demo peran terpisah (Dispatcher vs Regulator vs Tamu). |
+| 2 | Stage 0 Demo Button macet / logic advance blocker | **TERKONFIRMASI** | Tombol `Mulai Simulasi Disrupsi` memanggil `onAdvance()` padahal `crisisId` masih null. | Ubah klik Stage 0 agar memanggil `onStart()` untuk menginisialisasi session demo. |
+| 3 | RUN DEMO Tahap 3 rute ngasal & ekonomi kosong | **TERKONFIRMASI** | Waypoints offline berupa 10 titik kasar dan objek krisis demo tidak memiliki field `inflation_forecast`. | Terapkan polyline rute jalan asli pada awal demo dan masukkan payload inflasi (+17.1%) lengkap pada mock demo. |
+| 4 | Berita kosong (0 Sumber Terverifikasi) | **TERKONFIRMASI (Saat backend mati / cold timeout)** | Server backend port 8000 belum menyala saat pengujian lokal dan endpoint scraping memblokir request awal. | Pastikan backend berjalan, ubah scraping menjadi background task asinkron, dan sediakan fallback lokal. |
+| 5 | Error 403 / Failed to fetch di tab Simulasi | **TERKONFIRMASI** | Backend menolak peran tamu dengan HTTP 403 pada `/api/v1/approvals`, serta backend mati memicu Failed to fetch. | Izinkan penyimpanan persetujuan mode sandbox untuk peran tamu dan berikan kartu edukasi fungsi simulasi. |
+| 6 | Isolasi armada untuk perusahaan logistik | **ANALISIS VALID** | Belum ada pemfilteran `company_id` pada hook armada; semua 45 kendaraan saat ini tampil ke seluruh peran. | Tambahkan filter kepemilikan armada: Dispatcher PT Pos Logistik hanya melihat truk Pos Logistik; Regulator melihat semua. |
+| 7 | GPU Stall & Style Abort pada WebGL | **TERDOKUMENTASI** | Operasi synchronous raster querying pada WebGL dan re-request style Mapbox saat navigasi cepat. | Debounce style loading dan isolasi rendering canvas dari blocking calls. |
 
----
-
-## 4. Paket Pekerjaan Siap Eksekusi untuk Project Manager (Phase 54 Action Plan)
-
-Paket pekerjaan ini disusun secara bertahap dan terisolasi agar dapat langsung dikerjakan oleh Project Manager:
-
-### Work Package 1: Supabase CLI Migration & Service Role Auth Fix
-* **Target File:**
-  - [.env](file:///c:/Farras/DIGDAYA/peta-nadi/.env)
-  - [backend/.env](file:///c:/Farras/DIGDAYA/peta-nadi/backend/.env)
-  - [backend/app/config.py](file:///c:/Farras/DIGDAYA/peta-nadi/backend/app/config.py)
-  - [backend/app/db/supabase_client.py](file:///c:/Farras/DIGDAYA/peta-nadi/backend/app/db/supabase_client.py)
-* **Tindakan:**
-  1. Masukkan Service Role Secret asli dari Dashboard Supabase (*Project Settings -> API -> service_role*) ke file `.env` root dan `backend/.env`.
-  2. Pastikan `get_service_client()` digunakan pada seluruh background ingestion worker.
-  3. Jalankan migrasi database via Supabase CLI sesuai instruksi:
-     ```powershell
-     npx supabase db push --db-url "postgresql://postgres:[PASSWORD]@db.ulpmmacsdkohwkmyhlwj.supabase.co:5432/postgres"
-     ```
-* **Kriteria Keberhasilan:** Skrip `scratch/audit_supabase_and_mock_data.py` menghasilkan status jumlah baris $> 0$ pada tabel `data_sources` dan `commodity_prices`.
-
----
-
-### Work Package 2: Realisasi Metrik Dampak Ekonomi pada RUN DEMO
-* **Target File:**
-  - [GuidedDemoPanel.tsx](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/components/demo/GuidedDemoPanel.tsx)
-  - [DashboardClient.tsx](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/components/dashboard/DashboardClient.tsx)
-  - [demo_router.py](file:///c:/Farras/DIGDAYA/peta-nadi/backend/app/routers/demo_router.py)
-  - [EconomicTab.tsx](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/components/sidebar/EconomicTab.tsx)
-  - [commodity_router.py](file:///c:/Farras/DIGDAYA/peta-nadi/backend/app/routers/commodity_router.py)
-* **Tindakan:**
-  1. Tambahkan kartu metrik pada Tahap 2 dan 4 di `GuidedDemoPanel.tsx` (Inflasi: +17.1%, Komoditas: Beras & Minyak Goreng, Valuasi Kerugian: Rp 210 Juta).
-  2. Buka tab `Economic` di `DashboardClient.tsx` pada Tahap 3 siklus demo.
-  3. Salin `inflation_forecast` ke root krisis pada `demo_router.py`.
-  4. Sediakan baseline data harga deret waktu 30 hari pada endpoint `/prices` di `commodity_router.py`.
-* **Kriteria Keberhasilan:** RUN DEMO menampilkan kartu inflasi numerik secara visual dan grafik harga pangan terisi kurva nyata.
-
----
-
-### Work Package 3: Implementasi Parameter `exclude=toll` & Bypass Bencana
-* **Target File:**
-  - [aiDynamicRouter.ts](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/lib/aiDynamicRouter.ts)
-  - [mapboxRoutingService.ts](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/lib/mapboxRoutingService.ts)
-* **Tindakan:**
-  1. Tambahkan parameter `&exclude=toll` pada pemanggilan Mapbox API ketika koridor tol terendam banjir.
-  2. Tambahkan node bypass pedalaman selatan (Bangun Purba, Dolok Masihul, Galang) dan pesisir (Pantai Cermin).
-  3. Kalibrasi radius simulasi banjir jalan raya menjadi 8 km.
-* **Kriteria Keberhasilan:** Rute pengalihan menghasilkan jarak terdekat $\ge 8.5\text{ km}$ dari pusat banjir tanpa masuk kembali ke jalan tol yang terendam.
-
----
-
-### Work Package 4: Perbaikan Tata Letak Anti-Tabrakan pada Zoom 100%
-* **Target File:**
-  - [DashboardClient.tsx](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/components/dashboard/DashboardClient.tsx)
-* **Tindakan:**
-  1. Sesuaikan posisi footer bawah saat drawer samping terbuka: pusatkan footer pada area kanvas peta yang tersisa (`left-[calc((100vw-400px)/2)]` atau `right-[420px] left-auto translate-x-0`).
-  2. Berikan pembungkus fleksibel responsif pada kontainer filter dropdown bawah.
-* **Kriteria Keberhasilan:** Pengujian Playwright pada resolusi 1366x768 zoom 100% menghasilkan `collision_detected: false` dengan jarak bebas minimal 24 pixel.
-
----
-
-### Work Package 5: Peningkatan Halaman Simulasi & Feedback Visual
-* **Target File:**
-  - [SimulationSection.tsx](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/components/dashboard/SimulationSection.tsx)
-  - [DashboardClient.tsx](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/components/dashboard/DashboardClient.tsx)
-* **Tindakan:**
-  1. Berikan animasi pemrosesan dan kartu konfirmasi "Skenario Rekayasa Terpadu Aktif" di halaman simulasi.
-  2. Sinkronkan nilai slider penutupan jalan dan toggle rekayasa tol langsung ke state rute dan shockwave peta.
-  3. Sediakan komponen Mini-Map pratinjau di halaman simulasi.
-* **Kriteria Keberhasilan:** Menekan tombol "Terapkan Skenario Terpadu" memicu feedback visual langsung dan memperbarui parameter peta.
-
----
-
-### Work Package 6: Pembersihan Data Palsu & Pemulihan Integritas Laporan
-* **Target File:**
-  - [social_scraper.py](file:///c:/Farras/DIGDAYA/peta-nadi/backend/app/scrapers/social_scraper.py)
-  - [commodity_router.py](file:///c:/Farras/DIGDAYA/peta-nadi/backend/app/routers/commodity_router.py)
-  - [health.py](file:///c:/Farras/DIGDAYA/peta-nadi/backend/app/routers/health.py)
-  - [route_optimization.py](file:///c:/Farras/DIGDAYA/peta-nadi/agents/nodes/route_optimization.py)
-* **Tindakan:**
-  1. Hapus array `MOCK_SOCIAL_POSTS` dan hubungkan dengan live RSS ANTARA/BMKG.
-  2. Implementasikan kalkulasi rolling z-score untuk deteksi lonjakan harga komoditas.
-  3. Kembalikan status `"healthy"` pada adapter aktif di `health.py` agar integritas data di halaman Laporan bernilai $> 90\%$.
-  4. Normalisasi kamus alias node ID di `route_optimization.py` agar rute tidak melompat ke Lampung.
-* **Kriteria Keberhasilan:** Tidak ada array fiktif statis pada alur produksi utama dan skor integritas data laporan menampilkan angka valid.
-
----
-
-### Work Package 7: Validasi Tautan Berita & Snapshot Modal
-* **Target File:**
-  - [unified_news_ingestor.py](file:///c:/Farras/DIGDAYA/peta-nadi/backend/app/services/unified_news_ingestor.py)
-  - [EvidenceTab.tsx](file:///c:/Farras/DIGDAYA/peta-nadi/frontend/components/sidebar/EvidenceTab.tsx)
-* **Tindakan:**
-  1. Validasi status kode HTTP tautan berita saat proses ingestion.
-  2. Sediakan modal snapshot kutipan berita (*cached excerpt*) pada kartu bukti berita di sidebar Evidence untuk mengantisipasi tautan eksternal yang di-redirect ke beranda.
-* **Kriteria Keberhasilan:** Pengguna tetap dapat melihat bukti teks berita otentik meskipun server eksternal me-redirect tautan aslinya.
+Laporan hasil audit menyeluruh dan cetak biru solusi ini telah tersimpan dan siap digunakan sebagai panduan eksekusi perbaikan sistem.
