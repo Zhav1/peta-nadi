@@ -1,10 +1,10 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { 
-  ShieldAlert, 
-  Truck, 
-  Building2, 
+import {
+  ShieldAlert,
+  Truck,
+  Building2,
   SlidersHorizontal,
   CheckCircle2,
   ShieldCheck,
@@ -12,6 +12,7 @@ import {
   Map as MapIcon,
   FileText,
   RotateCcw,
+  FlaskConical,
 } from 'lucide-react';
 import type { CrisisState } from '@/lib/types';
 
@@ -107,6 +108,24 @@ export default function SimulationSection({
 
   return (
     <div className="relative w-full min-h-full lg:h-full grid grid-cols-12 gap-6 pointer-events-auto">
+
+      {/* Phase 57 WP-A1 (D7): macro-vs-tactical explainer — this tab is a
+          B2G policy simulator (local what-if calc), not the tactical map sim.
+          Deploy stays local-calc; commit to corridor happens via DashboardClient
+          sandbox/approval path (WP-A3). */}
+      <div className="col-span-12 backdrop-blur-md bg-[#0c0e12]/80 border border-sky-500/25 rounded-xl px-4 py-3 flex items-start gap-3 shadow-xl">
+        <FlaskConical className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
+        <div className="min-w-0">
+          <p className="text-xs font-mono font-semibold text-sky-300 uppercase tracking-wider">
+            Simulator Makro (B2G) — Kalkulasi Lokal
+          </p>
+          <p className="text-xs font-sans text-slate-300 leading-relaxed mt-0.5">
+            Tab ini menghitung skenario kebijakan antar-lembaga secara lokal (what-if).
+            Untuk simulasi taktis per-kendaraan, gunakan Peta 4D. Penerapan skenario
+            tidak otomatis commit ke koridor — deployment tercatat via jalur persetujuan.
+          </p>
+        </div>
+      </div>
       
       {/* Floating Toast Notification */}
       {toast && (

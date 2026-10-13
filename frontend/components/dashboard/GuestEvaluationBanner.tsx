@@ -1,15 +1,35 @@
 'use client';
 
-import { ShieldAlert, KeyRound } from 'lucide-react';
+import { useState } from 'react';
+import { ShieldAlert, KeyRound, X } from 'lucide-react';
 import { useAuth } from '@/lib/authContext';
+
+const DISMISS_KEY = 'prehub_guest_banner_dismissed';
 
 // Explicit guest evaluation banner: shown whenever /dashboard is accessed without a
 // verified session (middleware guest redirect or client-side logout), so restricted
-// access is never silent.
+// access is never silent. Phase 57 WP-A1 (D7): dismissible per-session via X;
+// reappears next session only (sessionStorage, not localStorage).
 export function GuestEvaluationBanner() {
   const { isAuthenticated, isLoading, openAuthModal } = useAuth();
+  const [dismissed, setDismissed] = useState<boolean>(() => {
+    try {
+      return sessionStorage.getItem(DISMISS_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
 
-  if (isAuthenticated || isLoading) return null;
+  if (isAuthenticated || isLoading || dismissed) return null;
+
+  const handleDismiss = () => {
+    try {
+      sessionStorage.setItem(DISMISS_KEY, '1');
+    } catch {
+      // storage unavailable — dismiss for this render only
+    }
+    setDismissed(true);
+  };
 
   return (
     <div className="fixed top-16 left-1/2 -translate-x-1/2 z-[550] w-[95%] max-w-3xl pointer-events-auto">
@@ -26,14 +46,24 @@ export function GuestEvaluationBanner() {
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={openAuthModal}
-          className="cursor-pointer shrink-0 px-3 py-1.5 rounded-md bg-white hover:bg-slate-200 text-[#080d14] text-xs font-semibold transition flex items-center gap-1.5"
-        >
-          <KeyRound className="w-3.5 h-3.5" />
-          <span>Masuk / Daftar</span>
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={openAuthModal}
+            className="cursor-pointer px-3 py-1.5 rounded-md bg-white hover:bg-slate-200 text-[#080d14] text-xs font-semibold transition flex items-center gap-1.5"
+          >
+            <KeyRound className="w-3.5 h-3.5" />
+            <span>Masuk / Daftar</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleDismiss}
+            aria-label="Tutup banner evaluasi tamu"
+            className="cursor-pointer p-1.5 rounded-md text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
       </div>
     </div>
   );
