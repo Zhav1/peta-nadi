@@ -247,6 +247,10 @@ export interface MapboxRouteResult {
   durationMinutes: number;
   congestionSegments: CongestionSegment[];
   summary: string;
+  // Phase 57 WP-A3 (D4 live-first): provenance of the polyline. 'live' =
+  // Mapbox Directions road geometry; 'offline-interpolated' = straight-line
+  // estimate shown ONLY with a SIMULASI/OFFLINE label, never as a live road route.
+  source: 'live' | 'offline-interpolated';
 }
 
 export interface MapboxDirectionsRoute {
@@ -357,7 +361,7 @@ async function fetchMapboxRouteWithForcedWaypoint(
       }
     }
 
-    return { coordinates: coords, distanceKm, durationMinutes, congestionSegments, summary: route.legs?.[0]?.summary || 'Bypass Route' };
+    return { coordinates: coords, distanceKm, durationMinutes, congestionSegments, summary: route.legs?.[0]?.summary || 'Bypass Route', source: 'live' };
   } catch {
     return null;
   }
@@ -415,7 +419,7 @@ export async function fetchMapboxAlternativeDrivingRoutes(
           }
 
           const routeName = index === 0 ? 'Rute Utama (Jalan Tol / Jalinsum)' : index === 1 ? 'Alternatif 1 (Jalur Arteri)' : 'Alternatif 2 (Bypass Sekunder)';
-          results.push({ coordinates: coords, distanceKm, durationMinutes, congestionSegments, summary: route.legs?.[0]?.summary || routeName });
+          results.push({ coordinates: coords, distanceKm, durationMinutes, congestionSegments, summary: route.legs?.[0]?.summary || routeName, source: 'live' });
         }
       }
     } catch (err) {
@@ -424,12 +428,15 @@ export async function fetchMapboxAlternativeDrivingRoutes(
   }
 
   if (results.length === 0) {
+    // Phase 57 WP-A3 (D4): honest unavailable path. Straight-line estimate is
+    // labeled SIMULASI/OFFLINE at every render site — never presented as live.
     results.push({
       coordinates: fallbackCoords,
       distanceKm: Math.round(fallbackDistance),
       durationMinutes: Math.round((fallbackDistance / 60) * 60),
       congestionSegments: [],
-      summary: 'Koridor Utama Logistik',
+      summary: 'SIMULASI/OFFLINE — garis lurus, bukan geometri jalan live',
+      source: 'offline-interpolated',
     });
   }
 
@@ -630,10 +637,20 @@ export async function calculateAIDynamicDetourRoutes(
     const routeColor = isCompromised ? '#EF4444' : i === 0 ? '#00F0FF' : i === 1 ? '#3B82F6' : '#F59E0B';
     const routeName = i === 0 ? 'Rute Utama (Jalan Tol / Jalinsum)' : i === 1 ? 'Alternatif 1 (Jalur Arteri)' : 'Alternatif 2 (Bypass Sekunder)';
 
+    // Phase 57 WP-A3 (D4): offline-interpolated geometry carries the SIMULASI
+    // badge in every user-facing field so the map can never render it as live.
+    const isOffline = res.source === 'offline-interpolated';
+    const labeledName = isOffline ? `[SIMULASI] ${routeName}` : routeName;
+    const labeledTag = isOffline
+      ? `${isCompromised ? 'TERDAMPAK ZONA BAHAYA (+60m Delay)' : i === 0 ? 'RUTE UTAMA TERCEPAT' : 'RUTE ALTERNATIF'} • SIMULASI/OFFLINE`
+      : isCompromised ? 'TERDAMPAK ZONA BAHAYA (+60m Delay)' : i === 0 ? 'RUTE UTAMA TERCEPAT' : 'RUTE ALTERNATIF';
+
     recommendations.push({
       id: `route-opt-${i + 1}`,
-      route_name: routeName,
-      description: `${routeName} via ${res.summary}`,
+      route_name: labeledName,
+      description: isOffline
+        ? `[SIMULASI/OFFLINE — garis lurus, bukan jalan raya live] ${routeName} via ${res.summary}`
+        : `${routeName} via ${res.summary}`,
       waypoints: res.coordinates.map(([lon, lat]) => ({ lat, lon })),
       distance_km: res.distanceKm,
       eta_minutes: res.durationMinutes + (isCompromised ? 60 : 0),
@@ -641,7 +658,7 @@ export async function calculateAIDynamicDetourRoutes(
       risk_score: isCompromised ? 0.90 : 0.05 + i * 0.08,
       is_compromised: isCompromised,
       safety_status: isCompromised ? 'COMPROMISED' : 'SAFE_DETOUR',
-      safety_tag: isCompromised ? 'TERDAMPAK ZONA BAHAYA (+60m Delay)' : i === 0 ? 'RUTE UTAMA TERCEPAT' : 'RUTE ALTERNATIF',
+      safety_tag: labeledTag,
       traffic_level: res.congestionSegments.some((s) => s.level === 'heavy') ? 'heavy' : 'low',
       congestion_segments: res.congestionSegments,
       modality: 'truck',

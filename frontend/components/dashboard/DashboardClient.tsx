@@ -587,11 +587,39 @@ export default function DashboardClient() {
         type: 'success'
       });
     } catch (err) {
-      console.error('Failed to deploy unified action plan:', err);
-      setToast({
-        message: `Gagal Menerapkan Skenario: ${err instanceof Error ? err.message : String(err)}`,
-        type: 'error'
-      });
+      // Phase 57 WP-A3 (D1 — strict RBAC stays): guest writes keep 403. UX
+      // explains + saves locally instead of bypassing. Map styling below
+      // still applies; approvals count stays local-only.
+      const errMsg = err instanceof Error ? err.message : String(err);
+      const isForbidden = /403/.test(errMsg);
+      if (isForbidden) {
+        try {
+          const key = 'prehub_sandbox_approvals';
+          const raw = localStorage.getItem(key);
+          const prev = raw ? (JSON.parse(raw) as unknown[]) : [];
+          prev.push({
+            incident_id: selectedCrisisId || 'belawan-flash-flood',
+            route_id: approvedRoute?.id || 'route-detour-1',
+            agency: planParams?.agency || null,
+            action: planParams?.action || null,
+            saved_at: new Date().toISOString(),
+          });
+          localStorage.setItem(key, JSON.stringify(prev));
+        } catch {
+          // storage unavailable — toast still explains sandbox mode
+        }
+        setApprovalsCount(prev => prev + 1);
+        setToast({
+          message: 'Mode Sandbox: tersimpan lokal — login Dispatcher untuk commit ke koridor.',
+          type: 'info'
+        });
+      } else {
+        console.error('Failed to deploy unified action plan:', err);
+        setToast({
+          message: `Gagal Menerapkan Skenario: ${errMsg}`,
+          type: 'error'
+        });
+      }
     }
 
     // Single source of truth: keep currentMapRoutes AND selectedCrisis.route_recommendations in lockstep

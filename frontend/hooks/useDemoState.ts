@@ -191,8 +191,8 @@ export function useDemoState(onCrisisReady?: (crisis: CrisisState) => void) {
       route_recommendations: [
         {
           id: 'offline-bypass-pesisir',
-          route_name: `${originLabel} - ${destLabel} Bypass Pesisir`,
-          description: `${originLabel} - ${destLabel} Detour via Jalur Pesisir Pantai Cermin (melingkari zona bahaya Lubuk Pakam)`,
+          route_name: `[SIMULASI] ${originLabel} - ${destLabel} Bypass Pesisir`,
+          description: `[SIMULASI/OFFLINE — garis pesisir kurasi, bukan jalan raya live] ${originLabel} - ${destLabel} Detour via Jalur Pesisir Pantai Cermin (melingkari zona bahaya Lubuk Pakam)`,
           waypoints: [
             { lat: 3.7922, lon: 98.6776 },
             { lat: 3.7300, lon: 98.7200 },
@@ -211,7 +211,7 @@ export function useDemoState(onCrisisReady?: (crisis: CrisisState) => void) {
           risk_score: 0.12,
           is_compromised: false,
           safety_status: 'SAFE_DETOUR',
-          safety_tag: 'BYPASS PESISIR BEBAS BANJIR',
+          safety_tag: 'BYPASS PESISIR • SIMULASI/OFFLINE',
           modality: 'truck',
           color: '#10B981'
         }

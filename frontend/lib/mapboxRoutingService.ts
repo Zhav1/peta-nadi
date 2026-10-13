@@ -346,17 +346,25 @@ export const STRATEGIC_BASELINE_CORRIDORS: GeoJSON.FeatureCollection = {
 
 /**
  * Fetches real-world turn-by-turn road network routing using Mapbox Directions API.
+ * Phase 57 WP-A3 (D4 live-first): returns provenance alongside geometry so
+ * interpolated fallbacks can never render unlabeled as a real road route.
  */
+export interface DirectionsFetchResult {
+  coords: LonLat[];
+  /** 'live' = Mapbox road geometry; 'offline-interpolated' = straight-line estimate (SIMULASI/OFFLINE only). */
+  source: 'live' | 'offline-interpolated';
+}
+
 export async function fetchMapboxDirections(
   origin: LonLat,
   destination: LonLat,
   waypoints: LonLat[] = [],
   excludeToll: boolean = false
-): Promise<LonLat[]> {
+): Promise<DirectionsFetchResult> {
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 
   if (!token) {
-    return fallbackHighwayRoute(origin, destination, waypoints);
+    return { coords: fallbackHighwayRoute(origin, destination, waypoints), source: 'offline-interpolated' };
   }
 
   const allCoords = [origin, ...waypoints, destination];
@@ -372,13 +380,13 @@ export async function fetchMapboxDirections(
     );
     if (data?.routes && data.routes.length > 0 && data.routes[0].geometry) {
       const coords: LonLat[] = data.routes[0].geometry.coordinates;
-      return coords;
+      return { coords, source: 'live' };
     }
   } catch (err) {
     console.warn('Failed to fetch Mapbox Directions API, using highway fallback:', err);
   }
 
-  return fallbackHighwayRoute(origin, destination, waypoints);
+  return { coords: fallbackHighwayRoute(origin, destination, waypoints), source: 'offline-interpolated' };
 }
 
 function fallbackHighwayRoute(
@@ -444,18 +452,25 @@ export async function calculateRoadNetworkDetourRoutes(
     fetchMapboxDirections(origin, destination, detourWaypoints2, excludeToll),
   ]);
 
+  // Phase 57 WP-A3 (D4): interpolated geometry is labeled SIMULASI/OFFLINE in
+  // every user-facing field — never presented as a live road route.
+  const offlineLabel = (text: string) =>
+    coordsPrimary.source === 'offline-interpolated' && coordsAlternative.source === 'offline-interpolated'
+      ? `[SIMULASI/OFFLINE — garis lurus, bukan jalan raya live] ${text}`
+      : text;
+
   return [
     {
-      description: `Rute Pengalihan Tangensial Bebas Hambatan (Menghindari Radius Bahaya ${radiusKm}km)`,
-      waypoints: coordsPrimary.map(([lon, lat]) => ({ lat, lon })),
+      description: offlineLabel(`Rute Pengalihan Tangensial Bebas Hambatan (Menghindari Radius Bahaya ${radiusKm}km)`),
+      waypoints: coordsPrimary.coords.map(([lon, lat]) => ({ lat, lon })),
       distance_km: 118,
       eta_minutes: 112,
       fuel_increase_pct: 12.5,
       risk_score: 0.15,
     },
     {
-      description: `Rute Arteri Alternatif Sekunder (Jalur Pengalihan Mandiri)`,
-      waypoints: coordsAlternative.map(([lon, lat]) => ({ lat, lon })),
+      description: offlineLabel(`Rute Arteri Alternatif Sekunder (Jalur Pengalihan Mandiri)`),
+      waypoints: coordsAlternative.coords.map(([lon, lat]) => ({ lat, lon })),
       distance_km: 136,
       eta_minutes: 145,
       fuel_increase_pct: 22.0,
