@@ -12,6 +12,7 @@ import logging
 import time
 from typing import Callable, Optional
 import jwt
+from jwt import PyJWKClient
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
@@ -53,6 +54,12 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
     ],
 }
 
+DEFAULT_ROLE_COMPANIES: dict[str, str] = {
+    ROLE_DISPATCHER: "pos_logistik",
+    ROLE_REGULATOR: "bapanas",
+    ROLE_GUEST: "demo_sandbox",
+}
+
 DEFAULT_ROLE_ORGS: dict[str, str] = {
     ROLE_DISPATCHER: "PT Samudera Logistik Sumatra",
     ROLE_REGULATOR: "Badan Pangan Nasional / Kemenhub",
@@ -77,6 +84,7 @@ class UserSession(BaseModel):
     id: str
     email: str
     role: str = Field(default=ROLE_GUEST)
+    company_id: Optional[str] = Field(default=None)
     org_name: str = Field(default=DEFAULT_ROLE_ORGS[ROLE_GUEST])
     name: str = Field(default=DEFAULT_ROLE_NAMES[ROLE_GUEST])
     permissions: list[str] = Field(default_factory=list)
@@ -91,6 +99,7 @@ def get_jwt_secret() -> str:
 
 def create_guest_token(
     role: str = ROLE_GUEST,
+    company_id: Optional[str] = None,
     org_name: Optional[str] = None,
     email: Optional[str] = None,
     name: Optional[str] = None,
@@ -101,6 +110,7 @@ def create_guest_token(
     Used for local evaluation, guest testing, and offline fallback mode.
     """
     normalized_role = role.upper() if role.upper() in VALID_ROLES else ROLE_GUEST
+    assigned_company = company_id or DEFAULT_ROLE_COMPANIES.get(normalized_role, DEFAULT_ROLE_COMPANIES[ROLE_GUEST])
     assigned_org = org_name or DEFAULT_ROLE_ORGS.get(normalized_role, DEFAULT_ROLE_ORGS[ROLE_GUEST])
     assigned_name = name or DEFAULT_ROLE_NAMES.get(normalized_role, DEFAULT_ROLE_NAMES[ROLE_GUEST])
     assigned_email = email or DEFAULT_ROLE_EMAILS.get(normalized_role, DEFAULT_ROLE_EMAILS[ROLE_GUEST])
@@ -117,11 +127,13 @@ def create_guest_token(
         "app_metadata": {
             "provider": "guest_session",
             "role": normalized_role,
+            "company_id": assigned_company,
             "org_name": assigned_org,
             "permissions": ROLE_PERMISSIONS.get(normalized_role, []),
         },
         "user_metadata": {
             "name": assigned_name,
+            "company_id": assigned_company,
             "org_name": assigned_org,
         },
         "iat": now,
@@ -132,10 +144,22 @@ def create_guest_token(
     return jwt.encode(payload, get_jwt_secret(), algorithm="HS256")
 
 
+_jwks_clients: dict[str, PyJWKClient] = {}
+
+
+def get_jwks_client(jwks_url: str) -> PyJWKClient:
+    """Returns cached PyJWKClient instance for given JWKS endpoint."""
+    global _jwks_clients
+    if jwks_url not in _jwks_clients:
+        _jwks_clients[jwks_url] = PyJWKClient(jwks_url, cache_keys=True, max_cached_keys=16)
+    return _jwks_clients[jwks_url]
+
+
 def decode_and_verify_token(token: str) -> UserSession:
     """
     Decode and verify a JWT token from Supabase Auth or offline session generator.
-    Strictly extracts role from app_metadata.role per Supabase security guidelines.
+    Supports asymmetric Supabase JWTs (ES256 / RS256 via JWKS) and symmetric HMAC (HS256).
+    Falls back to server-side Supabase get_user validation if available.
     """
     if not token or not isinstance(token, str):
         raise HTTPException(
@@ -143,36 +167,102 @@ def decode_and_verify_token(token: str) -> UserSession:
             detail={"error": "UNAUTHORIZED", "message": "Token otentikasi tidak disediakan atau tidak valid."},
         )
 
-    secret = get_jwt_secret()
-
     try:
-        # First attempt standard verification
-        payload = jwt.decode(
-            token,
-            secret,
-            algorithms=["HS256", "RS256"],
-            options={"verify_aud": False, "verify_signature": True},
-        )
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"error": "TOKEN_EXPIRED", "message": "Sesi token telah kedaluwarsa. Silakan masuk kembali."},
-        )
-    except jwt.InvalidSignatureError:
-        # Security: never fall back to unverified decoding. A token whose signature
-        # cannot be validated must be rejected outright (no unsigned JWT trust).
-        logger.warning("Rejected token with invalid signature — unverified decode fallback is disabled.")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={
-                "error": "INVALID_SIGNATURE",
-                "message": "Tanda tangan token tidak valid. Sesi ditolak; silakan masuk kembali.",
-            },
-        )
+        unverified_header = jwt.get_unverified_header(token)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"error": "INVALID_TOKEN", "message": f"Token tidak valid: {str(e)}"},
+            detail={"error": "INVALID_TOKEN", "message": f"Header token tidak valid: {str(e)}"},
+        )
+
+    token_alg = unverified_header.get("alg", "HS256")
+    payload = None
+    verification_error = None
+
+    # Path 1: Asymmetric Supabase Auth JWT (ES256 / RS256 or presence of kid)
+    jwks_url = getattr(settings, "supabase_jwks_key", "") or ""
+    if not jwks_url and getattr(settings, "supabase_url", ""):
+        jwks_url = f"{settings.supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json"
+
+    if (token_alg in ["ES256", "RS256"] or unverified_header.get("kid")) and jwks_url:
+        try:
+            jwks_client = get_jwks_client(jwks_url)
+            signing_key = jwks_client.get_signing_key_from_jwt(token)
+            payload = jwt.decode(
+                token,
+                signing_key.key,
+                algorithms=["ES256", "RS256", "HS256"],
+                options={"verify_aud": False, "verify_signature": True},
+            )
+        except jwt.ExpiredSignatureError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={"error": "TOKEN_EXPIRED", "message": "Sesi token telah kedaluwarsa. Silakan masuk kembali."},
+            )
+        except jwt.InvalidSignatureError as e:
+            verification_error = e
+            logger.warning("Supabase token signature mismatch against JWKS key.")
+        except Exception as e:
+            verification_error = e
+            logger.warning(f"JWKS verification encountered error ({e}); attempting alternate path.")
+
+    # Path 2: Symmetric HMAC verification (HS256 for local dev / offline guest sessions / unit tests)
+    if payload is None:
+        try:
+            secret = get_jwt_secret()
+            payload = jwt.decode(
+                token,
+                secret,
+                algorithms=["HS256", "RS256"],
+                options={"verify_aud": False, "verify_signature": True},
+            )
+        except jwt.ExpiredSignatureError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={"error": "TOKEN_EXPIRED", "message": "Sesi token telah kedaluwarsa. Silakan masuk kembali."},
+            )
+        except jwt.InvalidSignatureError as e:
+            if verification_error is None:
+                verification_error = e
+        except Exception as e:
+            if verification_error is None:
+                verification_error = e
+
+    # Path 3: Server-side relay fallback via Supabase client get_user
+    if payload is None and settings.supabase_url and (settings.supabase_anon_key or settings.supabase_service_role_key):
+        try:
+            from supabase import create_client
+            sb_client = create_client(settings.supabase_url, settings.supabase_anon_key or settings.supabase_service_role_key)
+            user_response = sb_client.auth.get_user(token)
+            if user_response and user_response.user:
+                sb_user = user_response.user
+                app_meta = getattr(sb_user, "app_metadata", {}) or {}
+                user_meta = getattr(sb_user, "user_metadata", {}) or {}
+                payload = {
+                    "sub": str(sb_user.id),
+                    "email": sb_user.email,
+                    "app_metadata": app_meta,
+                    "user_metadata": user_meta,
+                    "iss": "supabase",
+                }
+        except Exception as relay_err:
+            logger.warning(f"Server-side Supabase get_user relay fallback failed: {relay_err}")
+
+    # If all verification paths failed, reject token
+    if payload is None:
+        if isinstance(verification_error, jwt.InvalidSignatureError):
+            logger.warning("Rejected token with invalid signature: unverified decode fallback is disabled.")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={
+                    "error": "INVALID_SIGNATURE",
+                    "message": "Tanda tangan token tidak valid. Sesi ditolak; silakan masuk kembali.",
+                },
+            )
+        err_msg = str(verification_error) if verification_error else "Verifikasi tanda tangan token gagal."
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"error": "INVALID_TOKEN", "message": f"Token tidak valid: {err_msg}"},
         )
 
     # Supabase Security: Extract role strictly from app_metadata
@@ -184,10 +274,32 @@ def decode_and_verify_token(token: str) -> UserSession:
     if normalized_role not in VALID_ROLES:
         normalized_role = ROLE_GUEST
 
-    org_name = app_meta.get("org_name") or user_meta.get("org_name") or DEFAULT_ROLE_ORGS.get(normalized_role, "")
-    user_name = user_meta.get("name") or user_meta.get("full_name") or DEFAULT_ROLE_NAMES.get(normalized_role, "")
+    company_id = app_meta.get("company_id") or user_meta.get("company_id")
     user_id = payload.get("sub") or payload.get("id") or f"user-{normalized_role.lower()}"
     email = payload.get("email") or DEFAULT_ROLE_EMAILS.get(normalized_role, "")
+
+    # Profile enrichment from public.profiles for registered Supabase accounts if company_id is unset
+    if not company_id and settings.supabase_url and settings.supabase_service_role_key and len(str(user_id)) == 36:
+        try:
+            from supabase import create_client
+            sb_admin = create_client(settings.supabase_url, settings.supabase_service_role_key)
+            prof_res = sb_admin.table("profiles").select("company_id, role, name").eq("id", user_id).limit(1).execute()
+            if prof_res.data and len(prof_res.data) > 0:
+                p_row = prof_res.data[0]
+                if p_row.get("company_id"):
+                    company_id = p_row["company_id"]
+                if p_row.get("role") and normalized_role == ROLE_GUEST:
+                    p_role = str(p_row["role"]).upper()
+                    if p_role in VALID_ROLES:
+                        normalized_role = p_role
+        except Exception as profile_err:
+            logger.debug(f"Profile lookup for user {user_id} skipped: {profile_err}")
+
+    if not company_id:
+        company_id = DEFAULT_ROLE_COMPANIES.get(normalized_role)
+
+    org_name = app_meta.get("org_name") or user_meta.get("org_name") or DEFAULT_ROLE_ORGS.get(normalized_role, "")
+    user_name = user_meta.get("name") or user_meta.get("full_name") or DEFAULT_ROLE_NAMES.get(normalized_role, "")
     permissions = app_meta.get("permissions") or ROLE_PERMISSIONS.get(normalized_role, [])
     is_offline = app_meta.get("provider") == "guest_session" or payload.get("iss") == "prehub-auth-engine"
 
@@ -195,6 +307,7 @@ def decode_and_verify_token(token: str) -> UserSession:
         id=user_id,
         email=email,
         role=normalized_role,
+        company_id=company_id,
         org_name=org_name,
         name=user_name,
         permissions=permissions,

@@ -1,5 +1,5 @@
 """
-PreHub — Unified Multi-Outlet News & Early Warning Intelligence Router (Supabase-Native)
+PreHub: Unified Multi-Outlet News & Early Warning Intelligence Router (Supabase-Native)
 Ingests from LKBN Antara (10 Sumatra Bureaus), BMKG/BNPB, and targeted regional media,
 persists to Supabase public.news_articles with PostGIS geography, extracts structured NLP
 crisis intelligence, and manages Globot-style Human-In-The-Loop review workflows.
@@ -8,7 +8,7 @@ import logging
 import asyncio
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 
 from app.services.redis_client import get_redis
@@ -39,8 +39,34 @@ class HitlActionRequest(BaseModel):
     notes: Optional[str] = None
 
 
+_ingestion_lock = asyncio.Lock()
+_is_ingesting = False
+
+
+async def run_background_news_ingestion(force: bool = False):
+    """
+    Background worker for asynchronous news and disaster early-warning indexing.
+    Protected by module-level concurrency guard to eliminate stampedes.
+    """
+    global _is_ingesting
+    if _is_ingesting:
+        logger.info("News ingestion cycle already in progress, skipping duplicate trigger.")
+        return
+    async with _ingestion_lock:
+        _is_ingesting = True
+        try:
+            logger.info("Executing background news ingestion cycle into Supabase...")
+            await unified_news_ingestor.run_ingestion_cycle(force_refresh=force)
+            _NEWS_CACHE["last_fetched_at"] = 0.0
+        except Exception as ie:
+            logger.warning(f"Background news ingestion error: {ie}")
+        finally:
+            _is_ingesting = False
+
+
 @router.get("/api/v1/news/live")
 async def get_live_news(
+    background_tasks: BackgroundTasks = None,
     province: Optional[str] = Query(None, description="Filter by Sumatra province (e.g. 'Sumatera Barat', 'Sumatera Utara')"),
     severity: Optional[str] = Query(None, description="Filter by severity ('critical', 'high', 'medium', 'low')"),
     force_refresh: bool = Query(False, description="Force dynamic re-scrape from RSS & Google News into Supabase")
@@ -48,24 +74,33 @@ async def get_live_news(
     """
     Returns aggregated real-time news articles from Supabase public.news_articles,
     enriched with PostGIS coordinates, corridor impact metrics, and official citations.
+    Non-blocking: ingestion runs in background, returning cached/current data immediately.
     """
     now = datetime.now(timezone.utc).timestamp()
 
-    # If force refresh requested or cache expired, run ingestion cycle
-    if force_refresh or (now - _NEWS_CACHE["last_fetched_at"] > 300) or not _NEWS_CACHE["articles"]:
-        try:
-            logger.info("Executing dynamic news ingestion cycle into Supabase...")
-            await unified_news_ingestor.run_ingestion_cycle(force_refresh=force_refresh)
-        except Exception as ie:
-            logger.warning(f"Live news ingestion error: {ie}")
+    # If force refresh requested or cache expired (5 min), trigger background ingestion
+    if force_refresh or (now - _NEWS_CACHE["last_fetched_at"] > 300):
+        if background_tasks is not None:
+            background_tasks.add_task(run_background_news_ingestion, force_refresh)
+        else:
+            asyncio.create_task(run_background_news_ingestion(force_refresh))
 
-    # Query latest articles from Supabase
+    # Query latest articles immediately from Supabase
     articles = await fetch_news_from_supabase(limit=60, province=province, severity=severity)
 
-    # If Supabase is currently empty or network is cold, trigger immediate on-demand ingestion
+    # If Supabase is cold or empty, trigger background ingestion and return honest warming state
     if not articles:
-        await unified_news_ingestor.run_ingestion_cycle(force_refresh=True)
-        articles = await fetch_news_from_supabase(limit=60, province=province, severity=severity)
+        background_tasks.add_task(run_background_news_ingestion, True)
+        return {
+            "status": "warming",
+            "storage": "supabase_postgis",
+            "count": 0,
+            "total": 0,
+            "message": "Indeks intelijen berita sedang disinkronkan di latar belakang...",
+            "last_updated": datetime.now(timezone.utc).isoformat(),
+            "articles": [],
+            "items": []
+        }
 
     _NEWS_CACHE["articles"] = articles
     _NEWS_CACHE["last_fetched_at"] = now

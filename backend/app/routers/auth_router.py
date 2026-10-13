@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from app.auth.supabase_auth import (
+    DEFAULT_ROLE_COMPANIES,
     DEFAULT_ROLE_EMAILS,
     DEFAULT_ROLE_NAMES,
     DEFAULT_ROLE_ORGS,
@@ -33,6 +34,7 @@ router = APIRouter(prefix="/auth", tags=["Authentication & RBAC"])
 class GuestSessionRequest(BaseModel):
     """Payload to generate an offline/evaluator guest session."""
     role: str = Field(default=ROLE_GUEST, description="Role to assign: DISPATCHER | REGULATOR | GUEST")
+    company_id: Optional[str] = Field(default=None, description="Tenant company ID (e.g. pos_logistik, pelindo_belawan)")
     org_name: Optional[str] = Field(default=None, description="Custom organization name")
     name: Optional[str] = Field(default=None, description="Custom user name")
     email: Optional[str] = Field(default=None, description="Custom user email")
@@ -94,6 +96,7 @@ async def create_guest_session(request: GuestSessionRequest):
 
     token = create_guest_token(
         role=target_role,
+        company_id=request.company_id,
         org_name=request.org_name,
         email=request.email,
         name=request.name,
@@ -102,7 +105,7 @@ async def create_guest_session(request: GuestSessionRequest):
     from app.auth.supabase_auth import decode_and_verify_token
     user_session = decode_and_verify_token(token)
 
-    logger.info(f"Generated guest session token for persona: {target_role} ({user_session.org_name})")
+    logger.info(f"Generated guest session token for persona: {target_role} ({user_session.company_id} / {user_session.org_name})")
 
     return AuthTokenResponse(
         access_token=token,
@@ -126,8 +129,11 @@ async def switch_role(request: RoleSwitchRequest, current_user: UserSession = De
             detail={"error": "INVALID_ROLE", "message": f"Peran '{request.role}' tidak valid. Pilihan: {VALID_ROLES}"},
         )
 
+    target_company = current_user.company_id or DEFAULT_ROLE_COMPANIES.get(target_role)
+
     token = create_guest_token(
         role=target_role,
+        company_id=target_company,
         org_name=DEFAULT_ROLE_ORGS.get(target_role),
         name=DEFAULT_ROLE_NAMES.get(target_role),
         email=DEFAULT_ROLE_EMAILS.get(target_role),

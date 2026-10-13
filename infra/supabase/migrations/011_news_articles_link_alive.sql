@@ -6,4 +6,4 @@ ALTER TABLE public.news_articles
   ADD COLUMN IF NOT EXISTS link_alive TEXT DEFAULT 'unknown';
 
 COMMENT ON COLUMN public.news_articles.link_alive IS
-  'alive | dead | unknown — result of the ingestion-time source link probe (dead = status >= 400, redirect to site root, or redirect to another host; unknown = timeout/transport error).';
+  'alive | dead | unknown - result of the ingestion-time source link probe (dead = status >= 400, redirect to site root, or redirect to another host; unknown = timeout/transport error).';

@@ -1,7 +1,7 @@
 import pytest
 from types import SimpleNamespace
 from typing import Any, Dict
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, AsyncMock
 
 import httpx
 
@@ -234,3 +234,68 @@ async def test_link_alive_is_persisted_to_supabase(monkeypatch):
 
     assert count == 1
     assert captured_chunks[0][0]["link_alive"] == "dead"
+
+
+# ---------------------------------------------------------------------------
+# WP-B1: Non-blocking news ingestion & warming state
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_news_stampede_guard_prevents_duplicate_runs(monkeypatch):
+    """Multiple concurrent calls to run_background_news_ingestion must not run concurrently."""
+    import asyncio
+    from app.routers import news_router
+
+    calls = 0
+
+    async def fake_ingest(force_refresh=False):
+        nonlocal calls
+        calls += 1
+        await asyncio.sleep(0.05)
+
+    monkeypatch.setattr(news_router.unified_news_ingestor, "run_ingestion_cycle", fake_ingest)
+
+    # Launch two ingestion triggers simultaneously
+    task1 = asyncio.create_task(news_router.run_background_news_ingestion(force=True))
+    task2 = asyncio.create_task(news_router.run_background_news_ingestion(force=True))
+
+    await asyncio.gather(task1, task2)
+
+    # Stampede guard must allow only 1 cycle execution
+    assert calls == 1
+
+
+@pytest.mark.asyncio
+async def test_get_live_news_returns_warming_state_when_cold(monkeypatch):
+    """When Supabase has no cached articles, return warming status immediately without blocking."""
+    from fastapi import BackgroundTasks
+    from app.routers import news_router
+
+    monkeypatch.setattr(news_router, "fetch_news_from_supabase", AsyncMock(return_value=[]))
+    monkeypatch.setattr(news_router, "_NEWS_CACHE", {"articles": [], "last_fetched_at": 0.0})
+
+    bg_tasks = BackgroundTasks()
+    res = await news_router.get_live_news(background_tasks=bg_tasks)
+
+    assert res["status"] == "warming"
+    assert res["count"] == 0
+    assert res["articles"] == []
+    assert "warming" in res["status"]
+
+
+@pytest.mark.asyncio
+async def test_get_live_news_returns_live_state_when_cached(monkeypatch):
+    """When Supabase has articles, return live status immediately."""
+    from fastapi import BackgroundTasks
+    from app.routers import news_router
+
+    sample_articles = [{"id": "art-1", "title": "Banjir Tebing Tinggi", "severity": "high"}]
+    monkeypatch.setattr(news_router, "fetch_news_from_supabase", AsyncMock(return_value=sample_articles))
+    monkeypatch.setattr(news_router, "_NEWS_CACHE", {"articles": [], "last_fetched_at": 0.0})
+
+    bg_tasks = BackgroundTasks()
+    res = await news_router.get_live_news(background_tasks=bg_tasks)
+
+    assert res["status"] == "live"
+    assert res["count"] == 1
+    assert len(res["articles"]) == 1

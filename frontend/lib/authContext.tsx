@@ -39,7 +39,7 @@ interface AuthContextType {
   closeAuthModal: () => void;
   switchRole: (role: UserRole) => Promise<{ success: boolean; error?: string }>;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  signUp: (email: string, password: string, role?: UserRole) => Promise<{ success: boolean; error?: string }>;
+  signUp: (email: string, password: string, role?: UserRole, companyId?: string) => Promise<{ success: boolean; error?: string }>;
   loginWithMagicLink: (email: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
 }
@@ -213,7 +213,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const signUp = useCallback(
-    async (email: string, password: string, selectedRole: UserRole = 'DISPATCHER'): Promise<{ success: boolean; error?: string }> => {
+    async (
+      email: string,
+      password: string,
+      selectedRole: UserRole = 'GUEST',
+      companyId?: string
+    ): Promise<{ success: boolean; error?: string }> => {
       setIsLoading(true);
       try {
         const sb = getSupabaseClient();
@@ -221,11 +226,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return { success: false, error: AUTH_SERVICE_UNAVAILABLE_MESSAGE };
         }
 
+        const effectiveCompanyId = companyId || 'demo_sandbox';
+
         const { data, error } = await sb.auth.signUp({
           email,
           password,
           options: {
-            data: { role: selectedRole },
+            data: {
+              role: selectedRole,
+              company_id: effectiveCompanyId,
+            },
           },
         });
         if (error) throw error;

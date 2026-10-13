@@ -449,3 +449,101 @@ def test_rbac_fleet_delete_allowed_for_dispatcher():
     )
     assert response.status_code == 200
     assert response.json()["status"] == "success"
+
+
+def test_rbac_company_id_tenancy_propagation():
+    """Verify that company_id is preserved and decoded in UserSession and /api/v1/auth/me."""
+    token = create_guest_token(
+        role=ROLE_DISPATCHER,
+        company_id="pos_logistik",
+        org_name="PT Pos Logistik Indonesia",
+        name="Dispatcher Pos"
+    )
+    res = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert res.status_code == 200
+    profile = res.json()
+    assert profile["company_id"] == "pos_logistik"
+    assert profile["role"] == ROLE_DISPATCHER
+
+
+def test_guest_session_endpoint_accepts_company_id():
+    """Verify that /api/v1/auth/guest-session accepts company_id and returns it in user payload."""
+    payload = {
+        "role": "DISPATCHER",
+        "company_id": "pelindo_belawan",
+        "org_name": "PT Pelabuhan Indonesia",
+        "name": "Dispatcher Pelindo"
+    }
+    res = client.post("/api/v1/auth/guest-session", json=payload)
+    assert res.status_code == 200
+    data = res.json()
+    assert "access_token" in data
+    assert data["user"]["company_id"] == "pelindo_belawan"
+    assert data["user"]["role"] == "DISPATCHER"
+
+
+def test_asymmetric_es256_jwks_token_validation(monkeypatch):
+    """
+    Verify that decode_and_verify_token correctly validates asymmetrically
+    signed ES256 Supabase JWTs via PyJWKClient.
+    """
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from unittest.mock import MagicMock
+    from fastapi import HTTPException
+    from app.auth.supabase_auth import decode_and_verify_token
+
+    # 1. Generate EC key pair (P-256 for ES256)
+    private_key = ec.generate_private_key(ec.SECP256R1())
+    public_key = private_key.public_key()
+
+    # 2. Issue an ES256 token matching real Supabase token structure
+    token_payload = {
+        "sub": "44444444-4444-4444-8444-444444444444",
+        "email": "pilot.es256@poslogistik.co.id",
+        "exp": int(time.time()) + 3600,
+        "app_metadata": {
+            "provider": "email",
+            "role": "DISPATCHER",
+            "company_id": "pos_logistik",
+        },
+        "user_metadata": {
+            "name": "Budi Santoso ES256",
+            "company_id": "pos_logistik",
+        },
+    }
+    es256_token = jwt.encode(
+        token_payload,
+        private_key,
+        algorithm="ES256",
+        headers={"kid": "mock-supabase-key-id"},
+    )
+
+    # 3. Mock PyJWKClient to return the matching public key
+    mock_signing_key = MagicMock()
+    mock_signing_key.key = public_key
+
+    mock_jwks_client = MagicMock()
+    mock_jwks_client.get_signing_key_from_jwt.return_value = mock_signing_key
+
+    monkeypatch.setattr("app.auth.supabase_auth.get_jwks_client", lambda url: mock_jwks_client)
+
+    # 4. Verify decoding succeeds and populates UserSession correctly
+    session = decode_and_verify_token(es256_token)
+    assert session.id == "44444444-4444-4444-8444-444444444444"
+    assert session.email == "pilot.es256@poslogistik.co.id"
+    assert session.role == "DISPATCHER"
+    assert session.company_id == "pos_logistik"
+    assert "fleet:write" in session.permissions
+
+    # 5. Verify forged/mismatched signature is rejected
+    tampered_key = ec.generate_private_key(ec.SECP256R1())
+    forged_token = jwt.encode(
+        token_payload,
+        tampered_key,
+        algorithm="ES256",
+        headers={"kid": "mock-supabase-key-id"},
+    )
+    with pytest.raises(HTTPException) as exc_info:
+        decode_and_verify_token(forged_token)
+    assert exc_info.value.status_code == 401
+    assert "INVALID_SIGNATURE" in str(exc_info.value.detail)

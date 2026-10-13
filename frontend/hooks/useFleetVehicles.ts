@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import type { FleetVehicle } from '@/lib/types';
 import { api } from '@/lib/api';
+import { useAuth } from '@/lib/authContext';
 
 const FALLBACK_FLEET: FleetVehicle[] = [
   // Maritime
@@ -220,6 +221,9 @@ export function useFleetVehicles(
   modality?: string,
   options?: UseFleetVehiclesOptions
 ) {
+  const { user, role } = useAuth();
+  const effectiveCompanyId = role === 'DISPATCHER' ? user?.company_id : undefined;
+
   const [isSimulationMode, setIsSimulationMode] = useState<boolean>(
     options?.enableSimulationFallback ?? false
   );
@@ -229,7 +233,7 @@ export function useFleetVehicles(
 
   const fetchFleet = async () => {
     try {
-      const res = await api.fleet.vehicles(modality);
+      const res = await api.fleet.vehicles(modality, effectiveCompanyId);
       if (res.vehicles && res.vehicles.length > 0) {
         setVehicles(res.vehicles);
         setError(null);
@@ -264,7 +268,7 @@ export function useFleetVehicles(
 
     async function initialFetch() {
       try {
-        const res = await api.fleet.vehicles(modality);
+        const res = await api.fleet.vehicles(modality, effectiveCompanyId);
         if (isMounted) {
           if (res.vehicles && res.vehicles.length > 0) {
             setVehicles(res.vehicles);
@@ -305,7 +309,7 @@ export function useFleetVehicles(
       isMounted = false;
       clearInterval(interval);
     };
-  }, [modality, isSimulationMode]);
+  }, [modality, isSimulationMode, effectiveCompanyId]);
 
   useEffect(() => {
     if (isSimulationMode && vehicles.length === 0 && !isLoading) {

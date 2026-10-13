@@ -532,6 +532,7 @@ export interface UserProfile {
   name: string;
   permissions: string[];
   is_offline_guest: boolean;
+  company_name?: string;
   exp?: number;
 }
 

@@ -21,6 +21,15 @@ import {
 import { useAuth, GUEST_LOCK_MESSAGE } from '@/lib/authContext';
 import type { UserRole } from '@/lib/types';
 
+export const PILOT_ORGANIZATIONS = [
+  { id: 'pos_logistik', name: 'PT Pos Logistik Indonesia (Pos Logistik)' },
+  { id: 'pelindo_belawan', name: 'PT Pelabuhan Indonesia (Pelindo Belawan)' },
+  { id: 'jne_sumut', name: 'JNE Express Regional Sumatera' },
+  { id: 'bapanas', name: 'Badan Pangan Nasional (Bapanas)' },
+  { id: 'kemenhub', name: 'Kementerian Perhubungan (Kemenhub)' },
+  { id: 'demo_sandbox', name: 'Evaluasi Tamu / Demo Sandbox' },
+];
+
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -34,7 +43,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [selectedSignupRole, setSelectedSignupRole] = useState<UserRole>('DISPATCHER');
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>('pos_logistik');
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   if (!isOpen) return null;
@@ -75,9 +84,9 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
     }
 
     if (isSignUp) {
-      const res = await signUp(email, password, selectedSignupRole);
+      const res = await signUp(email, password, 'GUEST', selectedCompanyId);
       if (res.success) {
-        setStatusMessage({ type: 'success', text: 'Akun berhasil dibuat. Sesi aktif siap digunakan.' });
+        setStatusMessage({ type: 'success', text: 'Pendaftaran berhasil. Akun Anda aktif dalam mode Evaluasi Tamu (Sandbox).' });
         dismissGuestQuery();
         setTimeout(onClose, 800);
       } else {
@@ -452,20 +461,31 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
               </div>
 
               {isSignUp && (
-                <div className="space-y-1.5">
-                  <label className="text-xs font-mono text-slate-300 flex items-center gap-1.5">
-                    <Building className="w-3.5 h-3.5 text-slate-400" />
-                    <span>Peran Akun Baru</span>
-                  </label>
-                  <select
-                    value={selectedSignupRole}
-                    onChange={(e) => setSelectedSignupRole(e.target.value as UserRole)}
-                    className="w-full px-3.5 py-2 rounded-md bg-[#080d14] border border-[#1c2432] text-xs text-white focus:outline-none focus:border-slate-400 font-sans transition"
-                  >
-                    <option value="DISPATCHER">Dispatcher Logistik (PT Samudera)</option>
-                    <option value="REGULATOR">Regulator Pemerintah (Bapanas/Kemenhub)</option>
-                    <option value="GUEST">Evaluator Sandbox (Guest)</option>
-                  </select>
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-mono text-slate-300 flex items-center gap-1.5">
+                      <Building className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Afiliasi Organisasi / Mitra Pilot</span>
+                    </label>
+                    <select
+                      value={selectedCompanyId}
+                      onChange={(e) => setSelectedCompanyId(e.target.value)}
+                      className="w-full px-3.5 py-2 rounded-md bg-[#080d14] border border-[#1c2432] text-xs text-white focus:outline-none focus:border-slate-400 font-sans transition cursor-pointer"
+                    >
+                      {PILOT_ORGANIZATIONS.map((org) => (
+                        <option key={org.id} value={org.id}>
+                          {org.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="p-2.5 rounded-md bg-[#121822] border border-[#1c2432] text-xs font-sans text-slate-400 leading-relaxed flex items-start gap-2">
+                    <AlertCircle className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
+                    <span>
+                      Pendaftaran mandiri baru otomatis diberikan akses Tamu (Sandbox). Wewenang operasional Dispatcher dan Regulator memerlukan undangan resmi atau persetujuan operator.
+                    </span>
+                  </div>
                 </div>
               )}
 

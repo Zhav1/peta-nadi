@@ -48,6 +48,8 @@ export function useNewsVerification() {
     early_warning_count: 0
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [status, setStatus] = useState<'live' | 'warming' | 'idle'>('idle');
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -58,7 +60,24 @@ export function useNewsVerification() {
           api.news.marketRegime()
         ]);
         if (isMounted) {
-          const rawArticles = (newsData as { articles?: any[]; items?: any[] }).articles || (newsData as { items?: any[] }).items;
+          const res = newsData as {
+            status?: string;
+            articles?: any[];
+            items?: any[];
+            last_updated?: string;
+          };
+
+          if (res.status === 'warming') {
+            setStatus('warming');
+          } else if (res.status === 'live') {
+            setStatus('live');
+          }
+
+          if (res.last_updated) {
+            setLastUpdated(res.last_updated);
+          }
+
+          const rawArticles = res.articles || res.items || [];
           if (rawArticles && rawArticles.length > 0) {
             const mapped: NewsItem[] = rawArticles.map((a: any) => {
               const src = a.source || 'ANTARA';
@@ -96,6 +115,8 @@ export function useNewsVerification() {
               };
             });
             setNewsFeed(mapped);
+          } else {
+            setNewsFeed([]);
           }
           if (regimeData) setMarketRegime(regimeData as unknown as MarketRegimeData);
         }
@@ -118,5 +139,5 @@ export function useNewsVerification() {
     };
   }, []);
 
-  return { newsFeed, marketRegime, isLoading };
+  return { newsFeed, marketRegime, isLoading, status, lastUpdated };
 }

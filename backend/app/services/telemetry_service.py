@@ -1,5 +1,5 @@
 """
-PreHub — Multi-Modal Telemetry Ingestion & Resilient Fallback Service.
+PreHub: Multi-Modal Telemetry Ingestion & Resilient Fallback Service.
 Fuses Maritime AIS, Aviation ADS-B, and Truck GPS IoT Cold-Chain streams.
 """
 import os
@@ -964,17 +964,24 @@ class TelemetryService:
         if "progress" not in item:
             item["progress"] = 0.5
 
+        # Tenancy normalization
+        if not item.get("company_id"):
+            item["company_id"] = item.get("organization_id")
+        if not item.get("company_name"):
+            item["company_name"] = item.get("organization_id")
+
         return item
 
     def get_unified_fleet(
         self,
         modality: Optional[str] = None,
         status: Optional[str] = None,
+        company_id: Optional[str] = None,
         db_path: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         Merges custom user-registered fleets and baseline 45-unit multi-modal assets,
-        applying live telemetry, caching, cold-chain checks, and query filters.
+        applying live telemetry, caching, cold-chain checks, tenancy enforcement, and query filters.
         """
         # 1. Attempt to inspect live Redis AIS stream or active vessels
         live_ais: Dict[str, Any] = {}
@@ -1001,7 +1008,7 @@ class TelemetryService:
         except Exception as e:
             logger.error(f"Error loading custom vehicles from SQLite: {e}")
 
-        # 3. Enrich master baseline units
+        # 3. Enrich master baseline units and tag pilot tenancy
         enriched_baseline: List[Dict[str, Any]] = []
         for unit in MASTER_FLEET_DEFINITIONS:
             unit_modality = unit.get("modality")
@@ -1013,6 +1020,7 @@ class TelemetryService:
                 enriched = self._enrich_truck(unit)
             else:
                 enriched = dict(unit)
+            assign_baseline_tenancy(enriched)
             enriched_baseline.append(enriched)
 
         # Merge custom units first, followed by baseline
@@ -1026,11 +1034,54 @@ class TelemetryService:
         if status:
             filtered_fleet = [v for v in filtered_fleet if v.get("status") == status]
 
+        if company_id:
+            filtered_fleet = [
+                v for v in filtered_fleet
+                if v.get("company_id") == company_id or v.get("organization_id") == company_id
+            ]
+
         return filtered_fleet
 
-    async def get_all_vehicles(self) -> List[Dict[str, Any]]:
-        """Convenience async accessor returning all unified fleet vehicles."""
-        return self.get_unified_fleet()
+    async def get_all_vehicles(self, company_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Convenience async accessor returning unified fleet vehicles, optionally filtered by company_id."""
+        return self.get_unified_fleet(company_id=company_id)
+
+
+def assign_baseline_tenancy(unit: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Tags baseline unit with pilot carrier tenancy.
+    - Maritime: pelindo_belawan (PT Pelabuhan Indonesia) or bapanas
+    - Air: pos_logistik (PT Pos Logistik Indonesia)
+    - Truck: distributed among pos_logistik, jne_sumut, pelindo_belawan, bapanas
+    """
+    if unit.get("company_id"):
+        return unit
+
+    vid = unit.get("vehicle_id", "")
+    cargo = str(unit.get("cargo", "")).lower()
+    modality = unit.get("modality")
+
+    if modality == "maritime":
+        unit["company_id"] = "pelindo_belawan"
+        unit["company_name"] = "PT Pelabuhan Indonesia (Pelindo Belawan)"
+    elif modality == "air":
+        unit["company_id"] = "pos_logistik"
+        unit["company_name"] = "PT Pos Logistik Indonesia"
+    elif modality == "truck":
+        if "bulog" in cargo or "beras" in cargo:
+            unit["company_id"] = "bapanas"
+            unit["company_name"] = "Badan Pangan Nasional (Bapanas)"
+        elif "cabai" in cargo or "sayur" in cargo or "horti" in vid.lower():
+            unit["company_id"] = "jne_sumut"
+            unit["company_name"] = "JNE Express Regional Sumatera"
+        elif "minyak" in cargo or "cpo" in cargo or "belawan" in vid.lower():
+            unit["company_id"] = "pelindo_belawan"
+            unit["company_name"] = "PT Pelabuhan Indonesia (Pelindo Belawan)"
+        else:
+            unit["company_id"] = "pos_logistik"
+            unit["company_name"] = "PT Pos Logistik Indonesia"
+
+    return unit
 
 
 # Global singleton instance

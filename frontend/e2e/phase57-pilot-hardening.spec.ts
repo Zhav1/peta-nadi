@@ -102,7 +102,7 @@ test('offline detour recommendations render with the SIMULASI badge, never as li
 
     expect(mapbox.urls).toHaveLength(0);
 
-    const interpolated = routes.filter((r) => r.route_name.startsWith('[SIMULASI]'));
+    const interpolated = routes.filter((r) => (r.route_name ?? '').startsWith('[SIMULASI]'));
     expect(interpolated.length).toBeGreaterThan(0);
     for (const route of interpolated) {
       expect(route.description).toContain('SIMULASI/OFFLINE');
@@ -113,7 +113,7 @@ test('offline detour recommendations render with the SIMULASI badge, never as li
     for (const route of routes) {
       if (route.safety_status === 'HOLD_DELAY') continue;
       const labeled =
-        route.route_name.startsWith('[SIMULASI]') || (route.safety_tag ?? '').includes('SIMULASI');
+        (route.route_name ?? '').startsWith('[SIMULASI]') || (route.safety_tag ?? '').includes('SIMULASI');
       expect(labeled).toBe(true);
     }
   } finally {

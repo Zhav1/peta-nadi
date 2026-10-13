@@ -119,6 +119,8 @@ async def register_single_vehicle(
     try:
         vehicle_dict = payload.model_dump()
         vehicle_dict["organization_id"] = user.org_name
+        vehicle_dict["company_id"] = user.company_id or user.org_name
+        vehicle_dict["company_name"] = user.org_name
         vehicle_dict["created_by"] = user.name
         
         saved = telemetry_service.register_custom_vehicle(vehicle_dict)
@@ -164,6 +166,8 @@ async def upload_fleet_manifest(
         for v in payload.vehicles:
             d = v.model_dump()
             d["organization_id"] = user.org_name
+            d["company_id"] = user.company_id or user.org_name
+            d["company_name"] = user.org_name
             d["created_by"] = user.name
             vehicles_to_register.append(d)
 
@@ -228,6 +232,8 @@ async def upload_fleet_manifest_file(
     try:
         for v in vehicles_to_register:
             v["organization_id"] = user.org_name
+            v["company_id"] = user.company_id or user.org_name
+            v["company_name"] = user.org_name
             v["created_by"] = user.name
 
         registered_count = telemetry_service.register_batch_custom_vehicles(vehicles_to_register)

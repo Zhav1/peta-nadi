@@ -247,3 +247,49 @@ Batasi frekuensi pembacaan raster dan hindari pemanggilan sinkron `getImageData`
 | 7 | GPU Stall & Style Abort pada WebGL | **TERDOKUMENTASI** | Operasi synchronous raster querying pada WebGL dan re-request style Mapbox saat navigasi cepat. | Debounce style loading dan isolasi rendering canvas dari blocking calls. |
 
 Laporan hasil audit menyeluruh dan cetak biru solusi ini telah tersimpan dan siap digunakan sebagai panduan eksekusi perbaikan sistem.
+
+---
+
+## 5. Laporan Implementasi & Verifikasi Track B (Phase 57)
+
+Fokus Pekerjaan Track B: Ketahanan Backend (*Backend Resilience*), Penegakan Multi-Tenancy Armada (*Fleet Tenancy Enforcement*), Penguatan Otentikasi Akun Pilot (*Pilot Auth Hardening*), dan Konsumsi Berita Asinkron Tanpa Hambatan (*Non-Blocking News Ingestion*).
+
+Seluruh implementasi Track B mematuhi guardrail integritas Phase 56 & Phase 57: tanpa mock resurrection, tanpa em dashes, validasi strict RBAC, dan tanpa rekayasa data palsu (*zero fake figures*).
+
+### Ringkasan Eksekusi per Work Package:
+
+1. **WP-B1: News Non-Blocking Ingestion (Keputusan D5)**
+   - **Diagnosis**: Endpoint `GET /api/v1/news/live` mengeksekusi `await unified_news_ingestor.run_ingestion_cycle()` secara synchronous di dalam request handler, memicu blocking I/O dan timeout 20-30 detik pada kondisi cold start.
+   - **Perubahan Kode**:
+     - `backend/app/routers/news_router.py`: Diterapkan FastAPI `BackgroundTasks` dan concurrency lock `_ingestion_lock` / `_is_ingesting` untuk mencegah stampede request paralel.
+     - Mode Cold Start: Mengembalikan status jujur `"warming"` secara instan (<1s) dengan `articles: []` dan pesan informatif, tanpa menyuntikkan artikel palsu. Ingestion scraper berjalan di latar belakang.
+     - Mode Normal: Mengembalikan data live dari database Supabase / in-memory cache secara instan.
+     - `frontend/hooks/useNewsVerification.ts`: Menerima status `"warming"` dan `"live"` serta timestamp `last_updated`, mempertahankan integritas honest loading tanpa fallback artikel tiruan.
+   - **Bukti Pengujian**: 13 unit tests di `backend/tests/test_news_pipeline.py` dan router test di `test_api_routers.py` lulus 100%.
+
+2. **WP-B2: Pilot Auth Hardening & Metadata Perusahaan (Keputusan D2/D3)**
+   - **Diagnosis**: Registrasi publik mandiri sebelumnya mengizinkan pengguna memilih peran `DISPATCHER` secara bebas tanpa otorisasi institusi logistik.
+   - **Perubahan Kode**:
+     - `backend/app/auth/supabase_auth.py`: Model `UserSession` diperluas dengan field `company_id`. Pemetaan default `DEFAULT_ROLE_COMPANIES` (`pos_logistik`, `bapanas`, `demo_sandbox`) disematkan. Fungsi `create_guest_token` dan `decode_and_verify_token` mempropagasi klaim `company_id` dari JWT `app_metadata` / `user_metadata`.
+     - `backend/app/routers/auth_router.py`: Endpoint `/api/v1/auth/me`, `/session`, dan `/guest-session` mendukung input dan serialisasi `company_id`.
+     - `frontend/components/auth/AuthModal.tsx` & `frontend/lib/authContext.tsx`:
+       - Menutup self-grant `DISPATCHER` terbuka: Pendaftaran mandiri baru otomatis berstatus `GUEST` (Sandbox preview).
+       - Menambahkan selector institusi mitra pilot (`pos_logistik`, `pelindo_belawan`, `jne_sumut`, `bapanas`, `kemenhub`, `demo_sandbox`) yang dikirimkan melalui `options.data.company_id` saat registrasi Supabase Auth.
+       - Menampilkan catatan tata kelola bahwa wewenang operasional penuh memerlukan undangan resmi atau persetujuan operator.
+   - **Bukti Pengujian**: 28 unit tests di `backend/tests/test_auth_rbac.py` lulus 100%, memverifikasi integritas RBAC dan propagasi tenancy `company_id`.
+
+3. **WP-B3: Fleet Tenancy Enforcement (Keputusan D3)**
+   - **Diagnosis**: Seluruh 45 kendaraan baseline tampil ke semua pengguna tanpa filter kepemilikan armada korporasi.
+   - **Perubahan Kode**:
+     - `backend/app/services/telemetry_service.py`: Baseline 45 unit armada ditandai tenancy secara deterministik (`pos_logistik`, `jne_sumut`, `pelindo_belawan`, `bapanas`). Method `get_unified_fleet` menerima filter `company_id` untuk menyaring armada kustom SQLite dan armada baseline.
+     - `backend/app/routers/vehicles_router.py`: Endpoint `/api/v1/fleet/vehicles` menerima query `company_id` dan secara otomatis membatasi data armada bagi pengguna dengan peran `DISPATCHER` ke `company_id` miliknya. Peran `REGULATOR` dan `GUEST` tetap melihat armada koridor makro (45 unit).
+     - `backend/app/routers/fleet_ingest_router.py`: Normalisasi `company_id` pada registrasi armada perorangan dan impor manifest CSV batch.
+     - `frontend/lib/api.ts` & `frontend/hooks/useFleetVehicles.ts`: Mengirimkan parameter `company_id` ke API secara dinamis berdasarkan profil pengguna aktif.
+   - **Bukti Pengujian**: 7 unit tests di `backend/tests/test_vehicles_telemetry.py` dan 9 tests di `test_fleet_ingest.py` lulus 100%.
+
+### Verifikasi Gerbang Kualitas (Verification Gate):
+- **Backend Test Suite**: 191/191 tests passed (`pytest backend/tests`).
+- **Frontend Type Safety**: `npx tsc --noEmit` exited cleanly dengan 0 error.
+- **Frontend Production Build**: `npm run build` sukses 100% tanpa kompilasi gagal.
+- **Integritas Gaya Bahasa**: Zero em dashes (`—`) di seluruh berkas kode dan dokumentasi.
+- **Isolasi Track A**: Seluruh file milik rekan kerja (Track A) tidak tersentuh sama sekali.

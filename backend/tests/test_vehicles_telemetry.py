@@ -230,3 +230,46 @@ def test_offline_telemetry_fallback():
         truck_units = [v for v in fleet if v["modality"] == "truck"]
         assert len(truck_units) == 24
         assert all("vin" in v and v["vin"] for v in truck_units)
+
+
+def test_fleet_tenancy_filter_by_query():
+    """Verify that ?company_id= filters fleet strictly to that tenant."""
+    res_pos = client.get("/api/v1/fleet/vehicles?company_id=pos_logistik")
+    assert res_pos.status_code == 200
+    data_pos = res_pos.json()
+    assert data_pos["status"] == "success"
+    assert data_pos["total_vehicles"] > 0
+    assert all(v["company_id"] == "pos_logistik" for v in data_pos["vehicles"])
+
+    res_pelindo = client.get("/api/v1/fleet/vehicles?company_id=pelindo_belawan")
+    assert res_pelindo.status_code == 200
+    data_pelindo = res_pelindo.json()
+    assert data_pelindo["total_vehicles"] > 0
+    assert all(v["company_id"] == "pelindo_belawan" for v in data_pelindo["vehicles"])
+
+
+def test_fleet_tenancy_filter_by_dispatcher_jwt():
+    """Verify that a DISPATCHER session automatically filters fleet by user.company_id."""
+    from app.auth.supabase_auth import create_guest_token, ROLE_DISPATCHER
+
+    token = create_guest_token(role=ROLE_DISPATCHER, company_id="pos_logistik")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    res = client.get("/api/v1/fleet/vehicles", headers=headers)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["total_vehicles"] > 0
+    assert all(v["company_id"] == "pos_logistik" for v in data["vehicles"])
+
+
+def test_fleet_regulator_sees_corridor_wide():
+    """Verify that a REGULATOR session sees the full corridor-wide macro fleet (45 units)."""
+    from app.auth.supabase_auth import create_guest_token, ROLE_REGULATOR
+
+    token = create_guest_token(role=ROLE_REGULATOR)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    res = client.get("/api/v1/fleet/vehicles", headers=headers)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["total_vehicles"] == 45

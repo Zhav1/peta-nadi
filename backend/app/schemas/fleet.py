@@ -1,5 +1,5 @@
 """
-PreHub — Multi-Modal Fleet Telemetry Schemas (Pydantic v2)
+PreHub: Multi-Modal Fleet Telemetry Schemas (Pydantic v2)
 Models for Maritime AIS, Aviation ADS-B, and Truck IoT Cold-Chain Transponders.
 """
 from enum import Enum
@@ -95,7 +95,9 @@ class FleetVehicleTelemetry(BaseModel):
     deadline_buffer_hours: Optional[float] = Field(None, description="Buffer hours remaining before SLA penalty")
     has_bkhit_cert: bool = Field(False, description="Whether agricultural quarantine certificate is active")
     driver_name: Optional[str] = Field(None, description="Driver full name")
-    driver_phone: Optional[str] = Field(None, description="Driver WhatsApp contact number (+62...)")
+    # --- Tenancy & Organization Fields ---
+    company_id: Optional[str] = Field(None, description="Tenant organization ID (e.g. pos_logistik, pelindo_belawan)")
+    company_name: Optional[str] = Field(None, description="Human-readable tenant company name")
 
     # --- Signal & Telemetry Metadata ---
     signal_status: SignalStatus = Field(SignalStatus.SIMULATION_CACHE, description="Telemetry stream status")

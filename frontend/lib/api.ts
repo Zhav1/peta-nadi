@@ -179,8 +179,7 @@ export const api = {
   fleet: {
     // Phase 57 STEP 0 tenant contract (D3): ?company_id= filters custom +
     // baseline; missing claim = honest empty (dispatcher) / full corridor
-    // (regulator, macro view). Enforcement lands in WP-B3; this is the
-    // shared frontend/backend contract signature.
+    // (regulator, macro view). Enforced in WP-B3.
     vehicles: (modality?: string, company_id?: string) => {
       const sp = new URLSearchParams();
       if (modality && modality !== 'all') sp.append('modality', modality);
