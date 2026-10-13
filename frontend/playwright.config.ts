@@ -23,7 +23,9 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run start',
+    // next.config.mjs uses output: 'standalone', under which `next start`
+    // refuses to boot — serve the standalone bundle directly instead.
+    command: 'node .next/standalone/server.js',
     url: 'http://localhost:3000',
     reuseExistingServer: true,
     timeout: 120 * 1000,
