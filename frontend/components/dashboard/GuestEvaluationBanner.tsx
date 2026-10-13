@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ShieldAlert, KeyRound, X } from 'lucide-react';
 import { useAuth } from '@/lib/authContext';
 
@@ -12,13 +12,17 @@ const DISMISS_KEY = 'prehub_guest_banner_dismissed';
 // reappears next session only (sessionStorage, not localStorage).
 export function GuestEvaluationBanner() {
   const { isAuthenticated, isLoading, openAuthModal } = useAuth();
-  const [dismissed, setDismissed] = useState<boolean>(() => {
+  // Phase 57 WP-A3 follow-up: read storage in an effect, not during render,
+  // so server prerender and first client render agree (no hydration mismatch).
+  const [dismissed, setDismissed] = useState<boolean>(false);
+
+  useEffect(() => {
     try {
-      return sessionStorage.getItem(DISMISS_KEY) === '1';
+      if (sessionStorage.getItem(DISMISS_KEY) === '1') setDismissed(true);
     } catch {
-      return false;
+      // storage unavailable — banner stays visible
     }
-  });
+  }, []);
 
   if (isAuthenticated || isLoading || dismissed) return null;
 
