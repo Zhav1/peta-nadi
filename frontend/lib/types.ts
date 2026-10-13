@@ -416,6 +416,9 @@ export interface FleetVehicle {
   driver_phone?: string;
   driver_name?: string;
   license_plate?: string;
+  // Phase 57 STEP 0 tenant contract (D3): stable tenant claim. Backend
+  // GET /api/v1/fleet/vehicles accepts ?company_id= ; WP-B3 enforces filter.
+  company_id?: string;
 }
 
 // Phase 40: Dedicated Evaluation & Benchmark Dashboard Types
@@ -522,6 +525,10 @@ export interface UserProfile {
   email: string;
   role: UserRole;
   org_name: string;
+  // Phase 57 STEP 0 tenant contract (D3): stable tenant ID from
+  // profiles.company_id via JWT app_metadata.company_id. org_name stays
+  // for display; company_id is the enforceable claim (WP-B2/B3).
+  company_id?: string;
   name: string;
   permissions: string[];
   is_offline_guest: boolean;

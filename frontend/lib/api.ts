@@ -177,12 +177,19 @@ export const api = {
       request<unknown>(`/api/demo/replay/${crisisId}`),
   },
   fleet: {
-    vehicles: (modality?: string) =>
-      request<{ vehicles: import('./types').FleetVehicle[]; total_vehicles?: number; timestamp?: string }>(
-        modality && modality !== 'all'
-          ? `/api/v1/fleet/vehicles?modality=${encodeURIComponent(modality)}`
-          : '/api/v1/fleet/vehicles'
-      ),
+    // Phase 57 STEP 0 tenant contract (D3): ?company_id= filters custom +
+    // baseline; missing claim = honest empty (dispatcher) / full corridor
+    // (regulator, macro view). Enforcement lands in WP-B3; this is the
+    // shared frontend/backend contract signature.
+    vehicles: (modality?: string, company_id?: string) => {
+      const sp = new URLSearchParams();
+      if (modality && modality !== 'all') sp.append('modality', modality);
+      if (company_id) sp.append('company_id', company_id);
+      const qs = sp.toString() ? `?${sp.toString()}` : '';
+      return request<{ vehicles: import('./types').FleetVehicle[]; total_vehicles?: number; timestamp?: string }>(
+        `/api/v1/fleet/vehicles${qs}`
+      );
+    },
     register: (payload: import('./types').CustomVehicleRegisterPayload) =>
       request<import('./types').FleetIngestResponse>('/api/v1/fleet/register', {
         method: 'POST',
