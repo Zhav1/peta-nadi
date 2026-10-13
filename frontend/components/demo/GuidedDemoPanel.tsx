@@ -429,7 +429,14 @@ export function GuidedDemoPanel({
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                onAdvance();
+                // Phase 57 WP-A2 (D7): Stage-0 cold click must START the demo
+                // (crisisId is null so onAdvance would early-return). Pass the
+                // selected corridor so offline fallback labels match.
+                if (stage === 0) {
+                  onStart({ origin: selectedOrigin, destination: selectedDestination });
+                } else {
+                  onAdvance();
+                }
               }}
               className="flex-1 py-2 px-3 rounded-md text-xs font-semibold bg-white text-[#080d14] hover:bg-slate-200 transition-colors shadow-sm cursor-pointer flex items-center justify-center gap-1.5"
             >

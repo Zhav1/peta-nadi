@@ -163,7 +163,11 @@ export function useDemoState(onCrisisReady?: (crisis: CrisisState) => void) {
       console.warn('Backend demo API call failed, activating client-side offline demo runner:', err);
     }
 
-    // Fallback for offline / mock mode when backend is unreachable
+    // Fallback for offline / mock mode when backend is unreachable.
+    // Phase 57 WP-A2 (D6 — NO mock resurrection): this fallback MUST NOT add
+    // canned inflation_forecast / ltm_episodes / headline figures. Economy stays
+    // honestly empty until the real engine payload arrives (getFilteredState
+    // gates economy to stage>=3; EconomicTab renders honest empty states).
     const fallbackId = `belawan-demo-offline-${Math.floor(Math.random() * 1000)}`;
     const originLabel = opts?.origin ? opts.origin.toUpperCase() : 'BELAWAN';
     const destLabel = opts?.destination ? opts.destination.toUpperCase() : 'TEBING TINGGI';
