@@ -109,6 +109,35 @@ async def test_opencode_branch_raises_on_empty_completion(opencode_keyed, monkey
         await LLMGateway.generate_content(prompt="ping")
 
 
+@pytest.mark.asyncio
+async def test_gemini_branch_uses_configured_model_not_caller_opencode_id(monkeypatch):
+    """Gemini branch must use settings.gemini_model even when the caller passes an opencode ID.
+
+    Post-migration all call sites pass mimo/deepseek IDs. Reusing the caller ID
+    for the Gemini SDK would be a guaranteed API failure after a wasted call,
+    so the branch resolves its model from config (F1).
+    """
+    monkeypatch.setattr(llm_gateway.settings, "demo_offline", False)
+    monkeypatch.setattr(llm_gateway.settings, "opencode_api_key", "")
+    monkeypatch.setattr(llm_gateway.settings, "gemini_api_key", "AIza-test-key")
+    monkeypatch.setattr(llm_gateway.settings, "gemini_model", "gemini-1.5-flash")
+    captured = {}
+
+    class FakeModel:
+        def __init__(self, model_name=None, system_instruction=None):
+            captured["model_name"] = model_name
+
+        def generate_content(self, prompt, generation_config=None):
+            return MagicMock(text=" ringkasan taktis ")
+
+    monkeypatch.setattr(llm_gateway.genai, "GenerativeModel", FakeModel)
+    monkeypatch.setattr(llm_gateway.genai, "configure", lambda api_key=None: None)
+
+    text = await LLMGateway.generate_content(prompt="uji", model_name="mimo-v2.6-flash-free")
+    assert text == "ringkasan taktis"
+    assert captured["model_name"] == "gemini-1.5-flash"
+
+
 def test_economic_degraded_markers_rejected():
     """The marker tuple used to reject fallback prose must cover known canned headers."""
     markers = ("FALLBACK", "CRISIS EXECUTIVE SUMMARY", "RINGKASAN EKSEKUTIF PREHUB", "MOCKED")

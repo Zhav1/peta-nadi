@@ -18,7 +18,7 @@ OPENCODE_CHAT_COMPLETIONS_PATH = "/chat/completions"
 
 
 class LLMGatewayUnavailable(RuntimeError):
-    """Raised when no LLM provider (Gemini or NVIDIA NIM) can produce a real completion."""
+    """Raised when no LLM provider (opencode-go, Gemini or NVIDIA NIM) can produce a real completion."""
 
 
 class LLMGateway:
@@ -48,8 +48,11 @@ class LLMGateway:
         Gemini, then NVIDIA NIM DeepSeek. Raises LLMGatewayUnavailable when no
         provider succeeds; never returns canned prose.
         Per-branch defaults (not one global default): opencode branch defaults to
-        settings.opencode_driver_model, Gemini branch to settings.gemini_model,
-        NIM branch to PRIMARY_NIM_MODEL. Callers override explicitly via model_name.
+        settings.opencode_driver_model, Gemini branch ALWAYS uses
+        settings.gemini_model (never the caller's ID — callers pass opencode
+        IDs that are invalid for the Gemini SDK), NIM branch to
+        PRIMARY_NIM_MODEL. Callers override explicitly via model_name for the
+        opencode branch only.
         """
         # Force offline/mock mode if configured (production must run DEMO_OFFLINE=false)
         if settings.demo_offline:
@@ -94,7 +97,10 @@ class LLMGateway:
                 logger.error(f"LLMGateway: opencode call failed ({opencode_model}): {oc_err}", exc_info=True)
                 raise LLMGatewayUnavailable(f"opencode call failed ({opencode_model}): {oc_err}") from oc_err
 
-        model_name = model_name or settings.gemini_model
+        # NB: resolve the Gemini model from config, NEVER from the caller's
+        # model_name. Post-migration callers pass opencode IDs (mimo/deepseek)
+        # which the Gemini SDK would reject after a wasted, unbounded call.
+        gemini_model = settings.gemini_model
 
         gemini_available = (
             settings.gemini_api_key 
@@ -104,22 +110,23 @@ class LLMGateway:
 
         if gemini_available:
             try:
-                logger.info(f"LLMGateway: Attempting Gemini call ({model_name})...")
+                logger.info(f"LLMGateway: Attempting Gemini call ({gemini_model})...")
                 genai.configure(api_key=settings.gemini_api_key)
                 
                 import asyncio
                 
                 model = genai.GenerativeModel(
-                    model_name=model_name,
+                    model_name=gemini_model,
                     system_instruction=system_instruction
                 )
                 
-                # Run synchronous generation in executor
-                response = await asyncio.to_thread(
+                # Run synchronous generation in executor, bounded: the SDK
+                # exposes no timeout, so cap it like the httpx branches.
+                response = await asyncio.wait_for(asyncio.to_thread(
                     model.generate_content, 
                     prompt,
                     generation_config={"temperature": temperature}
-                )
+                ), timeout=30.0)
                 text = response.text.strip()
                 if text:
                     logger.info("LLMGateway: Gemini call succeeded.")

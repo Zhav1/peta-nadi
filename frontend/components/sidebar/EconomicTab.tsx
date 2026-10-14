@@ -104,6 +104,19 @@ export function EconomicTab({ crisis }: EconomicTabProps) {
         </div>
       )}
 
+      {/* Prediction narrative (Phase 58 expansion A): prose overlay on computed horizons */}
+      {(() => {
+        const narrative = crisis.prediction_finding?.data?.narrative;
+        return typeof narrative === 'string' && narrative.length > 0 ? (
+          <div className="bg-[#121822] border border-[#1c2432] rounded-lg p-3">
+            <p className="text-xs font-semibold text-cyan-300 uppercase tracking-wide mb-1">
+              Narasi Prakiraan
+            </p>
+            <p className="text-xs text-slate-300 leading-relaxed font-sans">{narrative}</p>
+          </div>
+        ) : null;
+      })()}
+
       {/* Historical price chart */}
       {loadingChart ? (
         <div className="w-full h-[160px] flex items-center justify-center bg-[#121822] border border-[#1c2432] rounded-md">

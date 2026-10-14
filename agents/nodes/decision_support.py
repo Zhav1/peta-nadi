@@ -101,15 +101,20 @@ async def decision_support_copilot(state: CrisisState) -> dict:
     comp_stat = compliance.get("status", "COMPLIANT")
     comp_desc = compliance.get("summary", "Sertifikat Karantina BKHIT Valid & Batas MST Sesuai")
 
+    # Deterministic last-resort briefing (used ONLY when the LLM is unreachable).
+    # Honesty rule (Phase 56/57 + audit F2): every figure below is an operational
+    # baseline estimate, never a verified model output. The header says so
+    # explicitly so a validated alert can never present these as measured truth.
     summary_text = (
+        "[ESTIMASI DETERMINISTIK — tanpa penalaran LLM; angka di bawah adalah baseline operasional, bukan hasil verifikasi model]\n"
         "ANALISIS KORELASI SITUASI & KEPUTUSAN TAKTIS\n"
         "1. ANCAMAN FISIK & VERIFIKASI BERITA RESMI:\n"
         f"- Cuaca & Sensor: {corridor_context.get('weather', {}).get('alert_summary', 'Hujan Lebat & Cuaca Ekstrem')}, "
         f"Kemacetan {corridor_context.get('traffic', {}).get('congestion_level_pct', 74.2)}% (Tunda {corridor_context.get('traffic', {}).get('delay_minutes', 35)} menit).\n"
         f"- Verifikasi Lapangan:{news_cite_str or ' Terkonfirmasi oleh buletin BMKG dan pantauan media terakreditasi.'}\n"
         "2. DAMPAK EKONOMI & PASOKAN PANGAN:\n"
-        f"- Indikator Harga: Cabai Rp {corridor_context.get('commodity_prices', {}).get('chili_price', 48500):,}, Beras Rp {corridor_context.get('commodity_prices', {}).get('rice_price', 14200):,}.\n"
-        "- Proyeksi Inflasi 48 Jam: Kenaikan harga pangan +12.8% jika distribusi terhambat.\n"
+        f"- Indikator Harga: Cabai Rp {corridor_context.get('commodity_prices', {}).get('chili_price', 48500):,}, Beras Rp {corridor_context.get('commodity_prices', {}).get('rice_price', 14200):,} (harga acuan, bukan pantauan live).\n"
+        "- Proyeksi Inflasi 48 Jam: Estimasi kasar kenaikan harga pangan +12.8% bila distribusi terhambat.\n"
         "3. KEPUTUSAN RUTE TAKTIS (EXPLAINABLE AI):\n"
         "- Rekomendasi: Alihkan armada distribusi ke Tol Medan-Kualanamu-Tebing Tinggi (Tol MKTT) guna menghindari hambatan di jalur arteri.\n"
         f"- Evaluasi Spoilage Hedging: Kebijakan {optimal_pol} menghemat {net_sav} dibanding kerugian pembusukan kargo pada skenario CONTINUE ({cont_loss}). Biaya operasional reroute: {reroute_cost}.\n"
