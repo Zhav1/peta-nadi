@@ -124,7 +124,7 @@ status: complete
 
 ## Performance
 
-- **Duration:** ~75 min (planning + execution incl. verification)
+- **Duration:** ~75 min planning + execution; full suite 194 passed in ~10:46 background run (NIM egress timeouts in sandbox, all via fail-loud fallback)
 - **Started:** 2026-10-14T00:42Z
 - **Completed:** 2026-10-14T01:55Z
 - **Tasks:** 11
