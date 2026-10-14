@@ -180,6 +180,10 @@ async def _poll_pihps_loop():
 async def lifespan(app: FastAPI):
     """Application startup and shutdown lifecycle."""
     logger.info(f"Starting {settings.app_name} v{settings.version} [{settings.environment}]")
+    if settings.demo_offline:
+        logger.warning("BOOT: DEMO_OFFLINE=true — mock LLM branch active; production must run DEMO_OFFLINE=false")
+    else:
+        logger.info("BOOT: DEMO_OFFLINE=false — live LLM gateway active (opencode-first, fail-loud)")
     # Startup: verify Redis connection
     try:
         r = get_redis()

@@ -19,49 +19,49 @@ AGENT_STATUS_STORE: Dict[str, Dict[str, Any]] = {
     "DataCollectionAgent": {
         "agent_id": "DataCollectionAgent",
         "name": "Data Collection & Health",
-        "status": "complete",
+        "status": "idle",
         "confidence": 0.88,
-        "last_run_at": datetime.now(timezone.utc).isoformat(),
+        "last_run_at": "never",
         "summary": "Validasi telemetri BMKG, TomTom, dan status sumber data pangan."
     },
     "OSINTHazardAgent": {
         "agent_id": "OSINTHazardAgent",
         "name": "OSINT & Intelligence",
-        "status": "complete",
+        "status": "idle",
         "confidence": 0.84,
-        "last_run_at": datetime.now(timezone.utc).isoformat(),
+        "last_run_at": "never",
         "summary": "Ekstraksi berita RSS & analisis anomali krisis lapangan."
     },
     "PredictionAgent": {
         "agent_id": "PredictionAgent",
         "name": "Congestion & Weather Forecast",
-        "status": "complete",
+        "status": "idle",
         "confidence": 0.82,
-        "last_run_at": datetime.now(timezone.utc).isoformat(),
+        "last_run_at": "never",
         "summary": "Proyeksi kemacetan 48 jam & estimasi risiko presipitasi Open-Meteo."
     },
     "RouteOptimizationAgent": {
         "agent_id": "RouteOptimizationAgent",
         "name": "Logistics & Graph Routing",
-        "status": "complete",
+        "status": "idle",
         "confidence": 0.90,
-        "last_run_at": datetime.now(timezone.utc).isoformat(),
+        "last_run_at": "never",
         "summary": "Komputasi rute mitigasi NetworkX Dijkstra dengan penalti bahaya."
     },
     "EconomicIntelligenceAgent": {
         "agent_id": "EconomicIntelligenceAgent",
         "name": "Price & Inflation Intelligence",
-        "status": "complete",
+        "status": "idle",
         "confidence": 0.86,
-        "last_run_at": datetime.now(timezone.utc).isoformat(),
+        "last_run_at": "never",
         "summary": "Deteksi anomali harga cabai/beras & proyeksi tren inflasi."
     },
     "DecisionSupportCopilot": {
         "agent_id": "DecisionSupportCopilot",
         "name": "AI Decision Copilot",
-        "status": "complete",
+        "status": "idle",
         "confidence": 0.92,
-        "last_run_at": datetime.now(timezone.utc).isoformat(),
+        "last_run_at": "never",
         "summary": "Sintesis CoT eksekutif multi-instansi dengan penalaran opencode (mimo reasoning + deepseek driver)."
     }
 }

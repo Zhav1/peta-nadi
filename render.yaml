@@ -23,3 +23,9 @@ services:
         sync: false
       - key: TOMTOM_API_KEY
         sync: false
+      - key: DEMO_OFFLINE
+        value: "false"
+      - key: OPENCODE_REASONING_MODEL
+        value: "mimo-v2.6-flash-free"
+      - key: OPENCODE_DRIVER_MODEL
+        value: "deepseek-v4.1-flash"
