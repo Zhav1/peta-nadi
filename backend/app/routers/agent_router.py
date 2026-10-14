@@ -62,7 +62,7 @@ AGENT_STATUS_STORE: Dict[str, Dict[str, Any]] = {
         "status": "complete",
         "confidence": 0.92,
         "last_run_at": datetime.now(timezone.utc).isoformat(),
-        "summary": "Sintesis CoT eksekutif multi-instansi dengan penalaran DeepSeek R1."
+        "summary": "Sintesis CoT eksekutif multi-instansi dengan penalaran opencode (mimo reasoning + deepseek driver)."
     }
 }
 
@@ -105,6 +105,7 @@ class ChatResponse(BaseModel):
     thought_signature: str
     confidence_score: float = 0.91
     consensus_passed: bool = True
+    degraded: bool = False
     sources: List[str] = [
         "BMKG Weather Radar",
         "TomTom Speed Flow",
@@ -198,10 +199,13 @@ async def simulation_chat(req: ChatRequest):
         logger.warning(f"LLMGateway invocation exception: {e}. Switching to dynamic context engine.")
 
     # Dynamic intelligent response generator if LLM returned mock default or failed
+    # (R6 honesty: template replies are grounded but NOT model reasoning — flagged degraded.)
+    degraded = False
     if not ai_reply or "CRISIS EXECUTIVE SUMMARY" in ai_reply or "mocked fallback" in ai_reply.lower() or "RINGKASAN EKSEKUTIF PREHUB (FALLBACK MODE)" in ai_reply:
+        degraded = True
         msg_lower = user_msg.lower()
         sig_hash = hashlib.md5(f"{user_msg}{time.time()}".encode()).hexdigest()[:6].upper()
-        thought_sig = f"SIG-GEMINI-3.8-FL-{sig_hash}"
+        thought_sig = f"SIG-OPENCODE-DRIVER-{sig_hash}"
 
         if "biaya" in msg_lower or "anggaran" in msg_lower or "tarif" in msg_lower or "rupiah" in msg_lower or "hedging" in msg_lower or "rugi" in msg_lower:
             ai_reply = (
@@ -235,13 +239,14 @@ async def simulation_chat(req: ChatRequest):
             )
     else:
         sig_hash = hashlib.md5(ai_reply.encode()).hexdigest()[:6].upper()
-        thought_sig = f"SIG-GEMINI-3.8-FL-{sig_hash}"
+        thought_sig = f"SIG-OPENCODE-DRIVER-{sig_hash}"
 
     return ChatResponse(
         reply=ai_reply,
         thought_signature=thought_sig,
         confidence_score=0.92,
         consensus_passed=True,
+        degraded=degraded,
         sources=["BMKG Weather Radar", "TomTom Speed Flow", "PIHPS Commodity Stream", "NVIDIA cuOpt Matrix"]
     )
 
