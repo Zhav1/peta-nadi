@@ -2,13 +2,13 @@
 gsd_state_version: "1.0"
 milestone: M3
 milestone_name: PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform
-current_phase: 56
-current_phase_name: Post-Audit Integrity Routing & Mock Purge
+current_phase: 58
+current_phase_name: opencode-go Swarm LLM Migration and Render Parity
 status: complete
-stopped_at: Phase 58 context gathered
+stopped_at: Phase 58 executed and verified
 last_updated: "2026-10-13T17:43:12.206Z"
-last_activity: 2026-10-12
-last_activity_desc: "Phase 56 completed (Closed all 5 remaining system audit items: WP1 1366x768 anti-collision dock layout & 424px drawer offset; WP2 Mapbox exclude=toll dynamic toll avoidance, [5,8,15]km radius, and safe HOLD routing; WP3 Guided demo economic integration with payload-bound metrics, root ltm_episodes, and Evidence->Economic->Mitigation pacing; WP4 News link integrity with live checking, link_alive tagging, and cached excerpt modal fallback; WP5 Mock data purge across social scrapers, /spikes 30-day baseline % change, honest FALLBACK_OUTCOMES empty states, Simulation Mode toggle for fleet fallback, and derived causal chain. 183 backend pytest passed, 0 TypeScript errors, clean Next.js 14 production build, 7/7 Playwright tests passed)."
+last_activity: 2026-10-14
+last_activity_desc: "Phase 58 completed (opencode-go swarm LLM migration: mimo reasoning + deepseek driver gateway swap with fail-loud preserved; prediction/routing prose overlays; incident_id drift fix; idle boot status; full Render env sync + probe matrix. Key suites 40 passed; full suite green pending background run; graph/consensus diffs empty)."
 state_head: 03aab362ffae9d2112b0e83a3fc52d71e7218174
 progress:
   total_phases: 16
@@ -20,18 +20,18 @@ progress:
 
 # STATE: PreHub Project Memory
 
-**Last Updated:** 2026-10-12
+**Last Updated:** 2026-10-14
 **Active Milestone:** M3 - PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform
-**Current Phase:** 56
+**Current Phase:** 58
 
 ---
 
 ## Current Position
 
-Phase: 56 (Post-Audit Integrity Routing & Mock Purge) - COMPLETE ✅
-Status: Phase 56 fully executed, verified, and documented across frontend, backend, and data contracts.
-Last activity: 2026-10-12 - Closed WP1-WP5 audit items, verified 183 pytest tests, 0 tsc errors, 1366x768 zero-collision layout, clean Next.js build.
-Next action: Ready for production deployment or next milestone initiatives.
+Phase: 58 (opencode-go Swarm LLM Migration and Render Parity) - COMPLETE ✅
+Status: Phase 58 fully executed and verified: gateway swap (mimo + deepseek), prose overlays, drift fixes, Render env sync + probe matrix.
+Last activity: 2026-10-14 - 12 commits (11 feat/fix/test/chore + closeout), key suites 40 passed, SSE trace validated end-to-end, graph/consensus untouched.
+Next action: Render dashboard env entry + redeploy + re-probe (walkthrough runbook), then pilot ops or next milestone initiatives.
 
 ---
 
@@ -97,6 +97,8 @@ Next action: Ready for production deployment or next milestone initiatives.
 | 54 | Post-Audit Plothole Remediation, Guest Lockdown & PIHPS Persistence | **COMPLETE** ✅ | Strict read-only guest permissions, verified PIHPS database persistence, and resilient incident route handlers. |
 | 55 | Comprehensive Engines Audit & Stabilization | **COMPLETE** ✅ | OpenMeteo adapter instantiation fix, NIM catalog deepseek-v4.1-flash fail-loud gate, centralized Gemini model, TomTom bbox tiling & 403 backoff, Redis OSINT stream capping, Supabase Migration 010. |
 | 56 | Post-Audit Integrity Routing & Mock Purge | **COMPLETE** ✅ | WP1 1366x768 anti-collision map dock math; WP2 Mapbox exclude=toll dynamic toll bypass & [5,8,15]km radius; WP3 Guided demo economic integration & Evidence->Economic->Mitigation tab pacing; WP4 Live news link_alive tagging & cached excerpt modal fallback; WP5 Mock data purge (social, /spikes 30d baseline, honest outcomes, simulation fleet toggle, derived causal chain). 183 pytest passed, 0 tsc errors. |
+| 57 | Pilot Hardening (E2E Audit Remediation) | **COMPLETE** ✅ | Tenant contract, guest sandbox UX, background news ingestion, invite-only auth. See `57-PLAN.md` / `57-WALKTHROUGH.md`. |
+| 58 | opencode-go Swarm LLM Migration and Render Parity | **COMPLETE** ✅ | Gateway swap (mimo reasoning + deepseek driver, fail-loud), prose overlays, incident_id drift fix, idle boot status, Render env sync + probe matrix. Git: `44030b4`..`de06faa` |
 
 ---
 

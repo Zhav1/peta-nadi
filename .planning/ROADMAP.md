@@ -1386,6 +1386,26 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 
 ---
 
+## Phase 58: opencode-go Swarm LLM Migration and Render Parity
+**Goal:** Migrate swarm LLM from Gemini+NIM to opencode-go subscription (mimo reasoning + deepseek driver), fix live-verified drift (incident_id vs id, seeded status, DEMO_OFFLINE), and reach Render env parity with a runnable probe matrix.
+**Status:** COMPLETE ✅
+**Plans:** 58-PLAN.md, 58-RESEARCH.md, 58-SUMMARY.md, 58-WALKTHROUGH.md
+
+### Deliverables
+- [x] **WP1 (tracer) — opencode-first gateway + config + catalog check**: `OPENCODE_*` Settings keys, single-base-URL fail-loud branch with per-branch defaults, `scripts/verify_opencode_models.py`.
+- [x] **WP2 — routing + expansion + chat honesty**: 5 call sites on mimo/deepseek table, prediction narrative + routing explainer prose overlays (deterministic fallback), chat `degraded` flag, opencode seed strings.
+- [x] **WP3 — drift + state honesty**: either-key `incident_id`/`id` normalization with regression tests, `idle` boot seeds, `DEMO_OFFLINE=false` pin.
+- [x] **WP4 — tests + parity**: gateway/drift/honesty tests (40 passed), full `render.yaml` env sync (secrets dashboard-only), `scripts/probe_parity.sh` matrix + local SSE trace (consensus 0.86 validated).
+
+### Verification Criteria
+- [x] Key suites 40 passed (gateway 8 + normalization 6 + auth_rbac 26), zero regressions
+- [x] `git diff --stat agents/graph.py agents/state.py agents/tools/consensus_gate.py` empty (DAG + formula untouched)
+- [x] Local SSE stream completes end-to-end (`simulation_started` → `node_update`s → validated)
+- [x] `grep DeepSeek R1 backend/app/routers/agent_router.py` = 0; LTM stays Google text-embedding-004
+- [ ] Render leg: dashboard env entry + redeploy + re-probe (walkthrough runbook; operator action)
+
+---
+
 ## Backlog (Post-Hackathon / v2)
 - Driver mobile app (React Native + WatermelonDB + CRDT offline sync)
 - Enterprise GraphRAG private self-hosted deployment
