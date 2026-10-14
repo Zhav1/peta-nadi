@@ -187,9 +187,11 @@ async def simulation_chat(req: ChatRequest):
     try:
         from agents.llm_gateway import LLMGateway
         logger.info(f"Invoking LLMGateway for query: '{user_msg}'")
+        from app.config import get_settings as _get_settings
         ai_reply = await LLMGateway.generate_content(
             prompt=prompt,
             system_instruction=system_instruction,
+            model_name=_get_settings().opencode_driver_model,
             temperature=0.3
         )
     except Exception as e:

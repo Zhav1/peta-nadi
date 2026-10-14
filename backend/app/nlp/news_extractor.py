@@ -1,6 +1,6 @@
 """
 PreHub — Structured News & Early Warning Information Extractor
-Uses Gemini 3.8 Flash via LLMGateway to extract structured crisis intelligence:
+Uses the opencode driver model via LLMGateway to extract structured crisis intelligence:
 - Incident type, severity, temporal phase (forecast_early_warning, active_disruption, clearing_recovery)
 - Estimated lead-time in hours
 - Corridor nodes and specific arterial road segments (e.g. Jalinsum KM 78)
@@ -138,7 +138,7 @@ def _fast_heuristic_extraction(art: Dict[str, Any]) -> Dict[str, Any]:
 async def extract_structured_news(art: Dict[str, Any]) -> Dict[str, Any]:
     """
     Extracts structured crisis intelligence from raw news item.
-    Uses cached result if present, otherwise attempts Gemini Flash with heuristic fallback.
+    Uses cached result if present, otherwise attempts opencode driver with heuristic fallback.
     """
     title = art.get("title", "")
     source = art.get("source", "Media")
@@ -151,7 +151,8 @@ async def extract_structured_news(art: Dict[str, Any]) -> Dict[str, Any]:
     structured = _fast_heuristic_extraction(art)
     
     settings = get_settings()
-    if settings.gemini_api_key:
+    opencode_key = getattr(settings, "opencode_api_key", "")
+    if opencode_key and not opencode_key.startswith("your-"):
         try:
             from agents.llm_gateway import LLMGateway
             prompt = (
@@ -173,10 +174,10 @@ async def extract_structured_news(art: Dict[str, Any]) -> Dict[str, Any]:
                 f"Content: {art.get('raw_description', '')}"
             )
             
-            # Bounded 12s budget: a full Gemini 3.8 Flash completion fits within it,
+            # Bounded 12s budget: a full opencode driver completion fits within it,
             # and only then do we drop to the heuristic baseline.
             gen_text = await asyncio.wait_for(
-                LLMGateway.generate_content(prompt=prompt, model_name=settings.gemini_model),
+                LLMGateway.generate_content(prompt=prompt, model_name=settings.opencode_driver_model),
                 timeout=12.0
             )
             if gen_text:
