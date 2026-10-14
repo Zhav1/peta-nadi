@@ -57,11 +57,13 @@ async def prediction_agent(state: CrisisState) -> dict:
         logger.debug(f"Failed to fetch Earth-2 data from Redis: {e_err}")
 
     # 2. Query incidents table for historical events count in same region
+    # Tolerate both `incident_id` and `id` keys (live schema returns `id`).
     has_history = False
     try:
         supabase = get_client()
-        res = supabase.table("incidents").select("incident_id").eq("region", state.get("region", "")).execute()
-        if res.data and len(res.data) >= 5:
+        res = supabase.table("incidents").select("*").eq("region", state.get("region", "")).execute()
+        hist_rows = [r for r in (res.data or []) if r.get("incident_id") or r.get("id")]
+        if len(hist_rows) >= 5:
             has_history = True
     except Exception as dbe:
         logger.debug(f"Failed to query historical incidents: {dbe}")

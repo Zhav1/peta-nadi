@@ -75,7 +75,7 @@ async def get_hazard_polygons(lat: float, lon: float, radius_km: float = 50) -> 
         for row in (res.data or []):
             if row.get("affected_polygon"):
                 hazards.append({
-                    "incident_id": row["incident_id"],
+                    "incident_id": row.get("incident_id") or row.get("id", ""),
                     "title": row["title"],
                     "type": row["type"],
                     "severity": "high",  # Default mapping
