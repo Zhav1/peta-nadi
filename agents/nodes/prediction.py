@@ -5,8 +5,10 @@ from datetime import datetime, timezone
 from agents.state import CrisisState, AgentFinding
 from agents.memory.stm import get_async_redis
 from app.db.supabase_client import get_client
+from app.config import get_settings
 
 logger = logging.getLogger(__name__)
+settings = get_settings()
 
 
 async def prediction_agent(state: CrisisState) -> dict:
@@ -126,19 +128,47 @@ async def prediction_agent(state: CrisisState) -> dict:
         confidence += 0.1
     if state.get("severity") in ["critical", "high"] or state.get("is_simulated"):
         confidence += 0.1
-        
+
     confidence = min(1.0, confidence)
-    
+
+    summary_text = f"Generated 48h multi-horizon forecast. Max predicted delay: {congestion_forecast['12h']['delay_min']} minutes in 12h. Integrated NVIDIA Earth-2 weather risk analysis."
+
+    # 5b. Phase 58 expansion (A): opencode-driver prose narrative over computed horizons.
+    # Numbers are injected as ground truth; the model must not invent figures.
+    # On LLMGatewayUnavailable, the deterministic summary above stands (honest fallback).
+    narrative = None
+    try:
+        from agents.llm_gateway import LLMGateway
+        horizons_txt = ", ".join(
+            f"{h}: {v['delay_min']} menit (CI {v['confidence_interval'][0]}-{v['confidence_interval'][1]})"
+            for h, v in congestion_forecast.items()
+        )
+        prompt = (
+            "Jelaskan prakiraan kemacetan berikut dalam 1-2 kalimat Bahasa Indonesia. "
+            "Jangan mengarang angka; kutip hanya horizon yang diberikan.\n\n"
+            f"Horizon (ground truth): {horizons_txt}"
+        )
+        resp = await LLMGateway.generate_content(
+            prompt=prompt,
+            model_name=settings.opencode_driver_model,
+            temperature=0.2
+        )
+        if resp and len(resp.strip()) > 10:
+            narrative = resp.strip()
+    except Exception as le:
+        logger.debug(f"PredictionAgent: narrative expansion unavailable, keeping deterministic summary: {le}")
+
     finding: AgentFinding = {
         "agent": "PredictionAgent",
         "confidence": confidence,
-        "summary": f"Generated 48h multi-horizon forecast. Max predicted delay: {congestion_forecast['12h']['delay_min']} minutes in 12h. Integrated NVIDIA Earth-2 weather risk analysis.",
+        "summary": summary_text,
         "data": {
             "forecast": congestion_forecast,
             "data_points_used": len(delays),
             "has_historical_precedents": has_history,
             "earth2_flood_risk_pct": earth2_flood_risk,
-            "earth2_precipitation_mm_24h": earth2_precip
+            "earth2_precipitation_mm_24h": earth2_precip,
+            **({"narrative": narrative} if narrative else {})
         },
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
