@@ -1392,17 +1392,50 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 **Plans:** 58-PLAN.md, 58-RESEARCH.md, 58-SUMMARY.md, 58-WALKTHROUGH.md
 
 ### Deliverables
-- [x] **WP1 (tracer) — opencode-first gateway + config + catalog check**: `OPENCODE_*` Settings keys, single-base-URL fail-loud branch with per-branch defaults, `scripts/verify_opencode_models.py`.
-- [x] **WP2 — routing + expansion + chat honesty**: 5 call sites on mimo/deepseek table, prediction narrative + routing explainer prose overlays (deterministic fallback), chat `degraded` flag, opencode seed strings.
-- [x] **WP3 — drift + state honesty**: either-key `incident_id`/`id` normalization with regression tests, `idle` boot seeds, `DEMO_OFFLINE=false` pin.
-- [x] **WP4 — tests + parity**: gateway/drift/honesty tests (40 passed), full `render.yaml` env sync (secrets dashboard-only), `scripts/probe_parity.sh` matrix + local SSE trace (consensus 0.86 validated).
+- [x] **WP1 (tracer): opencode-first gateway + config + catalog check**: `OPENCODE_*` Settings keys, single-base-URL fail-loud branch with per-branch defaults, `scripts/verify_opencode_models.py`.
+- [x] **WP2: routing + expansion + chat honesty**: 5 call sites on mimo/deepseek table, prediction narrative + routing explainer prose overlays (deterministic fallback), chat `degraded` flag, opencode seed strings.
+- [x] **WP3: drift + state honesty**: either-key `incident_id`/`id` normalization with regression tests, `idle` boot seeds, `DEMO_OFFLINE=false` pin.
+- [x] **WP4: tests + parity**: gateway/drift/honesty tests (40 passed), full `render.yaml` env sync (secrets dashboard-only), `scripts/probe_parity.sh` matrix + local SSE trace (consensus 0.86 validated).
 
 ### Verification Criteria
 - [x] Key suites 40 passed (gateway 8 + normalization 6 + auth_rbac 26), zero regressions
 - [x] `git diff --stat agents/graph.py agents/state.py agents/tools/consensus_gate.py` empty (DAG + formula untouched)
-- [x] Local SSE stream completes end-to-end (`simulation_started` → `node_update`s → validated)
+- [x] Local SSE stream completes end-to-end (`simulation_started` -> `node_update`s -> validated)
 - [x] `grep DeepSeek R1 backend/app/routers/agent_router.py` = 0; LTM stays Google text-embedding-004
 - [ ] Render leg: dashboard env entry + redeploy + re-probe (walkthrough runbook; operator action)
+
+---
+
+## Phase 59: E2E Audit Remediation & Visual Lockdowns
+**Goal:** Resolve all 9 systemic bugs and usability anomalies discovered during end-to-end audit and user field drills documented in `PILOT_BUGS_AND_E2E_AUDIT_REPORT.md`, plus 3 critical dashboard fixes (Mode Simulasi OFF 0ms hide, Guided Demo stage 1 flow, and Pantai Cermin coastal detour bypass).
+**Status:** COMPLETE ✅
+**Plans:** 59-PLAN.md, 59-RESEARCH.md, 59-CONTEXT.md
+**Audit Report:** `PILOT_BUGS_AND_E2E_AUDIT_REPORT.md` (Bugs 1-9)
+
+### Deliverables
+- [x] **WP1 (P0) - Authentication, Profile Card, Persona Lockdown, Visual Lock Badges & Banner Pointer-Events (Bugs 1, 2, 3, 4)**:
+  - `GuestEvaluationBanner.tsx`: outer container `pointer-events-none`, inner card `pointer-events-auto`, positioned at `fixed top-20 right-4 sm:right-6` clearing the top telemetry HUD strip (`TopNavTelemetry`).
+  - `AuthModal.tsx`: Authenticated User Profile Card with Avatar, Name, Email, Organization, Role badge (DISPATCHER: Cyan, REGULATOR: Amber, GUEST: Emerald), active RBAC capabilities, and explicit "Keluar dari Sesi (Logout)" button.
+  - `AuthModal.tsx`: 1-Click Persona switcher locked exclusively to sandbox evaluation accounts (`is_offline_guest` or `@kompetisi-lrip.id`); corporate accounts locked with centralized authority notice.
+  - `DashboardClient.tsx`, `FleetOnboardingModal.tsx`, `MitigationTab.tsx`: explicit visual lock badges (`[Khusus Dispatcher]`) and role-aware disabled states across fleet onboarding and mitigation execution.
+- [x] **WP2 (P0) - Fleet Simulation Mode Filtering Hardening (Bug 7 & 0ms Instant Hide)**:
+  - `useFleetVehicles.ts`: honest filtering when `isSimulationMode === false` strictly retaining only custom onboarded units (`is_custom === true`), filtering out 45 baseline synthetic units.
+  - `FleetVehicleLayer.tsx`: instant 0ms removal on simulation OFF with `map.triggerRepaint()` and interpolation cache purge.
+- [x] **WP3 (P0) - Run Demo Arterial Coastal Routing Geometry, Destination Simpul Fix & Econometric Data Piping (Bugs 5, 6 & Clean Bypass Routes)**:
+  - `DashboardClient.tsx`, `useDemoState.ts`, `mock_crisis_state.json`: replaced crude 4-point straight lines with verified Pantai Cermin coastal arterial highway coordinates (Belawan -> Marelan -> Percut Sei Tuan -> Pantai Cermin -> Sei Rampah -> Tebing Tinggi).
+  - Synchronous index 0 green detour rendering (#10B981) avoiding flood zones with affected direct route highlighted red (#EF4444) at index 1.
+  - Waypoints terminate cleanly at Simpang Susun Tol Tebing Tinggi (`3.3285, 99.1625`), stripping southern Lake Toba / Parapat overshoot.
+  - `backend/app/routers/demo_router.py`: added dynamic `origin` and `destination` fields to `StartDemoPayload`.
+  - `useDemoState.ts`: populated `inflation_forecast` with calibrated econometric projections (+15.2% Minyak Goreng, Cabai Merah) labeled `[Simulasi Model Ekonometrika]`.
+- [x] **WP4 (P1) - Demo Remote 404 Polling Guard & Toast Unification (Bugs 8, 9)**:
+  - `frontend/app/demo-remote/page.tsx`: stopped aggressive polling on 404, displaying clean inactive session notice.
+  - `SimulationSection.tsx`: eliminated duplicate local toast triggers in favor of centralized `onDeployActionPlan` feedback in `DashboardClient.tsx`.
+
+### Verification Criteria
+- [x] `npx tsc --noEmit` in `frontend/`: 0 errors.
+- [x] `pytest backend/tests`: 204 passed, 0 failed.
+- [x] Clean local git status (ahead of origin/main, local only).
+- [x] Verified via browser DevTools inspection: banner pointer events non-blocking, fleet layer 0ms instant hide, guided demo stage 1 manual advance responsive, and detour bypass correctly drawn around flood zone.
 
 ---
 

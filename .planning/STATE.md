@@ -1,37 +1,37 @@
 ---
 gsd_state_version: "1.0"
-milestone: M3
-milestone_name: PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform
-current_phase: 58
-current_phase_name: opencode-go Swarm LLM Migration and Render Parity
+milestone: M4
+milestone_name: PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability
+current_phase: 59
+current_phase_name: E2E Audit Remediation & Visual Lockdowns
 status: complete
-stopped_at: Phase 58 executed and verified
-last_updated: "2026-10-13T17:43:12.206Z"
-last_activity: 2026-10-14
-last_activity_desc: "Phase 58 completed (opencode-go swarm LLM migration: mimo reasoning + deepseek driver gateway swap with fail-loud preserved; prediction/routing prose overlays; incident_id drift fix; idle boot status; full Render env sync + probe matrix. Full suite 194 passed, 0 failed; graph/consensus diffs empty)."
-state_head: 03aab362ffae9d2112b0e83a3fc52d71e7218174
+stopped_at: Phase 59 executed and verified
+last_updated: "2026-10-16T21:40:00.000Z"
+last_activity: 2026-10-16
+last_activity_desc: "Phase 59 completed: 9 E2E audit remediations and visual lockdowns (PILOT_BUGS_AND_E2E_AUDIT_REPORT.md) plus 3 critical dashboard fixes (Mode Simulasi OFF 0ms hide, Guided Demo stage 1 flow, and Pantai Cermin coastal detour bypass). Full suite 204 passed, 0 failed; TypeScript 0 errors."
+state_head: 147912b
 progress:
-  total_phases: 16
-  completed_phases: 56
-  total_plans: 27
-  completed_plans: 66
+  total_phases: 60
+  completed_phases: 60
+  total_plans: 73
+  completed_plans: 73
   percent: 100
 ---
 
 # STATE: PreHub Project Memory
 
-**Last Updated:** 2026-10-14
-**Active Milestone:** M3 - PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform
-**Current Phase:** 58
+**Last Updated:** 2026-10-16
+**Active Milestone:** M4 - PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability [ACTIVE 🚀]
+**Current Phase:** 59
 
 ---
 
 ## Current Position
 
-Phase: 58 (opencode-go Swarm LLM Migration and Render Parity) - COMPLETE ✅
-Status: Phase 58 fully executed and verified: gateway swap (mimo + deepseek), prose overlays, drift fixes, Render env sync + probe matrix.
-Last activity: 2026-10-14 - 12 commits (11 feat/fix/test/chore + closeout), key suites 40 passed, SSE trace validated end-to-end, graph/consensus untouched.
-Next action: Render dashboard env entry + redeploy + re-probe (walkthrough runbook), then pilot ops or next milestone initiatives.
+Phase: 59 (E2E Audit Remediation & Visual Lockdowns) - COMPLETE ✅
+Status: Phase 59 fully executed and verified: 9 audit findings resolved, 3 critical dashboard fixes implemented, full backend suite passing (204 passed), TypeScript 0 errors.
+Last activity: 2026-10-16 - Selesai audit remediasi, visual lockdowns, mode simulasi 0ms instant hide, guided demo stage 1 flow, dan bypass pesisir bebas banjir Pantai Cermin.
+Next action: Automated headless E2E verification capture, Render dashboard env entry sync, and pilot operational acceptance.
 
 ---
 
@@ -99,6 +99,7 @@ Next action: Render dashboard env entry + redeploy + re-probe (walkthrough runbo
 | 56 | Post-Audit Integrity Routing & Mock Purge | **COMPLETE** ✅ | WP1 1366x768 anti-collision map dock math; WP2 Mapbox exclude=toll dynamic toll bypass & [5,8,15]km radius; WP3 Guided demo economic integration & Evidence->Economic->Mitigation tab pacing; WP4 Live news link_alive tagging & cached excerpt modal fallback; WP5 Mock data purge (social, /spikes 30d baseline, honest outcomes, simulation fleet toggle, derived causal chain). 183 pytest passed, 0 tsc errors. |
 | 57 | Pilot Hardening (E2E Audit Remediation) | **COMPLETE** ✅ | Tenant contract, guest sandbox UX, background news ingestion, invite-only auth. See `57-PLAN.md` / `57-WALKTHROUGH.md`. |
 | 58 | opencode-go Swarm LLM Migration and Render Parity | **COMPLETE** ✅ | Gateway swap (mimo reasoning + deepseek driver, fail-loud), prose overlays, incident_id drift fix, idle boot status, Render env sync + probe matrix. Git: `44030b4`..`de06faa` |
+| 59 | E2E Audit Remediation & Visual Lockdowns | **COMPLETE** ✅ | 9 remediations from PILOT_BUGS_AND_E2E_AUDIT_REPORT.md + 3 dashboard fixes (Simulation OFF 0ms hide, Guided demo stage 1 flow, Pantai Cermin bypass). 204 pytest passed, 0 tsc errors. |
 
 ---
 
@@ -106,6 +107,7 @@ Next action: Render dashboard env entry + redeploy + re-probe (walkthrough runbo
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
+| 2026-10-16 | Phase 59: E2E Audit Remediation & Visual Lockdowns | Resolved 9 systemic bugs and usability anomalies from PILOT_BUGS_AND_E2E_AUDIT_REPORT.md: (1) GuestEvaluationBanner non-blocking pointer-events; (2) Authenticated User Profile Card in AuthModal; (3) Persona switcher locked for corporate accounts; (4) Visual lock badges [Khusus Dispatcher] and role-aware buttons; (5) Arterial coastal road routing geometry (Belawan -> Pantai Cermin -> Tebing Tinggi) and dynamic origin/destination demo schema; (6) Econometric intelligence data piping into demo state; (7) Honest simulation fleet filtering with 0ms instant hide via map.triggerRepaint(); (8) Stop 404 polling on /demo-remote; (9) Toast unification in SimulationSection. 204 pytest passed, 0 tsc errors. |
 | 2026-10-12 | Phase 56: Post-Audit Integrity Routing & Mock Purge | Comprehensive remediation of remaining 5 system audit items: (1) Anti-collision dock layout at 1366x768 with centralized mapDockLayout math (24px simulator dock clearance, 92px footer clearance, 424px drawer offset); (2) Dynamic &exclude=toll query parameter with NoRoute retry and [5,8,15]km radius; (3) Guided demo economic integration routing Evidence -> Economic -> Mitigation without hardcoded figures; (4) News link integrity validation with link_alive tagging and cached excerpt modal fallback; (5) Mock data purge across social scrapers, /spikes 30-day baseline calculation, honest FALLBACK_OUTCOMES empty states, opt-in Simulation Mode toggle for fleet fallback, and derived causal chain. 183 pytest passed, 0 tsc errors. |
 | 2026-10-07 | Phase 50: Anti-AI-Slop & Editorial Distillation Audit | Conducted a comprehensive audit and cleanup across Landing Page and Dashboard surfaces: stripped right chapter rail nav, synthetic telemetry pills, and stage counter from ImageSequenceCanvas; removed kickers and replaced Bot with ShieldCheck in KineticFeatureGrid; simplified LiveTelemetryShowcase into a 3-column provenance ledger; removed AgentStatusWidget and 320px popover essays from TopNavTelemetry; removed pseudo-terminal stream and 6-agent matrix from GuidedDemoPanel; replaced 3-page static textbook essay with an interactive Audit Ledger table in ReportsSection; replaced conversational chatbot with an interactive Scenario Workbench in SimulationSection; removed Human-in-the-Loop governance essay banner in CrisisSidebar; removed 8-step decision trace header in EvidenceTab; replaced Sparkles icon with Compass in CrisisSimulatorBar; enforced strict 12px floor across 7 components (0 sub-12px classes remaining); 0 TypeScript errors and clean Next.js build. |
 | 2026-10-07 | Phase 49: Pan-Sumatra Spatial Engine & Ingestion Adapter Generalization | Expanded spatial engine and adapters from North Sumatra to all 8 mainland Sumatra provinces (Aceh, North Sumatra, West Sumatra, Riau, Riau Islands, Jambi, South Sumatra, Bengkulu, Lampung) plus ALKI I seaports. Enriched road network and hazard boundaries, resolved all 137 tests passing. |
