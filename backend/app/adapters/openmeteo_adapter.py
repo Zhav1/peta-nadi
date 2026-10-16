@@ -78,15 +78,15 @@ class OpenMeteoAdapter(BaseAdapter):
             "source": "Open-Meteo Local NWP Cache",
             "hourly": {
                 "time": [datetime.now(timezone.utc).isoformat()],
-                "precipitation": [38.5],
-                "rain": [36.0],
-                "windspeed_10m": [22.4],
-                "surface_pressure": [1008.2]
+                "precipitation": [5.2],
+                "rain": [4.0],
+                "windspeed_10m": [12.0],
+                "surface_pressure": [1011.5]
             },
             "predictions": {
-                "weather_risk_index": 0.72,
-                "heavy_rain_risk": "high",
-                "flood_prone_corridors": ["Jalinsum Medan-Tebing Tinggi", "Belawan Port Access"]
+                "weather_risk_index": 0.20,
+                "heavy_rain_risk": "low",
+                "flood_prone_corridors": []
             }
         }
 

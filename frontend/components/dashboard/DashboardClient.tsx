@@ -554,6 +554,8 @@ export default function DashboardClient() {
   const activeOriginRef = useRef<string | null>(null);
   const activeDestRef = useRef<string | null>(null);
   const routeCalculationReqIdRef = useRef<number>(0);
+  const demoDetourRoutesRef = useRef<RouteRecommendation[] | null>(null);
+  const demoStateRef = useRef<ReturnType<typeof useDemoState> | null>(null);
   activeOriginRef.current = selectedOriginNode;
   activeDestRef.current = selectedDestNode;
 
@@ -828,6 +830,10 @@ export default function DashboardClient() {
     const destNode = HUB_NODES[destId]?.coords;
     if (!originNode || !destNode) return;
 
+    if (isDemoRunningRef.current) {
+      demoStateRef.current?.setIsCalculatingRoute(true);
+    }
+
     // Synchronize Deterministic CPU Route Solver (NetworkX + OR-Tools)
     try {
       const cuoptRes = await api.routing.optimizeCuOpt({
@@ -847,18 +853,24 @@ export default function DashboardClient() {
       console.warn('CPU routing solver API fallback:', err);
     }
 
-    const routes = await calculateAIDynamicDetourRoutes(hazardCenter, radiusKm, originNode, destNode, modality);
-    setCurrentMapRoutes(routes);
-    setSelectedCrisis((prev) =>
-      prev ? { ...prev, route_recommendations: routes } : prev
-    );
+    try {
+      const routes = await calculateAIDynamicDetourRoutes(hazardCenter, radiusKm, originNode, destNode, modality);
+      setCurrentMapRoutes(routes);
+      setSelectedCrisis((prev) =>
+        prev ? { ...prev, route_recommendations: routes } : prev
+      );
+    } finally {
+      if (isDemoRunningRef.current) {
+        demoStateRef.current?.setIsCalculatingRoute(false);
+      }
+    }
   }, []);
 
   // Sync road network routes when origin, destination, modality, or hazard changes
   useEffect(() => {
     if (selectedOriginNode && selectedDestNode) {
-      if (isDemoRunningRef.current) {
-        // When guided demo is active, demo stages manage their own routes
+      if (isDemoRunningRef.current && (demoStateRef.current?.stage ?? 0) > 0) {
+        // When guided demo is active at stage 1+, demo stages manage their own routes
         return;
       }
       updateBaselineMapboxRoute(
@@ -1046,6 +1058,7 @@ export default function DashboardClient() {
   }, [selectedOriginNode, selectedDestNode, selectedRadius, selectedModality, historicalEpisodes, predictiveRisks, activeTimeFilter]);
 
   // LIVE VISUAL DEMO STEPPER TRIGGER
+  // LIVE VISUAL DEMO STEPPER TRIGGER
   const handleCrisisReadyFromDemo = useCallback(async (crisis: CrisisState) => {
     // Rely strictly on active nodes selected by the user, never force-overwrite to default strings
     const originId = activeOriginRef.current || selectedOriginNode;
@@ -1068,54 +1081,61 @@ export default function DashboardClient() {
       hazardType: 'flood',
     });
 
-    const demoRoutes = await calculateAIDynamicDetourRoutes(
-      hazardPoint,
-      selectedRadius,
-      originCoords,
-      destCoords,
-      selectedModality
-    );
+    let resolvedRoutes: RouteRecommendation[] = [];
 
-    // Stale check: if user navigated or changed node while in flight, discard this update!
-    if (routeCalculationReqIdRef.current !== currentReqId) {
-      return;
-    }
-    if (activeOriginRef.current !== originId || activeDestRef.current !== destId) {
-      return;
-    }
+    // Fast-path: Reuse the road-snapped routes already calculated during Stage 2
+    if (demoDetourRoutesRef.current && demoDetourRoutesRef.current.length > 0) {
+      resolvedRoutes = demoDetourRoutesRef.current;
+    } else {
+      demoStateRef.current?.setIsCalculatingRoute(true);
+      try {
+        const demoRoutes = await calculateAIDynamicDetourRoutes(
+          hazardPoint,
+          selectedRadius,
+          originCoords,
+          destCoords,
+          selectedModality
+        );
 
-    // Guarantee the demo route loops around the flood circle: if the primary corridor is
-    // submerged (offline straight-line fallback), substitute a deterministic bypass detour.
-    const primarySubmerged =
-      demoRoutes.length === 0 ||
-      isPolylineIntersectingHazardCircle(
-        demoRoutes[0].waypoints.map((wp) => [wp.lon, wp.lat] as [number, number]),
-        hazardPoint,
-        selectedRadius
-      );
-    const cleanBypass = primarySubmerged
-      ? buildHazardBypassRoute(originCoords, destCoords, hazardPoint, selectedRadius)
-      : null;
-    const resolvedRoutes: RouteRecommendation[] = [];
-    if (cleanBypass) resolvedRoutes.push(cleanBypass);
-    demoRoutes
-      .filter((r) => r.is_compromised !== true && r.safety_status !== 'HOLD_DELAY')
-      .forEach((r) => {
-        if (!resolvedRoutes.some((res) => res.id === r.id)) {
-          resolvedRoutes.push(r);
+        if (routeCalculationReqIdRef.current !== currentReqId) {
+          return;
         }
-      });
 
-    const compromisedRoute = demoRoutes.find((r) => r.is_compromised) || (primarySubmerged ? {
-      ...demoRoutes[0],
-      color: '#EF4444',
-      safety_status: 'COMPROMISED' as const,
-      safety_tag: 'TERDAMPAK ZONA BAHAYA (+60m Delay)',
-      is_compromised: true,
-    } : null);
+        const primarySubmerged =
+          demoRoutes.length === 0 ||
+          isPolylineIntersectingHazardCircle(
+            demoRoutes[0].waypoints.map((wp) => [wp.lon, wp.lat] as [number, number]),
+            hazardPoint,
+            selectedRadius
+          );
+        const cleanBypass = primarySubmerged
+          ? buildHazardBypassRoute(originCoords, destCoords, hazardPoint, selectedRadius)
+          : null;
+        if (cleanBypass) resolvedRoutes.push(cleanBypass);
+        demoRoutes
+          .filter((r) => r.is_compromised !== true && r.safety_status !== 'HOLD_DELAY')
+          .forEach((r) => {
+            if (!resolvedRoutes.some((res) => res.id === r.id)) {
+              resolvedRoutes.push(r);
+            }
+          });
 
-    if (compromisedRoute && !resolvedRoutes.some((r) => r.id === compromisedRoute.id)) {
-      resolvedRoutes.push(compromisedRoute);
+        const compromisedRoute = demoRoutes.find((r) => r.is_compromised) || (primarySubmerged ? {
+          ...demoRoutes[0],
+          color: '#EF4444',
+          safety_status: 'COMPROMISED' as const,
+          safety_tag: 'TERDAMPAK ZONA BAHAYA (+60m Delay)',
+          is_compromised: true,
+        } : null);
+
+        if (compromisedRoute && !resolvedRoutes.some((r) => r.id === compromisedRoute.id)) {
+          resolvedRoutes.push(compromisedRoute);
+        }
+
+        demoDetourRoutesRef.current = resolvedRoutes;
+      } finally {
+        demoStateRef.current?.setIsCalculatingRoute(false);
+      }
     }
 
     const fullDemoState: CrisisState = {
@@ -1133,6 +1153,7 @@ export default function DashboardClient() {
 
   // Phase 23: Lifted Demo Engine State & Stage-Wired Effects
   const demoState = useDemoState(handleCrisisReadyFromDemo);
+  demoStateRef.current = demoState;
   isDemoRunningRef.current = demoState.isRunning;
 
   // Latest corridor nodes in refs: the demo stage effect reads fresh values
@@ -1147,6 +1168,7 @@ export default function DashboardClient() {
   // Comprehensive Demo Reset Handler (Clears all demo states, shockwaves, dirty routes & restores map)
   const handleResetDemo = useCallback(() => {
     routeCalculationReqIdRef.current++;
+    demoDetourRoutesRef.current = null;
     demoState.reset();
     setSimulatedShockwave(null);
     setDisasterZones([]);
@@ -1165,11 +1187,18 @@ export default function DashboardClient() {
     });
   }, [demoState]);
 
-  // Robust Async-Locked Advance Handler
+  // Robust Async-Locked Advance Handler with Strict Step-Gating
   const handleDemoAdvance = useCallback(() => {
     if (demoState.isCalculatingRoute) return;
+    if (demoState.stage === 0 && (!selectedOriginNode || !selectedDestNode || currentMapRoutes.length === 0)) {
+      setToast({
+        message: 'Silakan pilih titik asal dan tujuan, dan tunggu rute jalan siap sebelum melanjutkan.',
+        type: 'info'
+      });
+      return;
+    }
     demoState.advance();
-  }, [demoState]);
+  }, [demoState, selectedOriginNode, selectedDestNode, currentMapRoutes.length]);
 
   useEffect(() => {
     if (!demoState.isRunning) return;
@@ -1180,10 +1209,12 @@ export default function DashboardClient() {
         setSimulatedShockwave(null);
         setSelectedCrisis(null);
         setIsSidebarOpen(false);
+        demoDetourRoutesRef.current = null;
         if (selectedOriginNode && selectedDestNode) {
           const originCoords = HUB_NODES[selectedOriginNode]?.coords;
           const destCoords = HUB_NODES[selectedDestNode]?.coords;
           if (originCoords && destCoords) {
+            demoState.setIsCalculatingRoute(true);
             calculateAIDynamicDetourRoutes(null, selectedRadius, originCoords, destCoords, selectedModality)
               .then((routes) => {
                 if (routes.length > 0) {
@@ -1191,7 +1222,10 @@ export default function DashboardClient() {
                   setActiveRouteIdx(0);
                 }
               })
-              .catch((err) => console.warn('Stage 0 route calculation error:', err));
+              .catch((err) => console.warn('Stage 0 route calculation error:', err))
+              .finally(() => {
+                demoState.setIsCalculatingRoute(false);
+              });
           }
         } else {
           setCurrentMapRoutes([]);
@@ -1245,6 +1279,7 @@ export default function DashboardClient() {
               routesToShow.push(markedDirect);
             }
             if (routesToShow.length > 0) {
+              demoDetourRoutesRef.current = routesToShow;
               setCurrentMapRoutes(routesToShow);
               setActiveRouteIdx(0);
             }
@@ -1648,6 +1683,19 @@ export default function DashboardClient() {
           onClose={() => setToast(null)}
         />
       )}
+
+      {/* Human-in-the-Loop Decision Drawer (Root Level Portal Context) */}
+      <HitlDecisionDrawer
+        isOpen={isHitlDrawerOpen}
+        onClose={() => setIsHitlDrawerOpen(false)}
+        onDecisionApplied={(approvalId, decision) => {
+          setToast({
+            message: `Keputusan HITL Disimpan: [${decision}] untuk ${approvalId}. Status diperbarui di Supabase.`,
+            type: 'success'
+          });
+          setApprovalsCount((prev) => prev + 1);
+        }}
+      />
 
       {/* MAIN CONTENT CANVAS AREA */}
       <main className="absolute left-0 top-16 right-0 bottom-0 overflow-hidden flex">
@@ -2226,19 +2274,6 @@ export default function DashboardClient() {
               selectedImpactedVehicle={selectedImpactedVehicle}
             />
           )}
-
-          {/* 4. GLOBOT-STYLE HUMAN-IN-THE-LOOP DECISION DRAWER */}
-          <HitlDecisionDrawer
-            isOpen={isHitlDrawerOpen}
-            onClose={() => setIsHitlDrawerOpen(false)}
-            onDecisionApplied={(approvalId, decision) => {
-              setToast({
-                message: `Keputusan HITL Disimpan: [${decision}] untuk ${approvalId}. Status diperbarui di Supabase.`,
-                type: 'success'
-              });
-              setApprovalsCount((prev) => prev + 1);
-            }}
-          />
 
         </div>
 

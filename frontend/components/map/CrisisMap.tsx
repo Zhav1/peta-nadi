@@ -679,7 +679,8 @@ export default function CrisisMap({
     // 1. Update Weather Polygons
     const weatherSource = map.getSource('weather-polygons-source') as mapboxgl.GeoJSONSource;
     if (weatherSource) {
-      if (spatialWeatherPolygons && spatialWeatherPolygons.features && spatialWeatherPolygons.features.length > 0) {
+      // Suppress ambient weather polygons during active demo simulation to prevent visual clutter
+      if (demoStage == null && spatialWeatherPolygons && spatialWeatherPolygons.features && spatialWeatherPolygons.features.length > 0) {
         weatherSource.setData(spatialWeatherPolygons);
       } else {
         weatherSource.setData({ type: 'FeatureCollection', features: [] });

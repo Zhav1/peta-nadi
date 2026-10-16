@@ -483,11 +483,20 @@ export function GuidedDemoPanel({
                   e.stopPropagation();
                   onOpenMitigation?.();
                 }}
-                disabled={!onOpenMitigation}
+                disabled={!onOpenMitigation || isCalculatingRoute}
                 className="flex-1 py-2 px-3 rounded-md text-xs font-semibold bg-white text-[#080d14] hover:bg-slate-200 transition-colors shadow-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
               >
-                <ArrowRight className="w-3.5 h-3.5" />
-                <span>Buka Mitigasi & Setujui</span>
+                {isCalculatingRoute ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-800" />
+                    <span>Memvalidasi Rute Lapangan...</span>
+                  </>
+                ) : (
+                  <>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                    <span>Buka Mitigasi & Setujui</span>
+                  </>
+                )}
               </button>
               <button
                 type="button"
