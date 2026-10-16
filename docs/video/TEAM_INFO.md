@@ -63,4 +63,4 @@ Valuasi dampak:
 
 - **Innovation Level**: **Level 3 Innovation Status (MVP Functional)**
 - **MVP Validation Corridor**: Koridor Logistik Strategis Sumatera Utara (Berastagi – Medan – Belawan)
-- **Tech Stack**: Next.js 14, FastAPI, Supabase PostgreSQL (PostGIS, TimescaleDB, pgvector), Redis Streams, LangGraph, Gemini 3.1 Flash, DeepSeek V3.2, NVIDIA cuOpt, FourCastNet, TFT.
+- **Tech Stack**: Next.js 14, FastAPI, Supabase PostgreSQL (PostGIS, TimescaleDB, pgvector), Redis Streams, LangGraph, Gemini 3.1 Flash, DeepSeek V3.2, CPU routing (NetworkX/OR-Tools), Open-Meteo weather, TFT.

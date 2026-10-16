@@ -131,7 +131,7 @@ class ChatResponse(BaseModel):
 @router.post("/api/v1/agent/chat", response_model=ChatResponse)
 async def simulation_chat(req: ChatRequest):
     """
-    Real-time AI Chat Advisor powered by Gemini 3.8 Flash / NVIDIA NIM & Multi-Agent Swarm Intelligence.
+    Real-time AI Chat Advisor powered by opencode reasoning (mimo-v2.6-pro) + driver (deepseek-v4.1-flash) at temperature 0.3.
     Ingests live telemetry parameters (BMKG, TomTom, PIHPS, CPU routing) and dynamic simulation telemetry to generate real responses.
     """
     user_msg = req.message.strip()
