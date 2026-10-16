@@ -3,7 +3,6 @@ import json
 import logging
 import re
 from typing import List
-import google.generativeai as genai
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -24,29 +23,32 @@ def extract_locations_gazetteer(text: str) -> List[str]:
     return found
 
 async def extract_locations_llm(text: str) -> List[str]:
-    """Extract location names from text using Gemini Flash (fallback path)."""
+    """Extract location names from text using the opencode driver model (fallback path)."""
     settings = get_settings()
-    if not settings.gemini_api_key:
-        logger.warning("Gemini API key is not configured. Skipping LLM location extraction.")
-        return []
+    # Local import matches news_extractor/agent_router and avoids import cycles.
+    from agents.llm_gateway import LLMGateway
+
+    prompt = (
+        "Extract all Indonesian location names (roads, ports, cities, regencies, landmarks) from the text below. "
+        "Return the output ONLY as a valid JSON array of strings (e.g., [\"Medan\", \"Belawan\"]). "
+        "Do not include any introductory or concluding text. Do not wrap in markdown code blocks. "
+        "If no locations are found, return an empty array [].\n\n"
+        f"Text: {text}"
+    )
 
     try:
-        genai.configure(api_key=settings.gemini_api_key)
-        model = genai.GenerativeModel(settings.gemini_model)
-        
-        prompt = (
-            "Extract all Indonesian location names (roads, ports, cities, regencies, landmarks) from the text below. "
-            "Return the output ONLY as a valid JSON array of strings (e.g., [\"Medan\", \"Belawan\"]). "
-            "Do not include any introductory or concluding text. Do not wrap in markdown code blocks. "
-            "If no locations are found, return an empty array [].\n\n"
-            f"Text: {text}"
+        # Bounded at 12s (fixes the D-06 unbounded to_thread): the gateway
+        # raises fail-loud on any provider error, which maps to [] below.
+        raw = await asyncio.wait_for(
+            LLMGateway.generate_content(
+                prompt=prompt,
+                model_name=settings.opencode_driver_model,
+            ),
+            timeout=12.0,
         )
-        
-        # Run in executor to prevent blocking the async loop if the client call is synchronous
-        response = await asyncio.to_thread(model.generate_content, prompt)
-        
+
         # Clean backticks and JSON markdown packaging
-        resp_text = response.text.strip()
+        resp_text = raw.strip()
         if resp_text.startswith("```"):
             lines = resp_text.split("\n")
             if lines[0].startswith("```"):
@@ -64,13 +66,13 @@ async def extract_locations_llm(text: str) -> List[str]:
             return [str(loc).strip() for loc in locations if str(loc).strip()]
         return []
     except Exception as e:
-        logger.error(f"Error during Gemini LLM location extraction: {e}")
+        logger.error(f"Error during opencode driver LLM location extraction: {e}")
         return []
 
 async def extract_locations(text: str) -> List[str]:
     """
     Extract locations from text.
-    Uses fast regex gazetteer first, falling back to Gemini Flash LLM.
+    Uses fast regex gazetteer first, falling back to the opencode driver LLM.
     """
     if not text or not text.strip():
         return []
@@ -78,9 +80,9 @@ async def extract_locations(text: str) -> List[str]:
     # 1. Fast Path: Gazetteer
     locations = extract_locations_gazetteer(text)
     
-    # 2. Fallback Path: Gemini Flash
+    # 2. Fallback Path: opencode driver LLM (12s bound, [] on failure)
     if not locations:
-        logger.debug(f"Gazetteer empty for text: '{text[:50]}...'. Falling back to Gemini Flash.")
+        logger.debug(f"Gazetteer empty for text: '{text[:50]}...'. Falling back to opencode driver LLM.")
         locations = await extract_locations_llm(text)
         
     return locations
