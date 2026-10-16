@@ -19,50 +19,50 @@ AGENT_STATUS_STORE: Dict[str, Dict[str, Any]] = {
     "DataCollectionAgent": {
         "agent_id": "DataCollectionAgent",
         "name": "Data Collection & Health",
-        "status": "complete",
+        "status": "idle",
         "confidence": 0.88,
-        "last_run_at": datetime.now(timezone.utc).isoformat(),
+        "last_run_at": "never",
         "summary": "Validasi telemetri BMKG, TomTom, dan status sumber data pangan."
     },
     "OSINTHazardAgent": {
         "agent_id": "OSINTHazardAgent",
         "name": "OSINT & Intelligence",
-        "status": "complete",
+        "status": "idle",
         "confidence": 0.84,
-        "last_run_at": datetime.now(timezone.utc).isoformat(),
+        "last_run_at": "never",
         "summary": "Ekstraksi berita RSS & analisis anomali krisis lapangan."
     },
     "PredictionAgent": {
         "agent_id": "PredictionAgent",
         "name": "Congestion & Weather Forecast",
-        "status": "complete",
+        "status": "idle",
         "confidence": 0.82,
-        "last_run_at": datetime.now(timezone.utc).isoformat(),
+        "last_run_at": "never",
         "summary": "Proyeksi kemacetan 48 jam & estimasi risiko presipitasi Open-Meteo."
     },
     "RouteOptimizationAgent": {
         "agent_id": "RouteOptimizationAgent",
         "name": "Logistics & Graph Routing",
-        "status": "complete",
+        "status": "idle",
         "confidence": 0.90,
-        "last_run_at": datetime.now(timezone.utc).isoformat(),
+        "last_run_at": "never",
         "summary": "Komputasi rute mitigasi NetworkX Dijkstra dengan penalti bahaya."
     },
     "EconomicIntelligenceAgent": {
         "agent_id": "EconomicIntelligenceAgent",
         "name": "Price & Inflation Intelligence",
-        "status": "complete",
+        "status": "idle",
         "confidence": 0.86,
-        "last_run_at": datetime.now(timezone.utc).isoformat(),
+        "last_run_at": "never",
         "summary": "Deteksi anomali harga cabai/beras & proyeksi tren inflasi."
     },
     "DecisionSupportCopilot": {
         "agent_id": "DecisionSupportCopilot",
         "name": "AI Decision Copilot",
-        "status": "complete",
+        "status": "idle",
         "confidence": 0.92,
-        "last_run_at": datetime.now(timezone.utc).isoformat(),
-        "summary": "Sintesis CoT eksekutif multi-instansi dengan penalaran DeepSeek R1."
+        "last_run_at": "never",
+        "summary": "Sintesis CoT eksekutif multi-instansi dengan penalaran opencode (mimo reasoning + deepseek driver)."
     }
 }
 
@@ -80,14 +80,25 @@ def update_agent_status(agent_id: str, status: str = "complete", confidence: flo
 @router.get("/api/v1/agents/status")
 @router.get("/api/agents/status")
 async def get_agents_status():
-    """Returns the persistent health and telemetry execution status of all 6 swarm agents."""
+    """Returns the persistent health and telemetry execution status of all 6 swarm agents.
+
+    Honesty rule (audit F4): before the first real run the store holds idle
+    seeds, so the aggregate reports "warming" with 0.0 confidence instead of
+    "healthy" with a seeded average that was never measured.
+    """
     agents_list = list(AGENT_STATUS_STORE.values())
-    avg_confidence = round(sum(a["confidence"] for a in agents_list) / len(agents_list), 2)
-    
+    measured = [
+        a["confidence"] for a in agents_list
+        if a.get("last_run_at") not in (None, "", "never")
+    ]
+    any_run = len(measured) > 0
+    avg_confidence = round(sum(measured) / len(measured), 2) if any_run else 0.0
+
     return {
-        "status": "healthy",
+        "status": "healthy" if any_run else "warming",
         "active_agents": len(agents_list),
         "average_confidence": avg_confidence,
+        "note": "live" if any_run else "last-known seeds until first run",
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "agents": agents_list
     }
@@ -105,6 +116,7 @@ class ChatResponse(BaseModel):
     thought_signature: str
     confidence_score: float = 0.91
     consensus_passed: bool = True
+    degraded: bool = False
     sources: List[str] = [
         "BMKG Weather Radar",
         "TomTom Speed Flow",
@@ -187,19 +199,24 @@ async def simulation_chat(req: ChatRequest):
     try:
         from agents.llm_gateway import LLMGateway
         logger.info(f"Invoking LLMGateway for query: '{user_msg}'")
+        from app.config import get_settings as _get_settings
         ai_reply = await LLMGateway.generate_content(
             prompt=prompt,
             system_instruction=system_instruction,
+            model_name=_get_settings().opencode_driver_model,
             temperature=0.3
         )
     except Exception as e:
         logger.warning(f"LLMGateway invocation exception: {e}. Switching to dynamic context engine.")
 
     # Dynamic intelligent response generator if LLM returned mock default or failed
+    # (R6 honesty: template replies are grounded but NOT model reasoning — flagged degraded.)
+    degraded = False
     if not ai_reply or "CRISIS EXECUTIVE SUMMARY" in ai_reply or "mocked fallback" in ai_reply.lower() or "RINGKASAN EKSEKUTIF PREHUB (FALLBACK MODE)" in ai_reply:
+        degraded = True
         msg_lower = user_msg.lower()
         sig_hash = hashlib.md5(f"{user_msg}{time.time()}".encode()).hexdigest()[:6].upper()
-        thought_sig = f"SIG-GEMINI-3.8-FL-{sig_hash}"
+        thought_sig = f"SIG-OPENCODE-DRIVER-{sig_hash}"
 
         if "biaya" in msg_lower or "anggaran" in msg_lower or "tarif" in msg_lower or "rupiah" in msg_lower or "hedging" in msg_lower or "rugi" in msg_lower:
             ai_reply = (
@@ -233,14 +250,22 @@ async def simulation_chat(req: ChatRequest):
             )
     else:
         sig_hash = hashlib.md5(ai_reply.encode()).hexdigest()[:6].upper()
-        thought_sig = f"SIG-GEMINI-3.8-FL-{sig_hash}"
+        thought_sig = f"SIG-OPENCODE-DRIVER-{sig_hash}"
 
+    # Honesty rule (audit F5): a template fallback must never wear model-grade
+    # confidence. Degraded replies carry reduced confidence, no consensus
+    # claim, and sensor-only sources (the cuOpt label predates the CPU solver).
+    degraded_confidence = 0.62
+    sources = ["BMKG Weather Radar", "TomTom Speed Flow", "PIHPS Commodity Stream"]
+    if not degraded:
+        sources = sources + ["CPU Route Solver (NetworkX/OR-Tools)"]
     return ChatResponse(
         reply=ai_reply,
         thought_signature=thought_sig,
-        confidence_score=0.92,
-        consensus_passed=True,
-        sources=["BMKG Weather Radar", "TomTom Speed Flow", "PIHPS Commodity Stream", "NVIDIA cuOpt Matrix"]
+        confidence_score=0.92 if not degraded else degraded_confidence,
+        consensus_passed=not degraded,
+        degraded=degraded,
+        sources=sources
     )
 
 

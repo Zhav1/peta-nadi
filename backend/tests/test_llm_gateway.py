@@ -1,4 +1,4 @@
-"""Regression tests for the fail-loud LLM gateway contract (Phase 55, S2)."""
+"""Regression tests for the fail-loud LLM gateway contract (Phase 55, S2; Phase 58 opencode)."""
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
@@ -8,11 +8,46 @@ from agents.llm_gateway import LLMGateway, LLMGatewayUnavailable
 
 @pytest.fixture
 def unavailable_providers(monkeypatch):
-    """Force Gemini unconfigured and NVIDIA NIM keyless."""
+    """Force all providers unconfigured: opencode + Gemini + NVIDIA NIM keyless."""
     monkeypatch.setattr(llm_gateway.settings, "demo_offline", False)
+    monkeypatch.setattr(llm_gateway.settings, "opencode_api_key", "")
     monkeypatch.setattr(llm_gateway.settings, "gemini_api_key", "")
     for key in ("nvidia_deepseek_v4_pro", "nvidia_deepseek_v4_flash", "nvidia_cuopt", "nvidia_fourcastnet"):
         monkeypatch.setattr(llm_gateway.settings, key, "")
+
+
+@pytest.fixture
+def opencode_keyed(monkeypatch):
+    """Route generate_content into the opencode branch with all other providers off."""
+    monkeypatch.setattr(llm_gateway.settings, "demo_offline", False)
+    monkeypatch.setattr(llm_gateway.settings, "opencode_api_key", "oc-test-key")
+    monkeypatch.setattr(llm_gateway.settings, "gemini_api_key", "")
+
+
+def _mock_httpx_client(monkeypatch, *, status=200, payload=None, exc=None):
+    """Install a fake httpx.AsyncClient returning one canned HTTP response."""
+    mock_client = AsyncMock()
+    if exc is not None:
+        mock_client.post.side_effect = exc
+    else:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = payload
+        if status >= 400:
+            import httpx as _httpx
+            mock_resp.raise_for_status.side_effect = _httpx.HTTPStatusError(
+                f"HTTP {status}", request=MagicMock(), response=MagicMock()
+            )
+        else:
+            mock_resp.raise_for_status.return_value = None
+        mock_client.post.return_value = mock_resp
+    mock_client_cls = MagicMock()
+    mock_client_cls.return_value.__aenter__.return_value = mock_client
+    monkeypatch.setattr(llm_gateway.httpx, "AsyncClient", mock_client_cls)
+    return mock_client
+
+
+def _opencode_payload(text):
+    return {"choices": [{"message": {"content": text}}]}
 
 
 def test_nim_primary_model_is_catalog_verified():
@@ -40,3 +75,73 @@ async def test_gateway_raises_on_nim_failure(unavailable_providers, monkeypatch)
 
     with pytest.raises(LLMGatewayUnavailable):
         await LLMGateway.generate_content(prompt="ping")
+
+
+@pytest.mark.asyncio
+async def test_opencode_branch_returns_stripped_text(opencode_keyed, monkeypatch):
+    """opencode 200 with choices[0].message.content => stripped text returned."""
+    _mock_httpx_client(monkeypatch, payload=_opencode_payload("  banjir Belawan siaga  "))
+    text = await LLMGateway.generate_content(prompt="klasifikasikan severitas")
+    assert text == "banjir Belawan siaga"
+
+
+@pytest.mark.asyncio
+async def test_opencode_branch_raises_on_401(opencode_keyed, monkeypatch):
+    """opencode 401 => LLMGatewayUnavailable, never canned prose."""
+    _mock_httpx_client(monkeypatch, status=401, payload={"error": "unauthorized"})
+    with pytest.raises(LLMGatewayUnavailable):
+        await LLMGateway.generate_content(prompt="ping")
+
+
+@pytest.mark.asyncio
+async def test_opencode_branch_raises_on_404(opencode_keyed, monkeypatch):
+    """opencode 404 (wrong endpoint form) => LLMGatewayUnavailable."""
+    _mock_httpx_client(monkeypatch, status=404, payload={"error": "not found"})
+    with pytest.raises(LLMGatewayUnavailable):
+        await LLMGateway.generate_content(prompt="ping")
+
+
+@pytest.mark.asyncio
+async def test_opencode_branch_raises_on_empty_completion(opencode_keyed, monkeypatch):
+    """opencode 200 with empty content => LLMGatewayUnavailable."""
+    _mock_httpx_client(monkeypatch, payload=_opencode_payload("   "))
+    with pytest.raises(LLMGatewayUnavailable):
+        await LLMGateway.generate_content(prompt="ping")
+
+
+@pytest.mark.asyncio
+async def test_gemini_branch_uses_configured_model_not_caller_opencode_id(monkeypatch):
+    """Gemini branch must use settings.gemini_model even when the caller passes an opencode ID.
+
+    Post-migration all call sites pass mimo/deepseek IDs. Reusing the caller ID
+    for the Gemini SDK would be a guaranteed API failure after a wasted call,
+    so the branch resolves its model from config (F1).
+    """
+    monkeypatch.setattr(llm_gateway.settings, "demo_offline", False)
+    monkeypatch.setattr(llm_gateway.settings, "opencode_api_key", "")
+    monkeypatch.setattr(llm_gateway.settings, "gemini_api_key", "AIza-test-key")
+    monkeypatch.setattr(llm_gateway.settings, "gemini_model", "gemini-1.5-flash")
+    captured = {}
+
+    class FakeModel:
+        def __init__(self, model_name=None, system_instruction=None):
+            captured["model_name"] = model_name
+
+        def generate_content(self, prompt, generation_config=None):
+            return MagicMock(text=" ringkasan taktis ")
+
+    monkeypatch.setattr(llm_gateway.genai, "GenerativeModel", FakeModel)
+    monkeypatch.setattr(llm_gateway.genai, "configure", lambda api_key=None: None)
+
+    text = await LLMGateway.generate_content(prompt="uji", model_name="mimo-v2.6-flash-free")
+    assert text == "ringkasan taktis"
+    assert captured["model_name"] == "gemini-1.5-flash"
+
+
+def test_economic_degraded_markers_rejected():
+    """The marker tuple used to reject fallback prose must cover known canned headers."""
+    markers = ("FALLBACK", "CRISIS EXECUTIVE SUMMARY", "RINGKASAN EKSEKUTIF PREHUB", "MOCKED")
+    canned = "CRISIS EXECUTIVE SUMMARY\nEvent: Flood (mocked fallback)"
+    assert any(m in canned.upper() for m in markers)
+    genuine = "Proyeksi inflasi pangan +8% dalam 48 jam di koridor Belawan."
+    assert not any(m in genuine.upper() for m in markers)

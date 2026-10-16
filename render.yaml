@@ -23,3 +23,29 @@ services:
         sync: false
       - key: TOMTOM_API_KEY
         sync: false
+      - key: DEMO_OFFLINE
+        value: "false"
+      # Phase 58 LLM migration: secret values dashboard-only (sync:false, no value in yaml)
+      - key: OPENCODE_API_KEY
+        sync: false
+      - key: OPENCODE_REASONING_MODEL
+        value: "mimo-v2.6-flash-free"
+      - key: OPENCODE_DRIVER_MODEL
+        value: "deepseek-v4.1-flash"
+      # GEMINI_API_KEY kept — LTM embeddings stay on Google models/text-embedding-004
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: AISSTREAM_API_KEY
+        sync: false
+      - key: NASA_FIRMS_MAP_KEY
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+      - key: CORS_ORIGINS
+        value: "https://peta-nadi.onrender.com"
+      - key: APP_URL
+        value: "https://peta-nadi.onrender.com"
+      - key: PREHUB_DB_PATH
+        value: "/app/data/prehub_local.db"

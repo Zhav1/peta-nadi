@@ -1,36 +1,37 @@
 ---
-gsd_state_version: 1.0
-milestone: M4
-milestone_name: PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability
+gsd_state_version: "1.0"
+milestone: M3
+milestone_name: PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform
 current_phase: 58
-current_phase_name: E2E Audit Remediation & Visual Lockdowns
-status: in_progress
-stopped_at: Initial E2E audit complete (PILOT_BUGS_AND_E2E_AUDIT_REPORT.md). Milestone M4 initialized and ready for Phase 58 execution.
-last_updated: "2026-10-14T10:15:00.000Z"
+current_phase_name: opencode-go Swarm LLM Migration and Render Parity
+status: complete
+stopped_at: Phase 58 executed and verified
+last_updated: "2026-10-13T17:43:12.206Z"
 last_activity: 2026-10-14
-last_activity_desc: Completed comprehensive E2E audit identifying 9 systemic bugs. Initialized Milestone M4 covering Phase 57 (Track B Pilot Hardening), Phase 58 (Audit Remediation), and Phase 59 (Pilot Acceptance).
+last_activity_desc: "Phase 58 completed (opencode-go swarm LLM migration: mimo reasoning + deepseek driver gateway swap with fail-loud preserved; prediction/routing prose overlays; incident_id drift fix; idle boot status; full Render env sync + probe matrix. Full suite 194 passed, 0 failed; graph/consensus diffs empty)."
+state_head: 03aab362ffae9d2112b0e83a3fc52d71e7218174
 progress:
-  total_phases: 59
+  total_phases: 16
   completed_phases: 56
-  total_plans: 72
+  total_plans: 27
   completed_plans: 66
-  percent: 92
+  percent: 100
 ---
 
 # STATE: PreHub Project Memory
 
 **Last Updated:** 2026-10-14
-**Active Milestone:** M4 - PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability [ACTIVE 🚀]
-**Current Phase:** 58 (E2E Audit Remediation & Visual Lockdowns)
+**Active Milestone:** M3 - PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform
+**Current Phase:** 58
 
 ---
 
 ## Current Position
 
-Phase: 58 (E2E Audit Remediation & Visual Lockdowns) - READY TO EXECUTE 🟡
-Status: Milestone M4 initialized; Phase 57 underway for backend tenancy; Phase 58 planned to resolve all 9 audit findings.
-Last activity: 2026-10-14 - Playwright E2E diagnostic completed; documented all 9 issues in PILOT_BUGS_AND_E2E_AUDIT_REPORT.md.
-Next action: Execute Wave 1 through Wave 4 remediation tasks in Phase 58.
+Phase: 58 (opencode-go Swarm LLM Migration and Render Parity) - COMPLETE ✅
+Status: Phase 58 fully executed and verified: gateway swap (mimo + deepseek), prose overlays, drift fixes, Render env sync + probe matrix.
+Last activity: 2026-10-14 - 12 commits (11 feat/fix/test/chore + closeout), key suites 40 passed, SSE trace validated end-to-end, graph/consensus untouched.
+Next action: Render dashboard env entry + redeploy + re-probe (walkthrough runbook), then pilot ops or next milestone initiatives.
 
 ---
 
@@ -96,9 +97,8 @@ Next action: Execute Wave 1 through Wave 4 remediation tasks in Phase 58.
 | 54 | Post-Audit Plothole Remediation, Guest Lockdown & PIHPS Persistence | **COMPLETE** ✅ | Strict read-only guest permissions, verified PIHPS database persistence, and resilient incident route handlers. |
 | 55 | Comprehensive Engines Audit & Stabilization | **COMPLETE** ✅ | OpenMeteo adapter instantiation fix, NIM catalog deepseek-v4.1-flash fail-loud gate, centralized Gemini model, TomTom bbox tiling & 403 backoff, Redis OSINT stream capping, Supabase Migration 010. |
 | 56 | Post-Audit Integrity Routing & Mock Purge | **COMPLETE** ✅ | WP1 1366x768 anti-collision map dock math; WP2 Mapbox exclude=toll dynamic toll bypass & [5,8,15]km radius; WP3 Guided demo economic integration & Evidence->Economic->Mitigation tab pacing; WP4 Live news link_alive tagging & cached excerpt modal fallback; WP5 Mock data purge (social, /spikes 30d baseline, honest outcomes, simulation fleet toggle, derived causal chain). 183 pytest passed, 0 tsc errors. |
-| 57 | Track B Pilot Hardening (Tenancy Schema, Auth & Non-Blocking Ingestion) | **IN PROGRESS** 🟡 | Step 0 Migration 012 (`organizations`, `profiles`, tenancy triggers), user session tenancy, news background worker, and fleet isolation. |
-| 58 | E2E Audit Remediation & Visual Lockdowns | **READY** 🟡 | Resolve all 9 audit findings from PILOT_BUGS_AND_E2E_AUDIT_REPORT.md: banner collision, auth profile card, persona lock, visual lock badges, arterial coastal routing, economic payload binding, fleet sim toggle, remote polling 404 guard, toast unification. |
-| 59 | Comprehensive E2E Verification & Pilot Operations Acceptance | **PLANNED** 📋 | Automated Playwright regression test suite across all 8 core flows, multi-role test matrix validation, verification gate pass, zero console errors. |
+| 57 | Pilot Hardening (E2E Audit Remediation) | **COMPLETE** ✅ | Tenant contract, guest sandbox UX, background news ingestion, invite-only auth. See `57-PLAN.md` / `57-WALKTHROUGH.md`. |
+| 58 | opencode-go Swarm LLM Migration and Render Parity | **COMPLETE** ✅ | Gateway swap (mimo reasoning + deepseek driver, fail-loud), prose overlays, incident_id drift fix, idle boot status, Render env sync + probe matrix. Git: `44030b4`..`de06faa` |
 
 ---
 
@@ -176,7 +176,6 @@ These scripts validate the economic correlation hypotheses that underpin Agent 5
 
 ## Session
 
-**Last session:** 2026-10-12T14:30:00.000Z
-**Stopped at:** Phase 56 verification, mock purge, and documentation completed
-**Resume file:** .planning/phases/56-post-audit-integrity-routing-and-mock-purge/56-WALKTHROUGH.md
-
+**Last session:** 2026-10-13T17:43:10.670Z
+**Stopped at:** Phase 58 context gathered
+**Resume file:** .planning/phases/58-opencode-go-swarm-llm-migration-and-render-parity/58-CONTEXT.md

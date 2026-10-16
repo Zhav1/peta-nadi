@@ -4,12 +4,14 @@ from datetime import datetime, timezone
 import networkx as nx
 from agents.state import CrisisState, AgentFinding, RouteRecommendation
 from agents.tools.supabase_tools import load_road_graph
+from app.config import get_settings
 from app.services.spoilage_hedging_service import spoilage_hedging_service
 from app.services.compliance_service import compliance_service
 from app.services.intermodal_sync_service import IntermodalSyncService
 from app.schemas.intermodal import HedgingSolveRequest, ComplianceVerifyRequest
 
 logger = logging.getLogger(__name__)
+settings = get_settings()
 
 # Frontend/operator node keys -> canonical backend road network graph node ids
 ALIAS_MAP = {
@@ -335,6 +337,33 @@ async def route_optimization_agent(state: CrisisState) -> dict:
                 })
     except Exception as routing_err:
         logger.error(f"Error calculating NetworkX shortest paths: {routing_err}")
+
+    # 4b. Phase 58 expansion (B): opencode-driver prose "why this route" explainer.
+    # Computed distance_km / eta_minutes / risk_score / optimal_policy are injected
+    # verbatim as ground truth; the model must not invent figures or alter waypoints/ETA.
+    # On failure the templated desc above stands (honest fallback).
+    if recommendations:
+        try:
+            from agents.llm_gateway import LLMGateway
+            top = recommendations[0]
+            top_hedge = top.get("hedging", {}) or {}
+            prompt = (
+                "Jelaskan dalam 1-2 kalimat Bahasa Indonesia mengapa rute berikut dipilih. "
+                "Jangan mengarang angka; kutip hanya nilai yang diberikan.\n\n"
+                f"Jarak: {top.get('distance_km')} km, ETA: {top.get('eta_minutes')} menit, "
+                f"skor risiko: {top.get('risk_score')}, "
+                f"kebijakan hedging: {top_hedge.get('optimal_policy')}, "
+                f"penghematan bersih: Rp {top_hedge.get('net_savings_idr')}"
+            )
+            explainer = await LLMGateway.generate_content(
+                prompt=prompt,
+                model_name=settings.opencode_driver_model,
+                temperature=0.2
+            )
+            if explainer and len(explainer.strip()) > 10:
+                top["explainer"] = explainer.strip()
+        except Exception as le:
+            logger.debug(f"RouteOptimizationAgent: explainer expansion unavailable, keeping templated desc: {le}")
 
     # 5. Compute confidence score
     confidence = 0.75  # Base

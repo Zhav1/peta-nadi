@@ -36,6 +36,7 @@ export interface RouteRecommendation {
   eta_minutes: number;
   fuel_increase_pct: number;
   risk_score: number;
+  explainer?: string;
   is_compromised?: boolean;
   safety_status?: 'SAFE_DETOUR' | 'COMPROMISED' | 'CLEAR' | 'HOLD_DELAY';
   safety_tag?: string;

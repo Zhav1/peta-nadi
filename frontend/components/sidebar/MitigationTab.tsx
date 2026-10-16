@@ -156,6 +156,12 @@ function RouteCard({
         {route.description}
       </p>
 
+      {typeof route.explainer === 'string' && route.explainer.length > 0 && (
+        <p className="text-xs text-cyan-300/90 leading-relaxed mb-2 font-sans italic">
+          {route.explainer}
+        </p>
+      )}
+
       {route.safety_tag && (
         <div className="mb-2 text-xs font-mono font-medium text-slate-300 bg-[#121822] px-2 py-1 rounded border border-[#1c2432]">
           {route.safety_tag}
