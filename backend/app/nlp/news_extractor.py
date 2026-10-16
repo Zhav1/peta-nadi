@@ -174,11 +174,13 @@ async def extract_structured_news(art: Dict[str, Any]) -> Dict[str, Any]:
                 f"Content: {art.get('raw_description', '')}"
             )
             
-            # Bounded 12s budget: a full opencode driver completion fits within it,
-            # and only then do we drop to the heuristic baseline.
+            # Bounded 35s outer budget enveloping the 30s gateway inner timeout
+            # (Phase 59 D-06 fix: a 12s outer used to pre-empt the inner 30s
+            # budget, making the gateway timeout dead code). The gateway fires
+            # first on slow completions; only then do we drop to heuristics.
             gen_text = await asyncio.wait_for(
                 LLMGateway.generate_content(prompt=prompt, model_name=settings.opencode_driver_model),
-                timeout=12.0
+                timeout=35.0
             )
             if gen_text:
                 clean_text = gen_text.strip()

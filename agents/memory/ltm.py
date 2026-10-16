@@ -22,13 +22,22 @@ async def embed_text(text: str) -> List[float]:
 
     try:
         genai.configure(api_key=settings.gemini_api_key)
-        # Run in executor to prevent blocking the async event loop
-        response = await asyncio.to_thread(
-            genai.embed_content,
-            model="models/text-embedding-004",
-            content=text,
-            task_type="retrieval_query",
-        )
+        # Run in executor to prevent blocking the async event loop.
+        # 12s bound (Phase 59 D-06 / T-59-04): the embed call must never hang
+        # the swarm unbounded — time out to [] like any other embed failure.
+        try:
+            response = await asyncio.wait_for(
+                asyncio.to_thread(
+                    genai.embed_content,
+                    model="models/text-embedding-004",
+                    content=text,
+                    task_type="retrieval_query",
+                ),
+                timeout=12.0,
+            )
+        except asyncio.TimeoutError:
+            logger.warning("Gemini embedding timed out after 12s. Returning empty vector.")
+            return []
         if isinstance(response, dict) and "embedding" in response:
             return response["embedding"]
         elif hasattr(response, "embedding"):
