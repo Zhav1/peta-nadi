@@ -5,16 +5,16 @@ milestone_name: PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform
 current_phase: 58
 current_phase_name: opencode-go Swarm LLM Migration and Render Parity
 status: complete
-stopped_at: Completed 59-llm-swarm-post-key-audit-02-PLAN.md
-last_updated: "2026-10-16T18:12:19.303Z"
+stopped_at: Completed 59-llm-swarm-post-key-audit-04-PLAN.md
+last_updated: "2026-10-16T18:30:10.000Z"
 last_activity: 2026-10-14
 last_activity_desc: "Phase 58 completed (opencode-go swarm LLM migration: mimo reasoning + deepseek driver gateway swap with fail-loud preserved; prediction/routing prose overlays; incident_id drift fix; idle boot status; full Render env sync + probe matrix. Full suite 194 passed, 0 failed; graph/consensus diffs empty)."
-state_head: e4f545e328cfe89158288b2a5f67c9bbc0efd542
+state_head: 663c9427c3886523566f381f3373f798270c6cd3
 progress:
   total_phases: 18
   completed_phases: 56
   total_plans: 31
-  completed_plans: 66
+  completed_plans: 67
   percent: 100
 ---
 
@@ -176,8 +176,8 @@ These scripts validate the economic correlation hypotheses that underpin Agent 5
 
 ## Session
 
-**Last session:** 2026-10-16T18:12:19.233Z
-**Stopped at:** Completed 59-llm-swarm-post-key-audit-02-PLAN.md
+**Last session:** 2026-10-16T18:30:10.000Z
+**Stopped at:** Completed 59-llm-swarm-post-key-audit-04-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -185,9 +185,13 @@ These scripts validate the economic correlation hypotheses that underpin Agent 5
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 59-llm-swarm-post-key-audit P02 | 45min | 3 tasks | 7 files |
+| Phase 59-llm-swarm-post-key-audit P04 | 16min | 9 tasks | 25 files |
 
 ## Decisions
 
 - [Phase 59-llm-swarm-post-key-audit]: 59-02: migration gate uses format_type comparison after live probe showed pgvector stores width directly in atttypmod (typmod=1536)
 - [Phase 59-llm-swarm-post-key-audit]: 59-02: text-embedding-004 HTTP 404 for current key recorded as evidence; model NOT switched (one-way D-08 lock, follow-up for future plan)
 - [Phase 59-llm-swarm-post-key-audit]: 59-02: no pip installs per package-legitimacy exclusion; httpx-REST probe plus py_compile/grep equivalents used, pytest recorded unrun
+- [Phase 59-llm-swarm-post-key-audit]: 59-04: full rename with no backwards-compat aliases (endpoint, function, props, Redis keys); no other callers per repo-wide identifier scan
+- [Phase 59-llm-swarm-post-key-audit]: 59-04: fabricated savings percentages removed not computed (no honest baseline exists); frontend savings nullable
+- [Phase 59-llm-swarm-post-key-audit]: 59-04: pytest absent in env (ModuleNotFoundError) so AST-parse plus tsc used as proof; suites must re-run where pytest exists
