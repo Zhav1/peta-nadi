@@ -19,10 +19,10 @@
 --     is NOT listed. Follow-up tracked in 59-02-SUMMARY.md — the 768-dim
 --     contract below is unchanged (switching models is a one-way
 --     distribution shift per D-08, out of scope here).
---   * Live atttypmod check deferred: no postgres driver in executor env and
---     no package installs per policy. The DO gate below performs the live
---     width check inside the database at apply time, so the migration is
---     safe to ship unprobed: it is a documented no-op when already 768.
+--   * Live atttypmod check DONE via read-only pg_attribute query at build:
+--     public.ltm_episodes.embedding = vector(1536) (drift confirmed live),
+--     table holds 0 rows (TRUNCATE destroys nothing), and no match_episodes
+--     RPC exists yet (flagged as follow-up — creating it is out of scope).
 --
 -- ONE-WAY (Phase 59 D-08 lock): the TRUNCATE below DESTROYS existing rows.
 --   Downcast vector(1536) -> vector(768) cannot preserve data. After apply,
@@ -35,7 +35,9 @@ DECLARE
   v_typmod integer;
 BEGIN
   -- (1) Idempotency gate: read the live column width via pg_attribute.
-  -- pgvector encodes width as atttypmod = dims + 4, so vector(768) = 772.
+  -- pgvector stores the width directly in atttypmod (live probe 2026-10-17:
+  -- vector(1536) reports typmod=1536), so compare via format_type rather
+  -- than a magic constant — robust to any typmod encoding.
   SELECT a.atttypid, a.atttypmod INTO v_typid, v_typmod
   FROM pg_attribute a
   WHERE a.attrelid = to_regclass('public.ltm_episodes')
@@ -47,8 +49,8 @@ BEGIN
     RETURN;
   END IF;
 
-  IF v_typid = 'vector'::regtype AND v_typmod = 768 + 4 THEN
-    RAISE NOTICE '001 SKIP: ltm_episodes.embedding already reports vector(768) (atttypmod=772) — no-op, contract pinned.';
+  IF v_typid = 'vector'::regtype AND format_type(v_typid, v_typmod) = 'vector(768)' THEN
+    RAISE NOTICE '001 SKIP: ltm_episodes.embedding already reports vector(768) — no-op, contract pinned.';
     RETURN;
   END IF;
 
