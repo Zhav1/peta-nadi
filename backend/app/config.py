@@ -28,7 +28,6 @@ class Settings(BaseSettings):
     aisstream_api_key: str = ""
     nasa_firms_map_key: str = ""
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-3.8-flash"
     opencode_api_key: str = ""
     # opencode Go subscription model IDs (https://opencode.ai/docs/go). The
     # `mimo-v2.6-flash-free` *-free variant is IDE-only and 403s on third-party

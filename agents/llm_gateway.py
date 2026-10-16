@@ -1,7 +1,6 @@
 import logging
 from typing import Optional
 import httpx
-import google.generativeai as genai
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -64,7 +63,7 @@ OPENCODE_USER_AGENT = "PreHub-LLMGateway/1.0 (+https://github.com/Zhav1/peta-nad
 
 
 class LLMGatewayUnavailable(RuntimeError):
-    """Raised when no LLM provider (opencode-go, Gemini or NVIDIA NIM) can produce a real completion."""
+    """Raised when no LLM provider (opencode-go or NVIDIA NIM) can produce a real completion."""
 
 
 class LLMGateway:
@@ -91,14 +90,15 @@ class LLMGateway:
     ) -> str:
         """
         Tries opencode-go first (D-03 opencode-first, fail-loud). Falls back to
-        Gemini, then NVIDIA NIM DeepSeek. Raises LLMGatewayUnavailable when no
-        provider succeeds; never returns canned prose.
-        Per-branch defaults (not one global default): opencode branch defaults to
-        settings.opencode_driver_model, Gemini branch ALWAYS uses
-        settings.gemini_model (never the caller's ID — callers pass opencode
-        IDs that are invalid for the Gemini SDK), NIM branch to
-        PRIMARY_NIM_MODEL. Callers override explicitly via model_name for the
-        opencode branch only.
+        NVIDIA NIM DeepSeek only when the opencode branch is unreachable
+        (missing key). Raises LLMGatewayUnavailable when no provider
+        succeeds; never returns canned prose.
+        Gemini serves embeddings only (agents/memory/ltm.py) and is never
+        consulted for chat — GEMINI_API_KEY must not scope to completions.
+        Per-branch defaults (not one global default): opencode branch defaults
+        to settings.opencode_driver_model, NIM branch to PRIMARY_NIM_MODEL.
+        Callers override explicitly via model_name for the opencode branch
+        only.
         """
         # Force offline/mock mode if configured (production must run DEMO_OFFLINE=false)
         if settings.demo_offline:
@@ -148,50 +148,14 @@ class LLMGateway:
                 logger.error(f"LLMGateway: opencode call failed ({opencode_model}): {oc_err}", exc_info=True)
                 raise LLMGatewayUnavailable(f"opencode call failed ({opencode_model}): {oc_err}") from oc_err
 
-        # NB: resolve the Gemini model from config, NEVER from the caller's
-        # model_name. Post-migration callers pass opencode IDs (mimo/deepseek)
-        # which the Gemini SDK would reject after a wasted, unbounded call.
-        gemini_model = settings.gemini_model
-
-        gemini_available = (
-            settings.gemini_api_key 
-            and settings.gemini_api_key != "your-gemini-api-key"
-            and settings.gemini_api_key.strip() != ""
-        )
-
-        if gemini_available:
-            try:
-                logger.info(f"LLMGateway: Attempting Gemini call ({gemini_model})...")
-                genai.configure(api_key=settings.gemini_api_key)
-                
-                import asyncio
-                
-                model = genai.GenerativeModel(
-                    model_name=gemini_model,
-                    system_instruction=system_instruction
-                )
-                
-                # Run synchronous generation in executor, bounded: the SDK
-                # exposes no timeout, so cap it like the httpx branches.
-                response = await asyncio.wait_for(asyncio.to_thread(
-                    model.generate_content, 
-                    prompt,
-                    generation_config={"temperature": temperature}
-                ), timeout=30.0)
-                text = response.text.strip()
-                if text:
-                    logger.info("LLMGateway: Gemini call succeeded.")
-                    return text
-                logger.warning("LLMGateway: Gemini returned an empty response. Falling back to NVIDIA NIM.")
-            except Exception as e:
-                logger.warning(f"LLMGateway: Gemini call failed: {e}. Falling back to NVIDIA NIM ({PRIMARY_NIM_MODEL})...")
-
+        # --- Phase 59: Gemini chat removed (embeddings-only lock). GEMINI_API_KEY
+        # serves agents/memory/ltm.py embed_content only and is never read here.
         # Fallback to NVIDIA NIM (DeepSeek V4.1 Flash)
         nvidia_key = cls.get_nvidia_key()
         if not nvidia_key:
-            logger.error("LLMGateway: No usable API keys found (Gemini unconfigured/failed and NVIDIA NIM key missing).")
+            logger.error("LLMGateway: No usable API keys found (opencode call unreachable and NVIDIA NIM key missing).")
             raise LLMGatewayUnavailable(
-                "No usable LLM API keys configured: Gemini is unconfigured or failed and no NVIDIA NIM key is available."
+                "No usable LLM API keys configured: opencode is unconfigured or failed and no NVIDIA NIM key is available."
             )
 
         logger.info(f"LLMGateway: Routing LLM request to NVIDIA NIM ({PRIMARY_NIM_MODEL})...")

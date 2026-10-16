@@ -8,7 +8,7 @@ from agents.llm_gateway import LLMGateway, LLMGatewayUnavailable
 
 @pytest.fixture
 def unavailable_providers(monkeypatch):
-    """Force all providers unconfigured: opencode + Gemini + NVIDIA NIM keyless."""
+    """Force all chat providers unconfigured: opencode + NVIDIA NIM keyless (embedding key irrelevant to chat)."""
     monkeypatch.setattr(llm_gateway.settings, "demo_offline", False)
     monkeypatch.setattr(llm_gateway.settings, "opencode_api_key", "")
     monkeypatch.setattr(llm_gateway.settings, "gemini_api_key", "")
@@ -110,32 +110,30 @@ async def test_opencode_branch_raises_on_empty_completion(opencode_keyed, monkey
 
 
 @pytest.mark.asyncio
-async def test_gemini_branch_uses_configured_model_not_caller_opencode_id(monkeypatch):
-    """Gemini branch must use settings.gemini_model even when the caller passes an opencode ID.
+async def test_chat_never_touches_embedding_key(monkeypatch):
+    """Chat must be opencode-only even when the embedding key is set.
 
-    Post-migration all call sites pass mimo/deepseek IDs. Reusing the caller ID
-    for the Gemini SDK would be a guaranteed API failure after a wasted call,
-    so the branch resolves its model from config (F1).
+    Phase 59 embeddings-only lock: GEMINI_API_KEY serves ltm.py embeddings
+    only. With both keys configured, generate_content must serve from the
+    opencode branch, resolve the caller's opencode model ID verbatim, and
+    never send the embedding key anywhere (headers carry only the opencode
+    Bearer token). The gateway module must not even import the Gemini SDK.
     """
+    assert not hasattr(llm_gateway, "genai"), "gateway must not import the Gemini chat SDK"
     monkeypatch.setattr(llm_gateway.settings, "demo_offline", False)
-    monkeypatch.setattr(llm_gateway.settings, "opencode_api_key", "")
-    monkeypatch.setattr(llm_gateway.settings, "gemini_api_key", "AIza-test-key")
-    monkeypatch.setattr(llm_gateway.settings, "gemini_model", "gemini-1.5-flash")
-    captured = {}
+    monkeypatch.setattr(llm_gateway.settings, "opencode_api_key", "oc-test-key")
+    monkeypatch.setattr(llm_gateway.settings, "gemini_api_key", "AQ-test-embedding-key")
 
-    class FakeModel:
-        def __init__(self, model_name=None, system_instruction=None):
-            captured["model_name"] = model_name
-
-        def generate_content(self, prompt, generation_config=None):
-            return MagicMock(text=" ringkasan taktis ")
-
-    monkeypatch.setattr(llm_gateway.genai, "GenerativeModel", FakeModel)
-    monkeypatch.setattr(llm_gateway.genai, "configure", lambda api_key=None: None)
-
-    text = await LLMGateway.generate_content(prompt="uji", model_name="mimo-v2.6-flash-free")
+    mock_client = _mock_httpx_client(
+        monkeypatch, payload=_opencode_payload("  ringkasan taktis  ")
+    )
+    text = await LLMGateway.generate_content(prompt="uji", model_name="mimo-v2.6-pro")
     assert text == "ringkasan taktis"
-    assert captured["model_name"] == "gemini-1.5-flash"
+    sent_payload = mock_client.post.call_args[1]["json"]
+    assert sent_payload["model"] == "mimo-v2.6-pro"
+    sent_headers = mock_client.post.call_args[1]["headers"]
+    assert "AQ-test-embedding-key" not in str(sent_headers)
+    assert sent_payload.keys() == {"model", "messages", "temperature", "max_tokens"}
 
 
 def test_economic_degraded_markers_rejected():
