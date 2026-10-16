@@ -132,7 +132,7 @@ class ChatResponse(BaseModel):
 async def simulation_chat(req: ChatRequest):
     """
     Real-time AI Chat Advisor powered by Gemini 3.8 Flash / NVIDIA NIM & Multi-Agent Swarm Intelligence.
-    Ingests live telemetry parameters (BMKG, TomTom, PIHPS, cuOpt) and dynamic simulation telemetry to generate real responses.
+    Ingests live telemetry parameters (BMKG, TomTom, PIHPS, CPU routing) and dynamic simulation telemetry to generate real responses.
     """
     user_msg = req.message.strip()
     if not user_msg:
@@ -254,7 +254,8 @@ async def simulation_chat(req: ChatRequest):
 
     # Honesty rule (audit F5): a template fallback must never wear model-grade
     # confidence. Degraded replies carry reduced confidence, no consensus
-    # claim, and sensor-only sources (the cuOpt label predates the CPU solver).
+    # claim, and sensor-only sources (degraded replies never claim model-grade
+    # consensus — they carry only measured telemetry).
     degraded_confidence = 0.62
     sources = ["BMKG Weather Radar", "TomTom Speed Flow", "PIHPS Commodity Stream"]
     if not degraded:

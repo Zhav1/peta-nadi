@@ -11,7 +11,7 @@ from unittest.mock import patch, MagicMock
 from app.adapters.cpu_routing_adapter import CPURoutingAdapter, get_cpu_router
 from app.adapters.openmeteo_adapter import OpenMeteoAdapter
 from app.services.weather_fusion_service import get_fused_spatial_weather
-from app.services.cuopt_tomtom_service import optimize_fleet_routes_with_cuopt
+from app.services.cpu_routing_service import optimize_fleet_routes_cpu
 from agents.nodes.route_optimization import route_optimization_agent
 from agents.state import CrisisState
 
@@ -96,13 +96,12 @@ def test_cpu_fleet_vrp_latency_nfr5():
 
 @pytest.mark.asyncio
 async def test_weather_fusion_service_openmeteo():
-    """FR-11.5: Asserts get_fused_spatial_weather produces valid GeoJSON without Earth2/GPU dependencies."""
+    """FR-11.5: Asserts get_fused_spatial_weather produces valid GeoJSON with no GPU dependencies."""
     result = await get_fused_spatial_weather()
     assert result["type"] == "FeatureCollection"
     assert "metadata" in result
     assert "Open-Meteo" in result["metadata"]["fusion_engine"]
-    assert "FourCastNet" not in result["metadata"]["fusion_engine"]
-    assert "Earth-2" not in result["metadata"]["fusion_engine"]
+    assert result["metadata"]["fusion_engine"] == "BMKG Radar Observation + Open-Meteo NWP Forecast"
 
 
 @pytest.mark.asyncio
@@ -123,9 +122,9 @@ async def test_agent4_offline_cache_resilience():
 
 
 @pytest.mark.asyncio
-async def test_cuopt_service_backwards_compatibility():
-    """FR-11.4, NFR-7: Asserts optimize_fleet_routes_with_cuopt executes on CPU with compute time < 150 ms."""
-    res = await optimize_fleet_routes_with_cuopt(
+async def test_cpu_routing_service_backwards_compatibility():
+    """FR-11.4, NFR-7: Asserts optimize_fleet_routes_cpu executes on CPU with compute time < 150 ms."""
+    res = await optimize_fleet_routes_cpu(
         origin_id="belawan_port",
         dest_id="tebing_tinggi",
         fleet_size=3
@@ -133,11 +132,11 @@ async def test_cuopt_service_backwards_compatibility():
     assert res["status"] == "success"
     assert "Deterministic CPU" in res["solver"]
     assert res["compute_time_ms"] < 150.0
-    assert "cuopt_solution" in res
+    assert "routing_solution" in res
 
 
 @pytest.mark.asyncio
-async def test_cuopt_service_flags_seed_fallback_when_tomtom_unavailable(monkeypatch):
+async def test_cpu_routing_service_flags_seed_fallback_when_tomtom_unavailable(monkeypatch):
     """S5: seed speeds are explicitly flagged as degraded fallback, never labeled live."""
     from app.adapters.tomtom_adapter import TomTomAdapter
 
@@ -151,7 +150,7 @@ async def test_cuopt_service_flags_seed_fallback_when_tomtom_unavailable(monkeyp
 
     monkeypatch.setattr(TomTomAdapter, "fetch", empty_fetch)
 
-    res = await optimize_fleet_routes_with_cuopt(origin_id="belawan_port", dest_id="tebing_tinggi", fleet_size=2)
+    res = await optimize_fleet_routes_cpu(origin_id="belawan_port", dest_id="tebing_tinggi", fleet_size=2)
     assert res["status"] == "success"
     assert res["is_fallback"] is True
     assert res["degraded_reason"] == "tomtom_api_key_missing"
@@ -161,7 +160,7 @@ async def test_cuopt_service_flags_seed_fallback_when_tomtom_unavailable(monkeyp
 
 
 @pytest.mark.asyncio
-async def test_cuopt_service_uses_live_speeds_when_available(monkeypatch):
+async def test_cpu_routing_service_uses_live_speeds_when_available(monkeypatch):
     """S5: live TomTom flow is reported as non-fallback with tomtom_live speed source."""
     from app.adapters.tomtom_adapter import TomTomAdapter
 
@@ -178,7 +177,7 @@ async def test_cuopt_service_uses_live_speeds_when_available(monkeypatch):
 
     monkeypatch.setattr(TomTomAdapter, "fetch", live_fetch)
 
-    res = await optimize_fleet_routes_with_cuopt(origin_id="belawan_port", dest_id="tebing_tinggi", fleet_size=2)
+    res = await optimize_fleet_routes_cpu(origin_id="belawan_port", dest_id="tebing_tinggi", fleet_size=2)
     assert res["is_fallback"] is False
     assert res["degraded_reason"] is None
     assert res["traffic_telemetry"]["status"] == "OK"

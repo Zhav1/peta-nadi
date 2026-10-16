@@ -2,7 +2,7 @@
 PetaNadi / PreHub — Deterministic Dynamic Routing Synchronization Service
 Synchronizes real-time TomTom segment traffic speeds & weather flood avoidance penalties
 into an N x N Travel Time Matrix, solved deterministically on CPU (NetworkX + OR-Tools).
-Maintains backwards compatibility for existing /api/v1/routing/optimize-cuopt endpoints.
+Served at POST /api/v1/routing/optimize.
 """
 import logging
 import math
@@ -108,7 +108,7 @@ async def build_dynamic_tomtom_cost_matrix(hazard_zones: Optional[List[Dict[str,
     return _build_cost_matrix(checkpoint_speeds, hazard_zones)
 
 
-async def optimize_fleet_routes_with_cuopt(
+async def optimize_fleet_routes_cpu(
     origin_id: str = "belawan_port",
     dest_id: str = "tebing_tinggi",
     fleet_size: int = 3,
@@ -154,13 +154,11 @@ async def optimize_fleet_routes_with_cuopt(
         "total_pipeline_time_ms": elapsed_ms,
         "locations": locations,
         "cost_matrix_sample": cost_matrix[:3],
-        "cuopt_solution": {
+        "routing_solution": {
             "routes": {f"truck_{i+1}": r["route"] for i, r in enumerate(vrp_solution["vehicle_routes"])},
             "vehicle_details": vrp_solution["vehicle_routes"]
         },
         "optimization_summary": {
-            "travel_time_savings_pct": 18.5,
-            "fuel_cost_reduction_pct": 14.2,
             "hazard_segments_avoided": len(hazard_zones) if hazard_zones else 0,
             "avg_corridor_speed_kmh": avg_corridor_speed,
             "speed_source": "tomtom_live" if tomtom_live else "seed_fallback"

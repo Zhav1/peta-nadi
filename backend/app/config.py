@@ -41,8 +41,6 @@ class Settings(BaseSettings):
     deepseek_api_key: str = ""
     nvidia_deepseek_v4_pro: str = ""
     nvidia_deepseek_v4_flash: str = ""
-    nvidia_fourcastnet: str = ""
-    nvidia_cuopt: str = ""
     whatsapp_token: str = ""
     whatsapp_phone_number_id: str = ""
     whatsapp_recipient_number: str = ""

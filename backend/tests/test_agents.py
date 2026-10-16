@@ -369,12 +369,12 @@ async def test_four_stage_pipeline_execution(mock_redis, mock_supabase):
         )
     ])
     
-    # Mock TomTom traffic delay and Earth-2 prediction in Redis
+    # Mock TomTom traffic delay and Open-Meteo prediction in Redis
     mock_redis.keys_return_value = ["lrip:tomtom:segment:medan"]
     async def custom_get(key, *args, **kwargs):
         if "tomtom:segment" in key:
             return '{"delay_min": 55.0, "currentTravelTime": 3300, "timestamp": 1720000000}'
-        if key == "lrip:cache:earth2":
+        if key == "lrip:cache:open_meteo":
             return '[{"raw_payload": {"predictions": {"precipitation_mm_24h": 45.0, "flood_risk_pct": 75.0}}}]'
         if key == "lrip:pihps:latest":
             return '{"rice": {"current": 16000, "mean": 12000, "std": 1000}}'

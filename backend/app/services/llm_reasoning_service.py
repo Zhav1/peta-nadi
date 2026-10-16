@@ -33,8 +33,7 @@ def generate_natural_incident_reasoning(
         f"{impact_summary or 'Gangguan pasokan pangan pokok memicu lonjakan harga komoditas di pasar induk Medan.'} "
         f"{f'Dampak tren inflasi: {price_impact}' if price_impact else 'Anomali harga terdeteksi oleh stream PIHPS.'}\n\n"
         f"3. REKOMENDASI OPTIMASI RUTE TAKTIS:\n"
-        f"NVIDIA cuOpt & AI Routing Agent merekomendasikan pengalihan rute melalui arteri bypass 2 km di luar zona bahaya "
-        f"dengan potensi penghematan waktu hingga 18.5%."
+        f"Agen Routing CPU (NetworkX + OR-Tools) merekomendasikan pengalihan rute melalui arteri bypass di luar zona bahaya."
     )
 
     osint_evidence = (

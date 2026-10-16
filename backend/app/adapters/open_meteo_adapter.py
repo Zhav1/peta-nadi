@@ -11,9 +11,9 @@ settings = get_settings()
 
 OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
 
-class Earth2Adapter(BaseAdapter):
-    source_name = "earth2"
-    stream_key = "lrip:events:earth2"
+class OpenMeteoAdapter(BaseAdapter):
+    source_name = "open_meteo"
+    stream_key = "lrip:events:open_meteo"
     poll_interval_seconds = 21600  # 6 hours
 
     async def health_check(self) -> bool:
@@ -34,7 +34,7 @@ class Earth2Adapter(BaseAdapter):
     async def fetch(self) -> Any:
         """Fetch real atmospheric weather prediction from Open-Meteo or use high-fidelity simulation."""
         if settings.demo_offline:
-            logger.info("Earth2/Weather Adapter: Running in offline mode.")
+            logger.info("Open-Meteo Adapter: Running in offline mode.")
             return self._generate_sim_forecast()
 
         params = {
@@ -49,7 +49,7 @@ class Earth2Adapter(BaseAdapter):
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(OPEN_METEO_URL, params=params)
                 if response.status_code == 200:
-                    logger.info("Earth2/Weather Adapter: Successfully fetched live weather data from Open-Meteo.")
+                    logger.info("Open-Meteo Adapter: Successfully fetched live weather data from Open-Meteo.")
                     return self._parse_open_meteo(response.json())
                 else:
                     logger.warning(f"Open-Meteo returned status {response.status_code}. Using simulation fallback.")
@@ -100,8 +100,8 @@ class Earth2Adapter(BaseAdapter):
 
         if severity in ["medium", "high"]:
             events.append({
-                "crisis_id": f"earth2_{int(datetime.now(timezone.utc).timestamp())}",
-                "source": raw_data.get("source", "earth2"),
+                "crisis_id": f"open_meteo_{int(datetime.now(timezone.utc).timestamp())}",
+                "source": raw_data.get("source", "open_meteo"),
                 "event_type": "weather_prediction",
                 "title": f"PreHub Atmospheric Risk ({raw_data.get('model', 'open-meteo')})",
                 "severity": severity,

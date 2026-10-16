@@ -5,8 +5,7 @@ from app.adapters.aisstream_adapter import AISstreamAdapter
 from app.adapters.nasa_firms_adapter import NASAFIRMSAdapter
 from app.adapters.openmeteo_adapter import OpenMeteoAdapter
 from app.adapters.cpu_routing_adapter import CPURoutingAdapter
-from app.adapters.earth2_adapter import Earth2Adapter
-from app.adapters.cuopt_adapter import CuOptAdapter
+from app.adapters.open_meteo_adapter import OpenMeteoAdapter as OpenMeteoForecastAdapter
 
 __all__ = [
     "BaseAdapter",
@@ -16,6 +15,5 @@ __all__ = [
     "NASAFIRMSAdapter",
     "OpenMeteoAdapter",
     "CPURoutingAdapter",
-    "Earth2Adapter",
-    "CuOptAdapter"
+    "OpenMeteoForecastAdapter"
 ]

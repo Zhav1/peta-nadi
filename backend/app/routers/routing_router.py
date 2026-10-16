@@ -1,5 +1,5 @@
 """
-FastAPI Router for NVIDIA cuOpt Optimization, Weather Fusion Polygons & TomTom Traffic Flow
+FastAPI Router for CPU Routing Optimization, Weather Fusion Polygons & TomTom Traffic Flow
 """
 import logging
 from fastapi import APIRouter, Query, HTTPException, Body
@@ -7,7 +7,7 @@ from typing import Dict, Any, List, Optional
 from pydantic import BaseModel
 
 from app.services.weather_fusion_service import get_fused_spatial_weather
-from app.services.cuopt_tomtom_service import optimize_fleet_routes_with_cuopt, CORRIDOR_JUNCTION_NODES
+from app.services.cpu_routing_service import optimize_fleet_routes_cpu, CORRIDOR_JUNCTION_NODES
 from app.adapters.tomtom_adapter import TomTomAdapter
 
 logger = logging.getLogger(__name__)
@@ -28,21 +28,21 @@ async def fetch_spatial_weather_polygons() -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-class CuOptRequestPayload(BaseModel):
+class RoutingRequestPayload(BaseModel):
     origin_id: Optional[str] = "belawan_port"
     dest_id: Optional[str] = "tebing_tinggi"
     fleet_size: Optional[int] = 3
     hazard_zones: Optional[List[Dict[str, Any]]] = []
 
 
-@router.post("/routing/optimize-cuopt")
-async def optimize_cuopt_routing(payload: CuOptRequestPayload = Body(...)) -> Dict[str, Any]:
+@router.post("/routing/optimize")
+async def optimize_routing(payload: RoutingRequestPayload = Body(...)) -> Dict[str, Any]:
     """
     Invokes deterministic CPU routing solver (NetworkX + OR-Tools) using dynamic travel time matrices
     weighted by TomTom live speeds and BMKG/Open-Meteo hazard avoidance penalties.
     """
     try:
-        result = await optimize_fleet_routes_with_cuopt(
+        result = await optimize_fleet_routes_cpu(
             origin_id=payload.origin_id,
             dest_id=payload.dest_id,
             fleet_size=payload.fleet_size,
@@ -50,7 +50,7 @@ async def optimize_cuopt_routing(payload: CuOptRequestPayload = Body(...)) -> Di
         )
         return result
     except Exception as e:
-        logger.error(f"Error executing cuOpt routing optimization: {e}", exc_info=True)
+        logger.error(f"Error executing CPU routing optimization: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

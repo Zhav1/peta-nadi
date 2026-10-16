@@ -72,9 +72,7 @@ class LLMGateway:
         """Helper to get a valid NVIDIA API Key from configuration, prioritizing DeepSeek Pro."""
         for key in [
             settings.nvidia_deepseek_v4_pro,
-            settings.nvidia_deepseek_v4_flash,
-            settings.nvidia_cuopt,
-            settings.nvidia_fourcastnet
+            settings.nvidia_deepseek_v4_flash
         ]:
             if key and not key.startswith("your-") and key != "":
                 return key

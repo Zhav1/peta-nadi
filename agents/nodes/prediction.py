@@ -12,7 +12,7 @@ settings = get_settings()
 
 
 async def prediction_agent(state: CrisisState) -> dict:
-    """Agent 3: Multi-horizon congestion forecast (6h/12h/24h/48h) incorporating Earth-2 predictions."""
+    """Agent 3: Multi-horizon congestion forecast (6h/12h/24h/48h) incorporating Open-Meteo predictions."""
     logger.info("Agent 3 [PredictionAgent] running...")
     
     norm_event = state.get("normalized_event") or {}
@@ -40,21 +40,21 @@ async def prediction_agent(state: CrisisState) -> dict:
     except Exception as re:
         logger.error(f"Failed to scan TomTom data from Redis: {re}")
 
-    # Check for Earth-2 weather predictions in Redis cache
-    earth2_precip = 0.0
-    earth2_flood_risk = 0.0
+    # Check for Open-Meteo weather predictions in Redis cache
+    open_meteo_precip = 0.0
+    open_meteo_flood_risk = 0.0
     try:
-        val = await r.get("lrip:cache:earth2")
+        val = await r.get("lrip:cache:open_meteo")
         if val:
             events = json.loads(val)
             if events:
                 latest_ev = events[-1]
                 raw_payload = latest_ev.get("raw_payload", {})
                 predictions = raw_payload.get("predictions", {})
-                earth2_precip = float(predictions.get("precipitation_mm_24h", 0.0))
-                earth2_flood_risk = float(predictions.get("flood_risk_pct", 0.0))
+                open_meteo_precip = float(predictions.get("precipitation_mm_24h", 0.0))
+                open_meteo_flood_risk = float(predictions.get("flood_risk_pct", 0.0))
     except Exception as e_err:
-        logger.debug(f"Failed to fetch Earth-2 data from Redis: {e_err}")
+        logger.debug(f"Failed to fetch Open-Meteo data from Redis: {e_err}")
 
     # 2. Query incidents table for historical events count in same region
     # Tolerate both `incident_id` and `id` keys (live schema returns `id`).
@@ -102,10 +102,10 @@ async def prediction_agent(state: CrisisState) -> dict:
         for h in base_delays:
             base_delays[h] *= 1.3
             
-    # Earth-2 Weather adjustments: escalate delay prediction if high precipitation or flood risk is predicted
-    if earth2_flood_risk > 50.0 or earth2_precip > 20.0:
-        logger.info(f"Earth-2 weather alert active (Flood risk: {earth2_flood_risk}%, Precip: {earth2_precip}mm). Escalating congestion forecasts.")
-        multiplier = 1.0 + (earth2_flood_risk / 100.0)
+    # Open-Meteo weather adjustments: escalate delay prediction if high precipitation or flood risk is predicted
+    if open_meteo_flood_risk > 50.0 or open_meteo_precip > 20.0:
+        logger.info(f"Open-Meteo weather alert active (Flood risk: {open_meteo_flood_risk}%, Precip: {open_meteo_precip}mm). Escalating congestion forecasts.")
+        multiplier = 1.0 + (open_meteo_flood_risk / 100.0)
         for h in base_delays:
             base_delays[h] *= multiplier
             
@@ -126,14 +126,14 @@ async def prediction_agent(state: CrisisState) -> dict:
         confidence += 0.15
     if is_wildfire:
         confidence += 0.1
-    if earth2_flood_risk > 50.0:
+    if open_meteo_flood_risk > 50.0:
         confidence += 0.1
     if state.get("severity") in ["critical", "high"] or state.get("is_simulated"):
         confidence += 0.1
 
     confidence = min(1.0, confidence)
 
-    summary_text = f"Generated 48h multi-horizon forecast. Max predicted delay: {congestion_forecast['12h']['delay_min']} minutes in 12h. Integrated NVIDIA Earth-2 weather risk analysis."
+    summary_text = f"Generated 48h multi-horizon forecast. Max predicted delay: {congestion_forecast['12h']['delay_min']} minutes in 12h. Integrated Open-Meteo weather risk analysis."
 
     # 5b. Phase 58 expansion (A): opencode-driver prose narrative over computed horizons.
     # Numbers are injected as ground truth; the model must not invent figures.
@@ -168,8 +168,8 @@ async def prediction_agent(state: CrisisState) -> dict:
             "forecast": congestion_forecast,
             "data_points_used": len(delays),
             "has_historical_precedents": has_history,
-            "earth2_flood_risk_pct": earth2_flood_risk,
-            "earth2_precipitation_mm_24h": earth2_precip,
+            "open_meteo_flood_risk_pct": open_meteo_flood_risk,
+            "open_meteo_precipitation_mm_24h": open_meteo_precip,
             **({"narrative": narrative} if narrative else {})
         },
         "timestamp": datetime.now(timezone.utc).isoformat()
@@ -185,5 +185,5 @@ async def prediction_agent(state: CrisisState) -> dict:
     return {
         "congestion_forecast": congestion_forecast,
         "prediction_finding": finding,
-        "messages": state.get("messages", []) + ["PredictionAgent: Generated traffic and incident forecasts incorporating Earth-2."]
+        "messages": state.get("messages", []) + ["PredictionAgent: Generated traffic and incident forecasts incorporating Open-Meteo."]
     }

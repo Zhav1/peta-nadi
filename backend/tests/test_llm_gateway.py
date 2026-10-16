@@ -12,7 +12,7 @@ def unavailable_providers(monkeypatch):
     monkeypatch.setattr(llm_gateway.settings, "demo_offline", False)
     monkeypatch.setattr(llm_gateway.settings, "opencode_api_key", "")
     monkeypatch.setattr(llm_gateway.settings, "gemini_api_key", "")
-    for key in ("nvidia_deepseek_v4_pro", "nvidia_deepseek_v4_flash", "nvidia_cuopt", "nvidia_fourcastnet"):
+    for key in ("nvidia_deepseek_v4_pro", "nvidia_deepseek_v4_flash"):
         monkeypatch.setattr(llm_gateway.settings, key, "")
 
 

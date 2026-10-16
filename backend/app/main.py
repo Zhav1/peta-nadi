@@ -110,27 +110,27 @@ async def _poll_tomtom_loop():
         logger.error(f"Fatal error in TomTom poller loop: {e}")
 
 
-async def _poll_earth2_loop():
+async def _poll_open_meteo_loop():
     """Background poller for Open-Meteo atmospheric forecasts."""
-    logger.info("Starting background Earth2/Open-Meteo poller task...")
+    logger.info("Starting background Open-Meteo poller task...")
     try:
-        from app.adapters.earth2_adapter import Earth2Adapter
-        adapter = Earth2Adapter()
+        from app.adapters.open_meteo_adapter import OpenMeteoAdapter
+        adapter = OpenMeteoAdapter()
         while True:
             try:
                 raw = await adapter.fetch()
                 if raw:
                     events = await adapter.parse(raw)
                     r = get_redis()
-                    r.set("lrip:cache:earth2", json.dumps(events), ex=21600)
-                    logger.info("Earth2/Open-Meteo weather forecast cached in Redis.")
+                    r.set("lrip:cache:open_meteo", json.dumps(events), ex=21600)
+                    logger.info("Open-Meteo weather forecast cached in Redis.")
             except Exception as e:
-                logger.warning(f"Earth2/Weather poll error: {e}")
+                logger.warning(f"Open-Meteo/Weather poll error: {e}")
             await asyncio.sleep(21600)  # Every 6 hours
     except asyncio.CancelledError:
-        logger.info("Earth2 background poller task canceled.")
+        logger.info("Open-Meteo background poller task canceled.")
     except Exception as e:
-        logger.error(f"Fatal error in Earth2 poller loop: {e}")
+        logger.error(f"Fatal error in Open-Meteo poller loop: {e}")
 
 
 async def _run_aisstream():
@@ -195,7 +195,7 @@ async def lifespan(app: FastAPI):
     # Start all background tasks
     bmkg_task = asyncio.create_task(_poll_bmkg_loop())
     tomtom_task = asyncio.create_task(_poll_tomtom_loop())
-    earth2_task = asyncio.create_task(_poll_earth2_loop())
+    open_meteo_task = asyncio.create_task(_poll_open_meteo_loop())
     ais_task = asyncio.create_task(_run_aisstream())
     news_task = asyncio.create_task(_poll_news_loop())
     pihps_task = asyncio.create_task(_poll_pihps_loop())
@@ -204,7 +204,7 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down background workers...")
-    for t in [bmkg_task, tomtom_task, earth2_task, ais_task, news_task, pihps_task]:
+    for t in [bmkg_task, tomtom_task, open_meteo_task, ais_task, news_task, pihps_task]:
         t.cancel()
     close_redis()
 
