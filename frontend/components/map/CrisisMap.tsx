@@ -48,6 +48,7 @@ export interface CrisisMapProps {
   fleetModalityFilter?: 'all' | 'truck' | 'maritime' | 'air';
   simSpeed?: number;
   isRightSidebarOpen?: boolean;
+  mapLegendSlot?: React.ReactNode;
 }
 
 const INITIAL_CENTER: [number, number] = [100.5, 0.5];
@@ -110,6 +111,7 @@ export default function CrisisMap({
   fleetModalityFilter = 'all',
   simSpeed = 1,
   isRightSidebarOpen = false,
+  mapLegendSlot,
 }: CrisisMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   void isLeftSidebarCollapsed;
@@ -1055,7 +1057,7 @@ export default function CrisisMap({
   }, [demoStage, selectedOriginNode, selectedDestNode]);
 
   return (
-    <div className="relative w-full h-full">
+    <div className={`relative w-full h-full ${isRightSidebarOpen ? 'sidebar-open' : ''}`}>
       <div
         ref={containerRef}
         id="crisis-map"
@@ -1075,23 +1077,24 @@ export default function CrisisMap({
         />
       )}
 
-      {/* Floating Map Layer Filters Control */}
-      <div className={`absolute top-3.5 z-30 pointer-events-auto transition-all duration-300 ${
-        isRightSidebarOpen ? 'right-[552px]' : 'right-[124px]'
+      {/* Floating Map Action Controls Group (Layer Peta + Legenda Rute side-by-side) */}
+      <div className={`absolute top-3.5 z-30 pointer-events-auto transition-all duration-300 flex items-center gap-2 ${
+        isRightSidebarOpen ? 'right-[436px]' : 'right-4'
       }`}>
-        <button
-          type="button"
-          onClick={() => setShowLayerFilterMenu((v) => !v)}
-          className={`cursor-pointer px-3 py-2 rounded-lg border text-xs font-medium transition-colors flex items-center gap-2 shadow-lg ${
-            showLayerFilterMenu
-              ? 'bg-white text-[#080d14] border-white font-semibold'
-              : 'bg-[#0c1017] text-slate-300 border-[#1c2432] hover:text-white hover:border-slate-500'
-          }`}
-          title="Filter Layer Peta"
-        >
-          <Layers className="w-3.5 h-3.5 text-slate-400" />
-          <span>Layer Peta</span>
-        </button>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setShowLayerFilterMenu((v) => !v)}
+            className={`cursor-pointer px-3 py-1.5 rounded-md border text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-xl ${
+              showLayerFilterMenu
+                ? 'bg-white text-[#080d14] border-white'
+                : 'bg-[#0c1017] text-slate-300 border-[#1c2432] hover:text-white hover:bg-[#121822]'
+            }`}
+            title="Filter Layer Peta"
+          >
+            <Layers className="w-3.5 h-3.5 text-slate-400" />
+            <span>Layer Peta</span>
+          </button>
 
         {showLayerFilterMenu && (
           <div className="absolute right-0 mt-2 w-64 bg-[#0c1017] border border-[#1c2432] p-3 rounded-lg shadow-xl text-xs space-y-2 animate-in fade-in duration-150">
@@ -1154,6 +1157,9 @@ export default function CrisisMap({
             </div>
           </div>
         )}
+        </div>
+
+        {mapLegendSlot}
       </div>
 
       {drawModeActive && (

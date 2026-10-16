@@ -39,7 +39,7 @@ export function GuestEvaluationBanner() {
     <div
       id="guest-evaluation-banner"
       data-testid="guest-evaluation-banner"
-      className="fixed bottom-6 left-4 lg:left-[380px] z-[45] w-[92%] sm:w-auto max-w-md pointer-events-none"
+      className="fixed bottom-24 left-4 z-[45] w-[92%] sm:w-80 pointer-events-none"
     >
       <div className="pointer-events-auto bg-[#0c1017]/95 border border-amber-500/40 rounded-lg shadow-2xl px-3.5 py-2.5 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5 min-w-0">

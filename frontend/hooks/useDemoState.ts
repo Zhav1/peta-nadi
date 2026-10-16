@@ -256,7 +256,7 @@ export function useDemoState(onCrisisReady?: (crisis: CrisisState) => void) {
 
   // Sync state by polling (primarily for mobile remote synchronization)
   const pollStatus = useCallback(async () => {
-    if (!crisisId || isReplay || crisisId.startsWith('belawan-demo-offline')) return;
+    if (!isRunning || !crisisId || isReplay || crisisId.startsWith('belawan-demo-offline')) return;
     try {
       const statusRes = await api.demo.status(crisisId);
       const pollFull = (statusRes as any).full_crisis_state;
@@ -276,7 +276,7 @@ export function useDemoState(onCrisisReady?: (crisis: CrisisState) => void) {
     } catch (err) {
       console.warn('Failed to poll demo status (skipping offline ID):', err);
     }
-  }, [crisisId, isReplay]);
+  }, [isRunning, crisisId, isReplay]);
 
   // Setup polling when active (runs every 2 seconds if running and not in replay)
   useEffect(() => {
@@ -285,13 +285,16 @@ export function useDemoState(onCrisisReady?: (crisis: CrisisState) => void) {
       interval = setInterval(pollStatus, 2000);
     }
     return () => {
-      if (interval) clearInterval(interval);
+      if (interval) {
+        clearInterval(interval);
+        interval = null;
+      }
     };
   }, [isRunning, crisisId, isReplay, pollStatus]);
 
   // Handle auto-advance timer
   useEffect(() => {
-    if (isAuto && !isCalculatingRoute) {
+    if (isRunning && isAuto && !isCalculatingRoute) {
       autoIntervalRef.current = setInterval(() => {
         setStage((prev) => {
           if (prev < 4) {
@@ -309,15 +312,17 @@ export function useDemoState(onCrisisReady?: (crisis: CrisisState) => void) {
     } else {
       if (autoIntervalRef.current) {
         clearInterval(autoIntervalRef.current);
+        autoIntervalRef.current = null;
       }
     }
 
     return () => {
       if (autoIntervalRef.current) {
         clearInterval(autoIntervalRef.current);
+        autoIntervalRef.current = null;
       }
     };
-  }, [isAuto, isCalculatingRoute, isReplay, crisisId]);
+  }, [isRunning, isAuto, isCalculatingRoute, isReplay, crisisId]);
 
   const toggleAuto = useCallback(() => {
     setIsAuto((prev) => !prev);
@@ -338,6 +343,7 @@ export function useDemoState(onCrisisReady?: (crisis: CrisisState) => void) {
     notifiedKeyRef.current = null;
     if (autoIntervalRef.current) {
       clearInterval(autoIntervalRef.current);
+      autoIntervalRef.current = null;
     }
   }, []);
 

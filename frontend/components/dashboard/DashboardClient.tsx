@@ -404,16 +404,13 @@ function TimeModeBanner({
 function FloatingMapLegend({
   isOpen,
   onToggle,
-  isSidebarOpen = false,
 }: {
   isOpen: boolean;
   onToggle: () => void;
   isSidebarOpen?: boolean;
 }) {
   return (
-    <div className={`absolute top-3.5 z-30 pointer-events-auto transition-all duration-300 ${
-      isSidebarOpen ? 'right-[436px]' : 'right-4'
-    }`}>
+    <div className="relative pointer-events-auto">
       {!isOpen ? (
         <button
           type="button"
@@ -425,7 +422,7 @@ function FloatingMapLegend({
           <span>LEGENDA RUTE</span>
         </button>
       ) : (
-        <div className="w-72 bg-[#0c1017] border border-[#1c2432] p-3.5 rounded-lg shadow-xl text-xs space-y-2.5 animate-in fade-in zoom-in-95 duration-150">
+        <div className="absolute right-0 mt-2 w-72 bg-[#0c1017] border border-[#1c2432] p-3.5 rounded-lg shadow-xl text-xs space-y-2.5 animate-in fade-in zoom-in-95 duration-150 z-50">
           <div className="flex items-center justify-between border-b border-[#1c2432] pb-2">
             <span className="font-mono font-semibold text-xs text-white uppercase tracking-wider flex items-center gap-1.5">
               <Compass className="w-3.5 h-3.5 text-slate-300" />
@@ -513,6 +510,12 @@ export default function DashboardClient() {
   const [selectedOriginNode, setSelectedOriginNode] = useState<string | null>(null);
   const [selectedDestNode, setSelectedDestNode] = useState<string | null>(null);
   const [selectedModality, setSelectedModality] = useState<TransportModality>('truck');
+
+  const activeOriginRef = useRef<string | null>(null);
+  const activeDestRef = useRef<string | null>(null);
+  const routeCalculationReqIdRef = useRef<number>(0);
+  activeOriginRef.current = selectedOriginNode;
+  activeDestRef.current = selectedDestNode;
 
   // Real-time Swarm Streaming Hook
   const {
@@ -1004,13 +1007,19 @@ export default function DashboardClient() {
 
   // LIVE VISUAL DEMO STEPPER TRIGGER
   const handleCrisisReadyFromDemo = useCallback(async (crisis: CrisisState) => {
-    const originId = selectedOriginNode || 'belawan';
-    const destId = selectedDestNode || 'tebingtinggi';
-    setSelectedOriginNode(originId);
-    setSelectedDestNode(destId);
+    // Rely strictly on active nodes selected by the user, never force-overwrite to default strings
+    const originId = activeOriginRef.current || selectedOriginNode;
+    const destId = activeDestRef.current || selectedDestNode;
+    if (!originId || !destId) {
+      return;
+    }
 
-    const originCoords = HUB_NODES[originId]?.coords || HUB_NODES.belawan.coords;
-    const destCoords = HUB_NODES[destId]?.coords || HUB_NODES.tebingtinggi.coords;
+    const currentReqId = ++routeCalculationReqIdRef.current;
+
+    const originCoords = HUB_NODES[originId]?.coords;
+    const destCoords = HUB_NODES[destId]?.coords;
+    if (!originCoords || !destCoords) return;
+
     const hazardPoint: [number, number] = [98.87, 3.56]; // Lubuk Pakam corridor
 
     setSimulatedShockwave({
@@ -1026,6 +1035,14 @@ export default function DashboardClient() {
       destCoords,
       selectedModality
     );
+
+    // Stale check: if user navigated or changed node while in flight, discard this update!
+    if (routeCalculationReqIdRef.current !== currentReqId) {
+      return;
+    }
+    if (activeOriginRef.current !== originId || activeDestRef.current !== destId) {
+      return;
+    }
 
     // Guarantee the demo route loops around the flood circle: if the primary corridor is
     // submerged (offline straight-line fallback), substitute a deterministic bypass detour.
@@ -1089,6 +1106,7 @@ export default function DashboardClient() {
 
   // Comprehensive Demo Reset Handler (Clears all demo states, shockwaves, dirty routes & restores map)
   const handleResetDemo = useCallback(() => {
+    routeCalculationReqIdRef.current++;
     demoState.reset();
     setSimulatedShockwave(null);
     setDisasterZones([]);
@@ -1116,10 +1134,18 @@ export default function DashboardClient() {
       try {
         const hazardCenter: [number, number] = [98.87, 3.56];
         const demoRadiusKm = selectedRadius || DEFAULT_HAZARD_RADIUS_KM;
-        const originId = selectedOriginNode || 'belawan';
-        const destId = selectedDestNode || 'tebingtinggi';
-        const demoOriginCoords = HUB_NODES[originId]?.coords || HUB_NODES.belawan.coords;
-        const demoDestCoords = HUB_NODES[destId]?.coords || HUB_NODES.tebingtinggi.coords;
+        const originId = activeOriginRef.current || selectedOriginNode;
+        const destId = activeDestRef.current || selectedDestNode;
+        if (!originId || !destId) {
+          demoState.advance();
+          return;
+        }
+        const demoOriginCoords = HUB_NODES[originId]?.coords;
+        const demoDestCoords = HUB_NODES[destId]?.coords;
+        if (!demoOriginCoords || !demoDestCoords) {
+          demoState.advance();
+          return;
+        }
 
         // Advance stage immediately to 2
         demoState.advance();
@@ -1217,8 +1243,12 @@ export default function DashboardClient() {
         });
 
         // Compute clean bypass corridor and mark the direct corridor as compromised
-        const demoOriginCoords = HUB_NODES[demoOriginRef.current || 'belawan']?.coords || HUB_NODES.belawan.coords;
-        const demoDestCoords = HUB_NODES[demoDestRef.current || 'tebingtinggi']?.coords || HUB_NODES.tebingtinggi.coords;
+        const originId = activeOriginRef.current || demoOriginRef.current;
+        const destId = activeDestRef.current || demoDestRef.current;
+        if (!originId || !destId) break;
+        const demoOriginCoords = HUB_NODES[originId]?.coords;
+        const demoDestCoords = HUB_NODES[destId]?.coords;
+        if (!demoOriginCoords || !demoDestCoords) break;
         const bypassPreview = buildHazardBypassRoute(demoOriginCoords, demoDestCoords, hazardCenter, demoRadiusKm);
         if (bypassPreview) {
           setCurrentMapRoutes([bypassPreview]);
@@ -1296,13 +1326,19 @@ export default function DashboardClient() {
       setSimulatedShockwave(null);
     }
 
-    const originId = selectedOriginNode || 'belawan';
-    const destId = selectedDestNode || 'medan';
-    if (!selectedOriginNode) setSelectedOriginNode(originId);
-    if (!selectedDestNode) setSelectedDestNode(destId);
+    const originId = activeOriginRef.current || selectedOriginNode;
+    const destId = activeDestRef.current || selectedDestNode;
+    if (!originId || !destId) {
+      setToast({
+        message: 'Pilih Titik Asal dan Titik Tujuan di peta terlebih dahulu untuk mengaktifkan simulasi krisis.',
+        type: 'info'
+      });
+      return;
+    }
 
-    const originCoords = HUB_NODES[originId]?.coords || HUB_NODES.belawan.coords;
-    const destCoords = HUB_NODES[destId]?.coords || HUB_NODES.medan.coords;
+    const originCoords = HUB_NODES[originId]?.coords;
+    const destCoords = HUB_NODES[destId]?.coords;
+    if (!originCoords || !destCoords) return;
 
     // Fast preliminary preview route while backend calculates deep matrix
     calculateAIDynamicDetourRoutes(
@@ -1655,8 +1691,8 @@ export default function DashboardClient() {
             isLeftSidebarCollapsed ? 'left-4' : 'left-4 lg:left-[368px]'
           } ${
             isSidebarOpen && !!selectedCrisis
-              ? 'max-w-[calc(100vw-368px-670px)]'
-              : 'max-w-[calc(100vw-368px-240px)]'
+              ? 'max-w-[calc(100vw-368px-680px)]'
+              : 'max-w-[calc(100vw-368px-270px)]'
           }`}>
             <TopNavTelemetry
               cuOptInfo={cuOptInfo}
@@ -1701,6 +1737,12 @@ export default function DashboardClient() {
               fleetModalityFilter={fleetModalityFilter}
               simSpeed={simSpeed}
               isRightSidebarOpen={isSidebarOpen && !!selectedCrisis}
+              mapLegendSlot={
+                <FloatingMapLegend
+                  isOpen={isMapLegendOpen}
+                  onToggle={() => setIsMapLegendOpen(v => !v)}
+                />
+              }
             />
 
           </div>
@@ -2106,36 +2148,31 @@ export default function DashboardClient() {
               </div>
             )}
 
-            {/* Floating Collapsible Route Map Legend */}
-            <FloatingMapLegend
-              isOpen={isMapLegendOpen}
-              onToggle={() => setIsMapLegendOpen(v => !v)}
-              isSidebarOpen={isSidebarOpen && !!selectedCrisis}
-            />
-
-            {/* Relocated Collapsible Floating Simulator Dock above Bottombar */}
-            <CrisisSimulatorBar
-              onTriggerPointSimulation={(lat, lon, type, radiusKm, severity) =>
-                handleMapPointTargeted(lat, lon, type, radiusKm, severity)
-              }
-              isClickTargeting={isClickTargeting}
-              setIsClickTargeting={setIsClickTargeting}
-              drawModeActive={drawModeActive}
-              setDrawModeActive={setDrawModeActive}
-              simulationActive={!!simulatedShockwave || disasterZones.length > 0 || selectedCrisisId === 'simulated-active'}
-              onClearSimulation={handleClearSimulation}
-              originNodeId={selectedOriginNode}
-              destNodeId={selectedDestNode}
-              selectedRadius={selectedRadius}
-              setSelectedRadius={setSelectedRadius}
-              selectedModality={selectedModality}
-              setSelectedModality={handleModalityChange}
-              onResetNodes={handleResetNodes}
-              isSidebarOpen={isSidebarOpen && !!selectedCrisis}
-              isLeftSidebarCollapsed={isLeftSidebarCollapsed}
-              simSpeed={simSpeed}
-              setSimSpeed={setSimSpeed}
-            />
+            {/* Relocated Collapsible Floating Simulator Dock above Bottombar (Hidden during guided demo to avoid UI overlap) */}
+            {!demoState.isRunning && (
+              <CrisisSimulatorBar
+                onTriggerPointSimulation={(lat, lon, type, radiusKm, severity) =>
+                  handleMapPointTargeted(lat, lon, type, radiusKm, severity)
+                }
+                isClickTargeting={isClickTargeting}
+                setIsClickTargeting={setIsClickTargeting}
+                drawModeActive={drawModeActive}
+                setDrawModeActive={setDrawModeActive}
+                simulationActive={!!simulatedShockwave || disasterZones.length > 0 || selectedCrisisId === 'simulated-active'}
+                onClearSimulation={handleClearSimulation}
+                originNodeId={selectedOriginNode}
+                destNodeId={selectedDestNode}
+                selectedRadius={selectedRadius}
+                setSelectedRadius={setSelectedRadius}
+                selectedModality={selectedModality}
+                setSelectedModality={handleModalityChange}
+                onResetNodes={handleResetNodes}
+                isSidebarOpen={isSidebarOpen && !!selectedCrisis}
+                isLeftSidebarCollapsed={isLeftSidebarCollapsed}
+                simSpeed={simSpeed}
+                setSimSpeed={setSimSpeed}
+              />
+            )}
 
             {/* Guided Presentation Demo Panel */}
             <GuidedDemoPanel
@@ -2177,44 +2214,46 @@ export default function DashboardClient() {
             />
 
             {/* Bottombar Time Scope Filters (Exact Dual-Sidebar Centering on Desktop, Centered on Mobile) */}
-            <footer className={`absolute bottom-4 sm:bottom-6 z-40 flex items-center gap-1.5 bg-[#0c1017] border border-[#1c2432] p-1.5 rounded-lg shadow-xl transition-all duration-300 pointer-events-auto left-1/2 -translate-x-1/2 max-w-[95vw] overflow-x-auto no-scrollbar ${footerDockClass}`}>
-              {(['past', 'present', 'future', 'predict'] as const).map((filter) => (
+            {!demoState.isRunning && (
+              <footer className={`absolute bottom-4 sm:bottom-6 z-40 flex items-center gap-1.5 bg-[#0c1017] border border-[#1c2432] p-1.5 rounded-lg shadow-xl transition-all duration-300 pointer-events-auto left-1/2 -translate-x-1/2 max-w-[95vw] overflow-x-auto no-scrollbar ${footerDockClass}`}>
+                {(['past', 'present', 'future', 'predict'] as const).map((filter) => (
+                  <button
+                    key={filter}
+                    onClick={() => {
+                      setActiveTimeFilter(filter);
+                      if (filter === 'predict') {
+                        const firstPredictive = predictiveRisks[0];
+                        const predictiveId = firstPredictive
+                          ? String(firstPredictive.risk_id || firstPredictive.id || 'pred-rob-belawan-48h')
+                          : 'pred-rob-belawan-48h';
+                        handleCrisisClick(predictiveId);
+                      }
+                    }}
+                    className={`px-3 py-1 rounded text-xs font-semibold uppercase tracking-wider transition-colors cursor-pointer shrink-0 ${activeTimeFilter === filter
+                      ? 'bg-white text-[#080d14] shadow-sm'
+                      : 'text-slate-400 hover:text-white hover:bg-[#121822]'
+                      }`}
+                  >
+                    {filter}
+                  </button>
+                ))}
+                <div className="w-[1px] h-4 bg-[#1c2432] mx-1 shrink-0" />
                 <button
-                  key={filter}
+                  type="button"
+                  id="run-demo-btn"
                   onClick={() => {
-                    setActiveTimeFilter(filter);
-                    if (filter === 'predict') {
-                      const firstPredictive = predictiveRisks[0];
-                      const predictiveId = firstPredictive
-                        ? String(firstPredictive.risk_id || firstPredictive.id || 'pred-rob-belawan-48h')
-                        : 'pred-rob-belawan-48h';
-                      handleCrisisClick(predictiveId);
-                    }
+                    setSelectedOriginNode(null);
+                    setSelectedDestNode(null);
+                    setCurrentMapRoutes([]);
+                    demoState.start({ mock_agents: true, offline: false });
                   }}
-                  className={`px-3 py-1 rounded text-xs font-semibold uppercase tracking-wider transition-colors cursor-pointer shrink-0 ${activeTimeFilter === filter
-                    ? 'bg-white text-[#080d14] shadow-sm'
-                    : 'text-slate-400 hover:text-white hover:bg-[#121822]'
-                    }`}
+                  className="flex items-center gap-1.5 px-3 py-1 rounded bg-white hover:bg-slate-200 text-[#080d14] font-semibold text-xs uppercase tracking-wider transition-colors shadow-sm cursor-pointer shrink-0"
                 >
-                  {filter}
+                  <Play className="w-3 h-3 fill-current" />
+                  <span>Run Demo</span>
                 </button>
-              ))}
-              <div className="w-[1px] h-4 bg-[#1c2432] mx-1 shrink-0" />
-              <button
-                type="button"
-                id="run-demo-btn"
-                onClick={() => {
-                  setSelectedOriginNode(null);
-                  setSelectedDestNode(null);
-                  setCurrentMapRoutes([]);
-                  demoState.start({ mock_agents: true, offline: false });
-                }}
-                className="flex items-center gap-1.5 px-3 py-1 rounded bg-white hover:bg-slate-200 text-[#080d14] font-semibold text-xs uppercase tracking-wider transition-colors shadow-sm cursor-pointer shrink-0"
-              >
-                <Play className="w-3 h-3 fill-current" />
-                <span>Run Demo</span>
-              </button>
-            </footer>
+              </footer>
+            )}
           </div>
 
           {/* 3. DOCKED FLOATING GLASS DRAWER RIGHT SIDEBAR (CrisisSidebar) */}
