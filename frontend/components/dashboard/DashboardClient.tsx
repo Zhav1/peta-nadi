@@ -210,14 +210,29 @@ function resolveApprovedDelayMinutes(
 
 const PANTAI_CERMIN_COASTAL_CORRIDOR: [number, number][] = [
   [98.6776, 3.7922], // Pelabuhan Belawan
-  [98.6850, 3.7250], // Medan Timur Bypass
-  [98.6920, 3.6550], // Simpang Kayu Besar
-  [98.7450, 3.6300], // Batang Kuis
-  [98.8100, 3.6150], // Lubuk Pakam Arterial
-  [98.9800, 3.6350], // Pantai Cermin Coastal Detour
-  [99.0700, 3.5200], // Perbaungan Bypass
-  [99.1200, 3.4400], // Sei Rampah Arterial
-  [99.1625, 3.3285], // Tebing Tinggi Terminal
+  [98.6795, 3.7620], // Medan Labuhan Arteri
+  [98.6830, 3.7310], // Marelan Selatan
+  [98.6880, 3.7050], // Medan Timur Arteri
+  [98.6980, 3.6780], // Simpang Kayu Besar / Tol Belmera
+  [98.7150, 3.6550], // Interchange Cemara
+  [98.7420, 3.6380], // Percut Sei Tuan
+  [98.7750, 3.6320], // Batang Kuis Arteri
+  [98.8150, 3.6350], // Deli Serdang Utara
+  [98.8550, 3.6450], // Akses Pesisir Pantai Cermin Barat
+  [98.8950, 3.6520], // Arteri Pesisir Pantai Cermin
+  [98.9350, 3.6550], // Kawasan Wisata Pantai Cermin
+  [98.9750, 3.6480], // Pantai Cermin Timur
+  [99.0150, 3.6350], // Jalur Lingkar Pesisir Serdang Bedagai
+  [99.0400, 3.6120], // Menuju Koridor Bypass Perbaungan
+  [99.0550, 3.5820], // Simpang Arteri Melati
+  [99.0680, 3.5510], // Perbaungan Timur Bypass (Clearance Zona Banjir)
+  [99.0850, 3.5220], // Jalur Arteri Teluk Mengkudu
+  [99.1050, 3.4920], // Koridor Sei Buluh
+  [99.1220, 3.4610], // Menuju Sei Rampah Utara
+  [99.1380, 3.4280], // Sei Rampah Bypass
+  [99.1501, 3.3950], // Arteri Firdaus / Sei Rampah
+  [99.1560, 3.3620], // Jalinsum Tebing Tinggi Barat
+  [99.1625, 3.3285], // Interchange Tol & Terminal Tebing Tinggi
 ];
 
 // Deterministic tangential bypass: bends a corridor around a hazard circle at radius + 6 km clearance
@@ -397,7 +412,7 @@ function FloatingMapLegend({
 }) {
   return (
     <div className={`absolute top-3.5 z-30 pointer-events-auto transition-all duration-300 ${
-      isSidebarOpen ? 'right-[420px]' : 'right-4'
+      isSidebarOpen ? 'right-[436px]' : 'right-4'
     }`}>
       {!isOpen ? (
         <button
@@ -1072,6 +1087,92 @@ export default function DashboardClient() {
   demoDestRef.current = selectedDestNode;
   demoRadiusRef.current = selectedRadius;
 
+  // Comprehensive Demo Reset Handler (Clears all demo states, shockwaves, dirty routes & restores map)
+  const handleResetDemo = useCallback(() => {
+    demoState.reset();
+    setSimulatedShockwave(null);
+    setDisasterZones([]);
+    setSelectedCrisisId(null);
+    setSelectedCrisis(null);
+    setActiveRouteIdx(null);
+    setIsClickTargeting(false);
+    setDrawModeActive(false);
+    setIsSidebarOpen(false);
+    setSelectedOriginNode(null);
+    setSelectedDestNode(null);
+    setCurrentMapRoutes([]);
+    setToast({
+      message: 'Demo di-reset. Peta dikembalikan ke kondisi awal (pilih 2 titik simpul).',
+      type: 'info'
+    });
+  }, [demoState]);
+
+  // Robust Async-Locked Advance Handler (prevents race condition in Step 3 detour routing)
+  const handleDemoAdvance = useCallback(async () => {
+    if (demoState.isCalculatingRoute) return;
+
+    if (demoState.stage === 1) {
+      demoState.setIsCalculatingRoute(true);
+      try {
+        const hazardCenter: [number, number] = [98.87, 3.56];
+        const demoRadiusKm = selectedRadius || DEFAULT_HAZARD_RADIUS_KM;
+        const originId = selectedOriginNode || 'belawan';
+        const destId = selectedDestNode || 'tebingtinggi';
+        const demoOriginCoords = HUB_NODES[originId]?.coords || HUB_NODES.belawan.coords;
+        const demoDestCoords = HUB_NODES[destId]?.coords || HUB_NODES.tebingtinggi.coords;
+
+        // Advance stage immediately to 2
+        demoState.advance();
+
+        setSimulatedShockwave({
+          center: hazardCenter,
+          radiusKm: demoRadiusKm,
+          hazardType: 'flood',
+        });
+
+        const bypassPreview = buildHazardBypassRoute(demoOriginCoords, demoDestCoords, hazardCenter, demoRadiusKm);
+        if (bypassPreview) {
+          setCurrentMapRoutes([bypassPreview]);
+          setActiveRouteIdx(0);
+        }
+
+        const rawRoutes = await calculateAIDynamicDetourRoutes(
+          hazardCenter,
+          demoRadiusKm,
+          demoOriginCoords,
+          demoDestCoords,
+          selectedModality
+        );
+
+        const directCompromised = rawRoutes.find((r) => r.is_compromised) || rawRoutes[0];
+        const markedDirect: RouteRecommendation | null = directCompromised ? {
+          ...directCompromised,
+          color: '#EF4444',
+          safety_status: 'COMPROMISED',
+          safety_tag: 'TERDAMPAK ZONA BAHAYA (+60m Delay)',
+          is_compromised: true,
+        } : null;
+
+        const routesToShow: RouteRecommendation[] = [];
+        if (bypassPreview) routesToShow.push(bypassPreview);
+        if (markedDirect && !routesToShow.some((r) => r.id === markedDirect.id)) {
+          routesToShow.push(markedDirect);
+        }
+        if (routesToShow.length > 0) {
+          setCurrentMapRoutes(routesToShow);
+          setActiveRouteIdx(0);
+        }
+      } catch (err) {
+        console.warn('Detour calculation error during advance:', err);
+      } finally {
+        demoState.setIsCalculatingRoute(false);
+      }
+      return;
+    }
+
+    demoState.advance();
+  }, [demoState, selectedRadius, selectedOriginNode, selectedDestNode, selectedModality]);
+
   useEffect(() => {
     if (!demoState.isRunning) return;
 
@@ -1081,16 +1182,22 @@ export default function DashboardClient() {
         setSimulatedShockwave(null);
         setSelectedCrisis(null);
         setIsSidebarOpen(false);
-        const originId = selectedOriginNode || 'belawan';
-        const destId = selectedDestNode || 'tebingtinggi';
-        const originCoords = HUB_NODES[originId]?.coords || HUB_NODES.belawan.coords;
-        const destCoords = HUB_NODES[destId]?.coords || HUB_NODES.tebingtinggi.coords;
-        calculateAIDynamicDetourRoutes(null, selectedRadius, originCoords, destCoords, selectedModality).then((routes) => {
-          if (routes.length > 0) {
-            setCurrentMapRoutes(routes);
-            setActiveRouteIdx(0);
+        if (selectedOriginNode && selectedDestNode) {
+          const originCoords = HUB_NODES[selectedOriginNode]?.coords;
+          const destCoords = HUB_NODES[selectedDestNode]?.coords;
+          if (originCoords && destCoords) {
+            calculateAIDynamicDetourRoutes(null, selectedRadius, originCoords, destCoords, selectedModality)
+              .then((routes) => {
+                if (routes.length > 0) {
+                  setCurrentMapRoutes(routes);
+                  setActiveRouteIdx(0);
+                }
+              })
+              .catch((err) => console.warn('Stage 0 route calculation error:', err));
           }
-        });
+        } else {
+          setCurrentMapRoutes([]);
+        }
         break;
       }
 
@@ -1118,26 +1225,32 @@ export default function DashboardClient() {
           setActiveRouteIdx(0);
         }
 
-        calculateAIDynamicDetourRoutes(hazardCenter, demoRadiusKm, demoOriginCoords, demoDestCoords, selectedModality).then((rawRoutes) => {
-          const directCompromised = rawRoutes.find((r) => r.is_compromised) || rawRoutes[0];
-          const markedDirect: RouteRecommendation | null = directCompromised ? {
-            ...directCompromised,
-            color: '#EF4444',
-            safety_status: 'COMPROMISED',
-            safety_tag: 'TERDAMPAK ZONA BAHAYA (+60m Delay)',
-            is_compromised: true,
-          } : null;
+        demoState.setIsCalculatingRoute(true);
+        calculateAIDynamicDetourRoutes(hazardCenter, demoRadiusKm, demoOriginCoords, demoDestCoords, selectedModality)
+          .then((rawRoutes) => {
+            const directCompromised = rawRoutes.find((r) => r.is_compromised) || rawRoutes[0];
+            const markedDirect: RouteRecommendation | null = directCompromised ? {
+              ...directCompromised,
+              color: '#EF4444',
+              safety_status: 'COMPROMISED',
+              safety_tag: 'TERDAMPAK ZONA BAHAYA (+60m Delay)',
+              is_compromised: true,
+            } : null;
 
-          const routesToShow: RouteRecommendation[] = [];
-          if (bypassPreview) routesToShow.push(bypassPreview);
-          if (markedDirect && !routesToShow.some((r) => r.id === markedDirect.id)) {
-            routesToShow.push(markedDirect);
-          }
-          if (routesToShow.length > 0) {
-            setCurrentMapRoutes(routesToShow);
-            setActiveRouteIdx(0);
-          }
-        });
+            const routesToShow: RouteRecommendation[] = [];
+            if (bypassPreview) routesToShow.push(bypassPreview);
+            if (markedDirect && !routesToShow.some((r) => r.id === markedDirect.id)) {
+              routesToShow.push(markedDirect);
+            }
+            if (routesToShow.length > 0) {
+              setCurrentMapRoutes(routesToShow);
+              setActiveRouteIdx(0);
+            }
+          })
+          .catch((err) => console.warn('Stage 2 detour calculation error:', err))
+          .finally(() => {
+            demoState.setIsCalculatingRoute(false);
+          });
         break;
       }
 
@@ -1538,8 +1651,12 @@ export default function DashboardClient() {
         <div className={`w-full h-full relative ${activeSection === 'map' ? 'block' : 'hidden'}`}>
 
           {/* Floating Operational Telemetry HUD Strip */}
-          <div className={`absolute top-3.5 z-30 pointer-events-auto transition-all duration-300 hidden md:flex w-fit overflow-visible ${
-            isLeftSidebarCollapsed ? 'left-4 sm:left-32' : 'left-4 sm:left-32 lg:left-[368px]'
+          <div className={`absolute top-3.5 z-30 pointer-events-auto transition-all duration-300 hidden md:flex items-center no-scrollbar overflow-x-auto ${
+            isLeftSidebarCollapsed ? 'left-4' : 'left-4 lg:left-[368px]'
+          } ${
+            isSidebarOpen && !!selectedCrisis
+              ? 'max-w-[calc(100vw-368px-670px)]'
+              : 'max-w-[calc(100vw-368px-240px)]'
           }`}>
             <TopNavTelemetry
               cuOptInfo={cuOptInfo}
@@ -2029,13 +2146,24 @@ export default function DashboardClient() {
               confidence={demoState.confidence}
               summary={demoState.summary}
               isAuto={demoState.isAuto}
-              onStart={(opts) => demoState.start({ mock_agents: true, offline: false, origin: opts?.origin || selectedOriginNode || 'belawan', destination: opts?.destination || selectedDestNode || 'tebingtinggi' })}
-              onAdvance={demoState.advance}
+              isCalculatingRoute={demoState.isCalculatingRoute}
+              onStart={(opts) => {
+                setSelectedOriginNode(null);
+                setSelectedDestNode(null);
+                setCurrentMapRoutes([]);
+                demoState.start({
+                  mock_agents: true,
+                  offline: false,
+                  origin: opts?.origin,
+                  destination: opts?.destination,
+                });
+              }}
+              onAdvance={handleDemoAdvance}
               onToggleAuto={demoState.toggleAuto}
-              onReset={demoState.reset}
+              onReset={handleResetDemo}
               isSidebarOpen={isSidebarOpen && !!selectedCrisis}
-              selectedOrigin={selectedOriginNode || 'belawan'}
-              selectedDestination={selectedDestNode || 'tebingtinggi'}
+              selectedOrigin={selectedOriginNode}
+              selectedDestination={selectedDestNode}
               inflationForecast={demoState.currentCrisisState?.inflation_forecast}
               economicFinding={demoState.currentCrisisState?.economic_intelligence_finding}
               onOpenMitigation={() => {
@@ -2075,7 +2203,12 @@ export default function DashboardClient() {
               <button
                 type="button"
                 id="run-demo-btn"
-                onClick={() => demoState.start({ mock_agents: true, offline: false, origin: selectedOriginNode || 'belawan', destination: selectedDestNode || 'tebingtinggi' })}
+                onClick={() => {
+                  setSelectedOriginNode(null);
+                  setSelectedDestNode(null);
+                  setCurrentMapRoutes([]);
+                  demoState.start({ mock_agents: true, offline: false });
+                }}
                 className="flex items-center gap-1.5 px-3 py-1 rounded bg-white hover:bg-slate-200 text-[#080d14] font-semibold text-xs uppercase tracking-wider transition-colors shadow-sm cursor-pointer shrink-0"
               >
                 <Play className="w-3 h-3 fill-current" />

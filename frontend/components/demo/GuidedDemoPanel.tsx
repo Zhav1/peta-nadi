@@ -21,6 +21,7 @@ import {
   ArrowRight,
   Info,
   AlertTriangle,
+  Loader2,
 } from 'lucide-react';
 import type { CrisisState } from '@/lib/types';
 
@@ -32,13 +33,14 @@ interface GuidedDemoPanelProps {
   confidence: number;
   summary: string;
   isAuto: boolean;
+  isCalculatingRoute?: boolean;
   onStart: (opts?: { origin?: string; destination?: string }) => void;
   onAdvance: () => void;
   onToggleAuto: () => void;
   onReset: () => void;
   isSidebarOpen?: boolean;
-  selectedOrigin?: string;
-  selectedDestination?: string;
+  selectedOrigin?: string | null;
+  selectedDestination?: string | null;
   onSelectPreset?: (origin: string, dest: string) => void;
   inflationForecast?: CrisisState['inflation_forecast'];
   economicFinding?: CrisisState['economic_intelligence_finding'];
@@ -53,13 +55,14 @@ export function GuidedDemoPanel({
   confidence,
   summary,
   isAuto,
+  isCalculatingRoute = false,
   onStart,
   onAdvance,
   onToggleAuto,
   onReset,
   isSidebarOpen = false,
-  selectedOrigin = 'belawan',
-  selectedDestination = 'tebingtinggi',
+  selectedOrigin = null,
+  selectedDestination = null,
   onSelectPreset,
   inflationForecast,
   economicFinding,
@@ -223,7 +226,13 @@ export function GuidedDemoPanel({
                 </span>
               </div>
               <p className="text-xs text-slate-400 leading-normal">
-                Klik marker kota/pelabuhan pada peta untuk mengeset titik <strong className="text-cyan-300 font-medium">Asal</strong> lalu <strong className="text-amber-300 font-medium">Tujuan</strong>.
+                {!selectedOrigin ? (
+                  <span className="text-cyan-300 font-medium animate-pulse">Langkah 1: Klik marker kota/pelabuhan pada peta untuk menetapkan Titik Asal.</span>
+                ) : !selectedDestination ? (
+                  <span className="text-amber-300 font-medium animate-pulse">Langkah 2: Titik Asal diset ({HUB_NODES[selectedOrigin]?.name || selectedOrigin}). Sekarang klik marker kedua untuk Titik Tujuan.</span>
+                ) : (
+                  <span className="text-emerald-400 font-medium">Koridor siap ({HUB_NODES[selectedOrigin]?.name || selectedOrigin} &rarr; {HUB_NODES[selectedDestination]?.name || selectedDestination}). Silakan tekan tombol di bawah untuk mulai simulasi.</span>
+                )}
               </p>
             </div>
 
@@ -427,17 +436,31 @@ export function GuidedDemoPanel({
             <button
               type="button"
               id="guided-demo-advance-btn"
+              disabled={(stage === 0 && (!selectedOrigin || !selectedDestination)) || isCalculatingRoute}
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 onAdvance();
               }}
-              className="flex-1 py-2 px-3 rounded-md text-xs font-semibold bg-white text-[#080d14] hover:bg-slate-200 transition-colors shadow-sm cursor-pointer flex items-center justify-center gap-1.5"
+              className={`flex-1 py-2 px-3 rounded-md text-xs font-semibold transition-colors shadow-sm flex items-center justify-center gap-1.5 ${
+                (stage === 0 && (!selectedOrigin || !selectedDestination)) || isCalculatingRoute
+                  ? 'bg-slate-850 text-slate-500 cursor-not-allowed border border-white/5 opacity-70'
+                  : 'bg-white text-[#080d14] hover:bg-slate-200 cursor-pointer'
+              }`}
             >
-              {stage === 0 ? (
+              {isCalculatingRoute ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-cyan-400" />
+                  <span>Menghitung Rute Pengalihan...</span>
+                </>
+              ) : stage === 0 ? (
                 <>
                   <Play className="w-3.5 h-3.5 fill-current" />
-                  <span>Mulai Simulasi Disrupsi</span>
+                  <span>
+                    {!selectedOrigin || !selectedDestination
+                      ? 'Pilih 2 Titik Simpul di Peta'
+                      : 'Mulai Simulasi Disrupsi'}
+                  </span>
                 </>
               ) : logStep === 5 ? (
                 <>
@@ -471,7 +494,7 @@ export function GuidedDemoPanel({
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  onStart({ origin: selectedOrigin, destination: selectedDestination });
+                  onStart({ origin: selectedOrigin || undefined, destination: selectedDestination || undefined });
                 }}
                 className="px-3 py-2 rounded-md text-xs font-medium border border-[#1c2432] bg-[#121822] text-slate-300 hover:text-white hover:bg-[#1a2230] transition-colors cursor-pointer flex items-center justify-center"
                 title="Mulai Ulang Demo"
@@ -527,7 +550,7 @@ export function GuidedDemoPanel({
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
-              onStart();
+              onReset();
             }}
             className="hover:text-slate-200 transition cursor-pointer flex items-center gap-1"
           >

@@ -455,6 +455,38 @@ export default function CrisisMap({
         data: { type: 'FeatureCollection', features: [] },
       });
       map.addLayer({
+        id: 'hub-nodes-pulse-outer',
+        type: 'circle',
+        source: 'hub-nodes-source',
+        paint: {
+          'circle-radius': [
+            'case',
+            ['get', 'isKeyNode'], 18,
+            ['get', 'isSelectablePrompt'], 14,
+            0
+          ],
+          'circle-color': [
+            'case',
+            ['get', 'isKeyNode'], '#22d3ee',
+            '#00f0ff'
+          ],
+          'circle-opacity': [
+            'case',
+            ['get', 'isKeyNode'], 0.25,
+            ['get', 'isSelectablePrompt'], 0.35,
+            0
+          ],
+          'circle-stroke-width': [
+            'case',
+            ['get', 'isKeyNode'], 2.0,
+            ['get', 'isSelectablePrompt'], 1.5,
+            0
+          ],
+          'circle-stroke-color': '#22d3ee',
+          'circle-stroke-opacity': 0.8,
+        },
+      });
+      map.addLayer({
         id: 'hub-nodes-circle',
         type: 'circle',
         source: 'hub-nodes-source',
@@ -492,20 +524,30 @@ export default function CrisisMap({
       });
 
       // Hub node WebGL click & hover handlers
-      map.on('click', 'hub-nodes-circle', (e) => {
+      const handleNodeClick = (e: any) => {
         if (e.features && e.features[0] && e.features[0].properties) {
           const nodeId = e.features[0].properties.id;
           if (nodeId && onNodeSelectedRef.current) {
             onNodeSelectedRef.current(nodeId);
           }
         }
-      });
-      map.on('mouseenter', 'hub-nodes-circle', () => {
+      };
+      map.on('click', 'hub-nodes-circle', handleNodeClick);
+      map.on('click', 'hub-nodes-pulse-outer', handleNodeClick);
+      map.on('click', 'hub-nodes-label', handleNodeClick);
+
+      const setPointerCursor = () => {
         if (mapRef.current) mapRef.current.getCanvas().style.cursor = 'pointer';
-      });
-      map.on('mouseleave', 'hub-nodes-circle', () => {
+      };
+      const resetCursor = () => {
         if (mapRef.current) mapRef.current.getCanvas().style.cursor = '';
-      });
+      };
+      map.on('mouseenter', 'hub-nodes-circle', setPointerCursor);
+      map.on('mouseleave', 'hub-nodes-circle', resetCursor);
+      map.on('mouseenter', 'hub-nodes-pulse-outer', setPointerCursor);
+      map.on('mouseleave', 'hub-nodes-pulse-outer', resetCursor);
+      map.on('mouseenter', 'hub-nodes-label', setPointerCursor);
+      map.on('mouseleave', 'hub-nodes-label', resetCursor);
 
       // 5. Route ETA Badges Native WebGL Layer
       map.addSource('route-eta-badges-source', {
@@ -773,6 +815,7 @@ export default function CrisisMap({
     const hubSource = map.getSource('hub-nodes-source') as mapboxgl.GeoJSONSource;
     if (hubSource) {
       const nodesToRender = hubNodesList || Object.values(HUB_NODES);
+      const isSelecting = demoStage === 0 && (!selectedOriginNode || !selectedDestNode);
       const hubFeatures: GeoJSON.Feature<GeoJSON.Point>[] = nodesToRender.map((node) => {
         const isOrigin = node.id === selectedOriginNode;
         const isDest = node.id === selectedDestNode;
@@ -780,15 +823,26 @@ export default function CrisisMap({
         const shortCityName = rawName
           .replace(/^(Hub Utama Pergudangan|Hub Logistik|Interchange Tol|Interchange|Pelabuhan|Bandara Internasional|Bandara|Kota)\s+/i, '')
           .trim();
+
+        let labelName = shortCityName;
+        if (isOrigin) {
+          labelName = `${shortCityName} (ASAL)`;
+        } else if (isDest) {
+          labelName = `${shortCityName} (TUJUAN)`;
+        } else if (isSelecting) {
+          labelName = !selectedOriginNode ? `${shortCityName} (KLIK ASAL)` : `${shortCityName} (KLIK TUJUAN)`;
+        }
+
         return {
           type: 'Feature',
           geometry: { type: 'Point', coordinates: node.coords },
           properties: {
             id: node.id,
             name: node.name,
-            shortName: isOrigin ? `${shortCityName} (ASAL)` : isDest ? `${shortCityName} (TUJUAN)` : shortCityName,
+            shortName: labelName,
             type: node.type,
             isKeyNode: isOrigin || isDest,
+            isSelectablePrompt: isSelecting && !isOrigin && !isDest,
           },
         };
       });
@@ -957,6 +1011,49 @@ export default function CrisisMap({
     }
   }, [selectedCrisisId, simulatedShockwave?.center?.[0], simulatedShockwave?.center?.[1], simulatedShockwave?.radiusKm]);
 
+  // Step 1 interactive visual cues: animated pulse halo around selectable hub nodes
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const isSelecting = demoStage === 0 && (!selectedOriginNode || !selectedDestNode);
+    if (!isSelecting) return;
+
+    let animId: number;
+    const startTime = performance.now();
+
+    const animatePulse = (now: number) => {
+      const elapsed = (now - startTime) / 1000;
+      const progress = (Math.sin(elapsed * 4) + 1) / 2;
+      const radius = 13 + progress * 7;
+      const opacity = 0.45 - progress * 0.25;
+
+      try {
+        if (map.getLayer('hub-nodes-pulse-outer')) {
+          map.setPaintProperty('hub-nodes-pulse-outer', 'circle-radius', [
+            'case',
+            ['get', 'isKeyNode'], 18,
+            ['get', 'isSelectablePrompt'], radius,
+            0
+          ]);
+          map.setPaintProperty('hub-nodes-pulse-outer', 'circle-opacity', [
+            'case',
+            ['get', 'isKeyNode'], 0.3,
+            ['get', 'isSelectablePrompt'], opacity,
+            0
+          ]);
+        }
+      } catch {}
+
+      animId = requestAnimationFrame(animatePulse);
+    };
+
+    animId = requestAnimationFrame(animatePulse);
+    return () => {
+      cancelAnimationFrame(animId);
+    };
+  }, [demoStage, selectedOriginNode, selectedDestNode]);
+
   return (
     <div className="relative w-full h-full">
       <div
@@ -980,7 +1077,7 @@ export default function CrisisMap({
 
       {/* Floating Map Layer Filters Control */}
       <div className={`absolute top-3.5 z-30 pointer-events-auto transition-all duration-300 ${
-        isRightSidebarOpen ? 'right-[560px]' : 'right-[156px]'
+        isRightSidebarOpen ? 'right-[552px]' : 'right-[124px]'
       }`}>
         <button
           type="button"

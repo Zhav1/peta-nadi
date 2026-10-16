@@ -27,6 +27,7 @@ export function useDemoState(onCrisisReady?: (crisis: CrisisState) => void) {
   const [currentCrisisState, setCurrentCrisisState] = useState<CrisisState | null>(null);
   
   const [isAuto, setIsAuto] = useState<boolean>(false);
+  const [isCalculatingRoute, setIsCalculatingRoute] = useState<boolean>(false);
   const autoIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   
   // Track agent statuses for stepper
@@ -290,13 +291,13 @@ export function useDemoState(onCrisisReady?: (crisis: CrisisState) => void) {
 
   // Handle auto-advance timer
   useEffect(() => {
-    if (isAuto) {
+    if (isAuto && !isCalculatingRoute) {
       autoIntervalRef.current = setInterval(() => {
         setStage((prev) => {
           if (prev < 4) {
             // For live mode, advance via API
             if (!isReplay && crisisId) {
-              api.demo.advance(crisisId).catch(console.error);
+              api.demo.advance(crisisId).catch(() => {});
             }
             return prev + 1;
           } else {
@@ -316,7 +317,7 @@ export function useDemoState(onCrisisReady?: (crisis: CrisisState) => void) {
         clearInterval(autoIntervalRef.current);
       }
     };
-  }, [isAuto, isReplay, crisisId]);
+  }, [isAuto, isCalculatingRoute, isReplay, crisisId]);
 
   const toggleAuto = useCallback(() => {
     setIsAuto((prev) => !prev);
@@ -333,6 +334,7 @@ export function useDemoState(onCrisisReady?: (crisis: CrisisState) => void) {
     setFullCrisisState(null);
     setCurrentCrisisState(null);
     setIsAuto(false);
+    setIsCalculatingRoute(false);
     notifiedKeyRef.current = null;
     if (autoIntervalRef.current) {
       clearInterval(autoIntervalRef.current);
@@ -392,6 +394,8 @@ export function useDemoState(onCrisisReady?: (crisis: CrisisState) => void) {
     summary,
     currentCrisisState,
     isAuto,
+    isCalculatingRoute,
+    setIsCalculatingRoute,
     start,
     advance,
     toggleAuto,

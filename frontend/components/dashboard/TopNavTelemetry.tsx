@@ -46,7 +46,10 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
         {isLoading && !corridorContext ? (
           <span>LALULINTAS: ...</span>
         ) : (
-          <span>LALULINTAS: {tomtomDelayMin != null ? `+${tomtomDelayMin}m` : '-'}</span>
+          <span>
+            <span className="hidden xl:inline">LALULINTAS: </span>
+            {tomtomDelayMin != null ? `+${tomtomDelayMin}m` : '-'}
+          </span>
         )}
       </div>
 
@@ -59,7 +62,10 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
         {isLoading && !corridorContext ? (
           <span>BMKG: ...</span>
         ) : (
-          <span>BMKG: {bmkgRainfall != null ? `${bmkgRainfall} mm/j` : '-'}</span>
+          <span>
+            <span className="hidden xl:inline">BMKG: </span>
+            {bmkgRainfall != null ? `${bmkgRainfall} mm/j` : '-'}
+          </span>
         )}
       </div>
 
