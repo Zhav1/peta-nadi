@@ -30,7 +30,7 @@ export function Toast({ message, type = 'success', onClose, duration = 3000 }: T
   return (
     <div
       data-testid="toast-notification"
-      className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-2 px-4 py-2.5 rounded-lg border shadow-2xl backdrop-blur-md transition-all duration-300 max-w-md ${bgColors}`}
+      className={`fixed top-20 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-2 px-4 py-2.5 rounded-lg border shadow-2xl backdrop-blur-md transition-all duration-300 max-w-md ${bgColors}`}
       style={{
         animation: 'fadeIn 0.25s ease-out'
       }}

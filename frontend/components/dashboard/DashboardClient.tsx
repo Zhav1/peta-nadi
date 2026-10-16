@@ -251,35 +251,75 @@ function buildHazardBypassRoute(
     return null;
   }
 
-  // Primary pilot corridor check (Belawan / Medan -> Tebing Tinggi)
-  const isBelawanTebingCorridor =
-    (getHaversineDistanceKm(origin, [98.6776, 3.7922]) < 25.0 || getHaversineDistanceKm(origin, [98.6722, 3.5952]) < 25.0) &&
-    getHaversineDistanceKm(destination, [99.1625, 3.3285]) < 25.0;
+  // Dynamic Coastal Arterial Bypass (Belawan / Medan towards Serdang Bedagai / Sei Rampah / Tebing Tinggi)
+  const isEastCoastOrigin =
+    getHaversineDistanceKm(origin, [98.6776, 3.7922]) < 25.0 || getHaversineDistanceKm(origin, [98.6722, 3.5952]) < 25.0;
+  const isEastCoastDest = destination[0] > hazardCenter[0] && destination[1] <= hazardCenter[1] + 0.15;
 
-  if (isBelawanTebingCorridor) {
-    const coords = PANTAI_CERMIN_COASTAL_CORRIDOR;
-    let lengthKm = 0;
-    for (let i = 0; i < coords.length - 1; i++) {
-      lengthKm += getHaversineDistanceKm(coords[i], coords[i + 1]);
+  if (isEastCoastOrigin && isEastCoastDest) {
+    // Find closest starting index in corridor to origin
+    let startIdx = 0;
+    let minStartDist = Infinity;
+    for (let i = 0; i < PANTAI_CERMIN_COASTAL_CORRIDOR.length; i++) {
+      const d = getHaversineDistanceKm(origin, PANTAI_CERMIN_COASTAL_CORRIDOR[i]);
+      if (d < minStartDist) {
+        minStartDist = d;
+        startIdx = i;
+      }
     }
-    const roadDistanceKm = Math.round(lengthKm * 1.05);
-    return {
-      id: 'demo-clean-bypass-coastal',
-      route_name: 'Bypass Pesisir Pantai Cermin',
-      description: 'Koridor arteri pesisir melingkari zona bencana Lubuk Pakam via Sei Rampah menuju Tebing Tinggi',
-      waypoints: coords.map(([lon, lat]) => ({ lat, lon })),
-      distance_km: roadDistanceKm,
-      eta_minutes: Math.round((roadDistanceKm / 50) * 60),
-      fuel_increase_pct: 12.5,
-      risk_score: 0.08,
-      is_compromised: false,
-      safety_status: 'SAFE_DETOUR',
-      safety_tag: 'RUTE PENGALIHAN BEBAS BENCANA',
-      traffic_level: 'low',
-      congestion_segments: [],
-      modality: 'truck',
-      color: '#10B981',
-    };
+
+    // Find closest ending index in corridor to user-selected destination
+    let endIdx = PANTAI_CERMIN_COASTAL_CORRIDOR.length - 1;
+    let minEndDist = Infinity;
+    for (let i = startIdx; i < PANTAI_CERMIN_COASTAL_CORRIDOR.length; i++) {
+      const d = getHaversineDistanceKm(destination, PANTAI_CERMIN_COASTAL_CORRIDOR[i]);
+      if (d < minEndDist) {
+        minEndDist = d;
+        endIdx = i;
+      }
+    }
+
+    // Slice corridor strictly between startIdx and endIdx
+    const sliced = PANTAI_CERMIN_COASTAL_CORRIDOR.slice(startIdx, endIdx + 1);
+    const candidateCoords: [number, number][] = [origin, ...sliced, destination];
+
+    // Filter duplicates and near-identical consecutive waypoints
+    const finalCoords: [number, number][] = [];
+    for (let i = 0; i < candidateCoords.length; i++) {
+      if (i === 0 || getHaversineDistanceKm(finalCoords[finalCoords.length - 1], candidateCoords[i]) > 0.2) {
+        finalCoords.push(candidateCoords[i]);
+      }
+    }
+
+    // Ensure final waypoint strictly equals user destination
+    if (finalCoords.length > 0) {
+      finalCoords[finalCoords.length - 1] = destination;
+    }
+
+    if (!isPolylineIntersectingHazardCircle(finalCoords, hazardCenter, radiusKm)) {
+      let lengthKm = 0;
+      for (let i = 0; i < finalCoords.length - 1; i++) {
+        lengthKm += getHaversineDistanceKm(finalCoords[i], finalCoords[i + 1]);
+      }
+      const roadDistanceKm = Math.max(10, Math.round(lengthKm * 1.05));
+      return {
+        id: 'demo-clean-bypass-coastal',
+        route_name: 'Bypass Pesisir Pantai Cermin',
+        description: 'Koridor arteri pesisir melingkari zona bahaya bebas banjir menuju titik tujuan',
+        waypoints: finalCoords.map(([lon, lat]) => ({ lat, lon })),
+        distance_km: roadDistanceKm,
+        eta_minutes: Math.round((roadDistanceKm / 50) * 60),
+        fuel_increase_pct: 12.5,
+        risk_score: 0.08,
+        is_compromised: false,
+        safety_status: 'SAFE_DETOUR',
+        safety_tag: 'RUTE PENGALIHAN BEBAS BENCANA',
+        traffic_level: 'low',
+        congestion_segments: [],
+        modality: 'truck',
+        color: '#10B981',
+      };
+    }
   }
 
   const clearanceKm = radiusKm + 6.0;
@@ -695,14 +735,14 @@ export default function DashboardClient() {
       setSelectedCrisis((prev) =>
         prev
           ? {
-              ...prev,
-              route_recommendations: styleApprovedRoutes(
-                prev.route_recommendations && prev.route_recommendations.length > 0
-                  ? prev.route_recommendations
-                  : styledRoutes,
-                approvedRoute
-              ),
-            }
+            ...prev,
+            route_recommendations: styleApprovedRoutes(
+              prev.route_recommendations && prev.route_recommendations.length > 0
+                ? prev.route_recommendations
+                : styledRoutes,
+              approvedRoute
+            ),
+          }
           : prev
       );
       setActiveRouteIdx(0);
@@ -1125,79 +1165,11 @@ export default function DashboardClient() {
     });
   }, [demoState]);
 
-  // Robust Async-Locked Advance Handler (prevents race condition in Step 3 detour routing)
-  const handleDemoAdvance = useCallback(async () => {
+  // Robust Async-Locked Advance Handler
+  const handleDemoAdvance = useCallback(() => {
     if (demoState.isCalculatingRoute) return;
-
-    if (demoState.stage === 1) {
-      demoState.setIsCalculatingRoute(true);
-      try {
-        const hazardCenter: [number, number] = [98.87, 3.56];
-        const demoRadiusKm = selectedRadius || DEFAULT_HAZARD_RADIUS_KM;
-        const originId = activeOriginRef.current || selectedOriginNode;
-        const destId = activeDestRef.current || selectedDestNode;
-        if (!originId || !destId) {
-          demoState.advance();
-          return;
-        }
-        const demoOriginCoords = HUB_NODES[originId]?.coords;
-        const demoDestCoords = HUB_NODES[destId]?.coords;
-        if (!demoOriginCoords || !demoDestCoords) {
-          demoState.advance();
-          return;
-        }
-
-        // Advance stage immediately to 2
-        demoState.advance();
-
-        setSimulatedShockwave({
-          center: hazardCenter,
-          radiusKm: demoRadiusKm,
-          hazardType: 'flood',
-        });
-
-        const bypassPreview = buildHazardBypassRoute(demoOriginCoords, demoDestCoords, hazardCenter, demoRadiusKm);
-        if (bypassPreview) {
-          setCurrentMapRoutes([bypassPreview]);
-          setActiveRouteIdx(0);
-        }
-
-        const rawRoutes = await calculateAIDynamicDetourRoutes(
-          hazardCenter,
-          demoRadiusKm,
-          demoOriginCoords,
-          demoDestCoords,
-          selectedModality
-        );
-
-        const directCompromised = rawRoutes.find((r) => r.is_compromised) || rawRoutes[0];
-        const markedDirect: RouteRecommendation | null = directCompromised ? {
-          ...directCompromised,
-          color: '#EF4444',
-          safety_status: 'COMPROMISED',
-          safety_tag: 'TERDAMPAK ZONA BAHAYA (+60m Delay)',
-          is_compromised: true,
-        } : null;
-
-        const routesToShow: RouteRecommendation[] = [];
-        if (bypassPreview) routesToShow.push(bypassPreview);
-        if (markedDirect && !routesToShow.some((r) => r.id === markedDirect.id)) {
-          routesToShow.push(markedDirect);
-        }
-        if (routesToShow.length > 0) {
-          setCurrentMapRoutes(routesToShow);
-          setActiveRouteIdx(0);
-        }
-      } catch (err) {
-        console.warn('Detour calculation error during advance:', err);
-      } finally {
-        demoState.setIsCalculatingRoute(false);
-      }
-      return;
-    }
-
     demoState.advance();
-  }, [demoState, selectedRadius, selectedOriginNode, selectedDestNode, selectedModality]);
+  }, [demoState]);
 
   useEffect(() => {
     if (!demoState.isRunning) return;
@@ -1405,14 +1377,14 @@ export default function DashboardClient() {
       setSelectedCrisis((prev) =>
         prev
           ? {
-              ...prev,
-              route_recommendations: styleApprovedRoutes(
-                prev.route_recommendations && prev.route_recommendations.length > 0
-                  ? prev.route_recommendations
-                  : [route],
-                route
-              ),
-            }
+            ...prev,
+            route_recommendations: styleApprovedRoutes(
+              prev.route_recommendations && prev.route_recommendations.length > 0
+                ? prev.route_recommendations
+                : [route],
+              route
+            ),
+          }
           : prev
       );
       setActiveRouteIdx(0);
@@ -1576,11 +1548,10 @@ export default function DashboardClient() {
                 id={`nav-${tab.id}`}
                 type="button"
                 onClick={() => setActiveSection(tab.id as typeof activeSection)}
-                className={`cursor-pointer px-3 sm:px-3.5 py-1.5 rounded-md text-xs font-medium transition whitespace-nowrap ${
-                  activeSection === tab.id
+                className={`cursor-pointer px-3 sm:px-3.5 py-1.5 rounded-md text-xs font-medium transition whitespace-nowrap ${activeSection === tab.id
                     ? 'bg-white text-[#080d14] font-semibold'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
-                }`}
+                  }`}
               >
                 {tab.label}
               </button>
@@ -1603,11 +1574,10 @@ export default function DashboardClient() {
               setIsOnboardingModalOpen(true);
             }}
             id="onboard-armada-btn"
-            className={`cursor-pointer px-2.5 sm:px-3 py-1.5 rounded-lg border text-xs font-medium transition flex items-center gap-1.5 ${
-              role === 'DISPATCHER'
+            className={`cursor-pointer px-2.5 sm:px-3 py-1.5 rounded-lg border text-xs font-medium transition flex items-center gap-1.5 ${role === 'DISPATCHER'
                 ? 'border-white/10 bg-white/5 hover:bg-white/10 text-slate-200 hover:text-white'
                 : 'border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-200 hover:text-white'
-            }`}
+              }`}
             title={role === 'DISPATCHER' ? 'Onboard Armada & Unggah Manifest Pengiriman' : 'Onboard Armada (Terkunci: Khusus Wewenang Dispatcher)'}
           >
             {role === 'DISPATCHER' ? (
@@ -1636,9 +1606,8 @@ export default function DashboardClient() {
             className="cursor-pointer px-2.5 sm:px-3 py-1.5 rounded-lg border border-white/10 bg-[#080d14] hover:border-white/20 transition flex items-center gap-2 group text-left"
             title="Ganti Persona Akses & Ruang Kerja (RBAC)"
           >
-            <div className={`w-2 h-2 rounded-full shrink-0 ${
-              role === 'DISPATCHER' ? 'bg-cyan-400' : role === 'REGULATOR' ? 'bg-amber-400' : 'bg-emerald-400'
-            }`} />
+            <div className={`w-2 h-2 rounded-full shrink-0 ${role === 'DISPATCHER' ? 'bg-cyan-400' : role === 'REGULATOR' ? 'bg-amber-400' : 'bg-emerald-400'
+              }`} />
             <div className="leading-tight">
               <div className="flex items-center gap-1.5">
                 <span className="text-xs font-mono font-bold uppercase tracking-wider text-slate-200">
@@ -1687,13 +1656,11 @@ export default function DashboardClient() {
         <div className={`w-full h-full relative ${activeSection === 'map' ? 'block' : 'hidden'}`}>
 
           {/* Floating Operational Telemetry HUD Strip */}
-          <div className={`absolute top-3.5 z-30 pointer-events-auto transition-all duration-300 hidden md:flex items-center no-scrollbar overflow-x-auto ${
-            isLeftSidebarCollapsed ? 'left-4' : 'left-4 lg:left-[368px]'
-          } ${
-            isSidebarOpen && !!selectedCrisis
+          <div className={`absolute top-3.5 z-30 pointer-events-auto transition-all duration-300 hidden md:flex items-center no-scrollbar overflow-x-auto ${isLeftSidebarCollapsed ? 'left-4' : 'left-4 lg:left-[368px]'
+            } ${isSidebarOpen && !!selectedCrisis
               ? 'max-w-[calc(100vw-368px-680px)]'
               : 'max-w-[calc(100vw-368px-270px)]'
-          }`}>
+            }`}>
             <TopNavTelemetry
               cuOptInfo={cuOptInfo}
               corridorContext={corridorContext}
@@ -1761,9 +1728,8 @@ export default function DashboardClient() {
           )}
 
           {/* 2. COLLAPSIBLE LEFT OSINT & NEWS SIDEBAR (GLOBOT STYLE) */}
-          <aside className={`absolute left-0 top-0 bottom-0 z-40 w-80 md:w-88 bg-[#0c1017] border-r border-[#1c2432] flex flex-col gap-3 p-3.5 overflow-hidden pointer-events-auto transition-transform duration-300 ease-in-out shadow-xl ${
-            isLeftSidebarCollapsed ? '-translate-x-full pointer-events-none' : 'translate-x-0'
-          }`}>
+          <aside className={`absolute left-0 top-0 bottom-0 z-40 w-80 md:w-88 bg-[#0c1017] border-r border-[#1c2432] flex flex-col gap-3 p-3.5 overflow-hidden pointer-events-auto transition-transform duration-300 ease-in-out shadow-xl ${isLeftSidebarCollapsed ? '-translate-x-full pointer-events-none' : 'translate-x-0'
+            }`}>
             {/* Header: OSINT Wire & Live Pulse */}
             <div className="flex items-center justify-between pb-2 border-b border-[#1c2432] shrink-0">
               <div className="flex items-center gap-2">
@@ -1826,11 +1792,10 @@ export default function DashboardClient() {
                     key={tab.id}
                     type="button"
                     onClick={() => setSelectedNewsCategory(tab.id as 'ALL' | 'OFFICIAL' | 'WEATHER' | 'OSINT' | 'MARKET')}
-                    className={`cursor-pointer px-1.5 py-1 text-center rounded-lg border font-medium transition text-xs ${
-                      selectedNewsCategory === tab.id
+                    className={`cursor-pointer px-1.5 py-1 text-center rounded-lg border font-medium transition text-xs ${selectedNewsCategory === tab.id
                         ? 'bg-cyan-950 text-cyan-300 border-cyan-500/50'
                         : 'bg-slate-950/50 text-slate-400 border-white/5 hover:border-white/20 hover:text-slate-200'
-                    }`}
+                      }`}
                   >
                     {tab.label}
                   </button>
@@ -1876,20 +1841,18 @@ export default function DashboardClient() {
                     <div
                       key={item.id}
                       onClick={handleFocusMap}
-                      className={`p-3 rounded-lg border transition-colors space-y-2 cursor-pointer ${
-                        isSelected
+                      className={`p-3 rounded-lg border transition-colors space-y-2 cursor-pointer ${isSelected
                           ? 'bg-[#121822] border-white/40 ring-1 ring-white/20'
                           : 'bg-[#0c1017] border-[#1c2432] hover:border-slate-600 hover:bg-[#121822]'
-                      }`}
+                        }`}
                     >
                       {/* Source & Timestamp */}
                       <div className="flex items-center justify-between gap-1 text-xs font-mono">
                         <div className="flex items-center gap-1.5 truncate">
-                          <span className={`px-1.5 py-0.5 rounded border text-xs font-semibold uppercase ${
-                            isOfficial
+                          <span className={`px-1.5 py-0.5 rounded border text-xs font-semibold uppercase ${isOfficial
                               ? 'bg-white/10 text-slate-200 border-white/20'
                               : 'bg-[#121822] text-slate-400 border-[#1c2432]'
-                          }`}>
+                            }`}>
                             {item.source_name || (isOfficial ? 'ANTARA' : 'BERITA')}
                           </span>
                           <span className="text-slate-400 truncate">{item.pubDate || 'Terkini'}</span>
@@ -1924,9 +1887,8 @@ export default function DashboardClient() {
 
                       {/* Stored excerpt: clamped until the operator expands it */}
                       <p
-                        className={`text-xs text-slate-400 font-sans leading-relaxed transition-all duration-200 ${
-                          isExcerptExpanded ? '' : 'line-clamp-2'
-                        }`}
+                        className={`text-xs text-slate-400 font-sans leading-relaxed transition-all duration-200 ${isExcerptExpanded ? '' : 'line-clamp-2'
+                          }`}
                       >
                         {item.summary}
                       </p>
@@ -1975,9 +1937,8 @@ export default function DashboardClient() {
                                 title={isExcerptExpanded ? 'Sembunyikan kutipan tersimpan' : 'Tampilkan kutipan tersimpan'}
                               >
                                 <ChevronDown
-                                  className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                                    isExcerptExpanded ? 'rotate-180' : ''
-                                  }`}
+                                  className={`w-3.5 h-3.5 transition-transform duration-200 ${isExcerptExpanded ? 'rotate-180' : ''
+                                    }`}
                                 />
                                 <span>{isExcerptExpanded ? 'Sembunyikan kutipan' : 'Kutipan tersimpan'}</span>
                               </button>
@@ -2077,9 +2038,8 @@ export default function DashboardClient() {
 
             {/* Floating Live Fleet Modality Filter Control */}
             {activeTimeFilter === 'present' && !(isSidebarOpen && selectedCrisis) && (
-              <div className={`absolute top-[52px] z-30 pointer-events-auto transition-all duration-300 hidden md:flex items-center gap-1 p-1 rounded-lg bg-[#0c1017] border border-white/10 shadow-xl ${
-                isLeftSidebarCollapsed ? 'left-4 sm:left-32' : 'left-4 sm:left-32 lg:left-[368px]'
-              }`}>
+              <div className={`absolute top-[52px] z-30 pointer-events-auto transition-all duration-300 hidden md:flex items-center gap-1 p-1 rounded-lg bg-[#0c1017] border border-white/10 shadow-xl ${isLeftSidebarCollapsed ? 'left-4 sm:left-32' : 'left-4 sm:left-32 lg:left-[368px]'
+                }`}>
                 {[
                   { id: 'all', label: 'SEMUA', count: activeFleetVehicles.length, icon: null },
                   { id: 'truck', label: 'TRUK', count: activeFleetVehicles.filter((v) => v.modality === 'truck').length, icon: Truck },
@@ -2099,18 +2059,16 @@ export default function DashboardClient() {
                           type: 'info',
                         });
                       }}
-                      className={`cursor-pointer px-2.5 py-1 rounded-md text-xs font-mono font-medium transition-all flex items-center gap-1.5 ${
-                        fleetModalityFilter === m.id
+                      className={`cursor-pointer px-2.5 py-1 rounded-md text-xs font-mono font-medium transition-all flex items-center gap-1.5 ${fleetModalityFilter === m.id
                           ? 'bg-white text-[#080d14] font-bold'
                           : 'text-slate-400 hover:text-white hover:bg-white/5'
-                      }`}
+                        }`}
                     >
                       {IconComp && <IconComp className="w-3.5 h-3.5" />}
                       <span>{m.label}</span>
                       <span
-                        className={`px-1.5 py-0.5 rounded text-xs ${
-                          fleetModalityFilter === m.id ? 'bg-[#080d14] text-white' : 'bg-white/10 text-slate-400'
-                        }`}
+                        className={`px-1.5 py-0.5 rounded text-xs ${fleetModalityFilter === m.id ? 'bg-[#080d14] text-white' : 'bg-white/10 text-slate-400'
+                          }`}
                       >
                         {m.count}
                       </span>
@@ -2131,17 +2089,15 @@ export default function DashboardClient() {
                       type: 'info',
                     });
                   }}
-                  className={`cursor-pointer px-2.5 py-1 rounded-md text-xs font-mono font-medium transition-all flex items-center gap-1.5 ${
-                    isFleetSimMode
+                  className={`cursor-pointer px-2.5 py-1 rounded-md text-xs font-mono font-medium transition-all flex items-center gap-1.5 ${isFleetSimMode
                       ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40 font-bold'
                       : 'text-slate-400 hover:text-white hover:bg-white/5'
-                  }`}
+                    }`}
                   title="Toggle Mode Simulasi Armada Fallback"
                 >
                   <span
-                    className={`w-1.5 h-1.5 rounded-full ${
-                      isFleetSimMode ? 'bg-amber-400 animate-pulse' : 'bg-slate-500'
-                    }`}
+                    className={`w-1.5 h-1.5 rounded-full ${isFleetSimMode ? 'bg-amber-400 animate-pulse' : 'bg-slate-500'
+                      }`}
                   />
                   <span>Mode Simulasi</span>
                 </button>
@@ -2288,7 +2244,7 @@ export default function DashboardClient() {
 
         {/* Section 2: Analytics Dashboard */}
         <div className={`w-full h-full p-4 lg:p-6 overflow-y-auto ${activeSection === 'analytics' ? 'block' : 'hidden'}`}>
-          <AnalyticsSection 
+          <AnalyticsSection
             selectedCrisis={selectedCrisis}
             corridorContext={corridorContext}
             activeRoutes={currentMapRoutes}
@@ -2298,7 +2254,7 @@ export default function DashboardClient() {
 
         {/* Section 3: Simulation Sandbox */}
         <div className={`w-full h-full p-4 lg:p-6 overflow-y-auto ${activeSection === 'simulation' ? 'block' : 'hidden'}`}>
-          <SimulationSection 
+          <SimulationSection
             crisisId={selectedCrisisId}
             selectedCrisis={selectedCrisis}
             demoState={demoState}
@@ -2309,7 +2265,7 @@ export default function DashboardClient() {
 
         {/* Section 4: Executive Reports */}
         <div className={`w-full h-full p-4 lg:p-6 overflow-y-auto ${activeSection === 'reports' ? 'block' : 'hidden'}`}>
-          <ReportsSection 
+          <ReportsSection
             approvalsCount={approvalsCount}
             corridorContext={corridorContext}
             selectedCrisis={selectedCrisis}
@@ -2319,7 +2275,7 @@ export default function DashboardClient() {
 
         {/* Section 5: Dedicated Evaluation & Benchmark Dashboard */}
         <div className={`w-full h-full p-4 lg:p-6 overflow-y-auto ${activeSection === 'evaluation' ? 'block' : 'hidden'}`}>
-          <EvaluationSection 
+          <EvaluationSection
             corridorContext={corridorContext}
             selectedCrisis={selectedCrisis}
             activeRoutes={currentMapRoutes}

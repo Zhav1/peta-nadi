@@ -158,12 +158,22 @@ class CPURoutingAdapter:
                 for hz in hazard_zones:
                     center = hz.get("center") or [hz.get("lon", 98.68), hz.get("lat", 3.75)]
                     radius = hz.get("radiusKm", 10.0)
-                    dist_to_hazard = haversine_km(mid_lat, mid_lon, center[1], center[0])
+                dist_mid = haversine_km(mid_lat, mid_lon, center[1], center[0])
+                dist_n1 = haversine_km(n1["lat"], n1["lon"], center[1], center[0])
+                dist_n2 = haversine_km(n2["lat"], n2["lon"], center[1], center[0])
+                min_dist_to_hazard = min(dist_mid, dist_n1, dist_n2)
 
-                    if dist_to_hazard <= (radius + 2.0):
-                        # Apply 10x penalty or severe blockage
-                        G[u][v]["weight"] = G[u][v]["travel_time_min"] * 10.0
-                        logger.debug(f"Penalized edge {u}->{v} due to hazard zone.")
+                effective_radius = radius + 2.0
+                if min_dist_to_hazard <= effective_radius:
+                    # Tiered least-risk penalty cost
+                    if min_dist_to_hazard <= radius * 0.5:
+                        penalty_mult = 50.0 # Epicenter core
+                    elif min_dist_to_hazard <= radius:
+                        penalty_mult = 15.0 # Inner hazard zone
+                    else:
+                        penalty_mult = 3.5  # Outer fringe buffer
+                    G[u][v]["weight"] = G[u][v]["travel_time_min"] * penalty_mult
+                    logger.debug(f"Penalized edge {u}->{v} ({penalty_mult}x) due to hazard zone.")
 
         routes = []
         try:

@@ -1078,89 +1078,89 @@ export default function CrisisMap({
       )}
 
       {/* Floating Map Action Controls Group (Layer Peta + Legenda Rute side-by-side) */}
-      <div className={`absolute top-3.5 z-30 pointer-events-auto transition-all duration-300 flex items-center gap-2 ${
-        isRightSidebarOpen ? 'right-[436px]' : 'right-4'
-      }`}>
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setShowLayerFilterMenu((v) => !v)}
-            className={`cursor-pointer px-3 py-1.5 rounded-md border text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-xl ${
-              showLayerFilterMenu
-                ? 'bg-white text-[#080d14] border-white'
-                : 'bg-[#0c1017] text-slate-300 border-[#1c2432] hover:text-white hover:bg-[#121822]'
-            }`}
-            title="Filter Layer Peta"
-          >
-            <Layers className="w-3.5 h-3.5 text-slate-400" />
-            <span>Layer Peta</span>
-          </button>
+      {!(isRightSidebarOpen || (demoStage != null && demoStage >= 2)) && (
+        <div className={`absolute top-3.5 z-30 pointer-events-auto transition-all duration-300 flex items-center gap-2 right-4 animate-in fade-in duration-200`}>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowLayerFilterMenu((v) => !v)}
+              className={`cursor-pointer px-3 py-1.5 rounded-md border text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-xl ${
+                showLayerFilterMenu
+                  ? 'bg-white text-[#080d14] border-white'
+                  : 'bg-[#0c1017] text-slate-300 border-[#1c2432] hover:text-white hover:bg-[#121822]'
+              }`}
+              title="Filter Layer Peta"
+            >
+              <Layers className="w-3.5 h-3.5 text-slate-400" />
+              <span>Layer Peta</span>
+            </button>
 
-        {showLayerFilterMenu && (
-          <div className="absolute right-0 mt-2 w-64 bg-[#0c1017] border border-[#1c2432] p-3 rounded-lg shadow-xl text-xs space-y-2 animate-in fade-in duration-150">
-            <div className="font-sans font-medium text-xs text-slate-300 uppercase tracking-wider border-b border-[#1c2432] pb-1.5">
-              Filter Visualisasi Layer
-            </div>
+            {showLayerFilterMenu && (
+              <div className="absolute right-0 mt-2 w-64 bg-[#0c1017] border border-[#1c2432] p-3 rounded-lg shadow-xl text-xs space-y-2 animate-in fade-in duration-150">
+                <div className="font-sans font-medium text-xs text-slate-300 uppercase tracking-wider border-b border-[#1c2432] pb-1.5">
+                  Filter Visualisasi Layer
+                </div>
 
-            <div className="space-y-1 text-xs">
-              <button
-                type="button"
-                onClick={() => toggleLayerFilter('baselineCorridors')}
-                className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-[#121822] transition"
-              >
-                <span className="text-slate-200">Koridor Utama</span>
-                <span className={`w-4 h-4 rounded flex items-center justify-center border ${
-                  layerFilters.baselineCorridors ? 'bg-white border-white text-[#080d14]' : 'border-[#1c2432]'
-                }`}>
-                  {layerFilters.baselineCorridors && <Check className="w-3 h-3 stroke-[3]" />}
-                </span>
-              </button>
+                <div className="space-y-1 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => toggleLayerFilter('baselineCorridors')}
+                    className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-[#121822] transition"
+                  >
+                    <span className="text-slate-200">Koridor Utama</span>
+                    <span className={`w-4 h-4 rounded flex items-center justify-center border ${
+                      layerFilters.baselineCorridors ? 'bg-white border-white text-[#080d14]' : 'border-[#1c2432]'
+                    }`}>
+                      {layerFilters.baselineCorridors && <Check className="w-3 h-3 stroke-[3]" />}
+                    </span>
+                  </button>
 
-              <button
-                type="button"
-                onClick={() => toggleLayerFilter('bottlenecks')}
-                className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-[#121822] transition"
-              >
-                <span className="text-slate-200">Kemacetan / Bottleneck</span>
-                <span className={`w-4 h-4 rounded flex items-center justify-center border ${
-                  layerFilters.bottlenecks ? 'bg-white border-white text-[#080d14]' : 'border-[#1c2432]'
-                }`}>
-                  {layerFilters.bottlenecks && <Check className="w-3 h-3 stroke-[3]" />}
-                </span>
-              </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleLayerFilter('bottlenecks')}
+                    className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-[#121822] transition"
+                  >
+                    <span className="text-slate-200">Kemacetan / Bottleneck</span>
+                    <span className={`w-4 h-4 rounded flex items-center justify-center border ${
+                      layerFilters.bottlenecks ? 'bg-white border-white text-[#080d14]' : 'border-[#1c2432]'
+                    }`}>
+                      {layerFilters.bottlenecks && <Check className="w-3 h-3 stroke-[3]" />}
+                    </span>
+                  </button>
 
-              <button
-                type="button"
-                onClick={() => toggleLayerFilter('weatherRadar')}
-                className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-[#121822] transition"
-              >
-                <span className="text-slate-200">Radar Cuaca & Bahaya</span>
-                <span className={`w-4 h-4 rounded flex items-center justify-center border ${
-                  layerFilters.weatherRadar ? 'bg-white border-white text-[#080d14]' : 'border-[#1c2432]'
-                }`}>
-                  {layerFilters.weatherRadar && <Check className="w-3 h-3 stroke-[3]" />}
-                </span>
-              </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleLayerFilter('weatherRadar')}
+                    className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-[#121822] transition"
+                  >
+                    <span className="text-slate-200">Radar Cuaca & Bahaya</span>
+                    <span className={`w-4 h-4 rounded flex items-center justify-center border ${
+                      layerFilters.weatherRadar ? 'bg-white border-white text-[#080d14]' : 'border-[#1c2432]'
+                    }`}>
+                      {layerFilters.weatherRadar && <Check className="w-3 h-3 stroke-[3]" />}
+                    </span>
+                  </button>
 
-              <button
-                type="button"
-                onClick={() => toggleLayerFilter('fleetVehicles')}
-                className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-[#121822] transition"
-              >
-                <span className="text-slate-200">Armada Logistik</span>
-                <span className={`w-4 h-4 rounded flex items-center justify-center border ${
-                  layerFilters.fleetVehicles ? 'bg-white border-white text-[#080d14]' : 'border-[#1c2432]'
-                }`}>
-                  {layerFilters.fleetVehicles && <Check className="w-3 h-3 stroke-[3]" />}
-                </span>
-              </button>
-            </div>
+                  <button
+                    type="button"
+                    onClick={() => toggleLayerFilter('fleetVehicles')}
+                    className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-[#121822] transition"
+                  >
+                    <span className="text-slate-200">Armada Logistik</span>
+                    <span className={`w-4 h-4 rounded flex items-center justify-center border ${
+                      layerFilters.fleetVehicles ? 'bg-white border-white text-[#080d14]' : 'border-[#1c2432]'
+                    }`}>
+                      {layerFilters.fleetVehicles && <Check className="w-3 h-3 stroke-[3]" />}
+                    </span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
-        )}
-        </div>
 
-        {mapLegendSlot}
-      </div>
+          {mapLegendSlot}
+        </div>
+      )}
 
       {drawModeActive && (
         <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[360] px-3.5 py-1.5 rounded-md bg-[#1a120b] border border-amber-500/40 shadow-xl flex items-center gap-2.5 animate-in fade-in duration-200">
