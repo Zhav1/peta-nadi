@@ -61,7 +61,7 @@ Per the official docs "Where can I use it?" section, the Go surface expects a st
 
 ```bash
 OPENCODE_API_KEY=oc_sk_...                  # Service Account key, works on both surfaces
-OPENCODE_REASONING_MODEL=mimo-v2.6-flash     # NOT mimo-v2.6-flash-free
+OPENCODE_REASONING_MODEL=mimo-v2.6-pro       # Go plan reasoning ($0.435/$0.87 per 1M). NOT mimo-v2.6-flash-free (IDE-only)
 OPENCODE_DRIVER_MODEL=deepseek-v4.1-flash    # works on both, but Go bills against plan
 ```
 

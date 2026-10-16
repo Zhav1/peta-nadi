@@ -5,7 +5,7 @@ unauthenticated otherwise per free-model terms), asserts the locked
 reasoning/driver IDs are present verbatim, and prints a pro-override
 recommendation when a non-free mimo-* ID appears.
 
-Exit 0  — both mimo-v2.6-flash-free and deepseek-v4.1-flash confirmed.
+Exit 0  — both mimo-v2.6-pro and deepseek-v4.1-flash confirmed in the Go catalog.
 Exit 1+ — 404 / mismatch / unreachable: fail-loud, never silently continue.
 """
 import os
@@ -28,7 +28,7 @@ OPENCODE_CATALOG_URL = os.environ.get(
     "OPENCODE_CATALOG_URL", "https://opencode.ai/inference/go/v1/models"
 )
 EXPECTED_REASONING = os.environ.get(
-    "OPENCODE_REASONING_MODEL", "mimo-v2.6-flash"
+    "OPENCODE_REASONING_MODEL", "mimo-v2.6-pro"
 )
 EXPECTED_DRIVER = os.environ.get(
     "OPENCODE_DRIVER_MODEL", "deepseek-v4.1-flash"
@@ -96,7 +96,7 @@ def main() -> int:
             "(Go subscription exposes a pro mimo ID)."
         )
     else:
-        print("No pro mimo ID found — ship flash-free default (mimo-v2.6-flash-free).")
+        print("No pro mimo ID found — keeping current reasoning default.")
     return 0
 
 

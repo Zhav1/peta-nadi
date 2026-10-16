@@ -29,7 +29,7 @@ services:
       - key: OPENCODE_API_KEY
         sync: false
       - key: OPENCODE_REASONING_MODEL
-        value: "mimo-v2.6-flash"
+        value: "mimo-v2.6-pro"
       - key: OPENCODE_DRIVER_MODEL
         value: "deepseek-v4.1-flash"
       # GEMINI_API_KEY kept — LTM embeddings stay on Google models/text-embedding-004
