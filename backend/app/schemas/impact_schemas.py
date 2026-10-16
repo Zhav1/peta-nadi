@@ -1,5 +1,5 @@
 """
-PreHub — Disruption Impact Assessment Schemas (Pydantic v2).
+PreHub : Disruption Impact Assessment Schemas (Pydantic v2).
 Models for evaluating spatial intersections between physical hazard disruptions
 and active fleet shipments, generating explainable recommendations and WhatsApp dispatch triggers.
 """

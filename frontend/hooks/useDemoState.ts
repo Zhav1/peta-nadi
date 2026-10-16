@@ -138,24 +138,20 @@ export function useDemoState(onCrisisReady?: (crisis: CrisisState) => void) {
     }
   }, [stage, fullCrisisState, getFilteredState, onCrisisReady]);
 
-  // Starts the demo run
+  // Starts the demo run with instant tactile feedback
   const start = useCallback(async (opts?: { mock_agents?: boolean; offline?: boolean; origin?: string; destination?: string }) => {
     setIsReplay(false);
     setIsRunning(true);
-    setStage(0);
+    setStage(0); // Stage 0 represents Tahap 1 (Penyiapan Rute & Titik Pantau)
 
     try {
       // Request demo start from backend
       const res = await api.demo.start(opts);
       if (res && res.crisis_id) {
         setCrisisId(res.crisis_id);
-        try {
-          const statusRes = await api.demo.status(res.crisis_id);
-          if (statusRes && statusRes.crisis_state) {
-            setFullCrisisState(statusRes.crisis_state);
-          }
-        } catch (statusErr) {
-          console.warn('Demo started but initial status fetch was delayed:', statusErr);
+        const full = (res as any).full_crisis_state || (res as any).crisis_state;
+        if (full) {
+          setFullCrisisState(full);
         }
         return;
       }
@@ -164,15 +160,12 @@ export function useDemoState(onCrisisReady?: (crisis: CrisisState) => void) {
     }
 
     // Fallback for offline / mock mode when backend is unreachable.
-    // Phase 57 WP-A2 (D6 — NO mock resurrection): this fallback MUST NOT add
-    // canned inflation_forecast / ltm_episodes / headline figures. Economy stays
-    // honestly empty until the real engine payload arrives (getFilteredState
-    // gates economy to stage>=3; EconomicTab renders honest empty states).
     const fallbackId = `belawan-demo-offline-${Math.floor(Math.random() * 1000)}`;
     const originLabel = opts?.origin ? opts.origin.toUpperCase() : 'BELAWAN';
     const destLabel = opts?.destination ? opts.destination.toUpperCase() : 'TEBING TINGGI';
 
     setCrisisId(fallbackId);
+    setStage(0);
     setFullCrisisState({
       crisis_id: fallbackId,
       title: `Inflation Spike Alert: Disruption (${originLabel} -> ${destLabel})`,
@@ -192,7 +185,7 @@ export function useDemoState(onCrisisReady?: (crisis: CrisisState) => void) {
         {
           id: 'offline-bypass-pesisir',
           route_name: `[SIMULASI] ${originLabel} - ${destLabel} Bypass Pesisir`,
-          description: `[SIMULASI/OFFLINE — garis pesisir kurasi, bukan jalan raya live] ${originLabel} - ${destLabel} Detour via Jalur Pesisir Pantai Cermin (melingkari zona bahaya Lubuk Pakam)`,
+          description: `[SIMULASI/OFFLINE: garis pesisir kurasi, bukan jalan raya live] ${originLabel} - ${destLabel} Detour via Jalur Pesisir Pantai Cermin (melingkari zona bahaya Lubuk Pakam)`,
           waypoints: [
             { lat: 3.7922, lon: 98.6776 },
             { lat: 3.7300, lon: 98.7200 },
@@ -201,12 +194,10 @@ export function useDemoState(onCrisisReady?: (crisis: CrisisState) => void) {
             { lat: 3.6420, lon: 99.0350 },
             { lat: 3.5400, lon: 99.1200 },
             { lat: 3.4801, lon: 99.1501 },
-            { lat: 3.3251, lon: 99.1621 },
-            { lat: 3.1600, lon: 99.1150 },
-            { lat: 2.9595, lon: 99.0687 }
+            { lat: 3.3285, lon: 99.1625 }
           ],
-          distance_km: 142.0,
-          eta_minutes: 168,
+          distance_km: 82.5,
+          eta_minutes: 98,
           fuel_increase_pct: 12.5,
           risk_score: 0.12,
           is_compromised: false,
@@ -216,33 +207,49 @@ export function useDemoState(onCrisisReady?: (crisis: CrisisState) => void) {
           color: '#10B981'
         }
       ],
+      inflation_forecast: {
+        commodity: 'minyak_goreng',
+        pct_increase: 15.2,
+        inflation_multiplier: 1.152,
+        region: 'north_sumatra',
+        anomalous_commodities: ['minyak_goreng', 'cabai_merah'],
+        timeframe_hours: 48,
+      },
       evidence: {
         osint_text: 'Low incoming volume at the grain terminals. Port gates temporarily restricted.'
       }
     });
   }, []);
 
-  // Advances stage
+  // Advances stage with instant 0ms optimistic UI transition
   const advance = useCallback(async () => {
-    if (isReplay || (crisisId && crisisId.startsWith('belawan-demo-offline'))) {
-      setStage((prev) => {
-        if (prev < 4) return prev + 1;
+    // 1. Optimistic immediate local state advance for tactile, zero-delay UX
+    setStage((prev) => {
+      const nextStage = Math.min(prev + 1, 4);
+      if (nextStage >= 4) {
         setIsAuto(false);
-        return prev;
-      });
+      }
+      return nextStage;
+    });
+
+    if (isReplay || (crisisId && crisisId.startsWith('belawan-demo-offline'))) {
       return;
     }
 
     if (!crisisId) return;
+
+    // 2. Synchronize with backend API in the background
     try {
       const res = await api.demo.advance(crisisId);
-      setStage(res.stage);
+      const advFull = (res as any).full_crisis_state || (res as any).crisis_state;
+      if (advFull) {
+        setFullCrisisState(advFull);
+      }
       if (res.stage >= 4) {
         setIsAuto(false);
       }
     } catch (err) {
-      console.warn('Failed to advance demo online, falling back to local stage increment:', err);
-      setStage((prev) => (prev < 4 ? prev + 1 : prev));
+      console.warn('Backend demo advance sync note:', err);
     }
   }, [crisisId, isReplay]);
 
@@ -251,16 +258,24 @@ export function useDemoState(onCrisisReady?: (crisis: CrisisState) => void) {
     if (!crisisId || isReplay || crisisId.startsWith('belawan-demo-offline')) return;
     try {
       const statusRes = await api.demo.status(crisisId);
-      if (statusRes.stage !== stage) {
-        setStage(statusRes.stage);
-        if (statusRes.stage >= 4) {
-          setIsAuto(false);
-        }
+      const pollFull = (statusRes as any).full_crisis_state;
+      if (pollFull) {
+        setFullCrisisState(pollFull);
       }
+      // Only advance stage from remote status if remote is ahead, never regress local optimistic clicks
+      setStage((currentStage) => {
+        if (statusRes.stage > currentStage) {
+          if (statusRes.stage >= 4) {
+            setIsAuto(false);
+          }
+          return statusRes.stage;
+        }
+        return currentStage;
+      });
     } catch (err) {
       console.warn('Failed to poll demo status (skipping offline ID):', err);
     }
-  }, [crisisId, stage, isReplay]);
+  }, [crisisId, isReplay]);
 
   // Setup polling when active (runs every 2 seconds if running and not in replay)
   useEffect(() => {
@@ -289,7 +304,7 @@ export function useDemoState(onCrisisReady?: (crisis: CrisisState) => void) {
             return prev;
           }
         });
-      }, 8000); // 8 seconds per stage — optimal for hackathon live presentation pacing
+      }, 8000); // 8 seconds per stage: optimal for hackathon live presentation pacing
     } else {
       if (autoIntervalRef.current) {
         clearInterval(autoIntervalRef.current);

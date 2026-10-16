@@ -33,7 +33,7 @@ export function useCrisisSocket(
     };
 
     ws.onclose = () => {
-      console.log(`[WS] Closed — retrying in ${retryDelayRef.current}ms`);
+      console.log(`[WS] Closed: retrying in ${retryDelayRef.current}ms`);
       reconnectRef.current = setTimeout(() => {
         retryDelayRef.current = Math.min(retryDelayRef.current * 2, 30_000);
         connect();

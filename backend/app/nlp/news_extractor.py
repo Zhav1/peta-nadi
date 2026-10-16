@@ -1,5 +1,5 @@
 """
-PreHub — Structured News & Early Warning Information Extractor
+PreHub : Structured News & Early Warning Information Extractor
 Uses Gemini 3.8 Flash via LLMGateway to extract structured crisis intelligence:
 - Incident type, severity, temporal phase (forecast_early_warning, active_disruption, clearing_recovery)
 - Estimated lead-time in hours

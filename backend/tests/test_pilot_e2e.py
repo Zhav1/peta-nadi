@@ -1,5 +1,5 @@
 """
-PreHub — Pilot Verification Scenario Drills & End-to-End Test Suite.
+PreHub : Pilot Verification Scenario Drills & End-to-End Test Suite.
 Validates Milestone M3 Operational Crisis Drills with 100% real Pan-Sumatra logistics data:
 - Drill 1: Belawan -> Pekanbaru ultra-perishable Cabai Merah Keriting spoilage hedging detour.
 - Drill 2: Bakauheni Ferry Strait Crossing cold-chain beef transit with BKHIT quarantine block/release.

@@ -14,7 +14,7 @@ settings = get_settings()
 
 _redis_client: Optional[redis.Redis] = None
 
-# Redis stream key constants — used across the entire codebase
+# Redis stream key constants : used across the entire codebase
 STREAM_BMKG = "lrip:events:bmkg"
 STREAM_TOMTOM = "lrip:events:tomtom"
 STREAM_AISSTREAM = "lrip:events:aisstream"

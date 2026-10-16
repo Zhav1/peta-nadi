@@ -72,7 +72,7 @@ export default function ReportsSection({
 
   const handleGeneratePDF = () => {
     if (typeof window === 'undefined') return;
-    const reportTitle = "PreHub — Laporan Operasional Mitigasi Logistik Pangan";
+    const reportTitle = "PreHub: Laporan Operasional Mitigasi Logistik Pangan";
     const timestamp = new Date().toLocaleString("id-ID");
     
     const printWindow = window.open("", "_blank");
@@ -109,8 +109,8 @@ export default function ReportsSection({
       <body>
         <div class="header">
           <div>
-            <h1 class="title">PreHub — Laporan Operasional Mitigasi Logistik Pangan</h1>
-            <div class="subtitle">Koridor ${selectedCrisis?.region || 'Logistik Terpadu Pulau Sumatera'} — Pemantauan dan Rekomendasi Rute Alternatif</div>
+            <h1 class="title">PreHub: Laporan Operasional Mitigasi Logistik Pangan</h1>
+            <div class="subtitle">Koridor ${selectedCrisis?.region || 'Logistik Terpadu Pulau Sumatera'} - Pemantauan dan Rekomendasi Rute Alternatif</div>
           </div>
           <div class="meta">
             <div><strong>Diterbitkan:</strong> ${timestamp}</div>

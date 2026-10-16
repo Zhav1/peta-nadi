@@ -1,36 +1,36 @@
 ---
 gsd_state_version: 1.0
-milestone: M3
-milestone_name: PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform
-current_phase: 56
-current_phase_name: Post-Audit Integrity Routing & Mock Purge
-status: complete
-stopped_at: Phase 56 execution, multi-agent verification, and documentation completed
-last_updated: "2026-10-12T14:30:00.000Z"
-last_activity: 2026-10-12
-last_activity_desc: Phase 56 completed (Closed all 5 remaining system audit items: WP1 1366x768 anti-collision dock layout & 424px drawer offset; WP2 Mapbox exclude=toll dynamic toll avoidance, [5,8,15]km radius, and safe HOLD routing; WP3 Guided demo economic integration with payload-bound metrics, root ltm_episodes, and Evidence->Economic->Mitigation pacing; WP4 News link integrity with live checking, link_alive tagging, and cached excerpt modal fallback; WP5 Mock data purge across social scrapers, /spikes 30-day baseline % change, honest FALLBACK_OUTCOMES empty states, Simulation Mode toggle for fleet fallback, and derived causal chain. 183 backend pytest passed, 0 TypeScript errors, clean Next.js 14 production build, 7/7 Playwright tests passed).
+milestone: M4
+milestone_name: PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability
+current_phase: 58
+current_phase_name: E2E Audit Remediation & Visual Lockdowns
+status: in_progress
+stopped_at: Initial E2E audit complete (PILOT_BUGS_AND_E2E_AUDIT_REPORT.md). Milestone M4 initialized and ready for Phase 58 execution.
+last_updated: "2026-10-14T10:15:00.000Z"
+last_activity: 2026-10-14
+last_activity_desc: Completed comprehensive E2E audit identifying 9 systemic bugs. Initialized Milestone M4 covering Phase 57 (Track B Pilot Hardening), Phase 58 (Audit Remediation), and Phase 59 (Pilot Acceptance).
 progress:
-  total_phases: 56
+  total_phases: 59
   completed_phases: 56
-  total_plans: 66
+  total_plans: 72
   completed_plans: 66
-  percent: 100
+  percent: 92
 ---
 
 # STATE: PreHub Project Memory
 
-**Last Updated:** 2026-10-12
-**Active Milestone:** M3 - PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform
-**Current Phase:** 56
+**Last Updated:** 2026-10-14
+**Active Milestone:** M4 - PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability [ACTIVE 🚀]
+**Current Phase:** 58 (E2E Audit Remediation & Visual Lockdowns)
 
 ---
 
 ## Current Position
 
-Phase: 56 (Post-Audit Integrity Routing & Mock Purge) - COMPLETE ✅
-Status: Phase 56 fully executed, verified, and documented across frontend, backend, and data contracts.
-Last activity: 2026-10-12 - Closed WP1-WP5 audit items, verified 183 pytest tests, 0 tsc errors, 1366x768 zero-collision layout, clean Next.js build.
-Next action: Ready for production deployment or next milestone initiatives.
+Phase: 58 (E2E Audit Remediation & Visual Lockdowns) - READY TO EXECUTE 🟡
+Status: Milestone M4 initialized; Phase 57 underway for backend tenancy; Phase 58 planned to resolve all 9 audit findings.
+Last activity: 2026-10-14 - Playwright E2E diagnostic completed; documented all 9 issues in PILOT_BUGS_AND_E2E_AUDIT_REPORT.md.
+Next action: Execute Wave 1 through Wave 4 remediation tasks in Phase 58.
 
 ---
 
@@ -96,6 +96,9 @@ Next action: Ready for production deployment or next milestone initiatives.
 | 54 | Post-Audit Plothole Remediation, Guest Lockdown & PIHPS Persistence | **COMPLETE** ✅ | Strict read-only guest permissions, verified PIHPS database persistence, and resilient incident route handlers. |
 | 55 | Comprehensive Engines Audit & Stabilization | **COMPLETE** ✅ | OpenMeteo adapter instantiation fix, NIM catalog deepseek-v4.1-flash fail-loud gate, centralized Gemini model, TomTom bbox tiling & 403 backoff, Redis OSINT stream capping, Supabase Migration 010. |
 | 56 | Post-Audit Integrity Routing & Mock Purge | **COMPLETE** ✅ | WP1 1366x768 anti-collision map dock math; WP2 Mapbox exclude=toll dynamic toll bypass & [5,8,15]km radius; WP3 Guided demo economic integration & Evidence->Economic->Mitigation tab pacing; WP4 Live news link_alive tagging & cached excerpt modal fallback; WP5 Mock data purge (social, /spikes 30d baseline, honest outcomes, simulation fleet toggle, derived causal chain). 183 pytest passed, 0 tsc errors. |
+| 57 | Track B Pilot Hardening (Tenancy Schema, Auth & Non-Blocking Ingestion) | **IN PROGRESS** 🟡 | Step 0 Migration 012 (`organizations`, `profiles`, tenancy triggers), user session tenancy, news background worker, and fleet isolation. |
+| 58 | E2E Audit Remediation & Visual Lockdowns | **READY** 🟡 | Resolve all 9 audit findings from PILOT_BUGS_AND_E2E_AUDIT_REPORT.md: banner collision, auth profile card, persona lock, visual lock badges, arterial coastal routing, economic payload binding, fleet sim toggle, remote polling 404 guard, toast unification. |
+| 59 | Comprehensive E2E Verification & Pilot Operations Acceptance | **PLANNED** 📋 | Automated Playwright regression test suite across all 8 core flows, multi-role test matrix validation, verification gate pass, zero console errors. |
 
 ---
 

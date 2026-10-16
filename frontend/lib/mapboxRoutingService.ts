@@ -453,10 +453,10 @@ export async function calculateRoadNetworkDetourRoutes(
   ]);
 
   // Phase 57 WP-A3 (D4): interpolated geometry is labeled SIMULASI/OFFLINE in
-  // every user-facing field — never presented as a live road route.
+  // every user-facing field: never presented as a live road route.
   const offlineLabel = (text: string) =>
     coordsPrimary.source === 'offline-interpolated' && coordsAlternative.source === 'offline-interpolated'
-      ? `[SIMULASI/OFFLINE — garis lurus, bukan jalan raya live] ${text}`
+      ? `[SIMULASI/OFFLINE: garis lurus, bukan jalan raya live] ${text}`
       : text;
 
   return [

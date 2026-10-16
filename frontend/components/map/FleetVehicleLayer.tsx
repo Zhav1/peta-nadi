@@ -341,7 +341,44 @@ export function FleetVehicleLayer({
 
   // Calibrated requestAnimationFrame animation loop updating WebGL GeoJSON sources & follow camera
   useEffect(() => {
-    if (!map || !vehicles || vehicles.length === 0) return;
+    if (!map) return;
+
+    // Helper to completely clear WebGL fleet sources and force immediate repaint
+    const clearFleetSources = () => {
+      try {
+        const emptyFc: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
+        const pointsSource = map.getSource('fleet-telemetry-points') as mapboxgl.GeoJSONSource | undefined;
+        if (pointsSource) pointsSource.setData(emptyFc);
+
+        const trailsSource = map.getSource('fleet-breadcrumb-trails') as mapboxgl.GeoJSONSource | undefined;
+        if (trailsSource) trailsSource.setData(emptyFc);
+
+        const vectorsSource = map.getSource('fleet-bearing-vectors') as mapboxgl.GeoJSONSource | undefined;
+        if (vectorsSource) vectorsSource.setData(emptyFc);
+
+        progressMapRef.current = {};
+        breadcrumbsRef.current = {};
+
+        // Force immediate synchronous WebGL repaint so fleet icons disappear with zero delay
+        map.triggerRepaint();
+        requestAnimationFrame(() => {
+          try {
+            map.triggerRepaint();
+          } catch {}
+        });
+      } catch {}
+    };
+
+    if (!vehicles || vehicles.length === 0) {
+      if (animRef.current) {
+        cancelAnimationFrame(animRef.current);
+        animRef.current = null;
+      }
+      clearFleetSources();
+      setSelectedVehicle(null);
+      isFollowCamActiveRef.current = false;
+      return;
+    }
 
     let isCancelled = false;
 
@@ -350,6 +387,17 @@ export function FleetVehicleLayer({
       if (!modalityFilter || modalityFilter === 'all') return true;
       return v.modality === modalityFilter;
     });
+
+    if (visibleVehicles.length === 0) {
+      if (animRef.current) {
+        cancelAnimationFrame(animRef.current);
+        animRef.current = null;
+      }
+      clearFleetSources();
+      setSelectedVehicle(null);
+      isFollowCamActiveRef.current = false;
+      return;
+    }
 
     // Initialize progress map
     visibleVehicles.forEach((v) => {

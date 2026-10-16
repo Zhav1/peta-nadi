@@ -1,29 +1,31 @@
 # PROJECT: PreHub (Logistics Resilience Intelligence Platform)
 
-**Active Milestone:** M3 - PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform
+**Active Milestone:** M4 - PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability [ACTIVE 🚀]
 **Previous Milestones:** 
 - M1 - Hackathon MVP (Pan-Sumatra Logistics & Swarm Intelligence) [COMPLETED ✅]
 - M2 - PreHub Final Defense: Empirical Evaluation, Tactical HUD & Multi-Source Maturity [COMPLETED ✅]
+- M3 - PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform [COMPLETED ✅]
 
-## Current Milestone: M3 - PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform
+## Current Milestone: M4 - PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability
 
-**Goal:** Transform PreHub into a defense-grade, pilot-ready operational workspace tailored for real-world logistics dispatchers (BULOG, 3PL, Trucking Fleets), intermodal maritime coordinators (Pelindo Belawan, ASDP Ferry), and government food security regulators (Bapanas, Dinas Perhubungan). Deliver multi-tenant Supabase Auth & Role-Based Access Control (RBAC), self-serve fleet & bulk CSV manifest onboarding, live TMS telematics webhooks, sea-land intermodal terminal synchronization, operational food spoilage hedging economics (inspired by Globot), digital *Surat Jalan* & quarantine compliance inspection, and an uncompromising minimalist, clutter-free operator-first UI (zero emojis, zero boasting buzzwords, clean high-contrast monochrome design).
+**Goal:** Resolve all 9 systemic bugs and usability anomalies discovered during end-to-end audit and user field drills documented in `PILOT_BUGS_AND_E2E_AUDIT_REPORT.md`. Enforce strict multi-tenant tenancy isolation, complete user profile management, secure 1-click persona locks for corporate accounts, explicit visual locked states for non-dispatcher roles, curated Pan-Sumatra coastal highway routing geometry, econometric impact model data piping, and resilient simulation controls.
 
 **Target features:**
-- Multi-tenant Supabase Authentication (Sign In, Sign Up, Magic Link) with role-based access control (Dispatcher, Regulator, Guest/Evaluator)
-- Self-serve fleet onboarding modal with single-truck manual input and drag-and-drop CSV/Excel bulk manifest parser
-- Standardized REST webhook endpoint (`POST /api/v1/fleet/telemetry/ingest`) for external TMS GPS telematics ingestion
-- Intermodal sea-land terminal synchronization fusing AIS vessel roadstead queues with highway volumes and applying automated delay multipliers
-- Operational food spoilage hedging calculator computing monetary tradeoffs between Continue (spoilage loss), Reroute (toll + fuel), and Hold (cold-chain genset diesel)
-- Digital *Surat Jalan* (Cargo Manifest) and *Sertifikat Karantina Pangan (BKHIT)* compliance inspector for alternative detour corridors
-- End-to-end pilot verification test suite (`test_pilot_e2e.py`) validating the complete dispatcher workflow
-- Hardened Docker Compose setup and official Pilot Onboarding Manual (`docs/PreHub_Pilot_Onboarding_Manual.md`)
-- Strict Minimalist Non-AI UI Ergonomics (zero emojis, 100% SVG Lucide icons, zero boasting language, clutter-free glassmorphic design)
+- Bug 1: Elimination of `GuestEvaluationBanner` pointer-events collision with top telemetry HUD.
+- Bug 2: Comprehensive Authenticated User Profile Card with active permissions and logout action in `AuthModal`.
+- Bug 3: Strict 1-Click Persona Switcher lockdown restricted exclusively to sandbox/guest evaluator accounts.
+- Bug 4: Explicit visual lock badges (`[Khusus Dispatcher]`) and role-aware disabled states across fleet onboarding and mitigation execution.
+- Bug 5: Curated arterial coastal road routing (Belawan -> Pantai Cermin -> Tebing Tinggi) replacing crude 4-point straight lines, correct destination node coordinates, and dynamic origin/destination support in backend demo engine.
+- Bug 6: Calibrated econometric intelligence data pipeline feeding live inflation and spoilage hedging forecasts into guided demo state.
+- Bug 7: Resilient fleet simulation mode filter in `useFleetVehicles` correctly clearing 45 baseline synthetic units when toggled off.
+- Bug 8: Exponential backoff and graceful inactive state in `/demo-remote` eliminating continuous 404 polling loops.
+- Bug 9: Unified toast notification dispatching eliminating duplicate conflicting popups in `SimulationSection`.
 
 ## Milestones Overview
 - **M1 - Pan-Sumatra Logistics & Swarm Intelligence MVP**: Completed (Phases 0 to 35). Shipped 6-agent swarm, Mapbox canvas, live news pipeline across 8 ANTARA bureaus, and 39 pytest tests.
 - **M2 - PreHub Final Defense: Empirical Evaluation, Tactical HUD & Multi-Source Maturity**: Completed (Phases 36 to 41). Delivered ground-truth benchmark ($N=60$), 88-test matrix, mathematical consensus formula, Brier probability calibration, deterministic CPU routing, God's-Eye HUD telemetry, and sanitized UI.
-- **M3 - PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform**: Active (Phases 42 to 45). Delivering multi-role auth, self-serve fleet/CSV manifest ingestion, spoilage hedging economics, intermodal port synchronization, and pilot deployment packaging.
+- **M3 - PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform**: Completed (Phases 42 to 56). Delivered multi-role auth, self-serve fleet/CSV manifest ingestion, spoilage hedging economics, intermodal port synchronization, and anti-collision dock layouts.
+- **M4 - PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability**: Active (Phases 57 to 59). Remediating all 9 audit findings from `PILOT_BUGS_AND_E2E_AUDIT_REPORT.md`, locking corporate RBAC, refining arterial coastal routing, and certifying pilot readiness.
 
 ## Vision
 An AI-powered decision support platform that shifts logistics and disaster response from **reactive** to **proactive**. PreHub ingests real-time physical hazard data (weather, traffic, maritime, wildfire), detects logistics disruptions, predicts cascading economic impacts (commodity price spikes), and delivers actionable intelligence to field coordinators and government executives, all before the crisis escalates.

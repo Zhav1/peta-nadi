@@ -23,6 +23,7 @@ import {
   ChevronDown,
   Play,
   Home,
+  Lock,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useIncidents } from '@/hooks/useIncidents';
@@ -207,6 +208,18 @@ function resolveApprovedDelayMinutes(
   return Math.max(0, approvedEta - Math.min(...etaMinutes));
 }
 
+const PANTAI_CERMIN_COASTAL_CORRIDOR: [number, number][] = [
+  [98.6776, 3.7922], // Pelabuhan Belawan
+  [98.6850, 3.7250], // Medan Timur Bypass
+  [98.6920, 3.6550], // Simpang Kayu Besar
+  [98.7450, 3.6300], // Batang Kuis
+  [98.8100, 3.6150], // Lubuk Pakam Arterial
+  [98.9800, 3.6350], // Pantai Cermin Coastal Detour
+  [99.0700, 3.5200], // Perbaungan Bypass
+  [99.1200, 3.4400], // Sei Rampah Arterial
+  [99.1625, 3.3285], // Tebing Tinggi Terminal
+];
+
 // Deterministic tangential bypass: bends a corridor around a hazard circle at radius + 6 km clearance
 // so demo/offline routes never cross straight through the disaster zone.
 function buildHazardBypassRoute(
@@ -221,6 +234,37 @@ function buildHazardBypassRoute(
     getHaversineDistanceKm(destination, hazardCenter) <= effectiveRadiusKm
   ) {
     return null;
+  }
+
+  // Primary pilot corridor check (Belawan / Medan -> Tebing Tinggi)
+  const isBelawanTebingCorridor =
+    (getHaversineDistanceKm(origin, [98.6776, 3.7922]) < 25.0 || getHaversineDistanceKm(origin, [98.6722, 3.5952]) < 25.0) &&
+    getHaversineDistanceKm(destination, [99.1625, 3.3285]) < 25.0;
+
+  if (isBelawanTebingCorridor) {
+    const coords = PANTAI_CERMIN_COASTAL_CORRIDOR;
+    let lengthKm = 0;
+    for (let i = 0; i < coords.length - 1; i++) {
+      lengthKm += getHaversineDistanceKm(coords[i], coords[i + 1]);
+    }
+    const roadDistanceKm = Math.round(lengthKm * 1.05);
+    return {
+      id: 'demo-clean-bypass-coastal',
+      route_name: 'Bypass Pesisir Pantai Cermin',
+      description: 'Koridor arteri pesisir melingkari zona bencana Lubuk Pakam via Sei Rampah menuju Tebing Tinggi',
+      waypoints: coords.map(([lon, lat]) => ({ lat, lon })),
+      distance_km: roadDistanceKm,
+      eta_minutes: Math.round((roadDistanceKm / 50) * 60),
+      fuel_increase_pct: 12.5,
+      risk_score: 0.08,
+      is_compromised: false,
+      safety_status: 'SAFE_DETOUR',
+      safety_tag: 'RUTE PENGALIHAN BEBAS BENCANA',
+      traffic_level: 'low',
+      congestion_segments: [],
+      modality: 'truck',
+      color: '#10B981',
+    };
   }
 
   const clearanceKm = radiusKm + 6.0;
@@ -470,6 +514,7 @@ export default function DashboardClient() {
   const [simulatedShockwave, setSimulatedShockwave] = useState<{ center: [number, number]; radiusKm: number; hazardType: string } | null>(null);
   const [disasterZones, setDisasterZones] = useState<Array<{ polygon: [number, number][]; type: 'flood'; risk: number }>>([]);
   const [toast, setToast] = useState<{ message: string; type?: 'success' | 'error' | 'info' } | null>(null);
+  const isDemoRunningRef = useRef<boolean>(false);
 
   // Decision Support System (DSS) Impact Assessment States
   const [impactAssessmentData, setImpactAssessmentData] = useState<DisruptionImpactResponse | null>(null);
@@ -587,7 +632,7 @@ export default function DashboardClient() {
         type: 'success'
       });
     } catch (err) {
-      // Phase 57 WP-A3 (D1 — strict RBAC stays): guest writes keep 403. UX
+      // Phase 57 WP-A3 (D1: strict RBAC stays): guest writes keep 403. UX
       // explains + saves locally instead of bypassing. Map styling below
       // still applies; approvals count stays local-only.
       const errMsg = err instanceof Error ? err.message : String(err);
@@ -606,11 +651,11 @@ export default function DashboardClient() {
           });
           localStorage.setItem(key, JSON.stringify(prev));
         } catch {
-          // storage unavailable — toast still explains sandbox mode
+          // storage unavailable: toast still explains sandbox mode
         }
         setApprovalsCount(prev => prev + 1);
         setToast({
-          message: 'Mode Sandbox: tersimpan lokal — login Dispatcher untuk commit ke koridor.',
+          message: 'Mode Sandbox: tersimpan lokal - login Dispatcher untuk commit ke koridor.',
           type: 'info'
         });
       } else {
@@ -754,6 +799,10 @@ export default function DashboardClient() {
   // Sync road network routes when origin, destination, modality, or hazard changes
   useEffect(() => {
     if (selectedOriginNode && selectedDestNode) {
+      if (isDemoRunningRef.current) {
+        // When guided demo is active, demo stages manage their own routes
+        return;
+      }
       updateBaselineMapboxRoute(
         selectedOriginNode,
         selectedDestNode,
@@ -975,9 +1024,27 @@ export default function DashboardClient() {
     const cleanBypass = primarySubmerged
       ? buildHazardBypassRoute(originCoords, destCoords, hazardPoint, selectedRadius)
       : null;
-    const resolvedRoutes = cleanBypass
-      ? [cleanBypass, ...demoRoutes.filter((r) => r.is_compromised !== true && r.safety_status !== 'HOLD_DELAY')]
-      : demoRoutes;
+    const resolvedRoutes: RouteRecommendation[] = [];
+    if (cleanBypass) resolvedRoutes.push(cleanBypass);
+    demoRoutes
+      .filter((r) => r.is_compromised !== true && r.safety_status !== 'HOLD_DELAY')
+      .forEach((r) => {
+        if (!resolvedRoutes.some((res) => res.id === r.id)) {
+          resolvedRoutes.push(r);
+        }
+      });
+
+    const compromisedRoute = demoRoutes.find((r) => r.is_compromised) || (primarySubmerged ? {
+      ...demoRoutes[0],
+      color: '#EF4444',
+      safety_status: 'COMPROMISED' as const,
+      safety_tag: 'TERDAMPAK ZONA BAHAYA (+60m Delay)',
+      is_compromised: true,
+    } : null);
+
+    if (compromisedRoute && !resolvedRoutes.some((r) => r.id === compromisedRoute.id)) {
+      resolvedRoutes.push(compromisedRoute);
+    }
 
     const fullDemoState: CrisisState = {
       ...crisis,
@@ -988,11 +1055,13 @@ export default function DashboardClient() {
     setSelectedCrisis(fullDemoState);
     setSelectedCrisisId(crisis.crisis_id);
     setActiveRouteIdx(0);
+    setIsSidebarOpen(true);
     setToast({ message: `Skenario Aktif: ${crisis.title}`, type: 'success' });
   }, [selectedOriginNode, selectedDestNode, selectedRadius, selectedModality]);
 
   // Phase 23: Lifted Demo Engine State & Stage-Wired Effects
   const demoState = useDemoState(handleCrisisReadyFromDemo);
+  isDemoRunningRef.current = demoState.isRunning;
 
   // Latest corridor nodes in refs: the demo stage effect reads fresh values
   // without re-running its side effects on every map node click.
@@ -1008,20 +1077,30 @@ export default function DashboardClient() {
 
     switch (demoState.stage) {
       case 0: {
-        // Stage 0: Baseline Data Ingestion — clean map, respect user's selected origin & destination
+        // Stage 0: Baseline Data Ingestion: clean map, respect user's selected origin & destination
         setSimulatedShockwave(null);
         setSelectedCrisis(null);
         setIsSidebarOpen(false);
+        const originId = selectedOriginNode || 'belawan';
+        const destId = selectedDestNode || 'tebingtinggi';
+        const originCoords = HUB_NODES[originId]?.coords || HUB_NODES.belawan.coords;
+        const destCoords = HUB_NODES[destId]?.coords || HUB_NODES.tebingtinggi.coords;
+        calculateAIDynamicDetourRoutes(null, selectedRadius, originCoords, destCoords, selectedModality).then((routes) => {
+          if (routes.length > 0) {
+            setCurrentMapRoutes(routes);
+            setActiveRouteIdx(0);
+          }
+        });
         break;
       }
 
       case 1: {
-        // Stage 1: Agent Swarm Analyzing — active user selected corridor remains intact
+        // Stage 1: Agent Swarm Analyzing: active user selected corridor remains intact
         break;
       }
 
       case 2: {
-        // Stage 2: Consensus Gate — inject hazard flood shockwave at Lubuk Pakam
+        // Stage 2: Consensus Gate: inject hazard flood shockwave at Lubuk Pakam
         const hazardCenter: [number, number] = [98.87, 3.56]; // Lubuk Pakam flood corridor
         const demoRadiusKm = demoRadiusRef.current;
         setSimulatedShockwave({
@@ -1030,8 +1109,7 @@ export default function DashboardClient() {
           hazardType: 'flood',
         });
 
-        // Preview a clean bypass corridor so the demo route visibly loops around the
-        // active flood circle instead of passing straight through its center.
+        // Compute clean bypass corridor and mark the direct corridor as compromised
         const demoOriginCoords = HUB_NODES[demoOriginRef.current || 'belawan']?.coords || HUB_NODES.belawan.coords;
         const demoDestCoords = HUB_NODES[demoDestRef.current || 'tebingtinggi']?.coords || HUB_NODES.tebingtinggi.coords;
         const bypassPreview = buildHazardBypassRoute(demoOriginCoords, demoDestCoords, hazardCenter, demoRadiusKm);
@@ -1039,11 +1117,32 @@ export default function DashboardClient() {
           setCurrentMapRoutes([bypassPreview]);
           setActiveRouteIdx(0);
         }
+
+        calculateAIDynamicDetourRoutes(hazardCenter, demoRadiusKm, demoOriginCoords, demoDestCoords, selectedModality).then((rawRoutes) => {
+          const directCompromised = rawRoutes.find((r) => r.is_compromised) || rawRoutes[0];
+          const markedDirect: RouteRecommendation | null = directCompromised ? {
+            ...directCompromised,
+            color: '#EF4444',
+            safety_status: 'COMPROMISED',
+            safety_tag: 'TERDAMPAK ZONA BAHAYA (+60m Delay)',
+            is_compromised: true,
+          } : null;
+
+          const routesToShow: RouteRecommendation[] = [];
+          if (bypassPreview) routesToShow.push(bypassPreview);
+          if (markedDirect && !routesToShow.some((r) => r.id === markedDirect.id)) {
+            routesToShow.push(markedDirect);
+          }
+          if (routesToShow.length > 0) {
+            setCurrentMapRoutes(routesToShow);
+            setActiveRouteIdx(0);
+          }
+        });
         break;
       }
 
       case 3: {
-        // Stage 3: Validated Crisis — handleCrisisReadyFromDemo auto-called by useDemoState
+        // Stage 3: Validated Crisis: handleCrisisReadyFromDemo auto-called by useDemoState
         setIsSidebarOpen(true);
         setActiveTab('Evidence');
         setActiveRouteIdx(0); // Highlight emerald detour route at index 0
@@ -1051,7 +1150,7 @@ export default function DashboardClient() {
       }
 
       case 4: {
-        // Stage 4: Dispatch Complete — review the economic impact before approving the mitigation plan
+        // Stage 4: Dispatch Complete: review the economic impact before approving the mitigation plan
         setActiveTab('Economic');
         setToast({
           message: 'Notifikasi Terkirim: Armada dialihkan ke rute aman.',
@@ -1345,12 +1444,34 @@ export default function DashboardClient() {
           {/* Phase 43: Self-Serve Fleet Onboarding Action Button */}
           <button
             type="button"
-            onClick={() => setIsOnboardingModalOpen(true)}
-            className="cursor-pointer px-2.5 sm:px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-slate-200 hover:text-white text-xs font-medium transition flex items-center gap-1.5"
-            title="Onboard Armada & Unggah Manifest Pengiriman"
+            onClick={() => {
+              if (role !== 'DISPATCHER') {
+                setToast({
+                  message: 'Pendaftaran armada hanya dapat dilakukan oleh operator dengan wewenang DISPATCHER.',
+                  type: 'info',
+                });
+              }
+              setIsOnboardingModalOpen(true);
+            }}
+            id="onboard-armada-btn"
+            className={`cursor-pointer px-2.5 sm:px-3 py-1.5 rounded-lg border text-xs font-medium transition flex items-center gap-1.5 ${
+              role === 'DISPATCHER'
+                ? 'border-white/10 bg-white/5 hover:bg-white/10 text-slate-200 hover:text-white'
+                : 'border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-200 hover:text-white'
+            }`}
+            title={role === 'DISPATCHER' ? 'Onboard Armada & Unggah Manifest Pengiriman' : 'Onboard Armada (Terkunci: Khusus Wewenang Dispatcher)'}
           >
-            <PlusCircle className="w-3.5 h-3.5 text-slate-300" />
+            {role === 'DISPATCHER' ? (
+              <PlusCircle className="w-3.5 h-3.5 text-slate-300" />
+            ) : (
+              <Lock className="w-3.5 h-3.5 text-amber-400" />
+            )}
             <span className="hidden sm:inline">Onboard Armada</span>
+            {role !== 'DISPATCHER' && (
+              <span className="hidden md:inline px-1 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px] font-mono">
+                Khusus Dispatcher
+              </span>
+            )}
             {customFleetCount > 0 && (
               <span className="px-1.5 py-0.5 rounded bg-white text-[#080d14] font-mono text-xs font-bold tabular-nums">
                 {customFleetCount}
@@ -1361,6 +1482,7 @@ export default function DashboardClient() {
           {/* 1-Click Role & Workspace Persona Badge */}
           <button
             type="button"
+            id="auth-persona-badge-btn"
             onClick={openAuthModal}
             className="cursor-pointer px-2.5 sm:px-3 py-1.5 rounded-lg border border-white/10 bg-[#080d14] hover:border-white/20 transition flex items-center gap-2 group text-left"
             title="Ganti Persona Akses & Ruang Kerja (RBAC)"
@@ -1641,7 +1763,7 @@ export default function DashboardClient() {
                         )}
                       </h3>
 
-                      {/* Stored excerpt — clamped until the operator expands it */}
+                      {/* Stored excerpt: clamped until the operator expands it */}
                       <p
                         className={`text-xs text-slate-400 font-sans leading-relaxed transition-all duration-200 ${
                           isExcerptExpanded ? '' : 'line-clamp-2'
@@ -1814,7 +1936,7 @@ export default function DashboardClient() {
                         const fleetFilter = m.id as 'all' | 'truck' | 'maritime' | 'air';
                         handleModalityChange(fleetFilter === 'all' ? 'best' : fleetFilter);
                         setToast({
-                          message: `Filter Armada: ${m.label} (${m.count} Unit) — modalitas rute disinkronkan`,
+                          message: `Filter Armada: ${m.label} (${m.count} Unit): modalitas rute disinkronkan`,
                           type: 'info',
                         });
                       }}
@@ -1839,6 +1961,7 @@ export default function DashboardClient() {
                 <div className="w-[1px] h-4 bg-white/10 mx-1 shrink-0" />
                 <button
                   type="button"
+                  id="fleet-sim-toggle-btn"
                   onClick={() => {
                     const nextMode = !isFleetSimMode;
                     setIsFleetSimMode(nextMode);
@@ -1906,7 +2029,7 @@ export default function DashboardClient() {
               confidence={demoState.confidence}
               summary={demoState.summary}
               isAuto={demoState.isAuto}
-              onStart={(opts) => demoState.start({ mock_agents: false, offline: false, origin: opts?.origin || selectedOriginNode || 'belawan', destination: opts?.destination || selectedDestNode || 'tebingtinggi' })}
+              onStart={(opts) => demoState.start({ mock_agents: true, offline: false, origin: opts?.origin || selectedOriginNode || 'belawan', destination: opts?.destination || selectedDestNode || 'tebingtinggi' })}
               onAdvance={demoState.advance}
               onToggleAuto={demoState.toggleAuto}
               onReset={demoState.reset}
@@ -1951,7 +2074,8 @@ export default function DashboardClient() {
               <div className="w-[1px] h-4 bg-[#1c2432] mx-1 shrink-0" />
               <button
                 type="button"
-                onClick={() => demoState.start({ mock_agents: false, offline: false, origin: selectedOriginNode || 'belawan', destination: selectedDestNode || 'tebingtinggi' })}
+                id="run-demo-btn"
+                onClick={() => demoState.start({ mock_agents: true, offline: false, origin: selectedOriginNode || 'belawan', destination: selectedDestNode || 'tebingtinggi' })}
                 className="flex items-center gap-1.5 px-3 py-1 rounded bg-white hover:bg-slate-200 text-[#080d14] font-semibold text-xs uppercase tracking-wider transition-colors shadow-sm cursor-pointer shrink-0"
               >
                 <Play className="w-3 h-3 fill-current" />

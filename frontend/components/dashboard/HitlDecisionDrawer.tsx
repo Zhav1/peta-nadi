@@ -99,6 +99,15 @@ export function HitlDecisionDrawer({
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const handleDecision = async (decision: 'APPROVE' | 'REJECT' | 'HOLD') => {
@@ -169,6 +178,7 @@ export function HitlDecisionDrawer({
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
           <button
+            id="close-hitl-drawer-btn"
             onClick={onClose}
             className="cursor-pointer p-1.5 rounded-lg border border-white/10 hover:bg-white/5 text-slate-400 hover:text-white transition"
           >

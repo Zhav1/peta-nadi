@@ -1,5 +1,5 @@
 """
-PreHub — Deterministic CPU Routing Adapter
+PreHub : Deterministic CPU Routing Adapter
 Consolidates logistics routing using NetworkX Dijkstra/A* for alternative point-to-point detours
 and Google OR-Tools (with NetworkX heuristic fallback) for Capacitated Vehicle Routing Problems (CVRP).
 Zero GPU overhead, sub-second execution (<150 ms for 50 nodes).

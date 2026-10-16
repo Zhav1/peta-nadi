@@ -1,5 +1,5 @@
 """
-agent_router.py — PetaNadi Multi-Agent & LLM Advisory Router
+agent_router.py : PetaNadi Multi-Agent & LLM Advisory Router
 Handles real-time AI simulation chat, LangGraph reasoning traces, and agency orchestration calls.
 """
 import logging
@@ -277,7 +277,7 @@ async def simulate_crisis_stream(payload: dict):
         "lat": lat,
         "lon": lon,
         "region": region,
-        "title": payload.get("title") or f"[Simulasi] {crisis_type.replace('_', ' ').title()} — {region.replace('_', ' ').title()}",
+        "title": payload.get("title") or f"[Simulasi] {crisis_type.replace('_', ' ').title()} : {region.replace('_', ' ').title()}",
         "is_simulated": True,
         "crisis_id": scenario_id,
         "affected_polygon": polygon,

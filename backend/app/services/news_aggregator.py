@@ -1,5 +1,5 @@
 """
-PreHub — Unified Multi-Outlet News & Official Agency Ingestion Service (Supabase-Native)
+PreHub : Unified Multi-Outlet News & Official Agency Ingestion Service (Supabase-Native)
 Aggregates live news and bulletins across all 10 provinces of Sumatra:
 1. Tier 1 (Official & Government Agencies): LKBN ANTARA (10 Sumatra Bureaus), BMKG, BNPB
 2. Tier 2 (Authoritative Regional & National Press): Targeted queries for DetikSumut, Tribun Medan, Kompas, CNBC

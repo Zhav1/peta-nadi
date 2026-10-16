@@ -1,5 +1,5 @@
 """
-PreHub — Open-Meteo Weather Model Adapter
+PreHub : Open-Meteo Weather Model Adapter
 Connects to Open-Meteo Global Meteorological APIs (ECMWF / GFS numerical models).
 Provides live precipitation rates, wind speeds, and atmospheric hazard forecasts with offline fallback.
 Zero GPU overhead.

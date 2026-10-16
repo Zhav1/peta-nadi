@@ -1,5 +1,5 @@
 """
-PreHub — Unified News & Early Warning Ingestion Orchestrator (Supabase + Swarm)
+PreHub : Unified News & Early Warning Ingestion Orchestrator (Supabase + Swarm)
 Periodically ingests Pan-Sumatra live feeds, geocodes physical coordinates,
 persists to Supabase public.news_articles, and automatically synthesizes
 physical incidents into public.incidents, public.incident_impact_assessments,

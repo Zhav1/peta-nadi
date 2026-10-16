@@ -1,5 +1,5 @@
 """
-PetaNadi / PreHub — Deterministic Dynamic Routing Synchronization Service
+PetaNadi / PreHub : Deterministic Dynamic Routing Synchronization Service
 Synchronizes real-time TomTom segment traffic speeds & weather flood avoidance penalties
 into an N x N Travel Time Matrix, solved deterministically on CPU (NetworkX + OR-Tools).
 Maintains backwards compatibility for existing /api/v1/routing/optimize-cuopt endpoints.

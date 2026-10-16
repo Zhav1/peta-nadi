@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   X,
   Truck,
@@ -122,8 +122,18 @@ export function FleetOnboardingModal({
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [copiedUrl, setCopiedUrl] = useState(false);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
+  const isDispatcher = userRole.toUpperCase() === 'DISPATCHER';
   const isRegulator = userRole.toUpperCase() === 'REGULATOR';
   const apiBase = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' && window.location.hostname !== 'localhost' ? window.location.origin : 'http://localhost:8000');
 
@@ -179,8 +189,11 @@ export function FleetOnboardingModal({
 
   const handleSingleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isRegulator) {
-      setFeedback({ type: 'error', message: 'Regulator hanya memiliki hak akses baca (Read-Only).' });
+    if (!isDispatcher) {
+      setFeedback({
+        type: 'error',
+        message: 'Wewenang ditolak: Pendaftaran armada hanya dapat dilakukan oleh operator dengan peran DISPATCHER.',
+      });
       return;
     }
     if (!singleForm.vehicle_id.trim() || !singleForm.name.trim()) {
@@ -208,8 +221,11 @@ export function FleetOnboardingModal({
   };
 
   const handleBulkSubmit = async () => {
-    if (isRegulator) {
-      setFeedback({ type: 'error', message: 'Regulator hanya memiliki hak akses baca (Read-Only).' });
+    if (!isDispatcher) {
+      setFeedback({
+        type: 'error',
+        message: 'Wewenang ditolak: Unggah manifest armada hanya dapat dilakukan oleh operator dengan peran DISPATCHER.',
+      });
       return;
     }
     if (!csvFile) {
@@ -238,6 +254,13 @@ export function FleetOnboardingModal({
 
   const handleWebhookPingSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isDispatcher) {
+      setFeedback({
+        type: 'error',
+        message: 'Wewenang ditolak: Simulasi webhook telemetri hanya dapat dilakukan oleh operator dengan peran DISPATCHER.',
+      });
+      return;
+    }
     if (!webhookForm.vehicle_id.trim()) {
       setFeedback({ type: 'error', message: 'ID Armada wajib diisi untuk pengujian telemetri GPS.' });
       return;
@@ -286,6 +309,8 @@ export function FleetOnboardingModal({
             </div>
           </div>
           <button
+            id="close-onboarding-modal-btn"
+            title="Tutup Modal Onboarding"
             type="button"
             onClick={onClose}
             className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-[#0c1017] transition-colors cursor-pointer"
@@ -294,12 +319,14 @@ export function FleetOnboardingModal({
           </button>
         </div>
 
-        {/* Role Warning Banner for Regulator */}
-        {isRegulator && (
+        {/* Role Warning Banner for Non-Dispatchers */}
+        {!isDispatcher && (
           <div className="px-6 py-2.5 bg-amber-950/30 border-b border-amber-500/20 flex items-center gap-2 text-xs text-amber-300">
             <AlertTriangle className="w-4 h-4 shrink-0" />
             <span>
-              Mode Regulator (Read-Only): Anda dapat melihat spesifikasi dan format integrasi, namun perubahan dibatasi.
+              {isRegulator
+                ? 'Mode Regulator (Read-Only): Anda dapat melihat spesifikasi dan format integrasi, namun pendaftaran armada dibatasi khusus peran Dispatcher.'
+                : 'Mode Evaluator Tamu (Read-Only): Penambahan armada riil terkunci. Anda dapat meninjau format data dan spesifikasi integrasi.'}
             </span>
           </div>
         )}

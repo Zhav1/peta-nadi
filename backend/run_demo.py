@@ -1,5 +1,5 @@
 """
-run_demo.py — PreHub Demo Injector
+run_demo.py : PreHub Demo Injector
 
 Injects a synthetic Belawan Port closure + Trans-Sumatra Highway flood scenario
 into Redis Streams, triggering the full agent pipeline. Supports offline mode.
@@ -307,7 +307,7 @@ class MockSupabaseClient:
 
 SCENARIOS = {
     "belawan_flood": {
-        "description": "Belawan Port closure + Trans-Sumatra Highway flooding — North Sumatra",
+        "description": "Belawan Port closure + Trans-Sumatra Highway flooding : North Sumatra",
         "region": "north_sumatra",
         "corridor": "Belawan Port -> Trans-Sumatra Highway",
         "events": [],
@@ -331,7 +331,7 @@ def print_scenario_info(scenario: dict, offline: bool):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="PreHub Demo Injector — injects synthetic crisis events into Redis Streams",
+        description="PreHub Demo Injector : injects synthetic crisis events into Redis Streams",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -529,7 +529,7 @@ Examples:
         "lat": 3.7922,
         "lon": 98.6776,
         "region": "north_sumatra, belawan, pematangsiantar, tanjung mulia",
-        "title": "Belawan Port — Simulated Closure (Flooding)",
+        "title": "Belawan Port : Simulated Closure (Flooding)",
         "is_simulated": True,
     }
 

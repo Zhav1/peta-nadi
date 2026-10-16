@@ -1,5 +1,5 @@
 """
-PetaNadi / LRIP — LLM Reasoning Service for Natural XAI Explanations
+PetaNadi / LRIP : LLM Reasoning Service for Natural XAI Explanations
 Converts raw incident metrics & telemetry into natural, professional Indonesian XAI summaries.
 """
 

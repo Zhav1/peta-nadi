@@ -34,7 +34,7 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
         title="Latensi solver optimasi rute mitigasi CPU"
       >
         <Zap className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-        <span>RUTE: {solverStats ? `${solverStats.compute_time_ms}ms` : '—'}</span>
+        <span>RUTE: {solverStats ? `${solverStats.compute_time_ms}ms` : '-'}</span>
       </div>
 
       {/* 2. TomTom Traffic Delay */}
@@ -46,7 +46,7 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
         {isLoading && !corridorContext ? (
           <span>LALULINTAS: ...</span>
         ) : (
-          <span>LALULINTAS: {tomtomDelayMin != null ? `+${tomtomDelayMin}m` : '—'}</span>
+          <span>LALULINTAS: {tomtomDelayMin != null ? `+${tomtomDelayMin}m` : '-'}</span>
         )}
       </div>
 
@@ -59,7 +59,7 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
         {isLoading && !corridorContext ? (
           <span>BMKG: ...</span>
         ) : (
-          <span>BMKG: {bmkgRainfall != null ? `${bmkgRainfall} mm/j` : '—'}</span>
+          <span>BMKG: {bmkgRainfall != null ? `${bmkgRainfall} mm/j` : '-'}</span>
         )}
       </div>
 
@@ -69,6 +69,7 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
       {/* 5. Globot HITL Review Drawer Trigger */}
       {onOpenHitl && (
         <button
+          id="hitl-review-btn"
           type="button"
           onClick={onOpenHitl}
           className="cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-amber-950/40 border-amber-500/40 text-amber-300 hover:bg-amber-900/50 hover:text-white transition shadow-sm"

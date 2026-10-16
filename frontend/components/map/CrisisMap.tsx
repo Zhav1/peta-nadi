@@ -150,6 +150,8 @@ export default function CrisisMap({
   onSelectRouteRef.current = onSelectRoute;
 
   const mouseDownPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const lastFocusedCrisisIdRef = useRef<string | null>(null);
+  const lastFocusedShockwaveKeyRef = useRef<string | null>(null);
 
   // Toggle map layer visibility
   const toggleLayerFilter = (key: keyof typeof layerFilters) => {
@@ -924,24 +926,36 @@ export default function CrisisMap({
     if (!mapRef.current) return;
 
     if (simulatedShockwave?.center) {
-      mapRef.current.flyTo({
-        center: simulatedShockwave.center,
-        zoom: 10,
-        duration: 1400,
-        essential: true,
-      });
-    } else if (selectedCrisisId) {
-      const incident = incidents.find((i) => i.id === selectedCrisisId);
-      if (incident?.lat != null && incident?.lon != null) {
+      const shockwaveKey = `${simulatedShockwave.center[0].toFixed(4)},${simulatedShockwave.center[1].toFixed(4)},${simulatedShockwave.radiusKm || 0}`;
+      if (lastFocusedShockwaveKeyRef.current !== shockwaveKey) {
+        lastFocusedShockwaveKeyRef.current = shockwaveKey;
         mapRef.current.flyTo({
-          center: [incident.lon, incident.lat],
-          zoom: 11,
-          duration: 1200,
+          center: simulatedShockwave.center,
+          zoom: 10,
+          duration: 1400,
           essential: true,
         });
       }
+    } else {
+      lastFocusedShockwaveKeyRef.current = null;
+      if (selectedCrisisId) {
+        if (lastFocusedCrisisIdRef.current !== selectedCrisisId) {
+          lastFocusedCrisisIdRef.current = selectedCrisisId;
+          const incident = incidents.find((i) => i.id === selectedCrisisId);
+          if (incident?.lat != null && incident?.lon != null) {
+            mapRef.current.flyTo({
+              center: [incident.lon, incident.lat],
+              zoom: 11,
+              duration: 1200,
+              essential: true,
+            });
+          }
+        }
+      } else {
+        lastFocusedCrisisIdRef.current = null;
+      }
     }
-  }, [selectedCrisisId, incidents, simulatedShockwave]);
+  }, [selectedCrisisId, simulatedShockwave?.center?.[0], simulatedShockwave?.center?.[1], simulatedShockwave?.radiusKm]);
 
   return (
     <div className="relative w-full h-full">

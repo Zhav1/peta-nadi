@@ -1,5 +1,5 @@
 """
-PreHub — Disruption Impact Assessment Service.
+PreHub : Disruption Impact Assessment Service.
 Evaluates spatial corridor intersections between physical hazard disruptions (BMKG, OSINT, Simulation)
 and active fleet shipments. Deterministically triggers Spoilage Hedging, Regulatory Compliance,
 and CPU Detour Pathfinding to generate explainable dispatcher recommendations and WhatsApp dispatch triggers.

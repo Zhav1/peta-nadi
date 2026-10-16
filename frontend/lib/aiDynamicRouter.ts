@@ -8,7 +8,7 @@ export const DEFAULT_HAZARD_RADIUS_KM = 8;
 export const TOLL_CORRIDOR_BUFFER_KM = 2.0;
 
 /**
- * Verified Real Arterial Road Network Nodes — Sumatra Logistics Corridors
+ * Verified Real Arterial Road Network Nodes: Sumatra Logistics Corridors
  */
 export const HIGHWAY_JUNCTION_NODES: Array<{ id: string; name: string; coords: LonLat; region: string; isTollGate?: boolean }> = [
   // North Sumatra / Belawan - Medan - Tebing - Siantar
@@ -429,13 +429,13 @@ export async function fetchMapboxAlternativeDrivingRoutes(
 
   if (results.length === 0) {
     // Phase 57 WP-A3 (D4): honest unavailable path. Straight-line estimate is
-    // labeled SIMULASI/OFFLINE at every render site — never presented as live.
+    // labeled SIMULASI/OFFLINE at every render site: never presented as live.
     results.push({
       coordinates: fallbackCoords,
       distanceKm: Math.round(fallbackDistance),
       durationMinutes: Math.round((fallbackDistance / 60) * 60),
       congestionSegments: [],
-      summary: 'SIMULASI/OFFLINE — garis lurus, bukan geometri jalan live',
+      summary: 'SIMULASI/OFFLINE: garis lurus, bukan geometri jalan live',
       source: 'offline-interpolated',
     });
   }
@@ -649,7 +649,7 @@ export async function calculateAIDynamicDetourRoutes(
       id: `route-opt-${i + 1}`,
       route_name: labeledName,
       description: isOffline
-        ? `[SIMULASI/OFFLINE — garis lurus, bukan jalan raya live] ${routeName} via ${res.summary}`
+        ? `[SIMULASI/OFFLINE: garis lurus, bukan jalan raya live] ${routeName} via ${res.summary}`
         : `${routeName} via ${res.summary}`,
       waypoints: res.coordinates.map(([lon, lat]) => ({ lat, lon })),
       distance_km: res.distanceKm,
@@ -714,7 +714,7 @@ export async function calculateAIDynamicDetourRoutes(
     }
   }
 
-  // STEP 3: Orthogonal / Tangential Avoidance — compute perpendicular bypass waypoints around the hazard circle
+  // STEP 3: Orthogonal / Tangential Avoidance: compute perpendicular bypass waypoints around the hazard circle
   if (hazardCenter && !foundCleanRoute && token) {
     const [hazardLon, hazardLat] = hazardCenter;
     const clearanceKm = radiusKm + 6.0;

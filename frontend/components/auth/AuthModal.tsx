@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   AlertCircle,
@@ -17,6 +17,8 @@ import {
   Building,
   KeyRound,
   Sparkles,
+  LogOut,
+  ShieldCheck,
 } from 'lucide-react';
 import { useAuth, GUEST_LOCK_MESSAGE } from '@/lib/authContext';
 import type { UserRole } from '@/lib/types';
@@ -36,17 +38,36 @@ interface AuthModalProps {
 }
 
 export function AuthModal({ isOpen, onClose }: AuthModalProps) {
-  const { user, role, switchRole, login, signUp, loginWithMagicLink, isLoading, isAuthenticated } = useAuth();
+  const { user, role, switchRole, login, signUp, loginWithMagicLink, logout, isLoading, isAuthenticated } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const [activeTab, setActiveTab] = useState<'persona' | 'password' | 'magic'>('password');
+  const [activeTab, setActiveTab] = useState<'account' | 'persona' | 'password' | 'magic'>('password');
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>('pos_logistik');
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // When opening modal, direct authenticated users to their profile card by default
+  useEffect(() => {
+    if (isOpen) {
+      if (isAuthenticated) {
+        setActiveTab('account');
+      } else {
+        setActiveTab('password');
+      }
+      setStatusMessage(null);
+    }
+  }, [isOpen, isAuthenticated]);
+
   if (!isOpen) return null;
+
+  const isSandboxAccount = Boolean(
+    user?.is_offline_guest ||
+    user?.email?.endsWith('@kompetisi-lrip.id') ||
+    user?.company_id === 'demo_sandbox' ||
+    !user?.email
+  );
 
   // A verified session supersedes the middleware guest-evaluation flag: drop ?guest=1
   // from the URL while keeping every other query parameter intact.
@@ -66,6 +87,14 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
       return;
     }
 
+    if (!isSandboxAccount) {
+      setStatusMessage({
+        type: 'error',
+        text: 'Akun organisasi terikat peran tetap. Pergantian 1-klik persona hanya tersedia untuk akun sandbox/evaluasi.',
+      });
+      return;
+    }
+
     setStatusMessage(null);
     const res = await switchRole(targetRole);
     if (res.success) {
@@ -73,6 +102,13 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
     } else {
       setStatusMessage({ type: 'error', text: res.error || GUEST_LOCK_MESSAGE });
     }
+  };
+
+  const handleLogout = async () => {
+    setStatusMessage(null);
+    await logout();
+    setStatusMessage({ type: 'success', text: 'Berhasil keluar dari sesi. Silakan masuk dengan akun lain.' });
+    setActiveTab('password');
   };
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
@@ -139,7 +175,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
             </div>
             <div>
               <h2 className="text-sm font-semibold font-sans text-white">
-                Manajemen Ruang Kerja & Akses Persona
+                {isAuthenticated ? 'Profil Pengguna & Wewenang Akses' : 'Manajemen Ruang Kerja & Akses Masuk'}
               </h2>
               <p className="text-xs font-mono text-slate-400">
                 Otentikasi Multi-Tenant Supabase & Kontrol Akses Berbasis Peran (RBAC)
@@ -149,6 +185,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
           <button
             type="button"
+            id="close-auth-modal-btn"
             onClick={onClose}
             className="p-1.5 rounded-md bg-[#0c1017] text-slate-400 hover:text-white transition cursor-pointer"
             title="Tutup Modal"
@@ -157,63 +194,58 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
           </button>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="flex items-center gap-1 px-6 pt-3 border-b border-[#1c2432] bg-[#080d14] text-xs">
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab('persona');
-              setStatusMessage(null);
-            }}
-            className={`cursor-pointer px-4 py-2 border-b-2 font-medium transition flex items-center gap-1.5 ${
-              activeTab === 'persona'
-                ? 'border-white text-white bg-[#0c1017]'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>1-Klik Persona (Evaluator)</span>
-            {!isAuthenticated && (
-              <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/40 text-amber-300 text-[10px] font-mono font-semibold uppercase">
-                <Lock className="w-2.5 h-2.5" />
-                <span>Terkunci</span>
-              </span>
-            )}
-          </button>
+        {/* Tab Navigation (Only visible when NOT authenticated or logged out) */}
+        {!isAuthenticated && (
+          <div className="flex items-center gap-1 px-6 pt-3 border-b border-[#1c2432] bg-[#080d14] text-xs">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('password');
+                setStatusMessage(null);
+              }}
+              className={`cursor-pointer px-4 py-2 border-b-2 font-medium transition flex items-center gap-1.5 ${
+                activeTab === 'password'
+                  ? 'border-white text-white bg-[#0c1017]'
+                  : 'border-transparent text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <KeyRound className="w-3.5 h-3.5" />
+              <span>Masuk / Akun</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab('password');
-              setStatusMessage(null);
-            }}
-            title="Masuk dengan Kata Sandi / Akun"
-            className={`cursor-pointer px-4 py-2 border-b-2 font-medium transition flex items-center gap-1.5 ${
-              activeTab === 'password'
-                ? 'border-white text-white bg-[#0c1017]'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <KeyRound className="w-3.5 h-3.5" />
-            <span>Masuk / Akun</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('persona');
+                setStatusMessage(null);
+              }}
+              className={`cursor-pointer px-4 py-2 border-b-2 font-medium transition flex items-center gap-1.5 ${
+                activeTab === 'persona'
+                  ? 'border-white text-white bg-[#0c1017]'
+                  : 'border-transparent text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>1-Klik Persona (Sandbox)</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab('magic');
-              setStatusMessage(null);
-            }}
-            className={`cursor-pointer px-4 py-2 border-b-2 font-medium transition flex items-center gap-1.5 ${
-              activeTab === 'magic'
-                ? 'border-white text-white bg-[#0c1017]'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Mail className="w-3.5 h-3.5" />
-            <span>Magic Link</span>
-          </button>
-        </div>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('magic');
+                setStatusMessage(null);
+              }}
+              className={`cursor-pointer px-4 py-2 border-b-2 font-medium transition flex items-center gap-1.5 ${
+                activeTab === 'magic'
+                  ? 'border-white text-white bg-[#0c1017]'
+                  : 'border-transparent text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Mail className="w-3.5 h-3.5" />
+              <span>Magic Link</span>
+            </button>
+          </div>
+        )}
 
         {/* Status Alerts */}
         {statusMessage && (
@@ -235,6 +267,125 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
         {/* Modal Body */}
         <div className="p-6 overflow-y-auto max-h-[65vh]">
+          {/* TAB 0: PROFIL AKUN (ACTIVE FOR AUTHENTICATED USERS) */}
+          {activeTab === 'account' && (
+            <div className="space-y-4">
+              <div className="p-4 rounded-md bg-[#121822] border border-[#1c2432] space-y-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-full bg-[#080d14] border border-white/20 flex items-center justify-center text-white font-bold text-base">
+                      {user.name ? user.name.slice(0, 2).toUpperCase() : 'US'}
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-white font-sans">{user.name || 'Pengguna Terautentikasi'}</h3>
+                      <p className="text-xs font-mono text-slate-400">{user.email || 'Email tidak tercantum'}</p>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <Building className="w-3 h-3 text-slate-400" />
+                        <span className="text-xs text-slate-300 font-sans">
+                          {user.org_name || (user.company_id ? user.company_id.toUpperCase() : 'Mitra Terdaftar')}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <span className={`px-2.5 py-1 rounded text-xs font-mono font-bold uppercase tracking-wider border ${
+                    role === 'DISPATCHER'
+                      ? 'bg-cyan-500/15 border-cyan-500/40 text-cyan-300'
+                      : role === 'REGULATOR'
+                      ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+                      : 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
+                  }`}>
+                    {role}
+                  </span>
+                </div>
+
+                {/* Permissions Breakdown */}
+                <div className="pt-3 border-t border-[#1c2432] space-y-2">
+                  <span className="text-xs font-mono font-semibold text-slate-300 flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-slate-400" />
+                    <span>Daftar Hak Akses & Wewenang Aktif:</span>
+                  </span>
+                  <div className="grid grid-cols-1 gap-1.5 text-xs font-sans text-slate-300">
+                    {role === 'DISPATCHER' && (
+                      <>
+                        <div className="p-2 rounded bg-[#080d14] border border-[#1c2432] flex items-center gap-2">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                          <span>Persetujuan Pengalihan Rute Darurat & Detour Operasional</span>
+                        </div>
+                        <div className="p-2 rounded bg-[#080d14] border border-[#1c2432] flex items-center gap-2">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                          <span>Pendaftaran Armada Baru & Integrasi Webhook GPS TMS</span>
+                        </div>
+                        <div className="p-2 rounded bg-[#080d14] border border-[#1c2432] flex items-center gap-2">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                          <span>Disposisi Instruksi Mitigasi ke WhatsApp Pengemudi</span>
+                        </div>
+                      </>
+                    )}
+                    {role === 'REGULATOR' && (
+                      <>
+                        <div className="p-2 rounded bg-[#080d14] border border-[#1c2432] flex items-center gap-2">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                          <span>Pemantauan Spasial Makro & Heatmap Kerentanan Cuaca BMKG</span>
+                        </div>
+                        <div className="p-2 rounded bg-[#080d14] border border-[#1c2432] flex items-center gap-2">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                          <span>Pemodelan Ekonometrika Pangan & Disparitas Harga PIHPS</span>
+                        </div>
+                        <div className="p-2 rounded bg-[#080d14] border border-[#1c2432] flex items-center gap-2">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                          <span>Ekspor Laporan Situasi Kabinet B2G (Hanya Akses Tinjau/Read-Only)</span>
+                        </div>
+                      </>
+                    )}
+                    {role === 'GUEST' && (
+                      <>
+                        <div className="p-2 rounded bg-[#080d14] border border-[#1c2432] flex items-center gap-2">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                          <span>Pratinjau Peta & Koridor Logistik Sumatra</span>
+                        </div>
+                        <div className="p-2 rounded bg-[#080d14] border border-[#1c2432] flex items-center gap-2">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                          <span>Simulasi Benchmark N=60 & Deteksi Anomali</span>
+                        </div>
+                        <div className="p-2 rounded bg-[#080d14] border border-[#1c2432] flex items-center gap-2">
+                          <AlertCircle className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span className="text-slate-400">Pendaftaran armada & mutasi rute terkunci (khusus operator terverifikasi)</span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Session Security Policy Note */}
+                <div className="p-3 rounded-md bg-[#080d14] border border-[#1c2432] text-xs text-slate-300 space-y-1">
+                  <div className="flex items-center gap-1.5 text-slate-200 font-medium">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Integritas Sesi Multi-Tenant Aktif</span>
+                  </div>
+                  <p className="leading-relaxed text-slate-400">
+                    Sesi Anda terikat dengan wewenang resmi ({role}). Demi integritas audit trail logistik, perpindahan akun atau persona dinonaktifkan selama sesi aktif. Klik tombol di bawah untuk keluar dari sesi sebelum masuk dengan akun lain.
+                  </p>
+                </div>
+
+                {/* Logout Action */}
+                <div className="pt-3 border-t border-[#1c2432] flex items-center justify-between">
+                  <span className="text-xs text-slate-400 font-sans">
+                    Sesi tersinkronisasi aman melalui Supabase Auth
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    disabled={isLoading}
+                    className="cursor-pointer px-3.5 py-1.5 rounded-md bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 text-rose-300 hover:text-white text-xs font-semibold transition flex items-center gap-1.5 shadow-sm"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Keluar dari Sesi</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           {/* TAB 1: 1-KLIK PERSONA (EVALUATOR) */}
           {activeTab === 'persona' && (
             <div className="space-y-4">
@@ -261,9 +412,19 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                     </button>
                   </div>
                 </div>
+              ) : !isSandboxAccount ? (
+                <div className="p-3.5 rounded-md bg-amber-950/20 border border-amber-500/30 text-xs font-sans text-amber-200">
+                  <div className="flex items-center gap-2 font-semibold text-amber-300">
+                    <Lock className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span>Akun Organisasi Enterprise Terkunci</span>
+                  </div>
+                  <p className="mt-1 text-slate-300 leading-relaxed">
+                    Anda terautentikasi dengan akun resmi ({user.email}). Peran dan wewenang operasional dikunci sesuai penugasan organisasi Anda ({user.org_name || user.company_id}). Pengalihan persona 1-klik hanya diizinkan untuk akun sandbox evaluasi.
+                  </p>
+                </div>
               ) : (
                 <div className="p-3 rounded-md bg-[#121822] border border-[#1c2432] text-xs font-sans text-slate-300 leading-relaxed">
-                  Pilih persona di bawah untuk menguji adaptasi antarmuka, hak akses navigasi, dan wewenang operasional secara instan tanpa perlu mendaftar ulang.
+                  Pilih persona di bawah untuk menguji adaptasi antarmuka, hak akses navigasi, dan wewenang operasional secara instan dalam lingkungan sandbox.
                 </div>
               )}
 
@@ -272,8 +433,10 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                 <button
                   type="button"
                   onClick={() => handlePersonaSelect('DISPATCHER')}
-                  disabled={isLoading}
-                  className={`cursor-pointer w-full text-left p-4 rounded-md border transition-colors duration-150 flex flex-col gap-2 relative overflow-hidden group ${!isAuthenticated ? 'opacity-50 ' : ''}${
+                  disabled={isLoading || !isSandboxAccount}
+                  className={`w-full text-left p-4 rounded-md border transition-colors duration-150 flex flex-col gap-2 relative overflow-hidden group ${
+                    !isAuthenticated || !isSandboxAccount ? 'opacity-50 cursor-not-allowed ' : 'cursor-pointer '
+                  }${
                     role === 'DISPATCHER'
                       ? 'bg-[#121822] border-white shadow-sm'
                       : 'bg-[#0c1017] border-[#1c2432] hover:border-slate-500 hover:bg-[#121822]'
@@ -324,8 +487,10 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                 <button
                   type="button"
                   onClick={() => handlePersonaSelect('REGULATOR')}
-                  disabled={isLoading}
-                  className={`cursor-pointer w-full text-left p-4 rounded-md border transition-colors duration-150 flex flex-col gap-2 relative overflow-hidden group ${!isAuthenticated ? 'opacity-50 ' : ''}${
+                  disabled={isLoading || !isSandboxAccount}
+                  className={`w-full text-left p-4 rounded-md border transition-colors duration-150 flex flex-col gap-2 relative overflow-hidden group ${
+                    !isAuthenticated || !isSandboxAccount ? 'opacity-50 cursor-not-allowed ' : 'cursor-pointer '
+                  }${
                     role === 'REGULATOR'
                       ? 'bg-[#121822] border-white shadow-sm'
                       : 'bg-[#0c1017] border-[#1c2432] hover:border-slate-500 hover:bg-[#121822]'
@@ -376,8 +541,10 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
                 <button
                   type="button"
                   onClick={() => handlePersonaSelect('GUEST')}
-                  disabled={isLoading}
-                  className={`cursor-pointer w-full text-left p-4 rounded-md border transition-colors duration-150 flex flex-col gap-2 relative overflow-hidden group ${!isAuthenticated ? 'opacity-50 ' : ''}${
+                  disabled={isLoading || !isSandboxAccount}
+                  className={`w-full text-left p-4 rounded-md border transition-colors duration-150 flex flex-col gap-2 relative overflow-hidden group ${
+                    !isAuthenticated || !isSandboxAccount ? 'opacity-50 cursor-not-allowed ' : 'cursor-pointer '
+                  }${
                     role === 'GUEST'
                       ? 'bg-[#121822] border-white shadow-sm'
                       : 'bg-[#0c1017] border-[#1c2432] hover:border-slate-500 hover:bg-[#121822]'
@@ -554,10 +721,10 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
         <div className="px-6 py-3 border-t border-[#1c2432] bg-[#080d14] flex items-center justify-between text-xs font-mono text-slate-400">
           <div className="flex items-center gap-1.5">
             <User className="w-3.5 h-3.5 text-slate-400" />
-            <span>Sesi Aktif: <strong className="text-slate-200">{user.name}</strong></span>
+            <span>Sesi: <strong className="text-slate-200">{isAuthenticated ? (user?.name || 'Terautentikasi') : 'Belum Masuk (Tamu)'}</strong></span>
           </div>
           <span className="px-2 py-0.5 rounded bg-[#121822] border border-[#1c2432] text-slate-300">
-            {role}
+            {isAuthenticated ? role : 'GUEST'}
           </span>
         </div>
       </div>

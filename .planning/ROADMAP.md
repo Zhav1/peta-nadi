@@ -1,7 +1,7 @@
 # ROADMAP: PreHub (Logistics Resilience Intelligence Platform)
 
-**Active Milestone:** M3 - PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform [ACTIVE 🚀]
-**Previous Milestones:** M1 - Hackathon MVP (Pan-Sumatra Logistics & Swarm Intelligence) [COMPLETED ✅], M2 - PreHub Final Defense: Empirical Evaluation, Tactical HUD & Multi-Source Maturity [COMPLETED ✅]
+**Active Milestone:** M4 - PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability [ACTIVE 🚀]
+**Previous Milestones:** M1 - Hackathon MVP (Pan-Sumatra Logistics & Swarm Intelligence) [COMPLETED ✅], M2 - PreHub Final Defense: Empirical Evaluation, Tactical HUD & Multi-Source Maturity [COMPLETED ✅], M3 - PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform [COMPLETED ✅]
 **Development Mode:** Solo, AI-assisted (GSD Disciplined Workflow)
 
 ---
@@ -1383,6 +1383,63 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 - [x] `npm run build` in `frontend/`: exit code 0, all 7 pages generated cleanly.
 - [x] Playwright headless test at 1366x768 confirms zero component collision and 7/7 route avoidance tests passed (`toll-bypass-routing.spec.ts`).
 - [x] Codebase search confirms 0 remaining hits for `MOCK_SOCIAL_POSTS`, `FALLBACK_OUTCOMES`, `62000`, and `38500`.
+
+---
+
+# MILESTONE M4: PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability
+
+## Phase 57: Track B Pilot Hardening (Tenancy Schema, Auth & Non-Blocking Ingestion)
+**Goal:** Deliver Step 0 Tenancy Schema (`012_organizations_profiles_tenancy.sql`), UserSession tenancy propagation, invite-only auth, and non-blocking news ingestion.
+**Status:** IN PROGRESS 🟡
+**Plans:** 57-PLAN.md, 57-CONTEXT.md, 57-WALKTHROUGH.md
+
+### Deliverables
+- [ ] **Step 0**: Supabase Migration 012 (`organizations`, `profiles`, `handle_new_user()` trigger), `frontend/lib/types.ts` tenant claims, `company_id` filter contract in `GET /api/v1/fleet/vehicles`.
+- [ ] **WP-B1**: News non-blocking background ingestion with in-progress mutex guards and honest warming status.
+- [ ] **WP-B2**: Pilot auth lockdown with invite-only mode, company affiliation on signup, and server-side JWT tenancy resolution.
+- [ ] **WP-B3**: Multi-tenant fleet isolation ensuring dispatchers strictly see own fleets while regulators retain macro corridor visibility.
+
+---
+
+## Phase 58: E2E Audit Remediation & Visual Lockdowns
+**Goal:** Resolve all 9 systemic bugs and interface anomalies identified during automated E2E audit in `PILOT_BUGS_AND_E2E_AUDIT_REPORT.md`.
+**Status:** READY TO EXECUTE 🟡
+**Plans:** 58-PLAN.md, 58-CONTEXT.md, 58-RESEARCH.md
+
+### Deliverables
+- [ ] **WP1 (P0) - GuestEvaluationBanner Pointer-Events & Collision Fix:**
+  - Convert container to `pointer-events-none` with `pointer-events-auto` restricted strictly to the interactive banner card.
+  - Position banner to avoid occluding the top telemetry HUD strip (`TopNavTelemetry`).
+- [ ] **WP2 (P0) - Authenticated User Profile Card & Persona Lockdown:**
+  - Implement full User Profile Card in `AuthModal.tsx` showing Name, Email, Organization, Role badge, and Logout button.
+  - Lock 1-Click Persona Switcher strictly to sandbox evaluator accounts (`is_offline_guest === true` or `@kompetisi-lrip.id`).
+- [ ] **WP3 (P0) - Visual Lock Badges for Non-Dispatcher Roles:**
+  - Add visual lock icons and `[Khusus Dispatcher]` badges to `Onboard Armada` button and mitigation execution controls.
+  - Provide clear informative toast messages when guest or regulator attempts dispatcher-only actions.
+- [ ] **WP4 (P0) - Run Demo Arterial Coastal Routing Geometry & Dynamic Corridor:**
+  - Replace crude 4-point straight lines in `buildHazardBypassRoute` with curated Pantai Cermin coastal arterial highway coordinates (Belawan -> Marelan -> Percut Sei Tuan -> Pantai Cermin -> Tebing Tinggi).
+  - Correct destination endpoint in `useDemoState.ts` and `mock_crisis_state.json` to Simpang Susun Tebing Tinggi (`3.3285, 99.1625`), eliminating erroneous extensions to Lake Toba.
+  - Add `origin` and `destination` fields to `StartDemoPayload` in `backend/app/routers/demo_router.py`.
+- [ ] **WP5 (P1) - Econometric Model Intelligence Payload Binding:**
+  - Feed calibrated econometric models (+15% Minyak Goreng, Rp 1,045,284 net savings from holding) into `inflation_forecast` in guided demo state.
+- [ ] **WP6 (P1) - Fleet Simulation Mode Filter Hardening:**
+  - Settle `useFleetVehicles.ts` so turning off Mode Simulasi strictly hides the 45 synthetic baseline units, displaying only custom onboarded vehicles (or 0 if none).
+- [ ] **WP7 (P1) - Demo Remote Polling Backoff & Toast Unification:**
+  - Add graceful backoff and inactive notice in `/demo-remote` eliminating continuous 404 console errors.
+  - Eliminate duplicate toast notifications in `SimulationSection.tsx`.
+
+---
+
+## Phase 59: Comprehensive E2E Verification & Pilot Operations Acceptance
+**Goal:** Full regression testing across all 8 core workflows, multi-role test matrix validation, verification gate pass, zero console errors, zero em dashes.
+**Status:** PLANNED 📋
+
+### Deliverables
+- [ ] Automated Playwright regression test suite passing with 0 element collision timeouts.
+- [ ] Multi-tenant RBAC validation across Guest, Regulator, and Dispatcher sessions.
+- [ ] Backend test suite passing 100% of tests (`python -m pytest backend/tests`).
+- [ ] Clean TypeScript compile (`npx tsc --noEmit`) and Next.js production build (`npm run build`).
+- [ ] Full operational signoff documented in `PILOT_BUGS_AND_E2E_AUDIT_REPORT.md`.
 
 ---
 

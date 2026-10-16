@@ -13,33 +13,45 @@ function DemoRemoteClient() {
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [stageName, setStageName] = useState<string>('Injecting Events');
   const [isAuto, setIsAuto] = useState<boolean>(false);
+  const [sessionError, setSessionError] = useState<string | null>(null);
   const autoIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const consecutiveFailuresRef = useRef<number>(0);
 
   // Poll status from backend to stay in sync
   const pollStatus = useCallback(async (cid: string) => {
     try {
       const statusRes = await api.demo.status(cid);
+      consecutiveFailuresRef.current = 0;
       setStage(statusRes.stage);
       setStageName(statusRes.stage_name);
       setIsRunning(true);
+      setSessionError(null);
       if (statusRes.stage >= 4) {
         setIsAuto(false);
       }
-    } catch (err) {
-      console.error('Failed to fetch status:', err);
+    } catch (err: any) {
+      consecutiveFailuresRef.current += 1;
+      if (err?.status === 404 || consecutiveFailuresRef.current >= 2) {
+        setIsRunning(false);
+        setSessionError('Sesi demo tidak aktif atau telah kedaluwarsa di server.');
+      }
     }
   }, []);
 
   // Sync state on load and set up polling interval
   useEffect(() => {
-    if (crisisId) {
+    if (crisisId && !sessionError) {
       pollStatus(crisisId);
-      const interval = setInterval(() => pollStatus(crisisId), 2000);
+      const interval = setInterval(() => {
+        if (!sessionError) {
+          pollStatus(crisisId);
+        }
+      }, 2000);
       return () => clearInterval(interval);
     } else {
       setIsRunning(false);
     }
-  }, [crisisId, pollStatus]);
+  }, [crisisId, pollStatus, sessionError]);
 
   // Start a new demo run from phone
   const handleStartDemo = async () => {
@@ -108,9 +120,14 @@ function DemoRemoteClient() {
           <img src="/logo_prehub.png" alt="PreHub Logo" className="w-9 h-9 object-contain" />
         </div>
         <h1 className="text-xl font-bold mb-2">PreHub Presenter Remote</h1>
-        <p className="text-sm text-slate-400 max-w-xs mb-8">
+        <p className="text-sm text-slate-400 max-w-xs mb-6">
           Control the dashboard directly from your phone. Ensure you have the dashboard open on desktop first.
         </p>
+        {sessionError && (
+          <div className="mb-6 p-3 rounded-md bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300 max-w-xs text-center">
+            {sessionError}
+          </div>
+        )}
         <button
           onClick={handleStartDemo}
           className="w-full max-w-xs py-3 rounded-md font-semibold bg-white hover:bg-slate-200 text-[#080d14] transition-colors shadow-sm cursor-pointer text-sm"

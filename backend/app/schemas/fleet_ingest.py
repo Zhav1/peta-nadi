@@ -1,5 +1,5 @@
 """
-PreHub — Self-Serve Fleet Onboarding & Live GPS Ingestion Schemas.
+PreHub : Self-Serve Fleet Onboarding & Live GPS Ingestion Schemas.
 Pydantic v2 schemas for single vehicle registration, bulk CSV/Excel manifest parsing,
 and standard TMS GPS telematics webhook payloads.
 """

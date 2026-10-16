@@ -1,5 +1,5 @@
 """
-PreHub — Test Suite for Intermodal Choke-Points, Spoilage Hedging, and Compliance.
+PreHub : Test Suite for Intermodal Choke-Points, Spoilage Hedging, and Compliance.
 Tests 18+ Pan-Sumatra transport gateways, delay multipliers, BPJT toll tables,
 4-tier perishability decay, hedging cost solver optimality, BKHIT quarantine hard blocks,
 and MST axle-load compliance rules.

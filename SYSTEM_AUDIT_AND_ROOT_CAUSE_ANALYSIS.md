@@ -291,5 +291,26 @@ Seluruh implementasi Track B mematuhi guardrail integritas Phase 56 & Phase 57: 
 - **Backend Test Suite**: 191/191 tests passed (`pytest backend/tests`).
 - **Frontend Type Safety**: `npx tsc --noEmit` exited cleanly dengan 0 error.
 - **Frontend Production Build**: `npm run build` sukses 100% tanpa kompilasi gagal.
-- **Integritas Gaya Bahasa**: Zero em dashes (`—`) di seluruh berkas kode dan dokumentasi.
+- **Integritas Gaya Bahasa**: Zero em dashes di seluruh berkas kode dan dokumentasi.
 - **Isolasi Track A**: Seluruh file milik rekan kerja (Track A) tidak tersentuh sama sekali.
+
+---
+
+## 6. Audit Lanjutan Pasca-Pengujian Pengguna (Temuan E2E Sesi 14 Oktober 2026)
+
+Dokumentasi lengkap dan mendalam telah dikompilasi pada berkas tersendiri: [PILOT_BUGS_AND_E2E_AUDIT_REPORT.md](file:///c:/Farras/DIGDAYA/peta-nadi/PILOT_BUGS_AND_E2E_AUDIT_REPORT.md).
+
+### Ringkasan 3 Masalah Kritis Pengoperasian:
+
+1. **Autentikasi & Tampilan Profil Pengguna (RBAC UX):**
+   - **Gejala**: Pengguna yang sudah masuk (misal: `regulator@bapanas.go.id`) mendapati klik pada lencana header kanan atas tetap membuka form input email/kata sandi login, bukannya Kartu Profil Pengguna aktif.
+   - **Kebocoran Peran**: Pengguna korporat resmi masih dapat berpindah peran via tab "1-Klik Persona", padahal peralihan instan hanya untuk evaluator sandbox.
+   - **Ketiadaan Visual Terkunci**: Pengguna Tamu (GUEST) atau Regulator tidak melihat indikator gembok pada fitur yang dibatasi (seperti tombol Onboard Armada dan persetujuan rute operasional).
+
+2. **Kegagalan Jalur Rute Run Demo & Ketiadaan Dampak Ekonomi:**
+   - **Gejala**: Pada tahap 2 dan 3, rute berupa 4 titik garis lurus kasar melintasi daratan (`buildHazardBypassRoute`). Backend memetakan rute hingga ke Duri, Riau (457 km) meski pengguna memilih Belawan ke Tebing Tinggi karena skema Pydantic `StartDemoPayload` tidak membaca parameter simpul asal dan tujuan.
+   - **Dampak Ekonomi Kosong**: Tab Dampak Ekonomi tidak menampilkan estimasi nilai karena aturan sanitasi D6 memutus aliran data model ekonometrika pada fallback demo.
+
+3. **Anomali Sakelar Mode Simulasi Armada:**
+   - **Gejala**: Mematikan sakelar "Mode Simulasi" memunculkan notifikasi mati, tetapi 45 kendaraan sintetis tetap aktif di peta.
+   - **Akar Masalah**: `useFleetVehicles.ts` selalu menerima 45 armada baseline dari backend tanpa menyaring status simulasi, dan perubahan state sakelar tidak memicu pembaruan armada yang ditampilkan.

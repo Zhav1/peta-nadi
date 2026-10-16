@@ -3,7 +3,7 @@ import './globals.css';
 import { AuthProvider } from '@/lib/authContext';
 
 export const metadata: Metadata = {
-  title: 'PreHub — Sistem Peringatan Dini & Rekomendasi Mitigasi Gangguan Distribusi Pangan',
+  title: 'PreHub: Sistem Peringatan Dini & Rekomendasi Mitigasi Gangguan Distribusi Pangan',
   description:
     'Sistem peringatan dini dan rekomendasi mitigasi gangguan distribusi pangan berbasis data multisumber. ' +
     'Memantau koridor distribusi, validasi bukti cuaca & lalu lintas, serta perbandingan mitigasi Continue, Reroute, dan Hold/Delay.',
