@@ -16,6 +16,11 @@ NVIDIA_NIM_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 OPENCODE_BASE_URL = "https://opencode.ai/inference/v1"
 OPENCODE_CHAT_COMPLETIONS_PATH = "/chat/completions"
 
+# Honest client identity: Cloudflare 1010-bans default python-httpx/urllib
+# User-Agents, which surfaces as a misleading 403. Same header everywhere
+# we call opencode (gateway + verify script must match).
+OPENCODE_USER_AGENT = "PreHub-LLMGateway/1.0 (+https://github.com/Zhav1/peta-nadi)"
+
 
 class LLMGatewayUnavailable(RuntimeError):
     """Raised when no LLM provider (opencode-go, Gemini or NVIDIA NIM) can produce a real completion."""
@@ -70,7 +75,8 @@ class LLMGateway:
             url = f"{OPENCODE_BASE_URL}{OPENCODE_CHAT_COMPLETIONS_PATH}"
             headers = {
                 "Authorization": f"Bearer {settings.opencode_api_key}",
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "User-Agent": OPENCODE_USER_AGENT,
             }
             messages = []
             if system_instruction:

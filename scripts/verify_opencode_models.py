@@ -16,6 +16,8 @@ import urllib.error
 import json
 
 OPENCODE_BASE_URL = os.environ.get(
+    # Must match OPENCODE_BASE_URL in agents/llm_gateway.py (/v1, not /v2:
+    # the v2 catalog path 403s even with a valid key).
     "OPENCODE_BASE_URL", "https://opencode.ai/inference/v1"
 )
 EXPECTED_REASONING = os.environ.get(
@@ -28,7 +30,12 @@ EXPECTED_DRIVER = os.environ.get(
 
 def fetch_catalog(base_url: str) -> list:
     url = f"{base_url.rstrip('/')}/models"
-    headers = {"Content-Type": "application/json"}
+    headers = {
+        "Content-Type": "application/json",
+        # Cloudflare 1010-bans default urllib UA (misleading 403); must match
+        # OPENCODE_USER_AGENT in agents/llm_gateway.py.
+        "User-Agent": "PreHub-LLMGateway/1.0 (+https://github.com/Zhav1/peta-nadi)",
+    }
     api_key = os.environ.get("OPENCODE_API_KEY", "").strip()
     if api_key and not api_key.startswith("your-"):
         headers["Authorization"] = f"Bearer {api_key}"
