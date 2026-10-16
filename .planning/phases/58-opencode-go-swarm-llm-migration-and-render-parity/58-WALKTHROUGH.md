@@ -5,10 +5,33 @@
 
 ## Resolved model IDs (Task 1.3)
 
-- Reasoning: `mimo-v2.6-flash-free` (default; pro-override only if `GET /models` under the Go key shows a non-free `mimo-*` ID)
+- Reasoning: `mimo-v2.6-flash` (Go plan model, not `mimo-v2.6-flash-free` which is IDE-only — see addendum below)
 - Driver: `deepseek-v4.1-flash`
 - Live catalog probe without key returns 403; script exits 2 fail-loud as designed (key required for catalog read)
 - Privacy note: free-tier mimo may use prompts for training; payloads are crisis telemetry only, never operator PII (Phase 11 UU 27/2022 sweep holds)
+
+## 2026-10-16 Addendum — Console vs Go endpoint fix (READ THIS)
+
+The original Phase 58 deployed the gateway against `https://opencode.ai/inference/v1` (the **opencode Console** surface) with the `mimo-v2.6-flash-free` ID (a free-tier promo). That combination produced two server-side failures in production:
+
+- `402 Insufficient account funds` on `deepseek-v4.1-flash` (Console charges per-token; a Go subscription does NOT credit the Console balance)
+- `403 FreeTierError: OpenCode's free tier can only be used from within OpenCode` on `mimo-v2.6-flash-free` (the free quota is gated to the OpenCode IDE / TUI; paying accounts still get rejected for non-IDE clients — server-side client-attribution gate, not header-spoofable)
+
+**Fix applied 2026-10-16:**
+
+- `agents/llm_gateway.py:19` — `OPENCODE_BASE_URL` switched to `https://opencode.ai/inference/go/openai/v1` (the **Go** surface, billed against the Go subscription, not Console credits)
+- `backend/app/config.py:33-34`, `.env.example:33-34`, `render.yaml:32` — reasoning default `mimo-v2.6-flash-free` → `mimo-v2.6-flash` (Go plan form)
+- `scripts/verify_opencode_models.py` — split `OPENCODE_BASE_URL` (chat URL) from `OPENCODE_CATALOG_URL` (`/inference/go/v1/models`, which is the doc-promoted catalog path; `/inference/go/openai/v1/models` 404s)
+- `agents/OPENCODE_GATEWAY.md` — full cheat sheet added so future agents don't undo this
+- Gateway now sends `x-opencode-session: prehub-backend` (required by Go for prompt caching + routing)
+
+**Verification (with current `oc_sk_*` Service Account key):**
+
+- `python scripts/verify_opencode_models.py` → 37 Go models, both defaults confirmed
+- Live reasoning call returns Indonesian prose (`"Banjir Belawan dapat diklasifikasikan sebagai banjir rob pesisir yang dipicu oleh pasang air laut, hujan lebat, dan buruknya drainase."`)
+- `pytest backend/tests/test_llm_gateway.py` → 9/9 pass
+
+**Lesson logged for future agents:** opencode has two inference surfaces and they are not interchangeable. Mixing the URL with the wrong model ID catalog = guaranteed 4xx. Read `agents/OPENCODE_GATEWAY.md` before touching `OPENCODE_*` env vars.
 
 ## Local SSE trace (Task 4.3, executor run 01:06 UTC)
 
