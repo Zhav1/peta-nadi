@@ -1,10 +1,19 @@
 #!/usr/bin/env bash
-# Phase 58 Task 4.3: local-vs-Render probe matrix with pass/fail + latency.
+# Phase 59 Task 3: local-vs-Render probe matrix with pass/fail + latency.
 # Usage: bash scripts/probe_parity.sh [BASE_URL]   (default http://localhost:8000)
+#   Render leg: bash scripts/probe_parity.sh https://peta-nadi.onrender.com
 # Note: first Render hit after deploy may cold-start 30-50s; keep-alive cron */10 stays.
+# D-02: prefix every Render run with the warm-up GET below; 90s per-probe max.
+# 59-04 purge substitution check: this script references no routing/adapter
+# paths at all — the canonical CPU-routing endpoint lives outside this
+# matrix, and no pre-purge endpoint, cache-key, or adapter filename appears
+# here (verified by grep at commit time).
 set -u
 BASE="${1:-http://localhost:8000}"
 PASS=0; FAIL=0
+
+echo "=== Warm-up GET ${BASE}/health (cold-start guard, ignored in score) ==="
+curl -s --max-time 90 "${BASE}/health" -o /dev/null 2>/dev/null || true
 
 probe() { # $1=name $2=url $3=expected-substring $4=extra-curl-args
   local name="$1" url="$2" want="$3"; shift 3
@@ -23,26 +32,35 @@ probe() { # $1=name $2=url $3=expected-substring $4=extra-curl-args
   fi
 }
 
-echo "=== Phase 58 parity matrix vs ${BASE} ==="
+echo "=== Phase 59 parity matrix vs ${BASE} ==="
 probe "health"              "${BASE}/health"                        '"status"'
 probe "agents-status"       "${BASE}/api/v1/agents/status"          '"active_agents"'
 probe "sources"             "${BASE}/api/v1/health/sources"         'BMKG'
 probe "news-live"           "${BASE}/api/v1/news/live?limit=2"      'live'
 probe "market-regime"       "${BASE}/api/v1/news/market-regime"     'volatility'
 probe "incidents"           "${BASE}/api/v1/incidents?limit=2"      '"id"'
+probe "corridor-context"    "${BASE}/api/v1/corridor/context"       'corridor'
 probe "chat-degraded-flag"  "${BASE}/api/v1/agent/chat"             '"degraded"' \
   -X POST -H 'Content-Type: application/json' -d '{"message":"berapa biaya hedging?"}'
 
 echo "--- SSE stream (synthetic flood, max 120s) ---"
-STREAM_OUT=$(curl -sN -X POST "${BASE}/api/v1/simulate/stream" \
+STREAM_BODY=$(curl -sN -X POST "${BASE}/api/v1/simulate/stream" \
   -H 'Content-Type: application/json' \
   -d '{"type":"flood","lat":3.79,"lon":98.67,"region":"north_sumatra","severity":"high","is_simulated":true}' \
-  --max-time 120 2>/dev/null | grep -c "simulation_complete\|node_update" || true)
+  --max-time 120 2>/dev/null || true)
+STREAM_OUT=$(echo "$STREAM_BODY" | grep -c "simulation_complete\|node_update" || true)
 if [[ "${STREAM_OUT:-0}" -ge 2 ]]; then
   echo "PASS sse-stream (${STREAM_OUT} events)"
   PASS=$((PASS+1))
 else
   echo "FAIL sse-stream (got ${STREAM_OUT:-0} matching events; cold start may exceed 120s on Render free)"
+  FAIL=$((FAIL+1))
+fi
+if echo "$STREAM_BODY" | grep -q "decision_support"; then
+  echo "PASS sse-decision-support (stream carries decision_support output)"
+  PASS=$((PASS+1))
+else
+  echo "FAIL sse-decision-support (no decision_support in stream; got: $(echo "$STREAM_BODY" | head -c 200))"
   FAIL=$((FAIL+1))
 fi
 
