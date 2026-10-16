@@ -5,15 +5,15 @@ milestone_name: PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform
 current_phase: 58
 current_phase_name: opencode-go Swarm LLM Migration and Render Parity
 status: complete
-stopped_at: Phase 58 executed and verified
-last_updated: "2026-10-13T17:43:12.206Z"
+stopped_at: Completed 59-llm-swarm-post-key-audit-02-PLAN.md
+last_updated: "2026-10-16T18:12:19.303Z"
 last_activity: 2026-10-14
 last_activity_desc: "Phase 58 completed (opencode-go swarm LLM migration: mimo reasoning + deepseek driver gateway swap with fail-loud preserved; prediction/routing prose overlays; incident_id drift fix; idle boot status; full Render env sync + probe matrix. Full suite 194 passed, 0 failed; graph/consensus diffs empty)."
-state_head: 03aab362ffae9d2112b0e83a3fc52d71e7218174
+state_head: e4f545e328cfe89158288b2a5f67c9bbc0efd542
 progress:
-  total_phases: 16
+  total_phases: 18
   completed_phases: 56
-  total_plans: 27
+  total_plans: 31
   completed_plans: 66
   percent: 100
 ---
@@ -176,6 +176,18 @@ These scripts validate the economic correlation hypotheses that underpin Agent 5
 
 ## Session
 
-**Last session:** 2026-10-13T17:43:10.670Z
-**Stopped at:** Phase 58 context gathered
-**Resume file:** .planning/phases/58-opencode-go-swarm-llm-migration-and-render-parity/58-CONTEXT.md
+**Last session:** 2026-10-16T18:12:19.233Z
+**Stopped at:** Completed 59-llm-swarm-post-key-audit-02-PLAN.md
+**Resume file:** None
+
+## Performance Metrics
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 59-llm-swarm-post-key-audit P02 | 45min | 3 tasks | 7 files |
+
+## Decisions
+
+- [Phase 59-llm-swarm-post-key-audit]: 59-02: migration gate uses format_type comparison after live probe showed pgvector stores width directly in atttypmod (typmod=1536)
+- [Phase 59-llm-swarm-post-key-audit]: 59-02: text-embedding-004 HTTP 404 for current key recorded as evidence; model NOT switched (one-way D-08 lock, follow-up for future plan)
+- [Phase 59-llm-swarm-post-key-audit]: 59-02: no pip installs per package-legitimacy exclusion; httpx-REST probe plus py_compile/grep equivalents used, pytest recorded unrun
