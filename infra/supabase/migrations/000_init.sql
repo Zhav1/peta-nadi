@@ -117,7 +117,7 @@ CREATE TABLE IF NOT EXISTS ltm_episodes (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   title       TEXT NOT NULL,
   description TEXT,
-  embedding   vector(1536),                   -- semantic embedding (OpenAI/Gemini text-embedding-3-small compatible)
+  embedding   vector(768),                    -- semantic embedding (Google models/text-embedding-004, 768 dims)
   metadata    JSONB DEFAULT '{}',             -- {disaster_type, region, lag_days, price_impact_pct, commodity, year}
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
