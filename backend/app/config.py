@@ -30,7 +30,14 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     gemini_model: str = "gemini-3.8-flash"
     opencode_api_key: str = ""
-    opencode_reasoning_model: str = "mimo-v2.6-flash-free"
+    # opencode Go subscription model IDs (https://opencode.ai/docs/go). The
+    # `mimo-v2.6-flash-free` *-free variant is IDE-only and 403s on third-party
+    # /chat/completions calls; mimo-v2.6-pro is the Go plan reasoning model
+    # ($0.435/$0.87 per 1M, $15/mo allowance — step-up from flash, still cheap).
+    # See the long comment block in
+    # agents/llm_gateway.py before changing any of these — endpoint ↔ ID must
+    # match (Console vs Go have separate catalogs).
+    opencode_reasoning_model: str = "mimo-v2.6-pro"
     opencode_driver_model: str = "deepseek-v4.1-flash"
     deepseek_api_key: str = ""
     nvidia_deepseek_v4_pro: str = ""

@@ -23,3 +23,15 @@ Built in **Phase 3** — see `.planning/phases/phase-3/PLAN.md` (generated after
 
 Run `/gsd-ai-integration-phase 3` to generate the AI-SPEC.md design contract
 before implementing any agent code.
+
+## LLM Gateway — endpoint & model ID rules
+
+All agents call `LLMGateway.generate_content(...)` in `llm_gateway.py`. Before
+changing `OPENCODE_*` env vars, the gateway URL, or the model defaults in
+`backend/app/config.py`, **read `agents/OPENCODE_GATEWAY.md` first**.
+
+The short version: opencode has two inference surfaces (Console pay-as-you-go
+vs. Go subscription). We use Go. Mixing the URL with the wrong model ID
+catalog, or picking a `*-free` ID that the inference server reserves for the
+IDE, causes `402` / `403` / `400 Model is unavailable` failures. The full
+diagnostic tree lives in that file.

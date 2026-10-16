@@ -52,4 +52,10 @@ def get_write_client() -> Client:
     """
     if settings.supabase_service_role_key:
         return get_service_client()
+    logger.warning(
+        "SUPABASE_SERVICE_ROLE_KEY not configured, using anon client for writes. "
+        "Mutations on RLS-restricted tables (e.g. data_sources) will fail with "
+        "'new row violates row-level security policy'. Set the true service_role "
+        "key in .env / Render dashboard."
+    )
     return get_client()

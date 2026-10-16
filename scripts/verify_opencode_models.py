@@ -5,7 +5,7 @@ unauthenticated otherwise per free-model terms), asserts the locked
 reasoning/driver IDs are present verbatim, and prints a pro-override
 recommendation when a non-free mimo-* ID appears.
 
-Exit 0  — both mimo-v2.6-flash-free and deepseek-v4.1-flash confirmed.
+Exit 0  — both mimo-v2.6-pro and deepseek-v4.1-flash confirmed in the Go catalog.
 Exit 1+ — 404 / mismatch / unreachable: fail-loud, never silently continue.
 """
 import os
@@ -16,19 +16,33 @@ import urllib.error
 import json
 
 OPENCODE_BASE_URL = os.environ.get(
-    "OPENCODE_BASE_URL", "https://opencode.ai/inference/v1"
+    # Must match OPENCODE_BASE_URL in agents/llm_gateway.py — Go subscription
+    # models live under /inference/go/openai/v1; the Console
+    # /inference/openai/v1 catalog lists IDE-only free models that 403 here.
+    "OPENCODE_BASE_URL", "https://opencode.ai/inference/go/openai/v1"
+)
+# The /models catalog endpoint is exposed at the API-family root, not under
+# /openai/v1 (which 404s). https://opencode.ai/inference/go/v1/models is the
+# doc-promoted catalog URL.
+OPENCODE_CATALOG_URL = os.environ.get(
+    "OPENCODE_CATALOG_URL", "https://opencode.ai/inference/go/v1/models"
 )
 EXPECTED_REASONING = os.environ.get(
-    "OPENCODE_REASONING_MODEL", "mimo-v2.6-flash-free"
+    "OPENCODE_REASONING_MODEL", "mimo-v2.6-pro"
 )
 EXPECTED_DRIVER = os.environ.get(
     "OPENCODE_DRIVER_MODEL", "deepseek-v4.1-flash"
 )
 
 
-def fetch_catalog(base_url: str) -> list:
-    url = f"{base_url.rstrip('/')}/models"
-    headers = {"Content-Type": "application/json"}
+def fetch_catalog(_base_url_unused: str) -> list:
+    url = OPENCODE_CATALOG_URL
+    headers = {
+        "Content-Type": "application/json",
+        # Cloudflare 1010-bans default urllib UA (misleading 403); must match
+        # OPENCODE_USER_AGENT in agents/llm_gateway.py.
+        "User-Agent": "PreHub-LLMGateway/1.0 (+https://github.com/Zhav1/peta-nadi)",
+    }
     api_key = os.environ.get("OPENCODE_API_KEY", "").strip()
     if api_key and not api_key.startswith("your-"):
         headers["Authorization"] = f"Bearer {api_key}"
@@ -58,7 +72,7 @@ def fetch_catalog(base_url: str) -> list:
 
 def main() -> int:
     model_ids = fetch_catalog(OPENCODE_BASE_URL)
-    print(f"Catalog: {len(model_ids)} models at {OPENCODE_BASE_URL}/models")
+    print(f"Catalog: {len(model_ids)} models at {OPENCODE_CATALOG_URL}")
 
     missing = [m for m in (EXPECTED_REASONING, EXPECTED_DRIVER) if m not in model_ids]
     if missing:
@@ -82,7 +96,7 @@ def main() -> int:
             "(Go subscription exposes a pro mimo ID)."
         )
     else:
-        print("No pro mimo ID found — ship flash-free default (mimo-v2.6-flash-free).")
+        print("No pro mimo ID found — keeping current reasoning default.")
     return 0
 
 

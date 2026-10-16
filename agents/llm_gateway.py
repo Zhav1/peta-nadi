@@ -11,10 +11,56 @@ PRIMARY_NIM_MODEL = "deepseek-ai/deepseek-v4.1-flash"
 NVIDIA_NIM_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 
 # Phase 58 (D-02/R1): single base-URL constant for opencode-go inference.
-# Alternate documented form https://opencode.ai/inference/openai/v1/chat/completions
-# is NOT used — one constant only so a wrong form 404s fail-loud.
-OPENCODE_BASE_URL = "https://opencode.ai/inference/v1"
+#
+# ===========================================================================
+# READ ME — opencode endpoint + model ID traps (don't undo this)
+# ===========================================================================
+# There are TWO inference surfaces and they take DIFFERENT model IDs:
+#
+#   1. opencode Console  https://opencode.ai/inference/openai/v1
+#      Pay-as-you-go. Requires a positive Console balance (NOT Go plan credits).
+#      Lists ~88 models including *-free promos. Keys created from a Service
+#      Account in the Console dashboard (oc_sk_*) live here.
+#
+#   2. opencode Go       https://opencode.ai/inference/go/openai/v1   <-- THIS
+#      $10/mo (or Go Plus $40/mo) subscription. 37 curated models only.
+#      Subscribed workspace's API key (same oc_sk_* form) also works here.
+#      Go's monthly usage limits reset; you don't need Console credits.
+#      Doc: https://opencode.ai/docs/go  →  "Endpoints" table.
+#
+# FOOTGUNS (already paid for, please don't repeat):
+#
+#   * The "*‑free" IDs (mimo-v2.6-flash-free, nemotron-3-ultra-free, etc.) are
+#     advertised in BOTH catalogs but the inference server returns
+#     403 FreeTierError  "OpenCode's free tier can only be used from within
+#     OpenCode"  for any non-OO client, even with a valid Service-Account key.
+#     The free quota is gated to the OpenCode IDE / TUI. Don't try to use them
+#     here. Use the Go plan form: mimo-v2.6-flash (not -free).
+#
+#   * Sending a Go model ID (e.g. mimo-v2.6-flash) to the Console endpoint
+#     /inference/openai/v1 returns 400 "Model is unavailable."  Sending a
+#     Console ID (e.g. minimax-m3) to the Go endpoint returns 400 too — the
+#     catalogs are not interchangeable. Always match endpoint ↔ Go-form ID.
+#
+#   * The catalog endpoint is /inference/go/v1/models  (NOT
+#     /inference/go/openai/v1/models, which 404s). scripts/verify_opencode_models.py
+#     encodes this.
+#
+#   * opencode Go also requires the x-opencode-session header for prompt caching
+#     and routing (per https://opencode.ai/docs/go "Where can I use it?").
+#     Without it requests still succeed today but get throttled / lose caching.
+#
+# If you need to switch surfaces: change OPENCODE_BASE_URL AND the model
+# defaults in backend/app/config.py together. Don't change one without the
+# other — that's how we got the original 402 / 403 in the first place.
+# ===========================================================================
+OPENCODE_BASE_URL = "https://opencode.ai/inference/go/openai/v1"
 OPENCODE_CHAT_COMPLETIONS_PATH = "/chat/completions"
+
+# Honest client identity: Cloudflare 1010-bans default python-httpx/urllib
+# User-Agents, which surfaces as a misleading 403. Same header everywhere
+# we call opencode (gateway + verify script must match).
+OPENCODE_USER_AGENT = "PreHub-LLMGateway/1.0 (+https://github.com/Zhav1/peta-nadi)"
 
 
 class LLMGatewayUnavailable(RuntimeError):
@@ -70,7 +116,12 @@ class LLMGateway:
             url = f"{OPENCODE_BASE_URL}{OPENCODE_CHAT_COMPLETIONS_PATH}"
             headers = {
                 "Authorization": f"Bearer {settings.opencode_api_key}",
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "User-Agent": OPENCODE_USER_AGENT,
+                # Required by opencode Go for prompt caching + routing
+                # (https://opencode.ai/docs/go "Where can I use it?"). Third-party
+                # clients without a stable session id get throttled or rejected.
+                "x-opencode-session": "prehub-backend",
             }
             messages = []
             if system_instruction:
