@@ -5,16 +5,16 @@ milestone_name: PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform
 current_phase: 58
 current_phase_name: opencode-go Swarm LLM Migration and Render Parity
 status: complete
-stopped_at: Completed 59-llm-swarm-post-key-audit-04-PLAN.md
-last_updated: "2026-10-16T18:30:10.000Z"
+stopped_at: Completed 59-llm-swarm-post-key-audit-03-PLAN.md
+last_updated: "2026-10-16T19:02:57.000Z"
 last_activity: 2026-10-14
 last_activity_desc: "Phase 58 completed (opencode-go swarm LLM migration: mimo reasoning + deepseek driver gateway swap with fail-loud preserved; prediction/routing prose overlays; incident_id drift fix; idle boot status; full Render env sync + probe matrix. Full suite 194 passed, 0 failed; graph/consensus diffs empty)."
-state_head: 663c9427c3886523566f381f3373f798270c6cd3
+state_head: ee02e761248b7a6008f0fee7d7b9475cf60bbe3b
 progress:
   total_phases: 18
   completed_phases: 56
   total_plans: 31
-  completed_plans: 67
+  completed_plans: 68
   percent: 100
 ---
 
@@ -176,8 +176,8 @@ These scripts validate the economic correlation hypotheses that underpin Agent 5
 
 ## Session
 
-**Last session:** 2026-10-16T18:30:10.000Z
-**Stopped at:** Completed 59-llm-swarm-post-key-audit-04-PLAN.md
+**Last session:** 2026-10-16T19:02:57.000Z
+**Stopped at:** Completed 59-llm-swarm-post-key-audit-03-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -186,6 +186,7 @@ These scripts validate the economic correlation hypotheses that underpin Agent 5
 |------|----------|-------|-------|
 | Phase 59-llm-swarm-post-key-audit P02 | 45min | 3 tasks | 7 files |
 | Phase 59-llm-swarm-post-key-audit P04 | 16min | 9 tasks | 25 files |
+| Phase 59-llm-swarm-post-key-audit P03 | 75min | 3 tasks | 5 files |
 
 ## Decisions
 
@@ -195,3 +196,7 @@ These scripts validate the economic correlation hypotheses that underpin Agent 5
 - [Phase 59-llm-swarm-post-key-audit]: 59-04: full rename with no backwards-compat aliases (endpoint, function, props, Redis keys); no other callers per repo-wide identifier scan
 - [Phase 59-llm-swarm-post-key-audit]: 59-04: fabricated savings percentages removed not computed (no honest baseline exists); frontend savings nullable
 - [Phase 59-llm-swarm-post-key-audit]: 59-04: pytest absent in env (ModuleNotFoundError) so AST-parse plus tsc used as proof; suites must re-run where pytest exists
+- [Phase 59-llm-swarm-post-key-audit]: 59-03: no gateway timeout retune for row-1 marginality (architectural scope); probe carries one annotated retry, F-ROW1-LATENCY stays open
+- [Phase 59-llm-swarm-post-key-audit]: 59-03: no retry-on-empty for driver intermittency (fail-loud D-05 kept); degraded path proven endogenously
+- [Phase 59-llm-swarm-post-key-audit]: 59-03: text-embedding-004 404 recorded with exact error plus live ListModels; model NOT switched (D-08 one-way lock)
+- [Phase 59-llm-swarm-post-key-audit]: 59-03: local parity leg via curl.exe equivalent (msys-bash loopback blocked in executor env); bash script proven by Render leg
