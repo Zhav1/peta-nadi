@@ -35,7 +35,7 @@ Setiap kali melakukan refactoring, styling Tailwind, atau pembuatan komponen UI 
    - 📦 **LEGACY CONTEXT ISOLATION**: `docs/` and `docs/legacy_hackathon_archive/` contain outdated February 2026 hackathon stage 2 pitch documents. NEVER treat `docs/` as the current technical specification. If an agent encounters a contradiction between `docs/` and `.planning/`, `.planning/` WINS 100% of the time.
 
 2. **Core Architectural Invariants (DO NOT REGRESS)**:
-   - ❌ **DEPRECATED**: NVIDIA cuOpt and NVIDIA FourCastNet / Earth-2. DO NOT suggest, reintroduce, or generate code/docs requiring NVIDIA GPU solvers.
+   - ❌ **DEPRECATED**: GPU-based routing solvers and AI forecast models (purged from the live pipeline in Phase 59). DO NOT suggest, reintroduce, or generate code/docs requiring GPU solvers.
    - ✅ **CURRENT SOLVER**: Deterministic CPU Routing Adapter (`NetworkX + OR-Tools / 2-Opt`) in `backend/app/adapters/cpu_routing_adapter.py`.
    - ✅ **CURRENT WEATHER**: Real-time BMKG Radar + Open-Meteo NWP spatial fusion in `backend/app/services/weather_fusion_service.py`.
    - 🎯 **PRODUCT SCOPE**: PreHub is a **Live Pilot Operations Product** for Sumatra logistics partners (Pelindo Belawan, BKHIT, BPJT tolls, PIHPS food commodities), NOT an artificial synthetic demo.

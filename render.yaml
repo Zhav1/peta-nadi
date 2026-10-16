@@ -41,10 +41,6 @@ services:
         sync: false
       - key: NVIDIA_DEEPSEEK_V4_FLASH
         sync: false
-      - key: NVIDIA_FOURCASTNET
-        sync: false
-      - key: NVIDIA_CUOPT
-        sync: false
       - key: AISSTREAM_API_KEY
         sync: false
       - key: NASA_FIRMS_MAP_KEY

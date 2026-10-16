@@ -21,11 +21,11 @@
 
 ## Architectural & Scope Invariants (2026 Updated)
 
-1. **Deterministic CPU Solvers Only (No GPU/cuOpt)**:
+1. **Deterministic CPU Solvers Only (No GPU)**:
    - Route optimization uses **NetworkX + Heuristic OR-Tools/2-Opt** running on CPU in `<150ms` latency ([`cpu_routing_adapter.py`](file:///d:/College/Pidi.id/backend/app/adapters/cpu_routing_adapter.py)).
-   - NVIDIA cuOpt is fully superseded. Any remaining `/routing/optimize-cuopt` paths are backwards compatibility aliases only.
-2. **Atmospheric Weather Fusion (No FourCastNet)**:
-   - Weather and flood polygons are fused from **BMKG weather radar + Open-Meteo NWP forecasts** ([`weather_fusion_service.py`](file:///d:/College/Pidi.id/backend/app/services/weather_fusion_service.py)). NVIDIA FourCastNet and Earth-2 are deprecated.
+   - Legacy GPU solver naming has been fully purged from the live pipeline (Phase 59). The routing endpoint is `POST /api/v1/routing/optimize` with no backwards-compatibility aliases.
+2. **Atmospheric Weather Fusion (Open NWP)**:
+   - Weather and flood polygons are fused from **BMKG weather radar + Open-Meteo NWP forecasts** ([`weather_fusion_service.py`](file:///d:/College/Pidi.id/backend/app/services/weather_fusion_service.py)). Legacy AI-forecast naming is fully removed from the live pipeline.
 3. **Pilot Product with Real Sumatra Logistics Partners**:
    - The product scope is a **live operational pilot** (Pelindo Belawan, BKHIT Tanjung Kalian / Merak quarantine, BPJT toll tariffs, real-time PIHPS market prices), **NOT** a synthetic pitch demo.
 4. **Honest Metric Transparency (No Boasting/Unbacked Claims)**:
