@@ -40,7 +40,7 @@ export interface CrisisMapProps {
   hubNodesList?: HubNode[];
   corridorContext?: import('@/lib/types').CorridorContext | null;
   spatialWeatherPolygons?: GeoJSON.FeatureCollection | null;
-  cuOptOptimizationInfo?: { solver: string; compute_time_ms: number; savings_pct: number } | null;
+  routingInfo?: { solver: string; compute_time_ms: number; savings_pct: number | null } | null;
   isLeftSidebarCollapsed?: boolean;
   activeTimeFilter?: 'past' | 'present' | 'future' | 'predict';
   historicalEpisodes?: Record<string, unknown>[];
@@ -102,7 +102,7 @@ export default function CrisisMap({
   hubNodesList,
   corridorContext,
   spatialWeatherPolygons,
-  cuOptOptimizationInfo,
+  routingInfo,
   isLeftSidebarCollapsed = false,
   activeTimeFilter = 'present',
   historicalEpisodes = [],
@@ -114,7 +114,7 @@ export default function CrisisMap({
   const containerRef = useRef<HTMLDivElement>(null);
   void isLeftSidebarCollapsed;
   void corridorContext;
-  void cuOptOptimizationInfo;
+  void routingInfo;
   void demoStage;
   void fireHotspots;
 

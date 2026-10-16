@@ -655,7 +655,7 @@ export default function DashboardClient() {
     // Navigation stays with the user: only the explicit "Tampilkan di Peta 4D" / "Lihat Dampak di Laporan" buttons switch sections.
   };
   const [spatialWeatherPolygons, setSpatialWeatherPolygons] = useState<GeoJSON.FeatureCollection | null>(null);
-  const [cuOptInfo, setCuOptInfo] = useState<{ solver: string; compute_time_ms: number; savings_pct: number } | null>(null);
+  const [routingInfo, setRoutingInfo] = useState<{ solver: string; compute_time_ms: number; savings_pct: number | null } | null>(null);
 
   // Time Horizon State Datasets (PAST / PRESENT / FUTURE / PREDICT)
   const [historicalEpisodes, setHistoricalEpisodes] = useState<Record<string, unknown>[]>([]);
@@ -727,17 +727,17 @@ export default function DashboardClient() {
 
     // Synchronize Deterministic CPU Route Solver (NetworkX + OR-Tools)
     try {
-      const cuoptRes = await api.routing.optimizeCuOpt({
+      const routingRes = await api.routing.optimizeRouting({
         origin_id: originId,
         dest_id: destId,
         fleet_size: 3,
         hazard_zones: hazardCenter ? [{ center: hazardCenter, radiusKm }] : []
       });
-      if (cuoptRes && cuoptRes.optimization_summary) {
-        setCuOptInfo({
-          solver: cuoptRes.solver || 'Deterministic CPU Routing Solver (NetworkX + OR-Tools)',
-          compute_time_ms: cuoptRes.compute_time_ms || 1.5,
-          savings_pct: cuoptRes.optimization_summary.fuel_cost_reduction_pct || 18.5
+      if (routingRes && routingRes.optimization_summary) {
+        setRoutingInfo({
+          solver: routingRes.solver || 'Deterministic CPU Routing Solver (NetworkX + OR-Tools)',
+          compute_time_ms: routingRes.compute_time_ms || 1.5,
+          savings_pct: routingRes.optimization_summary.fuel_cost_reduction_pct ?? null
         });
       }
     } catch (err) {
@@ -1420,7 +1420,7 @@ export default function DashboardClient() {
             isLeftSidebarCollapsed ? 'left-4 sm:left-32' : 'left-4 sm:left-32 lg:left-[368px]'
           }`}>
             <TopNavTelemetry
-              cuOptInfo={cuOptInfo}
+              routingInfo={routingInfo}
               corridorContext={corridorContext}
               isLoading={isCorridorLoading}
               onOpenHitl={() => setIsHitlDrawerOpen(true)}
@@ -1454,7 +1454,7 @@ export default function DashboardClient() {
               hubNodesList={dynamicHubNodes}
               corridorContext={corridorContext}
               spatialWeatherPolygons={spatialWeatherPolygons}
-              cuOptOptimizationInfo={cuOptInfo}
+              routingInfo={routingInfo}
               isLeftSidebarCollapsed={isLeftSidebarCollapsed}
               activeTimeFilter={activeTimeFilter}
               historicalEpisodes={historicalEpisodes}

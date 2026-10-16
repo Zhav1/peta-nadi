@@ -144,15 +144,15 @@ export const api = {
       }>('/api/v1/traffic/flow-segments'),
   },
   routing: {
-    optimizeCuOpt: (payload: { origin_id?: string; dest_id?: string; fleet_size?: number; hazard_zones?: Array<Record<string, unknown>> }) =>
+    optimizeRouting: (payload: { origin_id?: string; dest_id?: string; fleet_size?: number; hazard_zones?: Array<Record<string, unknown>> }) =>
       request<{
         status: string;
         is_fallback?: boolean;
         degraded_reason?: string | null;
         solver: string;
         compute_time_ms: number;
-        optimization_summary: { travel_time_savings_pct: number; fuel_cost_reduction_pct: number; hazard_segments_avoided: number; avg_corridor_speed_kmh: number; speed_source: string };
-      }>('/api/v1/routing/optimize-cuopt', {
+        optimization_summary: { travel_time_savings_pct?: number; fuel_cost_reduction_pct?: number; hazard_segments_avoided: number; avg_corridor_speed_kmh: number; speed_source: string };
+      }>('/api/v1/routing/optimize', {
         method: 'POST',
         body: JSON.stringify(payload),
       }),

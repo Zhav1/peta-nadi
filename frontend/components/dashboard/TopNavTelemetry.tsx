@@ -5,8 +5,7 @@ import { Zap, Truck, CloudRain } from 'lucide-react';
 import { IntermodalTerminalPopover } from '@/components/dashboard/IntermodalTerminalPopover';
 
 interface TopNavTelemetryProps {
-  routingInfo?: { solver: string; compute_time_ms: number; savings_pct: number } | null;
-  cuOptInfo?: { solver: string; compute_time_ms: number; savings_pct: number } | null; // Backwards-compatible alias
+  routingInfo?: { solver: string; compute_time_ms: number; savings_pct: number | null } | null;
   corridorContext?: import('@/lib/types').CorridorContext | null;
   isLoading?: boolean;
   onOpenHitl?: () => void;
@@ -15,13 +14,12 @@ interface TopNavTelemetryProps {
 
 export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
   routingInfo,
-  cuOptInfo,
   corridorContext,
   isLoading = false,
   onOpenHitl,
   pendingHitlCount = 0,
 }) => {
-  const solverStats = routingInfo || cuOptInfo;
+  const solverStats = routingInfo;
   const bmkgRainfall = corridorContext?.weather?.rainfall_mm;
   const tomtomDelayMin = corridorContext?.traffic?.delay_minutes;
   const tomtomIndex = corridorContext?.traffic?.congestion_level_pct;
