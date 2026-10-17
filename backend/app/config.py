@@ -28,6 +28,13 @@ class Settings(BaseSettings):
     aisstream_api_key: str = ""
     nasa_firms_map_key: str = ""
     gemini_api_key: str = ""
+    # LTM embeddings (Phase 59 batch C): live ListModels probe 2026-10-17 shows
+    # only gemini-embedding-001 / gemini-embedding-2-preview / gemini-embedding-2
+    # support embedContent on this key — models/text-embedding-004 404s. Default
+    # is gemini-embedding-001 truncated to 768 dims (native 3072) to preserve the
+    # vector(768) column contract. Changing model OR dims requires a migration +
+    # full re-embed (one-way distribution shift) — see infra/supabase/migrations.
+    gemini_embedding_model: str = "models/gemini-embedding-001"
     opencode_api_key: str = ""
     # opencode Go subscription model IDs (https://opencode.ai/docs/go). The
     # `mimo-v2.6-flash-free` *-free variant is IDE-only and 403s on third-party

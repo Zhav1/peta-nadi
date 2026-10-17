@@ -19,6 +19,11 @@
 --     is NOT listed. Follow-up tracked in 59-02-SUMMARY.md — the 768-dim
 --     contract below is unchanged (switching models is a one-way
 --     distribution shift per D-08, out of scope here).
+--   * Batch C resolution (2026-10-17): default switched to
+--     models/gemini-embedding-001 with output_dimensionality=768 pinned in
+--     agents/memory/ltm.py (Settings.gemini_embedding_model). Live probe:
+--     native output 3072 dims, truncated output exactly 768 — the vector(768)
+--     contract below stays valid, no width change needed.
 --   * Live atttypmod check DONE via read-only pg_attribute query at build:
 --     public.ltm_episodes.embedding = vector(1536) (drift confirmed live),
 --     table holds 0 rows (TRUNCATE destroys nothing), and no match_episodes

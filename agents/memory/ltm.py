@@ -12,6 +12,13 @@ from agents.state import LTMEpisode
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
+# pgvector contract (infra/supabase/migrations 000_init + 001): ltm_episodes
+# .embedding is vector(768). gemini-embedding-001 natively emits 3072 dims, so
+# embed_text truncates via output_dimensionality (Matryoshka) — verified live
+# 2026-10-17 (default 3072, truncated exactly 768). Width mismatches are dropped
+# to [] so a model/dims drift can never write rows pgvector would reject.
+EMBEDDING_DIMS = 768
+
 
 async def embed_text(text: str) -> List[float]:
     """Generates a 768-dimensional vector embedding for the given text using Gemini."""
@@ -22,28 +29,44 @@ async def embed_text(text: str) -> List[float]:
 
     try:
         genai.configure(api_key=settings.gemini_api_key)
+        # Model is configurable (Settings.gemini_embedding_model); only the
+        # gemini-embedding family supports output_dimensionality truncation, so
+        # pin it there to hold the vector(768) DB contract. Legacy
+        # text-embedding-004 already emits 768 natively and rejects the param.
+        embed_kwargs: dict = {
+            "model": settings.gemini_embedding_model,
+            "content": text,
+            "task_type": "retrieval_query",
+        }
+        if settings.gemini_embedding_model.startswith("models/gemini-embedding"):
+            embed_kwargs["output_dimensionality"] = EMBEDDING_DIMS
         # Run in executor to prevent blocking the async event loop.
         # 12s bound (Phase 59 D-06 / T-59-04): the embed call must never hang
         # the swarm unbounded — time out to [] like any other embed failure.
         try:
             response = await asyncio.wait_for(
-                asyncio.to_thread(
-                    genai.embed_content,
-                    model="models/text-embedding-004",
-                    content=text,
-                    task_type="retrieval_query",
-                ),
+                asyncio.to_thread(genai.embed_content, **embed_kwargs),
                 timeout=12.0,
             )
         except asyncio.TimeoutError:
             logger.warning("Gemini embedding timed out after 12s. Returning empty vector.")
             return []
+        embedding: List[float] = []
         if isinstance(response, dict) and "embedding" in response:
-            return response["embedding"]
+            embedding = response["embedding"]
         elif hasattr(response, "embedding"):
-            return response.embedding
-        logger.error(f"Invalid response format from Gemini embedding API: {response}")
-        return []
+            embedding = response.embedding
+        else:
+            logger.error(f"Invalid response format from Gemini embedding API: {response}")
+            return []
+        if len(embedding) != EMBEDDING_DIMS:
+            logger.error(
+                f"Embedding width {len(embedding)} != {EMBEDDING_DIMS} "
+                f"(model={settings.gemini_embedding_model}). Dropping to protect "
+                "the vector(768) column contract."
+            )
+            return []
+        return embedding
     except Exception as e:
         logger.error(f"Failed to generate embedding: {e}")
         return []
@@ -66,19 +89,27 @@ async def query_ltm(query_text: str, top_k: int = 5) -> List[LTMEpisode]:
         logger.warning("Empty embedding returned. LTM query returning empty list.")
         return []
 
-    # 4. Query Supabase RPC
+    # 4. Query Supabase RPC (12s bound — mirror of the embed_text path above:
+        # an unbounded to_thread would hang the swarm on a stalled connection)
     try:
         supabase = get_client()
-        response = await asyncio.to_thread(
-            lambda: supabase.rpc(
-                "match_episodes",
-                {
-                    "query_embedding": embedding,
-                    "match_threshold": 0.6,
-                    "match_count": top_k,
-                }
-            ).execute()
-        )
+        try:
+            response = await asyncio.wait_for(
+                asyncio.to_thread(
+                    lambda: supabase.rpc(
+                        "match_episodes",
+                        {
+                            "query_embedding": embedding,
+                            "match_threshold": 0.6,
+                            "match_count": top_k,
+                        }
+                    ).execute()
+                ),
+                timeout=12.0,
+            )
+        except asyncio.TimeoutError:
+            logger.warning("Supabase match_episodes RPC timed out after 12s. Returning empty list.")
+            return []
         
         raw_results = response.data or []
         results: List[LTMEpisode] = []
