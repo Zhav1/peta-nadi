@@ -46,7 +46,6 @@ import {
   calculateAIDynamicDetourRoutes,
   DEFAULT_HAZARD_RADIUS_KM,
   getHaversineDistanceKm,
-  isPolylineIntersectingHazardCircle,
   type TransportModality,
 } from '@/lib/aiDynamicRouter';
 import { api } from '@/lib/api';
@@ -206,182 +205,6 @@ function resolveApprovedDelayMinutes(
   if (etaMinutes.length === 0) return 0;
 
   return Math.max(0, approvedEta - Math.min(...etaMinutes));
-}
-
-const PANTAI_CERMIN_COASTAL_CORRIDOR: [number, number][] = [
-  [98.6776, 3.7922], // Pelabuhan Belawan
-  [98.6795, 3.7620], // Medan Labuhan Arteri
-  [98.6830, 3.7310], // Marelan Selatan
-  [98.6880, 3.7050], // Medan Timur Arteri
-  [98.6980, 3.6780], // Simpang Kayu Besar / Tol Belmera
-  [98.7150, 3.6550], // Interchange Cemara
-  [98.7420, 3.6380], // Percut Sei Tuan
-  [98.7750, 3.6320], // Batang Kuis Arteri
-  [98.8150, 3.6350], // Deli Serdang Utara
-  [98.8550, 3.6450], // Akses Pesisir Pantai Cermin Barat
-  [98.8950, 3.6520], // Arteri Pesisir Pantai Cermin
-  [98.9350, 3.6550], // Kawasan Wisata Pantai Cermin
-  [98.9750, 3.6480], // Pantai Cermin Timur
-  [99.0150, 3.6350], // Jalur Lingkar Pesisir Serdang Bedagai
-  [99.0400, 3.6120], // Menuju Koridor Bypass Perbaungan
-  [99.0550, 3.5820], // Simpang Arteri Melati
-  [99.0680, 3.5510], // Perbaungan Timur Bypass (Clearance Zona Banjir)
-  [99.0850, 3.5220], // Jalur Arteri Teluk Mengkudu
-  [99.1050, 3.4920], // Koridor Sei Buluh
-  [99.1220, 3.4610], // Menuju Sei Rampah Utara
-  [99.1380, 3.4280], // Sei Rampah Bypass
-  [99.1501, 3.3950], // Arteri Firdaus / Sei Rampah
-  [99.1560, 3.3620], // Jalinsum Tebing Tinggi Barat
-  [99.1625, 3.3285], // Interchange Tol & Terminal Tebing Tinggi
-];
-
-// Deterministic tangential bypass: bends a corridor around a hazard circle at radius + 6 km clearance
-// so demo/offline routes never cross straight through the disaster zone.
-function buildHazardBypassRoute(
-  origin: [number, number],
-  destination: [number, number],
-  hazardCenter: [number, number],
-  radiusKm: number
-): RouteRecommendation | null {
-  const effectiveRadiusKm = radiusKm + 2.0;
-  if (
-    getHaversineDistanceKm(origin, hazardCenter) <= effectiveRadiusKm ||
-    getHaversineDistanceKm(destination, hazardCenter) <= effectiveRadiusKm
-  ) {
-    return null;
-  }
-
-  // Dynamic Coastal Arterial Bypass (Belawan / Medan towards Serdang Bedagai / Sei Rampah / Tebing Tinggi)
-  const isEastCoastOrigin =
-    getHaversineDistanceKm(origin, [98.6776, 3.7922]) < 25.0 || getHaversineDistanceKm(origin, [98.6722, 3.5952]) < 25.0;
-  const isEastCoastDest = destination[0] > hazardCenter[0] && destination[1] <= hazardCenter[1] + 0.15;
-
-  if (isEastCoastOrigin && isEastCoastDest) {
-    // Find closest starting index in corridor to origin
-    let startIdx = 0;
-    let minStartDist = Infinity;
-    for (let i = 0; i < PANTAI_CERMIN_COASTAL_CORRIDOR.length; i++) {
-      const d = getHaversineDistanceKm(origin, PANTAI_CERMIN_COASTAL_CORRIDOR[i]);
-      if (d < minStartDist) {
-        minStartDist = d;
-        startIdx = i;
-      }
-    }
-
-    // Find closest ending index in corridor to user-selected destination
-    let endIdx = PANTAI_CERMIN_COASTAL_CORRIDOR.length - 1;
-    let minEndDist = Infinity;
-    for (let i = startIdx; i < PANTAI_CERMIN_COASTAL_CORRIDOR.length; i++) {
-      const d = getHaversineDistanceKm(destination, PANTAI_CERMIN_COASTAL_CORRIDOR[i]);
-      if (d < minEndDist) {
-        minEndDist = d;
-        endIdx = i;
-      }
-    }
-
-    // Slice corridor strictly between startIdx and endIdx
-    const sliced = PANTAI_CERMIN_COASTAL_CORRIDOR.slice(startIdx, endIdx + 1);
-    const candidateCoords: [number, number][] = [origin, ...sliced, destination];
-
-    // Filter duplicates and near-identical consecutive waypoints
-    const finalCoords: [number, number][] = [];
-    for (let i = 0; i < candidateCoords.length; i++) {
-      if (i === 0 || getHaversineDistanceKm(finalCoords[finalCoords.length - 1], candidateCoords[i]) > 0.2) {
-        finalCoords.push(candidateCoords[i]);
-      }
-    }
-
-    // Ensure final waypoint strictly equals user destination
-    if (finalCoords.length > 0) {
-      finalCoords[finalCoords.length - 1] = destination;
-    }
-
-    if (!isPolylineIntersectingHazardCircle(finalCoords, hazardCenter, radiusKm)) {
-      let lengthKm = 0;
-      for (let i = 0; i < finalCoords.length - 1; i++) {
-        lengthKm += getHaversineDistanceKm(finalCoords[i], finalCoords[i + 1]);
-      }
-      const roadDistanceKm = Math.max(10, Math.round(lengthKm * 1.05));
-      return {
-        id: 'demo-clean-bypass-coastal',
-        route_name: 'Bypass Pesisir Pantai Cermin',
-        description: 'Koridor arteri pesisir melingkari zona bahaya bebas banjir menuju titik tujuan',
-        waypoints: finalCoords.map(([lon, lat]) => ({ lat, lon })),
-        distance_km: roadDistanceKm,
-        eta_minutes: Math.round((roadDistanceKm / 50) * 60),
-        fuel_increase_pct: 12.5,
-        risk_score: 0.08,
-        is_compromised: false,
-        safety_status: 'SAFE_DETOUR',
-        safety_tag: 'RUTE PENGALIHAN BEBAS BENCANA',
-        traffic_level: 'low',
-        congestion_segments: [],
-        modality: 'truck',
-        color: '#10B981',
-      };
-    }
-  }
-
-  const clearanceKm = radiusKm + 6.0;
-  const kmPerLon = 111.32 * Math.cos((hazardCenter[1] * Math.PI) / 180);
-  const kmPerLat = 110.574;
-
-  const odLonKm = (destination[0] - origin[0]) * kmPerLon;
-  const odLatKm = (destination[1] - origin[1]) * kmPerLat;
-  const odLengthKm = Math.sqrt(odLonKm * odLonKm + odLatKm * odLatKm);
-  if (odLengthKm < 1.0) return null;
-
-  const dirLon = odLonKm / odLengthKm;
-  const dirLat = odLatKm / odLengthKm;
-
-  let best: { coordinates: [number, number][]; lengthKm: number } | null = null;
-
-  for (const side of [1, -1]) {
-    const normLon = -dirLat * side;
-    const normLat = dirLon * side;
-
-    const bend1: [number, number] = [
-      hazardCenter[0] + (normLon * clearanceKm - dirLon * clearanceKm) / kmPerLon,
-      hazardCenter[1] + (normLat * clearanceKm - dirLat * clearanceKm) / kmPerLat,
-    ];
-    const bend2: [number, number] = [
-      hazardCenter[0] + (normLon * clearanceKm + dirLon * clearanceKm) / kmPerLon,
-      hazardCenter[1] + (normLat * clearanceKm + dirLat * clearanceKm) / kmPerLat,
-    ];
-
-    const candidate: [number, number][] = [origin, bend1, bend2, destination];
-    if (isPolylineIntersectingHazardCircle(candidate, hazardCenter, radiusKm)) continue;
-
-    let lengthKm = 0;
-    for (let i = 0; i < candidate.length - 1; i++) {
-      lengthKm += getHaversineDistanceKm(candidate[i], candidate[i + 1]);
-    }
-
-    if (!best || lengthKm < best.lengthKm) {
-      best = { coordinates: candidate, lengthKm };
-    }
-  }
-
-  if (!best) return null;
-
-  const roadDistanceKm = Math.round(best.lengthKm * 1.15);
-  return {
-    id: 'demo-clean-bypass',
-    route_name: 'Rute Pengalihan Bebas Bencana',
-    description: 'Pengalihan geometris melingkari zona bahaya tanpa melintasi pusat genangan',
-    waypoints: best.coordinates.map(([lon, lat]) => ({ lat, lon })),
-    distance_km: roadDistanceKm,
-    eta_minutes: Math.round((roadDistanceKm / 55) * 60),
-    fuel_increase_pct: 13.0,
-    risk_score: 0.07,
-    is_compromised: false,
-    safety_status: 'SAFE_DETOUR',
-    safety_tag: 'RUTE PENGALIHAN BEBAS BENCANA',
-    traffic_level: 'low',
-    congestion_segments: [],
-    modality: 'truck',
-    color: '#10B981',
-  };
 }
 
 function TimeModeBanner({
@@ -1101,26 +924,16 @@ export default function DashboardClient() {
           return;
         }
 
-        const primarySubmerged =
-          demoRoutes.length === 0 ||
-          isPolylineIntersectingHazardCircle(
-            demoRoutes[0].waypoints.map((wp) => [wp.lon, wp.lat] as [number, number]),
-            hazardPoint,
-            selectedRadius
-          );
-        const cleanBypass = primarySubmerged
-          ? buildHazardBypassRoute(originCoords, destCoords, hazardPoint, selectedRadius)
-          : null;
-        if (cleanBypass) resolvedRoutes.push(cleanBypass);
-        demoRoutes
-          .filter((r) => r.is_compromised !== true && r.safety_status !== 'HOLD_DELAY')
-          .forEach((r) => {
-            if (!resolvedRoutes.some((res) => res.id === r.id)) {
-              resolvedRoutes.push(r);
-            }
-          });
+        const safeDetours = demoRoutes.filter(
+          (r) => !r.is_compromised && r.safety_status !== 'HOLD_DELAY' && r.waypoints.length > 0
+        );
+        safeDetours.forEach((r) => {
+          if (!resolvedRoutes.some((res) => res.id === r.id)) {
+            resolvedRoutes.push(r);
+          }
+        });
 
-        const compromisedRoute = demoRoutes.find((r) => r.is_compromised) || (primarySubmerged ? {
+        const compromisedRoute = demoRoutes.find((r) => r.is_compromised) || (demoRoutes.length > 0 ? {
           ...demoRoutes[0],
           color: '#EF4444',
           safety_status: 'COMPROMISED' as const,
@@ -1248,22 +1061,20 @@ export default function DashboardClient() {
           hazardType: 'flood',
         });
 
-        // Compute clean bypass corridor and mark the direct corridor as compromised
+        // Calculate road-snapped Mapbox detour routes avoiding the hazard
         const originId = activeOriginRef.current || demoOriginRef.current;
         const destId = activeDestRef.current || demoDestRef.current;
         if (!originId || !destId) break;
         const demoOriginCoords = HUB_NODES[originId]?.coords;
         const demoDestCoords = HUB_NODES[destId]?.coords;
         if (!demoOriginCoords || !demoDestCoords) break;
-        const bypassPreview = buildHazardBypassRoute(demoOriginCoords, demoDestCoords, hazardCenter, demoRadiusKm);
-        if (bypassPreview) {
-          setCurrentMapRoutes([bypassPreview]);
-          setActiveRouteIdx(0);
-        }
 
         demoState.setIsCalculatingRoute(true);
         calculateAIDynamicDetourRoutes(hazardCenter, demoRadiusKm, demoOriginCoords, demoDestCoords, selectedModality)
           .then((rawRoutes) => {
+            const safeDetours = rawRoutes.filter(
+              (r) => !r.is_compromised && r.safety_status !== 'HOLD_DELAY' && r.waypoints.length > 0
+            );
             const directCompromised = rawRoutes.find((r) => r.is_compromised) || rawRoutes[0];
             const markedDirect: RouteRecommendation | null = directCompromised ? {
               ...directCompromised,
@@ -1274,7 +1085,13 @@ export default function DashboardClient() {
             } : null;
 
             const routesToShow: RouteRecommendation[] = [];
-            if (bypassPreview) routesToShow.push(bypassPreview);
+            // Prioritize road-snapped safe detour(s) at index 0 (Emerald #10B981)
+            safeDetours.forEach((r) => {
+              if (!routesToShow.some((existing) => existing.id === r.id)) {
+                routesToShow.push(r);
+              }
+            });
+            // Append compromised direct route at index 1 (Red #EF4444)
             if (markedDirect && !routesToShow.some((r) => r.id === markedDirect.id)) {
               routesToShow.push(markedDirect);
             }
@@ -1704,10 +1521,14 @@ export default function DashboardClient() {
         <div className={`w-full h-full relative ${activeSection === 'map' ? 'block' : 'hidden'}`}>
 
           {/* Floating Operational Telemetry HUD Strip */}
-          <div className={`absolute top-3.5 z-30 pointer-events-auto transition-all duration-300 hidden md:flex items-center no-scrollbar overflow-x-auto ${isLeftSidebarCollapsed ? 'left-4' : 'left-4 lg:left-[368px]'
+          <div className={`absolute top-3.5 z-30 pointer-events-auto transition-all duration-300 hidden md:flex items-center gap-1.5 no-scrollbar overflow-x-auto ${isLeftSidebarCollapsed ? 'left-4' : 'left-4 lg:left-[368px]'
             } ${isSidebarOpen && !!selectedCrisis
-              ? 'max-w-[calc(100vw-368px-680px)]'
-              : 'max-w-[calc(100vw-368px-270px)]'
+              ? isLeftSidebarCollapsed
+                ? 'max-w-[calc(100vw-450px)]'
+                : 'max-w-[calc(100vw-450px)] lg:max-w-[calc(100vw-368px-440px)]'
+              : isLeftSidebarCollapsed
+                ? 'max-w-[calc(100vw-32px)]'
+                : 'max-w-[calc(100vw-32px)] lg:max-w-[calc(100vw-380px)]'
             }`}>
             <TopNavTelemetry
               cuOptInfo={cuOptInfo}
