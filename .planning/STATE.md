@@ -2,19 +2,19 @@
 gsd_state_version: "1.0"
 milestone: M4
 milestone_name: PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability
-current_phase: 63
-current_phase_name: High-Density @deck.gl/mapbox Telemetry, News Permalink Integrity, Pure Coordinate Routing & Multi-Color Intermodal Corridors with Hold-vs-Reroute Economics
+current_phase: 68
+current_phase_name: Restore Guest-403 E2E Test Against MitigationTab
 status: complete
-stopped_at: Completed Phase 63; GPU-instanced @deck.gl/mapbox MapboxOverlay telemetry (5,000+ units @ 60 FPS), inverted AISstream bounding box fix + parallel ADS-B (adsb.lol, airplanes.live, adsb.fi, OpenSky), 45+ flight baseline, purge of fake Antara numeric IDs with targeted Google News search permalinks, pure [lon, lat] coordinate routing snapping with zero static hub hardcoding, multi-color intermodal corridors (Emerald Land #10B981, Royal Blue Sea #3B82F6, Sky Cyan Air #00F0FF, Amber Detour #F59E0B), and grounded Hold-vs-Reroute Spoilage Hedging economic decision engine. 12/12 pytest passed, Next.js build clean with 0 tsc errors.
-last_updated: "2026-10-18T00:00:00.000Z"
+stopped_at: Completed Phases 64..68; purged mock Past/Future/Predict dock tabs & backend endpoints; removed Simulasi main tab and dead simulation/chat routes; enforced Analytics honesty (data tidak tersedia empty states, purged hardcoded cards/arcs); hardened Laporan audit ledger (real action/sync status, ISO date+tz, filters, dynamic PDF/JSON export); restored guest-403 e2e test against MitigationTab. 14/14 api router tests passed, 1/1 guest-403 playwright passed, 0 tsc errors, 100% clean Next.js build.
+last_updated: "2026-10-18T06:10:00.000Z"
 last_activity: 2026-10-18
-last_activity_desc: "Phase 63 completed: High-density @deck.gl/mapbox telemetry, canonical news permalink integrity, pure coordinate routing & multi-color intermodal corridors with hold-vs-reroute economics. 12/12 pytest passed, 0 tsc errors."
+last_activity_desc: "Phases 64-68 completed: Mock purge, Simulasi tab removal, Analytics honesty, Laporan ledger hardening, and guest-403 e2e restoration. 14/14 test_api_routers passed, 1/1 playwright guest-403 passed, 0 tsc errors, 100% clean Next.js build."
 state_head: HEAD
 progress:
-  total_phases: 63
-  completed_phases: 63
-  total_plans: 76
-  completed_plans: 76
+  total_phases: 68
+  completed_phases: 68
+  total_plans: 81
+  completed_plans: 81
   percent: 100
 ---
 
@@ -22,15 +22,15 @@ progress:
 
 **Last Updated:** 2026-10-18
 **Active Milestone:** M4 - PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability [ACTIVE 🚀]
-**Current Phase:** 63
+**Current Phase:** 68
 
 ---
 
 ## Current Position
 
-Phase: 63 (High-Density @deck.gl/mapbox Telemetry, News Permalink Integrity, Pure Coordinate Routing & Multi-Color Intermodal Corridors with Hold-vs-Reroute Economics) - COMPLETE
-Status: GPU-instanced @deck.gl/mapbox MapboxOverlay active (5,000+ units @ 60 FPS), inverted AIS bbox corrected to [[6.2, 94.8], [-6.2, 109.0]] with 1,500 retention cap, parallel ADS-B poller (adsb.lol + airplanes.live + adsb.fi + OpenSky) with 45+ regional flights across Sumatra FIRs, synthetic Antara IDs purged with targeted Google News query permalinks, pure [lon, lat] coordinate snapping to nearest road graph node, simultaneous multi-color intermodal corridors (Emerald Land #10B981, Royal Blue Sea #3B82F6, Sky Cyan Air #00F0FF) with same-hub viability guards, and interactive Hold-vs-Reroute Spoilage Hedging economic decision matrix. 12/12 pytest passed, 0 tsc errors, 100% clean Next.js build.
-Last activity: 2026-10-18 - Phase 63 executed, verified, and synchronized with 63-PLAN.md.
+Phase: 68 (Restore Guest-403 E2E Test Against MitigationTab) - COMPLETE
+Status: Phases 64..68 executed and verified. (1) Past/Future/Predict tabs removed from dock, TimelineScrubber.tsx deleted, /historical/episodes and /predictive/risks endpoints removed; (2) Simulasi main tab and SimulationSection.tsx deleted, /simulation/chat purged; (3) Analytics tab sanitized with real PIHPS series preserved and explicit 'Data tidak tersedia' empty states; (4) Laporan audit ledger hardened with dynamic ACCEPT/REJECT/OVERRIDE actions, live sync status, full ISO date+tz formatting, filters toolbar, and dynamic PDF/JSON export; (5) Playwright guest-403 test restored against MitigationTab approval pipeline (1/1 passed). 0 tsc errors, 100% clean Next.js build.
+Last activity: 2026-10-18 - Phases 64-68 executed, verified, and synchronized with plans.
 Next action: Push commit to remote origin/main.
 
 ---
@@ -104,6 +104,11 @@ Next action: Push commit to remote origin/main.
 | 61 | Render CORS and Berita Audit Remediation | **COMPLETE** ✅ | Dual-layer CORS (*.vercel.app + Next.js server proxy), Berita sidebar hydration, Docker data packaging, BackgroundTasks guard, UUID validation. 5/5 test_audit_fixes passed, 0 tsc errors. |
 | 62 | Live Telemetry, SpatialHash Anti-Clutter, News Deep-Linking & Universal Village Routing | **COMPLETE** ✅ | Live AIS (Malacca macro box) + ADS-B (adsb.lol), hybrid GPS/estimated trucks, 32px SpatialHash, 3-tier village LOD, /api/v1/geocode/*, canonical news permalinks. 12/12 tests passed, 0 tsc errors. |
 | 63 | High-Density @deck.gl/mapbox Telemetry, News Permalink Integrity, Pure Coordinate Routing & Multi-Color Intermodal Corridors with Hold-vs-Reroute Economics | **COMPLETE** ✅ | GPU @deck.gl/mapbox MapboxOverlay (5k units @ 60 FPS), inverted AIS bbox fix, parallel ADS-B pool, purge fake Antara IDs, pure [lon, lat] coordinate snapping, 3-leg Sea/Air corridors, Hold vs Reroute economics. 12/12 pytest, 0 tsc errors. |
+| 64 | Remove Past/Future/Predict Dock Tabs & Mock Endpoints | **COMPLETE** ✅ | Purged mock Past/Future/Predict tabs, TimelineScrubber.tsx, /historical/episodes and /predictive/risks endpoints, and TFT claims. 0 tsc errors, 100% clean build. |
+| 65 | Remove Simulasi Main Tab & Dead Chat Code | **COMPLETE** ✅ | Deleted SimulationSection.tsx and /simulation/chat routes; consolidated simulation under map Simulasi Bencana (CrisisSimulatorBar.tsx). 0 tsc errors. |
+| 66 | Analytics Honesty Audit | **COMPLETE** ✅ | Preserved real PIHPS series; removed hardcoded risk cards, causal chain, and fake arcs/nodes; added honest 'Data tidak tersedia' empty states. |
+| 67 | Laporan Audit Ledger Hardening | **COMPLETE** ✅ | Replaced hardcoded DISETUJUI with dynamic ACCEPT/REJECT/OVERRIDE, sync status, full ISO date+tz, interactive filters toolbar, dynamic PDF/JSON exports. |
+| 68 | Restore Guest-403 E2E Test Against MitigationTab | **COMPLETE** ✅ | Replaced deleted SimulationSection test with MitigationTab approval pipeline test; verified 403 sandbox toast and optimistic UI update. 1/1 Playwright passed. |
 
 ---
 
@@ -111,6 +116,11 @@ Next action: Push commit to remote origin/main.
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
+| 2026-10-18 | Phase 68: Restore Guest-403 E2E Test Against MitigationTab | Re-established automated test coverage for guest 403 handling on `MitigationTab.tsx` (`POST /api/v1/approvals`). Asserted real behavior (sandbox toast and optimistic card update without writing to `localStorage`). Added null guards in `MitigationTab.tsx` and node resolution fallback in `DashboardClient.tsx`. 1/1 Playwright test passed. |
+| 2026-10-18 | Phase 67: Laporan Audit Ledger Hardening | Replaced static `DISETUJUI` badge with real operator actions (`ACCEPT`, `REJECT`, `OVERRIDE`), live sync indicators, full Indonesian locale ISO date-time formatting with timezone (`GMT+7`), interactive filter toolbar, and dynamic filtered PDF/JSON exports. Pruned fake fallback rows. |
+| 2026-10-18 | Phase 66: Analytics Honesty Audit | Preserved authentic dynamic PIHPS series (`api.commodities.prices`). Stripped static risk-ranking cards, static causal chain, and fake Deck.gl arcs/nodes. Replaced synthetic fallback numbers with explicit `"Data tidak tersedia"` badges. |
+| 2026-10-18 | Phase 65: Remove Simulasi Main Tab & Dead Simulation/Chat Code | Deleted legacy `SimulationSection.tsx` (495 lines) with unverified toy formulas and hardcoded metrics. Consolidated all simulation workflows into verified "Simulasi Bencana" engine (`CrisisSimulatorBar.tsx` -> `POST /api/v1/simulate/stream`). Purged dead `/simulation/chat` routes. |
+| 2026-10-18 | Phase 64: Remove Past/Future/Predict Dock Tabs & Mock Endpoints | Eradicated mock Past, Future, and Predict dock tabs, synthetic fallback fixtures, orphaned `TimelineScrubber.tsx`, and dead backend endpoints (`/historical/episodes`, `/predictive/risks`). Purged ungrounded "TFT Multi-Model" claims. |
 | 2026-10-18 | Phase 63: High-Density @deck.gl/mapbox Telemetry, News Permalink Integrity, Pure Coordinate Routing & Multi-Color Intermodal Corridors with Hold-vs-Reroute Economics | Migrated fleet rendering from GeoJSON serialization to GPU-instanced @deck.gl/mapbox MapboxOverlay with IconLayer & PathLayer (60 FPS @ 5,000+ units). Fixed inverted AISStream bbox ([[6.2, 94.8], [-6.2, 109.0]]) and enabled parallel ADS-B multi-provider polling (adsb.lol, airplanes.live, adsb.fi, OpenSky) with 45+ flight regional baseline. Purged fake numeric Antara IDs (543210, 532190, etc.) with targeted Google News search permalinks. Decoupled routing from static HUB_NODES to pure [lon, lat] coordinates with Haversine nearest-node road graph snapping. Implemented simultaneous multi-color intermodal corridors (Land: #10B981 Emerald, Sea: #3B82F6 Royal Blue, Air: #00F0FF Sky Cyan) with same-hub viability guards and interactive Hold vs. Reroute Spoilage Hedging economic comparison card. 12/12 pytest passed, 0 tsc errors, 100% clean Next.js build. |
 | 2026-10-18 | Phase 62: Live Telemetry, SpatialHash Anti-Clutter, News Deep-Linking & Universal Village Routing | Retired Mode Simulasi blanking gate; established always-on live AIS (Malacca macro box) + ADS-B (adsb.lol 250nm) + hybrid dispatcher onboarding (LIVE_GPS + ROUTE_ESTIMATED with BMKG/TomTom delay interpolation). Ported gods-eye-view 32px bit-packed Smi SpatialHash label arbiter (2500ms hysteresis) and 60fps dead-reckoning motionModel. Implemented /api/v1/geocode/* and Haversine nearest-node snapping in cpu_routing_adapter.py for remote village routing. Fixed 4 news bounce root causes (canonical URL unwrapping, citation URL preservation, no-referrer). 12/12 tests passed, 0 tsc errors. |
 | 2026-10-17 | Phase 61: Render CORS and Berita Audit Remediation | Implemented dual-layer CORS resolution (FastAPI *.vercel.app regex + Next.js App Router /api/proxy server fallback), hydrated Berita sidebar via Promise.allSettled + verified baseline, packaged data/ in Dockerfile with _find_data_file multi-path resolution, guarded BackgroundTasks=None dual-caller in news_router, and enforced UUID 422 validation on hitl-action. 5/5 test_audit_fixes passed, 0 tsc errors. |
@@ -207,5 +217,15 @@ These scripts validate the economic correlation hypotheses that underpin Agent 5
 - [Phase 59-llm-swarm-post-key-audit]: 59-04: pytest absent in env (ModuleNotFoundError) so AST-parse plus tsc used as proof; suites must re-run where pytest exists
 - [Phase 59-llm-swarm-post-key-audit]: 59-03: no gateway timeout retune for row-1 marginality (architectural scope); probe carries one annotated retry, F-ROW1-LATENCY stays open
 - [Phase 59-llm-swarm-post-key-audit]: 59-03: no retry-on-empty for driver intermittency (fail-loud D-05 kept); degraded path proven endogenously
-- [Phase 59-llm-swarm-post-key-audit]: 59-03: text-embedding-004 404 recorded with exact error plus live ListModels; model NOT switched (D-08 one-way lock)
 - [Phase 59-llm-swarm-post-key-audit]: 59-03: local parity leg via curl.exe equivalent (msys-bash loopback blocked in executor env); bash script proven by Render leg
+- [Phase 68]: 68-01: guest 403 test restored against MitigationTab approval flow; React-only sandbox state preserved without inventing localStorage persistence
+
+## Open Issues for New Context Window
+
+1. **MitigationTab Guest-403 Persistence vs Wording Mismatch**: Toast notification states `"tersimpan secara lokal"`, but state is held in React memory only and lost on page refresh. Update toast wording or implement `localStorage.setItem('prehub_sandbox_approvals', ...)` persistence.
+2. **Regulatory Audit Schema Expansion**: Add fields to Supabase `route_approvals` table (`bkhit_cert_id`, `bpjt_toll_gate`, `bpjt_vehicle_class`, `container_id`, `vessel_mmsi`) to support deep audits by Pelindo, BKHIT, and BPJT.
+3. **Dynamic Multi-Market Analytics Risk Cards**: Wire `AnalyticsSection.tsx` risk cards to live multi-market PIHPS price spreads when scrapers or multi-province feeds are active.
+4. **Status Koridor Derivation**: Expand Laporan's "Status Koridor" from single-crisis severity to aggregate corridor health across all active routes.
+5. **Full E2E Suite Run & Visual Browser Audit**: Run full Playwright test suite and perform visual audit of all pages.
+6. **Render Backend Redeployment**: Deploy backend to Render to complete endpoint deprecation.
+7. **Review `handleCrisisReadyFromDemo` Default Corridor**: Review fallback to `'belawan'` -> `'tebingtinggi'`.

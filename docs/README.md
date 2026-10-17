@@ -30,3 +30,11 @@
    - The product scope is a **live operational pilot** (Pelindo Belawan, BKHIT Tanjung Kalian / Merak quarantine, BPJT toll tariffs, real-time PIHPS market prices), **NOT** a synthetic pitch demo.
 4. **Honest Metric Transparency (No Boasting/Unbacked Claims)**:
    - Do NOT display synthetic "100% match" or "100% guarantee" assertions in documentation or UI unless backed by automated empirical evaluation numbers from [EvaluationSection.tsx](file:///d:/College/Pidi.id/frontend/components/dashboard/EvaluationSection.tsx).
+5. **Single Canonical Simulator ("Simulasi Bencana")**:
+   - The former macro-slider "Simulasi" tab (`SimulationSection.tsx`) and `/simulation/chat` endpoints have been decommissioned. The sole operational simulator is **Simulasi Bencana** on the map canvas ([`CrisisSimulatorBar.tsx`](file:///d:/College/Pidi.id/frontend/components/map/CrisisSimulatorBar.tsx) -> `POST /api/v1/simulate/stream`), directly executing deterministic OR-Tools detours, BKHIT quarantine verification, and calibrated exponential spoilage decay ($1 - e^{-\delta \cdot T}$).
+6. **Laporan Audit Ledger & Non-Repudiation**:
+   - The "Laporan" tab ([`ReportsSection.tsx`](file:///d:/College/Pidi.id/frontend/components/dashboard/ReportsSection.tsx)) serves as the official operational audit ledger ("Catatan Audit Mitigasi Logistik Pangan"), logging real operator actions (`ACCEPT`, `REJECT`, `OVERRIDE`), live sync statuses (`SYNCED` / `PENDING`), full ISO date+timezone timestamps (`GMT+7`), interactive search/date filters, and dynamic filtered PDF/JSON exports. All mock fallback rows are eliminated.
+7. **Analytics Honesty**:
+   - The "Analitik" tab ([`AnalyticsSection.tsx`](file:///d:/College/Pidi.id/frontend/components/dashboard/AnalyticsSection.tsx)) presents genuine PIHPS price series (`GET /api/v1/commodities/prices`). Static fabricated risk-ranking cards, static causal chains, and synthetic arcs/nodes have been removed in favor of honest `"Data tidak tersedia"` empty states.
+8. **Purged Time Horizon Replays**:
+   - Mock Past, Future, and Predict dock tabs, synthetic fallback fixtures, `TimelineScrubber.tsx`, and dead mock endpoints (`/historical/episodes`, `/predictive/risks`) have been purged from the platform.

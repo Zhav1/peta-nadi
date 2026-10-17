@@ -72,6 +72,20 @@ Multisource Telemetry (BMKG Sensor, TomTom Speed Flow, Google News RSS, PIHPS Pr
 - **Next.js Route Middleware (`frontend/middleware.ts`):** `/dashboard` requires a well-formed, unexpired session JWT (`prehub_auth_token` cookie). Unauthenticated visits are redirected to `/dashboard?guest=1` and rendered as an explicitly-flagged read-only evaluation preview instead of an operational session.
 - **Verified-Signature Enforcement:** FastAPI validates JWT signatures and active sessions with no `verify_signature=False` fallback; forged or expired tokens are rejected with HTTP 401.
 
+### 7. Simulasi Bencana (Single Canonical Simulator)
+- **Live Agentic Hazard Simulation:** Unified interactive simulation engine on the map canvas (`CrisisSimulatorBar.tsx`), invoking `POST /api/v1/simulate/stream` with real-time SSE event streaming.
+- **Calibrated Multi-Model Evaluation:** Computes deterministic CPU OR-Tools / NetworkX detour corridors in $<150\text{ms}$, enforces BKHIT digital quarantine compliance, checks MST axle-load limits, and evaluates exponential perishability decay ($1 - e^{-\delta \cdot T}$).
+- **Decommissioned Toy Sliders:** Fully purged legacy macro-slider "Simulasi" tab (`SimulationSection.tsx`) and dead `/simulation/chat` routes.
+
+### 8. Laporan Audit Ledger (Operational Governance & Traceability)
+- **Non-Repudiable Mitigation Ledger:** The Laporan tab (`ReportsSection.tsx`) serves as the official operational ledger ("Catatan Audit Mitigasi Logistik Pangan"), persisted to Supabase `route_approvals` with SQLite `route_decision_traces` fallback.
+- **Multi-Action Logging:** Captures genuine human-in-the-loop decisions (`ACCEPT`, `REJECT`, `OVERRIDE`) with live sync indicators (`SYNCED` / `PENDING`), tactical maneuver directives (`REROUTE`, `HOLD`, `CONTINUE`), and operator justification notes.
+- **Precise Chronology & Dynamic Exports:** Formats full ISO date-time with explicit timezone (`GMT+7`), interactive filter toolbar (search, action type, date range), and dynamic filtered PDF and JSON export generation. All mock fallback rows are eliminated.
+
+### 9. Analytics Honesty (Empirical PIHPS Series & Honest Empty States)
+- **Empirical Market Data:** Integrates live strategic food commodity price series for rice and red chili (`GET /api/v1/commodities/prices`) queried from Supabase `commodity_prices`.
+- **Zero Fabricated Claims:** Completely eradicated ungrounded 24-hour risk cards (+18.5%, +24.5%), static causal chains, and synthetic Deck.gl arcs/nodes in favor of honest, transparent `"Data tidak tersedia"` empty states.
+
 ---
 
 ## Technology Stack
@@ -173,7 +187,7 @@ npm run build
 ├── agents/                     # LangGraph 6-agent swarm nodes and consensus gate
 ├── backend/                    # FastAPI backend application
 │   ├── app/
-│   │   ├── adapters/           # BMKG, TomTom, Earth2/NVIDIA adapters
+│   │   ├── adapters/           # BMKG, TomTom, Open-Meteo, AISstream adapters
 │   │   ├── db/                 # Local SQLite storage with WAL concurrency
 │   │   ├── routers/            # Health, Incidents, Approvals, Corridor, Vehicles, News, Routing, Intermodal, Compliance
 │   │   ├── services/           # NetworkX routing, weather fusion, hedging, compliance

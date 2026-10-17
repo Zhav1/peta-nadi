@@ -1733,8 +1733,134 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 
 ---
 
-## Backlog (Post-Hackathon / v2)
+## Phase 64: Remove Past/Future/Predict Dock Tabs and Mock Endpoints
 
+**Goal:** Eradicate mock Past, Future, and Predict dock tabs, synthetic fallback fixtures, orphaned TimelineScrubber component, and dead mock backend endpoints (`/historical/episodes`, `/predictive/risks`).
+**Status:** COMPLETE ✅
+**Plans:** `64-PLAN.md`, `64-WALKTHROUGH.md`, `64-LEARNINGS.md`
+
+### Deliverables
+
+- [x] `frontend/components/dashboard/DashboardClient.tsx`: removed `FALLBACK_HISTORICAL`, `FALLBACK_PREDICTIVE`, `TimeModeBanner`, `activeTimeFilter`, historical/predictive states, load effect, and predict click branch; simplified dock to `Run Demo`; made Fleet Modality filter permanently visible.
+- [x] `frontend/components/map/CrisisMap.tsx`: removed `activeTimeFilter`, `historicalEpisodes`, `predictiveRisks` props, sources (`historical-episodes-source`, `predictive-risks-source`, `time-horizon-badges-source`), and layer update blocks.
+- [x] `frontend/lib/api.ts`: removed `incidents.historical` and `incidents.predictive`.
+- [x] `frontend/components/dashboard/SystemObservabilitySection.tsx`: removed probes `ep-4` and `ep-5`.
+- [x] Deleted `frontend/components/ui/TimelineScrubber.tsx`.
+- [x] `backend/app/routers/incidents.py`: removed `/historical/episodes` and `/predictive/risks` endpoints.
+- [x] Deleted `backend/app/fixtures/historical_episodes.json`.
+
+### Verification Criteria
+
+- [x] `npx tsc --noEmit` in `frontend/`: 0 errors.
+- [x] `npm run build` in `frontend/`: 100% clean production bundle (7/7 static pages).
+- [x] `git grep` confirms zero active references to `activeTimeFilter`, `TimelineScrubber`, `FALLBACK_HISTORICAL`, and `TFT`.
+
+---
+
+## Phase 65: Remove Simulasi Main Tab and Dead Simulation/Chat Code
+
+**Goal:** Eliminate legacy `SimulationSection.tsx` with its uncalibrated toy formulas and hardcoded numbers; consolidate all simulation workflows into the verified "Simulasi Bencana" engine (`CrisisSimulatorBar.tsx`); purge dead `/simulation/chat` endpoints.
+**Status:** COMPLETE ✅
+**Plans:** `65-PLAN.md`, `65-WALKTHROUGH.md`, `65-LEARNINGS.md`
+
+### Deliverables
+
+- [x] Deleted `frontend/components/dashboard/SimulationSection.tsx` (495 lines).
+- [x] `frontend/components/dashboard/DashboardClient.tsx`: removed import, `'simulation'` from activeSection union, query param handling, nav tab, `handleDeployUnifiedActionPlan`, and container.
+- [x] `frontend/components/dashboard/AnalyticsSection.tsx`: redirected "Simulasi Skenario Dampak" button to `'map'` as `"Simulasi Bencana (Peta)"`.
+- [x] `frontend/lib/api.ts`: removed `api.simulation`.
+- [x] `backend/app/routers/agent_router.py`: removed dead `/simulation/chat` endpoints.
+- [x] `frontend/e2e/capture-screenshots.spec.ts`: removed `section=simulation` capture.
+
+### Verification Criteria
+
+- [x] `npx tsc --noEmit` in `frontend/`: 0 errors.
+- [x] `npm run build` in `frontend/`: 100% clean production bundle (7/7 static pages).
+- [x] `git grep` confirms zero references to `SimulationSection` and `/simulation/chat`.
+- [x] Top navigation cleanly presents 4 tabs: Peta Operasi, Analitik, Laporan, Evaluasi.
+
+---
+
+## Phase 66: Analytics Honesty Audit (Mock Purge & Honest Empty States)
+
+**Goal:** Preserve authentic PIHPS price series while purging hardcoded risk cards, static causal chains, and synthetic arcs/nodes from the Analytics tab, replacing missing data with honest `"Data tidak tersedia"` states.
+**Status:** COMPLETE ✅
+**Plans:** `66-PLAN.md`, `66-WALKTHROUGH.md`, `66-LEARNINGS.md`
+
+### Deliverables
+
+- [x] `frontend/components/dashboard/AnalyticsSection.tsx`: preserved real PIHPS series (`api.commodities.prices` -> Supabase `commodity_prices`).
+- [x] Removed hardcoded 24-hour risk-ranking cards (`Cabai Merah +18.5%`, `Bawang Putih +24.5%`, etc.); added honest empty state.
+- [x] Removed static Deck.gl arcs and port scatter points.
+- [x] Removed hardcoded causal dependency chain.
+- [x] Replaced synthetic fallback numbers (`Rp 12.400`, `+14.2%`) with explicit `"Data tidak tersedia"` badges.
+
+### Verification Criteria
+
+- [x] `npx tsc --noEmit` in `frontend/`: 0 errors.
+- [x] `npm run build` in `frontend/`: 100% clean production bundle (7/7 static pages).
+- [x] Verified zero hardcoded speculative risk percentages remain in component.
+
+---
+
+## Phase 67: Laporan Audit Ledger Hardening
+
+**Goal:** Transform the Laporan tab into an authentic, non-repudiable audit ledger displaying real operator actions, live sync indicators, full ISO date+timezone timestamps, interactive filters, honest empty states, and dynamic PDF/JSON exports based on the filtered ledger.
+**Status:** COMPLETE ✅
+**Plans:** `67-PLAN.md`, `67-WALKTHROUGH.md`, `67-LEARNINGS.md`
+
+### Deliverables
+
+- [x] `frontend/components/dashboard/ReportsSection.tsx`: dynamic decision action badges (`ACCEPT`, `REJECT`, `OVERRIDE`), live sync indicator (`SYNCED` / `PENDING`), tactical maneuver directives (`REROUTE`, `HOLD`, `CONTINUE`), and operator notes.
+- [x] Indonesian locale ISO date-time formatting with timezone (e.g. `18 Okt 2026, 03.47.03 GMT+7`).
+- [x] Purged the 2 fake fallback rows; added authentic empty states for zero records and zero filter matches.
+- [x] Derived "Status Koridor" from crisis severity and traffic status.
+- [x] Added filter toolbar: text search, action dropdown, date range pickers, reset button.
+- [x] Hardened `handleGeneratePDF()` and `handleExportJSON()` to dynamically export the active filtered ledger.
+- [x] `frontend/lib/types.ts`: added `sync_status?: string;` to `ApprovalItem`.
+
+### Verification Criteria
+
+- [x] `npx tsc --noEmit` in `frontend/`: 0 errors.
+- [x] `npm run build` in `frontend/`: 100% clean production bundle (7/7 static pages).
+- [x] Table displays actual operator decisions and sync status.
+- [x] PDF and JSON exports accurately reflect filtered audit rows.
+
+---
+
+## Phase 68: Restore Guest-403 E2E Test Against MitigationTab
+
+**Goal:** Reconstruct automated Playwright E2E test coverage for guest 403 handling on the `MitigationTab` approval pipeline following the removal of `SimulationSection.tsx`.
+**Status:** COMPLETE ✅
+**Plans:** `68-PLAN.md`, `68-WALKTHROUGH.md`, `68-LEARNINGS.md`
+
+### Deliverables
+
+- [x] `frontend/e2e/phase57-pilot-hardening.spec.ts`: restored `guest deploy on 403 shows the sandbox toast and saves locally` targeting `MitigationTab` approval flow (`POST /api/v1/approvals`).
+- [x] Verified 403 interception, sandbox save toast, and optimistic transition to `DISETUJUI & DIKIRIM`.
+- [x] Asserted current React-state-only behavior (`localStorage` empty) without inventing unverified persistence.
+- [x] `frontend/components/sidebar/MitigationTab.tsx`: null guards on route distance and fuel increase metrics.
+- [x] `frontend/components/dashboard/DashboardClient.tsx`: `handleCrisisReadyFromDemo` route reuse and node resolution hardening.
+
+### Verification Criteria
+
+- [x] `npx tsc --noEmit` in `frontend/`: 0 errors.
+- [x] `npx playwright test e2e/phase57-pilot-hardening.spec.ts -g "guest deploy on 403"`: 1 passed (100%).
+
+---
+
+## Backlog (Post-Hackathon / v2 & New Context Window Backlog)
+
+### Active Remediation & Audit Backlog (For New Context Window)
+1. **MitigationTab Guest-403 Persistence Alignment**: Either update toast wording from `"tersimpan secara lokal"` to `"Tindakan aktif untuk simulasi sesi ini"` or implement actual `localStorage.setItem('prehub_sandbox_approvals', ...)` persistence.
+2. **Regulatory Audit Schema Expansion**: Add fields to Supabase `route_approvals` table (`bkhit_cert_id`, `bpjt_toll_gate`, `bpjt_vehicle_class`, `container_id`, `vessel_mmsi`) to support deep audits by Pelindo, BKHIT, and BPJT.
+3. **Dynamic Multi-Market Analytics Risk Cards**: Wire `AnalyticsSection.tsx` risk cards to live multi-market PIHPS price spreads when scrapers or multi-province feeds are active.
+4. **Status Koridor Derivation**: Expand Laporan's "Status Koridor" from single-crisis severity to aggregate corridor health across all active routes.
+5. **Full E2E Suite Run & Visual Browser Audit**: Run full Playwright test suite and perform visual audit of all pages.
+6. **Render Backend Redeployment**: Deploy backend to Render to complete endpoint deprecation.
+7. **Review `handleCrisisReadyFromDemo` Default Corridor**: Review fallback to `'belawan'` -> `'tebingtinggi'`.
+
+### Future Product Roadmap
 - Driver mobile app (React Native + WatermelonDB + CRDT offline sync)
 - Enterprise GraphRAG private self-hosted deployment
 - Automated CI/CD pipeline with staging $\to$ production promotion
