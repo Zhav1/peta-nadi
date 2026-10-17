@@ -1,7 +1,6 @@
 import json
 import logging
 from datetime import datetime, timezone, timedelta
-import google.generativeai as genai
 from agents.state import CrisisState, AgentFinding
 from agents.tools.supabase_tools import get_hazard_polygons
 from agents.memory.stm import get_async_redis

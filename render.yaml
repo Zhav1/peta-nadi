@@ -33,9 +33,6 @@ services:
       # GEMINI_API_KEY kept — LTM embeddings stay on Google models/text-embedding-004
       - key: GEMINI_API_KEY
         sync: false
-      # GEMINI_MODEL unused — chat disabled; embeddings use hardcoded models/text-embedding-004
-      - key: GEMINI_MODEL
-        value: "unused-chat-disabled"
       # NVIDIA NIM fallback keys — secret values dashboard-only (sync:false, no value in yaml)
       - key: NVIDIA_DEEPSEEK_V4_PRO
         sync: false

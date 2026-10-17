@@ -3,7 +3,6 @@ import logging
 import httpx
 import asyncio
 from datetime import datetime, timezone
-import google.generativeai as genai
 from agents.state import CrisisState
 from agents.tools.supabase_tools import write_incident
 from agents.tools.graphrag import query_graphrag

@@ -3,9 +3,8 @@ from app.adapters.bmkg_adapter import BMKGAdapter
 from app.adapters.tomtom_adapter import TomTomAdapter
 from app.adapters.aisstream_adapter import AISstreamAdapter
 from app.adapters.nasa_firms_adapter import NASAFIRMSAdapter
-from app.adapters.openmeteo_adapter import OpenMeteoAdapter
+from app.adapters.open_meteo_adapter import OpenMeteoAdapter
 from app.adapters.cpu_routing_adapter import CPURoutingAdapter
-from app.adapters.open_meteo_adapter import OpenMeteoAdapter as OpenMeteoForecastAdapter
 
 __all__ = [
     "BaseAdapter",
@@ -15,5 +14,4 @@ __all__ = [
     "NASAFIRMSAdapter",
     "OpenMeteoAdapter",
     "CPURoutingAdapter",
-    "OpenMeteoForecastAdapter"
 ]

@@ -22,6 +22,8 @@ def opencode_keyed(monkeypatch):
     monkeypatch.setattr(llm_gateway.settings, "demo_offline", False)
     monkeypatch.setattr(llm_gateway.settings, "opencode_api_key", "oc-test-key")
     monkeypatch.setattr(llm_gateway.settings, "gemini_api_key", "")
+    for key in ("nvidia_deepseek_v4_pro", "nvidia_deepseek_v4_flash"):
+        monkeypatch.setattr(llm_gateway.settings, key, "")
 
 
 def _mock_httpx_client(monkeypatch, *, status=200, payload=None, exc=None):

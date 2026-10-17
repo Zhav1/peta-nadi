@@ -2,7 +2,6 @@ import json
 import logging
 import asyncio
 from datetime import datetime, timezone
-import google.generativeai as genai
 from agents.state import CrisisState, AgentFinding, LTMEpisode
 from agents.memory.stm import get_async_redis
 from agents.memory.ltm import query_ltm

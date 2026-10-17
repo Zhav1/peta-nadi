@@ -9,7 +9,7 @@ from typing import Dict, Any, List
 from datetime import datetime, timezone
 
 from app.adapters.bmkg_adapter import BMKGAdapter
-from app.adapters.openmeteo_adapter import OpenMeteoAdapter
+from app.adapters.open_meteo_adapter import OpenMeteoAdapter
 from app.services.incident_geometry_service import generate_flood_geometry
 
 logger = logging.getLogger(__name__)
@@ -41,14 +41,16 @@ async def get_fused_spatial_weather() -> Dict[str, Any]:
 
     features = []
 
-    # Combined active weather warnings
-    weather_warnings = [ev for ev in (bmkg_events + openmeteo_events) if ev.get("event_type") == "weather_warning"]
+    # Combined active weather warnings (canonical OpenMeteoAdapter emits
+    # event_type "weather_prediction" / source "open_meteo"; BMKG emits
+    # "weather_warning" — accept both so fusion keeps producing features)
+    weather_warnings = [ev for ev in (bmkg_events + openmeteo_events) if ev.get("event_type") in ("weather_warning", "weather_prediction")]
 
     for ev in weather_warnings:
         lat = float(ev.get("lat", 3.58))
         lon = float(ev.get("lon", 98.67))
         severity = ev.get("severity", "medium")
-        is_om = ev.get("source") == "openmeteo"
+        is_om = ev.get("source") in ("openmeteo", "open_meteo")
 
         geom_feature = generate_flood_geometry(lon, lat, water_depth_m=1.2 if severity == "high" else 0.6)
 

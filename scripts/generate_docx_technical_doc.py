@@ -415,7 +415,7 @@ def build_technical_document(output_path, project_root):
         "ENVIRONMENT=\"production\"\n"
         "PORT=8000\n"
         "HOST=\"0.0.0.0\"\n"
-        "GOOGLE_API_KEY=\"your-gemini-api-key\"\n"
+        "GEMINI_API_KEY=\"your-gemini-api-key\"\n"
         "TOMTOM_API_KEY=\"your-tomtom-api-key\"\n"
         "BMKG_API_URL=\"https://data.bmkg.go.id/DataMKG/TEWS/\"\n"
         "DATABASE_URL=\"postgresql://postgres:password@localhost:5432/prehub\"\n"
@@ -608,7 +608,7 @@ def build_technical_document(output_path, project_root):
         ["Backend API", "Koyeb (Eco Free) / Render (Free)", "Menjalankan Python FastAPI ASGI (uvicorn). Koyeb: Tidak pernah tidur (no spin-down). Render: Pasang cron ping.", "Build: pip install -r requirements.txt\nRun: uvicorn app.main:app --port $PORT"],
         ["Database Spatial", "Supabase (Free Tier)", "500 MB PostgreSQL 15 + PostGIS 3.3, REST API otomatis, backup harian.", "Gunakan DATABASE_URL Supabase"],
         ["Cache & Streams", "Upstash Redis (Free Tier)", "10.000 request/hari gratis, kompatibel protokol Redis standar, region Singapura.", "Set REDIS_URL Upstash"],
-        ["LLM AI Engine", "Google AI Studio (Gemini 2.5 Flash)", "Free Tier 15 RPM, latensi sangat cepat, penalaran cerdas.", "Set GOOGLE_API_KEY"]
+        ["LLM AI Engine", "Google AI Studio (Gemini 2.5 Flash)", "Free Tier 15 RPM, latensi sangat cepat, penalaran cerdas.", "Set GEMINI_API_KEY"]
     ]
     add_styled_table(doc, cloud_headers, cloud_rows, col_widths=[Inches(1.3), Inches(1.7), Inches(2.2), Inches(1.3)])
 
@@ -628,7 +628,7 @@ def build_technical_document(output_path, project_root):
     trouble_rows = [
         ["Peta Mapbox Blank / Gelap", "Token Mapbox belum diatur / limit token habis", "Periksa variabel NEXT_PUBLIC_MAPBOX_TOKEN di .env.local. Pastikan token valid."],
         ["Koneksi API / SSE Terputus", "Backend FastAPI mati atau port 8000 terblokir", "Jalankan uvicorn app.main:app --port 8000. Uji endpoint curl http://localhost:8000/health."],
-        ["Multi-Agent Demo Gagal", "API Key LLM tidak valid atau habis limit", "Masukkan GOOGLE_API_KEY aktif. Sistem otomatis beralih ke Deterministic Fallback Agents jika API luar terputus."],
+        ["Multi-Agent Demo Gagal", "API Key LLM tidak valid atau habis limit", "Masukkan GEMINI_API_KEY aktif. Sistem otomatis beralih ke Deterministic Fallback Agents jika API luar terputus."],
         ["Database Connection Error", "Koneksi Supabase / PostgreSQL terganggu", "Verifikasi koneksi internet. Sistem secara otomatis menggunakan penyimpanan lokal SQLite prehub_local.db."],
         ["Performa Rendering Lambat", "Hardware Acceleration browser mati", "Aktifkan Hardware Acceleration pada pengaturan browser (Settings -> System -> Use graphics acceleration)."]
     ]

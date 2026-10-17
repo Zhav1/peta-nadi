@@ -9,7 +9,7 @@ from app.adapters.bmkg_adapter import BMKGAdapter
 from app.adapters.tomtom_adapter import TomTomAdapter
 from app.adapters.aisstream_adapter import AISstreamAdapter
 from app.adapters.nasa_firms_adapter import NASAFIRMSAdapter
-from app.adapters.openmeteo_adapter import OpenMeteoAdapter
+from app.adapters.open_meteo_adapter import OpenMeteoAdapter
 
 # ==============================================================================
 # BMKG Adapter Tests
@@ -533,14 +533,12 @@ async def test_nasa_firms_proximity_filter(mock_get_redis):
 def test_openmeteo_adapter_instantiates():
     """Regression (S1): OpenMeteoAdapter must instantiate with the base signature and implement health_check."""
     adapter = OpenMeteoAdapter()
-    assert adapter.source_name == "openmeteo"
-    assert adapter.stream_key == "lrip:events:openmeteo"
-    assert adapter.lat == 3.5833
-    assert adapter.lon == 98.6667
+    assert adapter.source_name == "open_meteo"
+    assert adapter.stream_key == "lrip:events:open_meteo"
 
 
 @pytest.mark.asyncio
-@patch("app.adapters.openmeteo_adapter.httpx.AsyncClient")
+@patch("app.adapters.open_meteo_adapter.httpx.AsyncClient")
 async def test_openmeteo_health_check_reflects_endpoint_status(mock_client_cls):
     mock_client = AsyncMock()
     mock_client_cls.return_value.__aenter__.return_value = mock_client

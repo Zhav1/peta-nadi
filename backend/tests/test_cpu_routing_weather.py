@@ -9,7 +9,7 @@ import time
 from unittest.mock import patch, MagicMock
 
 from app.adapters.cpu_routing_adapter import CPURoutingAdapter, get_cpu_router
-from app.adapters.openmeteo_adapter import OpenMeteoAdapter
+from app.adapters.open_meteo_adapter import OpenMeteoAdapter
 from app.services.weather_fusion_service import get_fused_spatial_weather
 from app.services.cpu_routing_service import optimize_fleet_routes_cpu
 from agents.nodes.route_optimization import route_optimization_agent
