@@ -4,8 +4,8 @@ export interface MapDockLayoutInput {
 }
 
 const MAP_DOCK_CLASSES = {
-  sidebarAndDrawer: 'lg:left-[calc((100vw-424px+320px)/2)] max-w-[calc(100vw-460px)] lg:max-w-[calc(100vw-424px-320px-48px)]',
-  sidebarOnly: 'lg:left-[calc((100vw+320px)/2)] lg:max-w-[calc(100vw-320px-48px)]',
+  sidebarAndDrawer: 'lg:left-[calc((100vw-424px+368px)/2)] max-w-[calc(100vw-460px)] lg:max-w-[calc(100vw-424px-368px-32px)]',
+  sidebarOnly: 'lg:left-[calc((100vw+368px)/2)] lg:max-w-[calc(100vw-368px-48px)]',
   drawerOnly: 'lg:left-[calc((100vw-424px)/2)] max-w-[calc(100vw-460px)]',
   mapOnly: 'lg:left-1/2',
 } as const;

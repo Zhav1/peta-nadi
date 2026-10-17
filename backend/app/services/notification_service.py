@@ -42,7 +42,7 @@ async def send_crisis_alert(incident: dict) -> bool:
 
     # Build plain text message body
     body = (
-        f"🚨 ALERT — PetaNadi Crisis Detected\n"
+        f"🚨 ALERT : PetaNadi Crisis Detected\n"
         f"────────────────────────────────\n"
         f"Type:       {crisis_type}\n"
         f"Severity:   {severity} ({confidence}% confidence)\n"

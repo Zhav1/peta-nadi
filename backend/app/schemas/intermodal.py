@@ -1,5 +1,5 @@
 """
-PreHub — Intermodal Terminal, Spoilage Hedging & Compliance Schemas.
+PreHub : Intermodal Terminal, Spoilage Hedging & Compliance Schemas.
 Pydantic v2 schemas for Pan-Sumatra transport choke-points, operational
 spoilage hedging calculations, and digital compliance inspection.
 """

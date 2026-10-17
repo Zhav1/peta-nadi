@@ -55,6 +55,8 @@ class StartDemoPayload(BaseModel):
     mock_agents: Optional[bool] = None
     offline: Optional[bool] = None
     scenario: Optional[str] = None
+    origin: Optional[str] = None
+    destination: Optional[str] = None
 
 @router.post("/start")
 async def start_demo(payload: StartDemoPayload, background_tasks: BackgroundTasks):
@@ -72,6 +74,8 @@ async def start_demo(payload: StartDemoPayload, background_tasks: BackgroundTask
     
     # 2. Get scenario data (for logs/context)
     scenario_path = os.path.join("data", "synthetic", scenario_file)
+    if not os.path.exists(scenario_path):
+        scenario_path = os.path.join("..", "data", "synthetic", scenario_file)
     events = []
     if os.path.exists(scenario_path):
         try:
@@ -85,6 +89,8 @@ async def start_demo(payload: StartDemoPayload, background_tasks: BackgroundTask
     crisis_state = {}
     if mock_agents:
         fixture_path = os.path.join("data", "fixtures", "mock_crisis_state.json")
+        if not os.path.exists(fixture_path):
+            fixture_path = os.path.join("..", "data", "fixtures", "mock_crisis_state.json")
         if os.path.exists(fixture_path):
             try:
                 with open(fixture_path, "r") as f:
@@ -159,7 +165,9 @@ async def start_demo(payload: StartDemoPayload, background_tasks: BackgroundTask
     return {
         "crisis_id": crisis_id,
         "stage": 0,
-        "total_stages": 5
+        "total_stages": 5,
+        "crisis_state": crisis_state,
+        "full_crisis_state": crisis_state
     }
 
 @router.get("/status/{crisis_id}")
@@ -281,7 +289,8 @@ async def get_demo_status(crisis_id: str):
         "confidence": confidence,
         "validated": filtered["validated"],
         "summary": filtered.get("decision_support_output", ""),
-        "crisis_state": filtered
+        "crisis_state": filtered,
+        "full_crisis_state": full_state
     }
 
 @router.post("/advance/{crisis_id}")
@@ -312,7 +321,9 @@ async def advance_demo(crisis_id: str):
             "Consensus Gate",
             "Validated Alert",
             "Notification Sent"
-        ][run["stage"]]
+        ][run["stage"]],
+        "crisis_state": run["crisis_state"],
+        "full_crisis_state": run["crisis_state"]
     }
 
 @router.get("/replay/{crisis_id}")

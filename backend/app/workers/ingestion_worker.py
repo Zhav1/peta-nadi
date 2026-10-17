@@ -1,5 +1,5 @@
 """
-ingestion_worker.py — Concurrent orchestrator runner for all data adapters.
+ingestion_worker.py : Concurrent orchestrator runner for all data adapters.
 
 Usage:
     python -m app.workers.ingestion_worker

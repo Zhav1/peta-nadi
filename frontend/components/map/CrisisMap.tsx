@@ -48,6 +48,7 @@ export interface CrisisMapProps {
   fleetModalityFilter?: 'all' | 'truck' | 'maritime' | 'air';
   simSpeed?: number;
   isRightSidebarOpen?: boolean;
+  mapLegendSlot?: React.ReactNode;
 }
 
 const INITIAL_CENTER: [number, number] = [100.5, 0.5];
@@ -110,6 +111,7 @@ export default function CrisisMap({
   fleetModalityFilter = 'all',
   simSpeed = 1,
   isRightSidebarOpen = false,
+  mapLegendSlot,
 }: CrisisMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   void isLeftSidebarCollapsed;
@@ -150,6 +152,8 @@ export default function CrisisMap({
   onSelectRouteRef.current = onSelectRoute;
 
   const mouseDownPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const lastFocusedCrisisIdRef = useRef<string | null>(null);
+  const lastFocusedShockwaveKeyRef = useRef<string | null>(null);
 
   // Toggle map layer visibility
   const toggleLayerFilter = (key: keyof typeof layerFilters) => {
@@ -453,6 +457,38 @@ export default function CrisisMap({
         data: { type: 'FeatureCollection', features: [] },
       });
       map.addLayer({
+        id: 'hub-nodes-pulse-outer',
+        type: 'circle',
+        source: 'hub-nodes-source',
+        paint: {
+          'circle-radius': [
+            'case',
+            ['get', 'isKeyNode'], 18,
+            ['get', 'isSelectablePrompt'], 14,
+            0
+          ],
+          'circle-color': [
+            'case',
+            ['get', 'isKeyNode'], '#22d3ee',
+            '#00f0ff'
+          ],
+          'circle-opacity': [
+            'case',
+            ['get', 'isKeyNode'], 0.25,
+            ['get', 'isSelectablePrompt'], 0.35,
+            0
+          ],
+          'circle-stroke-width': [
+            'case',
+            ['get', 'isKeyNode'], 2.0,
+            ['get', 'isSelectablePrompt'], 1.5,
+            0
+          ],
+          'circle-stroke-color': '#22d3ee',
+          'circle-stroke-opacity': 0.8,
+        },
+      });
+      map.addLayer({
         id: 'hub-nodes-circle',
         type: 'circle',
         source: 'hub-nodes-source',
@@ -490,20 +526,30 @@ export default function CrisisMap({
       });
 
       // Hub node WebGL click & hover handlers
-      map.on('click', 'hub-nodes-circle', (e) => {
+      const handleNodeClick = (e: any) => {
         if (e.features && e.features[0] && e.features[0].properties) {
           const nodeId = e.features[0].properties.id;
           if (nodeId && onNodeSelectedRef.current) {
             onNodeSelectedRef.current(nodeId);
           }
         }
-      });
-      map.on('mouseenter', 'hub-nodes-circle', () => {
+      };
+      map.on('click', 'hub-nodes-circle', handleNodeClick);
+      map.on('click', 'hub-nodes-pulse-outer', handleNodeClick);
+      map.on('click', 'hub-nodes-label', handleNodeClick);
+
+      const setPointerCursor = () => {
         if (mapRef.current) mapRef.current.getCanvas().style.cursor = 'pointer';
-      });
-      map.on('mouseleave', 'hub-nodes-circle', () => {
+      };
+      const resetCursor = () => {
         if (mapRef.current) mapRef.current.getCanvas().style.cursor = '';
-      });
+      };
+      map.on('mouseenter', 'hub-nodes-circle', setPointerCursor);
+      map.on('mouseleave', 'hub-nodes-circle', resetCursor);
+      map.on('mouseenter', 'hub-nodes-pulse-outer', setPointerCursor);
+      map.on('mouseleave', 'hub-nodes-pulse-outer', resetCursor);
+      map.on('mouseenter', 'hub-nodes-label', setPointerCursor);
+      map.on('mouseleave', 'hub-nodes-label', resetCursor);
 
       // 5. Route ETA Badges Native WebGL Layer
       map.addSource('route-eta-badges-source', {
@@ -633,7 +679,8 @@ export default function CrisisMap({
     // 1. Update Weather Polygons
     const weatherSource = map.getSource('weather-polygons-source') as mapboxgl.GeoJSONSource;
     if (weatherSource) {
-      if (spatialWeatherPolygons && spatialWeatherPolygons.features && spatialWeatherPolygons.features.length > 0) {
+      // Suppress ambient weather polygons during active demo simulation to prevent visual clutter
+      if (demoStage == null && spatialWeatherPolygons && spatialWeatherPolygons.features && spatialWeatherPolygons.features.length > 0) {
         weatherSource.setData(spatialWeatherPolygons);
       } else {
         weatherSource.setData({ type: 'FeatureCollection', features: [] });
@@ -771,6 +818,7 @@ export default function CrisisMap({
     const hubSource = map.getSource('hub-nodes-source') as mapboxgl.GeoJSONSource;
     if (hubSource) {
       const nodesToRender = hubNodesList || Object.values(HUB_NODES);
+      const isSelecting = demoStage === 0 && (!selectedOriginNode || !selectedDestNode);
       const hubFeatures: GeoJSON.Feature<GeoJSON.Point>[] = nodesToRender.map((node) => {
         const isOrigin = node.id === selectedOriginNode;
         const isDest = node.id === selectedDestNode;
@@ -778,15 +826,26 @@ export default function CrisisMap({
         const shortCityName = rawName
           .replace(/^(Hub Utama Pergudangan|Hub Logistik|Interchange Tol|Interchange|Pelabuhan|Bandara Internasional|Bandara|Kota)\s+/i, '')
           .trim();
+
+        let labelName = shortCityName;
+        if (isOrigin) {
+          labelName = `${shortCityName} (ASAL)`;
+        } else if (isDest) {
+          labelName = `${shortCityName} (TUJUAN)`;
+        } else if (isSelecting) {
+          labelName = !selectedOriginNode ? `${shortCityName} (KLIK ASAL)` : `${shortCityName} (KLIK TUJUAN)`;
+        }
+
         return {
           type: 'Feature',
           geometry: { type: 'Point', coordinates: node.coords },
           properties: {
             id: node.id,
             name: node.name,
-            shortName: isOrigin ? `${shortCityName} (ASAL)` : isDest ? `${shortCityName} (TUJUAN)` : shortCityName,
+            shortName: labelName,
             type: node.type,
             isKeyNode: isOrigin || isDest,
+            isSelectablePrompt: isSelecting && !isOrigin && !isDest,
           },
         };
       });
@@ -924,27 +983,82 @@ export default function CrisisMap({
     if (!mapRef.current) return;
 
     if (simulatedShockwave?.center) {
-      mapRef.current.flyTo({
-        center: simulatedShockwave.center,
-        zoom: 10,
-        duration: 1400,
-        essential: true,
-      });
-    } else if (selectedCrisisId) {
-      const incident = incidents.find((i) => i.id === selectedCrisisId);
-      if (incident?.lat != null && incident?.lon != null) {
+      const shockwaveKey = `${simulatedShockwave.center[0].toFixed(4)},${simulatedShockwave.center[1].toFixed(4)},${simulatedShockwave.radiusKm || 0}`;
+      if (lastFocusedShockwaveKeyRef.current !== shockwaveKey) {
+        lastFocusedShockwaveKeyRef.current = shockwaveKey;
         mapRef.current.flyTo({
-          center: [incident.lon, incident.lat],
-          zoom: 11,
-          duration: 1200,
+          center: simulatedShockwave.center,
+          zoom: 10,
+          duration: 1400,
           essential: true,
         });
       }
+    } else {
+      lastFocusedShockwaveKeyRef.current = null;
+      if (selectedCrisisId) {
+        if (lastFocusedCrisisIdRef.current !== selectedCrisisId) {
+          lastFocusedCrisisIdRef.current = selectedCrisisId;
+          const incident = incidents.find((i) => i.id === selectedCrisisId);
+          if (incident?.lat != null && incident?.lon != null) {
+            mapRef.current.flyTo({
+              center: [incident.lon, incident.lat],
+              zoom: 11,
+              duration: 1200,
+              essential: true,
+            });
+          }
+        }
+      } else {
+        lastFocusedCrisisIdRef.current = null;
+      }
     }
-  }, [selectedCrisisId, incidents, simulatedShockwave]);
+  }, [selectedCrisisId, simulatedShockwave?.center?.[0], simulatedShockwave?.center?.[1], simulatedShockwave?.radiusKm]);
+
+  // Step 1 interactive visual cues: animated pulse halo around selectable hub nodes
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const isSelecting = demoStage === 0 && (!selectedOriginNode || !selectedDestNode);
+    if (!isSelecting) return;
+
+    let animId: number;
+    const startTime = performance.now();
+
+    const animatePulse = (now: number) => {
+      const elapsed = (now - startTime) / 1000;
+      const progress = (Math.sin(elapsed * 4) + 1) / 2;
+      const radius = 13 + progress * 7;
+      const opacity = 0.45 - progress * 0.25;
+
+      try {
+        if (map.getLayer('hub-nodes-pulse-outer')) {
+          map.setPaintProperty('hub-nodes-pulse-outer', 'circle-radius', [
+            'case',
+            ['get', 'isKeyNode'], 18,
+            ['get', 'isSelectablePrompt'], radius,
+            0
+          ]);
+          map.setPaintProperty('hub-nodes-pulse-outer', 'circle-opacity', [
+            'case',
+            ['get', 'isKeyNode'], 0.3,
+            ['get', 'isSelectablePrompt'], opacity,
+            0
+          ]);
+        }
+      } catch {}
+
+      animId = requestAnimationFrame(animatePulse);
+    };
+
+    animId = requestAnimationFrame(animatePulse);
+    return () => {
+      cancelAnimationFrame(animId);
+    };
+  }, [demoStage, selectedOriginNode, selectedDestNode]);
 
   return (
-    <div className="relative w-full h-full">
+    <div className={`relative w-full h-full ${isRightSidebarOpen ? 'sidebar-open' : ''}`}>
       <div
         ref={containerRef}
         id="crisis-map"
@@ -964,86 +1078,90 @@ export default function CrisisMap({
         />
       )}
 
-      {/* Floating Map Layer Filters Control */}
-      <div className={`absolute top-3.5 z-30 pointer-events-auto transition-all duration-300 ${
-        isRightSidebarOpen ? 'right-[560px]' : 'right-[156px]'
-      }`}>
-        <button
-          type="button"
-          onClick={() => setShowLayerFilterMenu((v) => !v)}
-          className={`cursor-pointer px-3 py-2 rounded-lg border text-xs font-medium transition-colors flex items-center gap-2 shadow-lg ${
-            showLayerFilterMenu
-              ? 'bg-white text-[#080d14] border-white font-semibold'
-              : 'bg-[#0c1017] text-slate-300 border-[#1c2432] hover:text-white hover:border-slate-500'
-          }`}
-          title="Filter Layer Peta"
-        >
-          <Layers className="w-3.5 h-3.5 text-slate-400" />
-          <span>Layer Peta</span>
-        </button>
+      {/* Floating Map Action Controls Group (Layer Peta + Legenda Rute side-by-side) */}
+      {!(isRightSidebarOpen || (demoStage != null && demoStage >= 2)) && (
+        <div className={`absolute top-3.5 z-30 pointer-events-auto transition-all duration-300 flex items-center gap-2 right-4 animate-in fade-in duration-200`}>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowLayerFilterMenu((v) => !v)}
+              className={`cursor-pointer px-3 py-1.5 rounded-md border text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-xl ${
+                showLayerFilterMenu
+                  ? 'bg-white text-[#080d14] border-white'
+                  : 'bg-[#0c1017] text-slate-300 border-[#1c2432] hover:text-white hover:bg-[#121822]'
+              }`}
+              title="Filter Layer Peta"
+            >
+              <Layers className="w-3.5 h-3.5 text-slate-400" />
+              <span>Layer Peta</span>
+            </button>
 
-        {showLayerFilterMenu && (
-          <div className="absolute right-0 mt-2 w-64 bg-[#0c1017] border border-[#1c2432] p-3 rounded-lg shadow-xl text-xs space-y-2 animate-in fade-in duration-150">
-            <div className="font-sans font-medium text-xs text-slate-300 uppercase tracking-wider border-b border-[#1c2432] pb-1.5">
-              Filter Visualisasi Layer
-            </div>
+            {showLayerFilterMenu && (
+              <div className="absolute right-0 mt-2 w-64 bg-[#0c1017] border border-[#1c2432] p-3 rounded-lg shadow-xl text-xs space-y-2 animate-in fade-in duration-150">
+                <div className="font-sans font-medium text-xs text-slate-300 uppercase tracking-wider border-b border-[#1c2432] pb-1.5">
+                  Filter Visualisasi Layer
+                </div>
 
-            <div className="space-y-1 text-xs">
-              <button
-                type="button"
-                onClick={() => toggleLayerFilter('baselineCorridors')}
-                className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-[#121822] transition"
-              >
-                <span className="text-slate-200">Koridor Utama</span>
-                <span className={`w-4 h-4 rounded flex items-center justify-center border ${
-                  layerFilters.baselineCorridors ? 'bg-white border-white text-[#080d14]' : 'border-[#1c2432]'
-                }`}>
-                  {layerFilters.baselineCorridors && <Check className="w-3 h-3 stroke-[3]" />}
-                </span>
-              </button>
+                <div className="space-y-1 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => toggleLayerFilter('baselineCorridors')}
+                    className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-[#121822] transition"
+                  >
+                    <span className="text-slate-200">Koridor Utama</span>
+                    <span className={`w-4 h-4 rounded flex items-center justify-center border ${
+                      layerFilters.baselineCorridors ? 'bg-white border-white text-[#080d14]' : 'border-[#1c2432]'
+                    }`}>
+                      {layerFilters.baselineCorridors && <Check className="w-3 h-3 stroke-[3]" />}
+                    </span>
+                  </button>
 
-              <button
-                type="button"
-                onClick={() => toggleLayerFilter('bottlenecks')}
-                className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-[#121822] transition"
-              >
-                <span className="text-slate-200">Kemacetan / Bottleneck</span>
-                <span className={`w-4 h-4 rounded flex items-center justify-center border ${
-                  layerFilters.bottlenecks ? 'bg-white border-white text-[#080d14]' : 'border-[#1c2432]'
-                }`}>
-                  {layerFilters.bottlenecks && <Check className="w-3 h-3 stroke-[3]" />}
-                </span>
-              </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleLayerFilter('bottlenecks')}
+                    className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-[#121822] transition"
+                  >
+                    <span className="text-slate-200">Kemacetan / Bottleneck</span>
+                    <span className={`w-4 h-4 rounded flex items-center justify-center border ${
+                      layerFilters.bottlenecks ? 'bg-white border-white text-[#080d14]' : 'border-[#1c2432]'
+                    }`}>
+                      {layerFilters.bottlenecks && <Check className="w-3 h-3 stroke-[3]" />}
+                    </span>
+                  </button>
 
-              <button
-                type="button"
-                onClick={() => toggleLayerFilter('weatherRadar')}
-                className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-[#121822] transition"
-              >
-                <span className="text-slate-200">Radar Cuaca & Bahaya</span>
-                <span className={`w-4 h-4 rounded flex items-center justify-center border ${
-                  layerFilters.weatherRadar ? 'bg-white border-white text-[#080d14]' : 'border-[#1c2432]'
-                }`}>
-                  {layerFilters.weatherRadar && <Check className="w-3 h-3 stroke-[3]" />}
-                </span>
-              </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleLayerFilter('weatherRadar')}
+                    className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-[#121822] transition"
+                  >
+                    <span className="text-slate-200">Radar Cuaca & Bahaya</span>
+                    <span className={`w-4 h-4 rounded flex items-center justify-center border ${
+                      layerFilters.weatherRadar ? 'bg-white border-white text-[#080d14]' : 'border-[#1c2432]'
+                    }`}>
+                      {layerFilters.weatherRadar && <Check className="w-3 h-3 stroke-[3]" />}
+                    </span>
+                  </button>
 
-              <button
-                type="button"
-                onClick={() => toggleLayerFilter('fleetVehicles')}
-                className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-[#121822] transition"
-              >
-                <span className="text-slate-200">Armada Logistik</span>
-                <span className={`w-4 h-4 rounded flex items-center justify-center border ${
-                  layerFilters.fleetVehicles ? 'bg-white border-white text-[#080d14]' : 'border-[#1c2432]'
-                }`}>
-                  {layerFilters.fleetVehicles && <Check className="w-3 h-3 stroke-[3]" />}
-                </span>
-              </button>
-            </div>
+                  <button
+                    type="button"
+                    onClick={() => toggleLayerFilter('fleetVehicles')}
+                    className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-[#121822] transition"
+                  >
+                    <span className="text-slate-200">Armada Logistik</span>
+                    <span className={`w-4 h-4 rounded flex items-center justify-center border ${
+                      layerFilters.fleetVehicles ? 'bg-white border-white text-[#080d14]' : 'border-[#1c2432]'
+                    }`}>
+                      {layerFilters.fleetVehicles && <Check className="w-3 h-3 stroke-[3]" />}
+                    </span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+
+          {mapLegendSlot}
+        </div>
+      )}
 
       {drawModeActive && (
         <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[360] px-3.5 py-1.5 rounded-md bg-[#1a120b] border border-amber-500/40 shadow-xl flex items-center gap-2.5 animate-in fade-in duration-200">

@@ -1,19 +1,19 @@
 ---
-phase: 59-llm-swarm-post-key-audit
+phase: 60-llm-swarm-post-key-audit
 plan: 02
 subsystem: infra
 tags: [pgvector, supabase, gemini-embeddings, asyncio-timeout, render-yaml, env-sync]
 
 # Dependency graph
 requires:
-  - phase: 59-llm-swarm-post-key-audit
-    provides: 59-RESEARCH.md env-sync table plus pgvector drift verdict (1536 vs 768)
+  - phase: 60-llm-swarm-post-key-audit
+    provides: 60-RESEARCH.md env-sync table plus pgvector drift verdict (1536 vs 768)
 provides:
   - 001_ltm_embedding_768.sql atttypmod-gated idempotent pgvector migration
   - 768-dim fresh-install schema in 000_init.sql
   - 12s embed bound plus 35s extractor outer timeout enveloping the 30s gateway inner call
   - synchronized env contracts with zero GOOGLE_API_KEY alias residue
-affects: [59-01-gateway-cutover, 59-03-audit-probes, ltm-seeding, render-redeploy]
+affects: [60-01-gateway-cutover, 60-03-audit-probes, ltm-seeding, render-redeploy]
 
 # Actuals (#2632) — pairs with the plan's `estimate` to calibrate future estimates.
 # Same estimateTokens scale (chars/4 over the realized diff), never a harness token count.
@@ -96,7 +96,7 @@ completed: 2026-10-17
 status: complete
 ---
 
-# Phase 59 Plan 02: pgvector 768 Migration, Timeout Bounds, Env Sync Summary
+# Phase 60 Plan 02: pgvector 768 Migration, Timeout Bounds, Env Sync Summary
 
 **Probe-then-migrate pgvector 1536→768 with atttypmod gate, 12s embed + 35s extractor timeout bounds, and env contract sync with stale key-alias removal**
 

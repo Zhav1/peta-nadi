@@ -225,9 +225,9 @@ export function useFleetVehicles(
   const effectiveCompanyId = role === 'DISPATCHER' ? user?.company_id : undefined;
 
   const [isSimulationMode, setIsSimulationMode] = useState<boolean>(
-    options?.enableSimulationFallback ?? false
+    options?.enableSimulationFallback ?? true
   );
-  const [vehicles, setVehicles] = useState<FleetVehicle[]>([]);
+  const [rawVehicles, setRawVehicles] = useState<FleetVehicle[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -235,29 +235,14 @@ export function useFleetVehicles(
     try {
       const res = await api.fleet.vehicles(modality, effectiveCompanyId);
       if (res.vehicles && res.vehicles.length > 0) {
-        setVehicles(res.vehicles);
+        setRawVehicles(res.vehicles);
         setError(null);
       } else {
-        if (isSimulationMode) {
-          const simFleet = modality
-            ? FALLBACK_FLEET.filter((v) => v.modality === modality)
-            : FALLBACK_FLEET;
-          setVehicles(simFleet);
-        } else {
-          setVehicles([]);
-        }
+        setRawVehicles([]);
       }
     } catch (err: unknown) {
-      if (isSimulationMode) {
-        const simFleet = modality
-          ? FALLBACK_FLEET.filter((v) => v.modality === modality)
-          : FALLBACK_FLEET;
-        setVehicles(simFleet);
-        setError(null);
-      } else {
-        setVehicles([]);
-        setError(err instanceof Error ? err.message : 'Gagal memuat telemetri armada');
-      }
+      setRawVehicles([]);
+      setError(err instanceof Error ? err.message : 'Gagal memuat telemetri armada');
     } finally {
       setIsLoading(false);
     }
@@ -271,31 +256,16 @@ export function useFleetVehicles(
         const res = await api.fleet.vehicles(modality, effectiveCompanyId);
         if (isMounted) {
           if (res.vehicles && res.vehicles.length > 0) {
-            setVehicles(res.vehicles);
+            setRawVehicles(res.vehicles);
             setError(null);
           } else {
-            if (isSimulationMode) {
-              const simFleet = modality
-                ? FALLBACK_FLEET.filter((v) => v.modality === modality)
-                : FALLBACK_FLEET;
-              setVehicles(simFleet);
-            } else {
-              setVehicles([]);
-            }
+            setRawVehicles([]);
           }
         }
       } catch (err: unknown) {
         if (isMounted) {
-          if (isSimulationMode) {
-            const simFleet = modality
-              ? FALLBACK_FLEET.filter((v) => v.modality === modality)
-              : FALLBACK_FLEET;
-            setVehicles(simFleet);
-            setError(null);
-          } else {
-            setVehicles([]);
-            setError(err instanceof Error ? err.message : 'Gagal memuat telemetri armada');
-          }
+          setRawVehicles([]);
+          setError(err instanceof Error ? err.message : 'Gagal memuat telemetri armada');
         }
       } finally {
         if (isMounted) setIsLoading(false);
@@ -309,29 +279,27 @@ export function useFleetVehicles(
       isMounted = false;
       clearInterval(interval);
     };
-  }, [modality, isSimulationMode, effectiveCompanyId]);
+  }, [modality, effectiveCompanyId]);
 
-  useEffect(() => {
-    if (isSimulationMode && vehicles.length === 0 && !isLoading) {
-      const simFleet = modality
-        ? FALLBACK_FLEET.filter((v) => v.modality === modality)
-        : FALLBACK_FLEET;
-      setVehicles(simFleet);
-    } else if (!isSimulationMode && error) {
-      setVehicles([]);
-    }
-  }, [isSimulationMode, modality, vehicles.length, isLoading, error]);
+  const customVehicles = rawVehicles.filter(
+    (v) =>
+      v.telemetry_source === 'CUSTOM_DISPATCHER' ||
+      v.telemetry_source === 'TMS_GPS_WEBHOOK' ||
+      (v as any).is_custom === true
+  );
 
-  const customCount = vehicles.filter(
-    (v) => v.telemetry_source === 'CUSTOM_DISPATCHER' || v.telemetry_source === 'TMS_GPS_WEBHOOK'
-  ).length;
+  const vehicles: FleetVehicle[] = isSimulationMode
+    ? (rawVehicles.length > 0
+        ? rawVehicles
+        : (modality ? FALLBACK_FLEET.filter((v) => v.modality === modality) : FALLBACK_FLEET))
+    : customVehicles;
 
   return {
     vehicles,
     isLoading,
     error,
     refetch: fetchFleet,
-    customCount,
+    customCount: customVehicles.length,
     isSimulationMode,
     setIsSimulationMode,
   };

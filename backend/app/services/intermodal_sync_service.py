@@ -1,5 +1,5 @@
 """
-PreHub — Pan-Sumatra Intermodal Sea-Land Terminal & Choke-Point Synchronization Service.
+PreHub : Pan-Sumatra Intermodal Sea-Land Terminal & Choke-Point Synchronization Service.
 Tracks 18+ strategic Sumatra transport hubs (7 maritime/ferry terminals and 11 mountain/toll bottlenecks),
 calculating real-time dwelling times, queue volumes, and dynamic delay multipliers (M_intermodal).
 """

@@ -1,5 +1,5 @@
 """
-PreHub — Test Suite for Self-Serve Fleet Onboarding & Live GPS Ingestion.
+PreHub : Test Suite for Self-Serve Fleet Onboarding & Live GPS Ingestion.
 Tests single registration, bulk CSV manifest parsing, TMS GPS telematics webhooks,
 SQLite local persistence, TelemetryService dynamic fusion, and RBAC authorization.
 """

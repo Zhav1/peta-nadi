@@ -1,12 +1,12 @@
 ---
-phase: 59-llm-swarm-post-key-audit
+phase: 60-llm-swarm-post-key-audit
 plan: 03
 subsystem: api
 tags: [llm-swarm, mimo-v2.6-pro, deepseek-v4.1-flash, live-matrix, render-parity, retired-literal-sweep]
 
 # Dependency graph
 requires:
-  - phase: 59-llm-swarm-post-key-audit
+  - phase: 60-llm-swarm-post-key-audit
     provides: 59-01 tracer + embeddings-only cutover, 59-02 pgvector/timeout/env-sync, 59-04 NVIDIA purge
 provides:
   - Full 8-use-case live matrix over the locked pair (rows 0-7 live, row 8 404-recorded)
@@ -27,7 +27,7 @@ tech-stack:
 
 key-files:
   created:
-    - .planning/phases/59-llm-swarm-post-key-audit/59-AUDIT-FINDINGS.md
+    - .planning/phases/59-llm-swarm-post-key-audit/60-AUDIT-FINDINGS.md
   modified:
     - backend/app/routers/agent_router.py
     - docs/video/TEAM_INFO.md
@@ -91,7 +91,7 @@ plan_head_after: ee02e761248b7a6008f0fee7d7b9475cf60bbe3b
 commits: 3
 ---
 
-# Phase 59 Plan 03: Full 8-Use-Case Matrix + Render Parity + Findings Ledger Summary
+# Phase 60 Plan 03: Full 8-Use-Case Matrix + Render Parity + Findings Ledger Summary
 
 **Swarm proven live on mimo reasoning + deepseek driver (rows 0-7), local 10/10 and Render 10/10 parity, every plothole ledgered file:line — LTM blocked by the external embedding 404 (model not switched per D-08), dashboard redeploy left for human confirm.**
 
@@ -107,7 +107,7 @@ commits: 3
 
 - Task 1: chat docstring at `agent_router.py:134` now credits `mimo-v2.6-pro` + `deepseek-v4.1-flash` at temp 0.3; `docs/video/TEAM_INFO.md:66` vendor names purged (extra gate); zero `gemini-3.8-flash|3.5-flash-lite` in agents/backend/scripts; zero `cuopt|fourcastnet|earth2` repo-wide per extra-gate scope (one intentional detector hit kept at `scripts/verify_codebase_consistency.py:30`).
 - Task 2: `verify_llm_swarm.py` extended 59-01 tracer → full rows 1-8 with Indonesian, grounding, and degraded-marker asserts; final run exit 0 — rows 0-7 LIVE (row 1 2591-char 3-section brief, row 6 schema-valid, row 7 declarative-live + terse-honestly-degraded), row 8a DEGRADED-RECORDED with exact 404 + live ListModels, row 8b 0 rows. Gateway suite 9/9 green.
-- Task 3: `probe_parity.sh` extended (warm-up, corridor-context, `decision_support` stream assert); Render leg 10/10 via bash; local leg 10/10 via curl.exe equivalent (fresh current-tree boot, stopped after); `59-AUDIT-FINDINGS.md` ledgers 5 findings with file:line + dispositions.
+- Task 3: `probe_parity.sh` extended (warm-up, corridor-context, `decision_support` stream assert); Render leg 10/10 via bash; local leg 10/10 via curl.exe equivalent (fresh current-tree boot, stopped after); `60-AUDIT-FINDINGS.md` ledgers 5 findings with file:line + dispositions.
 - Render chat on the terse prompt served LIVE (`degraded:false`, conf 0.92, `SIG-OPENCODE-DRIVER-8969BF`, CPU-R Solver sources, grounded Rp figures).
 
 ## Task Commits
@@ -122,7 +122,7 @@ Each task was committed atomically:
 
 ## Files Created/Modified
 
-- `.planning/phases/59-llm-swarm-post-key-audit/59-AUDIT-FINDINGS.md` - Parity tables, live-matrix evidence, 5 findings with file:line + dispositions, sweep record (created)
+- `.planning/phases/59-llm-swarm-post-key-audit/60-AUDIT-FINDINGS.md` - Parity tables, live-matrix evidence, 5 findings with file:line + dispositions, sweep record (created)
 - `backend/app/routers/agent_router.py` - Chat docstring → locked pair at temp 0.3 (modified)
 - `docs/video/TEAM_INFO.md` - Tech-stack vendor names → CPU routing/Open-Meteo (modified)
 - `scripts/verify_llm_swarm.py` - Rows 1-8 matrix, asserts, annotated row-1 retry, two-leg row 7, 8a/8b 404 evidence (modified)
@@ -190,7 +190,7 @@ None — no new network endpoints, auth paths, or schema changes. Ledger carries
 ## Deferred Observations (out of scope, not fixed)
 
 - `docs/video/TEAM_INFO.md:66` still lists `Gemini 3.1 Flash, DeepSeek V3.2` (stale vs locked pair) — outside the banned-literal gate; docs-refresh pass candidate.
-- Pre-existing untracked `59-0x-PLAN.md` / `59-CONTEXT.md` / `59-RESEARCH.md` planning files in the phase dir belong to the orchestrator — left untouched.
+- Pre-existing untracked `59-0x-PLAN.md` / `60-CONTEXT.md` / `60-RESEARCH.md` planning files in the phase dir belong to the orchestrator — left untouched.
 
 ## User Setup Required
 

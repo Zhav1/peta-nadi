@@ -32,7 +32,7 @@ export default function OnboardHero() {
         <div className="absolute inset-0 bg-gradient-to-b from-[#080d14] via-[#080d14]/70 to-[#080d14]" />
       </div>
 
-      {/* Hero Content — Restrained Editorial Composition */}
+      {/* Hero Content: Restrained Editorial Composition */}
       <div className="relative z-10 max-w-4xl mx-auto text-center flex flex-col items-center gap-8">
         
         {/* Editorial Headline */}
@@ -40,7 +40,7 @@ export default function OnboardHero() {
           Peringatan Dini & Mitigasi Gangguan Distribusi Pangan
         </h1>
 
-        {/* Subtitle — Factual, Grounded Domain Copy */}
+        {/* Subtitle: Factual, Grounded Domain Copy */}
         <p className="font-sans text-base sm:text-lg md:text-xl text-slate-300 max-w-2xl leading-relaxed">
           Memantau kelancaran koridor logistik, memvalidasi gangguan berbasis data multi-sumber, dan merekomendasikan rute pengalihan secara dini sebelum pasokan pangan pokok terhambat.
         </p>

@@ -1,5 +1,5 @@
 """
-PetaNadi / LRIP — Incident Geometry Generator Service
+PetaNadi / LRIP : Incident Geometry Generator Service
 Generates algorithmically correct, visually distinct, organic GeoJSON geometries per hazard type.
 Replaces rectangular bounding boxes with realistic geographic representations:
 - Earthquake: Multi-ring shockwaves + fault crack vectors (LineString)

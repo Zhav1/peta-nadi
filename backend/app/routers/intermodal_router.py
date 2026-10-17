@@ -1,5 +1,5 @@
 """
-PreHub — Pan-Sumatra Intermodal Choke-Point, Spoilage Hedging & Compliance Router.
+PreHub : Pan-Sumatra Intermodal Choke-Point, Spoilage Hedging & Compliance Router.
 Exposes endpoints for intermodal terminal queues, operational hedging cost matrix solvers,
 and digital Surat Jalan / BKHIT / MST compliance inspections.
 """

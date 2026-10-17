@@ -1,5 +1,5 @@
 """
-PreHub — Self-Serve Fleet Onboarding & Live GPS Ingestion REST Router.
+PreHub : Self-Serve Fleet Onboarding & Live GPS Ingestion REST Router.
 Provides endpoints for single vehicle registration, bulk CSV/Excel manifest parsing,
 standard TMS GPS telematics webhooks, and local fleet management.
 """

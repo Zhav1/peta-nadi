@@ -1,5 +1,5 @@
 """
-PreHub — Operational Spoilage Hedging & Economic Cost-Benefit Solver.
+PreHub : Operational Spoilage Hedging & Economic Cost-Benefit Solver.
 Calculates closed-form monetary trade-offs across 3 tactical mitigation policies (Continue vs Reroute vs Hold),
 factoring 4-tier commodity perishability decay, real BPJT toll tariffs, Pertamina fuel rates,
 and PIHPS spot cargo valuations.

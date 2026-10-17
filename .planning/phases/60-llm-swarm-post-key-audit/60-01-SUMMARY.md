@@ -1,5 +1,5 @@
 ---
-phase: 59-llm-swarm-post-key-audit
+phase: 60-llm-swarm-post-key-audit
 plan: 01
 subsystem: api
 tags: [opencode-go, mimo-v2.6-pro, deepseek-v4.1-flash, llm-gateway, ner, fail-loud, embeddings-only]
@@ -86,7 +86,7 @@ plan_head_before: ccca38766a44a413fde3dd5ffb7395c720e070ae
 plan_head_after: b7c9e6f
 ---
 
-# Phase 59 Plan 01: Tracer Smoke + Gemini-Embeddings-Only Cutover Summary
+# Phase 60 Plan 01: Tracer Smoke + Gemini-Embeddings-Only Cutover Summary
 
 **Live mimo + deepseek completions proven over Go chat/completions, then both Gemini chat violators deleted so GEMINI_API_KEY scopes to LTM embeddings only — fail-loud honesty intact.**
 

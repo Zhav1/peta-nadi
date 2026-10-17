@@ -1,12 +1,12 @@
 ---
-phase: 59-llm-swarm-post-key-audit
+phase: 60-llm-swarm-post-key-audit
 plan: "04"
 subsystem: refactoring
 tags: [cpu-routing, open-meteo, rename-refactor, nvidia-purge, networkx, or-tools]
 
 # Dependency graph
 requires:
-  - phase: 59-llm-swarm-post-key-audit
+  - phase: 60-llm-swarm-post-key-audit
     provides: Phase 59-02 env-contract sync (NVIDIA key placeholders that this plan removes)
 provides:
   - Zero NVIDIA/Earth2 naming in the live pipeline (backend, frontend, env contracts, docs)
@@ -74,7 +74,7 @@ completed: 2026-10-17
 status: complete
 ---
 
-# Phase 59 Plan 04: NVIDIA Naming Purge Summary
+# Phase 60 Plan 04: NVIDIA Naming Purge Summary
 
 **Deleted cuopt_adapter.py, renamed Earth2/cuOpt identifiers to Open-Meteo/CPU naming across backend, frontend, env contracts and docs — CPU routing (NetworkX + OR-Tools) and Open-Meteo weather run exactly as before, with zero banned-vendor strings left in the live pipeline.**
 
@@ -207,4 +207,4 @@ None - no external service configuration required. (Operators with live `.env` f
 
 - All 25 changed files exist at their post-rename paths (renames verified via `git show --stat HEAD` lineage).
 - Commits `b7ce494`, `81c189a`, `663c942` are ancestors of HEAD (`git rev-list --count 9f250c8..HEAD` = 3).
-- SUMMARY file written to `.planning/phases/59-llm-swarm-post-key-audit/59-04-SUMMARY.md`.
+- SUMMARY file written to `.planning/phases/59-llm-swarm-post-key-audit/60-04-SUMMARY.md`.

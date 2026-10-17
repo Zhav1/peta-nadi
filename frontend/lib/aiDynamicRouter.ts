@@ -8,7 +8,7 @@ export const DEFAULT_HAZARD_RADIUS_KM = 8;
 export const TOLL_CORRIDOR_BUFFER_KM = 2.0;
 
 /**
- * Verified Real Arterial Road Network Nodes — Sumatra Logistics Corridors
+ * Verified Real Arterial Road Network Nodes: Sumatra Logistics Corridors
  */
 export const HIGHWAY_JUNCTION_NODES: Array<{ id: string; name: string; coords: LonLat; region: string; isTollGate?: boolean }> = [
   // North Sumatra / Belawan - Medan - Tebing - Siantar
@@ -241,6 +241,95 @@ export function isPolylineIntersectingHazardCircle(
   return false;
 }
 
+export interface HazardExposureMetrics {
+  isIntersecting: boolean;
+  exposureKm: number;
+  penetrationRatio: number;
+  minDistanceToCenterKm: number;
+  maxProximity: number; // 0 (at/outside edge) to 1 (at epicenter)
+  riskPenaltyScore: number;
+}
+
+/**
+ * Calculates continuous quantitative hazard exposure metrics for a polyline:
+ * - exposureKm: cumulative length of segments lying within hazard radius
+ * - penetrationRatio: proportion of route exposed to hazard
+ * - minDistanceToCenterKm: closest distance the route approaches the hazard center
+ * - maxProximity: continuous index of closeness to epicenter (1 = direct center hit)
+ * - riskPenaltyScore: continuous composite cost for least-risk ranking
+ */
+export function calculateHazardExposureMetrics(
+  polyline: LonLat[],
+  hazardCenter: LonLat,
+  radiusKm: number,
+  dangerBufferKm: number = 2.0
+): HazardExposureMetrics {
+  if (!polyline || polyline.length === 0) {
+    return {
+      isIntersecting: false,
+      exposureKm: 0,
+      penetrationRatio: 0,
+      minDistanceToCenterKm: 9999,
+      maxProximity: 0,
+      riskPenaltyScore: 0,
+    };
+  }
+
+  const effectiveRadius = radiusKm + dangerBufferKm;
+  let totalLengthKm = 0;
+  let exposedLengthKm = 0;
+  let minDistance = Infinity;
+
+  for (let i = 0; i < polyline.length; i++) {
+    const distToCenter = getHaversineDistanceKm(polyline[i], hazardCenter);
+    if (distToCenter < minDistance) minDistance = distToCenter;
+
+    if (i < polyline.length - 1) {
+      const segLength = getHaversineDistanceKm(polyline[i], polyline[i + 1]);
+      totalLengthKm += segLength;
+
+      const A = polyline[i];
+      const B = polyline[i + 1];
+      const H = hazardCenter;
+      const dx = B[0] - A[0];
+      const dy = B[1] - A[1];
+      const lenSq = dx * dx + dy * dy;
+
+      let closestDist = distToCenter;
+      if (lenSq > 0) {
+        const t = Math.max(0, Math.min(1, ((H[0] - A[0]) * dx + (H[1] - A[1]) * dy) / lenSq));
+        const closest: LonLat = [A[0] + t * dx, A[1] + t * dy];
+        closestDist = getHaversineDistanceKm(closest, hazardCenter);
+        if (closestDist < minDistance) minDistance = closestDist;
+      }
+
+      if (closestDist <= effectiveRadius) {
+        exposedLengthKm += segLength;
+      }
+    }
+  }
+
+  const isIntersecting = minDistance <= effectiveRadius;
+  const penetrationRatio = totalLengthKm > 0 ? Math.min(1.0, exposedLengthKm / totalLengthKm) : 0;
+  const maxProximity = isIntersecting
+    ? Math.max(0, Math.min(1.0, 1.0 - minDistance / effectiveRadius))
+    : 0;
+
+  // Composite risk penalty: heavily penalizes routes passing deep near the center
+  const riskPenaltyScore = isIntersecting
+    ? exposedLengthKm * 3.0 + Math.pow(maxProximity, 2) * 60.0
+    : 0;
+
+  return {
+    isIntersecting,
+    exposureKm: Math.round(exposedLengthKm * 10) / 10,
+    penetrationRatio: Math.round(penetrationRatio * 100) / 100,
+    minDistanceToCenterKm: Math.round(minDistance * 10) / 10,
+    maxProximity: Math.round(maxProximity * 100) / 100,
+    riskPenaltyScore: Math.round(riskPenaltyScore * 10) / 10,
+  };
+}
+
 export interface MapboxRouteResult {
   coordinates: LonLat[];
   distanceKm: number;
@@ -429,13 +518,13 @@ export async function fetchMapboxAlternativeDrivingRoutes(
 
   if (results.length === 0) {
     // Phase 57 WP-A3 (D4): honest unavailable path. Straight-line estimate is
-    // labeled SIMULASI/OFFLINE at every render site — never presented as live.
+    // labeled SIMULASI/OFFLINE at every render site: never presented as live.
     results.push({
       coordinates: fallbackCoords,
       distanceKm: Math.round(fallbackDistance),
       durationMinutes: Math.round((fallbackDistance / 60) * 60),
       congestionSegments: [],
-      summary: 'SIMULASI/OFFLINE — garis lurus, bukan geometri jalan live',
+      summary: 'SIMULASI/OFFLINE: garis lurus, bukan geometri jalan live',
       source: 'offline-interpolated',
     });
   }
@@ -625,14 +714,26 @@ export async function calculateAIDynamicDetourRoutes(
   const mapboxResults = await fetchMapboxAlternativeDrivingRoutes(origin, destination, [], excludeToll);
   const recommendations: RouteRecommendation[] = [];
   let foundCleanRoute = false;
+  const evaluatedCandidates: Array<{
+    result: MapboxRouteResult;
+    metrics: HazardExposureMetrics;
+    name: string;
+  }> = [];
 
   for (let i = 0; i < mapboxResults.length; i++) {
     const res = mapboxResults[i];
-    const isCompromised = hazardCenter
-      ? isPolylineIntersectingHazardCircle(res.coordinates, hazardCenter, radiusKm)
-      : false;
+    const metrics = hazardCenter
+      ? calculateHazardExposureMetrics(res.coordinates, hazardCenter, radiusKm)
+      : { isIntersecting: false, exposureKm: 0, penetrationRatio: 0, minDistanceToCenterKm: 9999, maxProximity: 0, riskPenaltyScore: 0 };
 
+    const isCompromised = metrics.isIntersecting;
     if (!isCompromised) foundCleanRoute = true;
+
+    evaluatedCandidates.push({
+      result: res,
+      metrics,
+      name: i === 0 ? 'Rute Utama (Jalan Tol / Jalinsum)' : `Alternatif ${i} (Jalur Arteri)`,
+    });
 
     const routeColor = isCompromised ? '#EF4444' : i === 0 ? '#00F0FF' : i === 1 ? '#3B82F6' : '#F59E0B';
     const routeName = i === 0 ? 'Rute Utama (Jalan Tol / Jalinsum)' : i === 1 ? 'Alternatif 1 (Jalur Arteri)' : 'Alternatif 2 (Bypass Sekunder)';
@@ -649,7 +750,7 @@ export async function calculateAIDynamicDetourRoutes(
       id: `route-opt-${i + 1}`,
       route_name: labeledName,
       description: isOffline
-        ? `[SIMULASI/OFFLINE — garis lurus, bukan jalan raya live] ${routeName} via ${res.summary}`
+        ? `[SIMULASI/OFFLINE: garis lurus, bukan jalan raya live] ${routeName} via ${res.summary}`
         : `${routeName} via ${res.summary}`,
       waypoints: res.coordinates.map(([lon, lat]) => ({ lat, lon })),
       distance_km: res.distanceKm,
@@ -666,7 +767,7 @@ export async function calculateAIDynamicDetourRoutes(
     });
   }
 
-  // STEP 2: If ALL default routes are compromised, search bypass arterial nodes
+  // STEP 2: Priority 1 - Full Avoidance: search bypass arterial nodes
   if (hazardCenter && !foundCleanRoute && token) {
     const safeNodes = HIGHWAY_JUNCTION_NODES.filter(
       (node) => getHaversineDistanceKm(node.coords, hazardCenter) >= radiusKm + 2.0
@@ -687,9 +788,10 @@ export async function calculateAIDynamicDetourRoutes(
       const bypassResult = await fetchMapboxRouteWithForcedWaypoint(origin, destination, cand.coords, token, excludeToll);
 
       if (bypassResult) {
-        const isBypassClean = !isPolylineIntersectingHazardCircle(bypassResult.coordinates, hazardCenter, radiusKm);
+        const metrics = calculateHazardExposureMetrics(bypassResult.coordinates, hazardCenter, radiusKm);
+        evaluatedCandidates.push({ result: bypassResult, metrics, name: `Arteri ${cand.name}` });
 
-        if (isBypassClean) {
+        if (!metrics.isIntersecting) {
           foundCleanRoute = true;
           recommendations.unshift({
             id: 'route-opt-safe-bypass',
@@ -714,7 +816,7 @@ export async function calculateAIDynamicDetourRoutes(
     }
   }
 
-  // STEP 3: Orthogonal / Tangential Avoidance — compute perpendicular bypass waypoints around the hazard circle
+  // STEP 3: Multi-Angle Radial Clearance Avoidance (+90, -90, +45, -45 degrees)
   if (hazardCenter && !foundCleanRoute && token) {
     const [hazardLon, hazardLat] = hazardCenter;
     const clearanceKm = radiusKm + 6.0;
@@ -725,56 +827,82 @@ export async function calculateAIDynamicDetourRoutes(
     const odLatKm = (destination[1] - origin[1]) * kmPerLatDegree;
     const odLengthKm = Math.sqrt(odLonKm * odLonKm + odLatKm * odLatKm) || 1;
 
-    const perpLonKm = -odLatKm / odLengthKm;
-    const perpLatKm = odLonKm / odLengthKm;
+    const dirLon = odLonKm / odLengthKm;
+    const dirLat = odLatKm / odLengthKm;
 
-    const offsetLon = (perpLonKm * clearanceKm) / kmPerLonDegree;
-    const offsetLat = (perpLatKm * clearanceKm) / kmPerLatDegree;
+    // Test 4 radial avoidance angles: orthogonal left/right and 45-degree sweeps
+    const avoidanceAngles = [Math.PI / 2, -Math.PI / 2, Math.PI / 4, -Math.PI / 4];
+    for (const ang of avoidanceAngles) {
+      const cosA = Math.cos(ang);
+      const sinA = Math.sin(ang);
+      const rotLon = dirLon * cosA - dirLat * sinA;
+      const rotLat = dirLon * sinA + dirLat * cosA;
+      const offsetLon = (rotLon * clearanceKm) / kmPerLonDegree;
+      const offsetLat = (rotLat * clearanceKm) / kmPerLatDegree;
+      const waypoint: LonLat = [hazardLon + offsetLon, hazardLat + offsetLat];
 
-    const orthogonalWaypoints: LonLat[] = [
-      [hazardLon + offsetLon, hazardLat + offsetLat],
-      [hazardLon - offsetLon, hazardLat - offsetLat],
-    ];
+      const radialResult = await fetchMapboxRouteWithForcedWaypoint(origin, destination, waypoint, token, excludeToll);
+      if (!radialResult) continue;
 
-    for (const waypoint of orthogonalWaypoints) {
-      const orthogonalResult = await fetchMapboxRouteWithForcedWaypoint(origin, destination, waypoint, token, excludeToll);
-      if (!orthogonalResult) continue;
+      const metrics = calculateHazardExposureMetrics(radialResult.coordinates, hazardCenter, radiusKm);
+      evaluatedCandidates.push({ result: radialResult, metrics, name: `Radial Detour (${Math.round(ang * 180 / Math.PI)}°)` });
 
-      const isOrthogonalClean = !isPolylineIntersectingHazardCircle(
-        orthogonalResult.coordinates,
-        hazardCenter,
-        radiusKm
-      );
-      if (!isOrthogonalClean) continue;
-
-      foundCleanRoute = true;
-      recommendations.unshift({
-        id: 'route-opt-orthogonal-detour',
-        route_name: 'Rute Pengalihan Bebas Bencana',
-        description: `Rute belok geometris tegak lurus (kiri/kanan) pada jarak ${clearanceKm} km dari pusat bahaya`,
-        waypoints: orthogonalResult.coordinates.map(([lon, lat]) => ({ lat, lon })),
-        distance_km: orthogonalResult.distanceKm,
-        eta_minutes: orthogonalResult.durationMinutes,
-        fuel_increase_pct: 13.5,
-        risk_score: 0.08,
-        is_compromised: false,
-        safety_status: 'SAFE_DETOUR',
-        safety_tag: 'RUTE PENGALIHAN BEBAS BENCANA',
-        traffic_level: 'low',
-        congestion_segments: orthogonalResult.congestionSegments,
-        modality: 'truck',
-        color: '#10B981',
-      });
-      break;
+      if (!metrics.isIntersecting) {
+        foundCleanRoute = true;
+        recommendations.unshift({
+          id: 'route-opt-radial-detour',
+          route_name: 'Rute Pengalihan Bebas Bencana',
+          description: `Rute belok radial ${clearanceKm} km di luar radius genangan bahaya`,
+          waypoints: radialResult.coordinates.map(([lon, lat]) => ({ lat, lon })),
+          distance_km: radialResult.distanceKm,
+          eta_minutes: radialResult.durationMinutes,
+          fuel_increase_pct: 13.5,
+          risk_score: 0.08,
+          is_compromised: false,
+          safety_status: 'SAFE_DETOUR',
+          safety_tag: 'RUTE PENGALIHAN BEBAS BENCANA',
+          traffic_level: 'low',
+          congestion_segments: radialResult.congestionSegments,
+          modality: 'truck',
+          color: '#10B981',
+        });
+        break;
+      }
     }
   }
 
-  // STEP 4: If STILL all routes are compromised, surface HOLD / DELAY
-  if (hazardCenter && !foundCleanRoute) {
-    recommendations.unshift({
+  // STEP 4: Priority 2 - Least-Risk Minimization Path (when all corridors intersect)
+  if (hazardCenter && !foundCleanRoute && evaluatedCandidates.length > 0) {
+    // Sort all evaluated candidates by composite risk penalty score
+    evaluatedCandidates.sort((a, b) => a.metrics.riskPenaltyScore - b.metrics.riskPenaltyScore);
+    const leastRisk = evaluatedCandidates[0];
+
+    // Only unshift if least risk candidate significantly improves exposure over straight cut
+    if (leastRisk && leastRisk.result.coordinates.length > 0) {
+      recommendations.unshift({
+        id: 'route-opt-least-risk',
+        route_name: 'Rute Risiko Minimal (Fringe Avoidance)',
+        description: `Jalur alternatif risiko terendah: meminimalisir paparan ke ${leastRisk.metrics.exposureKm} km di pinggiran luar zona bahaya (jarak terdekat ${leastRisk.metrics.minDistanceToCenterKm} km dari episentrum).`,
+        waypoints: leastRisk.result.coordinates.map(([lon, lat]) => ({ lat, lon })),
+        distance_km: leastRisk.result.distanceKm,
+        eta_minutes: leastRisk.result.durationMinutes + Math.round(leastRisk.metrics.exposureKm * 2),
+        fuel_increase_pct: 14.0,
+        risk_score: Math.min(0.45, Math.round(leastRisk.metrics.penetrationRatio * 60) / 100 + 0.15),
+        is_compromised: false,
+        safety_status: 'SAFE_DETOUR',
+        safety_tag: `RISIKO MINIMAL (${leastRisk.metrics.exposureKm}KM EXPOSURE)`,
+        traffic_level: 'moderate',
+        congestion_segments: leastRisk.result.congestionSegments,
+        modality: 'truck',
+        color: '#F59E0B', // Amber caution color for least-risk fringe route
+      });
+    }
+
+    // Also surface tactical hold option
+    recommendations.push({
       id: 'mitigation-hold-delay',
       route_name: 'Mitigasi Taktis: Tunda Keberangkatan (Hold / Delay)',
-      description: 'Semua jalur utama dan pengalihan terblokir radius bencana. Rekomendasi: Tahan armada di buffer area hingga kondisi dinyatakan aman.',
+      description: 'Seluruh koridor langsung terpapar radius bencana. Rekomendasi: Tahan armada di buffer area hingga genangan surut.',
       waypoints: [],
       distance_km: recommendations[0]?.distance_km || Math.round(odDistanceKm),
       eta_minutes: (recommendations[0]?.eta_minutes || 60) + 180,

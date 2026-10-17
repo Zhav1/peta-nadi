@@ -99,6 +99,15 @@ export function HitlDecisionDrawer({
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const handleDecision = async (decision: 'APPROVE' | 'REJECT' | 'HOLD') => {
@@ -138,65 +147,75 @@ export function HitlDecisionDrawer({
   const topVehicle = activeAssessment?.impacted_assessments?.[0];
 
   return (
-    <div className="fixed inset-y-0 right-0 z-50 w-full max-w-xl bg-[#0c1017]/95 backdrop-blur-md border-l border-white/10 shadow-2xl flex flex-col text-slate-200 animate-in slide-in-from-right duration-300">
-      {/* Header */}
-      <div className="p-4 border-b border-[#1c2432] flex items-center justify-between bg-[#080d14]">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-            <Scale className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm font-mono font-bold text-white uppercase tracking-wider">
-                Human-in-the-Loop Review
-              </h2>
-              <span className="text-xs font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                GLOBOT PROTOCOL
-              </span>
-            </div>
-            <p className="text-xs text-slate-400 font-sans">
-              Evaluasi biaya deviasi vs pembusukan kargo sebelum instruksi disahkan
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={fetchPending}
-            disabled={isLoading}
-            className="cursor-pointer p-1.5 rounded-lg border border-white/10 hover:bg-white/5 text-slate-400 hover:text-white transition"
-            title="Muat Ulang Antrean"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-          </button>
-          <button
-            onClick={onClose}
-            className="cursor-pointer p-1.5 rounded-lg border border-white/10 hover:bg-white/5 text-slate-400 hover:text-white transition"
-          >
-            <XCircle className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
+    <>
+      {/* Dark high-opacity backdrop overlay to isolate drawer and prevent visual collision with map */}
+      <div
+        className="fixed inset-0 bg-[#080d14]/80 backdrop-blur-sm z-[95] animate-in fade-in duration-200"
+        onClick={onClose}
+        aria-hidden="true"
+      />
 
-      {/* Main Drawer Content */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {/* Pending Items Tab/Selector if multiple */}
-        {pendingItems.length > 0 && (
-          <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-            {pendingItems.map((item) => (
-              <button
-                key={item.approval_id}
-                onClick={() => setSelectedItem(item)}
-                className={`cursor-pointer px-3 py-1.5 rounded-lg border text-xs font-mono whitespace-nowrap transition ${
-                  selectedItem?.approval_id === item.approval_id
-                    ? 'bg-amber-500/20 border-amber-500/50 text-amber-300 font-bold'
-                    : 'bg-[#121822] border-[#1c2432] text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                {item.route_name || item.incident_id}
-              </button>
-            ))}
+      <div className="fixed top-0 right-0 bottom-0 z-[100] w-full max-w-xl bg-[#0c1017] border-l border-white/10 shadow-2xl flex flex-col text-slate-200 animate-in slide-in-from-right duration-300">
+        {/* Header */}
+        <div className="p-4 border-b border-[#1c2432] flex items-center justify-between bg-[#080d14]">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+              <Scale className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-mono font-bold text-white uppercase tracking-wider">
+                  Human-in-the-Loop Review
+                </h2>
+                <span className="text-xs font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                  GLOBOT PROTOCOL
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 font-sans">
+                Evaluasi biaya deviasi vs pembusukan kargo sebelum instruksi disahkan
+              </p>
+            </div>
           </div>
-        )}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={fetchPending}
+              disabled={isLoading}
+              className="cursor-pointer p-1.5 rounded-lg border border-white/10 hover:bg-white/5 text-slate-400 hover:text-white transition"
+              title="Muat Ulang Antrean"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+            </button>
+            <button
+              id="close-hitl-drawer-btn"
+              onClick={onClose}
+              className="cursor-pointer p-1.5 rounded-lg border border-white/10 hover:bg-white/5 text-slate-400 hover:text-white transition"
+            >
+              <XCircle className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Main Drawer Content */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {/* Pending Items Tab/Selector if multiple */}
+          {pendingItems.length > 0 && (
+            <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+              {pendingItems.map((item) => (
+                <button
+                  key={item.approval_id}
+                  onClick={() => setSelectedItem(item)}
+                  className={`cursor-pointer px-3 py-1.5 rounded-lg border text-xs font-mono max-w-[260px] truncate transition ${
+                    selectedItem?.approval_id === item.approval_id
+                      ? 'bg-amber-500/20 border-amber-500/50 text-amber-300 font-bold'
+                      : 'bg-[#121822] border-[#1c2432] text-slate-400 hover:text-slate-200'
+                  }`}
+                  title={item.route_name || item.incident_id}
+                >
+                  {item.route_name || item.incident_id}
+                </button>
+              ))}
+            </div>
+          )}
 
         {pendingItems.length === 0 && !isLoading ? (
           <div className="py-16 text-center text-slate-500 space-y-2">
@@ -368,5 +387,6 @@ export function HitlDecisionDrawer({
         </div>
       )}
     </div>
+    </>
   );
 }

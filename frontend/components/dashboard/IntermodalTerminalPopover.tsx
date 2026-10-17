@@ -69,7 +69,9 @@ export const IntermodalTerminalPopover: React.FC = () => {
         title={`Pan-Sumatra Intermodal: ${totalCount} Hub (${congestedCount + restrictedCount} Padat/Terbatas)`}
       >
         <Ship className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-        <span className="font-mono text-xs tabular-nums">Intermodal: {totalCount} Hub</span>
+        <span className="font-mono text-xs tabular-nums">
+          <span className="hidden 2xl:inline">Intermodal: </span>{totalCount} Hub
+        </span>
         <ChevronDown className="w-3 h-3 opacity-60 ml-0.5" />
       </button>
 

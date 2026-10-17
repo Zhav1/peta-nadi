@@ -1,5 +1,5 @@
 """
-PetaNadi / LRIP — Corridor Data Aggregator Service
+PetaNadi / LRIP : Corridor Data Aggregator Service
 Aggregates real-time & cached telemetry from BMKG, TomTom, and PIHPS for corridor resilience analysis.
 """
 import logging

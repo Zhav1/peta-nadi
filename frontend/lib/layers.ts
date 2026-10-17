@@ -59,8 +59,8 @@ export function buildRoutePathsLayer(routes: RouteRecommendation[], activeIdx: n
     getPath: (d) => d.path,
     getColor: (d) =>
       d.isActive
-        ? [34, 211, 238, 255]          // cyan — selected route
-        : [249, 115, 22, 180],         // orange — alternative route
+        ? [34, 211, 238, 255]          // cyan: selected route
+        : [249, 115, 22, 180],         // orange: alternative route
     getWidth: (d) => (d.isActive ? 6 : 3),
     widthMinPixels: 3,
     widthMaxPixels: 12,

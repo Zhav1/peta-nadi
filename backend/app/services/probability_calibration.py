@@ -1,5 +1,5 @@
 """
-PreHub — Probability Calibration & Statistical Honesty Service
+PreHub : Probability Calibration & Statistical Honesty Service
 Provides empirical calibration evaluation (Brier Score, Expected Calibration Error)
 and post-hoc calibration transforms (Platt Scaling, Isotonic Regression via PAVA).
 """

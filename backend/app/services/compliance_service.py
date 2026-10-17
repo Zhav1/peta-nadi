@@ -1,5 +1,5 @@
 """
-PreHub — Digital Cargo Manifest & Quarantine Compliance Inspector Service.
+PreHub : Digital Cargo Manifest & Quarantine Compliance Inspector Service.
 Enforces BKHIT quarantine certificates for inter-island routes (Hard Block),
 MST axle-load regulations on Class III roads (Tactical Warning & Advisory),
 and cryptographic Surat Jalan manifest verification.

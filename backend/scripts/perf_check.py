@@ -1,5 +1,5 @@
 """
-perf_check.py — Performance Audit Script
+perf_check.py : Performance Audit Script
 
 Measures the end-to-end execution time of `run_crisis_event()` in offline mode.
 Asserts that the total execution time is under 180 seconds.
@@ -129,7 +129,7 @@ async def run_audit():
         "lat": 3.7922,
         "lon": 98.6776,
         "region": "north_sumatra, belawan, pematangsiantar, tanjung mulia",
-        "title": "Belawan Port — Simulated Closure (Flooding)",
+        "title": "Belawan Port : Simulated Closure (Flooding)",
         "is_simulated": True,
     }
 

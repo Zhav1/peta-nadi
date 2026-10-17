@@ -20,7 +20,7 @@ export function GuestEvaluationBanner() {
     try {
       if (sessionStorage.getItem(DISMISS_KEY) === '1') setDismissed(true);
     } catch {
-      // storage unavailable — banner stays visible
+      // storage unavailable: banner stays visible
     }
   }, []);
 
@@ -30,14 +30,18 @@ export function GuestEvaluationBanner() {
     try {
       sessionStorage.setItem(DISMISS_KEY, '1');
     } catch {
-      // storage unavailable — dismiss for this render only
+      // storage unavailable: dismiss for this render only
     }
     setDismissed(true);
   };
 
   return (
-    <div className="fixed top-16 left-1/2 -translate-x-1/2 z-[550] w-[95%] max-w-3xl pointer-events-auto">
-      <div className="mt-2 bg-[#0c1017] border border-amber-500/40 rounded-lg shadow-xl px-4 py-2.5 flex items-center justify-between gap-3">
+    <div
+      id="guest-evaluation-banner"
+      data-testid="guest-evaluation-banner"
+      className="fixed bottom-24 left-4 z-[45] w-[92%] sm:w-80 pointer-events-none"
+    >
+      <div className="pointer-events-auto bg-[#0c1017]/95 border border-amber-500/40 rounded-lg shadow-2xl px-3.5 py-2.5 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5 min-w-0">
           <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
           <div className="min-w-0">

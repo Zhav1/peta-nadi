@@ -341,7 +341,64 @@ export function FleetVehicleLayer({
 
   // Calibrated requestAnimationFrame animation loop updating WebGL GeoJSON sources & follow camera
   useEffect(() => {
-    if (!map || !vehicles || vehicles.length === 0) return;
+    if (!map) return;
+
+    // Helper to completely clear WebGL fleet sources and force immediate repaint
+    const clearFleetSources = () => {
+      try {
+        // 1. Immediately toggle WebGL layer visibility to 'none' synchronously (0ms visual hide)
+        if (map.getLayer('fleet-telemetry-points-layer')) {
+          map.setLayoutProperty('fleet-telemetry-points-layer', 'visibility', 'none');
+        }
+        if (map.getLayer('fleet-bearing-vectors-layer')) {
+          map.setLayoutProperty('fleet-bearing-vectors-layer', 'visibility', 'none');
+        }
+        if (map.getLayer('fleet-breadcrumb-trails-layer')) {
+          map.setLayoutProperty('fleet-breadcrumb-trails-layer', 'visibility', 'none');
+        }
+
+        // 2. Clear GeoJSON sources
+        const emptyFc: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
+        const pointsSource = map.getSource('fleet-telemetry-points') as mapboxgl.GeoJSONSource | undefined;
+        if (pointsSource) pointsSource.setData(emptyFc);
+
+        const trailsSource = map.getSource('fleet-breadcrumb-trails') as mapboxgl.GeoJSONSource | undefined;
+        if (trailsSource) trailsSource.setData(emptyFc);
+
+        const vectorsSource = map.getSource('fleet-bearing-vectors') as mapboxgl.GeoJSONSource | undefined;
+        if (vectorsSource) vectorsSource.setData(emptyFc);
+
+        progressMapRef.current = {};
+        breadcrumbsRef.current = {};
+
+        // 3. Force immediate synchronous WebGL repaint so fleet icons disappear with zero delay
+        map.triggerRepaint();
+      } catch {}
+    };
+
+    if (!vehicles || vehicles.length === 0) {
+      if (animRef.current) {
+        cancelAnimationFrame(animRef.current);
+        animRef.current = null;
+      }
+      clearFleetSources();
+      setSelectedVehicle(null);
+      isFollowCamActiveRef.current = false;
+      return;
+    }
+
+    // Restore layer visibility to 'visible' when vehicles are active
+    try {
+      if (map.getLayer('fleet-telemetry-points-layer')) {
+        map.setLayoutProperty('fleet-telemetry-points-layer', 'visibility', 'visible');
+      }
+      if (map.getLayer('fleet-bearing-vectors-layer')) {
+        map.setLayoutProperty('fleet-bearing-vectors-layer', 'visibility', 'visible');
+      }
+      if (map.getLayer('fleet-breadcrumb-trails-layer')) {
+        map.setLayoutProperty('fleet-breadcrumb-trails-layer', 'visibility', 'visible');
+      }
+    } catch {}
 
     let isCancelled = false;
 
@@ -350,6 +407,17 @@ export function FleetVehicleLayer({
       if (!modalityFilter || modalityFilter === 'all') return true;
       return v.modality === modalityFilter;
     });
+
+    if (visibleVehicles.length === 0) {
+      if (animRef.current) {
+        cancelAnimationFrame(animRef.current);
+        animRef.current = null;
+      }
+      clearFleetSources();
+      setSelectedVehicle(null);
+      isFollowCamActiveRef.current = false;
+      return;
+    }
 
     // Initialize progress map
     visibleVehicles.forEach((v) => {
@@ -548,7 +616,11 @@ export function FleetVehicleLayer({
 
     return () => {
       isCancelled = true;
-      if (animRef.current) cancelAnimationFrame(animRef.current);
+      if (animRef.current) {
+        cancelAnimationFrame(animRef.current);
+        animRef.current = null;
+      }
+      clearFleetSources();
     };
   }, [map, vehicles, activeRoutes, activeRouteIdx, modalityFilter, simSpeed]);
 

@@ -5,7 +5,7 @@ import type { SourceHealth } from '@/lib/types';
 import { GlassPanel } from './GlassPanel';
 
 function formatRelativeTime(isoString: string | null): string {
-  if (!isoString) return '—';
+  if (!isoString) return '-';
   try {
     const past = new Date(isoString);
     const now = new Date();
@@ -19,7 +19,7 @@ function formatRelativeTime(isoString: string | null): string {
     if (diffHours < 24) return `${diffHours}h ago`;
     return past.toLocaleDateString();
   } catch {
-    return '—';
+    return '-';
   }
 }
 

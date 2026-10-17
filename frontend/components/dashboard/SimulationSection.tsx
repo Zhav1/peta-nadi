@@ -41,17 +41,14 @@ export default function SimulationSection({
   onNavigateSection 
 }: SimulationSectionProps) {
   const [activeAgency, setActiveAgency] = useState<string>('BULOG');
-  const [toast, setToast] = useState<{ message: string; type: 'info' | 'success' | 'warning' } | null>(null);
   const [isApplying, setIsApplying] = useState<boolean>(false);
   const [appliedScenario, setAppliedScenario] = useState<ActionPlanParams | null>(null);
   const isScenarioActive = appliedScenario !== null;
   const applyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     return () => {
       if (applyTimerRef.current) clearTimeout(applyTimerRef.current);
-      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     };
   }, []);
 
@@ -61,12 +58,6 @@ export default function SimulationSection({
   const [dishubDiversion, setDishubDiversion] = useState<boolean>(true);
   const [bulogStockAlloc, setBulogStockAlloc] = useState<number>(75);
   const [bnpbRescueUnits, setBnpbRescueUnits] = useState<number>(12);
-
-  const showToast = (message: string, type: 'info' | 'success' | 'warning' = 'info') => {
-    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    setToast({ message, type });
-    toastTimerRef.current = setTimeout(() => setToast(null), 4000);
-  };
 
   // Dynamic impact calculations based on simulation parameters
   const calculatedDelayMinutes = dishubDiversion 
@@ -98,18 +89,17 @@ export default function SimulationSection({
     };
 
     setIsApplying(true);
+    setAppliedScenario(params);
+    onDeployActionPlan?.(params);
     applyTimerRef.current = setTimeout(() => {
       setIsApplying(false);
-      setAppliedScenario(params);
-      showToast(`Rencana Mitigasi ${agencyName} Berhasil Diterapkan`, 'success');
-      onDeployActionPlan?.(params);
     }, 600);
   };
 
   return (
     <div className="relative w-full min-h-full lg:h-full grid grid-cols-12 gap-6 pointer-events-auto">
 
-      {/* Phase 57 WP-A1 (D7): macro-vs-tactical explainer — this tab is a
+      {/* Phase 57 WP-A1 (D7): macro-vs-tactical explainer: this tab is a
           B2G policy simulator (local what-if calc), not the tactical map sim.
           Deploy stays local-calc; commit to corridor happens via DashboardClient
           sandbox/approval path (WP-A3). */}
@@ -117,26 +107,16 @@ export default function SimulationSection({
         <FlaskConical className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
         <div className="min-w-0">
           <p className="text-xs font-mono font-semibold text-sky-300 uppercase tracking-wider">
-            Simulator Makro (B2G) — Kalkulasi Lokal
+            Simulator Makro (B2G): Kalkulasi Lokal
           </p>
           <p className="text-xs font-sans text-slate-300 leading-relaxed mt-0.5">
             Tab ini menghitung skenario kebijakan antar-lembaga secara lokal (what-if).
             Untuk simulasi taktis per-kendaraan, gunakan Peta 4D. Penerapan skenario
-            tidak otomatis commit ke koridor — deployment tercatat via jalur persetujuan.
+            tidak otomatis commit ke koridor (deployment tercatat via jalur persetujuan).
           </p>
         </div>
       </div>
       
-      {/* Floating Toast Notification */}
-      {toast && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[10000] px-5 py-2.5 rounded-lg bg-[#0c1017] border border-[#1c2432] shadow-xl flex items-center gap-2.5 animate-in fade-in slide-in-from-top-2 duration-200">
-          <div className="w-2 h-2 rounded-full bg-emerald-400" />
-          <span className="font-mono text-xs font-semibold text-white uppercase tracking-wider">
-            {toast.message}
-          </span>
-        </div>
-      )}
-
       {/* LEFT SECTION: Scenario Levers & Dynamic Calculated Impacts (8 Cols) */}
       <section className="col-span-12 lg:col-span-8 flex flex-col min-h-0 gap-4">
         
@@ -499,6 +479,7 @@ export default function SimulationSection({
         ) : (
           <button
             type="button"
+            id="deploy-simulation-scenario-btn"
             onClick={handleDeploy}
             className="mt-auto w-full py-2.5 bg-white hover:bg-slate-200 text-[#080d14] font-semibold text-xs uppercase tracking-wider rounded-md transition-colors shadow-sm flex items-center justify-center gap-2 cursor-pointer"
           >

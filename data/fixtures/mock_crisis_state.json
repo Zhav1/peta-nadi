@@ -78,12 +78,10 @@
         {"lat": 3.6420, "lon": 99.0350},
         {"lat": 3.5400, "lon": 99.1200},
         {"lat": 3.4801, "lon": 99.1501},
-        {"lat": 3.3251, "lon": 99.1621},
-        {"lat": 3.1600, "lon": 99.1150},
-        {"lat": 2.9595, "lon": 99.0687}
+        {"lat": 3.3285, "lon": 99.1625}
       ],
-      "distance_km": 142.0,
-      "eta_minutes": 168,
+      "distance_km": 82.5,
+      "eta_minutes": 98,
       "fuel_increase_pct": 12.4,
       "risk_score": 0.08,
       "is_compromised": false,

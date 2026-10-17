@@ -288,10 +288,10 @@ function RouteCard({
                       }}
                       disabled={approving}
                       className="py-2 px-2.5 rounded-md text-xs font-semibold uppercase tracking-wider bg-white hover:bg-slate-200 text-[#080d14] transition-colors shadow-sm flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Setujui dan instruksikan armada rute alternatif"
+                      title={role === 'GUEST' ? 'Simpan rencana rute dalam sandbox evaluasi tamu' : 'Setujui dan instruksikan armada rute alternatif'}
                     >
                       <CheckCircle2 className="w-3.5 h-3.5 text-[#080d14] shrink-0" />
-                      <span>REROUTE</span>
+                      <span>{role === 'GUEST' ? 'SIMPAN RENCANA' : 'REROUTE'}</span>
                     </button>
 
                     {/* 2. Secondary: Hold Fleet */}
@@ -303,12 +303,18 @@ function RouteCard({
                       }}
                       disabled={approving}
                       className="py-2 px-2.5 rounded-md text-xs font-semibold uppercase tracking-wider bg-[#121822] hover:bg-slate-800 border border-[#1c2432] text-amber-300 transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Instruksikan armada parkir aman sementara waktu"
+                      title={role === 'GUEST' ? 'Simulasi tahan armada dalam sandbox' : 'Instruksikan armada parkir aman sementara waktu'}
                     >
                       <PauseCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                       <span>TAHAN ARMADA</span>
                     </button>
                   </div>
+
+                  {role === 'GUEST' && (
+                    <div className="text-[10px] font-mono text-emerald-400/80 text-center">
+                      Mode Sandbox: Tindakan disimpan lokal untuk simulasi evaluasi.
+                    </div>
+                  )}
 
                   {/* 3. Tertiary: Override with Custom Notes */}
                   <button
@@ -533,7 +539,7 @@ export function MitigationTab({
   return (
     <div className="flex flex-col gap-4 text-slate-100">
 
-      {/* BLOCK A — CONSENSUS BADGE */}
+      {/* BLOCK A: CONSENSUS BADGE */}
       <div className="bg-[#121822] border border-[#1c2432] p-3 rounded-md">
         <div className="flex items-center justify-between mb-1">
           <span className="text-xs font-sans text-cyan-400 font-bold">
@@ -548,7 +554,7 @@ export function MitigationTab({
         </p>
       </div>
 
-      {/* BLOCK B — PHYSICAL & ECONOMIC IMPACT CHAIN & MARKET REGIME */}
+      {/* BLOCK B: PHYSICAL & ECONOMIC IMPACT CHAIN & MARKET REGIME */}
       <div className="bg-[#121822] border border-[#1c2432] p-3 rounded-md">
         <div className="flex items-center justify-between mb-1.5">
           <span className="text-xs font-sans text-amber-400 font-bold">
@@ -574,7 +580,7 @@ export function MitigationTab({
         </div>
       </div>
 
-      {/* BLOCK B2 — OFFICIAL NEWS GROUNDING VERIFICATION */}
+      {/* BLOCK B2: OFFICIAL NEWS GROUNDING VERIFICATION */}
       <div className="bg-[#121822] border border-[#1c2432] p-3 rounded-md">
 
         <div className="flex items-center justify-between mb-2">
@@ -654,7 +660,7 @@ export function MitigationTab({
         </p>
       </div>
 
-      {/* BLOCK C — OPERATIONAL REASONING TRACE */}
+      {/* BLOCK C: OPERATIONAL REASONING TRACE */}
       <div className="bg-[#121822] border border-[#1c2432] p-3.5 rounded-md">
         <span className="text-xs font-sans text-cyan-400 font-bold block mb-2">
           Analisis Operasional & Rekomendasi
@@ -662,7 +668,7 @@ export function MitigationTab({
         <FormattedMarkdown content={crisis.decision_support_output || ''} />
       </div>
 
-      {/* BLOCK C2 — SPOILAGE HEDGING COST MATRIX (PHASE 44 / FR-18) */}
+      {/* BLOCK C2: SPOILAGE HEDGING COST MATRIX (PHASE 44 / FR-18) */}
       {(() => {
         const activeRoute = crisis.route_recommendations?.[activeRouteIdx ?? 0];
         const resolvedCommodity =
@@ -732,7 +738,7 @@ export function MitigationTab({
               }}
             />
 
-            {/* BLOCK D — HUMAN-IN-THE-LOOP (HITL) ROUTE RECOMMENDATIONS & ACTION */}
+            {/* BLOCK D: HUMAN-IN-THE-LOOP (HITL) ROUTE RECOMMENDATIONS & ACTION */}
             <div className="flex flex-col gap-2.5">
               <span className="text-xs font-mono text-slate-400 uppercase tracking-wider font-semibold">
                 REKOMENDASI JALUR ALTERNATIF
@@ -766,7 +772,7 @@ export function MitigationTab({
               )}
             </div>
 
-            {/* BLOCK E — DIGITAL COMPLIANCE INSPECTOR (PHASE 44 / FR-19) */}
+            {/* BLOCK E: DIGITAL COMPLIANCE INSPECTOR (PHASE 44 / FR-19) */}
             <ComplianceInspectorCard
               vehicleId={resolvedVehicleId}
               origin={resolvedOrigin}

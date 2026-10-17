@@ -1,4 +1,4 @@
-// Mirror of agents/state.py TypedDicts — keep in sync with backend
+// Mirror of agents/state.py TypedDicts: keep in sync with backend
 
 export type Severity = 'low' | 'medium' | 'high' | 'critical';
 export type CrisisType = 'flood' | 'port_closure' | 'wildfire' | 'congestion' | 'earthquake' | 'landslide';
@@ -150,7 +150,7 @@ export interface CrisisState {
   messages: string[];
 }
 
-// Incident list item (lighter weight — from REST endpoint)
+// Incident list item (lighter weight - from REST endpoint)
 export interface IncidentSummary {
   id: string;
   title: string;
@@ -717,7 +717,7 @@ export interface ComplianceVerifyResponse {
 }
 
 // Disruption Impact Assessment & Decision Engine Types
-// Mirror of backend/app/schemas/impact_schemas.py — keep in sync with the API contract
+// Mirror of backend/app/schemas/impact_schemas.py: keep in sync with the API contract
 export interface DisruptionImpactRequest {
   incident_id?: string;
   lat: number;

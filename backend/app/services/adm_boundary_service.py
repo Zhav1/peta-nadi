@@ -1,5 +1,5 @@
 """
-PetaNadi / LRIP — Real Administrative Boundary Service
+PetaNadi / LRIP : Real Administrative Boundary Service
 Provides North Sumatra ADM2/ADM3 GeoJSON boundary polygons (Google Maps style)
 enriched with live BMKG weather, TomTom traffic, and active hazard state.
 """

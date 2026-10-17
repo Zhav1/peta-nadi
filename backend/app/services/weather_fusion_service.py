@@ -1,5 +1,5 @@
 """
-PetaNadi / PreHub — Standardized Weather Fusion Service
+PetaNadi / PreHub : Standardized Weather Fusion Service
 Combines live BMKG Radar / Station Warnings + Open-Meteo Global Numerical Weather Predictions (ECMWF/GFS)
 into organic GeoJSON coverage polygons for Sumatra corridors.
 Zero GPU overhead.

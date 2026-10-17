@@ -1,5 +1,5 @@
 """
-osint_worker.py — Concurrent orchestrator runner for all OSINT scrapers.
+osint_worker.py : Concurrent orchestrator runner for all OSINT scrapers.
 
 Usage:
     python -m app.workers.osint_worker

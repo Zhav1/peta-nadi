@@ -1,5 +1,5 @@
 """
-PreHub — FastAPI Application Entry Point
+PreHub : FastAPI Application Entry Point
 """
 import asyncio
 import json
@@ -190,7 +190,7 @@ async def lifespan(app: FastAPI):
         r.ping()
         logger.info("Redis connection: OK")
     except Exception as e:
-        logger.warning(f"Redis connection failed: {e} — continuing without Redis")
+        logger.warning(f"Redis connection failed: {e} : continuing without Redis")
 
     # Start all background tasks
     bmkg_task = asyncio.create_task(_poll_bmkg_loop())
@@ -218,7 +218,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS — allow Next.js frontend on localhost and 127.0.0.1
+# CORS : allow Next.js frontend on localhost and 127.0.0.1
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
