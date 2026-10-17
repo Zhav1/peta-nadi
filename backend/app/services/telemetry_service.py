@@ -113,7 +113,39 @@ SUMATRA_STRATEGIC_HUBS: Dict[str, List[float]] = {
     "Bandara Sultan Thaha (DJB)": [103.6444, -1.6389],
     "Soekarno-Hatta (CGK)": [106.6500, -6.1256],
     "Halim Perdanakusuma (HLP)": [106.8856, -6.2656],
+    "Bandara Hang Nadim (BTH)": [104.1189, 1.1211],
+    "Batam (BTH)": [104.1189, 1.1211],
+    "Bandara Depati Amir (PGK)": [106.1394, -2.1628],
+    "Pangkal Pinang (PGK)": [106.1394, -2.1628],
+    "Bandara Fatmawati Soekarno (BKS)": [102.3400, -3.8639],
+    "Bengkulu (BKS)": [102.3400, -3.8639],
+    "Bandara Silangit (DTB)": [98.9933, 2.2592],
+    "Silangit (DTB)": [98.9933, 2.2592],
+    "Bandara Malikussaleh (LSW)": [96.9472, 5.2269],
+    "Lhokseumawe (LSW)": [96.9472, 5.2269],
+    "Bandara FL Tobing (FLZ)": [98.8906, 1.5558],
+    "Sibolga (FLZ)": [98.8906, 1.5558],
 }
+
+
+def dead_reckon_lonlat(coord: List[float], bearing_deg: float, distance_km: float) -> List[float]:
+    """Projects [lon, lat] along a bearing (degrees) for distance_km."""
+    lon, lat = float(coord[0]), float(coord[1])
+    R = 6371.0
+    rad = math.radians(bearing_deg)
+    lat_rad = math.radians(lat)
+    lon_rad = math.radians(lon)
+    d_div_r = distance_km / R
+
+    new_lat_rad = math.asin(
+        math.sin(lat_rad) * math.cos(d_div_r) +
+        math.cos(lat_rad) * math.sin(d_div_r) * math.cos(rad)
+    )
+    new_lon_rad = lon_rad + math.atan2(
+        math.sin(rad) * math.sin(d_div_r) * math.cos(lat_rad),
+        math.cos(d_div_r) - math.sin(lat_rad) * math.sin(new_lat_rad)
+    )
+    return [round(math.degrees(new_lon_rad), 4), round(math.degrees(new_lat_rad), 4)]
 
 
 def calculate_bearing(coord1: List[float], coord2: List[float]) -> float:
@@ -621,7 +653,7 @@ MASTER_FLEET_DEFINITIONS: List[Dict[str, Any]] = [
         "vin": "MHF12TRK024MBO"
     },
 
-    # --- 3. AIR CARGO FLIGHTS (7 Units) ---
+    # --- 3. AIR CARGO & REGIONAL FLIGHTS (45 Units across Pan-Sumatra FIR) ---
     {
         "vehicle_id": "AIR-001-KNO-CGK",
         "name": "Garuda Cargo GA-7101 (KNO -> CGK)",
@@ -684,6 +716,348 @@ MASTER_FLEET_DEFINITIONS: List[Dict[str, Any]] = [
         "route_geometry": {"type": "LineString", "coordinates": [[105.1783, -5.2417], [106.0000, -5.7500], [106.8856, -6.2656]]},
         "speed_kmh": 520.0, "status": "moving", "progress": 0.70, "cargo": "6.8 Ton Pangan Segar Antar-Pulau", "origin": "Bandara Radin Inten II (TKG)", "destination": "Halim Perdanakusuma (HLP)",
         "icao24": "8A01A7", "callsign": "ACE707", "altitude_ft": 29000.0
+    },
+    {
+        "vehicle_id": "AIR-008-BTH-PKU",
+        "name": "Citilink Cargo QG-831 (BTH -> PKU)",
+        "modality": "air",
+        "path": [[104.1189, 1.1211], [102.8000, 0.8000], [101.4447, 0.4619]],
+        "route_geometry": {"type": "LineString", "coordinates": [[104.1189, 1.1211], [102.8000, 0.8000], [101.4447, 0.4619]]},
+        "speed_kmh": 560.0, "status": "moving", "progress": 0.48, "cargo": "4.5 Ton Komponen Manufaktur & Makanan Segar", "origin": "Bandara Hang Nadim (BTH)", "destination": "Bandara Sultan Syarif Kasim II (PKU)",
+        "icao24": "8A01A8", "callsign": "CTV831", "altitude_ft": 27000.0
+    },
+    {
+        "vehicle_id": "AIR-009-KNO-BTH",
+        "name": "Batik Air Cargo ID-6881 (KNO -> BTH)",
+        "modality": "air",
+        "path": [[98.8780, 3.6421], [101.5000, 2.3000], [104.1189, 1.1211]],
+        "route_geometry": {"type": "LineString", "coordinates": [[98.8780, 3.6421], [101.5000, 2.3000], [104.1189, 1.1211]]},
+        "speed_kmh": 640.0, "status": "moving", "progress": 0.38, "cargo": "6.2 Ton Produk Farmasi & Hortikultura", "origin": "Bandara Kualanamu (KNO)", "destination": "Bandara Hang Nadim (BTH)",
+        "icao24": "8A01A9", "callsign": "BTK6881", "altitude_ft": 33000.0
+    },
+    {
+        "vehicle_id": "AIR-010-PKU-CGK",
+        "name": "Garuda Indonesia GA-177 (PKU -> CGK)",
+        "modality": "air",
+        "path": [[101.4447, 0.4619], [103.9000, -2.8000], [106.6500, -6.1256]],
+        "route_geometry": {"type": "LineString", "coordinates": [[101.4447, 0.4619], [103.9000, -2.8000], [106.6500, -6.1256]]},
+        "speed_kmh": 680.0, "status": "moving", "progress": 0.52, "cargo": "9.0 Ton Olahan Sawit & Kargo Reguler", "origin": "Bandara Sultan Syarif Kasim II (PKU)", "destination": "Soekarno-Hatta (CGK)",
+        "icao24": "8A01AA", "callsign": "GIA177", "altitude_ft": 35000.0
+    },
+    {
+        "vehicle_id": "AIR-011-PLM-CGK",
+        "name": "Super Air Jet IU-803 (PLM -> CGK)",
+        "modality": "air",
+        "path": [[104.7000, -2.8983], [105.6500, -4.5000], [106.6500, -6.1256]],
+        "route_geometry": {"type": "LineString", "coordinates": [[104.7000, -2.8983], [105.6500, -4.5000], [106.6500, -6.1256]]},
+        "speed_kmh": 590.0, "status": "moving", "progress": 0.62, "cargo": "5.0 Ton Produk Pangan Segar Sumsel", "origin": "Bandara Sultan Mahmud Badaruddin II (PLM)", "destination": "Soekarno-Hatta (CGK)",
+        "icao24": "8A01AB", "callsign": "SJV803", "altitude_ft": 28000.0
+    },
+    {
+        "vehicle_id": "AIR-012-PGK-PLM",
+        "name": "Sriwijaya Air SJ-071 (PGK -> PLM)",
+        "modality": "air",
+        "path": [[106.1394, -2.1628], [105.4000, -2.5000], [104.7000, -2.8983]],
+        "route_geometry": {"type": "LineString", "coordinates": [[106.1394, -2.1628], [105.4000, -2.5000], [104.7000, -2.8983]]},
+        "speed_kmh": 480.0, "status": "moving", "progress": 0.40, "cargo": "3.8 Ton Ikan Laut Segar Bangka", "origin": "Bandara Depati Amir (PGK)", "destination": "Bandara Sultan Mahmud Badaruddin II (PLM)",
+        "icao24": "8A01AC", "callsign": "SJ071", "altitude_ft": 22000.0, "temperature_c": 2.0
+    },
+    {
+        "vehicle_id": "AIR-013-BKS-CGK",
+        "name": "Lion Air JT-631 (BKS -> CGK)",
+        "modality": "air",
+        "path": [[102.3400, -3.8639], [104.5000, -5.0000], [106.6500, -6.1256]],
+        "route_geometry": {"type": "LineString", "coordinates": [[102.3400, -3.8639], [104.5000, -5.0000], [106.6500, -6.1256]]},
+        "speed_kmh": 620.0, "status": "moving", "progress": 0.55, "cargo": "5.6 Ton Hasil Bumi Bengkulu", "origin": "Bandara Fatmawati Soekarno (BKS)", "destination": "Soekarno-Hatta (CGK)",
+        "icao24": "8A01AD", "callsign": "LNI631", "altitude_ft": 32000.0
+    },
+    {
+        "vehicle_id": "AIR-014-DTB-KNO",
+        "name": "Wings Air IW-1250 (DTB -> KNO)",
+        "modality": "air",
+        "path": [[98.9933, 2.2592], [98.9200, 2.9500], [98.8780, 3.6421]],
+        "route_geometry": {"type": "LineString", "coordinates": [[98.9933, 2.2592], [98.9200, 2.9500], [98.8780, 3.6421]]},
+        "speed_kmh": 390.0, "status": "moving", "progress": 0.45, "cargo": "2.4 Ton Kopi Arabika Toba & Hortikultura", "origin": "Bandara Silangit (DTB)", "destination": "Bandara Kualanamu (KNO)",
+        "icao24": "8A01AE", "callsign": "WON1250", "altitude_ft": 15000.0
+    },
+    {
+        "vehicle_id": "AIR-015-LSW-KNO",
+        "name": "Wings Air IW-1254 (LSW -> KNO)",
+        "modality": "air",
+        "path": [[96.9472, 5.2269], [97.9000, 4.4500], [98.8780, 3.6421]],
+        "route_geometry": {"type": "LineString", "coordinates": [[96.9472, 5.2269], [97.9000, 4.4500], [98.8780, 3.6421]]},
+        "speed_kmh": 420.0, "status": "moving", "progress": 0.60, "cargo": "3.1 Ton Komoditas Pesisir Aceh Timur", "origin": "Bandara Malikussaleh (LSW)", "destination": "Bandara Kualanamu (KNO)",
+        "icao24": "8A01AF", "callsign": "WON1254", "altitude_ft": 16000.0
+    },
+    {
+        "vehicle_id": "AIR-016-FLZ-KNO",
+        "name": "Susi Air SI-210 (FLZ -> KNO)",
+        "modality": "air",
+        "path": [[98.8906, 1.5558], [98.9000, 2.6000], [98.8780, 3.6421]],
+        "route_geometry": {"type": "LineString", "coordinates": [[98.8906, 1.5558], [98.9000, 2.6000], [98.8780, 3.6421]]},
+        "speed_kmh": 310.0, "status": "moving", "progress": 0.50, "cargo": "1.8 Ton Hasil Perikanan Sibolga Express", "origin": "Bandara FL Tobing (FLZ)", "destination": "Bandara Kualanamu (KNO)",
+        "icao24": "8A01B0", "callsign": "VNT210", "altitude_ft": 12000.0, "temperature_c": 1.5
+    },
+    {
+        "vehicle_id": "AIR-017-BTJ-CGK",
+        "name": "Batik Air ID-6897 (BTJ -> CGK)",
+        "modality": "air",
+        "path": [[95.4194, 5.5222], [99.5000, 1.5000], [103.5000, -2.5000], [106.6500, -6.1256]],
+        "route_geometry": {"type": "LineString", "coordinates": [[95.4194, 5.5222], [99.5000, 1.5000], [103.5000, -2.5000], [106.6500, -6.1256]]},
+        "speed_kmh": 720.0, "status": "moving", "progress": 0.30, "cargo": "7.5 Ton Kopi Gayo & Kargo Reguler", "origin": "Bandara Sultan Iskandar Muda (BTJ)", "destination": "Soekarno-Hatta (CGK)",
+        "icao24": "8A01B1", "callsign": "BTK6897", "altitude_ft": 37000.0
+    },
+    {
+        "vehicle_id": "AIR-018-KNO-PKU",
+        "name": "Citilink QG-922 (KNO -> PKU)",
+        "modality": "air",
+        "path": [[98.8780, 3.6421], [100.1500, 2.0500], [101.4447, 0.4619]],
+        "route_geometry": {"type": "LineString", "coordinates": [[98.8780, 3.6421], [100.1500, 2.0500], [101.4447, 0.4619]]},
+        "speed_kmh": 550.0, "status": "moving", "progress": 0.52, "cargo": "4.2 Ton Pos Ekspres & Paket Logistik", "origin": "Bandara Kualanamu (KNO)", "destination": "Bandara Sultan Syarif Kasim II (PKU)",
+        "icao24": "8A01B2", "callsign": "CTV922", "altitude_ft": 26000.0
+    },
+    {
+        "vehicle_id": "AIR-019-BTH-PLM",
+        "name": "Lion Air JT-247 (BTH -> PLM)",
+        "modality": "air",
+        "path": [[104.1189, 1.1211], [104.4000, -0.9000], [104.7000, -2.8983]],
+        "route_geometry": {"type": "LineString", "coordinates": [[104.1189, 1.1211], [104.4000, -0.9000], [104.7000, -2.8983]]},
+        "speed_kmh": 570.0, "status": "moving", "progress": 0.60, "cargo": "5.3 Ton Sembako & Kargo Batam", "origin": "Bandara Hang Nadim (BTH)", "destination": "Bandara Sultan Mahmud Badaruddin II (PLM)",
+        "icao24": "8A01B3", "callsign": "LNI247", "altitude_ft": 29000.0
+    },
+    {
+        "vehicle_id": "AIR-020-BIM-KNO",
+        "name": "Super Air Jet IU-955 (BIM -> KNO)",
+        "modality": "air",
+        "path": [[100.2811, -0.7869], [99.5000, 1.4500], [98.8780, 3.6421]],
+        "route_geometry": {"type": "LineString", "coordinates": [[100.2811, -0.7869], [99.5000, 1.4500], [98.8780, 3.6421]]},
+        "speed_kmh": 590.0, "status": "moving", "progress": 0.40, "cargo": "4.6 Ton Sayur Alahan Panjang & Hortikultura", "origin": "Bandara Minangkabau (BIM)", "destination": "Bandara Kualanamu (KNO)",
+        "icao24": "8A01B4", "callsign": "SJV955", "altitude_ft": 30000.0
+    },
+    {
+        "vehicle_id": "AIR-021-DJB-CGK",
+        "name": "Garuda Indonesia GA-131 (DJB -> CGK)",
+        "modality": "air",
+        "path": [[103.6444, -1.6389], [105.1000, -3.9000], [106.6500, -6.1256]],
+        "route_geometry": {"type": "LineString", "coordinates": [[103.6444, -1.6389], [105.1000, -3.9000], [106.6500, -6.1256]]},
+        "speed_kmh": 650.0, "status": "moving", "progress": 0.45, "cargo": "6.8 Ton Hasil Pertanian & Kayu Olahan", "origin": "Bandara Sultan Thaha (DJB)", "destination": "Soekarno-Hatta (CGK)",
+        "icao24": "8A01B5", "callsign": "GIA131", "altitude_ft": 33000.0
+    },
+    {
+        "vehicle_id": "AIR-022-TKG-BTH",
+        "name": "Lion Air JT-172 (TKG -> BTH)",
+        "modality": "air",
+        "path": [[105.1783, -5.2417], [104.6000, -2.0000], [104.1189, 1.1211]],
+        "route_geometry": {"type": "LineString", "coordinates": [[105.1783, -5.2417], [104.6000, -2.0000], [104.1189, 1.1211]]},
+        "speed_kmh": 610.0, "status": "moving", "progress": 0.35, "cargo": "5.1 Ton Kopi Lampung & Pangan Segar", "origin": "Bandara Radin Inten II (TKG)", "destination": "Bandara Hang Nadim (BTH)",
+        "icao24": "8A01B6", "callsign": "LNI172", "altitude_ft": 31000.0
+    },
+    {
+        "vehicle_id": "AIR-023-PGK-CGK",
+        "name": "Sriwijaya Air SJ-083 (PGK -> CGK)",
+        "modality": "air",
+        "path": [[106.1394, -2.1628], [106.4000, -4.1500], [106.6500, -6.1256]],
+        "route_geometry": {"type": "LineString", "coordinates": [[106.1394, -2.1628], [106.4000, -4.1500], [106.6500, -6.1256]]},
+        "speed_kmh": 580.0, "status": "moving", "progress": 0.65, "cargo": "4.4 Ton Olahan Lada & Kargo Ringan", "origin": "Bandara Depati Amir (PGK)", "destination": "Soekarno-Hatta (CGK)",
+        "icao24": "8A01B7", "callsign": "SJ083", "altitude_ft": 28000.0
+    },
+    {
+        "vehicle_id": "AIR-024-BKS-PLM",
+        "name": "Wings Air IW-1782 (BKS -> PLM)",
+        "modality": "air",
+        "path": [[102.3400, -3.8639], [103.5000, -3.4000], [104.7000, -2.8983]],
+        "route_geometry": {"type": "LineString", "coordinates": [[102.3400, -3.8639], [103.5000, -3.4000], [104.7000, -2.8983]]},
+        "speed_kmh": 430.0, "status": "moving", "progress": 0.50, "cargo": "2.8 Ton Buah Segar & Pasokan Medis", "origin": "Bandara Fatmawati Soekarno (BKS)", "destination": "Bandara Sultan Mahmud Badaruddin II (PLM)",
+        "icao24": "8A01B8", "callsign": "WON1782", "altitude_ft": 17000.0
+    },
+    {
+        "vehicle_id": "AIR-025-DTB-CGK",
+        "name": "Batik Air ID-6831 (DTB -> CGK)",
+        "modality": "air",
+        "path": [[98.9933, 2.2592], [102.7000, -1.9000], [106.6500, -6.1256]],
+        "route_geometry": {"type": "LineString", "coordinates": [[98.9933, 2.2592], [102.7000, -1.9000], [106.6500, -6.1256]]},
+        "speed_kmh": 660.0, "status": "moving", "progress": 0.38, "cargo": "5.8 Ton Komoditas Wisata & Pangan", "origin": "Bandara Silangit (DTB)", "destination": "Soekarno-Hatta (CGK)",
+        "icao24": "8A01B9", "callsign": "BTK6831", "altitude_ft": 34000.0
+    },
+    {
+        "vehicle_id": "AIR-026-KNO-BIM",
+        "name": "Wings Air IW-1240 (KNO -> BIM)",
+        "modality": "air",
+        "path": [[98.8780, 3.6421], [99.6000, 1.4000], [100.2811, -0.7869]],
+        "route_geometry": {"type": "LineString", "coordinates": [[98.8780, 3.6421], [99.6000, 1.4000], [100.2811, -0.7869]]},
+        "speed_kmh": 460.0, "status": "moving", "progress": 0.55, "cargo": "3.5 Ton Paket E-Commerce & Dokumen", "origin": "Bandara Kualanamu (KNO)", "destination": "Bandara Minangkabau (BIM)",
+        "icao24": "8A01BA", "callsign": "WON1240", "altitude_ft": 20000.0
+    },
+    {
+        "vehicle_id": "AIR-027-BTH-DJB",
+        "name": "Wings Air IW-1271 (BTH -> DJB)",
+        "modality": "air",
+        "path": [[104.1189, 1.1211], [103.8800, -0.2500], [103.6444, -1.6389]],
+        "route_geometry": {"type": "LineString", "coordinates": [[104.1189, 1.1211], [103.8800, -0.2500], [103.6444, -1.6389]]},
+        "speed_kmh": 440.0, "status": "moving", "progress": 0.42, "cargo": "2.9 Ton Elektronik Ringan & Makanan Olahan", "origin": "Bandara Hang Nadim (BTH)", "destination": "Bandara Sultan Thaha (DJB)",
+        "icao24": "8A01BB", "callsign": "WON1271", "altitude_ft": 19000.0
+    },
+    {
+        "vehicle_id": "AIR-028-PLM-BTH",
+        "name": "Citilink QG-990 (PLM -> BTH)",
+        "modality": "air",
+        "path": [[104.7000, -2.8983], [104.4000, -0.9000], [104.1189, 1.1211]],
+        "route_geometry": {"type": "LineString", "coordinates": [[104.7000, -2.8983], [104.4000, -0.9000], [104.1189, 1.1211]]},
+        "speed_kmh": 570.0, "status": "moving", "progress": 0.50, "cargo": "4.9 Ton Kargo Segar & Pempek Palembang", "origin": "Bandara Sultan Mahmud Badaruddin II (PLM)", "destination": "Bandara Hang Nadim (BTH)",
+        "icao24": "8A01BC", "callsign": "CTV990", "altitude_ft": 28000.0
+    },
+    {
+        "vehicle_id": "AIR-029-PKU-BTH",
+        "name": "Lion Air JT-236 (PKU -> BTH)",
+        "modality": "air",
+        "path": [[101.4447, 0.4619], [102.7500, 0.8000], [104.1189, 1.1211]],
+        "route_geometry": {"type": "LineString", "coordinates": [[101.4447, 0.4619], [102.7500, 0.8000], [104.1189, 1.1211]]},
+        "speed_kmh": 540.0, "status": "moving", "progress": 0.62, "cargo": "5.0 Ton Produk Pangan Olahan Riau", "origin": "Bandara Sultan Syarif Kasim II (PKU)", "destination": "Bandara Hang Nadim (BTH)",
+        "icao24": "8A01BD", "callsign": "LNI236", "altitude_ft": 25000.0
+    },
+    {
+        "vehicle_id": "AIR-030-BTJ-LSW",
+        "name": "Cardig Cargo 804 (BTJ -> LSW)",
+        "modality": "air",
+        "path": [[95.4194, 5.5222], [96.2000, 5.3500], [96.9472, 5.2269]],
+        "route_geometry": {"type": "LineString", "coordinates": [[95.4194, 5.5222], [96.2000, 5.3500], [96.9472, 5.2269]]},
+        "speed_kmh": 480.0, "status": "moving", "progress": 0.45, "cargo": "3.8 Ton Logistik Darurat & Obat-obatan", "origin": "Bandara Sultan Iskandar Muda (BTJ)", "destination": "Bandara Malikussaleh (LSW)",
+        "icao24": "8A01BE", "callsign": "CDG804", "altitude_ft": 18000.0, "temperature_c": 4.0
+    },
+    {
+        "vehicle_id": "AIR-031-KNO-BTH",
+        "name": "Trigana Air Cargo 511 (KNO -> BTH)",
+        "modality": "air",
+        "path": [[98.8780, 3.6421], [101.5000, 2.3000], [104.1189, 1.1211]],
+        "route_geometry": {"type": "LineString", "coordinates": [[98.8780, 3.6421], [101.5000, 2.3000], [104.1189, 1.1211]]},
+        "speed_kmh": 530.0, "status": "moving", "progress": 0.58, "cargo": "6.0 Ton Sayuran Berastagi & Buah", "origin": "Bandara Kualanamu (KNO)", "destination": "Bandara Hang Nadim (BTH)",
+        "icao24": "8A01BF", "callsign": "TGN511", "altitude_ft": 28000.0, "temperature_c": 3.0
+    },
+    {
+        "vehicle_id": "AIR-032-BTH-PGK",
+        "name": "Wings Air IW-1288 (BTH -> PGK)",
+        "modality": "air",
+        "path": [[104.1189, 1.1211], [105.1000, -0.5000], [106.1394, -2.1628]],
+        "route_geometry": {"type": "LineString", "coordinates": [[104.1189, 1.1211], [105.1000, -0.5000], [106.1394, -2.1628]]},
+        "speed_kmh": 450.0, "status": "moving", "progress": 0.35, "cargo": "3.1 Ton Bahan Makanan Cepat Saji", "origin": "Bandara Hang Nadim (BTH)", "destination": "Bandara Depati Amir (PGK)",
+        "icao24": "8A01C0", "callsign": "WON1288", "altitude_ft": 20000.0
+    },
+    {
+        "vehicle_id": "AIR-033-KNO-TKG",
+        "name": "Super Air Jet IU-891 (KNO -> TKG)",
+        "modality": "air",
+        "path": [[98.8780, 3.6421], [102.0000, -1.0000], [105.1783, -5.2417]],
+        "route_geometry": {"type": "LineString", "coordinates": [[98.8780, 3.6421], [102.0000, -1.0000], [105.1783, -5.2417]]},
+        "speed_kmh": 670.0, "status": "moving", "progress": 0.44, "cargo": "5.5 Ton Kargo Logistik Antar-Provinsi", "origin": "Bandara Kualanamu (KNO)", "destination": "Bandara Radin Inten II (TKG)",
+        "icao24": "8A01C1", "callsign": "SJV891", "altitude_ft": 35000.0
+    },
+    {
+        "vehicle_id": "AIR-034-BIM-PLM",
+        "name": "Super Air Jet IU-872 (BIM -> PLM)",
+        "modality": "air",
+        "path": [[100.2811, -0.7869], [102.5000, -1.8500], [104.7000, -2.8983]],
+        "route_geometry": {"type": "LineString", "coordinates": [[100.2811, -0.7869], [102.5000, -1.8500], [104.7000, -2.8983]]},
+        "speed_kmh": 560.0, "status": "moving", "progress": 0.53, "cargo": "4.7 Ton Pangan Segar Solok & Sayuran", "origin": "Bandara Minangkabau (BIM)", "destination": "Bandara Sultan Mahmud Badaruddin II (PLM)",
+        "icao24": "8A01C2", "callsign": "SJV872", "altitude_ft": 27000.0
+    },
+    {
+        "vehicle_id": "AIR-035-PKU-DJB",
+        "name": "Wings Air IW-1262 (PKU -> DJB)",
+        "modality": "air",
+        "path": [[101.4447, 0.4619], [102.5500, -0.6000], [103.6444, -1.6389]],
+        "route_geometry": {"type": "LineString", "coordinates": [[101.4447, 0.4619], [102.5500, -0.6000], [103.6444, -1.6389]]},
+        "speed_kmh": 450.0, "status": "moving", "progress": 0.40, "cargo": "3.3 Ton Paket Pos & Sembako Ritel", "origin": "Bandara Sultan Syarif Kasim II (PKU)", "destination": "Bandara Sultan Thaha (DJB)",
+        "icao24": "8A01C3", "callsign": "WON1262", "altitude_ft": 19000.0
+    },
+    {
+        "vehicle_id": "AIR-036-PLM-TKG",
+        "name": "Wings Air IW-1282 (PLM -> TKG)",
+        "modality": "air",
+        "path": [[104.7000, -2.8983], [104.9500, -4.0500], [105.1783, -5.2417]],
+        "route_geometry": {"type": "LineString", "coordinates": [[104.7000, -2.8983], [104.9500, -4.0500], [105.1783, -5.2417]]},
+        "speed_kmh": 440.0, "status": "moving", "progress": 0.48, "cargo": "3.0 Ton Komoditas Pangan Segar", "origin": "Bandara Sultan Mahmud Badaruddin II (PLM)", "destination": "Bandara Radin Inten II (TKG)",
+        "icao24": "8A01C4", "callsign": "WON1282", "altitude_ft": 18000.0
+    },
+    {
+        "vehicle_id": "AIR-037-BKS-BIM",
+        "name": "Susi Air SI-215 (BKS -> BIM)",
+        "modality": "air",
+        "path": [[102.3400, -3.8639], [101.3000, -2.3000], [100.2811, -0.7869]],
+        "route_geometry": {"type": "LineString", "coordinates": [[102.3400, -3.8639], [101.3000, -2.3000], [100.2811, -0.7869]]},
+        "speed_kmh": 380.0, "status": "moving", "progress": 0.52, "cargo": "2.1 Ton Komoditas Pesisir Barat Bengkulu", "origin": "Bandara Fatmawati Soekarno (BKS)", "destination": "Bandara Minangkabau (BIM)",
+        "icao24": "8A01C5", "callsign": "VNT215", "altitude_ft": 14000.0
+    },
+    {
+        "vehicle_id": "AIR-038-DJB-BTH",
+        "name": "Citilink QG-981 (DJB -> BTH)",
+        "modality": "air",
+        "path": [[103.6444, -1.6389], [103.8800, -0.2500], [104.1189, 1.1211]],
+        "route_geometry": {"type": "LineString", "coordinates": [[103.6444, -1.6389], [103.8800, -0.2500], [104.1189, 1.1211]]},
+        "speed_kmh": 530.0, "status": "moving", "progress": 0.60, "cargo": "4.2 Ton Karet & Hasil Perkebunan Jambi", "origin": "Bandara Sultan Thaha (DJB)", "destination": "Bandara Hang Nadim (BTH)",
+        "icao24": "8A01C6", "callsign": "CTV981", "altitude_ft": 26000.0
+    },
+    {
+        "vehicle_id": "AIR-039-PGK-TKG",
+        "name": "Wings Air IW-1290 (PGK -> TKG)",
+        "modality": "air",
+        "path": [[106.1394, -2.1628], [105.6500, -3.7000], [105.1783, -5.2417]],
+        "route_geometry": {"type": "LineString", "coordinates": [[106.1394, -2.1628], [105.6500, -3.7000], [105.1783, -5.2417]]},
+        "speed_kmh": 450.0, "status": "moving", "progress": 0.42, "cargo": "2.7 Ton Makanan Kering & Kargo Express", "origin": "Bandara Depati Amir (PGK)", "destination": "Bandara Radin Inten II (TKG)",
+        "icao24": "8A01C7", "callsign": "WON1290", "altitude_ft": 19000.0
+    },
+    {
+        "vehicle_id": "AIR-040-BTJ-BTH",
+        "name": "Lion Air JT-288 (BTJ -> BTH)",
+        "modality": "air",
+        "path": [[95.4194, 5.5222], [99.8000, 3.3000], [104.1189, 1.1211]],
+        "route_geometry": {"type": "LineString", "coordinates": [[95.4194, 5.5222], [99.8000, 3.3000], [104.1189, 1.1211]]},
+        "speed_kmh": 660.0, "status": "moving", "progress": 0.45, "cargo": "6.5 Ton Kopi Atjeh & Kargo Transit", "origin": "Bandara Sultan Iskandar Muda (BTJ)", "destination": "Bandara Hang Nadim (BTH)",
+        "icao24": "8A01C8", "callsign": "LNI288", "altitude_ft": 34000.0
+    },
+    {
+        "vehicle_id": "AIR-041-FLZ-BIM",
+        "name": "Susi Air SI-222 (FLZ -> BIM)",
+        "modality": "air",
+        "path": [[98.8906, 1.5558], [99.6000, 0.3500], [100.2811, -0.7869]],
+        "route_geometry": {"type": "LineString", "coordinates": [[98.8906, 1.5558], [99.6000, 0.3500], [100.2811, -0.7869]]},
+        "speed_kmh": 340.0, "status": "moving", "progress": 0.55, "cargo": "1.9 Ton Hasil Tangkapan Laut Dingin", "origin": "Bandara FL Tobing (FLZ)", "destination": "Bandara Minangkabau (BIM)",
+        "icao24": "8A01C9", "callsign": "VNT222", "altitude_ft": 13000.0, "temperature_c": 0.5
+    },
+    {
+        "vehicle_id": "AIR-042-LSW-BTJ",
+        "name": "Wings Air IW-1256 (LSW -> BTJ)",
+        "modality": "air",
+        "path": [[96.9472, 5.2269], [96.1800, 5.3700], [95.4194, 5.5222]],
+        "route_geometry": {"type": "LineString", "coordinates": [[96.9472, 5.2269], [96.1800, 5.3700], [95.4194, 5.5222]]},
+        "speed_kmh": 410.0, "status": "moving", "progress": 0.50, "cargo": "2.5 Ton Pasokan Medis & Vaksin", "origin": "Bandara Malikussaleh (LSW)", "destination": "Bandara Sultan Iskandar Muda (BTJ)",
+        "icao24": "8A01CA", "callsign": "WON1256", "altitude_ft": 15000.0, "temperature_c": 3.0
+    },
+    {
+        "vehicle_id": "AIR-043-KNO-LSW",
+        "name": "Susi Air SI-208 (KNO -> LSW)",
+        "modality": "air",
+        "path": [[98.8780, 3.6421], [97.9000, 4.4500], [96.9472, 5.2269]],
+        "route_geometry": {"type": "LineString", "coordinates": [[98.8780, 3.6421], [97.9000, 4.4500], [96.9472, 5.2269]]},
+        "speed_kmh": 330.0, "status": "moving", "progress": 0.38, "cargo": "1.6 Ton Kargo Farmasi Segera", "origin": "Bandara Kualanamu (KNO)", "destination": "Bandara Malikussaleh (LSW)",
+        "icao24": "8A01CB", "callsign": "VNT208", "altitude_ft": 13500.0, "temperature_c": 2.5
+    },
+    {
+        "vehicle_id": "AIR-044-DTB-BIM",
+        "name": "Wings Air IW-1248 (DTB -> BIM)",
+        "modality": "air",
+        "path": [[98.9933, 2.2592], [99.6000, 0.7000], [100.2811, -0.7869]],
+        "route_geometry": {"type": "LineString", "coordinates": [[98.9933, 2.2592], [99.6000, 0.7000], [100.2811, -0.7869]]},
+        "speed_kmh": 420.0, "status": "moving", "progress": 0.45, "cargo": "2.8 Ton Bawang & Cabai Dataran Tinggi", "origin": "Bandara Silangit (DTB)", "destination": "Bandara Minangkabau (BIM)",
+        "icao24": "8A01CC", "callsign": "WON1248", "altitude_ft": 17500.0
+    },
+    {
+        "vehicle_id": "AIR-045-FLZ-KNO-EXP",
+        "name": "Cardig Air Cargo 810 (FLZ -> KNO)",
+        "modality": "air",
+        "path": [[98.8906, 1.5558], [98.9000, 2.6000], [98.8780, 3.6421]],
+        "route_geometry": {"type": "LineString", "coordinates": [[98.8906, 1.5558], [98.9000, 2.6000], [98.8780, 3.6421]]},
+        "speed_kmh": 490.0, "status": "moving", "progress": 0.60, "cargo": "4.2 Ton Ikan Tuna Ekspor Sibolga", "origin": "Bandara FL Tobing (FLZ)", "destination": "Bandara Kualanamu (KNO)",
+        "icao24": "8A01CD", "callsign": "CDG810", "altitude_ft": 22000.0, "temperature_c": -2.0
     },
 ]
 
@@ -789,10 +1163,13 @@ class TelemetryService:
 
     async def fetch_live_sumatra_aircraft(self) -> List[Dict[str, Any]]:
         """
-        Fetches live regional Sumatra airspace flights querying adsb.lol REST API with a 30-second TTL cache
-        so Render's shared IP never hits rate limits.
-        Queries Central Sumatra (0.5, 101.5), North Sumatra (3.5, 98.5), and South Sumatra (-3.5, 104.5).
-        Falls back to OpenSky states, and then to active Sumatra air corridor transponders.
+        Fetches live regional Sumatra airspace flights querying multiple open ADS-B endpoints
+        concurrently via asyncio.gather with 2.5s timeouts across North, Central, and South Sumatra.
+        Providers:
+          1. https://api.airplanes.live/v2/point/{lat}/{lon}/250
+          2. https://opendata.adsb.fi/api/v2/lat/{lat}/lon/{lon}/dist/250
+          3. https://api.adsb.lol/v2/point/{lat}/{lon}/250
+        Falls back to OpenSky Network states, and then to 45 realistic Pan-Sumatra regional flights.
         """
         now = time.time()
         if self._aircraft_cache and (now - self._aircraft_cache_ts < self._aircraft_ttl_seconds):
@@ -806,70 +1183,92 @@ class TelemetryService:
 
         live_planes: Dict[str, Dict[str, Any]] = {}
 
+        # Build query tasks across 3 independent open ADS-B aggregators
+        query_configs = []
+        for lat_pt, lon_pt in points:
+            query_configs.append((f"https://api.airplanes.live/v2/point/{lat_pt}/{lon_pt}/250", "AIRPLANES_LIVE"))
+            query_configs.append((f"https://opendata.adsb.fi/api/v2/lat/{lat_pt}/lon/{lon_pt}/dist/250", "ADSB_FI"))
+            query_configs.append((f"https://api.adsb.lol/v2/point/{lat_pt}/{lon_pt}/250", "ADSB_LOL"))
+
+        async def _fetch_endpoint(client: httpx.AsyncClient, url: str, source_tag: str):
+            try:
+                resp = await client.get(url)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    planes = data.get("ac", [])
+                    return [(p, source_tag) for p in planes if isinstance(p, dict)]
+            except Exception as e:
+                logger.debug(f"ADS-B query error {url}: {e}")
+            return []
+
         try:
-            async with httpx.AsyncClient(timeout=4.0) as client:
-                for lat_pt, lon_pt in points:
-                    try:
-                        url = f"https://api.adsb.lol/v2/point/{lat_pt}/{lon_pt}/250"
-                        resp = await client.get(url)
-                        if resp.status_code == 200:
-                            data = resp.json()
-                            for plane in data.get("ac", []):
-                                hex_id = str(plane.get("hex", "")).strip().upper()
-                                lat = plane.get("lat")
-                                lon = plane.get("lon")
-                                if not hex_id or lat is None or lon is None:
-                                    continue
-                                if not (-6.5 <= lat <= 6.5 and 94.5 <= lon <= 109.0):
-                                    continue
+            async with httpx.AsyncClient(timeout=2.5) as client:
+                tasks = [_fetch_endpoint(client, url, tag) for url, tag in query_configs]
+                results = await asyncio.gather(*tasks, return_exceptions=True)
 
-                                if hex_id not in live_planes:
-                                    callsign = str(plane.get("flight") or f"FLT-{hex_id}").strip()
-                                    alt = float(plane.get("alt_baro") or plane.get("alt_geom") or 28000.0) if plane.get("alt_baro") != "ground" else 0.0
-                                    speed_kts = float(plane.get("gs") or 420.0)
-                                    track = float(plane.get("track") or 0.0)
-                                    t_desc = str(plane.get("t") or "Aircraft")
+                for res in results:
+                    if isinstance(res, list):
+                        for plane, source_tag in res:
+                            hex_id = str(plane.get("hex", "")).strip().upper()
+                            lat = plane.get("lat")
+                            lon = plane.get("lon")
+                            if not hex_id or lat is None or lon is None:
+                                continue
+                            try:
+                                lat = float(lat)
+                                lon = float(lon)
+                            except (ValueError, TypeError):
+                                continue
 
-                                    p_prev = [round(lon - 0.15, 4), round(lat - 0.15, 4)]
-                                    p_curr = [round(lon, 4), round(lat, 4)]
-                                    p_next = [round(lon + 0.15, 4), round(lat + 0.15, 4)]
+                            if not (-6.5 <= lat <= 6.5 and 94.5 <= lon <= 109.0):
+                                continue
 
-                                    live_planes[hex_id] = {
-                                        "vehicle_id": f"AIR-LIVE-{hex_id}",
-                                        "name": f"{callsign} ({t_desc})",
-                                        "modality": "air",
-                                        "path": [p_prev, p_curr, p_next],
-                                        "route_geometry": {
-                                            "type": "LineString",
-                                            "coordinates": [p_prev, p_curr, p_next]
-                                        },
-                                        "speed_kmh": round(speed_kts * 1.852, 1),
-                                        "status": "moving",
-                                        "progress": 0.5,
-                                        "cargo": "Kargo Logistik Udara / Pos Ekspres",
-                                        "origin": "Koridor Udara Sumatera",
-                                        "destination": "Penerbangan Aktif",
-                                        "heading_deg": track,
-                                        "icao24": hex_id,
-                                        "callsign": callsign,
-                                        "altitude_ft": alt,
-                                        "ground_speed_kts": speed_kts,
-                                        "tracking_mode": "LIVE_GPS",
-                                        "signal_status": "ADSB_LIVE",
-                                        "telemetry_source": "ADSB_LOL_FEED",
-                                        "company_id": "pos_logistik",
-                                        "company_name": "PT Pos Logistik Indonesia",
-                                        "last_ping_seconds_ago": 0.8
-                                    }
-                    except Exception as e:
-                        logger.debug(f"adsb.lol query point ({lat_pt}, {lon_pt}) error: {e}")
+                            if hex_id not in live_planes:
+                                callsign = str(plane.get("flight") or plane.get("r") or f"FLT-{hex_id}").strip()
+                                alt = float(plane.get("alt_baro") or plane.get("alt_geom") or 28000.0) if plane.get("alt_baro") != "ground" else 0.0
+                                speed_kts = float(plane.get("gs") or 420.0)
+                                track = float(plane.get("track") or 0.0)
+                                t_desc = str(plane.get("t") or "Aircraft")
+
+                                dist_air_km = max(5.0, (speed_kts * 1.852) * (5.0 / 60.0))
+                                p_prev = dead_reckon_lonlat([lon, lat], (track + 180.0) % 360.0, dist_air_km)
+                                p_curr = [round(lon, 4), round(lat, 4)]
+                                p_next = dead_reckon_lonlat([lon, lat], track, dist_air_km)
+
+                                live_planes[hex_id] = {
+                                    "vehicle_id": f"AIR-LIVE-{hex_id}",
+                                    "name": f"{callsign} ({t_desc})",
+                                    "modality": "air",
+                                    "path": [p_prev, p_curr, p_next],
+                                    "route_geometry": {
+                                        "type": "LineString",
+                                        "coordinates": [p_prev, p_curr, p_next]
+                                    },
+                                    "speed_kmh": round(speed_kts * 1.852, 1),
+                                    "status": "moving",
+                                    "progress": 0.5,
+                                    "cargo": "Kargo Logistik Udara / Pos Ekspres",
+                                    "origin": "Koridor Udara Sumatera",
+                                    "destination": "Penerbangan Aktif",
+                                    "heading_deg": track,
+                                    "icao24": hex_id,
+                                    "callsign": callsign,
+                                    "altitude_ft": alt,
+                                    "ground_speed_kts": speed_kts,
+                                    "tracking_mode": "LIVE_GPS",
+                                    "signal_status": "ADSB_LIVE",
+                                    "telemetry_source": source_tag,
+                                    "company_id": "pos_logistik",
+                                    "company_name": "PT Pos Logistik Indonesia",
+                                    "last_ping_seconds_ago": 0.8
+                                }
         except Exception as e:
-            logger.warning(f"Error querying adsb.lol: {e}. Falling back to OpenSky / baseline transponders.")
+            logger.warning(f"Error querying parallel ADS-B feeds: {e}. Falling back to OpenSky / baseline transponders.")
 
-        if live_planes:
+        if len(live_planes) >= 5:
             self._aircraft_cache = list(live_planes.values())
             self._aircraft_cache_ts = now
-            logger.info(f"Refreshed live Sumatra aircraft from adsb.lol: {len(self._aircraft_cache)} flights")
+            logger.info(f"Refreshed live Sumatra aircraft from parallel ADS-B feeds: {len(self._aircraft_cache)} flights")
             return self._aircraft_cache
 
         # Fallback 1: OpenSky Network states
@@ -1196,6 +1595,33 @@ class TelemetryService:
         vid = item.get("vehicle_id")
         path = item.get("path") or []
 
+        if vid and vid in self._active_reroutes:
+            rr = self._active_reroutes[vid]
+            item["route_geometry"] = rr["route_geometry"]
+            path = rr["route_geometry"].get("coordinates", path)
+            item["path"] = path
+            item["status"] = "rerouting"
+            if rr.get("eta_minutes") is not None:
+                item["eta_minutes"] = rr["eta_minutes"]
+        elif path and 2 <= len(path) < 10:
+            dense_path = []
+            target_count = 10
+            n_segments = len(path) - 1
+            pts_per_seg = max(2, (target_count + n_segments - 1) // n_segments)
+            for i in range(n_segments):
+                p1 = path[i]
+                p2 = path[i + 1]
+                steps = pts_per_seg if i == n_segments - 1 else pts_per_seg - 1
+                for s in range(steps):
+                    t = s / float(steps)
+                    dense_path.append([
+                        round(p1[0] + t * (p2[0] - p1[0]), 4),
+                        round(p1[1] + t * (p2[1] - p1[1]), 4)
+                    ])
+            dense_path.append(path[-1])
+            path = dense_path
+            item["path"] = path
+
         # Overlay cached extra metadata
         extra = self._custom_vehicles_extra.get(vid, {})
         for k, v in extra.items():
@@ -1326,19 +1752,20 @@ class TelemetryService:
                 sog = float(v.get("sog") or v.get("sog_knots") or 10.0)
                 cog = float(v.get("cog") or v.get("cog_deg") or 0.0)
                 heading = float(v.get("heading") or v.get("heading_deg") or cog)
-
-                p1 = [round(lon - 0.04, 4), round(lat - 0.04, 4)]
-                p2 = [round(lon, 4), round(lat, 4)]
-                p3 = [round(lon + 0.04, 4), round(lat + 0.04, 4)]
+                # True forward projection along course over ground (cog) and speed (sog)
+                past_dist_km = max(0.5, (sog * 1.852) * 0.25)
+                p_prev = dead_reckon_lonlat([lon, lat], (cog + 180.0) % 360.0, past_dist_km)
+                p_curr = [round(lon, 4), round(lat, 4)]
+                p_next = dead_reckon_lonlat([lon, lat], cog, past_dist_km)
 
                 m_unit = {
                     "vehicle_id": vid,
                     "name": v.get("ship_name") or v.get("name") or vid,
                     "modality": "maritime",
-                    "path": [p1, p2, p3],
+                    "path": [p_prev, p_curr, p_next],
                     "route_geometry": {
                         "type": "LineString",
-                        "coordinates": [p1, p2, p3]
+                        "coordinates": [p_prev, p_curr, p_next]
                     },
                     "speed_kmh": round(sog * 1.852, 1),
                     "status": "anchored" if sog < 0.5 else "moving",
@@ -1386,7 +1813,7 @@ class TelemetryService:
                     aviation_units.append(enriched)
 
         # Full Unified Fleet
-        full_fleet = enriched_custom + enriched_trucks + maritime_units + aviation_units
+        full_fleet = enriched_trucks + enriched_custom + maritime_units + aviation_units
 
         # 5. Apply Query Filters
         filtered_fleet = full_fleet
@@ -1399,7 +1826,9 @@ class TelemetryService:
         if company_id:
             filtered_fleet = [
                 v for v in filtered_fleet
-                if v.get("company_id") == company_id or v.get("organization_id") == company_id
+                if v.get("modality") in ("maritime", "air")
+                or v.get("company_id") == company_id
+                or v.get("organization_id") == company_id
             ]
 
         return filtered_fleet

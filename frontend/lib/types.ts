@@ -13,6 +13,17 @@ export interface AgentFinding {
   timestamp: string;
 }
 
+export interface HoldVsRerouteEconomics {
+  reroute_total_cost_idr: number;
+  hold_total_cost_idr: number;
+  hold_depot_name: string;
+  hold_depot_coords: [number, number];
+  estimated_clearance_hours: number;
+  recommended_action: 'REROUTE' | 'HOLD';
+  net_savings_idr: number;
+  rationale_id: string;
+}
+
 export interface RouteLeg {
   title: string;
   mode: 'truck' | 'maritime' | 'air';
@@ -20,6 +31,14 @@ export interface RouteLeg {
   eta_minutes: number;
   from_name: string;
   to_name: string;
+  coordinates?: [number, number][];
+  color?: string;
+  transfer_hub?: {
+    id: string;
+    name: string;
+    type: 'seaport' | 'airport' | 'hold_depot';
+    coords: [number, number];
+  };
 }
 
 export interface CongestionSegment {
@@ -43,6 +62,10 @@ export interface RouteRecommendation {
   traffic_level?: 'low' | 'moderate' | 'heavy' | 'mixed';
   congestion_segments?: CongestionSegment[];
   modality?: 'truck' | 'maritime' | 'air' | 'multimodal' | 'best';
+  corridor_type?: 'land_primary' | 'land_detour' | 'sea_intermodal' | 'air_intermodal' | 'hold_staging';
+  viable?: boolean;
+  non_viable_reason?: string;
+  economic_comparison?: HoldVsRerouteEconomics;
   legs?: RouteLeg[];
   color?: string;
   hedging?: {
@@ -236,6 +259,7 @@ export interface ApprovalItem {
   operator_id: string;
   custom_constraints?: Record<string, any>;
   notes?: string;
+  sync_status?: string;
   approved_at?: string;
   created_at?: string;
 }

@@ -47,31 +47,37 @@ export interface MarketRegimeData {
  * a targeted Google News direct reader search query for that specific article and source.
  */
 export function normalizeNewsPermalink(rawUrl?: string, headline?: string, source?: string): string {
-  if (!rawUrl || !rawUrl.trim()) {
+  const buildSearchUrl = () => {
     if (headline && headline.trim()) {
       const q = [headline.trim(), source?.trim()].filter(Boolean).join(' ');
       return `https://news.google.com/search?q=${encodeURIComponent(q)}&hl=id-ID&gl=ID&ceid=ID:id`;
     }
     return '';
+  };
+
+  if (!rawUrl || !rawUrl.trim()) {
+    return buildSearchUrl();
   }
 
   const cleanUrl = rawUrl.trim();
 
+  // Detect synthetic numeric ID patterns or known demo Antara IDs
+  if (/(?:berita|news)\/(?:543210|532190|571234|562341|\d{6})(?:\/|$)/i.test(cleanUrl) ||
+      cleanUrl.includes('543210') || cleanUrl.includes('532190') || cleanUrl.includes('571234') || cleanUrl.includes('562341')) {
+    const searchUrl = buildSearchUrl();
+    if (searchUrl) return searchUrl;
+  }
+
   try {
     const parsed = new URL(cleanUrl);
     if (parsed.pathname === '/' || parsed.pathname === '') {
-      if (headline && headline.trim()) {
-        const q = [headline.trim(), source?.trim()].filter(Boolean).join(' ');
-        return `https://news.google.com/search?q=${encodeURIComponent(q)}&hl=id-ID&gl=ID&ceid=ID:id`;
-      }
+      const searchUrl = buildSearchUrl();
+      if (searchUrl) return searchUrl;
     }
     return cleanUrl;
   } catch {
-    if (headline && headline.trim()) {
-      const q = [headline.trim(), source?.trim()].filter(Boolean).join(' ');
-      return `https://news.google.com/search?q=${encodeURIComponent(q)}&hl=id-ID&gl=ID&ceid=ID:id`;
-    }
-    return cleanUrl;
+    const searchUrl = buildSearchUrl();
+    return searchUrl || cleanUrl;
   }
 }
 
@@ -97,8 +103,8 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     verification_status: 'CORROBORATED_OFFICIAL',
     confidence_score: 0.96,
     commodity_name: 'CPO, Karet, Kopi',
-    link: 'https://sumut.antaranews.com/berita/543210/operasional-terminal-petikemas-belawan-berjalan-normal-cuaca-terpadu',
-    url: 'https://sumut.antaranews.com/berita/543210/operasional-terminal-petikemas-belawan-berjalan-normal-cuaca-terpadu',
+    link: 'https://news.google.com/search?q=Terminal%20Petikemas%20Belawan%20Pelindo%20Logistik&hl=id-ID&gl=ID&ceid=ID:id',
+    url: 'https://news.google.com/search?q=Terminal%20Petikemas%20Belawan%20Pelindo%20Logistik&hl=id-ID&gl=ID&ceid=ID:id',
     link_alive: 'alive',
   },
   {
@@ -172,8 +178,8 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     verification_status: 'CORROBORATED_OFFICIAL',
     confidence_score: 0.92,
     commodity_name: 'Beras Solok, Hortikultura',
-    link: 'https://sumbar.antaranews.com/berita/532190/kesiapsiagaan-alat-berat-jalinsum-sitinjau-lauik-jalur-padang-solok',
-    url: 'https://sumbar.antaranews.com/berita/532190/kesiapsiagaan-alat-berat-jalinsum-sitinjau-lauik-jalur-padang-solok',
+    link: 'https://news.google.com/search?q=Sitinjau%20Lauik%20Longsor%20Jalur%20Padang%20Solok%20BPBD&hl=id-ID&gl=ID&ceid=ID:id',
+    url: 'https://news.google.com/search?q=Sitinjau%20Lauik%20Longsor%20Jalur%20Padang%20Solok%20BPBD&hl=id-ID&gl=ID&ceid=ID:id',
     link_alive: 'alive',
   },
   {

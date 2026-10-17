@@ -42,8 +42,6 @@ const INITIAL_ENDPOINTS: EndpointProbeItem[] = [
   
   // Incidents
   { id: 'ep-3', name: 'List Active Incidents', path: '/api/v1/incidents', method: 'GET', category: 'Incidents', status: 'PENDING' },
-  { id: 'ep-4', name: 'Historical Episodes', path: '/api/v1/incidents/historical/episodes', method: 'GET', category: 'Incidents', status: 'PENDING' },
-  { id: 'ep-5', name: 'Predictive Risks', path: '/api/v1/incidents/predictive/risks', method: 'GET', category: 'Incidents', status: 'PENDING' },
   { id: 'ep-6', name: 'OSINT Media Stream', path: '/api/v1/incidents/osint/feed', method: 'GET', category: 'Incidents', status: 'PENDING' },
   { id: 'ep-7', name: 'OSINT Live Events', path: '/api/v1/incidents/osint/live', method: 'GET', category: 'Incidents', status: 'PENDING' },
   

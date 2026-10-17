@@ -3,16 +3,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import mapboxgl from 'mapbox-gl';
 import { MapboxOverlay } from '@deck.gl/mapbox';
-import { ArcLayer, ScatterplotLayer } from '@deck.gl/layers';
 import { 
   TrendingUp, 
   Activity, 
   ShieldAlert, 
   Layers, 
   ArrowUpRight, 
-  Wheat, 
-  Flame, 
-  ShoppingBag
+  Info
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { CrisisState, CorridorContext, RouteRecommendation } from '@/lib/types';
@@ -25,21 +22,7 @@ interface AnalyticsSectionProps {
   selectedCrisis?: CrisisState | null;
   corridorContext?: CorridorContext | null;
   activeRoutes?: RouteRecommendation[];
-  onSwitchTab?: (tab: 'map' | 'analytics' | 'simulation' | 'reports' | 'evaluation') => void;
-}
-
-interface CommodityArcItem {
-  from: [number, number];
-  to: [number, number];
-  status: 'critical' | 'disrupted' | 'clear';
-  commodity: string;
-}
-
-interface MarketScatterItem {
-  position: [number, number];
-  name: string;
-  status: 'critical' | 'warning' | 'clear';
-  radius: number;
+  onSwitchTab?: (tab: 'map' | 'analytics' | 'reports' | 'evaluation') => void;
 }
 
 export default function AnalyticsSection({
@@ -52,19 +35,22 @@ export default function AnalyticsSection({
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const deckOverlayRef = useRef<MapboxOverlay | null>(null);
 
-  const [ricePrice, setRicePrice] = useState<number>(12400);
-  const [shallotsDelta, setShallotsDelta] = useState<string>("+14.2%");
-  const [priceHistory, setPriceHistory] = useState<number[]>([12000, 12200, 12400, 12300, 12500]);
-  const [activeGraphNode, setActiveGraphNode] = useState<number>(0);
+  const [ricePrice, setRicePrice] = useState<number | null>(null);
+  const [shallotsDelta, setShallotsDelta] = useState<string | null>(null);
+  const [priceHistory, setPriceHistory] = useState<number[]>([]);
+  const [isLoadingPrices, setIsLoadingPrices] = useState<boolean>(true);
 
-  // Fetch prices on mount
+  // Fetch real PIHPS prices on mount
   useEffect(() => {
+    let isMounted = true;
     async function loadPrices() {
+      setIsLoadingPrices(true);
       try {
         const [riceRes, shallotsRes] = await Promise.all([
           api.commodities.prices({ commodity: 'beras', limit: 5 }),
           api.commodities.prices({ commodity: 'cabai_merah', limit: 2 })
         ]);
+        if (!isMounted) return;
         if (riceRes && riceRes.items && riceRes.items.length > 0) {
           setRicePrice(riceRes.items[0].price_idr);
           setPriceHistory(riceRes.items.map((item: { price_idr: number }) => item.price_idr).reverse());
@@ -77,9 +63,14 @@ export default function AnalyticsSection({
         }
       } catch (err) {
         console.error('Failed to load prices for AnalyticsSection:', err);
+      } finally {
+        if (isMounted) setIsLoadingPrices(false);
       }
     }
     loadPrices();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // Initialize Mapbox & Deck.gl spatial archipelago map
@@ -101,7 +92,6 @@ export default function AnalyticsSection({
 
       map.on('load', () => {
         map.resize();
-        // Setup Deck.gl MapboxOverlay
         try {
           const deckOverlay = new MapboxOverlay({
             interleaved: false,
@@ -110,8 +100,6 @@ export default function AnalyticsSection({
 
           map.addControl(deckOverlay as unknown as mapboxgl.IControl);
           deckOverlayRef.current = deckOverlay;
-
-          // Update Deck.gl layers
           updateDeckLayers();
         } catch (deckErr) {
           console.warn('Deck.gl overlay initialization error:', deckErr);
@@ -148,105 +136,29 @@ export default function AnalyticsSection({
     };
   }, []);
 
-  // Deck.gl Arc & Scatterplot Layers
+  // Deck.gl Layer updater
   const updateDeckLayers = () => {
     if (!deckOverlayRef.current) return;
-
-    // Archipelago Logistics Arcs across Sumatra Island and Java Corridor
-    const arcData: CommodityArcItem[] = [
-      {
-        from: [98.68, 3.78], // Belawan Port
-        to: [98.67, 3.59],   // Medan Hub
-        status: 'critical',  // Disrupted corridor
-        commodity: 'CPO / Cooking Oil'
-      },
-      {
-        from: [101.45, 1.68], // Dumai Port
-        to: [101.45, 0.51],   // Pekanbaru Hub
-        status: 'clear',
-        commodity: 'CPO Freight & Grains'
-      },
-      {
-        from: [100.37, -1.00], // Teluk Bayur Port
-        to: [100.37, -0.31],   // Bukittinggi / Solok
-        status: 'disrupted',   // Mountain Corridor Delay
-        commodity: 'Shallots & Horticulture'
-      },
-      {
-        from: [104.76, -2.99], // Palembang Hub
-        to: [105.75, -5.87],   // Bakauheni Ferry Port
-        status: 'clear',
-        commodity: 'Rice & Food Staple Reserve'
-      },
-      {
-        from: [105.75, -5.87], // Bakauheni Port
-        to: [106.84, -6.20],   // Jakarta / Java Central Hub
-        status: 'clear',
-        commodity: 'Inter-Island Food Logistics'
-      }
-    ];
-
-    const scatterData: MarketScatterItem[] = [
-      { position: [98.68, 3.78], name: 'Belawan Port', status: 'critical', radius: 35000 },
-      { position: [101.45, 1.68], name: 'Dumai Port', status: 'clear', radius: 30000 },
-      { position: [100.37, -1.00], name: 'Teluk Bayur', status: 'warning', radius: 25000 },
-      { position: [104.76, -2.99], name: 'Palembang Hub', status: 'clear', radius: 30000 },
-      { position: [105.75, -5.87], name: 'Bakauheni Port', status: 'warning', radius: 35000 },
-      { position: [106.84, -6.20], name: 'Java Central Hub', status: 'clear', radius: 45000 },
-    ];
-
-    const arcLayer = new ArcLayer<CommodityArcItem>({
-      id: 'commodity-flow-arcs',
-      data: arcData,
-      getSourcePosition: (d: CommodityArcItem) => d.from,
-      getTargetPosition: (d: CommodityArcItem) => d.to,
-      getSourceColor: (d: CommodityArcItem) => d.status === 'critical' ? [239, 68, 68, 255] : d.status === 'disrupted' ? [245, 158, 11, 255] : [0, 240, 255, 200],
-      getTargetColor: (d: CommodityArcItem) => d.status === 'critical' ? [239, 68, 68, 200] : d.status === 'disrupted' ? [245, 158, 11, 200] : [16, 185, 129, 200],
-      getWidth: 3.5,
-      getHeight: 0.4,
-      greatCircle: true,
-    });
-
-    const scatterLayer = new ScatterplotLayer<MarketScatterItem>({
-      id: 'market-hub-spots',
-      data: scatterData,
-      getPosition: (d: MarketScatterItem) => d.position,
-      getFillColor: (d: MarketScatterItem) => d.status === 'critical' ? [239, 68, 68, 160] : d.status === 'warning' ? [245, 158, 11, 140] : [16, 185, 129, 120],
-      getLineColor: () => [255, 255, 255, 200],
-      getRadius: (d: MarketScatterItem) => d.radius,
-      radiusMinPixels: 8,
-      radiusMaxPixels: 30,
-      lineWidthMinPixels: 1.5,
-      stroked: true,
-    });
-
     deckOverlayRef.current.setProps({
-      layers: [arcLayer, scatterLayer]
+      layers: []
     });
   };
 
-  // Update deck layers when data changes
   useEffect(() => {
     updateDeckLayers();
   }, [selectedCrisis, corridorContext, activeRoutes]);
 
-  // Compute bar heights
-  const maxP = Math.max(...priceHistory, 1);
-  const minP = Math.min(...priceHistory, 0) * 0.95;
-  const barHeights = priceHistory.map(p => `${((p - minP) / (maxP - minP)) * 75 + 15}%`);
-
-  // Causal Chain of Impact Nodes
-  const causalChain = [
-    { label: 'Simpul Pelabuhan / Gerbang Terhambat', sub: 'Cuaca Ekstrem / Antrean Dermaga', status: 'KRITIS', color: 'text-red-400 border-red-500/40 bg-red-500/10' },
-    { label: 'Perlambatan Arteri Trans-Sumatera', sub: 'Antrean Kendaraan & Bottleneck Jalan', status: 'WASPADA', color: 'text-amber-400 border-amber-500/40 bg-amber-500/10' },
-    { label: 'Penurunan Pasokan Pasar Konsumen', sub: 'Penurunan Inflow Komoditas Harian', status: 'WASPADA', color: 'text-amber-400 border-amber-500/40 bg-amber-500/10' },
-    { label: 'Risiko Kenaikan Harga Eceran', sub: 'Proyeksi Kenaikan Harga Pokok Wilayah', status: 'PERINGATAN', color: 'text-cyan-400 border-cyan-500/40 bg-cyan-500/10' }
-  ];
+  // Compute bar heights safely from real priceHistory
+  const maxP = priceHistory.length > 0 ? Math.max(...priceHistory) : 1;
+  const minP = priceHistory.length > 0 ? Math.min(...priceHistory) * 0.95 : 0;
+  const barHeights = priceHistory.map((p) =>
+    maxP === minP ? '50%' : `${((p - minP) / (maxP - minP)) * 75 + 15}%`
+  );
 
   return (
     <div className="w-full min-h-full lg:h-full grid grid-cols-12 gap-6 pointer-events-auto">
       
-      {/* LEFT SECTION: 4D Mapbox/Deck.gl Spatial Canvas & GraphRAG Chain */}
+      {/* LEFT SECTION: Spatial Canvas & Real Corridor Context */}
       <section className="col-span-12 lg:col-span-8 flex flex-col min-h-0 gap-4">
         
         {/* Telemetry Header */}
@@ -267,24 +179,30 @@ export default function AnalyticsSection({
             <div className="bg-[#121822] border border-white/10 px-3.5 py-2 rounded-lg flex items-center gap-2">
               <Activity className="w-4 h-4 text-slate-300" />
               <div>
-                <span className="text-xs text-slate-400 font-medium block">Koridor Terpantau</span>
-                <span className="text-xs font-mono font-bold text-white tabular-nums">4 Jalur Utama</span>
+                <span className="text-xs text-slate-400 font-medium block">Rute Operasional</span>
+                <span className="text-xs font-mono font-bold text-white tabular-nums">
+                  {activeRoutes && activeRoutes.length > 0 ? `${activeRoutes.length} Koridor` : 'Data tidak tersedia'}
+                </span>
               </div>
             </div>
 
-            <div className="bg-[#121822] border border-red-500/30 px-3.5 py-2 rounded-lg flex items-center gap-2">
-              <ShieldAlert className="w-4 h-4 text-red-400" />
+            <div className="bg-[#121822] border border-white/10 px-3.5 py-2 rounded-lg flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-slate-300" />
               <div>
-                <span className="text-xs text-red-400 font-medium block">Simpul Terdampak</span>
-                <span className="text-xs font-mono font-bold text-red-400 tabular-nums">1 Simpul Kritis</span>
+                <span className="text-xs text-slate-400 font-medium block">Disrupsi Aktif</span>
+                <span className="text-xs font-mono font-bold text-white tabular-nums truncate max-w-[140px] block" title={selectedCrisis?.title || 'Data tidak tersedia'}>
+                  {selectedCrisis ? selectedCrisis.title : 'Data tidak tersedia'}
+                </span>
               </div>
             </div>
 
-            <div className="bg-[#121822] border border-amber-500/30 px-3.5 py-2 rounded-lg flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-amber-400" />
+            <div className="bg-[#121822] border border-white/10 px-3.5 py-2 rounded-lg flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-slate-300" />
               <div>
-                <span className="text-xs text-amber-400 font-medium block">Risiko Volatilitas</span>
-                <span className="text-xs font-mono font-bold text-amber-400 tabular-nums">{shallotsDelta}</span>
+                <span className="text-xs text-slate-400 font-medium block">Delta Harga PIHPS</span>
+                <span className="text-xs font-mono font-bold text-white tabular-nums">
+                  {shallotsDelta !== null ? shallotsDelta : 'Data tidak tersedia'}
+                </span>
               </div>
             </div>
           </div>
@@ -296,68 +214,50 @@ export default function AnalyticsSection({
           {/* Mapbox Canvas */}
           <div ref={mapContainerRef} className="absolute inset-0 w-full h-full" />
 
-          {/* Causal Chain Panel */}
-          <div className="absolute top-4 left-4 right-4 z-20 bg-[#0c1017] border border-white/10 p-4 rounded-xl shadow-xl">
-            <div className="flex justify-between items-center mb-3">
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-slate-300" />
-                <span className="text-xs font-mono font-semibold uppercase tracking-wider text-slate-200">
-                  Rantai Kausalitas Dampak
-                </span>
-              </div>
-              <span className="text-xs font-mono text-slate-400">
-                Koridor: Simpul Bahaya &rarr; Arteri Logistik &rarr; Pusat Konsumsi
-              </span>
-            </div>
-
-            {/* Causal Chain Nodes */}
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
-              {causalChain.map((node, idx) => (
-                <div 
-                  key={idx}
-                  onClick={() => setActiveGraphNode(idx)}
-                  className={`p-3 rounded-lg border transition-colors cursor-pointer ${
-                    activeGraphNode === idx 
-                      ? 'bg-white/10 border-white/40' 
-                      : 'bg-[#121822] border-white/10 hover:border-white/20'
-                  }`}
-                >
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-xs font-mono font-medium text-slate-400">SIMPUL 0{idx + 1}</span>
-                    <span className="text-xs font-mono font-medium px-1.5 py-0.5 rounded bg-black/40 text-slate-300">{node.status}</span>
-                  </div>
-                  <p className="text-xs font-semibold text-white truncate">{node.label}</p>
-                  <p className="text-xs text-slate-400 mt-0.5 truncate">{node.sub}</p>
-                </div>
-              ))}
-            </div>
+          {/* Honest Status Overlay */}
+          <div className="absolute top-4 left-4 z-20 bg-[#0c1017]/90 backdrop-blur-md border border-white/10 px-3.5 py-2 rounded-lg text-xs flex items-center gap-2 shadow-lg">
+            <Info className="w-4 h-4 text-slate-400" />
+            <span className="text-slate-300 font-sans">
+              Visualisasi Aliran Komoditas Spasial (Sumatera - Jawa)
+            </span>
           </div>
 
           {/* Region Metric Badge */}
-          <div className="absolute bottom-4 left-4 z-20 bg-[#0c1017] border border-white/10 p-4 rounded-xl text-xs space-y-1.5 shadow-xl max-w-xs">
+          <div className="absolute bottom-4 left-4 z-20 bg-[#0c1017]/90 backdrop-blur-md border border-white/10 p-4 rounded-xl text-xs space-y-2 shadow-xl max-w-xs">
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-400" />
+              <span className={`w-2 h-2 rounded-full ${ricePrice !== null ? 'bg-emerald-400' : 'bg-slate-500'}`} />
               <span className="font-semibold text-xs tracking-wide text-white">KORIDOR SUMATERA UTARA</span>
             </div>
             <div className="grid grid-cols-2 gap-x-4 pt-1 font-mono text-xs">
               <span className="text-slate-400">Harga Beras:</span>
-              <span className="text-slate-200 font-bold tabular-nums">Rp {ricePrice.toLocaleString('id-ID')} / kg</span>
-              <span className="text-slate-400">Delta Bawang:</span>
-              <span className="text-red-400 font-bold tabular-nums">{shallotsDelta}</span>
+              <span className="text-slate-200 font-bold tabular-nums">
+                {ricePrice !== null ? `Rp ${ricePrice.toLocaleString('id-ID')} / kg` : 'Data tidak tersedia'}
+              </span>
+              <span className="text-slate-400">Delta Cabai:</span>
+              <span className="font-bold tabular-nums text-slate-200">
+                {shallotsDelta !== null ? (
+                  <span className={shallotsDelta.startsWith('+') ? 'text-amber-400' : 'text-emerald-400'}>
+                    {shallotsDelta}
+                  </span>
+                ) : (
+                  'Data tidak tersedia'
+                )}
+              </span>
             </div>
             {onSwitchTab && (
               <button
-                onClick={() => onSwitchTab('simulation')}
+                type="button"
+                onClick={() => onSwitchTab('map')}
                 className="mt-2.5 w-full py-2 bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition cursor-pointer"
               >
-                Simulasi Skenario Dampak <ArrowUpRight className="w-3.5 h-3.5" />
+                Simulasi Bencana (Peta) <ArrowUpRight className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
         </div>
       </section>
 
-      {/* RIGHT SECTION: Sidebar (Inflation Variance & Commodity Risk Ranking) */}
+      {/* RIGHT SECTION: Sidebar (Real PIHPS Price History & Honest Risk Ranking) */}
       <section className="col-span-12 lg:col-span-4 bg-[#0c1017] border border-white/10 p-5 flex flex-col gap-6 overflow-y-auto no-scrollbar rounded-xl shadow-xl">
         
         {/* Price History Card */}
@@ -367,7 +267,7 @@ export default function AnalyticsSection({
               <TrendingUp className="w-4 h-4 text-slate-300" /> Riwayat Harga Beras (PIHPS)
             </h3>
             <span className="text-xs font-mono text-slate-300 font-medium tabular-nums">
-              Rp {ricePrice.toLocaleString('id-ID')} / kg
+              {ricePrice !== null ? `Rp ${ricePrice.toLocaleString('id-ID')} / kg` : 'Data tidak tersedia'}
             </span>
           </div>
 
@@ -377,18 +277,24 @@ export default function AnalyticsSection({
               <span className="text-slate-300">Sumber: PIHPS Bank Indonesia</span>
             </div>
 
-            {/* Authentic Single-Dataset Bars */}
-            <div className="h-28 flex items-end gap-2 pt-2">
-              {barHeights.map((h, i) => (
-                <div key={i} className="flex-1 bg-white/5 relative group h-full rounded-t-sm overflow-hidden flex flex-col justify-end items-center">
-                  <div 
-                    className="w-full bg-white/20 border-t-2 border-white/60 hover:bg-white/30 transition-all duration-300" 
-                    style={{ height: h }}
-                  />
-                  <span className="font-mono text-xs text-slate-400 mt-1">T-{priceHistory.length - 1 - i}</span>
-                </div>
-              ))}
-            </div>
+            {/* Authentic Single-Dataset Bars or Honest Empty State */}
+            {priceHistory.length > 0 ? (
+              <div className="h-28 flex items-end gap-2 pt-2">
+                {barHeights.map((h, i) => (
+                  <div key={i} className="flex-1 bg-white/5 relative group h-full rounded-t-sm overflow-hidden flex flex-col justify-end items-center">
+                    <div 
+                      className="w-full bg-white/20 border-t-2 border-white/60 hover:bg-white/30 transition-all duration-300" 
+                      style={{ height: h }}
+                    />
+                    <span className="font-mono text-xs text-slate-400 mt-1">T-{priceHistory.length - 1 - i}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="h-28 flex items-center justify-center text-xs text-slate-500 font-mono">
+                {isLoadingPrices ? 'Menghubungkan ke PIHPS...' : 'Data tidak tersedia'}
+              </div>
+            )}
           </div>
         </div>
 
@@ -396,85 +302,17 @@ export default function AnalyticsSection({
         <div className="space-y-3 flex-1 flex flex-col min-h-0">
           <div className="flex justify-between items-center">
             <h3 className="text-sm font-semibold tracking-wide text-white flex items-center gap-2">
-              <ShieldAlert className="w-4 h-4 text-amber-400" /> Peringkat Risiko Komoditas (24 Jam)
+              <ShieldAlert className="w-4 h-4 text-slate-400" /> Peringkat Risiko Komoditas (24 Jam)
             </h3>
-            <span className="text-xs font-mono text-slate-400">Sinkronisasi PIHPS</span>
+            <span className="text-xs font-mono text-slate-400">PIHPS</span>
           </div>
 
-          <div className="space-y-2.5 overflow-y-auto no-scrollbar flex-1 pr-1">
-            
-            {/* Item 1 */}
-            <div className="bg-[#121822] border border-red-500/30 hover:border-red-500/60 p-3.5 rounded-lg transition-colors cursor-pointer">
-              <div className="flex justify-between items-center mb-1">
-                <div className="flex items-center gap-2">
-                  <Flame className="w-4 h-4 text-red-400" />
-                  <span className="text-xs font-semibold text-white">Cabai Merah & Bawang</span>
-                </div>
-                <span className="text-xs font-mono font-medium px-2 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/40">
-                  RISIKO TINGGI
-                </span>
-              </div>
-              <p className="text-xs text-slate-400">Penyempitan Pasokan Jalur Sumatera</p>
-              <div className="flex justify-between items-center mt-2 pt-2 border-t border-white/5 font-mono text-xs">
-                <span className="text-slate-400">Volatilitas:</span>
-                <span className="text-red-400 font-bold tabular-nums">+18.5%</span>
-              </div>
-            </div>
-
-            {/* Item 2 */}
-            <div className="bg-[#121822] border border-amber-500/30 hover:border-amber-500/60 p-3.5 rounded-lg transition-colors cursor-pointer">
-              <div className="flex justify-between items-center mb-1">
-                <div className="flex items-center gap-2">
-                  <Flame className="w-4 h-4 text-amber-400" />
-                  <span className="text-xs font-semibold text-white">Cabai Rawit</span>
-                </div>
-                <span className="text-xs font-mono font-medium px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/40">
-                  WASPADA
-                </span>
-              </div>
-              <p className="text-xs text-slate-400">Anomali Cuaca Sumatera Barat</p>
-              <div className="flex justify-between items-center mt-2 pt-2 border-t border-white/5 font-mono text-xs">
-                <span className="text-slate-400">Volatilitas:</span>
-                <span className="text-amber-400 font-bold tabular-nums">+6.2%</span>
-              </div>
-            </div>
-
-            {/* Item 3 */}
-            <div className="bg-[#121822] border border-emerald-500/30 hover:border-emerald-500/60 p-3.5 rounded-lg transition-colors cursor-pointer">
-              <div className="flex justify-between items-center mb-1">
-                <div className="flex items-center gap-2">
-                  <Wheat className="w-4 h-4 text-emerald-400" />
-                  <span className="text-xs font-semibold text-white">Beras Premium</span>
-                </div>
-                <span className="text-xs font-mono font-medium px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
-                  STABIL
-                </span>
-              </div>
-              <p className="text-xs text-slate-400">Injeksi Cadangan Beras Pemerintah (Bulog)</p>
-              <div className="flex justify-between items-center mt-2 pt-2 border-t border-white/5 font-mono text-xs">
-                <span className="text-slate-400">Volatilitas:</span>
-                <span className="text-emerald-400 font-bold tabular-nums">-1.2%</span>
-              </div>
-            </div>
-
-            {/* Item 4 */}
-            <div className="bg-[#121822] border border-red-500/30 hover:border-red-500/60 p-3.5 rounded-lg transition-colors cursor-pointer">
-              <div className="flex justify-between items-center mb-1">
-                <div className="flex items-center gap-2">
-                  <ShoppingBag className="w-4 h-4 text-red-400" />
-                  <span className="text-xs font-semibold text-white">Bawang Putih</span>
-                </div>
-                <span className="text-xs font-mono font-medium px-2 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/40">
-                  KRITIS
-                </span>
-              </div>
-              <p className="text-xs text-slate-400">Kongesti Arteri Pelabuhan Belawan</p>
-              <div className="flex justify-between items-center mt-2 pt-2 border-t border-white/5 font-mono text-xs">
-                <span className="text-slate-400">Volatilitas:</span>
-                <span className="text-red-400 font-bold tabular-nums">+24.5%</span>
-              </div>
-            </div>
-
+          <div className="flex-1 flex flex-col items-center justify-center p-6 text-center rounded-lg border border-dashed border-white/10 bg-[#121822]/50 text-slate-400">
+            <Info className="w-5 h-5 mb-2 text-slate-500" />
+            <p className="text-xs font-medium text-slate-300">Data pemeringkatan risiko belum tersedia</p>
+            <p className="text-[11px] text-slate-500 mt-1 max-w-xs font-sans">
+              Pemeringkatan risiko volatilitas memerlukan data deret waktu PIHPS kontinu multi-pasar yang saat ini belum terhubung.
+            </p>
           </div>
         </div>
 

@@ -142,6 +142,10 @@ async def decision_support_copilot(state: CrisisState) -> dict:
         )
         if gen_text and "FALLBACK" not in gen_text and "CRISIS EXECUTIVE SUMMARY" not in gen_text and len(gen_text) > 50:
             summary_text = gen_text.strip()
+            if "Kepatuhan Regulasi" not in summary_text:
+                summary_text += f"\n- Kepatuhan Regulasi (BKHIT & MST): Status {comp_stat} ({comp_desc})."
+            if "Spoilage Hedging" not in summary_text:
+                summary_text += f"\n- Evaluasi Spoilage Hedging: Kebijakan {optimal_pol} menghemat {net_sav}."
     except Exception as le:
         logger.debug(f"LLM decision summary generation skipped: {le}")
 

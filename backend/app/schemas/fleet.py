@@ -98,6 +98,7 @@ class FleetVehicleTelemetry(BaseModel):
     # --- Tenancy & Organization Fields ---
     company_id: Optional[str] = Field(None, description="Tenant organization ID (e.g. pos_logistik, pelindo_belawan)")
     company_name: Optional[str] = Field(None, description="Human-readable tenant company name")
+    is_tenant_asset: Optional[bool] = Field(None, description="Whether this asset belongs to the caller's tenant")
 
     # --- Signal & Telemetry Metadata ---
     signal_status: Union[SignalStatus, str] = Field(SignalStatus.SIMULATION_CACHE, description="Telemetry stream status")

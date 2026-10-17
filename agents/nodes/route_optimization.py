@@ -17,15 +17,27 @@ settings = get_settings()
 ALIAS_MAP = {
     "belawan": "belawan_port",
     "belawan port": "belawan_port",
+    "pelabuhan belawan": "belawan_port",
     "medan": "medan_kim",
     "medan kim": "medan_kim",
+    "medan hub": "medan_kim",
     "tebingtinggi": "tebing_tinggi_hub",
     "tebing tinggi": "tebing_tinggi_hub",
     "siantar": "siantar_hub",
     "pematang siantar": "siantar_hub",
     "pematangsiantar": "siantar_hub",
     "dumai": "dumai_port",
+    "dumai port": "dumai_port",
     "bakauheni": "bakauheni_port",
+    "padang": "padang_teluk_bayur",
+    "teluk bayur": "padang_teluk_bayur",
+    "pekanbaru": "pekanbaru_hub",
+    "palembang": "palembang_hub",
+    "bukittinggi": "bukittinggi_hub",
+    "binjai": "binjai_hub",
+    "kualanamu": "kualanamu_airport",
+    "panjang": "panjang_port",
+    "boom baru": "boom_baru_port",
 }
 
 
@@ -200,18 +212,44 @@ async def route_optimization_agent(state: CrisisState) -> dict:
         # Robust origin & destination resolution
         req_origin = state.get("origin") or state.get("start_location")
         req_dest = state.get("destination") or state.get("end_location")
-        
+        origin_coords = state.get("origin_coords")
+        dest_coords = state.get("dest_coords")
+
+        # Support if req_origin / req_dest were passed directly as [lon, lat]
+        if isinstance(req_origin, (list, tuple)) and len(req_origin) >= 2:
+            origin_coords = [float(req_origin[0]), float(req_origin[1])]
+            req_origin = None
+        if isinstance(req_dest, (list, tuple)) and len(req_dest) >= 2:
+            dest_coords = [float(req_dest[0]), float(req_dest[1])]
+            req_dest = None
+
         node_lookup = {str(n).lower(): n for n in G.nodes}
-        
+
+        def _find_nearest_graph_node(coords):
+            if not coords or len(coords) < 2 or not node_coords:
+                return None
+            lon, lat = float(coords[0]), float(coords[1])
+            best_node = None
+            best_dist = float("inf")
+            for nid, c in node_coords.items():
+                n_lat = c.get("lat")
+                n_lon = c.get("lon")
+                if n_lat is not None and n_lon is not None:
+                    d = (lat - n_lat) ** 2 + (lon - n_lon) ** 2
+                    if d < best_dist:
+                        best_dist = d
+                        best_node = nid
+            return best_node
+
         origin = _resolve_network_node(req_origin, node_lookup)
-        if origin is None:
-            origin = _resolve_network_node("belawan", node_lookup)
+        if origin is None and origin_coords:
+            origin = _find_nearest_graph_node(origin_coords)
         if origin is None and len(G.nodes) > 0:
             origin = list(G.nodes)[0]
 
         destination = _resolve_network_node(req_dest, node_lookup)
-        if destination is None:
-            destination = _resolve_network_node("dumai", node_lookup)
+        if destination is None and dest_coords:
+            destination = _find_nearest_graph_node(dest_coords)
         if destination is None and len(G.nodes) > 1:
             destination = list(G.nodes)[-1]
 
@@ -250,6 +288,10 @@ async def route_optimization_agent(state: CrisisState) -> dict:
                 if not waypoints:
                     waypoints = [{"lat": 3.78 + (idx * 0.02), "lon": 98.68 - (idx * 0.02)}]
                 wp_coords = [[wp["lon"], wp["lat"]] for wp in waypoints]
+                if origin_coords and len(origin_coords) >= 2:
+                    wp_coords = [[float(origin_coords[0]), float(origin_coords[1])]] + wp_coords
+                if dest_coords and len(dest_coords) >= 2:
+                    wp_coords = wp_coords + [[float(dest_coords[0]), float(dest_coords[1])]]
                 
                 # Intermodal Choke-Point Proximity Delay Multiplier
                 choke_multiplier = intermodal_sync.calculate_route_intermodal_delay(wp_coords)

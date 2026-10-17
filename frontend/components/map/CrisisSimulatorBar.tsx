@@ -22,10 +22,16 @@ import {
   Check,
   Gauge,
 } from 'lucide-react';
-import type { CrisisType, Severity } from '@/lib/types';
+import type { CrisisType, Severity, RouteRecommendation } from '@/lib/types';
 import { HUB_NODES } from '@/lib/mapboxRoutingService';
 import { HAZARD_RADIUS_OPTIONS_KM, type TransportModality } from '@/lib/aiDynamicRouter';
 import { resolveMapDockClasses } from '@/components/dashboard/mapDockLayout';
+
+export interface CorridorVisibilityState {
+  land: boolean;
+  sea: boolean;
+  air: boolean;
+}
 
 export interface CrisisSimulatorBarProps {
   onTriggerPointSimulation: (
@@ -47,6 +53,9 @@ export interface CrisisSimulatorBarProps {
   setSelectedRadius: (radius: number) => void;
   selectedModality?: TransportModality;
   setSelectedModality?: (modality: TransportModality) => void;
+  corridorVisibility?: CorridorVisibilityState;
+  onToggleCorridor?: (corridor: 'land' | 'sea' | 'air') => void;
+  activeCorridors?: RouteRecommendation[];
   onResetNodes?: () => void;
   isSidebarOpen?: boolean;
   isLeftSidebarCollapsed?: boolean;
@@ -67,6 +76,9 @@ export function CrisisSimulatorBar({
   setSelectedRadius,
   selectedModality = 'best',
   setSelectedModality,
+  corridorVisibility = { land: true, sea: true, air: true },
+  onToggleCorridor,
+  activeCorridors = [],
   onResetNodes,
   isSidebarOpen = false,
   isLeftSidebarCollapsed = false,
@@ -74,7 +86,7 @@ export function CrisisSimulatorBar({
   setSimSpeed,
 }: CrisisSimulatorBarProps) {
   const [selectedType, setSelectedType] = useState<CrisisType>('flood');
-  const [activePopover, setActivePopover] = useState<'modality' | 'nodes' | 'disruption' | 'radius' | 'speed' | null>(null);
+  const [activePopover, setActivePopover] = useState<'nodes' | 'disruption' | 'radius' | 'speed' | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -98,18 +110,23 @@ export function CrisisSimulatorBar({
     { type: 'landslide', label: 'Tanah Longsor', icon: <Mountain className="w-3.5 h-3.5 text-emerald-400" /> },
   ];
 
-
   const originName = originNodeId ? HUB_NODES[originNodeId]?.name || originNodeId : null;
   const destName = destNodeId ? HUB_NODES[destNodeId]?.name || destNodeId : null;
 
-  const modalityIcons: Record<string, React.ReactNode> = {
-    best: <Compass className="w-3.5 h-3.5 text-cyan-400" />,
-    truck: <Truck className="w-3.5 h-3.5 text-emerald-400" />,
-    maritime: <Ship className="w-3.5 h-3.5 text-blue-400" />,
-    air: <Plane className="w-3.5 h-3.5 text-sky-400" />,
-  };
+  // Find Sea and Air viability from active computed corridors
+  const seaCorridor = activeCorridors.find(
+    (c) => c.corridor_type === 'sea_intermodal' || c.modality === 'maritime'
+  );
+  const isSeaViable = seaCorridor ? seaCorridor.viable !== false : true;
+  const seaNonViableReason = seaCorridor?.non_viable_reason;
 
-  const togglePopover = (popover: 'modality' | 'nodes' | 'disruption' | 'radius' | 'speed') => {
+  const airCorridor = activeCorridors.find(
+    (c) => c.corridor_type === 'air_intermodal' || c.modality === 'air'
+  );
+  const isAirViable = airCorridor ? airCorridor.viable !== false : true;
+  const airNonViableReason = airCorridor?.non_viable_reason;
+
+  const togglePopover = (popover: 'nodes' | 'disruption' | 'radius' | 'speed') => {
     setActivePopover((prev) => (prev === popover ? null : popover));
   };
 
@@ -117,7 +134,7 @@ export function CrisisSimulatorBar({
     isLeftSidebarCollapsed,
     isCrisisDrawerOpen: isSidebarOpen,
   });
-  const pillsRowClass = `flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#0c1017] border border-[#1c2432] shadow-xl max-w-full overflow-visible ${
+  const pillsRowClass = `flex items-center gap-2 px-3 py-1.5 rounded-lg backdrop-blur-md bg-[#0c0e12]/80 border border-white/10 shadow-2xl max-w-full overflow-visible transition-all duration-200 ${
     isSidebarOpen ? 'flex-wrap justify-center' : ''
   }`;
 
@@ -129,57 +146,74 @@ export function CrisisSimulatorBar({
       {/* Floating Action Bubble Pills Row */}
       <div className={pillsRowClass}>
         
-        {/* 1. Modality Bubble Pill */}
-        {setSelectedModality && (
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => togglePopover('modality')}
-              className="cursor-pointer px-3 py-1.5 rounded-md bg-[#121822] border border-[#1c2432] text-xs font-sans font-medium text-slate-200 hover:border-slate-600 transition-all flex items-center gap-2"
-            >
-              {modalityIcons[selectedModality] || modalityIcons.best}
-              <span className="capitalize">{selectedModality === 'best' ? 'Multi-Moda' : selectedModality}</span>
-              <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform duration-200 ${activePopover === 'modality' ? 'rotate-180' : ''}`} />
-            </button>
+        {/* 1. Simultaneous Corridor Visibility Toggle Pills */}
+        <div className="flex items-center gap-1.5 p-0.5 rounded-md bg-[#121822]/60 border border-white/5">
+          {/* A. Darat (Truck) */}
+          <button
+            type="button"
+            onClick={() => onToggleCorridor?.('land')}
+            className={`cursor-pointer px-2.5 py-1 rounded text-xs font-sans font-medium transition-all duration-200 flex items-center gap-1.5 ${
+              corridorVisibility.land
+                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shadow-sm'
+                : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent opacity-60'
+            }`}
+            title="Toggle Visibilitas Koridor Darat (Utama & Detour)"
+          >
+            <span className="w-2 h-2 rounded-full bg-[#10B981] shrink-0" />
+            <Truck className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Darat</span>
+          </button>
 
-            {/* Modality Dropdown Popover */}
-            {activePopover === 'modality' && (
-              <div className="absolute bottom-full left-0 mb-2 w-52 p-2 rounded-md bg-[#0c1017] border border-[#1c2432] shadow-xl flex flex-col gap-1 z-50 animate-in fade-in slide-in-from-bottom-2 duration-150">
-                <span className="px-2 py-1 text-xs font-sans text-cyan-400 font-bold">PILIH MODALITAS DISTRIBUSI</span>
-                {[
-                  { mode: 'best', label: 'Multi-Moda Terpadu', desc: 'Optimasi Rute Multi-Moda', icon: <Compass className="w-4 h-4 text-cyan-400" /> },
-                  { mode: 'truck', label: 'Truk Logistik', desc: 'Transportasi Darat', icon: <Truck className="w-4 h-4 text-emerald-400" /> },
-                  { mode: 'maritime', label: 'Kapal Laut', desc: 'Transportasi Maritim', icon: <Ship className="w-4 h-4 text-blue-400" /> },
-                  { mode: 'air', label: 'Cargo Udara', desc: 'Transportasi Udara', icon: <Plane className="w-4 h-4 text-sky-400" /> },
-                ].map((m) => {
-                  const active = selectedModality === m.mode;
-                  return (
-                    <button
-                      key={m.mode}
-                      type="button"
-                      onClick={() => {
-                        setSelectedModality(m.mode as TransportModality);
-                        setActivePopover(null);
-                      }}
-                      className={`cursor-pointer w-full p-2 rounded-md text-left font-sans transition flex items-center justify-between ${
-                        active ? 'bg-white/10 text-white border border-white/20' : 'hover:bg-white/5 text-slate-300'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5">
-                        {m.icon}
-                        <div className="flex flex-col">
-                          <span className="text-xs font-bold">{m.label}</span>
-                          <span className="text-xs text-slate-400">{m.desc}</span>
-                        </div>
-                      </div>
-                      {active && <Check className="w-3.5 h-3.5 text-cyan-400" />}
-                    </button>
-                  );
-                })}
-              </div>
+          {/* B. Laut + Darat (Maritime Intermodal) */}
+          <button
+            type="button"
+            disabled={!isSeaViable}
+            onClick={() => isSeaViable && onToggleCorridor?.('sea')}
+            className={`px-2.5 py-1 rounded text-xs font-sans font-medium transition-all duration-200 flex items-center gap-1.5 ${
+              !isSeaViable
+                ? 'opacity-40 cursor-not-allowed bg-slate-900/40 text-slate-500 border border-slate-800'
+                : corridorVisibility.sea
+                  ? 'cursor-pointer bg-blue-500/20 text-blue-300 border border-blue-500/30 shadow-sm'
+                  : 'cursor-pointer text-slate-400 hover:text-white hover:bg-white/5 border border-transparent opacity-60'
+            }`}
+            title={!isSeaViable ? (seaNonViableReason || 'Rute laut tidak efisien untuk pasangan rute ini') : 'Toggle Visibilitas Koridor Intermodal Laut + Darat'}
+          >
+            <span className="flex items-center -space-x-1 shrink-0">
+              <span className="w-2 h-2 rounded-full bg-[#3B82F6]" />
+              <span className="w-2 h-2 rounded-full bg-[#10B981]" />
+            </span>
+            <Ship className="w-3.5 h-3.5 text-blue-400" />
+            <span>Laut + Darat</span>
+            {!isSeaViable && (
+              <span className="text-[10px] font-mono text-amber-400/80 bg-amber-400/10 px-1 rounded">N/A</span>
             )}
-          </div>
-        )}
+          </button>
+
+          {/* C. Udara + Darat (Air Intermodal) */}
+          <button
+            type="button"
+            disabled={!isAirViable}
+            onClick={() => isAirViable && onToggleCorridor?.('air')}
+            className={`px-2.5 py-1 rounded text-xs font-sans font-medium transition-all duration-200 flex items-center gap-1.5 ${
+              !isAirViable
+                ? 'opacity-40 cursor-not-allowed bg-slate-900/40 text-slate-500 border border-slate-800'
+                : corridorVisibility.air
+                  ? 'cursor-pointer bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 shadow-sm'
+                  : 'cursor-pointer text-slate-400 hover:text-white hover:bg-white/5 border border-transparent opacity-60'
+            }`}
+            title={!isAirViable ? (airNonViableReason || 'Rute udara tidak efisien untuk pasangan rute ini') : 'Toggle Visibilitas Koridor Intermodal Udara + Darat'}
+          >
+            <span className="flex items-center -space-x-1 shrink-0">
+              <span className="w-2 h-2 rounded-full bg-[#00F0FF]" />
+              <span className="w-2 h-2 rounded-full bg-[#10B981]" />
+            </span>
+            <Plane className="w-3.5 h-3.5 text-sky-400" />
+            <span>Udara + Darat</span>
+            {!isAirViable && (
+              <span className="text-[10px] font-mono text-amber-400/80 bg-amber-400/10 px-1 rounded">N/A</span>
+            )}
+          </button>
+        </div>
 
         {/* 2. Node Selector Bubble Pill */}
         <div className="relative">

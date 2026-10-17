@@ -58,6 +58,14 @@ FALLBACK_VESSEL_BASELINES = [
     {"mmsi": 525011033, "name": "KM Lingga Maju", "type": "General Cargo", "lat": 1.6500, "lon": 102.6000, "sog": 10.4, "cog": 128.0, "origin": "Kepulauan Riau"},
     {"mmsi": 525011034, "name": "MV Dumai Fortune", "type": "Bulk Carrier", "lat": 2.5000, "lon": 101.1500, "sog": 12.7, "cog": 310.0, "origin": "Dumai"},
     {"mmsi": 525011035, "name": "KM Medan Bahari", "type": "Container", "lat": 4.7000, "lon": 98.5000, "sog": 15.6, "cog": 130.0, "origin": "Belawan"},
+    {"mmsi": 525011036, "name": "KM Aceh Sejahtera", "type": "General Cargo", "lat": 5.2500, "lon": 97.2000, "sog": 13.4, "cog": 115.0, "origin": "Lhokseumawe"},
+    {"mmsi": 525011037, "name": "MT Arun Gas Leader", "type": "LPG Tanker", "lat": 5.3000, "lon": 97.4000, "sog": 14.8, "cog": 305.0, "origin": "Pelabuhan Arun Lhokseumawe"},
+    {"mmsi": 525011038, "name": "KM Belawan Samudera 7", "type": "Container", "lat": 4.0500, "lon": 99.2500, "sog": 16.2, "cog": 136.0, "origin": "Belawan Outer Channel"},
+    {"mmsi": 525011039, "name": "MV Malacca Trader 11", "type": "Feeder Container", "lat": 3.1500, "lon": 100.5500, "sog": 15.1, "cog": 312.0, "origin": "Selat Malaka Tengah"},
+    {"mmsi": 525011040, "name": "KM Deli Express II", "type": "General Cargo", "lat": 3.6500, "lon": 99.8500, "sog": 12.0, "cog": 133.0, "origin": "Kuala Tanjung"},
+    {"mmsi": 525011041, "name": "MT Meulaboh Spirit", "type": "Product Tanker", "lat": 4.1000, "lon": 96.0500, "sog": 11.2, "cog": 155.0, "origin": "Meulaboh Pantai Barat"},
+    {"mmsi": 525011042, "name": "KM Sabang Poros 01", "type": "Ro-Ro Cargo", "lat": 5.8500, "lon": 95.3000, "sog": 15.0, "cog": 85.0, "origin": "Pelabuhan Bebas Sabang"},
+    {"mmsi": 525011043, "name": "TB Ujung Baru Tug 04", "type": "Harbor Tug", "lat": 3.7880, "lon": 98.6820, "sog": 3.8, "cog": 120.0, "origin": "Pelabuhan Belawan Dermaga Ujung Baru"},
 
     # --- 2. SELAT SUNDA & BAKAUHENI - MERAK CORRIDOR (15 Vessels) ---
     {"mmsi": 525022001, "name": "KMP Batu Mandi", "type": "Ro-Ro Ferry", "lat": -5.8750, "lon": 105.7800, "sog": 13.5, "cog": 118.0, "origin": "Pelabuhan Bakauheni"},
@@ -190,54 +198,60 @@ class AISstreamAdapter(BaseAdapter):
     source_name = "aisstream"
     stream_key = STREAM_AISSTREAM
     poll_interval_seconds = 60  # Check queue depth every 60s in memory
-    MAX_LIVE_VESSELS = 600
+    MAX_LIVE_VESSELS = 1500
+    MAX_VESSELS = 1500
 
-    # Strategic Sumatra Seaports Bounding Boxes:
+    # Strategic Sumatra Seaports Bounding Boxes: [[lat_max, lon_min], [lat_min, lon_max]]
     PORTS = {
         "belawan": {
             "name": "Pelabuhan Belawan",
-            "bbox": [[3.70, 98.60], [3.90, 98.80]],
+            "bbox": [[3.90, 98.60], [3.70, 98.80]],
             "center": {"lat": 3.7922, "lon": 98.6776},
         },
         "kuala_tanjung": {
             "name": "Pelabuhan Kuala Tanjung",
-            "bbox": [[3.25, 99.35], [3.45, 99.55]],
+            "bbox": [[3.45, 99.35], [3.25, 99.55]],
             "center": {"lat": 3.3600, "lon": 99.4500},
         },
         "dumai": {
             "name": "Pelabuhan Dumai",
-            "bbox": [[1.60, 101.35], [1.78, 101.55]],
+            "bbox": [[1.78, 101.35], [1.60, 101.55]],
             "center": {"lat": 1.6811, "lon": 101.4533},
         },
         "teluk_bayur": {
             "name": "Pelabuhan Teluk Bayur",
-            "bbox": [[-1.08, 100.30], [-0.92, 100.45]],
+            "bbox": [[-0.92, 100.30], [-1.08, 100.45]],
             "center": {"lat": -0.9980, "lon": 100.3700},
         },
         "boom_baru": {
             "name": "Pelabuhan Boom Baru (Palembang)",
-            "bbox": [[-3.05, 104.70], [-2.90, 104.85]],
+            "bbox": [[-2.90, 104.70], [-3.05, 104.85]],
             "center": {"lat": -2.9750, "lon": 104.7833},
         },
         "panjang": {
             "name": "Pelabuhan Panjang (Lampung)",
-            "bbox": [[-5.55, 105.25], [-5.40, 105.40]],
+            "bbox": [[-5.40, 105.25], [-5.55, 105.40]],
             "center": {"lat": -5.4667, "lon": 105.3167},
         },
         "bakauheni": {
             "name": "Pelabuhan Bakauheni (Sunda Strait Ferry)",
-            "bbox": [[-5.95, 105.68], [-5.80, 105.82]],
+            "bbox": [[-5.80, 105.68], [-5.95, 105.82]],
             "center": {"lat": -5.8711, "lon": 105.7533},
+        },
+        "lhokseumawe": {
+            "name": "Pelabuhan Lhokseumawe (Aceh)",
+            "bbox": [[5.35, 97.00], [5.15, 97.25]],
+            "center": {"lat": 5.2400, "lon": 97.0600},
         },
         "malahayati": {
             "name": "Pelabuhan Malahayati (Aceh)",
-            "bbox": [[5.50, 95.45], [5.68, 95.60]],
+            "bbox": [[5.68, 95.45], [5.50, 95.60]],
             "center": {"lat": 5.5897, "lon": 95.5186},
         },
     }
 
-    # Macro Bounding Box covering Sumatra, Malacca Strait, and Sunda Strait
-    MACRO_BBOX = [[-6.2, 94.8], [6.2, 109.0]]
+    # Macro Bounding Box covering Sumatra, Malacca Strait, and Sunda Strait: [[North_Lat, West_Lon], [South_Lat, East_Lon]]
+    MACRO_BBOX = [[6.2, 94.8], [-6.2, 109.0]]
 
     # Combined bounding boxes for AISstream subscription (Macro + 8 Ports)
     BBOX = [MACRO_BBOX] + [info["bbox"] for info in PORTS.values()]
@@ -367,11 +381,15 @@ class AISstreamAdapter(BaseAdapter):
             port_origin = "Selat Malaka / Lintas Selat"
             for pid, pdata in self.PORTS.items():
                 bbox = pdata["bbox"]
-                if bbox[0][0] <= lat <= bbox[1][0] and bbox[0][1] <= lon <= bbox[1][1]:
+                lat_min = min(bbox[0][0], bbox[1][0])
+                lat_max = max(bbox[0][0], bbox[1][0])
+                lon_min = min(bbox[0][1], bbox[1][1])
+                lon_max = max(bbox[0][1], bbox[1][1])
+                if lat_min <= lat <= lat_max and lon_min <= lon <= lon_max:
                     port_origin = pdata["name"]
                     break
 
-            # Enforce bounded ring-buffer capacity (MAX_LIVE_VESSELS = 600)
+            # Enforce bounded ring-buffer capacity (MAX_LIVE_VESSELS = 1500)
             if len(self.vessels) >= self.MAX_LIVE_VESSELS and mmsi not in self.vessels:
                 # Evict oldest vessel
                 oldest_mmsi = min(self.vessels.keys(), key=lambda k: self.vessels[k].get("last_seen", ""))
@@ -428,13 +446,13 @@ class AISstreamAdapter(BaseAdapter):
         current_hour = datetime.now(timezone.utc).strftime("%Y%m%d%H")
         
         try:
-            # Cleanup vessels not seen in the last 20 minutes
+            # Cleanup vessels not seen in the last 45 minutes (2700s)
             now = datetime.now(timezone.utc)
             to_delete = []
             for mmsi, info in self.vessels.items():
                 try:
                     last_seen = datetime.fromisoformat(info["last_seen"])
-                    if (now - last_seen).total_seconds() > 1200:
+                    if (now - last_seen).total_seconds() > 2700:
                         to_delete.append(mmsi)
                 except Exception:
                     pass
@@ -451,7 +469,11 @@ class AISstreamAdapter(BaseAdapter):
                     continue
                 for pid, pdata in self.PORTS.items():
                     bbox = pdata["bbox"]
-                    if bbox[0][0] <= v_lat <= bbox[1][0] and bbox[0][1] <= v_lon <= bbox[1][1]:
+                    lat_min = min(bbox[0][0], bbox[1][0])
+                    lat_max = max(bbox[0][0], bbox[1][0])
+                    lon_min = min(bbox[0][1], bbox[1][1])
+                    lon_max = max(bbox[0][1], bbox[1][1])
+                    if lat_min <= v_lat <= lat_max and lon_min <= v_lon <= lon_max:
                         port_vessels[pid].append(v)
                         break
 

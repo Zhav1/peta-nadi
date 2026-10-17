@@ -36,7 +36,6 @@ import { useCorridorContext } from '@/hooks/useCorridorContext';
 import { useNewsVerification } from '@/hooks/useNewsVerification';
 import { GuidedDemoPanel } from '@/components/demo/GuidedDemoPanel';
 import AnalyticsSection from '@/components/dashboard/AnalyticsSection';
-import SimulationSection, { type ActionPlanParams } from '@/components/dashboard/SimulationSection';
 import ReportsSection from '@/components/dashboard/ReportsSection';
 import EvaluationSection from '@/components/dashboard/EvaluationSection';
 import { CrisisSimulatorBar } from '@/components/map/CrisisSimulatorBar';
@@ -63,123 +62,6 @@ import type { DisruptionImpactResponse, ImpactedVehicleAssessment } from '@/lib/
 // Dynamic import for map to avoid SSR issues
 const CrisisMap = dynamic(() => import('@/components/map/CrisisMap'), { ssr: false });
 
-const FALLBACK_HISTORICAL = [
-  {
-    incident_id: "hist-gempa-pasaman-2022",
-    title: "Gempa Tektonik Sesar Sumatra (M6.2 Pasaman)",
-    type: "earthquake",
-    status: "historical",
-    severity: "critical",
-    lat: 3.48,
-    lon: 98.78,
-    impact_summary: "Retakan sesar tanah dan guncangan M6.2 melumpuhkan koridor antarprovinsi Sumatra. Terjadi keterlambatan distribusi 18 jam.",
-    price_lag_impact: "Harga cabai & bawang merah naik +18.4% 3 hari pasca gempa.",
-    geojson_geometry: {
-      type: "FeatureCollection",
-      features: [
-        {
-          type: "Feature",
-          geometry: {
-            type: "MultiPolygon",
-            coordinates: [
-              [[[98.78, 3.82], [98.92, 3.75], [99.01, 3.60], [99.04, 3.48], [98.98, 3.32], [98.86, 3.20], [98.72, 3.16], [98.59, 3.22], [98.53, 3.38], [98.54, 3.56], [98.64, 3.74], [98.78, 3.82]]],
-              [[[98.78, 3.70], [98.88, 3.65], [98.94, 3.54], [98.96, 3.48], [98.92, 3.37], [98.84, 3.28], [98.74, 3.26], [98.65, 3.30], [98.60, 3.41], [98.61, 3.53], [98.68, 3.66], [98.78, 3.70]]]
-            ]
-          },
-          properties: { hazard_type: "earthquake", magnitude: 6.2, severity_label: "M6.2 CRITICAL SHOCKWAVE ZONE" }
-        },
-        {
-          type: "Feature",
-          geometry: {
-            type: "MultiLineString",
-            coordinates: [
-              [[98.61, 3.78], [98.70, 3.63], [98.78, 3.48], [98.86, 3.33], [98.95, 3.18]]
-            ]
-          },
-          properties: { hazard_type: "earthquake_crack", strike_deg: 150, severity_label: "TECTONIC FAULT CRACK VECTOR" }
-        }
-      ]
-    }
-  },
-  {
-    incident_id: "hist-banjir-pantura-2024",
-    title: "Banjir Luapan Laut Koridor Belawan 2024",
-    type: "flood",
-    status: "historical",
-    severity: "high",
-    lat: 3.78,
-    lon: 98.67,
-    impact_summary: "Genangan air setinggi 1.6m melumpuhkan akses Pelabuhan Belawan dan Tol Belmera. 450+ truk logistik tertahan 24 jam.",
-    price_lag_impact: "Lonjakan harga bawang merah nasional hingga +55% akibat disrupsi distribusi utama.",
-    geojson_geometry: {
-      type: "Feature",
-      geometry: {
-        type: "Polygon",
-        coordinates: [[[98.66, 3.86], [98.73, 3.84], [98.76, 3.79], [98.74, 3.73], [98.70, 3.71], [98.65, 3.72], [98.60, 3.76], [98.61, 3.82], [98.66, 3.86]]]
-      },
-      properties: { hazard_type: "flood", water_depth: "1.6m", severity_label: "RIVER-VALLEY FLOOD INUNDATION" }
-    }
-  },
-  {
-    incident_id: "hist-longsor-berastagi-2023",
-    title: "Longsor Mountain Slope Jalinsum 2023",
-    type: "landslide",
-    status: "historical",
-    severity: "high",
-    lat: 3.32,
-    lon: 98.50,
-    impact_summary: "Runtuhan material batu dan lumpur di lereng Jalinsum Medan-Berastagi memutus pasokan pasokan sayur & komoditas basah.",
-    price_lag_impact: "Kenaikan harga sayuran komoditas basah +22% di kota Medan.",
-    geojson_geometry: {
-      type: "Feature",
-      geometry: {
-        type: "Polygon",
-        coordinates: [[[98.48, 3.36], [98.52, 3.36], [98.57, 3.29], [98.54, 3.26], [98.47, 3.28], [98.48, 3.36]]]
-      },
-      properties: { hazard_type: "landslide", severity_label: "DOWNSLOPE DEBRIS FLOW FAN" }
-    }
-  }
-];
-
-const FALLBACK_PREDICTIVE = [
-  {
-    risk_id: "pred-rob-belawan-48h",
-    title: "Proyeksi Genangan Rob 48j (Belawan)",
-    type: "flood",
-    risk_score: 88,
-    lat: 3.76,
-    lon: 98.68,
-    forecast_window: "48h TFT Model",
-    recommendation: "Alihkan rute kontainer via Jalan Lintas Barat Kualanamu sebelum air pasang jam 16:00.",
-    geojson_geometry: {
-      type: "Feature",
-      geometry: {
-        type: "Polygon",
-        coordinates: [[[98.66, 3.82], [98.73, 3.81], [98.75, 3.75], [98.71, 3.71], [98.65, 3.73], [98.66, 3.82]]]
-      },
-      properties: { hazard_type: "flood", risk_score: 88, severity_label: "TFT 48H ROB FLOOD" }
-    }
-  },
-  {
-    risk_id: "pred-bottleneck-tebingtinggi-24h",
-    title: "Potensi Bottleneck Tol Tebing Tinggi 24j",
-    type: "congestion",
-    risk_score: 72,
-    lat: 3.33,
-    lon: 99.16,
-    forecast_window: "24h Traffic Network Model",
-    recommendation: "Peringatan penumpukan armada truk >2.5km di gerbang tol Interchange Tebing Tinggi.",
-    geojson_geometry: {
-      type: "Feature",
-      geometry: {
-        type: "Polygon",
-        coordinates: [[[99.11, 3.37], [99.20, 3.36], [99.22, 3.30], [99.15, 3.28], [99.10, 3.32], [99.11, 3.37]]]
-      },
-      properties: { hazard_type: "congestion", risk_score: 72, severity_label: "TFT 24H BOTTLENECK" }
-    }
-  }
-];
-
 // Applies operational approval styling: the approved corridor turns cyan, its alternatives dim out.
 // Shared by handleDeployUnifiedActionPlan and handleCommitOperationalRoute so both route stores stay identical.
 function styleApprovedRoutes(routes: RouteRecommendation[], approved: RouteRecommendation): RouteRecommendation[] {
@@ -205,63 +87,6 @@ function resolveApprovedDelayMinutes(
   if (etaMinutes.length === 0) return 0;
 
   return Math.max(0, approvedEta - Math.min(...etaMinutes));
-}
-
-function TimeModeBanner({
-  activeTimeFilter,
-  onResetToPresent,
-}: {
-  activeTimeFilter: 'past' | 'present' | 'future' | 'predict';
-  onResetToPresent: () => void;
-}) {
-  if (activeTimeFilter === 'present') return null;
-
-  const config = {
-    past: {
-      title: 'Mode Arsip Historis (2022-2024)',
-      badge: 'HISTORICAL REPLAY',
-      badgeColor: 'bg-[#121822] text-slate-300 border-[#1c2432]',
-      description: 'Menampilkan arsip kejadian disrupsi pangan nyata di koridor logistik Sumatra untuk analisis perambatan inflasi.',
-    },
-    future: {
-      title: 'Mode Proyeksi Dini (24-48 Jam)',
-      badge: 'PROJECTION FORECAST',
-      badgeColor: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
-      description: 'Peringatan dini berdasarkan akumulasi curah hujan BMKG dan potensi bottleneck lalu lintas sebelum armada diberangkatkan.',
-    },
-    predict: {
-      title: 'Mode Prediksi Multi-Model (TFT & Open-Meteo)',
-      badge: 'PREDIKSI PROSPEKTIF',
-      badgeColor: 'bg-white/10 text-slate-200 border-white/20',
-      description: 'Simulasi skenario disrupsi pelabuhan Belawan dan koridor pangan menggunakan model prakiraan cuaca Open-Meteo dan BMKG.',
-    },
-  }[activeTimeFilter];
-
-  return (
-    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 max-w-xl w-[90%] pointer-events-auto">
-      <div className="bg-[#0c1017] border border-[#1c2432] px-4 py-2.5 rounded-lg shadow-xl flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-0.5">
-            <span className={`text-xs font-mono font-semibold px-2 py-0.5 rounded border ${config.badgeColor}`}>
-              {config.badge}
-            </span>
-            <span className="text-xs font-bold text-white font-sans">{config.title}</span>
-          </div>
-          <p className="text-xs text-slate-400 font-sans truncate">{config.description}</p>
-        </div>
-
-        <button
-          type="button"
-          onClick={onResetToPresent}
-          className="cursor-pointer px-2.5 py-1 rounded-md bg-[#121822] hover:bg-slate-800 text-slate-300 hover:text-white border border-[#1c2432] text-xs font-mono font-medium transition-colors shrink-0 flex items-center gap-1.5"
-          title="Kembali ke Mode Real-Time Present"
-        >
-          <RotateCcw className="w-3.5 h-3.5" />
-          <span>Ke Live</span>
-        </button>
-      </div>
-    </div>
-  );
 }
 
 function FloatingMapLegend({
@@ -373,6 +198,18 @@ export default function DashboardClient() {
   const [selectedOriginNode, setSelectedOriginNode] = useState<string | null>(null);
   const [selectedDestNode, setSelectedDestNode] = useState<string | null>(null);
   const [selectedModality, setSelectedModality] = useState<TransportModality>('truck');
+  const [corridorVisibility, setCorridorVisibility] = useState<{
+    land: boolean;
+    sea: boolean;
+    air: boolean;
+  }>({ land: true, sea: true, air: true });
+
+  const handleToggleCorridor = useCallback((corridor: 'land' | 'sea' | 'air') => {
+    setCorridorVisibility((prev) => ({
+      ...prev,
+      [corridor]: !prev[corridor],
+    }));
+  }, []);
 
   const activeOriginRef = useRef<string | null>(null);
   const activeDestRef = useRef<string | null>(null);
@@ -408,8 +245,7 @@ export default function DashboardClient() {
   const [pendingHitlCount, setPendingHitlCount] = useState<number>(0);
 
   // Layout & Navigation States
-  const [activeSection, setActiveSection] = useState<'map' | 'analytics' | 'simulation' | 'reports' | 'evaluation'>('map');
-  const [activeTimeFilter, setActiveTimeFilter] = useState<'past' | 'present' | 'future' | 'predict'>('present');
+  const [activeSection, setActiveSection] = useState<'map' | 'analytics' | 'reports' | 'evaluation'>('map');
   const [activeTab, setActiveTab] = useState<'Evidence' | 'Mitigation' | 'Economic'>('Evidence');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState(false);
@@ -452,8 +288,8 @@ export default function DashboardClient() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      const section = params.get('section') as 'map' | 'analytics' | 'simulation' | 'reports' | 'evaluation';
-      if (section && ['map', 'analytics', 'simulation', 'reports', 'evaluation'].includes(section)) {
+      const section = params.get('section') as 'map' | 'analytics' | 'reports' | 'evaluation';
+      if (section && ['map', 'analytics', 'reports', 'evaluation'].includes(section)) {
         setActiveSection(section);
       }
     }
@@ -480,150 +316,10 @@ export default function DashboardClient() {
     };
   }, []);
 
-  const handleDeployUnifiedActionPlan = async (planParams?: ActionPlanParams) => {
-    const allRoutes =
-      currentMapRoutes.length > 0 ? currentMapRoutes : (selectedCrisis?.route_recommendations || []);
-    const approvedRoute = allRoutes[0];
-
-    try {
-      const routeName = approvedRoute?.route_name || approvedRoute?.description || "Rute Bypass Medan-Tebing Tinggi";
-      const origin = selectedOriginNode || 'belawan';
-      const destination = selectedDestNode || 'tebingtinggi';
-
-      await api.approvals.create({
-        incident_id: selectedCrisisId || 'belawan-flash-flood',
-        route_id: approvedRoute?.id || 'route-detour-1',
-        recommended_route: approvedRoute || {
-          description: routeName,
-          waypoints: [],
-          distance_km: 42,
-          eta_minutes: 38,
-          fuel_increase_pct: 4,
-          risk_score: 0.12
-        },
-        operator_id: planParams?.agency ? `Otoritas Gabungan (${planParams.agency})` : 'Tim Komando Bapanas / Kemenhub',
-        crisis_id: selectedCrisisId || 'belawan-flash-flood',
-        route_name: routeName,
-        origin: origin,
-        destination: destination,
-        approved_by: planParams?.agency ? `Otoritas Gabungan (${planParams.agency})` : 'Tim Komando Bapanas / Kemenhub',
-        notes: planParams?.action || 'Rencana Tindakan Gabungan (Unified Action Plan) Berhasil Diterapkan.'
-      });
-
-      setApprovalsCount(prev => prev + 1);
-      setToast({
-        message: `UNIFIED ACTION PLAN DITERAPKAN: Rute Aman Disetujui & Instruksi Dikirim ke ${planParams?.agency || 'BULOG/DISHUB'}!`,
-        type: 'success'
-      });
-    } catch (err) {
-      // Phase 57 WP-A3 (D1: strict RBAC stays): guest writes keep 403. UX
-      // explains + saves locally instead of bypassing. Map styling below
-      // still applies; approvals count stays local-only.
-      const errMsg = err instanceof Error ? err.message : String(err);
-      const isForbidden = /403/.test(errMsg);
-      if (isForbidden) {
-        try {
-          const key = 'prehub_sandbox_approvals';
-          const raw = localStorage.getItem(key);
-          const prev = raw ? (JSON.parse(raw) as unknown[]) : [];
-          prev.push({
-            incident_id: selectedCrisisId || 'belawan-flash-flood',
-            route_id: approvedRoute?.id || 'route-detour-1',
-            agency: planParams?.agency || null,
-            action: planParams?.action || null,
-            saved_at: new Date().toISOString(),
-          });
-          localStorage.setItem(key, JSON.stringify(prev));
-        } catch {
-          // storage unavailable: toast still explains sandbox mode
-        }
-        setApprovalsCount(prev => prev + 1);
-        setToast({
-          message: 'Mode Sandbox: tersimpan lokal - login Dispatcher untuk commit ke koridor.',
-          type: 'info'
-        });
-      } else {
-        console.error('Failed to deploy unified action plan:', err);
-        setToast({
-          message: `Gagal Menerapkan Skenario: ${errMsg}`,
-          type: 'error'
-        });
-      }
-    }
-
-    // Single source of truth: keep currentMapRoutes AND selectedCrisis.route_recommendations in lockstep
-    if (approvedRoute) {
-      const styledRoutes = styleApprovedRoutes(
-        currentMapRoutes.length > 0 ? currentMapRoutes : allRoutes,
-        approvedRoute
-      );
-      setCurrentMapRoutes(styledRoutes);
-      setSelectedCrisis((prev) =>
-        prev
-          ? {
-            ...prev,
-            route_recommendations: styleApprovedRoutes(
-              prev.route_recommendations && prev.route_recommendations.length > 0
-                ? prev.route_recommendations
-                : styledRoutes,
-              approvedRoute
-            ),
-          }
-          : prev
-      );
-      setActiveRouteIdx(0);
-    }
-
-    // Reactive telemetry: the approved detour immediately recalculates corridor
-    // traffic delays, congestion levels, and commodity inflation indicators.
-    applyOperationalImpact({
-      delayMinutes: resolveApprovedDelayMinutes(approvedRoute, allRoutes),
-      fuelIncreasePct: approvedRoute?.fuel_increase_pct ?? 4,
-    });
-
-    // Navigation stays with the user: only the explicit "Tampilkan di Peta 4D" / "Lihat Dampak di Laporan" buttons switch sections.
-  };
   const [spatialWeatherPolygons, setSpatialWeatherPolygons] = useState<GeoJSON.FeatureCollection | null>(null);
   const [routingInfo, setRoutingInfo] = useState<{ solver: string; compute_time_ms: number | null; savings_pct: number | null } | null>(null);
 
-  // Time Horizon State Datasets (PAST / PRESENT / FUTURE / PREDICT)
-  const [historicalEpisodes, setHistoricalEpisodes] = useState<Record<string, unknown>[]>([]);
-  const [predictiveRisks, setPredictiveRisks] = useState<Record<string, unknown>[]>([]);
   const [fleetModalityFilter, setFleetModalityFilter] = useState<'all' | 'truck' | 'maritime' | 'air'>('all');
-
-
-  useEffect(() => {
-    let isMounted = true;
-    async function loadTimeHorizonData() {
-      if (activeTimeFilter === 'past') {
-        try {
-          const res = await api.incidents.historical();
-          if (isMounted && res.items && res.items.length > 0) {
-            setHistoricalEpisodes(res.items);
-            return;
-          }
-        } catch (e) {
-          console.warn('Backend historical data fallback to local fixture:', e);
-        }
-        if (isMounted) setHistoricalEpisodes(FALLBACK_HISTORICAL);
-      } else if (activeTimeFilter === 'future') {
-        try {
-          const res = await api.incidents.predictive();
-          if (isMounted && res.items && res.items.length > 0) {
-            setPredictiveRisks(res.items);
-            return;
-          }
-        } catch (e) {
-          console.warn('Backend predictive data fallback to local fixture:', e);
-        }
-        if (isMounted) setPredictiveRisks(FALLBACK_PREDICTIVE);
-      }
-    }
-    loadTimeHorizonData();
-    return () => {
-      isMounted = false;
-    };
-  }, [activeTimeFilter]);
 
 
   useEffect(() => {
@@ -708,6 +404,8 @@ export default function DashboardClient() {
         dest_id: destId,
         origin_coords: originNode,
         dest_coords: destNode,
+        origin_name: originInfo?.name || originId,
+        dest_name: destInfo?.name || destId,
         fleet_size: 3,
         hazard_zones: hazardCenter ? [{ center: hazardCenter, radiusKm }] : []
       });
@@ -841,45 +539,10 @@ export default function DashboardClient() {
 
     if (id !== 'simulated-active') {
       let baseCrisis: CrisisState | null = null;
-
-      // Predictive risk ids (pred-*) are local catalog entries: skip the backend
-      // lookup entirely and let the local catalog branch below resolve them.
-      if (!id.startsWith('pred-')) {
-        try {
-          baseCrisis = await api.incidents.get(id);
-        } catch (err) {
-          console.error('Failed to fetch crisis detail:', err);
-        }
-      }
-
-      // If backend call fails (or was skipped for a predictive id), check local historical & predictive risk arrays
-      if (!baseCrisis) {
-        const histMatch = ([...historicalEpisodes, ...FALLBACK_HISTORICAL] as Record<string, unknown>[]).find((e) => e.incident_id === id || e.id === id) as Record<string, unknown> | undefined;
-        const predMatch = ([...predictiveRisks, ...FALLBACK_PREDICTIVE] as Record<string, unknown>[]).find((p) => p.risk_id === id || p.id === id) as Record<string, unknown> | undefined;
-        const item = histMatch || predMatch;
-        if (item) {
-          baseCrisis = {
-            crisis_id: String(item.incident_id || item.risk_id || id),
-            title: String(item.title || 'Incident Event'),
-            type: (item.type as CrisisType) || 'flood',
-            status: activeTimeFilter === 'past' ? 'resolved' : 'validating',
-            overall_confidence: Number(item.confidence || 0.95),
-            validated: true,
-            is_simulated: true,
-            lat: Number(item.lat || 3.58),
-            lon: Number(item.lon || 98.67),
-            region: String(item.region || 'Sumatra Logistics Corridor'),
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            messages: [],
-            route_recommendations: [],
-            evidence: {
-              osint_author: '@LogisticsWatcher_ID',
-              osint_text: `Laporan OSINT Terverifikasi: ${String(item.title)}. ${String(item.impact_summary || 'Anomali disrupsi pasokan memicu risiko lonjakan harga komoditas.')}`
-            },
-            decision_support_output: `**Ringkasan Penalaran AI Swarm (Explainable AI)**\n\n**Peristiwa:** ${String(item.title)}\n\n**1. Analisis Ancaman Fisik Koridor:**\nTelemetri sensor mengonfirmasi disrupsi logistik akibat ${String(item.type || 'bencana')}. Terjadi hambatan pergerakan armada dengan estimasi perlambatan hingga +12 jam.\n\n**2. Proyeksi Dampak Ekonomi & Anomali Inflasi:**\n${String(item.impact_summary || 'Gangguan pasokan pangan memicu risiko lonjakan harga di pasar Medan.')} ${item.price_lag_impact ? `Dampak inflasi: ${String(item.price_lag_impact)}` : ''}\n\n**3. Rekomendasi Optimasi Rute Taktis:**\nSolver Rute CPU (NetworkX & OR-Tools) merutekan ulang armada ke rute alternatif bebas bahaya.`
-          };
-        }
+      try {
+        baseCrisis = await api.incidents.get(id);
+      } catch (err) {
+        console.error('Failed to fetch crisis detail:', err);
       }
 
       if (baseCrisis) {
@@ -902,8 +565,10 @@ export default function DashboardClient() {
         }
 
         if (selectedOriginNode && selectedDestNode) {
-          const originCoords = HUB_NODES[selectedOriginNode]?.coords;
-          const destCoords = HUB_NODES[selectedDestNode]?.coords;
+          const originInfo = resolveNodeInfo(selectedOriginNode);
+          const destInfo = resolveNodeInfo(selectedDestNode);
+          const originCoords = originInfo?.coords;
+          const destCoords = destInfo?.coords;
           if (originCoords && destCoords) {
             const dynamicRoutes = await calculateAIDynamicDetourRoutes(
               [baseCrisis.lon, baseCrisis.lat],
@@ -928,7 +593,7 @@ export default function DashboardClient() {
         }
       }
     }
-  }, [selectedOriginNode, selectedDestNode, selectedRadius, selectedModality, historicalEpisodes, predictiveRisks, activeTimeFilter]);
+  }, [selectedOriginNode, selectedDestNode, selectedRadius, selectedModality, resolveNodeInfo]);
 
   // LIVE VISUAL DEMO STEPPER TRIGGER
   // LIVE VISUAL DEMO STEPPER TRIGGER
@@ -1210,8 +875,10 @@ export default function DashboardClient() {
       return;
     }
 
-    const originCoords = HUB_NODES[originId]?.coords;
-    const destCoords = HUB_NODES[destId]?.coords;
+    const originInfo = resolveNodeInfo(originId);
+    const destInfo = resolveNodeInfo(destId);
+    const originCoords = originInfo?.coords;
+    const destCoords = destInfo?.coords;
     if (!originCoords || !destCoords) return;
 
     // Fast preliminary preview route while backend calculates deep matrix
@@ -1242,17 +909,44 @@ export default function DashboardClient() {
         title,
         origin: originId,
         destination: destId,
+        origin_coords: originCoords,
+        dest_coords: destCoords,
+        origin_name: originInfo?.name || originId,
+        dest_name: destInfo?.name || destId,
         commodity: 'cabai_merah',
         cargoTonnage: 10.0,
         hasBkhitCert: true,
         vehicleGrossWeightTon: 18.0,
-      },
+      } as any,
       (backendCrisisState) => {
         setSelectedCrisisId(backendCrisisState.crisis_id);
         setSelectedCrisis(backendCrisisState);
 
         if (backendCrisisState.route_recommendations && backendCrisisState.route_recommendations.length > 0) {
-          setCurrentMapRoutes(backendCrisisState.route_recommendations);
+          const backendFirst = backendCrisisState.route_recommendations[0];
+          const backendLastWp = backendFirst?.waypoints?.[backendFirst.waypoints.length - 1];
+          let backendMatchesDest = true;
+          if (backendLastWp && destCoords) {
+            const dKm = getHaversineDistanceKm([backendLastWp.lon, backendLastWp.lat], destCoords);
+            if (dKm > 20) {
+              backendMatchesDest = false;
+            }
+          }
+
+          if (backendMatchesDest) {
+            setCurrentMapRoutes(backendCrisisState.route_recommendations);
+          } else {
+            // Merge backend telemetry/audit metadata while preserving client multi-corridor geometries terminating at destCoords
+            setCurrentMapRoutes((prev) =>
+              prev.length > 0
+                ? prev.map((r, rIdx) => ({
+                    ...r,
+                    hedging: backendCrisisState.route_recommendations[rIdx]?.hedging || backendCrisisState.route_recommendations[0]?.hedging,
+                    compliance: backendCrisisState.route_recommendations[rIdx]?.compliance || backendCrisisState.route_recommendations[0]?.compliance,
+                  }))
+                : backendCrisisState.route_recommendations
+            );
+          }
         }
 
         setActiveRouteIdx(0);
@@ -1398,22 +1092,10 @@ export default function DashboardClient() {
     });
   }, [selectedOriginNode, selectedDestNode, selectedModality, updateBaselineMapboxRoute]);
 
-  // Dynamic Incident Stream Integration across 4D Temporal Horizons (0% Hardcode!)
-  const getDisplayedIncidents = () => {
-    if (activeTimeFilter === 'past') {
-      return incidents.filter((i) => i.status === 'resolved');
-    }
-    if (activeTimeFilter === 'future') {
-      return incidents.filter((i) => i.status === 'detecting' || i.status === 'validating');
-    }
-    if (activeTimeFilter === 'predict') {
-      return incidents.filter((i) => i.id.includes('predict') || i.type === 'port_closure');
-    }
-    // Present: Live Dynamic Ingested Incidents (Earthquakes, Floods, CCTV alerts)
-    return incidents.filter((i) => i.status !== 'resolved' && !i.id.includes('predict') && i.type !== 'port_closure');
-  };
-
-  const activeIncidents = getDisplayedIncidents();
+  // Live Dynamic Ingested Incidents (Earthquakes, Floods, CCTV alerts)
+  const activeIncidents = incidents.filter(
+    (i) => i.status !== 'resolved' && !i.id.includes('predict') && i.type !== 'port_closure'
+  );
 
   const isCrisisDrawerOpen = isSidebarOpen && !!selectedCrisis;
   const footerDockClass = resolveMapDockClasses({ isLeftSidebarCollapsed, isCrisisDrawerOpen });
@@ -1445,7 +1127,6 @@ export default function DashboardClient() {
             {[
               { id: 'map', label: 'Peta Operasi' },
               { id: 'analytics', label: 'Analitik' },
-              { id: 'simulation', label: 'Simulasi' },
               { id: 'reports', label: 'Laporan' },
               { id: 'evaluation', label: 'Evaluasi' },
             ].map((tab) => (
@@ -1622,12 +1303,10 @@ export default function DashboardClient() {
               spatialWeatherPolygons={spatialWeatherPolygons}
               routingInfo={routingInfo}
               isLeftSidebarCollapsed={isLeftSidebarCollapsed}
-              activeTimeFilter={activeTimeFilter}
-              historicalEpisodes={historicalEpisodes}
-              predictiveRisks={predictiveRisks}
               fleetModalityFilter={fleetModalityFilter}
               simSpeed={simSpeed}
               isRightSidebarOpen={isSidebarOpen && !!selectedCrisis}
+              corridorVisibility={corridorVisibility}
               mapLegendSlot={
                 <FloatingMapLegend
                   isOpen={isMapLegendOpen}
@@ -1955,14 +1634,8 @@ export default function DashboardClient() {
               />
             )}
 
-            {/* Time Horizon Context Banner when in Past / Future / Predict modes */}
-            <TimeModeBanner
-              activeTimeFilter={activeTimeFilter}
-              onResetToPresent={() => setActiveTimeFilter('present')}
-            />
-
             {/* Floating Live Fleet Modality Filter Control */}
-            {activeTimeFilter === 'present' && !(isSidebarOpen && selectedCrisis) && (
+            {!(isSidebarOpen && selectedCrisis) && (
               <div className={`absolute top-[52px] z-30 pointer-events-auto transition-all duration-300 hidden md:flex items-center gap-1 p-1 rounded-lg bg-[#0c1017] border border-white/10 shadow-xl ${isLeftSidebarCollapsed ? 'left-4 sm:left-32' : 'left-4 sm:left-32 lg:left-[368px]'
                 }`}>
                 {[
@@ -2051,6 +1724,9 @@ export default function DashboardClient() {
                 setSelectedRadius={setSelectedRadius}
                 selectedModality={selectedModality}
                 setSelectedModality={handleModalityChange}
+                corridorVisibility={corridorVisibility}
+                onToggleCorridor={handleToggleCorridor}
+                activeCorridors={currentMapRoutes.length > 0 ? currentMapRoutes : (selectedCrisis?.route_recommendations || [])}
                 onResetNodes={handleResetNodes}
                 isSidebarOpen={isSidebarOpen && !!selectedCrisis}
                 isLeftSidebarCollapsed={isLeftSidebarCollapsed}
@@ -2098,31 +1774,9 @@ export default function DashboardClient() {
               }}
             />
 
-            {/* Bottombar Time Scope Filters (Exact Dual-Sidebar Centering on Desktop, Centered on Mobile) */}
+            {/* Run Demo Dock */}
             {!demoState.isRunning && (
               <footer className={`absolute bottom-4 sm:bottom-6 z-40 flex items-center gap-1.5 bg-[#0c1017] border border-[#1c2432] p-1.5 rounded-lg shadow-xl transition-all duration-300 pointer-events-auto left-1/2 -translate-x-1/2 max-w-[95vw] overflow-x-auto no-scrollbar ${footerDockClass}`}>
-                {(['past', 'present', 'future', 'predict'] as const).map((filter) => (
-                  <button
-                    key={filter}
-                    onClick={() => {
-                      setActiveTimeFilter(filter);
-                      if (filter === 'predict') {
-                        const firstPredictive = predictiveRisks[0];
-                        const predictiveId = firstPredictive
-                          ? String(firstPredictive.risk_id || firstPredictive.id || 'pred-rob-belawan-48h')
-                          : 'pred-rob-belawan-48h';
-                        handleCrisisClick(predictiveId);
-                      }
-                    }}
-                    className={`px-3 py-1 rounded text-xs font-semibold uppercase tracking-wider transition-colors cursor-pointer shrink-0 ${activeTimeFilter === filter
-                      ? 'bg-white text-[#080d14] shadow-sm'
-                      : 'text-slate-400 hover:text-white hover:bg-[#121822]'
-                      }`}
-                  >
-                    {filter}
-                  </button>
-                ))}
-                <div className="w-[1px] h-4 bg-[#1c2432] mx-1 shrink-0" />
                 <button
                   type="button"
                   id="run-demo-btn"
@@ -2168,18 +1822,7 @@ export default function DashboardClient() {
           />
         </div>
 
-        {/* Section 3: Simulation Sandbox */}
-        <div className={`w-full h-full p-4 lg:p-6 overflow-y-auto ${activeSection === 'simulation' ? 'block' : 'hidden'}`}>
-          <SimulationSection
-            crisisId={selectedCrisisId}
-            selectedCrisis={selectedCrisis}
-            demoState={demoState}
-            onDeployActionPlan={handleDeployUnifiedActionPlan}
-            onNavigateSection={(section) => setActiveSection(section)}
-          />
-        </div>
-
-        {/* Section 4: Executive Reports */}
+        {/* Section 3: Executive Reports */}
         <div className={`w-full h-full p-4 lg:p-6 overflow-y-auto ${activeSection === 'reports' ? 'block' : 'hidden'}`}>
           <ReportsSection
             approvalsCount={approvalsCount}

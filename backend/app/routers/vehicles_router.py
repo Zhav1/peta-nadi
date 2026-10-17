@@ -44,6 +44,16 @@ async def get_active_fleet(
     )
     all_units = telemetry_service.get_unified_fleet(company_id=effective_company)
 
+    # Tag tenant-owned assets vs macro situational awareness assets
+    for v in vehicles:
+        if effective_company:
+            v["is_tenant_asset"] = (
+                v.get("company_id") == effective_company or
+                v.get("organization_id") == effective_company
+            )
+        else:
+            v["is_tenant_asset"] = True
+
     modality_counts = {
         "all": len(all_units),
         "truck": len([v for v in all_units if v.get("modality") == "truck"]),

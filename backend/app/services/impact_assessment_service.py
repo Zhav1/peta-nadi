@@ -232,11 +232,26 @@ class ImpactAssessmentService:
         hazard_zones = [{"center": [disruption.lon, disruption.lat], "radiusKm": disruption.radius_km}]
         route_detour = None
         try:
+            # Extract coordinates from vehicle telemetry if available
+            orig_c = v_dict.get("current_coords")
+            if not orig_c and v_dict.get("path") and len(v_dict["path"]) > 0:
+                orig_c = v_dict["path"][0]
+            elif not orig_c and v_dict.get("origin_coords"):
+                orig_c = v_dict["origin_coords"]
+
+            dest_c = v_dict.get("dest_coords")
+            if not dest_c and v_dict.get("path") and len(v_dict["path"]) > 1:
+                dest_c = v_dict["path"][-1]
+
             orig_id = self._normalize_hub_id(origin)
             dest_id = self._normalize_hub_id(destination)
             cpu_res = self.router.solve_shortest_path(
                 origin_id=orig_id,
                 dest_id=dest_id,
+                origin_coords=orig_c,
+                dest_coords=dest_c,
+                origin_name=origin,
+                dest_name=destination,
                 hazard_zones=hazard_zones,
                 k_alternatives=1
             )
@@ -333,25 +348,35 @@ class ImpactAssessmentService:
         }.get(commodity_key, 20000.0)
         return tonnage * 1000.0 * rate_per_kg
 
-    def _normalize_hub_id(self, hub_name: str) -> str:
-        h = hub_name.lower()
+    def _normalize_hub_id(self, hub_name: Optional[str]) -> Optional[str]:
+        if not hub_name:
+            return None
+        h = str(hub_name).lower()
         if "belawan" in h:
             return "belawan_port"
         elif "tebing" in h:
-            return "tebing_tinggi"
+            return "tebing_tinggi_toll"
         elif "pekanbaru" in h:
             return "pekanbaru_hub"
         elif "medan" in h:
-            return "medan_hub"
+            return "medan_kim"
         elif "dumai" in h:
             return "dumai_port"
-        elif "padang" in h:
-            return "padang_hub"
+        elif "padang" in h or "bayur" in h:
+            return "padang_teluk_bayur"
         elif "bakauheni" in h:
             return "bakauheni_port"
         elif "palembang" in h:
             return "palembang_hub"
-        return "medan_hub"
+        elif "bukittinggi" in h:
+            return "bukittinggi_hub"
+        elif "binjai" in h:
+            return "binjai_hub"
+        elif "kualanamu" in h:
+            return "kualanamu_airport"
+        elif "siantar" in h:
+            return "pematangsiantar_hub"
+        return None
 
 
 impact_assessment_service = ImpactAssessmentService()

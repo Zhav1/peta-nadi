@@ -1,5 +1,5 @@
 import type { LonLat } from './pathDensifier';
-import type { RouteRecommendation, CongestionSegment, RouteLeg } from './types';
+import type { RouteRecommendation, CongestionSegment, RouteLeg, HoldVsRerouteEconomics } from './types';
 
 export type TransportModality = 'best' | 'truck' | 'maritime' | 'air' | 'multimodal' | 'auto';
 
@@ -65,6 +65,118 @@ export const CARGO_AIRPORT_NODES: Array<{ id: string; name: string; code: string
   { id: 'palembang_air', name: 'Bandara Sultan Mahmud Badaruddin II (PLM)', code: 'PLM', coords: [104.7000, -2.8983] },
   { id: 'radin_inten_air', name: 'Bandara Radin Inten II Cargo (TKG)', code: 'TKG', coords: [105.1783, -5.2417] },
 ];
+
+/**
+ * Verified Pelindo Cargo Seaport Nodes across Sumatra Island
+ */
+export const CARGO_SEAPORT_NODES: Array<{ id: string; name: string; coords: LonLat }> = [
+  { id: 'belawan_port', name: 'Pelabuhan Belawan (Medan)', coords: [98.6776, 3.7922] },
+  { id: 'kuala_tanjung_port', name: 'Pelabuhan Kuala Tanjung (Batu Bara)', coords: [99.4500, 3.3600] },
+  { id: 'lhokseumawe_port', name: 'Pelabuhan Krueng Geukueh (Lhokseumawe)', coords: [97.0200, 5.2400] },
+  { id: 'dumai_port', name: 'Pelabuhan Dumai (Terminal Curah & Kontainer)', coords: [101.4533, 1.6811] },
+  { id: 'teluk_bayur_port', name: 'Pelabuhan Teluk Bayur (Padang)', coords: [100.3700, -0.9980] },
+  { id: 'palembang_port', name: 'Pelabuhan Boom Baru (Palembang)', coords: [104.7833, -2.9750] },
+  { id: 'panjang_port', name: 'Pelabuhan Panjang (Bandar Lampung)', coords: [105.3167, -5.4667] },
+  { id: 'bakauheni_port', name: 'Pelabuhan Penyeberangan Bakauheni', coords: [105.7533, -5.8711] },
+];
+
+/**
+ * Strategic Safe Staging Depots / BULOG Cold-Storage Buffer Hubs across Sumatra
+ */
+export const SAFE_BUFFER_DEPOTS: Array<{ id: string; name: string; coords: LonLat; type: 'hold_depot' }> = [
+  { id: 'depo_amplas_medan', name: 'Depo Buffer Logistik Amplas Medan', coords: [98.7050, 3.5511], type: 'hold_depot' },
+  { id: 'depo_kualanamu', name: 'Pergudangan & Cold Storage Kualanamu Hub', coords: [98.8780, 3.6421], type: 'hold_depot' },
+  { id: 'depo_tebing_tinggi', name: 'Depo Penyangga Tebing Tinggi', coords: [99.1621, 3.3251], type: 'hold_depot' },
+  { id: 'depo_siantar', name: 'Pergudangan Hortikultura Pematang Siantar', coords: [99.0687, 2.9595], type: 'hold_depot' },
+  { id: 'depo_rantauprapat', name: 'Depo Transit Lintas Timur Rantauprapat', coords: [100.0000, 2.1000], type: 'hold_depot' },
+  { id: 'depo_pekanbaru', name: 'Kawasan Pergudangan Arengka Pekanbaru', coords: [101.4478, 0.5071], type: 'hold_depot' },
+  { id: 'depo_bukittinggi', name: 'Sentra Distribusi Cabai Padang Luar Bukittinggi', coords: [100.3692, -0.3056], type: 'hold_depot' },
+  { id: 'depo_padang', name: 'Depo Logistik By Pass Kota Padang', coords: [100.3543, -0.9492], type: 'hold_depot' },
+  { id: 'depo_jambi', name: 'Depo BULOG & Distribusi Pangan Jambi', coords: [103.6131, -1.6100], type: 'hold_depot' },
+  { id: 'depo_palembang', name: 'Kawasan Pergudangan Soekarno-Hatta Palembang', coords: [104.7565, -2.9909], type: 'hold_depot' },
+  { id: 'depo_lampung', name: 'Pusat Distribusi Regional Way Halim Bandar Lampung', coords: [105.2667, -5.4294], type: 'hold_depot' },
+  { id: 'depo_banda_aceh', name: 'Depo Logistik Sentral Banda Aceh', coords: [95.3193, 5.5483], type: 'hold_depot' },
+];
+
+export function findClosestSeaport(pt: LonLat) {
+  let best = CARGO_SEAPORT_NODES[0];
+  let minD = Infinity;
+  for (const sp of CARGO_SEAPORT_NODES) {
+    const d = getHaversineDistanceKm(pt, sp.coords);
+    if (d < minD) {
+      minD = d;
+      best = sp;
+    }
+  }
+  return { seaport: best, distanceKm: minD };
+}
+
+export function findClosestSafeHoldDepot(
+  origin: LonLat,
+  hazardCenter: LonLat | null,
+  radiusKm: number
+): { depot: typeof SAFE_BUFFER_DEPOTS[0]; distanceKm: number } {
+  let best = SAFE_BUFFER_DEPOTS[0];
+  let minD = Infinity;
+  for (const depot of SAFE_BUFFER_DEPOTS) {
+    if (hazardCenter && getHaversineDistanceKm(depot.coords, hazardCenter) < radiusKm + 3.0) {
+      continue;
+    }
+    const d = getHaversineDistanceKm(origin, depot.coords);
+    if (d < minD) {
+      minD = d;
+      best = depot;
+    }
+  }
+  return { depot: best, distanceKm: minD };
+}
+
+export function calculateHoldVsRerouteEconomics(
+  origin: LonLat,
+  destination: LonLat,
+  primaryDistKm: number,
+  detourDistKm: number,
+  hazardCenter: LonLat | null,
+  radiusKm: number,
+  hazardType: string = 'flood'
+): HoldVsRerouteEconomics {
+  const safeDepot = findClosestSafeHoldDepot(origin, hazardCenter, radiusKm).depot;
+  const estimated_clearance_hours =
+    hazardType === 'landslide' ? 24 :
+    hazardType === 'earthquake' ? 36 :
+    hazardType === 'port_closure' ? 18 : 14;
+
+  const deltaKm = Math.max(0, detourDistKm - primaryDistKm);
+  const fuelAndMaintenanceCost = Math.round(deltaKm * 6800);
+  const tollDifferential = 85000;
+  const driverOvertimeBonus = Math.round((deltaKm / 45) * 40000);
+  const reroute_total_cost_idr = Math.max(750000, fuelAndMaintenanceCost + tollDifferential + driverOvertimeBonus);
+
+  const reeferPlugCost = estimated_clearance_hours * 45000;
+  const demurrageCost = estimated_clearance_hours * 125000;
+  const baseCargoValue = 180000000;
+  const spoilageLoss = Math.round(baseCargoValue * (1 - Math.exp(-0.006 * estimated_clearance_hours)));
+  const hold_total_cost_idr = reeferPlugCost + demurrageCost + spoilageLoss;
+
+  const isRerouteBetter = reroute_total_cost_idr <= hold_total_cost_idr;
+  const recommended_action: 'REROUTE' | 'HOLD' = isRerouteBetter ? 'REROUTE' : 'HOLD';
+  const net_savings_idr = Math.abs(reroute_total_cost_idr - hold_total_cost_idr);
+
+  const rationale_id = isRerouteBetter
+    ? `Reroute bypass (${Math.round(detourDistKm)} km) menghemat Rp ${(net_savings_idr / 1000000).toFixed(1)} Juta dibanding biaya penundaan & risiko susut komoditas selama ${estimated_clearance_hours} jam di ${safeDepot.name}.`
+    : `Menahan muatan di ${safeDepot.name} (${estimated_clearance_hours} jam) menghemat Rp ${(net_savings_idr / 1000000).toFixed(1)} Juta dibanding biaya ekspedisi memutar jauh (${Math.round(detourDistKm)} km).`;
+
+  return {
+    reroute_total_cost_idr,
+    hold_total_cost_idr,
+    hold_depot_name: safeDepot.name,
+    hold_depot_coords: safeDepot.coords,
+    estimated_clearance_hours,
+    recommended_action,
+    net_savings_idr,
+    rationale_id,
+  };
+}
 
 /**
  * Authentic Nautical Coastal Sea-Lane Waypoints around Sumatra Island
@@ -569,363 +681,505 @@ function findClosestAirport(pt: LonLat) {
 }
 
 /**
- * Computes Dynamic Multi-Modal Logistics Chain (Truck -> Cargo Flight -> Truck)
+ * Computes Authentic 3-Leg Maritime + Land Intermodal Logistics Chain (Truck -> Pelindo Seaport -> Pelindo Seaport -> Truck)
  */
-export async function calculateMultiModalLogisticsChain(
+export async function calculateSeaIntermodalCorridor(
   origin: LonLat,
   destination: LonLat
-): Promise<RouteRecommendation[]> {
+): Promise<RouteRecommendation> {
+  const odDistanceKm = getHaversineDistanceKm(origin, destination);
+  const originPort = findClosestSeaport(origin).seaport;
+  const destPort = findClosestSeaport(destination).seaport;
+
+  // Same-Port / Short-Distance Guard
+  if (originPort.id === destPort.id || odDistanceKm < 120) {
+    return {
+      id: 'corridor-sea-intermodal',
+      route_name: 'Intermodal Laut + Darat',
+      description: `Pelabuhan terdekat sama (${originPort.name}) — Rute darat langsung lebih efisien.`,
+      waypoints: [],
+      distance_km: Math.round(odDistanceKm),
+      eta_minutes: Math.round((odDistanceKm / 55) * 60),
+      fuel_increase_pct: 0,
+      risk_score: 0.04,
+      is_compromised: false,
+      safety_status: 'SAFE_DETOUR',
+      safety_tag: 'RUTE DARAT LEBIH EFISIEN',
+      modality: 'maritime',
+      corridor_type: 'sea_intermodal',
+      viable: false,
+      non_viable_reason: `Pelabuhan terdekat sama (${originPort.name}) — Rute darat langsung lebih efisien`,
+      legs: [],
+      color: '#3B82F6',
+    };
+  }
+
+  // True 3-Leg Chain:
+  // Leg 1: First-Mile Land Truck to Origin Seaport
+  const leg1Coords = await fetchMapboxDrivingRoute(origin, originPort.coords, [], 'truck');
+  const leg1Dist = Math.round(getHaversineDistanceKm(origin, originPort.coords) * 1.15);
+  const leg1Eta = Math.round((leg1Dist / 50) * 60);
+
+  // Leg 2: Coastal Maritime Sea Lane along SUMATRA_NAUTICAL_PERIMETER
+  const seaFairwayCoords = generateNauticalCoastalRoute(originPort.coords, destPort.coords);
+  let seaDist = 0;
+  for (let i = 0; i < seaFairwayCoords.length - 1; i++) {
+    seaDist += getHaversineDistanceKm(seaFairwayCoords[i], seaFairwayCoords[i + 1]);
+  }
+  const leg2Dist = Math.round(seaDist);
+  const leg2Eta = Math.round((leg2Dist / 26) * 60) + 120; // 26 km/h (~14 knots) + 120 min Pelindo port handling buffer
+
+  // Leg 3: Last-Mile Land Truck from Destination Seaport to Destination
+  const leg3Coords = await fetchMapboxDrivingRoute(destPort.coords, destination, [], 'truck');
+  const leg3Dist = Math.round(getHaversineDistanceKm(destPort.coords, destination) * 1.15);
+  const leg3Eta = Math.round((leg3Dist / 50) * 60);
+
+  const totalWaypoints: Array<{ lat: number; lon: number }> = [];
+  leg1Coords.forEach(([lon, lat]) => totalWaypoints.push({ lat, lon }));
+  seaFairwayCoords.forEach(([lon, lat]) => totalWaypoints.push({ lat, lon }));
+  leg3Coords.forEach(([lon, lat]) => totalWaypoints.push({ lat, lon }));
+
+  const legs: RouteLeg[] = [
+    {
+      title: `Leg 1: Feeder Darat -> ${originPort.name}`,
+      mode: 'truck',
+      distance_km: leg1Dist,
+      eta_minutes: leg1Eta,
+      from_name: 'Titik Asal Logistik',
+      to_name: originPort.name,
+      coordinates: leg1Coords,
+      color: '#10B981', // Emerald Green
+      transfer_hub: {
+        id: originPort.id,
+        name: originPort.name,
+        type: 'seaport',
+        coords: originPort.coords,
+      },
+    },
+    {
+      title: `Leg 2: Alur Laut ALKI (${originPort.name.split('(')[0].trim()} -> ${destPort.name.split('(')[0].trim()})`,
+      mode: 'maritime',
+      distance_km: leg2Dist,
+      eta_minutes: leg2Eta,
+      from_name: originPort.name,
+      to_name: destPort.name,
+      coordinates: seaFairwayCoords,
+      color: '#3B82F6', // Royal Blue
+      transfer_hub: {
+        id: destPort.id,
+        name: destPort.name,
+        type: 'seaport',
+        coords: destPort.coords,
+      },
+    },
+    {
+      title: `Leg 3: Last-Mile Darat (${destPort.name.split('(')[0].trim()} -> Tujuan)`,
+      mode: 'truck',
+      distance_km: leg3Dist,
+      eta_minutes: leg3Eta,
+      from_name: destPort.name,
+      to_name: 'Titik Tujuan Logistik',
+      coordinates: leg3Coords,
+      color: '#10B981', // Emerald Green
+    },
+  ];
+
+  return {
+    id: 'corridor-sea-intermodal',
+    route_name: `Intermodal Laut (${originPort.name.split('(')[0].trim()} -> ${destPort.name.split('(')[0].trim()})`,
+    description: `Bypass Maritim Pesisir Alur Laut Kepulauan Indonesia (ALKI) via ${originPort.name} ke ${destPort.name}`,
+    waypoints: totalWaypoints,
+    distance_km: leg1Dist + leg2Dist + leg3Dist,
+    eta_minutes: leg1Eta + leg2Eta + leg3Eta,
+    fuel_increase_pct: 0,
+    risk_score: 0.04,
+    is_compromised: false,
+    safety_status: 'SAFE_DETOUR',
+    safety_tag: 'MULTI-MODA LAUT + DARAT',
+    modality: 'maritime',
+    corridor_type: 'sea_intermodal',
+    viable: true,
+    legs,
+    color: '#3B82F6',
+  };
+}
+
+/**
+ * Computes Authentic 3-Leg Air Cargo + Land Intermodal Logistics Chain (Truck -> Airport -> Airport -> Truck)
+ */
+export async function calculateAirIntermodalCorridor(
+  origin: LonLat,
+  destination: LonLat
+): Promise<RouteRecommendation> {
+  const odDistanceKm = getHaversineDistanceKm(origin, destination);
   const depAirport = findClosestAirport(origin).airport;
   const arrAirport = findClosestAirport(destination).airport;
 
-  const isOriginAirport = getHaversineDistanceKm(origin, depAirport.coords) < 15.0;
-  const isDestAirport = getHaversineDistanceKm(destination, arrAirport.coords) < 15.0;
+  // Same-Airport / Short-Distance Guard
+  if (depAirport.id === arrAirport.id || odDistanceKm < 120) {
+    return {
+      id: 'corridor-air-intermodal',
+      route_name: 'Intermodal Udara + Darat',
+      description: `Rute udara tidak direkomendasikan untuk jarak ${Math.round(odDistanceKm)} km atau bandara terdekat sama (${depAirport.code}).`,
+      waypoints: [],
+      distance_km: Math.round(odDistanceKm),
+      eta_minutes: Math.round((odDistanceKm / 55) * 60),
+      fuel_increase_pct: 0,
+      risk_score: 0.05,
+      is_compromised: false,
+      safety_status: 'SAFE_DETOUR',
+      safety_tag: 'RUTE DARAT LEBIH EFISIEN',
+      modality: 'air',
+      corridor_type: 'air_intermodal',
+      viable: false,
+      non_viable_reason: `Bandara terdekat sama (${depAirport.code}) — Rute darat langsung lebih efisien`,
+      legs: [],
+      color: '#00F0FF',
+    };
+  }
+
+  // True 3-Leg Chain:
+  // Leg 1: First-Mile Land Truck to Departure Airport
+  const leg1Coords = await fetchMapboxDrivingRoute(origin, depAirport.coords, [], 'truck');
+  const leg1Dist = Math.round(getHaversineDistanceKm(origin, depAirport.coords) * 1.15);
+  const leg1Eta = Math.round((leg1Dist / 55) * 60);
+
+  // Leg 2: Geodesic Flight Arc
+  const flightDist = Math.round(getHaversineDistanceKm(depAirport.coords, arrAirport.coords));
+  const flightEta = Math.round((flightDist / 620) * 60) + 40; // 40m loading/handling buffer
+  const numArcPts = 12;
+  const leg2Coords: LonLat[] = [];
+  const midLon = (depAirport.coords[0] + arrAirport.coords[0]) / 2 + 0.18;
+  const midLat = (depAirport.coords[1] + arrAirport.coords[1]) / 2 + 0.12;
+  for (let s = 0; s <= numArcPts; s++) {
+    const t = s / numArcPts;
+    const bx = (1 - t) * (1 - t) * depAirport.coords[0] + 2 * (1 - t) * t * midLon + t * t * arrAirport.coords[0];
+    const by = (1 - t) * (1 - t) * depAirport.coords[1] + 2 * (1 - t) * t * midLat + t * t * arrAirport.coords[1];
+    leg2Coords.push([Number(bx.toFixed(4)), Number(by.toFixed(4))]);
+  }
+
+  // Leg 3: Last-Mile Land Truck from Arrival Airport to Destination
+  const leg3Coords = await fetchMapboxDrivingRoute(arrAirport.coords, destination, [], 'truck');
+  const leg3Dist = Math.round(getHaversineDistanceKm(arrAirport.coords, destination) * 1.15);
+  const leg3Eta = Math.round((leg3Dist / 55) * 60);
 
   const totalWaypoints: Array<{ lat: number; lon: number }> = [];
-  const legs: RouteLeg[] = [];
-  let totalDistance = 0;
-  let totalEta = 0;
+  leg1Coords.forEach(([lon, lat]) => totalWaypoints.push({ lat, lon }));
+  leg2Coords.forEach(([lon, lat]) => totalWaypoints.push({ lat, lon }));
+  leg3Coords.forEach(([lon, lat]) => totalWaypoints.push({ lat, lon }));
 
-  // Leg 1: First-Mile Ground Transport (if origin is not the departure airport)
-  if (!isOriginAirport) {
-    const leg1Coords = await fetchMapboxDrivingRoute(origin, depAirport.coords, [], 'truck');
-    const leg1Dist = Math.round(getHaversineDistanceKm(origin, depAirport.coords));
-    const leg1Eta = Math.round((leg1Dist / 55) * 60);
-    totalDistance += leg1Dist;
-    totalEta += leg1Eta;
-    leg1Coords.forEach(([lon, lat]) => totalWaypoints.push({ lat, lon }));
-    legs.push({
-      title: `Leg 1: First-Mile Truk (${depAirport.code})`,
+  const legs: RouteLeg[] = [
+    {
+      title: `Leg 1: Feeder Darat -> ${depAirport.code}`,
       mode: 'truck',
       distance_km: leg1Dist,
       eta_minutes: leg1Eta,
       from_name: 'Titik Asal Logistik',
       to_name: depAirport.name,
-    });
-  } else {
-    totalWaypoints.push({ lat: origin[1], lon: origin[0] });
-  }
-
-  // Leg 2: Main Airway Flight Corridor
-  const flightDist = Math.round(getHaversineDistanceKm(depAirport.coords, arrAirport.coords));
-  const flightEta = Math.round((flightDist / 620) * 60) + 40; // 40m loading/handling buffer
-  totalDistance += flightDist;
-  totalEta += flightEta;
-
-  const airwayMidLon = (depAirport.coords[0] + arrAirport.coords[0]) / 2 + 0.15;
-  const airwayMidLat = (depAirport.coords[1] + arrAirport.coords[1]) / 2 + 0.10;
-  totalWaypoints.push({ lat: depAirport.coords[1], lon: depAirport.coords[0] });
-  totalWaypoints.push({ lat: airwayMidLat, lon: airwayMidLon });
-  totalWaypoints.push({ lat: arrAirport.coords[1], lon: arrAirport.coords[0] });
-
-  legs.push({
-    title: `Leg 2: Penerbangan Kargo (${depAirport.code} -> ${arrAirport.code})`,
-    mode: 'air',
-    distance_km: flightDist,
-    eta_minutes: flightEta,
-    from_name: depAirport.name,
-    to_name: arrAirport.name,
-  });
-
-  // Leg 3: Last-Mile Ground Transport (if destination is not the arrival airport)
-  if (!isDestAirport) {
-    const leg3Coords = await fetchMapboxDrivingRoute(arrAirport.coords, destination, [], 'truck');
-    const leg3Dist = Math.round(getHaversineDistanceKm(arrAirport.coords, destination));
-    const leg3Eta = Math.round((leg3Dist / 55) * 60);
-    totalDistance += leg3Dist;
-    totalEta += leg3Eta;
-    leg3Coords.forEach(([lon, lat]) => totalWaypoints.push({ lat, lon }));
-    legs.push({
-      title: `Leg 3: Last-Mile Distribusi (${arrAirport.code})`,
+      coordinates: leg1Coords,
+      color: '#10B981', // Emerald Green
+      transfer_hub: {
+        id: depAirport.id,
+        name: depAirport.name,
+        type: 'airport',
+        coords: depAirport.coords,
+      },
+    },
+    {
+      title: `Leg 2: Penerbangan Kargo (${depAirport.code} -> ${arrAirport.code})`,
+      mode: 'air',
+      distance_km: flightDist,
+      eta_minutes: flightEta,
+      from_name: depAirport.name,
+      to_name: arrAirport.name,
+      coordinates: leg2Coords,
+      color: '#00F0FF', // Sky Cyan
+      transfer_hub: {
+        id: arrAirport.id,
+        name: arrAirport.name,
+        type: 'airport',
+        coords: arrAirport.coords,
+      },
+    },
+    {
+      title: `Leg 3: Last-Mile Darat (${arrAirport.code} -> Tujuan)`,
       mode: 'truck',
       distance_km: leg3Dist,
       eta_minutes: leg3Eta,
       from_name: arrAirport.name,
       to_name: 'Titik Tujuan Logistik',
-    });
-  } else {
-    totalWaypoints.push({ lat: destination[1], lon: destination[0] });
-  }
+      coordinates: leg3Coords,
+      color: '#10B981', // Emerald Green
+    },
+  ];
 
-  return [{
-    id: 'multimodal-air-express',
-    route_name: `Rantai Logistik Udara (${depAirport.code} -> ${arrAirport.code})`,
-    description: `Distribusi Cepat Multi-Moda melalui koridor udara ${depAirport.name} ke ${arrAirport.name}`,
+  return {
+    id: 'corridor-air-intermodal',
+    route_name: `Intermodal Udara (${depAirport.code} -> ${arrAirport.code})`,
+    description: `Koridor Udara Cepat Multi-Moda via ${depAirport.name} ke ${arrAirport.name}`,
     waypoints: totalWaypoints,
-    distance_km: totalDistance,
-    eta_minutes: totalEta,
-    fuel_increase_pct: 14.5,
-    risk_score: 0.06,
+    distance_km: leg1Dist + flightDist + leg3Dist,
+    eta_minutes: leg1Eta + flightEta + leg3Eta,
+    fuel_increase_pct: 18.0,
+    risk_score: 0.05,
     is_compromised: false,
     safety_status: 'SAFE_DETOUR',
-    safety_tag: 'MULTI-MODA UDARA OPTIMAL',
-    modality: 'multimodal',
+    safety_tag: 'MULTI-MODA UDARA + DARAT',
+    modality: 'air',
+    corridor_type: 'air_intermodal',
+    viable: true,
     legs,
     color: '#00F0FF',
-  }];
+  };
 }
 
 /**
- * Multi-alternative routing engine with hazard intersection detection and Hold/Delay fallback.
+ * Backward compatibility wrapper for calculateMultiModalLogisticsChain
+ */
+export async function calculateMultiModalLogisticsChain(
+  origin: LonLat,
+  destination: LonLat
+): Promise<RouteRecommendation[]> {
+  const air = await calculateAirIntermodalCorridor(origin, destination);
+  return [air];
+}
+
+/**
+ * Simultaneous Multi-Color Intermodal Router:
+ * Simultaneously computes all four corridors (Land Primary, Land Detour, Sea Intermodal, Air Intermodal)
+ * with authentic per-leg multi-color coordinates and grounded Hold-vs-Reroute economics.
  */
 export async function calculateAIDynamicDetourRoutes(
   hazardCenter: LonLat | null,
   radiusKm: number = DEFAULT_HAZARD_RADIUS_KM,
   origin: LonLat,
   destination: LonLat,
-  modality: TransportModality = 'best'
+  _modality: TransportModality = 'best'
 ): Promise<RouteRecommendation[]> {
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
-  const odDistanceKm = getHaversineDistanceKm(origin, destination);
   const excludeToll = hazardCenter ? isHazardNearTollCorridor(hazardCenter, radiusKm) : false;
 
-  // Handle explicit Maritime mode (Coastal Nautical Sea Lane Pathfinding)
-  if (modality === 'maritime') {
-    const coords = generateNauticalCoastalRoute(origin, destination);
-    let seaDist = 0;
-    for (let i = 0; i < coords.length - 1; i++) {
-      seaDist += getHaversineDistanceKm(coords[i], coords[i + 1]);
-    }
-    const finalDist = Math.round(Math.max(odDistanceKm * 1.15, seaDist));
-
-    return [{
-      id: 'maritime-main',
-      route_name: 'Rute Kapal Laut (Alur Laut Kepulauan)',
-      description: 'Jalur Pelayaran Bebas Hambatan menyusuri Alur Laut Kepulauan (ALKI)',
-      waypoints: coords.map(([lon, lat]) => ({ lat, lon })),
-      distance_km: finalDist,
-      eta_minutes: Math.round((finalDist / 25) * 60),
-      fuel_increase_pct: 0,
-      risk_score: 0.04,
-      is_compromised: false,
-      safety_status: 'SAFE_DETOUR',
-      safety_tag: 'ALUR LAUT TERVERIFIKASI',
-      modality: 'maritime',
-      color: '#3B82F6',
-    }];
-  }
-
-  // Handle explicit Air mode
-  if (modality === 'air') {
-    return calculateMultiModalLogisticsChain(origin, destination);
-  }
-
-  // STEP 1: Get native Mapbox routes and evaluate each against hazard circle
+  // STEP 1: Compute Land Routes (Primary & Alternative / Bypass)
   const mapboxResults = await fetchMapboxAlternativeDrivingRoutes(origin, destination, [], excludeToll);
-  const recommendations: RouteRecommendation[] = [];
-  let foundCleanRoute = false;
-  const evaluatedCandidates: Array<{
-    result: MapboxRouteResult;
-    metrics: HazardExposureMetrics;
-    name: string;
-  }> = [];
+  const primaryRes = mapboxResults[0];
+  const primaryMetrics = hazardCenter
+    ? calculateHazardExposureMetrics(primaryRes.coordinates, hazardCenter, radiusKm)
+    : { isIntersecting: false, exposureKm: 0, penetrationRatio: 0, minDistanceToCenterKm: 9999, maxProximity: 0, riskPenaltyScore: 0 };
+  const isPrimaryCompromised = primaryMetrics.isIntersecting;
 
-  for (let i = 0; i < mapboxResults.length; i++) {
-    const res = mapboxResults[i];
-    const metrics = hazardCenter
-      ? calculateHazardExposureMetrics(res.coordinates, hazardCenter, radiusKm)
-      : { isIntersecting: false, exposureKm: 0, penetrationRatio: 0, minDistanceToCenterKm: 9999, maxProximity: 0, riskPenaltyScore: 0 };
+  // Corridor 1: Fastest Direct Land Corridor
+  const isPrimaryOffline = primaryRes.source === 'offline-interpolated';
+  const landPrimaryName = isPrimaryOffline ? '[SIMULASI] Koridor Darat Utama (Tol / Jalinsum)' : 'Koridor Darat Utama (Tol / Jalinsum)';
+  const landPrimaryColor = isPrimaryCompromised ? '#EF4444' : '#10B981';
 
-    const isCompromised = metrics.isIntersecting;
-    if (!isCompromised) foundCleanRoute = true;
+  const landPrimary: RouteRecommendation = {
+    id: 'corridor-land-primary',
+    route_name: landPrimaryName,
+    description: isPrimaryOffline
+      ? `[SIMULASI/OFFLINE: garis lurus] Jalur langsung via ${primaryRes.summary}`
+      : `Jalur darat langsung tercepat via ${primaryRes.summary}`,
+    waypoints: primaryRes.coordinates.map(([lon, lat]) => ({ lat, lon })),
+    distance_km: primaryRes.distanceKm,
+    eta_minutes: primaryRes.durationMinutes + (isPrimaryCompromised ? 60 : 0),
+    fuel_increase_pct: isPrimaryCompromised ? 25.0 : 0,
+    risk_score: isPrimaryCompromised ? 0.90 : 0.05,
+    is_compromised: isPrimaryCompromised,
+    safety_status: isPrimaryCompromised ? 'COMPROMISED' : 'SAFE_DETOUR',
+    safety_tag: isPrimaryCompromised ? 'TERDAMPAK ZONA BAHAYA (+60m Delay)' : 'RUTE DARAT TERCEPAT',
+    traffic_level: primaryRes.congestionSegments.some((s) => s.level === 'heavy') ? 'heavy' : 'low',
+    congestion_segments: primaryRes.congestionSegments,
+    modality: 'truck',
+    corridor_type: 'land_primary',
+    viable: true,
+    color: landPrimaryColor,
+    legs: [
+      {
+        title: 'Koridor Darat Langsung',
+        mode: 'truck',
+        distance_km: primaryRes.distanceKm,
+        eta_minutes: primaryRes.durationMinutes,
+        from_name: 'Titik Asal Logistik',
+        to_name: 'Titik Tujuan Logistik',
+        coordinates: primaryRes.coordinates,
+        color: landPrimaryColor,
+      },
+    ],
+  };
 
-    evaluatedCandidates.push({
-      result: res,
-      metrics,
-      name: i === 0 ? 'Rute Utama (Jalan Tol / Jalinsum)' : `Alternatif ${i} (Jalur Arteri)`,
-    });
+  // Corridor 2: Alternative Land / Hazard Detour Corridor
+  let landDetourResult: MapboxRouteResult = mapboxResults[1] || primaryRes;
+  let landDetourColor = '#34D399';
+  let landDetourTag = 'RUTE ALTERNATIF ARTERI';
+  let isDetourCompromised = false;
 
-    const routeColor = isCompromised ? '#EF4444' : i === 0 ? '#00F0FF' : i === 1 ? '#3B82F6' : '#F59E0B';
-    const routeName = i === 0 ? 'Rute Utama (Jalan Tol / Jalinsum)' : i === 1 ? 'Alternatif 1 (Jalur Arteri)' : 'Alternatif 2 (Bypass Sekunder)';
+  // If primary route intersects hazard shockwave, actively solve detour around hazard
+  if (hazardCenter && isPrimaryCompromised && token) {
+    let foundDetour = false;
 
-    // Phase 57 WP-A3 (D4): offline-interpolated geometry carries the SIMULASI
-    // badge in every user-facing field so the map can never render it as live.
-    const isOffline = res.source === 'offline-interpolated';
-    const labeledName = isOffline ? `[SIMULASI] ${routeName}` : routeName;
-    const labeledTag = isOffline
-      ? `${isCompromised ? 'TERDAMPAK ZONA BAHAYA (+60m Delay)' : i === 0 ? 'RUTE UTAMA TERCEPAT' : 'RUTE ALTERNATIF'} • SIMULASI/OFFLINE`
-      : isCompromised ? 'TERDAMPAK ZONA BAHAYA (+60m Delay)' : i === 0 ? 'RUTE UTAMA TERCEPAT' : 'RUTE ALTERNATIF';
-
-    recommendations.push({
-      id: `route-opt-${i + 1}`,
-      route_name: labeledName,
-      description: isOffline
-        ? `[SIMULASI/OFFLINE: garis lurus, bukan jalan raya live] ${routeName} via ${res.summary}`
-        : `${routeName} via ${res.summary}`,
-      waypoints: res.coordinates.map(([lon, lat]) => ({ lat, lon })),
-      distance_km: res.distanceKm,
-      eta_minutes: res.durationMinutes + (isCompromised ? 60 : 0),
-      fuel_increase_pct: isCompromised ? 25.0 : i * 5.0,
-      risk_score: isCompromised ? 0.90 : 0.05 + i * 0.08,
-      is_compromised: isCompromised,
-      safety_status: isCompromised ? 'COMPROMISED' : 'SAFE_DETOUR',
-      safety_tag: labeledTag,
-      traffic_level: res.congestionSegments.some((s) => s.level === 'heavy') ? 'heavy' : 'low',
-      congestion_segments: res.congestionSegments,
-      modality: 'truck',
-      color: routeColor,
-    });
-  }
-
-  // STEP 2: Priority 1 - Full Avoidance: search bypass arterial nodes
-  if (hazardCenter && !foundCleanRoute && token) {
+    // A. Priority Bypass: Safe arterial junctions outside hazard zone
     const safeNodes = HIGHWAY_JUNCTION_NODES.filter(
       (node) => getHaversineDistanceKm(node.coords, hazardCenter) >= radiusKm + 2.0
     );
-
-    const scored = safeNodes.map((node) => ({
+    const scoredNodes = safeNodes.map((node) => ({
       name: node.name,
       coords: node.coords,
-      score:
-        getHaversineDistanceKm(origin, node.coords) +
-        getHaversineDistanceKm(node.coords, destination),
-    }));
+      score: getHaversineDistanceKm(origin, node.coords) + getHaversineDistanceKm(node.coords, destination),
+    })).sort((a, b) => a.score - b.score);
 
-    scored.sort((a, b) => a.score - b.score);
-    const topCandidates = scored.slice(0, 5);
-
-    for (const cand of topCandidates) {
-      const bypassResult = await fetchMapboxRouteWithForcedWaypoint(origin, destination, cand.coords, token, excludeToll);
-
-      if (bypassResult) {
-        const metrics = calculateHazardExposureMetrics(bypassResult.coordinates, hazardCenter, radiusKm);
-        evaluatedCandidates.push({ result: bypassResult, metrics, name: `Arteri ${cand.name}` });
-
-        if (!metrics.isIntersecting) {
-          foundCleanRoute = true;
-          recommendations.unshift({
-            id: 'route-opt-safe-bypass',
-            route_name: `Rute Pengalihan: via ${cand.name}`,
-            description: `Pengalihan rute jalan raya otomatis melingkari zona bahaya via ${cand.name}`,
-            waypoints: bypassResult.coordinates.map(([lon, lat]) => ({ lat, lon })),
-            distance_km: bypassResult.distanceKm,
-            eta_minutes: bypassResult.durationMinutes,
-            fuel_increase_pct: 12.0,
-            risk_score: 0.10,
-            is_compromised: false,
-            safety_status: 'SAFE_DETOUR',
-            safety_tag: `RUTE PENGALIHAN AMAN (${cand.name.toUpperCase()})`,
-            traffic_level: 'low',
-            congestion_segments: bypassResult.congestionSegments,
-            modality: 'truck',
-            color: '#10B981', // Emerald green
-          });
+    for (const cand of scoredNodes.slice(0, 4)) {
+      const bypass = await fetchMapboxRouteWithForcedWaypoint(origin, destination, cand.coords, token, excludeToll);
+      if (bypass) {
+        const m = calculateHazardExposureMetrics(bypass.coordinates, hazardCenter, radiusKm);
+        if (!m.isIntersecting) {
+          landDetourResult = bypass;
+          landDetourColor = '#10B981';
+          landDetourTag = `PENGALIHAN AMAN (${cand.name.toUpperCase()})`;
+          foundDetour = true;
           break;
         }
       }
     }
-  }
 
-  // STEP 3: Multi-Angle Radial Clearance Avoidance (+90, -90, +45, -45 degrees)
-  if (hazardCenter && !foundCleanRoute && token) {
-    const [hazardLon, hazardLat] = hazardCenter;
-    const clearanceKm = radiusKm + 6.0;
-    const kmPerLonDegree = 111.32 * Math.cos((hazardLat * Math.PI) / 180);
-    const kmPerLatDegree = 110.574;
+    // B. Radial clearance detour if junction bypass not clean
+    if (!foundDetour) {
+      const [hazardLon, hazardLat] = hazardCenter;
+      const clearanceKm = radiusKm + 6.0;
+      const kmPerLonDegree = 111.32 * Math.cos((hazardLat * Math.PI) / 180);
+      const kmPerLatDegree = 110.574;
+      const odLonKm = (destination[0] - origin[0]) * kmPerLonDegree;
+      const odLatKm = (destination[1] - origin[1]) * kmPerLatDegree;
+      const odLengthKm = Math.sqrt(odLonKm * odLonKm + odLatKm * odLatKm) || 1;
+      const dirLon = odLonKm / odLengthKm;
+      const dirLat = odLatKm / odLengthKm;
 
-    const odLonKm = (destination[0] - origin[0]) * kmPerLonDegree;
-    const odLatKm = (destination[1] - origin[1]) * kmPerLatDegree;
-    const odLengthKm = Math.sqrt(odLonKm * odLonKm + odLatKm * odLatKm) || 1;
+      for (const ang of [Math.PI / 2, -Math.PI / 2, Math.PI / 4, -Math.PI / 4]) {
+        const cosA = Math.cos(ang);
+        const sinA = Math.sin(ang);
+        const rotLon = dirLon * cosA - dirLat * sinA;
+        const rotLat = dirLon * sinA + dirLat * cosA;
+        const offsetLon = (rotLon * clearanceKm) / kmPerLonDegree;
+        const offsetLat = (rotLat * clearanceKm) / kmPerLatDegree;
+        const waypoint: LonLat = [hazardLon + offsetLon, hazardLat + offsetLat];
 
-    const dirLon = odLonKm / odLengthKm;
-    const dirLat = odLatKm / odLengthKm;
-
-    // Test 4 radial avoidance angles: orthogonal left/right and 45-degree sweeps
-    const avoidanceAngles = [Math.PI / 2, -Math.PI / 2, Math.PI / 4, -Math.PI / 4];
-    for (const ang of avoidanceAngles) {
-      const cosA = Math.cos(ang);
-      const sinA = Math.sin(ang);
-      const rotLon = dirLon * cosA - dirLat * sinA;
-      const rotLat = dirLon * sinA + dirLat * cosA;
-      const offsetLon = (rotLon * clearanceKm) / kmPerLonDegree;
-      const offsetLat = (rotLat * clearanceKm) / kmPerLatDegree;
-      const waypoint: LonLat = [hazardLon + offsetLon, hazardLat + offsetLat];
-
-      const radialResult = await fetchMapboxRouteWithForcedWaypoint(origin, destination, waypoint, token, excludeToll);
-      if (!radialResult) continue;
-
-      const metrics = calculateHazardExposureMetrics(radialResult.coordinates, hazardCenter, radiusKm);
-      evaluatedCandidates.push({ result: radialResult, metrics, name: `Radial Detour (${Math.round(ang * 180 / Math.PI)}°)` });
-
-      if (!metrics.isIntersecting) {
-        foundCleanRoute = true;
-        recommendations.unshift({
-          id: 'route-opt-radial-detour',
-          route_name: 'Rute Pengalihan Bebas Bencana',
-          description: `Rute belok radial ${clearanceKm} km di luar radius genangan bahaya`,
-          waypoints: radialResult.coordinates.map(([lon, lat]) => ({ lat, lon })),
-          distance_km: radialResult.distanceKm,
-          eta_minutes: radialResult.durationMinutes,
-          fuel_increase_pct: 13.5,
-          risk_score: 0.08,
-          is_compromised: false,
-          safety_status: 'SAFE_DETOUR',
-          safety_tag: 'RUTE PENGALIHAN BEBAS BENCANA',
-          traffic_level: 'low',
-          congestion_segments: radialResult.congestionSegments,
-          modality: 'truck',
-          color: '#10B981',
-        });
-        break;
+        const radial = await fetchMapboxRouteWithForcedWaypoint(origin, destination, waypoint, token, excludeToll);
+        if (radial) {
+          const m = calculateHazardExposureMetrics(radial.coordinates, hazardCenter, radiusKm);
+          if (!m.isIntersecting) {
+            landDetourResult = radial;
+            landDetourColor = '#10B981';
+            landDetourTag = 'RUTE PENGALIHAN BEBAS BENCANA';
+            foundDetour = true;
+            break;
+          }
+        }
       }
     }
-  }
 
-  // STEP 4: Priority 2 - Least-Risk Minimization Path (when all corridors intersect)
-  if (hazardCenter && !foundCleanRoute && evaluatedCandidates.length > 0) {
-    // Sort all evaluated candidates by composite risk penalty score
-    evaluatedCandidates.sort((a, b) => a.metrics.riskPenaltyScore - b.metrics.riskPenaltyScore);
-    const leastRisk = evaluatedCandidates[0];
-
-    // Only unshift if least risk candidate significantly improves exposure over straight cut
-    if (leastRisk && leastRisk.result.coordinates.length > 0) {
-      recommendations.unshift({
-        id: 'route-opt-least-risk',
-        route_name: 'Rute Risiko Minimal (Fringe Avoidance)',
-        description: `Jalur alternatif risiko terendah: meminimalisir paparan ke ${leastRisk.metrics.exposureKm} km di pinggiran luar zona bahaya (jarak terdekat ${leastRisk.metrics.minDistanceToCenterKm} km dari episentrum).`,
-        waypoints: leastRisk.result.coordinates.map(([lon, lat]) => ({ lat, lon })),
-        distance_km: leastRisk.result.distanceKm,
-        eta_minutes: leastRisk.result.durationMinutes + Math.round(leastRisk.metrics.exposureKm * 2),
-        fuel_increase_pct: 14.0,
-        risk_score: Math.min(0.45, Math.round(leastRisk.metrics.penetrationRatio * 60) / 100 + 0.15),
-        is_compromised: false,
-        safety_status: 'SAFE_DETOUR',
-        safety_tag: `RISIKO MINIMAL (${leastRisk.metrics.exposureKm}KM EXPOSURE)`,
-        traffic_level: 'moderate',
-        congestion_segments: leastRisk.result.congestionSegments,
-        modality: 'truck',
-        color: '#F59E0B', // Amber caution color for least-risk fringe route
-      });
+    if (!foundDetour) {
+      landDetourColor = '#F59E0B';
+      landDetourTag = 'DETOUR RISIKO MINIMAL (FRINGE)';
+      isDetourCompromised = true;
     }
-
-    // Also surface tactical hold option
-    recommendations.push({
-      id: 'mitigation-hold-delay',
-      route_name: 'Mitigasi Taktis: Tunda Keberangkatan (Hold / Delay)',
-      description: 'Seluruh koridor langsung terpapar radius bencana. Rekomendasi: Tahan armada di buffer area hingga genangan surut.',
-      waypoints: [],
-      distance_km: recommendations[0]?.distance_km || Math.round(odDistanceKm),
-      eta_minutes: (recommendations[0]?.eta_minutes || 60) + 180,
-      fuel_increase_pct: 0,
-      risk_score: 0.15,
-      is_compromised: true,
-      safety_status: 'HOLD_DELAY',
-      safety_tag: 'REKOMENDASI: TUNDA KEBERANGKATAN (HOLD / DELAY)',
-      traffic_level: 'heavy',
-      congestion_segments: [],
-      modality: 'truck',
-      color: '#F59E0B',
-    });
   }
 
-  // Sort: safe/hold routes first, then by ETA
-  recommendations.sort((a, b) => {
-    const rank = (route: RouteRecommendation) =>
-      route.is_compromised === true && route.safety_status !== 'HOLD_DELAY' ? 1 : 0;
-    const rankDelta = rank(a) - rank(b);
-    if (rankDelta === 0) return a.eta_minutes - b.eta_minutes;
-    return rankDelta;
-  });
+  const landDetour: RouteRecommendation = {
+    id: 'corridor-land-detour',
+    route_name: isPrimaryCompromised ? 'Rute Pengalihan Darat (Detour)' : 'Alternatif Darat (Jalur Arteri)',
+    description: isPrimaryCompromised
+      ? `Jalur pengalihan darat melingkari radius bahaya ${radiusKm}km via ${landDetourResult.summary}`
+      : `Jalur alternatif arteri bebas hambatan via ${landDetourResult.summary}`,
+    waypoints: landDetourResult.coordinates.map(([lon, lat]) => ({ lat, lon })),
+    distance_km: landDetourResult.distanceKm,
+    eta_minutes: landDetourResult.durationMinutes,
+    fuel_increase_pct: isPrimaryCompromised ? 14.0 : 8.0,
+    risk_score: isDetourCompromised ? 0.35 : 0.08,
+    is_compromised: isDetourCompromised,
+    safety_status: isDetourCompromised ? 'COMPROMISED' : 'SAFE_DETOUR',
+    safety_tag: landDetourTag,
+    traffic_level: landDetourResult.congestionSegments.some((s) => s.level === 'heavy') ? 'heavy' : 'low',
+    congestion_segments: landDetourResult.congestionSegments,
+    modality: 'truck',
+    corridor_type: 'land_detour',
+    viable: true,
+    color: landDetourColor,
+    legs: [
+      {
+        title: isPrimaryCompromised ? 'Pengalihan Darat / Detour' : 'Jalur Arteri Sekunder',
+        mode: 'truck',
+        distance_km: landDetourResult.distanceKm,
+        eta_minutes: landDetourResult.durationMinutes,
+        from_name: 'Titik Asal Logistik',
+        to_name: 'Titik Tujuan Logistik',
+        coordinates: landDetourResult.coordinates,
+        color: landDetourColor,
+      },
+    ],
+  };
 
-  return recommendations.slice(0, 3);
+  // STEP 2: Simultaneously Compute Intermodal Corridors (Sea & Air)
+  const [seaCorridor, airCorridor] = await Promise.all([
+    calculateSeaIntermodalCorridor(origin, destination),
+    calculateAirIntermodalCorridor(origin, destination),
+  ]);
+
+  // STEP 3: Grounded Hold vs Reroute Economic Decision Engine
+  let holdCorridor: RouteRecommendation | null = null;
+  if (hazardCenter) {
+    const econ = calculateHoldVsRerouteEconomics(
+      origin,
+      destination,
+      landPrimary.distance_km,
+      landDetour.distance_km,
+      hazardCenter,
+      radiusKm
+    );
+
+    landPrimary.economic_comparison = econ;
+    landDetour.economic_comparison = econ;
+    seaCorridor.economic_comparison = econ;
+    airCorridor.economic_comparison = econ;
+
+    holdCorridor = {
+      id: 'corridor-hold-staging',
+      route_name: `Tahan Muatan di Depo Buffer (${econ.hold_depot_name.split('(')[0].trim()})`,
+      description: `Rekomendasi Taktis: Tahan armada di ${econ.hold_depot_name} (~${econ.estimated_clearance_hours} jam) hingga air surut / jalan dibuka. Hemat Rp ${(econ.net_savings_idr / 1000000).toFixed(1)} Juta dibanding reroute.`,
+      waypoints: [],
+      distance_km: landPrimary.distance_km,
+      eta_minutes: landPrimary.eta_minutes + econ.estimated_clearance_hours * 60,
+      fuel_increase_pct: 0,
+      risk_score: 0.10,
+      is_compromised: false,
+      safety_status: 'HOLD_DELAY',
+      safety_tag: `TAHAN MUATAN • REKOMENDASI ${econ.recommended_action}`,
+      modality: 'truck',
+      corridor_type: 'hold_staging',
+      viable: true,
+      economic_comparison: econ,
+      color: '#F59E0B',
+      legs: [
+        {
+          title: `Feeder ke ${econ.hold_depot_name}`,
+          mode: 'truck',
+          distance_km: Math.round(getHaversineDistanceKm(origin, econ.hold_depot_coords)),
+          eta_minutes: Math.round((getHaversineDistanceKm(origin, econ.hold_depot_coords) / 45) * 60),
+          from_name: 'Titik Asal Logistik',
+          to_name: econ.hold_depot_name,
+          color: '#F59E0B',
+          transfer_hub: {
+            id: 'safe_hold_depot',
+            name: econ.hold_depot_name,
+            type: 'hold_depot',
+            coords: econ.hold_depot_coords,
+          },
+        },
+      ],
+    };
+  }
+
+  const allCorridors: RouteRecommendation[] = [landPrimary, landDetour, seaCorridor, airCorridor];
+  if (holdCorridor) {
+    allCorridors.push(holdCorridor);
+  }
+
+  return allCorridors;
 }

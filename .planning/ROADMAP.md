@@ -1691,6 +1691,48 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 
 ---
 
+## Phase 63: High-Density `@deck.gl/mapbox` Telemetry, News Permalink Integrity, Pure Coordinate Routing & Multi-Color Intermodal Corridors with Hold-vs-Reroute Economics
+
+**Goal:** Transform the PreHub tactical map with GPU-instanced `@deck.gl/mapbox` `MapboxOverlay` rendering (5,000+ units @ 60 FPS), fix inverted AISStream bounding boxes and enable multi-provider parallel ADS-B polling (45+ flight regional baseline), purge fake numeric Antara IDs with targeted Google News search permalinks, eliminate static hub routing dependencies in favor of pure `[lon, lat]` coordinate graph snapping, and render simultaneous multi-color intermodal corridors (Emerald Land, Royal Blue Sea, Sky Cyan Air) backed by a grounded Hold vs. Reroute Spoilage Hedging economic comparison engine.
+**Status:** COMPLETE ✅
+**Plans:** `63-PLAN.md`
+
+### Deliverables
+
+- [x] **WP1 - High-Density WebGL Telemetry Engine (`@deck.gl/mapbox` + Multi-Feed Backend)**:
+  - `backend/app/adapters/aisstream_adapter.py`: corrected inverted `MACRO_BBOX` to `[[6.2, 94.8], [-6.2, 109.0]]` (`[[North_Lat, West_Lon], [South_Lat, East_Lon]]`), aligned 8 seaport bounding boxes, and expanded retention cap `MAX_LIVE_VESSELS` from 600 to 1,500 units.
+  - `backend/app/services/telemetry_service.py`: parallel ADS-B poller querying `api.airplanes.live`, `opendata.adsb.fi`, `api.adsb.lol`, and OpenSky via `asyncio.gather(timeout=2.5s)`; expanded `MASTER_FLEET_DEFINITIONS` aviation baseline from 7 to 45+ regional flights across Sumatra FIRs (KNO, BIM, PLM, PKU, BTJ, DJB, TKG, BTH, PGK, DTB).
+  - `backend/app/services/telemetry_service.py`: true COG (`cog_deg`) and SOG (`sog_knots`) dead-reckoning kinematics replacing synthetic diagonal offsets.
+  - `backend/app/routers/vehicles_router.py`: preserved global maritime and aviation assets under single-tenant dispatcher filtering unless explicitly filtering by tenant.
+  - `frontend/components/map/FleetVehicleLayer.tsx` & `CrisisMap.tsx`: integrated `@deck.gl/mapbox` `MapboxOverlay` (`interleaved: true`) with GPU-instanced `IconLayer` and `PathLayer` for vehicle sprites and velocity vectors at 60 FPS.
+  - `frontend/lib/spatialHashArbiter.ts`: updated macro zoom (`z < 7.5`) arbitration ensuring top-priority strategic vessels and cargo flights display decluttered callsign labels.
+- [x] **WP2 - News Permalink Integrity & Citation Grounding (Issue #3)**:
+  - `frontend/hooks/useNewsVerification.ts`: purged fake numeric Antara IDs (`543210`, `532190`, `571234`, `562341`) in `FALLBACK_SUMATRA_NEWS`; upgraded `normalizeNewsPermalink` with regex detection rewriting synthetic IDs to targeted Google News search queries (`hl=id-ID&gl=ID&ceid=ID:id`).
+  - `backend/app/services/news_aggregator.py`: updated `DEMO_STANDARDIZED_SCENARIOS` with deterministic Google News search permalinks.
+- [x] **WP3 - Pure `[lon, lat]` Coordinate Routing & Graph Snapping (Issue #4)**:
+  - `frontend/components/dashboard/DashboardClient.tsx`: eliminated hardcoded `HUB_NODES[originId]?.coords` dependencies; all locations resolve through `resolveNodeInfo(nodeId)` supporting gazetteer, village nodes, and custom coordinates.
+  - `frontend/components/map/CrisisMap.tsx`: removed permanent static city hub pins (`hub-nodes-source`), rendering only active `ASAL` and `TUJUAN` endpoint pins plus contextual transfer/hold waypoints.
+  - `frontend/components/sidebar/MitigationTab.tsx`: locked `resolvedDestination` precedence so selected destination is never overwritten by background vehicle scans.
+  - `agents/nodes/route_optimization.py`, `backend/app/adapters/cpu_routing_adapter.py`, `backend/app/services/impact_assessment_service.py`: eliminated fallbacks to `"dumai"` and `"medan_hub"`, snapping arbitrary `origin_coords` and `dest_coords` directly to nearest road graph node with first/last-mile connectors.
+- [x] **WP4 - Simultaneous Multi-Color Intermodal Corridors & Hold-vs-Reroute Economics (Issue #5)**:
+  - `frontend/components/map/CrisisSimulatorBar.tsx`: replaced restrictive single-mode dropdown with Corridor Visibility Filter Pills (`Darat Utama/Alternatif`, `Intermodal Laut+Darat`, `Intermodal Udara+Darat`, `Titik Transfer & Hold`).
+  - `frontend/lib/types.ts` & `aiDynamicRouter.ts`: extended `RouteLeg` with coordinates, dynamic hex color, and transfer hub metadata; constructed true 3-leg Sea (`Truck -> Seaport -> Seaport -> Truck`) and Air (`Truck -> Airport -> Airport -> Truck`) chains so sea lines never cross dry land.
+  - `frontend/lib/aiDynamicRouter.ts`: implemented same-hub and short-distance (<120 km) viability guard marking non-viable corridors with explanatory rationale.
+  - `frontend/components/map/CrisisMap.tsx`: styled `route-paths-source` with one `LineString` feature per leg using dynamic color palette (`#10B981` Emerald Land, `#3B82F6` Royal Blue Sea, `#00F0FF` Sky Cyan Air, `#F59E0B` Amber Detour).
+  - `backend/app/services/spoilage_hedging_service.py` & `frontend/components/sidebar/HoldVsRerouteCard.tsx` (in `MitigationTab.tsx`): 3-way economic decision solver comparing Option A (Land Detour), Option B (Intermodal Bypass), and Option C (Hold at Safe Staging Depot) with grounded spoilage decay ($1 - e^{-\delta \cdot T}$), reefer genset, demurrage, and toll/fuel costs.
+
+### Verification Criteria
+
+- [x] `backend/tests/test_vehicles_telemetry.py` & `backend/tests/test_cross_workstream_integration.py`: 12/12 passed (100%).
+- [x] `npx tsc --noEmit` in `frontend/`: 0 errors.
+- [x] `npm run build` in `frontend/`: 100% clean production bundle (7/7 static pages generated).
+- [x] High-density WebGL telemetry layer active on dashboard via `@deck.gl/mapbox`.
+- [x] 100% of news links resolve to targeted Google News queries or verified Antara reports (zero Mason Greenwood / 404 links).
+- [x] Pure coordinate routing operates without static city hub restrictions.
+- [x] Simultaneous multi-color intermodal corridors render with distinct colors, and Hold vs. Reroute economic card displays grounded IDR comparative figures.
+
+---
+
 ## Backlog (Post-Hackathon / v2)
 
 - Driver mobile app (React Native + WatermelonDB + CRDT offline sync)

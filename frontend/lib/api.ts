@@ -74,8 +74,6 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(body),
       }),
-    historical: () => request<{ items: Record<string, unknown>[]; total: number }>('/api/v1/incidents/historical/episodes'),
-    predictive: () => request<{ items: Record<string, unknown>[]; total: number }>('/api/v1/incidents/predictive/risks'),
     osint: () => request<{ items: Record<string, unknown>[]; total: number }>('/api/v1/incidents/osint/feed'),
     assessImpact: (body: import('./types').DisruptionImpactRequest) =>
       request<import('./types').DisruptionImpactResponse>('/api/v1/incidents/impact-assessment', {
@@ -144,13 +142,6 @@ export const api = {
       );
     }
   },
-  simulation: {
-    chat: (body: { message: string; crisis_id?: string; agency?: string; parameters?: Record<string, any> }) =>
-      request<{ reply: string; thought_signature?: string; confidence_score?: number; degraded?: boolean; consensus_passed?: boolean }>('/api/simulation/chat', {
-        method: 'POST',
-        body: JSON.stringify(body)
-      })
-  },
   corridor: {
     context: (corridorId: string = 'sumatra_belawan_medan') =>
       request<import('./types').CorridorContext>(`/api/v1/corridor/context?corridor_id=${corridorId}`),
@@ -174,6 +165,8 @@ export const api = {
       dest_id?: string;
       origin_coords?: [number, number];
       dest_coords?: [number, number];
+      origin_name?: string;
+      dest_name?: string;
       fleet_size?: number;
       hazard_zones?: Array<Record<string, unknown>>;
     }) =>

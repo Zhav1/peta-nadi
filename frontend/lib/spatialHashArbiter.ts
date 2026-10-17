@@ -12,8 +12,11 @@ export const MIN_LIFETIME_MS = 2500;
 export const COOLDOWN_MS = 1200;
 
 export const PRIORITY_SELECTED_ROUTE = 100;
+export const PRIORITY_IMPACTED_FLEET = 90;
 export const PRIORITY_STRATEGIC_HUB = 80;
 export const PRIORITY_REGENCY_NODE = 60;
+export const PRIORITY_AIRCRAFT_CALLSIGN = 55;
+export const PRIORITY_MAJOR_VESSEL = 50;
 export const PRIORITY_FLEET_CALLSIGN = 40;
 export const PRIORITY_VILLAGE_DESA = 20;
 
@@ -29,6 +32,11 @@ export interface DeclutterItem {
   category?: DeclutterCategory;
   text?: string;
   coords?: [number, number]; // [lon, lat]
+}
+
+export interface ArbitrateOptions {
+  cellSizePx?: number;
+  maxFleetQuota?: number;
 }
 
 interface HysteresisRecord {
@@ -51,7 +59,7 @@ export class SpatialHashArbiter {
   private history: Map<string, HysteresisRecord> = new Map();
   private maxFleetQuota: number;
 
-  constructor(maxFleetQuota: number = 24) {
+  constructor(maxFleetQuota: number = 28) {
     this.maxFleetQuota = maxFleetQuota;
   }
 
@@ -67,9 +75,15 @@ export class SpatialHashArbiter {
    * Arbitrate a set of candidate screen-space items.
    * Returns a set of winning item IDs that are permitted to render without visual overlap.
    */
-  public arbitrate(candidates: DeclutterItem[], currentTime: number = performance.now()): Set<string> {
+  public arbitrate(
+    candidates: DeclutterItem[],
+    currentTime: number = performance.now(),
+    options?: ArbitrateOptions
+  ): Set<string> {
     this.occupiedCells.clear();
     const winningIds = new Set<string>();
+    const cellSize = options?.cellSizePx ?? CELL_SIZE_PX;
+    const fleetQuota = options?.maxFleetQuota ?? this.maxFleetQuota;
 
     // 1. Calculate effective priority with temporal hysteresis boost/cooldown
     const scoredCandidates = candidates.map((item) => {
@@ -105,17 +119,17 @@ export class SpatialHashArbiter {
 
     // 3. Grid collision resolution
     for (const { item } of scoredCandidates) {
-      if (item.category === 'fleet' && fleetCallsignsRendered >= this.maxFleetQuota) {
+      if (item.category === 'fleet' && fleetCallsignsRendered >= fleetQuota) {
         continue;
       }
 
       const w = item.width || 80;
       const h = item.height || 24;
 
-      const minCx = Math.floor((item.screenX - w / 2) / CELL_SIZE_PX);
-      const maxCx = Math.floor((item.screenX + w / 2) / CELL_SIZE_PX);
-      const minCy = Math.floor((item.screenY - h / 2) / CELL_SIZE_PX);
-      const maxCy = Math.floor((item.screenY + h / 2) / CELL_SIZE_PX);
+      const minCx = Math.floor((item.screenX - w / 2) / cellSize);
+      const maxCx = Math.floor((item.screenX + w / 2) / cellSize);
+      const minCy = Math.floor((item.screenY - h / 2) / cellSize);
+      const maxCy = Math.floor((item.screenY + h / 2) / cellSize);
 
       let hasCollision = false;
       const targetKeys: number[] = [];
@@ -187,6 +201,19 @@ export function arbitrateVisibleLabels(
 }
 
 /**
+ * Macro-zoom arbitration helper for island-wide overview (zoom < 7.5).
+ * Uses a wider 56px cell spacing and a 22-item quota so ~15-25 high-priority
+ * non-overlapping strategic callsigns remain crisply legible across Sumatra.
+ */
+export function arbitrateMacroZoomLabels(
+  items: DeclutterItem[],
+  arbiter: SpatialHashArbiter = defaultSpatialHashArbiter,
+  timestamp?: number
+): Set<string> {
+  return arbiter.arbitrate(items, timestamp, { cellSizePx: 56, maxFleetQuota: 22 });
+}
+
+/**
  * Generates Mapbox GL expression for zoom-based Level of Detail (LOD).
  */
 export function getMapboxZoomLODExpression(layerType: 'fleet-icon' | 'hub-node' | 'regency-node'): any {
@@ -196,10 +223,11 @@ export function getMapboxZoomLODExpression(layerType: 'fleet-icon' | 'hub-node' 
         'interpolate',
         ['linear'],
         ['zoom'],
-        4.0, 0.35,
-        7.5, 0.50,
-        10.0, 0.85,
-        14.0, 1.05,
+        4.0, 0.48,
+        6.0, 0.68,
+        7.5, 0.75,
+        10.0, 0.90,
+        14.0, 1.15,
       ];
     case 'hub-node':
       return [

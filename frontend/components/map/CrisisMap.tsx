@@ -70,13 +70,11 @@ export interface CrisisMapProps {
   spatialWeatherPolygons?: GeoJSON.FeatureCollection | null;
   routingInfo?: { solver: string; compute_time_ms: number | null; savings_pct: number | null } | null;
   isLeftSidebarCollapsed?: boolean;
-  activeTimeFilter?: 'past' | 'present' | 'future' | 'predict';
-  historicalEpisodes?: Record<string, unknown>[];
-  predictiveRisks?: Record<string, unknown>[];
   fleetModalityFilter?: 'all' | 'truck' | 'maritime' | 'air';
   simSpeed?: number;
   isRightSidebarOpen?: boolean;
   mapLegendSlot?: React.ReactNode;
+  corridorVisibility?: { land: boolean; sea: boolean; air: boolean };
 }
 
 const INITIAL_CENTER: [number, number] = [100.5, 0.5];
@@ -134,13 +132,11 @@ export default function CrisisMap({
   spatialWeatherPolygons,
   routingInfo,
   isLeftSidebarCollapsed = false,
-  activeTimeFilter = 'present',
-  historicalEpisodes = [],
-  predictiveRisks = [],
   fleetModalityFilter = 'all',
   simSpeed = 1,
   isRightSidebarOpen = false,
   mapLegendSlot,
+  corridorVisibility = { land: true, sea: true, air: true },
 }: CrisisMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   void isLeftSidebarCollapsed;
@@ -399,56 +395,6 @@ export default function CrisisMap({
             '#f97316'
           ],
           'line-width': 2.5,
-        },
-      });
-
-      // 1b. Historical Episodes Layer (PAST Mode)
-      map.addSource('historical-episodes-source', {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] },
-      });
-      map.addLayer({
-        id: 'historical-episodes-fill',
-        type: 'fill',
-        source: 'historical-episodes-source',
-        paint: {
-          'fill-color': 'rgba(168, 85, 247, 0.25)',
-          'fill-opacity': 0.75,
-        },
-      });
-      map.addLayer({
-        id: 'historical-episodes-outline',
-        type: 'line',
-        source: 'historical-episodes-source',
-        paint: {
-          'line-color': '#a855f7',
-          'line-width': 2.0,
-          'line-dasharray': [4, 2],
-        },
-      });
-
-      // 1c. Predictive Risks Layer (FUTURE Mode with opacity proportional to risk score)
-      map.addSource('predictive-risks-source', {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] },
-      });
-      map.addLayer({
-        id: 'predictive-risks-fill',
-        type: 'fill',
-        source: 'predictive-risks-source',
-        paint: {
-          'fill-color': 'rgba(234, 179, 8, 0.30)',
-          'fill-opacity': 0.80,
-        },
-      });
-      map.addLayer({
-        id: 'predictive-risks-outline',
-        type: 'line',
-        source: 'predictive-risks-source',
-        paint: {
-          'line-color': '#eab308',
-          'line-width': 2.0,
-          'line-dasharray': [2, 2],
         },
       });
 
@@ -784,38 +730,6 @@ export default function CrisisMap({
         if (mapRef.current) mapRef.current.getCanvas().style.cursor = '';
       });
 
-      // 6. Time Horizon Badges Native WebGL Layer
-      map.addSource('time-horizon-badges-source', {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] },
-      });
-      map.addLayer({
-        id: 'time-horizon-badges-layer',
-        type: 'symbol',
-        source: 'time-horizon-badges-source',
-        layout: {
-          'text-field': ['get', 'label'],
-          'text-font': ['DIN Pro Bold', 'Arial Unicode MS Bold'],
-          'text-size': 11,
-          'text-allow-overlap': true,
-        },
-        paint: {
-          'text-color': ['get', 'textColor'],
-          'text-halo-color': '#0c1017',
-          'text-halo-width': 2.0,
-        },
-      });
-      map.on('click', 'time-horizon-badges-layer', (e) => {
-        const incidentId = e.features?.[0]?.properties?.incidentId;
-        if (incidentId && onCrisisClickRef.current) onCrisisClickRef.current(incidentId);
-      });
-      map.on('mouseenter', 'time-horizon-badges-layer', () => {
-        if (mapRef.current) mapRef.current.getCanvas().style.cursor = 'pointer';
-      });
-      map.on('mouseleave', 'time-horizon-badges-layer', () => {
-        if (mapRef.current) mapRef.current.getCanvas().style.cursor = '';
-      });
-
       // Map click handler for point targeting
       map.on('click', (e) => {
         if (isClickTargetingRef.current && onMapPointTargetedRef.current) {
@@ -997,16 +911,54 @@ export default function CrisisMap({
       }
     }
 
-    // 2. Update Active Route Paths
+    // 2. Update Active Route Paths (Per-Leg Multi-Color Corridors)
     const routesSource = map.getSource('route-paths-source') as mapboxgl.GeoJSONSource;
     if (routesSource) {
       const targetIdx = activeRouteIdx ?? 0;
-      routesSource.setData({
-        type: 'FeatureCollection',
-        features: activeRoutes.map((r, idx) => {
+      const isCorridorVisible = (r: RouteRecommendation) => {
+        if (r.viable === false) return false;
+        const type = r.corridor_type;
+        if (!type) return true;
+        if (type === 'land_primary' || type === 'land_detour') return corridorVisibility?.land ?? true;
+        if (type === 'sea_intermodal') return corridorVisibility?.sea ?? true;
+        if (type === 'air_intermodal') return corridorVisibility?.air ?? true;
+        if (type === 'hold_staging') return corridorVisibility?.land ?? true;
+        return true;
+      };
+
+      const visibleRoutes = activeRoutes.filter(isCorridorVisible);
+      const routeFeatures: GeoJSON.Feature<GeoJSON.LineString>[] = [];
+
+      visibleRoutes.forEach((r, idx) => {
+        const isRouteActive = idx === targetIdx;
+        if (r.legs && r.legs.length > 0 && r.legs.some((l) => l.coordinates && l.coordinates.length >= 2)) {
+          // Emit one feature per leg with exact leg color and coordinates
+          r.legs.forEach((leg, lIdx) => {
+            const legCoords = leg.coordinates || [];
+            if (legCoords.length >= 2) {
+              const finalCoords = legCoords.length > 5 ? legCoords : densifyPath(legCoords, 15);
+              routeFeatures.push({
+                type: 'Feature',
+                geometry: {
+                  type: 'LineString',
+                  coordinates: finalCoords,
+                },
+                properties: {
+                  routeIndex: idx,
+                  legIndex: lIdx,
+                  isActive: isRouteActive,
+                  description: `${r.description} (${leg.title})`,
+                  color: leg.color || (leg.mode === 'maritime' ? '#3B82F6' : leg.mode === 'air' ? '#00F0FF' : '#10B981'),
+                  legMode: leg.mode,
+                  isLeg: true,
+                },
+              });
+            }
+          });
+        } else if (r.waypoints && r.waypoints.length >= 2) {
           const rawWaypoints: LonLat[] = r.waypoints.map((wp) => [wp.lon, wp.lat]);
           const finalCoordinates = rawWaypoints.length > 5 ? rawWaypoints : densifyPath(rawWaypoints, 25);
-          return {
+          routeFeatures.push({
             type: 'Feature',
             geometry: {
               type: 'LineString',
@@ -1014,12 +966,18 @@ export default function CrisisMap({
             },
             properties: {
               routeIndex: idx,
-              isActive: idx === targetIdx,
+              isActive: isRouteActive,
               description: r.description,
-              color: r.color || (idx === targetIdx ? '#00f0ff' : idx === 1 ? '#3b82f6' : '#8b5cf6'),
+              color: r.color || (isRouteActive ? '#10B981' : idx === 1 ? '#34D399' : '#3B82F6'),
+              isLeg: false,
             },
-          };
-        }),
+          });
+        }
+      });
+
+      routesSource.setData({
+        type: 'FeatureCollection',
+        features: routeFeatures,
       });
     }
 
@@ -1064,46 +1022,6 @@ export default function CrisisMap({
       });
     }
 
-    // 3b. Update Historical Episodes (PAST Mode)
-    const historicalSource = map.getSource('historical-episodes-source') as mapboxgl.GeoJSONSource;
-    if (historicalSource) {
-      if (activeTimeFilter === 'past' && historicalEpisodes.length > 0) {
-        const histFeatures: GeoJSON.Feature[] = [];
-        historicalEpisodes.forEach((ep) => {
-          const geom = ep.geojson_geometry as unknown as GeoJSON.FeatureCollection | GeoJSON.Feature;
-          if (!geom) return;
-          if (geom.type === 'FeatureCollection' && Array.isArray(geom.features)) {
-            histFeatures.push(...geom.features);
-          } else if (geom.type === 'Feature') {
-            histFeatures.push(geom);
-          }
-        });
-        historicalSource.setData({ type: 'FeatureCollection', features: histFeatures });
-      } else {
-        historicalSource.setData({ type: 'FeatureCollection', features: [] });
-      }
-    }
-
-    // 3c. Update Predictive Risks (FUTURE Mode)
-    const predictiveSource = map.getSource('predictive-risks-source') as mapboxgl.GeoJSONSource;
-    if (predictiveSource) {
-      if (activeTimeFilter === 'future' && predictiveRisks.length > 0) {
-        const predFeatures: GeoJSON.Feature[] = [];
-        predictiveRisks.forEach((pr) => {
-          const geom = pr.geojson_geometry as unknown as GeoJSON.FeatureCollection | GeoJSON.Feature;
-          if (!geom) return;
-          if (geom.type === 'FeatureCollection' && Array.isArray(geom.features)) {
-            predFeatures.push(...geom.features);
-          } else if (geom.type === 'Feature') {
-            predFeatures.push(geom);
-          }
-        });
-        predictiveSource.setData({ type: 'FeatureCollection', features: predFeatures });
-      } else {
-        predictiveSource.setData({ type: 'FeatureCollection', features: [] });
-      }
-    }
-
     // 4. Update Simulated Shockwave Pulse
     const shockwaveSource = map.getSource('simulated-shockwave-source') as mapboxgl.GeoJSONSource;
     if (shockwaveSource) {
@@ -1124,41 +1042,164 @@ export default function CrisisMap({
       }
     }
 
-    // 5. Update Native WebGL Hub Nodes (Ports, Airports, Distribution Hubs)
+    // 5. Update Native WebGL Hub Nodes & Active Infrastructure Waypoints (Purged Static Hub Clutter)
     const hubSource = map.getSource('hub-nodes-source') as mapboxgl.GeoJSONSource;
     if (hubSource) {
-      const nodesToRender = hubNodesList || Object.values(HUB_NODES);
-      const isSelecting = demoStage === 0 && (!selectedOriginNode || !selectedDestNode);
-      const hubFeatures: GeoJSON.Feature<GeoJSON.Point>[] = nodesToRender.map((node) => {
-        const isOrigin = node.id === selectedOriginNode;
-        const isDest = node.id === selectedDestNode;
-        const rawName = node.name.split('(')[0].trim();
-        const shortCityName = rawName
-          .replace(/^(Hub Utama Pergudangan|Hub Logistik|Interchange Tol|Interchange|Pelabuhan|Bandara Internasional|Bandara|Kota)\s+/i, '')
-          .trim();
+      const hubFeatures: GeoJSON.Feature<GeoJSON.Point>[] = [];
+      const registeredIds = new Set<string>();
 
-        let labelName = shortCityName;
-        if (isOrigin) {
-          labelName = `${shortCityName} (ASAL)`;
-        } else if (isDest) {
-          labelName = `${shortCityName} (TUJUAN)`;
-        } else if (isSelecting) {
-          labelName = !selectedOriginNode ? `${shortCityName} (KLIK ASAL)` : `${shortCityName} (KLIK TUJUAN)`;
+      // 1. Resolve & render Origin endpoint
+      if (selectedOriginNode) {
+        registeredIds.add(selectedOriginNode);
+        let originCoords: LonLat | null = null;
+        let originName = selectedOriginNode;
+        if (HUB_NODES[selectedOriginNode]) {
+          originCoords = HUB_NODES[selectedOriginNode].coords;
+          originName = HUB_NODES[selectedOriginNode].name;
+        } else {
+          const match = PAN_SUMATRA_GAZETTEER.find(
+            (g) =>
+              g.name.toLowerCase() === selectedOriginNode.toLowerCase() ||
+              `node-${g.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}` === selectedOriginNode.toLowerCase() ||
+              `regency-${g.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}` === selectedOriginNode.toLowerCase()
+          );
+          if (match) {
+            originCoords = [match.lon, match.lat];
+            originName = match.display_name || match.name;
+          }
         }
+        if (originCoords) {
+          const shortName = originName
+            .split('(')[0]
+            .replace(/^(Hub Utama Pergudangan|Hub Logistik|Interchange Tol|Interchange|Pelabuhan|Bandara Internasional|Bandara|Kota)\s+/i, '')
+            .trim();
+          hubFeatures.push({
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: originCoords },
+            properties: {
+              id: selectedOriginNode,
+              name: originName,
+              shortName: `${shortName} (ASAL)`,
+              type: 'hub',
+              isKeyNode: true,
+              isSelectablePrompt: false,
+              isTransferHub: false,
+            },
+          });
+        }
+      }
 
-        return {
-          type: 'Feature',
-          geometry: { type: 'Point', coordinates: node.coords },
-          properties: {
-            id: node.id,
-            name: node.name,
-            shortName: labelName,
-            type: node.type,
-            isKeyNode: isOrigin || isDest,
-            isSelectablePrompt: isSelecting && !isOrigin && !isDest,
-          },
-        };
+      // 2. Resolve & render Destination endpoint
+      if (selectedDestNode) {
+        registeredIds.add(selectedDestNode);
+        let destCoords: LonLat | null = null;
+        let destName = selectedDestNode;
+        if (HUB_NODES[selectedDestNode]) {
+          destCoords = HUB_NODES[selectedDestNode].coords;
+          destName = HUB_NODES[selectedDestNode].name;
+        } else {
+          const match = PAN_SUMATRA_GAZETTEER.find(
+            (g) =>
+              g.name.toLowerCase() === selectedDestNode.toLowerCase() ||
+              `node-${g.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}` === selectedDestNode.toLowerCase() ||
+              `regency-${g.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}` === selectedDestNode.toLowerCase()
+          );
+          if (match) {
+            destCoords = [match.lon, match.lat];
+            destName = match.display_name || match.name;
+          }
+        }
+        if (destCoords) {
+          const shortName = destName
+            .split('(')[0]
+            .replace(/^(Hub Utama Pergudangan|Hub Logistik|Interchange Tol|Interchange|Pelabuhan|Bandara Internasional|Bandara|Kota)\s+/i, '')
+            .trim();
+          hubFeatures.push({
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: destCoords },
+            properties: {
+              id: selectedDestNode,
+              name: destName,
+              shortName: `${shortName} (TUJUAN)`,
+              type: 'hub',
+              isKeyNode: true,
+              isSelectablePrompt: false,
+              isTransferHub: false,
+            },
+          });
+        }
+      }
+
+      // 3. Render contextual Infrastructure Transfer Hubs from visible active route legs
+      const isCorridorVisible = (r: RouteRecommendation) => {
+        if (r.viable === false) return false;
+        const type = r.corridor_type;
+        if (!type) return true;
+        if (type === 'land_primary' || type === 'land_detour') return corridorVisibility?.land ?? true;
+        if (type === 'sea_intermodal') return corridorVisibility?.sea ?? true;
+        if (type === 'air_intermodal') return corridorVisibility?.air ?? true;
+        if (type === 'hold_staging') return corridorVisibility?.land ?? true;
+        return true;
+      };
+
+      const visibleRoutes = activeRoutes.filter(isCorridorVisible);
+      visibleRoutes.forEach((r) => {
+        if (r.legs) {
+          r.legs.forEach((leg) => {
+            if (leg.transfer_hub && !registeredIds.has(leg.transfer_hub.id)) {
+              registeredIds.add(leg.transfer_hub.id);
+              const hub = leg.transfer_hub;
+              const badgeLabel =
+                hub.type === 'seaport'
+                  ? `⚓ ${hub.name.split('(')[0].trim()}`
+                  : hub.type === 'airport'
+                  ? `✈️ ${hub.name.split('(')[0].trim()}`
+                  : `🛡️ ${hub.name.split('(')[0].trim()}`;
+
+              hubFeatures.push({
+                type: 'Feature',
+                geometry: { type: 'Point', coordinates: hub.coords },
+                properties: {
+                  id: hub.id,
+                  name: hub.name,
+                  shortName: badgeLabel,
+                  type: hub.type === 'seaport' ? 'port' : hub.type === 'airport' ? 'airport' : 'hub',
+                  isKeyNode: true,
+                  isSelectablePrompt: false,
+                  isTransferHub: true,
+                },
+              });
+            }
+          });
+        }
       });
+
+      // 4. During initial interactive selection (demoStage === 0 and missing endpoints), render selectable prompts
+      if (demoStage === 0 && (!selectedOriginNode || !selectedDestNode)) {
+        const selectableNodes = hubNodesList || Object.values(HUB_NODES);
+        selectableNodes.forEach((node) => {
+          if (!registeredIds.has(node.id)) {
+            const rawName = node.name.split('(')[0].trim();
+            const shortCityName = rawName
+              .replace(/^(Hub Utama Pergudangan|Hub Logistik|Interchange Tol|Interchange|Pelabuhan|Bandara Internasional|Bandara|Kota)\s+/i, '')
+              .trim();
+            hubFeatures.push({
+              type: 'Feature',
+              geometry: { type: 'Point', coordinates: node.coords },
+              properties: {
+                id: node.id,
+                name: node.name,
+                shortName: !selectedOriginNode ? `${shortCityName} (KLIK ASAL)` : `${shortCityName} (KLIK TUJUAN)`,
+                type: node.type,
+                isKeyNode: false,
+                isSelectablePrompt: true,
+                isTransferHub: false,
+              },
+            });
+          }
+        });
+      }
+
       hubSource.setData({ type: 'FeatureCollection', features: hubFeatures });
     }
 
@@ -1187,48 +1228,6 @@ export default function CrisisMap({
         });
       }
       etaSource.setData({ type: 'FeatureCollection', features: etaFeatures });
-    }
-
-    // 7. Update Native WebGL Time Horizon Badges (Historical & Predictive)
-    const thSource = map.getSource('time-horizon-badges-source') as mapboxgl.GeoJSONSource;
-    if (thSource) {
-      const thFeatures: GeoJSON.Feature<GeoJSON.Point>[] = [];
-      if (activeTimeFilter === 'past' && historicalEpisodes && historicalEpisodes.length > 0) {
-        historicalEpisodes.forEach((epItem) => {
-          const ep = epItem as Record<string, unknown>;
-          const lon = typeof ep.lon === 'number' ? ep.lon : null;
-          const lat = typeof ep.lat === 'number' ? ep.lat : null;
-          if (lon != null && lat != null) {
-            thFeatures.push({
-              type: 'Feature',
-              geometry: { type: 'Point', coordinates: [lon, lat] },
-              properties: {
-                incidentId: (ep.incident_id || ep.id) as string,
-                label: String(ep.type || 'LTM').toUpperCase(),
-                textColor: '#c084fc',
-              },
-            });
-          }
-        });
-      } else if (activeTimeFilter === 'future' && predictiveRisks && predictiveRisks.length > 0) {
-        predictiveRisks.forEach((prItem) => {
-          const pr = prItem as Record<string, unknown>;
-          const lon = typeof pr.lon === 'number' ? pr.lon : null;
-          const lat = typeof pr.lat === 'number' ? pr.lat : null;
-          if (lon != null && lat != null) {
-            thFeatures.push({
-              type: 'Feature',
-              geometry: { type: 'Point', coordinates: [lon, lat] },
-              properties: {
-                incidentId: (pr.risk_id || pr.id) as string,
-                label: `${String(pr.risk_score || 85)}% RISIKO`,
-                textColor: '#fcd34d',
-              },
-            });
-          }
-        });
-      }
-      thSource.setData({ type: 'FeatureCollection', features: thFeatures });
     }
 
     // 8. Update Tier 2 Pan-Sumatra Regency & Gazetteer Nodes Source
@@ -1297,9 +1296,6 @@ export default function CrisisMap({
     selectedOriginNode,
     selectedDestNode,
     hubNodesList,
-    activeTimeFilter,
-    historicalEpisodes,
-    predictiveRisks,
     gazetteerNodes,
     customPinnedPoints,
   ]);

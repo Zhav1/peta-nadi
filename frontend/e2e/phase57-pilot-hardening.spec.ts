@@ -158,15 +158,6 @@ test('guest banner dismiss hides it this session and it returns next session', a
 });
 
 // ---------------------------------------------------------------------------
-// WP-A1 (D7): simulation tab explains macro-vs-tactical scope
-// ---------------------------------------------------------------------------
-
-test('simulation tab shows the macro-vs-tactical explainer card', async ({ page }) => {
-  await page.goto('/dashboard?section=simulation');
-  await expect(page.getByText('Simulator Makro (B2G)')).toBeVisible({ timeout: 30000 });
-});
-
-// ---------------------------------------------------------------------------
 // WP-A2 (D7): Stage-0 cold click starts the demo instead of silently stalling
 // ---------------------------------------------------------------------------
 
@@ -200,34 +191,4 @@ test('Stage-0 cold click fires onStart (second demo/start) rather than stalling'
   await stageZero.click();
   await expect.poll(() => startCount, { timeout: 15000 }).toBe(2);
   expect(advanceCount).toBe(0);
-});
-
-// ---------------------------------------------------------------------------
-// WP-A3 (D1): guest deploy keeps 403 and lands in local sandbox with a toast
-// ---------------------------------------------------------------------------
-
-test('guest deploy on 403 shows the sandbox toast and saves locally', async ({ page }) => {
-  await page.route('**/api/v1/approvals', async (route) =>
-    route.fulfill({
-      status: 403,
-      contentType: 'application/json',
-      body: JSON.stringify({ detail: { error: 'FORBIDDEN' } }),
-    })
-  );
-
-  await page.goto('/dashboard?section=simulation');
-  const deploy = page.getByRole('button', { name: 'Terapkan Skenario Terpadu' });
-  await expect(deploy).toBeVisible({ timeout: 30000 });
-  await deploy.click();
-
-  await expect(page.getByText('Mode Sandbox: tersimpan lokal')).toBeVisible({ timeout: 30000 });
-
-  const sandbox = await page.evaluate(() => {
-    try {
-      return JSON.parse(localStorage.getItem('prehub_sandbox_approvals') ?? '[]') as unknown[];
-    } catch {
-      return [];
-    }
-  });
-  expect(sandbox).toHaveLength(1);
 });

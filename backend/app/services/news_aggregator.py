@@ -121,8 +121,8 @@ DEMO_STANDARDIZED_SCENARIOS = [
     {
         "id": "NEWS-DEMO-01",
         "title": "Banjir Luapan Sungai Padang Rendam Jalur Logistik Tebing Tinggi KM 78",
-        "link": "https://sumut.antaranews.com/berita/571234/banjir-luapan-sungai-padang-rendam-jalinsum-tebing-tinggi",
-        "url": "https://sumut.antaranews.com/berita/571234/banjir-luapan-sungai-padang-rendam-jalinsum-tebing-tinggi",
+        "link": "https://news.google.com/search?q=Banjir%20Luapan%20Sungai%20Padang%20Tebing%20Tinggi%20KM%2078%20Jalinsum&hl=id-ID&gl=ID&ceid=ID:id",
+        "url": "https://news.google.com/search?q=Banjir%20Luapan%20Sungai%20Padang%20Tebing%20Tinggi%20KM%2078%20Jalinsum&hl=id-ID&gl=ID&ceid=ID:id",
         "source": "LKBN ANTARA Sumut",
         "source_tier": "TIER_1_OFFICIAL",
         "pubDate": "15m lalu",
@@ -145,8 +145,8 @@ DEMO_STANDARDIZED_SCENARIOS = [
     {
         "id": "NEWS-DEMO-02",
         "title": "Tebing Sitinjau Lauik Longsor, Jalur Distribusi Padang-Solok Terputus",
-        "link": "https://sumbar.antaranews.com/berita/562341/longsor-sitinjau-lauik-akses-padang-solok-terputus-total",
-        "url": "https://sumbar.antaranews.com/berita/562341/longsor-sitinjau-lauik-akses-padang-solok-terputus-total",
+        "link": "https://news.google.com/search?q=Sitinjau%20Lauik%20Longsor%20Jalur%20Padang%20Solok%20BPBD&hl=id-ID&gl=ID&ceid=ID:id",
+        "url": "https://news.google.com/search?q=Sitinjau%20Lauik%20Longsor%20Jalur%20Padang%20Solok%20BPBD&hl=id-ID&gl=ID&ceid=ID:id",
         "source": "LKBN ANTARA Sumbar",
         "source_tier": "TIER_1_OFFICIAL",
         "pubDate": "1j lalu",
@@ -198,6 +198,12 @@ def resolve_canonical_article_url(raw_url: str, title: str = "", source: str = "
                 return clean_url
     except Exception:
         pass
+
+    # Rewrite synthetic or dummy Antara IDs (e.g. 543210, 532190, 571234, 562341) to targeted Google News queries
+    if re.search(r'(?:berita|news)/(?:543210|532190|571234|562341|\d{6})(?:/|$)', clean_url) or any(tok in clean_url for tok in ("543210", "532190", "571234", "562341")):
+        if title:
+            q = f"{title} {source}".strip()
+            return f"https://news.google.com/search?q={quote_plus(q)}&hl=id-ID&gl=ID&ceid=ID:id"
 
     # Handle Google News opaque wrappers
     if "news.google.com" in clean_url and ("/articles/" in clean_url or "/rss/articles/" in clean_url):

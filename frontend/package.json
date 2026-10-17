@@ -10,9 +10,9 @@
   },
   "dependencies": {
     "@deck.gl/aggregation-layers": "^9.3.6",
-    "@deck.gl/core": "^9.3.6",
-    "@deck.gl/layers": "^9.3.6",
-    "@deck.gl/mapbox": "^9.3.6",
+    "@deck.gl/core": "^9.4.0",
+    "@deck.gl/layers": "^9.4.0",
+    "@deck.gl/mapbox": "^9.4.0",
     "@mapbox/mapbox-gl-draw": "^1.5.1",
     "@supabase/supabase-js": "^2.117.2",
     "@turf/along": "^7.3.5",

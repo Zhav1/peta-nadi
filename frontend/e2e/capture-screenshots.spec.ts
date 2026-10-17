@@ -43,13 +43,6 @@ test('03 - Spatial Economic Analytics', async ({ page }) => {
   await page.screenshot({ path: path.join(screenshotDir, '05_spatial_economic_analytics.png') });
 });
 
-test('04 - Multi-Agency Simulation Sandbox', async ({ page }) => {
-  await page.setViewportSize({ width: 1920, height: 1080 });
-  await page.goto('http://localhost:3000/dashboard?section=simulation', { waitUntil: 'domcontentloaded' });
-  await page.waitForTimeout(3500);
-  await page.screenshot({ path: path.join(screenshotDir, '06_simulation_agency_sandbox.png') });
-});
-
 test('05 - B2G Executive Cabinet Briefing Center', async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto('http://localhost:3000/dashboard?section=reports', { waitUntil: 'domcontentloaded' });

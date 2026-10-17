@@ -27,12 +27,14 @@ import {
   FileText,
   Scale,
   Shield,
-  MessageSquare
+  MessageSquare,
+  AlertCircle
 } from 'lucide-react';
 import { useAuth } from '@/lib/authContext';
 import { normalizeNewsPermalink } from '@/hooks/useNewsVerification';
 import { SpoilageHedgingCard } from './SpoilageHedgingCard';
 import { ComplianceInspectorCard } from './ComplianceInspectorCard';
+import { HoldVsRerouteCard } from './HoldVsRerouteCard';
 
 interface MitigationTabProps {
   crisis: CrisisState;
@@ -112,13 +114,35 @@ function RouteCard({
   const [validationError, setValidationError] = useState<string | null>(null);
 
   const isCompromised = route.is_compromised;
+  const isNonViable = route.viable === false;
+  const isHoldStaging = route.corridor_type === 'hold_staging';
+
   const cardBorderColor = isCompromised
     ? 'border-red-500/50 bg-red-950/20'
-    : isActive
-      ? 'border-cyan-400/80 bg-cyan-950/30 ring-2 ring-cyan-400/40'
-      : 'border-white/10 bg-slate-800/40 hover:border-white/20';
+    : isNonViable
+      ? 'border-white/5 bg-slate-900/40 opacity-75 hover:opacity-100'
+      : isActive
+        ? 'border-cyan-400/80 bg-cyan-950/30 ring-2 ring-cyan-400/40'
+        : 'border-white/10 bg-slate-800/40 hover:border-white/20';
 
-  const titleText = route.route_name || (idx === 0 ? 'Rute Rekomendasi Utama' : `Rute Alternatif ${idx + 1}`);
+  const titleText =
+    route.route_name ||
+    (() => {
+      switch (route.corridor_type) {
+        case 'land_primary':
+          return 'Koridor Darat Primer (Terdampak)';
+        case 'land_detour':
+          return 'Koridor Darat Pengalihan Bebas Hambatan';
+        case 'sea_intermodal':
+          return 'Koridor Intermoda Laut + Darat (Ro-Ro / Feeder)';
+        case 'air_intermodal':
+          return 'Koridor Intermoda Udara + Darat (Cargo Air)';
+        case 'hold_staging':
+          return 'Opsi Tahan di Depo Penyangga (Hold & Buffer)';
+        default:
+          return idx === 0 ? 'Rute Rekomendasi Utama' : `Rute Alternatif ${idx + 1}`;
+      }
+    })();
 
   const handleExecuteOverride = async () => {
     if (!overrideNotes.trim()) {
@@ -138,16 +162,31 @@ function RouteCard({
     >
       <div className="flex justify-between items-start mb-1.5 gap-2">
         <span className="text-xs font-bold text-slate-100 flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ backgroundColor: route.color || (idx === 0 ? '#00f0ff' : '#3b82f6') }} />
+          <span
+            className="w-2.5 h-2.5 rounded-full inline-block shrink-0"
+            style={{
+              backgroundColor:
+                route.color ||
+                (isHoldStaging ? '#F59E0B' : idx === 0 ? '#00f0ff' : '#3b82f6'),
+            }}
+          />
           <span>{titleText}</span>
         </span>
 
         {isCompromised ? (
-          <span className="inline-flex items-center gap-1 text-xs font-semibold font-mono px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20">
+          <span className="inline-flex items-center gap-1 text-[11px] font-semibold font-mono px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20">
             <AlertTriangle className="w-3.5 h-3.5 text-rose-400" /> TERDAMPAK
           </span>
+        ) : isNonViable ? (
+          <span className="inline-flex items-center gap-1 text-[11px] font-semibold font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-white/10">
+            <AlertTriangle className="w-3 h-3 text-amber-400" /> NON-VIABEL
+          </span>
+        ) : isHoldStaging ? (
+          <span className="inline-flex items-center gap-1 text-[11px] font-semibold font-mono px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">
+            <PauseCircle className="w-3.5 h-3.5 text-amber-400" /> TAHAN DI DEPO
+          </span>
         ) : (
-          <span className="inline-flex items-center gap-1 text-xs font-semibold font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+          <span className="inline-flex items-center gap-1 text-[11px] font-semibold font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> JALUR AMAN
           </span>
         )}
@@ -156,6 +195,17 @@ function RouteCard({
       <p className="text-xs text-slate-300 leading-relaxed mb-2 font-mono">
         {route.description}
       </p>
+
+      {/* Non-Viable Callout Warning */}
+      {isNonViable && route.non_viable_reason && (
+        <div className="mb-2 p-2.5 rounded-lg bg-amber-950/20 border border-amber-500/30 text-xs text-amber-200/90 font-mono flex items-start gap-2">
+          <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+          <div>
+            <span className="font-bold text-amber-300 block mb-0.5">Alasan Koridor Tidak Direkomendasikan:</span>
+            <span>{route.non_viable_reason}</span>
+          </div>
+        </div>
+      )}
 
       {typeof route.explainer === 'string' && route.explainer.length > 0 && (
         <p className="text-xs text-cyan-300/90 leading-relaxed mb-2 font-sans italic">
@@ -169,26 +219,77 @@ function RouteCard({
         </div>
       )}
 
-      {/* Multi-modal Leg Breakdown if available */}
+      {/* Multi-modal Leg Breakdown with Custom Palette */}
       {route.legs && route.legs.length > 0 && (
-        <div className="mb-2 p-2.5 rounded-md bg-[#121822] border border-[#1c2432] flex flex-col gap-1 text-xs font-mono">
-          <span className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Rincian Leg Logistik Multi-Moda:</span>
-          {route.legs.map((leg, lIdx) => (
-            <div key={lIdx} className="flex justify-between items-center text-slate-300">
-              <span className="flex items-center gap-1.5">
-                {leg.mode === 'truck' ? <Truck className="w-3.5 h-3.5 text-slate-300" /> : leg.mode === 'maritime' ? <Anchor className="w-3.5 h-3.5 text-amber-400" /> : (leg.mode as string) === 'rail' ? <Train className="w-3.5 h-3.5 text-emerald-400" /> : <Plane className="w-3.5 h-3.5 text-sky-400" />}
-                <span>{leg.title}</span>
-              </span>
-              <span className="text-white font-semibold tabular-nums">{leg.eta_minutes} min ({leg.distance_km} km)</span>
-            </div>
-          ))}
+        <div className="mb-2 p-2.5 rounded-lg bg-[#0c1017] border border-white/10 flex flex-col gap-1.5 text-xs font-mono">
+          <div className="flex items-center justify-between text-[11px] uppercase tracking-wider text-slate-400 font-semibold border-b border-white/5 pb-1">
+            <span>Rincian Leg Logistik Multi-Moda</span>
+            <span className="text-slate-500 font-normal">{route.legs.length} Segmen</span>
+          </div>
+          {route.legs.map((leg, lIdx) => {
+            const legColor =
+              leg.color ||
+              (leg.mode === 'truck'
+                ? '#10B981'
+                : leg.mode === 'maritime'
+                ? '#3B82F6'
+                : (leg.mode as string) === 'air'
+                ? '#00F0FF'
+                : '#F59E0B');
+
+            return (
+              <div
+                key={lIdx}
+                className="flex flex-col gap-0.5 border-b border-white/5 pb-1.5 last:border-b-0 last:pb-0"
+              >
+                <div className="flex justify-between items-center text-slate-300">
+                  <span className="flex items-center gap-2">
+                    <span
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ backgroundColor: legColor }}
+                    />
+                    <span className="flex items-center gap-1.5">
+                      {leg.mode === 'truck' ? (
+                        <Truck className="w-3.5 h-3.5" style={{ color: legColor }} />
+                      ) : leg.mode === 'maritime' ? (
+                        <Anchor className="w-3.5 h-3.5" style={{ color: legColor }} />
+                      ) : (leg.mode as string) === 'air' ? (
+                        <Plane className="w-3.5 h-3.5" style={{ color: legColor }} />
+                      ) : (
+                        <Train className="w-3.5 h-3.5" style={{ color: legColor }} />
+                      )}
+                      <span className="font-medium text-slate-200">{leg.title}</span>
+                    </span>
+                  </span>
+                  <span className="text-white font-semibold tabular-nums text-[11px]">
+                    {leg.eta_minutes} min ({leg.distance_km} km)
+                  </span>
+                </div>
+                {leg.transfer_hub && (
+                  <div className="flex items-center gap-1.5 pl-6 text-[10px] text-cyan-300/80">
+                    <span className="w-1 h-1 rounded-full bg-cyan-400 shrink-0" />
+                    <span>
+                      Simpul Alih:{' '}
+                      <strong className="text-cyan-200">{leg.transfer_hub.name}</strong>
+                    </span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
       <div className="flex gap-3 text-xs text-slate-300 font-mono mb-1">
-        <span className="inline-flex items-center gap-1"><MapPin className="w-3 h-3 text-slate-400" /> {route.distance_km.toFixed(0)} km</span>
-        <span className="inline-flex items-center gap-1"><Clock className="w-3 h-3 text-amber-400" /> {route.eta_minutes} min</span>
-        <span className="inline-flex items-center gap-1"><Fuel className="w-3 h-3 text-emerald-400" /> +{route.fuel_increase_pct.toFixed(0)}%</span>
+        <span className="inline-flex items-center gap-1">
+          <MapPin className="w-3 h-3 text-slate-400" /> {route.distance_km.toFixed(0)} km
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <Clock className="w-3 h-3 text-amber-400" /> {route.eta_minutes} min
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <Fuel className="w-3 h-3 text-emerald-400" /> +{route.fuel_increase_pct.toFixed(0)}%
+        </span>
       </div>
 
       {isActive && (
@@ -280,19 +381,45 @@ function RouteCard({
                 <>
                   {/* Tactical Buttons Grid */}
                   <div className="grid grid-cols-2 gap-2">
-                    {/* 1. Primary: Approve Reroute */}
+                    {/* 1. Primary: Approve Reroute or Hold */}
                     <button
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onApprove('ACCEPT', 'REROUTE');
+                        if (isHoldStaging) {
+                          onApprove('ACCEPT', 'HOLD', 'Armada diinstruksikan menahan laju di depo penyangga aman.');
+                        } else {
+                          onApprove('ACCEPT', 'REROUTE');
+                        }
                       }}
-                      disabled={approving}
-                      className="py-2 px-2.5 rounded-md text-xs font-semibold uppercase tracking-wider bg-white hover:bg-slate-200 text-[#080d14] transition-colors shadow-sm flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                      title={role === 'GUEST' ? 'Simpan rencana rute dalam sandbox evaluasi tamu' : 'Setujui dan instruksikan armada rute alternatif'}
+                      disabled={approving || isNonViable}
+                      className={`py-2 px-2.5 rounded-md text-xs font-semibold uppercase tracking-wider transition-colors shadow-sm flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                        isHoldStaging
+                          ? 'bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold'
+                          : 'bg-white hover:bg-slate-200 text-[#080d14]'
+                      }`}
+                      title={
+                        isNonViable
+                          ? 'Koridor ini tidak viabel untuk eksekusi langsung'
+                          : role === 'GUEST'
+                          ? 'Simpan rencana rute dalam sandbox evaluasi tamu'
+                          : 'Setujui dan instruksikan armada'
+                      }
                     >
-                      <CheckCircle2 className="w-3.5 h-3.5 text-[#080d14] shrink-0" />
-                      <span>{role === 'GUEST' ? 'SIMPAN RENCANA' : 'REROUTE'}</span>
+                      {isHoldStaging ? (
+                        <PauseCircle className="w-3.5 h-3.5 text-slate-950 shrink-0" />
+                      ) : (
+                        <CheckCircle2 className="w-3.5 h-3.5 text-[#080d14] shrink-0" />
+                      )}
+                      <span>
+                        {role === 'GUEST'
+                          ? 'SIMPAN RENCANA'
+                          : isHoldStaging
+                          ? 'TAHAN DI DEPO'
+                          : isNonViable
+                          ? 'TIDAK VIABEL'
+                          : 'SETUJUI RUTE'}
+                      </span>
                     </button>
 
                     {/* 2. Secondary: Hold Fleet */}
@@ -697,7 +824,6 @@ export function MitigationTab({
           ((crisis as unknown as Record<string, unknown>).vehicle_id as string) ||
           'TRK-MEDAN-08';
         const resolvedOrigin = (() => {
-          if (selectedImpactedVehicle?.origin) return selectedImpactedVehicle.origin;
           if (activeRoute?.legs && activeRoute.legs.length > 0 && activeRoute.legs[0].from_name) {
             return activeRoute.legs[0].from_name;
           }
@@ -705,13 +831,13 @@ export function MitigationTab({
             const parts = activeRoute.route_name.split(/→|->|\bto\b/i);
             if (parts.length > 1 && parts[0].trim()) return parts[0].trim();
           }
+          if (selectedImpactedVehicle?.origin) return selectedImpactedVehicle.origin;
           if (crisis.region) {
             return crisis.region.includes('Sumut') || crisis.region.includes('Medan') ? 'Medan' : crisis.region;
           }
           return 'Medan';
         })();
         const resolvedDestination = (() => {
-          if (selectedImpactedVehicle?.destination) return selectedImpactedVehicle.destination;
           if (activeRoute?.legs && activeRoute.legs.length > 0 && activeRoute.legs[activeRoute.legs.length - 1].to_name) {
             return activeRoute.legs[activeRoute.legs.length - 1].to_name;
           }
@@ -719,6 +845,7 @@ export function MitigationTab({
             const parts = activeRoute.route_name.split(/→|->|\bto\b/i);
             if (parts.length > 1 && parts[1].trim()) return parts[1].trim();
           }
+          if (selectedImpactedVehicle?.destination) return selectedImpactedVehicle.destination;
           return 'Pekanbaru';
         })();
         const resolvedCargoTonnage = selectedImpactedVehicle?.cargo_tonnage ?? 10.0;
@@ -753,6 +880,38 @@ export function MitigationTab({
                 }
               }}
             />
+
+            {/* BLOCK C3: HOLD VS REROUTE ECONOMIC DECISION CARD */}
+            {(() => {
+              const holdVsRerouteEconomics =
+                activeRoute?.economic_comparison ||
+                crisis.route_recommendations?.find((r) => r.economic_comparison)?.economic_comparison;
+
+              if (!holdVsRerouteEconomics) return null;
+
+              return (
+                <HoldVsRerouteCard
+                  economics={holdVsRerouteEconomics}
+                  onApplyTactical={(action) => {
+                    if (action === 'HOLD') {
+                      const holdIdx = crisis.route_recommendations?.findIndex(
+                        (r) => r.corridor_type === 'hold_staging'
+                      );
+                      if (holdIdx !== undefined && holdIdx >= 0 && onSelectRoute) {
+                        onSelectRoute(holdIdx);
+                      }
+                    } else if (action === 'REROUTE') {
+                      const detourIdx = crisis.route_recommendations?.findIndex(
+                        (r) => r.corridor_type === 'land_detour' || r.corridor_type === 'sea_intermodal'
+                      );
+                      if (detourIdx !== undefined && detourIdx >= 0 && onSelectRoute) {
+                        onSelectRoute(detourIdx);
+                      }
+                    }
+                  }}
+                />
+              );
+            })()}
 
             {/* BLOCK D: HUMAN-IN-THE-LOOP (HITL) ROUTE RECOMMENDATIONS & ACTION */}
             <div className="flex flex-col gap-2.5">

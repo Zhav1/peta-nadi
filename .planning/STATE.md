@@ -2,19 +2,19 @@
 gsd_state_version: "1.0"
 milestone: M4
 milestone_name: PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability
-current_phase: 62
-current_phase_name: Live Telemetry, SpatialHash Anti-Clutter, News Deep-Linking & Universal Village Routing
+current_phase: 63
+current_phase_name: High-Density @deck.gl/mapbox Telemetry, News Permalink Integrity, Pure Coordinate Routing & Multi-Color Intermodal Corridors with Hold-vs-Reroute Economics
 status: complete
-stopped_at: Completed Phase 62; always-on live AIS/ADS-B telemetry, hybrid dispatcher onboarding (LIVE_GPS + ROUTE_ESTIMATED), 32px bit-packed SpatialHash arbiter, 3-tier zoom LOD, /api/v1/geocode/* universal village routing, and canonical news permalink resolution. 12/12 tests passed, 0 tsc errors.
+stopped_at: Completed Phase 63; GPU-instanced @deck.gl/mapbox MapboxOverlay telemetry (5,000+ units @ 60 FPS), inverted AISstream bounding box fix + parallel ADS-B (adsb.lol, airplanes.live, adsb.fi, OpenSky), 45+ flight baseline, purge of fake Antara numeric IDs with targeted Google News search permalinks, pure [lon, lat] coordinate routing snapping with zero static hub hardcoding, multi-color intermodal corridors (Emerald Land #10B981, Royal Blue Sea #3B82F6, Sky Cyan Air #00F0FF, Amber Detour #F59E0B), and grounded Hold-vs-Reroute Spoilage Hedging economic decision engine. 12/12 pytest passed, Next.js build clean with 0 tsc errors.
 last_updated: "2026-10-18T00:00:00.000Z"
 last_activity: 2026-10-18
-last_activity_desc: "Phase 62 completed: always-on live AIS + ADS-B, hybrid GPS/estimated fleet, 32px SpatialHash, 3-tier village routing LOD, canonical news permalinks. 12/12 tests passed, 0 tsc errors."
+last_activity_desc: "Phase 63 completed: High-density @deck.gl/mapbox telemetry, canonical news permalink integrity, pure coordinate routing & multi-color intermodal corridors with hold-vs-reroute economics. 12/12 pytest passed, 0 tsc errors."
 state_head: HEAD
 progress:
-  total_phases: 62
-  completed_phases: 62
-  total_plans: 75
-  completed_plans: 75
+  total_phases: 63
+  completed_phases: 63
+  total_plans: 76
+  completed_plans: 76
   percent: 100
 ---
 
@@ -22,15 +22,15 @@ progress:
 
 **Last Updated:** 2026-10-18
 **Active Milestone:** M4 - PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability [ACTIVE 🚀]
-**Current Phase:** 62
+**Current Phase:** 63
 
 ---
 
 ## Current Position
 
-Phase: 62 (Live Telemetry, SpatialHash Anti-Clutter, News Deep-Linking & Universal Village Routing) - COMPLETE
-Status: Always-on live multi-modal telemetry active (Sumatra/Malacca AIS macro box + adsb.lol 250nm aviation + persistent partner manifests). Hybrid dispatcher fleet onboarding (LIVE_GPS + ROUTE_ESTIMATED with BMKG/TomTom corridor delay interpolation). Screen-space 32px bit-packed SpatialHash arbiter with 2500ms hysteresis. 3-tier zoom LOD (z<7.5 hubs -> z 7.5-11.5 gazetteer -> z>=11.5 vector desa). Universal village routing via Haversine snapping in cpu_routing_adapter.py. Canonical news permalink unwrapping and referrerPolicy='no-referrer'. 12/12 tests passed, 0 tsc errors.
-Last activity: 2026-10-18 - Phase 62 executed, verified, and documented with comprehensive 62-LEARNINGS.md, 62-CONTEXT.md, and 62-WALKTHROUGH.md.
+Phase: 63 (High-Density @deck.gl/mapbox Telemetry, News Permalink Integrity, Pure Coordinate Routing & Multi-Color Intermodal Corridors with Hold-vs-Reroute Economics) - COMPLETE
+Status: GPU-instanced @deck.gl/mapbox MapboxOverlay active (5,000+ units @ 60 FPS), inverted AIS bbox corrected to [[6.2, 94.8], [-6.2, 109.0]] with 1,500 retention cap, parallel ADS-B poller (adsb.lol + airplanes.live + adsb.fi + OpenSky) with 45+ regional flights across Sumatra FIRs, synthetic Antara IDs purged with targeted Google News query permalinks, pure [lon, lat] coordinate snapping to nearest road graph node, simultaneous multi-color intermodal corridors (Emerald Land #10B981, Royal Blue Sea #3B82F6, Sky Cyan Air #00F0FF) with same-hub viability guards, and interactive Hold-vs-Reroute Spoilage Hedging economic decision matrix. 12/12 pytest passed, 0 tsc errors, 100% clean Next.js build.
+Last activity: 2026-10-18 - Phase 63 executed, verified, and synchronized with 63-PLAN.md.
 Next action: Push commit to remote origin/main.
 
 ---
@@ -103,6 +103,7 @@ Next action: Push commit to remote origin/main.
 | 60 | LLM Swarm Post-Key Audit and Render Parity | **IN PROGRESS** | Gateway cutover, pgvector 768 + RPC, 8-use-case matrix, parity ledger, NVIDIA purge, gap fixes. See `60-*.md` + `60-AUDIT-FINDINGS.md`. |
 | 61 | Render CORS and Berita Audit Remediation | **COMPLETE** ✅ | Dual-layer CORS (*.vercel.app + Next.js server proxy), Berita sidebar hydration, Docker data packaging, BackgroundTasks guard, UUID validation. 5/5 test_audit_fixes passed, 0 tsc errors. |
 | 62 | Live Telemetry, SpatialHash Anti-Clutter, News Deep-Linking & Universal Village Routing | **COMPLETE** ✅ | Live AIS (Malacca macro box) + ADS-B (adsb.lol), hybrid GPS/estimated trucks, 32px SpatialHash, 3-tier village LOD, /api/v1/geocode/*, canonical news permalinks. 12/12 tests passed, 0 tsc errors. |
+| 63 | High-Density @deck.gl/mapbox Telemetry, News Permalink Integrity, Pure Coordinate Routing & Multi-Color Intermodal Corridors with Hold-vs-Reroute Economics | **COMPLETE** ✅ | GPU @deck.gl/mapbox MapboxOverlay (5k units @ 60 FPS), inverted AIS bbox fix, parallel ADS-B pool, purge fake Antara IDs, pure [lon, lat] coordinate snapping, 3-leg Sea/Air corridors, Hold vs Reroute economics. 12/12 pytest, 0 tsc errors. |
 
 ---
 
@@ -110,6 +111,7 @@ Next action: Push commit to remote origin/main.
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
+| 2026-10-18 | Phase 63: High-Density @deck.gl/mapbox Telemetry, News Permalink Integrity, Pure Coordinate Routing & Multi-Color Intermodal Corridors with Hold-vs-Reroute Economics | Migrated fleet rendering from GeoJSON serialization to GPU-instanced @deck.gl/mapbox MapboxOverlay with IconLayer & PathLayer (60 FPS @ 5,000+ units). Fixed inverted AISStream bbox ([[6.2, 94.8], [-6.2, 109.0]]) and enabled parallel ADS-B multi-provider polling (adsb.lol, airplanes.live, adsb.fi, OpenSky) with 45+ flight regional baseline. Purged fake numeric Antara IDs (543210, 532190, etc.) with targeted Google News search permalinks. Decoupled routing from static HUB_NODES to pure [lon, lat] coordinates with Haversine nearest-node road graph snapping. Implemented simultaneous multi-color intermodal corridors (Land: #10B981 Emerald, Sea: #3B82F6 Royal Blue, Air: #00F0FF Sky Cyan) with same-hub viability guards and interactive Hold vs. Reroute Spoilage Hedging economic comparison card. 12/12 pytest passed, 0 tsc errors, 100% clean Next.js build. |
 | 2026-10-18 | Phase 62: Live Telemetry, SpatialHash Anti-Clutter, News Deep-Linking & Universal Village Routing | Retired Mode Simulasi blanking gate; established always-on live AIS (Malacca macro box) + ADS-B (adsb.lol 250nm) + hybrid dispatcher onboarding (LIVE_GPS + ROUTE_ESTIMATED with BMKG/TomTom delay interpolation). Ported gods-eye-view 32px bit-packed Smi SpatialHash label arbiter (2500ms hysteresis) and 60fps dead-reckoning motionModel. Implemented /api/v1/geocode/* and Haversine nearest-node snapping in cpu_routing_adapter.py for remote village routing. Fixed 4 news bounce root causes (canonical URL unwrapping, citation URL preservation, no-referrer). 12/12 tests passed, 0 tsc errors. |
 | 2026-10-17 | Phase 61: Render CORS and Berita Audit Remediation | Implemented dual-layer CORS resolution (FastAPI *.vercel.app regex + Next.js App Router /api/proxy server fallback), hydrated Berita sidebar via Promise.allSettled + verified baseline, packaged data/ in Dockerfile with _find_data_file multi-path resolution, guarded BackgroundTasks=None dual-caller in news_router, and enforced UUID 422 validation on hitl-action. 5/5 test_audit_fixes passed, 0 tsc errors. |
 | 2026-10-16 | Phase 59: E2E Audit Remediation & Visual Lockdowns | Resolved 9 systemic bugs and usability anomalies from PILOT_BUGS_AND_E2E_AUDIT_REPORT.md: (1) GuestEvaluationBanner non-blocking pointer-events; (2) Authenticated User Profile Card in AuthModal; (3) Persona switcher locked for corporate accounts; (4) Visual lock badges [Khusus Dispatcher] and role-aware buttons; (5) Arterial coastal road routing geometry (Belawan -> Pantai Cermin -> Tebing Tinggi) and dynamic origin/destination demo schema; (6) Econometric intelligence data piping into demo state; (7) Honest simulation fleet filtering with 0ms instant hide via map.triggerRepaint(); (8) Stop 404 polling on /demo-remote; (9) Toast unification in SimulationSection. 204 pytest passed, 0 tsc errors. |
