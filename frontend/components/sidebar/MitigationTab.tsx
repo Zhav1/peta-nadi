@@ -282,13 +282,13 @@ function RouteCard({
 
       <div className="flex gap-3 text-xs text-slate-300 font-mono mb-1">
         <span className="inline-flex items-center gap-1">
-          <MapPin className="w-3 h-3 text-slate-400" /> {route.distance_km.toFixed(0)} km
+          <MapPin className="w-3 h-3 text-slate-400" /> {(route.distance_km ?? 0).toFixed(0)} km
         </span>
         <span className="inline-flex items-center gap-1">
-          <Clock className="w-3 h-3 text-amber-400" /> {route.eta_minutes} min
+          <Clock className="w-3 h-3 text-amber-400" /> {route.eta_minutes ?? 0} min
         </span>
         <span className="inline-flex items-center gap-1">
-          <Fuel className="w-3 h-3 text-emerald-400" /> +{route.fuel_increase_pct.toFixed(0)}%
+          <Fuel className="w-3 h-3 text-emerald-400" /> +{(route.fuel_increase_pct ?? 0).toFixed(0)}%
         </span>
       </div>
 

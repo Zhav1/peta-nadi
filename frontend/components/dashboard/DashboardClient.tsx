@@ -596,19 +596,18 @@ export default function DashboardClient() {
   }, [selectedOriginNode, selectedDestNode, selectedRadius, selectedModality, resolveNodeInfo]);
 
   // LIVE VISUAL DEMO STEPPER TRIGGER
-  // LIVE VISUAL DEMO STEPPER TRIGGER
   const handleCrisisReadyFromDemo = useCallback(async (crisis: CrisisState) => {
-    // Rely strictly on active nodes selected by the user, never force-overwrite to default strings
-    const originId = activeOriginRef.current || selectedOriginNode;
-    const destId = activeDestRef.current || selectedDestNode;
+    // Rely on active nodes selected by the user or fallback to standard demo corridor
+    const originId = activeOriginRef.current || selectedOriginNode || 'belawan';
+    const destId = activeDestRef.current || selectedDestNode || 'tebingtinggi';
     if (!originId || !destId) {
       return;
     }
 
     const currentReqId = ++routeCalculationReqIdRef.current;
 
-    const originCoords = HUB_NODES[originId]?.coords;
-    const destCoords = HUB_NODES[destId]?.coords;
+    const originCoords = resolveNodeInfo(originId)?.coords || HUB_NODES[originId]?.coords;
+    const destCoords = resolveNodeInfo(destId)?.coords || HUB_NODES[destId]?.coords;
     if (!originCoords || !destCoords) return;
 
     const hazardPoint: [number, number] = [98.87, 3.56]; // Lubuk Pakam corridor
@@ -621,9 +620,12 @@ export default function DashboardClient() {
 
     let resolvedRoutes: RouteRecommendation[] = [];
 
-    // Fast-path: Reuse the road-snapped routes already calculated during Stage 2
+    // Fast-path: Reuse the road-snapped routes already calculated during Stage 2 or passed from crisis
     if (demoDetourRoutesRef.current && demoDetourRoutesRef.current.length > 0) {
       resolvedRoutes = demoDetourRoutesRef.current;
+    } else if (crisis.route_recommendations && crisis.route_recommendations.length > 0) {
+      resolvedRoutes = crisis.route_recommendations;
+      demoDetourRoutesRef.current = resolvedRoutes;
     } else {
       demoStateRef.current?.setIsCalculatingRoute(true);
       try {
@@ -677,7 +679,7 @@ export default function DashboardClient() {
     setActiveRouteIdx(0);
     setIsSidebarOpen(true);
     setToast({ message: `Skenario Aktif: ${crisis.title}`, type: 'success' });
-  }, [selectedOriginNode, selectedDestNode, selectedRadius, selectedModality]);
+  }, [selectedOriginNode, selectedDestNode, selectedRadius, selectedModality, resolveNodeInfo]);
 
   // Phase 23: Lifted Demo Engine State & Stage-Wired Effects
   const demoState = useDemoState(handleCrisisReadyFromDemo);
@@ -1746,14 +1748,16 @@ export default function DashboardClient() {
               isAuto={demoState.isAuto}
               isCalculatingRoute={demoState.isCalculatingRoute}
               onStart={(opts) => {
-                setSelectedOriginNode(null);
-                setSelectedDestNode(null);
+                const origin = opts?.origin || 'belawan';
+                const dest = opts?.destination || 'tebingtinggi';
+                setSelectedOriginNode(origin);
+                setSelectedDestNode(dest);
                 setCurrentMapRoutes([]);
                 demoState.start({
                   mock_agents: true,
                   offline: false,
-                  origin: opts?.origin,
-                  destination: opts?.destination,
+                  origin,
+                  destination: dest,
                 });
               }}
               onAdvance={handleDemoAdvance}
@@ -1781,10 +1785,10 @@ export default function DashboardClient() {
                   type="button"
                   id="run-demo-btn"
                   onClick={() => {
-                    setSelectedOriginNode(null);
-                    setSelectedDestNode(null);
+                    setSelectedOriginNode('belawan');
+                    setSelectedDestNode('tebingtinggi');
                     setCurrentMapRoutes([]);
-                    demoState.start({ mock_agents: true, offline: false });
+                    demoState.start({ mock_agents: true, offline: false, origin: 'belawan', destination: 'tebingtinggi' });
                   }}
                   className="flex items-center gap-1.5 px-3 py-1 rounded bg-white hover:bg-slate-200 text-[#080d14] font-semibold text-xs uppercase tracking-wider transition-colors shadow-sm cursor-pointer shrink-0"
                 >

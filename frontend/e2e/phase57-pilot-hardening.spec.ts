@@ -192,3 +192,152 @@ test('Stage-0 cold click fires onStart (second demo/start) rather than stalling'
   await expect.poll(() => startCount, { timeout: 15000 }).toBe(2);
   expect(advanceCount).toBe(0);
 });
+
+// ---------------------------------------------------------------------------
+// WP-A3 (D1): guest deploy keeps 403 and updates optimistic state with local toast
+// ---------------------------------------------------------------------------
+
+test('guest deploy on 403 shows the sandbox toast and saves locally', async ({ page }) => {
+  const crisisId = 'pilot-hardening-demo-crisis';
+
+  // Mock Mapbox directions so AI route calculation resolves instantly without network stalls
+  await page.route(/\/directions\/v5\/mapbox/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(directionsRoute([BELAWAN, TEBING_TINGGI])),
+    });
+  });
+
+  // Mock demo start and status polling to cleanly advance to Stage 3 (where crisis routes are active)
+  await page.route('**/api/demo/start', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        crisis_id: crisisId,
+        stage: 0,
+        total_stages: 5,
+      }),
+    });
+  });
+
+  await page.route(new RegExp(`/api/demo/status/${crisisId}`), async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        crisis_id: crisisId,
+        stage: 3,
+        status: 'validated',
+        full_crisis_state: {
+          crisis_id: crisisId,
+          title: 'Disrupsi Koridor Belawan - Tebing Tinggi',
+          type: 'flood',
+          status: 'validated',
+          lat: 3.10,
+          lon: 98.50,
+          overall_confidence: 0.94,
+          validated: true,
+          region: 'north_sumatra',
+          decision_support_output: 'Rute pengalihan aman teridentifikasi.',
+          route_recommendations: [
+            {
+              id: 'detour-bypass-0',
+              route_name: 'Koridor Darat Pengalihan Bebas Hambatan',
+              description: 'Jalur alternatif tol Medan-Tebing Tinggi aman dari disrupsi',
+              distance_km: 84.5,
+              eta_minutes: 88,
+              fuel_increase_pct: 12.0,
+              viable: true,
+              is_compromised: false,
+              safety_status: 'SAFE_DETOUR',
+              safety_tag: 'JALUR AMAN',
+              waypoints: [
+                { lat: 3.7922, lon: 98.6776 },
+                { lat: 3.3285, lon: 99.1625 },
+              ],
+            },
+          ],
+        },
+      }),
+    });
+  });
+
+  await page.route(new RegExp(`/api/demo/advance/${crisisId}`), async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        crisis_id: crisisId,
+        stage: 4,
+        stage_name: 'Dispatch & Mitigasi',
+      }),
+    });
+  });
+
+  // Mock approvals endpoint: GET returns empty list; POST returns 403 FORBIDDEN
+  await page.route('**/api/v1/approvals*', async (route) => {
+    if (route.request().method() === 'POST') {
+      await route.fulfill({
+        status: 403,
+        contentType: 'application/json',
+        body: JSON.stringify({ detail: { error: 'FORBIDDEN' } }),
+      });
+    } else {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ items: [], total: 0 }),
+      });
+    }
+  });
+
+  await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
+
+  // Start the presentation demo to trigger crisis ingestion
+  const runDemoBtn = page.locator('#run-demo-btn');
+  await expect(runDemoBtn).toBeVisible({ timeout: 60000 });
+  await runDemoBtn.click();
+
+  // Status polling brings the demo directly to Stage 3 (Tahap 4)
+  const nextStepBtn = page.getByRole('button', { name: 'Langkah Berikutnya' });
+  await expect(nextStepBtn).toBeVisible({ timeout: 30000 });
+  await nextStepBtn.click();
+
+  // At Stage 4 (Tahap 5), click "Buka Mitigasi & Setujui" to open CrisisSidebar on Mitigation tab
+  const openMitigationBtn = page.getByRole('button', { name: 'Buka Mitigasi & Setujui' });
+  await expect(openMitigationBtn).toBeVisible({ timeout: 15000 });
+  await openMitigationBtn.click();
+
+  // MitigationTab renders for GUEST role: shows sandbox disclaimer & SIMPAN RENCANA button
+  await expect(
+    page.getByText('Mode Sandbox: Tindakan disimpan lokal untuk simulasi evaluasi.')
+  ).toBeVisible({ timeout: 30000 });
+
+
+  const approveBtn = page.getByRole('button', { name: 'SIMPAN RENCANA' });
+  await expect(approveBtn).toBeVisible({ timeout: 30000 });
+  await approveBtn.click();
+
+  // When POST /api/v1/approvals returns 403, MitigationTab catches it and invokes
+  // onApproveSuccess with local save confirmation toast
+  await expect(page.getByText(/tersimpan secara lokal/i)).toBeVisible({ timeout: 15000 });
+
+  // Route card updates optimistically to approved state
+  await expect(page.getByText('DISETUJUI & DIKIRIM')).toBeVisible({ timeout: 15000 });
+  await expect(approveBtn).toBeHidden();
+
+  // Audit gap verification: unlike legacy simulation tab, MitigationTab does NOT
+  // persist to localStorage ('prehub_sandbox_approvals'), but only holds it in component state.
+  const sandbox = await page.evaluate(() => {
+    try {
+      return JSON.parse(localStorage.getItem('prehub_sandbox_approvals') ?? '[]') as unknown[];
+    } catch {
+      return [];
+    }
+  });
+  expect(sandbox).toHaveLength(0);
+});
+
+
