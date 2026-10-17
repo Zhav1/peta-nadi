@@ -218,15 +218,28 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS : allow Next.js frontend on localhost and 127.0.0.1
+# CORS : allow Next.js frontend on localhost, 127.0.0.1, Vercel deployments, and Render
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
-    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
+    allow_origin_regex=r"https?://((localhost|127\.0\.0\.1)(:\d+)?|.*\.vercel\.app|.*\.onrender\.com)",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.get("/", tags=["health"])
+async def root():
+    """Root status endpoint providing service metadata and discovery links."""
+    return {
+        "status": "ok",
+        "service": "prehub-api",
+        "version": settings.version,
+        "docs": "/docs",
+        "health": "/health"
+    }
+
 
 # Routers
 app.include_router(health.router)

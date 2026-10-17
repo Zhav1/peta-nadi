@@ -1,6 +1,7 @@
 import logging
 import os
 import json
+from pathlib import Path
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from typing import Dict, Any, Optional, List
@@ -14,6 +15,20 @@ router = APIRouter(prefix="/demo", tags=["Demo"])
 
 # In-memory store for demo runs
 DEMO_STORE: Dict[str, Dict[str, Any]] = {}
+
+
+def _find_data_file(*subpaths: str) -> Optional[Path]:
+    """Resolves data files across local, container, and repository directory structures."""
+    candidates = [
+        Path("data", *subpaths),
+        Path("..", "data", *subpaths),
+        Path(__file__).resolve().parents[2] / "data" / Path(*subpaths),
+        Path(__file__).resolve().parents[3] / "data" / Path(*subpaths),
+    ]
+    for candidate in candidates:
+        if candidate.exists() and candidate.is_file():
+            return candidate
+    return None
 
 
 def _derive_causal_chain(full_state: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -73,37 +88,42 @@ async def start_demo(payload: StartDemoPayload, background_tasks: BackgroundTask
     crisis_id = f"belawan-demo-{uuid.uuid4().hex[:6]}"
     
     # 2. Get scenario data (for logs/context)
-    scenario_path = os.path.join("data", "synthetic", scenario_file)
-    if not os.path.exists(scenario_path):
-        scenario_path = os.path.join("..", "data", "synthetic", scenario_file)
+    scenario_path = _find_data_file("synthetic", scenario_file)
     events = []
-    if os.path.exists(scenario_path):
+    if scenario_path:
         try:
-            with open(scenario_path, "r") as f:
+            with open(scenario_path, "r", encoding="utf-8") as f:
                 scenario_data = json.load(f)
                 events = scenario_data.get("events", [])
         except Exception as e:
-            logger.error(f"Failed to load scenario {scenario_file}: {e}")
+            logger.warning(f"Failed to load scenario {scenario_file} from {scenario_path}: {e}")
 
     # 3. Load or run agents to get the final CrisisState
     crisis_state = {}
     if mock_agents:
-        fixture_path = os.path.join("data", "fixtures", "mock_crisis_state.json")
-        if not os.path.exists(fixture_path):
-            fixture_path = os.path.join("..", "data", "fixtures", "mock_crisis_state.json")
-        if os.path.exists(fixture_path):
+        fixture_path = _find_data_file("fixtures", "mock_crisis_state.json")
+        if fixture_path:
             try:
-                with open(fixture_path, "r") as f:
+                with open(fixture_path, "r", encoding="utf-8") as f:
                     crisis_state = json.load(f)
                 # Override ID and timestamp
                 crisis_state["crisis_id"] = crisis_id
                 crisis_state["created_at"] = datetime.now(timezone.utc).isoformat()
                 crisis_state["updated_at"] = datetime.now(timezone.utc).isoformat()
             except Exception as e:
-                logger.error(f"Failed to load mock fixture: {e}")
-                raise HTTPException(status_code=500, detail="Failed to load mock fixture")
-        else:
-            raise HTTPException(status_code=500, detail=f"Mock fixture not found at {fixture_path}")
+                logger.warning(f"Failed to load mock fixture from {fixture_path}: {e}, using clean fallback state")
+                crisis_state = {}
+
+        # If mock_crisis_state.json is still not found on disk, populate clean fallback
+        if not crisis_state:
+            crisis_state = {
+                "crisis_id": crisis_id,
+                "status": "ACTIVE",
+                "corridor": "Sumatra Logistics Corridor",
+                "events": events,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
     else:
         # Run real agents using the scenario events (run_crisis_event)
         # We aggregate events into a single payload or process the representative event

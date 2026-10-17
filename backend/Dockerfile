@@ -25,6 +25,9 @@ COPY backend/ .
 # Copy agents directory to /app/agents if present
 COPY agents/ ./agents/
 
+# Copy data fixtures and synthetic scenarios for demo & fallback pipelines
+COPY data/ ./data/
+
 # Expose the API port
 EXPOSE 8000
 

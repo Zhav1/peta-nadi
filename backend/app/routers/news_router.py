@@ -6,6 +6,7 @@ crisis intelligence, and manages Globot-style Human-In-The-Loop review workflows
 """
 import logging
 import asyncio
+import uuid
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, Query, HTTPException, BackgroundTasks
@@ -90,7 +91,10 @@ async def get_live_news(
 
     # If Supabase is cold or empty, trigger background ingestion and return honest warming state
     if not articles:
-        background_tasks.add_task(run_background_news_ingestion, True)
+        if background_tasks is not None:
+            background_tasks.add_task(run_background_news_ingestion, True)
+        else:
+            asyncio.create_task(run_background_news_ingestion(True))
         return {
             "status": "warming",
             "storage": "supabase_postgis",
@@ -316,6 +320,14 @@ async def submit_hitl_operator_action(req: HitlActionRequest):
     Executes a Human-In-The-Loop dispatcher action (Approve Detour, Hold, or Dismiss).
     Persists decision to Supabase public.route_approvals and broadcasts to telemetry.
     """
+    try:
+        uuid.UUID(str(req.approval_id))
+    except (ValueError, AttributeError, TypeError):
+        raise HTTPException(
+            status_code=422,
+            detail="Invalid UUID format for approval_id"
+        )
+
     try:
         from app.db.supabase_client import get_service_client
         sb = get_service_client()

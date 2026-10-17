@@ -133,7 +133,22 @@ export default function SystemObservabilitySection() {
         }
       }
 
-      const res = await fetch(url, options);
+      let res: Response;
+      try {
+        res = await fetch(url, options);
+      } catch (directErr) {
+        if (typeof window !== 'undefined') {
+          res = await fetch(`/api/proxy${item.path}`, {
+            ...options,
+            headers: {
+              ...(options.headers as Record<string, string>),
+              'x-target-base-url': baseUrl.replace(/\/$/, '')
+            }
+          });
+        } else {
+          throw directErr;
+        }
+      }
       const elapsed = Math.round(performance.now() - t0);
       const text = await res.text();
       const bytes = new Blob([text]).size;

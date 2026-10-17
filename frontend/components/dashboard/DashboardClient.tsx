@@ -1595,10 +1595,10 @@ export default function DashboardClient() {
               type="button"
               onClick={() => setIsLeftSidebarCollapsed(false)}
               className="absolute top-4 left-4 z-[360] px-3 py-1.5 rounded-md bg-[#0c1017] border border-[#1c2432] text-slate-300 hover:text-white hover:bg-[#121822] shadow-xl transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-semibold"
-              title="Tampilkan Tactical Sidebar"
+              title="Tampilkan Panel Berita"
             >
               <PanelLeftOpen className="w-4 h-4 text-slate-300" />
-              <span>SIDEBAR</span>
+              <span>BERITA</span>
             </button>
           )}
 

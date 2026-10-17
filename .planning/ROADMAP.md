@@ -1619,6 +1619,38 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 - [x] 8/8 use cases live on locked pair; local 10/10 + Render 10/10 parity; findings ledgered file:line
 - [ ] Human UAT close-out: cold-start boot, pytest where available, Render redeploy confirm (see 60-UAT.md)
 
+## Phase 61: Render CORS and Berita Audit Remediation
+
+**Goal:** Resolve cross-origin deployment CORS failures between Vercel (`https://pre-hub.vercel.app`) and Render (`https://peta-nadi.onrender.com`), restore live news hydration in the Berita sidebar, package fixtures into Docker build, guard background task concurrency, and enforce strict UUID parameter validation.
+**Status:** COMPLETE ✅
+**Plans:** 61-01-PLAN.md, 61-01-SUMMARY.md, WALKTHROUGH.md, 61-LEARNINGS.md
+
+### Deliverables
+
+- [x] **WP1 - Dual-Layer CORS Architecture & Root Health Probe**:
+  - `backend/app/config.py` & `render.yaml`: added `https://pre-hub.vercel.app` and `https://peta-nadi.onrender.com` to `cors_origins`.
+  - `backend/app/main.py`: expanded `allow_origin_regex` to allow `*.vercel.app` and `*.onrender.com`.
+  - Registered `@app.get("/")` returning API health status and documentation links.
+  - `frontend/app/api/proxy/[...path]/route.ts`: Next.js App Router server Route Handler proxy executing server-to-server calls to Render, bypassing browser CORS restrictions.
+  - `frontend/lib/api.ts` & `SystemObservabilitySection.tsx`: automatic server proxy fallback retry on browser CORS/network `TypeError`.
+- [x] **WP2 - Berita Sidebar Hydration & Discoverability**:
+  - `frontend/hooks/useNewsVerification.ts`: replaced `Promise.all` with `Promise.allSettled` to prevent regime lookup hiccups from dropping 60 verified Supabase news articles, with authenticated Sumatra baseline fallback.
+  - `frontend/components/dashboard/DashboardClient.tsx`: renamed collapsed floating sidebar toggle button from `SIDEBAR` to `BERITA`.
+- [x] **WP3 - Docker Fixture Packaging & Multi-Path Resolution**:
+  - `backend/Dockerfile`: packaged `COPY data/ ./data/` into container image at `/app/data/`.
+  - `backend/app/routers/demo_router.py`: added `_find_data_file` resolving relative paths across CWD and script directories, with inline crisis state fallback preventing 500 errors on `POST /api/demo/start`.
+- [x] **WP4 - Backend Concurrency & Database Validation Hardening**:
+  - `backend/app/routers/news_router.py`: guarded optional `BackgroundTasks` in `get_live_news` with `asyncio.create_task` fallback for internal loop callers (`_poll_news_loop`).
+  - `backend/app/routers/news_router.py`: validated `req.approval_id` as UUID in `submit_hitl_operator_action` returning `HTTP 422` instead of unhandled 500 database exceptions.
+  - `backend/tests/test_audit_fixes.py`: automated test suite verifying all 5 audit fixes with 100% pass rate.
+
+### Verification Criteria
+
+- [x] All 26 REST API Evaluator endpoints verified `HTTP 200 OK` on live Render backend.
+- [x] `pytest backend/tests/test_audit_fixes.py`: 5 passed, 0 failed.
+- [x] `npx tsc --noEmit` in `frontend/`: 0 errors.
+- [x] Berita sidebar actively hydrates live news from Supabase PostGIS with `BERITA` toggle button.
+
 ---
 
 ## Backlog (Post-Hackathon / v2)

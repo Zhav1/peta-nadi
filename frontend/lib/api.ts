@@ -1,4 +1,12 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+export function getBaseUrl(): string {
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
+  if (typeof window !== 'undefined' && !['localhost', '127.0.0.1'].includes(window.location.hostname)) {
+    return 'https://peta-nadi.onrender.com';
+  }
+  return 'http://localhost:8000';
+}
 
 let currentAuthToken: string | null = null;
 
@@ -11,6 +19,7 @@ export function getAuthToken(): string | null {
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const baseUrl = getBaseUrl();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options?.headers as Record<string, string>),
@@ -20,10 +29,26 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     headers['Authorization'] = `Bearer ${currentAuthToken}`;
   }
 
-  const res = await fetch(`${BASE_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${baseUrl}${path}`, {
+      ...options,
+      headers,
+    });
+  } catch (err) {
+    if (typeof window !== 'undefined') {
+      res = await fetch(`/api/proxy${path}`, {
+        ...options,
+        headers: {
+          ...headers,
+          'x-target-base-url': baseUrl,
+        },
+      });
+    } else {
+      throw err;
+    }
+  }
+
   if (!res.ok) throw new Error(`API ${path} → ${res.status}`);
   return res.json() as Promise<T>;
 }
@@ -210,11 +235,28 @@ export const api = {
         headers['Authorization'] = `Bearer ${currentAuthToken}`;
       }
       
-      const res = await fetch(`${BASE_URL}/api/v1/fleet/upload-manifest/file`, {
-        method: 'POST',
-        headers,
-        body: formData,
-      });
+      const baseUrl = getBaseUrl();
+      let res: Response;
+      try {
+        res = await fetch(`${baseUrl}/api/v1/fleet/upload-manifest/file`, {
+          method: 'POST',
+          headers,
+          body: formData,
+        });
+      } catch (err) {
+        if (typeof window !== 'undefined') {
+          res = await fetch('/api/proxy/api/v1/fleet/upload-manifest/file', {
+            method: 'POST',
+            headers: {
+              ...headers,
+              'x-target-base-url': baseUrl,
+            },
+            body: formData,
+          });
+        } else {
+          throw err;
+        }
+      }
       if (!res.ok) throw new Error(`API /api/v1/fleet/upload-manifest/file → ${res.status}`);
       return res.json() as Promise<import('./types').FleetIngestResponse>;
     },
