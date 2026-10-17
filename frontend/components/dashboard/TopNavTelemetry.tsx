@@ -5,7 +5,7 @@ import { Zap, Truck, CloudRain } from 'lucide-react';
 import { IntermodalTerminalPopover } from '@/components/dashboard/IntermodalTerminalPopover';
 
 interface TopNavTelemetryProps {
-  routingInfo?: { solver: string; compute_time_ms: number; savings_pct: number | null } | null;
+  routingInfo?: { solver: string; compute_time_ms: number | null; savings_pct: number | null } | null;
   corridorContext?: import('@/lib/types').CorridorContext | null;
   isLoading?: boolean;
   onOpenHitl?: () => void;
@@ -32,7 +32,8 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
         title="Latensi solver optimasi rute mitigasi CPU"
       >
         <Zap className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-        <span>RUTE: {solverStats ? `${solverStats.compute_time_ms}ms` : '—'}</span>
+        {/* No savings pill: backend reports savings_pct null without a baseline — never render a fabricated % */}
+        <span>RUTE: {solverStats?.compute_time_ms != null ? `${solverStats.compute_time_ms}ms` : '—'}</span>
       </div>
 
       {/* 2. TomTom Traffic Delay */}

@@ -40,7 +40,7 @@ export interface CrisisMapProps {
   hubNodesList?: HubNode[];
   corridorContext?: import('@/lib/types').CorridorContext | null;
   spatialWeatherPolygons?: GeoJSON.FeatureCollection | null;
-  routingInfo?: { solver: string; compute_time_ms: number; savings_pct: number | null } | null;
+  routingInfo?: { solver: string; compute_time_ms: number | null; savings_pct: number | null } | null;
   isLeftSidebarCollapsed?: boolean;
   activeTimeFilter?: 'past' | 'present' | 'future' | 'predict';
   historicalEpisodes?: Record<string, unknown>[];

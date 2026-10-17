@@ -655,7 +655,7 @@ export default function DashboardClient() {
     // Navigation stays with the user: only the explicit "Tampilkan di Peta 4D" / "Lihat Dampak di Laporan" buttons switch sections.
   };
   const [spatialWeatherPolygons, setSpatialWeatherPolygons] = useState<GeoJSON.FeatureCollection | null>(null);
-  const [routingInfo, setRoutingInfo] = useState<{ solver: string; compute_time_ms: number; savings_pct: number | null } | null>(null);
+  const [routingInfo, setRoutingInfo] = useState<{ solver: string; compute_time_ms: number | null; savings_pct: number | null } | null>(null);
 
   // Time Horizon State Datasets (PAST / PRESENT / FUTURE / PREDICT)
   const [historicalEpisodes, setHistoricalEpisodes] = useState<Record<string, unknown>[]>([]);
@@ -734,9 +734,11 @@ export default function DashboardClient() {
         hazard_zones: hazardCenter ? [{ center: hazardCenter, radiusKm }] : []
       });
       if (routingRes && routingRes.optimization_summary) {
+        // Savings stay null until the backend reports a real baseline comparison;
+        // the HUD hides the pill when null (no fabricated fallback).
         setRoutingInfo({
           solver: routingRes.solver || 'Deterministic CPU Routing Solver (NetworkX + OR-Tools)',
-          compute_time_ms: routingRes.compute_time_ms || 1.5,
+          compute_time_ms: routingRes.compute_time_ms ?? routingRes.total_pipeline_time_ms ?? null,
           savings_pct: routingRes.optimization_summary.fuel_cost_reduction_pct ?? null
         });
       }
@@ -1137,12 +1139,16 @@ export default function DashboardClient() {
         setIsSidebarOpen(true);
         setActiveTab('Mitigation');
 
-        const netSavings = backendCrisisState.hedging_breakdown?.net_savings_idr
-          ? `Rp ${Number(backendCrisisState.hedging_breakdown.net_savings_idr).toLocaleString('id-ID')}`
-          : 'Rp 42.500.000';
+        // Honest savings: only claim hedging savings when the backend computed one.
+        const rawSavings = backendCrisisState.hedging_breakdown?.net_savings_idr;
+        const netSavings = rawSavings != null && Number(rawSavings) > 0
+          ? `Rp ${Number(rawSavings).toLocaleString('id-ID')}`
+          : null;
 
         setToast({
-          message: `Swarm AI Selesai: Keputusan taktis aktif. Proyeksi penghematan hedging: ${netSavings}.`,
+          message: netSavings
+            ? `Swarm AI Selesai: Keputusan taktis aktif. Proyeksi penghematan hedging: ${netSavings}.`
+            : 'Swarm AI Selesai: Keputusan taktis aktif.',
           type: 'success',
         });
       }

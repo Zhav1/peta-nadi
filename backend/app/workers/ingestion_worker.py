@@ -52,7 +52,13 @@ class IngestionWorker:
         
         logger.info(f"Concurrently running {len(self.tasks)} active ingestion adapters.")
         try:
-            await asyncio.gather(*self.tasks, return_exceptions=True)
+            results = await asyncio.gather(*self.tasks, return_exceptions=True)
+            for adapter, result in zip(self.adapters, results):
+                if isinstance(result, BaseException):
+                    logger.error(
+                        f"Ingestion adapter {type(adapter).__name__} failed: {result}",
+                        exc_info=result,
+                    )
         except asyncio.CancelledError:
             logger.info("Worker tasks canceled.")
         except Exception as e:

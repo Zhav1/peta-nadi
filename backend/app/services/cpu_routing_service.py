@@ -135,8 +135,11 @@ async def optimize_fleet_routes_cpu(
         vehicle_capacity=120.0
     )
 
-    solver_compute_ms = vrp_solution.get("compute_time_ms", 1.5)
+    solver_compute_ms = vrp_solution.get("compute_time_ms")
     elapsed_ms = round((datetime.now(timezone.utc) - start_time).total_seconds() * 1000.0, 1)
+    if solver_compute_ms is None:
+        # Honest fallback: solver did not report timing, use measured wall time.
+        solver_compute_ms = elapsed_ms
     telemetry_reason = None if tomtom_live else (degraded_reason or "no live TomTom flow data")
     avg_corridor_speed = round(sum(speeds.values()) / max(1, len(speeds)), 1)
 
@@ -161,7 +164,12 @@ async def optimize_fleet_routes_cpu(
         "optimization_summary": {
             "hazard_segments_avoided": len(hazard_zones) if hazard_zones else 0,
             "avg_corridor_speed_kmh": avg_corridor_speed,
-            "speed_source": "tomtom_live" if tomtom_live else "seed_fallback"
+            "speed_source": "tomtom_live" if tomtom_live else "seed_fallback",
+            # No honest baseline exists for % savings (no free-flow reference run),
+            # so these stay null and the HUD hides the savings pill. Do NOT
+            # reintroduce fabricated literals (e.g. 18.5 / 14.2).
+            "travel_time_savings_pct": None,
+            "fuel_cost_reduction_pct": None
         },
         "timestamp": datetime.now(timezone.utc).isoformat()
     }

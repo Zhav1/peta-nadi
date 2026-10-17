@@ -151,7 +151,8 @@ export const api = {
         degraded_reason?: string | null;
         solver: string;
         compute_time_ms: number;
-        optimization_summary: { travel_time_savings_pct?: number; fuel_cost_reduction_pct?: number; hazard_segments_avoided: number; avg_corridor_speed_kmh: number; speed_source: string };
+        total_pipeline_time_ms?: number;
+        optimization_summary: { travel_time_savings_pct?: number | null; fuel_cost_reduction_pct?: number | null; hazard_segments_avoided: number; avg_corridor_speed_kmh: number; speed_source: string };
       }>('/api/v1/routing/optimize', {
         method: 'POST',
         body: JSON.stringify(payload),
