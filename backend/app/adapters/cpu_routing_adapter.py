@@ -108,6 +108,27 @@ class CPURoutingAdapter:
         except Exception as e:
             logger.error(f"Failed to load road graph network cache: {e}")
 
+    def _find_nearest_graph_node(self, lon: float, lat: float) -> Tuple[str, float]:
+        """
+        Finds closest node in self.nodes_dict by haversine distance.
+        Returns (node_id, distance_km).
+        """
+        best_node = None
+        best_dist = float("inf")
+        for node_id, node in self.nodes_dict.items():
+            n_lat = node.get("lat")
+            n_lon = node.get("lon")
+            if n_lat is not None and n_lon is not None:
+                d = haversine_km(lat, lon, n_lat, n_lon)
+                if d < best_dist:
+                    best_dist = d
+                    best_node = node_id
+        if best_node is None:
+            nodes = list(self.graph.nodes)
+            best_node = nodes[0] if nodes else "belawan_port"
+            best_dist = 0.0
+        return best_node, best_dist
+
     def get_node_coords(self, node_id: str) -> Optional[Tuple[float, float]]:
         """Returns (lat, lon) coordinates for a given node ID."""
         resolved = NODE_ALIASES.get(node_id, node_id)
@@ -117,29 +138,57 @@ class CPURoutingAdapter:
 
     def solve_shortest_path(
         self,
-        origin_id: str,
-        dest_id: str,
+        origin_id: Optional[str] = None,
+        dest_id: Optional[str] = None,
         hazard_zones: Optional[List[Dict[str, Any]]] = None,
-        k_alternatives: int = 3
+        k_alternatives: int = 3,
+        origin_coords: Optional[List[float]] = None,
+        dest_coords: Optional[List[float]] = None,
+        origin_name: Optional[str] = None,
+        dest_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Computes k-shortest simple paths on CPU with dynamic hazard avoidance penalties.
+        Supports universal point-to-point coordinates snapping with last-mile connectors.
         Execution latency: < 30 ms.
         """
         t0 = time.perf_counter()
 
-        # Handle node resolution / aliases / defaults
-        orig_resolved = NODE_ALIASES.get(origin_id, origin_id)
-        if orig_resolved in self.graph:
-            origin_id = orig_resolved
-        elif origin_id not in self.graph:
-            origin_id = list(self.graph.nodes)[0] if len(self.graph.nodes) > 0 else "belawan_port"
+        # Handle origin snapping & last-mile connector
+        orig_connector_km = 0.0
+        orig_connector_time_min = 0.0
+        snapped_orig_node = origin_id
 
-        dest_resolved = NODE_ALIASES.get(dest_id, dest_id)
-        if dest_resolved in self.graph:
-            dest_id = dest_resolved
-        elif dest_id not in self.graph:
-            dest_id = list(self.graph.nodes)[-1] if len(self.graph.nodes) > 1 else "tebing_tinggi_toll"
+        if origin_coords and len(origin_coords) >= 2:
+            snapped_orig_node, snap_dist = self._find_nearest_graph_node(origin_coords[0], origin_coords[1])
+            origin_id = snapped_orig_node
+            orig_connector_km = snap_dist * 1.25
+            orig_connector_time_min = (orig_connector_km / 40.0) * 60.0
+        else:
+            orig_resolved = NODE_ALIASES.get(origin_id, origin_id) if origin_id else None
+            if orig_resolved and orig_resolved in self.graph:
+                origin_id = orig_resolved
+            elif origin_id not in self.graph:
+                origin_id = list(self.graph.nodes)[0] if len(self.graph.nodes) > 0 else "belawan_port"
+            snapped_orig_node = origin_id
+
+        # Handle destination snapping & last-mile connector
+        dest_connector_km = 0.0
+        dest_connector_time_min = 0.0
+        snapped_dest_node = dest_id
+
+        if dest_coords and len(dest_coords) >= 2:
+            snapped_dest_node, snap_dist = self._find_nearest_graph_node(dest_coords[0], dest_coords[1])
+            dest_id = snapped_dest_node
+            dest_connector_km = snap_dist * 1.25
+            dest_connector_time_min = (dest_connector_km / 40.0) * 60.0
+        else:
+            dest_resolved = NODE_ALIASES.get(dest_id, dest_id) if dest_id else None
+            if dest_resolved and dest_resolved in self.graph:
+                dest_id = dest_resolved
+            elif dest_id not in self.graph:
+                dest_id = list(self.graph.nodes)[-1] if len(self.graph.nodes) > 1 else "tebing_tinggi_toll"
+            snapped_dest_node = dest_id
 
         # Build dynamic weighted copy of graph
         G = self.graph.copy()
@@ -158,22 +207,23 @@ class CPURoutingAdapter:
                 for hz in hazard_zones:
                     center = hz.get("center") or [hz.get("lon", 98.68), hz.get("lat", 3.75)]
                     radius = hz.get("radiusKm", 10.0)
-                dist_mid = haversine_km(mid_lat, mid_lon, center[1], center[0])
-                dist_n1 = haversine_km(n1["lat"], n1["lon"], center[1], center[0])
-                dist_n2 = haversine_km(n2["lat"], n2["lon"], center[1], center[0])
-                min_dist_to_hazard = min(dist_mid, dist_n1, dist_n2)
 
-                effective_radius = radius + 2.0
-                if min_dist_to_hazard <= effective_radius:
-                    # Tiered least-risk penalty cost
-                    if min_dist_to_hazard <= radius * 0.5:
-                        penalty_mult = 50.0 # Epicenter core
-                    elif min_dist_to_hazard <= radius:
-                        penalty_mult = 15.0 # Inner hazard zone
-                    else:
-                        penalty_mult = 3.5  # Outer fringe buffer
-                    G[u][v]["weight"] = G[u][v]["travel_time_min"] * penalty_mult
-                    logger.debug(f"Penalized edge {u}->{v} ({penalty_mult}x) due to hazard zone.")
+                    dist_mid = haversine_km(mid_lat, mid_lon, center[1], center[0])
+                    dist_n1 = haversine_km(n1["lat"], n1["lon"], center[1], center[0])
+                    dist_n2 = haversine_km(n2["lat"], n2["lon"], center[1], center[0])
+                    min_dist_to_hazard = min(dist_mid, dist_n1, dist_n2)
+
+                    effective_radius = radius + 2.0
+                    if min_dist_to_hazard <= effective_radius:
+                        # Tiered least-risk penalty cost
+                        if min_dist_to_hazard <= radius * 0.5:
+                            penalty_mult = 50.0  # Epicenter core
+                        elif min_dist_to_hazard <= radius:
+                            penalty_mult = 15.0  # Inner hazard zone
+                        else:
+                            penalty_mult = 3.5   # Outer fringe buffer
+                        G[u][v]["weight"] = G[u][v]["travel_time_min"] * penalty_mult
+                        logger.debug(f"Penalized edge {u}->{v} ({penalty_mult}x) due to hazard zone.")
 
         routes = []
         try:
@@ -186,20 +236,34 @@ class CPURoutingAdapter:
                 time_min = 0.0
                 path_coords = []
                 for i in range(len(path) - 1):
-                    u, v = path[i], path[i+1]
+                    u, v = path[i], path[i + 1]
                     if G.has_edge(u, v):
                         dist_km += G[u][v]["distance_km"]
                         time_min += G[u][v]["travel_time_min"]
                     if u in self.nodes_dict:
                         path_coords.append([self.nodes_dict[u]["lon"], self.nodes_dict[u]["lat"]])
-                
-                if path[-1] in self.nodes_dict:
+
+                if path and path[-1] in self.nodes_dict:
                     path_coords.append([self.nodes_dict[path[-1]]["lon"], self.nodes_dict[path[-1]]["lat"]])
 
+                # Prepend origin connector
+                if origin_coords and len(origin_coords) >= 2:
+                    path_coords = [origin_coords] + path_coords
+                    dist_km += orig_connector_km
+                    time_min += orig_connector_time_min
+
+                # Append dest connector
+                if dest_coords and len(dest_coords) >= 2:
+                    path_coords = path_coords + [dest_coords]
+                    dist_km += dest_connector_km
+                    time_min += dest_connector_time_min
+
                 is_detour = (idx > 0)
+                via_nodes = [n for n in path[1:-1]]
+                via_str = f" via {', '.join(via_nodes)}" if via_nodes else ""
                 desc = (
-                    f"Rute Utama Teroptimasi via {', '.join(path[1:-1])}" if not is_detour
-                    else f"Jalur Pengalihan Alternatif #{idx} via {', '.join(path[1:-1])}"
+                    f"Rute Utama Teroptimasi{via_str}" if not is_detour
+                    else f"Jalur Pengalihan Alternatif #{idx}{via_str}"
                 )
 
                 routes.append({
@@ -216,13 +280,41 @@ class CPURoutingAdapter:
         except Exception as e:
             logger.warning(f"CPURoutingAdapter shortest_paths fallback: {e}")
 
+        orig_name_resolved = origin_name or (self.nodes_dict.get(origin_id, {}).get("name") if origin_id in self.nodes_dict else origin_id)
+        dest_name_resolved = dest_name or (self.nodes_dict.get(dest_id, {}).get("name") if dest_id in self.nodes_dict else dest_id)
+
+        orig_coords_resolved = origin_coords or ([self.nodes_dict[origin_id]["lon"], self.nodes_dict[origin_id]["lat"]] if origin_id in self.nodes_dict else None)
+        dest_coords_resolved = dest_coords or ([self.nodes_dict[dest_id]["lon"], self.nodes_dict[dest_id]["lat"]] if dest_id in self.nodes_dict else None)
+
+        # Fallback if no path could be generated between nodes
+        if not routes and orig_coords_resolved and dest_coords_resolved:
+            direct_dist = haversine_km(orig_coords_resolved[1], orig_coords_resolved[0], dest_coords_resolved[1], dest_coords_resolved[0]) * 1.35
+            direct_time = (direct_dist / 40.0) * 60.0
+            routes.append({
+                "route_index": 0,
+                "description": f"Rute Langsung Alternatif ({orig_name_resolved} -> {dest_name_resolved})",
+                "nodes": [snapped_orig_node, snapped_dest_node] if snapped_orig_node != snapped_dest_node else [snapped_orig_node],
+                "coordinates": [orig_coords_resolved, dest_coords_resolved],
+                "distance_km": round(direct_dist, 2),
+                "eta_minutes": int(round(direct_time)),
+                "fuel_increase_pct": 0.0,
+                "risk_score": 0.2,
+                "is_detour": False
+            })
+
         elapsed_ms = (time.perf_counter() - t0) * 1000.0
 
         return {
             "status": "success" if routes else "no_path_found",
             "solver": "NetworkX Dijkstra / A* CPU Solver",
             "origin": origin_id,
+            "origin_name": orig_name_resolved,
+            "origin_coords": orig_coords_resolved,
             "destination": dest_id,
+            "dest_name": dest_name_resolved,
+            "dest_coords": dest_coords_resolved,
+            "snapped_origin_node": snapped_orig_node,
+            "snapped_dest_node": snapped_dest_node,
             "routes_count": len(routes),
             "routes": routes,
             "compute_time_ms": round(elapsed_ms, 3)

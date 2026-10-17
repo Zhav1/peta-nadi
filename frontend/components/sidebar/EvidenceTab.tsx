@@ -1,6 +1,7 @@
 'use client';
 import React from 'react';
 import type { CrisisState } from '@/lib/types';
+import { normalizeNewsPermalink } from '@/hooks/useNewsVerification';
 import {
   FileText,
   Activity,
@@ -72,7 +73,8 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
   const sourceName = topCitation?.source || topCitation?.source_name || crisis.evidence?.osint_author || null;
   const citationHeadline = topCitation?.headline || null;
   const storedExcerpt = crisis.evidence?.osint_text || null;
-  const sourceUrl = topCitation?.url || topCitation?.link || null;
+  const rawSourceUrl = topCitation?.url || topCitation?.link || null;
+  const sourceUrl = normalizeNewsPermalink(rawSourceUrl || undefined, citationHeadline || crisis.title, sourceName || undefined);
   const sourceIsDead = topCitation?.link_alive === 'dead';
   const canOpenSource = Boolean(sourceUrl) && !sourceIsDead;
   const isOfficialTier = topCitation?.tier ? topCitation.tier === 'TIER_1_OFFICIAL' : true;
@@ -219,6 +221,7 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
                   href={sourceUrl ?? undefined}
                   target="_blank"
                   rel="noopener noreferrer"
+                  referrerPolicy="no-referrer"
                   className="cursor-pointer inline-flex items-center gap-1 px-2 py-1 rounded bg-[#121822] text-slate-300 hover:text-white border border-[#1c2432] transition-colors"
                   title={
                     topCitation?.link_alive === 'unknown'

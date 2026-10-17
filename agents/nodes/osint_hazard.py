@@ -106,7 +106,9 @@ async def osint_hazard_agent(state: CrisisState) -> dict:
                         "source": source_name,
                         "tier": source_tier,
                         "temporal_phase": temporal_phase,
-                        "lane_status": lane_status
+                        "lane_status": lane_status,
+                        "url": payload.get("url") or payload.get("link") or "",
+                        "published_at": payload.get("published_at") or ""
                     })
     except Exception as re:
         logger.error(f"Failed to read OSINT events from Redis: {re}")

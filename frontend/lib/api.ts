@@ -169,7 +169,14 @@ export const api = {
       }>('/api/v1/traffic/flow-segments'),
   },
   routing: {
-    optimizeRouting: (payload: { origin_id?: string; dest_id?: string; fleet_size?: number; hazard_zones?: Array<Record<string, unknown>> }) =>
+    optimizeRouting: (payload: {
+      origin_id?: string;
+      dest_id?: string;
+      origin_coords?: [number, number];
+      dest_coords?: [number, number];
+      fleet_size?: number;
+      hazard_zones?: Array<Record<string, unknown>>;
+    }) =>
       request<{
         status: string;
         is_fallback?: boolean;
@@ -182,6 +189,16 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(payload),
       }),
+  },
+  geocode: {
+    nodes: () =>
+      request<{ nodes: import('./types').GeocodeNode[]; total: number }>('/api/v1/geocode/nodes'),
+    search: (q: string) =>
+      request<{ results: import('./types').GeocodeSearchResult[]; query: string }>(
+        `/api/v1/geocode/search?q=${encodeURIComponent(q)}`
+      ),
+    reverse: (lat: number, lon: number) =>
+      request<import('./types').GeocodeSearchResult>(`/api/v1/geocode/reverse?lat=${lat}&lon=${lon}`),
   },
   demo: {
     start: (opts?: { mock_agents?: boolean; offline?: boolean }) =>

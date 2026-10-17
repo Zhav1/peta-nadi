@@ -17,9 +17,13 @@ import {
   Copy,
   Check,
   RefreshCw,
+  Navigation,
+  Search,
+  MapPin,
+  Clock,
 } from 'lucide-react';
 import { api } from '@/lib/api';
-import type { CustomVehicleRegisterPayload, TMSWebhookPingPayload } from '@/lib/types';
+import type { CustomVehicleRegisterPayload, TMSWebhookPingPayload, GeocodeSearchResult } from '@/lib/types';
 
 interface FleetOnboardingModalProps {
   isOpen: boolean;
@@ -100,7 +104,86 @@ export function FleetOnboardingModal({
     destination: 'Medan',
     speed_kmh: 60,
     temperature_c: undefined,
+    tracking_mode: 'LIVE_GPS',
+    departure_time: new Date().toISOString().slice(0, 16),
   });
+
+  // Village / Kecamatan / City Geocode Autocomplete State
+  const [originQuery, setOriginQuery] = useState('Pelabuhan Belawan');
+  const [originSearchResults, setOriginSearchResults] = useState<GeocodeSearchResult[]>([]);
+  const [isSearchingOrigin, setIsSearchingOrigin] = useState(false);
+  const [showOriginDropdown, setShowOriginDropdown] = useState(false);
+
+  const [destQuery, setDestQuery] = useState('Medan');
+  const [destSearchResults, setDestSearchResults] = useState<GeocodeSearchResult[]>([]);
+  const [isSearchingDest, setIsSearchingDest] = useState(false);
+  const [showDestDropdown, setShowDestDropdown] = useState(false);
+
+  useEffect(() => {
+    if (!originQuery.trim() || originQuery.length < 2) {
+      setOriginSearchResults([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setIsSearchingOrigin(true);
+      try {
+        const res = await api.geocode.search(originQuery);
+        if (res && res.results) {
+          setOriginSearchResults(res.results);
+        } else {
+          setOriginSearchResults([]);
+        }
+      } catch {
+        const filtered = STRATEGIC_HUBS
+          .filter(h => h.toLowerCase().includes(originQuery.toLowerCase()))
+          .map(h => ({
+            name: h,
+            display_name: h,
+            lat: 3.5952,
+            lon: 98.6722,
+            type: 'hub',
+            province: 'Sumatera',
+          }));
+        setOriginSearchResults(filtered);
+      } finally {
+        setIsSearchingOrigin(false);
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [originQuery]);
+
+  useEffect(() => {
+    if (!destQuery.trim() || destQuery.length < 2) {
+      setDestSearchResults([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setIsSearchingDest(true);
+      try {
+        const res = await api.geocode.search(destQuery);
+        if (res && res.results) {
+          setDestSearchResults(res.results);
+        } else {
+          setDestSearchResults([]);
+        }
+      } catch {
+        const filtered = STRATEGIC_HUBS
+          .filter(h => h.toLowerCase().includes(destQuery.toLowerCase()))
+          .map(h => ({
+            name: h,
+            display_name: h,
+            lat: 3.5952,
+            lon: 98.6722,
+            type: 'hub',
+            province: 'Sumatera',
+          }));
+        setDestSearchResults(filtered);
+      } finally {
+        setIsSearchingDest(false);
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [destQuery]);
 
   // Bulk Manifest State
   const [csvFile, setCsvFile] = useState<File | null>(null);
@@ -474,40 +557,185 @@ export function FleetOnboardingModal({
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">
-                    Hub Asal
+                {/* Mode Pelacakan Armada */}
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                    Mode Pelacakan Armada *
                   </label>
-                  <select
-                    disabled={isRegulator}
-                    value={singleForm.origin || ''}
-                    onChange={(e) => setSingleForm({ ...singleForm, origin: e.target.value })}
-                    className="w-full px-3 py-2 text-xs rounded-lg bg-[#141820] border border-white/10 text-slate-100 focus:outline-none focus:border-cyan-500/50 cursor-pointer"
-                  >
-                    {STRATEGIC_HUBS.map((h) => (
-                      <option key={h} value={h}>
-                        {h}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      disabled={isRegulator}
+                      onClick={() => setSingleForm({ ...singleForm, tracking_mode: 'LIVE_GPS' })}
+                      className={`p-3 rounded-lg border text-left transition-all cursor-pointer ${
+                        (singleForm.tracking_mode || 'LIVE_GPS') === 'LIVE_GPS'
+                          ? 'bg-cyan-500/15 border-cyan-400 text-white'
+                          : 'bg-white/5 border-white/10 text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <Radio className="w-4 h-4 text-cyan-400" />
+                        <span className="font-semibold text-xs text-cyan-300">GPS Tracker Aktif / Webhook Real-Time</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400">
+                        GPS fisik terpasang atau streaming webhook telemetri TMS.
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={isRegulator}
+                      onClick={() => setSingleForm({ ...singleForm, tracking_mode: 'ROUTE_ESTIMATED' })}
+                      className={`p-3 rounded-lg border text-left transition-all cursor-pointer ${
+                        singleForm.tracking_mode === 'ROUTE_ESTIMATED'
+                          ? 'bg-amber-500/15 border-amber-400 text-white'
+                          : 'bg-white/5 border-white/10 text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <Navigation className="w-4 h-4 text-amber-400" />
+                        <span className="font-semibold text-xs text-amber-300">Estimasi Rute Otomatis (Tanpa GPS)</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400">
+                        Dead-reckoning koridor berdasarkan waktu keberangkatan dan kecepatan.
+                      </p>
+                    </button>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">
-                    Hub Tujuan
+                {/* Conditional Departure Time for ROUTE_ESTIMATED */}
+                {singleForm.tracking_mode === 'ROUTE_ESTIMATED' && (
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-medium text-amber-300 mb-1 flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5" />
+                      Waktu Keberangkatan (Departure Time) *
+                    </label>
+                    <input
+                      type="datetime-local"
+                      required
+                      disabled={isRegulator}
+                      value={singleForm.departure_time || ''}
+                      onChange={(e) => setSingleForm({ ...singleForm, departure_time: e.target.value })}
+                      className="w-full px-3 py-2 text-xs rounded-lg bg-white/5 border border-amber-400/40 text-slate-100 focus:outline-none focus:border-amber-400"
+                    />
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      Waktu keberangkatan digunakan oleh solver dead-reckoning untuk menghitung posisi armada sepanjang koridor Trans-Sumatra.
+                    </p>
+                  </div>
+                )}
+
+                {/* Searchable Asal (Origin) with Geocode Autocomplete */}
+                <div className="relative">
+                  <label className="block text-xs font-medium text-slate-300 mb-1 flex items-center justify-between">
+                    <span>Titik Asal (Hub / Desa / Kecamatan) *</span>
+                    {singleForm.origin_coords && (
+                      <span className="text-[10px] text-cyan-400 font-mono">
+                        [{singleForm.origin_coords[1].toFixed(3)}, {singleForm.origin_coords[0].toFixed(3)}]
+                      </span>
+                    )}
                   </label>
-                  <select
-                    disabled={isRegulator}
-                    value={singleForm.destination || ''}
-                    onChange={(e) => setSingleForm({ ...singleForm, destination: e.target.value })}
-                    className="w-full px-3 py-2 text-xs rounded-lg bg-[#141820] border border-white/10 text-slate-100 focus:outline-none focus:border-cyan-500/50 cursor-pointer"
-                  >
-                    {STRATEGIC_HUBS.map((h) => (
-                      <option key={h} value={h}>
-                        {h}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      required
+                      disabled={isRegulator}
+                      placeholder="Ketik desa, kecamatan, kota, atau hub..."
+                      value={originQuery}
+                      onChange={(e) => {
+                        setOriginQuery(e.target.value);
+                        setSingleForm({ ...singleForm, origin: e.target.value });
+                        setShowOriginDropdown(true);
+                      }}
+                      onFocus={() => setShowOriginDropdown(true)}
+                      className="w-full pl-8 pr-3 py-2 text-xs rounded-lg bg-white/5 border border-white/10 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50"
+                    />
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5 pointer-events-none" />
+                  </div>
+                  {showOriginDropdown && originSearchResults.length > 0 && (
+                    <div className="absolute left-0 right-0 top-full mt-1 z-30 max-h-48 overflow-y-auto rounded-lg bg-[#0c1017] border border-white/10 shadow-2xl backdrop-blur-md">
+                      {originSearchResults.map((item, idx) => (
+                        <button
+                          key={`${item.name}-${idx}`}
+                          type="button"
+                          onClick={() => {
+                            setSingleForm({
+                              ...singleForm,
+                              origin: item.display_name || item.name,
+                              origin_coords: [item.lon, item.lat],
+                            });
+                            setOriginQuery(item.display_name || item.name);
+                            setShowOriginDropdown(false);
+                          }}
+                          className="w-full text-left px-3 py-2 text-xs hover:bg-white/10 transition-colors flex items-center gap-2 border-b border-white/5 last:border-b-0 cursor-pointer"
+                        >
+                          <MapPin className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                          <div className="truncate">
+                            <span className="font-medium text-slate-200">{item.name}</span>
+                            <span className="text-[10px] text-slate-400 ml-1.5 truncate">
+                              {item.kecamatan ? `${item.kecamatan}, ` : ''}{item.kabupaten ? `${item.kabupaten}, ` : ''}{item.province}
+                            </span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Searchable Tujuan (Destination) with Geocode Autocomplete */}
+                <div className="relative">
+                  <label className="block text-xs font-medium text-slate-300 mb-1 flex items-center justify-between">
+                    <span>Titik Tujuan (Hub / Desa / Kecamatan) *</span>
+                    {singleForm.dest_coords && (
+                      <span className="text-[10px] text-cyan-400 font-mono">
+                        [{singleForm.dest_coords[1].toFixed(3)}, {singleForm.dest_coords[0].toFixed(3)}]
+                      </span>
+                    )}
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      required
+                      disabled={isRegulator}
+                      placeholder="Ketik desa, kecamatan, kota, atau hub..."
+                      value={destQuery}
+                      onChange={(e) => {
+                        setDestQuery(e.target.value);
+                        setSingleForm({ ...singleForm, destination: e.target.value });
+                        setShowDestDropdown(true);
+                      }}
+                      onFocus={() => setShowDestDropdown(true)}
+                      className="w-full pl-8 pr-3 py-2 text-xs rounded-lg bg-white/5 border border-white/10 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50"
+                    />
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5 pointer-events-none" />
+                  </div>
+                  {showDestDropdown && destSearchResults.length > 0 && (
+                    <div className="absolute left-0 right-0 top-full mt-1 z-30 max-h-48 overflow-y-auto rounded-lg bg-[#0c1017] border border-white/10 shadow-2xl backdrop-blur-md">
+                      {destSearchResults.map((item, idx) => (
+                        <button
+                          key={`${item.name}-${idx}`}
+                          type="button"
+                          onClick={() => {
+                            setSingleForm({
+                              ...singleForm,
+                              destination: item.display_name || item.name,
+                              dest_coords: [item.lon, item.lat],
+                            });
+                            setDestQuery(item.display_name || item.name);
+                            setShowDestDropdown(false);
+                          }}
+                          className="w-full text-left px-3 py-2 text-xs hover:bg-white/10 transition-colors flex items-center gap-2 border-b border-white/5 last:border-b-0 cursor-pointer"
+                        >
+                          <MapPin className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                          <div className="truncate">
+                            <span className="font-medium text-slate-200">{item.name}</span>
+                            <span className="text-[10px] text-slate-400 ml-1.5 truncate">
+                              {item.kecamatan ? `${item.kecamatan}, ` : ''}{item.kabupaten ? `${item.kabupaten}, ` : ''}{item.province}
+                            </span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div>

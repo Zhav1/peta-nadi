@@ -33,6 +33,10 @@ class SingleVehicleRegisterRequest(BaseModel):
     vin: Optional[str] = Field(default=None, description="Vehicle Identification Number (VIN) if applicable")
     icao24: Optional[str] = Field(default=None, description="Aviation ICAO 24-bit transponder address if applicable")
     callsign: Optional[str] = Field(default=None, description="Aviation callsign if applicable")
+    tracking_mode: Optional[str] = Field(default="ROUTE_ESTIMATED", description="Tracking mode: 'LIVE_GPS' or 'ROUTE_ESTIMATED'")
+    departure_time: Optional[str] = Field(default=None, description="ISO-8601 departure timestamp for dead-reckoning route progress")
+    origin_coords: Optional[List[float]] = Field(default=None, description="Origin coordinate pair [lon, lat]")
+    dest_coords: Optional[List[float]] = Field(default=None, description="Destination coordinate pair [lon, lat]")
 
 
 class BulkManifestUploadRequest(BaseModel):

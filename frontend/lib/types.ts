@@ -420,6 +420,10 @@ export interface FleetVehicle {
   // Phase 57 STEP 0 tenant contract (D3): stable tenant claim. Backend
   // GET /api/v1/fleet/vehicles accepts ?company_id= ; WP-B3 enforces filter.
   company_id?: string;
+  tracking_mode?: 'LIVE_GPS' | 'ROUTE_ESTIMATED';
+  departure_time?: string;
+  origin_coords?: [number, number];
+  dest_coords?: [number, number];
 }
 
 // Phase 40: Dedicated Evaluation & Benchmark Dashboard Types
@@ -573,6 +577,35 @@ export interface CustomVehicleRegisterPayload {
   vin?: string;
   icao24?: string;
   callsign?: string;
+  tracking_mode?: 'LIVE_GPS' | 'ROUTE_ESTIMATED';
+  departure_time?: string;
+  origin_coords?: [number, number];
+  dest_coords?: [number, number];
+}
+
+// Phase 62: Pan-Sumatra Gazetteer & 3-Tier Village Geocoding Types
+export interface GeocodeNode {
+  name: string;
+  display_name: string;
+  lat: number;
+  lon: number;
+  type: 'port' | 'airport' | 'city' | 'regency' | 'kecamatan' | 'village' | 'hub';
+  province: string;
+  kabupaten?: string;
+  kecamatan?: string;
+  corridor?: string;
+}
+
+export interface GeocodeSearchResult {
+  name: string;
+  display_name: string;
+  lat: number;
+  lon: number;
+  type: string;
+  province: string;
+  kabupaten?: string;
+  kecamatan?: string;
+  corridor?: string;
 }
 
 export interface TMSWebhookPingPayload {

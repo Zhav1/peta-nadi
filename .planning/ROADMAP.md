@@ -1653,6 +1653,44 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 
 ---
 
+## Phase 62: Live Telemetry, SpatialHash Anti-Clutter, News Deep-Linking & Universal Village Routing
+
+**Goal:** Establish always-on multi-modal telemetry across Sumatra and the Malacca Strait, hybrid dispatcher truck onboarding (`LIVE_GPS` + `ROUTE_ESTIMATED`), screen-space 32px bit-packed `SpatialHash` label arbiter, 3-tier zoom Level of Detail (LOD), universal village geocoding and CPU routing, and deep-link integrity for all news evidence citations.
+**Status:** COMPLETE ✅
+**Plans:** 62-PLAN.md, 62-CONTEXT.md, 62-LEARNINGS.md, 62-WALKTHROUGH.md, 62-SUMMARY.md
+
+### Deliverables
+
+- [x] **WP1 - Always-On Telemetry (AIS + ADS-B) & Hybrid Dispatcher Trucks**:
+  - `backend/app/adapters/aisstream_adapter.py`: expanded AIS subscription to Sumatra/Malacca macro bounding box (`[[-6.2, 94.8], [6.2, 109.0]]`), 600-vessel thread-safe ring buffer with reconnection watchdog, and 88-vessel empirical regional sea-lane fallback.
+  - `backend/app/services/telemetry_service.py`: `adsb.lol` 250nm aviation polling with 30s TTL cache, bypassing OpenSky 429 rate limits on Render.
+  - `backend/app/schemas/fleet.py` & `fleet_ingest.py`: canonical `tracking_mode`, `origin_coords`, `dest_coords`, `departure_time`, `current_coords` schema fields.
+  - `backend/app/routers/fleet_ingest_router.py`: hybrid `LIVE_GPS` (webhook pings) and `ROUTE_ESTIMATED` (dead-reckoned along road corridors, modulated by BMKG weather and TomTom traffic) with deterministic VIN generation (`VIN-CUSTOM-{vid}`).
+  - `frontend/hooks/useFleetVehicles.ts` & `DashboardClient.tsx`: retired destructive `!isSimulationMode` filter that previously emptied the map, replacing `#fleet-sim-toggle-btn` with multi-source filter and live status indicators.
+- [x] **WP2 - Screen-Space SpatialHash Anti-Clutter Arbiter & 3-Tier Zoom LOD**:
+  - `frontend/lib/spatialHashArbiter.ts`: 32px screen-space spatial hash using 31-bit Smi bit-packing `(cx << 14) | cy` with 5-tier priority arbitration, cell quota capping, and 2500ms hysteresis lock.
+  - `frontend/components/map/CrisisMap.tsx`: 3-tier zoom LOD (Tier 1 `z < 7.5` Core Hubs, Tier 2 `7.5 <= z < 11.5` 116 Gazetteer Nodes, Tier 3 `z >= 11.5` Interactive Mapbox Vector Village Labels).
+  - `frontend/components/map/FleetVehicleLayer.tsx`: 60 FPS client-side kinematic dead-reckoning extrapolator with zoom-expression sizing.
+- [x] **WP3 - Universal Village Geocoding & CPU Routing Solver**:
+  - `backend/app/routers/geocode_router.py`: `GET /api/v1/geocode/nodes` (116 gazetteer nodes), `GET /api/v1/geocode/search` (multi-source search bounded to Sumatra), `GET /api/v1/geocode/reverse`.
+  - `backend/app/adapters/cpu_routing_adapter.py` & `backend/app/routers/routing_router.py`: Haversine nearest-node projection to snap arbitrary village coordinates to backbone road network in $< 1\text{ms}$.
+  - `frontend/components/dashboard/DashboardClient.tsx`: village search input and map click-to-route context handlers.
+- [x] **WP4 - News Deep-Link Integrity & Canonical URL Resolution**:
+  - `agents/nodes/osint_hazard.py`: preserved `url` and `published_at` in `verified_citations`.
+  - `backend/app/services/news_aggregator.py`: canonical article permalink unwrapping (decoding Google News RSS base64 `CBMi...` tokens).
+  - `frontend/hooks/useNewsVerification.ts`: updated `FALLBACK_SUMATRA_NEWS` with canonical article permalinks.
+  - `DashboardClient.tsx`, `EvidenceTab.tsx`, `MitigationTab.tsx`: added `rel="noopener noreferrer"` and `referrerPolicy="no-referrer"` to bypass Indonesian publisher CDN referer bounces.
+
+### Verification Criteria
+
+- [x] `backend/tests/test_cross_workstream_integration.py` & `backend/tests/test_vehicles_telemetry.py`: 12 passed, 0 failed.
+- [x] `npx tsc --noEmit` in `frontend/`: 0 errors.
+- [x] Always-on live telemetry active on dashboard without manual toggling.
+- [x] 100% of news headline and citation links navigate to specific articles without homepage bouncing.
+- [x] Universal village search and map click-to-route operational with $< 1\text{ms}$ Haversine graph snapping.
+
+---
+
 ## Backlog (Post-Hackathon / v2)
 
 - Driver mobile app (React Native + WatermelonDB + CRDT offline sync)

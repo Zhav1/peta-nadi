@@ -17,7 +17,8 @@ import httpx
 
 from app.services.news_aggregator import (
     fetch_all_multi_outlet_news,
-    upsert_articles_to_supabase
+    upsert_articles_to_supabase,
+    resolve_canonical_article_url
 )
 from app.nlp.news_extractor import extract_structured_news
 from app.services.redis_client import get_redis
@@ -67,6 +68,15 @@ class UnifiedNewsIngestor:
         tasks = [extract_structured_news(a) for a in raw_items[:30]]
         structured_results = await asyncio.gather(*tasks, return_exceptions=True)
         structured_articles = [a for a in structured_results if isinstance(a, dict)]
+
+        # Ensure canonical article URLs and permalinks are resolved across all items
+        for art in structured_articles:
+            raw_url = art.get("link") or art.get("url") or ""
+            title = art.get("title", "")
+            source = art.get("source", "")
+            resolved_url = resolve_canonical_article_url(raw_url, title, source)
+            art["link"] = resolved_url
+            art["url"] = resolved_url
 
         # 3. Verify original source links (dead / alive / unknown provenance)
         await self._attach_link_liveness(structured_articles)
@@ -180,6 +190,8 @@ class UnifiedNewsIngestor:
                     "commodities_affected": ",".join(art.get("commodities_affected", ["Komoditas Pangan Pokok"])),
                     "lane_status": str(art.get("ground_truth_metrics", {}).get("lane_status", "CLEAR")),
                     "link": str(art.get("link", "")),
+                    "url": str(art.get("url") or art.get("link", "")),
+                    "published_at": str(art.get("published_at") or art.get("pubDate") or datetime.now(timezone.utc).isoformat()),
                     "link_alive": str(art.get("link_alive", "unknown")),
                     "confidence_score": str(art.get("confidence_score", 0.85)),
                     "created_at": datetime.now(timezone.utc).isoformat()

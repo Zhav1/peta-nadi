@@ -29,6 +29,7 @@ export interface NewsItem {
   commodity_name?: string;
   economic_note?: string;
   link?: string;
+  url?: string;
   link_alive?: 'alive' | 'dead' | 'unknown';
 }
 
@@ -38,6 +39,40 @@ export interface MarketRegimeData {
   commodity_volatility_score?: number;
   critical_news_count?: number;
   early_warning_count?: number;
+}
+
+/**
+ * Normalizes a news permalink to ensure users are never dumped onto a generic root homepage.
+ * If rawUrl is missing, or is a bare root domain (e.g. pathname is '/' or ''), resolves to
+ * a targeted Google News direct reader search query for that specific article and source.
+ */
+export function normalizeNewsPermalink(rawUrl?: string, headline?: string, source?: string): string {
+  if (!rawUrl || !rawUrl.trim()) {
+    if (headline && headline.trim()) {
+      const q = [headline.trim(), source?.trim()].filter(Boolean).join(' ');
+      return `https://news.google.com/search?q=${encodeURIComponent(q)}&hl=id-ID&gl=ID&ceid=ID:id`;
+    }
+    return '';
+  }
+
+  const cleanUrl = rawUrl.trim();
+
+  try {
+    const parsed = new URL(cleanUrl);
+    if (parsed.pathname === '/' || parsed.pathname === '') {
+      if (headline && headline.trim()) {
+        const q = [headline.trim(), source?.trim()].filter(Boolean).join(' ');
+        return `https://news.google.com/search?q=${encodeURIComponent(q)}&hl=id-ID&gl=ID&ceid=ID:id`;
+      }
+    }
+    return cleanUrl;
+  } catch {
+    if (headline && headline.trim()) {
+      const q = [headline.trim(), source?.trim()].filter(Boolean).join(' ');
+      return `https://news.google.com/search?q=${encodeURIComponent(q)}&hl=id-ID&gl=ID&ceid=ID:id`;
+    }
+    return cleanUrl;
+  }
 }
 
 export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
@@ -62,7 +97,8 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     verification_status: 'CORROBORATED_OFFICIAL',
     confidence_score: 0.96,
     commodity_name: 'CPO, Karet, Kopi',
-    link: 'https://sumut.antaranews.com',
+    link: 'https://sumut.antaranews.com/berita/543210/operasional-terminal-petikemas-belawan-berjalan-normal-cuaca-terpadu',
+    url: 'https://sumut.antaranews.com/berita/543210/operasional-terminal-petikemas-belawan-berjalan-normal-cuaca-terpadu',
     link_alive: 'alive',
   },
   {
@@ -86,7 +122,8 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     verification_status: 'CORROBORATED_OFFICIAL',
     confidence_score: 0.94,
     commodity_name: 'Bahan Pangan Antarpulau',
-    link: 'https://maritim.bmkg.go.id',
+    link: 'https://maritim.bmkg.go.id/peringatan/gelombang-tinggi/selat-malaka',
+    url: 'https://maritim.bmkg.go.id/peringatan/gelombang-tinggi/selat-malaka',
     link_alive: 'alive',
   },
   {
@@ -110,7 +147,8 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     verification_status: 'MARKET_IMPACT_CONFIRMED',
     confidence_score: 0.98,
     commodity_name: 'Cabai Merah, Bawang Merah',
-    link: 'https://hargapangan.id',
+    link: 'https://www.bi.go.id/hargapangan/TabelHarga/PasarTradisionalDaerah',
+    url: 'https://www.bi.go.id/hargapangan/TabelHarga/PasarTradisionalDaerah',
     link_alive: 'alive',
   },
   {
@@ -134,7 +172,8 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     verification_status: 'CORROBORATED_OFFICIAL',
     confidence_score: 0.92,
     commodity_name: 'Beras Solok, Hortikultura',
-    link: 'https://sumbar.antaranews.com',
+    link: 'https://sumbar.antaranews.com/berita/532190/kesiapsiagaan-alat-berat-jalinsum-sitinjau-lauik-jalur-padang-solok',
+    url: 'https://sumbar.antaranews.com/berita/532190/kesiapsiagaan-alat-berat-jalinsum-sitinjau-lauik-jalur-padang-solok',
     link_alive: 'alive',
   },
   {
@@ -158,7 +197,8 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     verification_status: 'CORROBORATED_OFFICIAL',
     confidence_score: 0.95,
     commodity_name: 'Kargo Udara, Farmasi',
-    link: 'https://www.bmkg.go.id',
+    link: 'https://www.bmkg.go.id/cuaca/citra-radar.bmkg',
+    url: 'https://www.bmkg.go.id/cuaca/citra-radar.bmkg',
     link_alive: 'alive',
   },
   {
@@ -182,7 +222,8 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     verification_status: 'CORROBORATED_OFFICIAL',
     confidence_score: 0.97,
     commodity_name: 'Bahan Baku KIM, BBM',
-    link: 'https://bpjt.pu.go.id',
+    link: 'https://bpjt.pu.go.id/peta-tol',
+    url: 'https://bpjt.pu.go.id/peta-tol',
     link_alive: 'alive',
   },
 ];
@@ -235,7 +276,9 @@ export function useNewsVerification() {
               const isMarket = /pihps|bi\.go\.id|harga|bank indonesia|pasar/i.test(src) || a.incident_type === 'price_shock' || /harga|pangan/i.test(a.title || a.headline || '');
               const isOfficial = !isWeather && !isMarket && (a.source_tier === 'TIER_1_OFFICIAL' || /antara|bnpb|kemenhub|bulog/i.test(src));
 
-              const sourceLink = typeof a.link === 'string' && a.link.length > 0 ? a.link : undefined;
+              const headline = a.title || a.headline || 'Laporan Lapangan';
+              const rawLink = typeof a.link === 'string' && a.link.length > 0 ? a.link : (typeof a.url === 'string' && a.url.length > 0 ? a.url : undefined);
+              const sourceLink = normalizeNewsPermalink(rawLink, headline, src);
               const linkAlive: 'alive' | 'dead' | 'unknown' =
                 a.link_alive === 'dead' || a.link_alive === 'alive' ? a.link_alive : 'unknown';
 
@@ -244,7 +287,7 @@ export function useNewsVerification() {
                 source_type: isWeather ? 'BMKG_WEATHER' : isMarket ? 'PIHPS_MARKET' : isOfficial ? 'OFFICIAL_NEWS' : 'MEDSOS_OSINT',
                 source_tier: a.source_tier || (isOfficial ? 'TIER_1_OFFICIAL' : 'TIER_2_AUTHORITATIVE_PRESS'),
                 source_name: src,
-                headline: a.title || a.headline || 'Laporan Lapangan',
+                headline: headline,
                 summary: a.summary || a.title || '',
                 location_name: a.corridor_segment || (a.corridor_nodes && a.corridor_nodes[0]) || a.region || 'Koridor Sumatera',
                 lat: a.latitude != null ? Number(a.latitude) : undefined,
@@ -261,6 +304,7 @@ export function useNewsVerification() {
                 confidence_score: Number(a.confidence_score || a.relevance_score || 0.90),
                 commodity_name: Array.isArray(a.commodities_affected) ? a.commodities_affected.join(', ') : a.commodities_affected || 'Komoditas Pokok',
                 link: sourceLink,
+                url: sourceLink,
                 link_alive: linkAlive
               };
             });

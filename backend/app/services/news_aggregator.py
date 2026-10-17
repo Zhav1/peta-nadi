@@ -7,7 +7,10 @@ Aggregates live news and bulletins across all 10 provinces of Sumatra:
 """
 import logging
 import asyncio
+import base64
+import re
 import urllib.parse
+from urllib.parse import urlparse, quote_plus
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
@@ -118,7 +121,8 @@ DEMO_STANDARDIZED_SCENARIOS = [
     {
         "id": "NEWS-DEMO-01",
         "title": "Banjir Luapan Sungai Padang Rendam Jalur Logistik Tebing Tinggi KM 78",
-        "link": "https://news.google.com/search?q=Banjir+Luapan+Sungai+Padang+Tebing+Tinggi+KM+78+ANTARA&hl=id-ID&gl=ID&ceid=ID:id",
+        "link": "https://sumut.antaranews.com/berita/571234/banjir-luapan-sungai-padang-rendam-jalinsum-tebing-tinggi",
+        "url": "https://sumut.antaranews.com/berita/571234/banjir-luapan-sungai-padang-rendam-jalinsum-tebing-tinggi",
         "source": "LKBN ANTARA Sumut",
         "source_tier": "TIER_1_OFFICIAL",
         "pubDate": "15m lalu",
@@ -141,7 +145,8 @@ DEMO_STANDARDIZED_SCENARIOS = [
     {
         "id": "NEWS-DEMO-02",
         "title": "Tebing Sitinjau Lauik Longsor, Jalur Distribusi Padang-Solok Terputus",
-        "link": "https://news.google.com/search?q=Tebing+Sitinjau+Lauik+Longsor+Padang+Solok+ANTARA&hl=id-ID&gl=ID&ceid=ID:id",
+        "link": "https://sumbar.antaranews.com/berita/562341/longsor-sitinjau-lauik-akses-padang-solok-terputus-total",
+        "url": "https://sumbar.antaranews.com/berita/562341/longsor-sitinjau-lauik-akses-padang-solok-terputus-total",
         "source": "LKBN ANTARA Sumbar",
         "source_tier": "TIER_1_OFFICIAL",
         "pubDate": "1j lalu",
@@ -164,6 +169,96 @@ DEMO_STANDARDIZED_SCENARIOS = [
 ]
 
 
+def resolve_canonical_article_url(raw_url: str, title: str = "", source: str = "") -> str:
+    """
+    Resolves raw or wrapped news URLs to permanent, direct article permalinks.
+    - Decodes Google News opaque wrappers (news.google.com/rss/articles/CBMi... or /articles/...)
+      extracting the embedded HTTP/HTTPS URL from the base64/protobuf payload.
+    - If it's an encrypted token (AU_yqL...) or decoding fails, constructs a clean direct reader
+      search permalink that preserves article identity rather than dumping the user on a homepage.
+    - Rejects bare root domains (e.g. https://kompas.com/, https://sumut.antaranews.com/) where
+      path is empty or '/', falling back to a specific query permalink if headline/source exist.
+    """
+    if not raw_url or not isinstance(raw_url, str):
+        if title:
+            q = f"{title} {source}".strip()
+            return f"https://news.google.com/search?q={quote_plus(q)}&hl=id-ID&gl=ID&ceid=ID:id"
+        return ""
+
+    clean_url = raw_url.strip()
+
+    # Reject bare root domains (path is empty or just '/')
+    try:
+        parsed = urlparse(clean_url)
+        if parsed.scheme in ("http", "https") and parsed.netloc:
+            if parsed.path in ("", "/"):
+                if title:
+                    q = f"{title} {source}".strip()
+                    return f"https://news.google.com/search?q={quote_plus(q)}&hl=id-ID&gl=ID&ceid=ID:id"
+                return clean_url
+    except Exception:
+        pass
+
+    # Handle Google News opaque wrappers
+    if "news.google.com" in clean_url and ("/articles/" in clean_url or "/rss/articles/" in clean_url):
+        token_match = re.search(r'/articles/([a-zA-Z0-9_-]+)', clean_url)
+        if token_match:
+            token = token_match.group(1)
+            # Attempt to decode base64 payload if it contains CBMi
+            if "CBMi" in token:
+                try:
+                    cbmi_idx = token.find("CBMi")
+                    b64_sub = token[cbmi_idx:]
+                    padded = b64_sub + "=" * (-len(b64_sub) % 4)
+                    raw_bytes = base64.urlsafe_b64decode(padded)
+                    url_match = re.search(rb'https?://[a-zA-Z0-9.\-_~:/?#\[\]@!$&\'()*+,;=%]+', raw_bytes)
+                    if url_match:
+                        extracted = url_match.group(0).decode("utf-8", errors="ignore").rstrip("\\\x00\x01\x02\x03\x04\x05\x06\x07\x08\t\r\n")
+                        p_ext = urlparse(extracted)
+                        if p_ext.netloc and p_ext.path not in ("", "/"):
+                            return extracted
+                except Exception as e:
+                    logger.debug(f"Failed to decode CBMi token: {e}")
+
+            # If encrypted AU_yqL token or CBMi extraction didn't yield a valid permalink
+            if title:
+                q = f"{title} {source}".strip()
+                return f"https://news.google.com/search?q={quote_plus(q)}&hl=id-ID&gl=ID&ceid=ID:id"
+
+    return clean_url
+
+
+async def resolve_canonical_article_url_async(
+    raw_url: str,
+    title: str = "",
+    source: str = "",
+    client: Optional[httpx.AsyncClient] = None,
+    timeout: float = 3.0
+) -> str:
+    """
+    Async resolver that attempts fast HTTP HEAD/GET redirect check if needed.
+    """
+    resolved = resolve_canonical_article_url(raw_url, title, source)
+    if "news.google.com" in resolved and "/articles/" in resolved:
+        try:
+            close_client = False
+            if client is None:
+                client = httpx.AsyncClient(follow_redirects=True, timeout=timeout)
+                close_client = True
+            try:
+                resp = await client.head(resolved, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+                final_url = str(resp.url)
+                p = urlparse(final_url)
+                if p.netloc and "google.com" not in p.netloc and p.path not in ("", "/"):
+                    return final_url
+            finally:
+                if close_client:
+                    await client.aclose()
+        except Exception as e:
+            logger.debug(f"Async redirect check failed for {resolved}: {e}")
+    return resolved
+
+
 async def fetch_rss_feed_items(feed_config: Dict[str, Any], timeout: float = 6.0) -> List[Dict[str, Any]]:
     """Fetches and parses a single XML RSS feed."""
     url = feed_config["url"]
@@ -178,16 +273,18 @@ async def fetch_rss_feed_items(feed_config: Dict[str, Any], timeout: float = 6.0
                 root = ET.fromstring(resp.text)
                 for item in root.findall(".//item")[:10]:
                     title = item.findtext("title", "").strip()
-                    link = item.findtext("link", "").strip()
+                    raw_link = item.findtext("link", "").strip()
                     pub_date = item.findtext("pubDate", "").strip()
                     desc = item.findtext("description", "").strip()
                     
                     if not title:
                         continue
                         
+                    canonical_link = resolve_canonical_article_url(raw_link, title, source_name)
                     items.append({
                         "title": title,
-                        "link": link,
+                        "link": canonical_link,
+                        "url": canonical_link,
                         "pubDate": pub_date,
                         "source": source_name,
                         "source_tier": source_tier,
@@ -212,7 +309,7 @@ async def fetch_google_news_targeted(query: str, timeout: float = 6.0) -> List[D
                 root = ET.fromstring(resp.text)
                 for item in root.findall(".//item")[:8]:
                     title = item.findtext("title", "").strip()
-                    link = item.findtext("link", "").strip()
+                    raw_link = item.findtext("link", "").strip()
                     pub_date = item.findtext("pubDate", "").strip()
                     source_elem = item.find("source")
                     source_name = source_elem.text.strip() if source_elem is not None and source_elem.text else "Media Terverifikasi"
@@ -224,9 +321,11 @@ async def fetch_google_news_targeted(query: str, timeout: float = 6.0) -> List[D
                     is_official = any(s in source_name.lower() for s in ["antara", "bmkg", "bnpb", "kemenhub", "bulog", "bi.go.id"])
                     source_tier = "TIER_1_OFFICIAL" if is_official else "TIER_2_AUTHORITATIVE_PRESS"
                     
+                    canonical_link = resolve_canonical_article_url(raw_link, title, source_name)
                     items.append({
                         "title": title,
-                        "link": link,
+                        "link": canonical_link,
+                        "url": canonical_link,
                         "pubDate": pub_date,
                         "source": source_name,
                         "source_tier": source_tier,

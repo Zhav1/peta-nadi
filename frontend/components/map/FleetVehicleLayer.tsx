@@ -17,6 +17,13 @@ import {
   Crosshair,
   Thermometer,
 } from 'lucide-react';
+import {
+  defaultSpatialHashArbiter,
+  arbitrateVisibleLabels,
+  PRIORITY_SELECTED_ROUTE,
+  PRIORITY_FLEET_CALLSIGN,
+  type DeclutterItem,
+} from '@/lib/spatialHashArbiter';
 
 interface FleetVehicleLayerProps {
   map: mapboxgl.Map | null;
@@ -40,6 +47,37 @@ function getCardinalDirection(deg: number): string {
   const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
   const index = Math.round(((deg % 360) / 45)) % 8;
   return directions[index];
+}
+
+/**
+ * 60 FPS Great-Circle Dead-Reckoning Extrapolation (motionModel).
+ * Extrapolates [lon, lat] forward in time based on speed_kmh and bearingDeg.
+ */
+function deadReckonPosition(
+  start: [number, number],
+  bearingDeg: number,
+  distanceKm: number
+): [number, number] {
+  const [lon1, lat1] = start;
+  const R = 6371.0;
+  const d = distanceKm / R;
+  const brng = (bearingDeg * Math.PI) / 180;
+  const phi1 = (lat1 * Math.PI) / 180;
+  const lambda1 = (lon1 * Math.PI) / 180;
+
+  const phi2 = Math.asin(
+    Math.sin(phi1) * Math.cos(d) +
+    Math.cos(phi1) * Math.sin(d) * Math.cos(brng)
+  );
+  const lambda2 = lambda1 + Math.atan2(
+    Math.sin(brng) * Math.sin(d) * Math.cos(phi1),
+    Math.cos(d) - Math.sin(phi1) * Math.sin(phi2)
+  );
+
+  const lon2 = ((lambda2 * 180) / Math.PI + 540) % 360 - 180;
+  const lat2 = (phi2 * 180) / Math.PI;
+
+  return [lon2, lat2];
 }
 
 /**
@@ -234,6 +272,15 @@ export function FleetVehicleLayer({
             'icon-image': ['get', 'icon'],
             'icon-rotate': ['get', 'heading'],
             'icon-rotation-alignment': 'map',
+            'icon-size': [
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              4.0, 0.40,
+              7.5, 0.55,
+              10.0, 0.85,
+              14.0, 1.05,
+            ],
             'icon-allow-overlap': true,
             'icon-ignore-placement': true,
           },
@@ -245,6 +292,47 @@ export function FleetVehicleLayer({
         if (layerInst && !layerInst.layout && typeof layerInst.recalculate === 'function') {
           layerInst.recalculate({ zoom: targetMap.getZoom() }, styleAny?._availableImages || {});
         }
+      }
+
+      // 4. Callsign labels source & symbol layer (governed by SpatialHash anti-clutter arbiter)
+      if (!targetMap.getSource('fleet-callsign-labels')) {
+        targetMap.addSource('fleet-callsign-labels', {
+          type: 'geojson',
+          data: { type: 'FeatureCollection', features: [] },
+        });
+      }
+      if (!targetMap.getLayer('fleet-callsign-labels-layer')) {
+        targetMap.addLayer({
+          id: 'fleet-callsign-labels-layer',
+          type: 'symbol',
+          source: 'fleet-callsign-labels',
+          layout: {
+            'text-field': [
+              'case',
+              ['get', 'is_selected'],
+              ['concat', ['get', 'callsign'], '\n[', ['get', 'badge'], ']'],
+              ['concat', ['get', 'callsign'], ' • ', ['get', 'badge']]
+            ],
+            'text-font': ['DIN Pro Medium', 'Arial Unicode MS Regular'],
+            'text-size': [
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              7.5, 9.5,
+              10.0, 11.0,
+              14.0, 12.0,
+            ],
+            'text-offset': [0, 1.4],
+            'text-anchor': 'top',
+            'text-allow-overlap': false,
+            'text-ignore-placement': false,
+          },
+          paint: {
+            'text-color': ['get', 'text_color'],
+            'text-halo-color': '#0c1017',
+            'text-halo-width': 2.0,
+          },
+        });
       }
     } catch {
       // Style was mutating, retry on idle
@@ -328,11 +416,19 @@ export function FleetVehicleLayer({
     map.on('mouseenter', 'fleet-telemetry-points-layer', onMouseEnter);
     map.on('mouseleave', 'fleet-telemetry-points-layer', onMouseLeave);
 
+    map.on('click', 'fleet-callsign-labels-layer', onLayerClick);
+    map.on('mouseenter', 'fleet-callsign-labels-layer', onMouseEnter);
+    map.on('mouseleave', 'fleet-callsign-labels-layer', onMouseLeave);
+
     return () => {
       try {
         map.off('click', 'fleet-telemetry-points-layer', onLayerClick);
         map.off('mouseenter', 'fleet-telemetry-points-layer', onMouseEnter);
         map.off('mouseleave', 'fleet-telemetry-points-layer', onMouseLeave);
+
+        map.off('click', 'fleet-callsign-labels-layer', onLayerClick);
+        map.off('mouseenter', 'fleet-callsign-labels-layer', onMouseEnter);
+        map.off('mouseleave', 'fleet-callsign-labels-layer', onMouseLeave);
         const canvas = map?.getCanvas();
         if (canvas?.style) canvas.style.cursor = '';
       } catch {}
@@ -356,6 +452,9 @@ export function FleetVehicleLayer({
         if (map.getLayer('fleet-breadcrumb-trails-layer')) {
           map.setLayoutProperty('fleet-breadcrumb-trails-layer', 'visibility', 'none');
         }
+        if (map.getLayer('fleet-callsign-labels-layer')) {
+          map.setLayoutProperty('fleet-callsign-labels-layer', 'visibility', 'none');
+        }
 
         // 2. Clear GeoJSON sources
         const emptyFc: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
@@ -367,6 +466,9 @@ export function FleetVehicleLayer({
 
         const vectorsSource = map.getSource('fleet-bearing-vectors') as mapboxgl.GeoJSONSource | undefined;
         if (vectorsSource) vectorsSource.setData(emptyFc);
+
+        const labelsSource = map.getSource('fleet-callsign-labels') as mapboxgl.GeoJSONSource | undefined;
+        if (labelsSource) labelsSource.setData(emptyFc);
 
         progressMapRef.current = {};
         breadcrumbsRef.current = {};
@@ -397,6 +499,9 @@ export function FleetVehicleLayer({
       }
       if (map.getLayer('fleet-breadcrumb-trails-layer')) {
         map.setLayoutProperty('fleet-breadcrumb-trails-layer', 'visibility', 'visible');
+      }
+      if (map.getLayer('fleet-callsign-labels-layer')) {
+        map.setLayoutProperty('fleet-callsign-labels-layer', 'visibility', 'visible');
       }
     } catch {}
 
@@ -435,6 +540,8 @@ export function FleetVehicleLayer({
       const pointFeatures: GeoJSON.Feature<GeoJSON.Point>[] = [];
       const trailFeatures: GeoJSON.Feature<GeoJSON.LineString>[] = [];
       const vectorFeatures: GeoJSON.Feature<GeoJSON.LineString>[] = [];
+      const declutterCandidates: DeclutterItem[] = [];
+      const labelFeatures: GeoJSON.Feature<GeoJSON.Point>[] = [];
 
       visibleVehicles.forEach((v) => {
         let coords = (v.route_geometry?.coordinates || v.path || []) as [number, number][];
@@ -476,11 +583,32 @@ export function FleetVehicleLayer({
 
         const state = calculateRouteProgressPosition(coords, currentProgress);
 
+        // 60 FPS Dead-Reckoning Motion Interpolation (motionModel):
+        // For maritime and air vehicles (and off-corridor live GPS trucks), smoothly extrapolate [lon, lat]
+        // between polling intervals using speed_kmh and bearing via great-circle geodesics.
+        // For ROUTE_ESTIMATED trucks, preserve surveyed Trans-Sumatra road corridor-snapped progression.
+        let finalPos: [number, number] = state.currentPosition;
+        let finalBearing: number = state.bearing;
+
+        if (
+          v.modality === 'maritime' ||
+          v.modality === 'air' ||
+          (v.tracking_mode === 'LIVE_GPS' && (!v.path || v.path.length <= 2))
+        ) {
+          const effectiveBearing = v.cog_deg ?? v.heading_deg ?? state.bearing;
+          finalBearing = effectiveBearing;
+          const kmDrift = (baseSpeed / 3600) * deltaSec * simSpeedMultiplier * 1.2;
+          finalPos = deadReckonPosition(state.currentPosition, effectiveBearing, kmDrift);
+        } else {
+          finalPos = state.currentPosition;
+          finalBearing = state.bearing;
+        }
+
         // Maintain rolling circular buffer of last 10 historical coordinates for breadcrumb trail
         const history = breadcrumbsRef.current[v.vehicle_id] || [];
         const lastPt = history[history.length - 1];
-        if (!lastPt || Math.hypot(lastPt[0] - state.currentPosition[0], lastPt[1] - state.currentPosition[1]) > 0.0002) {
-          history.push(state.currentPosition);
+        if (!lastPt || Math.hypot(lastPt[0] - finalPos[0], lastPt[1] - finalPos[1]) > 0.0002) {
+          history.push(finalPos);
           if (history.length > 10) history.shift();
           breadcrumbsRef.current[v.vehicle_id] = history;
         }
@@ -510,8 +638,8 @@ export function FleetVehicleLayer({
                 : '#34d399';
 
           const endPoint = projectBearingEndpoint(
-            state.currentPosition,
-            state.bearing,
+            finalPos,
+            finalBearing,
             v.speed_kmh || 60,
             v.modality === 'air' ? 0.08 : 0.05
           );
@@ -524,7 +652,7 @@ export function FleetVehicleLayer({
             },
             geometry: {
               type: 'LineString',
-              coordinates: [state.currentPosition, endPoint],
+              coordinates: [finalPos, endPoint],
             },
           });
         }
@@ -535,7 +663,7 @@ export function FleetVehicleLayer({
             id: v.vehicle_id,
             name: v.name,
             modality: v.modality,
-            heading: state.bearing,
+            heading: finalBearing,
             speed_kmh: v.speed_kmh,
             status: v.status,
             icon,
@@ -546,8 +674,22 @@ export function FleetVehicleLayer({
           },
           geometry: {
             type: 'Point',
-            coordinates: state.currentPosition,
+            coordinates: finalPos,
           },
+        });
+
+        // Register candidate for screen-space SpatialHash label decluttering
+        const screenPt = map.project(finalPos);
+        declutterCandidates.push({
+          id: v.vehicle_id,
+          screenX: screenPt.x,
+          screenY: screenPt.y,
+          priority: isSelected ? PRIORITY_SELECTED_ROUTE : PRIORITY_FLEET_CALLSIGN,
+          width: 90,
+          height: 24,
+          category: 'fleet',
+          text: v.callsign || v.name || v.vehicle_id,
+          coords: finalPos,
         });
 
         // Update selected vehicle live position & Follow camera tracking
@@ -556,8 +698,8 @@ export function FleetVehicleLayer({
             if (!prev || prev.vehicle.vehicle_id !== v.vehicle_id) return prev;
             return {
               ...prev,
-              currentPos: state.currentPosition,
-              bearing: state.bearing,
+              currentPos: finalPos,
+              bearing: finalBearing,
             };
           });
 
@@ -565,9 +707,53 @@ export function FleetVehicleLayer({
             // Smooth 60 FPS top-down North-Up lerp center without disorienting rotational swings or easeTo queue lag
             const currentCenter = map.getCenter();
             const lerpFactor = 0.08;
-            const nextLng = currentCenter.lng + (state.currentPosition[0] - currentCenter.lng) * lerpFactor;
-            const nextLat = currentCenter.lat + (state.currentPosition[1] - currentCenter.lat) * lerpFactor;
+            const nextLng = currentCenter.lng + (finalPos[0] - currentCenter.lng) * lerpFactor;
+            const nextLat = currentCenter.lat + (finalPos[1] - currentCenter.lat) * lerpFactor;
             map.setCenter([nextLng, nextLat]);
+          }
+        }
+      });
+
+      // SpatialHash Anti-Clutter Arbitration:
+      // At island zoom (z < 7.5), non-selected callsign labels are hidden to prevent cluttering Sumatra & Malacca Strait.
+      // At closer zoom (z >= 7.5), labels are arbitrated across 32px grid cells with temporal hysteresis.
+      const currentZoom = map.getZoom();
+      const winningLabelIds = currentZoom >= 7.5
+        ? arbitrateVisibleLabels(declutterCandidates, defaultSpatialHashArbiter)
+        : new Set<string>();
+
+      declutterCandidates.forEach((c) => {
+        const isSelected = selectedVehicleIdRef.current === c.id;
+        if (isSelected || winningLabelIds.has(c.id)) {
+          const targetVeh = visibleVehicles.find((veh) => veh.vehicle_id === c.id);
+          if (targetVeh && c.coords) {
+            let badge = 'GPS LIVE';
+            let textColor = '#34d399';
+            if (targetVeh.modality === 'maritime') {
+              badge = 'AIS LIVE';
+              textColor = '#38bdf8';
+            } else if (targetVeh.modality === 'air') {
+              badge = 'ADS-B';
+              textColor = '#c084fc';
+            } else if (targetVeh.tracking_mode === 'ROUTE_ESTIMATED') {
+              badge = 'ESTIMASI RUTE';
+              textColor = '#f59e0b';
+            }
+
+            labelFeatures.push({
+              type: 'Feature',
+              properties: {
+                id: targetVeh.vehicle_id,
+                callsign: c.text,
+                badge,
+                text_color: isSelected ? '#00f0ff' : textColor,
+                is_selected: isSelected,
+              },
+              geometry: {
+                type: 'Point',
+                coordinates: c.coords,
+              },
+            });
           }
         }
       });
@@ -603,6 +789,14 @@ export function FleetVehicleLayer({
             features: vectorFeatures,
           });
         }
+
+        const labelsSource = map.getSource('fleet-callsign-labels') as mapboxgl.GeoJSONSource | undefined;
+        if (labelsSource) {
+          labelsSource.setData({
+            type: 'FeatureCollection',
+            features: labelFeatures,
+          });
+        }
       } catch {
         // Handle race conditions during style reload
       }
@@ -636,9 +830,11 @@ export function FleetVehicleLayer({
         if (map.getLayer('fleet-telemetry-points-layer')) map.removeLayer('fleet-telemetry-points-layer');
         if (map.getLayer('fleet-bearing-vectors-layer')) map.removeLayer('fleet-bearing-vectors-layer');
         if (map.getLayer('fleet-breadcrumb-trails-layer')) map.removeLayer('fleet-breadcrumb-trails-layer');
+        if (map.getLayer('fleet-callsign-labels-layer')) map.removeLayer('fleet-callsign-labels-layer');
         if (map.getSource('fleet-telemetry-points')) map.removeSource('fleet-telemetry-points');
         if (map.getSource('fleet-bearing-vectors')) map.removeSource('fleet-bearing-vectors');
         if (map.getSource('fleet-breadcrumb-trails')) map.removeSource('fleet-breadcrumb-trails');
+        if (map.getSource('fleet-callsign-labels')) map.removeSource('fleet-callsign-labels');
       } catch {
         // Map may be tearing down
       }

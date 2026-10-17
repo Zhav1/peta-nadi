@@ -92,6 +92,8 @@ def _parse_csv_manifest_text(csv_text: str) -> List[Dict[str, Any]]:
             "speed_kmh": speed_val,
             "temperature_c": temp_val,
             "status": "moving",
+            "tracking_mode": clean_row.get("tracking_mode") or "ROUTE_ESTIMATED",
+            "departure_time": clean_row.get("departure_time"),
         })
     return results
 
@@ -122,11 +124,15 @@ async def register_single_vehicle(
         vehicle_dict["company_id"] = user.company_id or user.org_name
         vehicle_dict["company_name"] = user.org_name
         vehicle_dict["created_by"] = user.name
+        vehicle_dict["tracking_mode"] = payload.tracking_mode or "ROUTE_ESTIMATED"
+        vehicle_dict["departure_time"] = payload.departure_time
+        vehicle_dict["origin_coords"] = payload.origin_coords
+        vehicle_dict["dest_coords"] = payload.dest_coords
         
         saved = telemetry_service.register_custom_vehicle(vehicle_dict)
         return FleetIngestResponse(
             status="success",
-            message=f"Armada {saved.get('vehicle_id')} ({saved.get('name')}) berhasil didaftarkan.",
+            message=f"Armada {saved.get('vehicle_id')} ({saved.get('name')}) berhasil didaftarkan [mode: {saved.get('tracking_mode', 'ROUTE_ESTIMATED')}].",
             registered_count=1,
             vehicles=[saved],
         )

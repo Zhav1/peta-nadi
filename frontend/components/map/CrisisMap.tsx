@@ -1,13 +1,38 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import MapboxDraw from '@mapbox/mapbox-gl-draw';
 import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css';
 import { densifyPath, type LonLat } from '@/lib/pathDensifier';
-import { HUB_NODES, STRATEGIC_BASELINE_CORRIDORS, type HubNode } from '@/lib/mapboxRoutingService';
-import { Layers, Check } from 'lucide-react';
+import {
+  HUB_NODES,
+  STRATEGIC_BASELINE_CORRIDORS,
+  fetchGazetteerNodes,
+  PAN_SUMATRA_GAZETTEER,
+  type HubNode,
+} from '@/lib/mapboxRoutingService';
+import {
+  defaultSpatialHashArbiter,
+  arbitrateVisibleLabels,
+  getMapboxZoomLODExpression,
+  PRIORITY_REGENCY_NODE,
+  type DeclutterItem,
+} from '@/lib/spatialHashArbiter';
+import { api } from '@/lib/api';
+import {
+  Layers,
+  Check,
+  Search,
+  X,
+  MapPin,
+  Crosshair,
+  ArrowUpRight,
+  Flag,
+  Loader2,
+  Navigation,
+} from 'lucide-react';
 
 import type {
   IncidentSummary,
@@ -15,6 +40,8 @@ import type {
   FireHotspot,
   FleetVehicle,
   DisasterZone,
+  GeocodeNode,
+  GeocodeSearchResult,
 } from '@/lib/types';
 import { FleetVehicleLayer } from './FleetVehicleLayer';
 
@@ -36,6 +63,7 @@ export interface CrisisMapProps {
   selectedOriginNode?: string | null;
   selectedDestNode?: string | null;
   onNodeSelected?: (nodeId: string) => void;
+  onCustomPointSelected?: (role: 'origin' | 'dest', coords: [number, number], name: string, nodeId: string) => void;
   onSelectRoute?: (routeIdx: number) => void;
   hubNodesList?: HubNode[];
   corridorContext?: import('@/lib/types').CorridorContext | null;
@@ -99,6 +127,7 @@ export default function CrisisMap({
   selectedOriginNode = null,
   selectedDestNode = null,
   onNodeSelected,
+  onCustomPointSelected,
   onSelectRoute,
   hubNodesList,
   corridorContext,
@@ -126,6 +155,34 @@ export default function CrisisMap({
   const [mapInstance, setMapInstance] = useState<mapboxgl.Map | null>(null);
   const isMapLoadedRef = useRef(false);
 
+  // Tier 2 Pan-Sumatra Gazetteer & Search State
+  const [gazetteerNodes, setGazetteerNodes] = useState<GeocodeNode[]>(PAN_SUMATRA_GAZETTEER);
+  const gazetteerNodesRef = useRef<GeocodeNode[]>(PAN_SUMATRA_GAZETTEER);
+  gazetteerNodesRef.current = gazetteerNodes;
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Array<GeocodeNode | GeocodeSearchResult>>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+
+  // Click-to-Pin / Right-Click / Village Context Popup State
+  const [contextPopup, setContextPopup] = useState<{
+    coords: [number, number];
+    nodeId: string;
+    name: string;
+    type: string;
+    province?: string;
+    screenPos?: { x: number; y: number };
+  } | null>(null);
+
+  // Custom User Pinned Points on Map (Origins, Dests, POIs)
+  const [customPinnedPoints, setCustomPinnedPoints] = useState<Array<{
+    id: string;
+    coords: [number, number];
+    name: string;
+    role: 'origin' | 'dest' | 'poi';
+  }>>([]);
+
   // Interactive Map Layer Filters State
   const [showLayerFilterMenu, setShowLayerFilterMenu] = useState(false);
   const [layerFilters, setLayerFilters] = useState({
@@ -148,12 +205,27 @@ export default function CrisisMap({
   onMapPointTargetedRef.current = onMapPointTargeted;
   const onNodeSelectedRef = useRef(onNodeSelected);
   onNodeSelectedRef.current = onNodeSelected;
+  const onCustomPointSelectedRef = useRef(onCustomPointSelected);
+  onCustomPointSelectedRef.current = onCustomPointSelected;
   const onSelectRouteRef = useRef(onSelectRoute);
   onSelectRouteRef.current = onSelectRoute;
 
   const mouseDownPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const lastFocusedCrisisIdRef = useRef<string | null>(null);
   const lastFocusedShockwaveKeyRef = useRef<string | null>(null);
+
+  // Fetch updated gazetteer nodes from backend on mount (falls back to local PAN_SUMATRA_GAZETTEER)
+  useEffect(() => {
+    let isMounted = true;
+    fetchGazetteerNodes().then((nodes) => {
+      if (isMounted && nodes && nodes.length > 0) {
+        setGazetteerNodes(nodes);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Toggle map layer visibility
   const toggleLayerFilter = (key: keyof typeof layerFilters) => {
@@ -551,6 +623,132 @@ export default function CrisisMap({
       map.on('mouseenter', 'hub-nodes-label', setPointerCursor);
       map.on('mouseleave', 'hub-nodes-label', resetCursor);
 
+      // 4b. Tier 2 Pan-Sumatra Regency & Gazetteer Nodes WebGL Layers (minzoom: 7.5)
+      map.addSource('regency-nodes-source', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+      map.addLayer({
+        id: 'regency-nodes-circle',
+        type: 'circle',
+        source: 'regency-nodes-source',
+        minzoom: 7.5,
+        paint: {
+          'circle-radius': getMapboxZoomLODExpression('regency-node'),
+          'circle-color': '#64748b',
+          'circle-stroke-width': 1.5,
+          'circle-stroke-color': '#0c1017',
+          'circle-opacity': 0.85,
+        },
+      });
+      map.addLayer({
+        id: 'regency-nodes-label',
+        type: 'symbol',
+        source: 'regency-nodes-source',
+        minzoom: 7.5,
+        layout: {
+          'text-field': ['get', 'name'],
+          'text-font': ['DIN Pro Regular', 'Arial Unicode MS Regular'],
+          'text-size': [
+            'interpolate', ['linear'], ['zoom'],
+            7.5, 9.5,
+            10.5, 11.5,
+          ],
+          'text-offset': [0, 1.0],
+          'text-anchor': 'top',
+          'text-allow-overlap': false,
+          'text-ignore-placement': false,
+        },
+        paint: {
+          'text-color': '#cbd5e1',
+          'text-halo-color': '#0c1017',
+          'text-halo-width': 2.0,
+        },
+      });
+
+      const handleRegencyClick = (e: any) => {
+        if (e.features && e.features[0] && e.features[0].properties) {
+          const props = e.features[0].properties;
+          const coords: [number, number] = [Number(props.lon), Number(props.lat)];
+          setContextPopup({
+            coords,
+            nodeId: props.id,
+            name: props.displayName || props.name,
+            type: props.type === 'city' ? 'Kota' : props.type === 'kecamatan' ? 'Kecamatan' : 'Kabupaten',
+            province: props.province,
+            screenPos: { x: e.point.x, y: e.point.y },
+          });
+        }
+      };
+      map.on('click', 'regency-nodes-circle', handleRegencyClick);
+      map.on('click', 'regency-nodes-label', handleRegencyClick);
+      map.on('mouseenter', 'regency-nodes-circle', setPointerCursor);
+      map.on('mouseleave', 'regency-nodes-circle', resetCursor);
+      map.on('mouseenter', 'regency-nodes-label', setPointerCursor);
+      map.on('mouseleave', 'regency-nodes-label', resetCursor);
+
+      // 4c. Custom Pinned Points WebGL Layers (Origins, Dests, POIs)
+      map.addSource('custom-pinned-source', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+      map.addLayer({
+        id: 'custom-pinned-pulse',
+        type: 'circle',
+        source: 'custom-pinned-source',
+        paint: {
+          'circle-radius': 14,
+          'circle-color': [
+            'match', ['get', 'role'],
+            'origin', '#00f0ff',
+            'dest', '#22c55e',
+            '#f59e0b'
+          ],
+          'circle-opacity': 0.25,
+          'circle-stroke-width': 2,
+          'circle-stroke-color': [
+            'match', ['get', 'role'],
+            'origin', '#00f0ff',
+            'dest', '#22c55e',
+            '#f59e0b'
+          ],
+        },
+      });
+      map.addLayer({
+        id: 'custom-pinned-point',
+        type: 'circle',
+        source: 'custom-pinned-source',
+        paint: {
+          'circle-radius': 6.5,
+          'circle-color': [
+            'match', ['get', 'role'],
+            'origin', '#00f0ff',
+            'dest', '#22c55e',
+            '#f59e0b'
+          ],
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#ffffff',
+        },
+      });
+      map.addLayer({
+        id: 'custom-pinned-label',
+        type: 'symbol',
+        source: 'custom-pinned-source',
+        layout: {
+          'text-field': ['get', 'label'],
+          'text-font': ['DIN Pro Bold', 'Arial Unicode MS Bold'],
+          'text-size': 11,
+          'text-offset': [0, 1.2],
+          'text-anchor': 'top',
+          'text-allow-overlap': true,
+        },
+        paint: {
+          'text-color': '#ffffff',
+          'text-halo-color': '#0c1017',
+          'text-halo-width': 2.5,
+        },
+      });
+
       // 5. Route ETA Badges Native WebGL Layer
       map.addSource('route-eta-badges-source', {
         type: 'geojson',
@@ -640,6 +838,118 @@ export default function CrisisMap({
       });
       map.on('mouseleave', 'route-paths-line', () => {
         if (mapRef.current) mapRef.current.getCanvas().style.cursor = '';
+      });
+
+      // Tier 3 Settlement & Village WebGL Labels Enhancement (High contrast halo)
+      const enhanceSettlementLabels = () => {
+        ['settlement-subdivision-label', 'settlement-minor-label', 'settlement-major-label'].forEach((layerId) => {
+          if (map.getLayer(layerId)) {
+            try {
+              map.setPaintProperty(layerId, 'text-halo-color', '#05070a');
+              map.setPaintProperty(layerId, 'text-halo-width', 2.0);
+              map.setPaintProperty(layerId, 'text-color', '#e2e8f0');
+            } catch {}
+          }
+        });
+      };
+      enhanceSettlementLabels();
+
+      // Tier 3 Settlement click handler for Village-level routing
+      const handleSettlementClick = (e: any) => {
+        if (e.features && e.features[0]) {
+          const f = e.features[0];
+          const name = f.properties?.name || f.properties?.name_en || 'Pemukiman';
+          const coords: [number, number] = [e.lngLat.lng, e.lngLat.lat];
+          setContextPopup({
+            coords,
+            nodeId: `settlement-${coords[0].toFixed(4)}-${coords[1].toFixed(4)}`,
+            name,
+            type: 'Desa / Pemukiman',
+            province: 'Sumatra',
+            screenPos: { x: e.point.x, y: e.point.y },
+          });
+        }
+      };
+      if (map.getLayer('settlement-subdivision-label')) {
+        map.on('click', 'settlement-subdivision-label', handleSettlementClick);
+        map.on('mouseenter', 'settlement-subdivision-label', setPointerCursor);
+        map.on('mouseleave', 'settlement-subdivision-label', resetCursor);
+      }
+      if (map.getLayer('settlement-minor-label')) {
+        map.on('click', 'settlement-minor-label', handleSettlementClick);
+        map.on('mouseenter', 'settlement-minor-label', setPointerCursor);
+        map.on('mouseleave', 'settlement-minor-label', resetCursor);
+      }
+
+      // Universal Click-to-Pin & Right-Click Context Menu with Reverse Geocoding
+      map.on('contextmenu', async (e) => {
+        const coords: [number, number] = [e.lngLat.lng, e.lngLat.lat];
+        let displayName = `Titik [${coords[0].toFixed(3)}, ${coords[1].toFixed(3)}]`;
+        let type = 'Koordinat Khusus';
+        let province = 'Sumatra';
+
+        try {
+          const rev = await api.geocode.reverse(coords[1], coords[0]);
+          if (rev && rev.display_name) {
+            displayName = rev.display_name;
+            type = rev.type || 'Titik Lapangan';
+            province = rev.province || 'Sumatra';
+          }
+        } catch {
+          // quiet fallback
+        }
+
+        setContextPopup({
+          coords,
+          nodeId: `pin-${coords[0].toFixed(4)}-${coords[1].toFixed(4)}`,
+          name: displayName,
+          type,
+          province,
+          screenPos: { x: e.point.x, y: e.point.y },
+        });
+      });
+
+      // SpatialHash Screen-Space Anti-Clutter Arbiter for Regency Nodes
+      const runRegencyDeclutter = () => {
+        if (!mapRef.current || !isMapLoadedRef.current) return;
+        const zoom = mapRef.current.getZoom();
+        if (zoom < 7.5) return;
+
+        const bounds = mapRef.current.getBounds();
+        const candidates: DeclutterItem[] = [];
+        const nodes = gazetteerNodesRef.current;
+
+        for (let i = 0; i < nodes.length; i++) {
+          const n = nodes[i];
+          if (bounds && !bounds.contains([n.lon, n.lat])) continue;
+          const pt = mapRef.current.project([n.lon, n.lat]);
+          candidates.push({
+            id: `regency-${i}-${n.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+            screenX: pt.x,
+            screenY: pt.y,
+            priority: PRIORITY_REGENCY_NODE,
+            category: 'regency',
+            width: 75,
+            height: 20,
+          });
+        }
+
+        const winners = arbitrateVisibleLabels(candidates, defaultSpatialHashArbiter);
+        if (mapRef.current.getLayer('regency-nodes-label')) {
+          mapRef.current.setFilter('regency-nodes-label', ['in', ['get', 'id'], ['literal', Array.from(winners)]]);
+        }
+      };
+
+      map.on('moveend', runRegencyDeclutter);
+      map.on('zoomend', runRegencyDeclutter);
+
+      // Track screen position of active context popup during map interaction
+      map.on('move', () => {
+        setContextPopup((prev) => {
+          if (!prev || !mapRef.current) return prev;
+          const p = mapRef.current.project(prev.coords);
+          return { ...prev, screenPos: { x: p.x, y: p.y } };
+        });
       });
 
       // Handle polygon drawing completion
@@ -920,6 +1230,45 @@ export default function CrisisMap({
       }
       thSource.setData({ type: 'FeatureCollection', features: thFeatures });
     }
+
+    // 8. Update Tier 2 Pan-Sumatra Regency & Gazetteer Nodes Source
+    const regencySource = map.getSource('regency-nodes-source') as mapboxgl.GeoJSONSource;
+    if (regencySource) {
+      regencySource.setData({
+        type: 'FeatureCollection',
+        features: gazetteerNodes.map((node, idx) => ({
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: [node.lon, node.lat] },
+          properties: {
+            id: `regency-${idx}-${node.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+            name: node.name,
+            displayName: node.display_name,
+            type: node.type,
+            province: node.province || '',
+            kabupaten: node.kabupaten || '',
+            lon: node.lon,
+            lat: node.lat,
+          },
+        })),
+      });
+    }
+
+    // 9. Update Custom User Pinned Points Source
+    const customSource = map.getSource('custom-pinned-source') as mapboxgl.GeoJSONSource;
+    if (customSource) {
+      customSource.setData({
+        type: 'FeatureCollection',
+        features: customPinnedPoints.map((pt) => ({
+          type: 'Feature',
+          geometry: { type: 'Point', coordinates: pt.coords },
+          properties: {
+            id: pt.id,
+            label: pt.role === 'origin' ? `${pt.name} (ASAL)` : pt.role === 'dest' ? `${pt.name} (TUJUAN)` : pt.name,
+            role: pt.role,
+          },
+        })),
+      });
+    }
   };
 
   useEffect(() => {
@@ -951,6 +1300,8 @@ export default function CrisisMap({
     activeTimeFilter,
     historicalEpisodes,
     predictiveRisks,
+    gazetteerNodes,
+    customPinnedPoints,
   ]);
 
   useEffect(() => {
@@ -1057,6 +1408,99 @@ export default function CrisisMap({
     };
   }, [demoStage, selectedOriginNode, selectedDestNode]);
 
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleSearchChange = useCallback((query: string) => {
+    setSearchQuery(query);
+    const q = query.trim().toLowerCase();
+
+    if (q.length < 2) {
+      setSearchResults([]);
+      setIsSearchOpen(false);
+      return;
+    }
+
+    // Instant local filter across gazetteer and hub nodes
+    const localMatches = gazetteerNodesRef.current.filter((n) => {
+      return (
+        n.name.toLowerCase().includes(q) ||
+        n.display_name.toLowerCase().includes(q) ||
+        (n.kabupaten && n.kabupaten.toLowerCase().includes(q)) ||
+        (n.province && n.province.toLowerCase().includes(q))
+      );
+    });
+
+    const hubMatches = (hubNodesList || Object.values(HUB_NODES))
+      .filter((h) => h.name.toLowerCase().includes(q))
+      .map((h) => ({
+        name: h.name,
+        display_name: h.name,
+        lat: h.coords[1],
+        lon: h.coords[0],
+        type: h.type,
+        province: h.province || 'Sumatra',
+      }));
+
+    const combinedLocal = [...hubMatches, ...localMatches].slice(0, 8);
+    setSearchResults(combinedLocal);
+    setIsSearchOpen(true);
+
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        setIsSearching(true);
+        const res = await api.geocode.search(query.trim());
+        if (res && res.results && res.results.length > 0) {
+          setSearchResults((prev) => {
+            const seen = new Set(prev.map((p) => p.name.toLowerCase()));
+            const extended = res.results.filter((r) => !seen.has(r.name.toLowerCase()));
+            return [...prev, ...extended].slice(0, 10);
+          });
+        }
+      } catch {
+        // quiet fallback
+      } finally {
+        setIsSearching(false);
+      }
+    }, 280);
+  }, [hubNodesList]);
+
+  const handleSelectSearchResult = useCallback(
+    (item: GeocodeNode | GeocodeSearchResult, role: 'origin' | 'dest' | 'focus' = 'focus') => {
+      const coords: [number, number] = [item.lon, item.lat];
+      const nodeId = `node-${item.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+
+      mapRef.current?.flyTo({
+        center: coords,
+        zoom: 11,
+        duration: 1200,
+        essential: true,
+      });
+
+      if (role === 'origin' || role === 'dest') {
+        setCustomPinnedPoints((prev) => [
+          ...prev.filter((p) => p.role !== role),
+          { id: nodeId, coords, name: item.name, role },
+        ]);
+        onCustomPointSelectedRef.current?.(role, coords, item.name, nodeId);
+        onNodeSelectedRef.current?.(nodeId);
+      } else {
+        const pt = mapRef.current?.project(coords);
+        setContextPopup({
+          coords,
+          nodeId,
+          name: item.display_name || item.name,
+          type: item.type || 'Titik Lokasi',
+          province: item.province,
+          screenPos: pt ? { x: pt.x, y: pt.y } : undefined,
+        });
+      }
+
+      setIsSearchOpen(false);
+    },
+    []
+  );
+
   return (
     <div className={`relative w-full h-full ${isRightSidebarOpen ? 'sidebar-open' : ''}`}>
       <div
@@ -1076,6 +1520,199 @@ export default function CrisisMap({
           modalityFilter={fleetModalityFilter}
           simSpeed={simSpeed}
         />
+      )}
+
+      {/* Universal Village Search Bar Overlay (Glassmorphism & Instant Gazetteer Autocomplete) */}
+      <div className="absolute top-3.5 left-14 z-30 pointer-events-auto">
+        <div className="relative">
+          <div className="flex items-center backdrop-blur-md bg-[#0c1017]/90 border border-[#1c2432] focus-within:border-cyan-500/50 rounded-lg px-2.5 py-1.5 shadow-xl transition-all w-72">
+            <Search className="w-3.5 h-3.5 text-slate-400 mr-2 shrink-0" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              onFocus={() => {
+                if (searchQuery.trim().length >= 2) setIsSearchOpen(true);
+              }}
+              placeholder="Cari desa, kota, atau titik..."
+              className="bg-transparent text-xs text-slate-200 placeholder-slate-500 outline-none w-full font-sans"
+            />
+            {isSearching ? (
+              <Loader2 className="w-3.5 h-3.5 text-cyan-400 animate-spin shrink-0 ml-1.5" />
+            ) : searchQuery ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  setSearchResults([]);
+                  setIsSearchOpen(false);
+                }}
+                className="text-slate-400 hover:text-white p-0.5 rounded cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            ) : null}
+          </div>
+
+          {isSearchOpen && searchResults.length > 0 && (
+            <div className="absolute left-0 mt-2 w-80 bg-[#0c1017]/95 backdrop-blur-md border border-[#1c2432] rounded-lg shadow-2xl p-2 text-xs space-y-1.5 max-h-80 overflow-y-auto no-scrollbar z-40 animate-in fade-in duration-150">
+              <div className="font-sans font-medium text-[11px] text-slate-400 uppercase tracking-wider px-1 pb-1 border-b border-[#1c2432] flex items-center justify-between">
+                <span>Hasil Temuan Pan-Sumatra</span>
+                <span className="text-slate-500 lowercase">{searchResults.length} titik</span>
+              </div>
+
+              {searchResults.map((item, idx) => {
+                const key = `${item.name}-${idx}`;
+                const subtitle = `${item.province || 'Sumatra'}${item.kabupaten ? ' • ' + item.kabupaten : ''}`;
+                const badgeType =
+                  item.type === 'city'
+                    ? 'Kota'
+                    : item.type === 'port'
+                    ? 'Pelabuhan'
+                    : item.type === 'airport'
+                    ? 'Bandara'
+                    : item.type === 'kecamatan'
+                    ? 'Kecamatan'
+                    : 'Desa';
+                return (
+                  <div
+                    key={key}
+                    className="p-2 rounded-md hover:bg-[#121822] transition-colors border border-transparent hover:border-[#1c2432]/60 group"
+                  >
+                    <div className="flex items-start justify-between gap-1.5">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <MapPin className="w-3 h-3 text-cyan-400 shrink-0" />
+                          <span className="font-medium text-slate-100 truncate">{item.name}</span>
+                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 font-mono">
+                            {badgeType}
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-slate-400 truncate pl-4.5 mt-0.5">{subtitle}</div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1 mt-2 pl-4.5">
+                      <button
+                        type="button"
+                        onClick={() => handleSelectSearchResult(item, 'origin')}
+                        className="cursor-pointer px-2 py-0.5 rounded bg-cyan-950/60 hover:bg-cyan-900 text-cyan-300 border border-cyan-800/50 text-[10px] flex items-center gap-1 transition-colors"
+                      >
+                        <ArrowUpRight className="w-2.5 h-2.5" />
+                        <span>Set Asal</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSelectSearchResult(item, 'dest')}
+                        className="cursor-pointer px-2 py-0.5 rounded bg-emerald-950/60 hover:bg-emerald-900 text-emerald-300 border border-emerald-800/50 text-[10px] flex items-center gap-1 transition-colors"
+                      >
+                        <Flag className="w-2.5 h-2.5" />
+                        <span>Set Tujuan</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSelectSearchResult(item, 'focus')}
+                        className="cursor-pointer px-2 py-0.5 rounded bg-[#1a2333] hover:bg-[#223044] text-slate-300 border border-[#2b3a50] text-[10px] flex items-center gap-1 transition-colors"
+                      >
+                        <Crosshair className="w-2.5 h-2.5" />
+                        <span>Fokus</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Glassmorphic Village & Right-Click Context Menu Popup Card */}
+      {contextPopup && (
+        <div
+          className="absolute z-50 pointer-events-auto transition-all duration-150"
+          style={{
+            left: Math.min(
+              Math.max(16, (contextPopup.screenPos?.x || 100) - 140),
+              typeof window !== 'undefined' ? window.innerWidth - 300 : 800
+            ),
+            top: Math.max(70, (contextPopup.screenPos?.y || 200) - 160),
+          }}
+        >
+          <div className="w-72 backdrop-blur-md bg-[#0c1017]/95 border border-[#1c2432] p-3 rounded-lg shadow-2xl space-y-2.5 text-xs animate-in zoom-in-95 duration-150">
+            <div className="flex items-start justify-between gap-2 border-b border-[#1c2432] pb-1.5">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <MapPin className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                <span className="font-semibold text-slate-100 truncate">{contextPopup.name}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setContextPopup(null)}
+                className="text-slate-400 hover:text-white p-0.5 rounded cursor-pointer"
+                title="Tutup Popup"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between text-[11px] text-slate-400">
+              <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[10px]">
+                {contextPopup.type}
+              </span>
+              <span className="font-mono text-[10px] text-slate-400">
+                {contextPopup.coords[0].toFixed(3)}°, {contextPopup.coords[1].toFixed(3)}°
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-1.5 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  const { coords, name, nodeId } = contextPopup;
+                  setCustomPinnedPoints((prev) => [
+                    ...prev.filter((p) => p.role !== 'origin'),
+                    { id: nodeId, coords, name, role: 'origin' },
+                  ]);
+                  onCustomPointSelectedRef.current?.('origin', coords, name, nodeId);
+                  onNodeSelectedRef.current?.(nodeId);
+                  setContextPopup(null);
+                }}
+                className="cursor-pointer px-2.5 py-1.5 rounded bg-cyan-950/80 hover:bg-cyan-900 text-cyan-200 border border-cyan-700/60 font-medium text-xs flex items-center justify-center gap-1 transition-colors"
+              >
+                <ArrowUpRight className="w-3.5 h-3.5" />
+                <span>Jadikan Asal</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const { coords, name, nodeId } = contextPopup;
+                  setCustomPinnedPoints((prev) => [
+                    ...prev.filter((p) => p.role !== 'dest'),
+                    { id: nodeId, coords, name, role: 'dest' },
+                  ]);
+                  onCustomPointSelectedRef.current?.('dest', coords, name, nodeId);
+                  onNodeSelectedRef.current?.(nodeId);
+                  setContextPopup(null);
+                }}
+                className="cursor-pointer px-2.5 py-1.5 rounded bg-emerald-950/80 hover:bg-emerald-900 text-emerald-200 border border-emerald-700/60 font-medium text-xs flex items-center justify-center gap-1 transition-colors"
+              >
+                <Flag className="w-3.5 h-3.5" />
+                <span>Jadikan Tujuan</span>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                mapRef.current?.flyTo({ center: contextPopup.coords, zoom: 12, duration: 1000 });
+              }}
+              className="cursor-pointer w-full py-1 rounded bg-[#161d27] hover:bg-[#1e2736] text-slate-300 border border-[#2b3a50] text-[11px] flex items-center justify-center gap-1 transition-colors"
+            >
+              <Crosshair className="w-3 h-3 text-slate-400" />
+              <span>Fokuskan Kamera ke Titik Ini</span>
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Floating Map Action Controls Group (Layer Peta + Legenda Rute side-by-side) */}

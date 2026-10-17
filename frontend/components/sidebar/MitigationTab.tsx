@@ -30,6 +30,7 @@ import {
   MessageSquare
 } from 'lucide-react';
 import { useAuth } from '@/lib/authContext';
+import { normalizeNewsPermalink } from '@/hooks/useNewsVerification';
 import { SpoilageHedgingCard } from './SpoilageHedgingCard';
 import { ComplianceInspectorCard } from './ComplianceInspectorCard';
 
@@ -602,31 +603,45 @@ export function MitigationTab({
         <div className="flex flex-wrap gap-1.5 mt-2">
           {(() => {
             const rawVerified = crisis.verified_news_citations || (crisis as unknown as Record<string, unknown>).verified_news_citations as Array<Record<string, unknown>> | undefined;
-            const rawAttrs = crisis.news_attributions || (crisis as unknown as Record<string, unknown>).news_attributions as Array<{ source_name: string; url: string }> | undefined;
+            const rawAttrs = crisis.news_attributions || (crisis as unknown as Record<string, unknown>).news_attributions as Array<{ source_name: string; url?: string; link?: string }> | undefined;
 
             const citations: Array<{ source_name: string; headline?: string; tier?: string; url: string }> = 
               (rawVerified && rawVerified.length > 0)
-                ? rawVerified.map(c => ({
-                    source_name: String(c.source || c.source_name || 'Berita Resmi'),
-                    headline: c.headline ? String(c.headline) : undefined,
-                    tier: c.tier ? String(c.tier) : undefined,
-                    url: c.url ? String(c.url) : `https://news.google.com/search?q=${encodeURIComponent((String(c.headline || c.source || crisis.title || 'berita')) + ' ' + String(c.source || ''))}&hl=id-ID&gl=ID&ceid=ID:id`
-                  }))
+                ? rawVerified.map(c => {
+                    const rawItem = c as Record<string, unknown>;
+                    const src = String(c.source || c.source_name || 'Berita Resmi');
+                    const headline = c.headline ? String(c.headline) : undefined;
+                    const tier = c.tier ? String(c.tier) : undefined;
+                    const rawUrl = String(c.url || rawItem.link || '');
+                    const resolvedUrl = normalizeNewsPermalink(rawUrl, headline || crisis.title, src);
+                    return {
+                      source_name: src,
+                      headline,
+                      tier,
+                      url: resolvedUrl
+                    };
+                  })
                 : (rawAttrs && rawAttrs.length > 0)
-                ? rawAttrs.map(a => ({
-                    source_name: a.source_name || 'Berita Resmi',
-                    url: a.url || `https://news.google.com/search?q=${encodeURIComponent((crisis.title || 'berita') + ' ' + (a.source_name || ''))}&hl=id-ID&gl=ID&ceid=ID:id`
-                  }))
+                ? rawAttrs.map(a => {
+                    const rawAttr = a as Record<string, unknown>;
+                    const src = a.source_name || 'Berita Resmi';
+                    const rawUrl = a.url || (rawAttr.link as string) || '';
+                    const resolvedUrl = normalizeNewsPermalink(rawUrl, crisis.title, src);
+                    return {
+                      source_name: src,
+                      url: resolvedUrl
+                    };
+                  })
                 : [
                     {
                       source_name: 'Antara News Sumatera',
                       tier: 'Tier-1 Resmi',
-                      url: `https://news.google.com/search?q=${encodeURIComponent((crisis.title || 'bencana logistik Sumatera') + ' Antara')}&hl=id-ID&gl=ID&ceid=ID:id`
+                      url: normalizeNewsPermalink('', (crisis.title || 'bencana logistik Sumatera') + ' Antara', 'LKBN ANTARA')
                     },
                     {
                       source_name: 'Kompas.com Regional',
                       tier: 'Media Nasional',
-                      url: `https://news.google.com/search?q=${encodeURIComponent((crisis.title || 'jalur logistik Sumatera') + ' Kompas')}&hl=id-ID&gl=ID&ceid=ID:id`
+                      url: normalizeNewsPermalink('', (crisis.title || 'jalur logistik Sumatera') + ' Kompas', 'Kompas')
                     }
                   ];
 
@@ -635,7 +650,8 @@ export function MitigationTab({
                 key={aIdx} 
                 href={attr.url} 
                 target="_blank" 
-                rel="noreferrer"
+                rel="noopener noreferrer"
+                referrerPolicy="no-referrer"
                 className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#0c1017] hover:bg-slate-800 text-xs font-mono text-cyan-300 border border-[#1c2432] transition-all cursor-pointer"
                 title={attr.headline ? `${attr.source_name}: ${attr.headline}` : `Buka Berita Asli: ${attr.source_name}`}
               >

@@ -3,7 +3,7 @@ PreHub: Multi-Modal Fleet Telemetry Schemas (Pydantic v2)
 Models for Maritime AIS, Aviation ADS-B, and Truck IoT Cold-Chain Transponders.
 """
 from enum import Enum
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -100,9 +100,14 @@ class FleetVehicleTelemetry(BaseModel):
     company_name: Optional[str] = Field(None, description="Human-readable tenant company name")
 
     # --- Signal & Telemetry Metadata ---
-    signal_status: SignalStatus = Field(SignalStatus.SIMULATION_CACHE, description="Telemetry stream status")
+    signal_status: Union[SignalStatus, str] = Field(SignalStatus.SIMULATION_CACHE, description="Telemetry stream status")
     telemetry_source: str = Field("PREHUB_RADAR", description="Source sensor or radar feed ID")
     last_ping_seconds_ago: float = Field(1.2, ge=0.0, description="Freshness of last transponder ping")
+    tracking_mode: Optional[str] = Field("ROUTE_ESTIMATED", description="Tracking mode: LIVE_GPS or ROUTE_ESTIMATED")
+    origin_coords: Optional[List[float]] = Field(None, description="Origin coordinates [lon, lat]")
+    dest_coords: Optional[List[float]] = Field(None, description="Destination coordinates [lon, lat]")
+    departure_time: Optional[str] = Field(None, description="Departure timestamp ISO string")
+    current_coords: Optional[List[float]] = Field(None, description="Current coordinates [lon, lat]")
 
     @field_validator("path")
     @classmethod

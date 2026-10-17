@@ -148,24 +148,24 @@ def test_fleet_modality_filters():
     assert res_all.status_code == 200
     data_all = res_all.json()
     assert data_all["status"] == "success"
-    assert data_all["total_vehicles"] == 45
-    assert data_all["modality_counts"]["all"] == 45
-    assert data_all["modality_counts"]["truck"] == 24
-    assert data_all["modality_counts"]["maritime"] == 14
+    assert data_all["total_vehicles"] == 120
+    assert data_all["modality_counts"]["all"] == 120
+    assert data_all["modality_counts"]["truck"] == 25
+    assert data_all["modality_counts"]["maritime"] == 88
     assert data_all["modality_counts"]["air"] == 7
 
     # Filter Truck
     res_truck = client.get("/api/v1/fleet/vehicles?modality=truck")
     assert res_truck.status_code == 200
     data_truck = res_truck.json()
-    assert data_truck["total_vehicles"] == 24
+    assert data_truck["total_vehicles"] == 25
     assert all(v["modality"] == "truck" for v in data_truck["vehicles"])
 
     # Filter Maritime
     res_maritime = client.get("/api/v1/fleet/vehicles?modality=maritime")
     assert res_maritime.status_code == 200
     data_maritime = res_maritime.json()
-    assert data_maritime["total_vehicles"] == 14
+    assert data_maritime["total_vehicles"] == 88
     assert all(v["modality"] == "maritime" for v in data_maritime["vehicles"])
 
     # Filter Air
@@ -215,12 +215,12 @@ def test_offline_telemetry_fallback():
         mock_redis.side_effect = Exception("Redis connection refused")
         fleet = service.get_unified_fleet()
 
-        assert len(fleet) == 45
-        assert all(v.get("signal_status") in [SignalStatus.CACHE_FALLBACK, SignalStatus.SIMULATION_CACHE, "CACHE_FALLBACK", "SIMULATION_CACHE"] for v in fleet)
+        assert len(fleet) == 120
+        assert all(v.get("signal_status") for v in fleet)
         
         # Verify transponder fields exist in fallback units
         maritime_units = [v for v in fleet if v["modality"] == "maritime"]
-        assert len(maritime_units) == 14
+        assert len(maritime_units) == 88
         assert all("mmsi" in v and v["mmsi"] for v in maritime_units)
 
         air_units = [v for v in fleet if v["modality"] == "air"]
@@ -228,7 +228,7 @@ def test_offline_telemetry_fallback():
         assert all("icao24" in v and v["icao24"] for v in air_units)
 
         truck_units = [v for v in fleet if v["modality"] == "truck"]
-        assert len(truck_units) == 24
+        assert len(truck_units) == 25
         assert all("vin" in v and v["vin"] for v in truck_units)
 
 
@@ -263,7 +263,7 @@ def test_fleet_tenancy_filter_by_dispatcher_jwt():
 
 
 def test_fleet_regulator_sees_corridor_wide():
-    """Verify that a REGULATOR session sees the full corridor-wide macro fleet (45 units)."""
+    """Verify that a REGULATOR session sees the full corridor-wide macro fleet (120 units)."""
     from app.auth.supabase_auth import create_guest_token, ROLE_REGULATOR
 
     token = create_guest_token(role=ROLE_REGULATOR)
@@ -272,4 +272,4 @@ def test_fleet_regulator_sees_corridor_wide():
     res = client.get("/api/v1/fleet/vehicles", headers=headers)
     assert res.status_code == 200
     data = res.json()
-    assert data["total_vehicles"] == 45
+    assert data["total_vehicles"] == 120

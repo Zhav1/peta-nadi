@@ -41,7 +41,7 @@ import ReportsSection from '@/components/dashboard/ReportsSection';
 import EvaluationSection from '@/components/dashboard/EvaluationSection';
 import { CrisisSimulatorBar } from '@/components/map/CrisisSimulatorBar';
 import { resolveMapDockClasses } from '@/components/dashboard/mapDockLayout';
-import { HUB_NODES, type HubNode } from '@/lib/mapboxRoutingService';
+import { HUB_NODES, PAN_SUMATRA_GAZETTEER, type HubNode } from '@/lib/mapboxRoutingService';
 import {
   calculateAIDynamicDetourRoutes,
   DEFAULT_HAZARD_RADIUS_KM,
@@ -376,6 +376,7 @@ export default function DashboardClient() {
 
   const activeOriginRef = useRef<string | null>(null);
   const activeDestRef = useRef<string | null>(null);
+  const customNodesRef = useRef<Record<string, { coords: [number, number]; name: string }>>({});
   const routeCalculationReqIdRef = useRef<number>(0);
   const demoDetourRoutesRef = useRef<RouteRecommendation[] | null>(null);
   const demoStateRef = useRef<ReturnType<typeof useDemoState> | null>(null);
@@ -648,9 +649,52 @@ export default function DashboardClient() {
 
 
   // Fetch multi-alternative Mapbox driving & hazard detour routes when node selection or modality changes
+  const resolveNodeInfo = useCallback((nodeId: string | null): { coords: [number, number]; name: string } | null => {
+    if (!nodeId) return null;
+    if (HUB_NODES[nodeId]) {
+      return { coords: HUB_NODES[nodeId].coords, name: HUB_NODES[nodeId].name };
+    }
+    const gazetteerMatch = PAN_SUMATRA_GAZETTEER.find(
+      (g) =>
+        g.name.toLowerCase() === nodeId.toLowerCase() ||
+        g.display_name.toLowerCase() === nodeId.toLowerCase() ||
+        `node-${g.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}` === nodeId.toLowerCase() ||
+        `regency-${g.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}` === nodeId.toLowerCase()
+    );
+    if (gazetteerMatch) {
+      return { coords: [gazetteerMatch.lon, gazetteerMatch.lat], name: gazetteerMatch.display_name || gazetteerMatch.name };
+    }
+    if (customNodesRef.current[nodeId]) {
+      return customNodesRef.current[nodeId];
+    }
+    return null;
+  }, []);
+
+  const handleCustomPointSelected = useCallback(
+    (role: 'origin' | 'dest', coords: [number, number], name: string, nodeId: string) => {
+      customNodesRef.current[nodeId] = { coords, name };
+      if (role === 'origin') {
+        setSelectedOriginNode(nodeId);
+        setToast({
+          message: `Titik Asal Terpilih: ${name}. Silakan tentukan Titik Tujuan.`,
+          type: 'info',
+        });
+      } else {
+        setSelectedDestNode(nodeId);
+        setToast({
+          message: `Titik Tujuan Terpilih: ${name}. Mengkalkulasi rute alternatif...`,
+          type: 'success',
+        });
+      }
+    },
+    []
+  );
+
   const updateBaselineMapboxRoute = useCallback(async (originId: string, destId: string, modality: TransportModality, hazardCenter: [number, number] | null = null, radiusKm: number = DEFAULT_HAZARD_RADIUS_KM) => {
-    const originNode = HUB_NODES[originId]?.coords;
-    const destNode = HUB_NODES[destId]?.coords;
+    const originInfo = resolveNodeInfo(originId);
+    const destInfo = resolveNodeInfo(destId);
+    const originNode = originInfo?.coords;
+    const destNode = destInfo?.coords;
     if (!originNode || !destNode) return;
 
     if (isDemoRunningRef.current) {
@@ -662,6 +706,8 @@ export default function DashboardClient() {
       const routingRes = await api.routing.optimizeRouting({
         origin_id: originId,
         dest_id: destId,
+        origin_coords: originNode,
+        dest_coords: destNode,
         fleet_size: 3,
         hazard_zones: hazardCenter ? [{ center: hazardCenter, radiusKm }] : []
       });
@@ -689,7 +735,7 @@ export default function DashboardClient() {
         demoStateRef.current?.setIsCalculatingRoute(false);
       }
     }
-  }, []);
+  }, [resolveNodeInfo]);
 
   // Sync road network routes when origin, destination, modality, or hazard changes
   useEffect(() => {
@@ -710,11 +756,12 @@ export default function DashboardClient() {
 
   // FULL REACTIVE CLEAN SLATE NODE SELECTION HANDLER
   const handleNodeSelected = useCallback(async (nodeId: string) => {
+    const nodeName = resolveNodeInfo(nodeId)?.name || HUB_NODES[nodeId]?.name || nodeId;
     if (!selectedOriginNode) {
       // Step 1: Set Start Node
       setSelectedOriginNode(nodeId);
       setToast({
-        message: `Titik Asal Terpilih: ${HUB_NODES[nodeId]?.name || nodeId}. Silakan klik titik kedua untuk mengeset Titik Tujuan.`,
+        message: `Titik Asal Terpilih: ${nodeName}. Silakan klik titik kedua untuk mengeset Titik Tujuan.`,
         type: 'info',
       });
       return;
@@ -732,7 +779,7 @@ export default function DashboardClient() {
       );
 
       setToast({
-        message: `Titik Tujuan Terpilih: ${HUB_NODES[nodeId]?.name || nodeId}. Rute alternatif siap.`,
+        message: `Titik Tujuan Terpilih: ${nodeName}. Rute alternatif siap.`,
         type: 'success',
       });
       return;
@@ -740,6 +787,7 @@ export default function DashboardClient() {
 
     // Both already set -> User clicks a third node to update Destination
     if (nodeId !== selectedOriginNode) {
+      const originName = resolveNodeInfo(selectedOriginNode)?.name || HUB_NODES[selectedOriginNode]?.name || selectedOriginNode;
       setSelectedDestNode(nodeId);
       await updateBaselineMapboxRoute(
         selectedOriginNode,
@@ -750,11 +798,11 @@ export default function DashboardClient() {
       );
 
       setToast({
-        message: `Tujuan Diperbarui: ${HUB_NODES[selectedOriginNode]?.name} -> ${HUB_NODES[nodeId]?.name || nodeId}`,
+        message: `Tujuan Diperbarui: ${originName} -> ${nodeName}`,
         type: 'info',
       });
     }
-  }, [selectedOriginNode, selectedDestNode, selectedModality, simulatedShockwave, selectedRadius, updateBaselineMapboxRoute]);
+  }, [selectedOriginNode, selectedDestNode, selectedModality, simulatedShockwave, selectedRadius, updateBaselineMapboxRoute, resolveNodeInfo]);
 
   // 1-Click Reset Node Selection Handler
   const handleResetNodes = useCallback(() => {
@@ -1567,6 +1615,7 @@ export default function DashboardClient() {
               selectedOriginNode={selectedOriginNode || undefined}
               selectedDestNode={selectedDestNode || undefined}
               onNodeSelected={handleNodeSelected}
+              onCustomPointSelected={handleCustomPointSelected}
               onSelectRoute={(idx) => setActiveRouteIdx(idx)}
               hubNodesList={dynamicHubNodes}
               corridorContext={corridorContext}
@@ -1746,6 +1795,7 @@ export default function DashboardClient() {
                             href={item.link}
                             target="_blank"
                             rel="noopener noreferrer"
+                            referrerPolicy="no-referrer"
                             onClick={(e) => e.stopPropagation()}
                             className="hover:text-cyan-300 hover:underline transition-colors flex items-start gap-1 cursor-pointer"
                             title="Buka Berita Asli (Tab Baru)"
@@ -1959,22 +2009,26 @@ export default function DashboardClient() {
                     setIsFleetSimMode(nextMode);
                     setToast({
                       message: nextMode
-                        ? 'Mode Simulasi Armada diaktifkan (Armada fallback sintetis dimuat)'
-                        : 'Mode Simulasi Armada dimatikan (Tampilan armada riil/offline cache)',
+                        ? 'Filter Armada: Semua Armada Live & Rute Terestimasi'
+                        : 'Filter Armada: Hanya Transponder (AIS/ADS-B) & GPS Aktif',
                       type: 'info',
                     });
                   }}
                   className={`cursor-pointer px-2.5 py-1 rounded-md text-xs font-mono font-medium transition-all flex items-center gap-1.5 ${isFleetSimMode
                       ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40 font-bold'
-                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                      : 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 font-bold'
                     }`}
-                  title="Toggle Mode Simulasi Armada Fallback"
+                  title="Toggle Mode Telemetri: Semua Armada Live + Rute Estimasi vs Hanya GPS & Transponder Live"
                 >
                   <span
-                    className={`w-1.5 h-1.5 rounded-full ${isFleetSimMode ? 'bg-amber-400 animate-pulse' : 'bg-slate-500'
+                    className={`w-1.5 h-1.5 rounded-full ${isFleetSimMode ? 'bg-amber-400 animate-pulse' : 'bg-cyan-400 animate-pulse'
                       }`}
                   />
-                  <span>Mode Simulasi</span>
+                  <span>
+                    {isFleetSimMode
+                      ? `Live AIS/ADS-B + Rute Estimasi (${activeFleetVehicles.length})`
+                      : `Hanya GPS & Transponder Live (${activeFleetVehicles.length})`}
+                  </span>
                 </button>
               </div>
             )}

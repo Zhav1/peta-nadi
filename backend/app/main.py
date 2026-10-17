@@ -21,7 +21,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.routers import health, incidents, agent_router, approvals, demo_router, commodity_router, corridor_router, routing_router, vehicles_router, news_router, outcomes_router, evaluation_router, auth_router, fleet_ingest_router, intermodal_router
+from app.routers import health, incidents, agent_router, approvals, demo_router, commodity_router, corridor_router, routing_router, vehicles_router, news_router, outcomes_router, evaluation_router, auth_router, fleet_ingest_router, intermodal_router, geocode_router
 from app.services.redis_client import get_redis, close_redis
 
 settings = get_settings()
@@ -137,8 +137,8 @@ async def _run_aisstream():
     """Background WebSocket listener for AIS maritime vessels."""
     logger.info("Starting background AISstream WebSocket task...")
     try:
-        from app.adapters.aisstream_adapter import AISstreamAdapter
-        adapter = AISstreamAdapter()
+        from app.adapters.aisstream_adapter import get_aisstream_adapter
+        adapter = get_aisstream_adapter()
         await adapter.run()
     except asyncio.CancelledError:
         logger.info("AISstream WebSocket task canceled.")
@@ -259,6 +259,7 @@ app.include_router(evaluation_router.router, prefix="/api/v1")
 app.include_router(auth_router.router, prefix="/api/v1")
 app.include_router(fleet_ingest_router.router, prefix="/api/v1")
 app.include_router(intermodal_router.router, prefix="/api/v1")
+app.include_router(geocode_router.router, prefix="/api/v1")
 
 
 @app.websocket("/ws/crisis/{crisis_id}")
