@@ -453,6 +453,7 @@ export function FleetVehicleLayer({
 
       const trailData: Array<{ path: [number, number][]; color: [number, number, number, number]; width: number }> = [];
       const vectorData: Array<{ path: [number, number][]; color: [number, number, number, number] }> = [];
+      const estimatedRouteData: Array<{ path: [number, number][]; color: [number, number, number, number] }> = [];
       const pulseData: Array<{
         position: [number, number];
         radius: number;
@@ -679,6 +680,22 @@ export function FleetVehicleLayer({
             fillColor: isSelected ? [0, 240, 255, alphaFill] : [245, 158, 11, alphaFill],
             lineColor: isSelected ? [0, 240, 255, alphaLine] : [245, 158, 11, alphaLine],
           });
+        } else if (v.tracking_mode === 'ROUTE_ESTIMATED') {
+          // Subtle amber tactical ring for estimated corridor units
+          pulseData.push({
+            position: finalPos,
+            radius: 14,
+            fillColor: [245, 158, 11, 20],
+            lineColor: [245, 158, 11, 140],
+          });
+        }
+
+        // Collect planned trajectory line for ROUTE_ESTIMATED vehicles
+        if (v.tracking_mode === 'ROUTE_ESTIMATED' && coords.length >= 2) {
+          estimatedRouteData.push({
+            path: coords,
+            color: [245, 158, 11, 150],
+          });
         }
 
         // Persistent base dot for all vehicles (always visible at all zoom levels)
@@ -852,6 +869,17 @@ export function FleetVehicleLayer({
 
       // Construct Deck.gl GPU-instanced layers
       const deckLayers = [
+        new PathLayer({
+          id: 'deck-fleet-estimated-routes',
+          data: estimatedRouteData,
+          getPath: (d: any) => d.path,
+          getColor: (d: any) => d.color,
+          getWidth: 2.5,
+          widthUnits: 'pixels',
+          widthMinPixels: 1.5,
+          capRounded: true,
+          jointRounded: true,
+        }),
         new PathLayer({
           id: 'deck-fleet-wakes',
           data: trailData,

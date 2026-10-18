@@ -1404,6 +1404,32 @@ export default function CrisisMap({
     };
   }, []);
 
+  // Immediately purge custom pinned points and route layers when corridor endpoints are cleared
+  useEffect(() => {
+    if (!selectedOriginNode && !selectedDestNode) {
+      setCustomPinnedPoints([]);
+      const map = mapRef.current;
+      if (map && isMapLoadedRef.current) {
+        const customSrc = map.getSource('custom-pinned-source') as mapboxgl.GeoJSONSource;
+        if (customSrc) {
+          customSrc.setData({ type: 'FeatureCollection', features: [] });
+        }
+        const routesSrc = map.getSource('route-paths-source') as mapboxgl.GeoJSONSource;
+        if (routesSrc) {
+          routesSrc.setData({ type: 'FeatureCollection', features: [] });
+        }
+        const badgesSrc = map.getSource('route-eta-badges-source') as mapboxgl.GeoJSONSource;
+        if (badgesSrc) {
+          badgesSrc.setData({ type: 'FeatureCollection', features: [] });
+        }
+        const congestionSrc = map.getSource('congestion-segments-source') as mapboxgl.GeoJSONSource;
+        if (congestionSrc) {
+          congestionSrc.setData({ type: 'FeatureCollection', features: [] });
+        }
+      }
+    }
+  }, [selectedOriginNode, selectedDestNode]);
+
   useEffect(() => {
     const draw = drawRef.current;
     const map = mapRef.current;

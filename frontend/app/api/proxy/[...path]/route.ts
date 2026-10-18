@@ -51,11 +51,18 @@ async function handleProxy(req: NextRequest, context: RouteContext) {
     const upstreamText = await upstreamRes.text();
     const upstreamContentType = upstreamRes.headers.get('content-type') || 'application/json';
 
+    const responseHeaders: Record<string, string> = {
+      'content-type': upstreamContentType,
+    };
+
+    // Cache-Control for GET read requests: Vercel CDN/Edge cache for 60s with 120s stale-while-revalidate
+    if (req.method === 'GET' && upstreamRes.status === 200) {
+      responseHeaders['cache-control'] = 'public, s-maxage=60, stale-while-revalidate=120';
+    }
+
     return new NextResponse(upstreamText, {
       status: upstreamRes.status,
-      headers: {
-        'content-type': upstreamContentType,
-      },
+      headers: responseHeaders,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Upstream request failed';

@@ -212,6 +212,16 @@ const FALLBACK_FLEET: FleetVehicle[] = [
     telemetry_source: 'TMS_GPS_WEBHOOK', signal_status: 'LIVE_STREAM', tracking_mode: 'LIVE_GPS', vin: 'TRK-LLG-PLM-12', callsign: 'LINGGAU-12',
     heading_deg: 82
   },
+  {
+    vehicle_id: 'TRK-013-BELAWAN-MEDAN-SCHED',
+    name: 'Truk Distribusi 13 (Arteri Belawan-Medan)',
+    modality: 'truck',
+    path: [[98.6850, 3.7750], [98.6750, 3.7100], [98.6650, 3.6500], [98.6722, 3.5952]],
+    route_geometry: { type: 'LineString', coordinates: [[98.6850, 3.7750], [98.6750, 3.7100], [98.6650, 3.6500], [98.6722, 3.5952]] },
+    speed_kmh: 48.0, status: 'moving', progress: 0.45, cargo: '16 Ton Gula & Terigu Rute Terjadwal', origin: 'Pelabuhan Belawan', destination: 'Gudang Amplas Medan',
+    telemetry_source: 'ROUTE_ESTIMATED', signal_status: 'SIMULATION_CACHE', tracking_mode: 'ROUTE_ESTIMATED', callsign: 'AMPLAS-13',
+    heading_deg: 185
+  },
 
   // Air Cargo (Live ADS-B Flights OpenSky Network & Commercial Cargo)
   {
@@ -400,6 +410,14 @@ export function useFleetVehicles(
 
   // Evaluate whether a vehicle has an active hardware transponder or live GPS ping
   const isTransponderActive = (v: FleetVehicle): boolean => {
+    // Exclude synthetic dead-reckoning and estimated routes from live hardware transponder mode
+    if (
+      v.tracking_mode === 'ROUTE_ESTIMATED' ||
+      v.signal_status === 'SIMULATION_CACHE' ||
+      v.telemetry_source === 'ROUTE_ESTIMATED'
+    ) {
+      return false;
+    }
     if (v.tracking_mode === 'LIVE_GPS') return true;
     if (v.signal_status === 'LIVE_STREAM') return true;
     const liveSources = [
@@ -412,8 +430,7 @@ export function useFleetVehicles(
       'CUSTOM_DISPATCHER',
     ];
     if (v.telemetry_source && liveSources.includes(v.telemetry_source)) return true;
-    if (Boolean(v.mmsi || v.icao24 || v.vin)) return true;
-    if (v.modality === 'maritime' || v.modality === 'air') return true;
+    if (Boolean(v.mmsi || v.icao24)) return true;
     return false;
   };
 

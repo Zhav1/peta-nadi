@@ -508,6 +508,11 @@ export default function DashboardClient() {
 
   // 1-Click Reset Node Selection Handler
   const handleResetNodes = useCallback(() => {
+    routeCalculationReqIdRef.current++;
+    customNodesRef.current = {};
+    demoDetourRoutesRef.current = null;
+    setRoutingInfo(null);
+    setActiveRouteIdx(null);
     setSelectedOriginNode(null);
     setSelectedDestNode(null);
     setCurrentMapRoutes([]);

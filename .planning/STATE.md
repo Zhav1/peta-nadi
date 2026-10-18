@@ -2,36 +2,36 @@
 gsd_state_version: "1.0"
 milestone: M4
 milestone_name: PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability
-current_phase: 69
-current_phase_name: Telemetry OOM & Island Snapping Fix, Deep Article Permalink Resolution, and On-Map Contextual Corridor Selection
+current_phase: 70
+current_phase_name: Map State Reset Purge, Fleet Telemetry Filter & Backend REST Latency Optimization
 status: complete
-stopped_at: Completed Phase 69; decoupled Deck.gl layer recreation from RAF loop at 25-30 Hz (eliminated browser OOM) and hardened spatialHashArbiter against RangeError; synchronized current_coords and stabilized maritime polyline progress without island jumps; added async redirect resolution for authentic Antara news permalinks; added on-map route click popover and Reset Rute corridor pill in CrisisSimulatorBar. 20/20 pytest passed, 0 tsc errors, 100% clean Next.js build.
-last_updated: "2026-10-18T14:20:00.000Z"
+stopped_at: "Phase 70 complete: (1) Map state reset synchronization in CrisisMap & DashboardClient; (2) Fleet telemetry filter precision & projected trajectory lines; (3) Backend REST latency fast-path & asyncio.gather parallelization."
+last_updated: "2026-10-18T21:30:00.000Z"
 last_activity: 2026-10-18
-last_activity_desc: "Phase 69 completed: Telemetry OOM elimination, spatialHashArbiter RangeError fix, island snapping fix, deep news permalink resolution, and on-map corridor popover. 20/20 pytest passed, 0 tsc errors, 100% clean Next.js build."
+last_activity_desc: "Phase 70 executed and verified: Map reset purge, fleet trajectory filter, and REST latency caching complete."
 state_head: HEAD
 progress:
-  total_phases: 69
-  completed_phases: 69
-  total_plans: 82
-  completed_plans: 82
-  percent: 100
+  total_phases: 70
+  completed_phases: 70
+  total_plans: 83
+  completed_plans: 83
+  percent: 100.0
 ---
 
 # STATE: PreHub Project Memory
 
 **Last Updated:** 2026-10-18
 **Active Milestone:** M4 - PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability [ACTIVE 🚀]
-**Current Phase:** 69
+**Current Phase:** 70
 
 ---
 
 ## Current Position
 
-Phase: 69 (Telemetry OOM & Island Snapping Fix, Deep Article Permalink Resolution, and On-Map Contextual Corridor Selection) - COMPLETE
-Status: Phase 69 executed and verified. (1) Throttled Deck.gl setProps to 25-30 Hz and reused preallocated data buffers in FleetVehicleLayer.tsx, eliminating OOM heap churn, and fixed spatialHashArbiter RangeError; (2) Synchronized current_coords and snapped maritime vessels to surveyed navigation polylines, purging the +/-14.5° island snap; (3) Resolved Google News encrypted redirects to authentic Antara/publisher permalinks; (4) Added contextual glassmorphism popover on route line clicks with metrics and instant corridor reset pill in CrisisSimulatorBar.tsx. 20/20 pytest passed, 0 tsc errors, 100% clean Next.js build.
-Last activity: 2026-10-18 - Phase 69 executed, verified, and synchronized with plans.
-Next action: Push commit to remote origin/main.
+Phase: 70 (Map State Reset Purge, Fleet Telemetry Filter & Backend REST Latency Optimization) - COMPLETE ✅
+Status: (1) Fixed customPinnedPoints isolation in CrisisMap with reset sync effect and cancelled in-flight routing calculations; (2) Added corridor schedule unit in Medan viewport and integrated Deck.gl PathLayer for estimated routes; (3) Added in-memory & Redis fast-path caching, parallelized adapter fetch, and added edge cache headers to proxy.
+Last activity: 2026-10-18 - Phase 70 completed and verified.
+Next action: Push to remote main repository.
 
 ---
 

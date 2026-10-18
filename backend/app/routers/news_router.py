@@ -81,6 +81,21 @@ async def get_live_news(
     """
     now = datetime.now(timezone.utc).timestamp()
 
+    # Fast-path: Return cached articles if valid (<30s) and no specific query filters
+    if not force_refresh and not province and not severity and _NEWS_CACHE["articles"]:
+        if (now - _NEWS_CACHE["last_fetched_at"]) <= CACHE_TTL_SECONDS:
+            cached_articles = _NEWS_CACHE["articles"]
+            return {
+                "status": "live",
+                "storage": "supabase_postgis",
+                "cached": True,
+                "count": len(cached_articles),
+                "total": len(cached_articles),
+                "last_updated": datetime.now(timezone.utc).isoformat(),
+                "articles": cached_articles,
+                "items": cached_articles
+            }
+
     # If force refresh requested or cache expired (5 min), trigger background ingestion
     if force_refresh or (now - _NEWS_CACHE["last_fetched_at"] > 300):
         if background_tasks is not None:

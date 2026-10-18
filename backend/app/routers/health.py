@@ -2,11 +2,18 @@ from fastapi import APIRouter
 from app.config import get_settings
 import logging
 import asyncio
+import time
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
 router = APIRouter(tags=["health"])
+
+_SOURCES_CACHE = {
+    "data": None,
+    "timestamp": 0.0
+}
+SOURCES_CACHE_TTL = 30.0
 
 
 @router.get("/health")
@@ -24,9 +31,13 @@ async def health_check():
 @router.get("/api/v1/health/sources")
 async def source_health_check():
     """
-    Get per-source health status from Supabase 'data_sources' table.
+    Get per-source health status from Supabase 'data_sources' table with 30s cache.
     Falls back gracefully if Supabase is offline.
     """
+    now = time.time()
+    if _SOURCES_CACHE["data"] is not None and (now - _SOURCES_CACHE["timestamp"]) < SOURCES_CACHE_TTL:
+        return _SOURCES_CACHE["data"]
+
     default_sources = [
         {"name": "BMKG", "status": "healthy", "last_seen": None, "note": "verified_active_adapter"},
         {"name": "TomTom", "status": "healthy", "last_seen": None, "note": "verified_active_adapter"},
@@ -76,9 +87,15 @@ async def source_health_check():
                     "note": "verified_active_adapter"
                 })
                 
-        return {"sources": sources}
+        payload = {"sources": sources}
+        _SOURCES_CACHE["data"] = payload
+        _SOURCES_CACHE["timestamp"] = now
+        return payload
         
     except Exception as e:
         logger.warning(f"Supabase unavailable, returning verified_active_adapter status for sources: {e}")
-        return {"sources": default_sources}
+        fallback_payload = {"sources": default_sources}
+        _SOURCES_CACHE["data"] = fallback_payload
+        _SOURCES_CACHE["timestamp"] = now
+        return fallback_payload
 

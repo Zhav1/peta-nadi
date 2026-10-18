@@ -1888,6 +1888,37 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 
 ---
 
+## Phase 70: Map State Reset Purge, Fleet Telemetry Filter & Backend REST Latency Optimization
+
+**Goal:** Ensure 1-click route reset immediately purges all route polylines and `[ASAL]`/`[TUJUAN]` markers from the Mapbox WebGL canvas; wire the fleet telemetry toggle to precision hardware filtering with visible estimated trajectory paths; and introduce Redis/in-memory cache fast-paths and `asyncio.gather` parallelization to reduce `/corridor/context` REST latency from 5,400ms to <200ms.
+**Status:** COMPLETE ✅
+**Plans:** `70-RESEARCH.md`, `70-PLAN.md`, `70-01-SUMMARY.md`, `70-LEARNINGS.md`
+
+### Deliverables
+
+- [x] **WP1 - Map State Reset Purge (`CrisisMap.tsx` & `DashboardClient.tsx`)**:
+  - `frontend/components/map/CrisisMap.tsx`: add effect synchronizing `customPinnedPoints` with `selectedOriginNode` and `selectedDestNode`, purging `custom-pinned-source`, `route-paths-source`, and `route-eta-badges-source` immediately when nodes are null.
+  - `frontend/components/dashboard/DashboardClient.tsx`: increment `routeCalculationReqIdRef` in `handleResetNodes` to discard in-flight routing calculations; clear `customNodesRef`, `demoDetourRoutesRef`, and `routingInfo`.
+- [x] **WP2 - Precision Telemetry Filtering & Projected Trajectory Paths (`useFleetVehicles.ts` & `FleetVehicleLayer.tsx`)**:
+  - `frontend/hooks/useFleetVehicles.ts`: refine `isTransponderActive` to strictly check for genuine hardware streaming/GPS telemetry; include active Medan/Deli Serdang corridor units in the estimated route cohort so filter changes are immediately obvious.
+  - `frontend/components/map/FleetVehicleLayer.tsx`: add `PathLayer` for `ROUTE_ESTIMATED` vehicles (`deck-fleet-estimated-routes`) when `isSimulationMode` is active, rendering planned corridor polylines and distinct amber halo styling.
+- [x] **WP3 - Backend REST Latency Optimization & Edge Caching (`corridor_service.py`, `news_router.py`, `health.py`, `route.ts`)**:
+  - `backend/app/services/corridor_service.py`: add Redis / in-memory cache fast-path (<180s); parallelize BMKG, TomTom, and Supabase calls via `asyncio.gather()`; make `data_sources` upsert asynchronous.
+  - `backend/app/routers/news_router.py`: read `_NEWS_CACHE` first before triggering database queries.
+  - `backend/app/routers/health.py`: add 30-second in-memory cache for `source_health_check`.
+  - `frontend/app/api/proxy/[...path]/route.ts`: add `Cache-Control: s-maxage=60, stale-while-revalidate=120` to GET proxy responses.
+
+### Verification Criteria
+
+- [x] `npx tsc --noEmit` in `frontend/`: 0 errors.
+- [x] `npm test` in `frontend/`: 100% clean test suite pass (`test_arbiter.ts` & `test_phase70_logic.ts`).
+- [x] Python syntax check: `python -m py_compile` 0 errors on all modified backend services.
+- [x] Clicking "Reset Titik Node" clears all route polylines and `[ASAL]`/`[TUJUAN]` markers from the map canvas immediately.
+- [x] Toggling `#fleet-sim-toggle-btn` visibly alters the fleet layer and toggles estimated trajectory paths.
+- [x] `/corridor/context` response time drops from >5,000ms to <200ms on cache hit and <1,000ms on refresh.
+
+---
+
 ## Backlog (Post-Hackathon / v2 & New Context Window Backlog)
 
 ### Active Remediation & Audit Backlog (For New Context Window)
