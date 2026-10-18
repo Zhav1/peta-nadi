@@ -1,6 +1,10 @@
 export function getBaseUrl(): string {
   if (process.env.NEXT_PUBLIC_API_URL) {
-    return process.env.NEXT_PUBLIC_API_URL;
+    const envUrl = process.env.NEXT_PUBLIC_API_URL;
+    // Auto-sanitize deprecated host to eliminate CORS and 404s in production Vercel
+    if (!envUrl.includes('prehub-backend.onrender.com')) {
+      return envUrl;
+    }
   }
   if (typeof window !== 'undefined' && !['localhost', '127.0.0.1'].includes(window.location.hostname)) {
     return 'https://peta-nadi.onrender.com';

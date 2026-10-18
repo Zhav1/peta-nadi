@@ -354,6 +354,28 @@ export default function CrisisMap({
           'line-opacity': 0.6,
         },
       });
+      map.addLayer({
+        id: 'baseline-corridors-symbol',
+        type: 'symbol',
+        source: 'baseline-corridors-source',
+        filter: ['==', ['get', 'type'], 'maritime'],
+        layout: {
+          'symbol-placement': 'line',
+          'text-field': 'ALUR LAUT SELAT MALAKA (TSS)',
+          'text-font': ['DIN Pro Medium', 'Arial Unicode MS Regular'],
+          'text-size': 10.5,
+          'text-letter-spacing': 0.15,
+          'text-transform': 'uppercase',
+          'symbol-spacing': 350,
+          'text-keep-upright': true,
+        },
+        paint: {
+          'text-color': '#60a5fa',
+          'text-halo-color': '#0b0f17',
+          'text-halo-width': 1.5,
+          'text-opacity': 0.85,
+        },
+      });
 
       // 0b. Regional Weather & Radar Polygons Layer
       map.addSource('weather-polygons-source', {

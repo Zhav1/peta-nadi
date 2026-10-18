@@ -840,19 +840,19 @@ export function FleetVehicleLayer({
             let badge = 'GPS LIVE';
             let textColor: [number, number, number, number] = [52, 211, 153, 255]; // emerald
             if (targetVeh.modality === 'maritime') {
-              badge = 'AIS LIVE';
+              badge = targetVeh.tracking_mode === 'ROUTE_ESTIMATED' ? 'AIS PROYEKSI' : 'AIS LIVE';
               textColor = [56, 189, 248, 255]; // sky
             } else if (targetVeh.modality === 'air') {
               badge = 'ADS-B';
               textColor = [192, 132, 252, 255]; // purple
             } else if (targetVeh.tracking_mode === 'ROUTE_ESTIMATED') {
-              badge = 'ESTIMASI RUTE';
+              badge = 'ESTIMASI';
               textColor = [245, 158, 11, 255]; // amber
             }
 
             const labelText = isSelected
               ? `${c.text}\n[${badge}]`
-              : `${c.text} • ${badge}`;
+              : `${c.text} - ${badge}`;
 
             textData.push({
               vehicle: targetVeh,
@@ -1021,13 +1021,16 @@ export function FleetVehicleLayer({
         ? `VIN: ${vehicle.vin}`
         : `ID: ${vehicle?.vehicle_id}`;
 
-  const statusLabel = isMaritime
-    ? 'AIS AKTIF'
-    : isAir
-      ? 'ADS-B LOCK'
-      : vehicle?.vehicle_id.startsWith('MMSI:')
-        ? 'AIS AKTIF'
-        : 'GPS LOCK';
+  const isEstimated = vehicle?.tracking_mode === 'ROUTE_ESTIMATED';
+  const statusLabel = isEstimated
+    ? 'PROYEKSI RUTE'
+    : isMaritime
+      ? 'AIS LIVE SATELIT'
+      : isAir
+        ? 'ADS-B LIVE'
+        : vehicle?.vehicle_id.startsWith('MMSI:')
+          ? 'AIS LIVE SATELIT'
+          : 'GPS LIVE SATELIT';
 
   return (
     <>
@@ -1052,11 +1055,13 @@ export function FleetVehicleLayer({
             <div className="flex items-center gap-2.5">
               <div
                 className={`p-2 rounded-lg border ${
-                  isMaritime
-                    ? 'bg-sky-950/50 text-sky-400 border-sky-500/30'
-                    : isAir
-                      ? 'bg-purple-950/50 text-purple-400 border-purple-500/30'
-                      : 'bg-emerald-950/50 text-emerald-400 border-emerald-500/30'
+                  isEstimated
+                    ? 'bg-amber-950/50 text-amber-400 border-amber-500/30'
+                    : isMaritime
+                      ? 'bg-sky-950/50 text-sky-400 border-sky-500/30'
+                      : isAir
+                        ? 'bg-purple-950/50 text-purple-400 border-purple-500/30'
+                        : 'bg-emerald-950/50 text-emerald-400 border-emerald-500/30'
                 }`}
               >
                 {isMaritime ? (
@@ -1077,8 +1082,12 @@ export function FleetVehicleLayer({
                     {transponderId}
                   </span>
                   <span className="text-slate-600">·</span>
-                  <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#121822] text-slate-300 border border-[#1c2432] text-xs font-mono">
-                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                  <span className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-mono border ${
+                    isEstimated
+                      ? 'bg-amber-950/40 text-amber-300 border-amber-500/30'
+                      : 'bg-[#121822] text-slate-300 border-[#1c2432]'
+                  }`}>
+                    <ShieldCheck className={`w-3.5 h-3.5 ${isEstimated ? 'text-amber-400' : 'text-emerald-400'}`} />
                     <span>{statusLabel}</span>
                   </span>
                 </div>

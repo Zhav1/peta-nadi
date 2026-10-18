@@ -355,6 +355,11 @@ def resolve_canonical_article_url(raw_url: str, title: str = "", source: str = "
         if title:
             return _map_publisher_deep_fallback(title, source)
 
+    # Detect Antara URLs that lack a numeric article ID (which causes 404 on Antara's CMS)
+    if "antaranews.com/berita/" in clean_url and not re.search(r'antaranews\.com/berita/\d{5,8}/', clean_url):
+        if title:
+            return _map_publisher_deep_fallback(title, source)
+
     # If it's already a direct non-Google publisher link with a deep path, return it directly
     try:
         p = urlparse(clean_url)
@@ -467,8 +472,31 @@ async def resolve_canonical_article_url_async(
     return clean_url
 
 
+LOGISTICS_DISASTER_KEYWORDS = (
+    "banjir", "longsor", "amblas", "terputus", "jembatan", "jalan", "jalinsum", "jalintim", "jalinbar",
+    "tol", "pelabuhan", "dermaga", "belawan", "merak", "bakauheni", "teluk bayur", "panjang", "boom baru",
+    "kapal", "cuaca", "hujan", "badai", "gelombang", "angin", "gempa", "erupsi", "gunung",
+    "beras", "cabai", "minyak goreng", "gula", "pangan", "bawang", "sembako", "bulog", "pihps",
+    "distribusi", "truk", "kargo", "logistik", "rantai pasok", "kontainer", "kemacetan", "antrean",
+    "bbm", "solar", "pertamina", "pupuk", "disrupsi", "bencana"
+)
+
+EXCLUDED_NOISE_KEYWORDS = (
+    "varises", "osteoporosis", "kanker", "klinik", "rumah sakit", "evla", "penyakit", "pasien",
+    "olahraga", "sepak bola", "liga", "artis", "selebriti", "hiburan", "film", "konser",
+    "wisata", "kuliner", "fashion", "kecantikan", "kosmetik"
+)
+
+def is_relevant_logistics_or_disaster(text: str) -> bool:
+    """Filters out irrelevant health, hospital, and celebrity news from general RSS feeds."""
+    t_lower = text.lower()
+    if any(n in t_lower for n in EXCLUDED_NOISE_KEYWORDS):
+        return False
+    return any(k in t_lower for k in LOGISTICS_DISASTER_KEYWORDS)
+
+
 async def fetch_rss_feed_items(feed_config: Dict[str, Any], timeout: float = 6.0) -> List[Dict[str, Any]]:
-    """Fetches and parses a single XML RSS feed."""
+    """Fetches and parses a single XML RSS feed with logistics/disaster keyword gate."""
     url = feed_config["url"]
     source_name = feed_config["source"]
     source_tier = feed_config.get("tier", "TIER_2_AUTHORITATIVE_PRESS")
@@ -479,13 +507,17 @@ async def fetch_rss_feed_items(feed_config: Dict[str, Any], timeout: float = 6.0
             resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0 (PreHub Logistics Bot 2.0)"})
             if resp.status_code == 200:
                 root = ET.fromstring(resp.text)
-                for item in root.findall(".//item")[:10]:
+                for item in root.findall(".//item")[:15]:
                     title = item.findtext("title", "").strip()
                     raw_link = item.findtext("link", "").strip()
                     pub_date = item.findtext("pubDate", "").strip()
                     desc = item.findtext("description", "").strip()
                     
                     if not title:
+                        continue
+                    
+                    # Reject non-logistics / health / entertainment articles
+                    if not is_relevant_logistics_or_disaster(f"{title} {desc}"):
                         continue
                         
                     canonical_link = resolve_canonical_article_url(raw_link, title, source_name)
@@ -515,14 +547,19 @@ async def fetch_google_news_targeted(query: str, timeout: float = 6.0) -> List[D
             resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0 (PreHub Logistics Bot 2.0)"})
             if resp.status_code == 200:
                 root = ET.fromstring(resp.text)
-                for item in root.findall(".//item")[:8]:
+                for item in root.findall(".//item")[:10]:
                     title = item.findtext("title", "").strip()
                     raw_link = item.findtext("link", "").strip()
                     pub_date = item.findtext("pubDate", "").strip()
+                    desc = item.findtext("description", "").strip()
                     source_elem = item.find("source")
                     source_name = source_elem.text.strip() if source_elem is not None and source_elem.text else "Media Terverifikasi"
                     
                     if not title:
+                        continue
+
+                    # Reject non-logistics noise
+                    if not is_relevant_logistics_or_disaster(f"{title} {desc}"):
                         continue
                         
                     # Classify tier

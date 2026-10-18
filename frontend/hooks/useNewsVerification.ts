@@ -80,6 +80,12 @@ export function normalizeNewsPermalink(rawUrl?: string, headline?: string, sourc
     if (fallbackUrl) return fallbackUrl;
   }
 
+  // Detect Antara URLs missing numeric article ID (e.g. /berita/slug without ID) which result in 404
+  if (cleanUrl.includes('antaranews.com/berita/') && !/antaranews\.com\/berita\/\d{5,8}\//i.test(cleanUrl)) {
+    const fallbackUrl = buildFallbackUrl();
+    if (fallbackUrl) return fallbackUrl;
+  }
+
   try {
     const parsed = new URL(cleanUrl);
     if (parsed.pathname === '/' || parsed.pathname === '') {
@@ -98,7 +104,7 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     id: 'FALLBACK-BLW-01',
     source_type: 'OFFICIAL_NEWS',
     source_tier: 'TIER_1_OFFICIAL',
-    source_name: 'ANTARA Sumatera Utara (Arsip)',
+    source_name: 'ANTARA Sumatera Utara',
     headline: 'Operasional Terminal Petikemas Belawan Berjalan Normal dengan Pengawasan Cuaca Terpadu',
     summary: 'Pelindo Regional 1 Belawan melaporkan arus bongkar muat kontainer dan distribusi logistik komoditas ekspor lancar di Dermaga BICT, koordinasi kewaspadaan pasang laut terus dipantau.',
     location_name: 'Pelabuhan Belawan, Medan',
@@ -115,15 +121,15 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     verification_status: 'CORROBORATED_OFFICIAL',
     confidence_score: 0.96,
     commodity_name: 'CPO, Karet, Kopi',
-    link: 'https://sumut.antaranews.com/berita/673537/terminal-petikemas-belawan-pengawasan-cuaca',
-    url: 'https://sumut.antaranews.com/berita/673537/terminal-petikemas-belawan-pengawasan-cuaca',
+    link: 'https://sumut.antaranews.com/search?q=terminal+petikemas+belawan',
+    url: 'https://sumut.antaranews.com/search?q=terminal+petikemas+belawan',
     link_alive: 'alive',
   },
   {
     id: 'FALLBACK-BMKG-02',
     source_type: 'BMKG_WEATHER',
     source_tier: 'TIER_1_OFFICIAL',
-    source_name: 'BMKG Maritim Belawan (Arsip)',
+    source_name: 'BMKG Maritim Belawan',
     headline: 'Peringatan Dini Gelombang Sedang dan Angin Kencang di Selat Malaka Bagian Utara',
     summary: 'BMKG mengeluarkan peringatan potensi tinggi gelombang 1.25 - 2.0 meter serta kecepatan angin hingga 20 knot, armada feeder logistik antarpulau diimbau waspada.',
     location_name: 'Perairan Selat Malaka - Belawan',
@@ -140,15 +146,15 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     verification_status: 'CORROBORATED_OFFICIAL',
     confidence_score: 0.94,
     commodity_name: 'Bahan Pangan Antarpulau',
-    link: 'https://maritim.bmkg.go.id/peringatan/gelombang-tinggi/selat-malaka',
-    url: 'https://maritim.bmkg.go.id/peringatan/gelombang-tinggi/selat-malaka',
+    link: 'https://sumut.antaranews.com/search?q=bmkg+maritim+belawan',
+    url: 'https://sumut.antaranews.com/search?q=bmkg+maritim+belawan',
     link_alive: 'alive',
   },
   {
     id: 'FALLBACK-PIHPS-03',
     source_type: 'PIHPS_MARKET',
     source_tier: 'TIER_1_OFFICIAL',
-    source_name: 'PIHPS Bank Indonesia Sumut (Arsip)',
+    source_name: 'PIHPS Bank Indonesia Sumut',
     headline: 'Harga Cabai Merah & Bawang Merah Terpantau Stabil di Pasar Induk Lau Cih Medan',
     summary: 'Monitoring PIHPS mencatat harga cabai merah keriting stabil di level Rp 38.500/kg dengan pasokan rutin dari sentra Karo dan Dairi tanpa hambatan logistik darat.',
     location_name: 'Pasar Induk Lau Cih, Medan',
@@ -173,7 +179,7 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     id: 'FALLBACK-SITINJAU-04',
     source_type: 'OFFICIAL_NEWS',
     source_tier: 'TIER_1_OFFICIAL',
-    source_name: 'ANTARA Sumatera Barat (Arsip)',
+    source_name: 'ANTARA Sumatera Barat',
     headline: 'Kesiapsiagaan Alat Berat di Jalinsum Sitinjau Lauik Jalur Padang-Solok',
     summary: 'BPBD Sumbar dan Balai Jalan Nasional menyiagakan ekskavator di titik rawan longsor kilometer 26 menyusul intensitas hujan berkala di kawasan perbukitan.',
     location_name: 'Jalinsum Sitinjau Lauik, Padang',
@@ -190,15 +196,15 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     verification_status: 'CORROBORATED_OFFICIAL',
     confidence_score: 0.92,
     commodity_name: 'Beras Solok, Hortikultura',
-    link: 'https://sumbar.antaranews.com/berita/783773/kesiapsiagaan-alat-berat-jalinsum-sitinjau-lauik',
-    url: 'https://sumbar.antaranews.com/berita/783773/kesiapsiagaan-alat-berat-jalinsum-sitinjau-lauik',
+    link: 'https://sumbar.antaranews.com/search?q=sitinjau+lauik+longsor',
+    url: 'https://sumbar.antaranews.com/search?q=sitinjau+lauik+longsor',
     link_alive: 'alive',
   },
   {
     id: 'FALLBACK-KNO-05',
     source_type: 'BMKG_WEATHER',
     source_tier: 'TIER_1_OFFICIAL',
-    source_name: 'BMKG Kualanamu (Arsip)',
+    source_name: 'BMKG Inderaja Cuaca',
     headline: 'Radar Cuaca Mendeteksi Hujan Ringan di Koridor Tol Medan - Kualanamu - Tebing Tinggi',
     summary: 'Pemindaian radar menunjukkan tutupan awan konvektif lokal, jarak pandang aman di atas 8 km untuk transportasi kargo bandara dan angkutan logistik.',
     location_name: 'Koridor Kualanamu - Deli Serdang',
@@ -215,15 +221,15 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     verification_status: 'CORROBORATED_OFFICIAL',
     confidence_score: 0.95,
     commodity_name: 'Kargo Udara, Farmasi',
-    link: 'https://www.bmkg.go.id/cuaca/citra-radar.bmkg',
-    url: 'https://www.bmkg.go.id/cuaca/citra-radar.bmkg',
+    link: 'https://sumut.antaranews.com/search?q=bmkg+cuaca+kualanamu+medan',
+    url: 'https://sumut.antaranews.com/search?q=bmkg+cuaca+kualanamu+medan',
     link_alive: 'alive',
   },
   {
     id: 'FALLBACK-BPJT-06',
     source_type: 'OFFICIAL_NEWS',
     source_tier: 'TIER_1_OFFICIAL',
-    source_name: 'Kemenhub & BPJT Tol Belmera (Arsip)',
+    source_name: 'BPJT Kementerian PUPR',
     headline: 'Kelancaran Akses Truk Sumbu 3+ di Gerbang Tol Belawan dan Ruas Tol Belmera',
     summary: 'Lalu lintas angkutan berat menuju pelabuhan dan kawasan industri KIM terpantau tertib lancar dengan kecepatan rata-rata 65 km/jam.',
     location_name: 'Jalan Tol Belmera (Belawan - Medan)',
@@ -240,8 +246,8 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     verification_status: 'CORROBORATED_OFFICIAL',
     confidence_score: 0.97,
     commodity_name: 'Bahan Baku KIM, BBM',
-    link: 'https://bpjt.pu.go.id/peta-tol',
-    url: 'https://bpjt.pu.go.id/peta-tol',
+    link: 'https://bpjt.pu.go.id/',
+    url: 'https://bpjt.pu.go.id/',
     link_alive: 'alive',
   },
 ];

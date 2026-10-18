@@ -1919,6 +1919,39 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 
 ---
 
+## Phase 71: Map Visual Context (Blue Layer Clarity), Fleet Filter Diagnostics & News Intelligence Link Sanitization
+
+**Goal:** Provide complete visual context and UX clarity for unlabeled blue maritime elements and sea lanes on the map; enrich the fleet filter toggle with clear operational purpose and telemetry provenance while eliminating Deck.gl character warnings; sanitize broken/outdated news links; and fix the backend hostname mismatch causing CORS errors on Vercel.
+**Status:** COMPLETE ✅
+**Plans:** `71-RESEARCH.md`, `71-PLAN.md`, `71-01-SUMMARY.md`, `71-LEARNINGS.md`
+
+### Deliverables
+
+- [x] **WP1 - Map Visual Context & Blue Layer Legend Expansion**:
+  - `frontend/components/dashboard/DashboardClient.tsx`: expand `LEGENDA RUTE` modal with dedicated "Armada Multimoda & Koridor Maritim" section explaining `#38bdf8` (Live AIS Vessels), `#34d399` (Live GPS Trucks), `#c084fc` (Air Cargo), `#1e40af` (Malacca Strait Sea Lane), and `#f59e0b` (Scheduled Trajectory).
+  - `frontend/components/map/CrisisMap.tsx`: add subtle on-map symbol text for the Malacca Strait TSS baseline corridor.
+  - `frontend/components/map/FleetVehicleLayer.tsx`: enhance hover tooltip on maritime vessels with name, speed in knots, and navigation status.
+- [x] **WP2 - Fleet Filter Operational Clarity & Deck.gl Character Warning Fix**:
+  - `frontend/components/dashboard/DashboardClient.tsx`: add operational tooltip on `#fleet-sim-toggle-btn` explaining tactical vs macro dispatch use-cases.
+  - `frontend/components/map/FleetVehicleLayer.tsx`: replace Unicode bullet point `•` (8226) with standard ASCII `-` in Deck.gl text layers to eliminate console warnings; add `[GPS LIVE SATELIT]` vs `[PROYEKSI JALUR JADWAL]` telemetry provenance badges on hover cards.
+- [x] **WP3 - News Intelligence Link Sanitization & Backend Keyword Gate**:
+  - `frontend/hooks/useNewsVerification.ts`: sanitize `FALLBACK_SUMATRA_NEWS` with valid 200 OK official links (BMKG, BPJT) and targeted regional bureau search fallbacks.
+  - `backend/app/services/news_aggregator.py`: enforce `LOGISTICS_DISASTER_KEYWORDS` gate to reject non-logistics articles (health, hospital, ceremonial politics) from RSS ingestion; enforce valid Antara URL format.
+- [x] **WP4 - Frontend API Base URL Auto-Sanitization**:
+  - `frontend/lib/api.ts`: sanitize `getBaseUrl()` to redirect deprecated `prehub-backend.onrender.com` to active `https://peta-nadi.onrender.com`, eliminating CORS and 404 errors in production.
+  - `frontend/app/api/proxy/[...path]/route.ts`: ensure default upstream target is `https://peta-nadi.onrender.com`.
+
+### Verification Criteria
+
+- [x] `npx tsc --noEmit` in `frontend/`: 0 errors.
+- [x] `npm test` in `frontend/`: 100% clean test suite pass.
+- [x] Link validation test: 100% of fallback news URLs return HTTP 200 (0 URLs return 404/403).
+- [x] Zero `deck: Missing character: • (8226)` warnings in the browser console.
+- [x] Modal `LEGENDA RUTE` clearly documents maritime vessels, sea lanes, and multimodal fleet colors.
+- [x] Production API calls route cleanly without CORS errors to `peta-nadi.onrender.com`.
+
+---
+
 ## Backlog (Post-Hackathon / v2 & New Context Window Backlog)
 
 ### Active Remediation & Audit Backlog (For New Context Window)

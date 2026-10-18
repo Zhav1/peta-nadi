@@ -166,6 +166,52 @@ function FloatingMapLegend({
                 <span className="text-xs text-slate-400 font-sans">Pelabuhan Utama, Gudang BULOG, Pasar Induk.</span>
               </div>
             </div>
+
+            <div className="pt-2 mt-2 border-t border-[#1c2432]/80 space-y-2">
+              <span className="text-slate-400 font-sans font-semibold text-[11px] uppercase tracking-wider block">
+                Armada Multimoda & Koridor Maritim
+              </span>
+
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-sky-400 shrink-0 shadow-[0_0_8px_rgba(56,189,248,0.5)]" />
+                <div>
+                  <span className="text-slate-200 font-medium block">Kapal Kargo & Feri Maritim (AIS)</span>
+                  <span className="text-xs text-slate-400 font-sans">Transponder AIS Selat Malaka, Selat Sunda & Teluk Palembang.</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0 shadow-[0_0_8px_rgba(52,211,153,0.5)]" />
+                <div>
+                  <span className="text-slate-200 font-medium block">Truk Logistik Pangan (GPS)</span>
+                  <span className="text-xs text-slate-400 font-sans">Telemetri satelit koridor Tol Trans-Sumatera & Jalinsum.</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-purple-400 shrink-0 shadow-[0_0_8px_rgba(192,132,252,0.5)]" />
+                <div>
+                  <span className="text-slate-200 font-medium block">Kargo Udara Darurat (ADS-B)</span>
+                  <span className="text-xs text-slate-400 font-sans">Penerbangan logistik hub KNO, PDG, & PLM.</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="w-4 h-0.5 border-b-2 border-dashed border-blue-600 shrink-0" />
+                <div>
+                  <span className="text-slate-200 font-medium block">Alur Laut Selat Malaka (TSS)</span>
+                  <span className="text-xs text-slate-400 font-sans">Koridor pelayaran vital logistik maritim Sumatra.</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="w-4 h-0.5 border-b-2 border-dashed border-amber-400 shrink-0" />
+                <div>
+                  <span className="text-slate-200 font-medium block">Proyeksi Rute Estimasi</span>
+                  <span className="text-xs text-slate-400 font-sans">Lintasan terencana berbasis manifes pelayaran.</span>
+                </div>
+              </div>
+            </div>
           </div>
 
           <p className="text-xs text-slate-400 font-sans pt-1 border-t border-[#1c2432] leading-tight">
@@ -1705,7 +1751,7 @@ export default function DashboardClient() {
                       ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40 font-bold'
                       : 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 font-bold'
                     }`}
-                  title="Toggle Mode Telemetri: Semua Armada Live + Rute Estimasi vs Hanya GPS & Transponder Live"
+                  title="Mode Telemetri:&#10;• Cyan [Hanya GPS & Transponder Live]: Dispatch taktis instan berbasis sinyal fisik AIS & GPS satelit.&#10;• Amber [Live AIS/ADS-B + Rute Estimasi]: Perencanaan kapasitas makro koridor logistik pangan."
                 >
                   <span
                     className={`w-1.5 h-1.5 rounded-full ${isFleetSimMode ? 'bg-amber-400 animate-pulse' : 'bg-cyan-400 animate-pulse'

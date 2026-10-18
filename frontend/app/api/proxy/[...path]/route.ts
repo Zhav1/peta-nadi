@@ -8,10 +8,14 @@ async function handleProxy(req: NextRequest, context: RouteContext) {
   const resolvedParams = await Promise.resolve(context.params);
   const pathSegments = resolvedParams?.path || [];
 
-  const baseUrl =
+  let baseUrl =
     req.headers.get('x-target-base-url') ||
     process.env.NEXT_PUBLIC_API_URL ||
     'https://peta-nadi.onrender.com';
+
+  if (baseUrl.includes('prehub-backend.onrender.com')) {
+    baseUrl = 'https://peta-nadi.onrender.com';
+  }
 
   const cleanBase = baseUrl.replace(/\/$/, '');
   const subpath = pathSegments.join('/');

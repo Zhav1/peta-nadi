@@ -2,19 +2,19 @@
 gsd_state_version: "1.0"
 milestone: M4
 milestone_name: PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability
-current_phase: 70
-current_phase_name: Map State Reset Purge, Fleet Telemetry Filter & Backend REST Latency Optimization
+current_phase: 71
+current_phase_name: Map Visual Context, Fleet Filter Diagnostics & News Intelligence Link Sanitization
 status: complete
-stopped_at: "Phase 70 complete: (1) Map state reset synchronization in CrisisMap & DashboardClient; (2) Fleet telemetry filter precision & projected trajectory lines; (3) Backend REST latency fast-path & asyncio.gather parallelization."
-last_updated: "2026-10-18T21:30:00.000Z"
+stopped_at: "Phase 71 complete: (1) Map visual context & blue layer legend expansion; (2) Fleet filter operational clarity & Deck.gl character fix; (3) News link sanitization & backend keyword gate; (4) Frontend API base URL auto-sanitization to peta-nadi.onrender.com."
+last_updated: "2026-10-18T22:20:00.000Z"
 last_activity: 2026-10-18
-last_activity_desc: "Phase 70 executed and verified: Map reset purge, fleet trajectory filter, and REST latency caching complete."
+last_activity_desc: "Phase 71 executed & verified: 100% clean typecheck, tests, and URL link health."
 state_head: HEAD
 progress:
-  total_phases: 70
-  completed_phases: 70
-  total_plans: 83
-  completed_plans: 83
+  total_phases: 71
+  completed_phases: 71
+  total_plans: 84
+  completed_plans: 84
   percent: 100.0
 ---
 
@@ -22,16 +22,16 @@ progress:
 
 **Last Updated:** 2026-10-18
 **Active Milestone:** M4 - PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability [ACTIVE 🚀]
-**Current Phase:** 70
+**Current Phase:** 71
 
 ---
 
 ## Current Position
 
-Phase: 70 (Map State Reset Purge, Fleet Telemetry Filter & Backend REST Latency Optimization) - COMPLETE ✅
-Status: (1) Fixed customPinnedPoints isolation in CrisisMap with reset sync effect and cancelled in-flight routing calculations; (2) Added corridor schedule unit in Medan viewport and integrated Deck.gl PathLayer for estimated routes; (3) Added in-memory & Redis fast-path caching, parallelized adapter fetch, and added edge cache headers to proxy.
-Last activity: 2026-10-18 - Phase 70 completed and verified.
-Next action: Push to remote main repository.
+Phase: 71 (Map Visual Context, Fleet Filter Diagnostics & News Intelligence Link Sanitization) - COMPLETE ✅
+Status: (1) Added Multimodal Fleet & Maritime Corridor section to LEGENDA RUTE modal; (2) Added on-map text label for Malacca Strait sea lane; (3) Added operational tooltips distinguishing tactical vs macro fleet dispatch modes; (4) Replaced Deck.gl unicode bullet with ASCII hyphen eliminating console errors; (5) Implemented backend logistics keyword gate rejecting non-logistics noise; (6) Sanitized fallback news links with 100% 200 OK endpoints; (7) Auto-sanitized frontend API base URL redirecting dead prehub-backend to active peta-nadi.onrender.com.
+Last activity: 2026-10-18 - Phase 71 fully executed and verified.
+Next action: Push changes to remote repository.
 
 ---
 
