@@ -258,6 +258,9 @@ export function FleetVehicleLayer({
   const deadReckonMapRef = useRef<Record<string, DeadReckonState>>({});
   const breadcrumbsRef = useRef<Record<string, [number, number][]>>({});
   const lastTimeRef = useRef<number>(performance.now());
+  const lastArbitrateTimeRef = useRef<number>(0);
+  const lastArbitrateZoomRef = useRef<number>(0);
+  const cachedWinnersRef = useRef<Set<string>>(new Set());
   const selectedVehicleIdRef = useRef<string | null>(null);
   const isFollowCamActiveRef = useRef<boolean>(false);
 
@@ -412,7 +415,14 @@ export function FleetVehicleLayer({
     const animate = (now: number) => {
       if (isCancelled || !map || !overlayRef.current) return;
 
-      const deltaSec = Math.min((now - lastTimeRef.current) / 1000, 0.1);
+      // Throttle telemetry update to ~25 FPS (40ms interval) to liberate main-thread CPU
+      const elapsedMs = now - lastTimeRef.current;
+      if (elapsedMs < 38) {
+        animRef.current = requestAnimationFrame(animate);
+        return;
+      }
+
+      const deltaSec = Math.min(elapsedMs / 1000, 0.1);
       lastTimeRef.current = now;
 
       const currentZoom = map.getZoom();
@@ -507,8 +517,14 @@ export function FleetVehicleLayer({
                 ? v.ground_speed_kts * 1.852
                 : (v.speed_kmh || (v.modality === 'air' ? 520 : 25));
 
-          const effectiveBearing = v.cog_deg ?? v.heading_deg ?? (v as any).bearing ?? 0;
-          finalBearing = effectiveBearing;
+          // Derive effective bearing: prioritize live sensor cog/heading, then fallback to route azimuth
+          let effectiveBearing = v.cog_deg ?? v.heading_deg ?? (v as any).bearing;
+          if (effectiveBearing === undefined && coords.length >= 2) {
+            const dx = coords[1][0] - coords[0][0];
+            const dy = coords[1][1] - coords[0][1];
+            effectiveBearing = (Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360;
+          }
+          finalBearing = effectiveBearing ?? 0;
 
           if (effectiveSpeedKmh > 0) {
             const speedScale = v.modality === 'air' ? 2.5 : 4.0;
@@ -569,7 +585,9 @@ export function FleetVehicleLayer({
         }
 
         // Forward geodesic velocity vector
-        if (v.status !== 'anchored' && (v.speed_kmh || 0) > 0) {
+        // Display tactical velocity vector only for actively selected unit or actively rerouting/delayed unit
+        const isImpacted = v.status === 'rerouting' || Boolean((v as any).status === 'delayed') || Boolean((v as any).impacted);
+        if (v.status !== 'anchored' && (v.speed_kmh || 0) > 0 && (isSelected || isImpacted)) {
           const vectorColor: [number, number, number, number] = isSelected
             ? [0, 240, 255, 240]
             : v.modality === 'maritime'
@@ -578,11 +596,12 @@ export function FleetVehicleLayer({
                 ? [192, 132, 252, 200]
                 : [52, 211, 153, 200];
 
+          // Forward time projection: ~1.2 minutes (0.02h) so vector indicates heading cleanly without spanning the map
           const endPoint = projectBearingEndpoint(
             finalPos,
             finalBearing,
             v.speed_kmh || 60,
-            v.modality === 'air' ? 0.08 : 0.05
+            v.modality === 'air' ? 0.025 : 0.02
           );
 
           vectorData.push({
@@ -592,7 +611,6 @@ export function FleetVehicleLayer({
         }
 
         // Hazard pulse ring for selected, delayed, or rerouting vehicles
-        const isImpacted = v.status === 'rerouting' || Boolean((v as any).status === 'delayed') || Boolean((v as any).impacted);
         if (isSelected || isImpacted) {
           const pulsePhase = ((now + idx * 250) % 1800) / 1800; // 0.0 to 1.0
           const radiusPixels = isSelected ? 22 + pulsePhase * 16 : 16 + pulsePhase * 12;
@@ -673,13 +691,22 @@ export function FleetVehicleLayer({
       });
 
       // SpatialHash Anti-Clutter Arbitration:
-      // At macro zoom (z < 7.5), arbitrate with 56px spacing and quota of 22 so ~15-25 high-priority
-      // non-overlapping callsign labels (impacted units, flights, major cargo vessels) display crisply.
-      // At closer zoom (z >= 7.5), arbitrate standard 32px grid.
+      // Cache arbitration winners and re-arbitrate only periodically (~350ms) or when camera zoom changes
       const isMacro = currentZoom < 7.5;
-      const winningLabelIds = isMacro
-        ? arbitrateMacroZoomLabels(declutterCandidates, defaultSpatialHashArbiter, now)
-        : arbitrateVisibleLabels(declutterCandidates, defaultSpatialHashArbiter, now);
+      const shouldReArbitrate =
+        now - lastArbitrateTimeRef.current > 350 ||
+        Math.abs(currentZoom - lastArbitrateZoomRef.current) > 0.25 ||
+        cachedWinnersRef.current.size === 0;
+
+      let winningLabelIds = cachedWinnersRef.current;
+      if (shouldReArbitrate) {
+        winningLabelIds = isMacro
+          ? arbitrateMacroZoomLabels(declutterCandidates, defaultSpatialHashArbiter, now)
+          : arbitrateVisibleLabels(declutterCandidates, defaultSpatialHashArbiter, now);
+        cachedWinnersRef.current = winningLabelIds;
+        lastArbitrateTimeRef.current = now;
+        lastArbitrateZoomRef.current = currentZoom;
+      }
 
       const textData: Array<{
         vehicle: FleetVehicle;

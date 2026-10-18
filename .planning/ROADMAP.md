@@ -1849,6 +1849,29 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 
 ---
 
+## Phase 69: WebGL Telemetry Stabilization & Main-Thread Performance Optimization
+
+**Goal:** Eliminate `RangeError: Invalid array length` crash in `spatialHashArbiter.ts`, correct distorted vertical velocity vectors on map assets, and throttle heavy 60 FPS animation/arbitration loops to liberate main-thread CPU without degrading native Mapbox 60 FPS fluidity.
+**Status:** COMPLETE ✅
+**Plans:** `69-RESEARCH.md`, `69-PLAN.md`, `69-WALKTHROUGH.md`, `69-LEARNINGS.md`, `69-01-SUMMARY.md`
+
+### Deliverables
+
+- [x] `frontend/lib/spatialHashArbiter.ts`: finite checks on screen coords/dimensions, viewport bounds filtering, and max cell footprint clamping to mathematically eliminate infinite array allocation loops.
+- [x] `frontend/hooks/useFleetVehicles.ts`: add authentic travel bearings (`heading_deg`) for aviation and truck fallback fleets.
+- [x] `frontend/components/map/FleetVehicleLayer.tsx`: derive forward bearing from route geometry when missing, clamp forward velocity vector visual lengths, and restrict prominence to active/selected units.
+- [x] `frontend/components/map/FleetVehicleLayer.tsx`: throttle telemetry dead-reckoning loop to 25 FPS (40ms tick), decoupling from monitor refresh rate.
+- [x] `frontend/components/map/FleetVehicleLayer.tsx`: cache SpatialHash arbitration winners and execute arbitration only during camera interaction or significant spatial shifts.
+- [x] `frontend/scripts/test_arbiter.ts`: standalone test runner verifying arbiter safely handles invalid/infinite coordinates without throwing RangeError.
+
+### Verification Criteria
+
+- [x] `npx tsc --noEmit` in `frontend/`: 0 errors.
+- [x] `npm test` in `frontend/`: 100% clean pass on all pathological/extreme input cases.
+- [x] Verified zero `RangeError` under infinite/NaN coordinate projection.
+
+---
+
 ## Backlog (Post-Hackathon / v2 & New Context Window Backlog)
 
 ### Active Remediation & Audit Backlog (For New Context Window)

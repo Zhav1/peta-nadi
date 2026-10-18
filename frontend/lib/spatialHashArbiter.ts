@@ -126,10 +126,38 @@ export class SpatialHashArbiter {
       const w = item.width || 80;
       const h = item.height || 24;
 
+      // Guard: strictly ignore non-finite coordinates or dimension anomalies
+      if (
+        !Number.isFinite(item.screenX) ||
+        !Number.isFinite(item.screenY) ||
+        !Number.isFinite(w) ||
+        !Number.isFinite(h)
+      ) {
+        continue;
+      }
+
+      // Guard: ignore candidate items positioned far outside visible screen viewport
+      if (
+        item.screenX < -300 ||
+        item.screenX > 4000 ||
+        item.screenY < -300 ||
+        item.screenY > 4000
+      ) {
+        continue;
+      }
+
       const minCx = Math.floor((item.screenX - w / 2) / cellSize);
       const maxCx = Math.floor((item.screenX + w / 2) / cellSize);
       const minCy = Math.floor((item.screenY - h / 2) / cellSize);
       const maxCy = Math.floor((item.screenY + h / 2) / cellSize);
+
+      const cellSpanX = maxCx - minCx + 1;
+      const cellSpanY = maxCy - minCy + 1;
+
+      // Guard: a label should occupy at most 24 grid cells (e.g. 6x4). Clamping protects against array allocation overflow
+      if (cellSpanX <= 0 || cellSpanY <= 0 || cellSpanX * cellSpanY > 24) {
+        continue;
+      }
 
       let hasCollision = false;
       const targetKeys: number[] = [];

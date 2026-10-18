@@ -169,7 +169,8 @@ const FALLBACK_FLEET: FleetVehicle[] = [
     path: [[101.4478, 0.5071], [101.3500, 0.8500], [101.2100, 1.2800]],
     route_geometry: { type: 'LineString', coordinates: [[101.4478, 0.5071], [101.3500, 0.8500], [101.2100, 1.2800]] },
     speed_kmh: 70.0, status: 'moving', progress: 0.62, cargo: '18 Ton Sembako Campuran', origin: 'Pekanbaru', destination: 'Duri',
-    telemetry_source: 'TMS_GPS_WEBHOOK', signal_status: 'LIVE_STREAM', tracking_mode: 'LIVE_GPS', vin: 'TRK-PKU-DUR-10', callsign: 'DURI-LOG'
+    telemetry_source: 'TMS_GPS_WEBHOOK', signal_status: 'LIVE_STREAM', tracking_mode: 'LIVE_GPS', vin: 'TRK-PKU-DUR-10', callsign: 'DURI-LOG',
+    heading_deg: 342
   },
   {
     vehicle_id: 'TRK-011-RANTAUPRAPAT-KISARAN',
@@ -178,7 +179,8 @@ const FALLBACK_FLEET: FleetVehicle[] = [
     path: [[100.0000, 2.1000], [99.8500, 2.4500], [99.6200, 2.9800]],
     route_geometry: { type: 'LineString', coordinates: [[100.0000, 2.1000], [99.8500, 2.4500], [99.6200, 2.9800]] },
     speed_kmh: 60.0, status: 'moving', progress: 0.50, cargo: '15 Ton Minyak Goreng Curah', origin: 'Rantauprapat', destination: 'Kisaran',
-    telemetry_source: 'ROUTE_ESTIMATED', signal_status: 'SIMULATION_CACHE', tracking_mode: 'ROUTE_ESTIMATED', callsign: 'KISARAN-11'
+    telemetry_source: 'ROUTE_ESTIMATED', signal_status: 'SIMULATION_CACHE', tracking_mode: 'ROUTE_ESTIMATED', callsign: 'KISARAN-11',
+    heading_deg: 335
   },
   {
     vehicle_id: 'TRK-012-LUBUKLINGGAU-PLM',
@@ -187,7 +189,8 @@ const FALLBACK_FLEET: FleetVehicle[] = [
     path: [[102.8600, -3.2900], [103.5500, -3.2000], [104.1500, -3.1000], [104.7565, -2.9909]],
     route_geometry: { type: 'LineString', coordinates: [[102.8600, -3.2900], [103.5500, -3.2000], [104.1500, -3.1000], [104.7565, -2.9909]] },
     speed_kmh: 58.0, status: 'moving', progress: 0.45, cargo: '20 Ton Beras & Palawija', origin: 'Lubuklinggau', destination: 'Palembang',
-    telemetry_source: 'TMS_GPS_WEBHOOK', signal_status: 'LIVE_STREAM', tracking_mode: 'LIVE_GPS', vin: 'TRK-LLG-PLM-12', callsign: 'LINGGAU-12'
+    telemetry_source: 'TMS_GPS_WEBHOOK', signal_status: 'LIVE_STREAM', tracking_mode: 'LIVE_GPS', vin: 'TRK-LLG-PLM-12', callsign: 'LINGGAU-12',
+    heading_deg: 82
   },
 
   // Air Cargo (Live ADS-B Flights OpenSky Network & Commercial Cargo)
@@ -198,7 +201,8 @@ const FALLBACK_FLEET: FleetVehicle[] = [
     path: [[98.8780, 3.6421], [101.5000, 0.5000], [104.5000, -3.0000], [106.6500, -6.1256]],
     route_geometry: { type: 'LineString', coordinates: [[98.8780, 3.6421], [101.5000, 0.5000], [104.5000, -3.0000], [106.6500, -6.1256]] },
     speed_kmh: 620.0, status: 'moving', progress: 0.35, cargo: '8.5 Ton Daging Beku & Vaksin', origin: 'Bandara Kualanamu (KNO)', destination: 'Soekarno-Hatta (CGK)',
-    telemetry_source: 'ADSB_LIVE', signal_status: 'LIVE_STREAM', tracking_mode: 'LIVE_GPS', icao24: '8a011b', callsign: 'GIA7101'
+    telemetry_source: 'ADSB_LIVE', signal_status: 'LIVE_STREAM', tracking_mode: 'LIVE_GPS', icao24: '8a011b', callsign: 'GIA7101',
+    heading_deg: 145
   },
   {
     vehicle_id: 'AIR-002-PKU-BIM',
@@ -207,7 +211,8 @@ const FALLBACK_FLEET: FleetVehicle[] = [
     path: [[101.4447, 0.4619], [100.8500, -0.1500], [100.2811, -0.7869]],
     route_geometry: { type: 'LineString', coordinates: [[101.4447, 0.4619], [100.8500, -0.1500], [100.2811, -0.7869]] },
     speed_kmh: 540.0, status: 'moving', progress: 0.58, cargo: '5.2 Ton Sayur Segar & Medis', origin: 'Bandara Sultan Syarif Kasim II (PKU)', destination: 'Bandara Minangkabau (BIM)',
-    telemetry_source: 'OPENSKY_NETWORK', signal_status: 'LIVE_STREAM', tracking_mode: 'LIVE_GPS', icao24: '8a023c', callsign: 'CDG802'
+    telemetry_source: 'OPENSKY_NETWORK', signal_status: 'LIVE_STREAM', tracking_mode: 'LIVE_GPS', icao24: '8a023c', callsign: 'CDG802',
+    heading_deg: 228
   },
   {
     vehicle_id: 'AIR-003-PLM-TKG',
@@ -216,7 +221,8 @@ const FALLBACK_FLEET: FleetVehicle[] = [
     path: [[104.7000, -2.8983], [104.9500, -4.0500], [105.1783, -5.2417]],
     route_geometry: { type: 'LineString', coordinates: [[104.7000, -2.8983], [104.9500, -4.0500], [105.1783, -5.2417]] },
     speed_kmh: 510.0, status: 'moving', progress: 0.42, cargo: '6.0 Ton Benih Pangan & Sembako Ekspres', origin: 'Bandara Sultan Mahmud Badaruddin II (PLM)', destination: 'Bandara Radin Inten II (TKG)',
-    telemetry_source: 'ADSB_LIVE', signal_status: 'LIVE_STREAM', tracking_mode: 'LIVE_GPS', icao24: '8a034d', callsign: 'TMG301'
+    telemetry_source: 'ADSB_LIVE', signal_status: 'LIVE_STREAM', tracking_mode: 'LIVE_GPS', icao24: '8a034d', callsign: 'TMG301',
+    heading_deg: 168
   },
   {
     vehicle_id: 'AIR-004-BTJ-KNO',
@@ -225,7 +231,8 @@ const FALLBACK_FLEET: FleetVehicle[] = [
     path: [[95.4194, 5.5222], [97.1000, 4.6000], [98.8780, 3.6421]],
     route_geometry: { type: 'LineString', coordinates: [[95.4194, 5.5222], [97.1000, 4.6000], [98.8780, 3.6421]] },
     speed_kmh: 580.0, status: 'moving', progress: 0.65, cargo: '4.8 Ton Pangan Hortikultura & Bumbu', origin: 'Bandara Sultan Iskandar Muda (BTJ)', destination: 'Bandara Kualanamu (KNO)',
-    telemetry_source: 'OPENSKY_NETWORK', signal_status: 'LIVE_STREAM', tracking_mode: 'LIVE_GPS', icao24: '8a045e', callsign: 'LNI404'
+    telemetry_source: 'OPENSKY_NETWORK', signal_status: 'LIVE_STREAM', tracking_mode: 'LIVE_GPS', icao24: '8a045e', callsign: 'LNI404',
+    heading_deg: 122
   },
   {
     vehicle_id: 'AIR-005-DJB-PLM',
@@ -234,7 +241,8 @@ const FALLBACK_FLEET: FleetVehicle[] = [
     path: [[103.6444, -1.6389], [104.1500, -2.2500], [104.7000, -2.8983]],
     route_geometry: { type: 'LineString', coordinates: [[103.6444, -1.6389], [104.1500, -2.2500], [104.7000, -2.8983]] },
     speed_kmh: 490.0, status: 'moving', progress: 0.30, cargo: '5.5 Ton Komoditas Pangan Segar', origin: 'Bandara Sultan Thaha (DJB)', destination: 'Bandara Sultan Mahmud Badaruddin II (PLM)',
-    telemetry_source: 'ADSB_LIVE', signal_status: 'LIVE_STREAM', tracking_mode: 'LIVE_GPS', icao24: '8a056f', callsign: 'MYU505'
+    telemetry_source: 'ADSB_LIVE', signal_status: 'LIVE_STREAM', tracking_mode: 'LIVE_GPS', icao24: '8a056f', callsign: 'MYU505',
+    heading_deg: 142
   },
 ];
 

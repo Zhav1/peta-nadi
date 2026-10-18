@@ -2,19 +2,19 @@
 gsd_state_version: "1.0"
 milestone: M4
 milestone_name: PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability
-current_phase: 68
-current_phase_name: Restore Guest-403 E2E Test Against MitigationTab
+current_phase: 69
+current_phase_name: WebGL Telemetry Stabilization & Main-Thread Performance Optimization
 status: complete
-stopped_at: Completed Phases 64..68; purged mock Past/Future/Predict dock tabs & backend endpoints; removed Simulasi main tab and dead simulation/chat routes; enforced Analytics honesty (data tidak tersedia empty states, purged hardcoded cards/arcs); hardened Laporan audit ledger (real action/sync status, ISO date+tz, filters, dynamic PDF/JSON export); restored guest-403 e2e test against MitigationTab. 14/14 api router tests passed, 1/1 guest-403 playwright passed, 0 tsc errors, 100% clean Next.js build.
-last_updated: "2026-10-18T06:10:00.000Z"
+stopped_at: "Phase 69 completed: (1) spatialHashArbiter.ts infinite array overflow fix verified with test suite; (2) realistic aircraft/truck velocity bearings and vector length clamping applied; (3) 25 FPS telemetry loop throttling to unchoke main thread CPU. 0 tsc errors, 100% test pass."
+last_updated: "2026-10-18T19:40:00.000Z"
 last_activity: 2026-10-18
-last_activity_desc: "Phases 64-68 completed: Mock purge, Simulasi tab removal, Analytics honesty, Laporan ledger hardening, and guest-403 e2e restoration. 14/14 test_api_routers passed, 1/1 playwright guest-403 passed, 0 tsc errors, 100% clean Next.js build."
+last_activity_desc: "Phase 69 executed and verified: spatialHashArbiter hardened against RangeError, velocity vectors sanitized, animation throttled to 25 FPS, npm test passed."
 state_head: HEAD
 progress:
-  total_phases: 68
-  completed_phases: 68
-  total_plans: 81
-  completed_plans: 81
+  total_phases: 69
+  completed_phases: 69
+  total_plans: 82
+  completed_plans: 82
   percent: 100
 ---
 
@@ -22,16 +22,16 @@ progress:
 
 **Last Updated:** 2026-10-18
 **Active Milestone:** M4 - PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability [ACTIVE 🚀]
-**Current Phase:** 68
+**Current Phase:** 69
 
 ---
 
 ## Current Position
 
-Phase: 68 (Restore Guest-403 E2E Test Against MitigationTab) - COMPLETE
-Status: Phases 64..68 executed and verified. (1) Past/Future/Predict tabs removed from dock, TimelineScrubber.tsx deleted, /historical/episodes and /predictive/risks endpoints removed; (2) Simulasi main tab and SimulationSection.tsx deleted, /simulation/chat purged; (3) Analytics tab sanitized with real PIHPS series preserved and explicit 'Data tidak tersedia' empty states; (4) Laporan audit ledger hardened with dynamic ACCEPT/REJECT/OVERRIDE actions, live sync status, full ISO date+tz formatting, filters toolbar, and dynamic PDF/JSON export; (5) Playwright guest-403 test restored against MitigationTab approval pipeline (1/1 passed). 0 tsc errors, 100% clean Next.js build.
-Last activity: 2026-10-18 - Phases 64-68 executed, verified, and synchronized with plans.
-Next action: Push commit to remote origin/main.
+Phase: 69 (WebGL Telemetry Stabilization & Main-Thread Performance Optimization) - COMPLETE
+Status: (1) RangeError: Invalid array length in spatialHashArbiter.ts eliminated via finite checks and footprint clamping; (2) Velocity vectors sanitized and oriented to authentic bearings; (3) Telemetry dead-reckoning throttled to 25 FPS to liberate main thread CPU. Verified with 0 tsc errors and 100% clean test suite.
+Last activity: 2026-10-18 - Phase 69 executed and verified.
+Next action: Commit changes and advance workflow.
 
 ---
 

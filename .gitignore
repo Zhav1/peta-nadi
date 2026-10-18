@@ -87,4 +87,5 @@ tests/e2e-runner/
 .e2e-artifacts/
 e2e/
 scratch/
-
+
+docs/skill
