@@ -1090,16 +1090,16 @@ export default function CrisisMap({
                   ? 'bg-white text-[#080d14] border-white'
                   : 'bg-[#0c1017] text-slate-300 border-[#1c2432] hover:text-white hover:bg-[#121822]'
               }`}
-              title="Filter Layer Peta"
+              title="Pilihan Lapisan Peta"
             >
               <Layers className="w-3.5 h-3.5 text-slate-400" />
-              <span>Layer Peta</span>
+              <span>Lapisan Peta</span>
             </button>
 
             {showLayerFilterMenu && (
-              <div className="absolute right-0 mt-2 w-64 bg-[#0c1017] border border-[#1c2432] p-3 rounded-lg shadow-xl text-xs space-y-2 animate-in fade-in duration-150">
+              <div className="absolute right-0 mt-2 w-64 max-h-[80vh] overflow-y-auto bg-[#0c1017] border border-[#1c2432] p-3 rounded-lg shadow-2xl text-xs space-y-2 animate-in fade-in duration-150 z-50">
                 <div className="font-sans font-medium text-xs text-slate-300 uppercase tracking-wider border-b border-[#1c2432] pb-1.5">
-                  Filter Visualisasi Layer
+                  Pilihan Lapisan Peta
                 </div>
 
                 <div className="space-y-1 text-xs">

@@ -91,7 +91,7 @@ export function EconomicTab({ crisis }: EconomicTabProps) {
           <p className="text-xs text-slate-400">
             {typeof forecast.timeframe_hours === 'number'
               ? `Estimasi ${forecast.timeframe_hours} jam ke depan`
-              : 'Horizon proyeksi belum tersedia'}
+              : 'Rentang estimasi waktu belum tersedia'}
             {regionLabel ? ` · ${regionLabel}` : ''}
           </p>
         </div>

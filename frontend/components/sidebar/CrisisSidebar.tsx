@@ -58,17 +58,12 @@ export function CrisisSidebar({
         <div className="flex items-start justify-between">
           <div className="flex-1 min-w-0 pr-2">
             <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-              <span className={`text-xs font-bold px-2 py-0.5 rounded font-mono uppercase tracking-wide ${severityColor}`}>
+              <span className={`text-xs font-semibold px-2 py-0.5 rounded font-sans uppercase tracking-wide ${severityColor}`}>
                 {crisis.status}
               </span>
-              <span className="text-xs text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded font-mono font-bold">
-                {confidencePct}% Keyakinan
+              <span className="text-xs text-slate-300 font-sans">
+                Tingkat Validasi: <span className="font-semibold text-white">{confidencePct}%</span>
               </span>
-              {crisis.is_simulated && (
-                <span className="text-xs text-amber-300 bg-amber-950/60 border border-amber-500/30 px-2 py-0.5 rounded font-mono font-bold">
-                  SIMULASI FIXTURE
-                </span>
-              )}
             </div>
             <h2 className="text-sm font-bold text-white leading-snug font-sans">
               {crisis.title}
@@ -140,7 +135,7 @@ export function CrisisSidebar({
           >
             <span className="flex items-center gap-1.5">
               <Link2 className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Mengapa Peringatan Ini Muncul? (Causal Chain)</span>
+              <span>Alur Bukti Pemicu Peringatan</span>
             </span>
             <span>{showCausalChain ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}</span>
           </button>

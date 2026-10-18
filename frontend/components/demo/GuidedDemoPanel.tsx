@@ -123,7 +123,7 @@ export function GuidedDemoPanel({
   ];
 
   const stageExplainers = [
-    'Silakan tentukan rute krisis dengan mengeklik 2 titik marker pada Peta Operasi di sebelah kiri (Klik 1: Start, Klik 2: End). Sistem akan merender rute baseline hijau sebelum disrupsi disimulasikan.',
+    'Tentukan rute krisis dengan memilih 2 titik simpul pada Peta Operasi (pilih titik asal, kemudian titik tujuan). Sistem akan menampilkan rute awal sebelum simulasi disrupsi dijalankan.',
     'Modul analisis memproses data secara terpadu untuk pemetaan bahaya, rute alternatif, dan proyeksi dampak ekonomi pasar.',
     'Sistem mengevaluasi tingkat keyakinan data multi-sumber guna menyaring peringatan palsu sebelum diterbitkan.',
     'Gangguan tervalidasi. Sistem menghitung rute pengalihan aman di luar zona bahaya khusus untuk koridor pilihan Anda.',
@@ -241,7 +241,7 @@ export function GuidedDemoPanel({
               <div className={`p-2 rounded-md border flex flex-col gap-1 text-xs transition-colors ${selectedOrigin ? 'bg-[#0c1017] border-[#1c2432] text-slate-200' : 'bg-[#0c1017]/50 border-dashed border-[#1c2432] text-slate-500'}`}>
                 <span className="font-medium text-cyan-400 flex items-center gap-1">
                   <Circle className="w-2.5 h-2.5 fill-cyan-400 text-cyan-400" />
-                  <span>Asal (Klik 1)</span>
+                  <span>Titik Asal</span>
                   {selectedOrigin && <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400 ml-auto" />}
                 </span>
                 <span className="font-mono tabular-nums text-xs truncate">
@@ -251,7 +251,7 @@ export function GuidedDemoPanel({
               <div className={`p-2 rounded-md border flex flex-col gap-1 text-xs transition-colors ${selectedDestination ? 'bg-[#0c1017] border-[#1c2432] text-slate-200' : 'bg-[#0c1017]/50 border-dashed border-[#1c2432] text-slate-500'}`}>
                 <span className="font-medium text-amber-400 flex items-center gap-1">
                   <Circle className="w-2.5 h-2.5 fill-amber-400 text-amber-400" />
-                  <span>Tujuan (Klik 2)</span>
+                  <span>Titik Tujuan</span>
                   {selectedDestination && <CheckCircle2 className="w-3.5 h-3.5 text-amber-400 ml-auto" />}
                 </span>
                 <span className="font-mono tabular-nums text-xs truncate">
@@ -358,8 +358,8 @@ export function GuidedDemoPanel({
                     Dampak Ekonomi
                   </span>
                   {economicConfidencePct !== null && (
-                    <span className="text-xs font-mono text-slate-400 tabular-nums">
-                      {economicConfidencePct}% keyakinan agen
+                    <span className="text-xs font-sans text-slate-300 tabular-nums">
+                      Tingkat Validasi: <span className="font-semibold text-white">{economicConfidencePct}%</span>
                     </span>
                   )}
                 </div>
@@ -381,7 +381,7 @@ export function GuidedDemoPanel({
                     )}
                   </div>
                   <div className="p-2 rounded border border-[#1c2432] bg-[#0c1017] flex flex-col gap-0.5 min-w-0">
-                    <span className="text-slate-400">Horizon Proyeksi</span>
+                    <span className="text-slate-400">Periode Estimasi Dampak</span>
                     {typeof inflationForecast?.timeframe_hours === 'number' ? (
                       <span className="font-mono text-cyan-300 font-medium tabular-nums">
                         {inflationForecast.timeframe_hours} jam

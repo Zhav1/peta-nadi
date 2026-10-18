@@ -235,12 +235,12 @@ export default function AnalyticsSection({
   const minP = Math.min(...priceHistory, 0) * 0.95;
   const barHeights = priceHistory.map(p => `${((p - minP) / (maxP - minP)) * 75 + 15}%`);
 
-  // Causal Chain of Impact Nodes
+  // Transmission Chain of Impact Nodes
   const causalChain = [
-    { label: 'Simpul Pelabuhan / Gerbang Terhambat', sub: 'Cuaca Ekstrem / Antrean Dermaga', status: 'KRITIS', color: 'text-red-400 border-red-500/40 bg-red-500/10' },
-    { label: 'Perlambatan Arteri Trans-Sumatera', sub: 'Antrean Kendaraan & Bottleneck Jalan', status: 'WASPADA', color: 'text-amber-400 border-amber-500/40 bg-amber-500/10' },
-    { label: 'Penurunan Pasokan Pasar Konsumen', sub: 'Penurunan Inflow Komoditas Harian', status: 'WASPADA', color: 'text-amber-400 border-amber-500/40 bg-amber-500/10' },
-    { label: 'Risiko Kenaikan Harga Eceran', sub: 'Proyeksi Kenaikan Harga Pokok Wilayah', status: 'PERINGATAN', color: 'text-cyan-400 border-cyan-500/40 bg-cyan-500/10' }
+    { label: 'Gerbang / Pelabuhan Terkendala', sub: 'Cuaca Ekstrem / Antrean Logistik', status: 'KRITIS', color: 'text-red-400 border-red-500/40 bg-red-500/10' },
+    { label: 'Perlambatan Koridor Tol & Arteri', sub: 'Penyempitan Arus Lalu Lintas', status: 'WASPADA', color: 'text-amber-400 border-amber-500/40 bg-amber-500/10' },
+    { label: 'Penurunan Pasokan Pasar Induk', sub: 'Penurunan Inflow Komoditas', status: 'WASPADA', color: 'text-amber-400 border-amber-500/40 bg-amber-500/10' },
+    { label: 'Kenaikan Harga Tingkat Eceran', sub: 'Potensi Fluktuasi Harga Pangan', status: 'PERINGATAN', color: 'text-cyan-400 border-cyan-500/40 bg-cyan-500/10' }
   ];
 
   return (
@@ -296,38 +296,40 @@ export default function AnalyticsSection({
           {/* Mapbox Canvas */}
           <div ref={mapContainerRef} className="absolute inset-0 w-full h-full" />
 
-          {/* Causal Chain Panel */}
+          {/* Transmission Chain Panel */}
           <div className="absolute top-4 left-4 right-4 z-20 bg-[#0c1017] border border-white/10 p-4 rounded-xl shadow-xl">
             <div className="flex justify-between items-center mb-3">
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-slate-300" />
-                <span className="text-xs font-mono font-semibold uppercase tracking-wider text-slate-200">
-                  Rantai Kausalitas Dampak
+                <span className="text-xs font-sans font-bold uppercase tracking-wider text-slate-200">
+                  Alur Penjalaran Dampak Gangguan
                 </span>
               </div>
-              <span className="text-xs font-mono text-slate-400">
-                Koridor: Simpul Bahaya &rarr; Arteri Logistik &rarr; Pusat Konsumsi
+              <span className="text-xs font-sans text-slate-400">
+                Transmisi: Titik Gangguan &rarr; Koridor Distribusi &rarr; Pasokan Pasar
               </span>
             </div>
 
             {/* Causal Chain Nodes */}
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
               {causalChain.map((node, idx) => (
                 <div 
                   key={idx}
                   onClick={() => setActiveGraphNode(idx)}
-                  className={`p-3 rounded-lg border transition-colors cursor-pointer ${
+                  className={`p-3 rounded-lg border transition-colors cursor-pointer flex flex-col justify-between ${
                     activeGraphNode === idx 
                       ? 'bg-white/10 border-white/40' 
                       : 'bg-[#121822] border-white/10 hover:border-white/20'
                   }`}
                 >
-                  <div className="flex justify-between items-center mb-1">
+                  <div className="flex justify-between items-center mb-1.5">
                     <span className="text-xs font-mono font-medium text-slate-400">SIMPUL 0{idx + 1}</span>
-                    <span className="text-xs font-mono font-medium px-1.5 py-0.5 rounded bg-black/40 text-slate-300">{node.status}</span>
+                    <span className="text-xs font-sans font-medium px-1.5 py-0.5 rounded bg-black/40 text-slate-300">{node.status}</span>
                   </div>
-                  <p className="text-xs font-semibold text-white truncate">{node.label}</p>
-                  <p className="text-xs text-slate-400 mt-0.5 truncate">{node.sub}</p>
+                  <div>
+                    <p className="text-xs font-semibold text-white leading-snug">{node.label}</p>
+                    <p className="text-xs text-slate-400 mt-1 leading-tight">{node.sub}</p>
+                  </div>
                 </div>
               ))}
             </div>
@@ -339,11 +341,11 @@ export default function AnalyticsSection({
               <span className="w-2 h-2 rounded-full bg-emerald-400" />
               <span className="font-semibold text-xs tracking-wide text-white">KORIDOR SUMATERA UTARA</span>
             </div>
-            <div className="grid grid-cols-2 gap-x-4 pt-1 font-mono text-xs">
+            <div className="grid grid-cols-2 gap-x-4 pt-1 font-sans text-xs">
               <span className="text-slate-400">Harga Beras:</span>
-              <span className="text-slate-200 font-bold tabular-nums">Rp {ricePrice.toLocaleString('id-ID')} / kg</span>
-              <span className="text-slate-400">Delta Bawang:</span>
-              <span className="text-red-400 font-bold tabular-nums">{shallotsDelta}</span>
+              <span className="text-slate-200 font-bold font-mono tabular-nums">Rp {ricePrice.toLocaleString('id-ID')} / kg</span>
+              <span className="text-slate-400">Perubahan Cabai:</span>
+              <span className="text-red-400 font-bold font-mono tabular-nums">{shallotsDelta}</span>
             </div>
             {onSwitchTab && (
               <button

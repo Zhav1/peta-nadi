@@ -279,34 +279,34 @@ function FloatingMapLegend({
           type="button"
           onClick={onToggle}
           className="cursor-pointer px-3 py-1.5 rounded-md bg-[#0c1017] border border-[#1c2432] text-slate-300 hover:text-white hover:bg-[#121822] shadow-xl transition-colors flex items-center gap-1.5 text-xs font-semibold"
-          title="Buka Legenda Peta & Rute"
+          title="Buka Panduan Simbol & Rute"
         >
           <Info className="w-4 h-4 text-slate-300" />
-          <span>LEGENDA RUTE</span>
+          <span>Panduan Simbol & Rute</span>
         </button>
       ) : (
-        <div className="absolute right-0 mt-2 w-72 bg-[#0c1017] border border-[#1c2432] p-3.5 rounded-lg shadow-xl text-xs space-y-2.5 animate-in fade-in zoom-in-95 duration-150 z-50">
+        <div className="absolute right-0 top-full mt-2 w-72 max-h-[80vh] overflow-y-auto bg-[#0c1017] border border-[#1c2432] p-3.5 rounded-lg shadow-2xl text-xs space-y-2.5 animate-in fade-in zoom-in-95 duration-150 z-50">
           <div className="flex items-center justify-between border-b border-[#1c2432] pb-2">
-            <span className="font-mono font-semibold text-xs text-white uppercase tracking-wider flex items-center gap-1.5">
+            <span className="font-sans font-semibold text-xs text-white uppercase tracking-wider flex items-center gap-1.5">
               <Compass className="w-3.5 h-3.5 text-slate-300" />
-              <span>Legenda Peta & Keputusan</span>
+              <span>Panduan Simbol & Rute</span>
             </span>
             <button
               type="button"
               onClick={onToggle}
               className="cursor-pointer p-1 rounded-md bg-[#121822] text-slate-400 hover:text-white border border-[#1c2432] transition-colors"
-              title="Tutup Legenda"
+              title="Tutup Panduan"
             >
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
 
-          <div className="space-y-2 font-mono text-xs">
+          <div className="space-y-2 font-sans text-xs">
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0" />
               <div>
                 <span className="text-slate-200 font-medium block">Rute Rekomendasi Tercepat</span>
-                <span className="text-xs text-slate-400 font-sans">Bebas bahaya dengan jarak dan waktu tempuh paling efisien.</span>
+                <span className="text-xs text-slate-400 font-sans">Bebas hambatan dengan jarak dan estimasi waktu paling efisien.</span>
               </div>
             </div>
 
@@ -314,23 +314,23 @@ function FloatingMapLegend({
               <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shrink-0" />
               <div>
                 <span className="text-slate-200 font-medium block">Rute Alternatif Sekunder</span>
-                <span className="text-xs text-slate-400 font-sans">Jalur alternatif cadangan dengan deviasi waktu lebih panjang.</span>
+                <span className="text-xs text-slate-400 font-sans">Jalur cadangan dengan deviasi waktu lebih panjang.</span>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
               <div>
-                <span className="text-slate-200 font-medium block">Koridor Utama Terblokir</span>
-                <span className="text-xs text-slate-400 font-sans">Jalur utama yang terhambat genangan atau longsor.</span>
+                <span className="text-slate-200 font-medium block">Koridor Utama Terkendala</span>
+                <span className="text-xs text-slate-400 font-sans">Jalur utama yang terhambat genangan, banjir, atau longsor.</span>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full border border-rose-500 bg-rose-500/20 shrink-0" />
               <div>
-                <span className="text-slate-200 font-medium block">Zona Radius Bahaya (Shockwave)</span>
-                <span className="text-xs text-slate-400 font-sans">Area bahaya hasil konsensus BMKG dan OSINT.</span>
+                <span className="text-slate-200 font-medium block">Radius Area Terdampak Bencana</span>
+                <span className="text-xs text-slate-400 font-sans">Area risiko terdampak berdasarkan data BMKG dan laporan lapangan.</span>
               </div>
             </div>
 
@@ -344,7 +344,7 @@ function FloatingMapLegend({
           </div>
 
           <p className="text-xs text-slate-400 font-sans pt-1 border-t border-[#1c2432] leading-tight">
-            <strong>Transparansi HITL:</strong> PreHub menampilkan semua alternatif rute agar operator dapat membandingkan trade-off waktu dan risiko sebelum persetujuan.
+            <strong>Transparansi Rute:</strong> PreHub menyajikan rute alternatif agar operator dapat mengevaluasi efisiensi waktu tempuh dan mitigasi risiko sebelum konfirmasi pengalihan.
           </p>
         </div>
       )}
@@ -1614,7 +1614,7 @@ export default function DashboardClient() {
                 </div>
                 <div>
                   <h2 className="text-xs font-bold font-sans text-white uppercase tracking-wider">
-                    Intelijen Berita Resmi
+                    Warta & Laporan Lapangan
                   </h2>
                   <span className="text-xs font-mono text-slate-400">
                     {filteredNews.length} Sumber Terverifikasi

@@ -170,8 +170,8 @@ function RouteCard({
 
       {/* Multi-modal Leg Breakdown if available */}
       {route.legs && route.legs.length > 0 && (
-        <div className="mb-2 p-2.5 rounded-md bg-[#121822] border border-[#1c2432] flex flex-col gap-1 text-xs font-mono">
-          <span className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Rincian Leg Logistik Multi-Moda:</span>
+        <div className="mb-2 p-2.5 rounded-md bg-[#121822] border border-[#1c2432] flex flex-col gap-1 text-xs font-sans">
+          <span className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Tahapan Rute Perjalanan Armada:</span>
           {route.legs.map((leg, lIdx) => (
             <div key={lIdx} className="flex justify-between items-center text-slate-300">
               <span className="flex items-center gap-1.5">
@@ -543,14 +543,14 @@ export function MitigationTab({
       <div className="bg-[#121822] border border-[#1c2432] p-3 rounded-md">
         <div className="flex items-center justify-between mb-1">
           <span className="text-xs font-sans text-cyan-400 font-bold">
-            Konsensus Sistem & Keyakinan
+            Validasi Terpadu Multi-Sumber
           </span>
-          <span className="text-xs font-bold font-mono text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-500/30">
-            {confidenceScore}% Keyakinan
+          <span className="text-xs font-medium font-sans text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-500/30">
+            Tingkat Validasi: <span className="font-bold font-mono">{confidenceScore}%</span>
           </span>
         </div>
-        <p className="text-xs text-slate-300 font-mono">
-          Sensor: <span className="text-cyan-300">BMKG Radar</span> + <span className="text-amber-300">TomTom Traffic</span> + <span className="text-emerald-300">AISstream Maritime</span>
+        <p className="text-xs text-slate-300 font-sans">
+          Sensor: <span className="text-cyan-300 font-medium">BMKG Radar</span> + <span className="text-amber-300 font-medium">TomTom Traffic</span> + <span className="text-emerald-300 font-medium">AISstream Maritime</span>
         </p>
       </div>
 
@@ -558,24 +558,24 @@ export function MitigationTab({
       <div className="bg-[#121822] border border-[#1c2432] p-3 rounded-md">
         <div className="flex items-center justify-between mb-1.5">
           <span className="text-xs font-sans text-amber-400 font-bold">
-            Dampak Fisik & Rantai Ekonomi
+            Gangguan Jalur & Dampak Pasokan
           </span>
-          <span className="px-2 py-0.5 rounded text-xs font-mono font-bold bg-[#0c1017] text-cyan-300 border border-[#1c2432]">
-            Regim Pasar: Waspada
+          <span className="px-2 py-0.5 rounded text-xs font-sans font-medium bg-[#0c1017] text-cyan-300 border border-[#1c2432]">
+            Status Pasokan: Waspada
           </span>
         </div>
-        <div className="flex flex-col gap-1.5 text-xs font-mono">
+        <div className="flex flex-col gap-1.5 text-xs font-sans">
           <div className="flex items-center gap-2 text-rose-300">
-            <span className="flex items-center gap-1"><Waves className="w-3.5 h-3.5 text-blue-400" /> Disrupsi Fisik:</span>
-            <span className="font-bold">{crisis.title || 'Banjir Koridor Belawan'}</span>
+            <span className="flex items-center gap-1 font-medium"><Waves className="w-3.5 h-3.5 text-blue-400" /> Disrupsi Fisik:</span>
+            <span className="font-semibold">{crisis.title || 'Banjir Koridor Belawan'}</span>
           </div>
           <div className="flex items-center gap-2 text-amber-300">
-            <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5 text-amber-400" /> Keterlambatan Logistik:</span>
-            <span className="font-bold">+4.2 Jam Delay Pasokan</span>
+            <span className="flex items-center gap-1 font-medium"><Clock className="w-3.5 h-3.5 text-amber-400" /> Keterlambatan Logistik:</span>
+            <span className="font-semibold tabular-nums">+4.2 Jam Delay Pasokan</span>
           </div>
           <div className="flex items-center gap-2 text-emerald-300">
-            <span className="flex items-center gap-1"><TrendingUp className="w-3.5 h-3.5 text-emerald-400" /> Proyeksi Inflasi Pangan:</span>
-            <span className="font-bold">Potensi Inflasi Medan +2.1% (Cabai +14.2%)</span>
+            <span className="flex items-center gap-1 font-medium"><TrendingUp className="w-3.5 h-3.5 text-emerald-400" /> Proyeksi Inflasi Pangan:</span>
+            <span className="font-semibold tabular-nums">Potensi Inflasi Medan +2.1% (Cabai +14.2%)</span>
           </div>
         </div>
       </div>

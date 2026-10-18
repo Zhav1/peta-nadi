@@ -142,6 +142,14 @@ export function HitlDecisionDrawer({
     return `Rp ${val.toLocaleString('id-ID')}`;
   };
 
+  const formatCommodity = (key?: string) => {
+    if (!key) return 'Komoditas Pangan';
+    return key
+      .split('_')
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  };
+
   const activeAssessment = selectedItem?.impact_assessment;
   const citation = selectedItem?.news_citation;
   const topVehicle = activeAssessment?.impacted_assessments?.[0];
@@ -164,15 +172,15 @@ export function HitlDecisionDrawer({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-sm font-mono font-bold text-white uppercase tracking-wider">
-                  Human-in-the-Loop Review
+                <h2 className="text-sm font-sans font-bold text-white uppercase tracking-wider">
+                  Persetujuan Rute Operator
                 </h2>
-                <span className="text-xs font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                  GLOBOT PROTOCOL
+                <span className="text-xs font-sans font-medium px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                  Protokol Validasi Otomatis
                 </span>
               </div>
               <p className="text-xs text-slate-400 font-sans">
-                Evaluasi biaya deviasi vs pembusukan kargo sebelum instruksi disahkan
+                Evaluasi deviasi biaya dan mitigasi kerusakan kargo sebelum instruksi disahkan
               </p>
             </div>
           </div>
@@ -204,7 +212,7 @@ export function HitlDecisionDrawer({
                 <button
                   key={item.approval_id}
                   onClick={() => setSelectedItem(item)}
-                  className={`cursor-pointer px-3 py-1.5 rounded-lg border text-xs font-mono max-w-[260px] truncate transition ${
+                  className={`cursor-pointer px-3 py-1.5 rounded-lg border text-xs font-sans min-w-fit max-w-[280px] truncate transition ${
                     selectedItem?.approval_id === item.approval_id
                       ? 'bg-amber-500/20 border-amber-500/50 text-amber-300 font-bold'
                       : 'bg-[#121822] border-[#1c2432] text-slate-400 hover:text-slate-200'
@@ -227,16 +235,16 @@ export function HitlDecisionDrawer({
           </div>
         ) : selectedItem ? (
           <>
-            {/* Ground Truth Citation Card (Globot / God's Eye View Pattern) */}
+            {/* Ground Truth Citation Card */}
             <div className="p-3.5 rounded-xl border border-white/10 bg-[#0c1017] space-y-2">
-              <div className="flex items-center justify-between text-xs font-mono">
-                <span className="text-slate-400 flex items-center gap-1.5">
+              <div className="flex items-center justify-between text-xs font-sans">
+                <span className="text-slate-400 flex items-center gap-1.5 font-medium">
                   <FileText className="w-3.5 h-3.5 text-cyan-400" />
-                  EVIDENCE CITATION (VERIFIED OSINT)
+                  Sumber Laporan & Bukti Terverifikasi
                 </span>
                 {citation?.confidence_score && (
-                  <span className="text-emerald-400 font-bold">
-                    {(citation.confidence_score * 100).toFixed(0)}% CONFIDENCE
+                  <span className="text-emerald-400 font-semibold">
+                    Validasi: {(citation.confidence_score * 100).toFixed(0)}%
                   </span>
                 )}
               </div>
@@ -246,10 +254,10 @@ export function HitlDecisionDrawer({
                   {citation?.headline || selectedItem.route_name || 'Disrupsi Koridor Teridentifikasi'}
                 </h3>
                 <div className="flex flex-wrap items-center gap-2 pt-1 text-xs text-slate-400">
-                  <span className="px-2 py-0.5 rounded bg-cyan-950/60 border border-cyan-800 text-cyan-300 font-mono">
+                  <span className="px-2 py-0.5 rounded bg-cyan-950/60 border border-cyan-800 text-cyan-300 font-sans font-medium">
                     {citation?.source || 'LKBN ANTARA'}
                   </span>
-                  <span className="flex items-center gap-1 font-mono text-slate-400">
+                  <span className="flex items-center gap-1 font-sans text-slate-400">
                     <MapPin className="w-3 h-3 text-rose-400" />
                     {citation?.corridor || selectedItem.origin || 'Koridor Logistik'}
                   </span>
@@ -258,7 +266,7 @@ export function HitlDecisionDrawer({
                       href={citation.link}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="cursor-pointer flex items-center gap-1 text-cyan-400 hover:underline"
+                      className="cursor-pointer flex items-center gap-1 text-cyan-400 hover:underline font-sans"
                     >
                       Buka Sumber <ExternalLink className="w-2.5 h-2.5" />
                     </a>
@@ -270,32 +278,32 @@ export function HitlDecisionDrawer({
             {/* Economic Trade-off Matrix: Spoilage Risk vs Detour Surcharge */}
             <div className="p-3.5 rounded-xl border border-amber-500/20 bg-amber-950/10 space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-mono font-bold text-amber-400 flex items-center gap-1.5">
+                <span className="text-xs font-sans font-bold text-amber-400 flex items-center gap-1.5 uppercase tracking-wide">
                   <Scale className="w-3.5 h-3.5" />
-                  COST-BENEFIT HEDGING MATRIX
+                  Analisis Risiko & Biaya Pengalihan
                 </span>
-                <span className="text-xs font-mono text-slate-400">
+                <span className="text-xs font-sans text-slate-400">
                   {activeAssessment?.impacted_vehicles_count || 1} Armada Terdampak
                 </span>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+              <div className="grid grid-cols-2 gap-2 text-xs">
                 <div className="p-2.5 rounded-lg bg-[#080d14] border border-rose-500/30">
-                  <span className="text-slate-400 text-xs block">POTENSI SUSUT / SPOILAGE</span>
-                  <span className="text-sm font-bold text-rose-400 block mt-0.5">
+                  <span className="text-slate-400 text-xs block font-sans">Risiko Kerusakan Muatan</span>
+                  <span className="text-sm font-bold text-rose-400 block mt-0.5 font-mono">
                     {formatIDR(topVehicle?.spoilage_loss_idr || activeAssessment?.total_value_at_risk_idr)}
                   </span>
-                  <span className="text-xs text-slate-500 mt-1 block">
-                    Jika tertahan di titik macet
+                  <span className="text-xs text-slate-400 mt-1 block font-sans">
+                    Jika armada tertahan di titik macet
                   </span>
                 </div>
 
                 <div className="p-2.5 rounded-lg bg-[#080d14] border border-cyan-500/30">
-                  <span className="text-slate-400 text-xs block">BIAYA DETOUR (+SOLAR/TOL)</span>
-                  <span className="text-sm font-bold text-cyan-400 block mt-0.5">
+                  <span className="text-slate-400 text-xs block font-sans">Tambahan Operasional (BBM & Tol)</span>
+                  <span className="text-sm font-bold text-cyan-400 block mt-0.5 font-mono">
                     {formatIDR(topVehicle?.detour_fuel_cost_idr || 185000)}
                   </span>
-                  <span className="text-xs text-slate-500 mt-1 block">
+                  <span className="text-xs text-slate-400 mt-1 block font-sans">
                     +{topVehicle?.detour_distance_km || 42} km | +{topVehicle?.detour_time_hours || 1.5} jam
                   </span>
                 </div>
@@ -303,12 +311,12 @@ export function HitlDecisionDrawer({
 
               {/* Net Benefit Callout */}
               {topVehicle && (
-                <div className="p-2.5 rounded-lg bg-emerald-950/40 border border-emerald-500/30 flex items-center justify-between text-xs font-mono">
-                  <div className="flex items-center gap-1.5 text-emerald-400">
+                <div className="p-2.5 rounded-lg bg-emerald-950/40 border border-emerald-500/30 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5 text-emerald-400 font-sans">
                     <Sparkles className="w-3.5 h-3.5" />
-                    <span>Net Saving Detour:</span>
+                    <span>Estimasi Penghematan Bersih:</span>
                   </div>
-                  <span className="font-bold text-emerald-300">
+                  <span className="font-bold text-emerald-300 font-mono">
                     +{formatIDR(topVehicle.net_benefit_idr)}
                   </span>
                 </div>
@@ -318,19 +326,19 @@ export function HitlDecisionDrawer({
             {/* Target Fleet Vehicle Details */}
             {topVehicle && (
               <div className="p-3 rounded-lg border border-white/5 bg-[#080d14] space-y-2 text-xs">
-                <div className="flex items-center justify-between text-slate-400 font-mono">
+                <div className="flex items-center justify-between text-slate-400 font-sans">
                   <span className="flex items-center gap-1.5">
                     <Truck className="w-3.5 h-3.5 text-slate-300" />
-                    Target Armada: <strong className="text-white">{topVehicle.vehicle_id}</strong>
+                    Target Armada: <strong className="text-white font-mono">{topVehicle.vehicle_id}</strong>
                   </span>
-                  <span className="px-1.5 py-0.5 rounded bg-white/10 text-slate-300 font-bold">
-                    {topVehicle.commodity_key} ({topVehicle.cargo_tonnage} Ton)
+                  <span className="px-2 py-0.5 rounded bg-white/10 text-slate-200 font-semibold font-sans">
+                    {formatCommodity(topVehicle.commodity_key)} ({topVehicle.cargo_tonnage} Ton)
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-slate-400 font-sans">
                   <span>Rekomendasi Algoritma:</span>
-                  <span className="font-mono font-bold text-cyan-300">
-                    {topVehicle.recommended_action === 'REROUTE' ? 'PENGALIHAN RUTE (DETOUR)' : 'TAHAN DI BUFFER'}
+                  <span className="font-sans font-bold text-cyan-300">
+                    {topVehicle.recommended_action === 'REROUTE' ? 'Pengalihan Rute Terpilih' : 'Tahan di Titik Aman'}
                   </span>
                 </div>
               </div>
@@ -338,7 +346,7 @@ export function HitlDecisionDrawer({
 
             {/* Operator Notes Input */}
             <div className="space-y-1.5">
-              <label className="text-xs font-mono text-slate-400 block">
+              <label className="text-xs font-sans text-slate-400 block font-medium">
                 Catatan Operator / Instruksi Dispatcher (Opsional):
               </label>
               <textarea
@@ -359,30 +367,30 @@ export function HitlDecisionDrawer({
           <button
             onClick={() => handleDecision('APPROVE')}
             disabled={actionLoading}
-            className="cursor-pointer flex-1 py-2.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-xs font-bold transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/50 disabled:opacity-50"
+            className="cursor-pointer flex-1 py-2.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-sans text-xs font-bold transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/50 disabled:opacity-50"
           >
             <CheckCircle2 className="w-4 h-4" />
-            <span>SETUJUI DETOUR</span>
+            <span>Setujui Pengalihan Rute</span>
           </button>
 
           <button
             onClick={() => handleDecision('HOLD')}
             disabled={actionLoading}
-            className="cursor-pointer py-2.5 px-3 rounded-lg border border-amber-500/40 hover:bg-amber-500/10 text-amber-300 font-mono text-xs font-medium transition flex items-center justify-center gap-1.5 disabled:opacity-50"
-            title="Tahan armada di kantong parkir buffer"
+            className="cursor-pointer py-2.5 px-3 rounded-lg border border-amber-500/40 hover:bg-amber-500/10 text-amber-300 font-sans text-xs font-semibold transition flex items-center justify-center gap-1.5 disabled:opacity-50"
+            title="Tahan armada di kantong parkir aman"
           >
             <PauseCircle className="w-4 h-4" />
-            <span>TAHAN BUFFER</span>
+            <span>Tahan di Titik Aman</span>
           </button>
 
           <button
             onClick={() => handleDecision('REJECT')}
             disabled={actionLoading}
-            className="cursor-pointer py-2.5 px-3 rounded-lg border border-rose-500/40 hover:bg-rose-500/10 text-rose-300 font-mono text-xs font-medium transition flex items-center justify-center gap-1.5 disabled:opacity-50"
+            className="cursor-pointer py-2.5 px-3 rounded-lg border border-rose-500/40 hover:bg-rose-500/10 text-rose-300 font-sans text-xs font-semibold transition flex items-center justify-center gap-1.5 disabled:opacity-50"
             title="Tolak deviasi, lanjutkan rute utama"
           >
             <XCircle className="w-4 h-4" />
-            <span>TETAP RUTE AWAL</span>
+            <span>Tetap Rute Awal</span>
           </button>
         </div>
       )}

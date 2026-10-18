@@ -71,10 +71,10 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
           type="button"
           onClick={onOpenHitl}
           className="cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-amber-950/40 border-amber-500/40 text-amber-300 hover:bg-amber-900/50 hover:text-white transition shadow-sm"
-          title="Buka Panel Tinjauan Keputusan Operator (HITL)"
+          title="Buka Panel Persetujuan Operator"
         >
           <span className="w-2 h-2 rounded-full bg-amber-400 ring-2 ring-amber-400/30" />
-          <span>HITL REVIEW</span>
+          <span>Persetujuan</span>
           {pendingHitlCount > 0 && (
             <span className="px-1.5 py-0.2 rounded bg-amber-500 text-black font-bold text-xs">
               {pendingHitlCount}

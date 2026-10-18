@@ -45,11 +45,11 @@ export function GuestEvaluationBanner() {
         <div className="flex items-center gap-2.5 min-w-0">
           <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
           <div className="min-w-0">
-            <span className="block text-xs font-mono font-semibold text-amber-300 uppercase tracking-wider">
-              Mode Evaluasi Tamu (Belum Terautentikasi)
+            <span className="block text-xs font-sans font-semibold text-amber-300">
+              Akses Tamu (Mode Pratinjau)
             </span>
             <span className="block text-xs font-sans text-slate-300 truncate">
-              Akses preview terbatas: beralih peran operasional dan aksi persetujuan memerlukan akun resmi.
+              Pratinjau terbatas: persetujuan rute dan kontrol armada memerlukan akun resmi.
             </span>
           </div>
         </div>

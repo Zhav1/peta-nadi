@@ -1653,9 +1653,67 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 
 ---
 
+## Phase 62: Visual UI Slop Eradication and Logistics UX Humanization
+
+**Goal:** Eradicate visual AI-slop anti-patterns (stacked neon badges, detached floating controls, card text clipping, raw snake_case data) and rewrite all robotic AI copy into natural Indonesian logistics command-center terminology across all PreHub surfaces.
+**Status:** COMPLETE ✅
+**Branch:** `slop`
+**Plans:** `62-01-PLAN.md`, `62-01-SUMMARY.md`
+
+### Deliverables
+
+- [x] **WP1 - Map Controls, Popovers & Floating HUD Sanitation (`DashboardClient.tsx`, `CrisisMap.tsx`, `TopNavTelemetry.tsx`)**:
+  - Replace `LEGENDA RUTE` / `Legenda Peta & Keputusan` with `Panduan Simbol & Rute`.
+  - Fix popover anchoring to `top-full mt-2 right-0` eliminating viewport text clipping.
+  - Remove neon border glows in favor of crisp `border-slate-800` on elevated `bg-slate-900/95`.
+  - Replace `FILTER VISUALISASI LAYER` with `Pilihan Lapisan Peta`.
+  - Replace `INTELIJEN BERITA RESMI` with `Warta & Laporan Lapangan`.
+  - Replace `HITL REVIEW` button in top telemetry bar with compact `Persetujuan` button.
+  - Replace `Zona Radius Bahaya (Shockwave)` with `Radius Area Terdampak Bencana`.
+  - Replace `Mode Evaluasi Tamu (Belum Terautentikasi)` with `Akses Tamu (Mode Pratinjau)`.
+- [x] **WP2 - Crisis Card Header & Status Unification (`CrisisSidebar.tsx`)**:
+  - Eliminate triple badge cramming (`[KRITIS/TINGGI]`, `[91% Keyakinan]`, `[SIMULASI FIXTURE]`).
+  - Drop the synthetic `SIMULASI FIXTURE` pill.
+  - Implement a calm, unified status line: primary severity tag (`KRITIS`) + clean validation text (`Tingkat Validasi: 91%`).
+  - Replace `Mengapa Peringatan Ini Muncul? (Causal Chain)` with `Alur Bukti Pemicu Peringatan`.
+- [x] **WP3 - Operator Decision Drawer Refactoring (`HitlDecisionDrawer.tsx`)**:
+  - Replace `HUMAN-IN-THE-LOOP REVIEW` with `Persetujuan Rute Operator`.
+  - Replace `GLOBOT PROTOCOL` with `Protokol Validasi Otomatis`.
+  - Eliminate vehicle selection pill truncation (`[N...` $\to$ full fleet ID).
+  - Replace `EVIDENCE CITATION (VERIFIED OSINT)` with `Sumber Laporan & Bukti Terverifikasi`.
+  - Replace `COST-BENEFIT HEDGING MATRIX` with `Analisis Risiko & Biaya Pengalihan`.
+  - Replace `POTENSI SUSUT / SPOILAGE` with `Risiko Kerusakan Muatan`.
+  - Replace `BIAYA DETOUR (+SOLAR/TOL)` with `Tambahan Operasional (BBM & Tol)`.
+  - Auto-format commodity string: convert raw `bawang_merah (10 Ton)` to `Bawang Merah (10 Ton)`.
+  - Replace action buttons with `Setujui Pengalihan Rute` and `Tahan di Titik Aman`.
+- [x] **WP4 - Tab Copywriting & Density Standards (`MitigationTab.tsx`, `EconomicTab.tsx`, `GuidedDemoPanel.tsx`)**:
+  - Replace `Konsensus Sistem & Keyakinan` with `Validasi Terpadu Multi-Sumber`.
+  - Replace `Regim Pasar: Waspada` with `Status Pasokan: Waspada`.
+  - Replace `Dampak Fisik & Rantai Ekonomi` with `Gangguan Jalur & Dampak Pasokan`.
+  - Replace `Rincian Leg Logistik Multi-Moda` with `Tahapan Rute Perjalanan Armada`.
+  - Replace `Horizon proyeksi belum tersedia` with `Rentang estimasi waktu belum tersedia`.
+  - Replace `(Klik 1: Start, Klik 2: End)` with `Klik titik asal, lalu titik tujuan pada peta`.
+  - Replace `Horizon Proyeksi` with `Periode Estimasi Dampak`.
+  - Reserve `font-mono` strictly for numeric metrics and coordinate values.
+- [x] **WP5 - Analytics Sequence & Simulation Terminology (`AnalyticsSection.tsx`, `SimulationSection.tsx`)**:
+  - Replace `RANTAI KAUSALITAS DAMPAK` with `Alur Penjalaran Dampak Gangguan`.
+  - Redesign cramped 4-card row to prevent text ellipsis clipping (`Gerba...`, `Bottl...`, `Komodit...`).
+  - Replace `Delta Bawang: -9.1%` with `Perubahan Cabai: -9.1%`.
+  - Replace `SIMULATOR MAKRO (B2G): KALKULASI LOKAL` with `Simulasi Kebijakan Distribusi Komoditas`.
+  - Replace `Peta 4D` and `commit ke koridor` with `Peta Operasional` and `diterapkan ke jadwal armada`.
+
+### Verification Criteria
+
+- [x] `npx tsc --noEmit` in `frontend/`: 0 errors.
+- [x] Visual verification via Chrome DevTools MCP: zero badge cramming, zero text truncation, zero popover clipping.
+- [x] `pytest backend/tests/test_audit_fixes.py`: 5 passed, 0 failed.
+
+---
+
 ## Backlog (Post-Hackathon / v2)
 
 - Driver mobile app (React Native + WatermelonDB + CRDT offline sync)
 - Enterprise GraphRAG private self-hosted deployment
 - Automated CI/CD pipeline with staging $\to$ production promotion
 - Multi-province rollout (Java corridor & Eastern Indonesia)
+

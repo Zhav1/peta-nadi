@@ -106,13 +106,13 @@ export default function SimulationSection({
       <div className="col-span-12 backdrop-blur-md bg-[#0c0e12]/80 border border-sky-500/25 rounded-xl px-4 py-3 flex items-start gap-3 shadow-xl">
         <FlaskConical className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
         <div className="min-w-0">
-          <p className="text-xs font-mono font-semibold text-sky-300 uppercase tracking-wider">
-            Simulator Makro (B2G): Kalkulasi Lokal
+          <p className="text-xs font-sans font-semibold text-sky-300 uppercase tracking-wider">
+            Simulasi Kebijakan Distribusi Komoditas
           </p>
           <p className="text-xs font-sans text-slate-300 leading-relaxed mt-0.5">
-            Tab ini menghitung skenario kebijakan antar-lembaga secara lokal (what-if).
-            Untuk simulasi taktis per-kendaraan, gunakan Peta 4D. Penerapan skenario
-            tidak otomatis commit ke koridor (deployment tercatat via jalur persetujuan).
+            Panel ini menghitung skenario intervensi pasokan dan kebijakan antar-lembaga secara lokal.
+            Untuk pemantauan pergerakan armada langsung, buka Peta Operasional. Rekomendasi skenario
+            diterapkan ke jadwal armada setelah melalui konfirmasi operator.
           </p>
         </div>
       </div>
