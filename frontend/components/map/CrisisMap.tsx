@@ -82,6 +82,8 @@ export interface CrisisMapProps {
   corridorVisibility?: { land: boolean; sea: boolean; air: boolean };
   onToggleCorridor?: (corridor: 'land' | 'sea' | 'air') => void;
   onResetCorridorVisibility?: () => void;
+  hiddenRouteIndices?: Set<number>;
+  onHideRoute?: (idx: number) => void;
 }
 
 const INITIAL_CENTER: [number, number] = [100.5, 0.5];
@@ -146,6 +148,8 @@ export default function CrisisMap({
   corridorVisibility = { land: true, sea: true, air: true },
   onToggleCorridor,
   onResetCorridorVisibility,
+  hiddenRouteIndices: propHiddenRouteIndices,
+  onHideRoute,
 }: CrisisMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   void isLeftSidebarCollapsed;
@@ -188,8 +192,9 @@ export default function CrisisMap({
     screenPos: { x: number; y: number };
   } | null>(null);
 
-  // User-hidden route corridors state
-  const [hiddenRouteIndices, setHiddenRouteIndices] = useState<Set<number>>(new Set());
+  // User-hidden route corridors state (synced with parent and reset upon full corridor visibility)
+  const [internalHiddenRouteIndices, setInternalHiddenRouteIndices] = useState<Set<number>>(new Set());
+  const hiddenRouteIndices = propHiddenRouteIndices ?? internalHiddenRouteIndices;
   const activeRoutesRef = useRef<RouteRecommendation[]>(activeRoutes);
   activeRoutesRef.current = activeRoutes;
 
@@ -200,6 +205,39 @@ export default function CrisisMap({
     name: string;
     role: 'origin' | 'dest' | 'poi';
   }>>([]);
+
+  // Auto-restore hidden routes whenever all corridors become visible
+  useEffect(() => {
+    if (corridorVisibility?.land && corridorVisibility?.sea && corridorVisibility?.air) {
+      setInternalHiddenRouteIndices(new Set());
+    }
+  }, [corridorVisibility?.land, corridorVisibility?.sea, corridorVisibility?.air]);
+
+  // Issue 4: Immediately clear custom pinned points and remove glowing pulse/point when origin/dest are reset
+  useEffect(() => {
+    setCustomPinnedPoints((prev) => {
+      let next = prev;
+      if (!selectedOriginNode) {
+        next = next.filter((p) => p.role !== 'origin');
+      }
+      if (!selectedDestNode) {
+        next = next.filter((p) => p.role !== 'dest');
+      }
+      return next;
+    });
+
+    if (!selectedOriginNode && !selectedDestNode) {
+      setCustomPinnedPoints([]);
+      setSelectedRoutePopover(null);
+      setContextPopup(null);
+      if (mapRef.current) {
+        const customSource = mapRef.current.getSource('custom-pinned-source') as mapboxgl.GeoJSONSource;
+        if (customSource) {
+          customSource.setData({ type: 'FeatureCollection', features: [] });
+        }
+      }
+    }
+  }, [selectedOriginNode, selectedDestNode]);
 
   // Interactive Map Layer Filters State
   const [showLayerFilterMenu, setShowLayerFilterMenu] = useState(false);
@@ -562,29 +600,39 @@ export default function CrisisMap({
         paint: {
           'circle-radius': [
             'case',
+            ['get', 'isTransferHub'], 22,
             ['get', 'isKeyNode'], 18,
             ['get', 'isSelectablePrompt'], 14,
             0
           ],
           'circle-color': [
             'case',
+            ['get', 'isTransferHub'],
+            ['match', ['get', 'type'], 'port', '#3b82f6', 'airport', '#00f0ff', '#22d3ee'],
             ['get', 'isKeyNode'], '#22d3ee',
             '#00f0ff'
           ],
           'circle-opacity': [
             'case',
+            ['get', 'isTransferHub'], 0.22,
             ['get', 'isKeyNode'], 0.25,
             ['get', 'isSelectablePrompt'], 0.35,
             0
           ],
           'circle-stroke-width': [
             'case',
+            ['get', 'isTransferHub'], 2.5,
             ['get', 'isKeyNode'], 2.0,
             ['get', 'isSelectablePrompt'], 1.5,
             0
           ],
-          'circle-stroke-color': '#22d3ee',
-          'circle-stroke-opacity': 0.8,
+          'circle-stroke-color': [
+            'case',
+            ['get', 'isTransferHub'],
+            ['match', ['get', 'type'], 'port', '#3b82f6', 'airport', '#00f0ff', '#22d3ee'],
+            '#22d3ee'
+          ],
+          'circle-stroke-opacity': 0.85,
         },
       });
       map.addLayer({
@@ -592,7 +640,12 @@ export default function CrisisMap({
         type: 'circle',
         source: 'hub-nodes-source',
         paint: {
-          'circle-radius': ['case', ['get', 'isKeyNode'], 8, 5],
+          'circle-radius': [
+            'case',
+            ['get', 'isTransferHub'], 9,
+            ['get', 'isKeyNode'], 8,
+            5
+          ],
           'circle-color': [
             'match', ['get', 'type'],
             'port', '#38bdf8',
@@ -1037,6 +1090,14 @@ export default function CrisisMap({
             const legCoords = leg.coordinates || [];
             if (legCoords.length >= 2) {
               const finalCoords = legCoords.length > 5 ? legCoords : densifyPath(legCoords, 15);
+              const legMode = (leg as any).modality || leg.mode;
+              const legColor =
+                leg.color ||
+                (legMode === 'maritime'
+                  ? '#3B82F6'
+                  : legMode === 'air'
+                    ? '#00F0FF'
+                    : '#10B981');
               routeFeatures.push({
                 type: 'Feature',
                 geometry: {
@@ -1049,8 +1110,8 @@ export default function CrisisMap({
                   legIndex: lIdx,
                   isActive: isRouteActive,
                   description: `${r.description} (${leg.title})`,
-                  color: leg.color || (leg.mode === 'maritime' ? '#3B82F6' : leg.mode === 'air' ? '#00F0FF' : '#10B981'),
-                  legMode: leg.mode,
+                  color: legColor,
+                  legMode: legMode,
                   isLeg: true,
                 },
               });
@@ -1059,6 +1120,16 @@ export default function CrisisMap({
         } else if (r.waypoints && r.waypoints.length >= 2) {
           const rawWaypoints: LonLat[] = r.waypoints.map((wp) => [wp.lon, wp.lat]);
           const finalCoordinates = rawWaypoints.length > 5 ? rawWaypoints : densifyPath(rawWaypoints, 25);
+          const defaultColor =
+            r.modality === 'maritime' || r.corridor_type === 'sea_intermodal'
+              ? '#3B82F6'
+              : r.modality === 'air' || r.corridor_type === 'air_intermodal'
+                ? '#00F0FF'
+                : isRouteActive
+                  ? '#10B981'
+                  : origIdx === 1
+                    ? '#38BDF8'
+                    : '#00F0FF';
           routeFeatures.push({
             type: 'Feature',
             geometry: {
@@ -1070,7 +1141,7 @@ export default function CrisisMap({
               routeIndex: origIdx,
               isActive: isRouteActive,
               description: r.description,
-              color: r.color || (isRouteActive ? '#10B981' : origIdx === 1 ? '#38BDF8' : '#00F0FF'),
+              color: r.color || defaultColor,
               isLeg: false,
             },
           });
@@ -2001,7 +2072,8 @@ export default function CrisisMap({
                       : r.corridor_type === 'air_intermodal' || r.modality === 'air'
                         ? 'air'
                         : 'land';
-                  setHiddenRouteIndices((prev) => new Set(prev).add(targetIdx));
+                  setInternalHiddenRouteIndices((prev) => new Set(prev).add(targetIdx));
+                  onHideRoute?.(targetIdx);
                   onToggleCorridor?.(mod);
                   setSelectedRoutePopover(null);
                 }}
@@ -2027,7 +2099,7 @@ export default function CrisisMap({
             <button
               type="button"
               onClick={() => {
-                setHiddenRouteIndices(new Set());
+                setInternalHiddenRouteIndices(new Set());
                 onResetCorridorVisibility?.();
               }}
               className="cursor-pointer px-3 py-1.5 rounded-md backdrop-blur-md bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-xs font-semibold flex items-center gap-1.5 shadow-xl transition-all duration-200"

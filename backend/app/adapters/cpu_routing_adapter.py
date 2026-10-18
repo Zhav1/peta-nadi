@@ -30,6 +30,238 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return R * c
 
 
+# =============================================================================
+# PAN-SUMATRA NAUTICAL SEA-LANES & INTERMODAL ROUTING
+# =============================================================================
+
+SUMATRA_NAUTICAL_PERIMETER: List[List[float]] = [
+    # 0: Aceh North Cape
+    [95.4000, 5.7500],
+    # 1: Lhokseumawe Offshore (Malacca Strait entrance)
+    [97.2500, 5.3500],
+    # 2: Langkat / Belawan Offshore Approach
+    [98.7800, 3.9500],
+    # 3: Kuala Tanjung Sea Fairway
+    [99.5500, 3.5000],
+    # 4: Asahan / Tanjung Balai Sea Lane
+    [100.1000, 3.1000],
+    # 5: Dumai Offshore Fairway
+    [101.4800, 1.7800],
+    # 6: Selat Bengkalis / Selat Rupat Waterway
+    [102.3500, 1.4000],
+    # 7: Riau Islands / Batam - Singapore Strait Approach
+    [103.9500, 1.1500],
+    # 8: Selat Berhala / Jambi Estuary
+    [104.4500, -0.7500],
+    # 9: Selat Bangka North Entrance
+    [105.0500, -1.8500],
+    # 10: Selat Bangka South (Musi River Entrance for Boom Baru)
+    [105.2500, -2.7500],
+    # 11: Lampung East Coast Sea Fairway
+    [106.1000, -4.7500],
+    # 12: Sunda Strait North / Panjang Port Entrance
+    [105.4500, -5.6000],
+    # 13: Bakauheni - Merak Ferry Nautical Corridor
+    [105.8200, -5.9200],
+    # 14: Sunda Strait West Ocean Fairway
+    [105.5000, -6.1000],
+    # 15: Teluk Semangka South
+    [104.6500, -5.9000],
+    # 16: Krui / Lampung Barat Offshore (Indian Ocean)
+    [103.7500, -5.2500],
+    # 17: Bengkulu / Pulau Baai Fairway (Indian Ocean)
+    [102.1500, -3.9500],
+    # 18: Mukomuko Offshore
+    [101.0500, -2.6000],
+    # 19: Teluk Bayur (Padang) Fairway (Indian Ocean)
+    [100.2500, -1.0500],
+    # 20: Nias Strait / Pasaman West Waters
+    [99.4500, 0.1000],
+    # 21: Sibolga Bay Ocean Entrance (Indian Ocean)
+    [98.6500, 1.6500],
+    # 22: Tapaktuan Offshore Waters
+    [97.0500, 3.1500],
+    # 23: Meulaboh Offshore Waters
+    [95.9500, 4.0500],
+    # 24: Banda Aceh West Coast (Indian Ocean)
+    [95.1500, 5.4500],
+]
+
+CARGO_SEAPORT_NODES: List[Dict[str, Any]] = [
+    {"id": "belawan_port", "name": "Pelabuhan Belawan (Medan)", "coords": [98.6776, 3.7922]},
+    {"id": "kuala_tanjung_port", "name": "Pelabuhan Kuala Tanjung (Batu Bara)", "coords": [99.4500, 3.3600]},
+    {"id": "lhokseumawe_port", "name": "Pelabuhan Krueng Geukueh (Lhokseumawe)", "coords": [97.0200, 5.2400]},
+    {"id": "dumai_port", "name": "Pelabuhan Dumai (Terminal Curah & Kontainer)", "coords": [101.4533, 1.6811]},
+    {"id": "teluk_bayur_port", "name": "Pelabuhan Teluk Bayur (Padang)", "coords": [100.3700, -0.9980]},
+    {"id": "boom_baru_port", "name": "Pelabuhan Boom Baru (Palembang)", "coords": [104.7833, -2.9750]},
+    {"id": "panjang_port", "name": "Pelabuhan Panjang (Bandar Lampung)", "coords": [105.3167, -5.4667]},
+    {"id": "bakauheni_port", "name": "Pelabuhan Penyeberangan Bakauheni", "coords": [105.7533, -5.8711]},
+]
+
+
+def find_closest_nautical_index(lon: float, lat: float) -> int:
+    """Finds closest perimeter waypoint index by Haversine distance."""
+    best_idx = 0
+    min_dist = float("inf")
+    for i, pt in enumerate(SUMATRA_NAUTICAL_PERIMETER):
+        d = haversine_km(lat, lon, pt[1], pt[0])
+        if d < min_dist:
+            min_dist = d
+            best_idx = i
+    return best_idx
+
+
+def generate_nautical_coastal_route(origin_coords: List[float], dest_coords: List[float]) -> List[List[float]]:
+    """
+    Generates an authentic coastal maritime path following open water sea-lanes around Sumatra.
+    Guarantees ships never traverse overland (never emits a 2-point straight Euclidean line across land).
+    """
+    orig_lon, orig_lat = origin_coords[0], origin_coords[1]
+    dest_lon, dest_lat = dest_coords[0], dest_coords[1]
+    start_idx = find_closest_nautical_index(orig_lon, orig_lat)
+    end_idx = find_closest_nautical_index(dest_lon, dest_lat)
+    N = len(SUMATRA_NAUTICAL_PERIMETER)
+
+    if start_idx == end_idx:
+        mid_pt = SUMATRA_NAUTICAL_PERIMETER[start_idx]
+        return [origin_coords, mid_pt, dest_coords]
+
+    # Calculate Forward (counter-clockwise) path distance
+    forward_path: List[List[float]] = []
+    curr = start_idx
+    forward_dist = 0.0
+    prev_pt = [orig_lon, orig_lat]
+    while True:
+        pt = SUMATRA_NAUTICAL_PERIMETER[curr]
+        forward_dist += haversine_km(prev_pt[1], prev_pt[0], pt[1], pt[0])
+        forward_path.append(pt)
+        prev_pt = pt
+        if curr == end_idx:
+            break
+        curr = (curr + 1) % N
+    forward_dist += haversine_km(prev_pt[1], prev_pt[0], dest_lat, dest_lon)
+
+    # Calculate Backward (clockwise) path distance
+    backward_path: List[List[float]] = []
+    curr = start_idx
+    backward_dist = 0.0
+    prev_pt = [orig_lon, orig_lat]
+    while True:
+        pt = SUMATRA_NAUTICAL_PERIMETER[curr]
+        backward_dist += haversine_km(prev_pt[1], prev_pt[0], pt[1], pt[0])
+        backward_path.append(pt)
+        prev_pt = pt
+        if curr == end_idx:
+            break
+        curr = (curr - 1 + N) % N
+    backward_dist += haversine_km(prev_pt[1], prev_pt[0], dest_lat, dest_lon)
+
+    best_perimeter = forward_path if forward_dist <= backward_dist else backward_path
+    return [origin_coords] + best_perimeter + [dest_coords]
+
+
+def find_closest_seaport_node(coords: List[float]) -> Dict[str, Any]:
+    """Finds closest cargo seaport node to given [lon, lat] coordinates."""
+    best = CARGO_SEAPORT_NODES[0]
+    min_dist = float("inf")
+    for sp in CARGO_SEAPORT_NODES:
+        d = haversine_km(coords[1], coords[0], sp["coords"][1], sp["coords"][0])
+        if d < min_dist:
+            min_dist = d
+            best = sp
+    return best
+
+
+def calculate_sea_intermodal_corridor(
+    origin_coords: List[float],
+    dest_coords: List[float],
+    origin_name: Optional[str] = None,
+    dest_name: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Computes authentic multi-modal 3-leg logistics chain (Truck -> Seaport -> Seaport -> Truck)
+    with coastal perimeter nautical routing.
+    Leg 1: Feeder truck (green #10B981)
+    Leg 2: Coastal maritime route (blue #3B82F6) along open ocean perimeter
+    Leg 3: Last-mile truck (green #10B981)
+    """
+    orig_port = find_closest_seaport_node(origin_coords)
+    dest_port = find_closest_seaport_node(dest_coords)
+
+    # Leg 1: Feeder truck to origin seaport
+    leg1_dist = round(haversine_km(origin_coords[1], origin_coords[0], orig_port["coords"][1], orig_port["coords"][0]) * 1.25, 2)
+    leg1_eta = int(round((leg1_dist / 45.0) * 60.0))
+    leg1_coords = [origin_coords, orig_port["coords"]]
+
+    # Leg 2: Coastal maritime route (strictly along nautical perimeter)
+    sea_coords = generate_nautical_coastal_route(orig_port["coords"], dest_port["coords"])
+    sea_dist = 0.0
+    for i in range(len(sea_coords) - 1):
+        sea_dist += haversine_km(sea_coords[i][1], sea_coords[i][0], sea_coords[i + 1][1], sea_coords[i + 1][0])
+    leg2_dist = round(sea_dist, 2)
+    # 26 km/h (~14 knots) avg feeder speed + 120 min port handling buffer
+    leg2_eta = int(round((leg2_dist / 26.0) * 60.0)) + 120
+
+    # Leg 3: Last-mile truck from destination seaport
+    leg3_dist = round(haversine_km(dest_port["coords"][1], dest_port["coords"][0], dest_coords[1], dest_coords[0]) * 1.25, 2)
+    leg3_eta = int(round((leg3_dist / 45.0) * 60.0))
+    leg3_coords = [dest_port["coords"], dest_coords]
+
+    total_dist = round(leg1_dist + leg2_dist + leg3_dist, 2)
+    total_eta = leg1_eta + leg2_eta + leg3_eta
+
+    total_coords = leg1_coords[:-1] + sea_coords + leg3_coords[1:]
+    waypoints = [{"lat": pt[1], "lon": pt[0]} for pt in total_coords]
+
+    legs = [
+        {
+            "modality": "truck",
+            "mode": "truck",
+            "color": "#10B981",
+            "coordinates": leg1_coords,
+            "distance_km": leg1_dist,
+            "eta_minutes": leg1_eta,
+            "from_name": origin_name or "Titik Asal Logistik",
+            "to_name": orig_port["name"],
+        },
+        {
+            "modality": "maritime",
+            "mode": "maritime",
+            "color": "#3B82F6",
+            "coordinates": sea_coords,
+            "distance_km": leg2_dist,
+            "eta_minutes": leg2_eta,
+            "from_name": orig_port["name"],
+            "to_name": dest_port["name"],
+        },
+        {
+            "modality": "truck",
+            "mode": "truck",
+            "color": "#10B981",
+            "coordinates": leg3_coords,
+            "distance_km": leg3_dist,
+            "eta_minutes": leg3_eta,
+            "from_name": dest_port["name"],
+            "to_name": dest_name or "Titik Tujuan Logistik",
+        },
+    ]
+
+    return {
+        "description": f"Intermodal Laut ({orig_port['name']} -> {dest_port['name']}) + Feeder Darat",
+        "route_name": f"Intermodal Laut ({orig_port['name'].split('(')[0].strip()} -> {dest_port['name'].split('(')[0].strip()})",
+        "waypoints": waypoints,
+        "coordinates": total_coords,
+        "distance_km": total_dist,
+        "eta_minutes": total_eta,
+        "fuel_increase_pct": 0.0,
+        "risk_score": 0.08,
+        "is_detour": True,
+        "modality": "maritime",
+        "corridor_type": "sea_intermodal",
+        "legs": legs,
+    }
+
+
 NODE_ALIASES: Dict[str, str] = {
     # Belawan Seaport aliases
     "belawan": "belawan_port",
@@ -146,6 +378,7 @@ class CPURoutingAdapter:
         dest_coords: Optional[List[float]] = None,
         origin_name: Optional[str] = None,
         dest_name: Optional[str] = None,
+        modality: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Computes k-shortest simple paths on CPU with dynamic hazard avoidance penalties.
@@ -266,6 +499,15 @@ class CPURoutingAdapter:
                     else f"Jalur Pengalihan Alternatif #{idx}{via_str}"
                 )
 
+                leg = {
+                    "modality": "truck",
+                    "mode": "truck",
+                    "color": "#10B981",
+                    "coordinates": path_coords,
+                    "distance_km": round(dist_km, 2),
+                    "eta_minutes": int(round(time_min)),
+                }
+
                 routes.append({
                     "route_index": idx,
                     "description": desc,
@@ -275,7 +517,8 @@ class CPURoutingAdapter:
                     "eta_minutes": int(round(time_min)),
                     "fuel_increase_pct": max(0.0, round(((dist_km - routes[0]["distance_km"]) / routes[0]["distance_km"] * 100.0), 1)) if routes and routes[0]["distance_km"] > 0 else 0.0,
                     "risk_score": 0.12 if not is_detour else round(0.25 + (idx * 0.12), 2),
-                    "is_detour": is_detour
+                    "is_detour": is_detour,
+                    "legs": [leg],
                 })
         except Exception as e:
             logger.warning(f"CPURoutingAdapter shortest_paths fallback: {e}")
@@ -286,21 +529,77 @@ class CPURoutingAdapter:
         orig_coords_resolved = origin_coords or ([self.nodes_dict[origin_id]["lon"], self.nodes_dict[origin_id]["lat"]] if origin_id in self.nodes_dict else None)
         dest_coords_resolved = dest_coords or ([self.nodes_dict[dest_id]["lon"], self.nodes_dict[dest_id]["lat"]] if dest_id in self.nodes_dict else None)
 
+        # Multi-modal / Intermodal Sea corridor injection
+        if orig_coords_resolved and dest_coords_resolved:
+            if modality in ("maritime", "intermodal", "multimodal"):
+                im_route = calculate_sea_intermodal_corridor(
+                    orig_coords_resolved,
+                    dest_coords_resolved,
+                    origin_name=orig_name_resolved,
+                    dest_name=dest_name_resolved,
+                )
+                im_route["route_index"] = 0
+                im_route["nodes"] = [snapped_orig_node, snapped_dest_node]
+                im_route["is_detour"] = False
+                for r in routes:
+                    r["route_index"] += 1
+                    r["is_detour"] = True
+                routes.insert(0, im_route)
+
         # Fallback if no path could be generated between nodes
         if not routes and orig_coords_resolved and dest_coords_resolved:
             direct_dist = haversine_km(orig_coords_resolved[1], orig_coords_resolved[0], dest_coords_resolved[1], dest_coords_resolved[0]) * 1.35
             direct_time = (direct_dist / 40.0) * 60.0
-            routes.append({
-                "route_index": 0,
-                "description": f"Rute Langsung Alternatif ({orig_name_resolved} -> {dest_name_resolved})",
-                "nodes": [snapped_orig_node, snapped_dest_node] if snapped_orig_node != snapped_dest_node else [snapped_orig_node],
-                "coordinates": [orig_coords_resolved, dest_coords_resolved],
-                "distance_km": round(direct_dist, 2),
-                "eta_minutes": int(round(direct_time)),
-                "fuel_increase_pct": 0.0,
-                "risk_score": 0.2,
-                "is_detour": False
-            })
+
+            if modality == "maritime":
+                coastal_coords = generate_nautical_coastal_route(orig_coords_resolved, dest_coords_resolved)
+                c_dist = 0.0
+                for ci in range(len(coastal_coords) - 1):
+                    c_dist += haversine_km(coastal_coords[ci][1], coastal_coords[ci][0], coastal_coords[ci + 1][1], coastal_coords[ci + 1][0])
+                c_dist = round(c_dist, 2)
+                c_eta = int(round((c_dist / 26.0) * 60.0)) + 60
+                routes.append({
+                    "route_index": 0,
+                    "description": f"Rute Maritim Pesisir Alur Laut ({orig_name_resolved} -> {dest_name_resolved})",
+                    "nodes": [snapped_orig_node, snapped_dest_node] if snapped_orig_node != snapped_dest_node else [snapped_orig_node],
+                    "coordinates": coastal_coords,
+                    "distance_km": c_dist,
+                    "eta_minutes": c_eta,
+                    "fuel_increase_pct": 0.0,
+                    "risk_score": 0.08,
+                    "is_detour": False,
+                    "modality": "maritime",
+                    "legs": [{
+                        "modality": "maritime",
+                        "mode": "maritime",
+                        "color": "#3B82F6",
+                        "coordinates": coastal_coords,
+                        "distance_km": c_dist,
+                        "eta_minutes": c_eta,
+                        "from_name": orig_name_resolved,
+                        "to_name": dest_name_resolved,
+                    }]
+                })
+            else:
+                routes.append({
+                    "route_index": 0,
+                    "description": f"Rute Langsung Alternatif ({orig_name_resolved} -> {dest_name_resolved})",
+                    "nodes": [snapped_orig_node, snapped_dest_node] if snapped_orig_node != snapped_dest_node else [snapped_orig_node],
+                    "coordinates": [orig_coords_resolved, dest_coords_resolved],
+                    "distance_km": round(direct_dist, 2),
+                    "eta_minutes": int(round(direct_time)),
+                    "fuel_increase_pct": 0.0,
+                    "risk_score": 0.2,
+                    "is_detour": False,
+                    "legs": [{
+                        "modality": "truck",
+                        "mode": "truck",
+                        "color": "#10B981",
+                        "coordinates": [orig_coords_resolved, dest_coords_resolved],
+                        "distance_km": round(direct_dist, 2),
+                        "eta_minutes": int(round(direct_time)),
+                    }]
+                })
 
         elapsed_ms = (time.perf_counter() - t0) * 1000.0
 

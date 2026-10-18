@@ -366,19 +366,90 @@ async def route_optimization_agent(state: CrisisState) -> dict:
                     top_hedging_breakdown = hedging_dict
                     top_compliance_status = compliance_dict
 
+                leg = {
+                    "modality": "truck",
+                    "mode": "truck",
+                    "color": "#10B981",
+                    "coordinates": wp_coords,
+                    "distance_km": round(distance_km, 2),
+                    "eta_minutes": eta_minutes,
+                }
+
                 recommendations.append({
                     "description": desc,
                     "waypoints": waypoints,
+                    "coordinates": wp_coords,
                     "distance_km": round(distance_km, 2),
                     "eta_minutes": eta_minutes,
                     "fuel_increase_pct": max(0.0, round((distance_km - 26.0) * 0.12, 2)),
                     "risk_score": 0.15 if not is_detour else round(0.3 + (idx * 0.15), 2),
                     "hedging": hedging_dict,
                     "compliance": compliance_dict,
-                    "chokepoint_delay_multiplier": choke_multiplier
+                    "chokepoint_delay_multiplier": choke_multiplier,
+                    "legs": [leg],
                 })
+
+            # Multi-modal / Intermodal Sea corridor injection
+            req_modality = state.get("modality") or "truck"
+            orig_pt = None
+            dest_pt = None
+            if origin_coords and len(origin_coords) >= 2:
+                orig_pt = [float(origin_coords[0]), float(origin_coords[1])]
+            elif origin and origin in node_coords:
+                orig_pt = [node_coords[origin]["lon"], node_coords[origin]["lat"]]
+
+            if dest_coords and len(dest_coords) >= 2:
+                dest_pt = [float(dest_coords[0]), float(dest_coords[1])]
+            elif destination and destination in node_coords:
+                dest_pt = [node_coords[destination]["lon"], node_coords[destination]["lat"]]
+
+            if orig_pt and dest_pt:
+                from app.adapters.cpu_routing_adapter import calculate_sea_intermodal_corridor
+                im_corridor = calculate_sea_intermodal_corridor(
+                    origin_coords=orig_pt,
+                    dest_coords=dest_pt,
+                    origin_name=str(req_origin or origin or "Asal"),
+                    dest_name=str(req_dest or destination or "Tujuan")
+                )
+                if im_corridor and im_corridor.get("legs"):
+                    if req_modality in ("maritime", "intermodal", "multimodal"):
+                        recommendations.insert(0, im_corridor)
+                    elif len(recommendations) < 3:
+                        recommendations.append(im_corridor)
     except Exception as routing_err:
         logger.error(f"Error calculating NetworkX shortest paths: {routing_err}")
+
+    # Preserve pre-existing route recommendations with legs if present
+    if not recommendations and state.get("route_recommendations"):
+        recommendations = list(state.get("route_recommendations"))
+
+    # Ensure all route recommendations preserve or generate multi-modal legs
+    for rec in recommendations:
+        if not rec.get("legs"):
+            coords = rec.get("coordinates")
+            if not coords and rec.get("waypoints"):
+                coords = [[w["lon"], w["lat"]] if "lon" in w else [w["longitude"], w["latitude"]] for w in rec["waypoints"]]
+            coords = coords or []
+            rec_mod = rec.get("modality", "truck")
+            color = "#3B82F6" if rec_mod == "maritime" else "#10B981"
+            rec["legs"] = [{
+                "modality": rec_mod,
+                "mode": rec_mod,
+                "color": color,
+                "coordinates": coords,
+                "distance_km": rec.get("distance_km", 0.0),
+                "eta_minutes": rec.get("eta_minutes", 0),
+            }]
+
+        # Enforce that maritime legs NEVER emit a 2-point straight Euclidean line across land
+        for leg in rec.get("legs", []):
+            leg_mod = leg.get("modality") or leg.get("mode")
+            if leg_mod == "maritime":
+                leg["color"] = "#3B82F6"
+                l_coords = leg.get("coordinates") or []
+                if len(l_coords) == 2:
+                    from app.adapters.cpu_routing_adapter import generate_nautical_coastal_route
+                    leg["coordinates"] = generate_nautical_coastal_route(l_coords[0], l_coords[1])
 
     # 4b. Phase 58 expansion (B): opencode-driver prose "why this route" explainer.
     # Computed distance_km / eta_minutes / risk_score / optimal_policy are injected

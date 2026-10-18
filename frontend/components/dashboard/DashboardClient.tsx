@@ -249,6 +249,7 @@ export default function DashboardClient() {
     sea: boolean;
     air: boolean;
   }>({ land: true, sea: true, air: true });
+  const [hiddenRouteIndices, setHiddenRouteIndices] = useState<Set<number>>(new Set());
 
   const handleToggleCorridor = useCallback((corridor: 'land' | 'sea' | 'air') => {
     setCorridorVisibility((prev) => ({
@@ -257,9 +258,20 @@ export default function DashboardClient() {
     }));
   }, []);
 
+  const handleHideRoute = useCallback((idx: number) => {
+    setHiddenRouteIndices((prev) => new Set(prev).add(idx));
+  }, []);
+
   const handleResetCorridors = useCallback(() => {
     setCorridorVisibility({ land: true, sea: true, air: true });
+    setHiddenRouteIndices(new Set());
   }, []);
+
+  const hiddenRouteCount =
+    hiddenRouteIndices.size +
+    (!corridorVisibility.land ? 1 : 0) +
+    (!corridorVisibility.sea ? 1 : 0) +
+    (!corridorVisibility.air ? 1 : 0);
 
   const activeOriginRef = useRef<string | null>(null);
   const activeDestRef = useRef<string | null>(null);
@@ -564,6 +576,8 @@ export default function DashboardClient() {
     setCurrentMapRoutes([]);
     setSelectedCrisis(null);
     setSelectedCrisisId(null);
+    setHiddenRouteIndices(new Set());
+    customNodesRef.current = {};
     setToast({ message: 'Titik rute dibersihkan. Silakan klik marker kota 1 untuk mengeset Start Node.', type: 'info' });
   }, []);
 
@@ -990,20 +1004,46 @@ export default function DashboardClient() {
             }
           }
 
-          if (backendMatchesDest) {
-            setCurrentMapRoutes(backendCrisisState.route_recommendations);
-          } else {
-            // Merge backend telemetry/audit metadata while preserving client multi-corridor geometries terminating at destCoords
-            setCurrentMapRoutes((prev) =>
-              prev.length > 0
-                ? prev.map((r, rIdx) => ({
-                    ...r,
-                    hedging: backendCrisisState.route_recommendations[rIdx]?.hedging || backendCrisisState.route_recommendations[0]?.hedging,
-                    compliance: backendCrisisState.route_recommendations[rIdx]?.compliance || backendCrisisState.route_recommendations[0]?.compliance,
-                  }))
-                : backendCrisisState.route_recommendations
+          setCurrentMapRoutes((prev) => {
+            const backendRoutes = backendCrisisState.route_recommendations;
+            if (!prev || prev.length === 0) {
+              return backendRoutes;
+            }
+            // Preserve client multi-leg intermodal routes (sea, air, hold) that backend didn't compute
+            const intermodalAndHoldCorridors = prev.filter(
+              (r) =>
+                r.corridor_type === 'sea_intermodal' ||
+                r.corridor_type === 'air_intermodal' ||
+                r.corridor_type === 'hold_staging' ||
+                (r.legs && r.legs.length > 1)
             );
-          }
+
+            // Merge backend hedging and compliance metadata onto land routes
+            const mergedLandRoutes = backendMatchesDest
+              ? backendRoutes.map((br, brIdx) => {
+                  const matchingPrev = prev.find((p) => p.corridor_type === br.corridor_type) || prev[brIdx];
+                  return {
+                    ...br,
+                    legs: br.legs && br.legs.length > 0 ? br.legs : matchingPrev?.legs,
+                  };
+                })
+              : prev.map((r, rIdx) => ({
+                  ...r,
+                  hedging: backendRoutes[rIdx]?.hedging || backendRoutes[0]?.hedging,
+                  compliance: backendRoutes[rIdx]?.compliance || backendRoutes[0]?.compliance,
+                }));
+
+            // Append preserved intermodal corridors
+            const preservedExtras = intermodalAndHoldCorridors
+              .filter((extra) => !mergedLandRoutes.some((m) => m.corridor_type === extra.corridor_type))
+              .map((extra) => ({
+                ...extra,
+                hedging: backendRoutes[0]?.hedging || extra.hedging,
+                compliance: backendRoutes[0]?.compliance || extra.compliance,
+              }));
+
+            return [...mergedLandRoutes, ...preservedExtras];
+          });
         }
 
         setActiveRouteIdx(0);
@@ -1366,6 +1406,8 @@ export default function DashboardClient() {
               corridorVisibility={corridorVisibility}
               onToggleCorridor={handleToggleCorridor}
               onResetCorridorVisibility={handleResetCorridors}
+              hiddenRouteIndices={hiddenRouteIndices}
+              onHideRoute={handleHideRoute}
               mapLegendSlot={
                 <FloatingMapLegend
                   isOpen={isMapLegendOpen}
@@ -1787,6 +1829,7 @@ export default function DashboardClient() {
                 corridorVisibility={corridorVisibility}
                 onToggleCorridor={handleToggleCorridor}
                 onResetCorridorVisibility={handleResetCorridors}
+                hiddenRouteCount={hiddenRouteCount}
                 activeCorridors={currentMapRoutes.length > 0 ? currentMapRoutes : (selectedCrisis?.route_recommendations || [])}
                 onResetNodes={handleResetNodes}
                 isSidebarOpen={isSidebarOpen && !!selectedCrisis}

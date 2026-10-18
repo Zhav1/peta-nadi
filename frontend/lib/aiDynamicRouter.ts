@@ -253,9 +253,166 @@ export function getHaversineDistanceKm([lon1, lat1]: LonLat, [lon2, lat2]: LonLa
 }
 
 /**
+ * Nautical Estuary & Channel Fairways connecting inland/coastal river ports to open water
+ */
+export interface PortChannelSpec {
+  name: string;
+  coords: LonLat;
+  // Waypoints from port dock out to the nearest open-water perimeter fairway
+  channelWaypoints: LonLat[];
+  perimeterIndex: number;
+}
+
+export const SUMATRA_PORT_CHANNELS: PortChannelSpec[] = [
+  // Palembang Boom Baru (Musi River -> Selat Bangka Entrance)
+  {
+    name: 'Palembang Boom Baru',
+    coords: [104.7833, -2.9750],
+    channelWaypoints: [
+      [104.7833, -2.9750],
+      [104.9200, -2.8500],
+      [105.0800, -2.6200],
+      [105.1800, -2.3500],
+      [105.1200, -2.1500],
+      [105.0500, -1.9500],
+    ],
+    perimeterIndex: 9, // Selat Bangka North Entrance [105.0500, -1.8500]
+  },
+  // Pekanbaru Siak (Siak River -> Selat Bengkalis / Malacca Strait)
+  {
+    name: 'Pekanbaru Siak',
+    coords: [101.4500, 0.5333],
+    channelWaypoints: [
+      [101.4500, 0.5333],
+      [101.7500, 0.7200],
+      [102.0500, 0.9500],
+      [102.1500, 1.2200],
+      [102.2500, 1.3500],
+    ],
+    perimeterIndex: 6, // Selat Bengkalis [102.3500, 1.4000]
+  },
+  // Jambi Talang Duku (Batanghari River -> Selat Berhala)
+  {
+    name: 'Jambi Talang Duku',
+    coords: [103.6500, -1.5500],
+    channelWaypoints: [
+      [103.6500, -1.5500],
+      [103.8800, -1.3500],
+      [104.1200, -1.1800],
+      [104.3500, -0.9800],
+      [104.4200, -0.8500],
+    ],
+    perimeterIndex: 8, // Selat Berhala [104.4500, -0.7500]
+  },
+  // Pelabuhan Belawan (Navigational dredged channel out to Malacca Strait)
+  {
+    name: 'Pelabuhan Belawan',
+    coords: [98.6776, 3.7922],
+    channelWaypoints: [
+      [98.6776, 3.7922],
+      [98.7100, 3.8400],
+      [98.7400, 3.8900],
+    ],
+    perimeterIndex: 2, // Belawan Offshore Approach [98.7800, 3.9500]
+  },
+  // Pelabuhan Kuala Tanjung
+  {
+    name: 'Pelabuhan Kuala Tanjung',
+    coords: [99.4500, 3.3600],
+    channelWaypoints: [
+      [99.4500, 3.3600],
+      [99.5000, 3.4200],
+    ],
+    perimeterIndex: 3, // Kuala Tanjung Sea Fairway [99.5500, 3.5000]
+  },
+  // Pelabuhan Dumai
+  {
+    name: 'Pelabuhan Dumai',
+    coords: [101.4533, 1.6811],
+    channelWaypoints: [
+      [101.4533, 1.6811],
+      [101.4650, 1.7200],
+    ],
+    perimeterIndex: 5, // Dumai Offshore Fairway [101.4800, 1.7800]
+  },
+  // Pelabuhan Krueng Geukueh / Lhokseumawe
+  {
+    name: 'Pelabuhan Krueng Geukueh',
+    coords: [97.0200, 5.2400],
+    channelWaypoints: [
+      [97.0200, 5.2400],
+      [97.1200, 5.2900],
+    ],
+    perimeterIndex: 1, // Lhokseumawe Offshore [97.2500, 5.3500]
+  },
+  // Pelabuhan Teluk Bayur (Padang)
+  {
+    name: 'Pelabuhan Teluk Bayur',
+    coords: [100.3700, -0.9980],
+    channelWaypoints: [
+      [100.3700, -0.9980],
+      [100.3400, -1.0200],
+      [100.2800, -1.0350],
+    ],
+    perimeterIndex: 19, // Teluk Bayur Indian Ocean Fairway [100.2500, -1.0500]
+  },
+  // Pelabuhan Panjang (Bandar Lampung)
+  {
+    name: 'Pelabuhan Panjang',
+    coords: [105.3167, -5.4667],
+    channelWaypoints: [
+      [105.3167, -5.4667],
+      [105.3600, -5.5200],
+      [105.4000, -5.5600],
+    ],
+    perimeterIndex: 12, // Sunda Strait North / Panjang [105.4500, -5.6000]
+  },
+  // Pelabuhan Penyeberangan Bakauheni
+  {
+    name: 'Pelabuhan Bakauheni',
+    coords: [105.7533, -5.8711],
+    channelWaypoints: [
+      [105.7533, -5.8711],
+      [105.7800, -5.8950],
+    ],
+    perimeterIndex: 13, // Bakauheni Ferry Corridor [105.8200, -5.9200]
+  },
+  // Pelabuhan Malahayati / Banda Aceh
+  {
+    name: 'Pelabuhan Malahayati',
+    coords: [95.5186, 5.5897],
+    channelWaypoints: [
+      [95.5186, 5.5897],
+      [95.4800, 5.6500],
+    ],
+    perimeterIndex: 0, // Aceh North Cape [95.4000, 5.7500]
+  },
+  // Pelabuhan Sibolga
+  {
+    name: 'Pelabuhan Sibolga',
+    coords: [98.7800, 1.7400],
+    channelWaypoints: [
+      [98.7800, 1.7400],
+      [98.7200, 1.7000],
+    ],
+    perimeterIndex: 21, // Sibolga Bay Entrance [98.6500, 1.6500]
+  },
+  // Pelabuhan Pulau Baai (Bengkulu)
+  {
+    name: 'Pelabuhan Pulau Baai',
+    coords: [102.2900, -3.8900],
+    channelWaypoints: [
+      [102.2900, -3.8900],
+      [102.2200, -3.9200],
+    ],
+    perimeterIndex: 17, // Bengkulu Fairway [102.1500, -3.9500]
+  },
+];
+
+/**
  * Finds closest nautical perimeter waypoint index
  */
-function findClosestNauticalIndex(pt: LonLat): number {
+export function findClosestNauticalIndex(pt: LonLat): number {
   let bestIdx = 0;
   let minDistance = Infinity;
   for (let i = 0; i < SUMATRA_NAUTICAL_PERIMETER.length; i++) {
@@ -269,53 +426,108 @@ function findClosestNauticalIndex(pt: LonLat): number {
 }
 
 /**
- * Generates an authentic coastal maritime path following open water sea-lanes around Sumatra.
- * Guarantees ships never traverse over the mainland.
+ * Matches coordinate to known seaport estuary or river navigation channel
  */
-export function generateNauticalCoastalRoute(origin: LonLat, destination: LonLat): LonLat[] {
-  const startIdx = findClosestNauticalIndex(origin);
-  const endIdx = findClosestNauticalIndex(destination);
+export function matchPortChannel(pt: LonLat): { channelWaypoints: LonLat[]; perimeterIndex: number } | null {
+  for (const port of SUMATRA_PORT_CHANNELS) {
+    if (getHaversineDistanceKm(pt, port.coords) <= 30.0) {
+      return {
+        channelWaypoints: port.channelWaypoints,
+        perimeterIndex: port.perimeterIndex,
+      };
+    }
+  }
+  return null;
+}
+
+/**
+ * Generates an authentic coastal maritime path following open water sea-lanes around Sumatra.
+ * Inland/river estuary ports first follow explicit estuary channels out to open water.
+ * Never cuts a Euclidean line across Sumatra mainland.
+ */
+export function buildNauticalPath(origin: LonLat, destination: LonLat): LonLat[] {
+  const originMatch = matchPortChannel(origin);
+  const destMatch = matchPortChannel(destination);
+
+  const startIdx = originMatch ? originMatch.perimeterIndex : findClosestNauticalIndex(origin);
+  const endIdx = destMatch ? destMatch.perimeterIndex : findClosestNauticalIndex(destination);
   const N = SUMATRA_NAUTICAL_PERIMETER.length;
 
+  const exitPath: LonLat[] = originMatch ? [...originMatch.channelWaypoints] : [origin];
+  const enterPath: LonLat[] = destMatch ? [...destMatch.channelWaypoints].reverse() : [destination];
+
+  // Case 1: Same perimeter waypoint (nearby or same estuary channel)
   if (startIdx === endIdx) {
-    return [origin, SUMATRA_NAUTICAL_PERIMETER[startIdx], destination];
+    const directDist = getHaversineDistanceKm(origin, destination);
+    if (directDist < 5.0) {
+      return [origin, destination];
+    }
+    const combinedRaw = [...exitPath, SUMATRA_NAUTICAL_PERIMETER[startIdx], ...enterPath];
+    // Deduplicate consecutive points
+    const result: LonLat[] = [];
+    for (const p of combinedRaw) {
+      if (result.length === 0) {
+        result.push(p);
+      } else {
+        const last = result[result.length - 1];
+        if (Math.hypot(last[0] - p[0], last[1] - p[1]) > 0.001) {
+          result.push(p);
+        }
+      }
+    }
+    return result;
   }
 
-  // Calculate Forward (counter-clockwise) path distance
-  const forwardPath: LonLat[] = [];
+  // Calculate Forward (counter-clockwise) path distance along sea perimeter
+  const forwardPerimeter: LonLat[] = [];
   let curr = startIdx;
   let forwardDist = 0;
-  let prevPt = origin;
+  let prevPt = exitPath[exitPath.length - 1];
   while (true) {
     const pt = SUMATRA_NAUTICAL_PERIMETER[curr];
     forwardDist += getHaversineDistanceKm(prevPt, pt);
-    forwardPath.push(pt);
+    forwardPerimeter.push(pt);
     prevPt = pt;
     if (curr === endIdx) break;
     curr = (curr + 1) % N;
   }
-  forwardDist += getHaversineDistanceKm(prevPt, destination);
+  forwardDist += getHaversineDistanceKm(prevPt, enterPath[0]);
 
-  // Calculate Backward (clockwise) path distance
-  const backwardPath: LonLat[] = [];
+  // Calculate Backward (clockwise) path distance along sea perimeter
+  const backwardPerimeter: LonLat[] = [];
   curr = startIdx;
   let backwardDist = 0;
-  prevPt = origin;
+  prevPt = exitPath[exitPath.length - 1];
   while (true) {
     const pt = SUMATRA_NAUTICAL_PERIMETER[curr];
     backwardDist += getHaversineDistanceKm(prevPt, pt);
-    backwardPath.push(pt);
+    backwardPerimeter.push(pt);
     prevPt = pt;
     if (curr === endIdx) break;
     curr = (curr - 1 + N) % N;
   }
-  backwardDist += getHaversineDistanceKm(prevPt, destination);
+  backwardDist += getHaversineDistanceKm(prevPt, enterPath[0]);
 
-  // Choose the shorter open-ocean coastal fairway
-  const bestPerimeter = forwardDist <= backwardDist ? forwardPath : backwardPath;
+  const bestPerimeter = forwardDist <= backwardDist ? forwardPerimeter : backwardPerimeter;
+  const combinedRaw = [...exitPath, ...bestPerimeter, ...enterPath];
 
-  return [origin, ...bestPerimeter, destination];
+  // Clean and deduplicate consecutive identical points
+  const cleanPath: LonLat[] = [];
+  for (const pt of combinedRaw) {
+    if (cleanPath.length === 0) {
+      cleanPath.push(pt);
+    } else {
+      const last = cleanPath[cleanPath.length - 1];
+      if (Math.hypot(last[0] - pt[0], last[1] - pt[1]) > 0.001) {
+        cleanPath.push(pt);
+      }
+    }
+  }
+
+  return cleanPath;
 }
+
+export const generateNauticalCoastalRoute = buildNauticalPath;
 
 /**
  * Checks if a polyline intersects a hazard circle.
@@ -743,6 +955,7 @@ export async function calculateSeaIntermodalCorridor(
     {
       title: `Leg 1: Feeder Darat -> ${originPort.name}`,
       mode: 'truck',
+      modality: 'truck',
       distance_km: leg1Dist,
       eta_minutes: leg1Eta,
       from_name: 'Titik Asal Logistik',
@@ -759,6 +972,7 @@ export async function calculateSeaIntermodalCorridor(
     {
       title: `Leg 2: Alur Laut ALKI (${originPort.name.split('(')[0].trim()} -> ${destPort.name.split('(')[0].trim()})`,
       mode: 'maritime',
+      modality: 'maritime',
       distance_km: leg2Dist,
       eta_minutes: leg2Eta,
       from_name: originPort.name,
@@ -775,6 +989,7 @@ export async function calculateSeaIntermodalCorridor(
     {
       title: `Leg 3: Last-Mile Darat (${destPort.name.split('(')[0].trim()} -> Tujuan)`,
       mode: 'truck',
+      modality: 'truck',
       distance_km: leg3Dist,
       eta_minutes: leg3Eta,
       from_name: destPort.name,
@@ -872,6 +1087,7 @@ export async function calculateAirIntermodalCorridor(
     {
       title: `Leg 1: Feeder Darat -> ${depAirport.code}`,
       mode: 'truck',
+      modality: 'truck',
       distance_km: leg1Dist,
       eta_minutes: leg1Eta,
       from_name: 'Titik Asal Logistik',
@@ -888,6 +1104,7 @@ export async function calculateAirIntermodalCorridor(
     {
       title: `Leg 2: Penerbangan Kargo (${depAirport.code} -> ${arrAirport.code})`,
       mode: 'air',
+      modality: 'air',
       distance_km: flightDist,
       eta_minutes: flightEta,
       from_name: depAirport.name,
@@ -904,6 +1121,7 @@ export async function calculateAirIntermodalCorridor(
     {
       title: `Leg 3: Last-Mile Darat (${arrAirport.code} -> Tujuan)`,
       mode: 'truck',
+      modality: 'truck',
       distance_km: leg3Dist,
       eta_minutes: leg3Eta,
       from_name: arrAirport.name,

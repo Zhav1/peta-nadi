@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { FleetVehicle } from '@/lib/types';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/authContext';
@@ -345,18 +345,42 @@ export function useFleetVehicles(
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // 90-second sliding TTL vehicle cache to prevent vessel count drops during partial polling
+  const vehicleCacheRef = useRef<Map<string, { vehicle: FleetVehicle; timestamp: number }>>(new Map());
+
+  const mergeWithCache = (incoming: FleetVehicle[]): FleetVehicle[] => {
+    const now = Date.now();
+    const cache = vehicleCacheRef.current;
+    for (const v of incoming) {
+      if (v.vehicle_id) {
+        cache.set(v.vehicle_id, { vehicle: v, timestamp: now });
+      }
+    }
+    const merged: FleetVehicle[] = [];
+    cache.forEach((entry, id) => {
+      if (now - entry.timestamp <= 90_000) {
+        merged.push(entry.vehicle);
+      } else {
+        cache.delete(id);
+      }
+    });
+    return merged;
+  };
+
   const fetchFleet = async () => {
     try {
       const vehicles = await fetchFleetWithFallback(modality, effectiveCompanyId);
-      if (vehicles.length > 0) {
-        setRawVehicles(vehicles);
+      const merged = mergeWithCache(vehicles);
+      if (merged.length > 0) {
+        setRawVehicles(merged);
         setError(null);
       } else {
         setRawVehicles([]);
       }
     } catch (err: unknown) {
-      // PRESERVE previous live units across transient network/cold-start errors!
-      setRawVehicles((prev) => (prev.length > 0 ? prev : []));
+      // PRESERVE previous live units from 90s cache across transient network/cold-start errors!
+      const cached = mergeWithCache([]);
+      setRawVehicles((prev) => (cached.length > 0 ? cached : prev.length > 0 ? prev : []));
       setError(err instanceof Error ? err.message : 'Gagal memuat telemetri armada');
     } finally {
       setIsLoading(false);
@@ -373,8 +397,9 @@ export function useFleetVehicles(
         try {
           const vehicles = await fetchFleetWithFallback(modality, effectiveCompanyId);
           if (isMounted) {
-            if (vehicles.length > 0) {
-              setRawVehicles(vehicles);
+            const merged = mergeWithCache(vehicles);
+            if (merged.length > 0) {
+              setRawVehicles(merged);
               setError(null);
             } else {
               setRawVehicles([]);
@@ -392,8 +417,9 @@ export function useFleetVehicles(
       }
 
       if (isMounted) {
-        // Retain any existing vehicles if available, otherwise fallback handles display
-        setRawVehicles((prev) => (prev.length > 0 ? prev : []));
+        // Retain any cached vehicles if available, otherwise fallback handles display
+        const cached = mergeWithCache([]);
+        setRawVehicles((prev) => (cached.length > 0 ? cached : prev.length > 0 ? prev : []));
         setError(lastErr instanceof Error ? lastErr.message : 'Gagal memuat telemetri armada');
         setIsLoading(false);
       }

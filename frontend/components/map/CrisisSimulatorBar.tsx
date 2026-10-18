@@ -55,6 +55,7 @@ export interface CrisisSimulatorBarProps {
   onToggleCorridor?: (corridor: 'land' | 'sea' | 'air') => void;
   onResetCorridorVisibility?: () => void;
   activeCorridors?: RouteRecommendation[];
+  hiddenRouteCount?: number;
   onResetNodes?: () => void;
   isSidebarOpen?: boolean;
   isLeftSidebarCollapsed?: boolean;
@@ -79,6 +80,7 @@ export function CrisisSimulatorBar({
   onToggleCorridor,
   onResetCorridorVisibility,
   activeCorridors = [],
+  hiddenRouteCount,
   onResetNodes,
   isSidebarOpen = false,
   isLeftSidebarCollapsed = false,
@@ -113,10 +115,12 @@ export function CrisisSimulatorBar({
   const originName = originNodeId ? HUB_NODES[originNodeId]?.name || originNodeId : null;
   const destName = destNodeId ? HUB_NODES[destNodeId]?.name || destNodeId : null;
 
-  const hiddenCount =
-    (!corridorVisibility.land ? 1 : 0) +
-    (!corridorVisibility.sea ? 1 : 0) +
-    (!corridorVisibility.air ? 1 : 0);
+  const effectiveHiddenCount =
+    typeof hiddenRouteCount === 'number'
+      ? hiddenRouteCount
+      : (!corridorVisibility.land ? 1 : 0) +
+        (!corridorVisibility.sea ? 1 : 0) +
+        (!corridorVisibility.air ? 1 : 0);
 
   const togglePopover = (popover: 'nodes' | 'disruption' | 'radius' | 'speed') => {
     setActivePopover((prev) => (prev === popover ? null : popover));
@@ -138,7 +142,7 @@ export function CrisisSimulatorBar({
       {/* Floating Action Bubble Pills Row */}
       <div className={pillsRowClass}>
         {/* Reset Hidden Corridors Pill (shows only when user has hidden any route corridors on map) */}
-        {hiddenCount > 0 && (
+        {effectiveHiddenCount > 0 && (
           <button
             type="button"
             onClick={() => onResetCorridorVisibility?.()}
@@ -146,7 +150,7 @@ export function CrisisSimulatorBar({
             title="Tampilkan kembali seluruh koridor rute yang disembunyikan"
           >
             <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
-            <span>Tampilkan Semua Rute ({hiddenCount} Tersembunyi)</span>
+            <span>Tampilkan Semua Rute ({effectiveHiddenCount} Tersembunyi)</span>
           </button>
         )}
 

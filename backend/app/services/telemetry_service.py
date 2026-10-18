@@ -1239,6 +1239,9 @@ class TelemetryService:
                                     "vehicle_id": f"AIR-LIVE-{hex_id}",
                                     "name": f"{callsign} ({t_desc})",
                                     "modality": "air",
+                                    "current_coords": p_curr,
+                                    "location": {"type": "Point", "coordinates": p_curr},
+                                    "current_location": {"type": "Point", "coordinates": p_curr},
                                     "path": [p_prev, p_curr, p_next],
                                     "route_geometry": {
                                         "type": "LineString",
@@ -1294,6 +1297,9 @@ class TelemetryService:
                             "vehicle_id": f"AIR-OPENSKY-{hex_id}",
                             "name": f"{callsign} (ADS-B Transponder)",
                             "modality": "air",
+                            "current_coords": p_curr,
+                            "location": {"type": "Point", "coordinates": p_curr},
+                            "current_location": {"type": "Point", "coordinates": p_curr},
                             "path": [p_prev, p_curr, p_next],
                             "route_geometry": {
                                 "type": "LineString",
@@ -1482,6 +1488,18 @@ class TelemetryService:
             item["tracking_mode"] = "LIVE_GPS"
             item["telemetry_source"] = "PELINDO_SUMATRA_RADAR"
 
+        if path:
+            if len(path) == 3:
+                p_curr = [round(path[1][0], 4), round(path[1][1], 4)]
+                item["progress"] = 0.5
+            else:
+                prog = float(item.get("progress", 0.5))
+                p_pos, curr_h = interpolate_path_position(path, prog)
+                p_curr = [round(p_pos[0], 4), round(p_pos[1], 4)]
+            item["current_coords"] = p_curr
+            item["location"] = {"type": "Point", "coordinates": p_curr}
+            item["current_location"] = item["location"]
+
         item["last_ping_seconds_ago"] = round(random.uniform(0.8, 2.4), 1)
         return item
 
@@ -1520,6 +1538,18 @@ class TelemetryService:
             item["cold_chain_status"] = evaluate_cold_chain_status(temp).value
         else:
             item["cold_chain_status"] = None
+
+        if path:
+            if len(path) == 3:
+                p_curr = [round(path[1][0], 4), round(path[1][1], 4)]
+                item["progress"] = 0.5
+            else:
+                prog = float(item.get("progress", 0.5))
+                p_pos, curr_h = interpolate_path_position(path, prog)
+                p_curr = [round(p_pos[0], 4), round(p_pos[1], 4)]
+            item["current_coords"] = p_curr
+            item["location"] = {"type": "Point", "coordinates": p_curr}
+            item["current_location"] = item["location"]
 
         item["signal_status"] = "ADSB_LIVE"
         item["tracking_mode"] = "LIVE_GPS"
@@ -1770,6 +1800,9 @@ class TelemetryService:
                     "vehicle_id": vid,
                     "name": v.get("ship_name") or v.get("name") or vid,
                     "modality": "maritime",
+                    "current_coords": p_curr,
+                    "location": {"type": "Point", "coordinates": p_curr},
+                    "current_location": {"type": "Point", "coordinates": p_curr},
                     "path": [p_prev, p_curr, p_next],
                     "route_geometry": {
                         "type": "LineString",
@@ -1819,6 +1852,31 @@ class TelemetryService:
                     enriched = self._enrich_air_cargo(unit)
                     assign_baseline_tenancy(enriched)
                     aviation_units.append(enriched)
+
+        # Enforce coordinate invariants on all maritime and aviation units (true current coordinate p_curr, progress: 0.5)
+        for m in maritime_units:
+            path = m.get("path") or []
+            if len(path) == 3:
+                p_curr = [round(path[1][0], 4), round(path[1][1], 4)]
+                m["current_coords"] = p_curr
+                m["progress"] = 0.5
+            elif not m.get("current_coords") and path:
+                m["current_coords"] = [round(path[0][0], 4), round(path[0][1], 4)]
+            if m.get("current_coords"):
+                m["location"] = {"type": "Point", "coordinates": m["current_coords"]}
+                m["current_location"] = {"type": "Point", "coordinates": m["current_coords"]}
+
+        for a in aviation_units:
+            path = a.get("path") or []
+            if len(path) == 3:
+                p_curr = [round(path[1][0], 4), round(path[1][1], 4)]
+                a["current_coords"] = p_curr
+                a["progress"] = 0.5
+            elif not a.get("current_coords") and path:
+                a["current_coords"] = [round(path[0][0], 4), round(path[0][1], 4)]
+            if a.get("current_coords"):
+                a["location"] = {"type": "Point", "coordinates": a["current_coords"]}
+                a["current_location"] = {"type": "Point", "coordinates": a["current_coords"]}
 
         # Full Unified Fleet
         full_fleet = enriched_trucks + enriched_custom + maritime_units + aviation_units

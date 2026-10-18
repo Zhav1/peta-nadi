@@ -167,6 +167,13 @@ def test_fleet_modality_filters():
     data_maritime = res_maritime.json()
     assert data_maritime["total_vehicles"] >= 88
     assert all(v["modality"] == "maritime" for v in data_maritime["vehicles"])
+    for v in data_maritime["vehicles"]:
+        assert "current_coords" in v and len(v["current_coords"]) == 2
+        assert "location" in v and v["location"]["type"] == "Point"
+        assert "current_location" in v and v["current_location"]["type"] == "Point"
+        if len(v.get("path", [])) == 3:
+            assert v["progress"] == 0.5
+            assert v["current_coords"] == v["path"][1]
 
     # Filter Air
     res_air = client.get("/api/v1/fleet/vehicles?modality=air")
@@ -174,6 +181,13 @@ def test_fleet_modality_filters():
     data_air = res_air.json()
     assert data_air["total_vehicles"] >= 40
     assert all(v["modality"] == "air" for v in data_air["vehicles"])
+    for v in data_air["vehicles"]:
+        assert "current_coords" in v and len(v["current_coords"]) == 2
+        assert "location" in v and v["location"]["type"] == "Point"
+        assert "current_location" in v and v["current_location"]["type"] == "Point"
+        if len(v.get("path", [])) == 3:
+            assert v["progress"] == 0.5
+            assert v["current_coords"] == v["path"][1]
 
 
 def test_cold_chain_threshold_evaluation():
@@ -282,3 +296,109 @@ def test_fleet_regulator_sees_corridor_wide():
     data = res.json()
     assert data["total_vehicles"] >= 120
     assert all(v.get("is_tenant_asset") is True for v in data["vehicles"])
+
+
+def test_ais_vessel_continuity_and_overlay():
+    """Phase 70 Wave 1: Verify that 10+ live AIS vessels overlay onto the 96 fallback vessels without discarding them."""
+    from app.adapters.aisstream_adapter import get_aisstream_adapter, get_live_ais_vessels
+
+    adapter = get_aisstream_adapter()
+    # Inject 15 mock live vessels
+    mock_live = {}
+    for i in range(15):
+        mmsi = 999000100 + i
+        mock_live[mmsi] = {
+            "mmsi": str(mmsi),
+            "ship_name": f"Live Vessel {i}",
+            "name": f"Live Vessel {i}",
+            "lat": 3.79 + (i * 0.01),
+            "lon": 98.68 + (i * 0.01),
+            "sog": 12.5,
+            "cog": 135.0,
+            "heading": 135.0,
+            "ship_type": "Cargo",
+            "telemetry_source": "AISSTREAM_WS",
+        }
+
+    with patch.object(adapter, "vessels", mock_live):
+        vessels = get_live_ais_vessels()
+        # Must retain all baseline 96 vessels + newly added 15 mock vessels = 111
+        assert len(vessels) >= 96 + 15
+        for v in vessels:
+            assert "current_coords" in v and len(v["current_coords"]) == 2
+            assert round(v["current_coords"][0], 4) == round(float(v["lon"]), 4)
+            assert round(v["current_coords"][1], 4) == round(float(v["lat"]), 4)
+
+
+@pytest.mark.asyncio
+async def test_intermodal_legs_and_coastal_maritime_routing():
+    """Phase 70 Wave 1: Verify multi-modal legs [{truck}, {maritime}, {truck}] and non-Euclidean coastal maritime routing."""
+    from app.adapters.cpu_routing_adapter import (
+        calculate_sea_intermodal_corridor,
+        generate_nautical_coastal_route,
+        get_cpu_router,
+    )
+    from agents.nodes.route_optimization import route_optimization_agent
+
+    # 1. Direct coastal maritime route generation
+    # Belawan Port [98.6776, 3.7922] to Dumai Port [101.4533, 1.6811]
+    sea_coords = generate_nautical_coastal_route([98.6776, 3.7922], [101.4533, 1.6811])
+    assert len(sea_coords) >= 4, "Maritime route must follow nautical perimeter, not 2-point straight line"
+
+    # 2. Intermodal Corridor 3-leg chain
+    medan_coords = [98.6722, 3.5952]
+    pekanbaru_coords = [101.4478, 0.5071]
+    corridor = calculate_sea_intermodal_corridor(medan_coords, pekanbaru_coords)
+    assert "legs" in corridor
+    assert len(corridor["legs"]) == 3
+
+    leg1, leg2, leg3 = corridor["legs"]
+    assert leg1["modality"] == "truck"
+    assert leg1["color"] == "#10B981"
+
+    assert leg2["modality"] == "maritime"
+    assert leg2["color"] == "#3B82F6"
+    assert len(leg2["coordinates"]) >= 4, "Maritime leg must follow coastal perimeter without cutting across land"
+
+    assert leg3["modality"] == "truck"
+    assert leg3["color"] == "#10B981"
+
+    # 3. CPURoutingAdapter solve_shortest_path with modality="intermodal"
+    router = get_cpu_router()
+    route_res = router.solve_shortest_path(
+        origin_id="belawan_port",
+        dest_id="dumai_port",
+        origin_coords=medan_coords,
+        dest_coords=pekanbaru_coords,
+        modality="intermodal",
+    )
+    assert route_res["status"] == "success"
+    top_route = route_res["routes"][0]
+    assert "legs" in top_route
+    assert len(top_route["legs"]) == 3
+    assert top_route["legs"][1]["modality"] == "maritime"
+    assert top_route["legs"][1]["color"] == "#3B82F6"
+
+    # 4. RouteOptimizationAgent preserves/generates multi-modal legs
+    agent_state = {
+        "crisis_id": "CRISIS-TEST-001",
+        "title": "Uji Rute Intermodal",
+        "type": "flood",
+        "is_simulated": True,
+        "lat": 3.5952,
+        "lon": 98.6722,
+        "region": "north_sumatra",
+        "status": "detecting",
+        "overall_confidence": 0.8,
+        "origin": "Medan",
+        "destination": "Dumai",
+        "origin_coords": medan_coords,
+        "dest_coords": [101.4533, 1.6811],
+        "modality": "intermodal",
+    }
+    agent_res = await route_optimization_agent(agent_state)
+    assert len(agent_res["route_recommendations"]) >= 1
+    rec = agent_res["route_recommendations"][0]
+    assert "legs" in rec
+    assert any(l["modality"] == "maritime" and l["color"] == "#3B82F6" for l in rec["legs"])
+

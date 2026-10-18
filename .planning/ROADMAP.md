@@ -1919,6 +1919,41 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 
 ---
 
+## Phase 70 (Extended): AIS Vessel Continuity, Coastal Maritime Fairways, Multi-Color Route Legs & Node Glow Reset
+
+**Goal:** Guarantee 100% AIS vessel continuity without dropouts during WebSocket reconnection, eliminate land crossing by coastal and estuary maritime corridors with dedicated port channels, render modality-colored route legs, sync hidden route state across map popovers and corridor bars, and cleanly remove node glow highlights on corridor reset.
+**Status:** COMPLETE ✅
+**Plans:** `70-SUMMARY.md`
+
+### Deliverables
+
+- [x] **AIS Vessel Continuity & Telemetry Schema Hardening**:
+  - `backend/app/adapters/aisstream_adapter.py`: Maintain persistent 96-vessel regional Sumatra baseline and overlay live AISStream updates on top (`get_ais_vessels()`), preventing ship disappearances during reconnection or cache renewal.
+  - `backend/app/services/telemetry_service.py`: Enforce explicit `current_coords: [lon, lat]` and GeoJSON Point geometries across all maritime and aviation telemetry feeds.
+  - `frontend/hooks/useFleetVehicles.ts` & `frontend/components/map/FleetVehicleLayer.tsx`: Stabilize vessel buffer state during polling cycles to eliminate flicker.
+- [x] **Coastal Maritime Fairways & 100% Water Routing Guarantee**:
+  - `frontend/lib/aiDynamicRouter.ts`: Define `SUMATRA_PORT_CHANNELS` connecting inland/river ports (Boom Baru Musi, Siak, Batanghari) to the 16-point `SUMATRA_NAUTICAL_PERIMETER`; implement `buildNauticalPath()` with fairway and perimeter routing avoiding all mainland traversal.
+  - `backend/app/adapters/cpu_routing_adapter.py`: Implement `SUMATRA_PORTS_GRAPH`, `generate_nautical_coastal_route()`, and `calculate_sea_intermodal_corridor()` with Dijkstra water routing.
+  - `frontend/scripts/test_nautical_corridor.ts`: Automated test script verifying estuary channel clearance and water-bound navigation paths.
+- [x] **Multi-Color Intermodal Legs & Visual Distinction**:
+  - `agents/nodes/route_optimization.py`: Emit structured `legs` array for all route recommendations with modality colors (road `#10B981`, maritime `#3B82F6`, aviation `#00F0FF`).
+  - `frontend/components/map/CrisisMap.tsx`: Render multi-color leg polylines in Mapbox `route-paths-line` layer so intermodal chains clearly differentiate road haulage, sea freight, and air staging.
+- [x] **Corridor Reset Sync & Immediate Node Glow Clearing**:
+  - `frontend/components/dashboard/DashboardClient.tsx`: Lift `hiddenRouteIndices` to dashboard state; preserve client multi-leg intermodal routes (sea, air, hold) when merging backend crisis states; reset hidden route indices on full reset.
+  - `frontend/components/map/CrisisSimulatorBar.tsx`: Bind dynamic effective hidden count to reset button (`Tampilkan Semua Rute (${effectiveHiddenCount} Tersembunyi)`).
+  - `frontend/components/map/CrisisMap.tsx`: Add active hook to immediately clear `customPinnedPoints` and reset `custom-pinned-source` GeoJSON when origin/destination nodes are cleared, instantly removing lingering pulse rings and node glow.
+
+### Verification Criteria
+
+- [x] `rtk npx tsc --noEmit` in `frontend/`: 0 errors.
+- [x] `rtk npm run build` in `frontend/`: 100% clean Next.js 14 production build (7/7 static routes).
+- [x] `pytest backend/tests/test_vehicles_telemetry.py backend/tests/test_cpu_routing_weather.py`: 19/19 passed (100%).
+- [x] `npx tsx frontend/scripts/test_nautical_corridor.ts`: 100% passed (estuary channel and coastal water path guarantees verified).
+- [x] Live AIS vessels overlay gracefully onto baseline without disappearing on WebSocket drops.
+- [x] Node glow and custom pins clear immediately upon clicking Reset Rute.
+
+---
+
 ## Phase 71: Map Visual Context (Blue Layer Clarity), Fleet Filter Diagnostics & News Intelligence Link Sanitization
 
 **Goal:** Provide complete visual context and UX clarity for unlabeled blue maritime elements and sea lanes on the map; enrich the fleet filter toggle with clear operational purpose and telemetry provenance while eliminating Deck.gl character warnings; sanitize broken/outdated news links; and fix the backend hostname mismatch causing CORS errors on Vercel.

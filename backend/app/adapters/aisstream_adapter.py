@@ -185,6 +185,7 @@ def generate_sumatra_maritime_fallback() -> List[Dict[str, Any]]:
             "port_origin": v.get("origin", "Pelabuhan Sumatra"),
             "last_seen": now_iso,
             "telemetry_source": "MARITIME_RADAR_FALLBACK",
+            "current_coords": [round(cur_lon, 4), round(cur_lat, 4)],
         })
 
     return vessels
@@ -411,7 +412,8 @@ class AISstreamAdapter(BaseAdapter):
                 "ship_type": existing.get("ship_type") or ("Tanker" if "MT " in ship_name else "Cargo"),
                 "port_origin": port_origin,
                 "last_seen": now_iso,
-                "telemetry_source": "AISSTREAM_WS"
+                "telemetry_source": "AISSTREAM_WS",
+                "current_coords": [round(float(lon), 4), round(float(lat), 4)],
             }
 
         elif msg_type == "ShipStaticData" and mmsi in self.vessels:
@@ -536,11 +538,32 @@ def get_aisstream_adapter() -> AISstreamAdapter:
 def get_live_ais_vessels() -> List[Dict[str, Any]]:
     """
     Returns live maritime vessels across Sumatra and Malacca Strait.
-    If the live WebSocket connection has active vessels (>= 10), returns them;
-    otherwise returns the realistic regional Malacca Strait & Sumatra fallback
-    generator (85+ active vessels) so maritime traffic is always populated.
+    Starts with the 96-vessel regional Sumatra fallback baseline and overlays/merges
+    all active live AISStream vessels on top of it so live vessels enrich and expand
+    the maritime fleet without ever discarding the Sumatra baseline.
+    Every vessel includes current_coords: [round(lon, 4), round(lat, 4)] (p_curr).
     """
     adapter = get_aisstream_adapter()
-    if len(adapter.vessels) >= 10:
-        return list(adapter.vessels.values())
-    return generate_sumatra_maritime_fallback()
+    baseline_vessels = generate_sumatra_maritime_fallback()
+    vessels_dict: Dict[str, Dict[str, Any]] = {
+        str(v.get("mmsi") or v.get("vehicle_id")): dict(v)
+        for v in baseline_vessels
+    }
+
+    # Overlay active live AISStream vessels on top of baseline
+    for mmsi_key, live_v in adapter.vessels.items():
+        v_key = str(live_v.get("mmsi") or mmsi_key)
+        if v_key in vessels_dict:
+            vessels_dict[v_key].update(live_v)
+        else:
+            vessels_dict[v_key] = dict(live_v)
+
+    # Ensure every vessel object includes current_coords: [round(lon, 4), round(lat, 4)] (p_curr)
+    result = []
+    for v in vessels_dict.values():
+        lat = v.get("lat")
+        lon = v.get("lon")
+        if lat is not None and lon is not None:
+            v["current_coords"] = [round(float(lon), 4), round(float(lat), 4)]
+        result.append(v)
+    return result

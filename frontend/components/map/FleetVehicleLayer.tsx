@@ -266,9 +266,20 @@ export function FleetVehicleLayer({
   const lastDeckUpdateRef = useRef<number>(0);
   const lastPopupSyncRef = useRef<number>(0);
   const isInteractingRef = useRef<boolean>(false);
+  const vehiclesRef = useRef<FleetVehicle[]>(vehicles);
+  vehiclesRef.current = vehicles;
 
   selectedVehicleIdRef.current = selectedVehicle?.vehicle.vehicle_id ?? null;
   isFollowCamActiveRef.current = isFollowCamActive;
+
+  // Clear dead-reckon and progress refs strictly on component unmount
+  useEffect(() => {
+    return () => {
+      progressMapRef.current = {};
+      deadReckonMapRef.current = {};
+      breadcrumbsRef.current = {};
+    };
+  }, []);
 
   // Listen to manual map gestures to pause heavy deck rebuilding and disengage follow-camera
   useEffect(() => {
@@ -376,52 +387,7 @@ export function FleetVehicleLayer({
   useEffect(() => {
     if (!map) return;
 
-    const clearDeckLayers = () => {
-      if (overlayRef.current) {
-        overlayRef.current.setProps({ layers: [] });
-      }
-      progressMapRef.current = {};
-      deadReckonMapRef.current = {};
-      breadcrumbsRef.current = {};
-    };
-
-    if (!vehicles || vehicles.length === 0) {
-      if (animRef.current) {
-        cancelAnimationFrame(animRef.current);
-        animRef.current = null;
-      }
-      clearDeckLayers();
-      setSelectedVehicle(null);
-      isFollowCamActiveRef.current = false;
-      return;
-    }
-
     let isCancelled = false;
-
-    // Filter vehicles by active modality
-    const visibleVehicles = vehicles.filter((v) => {
-      if (!modalityFilter || modalityFilter === 'all') return true;
-      return v.modality === modalityFilter;
-    });
-
-    if (visibleVehicles.length === 0) {
-      if (animRef.current) {
-        cancelAnimationFrame(animRef.current);
-        animRef.current = null;
-      }
-      clearDeckLayers();
-      setSelectedVehicle(null);
-      isFollowCamActiveRef.current = false;
-      return;
-    }
-
-    // Initialize progress map
-    visibleVehicles.forEach((v) => {
-      if (progressMapRef.current[v.vehicle_id] === undefined) {
-        progressMapRef.current[v.vehicle_id] = v.progress ?? 0.35;
-      }
-    });
-
     const atlasUrl = getVehicleAtlasDataUrl();
 
     const animate = (now: number) => {
@@ -447,6 +413,27 @@ export function FleetVehicleLayer({
         return;
       }
       lastDeckUpdateRef.current = now;
+
+      const currentVehicles = vehiclesRef.current || [];
+      const visibleVehicles = currentVehicles.filter((v) => {
+        if (!modalityFilter || modalityFilter === 'all') return true;
+        return v.modality === modalityFilter;
+      });
+
+      if (visibleVehicles.length === 0) {
+        if (overlayRef.current) {
+          overlayRef.current.setProps({ layers: [] });
+        }
+        animRef.current = requestAnimationFrame(animate);
+        return;
+      }
+
+      // Initialize progress map for newly arrived vehicles without wiping existing
+      visibleVehicles.forEach((v) => {
+        if (progressMapRef.current[v.vehicle_id] === undefined) {
+          progressMapRef.current[v.vehicle_id] = v.progress ?? 0.35;
+        }
+      });
 
       const currentZoom = map.getZoom();
       const simSpeedMultiplier = typeof simSpeed === 'number' && simSpeed > 0 ? simSpeed : 1.0;
@@ -521,7 +508,7 @@ export function FleetVehicleLayer({
                 : (v as any).location?.coordinates
                   ? [(v as any).location.coordinates[0], (v as any).location.coordinates[1]]
                   : coords.length > 0
-                    ? coords[0]
+                    ? coords[Math.floor(coords.length / 2)]
                     : [98.6722, 3.5952];
 
         const isLandTruck = v.modality === 'truck' || (v.modality as string) === 'land';
@@ -582,10 +569,15 @@ export function FleetVehicleLayer({
               };
               deadReckonMapRef.current[v.vehicle_id] = drState;
             } else {
-              const jumpDistance = getHaversineDistanceKm(drState.baseLocation, serverFix);
-              if (jumpDistance > 20) {
-                drState.currentPos = [serverFix[0], serverFix[1]];
+              const driftKm = getHaversineDistanceKm(drState.currentPos, serverFix);
+              if (driftKm > 15) {
+                // Smooth blend toward new server fix if drift is large, rather than resetting to stern/prev
+                drState.currentPos[0] += (serverFix[0] - drState.currentPos[0]) * 0.25;
+                drState.currentPos[1] += (serverFix[1] - drState.currentPos[1]) * 0.25;
                 drState.baseLocation = [serverFix[0], serverFix[1]];
+              } else if (driftKm > 0.8) {
+                drState.currentPos[0] += (serverFix[0] - drState.currentPos[0]) * 0.06;
+                drState.currentPos[1] += (serverFix[1] - drState.currentPos[1]) * 0.06;
               }
             }
 
@@ -1003,9 +995,11 @@ export function FleetVehicleLayer({
         cancelAnimationFrame(animRef.current);
         animRef.current = null;
       }
-      clearDeckLayers();
+      if (overlayRef.current) {
+        overlayRef.current.setProps({ layers: [] });
+      }
     };
-  }, [map, vehicles, activeRoutes, activeRouteIdx, modalityFilter, simSpeed, handleVehicleSelect]);
+  }, [map, activeRoutes, activeRouteIdx, modalityFilter, simSpeed, handleVehicleSelect]);
 
   const vehicle = selectedVehicle?.vehicle;
   const isMaritime = vehicle?.modality === 'maritime';

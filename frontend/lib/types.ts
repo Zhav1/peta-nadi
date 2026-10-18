@@ -27,6 +27,7 @@ export interface HoldVsRerouteEconomics {
 export interface RouteLeg {
   title: string;
   mode: 'truck' | 'maritime' | 'air';
+  modality?: 'truck' | 'maritime' | 'air';
   distance_km: number;
   eta_minutes: number;
   from_name: string;
