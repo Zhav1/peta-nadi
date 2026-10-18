@@ -1,107 +1,91 @@
-# FEATURE STATUS — PetaNadi System Matrix
+# FEATURE STATUS — PreHub System Matrix
 
-**Milestone:** M2/M3 — Pan-Sumatra Island Production Scope (8 Mainland Provinces + ALKI I Corridors)  
-**Architecture Paradigm:** Hybrid Cognitive Swarm (Dijkstra + Deterministic CPU Router + Open-Meteo NWP + OR-Tools VRP)  
-**Last Updated:** 2026-10-06  
+**Milestone:** M4 — PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability  
+**Architecture Paradigm:** Hybrid Cognitive Swarm (NetworkX Dijkstra + Deterministic CPU Router + Google OR-Tools + Open-Meteo NWP + BMKG Radar Fusion)  
+**Last Updated:** 2026-10-18  
 
 ---
 
 ## Executive Summary
 
-PetaNadi (PreHub/LRIP) adalah platform intelijen krisis logistik nasional multi-sensor berbasis AI. Sistem ini beroperasi di seluruh Pulau Sumatera (Aceh, Sumatera Utara, Sumatera Barat, Riau, Jambi, Bengkulu, Sumatera Selatan, Lampung) serta koridor maritim ALKI I, menghubungkan produsen komoditas pangan pokok dengan simpul pelabuhan strategis dan jaringan jalan tol Trans-Sumatera.
+PreHub (*Predictive Logistics Hub & Early Warning System*) adalah platform intelijen krisis logistik pangan nasional multi-sensor berbasis AI. Sistem ini beroperasi di seluruh 8 provinsi daratan Pulau Sumatera (Aceh, Sumatera Utara, Sumatera Barat, Riau, Jambi, Bengkulu, Sumatera Selatan, Lampung) serta alur laut kepulauan ALKI I, menghubungkan produsen komoditas pangan pokok dengan simpul pelabuhan strategis, jaringan jalan tol Trans-Sumatera, dan koridor penerbangan kargo.
 
 ---
 
 ## 1. Sudah Berfungsi (Functional & Fully Integrated)
-**Status:** READY FOR DEMO & PRODUCTION ✅
+**Status:** READY FOR PRODUCTION & PILOT DEPLOYMENT ✅
 
-### 1.1 UI/UX & Interactive Dashboard Mode
-- **Pure Agentic Tangential Avoidance Router** (`aiDynamicRouter.ts`)
-  - Mesin rerouting terukur yang memproyeksikan waypoint $W_{left}$ dan $W_{right}$ persis 2 km di luar tepi radius krisis ($R \times 1.15 + 2.0\text{km}$) secara tegak lurus (0% koordinat hardcode).
-  - Menyaring candidate rute dengan point-in-circle check (0 titik di dalam lingkaran krisis) & jarak terpendek via Mapbox Directions API.
-- **Clean Slate Dynamic Node Selection Workflow** (`DashboardClient.tsx`)
-  - State awal netral (`selectedOriginNode = null`, `selectedDestNode = null`), alur interaktif 2-Langkah untuk menentukan node Start (🟢) dan End (🟡), serta tombol `🔄 RESET RUTE`.
-- **Docked MAP 4D AI Copilot & 4 Explainable AI (XAI) Blocks** (`MitigationTab.tsx`)
-  - Blok penjelas AI (Consensus Badge `91% Confidence`, Chain of Impact, Chain-of-Thought reasoning trace, dan tombol HITL `[ APPROVE & DISPATCH REROUTE ]` yang terhubung ke Toast UI).
-- **Guided Demo Runner & Stepper Panel** (`GuidedDemoPanel.tsx`, `useDemoState.ts`)
-  - Stepper interaktif 5 tahap (`Injecting Events` ➔ `Agent Swarm` ➔ `Consensus Gate` ➔ `Validated Alert` ➔ `Notification Sent`).
-  - Dilengkapi mode otomatis dengan pacing 15 detik, generator QR Code remote HP presenter, dan penanganan krisis offline.
-- **3D Globe Mode & Pin Anchoring** (`CrisisMap.tsx`, `layers.ts`)
-  - Peta 3D Globe Mapbox v3 dengan `ScatterplotLayer` Deck.gl ber-billboard (`billboard: true`, 0 elevasi).
-  - Pin hotspot krisis terkunci 100% pada koordinat lat/lon tanpa melayang saat globe diputar atau di-zoom.
-- **Interactive Disruption Drawing Tool** (`CrisisMap.tsx`, `MapboxDraw`)
-  - Tombol "SIMULATE DISRUPTION" otomatis mengatur `pointer-events` overlay Deck.gl, mengaktifkan kursor pen (`crosshair`), dan menangkap poligon GeoJSON untuk memicu simulasi bencana.
-- **Logistics Corridor Route Polylines** (`layers.ts`, `mock_crisis_state.json`)
-  - Visualisasi garis rute pengalihan beresolusi tinggi sepanjang Koridor Tol Medan-Tebing Tinggi / Jalinsum dengan ujung melengkung halus (`jointRounded: true`, `capRounded: true`).
-- **Executive Cabinet Briefing PDF Export** (`ReportsSection.tsx`)
-  - Jendela cetak laporan resmi *PetaNadi National Logistics Cabinet Briefing* (`window.print()`) dan fitur ekspor raw data JSON.
+### 1.1 UI/UX & Interactive Command Center (Mapbox GL JS v3 + Deck.gl v8)
+- **High-Density GPU-Instanced Telemetry Layer** (`FleetVehicleLayer.tsx`)
+  - Rendering 5.000+ unit armada multi-moda (truk, kapal, pesawat) pada 60 FPS menggunakan `@deck.gl/mapbox` `MapboxOverlay` (`IconLayer`, `PathLayer`, `ScatterplotLayer`, `TextLayer`).
+  - Throttling update buffer Deck.gl ke ~4 Hz (250ms interval) dengan daur ulang typed array, melenyapkan lonjakan CPU main-thread dan crash browser V8 heap OOM.
+  - Orientasi `billboard: true` dan persistent visual anchor dots mencegah distorsi kemiringan label dan sprite pada tampilan peta 3D globe maupun sudut pitch tinggi.
+  - Arbitrase macro-zoom pada `spatialHashArbiter.ts` memberlakukan kuota fair-share seimbang (truk: 8, maritim: 9, udara: 7) sehingga label truk tidak tersingkir oleh armada kapal Selat Malaka.
+- **On-Map Contextual Corridor Popover & Reset Sync** (`CrisisMap.tsx`, `CrisisSimulatorBar.tsx`, `DashboardClient.tsx`)
+  - Interaksi langsung pada garis rute (`route-paths-line`): klik pada polylines memunculkan popover Glassmorphic interaktif berisi nama koridor, jarak, estimasi durasi, status risiko, rincian biaya logistik (Rp), serta aksi *"Pilih Rute Ini"*, *"Sembunyikan Koridor Ini"*, dan *"Tutup"*.
+  - Tombol pengalih moda di bagian bawah telah dieliminasi demi alur kontekstual peta langsung.
+  - Pil *"Tampilkan Semua Rute (N Tersembunyi)"* pada `CrisisSimulatorBar.tsx` muncul saat ada koridor tersembunyi dengan sinkronisasi status dua arah.
+  - Reset titik rute seketika menghapus `customPinnedPoints` dan membersihkan layer `custom-pinned-source`, memadamkan cincin kilau (glow) pin seketika.
+- **100% Water-Path Coastal & Estuary Navigation** (`aiDynamicRouter.ts`, `cpu_routing_adapter.py`)
+  - Kanal navigasi muara sungai (`SUMATRA_PORT_CHANNELS`) menghubungkan pelabuhan pedalaman (Boom Baru Sungai Musi, Pekanbaru Sungai Siak, Jambi Sungai Batanghari) ke perimeter 16-titik `SUMATRA_NAUTICAL_PERIMETER`.
+  - Algoritma Dijkstra pada graf air menjamin navigasi pesisir dan muara 100% melintasi perairan tanpa memotong semenanjung atau daratan.
+- **Modality-Specific Multi-Color Route Legs** (`CrisisMap.tsx`, `route_optimization.py`)
+  - Pewarnaan terstandarisasi untuk setiap segmen rantai multimoda: Hijau Zamrud `#10B981` (truk jalan raya), Biru Laut `#3B82F6` (maritim pesisir & sungai), dan Biru Sian `#00F0FF` (kargo udara).
+- **Legenda Rute & Kejelasan Visual Armada** (`DashboardClient.tsx`, `LEGENDA RUTE`)
+  - Modal legenda interaktif mendokumentasikan kode warna armada (`#38bdf8` Kapal AIS Live, `#34d399` Truk GPS Live, `#c084fc` Pesawat Kargo, `#1e40af` TSS Selat Malaka, `#f59e0b` Proyeksi Jalur Terjadwal).
+  - Teks Deck.gl menggunakan tanda hubung ASCII standar `-` menggantikan karakter Unicode bullet `•` (8226) guna meniadakan peringatan konsol.
 
-### 1.2 Core Backend Engine & AI Agent Swarm
-- **Backend Demo Engine** (`demo_router.py`)
-  - Router `/api/demo/start`, `/api/demo/status/{id}`, dan `/api/demo/advance/{id}` dengan auto-fallback mock fixture (menjamin HTTP 200 OK).
+### 1.2 Core Backend Engine & Swarm Intelligence
 - **LangGraph 6-Agent Cognitive Swarm** (`agents/`)
   - Swarm 6 agen cerdas: *Data Collection*, *OSINT & Hazard*, *Prediction*, *Route Optimization*, *Economic Intelligence*, dan *Decision Support Copilot*.
-- **Consensus Gate Engine** (`consensus_gate.py`)
-  - Gerbang validasi multi-sensor dengan threshold keyakinan $> 85\%$ dan syarat minimal **2 sumber data independen**.
-- **AI Advisor Multilingual Chat** (`agent_router.py`, `llm_gateway.py`)
-  - Adaptasi bahasa otomatis (merespon Bahasa Indonesia saat prompt Bahasa Indonesia) dengan fallback taktis lokal.
-- **WhatsApp Notification & Approval Logging** (`notification_service.py`, `approvals.py`)
-  - Pengiriman pesan peringatan ke operator armada logistik dan pencatatan log keputusan di tabel `route_approvals`.
+- **Deterministic CPU Route Optimization** (`cpu_routing_adapter.py`)
+  - Algoritma NetworkX Dijkstra dan Google OR-Tools (2-Opt) berjalan di CPU dengan latensi `<150ms`. Bebas ketergantungan GPU cloud berbiaya mahal. Snapping koordinat murni `[lon, lat]` via Haversine lookup ke node jalan terdekat.
+- **Persistent AIS Vessel Continuity** (`aisstream_adapter.py`, `useFleetVehicles.ts`)
+  - Penggabungan baseline 96 kapal regional Sumatera dengan feed langsung WebSocket AISStream (`get_live_ais_vessels()`) dan cache sliding TTL 90 detik, mencegah hilangnya kapal saat rekoneksi socket.
+- **Deep Publisher Permalink Resolution** (`news_aggregator.py`)
+  - Penguraian token URL Google News via RPC `batchexecute` Fbv4je dan integrasi RSS biro regional ANTARA langsung menuju artikel permanen penerbit (Antara, Detik, Kompas). Dilengkapi gerbang `LOGISTICS_DISASTER_KEYWORDS` untuk menolak artikel non-logistik.
+- **Atmospheric Weather Radar & NWP Fusion** (`weather_fusion_service.py`)
+  - Fusi spasial radar cuaca BMKG dan model numerik Open-Meteo (ECMWF/GFS) tanpa GPU.
+- **Single Canonical Disaster Simulator** (`CrisisSimulatorBar.tsx` ➔ `POST /api/v1/simulate/stream`)
+  - Simulasi krisis terpadu via Server-Sent Events (SSE), evaluasi kepatuhan karantina BKHIT, batas tonase MST, dan peluruhan eksponensial komoditas pangan ($1 - e^{-\delta \cdot T}$). Tab simulasi lama (`SimulationSection.tsx`) telah dipurgen sepenuhnya.
+- **Laporan Audit Ledger & Non-Repudiation** (`ReportsSection.tsx`)
+  - Pencatatan keputusan HITL (`ACCEPT`, `REJECT`, `OVERRIDE`), status sinkronisasi (`SYNCED`, `PENDING`), stempel waktu ISO dengan timezone (`GMT+7`), filter interaktif, serta ekspor PDF dan JSON dinamis.
+- **Analytics Honesty** (`AnalyticsSection.tsx`)
+  - Integrasi serial harga pangan riil PIHPS (`GET /api/v1/commodities/prices`) dari Supabase `commodity_prices` dengan status kosong `"Data tidak tersedia"` tanpa kartu risiko rekaan.
 
 ---
 
-## 2. Masih Berupa Simulasi / Stub (Simulated & Mock-Seeded)
-**Status:** MOCK-SEEDED / SYNTHETIC STUB 🧪
+## 2. Sudah Didekomisioning & Dieliminasi (Decommissioned & Purged)
+**Status:** FULLY PURGED 🗑️
 
-- **Synthetic Incident Stream Generator** (`belawan_scenario.json`, `run_demo.py`)
-  - Injeksi event sintetis (cuaca BMKG, kemacetan TomTom, banjir, lonjakan PIHPS) ke Redis Streams untuk simulasi krisis offline.
-- **GraphRAG Causal Chain Seeding** (`graphrag_tool.py`, `mock_crisis_state.json`)
-  - Graph hubungan sebab-akibat (*Belawan Port Closure* ➔ *Cooking Oil Supply Drop* ➔ *Medan Inflation*) dimuat dari seed data lokasi Koridor Sumut.
-- **LTM Historical Disaster Episode Memories** (`ltm_db.py`)
-  - Memori jangka panjang episode bencana masa lalu berbasis vector database (pgvector) untuk estimasi dampak ekonomi.
-- **Source Health Live Monitors** (`health.py`, `ReportsSection.tsx`)
-  - Indikator status adaptor data (BMKG, TomTom, AISstream) dikalkulasikan dari health check backend.
+- ❌ **GPU-Based Routing & AI Forecasts:** Purged pada Phase 59 (digantikan oleh CPU NetworkX Dijkstra, OR-Tools, dan Open-Meteo NWP).
+- ❌ **Legacy Simulasi Main Tab & Chat:** `SimulationSection.tsx` dan rute `/simulation/chat` dihapus pada Phase 65 (digantikan oleh Simulasi Bencana kanonikal di canvas peta).
+- ❌ **Mock Past/Future/Predict Replay Tabs:** `TimelineScrubber.tsx`, `/historical/episodes`, dan `/predictive/risks` dihapus pada Phase 64.
+- ❌ **Fake Risk Cards & Arcs:** Dihapus dari `AnalyticsSection.tsx` pada Phase 66 (digantikan oleh status `"Data tidak tersedia"` yang jujur).
+- ❌ **Fake Fallback Audit Rows:** Dihapus dari `ReportsSection.tsx` pada Phase 67 (digantikan oleh ledger audit dinamis dari tabel `route_approvals`).
+- ❌ **Bottom Modality Selector Buttons:** Dihapus pada Phase 69 demi on-map contextual popover.
 
 ---
 
-## 3. Pekerjaan Aktif & Target Berikutnya (Phase 15)
-**Status:** READY TO START 🚀
+## 3. Verifikasi & Pengujian Otomatis
+**Status:** 100% PASSING VERIFIED 🧪
 
-### 3.1 Pendekatan Arsitektur Optimasi Rute & Prediksi Hibrida
-
-PetaNadi menggabungkan algoritma CPU konvensional yang cepat dengan akselerasi GPU NVIDIA untuk mencapai efisiensi komputasi, keandalan tinggi, dan keberlanjutan biaya:
-
-| Skenario Kebutuhan | Cara yang Dipakai | Alasan / Benefit |
-| :--- | :--- | :--- |
-| **Navigasi Single (Point A ➔ B)** | **Dijkstra / pgRouting (CPU)** | Cepat, hemat biaya, tak butuh GPU. |
-## 3. Pekerjaan Aktif & Target Berikutnya (Phase 18)
-**Status:** IN PROGRESS 🛠️
-
-- **Phase 18: Map UI/UX Refactoring, Unified Telemetry HUD & Localized Weather Animations**
-  - Refactor map overlays to unify TomTom congestion stats and NVIDIA cuOpt GPU optimization metrics in a glassmorphic **Operations Telemetry HUD Panel**.
-  - Replace the single hardcoded weather badge with 4 localized interactive weather cards over regional center points (Belawan, Deli Serdang, Binjai, Tebing Tinggi).
-  - Embed custom animated SVG weather icons (rain fall, storm/lightning flash, cloud drift animations) styled directly with inline performance keyframes.
-  - Remove redundant static map markers to clean up visual clutter on map rotation.
+- **Backend Pytest Suite:** 216 tes unit, integrasi, dan E2E dalam 16 modul lulus 100% (`backend/tests/`).
+- **Frontend TypeScript:** `npx tsc --noEmit` lulus dengan 0 error.
+- **Frontend Unit & Logic Tests:**
+  - `scripts/test_arbiter.ts`: Lulus 100% (bebas RangeError pada input koordinat tak terhingga/ekstrem).
+  - `scripts/test_nautical_corridor.ts`: Lulus 100% (garansi rute air 100% pada Boom Baru, Siak, dan Selat Sunda).
+  - `scripts/test_phase70_logic.ts`: Lulus 100% (keabsahan filter transponder armada dan estimasi viewport).
+- **Next.js Production Build:** `npm run build` berhasil 100% (7/7 rute statis).
 
 ---
 
-## 4. Masih Direncanakan (Post-MVP)
+## 4. Masih Direncanakan (Post-MVP / v2)
 **Status:** PLANNED FOR POST-MVP / v2 ⏳
 
 - **Aplikasi Mobile Pengemudi Logistik (v2 / Post-MVP)**
-  - Aplikasi React Native + WatermelonDB dengan sinkronisasi CRDT offline untuk pengemudi truk.
+  - Aplikasi React Native + WatermelonDB dengan sinkronisasi CRDT offline untuk pengemudi armada.
 - **Pengembangan Koridor Multi-Provinsi (v2 / Post-MVP)**
-  - Perluasan cakupan sistem pemantauan dari Koridor Sumatra Utara menuju Koridor Trans-Jawa.
+  - Perluasan cakupan sistem pemantauan dari Koridor Sumatra menuju Koridor Trans-Jawa dan Kawasan Timur Indonesia.
 - **National Logistics Health Index API & GraphRAG Enterprise (v2 / Post-MVP)**
   - API publik kesehatan logistik dan deployment private cloud kementerian (Kemendag, Kemenhub, BNPB, Bapanas, Bulog).
-
----
-
-## Summary Matrix
-
-| Kategori Fitur | Jumlah Fitur | Tingkat Kesiapan |
-| :--- | :--- | :--- |
-| **1. Sudah Berfungsi** | 19 Fitur Utama | Production & Demo Ready (100%) |
-| **2. Simulasi / Stub** | 4 Subsystem | Operational via Mock Seed Data |
-| **3. Sedang Dikembangkan (Phase 18)** | 1 Major Module | In Progress |
-| **4. Masih Direncanakan (Post-MVP)** | 3 Major Modules | Scheduled on Proposal Roadmap |

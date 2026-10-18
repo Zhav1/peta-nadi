@@ -38,3 +38,22 @@
    - The "Analitik" tab ([`AnalyticsSection.tsx`](file:///d:/College/Pidi.id/frontend/components/dashboard/AnalyticsSection.tsx)) presents genuine PIHPS price series (`GET /api/v1/commodities/prices`). Static fabricated risk-ranking cards, static causal chains, and synthetic arcs/nodes have been removed in favor of honest `"Data tidak tersedia"` empty states.
 8. **Purged Time Horizon Replays**:
    - Mock Past, Future, and Predict dock tabs, synthetic fallback fixtures, `TimelineScrubber.tsx`, and dead mock endpoints (`/historical/episodes`, `/predictive/risks`) have been purged from the platform.
+9. **High-Density GPU Telemetry with Throttled Buffers (Phases 63 & 69)**:
+   - Fleet visualization uses `@deck.gl/mapbox` `MapboxOverlay` (`IconLayer`, `PathLayer`, `ScatterplotLayer`, `TextLayer`) running at 60 FPS for 5,000+ units.
+   - Deck.gl buffer uploads are decoupled and throttled to ~4 Hz (250ms interval) with array recycling in [`FleetVehicleLayer.tsx`](file:///d:/College/Pidi.id/frontend/components/map/FleetVehicleLayer.tsx), preventing V8 heap churn and browser OOM crashes.
+   - Sprites and text use `billboard: true` to prevent tilt distortion during pitched 3D views, while macro-zoom labels follow balanced fair-share quotas (trucks: 8, maritime: 9, air: 7) in [`spatialHashArbiter.ts`](file:///d:/College/Pidi.id/frontend/lib/spatialHashArbiter.ts).
+10. **100% Water-Path Coastal & Estuary Navigation (Phase 70)**:
+   - Dedicated channel waypoints (`SUMATRA_PORT_CHANNELS`) in [`aiDynamicRouter.ts`](file:///d:/College/Pidi.id/frontend/lib/aiDynamicRouter.ts) and [`cpu_routing_adapter.py`](file:///d:/College/Pidi.id/backend/app/adapters/cpu_routing_adapter.py) connect river ports (Palembang Boom Baru / Musi River, Pekanbaru / Siak River, Jambi / Batanghari River) to the 16-point `SUMATRA_NAUTICAL_PERIMETER`.
+   - Coastal and estuary maritime paths are guaranteed 100% water-bound with zero straight-line mainland or peninsula traversal.
+11. **Modality-Specific Multi-Color Route Legs (Phase 70)**:
+   - Route recommendations emit structured `legs` rendered with distinct modality colors: road haulage in emerald green `#10B981`, coastal and river maritime in royal blue `#3B82F6`, and air cargo in sky cyan `#00F0FF` ([`CrisisMap.tsx`](file:///d:/College/Pidi.id/frontend/components/map/CrisisMap.tsx) and [`route_optimization.py`](file:///d:/College/Pidi.id/agents/nodes/route_optimization.py)).
+12. **Persistent AIS Vessel Continuity (Phase 70)**:
+   - Persistent 96-vessel regional Sumatra baseline is merged with live WebSocket AISStream reports in [`aisstream_adapter.py`](file:///d:/College/Pidi.id/backend/app/adapters/aisstream_adapter.py) and protected by a 90-second sliding TTL cache in [`useFleetVehicles.ts`](file:///d:/College/Pidi.id/frontend/hooks/useFleetVehicles.ts), ensuring continuous tracking without dropouts during WebSocket reconnects.
+13. **On-Map Contextual Corridor Popover & Immediate Node Glow Cleanup (Phases 69 & 70)**:
+   - Bottom mode-selector buttons have been removed in favor of direct on-map clicks on route polylines, opening an interactive Glassmorphism popover with corridor metrics, selection, and hiding actions.
+   - Hidden corridors are restored via a dynamic *"Tampilkan Semua Rute"* button in [`CrisisSimulatorBar.tsx`](file:///d:/College/Pidi.id/frontend/components/map/CrisisSimulatorBar.tsx).
+   - Clearing route nodes immediately purges `customPinnedPoints` and resets `custom-pinned-source` GeoJSON, extinguishing lingering glow rings instantly.
+14. **Deep Publisher Permalink Resolution (Phases 63 & 69)**:
+   - Google News opaque wrappers are unmasked via `batchexecute` Fbv4je RPC in [`news_aggregator.py`](file:///d:/College/Pidi.id/backend/app/services/news_aggregator.py) and direct regional RSS feeds, linking directly to authentic articles (Antara, Detik, Kompas).
+15. **Production Base URL Auto-Sanitization (Phase 71)**:
+   - Frontend [`api.ts`](file:///d:/College/Pidi.id/frontend/lib/api.ts) automatically sanitizes `getBaseUrl()`, redirecting legacy backend URLs to `https://peta-nadi.onrender.com`.

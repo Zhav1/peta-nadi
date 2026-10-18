@@ -25,7 +25,7 @@
 - **M1 - Pan-Sumatra Logistics & Swarm Intelligence MVP**: Completed (Phases 0 to 35). Shipped 6-agent swarm, Mapbox canvas, live news pipeline across 8 ANTARA bureaus, and 39 pytest tests.
 - **M2 - PreHub Final Defense: Empirical Evaluation, Tactical HUD & Multi-Source Maturity**: Completed (Phases 36 to 41). Delivered ground-truth benchmark ($N=60$), 88-test matrix, mathematical consensus formula, Brier probability calibration, deterministic CPU routing, God's-Eye HUD telemetry, and sanitized UI.
 - **M3 - PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform**: Completed (Phases 42 to 56). Delivered multi-role auth, self-serve fleet/CSV manifest ingestion, spoilage hedging economics, intermodal port synchronization, and anti-collision dock layouts.
-- **M4 - PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability**: Active (Phases 57 to 63). Remediated all audit findings, locked corporate RBAC, ported live telemetry to GPU-instanced @deck.gl/mapbox MapboxOverlay (5,000+ units @ 60 FPS), resolved AIS/ADS-B ingestion bottlenecks, established canonical news permalinks, pure [lon, lat] coordinate graph snapping, and simultaneous multi-color intermodal routing with Hold-vs-Reroute Spoilage Hedging economics.
+- **M4 - PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability**: Completed (Phases 57 to 71). Remediated all audit findings, locked corporate RBAC, ported live telemetry to GPU-instanced @deck.gl/mapbox MapboxOverlay (5,000+ units @ 60 FPS), resolved AIS/ADS-B ingestion bottlenecks, established canonical news permalinks, pure [lon, lat] coordinate graph snapping, simultaneous multi-color intermodal routing with Hold-vs-Reroute Spoilage Hedging economics, purged legacy mock Past/Future/Predict and Simulasi tabs, hardened authentic PIHPS analytics and Laporan audit ledger, eliminated telemetry OOM crashes via 4 Hz Deck.gl buffer throttling and SpatialHash modality quotas, stabilized AIS vessel MMSI continuity with 96-vessel regional baseline + 90s sliding TTL, implemented 100% water-path coastal and estuary routing (`SUMATRA_PORT_CHANNELS` + `SUMATRA_NAUTICAL_PERIMETER`), and delivered on-map contextual corridor popovers with instant node glow cleanup.
 
 ## Vision
 An AI-powered decision support platform that shifts logistics and disaster response from **reactive** to **proactive**. PreHub ingests real-time physical hazard data (weather, traffic, maritime, wildfire), detects logistics disruptions, predicts cascading economic impacts (commodity price spikes), and delivers actionable intelligence to field coordinators and government executives, all before the crisis escalates.
@@ -103,14 +103,14 @@ Indonesia's logistics network is uniquely fragile. A single physical shock (a fl
 - **Real & Live Data Integration:** Live XML RSS news feeds, Open-Meteo & BMKG weather, TomTom traffic flow, and PIHPS price volatility stream.
 - **Deferred to v2:** Driver mobile application (WatermelonDB/CRDT offline sync), self-serve third-party operator onboarding SDK.
 
-## Success Metrics (Empirical M2 Targets)
+## Success Metrics (Empirical M2/M4 Targets)
 1. `< 15 minutes` from physical disruption to validated dashboard alert
 2. `> 85%` alert precision verified on $N=60$ ground-truth benchmark dataset
 3. `> 80%` alert recall verified on $N=60$ ground-truth benchmark dataset
 4. `> 82%` F1-Score on disruption detection
 5. Brier Score `≤ 0.10` indicating well-calibrated probability distributions
 6. `> 15%` travel time savings for CPU-optimized detour routes vs blocked corridors
-7. `39+` automated unit and integration tests passing with documented line/branch coverage
+7. `216` automated unit, integration, and E2E tests passing with 100% reliability
 8. `0 GPU` hardware requirement: 100% operational on standard CPU compute
 
 ## Business Model
@@ -140,10 +140,11 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ## Context Files
-- `C:\Users\VICTUS\.gemini\antigravity\brain\71230b73-0111-4d44-a02a-ff99c549ac69\implementation_plan.md` - M2 Master Implementation Plan
+- `.planning/ROADMAP.md` - Canonical phased deliverables and verification criteria
+- `.planning/STATE.md` - Live project memory and active execution state
+- `docs/README.md` - Architectural and scope invariants ledger
 - `docs/Dokumen_Pendukung_PreHub.md` - Official PreHub Technical Document
 - `LRIP Master Technical Blueprint (1).md` - Authoritative system design
-- `ide-2-v2.md` - TheoTown dual-mode engine spec
 
 ---
-*Last updated: 2026-09-22 after Milestone M2 initialization*
+*Last updated: 2026-10-18 after Phase 70 & 71 completion*

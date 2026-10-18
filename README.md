@@ -35,6 +35,7 @@ Multisource Telemetry (BMKG Sensor, TomTom Speed Flow, Google News RSS, PIHPS Pr
 ### 1. Multi-Source Grounding & Pan-Sumatra News Intelligence
 - **Pan-Sumatra Multi-Biro News Ingestion:** Real-time ingestion from LKBN ANTARA regional bureaus across 8 mainland Sumatra provinces (Sumut, Sumbar, Riau, Aceh, Sumsel, Lampung, Jambi, Bengkulu) and national economic outlets (ANTARA Ekonomi, CNBC, CNN).
 - **Structured NLP Extraction:** Automated entity recognition for arterial corridor segments, 3–6h pre-disruption lead times, affected food commodities (rice, chili, shallots, oil), and physical ground-truth metrics (water depth cm, road blockades).
+- **Deep Publisher Permalink Resolution:** Unmasks Google News opaque redirect wrappers via `batchexecute` Fbv4je RPC and direct regional RSS feeds into authentic permanent publisher articles (Antara, Detik, Kompas), eliminating redirect bounce and fake numeric IDs.
 - **BMKG Hydrometeorological Telemetry:** Real-time precipitation intensity, flood alerts, and observation station monitoring.
 - **TomTom Traffic Speed Flow:** Live segment-level speed deltas, delay metrics, and congestion index caching.
 - **PIHPS Price Stream:** Monitoring volatility and price spikes for strategic staple commodities.
@@ -54,37 +55,55 @@ Multisource Telemetry (BMKG Sensor, TomTom Speed Flow, Google News RSS, PIHPS Pr
 - `GET /api/v1/intermodal/chokepoints`: Live status of 18+ strategic Pan-Sumatra maritime ports and mountain passes.
 - `POST /api/v1/compliance/verify`: Digital manifest verification for BKHIT quarantine certification and MST Class III axle-load constraints.
 
-### 4. Coastal Nautical Sea-Lane & Air Multi-Modal Routing
-- **Authentic Coastal Maritime Sea-Lanes:** Navigates along verified Indonesian nautical fairways (Malacca Strait, Sunda Strait, Indian Ocean West Coast) ensuring maritime routes around Sumatra never traverse landmasses.
-- **Air Cargo Express Corridors:** Connects regional cargo airport nodes (KNO, BTJ, PKU, BIM, DJB, PLM, TKG) via Great Circle flight trajectories with first-mile and last-mile road feeder transport.
+### 4. Coastal Nautical Fairways, Estuary Navigation & Multi-Modal Routing
+- **100% Water-Path Coastal & River-Estuary Routing:** Dedicated port channel waypoints (`SUMATRA_PORT_CHANNELS`) connecting inland/river estuaries (Boom Baru Musi River, Pekanbaru Siak River, Jambi Batanghari River) to the 16-point `SUMATRA_NAUTICAL_PERIMETER`. Dijkstra pathfinding mathematically prevents all landmass and peninsula traversal.
+- **Modality-Specific Multi-Color Route Legs:** Visual differentiation with emerald green `#10B981` (road haulage), royal blue `#3B82F6` (coastal & river maritime), and sky cyan `#00F0FF` (air cargo express).
+- **Pure Coordinate Snap Routing:** Decoupled routing from rigid pre-defined hub nodes to pure `[lon, lat]` coordinates using Haversine nearest-node road graph snapping (`cpu_routing_adapter.py`).
 - **Hazard Collision & Hold/Delay Fallback:** When all primary and arterial bypass routes intersect disaster zones, the system surfaces an honest **Mitigasi Taktis: Tunda Keberangkatan (Hold / Delay)** recommendation instead of proposing compromised detours.
 
-### 5. Multi-Persona Operations & Digital Compliance (Milestone M3)
+### 5. High-Density GPU Telemetry & Memory Stability (Deck.gl v8 + SpatialHash)
+- **GPU-Instanced Telemetry Layer:** High-density `@deck.gl/mapbox` MapboxOverlay (`IconLayer`, `PathLayer`, `TextLayer`, `ScatterplotLayer`) rendering 5,000+ units at 60 FPS with pre-rendered icon atlas.
+- **4 Hz Buffer Throttling (Zero OOM):** Decoupled Deck.gl `setProps` buffer uploads to ~4 Hz (250ms interval) and recycled typed arrays in `FleetVehicleLayer.tsx`, eliminating main-thread CPU spikes and browser V8 heap OOM crashes.
+- **Persistent Visual Anchors & `billboard: true`:** Persistent `ScatterplotLayer` dots and `billboard: true` orientation prevent label/sprite tilting distortion during pitched 3D globe and terrain rotations.
+- **Balanced Modality Label Quotas:** Macro-zoom arbitration in `spatialHashArbiter.ts` enforces balanced fair-share label slots (trucks: 8, maritime: 9, air: 7) across 32px/56px spatial hash cells, preventing truck labels from being starved out by high-density maritime traffic.
+- **AIS Vessel MMSI Continuity & 90s Sliding TTL:** Persistent 96-vessel regional Sumatra baseline merged with live WebSocket AISStream messages (`get_live_ais_vessels()`) and 90-second sliding TTL cache (`useFleetVehicles.ts`), guaranteeing zero vessel disappearance during WebSocket reconnections or polling renewal.
+
+### 6. On-Map Contextual Corridor Selection & Node Glow Cleanup
+- **Contextual Route Popovers:** Clicking any route polyline opens an interactive Glassmorphic popover displaying corridor title, distance, duration, risk status, IDR logistics cost, and direct actions (*"Pilih Rute Ini"*, *"Sembunyikan Koridor Ini"*, *"Tutup"*).
+- **Clean Slate Architecture:** Bottom mode-selector buttons have been decommissioned in favor of this direct on-map contextual workflow.
+- **Bidirectional Corridor Restoration:** When routes are hidden, a contextual *"Tampilkan Semua Rute (N Tersembunyi)"* pill appears in `CrisisSimulatorBar.tsx`, restoring all hidden routes with synchronized state.
+- **Immediate Node Glow Cleanup:** An active synchronization hook immediately clears `customPinnedPoints` and resets `custom-pinned-source` GeoJSON when origin/destination nodes are cleared, instantly extinguishing lingering pulse rings and node glow.
+
+### 7. Multi-Persona Operations & Digital Compliance
 - **Supabase Authentication & Multi-Role RBAC:** Role-based access control partitioning features for `DISPATCHER` (fleet routing and reroute approvals), `REGULATOR` (BKHIT quarantine audit, price volatility monitoring, reports), and `GUEST` (strictly read-only evaluation sandbox).
 - **Self-Serve Fleet Onboarding:** Drag-and-drop CSV manifest ingestion, manual vehicle onboarding modal, and TMS GPS telemetry ingestion webhooks.
 - **Pan-Sumatra Intermodal Choke-Points:** Tracking 7 maritime/ferry ports (Belawan, Bakauheni, Dumai, Teluk Bayur, Panjang, Sibolga, Kuala Tanjung) and 11 mountain passes (Sitinjau Lauik, Kelok 9, Malalak, etc.) with automated delay multipliers ($1.0 \le M_{\text{intermodal}} \le 3.5$).
 - **Closed-Form Spoilage Hedging Matrix:** Closed-form monetary tradeoff solver evaluating Continue vs Reroute vs Hold factoring 4-tier exponential perishability decay ($\delta = 0.025$ to $0.0005/\text{hr}$), official BPJT toll tariffs across Golongan I-V, and Pertamina fuel consumption.
 - **Differentiated Regulatory Enforcement:** Deterministic `HARD_BLOCK` on missing BKHIT agricultural quarantine certificates for inter-island transits; tactical `WARNING` & bypass advisory with operator liability transfer override for heavy vehicles ($>8$ Ton) traversing Class III mountain corridors.
 
-### 6. Strict RBAC, Route Middleware & Guest Read-Only Mode
+### 8. Strict RBAC, Route Middleware & Guest Read-Only Mode
 - **Supabase Authentication Required:** Login, sign-up, and magic links run through Supabase Auth (`frontend/lib/authContext.tsx`). There is **no offline login fallback** — when the auth service is unavailable the modal returns *"Layanan autentikasi database sedang tidak tersedia"* and no operational session is ever issued.
 - **Read-Only Guest Mode:** Unauthenticated visitors enter a locked guest profile (`DEFAULT_GUEST_PROFILE`) with zero operational permissions. Backend `ROLE_GUEST` is restricted to `benchmark:read` and `reports:read` only (`backend/app/auth/supabase_auth.py`), so approvals, fleet mutation, and persona switching are rejected server-side with HTTP 403.
 - **Next.js Route Middleware (`frontend/middleware.ts`):** `/dashboard` requires a well-formed, unexpired session JWT (`prehub_auth_token` cookie). Unauthenticated visits are redirected to `/dashboard?guest=1` and rendered as an explicitly-flagged read-only evaluation preview instead of an operational session.
 - **Verified-Signature Enforcement:** FastAPI validates JWT signatures and active sessions with no `verify_signature=False` fallback; forged or expired tokens are rejected with HTTP 401.
 
-### 7. Simulasi Bencana (Single Canonical Simulator)
+### 9. Simulasi Bencana (Single Canonical Simulator)
 - **Live Agentic Hazard Simulation:** Unified interactive simulation engine on the map canvas (`CrisisSimulatorBar.tsx`), invoking `POST /api/v1/simulate/stream` with real-time SSE event streaming.
 - **Calibrated Multi-Model Evaluation:** Computes deterministic CPU OR-Tools / NetworkX detour corridors in $<150\text{ms}$, enforces BKHIT digital quarantine compliance, checks MST axle-load limits, and evaluates exponential perishability decay ($1 - e^{-\delta \cdot T}$).
 - **Decommissioned Toy Sliders:** Fully purged legacy macro-slider "Simulasi" tab (`SimulationSection.tsx`) and dead `/simulation/chat` routes.
 
-### 8. Laporan Audit Ledger (Operational Governance & Traceability)
+### 10. Laporan Audit Ledger (Operational Governance & Traceability)
 - **Non-Repudiable Mitigation Ledger:** The Laporan tab (`ReportsSection.tsx`) serves as the official operational ledger ("Catatan Audit Mitigasi Logistik Pangan"), persisted to Supabase `route_approvals` with SQLite `route_decision_traces` fallback.
 - **Multi-Action Logging:** Captures genuine human-in-the-loop decisions (`ACCEPT`, `REJECT`, `OVERRIDE`) with live sync indicators (`SYNCED` / `PENDING`), tactical maneuver directives (`REROUTE`, `HOLD`, `CONTINUE`), and operator justification notes.
 - **Precise Chronology & Dynamic Exports:** Formats full ISO date-time with explicit timezone (`GMT+7`), interactive filter toolbar (search, action type, date range), and dynamic filtered PDF and JSON export generation. All mock fallback rows are eliminated.
 
-### 9. Analytics Honesty (Empirical PIHPS Series & Honest Empty States)
+### 11. Analytics Honesty (Empirical PIHPS Series & Honest Empty States)
 - **Empirical Market Data:** Integrates live strategic food commodity price series for rice and red chili (`GET /api/v1/commodities/prices`) queried from Supabase `commodity_prices`.
 - **Zero Fabricated Claims:** Completely eradicated ungrounded 24-hour risk cards (+18.5%, +24.5%), static causal chains, and synthetic Deck.gl arcs/nodes in favor of honest, transparent `"Data tidak tersedia"` empty states.
+
+### 12. Decommissioned Stubs & Purged Time Replays
+- **Purged Past/Future/Predict Tabs:** Purged mock Past, Future, and Predict dock tabs, synthetic fallback fixtures, `TimelineScrubber.tsx`, and dead backend endpoints (`/historical/episodes`, `/predictive/risks`).
+- **Frontend API Auto-Sanitization:** `getBaseUrl()` automatically reroutes obsolete endpoints to `https://peta-nadi.onrender.com`, preventing 404s and CORS failures.
 
 ---
 
@@ -162,17 +181,29 @@ docker compose -f docker-compose.yml -f docker-compose.override.yml up
 
 ## Testing & Verification
 
-### Complete Backend Test Suite (133 Unit, Integration & E2E Tests)
+### Complete Backend Test Suite (216 Unit, Integration & E2E Tests)
 ```bash
 cd backend
 .\.venv\Scripts\python -m pytest tests/ -v
 ```
-All 133 automated tests across Functional Requirements FR-1 through FR-20 pass with 100% reliability, covering data adapters, swarm agents, Dijkstra routing, economic hedging, BKHIT/MST compliance, and full pilot drills.
+All 216 automated tests across 16 test modules pass with 100% reliability, covering data adapters, swarm agents, deterministic CPU Dijkstra routing, weather fusion, economic hedging, BKHIT/MST compliance, AIS vessel continuity, intermodal leg generation, and full pilot drills.
 
-### Frontend Type Check & Production Build
+### Frontend Type Check, Automated Tests & Production Build
 ```bash
 cd frontend
+# TypeScript verification (0 errors)
 npx tsc -p tsconfig.json --noEmit
+
+# SpatialHash declutterer & RangeError safety tests
+npm test
+
+# Water-path corridor and estuary routing verification
+npx tsx scripts/test_nautical_corridor.ts
+
+# Fleet telemetry filter and estimated unit viewport verification
+npx tsx scripts/test_phase70_logic.ts
+
+# Production build verification (7/7 static routes)
 npm run build
 ```
 
