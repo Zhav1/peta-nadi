@@ -263,21 +263,33 @@ export function FleetVehicleLayer({
   const cachedWinnersRef = useRef<Set<string>>(new Set());
   const selectedVehicleIdRef = useRef<string | null>(null);
   const isFollowCamActiveRef = useRef<boolean>(false);
+  const lastDeckUpdateRef = useRef<number>(0);
+  const lastPopupSyncRef = useRef<number>(0);
+  const isInteractingRef = useRef<boolean>(false);
 
   selectedVehicleIdRef.current = selectedVehicle?.vehicle.vehicle_id ?? null;
   isFollowCamActiveRef.current = isFollowCamActive;
 
-  // Listen to manual map drag to disengage follow-camera immediately
+  // Listen to manual map gestures to pause heavy deck rebuilding and disengage follow-camera
   useEffect(() => {
     if (!map) return;
 
-    const onDragStart = () => {
+    const onMoveStart = () => {
+      isInteractingRef.current = true;
       setIsFollowCamActive(false);
     };
 
-    map.on('dragstart', onDragStart);
+    const onMoveEnd = () => {
+      isInteractingRef.current = false;
+      // Force next frame to immediately rebuild Deck.gl layers with newly projected screen bounds
+      lastDeckUpdateRef.current = 0;
+    };
+
+    map.on('movestart', onMoveStart);
+    map.on('moveend', onMoveEnd);
     return () => {
-      map.off('dragstart', onDragStart);
+      map.off('movestart', onMoveStart);
+      map.off('moveend', onMoveEnd);
     };
   }, [map]);
 
@@ -425,6 +437,17 @@ export function FleetVehicleLayer({
       const deltaSec = Math.min(elapsedMs / 1000, 0.1);
       lastTimeRef.current = now;
 
+      // Throttle Deck.gl layer updates to ~4 Hz (every 250ms)
+      // and pause heavy layer rebuilding while the user is actively zooming or panning
+      const isInteracting = isInteractingRef.current || map.isMoving() || map.isZooming() || map.isRotating();
+      const timeSinceDeckUpdate = now - lastDeckUpdateRef.current;
+
+      if (timeSinceDeckUpdate < 250 || (isInteracting && timeSinceDeckUpdate < 600)) {
+        animRef.current = requestAnimationFrame(animate);
+        return;
+      }
+      lastDeckUpdateRef.current = now;
+
       const currentZoom = map.getZoom();
       const simSpeedMultiplier = typeof simSpeed === 'number' && simSpeed > 0 ? simSpeed : 1.0;
 
@@ -433,6 +456,14 @@ export function FleetVehicleLayer({
       const pulseData: Array<{
         position: [number, number];
         radius: number;
+        fillColor: [number, number, number, number];
+        lineColor: [number, number, number, number];
+      }> = [];
+      const baseDotsData: Array<{
+        vehicle: FleetVehicle;
+        position: [number, number];
+        heading: number;
+        isSelected: boolean;
         fillColor: [number, number, number, number];
         lineColor: [number, number, number, number];
       }> = [];
@@ -447,7 +478,15 @@ export function FleetVehicleLayer({
       const declutterCandidates: DeclutterItem[] = [];
 
       visibleVehicles.forEach((v, idx) => {
-        let coords = (v.route_geometry?.coordinates || v.path || []) as [number, number][];
+        let coords = (
+          v.route_geometry?.coordinates ||
+          (v as any).route_coordinates ||
+          (Array.isArray((v as any).waypoints)
+            ? (v as any).waypoints.map((w: any) => (Array.isArray(w) ? [w[0], w[1]] : [w.lon ?? w.lng ?? 0, w.lat ?? 0]))
+            : null) ||
+          v.path ||
+          []
+        ) as [number, number][];
 
         // Alternative corridor assignment for rerouted vehicle or demo unit
         if (v.status === 'rerouting' && v.route_geometry?.coordinates && v.route_geometry.coordinates.length > 1) {
@@ -470,95 +509,112 @@ export function FleetVehicleLayer({
         let finalPos: [number, number];
         let finalBearing: number;
 
-        // Extract latest server location fix
+        // Extract latest server location fix (read current_coords first from telemetry_service.py)
         const serverFix: [number, number] =
-          (v as any).current_location?.coordinates
-            ? [(v as any).current_location.coordinates[0], (v as any).current_location.coordinates[1]]
-            : Array.isArray((v as any).location) && (v as any).location.length >= 2
-              ? [(v as any).location[0], (v as any).location[1]]
-              : (v as any).location?.coordinates
-                ? [(v as any).location.coordinates[0], (v as any).location.coordinates[1]]
-                : coords.length > 0
-                  ? coords[Math.floor(coords.length / 2)]
-                  : [100.0, 1.0];
+          Array.isArray((v as any).current_coords) && (v as any).current_coords.length >= 2
+            ? [(v as any).current_coords[0], (v as any).current_coords[1]]
+            : (v as any).current_location?.coordinates
+              ? [(v as any).current_location.coordinates[0], (v as any).current_location.coordinates[1]]
+              : Array.isArray((v as any).location) && (v as any).location.length >= 2
+                ? [(v as any).location[0], (v as any).location[1]]
+                : (v as any).location?.coordinates
+                  ? [(v as any).location.coordinates[0], (v as any).location.coordinates[1]]
+                  : coords.length > 0
+                    ? coords[0]
+                    : [98.6722, 3.5952];
 
-        // Detect whether this vessel/aircraft should use continuous True Course Over Ground dead-reckoning
-        const isSyntheticDiagonal = coords.length <= 3 && calculatePathDistanceKm(coords) < 18;
-        const useContinuousDeadReckoning =
-          v.modality === 'maritime' ||
-          v.modality === 'air' ||
-          (v.tracking_mode === 'LIVE_GPS' && isSyntheticDiagonal);
+        const isLandTruck = v.modality === 'truck' || (v.modality as string) === 'land';
 
-        if (useContinuousDeadReckoning) {
-          // Initialize or update dead reckoning state
-          let drState = deadReckonMapRef.current[v.vehicle_id];
-          if (!drState) {
-            drState = {
-              currentPos: [serverFix[0], serverFix[1]],
-              baseLocation: [serverFix[0], serverFix[1]],
-              lastTimestamp: now,
-            };
-            deadReckonMapRef.current[v.vehicle_id] = drState;
-          } else {
-            const jumpDistance = getHaversineDistanceKm(drState.baseLocation, serverFix);
-            if (jumpDistance > 20) {
-              // Significant telemetry repositioning from backend poll
-              drState.currentPos = [serverFix[0], serverFix[1]];
-              drState.baseLocation = [serverFix[0], serverFix[1]];
+        if (isLandTruck) {
+          // Keep land trucks strictly snapped/interpolated along their Sumatra highway waypoints
+          // NEVER send land trucks into unbounded spherical dead-reckoning drifting into ocean
+          if (coords.length >= 2) {
+            const baseSpeed = v.speed_kmh || 60;
+            const totalDistanceKm = calculatePathDistanceKm(coords);
+            const simScale = 8.0 * simSpeedMultiplier;
+            const increment = v.status === 'anchored' ? 0 : (baseSpeed / 3600) * deltaSec * (simScale / totalDistanceKm);
+
+            const prevProg = progressMapRef.current[v.vehicle_id] ?? (v.progress ?? 0.35);
+            let currentProgress = prevProg + increment;
+            if (currentProgress > 1.0) {
+              currentProgress = 0.0;
+              breadcrumbsRef.current[v.vehicle_id] = [];
             }
-          }
+            progressMapRef.current[v.vehicle_id] = currentProgress;
 
-          const isAnchored = v.status === 'anchored' || (v.modality === 'maritime' && (v.sog_knots || 0) < 0.2);
-          const effectiveSpeedKmh = isAnchored
-            ? 0
-            : v.sog_knots
-              ? v.sog_knots * 1.852
-              : v.ground_speed_kts
-                ? v.ground_speed_kts * 1.852
-                : (v.speed_kmh || (v.modality === 'air' ? 520 : 25));
-
-          // Derive effective bearing: prioritize live sensor cog/heading, then fallback to route azimuth
-          let effectiveBearing = v.cog_deg ?? v.heading_deg ?? (v as any).bearing;
-          if (effectiveBearing === undefined && coords.length >= 2) {
-            const dx = coords[1][0] - coords[0][0];
-            const dy = coords[1][1] - coords[0][1];
-            effectiveBearing = (Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360;
-          }
-          finalBearing = effectiveBearing ?? 0;
-
-          if (effectiveSpeedKmh > 0) {
-            const speedScale = v.modality === 'air' ? 2.5 : 4.0;
-            const distKm = (effectiveSpeedKmh / 3600) * deltaSec * simSpeedMultiplier * speedScale;
-            finalPos = deadReckonPosition(drState.currentPos, effectiveBearing, distKm);
-
-            // Regional bounds check for Sumatra maritime corridor & FIR (lon: 94-109, lat: -7 to 7)
-            if (finalPos[0] < 94.0) finalPos[0] += 14.5;
-            if (finalPos[0] > 109.0) finalPos[0] -= 14.5;
-            if (finalPos[1] < -6.8) finalPos[1] += 13.0;
-            if (finalPos[1] > 6.8) finalPos[1] -= 13.0;
-
-            drState.currentPos = finalPos;
+            const state = calculateRouteProgressPosition(coords, currentProgress);
+            finalPos = state.currentPosition;
+            finalBearing = state.bearing;
           } else {
-            finalPos = drState.currentPos;
+            finalPos = serverFix;
+            finalBearing = v.heading_deg ?? (v as any).bearing ?? 0;
           }
         } else {
-          // Surveyed Trans-Sumatra road corridor progression
-          const baseSpeed = v.speed_kmh || 60;
-          const totalDistanceKm = calculatePathDistanceKm(coords);
-          const simScale = 8.0 * simSpeedMultiplier;
-          const increment = v.status === 'anchored' ? 0 : (baseSpeed / 3600) * deltaSec * (simScale / totalDistanceKm);
+          // Maritime & Air Kinematics
+          const hasSurveyedCorridor = coords.length >= 2 && calculatePathDistanceKm(coords) >= 15;
+          if (v.modality === 'maritime' && hasSurveyedCorridor) {
+            // Surveyed channel navigation (e.g. Belawan channel or Sunda Strait ferry route)
+            const baseSpeed = (v.sog_knots ? v.sog_knots * 1.852 : v.speed_kmh) || 22;
+            const totalDistanceKm = calculatePathDistanceKm(coords);
+            const simScale = 4.0 * simSpeedMultiplier;
+            const increment = v.status === 'anchored' ? 0 : (baseSpeed / 3600) * deltaSec * (simScale / totalDistanceKm);
 
-          const prevProg = progressMapRef.current[v.vehicle_id] ?? 0.35;
-          let currentProgress = prevProg + increment;
-          if (currentProgress > 1.0) {
-            currentProgress = 0.0;
-            breadcrumbsRef.current[v.vehicle_id] = [];
+            const prevProg = progressMapRef.current[v.vehicle_id] ?? (v.progress ?? 0.35);
+            let currentProgress = prevProg + increment;
+            if (currentProgress > 1.0) {
+              currentProgress = 0.0;
+              breadcrumbsRef.current[v.vehicle_id] = [];
+            }
+            progressMapRef.current[v.vehicle_id] = currentProgress;
+
+            const state = calculateRouteProgressPosition(coords, currentProgress);
+            finalPos = state.currentPosition;
+            finalBearing = state.bearing;
+          } else {
+            // Dead-reckoning for flights or open sea vessels
+            let drState = deadReckonMapRef.current[v.vehicle_id];
+            if (!drState) {
+              drState = {
+                currentPos: [serverFix[0], serverFix[1]],
+                baseLocation: [serverFix[0], serverFix[1]],
+                lastTimestamp: now,
+              };
+              deadReckonMapRef.current[v.vehicle_id] = drState;
+            } else {
+              const jumpDistance = getHaversineDistanceKm(drState.baseLocation, serverFix);
+              if (jumpDistance > 20) {
+                drState.currentPos = [serverFix[0], serverFix[1]];
+                drState.baseLocation = [serverFix[0], serverFix[1]];
+              }
+            }
+
+            const isAnchored = v.status === 'anchored' || (v.modality === 'maritime' && (v.sog_knots || 0) < 0.2);
+            const effectiveSpeedKmh = isAnchored
+              ? 0
+              : v.sog_knots
+                ? v.sog_knots * 1.852
+                : v.ground_speed_kts
+                  ? v.ground_speed_kts * 1.852
+                  : (v.speed_kmh || (v.modality === 'air' ? 520 : 25));
+
+            const effectiveBearing = v.cog_deg ?? v.heading_deg ?? (v as any).bearing ?? 0;
+            finalBearing = effectiveBearing;
+
+            if (effectiveSpeedKmh > 0) {
+              const speedScale = v.modality === 'air' ? 2.5 : 4.0;
+              const distKm = (effectiveSpeedKmh / 3600) * deltaSec * simSpeedMultiplier * speedScale;
+              finalPos = deadReckonPosition(drState.currentPos, effectiveBearing, distKm);
+
+              // Regional bounding clamp — removed crude longitude wraparound (+= 14.5 / -= 14.5)
+              // that caused vessels in Malacca Strait to teleport across Sumatra mainland
+              finalPos[0] = Math.max(94.0, Math.min(109.0, finalPos[0]));
+              finalPos[1] = Math.max(-7.0, Math.min(7.0, finalPos[1]));
+
+              drState.currentPos = finalPos;
+            } else {
+              finalPos = drState.currentPos;
+            }
           }
-          progressMapRef.current[v.vehicle_id] = currentProgress;
-
-          const state = calculateRouteProgressPosition(coords, currentProgress);
-          finalPos = state.currentPosition;
-          finalBearing = state.bearing;
         }
 
         // Maintain rolling circular history of coordinates for breadcrumb wake/trail
@@ -625,6 +681,24 @@ export function FleetVehicleLayer({
           });
         }
 
+        // Persistent base dot for all vehicles (always visible at all zoom levels)
+        const dotColor: [number, number, number, number] = isSelected
+          ? [0, 240, 255, 255]
+          : v.modality === 'maritime'
+            ? [56, 189, 248, 230]
+            : v.modality === 'air'
+              ? [192, 132, 252, 230]
+              : [52, 211, 153, 230];
+
+        baseDotsData.push({
+          vehicle: v,
+          position: finalPos,
+          heading: finalBearing,
+          isSelected,
+          fillColor: dotColor,
+          lineColor: [12, 16, 23, 220],
+        });
+
         // Vehicle sprite item
         const iconKey = isSelected ? `${v.modality}-selected` : v.modality;
         const iconSize = getVehicleIconSize(v.modality, currentZoom, isSelected);
@@ -655,6 +729,17 @@ export function FleetVehicleLayer({
             v.cargo?.toLowerCase().includes('cpo'))
         ) {
           priority = PRIORITY_MAJOR_VESSEL;
+        } else if (isLandTruck) {
+          // Strategic cargo trucks on Trans-Sumatra Highway receive priority boost
+          if (
+            v.cargo?.toLowerCase().includes('beras') ||
+            v.cargo?.toLowerCase().includes('bulog') ||
+            v.cargo?.toLowerCase().includes('solar') ||
+            v.cargo?.toLowerCase().includes('sayur') ||
+            v.cargo?.toLowerCase().includes('sembako')
+          ) {
+            priority = 52;
+          }
         }
 
         declutterCandidates.push({
@@ -665,33 +750,45 @@ export function FleetVehicleLayer({
           width: 90,
           height: 24,
           category: 'fleet',
+          modality: isLandTruck ? 'truck' : v.modality,
           text: v.callsign || v.name || v.vehicle_id,
           coords: finalPos,
         });
 
-        // Update selected vehicle live position & Follow camera tracking
+        // Throttled selected vehicle live position sync (~2 Hz) & Follow Camera easeTo
         if (isSelected) {
-          setSelectedVehicle((prev) => {
-            if (!prev || prev.vehicle.vehicle_id !== v.vehicle_id) return prev;
-            return {
-              ...prev,
-              currentPos: finalPos,
-              bearing: finalBearing,
-            };
-          });
+          if (now - lastPopupSyncRef.current >= 500) {
+            lastPopupSyncRef.current = now;
+            setSelectedVehicle((prev) => {
+              if (!prev || prev.vehicle.vehicle_id !== v.vehicle_id) return prev;
+              if (
+                Math.abs(prev.currentPos[0] - finalPos[0]) < 0.0001 &&
+                Math.abs(prev.currentPos[1] - finalPos[1]) < 0.0001 &&
+                Math.abs(prev.bearing - finalBearing) < 1
+              ) {
+                return prev;
+              }
+              return {
+                ...prev,
+                currentPos: finalPos,
+                bearing: finalBearing,
+              };
+            });
+          }
 
           if (isFollowCamActiveRef.current) {
-            const currentCenter = map.getCenter();
-            const lerpFactor = 0.08;
-            const nextLng = currentCenter.lng + (finalPos[0] - currentCenter.lng) * lerpFactor;
-            const nextLat = currentCenter.lat + (finalPos[1] - currentCenter.lat) * lerpFactor;
-            map.setCenter([nextLng, nextLat]);
+            map.easeTo({
+              center: finalPos,
+              duration: 250,
+              easing: (t) => t,
+            });
           }
         }
       });
 
       // SpatialHash Anti-Clutter Arbitration:
       // Cache arbitration winners and re-arbitrate only periodically (~350ms) or when camera zoom changes
+      // Macro zoom (z < 7.5) uses balanced per-modality quota (trucks: 8, maritime: 9, air: 7)
       const isMacro = currentZoom < 7.5;
       const shouldReArbitrate =
         now - lastArbitrateTimeRef.current > 350 ||
@@ -791,6 +888,27 @@ export function FleetVehicleLayer({
           lineWidthUnits: 'pixels',
           lineWidthMinPixels: 1.5,
         }),
+        new ScatterplotLayer({
+          id: 'deck-fleet-dots',
+          data: baseDotsData,
+          getPosition: (d: any) => d.position,
+          getRadius: (d: any) => (d.isSelected ? 6 : 4),
+          radiusUnits: 'pixels',
+          radiusMinPixels: 3,
+          getFillColor: (d: any) => d.fillColor,
+          getLineColor: (d: any) => d.lineColor,
+          stroked: true,
+          filled: true,
+          lineWidthUnits: 'pixels',
+          lineWidthMinPixels: 1.5,
+          billboard: true,
+          pickable: true,
+          onClick: (info: any) => {
+            if (info.object) {
+              handleVehicleSelect(info.object.vehicle, info.object.position, info.object.heading);
+            }
+          },
+        }),
         new IconLayer({
           id: 'deck-fleet-icons',
           data: iconData,
@@ -802,7 +920,7 @@ export function FleetVehicleLayer({
           getSize: (d: any) => d.size,
           sizeUnits: 'pixels',
           sizeMinPixels: 14,
-          billboard: false,
+          billboard: true,
           pickable: true,
           autoHighlight: true,
           highlightColor: [0, 240, 255, 60],
@@ -821,6 +939,7 @@ export function FleetVehicleLayer({
           getSize: (d: any) => d.size,
           sizeUnits: 'pixels',
           sizeMinPixels: 9,
+          billboard: true,
           fontFamily: 'DIN Pro Medium, Arial Unicode MS Regular, sans-serif',
           fontWeight: '600',
           getTextAnchor: 'start',

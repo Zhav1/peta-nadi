@@ -18,7 +18,8 @@ import httpx
 from app.services.news_aggregator import (
     fetch_all_multi_outlet_news,
     upsert_articles_to_supabase,
-    resolve_canonical_article_url
+    resolve_canonical_article_url,
+    resolve_canonical_article_url_async
 )
 from app.nlp.news_extractor import extract_structured_news
 from app.services.redis_client import get_redis
@@ -69,14 +70,16 @@ class UnifiedNewsIngestor:
         structured_results = await asyncio.gather(*tasks, return_exceptions=True)
         structured_articles = [a for a in structured_results if isinstance(a, dict)]
 
-        # Ensure canonical article URLs and permalinks are resolved across all items
-        for art in structured_articles:
+        # Ensure canonical article URLs and permalinks are resolved asynchronously across all items
+        async def resolve_item(art: Dict[str, Any]):
             raw_url = art.get("link") or art.get("url") or ""
             title = art.get("title", "")
             source = art.get("source", "")
-            resolved_url = resolve_canonical_article_url(raw_url, title, source)
+            resolved_url = await resolve_canonical_article_url_async(raw_url, title, source)
             art["link"] = resolved_url
             art["url"] = resolved_url
+
+        await asyncio.gather(*(resolve_item(a) for a in structured_articles))
 
         # 3. Verify original source links (dead / alive / unknown provenance)
         await self._attach_link_liveness(structured_articles)
@@ -116,9 +119,10 @@ class UnifiedNewsIngestor:
     async def _is_link_alive(self, url: str, client: "httpx.AsyncClient") -> str:
         """Probes a source URL and returns `alive`, `dead`, or `unknown`.
 
-        Dead means the server answered with status >= 400, redirected to the site root,
-        or redirected to another host. Timeouts and transport errors stay `unknown`:
-        the source is never declared expired without a response that proves it.
+        Dead means the server answered with explicit 404/410, redirected to site root,
+        or redirected to another host. Cloud anti-bot barriers (401, 403, 429) or consent
+        pages on deep article paths remain `alive` so valid news remains clickable.
+        Timeouts and transport errors stay `unknown`.
         """
         cached = self._link_liveness_cache.get(url)
         if cached and (time.monotonic() - cached[1]) < self.LINK_LIVENESS_TTL_SECONDS:
@@ -128,14 +132,22 @@ class UnifiedNewsIngestor:
         try:
             response = await client.get(url)
             final_url = str(response.url)
-            if response.status_code >= 400:
+            final_path = urlparse(final_url).path
+            if response.status_code in (404, 410):
                 verdict = self.LINK_DEAD
-            elif urlparse(final_url).path in ("", "/"):
+            elif final_path in ("", "/"):
                 verdict = self.LINK_DEAD
             elif not self._same_host(url, final_url):
-                verdict = self.LINK_DEAD
-            else:
+                if any(x in final_url for x in ("consent", "captcha", "cloudflare", "login", "auth")):
+                    verdict = self.LINK_ALIVE
+                else:
+                    verdict = self.LINK_DEAD
+            elif response.status_code in (401, 403, 429):
                 verdict = self.LINK_ALIVE
+            elif response.status_code < 400:
+                verdict = self.LINK_ALIVE
+            else:
+                verdict = self.LINK_UNKNOWN
         except httpx.TimeoutException:
             logger.debug(f"News link liveness probe timed out for {url}")
         except httpx.HTTPError as exc:
@@ -157,10 +169,12 @@ class UnifiedNewsIngestor:
             timeout=self.LINK_CHECK_TIMEOUT_SECONDS,
         ) as client:
             async def probe(article: Dict[str, Any]) -> None:
-                link = article.get("link")
+                link = article.get("link") or article.get("url")
                 if not link:
                     article["link_alive"] = self.LINK_UNKNOWN
                     return
+                article["link"] = str(link)
+                article["url"] = str(link)
                 async with semaphore:
                     article["link_alive"] = await self._is_link_alive(str(link), client)
 

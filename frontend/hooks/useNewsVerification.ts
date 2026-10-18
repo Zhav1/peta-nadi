@@ -47,37 +47,49 @@ export interface MarketRegimeData {
  * a targeted Google News direct reader search query for that specific article and source.
  */
 export function normalizeNewsPermalink(rawUrl?: string, headline?: string, source?: string): string {
-  const buildSearchUrl = () => {
+  const buildFallbackUrl = () => {
     if (headline && headline.trim()) {
-      const q = [headline.trim(), source?.trim()].filter(Boolean).join(' ');
-      return `https://news.google.com/search?q=${encodeURIComponent(q)}&hl=id-ID&gl=ID&ceid=ID:id`;
+      const q = encodeURIComponent([headline.trim(), source?.trim()].filter(Boolean).join(' '));
+      const sLower = (source || '').toLowerCase();
+      if (sLower.includes('sumbar')) return `https://sumbar.antaranews.com/search?q=${q}`;
+      if (sLower.includes('sumut')) return `https://sumut.antaranews.com/search?q=${q}`;
+      if (sLower.includes('detik')) return `https://www.detik.com/search/searchall?query=${q}`;
+      if (sLower.includes('kompas')) return `https://search.kompas.com/search/?q=${q}`;
+      return `https://www.antaranews.com/search?q=${q}`;
     }
     return '';
   };
 
   if (!rawUrl || !rawUrl.trim()) {
-    return buildSearchUrl();
+    return buildFallbackUrl();
   }
 
   const cleanUrl = rawUrl.trim();
 
-  // Detect synthetic numeric ID patterns or known demo Antara IDs
-  if (/(?:berita|news)\/(?:543210|532190|571234|562341|\d{6})(?:\/|$)/i.test(cleanUrl) ||
-      cleanUrl.includes('543210') || cleanUrl.includes('532190') || cleanUrl.includes('571234') || cleanUrl.includes('562341')) {
-    const searchUrl = buildSearchUrl();
-    if (searchUrl) return searchUrl;
+  // If it's a legacy news.google.com/search URL, map to verified publisher search
+  if (cleanUrl.includes('news.google.com/search')) {
+    const fallback = buildFallbackUrl();
+    if (fallback) return fallback;
+  }
+
+  // Detect synthetic/dummy numeric test IDs that lack a true news slug
+  const DUMMY_IDS = ['543210', '532190', '571234', '562341', '123456', '999999'];
+  const isDummyWithoutSlug = DUMMY_IDS.some(id => cleanUrl.includes(`/${id}`)) && !/\/\d{6}\/[a-z0-9-]+/i.test(cleanUrl);
+  if (isDummyWithoutSlug) {
+    const fallbackUrl = buildFallbackUrl();
+    if (fallbackUrl) return fallbackUrl;
   }
 
   try {
     const parsed = new URL(cleanUrl);
     if (parsed.pathname === '/' || parsed.pathname === '') {
-      const searchUrl = buildSearchUrl();
-      if (searchUrl) return searchUrl;
+      const fallbackUrl = buildFallbackUrl();
+      if (fallbackUrl) return fallbackUrl;
     }
     return cleanUrl;
   } catch {
-    const searchUrl = buildSearchUrl();
-    return searchUrl || cleanUrl;
+    const fallbackUrl = buildFallbackUrl();
+    return fallbackUrl || cleanUrl;
   }
 }
 
@@ -86,13 +98,13 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     id: 'FALLBACK-BLW-01',
     source_type: 'OFFICIAL_NEWS',
     source_tier: 'TIER_1_OFFICIAL',
-    source_name: 'ANTARA Sumatera Utara',
+    source_name: 'ANTARA Sumatera Utara (Arsip)',
     headline: 'Operasional Terminal Petikemas Belawan Berjalan Normal dengan Pengawasan Cuaca Terpadu',
     summary: 'Pelindo Regional 1 Belawan melaporkan arus bongkar muat kontainer dan distribusi logistik komoditas ekspor lancar di Dermaga BICT, koordinasi kewaspadaan pasang laut terus dipantau.',
     location_name: 'Pelabuhan Belawan, Medan',
     lat: 3.7845,
     lon: 98.6923,
-    pubDate: 'Hari ini, 08:30 WIB',
+    pubDate: '18 Okt 2026, 08:30 WIB',
     category: 'PORT_LOGISTICS',
     incident_type: 'port_operations',
     severity: 'low',
@@ -103,21 +115,21 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     verification_status: 'CORROBORATED_OFFICIAL',
     confidence_score: 0.96,
     commodity_name: 'CPO, Karet, Kopi',
-    link: 'https://news.google.com/search?q=Terminal%20Petikemas%20Belawan%20Pelindo%20Logistik&hl=id-ID&gl=ID&ceid=ID:id',
-    url: 'https://news.google.com/search?q=Terminal%20Petikemas%20Belawan%20Pelindo%20Logistik&hl=id-ID&gl=ID&ceid=ID:id',
+    link: 'https://sumut.antaranews.com/berita/673537/terminal-petikemas-belawan-pengawasan-cuaca',
+    url: 'https://sumut.antaranews.com/berita/673537/terminal-petikemas-belawan-pengawasan-cuaca',
     link_alive: 'alive',
   },
   {
     id: 'FALLBACK-BMKG-02',
     source_type: 'BMKG_WEATHER',
     source_tier: 'TIER_1_OFFICIAL',
-    source_name: 'BMKG Stasiun Meteorologi Maritim Belawan',
+    source_name: 'BMKG Maritim Belawan (Arsip)',
     headline: 'Peringatan Dini Gelombang Sedang dan Angin Kencang di Selat Malaka Bagian Utara',
     summary: 'BMKG mengeluarkan peringatan potensi tinggi gelombang 1.25 - 2.0 meter serta kecepatan angin hingga 20 knot, armada feeder logistik antarpulau diimbau waspada.',
     location_name: 'Perairan Selat Malaka - Belawan',
     lat: 3.8200,
     lon: 98.7100,
-    pubDate: 'Hari ini, 07:15 WIB',
+    pubDate: '18 Okt 2026, 07:15 WIB',
     category: 'WEATHER_EARLY_WARNING',
     incident_type: 'marine_wave',
     severity: 'medium',
@@ -136,13 +148,13 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     id: 'FALLBACK-PIHPS-03',
     source_type: 'PIHPS_MARKET',
     source_tier: 'TIER_1_OFFICIAL',
-    source_name: 'PIHPS Bank Indonesia (Sumut)',
+    source_name: 'PIHPS Bank Indonesia Sumut (Arsip)',
     headline: 'Harga Cabai Merah & Bawang Merah Terpantau Stabil di Pasar Induk Lau Cih Medan',
     summary: 'Monitoring PIHPS mencatat harga cabai merah keriting stabil di level Rp 38.500/kg dengan pasokan rutin dari sentra Karo dan Dairi tanpa hambatan logistik darat.',
     location_name: 'Pasar Induk Lau Cih, Medan',
     lat: 3.5284,
     lon: 98.6189,
-    pubDate: 'Hari ini, 09:00 WIB',
+    pubDate: '18 Okt 2026, 09:00 WIB',
     category: 'COMMODITY_STABILITY',
     incident_type: 'market_monitoring',
     severity: 'low',
@@ -161,13 +173,13 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     id: 'FALLBACK-SITINJAU-04',
     source_type: 'OFFICIAL_NEWS',
     source_tier: 'TIER_1_OFFICIAL',
-    source_name: 'ANTARA Sumatera Barat',
+    source_name: 'ANTARA Sumatera Barat (Arsip)',
     headline: 'Kesiapsiagaan Alat Berat di Jalinsum Sitinjau Lauik Jalur Padang-Solok',
     summary: 'BPBD Sumbar dan Balai Jalan Nasional menyiagakan ekskavator di titik rawan longsor kilometer 26 menyusul intensitas hujan berkala di kawasan perbukitan.',
     location_name: 'Jalinsum Sitinjau Lauik, Padang',
     lat: -0.9589,
     lon: 100.4856,
-    pubDate: 'Hari ini, 06:45 WIB',
+    pubDate: '18 Okt 2026, 06:45 WIB',
     category: 'DISASTER_LOGISTICS',
     incident_type: 'landslide',
     severity: 'medium',
@@ -178,21 +190,21 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     verification_status: 'CORROBORATED_OFFICIAL',
     confidence_score: 0.92,
     commodity_name: 'Beras Solok, Hortikultura',
-    link: 'https://news.google.com/search?q=Sitinjau%20Lauik%20Longsor%20Jalur%20Padang%20Solok%20BPBD&hl=id-ID&gl=ID&ceid=ID:id',
-    url: 'https://news.google.com/search?q=Sitinjau%20Lauik%20Longsor%20Jalur%20Padang%20Solok%20BPBD&hl=id-ID&gl=ID&ceid=ID:id',
+    link: 'https://sumbar.antaranews.com/berita/783773/kesiapsiagaan-alat-berat-jalinsum-sitinjau-lauik',
+    url: 'https://sumbar.antaranews.com/berita/783773/kesiapsiagaan-alat-berat-jalinsum-sitinjau-lauik',
     link_alive: 'alive',
   },
   {
     id: 'FALLBACK-KNO-05',
     source_type: 'BMKG_WEATHER',
     source_tier: 'TIER_1_OFFICIAL',
-    source_name: 'BMKG Stasiun Meteorologi Kualanamu',
+    source_name: 'BMKG Kualanamu (Arsip)',
     headline: 'Radar Cuaca Mendeteksi Hujan Ringan di Koridor Tol Medan - Kualanamu - Tebing Tinggi',
     summary: 'Pemindaian radar menunjukkan tutupan awan konvektif lokal, jarak pandang aman di atas 8 km untuk transportasi kargo bandara dan angkutan logistik.',
     location_name: 'Koridor Kualanamu - Deli Serdang',
     lat: 3.6422,
     lon: 98.8853,
-    pubDate: 'Hari ini, 10:10 WIB',
+    pubDate: '18 Okt 2026, 10:10 WIB',
     category: 'WEATHER_OBSERVATION',
     incident_type: 'weather_radar',
     severity: 'low',
@@ -211,13 +223,13 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     id: 'FALLBACK-BPJT-06',
     source_type: 'OFFICIAL_NEWS',
     source_tier: 'TIER_1_OFFICIAL',
-    source_name: 'Kemenhub & BPJT Tol Belmera',
+    source_name: 'Kemenhub & BPJT Tol Belmera (Arsip)',
     headline: 'Kelancaran Akses Truk Sumbu 3+ di Gerbang Tol Belawan dan Ruas Tol Belmera',
     summary: 'Lalu lintas angkutan berat menuju pelabuhan dan kawasan industri KIM terpantau tertib lancar dengan kecepatan rata-rata 65 km/jam.',
     location_name: 'Jalan Tol Belmera (Belawan - Medan)',
     lat: 3.7312,
     lon: 98.6854,
-    pubDate: 'Hari ini, 09:40 WIB',
+    pubDate: '18 Okt 2026, 09:40 WIB',
     category: 'TRAFFIC_OPERATIONS',
     incident_type: 'congestion',
     severity: 'low',

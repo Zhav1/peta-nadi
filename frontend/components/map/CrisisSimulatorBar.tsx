@@ -4,8 +4,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   Compass,
   Truck,
-  Ship,
-  Plane,
   ChevronDown,
   MapPin,
   RotateCcw,
@@ -55,6 +53,7 @@ export interface CrisisSimulatorBarProps {
   setSelectedModality?: (modality: TransportModality) => void;
   corridorVisibility?: CorridorVisibilityState;
   onToggleCorridor?: (corridor: 'land' | 'sea' | 'air') => void;
+  onResetCorridorVisibility?: () => void;
   activeCorridors?: RouteRecommendation[];
   onResetNodes?: () => void;
   isSidebarOpen?: boolean;
@@ -78,6 +77,7 @@ export function CrisisSimulatorBar({
   setSelectedModality,
   corridorVisibility = { land: true, sea: true, air: true },
   onToggleCorridor,
+  onResetCorridorVisibility,
   activeCorridors = [],
   onResetNodes,
   isSidebarOpen = false,
@@ -113,18 +113,10 @@ export function CrisisSimulatorBar({
   const originName = originNodeId ? HUB_NODES[originNodeId]?.name || originNodeId : null;
   const destName = destNodeId ? HUB_NODES[destNodeId]?.name || destNodeId : null;
 
-  // Find Sea and Air viability from active computed corridors
-  const seaCorridor = activeCorridors.find(
-    (c) => c.corridor_type === 'sea_intermodal' || c.modality === 'maritime'
-  );
-  const isSeaViable = seaCorridor ? seaCorridor.viable !== false : true;
-  const seaNonViableReason = seaCorridor?.non_viable_reason;
-
-  const airCorridor = activeCorridors.find(
-    (c) => c.corridor_type === 'air_intermodal' || c.modality === 'air'
-  );
-  const isAirViable = airCorridor ? airCorridor.viable !== false : true;
-  const airNonViableReason = airCorridor?.non_viable_reason;
+  const hiddenCount =
+    (!corridorVisibility.land ? 1 : 0) +
+    (!corridorVisibility.sea ? 1 : 0) +
+    (!corridorVisibility.air ? 1 : 0);
 
   const togglePopover = (popover: 'nodes' | 'disruption' | 'radius' | 'speed') => {
     setActivePopover((prev) => (prev === popover ? null : popover));
@@ -145,75 +137,18 @@ export function CrisisSimulatorBar({
     >
       {/* Floating Action Bubble Pills Row */}
       <div className={pillsRowClass}>
-        
-        {/* 1. Simultaneous Corridor Visibility Toggle Pills */}
-        <div className="flex items-center gap-1.5 p-0.5 rounded-md bg-[#121822]/60 border border-white/5">
-          {/* A. Darat (Truck) */}
+        {/* Reset Hidden Corridors Pill (shows only when user has hidden any route corridors on map) */}
+        {hiddenCount > 0 && (
           <button
             type="button"
-            onClick={() => onToggleCorridor?.('land')}
-            className={`cursor-pointer px-2.5 py-1 rounded text-xs font-sans font-medium transition-all duration-200 flex items-center gap-1.5 ${
-              corridorVisibility.land
-                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shadow-sm'
-                : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent opacity-60'
-            }`}
-            title="Toggle Visibilitas Koridor Darat (Utama & Detour)"
+            onClick={() => onResetCorridorVisibility?.()}
+            className="cursor-pointer px-3 py-1.5 rounded-md backdrop-blur-md bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-xs font-sans font-medium transition-all duration-200 flex items-center gap-1.5 shadow-sm"
+            title="Tampilkan kembali seluruh koridor rute yang disembunyikan"
           >
-            <span className="w-2 h-2 rounded-full bg-[#10B981] shrink-0" />
-            <Truck className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Darat</span>
+            <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+            <span>Tampilkan Semua Rute ({hiddenCount} Tersembunyi)</span>
           </button>
-
-          {/* B. Laut + Darat (Maritime Intermodal) */}
-          <button
-            type="button"
-            disabled={!isSeaViable}
-            onClick={() => isSeaViable && onToggleCorridor?.('sea')}
-            className={`px-2.5 py-1 rounded text-xs font-sans font-medium transition-all duration-200 flex items-center gap-1.5 ${
-              !isSeaViable
-                ? 'opacity-40 cursor-not-allowed bg-slate-900/40 text-slate-500 border border-slate-800'
-                : corridorVisibility.sea
-                  ? 'cursor-pointer bg-blue-500/20 text-blue-300 border border-blue-500/30 shadow-sm'
-                  : 'cursor-pointer text-slate-400 hover:text-white hover:bg-white/5 border border-transparent opacity-60'
-            }`}
-            title={!isSeaViable ? (seaNonViableReason || 'Rute laut tidak efisien untuk pasangan rute ini') : 'Toggle Visibilitas Koridor Intermodal Laut + Darat'}
-          >
-            <span className="flex items-center -space-x-1 shrink-0">
-              <span className="w-2 h-2 rounded-full bg-[#3B82F6]" />
-              <span className="w-2 h-2 rounded-full bg-[#10B981]" />
-            </span>
-            <Ship className="w-3.5 h-3.5 text-blue-400" />
-            <span>Laut + Darat</span>
-            {!isSeaViable && (
-              <span className="text-[10px] font-mono text-amber-400/80 bg-amber-400/10 px-1 rounded">N/A</span>
-            )}
-          </button>
-
-          {/* C. Udara + Darat (Air Intermodal) */}
-          <button
-            type="button"
-            disabled={!isAirViable}
-            onClick={() => isAirViable && onToggleCorridor?.('air')}
-            className={`px-2.5 py-1 rounded text-xs font-sans font-medium transition-all duration-200 flex items-center gap-1.5 ${
-              !isAirViable
-                ? 'opacity-40 cursor-not-allowed bg-slate-900/40 text-slate-500 border border-slate-800'
-                : corridorVisibility.air
-                  ? 'cursor-pointer bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 shadow-sm'
-                  : 'cursor-pointer text-slate-400 hover:text-white hover:bg-white/5 border border-transparent opacity-60'
-            }`}
-            title={!isAirViable ? (airNonViableReason || 'Rute udara tidak efisien untuk pasangan rute ini') : 'Toggle Visibilitas Koridor Intermodal Udara + Darat'}
-          >
-            <span className="flex items-center -space-x-1 shrink-0">
-              <span className="w-2 h-2 rounded-full bg-[#00F0FF]" />
-              <span className="w-2 h-2 rounded-full bg-[#10B981]" />
-            </span>
-            <Plane className="w-3.5 h-3.5 text-sky-400" />
-            <span>Udara + Darat</span>
-            {!isAirViable && (
-              <span className="text-[10px] font-mono text-amber-400/80 bg-amber-400/10 px-1 rounded">N/A</span>
-            )}
-          </button>
-        </div>
+        )}
 
         {/* 2. Node Selector Bubble Pill */}
         <div className="relative">

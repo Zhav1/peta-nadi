@@ -32,6 +32,11 @@ import {
   Flag,
   Loader2,
   Navigation,
+  Truck,
+  Ship,
+  Plane,
+  EyeOff,
+  RotateCcw,
 } from 'lucide-react';
 
 import type {
@@ -75,6 +80,8 @@ export interface CrisisMapProps {
   isRightSidebarOpen?: boolean;
   mapLegendSlot?: React.ReactNode;
   corridorVisibility?: { land: boolean; sea: boolean; air: boolean };
+  onToggleCorridor?: (corridor: 'land' | 'sea' | 'air') => void;
+  onResetCorridorVisibility?: () => void;
 }
 
 const INITIAL_CENTER: [number, number] = [100.5, 0.5];
@@ -137,6 +144,8 @@ export default function CrisisMap({
   isRightSidebarOpen = false,
   mapLegendSlot,
   corridorVisibility = { land: true, sea: true, air: true },
+  onToggleCorridor,
+  onResetCorridorVisibility,
 }: CrisisMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   void isLeftSidebarCollapsed;
@@ -170,6 +179,19 @@ export default function CrisisMap({
     province?: string;
     screenPos?: { x: number; y: number };
   } | null>(null);
+
+  // On-Map Contextual Route Corridor Popover State
+  const [selectedRoutePopover, setSelectedRoutePopover] = useState<{
+    routeIndex: number;
+    route: RouteRecommendation;
+    lngLat: [number, number];
+    screenPos: { x: number; y: number };
+  } | null>(null);
+
+  // User-hidden route corridors state
+  const [hiddenRouteIndices, setHiddenRouteIndices] = useState<Set<number>>(new Set());
+  const activeRoutesRef = useRef<RouteRecommendation[]>(activeRoutes);
+  activeRoutesRef.current = activeRoutes;
 
   // Custom User Pinned Points on Map (Origins, Dests, POIs)
   const [customPinnedPoints, setCustomPinnedPoints] = useState<Array<{
@@ -398,13 +420,15 @@ export default function CrisisMap({
         },
       });
 
-      // 2. Active Route Paths Layer
+      // 2. Active Route Paths Layers (Solid Active, Dashed Alternative, High-Hit-Target Hit Layer)
       map.addSource('route-paths-source', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
       });
+
+      // 2a. Wide transparent hit layer for effortless clicking
       map.addLayer({
-        id: 'route-paths-line',
+        id: 'route-paths-hit',
         type: 'line',
         source: 'route-paths-source',
         layout: {
@@ -412,9 +436,44 @@ export default function CrisisMap({
           'line-join': 'round',
         },
         paint: {
-          'line-color': ['coalesce', ['get', 'color'], '#00f0ff'],
-          'line-width': ['case', ['get', 'isActive'], 6, 3.5],
-          'line-opacity': ['case', ['get', 'isActive'], 0.95, 0.45],
+          'line-color': '#ffffff',
+          'line-width': 18,
+          'line-opacity': 0.001,
+        },
+      });
+
+      // 2b. Solid active route corridor
+      map.addLayer({
+        id: 'route-paths-line',
+        type: 'line',
+        source: 'route-paths-source',
+        filter: ['==', ['get', 'isActive'], true],
+        layout: {
+          'line-cap': 'round',
+          'line-join': 'round',
+        },
+        paint: {
+          'line-color': ['coalesce', ['get', 'color'], '#10b981'],
+          'line-width': 6,
+          'line-opacity': 0.95,
+        },
+      });
+
+      // 2c. Distinct dashed alternative route corridors
+      map.addLayer({
+        id: 'route-paths-alternative',
+        type: 'line',
+        source: 'route-paths-source',
+        filter: ['==', ['get', 'isActive'], false],
+        layout: {
+          'line-cap': 'round',
+          'line-join': 'round',
+        },
+        paint: {
+          'line-color': ['coalesce', ['get', 'color'], '#38bdf8'],
+          'line-width': 4,
+          'line-opacity': 0.70,
+          'line-dasharray': [2, 2],
         },
       });
 
@@ -737,21 +796,38 @@ export default function CrisisMap({
         }
       });
 
-      // Route line click handler
-      map.on('click', 'route-paths-line', (e) => {
+      // Route line click handler (opens on-map contextual popover)
+      const handleRouteClick = (e: mapboxgl.MapLayerMouseEvent) => {
         if (isClickTargetingRef.current) return;
         if (e.features && e.features[0]) {
-          const routeIdx = e.features[0].properties?.routeIndex;
-          if (routeIdx !== undefined && onSelectRouteRef.current) {
-            onSelectRouteRef.current(routeIdx);
+          const props = e.features[0].properties;
+          const origIdx = Number(props?.originalRouteIndex ?? props?.routeIndex);
+          if (!isNaN(origIdx) && activeRoutesRef.current[origIdx]) {
+            const targetRoute = activeRoutesRef.current[origIdx];
+            setSelectedRoutePopover({
+              routeIndex: origIdx,
+              route: targetRoute,
+              lngLat: [e.lngLat.lng, e.lngLat.lat],
+              screenPos: { x: e.point.x, y: e.point.y },
+            });
           }
         }
-      });
-      map.on('mouseenter', 'route-paths-line', () => {
+      };
+
+      map.on('click', 'route-paths-line', handleRouteClick);
+      map.on('click', 'route-paths-alternative', handleRouteClick);
+      map.on('click', 'route-paths-hit', handleRouteClick);
+
+      const setRoutePointer = () => {
         if (mapRef.current) mapRef.current.getCanvas().style.cursor = 'pointer';
-      });
-      map.on('mouseleave', 'route-paths-line', () => {
+      };
+      const resetRouteCursor = () => {
         if (mapRef.current) mapRef.current.getCanvas().style.cursor = '';
+      };
+
+      ['route-paths-line', 'route-paths-alternative', 'route-paths-hit'].forEach((layerId) => {
+        map.on('mouseenter', layerId, setRoutePointer);
+        map.on('mouseleave', layerId, resetRouteCursor);
       });
 
       // Tier 3 Settlement & Village WebGL Labels Enhancement (High contrast halo)
@@ -911,12 +987,13 @@ export default function CrisisMap({
       }
     }
 
-    // 2. Update Active Route Paths (Per-Leg Multi-Color Corridors)
+    // 2. Update Active Route Paths (Per-Leg Multi-Color Corridors with Original Indices)
     const routesSource = map.getSource('route-paths-source') as mapboxgl.GeoJSONSource;
     if (routesSource) {
       const targetIdx = activeRouteIdx ?? 0;
-      const isCorridorVisible = (r: RouteRecommendation) => {
+      const isCorridorVisible = (r: RouteRecommendation, origIdx: number) => {
         if (r.viable === false) return false;
+        if (hiddenRouteIndices.has(origIdx)) return false;
         const type = r.corridor_type;
         if (!type) return true;
         if (type === 'land_primary' || type === 'land_detour') return corridorVisibility?.land ?? true;
@@ -926,11 +1003,12 @@ export default function CrisisMap({
         return true;
       };
 
-      const visibleRoutes = activeRoutes.filter(isCorridorVisible);
       const routeFeatures: GeoJSON.Feature<GeoJSON.LineString>[] = [];
 
-      visibleRoutes.forEach((r, idx) => {
-        const isRouteActive = idx === targetIdx;
+      activeRoutes.forEach((r, origIdx) => {
+        if (!isCorridorVisible(r, origIdx)) return;
+        const isRouteActive = origIdx === targetIdx;
+
         if (r.legs && r.legs.length > 0 && r.legs.some((l) => l.coordinates && l.coordinates.length >= 2)) {
           // Emit one feature per leg with exact leg color and coordinates
           r.legs.forEach((leg, lIdx) => {
@@ -944,7 +1022,8 @@ export default function CrisisMap({
                   coordinates: finalCoords,
                 },
                 properties: {
-                  routeIndex: idx,
+                  originalRouteIndex: origIdx,
+                  routeIndex: origIdx,
                   legIndex: lIdx,
                   isActive: isRouteActive,
                   description: `${r.description} (${leg.title})`,
@@ -965,10 +1044,11 @@ export default function CrisisMap({
               coordinates: finalCoordinates,
             },
             properties: {
-              routeIndex: idx,
+              originalRouteIndex: origIdx,
+              routeIndex: origIdx,
               isActive: isRouteActive,
               description: r.description,
-              color: r.color || (isRouteActive ? '#10B981' : idx === 1 ? '#34D399' : '#3B82F6'),
+              color: r.color || (isRouteActive ? '#10B981' : origIdx === 1 ? '#38BDF8' : '#00F0FF'),
               isLeg: false,
             },
           });
@@ -1298,7 +1378,31 @@ export default function CrisisMap({
     hubNodesList,
     gazetteerNodes,
     customPinnedPoints,
+    corridorVisibility,
+    hiddenRouteIndices,
   ]);
+
+  // Keep route popover screen position synchronized during map pan/zoom
+  useEffect(() => {
+    if (!mapRef.current) return;
+    const map = mapRef.current;
+    const updatePopoverScreenPos = () => {
+      setSelectedRoutePopover((prev) => {
+        if (!prev) return null;
+        const pt = map.project(prev.lngLat);
+        return {
+          ...prev,
+          screenPos: { x: pt.x, y: pt.y },
+        };
+      });
+    };
+    map.on('move', updatePopoverScreenPos);
+    map.on('zoom', updatePopoverScreenPos);
+    return () => {
+      map.off('move', updatePopoverScreenPos);
+      map.off('zoom', updatePopoverScreenPos);
+    };
+  }, []);
 
   useEffect(() => {
     const draw = drawRef.current;
@@ -1711,9 +1815,180 @@ export default function CrisisMap({
         </div>
       )}
 
-      {/* Floating Map Action Controls Group (Layer Peta + Legenda Rute side-by-side) */}
+      {/* Glassmorphic On-Map Route Corridor Selection & Metrics Popover Card */}
+      {selectedRoutePopover && (
+        <div
+          className="absolute z-50 pointer-events-auto transition-transform duration-75"
+          style={{
+            left: Math.min(
+              Math.max(16, selectedRoutePopover.screenPos.x - 150),
+              typeof window !== 'undefined' ? window.innerWidth - 320 : 800
+            ),
+            top: Math.max(70, selectedRoutePopover.screenPos.y - 190),
+          }}
+        >
+          <div className="w-80 backdrop-blur-md bg-[#0c0e12]/90 border border-white/10 p-3.5 rounded-xl shadow-2xl space-y-3 text-xs animate-in zoom-in-95 duration-150 text-slate-100 font-sans">
+            {/* Header: Corridor Name & Modality Badge */}
+            <div className="flex items-start justify-between gap-2 border-b border-white/10 pb-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <div
+                  className={`p-1.5 rounded-lg border shrink-0 ${
+                    selectedRoutePopover.route.corridor_type === 'sea_intermodal' || selectedRoutePopover.route.modality === 'maritime'
+                      ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'
+                      : selectedRoutePopover.route.corridor_type === 'air_intermodal' || selectedRoutePopover.route.modality === 'air'
+                        ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30'
+                        : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                  }`}
+                >
+                  {selectedRoutePopover.route.corridor_type === 'sea_intermodal' || selectedRoutePopover.route.modality === 'maritime' ? (
+                    <Ship className="w-4 h-4" />
+                  ) : selectedRoutePopover.route.corridor_type === 'air_intermodal' || selectedRoutePopover.route.modality === 'air' ? (
+                    <Plane className="w-4 h-4" />
+                  ) : (
+                    <Truck className="w-4 h-4" />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <h4 className="font-semibold text-white truncate text-xs leading-tight">
+                    {selectedRoutePopover.route.description || selectedRoutePopover.route.route_name || `Koridor #${selectedRoutePopover.routeIndex + 1}`}
+                  </h4>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-mono uppercase border ${
+                        selectedRoutePopover.route.corridor_type === 'sea_intermodal' || selectedRoutePopover.route.modality === 'maritime'
+                          ? 'bg-blue-950/60 text-blue-300 border-blue-800/40'
+                          : selectedRoutePopover.route.corridor_type === 'air_intermodal' || selectedRoutePopover.route.modality === 'air'
+                            ? 'bg-cyan-950/60 text-cyan-300 border-cyan-800/40'
+                            : 'bg-emerald-950/60 text-emerald-300 border-emerald-800/40'
+                      }`}
+                    >
+                      {selectedRoutePopover.route.corridor_type === 'sea_intermodal' || selectedRoutePopover.route.modality === 'maritime'
+                        ? 'Laut + Darat'
+                        : selectedRoutePopover.route.corridor_type === 'air_intermodal' || selectedRoutePopover.route.modality === 'air'
+                          ? 'Udara + Darat'
+                          : 'Darat'}
+                    </span>
+                    {selectedRoutePopover.routeIndex === (activeRouteIdx ?? 0) && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                        AKTIF
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedRoutePopover(null)}
+                className="text-slate-400 hover:text-white p-1 rounded hover:bg-white/5 cursor-pointer transition-colors"
+                title="Tutup Popover"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* Metrics Grid */}
+            <div className="grid grid-cols-2 gap-2 p-2 rounded-lg bg-[#121822]/70 border border-white/5 text-[11px]">
+              <div>
+                <span className="text-slate-400 block text-[10px] uppercase font-mono">Estimasi Waktu (ETA)</span>
+                <span className="font-semibold text-white font-mono">
+                  {Math.floor(selectedRoutePopover.route.eta_minutes / 60)}j {Math.round(selectedRoutePopover.route.eta_minutes % 60)}m
+                </span>
+                <span className="text-[10px] text-slate-400 block">
+                  ({selectedRoutePopover.route.distance_km.toFixed(0)} km)
+                </span>
+              </div>
+
+              <div>
+                <span className="text-slate-400 block text-[10px] uppercase font-mono">Estimasi Biaya Total</span>
+                <span className="font-semibold text-emerald-300 font-mono">
+                  Rp {(
+                    selectedRoutePopover.route.hedging?.reroute_cost_idr ||
+                    selectedRoutePopover.route.economic_comparison?.reroute_total_cost_idr ||
+                    (selectedRoutePopover.route.corridor_type === 'air_intermodal' || selectedRoutePopover.route.modality === 'air'
+                      ? 14500000
+                      : selectedRoutePopover.route.corridor_type === 'sea_intermodal' || selectedRoutePopover.route.modality === 'maritime'
+                        ? 6200000
+                        : 3850000)
+                  ).toLocaleString('id-ID')}
+                </span>
+                <span className="text-[10px] text-slate-400 block truncate">
+                  {selectedRoutePopover.route.safety_status === 'SAFE_DETOUR'
+                    ? 'Detour Terverifikasi'
+                    : selectedRoutePopover.route.safety_status === 'COMPROMISED'
+                      ? 'Terdampak Krisis'
+                      : 'Jalur Bebas Hambatan'}
+                </span>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center gap-2 pt-0.5">
+              {selectedRoutePopover.routeIndex === (activeRouteIdx ?? 0) ? (
+                <div className="flex-1 py-1.5 px-3 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center justify-center gap-1.5 select-none">
+                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Koridor Utama Aktif</span>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSelectRouteRef.current?.(selectedRoutePopover.routeIndex);
+                  }}
+                  className="cursor-pointer flex-1 py-1.5 px-3 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all duration-200 shadow-sm"
+                >
+                  <Navigation className="w-3.5 h-3.5" />
+                  <span>Pilih Koridor Ini</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  const targetIdx = selectedRoutePopover.routeIndex;
+                  const r = selectedRoutePopover.route;
+                  const mod: 'land' | 'sea' | 'air' =
+                    r.corridor_type === 'sea_intermodal' || r.modality === 'maritime'
+                      ? 'sea'
+                      : r.corridor_type === 'air_intermodal' || r.modality === 'air'
+                        ? 'air'
+                        : 'land';
+                  setHiddenRouteIndices((prev) => new Set(prev).add(targetIdx));
+                  onToggleCorridor?.(mod);
+                  setSelectedRoutePopover(null);
+                }}
+                className="cursor-pointer py-1.5 px-2.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 text-xs font-medium flex items-center justify-center gap-1.5 transition-all duration-200"
+                title="Sembunyikan rute ini dari peta"
+              >
+                <EyeOff className="w-3.5 h-3.5 text-slate-400" />
+                <span>Sembunyikan</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Map Action Controls Group (Reset Rute + Layer Peta + Legenda Rute side-by-side) */}
       {!(isRightSidebarOpen || (demoStage != null && demoStage >= 2)) && (
         <div className={`absolute top-3.5 z-30 pointer-events-auto transition-all duration-300 flex items-center gap-2 right-4 animate-in fade-in duration-200`}>
+          {/* Quick Restore Hidden Routes Button */}
+          {(hiddenRouteIndices.size > 0 ||
+            !corridorVisibility?.land ||
+            !corridorVisibility?.sea ||
+            !corridorVisibility?.air) && (
+            <button
+              type="button"
+              onClick={() => {
+                setHiddenRouteIndices(new Set());
+                onResetCorridorVisibility?.();
+              }}
+              className="cursor-pointer px-3 py-1.5 rounded-md backdrop-blur-md bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-xs font-semibold flex items-center gap-1.5 shadow-xl transition-all duration-200"
+              title="Tampilkan kembali seluruh koridor rute yang disembunyikan"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+              <span>Tampilkan Semua Rute</span>
+            </button>
+          )}
           <div className="relative">
             <button
               type="button"

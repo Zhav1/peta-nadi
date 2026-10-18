@@ -211,6 +211,10 @@ export default function DashboardClient() {
     }));
   }, []);
 
+  const handleResetCorridors = useCallback(() => {
+    setCorridorVisibility({ land: true, sea: true, air: true });
+  }, []);
+
   const activeOriginRef = useRef<string | null>(null);
   const activeDestRef = useRef<string | null>(null);
   const customNodesRef = useRef<Record<string, { coords: [number, number]; name: string }>>({});
@@ -1309,6 +1313,8 @@ export default function DashboardClient() {
               simSpeed={simSpeed}
               isRightSidebarOpen={isSidebarOpen && !!selectedCrisis}
               corridorVisibility={corridorVisibility}
+              onToggleCorridor={handleToggleCorridor}
+              onResetCorridorVisibility={handleResetCorridors}
               mapLegendSlot={
                 <FloatingMapLegend
                   isOpen={isMapLegendOpen}
@@ -1421,7 +1427,8 @@ export default function DashboardClient() {
                   const isOfficial = item.source_tier === 'TIER_1_OFFICIAL' || item.source_type === 'OFFICIAL_NEWS';
                   const isEarlyWarning = item.temporal_phase === 'forecast_early_warning';
 
-                  const canOpenSource = Boolean(item.link) && item.link_alive !== 'dead';
+                  const articleLink = item.link || item.url;
+                  const canOpenSource = Boolean(articleLink) && item.link_alive !== 'dead';
                   const isExpiredLink = item.link_alive === 'dead';
                   const isExcerptExpanded = expandedNewsId === item.id;
 
@@ -1473,7 +1480,7 @@ export default function DashboardClient() {
                       <h3 className="text-xs font-semibold text-slate-100 leading-snug font-sans group">
                         {canOpenSource ? (
                           <a
-                            href={item.link}
+                            href={articleLink}
                             target="_blank"
                             rel="noopener noreferrer"
                             referrerPolicy="no-referrer"
@@ -1728,6 +1735,7 @@ export default function DashboardClient() {
                 setSelectedModality={handleModalityChange}
                 corridorVisibility={corridorVisibility}
                 onToggleCorridor={handleToggleCorridor}
+                onResetCorridorVisibility={handleResetCorridors}
                 activeCorridors={currentMapRoutes.length > 0 ? currentMapRoutes : (selectedCrisis?.route_recommendations || [])}
                 onResetNodes={handleResetNodes}
                 isSidebarOpen={isSidebarOpen && !!selectedCrisis}

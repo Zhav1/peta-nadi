@@ -1849,26 +1849,42 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 
 ---
 
-## Phase 69: WebGL Telemetry Stabilization & Main-Thread Performance Optimization
+## Phase 69: Telemetry OOM & Island Snapping Fix, Deep Article Permalink Resolution, and On-Map Contextual Corridor Selection
 
-**Goal:** Eliminate `RangeError: Invalid array length` crash in `spatialHashArbiter.ts`, correct distorted vertical velocity vectors on map assets, and throttle heavy 60 FPS animation/arbitration loops to liberate main-thread CPU without degrading native Mapbox 60 FPS fluidity.
+**Goal:** Eliminate browser telemetry OOM crashes and `RangeError` by decoupling Deck.gl layer recreation from the 60fps RAF loop and safeguarding `spatialHashArbiter.ts`, fix maritime/aviation island snapping and coordinate serialization, resolve news search wrappers to direct publisher article permalinks, and provide on-map contextual route selection popovers with a "Reset Hidden Routes" quick action.
 **Status:** COMPLETE ✅
-**Plans:** `69-RESEARCH.md`, `69-PLAN.md`, `69-WALKTHROUGH.md`, `69-LEARNINGS.md`, `69-01-SUMMARY.md`
+**Plans:** `69-RESEARCH.md`, `69-PLAN.md`, `69-WALKTHROUGH.md`, `69-LEARNINGS.md`, `69-01-SUMMARY.md`, `69-SUMMARY.md`
 
 ### Deliverables
 
-- [x] `frontend/lib/spatialHashArbiter.ts`: finite checks on screen coords/dimensions, viewport bounds filtering, and max cell footprint clamping to mathematically eliminate infinite array allocation loops.
-- [x] `frontend/hooks/useFleetVehicles.ts`: add authentic travel bearings (`heading_deg`) for aviation and truck fallback fleets.
-- [x] `frontend/components/map/FleetVehicleLayer.tsx`: derive forward bearing from route geometry when missing, clamp forward velocity vector visual lengths, and restrict prominence to active/selected units.
-- [x] `frontend/components/map/FleetVehicleLayer.tsx`: throttle telemetry dead-reckoning loop to 25 FPS (40ms tick), decoupling from monitor refresh rate.
-- [x] `frontend/components/map/FleetVehicleLayer.tsx`: cache SpatialHash arbitration winners and execute arbitration only during camera interaction or significant spatial shifts.
-- [x] `frontend/scripts/test_arbiter.ts`: standalone test runner verifying arbiter safely handles invalid/infinite coordinates without throwing RangeError.
+- [x] **WP1 - Telemetry OOM Elimination, SpatialHash Stabilization & Deck.gl Lifecycle**:
+  - `frontend/components/map/FleetVehicleLayer.tsx`: throttle `overlayRef.current.setProps` calls to 25–30 Hz; pre-allocate stable buffers for wake trails, velocity vectors, and icon sprites; ensure complete cleanup of animation handles and wake history on unmount; verify `billboard: true` orientation stability in pitched 3D map views; derive forward bearing from route geometry and clamp visual lengths.
+  - `frontend/lib/spatialHashArbiter.ts`: finite checks on screen coords/dimensions, viewport bounds filtering, and max cell footprint clamping to mathematically eliminate infinite array allocation loops (`RangeError`).
+  - `frontend/scripts/test_arbiter.ts`: standalone test runner verifying arbiter safely handles invalid/infinite coordinates without throwing RangeError.
+- [x] **WP2 - Island Snapping & Telemetry Coordinate Alignment**:
+  - `backend/app/services/telemetry_service.py`: synchronize `current_coords: [lon, lat]` and `location: {"type": "Point", "coordinates": [lon, lat]}` across all vehicle responses; ensure maritime units progress along surveyed channel polylines rather than unconstrained headings.
+  - `frontend/components/map/FleetVehicleLayer.tsx`: update `serverFix` extraction to read `(v as any).current_coords`; eliminate the $\pm 14.5^\circ$ island teleportation jump, keeping vessels and aircraft on valid nautical and aviation corridors.
+  - `frontend/hooks/useFleetVehicles.ts`: ensure `FALLBACK_FLEET` contains explicit `current_coords` and authentic travel bearings (`heading_deg`) matching route origins.
+- [x] **WP3 - Deep Article Permalink Resolution & Grounding**:
+  - `backend/app/services/news_aggregator.py`: upgrade `resolve_canonical_article_url_async` with a redirect follower to decode Google News wrappers into genuine publisher deep links (`antaranews.com`, `detik.com`, `kompas.com`, etc.); replace synthetic search queries in `DEMO_STANDARDIZED_SCENARIOS`.
+  - `backend/app/services/unified_news_ingestor.py`: invoke async redirect resolution before persisting articles into Supabase and publishing to Redis.
+  - `frontend/hooks/useNewsVerification.ts`: update `FALLBACK_SUMATRA_NEWS` with direct Antara / agency permalinks; refine `normalizeNewsPermalink` to protect deep article URLs.
+- [x] **WP4 - On-Map Contextual Route Popover & Corridor Reset Action**:
+  - `frontend/components/map/CrisisMap.tsx`: add interactive Glassmorphism popover on clicking `route-paths-line` showing corridor title, distance, duration, risk status, IDR logistics cost, and quick actions ("Pilih Rute Ini", "Sembunyikan Koridor Ini", "Tutup"); preserve original route indexing during corridor filtering.
+  - `frontend/components/map/CrisisSimulatorBar.tsx`: render contextual "Reset Rute (${3 - hiddenCount}/3 Aktif)" pill whenever corridors are hidden, restoring all modalities on click.
+  - `frontend/components/dashboard/DashboardClient.tsx`: wire corridor reset handler and sync route selection states.
 
 ### Verification Criteria
 
 - [x] `npx tsc --noEmit` in `frontend/`: 0 errors.
 - [x] `npm test` in `frontend/`: 100% clean pass on all pathological/extreme input cases.
 - [x] Verified zero `RangeError` under infinite/NaN coordinate projection.
+- [x] `npm run build` in `frontend/`: 100% clean production bundle (7/7 static pages).
+- [x] `backend/tests/test_vehicles_telemetry.py` & `backend/tests/test_news_pipeline.py`: all tests pass (20/20).
+- [x] Browser memory stays flat without unbounded leak over 60s in Dashboard map view.
+- [x] Maritime vessels progress along navigation channels without island-jumping.
+- [x] News links open direct articles on publisher sites.
+- [x] Route line click displays the on-map contextual popover; "Reset Rute" pill restores hidden corridors.
 
 ---
 

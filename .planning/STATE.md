@@ -3,12 +3,12 @@ gsd_state_version: "1.0"
 milestone: M4
 milestone_name: PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability
 current_phase: 69
-current_phase_name: WebGL Telemetry Stabilization & Main-Thread Performance Optimization
+current_phase_name: Telemetry OOM & Island Snapping Fix, Deep Article Permalink Resolution, and On-Map Contextual Corridor Selection
 status: complete
-stopped_at: "Phase 69 completed: (1) spatialHashArbiter.ts infinite array overflow fix verified with test suite; (2) realistic aircraft/truck velocity bearings and vector length clamping applied; (3) 25 FPS telemetry loop throttling to unchoke main thread CPU. 0 tsc errors, 100% test pass."
-last_updated: "2026-10-18T19:40:00.000Z"
+stopped_at: Completed Phase 69; decoupled Deck.gl layer recreation from RAF loop at 25-30 Hz (eliminated browser OOM) and hardened spatialHashArbiter against RangeError; synchronized current_coords and stabilized maritime polyline progress without island jumps; added async redirect resolution for authentic Antara news permalinks; added on-map route click popover and Reset Rute corridor pill in CrisisSimulatorBar. 20/20 pytest passed, 0 tsc errors, 100% clean Next.js build.
+last_updated: "2026-10-18T14:20:00.000Z"
 last_activity: 2026-10-18
-last_activity_desc: "Phase 69 executed and verified: spatialHashArbiter hardened against RangeError, velocity vectors sanitized, animation throttled to 25 FPS, npm test passed."
+last_activity_desc: "Phase 69 completed: Telemetry OOM elimination, spatialHashArbiter RangeError fix, island snapping fix, deep news permalink resolution, and on-map corridor popover. 20/20 pytest passed, 0 tsc errors, 100% clean Next.js build."
 state_head: HEAD
 progress:
   total_phases: 69
@@ -28,10 +28,10 @@ progress:
 
 ## Current Position
 
-Phase: 69 (WebGL Telemetry Stabilization & Main-Thread Performance Optimization) - COMPLETE
-Status: (1) RangeError: Invalid array length in spatialHashArbiter.ts eliminated via finite checks and footprint clamping; (2) Velocity vectors sanitized and oriented to authentic bearings; (3) Telemetry dead-reckoning throttled to 25 FPS to liberate main thread CPU. Verified with 0 tsc errors and 100% clean test suite.
-Last activity: 2026-10-18 - Phase 69 executed and verified.
-Next action: Commit changes and advance workflow.
+Phase: 69 (Telemetry OOM & Island Snapping Fix, Deep Article Permalink Resolution, and On-Map Contextual Corridor Selection) - COMPLETE
+Status: Phase 69 executed and verified. (1) Throttled Deck.gl setProps to 25-30 Hz and reused preallocated data buffers in FleetVehicleLayer.tsx, eliminating OOM heap churn, and fixed spatialHashArbiter RangeError; (2) Synchronized current_coords and snapped maritime vessels to surveyed navigation polylines, purging the +/-14.5° island snap; (3) Resolved Google News encrypted redirects to authentic Antara/publisher permalinks; (4) Added contextual glassmorphism popover on route line clicks with metrics and instant corridor reset pill in CrisisSimulatorBar.tsx. 20/20 pytest passed, 0 tsc errors, 100% clean Next.js build.
+Last activity: 2026-10-18 - Phase 69 executed, verified, and synchronized with plans.
+Next action: Push commit to remote origin/main.
 
 ---
 
@@ -109,6 +109,7 @@ Next action: Commit changes and advance workflow.
 | 66 | Analytics Honesty Audit | **COMPLETE** ✅ | Preserved real PIHPS series; removed hardcoded risk cards, causal chain, and fake arcs/nodes; added honest 'Data tidak tersedia' empty states. |
 | 67 | Laporan Audit Ledger Hardening | **COMPLETE** ✅ | Replaced hardcoded DISETUJUI with dynamic ACCEPT/REJECT/OVERRIDE, sync status, full ISO date+tz, interactive filters toolbar, dynamic PDF/JSON exports. |
 | 68 | Restore Guest-403 E2E Test Against MitigationTab | **COMPLETE** ✅ | Replaced deleted SimulationSection test with MitigationTab approval pipeline test; verified 403 sandbox toast and optimistic UI update. 1/1 Playwright passed. |
+| 69 | Telemetry OOM & Island Snapping Fix, Deep Article Permalink Resolution, and On-Map Contextual Corridor Selection | **COMPLETE** ✅ | Decoupled Deck.gl RAF (25-30 Hz, 0 OOM), aligned current_coords, nautical channel interpolation, deep Antara permalinks, on-map route popover & corridor reset. 20/20 pytest, 0 tsc errors. |
 
 ---
 
@@ -116,6 +117,7 @@ Next action: Commit changes and advance workflow.
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
+| 2026-10-18 | Phase 69: Telemetry OOM & Island Snapping Fix, Deep Article Permalink Resolution, and On-Map Contextual Corridor Selection | Throttled Deck.gl `setProps` updates to 25–30 Hz and reused pre-allocated arrays in `FleetVehicleLayer.tsx` to stop V8 heap churn and eliminate browser OOM crashes. Synchronized `current_coords` serialization and snapped maritime units to surveyed waterway polylines, purging the +/-14.5° island teleportation jump. Resolved Google News redirect wrappers to direct publisher article permalinks via asynchronous HEAD/GET unmasking. Added interactive glassmorphism popover on clicking route polylines and a contextual "Reset Rute" pill in `CrisisSimulatorBar.tsx`. 20/20 pytest passed, 0 tsc errors, 100% clean Next.js build. |
 | 2026-10-18 | Phase 68: Restore Guest-403 E2E Test Against MitigationTab | Re-established automated test coverage for guest 403 handling on `MitigationTab.tsx` (`POST /api/v1/approvals`). Asserted real behavior (sandbox toast and optimistic card update without writing to `localStorage`). Added null guards in `MitigationTab.tsx` and node resolution fallback in `DashboardClient.tsx`. 1/1 Playwright test passed. |
 | 2026-10-18 | Phase 67: Laporan Audit Ledger Hardening | Replaced static `DISETUJUI` badge with real operator actions (`ACCEPT`, `REJECT`, `OVERRIDE`), live sync indicators, full Indonesian locale ISO date-time formatting with timezone (`GMT+7`), interactive filter toolbar, and dynamic filtered PDF/JSON exports. Pruned fake fallback rows. |
 | 2026-10-18 | Phase 66: Analytics Honesty Audit | Preserved authentic dynamic PIHPS series (`api.commodities.prices`). Stripped static risk-ranking cards, static causal chain, and fake Deck.gl arcs/nodes. Replaced synthetic fallback numbers with explicit `"Data tidak tersedia"` badges. |

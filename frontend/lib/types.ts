@@ -445,6 +445,15 @@ export interface FleetVehicle {
   // GET /api/v1/fleet/vehicles accepts ?company_id= ; WP-B3 enforces filter.
   company_id?: string;
   tracking_mode?: 'LIVE_GPS' | 'ROUTE_ESTIMATED';
+  current_coords?: [number, number];
+  location?: {
+    type: string;
+    coordinates: [number, number];
+  };
+  current_location?: {
+    type: string;
+    coordinates: [number, number];
+  };
   departure_time?: string;
   origin_coords?: [number, number];
   dest_coords?: [number, number];

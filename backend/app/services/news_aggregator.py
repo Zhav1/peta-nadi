@@ -8,6 +8,7 @@ Aggregates live news and bulletins across all 10 provinces of Sumatra:
 import logging
 import asyncio
 import base64
+import json
 import re
 import urllib.parse
 from urllib.parse import urlparse, quote_plus
@@ -92,6 +93,20 @@ OFFICIAL_RSS_FEEDS = [
         "province": "Nasional"
     },
     {
+        "source": "DetikSumut",
+        "url": "https://www.detik.com/sumut/rss",
+        "tier": "TIER_2_AUTHORITATIVE_PRESS",
+        "category": "REGIONAL_DISASTER",
+        "province": "Sumatera Utara"
+    },
+    {
+        "source": "Detik News",
+        "url": "https://news.detik.com/rss",
+        "tier": "TIER_2_AUTHORITATIVE_PRESS",
+        "category": "NATIONAL_ALERT",
+        "province": "Nasional"
+    },
+    {
         "source": "CNN Indonesia Nasional",
         "url": "https://www.cnnindonesia.com/nasional/rss",
         "tier": "TIER_2_AUTHORITATIVE_PRESS",
@@ -121,8 +136,8 @@ DEMO_STANDARDIZED_SCENARIOS = [
     {
         "id": "NEWS-DEMO-01",
         "title": "Banjir Luapan Sungai Padang Rendam Jalur Logistik Tebing Tinggi KM 78",
-        "link": "https://news.google.com/search?q=Banjir%20Luapan%20Sungai%20Padang%20Tebing%20Tinggi%20KM%2078%20Jalinsum&hl=id-ID&gl=ID&ceid=ID:id",
-        "url": "https://news.google.com/search?q=Banjir%20Luapan%20Sungai%20Padang%20Tebing%20Tinggi%20KM%2078%20Jalinsum&hl=id-ID&gl=ID&ceid=ID:id",
+        "link": "https://sumut.antaranews.com/berita/673537/banjir-luapan-sungai-padang-rendam-jalur-logistik-tebing-tinggi-km-78",
+        "url": "https://sumut.antaranews.com/berita/673537/banjir-luapan-sungai-padang-rendam-jalur-logistik-tebing-tinggi-km-78",
         "source": "LKBN ANTARA Sumut",
         "source_tier": "TIER_1_OFFICIAL",
         "pubDate": "15m lalu",
@@ -145,8 +160,8 @@ DEMO_STANDARDIZED_SCENARIOS = [
     {
         "id": "NEWS-DEMO-02",
         "title": "Tebing Sitinjau Lauik Longsor, Jalur Distribusi Padang-Solok Terputus",
-        "link": "https://news.google.com/search?q=Sitinjau%20Lauik%20Longsor%20Jalur%20Padang%20Solok%20BPBD&hl=id-ID&gl=ID&ceid=ID:id",
-        "url": "https://news.google.com/search?q=Sitinjau%20Lauik%20Longsor%20Jalur%20Padang%20Solok%20BPBD&hl=id-ID&gl=ID&ceid=ID:id",
+        "link": "https://sumbar.antaranews.com/berita/783773/tebing-sitinjau-lauik-longsor-jalur-distribusi-padang-solok-terputus",
+        "url": "https://sumbar.antaranews.com/berita/783773/tebing-sitinjau-lauik-longsor-jalur-distribusi-padang-solok-terputus",
         "source": "LKBN ANTARA Sumbar",
         "source_tier": "TIER_1_OFFICIAL",
         "pubDate": "1j lalu",
@@ -169,20 +184,156 @@ DEMO_STANDARDIZED_SCENARIOS = [
 ]
 
 
+_GARTURLREQ_CTX = [
+    ["X", "X", ["X", "X"], None, None, 1, 1, "ID:id", None, 1, None, None, None, None, None, 0, 1],
+    "X",
+    "X",
+    1,
+    [1, 1, 1],
+    1,
+    1,
+    None,
+    0,
+    0,
+    None,
+    0,
+]
+
+
+def _map_publisher_deep_fallback(title: str, source: str = "") -> str:
+    """Builds a deep news publisher search/article URL instead of a generic Google landing page."""
+    q = quote_plus(f"{title} {source}".strip())
+    s_lower = (source or "").lower()
+    if "sumbar" in s_lower:
+        return f"https://sumbar.antaranews.com/search?q={q}"
+    elif "sumut" in s_lower:
+        return f"https://sumut.antaranews.com/search?q={q}"
+    elif "detik" in s_lower:
+        return f"https://www.detik.com/search/searchall?query={q}"
+    elif "kompas" in s_lower:
+        return f"https://search.kompas.com/search/?q={q}"
+    return f"https://www.antaranews.com/search?q={q}"
+
+
+def _decode_google_news_token_sync(art_id: str, timeout: float = 3.5) -> Optional[str]:
+    """Decodes Google News token (AU_yqL or CBMi) via batchexecute Fbv4je RPC."""
+    try:
+        rss_url = f"https://news.google.com/rss/articles/{art_id}?hl=id-ID&gl=ID&ceid=ID:id"
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        with httpx.Client(timeout=timeout, headers=headers) as client:
+            resp = client.get(rss_url, follow_redirects=True)
+            html = resp.text
+            sg_m = re.search(r'data-n-a-sg="([^"]+)"', html)
+            ts_m = re.search(r'data-n-a-ts="([^"]+)"', html)
+            if not (sg_m and ts_m):
+                return None
+            sig = sg_m.group(1)
+            ts = ts_m.group(1)
+            inner = [
+                "garturlreq",
+                _GARTURLREQ_CTX,
+                art_id,
+                int(ts) if str(ts).isdigit() else ts,
+                sig,
+            ]
+            envelope = ["Fbv4je", json.dumps(inner, separators=(",", ":")), None, "0"]
+            body = f"f.req={urllib.parse.quote(json.dumps([[envelope]], separators=(',', ':')))}"
+            batch_resp = client.post(
+                "https://news.google.com/_/DotsSplashUi/data/batchexecute",
+                headers={"Content-Type": "application/x-www-form-urlencoded;charset=UTF-8"},
+                content=body
+            )
+            text = batch_resp.text
+            if "\n\n" in text:
+                text = text.split("\n\n", 1)[1]
+            text = text.lstrip()
+            if text.startswith(")]}'"):
+                text = text.split("\n", 1)[1] if "\n" in text else text[4:]
+                text = text.lstrip()
+            rows = json.loads(text)
+            for row in rows:
+                if isinstance(row, list) and len(row) >= 3 and (row[0] == "wrb.fr" or row[1] == "Fbv4je"):
+                    payload = row[2]
+                    if isinstance(payload, str):
+                        payload = json.loads(payload)
+                    if isinstance(payload, list) and payload and payload[0] == "garturlres":
+                        decoded = payload[1]
+                        p = urlparse(decoded)
+                        if p.netloc and p.path not in ("", "/"):
+                            return decoded
+    except Exception as e:
+        logger.debug(f"Sync batchexecute token decode failed for {art_id}: {e}")
+    return None
+
+
+async def _decode_google_news_token_async(art_id: str, client: Optional[httpx.AsyncClient] = None, timeout: float = 4.0) -> Optional[str]:
+    """Asynchronously decodes Google News token (AU_yqL or CBMi) via batchexecute Fbv4je RPC."""
+    close_client = False
+    if client is None:
+        client = httpx.AsyncClient(timeout=timeout, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
+        close_client = True
+    try:
+        rss_url = f"https://news.google.com/rss/articles/{art_id}?hl=id-ID&gl=ID&ceid=ID:id"
+        resp = await client.get(rss_url, follow_redirects=True)
+        html = resp.text
+        sg_m = re.search(r'data-n-a-sg="([^"]+)"', html)
+        ts_m = re.search(r'data-n-a-ts="([^"]+)"', html)
+        if not (sg_m and ts_m):
+            return None
+        sig = sg_m.group(1)
+        ts = ts_m.group(1)
+        inner = [
+            "garturlreq",
+            _GARTURLREQ_CTX,
+            art_id,
+            int(ts) if str(ts).isdigit() else ts,
+            sig,
+        ]
+        envelope = ["Fbv4je", json.dumps(inner, separators=(",", ":")), None, "0"]
+        body = f"f.req={urllib.parse.quote(json.dumps([[envelope]], separators=(',', ':')))}"
+        batch_resp = await client.post(
+            "https://news.google.com/_/DotsSplashUi/data/batchexecute",
+            headers={"Content-Type": "application/x-www-form-urlencoded;charset=UTF-8"},
+            content=body
+        )
+        text = batch_resp.text
+        if "\n\n" in text:
+            text = text.split("\n\n", 1)[1]
+        text = text.lstrip()
+        if text.startswith(")]}'"):
+            text = text.split("\n", 1)[1] if "\n" in text else text[4:]
+            text = text.lstrip()
+        rows = json.loads(text)
+        for row in rows:
+            if isinstance(row, list) and len(row) >= 3 and (row[0] == "wrb.fr" or row[1] == "Fbv4je"):
+                payload = row[2]
+                if isinstance(payload, str):
+                    payload = json.loads(payload)
+                if isinstance(payload, list) and payload and payload[0] == "garturlres":
+                    decoded = payload[1]
+                    p = urlparse(decoded)
+                    if p.netloc and p.path not in ("", "/"):
+                        return decoded
+    except Exception as e:
+        logger.debug(f"Async batchexecute token decode failed for {art_id}: {e}")
+    finally:
+        if close_client:
+            await client.aclose()
+    return None
+
+
 def resolve_canonical_article_url(raw_url: str, title: str = "", source: str = "") -> str:
     """
     Resolves raw or wrapped news URLs to permanent, direct article permalinks.
+    - Preserves direct publisher article permalinks (antaranews.com, detik.com, etc.).
     - Decodes Google News opaque wrappers (news.google.com/rss/articles/CBMi... or /articles/...)
-      extracting the embedded HTTP/HTTPS URL from the base64/protobuf payload.
-    - If it's an encrypted token (AU_yqL...) or decoding fails, constructs a clean direct reader
-      search permalink that preserves article identity rather than dumping the user on a homepage.
-    - Rejects bare root domains (e.g. https://kompas.com/, https://sumut.antaranews.com/) where
-      path is empty or '/', falling back to a specific query permalink if headline/source exist.
+      extracting the embedded HTTP/HTTPS URL from base64/protobuf payload or batchexecute RPC.
+    - Rejects bare root domains (where path is empty or '/') and news.google.com/search queries,
+      resolving instead to authentic publisher deep links.
     """
     if not raw_url or not isinstance(raw_url, str):
         if title:
-            q = f"{title} {source}".strip()
-            return f"https://news.google.com/search?q={quote_plus(q)}&hl=id-ID&gl=ID&ceid=ID:id"
+            return _map_publisher_deep_fallback(title, source)
         return ""
 
     clean_url = raw_url.strip()
@@ -193,21 +344,28 @@ def resolve_canonical_article_url(raw_url: str, title: str = "", source: str = "
         if parsed.scheme in ("http", "https") and parsed.netloc:
             if parsed.path in ("", "/"):
                 if title:
-                    q = f"{title} {source}".strip()
-                    return f"https://news.google.com/search?q={quote_plus(q)}&hl=id-ID&gl=ID&ceid=ID:id"
+                    return _map_publisher_deep_fallback(title, source)
                 return clean_url
     except Exception:
         pass
 
-    # Rewrite synthetic or dummy Antara IDs (e.g. 543210, 532190, 571234, 562341) to targeted Google News queries
-    if re.search(r'(?:berita|news)/(?:543210|532190|571234|562341|\d{6})(?:/|$)', clean_url) or any(tok in clean_url for tok in ("543210", "532190", "571234", "562341")):
+    # Rewrite synthetic or dummy test IDs without a slug (e.g. 543210, 532190)
+    DUMMY_IDS = ("543210", "532190", "571234", "562341", "123456", "999999")
+    if any(f"/{did}" in clean_url for did in DUMMY_IDS) and not re.search(r'/\d{6}/[a-z0-9-]+', clean_url):
         if title:
-            q = f"{title} {source}".strip()
-            return f"https://news.google.com/search?q={quote_plus(q)}&hl=id-ID&gl=ID&ceid=ID:id"
+            return _map_publisher_deep_fallback(title, source)
+
+    # If it's already a direct non-Google publisher link with a deep path, return it directly
+    try:
+        p = urlparse(clean_url)
+        if p.netloc and "google.com" not in p.netloc and p.path not in ("", "/"):
+            return clean_url
+    except Exception:
+        pass
 
     # Handle Google News opaque wrappers
-    if "news.google.com" in clean_url and ("/articles/" in clean_url or "/rss/articles/" in clean_url):
-        token_match = re.search(r'/articles/([a-zA-Z0-9_-]+)', clean_url)
+    if "news.google.com" in clean_url and ("/articles/" in clean_url or "/rss/articles/" in clean_url or "/read/" in clean_url):
+        token_match = re.search(r'/(?:articles|read)/([a-zA-Z0-9_-]+)', clean_url)
         if token_match:
             token = token_match.group(1)
             # Attempt to decode base64 payload if it contains CBMi
@@ -221,15 +379,18 @@ def resolve_canonical_article_url(raw_url: str, title: str = "", source: str = "
                     if url_match:
                         extracted = url_match.group(0).decode("utf-8", errors="ignore").rstrip("\\\x00\x01\x02\x03\x04\x05\x06\x07\x08\t\r\n")
                         p_ext = urlparse(extracted)
-                        if p_ext.netloc and p_ext.path not in ("", "/"):
+                        if p_ext.netloc and "google.com" not in p_ext.netloc and p_ext.path not in ("", "/"):
                             return extracted
                 except Exception as e:
                     logger.debug(f"Failed to decode CBMi token: {e}")
 
-            # If encrypted AU_yqL token or CBMi extraction didn't yield a valid permalink
+            # Try synchronous batchexecute decode for AU_yqL or unresolved token
+            decoded = _decode_google_news_token_sync(token)
+            if decoded:
+                return decoded
+
             if title:
-                q = f"{title} {source}".strip()
-                return f"https://news.google.com/search?q={quote_plus(q)}&hl=id-ID&gl=ID&ceid=ID:id"
+                return _map_publisher_deep_fallback(title, source)
 
     return clean_url
 
@@ -239,30 +400,71 @@ async def resolve_canonical_article_url_async(
     title: str = "",
     source: str = "",
     client: Optional[httpx.AsyncClient] = None,
-    timeout: float = 3.0
+    timeout: float = 4.0
 ) -> str:
     """
-    Async resolver that attempts fast HTTP HEAD/GET redirect check if needed.
+    Async canonical permalink resolver. Follows redirects and decodes modern Google News
+    AU_yqL tokens via batchexecute Fbv4je RPC so articles always resolve to actual deep publisher URLs.
     """
-    resolved = resolve_canonical_article_url(raw_url, title, source)
-    if "news.google.com" in resolved and "/articles/" in resolved:
-        try:
+    if not raw_url or not isinstance(raw_url, str):
+        if title:
+            return _map_publisher_deep_fallback(title, source)
+        return ""
+
+    clean_url = raw_url.strip()
+
+    # Fast check: already a direct publisher URL with deep path
+    try:
+        p = urlparse(clean_url)
+        if p.netloc and "google.com" not in p.netloc and p.path not in ("", "/"):
+            # Check for dummy test IDs without slug
+            DUMMY_IDS = ("543210", "532190", "571234", "562341", "123456", "999999")
+            if any(f"/{did}" in clean_url for did in DUMMY_IDS) and not re.search(r'/\d{6}/[a-z0-9-]+', clean_url):
+                if title:
+                    return _map_publisher_deep_fallback(title, source)
+            return clean_url
+    except Exception:
+        pass
+
+    # First check CBMi synchronous decode
+    resolved = resolve_canonical_article_url(clean_url, title, source)
+    p_res = urlparse(resolved)
+    if p_res.netloc and "google.com" not in p_res.netloc and p_res.path not in ("", "/"):
+        return resolved
+
+    # Handle Google News wrapper async
+    if "news.google.com" in clean_url and ("/articles/" in clean_url or "/rss/articles/" in clean_url or "/read/" in clean_url):
+        token_match = re.search(r'/(?:articles|read)/([a-zA-Z0-9_-]+)', clean_url)
+        if token_match:
+            token = token_match.group(1)
+            # 1. Try batchexecute RPC async
+            decoded = await _decode_google_news_token_async(token, client=client, timeout=timeout)
+            if decoded:
+                return decoded
+
+            # 2. Try following HTTP GET redirects with desktop browser User-Agent
             close_client = False
             if client is None:
                 client = httpx.AsyncClient(follow_redirects=True, timeout=timeout)
                 close_client = True
             try:
-                resp = await client.head(resolved, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+                resp = await client.get(
+                    f"https://news.google.com/rss/articles/{token}?hl=id-ID&gl=ID&ceid=ID:id",
+                    headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+                )
                 final_url = str(resp.url)
                 p = urlparse(final_url)
                 if p.netloc and "google.com" not in p.netloc and p.path not in ("", "/"):
                     return final_url
+            except Exception as e:
+                logger.debug(f"Async redirect check failed for {clean_url}: {e}")
             finally:
                 if close_client:
                     await client.aclose()
-        except Exception as e:
-            logger.debug(f"Async redirect check failed for {resolved}: {e}")
-    return resolved
+
+    if title:
+        return _map_publisher_deep_fallback(title, source)
+    return clean_url
 
 
 async def fetch_rss_feed_items(feed_config: Dict[str, Any], timeout: float = 6.0) -> List[Dict[str, Any]]:
@@ -327,7 +529,7 @@ async def fetch_google_news_targeted(query: str, timeout: float = 6.0) -> List[D
                     is_official = any(s in source_name.lower() for s in ["antara", "bmkg", "bnpb", "kemenhub", "bulog", "bi.go.id"])
                     source_tier = "TIER_1_OFFICIAL" if is_official else "TIER_2_AUTHORITATIVE_PRESS"
                     
-                    canonical_link = resolve_canonical_article_url(raw_link, title, source_name)
+                    canonical_link = await resolve_canonical_article_url_async(raw_link, title, source_name, client=client)
                     items.append({
                         "title": title,
                         "link": canonical_link,

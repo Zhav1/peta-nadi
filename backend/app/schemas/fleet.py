@@ -109,6 +109,8 @@ class FleetVehicleTelemetry(BaseModel):
     dest_coords: Optional[List[float]] = Field(None, description="Destination coordinates [lon, lat]")
     departure_time: Optional[str] = Field(None, description="Departure timestamp ISO string")
     current_coords: Optional[List[float]] = Field(None, description="Current coordinates [lon, lat]")
+    location: Optional[Dict[str, Any]] = Field(None, description="GeoJSON Point {type: 'Point', coordinates: [lon, lat]}")
+    current_location: Optional[Dict[str, Any]] = Field(None, description="GeoJSON Point alias for location")
 
     @field_validator("path")
     @classmethod

@@ -1558,6 +1558,8 @@ class TelemetryService:
             lat = float(live_ping["latitude"])
             lon = float(live_ping["longitude"])
             item["current_coords"] = [lon, lat]
+            item["location"] = {"type": "Point", "coordinates": [lon, lat]}
+            item["current_location"] = item["location"]
             item["speed_kmh"] = float(live_ping.get("speed_kmh") or item.get("speed_kmh") or 60.0)
             item["tracking_mode"] = "LIVE_GPS"
             item["signal_status"] = "LIVE_GPS"
@@ -1574,6 +1576,8 @@ class TelemetryService:
             prog = float(item.get("progress", 0.45))
             curr_pos, curr_h = interpolate_path_position(path, prog)
             item["current_coords"] = curr_pos
+            item["location"] = {"type": "Point", "coordinates": curr_pos}
+            item["current_location"] = item["location"]
             item["heading_deg"] = curr_h
             t_mode = item.get("tracking_mode", "ROUTE_ESTIMATED")
             item["tracking_mode"] = t_mode
@@ -1661,6 +1665,8 @@ class TelemetryService:
                 path = [[lon, lat], [lon + 0.05, lat + 0.05]]
             item["path"] = path
             item["current_coords"] = [lon, lat]
+            item["location"] = {"type": "Point", "coordinates": [lon, lat]}
+            item["current_location"] = item["location"]
             item["tracking_mode"] = "LIVE_GPS"
             item["signal_status"] = "LIVE_GPS"
             item["telemetry_source"] = "TMS_GPS_WEBHOOK"
@@ -1684,6 +1690,8 @@ class TelemetryService:
             prog = float(item.get("progress", 0.45))
             curr_pos, curr_h = interpolate_path_position(path, prog)
             item["current_coords"] = curr_pos
+            item["location"] = {"type": "Point", "coordinates": curr_pos}
+            item["current_location"] = item["location"]
             item["heading_deg"] = curr_h
             item["tracking_mode"] = tracking_mode
             item["signal_status"] = "ROUTE_ESTIMATED" if tracking_mode == "ROUTE_ESTIMATED" else "LIVE_GPS"

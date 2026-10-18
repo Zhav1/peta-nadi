@@ -32,11 +32,17 @@ export interface DeclutterItem {
   category?: DeclutterCategory;
   text?: string;
   coords?: [number, number]; // [lon, lat]
+  modality?: 'truck' | 'maritime' | 'air' | 'land';
 }
 
 export interface ArbitrateOptions {
   cellSizePx?: number;
   maxFleetQuota?: number;
+  modalityQuotas?: {
+    truck?: number;
+    maritime?: number;
+    air?: number;
+  };
 }
 
 interface HysteresisRecord {
@@ -116,11 +122,27 @@ export class SpatialHashArbiter {
     scoredCandidates.sort((a, b) => b.effectivePriority - a.effectivePriority);
 
     let fleetCallsignsRendered = 0;
+    const fleetModalityCounts: Record<string, number> = {
+      truck: 0,
+      maritime: 0,
+      air: 0,
+    };
 
     // 3. Grid collision resolution
     for (const { item } of scoredCandidates) {
-      if (item.category === 'fleet' && fleetCallsignsRendered >= fleetQuota) {
-        continue;
+      if (item.category === 'fleet') {
+        if (fleetCallsignsRendered >= fleetQuota) {
+          continue;
+        }
+
+        if (options?.modalityQuotas && item.modality) {
+          const modKey = item.modality === 'land' ? 'truck' : item.modality;
+          const quota = options.modalityQuotas[modKey];
+          // Allow high-priority units (selected or impacted) to bypass per-modality cap
+          if (quota !== undefined && (fleetModalityCounts[modKey] ?? 0) >= quota && item.priority < PRIORITY_IMPACTED_FLEET) {
+            continue;
+          }
+        }
       }
 
       const w = item.width || 80;
@@ -181,6 +203,10 @@ export class SpatialHashArbiter {
         winningIds.add(item.id);
         if (item.category === 'fleet') {
           fleetCallsignsRendered++;
+          if (item.modality) {
+            const modKey = item.modality === 'land' ? 'truck' : item.modality;
+            fleetModalityCounts[modKey] = (fleetModalityCounts[modKey] ?? 0) + 1;
+          }
         }
       }
     }
@@ -230,15 +256,23 @@ export function arbitrateVisibleLabels(
 
 /**
  * Macro-zoom arbitration helper for island-wide overview (zoom < 7.5).
- * Uses a wider 56px cell spacing and a 22-item quota so ~15-25 high-priority
- * non-overlapping strategic callsigns remain crisply legible across Sumatra.
+ * Uses a wider 56px cell spacing and a 24-item quota with balanced per-modality
+ * slots (trucks: 8, maritime: 9, air: 7) so trucks aren't starved to 0 labels by 150 ships/planes.
  */
 export function arbitrateMacroZoomLabels(
   items: DeclutterItem[],
   arbiter: SpatialHashArbiter = defaultSpatialHashArbiter,
   timestamp?: number
 ): Set<string> {
-  return arbiter.arbitrate(items, timestamp, { cellSizePx: 56, maxFleetQuota: 22 });
+  return arbiter.arbitrate(items, timestamp, {
+    cellSizePx: 56,
+    maxFleetQuota: 24,
+    modalityQuotas: {
+      truck: 8,
+      maritime: 9,
+      air: 7,
+    },
+  });
 }
 
 /**

@@ -9,12 +9,14 @@ import asyncio
 import uuid
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
+from urllib.parse import urlparse
 from fastapi import APIRouter, Query, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 
 from app.services.redis_client import get_redis
 from app.services.news_aggregator import (
-    fetch_news_from_supabase
+    fetch_news_from_supabase,
+    resolve_canonical_article_url,
 )
 from app.services.unified_news_ingestor import unified_news_ingestor
 
@@ -106,17 +108,82 @@ async def get_live_news(
             "items": []
         }
 
-    _NEWS_CACHE["articles"] = articles
+    # Determine honest last_updated from newest article's published_at or ingested_at
+    latest_ts_iso = None
+    newest_dt = None
+    for a in articles:
+        cand_str = a.get("published_at") or a.get("ingested_at") or a.get("pubDate")
+        if cand_str:
+            try:
+                cleaned = str(cand_str).replace("Z", "+00:00")
+                parsed_dt = datetime.fromisoformat(cleaned)
+                if newest_dt is None or parsed_dt > newest_dt:
+                    newest_dt = parsed_dt
+                    latest_ts_iso = parsed_dt.isoformat()
+            except Exception:
+                if latest_ts_iso is None and isinstance(cand_str, str):
+                    latest_ts_iso = cand_str
+
+    if not latest_ts_iso:
+        latest_ts_iso = datetime.now(timezone.utc).isoformat()
+
+    # Detect if articles are older than 30 minutes or contain legacy search URLs
+    needs_refresh = False
+    now_utc = datetime.now(timezone.utc)
+    if newest_dt:
+        dt_cmp = newest_dt if newest_dt.tzinfo else newest_dt.replace(tzinfo=timezone.utc)
+        if (now_utc - dt_cmp).total_seconds() > 1800:
+            needs_refresh = True
+    else:
+        needs_refresh = True
+
+    has_legacy_search_links = any(
+        "news.google.com/search" in str(a.get("link", "")) or "news.google.com/search" in str(a.get("url", ""))
+        for a in articles
+    )
+    if has_legacy_search_links:
+        needs_refresh = True
+
+    # If force refresh requested or background refresh needed, trigger ingestion
+    if force_refresh or needs_refresh or (now - _NEWS_CACHE["last_fetched_at"] > 300):
+        if background_tasks is not None:
+            background_tasks.add_task(run_background_news_ingestion, force_refresh or needs_refresh)
+        else:
+            asyncio.create_task(run_background_news_ingestion(force_refresh or needs_refresh))
+
+    # Ensure every article has both link and url as deep permalinks and link_alive="alive"
+    enriched_articles = []
+    for a in articles:
+        art = dict(a)
+        raw_l = art.get("link") or art.get("url") or ""
+        clean_l = str(raw_l).strip()
+
+        if "news.google.com/search" in clean_l:
+            clean_l = resolve_canonical_article_url(clean_l, art.get("title", ""), art.get("source", ""))
+
+        art["link"] = clean_l
+        art["url"] = clean_l
+
+        p = urlparse(clean_l)
+        if clean_l and p.netloc and p.path not in ("", "/"):
+            if art.get("link_alive") != "dead":
+                art["link_alive"] = "alive"
+        elif not clean_l or p.path in ("", "/"):
+            art["link_alive"] = "dead"
+
+        enriched_articles.append(art)
+
+    _NEWS_CACHE["articles"] = enriched_articles
     _NEWS_CACHE["last_fetched_at"] = now
 
     return {
         "status": "live",
         "storage": "supabase_postgis",
-        "count": len(articles),
-        "total": len(articles),
-        "last_updated": datetime.now(timezone.utc).isoformat(),
-        "articles": articles,
-        "items": articles
+        "count": len(enriched_articles),
+        "total": len(enriched_articles),
+        "last_updated": latest_ts_iso,
+        "articles": enriched_articles,
+        "items": enriched_articles
     }
 
 
