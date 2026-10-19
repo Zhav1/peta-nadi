@@ -3,8 +3,21 @@ PetaNadi / LRIP : LLM Reasoning Service for Natural XAI Explanations
 Converts raw incident metrics & telemetry into natural, professional Indonesian XAI summaries.
 """
 
-def generate_natural_incident_reasoning(
-    incident_id: str,
+HAZARD_LABELS_ID = {
+    "earthquake": "Gempa Tektonik Dangkal (Sesar Sumatra)",
+    "flood": "Banjir Bandang & Luapan Pesisir (Belawan)",
+    "landslide": "Tanah Longsor Lereng Kipas (Berastagi)",
+    "wildfire": "Kebakaran Hutan & Titik Panas Thermal",
+    "congestion": "Bottleneck Kemacetan Segmen Tol Belmera",
+    "port_closure": "Penutupan Pelabuhan (Penutupan Pelabuhan)",
+    "marine_wave": "Gelombang Tinggi Laut (Marine Wave)",
+    "road_closure": "Penutupan / Putus Jalan (Road Closure)",
+    "volcanic_eruption": "Erupsi Gunung Api (Abu Vulkanik)",
+    "other_disruption": "Disrupsi Koridor Logistik Lainnya",
+}
+
+
+def generate_natural_incident_reasoning(    incident_id: str,
     title: str,
     hazard_type: str,
     impact_summary: str = "",
@@ -18,8 +31,15 @@ def generate_natural_incident_reasoning(
         "flood": "Banjir Bandang & Luapan Pesisir (Belawan)",
         "landslide": "Tanah Longsor Lereng Kipas (Berastagi)",
         "wildfire": "Kebakaran Hutan & Titik Panas Thermal",
-        "congestion": "Bottleneck Kemacetan Segmen Tol Belmera"
+        "congestion": "Bottleneck Kemacetan Segmen Tol Belmera",
+        "port_closure": "Penutupan Pelabuhan (Penutupan Pelabuhan)",
+        "marine_wave": "Gelombang Tinggi Laut (Marine Wave)",
+        "road_closure": "Penutupan / Putus Jalan (Road Closure)",
+        "volcanic_eruption": "Erupsi Gunung Api (Abu Vulkanik)",
+        "other_disruption": "Disrupsi Koridor Logistik Lainnya",
     }
+
+    HAZARD_LABELS_ID = type_labels
 
     label = type_labels.get(hazard_type, "Disrupsi Logistik")
 

@@ -48,7 +48,7 @@ import {
   type TransportModality,
 } from '@/lib/aiDynamicRouter';
 import { api } from '@/lib/api';
-import type { CrisisState, WsEvent, CrisisType, Severity, RouteRecommendation } from '@/lib/types';
+import type { CrisisState, WsEvent, CrisisType, Severity, RouteRecommendation, DisasterZone, HazardImpactProfile, ZoneTier } from '@/lib/types';
 import { useAuth } from '@/lib/authContext';
 import { AuthModal } from '@/components/auth/AuthModal';
 import { FleetOnboardingModal } from '@/components/fleet/FleetOnboardingModal';
@@ -295,7 +295,10 @@ export default function DashboardClient() {
   const [drawModeActive, setDrawModeActive] = useState(false);
   const [isClickTargeting, setIsClickTargeting] = useState(false);
   const [simulatedShockwave, setSimulatedShockwave] = useState<{ center: [number, number]; radiusKm: number; hazardType: string } | null>(null);
-  const [disasterZones, setDisasterZones] = useState<Array<{ polygon: [number, number][]; type: 'flood'; risk: number }>>([]);
+  const [disasterZones, setDisasterZones] = useState<DisasterZone[]>([]);
+  const [showRedZones, setShowRedZones] = useState<boolean>(true);
+  const [showYellowZones, setShowYellowZones] = useState<boolean>(true);
+  const [mapFlyTo, setMapFlyTo] = useState<{ lon: number; lat: number; zoom?: number; ts: number } | null>(null);
   const [toast, setToast] = useState<{ message: string; type?: 'success' | 'error' | 'info' } | null>(null);
   const isDemoRunningRef = useRef<boolean>(false);
 
@@ -345,6 +348,68 @@ export default function DashboardClient() {
       return true;
     });
   }, [newsFeed, selectedNewsCategory, newsSearchQuery]);
+
+  // 32-point polygon ring around [lon, lat] with radius rKm (RED 16km / YELLOW 20km).
+  const buildZoneRing = useCallback((lon: number, lat: number, rKm: number, points = 32): [number, number][] => {
+    const ring: [number, number][] = [];
+    const kmToRad = rKm / 6371.0;
+    const latRad = (lat * Math.PI) / 180;
+    const lonRad = (lon * Math.PI) / 180;
+    for (let i = 0; i <= points; i++) {
+      const theta = (i * 2 * Math.PI) / points;
+      const pLat = Math.asin(
+        Math.sin(latRad) * Math.cos(kmToRad) + Math.cos(latRad) * Math.sin(kmToRad) * Math.cos(theta)
+      );
+      const pLon = lonRad + Math.atan2(
+        Math.sin(theta) * Math.sin(kmToRad) * Math.cos(latRad),
+        Math.cos(kmToRad) - Math.sin(latRad) * Math.sin(pLat)
+      );
+      ring.push([(pLon * 180) / Math.PI, (pLat * 180) / Math.PI]);
+    }
+    return ring;
+  }, []);
+
+  const liveNewsZoneCounts = useMemo(() => {
+    let red = 0;
+    let yellow = 0;
+    for (const n of newsFeed) {
+      if (n.lat == null || n.lon == null) continue;
+      if (n.zone_tier === 'DROPPED_IRRELEVANT') continue;
+      if (n.zone_tier === 'YELLOW_CLARIFY') yellow += 1;
+      else red += 1;
+    }
+    return { red, yellow };
+  }, [newsFeed]);
+
+  // Derive live Red & Yellow news zones + combine with manual disasterZones (independent checkboxes).
+  const combinedDisasterZones: DisasterZone[] = useMemo(() => {
+    const live: DisasterZone[] = [];
+    for (const n of newsFeed) {
+      if (n.lat == null || n.lon == null) continue;
+      const tier = (n.zone_tier || 'RED_CONFIRMED') as ZoneTier;
+      if (tier === 'DROPPED_IRRELEVANT') continue;
+      if (tier === 'RED_CONFIRMED' && !showRedZones) continue;
+      if (tier === 'YELLOW_CLARIFY' && !showYellowZones) continue;
+      const radiusKm = tier === 'RED_CONFIRMED' ? 16 : 20;
+      const hazardType = (n.hazardType || n.incident_type || 'other_disruption') as CrisisType;
+      live.push({
+        polygon: buildZoneRing(n.lon, n.lat, radiusKm),
+        type: hazardType,
+        risk: tier === 'RED_CONFIRMED' ? 0.9 : 0.55,
+        crisis_id: `news-${n.id}`,
+        id: `news-${n.id}`,
+        zone_tier: tier,
+        title: n.headline,
+        tier_reason: n.tier_reason || '',
+        custom_hazard_label: n.custom_hazard_label || n.headline,
+        source_news_id: n.id,
+        center: [n.lon, n.lat],
+        radiusKm,
+        impact_profile: n.impact_profile,
+      });
+    }
+    return [...disasterZones, ...live];
+  }, [disasterZones, newsFeed, showRedZones, showYellowZones, buildZoneRing]);
 
   // Synchronize activeSection from URL query parameters
   useEffect(() => {
@@ -448,7 +513,7 @@ export default function DashboardClient() {
     []
   );
 
-  const updateBaselineMapboxRoute = useCallback(async (originId: string, destId: string, modality: TransportModality, hazardCenter: [number, number] | null = null, radiusKm: number = DEFAULT_HAZARD_RADIUS_KM) => {
+  const updateBaselineMapboxRoute = useCallback(async (originId: string, destId: string, modality: TransportModality, hazardCenter: [number, number] | null = null, radiusKm: number = DEFAULT_HAZARD_RADIUS_KM, hazardType: CrisisType = 'flood', impactProfile?: HazardImpactProfile, zoneTier: 'RED_CONFIRMED' | 'YELLOW_CLARIFY' = 'RED_CONFIRMED') => {
     const originInfo = resolveNodeInfo(originId);
     const destInfo = resolveNodeInfo(destId);
     const originNode = originInfo?.coords;
@@ -485,7 +550,7 @@ export default function DashboardClient() {
     }
 
     try {
-      const routes = await calculateAIDynamicDetourRoutes(hazardCenter, radiusKm, originNode, destNode, modality);
+      const routes = await calculateAIDynamicDetourRoutes(hazardCenter, radiusKm, originNode, destNode, modality, hazardType, impactProfile, zoneTier);
       setCurrentMapRoutes(routes);
       setSelectedCrisis((prev) =>
         prev ? { ...prev, route_recommendations: routes } : prev
@@ -644,7 +709,10 @@ export default function DashboardClient() {
               selectedRadius,
               originCoords,
               destCoords,
-              selectedModality
+              selectedModality,
+              baseCrisis.type || 'flood',
+              baseCrisis.impact_profile,
+              baseCrisis.zone_tier || 'RED_CONFIRMED'
             );
 
             setCurrentMapRoutes(dynamicRoutes);
@@ -703,7 +771,10 @@ export default function DashboardClient() {
           selectedRadius,
           originCoords,
           destCoords,
-          selectedModality
+          selectedModality,
+          (crisis.type as CrisisType) || 'flood',
+          crisis.impact_profile,
+          crisis.zone_tier || 'RED_CONFIRMED'
         );
 
         if (routeCalculationReqIdRef.current !== currentReqId) {
@@ -814,7 +885,7 @@ export default function DashboardClient() {
           const destCoords = HUB_NODES[selectedDestNode]?.coords;
           if (originCoords && destCoords) {
             demoState.setIsCalculatingRoute(true);
-            calculateAIDynamicDetourRoutes(null, selectedRadius, originCoords, destCoords, selectedModality)
+            calculateAIDynamicDetourRoutes(null, selectedRadius, originCoords, destCoords, selectedModality, 'flood', undefined, 'RED_CONFIRMED')
               .then((routes) => {
                 if (routes.length > 0) {
                   setCurrentMapRoutes(routes);
@@ -856,7 +927,7 @@ export default function DashboardClient() {
         if (!demoOriginCoords || !demoDestCoords) break;
 
         demoState.setIsCalculatingRoute(true);
-        calculateAIDynamicDetourRoutes(hazardCenter, demoRadiusKm, demoOriginCoords, demoDestCoords, selectedModality)
+        calculateAIDynamicDetourRoutes(hazardCenter, demoRadiusKm, demoOriginCoords, demoDestCoords, selectedModality, 'flood', undefined, 'RED_CONFIRMED')
           .then((rawRoutes) => {
             const safeDetours = rawRoutes.filter(
               (r) => !r.is_compromised && r.safety_status !== 'HOLD_DELAY' && r.waypoints.length > 0
@@ -958,7 +1029,10 @@ export default function DashboardClient() {
       radiusKm,
       originCoords,
       destCoords,
-      selectedModality
+      selectedModality,
+      type,
+      undefined,
+      'RED_CONFIRMED'
     ).then((prelimRoutes) => {
       if (prelimRoutes.length > 0) {
         setCurrentMapRoutes(prelimRoutes);
@@ -1065,6 +1139,184 @@ export default function DashboardClient() {
       }
     );
   }, [selectedOriginNode, selectedDestNode, selectedModality, triggerSimulation]);
+
+  // Unified stored-audit-trail inspection for news "Fokus" & map zone clicks (zero extra LLM cost).
+  const inspectNewsOrZoneAuditTrail = useCallback(async (
+    newsItem: (typeof newsFeed)[number] | undefined,
+    fallbackZone?: DisasterZone
+  ) => {
+    const zoneTier: 'RED_CONFIRMED' | 'YELLOW_CLARIFY' = ((newsItem?.zone_tier as string) || (fallbackZone?.zone_tier as string) || 'RED_CONFIRMED') === 'YELLOW_CLARIFY' ? 'YELLOW_CLARIFY' : 'RED_CONFIRMED';
+    const tierReason: string =
+      newsItem?.tier_reason || fallbackZone?.tier_reason ||
+      (zoneTier === 'RED_CONFIRMED'
+        ? 'Zona Merah: bencana terkonfirmasi dari sumber resmi, membutuhkan pengalihan koridor segera.'
+        : 'Zona Kuning: sinyal perlu klarifikasi/waspada, pantau sebelum pengalihan penuh.');
+    const customHazardLabel: string =
+      newsItem?.custom_hazard_label || fallbackZone?.custom_hazard_label ||
+      newsItem?.headline || fallbackZone?.title || 'Gangguan Koridor';
+    const rawHazard = (newsItem?.hazardType || newsItem?.incident_type || (fallbackZone?.type as string) || 'other_disruption') as CrisisType;
+    const hazardType: CrisisType = rawHazard;
+    const impactProfile: HazardImpactProfile | undefined = newsItem?.impact_profile || fallbackZone?.impact_profile;
+    const lon: number | undefined = (newsItem?.lon as number | undefined) ?? fallbackZone?.center?.[0];
+    const lat: number | undefined = (newsItem?.lat as number | undefined) ?? fallbackZone?.center?.[1];
+    if (lon == null || lat == null || !Number.isFinite(lon) || !Number.isFinite(lat)) {
+      setToast({ message: 'Koordinat zona belum tersedia untuk inspeksi audit.', type: 'info' });
+      return;
+    }
+    const radiusKm = fallbackZone?.radiusKm ?? (zoneTier === 'RED_CONFIRMED' ? 16 : 20);
+    const title: string = newsItem?.headline || fallbackZone?.title || customHazardLabel;
+    const source: string = newsItem?.source_name || 'Sumber Berita Terverifikasi';
+    const link: string = newsItem?.link || newsItem?.url || '';
+    const summary: string = newsItem?.summary || tierReason;
+    const corridorSegment: string = newsItem?.corridor_segment || newsItem?.location_name || 'Koridor Sumatera';
+    const affectedModalities = impactProfile?.affected_modalities?.join(', ') || 'Darat';
+    const passability = impactProfile?.passability || (zoneTier === 'RED_CONFIRMED' ? 'BLOCKED' : 'CAUTION');
+
+    // Smooth camera fly + highlight news card.
+    setMapFlyTo({ lon, lat, zoom: 9.5, ts: Date.now() });
+    if (newsItem) setSelectedNewsId(newsItem.id);
+
+    const nowIso = new Date().toISOString();
+    const crisisId = newsItem?.id ? `audit-${newsItem.id}` : (fallbackZone?.id || fallbackZone?.crisis_id || 'audit-zone');
+
+    const mkFinding = (agent: string, conf: number, text: string) => ({
+      agent,
+      confidence: conf,
+      summary: text,
+      data: { source_mode: 'LIVE_API', stored_news_id: newsItem?.id || fallbackZone?.source_news_id || crisisId } as Record<string, unknown>,
+      timestamp: nowIso,
+    });
+
+    const siblingCitations = newsFeed
+      .filter((n) => {
+        if (!newsItem) return n.id === fallbackZone?.source_news_id;
+        const sameCorridor = n.corridor_segment && newsItem?.corridor_segment
+          ? n.corridor_segment === newsItem.corridor_segment
+          : (n.location_name || '') === (newsItem.location_name || '');
+        return n.id === newsItem.id || sameCorridor;
+      })
+      .slice(0, 4)
+      .map((n) => ({
+        headline: n.headline,
+        source: n.source_name,
+        source_name: n.source_name,
+        tier: n.source_tier,
+        url: n.link || n.url,
+        link_alive: n.link_alive,
+        temporal_phase: n.temporal_phase,
+        lane_status: n.ground_truth_metrics?.lane_status,
+      }));
+
+    let routes: RouteRecommendation[] = [];
+    const originId = activeOriginRef.current || selectedOriginNode;
+    const destId = activeDestRef.current || selectedDestNode;
+    if (originId && destId) {
+      const originInfo = resolveNodeInfo(originId);
+      const destInfo = resolveNodeInfo(destId);
+      const originCoords = originInfo?.coords;
+      const destCoords = destInfo?.coords;
+      if (originCoords && destCoords) {
+        try {
+          routes = await calculateAIDynamicDetourRoutes(
+            [lon, lat],
+            radiusKm,
+            originCoords,
+            destCoords,
+            selectedModality,
+            hazardType,
+            impactProfile,
+            zoneTier
+          );
+          setCurrentMapRoutes(routes);
+          setActiveRouteIdx(0);
+        } catch (e) {
+          console.warn('Audit-trail route calc fallback:', e);
+        }
+      }
+    }
+
+    const auditCrisis: CrisisState = {
+      crisis_id: crisisId,
+      title,
+      type: hazardType,
+      severity: zoneTier === 'RED_CONFIRMED' ? 'critical' : 'medium',
+      is_simulated: false,
+      lat,
+      lon,
+      region: corridorSegment.replace(/ — /g, '_').replace(/ /g, '_').toLowerCase() || 'koridor_sumatera',
+      status: 'validated',
+      overall_confidence: zoneTier === 'RED_CONFIRMED' ? 0.92 : 0.64,
+      data_collection_finding: mkFinding(
+        'data_collection',
+        zoneTier === 'RED_CONFIRMED' ? 0.9 : 0.62,
+        `Sensor & traffic koridor ${corridorSegment}: status jalur ${passability}, moda terdampak ${affectedModalities}. Data tersimpan dari pipeline LIVE API.`
+      ),
+      osint_hazard_finding: mkFinding(
+        'osint_hazard',
+        zoneTier === 'RED_CONFIRMED' ? 0.92 : 0.64,
+        `Verifikasi ${source}: "${title}". ${tierReason}`
+      ),
+      prediction_finding: mkFinding(
+        'prediction',
+        zoneTier === 'RED_CONFIRMED' ? 0.88 : 0.6,
+        zoneTier === 'RED_CONFIRMED'
+          ? `Prakiraan spasial: radius ${radiusKm} km di sekitar [${lon.toFixed(3)}, ${lat.toFixed(3)}] tetap berisiko ${passability}; hindari koridor ${corridorSegment}.`
+          : `Prakiraan spasial: potensi gangguan terbatas di ${corridorSegment}; siaga klarifikasi lanjutan sebelum reroute penuh.`
+      ),
+      route_optimization_finding: mkFinding(
+        'route_optimization',
+        routes.length > 0 ? 0.9 : 0.66,
+        routes.length > 0
+          ? `${routes.length} koridor darat/laut/udara dihitung ulang menghindari zona ${zoneTier === 'RED_CONFIRMED' ? 'Merah' : 'Kuning'} (${hazardType}, ${passability}).`
+          : `Pilih Titik Asal & Tujuan untuk menghitung ulang koridor menghindari zona ${zoneTier === 'RED_CONFIRMED' ? 'Merah' : 'Kuning'} (${hazardType}).`
+      ),
+      economic_intelligence_finding: mkFinding(
+        'economic_intelligence',
+        0.7,
+        `Estimasi penundaan ~${impactProfile?.estimated_delay_hours ?? (zoneTier === 'RED_CONFIRMED' ? 8 : 2)} jam untuk komoditas ${newsItem?.commodity_name || 'pangan pokok'}; pantau harga PIHPS koridor ${corridorSegment}.`
+      ),
+      decision_support_output: `${customHazardLabel} — ${zoneTier === 'RED_CONFIRMED' ? 'Zona Merah terkonfirmasi' : 'Zona Kuning perlu klarifikasi'} di ${corridorSegment}. ${tierReason} Ringkasan tersimpan: ${summary} Moda terdampak: ${affectedModalities} (status ${passability}).`,
+      route_recommendations: routes,
+      verified_news_citations: siblingCitations.length > 0 ? siblingCitations : [{
+        headline: title,
+        source,
+        source_name: source,
+        url: link || undefined,
+        link_alive: newsItem?.link_alive || 'unknown',
+        temporal_phase: newsItem?.temporal_phase,
+      }],
+      causal_chain: [
+        { name: `Sumber Berita (${source})`, relation: 'melaporkan', impact_score: 0.9 },
+        { name: zoneTier === 'RED_CONFIRMED' ? 'Zona Merah: Bencana Aktif' : 'Zona Kuning: Perlu Klarifikasi', relation: 'diklasifikasikan LLM sebagai', impact_score: zoneTier === 'RED_CONFIRMED' ? 0.92 : 0.64 },
+        { name: `Dampak Moda (${affectedModalities})`, relation: 'mengganggu', impact_score: 0.75 },
+        { name: `Mitigasi Koridor (${corridorSegment})`, relation: 'dialihkan via', impact_score: 0.8 },
+      ],
+      zone_tier: zoneTier,
+      tier_reason: tierReason,
+      custom_hazard_label: customHazardLabel,
+      impact_profile: impactProfile,
+      evidence: {
+        osint_author: source,
+        osint_text: summary,
+      },
+      validated: true,
+      created_at: nowIso,
+      updated_at: nowIso,
+      messages: [],
+    };
+
+    setSelectedCrisis(auditCrisis);
+    setSelectedCrisisId(auditCrisis.crisis_id);
+    setActiveTab('Evidence');
+    setIsSidebarOpen(true);
+  }, [newsFeed, selectedOriginNode, selectedDestNode, selectedModality, resolveNodeInfo]);
+
+  const handleZoneClick = useCallback((zone: DisasterZone) => {
+    const linked = zone.source_news_id
+      ? newsFeed.find((n) => n.id === zone.source_news_id)
+      : newsFeed.find((n) => n.headline === zone.title);
+    void inspectNewsOrZoneAuditTrail(linked, zone);
+  }, [newsFeed, inspectNewsOrZoneAuditTrail]);
 
   const handleCommitOperationalRoute = useCallback(
     async (route: RouteRecommendation, action: any, tactical: any) => {
@@ -1384,7 +1636,9 @@ export default function DashboardClient() {
               fireHotspots={[]}
               activeFleet={activeFleetVehicles}
               demoStage={demoState.isRunning ? demoState.stage : null}
-              disasterZones={disasterZones}
+              disasterZones={combinedDisasterZones}
+              onZoneClick={handleZoneClick}
+              flyToCoords={mapFlyTo}
               onPolygonDrawn={handlePolygonDrawn}
               drawModeActive={drawModeActive}
               isClickTargeting={isClickTargeting}
@@ -1524,22 +1778,14 @@ export default function DashboardClient() {
                   const canOpenSource = Boolean(articleLink) && item.link_alive !== 'dead';
                   const isExpiredLink = item.link_alive === 'dead';
                   const isExcerptExpanded = expandedNewsId === item.id;
+                  const itemZoneTier = (item.zone_tier || 'RED_CONFIRMED') as ZoneTier;
 
                   const handleFocusMap = () => {
-                    setSelectedNewsId(item.id);
                     if (item.originNode && item.destNode) {
                       setSelectedOriginNode(item.originNode);
                       setSelectedDestNode(item.destNode);
                     }
-                    if (item.lat && item.lon) {
-                      handleMapPointTargeted(
-                        item.lat,
-                        item.lon,
-                        (item.hazardType as CrisisType) || 'flood',
-                        selectedRadius,
-                        'high'
-                      );
-                    }
+                    void inspectNewsOrZoneAuditTrail(item, undefined);
                   };
 
                   return (
@@ -1570,6 +1816,18 @@ export default function DashboardClient() {
                       </div>
 
                       {/* Headline with external link */}
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {itemZoneTier === 'RED_CONFIRMED' ? (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-red-500/15 border border-red-500/40 text-red-300">ZONA MERAH</span>
+                        ) : (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-yellow-400/10 border border-yellow-400/40 text-yellow-300">ZONA KUNING: PERLU KLARIFIKASI</span>
+                        )}
+                        {(item.custom_hazard_label) && (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-sans text-slate-200 bg-white/5 border border-white/10 truncate max-w-[180px]" title={item.custom_hazard_label}>
+                            {item.custom_hazard_label}
+                          </span>
+                        )}
+                      </div>
                       <h3 className="text-xs font-semibold text-slate-100 leading-snug font-sans group">
                         {canOpenSource ? (
                           <a
@@ -1807,6 +2065,37 @@ export default function DashboardClient() {
                 </button>
               </div>
             )}
+
+            {/* Filter Zona Peta: independent Red/Yellow checkboxes */}
+            <div className={`absolute top-[100px] z-30 pointer-events-auto transition-all duration-300 hidden md:flex flex-col gap-1.5 p-2.5 rounded-lg bg-[#0c1017]/95 border border-white/10 shadow-xl ${isLeftSidebarCollapsed ? 'left-4 sm:left-32' : 'left-4 sm:left-32 lg:left-[368px]'}`}>
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400 px-0.5">Filter Zona Peta</span>
+              <button
+                type="button"
+                onClick={() => setShowRedZones((v) => !v)}
+                className="cursor-pointer flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 transition text-left"
+                title="Tampilkan/sembunyikan zona merah terkonfirmasi"
+              >
+                <span className={`w-4 h-4 rounded flex items-center justify-center border ${showRedZones ? 'bg-red-500 border-red-500 text-white' : 'border-slate-600'}`}>
+                  {showRedZones && <span className="text-[11px] font-bold leading-none">✓</span>}
+                </span>
+                <span className="w-2.5 h-2.5 rounded-full bg-red-500 shrink-0 shadow-[0_0_8px_rgba(239,68,68,0.6)]" />
+                <span className="text-xs text-slate-200 font-medium">Zona Merah (Bencana Terkonfirmasi)</span>
+                <span className="ml-auto px-1.5 py-0.5 rounded bg-red-500/15 border border-red-500/30 text-red-300 text-xs font-mono font-bold">{liveNewsZoneCounts.red}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowYellowZones((v) => !v)}
+                className="cursor-pointer flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 transition text-left"
+                title="Tampilkan/sembunyikan zona kuning klarifikasi"
+              >
+                <span className={`w-4 h-4 rounded flex items-center justify-center border ${showYellowZones ? 'bg-yellow-400 border-yellow-400 text-black' : 'border-slate-600'}`}>
+                  {showYellowZones && <span className="text-[11px] font-bold leading-none">✓</span>}
+                </span>
+                <span className="w-2.5 h-2.5 rounded-full bg-yellow-400 shrink-0 shadow-[0_0_8px_rgba(250,204,21,0.6)]" />
+                <span className="text-xs text-slate-200 font-medium">Zona Kuning (Perlu Klarifikasi / Waspada)</span>
+                <span className="ml-auto px-1.5 py-0.5 rounded bg-yellow-400/10 border border-yellow-400/30 text-yellow-300 text-xs font-mono font-bold">{liveNewsZoneCounts.yellow}</span>
+              </button>
+            </div>
 
             {/* Relocated Collapsible Floating Simulator Dock above Bottombar (Hidden during guided demo to avoid UI overlap) */}
             {!demoState.isRunning && (

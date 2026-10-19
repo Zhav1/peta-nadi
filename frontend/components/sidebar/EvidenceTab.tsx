@@ -82,6 +82,43 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
 
   return (
     <div className="space-y-4 text-slate-200 text-xs">
+
+      {/* 0. AUDIT KLASIFIKASI AI & PENJELASAN ZONA */}
+      {(crisis.zone_tier || crisis.tier_reason || crisis.impact_profile) && (
+        <div className={`rounded-md border p-3 space-y-2 ${crisis.zone_tier === 'RED_CONFIRMED' ? 'bg-red-950/30 border-red-500/40' : 'bg-yellow-950/20 border-yellow-400/40'}`}>
+          <div className="flex items-center gap-1.5 font-sans font-bold text-xs">
+            <AlertTriangle className={`w-3.5 h-3.5 ${crisis.zone_tier === 'RED_CONFIRMED' ? 'text-red-400' : 'text-yellow-300'}`} />
+            <span className={crisis.zone_tier === 'RED_CONFIRMED' ? 'text-red-200' : 'text-yellow-200'}>
+              {crisis.zone_tier === 'RED_CONFIRMED' ? 'Zona Merah (Terkonfirmasi)' : 'Zona Kuning (Perlu Klarifikasi / Hati-hati)'}
+            </span>
+          </div>
+          {crisis.custom_hazard_label && (
+            <div className="text-xs font-sans">
+              <span className="text-slate-400 block text-[11px] uppercase tracking-wider font-mono">Jenis Bencana/Gangguan</span>
+              <span className="text-slate-100 font-semibold">{crisis.custom_hazard_label}</span>
+            </div>
+          )}
+          {crisis.tier_reason && (
+            <p className="text-xs text-slate-300 leading-relaxed font-sans">
+              <span className="text-slate-400 font-mono text-[11px] block uppercase tracking-wider">Mengapa zona ini diklasifikasikan {crisis.zone_tier === 'RED_CONFIRMED' ? 'Merah' : 'Kuning'} oleh LLM</span>
+              {crisis.tier_reason}
+            </p>
+          )}
+          {crisis.impact_profile && (
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-white/5 border border-white/10 text-slate-200">
+                Moda Terdampak: {crisis.impact_profile.affected_modalities?.map((m) => m === 'land' ? 'Darat' : m === 'sea' ? 'Laut' : 'Udara').join(', ') || 'Darat'}
+              </span>
+              <span className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold border ${crisis.impact_profile.passability === 'BLOCKED' ? 'bg-red-500/15 border-red-500/40 text-red-300' : crisis.impact_profile.passability === 'RESTRICTED' ? 'bg-amber-500/15 border-amber-500/40 text-amber-300' : 'bg-yellow-400/10 border-yellow-400/40 text-yellow-300'}`}>
+                Status Jalur: {crisis.impact_profile.passability}
+              </span>
+              <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-white/5 border border-white/10 text-slate-200">
+                Estimasi Penundaan: ~{crisis.impact_profile.estimated_delay_hours} Jam
+              </span>
+            </div>
+          )}
+        </div>
+      )}
       
       {/* 1. STATISTICAL CONFIDENCE VS DISRUPTION PROBABILITY CARD */}
       <div className="bg-[#121822] border border-[#1c2432] rounded-md p-3 space-y-2">

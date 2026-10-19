@@ -1,5 +1,5 @@
 import type { LonLat } from './pathDensifier';
-import type { RouteRecommendation, CongestionSegment, RouteLeg, HoldVsRerouteEconomics } from './types';
+import type { RouteRecommendation, CongestionSegment, RouteLeg, HoldVsRerouteEconomics, CrisisType, HazardImpactProfile, RouteTradeoffAnalysis } from './types';
 
 export type TransportModality = 'best' | 'truck' | 'maritime' | 'air' | 'multimodal' | 'auto';
 
@@ -131,6 +131,113 @@ export function findClosestSafeHoldDepot(
   return { depot: best, distanceKm: minD };
 }
 
+/**
+ * Modality Awareness: which transport modalities are affected by a hazard.
+ * Uses explicit impact_profile when provided, otherwise derives from hazardType.
+ */
+export function getAffectedModalities(
+  hazardType: CrisisType = 'flood',
+  impactProfile?: HazardImpactProfile
+): Array<'land' | 'sea' | 'air'> {
+  if (impactProfile?.affected_modalities && impactProfile.affected_modalities.length > 0) {
+    return [...impactProfile.affected_modalities];
+  }
+  switch (hazardType) {
+    case 'port_closure':
+      return ['sea', 'land'];
+    case 'marine_wave':
+      return ['sea'];
+    case 'volcanic_eruption':
+      return ['air', 'land'];
+    case 'wildfire':
+      return ['land', 'air'];
+    case 'flood':
+    case 'landslide':
+    case 'earthquake':
+    case 'road_closure':
+    case 'congestion':
+    case 'other_disruption':
+    default:
+      return ['land'];
+  }
+}
+
+/**
+ * Checks whether a seaport is blocked by a hazard circle.
+ * Sea-affecting hazards use a generous capture radius (max(radiusKm + 8, 22) km)
+ * because users clicking "near Pelabuhan Asal" often click harbor water or
+ * adjacent coast 5–20 km from the exact port pin coordinate.
+ */
+export function isSeaportBlockedByHazard(
+  portCoords: LonLat,
+  hazardCenter: LonLat | null,
+  radiusKm: number,
+  hazardType: CrisisType = 'flood',
+  affectedModalities: Array<string> = ['land']
+): boolean {
+  if (!hazardCenter) return false;
+  const distKm = getHaversineDistanceKm(portCoords, hazardCenter);
+  const seaAffecting =
+    hazardType === 'port_closure' ||
+    hazardType === 'marine_wave' ||
+    affectedModalities.includes('sea');
+  if (seaAffecting) {
+    return distKm <= Math.max(radiusKm + 8, 22);
+  }
+  return distKm <= radiusKm + 2.0;
+}
+
+/**
+ * Finds the closest seaport NOT blocked by the hazard, optionally excluding ports.
+ */
+export function findClosestOpenSeaport(
+  target: LonLat,
+  hazardCenter: LonLat | null,
+  radiusKm: number,
+  hazardType: CrisisType = 'flood',
+  affectedModalities: Array<string> = ['land'],
+  excludePortIds: string[] = []
+): typeof CARGO_SEAPORT_NODES[0] | null {
+  const sorted = [...CARGO_SEAPORT_NODES].sort(
+    (a, b) => getHaversineDistanceKm(target, a.coords) - getHaversineDistanceKm(target, b.coords)
+  );
+  for (const port of sorted) {
+    if (excludePortIds.includes(port.id)) continue;
+    if (!isSeaportBlockedByHazard(port.coords, hazardCenter, radiusKm, hazardType, affectedModalities)) {
+      return port;
+    }
+  }
+  return null;
+}
+
+/**
+ * Bows nautical waypoints further offshore so the sea lane visually and
+ * mathematically detours around a maritime hazard circle (radiusKm + 10 km).
+ */
+export function bowNauticalPathAroundHazard(
+  path: LonLat[],
+  hazardCenter: LonLat | null,
+  radiusKm: number,
+  extraMarginKm: number = 10
+): LonLat[] {
+  if (!hazardCenter || path.length === 0) return path;
+  const avoidRadius = radiusKm + extraMarginKm;
+  return path.map(([lon, lat]) => {
+    const d = getHaversineDistanceKm([lon, lat], hazardCenter);
+    if (d >= avoidRadius) return [lon, lat] as LonLat;
+    const pushKm = avoidRadius - d + 2;
+    const dx = lon - hazardCenter[0];
+    const dy = lat - hazardCenter[1];
+    const len = Math.hypot(dx, dy) || 1;
+    const kmPerLon = 111.32 * Math.cos((hazardCenter[1] * Math.PI) / 180) || 1;
+    const kmPerLat = 110.574;
+    return [
+      lon + (dx / len) * (pushKm / kmPerLon),
+      lat + (dy / len) * (pushKm / kmPerLat),
+    ] as LonLat;
+  });
+}
+
 export function calculateHoldVsRerouteEconomics(
   origin: LonLat,
   destination: LonLat,
@@ -141,22 +248,36 @@ export function calculateHoldVsRerouteEconomics(
   hazardType: string = 'flood'
 ): HoldVsRerouteEconomics {
   const safeDepot = findClosestSafeHoldDepot(origin, hazardCenter, radiusKm).depot;
-  const estimated_clearance_hours =
-    hazardType === 'landslide' ? 24 :
-    hazardType === 'earthquake' ? 36 :
-    hazardType === 'port_closure' ? 18 : 14;
+  const clearanceByHazard: Record<string, number> = {
+    earthquake: 36,
+    landslide: 24,
+    volcanic_eruption: 24,
+    port_closure: 18,
+    road_closure: 16,
+    marine_wave: 12,
+    flood: 14,
+    wildfire: 10,
+    congestion: 5,
+    other_disruption: 12,
+  };
+  const estimated_clearance_hours = clearanceByHazard[hazardType] ?? 12;
 
   const deltaKm = Math.max(0, detourDistKm - primaryDistKm);
   const fuelAndMaintenanceCost = Math.round(deltaKm * 6800);
   const tollDifferential = 85000;
   const driverOvertimeBonus = Math.round((deltaKm / 45) * 40000);
-  const reroute_total_cost_idr = Math.max(750000, fuelAndMaintenanceCost + tollDifferential + driverOvertimeBonus);
+  const isSeaPortHazard = hazardType === 'port_closure' || hazardType === 'marine_wave';
+  // Alternate-port failover incurs feeder trucking + stevedoring transfer fee.
+  const alternatePortTransferFee = isSeaPortHazard ? 450000 : 0;
+  const reroute_total_cost_idr = Math.max(750000, fuelAndMaintenanceCost + tollDifferential + driverOvertimeBonus + alternatePortTransferFee);
 
   const reeferPlugCost = estimated_clearance_hours * 45000;
   const demurrageCost = estimated_clearance_hours * 125000;
+  // Port closure / marine wave adds container stacking & port demurrage exposure.
+  const containerStackingCost = isSeaPortHazard ? estimated_clearance_hours * 85000 : 0;
   const baseCargoValue = 180000000;
   const spoilageLoss = Math.round(baseCargoValue * (1 - Math.exp(-0.006 * estimated_clearance_hours)));
-  const hold_total_cost_idr = reeferPlugCost + demurrageCost + spoilageLoss;
+  const hold_total_cost_idr = reeferPlugCost + demurrageCost + containerStackingCost + spoilageLoss;
 
   const isRerouteBetter = reroute_total_cost_idr <= hold_total_cost_idr;
   const recommended_action: 'REROUTE' | 'HOLD' = isRerouteBetter ? 'REROUTE' : 'HOLD';
@@ -894,14 +1015,49 @@ function findClosestAirport(pt: LonLat) {
 
 /**
  * Computes Authentic 3-Leg Maritime + Land Intermodal Logistics Chain (Truck -> Pelindo Seaport -> Pelindo Seaport -> Truck)
+ * Hazard-aware: reroutes via the nearest OPEN alternate seaport when the
+ * nearest port is blocked by a port_closure / marine_wave / sea hazard.
  */
 export async function calculateSeaIntermodalCorridor(
   origin: LonLat,
-  destination: LonLat
+  destination: LonLat,
+  hazardCenter: LonLat | null = null,
+  radiusKm: number = DEFAULT_HAZARD_RADIUS_KM,
+  hazardType: CrisisType = 'flood',
+  affectedModalities?: Array<'land' | 'sea' | 'air'>
 ): Promise<RouteRecommendation> {
   const odDistanceKm = getHaversineDistanceKm(origin, destination);
-  const originPort = findClosestSeaport(origin).seaport;
-  const destPort = findClosestSeaport(destination).seaport;
+  const modalities = affectedModalities ?? getAffectedModalities(hazardType);
+  const nearestOriginPort = findClosestSeaport(origin).seaport;
+  const nearestDestPort = findClosestSeaport(destination).seaport;
+
+  const originBlocked = isSeaportBlockedByHazard(nearestOriginPort.coords, hazardCenter, radiusKm, hazardType, modalities);
+  const destBlocked = isSeaportBlockedByHazard(nearestDestPort.coords, hazardCenter, radiusKm, hazardType, modalities);
+
+  let originPort = nearestOriginPort;
+  let destPort = nearestDestPort;
+  let altOriginPort: typeof CARGO_SEAPORT_NODES[0] | null = null;
+  let altDestPort: typeof CARGO_SEAPORT_NODES[0] | null = null;
+  if (originBlocked) {
+    altOriginPort = findClosestOpenSeaport(origin, hazardCenter, radiusKm, hazardType, modalities, [nearestOriginPort.id]);
+    if (altOriginPort) originPort = altOriginPort;
+  }
+  if (destBlocked) {
+    const exclude = destPort.id === originPort.id ? [destPort.id, nearestOriginPort.id] : [nearestDestPort.id];
+    // Avoid picking the (possibly already alternate) origin port as destination unless no choice.
+    if (originPort.id !== nearestDestPort.id) exclude.push(originPort.id);
+    altDestPort = findClosestOpenSeaport(destination, hazardCenter, radiusKm, hazardType, modalities, exclude);
+    if (!altDestPort && originBlocked && altOriginPort) {
+      // Fallback: try any open port distinct from originPort
+      altDestPort = findClosestOpenSeaport(destination, hazardCenter, radiusKm, hazardType, modalities, [originPort.id]);
+    }
+    if (altDestPort) destPort = altDestPort;
+  }
+  const usedAlternatePort = originBlocked || destBlocked;
+  const closedPortName = originBlocked ? nearestOriginPort.name : destBlocked ? nearestDestPort.name : undefined;
+  const altPortName = altOriginPort && altDestPort
+    ? `${altOriginPort.name} → ${altDestPort.name}`
+    : altOriginPort ? altOriginPort.name : altDestPort ? altDestPort.name : undefined;
 
   // Same-Port / Short-Distance Guard
   if (originPort.id === destPort.id || odDistanceKm < 120) {
@@ -933,7 +1089,12 @@ export async function calculateSeaIntermodalCorridor(
   const leg1Eta = Math.round((leg1Dist / 50) * 60);
 
   // Leg 2: Coastal Maritime Sea Lane along SUMATRA_NAUTICAL_PERIMETER
-  const seaFairwayCoords = generateNauticalCoastalRoute(originPort.coords, destPort.coords);
+  // Bow the nautical lane offshore when it crosses a maritime hazard circle.
+  const rawSeaFairway = generateNauticalCoastalRoute(originPort.coords, destPort.coords);
+  const seaFairwayCoords =
+    hazardCenter && (modalities.includes('sea'))
+      ? bowNauticalPathAroundHazard(rawSeaFairway, hazardCenter, radiusKm, 10)
+      : rawSeaFairway;
   let seaDist = 0;
   for (let i = 0; i < seaFairwayCoords.length - 1; i++) {
     seaDist += getHaversineDistanceKm(seaFairwayCoords[i], seaFairwayCoords[i + 1]);
@@ -1001,19 +1162,25 @@ export async function calculateSeaIntermodalCorridor(
 
   return {
     id: 'corridor-sea-intermodal',
-    route_name: `Intermodal Laut (${originPort.name.split('(')[0].trim()} -> ${destPort.name.split('(')[0].trim()})`,
-    description: `Bypass Maritim Pesisir Alur Laut Kepulauan Indonesia (ALKI) via ${originPort.name} ke ${destPort.name}`,
+    route_name: usedAlternatePort && altPortName
+      ? `Pengalihan Pelabuhan Alternatif via ${altPortName.split('(')[0].trim()}`
+      : `Intermodal Laut (${originPort.name.split('(')[0].trim()} -> ${destPort.name.split('(')[0].trim()})`,
+    description: usedAlternatePort
+      ? `Alih muat pelabuhan alternatif menghindari penutupan ${closedPortName ?? 'pelabuhan'} via ${originPort.name} ke ${destPort.name} (jalur laut didetour keluar radius bahaya ${radiusKm}km)`
+      : `Bypass Maritim Pesisir Alur Laut Kepulauan Indonesia (ALKI) via ${originPort.name} ke ${destPort.name}`,
     waypoints: totalWaypoints,
     distance_km: leg1Dist + leg2Dist + leg3Dist,
     eta_minutes: leg1Eta + leg2Eta + leg3Eta,
-    fuel_increase_pct: 0,
-    risk_score: 0.04,
+    fuel_increase_pct: usedAlternatePort ? 12.0 : 0,
+    risk_score: usedAlternatePort ? 0.12 : 0.04,
     is_compromised: false,
     safety_status: 'SAFE_DETOUR',
-    safety_tag: 'MULTI-MODA LAUT + DARAT',
+    safety_tag: usedAlternatePort ? 'ALIH MUAT PELABUHAN ALTERNATIF' : 'MULTI-MODA LAUT + DARAT',
     modality: 'maritime',
     corridor_type: 'sea_intermodal',
     viable: true,
+    affected_port_name: closedPortName,
+    alternate_port_name: altPortName,
     legs,
     color: '#3B82F6',
   };
@@ -1163,6 +1330,174 @@ export async function calculateMultiModalLogisticsChain(
 }
 
 /**
+ * Builds a structured tradeoff analysis (pros/cons + delay & cost breakdown)
+ * for a single route corridor against the normal baseline.
+ */
+export function buildRouteTradeoffAnalysis(
+  route: RouteRecommendation,
+  baselineEtaMinutes: number,
+  baselineDistKm: number,
+  econ: HoldVsRerouteEconomics | undefined,
+  opts: { hazardType?: CrisisType; closedPortName?: string; altPortName?: string } = {}
+): RouteTradeoffAnalysis {
+  const time_delta_minutes = Math.max(0, Math.round(route.eta_minutes - baselineEtaMinutes));
+  const deltaKm = Math.max(0, route.distance_km - baselineDistKm);
+  const corridor = route.corridor_type;
+  const closed = opts.closedPortName ?? route.affected_port_name;
+  const alt = opts.altPortName ?? route.alternate_port_name;
+
+  if (corridor === 'land_detour') {
+    const fuelCost = Math.round(deltaKm * 6800);
+    const tollDiff = 85000;
+    const overtime = Math.round((deltaKm / 45) * 40000);
+    return {
+      time_delta_minutes,
+      additional_cost_idr: fuelCost + tollDiff + overtime,
+      cost_breakdown_items: [
+        { label: 'BBM & Perawatan', amount_idr: fuelCost },
+        { label: 'Diferensial Tol', amount_idr: tollDiff },
+        { label: 'Lembur Supir', amount_idr: overtime },
+      ],
+      pros: [
+        'Menghindari zona bahaya via jalur arteri yang aman',
+        'Armada tetap bergerak tanpa menunggu jalur dibuka',
+        'Risiko armada terjebak genangan / blokade minimal',
+      ],
+      cons: [
+        `Waktu tempuh bertambah +${time_delta_minutes} menit dibanding jalur normal`,
+        `Tambahan jarak tempuh ${Math.round(deltaKm)} km memicu konsumsi BBM & tol`,
+        'Ketergantungan pada kepadatan arteri alternatif',
+      ],
+    };
+  }
+
+  if (corridor === 'sea_intermodal') {
+    const isAlt = Boolean(alt || closed);
+    const feederTruck = isAlt ? 850000 + Math.round(deltaKm * 2600) : Math.round(deltaKm * 2600);
+    const portHandling = 650000;
+    const stevedoring = isAlt ? 450000 : 0;
+    const charterDiff = Math.round(Math.max(0, route.distance_km - baselineDistKm) * 1600);
+    const additional_cost_idr = feederTruck + portHandling + stevedoring + charterDiff;
+    return {
+      time_delta_minutes,
+      additional_cost_idr,
+      cost_breakdown_items: [
+        { label: 'Feeder Truk Pelabuhan', amount_idr: feederTruck },
+        { label: 'Handling Pelabuhan', amount_idr: portHandling + stevedoring },
+        { label: 'Diferensial Charter Kapal', amount_idr: charterDiff },
+      ],
+      pros: isAlt
+        ? [
+            `Menghindari penutupan ${closed ?? 'pelabuhan'} melalui alih muat di ${alt ?? 'pelabuhan alternatif'}`,
+            'Mempertahankan pengiriman via jalur laut tanpa menunggu buka pelabuhan',
+            'Kapasitas bulk besar, cocok untuk muatan tonase tinggi',
+          ]
+        : [
+            'Bypass maritim kapasitas besar menghindari blokade darat',
+            'Biaya per ton-km efisien untuk jarak jauh antar pelabuhan',
+            'Tidak terdampak kemacetan / banjir koridor darat',
+          ],
+      cons: [
+        'Tambahan biaya feeder truk darat & bongkar-muat pelabuhan alternatif',
+        `Waktu tempuh bertambah +${time_delta_minutes} menit dibanding jalur normal`,
+        'Butuh koordinasi jadwal kapal & alih muat antar pelabuhan',
+      ],
+    };
+  }
+
+  if (corridor === 'air_intermodal') {
+    const uplift = 4500000;
+    const airportHandling = 1200000;
+    const extraFuel = Math.round(deltaKm * 6800);
+    return {
+      time_delta_minutes,
+      additional_cost_idr: uplift + airportHandling + extraFuel,
+      cost_breakdown_items: [
+        { label: 'Uplift Kargo Udara', amount_idr: uplift },
+        { label: 'Handling Bandara', amount_idr: airportHandling },
+        { label: 'Feeder Darat Bandara', amount_idr: extraFuel },
+      ],
+      pros: [
+        'Waktu tempuh tercepat untuk muatan bernilai tinggi / perishable',
+        'Menghindari seluruh blokade darat & laut sekaligus',
+        'SLA & cold-chain paling aman untuk komoditas sensitif',
+      ],
+      cons: [
+        'Biaya uplift kargo udara paling mahal di antara semua opsi',
+        'Kapasitas tonase terbatas & butuh handling bandara khusus',
+        `Diferensial operasional +Rp ${(uplift + airportHandling + extraFuel).toLocaleString('id-ID')} dibanding jalur normal`,
+      ],
+    };
+  }
+
+  if (corridor === 'hold_staging') {
+    const clearanceH = econ?.estimated_clearance_hours ?? 12;
+    const holdTotal = econ?.hold_total_cost_idr ?? 2500000;
+    const reefer = clearanceH * 45000;
+    const demurrage = clearanceH * 125000;
+    const spoilage = Math.max(0, holdTotal - reefer - demurrage);
+    return {
+      time_delta_minutes,
+      additional_cost_idr: holdTotal,
+      cost_breakdown_items: [
+        { label: `Reefer Plug (${clearanceH} jam)`, amount_idr: reefer },
+        { label: `Demurrage & Stacking (${clearanceH} jam)`, amount_idr: demurrage },
+        { label: 'Risiko Susut Muatan / Spoilage', amount_idr: spoilage },
+      ],
+      pros: [
+        'Menghindari risiko armada terjebak / rusak di zona bahaya',
+        'Menjaga kualitas muatan perishable di cold storage depo',
+        'Hemat dibanding memutar jauh bila jalur cepat dibuka',
+      ],
+      cons: [
+        `Pengiriman tertunda ~${clearanceH} jam hingga jalur dibuka`,
+        'Biaya reefer & demurrage berjalan per jam selama penahanan',
+        'Risiko susut muatan bila komoditas sangat perishable',
+      ],
+    };
+  }
+
+  // land_primary (default)
+  if (route.is_compromised) {
+    const penalty = 3200000;
+    const delayCost = time_delta_minutes * 12000;
+    return {
+      time_delta_minutes,
+      additional_cost_idr: penalty + delayCost,
+      cost_breakdown_items: [
+        { label: 'Penalti Keterlambatan & Eksposur Risiko', amount_idr: penalty },
+        { label: 'Risiko Susut / Kerusakan Muatan', amount_idr: delayCost },
+        { label: 'Biaya Darurat & Eskalasi', amount_idr: 450000 },
+      ],
+      pros: [
+        'Tetap di koridor utama tanpa memutar jauh',
+        'Cocok bila gangguan cepat surut / akses segera dibuka',
+      ],
+      cons: [
+        `Waktu tempuh bertambah +${time_delta_minutes} menit dibanding jalur normal`,
+        'Risiko armada terjebak banjir / blokade & biaya darurat',
+        'Potensi susut muatan perishable selama tertahan',
+      ],
+    };
+  }
+  return {
+    time_delta_minutes,
+    additional_cost_idr: 0,
+    cost_breakdown_items: [
+      { label: 'Jalur Normal', amount_idr: 0 },
+    ],
+    pros: [
+      'Jalur tercepat & termurah pada kondisi normal',
+      'Tanpa biaya tambahan operasional & alih muat',
+    ],
+    cons: [
+      'Tidak ada redundansi bila kondisi gangguan memburuk',
+      'Rentan terdampak bila radius bahaya meluas',
+    ],
+  };
+}
+
+/**
  * Simultaneous Multi-Color Intermodal Router:
  * Simultaneously computes all four corridors (Land Primary, Land Detour, Sea Intermodal, Air Intermodal)
  * with authentic per-leg multi-color coordinates and grounded Hold-vs-Reroute economics.
@@ -1172,8 +1507,13 @@ export async function calculateAIDynamicDetourRoutes(
   radiusKm: number = DEFAULT_HAZARD_RADIUS_KM,
   origin: LonLat,
   destination: LonLat,
-  _modality: TransportModality = 'best'
+  _modality: TransportModality = 'best',
+  hazardType: CrisisType = 'flood',
+  impactProfile?: HazardImpactProfile,
+  zoneTier: 'RED_CONFIRMED' | 'YELLOW_CLARIFY' = 'RED_CONFIRMED'
 ): Promise<RouteRecommendation[]> {
+  void zoneTier;
+  const affectedModalities = getAffectedModalities(hazardType, impactProfile);
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
   const excludeToll = hazardCenter ? isHazardNearTollCorridor(hazardCenter, radiusKm) : false;
 
@@ -1183,7 +1523,15 @@ export async function calculateAIDynamicDetourRoutes(
   const primaryMetrics = hazardCenter
     ? calculateHazardExposureMetrics(primaryRes.coordinates, hazardCenter, radiusKm)
     : { isIntersecting: false, exposureKm: 0, penetrationRatio: 0, minDistanceToCenterKm: 9999, maxProximity: 0, riskPenaltyScore: 0 };
-  const isPrimaryCompromised = primaryMetrics.isIntersecting;
+  // Port-closure near origin/destination blocks port access roads even when the
+  // polyline itself skirts the circle: users often click "near Pelabuhan Asal".
+  const portAccessThresholdKm = Math.max(radiusKm + 6, 18);
+  const portAccessBlocked =
+    hazardCenter != null &&
+    hazardType === 'port_closure' &&
+    (getHaversineDistanceKm(origin, hazardCenter) <= portAccessThresholdKm ||
+      getHaversineDistanceKm(destination, hazardCenter) <= portAccessThresholdKm);
+  const isPrimaryCompromised = primaryMetrics.isIntersecting || portAccessBlocked;
 
   // Corridor 1: Fastest Direct Land Corridor
   const isPrimaryOffline = primaryRes.source === 'offline-interpolated';
@@ -1203,7 +1551,11 @@ export async function calculateAIDynamicDetourRoutes(
     risk_score: isPrimaryCompromised ? 0.90 : 0.05,
     is_compromised: isPrimaryCompromised,
     safety_status: isPrimaryCompromised ? 'COMPROMISED' : 'SAFE_DETOUR',
-    safety_tag: isPrimaryCompromised ? 'TERDAMPAK ZONA BAHAYA (+60m Delay)' : 'RUTE DARAT TERCEPAT',
+    safety_tag: portAccessBlocked
+      ? 'AKSES PELABUHAN ASAL TUTUP — PERLU RUTE ALTERNATIF'
+      : isPrimaryCompromised
+        ? 'TERDAMPAK ZONA BAHAYA (+60m Delay)'
+        : 'RUTE DARAT TERCEPAT',
     traffic_level: primaryRes.congestionSegments.some((s) => s.level === 'heavy') ? 'heavy' : 'low',
     congestion_segments: primaryRes.congestionSegments,
     modality: 'truck',
@@ -1230,13 +1582,16 @@ export async function calculateAIDynamicDetourRoutes(
   let landDetourTag = 'RUTE ALTERNATIF ARTERI';
   let isDetourCompromised = false;
 
-  // If primary route intersects hazard shockwave, actively solve detour around hazard
+  // If primary route intersects hazard shockwave (or port access is blocked),
+  // actively solve detour around hazard / closed-port perimeter.
   if (hazardCenter && isPrimaryCompromised && token) {
     let foundDetour = false;
 
     // A. Priority Bypass: Safe arterial junctions outside hazard zone
+    // Port closures need a wider perimeter buffer around the closed terminal.
+    const nodeBufferKm = hazardType === 'port_closure' ? 6.0 : 2.0;
     const safeNodes = HIGHWAY_JUNCTION_NODES.filter(
-      (node) => getHaversineDistanceKm(node.coords, hazardCenter) >= radiusKm + 2.0
+      (node) => getHaversineDistanceKm(node.coords, hazardCenter) >= radiusKm + nodeBufferKm
     );
     const scoredNodes = safeNodes.map((node) => ({
       name: node.name,
@@ -1335,10 +1690,15 @@ export async function calculateAIDynamicDetourRoutes(
   };
 
   // STEP 2: Simultaneously Compute Intermodal Corridors (Sea & Air)
+  // Sea corridor is hazard-aware: blocked ports fail over to the nearest open port.
   const [seaCorridor, airCorridor] = await Promise.all([
-    calculateSeaIntermodalCorridor(origin, destination),
+    calculateSeaIntermodalCorridor(origin, destination, hazardCenter, radiusKm, hazardType, affectedModalities),
     calculateAirIntermodalCorridor(origin, destination),
   ]);
+
+  // Baseline normal ETA / distance: fastest direct land time before hazard delay.
+  const baselineEtaMinutes = primaryRes.durationMinutes;
+  const baselineDistKm = primaryRes.distanceKm;
 
   // STEP 3: Grounded Hold vs Reroute Economic Decision Engine
   let holdCorridor: RouteRecommendation | null = null;
@@ -1349,7 +1709,8 @@ export async function calculateAIDynamicDetourRoutes(
       landPrimary.distance_km,
       landDetour.distance_km,
       hazardCenter,
-      radiusKm
+      radiusKm,
+      hazardType
     );
 
     landPrimary.economic_comparison = econ;
@@ -1397,6 +1758,16 @@ export async function calculateAIDynamicDetourRoutes(
   const allCorridors: RouteRecommendation[] = [landPrimary, landDetour, seaCorridor, airCorridor];
   if (holdCorridor) {
     allCorridors.push(holdCorridor);
+  }
+
+  // STEP 4: Attach structured tradeoff analysis (pros/cons + delay & cost) to EVERY option.
+  const sharedEcon = allCorridors.find((r) => r.economic_comparison)?.economic_comparison;
+  for (const route of allCorridors) {
+    route.tradeoff_analysis = buildRouteTradeoffAnalysis(route, baselineEtaMinutes, baselineDistKm, sharedEcon, {
+      hazardType,
+      closedPortName: route.affected_port_name ?? seaCorridor.affected_port_name,
+      altPortName: route.alternate_port_name ?? seaCorridor.alternate_port_name,
+    });
   }
 
   return allCorridors;

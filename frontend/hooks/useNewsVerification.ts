@@ -2,6 +2,8 @@
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 
+import type { HazardImpactProfile } from '@/lib/types';
+
 export interface NewsItem {
   id: string;
   source_type: 'OFFICIAL_NEWS' | 'BMKG_WEATHER' | 'PIHPS_MARKET' | 'MEDSOS_OSINT';
@@ -25,12 +27,20 @@ export interface NewsItem {
   attributions?: Array<{ source_name: string; url?: string; credibility_score?: number }>;
   originNode?: string;
   destNode?: string;
-  hazardType?: 'flood' | 'landslide' | 'congestion' | 'port_closure' | 'wildfire';
+  hazardType?: 'flood' | 'landslide' | 'congestion' | 'port_closure' | 'wildfire' | 'marine_wave' | 'road_closure' | 'earthquake' | 'volcanic_eruption' | 'other_disruption';
   commodity_name?: string;
   economic_note?: string;
   link?: string;
   url?: string;
   link_alive?: 'alive' | 'dead' | 'unknown';
+  zone_tier?: 'RED_CONFIRMED' | 'YELLOW_CLARIFY' | 'DROPPED_IRRELEVANT';
+  tier_reason?: string;
+  custom_hazard_label?: string;
+  impact_profile?: HazardImpactProfile;
+  is_geocoded?: boolean;
+  location_precision?: string;
+  corridor_segment?: string;
+  corridor_nodes?: string[];
 }
 
 export interface MarketRegimeData {
@@ -112,10 +122,11 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     lon: 98.6923,
     pubDate: '18 Okt 2026, 08:30 WIB',
     category: 'PORT_LOGISTICS',
-    incident_type: 'port_operations',
-    severity: 'low',
-    temporal_phase: 'clearing_recovery',
-    lead_time_hours: 0,
+    incident_type: 'port_closure',
+    hazardType: 'port_closure',
+    severity: 'medium',
+    temporal_phase: 'forecast_early_warning',
+    lead_time_hours: 6,
     commodities_affected: ['CPO', 'Karet', 'Kopi'],
     ground_truth_metrics: { lane_status: 'NORMAL_OPERATIONS', water_level_cm: 12 },
     verification_status: 'CORROBORATED_OFFICIAL',
@@ -124,6 +135,14 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     link: 'https://sumut.antaranews.com/search?q=terminal+petikemas+belawan',
     url: 'https://sumut.antaranews.com/search?q=terminal+petikemas+belawan',
     link_alive: 'alive',
+    zone_tier: 'YELLOW_CLARIFY',
+    tier_reason: 'Operasional terpantau normal namun pengawasan cuaca pasang laut tetap aktif, perlu klarifikasi berkala sebelum dikategorikan aman penuh.',
+    custom_hazard_label: 'Pengawasan Operasional Pelabuhan',
+    impact_profile: { affected_modalities: ['sea', 'land'], passability: 'CAUTION', estimated_delay_hours: 2 },
+    is_geocoded: true,
+    location_precision: 'port',
+    corridor_segment: 'Belawan — Medan',
+    corridor_nodes: ['belawan', 'medan'],
   },
   {
     id: 'FALLBACK-BMKG-02',
@@ -138,6 +157,7 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     pubDate: '18 Okt 2026, 07:15 WIB',
     category: 'WEATHER_EARLY_WARNING',
     incident_type: 'marine_wave',
+    hazardType: 'marine_wave',
     severity: 'medium',
     temporal_phase: 'forecast_early_warning',
     lead_time_hours: 12,
@@ -149,6 +169,14 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     link: 'https://sumut.antaranews.com/search?q=bmkg+maritim+belawan',
     url: 'https://sumut.antaranews.com/search?q=bmkg+maritim+belawan',
     link_alive: 'alive',
+    zone_tier: 'YELLOW_CLARIFY',
+    tier_reason: 'Peringatan dini gelombang 1.25–2.0 m dari BMKG Maritim, armada feeder diminta waspada; belum ada penutupan pelabuhan.',
+    custom_hazard_label: 'Gelombang Sedang Selat Malaka',
+    impact_profile: { affected_modalities: ['sea'], passability: 'CAUTION', estimated_delay_hours: 4 },
+    is_geocoded: true,
+    location_precision: 'waterway',
+    corridor_segment: 'Belawan — Selat Malaka',
+    corridor_nodes: ['belawan', 'kuala_tanjung'],
   },
   {
     id: 'FALLBACK-PIHPS-03',
@@ -162,7 +190,8 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     lon: 98.6189,
     pubDate: '18 Okt 2026, 09:00 WIB',
     category: 'COMMODITY_STABILITY',
-    incident_type: 'market_monitoring',
+    incident_type: 'other_disruption',
+    hazardType: 'other_disruption',
     severity: 'low',
     temporal_phase: 'clearing_recovery',
     lead_time_hours: 0,
@@ -174,23 +203,32 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     link: 'https://www.bi.go.id/hargapangan/TabelHarga/PasarTradisionalDaerah',
     url: 'https://www.bi.go.id/hargapangan/TabelHarga/PasarTradisionalDaerah',
     link_alive: 'alive',
+    zone_tier: 'YELLOW_CLARIFY',
+    tier_reason: 'Pasokan stabil dari Karo–Dairi tanpa hambatan darat; dipantau sebagai indikator ketahanan pasokan, bukan bencana aktif.',
+    custom_hazard_label: 'Stabilitas Pasokan Pasar',
+    impact_profile: { affected_modalities: ['land'], passability: 'CAUTION', estimated_delay_hours: 0 },
+    is_geocoded: true,
+    location_precision: 'market',
+    corridor_segment: 'Karo — Medan',
+    corridor_nodes: ['karo', 'medan'],
   },
   {
     id: 'FALLBACK-SITINJAU-04',
     source_type: 'OFFICIAL_NEWS',
     source_tier: 'TIER_1_OFFICIAL',
     source_name: 'ANTARA Sumatera Barat',
-    headline: 'Kesiapsiagaan Alat Berat di Jalinsum Sitinjau Lauik Jalur Padang-Solok',
-    summary: 'BPBD Sumbar dan Balai Jalan Nasional menyiagakan ekskavator di titik rawan longsor kilometer 26 menyusul intensitas hujan berkala di kawasan perbukitan.',
+    headline: 'Banjir Rendam Jalinsum Sitinjau Lauik, Arus Padang-Solok Terputus Total',
+    summary: 'BPBD Sumbar melaporkan banjir dan longsor menutup Jalinsum kilometer 26 Sitinjau Lauik, ekskavator disiagakan dan arus Padang-Solok dialihkan.',
     location_name: 'Jalinsum Sitinjau Lauik, Padang',
     lat: -0.9589,
     lon: 100.4856,
     pubDate: '18 Okt 2026, 06:45 WIB',
     category: 'DISASTER_LOGISTICS',
-    incident_type: 'landslide',
-    severity: 'medium',
-    temporal_phase: 'forecast_early_warning',
-    lead_time_hours: 6,
+    incident_type: 'flood',
+    hazardType: 'flood',
+    severity: 'critical',
+    temporal_phase: 'active_disruption',
+    lead_time_hours: 0,
     commodities_affected: ['Beras Solok', 'Sayuran Hortikultura'],
     ground_truth_metrics: { lane_status: 'ALERT_STANDBY' },
     verification_status: 'CORROBORATED_OFFICIAL',
@@ -199,6 +237,14 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     link: 'https://sumbar.antaranews.com/search?q=sitinjau+lauik+longsor',
     url: 'https://sumbar.antaranews.com/search?q=sitinjau+lauik+longsor',
     link_alive: 'alive',
+    zone_tier: 'RED_CONFIRMED',
+    tier_reason: 'BPBD Sumbar mengonfirmasi Jalinsum KM 26 terputus total oleh banjir dan longsor; alat berat disiagakan di lokasi.',
+    custom_hazard_label: 'Banjir & Longsor Sitinjau Lauik',
+    impact_profile: { affected_modalities: ['land'], passability: 'BLOCKED', estimated_delay_hours: 14 },
+    is_geocoded: true,
+    location_precision: 'road_km',
+    corridor_segment: 'Padang — Solok',
+    corridor_nodes: ['padang', 'solok'],
   },
   {
     id: 'FALLBACK-KNO-05',
@@ -212,7 +258,8 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     lon: 98.8853,
     pubDate: '18 Okt 2026, 10:10 WIB',
     category: 'WEATHER_OBSERVATION',
-    incident_type: 'weather_radar',
+    incident_type: 'other_disruption',
+    hazardType: 'other_disruption',
     severity: 'low',
     temporal_phase: 'clearing_recovery',
     lead_time_hours: 0,
@@ -224,6 +271,14 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     link: 'https://sumut.antaranews.com/search?q=bmkg+cuaca+kualanamu+medan',
     url: 'https://sumut.antaranews.com/search?q=bmkg+cuaca+kualanamu+medan',
     link_alive: 'alive',
+    zone_tier: 'YELLOW_CLARIFY',
+    tier_reason: 'Hujan ringan terdeteksi radar, jarak pandang masih aman di atas 8 km; status waspada ringan koridor tol dan kargo udara.',
+    custom_hazard_label: 'Hujan Ringan Koridor Kualanamu',
+    impact_profile: { affected_modalities: ['land', 'air'], passability: 'CAUTION', estimated_delay_hours: 1 },
+    is_geocoded: true,
+    location_precision: 'corridor',
+    corridor_segment: 'Medan — Kualanamu — Tebing Tinggi',
+    corridor_nodes: ['medan', 'kualanamu', 'tebingtinggi'],
   },
   {
     id: 'FALLBACK-BPJT-06',
@@ -238,6 +293,7 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     pubDate: '18 Okt 2026, 09:40 WIB',
     category: 'TRAFFIC_OPERATIONS',
     incident_type: 'congestion',
+    hazardType: 'congestion',
     severity: 'low',
     temporal_phase: 'clearing_recovery',
     lead_time_hours: 0,
@@ -249,6 +305,14 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     link: 'https://bpjt.pu.go.id/',
     url: 'https://bpjt.pu.go.id/',
     link_alive: 'alive',
+    zone_tier: 'YELLOW_CLARIFY',
+    tier_reason: 'Arus truk sumbu 3+ terpantau lancar 65 km/jam; status pemantauan rutin tanpa indikasi kemacetan berat.',
+    custom_hazard_label: 'Arus Lancar Tol Belmera',
+    impact_profile: { affected_modalities: ['land'], passability: 'CAUTION', estimated_delay_hours: 0 },
+    is_geocoded: true,
+    location_precision: 'toll_road',
+    corridor_segment: 'Belawan — Medan (Tol Belmera)',
+    corridor_nodes: ['belawan', 'medan'],
   },
 ];
 
@@ -294,8 +358,33 @@ export function useNewsVerification() {
 
           const rawArticles = res.articles || res.items || [];
           if (rawArticles && rawArticles.length > 0) {
+            const ALLOWED_INCIDENT_TYPES = new Set([
+              'flood', 'port_closure', 'marine_wave', 'road_closure', 'landslide',
+              'earthquake', 'volcanic_eruption', 'wildfire', 'congestion', 'other_disruption',
+            ]);
+            const normalizeIncidentType = (raw: unknown): string => {
+              const v = typeof raw === 'string' ? raw.trim() : '';
+              if (!v) return 'other_disruption';
+              if (v === 'port_congestion') return 'port_closure';
+              if (v === 'supply_buffer' || v === 'logistics_news') return 'other_disruption';
+              if (ALLOWED_INCIDENT_TYPES.has(v)) return v;
+              // Legacy backend aliases → preserve semantics, never blindly coerce to flood.
+              if (v === 'port_operations') return 'port_closure';
+              if (v === 'market_monitoring' || v === 'weather_radar' || v === 'price_shock') return 'other_disruption';
+              return 'other_disruption';
+            };
+            const normalizeHazardType = (raw: unknown, incident: string): NewsItem['hazardType'] => {
+              const v = typeof raw === 'string' ? raw.trim() : '';
+              const cand = v || incident;
+              if (cand === 'flood' || cand === 'landslide' || cand === 'congestion' || cand === 'port_closure' ||
+                cand === 'wildfire' || cand === 'marine_wave' || cand === 'road_closure' ||
+                cand === 'earthquake' || cand === 'volcanic_eruption' || cand === 'other_disruption') {
+                return cand;
+              }
+              return 'other_disruption';
+            };
             const mapped: NewsItem[] = rawArticles.map((a: any) => {
-              const src = a.source || 'ANTARA';
+              const src = a.source || a.source_name || 'ANTARA';
               const isWeather = /bmkg|cuaca|gelombang|hujan|angin/i.test(src) || a.incident_type === 'marine_wave' || /cuaca|gelombang/i.test(a.title || a.headline || '');
               const isMarket = /pihps|bi\.go\.id|harga|bank indonesia|pasar/i.test(src) || a.incident_type === 'price_shock' || /harga|pangan/i.test(a.title || a.headline || '');
               const isOfficial = !isWeather && !isMarket && (a.source_tier === 'TIER_1_OFFICIAL' || /antara|bnpb|kemenhub|bulog/i.test(src));
@@ -306,33 +395,85 @@ export function useNewsVerification() {
               const linkAlive: 'alive' | 'dead' | 'unknown' =
                 a.link_alive === 'dead' || a.link_alive === 'alive' ? a.link_alive : 'unknown';
 
+              const gtm = a.ground_truth_metrics && typeof a.ground_truth_metrics === 'object' ? a.ground_truth_metrics : {};
+              const zone_tier = (a.zone_tier || gtm.zone_tier) as NewsItem['zone_tier'] | undefined;
+              const tier_reason = (a.tier_reason || gtm.tier_reason || a.zone_reason) as string | undefined;
+              const custom_hazard_label = (a.custom_hazard_label || gtm.custom_hazard_label || a.hazard_label) as string | undefined;
+              const impact_profile = (a.impact_profile || gtm.impact_profile) as NewsItem['impact_profile'];
+              const is_geocoded = (a.is_geocoded ?? gtm.is_geocoded) as boolean | undefined;
+              const location_precision = (a.location_precision || gtm.location_precision) as string | undefined;
+              const severity = (a.severity || 'medium') as NewsItem['severity'];
+
+              const normalizedIncident = normalizeIncidentType(a.incident_type);
+              const normalizedHazard = normalizeHazardType(a.hazardType || a.hazard_type, normalizedIncident);
+
+              // Legacy articles without zone_tier: critical/high → RED, else YELLOW with Indonesian reason.
+              let resolvedTier = zone_tier;
+              let resolvedReason = tier_reason;
+              if (!resolvedTier) {
+                if (severity === 'critical' || severity === 'high') {
+                  resolvedTier = 'RED_CONFIRMED';
+                  resolvedReason = resolvedReason || 'Berita berkekuatan tinggi dari sumber resmi; diklasifikasikan sebagai Zona Merah terkonfirmasi menunggu verifikasi lanjutan.';
+                } else {
+                  resolvedTier = 'YELLOW_CLARIFY';
+                  resolvedReason = resolvedReason || 'Sinyal intensitas rendah–menengah; masuk Zona Kuning untuk klarifikasi dan pemantauan lanjutan.';
+                }
+              }
+
+              const latRaw = a.latitude ?? a.lat ?? gtm.latitude ?? gtm.lat;
+              const lonRaw = a.longitude ?? a.lon ?? a.lng ?? gtm.longitude ?? gtm.lon;
+              const lat = latRaw != null && latRaw !== '' ? Number(latRaw) : undefined;
+              const lon = lonRaw != null && lonRaw !== '' ? Number(lonRaw) : undefined;
+              const corridor_nodes = Array.isArray(a.corridor_nodes) ? a.corridor_nodes : (Array.isArray(gtm.corridor_nodes) ? gtm.corridor_nodes : undefined);
+
               return {
                 id: a.id || `NEWS-${Math.random().toString(36).substr(2, 6)}`,
-                source_type: isWeather ? 'BMKG_WEATHER' : isMarket ? 'PIHPS_MARKET' : isOfficial ? 'OFFICIAL_NEWS' : 'MEDSOS_OSINT',
-                source_tier: a.source_tier || (isOfficial ? 'TIER_1_OFFICIAL' : 'TIER_2_AUTHORITATIVE_PRESS'),
+                source_type: (isWeather ? 'BMKG_WEATHER' : isMarket ? 'PIHPS_MARKET' : isOfficial ? 'OFFICIAL_NEWS' : 'MEDSOS_OSINT') as NewsItem['source_type'],
+                source_tier: (a.source_tier || (isOfficial ? 'TIER_1_OFFICIAL' : 'TIER_2_AUTHORITATIVE_PRESS')) as NewsItem['source_tier'],
                 source_name: src,
                 headline: headline,
                 summary: a.summary || a.title || '',
-                location_name: a.corridor_segment || (a.corridor_nodes && a.corridor_nodes[0]) || a.region || 'Koridor Sumatera',
-                lat: a.latitude != null ? Number(a.latitude) : undefined,
-                lon: a.longitude != null ? Number(a.longitude) : undefined,
-                pubDate: a.pubDate || 'Terkini',
+                location_name: a.corridor_segment || (a.corridor_nodes && a.corridor_nodes[0]) || a.region || a.location_name || 'Koridor Sumatera',
+                lat: Number.isFinite(lat) ? lat : undefined,
+                lon: Number.isFinite(lon) ? lon : undefined,
+                pubDate: a.pubDate || a.pub_date || a.published_at || 'Terkini',
                 category: a.category || 'DISASTER_LOGISTICS',
-                incident_type: a.incident_type || 'flood',
-                severity: a.severity || 'medium',
-                temporal_phase: a.temporal_phase || 'active_disruption',
+                incident_type: normalizedIncident,
+                hazardType: normalizedHazard,
+                severity: severity,
+                temporal_phase: (a.temporal_phase || 'active_disruption') as NewsItem['temporal_phase'],
                 lead_time_hours: a.lead_time_hours ? Number(a.lead_time_hours) : 0,
                 commodities_affected: a.commodities_affected || ['Beras'],
                 ground_truth_metrics: a.ground_truth_metrics || { lane_status: a.lane_status || 'CLEAR' },
-                verification_status: isOfficial ? 'CORROBORATED_OFFICIAL' : 'UNVERIFIED_GRASSROOTS',
+                verification_status: (isOfficial ? 'CORROBORATED_OFFICIAL' : 'UNVERIFIED_GRASSROOTS') as NewsItem['verification_status'],
                 confidence_score: Number(a.confidence_score || a.relevance_score || 0.90),
                 commodity_name: Array.isArray(a.commodities_affected) ? a.commodities_affected.join(', ') : a.commodities_affected || 'Komoditas Pokok',
+                originNode: a.originNode || a.origin_node,
+                destNode: a.destNode || a.dest_node,
                 link: sourceLink,
                 url: sourceLink,
-                link_alive: linkAlive
-              };
+                link_alive: linkAlive,
+                zone_tier: resolvedTier,
+                tier_reason: resolvedReason,
+                custom_hazard_label: custom_hazard_label,
+                impact_profile: impact_profile,
+                is_geocoded: is_geocoded,
+                location_precision: location_precision,
+                corridor_segment: a.corridor_segment || gtm.corridor_segment,
+                corridor_nodes: corridor_nodes,
+              } as NewsItem;
+            }).filter((n: NewsItem) => {
+              if (n.zone_tier === 'DROPPED_IRRELEVANT') return false;
+              if (n.is_geocoded === false) return false;
+              if (n.lat == null || n.lon == null || !Number.isFinite(n.lat) || !Number.isFinite(n.lon)) return false;
+              return true;
             });
-            setNewsFeed(mapped);
+            if (mapped.length > 0) {
+              setNewsFeed(mapped);
+            } else {
+              setNewsFeed(prev => (prev.length === 0 ? FALLBACK_SUMATRA_NEWS : prev));
+              setStatus('warming');
+            }
           } else {
             setNewsFeed(prev => (prev.length === 0 ? FALLBACK_SUMATRA_NEWS : prev));
             setStatus('warming');

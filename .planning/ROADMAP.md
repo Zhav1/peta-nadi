@@ -1987,6 +1987,38 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 
 ---
 
+## Phase 72: LLM News Gatekeeper, Red/Yellow Audit Zones & Port-Closure Modality Rerouting
+
+**Goal:** Turn noisy multi-outlet Sumatra news into trusted Red/Yellow map zones with zero hallucinated locations and minimal LLM cost, inspectable via stored Audit Trail (never synthetic simulation), with a 10-hazard dynamic impact model and modality-aware alternate-port rerouting for `Penutupan Pelabuhan`.
+**Status:** COMPLETE ✅
+**Plans:** `72-PLAN.md`, `72-WALKTHROUGH.md`, `72-01-SUMMARY.md`, `72-LEARNINGS.md`
+
+### Deliverables
+
+- [x] **WP1 - DB-First Deduplication, Bureau/Dateline Stripping & 3-Tier LLM Gatekeeper**:
+  - `backend/app/services/news_aggregator.py`: `fetch_existing_processed_articles_map()` dedups via Supabase + memory before any LLM call; `strip_bureau_and_dateline_noise()` removes `"ANTARA Bengkulu"` / dateline headers; expanded `EXCLUDED_NOISE_KEYWORDS`.
+  - `backend/app/nlp/geocoding_service.py`: no-match returns `is_geocoded=False, latitude=None` with `exact_node` vs `province_only` precision — never a province centroid.
+  - `backend/app/nlp/news_extractor.py`: `_fast_heuristic_extraction()` + `extract_structured_news_batch()` implementing `RED_CONFIRMED` / `YELLOW_CLARIFY` / `DROPPED_IRRELEVANT` with LLM overlay only for unprocessed items.
+  - `backend/app/services/unified_news_ingestor.py` + `backend/app/routers/news_router.py`: new metadata packed in existing `ground_truth_metrics` JSONB; legacy rows cleaned/re-tiered on read.
+- [x] **WP2 - Red/Yellow Zones, Checkboxes & Audit-Trail Inspection**:
+  - `frontend/components/map/CrisisMap.tsx`: click/hover on `disaster-zones-fill`/`outline`; `#ef4444` Red vs `#eab308` Yellow styling by `zone_tier`.
+  - `frontend/components/dashboard/DashboardClient.tsx`: independent `[x] Zona Merah` / `[x] Zona Kuning` checkboxes; `inspectNewsOrZoneAuditTrail()` replaces `triggerFullSimulationEngine()` on news `"Fokus"` (zero LLM/simulation cost).
+  - `frontend/components/sidebar/CrisisSidebar.tsx` + `EvidenceTab.tsx`: stored tier badge, `tier_reason`, `custom_hazard_label`, impact profile, permalink.
+- [x] **WP3 - 10-Hazard Taxonomy & Dynamic ImpactProfile**:
+  - Canonical `flood`, `port_closure`, `marine_wave`, `road_closure`, `landslide`, `earthquake`, `volcanic_eruption`, `wildfire`, `congestion`, `other_disruption` with `custom_hazard_label`, `affected_modalities`, `passability`, `estimated_delay_hours` threaded through `impact_assessment_service.py`, `llm_reasoning_service.py`, `CrisisSimulatorBar.tsx` (`Penutupan Pelabuhan`), `MitigationTab.tsx`.
+- [x] **WP4 - Port-Closure Alternate-Port Failover & Tradeoff Economics**:
+  - `frontend/lib/aiDynamicRouter.ts`: `isSeaportBlockedByHazard()` (`max(radiusKm + 8, 22)` km), `findClosestOpenSeaport()` with `Truck Feeder -> Next Open Port -> Sea` failover, `hazardType` passed to Hold-vs-Reroute economics, per-route `tradeoff_analysis` (Pros/Cons, ΔWaktu, ΔBiaya).
+  - `backend/app/services/cpu_routing_service.py` + `agents/nodes/route_optimization.py`: mirrored backend port-blockage penalties.
+
+### Verification Criteria
+
+- [x] `npx tsc --noEmit` in `frontend/`: 0 errors.
+- [x] `pytest backend/tests -q`: news/geocoding/routing suites pass.
+- [x] Router failover probe: closed origin port bypassed for next open port; tradeoff deltas present on all options.
+- [ ] Post-push live checks: `GET /api/v1/news/live` re-tiering on Render; Red/Yellow + alternate-port flows on Vercel in browser.
+
+---
+
 ## Backlog (Post-Hackathon / v2 & New Context Window Backlog)
 
 ### Active Remediation & Audit Backlog (For New Context Window)

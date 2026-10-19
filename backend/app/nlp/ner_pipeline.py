@@ -13,6 +13,13 @@ LOCATION_GAZETTEER = list(PAN_SUMATRA_GAZETTEER.keys())
 
 def extract_locations_gazetteer(text: str) -> List[str]:
     """Extract location names from text using a regex gazetteer (fast path)."""
+    if not text or not text.strip():
+        return []
+    try:
+        from app.nlp.geocoding_service import strip_bureau_and_dateline_noise
+        text = strip_bureau_and_dateline_noise(text)
+    except Exception:
+        pass
     found = []
     text_lower = text.lower()
     for loc in LOCATION_GAZETTEER:

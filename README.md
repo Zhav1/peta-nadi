@@ -105,6 +105,13 @@ Multisource Telemetry (BMKG Sensor, TomTom Speed Flow, Google News RSS, PIHPS Pr
 - **Purged Past/Future/Predict Tabs:** Purged mock Past, Future, and Predict dock tabs, synthetic fallback fixtures, `TimelineScrubber.tsx`, and dead backend endpoints (`/historical/episodes`, `/predictive/risks`).
 - **Frontend API Auto-Sanitization:** `getBaseUrl()` automatically reroutes obsolete endpoints to `https://peta-nadi.onrender.com`, preventing 404s and CORS failures.
 
+### 13. Economical 3-Tier News Gatekeeper, Red/Yellow Audit Zones & Port-Closure Failover (Phase 72)
+- **DB-First Economical Ingestion:** `fetch_existing_processed_articles_map()` dedups via Supabase `news_articles` plus in-memory cache before any LLM call, so the 5-minute background RSS cycle never burns duplicate tokens — including for `DROPPED_IRRELEVANT` items.
+- **Bureau/Dateline Stripping:** `strip_bureau_and_dateline_noise()` removes outlet headers (`ANTARA Bengkulu`, `Bengkulu (ANTARA) -`, `Medan (Antara)`) before gazetteer matching; location misses yield `is_geocoded=False` with null coordinates, never a province centroid. All tier metadata packs into the existing `ground_truth_metrics` JSONB column (no migration).
+- **Red/Yellow Zone Intelligence:** Deterministic heuristic assigns `RED_CONFIRMED` / `YELLOW_CLARIFY` / `DROPPED_IRRELEVANT` with live LLM overlay only for unprocessed items. Map renders clickable Red (`#ef4444`) / Yellow (`#eab308`) zones with independent `Zona Merah` / `Zona Kuning` checkboxes; news `Fokus` and zone clicks open the stored Audit Trail (`inspectNewsOrZoneAuditTrail`) at zero simulation cost.
+- **10-Hazard Dynamic Impact Model:** Canonical `flood`, `port_closure`, `marine_wave`, `road_closure`, `landslide`, `earthquake`, `volcanic_eruption`, `wildfire`, `congestion`, `other_disruption` with `custom_hazard_label`, `affected_modalities`, `passability`, `estimated_delay_hours` threaded through reasoning, assessment, and routing.
+- **Port-Closure Alternate-Port Failover:** `isSeaportBlockedByHazard()` (`max(radiusKm + 8, 22)` km capture) + `findClosestOpenSeaport()` drive automatic `Truck Feeder -> Next Open Port -> Sea` intermodal failover for `Penutupan Pelabuhan`, with per-route tradeoff analysis (Pros, Cons, time-delta, cost-delta) on every route card.
+
 ---
 
 ## Technology Stack

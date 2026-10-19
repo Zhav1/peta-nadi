@@ -309,8 +309,14 @@ class ImpactAssessmentService:
             "landslide": 10.0,
             "earthquake": 18.0,
             "congestion": 3.0,
-            "wildfire": 6.0
-        }.get(hazard_type.lower(), 8.0)
+            "wildfire": 6.0,
+            "port_closure": 18.0,
+            "marine_wave": 18.0,
+            "road_closure": 12.0,
+            "volcanic_eruption": 24.0,
+            "other_disruption": 8.0,
+            "port_congestion": 18.0,
+        }.get((hazard_type or "").lower(), 8.0)
 
         multiplier = {
             "critical": 1.2,

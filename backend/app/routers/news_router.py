@@ -106,6 +106,53 @@ async def get_live_news(
     # Query latest articles immediately from Supabase
     articles = await fetch_news_from_supabase(limit=60, province=province, severity=severity)
 
+    # Defensive on-read guard: fetch_news_from_supabase already unpacks
+    # ground_truth_metrics + re-tiers legacy rows, but re-apply here so legacy
+    # bureau-centroid noise can never reach the map even if the service path changes.
+    try:
+        from app.nlp.news_extractor import _fast_heuristic_extraction as _router_re_tier
+    except Exception:
+        _router_re_tier = None  # type: ignore
+    _guarded: list[dict] = []
+    for _r in articles or []:
+        try:
+            _row = dict(_r)
+            _gtm = _row.get("ground_truth_metrics") or {}
+            if isinstance(_gtm, str):
+                import json as _js
+                try:
+                    _gtm = _js.loads(_gtm)
+                except Exception:
+                    _gtm = {}
+            for _k in ("zone_tier", "tier_reason", "custom_hazard_label",
+                       "impact_profile", "is_geocoded", "location_precision"):
+                if _row.get(_k) is None and isinstance(_gtm, dict) and _gtm.get(_k) is not None:
+                    _row[_k] = _gtm[_k]
+            if not _row.get("zone_tier") and _router_re_tier is not None:
+                _re = _router_re_tier({
+                    "title": _row.get("title", ""),
+                    "raw_description": _row.get("raw_description") or _row.get("summary") or "",
+                    "source": _row.get("source", "Media"),
+                    "source_tier": _row.get("source_tier", "TIER_2_AUTHORITATIVE_PRESS"),
+                    "province": _row.get("province", "Sumatera"),
+                    "link": _row.get("link", ""),
+                })
+                for _k in ("zone_tier", "tier_reason", "custom_hazard_label",
+                           "impact_profile", "is_geocoded", "location_precision",
+                           "latitude", "longitude", "incident_type", "severity"):
+                    if _re.get(_k) is not None and (_row.get(_k) is None or _k.startswith("zone") or _k.startswith("tier")):
+                        _row[_k] = _re[_k]
+            if _row.get("zone_tier") == "DROPPED_IRRELEVANT":
+                continue
+            if _row.get("is_geocoded") is False:
+                continue
+            if _row.get("latitude") is None or _row.get("longitude") is None:
+                continue
+            _guarded.append(_row)
+        except Exception:
+            continue
+    articles = _guarded
+
     # If Supabase is cold or empty, trigger background ingestion and return honest warming state
     if not articles:
         if background_tasks is not None:

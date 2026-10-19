@@ -1,7 +1,33 @@
 // Mirror of agents/state.py TypedDicts: keep in sync with backend
 
 export type Severity = 'low' | 'medium' | 'high' | 'critical';
-export type CrisisType = 'flood' | 'port_closure' | 'wildfire' | 'congestion' | 'earthquake' | 'landslide';
+export type CrisisType =
+  | 'flood'
+  | 'port_closure'
+  | 'wildfire'
+  | 'congestion'
+  | 'earthquake'
+  | 'landslide'
+  | 'marine_wave'
+  | 'road_closure'
+  | 'volcanic_eruption'
+  | 'other_disruption';
+
+export type ZoneTier = 'RED_CONFIRMED' | 'YELLOW_CLARIFY' | 'DROPPED_IRRELEVANT';
+
+export interface HazardImpactProfile {
+  affected_modalities: Array<'land' | 'sea' | 'air'>;
+  passability: 'BLOCKED' | 'RESTRICTED' | 'CAUTION';
+  estimated_delay_hours: number;
+}
+
+export interface RouteTradeoffAnalysis {
+  time_delta_minutes: number;
+  additional_cost_idr: number;
+  cost_breakdown_items: Array<{ label: string; amount_idr: number }>;
+  pros: string[];
+  cons: string[];
+}
 
 export type CrisisStatus = 'detecting' | 'validating' | 'validated' | 'resolved';
 
@@ -67,6 +93,9 @@ export interface RouteRecommendation {
   viable?: boolean;
   non_viable_reason?: string;
   economic_comparison?: HoldVsRerouteEconomics;
+  tradeoff_analysis?: RouteTradeoffAnalysis;
+  affected_port_name?: string;
+  alternate_port_name?: string;
   legs?: RouteLeg[];
   color?: string;
   hedging?: {
@@ -163,6 +192,10 @@ export interface CrisisState {
   }>;
   blocked_corridors?: string[];
   news_affected_commodities?: string[];
+  zone_tier?: 'RED_CONFIRMED' | 'YELLOW_CLARIFY';
+  tier_reason?: string;
+  custom_hazard_label?: string;
+  impact_profile?: HazardImpactProfile;
   created_at: string;
   evidence?: {
     osint_author?: string;
@@ -210,6 +243,15 @@ export interface DisasterZone {
   type: CrisisType;
   risk: number;                     // 0–1
   crisis_id?: string;
+  id?: string;
+  zone_tier?: 'RED_CONFIRMED' | 'YELLOW_CLARIFY';
+  title?: string;
+  tier_reason?: string;
+  custom_hazard_label?: string;
+  source_news_id?: string;
+  center?: [number, number];
+  radiusKm?: number;
+  impact_profile?: HazardImpactProfile;
 }
 
 // PIHPS price chart data

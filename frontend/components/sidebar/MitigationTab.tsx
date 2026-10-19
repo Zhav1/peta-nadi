@@ -292,6 +292,81 @@ function RouteCard({
         </span>
       </div>
 
+      {/* Structured Trade-Off Analysis (Pros / Cons + Delay & Cost Breakdown) */}
+      {route.tradeoff_analysis && (
+        <div className="mt-2 p-2.5 rounded-lg bg-[#0c1017] border border-white/10 flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300 font-sans">
+              Analisis Trade-Off (Untung / Rugi &amp; Biaya Operasional)
+            </span>
+            <Scale className="w-3.5 h-3.5 text-cyan-400" />
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            <span className="inline-flex items-center gap-1 text-[11px] font-mono font-semibold px-2 py-1 rounded bg-amber-500/10 text-amber-300 border border-amber-500/25">
+              <Clock className="w-3 h-3" />
+              <span>
+                ΔWaktu:{' '}
+                {route.tradeoff_analysis.time_delta_minutes <= 0
+                  ? 'Tepat Waktu'
+                  : `+${Math.floor(route.tradeoff_analysis.time_delta_minutes / 60)} jam ${route.tradeoff_analysis.time_delta_minutes % 60} mnt`}
+              </span>
+            </span>
+            <span className="inline-flex items-center gap-1 text-[11px] font-mono font-semibold px-2 py-1 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/25">
+              <Fuel className="w-3 h-3" />
+              <span>ΔBiaya: +Rp {(route.tradeoff_analysis.additional_cost_idr ?? 0).toLocaleString('id-ID')}</span>
+            </span>
+          </div>
+          {route.tradeoff_analysis.cost_breakdown_items && route.tradeoff_analysis.cost_breakdown_items.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {route.tradeoff_analysis.cost_breakdown_items.map((item, bIdx) => (
+                <span
+                  key={bIdx}
+                  className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/5 text-slate-300 border border-white/10"
+                  title={`${item.label}: Rp ${item.amount_idr.toLocaleString('id-ID')}`}
+                >
+                  {item.label}: Rp {item.amount_idr.toLocaleString('id-ID')}
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-2 text-[11px] leading-relaxed">
+            <div className="p-2 rounded-md bg-emerald-950/30 border border-emerald-500/20">
+              <span className="block text-[10px] font-bold uppercase tracking-wider text-emerald-300 mb-1 font-sans">
+                Kelebihan
+              </span>
+              <ul className="flex flex-col gap-1 text-emerald-100/90 font-sans">
+                {route.tradeoff_analysis.pros.map((pro, pIdx) => (
+                  <li key={pIdx} className="flex items-start gap-1.5">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0 mt-0.5" />
+                    <span>{pro}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="p-2 rounded-md bg-amber-950/20 border border-amber-500/20">
+              <span className="block text-[10px] font-bold uppercase tracking-wider text-amber-300 mb-1 font-sans">
+                Kekurangan / Risiko
+              </span>
+              <ul className="flex flex-col gap-1 text-amber-100/90 font-sans">
+                {route.tradeoff_analysis.cons.map((con, cIdx) => (
+                  <li key={cIdx} className="flex items-start gap-1.5">
+                    <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0 mt-0.5" />
+                    <span>{con}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+          {(route.affected_port_name || route.alternate_port_name) && (
+            <div className="text-[10px] font-mono text-cyan-300/80">
+              {route.affected_port_name && <span>Pelabuhan terdampak: {route.affected_port_name}</span>}
+              {route.affected_port_name && route.alternate_port_name && <span> → </span>}
+              {route.alternate_port_name && <span>Alternatif: {route.alternate_port_name}</span>}
+            </div>
+          )}
+        </div>
+      )}
+
       {isActive && (
         <div className="mt-3 pt-2.5 border-t border-[#1c2432] flex flex-col gap-2">
           {isApproved ? (

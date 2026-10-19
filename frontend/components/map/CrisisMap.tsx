@@ -84,6 +84,8 @@ export interface CrisisMapProps {
   onResetCorridorVisibility?: () => void;
   hiddenRouteIndices?: Set<number>;
   onHideRoute?: (idx: number) => void;
+  onZoneClick?: (zone: DisasterZone) => void;
+  flyToCoords?: { lon: number; lat: number; zoom?: number; ts: number } | null;
 }
 
 const INITIAL_CENTER: [number, number] = [100.5, 0.5];
@@ -150,6 +152,8 @@ export default function CrisisMap({
   onResetCorridorVisibility,
   hiddenRouteIndices: propHiddenRouteIndices,
   onHideRoute,
+  onZoneClick,
+  flyToCoords = null,
 }: CrisisMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   void isLeftSidebarCollapsed;
@@ -265,6 +269,8 @@ export default function CrisisMap({
   onCustomPointSelectedRef.current = onCustomPointSelected;
   const onSelectRouteRef = useRef(onSelectRoute);
   onSelectRouteRef.current = onSelectRoute;
+  const onZoneClickRef = useRef(onZoneClick);
+  onZoneClickRef.current = onZoneClick;
 
   const mouseDownPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const lastFocusedCrisisIdRef = useRef<string | null>(null);
@@ -451,15 +457,25 @@ export default function CrisisMap({
         source: 'disaster-zones-source',
         paint: {
           'fill-color': [
-            'match', ['get', 'type'],
-            'flood', 'rgba(6, 182, 212, 0.35)',
-            'earthquake', 'rgba(244, 63, 94, 0.35)',
-            'landslide', 'rgba(217, 119, 6, 0.35)',
-            'wildfire', 'rgba(249, 115, 22, 0.35)',
-            'congestion', 'rgba(234, 179, 8, 0.30)',
-            'rgba(249, 115, 22, 0.25)'
+            'match', ['get', 'zone_tier'],
+            'RED_CONFIRMED', '#ef4444',
+            'YELLOW_CLARIFY', '#eab308',
+            // Fallback when zone_tier not set: color by legacy type, else red.
+            ['match', ['get', 'type'],
+              'flood', 'rgba(6, 182, 212, 0.35)',
+              'earthquake', 'rgba(244, 63, 94, 0.35)',
+              'landslide', 'rgba(217, 119, 6, 0.35)',
+              'wildfire', 'rgba(249, 115, 22, 0.35)',
+              'congestion', 'rgba(234, 179, 8, 0.30)',
+              'rgba(239, 68, 68, 0.35)'
+            ]
           ],
-          'fill-opacity': 0.85,
+          'fill-opacity': [
+            'match', ['get', 'zone_tier'],
+            'RED_CONFIRMED', 0.32,
+            'YELLOW_CLARIFY', 0.28,
+            0.85
+          ],
         },
       });
       map.addLayer({
@@ -468,13 +484,17 @@ export default function CrisisMap({
         source: 'disaster-zones-source',
         paint: {
           'line-color': [
-            'match', ['get', 'type'],
-            'flood', '#06b6d4',
-            'earthquake', '#f43f5e',
-            'landslide', '#d97706',
-            'wildfire', '#f97316',
-            'congestion', '#eab308',
-            '#f97316'
+            'match', ['get', 'zone_tier'],
+            'RED_CONFIRMED', '#ef4444',
+            'YELLOW_CLARIFY', '#facc15',
+            ['match', ['get', 'type'],
+              'flood', '#06b6d4',
+              'earthquake', '#f43f5e',
+              'landslide', '#d97706',
+              'wildfire', '#f97316',
+              'congestion', '#eab308',
+              '#ef4444'
+            ]
           ],
           'line-width': 2.5,
         },
@@ -905,6 +925,55 @@ export default function CrisisMap({
         map.on('mouseleave', layerId, resetRouteCursor);
       });
 
+      // Interactive Red/Yellow zone click → stored audit trail (no fake simulation stream).
+      const handleDisasterZoneClick = (e: mapboxgl.MapLayerMouseEvent) => {
+        if (isClickTargetingRef.current) return;
+        if (!e.features || e.features.length === 0) return;
+        const props: any = e.features[0].properties || {};
+        let impact_profile: any = undefined;
+        if (props.impact_profile_json) {
+          try {
+            impact_profile = JSON.parse(props.impact_profile_json);
+          } catch {
+            impact_profile = undefined;
+          }
+        }
+        const geom: any = (e.features[0] as any).geometry;
+        const polygon: [number, number][] =
+          geom && geom.type === 'Polygon' && Array.isArray(geom.coordinates?.[0])
+            ? (geom.coordinates[0] as [number, number][])
+            : [];
+        const zone = {
+          polygon,
+          type: (props.type as any) || 'flood',
+          risk: Number(props.risk ?? 0.85),
+          crisis_id: props.crisis_id || props.id || undefined,
+          id: props.id || props.crisis_id || undefined,
+          zone_tier: (props.zone_tier as any) || 'RED_CONFIRMED',
+          title: props.title || '',
+          tier_reason: props.tier_reason || '',
+          custom_hazard_label: props.custom_hazard_label || '',
+          source_news_id: props.source_news_id || '',
+          center: (props.center_lon != null && props.center_lat != null
+            ? [Number(props.center_lon), Number(props.center_lat)] as [number, number]
+            : undefined) as any,
+          radiusKm: props.radiusKm != null ? Number(props.radiusKm) : 15,
+          impact_profile,
+        } as unknown as import('@/lib/types').DisasterZone;
+        onZoneClickRef.current?.(zone);
+        return;
+      };
+      map.on('click', 'disaster-zones-fill', handleDisasterZoneClick);
+      map.on('click', 'disaster-zones-outline', handleDisasterZoneClick);
+      ['disaster-zones-fill', 'disaster-zones-outline'].forEach((layerId) => {
+        map.on('mouseenter', layerId, () => {
+          if (mapRef.current) mapRef.current.getCanvas().style.cursor = 'pointer';
+        });
+        map.on('mouseleave', layerId, () => {
+          if (mapRef.current) mapRef.current.getCanvas().style.cursor = '';
+        });
+      });
+
       // Tier 3 Settlement & Village WebGL Labels Enhancement (High contrast halo)
       const enhanceSettlementLabels = () => {
         ['settlement-subdivision-label', 'settlement-minor-label', 'settlement-major-label'].forEach((layerId) => {
@@ -1188,8 +1257,19 @@ export default function CrisisMap({
             coordinates: [z.polygon],
           },
           properties: {
+            id: (z as any).id || (z as any).crisis_id || '',
             type: z.type,
             risk: z.risk,
+            crisis_id: (z as any).crisis_id || (z as any).id || '',
+            zone_tier: (z as any).zone_tier || 'RED_CONFIRMED',
+            title: (z as any).title || '',
+            tier_reason: (z as any).tier_reason || '',
+            custom_hazard_label: (z as any).custom_hazard_label || '',
+            source_news_id: (z as any).source_news_id || '',
+            center_lon: (z as any).center?.[0] ?? null,
+            center_lat: (z as any).center?.[1] ?? null,
+            radiusKm: (z as any).radiusKm ?? 15,
+            impact_profile_json: (z as any).impact_profile ? JSON.stringify((z as any).impact_profile) : '',
           },
         })),
       });
@@ -1583,6 +1663,21 @@ export default function CrisisMap({
       }
     }
   }, [selectedCrisisId, simulatedShockwave?.center?.[0], simulatedShockwave?.center?.[1], simulatedShockwave?.radiusKm]);
+
+  // External camera focus (news "Fokus" / zone click) — independent of shockwave focus.
+  useEffect(() => {
+    if (!flyToCoords || !mapRef.current) return;
+    try {
+      mapRef.current.flyTo({
+        center: [flyToCoords.lon, flyToCoords.lat],
+        zoom: flyToCoords.zoom ?? 9.2,
+        duration: 1200,
+        essential: true,
+      });
+    } catch {
+      // quiet fallback when map not ready
+    }
+  }, [flyToCoords?.lon, flyToCoords?.lat, flyToCoords?.zoom, flyToCoords?.ts]);
 
   // Step 1 interactive visual cues: animated pulse halo around selectable hub nodes
   useEffect(() => {

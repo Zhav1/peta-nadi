@@ -1,4 +1,4 @@
-# Consolidated Learnings: Phases 64–68
+# Consolidated Learnings: Phases 64–72
 
 **Scope:** Architectural cleanup, mock elimination, audit ledger hardening, and E2E restoration across PreHub.  
 **Authority:** Grounded facts only; zero unverified assumptions.
@@ -122,3 +122,27 @@ The following items are prioritized for subsequent development phases:
 - **Do NOT run parallel agents on `DashboardClient.tsx`**: Monolithic UI files must be modified sequentially to prevent merge conflicts and syntax corruption.
 - **Do NOT claim AI models that do not exist**: Never advertise "TFT", "FourCastNet", or "NVIDIA cuOpt" unless an active, verified model service is executing those calculations.
 - **Do NOT assume tests assert what they claim**: Always inspect what an E2E test actually checks (e.g. confirming whether `localStorage` was genuinely written vs asserted).
+- **Do NOT map bureau/outlet names to coordinates**: Strip bureau/dateline headers (`"ANTARA Bengkulu"`, `"Bengkulu (ANTARA) -"`) before gazetteer matching; a location miss must yield `is_geocoded=False` with null coordinates, never a province centroid.
+- **Do NOT launch simulations from news inspection**: News `"Fokus"` and zone clicks open the stored Audit Trail (`inspectNewsOrZoneAuditTrail`); only explicit `CrisisSimulatorBar` actions run `POST /api/v1/simulate/stream`.
+- **Do NOT add new Supabase columns for news metadata**: Pack `zone_tier`, `tier_reason`, `custom_hazard_label`, `impact_profile`, `is_geocoded`, `location_precision` into the existing `ground_truth_metrics` JSONB to avoid production migration failures.
+- **Do NOT route through closed ports**: `findClosestSeaport` must exclude ports inside `port_closure`/`marine_wave` radii (`max(radiusKm + 8, 22)` km) via `findClosestOpenSeaport`; always pass the true `hazardType` into Hold-vs-Reroute economics.
+
+---
+
+## 6. Phase 72: Economical Tiered News Gating, Stored Audit Inspection & Port-Closure Failover
+
+### Decisions
+1. **DB-first deduplication**: `fetch_existing_processed_articles_map()` (Supabase `news_articles` + memory) runs before any LLM call in the 5-minute RSS cycle, so re-ingested items — including `DROPPED_IRRELEVANT` — never burn duplicate tokens.
+2. **Heuristic-first, LLM-overlay gatekeeper**: deterministic `_fast_heuristic_extraction()` assigns `RED_CONFIRMED` / `YELLOW_CLARIFY` / `DROPPED_IRRELEVANT`; live LLM tiering applies only to unprocessed items (requires `OPENCODE_API_KEY` on Render); LLM `DROPPED_IRRELEVANT` is respected and LLM `RED_CONFIRMED` without geocode is clamped.
+3. **Stored-audit inspection over simulation**: `inspectNewsOrZoneAuditTrail()` flies to stored zone coordinates and opens the persisted Audit Trail in `CrisisSidebar` at zero LLM cost.
+4. **10-hazard dynamic impact model**: `flood`, `port_closure`, `marine_wave`, `road_closure`, `landslide`, `earthquake`, `volcanic_eruption`, `wildfire`, `congestion`, `other_disruption` with `custom_hazard_label`, `affected_modalities`, `passability`, `estimated_delay_hours` end-to-end.
+5. **Alternate-port intermodal failover**: `Truck Feeder -> Next Open Port -> Sea` with per-route `tradeoff_analysis` (Pros, Cons, ΔWaktu, ΔBiaya) on every route card.
+
+### Constraints & Deployment Context
+- Frontend: `https://pre-hub.vercel.app`; Backend: `https://peta-nadi.onrender.com`; DB: Supabase `news_articles` (`ground_truth_metrics` JSONB carries all new metadata).
+- Orchestration: main orchestrator strictly delegates tool/research/implementation/git work to `opencode-go/muse-spark-1.3#high` subagents.
+
+### Open Concerns
+1. Confirm live Render `GET /api/v1/news/live` cleans/re-tiers legacy polluted rows on read.
+2. Confirm `OPENCODE_API_KEY` is set on Render for the live LLM tiering overlay.
+3. Browser E2E on Vercel: Red/Yellow checkboxes, zone-click Audit Trail, Pelabuhan Asal alternate-port rerouting.

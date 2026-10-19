@@ -64,6 +64,16 @@ export function CrisisSidebar({
               <span className="text-xs text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded font-mono font-bold">
                 {confidencePct}% Keyakinan
               </span>
+              {crisis.zone_tier === 'RED_CONFIRMED' && (
+                <span className="text-xs text-red-300 bg-red-950/60 border border-red-500/40 px-2 py-0.5 rounded font-mono font-bold">
+                  ZONA MERAH • BENCANA TERKONFIRMASI
+                </span>
+              )}
+              {crisis.zone_tier === 'YELLOW_CLARIFY' && (
+                <span className="text-xs text-yellow-300 bg-yellow-950/60 border border-yellow-400/40 px-2 py-0.5 rounded font-mono font-bold">
+                  ZONA KUNING • PERLU KLARIFIKASI / WASPADA
+                </span>
+              )}
               {crisis.is_simulated && (
                 <span className="text-xs text-amber-300 bg-amber-950/60 border border-amber-500/30 px-2 py-0.5 rounded font-mono font-bold">
                   SIMULASI FIXTURE
@@ -73,6 +83,11 @@ export function CrisisSidebar({
             <h2 className="text-sm font-bold text-white leading-snug font-sans">
               {crisis.title}
             </h2>
+            {crisis.custom_hazard_label && (
+              <p className="text-xs text-cyan-300 font-sans mt-0.5 font-medium">
+                {crisis.custom_hazard_label}
+              </p>
+            )}
             <p className="text-xs text-slate-400 font-mono mt-0.5">
               {crisis.region.replace(/_/g, ' ')} · {crisis.type}
             </p>

@@ -85,11 +85,35 @@ def _build_cost_matrix(checkpoint_speeds: Dict[str, float], hazard_zones: Option
             if hazard_zones:
                 mid_lat = (n1["lat"] + n2["lat"]) / 2.0
                 mid_lon = (n1["lon"] + n2["lon"]) / 2.0
+                n1_id = str(n1.get("id", "")).lower()
+                n2_id = str(n2.get("id", "")).lower()
+                is_port_access_edge = (
+                    "belawan" in n1_id or "belawan" in n2_id
+                    or "port" in n1_id or "port" in n2_id
+                    or "pelabuhan" in n1_id or "pelabuhan" in n2_id
+                )
                 for hz in hazard_zones:
                     hz_center = hz.get("center") or [hz.get("lon", 98.68), hz.get("lat", 3.75)]
                     hz_radius = hz.get("radiusKm", 10.0)
-                    dist_to_hazard = haversine_km(mid_lat, mid_lon, hz_center[1], hz_center[0])
-                    if dist_to_hazard <= (hz_radius + 2.0):
+                    hz_type = str(
+                        hz.get("incident_type") or hz.get("type")
+                        or hz.get("event_type") or hz.get("hazard_type") or ""
+                    ).lower()
+                    sea_affecting = hz_type in ("port_closure", "port_congestion", "marine_wave")
+                    # Port/corridor nodes get a generous capture radius (r + 8.0 km
+                    # minimum, mirroring frontend isSeaportBlockedByHazard) so a
+                    # port_closure clicked near Pelabuhan Asal penalizes the primary
+                    # port access edge (e.g. PORT_BELAWAN / belawan_port) and
+                    # promotes alternative corridors.
+                    if sea_affecting or is_port_access_edge:
+                        effective_radius = hz_radius + 8.0
+                    else:
+                        effective_radius = hz_radius + 2.0
+                    dist_mid = haversine_km(mid_lat, mid_lon, hz_center[1], hz_center[0])
+                    dist_n1 = haversine_km(n1["lat"], n1["lon"], hz_center[1], hz_center[0])
+                    dist_n2 = haversine_km(n2["lat"], n2["lon"], hz_center[1], hz_center[0])
+                    dist_to_hazard = min(dist_mid, dist_n1, dist_n2)
+                    if dist_to_hazard <= effective_radius:
                         travel_time_min *= 10.0
                         logger.debug(f"Penalized segment {n1['id']} -> {n2['id']} for hazard avoidance.")
 

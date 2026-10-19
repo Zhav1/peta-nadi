@@ -13,6 +13,7 @@ import {
   Flame,
   Activity,
   Mountain,
+  Waves,
   Target,
   PenTool,
   Trash2,
@@ -104,12 +105,15 @@ export function CrisisSimulatorBar({
   }, []);
 
   const hazardOptions: Array<{ type: CrisisType; label: string; icon: React.ReactNode }> = [
-    { type: 'flood', label: 'Banjir Luapan', icon: <CloudRain className="w-3.5 h-3.5 text-cyan-400" /> },
+    { type: 'flood', label: 'Banjir', icon: <CloudRain className="w-3.5 h-3.5 text-cyan-400" /> },
     { type: 'port_closure', label: 'Penutupan Pelabuhan', icon: <Anchor className="w-3.5 h-3.5 text-amber-400" /> },
-    { type: 'congestion', label: 'Macet Arteri / Tol', icon: <Truck className="w-3.5 h-3.5 text-yellow-400" /> },
-    { type: 'wildfire', label: 'Kebakaran Lahan', icon: <Flame className="w-3.5 h-3.5 text-orange-400" /> },
-    { type: 'earthquake', label: 'Gempa Tektonik', icon: <Activity className="w-3.5 h-3.5 text-red-400" /> },
-    { type: 'landslide', label: 'Tanah Longsor', icon: <Mountain className="w-3.5 h-3.5 text-emerald-400" /> },
+    { type: 'marine_wave', label: 'Gelombang Tinggi', icon: <Waves className="w-3.5 h-3.5 text-sky-400" /> },
+    { type: 'road_closure', label: 'Jalan / Jembatan Putus', icon: <Truck className="w-3.5 h-3.5 text-yellow-400" /> },
+    { type: 'landslide', label: 'Longsor', icon: <Mountain className="w-3.5 h-3.5 text-emerald-400" /> },
+    { type: 'earthquake', label: 'Gempa', icon: <Activity className="w-3.5 h-3.5 text-red-400" /> },
+    { type: 'volcanic_eruption', label: 'Erupsi / Abu Vulkanik', icon: <Flame className="w-3.5 h-3.5 text-orange-400" /> },
+    { type: 'wildfire', label: 'Kebakaran / Asap', icon: <Flame className="w-3.5 h-3.5 text-orange-400" /> },
+    { type: 'congestion', label: 'Macet', icon: <Truck className="w-3.5 h-3.5 text-yellow-400" /> },
   ];
 
   const originName = originNodeId ? HUB_NODES[originNodeId]?.name || originNodeId : null;

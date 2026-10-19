@@ -144,9 +144,18 @@ async def route_optimization_agent(state: CrisisState) -> dict:
 
     disrupted_corridors = set()
     for hazard in hazard_polygons:
-        event_type = state.get("type") or state.get("event_type")
+        hz_type = str(
+            (hazard.get("incident_type") if isinstance(hazard, dict) else None)
+            or (hazard.get("type") if isinstance(hazard, dict) else None)
+            or (hazard.get("event_type") if isinstance(hazard, dict) else None)
+            or state.get("type")
+            or state.get("event_type")
+            or ""
+        ).lower()
         hz_title = str(state.get("title", "")).lower()
-        if event_type in ["port_closure", "port_congestion"]:
+        if isinstance(hazard, dict) and hazard.get("title"):
+            hz_title = f"{hz_title} {str(hazard.get('title')).lower()}"
+        if hz_type in ["port_closure", "port_congestion", "marine_wave"]:
             if "dumai" in hz_title:
                 disrupted_corridors.add("dumai_access")
             elif "bayur" in hz_title or "padang" in hz_title:
@@ -159,6 +168,10 @@ async def route_optimization_agent(state: CrisisState) -> dict:
                 disrupted_corridors.add("boom_baru_access")
             else:
                 disrupted_corridors.add("belawan_access")
+        elif hz_type in ["flood", "landslide", "earthquake", "wildfire",
+                         "congestion", "road_closure", "volcanic_eruption",
+                         "other_disruption"]:
+            disrupted_corridors.add("trans_sumatra")
         else:
             disrupted_corridors.add("trans_sumatra")
             

@@ -19,9 +19,11 @@ from app.services.news_aggregator import (
     fetch_all_multi_outlet_news,
     upsert_articles_to_supabase,
     resolve_canonical_article_url,
-    resolve_canonical_article_url_async
+    resolve_canonical_article_url_async,
+    fetch_existing_processed_articles_map,
+    remember_processed_article,
 )
-from app.nlp.news_extractor import extract_structured_news
+from app.nlp.news_extractor import extract_structured_news, extract_structured_news_batch
 from app.services.redis_client import get_redis
 from app.config import get_settings
 
@@ -65,10 +67,68 @@ class UnifiedNewsIngestor:
             logger.warning("No news articles returned from feeds.")
             return {"status": "empty", "ingested": 0, "disruptions_triggered": 0}
 
-        # 2. Extract structured intelligence concurrently for top 30 items
-        tasks = [extract_structured_news(a) for a in raw_items[:30]]
-        structured_results = await asyncio.gather(*tasks, return_exceptions=True)
-        structured_articles = [a for a in structured_results if isinstance(a, dict)]
+        # 1b. DB-first deduplication: reuse prior LLM classifications with 0 LLM calls.
+        top_items = raw_items[:30]
+        try:
+            import hashlib as _hl
+            pre_ids: list[str] = []
+            pre_links: list[str] = []
+            for _a in top_items:
+                _t = _a.get("title", "")
+                _l = _a.get("link") or _a.get("url") or ""
+                if _l:
+                    pre_links.append(str(_l))
+                # Probe deterministic heuristic id used by extractor
+                pre_ids.append(f"NEWS-{_hl.md5(f'{_t}:{_l}'.encode()).hexdigest()[:8]}")
+            existing_map = fetch_existing_processed_articles_map(pre_ids, pre_links)
+        except Exception:
+            existing_map = {}
+
+        unseen: list[Dict[str, Any]] = []
+        reused: list[Dict[str, Any]] = []
+        for _a in top_items:
+            _t = _a.get("title", "")
+            _l = _a.get("link") or _a.get("url") or ""
+            import hashlib as _hl2
+            _pid = f"NEWS-{_hl2.md5(f'{_t}:{_l}'.encode()).hexdigest()[:8]}"
+            hit = existing_map.get(_pid) or existing_map.get(str(_l))
+            if hit:
+                # Rehydrate persisted tiering metadata from ground_truth_metrics.
+                try:
+                    gtm = hit.get("ground_truth_metrics") or {}
+                    if isinstance(gtm, str):
+                        import json as _js
+                        gtm = _js.loads(gtm)
+                    merged = dict(_a)
+                    merged.update({k: v for k, v in hit.items()
+                                   if k in ("id", "latitude", "longitude", "province", "region",
+                                            "corridor_segment", "corridor_nodes", "incident_type",
+                                            "severity", "temporal_phase", "zone_tier", "tier_reason",
+                                            "custom_hazard_label", "impact_profile", "is_geocoded",
+                                            "location_precision", "summary", "confidence_score")})
+                    for _k in ("zone_tier", "tier_reason", "custom_hazard_label",
+                               "impact_profile", "is_geocoded", "location_precision"):
+                        if merged.get(_k) is None and isinstance(gtm, dict) and gtm.get(_k) is not None:
+                            merged[_k] = gtm[_k]
+                    if not merged.get("id"):
+                        merged["id"] = _pid
+                    reused.append(merged)
+                    continue
+                except Exception:
+                    pass
+            unseen.append(_a)
+
+        # 2. Extract structured intelligence — ONE economical batched LLM call for unseen only.
+        structured_articles: list[Dict[str, Any]] = list(reused)
+        if unseen:
+            try:
+                batch_results = await extract_structured_news_batch(unseen)
+                structured_articles.extend([a for a in batch_results if isinstance(a, dict)])
+            except Exception as be:
+                logger.warning(f"Batched extraction failed, falling back per-item: {be}")
+                tasks = [extract_structured_news(a) for a in unseen]
+                fallback = await asyncio.gather(*tasks, return_exceptions=True)
+                structured_articles.extend([a for a in fallback if isinstance(a, dict)])
 
         # Ensure canonical article URLs and permalinks are resolved asynchronously across all items
         async def resolve_item(art: Dict[str, Any]):
@@ -84,19 +144,35 @@ class UnifiedNewsIngestor:
         # 3. Verify original source links (dead / alive / unknown provenance)
         await self._attach_link_liveness(structured_articles)
 
-        # 4. Upsert to Supabase
+        # 4. Upsert to Supabase — persist ALL incl. DROPPED_IRRELEVANT so they are
+        # remembered in DB and never re-tested by the LLM on the next cycle.
         upserted_count = await upsert_articles_to_supabase(structured_articles)
+        for _art in structured_articles:
+            try:
+                remember_processed_article(_art)
+            except Exception:
+                pass
+
+        # Filter DROPPED_IRRELEVANT before publishing to Redis / synthesizing incidents.
+        publishable = [a for a in structured_articles
+                       if a.get("zone_tier") != "DROPPED_IRRELEVANT"
+                       and a.get("is_geocoded") is not False
+                       and a.get("latitude") is not None
+                       and a.get("longitude") is not None]
 
         # 5. Push to Redis Stream
-        await self._publish_to_redis(structured_articles)
+        await self._publish_to_redis(publishable)
 
         # 6. Evaluate and trigger disruptions for road-blocking or critical events
-        disruptions_triggered = await self._process_critical_disruptions(structured_articles)
+        disruptions_triggered = await self._process_critical_disruptions(publishable)
 
         return {
             "status": "success",
             "total_fetched": len(raw_items),
             "structured_count": len(structured_articles),
+            "publishable_count": len(publishable),
+            "reused_from_cache": len(reused),
+            "llm_batch_calls": 1 if unseen else 0,
             "upserted_supabase": upserted_count,
             "disruptions_triggered": disruptions_triggered,
             "timestamp": datetime.now(timezone.utc).isoformat()
@@ -228,21 +304,35 @@ class UnifiedNewsIngestor:
     async def _process_critical_disruptions(self, articles: List[Dict[str, Any]]) -> int:
         """
         Synthesizes physical disruption incidents in Supabase and triggers fleet impact evaluation.
+        Only RED_CONFIRMED (and high-severity YELLOW is excluded) articles synthesize incidents.
         """
         count = 0
         for art in articles:
             severity = str(art.get("severity", "")).lower()
             lane_status = str(art.get("ground_truth_metrics", {}).get("lane_status", "")).upper()
             art_id = str(art.get("id", ""))
+            zone_tier = str(art.get("zone_tier") or art.get("ground_truth_metrics", {}).get("zone_tier") or "")
+            incident_type = str(art.get("incident_type", ""))
 
-            # Filter for consequential physical disruptions
+            if zone_tier == "DROPPED_IRRELEVANT":
+                continue
+            # Only RED_CONFIRMED synthesizes physical incidents; YELLOW stays map-only.
             is_disruption = (
-                severity in ["critical", "high"] or 
-                lane_status in ["BLOCKED", "RESTRICTED"] or
-                art.get("incident_type") in ["flood", "landslide", "marine_wave", "port_congestion"]
+                zone_tier == "RED_CONFIRMED"
+                or (severity in ["critical", "high"]
+                    or lane_status in ["BLOCKED", "RESTRICTED"]
+                    or incident_type in ["flood", "landslide", "earthquake", "wildfire",
+                                         "port_closure", "marine_wave", "road_closure",
+                                         "volcanic_eruption", "congestion", "other_disruption"])
             )
+            # Guard: never synthesize from un-geocoded rows.
+            if art.get("latitude") is None or art.get("longitude") is None:
+                continue
 
-            if is_disruption and art_id not in self._processed_disruption_ids:
+            if is_disruption and zone_tier != "DROPPED_IRRELEVANT" and art_id not in self._processed_disruption_ids:
+                # Require RED for auto-incident; YELLOW only if explicitly high severity.
+                if zone_tier == "YELLOW_CLARIFY" and severity not in ("high", "critical"):
+                    continue
                 self._processed_disruption_ids.add(art_id)
                 success = await self._synthesize_incident_and_hitl(art)
                 if success:

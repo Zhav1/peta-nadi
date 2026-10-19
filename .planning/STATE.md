@@ -2,35 +2,35 @@
 gsd_state_version: "1.0"
 milestone: M4
 milestone_name: PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability
-current_phase: 71
-current_phase_name: Map Visual Context, Fleet Filter Diagnostics & News Intelligence Link Sanitization
+current_phase: 72
+current_phase_name: LLM News Gatekeeper, Red/Yellow Audit Zones & Port-Closure Modality Rerouting
 status: complete
-stopped_at: "Phases 70 & 71 complete: (1) AIS vessel continuity with 96-vessel regional baseline plus live AISStream overlay and uniform current_coords; (2) Coastal river estuary navigation channels and multi-color intermodal legs; (3) Map state reset purge and immediate node glow clearing; (4) Fleet filter operational clarity & Deck.gl character fix; (5) News link sanitization & backend keyword gate; (6) Frontend API base URL auto-sanitization to peta-nadi.onrender.com."
-last_updated: "2026-10-18T22:25:00.000Z"
-last_activity: 2026-10-18
-last_activity_desc: "Phases 70 & 71 executed & verified: 100% clean typecheck, tests, and URL link health."
+stopped_at: "Phases 72 complete: (1) DB-first news dedup with bureau/dateline stripping and economical 3-tier LLM gatekeeper (RED_CONFIRMED/YELLOW_CLARIFY/DROPPED_IRRELEVANT); (2) Interactive Red/Yellow map zones with independent checkboxes and stored Audit Trail inspection (zero synthetic simulation); (3) Expanded 10-hazard taxonomy with dynamic ImpactProfile; (4) Port-closure alternate-port intermodal failover with per-route tradeoff economics."
+last_updated: "2026-10-19T08:05:00.000Z"
+last_activity: 2026-10-19
+last_activity_desc: "Phase 72 executed & verified: 0 tsc errors, pytest suites pass, router failover check green."
 state_head: HEAD
 progress:
-  total_phases: 71
-  completed_phases: 71
-  total_plans: 84
-  completed_plans: 84
+  total_phases: 72
+  completed_phases: 72
+  total_plans: 88
+  completed_plans: 88
   percent: 100.0
 ---
 
 # STATE: PreHub Project Memory
 
-**Last Updated:** 2026-10-18
+**Last Updated:** 2026-10-19
 **Active Milestone:** M4 - PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability [ACTIVE 🚀]
-**Current Phase:** 71
+**Current Phase:** 72
 
 ---
 
 ## Current Position
 
-Phase: 71 (Map Visual Context, Fleet Filter Diagnostics & News Intelligence Link Sanitization) & Phase 70 (AIS Vessel Continuity, Coastal Maritime Fairways, Multi-Color Route Legs & Node Glow Reset) - COMPLETE ✅
-Status: (1) Stabilized AIS vessel continuity by merging 96-vessel regional baseline with live AISStream overlay and uniform current_coords; (2) Added SUMATRA_PORT_CHANNELS and Dijkstra maritime pathfinding guaranteeing 100% water transit around Sumatra peninsulas and river estuaries; (3) Rendered distinct multi-color route legs (Road: #10B981, Maritime: #3B82F6, Air: #00F0FF); (4) Lifted hiddenRouteIndices to DashboardClient with bidirectional reset sync; (5) Cleared customPinnedPoints and custom-pinned-source GeoJSON immediately on route reset, eliminating lingering node glow; (6) Added Multimodal Fleet & Maritime Corridor section to LEGENDA RUTE modal; (7) Replaced Deck.gl unicode bullet with ASCII hyphen eliminating console errors; (8) Sanitized fallback news links with 100% 200 OK endpoints; (9) Auto-sanitized frontend API base URL redirecting dead prehub-backend to active peta-nadi.onrender.com.
-Last activity: 2026-10-18 - Phases 70 & 71 fully executed and verified.
+Phase: 72 (LLM News Gatekeeper, Red/Yellow Audit Zones & Port-Closure Modality Rerouting) - COMPLETE ✅
+Status: (1) DB-first dedup with bureau/dateline stripping and 3-tier gatekeeper (RED_CONFIRMED/YELLOW_CLARIFY/DROPPED_IRRELEVANT) packed in ground_truth_metrics JSONB; (2) Clickable Red (#ef4444)/Yellow (#eab308) zones with independent checkboxes; news Fokus opens stored Audit Trail via inspectNewsOrZoneAuditTrail instead of synthetic simulation; (3) 10-hazard taxonomy with dynamic ImpactProfile; (4) findClosestOpenSeaport alternate-port intermodal failover with per-route tradeoff economics.
+Last activity: 2026-10-19 - Phase 72 fully executed and verified.
 Next action: Push changes to remote repository.
 
 ---
@@ -111,6 +111,8 @@ Next action: Push changes to remote repository.
 | 68 | Restore Guest-403 E2E Test Against MitigationTab | **COMPLETE** ✅ | Replaced deleted SimulationSection test with MitigationTab approval pipeline test; verified 403 sandbox toast and optimistic UI update. 1/1 Playwright passed. |
 | 69 | Telemetry OOM & Island Snapping Fix, Deep Article Permalink Resolution, and On-Map Contextual Corridor Selection | **COMPLETE** ✅ | Decoupled Deck.gl RAF (25-30 Hz, 0 OOM), aligned current_coords, nautical channel interpolation, deep Antara permalinks, on-map route popover & corridor reset. 20/20 pytest, 0 tsc errors. |
 | 70 | AIS Vessel Continuity, Coastal Maritime Fairways, Multi-Color Route Legs & Node Glow Reset | **COMPLETE** ✅ | Persistent AIS baseline + overlay, river estuary channels (Musi/Siak), multi-color legs (#10B981/#3B82F6/#00F0FF), bidirectional reset, instant node glow wipe. 19/19 pytest, 0 tsc errors. |
+| 71 | Map Visual Context, Fleet Filter Diagnostics & News Intelligence Link Sanitization | **COMPLETE** ✅ | LEGENDA RUTE multimodal section, fleet filter tooltips, Deck.gl ASCII fix, news link sanitization + keyword gate, API base URL auto-sanitization. 0 tsc errors. |
+| 72 | LLM News Gatekeeper, Red/Yellow Audit Zones & Port-Closure Modality Rerouting | **COMPLETE** ✅ | 3-tier gatekeeper (RED/YELLOW/DROPPED) with bureau stripping + DB-first dedup; clickable Red/Yellow zones with independent checkboxes; stored Audit Trail inspection; 10-hazard ImpactProfile; alternate-port failover with tradeoff economics. 0 tsc errors. |
 
 ---
 
@@ -118,6 +120,7 @@ Next action: Push changes to remote repository.
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
+| 2026-10-19 | Phase 72: LLM News Gatekeeper, Red/Yellow Audit Zones & Port-Closure Modality Rerouting | DB-first dedup before any LLM call; bureau/dateline stripping fixes "ANTARA Bengkulu" centroid pollution; 3-tier gatekeeper (RED_CONFIRMED/YELLOW_CLARIFY/DROPPED_IRRELEVANT) with heuristic-first + LLM overlay; clickable Red/Yellow zones with independent checkboxes; news Fokus opens stored Audit Trail at zero simulation cost; 10-hazard ImpactProfile; alternate-port intermodal failover with per-route tradeoff economics. 0 tsc errors, pytest routing/news suites pass. |
 | 2026-10-18 | Phase 70: AIS Vessel Continuity, Coastal Maritime Fairways, Multi-Color Route Legs & Node Glow Reset | Stabilized AIS vessel continuity by merging 96-vessel Sumatra baseline with live AISStream messages and enforcing uniform current_coords: [lon, lat], stopping ship disappearance on WebSocket reconnection. Constructed SUMATRA_PORT_CHANNELS and Dijkstra maritime pathfinding around Sumatra peninsulas and river estuaries (Boom Baru Musi, Pekanbaru Siak, Jambi Batanghari), mathematically preventing straight-line land traversal. Rendered modality-specific multi-color route legs (Road: Emerald #10B981, Sea: Royal Blue #3B82F6, Air: Sky #00F0FF). Lifted hidden route index tracking to DashboardClient and preserved intermodal recommendations during crisis updates. Added active useEffect in CrisisMap to wipe custom-pinned-source and popovers when origin/destination nodes are cleared, immediately eliminating lingering node glow. 19/19 pytest passed, 0 tsc errors, 100% clean Next.js build. |
 | 2026-10-18 | Phase 69: Telemetry OOM & Island Snapping Fix, Deep Article Permalink Resolution, and On-Map Contextual Corridor Selection | Throttled Deck.gl `setProps` updates to 25–30 Hz and reused pre-allocated arrays in `FleetVehicleLayer.tsx` to stop V8 heap churn and eliminate browser OOM crashes. Synchronized `current_coords` serialization and snapped maritime units to surveyed waterway polylines, purging the +/-14.5° island teleportation jump. Resolved Google News redirect wrappers to direct publisher article permalinks via asynchronous HEAD/GET unmasking. Added interactive glassmorphism popover on clicking route polylines and a contextual "Reset Rute" pill in `CrisisSimulatorBar.tsx`. 20/20 pytest passed, 0 tsc errors, 100% clean Next.js build. |
 | 2026-10-18 | Phase 68: Restore Guest-403 E2E Test Against MitigationTab | Re-established automated test coverage for guest 403 handling on `MitigationTab.tsx` (`POST /api/v1/approvals`). Asserted real behavior (sandbox toast and optimistic card update without writing to `localStorage`). Added null guards in `MitigationTab.tsx` and node resolution fallback in `DashboardClient.tsx`. 1/1 Playwright test passed. |
@@ -199,8 +202,8 @@ These scripts validate the economic correlation hypotheses that underpin Agent 5
 
 ## Session
 
-**Last session:** 2026-10-18T22:35:00.000Z
-**Stopped at:** Completed Phases 63 through 71 and documentation verification via gsd-docs-update
+**Last session:** 2026-10-19T08:05:00.000Z
+**Stopped at:** Completed Phase 72 (LLM news gatekeeper, Red/Yellow audit zones, dynamic hazards, port-closure rerouting) and documentation verification via gsd-docs-update
 **Resume file:** None
 
 ## Performance Metrics
