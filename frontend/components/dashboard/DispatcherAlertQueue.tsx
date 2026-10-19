@@ -39,8 +39,8 @@ export function DispatcherAlertQueue({
   );
 
   return (
-    <div className="absolute top-16 left-4 sm:left-32 lg:left-[340px] right-4 sm:right-16 z-30 pointer-events-auto max-w-4xl animate-in slide-in-from-top-3 duration-200">
-      <div className="bg-[#0c1017] border border-white/10 rounded-lg shadow-2xl p-3 text-slate-200">
+    <div className="absolute top-20 left-3 right-3 sm:left-4 z-30 pointer-events-auto max-w-4xl max-w-[calc(100vw-1.5rem)] lg:max-w-[calc(100%-410px)] animate-in slide-in-from-top-3 duration-200">
+      <div className="bg-[#0c1017] border border-[#1c2432] rounded-lg shadow-2xl p-3 text-slate-200">
         {/* Header Ribbon */}
         <div className="flex items-center justify-between pb-2 mb-2 border-b border-[#1c2432]">
           <div className="flex items-center gap-2">

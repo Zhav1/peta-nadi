@@ -141,7 +141,7 @@ export function CrisisSimulatorBar({
   return (
     <div
       ref={containerRef}
-      className={`absolute bottom-16 sm:bottom-20 z-40 flex flex-col items-center gap-2 pointer-events-auto select-none transition-all duration-300 left-1/2 -translate-x-1/2 max-w-[95vw] ${dockPositionClass}`}
+      className={`absolute bottom-16 sm:bottom-20 z-40 flex flex-col items-center gap-2 pointer-events-auto select-none transition-all duration-300 -translate-x-1/2 ${dockPositionClass}`}
     >
       {/* Floating Action Bubble Pills Row */}
       <div className={pillsRowClass}>

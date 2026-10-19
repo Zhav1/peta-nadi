@@ -51,7 +51,7 @@ export function CrisisSidebar({
   return (
     <div
       id="crisis-sidebar"
-      className="fixed top-20 right-3 sm:right-6 w-[calc(100vw-1.5rem)] sm:w-[400px] max-h-[calc(100vh-6rem)] sm:max-h-[calc(100vh-7.5rem)] bg-[#0c1017] border border-[#1c2432] rounded-lg flex flex-col z-40 overflow-hidden shadow-xl animate-in slide-in-from-right-4 duration-300 pointer-events-auto"
+      className="absolute top-16 right-3 bottom-4 z-40 w-[calc(100vw-1.5rem)] sm:w-[390px] bg-[#0c1017] border border-[#1c2432] rounded-lg flex flex-col overflow-hidden shadow-xl animate-in slide-in-from-right-4 duration-300 pointer-events-auto"
     >
       {/* Header */}
       <div className="p-4 border-b border-[#1c2432] bg-[#0c1017] space-y-2">

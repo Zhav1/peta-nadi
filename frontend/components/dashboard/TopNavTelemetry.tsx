@@ -65,7 +65,7 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
   };
 
   return (
-    <div ref={containerRef} className="relative flex items-center gap-1.5 text-xs font-mono select-none overflow-visible">
+    <div ref={containerRef} className="relative flex flex-wrap items-center gap-1.5 text-xs font-mono select-none overflow-visible">
       {/* 1. Routing Compute Latency (Interactive Button & God's-Eye Popover) */}
       <div className="relative">
         <button

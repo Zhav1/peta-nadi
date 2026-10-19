@@ -37,6 +37,7 @@ import {
   Plane,
   EyeOff,
   RotateCcw,
+  PanelLeftOpen,
 } from 'lucide-react';
 
 import type {
@@ -75,9 +76,12 @@ export interface CrisisMapProps {
   spatialWeatherPolygons?: GeoJSON.FeatureCollection | null;
   routingInfo?: { solver: string; compute_time_ms: number | null; savings_pct: number | null } | null;
   isLeftSidebarCollapsed?: boolean;
+  onExpandSidebar?: () => void;
   fleetModalityFilter?: 'all' | 'truck' | 'maritime' | 'air';
   simSpeed?: number;
   isRightSidebarOpen?: boolean;
+  topNavTelemetrySlot?: React.ReactNode;
+  fleetModalitySlot?: React.ReactNode;
   mapLegendSlot?: React.ReactNode;
   corridorVisibility?: { land: boolean; sea: boolean; air: boolean };
   onToggleCorridor?: (corridor: 'land' | 'sea' | 'air') => void;
@@ -146,9 +150,12 @@ export default function CrisisMap({
   spatialWeatherPolygons,
   routingInfo,
   isLeftSidebarCollapsed = false,
+  onExpandSidebar,
   fleetModalityFilter = 'all',
   simSpeed = 1,
   isRightSidebarOpen = false,
+  topNavTelemetrySlot,
+  fleetModalitySlot,
   mapLegendSlot,
   corridorVisibility = { land: true, sea: true, air: true },
   onToggleCorridor,
@@ -162,7 +169,6 @@ export default function CrisisMap({
   onCloseVehicle,
 }: CrisisMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  void isLeftSidebarCollapsed;
   void corridorContext;
   void routingInfo;
   void demoStage;
@@ -342,7 +348,7 @@ export default function CrisisMap({
       mouseDownPosRef.current = { x: e.point.x, y: e.point.y };
     });
 
-    map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), 'top-right');
+    map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), 'bottom-right');
     map.addControl(new mapboxgl.ScaleControl(), 'bottom-right');
 
     const draw = new MapboxDraw({
@@ -382,7 +388,7 @@ export default function CrisisMap({
       isMapLoadedRef.current = true;
       setMapInstance(map);
       (window as any)._mapboxMap = map;
-      map.addControl(draw, 'top-left');
+      map.addControl(draw, 'bottom-right');
 
       // 0a. Strategic Trans-Sumatra Baseline Corridors Layer (Backbone Transit Network)
       map.addSource('baseline-corridors-source', {
@@ -1542,6 +1548,18 @@ export default function CrisisMap({
     };
   }, []);
 
+  // Trigger WebGL canvas resize during and after panel transition animations
+  useEffect(() => {
+    if (!mapRef.current) return;
+    mapRef.current.resize();
+    const t1 = setTimeout(() => mapRef.current?.resize(), 150);
+    const t2 = setTimeout(() => mapRef.current?.resize(), 320);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [isLeftSidebarCollapsed, isRightSidebarOpen]);
+
   useEffect(() => {
     updateMapSources();
   }, [
@@ -1845,108 +1863,241 @@ export default function CrisisMap({
         />
       )}
 
-      {/* Universal Village Search Bar Overlay (Glassmorphism & Instant Gazetteer Autocomplete) */}
-      <div className="absolute top-3.5 left-14 z-30 pointer-events-auto">
-        <div className="relative">
-          <div className="flex items-center backdrop-blur-md bg-[#0c1017]/90 border border-[#1c2432] focus-within:border-cyan-500/50 rounded-lg px-2.5 py-1.5 shadow-xl transition-all w-72">
-            <Search className="w-3.5 h-3.5 text-slate-400 mr-2 shrink-0" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              onFocus={() => {
-                if (searchQuery.trim().length >= 2) setIsSearchOpen(true);
-              }}
-              placeholder="Cari desa, kota, atau titik..."
-              className="bg-transparent text-xs text-slate-200 placeholder-slate-500 outline-none w-full font-sans"
-            />
-            {isSearching ? (
-              <Loader2 className="w-3.5 h-3.5 text-cyan-400 animate-spin shrink-0 ml-1.5" />
-            ) : searchQuery ? (
+      {/* Unified Top Command Bar inside Bounded Map Viewport */}
+      <div className="absolute top-3 left-3 right-3 z-40 pointer-events-none flex flex-col gap-2">
+        {/* Row 1: Primary Command & Telemetry Strip */}
+        <div className="flex items-center justify-between gap-2 w-full">
+          {/* Left Group: Expand Button + Universal Search Bar + TopNavTelemetry */}
+          <div className="flex flex-wrap items-center gap-1.5 pointer-events-auto">
+            {/* 1. Expand Left Sidebar Button when Collapsed */}
+            {isLeftSidebarCollapsed && onExpandSidebar && (
               <button
                 type="button"
-                onClick={() => {
-                  setSearchQuery('');
-                  setSearchResults([]);
-                  setIsSearchOpen(false);
-                }}
-                className="text-slate-400 hover:text-white p-0.5 rounded cursor-pointer"
+                onClick={onExpandSidebar}
+                className="cursor-pointer px-3 py-1.5 rounded-md bg-[#0c1017] border border-[#1c2432] text-slate-300 hover:text-white hover:bg-[#121822] shadow-xl transition-colors flex items-center gap-1.5 text-xs font-semibold shrink-0"
+                title="Tampilkan Panel Berita"
               >
-                <X className="w-3.5 h-3.5" />
+                <PanelLeftOpen className="w-4 h-4 text-slate-300" />
+                <span>BERITA</span>
               </button>
-            ) : null}
-          </div>
+            )}
 
-          {isSearchOpen && searchResults.length > 0 && (
-            <div className="absolute left-0 mt-2 w-80 bg-[#0c1017]/95 backdrop-blur-md border border-[#1c2432] rounded-lg shadow-2xl p-2 text-xs space-y-1.5 max-h-80 overflow-y-auto no-scrollbar z-40 animate-in fade-in duration-150">
-              <div className="font-sans font-medium text-[11px] text-slate-400 uppercase tracking-wider px-1 pb-1 border-b border-[#1c2432] flex items-center justify-between">
-                <span>Hasil Temuan Pan-Sumatra</span>
-                <span className="text-slate-500 lowercase">{searchResults.length} titik</span>
+            {/* 2. Universal Location Search Bar */}
+            <div className="relative shrink-0">
+              <div className="flex items-center backdrop-blur-md bg-[#0c1017]/90 border border-[#1c2432] focus-within:border-cyan-500/50 rounded-lg px-2.5 py-1.5 shadow-xl transition-all w-52 sm:w-60 lg:w-68">
+                <Search className="w-3.5 h-3.5 text-slate-400 mr-2 shrink-0" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                  onFocus={() => {
+                    if (searchQuery.trim().length >= 2) setIsSearchOpen(true);
+                  }}
+                  placeholder="Cari desa, kota, atau titik..."
+                  className="bg-transparent text-xs text-slate-200 placeholder-slate-500 outline-none w-full font-sans"
+                />
+                {isSearching ? (
+                  <Loader2 className="w-3.5 h-3.5 text-cyan-400 animate-spin shrink-0 ml-1.5" />
+                ) : searchQuery ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery('');
+                      setSearchResults([]);
+                      setIsSearchOpen(false);
+                    }}
+                    className="text-slate-400 hover:text-white p-0.5 rounded cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                ) : null}
               </div>
 
-              {searchResults.map((item, idx) => {
-                const key = `${item.name}-${idx}`;
-                const subtitle = `${item.province || 'Sumatra'}${item.kabupaten ? ' • ' + item.kabupaten : ''}`;
-                const badgeType =
-                  item.type === 'city'
-                    ? 'Kota'
-                    : item.type === 'port'
-                    ? 'Pelabuhan'
-                    : item.type === 'airport'
-                    ? 'Bandara'
-                    : item.type === 'kecamatan'
-                    ? 'Kecamatan'
-                    : 'Desa';
-                return (
-                  <div
-                    key={key}
-                    className="p-2 rounded-md hover:bg-[#121822] transition-colors border border-transparent hover:border-[#1c2432]/60 group"
-                  >
-                    <div className="flex items-start justify-between gap-1.5">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <MapPin className="w-3 h-3 text-cyan-400 shrink-0" />
-                          <span className="font-medium text-slate-100 truncate">{item.name}</span>
-                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 font-mono">
-                            {badgeType}
-                          </span>
+              {isSearchOpen && searchResults.length > 0 && (
+                <div className="absolute left-0 top-full mt-2 w-80 bg-[#0c1017]/95 backdrop-blur-md border border-[#1c2432] rounded-lg shadow-2xl p-2 text-xs space-y-1.5 max-h-80 overflow-y-auto no-scrollbar z-50 animate-in fade-in duration-150">
+                  <div className="font-sans font-medium text-[11px] text-slate-400 uppercase tracking-wider px-1 pb-1 border-b border-[#1c2432] flex items-center justify-between">
+                    <span>Hasil Temuan Pan-Sumatra</span>
+                    <span className="text-slate-500 lowercase">{searchResults.length} titik</span>
+                  </div>
+
+                  {searchResults.map((item, idx) => {
+                    const key = `${item.name}-${idx}`;
+                    const subtitle = `${item.province || 'Sumatra'}${item.kabupaten ? ' • ' + item.kabupaten : ''}`;
+                    const badgeType =
+                      item.type === 'city'
+                        ? 'Kota'
+                        : item.type === 'port'
+                        ? 'Pelabuhan'
+                        : item.type === 'airport'
+                        ? 'Bandara'
+                        : item.type === 'kecamatan'
+                        ? 'Kecamatan'
+                        : 'Desa';
+                    return (
+                      <div
+                        key={key}
+                        className="p-2 rounded-md hover:bg-[#121822] transition-colors border border-transparent hover:border-[#1c2432]/60 group"
+                      >
+                        <div className="flex items-start justify-between gap-1.5">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <MapPin className="w-3 h-3 text-cyan-400 shrink-0" />
+                              <span className="font-medium text-slate-100 truncate">{item.name}</span>
+                              <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 font-mono">
+                                {badgeType}
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-slate-400 truncate pl-4.5 mt-0.5">{subtitle}</div>
+                          </div>
                         </div>
-                        <div className="text-[10px] text-slate-400 truncate pl-4.5 mt-0.5">{subtitle}</div>
+
+                        <div className="flex items-center gap-1 mt-2 pl-4.5">
+                          <button
+                            type="button"
+                            onClick={() => handleSelectSearchResult(item, 'origin')}
+                            className="cursor-pointer px-2 py-0.5 rounded bg-cyan-950/60 hover:bg-cyan-900 text-cyan-300 border border-cyan-800/50 text-[10px] flex items-center gap-1 transition-colors"
+                          >
+                            <ArrowUpRight className="w-2.5 h-2.5" />
+                            <span>Set Asal</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSelectSearchResult(item, 'dest')}
+                            className="cursor-pointer px-2 py-0.5 rounded bg-emerald-950/60 hover:bg-emerald-900 text-emerald-300 border border-emerald-800/50 text-[10px] flex items-center gap-1 transition-colors"
+                          >
+                            <Flag className="w-2.5 h-2.5" />
+                            <span>Set Tujuan</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSelectSearchResult(item, 'focus')}
+                            className="cursor-pointer px-2 py-0.5 rounded bg-[#1a2333] hover:bg-[#223044] text-slate-300 border border-[#2b3a50] text-[10px] flex items-center gap-1 transition-colors"
+                          >
+                            <Crosshair className="w-2.5 h-2.5" />
+                            <span>Fokus</span>
+                          </button>
+                        </div>
                       </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* 3. TopNavTelemetry Slot */}
+            {topNavTelemetrySlot}
+          </div>
+
+          {/* Right Group: Action Controls (Restore + Layer Peta + Legenda Rute) */}
+          {!(isRightSidebarOpen || (demoStage != null && demoStage >= 2)) && (
+            <div className="flex items-center gap-1.5 pointer-events-auto shrink-0">
+              {(hiddenRouteIndices.size > 0 ||
+                !corridorVisibility?.land ||
+                !corridorVisibility?.sea ||
+                !corridorVisibility?.air) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setInternalHiddenRouteIndices(new Set());
+                    onResetCorridorVisibility?.();
+                  }}
+                  className="cursor-pointer px-3 py-1.5 rounded-md backdrop-blur-md bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-xs font-semibold flex items-center gap-1.5 shadow-xl transition-all duration-200"
+                  title="Tampilkan kembali seluruh koridor rute yang disembunyikan"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="hidden sm:inline">Tampilkan Semua Rute</span>
+                </button>
+              )}
+
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowLayerFilterMenu((v) => !v)}
+                  className={`cursor-pointer px-3 py-1.5 rounded-md border text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-xl ${
+                    showLayerFilterMenu
+                      ? 'bg-white text-[#080d14] border-white'
+                      : 'bg-[#0c1017] text-slate-300 border-[#1c2432] hover:text-white hover:bg-[#121822]'
+                  }`}
+                  title="Filter Layer Peta"
+                >
+                  <Layers className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Layer Peta</span>
+                </button>
+
+                {showLayerFilterMenu && (
+                  <div className="absolute right-0 top-full mt-2 w-64 bg-[#0c1017] border border-[#1c2432] p-3 rounded-lg shadow-xl text-xs space-y-2 z-50 animate-in fade-in duration-150">
+                    <div className="font-sans font-medium text-xs text-slate-300 uppercase tracking-wider border-b border-[#1c2432] pb-1.5">
+                      Filter Visualisasi Layer
                     </div>
 
-                    <div className="flex items-center gap-1 mt-2 pl-4.5">
+                    <div className="space-y-1 text-xs">
                       <button
                         type="button"
-                        onClick={() => handleSelectSearchResult(item, 'origin')}
-                        className="cursor-pointer px-2 py-0.5 rounded bg-cyan-950/60 hover:bg-cyan-900 text-cyan-300 border border-cyan-800/50 text-[10px] flex items-center gap-1 transition-colors"
+                        onClick={() => toggleLayerFilter('baselineCorridors')}
+                        className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-[#121822] transition"
                       >
-                        <ArrowUpRight className="w-2.5 h-2.5" />
-                        <span>Set Asal</span>
+                        <span className="text-slate-200">Koridor Utama</span>
+                        <span className={`w-4 h-4 rounded flex items-center justify-center border ${
+                          layerFilters.baselineCorridors ? 'bg-white border-white text-[#080d14]' : 'border-[#1c2432]'
+                        }`}>
+                          {layerFilters.baselineCorridors && <Check className="w-3 h-3 stroke-[3]" />}
+                        </span>
                       </button>
+
                       <button
                         type="button"
-                        onClick={() => handleSelectSearchResult(item, 'dest')}
-                        className="cursor-pointer px-2 py-0.5 rounded bg-emerald-950/60 hover:bg-emerald-900 text-emerald-300 border border-emerald-800/50 text-[10px] flex items-center gap-1 transition-colors"
+                        onClick={() => toggleLayerFilter('bottlenecks')}
+                        className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-[#121822] transition"
                       >
-                        <Flag className="w-2.5 h-2.5" />
-                        <span>Set Tujuan</span>
+                        <span className="text-slate-200">Kemacetan / Bottleneck</span>
+                        <span className={`w-4 h-4 rounded flex items-center justify-center border ${
+                          layerFilters.bottlenecks ? 'bg-white border-white text-[#080d14]' : 'border-[#1c2432]'
+                        }`}>
+                          {layerFilters.bottlenecks && <Check className="w-3 h-3 stroke-[3]" />}
+                        </span>
                       </button>
+
                       <button
                         type="button"
-                        onClick={() => handleSelectSearchResult(item, 'focus')}
-                        className="cursor-pointer px-2 py-0.5 rounded bg-[#1a2333] hover:bg-[#223044] text-slate-300 border border-[#2b3a50] text-[10px] flex items-center gap-1 transition-colors"
+                        onClick={() => toggleLayerFilter('weatherRadar')}
+                        className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-[#121822] transition"
                       >
-                        <Crosshair className="w-2.5 h-2.5" />
-                        <span>Fokus</span>
+                        <span className="text-slate-200">Radar Cuaca & Bahaya</span>
+                        <span className={`w-4 h-4 rounded flex items-center justify-center border ${
+                          layerFilters.weatherRadar ? 'bg-white border-white text-[#080d14]' : 'border-[#1c2432]'
+                        }`}>
+                          {layerFilters.weatherRadar && <Check className="w-3 h-3 stroke-[3]" />}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => toggleLayerFilter('fleetVehicles')}
+                        className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-[#121822] transition"
+                      >
+                        <span className="text-slate-200">Armada Logistik</span>
+                        <span className={`w-4 h-4 rounded flex items-center justify-center border ${
+                          layerFilters.fleetVehicles ? 'bg-white border-white text-[#080d14]' : 'border-[#1c2432]'
+                        }`}>
+                          {layerFilters.fleetVehicles && <Check className="w-3 h-3 stroke-[3]" />}
+                        </span>
                       </button>
                     </div>
                   </div>
-                );
-              })}
+                )}
+              </div>
+
+              {mapLegendSlot}
             </div>
           )}
         </div>
+
+        {/* Row 2: Fleet Modality Bar */}
+        {fleetModalitySlot && (
+          <div className="flex items-center gap-2 pointer-events-auto">
+            {fleetModalitySlot}
+          </div>
+        )}
       </div>
 
       {/* Glassmorphic Village & Right-Click Context Menu Popup Card */}
@@ -2189,109 +2340,6 @@ export default function CrisisMap({
               </button>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Floating Map Action Controls Group (Reset Rute + Layer Peta + Legenda Rute side-by-side) */}
-      {!(isRightSidebarOpen || (demoStage != null && demoStage >= 2)) && (
-        <div className={`absolute top-3.5 z-30 pointer-events-auto transition-all duration-300 flex items-center gap-2 right-4 animate-in fade-in duration-200`}>
-          {/* Quick Restore Hidden Routes Button */}
-          {(hiddenRouteIndices.size > 0 ||
-            !corridorVisibility?.land ||
-            !corridorVisibility?.sea ||
-            !corridorVisibility?.air) && (
-            <button
-              type="button"
-              onClick={() => {
-                setInternalHiddenRouteIndices(new Set());
-                onResetCorridorVisibility?.();
-              }}
-              className="cursor-pointer px-3 py-1.5 rounded-md backdrop-blur-md bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-xs font-semibold flex items-center gap-1.5 shadow-xl transition-all duration-200"
-              title="Tampilkan kembali seluruh koridor rute yang disembunyikan"
-            >
-              <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
-              <span>Tampilkan Semua Rute</span>
-            </button>
-          )}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setShowLayerFilterMenu((v) => !v)}
-              className={`cursor-pointer px-3 py-1.5 rounded-md border text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-xl ${
-                showLayerFilterMenu
-                  ? 'bg-white text-[#080d14] border-white'
-                  : 'bg-[#0c1017] text-slate-300 border-[#1c2432] hover:text-white hover:bg-[#121822]'
-              }`}
-              title="Filter Layer Peta"
-            >
-              <Layers className="w-3.5 h-3.5 text-slate-400" />
-              <span>Layer Peta</span>
-            </button>
-
-            {showLayerFilterMenu && (
-              <div className="absolute right-0 mt-2 w-64 bg-[#0c1017] border border-[#1c2432] p-3 rounded-lg shadow-xl text-xs space-y-2 animate-in fade-in duration-150">
-                <div className="font-sans font-medium text-xs text-slate-300 uppercase tracking-wider border-b border-[#1c2432] pb-1.5">
-                  Filter Visualisasi Layer
-                </div>
-
-                <div className="space-y-1 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => toggleLayerFilter('baselineCorridors')}
-                    className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-[#121822] transition"
-                  >
-                    <span className="text-slate-200">Koridor Utama</span>
-                    <span className={`w-4 h-4 rounded flex items-center justify-center border ${
-                      layerFilters.baselineCorridors ? 'bg-white border-white text-[#080d14]' : 'border-[#1c2432]'
-                    }`}>
-                      {layerFilters.baselineCorridors && <Check className="w-3 h-3 stroke-[3]" />}
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => toggleLayerFilter('bottlenecks')}
-                    className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-[#121822] transition"
-                  >
-                    <span className="text-slate-200">Kemacetan / Bottleneck</span>
-                    <span className={`w-4 h-4 rounded flex items-center justify-center border ${
-                      layerFilters.bottlenecks ? 'bg-white border-white text-[#080d14]' : 'border-[#1c2432]'
-                    }`}>
-                      {layerFilters.bottlenecks && <Check className="w-3 h-3 stroke-[3]" />}
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => toggleLayerFilter('weatherRadar')}
-                    className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-[#121822] transition"
-                  >
-                    <span className="text-slate-200">Radar Cuaca & Bahaya</span>
-                    <span className={`w-4 h-4 rounded flex items-center justify-center border ${
-                      layerFilters.weatherRadar ? 'bg-white border-white text-[#080d14]' : 'border-[#1c2432]'
-                    }`}>
-                      {layerFilters.weatherRadar && <Check className="w-3 h-3 stroke-[3]" />}
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => toggleLayerFilter('fleetVehicles')}
-                    className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-[#121822] transition"
-                  >
-                    <span className="text-slate-200">Armada Logistik</span>
-                    <span className={`w-4 h-4 rounded flex items-center justify-center border ${
-                      layerFilters.fleetVehicles ? 'bg-white border-white text-[#080d14]' : 'border-[#1c2432]'
-                    }`}>
-                      {layerFilters.fleetVehicles && <Check className="w-3 h-3 stroke-[3]" />}
-                    </span>
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {mapLegendSlot}
         </div>
       )}
 

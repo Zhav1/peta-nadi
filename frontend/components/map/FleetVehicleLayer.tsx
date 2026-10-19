@@ -1058,7 +1058,7 @@ export function FleetVehicleLayer({
 
       {/* Telemetry Inspector Console — Docked in Right Tactical Inspector Slot (Zero Overlap with Left Drawer) */}
       {selectedVehicle && (
-        <div className="fixed top-20 right-3 sm:right-6 z-40 w-[calc(100vw-1.5rem)] sm:w-[400px] max-h-[calc(100vh-6rem)] sm:max-h-[calc(100vh-7.5rem)] bg-[#0c1017] border border-[#1c2432] shadow-xl rounded-lg p-4 text-slate-100 animate-in slide-in-from-right-4 duration-300 pointer-events-auto space-y-3 font-sans overflow-y-auto no-scrollbar">
+        <div className="absolute top-16 right-3 bottom-4 z-40 w-[calc(100vw-1.5rem)] sm:w-[390px] bg-[#0c1017] border border-[#1c2432] shadow-xl rounded-lg p-4 text-slate-100 animate-in slide-in-from-right-4 duration-300 pointer-events-auto space-y-3 font-sans overflow-y-auto no-scrollbar">
           {/* Header Bar */}
           <div className="flex items-start justify-between border-b border-[#1c2432] pb-3">
             <div className="flex items-center gap-2.5">

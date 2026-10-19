@@ -99,18 +99,22 @@ function FloatingMapLegend({
 }) {
   return (
     <div className="relative pointer-events-auto">
-      {!isOpen ? (
-        <button
-          type="button"
-          onClick={onToggle}
-          className="cursor-pointer px-3 py-1.5 rounded-md bg-[#0c1017] border border-[#1c2432] text-slate-300 hover:text-white hover:bg-[#121822] shadow-xl transition-colors flex items-center gap-1.5 text-xs font-semibold"
-          title="Buka Legenda Peta & Rute"
-        >
-          <Info className="w-4 h-4 text-slate-300" />
-          <span>LEGENDA RUTE</span>
-        </button>
-      ) : (
-        <div className="absolute right-0 mt-2 w-72 bg-[#0c1017] border border-[#1c2432] p-3.5 rounded-lg shadow-xl text-xs space-y-2.5 animate-in fade-in zoom-in-95 duration-150 z-50">
+      <button
+        type="button"
+        onClick={onToggle}
+        className={`cursor-pointer px-3 py-1.5 rounded-md border text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-xl ${
+          isOpen
+            ? 'bg-white text-[#080d14] border-white'
+            : 'bg-[#0c1017] text-slate-300 border-[#1c2432] hover:text-white hover:bg-[#121822]'
+        }`}
+        title="Buka Legenda Peta & Rute"
+      >
+        <Info className="w-4 h-4 text-slate-300" />
+        <span>LEGENDA RUTE</span>
+      </button>
+
+      {isOpen && (
+        <div className="absolute right-0 top-full mt-2 w-72 bg-[#0c1017] border border-[#1c2432] p-3.5 rounded-lg shadow-xl text-xs space-y-2.5 animate-in fade-in zoom-in-95 duration-150 z-50">
           <div className="flex items-center justify-between border-b border-[#1c2432] pb-2">
             <span className="font-mono font-semibold text-xs text-white uppercase tracking-wider flex items-center gap-1.5">
               <Compass className="w-3.5 h-3.5 text-slate-300" />
@@ -1635,7 +1639,7 @@ export default function DashboardClient() {
     (i) => i.status !== 'resolved' && !i.id.includes('predict') && i.type !== 'port_closure'
   );
 
-  const isCrisisDrawerOpen = isSidebarOpen && !!selectedCrisis;
+  const isCrisisDrawerOpen = isRightInspectorActive;
   const footerDockClass = resolveMapDockClasses({ isLeftSidebarCollapsed, isCrisisDrawerOpen });
 
   return (
@@ -1791,111 +1795,16 @@ export default function DashboardClient() {
       <main className="absolute left-0 top-16 right-0 bottom-0 overflow-hidden flex">
 
         {/* SECTION 1: 4D GIS MAP WITH RESTORED FIGMA COMMAND CENTER GRID */}
-        <div className={`w-full h-full relative ${activeSection === 'map' ? 'block' : 'hidden'}`}>
+        <div className={`w-full h-full relative overflow-hidden ${activeSection === 'map' ? 'flex' : 'hidden'}`}>
 
-          {/* Floating Operational Telemetry HUD Strip (Zero Clipping & Responsive Left Offset) */}
-          <div className={`absolute top-3.5 z-30 pointer-events-auto transition-all duration-300 hidden md:flex items-center gap-1.5 overflow-visible ${isLeftSidebarCollapsed ? 'left-14' : 'left-4 md:left-[364px]'
-            } ${isRightInspectorActive
-              ? isLeftSidebarCollapsed
-                ? 'max-w-[calc(100vw-450px)]'
-                : 'max-w-[calc(100vw-450px)] lg:max-w-[calc(100vw-368px-440px)]'
-              : isLeftSidebarCollapsed
-                ? 'max-w-[calc(100vw-32px)]'
-                : 'max-w-[calc(100vw-32px)] lg:max-w-[calc(100vw-380px)]'
-            }`}>
-            <TopNavTelemetry
-              routingInfo={routingInfo}
-              corridorContext={corridorContext}
-              isLoading={isCorridorLoading}
-              onOpenHitl={() => setIsHitlDrawerOpen(true)}
-              pendingHitlCount={pendingHitlCount}
-              isLeftSidebarCollapsed={isLeftSidebarCollapsed}
-              showRedZones={showRedZones}
-              onToggleRedZones={() => setShowRedZones(v => !v)}
-              redZoneCount={liveNewsZoneCounts.red}
-              showYellowZones={showYellowZones}
-              onToggleYellowZones={() => setShowYellowZones(v => !v)}
-              yellowZoneCount={liveNewsZoneCounts.yellow}
-              onSelectHub={(hub) => {
-                setMapFlyTo({ lon: hub.coords[0], lat: hub.coords[1], zoom: 11, ts: Date.now() });
-              }}
-              onFocusRoute={() => {
-                if (selectedOriginNode && selectedDestNode) {
-                  const orig = dynamicHubNodes.find(n => n.id === selectedOriginNode);
-                  if (orig) setMapFlyTo({ lon: orig.coords[0], lat: orig.coords[1], zoom: 9, ts: Date.now() });
-                }
-              }}
-            />
-          </div>
-
-          {/* 1. FULL-BLEED 4D MAPBOX MAP CANVAS (ALWAYS 100% VIEWPORT - ZERO RESIZING BLINK!) */}
-          <div className="absolute inset-0 w-full h-full z-0">
-            <CrisisMap
-              incidents={activeIncidents}
-              selectedCrisisId={selectedCrisisId}
-              onCrisisClick={handleCrisisClick}
-              activeRoutes={
-                currentMapRoutes.length > 0 ? currentMapRoutes : (selectedCrisis?.route_recommendations || [])
-              }
-              activeRouteIdx={activeRouteIdx}
-              fireHotspots={[]}
-              activeFleet={activeFleetVehicles}
-              demoStage={demoState.isRunning ? demoState.stage : null}
-              disasterZones={combinedDisasterZones}
-              onZoneClick={handleZoneClick}
-              flyToCoords={mapFlyTo}
-              onPolygonDrawn={handlePolygonDrawn}
-              drawModeActive={drawModeActive}
-              isClickTargeting={isClickTargeting}
-              onMapPointTargeted={(lat, lon) => handleMapPointTargeted(lat, lon)}
-              simulatedShockwave={simulatedShockwave}
-              selectedOriginNode={selectedOriginNode || undefined}
-              selectedDestNode={selectedDestNode || undefined}
-              onNodeSelected={handleNodeSelected}
-              onCustomPointSelected={handleCustomPointSelected}
-              onSelectRoute={(idx) => setActiveRouteIdx(idx)}
-              hubNodesList={dynamicHubNodes}
-              corridorContext={corridorContext}
-              spatialWeatherPolygons={spatialWeatherPolygons}
-              routingInfo={routingInfo}
-              isLeftSidebarCollapsed={isLeftSidebarCollapsed}
-              fleetModalityFilter={fleetModalityFilter}
-              simSpeed={simSpeed}
-              isRightSidebarOpen={isRightInspectorActive}
-              selectedVehicleId={selectedVehicle?.vehicle_id ?? null}
-              onSelectVehicle={handleSelectVehicle}
-              onCloseVehicle={handleCloseVehicle}
-              corridorVisibility={corridorVisibility}
-              onToggleCorridor={handleToggleCorridor}
-              onResetCorridorVisibility={handleResetCorridors}
-              hiddenRouteIndices={hiddenRouteIndices}
-              onHideRoute={handleHideRoute}
-              mapLegendSlot={
-                <FloatingMapLegend
-                  isOpen={isMapLegendOpen}
-                  onToggle={() => setIsMapLegendOpen(v => !v)}
-                />
-              }
-            />
-
-          </div>
-
-          {/* Floating Expand Sidebar Button when Collapsed */}
-          {isLeftSidebarCollapsed && (
-            <button
-              type="button"
-              onClick={() => setIsLeftSidebarCollapsed(false)}
-              className="absolute top-4 left-4 z-[360] px-3 py-1.5 rounded-md bg-[#0c1017] border border-[#1c2432] text-slate-300 hover:text-white hover:bg-[#121822] shadow-xl transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-semibold"
-              title="Tampilkan Panel Berita"
-            >
-              <PanelLeftOpen className="w-4 h-4 text-slate-300" />
-              <span>BERITA</span>
-            </button>
-          )}
-
-          {/* 2. COLLAPSIBLE LEFT OSINT & NEWS SIDEBAR (GLOBOT STYLE) */}
-          <aside className={`absolute left-0 top-0 bottom-0 z-40 w-80 md:w-88 bg-[#0c1017] border-r border-[#1c2432] flex flex-col gap-3 p-3.5 overflow-hidden pointer-events-auto transition-transform duration-300 ease-in-out shadow-xl ${isLeftSidebarCollapsed ? '-translate-x-full pointer-events-none' : 'translate-x-0'
-            }`}>
+          {/* COLUMN 1: COLLAPSIBLE LEFT OSINT & NEWS SIDEBAR (GLOBOT STYLE) */}
+          <aside
+            className={`h-full bg-[#0c1017] flex flex-col gap-3 overflow-hidden pointer-events-auto transition-all duration-300 ease-in-out shadow-xl ${
+              isLeftSidebarCollapsed
+                ? 'w-0 p-0 overflow-hidden border-r-0 opacity-0 pointer-events-none -translate-x-full md:translate-x-0 shrink-0'
+                : 'absolute md:relative inset-y-0 left-0 md:inset-auto z-40 md:z-30 shrink-0 w-80 md:w-[352px] p-3.5 border-r border-[#1c2432] opacity-100 translate-x-0'
+            }`}
+          >
             {/* Header: OSINT Wire & Live Pulse */}
             <div className="flex items-center justify-between pb-2 border-b border-[#1c2432] shrink-0">
               <div className="flex items-center gap-2">
@@ -2268,8 +2177,155 @@ export default function DashboardClient() {
             </div>
           </aside>
 
-          {/* 3. FLOATING OVERLAYS CONTAINER AREA */}
-          <div className="absolute inset-0 w-full h-full pointer-events-none z-10">
+          {/* COLUMN 2: BOUNDED CENTER MAP VIEWPORT */}
+          <div className="relative flex-1 h-full min-w-0 overflow-hidden">
+            {/* 1. Full-Bleed 4D Mapbox Map Canvas */}
+            <div className="absolute inset-0 w-full h-full z-0">
+              <CrisisMap
+                incidents={activeIncidents}
+                selectedCrisisId={selectedCrisisId}
+                onCrisisClick={handleCrisisClick}
+                activeRoutes={
+                  currentMapRoutes.length > 0 ? currentMapRoutes : (selectedCrisis?.route_recommendations || [])
+                }
+                activeRouteIdx={activeRouteIdx}
+                fireHotspots={[]}
+                activeFleet={activeFleetVehicles}
+                demoStage={demoState.isRunning ? demoState.stage : null}
+                disasterZones={combinedDisasterZones}
+                onZoneClick={handleZoneClick}
+                flyToCoords={mapFlyTo}
+                onPolygonDrawn={handlePolygonDrawn}
+                drawModeActive={drawModeActive}
+                isClickTargeting={isClickTargeting}
+                onMapPointTargeted={(lat, lon) => handleMapPointTargeted(lat, lon)}
+                simulatedShockwave={simulatedShockwave}
+                selectedOriginNode={selectedOriginNode || undefined}
+                selectedDestNode={selectedDestNode || undefined}
+                onNodeSelected={handleNodeSelected}
+                onCustomPointSelected={handleCustomPointSelected}
+                onSelectRoute={(idx) => setActiveRouteIdx(idx)}
+                hubNodesList={dynamicHubNodes}
+                corridorContext={corridorContext}
+                spatialWeatherPolygons={spatialWeatherPolygons}
+                routingInfo={routingInfo}
+                isLeftSidebarCollapsed={isLeftSidebarCollapsed}
+                onExpandSidebar={() => setIsLeftSidebarCollapsed(false)}
+                fleetModalityFilter={fleetModalityFilter}
+                simSpeed={simSpeed}
+                isRightSidebarOpen={isRightInspectorActive}
+                selectedVehicleId={selectedVehicle?.vehicle_id ?? null}
+                onSelectVehicle={handleSelectVehicle}
+                onCloseVehicle={handleCloseVehicle}
+                corridorVisibility={corridorVisibility}
+                onToggleCorridor={handleToggleCorridor}
+                onResetCorridorVisibility={handleResetCorridors}
+                hiddenRouteIndices={hiddenRouteIndices}
+                onHideRoute={handleHideRoute}
+                topNavTelemetrySlot={
+                  <TopNavTelemetry
+                    routingInfo={routingInfo}
+                    corridorContext={corridorContext}
+                    isLoading={isCorridorLoading}
+                    onOpenHitl={() => setIsHitlDrawerOpen(true)}
+                    pendingHitlCount={pendingHitlCount}
+                    isLeftSidebarCollapsed={isLeftSidebarCollapsed}
+                    showRedZones={showRedZones}
+                    onToggleRedZones={() => setShowRedZones(v => !v)}
+                    redZoneCount={liveNewsZoneCounts.red}
+                    showYellowZones={showYellowZones}
+                    onToggleYellowZones={() => setShowYellowZones(v => !v)}
+                    yellowZoneCount={liveNewsZoneCounts.yellow}
+                    onSelectHub={(hub) => {
+                      setMapFlyTo({ lon: hub.coords[0], lat: hub.coords[1], zoom: 11, ts: Date.now() });
+                    }}
+                    onFocusRoute={() => {
+                      if (selectedOriginNode && selectedDestNode) {
+                        const orig = dynamicHubNodes.find(n => n.id === selectedOriginNode);
+                        if (orig) setMapFlyTo({ lon: orig.coords[0], lat: orig.coords[1], zoom: 9, ts: Date.now() });
+                      }
+                    }}
+                  />
+                }
+                fleetModalitySlot={
+                  !(isSidebarOpen && selectedCrisis) ? (
+                    <div className="flex items-center gap-1 p-1 rounded-lg bg-[#0c1017]/90 backdrop-blur-md border border-[#1c2432] shadow-xl overflow-x-auto no-scrollbar max-w-[calc(100vw-2rem)]">
+                      {[
+                        { id: 'all', label: 'SEMUA', count: activeFleetVehicles.length, icon: null },
+                        { id: 'truck', label: 'TRUK', count: activeFleetVehicles.filter((v) => v.modality === 'truck').length, icon: Truck },
+                        { id: 'maritime', label: 'KAPAL', count: activeFleetVehicles.filter((v) => v.modality === 'maritime').length, icon: Anchor },
+                        { id: 'air', label: 'UDARA', count: activeFleetVehicles.filter((v) => v.modality === 'air').length, icon: Plane },
+                      ].map((m) => {
+                        const IconComp = m.icon;
+                        return (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => {
+                              const fleetFilter = m.id as 'all' | 'truck' | 'maritime' | 'air';
+                              handleModalityChange(fleetFilter === 'all' ? 'best' : fleetFilter);
+                              setToast({
+                                message: `Filter Armada: ${m.label} (${m.count} Unit): modalitas rute disinkronkan`,
+                                type: 'info',
+                              });
+                            }}
+                            className={`cursor-pointer px-2.5 py-1 rounded-md text-xs font-mono font-medium transition-all flex items-center gap-1.5 shrink-0 ${fleetModalityFilter === m.id
+                                ? 'bg-white text-[#080d14] font-bold'
+                                : 'text-slate-400 hover:text-white hover:bg-white/5'
+                              }`}
+                          >
+                            {IconComp && <IconComp className="w-3.5 h-3.5" />}
+                            <span>{m.label}</span>
+                            <span
+                              className={`px-1.5 py-0.5 rounded text-xs ${fleetModalityFilter === m.id ? 'bg-[#080d14] text-white' : 'bg-white/10 text-slate-400'
+                                }`}
+                            >
+                              {m.count}
+                            </span>
+                          </button>
+                        );
+                      })}
+                      <div className="w-[1px] h-4 bg-white/10 mx-1 shrink-0" />
+                      <button
+                        type="button"
+                        id="fleet-sim-toggle-btn"
+                        onClick={() => {
+                          const nextMode = !isFleetSimMode;
+                          setIsFleetSimMode(nextMode);
+                          setToast({
+                            message: nextMode
+                              ? 'Filter Armada: Semua Armada Live & Rute Terestimasi'
+                              : 'Filter Armada: Hanya Transponder (AIS/ADS-B) & GPS Aktif',
+                            type: 'info',
+                          });
+                        }}
+                        className={`cursor-pointer px-2.5 py-1 rounded-md text-xs font-mono font-medium transition-all flex items-center gap-1.5 shrink-0 ${isFleetSimMode
+                            ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40 font-bold'
+                            : 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 font-bold'
+                          }`}
+                        title="Mode Telemetri:&#10;• Cyan [Hanya GPS & Transponder Live]: Dispatch taktis instan berbasis sinyal fisik AIS & GPS satelit.&#10;• Amber [Live AIS/ADS-B + Rute Estimasi]: Perencanaan kapasitas makro koridor logistik pangan."
+                      >
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${isFleetSimMode ? 'bg-amber-400 animate-pulse' : 'bg-cyan-400 animate-pulse'
+                            }`}
+                        />
+                        <span>
+                          {isFleetSimMode
+                            ? `Live AIS/ADS-B + Rute Estimasi (${activeFleetVehicles.length})`
+                            : `Hanya GPS & Transponder Live (${activeFleetVehicles.length})`}
+                        </span>
+                      </button>
+                    </div>
+                  ) : null
+                }
+                mapLegendSlot={
+                  <FloatingMapLegend
+                    isOpen={isMapLegendOpen}
+                    onToggle={() => setIsMapLegendOpen(v => !v)}
+                  />
+                }
+              />
+            </div>
 
             {/* Decision Support System (DSS): Dispatcher Alert Queue Strip */}
             {!isAlertQueueDismissed && impactAssessmentData && impactAssessmentData.impacted_vehicles.length > 0 && (
@@ -2290,78 +2346,6 @@ export default function DashboardClient() {
                 }}
                 onDismiss={() => setIsAlertQueueDismissed(true)}
               />
-            )}
-
-            {/* Floating Live Fleet Modality Filter Control */}
-            {!(isSidebarOpen && selectedCrisis) && (
-              <div className={`absolute top-[52px] z-30 pointer-events-auto transition-all duration-300 hidden md:flex items-center gap-1 p-1 rounded-lg bg-[#0c1017] border border-white/10 shadow-xl ${isLeftSidebarCollapsed ? 'left-4 sm:left-32' : 'left-4 sm:left-32 lg:left-[368px]'
-                }`}>
-                {[
-                  { id: 'all', label: 'SEMUA', count: activeFleetVehicles.length, icon: null },
-                  { id: 'truck', label: 'TRUK', count: activeFleetVehicles.filter((v) => v.modality === 'truck').length, icon: Truck },
-                  { id: 'maritime', label: 'KAPAL', count: activeFleetVehicles.filter((v) => v.modality === 'maritime').length, icon: Anchor },
-                  { id: 'air', label: 'UDARA', count: activeFleetVehicles.filter((v) => v.modality === 'air').length, icon: Plane },
-                ].map((m) => {
-                  const IconComp = m.icon;
-                  return (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => {
-                        const fleetFilter = m.id as 'all' | 'truck' | 'maritime' | 'air';
-                        handleModalityChange(fleetFilter === 'all' ? 'best' : fleetFilter);
-                        setToast({
-                          message: `Filter Armada: ${m.label} (${m.count} Unit): modalitas rute disinkronkan`,
-                          type: 'info',
-                        });
-                      }}
-                      className={`cursor-pointer px-2.5 py-1 rounded-md text-xs font-mono font-medium transition-all flex items-center gap-1.5 ${fleetModalityFilter === m.id
-                          ? 'bg-white text-[#080d14] font-bold'
-                          : 'text-slate-400 hover:text-white hover:bg-white/5'
-                        }`}
-                    >
-                      {IconComp && <IconComp className="w-3.5 h-3.5" />}
-                      <span>{m.label}</span>
-                      <span
-                        className={`px-1.5 py-0.5 rounded text-xs ${fleetModalityFilter === m.id ? 'bg-[#080d14] text-white' : 'bg-white/10 text-slate-400'
-                          }`}
-                      >
-                        {m.count}
-                      </span>
-                    </button>
-                  );
-                })}
-                <div className="w-[1px] h-4 bg-white/10 mx-1 shrink-0" />
-                <button
-                  type="button"
-                  id="fleet-sim-toggle-btn"
-                  onClick={() => {
-                    const nextMode = !isFleetSimMode;
-                    setIsFleetSimMode(nextMode);
-                    setToast({
-                      message: nextMode
-                        ? 'Filter Armada: Semua Armada Live & Rute Terestimasi'
-                        : 'Filter Armada: Hanya Transponder (AIS/ADS-B) & GPS Aktif',
-                      type: 'info',
-                    });
-                  }}
-                  className={`cursor-pointer px-2.5 py-1 rounded-md text-xs font-mono font-medium transition-all flex items-center gap-1.5 ${isFleetSimMode
-                      ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40 font-bold'
-                      : 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 font-bold'
-                    }`}
-                  title="Mode Telemetri:&#10;• Cyan [Hanya GPS & Transponder Live]: Dispatch taktis instan berbasis sinyal fisik AIS & GPS satelit.&#10;• Amber [Live AIS/ADS-B + Rute Estimasi]: Perencanaan kapasitas makro koridor logistik pangan."
-                >
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full ${isFleetSimMode ? 'bg-amber-400 animate-pulse' : 'bg-cyan-400 animate-pulse'
-                      }`}
-                  />
-                  <span>
-                    {isFleetSimMode
-                      ? `Live AIS/ADS-B + Rute Estimasi (${activeFleetVehicles.length})`
-                      : `Hanya GPS & Transponder Live (${activeFleetVehicles.length})`}
-                  </span>
-                </button>
-              </div>
             )}
 
             {/* Relocated Collapsible Floating Simulator Dock above Bottombar (Hidden during guided demo to avoid UI overlap) */}
@@ -2438,7 +2422,7 @@ export default function DashboardClient() {
 
             {/* Run Demo Dock */}
             {!demoState.isRunning && (
-              <footer className={`absolute bottom-4 sm:bottom-6 z-40 flex items-center gap-1.5 bg-[#0c1017] border border-[#1c2432] p-1.5 rounded-lg shadow-xl transition-all duration-300 pointer-events-auto left-1/2 -translate-x-1/2 max-w-[95vw] overflow-x-auto no-scrollbar ${footerDockClass}`}>
+              <footer className={`absolute bottom-4 sm:bottom-6 z-40 flex items-center gap-1.5 bg-[#0c1017] border border-[#1c2432] p-1.5 rounded-lg shadow-xl transition-all duration-300 pointer-events-auto -translate-x-1/2 overflow-x-auto no-scrollbar ${footerDockClass}`}>
                 <button
                   type="button"
                   id="run-demo-btn"
@@ -2455,22 +2439,22 @@ export default function DashboardClient() {
                 </button>
               </footer>
             )}
-          </div>
 
-          {/* 3. DOCKED FLOATING GLASS DRAWER RIGHT SIDEBAR (CrisisSidebar) */}
-          {isSidebarOpen && selectedCrisis && (
-            <CrisisSidebar
-              crisis={selectedCrisis}
-              onClose={() => setIsSidebarOpen(false)}
-              activeTab={activeTab}
-              setActiveTab={setActiveTab}
-              activeRouteIdx={activeRouteIdx}
-              onSelectRoute={(idx) => setActiveRouteIdx(idx)}
-              onApproveSuccess={(msg) => setToast({ message: msg, type: 'success' })}
-              onCommitOperationalRoute={handleCommitOperationalRoute}
-              selectedImpactedVehicle={selectedImpactedVehicle}
-            />
-          )}
+            {/* Right Tactical Inspector Dock (CrisisSidebar) */}
+            {!selectedVehicle && isSidebarOpen && selectedCrisis && (
+              <CrisisSidebar
+                crisis={selectedCrisis}
+                onClose={() => setIsSidebarOpen(false)}
+                activeTab={activeTab}
+                setActiveTab={setActiveTab}
+                activeRouteIdx={activeRouteIdx}
+                onSelectRoute={(idx) => setActiveRouteIdx(idx)}
+                onApproveSuccess={(msg) => setToast({ message: msg, type: 'success' })}
+                onCommitOperationalRoute={handleCommitOperationalRoute}
+                selectedImpactedVehicle={selectedImpactedVehicle}
+              />
+            )}
+          </div>
 
         </div>
 
