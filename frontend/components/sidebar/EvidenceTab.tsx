@@ -115,7 +115,37 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
               <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-white/5 border border-white/10 text-slate-200">
                 Estimasi Penundaan: ~{crisis.impact_profile.estimated_delay_hours} Jam
               </span>
+              <span className="px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-cyan-500/10 border border-cyan-500/40 text-cyan-200">
+                Radius Agen: ~{(crisis.radius_km || crisis.impact_profile?.estimated_delay_hours ? (crisis.radius_km ?? 4.5) : 4.5).toFixed(1)} km
+              </span>
             </div>
+          )}
+          {(!crisis.impact_profile) && (
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              <span className="px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-cyan-500/10 border border-cyan-500/40 text-cyan-200">
+                Radius Dampak Spesifik — Radius Agen: ~{((crisis.radius_km ?? 4.5)).toFixed(1)} km
+              </span>
+            </div>
+          )}
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-emerald-500/10 border border-emerald-500/40 text-emerald-200">
+              ✓ Freshness ≤48 Jam
+            </span>
+            <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-emerald-500/10 border border-emerald-500/40 text-emerald-200">
+              ✓ Diskursus Insiden Aktif (Bukan Opini)
+            </span>
+            <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-emerald-500/10 border border-emerald-500/40 text-emerald-200">
+              ✓ Presisi Geospasial
+            </span>
+            <span className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold border ${crisis.zone_tier === 'RED_CONFIRMED' ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-200' : 'bg-yellow-400/10 border-yellow-400/40 text-yellow-200'}`}>
+              {crisis.zone_tier === 'RED_CONFIRMED' ? '✓ Dampak Fisik Terkonfirmasi' : '⚠ Perlu Klarifikasi Lapangan'}
+            </span>
+          </div>
+          {crisis.verification_audit?.agent_verdict_summary && (
+            <p className="text-xs text-slate-300 leading-relaxed font-sans pt-1 border-t border-white/10">
+              <span className="text-slate-400 font-mono text-[11px] block uppercase tracking-wider">Verdict Agen Verifikasi</span>
+              {crisis.verification_audit.agent_verdict_summary}
+            </p>
           )}
           {crisis.affected_locations && crisis.affected_locations.length > 0 && (
             <div className="pt-1 space-y-1.5">

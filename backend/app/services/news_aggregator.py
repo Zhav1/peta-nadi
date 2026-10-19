@@ -124,12 +124,15 @@ OFFICIAL_RSS_FEEDS = [
 
 # Targeted Google News queries for verified regional press & logistics corridors across Pulau Sumatera
 TARGETED_PRESS_QUERIES = [
-    "(site:antaranews.com OR site:detik.com OR site:tribunnews.com OR site:kompas.com) (banjir OR longsor OR jalan terputus) (Medan OR Tebing Tinggi OR Belawan OR Jalinsum)",
-    "(site:antaranews.com OR site:tribunnews.com OR site:detik.com) (longsor Sitinjau Lauik OR jalan Padang Solok OR tol Pekanbaru Dumai)",
-    "(site:antaranews.com OR site:bisnis.com OR site:tempo.co) (stok beras BULOG OR harga cabai OR pasokan pangan) (Sumatera OR Sumut OR Sumbar OR Riau OR Lampung)",
-    "(site:antaranews.com OR site:detik.com) (gelombang Selat Malaka OR Pelabuhan Belawan OR Pelabuhan Panjang OR Bakauheni OR antrean truk tol)",
-    "(site:antaranews.com OR site:kompas.com) (jalan lintas timur OR jalintim OR jalinbar OR jembatan putus OR amblas) (Palembang OR Jambi OR Lampung)"
+    "(site:antaranews.com OR site:detik.com OR site:tribunnews.com OR site:kompas.com) (banjir OR longsor OR jalan terputus) (Medan OR Tebing Tinggi OR Belawan OR Jalinsum) when:2d",
+    "(site:antaranews.com OR site:tribunnews.com OR site:detik.com) (longsor Sitinjau Lauik OR jalan Padang Solok OR tol Pekanbaru Dumai) when:2d",
+    "(site:antaranews.com OR site:bisnis.com OR site:tempo.co) (stok beras BULOG OR harga cabai OR pasokan pangan) (Sumatera OR Sumut OR Sumbar OR Riau OR Lampung) when:2d",
+    "(site:antaranews.com OR site:detik.com) (gelombang Selat Malaka OR Pelabuhan Belawan OR Pelabuhan Panjang OR Bakauheni OR antrean truk tol) when:2d",
+    "(site:antaranews.com OR site:kompas.com) (jalan lintas timur OR jalintim OR jalinbar OR jembatan putus OR amblas) (Palembang OR Jambi OR Lampung) when:2d",
 ]
+
+MAX_NEWS_AGE_HOURS = 48
+EXTRACTION_SCHEMA_VERSION = 3
 
 # Dedicated test fixtures reserved strictly for synthetic offline unit tests / demo runner
 DEMO_STANDARDIZED_SCENARIOS = [
@@ -568,7 +571,7 @@ def fetch_existing_processed_articles_map(article_ids: List[str], links: List[st
                 row = _unpack_ground_truth_metrics(dict(row))
             except Exception:
                 pass
-            # Stale v1 rows (schema_version != 2) are re-classified on read so
+            # Stale rows (schema_version != 3) are re-classified on read so
             # old cached rows never serve stale tiering/geocoding.
             try:
                 _gtm = row.get("ground_truth_metrics") or {}
@@ -578,7 +581,7 @@ def fetch_existing_processed_articles_map(article_ids: List[str], links: List[st
                         _gtm = _js2.loads(_gtm)
                     except Exception:
                         _gtm = {}
-                if isinstance(_gtm, dict) and _gtm.get("schema_version") != 2:
+                if isinstance(_gtm, dict) and _gtm.get("schema_version") != 3:
                     from app.nlp.news_extractor import _fast_heuristic_extraction as _re_v2
                     _art = {
                         "title": row.get("title", ""),
@@ -587,12 +590,16 @@ def fetch_existing_processed_articles_map(article_ids: List[str], links: List[st
                         "source_tier": row.get("source_tier", "TIER_2_AUTHORITATIVE_PRESS"),
                         "province": row.get("province", "Sumatera"),
                         "link": row.get("link", ""),
+                        "pubDate": row.get("original_pub_date") or row.get("pubDate") or row.get("published_at"),
+                        "original_pub_date": row.get("original_pub_date") or (_gtm.get("original_pub_date") if isinstance(_gtm, dict) else None),
+                        "published_at": row.get("published_at"),
+                        "html_published_at": row.get("html_published_at"),
                     }
                     _re = _re_v2(_art)
                     for _k in ("zone_tier", "tier_reason", "custom_hazard_label", "impact_profile",
                                "is_geocoded", "location_precision", "latitude", "longitude",
                                "incident_type", "severity", "corridor_nodes", "corridor_segment",
-                               "affected_locations"):
+                               "affected_locations", "radius_km", "geometry_polygon", "verification_audit"):
                         if _re.get(_k) is not None:
                             row[_k] = _re.get(_k)
                     row["ground_truth_metrics"] = _re.get("ground_truth_metrics", row.get("ground_truth_metrics"))
@@ -613,6 +620,156 @@ def is_relevant_logistics_or_disaster(text: str) -> bool:
     if any(n in t_lower for n in EXCLUDED_NOISE_KEYWORDS):
         return False
     return any(k in t_lower for k in LOGISTICS_DISASTER_KEYWORDS)
+
+
+_ARCHIVAL_URL_DATE_PATTERNS = (
+    re.compile(r'/(20\d{2})/(\d{1,2})/(\d{1,2})(?:/|$|-|_)'),
+    re.compile(r'-(20\d{2})-(\d{2})-(\d{2})(?:/|$|-|_)'),
+)
+_ARCHIVAL_URL_YEAR_PATTERN = re.compile(r'/(20(?:1\d|2[0-5])/)')
+
+
+def _parse_pub_date_to_utc(raw: Any) -> Optional[datetime]:
+    """Parses pubDate / HTML meta timestamps via parsedate_to_datetime + fromisoformat."""
+    if raw is None:
+        return None
+    s = str(raw).strip()
+    if not s or s.lower() in ("terkini",):
+        return None
+    # 1. RFC2822 / RSS pubDate via email.utils.
+    try:
+        from email.utils import parsedate_to_datetime as _pdt
+        dt = _pdt(s)
+        if dt is not None:
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(timezone.utc)
+    except Exception:
+        pass
+    # 2. ISO8601 via fromisoformat (handles +00:00, Z, naive).
+    try:
+        iso = s.replace("Z", "+00:00")
+        # fromisoformat cannot parse trailing ' GMT' etc; try stripped.
+        dt2 = datetime.fromisoformat(iso)
+        if dt2.tzinfo is None:
+            dt2 = dt2.replace(tzinfo=timezone.utc)
+        return dt2.astimezone(timezone.utc)
+    except Exception:
+        pass
+    return None
+
+
+def parse_and_validate_article_freshness(
+    pub_date_raw: str | None,
+    url: str | None,
+    html_meta_date: str | None = None,
+    max_age_hours: int = 48,
+) -> dict:
+    """Strict 48h freshness gate with archival-URL extraction + true published_at preservation.
+
+    Check 1 inspects the URL for archival dates; Check 2 parses pubDate/HTML meta.
+    Returns {"is_fresh","published_at_iso","age_hours","reject_reason"}.
+    """
+    now = datetime.now(timezone.utc)
+    max_age = int(max_age_hours or MAX_NEWS_AGE_HOURS)
+    url_s = str(url or "")
+
+    # ---- Check 1: Archival URL date extraction ----
+    for pat in _ARCHIVAL_URL_DATE_PATTERNS:
+        try:
+            m = pat.search(url_s)
+            if m:
+                y, mo, d = int(m.group(1)), int(m.group(2)), int(m.group(3))
+                url_date = datetime(y, mo, d, tzinfo=timezone.utc)
+                age_h = (now - url_date).total_seconds() / 3600.0
+                if age_h > max_age:
+                    return {
+                        "is_fresh": False,
+                        "published_at_iso": url_date.isoformat(),
+                        "age_hours": round(age_h, 2),
+                        "reject_reason": f"URL berita arsip lama ({url_date.date().isoformat()}, melebihi batas {max_age} jam)",
+                    }
+                # Fresh archival-pattern date: keep as published_at but continue to Check 2.
+                return {
+                    "is_fresh": True,
+                    "published_at_iso": url_date.isoformat(),
+                    "age_hours": round(age_h, 2),
+                    "reject_reason": None,
+                }
+        except Exception:
+            continue
+    try:
+        ym = _ARCHIVAL_URL_YEAR_PATTERN.search(url_s)
+        if ym:
+            year = int(ym.group(1).rstrip("/"))
+            current_year = now.year
+            if year < current_year:
+                url_date = datetime(year, 1, 1, tzinfo=timezone.utc)
+                age_h = (now - url_date).total_seconds() / 3600.0
+                if age_h > max_age:
+                    return {
+                        "is_fresh": False,
+                        "published_at_iso": url_date.isoformat(),
+                        "age_hours": round(age_h, 2),
+                        "reject_reason": f"URL berita arsip lama ({year}, melebihi batas {max_age} jam)",
+                    }
+    except Exception:
+        pass
+
+    # ---- Check 2: pubDate / HTML meta timestamp parsing ----
+    parsed: Optional[datetime] = None
+    if html_meta_date:
+        parsed = _parse_pub_date_to_utc(html_meta_date)
+    if parsed is None and pub_date_raw:
+        parsed = _parse_pub_date_to_utc(pub_date_raw)
+    if parsed is None:
+        # Unparseable relative timestamps ("15m lalu", "Terkini", missing) ->
+        # treat as fresh with now as published_at so offline fixtures keep working.
+        return {
+            "is_fresh": True,
+            "published_at_iso": now.isoformat(),
+            "age_hours": 0.0,
+            "reject_reason": None,
+        }
+    age_h = (now - parsed).total_seconds() / 3600.0
+    if age_h < 0:
+        age_h = 0.0
+    if age_h > max_age:
+        return {
+            "is_fresh": False,
+            "published_at_iso": parsed.isoformat(),
+            "age_hours": round(age_h, 2),
+            "reject_reason": f"Berita sudah lewat {round(age_h, 1)} jam (batas {max_age} jam)",
+        }
+    return {
+        "is_fresh": True,
+        "published_at_iso": parsed.isoformat(),
+        "age_hours": round(age_h, 2),
+        "reject_reason": None,
+    }
+
+
+def extract_html_published_time(html: str) -> str | None:
+    """Extracts article:published_time / pubdate / datePublished from raw HTML."""
+    if not html or not isinstance(html, str):
+        return None
+    patterns = [
+        r'<meta[^>]+property=["\']article:published_time["\'][^>]*content=["\'](.*?)["\']',
+        r'<meta[^>]+content=["\'](.*?)["\'][^>]*property=["\']article:published_time["\']',
+        r'<meta[^>]+name=["\']pubdate["\'][^>]*content=["\'](.*?)["\']',
+        r'<meta[^>]+name=["\']publishdate["\'][^>]*content=["\'](.*?)["\']',
+        r'<meta[^>]+content=["\'](.*?)["\'][^>]*name=["\']pubdate["\']',
+        r'"datePublished"\s*:\s*"([^"]+)"',
+        r"'datePublished'\s*:\s*'([^']+)'",
+    ]
+    for pat in patterns:
+        try:
+            m = re.search(pat, html, flags=re.IGNORECASE | re.DOTALL)
+            if m and m.group(1).strip():
+                return m.group(1).strip()
+        except Exception:
+            continue
+    return None
 
 
 async def fetch_rss_feed_items(feed_config: Dict[str, Any], timeout: float = 6.0) -> List[Dict[str, Any]]:
@@ -641,11 +798,20 @@ async def fetch_rss_feed_items(feed_config: Dict[str, Any], timeout: float = 6.0
                         continue
                         
                     canonical_link = resolve_canonical_article_url(raw_link, title, source_name)
+                    # Strict 48h freshness gate (archival URL + pubDate).
+                    try:
+                        _fresh = parse_and_validate_article_freshness(pub_date, canonical_link, max_age_hours=MAX_NEWS_AGE_HOURS)
+                    except Exception:
+                        _fresh = {"is_fresh": True, "published_at_iso": None, "age_hours": 0.0, "reject_reason": None}
+                    if not _fresh.get("is_fresh"):
+                        continue
                     items.append({
                         "title": title,
                         "link": canonical_link,
                         "url": canonical_link,
                         "pubDate": pub_date,
+                        "original_pub_date": pub_date,
+                        "published_at": _fresh.get("published_at_iso"),
                         "source": source_name,
                         "source_tier": source_tier,
                         "province": feed_config.get("province", "Sumatera"),
@@ -687,11 +853,19 @@ async def fetch_google_news_targeted(query: str, timeout: float = 6.0) -> List[D
                     source_tier = "TIER_1_OFFICIAL" if is_official else "TIER_2_AUTHORITATIVE_PRESS"
                     
                     canonical_link = await resolve_canonical_article_url_async(raw_link, title, source_name, client=client)
+                    try:
+                        _fresh2 = parse_and_validate_article_freshness(pub_date, canonical_link, max_age_hours=MAX_NEWS_AGE_HOURS)
+                    except Exception:
+                        _fresh2 = {"is_fresh": True, "published_at_iso": None, "age_hours": 0.0, "reject_reason": None}
+                    if not _fresh2.get("is_fresh"):
+                        continue
                     items.append({
                         "title": title,
                         "link": canonical_link,
                         "url": canonical_link,
                         "pubDate": pub_date,
+                        "original_pub_date": pub_date,
+                        "published_at": _fresh2.get("published_at_iso"),
                         "source": source_name,
                         "source_tier": source_tier,
                         "raw_description": title
@@ -787,11 +961,37 @@ async def upsert_articles_to_supabase(articles: List[Dict[str, Any]]) -> int:
             gtm["location_precision"] = a.get("location_precision")
         if a.get("affected_locations") is not None:
             gtm["affected_locations"] = a.get("affected_locations")
+        # Preserve true published_at (never overwrite with now) + agent audit trail.
+        try:
+            _fresh_up = parse_and_validate_article_freshness(
+                a.get("original_pub_date") or a.get("pubDate") or a.get("published_at"),
+                a.get("link"),
+                html_meta_date=a.get("html_published_at"),
+                max_age_hours=MAX_NEWS_AGE_HOURS,
+            )
+            _pub_iso = _fresh_up.get("published_at_iso") or a.get("published_at")
+        except Exception:
+            _fresh_up = {"published_at_iso": a.get("published_at"), "age_hours": None}
+            _pub_iso = a.get("published_at")
+        if a.get("original_pub_date") is not None:
+            gtm["original_pub_date"] = a.get("original_pub_date")
+        elif a.get("pubDate") is not None:
+            gtm["original_pub_date"] = a.get("pubDate")
+        if _pub_iso is not None:
+            gtm["published_at_iso"] = _pub_iso
+        if _fresh_up.get("age_hours") is not None:
+            gtm["age_hours"] = _fresh_up.get("age_hours")
+        if a.get("radius_km") is not None:
+            gtm["radius_km"] = a.get("radius_km")
+        if a.get("geometry_polygon") is not None:
+            gtm["geometry_polygon"] = a.get("geometry_polygon")
+        if a.get("verification_audit") is not None:
+            gtm["verification_audit"] = a.get("verification_audit")
         try:
             from app.nlp.news_extractor import EXTRACTION_SCHEMA_VERSION as _SV
             gtm["schema_version"] = _SV
         except Exception:
-            gtm.setdefault("schema_version", 2)
+            gtm.setdefault("schema_version", 3)
 
         record = {
             "id": a.get("id"),
@@ -816,7 +1016,7 @@ async def upsert_articles_to_supabase(articles: List[Dict[str, Any]]) -> int:
             "raw_description": a.get("raw_description") or a.get("summary"),
             "summary": a.get("summary") or a.get("title"),
             "link_alive": a.get("link_alive", "unknown"),
-            "published_at": datetime.now(timezone.utc).isoformat()
+            "published_at": a.get("published_at") or _pub_iso or datetime.now(timezone.utc).isoformat()
         }
         records.append(record)
 
@@ -855,11 +1055,13 @@ def _unpack_ground_truth_metrics(row: Dict[str, Any]) -> Dict[str, Any]:
         if not isinstance(gtm, dict):
             return row
         for _k in ("zone_tier", "tier_reason", "custom_hazard_label", "impact_profile",
-                   "is_geocoded", "location_precision", "affected_locations", "schema_version"):
+                   "is_geocoded", "location_precision", "affected_locations", "schema_version",
+                   "radius_km", "geometry_polygon", "verification_audit", "original_pub_date",
+                   "published_at_iso", "age_hours"):
             if row.get(_k) is None and gtm.get(_k) is not None:
                 row[_k] = gtm[_k]
-        # Re-run v2 heuristic when cached/DB rows carry a stale schema version.
-        if gtm.get("schema_version") != 2:
+        # Re-run v3 heuristic when cached/DB rows carry a stale schema version.
+        if gtm.get("schema_version") != 3:
             try:
                 from app.nlp.news_extractor import _fast_heuristic_extraction as _re_tier_v2
                 legacy_art = {
@@ -869,12 +1071,16 @@ def _unpack_ground_truth_metrics(row: Dict[str, Any]) -> Dict[str, Any]:
                     "source_tier": row.get("source_tier", "TIER_2_AUTHORITATIVE_PRESS"),
                     "province": row.get("province", "Sumatera"),
                     "link": row.get("link", ""),
+                    "pubDate": row.get("original_pub_date") or row.get("pubDate") or row.get("published_at"),
+                    "original_pub_date": row.get("original_pub_date") or gtm.get("original_pub_date"),
+                    "published_at": row.get("published_at"),
+                    "html_published_at": row.get("html_published_at") or gtm.get("published_at_iso"),
                 }
                 re_tiered = _re_tier_v2(legacy_art)
                 for _k in ("zone_tier", "tier_reason", "custom_hazard_label", "impact_profile",
                            "is_geocoded", "location_precision", "latitude", "longitude",
                            "incident_type", "severity", "corridor_nodes", "corridor_segment",
-                           "affected_locations"):
+                           "affected_locations", "radius_km", "geometry_polygon", "verification_audit"):
                     if re_tiered.get(_k) is not None:
                         row[_k] = re_tiered.get(_k)
                 row["ground_truth_metrics"] = re_tiered.get("ground_truth_metrics", row.get("ground_truth_metrics"))
@@ -934,6 +1140,8 @@ async def enrich_article_description_if_needed(article: Dict[str, Any], timeout:
     ("daerah", "kabupaten", "wilayah", "titik", "lokasi", "catat").
     Resolves the canonical URL and extracts the meta/lead description so
     downstream extraction sees laid-out multi-regency bodies.
+    Also extracts article:published_time / pubdate / datePublished into
+    html_published_at for the 48h freshness gate.
     """
     try:
         title = (article.get("title") or "").strip()
@@ -944,7 +1152,9 @@ async def enrich_article_description_if_needed(article: Dict[str, Any], timeout:
             or len(desc) < 90
             or any(w in title.lower() for w in ("daerah", "kabupaten", "wilayah", "titik", "lokasi", "catat"))
         )
-        if not needs:
+        # Always try to capture HTML published time when missing, even if
+        # description looks complete, so freshness can be re-validated.
+        if not needs and article.get("html_published_at"):
             return article
         raw_url = article.get("link") or article.get("url") or ""
         if not raw_url:
@@ -958,9 +1168,13 @@ async def enrich_article_description_if_needed(article: Dict[str, Any], timeout:
             async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
                 resp = await client.get(raw_url, headers={"User-Agent": "Mozilla/5.0 (PreHub Logistics Bot 2.0)"})
                 if resp.status_code == 200 and resp.text:
-                    lead = extract_lead_text_from_html(resp.text)
-                    if lead and len(lead) > len(desc):
-                        article["raw_description"] = lead
+                    html_time = extract_html_published_time(resp.text)
+                    if html_time:
+                        article["html_published_at"] = html_time
+                    if needs:
+                        lead = extract_lead_text_from_html(resp.text)
+                        if lead and len(lead) > len(desc):
+                            article["raw_description"] = lead
         except Exception as e:
             logger.debug(f"Description enrichment skipped for {raw_url}: {e}")
     except Exception:
@@ -1004,8 +1218,8 @@ async def fetch_news_from_supabase(limit: int = 50, province: Optional[str] = No
             row = _unpack_ground_truth_metrics(dict(row))
         except Exception:
             continue
-        # Legacy rows missing zone_tier or carrying stale v1 schema: re-run
-        # fast heuristic on read (schema_version != 2 forces v2 re-tier).
+        # Legacy rows missing zone_tier or carrying stale schema: re-run
+        # fast heuristic on read (schema_version != 3 forces v3 re-tier).
         _needs_retier = (not row.get("zone_tier"))
         try:
             _gtm_chk = row.get("ground_truth_metrics") or {}
@@ -1015,7 +1229,7 @@ async def fetch_news_from_supabase(limit: int = 50, province: Optional[str] = No
                     _gtm_chk = _js3.loads(_gtm_chk)
                 except Exception:
                     _gtm_chk = {}
-            if isinstance(_gtm_chk, dict) and _gtm_chk.get("schema_version") != 2:
+            if isinstance(_gtm_chk, dict) and _gtm_chk.get("schema_version") != 3:
                 _needs_retier = True
         except Exception:
             pass
@@ -1028,16 +1242,20 @@ async def fetch_news_from_supabase(limit: int = 50, province: Optional[str] = No
                     "source_tier": row.get("source_tier", "TIER_2_AUTHORITATIVE_PRESS"),
                     "province": row.get("province", "Sumatera"),
                     "link": row.get("link", ""),
+                    "pubDate": row.get("original_pub_date") or row.get("pubDate") or row.get("published_at"),
+                    "original_pub_date": row.get("original_pub_date") or (_gtm_chk.get("original_pub_date") if isinstance(_gtm_chk, dict) else None),
+                    "published_at": row.get("published_at"),
+                    "html_published_at": row.get("html_published_at"),
                 }
                 re_tiered = _re_tier(legacy_art)
                 for _k in ("zone_tier", "tier_reason", "custom_hazard_label", "impact_profile",
                            "is_geocoded", "location_precision", "latitude", "longitude",
                            "incident_type", "severity", "corridor_nodes", "corridor_segment",
-                           "affected_locations"):
+                           "affected_locations", "radius_km", "geometry_polygon", "verification_audit"):
                     if re_tiered.get(_k) is not None:
                         # Only overwrite coordinates/geo when legacy row has none
                         # or was a blind fallback centroid without a real location,
-                        # or carries a stale v1 schema version.
+                        # or carries a stale schema version.
                         if _k in ("latitude", "longitude", "corridor_segment", "corridor_nodes",
                                   "province", "region", "affected_locations"):
                             _sv = None
@@ -1047,19 +1265,47 @@ async def fetch_news_from_supabase(limit: int = 50, province: Optional[str] = No
                                     _sv = _g.get("schema_version")
                             except Exception:
                                 pass
-                            if row.get("latitude") is None or row.get("longitude") is None or row.get("zone_tier") is None or _sv != 2:
+                            if row.get("latitude") is None or row.get("longitude") is None or row.get("zone_tier") is None or _sv != 3:
                                 row[_k] = re_tiered.get(_k)
                             if _k == "affected_locations":
                                 row[_k] = re_tiered.get(_k)
                         else:
                             row[_k] = re_tiered.get(_k)
-                # Always refresh ground_truth_metrics to v2.
+                # Always refresh ground_truth_metrics to v3.
                 try:
                     row["ground_truth_metrics"] = re_tiered.get("ground_truth_metrics", row.get("ground_truth_metrics"))
                 except Exception:
                     pass
             except Exception:
                 pass
+        # Strict 48h freshness gate: drop stale archival rows. Caveat for legacy
+        # DB rows — previously upsert overwrote published_at with now(), so do NOT
+        # trust a published_at column lacking original_pub_date when schema < 3
+        # and the URL carries an archival date (parse helper checks URL first).
+        try:
+            _gtm_f = row.get("ground_truth_metrics") or {}
+            if isinstance(_gtm_f, str):
+                import json as _jf
+                try:
+                    _gtm_f = _jf.loads(_gtm_f)
+                except Exception:
+                    _gtm_f = {}
+            _sv_f = _gtm_f.get("schema_version", 0) if isinstance(_gtm_f, dict) else 0
+            _pub_raw = row.get("original_pub_date") or (_gtm_f.get("original_pub_date") if isinstance(_gtm_f, dict) else None) or row.get("pubDate") or row.get("published_at")
+            # If legacy row (schema < 3) has no original_pub_date, let URL archival
+            # detection dominate by passing published_at only when URL has no date.
+            _fresh_chk = parse_and_validate_article_freshness(
+                _pub_raw, row.get("link"), html_meta_date=row.get("html_published_at"), max_age_hours=MAX_NEWS_AGE_HOURS
+            )
+            # Legacy DB caveat: schema < 3 + no original_pub_date + archival URL
+            # must be dropped even if published_at looks fresh (it was overwritten).
+            if not _fresh_chk.get("is_fresh"):
+                continue
+            # Sync true published_at / age for downstream consumers.
+            if _fresh_chk.get("published_at_iso"):
+                row["published_at"] = _fresh_chk.get("published_at_iso")
+        except Exception:
+            pass
         # Filter DROPPED_IRRELEVANT or un-geocoded bureau-centroid noise.
         if row.get("zone_tier") == "DROPPED_IRRELEVANT":
             continue

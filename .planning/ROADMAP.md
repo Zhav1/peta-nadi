@@ -2050,6 +2050,32 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 
 ---
 
+## Phase 74: Agent Verification Gate, Hazard-Specific Zone Geometry & 48h Freshness Lockdown
+
+**Goal:** Fix 3 user-reported live defects: academic policy article promoted to RED (bare `"banjir"` in blockage predicates canceled the exclusion veto), identical 16/20 km circles for all hazards, and a May 2024 Tribunnews article surfacing as "latest at 4 AM today" (ingestion-time `published_at` overwrite, no URL date check).
+**Status:** COMPLETE ✅
+
+### Deliverables
+
+- **4-Stage Agent Verification Gate (`news_extractor.py` + `osint_hazard.py`)**:
+  - Removed bare `"banjir"`/`"longsor"` from `PHYSICAL_BLOCKAGE_PREDICATES` (signal nouns never count as blockage override); added `NON_INCIDENT_DISCOURSE_MARKERS`.
+  - New `run_agent_verification_gate()`: Check 1 freshness ≤48h, Check 2 discourse, Check 3 spatial geocode, Check 4 impact-corroborated → RED else DROPPED/YELLOW ladder; full `verification_audit` packed in `ground_truth_metrics` JSONB. Agent-2 pre-filter in `osint_hazard.py`.
+- **Hazard-Specific Radius & Anisotropic Geometry (`incident_geometry_service.py` + `DashboardClient.tsx`)**:
+  - `compute_hazard_zone_geometry_and_radius`: landslide/road_closure 2.8–3.5 km wedge, port_closure 3.2, congestion 2.5, flood 4.8–6.0 river ellipse, wildfire 7.5, marine_wave 8.5, volcanic_eruption 10.0, earthquake 12.0, regency warning 7.2–9.0; 36-pt skewed-ellipse rings. `buildHazardSpecificZoneGeometry` prefers backend polygon, mirrors table as fallback.
+- **48h Freshness Lockdown (`news_aggregator.py` + `news_router.py` + `unified_news_ingestor.py` + `useNewsVerification.ts`)**:
+  - `MAX_NEWS_AGE_HOURS = 48`; `parse_and_validate_article_freshness` checks `/YYYY/MM/DD/` + `-YYYY-MM-DD` URL paths, RFC-2822/ISO `pubDate`, `<meta property="article:published_time">`; `when:2d` on Google News queries; true `published_at` preserved (never `now()`); legacy rows re-verified on read; client-side `validateClientNewsFreshnessAndDiscourse` mirror guard.
+- **`EXTRACTION_SCHEMA_VERSION = 3` + 4-Check Audit UI (`EvidenceTab.tsx`)**:
+  - `schema_version != 3` rows auto re-verified/filtered on read (follow-on to Phase 73 v2 invalidation); Evidence tab renders per-check pass/fail + `agent_verdict_summary`.
+
+### Verification
+
+- [x] `"Akademisi Unand: Pemulihan Hulu DAS ... Banjir ... Padang"` → `DROPPED_IRRELEVANT`; true blockages still RED.
+- [x] Landslide ≈ 2.8 km wedge vs earthquake 12.0 km; backend polygon preferred client-side.
+- [x] `.../2024/05/17/...` URL → stale-dropped regardless of stored `published_at`; fresh items keep real `pubDate`.
+- [x] 10 files modified; zero new Supabase columns; zero LLM contract changes.
+
+---
+
 ## Backlog (Post-Hackathon / v2 & New Context Window Backlog)
 
 ### Active Remediation & Audit Backlog (For New Context Window)

@@ -115,12 +115,12 @@ class UnifiedNewsIngestor:
                             merged[_k] = gtm[_k]
                     if not merged.get("id"):
                         merged["id"] = _pid
-                    # Stale v1 rows (schema_version != 2) must be re-extracted.
+                    # Stale rows (schema_version != 3) must be re-extracted.
                     try:
                         _sv_hit = gtm.get("schema_version") if isinstance(gtm, dict) else None
                     except Exception:
                         _sv_hit = None
-                    if _sv_hit != 2:
+                    if _sv_hit != 3:
                         unseen.append(merged)
                         continue
                     reused.append(merged)
@@ -441,7 +441,7 @@ class UnifiedNewsIngestor:
                 severity=severity if severity in ["low", "medium", "high", "critical"] else "high",
                 lat=float(lat),
                 lon=float(lon),
-                radius_km=25.0,
+                radius_km=float(art.get("radius_km") or 6.0),
                 title=f"{corridor}: {title}"
             )
 
@@ -454,7 +454,7 @@ class UnifiedNewsIngestor:
                     "hazard_type": inc_type,
                     "latitude": float(lat),
                     "longitude": float(lon),
-                    "radius_km": 25.0,
+                    "radius_km": float(art.get("radius_km") or 6.0),
                     "severity": severity,
                     "total_fleet_scanned": impact_res.total_fleet_scanned,
                     "impacted_vehicles_count": impact_res.impacted_vehicles_count,

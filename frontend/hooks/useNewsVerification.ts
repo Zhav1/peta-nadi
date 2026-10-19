@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 
-import type { HazardImpactProfile, AffectedLocationNode } from '@/lib/types';
+import type { HazardImpactProfile, AffectedLocationNode, VerificationAudit } from '@/lib/types';
 
 export interface NewsItem {
   id: string;
@@ -42,6 +42,9 @@ export interface NewsItem {
   corridor_segment?: string;
   corridor_nodes?: string[];
   affected_locations?: AffectedLocationNode[];
+  radius_km?: number;
+  geometry_polygon?: [number, number][];
+  verification_audit?: VerificationAudit;
 }
 
 export interface MarketRegimeData {
@@ -110,6 +113,93 @@ export function normalizeNewsPermalink(rawUrl?: string, headline?: string, sourc
   }
 }
 
+/**
+ * Client-side 48-hour freshness + discourse defense-in-depth guard.
+ * Mirrors backend verification gate so stale/archival/opinion items never render zones.
+ */
+export function validateClientNewsFreshnessAndDiscourse(
+  title: string,
+  summary: string,
+  link: string,
+  rawPubDate: string
+): { valid: boolean; reason?: 'archival_url' | 'stale_pubdate' | 'opinion_discourse'; formattedPubDate?: string } {
+  const safeLink = typeof link === 'string' ? link : '';
+  const safeTitle = typeof title === 'string' ? title : '';
+  const safeSummary = typeof summary === 'string' ? summary : '';
+  const safePub = typeof rawPubDate === 'string' ? rawPubDate : '';
+
+  // 1. Archival URL check: embedded YYYY or YYYY/MM/DD older than 48h.
+  if (safeLink) {
+    const fullMatch = safeLink.match(/\/(20\d{2})\/(\d{1,2})\/(\d{1,2})(?:\/|$|-)/);
+    if (fullMatch) {
+      const y = Number(fullMatch[1]);
+      const m = Number(fullMatch[2]);
+      const d = Number(fullMatch[3]);
+      if (Number.isFinite(y) && Number.isFinite(m) && Number.isFinite(d) && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+        const embeddedMs = Date.UTC(y, m - 1, d);
+        if (Number.isFinite(embeddedMs) && Date.now() - embeddedMs > 48 * 3600 * 1000) {
+          return { valid: false, reason: 'archival_url' };
+        }
+      }
+    } else if (/\/(20(?:1\d|2[0-5]))\//.test(safeLink)) {
+      // Year-only archival slug (2010–2025): in 2026+ this is always >48h old.
+      return { valid: false, reason: 'archival_url' };
+    }
+  }
+
+  // 2. Timestamp age check: rawPubDate older than 48h.
+  let formattedPubDate: string | undefined;
+  if (safePub) {
+    const parsedMs = Date.parse(safePub);
+    if (Number.isFinite(parsedMs) && !Number.isNaN(parsedMs)) {
+      const ageMs = Date.now() - parsedMs;
+      if (ageMs > 48 * 3600 * 1000) {
+        return { valid: false, reason: 'stale_pubdate' };
+      }
+      const d = new Date(parsedMs);
+      let timeWib = '';
+      try {
+        timeWib = new Intl.DateTimeFormat('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }).format(d);
+      } catch {
+        const hh = String(d.getHours()).padStart(2, '0');
+        const mm = String(d.getMinutes()).padStart(2, '0');
+        timeWib = `${hh}:${mm}`;
+      }
+      const ageHours = Math.floor(ageMs / 3600000);
+      if (ageMs < 0) {
+        formattedPubDate = `Hari ini, ${timeWib} WIB`;
+      } else if (ageHours < 1) {
+        formattedPubDate = `Baru saja (${timeWib} WIB)`;
+      } else if (ageHours < 24) {
+        formattedPubDate = `${ageHours} jam lalu (Hari ini, ${timeWib} WIB)`;
+      } else {
+        formattedPubDate = `Kemarin, ${timeWib} WIB (${ageHours} jam lalu)`;
+      }
+    }
+  }
+
+  // 3. Academic / policy / solution discourse check (without active closure phrase).
+  const combined = `${safeTitle} ${safeSummary}`.toLowerCase();
+  const academicMarkers = [
+    'akademisi',
+    'solusi banjir',
+    'pemulihan hulu das',
+    'dukung perekonomian',
+    'pertumbuhan ekonomi',
+    'guru besar',
+    'seminar',
+    'wacana',
+  ];
+  const closurePhrases = ['lumpuh', 'putus', 'tutup total', 'amblas', 'tidak bisa dilalui'];
+  const hasAcademic = academicMarkers.some((m) => combined.includes(m));
+  const hasClosure = closurePhrases.some((p) => combined.includes(p));
+  if (hasAcademic && !hasClosure) {
+    return { valid: false, reason: 'opinion_discourse', formattedPubDate };
+  }
+
+  return { valid: true, formattedPubDate };
+}
+
 export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
   {
     id: 'FALLBACK-BLW-01',
@@ -144,6 +234,16 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     location_precision: 'port',
     corridor_segment: 'Belawan — Medan',
     corridor_nodes: ['belawan', 'medan'],
+    radius_km: 3.2,
+    verification_audit: {
+      freshness_passed: true,
+      discourse_passed: true,
+      spatial_passed: true,
+      impact_corroborated: false,
+      discourse_type: 'active_incident',
+      age_hours: 3,
+      agent_verdict_summary: 'Operasional pelabuhan terpantau dengan pengawasan cuaca; zona kuning kewaspadaan terminal 3,2 km.',
+    },
   },
   {
     id: 'FALLBACK-BMKG-02',
@@ -178,6 +278,16 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     location_precision: 'waterway',
     corridor_segment: 'Belawan — Selat Malaka',
     corridor_nodes: ['belawan', 'kuala_tanjung'],
+    radius_km: 8.5,
+    verification_audit: {
+      freshness_passed: true,
+      discourse_passed: true,
+      spatial_passed: true,
+      impact_corroborated: false,
+      discourse_type: 'active_incident',
+      age_hours: 4,
+      agent_verdict_summary: 'Peringatan dini gelombang BMKG; sektor maritim 8,5 km dalam status waspada.',
+    },
   },
   {
     id: 'FALLBACK-PIHPS-03',
@@ -212,6 +322,16 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     location_precision: 'market',
     corridor_segment: 'Karo — Medan',
     corridor_nodes: ['karo', 'medan'],
+    radius_km: 4.5,
+    verification_audit: {
+      freshness_passed: true,
+      discourse_passed: true,
+      spatial_passed: true,
+      impact_corroborated: true,
+      discourse_type: 'active_incident',
+      age_hours: 2,
+      agent_verdict_summary: 'Pasokan pasar stabil terkonfirmasi PIHPS; tidak ada gangguan fisik aktif.',
+    },
   },
   {
     id: 'FALLBACK-SITINJAU-04',
@@ -246,7 +366,17 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     location_precision: 'road_km',
     corridor_segment: 'Padang — Solok',
     corridor_nodes: ['sitinjau lauik'],
-    affected_locations: [{ name: 'Sitinjau Lauik', latitude: -0.9525, longitude: 100.5183, corridor_segment: 'Sitinjau Lauik KM 22 (Padang - Solok)', location_precision: 'exact_node' }],
+    affected_locations: [{ name: 'Sitinjau Lauik', latitude: -0.9525, longitude: 100.5183, corridor_segment: 'Sitinjau Lauik KM 22 (Padang - Solok)', location_precision: 'exact_node', radius_km: 2.8 }],
+    radius_km: 2.8,
+    verification_audit: {
+      freshness_passed: true,
+      discourse_passed: true,
+      spatial_passed: true,
+      impact_corroborated: true,
+      discourse_type: 'active_incident',
+      age_hours: 5,
+      agent_verdict_summary: 'Longsor Sitinjau Lauik terkonfirmasi BPBD; koridor sempit 2,8 km terputus total.',
+    },
   },
   {
     id: 'FALLBACK-KNO-05',
@@ -281,6 +411,16 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     location_precision: 'corridor',
     corridor_segment: 'Medan — Kualanamu — Tebing Tinggi',
     corridor_nodes: ['medan', 'kualanamu', 'tebingtinggi'],
+    radius_km: 7.2,
+    verification_audit: {
+      freshness_passed: true,
+      discourse_passed: true,
+      spatial_passed: true,
+      impact_corroborated: false,
+      discourse_type: 'active_incident',
+      age_hours: 1,
+      agent_verdict_summary: 'Hujan ringan terpantau radar; koridor 7,2 km masih aman dilalui.',
+    },
   },
   {
     id: 'FALLBACK-BPJT-06',
@@ -315,6 +455,16 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     location_precision: 'toll_road',
     corridor_segment: 'Belawan — Medan (Tol Belmera)',
     corridor_nodes: ['belawan', 'medan'],
+    radius_km: 2.5,
+    verification_audit: {
+      freshness_passed: true,
+      discourse_passed: true,
+      spatial_passed: true,
+      impact_corroborated: true,
+      discourse_type: 'active_incident',
+      age_hours: 2,
+      agent_verdict_summary: 'Arus tol Belmera lancar 65 km/jam; bottleneck 2,5 km tanpa kemacetan.',
+    },
   },
   {
     id: 'FALLBACK-SUMUT-07',
@@ -350,10 +500,65 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     corridor_segment: 'Pantai Timur Sumut',
     corridor_nodes: ['asahan', 'deli serdang', 'langkat'],
     affected_locations: [
-      { name: 'Kabupaten Asahan', latitude: 2.9833, longitude: 99.6167, corridor_segment: 'Koridor Pantai Timur', location_precision: 'regency' },
-      { name: 'Kabupaten Deli Serdang', latitude: 3.5547, longitude: 98.8756, corridor_segment: 'Koridor Pantai Timur', location_precision: 'regency' },
-      { name: 'Kabupaten Langkat', latitude: 3.7506, longitude: 98.4486, corridor_segment: 'Koridor Pantai Timur', location_precision: 'regency' },
+      { name: 'Kabupaten Asahan', latitude: 2.9833, longitude: 99.6167, corridor_segment: 'Koridor Pantai Timur', location_precision: 'regency', radius_km: 7.2 },
+      { name: 'Kabupaten Deli Serdang', latitude: 3.5547, longitude: 98.8756, corridor_segment: 'Koridor Pantai Timur', location_precision: 'regency', radius_km: 7.2 },
+      { name: 'Kabupaten Langkat', latitude: 3.7506, longitude: 98.4486, corridor_segment: 'Koridor Pantai Timur', location_precision: 'regency', radius_km: 7.2 },
     ],
+    radius_km: 7.2,
+    verification_audit: {
+      freshness_passed: true,
+      discourse_passed: true,
+      spatial_passed: true,
+      impact_corroborated: false,
+      discourse_type: 'active_incident',
+      age_hours: 6,
+      agent_verdict_summary: 'BPBD Sumut mencatat 3 kabupaten terdampak cuaca ekstrem; radius regional 7,2 km perlu klarifikasi.',
+    },
+  },
+  {
+    id: 'FALLBACK-PLM-08',
+    source_type: 'OFFICIAL_NEWS',
+    source_tier: 'TIER_1_OFFICIAL',
+    source_name: 'ANTARA Sumatera Selatan',
+    headline: 'Banjir Rendam Jalintim Palembang, Arus Betung–Kayuagung Tersendat',
+    summary: 'BPBD Sumsel melaporkan banjir merendam Jalintim KM 18 Palembang–Betung, kendaraan dialihkan via Tol Palindra dan arus Kayuagung tersendat.',
+    location_name: 'Jalintim KM 18 Palembang — Betung',
+    lat: -3.0123,
+    lon: 104.7754,
+    pubDate: '18 Okt 2026, 07:50 WIB',
+    category: 'DISASTER_LOGISTICS',
+    incident_type: 'flood',
+    hazardType: 'flood',
+    severity: 'high',
+    temporal_phase: 'active_disruption',
+    lead_time_hours: 0,
+    commodities_affected: ['Beras', 'Semen'],
+    ground_truth_metrics: { lane_status: 'RESTRICTED' },
+    verification_status: 'CORROBORATED_OFFICIAL',
+    confidence_score: 0.91,
+    commodity_name: 'Beras, Semen',
+    link: 'https://sumsel.antaranews.com/search?q=banjir+palembang+jalintim',
+    url: 'https://sumsel.antaranews.com/search?q=banjir+palembang+jalintim',
+    link_alive: 'alive',
+    zone_tier: 'RED_CONFIRMED',
+    tier_reason: 'BPBD Sumsel mengonfirmasi banjir Jalintim KM 18; arus Betung–Kayuagung tersendat dan dialihkan.',
+    custom_hazard_label: 'Banjir Jalintim Palembang',
+    impact_profile: { affected_modalities: ['land'], passability: 'RESTRICTED', estimated_delay_hours: 6 },
+    is_geocoded: true,
+    location_precision: 'road_km',
+    corridor_segment: 'Palembang — Betung',
+    corridor_nodes: ['palembang', 'betung'],
+    affected_locations: [{ name: 'Jalintim KM 18 Palembang', latitude: -3.0123, longitude: 104.7754, corridor_segment: 'Palembang — Betung', location_precision: 'exact_node', radius_km: 5.0 }],
+    radius_km: 5.0,
+    verification_audit: {
+      freshness_passed: true,
+      discourse_passed: true,
+      spatial_passed: true,
+      impact_corroborated: true,
+      discourse_type: 'active_incident',
+      age_hours: 4,
+      agent_verdict_summary: 'Banjir Palembang terkonfirmasi; basin banjir 5,0 km membatasi Jalintim.',
+    },
   },
 ];
 
@@ -477,8 +682,18 @@ export function useNewsVerification() {
                         longitude: Number(loc.longitude),
                         ...(loc.corridor_segment ? { corridor_segment: String(loc.corridor_segment) } : {}),
                         ...(loc.location_precision ? { location_precision: String(loc.location_precision) } : {}),
+                        ...(loc.radius_km != null && Number.isFinite(Number(loc.radius_km)) ? { radius_km: Number(loc.radius_km) } : {}),
+                        ...(Array.isArray(loc.geometry_polygon) ? { geometry_polygon: loc.geometry_polygon as [number, number][] } : {}),
                       }))
                   : undefined;
+              const radius_km = (a.radius_km ?? gtm.radius_km) != null && Number.isFinite(Number(a.radius_km ?? gtm.radius_km))
+                ? Number(a.radius_km ?? gtm.radius_km)
+                : undefined;
+              const geometry_polygon = (Array.isArray(a.geometry_polygon) ? a.geometry_polygon : Array.isArray(gtm.geometry_polygon) ? gtm.geometry_polygon : undefined) as [number, number][] | undefined;
+              const verification_audit = (a.verification_audit ?? gtm.verification_audit) as VerificationAudit | undefined;
+              const rawPub = a.pubDate || a.pub_date || a.published_at || 'Terkini';
+              const summaryText = a.summary || a.title || '';
+              const freshness = validateClientNewsFreshnessAndDiscourse(headline, summaryText, sourceLink, String(rawPub));
 
               return {
                 id: a.id || `NEWS-${Math.random().toString(36).substr(2, 6)}`,
@@ -486,11 +701,11 @@ export function useNewsVerification() {
                 source_tier: (a.source_tier || (isOfficial ? 'TIER_1_OFFICIAL' : 'TIER_2_AUTHORITATIVE_PRESS')) as NewsItem['source_tier'],
                 source_name: src,
                 headline: headline,
-                summary: a.summary || a.title || '',
+                summary: summaryText,
                 location_name: a.corridor_segment || (a.corridor_nodes && a.corridor_nodes[0]) || a.region || a.location_name || 'Koridor Sumatera',
                 lat: Number.isFinite(lat) ? lat : undefined,
                 lon: Number.isFinite(lon) ? lon : undefined,
-                pubDate: a.pubDate || a.pub_date || a.published_at || 'Terkini',
+                pubDate: freshness.formattedPubDate || String(rawPub),
                 category: a.category || 'DISASTER_LOGISTICS',
                 incident_type: normalizedIncident,
                 hazardType: normalizedHazard,
@@ -516,11 +731,21 @@ export function useNewsVerification() {
                 corridor_segment: a.corridor_segment || gtm.corridor_segment,
                 corridor_nodes: corridor_nodes,
                 affected_locations: affected_locations,
+                radius_km: radius_km,
+                geometry_polygon: geometry_polygon,
+                verification_audit: verification_audit,
               } as NewsItem;
             }).filter((n: NewsItem) => {
               if (n.zone_tier === 'DROPPED_IRRELEVANT') return false;
               if (n.is_geocoded === false) return false;
               if (n.lat == null || n.lon == null || !Number.isFinite(n.lat) || !Number.isFinite(n.lon)) return false;
+              const check = validateClientNewsFreshnessAndDiscourse(
+                n.headline || '',
+                (n as NewsItem).summary || '',
+                n.link || n.url || '',
+                n.pubDate || 'Terkini'
+              );
+              if (!check.valid) return false;
               return true;
             });
             if (mapped.length > 0) {

@@ -162,6 +162,24 @@ The following items are prioritized for subsequent development phases:
 - Frontend: `https://pre-hub.vercel.app`; Backend: `https://peta-nadi.onrender.com`; DB: Supabase `news_articles` (`ground_truth_metrics` JSONB carries `affected_locations`, `schema_version`; no migration, no new columns).
 - Deterministic layer only: zero LLM prompt/contract changes in Phase 73.
 
-### Open Concerns
+### Open Concerns (Phase 73)
 1. Confirm legacy v1 rows (Jambi-centroid fallbacks, false Yellows, single-point shapes) visibly self-heal on live Render read.
 2. Browser E2E on Vercel: N-zone fan-out rendering, parent Audit Trail linkage, `Wilayah Terdampak` pills on Evidence tab + News Cards.
+
+---
+
+## 8. Phase 74: Agent Verification Gate, Hazard-Specific Geometry & 48h Freshness Lockdown
+
+### Decisions
+1. **4-check deterministic verification gate**: `run_agent_verification_gate()` (freshness ≤48h / discourse / spatial geocode / impact-corroborated) with a strict verdict ladder; full `verification_audit` packed in `ground_truth_metrics` JSONB and rendered in the Evidence tab 4-check panel. Agent-2 (`osint_hazard.py`) pre-filters discourse/stale items before confidence scoring.
+2. **Signal/blockage list separation**: bare `"banjir"`/`"longsor"` removed from `PHYSICAL_BLOCKAGE_PREDICATES` (kept in `STRICT_CRISIS_PREDICATES` as signal); a hazard noun never counts as blockage evidence. `"Akademisi Unand ... Solusi Banjir ..."` → DROPPED; true closures still RED.
+3. **Agent-decided hazard geometry**: one shared radius table (landslide/road 2.8–3.5, port 3.2, congestion 2.5, flood 4.8–6.0, wildfire 7.5, marine 8.5, volcanic 10.0, earthquake 12.0, regency warning 7.2–9.0) in `incident_geometry_service.py`, backend polygon preferred, client table fallback-only.
+4. **48h freshness lockdown**: archival URL date-path gate dominates stored timestamps; true `published_at` preserved end-to-end (never ingestion `now()`); `when:2d` at the query source; client mirror guard at render; `schema_version = 3` auto re-verifies all legacy rows on read.
+
+### Constraints & Deployment Context
+- Frontend: `https://pre-hub.vercel.app`; Backend: `https://peta-nadi.onrender.com`; DB: Supabase `news_articles` (`ground_truth_metrics` JSONB carries `verification_audit`, `radius_km`, `geometry_polygon`, `published_at_iso`, `age_hours`, `schema_version`; no migration, no new columns).
+- Deterministic layer only: zero LLM prompt/contract changes in Phase 74.
+
+### Open Concerns
+1. Confirm legacy v1/v2 rows (academic REDs, overwritten `published_at`) visibly self-heal on live Render read.
+2. Browser E2E on Vercel: hazard-specific footprints per class, Evidence 4-check panel per item, stale items absent from feed.

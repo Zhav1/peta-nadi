@@ -369,6 +369,103 @@ export default function DashboardClient() {
     return ring;
   }, []);
 
+  // Hazard-aware anisotropic zone geometry: agent-decided radius + oriented ellipse
+  // so mountain-pass landslides render as tight 2.8 km corridors, not city-wide circles.
+  const buildHazardSpecificZoneGeometry = useCallback((
+    lon: number,
+    lat: number,
+    hazardType: CrisisType,
+    tier: 'RED_CONFIRMED' | 'YELLOW_CLARIFY',
+    agentRadiusKm?: number,
+    backendPolygon?: [number, number][]
+  ): { polygon: [number, number][]; radiusKm: number } => {
+    if (backendPolygon && Array.isArray(backendPolygon) && backendPolygon.length >= 4) {
+      return { polygon: backendPolygon, radiusKm: agentRadiusKm ?? 4.0 };
+    }
+    let radiusKm: number;
+    let major: number;
+    let minor: number;
+    let rotDeg: number;
+    switch (hazardType) {
+      case 'landslide':
+      case 'road_closure':
+        radiusKm = agentRadiusKm ?? 2.8;
+        major = radiusKm * 1.25;
+        minor = radiusKm * 0.52;
+        rotDeg = 35;
+        break;
+      case 'port_closure':
+        radiusKm = agentRadiusKm ?? 3.2;
+        major = radiusKm * 1.1;
+        minor = radiusKm * 0.72;
+        rotDeg = 30;
+        break;
+      case 'congestion':
+        radiusKm = agentRadiusKm ?? 2.5;
+        major = radiusKm * 1.3;
+        minor = radiusKm * 0.48;
+        rotDeg = 55;
+        break;
+      case 'flood':
+        radiusKm = agentRadiusKm ?? 4.8;
+        major = radiusKm * 1.25;
+        minor = radiusKm * 0.65;
+        rotDeg = 22;
+        break;
+      case 'wildfire':
+        radiusKm = agentRadiusKm ?? 7.5;
+        major = radiusKm * 1.2;
+        minor = radiusKm * 0.68;
+        rotDeg = 115;
+        break;
+      case 'marine_wave':
+        radiusKm = agentRadiusKm ?? 8.5;
+        major = radiusKm * 1.25;
+        minor = radiusKm * 0.58;
+        rotDeg = 140;
+        break;
+      case 'volcanic_eruption':
+        radiusKm = agentRadiusKm ?? 10.0;
+        major = radiusKm * 1.05;
+        minor = radiusKm * 0.88;
+        rotDeg = 0;
+        break;
+      case 'earthquake':
+        radiusKm = agentRadiusKm ?? 12.0;
+        major = radiusKm * 1.08;
+        minor = radiusKm * 0.90;
+        rotDeg = 0;
+        break;
+      case 'other_disruption':
+      default:
+        radiusKm = agentRadiusKm ?? 7.2;
+        major = radiusKm * 1.15;
+        minor = radiusKm * 0.78;
+        rotDeg = tier === 'YELLOW_CLARIFY'
+          ? (Math.abs(Math.round(lat * 100 + lon * 100)) % 180)
+          : (Math.abs(Math.round(lat * 100 + lon * 100)) % 180);
+        break;
+    }
+    const points = 32;
+    const rotRad = (rotDeg * Math.PI) / 180;
+    const cosRot = Math.cos(rotRad);
+    const sinRot = Math.sin(rotRad);
+    const latRad = (lat * Math.PI) / 180;
+    const cosLat = Math.cos(latRad) || 0.000001;
+    const polygon: [number, number][] = [];
+    for (let i = 0; i <= points; i++) {
+      const theta = (i * 2 * Math.PI) / points;
+      const ex = major * Math.cos(theta);
+      const ey = minor * Math.sin(theta);
+      const rx = ex * cosRot - ey * sinRot;
+      const ry = ex * sinRot + ey * cosRot;
+      const dLat = ry / 111.32;
+      const dLon = rx / (111.32 * cosLat);
+      polygon.push([lon + dLon, lat + dLat]);
+    }
+    return { polygon, radiusKm };
+  }, []);
+
   const liveNewsZoneCounts = useMemo(() => {
     let red = 0;
     let yellow = 0;
@@ -390,13 +487,14 @@ export default function DashboardClient() {
       if (tier === 'DROPPED_IRRELEVANT') continue;
       if (tier === 'RED_CONFIRMED' && !showRedZones) continue;
       if (tier === 'YELLOW_CLARIFY' && !showYellowZones) continue;
-      const radiusKm = tier === 'RED_CONFIRMED' ? 16 : 20;
       const hazardType = (n.hazardType || n.incident_type || 'other_disruption') as CrisisType;
       const risk = tier === 'RED_CONFIRMED' ? 0.88 : 0.55;
       if (n.affected_locations && n.affected_locations.length > 0) {
         n.affected_locations.forEach((loc, idx) => {
+          const agentRadius = loc.radius_km ?? n.radius_km;
+          const geom = buildHazardSpecificZoneGeometry(loc.longitude, loc.latitude, hazardType, tier, agentRadius, loc.geometry_polygon ?? n.geometry_polygon);
           live.push({
-            polygon: buildZoneRing(loc.longitude, loc.latitude, radiusKm),
+            polygon: geom.polygon,
             type: hazardType,
             risk,
             crisis_id: `news-${n.id}-loc-${idx}`,
@@ -407,14 +505,19 @@ export default function DashboardClient() {
             custom_hazard_label: n.custom_hazard_label || n.headline,
             source_news_id: n.id,
             center: [loc.longitude, loc.latitude],
-            radiusKm,
+            radiusKm: geom.radiusKm,
+            radius_km: geom.radiusKm,
+            geometry_polygon: geom.polygon,
+            verification_audit: n.verification_audit,
             impact_profile: n.impact_profile,
             affected_locations: n.affected_locations,
           });
         });
       } else {
+        const agentRadius = n.radius_km;
+        const geom = buildHazardSpecificZoneGeometry(n.lon, n.lat, hazardType, tier, agentRadius, n.geometry_polygon);
         live.push({
-          polygon: buildZoneRing(n.lon, n.lat, radiusKm),
+          polygon: geom.polygon,
           type: hazardType,
           risk,
           crisis_id: `news-${n.id}`,
@@ -425,14 +528,17 @@ export default function DashboardClient() {
           custom_hazard_label: n.custom_hazard_label || n.headline,
           source_news_id: n.id,
           center: [n.lon, n.lat],
-          radiusKm,
+          radiusKm: geom.radiusKm,
+          radius_km: geom.radiusKm,
+          geometry_polygon: geom.polygon,
+          verification_audit: n.verification_audit,
           impact_profile: n.impact_profile,
           affected_locations: n.affected_locations,
         });
       }
     }
     return [...disasterZones, ...live];
-  }, [disasterZones, newsFeed, showRedZones, showYellowZones, buildZoneRing]);
+  }, [disasterZones, newsFeed, showRedZones, showYellowZones, buildHazardSpecificZoneGeometry]);
 
   // Synchronize activeSection from URL query parameters
   useEffect(() => {
@@ -1212,7 +1318,20 @@ export default function DashboardClient() {
       setToast({ message: 'Koordinat zona belum tersedia untuk inspeksi audit.', type: 'info' });
       return;
     }
-    const radiusKm = fallbackZone?.radiusKm ?? (zoneTier === 'RED_CONFIRMED' ? 16 : 20);
+    const agentRadiusKm: number | undefined =
+      newsItem?.affected_locations?.[0]?.radius_km
+      ?? newsItem?.radius_km
+      ?? fallbackZone?.affected_locations?.[0]?.radius_km
+      ?? fallbackZone?.radius_km
+      ?? fallbackZone?.radiusKm;
+    const backendPolygon: [number, number][] | undefined =
+      newsItem?.affected_locations?.[0]?.geometry_polygon
+      ?? newsItem?.geometry_polygon
+      ?? fallbackZone?.affected_locations?.[0]?.geometry_polygon
+      ?? fallbackZone?.geometry_polygon;
+    const zoneGeom = buildHazardSpecificZoneGeometry(lon, lat, hazardType, zoneTier, agentRadiusKm, backendPolygon);
+    const radiusKm = zoneGeom.radiusKm;
+    const verificationAudit = newsItem?.verification_audit || fallbackZone?.verification_audit;
     const title: string = newsItem?.headline || fallbackZone?.title || customHazardLabel;
     const source: string = newsItem?.source_name || 'Sumber Berita Terverifikasi';
     const link: string = newsItem?.link || newsItem?.url || '';
@@ -1345,6 +1464,9 @@ export default function DashboardClient() {
       custom_hazard_label: customHazardLabel,
       impact_profile: impactProfile,
       affected_locations: resolvedAffected,
+      radius_km: radiusKm,
+      geometry_polygon: zoneGeom.polygon,
+      verification_audit: verificationAudit,
       evidence: {
         osint_author: source,
         osint_text: summary,
@@ -1359,7 +1481,7 @@ export default function DashboardClient() {
     setSelectedCrisisId(auditCrisis.crisis_id);
     setActiveTab('Evidence');
     setIsSidebarOpen(true);
-  }, [newsFeed, selectedOriginNode, selectedDestNode, selectedModality, resolveNodeInfo]);
+  }, [newsFeed, selectedOriginNode, selectedDestNode, selectedModality, resolveNodeInfo, buildHazardSpecificZoneGeometry]);
 
   const handleZoneClick = useCallback((zone: DisasterZone) => {
     const linked = zone.source_news_id

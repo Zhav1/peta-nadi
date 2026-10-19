@@ -22,7 +22,7 @@ from app.nlp.geocoding_service import (
 
 logger = logging.getLogger(__name__)
 
-EXTRACTION_SCHEMA_VERSION = 2
+EXTRACTION_SCHEMA_VERSION = 3
 
 ECONOMIC_OPINION_CEREMONIAL_EXCLUSIONS = (
     "dukung perekonomian", "pertumbuhan ekonomi", "dorong ekonomi",
@@ -48,8 +48,28 @@ STRICT_CRISIS_PREDICATES = (
 )
 
 PHYSICAL_BLOCKAGE_PREDICATES = (
-    "putus", "amblas", "ambles", "longsor", "banjir", "ditutup",
-    "terendam", "lumpuh", "terisolir", "ambruk",
+    "putus", "terputus", "amblas", "ambles", "ambruk", "runtuh",
+    "tertutup", "ditutup", "tutup total", "lumpuh", "terisolir",
+    "macet total", "tidak bisa dilalui", "tak bisa dilalui",
+    "merendam jalan", "jalan terendam", "jalur terendam", "banjir merendam",
+    "menimbun badan jalan", "menutup badan jalan",
+)
+
+NON_INCIDENT_DISCOURSE_MARKERS = (
+    "akademisi", "unand", "universitas", "guru besar", "pakar", "pengamat",
+    "peneliti", "ahli:", "solusi", "solusi banjir", "pemulihan", "hulu das",
+    "daerah aliran sungai", "rehabilitasi", "normalisasi", "reboisasi",
+    "penghijauan", "pencegahan", "edukasi", "sosialisasi", "simulasi bencana",
+    "apel siaga", "pelatihan", "seminar", "diskusi", "kajian", "riset",
+    "studi", "wacana", "usulan", "rekomendasi", "program", "anggaran",
+    "bantuan sosial", "penyaluran bantuan", "santunan", "pasca banjir",
+    "pasca bencana", "rekonstruksi", "trauma healing", "dukung perekonomian",
+    "pertumbuhan ekonomi", "dorong ekonomi", "dongkrak ekonomi",
+    "dongkrak perekonomian", "peresmian", "diresmikan", "apresiasi",
+    "optimis", "investasi", "progres pembangunan", "progres konstruksi",
+    "uji laik fungsi", "diskon tarif", "mudik gratis", "kunjungan kerja",
+    "rapat koordinasi", "penghargaan", "ekspor meningkat", "surplus",
+    "pengusaha:",
 )
 
 # In-memory LRU-style cache to prevent repeated LLM calls on identical news headlines
@@ -181,6 +201,173 @@ def _build_impact_profile(incident_type: str, severity: str,
             "estimated_delay_hours": 4}
 
 
+def _detect_weather_warning_only(full_text_lower: str) -> bool:
+    """Detects pure weather forecasts/warnings or multi-regency seasonal alerts.
+
+    Returns True when warning markers are present without an active road/port
+    blockage clause (putus/amblas/lumpuh/tutup total/dll). Such items gate to
+    YELLOW_CLARIFY, never RED_CONFIRMED.
+    """
+    t = full_text_lower or ""
+    warning_markers = (
+        "catat", "peringatan dini", "berpotensi", "waspada", "prakiraan", "cuaca ekstrem",
+    )
+    blockage_clauses = (
+        "putus", "terputus", "amblas", "ambles", "ambruk", "lumpuh", "tutup total",
+        "tertutup", "ditutup", "terisolir", "tidak bisa dilalui", "tak bisa dilalui",
+        "merendam jalan", "jalan terendam", "jalur terendam", "menutup badan jalan",
+    )
+    has_warning = any(w in t for w in warning_markers)
+    if not has_warning:
+        return False
+    has_blockage = any(w in t for w in blockage_clauses)
+    return not has_blockage
+
+
+def _classify_discourse_type(full_text_lower: str, has_non_incident: bool) -> str:
+    t = full_text_lower or ""
+    if any(w in t for w in ("akademisi", "unand", "universitas", "guru besar", "pakar", "pengamat", "peneliti")):
+        return "academic_commentary"
+    if any(w in t for w in ("solusi", "pemulihan", "hulu das", "rehabilitasi", "normalisasi", "reboisasi", "rekomendasi", "usulan", "kajian", "riset", "studi", "wacana")):
+        return "solution_policy_discourse"
+    if any(w in t for w in ("sosialisasi", "edukasi", "simulasi bencana", "apel siaga", "pelatihan", "seminar", "diskusi")):
+        return "prevention_ceremonial"
+    if any(w in t for w in ("pasca banjir", "pasca bencana", "rekonstruksi", "trauma healing", "bantuan sosial", "penyaluran bantuan", "santunan")):
+        return "retrospective_aid"
+    if any(w in t for w in ("peresmian", "diresmikan", "apresiasi", "penghargaan", "kunjungan kerja", "rapat koordinasi", "mudik gratis", "diskon tarif")):
+        return "ceremonial_economic"
+    if has_non_incident:
+        return "non_incident_discourse"
+    return "incident_report"
+
+
+def run_agent_verification_gate(
+    article: Dict[str, Any] | None = None,
+    full_text_lower: str = "",
+    has_crisis_predicate: bool = False,
+    has_physical_blockage: bool = False,
+    has_non_incident_discourse: bool = False,
+    is_geocoded: bool = False,
+    latitude: Any = None,
+    location_precision: str = "none",
+    temporal_phase: str = "active_disruption",
+    severity: str = "medium",
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    """Strict 4-check deterministic agent verification gate.
+
+    Check 1 (freshness_passed): parse_and_validate_article_freshness <= 48h.
+    Check 2 (discourse_passed): not (has_non_incident and not has_physical) AND has_crisis.
+    Check 3 (spatial_passed): is_geocoded and latitude is not None.
+    Check 4 (impact_corroborated): ALL must hold for RED_CONFIRMED.
+    """
+    # Allow calling as run_agent_verification_gate(article_dict) with everything inside.
+    if article is None:
+        article = {}
+    if not isinstance(article, dict):
+        article = {}
+    # Merge kwargs-based article fields when full_text not explicitly passed.
+    if not full_text_lower:
+        _t = f"{article.get('title','')} {article.get('raw_description','') or article.get('summary','')}".lower()
+        full_text_lower = _t
+    else:
+        full_text_lower = (full_text_lower or "").lower()
+    if "has_crisis_predicate" not in kwargs and not has_crisis_predicate:
+        has_crisis_predicate = any(w in full_text_lower for w in STRICT_CRISIS_PREDICATES)
+    if "has_physical_blockage" not in kwargs and not has_physical_blockage:
+        has_physical_blockage = any(w in full_text_lower for w in PHYSICAL_BLOCKAGE_PREDICATES)
+    if "has_non_incident_discourse" not in kwargs and not has_non_incident_discourse:
+        has_non_incident_discourse = any(w in full_text_lower for w in NON_INCIDENT_DISCOURSE_MARKERS)
+    if not is_geocoded:
+        is_geocoded = bool(article.get("is_geocoded")) if article else False
+    if latitude is None:
+        latitude = article.get("latitude") if article else None
+    if not location_precision or location_precision == "none":
+        location_precision = article.get("location_precision") or location_precision or "none"
+    if not temporal_phase or temporal_phase == "active_disruption":
+        temporal_phase = article.get("temporal_phase") or temporal_phase or "active_disruption"
+    if not severity:
+        severity = article.get("severity") or "medium"
+
+    # ---- Check 1: freshness ----
+    freshness_passed = True
+    age_hours: float | None = None
+    try:
+        from app.services.news_aggregator import parse_and_validate_article_freshness as _fresh
+        pub_raw = (
+            article.get("original_pub_date")
+            or article.get("html_published_at")
+            or article.get("pubDate")
+            or article.get("published_at")
+            if article else None
+        )
+        link = (article.get("link") or article.get("url")) if article else ""
+        html_meta = article.get("html_published_at") if article else None
+        fres = _fresh(pub_raw, link, html_meta_date=html_meta, max_age_hours=48)
+        freshness_passed = bool(fres.get("is_fresh"))
+        try:
+            age_hours = float(fres.get("age_hours")) if fres.get("age_hours") is not None else None
+        except Exception:
+            age_hours = None
+    except Exception:
+        # If aggregator unavailable (circular import edge), default to pass
+        # unless URL carries an obvious archival year.
+        try:
+            import re as _re
+            from datetime import datetime as _dt, timezone as _tz
+            _m = _re.search(r'/(20\d{2})/(\d{1,2})/(\d{1,2})(?:/|$|-|_)', str((article.get("link") or "") if article else ""))
+            if _m:
+                freshness_passed = False
+        except Exception:
+            pass
+
+    # ---- Check 2: discourse ----
+    discourse_passed = (not (has_non_incident_discourse and not has_physical_blockage)) and bool(has_crisis_predicate)
+
+    # ---- Check 3: spatial ----
+    spatial_passed = bool(is_geocoded) and (latitude is not None)
+
+    # ---- Check 4: impact corroborated ----
+    is_weather_warning_only = _detect_weather_warning_only(full_text_lower)
+    impact_corroborated = bool(
+        freshness_passed
+        and discourse_passed
+        and spatial_passed
+        and (location_precision == "exact_node")
+        and (temporal_phase == "active_disruption")
+        and (bool(has_physical_blockage) or str(severity).lower() in ("high", "critical"))
+        and (not is_weather_warning_only)
+    )
+
+    discourse_type = _classify_discourse_type(full_text_lower, has_non_incident_discourse)
+    if impact_corroborated:
+        verdict_summary = "RED_CONFIRMED: active physical blockage corroborated."
+    elif not freshness_passed:
+        verdict_summary = "DROPPED: stale article beyond 48h freshness window."
+    elif not discourse_passed:
+        verdict_summary = "DROPPED: academic/policy/solution discourse without active blockage."
+    elif is_weather_warning_only:
+        verdict_summary = "YELLOW: weather warning only, needs field clarification."
+    elif not spatial_passed:
+        verdict_summary = "DROPPED: no geocoded incident location."
+    else:
+        verdict_summary = "YELLOW: needs field clarification."
+
+    return {
+        "freshness_passed": freshness_passed,
+        "discourse_passed": discourse_passed,
+        "spatial_passed": spatial_passed,
+        "impact_corroborated": impact_corroborated,
+        "discourse_type": discourse_type,
+        "age_hours": age_hours,
+        "is_weather_warning_only": is_weather_warning_only,
+        "has_crisis_predicate": bool(has_crisis_predicate),
+        "has_physical_blockage": bool(has_physical_blockage),
+        "has_non_incident_discourse": bool(has_non_incident_discourse),
+        "agent_verdict_summary": verdict_summary,
+    }
+
+
 def _fast_heuristic_extraction(art: Dict[str, Any]) -> Dict[str, Any]:
     """Fast deterministic rule-based extractor for zero-latency / offline execution."""
     title = art.get("title", "") or ""
@@ -263,16 +450,70 @@ def _fast_heuristic_extraction(art: Dict[str, Any]) -> Dict[str, Any]:
     # 6. Impact profile
     impact_profile = _build_impact_profile(incident_type, severity, passability_hint)
 
-    # 7. Zone tier & reason (economical 3-tier gatekeeper)
+    # 7. Zone tier & reason (economical 3-tier gatekeeper + 4-check agent verification)
     is_ad_noise = any(w in full_text for w in _AD_NOISE_KEYWORDS)
+    has_non_incident_discourse = any(w in full_text for w in NON_INCIDENT_DISCOURSE_MARKERS)
     # Strict two-factor crisis predicate gate (Issue 3): economic/opinion/
     # ceremonial pieces and bare-infra mentions without a crisis predicate
     # are immediately irrelevant.
     fails_crisis_gate = (not has_crisis_predicate) or (has_exclusion and not has_physical_blockage)
-    if fails_crisis_gate or (not is_geocoded) or (latitude is None) or is_ad_noise or (not _hazard_signal):
+    # Agent verification gate (freshness / discourse / spatial / impact).
+    try:
+        _probe_article = dict(art or {})
+        _probe_article.update({
+            "is_geocoded": is_geocoded,
+            "latitude": latitude,
+            "location_precision": location_precision,
+            "temporal_phase": temporal_phase,
+            "severity": severity,
+        })
+        verification_audit = run_agent_verification_gate(
+            _probe_article,
+            full_text_lower=full_text,
+            has_crisis_predicate=has_crisis_predicate,
+            has_physical_blockage=has_physical_blockage,
+            has_non_incident_discourse=has_non_incident_discourse,
+            is_geocoded=is_geocoded,
+            latitude=latitude,
+            location_precision=location_precision,
+            temporal_phase=temporal_phase,
+            severity=severity,
+        )
+    except Exception:
+        verification_audit = {
+            "freshness_passed": True,
+            "discourse_passed": (not (has_non_incident_discourse and not has_physical_blockage)) and bool(has_crisis_predicate),
+            "spatial_passed": bool(is_geocoded) and latitude is not None,
+            "impact_corroborated": False,
+            "discourse_type": "incident_report",
+            "age_hours": None,
+            "is_weather_warning_only": False,
+            "has_crisis_predicate": bool(has_crisis_predicate),
+            "has_physical_blockage": bool(has_physical_blockage),
+            "has_non_incident_discourse": bool(has_non_incident_discourse),
+            "agent_verdict_summary": "YELLOW: needs field clarification.",
+        }
+    freshness_passed = bool(verification_audit.get("freshness_passed", True))
+    discourse_passed = bool(verification_audit.get("discourse_passed", True))
+    is_weather_warning_only = bool(verification_audit.get("is_weather_warning_only", False))
+    impact_corroborated = bool(verification_audit.get("impact_corroborated", False))
+    discourse_type = verification_audit.get("discourse_type", "incident_report")
+
+    if (not freshness_passed) or (not discourse_passed):
+        zone_tier = "DROPPED_IRRELEVANT"
+        if not freshness_passed:
+            tier_reason = "Berita arsip/lama melebihi batas 48 jam; tidak relevan untuk koridor aktif."
+        else:
+            tier_reason = ("Artikel opini/akademik/kebijakan/solusi tanpa blokade fisik aktif; "
+                           "bukan disrupsi logistik.")
+    elif fails_crisis_gate or (not is_geocoded) or (latitude is None) or is_ad_noise or (not _hazard_signal):
         zone_tier = "DROPPED_IRRELEVANT"
         tier_reason = ("Artikel tidak memiliki lokasi insiden spesifik di koridor "
                        "Sumatera atau bukan disrupsi logistik.")
+    elif is_weather_warning_only:
+        zone_tier = "YELLOW_CLARIFY"
+        tier_reason = ("Peringatan cuaca / imbauan kewaspadaan tanpa penutupan jalur aktif; "
+                       "memerlukan klarifikasi lapangan.")
     elif (location_precision == "province_only"
           or temporal_phase in ("forecast_early_warning", "early_warning", "monitoring")
           or (incident_type == "other_disruption" and severity in ("low", "medium"))):
@@ -280,16 +521,30 @@ def _fast_heuristic_extraction(art: Dict[str, Any]) -> Dict[str, Any]:
         tier_reason = ("Peringatan dini / indikasi awal di wilayah provinsi; titik "
                        "koordinat spesifik atau tingkat penutupan jalur masih "
                        "memerlukan klarifikasi lapangan.")
+    elif impact_corroborated:
+        zone_tier = "RED_CONFIRMED"
+        tier_reason = (f"Dampak {custom_hazard_label} terkonfirmasi di "
+                       f"{loc_info.get('matched_node')} ({region}) dengan status "
+                       f"{impact_profile.get('passability')}; koridor logistik terdampak langsung.")
     elif (is_geocoded and location_precision == "exact_node"
           and (incident_type in ("flood", "landslide", "earthquake", "port_closure",
                                  "marine_wave", "road_closure", "volcanic_eruption",
                                  "wildfire")
                or (incident_type == "congestion" and severity in ("high", "critical"))
                or impact_profile.get("passability") in ("BLOCKED", "RESTRICTED"))):
-        zone_tier = "RED_CONFIRMED"
-        tier_reason = (f"Dampak {custom_hazard_label} terkonfirmasi di "
-                       f"{loc_info.get('matched_node')} ({region}) dengan status "
-                       f"{impact_profile.get('passability')}; koridor logistik terdampak langsung.")
+        # Geocoded exact-node with hazard signal but missing one corroboration
+        # facet (e.g. no explicit physical predicate) -> still RED only if the
+        # verification gate did not fail freshness/discourse and it is not a
+        # weather-warning-only item.
+        if freshness_passed and discourse_passed and not is_weather_warning_only:
+            zone_tier = "RED_CONFIRMED"
+            tier_reason = (f"Dampak {custom_hazard_label} terkonfirmasi di "
+                           f"{loc_info.get('matched_node')} ({region}) dengan status "
+                           f"{impact_profile.get('passability')}; koridor logistik terdampak langsung.")
+        else:
+            zone_tier = "YELLOW_CLARIFY"
+            tier_reason = ("Lokasi terdeteksi namun tingkat keparahan atau status jalur "
+                           "belum terkonfirmasi; memerlukan klarifikasi lapangan.")
     else:
         # Default: geocoded but ambiguous → Yellow for human clarification.
         zone_tier = "YELLOW_CLARIFY"
@@ -312,6 +567,31 @@ def _fast_heuristic_extraction(art: Dict[str, Any]) -> Dict[str, Any]:
             if _nm and _nm not in nodes:
                 nodes.append(_nm)
 
+    # 10. Agent-decided hazard-specific radius + anisotropic polygon geometry.
+    radius_km: float | None = None
+    geometry_polygon: list | None = None
+    try:
+        if latitude is not None and longitude is not None:
+            from app.services.incident_geometry_service import compute_hazard_zone_geometry_and_radius as _geo_fn
+            _geo = _geo_fn(incident_type, severity, location_precision, zone_tier, float(latitude), float(longitude), corridor_segment or "")
+            radius_km = float(_geo.get("radius_km", 6.0))
+            geometry_polygon = _geo.get("geometry_polygon")
+            # Attach radius/geometry onto each affected_location as well.
+            for _al in (affected_locations or []):
+                try:
+                    _alat = _al.get("latitude", latitude)
+                    _alon = _al.get("longitude", longitude)
+                    _g2 = _geo_fn(incident_type, severity, _al.get("location_precision", location_precision), zone_tier, float(_alat), float(_alon), _al.get("corridor_segment", corridor_segment or ""))
+                    _al["radius_km"] = float(_g2.get("radius_km", radius_km or 6.0))
+                    _al["geometry_polygon"] = _g2.get("geometry_polygon")
+                except Exception:
+                    if radius_km is not None:
+                        _al.setdefault("radius_km", radius_km)
+                    if geometry_polygon is not None:
+                        _al.setdefault("geometry_polygon", geometry_polygon)
+    except Exception:
+        pass
+
     return {
         "id": art_id,
         "title": title,
@@ -319,6 +599,9 @@ def _fast_heuristic_extraction(art: Dict[str, Any]) -> Dict[str, Any]:
         "source": source,
         "source_tier": source_tier,
         "pubDate": art.get("pubDate", "Terkini"),
+        "original_pub_date": art.get("original_pub_date") or art.get("pubDate") or art.get("published_at"),
+        "html_published_at": art.get("html_published_at"),
+        "published_at": art.get("published_at") or art.get("html_published_at") or art.get("pubDate"),
         "summary": title,
         "concise_summary": title,
         "region": region,
@@ -340,6 +623,9 @@ def _fast_heuristic_extraction(art: Dict[str, Any]) -> Dict[str, Any]:
         "lead_time_hours": lead_time_hours,
         "commodities_affected": commodities,
         "affected_locations": affected_locations,
+        "radius_km": radius_km,
+        "geometry_polygon": geometry_polygon,
+        "verification_audit": verification_audit,
         "ground_truth_metrics": {
             "lane_status": ("BLOCKED" if impact_profile.get("passability") == "BLOCKED"
                             else "RESTRICTED" if impact_profile.get("passability") == "RESTRICTED"
@@ -353,6 +639,13 @@ def _fast_heuristic_extraction(art: Dict[str, Any]) -> Dict[str, Any]:
             "location_precision": location_precision,
             "affected_locations": affected_locations,
             "schema_version": EXTRACTION_SCHEMA_VERSION,
+            "radius_km": radius_km,
+            "geometry_polygon": geometry_polygon,
+            "verification_audit": verification_audit,
+            "discourse_type": discourse_type,
+            "age_hours": verification_audit.get("age_hours"),
+            "original_pub_date": art.get("original_pub_date") or art.get("pubDate"),
+            "published_at_iso": art.get("published_at") or art.get("html_published_at"),
         },
         "zone_tier": zone_tier,
         "tier_reason": tier_reason,
@@ -400,10 +693,24 @@ def _apply_batch_llm_item(structured: Dict[str, Any], item: Dict[str, Any]) -> D
             except Exception:
                 pass
         structured["impact_profile"] = ip
-        # Tiering — LLM is authoritative unless it contradicts geocoding reality.
+        # Tiering — LLM is authoritative unless it contradicts geocoding reality
+        # or the deterministic verification gate (freshness / discourse).
         llm_tier = (item.get("zone_tier") or "").upper()
         llm_loc = item.get("verified_sumatra_location")
-        if llm_loc is None or llm_tier == "DROPPED_IRRELEVANT":
+        # Deterministic gate is never overridden by the LLM.
+        try:
+            _audit = structured.get("verification_audit") or {}
+            _fresh_ok = _audit.get("freshness_passed", True)
+            _disc_ok = _audit.get("discourse_passed", True)
+        except Exception:
+            _fresh_ok, _disc_ok = True, True
+        if _fresh_ok is False or _disc_ok is False:
+            structured["zone_tier"] = "DROPPED_IRRELEVANT"
+            if _fresh_ok is False:
+                structured["tier_reason"] = "Berita arsip/lama melebihi batas 48 jam; ditahan oleh verifikasi deterministik."
+            else:
+                structured["tier_reason"] = "Artikel opini/akademik/kebijakan/solusi tanpa blokade fisik aktif; ditahan oleh verifikasi deterministik."
+        elif llm_loc is None or llm_tier == "DROPPED_IRRELEVANT":
             structured["zone_tier"] = "DROPPED_IRRELEVANT"
             structured["tier_reason"] = (item.get("tier_reason")
                                          or "LLM tidak menemukan lokasi Sumatera terverifikasi.")
@@ -420,6 +727,24 @@ def _apply_batch_llm_item(structured: Dict[str, Any], item: Dict[str, Any]) -> D
                     if item.get("tier_reason"):
                         structured["tier_reason"] = item["tier_reason"]
         # Sync ground_truth_metrics mirror
+        # Recompute hazard geometry if LLM changed incident_type/severity.
+        try:
+            _lat = structured.get("latitude")
+            _lon = structured.get("longitude")
+            if _lat is not None and _lon is not None:
+                from app.services.incident_geometry_service import compute_hazard_zone_geometry_and_radius as _geo_llm
+                _g = _geo_llm(
+                    structured.get("incident_type", "other_disruption"),
+                    structured.get("severity", "medium"),
+                    structured.get("location_precision", "none"),
+                    structured.get("zone_tier", "YELLOW_CLARIFY"),
+                    float(_lat), float(_lon),
+                    structured.get("corridor_segment", ""),
+                )
+                structured["radius_km"] = float(_g.get("radius_km", 6.0))
+                structured["geometry_polygon"] = _g.get("geometry_polygon")
+        except Exception:
+            pass
         gtm = dict(structured.get("ground_truth_metrics") or {})
         gtm.update({
             "zone_tier": structured.get("zone_tier"),
@@ -430,6 +755,9 @@ def _apply_batch_llm_item(structured: Dict[str, Any], item: Dict[str, Any]) -> D
             "location_precision": structured.get("location_precision"),
             "affected_locations": structured.get("affected_locations") or [],
             "schema_version": EXTRACTION_SCHEMA_VERSION,
+            "radius_km": structured.get("radius_km"),
+            "geometry_polygon": structured.get("geometry_polygon"),
+            "verification_audit": structured.get("verification_audit"),
         })
         structured["ground_truth_metrics"] = gtm
     except Exception as e:
@@ -498,7 +826,10 @@ async def extract_structured_news_batch(articles: List[Dict[str, Any]]) -> List[
             "}\n"
             "Aturan: verified_sumatra_location=null ATAU iklan/tidak-relevan/di luar Sumatera "
             "=> zone_tier DROPPED_IRRELEVANT. Hanya lokasi node spesifik (kota/pelabuhan/jalan) "
-            "yang boleh RED_CONFIRMED; sebutan provinsi saja => YELLOW_CLARIFY.\n\n"
+            "yang boleh RED_CONFIRMED; sebutan provinsi saja => YELLOW_CLARIFY. "
+            "Tandai opini/akademisi (Akademisi/Pakar/Solusi Banjir/Pemulihan DAS), usulan kebijakan, "
+            "seminar/diskusi/sosialisasi, bantuan/pasca-bencana, dan berita arsip >48 jam sebagai "
+            "DROPPED_IRRELEVANT.\n\n"
             + "\n".join(lines)
         )
         gen_text = await asyncio.wait_for(

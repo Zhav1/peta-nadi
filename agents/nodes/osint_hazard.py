@@ -65,6 +65,30 @@ async def osint_hazard_agent(state: CrisisState) -> dict:
                     payload = json.loads(payload)
                 except Exception:
                     continue
+
+            # Agent verification gate: skip academic/opinion/solution discourse
+            # and archival (>48h) payloads so they never boost hazard confidence.
+            try:
+                from app.nlp.news_extractor import NON_INCIDENT_DISCOURSE_MARKERS
+                _ptitle = str(payload.get("title", "") or "")
+                _psum = str(payload.get("summary", "") or "")
+                _ptext = f"{_ptitle} {_psum}".lower()
+                if any(m in _ptext for m in NON_INCIDENT_DISCOURSE_MARKERS):
+                    continue
+                try:
+                    from app.services.news_aggregator import parse_and_validate_article_freshness as _osint_fresh
+                    _pfresh = _osint_fresh(
+                        payload.get("published_at") or payload.get("pubDate") or payload.get("original_pub_date"),
+                        payload.get("url") or payload.get("link"),
+                        html_meta_date=payload.get("html_published_at"),
+                        max_age_hours=48,
+                    )
+                    if not _pfresh.get("is_fresh"):
+                        continue
+                except Exception:
+                    pass
+            except Exception:
+                pass
             
             title = payload.get("title", "")
             source_name = payload.get("source", "")

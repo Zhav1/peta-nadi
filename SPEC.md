@@ -112,4 +112,41 @@ Non-Goals:
 3. Fan-out checks: multi-kabupaten body → N `affected_locations`; `schema_version != 2` fixture row re-tiers on read.
 4. `npx tsc --noEmit` 0 errors; no new Supabase columns; no LLM contract changes.
 
+---
+
+## Phase 74 Extension: Agent Verification Gate, Hazard-Specific Geometry & 48h Freshness Lockdown
+
+### Decisions Locked (additive, Phases 72–73 invariants preserved)
+
+1. **4-Check Agent Verification Gate**
+   - `run_agent_verification_gate()` (`news_extractor.py`): Check 1 `freshness_passed` (`parse_and_validate_article_freshness` ≤ 48h); Check 2 `discourse_passed = not (has_non_incident and not has_physical) and has_crisis`; Check 3 `spatial_passed = is_geocoded and latitude is not None`; Check 4 `impact_corroborated` (all of: fresh + discourse + spatial + `exact_node` + `active_disruption` + (blockage or high/critical) + not weather-warning-only).
+   - Bare `"banjir"`/`"longsor"` removed from `PHYSICAL_BLOCKAGE_PREDICATES` (kept in `STRICT_CRISIS_PREDICATES` as signal only); `NON_INCIDENT_DISCOURSE_MARKERS` covers academic/policy/solution/post-disaster/ceremonial text.
+   - `agents/nodes/osint_hazard.py` pre-filters discourse-without-blockage and 48h-stale items before Agent-2 confidence scoring.
+2. **Agent-Decided Hazard-Specific Radius & Anisotropic Polygons**
+   - `compute_hazard_zone_geometry_and_radius()` (`incident_geometry_service.py`): landslide/road_closure 2.8–3.5, port_closure 3.2, congestion 2.5, flood 4.8–6.0, wildfire 7.5, marine_wave 8.5, volcanic_eruption 10.0, earthquake 12.0, regency warning/other 7.2–9.0; 36-pt `_create_skewed_ellipse` rings.
+   - `buildHazardSpecificZoneGeometry()` (`DashboardClient.tsx`) prefers the backend polygon (≥4 pts), else mirrors the same table; threaded through `combinedDisasterZones` fan-out and crisis focus.
+3. **Strict 48h Freshness & Archival URL Date Gate**
+   - `MAX_NEWS_AGE_HOURS = 48`; `parse_and_validate_article_freshness()` checks `/YYYY/MM/DD/` + `-YYYY-MM-DD` + year-only URL patterns, then RFC-2822/ISO `pubDate` + `<meta property="article:published_time">` (`extract_html_published_time`); `when:2d` on all targeted Google News queries.
+   - `upsert_articles_to_supabase` preserves true `published_at` (never ingestion `now()`); read path distrusts pre-v3 overwritten `published_at` when the URL carries a stale archival date; `validateClientNewsFreshnessAndDiscourse` (`useNewsVerification.ts`) mirrors the guard client-side.
+4. **`EXTRACTION_SCHEMA_VERSION = 3` + 4-Check Audit Trail UI**
+   - `schema_version != 3` rows auto re-verify/filter on read (sanctioned invalidation path, follows Phase 73 v2 precedent); `EvidenceTab.tsx` renders the stored 4-check audit (`freshness/discourse/spatial/impact` + `agent_verdict_summary`).
+
+### Interfaces (Phase 74 additions)
+- `run_agent_verification_gate(article|kwargs) -> {freshness_passed, discourse_passed, spatial_passed, impact_corroborated, discourse_type, age_hours, agent_verdict_summary, ...}`.
+- `parse_and_validate_article_freshness(pub_date_raw, url, html_meta_date, max_age_hours=48) -> {is_fresh, published_at_iso, age_hours, reject_reason}`; `extract_html_published_time(html) -> str | None`.
+- `compute_hazard_zone_geometry_and_radius(incident_type, severity, location_precision, zone_tier, lat, lon, corridor_segment) -> {radius_km, geometry_polygon}`.
+- `validateClientNewsFreshnessAndDiscourse(title, summary, link, rawPubDate) -> {valid, reason?, formattedPubDate?}`; `buildHazardSpecificZoneGeometry(lon, lat, hazardType, tier, agentRadiusKm?, backendPolygon?) -> {polygon, radiusKm}`.
+- `VerificationAudit {freshness_passed, discourse_passed, spatial_passed, impact_corroborated, discourse_type?, age_hours?, agent_verdict_summary?}` (`types.ts`).
+
+### Edge Cases
+- `"Akademisi Unand: Pemulihan Hulu DAS menjadi Solusi Banjir di Kota Padang"` → `DROPPED_IRRELEVANT` (discourse fail, no blockage override).
+- `"Jalan putus"` / `"Pelabuhan ditutup"` / `"Longsor tutup akses"` → RED path preserved.
+- `".../2024/05/17/..."` URL → stale-dropped even if stored `published_at` looks fresh; unparseable relative timestamps (`"15m lalu"`) stay fresh-with-now for offline fixtures.
+
+### Verification Hooks (Phase 74 additions)
+1. Gate checks: academic article DROPPED; weather-warning-only → YELLOW; ungeocoded → DROPPED.
+2. Geometry checks: landslide ≈ 2.8 km wedge vs earthquake 12.0 km; backend polygon wins over client fallback.
+3. Freshness checks: archival URL stale-dropped; fresh RSS keeps real `pubDate` as displayed `published_at`.
+4. `npx tsc --noEmit` 0 errors; no new Supabase columns; no LLM contract changes.
+
 Spec status: READY

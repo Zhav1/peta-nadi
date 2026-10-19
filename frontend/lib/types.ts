@@ -21,6 +21,18 @@ export interface AffectedLocationNode {
   longitude: number;
   corridor_segment?: string;
   location_precision?: string;
+  radius_km?: number;
+  geometry_polygon?: [number, number][];
+}
+
+export interface VerificationAudit {
+  freshness_passed: boolean;
+  discourse_passed: boolean;
+  spatial_passed: boolean;
+  impact_corroborated: boolean;
+  discourse_type?: string;
+  age_hours?: number;
+  agent_verdict_summary?: string;
 }
 
 export interface HazardImpactProfile {
@@ -205,6 +217,9 @@ export interface CrisisState {
   tier_reason?: string;
   custom_hazard_label?: string;
   impact_profile?: HazardImpactProfile;
+  radius_km?: number;
+  geometry_polygon?: [number, number][];
+  verification_audit?: VerificationAudit;
   created_at: string;
   evidence?: {
     osint_author?: string;
@@ -260,6 +275,9 @@ export interface DisasterZone {
   source_news_id?: string;
   center?: [number, number];
   radiusKm?: number;
+  radius_km?: number;
+  geometry_polygon?: [number, number][];
+  verification_audit?: VerificationAudit;
   impact_profile?: HazardImpactProfile;
   affected_locations?: AffectedLocationNode[];
 }

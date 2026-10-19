@@ -199,3 +199,72 @@ def generate_incident_geometry(
             "geometry": {"type": "Polygon", "coordinates": [ring]},
             "properties": {"hazard_type": hazard_type, "severity_label": f"{hazard_type.upper()} ZONE"}
         }
+
+
+def compute_hazard_zone_geometry_and_radius(
+    incident_type: str,
+    severity: str,
+    location_precision: str,
+    zone_tier: str,
+    lat: float,
+    lon: float,
+    corridor_segment: str = "",
+) -> Dict[str, Any]:
+    """Agent-decided hazard-specific radius + anisotropic polygon geometry.
+
+    Returns {"radius_km": float, "geometry_polygon": list[list[float]]} where
+    geometry_polygon is a closed ring of [lon, lat] coordinates.
+    """
+    sev = (severity or "medium").lower()
+    itype = (incident_type or "other_disruption").lower()
+    is_critical = sev == "critical"
+    is_province_only = (location_precision or "") == "province_only"
+    is_yellow = (zone_tier or "") == "YELLOW_CLARIFY"
+
+    try:
+        lat_f = float(lat)
+        lon_f = float(lon)
+    except Exception:
+        lat_f, lon_f = -1.0, 102.0
+
+    # Default fallback (regency weather alert / other_disruption).
+    radius_km = 7.2
+    major_km, minor_km, bearing = 7.2 * 1.15, 7.2 * 0.78, 45.0
+
+    if itype in ("landslide", "road_closure"):
+        # Pinpoint chokepoint — narrow corridor wedge/ellipse.
+        radius_km = 3.5 if is_critical else 2.8
+        major_km, minor_km, bearing = radius_km * 1.15, radius_km * 0.55, 60.0
+    elif itype == "port_closure":
+        radius_km = 3.2
+        major_km, minor_km, bearing = 3.4, 2.3, 35.0
+    elif itype == "congestion":
+        radius_km = 2.5
+        major_km, minor_km, bearing = 3.0, 1.3, 60.0
+    elif itype == "flood":
+        radius_km = 6.0 if is_critical else 4.8
+        major_km, minor_km, bearing = radius_km * 1.2, radius_km * 0.65, 22.0
+    elif itype == "wildfire":
+        radius_km = 7.5
+        major_km, minor_km, bearing = 8.5, 5.0, 115.0
+    elif itype == "marine_wave":
+        radius_km = 8.5
+        major_km, minor_km, bearing = 9.5, 4.8, 140.0
+    elif itype == "volcanic_eruption":
+        radius_km = 10.0
+        major_km, minor_km, bearing = 10.5, 8.5, 30.0
+    elif itype == "earthquake":
+        radius_km = 12.0
+        major_km, minor_km, bearing = 12.5, 10.0, 150.0
+    else:
+        # other_disruption or YELLOW_CLARIFY regency weather alert.
+        if is_yellow or itype == "other_disruption":
+            radius_km = 9.0 if is_province_only else 7.2
+            major_km, minor_km, bearing = radius_km * 1.15, radius_km * 0.78, 45.0
+
+    try:
+        ring = _create_skewed_ellipse(lon_f, lat_f, major_km, minor_km, bearing_deg=bearing, points=36)
+    except Exception:
+        ring = _create_circle_polygon(lon_f, lat_f, radius_km)
+
+    return {"radius_km": float(radius_km), "geometry_polygon": ring}

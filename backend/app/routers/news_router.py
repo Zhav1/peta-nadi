@@ -113,6 +113,10 @@ async def get_live_news(
         from app.nlp.news_extractor import _fast_heuristic_extraction as _router_re_tier
     except Exception:
         _router_re_tier = None  # type: ignore
+    try:
+        from app.services.news_aggregator import parse_and_validate_article_freshness as _router_fresh
+    except Exception:
+        _router_fresh = None  # type: ignore
     _guarded: list[dict] = []
     for _r in articles or []:
         try:
@@ -126,11 +130,12 @@ async def get_live_news(
                     _gtm = {}
             for _k in ("zone_tier", "tier_reason", "custom_hazard_label",
                        "impact_profile", "is_geocoded", "location_precision",
-                       "affected_locations", "schema_version"):
+                       "affected_locations", "schema_version", "radius_km",
+                       "geometry_polygon", "verification_audit"):
                 if _row.get(_k) is None and isinstance(_gtm, dict) and _gtm.get(_k) is not None:
                     _row[_k] = _gtm[_k]
             _sv_row = _gtm.get("schema_version") if isinstance(_gtm, dict) else None
-            if (not _row.get("zone_tier") or _sv_row != 2) and _router_re_tier is not None:
+            if (not _row.get("zone_tier") or _sv_row != 3) and _router_re_tier is not None:
                 _re = _router_re_tier({
                     "title": _row.get("title", ""),
                     "raw_description": _row.get("raw_description") or _row.get("summary") or "",
@@ -138,15 +143,32 @@ async def get_live_news(
                     "source_tier": _row.get("source_tier", "TIER_2_AUTHORITATIVE_PRESS"),
                     "province": _row.get("province", "Sumatera"),
                     "link": _row.get("link", ""),
+                    "pubDate": _row.get("original_pub_date") or _row.get("pubDate") or _row.get("published_at"),
+                    "original_pub_date": _row.get("original_pub_date") or (isinstance(_gtm, dict) and _gtm.get("original_pub_date")),
+                    "published_at": _row.get("published_at"),
+                    "html_published_at": _row.get("html_published_at"),
                 })
                 for _k in ("zone_tier", "tier_reason", "custom_hazard_label",
                            "impact_profile", "is_geocoded", "location_precision",
                            "latitude", "longitude", "incident_type", "severity",
-                           "affected_locations"):
-                    if _re.get(_k) is not None and (_row.get(_k) is None or _k.startswith("zone") or _k.startswith("tier") or _sv_row != 2):
+                           "affected_locations", "radius_km", "geometry_polygon", "verification_audit"):
+                    if _re.get(_k) is not None and (_row.get(_k) is None or _k.startswith("zone") or _k.startswith("tier") or _sv_row != 3):
                         _row[_k] = _re[_k]
                 try:
                     _row["ground_truth_metrics"] = _re.get("ground_truth_metrics", _row.get("ground_truth_metrics"))
+                except Exception:
+                    pass
+            # Strict 48h freshness gate on read (archival URL or stale pubDate).
+            if _router_fresh is not None:
+                try:
+                    _fr = _router_fresh(
+                        _row.get("original_pub_date") or (isinstance(_gtm, dict) and _gtm.get("original_pub_date")) or _row.get("pubDate") or _row.get("published_at"),
+                        _row.get("link"),
+                        html_meta_date=_row.get("html_published_at"),
+                        max_age_hours=48,
+                    )
+                    if not _fr.get("is_fresh"):
+                        continue
                 except Exception:
                     pass
             if _row.get("zone_tier") == "DROPPED_IRRELEVANT":

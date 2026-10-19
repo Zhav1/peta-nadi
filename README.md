@@ -119,6 +119,11 @@ Multisource Telemetry (BMKG Sensor, TomTom Speed Flow, Google News RSS, PIHPS Pr
 - **Multi-Location Fan-Out:** `resolve_all_sumatra_locations()` returns ALL distinct locations (15 km dedupe, Medan HQ-noise drop) as `affected_locations[]`; lead-paragraph meta scraping (`og:description` + lead `<p>`) enriches title-only RSS items. The map renders N Red/Yellow polygons per multi-daerah report (each opening the parent Audit Trail) with `Wilayah Terdampak` pills in Evidence and News Cards.
 - **Schema Version Invalidation:** `EXTRACTION_SCHEMA_VERSION = 2` packed in existing `ground_truth_metrics` JSONB; legacy rows auto re-tier on read with zero new LLM cost and zero migrations.
 
+### 15. Agent Verification Gate, Hazard-Specific Geometry & 48h Freshness Lockdown (Phase 74)
+- **4-Check Agent Verification Gate:** `run_agent_verification_gate()` enforces freshness (≤48h) / discourse / spatial-geocode / impact-corroborated checks with a strict verdict ladder; `NON_INCIDENT_DISCOURSE_MARKERS` plus removal of bare `banjir`/`longsor` from `PHYSICAL_BLOCKAGE_PREDICATES` stops academic/policy articles from reaching RED. Agent-2 pre-filters discourse/stale items; Evidence tab shows the stored 4-check audit per item.
+- **Hazard-Specific Zone Geometry:** Agent-decided radii replace hardcoded circles — landslide/road_closure 2.8–3.5 km corridor wedge, port_closure 3.2 km, congestion 2.5 km, flood 4.8–6.0 km river ellipse, wildfire 7.5 km, marine_wave 8.5 km, volcanic_eruption 10.0 km, earthquake 12.0 km, regency warning 7.2–9.0 km — rendered as anisotropic polygons (backend polygon preferred, mirrored client table as fallback).
+- **48h Freshness Lockdown:** Archival `/YYYY/MM/DD/` URL date gate, RFC-2822/ISO `pubDate` + `<meta property="article:published_time">` validation, `when:2d` Google News query constraint, true-`published_at` preservation (never ingestion time), client-side mirror guard, and `EXTRACTION_SCHEMA_VERSION = 3` auto re-verification of all legacy Supabase rows on read. Zero migrations, zero LLM contract changes.
+
 ---
 
 ## Technology Stack
