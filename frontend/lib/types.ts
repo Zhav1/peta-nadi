@@ -15,6 +15,14 @@ export type CrisisType =
 
 export type ZoneTier = 'RED_CONFIRMED' | 'YELLOW_CLARIFY' | 'DROPPED_IRRELEVANT';
 
+export interface AffectedLocationNode {
+  name: string;
+  latitude: number;
+  longitude: number;
+  corridor_segment?: string;
+  location_precision?: string;
+}
+
 export interface HazardImpactProfile {
   affected_modalities: Array<'land' | 'sea' | 'air'>;
   passability: 'BLOCKED' | 'RESTRICTED' | 'CAUTION';
@@ -192,6 +200,7 @@ export interface CrisisState {
   }>;
   blocked_corridors?: string[];
   news_affected_commodities?: string[];
+  affected_locations?: AffectedLocationNode[];
   zone_tier?: 'RED_CONFIRMED' | 'YELLOW_CLARIFY';
   tier_reason?: string;
   custom_hazard_label?: string;
@@ -252,6 +261,7 @@ export interface DisasterZone {
   center?: [number, number];
   radiusKm?: number;
   impact_profile?: HazardImpactProfile;
+  affected_locations?: AffectedLocationNode[];
 }
 
 // PIHPS price chart data

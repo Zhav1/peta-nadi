@@ -1,8 +1,9 @@
 import asyncio
 import json
 import logging
+import math
 import re
-from typing import Tuple, Optional, Dict, Any
+from typing import Tuple, Optional, Dict, Any, List
 import httpx
 from app.services.redis_client import get_redis
 from app.config import get_settings
@@ -23,6 +24,11 @@ def is_within_sumatra(lat: float, lon: float) -> bool:
     )
 
 
+def _tiered_keys() -> List[str]:
+    """Tier 1 pinpoint first, Tier 2 kabupaten second, Tier 3 macro last; longer keys win ties."""
+    return sorted(PAN_SUMATRA_GAZETTEER.keys(), key=lambda k: (PAN_SUMATRA_GAZETTEER[k].get("tier", 2), -len(k)))
+
+
 async def geocode(location_name: str) -> Optional[Tuple[float, float]]:
     """
     Geocodes a Sumatra location using a 3-tier hybrid strategy:
@@ -39,10 +45,10 @@ async def geocode(location_name: str) -> Optional[Tuple[float, float]]:
         coords = PAN_SUMATRA_GAZETTEER[slug]["coords"]
         return coords
 
-    # Check partial / normalized matches in gazetteer
-    for key, val in PAN_SUMATRA_GAZETTEER.items():
+    # Check partial / normalized matches in gazetteer (tier-ordered).
+    for key in _tiered_keys():
         if key in slug or slug in key:
-            return val["coords"]
+            return PAN_SUMATRA_GAZETTEER[key]["coords"]
 
     # 2. Tier 2: Check Redis Cache
     r = get_redis()
@@ -74,7 +80,7 @@ async def geocode(location_name: str) -> Optional[Tuple[float, float]]:
     try:
         logger.info(f"Querying Nominatim for Sumatra location: '{location_name}'...")
         await asyncio.sleep(0.5)  # Respect rate limit
-        
+
         async with httpx.AsyncClient() as client:
             resp = await client.get(url, params=params, headers=headers, timeout=6.0)
             if resp.status_code == 200:
@@ -109,6 +115,16 @@ def strip_bureau_and_dateline_noise(text: str) -> str:
         r'\bantaranews\.com\b',
         r'\bantaranews\b',
         r'\bantara\s+(bengkulu|aceh|sumut|sumbar|riau|jambi|sumsel|lampung|babel|bangka\s+belitung|sumatera\s+utara|sumatera\s+barat|sumatera\s+selatan|kepri|kepulauan\s+riau)\b',
+        r'\blkbn\s+antara\s+sumut\b',
+        r'\bantara\s+sumut\b',
+        r'\bantara\s+berita\s+sumut\b',
+        r'\bantara\s+sumbar\b',
+        r'\bantara\s+berita\s+sumbar\b',
+        r'\bbpbd\s+(sumut|sumbar|riau|aceh|jambi|sumsel|sumsel|bengkulu|lampung|sumsel|sumatera\s+utara|sumatera\s+barat)\b',
+        r'\bpolda\s+sumut\b',
+        r'\bpemprov\s+sumut\b',
+        r'\bpemprov\s+(sumbar|riau|aceh|jambi|sumsel|bengkulu|lampung)\b',
+        r'\bpolda\s+(sumbar|riau|aceh|jambi|sumsel|bengkulu|lampung)\b',
         r'\bdetiksumut\b',
         r'\bdetiknews\b',
         r'\bdetik\.com\b',
@@ -179,6 +195,196 @@ BARE_PROVINCE_ALIASES = {
     "lampung": "Lampung",
 }
 
+# Specific Tier-1 chokepoint/pass signals used for route-endpoint demotion.
+_SPECIFIC_PASS_KEYS = (
+    "sitinjau lauik", "sitinjau laut", "sitinjau-lauik", "lembah anai",
+    "silaing", "silaing bawah", "kelok 9", "kelok sembilan", "sipirok",
+    "batu jomba", "aek latong", "batang toru", "sibolangit", "sembahe",
+    "tikungan tirtanadi", "berastagi", "parapat", "tarutung",
+)
+
+_ROUTE_PAIR_RE = re.compile(
+    r'(?:jalan\s+lintas|jalinsum|jalintim|jalinbar|jalinteng|jalan\s+lintas\s+tengah|jalan\s+lintas\s+timur|jalan\s+lintas\s+barat|jalur|ruas|tol)\s+([a-z]+)\s*[-–—/]\s*([a-z]+)',
+    flags=re.IGNORECASE,
+)
+
+
+def _mask_route_endpoint_pairs_when_specific_pass_present(text_lower: str) -> str:
+    """Masks `<CityA>-<CityB>` road-name descriptors when a Tier-1 pass is present.
+
+    e.g. "jalan lintas pekanbaru-padang via sitinjau lauik" -> the
+    "pekanbaru-padang" road-name substring is blanked so the cities inside the
+    road's name are never mistaken for the landslide pinpoint.
+    """
+    has_pass = any(p in text_lower for p in _SPECIFIC_PASS_KEYS)
+    has_via = ("via " in text_lower) or re.search(r'\bdi\s+[a-z]', text_lower) is not None
+    if not (has_pass or ("via " in text_lower)):
+        # Require either a known pass or an explicit via-connector before masking,
+        # to avoid nuking legitimate "A-B" incident mentions.
+        if not has_pass:
+            return text_lower
+    def _repl(m: re.Match) -> str:
+        return " "
+    masked = _ROUTE_PAIR_RE.sub(_repl, text_lower)
+    # Also handle "tol padang-pekanbaru"-style without jalan/jalur prefix
+    masked2 = re.sub(r'\btol\s+([a-z]+)\s*[-–—/]\s*([a-z]+)', ' ', masked, flags=re.IGNORECASE)
+    return masked2
+
+
+def _norm_key_pattern(key: str) -> str:
+    """Word-boundary regex allowing hyphen or whitespace between words."""
+    parts = [re.escape(w) for w in key.split()]
+    inner = r'[-\s]+'.join(parts) if parts else re.escape(key)
+    return r'\b' + inner + r'\b'
+
+
+def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    r = 6371.0
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp = math.radians(lat2 - lat1)
+    dl = math.radians(lon2 - lon1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(a))
+
+
+def resolve_all_sumatra_locations(text: str, fallback_province: str = "Sumatera Utara") -> List[Dict[str, Any]]:
+    """Finds ALL distinct matched locations with specificity filtering.
+
+    - Tier 1 present  -> Tier 1 location(s) + Tier 2 outside masked road-name
+      descriptors (dedupe within 15 km).
+    - Else Tier 2     -> ALL matched Tier 2 Kabupaten/Kota (dedupe 15 km).
+    - Else Tier 3 only-> single fallback-province centroid entry (province_only).
+    - Else            -> [] (bare-province scan may still yield province_only).
+    """
+    clean_text = strip_bureau_and_dateline_noise(text or "")
+    text_lower = clean_text.lower()
+    masked_lower = _mask_route_endpoint_pairs_when_specific_pass_present(text_lower)
+
+    tier1_hits: List[Dict[str, Any]] = []
+    tier2_hits: List[Dict[str, Any]] = []
+    tier3_hit_key: Optional[str] = None
+
+    for key in _tiered_keys():
+        data = PAN_SUMATRA_GAZETTEER[key]
+        tier = data.get("tier", 2)
+        if key in BARE_PROVINCE_KEYS:
+            continue
+        pat = _norm_key_pattern(key)
+        # For specificity filtering, Tier-2 membership is tested against the
+        # masked text so road-name endpoints (pekanbaru/padang) don't count.
+        haystack = text_lower if tier == 1 else masked_lower
+        # Tier 3 macro-corridors also tested on masked text.
+        if tier == 3:
+            haystack = masked_lower
+        try:
+            if not re.search(pat, haystack):
+                continue
+        except re.error:
+            if key not in haystack:
+                continue
+        lat, lon = data["coords"]
+        entry = {
+            "name": key.title(),
+            "key": key,
+            "latitude": lat,
+            "longitude": lon,
+            "province": data["province"],
+            "corridor_segment": data["corridor"],
+            "location_precision": "exact_node",
+            "tier": tier,
+        }
+        if tier == 1:
+            tier1_hits.append(entry)
+        elif tier == 2:
+            tier2_hits.append(entry)
+        elif tier == 3 and tier3_hit_key is None:
+            tier3_hit_key = key
+
+    def _dedupe(entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        out: List[Dict[str, Any]] = []
+        for e in entries:
+            dup = False
+            for o in out:
+                if _haversine_km(e["latitude"], e["longitude"], o["latitude"], o["longitude"]) < 15.0:
+                    dup = True
+                    break
+            if not dup:
+                out.append(e)
+        return out
+
+    if tier1_hits:
+        combined = _dedupe(tier1_hits + tier2_hits)
+        result = []
+        for e in combined:
+            result.append({
+                "name": e["name"],
+                "latitude": e["latitude"],
+                "longitude": e["longitude"],
+                "province": e["province"],
+                "corridor_segment": e["corridor_segment"],
+                "location_precision": "exact_node",
+            })
+        return result
+
+    if tier2_hits:
+        deduped = _dedupe(tier2_hits)
+        # Drop bureau-HQ "Medan" when 2+ other specific kabupaten matched and
+        # the raw text carries bureau/agency attribution context.
+        names_lower = {e["name"].lower() for e in deduped}
+        if len(deduped) >= 3 or (len(deduped) >= 2 and "medan" in names_lower):
+            raw_lower = (text or "").lower()
+            if any(tok in raw_lower for tok in ("antara", "bpbd", "pemprov", "polda", "dateline", "medan (antara", "(antara)")):
+                filtered = [e for e in deduped if e["name"].lower() != "medan"]
+                # Only drop Medan if at least 2 specific non-Medan locations remain.
+                if len(filtered) >= 2:
+                    deduped = filtered
+        # Also handle case: medan matched but text title is multi-area summary
+        # naming other kabupaten — medan is HQ noise, drop it when 2+ others exist.
+        if len(deduped) >= 3:
+            non_medan = [e for e in deduped if e["name"].lower() != "medan"]
+            if len(non_medan) >= 2:
+                deduped = non_medan
+        return [
+            {
+                "name": e["name"],
+                "latitude": e["latitude"],
+                "longitude": e["longitude"],
+                "province": e["province"],
+                "corridor_segment": e["corridor_segment"],
+                "location_precision": "exact_node",
+            }
+            for e in deduped
+        ]
+
+    if tier3_hit_key is not None:
+        lat, lon = PROVINCE_CENTROIDS.get(fallback_province, (None, None))
+        if lat is None:
+            lat, lon = -1.0, 102.0
+        return [{
+            "name": tier3_hit_key.title(),
+            "latitude": lat,
+            "longitude": lon,
+            "province": fallback_province,
+            "corridor_segment": PAN_SUMATRA_GAZETTEER[tier3_hit_key]["corridor"],
+            "location_precision": "province_only",
+        }]
+
+    # Bare-province scan → province_only.
+    for needle, canon in sorted(BARE_PROVINCE_ALIASES.items(), key=lambda kv: len(kv[0]), reverse=True):
+        if re.search(r'\b' + re.escape(needle) + r'\b', text_lower):
+            lat, lon = PROVINCE_CENTROIDS.get(canon, (None, None))
+            if lat is None:
+                continue
+            return [{
+                "name": canon,
+                "latitude": lat,
+                "longitude": lon,
+                "province": canon,
+                "corridor_segment": "Jalur Arteri Logistik Sumatera",
+                "location_precision": "province_only",
+            }]
+    return []
+
 
 def resolve_sumatra_location_and_corridor(text: str, fallback_province: str = "Sumatera Utara") -> Dict[str, Any]:
     """
@@ -186,70 +392,25 @@ def resolve_sumatra_location_and_corridor(text: str, fallback_province: str = "S
     from article text using the pan-Sumatra gazetteer.
 
     - Strips bureau/dateline noise before matching.
-    - Specific gazetteer nodes (ports, cities, regencies, corridors, straits)
-      yield `location_precision="exact_node"`.
+    - Uses Tier-1-first specificity hierarchy with route-endpoint demotion.
+    - Specific gazetteer nodes yield `location_precision="exact_node"`.
     - Bare province-name mentions only yield `location_precision="province_only"`.
     - CRITICAL: when nothing matches, NO blind fallback-centroid assignment is
       performed; returns `is_geocoded=False` with None coordinates.
     """
-    clean_text = strip_bureau_and_dateline_noise(text or "")
-    text_lower = clean_text.lower()
-
-    # Priority matching: Check longest key matches first to avoid sub-string shadowing
-    sorted_keys = sorted(PAN_SUMATRA_GAZETTEER.keys(), key=lambda k: len(k), reverse=True)
-
-    province_candidate = None
-    for key in sorted_keys:
-        if key in text_lower:
-            if key in BARE_PROVINCE_KEYS:
-                # Bare province mention — keep as fallback candidate, keep
-                # searching for a more specific exact node.
-                if province_candidate is None:
-                    data = PAN_SUMATRA_GAZETTEER[key]
-                    lat, lon = data["coords"]
-                    province_candidate = {
-                        "matched_node": key.title(),
-                        "latitude": lat,
-                        "longitude": lon,
-                        "province": data["province"],
-                        "corridor_segment": data["corridor"],
-                        "is_geocoded": True,
-                        "location_precision": "province_only",
-                    }
-                continue
-            data = PAN_SUMATRA_GAZETTEER[key]
-            lat, lon = data["coords"]
-            return {
-                "matched_node": key.title(),
-                "latitude": lat,
-                "longitude": lon,
-                "province": data["province"],
-                "corridor_segment": data["corridor"],
-                "is_geocoded": True,
-                "location_precision": "exact_node",
-            }
-
-    if province_candidate is not None:
-        return province_candidate
-
-    # Bare province-name scan (province_only): the province name itself may not be
-    # a gazetteer key (e.g. "Sumatera Barat"), so check aliases explicitly with
-    # word boundaries. Only when genuinely mentioned in the cleaned body.
-    import re as _re
-    for needle, canon in sorted(BARE_PROVINCE_ALIASES.items(), key=lambda kv: len(kv[0]), reverse=True):
-        if _re.search(r'\b' + _re.escape(needle) + r'\b', text_lower):
-            lat, lon = PROVINCE_CENTROIDS.get(canon, (None, None))
-            if lat is None:
-                continue
-            return {
-                "matched_node": canon,
-                "latitude": lat,
-                "longitude": lon,
-                "province": canon,
-                "corridor_segment": "Jalur Arteri Logistik Sumatera",
-                "is_geocoded": True,
-                "location_precision": "province_only",
-            }
+    locations = resolve_all_sumatra_locations(text, fallback_province=fallback_province)
+    if locations:
+        top = locations[0]
+        return {
+            "matched_node": top["name"],
+            "latitude": top["latitude"],
+            "longitude": top["longitude"],
+            "province": top["province"],
+            "corridor_segment": top["corridor_segment"],
+            "is_geocoded": True,
+            "location_precision": top.get("location_precision", "exact_node"),
+            "affected_locations": locations,
+        }
 
     # CRITICAL FIX: No blind fallback-centroid assignment.
     return {
@@ -260,4 +421,5 @@ def resolve_sumatra_location_and_corridor(text: str, fallback_province: str = "S
         "corridor_segment": "unknown",
         "is_geocoded": False,
         "location_precision": "none",
+        "affected_locations": [],
     }

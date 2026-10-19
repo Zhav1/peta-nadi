@@ -9,22 +9,33 @@ logger = logging.getLogger(__name__)
 
 from app.nlp.gazetteer_data import PAN_SUMATRA_GAZETTEER
 
-LOCATION_GAZETTEER = list(PAN_SUMATRA_GAZETTEER.keys())
+LOCATION_GAZETTEER = sorted(
+    PAN_SUMATRA_GAZETTEER.keys(),
+    key=lambda k: (PAN_SUMATRA_GAZETTEER[k].get("tier", 2), -len(k)),
+)
 
 def extract_locations_gazetteer(text: str) -> List[str]:
     """Extract location names from text using a regex gazetteer (fast path)."""
     if not text or not text.strip():
         return []
     try:
-        from app.nlp.geocoding_service import strip_bureau_and_dateline_noise
+        from app.nlp.geocoding_service import (
+            strip_bureau_and_dateline_noise,
+            _mask_route_endpoint_pairs_when_specific_pass_present,
+        )
         text = strip_bureau_and_dateline_noise(text)
+        masked = _mask_route_endpoint_pairs_when_specific_pass_present(text.lower())
     except Exception:
-        pass
+        masked = (text or "").lower()
     found = []
-    text_lower = text.lower()
+    text_lower = masked
     for loc in LOCATION_GAZETTEER:
-        # Match word boundaries to prevent substring collisions
-        pattern = r'\b' + re.escape(loc) + r'\b'
+        # Match word boundaries to prevent substring collisions; allow
+        # hyphen-or-whitespace between words so "sitinjau-lauik" matches.
+        import re as _re
+        parts = [_re.escape(w) for w in loc.split()]
+        inner = r'[-\s]+'.join(parts) if parts else _re.escape(loc)
+        pattern = r'\b' + inner + r'\b'
         if re.search(pattern, text_lower):
             found.append(loc.title())
     return found

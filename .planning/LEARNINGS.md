@@ -143,6 +143,25 @@ The following items are prioritized for subsequent development phases:
 - Orchestration: main orchestrator strictly delegates tool/research/implementation/git work to `opencode-go/muse-spark-1.3#high` subagents.
 
 ### Open Concerns
-1. Confirm live Render `GET /api/v1/news/live` cleans/re-tiers legacy polluted rows on read.
+1. Confirm live Render `GET /api/v1/news/live` fans out N zones per multi-location item and legacy v1 rows re-tier on read.
 2. Confirm `OPENCODE_API_KEY` is set on Render for the live LLM tiering overlay.
-3. Browser E2E on Vercel: Red/Yellow checkboxes, zone-click Audit Trail, Pelabuhan Asal alternate-port rerouting.
+3. Browser E2E on Vercel: multi-zone fan-out click-through to parent Audit Trail, `Wilayah Terdampak` pills, `Pengusaha: Tol...` DROPPED absence from map.
+
+---
+
+## 7. Phase 73: Toponym Hierarchy, Predicate Gate & Multi-Regency Fan-Out
+
+### Decisions
+1. **Tier-first gazetteer ordering**: `_tiered_keys()` and `LOCATION_GAZETTEER` sort by `(tier, -len(k))` — string length breaks ties only within a tier, never across tiers. Completed Pan-Sumatra Kabupaten coverage (`sipirok`, `asahan`, `deli serdang`, `langkat`, `tapanuli selatan`).
+2. **Route-endpoint masking**: `Jalan Lintas A-B` / `tol A-B` substrings blanked when a Tier-1 pass or explicit `via` is present; `via`/pass precondition prevents nuking legitimate `A-B` mentions.
+3. **Two-factor crisis gate**: `STRICT_CRISIS_PREDICATES` (physical actions only) required; `ECONOMIC_OPINION_CEREMONIAL_EXCLUSIONS` veto unless `PHYSICAL_BLOCKAGE_PREDICATES` override. Bare infrastructure nouns never count as a hazard signal alone.
+4. **Enrich-then-extract + 1-to-N fan-out**: canonical-URL lead fetch on short/title-only/multi-area items; `affected_locations[]` end-to-end (extractor → JSONB → API → N map zones + pills).
+5. **Schema version invalidation**: `EXTRACTION_SCHEMA_VERSION = 2`; `schema_version != 2` rows auto re-tier on read and force re-extract in the ingestor — the sanctioned cache-invalidation path for all future NLP rule changes.
+
+### Constraints & Deployment Context
+- Frontend: `https://pre-hub.vercel.app`; Backend: `https://peta-nadi.onrender.com`; DB: Supabase `news_articles` (`ground_truth_metrics` JSONB carries `affected_locations`, `schema_version`; no migration, no new columns).
+- Deterministic layer only: zero LLM prompt/contract changes in Phase 73.
+
+### Open Concerns
+1. Confirm legacy v1 rows (Jambi-centroid fallbacks, false Yellows, single-point shapes) visibly self-heal on live Render read.
+2. Browser E2E on Vercel: N-zone fan-out rendering, parent Audit Trail linkage, `Wilayah Terdampak` pills on Evidence tab + News Cards.

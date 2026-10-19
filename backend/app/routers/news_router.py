@@ -125,10 +125,12 @@ async def get_live_news(
                 except Exception:
                     _gtm = {}
             for _k in ("zone_tier", "tier_reason", "custom_hazard_label",
-                       "impact_profile", "is_geocoded", "location_precision"):
+                       "impact_profile", "is_geocoded", "location_precision",
+                       "affected_locations", "schema_version"):
                 if _row.get(_k) is None and isinstance(_gtm, dict) and _gtm.get(_k) is not None:
                     _row[_k] = _gtm[_k]
-            if not _row.get("zone_tier") and _router_re_tier is not None:
+            _sv_row = _gtm.get("schema_version") if isinstance(_gtm, dict) else None
+            if (not _row.get("zone_tier") or _sv_row != 2) and _router_re_tier is not None:
                 _re = _router_re_tier({
                     "title": _row.get("title", ""),
                     "raw_description": _row.get("raw_description") or _row.get("summary") or "",
@@ -139,9 +141,14 @@ async def get_live_news(
                 })
                 for _k in ("zone_tier", "tier_reason", "custom_hazard_label",
                            "impact_profile", "is_geocoded", "location_precision",
-                           "latitude", "longitude", "incident_type", "severity"):
-                    if _re.get(_k) is not None and (_row.get(_k) is None or _k.startswith("zone") or _k.startswith("tier")):
+                           "latitude", "longitude", "incident_type", "severity",
+                           "affected_locations"):
+                    if _re.get(_k) is not None and (_row.get(_k) is None or _k.startswith("zone") or _k.startswith("tier") or _sv_row != 2):
                         _row[_k] = _re[_k]
+                try:
+                    _row["ground_truth_metrics"] = _re.get("ground_truth_metrics", _row.get("ground_truth_metrics"))
+                except Exception:
+                    pass
             if _row.get("zone_tier") == "DROPPED_IRRELEVANT":
                 continue
             if _row.get("is_geocoded") is False:

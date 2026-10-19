@@ -117,6 +117,20 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
               </span>
             </div>
           )}
+          {crisis.affected_locations && crisis.affected_locations.length > 0 && (
+            <div className="pt-1 space-y-1.5">
+              <span className="text-slate-400 block text-[11px] uppercase tracking-wider font-mono">
+                Wilayah Terdampak ({crisis.affected_locations.length} Lokasi):
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {crisis.affected_locations.map((loc, idx) => (
+                  <span key={`${loc.name}-${idx}`} className="px-2 py-0.5 rounded text-[11px] font-sans bg-cyan-500/10 border border-cyan-500/30 text-cyan-200" title={loc.corridor_segment || loc.name}>
+                    📍 {loc.name}{loc.corridor_segment ? ` — ${loc.corridor_segment}` : ''}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
       

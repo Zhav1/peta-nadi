@@ -564,7 +564,41 @@ def fetch_existing_processed_articles_map(article_ids: List[str], links: List[st
             except Exception as e:
                 logger.debug(f"fetch_existing by link skipped: {e}")
         for row in fetched:
-            remember_processed_article(row)
+            try:
+                row = _unpack_ground_truth_metrics(dict(row))
+            except Exception:
+                pass
+            # Stale v1 rows (schema_version != 2) are re-classified on read so
+            # old cached rows never serve stale tiering/geocoding.
+            try:
+                _gtm = row.get("ground_truth_metrics") or {}
+                if isinstance(_gtm, str):
+                    import json as _js2
+                    try:
+                        _gtm = _js2.loads(_gtm)
+                    except Exception:
+                        _gtm = {}
+                if isinstance(_gtm, dict) and _gtm.get("schema_version") != 2:
+                    from app.nlp.news_extractor import _fast_heuristic_extraction as _re_v2
+                    _art = {
+                        "title": row.get("title", ""),
+                        "raw_description": row.get("raw_description") or row.get("summary") or "",
+                        "source": row.get("source", "Media"),
+                        "source_tier": row.get("source_tier", "TIER_2_AUTHORITATIVE_PRESS"),
+                        "province": row.get("province", "Sumatera"),
+                        "link": row.get("link", ""),
+                    }
+                    _re = _re_v2(_art)
+                    for _k in ("zone_tier", "tier_reason", "custom_hazard_label", "impact_profile",
+                               "is_geocoded", "location_precision", "latitude", "longitude",
+                               "incident_type", "severity", "corridor_nodes", "corridor_segment",
+                               "affected_locations"):
+                        if _re.get(_k) is not None:
+                            row[_k] = _re.get(_k)
+                    row["ground_truth_metrics"] = _re.get("ground_truth_metrics", row.get("ground_truth_metrics"))
+                    remember_processed_article(row)
+            except Exception:
+                pass
             if row.get("id"):
                 result[str(row["id"])] = row
             if row.get("link"):
@@ -735,7 +769,7 @@ async def upsert_articles_to_supabase(articles: List[Dict[str, Any]]) -> int:
         # so Supabase upserts never fail with unknown-column errors.
         gtm = dict(a.get("ground_truth_metrics") or {})
         for _k in ("zone_tier", "tier_reason", "custom_hazard_label", "impact_profile",
-                   "is_geocoded", "location_precision"):
+                   "is_geocoded", "location_precision", "affected_locations", "schema_version"):
             if a.get(_k) is not None and _k not in gtm:
                 gtm[_k] = a.get(_k)
         # Also mirror nested impact_profile fields if present at top level
@@ -751,6 +785,13 @@ async def upsert_articles_to_supabase(articles: List[Dict[str, Any]]) -> int:
             gtm["is_geocoded"] = a.get("is_geocoded")
         if a.get("location_precision") is not None:
             gtm["location_precision"] = a.get("location_precision")
+        if a.get("affected_locations") is not None:
+            gtm["affected_locations"] = a.get("affected_locations")
+        try:
+            from app.nlp.news_extractor import EXTRACTION_SCHEMA_VERSION as _SV
+            gtm["schema_version"] = _SV
+        except Exception:
+            gtm.setdefault("schema_version", 2)
 
         record = {
             "id": a.get("id"),
@@ -814,12 +855,117 @@ def _unpack_ground_truth_metrics(row: Dict[str, Any]) -> Dict[str, Any]:
         if not isinstance(gtm, dict):
             return row
         for _k in ("zone_tier", "tier_reason", "custom_hazard_label", "impact_profile",
-                   "is_geocoded", "location_precision"):
+                   "is_geocoded", "location_precision", "affected_locations", "schema_version"):
             if row.get(_k) is None and gtm.get(_k) is not None:
                 row[_k] = gtm[_k]
+        # Re-run v2 heuristic when cached/DB rows carry a stale schema version.
+        if gtm.get("schema_version") != 2:
+            try:
+                from app.nlp.news_extractor import _fast_heuristic_extraction as _re_tier_v2
+                legacy_art = {
+                    "title": row.get("title", ""),
+                    "raw_description": row.get("raw_description") or row.get("summary") or "",
+                    "source": row.get("source", "Media"),
+                    "source_tier": row.get("source_tier", "TIER_2_AUTHORITATIVE_PRESS"),
+                    "province": row.get("province", "Sumatera"),
+                    "link": row.get("link", ""),
+                }
+                re_tiered = _re_tier_v2(legacy_art)
+                for _k in ("zone_tier", "tier_reason", "custom_hazard_label", "impact_profile",
+                           "is_geocoded", "location_precision", "latitude", "longitude",
+                           "incident_type", "severity", "corridor_nodes", "corridor_segment",
+                           "affected_locations"):
+                    if re_tiered.get(_k) is not None:
+                        row[_k] = re_tiered.get(_k)
+                row["ground_truth_metrics"] = re_tiered.get("ground_truth_metrics", row.get("ground_truth_metrics"))
+            except Exception:
+                pass
     except Exception:
         pass
     return row
+
+
+def extract_lead_text_from_html(html: str) -> str:
+    """Extracts og:description / meta description + first 1-2 <p> lead text."""
+    if not html or not isinstance(html, str):
+        return ""
+    lead = ""
+    try:
+        m = re.search(r'<meta[^>]+property=["\']og:description["\'][^>]*content=["\'](.*?)["\']', html, flags=re.IGNORECASE | re.DOTALL)
+        if m:
+            lead = m.group(1).strip()
+        if not lead:
+            m2 = re.search(r'<meta[^>]+name=["\']description["\'][^>]*content=["\'](.*?)["\']', html, flags=re.IGNORECASE | re.DOTALL)
+            if m2:
+                lead = m2.group(1).strip()
+        if not lead:
+            m3 = re.search(r'<meta[^>]+content=["\'](.*?)["\'][^>]*property=["\']og:description["\']', html, flags=re.IGNORECASE | re.DOTALL)
+            if m3:
+                lead = m3.group(1).strip()
+        paras = re.findall(r'<p[^>]*>(.*?)</p>', html, flags=re.IGNORECASE | re.DOTALL)
+        clean_paras = []
+        for p in paras[:4]:
+            t = re.sub(r'<[^>]+>', ' ', p)
+            t = re.sub(r'\s+', ' ', t).strip()
+            if len(t) < 40:
+                continue
+            low = t.lower()
+            if any(b in low for b in ("copyright", "baca juga", "advertisement", "iklan", "langganan")):
+                continue
+            clean_paras.append(t)
+            if len(clean_paras) >= 2:
+                break
+        para_text = " ".join(clean_paras)
+        if lead and para_text:
+            # Prefer the longer, more informative of the two, else combine.
+            if len(para_text) > len(lead) * 1.5:
+                return para_text[:1000]
+            return (lead + " " + para_text)[:1000]
+        return (lead or para_text)[:1000]
+    except Exception:
+        return lead
+
+
+async def enrich_article_description_if_needed(article: Dict[str, Any], timeout: float = 5.0) -> Dict[str, Any]:
+    """Fetches the article URL to enrich short/title-only descriptions.
+
+    Triggers when raw_description is empty, equal to title, shorter than
+    90 chars, OR when the title carries multi-area summary phrases
+    ("daerah", "kabupaten", "wilayah", "titik", "lokasi", "catat").
+    Resolves the canonical URL and extracts the meta/lead description so
+    downstream extraction sees laid-out multi-regency bodies.
+    """
+    try:
+        title = (article.get("title") or "").strip()
+        desc = (article.get("raw_description") or article.get("summary") or "").strip()
+        needs = (
+            not desc
+            or desc == title
+            or len(desc) < 90
+            or any(w in title.lower() for w in ("daerah", "kabupaten", "wilayah", "titik", "lokasi", "catat"))
+        )
+        if not needs:
+            return article
+        raw_url = article.get("link") or article.get("url") or ""
+        if not raw_url:
+            return article
+        canonical = await resolve_canonical_article_url_async(raw_url, title, article.get("source", ""))
+        if canonical:
+            article["link"] = canonical
+            article["url"] = canonical
+            raw_url = canonical
+        try:
+            async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+                resp = await client.get(raw_url, headers={"User-Agent": "Mozilla/5.0 (PreHub Logistics Bot 2.0)"})
+                if resp.status_code == 200 and resp.text:
+                    lead = extract_lead_text_from_html(resp.text)
+                    if lead and len(lead) > len(desc):
+                        article["raw_description"] = lead
+        except Exception as e:
+            logger.debug(f"Description enrichment skipped for {raw_url}: {e}")
+    except Exception:
+        pass
+    return article
 
 
 async def fetch_news_from_supabase(limit: int = 50, province: Optional[str] = None, severity: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -858,8 +1004,22 @@ async def fetch_news_from_supabase(limit: int = 50, province: Optional[str] = No
             row = _unpack_ground_truth_metrics(dict(row))
         except Exception:
             continue
-        # Legacy rows missing zone_tier: re-run fast heuristic on read.
-        if not row.get("zone_tier") and _re_tier is not None:
+        # Legacy rows missing zone_tier or carrying stale v1 schema: re-run
+        # fast heuristic on read (schema_version != 2 forces v2 re-tier).
+        _needs_retier = (not row.get("zone_tier"))
+        try:
+            _gtm_chk = row.get("ground_truth_metrics") or {}
+            if isinstance(_gtm_chk, str):
+                import json as _js3
+                try:
+                    _gtm_chk = _js3.loads(_gtm_chk)
+                except Exception:
+                    _gtm_chk = {}
+            if isinstance(_gtm_chk, dict) and _gtm_chk.get("schema_version") != 2:
+                _needs_retier = True
+        except Exception:
+            pass
+        if _needs_retier and _re_tier is not None:
             try:
                 legacy_art = {
                     "title": row.get("title", ""),
@@ -872,16 +1032,32 @@ async def fetch_news_from_supabase(limit: int = 50, province: Optional[str] = No
                 re_tiered = _re_tier(legacy_art)
                 for _k in ("zone_tier", "tier_reason", "custom_hazard_label", "impact_profile",
                            "is_geocoded", "location_precision", "latitude", "longitude",
-                           "incident_type", "severity", "corridor_nodes", "corridor_segment"):
+                           "incident_type", "severity", "corridor_nodes", "corridor_segment",
+                           "affected_locations"):
                     if re_tiered.get(_k) is not None:
                         # Only overwrite coordinates/geo when legacy row has none
-                        # or was a blind fallback centroid without a real location.
+                        # or was a blind fallback centroid without a real location,
+                        # or carries a stale v1 schema version.
                         if _k in ("latitude", "longitude", "corridor_segment", "corridor_nodes",
-                                  "province", "region"):
-                            if row.get("latitude") is None or row.get("longitude") is None or row.get("zone_tier") is None:
+                                  "province", "region", "affected_locations"):
+                            _sv = None
+                            try:
+                                _g = row.get("ground_truth_metrics") or {}
+                                if isinstance(_g, dict):
+                                    _sv = _g.get("schema_version")
+                            except Exception:
+                                pass
+                            if row.get("latitude") is None or row.get("longitude") is None or row.get("zone_tier") is None or _sv != 2:
+                                row[_k] = re_tiered.get(_k)
+                            if _k == "affected_locations":
                                 row[_k] = re_tiered.get(_k)
                         else:
                             row[_k] = re_tiered.get(_k)
+                # Always refresh ground_truth_metrics to v2.
+                try:
+                    row["ground_truth_metrics"] = re_tiered.get("ground_truth_metrics", row.get("ground_truth_metrics"))
+                except Exception:
+                    pass
             except Exception:
                 pass
         # Filter DROPPED_IRRELEVANT or un-geocoded bureau-centroid noise.

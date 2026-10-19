@@ -2019,6 +2019,37 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 
 ---
 
+## Phase 73: Toponym Specificity Hierarchy, Strict Crisis Predicate Gate & Multi-Regency Zone Fan-Out
+
+**Goal:** Fix 4 user-reported live misclassifications: `len(k)` sorting pinning Sipirok reports to the Jambi centroid, `Jalan Lintas A-B` endpoints shadowing mountain passes, bare infra nouns (`tol`, `pelabuhan`) raising false Yellow zones on opinion pieces, and single-point schema collapsing multi-regency reports into one dot.
+**Status:** COMPLETE ✅
+**Plans:** `73-PLAN.md`, `73-WALKTHROUGH.md`, `73-01-SUMMARY.md`, `73-LEARNINGS.md`
+
+### Deliverables
+
+- [x] **WP1 - 4-Tier Toponym Hierarchy + Route-Endpoint Masking + Gazetteer Completion**:
+  - `backend/app/nlp/gazetteer_data.py`: 4-tier contract (Tier 1 pinpoint > Tier 2 Kabupaten/Kota > Tier 3 macro-corridor > Tier 4 bare province); added `sipirok` Tier 1 (`1.6050, 99.2778`) + missing Kabupaten keys (`asahan`, `deli serdang`, `langkat`, `tapanuli selatan`).
+  - `backend/app/nlp/geocoding_service.py`: `_tiered_keys()` sorts `(tier, -len(k))`; `_SPECIFIC_PASS_KEYS` + `_ROUTE_PAIR_RE` + `_mask_route_endpoint_pairs_when_specific_pass_present()` blanks `Jalan Lintas A-B` / `tol A-B` when a Tier-1 pass or `via` is present; `resolve_all_sumatra_locations()` fans out ALL locations (15 km dedupe, Medan HQ-noise drop); `geocode()` iterates in tier order.
+  - `backend/app/nlp/ner_pipeline.py`: `LOCATION_GAZETTEER` sorted `(tier, -len(k))` with same bureau-strip + endpoint-masking.
+- [x] **WP2 - Strict Two-Factor Crisis Predicate Gate**:
+  - `backend/app/nlp/news_extractor.py`: `STRICT_CRISIS_PREDICATES` (physical-disruption actions only) + `ECONOMIC_OPINION_CEREMONIAL_EXCLUSIONS` (opinion/ceremonial veto) + `PHYSICAL_BLOCKAGE_PREDICATES` (sole override). Bare nouns (`tol`, `pelabuhan`, `truk`, ...) NEVER trigger alone; `fails_crisis_gate` → `DROPPED_IRRELEVANT`.
+- [x] **WP3 - Multi-Location Extraction + Lead Scraping + Schema v2**:
+  - `backend/app/services/news_aggregator.py`: `extract_lead_text_from_html()` (og/meta + lead `<p>`) + `enrich_article_description_if_needed()` (empty/title-equal/<90 chars/multi-area title markers); stale-v1 (`schema_version != 2`) re-tier on read and write.
+  - `backend/app/services/unified_news_ingestor.py`: `asyncio.gather` enrichment of unseen items; forced re-extraction of stale v1 rows. `EXTRACTION_SCHEMA_VERSION = 2` packed into every extraction (existing `ground_truth_metrics` JSONB, no migration).
+  - `backend/app/routers/news_router.py`: `affected_locations` / `schema_version` unpacked into live payloads.
+- [x] **WP4 - Frontend Multi-Zone Map Fan-Out**:
+  - `frontend/lib/types.ts` + `frontend/hooks/useNewsVerification.ts`: `AffectedLocationNode[]` end-to-end. `frontend/components/dashboard/DashboardClient.tsx`: `combinedDisasterZones` renders N Red/Yellow polygons per multi-location report, each opening the parent Audit Trail. `frontend/components/sidebar/EvidenceTab.tsx`: `Wilayah Terdampak (N Lokasi)` pills.
+
+### Verification Criteria
+
+- [x] Sipirok landslide → `(1.6050, 99.2778)` exact_node, never Jambi centroid.
+- [x] Sitinjau Lauik report → pass pinpoint; `pekanbaru`/`padang` endpoints masked.
+- [x] `Pengusaha: Tol Padang-Pekanbaru dukung perekonomian Sumbar` → `DROPPED_IRRELEVANT`; true closures still gate `True`.
+- [x] BPBD 3-daerah report → N zones (Asahan, Deli Serdang, Langkat) + `Wilayah Terdampak` pills.
+- [x] `npx tsc --noEmit`: 0 errors; Supabase schema untouched (JSONB-only).
+
+---
+
 ## Backlog (Post-Hackathon / v2 & New Context Window Backlog)
 
 ### Active Remediation & Audit Backlog (For New Context Window)

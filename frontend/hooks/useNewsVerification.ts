@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 
-import type { HazardImpactProfile } from '@/lib/types';
+import type { HazardImpactProfile, AffectedLocationNode } from '@/lib/types';
 
 export interface NewsItem {
   id: string;
@@ -41,6 +41,7 @@ export interface NewsItem {
   location_precision?: string;
   corridor_segment?: string;
   corridor_nodes?: string[];
+  affected_locations?: AffectedLocationNode[];
 }
 
 export interface MarketRegimeData {
@@ -219,9 +220,9 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     source_name: 'ANTARA Sumatera Barat',
     headline: 'Banjir Rendam Jalinsum Sitinjau Lauik, Arus Padang-Solok Terputus Total',
     summary: 'BPBD Sumbar melaporkan banjir dan longsor menutup Jalinsum kilometer 26 Sitinjau Lauik, ekskavator disiagakan dan arus Padang-Solok dialihkan.',
-    location_name: 'Jalinsum Sitinjau Lauik, Padang',
-    lat: -0.9589,
-    lon: 100.4856,
+    location_name: 'Sitinjau Lauik KM 22 (Jalur Padang - Solok)',
+    lat: -0.9525,
+    lon: 100.5183,
     pubDate: '18 Okt 2026, 06:45 WIB',
     category: 'DISASTER_LOGISTICS',
     incident_type: 'flood',
@@ -244,7 +245,8 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     is_geocoded: true,
     location_precision: 'road_km',
     corridor_segment: 'Padang — Solok',
-    corridor_nodes: ['padang', 'solok'],
+    corridor_nodes: ['sitinjau lauik'],
+    affected_locations: [{ name: 'Sitinjau Lauik', latitude: -0.9525, longitude: 100.5183, corridor_segment: 'Sitinjau Lauik KM 22 (Padang - Solok)', location_precision: 'exact_node' }],
   },
   {
     id: 'FALLBACK-KNO-05',
@@ -313,6 +315,45 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
     location_precision: 'toll_road',
     corridor_segment: 'Belawan — Medan (Tol Belmera)',
     corridor_nodes: ['belawan', 'medan'],
+  },
+  {
+    id: 'FALLBACK-SUMUT-07',
+    source_type: 'OFFICIAL_NEWS',
+    source_tier: 'TIER_1_OFFICIAL',
+    source_name: 'ANTARA Sumatera Utara',
+    headline: 'BPBD Sumut Catat 3 Daerah Terdampak Cuaca Ekstrem di Koridor Pantai Timur',
+    summary: 'BPBD Sumut melaporkan cuaca ekstrem berdampak di Kabupaten Asahan, Deli Serdang, dan Langkat; tim siaga memantau koridor Pantai Timur dan distribusi logistik pangan.',
+    location_name: 'Koridor Pantai Timur Sumut',
+    lat: 3.4293,
+    lon: 98.9966,
+    pubDate: '18 Okt 2026, 11:20 WIB',
+    category: 'DISASTER_LOGISTICS',
+    incident_type: 'other_disruption',
+    hazardType: 'other_disruption',
+    severity: 'medium',
+    temporal_phase: 'active_disruption',
+    lead_time_hours: 0,
+    commodities_affected: ['Beras', 'Minyak Goreng'],
+    ground_truth_metrics: { lane_status: 'CAUTION_ADVISORY' },
+    verification_status: 'CORROBORATED_OFFICIAL',
+    confidence_score: 0.9,
+    commodity_name: 'Beras, Minyak Goreng',
+    link: 'https://sumut.antaranews.com/search?q=cuaca+ekstrem+pantai+timur',
+    url: 'https://sumut.antaranews.com/search?q=cuaca+ekstrem+pantai+timur',
+    link_alive: 'alive',
+    zone_tier: 'YELLOW_CLARIFY',
+    tier_reason: 'BPBD Sumut mencatat 3 kabupaten terdampak cuaca ekstrem; status waspada koridor Pantai Timur, perlu klarifikasi berkala sebelum reroute penuh.',
+    custom_hazard_label: 'Cuaca Ekstrem Pantai Timur',
+    impact_profile: { affected_modalities: ['land'], passability: 'CAUTION', estimated_delay_hours: 3 },
+    is_geocoded: true,
+    location_precision: 'multi_regency',
+    corridor_segment: 'Pantai Timur Sumut',
+    corridor_nodes: ['asahan', 'deli serdang', 'langkat'],
+    affected_locations: [
+      { name: 'Kabupaten Asahan', latitude: 2.9833, longitude: 99.6167, corridor_segment: 'Koridor Pantai Timur', location_precision: 'regency' },
+      { name: 'Kabupaten Deli Serdang', latitude: 3.5547, longitude: 98.8756, corridor_segment: 'Koridor Pantai Timur', location_precision: 'regency' },
+      { name: 'Kabupaten Langkat', latitude: 3.7506, longitude: 98.4486, corridor_segment: 'Koridor Pantai Timur', location_precision: 'regency' },
+    ],
   },
 ];
 
@@ -425,6 +466,19 @@ export function useNewsVerification() {
               const lat = latRaw != null && latRaw !== '' ? Number(latRaw) : undefined;
               const lon = lonRaw != null && lonRaw !== '' ? Number(lonRaw) : undefined;
               const corridor_nodes = Array.isArray(a.corridor_nodes) ? a.corridor_nodes : (Array.isArray(gtm.corridor_nodes) ? gtm.corridor_nodes : undefined);
+              const rawAffected = Array.isArray(a.affected_locations) ? a.affected_locations : (Array.isArray(gtm.affected_locations) ? gtm.affected_locations : undefined);
+              const affected_locations: AffectedLocationNode[] | undefined =
+                rawAffected && rawAffected.length > 0
+                  ? rawAffected
+                      .filter((loc: any) => loc && typeof loc.name === 'string' && Number.isFinite(Number(loc.latitude)) && Number.isFinite(Number(loc.longitude)))
+                      .map((loc: any) => ({
+                        name: String(loc.name),
+                        latitude: Number(loc.latitude),
+                        longitude: Number(loc.longitude),
+                        ...(loc.corridor_segment ? { corridor_segment: String(loc.corridor_segment) } : {}),
+                        ...(loc.location_precision ? { location_precision: String(loc.location_precision) } : {}),
+                      }))
+                  : undefined;
 
               return {
                 id: a.id || `NEWS-${Math.random().toString(36).substr(2, 6)}`,
@@ -461,6 +515,7 @@ export function useNewsVerification() {
                 location_precision: location_precision,
                 corridor_segment: a.corridor_segment || gtm.corridor_segment,
                 corridor_nodes: corridor_nodes,
+                affected_locations: affected_locations,
               } as NewsItem;
             }).filter((n: NewsItem) => {
               if (n.zone_tier === 'DROPPED_IRRELEVANT') return false;

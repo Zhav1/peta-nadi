@@ -112,6 +112,13 @@ Multisource Telemetry (BMKG Sensor, TomTom Speed Flow, Google News RSS, PIHPS Pr
 - **10-Hazard Dynamic Impact Model:** Canonical `flood`, `port_closure`, `marine_wave`, `road_closure`, `landslide`, `earthquake`, `volcanic_eruption`, `wildfire`, `congestion`, `other_disruption` with `custom_hazard_label`, `affected_modalities`, `passability`, `estimated_delay_hours` threaded through reasoning, assessment, and routing.
 - **Port-Closure Alternate-Port Failover:** `isSeaportBlockedByHazard()` (`max(radiusKm + 8, 22)` km capture) + `findClosestOpenSeaport()` drive automatic `Truck Feeder -> Next Open Port -> Sea` intermodal failover for `Penutupan Pelabuhan`, with per-route tradeoff analysis (Pros, Cons, time-delta, cost-delta) on every route card.
 
+### 14. Toponym Specificity Hierarchy, Crisis Predicate Gate & Multi-Regency Fan-Out (Phase 73)
+- **4-Tier Toponym Ordering:** Gazetteer candidates rank by `(tier, -len)` — Tier-1 pinpoints (Sitinjau Lauik, Sipirok, Kelok 9) outrank Tier-2 Kabupaten/Kota, which outrank Tier-3 macro-corridors (Jalintim/Jalinteng/JTTS); string length breaks ties only within a tier. Completed Pan-Sumatra Kabupaten coverage (`sipirok` at `1.6050, 99.2778`, `asahan`, `deli serdang`, `langkat`, `tapanuli selatan`).
+- **Route-Endpoint Masking:** `Jalan Lintas A-B` / `tol A-B` road-name substrings are blanked before Tier-2 matching when a Tier-1 pass or explicit `via` is present, so `"Pekanbaru-Padang"` never shadows `"Sitinjau Lauik"`.
+- **Two-Factor Crisis Gate:** `STRICT_CRISIS_PREDICATES` (physical-disruption actions only) is the sole hazard signal; `ECONOMIC_OPINION_CEREMONIAL_EXCLUSIONS` vetoes opinion/ceremonial pieces unless a `PHYSICAL_BLOCKAGE_PREDICATE` overrides. Bare nouns (`tol`, `pelabuhan`, `truk`) never trigger alone — `"Pengusaha: Tol Padang-Pekanbaru dukung perekonomian Sumbar"` is `DROPPED_IRRELEVANT`.
+- **Multi-Location Fan-Out:** `resolve_all_sumatra_locations()` returns ALL distinct locations (15 km dedupe, Medan HQ-noise drop) as `affected_locations[]`; lead-paragraph meta scraping (`og:description` + lead `<p>`) enriches title-only RSS items. The map renders N Red/Yellow polygons per multi-daerah report (each opening the parent Audit Trail) with `Wilayah Terdampak` pills in Evidence and News Cards.
+- **Schema Version Invalidation:** `EXTRACTION_SCHEMA_VERSION = 2` packed in existing `ground_truth_metrics` JSONB; legacy rows auto re-tier on read with zero new LLM cost and zero migrations.
+
 ---
 
 ## Technology Stack

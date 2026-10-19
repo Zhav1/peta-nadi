@@ -22,6 +22,7 @@ from app.services.news_aggregator import (
     resolve_canonical_article_url_async,
     fetch_existing_processed_articles_map,
     remember_processed_article,
+    enrich_article_description_if_needed,
 )
 from app.nlp.news_extractor import extract_structured_news, extract_structured_news_batch
 from app.services.redis_client import get_redis
@@ -105,13 +106,23 @@ class UnifiedNewsIngestor:
                                             "corridor_segment", "corridor_nodes", "incident_type",
                                             "severity", "temporal_phase", "zone_tier", "tier_reason",
                                             "custom_hazard_label", "impact_profile", "is_geocoded",
-                                            "location_precision", "summary", "confidence_score")})
+                                            "location_precision", "summary", "confidence_score",
+                                            "affected_locations")})
                     for _k in ("zone_tier", "tier_reason", "custom_hazard_label",
-                               "impact_profile", "is_geocoded", "location_precision"):
+                               "impact_profile", "is_geocoded", "location_precision",
+                               "affected_locations", "schema_version"):
                         if merged.get(_k) is None and isinstance(gtm, dict) and gtm.get(_k) is not None:
                             merged[_k] = gtm[_k]
                     if not merged.get("id"):
                         merged["id"] = _pid
+                    # Stale v1 rows (schema_version != 2) must be re-extracted.
+                    try:
+                        _sv_hit = gtm.get("schema_version") if isinstance(gtm, dict) else None
+                    except Exception:
+                        _sv_hit = None
+                    if _sv_hit != 2:
+                        unseen.append(merged)
+                        continue
                     reused.append(merged)
                     continue
                 except Exception:
@@ -119,6 +130,13 @@ class UnifiedNewsIngestor:
             unseen.append(_a)
 
         # 2. Extract structured intelligence — ONE economical batched LLM call for unseen only.
+        # Enrich short/title-only descriptions first so multi-regency bodies resolve.
+        if unseen:
+            try:
+                import asyncio as _aio
+                unseen = list(await _aio.gather(*[enrich_article_description_if_needed(dict(_a)) for _a in unseen]))
+            except Exception:
+                pass
         structured_articles: list[Dict[str, Any]] = list(reused)
         if unseen:
             try:

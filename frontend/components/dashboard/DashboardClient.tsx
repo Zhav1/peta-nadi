@@ -392,21 +392,44 @@ export default function DashboardClient() {
       if (tier === 'YELLOW_CLARIFY' && !showYellowZones) continue;
       const radiusKm = tier === 'RED_CONFIRMED' ? 16 : 20;
       const hazardType = (n.hazardType || n.incident_type || 'other_disruption') as CrisisType;
-      live.push({
-        polygon: buildZoneRing(n.lon, n.lat, radiusKm),
-        type: hazardType,
-        risk: tier === 'RED_CONFIRMED' ? 0.9 : 0.55,
-        crisis_id: `news-${n.id}`,
-        id: `news-${n.id}`,
-        zone_tier: tier,
-        title: n.headline,
-        tier_reason: n.tier_reason || '',
-        custom_hazard_label: n.custom_hazard_label || n.headline,
-        source_news_id: n.id,
-        center: [n.lon, n.lat],
-        radiusKm,
-        impact_profile: n.impact_profile,
-      });
+      const risk = tier === 'RED_CONFIRMED' ? 0.88 : 0.55;
+      if (n.affected_locations && n.affected_locations.length > 0) {
+        n.affected_locations.forEach((loc, idx) => {
+          live.push({
+            polygon: buildZoneRing(loc.longitude, loc.latitude, radiusKm),
+            type: hazardType,
+            risk,
+            crisis_id: `news-${n.id}-loc-${idx}`,
+            id: `news-${n.id}-loc-${idx}`,
+            zone_tier: tier,
+            title: n.affected_locations!.length > 1 ? `${loc.name} — ${n.headline}` : n.headline,
+            tier_reason: n.tier_reason || '',
+            custom_hazard_label: n.custom_hazard_label || n.headline,
+            source_news_id: n.id,
+            center: [loc.longitude, loc.latitude],
+            radiusKm,
+            impact_profile: n.impact_profile,
+            affected_locations: n.affected_locations,
+          });
+        });
+      } else {
+        live.push({
+          polygon: buildZoneRing(n.lon, n.lat, radiusKm),
+          type: hazardType,
+          risk,
+          crisis_id: `news-${n.id}`,
+          id: `news-${n.id}`,
+          zone_tier: tier,
+          title: n.headline,
+          tier_reason: n.tier_reason || '',
+          custom_hazard_label: n.custom_hazard_label || n.headline,
+          source_news_id: n.id,
+          center: [n.lon, n.lat],
+          radiusKm,
+          impact_profile: n.impact_profile,
+          affected_locations: n.affected_locations,
+        });
+      }
     }
     return [...disasterZones, ...live];
   }, [disasterZones, newsFeed, showRedZones, showYellowZones, buildZoneRing]);
@@ -1157,8 +1180,34 @@ export default function DashboardClient() {
     const rawHazard = (newsItem?.hazardType || newsItem?.incident_type || (fallbackZone?.type as string) || 'other_disruption') as CrisisType;
     const hazardType: CrisisType = rawHazard;
     const impactProfile: HazardImpactProfile | undefined = newsItem?.impact_profile || fallbackZone?.impact_profile;
-    const lon: number | undefined = (newsItem?.lon as number | undefined) ?? fallbackZone?.center?.[0];
-    const lat: number | undefined = (newsItem?.lat as number | undefined) ?? fallbackZone?.center?.[1];
+    const resolvedAffected = newsItem?.affected_locations || fallbackZone?.affected_locations;
+    let lon: number | undefined = (newsItem?.lon as number | undefined) ?? fallbackZone?.center?.[0];
+    let lat: number | undefined = (newsItem?.lat as number | undefined) ?? fallbackZone?.center?.[1];
+    let flyLon = lon;
+    let flyLat = lat;
+    let flyZoom = 9.5;
+    if (fallbackZone?.center) {
+      flyLon = fallbackZone.center[0];
+      flyLat = fallbackZone.center[1];
+      flyZoom = 9.5;
+      lon = lon ?? flyLon;
+      lat = lat ?? flyLat;
+    } else if (newsItem?.affected_locations && newsItem.affected_locations.length > 1) {
+      const validLocs = newsItem.affected_locations.filter(
+        (l) => Number.isFinite(l.longitude) && Number.isFinite(l.latitude)
+      );
+      if (validLocs.length > 0) {
+        const cLon = validLocs.reduce((s, l) => s + l.longitude, 0) / validLocs.length;
+        const cLat = validLocs.reduce((s, l) => s + l.latitude, 0) / validLocs.length;
+        flyLon = cLon;
+        flyLat = cLat;
+        flyZoom = 8.0;
+        if (lon == null || lat == null) {
+          lon = cLon;
+          lat = cLat;
+        }
+      }
+    }
     if (lon == null || lat == null || !Number.isFinite(lon) || !Number.isFinite(lat)) {
       setToast({ message: 'Koordinat zona belum tersedia untuk inspeksi audit.', type: 'info' });
       return;
@@ -1173,7 +1222,7 @@ export default function DashboardClient() {
     const passability = impactProfile?.passability || (zoneTier === 'RED_CONFIRMED' ? 'BLOCKED' : 'CAUTION');
 
     // Smooth camera fly + highlight news card.
-    setMapFlyTo({ lon, lat, zoom: 9.5, ts: Date.now() });
+    setMapFlyTo({ lon: flyLon as number, lat: flyLat as number, zoom: flyZoom, ts: Date.now() });
     if (newsItem) setSelectedNewsId(newsItem.id);
 
     const nowIso = new Date().toISOString();
@@ -1295,6 +1344,7 @@ export default function DashboardClient() {
       tier_reason: tierReason,
       custom_hazard_label: customHazardLabel,
       impact_profile: impactProfile,
+      affected_locations: resolvedAffected,
       evidence: {
         osint_author: source,
         osint_text: summary,
@@ -1848,6 +1898,12 @@ export default function DashboardClient() {
                           </span>
                         )}
                       </h3>
+
+                      {item.affected_locations && item.affected_locations.length > 1 && (
+                        <div className="px-2 py-1 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyan-200 text-[11px] font-sans leading-snug">
+                          📍 {item.affected_locations.length} Daerah: {item.affected_locations.map((l) => l.name).join(', ')}
+                        </div>
+                      )}
 
                       {/* Stored excerpt: clamped until the operator expands it */}
                       <p

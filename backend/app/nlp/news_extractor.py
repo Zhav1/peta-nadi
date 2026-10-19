@@ -22,6 +22,36 @@ from app.nlp.geocoding_service import (
 
 logger = logging.getLogger(__name__)
 
+EXTRACTION_SCHEMA_VERSION = 2
+
+ECONOMIC_OPINION_CEREMONIAL_EXCLUSIONS = (
+    "dukung perekonomian", "pertumbuhan ekonomi", "dorong ekonomi",
+    "dongkrak ekonomi", "dongkrak perekonomian", "peresmian", "diresmikan",
+    "apresiasi", "optimis", "investasi", "progres pembangunan",
+    "progres konstruksi", "uji laik fungsi", "diskon tarif", "mudik gratis",
+    "sosialisasi", "kunjungan kerja", "rapat koordinasi", "penghargaan",
+    "ekspor meningkat", "surplus", "pengusaha:", "pengamat:", "akademisi:",
+)
+
+STRICT_CRISIS_PREDICATES = (
+    "banjir", "genangan", "luapan", "terendam", "longsor", "tebing runtuh",
+    "material longsor", "amblas", "ambles", "ambruk", "putus", "terputus",
+    "runtuh", "lumpuh", "tertutup", "ditutup", "penutupan", "terisolir",
+    "macet total", "macet parah", "kemacetan panjang", "antrean panjang",
+    "antrean mengular", "gelombang tinggi", "ombak besar", "cuaca ekstrem",
+    "cuaca buruk", "angin kencang", "puting beliung", "badai", "erupsi",
+    "abu vulkanik", "lahar dingin", "gempa", "kebakaran hutan", "karhutla",
+    "kabut asap", "tumpahan", "kecelakaan", "tabrakan", "terguling", "mogok",
+    "blokade", "kelangkaan bbm", "antrean bbm", "darurat", "siaga", "waspada",
+    "peringatan dini", "rawan longsor", "rawan banjir", "rusak parah",
+    "berlubang parah", "gangguan operasional", "dihentikan sementara", "ditunda",
+)
+
+PHYSICAL_BLOCKAGE_PREDICATES = (
+    "putus", "amblas", "ambles", "longsor", "banjir", "ditutup",
+    "terendam", "lumpuh", "terisolir", "ambruk",
+)
+
 # In-memory LRU-style cache to prevent repeated LLM calls on identical news headlines
 _EXTRACTION_CACHE: Dict[str, Dict[str, Any]] = {}
 MAX_CACHE_ENTRIES = 500
@@ -59,6 +89,7 @@ _DEFAULT_HAZARD_LABELS = {
 def _detect_incident_type(full_text: str) -> tuple[str, str | None, str | None]:
     """Returns (incident_type, custom_hazard_label_override, passability_hint)."""
     t = full_text
+    has_crisis = any(w in t for w in STRICT_CRISIS_PREDICATES)
     # Port closure (specific first — must precede generic 'pelabuhan' checks)
     if any(w in t for w in ["penutupan pelabuhan", "pelabuhan ditutup", "dermaga ditutup",
                             "operasional pelabuhan dihentikan", "pelabuhan tutup"]):
@@ -80,29 +111,36 @@ def _detect_incident_type(full_text: str) -> tuple[str, str | None, str | None]:
     if any(w in t for w in ["gelombang tinggi", "ombak besar", "cuaca buruk laut",
                             "angin kencang laut", "gelombang setinggi", "laut bergelora"]):
         return "marine_wave", None, None
-    if any(w in t for w in ["banjir", "genangan", "luapan", "debit air", "tenggelam"]):
+    if any(w in t for w in ["banjir", "genangan", "luapan", "debit air", "tenggelam", "terendam"]):
         return "flood", None, None
-    if any(w in t for w in ["longsor", "tebing runtuh", "tanah longsor", "ambles", "amblas"]):
+    if any(w in t for w in ["longsor", "tebing runtuh", "tanah longsor", "ambles", "amblas", "material longsor"]):
         return "landslide", None, None
-    if any(w in t for w in ["macet", "kemacetan", "lumpuh total arus", "antrean panjang kendaraan"]):
+    if any(w in t for w in ["macet total", "macet parah", "kemacetan panjang", "antrean panjang kendaraan",
+                            "antrean mengular", "lumpuh total arus", "macet", "kemacetan"]):
         return "congestion", None, None
-    # Logistics disruption catch-all → other_disruption with descriptive label
-    disruption_hints = [
-        ("bbm", "Gangguan Pasokan BBM"),
-        ("solar langka", "Gangguan Pasokan BBM"),
-        ("pupuk", "Gangguan Distribusi Pupuk"),
-        ("logistik terganggu", "Disrupsi Koridor Logistik"),
-        ("distribusi terganggu", "Disrupsi Koridor Logistik"),
-        ("rantai pasok", "Disrupsi Koridor Logistik"),
-        ("disrupsi", "Disrupsi Koridor Logistik"),
-        ("pelabuhan", "Gangguan Operasional Pelabuhan"),
-        ("truk", "Gangguan Angkutan Logistik"),
-        ("tol", "Gangguan Koridor Tol"),
-    ]
-    for hint, label in disruption_hints:
-        if hint in t:
-            return "other_disruption", label, None
-    if any(w in t for w in ["cadangan pangan", "bulog", "stok beras", "operasi pasar"]):
+    # Logistics disruption catch-all → gated on explicit crisis predicate.
+    # Bare infrastructure nouns ("tol", "pelabuhan", "truk", "distribusi",
+    # "logistik", "bbm", "jalan", "pangan") NEVER trigger alone.
+    if has_crisis:
+        disruption_hints = [
+            ("bbm", "Gangguan Pasokan BBM"),
+            ("kelangkaan bbm", "Gangguan Pasokan BBM"),
+            ("antrean bbm", "Gangguan Pasokan BBM"),
+            ("solar langka", "Gangguan Pasokan BBM"),
+            ("pupuk", "Gangguan Distribusi Pupuk"),
+            ("logistik terganggu", "Disrupsi Koridor Logistik"),
+            ("distribusi terganggu", "Disrupsi Koridor Logistik"),
+            ("rantai pasok", "Disrupsi Koridor Logistik"),
+            ("disrupsi", "Disrupsi Koridor Logistik"),
+            ("gangguan operasional", "Disrupsi Koridor Logistik"),
+            ("pelabuhan", "Gangguan Operasional Pelabuhan"),
+            ("truk", "Gangguan Angkutan Logistik"),
+            ("tol", "Gangguan Koridor Tol"),
+        ]
+        for hint, label in disruption_hints:
+            if hint in t:
+                return "other_disruption", label, None
+    if has_crisis and any(w in t for w in ["cadangan pangan", "bulog", "stok beras", "operasi pasar"]):
         return "other_disruption", "Disrupsi Koridor Logistik", None
     return "other_disruption", None, None
 
@@ -156,19 +194,15 @@ def _fast_heuristic_extraction(art: Dict[str, Any]) -> Dict[str, Any]:
 
     # 1. Detect Incident Type (expanded taxonomy)
     incident_type, label_override, passability_hint = _detect_incident_type(full_text)
-    # Only treat as logistics-relevant if a hazard keyword fired; _detect always
-    # returns other_disruption as catch-all, so verify real signal below.
-    _hazard_signal = any(w in full_text for w in [
-        "banjir", "genangan", "luapan", "longsor", "tebing", "ambles", "amblas",
-        "gempa", "tektonik", "kebakaran hutan", "karhutla", "kabut asap",
-        "penutupan pelabuhan", "pelabuhan ditutup", "dermaga ditutup",
-        "operasional pelabuhan dihentikan", "antrean pelabuhan", "bongkar muat padat",
-        "gelombang tinggi", "ombak besar", "cuaca buruk laut", "angin kencang laut",
-        "jembatan putus", "jembatan ambruk", "jalan putus", "jalan amblas",
-        "penutupan jalan", "blokade jalan", "erupsi", "abu vulkanik", "marapi",
-        "sinabung", "kerinci", "semeru", "macet", "kemacetan", "pelabuhan",
-        "bbm", "logistik", "distribusi", "truk", "tol ", "disrupsi",
-    ])
+    # Strict two-factor crisis gate: bare infrastructure nouns ("tol",
+    # "pelabuhan", "truk", "distribusi", "logistik", "bbm", "jalan", "pangan")
+    # NEVER count as a hazard signal alone — an explicit crisis/disruption
+    # action predicate must be present.
+    has_crisis_predicate = any(w in full_text for w in STRICT_CRISIS_PREDICATES)
+    has_exclusion = any(w in full_text for w in ECONOMIC_OPINION_CEREMONIAL_EXCLUSIONS)
+    has_physical_blockage = any(w in full_text for w in PHYSICAL_BLOCKAGE_PREDICATES)
+    # Only treat as logistics-relevant if a strict crisis predicate fired.
+    _hazard_signal = has_crisis_predicate
     custom_hazard_label = label_override or _DEFAULT_HAZARD_LABELS.get(incident_type, "Disrupsi Logistik")
 
     # 2. Temporal Phase & Lead Time
@@ -231,7 +265,11 @@ def _fast_heuristic_extraction(art: Dict[str, Any]) -> Dict[str, Any]:
 
     # 7. Zone tier & reason (economical 3-tier gatekeeper)
     is_ad_noise = any(w in full_text for w in _AD_NOISE_KEYWORDS)
-    if (not is_geocoded) or (latitude is None) or is_ad_noise or (not _hazard_signal):
+    # Strict two-factor crisis predicate gate (Issue 3): economic/opinion/
+    # ceremonial pieces and bare-infra mentions without a crisis predicate
+    # are immediately irrelevant.
+    fails_crisis_gate = (not has_crisis_predicate) or (has_exclusion and not has_physical_blockage)
+    if fails_crisis_gate or (not is_geocoded) or (latitude is None) or is_ad_noise or (not _hazard_signal):
         zone_tier = "DROPPED_IRRELEVANT"
         tier_reason = ("Artikel tidak memiliki lokasi insiden spesifik di koridor "
                        "Sumatera atau bukan disrupsi logistik.")
@@ -266,6 +304,13 @@ def _fast_heuristic_extraction(art: Dict[str, Any]) -> Dict[str, Any]:
 
     art_link = art.get("link", "") or ""
     art_id = art.get("id") or f"NEWS-{hashlib.md5(f'{title}:{art_link}'.encode()).hexdigest()[:8]}"
+    affected_locations = loc_info.get("affected_locations") or []
+    if nodes and affected_locations:
+        # Ensure corridor_nodes covers all multi-regency matches.
+        for _al in affected_locations:
+            _nm = _al.get("name")
+            if _nm and _nm not in nodes:
+                nodes.append(_nm)
 
     return {
         "id": art_id,
@@ -294,6 +339,7 @@ def _fast_heuristic_extraction(art: Dict[str, Any]) -> Dict[str, Any]:
         "temporal_phase": temporal_phase,
         "lead_time_hours": lead_time_hours,
         "commodities_affected": commodities,
+        "affected_locations": affected_locations,
         "ground_truth_metrics": {
             "lane_status": ("BLOCKED" if impact_profile.get("passability") == "BLOCKED"
                             else "RESTRICTED" if impact_profile.get("passability") == "RESTRICTED"
@@ -305,6 +351,8 @@ def _fast_heuristic_extraction(art: Dict[str, Any]) -> Dict[str, Any]:
             "impact_profile": impact_profile,
             "is_geocoded": is_geocoded,
             "location_precision": location_precision,
+            "affected_locations": affected_locations,
+            "schema_version": EXTRACTION_SCHEMA_VERSION,
         },
         "zone_tier": zone_tier,
         "tier_reason": tier_reason,
@@ -380,6 +428,8 @@ def _apply_batch_llm_item(structured: Dict[str, Any], item: Dict[str, Any]) -> D
             "impact_profile": structured.get("impact_profile"),
             "is_geocoded": structured.get("is_geocoded"),
             "location_precision": structured.get("location_precision"),
+            "affected_locations": structured.get("affected_locations") or [],
+            "schema_version": EXTRACTION_SCHEMA_VERSION,
         })
         structured["ground_truth_metrics"] = gtm
     except Exception as e:

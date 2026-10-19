@@ -75,4 +75,41 @@ Non-Goals:
 4. `fetch_existing_processed_articles_map` returns cached/DB rows; ingestor skips LLM for them.
 5. `python -m pytest` / verification script passes without touching `frontend/**`.
 
+---
+
+## Phase 73 Extension: Toponym Hierarchy, Predicate Gate & Multi-Location Fan-Out
+
+### Decisions Locked (additive, Phase 72 invariants preserved)
+
+1. **4-Tier Toponym Specificity + Route-Endpoint Masking**
+   - Tiers: `Tier 1 pinpoint (passes/towns/ports/airports/volcanoes)` > `Tier 2 Kabupaten/Kota` > `Tier 3 macro-corridors (jalintim/jalinbar/jalinteng/jalinsum/JTTS)` > `Tier 4 bare province` (aliases only, never gazetteer keys).
+   - Ordering key is `(tier, -len(k))` in `_tiered_keys()` and `LOCATION_GAZETTEER`; length breaks ties only within a tier.
+   - `_mask_route_endpoint_pairs_when_specific_pass_present()`: `Jalan Lintas A-B` / `tol A-B` road-name substrings blanked before Tier-2 matching when a `_SPECIFIC_PASS_KEYS` pass or explicit `via` is present.
+2. **Strict Two-Factor Crisis Predicate Gate**
+   - `STRICT_CRISIS_PREDICATES` (physical-disruption actions only) is the sole hazard signal; `ECONOMIC_OPINION_CEREMONIAL_EXCLUSIONS` vetoes unless a `PHYSICAL_BLOCKAGE_PREDICATE` overrides.
+   - `fails_crisis_gate = (not has_crisis_predicate) or (has_exclusion and not has_physical_blockage)` → `DROPPED_IRRELEVANT`. Bare infrastructure nouns (`tol`, `pelabuhan`, `truk`, `distribusi`, `logistik`, `bbm`, `jalan`, `pangan`) NEVER count alone.
+3. **Multi-Location Extraction + Lead Scraping + `schema_version = 2`**
+   - `resolve_all_sumatra_locations()` → `affected_locations[]` (15 km dedupe, Medan HQ-noise drop, `province_only` single-entry Tier-3 fallback, else `[]`).
+   - `extract_lead_text_from_html()` (og/meta + lead `<p>`) + `enrich_article_description_if_needed()` (empty/title-equal/<90 chars/multi-area title markers) run before extraction for unseen items.
+   - `EXTRACTION_SCHEMA_VERSION = 2` packed in `ground_truth_metrics` JSONB; `schema_version != 2` rows re-tier on read and force re-extract in the ingestor — the sanctioned cache-invalidation path for all future NLP rule changes.
+4. **Frontend Multi-Zone Fan-Out**
+   - `combinedDisasterZones` renders N Red/Yellow polygons per multi-location report (per-location title `"${loc} — ${headline}"`), each opening the parent Audit Trail; `Wilayah Terdampak (N Lokasi)` pills in `EvidenceTab.tsx`.
+
+### Interfaces (Phase 73 additions)
+- `resolve_all_sumatra_locations(text, fallback_province) -> List[{name, latitude, longitude, province, corridor_segment, location_precision}]`.
+- `extract_lead_text_from_html(html) -> str`; `enrich_article_description_if_needed(article) -> article`.
+- `AffectedLocationNode {name, latitude, longitude, province?, corridor_segment?, location_precision?}` (`types.ts`); `combinedDisasterZones` (`DashboardClient.tsx`).
+
+### Edge Cases
+- `"Longsor Jalan Lintas Tengah ... Sipirok"` → Sipirok `(1.6050, 99.2778)` exact_node, never Jambi `(-1.0, 102.0)`.
+- `"Longsor Jalan Lintas Pekanbaru-Padang via Sitinjau Lauik"` → Sitinjau Lauik pinpoint; endpoints masked.
+- `"Pengusaha: Tol Padang-Pekanbaru dukung perekonomian Sumbar"` → `DROPPED_IRRELEVANT`, never `YELLOW_CLARIFY`.
+- `"BPBD Sumut catat 3 daerah cuaca ekstrem"` (+ enriched lead) → N exact_node entries; single-location items keep legacy single-zone shape.
+
+### Verification Hooks (Phase 73 additions)
+1. Tier-order checks: Sipirok over `jalan lintas tengah`; Sitinjau Lauik over `pekanbaru`/`padang` under masking.
+2. Gate checks: opinion piece DROPPED; `"Jalan putus"` / `"Pelabuhan ditutup"` still gate `True`.
+3. Fan-out checks: multi-kabupaten body → N `affected_locations`; `schema_version != 2` fixture row re-tiers on read.
+4. `npx tsc --noEmit` 0 errors; no new Supabase columns; no LLM contract changes.
+
 Spec status: READY

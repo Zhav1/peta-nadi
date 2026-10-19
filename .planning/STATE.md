@@ -2,19 +2,19 @@
 gsd_state_version: "1.0"
 milestone: M4
 milestone_name: PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability
-current_phase: 72
-current_phase_name: LLM News Gatekeeper, Red/Yellow Audit Zones & Port-Closure Modality Rerouting
+current_phase: 73
+current_phase_name: Toponym Specificity Hierarchy, Strict Crisis Predicate Gate & Multi-Regency Zone Fan-Out
 status: complete
-stopped_at: "Phases 72 complete: (1) DB-first news dedup with bureau/dateline stripping and economical 3-tier LLM gatekeeper (RED_CONFIRMED/YELLOW_CLARIFY/DROPPED_IRRELEVANT); (2) Interactive Red/Yellow map zones with independent checkboxes and stored Audit Trail inspection (zero synthetic simulation); (3) Expanded 10-hazard taxonomy with dynamic ImpactProfile; (4) Port-closure alternate-port intermodal failover with per-route tradeoff economics."
+stopped_at: "Phases 73 complete: (1) 4-tier toponym specificity hierarchy (tier, -len) + route-endpoint masking + Pan-Sumatra gazetteer completion (sipirok, asahan, deli serdang, langkat); (2) Strict two-factor crisis predicate gate (STRICT_CRISIS_PREDICATES + ECONOMIC_OPINION_CEREMONIAL_EXCLUSIONS, bare infra nouns never trigger alone); (3) Multi-location extraction (resolve_all_sumatra_locations -> affected_locations[]) + lead-paragraph HTML meta scraping + schema_version = 2 automatic re-tiering; (4) Frontend multi-zone map fan-out (combinedDisasterZones N Red/Yellow polygons per report + Wilayah Terdampak pills)."
 last_updated: "2026-10-19T08:05:00.000Z"
 last_activity: 2026-10-19
-last_activity_desc: "Phase 72 executed & verified: 0 tsc errors, pytest suites pass, router failover check green."
+last_activity_desc: "Phase 73 executed & verified: 0 tsc errors, 4 live-case fixes green, router/extractor suites pass."
 state_head: HEAD
 progress:
-  total_phases: 72
-  completed_phases: 72
-  total_plans: 88
-  completed_plans: 88
+  total_phases: 73
+  completed_phases: 73
+  total_plans: 89
+  completed_plans: 89
   percent: 100.0
 ---
 
@@ -22,15 +22,15 @@ progress:
 
 **Last Updated:** 2026-10-19
 **Active Milestone:** M4 - PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability [ACTIVE 🚀]
-**Current Phase:** 72
+**Current Phase:** 73
 
 ---
 
 ## Current Position
 
-Phase: 72 (LLM News Gatekeeper, Red/Yellow Audit Zones & Port-Closure Modality Rerouting) - COMPLETE ✅
-Status: (1) DB-first dedup with bureau/dateline stripping and 3-tier gatekeeper (RED_CONFIRMED/YELLOW_CLARIFY/DROPPED_IRRELEVANT) packed in ground_truth_metrics JSONB; (2) Clickable Red (#ef4444)/Yellow (#eab308) zones with independent checkboxes; news Fokus opens stored Audit Trail via inspectNewsOrZoneAuditTrail instead of synthetic simulation; (3) 10-hazard taxonomy with dynamic ImpactProfile; (4) findClosestOpenSeaport alternate-port intermodal failover with per-route tradeoff economics.
-Last activity: 2026-10-19 - Phase 72 fully executed and verified.
+Phase: 73 (Toponym Specificity Hierarchy, Strict Crisis Predicate Gate & Multi-Regency Zone Fan-Out) - COMPLETE ✅
+Status: (1) 4-tier toponym hierarchy (tier,-len) + route-endpoint masking + gazetteer completion (sipirok, asahan, deli serdang, langkat); (2) Strict two-factor crisis gate (bare infra nouns never trigger alone); (3) Multi-location fan-out (affected_locations[]) + lead meta scraping + schema_version=2 auto re-tiering; (4) N Red/Yellow polygons per multi-daerah report + Wilayah Terdampak pills.
+Last activity: 2026-10-19 - Phase 73 fully executed and verified.
 Next action: Push changes to remote repository.
 
 ---
@@ -113,6 +113,7 @@ Next action: Push changes to remote repository.
 | 70 | AIS Vessel Continuity, Coastal Maritime Fairways, Multi-Color Route Legs & Node Glow Reset | **COMPLETE** ✅ | Persistent AIS baseline + overlay, river estuary channels (Musi/Siak), multi-color legs (#10B981/#3B82F6/#00F0FF), bidirectional reset, instant node glow wipe. 19/19 pytest, 0 tsc errors. |
 | 71 | Map Visual Context, Fleet Filter Diagnostics & News Intelligence Link Sanitization | **COMPLETE** ✅ | LEGENDA RUTE multimodal section, fleet filter tooltips, Deck.gl ASCII fix, news link sanitization + keyword gate, API base URL auto-sanitization. 0 tsc errors. |
 | 72 | LLM News Gatekeeper, Red/Yellow Audit Zones & Port-Closure Modality Rerouting | **COMPLETE** ✅ | 3-tier gatekeeper (RED/YELLOW/DROPPED) with bureau stripping + DB-first dedup; clickable Red/Yellow zones with independent checkboxes; stored Audit Trail inspection; 10-hazard ImpactProfile; alternate-port failover with tradeoff economics. 0 tsc errors. |
+| 73 | Toponym Specificity Hierarchy, Strict Crisis Predicate Gate & Multi-Regency Zone Fan-Out | **COMPLETE** ✅ | 4-tier toponym hierarchy (tier,-len) + route-endpoint masking + gazetteer completion (sipirok/asahan/deli serdang/langkat); two-factor crisis gate (bare infra nouns never trigger); multi-location fan-out (affected_locations[]) + lead meta scraping + schema_version=2 re-tiering; N Red/Yellow polygons per report + Wilayah Terdampak pills. 0 tsc errors. |
 
 ---
 
@@ -120,6 +121,7 @@ Next action: Push changes to remote repository.
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
+| 2026-10-19 | Phase 73: Toponym Specificity Hierarchy, Strict Crisis Predicate Gate & Multi-Regency Zone Fan-Out | Tier-first gazetteer ordering (tier,-len) + Sipirok/Kabupaten key completion fixes Jambi-centroid mis-pinning; Jalan Lintas A-B endpoint masking preserves Sitinjau Lauik pinpoint; two-factor crisis gate (STRICT predicates + opinion exclusions, bare infra nouns never trigger) kills false Yellows; resolve_all_sumatra_locations + lead-meta enrichment fans out N Red/Yellow zones per multi-daerah report with Wilayah Terdampak pills; schema_version=2 auto re-tiers legacy rows with zero new LLM cost. 0 tsc errors, 4 live cases green. |
 | 2026-10-19 | Phase 72: LLM News Gatekeeper, Red/Yellow Audit Zones & Port-Closure Modality Rerouting | DB-first dedup before any LLM call; bureau/dateline stripping fixes "ANTARA Bengkulu" centroid pollution; 3-tier gatekeeper (RED_CONFIRMED/YELLOW_CLARIFY/DROPPED_IRRELEVANT) with heuristic-first + LLM overlay; clickable Red/Yellow zones with independent checkboxes; news Fokus opens stored Audit Trail at zero simulation cost; 10-hazard ImpactProfile; alternate-port intermodal failover with per-route tradeoff economics. 0 tsc errors, pytest routing/news suites pass. |
 | 2026-10-18 | Phase 70: AIS Vessel Continuity, Coastal Maritime Fairways, Multi-Color Route Legs & Node Glow Reset | Stabilized AIS vessel continuity by merging 96-vessel Sumatra baseline with live AISStream messages and enforcing uniform current_coords: [lon, lat], stopping ship disappearance on WebSocket reconnection. Constructed SUMATRA_PORT_CHANNELS and Dijkstra maritime pathfinding around Sumatra peninsulas and river estuaries (Boom Baru Musi, Pekanbaru Siak, Jambi Batanghari), mathematically preventing straight-line land traversal. Rendered modality-specific multi-color route legs (Road: Emerald #10B981, Sea: Royal Blue #3B82F6, Air: Sky #00F0FF). Lifted hidden route index tracking to DashboardClient and preserved intermodal recommendations during crisis updates. Added active useEffect in CrisisMap to wipe custom-pinned-source and popovers when origin/destination nodes are cleared, immediately eliminating lingering node glow. 19/19 pytest passed, 0 tsc errors, 100% clean Next.js build. |
 | 2026-10-18 | Phase 69: Telemetry OOM & Island Snapping Fix, Deep Article Permalink Resolution, and On-Map Contextual Corridor Selection | Throttled Deck.gl `setProps` updates to 25–30 Hz and reused pre-allocated arrays in `FleetVehicleLayer.tsx` to stop V8 heap churn and eliminate browser OOM crashes. Synchronized `current_coords` serialization and snapped maritime units to surveyed waterway polylines, purging the +/-14.5° island teleportation jump. Resolved Google News redirect wrappers to direct publisher article permalinks via asynchronous HEAD/GET unmasking. Added interactive glassmorphism popover on clicking route polylines and a contextual "Reset Rute" pill in `CrisisSimulatorBar.tsx`. 20/20 pytest passed, 0 tsc errors, 100% clean Next.js build. |
@@ -203,7 +205,7 @@ These scripts validate the economic correlation hypotheses that underpin Agent 5
 ## Session
 
 **Last session:** 2026-10-19T08:05:00.000Z
-**Stopped at:** Completed Phase 72 (LLM news gatekeeper, Red/Yellow audit zones, dynamic hazards, port-closure rerouting) and documentation verification via gsd-docs-update
+**Stopped at:** Completed Phase 73 (toponym hierarchy, crisis predicate gate, multi-regency fan-out, schema v2) and documentation verification via gsd-docs-update
 **Resume file:** None
 
 ## Performance Metrics
