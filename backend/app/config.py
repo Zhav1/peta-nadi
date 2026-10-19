@@ -1,5 +1,6 @@
-from pydantic_settings import BaseSettings
+from typing import Optional
 from functools import lru_cache
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
@@ -45,6 +46,7 @@ class Settings(BaseSettings):
     # match (Console vs Go have separate catalogs).
     opencode_reasoning_model: str = "mimo-v2.6-pro"
     opencode_driver_model: str = "deepseek-v4.1-flash"
+    opencode_reasoning_effort: Optional[str] = None
     deepseek_api_key: str = ""
     nvidia_deepseek_v4_pro: str = ""
     nvidia_deepseek_v4_flash: str = ""

@@ -135,7 +135,52 @@ async def test_chat_never_touches_embedding_key(monkeypatch):
     assert sent_payload["model"] == "mimo-v2.6-pro"
     sent_headers = mock_client.post.call_args[1]["headers"]
     assert "AQ-test-embedding-key" not in str(sent_headers)
-    assert sent_payload.keys() == {"model", "messages", "temperature", "max_tokens"}
+    assert sent_payload.keys() <= {"model", "messages", "temperature", "max_tokens", "reasoning_effort"}
+
+
+@pytest.mark.asyncio
+async def test_opencode_retries_on_connect_timeout_and_succeeds(opencode_keyed, monkeypatch):
+    """A transient ConnectTimeout on attempt 1 should retry and succeed on attempt 2."""
+    import httpx
+    mock_client = AsyncMock()
+    success_resp = MagicMock()
+    success_resp.status_code = 200
+    success_resp.json.return_value = _opencode_payload("hasil setelah retry")
+    success_resp.raise_for_status.return_value = None
+
+    # First call fails with ConnectTimeout, second call succeeds
+    mock_client.post.side_effect = [
+        httpx.ConnectTimeout("connection timed out"),
+        success_resp,
+    ]
+    mock_client_cls = MagicMock()
+    mock_client_cls.return_value.__aenter__.return_value = mock_client
+    monkeypatch.setattr(llm_gateway.httpx, "AsyncClient", mock_client_cls)
+
+    # Speed up tests by skipping actual sleep delay
+    monkeypatch.setattr(llm_gateway.asyncio, "sleep", AsyncMock())
+
+    text = await LLMGateway.generate_content(prompt="uji retry")
+    assert text == "hasil setelah retry"
+    assert mock_client.post.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_opencode_recovers_reasoning_content_when_content_empty(opencode_keyed, monkeypatch):
+    """When content is empty string, reasoning_content should be extracted as fallback."""
+    payload = {
+        "choices": [
+            {
+                "message": {
+                    "content": "",
+                    "reasoning_content": "analisis taktis dari reasoning"
+                }
+            }
+        ]
+    }
+    _mock_httpx_client(monkeypatch, payload=payload)
+    text = await LLMGateway.generate_content(prompt="uji reasoning fallback")
+    assert text == "analisis taktis dari reasoning"
 
 
 def test_economic_degraded_markers_rejected():

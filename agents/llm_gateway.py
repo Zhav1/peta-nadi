@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from typing import Optional
 import httpx
 from app.config import get_settings
@@ -85,7 +86,8 @@ class LLMGateway:
         system_instruction: Optional[str] = None, 
         model_name: Optional[str] = None,
         temperature: float = 0.2,
-        max_tokens: int = 1024
+        max_tokens: int = 1024,
+        reasoning_effort: Optional[str] = None
     ) -> str:
         """
         Tries opencode-go first (D-03 opencode-first, fail-loud). Falls back to
@@ -98,11 +100,15 @@ class LLMGateway:
         to settings.opencode_driver_model, NIM branch to PRIMARY_NIM_MODEL.
         Callers override explicitly via model_name for the opencode branch
         only.
+        Includes automatic retry for transient network/connect timeouts and
+        extracts reasoning_content fallback if output content is truncated.
         """
         # Force offline/mock mode if configured (production must run DEMO_OFFLINE=false)
         if settings.demo_offline:
             logger.warning("LLMGateway: Demo offline mode active (DEMO_OFFLINE=true; production must be false). Returning mock response.")
             return "CRISIS EXECUTIVE SUMMARY\nEvent: Flood / Port Congestion\nLocation/Region: North Sumatra\nKey Evidence: Ingested sensors show anomalies.\nRecommended Action: Divert traffic.\nConfidence Assessment: High (mocked fallback)."
+
+        max_retries = 2
 
         # --- Phase 58 branch 1: opencode-go (first priority) ---
         opencode_available = (
@@ -132,20 +138,51 @@ class LLMGateway:
                 "temperature": temperature,
                 "max_tokens": max_tokens
             }
-            try:
-                logger.info(f"LLMGateway: Attempting opencode call ({opencode_model})...")
-                async with httpx.AsyncClient() as client:
-                    response = await client.post(url, headers=headers, json=payload, timeout=30.0)
-                    response.raise_for_status()
-                    res_data = response.json()
-                    text = res_data["choices"][0]["message"]["content"].strip()
-                    if not text:
-                        raise ValueError("opencode returned an empty completion")
-                    logger.info("LLMGateway: opencode call succeeded.")
-                    return text
-            except Exception as oc_err:
-                logger.error(f"LLMGateway: opencode call failed ({opencode_model}): {oc_err}", exc_info=True)
-                raise LLMGatewayUnavailable(f"opencode call failed ({opencode_model}): {oc_err}") from oc_err
+            eff = reasoning_effort if reasoning_effort is not None else getattr(settings, "opencode_reasoning_effort", None)
+            if eff:
+                payload["reasoning_effort"] = eff
+
+            for attempt in range(max_retries + 1):
+                try:
+                    logger.info(f"LLMGateway: Attempting opencode call ({opencode_model}), attempt {attempt + 1}/{max_retries + 1}...")
+                    async with httpx.AsyncClient() as client:
+                        response = await client.post(url, headers=headers, json=payload, timeout=30.0)
+                        response.raise_for_status()
+                        res_data = response.json()
+                        message = res_data["choices"][0]["message"]
+                        text = (message.get("content") or "").strip()
+                        if not text and message.get("reasoning_content"):
+                            logger.info("LLMGateway: opencode content empty; extracted non-empty reasoning_content.")
+                            text = message["reasoning_content"].strip()
+                        if not text:
+                            raise ValueError("opencode returned an empty completion")
+                        logger.info("LLMGateway: opencode call succeeded.")
+                        return text
+                except (httpx.TimeoutException, httpx.NetworkError) as net_err:
+                    if attempt < max_retries:
+                        backoff = 1.0 * (2 ** attempt)
+                        logger.warning(
+                            f"LLMGateway: opencode network/timeout error ({type(net_err).__name__}: {net_err}). "
+                            f"Retrying in {backoff:.1f}s (attempt {attempt + 1}/{max_retries + 1})..."
+                        )
+                        await asyncio.sleep(backoff)
+                        continue
+                    logger.error(f"LLMGateway: opencode call failed after {max_retries + 1} attempts ({opencode_model}): {net_err}", exc_info=True)
+                    raise LLMGatewayUnavailable(f"opencode call failed ({opencode_model}): {net_err}") from net_err
+                except httpx.HTTPStatusError as http_err:
+                    if http_err.response.status_code in (502, 503, 504) and attempt < max_retries:
+                        backoff = 1.0 * (2 ** attempt)
+                        logger.warning(
+                            f"LLMGateway: opencode HTTP {http_err.response.status_code} error. "
+                            f"Retrying in {backoff:.1f}s (attempt {attempt + 1}/{max_retries + 1})..."
+                        )
+                        await asyncio.sleep(backoff)
+                        continue
+                    logger.error(f"LLMGateway: opencode call failed ({opencode_model}): {http_err}", exc_info=True)
+                    raise LLMGatewayUnavailable(f"opencode call failed ({opencode_model}): {http_err}") from http_err
+                except Exception as oc_err:
+                    logger.error(f"LLMGateway: opencode call failed ({opencode_model}): {oc_err}", exc_info=True)
+                    raise LLMGatewayUnavailable(f"opencode call failed ({opencode_model}): {oc_err}") from oc_err
 
         # --- Phase 59: Gemini chat removed (embeddings-only lock). GEMINI_API_KEY
         # serves agents/memory/ltm.py embed_content only and is never read here.
@@ -177,16 +214,42 @@ class LLMGateway:
             "max_tokens": max_tokens
         }
         
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(url, headers=headers, json=payload, timeout=30.0)
-                response.raise_for_status()
-                res_data = response.json()
-                text = res_data["choices"][0]["message"]["content"].strip()
-                if not text:
-                    raise ValueError("NVIDIA NIM returned an empty completion")
-                logger.info("LLMGateway: NVIDIA NIM DeepSeek call succeeded.")
-                return text
-        except Exception as nim_err:
-            logger.error(f"LLMGateway: NVIDIA NIM call failed ({PRIMARY_NIM_MODEL}): {nim_err}", exc_info=True)
-            raise LLMGatewayUnavailable(f"NVIDIA NIM call failed ({PRIMARY_NIM_MODEL}): {nim_err}") from nim_err
+        for attempt in range(max_retries + 1):
+            try:
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(url, headers=headers, json=payload, timeout=30.0)
+                    response.raise_for_status()
+                    res_data = response.json()
+                    message = res_data["choices"][0]["message"]
+                    text = (message.get("content") or "").strip()
+                    if not text and message.get("reasoning_content"):
+                        text = message["reasoning_content"].strip()
+                    if not text:
+                        raise ValueError("NVIDIA NIM returned an empty completion")
+                    logger.info("LLMGateway: NVIDIA NIM DeepSeek call succeeded.")
+                    return text
+            except (httpx.TimeoutException, httpx.NetworkError) as net_err:
+                if attempt < max_retries:
+                    backoff = 1.0 * (2 ** attempt)
+                    logger.warning(
+                        f"LLMGateway: NVIDIA NIM network/timeout error ({type(net_err).__name__}: {net_err}). "
+                        f"Retrying in {backoff:.1f}s (attempt {attempt + 1}/{max_retries + 1})..."
+                    )
+                    await asyncio.sleep(backoff)
+                    continue
+                logger.error(f"LLMGateway: NVIDIA NIM call failed after {max_retries + 1} attempts ({PRIMARY_NIM_MODEL}): {net_err}", exc_info=True)
+                raise LLMGatewayUnavailable(f"NVIDIA NIM call failed ({PRIMARY_NIM_MODEL}): {net_err}") from net_err
+            except httpx.HTTPStatusError as http_err:
+                if http_err.response.status_code in (502, 503, 504) and attempt < max_retries:
+                    backoff = 1.0 * (2 ** attempt)
+                    logger.warning(
+                        f"LLMGateway: NVIDIA NIM HTTP {http_err.response.status_code} error. "
+                        f"Retrying in {backoff:.1f}s (attempt {attempt + 1}/{max_retries + 1})..."
+                    )
+                    await asyncio.sleep(backoff)
+                    continue
+                logger.error(f"LLMGateway: NVIDIA NIM call failed ({PRIMARY_NIM_MODEL}): {http_err}", exc_info=True)
+                raise LLMGatewayUnavailable(f"NVIDIA NIM call failed ({PRIMARY_NIM_MODEL}): {http_err}") from http_err
+            except Exception as nim_err:
+                logger.error(f"LLMGateway: NVIDIA NIM call failed ({PRIMARY_NIM_MODEL}): {nim_err}", exc_info=True)
+                raise LLMGatewayUnavailable(f"NVIDIA NIM call failed ({PRIMARY_NIM_MODEL}): {nim_err}") from nim_err
