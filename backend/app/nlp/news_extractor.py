@@ -22,7 +22,7 @@ from app.nlp.geocoding_service import (
 
 logger = logging.getLogger(__name__)
 
-EXTRACTION_SCHEMA_VERSION = 4
+EXTRACTION_SCHEMA_VERSION = 5
 
 ECONOMIC_OPINION_CEREMONIAL_EXCLUSIONS = (
     "dukung perekonomian", "pertumbuhan ekonomi", "dorong ekonomi",
@@ -353,14 +353,16 @@ def run_agent_verification_gate(
     # corroborate impact (kills economic/opinion false-REDs).
     is_weather_warning_only = _detect_weather_warning_only(full_text_lower)
     _is_generic_other = str(incident_type or "").lower() == "other_disruption"
+    is_vague_region = location_precision in ("kabupaten_kota", "province_only", "none")
     impact_corroborated = bool(
         freshness_passed
         and discourse_passed
         and spatial_passed
-        and (location_precision == "exact_node")
+        and (location_precision in ("corridor_point", "exact_node"))
         and (temporal_phase == "active_disruption")
         and (bool(has_physical_blockage) or str(severity).lower() in ("high", "critical"))
         and (not is_weather_warning_only)
+        and (not is_vague_region)
         and not (_is_generic_other and not has_physical_blockage)
     )
 
@@ -375,6 +377,8 @@ def run_agent_verification_gate(
         verdict_summary = "YELLOW: weather warning only, needs field clarification."
     elif not spatial_passed:
         verdict_summary = "DROPPED: no geocoded incident location."
+    elif is_vague_region:
+        verdict_summary = "YELLOW: regency/province-wide mention capped at advisory zone."
     else:
         verdict_summary = "YELLOW: needs field clarification."
 
@@ -542,11 +546,14 @@ def _fast_heuristic_extraction(art: Dict[str, Any]) -> Dict[str, Any]:
         zone_tier = "YELLOW_CLARIFY"
         tier_reason = ("Peringatan cuaca / imbauan kewaspadaan tanpa penutupan jalur aktif; "
                        "memerlukan klarifikasi lapangan.")
-    elif (location_precision == "province_only"
-          or temporal_phase in ("forecast_early_warning", "early_warning", "monitoring")
+    elif (location_precision in ("province_only", "kabupaten_kota") and not has_physical_blockage):
+        zone_tier = "YELLOW_CLARIFY"
+        tier_reason = ("Penyebutan setingkat Kabupaten/Kota/Provinsi tanpa titik koridor/ruas jalan spesifik; "
+                       "dibatasi pada Zona Kuning (advisory) dan memerlukan klarifikasi lapangan.")
+    elif (temporal_phase in ("forecast_early_warning", "early_warning", "monitoring")
           or (incident_type == "other_disruption" and severity in ("low", "medium"))):
         zone_tier = "YELLOW_CLARIFY"
-        tier_reason = ("Peringatan dini / indikasi awal di wilayah provinsi; titik "
+        tier_reason = ("Peringatan dini / indikasi awal di wilayah koridor; titik "
                        "koordinat spesifik atau tingkat penutupan jalur masih "
                        "memerlukan klarifikasi lapangan.")
     elif impact_corroborated:
@@ -554,7 +561,7 @@ def _fast_heuristic_extraction(art: Dict[str, Any]) -> Dict[str, Any]:
         tier_reason = (f"Dampak {custom_hazard_label} terkonfirmasi di "
                        f"{loc_info.get('matched_node')} ({region}) dengan status "
                        f"{impact_profile.get('passability')}; koridor logistik terdampak langsung.")
-    elif (is_geocoded and location_precision == "exact_node"
+    elif (is_geocoded and location_precision in ("corridor_point", "exact_node")
           and (incident_type in ("flood", "landslide", "earthquake", "port_closure",
                                  "marine_wave", "road_closure", "volcanic_eruption",
                                  "wildfire")
@@ -622,6 +629,18 @@ def _fast_heuristic_extraction(art: Dict[str, Any]) -> Dict[str, Any]:
     except Exception:
         pass
 
+    escalation_required = bool(
+        severity in ("high", "critical")
+        or zone_tier == "RED_CONFIRMED"
+        or impact_profile.get("passability") in ("BLOCKED", "RESTRICTED")
+        or location_precision in ("kabupaten_kota", "province_only", "none")
+    )
+    location_tier = (
+        "TIER_A" if location_precision in ("corridor_point", "exact_node")
+        else "TIER_B" if location_precision == "kecamatan_kelurahan"
+        else "TIER_C"
+    )
+
     return {
         "id": art_id,
         "title": title,
@@ -659,6 +678,8 @@ def _fast_heuristic_extraction(art: Dict[str, Any]) -> Dict[str, Any]:
         "radius_km": radius_km,
         "geometry_polygon": geometry_polygon,
         "verification_audit": verification_audit,
+        "escalation_required": escalation_required,
+        "location_tier": location_tier,
         "ground_truth_metrics": {
             "lane_status": ("BLOCKED" if impact_profile.get("passability") == "BLOCKED"
                             else "RESTRICTED" if impact_profile.get("passability") == "RESTRICTED"
@@ -670,6 +691,8 @@ def _fast_heuristic_extraction(art: Dict[str, Any]) -> Dict[str, Any]:
             "impact_profile": impact_profile,
             "is_geocoded": is_geocoded,
             "location_precision": location_precision,
+            "location_tier": location_tier,
+            "escalation_required": escalation_required,
             "affected_locations": affected_locations,
             "schema_version": EXTRACTION_SCHEMA_VERSION,
             "radius_km": radius_km,
@@ -792,6 +815,11 @@ def _apply_batch_llm_item(structured: Dict[str, Any], item: Dict[str, Any]) -> D
                     structured["tier_reason"] = ("Artikel tidak memiliki lokasi insiden "
                                                  "spesifik di koridor Sumatera atau bukan "
                                                  "disrupsi logistik.")
+                elif llm_tier == "RED_CONFIRMED" and structured.get("location_precision") in ("kabupaten_kota", "province_only") and not structured.get("has_physical_blockage"):
+                    # Tier-C hard invariant cap: broad city/regency mention is capped at YELLOW_CLARIFY
+                    structured["zone_tier"] = "YELLOW_CLARIFY"
+                    structured["tier_reason"] = ("Penyebutan setingkat Kabupaten/Kota/Provinsi tanpa titik koridor/ruas jalan spesifik; "
+                                                 "dibatasi pada Zona Kuning (advisory) dan memerlukan klarifikasi lapangan.")
                 else:
                     structured["zone_tier"] = llm_tier
                     if item.get("tier_reason"):

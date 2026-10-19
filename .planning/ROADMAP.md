@@ -2104,6 +2104,41 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 
 ---
 
+## Phase 76: Pan-Sumatra Spatial Precision, Multi-Agent Consensus Escalation & Unified God's-Eye HUD
+
+**Goal:** Eliminate false-positive spatial geocoding collisions (e.g. "antrean panjang" misattributed to Pelabuhan Panjang Lampung instead of Abdya Aceh), implement 3-tier micro-spatial hazard bounding (Tier A corridor point 0.6–1.2 km, Tier B kecamatan 1.5–2.2 km, Tier C broad regency 3.2–4.5 km advisory capped at YELLOW_CLARIFY), wire multi-channel live consensus escalation, and declutter the God's-Eye HUD telemetry display.
+**Status:** COMPLETE ✅
+
+### Deliverables
+
+- **WP1 - Pan-Sumatra Gazetteer & Geocoding Remediation (`gazetteer_data.py` + `geocoding_service.py` + `remediate_panjang_incidents.py`)**:
+  - Removed collision-prone generic bare `"panjang"` entry from `GAZETTEER_NODES`; preserved exact compound forms (`"Pelabuhan Panjang"`, `"Panjang Bandar Lampung"`, `"Padang Panjang"`).
+  - Implemented longest-key descending sort matching (`sorted(..., key=lambda x: len(x), reverse=True)`) with word boundary regex `r'\b' + re.escape(node) + r'\b'` preventing substring misfires like `"sepanjang"` or `"antrean panjang"`.
+  - Added full Pan-Sumatra geographic coverage (83+ nodes across Aceh, Sumut, Sumbar, Riau, Jambi, Sumsel, Bengkulu, Lampung) with explicit `location_precision` tags (`corridor_point`, `kecamatan_kelurahan`, `kabupaten_kota`, `province_only`).
+  - Added news dateline and bureau noise stripper (`strip_bureau_and_dateline_noise`) stripping leading bureaus (`detikSumut`, `Antara Sumbar`, etc.) before geocoding.
+  - Added standalone DB remediation script (`backend/scripts/remediate_panjang_incidents.py`) to purge or re-geocode legacy false-Panjang records.
+- **WP2 - 3-Tier Micro-Spatial Bounding & ADM3 Polygons (`adm_boundary_service.py` + `incident_geometry_service.py`)**:
+  - Replaced oversized 16–20 km circles with 3-tier precision:
+    - **Tier A (`corridor_point`)**: Tight 0.6–1.2 km anisotropic highway ellipse with `semi_minor <= 0.5 km` oriented along corridor azimuth.
+    - **Tier B (`kecamatan_kelurahan`)**: Real or synthetic 1.5–2.2 km ADM3 subdistrict boundary polygon (`adm_boundary_service.py`).
+    - **Tier C (`kabupaten_kota` / `province_only`)**: 3.2–4.5 km subtle advisory zone; hard invariant: capped at `YELLOW_CLARIFY`, mathematically prohibited from synthesizing RED physical blockage.
+- **WP3 - Multi-Channel Consensus Escalation (`news_extractor.py` + `unified_news_ingestor.py` + `EvidenceTab.tsx`)**:
+  - Integrated 4-channel cross-agent consensus gate (W: BMKG/NWP Weather, T: TomTom/BPJT Traffic, I: OSINT Intelligence, E: PIHPS Economics).
+  - Single-channel news reports with broad Tier C regency precision cannot escalate to RED_CONFIRMED without corroborating physical blockage predicates or cross-channel consensus.
+  - Mirrored consensus metadata and audit records into `ground_truth_metrics` JSONB; displayed channel confirmation badges in `EvidenceTab.tsx`.
+- **WP4 - Unified God's-Eye HUD & Telemetry Declutter (`TopNavTelemetry.tsx` + `DashboardClient.tsx` + `FleetVehicleLayer.tsx` + `CrisisMap.tsx` + `IntermodalTerminalPopover.tsx`)**:
+  - Consolidated scattered map badges and telemetry tickers into a single unified top HUD bar with responsive tabs, real-time metrics, and live agent status.
+  - Refactored `FleetVehicleLayer.tsx` and `CrisisMap.tsx` with optimized LOD rendering, viewport filtering, and collision-free label clustering.
+  - Updated `IntermodalTerminalPopover.tsx` with clean telemetry metrics and direct corridor navigation.
+
+### Verification
+
+- [x] Pytest suite `backend/tests/test_phase76_news_spatial_consensus.py` passing (panjang collision avoidance, Padang Panjang vs Pelabuhan Panjang disambiguation, Medan Johor subdistrict corridor point, Tier C YELLOW cap, 3-tier geometry bounding).
+- [x] Zero regressions on locked files (`cpu_routing_adapter.py`, `weather_fusion_service.py`, `consensus_gate.py`, `EvaluationSection.tsx`).
+- [x] Next.js production build (`rtk npm run build`) compiles cleanly with zero TypeScript or packaging errors.
+
+---
+
 ## Backlog (Post-Hackathon / v2 & New Context Window Backlog)
 
 ### Active Remediation & Audit Backlog (For New Context Window)

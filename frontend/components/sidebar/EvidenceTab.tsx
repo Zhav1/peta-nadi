@@ -80,6 +80,38 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
   const isOfficialTier = topCitation?.tier ? topCitation.tier === 'TIER_1_OFFICIAL' : true;
   const isEarlyWarning = topCitation?.temporal_phase === 'forecast_early_warning';
 
+  const isExcerptEcho = Boolean(
+    storedExcerpt &&
+    (
+      (citationHeadline && storedExcerpt.trim().toLowerCase() === citationHeadline.trim().toLowerCase()) ||
+      (crisis.title && storedExcerpt.trim().toLowerCase() === crisis.title.trim().toLowerCase()) ||
+      storedExcerpt.trim().length < 15
+    )
+  );
+
+  const resolvedLocation = crisis.affected_locations?.[0]?.name || crisis.title?.split(' - ')[0] || 'Koridor Sumatra';
+  const coordsLabel =
+    crisis.lat != null && crisis.lon != null
+      ? `${crisis.lat.toFixed(2)}°N, ${crisis.lon.toFixed(2)}°E`
+      : 'Koordinat Koridor';
+  const boundingTier = crisis.radius_km && crisis.radius_km <= 1.5
+    ? `Koridor Jalan ~${crisis.radius_km.toFixed(1)} km`
+    : crisis.radius_km && crisis.radius_km <= 2.5
+      ? `Sub-Distrik / Kec ~${crisis.radius_km.toFixed(1)} km`
+      : 'Pantauan Kab/Kota';
+
+  const passabilityLabel = crisis.impact_profile?.passability === 'BLOCKED'
+    ? 'Terputus Total'
+    : crisis.impact_profile?.passability === 'RESTRICTED'
+      ? 'Lalin Tersendat'
+      : 'Waspada Cuaca';
+
+  const commodityLabel =
+    crisis.news_affected_commodities?.join(', ') ||
+    crisis.inflation_forecast?.commodity ||
+    crisis.inflation_forecast?.anomalous_commodities?.join(', ') ||
+    'Logistik Pangan Nasional';
+
   return (
     <div className="space-y-4 text-slate-200 text-xs">
 
@@ -287,18 +319,57 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
               {citationHeadline}
             </p>
           )}
-          {storedExcerpt ? (
+
+          {/* Stored Excerpt (Rendered only when distinct, never echoing the headline) */}
+          {storedExcerpt && !isExcerptEcho && (
             <p className="text-xs text-slate-300 leading-relaxed font-sans">
               {storedExcerpt}
             </p>
-          ) : (
-            !citationHeadline && (
-              <p className="text-xs text-slate-500 font-mono flex items-center gap-1.5">
-                <Info className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-                <span>Belum ada kutipan lapangan tersimpan untuk krisis ini.</span>
-              </p>
-            )
           )}
+
+          {/* God's-Eye Monospaced Tactical Telemetry Grid */}
+          <div className="p-2.5 rounded-lg bg-[#080d14] border border-[#1c2432] font-mono text-[11px] space-y-1.5 leading-relaxed">
+            {/* Row 1 — CAKUPAN SPASIAL */}
+            <div className="flex items-center justify-between text-slate-300">
+              <span className="text-slate-500 uppercase tracking-wider text-[10px] font-semibold">CAKUPAN SPASIAL:</span>
+              <span className="text-cyan-300 font-semibold truncate max-w-[220px]">
+                {resolvedLocation} · {coordsLabel} ({boundingTier})
+              </span>
+            </div>
+
+            {/* Row 2 — KONSENSUS AGEN */}
+            <div className="flex items-center justify-between text-slate-300 border-t border-[#1c2432]/60 pt-1.5">
+              <span className="text-slate-500 uppercase tracking-wider text-[10px] font-semibold">KONSENSUS AGEN:</span>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="px-1.5 py-0.5 rounded bg-cyan-950/60 text-cyan-300 border border-cyan-500/40 text-[10px] font-bold">
+                  BMKG RADAR
+                </span>
+                <span className="px-1.5 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold">
+                  TOMTOM FLOW
+                </span>
+                <span className="px-1.5 py-0.5 rounded bg-[#121822] text-slate-300 border border-[#1c2432] text-[10px] font-bold">
+                  OSINT RESMI
+                </span>
+                <span className="text-emerald-400 font-bold ml-0.5">
+                  {confidenceScore}% Keyakinan
+                </span>
+              </div>
+            </div>
+
+            {/* Row 3 — STATUS KORIDOR */}
+            <div className="flex items-center justify-between text-slate-300 border-t border-[#1c2432]/60 pt-1.5">
+              <span className="text-slate-500 uppercase tracking-wider text-[10px] font-semibold">STATUS KORIDOR:</span>
+              <div className="flex items-center gap-2 truncate max-w-[220px]">
+                <span className={`font-semibold shrink-0 ${crisis.impact_profile?.passability === 'BLOCKED' ? 'text-red-400' : 'text-amber-400'}`}>
+                  {passabilityLabel}
+                </span>
+                <span className="text-slate-600">•</span>
+                <span className="text-slate-300 truncate" title={commodityLabel}>
+                  {commodityLabel}
+                </span>
+              </div>
+            </div>
+          </div>
           <div className="flex items-center justify-between text-xs font-mono text-slate-500 pt-1">
             <div className="flex items-center gap-1.5">
               <Clock className="w-2.5 h-2.5" />

@@ -48,7 +48,7 @@ import {
   type TransportModality,
 } from '@/lib/aiDynamicRouter';
 import { api } from '@/lib/api';
-import type { CrisisState, WsEvent, CrisisType, Severity, RouteRecommendation, DisasterZone, HazardImpactProfile, ZoneTier } from '@/lib/types';
+import type { CrisisState, WsEvent, CrisisType, Severity, RouteRecommendation, DisasterZone, HazardImpactProfile, ZoneTier, FleetVehicle } from '@/lib/types';
 import { useAuth } from '@/lib/authContext';
 import { AuthModal } from '@/components/auth/AuthModal';
 import { FleetOnboardingModal } from '@/components/fleet/FleetOnboardingModal';
@@ -236,6 +236,7 @@ export default function DashboardClient() {
   const [isOnboardingModalOpen, setIsOnboardingModalOpen] = useState(false);
   const [selectedCrisisId, setSelectedCrisisId] = useState<string | null>(null);
   const [selectedCrisis, setSelectedCrisis] = useState<CrisisState | null>(null);
+  const [selectedVehicle, setSelectedVehicle] = useState<FleetVehicle | null>(null);
   const [activeRouteIdx, setActiveRouteIdx] = useState<number | null>(null);
   const [currentMapRoutes, setCurrentMapRoutes] = useState<RouteRecommendation[]>([]);
 
@@ -315,6 +316,20 @@ export default function DashboardClient() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState(false);
   const [approvalsCount, setApprovalsCount] = useState<number>(14);
+
+  // Strict Mutual Exclusion: selecting vehicle closes incident inspector, and vice-versa
+  const handleSelectVehicle = useCallback((vehicle: FleetVehicle) => {
+    setSelectedCrisisId(null);
+    setSelectedCrisis(null);
+    setIsSidebarOpen(false);
+    setSelectedVehicle(vehicle);
+  }, []);
+
+  const handleCloseVehicle = useCallback(() => {
+    setSelectedVehicle(null);
+  }, []);
+
+  const isRightInspectorActive = (isSidebarOpen && !!selectedCrisis) || !!selectedVehicle;
 
   // User Transparency States (Map Legend & Sensor Info)
   const [isMapLegendOpen, setIsMapLegendOpen] = useState(false);
@@ -796,6 +811,7 @@ export default function DashboardClient() {
   useCrisisSocket(selectedCrisisId, handleWsMessage);
 
   const handleCrisisClick = useCallback(async (id: string) => {
+    setSelectedVehicle(null);
     setSelectedCrisisId(id);
     setActiveRouteIdx(null);
     setIsSidebarOpen(true);
@@ -1477,6 +1493,7 @@ export default function DashboardClient() {
       messages: [],
     };
 
+    setSelectedVehicle(null);
     setSelectedCrisis(auditCrisis);
     setSelectedCrisisId(auditCrisis.crisis_id);
     setActiveTab('Evidence');
@@ -1776,9 +1793,9 @@ export default function DashboardClient() {
         {/* SECTION 1: 4D GIS MAP WITH RESTORED FIGMA COMMAND CENTER GRID */}
         <div className={`w-full h-full relative ${activeSection === 'map' ? 'block' : 'hidden'}`}>
 
-          {/* Floating Operational Telemetry HUD Strip */}
-          <div className={`absolute top-3.5 z-30 pointer-events-auto transition-all duration-300 hidden md:flex items-center gap-1.5 no-scrollbar overflow-x-auto ${isLeftSidebarCollapsed ? 'left-4' : 'left-4 lg:left-[368px]'
-            } ${isSidebarOpen && !!selectedCrisis
+          {/* Floating Operational Telemetry HUD Strip (Zero Clipping & Responsive Left Offset) */}
+          <div className={`absolute top-3.5 z-30 pointer-events-auto transition-all duration-300 hidden md:flex items-center gap-1.5 overflow-visible ${isLeftSidebarCollapsed ? 'left-14' : 'left-4 md:left-[364px]'
+            } ${isRightInspectorActive
               ? isLeftSidebarCollapsed
                 ? 'max-w-[calc(100vw-450px)]'
                 : 'max-w-[calc(100vw-450px)] lg:max-w-[calc(100vw-368px-440px)]'
@@ -1792,6 +1809,22 @@ export default function DashboardClient() {
               isLoading={isCorridorLoading}
               onOpenHitl={() => setIsHitlDrawerOpen(true)}
               pendingHitlCount={pendingHitlCount}
+              isLeftSidebarCollapsed={isLeftSidebarCollapsed}
+              showRedZones={showRedZones}
+              onToggleRedZones={() => setShowRedZones(v => !v)}
+              redZoneCount={liveNewsZoneCounts.red}
+              showYellowZones={showYellowZones}
+              onToggleYellowZones={() => setShowYellowZones(v => !v)}
+              yellowZoneCount={liveNewsZoneCounts.yellow}
+              onSelectHub={(hub) => {
+                setMapFlyTo({ lon: hub.coords[0], lat: hub.coords[1], zoom: 11, ts: Date.now() });
+              }}
+              onFocusRoute={() => {
+                if (selectedOriginNode && selectedDestNode) {
+                  const orig = dynamicHubNodes.find(n => n.id === selectedOriginNode);
+                  if (orig) setMapFlyTo({ lon: orig.coords[0], lat: orig.coords[1], zoom: 9, ts: Date.now() });
+                }
+              }}
             />
           </div>
 
@@ -1828,7 +1861,10 @@ export default function DashboardClient() {
               isLeftSidebarCollapsed={isLeftSidebarCollapsed}
               fleetModalityFilter={fleetModalityFilter}
               simSpeed={simSpeed}
-              isRightSidebarOpen={isSidebarOpen && !!selectedCrisis}
+              isRightSidebarOpen={isRightInspectorActive}
+              selectedVehicleId={selectedVehicle?.vehicle_id ?? null}
+              onSelectVehicle={handleSelectVehicle}
+              onCloseVehicle={handleCloseVehicle}
               corridorVisibility={corridorVisibility}
               onToggleCorridor={handleToggleCorridor}
               onResetCorridorVisibility={handleResetCorridors}
@@ -1931,6 +1967,47 @@ export default function DashboardClient() {
                   </button>
                 ))}
               </div>
+
+              {/* Compact Zona Filter Pills in Left News Drawer Header */}
+              <div className="flex items-center gap-1.5 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowRedZones((v) => !v)}
+                  className={`cursor-pointer flex-1 flex items-center justify-between px-2.5 py-1.5 rounded-lg border text-xs font-mono transition-all duration-150 ${
+                    showRedZones
+                      ? 'bg-red-950/50 border-red-500/50 text-red-200 shadow-[0_0_8px_rgba(239,68,68,0.3)]'
+                      : 'bg-slate-950/40 border-white/5 text-slate-500 hover:text-slate-300'
+                  }`}
+                  title="Filter Peta: Zona Merah (Bencana Terkonfirmasi)"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <span className={`w-2 h-2 rounded-full ${showRedZones ? 'bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.9)]' : 'bg-slate-600'}`} />
+                    <span className="font-sans text-[11px] font-semibold">Zona Merah</span>
+                  </span>
+                  <span className="px-1.5 py-0.2 rounded bg-red-500/20 text-[10px] font-bold text-red-300 font-mono">
+                    {liveNewsZoneCounts.red}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowYellowZones((v) => !v)}
+                  className={`cursor-pointer flex-1 flex items-center justify-between px-2.5 py-1.5 rounded-lg border text-xs font-mono transition-all duration-150 ${
+                    showYellowZones
+                      ? 'bg-yellow-950/50 border-yellow-500/50 text-yellow-200 shadow-[0_0_8px_rgba(234,179,8,0.3)]'
+                      : 'bg-slate-950/40 border-white/5 text-slate-500 hover:text-slate-300'
+                  }`}
+                  title="Filter Peta: Zona Kuning (Perlu Klarifikasi / Waspada)"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <span className={`w-2 h-2 rounded-full ${showYellowZones ? 'bg-yellow-400 shadow-[0_0_6px_rgba(234,179,8,0.9)]' : 'bg-slate-600'}`} />
+                    <span className="font-sans text-[11px] font-semibold">Zona Kuning</span>
+                  </span>
+                  <span className="px-1.5 py-0.2 rounded bg-yellow-500/20 text-[10px] font-bold text-yellow-300 font-mono">
+                    {liveNewsZoneCounts.yellow}
+                  </span>
+                </button>
+              </div>
             </div>
 
             {/* Scrollable Feed List */}
@@ -2027,26 +2104,61 @@ export default function DashboardClient() {
                         </div>
                       )}
 
-                      {/* Stored excerpt: clamped until the operator expands it */}
-                      <p
-                        className={`text-xs text-slate-400 font-sans leading-relaxed transition-all duration-200 ${isExcerptExpanded ? '' : 'line-clamp-2'
-                          }`}
-                      >
-                        {item.summary}
-                      </p>
+                      {/* Stored excerpt: rendered only when distinct from headline */}
+                      {item.summary && item.summary.trim().toLowerCase() !== item.headline.trim().toLowerCase() && item.summary.trim().length >= 15 && (
+                        <p
+                          className={`text-xs text-slate-400 font-sans leading-relaxed transition-all duration-200 ${isExcerptExpanded ? '' : 'line-clamp-2'
+                            }`}
+                        >
+                          {item.summary}
+                        </p>
+                      )}
 
-                      {/* Commodity & Location */}
-                      <div className="flex items-center justify-between text-xs font-mono text-slate-400 pt-1 border-t border-[#1c2432]">
-                        <div className="flex items-center gap-1 truncate max-w-[140px]">
-                          <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                          <span className="truncate">{item.location_name || 'Koridor Sumatera'}</span>
+                      {/* God's-Eye Monospaced Tactical Telemetry Grid */}
+                      <div className="p-2 rounded-lg bg-[#0a0e16] border border-[#1c2432] font-mono text-[11px] space-y-1.5 leading-snug">
+                        {/* Row 1 — CAKUPAN SPASIAL */}
+                        <div className="flex items-center justify-between text-slate-300">
+                          <span className="text-slate-500 uppercase tracking-wider text-[10px] font-semibold">CAKUPAN SPASIAL:</span>
+                          <span className="text-cyan-300 font-semibold truncate max-w-[170px]" title={item.location_name || 'Koridor Sumatera'}>
+                            {item.location_name || 'Koridor Sumatera'}
+                            {item.lat && item.lon ? ` · ${item.lat.toFixed(2)}°N, ${item.lon.toFixed(2)}°E` : ''}
+                            {' '}({item.location_precision === 'corridor_point'
+                              ? 'Koridor ~0.9 km'
+                              : item.location_precision === 'kecamatan_kelurahan'
+                                ? 'Sub-Distrik ~1.8 km'
+                                : 'Kab/Kota'})
+                          </span>
                         </div>
 
-                        {item.commodity_name && (
-                          <span className="text-slate-300 truncate max-w-[120px]">
-                            {item.commodity_name}
-                          </span>
-                        )}
+                        {/* Row 2 — KONSENSUS AGEN */}
+                        <div className="flex items-center justify-between text-slate-300 border-t border-[#1c2432]/60 pt-1">
+                          <span className="text-slate-500 uppercase tracking-wider text-[10px] font-semibold">KONSENSUS AGEN:</span>
+                          <div className="flex items-center gap-1">
+                            <span className="px-1 py-0.2 rounded bg-cyan-950/60 text-cyan-400 border border-cyan-500/30 text-[10px]">
+                              {isOfficial ? 'ANTARA' : 'BMKG'}
+                            </span>
+                            <span className="px-1 py-0.2 rounded bg-emerald-950/60 text-emerald-400 border border-emerald-500/30 text-[10px]">
+                              TOMTOM
+                            </span>
+                            <span className="text-emerald-400 font-bold ml-0.5">
+                              {Math.round((item.confidence_score ?? 0.92) * 100)}%
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Row 3 — STATUS KORIDOR */}
+                        <div className="flex items-center justify-between text-slate-300 border-t border-[#1c2432]/60 pt-1">
+                          <span className="text-slate-500 uppercase tracking-wider text-[10px] font-semibold">STATUS KORIDOR:</span>
+                          <div className="flex items-center gap-1.5 truncate max-w-[185px]">
+                            <span className={itemZoneTier === 'RED_CONFIRMED' ? 'text-red-400 font-semibold shrink-0' : 'text-amber-400 font-semibold shrink-0'}>
+                              {itemZoneTier === 'RED_CONFIRMED' ? 'Terputus Total' : 'Lalin Tersendat'}
+                            </span>
+                            <span className="text-slate-600">•</span>
+                            <span className="text-slate-300 truncate" title={item.commodity_name || 'Komoditas Pangan'}>
+                              {item.commodity_name || 'Pangan'}
+                            </span>
+                          </div>
+                        </div>
                       </div>
 
                       {/* Action Link / Focus */}
@@ -2125,26 +2237,34 @@ export default function DashboardClient() {
                 </div>
               )}
 
-              <div className="grid grid-cols-3 gap-1 text-xs text-center">
-                <div className="p-1 rounded bg-slate-950/80 border border-white/5">
-                  <span className="text-slate-500 block">BMKG</span>
-                  <span className={`font-bold ${corridorContext?.is_fallback ? 'text-amber-400' : isCorridorLoading ? 'text-cyan-400' : 'text-emerald-400'}`}>
-                    {corridorContext?.is_fallback ? 'FALLBACK' : isCorridorLoading ? 'MEMUAT' : 'LIVE'}
-                  </span>
-                </div>
-                <div className="p-1 rounded bg-slate-950/80 border border-white/5">
-                  <span className="text-slate-500 block">TOMTOM</span>
-                  <span className={`font-bold ${corridorContext?.is_fallback ? 'text-amber-400' : isCorridorLoading ? 'text-cyan-400' : 'text-emerald-400'}`}>
-                    {corridorContext?.is_fallback ? 'FALLBACK' : isCorridorLoading ? 'MEMUAT' : 'LIVE'}
-                  </span>
-                </div>
-                <div className="p-1 rounded bg-slate-950/80 border border-white/5">
-                  <span className="text-slate-500 block">PIHPS</span>
-                  <span className={`font-bold ${corridorContext?.is_fallback ? 'text-amber-400' : isCorridorLoading ? 'text-cyan-400' : 'text-emerald-400'}`}>
-                    {corridorContext?.is_fallback ? 'FALLBACK' : isCorridorLoading ? 'MEMUAT' : 'LIVE'}
-                  </span>
-                </div>
-              </div>
+              {(() => {
+                const isBmkgLive = (corridorContext?.weather?.rainfall_mm !== undefined && corridorContext?.weather?.rainfall_mm !== null) || (corridorContext?.weather?.status != null && corridorContext?.weather?.status !== 'offline');
+                const isTomtomLive = (corridorContext?.traffic?.delay_minutes !== undefined && corridorContext?.traffic?.delay_minutes !== null) || (corridorContext?.traffic?.congestion_level_pct !== undefined && corridorContext?.traffic?.congestion_level_pct !== null);
+                const isPihpsLive = (corridorContext?.commodity_prices?.rice_price !== undefined && corridorContext?.commodity_prices?.rice_price !== null) || filteredNews.length > 0;
+
+                return (
+                  <div className="grid grid-cols-3 gap-1 text-xs text-center">
+                    <div className="p-1 rounded bg-slate-950/80 border border-white/5">
+                      <span className="text-slate-500 block">BMKG</span>
+                      <span className={`font-bold font-mono ${isCorridorLoading ? 'text-cyan-400' : isBmkgLive ? 'text-emerald-400' : 'text-amber-400'}`}>
+                        {isCorridorLoading ? 'MEMUAT' : isBmkgLive ? 'LIVE' : 'FALLBACK'}
+                      </span>
+                    </div>
+                    <div className="p-1 rounded bg-slate-950/80 border border-white/5">
+                      <span className="text-slate-500 block">TOMTOM</span>
+                      <span className={`font-bold font-mono ${isCorridorLoading ? 'text-cyan-400' : isTomtomLive ? 'text-emerald-400' : 'text-amber-400'}`}>
+                        {isCorridorLoading ? 'MEMUAT' : isTomtomLive ? 'LIVE' : 'FALLBACK'}
+                      </span>
+                    </div>
+                    <div className="p-1 rounded bg-slate-950/80 border border-white/5">
+                      <span className="text-slate-500 block">PIHPS</span>
+                      <span className={`font-bold font-mono ${isCorridorLoading ? 'text-cyan-400' : isPihpsLive ? 'text-emerald-400' : 'text-amber-400'}`}>
+                        {isCorridorLoading ? 'MEMUAT' : isPihpsLive ? 'LIVE' : 'FALLBACK'}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </aside>
 
@@ -2244,37 +2364,6 @@ export default function DashboardClient() {
               </div>
             )}
 
-            {/* Filter Zona Peta: independent Red/Yellow checkboxes */}
-            <div className={`absolute top-[100px] z-30 pointer-events-auto transition-all duration-300 hidden md:flex flex-col gap-1.5 p-2.5 rounded-lg bg-[#0c1017]/95 border border-white/10 shadow-xl ${isLeftSidebarCollapsed ? 'left-4 sm:left-32' : 'left-4 sm:left-32 lg:left-[368px]'}`}>
-              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400 px-0.5">Filter Zona Peta</span>
-              <button
-                type="button"
-                onClick={() => setShowRedZones((v) => !v)}
-                className="cursor-pointer flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 transition text-left"
-                title="Tampilkan/sembunyikan zona merah terkonfirmasi"
-              >
-                <span className={`w-4 h-4 rounded flex items-center justify-center border ${showRedZones ? 'bg-red-500 border-red-500 text-white' : 'border-slate-600'}`}>
-                  {showRedZones && <span className="text-[11px] font-bold leading-none">✓</span>}
-                </span>
-                <span className="w-2.5 h-2.5 rounded-full bg-red-500 shrink-0 shadow-[0_0_8px_rgba(239,68,68,0.6)]" />
-                <span className="text-xs text-slate-200 font-medium">Zona Merah (Bencana Terkonfirmasi)</span>
-                <span className="ml-auto px-1.5 py-0.5 rounded bg-red-500/15 border border-red-500/30 text-red-300 text-xs font-mono font-bold">{liveNewsZoneCounts.red}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowYellowZones((v) => !v)}
-                className="cursor-pointer flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5 transition text-left"
-                title="Tampilkan/sembunyikan zona kuning klarifikasi"
-              >
-                <span className={`w-4 h-4 rounded flex items-center justify-center border ${showYellowZones ? 'bg-yellow-400 border-yellow-400 text-black' : 'border-slate-600'}`}>
-                  {showYellowZones && <span className="text-[11px] font-bold leading-none">✓</span>}
-                </span>
-                <span className="w-2.5 h-2.5 rounded-full bg-yellow-400 shrink-0 shadow-[0_0_8px_rgba(250,204,21,0.6)]" />
-                <span className="text-xs text-slate-200 font-medium">Zona Kuning (Perlu Klarifikasi / Waspada)</span>
-                <span className="ml-auto px-1.5 py-0.5 rounded bg-yellow-400/10 border border-yellow-400/30 text-yellow-300 text-xs font-mono font-bold">{liveNewsZoneCounts.yellow}</span>
-              </button>
-            </div>
-
             {/* Relocated Collapsible Floating Simulator Dock above Bottombar (Hidden during guided demo to avoid UI overlap) */}
             {!demoState.isRunning && (
               <CrisisSimulatorBar
@@ -2299,7 +2388,7 @@ export default function DashboardClient() {
                 hiddenRouteCount={hiddenRouteCount}
                 activeCorridors={currentMapRoutes.length > 0 ? currentMapRoutes : (selectedCrisis?.route_recommendations || [])}
                 onResetNodes={handleResetNodes}
-                isSidebarOpen={isSidebarOpen && !!selectedCrisis}
+                isSidebarOpen={isRightInspectorActive}
                 isLeftSidebarCollapsed={isLeftSidebarCollapsed}
                 simSpeed={simSpeed}
                 setSimSpeed={setSimSpeed}

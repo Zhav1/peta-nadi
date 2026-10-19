@@ -39,6 +39,8 @@ export interface FleetVehicleLayerProps {
   modalityFilter?: 'all' | 'truck' | 'maritime' | 'air';
   simSpeed?: number;
   onSelectVehicle?: (vehicle: FleetVehicle) => void;
+  selectedVehicleId?: string | null;
+  onCloseVehicle?: () => void;
 }
 
 interface DeadReckonState {
@@ -243,6 +245,8 @@ export function FleetVehicleLayer({
   modalityFilter = 'all',
   simSpeed = 1,
   onSelectVehicle,
+  selectedVehicleId,
+  onCloseVehicle,
 }: FleetVehicleLayerProps) {
   const [selectedVehicle, setSelectedVehicle] = useState<{
     vehicle: FleetVehicle;
@@ -271,6 +275,20 @@ export function FleetVehicleLayer({
 
   selectedVehicleIdRef.current = selectedVehicle?.vehicle.vehicle_id ?? null;
   isFollowCamActiveRef.current = isFollowCamActive;
+
+  // Sync external selection clear (e.g. when incident or crisis is selected)
+  useEffect(() => {
+    if (selectedVehicleId === null && selectedVehicle !== null) {
+      setSelectedVehicle(null);
+      setIsFollowCamActive(false);
+    }
+  }, [selectedVehicleId, selectedVehicle]);
+
+  const handleDismissSelection = useCallback(() => {
+    setSelectedVehicle(null);
+    setIsFollowCamActive(false);
+    onCloseVehicle?.();
+  }, [onCloseVehicle]);
 
   // Clear dead-reckon and progress refs strictly on component unmount
   useEffect(() => {
@@ -1034,16 +1052,13 @@ export function FleetVehicleLayer({
           map={map}
           targetLngLat={selectedVehicle.currentPos}
           callsign={selectedVehicle.vehicle.name || selectedVehicle.vehicle.vehicle_id}
-          onDismiss={() => {
-            setSelectedVehicle(null);
-            setIsFollowCamActive(false);
-          }}
+          onDismiss={handleDismissSelection}
         />
       )}
 
-      {/* Telemetry Inspector Console */}
+      {/* Telemetry Inspector Console — Docked in Right Tactical Inspector Slot (Zero Overlap with Left Drawer) */}
       {selectedVehicle && (
-        <div className="absolute top-20 left-4 z-40 w-96 bg-[#0c1017] border border-[#1c2432] shadow-xl rounded-lg p-4 text-slate-100 animate-in fade-in slide-in-from-left-2 duration-200 pointer-events-auto space-y-3 font-sans">
+        <div className="fixed top-20 right-3 sm:right-6 z-40 w-[calc(100vw-1.5rem)] sm:w-[400px] max-h-[calc(100vh-6rem)] sm:max-h-[calc(100vh-7.5rem)] bg-[#0c1017] border border-[#1c2432] shadow-xl rounded-lg p-4 text-slate-100 animate-in slide-in-from-right-4 duration-300 pointer-events-auto space-y-3 font-sans overflow-y-auto no-scrollbar">
           {/* Header Bar */}
           <div className="flex items-start justify-between border-b border-[#1c2432] pb-3">
             <div className="flex items-center gap-2.5">
@@ -1090,10 +1105,7 @@ export function FleetVehicleLayer({
 
             <button
               type="button"
-              onClick={() => {
-                setSelectedVehicle(null);
-                setIsFollowCamActive(false);
-              }}
+              onClick={handleDismissSelection}
               className="cursor-pointer p-1 rounded-md bg-[#121822] text-slate-400 hover:text-white border border-[#1c2432] transition"
               title="Tutup Inspeksi Armada"
             >
@@ -1224,10 +1236,7 @@ export function FleetVehicleLayer({
 
             <button
               type="button"
-              onClick={() => {
-                setSelectedVehicle(null);
-                setIsFollowCamActive(false);
-              }}
+              onClick={handleDismissSelection}
               className="w-full py-1 text-xs text-slate-400 hover:text-slate-200 flex items-center justify-center gap-1.5 cursor-pointer transition"
             >
               <Crosshair className="w-3 h-3" />

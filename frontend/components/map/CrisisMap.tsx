@@ -86,6 +86,9 @@ export interface CrisisMapProps {
   onHideRoute?: (idx: number) => void;
   onZoneClick?: (zone: DisasterZone) => void;
   flyToCoords?: { lon: number; lat: number; zoom?: number; ts: number } | null;
+  selectedVehicleId?: string | null;
+  onSelectVehicle?: (vehicle: FleetVehicle) => void;
+  onCloseVehicle?: () => void;
 }
 
 const INITIAL_CENTER: [number, number] = [100.5, 0.5];
@@ -154,6 +157,9 @@ export default function CrisisMap({
   onHideRoute,
   onZoneClick,
   flyToCoords = null,
+  selectedVehicleId = null,
+  onSelectVehicle,
+  onCloseVehicle,
 }: CrisisMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   void isLeftSidebarCollapsed;
@@ -1833,6 +1839,9 @@ export default function CrisisMap({
           activeRouteIdx={activeRouteIdx}
           modalityFilter={fleetModalityFilter}
           simSpeed={simSpeed}
+          onSelectVehicle={onSelectVehicle}
+          selectedVehicleId={selectedVehicleId}
+          onCloseVehicle={onCloseVehicle}
         />
       )}
 

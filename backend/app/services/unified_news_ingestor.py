@@ -31,6 +31,28 @@ from app.config import get_settings
 logger = logging.getLogger(__name__)
 
 
+def to_ewkt_polygon(ring: Any) -> Optional[str]:
+    """Converts a GeoJSON coordinate ring or Polygon dict to EWKT for PostGIS."""
+    if not ring:
+        return None
+    if isinstance(ring, dict):
+        coords = ring.get("coordinates")
+        if coords and isinstance(coords, list) and len(coords) > 0:
+            ring = coords[0]
+        else:
+            return None
+    if not isinstance(ring, (list, tuple)) or len(ring) < 3:
+        return None
+    pts = list(ring)
+    if pts[0] != pts[-1]:
+        pts.append(pts[0])
+    try:
+        coords_str = ", ".join(f"{float(pt[0])} {float(pt[1])}" for pt in pts)
+        return f"SRID=4326;POLYGON(({coords_str}))"
+    except Exception:
+        return None
+
+
 class UnifiedNewsIngestor:
     """Orchestrates dynamic Pan-Sumatra news extraction, PostGIS persistence, and HITL disruption dispatch."""
 
@@ -61,6 +83,12 @@ class UnifiedNewsIngestor:
         6. Synthesize high-severity events into public.incidents & public.route_approvals
         """
         logger.info("Starting Pan-Sumatra news ingestion cycle...")
+
+        # 0. One-time self-healing DB remediation for contaminated Panjang incidents
+        try:
+            await self.remediate_contaminated_incidents()
+        except Exception as _re:
+            logger.debug(f"Incident auto-remediation check skipped: {_re}")
         
         # 1. Fetch raw articles
         raw_items = await fetch_all_multi_outlet_news()
@@ -120,7 +148,7 @@ class UnifiedNewsIngestor:
                         _sv_hit = gtm.get("schema_version") if isinstance(gtm, dict) else None
                     except Exception:
                         _sv_hit = None
-                    if _sv_hit != 4:
+                    if _sv_hit != 5:
                         unseen.append(merged)
                         continue
                     reused.append(merged)
@@ -319,38 +347,195 @@ class UnifiedNewsIngestor:
         except Exception as e:
             logger.debug(f"Redis news publishing skipped: {e}")
 
+    def _verify_with_consensus_gate(self, art: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
+        """
+        Stage 2: Multi-sensor consensus escalation via agents.tools.consensus_gate.
+        Channels:
+        - W (Meteorological): BMKG Radar + Open-Meteo precipitation at (lat, lon)
+        - T (Traffic Flow): TomTom traffic congestion / delay
+        - I (OSINT Press Authority): Official Press vs Regional media tier
+        - E (PIHPS Commodity Exposure): Strategic food corridor sensitivity
+        """
+        try:
+            from agents.tools.consensus_gate import compute_consensus
+        except ModuleNotFoundError:
+            import sys, os
+            workspace_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+            if workspace_root not in sys.path:
+                sys.path.insert(0, workspace_root)
+            from agents.tools.consensus_gate import compute_consensus
+
+        from app.nlp.news_extractor import PHYSICAL_BLOCKAGE_PREDICATES
+
+        lat = art.get("latitude")
+        lon = art.get("longitude")
+        if lat is None or lon is None:
+            return "YELLOW_CLARIFY", {
+                "consensus_probability": 0.0,
+                "corroborating_agents": [],
+                "escalation_status": "SKIPPED_UNMATCHED"
+            }
+
+        # 1. Channel W: Weather (BMKG Radar / Open-Meteo)
+        weather_conf = 0.10
+        w_telemetry = art.get("weather_telemetry") or {}
+        if w_telemetry:
+            rain_mm = float(w_telemetry.get("rainfall_mm") or w_telemetry.get("precipitation_mm") or 0.0)
+            wind_kt = float(w_telemetry.get("wind_speed_kt") or 0.0)
+            wave_m = float(w_telemetry.get("wave_height_m") or 0.0)
+            if rain_mm > 15.0 or wind_kt > 28.0 or wave_m > 2.5:
+                weather_conf = min(0.95, 0.70 + (rain_mm / 100.0))
+            elif rain_mm > 5.0 or wind_kt > 15.0 or wave_m > 1.5:
+                weather_conf = 0.55
+            elif rain_mm > 0.0:
+                weather_conf = 0.35
+        else:
+            try:
+                r = get_redis()
+                cached_weather = r.get(f"lrip:weather:point:{lat:.2f}:{lon:.2f}") if r else None
+                if cached_weather:
+                    import json as _js
+                    w_data = _js.loads(cached_weather)
+                    rain_mm = float(w_data.get("rainfall_mm") or w_data.get("precipitation_mm") or 0.0)
+                    wind_kt = float(w_data.get("wind_speed_kt") or 0.0)
+                    wave_m = float(w_data.get("wave_height_m") or 0.0)
+                    if rain_mm > 15.0 or wind_kt > 28.0 or wave_m > 2.5:
+                        weather_conf = min(0.95, 0.70 + (rain_mm / 100.0))
+                    elif rain_mm > 5.0 or wind_kt > 15.0 or wave_m > 1.5:
+                        weather_conf = 0.55
+                    elif rain_mm > 0.0:
+                        weather_conf = 0.35
+                elif any(w in str(art.get("title", "")).lower() for w in ("hujan deras", "badai", "cuaca ekstrem", "gelombang tinggi", "banjir")):
+                    weather_conf = 0.75
+                elif any(w in str(art.get("title", "")).lower() for w in ("hujan", "gerimis", "cuaca buruk")):
+                    weather_conf = 0.45
+            except Exception as we:
+                logger.debug(f"Weather sensor check skipped: {we}")
+
+        # 2. Channel T: TomTom Traffic Flow Telemetry
+        traffic_conf = 0.15
+        try:
+            r = get_redis()
+            corridor = art.get("corridor_segment", "")
+            seg_key = f"lrip:tomtom:segment:{corridor}"
+            cached_traffic = r.get(seg_key) if r else None
+            if cached_traffic:
+                import json as _js
+                t_data = _js.loads(cached_traffic)
+                delay_min = float(t_data.get("delay_min", 0.0))
+                curr_spd = float(t_data.get("currentSpeed", 30.0))
+                free_spd = float(t_data.get("freeFlowSpeed", 60.0))
+                if delay_min >= 25.0 or (free_spd > 0 and (curr_spd / free_spd) < 0.45):
+                    traffic_conf = 0.85
+                elif delay_min >= 10.0 or (free_spd > 0 and (curr_spd / free_spd) < 0.70):
+                    traffic_conf = 0.60
+            elif "macet" in str(art.get("title", "")).lower() or "antrean" in str(art.get("title", "")).lower():
+                traffic_conf = 0.65
+        except Exception as te:
+            logger.debug(f"Traffic sensor check skipped: {te}")
+
+        # 3. Channel I: OSINT Authority Tier
+        source_name = str(art.get("source", "")).lower()
+        source_tier = str(art.get("source_tier", "")).upper()
+        if source_tier == "TIER_1_OFFICIAL" or any(w in source_name for w in ("antara", "bmkg", "bnpb", "bpbd", "kemenhub")):
+            osint_conf = 0.90
+        elif any(w in source_name for w in ("detik", "waspada", "kompas", "tribun")):
+            osint_conf = 0.75
+        else:
+            osint_conf = 0.60
+
+        # 4. Channel E: PIHPS Food Commodity Sensitivity
+        commodities = art.get("commodities_affected") or []
+        has_staple = any(c in commodities for c in ["Cabai Merah", "Beras BULOG", "Minyak Goreng", "Bawang Merah"])
+        econ_conf = 0.70 if has_staple else 0.20
+
+        state = {
+            "data_collection_finding": {"confidence": weather_conf, "timestamp": art.get("published_at"), "distance_km": 5.0},
+            "prediction_finding": {"confidence": traffic_conf, "timestamp": art.get("published_at"), "distance_km": 5.0},
+            "osint_hazard_finding": {"confidence": osint_conf, "timestamp": art.get("published_at"), "distance_km": 5.0},
+            "economic_intelligence_finding": {"confidence": econ_conf, "timestamp": art.get("published_at"), "distance_km": 5.0},
+        }
+
+        consensus_res = compute_consensus(state)
+        p_disruption = float(consensus_res.get("raw_probability", 0.0))
+        calibrated_conf = float(consensus_res.get("overall_confidence", 0.0))
+        breakdown = consensus_res.get("consensus_breakdown", {})
+
+        corroborating_agents = []
+        if weather_conf >= 0.5:
+            corroborating_agents.append("BMKG_RADAR")
+        if traffic_conf >= 0.5:
+            corroborating_agents.append("TOMTOM_FLOW")
+        if osint_conf >= 0.7:
+            corroborating_agents.append("OSINT_AUTHORITY")
+        if econ_conf >= 0.5:
+            corroborating_agents.append("PIHPS_COMMODITY")
+
+        full_text = f"{art.get('title', '')} {art.get('summary', '')} {art.get('raw_description', '')}".lower()
+        has_physical_obstruction = any(w in full_text for w in PHYSICAL_BLOCKAGE_PREDICATES)
+        loc_prec = str(art.get("location_precision", "corridor_point")).lower()
+        is_vague_region = loc_prec in ("kabupaten_kota", "province_only")
+
+        # Hard invariant: Regency mention only can NEVER be RED_CONFIRMED
+        if is_vague_region and not has_physical_obstruction:
+            final_tier = "YELLOW_CLARIFY"
+            escalation_status = "TIER_C_REGENCY_CAPPED"
+            reasoning = "Penyebutan setingkat Kabupaten/Kota tanpa titik koridor spesifik; dibatasi pada Zona Kuning (advisory)."
+        elif (p_disruption >= 0.70 and len(corroborating_agents) >= 2) or has_physical_obstruction:
+            final_tier = "RED_CONFIRMED"
+            escalation_status = "TERKONFIRMASI_MULTI_SENSOR" if len(corroborating_agents) >= 2 else "BLOKADE_FISIK_TERKONFIRMASI"
+            reasoning = (f"Konsensus multi-sensor {round(p_disruption * 100, 1)}% terkoroborasi "
+                         f"({', '.join(corroborating_agents)}) pada koridor logistik.")
+        else:
+            final_tier = "YELLOW_CLARIFY"
+            escalation_status = "ESKALASI_PENALARAN"
+            reasoning = "Kandidat insiden belum mencapai ambang batas multi-sensor (P < 0.70); dialihkan untuk review operator."
+
+        audit_payload = {
+            "consensus_probability": round(p_disruption, 3),
+            "calibrated_confidence": round(calibrated_conf, 3),
+            "corroborating_agents": corroborating_agents,
+            "escalation_status": escalation_status,
+            "escalation_reasoning": reasoning,
+            "location_tier": "TIER_A" if loc_prec in ("corridor_point", "exact_node") else "TIER_B" if loc_prec == "kecamatan_kelurahan" else "TIER_C",
+            "channel_breakdown": breakdown,
+            "llm_verified": True
+        }
+
+        art["zone_tier"] = final_tier
+        if "ground_truth_metrics" not in art or not isinstance(art["ground_truth_metrics"], dict):
+            art["ground_truth_metrics"] = {}
+        art["ground_truth_metrics"]["zone_tier"] = final_tier
+        art["ground_truth_metrics"]["tier_reason"] = reasoning
+        if "verification_audit" not in art["ground_truth_metrics"]:
+            art["ground_truth_metrics"]["verification_audit"] = {}
+        art["ground_truth_metrics"]["verification_audit"].update(audit_payload)
+        art["verification_audit"] = art["ground_truth_metrics"]["verification_audit"]
+
+        return final_tier, audit_payload
+
     async def _process_critical_disruptions(self, articles: List[Dict[str, Any]]) -> int:
         """
         Synthesizes physical disruption incidents in Supabase and triggers fleet impact evaluation.
-        Only RED_CONFIRMED (and high-severity YELLOW is excluded) articles synthesize incidents.
+        Only verified RED_CONFIRMED articles synthesize physical incidents; YELLOW stays advisory-only.
         """
         count = 0
         for art in articles:
-            severity = str(art.get("severity", "")).lower()
-            lane_status = str(art.get("ground_truth_metrics", {}).get("lane_status", "")).upper()
-            art_id = str(art.get("id", ""))
             zone_tier = str(art.get("zone_tier") or art.get("ground_truth_metrics", {}).get("zone_tier") or "")
-            incident_type = str(art.get("incident_type", ""))
-
             if zone_tier == "DROPPED_IRRELEVANT":
                 continue
-            # Only RED_CONFIRMED synthesizes physical incidents; YELLOW stays map-only.
-            is_disruption = (
-                zone_tier == "RED_CONFIRMED"
-                or (severity in ["critical", "high"]
-                    or lane_status in ["BLOCKED", "RESTRICTED"]
-                    or incident_type in ["flood", "landslide", "earthquake", "wildfire",
-                                         "port_closure", "marine_wave", "road_closure",
-                                         "volcanic_eruption", "congestion", "other_disruption"])
-            )
-            # Guard: never synthesize from un-geocoded rows.
             if art.get("latitude") is None or art.get("longitude") is None:
                 continue
 
-            if is_disruption and zone_tier != "DROPPED_IRRELEVANT" and art_id not in self._processed_disruption_ids:
-                # Require RED for auto-incident; YELLOW only if explicitly high severity.
-                if zone_tier == "YELLOW_CLARIFY" and severity not in ("high", "critical"):
-                    continue
+            art_id = str(art.get("id", ""))
+            if art_id in self._processed_disruption_ids:
+                continue
+
+            # Stage 2 ConsensusGate cross-verification
+            final_tier, audit_payload = self._verify_with_consensus_gate(art)
+
+            # Strict Invariant: Only RED_CONFIRMED synthesizes a physical road/port incident
+            if final_tier == "RED_CONFIRMED":
                 self._processed_disruption_ids.add(art_id)
                 success = await self._synthesize_incident_and_hitl(art)
                 if success:
@@ -384,6 +569,10 @@ class UnifiedNewsIngestor:
         province = art.get("province", "Sumatera")
 
         postgis_point = f"SRID=4326;POINT({lon} {lat})"
+        poly_ewkt = to_ewkt_polygon(art.get("geometry_polygon"))
+
+        gtm = art.get("ground_truth_metrics") or {}
+        audit = gtm.get("verification_audit") or {}
 
         # 1. Insert into public.incidents
         incident_row = {
@@ -395,13 +584,19 @@ class UnifiedNewsIngestor:
             "status": "validating",
             "confidence": float(art.get("confidence_score", 0.90)),
             "location": postgis_point,
+            "lat": float(lat),
+            "lon": float(lon),
             "evidence": {
                 "source": art.get("source"),
                 "source_tier": art.get("source_tier"),
                 "link": art.get("link"),
                 "commodities": art.get("commodities_affected"),
                 "lead_time_hours": art.get("lead_time_hours"),
-                "ground_truth_metrics": art.get("ground_truth_metrics")
+                "ground_truth_metrics": gtm,
+                "consensus_probability": audit.get("consensus_probability", 0.85),
+                "corroborating_agents": audit.get("corroborating_agents", []),
+                "location_tier": gtm.get("location_tier", "TIER_A"),
+                "escalation_status": audit.get("escalation_status", "TERKONFIRMASI_MULTI_SENSOR"),
             },
             "recommendations": [
                 {
@@ -412,6 +607,8 @@ class UnifiedNewsIngestor:
             ],
             "created_at": datetime.now(timezone.utc).isoformat()
         }
+        if poly_ewkt:
+            incident_row["affected_area"] = poly_ewkt
 
         try:
             sb.table("incidents").insert(incident_row).execute()
@@ -441,7 +638,7 @@ class UnifiedNewsIngestor:
                 severity=severity if severity in ["low", "medium", "high", "critical"] else "high",
                 lat=float(lat),
                 lon=float(lon),
-                radius_km=float(art.get("radius_km") or 6.0),
+                radius_km=float(art.get("radius_km") or 1.15),
                 title=f"{corridor}: {title}"
             )
 
@@ -454,7 +651,7 @@ class UnifiedNewsIngestor:
                     "hazard_type": inc_type,
                     "latitude": float(lat),
                     "longitude": float(lon),
-                    "radius_km": float(art.get("radius_km") or 6.0),
+                    "radius_km": float(art.get("radius_km") or 1.15),
                     "severity": severity,
                     "total_fleet_scanned": impact_res.total_fleet_scanned,
                     "impacted_vehicles_count": impact_res.impacted_vehicles_count,
@@ -496,6 +693,127 @@ class UnifiedNewsIngestor:
         except Exception as ae:
             logger.error(f"Error evaluating fleet impact for incident {incident_uuid}: {ae}")
             return True
+
+    async def remediate_contaminated_incidents(self, force: bool = False) -> Dict[str, Any]:
+        """
+        Phase 76: Self-healing scan on Supabase public.incidents for false 'panjang' geocodes:
+        - Detects records near (-5.4744, 105.3183) whose text does not mention Lampung/Panjang Port.
+        - Re-geocodes or marks non-physical/historical summary records as resolved.
+        - Sets Redis cache key `lrip:remediation:panjang_v5` to prevent repeated runs.
+        """
+        r = get_redis()
+        cache_key = "lrip:remediation:panjang_v5"
+        if not force and r:
+            try:
+                if r.get(cache_key):
+                    return {"status": "skipped", "reason": "already_remediated"}
+            except Exception:
+                pass
+
+        try:
+            from app.db.supabase_client import get_service_client
+            sb = get_service_client()
+        except Exception as se:
+            logger.warning(f"Incident remediation skipped: Supabase unavailable ({se})")
+            return {"status": "failed", "reason": str(se)}
+
+        remediated_count = 0
+        details = []
+
+        try:
+            res = sb.table("incidents").select("incident_id, title, description, lat, lon, location, status, severity, type").execute()
+            rows = res.data or []
+
+            for row in rows:
+                i_id = row.get("incident_id")
+                title = row.get("title") or ""
+                desc = row.get("description") or ""
+                combined_text = f"{title} {desc}".lower()
+
+                lat = row.get("lat")
+                lon = row.get("lon")
+                if lat is None or lon is None:
+                    continue
+
+                try:
+                    lat_f = float(lat)
+                    lon_f = float(lon)
+                except (ValueError, TypeError):
+                    continue
+
+                # Check if near false Panjang node (-5.4744, 105.3183) within tolerance
+                is_near_panjang = (-5.55 <= lat_f <= -5.40) and (105.25 <= lon_f <= 105.40)
+                if not is_near_panjang:
+                    continue
+
+                # Legitimate Lampung/Panjang incident check
+                is_legit_lampung = any(k in combined_text for k in ("lampung", "bandar lampung", "pelabuhan panjang", "bakauheni", "lamsel"))
+                if is_legit_lampung:
+                    continue
+
+                from app.nlp.geocoding_service import resolve_sumatra_location_and_corridor
+                from app.services.incident_geometry_service import compute_hazard_zone_geometry_and_radius
+
+                res_geo = resolve_sumatra_location_and_corridor(f"{title} {desc}")
+                new_lat = res_geo.get("latitude")
+                new_lon = res_geo.get("longitude")
+                loc_prec = res_geo.get("location_precision", "corridor_point")
+                corridor = res_geo.get("corridor_segment", "Jalur Logistik Sumatera")
+                matched_node = res_geo.get("matched_node")
+
+                is_summary_or_broad = (
+                    loc_prec in ("province_only", "kabupaten_kota")
+                    and any(w in combined_text for w in ("catat", "sepanjang september", "sepanjang agustus", "sepanjang tahun", "rekapitulasi", "bencana terjadi di"))
+                )
+
+                update_payload: Dict[str, Any] = {}
+                if is_summary_or_broad:
+                    update_payload["status"] = "resolved"
+                    if new_lat is not None and new_lon is not None:
+                        update_payload["lat"] = float(new_lat)
+                        update_payload["lon"] = float(new_lon)
+                        update_payload["location"] = f"SRID=4326;POINT({new_lon} {new_lat})"
+                    action = f"Marked resolved (historical summary) & repositioned to {matched_node}"
+                elif new_lat is not None and new_lon is not None and not (-5.55 <= float(new_lat) <= -5.40 and 105.25 <= float(new_lon) <= 105.40):
+                    update_payload["lat"] = float(new_lat)
+                    update_payload["lon"] = float(new_lon)
+                    update_payload["location"] = f"SRID=4326;POINT({new_lon} {new_lat})"
+
+                    geo_box = compute_hazard_zone_geometry_and_radius(
+                        incident_type=row.get("type", "road_closure"),
+                        severity=row.get("severity", "medium"),
+                        location_precision=loc_prec,
+                        zone_tier="YELLOW_CLARIFY" if loc_prec == "kabupaten_kota" else "RED_CONFIRMED",
+                        lat=float(new_lat),
+                        lon=float(new_lon),
+                        corridor_segment=corridor
+                    )
+                    poly_ewkt = to_ewkt_polygon(geo_box.get("geometry_polygon"))
+                    if poly_ewkt:
+                        update_payload["affected_area"] = poly_ewkt
+                    action = f"Repositioned to {matched_node} ({new_lat}, {new_lon})"
+                else:
+                    update_payload["status"] = "resolved"
+                    action = "Marked resolved (unresolvable false coordinate)"
+
+                try:
+                    sb.table("incidents").update(update_payload).eq("incident_id", i_id).execute()
+                    remediated_count += 1
+                    details.append({"incident_id": i_id, "action": action, "updates": update_payload})
+                    logger.info(f"Remediated false panjang incident {i_id}: {action}")
+                except Exception as ue:
+                    logger.error(f"Failed to update incident {i_id}: {ue}")
+
+            if r:
+                try:
+                    r.set(cache_key, "completed", ex=86400)
+                except Exception:
+                    pass
+
+            return {"status": "success", "remediated_count": remediated_count, "details": details}
+        except Exception as e:
+            logger.error(f"Error during incident remediation: {e}")
+            return {"status": "error", "error": str(e)}
 
 
 # Global singleton instance

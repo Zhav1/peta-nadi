@@ -16,8 +16,21 @@ import {
 import { useIntermodalData } from '@/hooks/useIntermodalData';
 import type { ChokePointItem } from '@/lib/types';
 
-export const IntermodalTerminalPopover: React.FC = () => {
-  const [isOpen, setIsOpen] = useState(false);
+export interface IntermodalTerminalPopoverProps {
+  isOpen?: boolean;
+  onToggle?: () => void;
+  onClose?: () => void;
+  onSelectHub?: (hub: ChokePointItem) => void;
+}
+
+export const IntermodalTerminalPopover: React.FC<IntermodalTerminalPopoverProps> = ({
+  isOpen: controlledIsOpen,
+  onToggle,
+  onClose,
+  onSelectHub,
+}) => {
+  const [internalIsOpen, setInternalIsOpen] = useState(false);
+  const isOpen = controlledIsOpen !== undefined ? controlledIsOpen : internalIsOpen;
   const [activeTab, setActiveTab] = useState<'SEAPORTS' | 'PASSES'>('SEAPORTS');
   const popoverRef = useRef<HTMLDivElement>(null);
 
@@ -33,12 +46,16 @@ export const IntermodalTerminalPopover: React.FC = () => {
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
+        if (onClose) {
+          onClose();
+        } else {
+          setInternalIsOpen(false);
+        }
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [onClose]);
 
   const seaports = chokePoints.filter(p => p.type === 'SEAPORT' || p.type === 'FERRY_TERMINAL');
   const mountainPasses = chokePoints.filter(p => p.type !== 'SEAPORT' && p.type !== 'FERRY_TERMINAL');
@@ -60,7 +77,13 @@ export const IntermodalTerminalPopover: React.FC = () => {
     <div ref={popoverRef} className="relative">
       <button
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => {
+          if (onToggle) {
+            onToggle();
+          } else {
+            setInternalIsOpen(!internalIsOpen);
+          }
+        }}
         className={`cursor-pointer flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs transition-colors duration-150 shrink-0 ${
           isOpen
             ? 'bg-white border-white text-[#080d14] font-semibold'
@@ -72,11 +95,11 @@ export const IntermodalTerminalPopover: React.FC = () => {
         <span className="font-mono text-xs tabular-nums">
           <span className="hidden 2xl:inline">Intermodal: </span>{totalCount} Hub
         </span>
-        <ChevronDown className="w-3 h-3 opacity-60 ml-0.5" />
+        <ChevronDown className={`w-3 h-3 opacity-60 ml-0.5 transition-transform duration-150 ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {isOpen && (
-        <div className="absolute top-full right-0 mt-2 w-96 max-h-[520px] flex flex-col rounded-lg bg-[#0c1017] border border-[#1c2432] shadow-xl z-50 text-slate-200 animate-in fade-in duration-150">
+        <div className="absolute top-full right-0 mt-2 w-80 sm:w-96 max-h-[520px] flex flex-col rounded-xl bg-[#0c1017]/95 backdrop-blur-md border border-[#1c2432] shadow-2xl z-50 text-slate-200 animate-in fade-in duration-150">
           {/* Header */}
           <div className="p-3 border-b border-[#1c2432] flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -125,7 +148,10 @@ export const IntermodalTerminalPopover: React.FC = () => {
             {(activeTab === 'SEAPORTS' ? seaports : mountainPasses).map((hub) => (
               <div
                 key={hub.id}
-                className="p-2.5 rounded-md bg-[#121822] border border-[#1c2432] hover:border-slate-500 transition-colors flex items-center justify-between gap-2"
+                onClick={() => onSelectHub?.(hub)}
+                className={`p-2.5 rounded-md bg-[#121822] border border-[#1c2432] hover:border-slate-500 transition-colors flex items-center justify-between gap-2 ${
+                  onSelectHub ? 'cursor-pointer hover:bg-[#18202c]' : ''
+                }`}
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 mb-1">

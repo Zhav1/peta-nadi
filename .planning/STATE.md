@@ -2,36 +2,36 @@
 gsd_state_version: "1.0"
 milestone: M4
 milestone_name: PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability
-current_phase: 75
-current_phase_name: Full-Body Scraping, Workhorse LLM Content Verifier & Post-Disaster Construction Guards
+current_phase: 76
+current_phase_name: Pan-Sumatra Spatial Precision, Multi-Agent Consensus Escalation & Unified God's-Eye HUD
 status: complete
-stopped_at: "Phase 75 complete: (1) full-body article scraper (enrich <450-char teasers to 2,500-char body, once per article); (2) Workhorse LLM content reader (1,600 chars/article, 5-article chunks, tier_reason + verified_sumatra_locations); (3) post-disaster construction guards (bare darurat removed, pascabencana/construction discourse markers, other_disruption blockage requirement); (4) schema_version = 4 auto re-verification + client guard mirror + Workhorse LLM badge."
-last_updated: "2026-10-19T12:00:00.000Z"
+stopped_at: "Phase 76 complete: (1) pan-sumatra gazetteer & geocoding remediation (removed bare panjang collision, added 83+ nodes with location_precision, longest-key matching, dateline stripping); (2) 3-tier micro-spatial hazard bounding (Tier A corridor point 0.6–1.2 km anisotropic ellipse, Tier B kecamatan 1.5–2.2 km ADM3 polygon, Tier C broad regency 3.2–4.5 km advisory capped at YELLOW_CLARIFY); (3) multi-channel consensus escalation wired to live consensus gate with evidence audit badges; (4) unified God's-Eye HUD decluttering map telemetry."
+last_updated: "2026-10-19T13:00:00.000Z"
 last_activity: 2026-10-19
-last_activity_desc: "Phase 75 executed & verified: teaser-to-body enrichment + Workhorse LLM content overlay green, construction false-RED killed, extractor/router suites pass."
+last_activity_desc: "Phase 76 executed & verified: panjang collision eliminated, 3-tier micro-spatial bounding green, live consensus gate wired, God's-Eye HUD unified, Next.js build clean."
 state_head: HEAD
 progress:
-  total_phases: 75
-  completed_phases: 75
-  total_plans: 91
-  completed_plans: 91
+  total_phases: 76
+  completed_phases: 76
+  total_plans: 92
+  completed_plans: 92
   percent: 100.0
 ---
 
 # STATE: PreHub Project Memory
 
 **Last Updated:** 2026-10-19
-**Active Milestone:** M4 - PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability [ACTIVE 🚀]
-**Current Phase:** 75
+**Active Milestone:** M4 - PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability [COMPLETED ✅]
+**Current Phase:** 76
 
 ---
 
 ## Current Position
 
-Phase: 75 (Full-Body Scraping, Workhorse LLM Content Verifier & Post-Disaster Construction Guards) - COMPLETE ✅
-Status: (1) full-body scraper (teaser <450 chars → 2,500-char body, once per article); (2) Workhorse LLM content reader (1,600 chars/article, 5-chunks, tier_reason + verified locations); (3) construction guards (bare darurat removed, pascabencana/construction markers, other_disruption blockage rule); (4) schema_version=4 re-verification + client guard + LLM badge.
-Last activity: 2026-10-19 - Phase 75 fully executed and verified.
-Next action: Push changes to remote repository.
+Phase: 76 (Pan-Sumatra Spatial Precision, Multi-Agent Consensus Escalation & Unified God's-Eye HUD) - COMPLETE ✅
+Status: (1) pan-sumatra gazetteer & geocoding remediation (removed bare panjang collision, added 83+ nodes with location_precision, longest-key matching, dateline stripping); (2) 3-tier micro-spatial hazard bounding (Tier A corridor point 0.6–1.2 km anisotropic ellipse, Tier B kecamatan 1.5–2.2 km ADM3 polygon, Tier C broad regency 3.2–4.5 km advisory capped at YELLOW_CLARIFY); (3) multi-channel consensus escalation wired to live consensus gate with evidence audit badges; (4) unified God's-Eye HUD decluttering map telemetry.
+Last activity: 2026-10-19 - Phase 76 fully executed and verified.
+Next action: All 76 phases complete. Final production build passed. Ready for live pilot operations.
 
 ---
 
@@ -116,6 +116,7 @@ Next action: Push changes to remote repository.
 | 73 | Toponym Specificity Hierarchy, Strict Crisis Predicate Gate & Multi-Regency Zone Fan-Out | **COMPLETE** ✅ | 4-tier toponym hierarchy (tier,-len) + route-endpoint masking + gazetteer completion (sipirok/asahan/deli serdang/langkat); two-factor crisis gate (bare infra nouns never trigger); multi-location fan-out (affected_locations[]) + lead meta scraping + schema_version=2 re-tiering; N Red/Yellow polygons per report + Wilayah Terdampak pills. 0 tsc errors. |
 | 74 | Agent Verification Gate, Hazard-Specific Zone Geometry & 48h Freshness Lockdown | **COMPLETE** ✅ | 4-check gate (freshness/discourse/spatial/impact) + discourse markers + blockage fix + Agent-2 pre-filter; hazard-specific radii (2.8–12.0 km) + backend-first polygons; 48h lockdown (URL date gate + true published_at + when:2d + client guard); schema_version=3 re-verification + Evidence 4-check audit UI. |
 | 75 | Full-Body Scraping, Workhorse LLM Content Verifier & Post-Disaster Construction Guards | **COMPLETE** ✅ | Full-article HTML scraping (2,500-char body, `< 450` teaser trigger, once per article in `ground_truth_metrics`); Workhorse LLM content reader (1,600 chars/article, 5-article chunks, `tier_reason` + `verified_sumatra_locations`); construction guards (bare `darurat` removed, `pascabencana`/construction markers, `other_disruption` blockage rule); schema_version=4 re-verification + client guard mirror + Workhorse LLM badge. |
+| 76 | Pan-Sumatra Spatial Precision, Multi-Agent Consensus Escalation & Unified God's-Eye HUD | **COMPLETE** ✅ | Bare panjang collision eliminated, longest-key matching, 3-tier micro-spatial bounding (Tier A: 0.6–1.2 km, Tier B: 1.5–2.2 km ADM3, Tier C: 3.2–4.5 km YELLOW cap), 4-channel consensus gate escalation, unified God's-Eye HUD. 0 tsc errors, Next.js build clean. |
 
 ---
 
@@ -123,6 +124,7 @@ Next action: Push changes to remote repository.
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
+| 2026-10-19 | Phase 76: Pan-Sumatra Spatial Precision, Multi-Agent Consensus Escalation & Unified God's-Eye HUD | Removed generic bare 'panjang' from GAZETTEER_NODES and enforced longest-key descending matching with word boundary regex, permanently ending 'antrean panjang' misattribution to Pelabuhan Panjang Lampung; established 3-tier micro-spatial bounding replacing 16-20 km circles with Tier A corridor points (0.6–1.2 km anisotropic ellipse), Tier B subdistricts (1.5–2.2 km ADM3 polygons), and Tier C regencies (3.2–4.5 km advisory capped at YELLOW_CLARIFY, mathematically barred from synthesizing RED physical blockage); unified top HUD telemetry bar declutters map viewport; 0 tsc errors, 100% clean Next.js build. |
 | 2026-10-19 | Phase 75: Full-Body Scraping, Workhorse LLM Content Verifier & Post-Disaster Guards | Full-article HTML scraping (<450-char teaser trigger, 2,500-char body, once per article) + Workhorse LLM content reader (1,600 chars/article, 5-chunks, tier_reason + verified locations) ends teaser-only judgments; bare darurat removed from crisis/severity lists and pascabencana/construction discourse markers kill Pembangunan-tanggul-darurat false REDs; other_disruption without blockage can no longer corroborate; schema_version=4 re-verifies legacy rows with zero migrations. |
 | 2026-10-19 | Phase 74: Agent Verification Gate, Hazard-Specific Geometry & 48h Freshness Lockdown | 4-check deterministic gate (freshness/discourse/spatial/impact) with bare banjir/longsor removed from blockage predicates kills academic-RED promotion; agent-decided hazard radii (2.8–12.0 km) replace hardcoded circles; archival-URL date gate + true published_at + when:2d ends stale-as-latest; schema_version=3 auto re-verifies legacy rows with zero new LLM cost. |
 | 2026-10-19 | Phase 73: Toponym Specificity Hierarchy, Strict Crisis Predicate Gate & Multi-Regency Zone Fan-Out | Tier-first gazetteer ordering (tier,-len) + Sipirok/Kabupaten key completion fixes Jambi-centroid mis-pinning; Jalan Lintas A-B endpoint masking preserves Sitinjau Lauik pinpoint; two-factor crisis gate (STRICT predicates + opinion exclusions, bare infra nouns never trigger) kills false Yellows; resolve_all_sumatra_locations + lead-meta enrichment fans out N Red/Yellow zones per multi-daerah report with Wilayah Terdampak pills; schema_version=2 auto re-tiers legacy rows with zero new LLM cost. 0 tsc errors, 4 live cases green. |

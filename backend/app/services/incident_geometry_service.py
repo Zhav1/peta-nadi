@@ -210,16 +210,16 @@ def compute_hazard_zone_geometry_and_radius(
     lon: float,
     corridor_segment: str = "",
 ) -> Dict[str, Any]:
-    """Agent-decided hazard-specific radius + anisotropic polygon geometry.
-
-    Returns {"radius_km": float, "geometry_polygon": list[list[float]]} where
-    geometry_polygon is a closed ring of [lon, lat] coordinates.
+    """3-Tier Micro-Spatial Bounding Hierarchy:
+    - Tier A (corridor_point): 0.6 km - 1.2 km tight anisotropic corridor polygon (semi_minor_km <= 0.5)
+    - Tier B (kecamatan_kelurahan): 1.5 km - 2.2 km real ADM3 sub-district polygon / micro-boundary
+    - Tier C (kabupaten_kota / province_only): 3.2 km - 4.5 km subtle advisory polygon (never RED_CONFIRMED)
     """
     sev = (severity or "medium").lower()
     itype = (incident_type or "other_disruption").lower()
+    loc_prec = (location_precision or "").lower()
     is_critical = sev == "critical"
-    is_province_only = (location_precision or "") == "province_only"
-    is_yellow = (zone_tier or "") == "YELLOW_CLARIFY"
+    is_province_only = loc_prec == "province_only"
 
     try:
         lat_f = float(lat)
@@ -227,44 +227,74 @@ def compute_hazard_zone_geometry_and_radius(
     except Exception:
         lat_f, lon_f = -1.0, 102.0
 
-    # Default fallback (regency weather alert / other_disruption).
-    radius_km = 7.2
-    major_km, minor_km, bearing = 7.2 * 1.15, 7.2 * 0.78, 45.0
-
-    if itype in ("landslide", "road_closure"):
-        # Pinpoint chokepoint — narrow corridor wedge/ellipse.
-        radius_km = 3.5 if is_critical else 2.8
-        major_km, minor_km, bearing = radius_km * 1.15, radius_km * 0.55, 60.0
-    elif itype == "port_closure":
-        radius_km = 3.2
-        major_km, minor_km, bearing = 3.4, 2.3, 35.0
-    elif itype == "congestion":
-        radius_km = 2.5
-        major_km, minor_km, bearing = 3.0, 1.3, 60.0
-    elif itype == "flood":
-        radius_km = 6.0 if is_critical else 4.8
-        major_km, minor_km, bearing = radius_km * 1.2, radius_km * 0.65, 22.0
-    elif itype == "wildfire":
-        radius_km = 7.5
-        major_km, minor_km, bearing = 8.5, 5.0, 115.0
-    elif itype == "marine_wave":
-        radius_km = 8.5
-        major_km, minor_km, bearing = 9.5, 4.8, 140.0
-    elif itype == "volcanic_eruption":
-        radius_km = 10.0
-        major_km, minor_km, bearing = 10.5, 8.5, 30.0
-    elif itype == "earthquake":
+    # Macro natural phenomena with specialized multi-feature geometry
+    if itype == "earthquake" and loc_prec not in ("corridor_point", "exact_node"):
         radius_km = 12.0
         major_km, minor_km, bearing = 12.5, 10.0, 150.0
-    else:
-        # other_disruption or YELLOW_CLARIFY regency weather alert.
-        if is_yellow or itype == "other_disruption":
-            radius_km = 9.0 if is_province_only else 7.2
-            major_km, minor_km, bearing = radius_km * 1.15, radius_km * 0.78, 45.0
-
-    try:
         ring = _create_skewed_ellipse(lon_f, lat_f, major_km, minor_km, bearing_deg=bearing, points=36)
-    except Exception:
-        ring = _create_circle_polygon(lon_f, lat_f, radius_km)
+        return {"radius_km": float(radius_km), "geometry_polygon": ring, "spatial_tier": "MACRO_EARTHQUAKE"}
+    elif itype == "volcanic_eruption" and loc_prec not in ("corridor_point", "exact_node"):
+        radius_km = 10.0
+        major_km, minor_km, bearing = 10.5, 8.5, 30.0
+        ring = _create_skewed_ellipse(lon_f, lat_f, major_km, minor_km, bearing_deg=bearing, points=36)
+        return {"radius_km": float(radius_km), "geometry_polygon": ring, "spatial_tier": "MACRO_VOLCANO"}
+    elif itype == "marine_wave" and loc_prec not in ("corridor_point", "exact_node"):
+        radius_km = 8.5
+        major_km, minor_km, bearing = 9.5, 4.8, 140.0
+        ring = _create_skewed_ellipse(lon_f, lat_f, major_km, minor_km, bearing_deg=bearing, points=36)
+        return {"radius_km": float(radius_km), "geometry_polygon": ring, "spatial_tier": "MACRO_MARITIME"}
 
-    return {"radius_km": float(radius_km), "geometry_polygon": ring}
+    # ==================== TIER A: Corridor Point Blockade ====================
+    # Tight 0.6 km - 1.2 km anisotropic corridor polygon (semi_minor_km <= 0.5)
+    if loc_prec in ("corridor_point", "exact_node") or itype in ("road_closure", "congestion"):
+        if loc_prec == "corridor_point" or (loc_prec == "exact_node" and itype in ("road_closure", "congestion", "landslide")):
+            radius_km = 1.15 if is_critical else 0.95 if sev == "high" else 0.85
+            major_km = round(1.15 * radius_km, 3)
+            minor_km = round(0.42 * radius_km, 3)
+            bearing = 55.0
+            ring = _create_skewed_ellipse(lon_f, lat_f, major_km, minor_km, bearing_deg=bearing, points=36)
+            return {
+                "radius_km": float(radius_km),
+                "geometry_polygon": ring,
+                "spatial_tier": "TIER_A",
+                "semi_major_km": major_km,
+                "semi_minor_km": minor_km,
+            }
+
+    # ==================== TIER B: Kecamatan / Sub-District Area ====================
+    # 1.5 km - 2.2 km real ADM3 sub-district polygon via adm_boundary_service
+    if loc_prec == "kecamatan_kelurahan":
+        radius_km = 2.1 if is_critical else 1.8 if sev == "high" else 1.6
+        from app.services.adm_boundary_service import get_adm3_or_adm2_boundary_geojson
+        ring = get_adm3_or_adm2_boundary_geojson(
+            node_name=corridor_segment or itype,
+            center_lat=lat_f,
+            center_lon=lon_f,
+            radius_km=radius_km
+        )
+        return {
+            "radius_km": float(radius_km),
+            "geometry_polygon": ring,
+            "spatial_tier": "TIER_B",
+        }
+
+    # ==================== TIER C: Regency / City Mention Only ====================
+    # Broad regional advisory zone (3.2 km - 4.5 km), capped at YELLOW_CLARIFY
+    if loc_prec in ("kabupaten_kota", "province_only", "none"):
+        radius_km = 4.2 if is_province_only else 3.5
+        major_km = round(radius_km * 1.12, 3)
+        minor_km = round(radius_km * 0.82, 3)
+        bearing = 45.0
+        ring = _create_skewed_ellipse(lon_f, lat_f, major_km, minor_km, bearing_deg=bearing, points=36)
+        return {
+            "radius_km": float(radius_km),
+            "geometry_polygon": ring,
+            "spatial_tier": "TIER_C",
+            "is_advisory_zone": True,
+        }
+
+    # General Fallback
+    radius_km = 3.5
+    major_km, minor_km, bearing = 3.8, 2.5, 45.0
+    ring = _create_skewed_ellipse(lon_f, lat_f, major_km, minor_km, bearing_deg=bearing, points=36)
+    return {"radius_km": float(radius_km), "geometry_polygon": ring, "spatial_tier": "DEFAULT"}
