@@ -183,3 +183,21 @@ The following items are prioritized for subsequent development phases:
 ### Open Concerns
 1. Confirm legacy v1/v2 rows (academic REDs, overwritten `published_at`) visibly self-heal on live Render read.
 2. Browser E2E on Vercel: hazard-specific footprints per class, Evidence 4-check panel per item, stale items absent from feed.
+
+---
+
+## 9. Phase 75: Full-Body Scraping, Workhorse LLM Content Verifier & Post-Disaster Guards
+
+### Decisions
+1. **Teaser-triggered full-body enrichment**: `enrich_article_description_if_needed()` enriches any unscraped HTTP-linked article with a `< 450`-char / empty / title-equal description (or location-cue title), combining the RSS summary with scraped `<article>`/`<p>` body up to 2,500 chars; `body_scraped` / `article_body_chars` / `html_published_at` persisted once per article in `ground_truth_metrics` JSONB. The old `< 90` skip is gone — standard ~120-char RSS teasers are now always expanded.
+2. **Workhorse LLM reads article content, not teasers**: `extract_structured_news_batch()` pre-enriches short bodies, then feeds `ISI BERITA[:1600]` per article to `settings.opencode_driver_model` (NVIDIA NIM `deepseek-v4.1-flash` fallback) in 5-article chunks (`max_tokens=1600`), returning `is_active_disaster`, `zone_tier`, `verified_sumatra_locations[]`, `recommended_radius_km`, and content-grounded `tier_reason`.
+3. **Post-disaster construction can never be a crisis signal**: bare `"darurat"` removed from `STRICT_CRISIS_PREDICATES` and the `critical`-severity list (only `tanggap darurat bencana` / `darurat banjir` / `darurat longsor` remain); `POST_CONSTRUCTION_EXCLUSION_PHRASES` quarantines emergency-infra nouns; both `pasca` spacings plus construction vocabulary (`pembangunan`, `tanggul`, `perbaikan`, `renovasi`, …) in `NON_INCIDENT_DISCOURSE_MARKERS`, mirrored in the Agent-2 pre-filter and the frontend client guard; `other_disruption` without physical blockage cannot set `impact_corroborated`.
+4. **`EXTRACTION_SCHEMA_VERSION = 4`** in both `news_extractor.py` and `news_aggregator.py`; legacy rows auto re-verify on read (sanctioned zero-migration invalidation path). Evidence tab renders `✓ Konten Artikel Dianalisis Workhorse LLM ({n} kar)` when `verification_audit.llm_verified`.
+
+### Constraints & Deployment Context
+- Frontend: `https://pre-hub.vercel.app`; Backend: `https://peta-nadi.onrender.com`; DB: Supabase `news_articles` (`ground_truth_metrics` JSONB carries `body_scraped`, `article_body_chars`, `verification_audit`, `schema_version`; no migration, no new columns).
+- Prompt contract changed (content-grounded `tier_reason`, post-disaster DROPPED rules) — first LLM-prompt change since Phase 72; heuristic baselines unchanged as fallback.
+
+### Open Concerns
+1. Confirm live Render ingestor enriches short teasers (check `body_scraped` / `article_body_chars` on fresh rows) and the Workhorse overlay fires (`llm_verified` badges in Evidence tab on Vercel).
+2. Confirm `OPENCODE_API_KEY` is set on Render — without it the batch path keeps heuristic baselines and `tier_reason` stays heuristic.

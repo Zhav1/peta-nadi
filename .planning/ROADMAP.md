@@ -2076,6 +2076,34 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 
 ---
 
+## Phase 75: Full-Body Scraping, Workhorse LLM Content Verifier & Post-Disaster Construction Guards
+
+**Goal:** Fix 2 user-reported live defects: the agent judging articles on 120-char RSS teasers only (full-body HTML never scraped, LLM fed `desc[:200]`), and `"Pembangunan tanggul darurat pascabencana di Padang"` turning RED (bare `"darurat"` firing crisis + critical severity, unspaced `"pascabencana"` and construction words unmarked, `other_disruption` corroborating without blockage).
+**Status:** COMPLETE ✅
+**Plans:** `75-PLAN.md`, `75-WALKTHROUGH.md`, `75-01-SUMMARY.md`, `75-LEARNINGS.md`
+
+### Deliverables
+
+- **WP1 - Full-Body Article HTML Scraper (`news_aggregator.py`)**:
+  - `extract_lead_text_from_html()` (aliased `extract_full_article_body_from_html`) scrapes `<article>` / `.post-content` / `.read__content` / `<p>` blocks up to 2,500 chars.
+  - `enrich_article_description_if_needed()` rewritten: `< 90` skip removed; enriches any unscraped HTTP-linked article with `< 450`-char teaser / empty / title-equal description or location-cue title; combines RSS summary + scraped body (2,500-char cap); persists `body_scraped`, `article_body_chars`, `html_published_at` once per article into Supabase `ground_truth_metrics`.
+- **WP2 - Workhorse LLM Content Reader (`news_extractor.py` + `llm_gateway.py` + `unified_news_ingestor.py`)**:
+  - `extract_structured_news_batch()` pre-enriches short bodies, then feeds up to 1,600 chars/article to `settings.opencode_driver_model` (NVIDIA NIM `deepseek-v4.1-flash` fallback) in 5-article chunks (`max_tokens=1600`), returning `is_active_disaster`, `zone_tier`, `verified_sumatra_locations[]`, `recommended_radius_km`, content-grounded `tier_reason`.
+- **WP3 - Post-Disaster Construction & Relief Guardrails (`news_extractor.py` + `osint_hazard.py` + `useNewsVerification.ts`)**:
+  - Bare `"darurat"` removed from `STRICT_CRISIS_PREDICATES` and `severity == "critical"` (only `tanggap darurat bencana` / `darurat banjir` / `darurat longsor` remain); new `POST_CONSTRUCTION_EXCLUSION_PHRASES`.
+  - `NON_INCIDENT_DISCOURSE_MARKERS` gains both `pasca` spacings (`pascabencana`, `pascabanjir`, …) + construction vocabulary (`pembangunan`, `tanggul`, `perbaikan`, `renovasi`, …), mirrored in Agent-2 pre-filter and frontend client guard.
+  - `impact_corroborated` blocks `other_disruption` without physical blockage.
+- **WP4 - Schema v4 + Frontend Guards & Badge**:
+  - `EXTRACTION_SCHEMA_VERSION = 4` (both modules); legacy rows auto re-verify on read. `EvidenceTab.tsx` renders `✓ Konten Artikel Dianalisis Workhorse LLM ({n} kar)` badge.
+
+### Verification
+
+- [x] Short teasers trigger HTML fetch; body capped 2,500 chars; LLM prompt carries `ISI BERITA[:1600]`, `max_tokens=1600`, 5-article chunks.
+- [x] `"Pembangunan tanggul darurat pascabencana di Padang"` → `DROPPED_IRRELEVANT`; true closures (`putus/amblas/tertutup/terisolir`) still RED.
+- [x] 9 files modified; zero new Supabase columns; `git status` shows only intended files.
+
+---
+
 ## Backlog (Post-Hackathon / v2 & New Context Window Backlog)
 
 ### Active Remediation & Audit Backlog (For New Context Window)

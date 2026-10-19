@@ -22,7 +22,7 @@ from app.nlp.geocoding_service import (
 
 logger = logging.getLogger(__name__)
 
-EXTRACTION_SCHEMA_VERSION = 3
+EXTRACTION_SCHEMA_VERSION = 4
 
 ECONOMIC_OPINION_CEREMONIAL_EXCLUSIONS = (
     "dukung perekonomian", "pertumbuhan ekonomi", "dorong ekonomi",
@@ -42,9 +42,17 @@ STRICT_CRISIS_PREDICATES = (
     "cuaca buruk", "angin kencang", "puting beliung", "badai", "erupsi",
     "abu vulkanik", "lahar dingin", "gempa", "kebakaran hutan", "karhutla",
     "kabut asap", "tumpahan", "kecelakaan", "tabrakan", "terguling", "mogok",
-    "blokade", "kelangkaan bbm", "antrean bbm", "darurat", "siaga", "waspada",
+    "blokade", "kelangkaan bbm", "antrean bbm", "tanggap darurat bencana",
+    "darurat banjir", "darurat longsor", "siaga", "waspada",
     "peringatan dini", "rawan longsor", "rawan banjir", "rusak parah",
     "berlubang parah", "gangguan operasional", "dihentikan sementara", "ditunda",
+)
+
+# Emergency-infra nouns that are post-disaster construction, NOT active crisis
+# predicates. They must never count as a crisis signal on their own.
+POST_CONSTRUCTION_EXCLUSION_PHRASES = (
+    "tanggul darurat", "jembatan darurat", "posko darurat", "tenda darurat",
+    "sekolah darurat", "pembangunan",
 )
 
 PHYSICAL_BLOCKAGE_PREDICATES = (
@@ -63,13 +71,20 @@ NON_INCIDENT_DISCOURSE_MARKERS = (
     "apel siaga", "pelatihan", "seminar", "diskusi", "kajian", "riset",
     "studi", "wacana", "usulan", "rekomendasi", "program", "anggaran",
     "bantuan sosial", "penyaluran bantuan", "santunan", "pasca banjir",
-    "pasca bencana", "rekonstruksi", "trauma healing", "dukung perekonomian",
+    "pasca bencana", "pascabencana", "pasca-bencana", "pascabanjir",
+    "pasca-banjir", "pascagempa", "pasca-gempa", "pascalongsor",
+    "rekonstruksi", "trauma healing", "dukung perekonomian",
     "pertumbuhan ekonomi", "dorong ekonomi", "dongkrak ekonomi",
     "dongkrak perekonomian", "peresmian", "diresmikan", "apresiasi",
     "optimis", "investasi", "progres pembangunan", "progres konstruksi",
     "uji laik fungsi", "diskon tarif", "mudik gratis", "kunjungan kerja",
     "rapat koordinasi", "penghargaan", "ekspor meningkat", "surplus",
-    "pengusaha:",
+    "pengusaha:", "pembangunan", "membangun", "tanggul",
+    "tanggul darurat", "jembatan darurat", "jembatan bailey",
+    "posko darurat", "tenda darurat", "sekolah darurat", "dapur umum",
+    "perbaikan", "renovasi", "pengerukan", "peletakan batu",
+    "tinjau lokasi", "meninjau", "kunjungan", "penyerahan bantuan",
+    "bantuan logistik",
 )
 
 # In-memory LRU-style cache to prevent repeated LLM calls on identical news headlines
@@ -228,11 +243,14 @@ def _classify_discourse_type(full_text_lower: str, has_non_incident: bool) -> st
     t = full_text_lower or ""
     if any(w in t for w in ("akademisi", "unand", "universitas", "guru besar", "pakar", "pengamat", "peneliti")):
         return "academic_commentary"
-    if any(w in t for w in ("solusi", "pemulihan", "hulu das", "rehabilitasi", "normalisasi", "reboisasi", "rekomendasi", "usulan", "kajian", "riset", "studi", "wacana")):
+    if any(w in t for w in ("solusi", "pemulihan", "hulu das", "rehabilitasi", "normalisasi", "reboisasi", "rekomendasi", "usulan", "kajian", "riset", "studi", "wacana", "reboisasi", "penghijauan", "pencegahan", "pengerukan", "renovasi", "perbaikan", "pembangunan", "membangun", "tanggul")):
+        # Recovery / construction / policy-solution discourse (incl. post-disaster works).
+        if any(w in t for w in ("pasca banjir", "pasca bencana", "pascabencana", "pasca-bencana", "pascabanjir", "pasca-banjir", "pascagempa", "pasca-gempa", "pascalongsor", "rekonstruksi", "trauma healing", "bantuan sosial", "penyaluran bantuan", "santunan", "penyerahan bantuan", "bantuan logistik", "dapur umum", "posko darurat", "tenda darurat", "sekolah darurat", "jembatan darurat", "jembatan bailey", "tanggul darurat", "peletakan batu", "tinjau lokasi", "meninjau", "kunjungan")):
+            return "retrospective_aid"
         return "solution_policy_discourse"
     if any(w in t for w in ("sosialisasi", "edukasi", "simulasi bencana", "apel siaga", "pelatihan", "seminar", "diskusi")):
         return "prevention_ceremonial"
-    if any(w in t for w in ("pasca banjir", "pasca bencana", "rekonstruksi", "trauma healing", "bantuan sosial", "penyaluran bantuan", "santunan")):
+    if any(w in t for w in ("pasca banjir", "pasca bencana", "pascabencana", "pasca-bencana", "pascabanjir", "pasca-banjir", "pascagempa", "pasca-gempa", "pascalongsor", "rekonstruksi", "trauma healing", "bantuan sosial", "penyaluran bantuan", "santunan", "penyerahan bantuan", "bantuan logistik", "dapur umum", "posko darurat", "tenda darurat", "sekolah darurat", "jembatan darurat", "pembangunan", "membangun", "tanggul", "perbaikan", "renovasi", "peletakan batu", "tinjau lokasi", "meninjau", "kunjungan")):
         return "retrospective_aid"
     if any(w in t for w in ("peresmian", "diresmikan", "apresiasi", "penghargaan", "kunjungan kerja", "rapat koordinasi", "mudik gratis", "diskon tarif")):
         return "ceremonial_economic"
@@ -252,6 +270,7 @@ def run_agent_verification_gate(
     location_precision: str = "none",
     temporal_phase: str = "active_disruption",
     severity: str = "medium",
+    incident_type: str = "",
     **kwargs: Any,
 ) -> Dict[str, Any]:
     """Strict 4-check deterministic agent verification gate.
@@ -288,6 +307,8 @@ def run_agent_verification_gate(
         temporal_phase = article.get("temporal_phase") or temporal_phase or "active_disruption"
     if not severity:
         severity = article.get("severity") or "medium"
+    if not incident_type:
+        incident_type = (article.get("incident_type") if article else "") or kwargs.get("incident_type", "") or ""
 
     # ---- Check 1: freshness ----
     freshness_passed = True
@@ -328,7 +349,10 @@ def run_agent_verification_gate(
     spatial_passed = bool(is_geocoded) and (latitude is not None)
 
     # ---- Check 4: impact corroborated ----
+    # Never allow generic other_disruption without a physical blockage to
+    # corroborate impact (kills economic/opinion false-REDs).
     is_weather_warning_only = _detect_weather_warning_only(full_text_lower)
+    _is_generic_other = str(incident_type or "").lower() == "other_disruption"
     impact_corroborated = bool(
         freshness_passed
         and discourse_passed
@@ -337,6 +361,7 @@ def run_agent_verification_gate(
         and (temporal_phase == "active_disruption")
         and (bool(has_physical_blockage) or str(severity).lower() in ("high", "critical"))
         and (not is_weather_warning_only)
+        and not (_is_generic_other and not has_physical_blockage)
     )
 
     discourse_type = _classify_discourse_type(full_text_lower, has_non_incident_discourse)
@@ -404,10 +429,11 @@ def _fast_heuristic_extraction(art: Dict[str, Any]) -> Dict[str, Any]:
         temporal_phase = "clearing_recovery"
         lead_time_hours = 0.0
 
-    # 3. Severity
+    # 3. Severity (bare "darurat" removed: only specific active-crisis phrases count)
     severity = "medium"
     if any(w in full_text for w in ["putus", "lumpuh total", "tenggelam", "siaga 1",
-                                    "darurat", "terisolir", "120cm", "100cm", "ditutup",
+                                    "tanggap darurat bencana", "darurat banjir", "darurat longsor",
+                                    "terisolir", "120cm", "100cm", "ditutup",
                                     "ambruk", "erupsi"]):
         severity = "critical"
     elif any(w in full_text for w in ["siaga 2", "tersendat", "antrean panjang",
@@ -466,6 +492,7 @@ def _fast_heuristic_extraction(art: Dict[str, Any]) -> Dict[str, Any]:
             "location_precision": location_precision,
             "temporal_phase": temporal_phase,
             "severity": severity,
+            "incident_type": incident_type,
         })
         verification_audit = run_agent_verification_gate(
             _probe_article,
@@ -478,6 +505,7 @@ def _fast_heuristic_extraction(art: Dict[str, Any]) -> Dict[str, Any]:
             location_precision=location_precision,
             temporal_phase=temporal_phase,
             severity=severity,
+            incident_type=incident_type,
         )
     except Exception:
         verification_audit = {
@@ -531,7 +559,9 @@ def _fast_heuristic_extraction(art: Dict[str, Any]) -> Dict[str, Any]:
                                  "marine_wave", "road_closure", "volcanic_eruption",
                                  "wildfire")
                or (incident_type == "congestion" and severity in ("high", "critical"))
-               or impact_profile.get("passability") in ("BLOCKED", "RESTRICTED"))):
+               or (incident_type == "other_disruption" and has_physical_blockage)
+               or (impact_profile.get("passability") in ("BLOCKED", "RESTRICTED") and incident_type != "other_disruption")
+               or (impact_profile.get("passability") in ("BLOCKED", "RESTRICTED") and has_physical_blockage))):
         # Geocoded exact-node with hazard signal but missing one corroboration
         # facet (e.g. no explicit physical predicate) -> still RED only if the
         # verification gate did not fail freshness/discourse and it is not a
@@ -604,6 +634,9 @@ def _fast_heuristic_extraction(art: Dict[str, Any]) -> Dict[str, Any]:
         "published_at": art.get("published_at") or art.get("html_published_at") or art.get("pubDate"),
         "summary": title,
         "concise_summary": title,
+        "raw_description": f"{title} {desc}".strip(),
+        "body_scraped": art.get("body_scraped", False),
+        "article_body_chars": art.get("article_body_chars") or len(f"{title} {desc}".strip()),
         "region": region,
         "province": region,
         "latitude": latitude,
@@ -672,6 +705,30 @@ def _clean_llm_json(text: str) -> str:
 def _apply_batch_llm_item(structured: Dict[str, Any], item: Dict[str, Any]) -> Dict[str, Any]:
     """Merges one batched-LLM result item into the heuristic baseline."""
     try:
+        # Workhorse LLM hard DROP: inactive disaster (post-construction / recovery /
+        # opinion / ceremony / economic) is never mappable.
+        _is_active = item.get("is_active_disaster")
+        if _is_active is False:
+            structured["zone_tier"] = "DROPPED_IRRELEVANT"
+            structured["tier_reason"] = (item.get("tier_reason")
+                                         or "LLM membaca isi berita: bukan bencana aktif (konstruksi pascabencana/pemulihan/opini).")
+            try:
+                _va = dict(structured.get("verification_audit") or {})
+                _va["llm_verified"] = True
+                _va["content_chars_analyzed"] = len(structured.get("raw_description") or "")
+                if item.get("discourse_type"):
+                    _va["discourse_type"] = item["discourse_type"]
+                    _va["discourse_type_llm"] = item["discourse_type"]
+                structured["verification_audit"] = _va
+                gtm0 = dict(structured.get("ground_truth_metrics") or {})
+                gtm0.update({"zone_tier": structured.get("zone_tier"),
+                             "tier_reason": structured.get("tier_reason"),
+                             "verification_audit": _va,
+                             "schema_version": EXTRACTION_SCHEMA_VERSION})
+                structured["ground_truth_metrics"] = gtm0
+            except Exception:
+                pass
+            return structured
         if item.get("incident_type"):
             structured["incident_type"] = item["incident_type"]
         if item.get("severity"):
@@ -681,6 +738,13 @@ def _apply_batch_llm_item(structured: Dict[str, Any], item: Dict[str, Any]) -> D
         if item.get("concise_summary"):
             structured["summary"] = item["concise_summary"]
             structured["concise_summary"] = item["concise_summary"]
+        if item.get("discourse_type"):
+            try:
+                _va0 = dict(structured.get("verification_audit") or {})
+                _va0["discourse_type_llm"] = item["discourse_type"]
+                structured["verification_audit"] = _va0
+            except Exception:
+                pass
         # Impact profile merge
         ip = dict(structured.get("impact_profile") or {})
         if item.get("affected_modalities"):
@@ -693,10 +757,16 @@ def _apply_batch_llm_item(structured: Dict[str, Any], item: Dict[str, Any]) -> D
             except Exception:
                 pass
         structured["impact_profile"] = ip
+        if item.get("recommended_radius_km") is not None:
+            try:
+                structured["radius_km"] = float(item["recommended_radius_km"])
+            except Exception:
+                pass
         # Tiering — LLM is authoritative unless it contradicts geocoding reality
         # or the deterministic verification gate (freshness / discourse).
         llm_tier = (item.get("zone_tier") or "").upper()
         llm_loc = item.get("verified_sumatra_location")
+        llm_locs = item.get("verified_sumatra_locations")
         # Deterministic gate is never overridden by the LLM.
         try:
             _audit = structured.get("verification_audit") or {}
@@ -726,6 +796,36 @@ def _apply_batch_llm_item(structured: Dict[str, Any], item: Dict[str, Any]) -> D
                     structured["zone_tier"] = llm_tier
                     if item.get("tier_reason"):
                         structured["tier_reason"] = item["tier_reason"]
+        # Multi-location fan-out: every Kabupaten/pass found by the Workhorse LLM
+        # in the body paragraphs gets geocoded with hazard-specific geometry.
+        try:
+            if isinstance(llm_locs, list) and any(isinstance(x, str) and x.strip() for x in llm_locs):
+                from app.nlp.geocoding_service import resolve_all_sumatra_locations as _resolve_all
+                _loc_text = ", ".join([str(x).strip() for x in llm_locs if isinstance(x, str) and str(x).strip()])
+                _fallback = structured.get("province") or structured.get("region") or "Sumatera Utara"
+                _all = _resolve_all(_loc_text, fallback_province=_fallback)
+                if _all:
+                    structured["affected_locations"] = _all
+                    # Promote primary to top hit.
+                    _top = _all[0]
+                    structured["latitude"] = _top.get("latitude", structured.get("latitude"))
+                    structured["longitude"] = _top.get("longitude", structured.get("longitude"))
+                    structured["province"] = _top.get("province", structured.get("province"))
+                    structured["region"] = _top.get("province", structured.get("region", structured.get("province")))
+                    structured["corridor_segment"] = _top.get("corridor_segment", structured.get("corridor_segment"))
+                    structured["corridor_nodes"] = [_e.get("name") for _e in _all if _e.get("name")]
+                    structured["is_geocoded"] = True
+                    structured["location_precision"] = _top.get("location_precision", "exact_node")
+        except Exception:
+            pass
+        # Mark LLM verification + content length analyzed.
+        try:
+            _va2 = dict(structured.get("verification_audit") or {})
+            _va2["llm_verified"] = True
+            _va2["content_chars_analyzed"] = len(structured.get("raw_description") or "")
+            structured["verification_audit"] = _va2
+        except Exception:
+            pass
         # Sync ground_truth_metrics mirror
         # Recompute hazard geometry if LLM changed incident_type/severity.
         try:
@@ -767,13 +867,29 @@ def _apply_batch_llm_item(structured: Dict[str, Any], item: Dict[str, Any]) -> D
 
 async def extract_structured_news_batch(articles: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
-    Economical batched LLM gatekeeper: heuristic baselines for all articles, then
-    ONE compact LLM call per ~10 unseen candidates via LLMGateway.generate_content
-    returning a JSON array with per-article tiering. Falls back to heuristics when
-    the LLM is unavailable. Never raises.
+    Economical batched LLM gatekeeper: enrich short bodies with full article HTML,
+    heuristic baselines for all articles, then compact LLM calls in chunks of up
+    to 5 candidates via LLMGateway.generate_content returning a JSON array with
+    per-article tiering. Falls back to heuristics when the LLM is unavailable.
+    Never raises.
     """
     if not articles:
         return []
+    # Pre-enrich: scrape full article body for any HTTP-linked row that has not
+    # been scraped and whose description is still a short RSS teaser (<450 chars).
+    try:
+        _needs_enrich = any(
+            isinstance(a, dict)
+            and not a.get("body_scraped")
+            and len((a.get("raw_description") or a.get("summary") or "")) < 450
+            and str(a.get("link") or a.get("url") or "").startswith("http")
+            for a in articles
+        )
+        if _needs_enrich:
+            from app.services.news_aggregator import enrich_article_description_if_needed as _enrich
+            articles = list(await asyncio.gather(*[_enrich(dict(a)) if isinstance(a, dict) else a for a in articles]))
+    except Exception:
+        pass
     baselines: List[Dict[str, Any]] = []
     for a in articles:
         try:
@@ -791,8 +907,8 @@ async def extract_structured_news_batch(articles: List[Dict[str, Any]]) -> List[
         except Exception:
             pass
 
-    # Only send non-dropped candidates to the LLM (economy: max 10 per prompt).
-    candidates = [b for b in baselines if b.get("zone_tier") != "DROPPED_IRRELEVANT"][:10]
+    # Only send non-dropped candidates to the LLM, in chunks of up to 5.
+    candidates = [b for b in baselines if b.get("zone_tier") != "DROPPED_IRRELEVANT"]
     if not candidates:
         return baselines
     try:
@@ -801,52 +917,69 @@ async def extract_structured_news_batch(articles: List[Dict[str, Any]]) -> List[
         if not opencode_key or opencode_key.startswith("your-"):
             return baselines
         from agents.llm_gateway import LLMGateway
-        lines = []
-        for b in candidates:
-            lines.append(
-                f"- id: {b.get('id')} | title: {(b.get('title') or '')[:160]} | "
-                f"desc: {(b.get('concise_summary') or b.get('summary') or '')[:200]} | "
-                f"heuristik: {b.get('incident_type')}/{b.get('severity')}/{b.get('zone_tier')}"
-            )
-        prompt = (
-            "Klasifikasikan artikel bencana/logistik Sumatera berikut. Kembalikan HANYA "
-            "array JSON valid (tanpa markdown) berisi satu objek per artikel:\n"
-            "{\n"
-            '  "id": "string (sama persis)",\n'
-            '  "zone_tier": "RED_CONFIRMED | YELLOW_CLARIFY | DROPPED_IRRELEVANT",\n'
-            '  "tier_reason": "1 kalimat Bahasa Indonesia",\n'
-            '  "incident_type": "flood | landslide | earthquake | wildfire | port_closure | marine_wave | road_closure | congestion | volcanic_eruption | other_disruption",\n'
-            '  "custom_hazard_label": "label singkat Bahasa Indonesia",\n'
-            '  "verified_sumatra_location": "kota/pelabuhan/jalan dari ISI berita saja, JANGAN dari nama biro (mis. Antara Bengkulu), atau null jika tidak ada",\n'
-            '  "severity": "low | medium | high | critical",\n'
-            '  "affected_modalities": ["land" dan/atau "sea" dan/atau "air"],\n'
-            '  "passability": "BLOCKED | RESTRICTED | CAUTION",\n'
-            '  "estimated_delay_hours": 0,\n'
-            '  "concise_summary": "1 kalimat ringkasan operasional Bahasa Indonesia"\n'
-            "}\n"
-            "Aturan: verified_sumatra_location=null ATAU iklan/tidak-relevan/di luar Sumatera "
-            "=> zone_tier DROPPED_IRRELEVANT. Hanya lokasi node spesifik (kota/pelabuhan/jalan) "
-            "yang boleh RED_CONFIRMED; sebutan provinsi saja => YELLOW_CLARIFY. "
-            "Tandai opini/akademisi (Akademisi/Pakar/Solusi Banjir/Pemulihan DAS), usulan kebijakan, "
-            "seminar/diskusi/sosialisasi, bantuan/pasca-bencana, dan berita arsip >48 jam sebagai "
-            "DROPPED_IRRELEVANT.\n\n"
-            + "\n".join(lines)
-        )
-        gen_text = await asyncio.wait_for(
-            LLMGateway.generate_content(prompt=prompt, model_name=settings.opencode_driver_model),
-            timeout=35.0,
-        )
-        if not gen_text:
-            return baselines
-        parsed = json.loads(_clean_llm_json(gen_text))
-        items = parsed if isinstance(parsed, list) else parsed.get("items", []) if isinstance(parsed, dict) else []
         by_id = {str(b.get("id")): b for b in baselines}
-        for it in items:
-            if not isinstance(it, dict) or not it.get("id"):
+        for _ci in range(0, len(candidates), 5):
+            _chunk = candidates[_ci:_ci + 5]
+            lines = []
+            for b in _chunk:
+                _desc = (b.get("raw_description") or b.get("concise_summary") or b.get("summary") or "")
+                lines.append(
+                    f"- id: {b.get('id')} | judul: {(b.get('title') or '')[:160]} | "
+                    f"ISI BERITA: {_desc[:1600]} | "
+                    f"heuristik: {b.get('incident_type')}/{b.get('severity')}/{b.get('zone_tier')}"
+                )
+            prompt = (
+                "Baca ISI BERITA setiap artikel Sumatera berikut secara penuh sebelum memutuskan. "
+                "Kembalikan HANYA array JSON valid (tanpa markdown) berisi satu objek per artikel:\n"
+                "{\n"
+                '  "id": "string (sama persis)",\n'
+                '  "is_active_disaster": true | false,\n'
+                '  "zone_tier": "RED_CONFIRMED | YELLOW_CLARIFY | DROPPED_IRRELEVANT",\n'
+                '  "tier_reason": "1-2 kalimat Bahasa Indonesia menjelaskan keputusan berdasarkan ISI BERITA",\n'
+                '  "verified_sumatra_locations": ["nama lokasi spesifik (pass, jalan, pelabuhan, Kecamatan, Kabupaten/Kota) yang disebut di ISI BERITA sebagai terdampak, atau []"],\n'
+                '  "verified_sumatra_location": "lokasi utama string atau null",\n'
+                '  "incident_type": "flood | landslide | earthquake | wildfire | port_closure | marine_wave | road_closure | congestion | volcanic_eruption | other_disruption",\n'
+                '  "custom_hazard_label": "label singkat Bahasa Indonesia",\n'
+                '  "severity": "low | medium | high | critical",\n'
+                '  "affected_modalities": ["land" dan/atau "sea" dan/atau "air"],\n'
+                '  "passability": "BLOCKED | RESTRICTED | CAUTION",\n'
+                '  "estimated_delay_hours": 0,\n'
+                '  "recommended_radius_km": 6.0,\n'
+                '  "discourse_type": "incident_report | academic_commentary | solution_policy_discourse | prevention_ceremonial | retrospective_aid | ceremonial_economic",\n'
+                '  "concise_summary": "1 kalimat ringkasan operasional Bahasa Indonesia"\n'
+                "}\n"
+                "Aturan: is_active_disaster=true HANYA jika ISI BERITA menggambarkan bencana fisik aktif "
+                "atau disrupsi transport/logistik yang sedang terjadi; false jika konstruksi/pemulihan pascabencana "
+                '(mis. Pembangunan tanggul darurat pascabencana), perbaikan, solusi akademik/pakar, seremonial, atau ekonomi. '
+                "is_active_disaster=false ATAU verified_sumatra_location=null ATAU iklan/tidak-relevan/di luar Sumatera "
+                "=> zone_tier DROPPED_IRRELEVANT. Hanya lokasi node spesifik (kota/pelabuhan/jalan) "
+                "yang boleh RED_CONFIRMED; sebutan provinsi saja => YELLOW_CLARIFY. "
+                "Tandai opini/akademisi (Akademisi/Pakar/Solusi Banjir/Pemulihan DAS), usulan kebijakan, "
+                "seminar/diskusi/sosialisasi, bantuan/pasca-bencana/pembangunan/tanggul/perbaikan/renovasi, "
+                "dan berita arsip >48 jam sebagai DROPPED_IRRELEVANT.\n\n"
+                + "\n".join(lines)
+            )
+            try:
+                gen_text = await asyncio.wait_for(
+                    LLMGateway.generate_content(prompt=prompt, model_name=settings.opencode_driver_model, max_tokens=1600),
+                    timeout=35.0,
+                )
+            except Exception as _ce:
+                logger.warning(f"Batched LLM chunk unavailable ({type(_ce).__name__}: {_ce}); keeping heuristics.")
                 continue
-            target = by_id.get(str(it["id"]))
-            if target is not None:
-                _apply_batch_llm_item(target, it)
+            if not gen_text:
+                continue
+            try:
+                parsed = json.loads(_clean_llm_json(gen_text))
+            except Exception:
+                continue
+            items = parsed if isinstance(parsed, list) else parsed.get("items", []) if isinstance(parsed, dict) else []
+            for it in items:
+                if not isinstance(it, dict) or not it.get("id"):
+                    continue
+                target = by_id.get(str(it["id"]))
+                if target is not None:
+                    _apply_batch_llm_item(target, it)
     except Exception as e:
         logger.warning(f"Batched LLM extraction unavailable ({type(e).__name__}: {e}); using heuristics.")
     return baselines

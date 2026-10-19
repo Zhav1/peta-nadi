@@ -2,19 +2,19 @@
 gsd_state_version: "1.0"
 milestone: M4
 milestone_name: PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability
-current_phase: 74
-current_phase_name: Agent Verification Gate, Hazard-Specific Zone Geometry & 48h Freshness Lockdown
+current_phase: 75
+current_phase_name: Full-Body Scraping, Workhorse LLM Content Verifier & Post-Disaster Construction Guards
 status: complete
-stopped_at: "Phase 74 complete: (1) 4-check agent verification gate (freshness/discourse/spatial/impact) + NON_INCIDENT_DISCOURSE_MARKERS + bare banjir/longsor removed from blockage predicates + Agent-2 pre-filter; (2) hazard-specific radii (landslide 2.8-3.5 wedge to earthquake 12.0) + anisotropic polygons backend-first; (3) 48h freshness lockdown (archival URL date gate + true published_at + when:2d + client mirror guard); (4) schema_version = 3 auto re-verification + Evidence 4-check audit UI."
+stopped_at: "Phase 75 complete: (1) full-body article scraper (enrich <450-char teasers to 2,500-char body, once per article); (2) Workhorse LLM content reader (1,600 chars/article, 5-article chunks, tier_reason + verified_sumatra_locations); (3) post-disaster construction guards (bare darurat removed, pascabencana/construction discourse markers, other_disruption blockage requirement); (4) schema_version = 4 auto re-verification + client guard mirror + Workhorse LLM badge."
 last_updated: "2026-10-19T12:00:00.000Z"
 last_activity: 2026-10-19
-last_activity_desc: "Phase 74 executed & verified: 3 live-case fixes green, extractor/router suites pass."
+last_activity_desc: "Phase 75 executed & verified: teaser-to-body enrichment + Workhorse LLM content overlay green, construction false-RED killed, extractor/router suites pass."
 state_head: HEAD
 progress:
-  total_phases: 74
-  completed_phases: 74
-  total_plans: 90
-  completed_plans: 90
+  total_phases: 75
+  completed_phases: 75
+  total_plans: 91
+  completed_plans: 91
   percent: 100.0
 ---
 
@@ -22,15 +22,15 @@ progress:
 
 **Last Updated:** 2026-10-19
 **Active Milestone:** M4 - PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability [ACTIVE 🚀]
-**Current Phase:** 74
+**Current Phase:** 75
 
 ---
 
 ## Current Position
 
-Phase: 74 (Agent Verification Gate, Hazard-Specific Zone Geometry & 48h Freshness Lockdown) - COMPLETE ✅
-Status: (1) 4-check verification gate (freshness/discourse/spatial/impact) + discourse markers + blockage-predicate fix + Agent-2 pre-filter; (2) hazard-specific radii (2.8–12.0 km) + anisotropic polygons backend-first; (3) 48h freshness lockdown (URL date gate + true published_at + when:2d + client guard); (4) schema_version=3 auto re-verification + Evidence 4-check audit panel.
-Last activity: 2026-10-19 - Phase 74 fully executed and verified.
+Phase: 75 (Full-Body Scraping, Workhorse LLM Content Verifier & Post-Disaster Construction Guards) - COMPLETE ✅
+Status: (1) full-body scraper (teaser <450 chars → 2,500-char body, once per article); (2) Workhorse LLM content reader (1,600 chars/article, 5-chunks, tier_reason + verified locations); (3) construction guards (bare darurat removed, pascabencana/construction markers, other_disruption blockage rule); (4) schema_version=4 re-verification + client guard + LLM badge.
+Last activity: 2026-10-19 - Phase 75 fully executed and verified.
 Next action: Push changes to remote repository.
 
 ---
@@ -115,6 +115,7 @@ Next action: Push changes to remote repository.
 | 72 | LLM News Gatekeeper, Red/Yellow Audit Zones & Port-Closure Modality Rerouting | **COMPLETE** ✅ | 3-tier gatekeeper (RED/YELLOW/DROPPED) with bureau stripping + DB-first dedup; clickable Red/Yellow zones with independent checkboxes; stored Audit Trail inspection; 10-hazard ImpactProfile; alternate-port failover with tradeoff economics. 0 tsc errors. |
 | 73 | Toponym Specificity Hierarchy, Strict Crisis Predicate Gate & Multi-Regency Zone Fan-Out | **COMPLETE** ✅ | 4-tier toponym hierarchy (tier,-len) + route-endpoint masking + gazetteer completion (sipirok/asahan/deli serdang/langkat); two-factor crisis gate (bare infra nouns never trigger); multi-location fan-out (affected_locations[]) + lead meta scraping + schema_version=2 re-tiering; N Red/Yellow polygons per report + Wilayah Terdampak pills. 0 tsc errors. |
 | 74 | Agent Verification Gate, Hazard-Specific Zone Geometry & 48h Freshness Lockdown | **COMPLETE** ✅ | 4-check gate (freshness/discourse/spatial/impact) + discourse markers + blockage fix + Agent-2 pre-filter; hazard-specific radii (2.8–12.0 km) + backend-first polygons; 48h lockdown (URL date gate + true published_at + when:2d + client guard); schema_version=3 re-verification + Evidence 4-check audit UI. |
+| 75 | Full-Body Scraping, Workhorse LLM Content Verifier & Post-Disaster Construction Guards | **COMPLETE** ✅ | Full-article HTML scraping (2,500-char body, `< 450` teaser trigger, once per article in `ground_truth_metrics`); Workhorse LLM content reader (1,600 chars/article, 5-article chunks, `tier_reason` + `verified_sumatra_locations`); construction guards (bare `darurat` removed, `pascabencana`/construction markers, `other_disruption` blockage rule); schema_version=4 re-verification + client guard mirror + Workhorse LLM badge. |
 
 ---
 
@@ -122,6 +123,7 @@ Next action: Push changes to remote repository.
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
+| 2026-10-19 | Phase 75: Full-Body Scraping, Workhorse LLM Content Verifier & Post-Disaster Guards | Full-article HTML scraping (<450-char teaser trigger, 2,500-char body, once per article) + Workhorse LLM content reader (1,600 chars/article, 5-chunks, tier_reason + verified locations) ends teaser-only judgments; bare darurat removed from crisis/severity lists and pascabencana/construction discourse markers kill Pembangunan-tanggul-darurat false REDs; other_disruption without blockage can no longer corroborate; schema_version=4 re-verifies legacy rows with zero migrations. |
 | 2026-10-19 | Phase 74: Agent Verification Gate, Hazard-Specific Geometry & 48h Freshness Lockdown | 4-check deterministic gate (freshness/discourse/spatial/impact) with bare banjir/longsor removed from blockage predicates kills academic-RED promotion; agent-decided hazard radii (2.8–12.0 km) replace hardcoded circles; archival-URL date gate + true published_at + when:2d ends stale-as-latest; schema_version=3 auto re-verifies legacy rows with zero new LLM cost. |
 | 2026-10-19 | Phase 73: Toponym Specificity Hierarchy, Strict Crisis Predicate Gate & Multi-Regency Zone Fan-Out | Tier-first gazetteer ordering (tier,-len) + Sipirok/Kabupaten key completion fixes Jambi-centroid mis-pinning; Jalan Lintas A-B endpoint masking preserves Sitinjau Lauik pinpoint; two-factor crisis gate (STRICT predicates + opinion exclusions, bare infra nouns never trigger) kills false Yellows; resolve_all_sumatra_locations + lead-meta enrichment fans out N Red/Yellow zones per multi-daerah report with Wilayah Terdampak pills; schema_version=2 auto re-tiers legacy rows with zero new LLM cost. 0 tsc errors, 4 live cases green. |
 | 2026-10-19 | Phase 72: LLM News Gatekeeper, Red/Yellow Audit Zones & Port-Closure Modality Rerouting | DB-first dedup before any LLM call; bureau/dateline stripping fixes "ANTARA Bengkulu" centroid pollution; 3-tier gatekeeper (RED_CONFIRMED/YELLOW_CLARIFY/DROPPED_IRRELEVANT) with heuristic-first + LLM overlay; clickable Red/Yellow zones with independent checkboxes; news Fokus opens stored Audit Trail at zero simulation cost; 10-hazard ImpactProfile; alternate-port intermodal failover with per-route tradeoff economics. 0 tsc errors, pytest routing/news suites pass. |
@@ -207,7 +209,7 @@ These scripts validate the economic correlation hypotheses that underpin Agent 5
 ## Session
 
 **Last session:** 2026-10-19T12:00:00.000Z
-**Stopped at:** Completed Phase 74 (4-check verification gate, hazard-specific geometry, 48h freshness lockdown, schema v3) and documentation via gsd-docs-update
+**Stopped at:** Completed Phase 75 (full-body scraping, Workhorse LLM content verifier, post-disaster construction guards, schema v4) and documentation via gsd-docs-update
 **Resume file:** None
 
 ## Performance Metrics

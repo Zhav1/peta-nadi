@@ -33,6 +33,9 @@ export interface VerificationAudit {
   discourse_type?: string;
   age_hours?: number;
   agent_verdict_summary?: string;
+  llm_verified?: boolean;
+  content_chars_analyzed?: number;
+  is_active_disaster?: boolean;
 }
 
 export interface HazardImpactProfile {

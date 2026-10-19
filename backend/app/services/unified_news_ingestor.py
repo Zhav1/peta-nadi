@@ -115,12 +115,12 @@ class UnifiedNewsIngestor:
                             merged[_k] = gtm[_k]
                     if not merged.get("id"):
                         merged["id"] = _pid
-                    # Stale rows (schema_version != 3) must be re-extracted.
+                    # Stale rows (schema_version != 4) must be re-extracted.
                     try:
                         _sv_hit = gtm.get("schema_version") if isinstance(gtm, dict) else None
                     except Exception:
                         _sv_hit = None
-                    if _sv_hit != 3:
+                    if _sv_hit != 4:
                         unseen.append(merged)
                         continue
                     reused.append(merged)

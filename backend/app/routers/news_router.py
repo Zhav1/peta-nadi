@@ -135,7 +135,7 @@ async def get_live_news(
                 if _row.get(_k) is None and isinstance(_gtm, dict) and _gtm.get(_k) is not None:
                     _row[_k] = _gtm[_k]
             _sv_row = _gtm.get("schema_version") if isinstance(_gtm, dict) else None
-            if (not _row.get("zone_tier") or _sv_row != 3) and _router_re_tier is not None:
+            if (not _row.get("zone_tier") or _sv_row != 4) and _router_re_tier is not None:
                 _re = _router_re_tier({
                     "title": _row.get("title", ""),
                     "raw_description": _row.get("raw_description") or _row.get("summary") or "",
@@ -152,7 +152,7 @@ async def get_live_news(
                            "impact_profile", "is_geocoded", "location_precision",
                            "latitude", "longitude", "incident_type", "severity",
                            "affected_locations", "radius_km", "geometry_polygon", "verification_audit"):
-                    if _re.get(_k) is not None and (_row.get(_k) is None or _k.startswith("zone") or _k.startswith("tier") or _sv_row != 3):
+                    if _re.get(_k) is not None and (_row.get(_k) is None or _k.startswith("zone") or _k.startswith("tier") or _sv_row != 4):
                         _row[_k] = _re[_k]
                 try:
                     _row["ground_truth_metrics"] = _re.get("ground_truth_metrics", _row.get("ground_truth_metrics"))

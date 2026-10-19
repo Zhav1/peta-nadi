@@ -84,7 +84,8 @@ class LLMGateway:
         prompt: str, 
         system_instruction: Optional[str] = None, 
         model_name: Optional[str] = None,
-        temperature: float = 0.2
+        temperature: float = 0.2,
+        max_tokens: int = 1024
     ) -> str:
         """
         Tries opencode-go first (D-03 opencode-first, fail-loud). Falls back to
@@ -129,7 +130,7 @@ class LLMGateway:
                 "model": opencode_model,
                 "messages": messages,
                 "temperature": temperature,
-                "max_tokens": 1024
+                "max_tokens": max_tokens
             }
             try:
                 logger.info(f"LLMGateway: Attempting opencode call ({opencode_model})...")
@@ -173,7 +174,7 @@ class LLMGateway:
             "model": PRIMARY_NIM_MODEL,
             "messages": messages,
             "temperature": temperature,
-            "max_tokens": 1024
+            "max_tokens": max_tokens
         }
         
         try:

@@ -149,4 +149,38 @@ Non-Goals:
 3. Freshness checks: archival URL stale-dropped; fresh RSS keeps real `pubDate` as displayed `published_at`.
 4. `npx tsc --noEmit` 0 errors; no new Supabase columns; no LLM contract changes.
 
+---
+
+## Phase 75 Extension: Full-Body Scraping, Workhorse LLM Content Verifier & Post-Disaster Guards
+
+### Decisions Locked (additive, Phases 72–74 invariants preserved)
+
+1. **Full-Body Article Scraper**
+   - `extract_lead_text_from_html(html) -> str` (aliased `extract_full_article_body_from_html`): scrapes `<article>` / `.post-content` / `.read__content` / `<p>` blocks, up to 2,500 chars.
+   - `enrich_article_description_if_needed(article) -> article`: old `< 90` skip removed; enriches unscraped HTTP-linked articles with `< 450`-char / empty / title-equal descriptions or location-cue titles; combines RSS summary + scraped body (2,500-char cap); sets `body_scraped`, `article_body_chars`, `html_published_at` (from `article:published_time` / `pubdate` / `datePublished`) once per article in `ground_truth_metrics` JSONB.
+2. **Workhorse LLM Content Reader**
+   - `extract_structured_news_batch(articles) -> structured[]`: async pre-enrichment gather, heuristic baselines for all, then LLM overlay in 5-article chunks — `ISI BERITA: {desc[:1600]}` per line, `LLMGateway.generate_content(prompt, model_name=settings.opencode_driver_model, max_tokens=1600)`, 35 s timeout/chunk, JSON-array contract (`id`, `is_active_disaster`, `zone_tier`, `tier_reason`, `verified_sumatra_locations[]`, `verified_sumatra_location`, `incident_type`, `severity`, `recommended_radius_km`, `discourse_type`, `concise_summary`).
+   - Prompt rules: construction/recovery post-disaster, `perbaikan`, academic/expert solutions, ceremonial, economic → `DROPPED_IRRELEVANT`; province-only → `YELLOW_CLARIFY`; only specific node locations may be `RED_CONFIRMED`.
+3. **Post-Disaster Construction & Relief Guardrails**
+   - Bare `"darurat"` removed from `STRICT_CRISIS_PREDICATES` and `severity == "critical"` triggers (only `tanggap darurat bencana` / `darurat banjir` / `darurat longsor` remain); `POST_CONSTRUCTION_EXCLUSION_PHRASES` (`tanggul/jembatan/posko/tenda/sekolah darurat`, `pembangunan`) never count as crisis signal alone.
+   - `NON_INCIDENT_DISCOURSE_MARKERS` += both `pasca` spacings (`pascabencana`, `pascabanjir`, `pascagempa`, `pascalongsor` + hyphenated/spaced forms) and construction vocabulary (`pembangunan`, `membangun`, `tanggul`, `jembatan bailey`, `posko/tenda/sekolah darurat`, `dapur umum`, `perbaikan`, `renovasi`, `peletakan batu`, `meninjau`, `kunjungan`); mirrored in `osint_hazard.py` pre-filter and `useNewsVerification.ts` `academicMarkers`.
+   - Check 4: `not (_is_generic_other and not has_physical_blockage)` — generic `other_disruption` never corroborates impact without a `PHYSICAL_BLOCKAGE_PREDICATES` hit.
+4. **`EXTRACTION_SCHEMA_VERSION = 4` + Workhorse Badge UI**
+   - `schema_version != 4` rows auto re-verify on read (follows v2/v3 precedent). `VerificationAudit {…, agent_verdict_summary?, llm_verified?, content_chars_analyzed?}`; `EvidenceTab.tsx` renders `✓ Konten Artikel Dianalisis Workhorse LLM ({n} kar)`.
+
+### Interfaces (Phase 75 additions)
+- `extract_full_article_body_from_html(html) -> str` (alias of `extract_lead_text_from_html`).
+- `extract_structured_news_batch()` prompt contract: JSON array with `is_active_disaster`, `verified_sumatra_locations[]`, `recommended_radius_km`, `tier_reason` (Bahasa Indonesia, content-grounded).
+
+### Edge Cases
+- `"Pembangunan tanggul darurat pascabencana di Padang"` → `DROPPED_IRRELEVANT` (no crisis predicate, discourse hit, no blockage, `other_disruption` blocked).
+- `"Jalan putus"` / `"Pelabuhan ditutup"` / `"Longsor tutup akses"` → RED path preserved (blockage predicates + `critical` severity words untouched).
+- Long bodies truncated at 1,600 chars/article for the LLM, 2,500 chars stored; LLM unreachable → heuristic baselines returned (never raises).
+
+### Verification Hooks (Phase 75 additions)
+1. Enrichment checks: `< 450`-char teaser triggers fetch; `body_scraped` prevents re-fetch; 2,500-char cap.
+2. Guard checks: `tanggul darurat` absent from crisis/severity lists; `pascabencana` + `pembangunan` in discourse markers; `other_disruption` + no blockage → not corroborated.
+3. Schema checks: v4 in both modules; legacy rows re-verify on read.
+4. `npx tsc --noEmit` 0 errors; no new Supabase columns; first LLM-prompt contract change since Phase 72.
+
 Spec status: READY

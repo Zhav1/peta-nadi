@@ -73,7 +73,12 @@ async def osint_hazard_agent(state: CrisisState) -> dict:
                 _ptitle = str(payload.get("title", "") or "")
                 _psum = str(payload.get("summary", "") or "")
                 _ptext = f"{_ptitle} {_psum}".lower()
+                _POST_CONSTRUCTION = ("pascabencana", "pasca-bencana", "pascabanjir", "pasca-banjir",
+                                      "pascagempa", "pasca-gempa", "pembangunan", "membangun",
+                                      "tanggul", "perbaikan", "renovasi")
                 if any(m in _ptext for m in NON_INCIDENT_DISCOURSE_MARKERS):
+                    continue
+                if any(m in _ptext for m in _POST_CONSTRUCTION):
                     continue
                 try:
                     from app.services.news_aggregator import parse_and_validate_article_freshness as _osint_fresh

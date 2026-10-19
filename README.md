@@ -124,6 +124,12 @@ Multisource Telemetry (BMKG Sensor, TomTom Speed Flow, Google News RSS, PIHPS Pr
 - **Hazard-Specific Zone Geometry:** Agent-decided radii replace hardcoded circles — landslide/road_closure 2.8–3.5 km corridor wedge, port_closure 3.2 km, congestion 2.5 km, flood 4.8–6.0 km river ellipse, wildfire 7.5 km, marine_wave 8.5 km, volcanic_eruption 10.0 km, earthquake 12.0 km, regency warning 7.2–9.0 km — rendered as anisotropic polygons (backend polygon preferred, mirrored client table as fallback).
 - **48h Freshness Lockdown:** Archival `/YYYY/MM/DD/` URL date gate, RFC-2822/ISO `pubDate` + `<meta property="article:published_time">` validation, `when:2d` Google News query constraint, true-`published_at` preservation (never ingestion time), client-side mirror guard, and `EXTRACTION_SCHEMA_VERSION = 3` auto re-verification of all legacy Supabase rows on read. Zero migrations, zero LLM contract changes.
 
+### 16. Full-Body Scraping, Workhorse LLM Content Verifier & Post-Disaster Construction Guards (Phase 75)
+- **Full-Body Article Scraper:** `enrich_article_description_if_needed()` no longer skips ≥90-char descriptions — short RSS teasers (< 450 chars) are enriched with scraped `<article>`/`<p>` body text up to 2,500 chars, persisted once per article (`body_scraped`, `article_body_chars`, `html_published_at`) in Supabase `ground_truth_metrics`.
+- **Workhorse LLM Content Reader:** `extract_structured_news_batch()` feeds up to 1,600 chars of scraped body per article to `settings.opencode_driver_model` (NVIDIA NIM `deepseek-v4.1-flash` fallback) in 5-article chunks, returning `is_active_disaster`, `zone_tier`, `verified_sumatra_locations[]`, `recommended_radius_km`, and content-grounded `tier_reason`.
+- **Post-Disaster Construction Guards:** Bare `"darurat"` removed from crisis/severity triggers; `pascabencana` (both spacings) + construction words (`pembangunan`, `tanggul`, `perbaikan`, `renovasi`, …) added to discourse markers; `other_disruption` without physical blockage can no longer corroborate impact — `"Pembangunan tanggul darurat pascabencana di Padang"` resolves to DROPPED, not RED.
+- **Schema v4 + Badge:** `EXTRACTION_SCHEMA_VERSION = 4` auto re-verifies legacy rows on read with zero migrations; Evidence tab shows a `✓ Konten Artikel Dianalisis Workhorse LLM` badge per analyzed item.
+
 ---
 
 ## Technology Stack

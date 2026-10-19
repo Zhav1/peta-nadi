@@ -132,7 +132,7 @@ TARGETED_PRESS_QUERIES = [
 ]
 
 MAX_NEWS_AGE_HOURS = 48
-EXTRACTION_SCHEMA_VERSION = 3
+EXTRACTION_SCHEMA_VERSION = 4
 
 # Dedicated test fixtures reserved strictly for synthetic offline unit tests / demo runner
 DEMO_STANDARDIZED_SCENARIOS = [
@@ -571,7 +571,7 @@ def fetch_existing_processed_articles_map(article_ids: List[str], links: List[st
                 row = _unpack_ground_truth_metrics(dict(row))
             except Exception:
                 pass
-            # Stale rows (schema_version != 3) are re-classified on read so
+            # Stale rows (schema_version != 4) are re-classified on read so
             # old cached rows never serve stale tiering/geocoding.
             try:
                 _gtm = row.get("ground_truth_metrics") or {}
@@ -581,7 +581,7 @@ def fetch_existing_processed_articles_map(article_ids: List[str], links: List[st
                         _gtm = _js2.loads(_gtm)
                     except Exception:
                         _gtm = {}
-                if isinstance(_gtm, dict) and _gtm.get("schema_version") != 3:
+                if isinstance(_gtm, dict) and _gtm.get("schema_version") != 4:
                     from app.nlp.news_extractor import _fast_heuristic_extraction as _re_v2
                     _art = {
                         "title": row.get("title", ""),
@@ -987,11 +987,21 @@ async def upsert_articles_to_supabase(articles: List[Dict[str, Any]]) -> int:
             gtm["geometry_polygon"] = a.get("geometry_polygon")
         if a.get("verification_audit") is not None:
             gtm["verification_audit"] = a.get("verification_audit")
+        if a.get("body_scraped") is not None:
+            gtm["body_scraped"] = a.get("body_scraped")
+        if a.get("article_body_chars") is not None:
+            gtm["article_body_chars"] = a.get("article_body_chars")
+        try:
+            _excerpt = (a.get("raw_description") or "")[:2000]
+            if _excerpt:
+                gtm["article_body_excerpt"] = _excerpt
+        except Exception:
+            pass
         try:
             from app.nlp.news_extractor import EXTRACTION_SCHEMA_VERSION as _SV
             gtm["schema_version"] = _SV
         except Exception:
-            gtm.setdefault("schema_version", 3)
+            gtm.setdefault("schema_version", 4)
 
         record = {
             "id": a.get("id"),
@@ -1057,11 +1067,12 @@ def _unpack_ground_truth_metrics(row: Dict[str, Any]) -> Dict[str, Any]:
         for _k in ("zone_tier", "tier_reason", "custom_hazard_label", "impact_profile",
                    "is_geocoded", "location_precision", "affected_locations", "schema_version",
                    "radius_km", "geometry_polygon", "verification_audit", "original_pub_date",
-                   "published_at_iso", "age_hours"):
+                   "published_at_iso", "age_hours", "body_scraped", "article_body_chars",
+                   "article_body_excerpt"):
             if row.get(_k) is None and gtm.get(_k) is not None:
                 row[_k] = gtm[_k]
-        # Re-run v3 heuristic when cached/DB rows carry a stale schema version.
-        if gtm.get("schema_version") != 3:
+        # Re-run v4 heuristic when cached/DB rows carry a stale schema version.
+        if gtm.get("schema_version") != 4:
             try:
                 from app.nlp.news_extractor import _fast_heuristic_extraction as _re_tier_v2
                 legacy_art = {
@@ -1092,64 +1103,89 @@ def _unpack_ground_truth_metrics(row: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def extract_lead_text_from_html(html: str) -> str:
-    """Extracts og:description / meta description + first 1-2 <p> lead text."""
+    """Extracts full-body article text (og:description + up to 18 <p> paragraphs, max 2500 chars)."""
     if not html or not isinstance(html, str):
         return ""
     lead = ""
     try:
-        m = re.search(r'<meta[^>]+property=["\']og:description["\'][^>]*content=["\'](.*?)["\']', html, flags=re.IGNORECASE | re.DOTALL)
+        # Strip non-content blocks first.
+        cleaned = re.sub(r'<script.*?</script>', ' ', html, flags=re.IGNORECASE | re.DOTALL)
+        cleaned = re.sub(r'<style.*?</style>', ' ', cleaned, flags=re.IGNORECASE | re.DOTALL)
+        cleaned = re.sub(r'<nav.*?</nav>', ' ', cleaned, flags=re.IGNORECASE | re.DOTALL)
+        cleaned = re.sub(r'<footer.*?</footer>', ' ', cleaned, flags=re.IGNORECASE | re.DOTALL)
+        cleaned = re.sub(r'<aside.*?</aside>', ' ', cleaned, flags=re.IGNORECASE | re.DOTALL)
+        m = re.search(r'<meta[^>]+property=["\']og:description["\'][^>]*content=["\'](.*?)["\']', cleaned, flags=re.IGNORECASE | re.DOTALL)
         if m:
             lead = m.group(1).strip()
         if not lead:
-            m2 = re.search(r'<meta[^>]+name=["\']description["\'][^>]*content=["\'](.*?)["\']', html, flags=re.IGNORECASE | re.DOTALL)
+            m2 = re.search(r'<meta[^>]+name=["\']description["\'][^>]*content=["\'](.*?)["\']', cleaned, flags=re.IGNORECASE | re.DOTALL)
             if m2:
                 lead = m2.group(1).strip()
         if not lead:
-            m3 = re.search(r'<meta[^>]+content=["\'](.*?)["\'][^>]*property=["\']og:description["\']', html, flags=re.IGNORECASE | re.DOTALL)
+            m3 = re.search(r'<meta[^>]+content=["\'](.*?)["\'][^>]*property=["\']og:description["\']', cleaned, flags=re.IGNORECASE | re.DOTALL)
             if m3:
                 lead = m3.group(1).strip()
-        paras = re.findall(r'<p[^>]*>(.*?)</p>', html, flags=re.IGNORECASE | re.DOTALL)
+        # Prefer <p> tags inside <article> or known content containers.
+        search_scope = cleaned
+        try:
+            article_blocks = re.findall(r'<article.*?>(.*?)</article>', cleaned, flags=re.IGNORECASE | re.DOTALL)
+            if article_blocks:
+                search_scope = " ".join(article_blocks)
+            else:
+                container_pat = re.compile(
+                    r'<(?:div|section)[^>]*(?:post-content|entry-content|detail__body-text|read__content|article-content|text-body)[^>]*>(.*?)</(?:div|section)>',
+                    flags=re.IGNORECASE | re.DOTALL,
+                )
+                container_blocks = container_pat.findall(cleaned)
+                if container_blocks:
+                    search_scope = " ".join(container_blocks)
+        except Exception:
+            search_scope = cleaned
+        paras = re.findall(r'<p[^>]*>(.*?)</p>', search_scope, flags=re.IGNORECASE | re.DOTALL)
+        if not paras:
+            paras = re.findall(r'<p[^>]*>(.*?)</p>', cleaned, flags=re.IGNORECASE | re.DOTALL)
         clean_paras = []
-        for p in paras[:4]:
+        for p in paras[:18]:
             t = re.sub(r'<[^>]+>', ' ', p)
             t = re.sub(r'\s+', ' ', t).strip()
             if len(t) < 40:
                 continue
             low = t.lower()
-            if any(b in low for b in ("copyright", "baca juga", "advertisement", "iklan", "langganan")):
+            if any(b in low for b in ("copyright", "baca juga", "advertisement", "iklan", "langganan", "pewarta:", "editor:", "ikuti kami di")):
                 continue
             clean_paras.append(t)
-            if len(clean_paras) >= 2:
-                break
         para_text = " ".join(clean_paras)
         if lead and para_text:
-            # Prefer the longer, more informative of the two, else combine.
-            if len(para_text) > len(lead) * 1.5:
-                return para_text[:1000]
-            return (lead + " " + para_text)[:1000]
-        return (lead or para_text)[:1000]
+            combined = (lead + " " + para_text)[:2500]
+            return combined
+        if para_text:
+            return para_text[:2500]
+        return (lead or "")[:2500]
     except Exception:
         return lead
+
+
+extract_full_article_body_from_html = extract_lead_text_from_html
 
 
 async def enrich_article_description_if_needed(article: Dict[str, Any], timeout: float = 5.0) -> Dict[str, Any]:
     """Fetches the article URL to enrich short/title-only descriptions.
 
-    Triggers when raw_description is empty, equal to title, shorter than
-    90 chars, OR when the title carries multi-area summary phrases
-    ("daerah", "kabupaten", "wilayah", "titik", "lokasi", "catat").
-    Resolves the canonical URL and extracts the meta/lead description so
-    downstream extraction sees laid-out multi-regency bodies.
-    Also extracts article:published_time / pubdate / datePublished into
-    html_published_at for the 48h freshness gate.
+    Scrapes the article URL whenever `body_scraped` is not set and the
+    description is shorter than 450 chars (1-sentence RSS teasers are
+    otherwise never expanded). Combines the original RSS summary with
+    scraped full-body paragraphs (up to 2,500 chars) so the Workhorse LLM
+    reads the full article content. Also extracts article:published_time /
+    pubdate / datePublished into html_published_at for the 48h freshness gate.
     """
     try:
         title = (article.get("title") or "").strip()
         desc = (article.get("raw_description") or article.get("summary") or "").strip()
+        already_scraped = bool(article.get("body_scraped"))
         needs = (
-            not desc
+            (not already_scraped and len(desc) < 450)
+            or (not desc)
             or desc == title
-            or len(desc) < 90
             or any(w in title.lower() for w in ("daerah", "kabupaten", "wilayah", "titik", "lokasi", "catat"))
         )
         # Always try to capture HTML published time when missing, even if
@@ -1157,7 +1193,7 @@ async def enrich_article_description_if_needed(article: Dict[str, Any], timeout:
         if not needs and article.get("html_published_at"):
             return article
         raw_url = article.get("link") or article.get("url") or ""
-        if not raw_url:
+        if not raw_url or not str(raw_url).startswith("http"):
             return article
         canonical = await resolve_canonical_article_url_async(raw_url, title, article.get("source", ""))
         if canonical:
@@ -1172,9 +1208,13 @@ async def enrich_article_description_if_needed(article: Dict[str, Any], timeout:
                     if html_time:
                         article["html_published_at"] = html_time
                     if needs:
-                        lead = extract_lead_text_from_html(resp.text)
-                        if lead and len(lead) > len(desc):
-                            article["raw_description"] = lead
+                        full_body = extract_lead_text_from_html(resp.text)
+                        if full_body:
+                            combined = ((desc + " " + full_body).strip() if desc and desc not in full_body else full_body)[:2500]
+                            if len(combined) > len(desc):
+                                article["raw_description"] = combined
+                            article["body_scraped"] = True
+                            article["article_body_chars"] = len(article.get("raw_description") or "")
         except Exception as e:
             logger.debug(f"Description enrichment skipped for {raw_url}: {e}")
     except Exception:
@@ -1219,7 +1259,7 @@ async def fetch_news_from_supabase(limit: int = 50, province: Optional[str] = No
         except Exception:
             continue
         # Legacy rows missing zone_tier or carrying stale schema: re-run
-        # fast heuristic on read (schema_version != 3 forces v3 re-tier).
+        # fast heuristic on read (schema_version != 4 forces v4 re-tier).
         _needs_retier = (not row.get("zone_tier"))
         try:
             _gtm_chk = row.get("ground_truth_metrics") or {}
@@ -1229,7 +1269,7 @@ async def fetch_news_from_supabase(limit: int = 50, province: Optional[str] = No
                     _gtm_chk = _js3.loads(_gtm_chk)
                 except Exception:
                     _gtm_chk = {}
-            if isinstance(_gtm_chk, dict) and _gtm_chk.get("schema_version") != 3:
+            if isinstance(_gtm_chk, dict) and _gtm_chk.get("schema_version") != 4:
                 _needs_retier = True
         except Exception:
             pass
@@ -1265,13 +1305,13 @@ async def fetch_news_from_supabase(limit: int = 50, province: Optional[str] = No
                                     _sv = _g.get("schema_version")
                             except Exception:
                                 pass
-                            if row.get("latitude") is None or row.get("longitude") is None or row.get("zone_tier") is None or _sv != 3:
+                            if row.get("latitude") is None or row.get("longitude") is None or row.get("zone_tier") is None or _sv != 4:
                                 row[_k] = re_tiered.get(_k)
                             if _k == "affected_locations":
                                 row[_k] = re_tiered.get(_k)
                         else:
                             row[_k] = re_tiered.get(_k)
-                # Always refresh ground_truth_metrics to v3.
+                # Always refresh ground_truth_metrics to v4.
                 try:
                     row["ground_truth_metrics"] = re_tiered.get("ground_truth_metrics", row.get("ground_truth_metrics"))
                 except Exception:
