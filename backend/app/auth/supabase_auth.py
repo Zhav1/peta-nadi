@@ -32,6 +32,21 @@ ROLE_GUEST = "GUEST"
 VALID_ROLES = [ROLE_DISPATCHER, ROLE_REGULATOR, ROLE_GUEST]
 
 ROLE_PERMISSIONS: dict[str, list[str]] = {
+    # Wave 3 RBAC verification (Phase 77): sandbox contract locked.
+    # - GUEST (demo_sandbox) is strictly read-only preview: benchmark:read +
+    #   reports:read ONLY. MUST NEVER contain approvals:write, fleet:write,
+    #   routes:plan, or manifests:upload. Guest selects open a watermarked
+    #   local preview with zero POST to /approvals, /news/hitl-action, or
+    #   /fleet/telemetry/*. Server enforces via approvals:write gate in
+    #   approvals.py (403 for GUEST + REGULATOR).
+    # - REGULATOR (bapanas) is read-mostly + HOLD-flag via HITL drawer only:
+    #   heatmap/prices/reports/audit/scenarios. MUST NEVER contain
+    #   approvals:write (APPROVE dispatch is Dispatcher-only). HOLD is a
+    #   HITL advisory flag, not an approvals:write commit.
+    # - DISPATCHER alone holds approvals:write + fleet:write + routes:plan.
+    # Any future permission change must keep the two invariants above;
+    # test_auth_rbac.py::test_create_and_decode_guest_token and
+    # ::test_rbac_approval_rejected_for_regulator pin them.
     ROLE_DISPATCHER: [
         "fleet:read",
         "fleet:write",
