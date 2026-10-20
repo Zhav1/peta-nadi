@@ -902,6 +902,20 @@ export default function DashboardClient() {
           hazard_zones: hazardCenter ? [{ center: hazardCenter, radiusKm }] : []
         }, signal);
         if (isStale()) return false;
+        const nested = (routingRes as { point_to_point_path?: { status?: string; message?: string } } | null)?.point_to_point_path;
+        if (nested?.status === 'no_route') {
+          const message = nested.message || 'Rute tidak ditemukan untuk titik yang dipilih.';
+          setRoutingError(message);
+          setCurrentMapRoutes([]);
+          setSelectedCrisis((prev) =>
+            prev ? { ...prev, route_recommendations: [] } : prev
+          );
+          setRoutingInfo(null);
+          setActiveRouteIdx(null);
+          setHiddenRouteIndices(new Set());
+          setToast({ message, type: 'error' });
+          return false;
+        }
         if (routingRes && routingRes.optimization_summary) {
           // Savings stay null until the backend reports a real baseline comparison;
           // the HUD hides the pill when null (no fabricated fallback).
@@ -1833,9 +1847,9 @@ export default function DashboardClient() {
     }
     try {
       const originName =
-        resolveNodeInfo(selectedOriginNode)?.name || selectedOriginNode || undefined;
+        formatNodeId(selectedOriginNode, resolveNodeInfo(selectedOriginNode)) || undefined;
       const destName =
-        resolveNodeInfo(selectedDestNode)?.name || selectedDestNode || undefined;
+        formatNodeId(selectedDestNode, resolveNodeInfo(selectedDestNode)) || undefined;
       await api.approvals.create({
         incident_id: selectedCrisis.crisis_id,
         route_id: String(idx),
