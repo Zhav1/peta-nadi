@@ -121,6 +121,9 @@ async def switch_role(request: RoleSwitchRequest, current_user: UserSession = De
     Switch the active persona to DISPATCHER, REGULATOR, or GUEST.
     Requires an existing authenticated session (valid Bearer token): unauthenticated
     persona flipping is rejected with 401. Returns a freshly signed JWT.
+    Wave 3 verification: this endpoint MUST stay behind get_current_user (never
+    get_optional_user); client-side AuthModal.tsx isSandboxAccount gate is UX-only
+    and never replaces this server check.
     """
     target_role = request.role.upper()
     if target_role not in VALID_ROLES:
