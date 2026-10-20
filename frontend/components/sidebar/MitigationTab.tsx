@@ -438,20 +438,47 @@ function RouteCard({
           ) : (
             <>
               {role === 'REGULATOR' ? (
-                <div className="w-full p-3 rounded-md bg-[#121822] border border-[#1c2432] text-slate-200 flex flex-col gap-1 text-xs font-mono">
-                  <div className="flex items-center justify-between font-bold">
-                    <span className="flex items-center gap-1.5">
-                      <Scale className="w-3.5 h-3.5 text-slate-300 shrink-0" />
-                      <span className="text-white">Akses Regulator (Pengawas)</span>
-                    </span>
-                    <span className="text-xs px-1.5 py-0.5 rounded bg-white/10 text-slate-300 border border-white/20">
-                      HANYA LIHAT
-                    </span>
+                <>
+                  <div className="w-full p-3 rounded-md bg-[#121822] border border-[#1c2432] text-slate-200 flex flex-col gap-1 text-xs font-mono">
+                    <div className="flex items-center justify-between font-bold">
+                      <span className="flex items-center gap-1.5">
+                        <Scale className="w-3.5 h-3.5 text-slate-300 shrink-0" />
+                        <span className="text-white">Akses Regulator (Pengawas)</span>
+                      </span>
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-white/10 text-slate-300 border border-white/20">
+                        HOLD SAJA
+                      </span>
+                    </div>
+                    <p className="text-xs font-sans text-slate-400 leading-snug pt-0.5">
+                      Mode Regulator berwenang memantau koridor makro dan disparitas harga. Persetujuan pengalihan rute armada didelegasikan kepada Dispatcher logistik — Regulator hanya dapat menandai HOLD.
+                    </p>
                   </div>
-                  <p className="text-xs font-sans text-slate-400 leading-snug pt-0.5">
-                    Mode Regulator berwenang memantau koridor makro dan disparitas harga. Persetujuan pengalihan rute armada didelegasikan kepada Dispatcher logistik.
-                  </p>
-                </div>
+                  {/* Regulator HOLD-only: APPROVE locked, HOLD enabled */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      disabled
+                      title="Memerlukan peran Dispatcher [Khusus Dispatcher]"
+                      className="py-2 px-2.5 rounded-md text-xs font-semibold uppercase tracking-wider bg-[#121822] border border-[#1c2432] text-slate-500 flex items-center justify-center gap-1.5 cursor-not-allowed opacity-50"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                      <span>SETUJUI [Khusus Dispatcher]</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onApprove('ACCEPT', 'HOLD', 'Regulator menandai HOLD untuk koridor ini.');
+                      }}
+                      disabled={approving}
+                      className="py-2 px-2.5 rounded-md text-xs font-semibold uppercase tracking-wider bg-[#121822] hover:bg-slate-800 border border-amber-500/40 text-amber-300 transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Tandai HOLD sebagai pengawas"
+                    >
+                      <PauseCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <span>TAHAN (HOLD)</span>
+                    </button>
+                  </div>
+                </>
               ) : (
                 <>
                   {/* Tactical Buttons Grid */}
@@ -514,8 +541,8 @@ function RouteCard({
                   </div>
 
                   {role === 'GUEST' && (
-                    <div className="text-[10px] font-mono text-emerald-400/80 text-center">
-                      Mode Sandbox: Tindakan disimpan lokal untuk simulasi evaluasi.
+                    <div className="text-[10px] font-mono text-amber-300/90 text-center">
+                      Mode Sandbox: pratinjau lokal berwatermark — tanpa POST /approvals, tanpa ping TMS.
                     </div>
                   )}
 
@@ -635,10 +662,12 @@ export function MitigationTab({
   onCommitOperationalRoute,
   selectedImpactedVehicle,
 }: MitigationTabProps) {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const [approvedRouteId, setApprovedRouteId] = useState<string | null>(null);
   const [latestApproval, setLatestApproval] = useState<ApprovalItem | null>(null);
   const [approvingIdx, setApprovingIdx] = useState<number | null>(null);
+  // Phase 77: guest/403 sandbox preview — local-only, never approved/committed.
+  const [sandboxNote, setSandboxNote] = useState<string | null>(null);
 
   // Load existing approvals on mount for this incident
   useEffect(() => {
@@ -669,6 +698,22 @@ export function MitigationTab({
     notes?: string
   ) => {
     if (!crisis.crisis_id) return;
+    // Phase 77 role branches: Guest sandbox (zero POST), Regulator HOLD-only.
+    if (role === 'GUEST') {
+      setSandboxNote(
+        `Mode Sandbox: rencana rute #${idx + 1} tersimpan lokal, tidak dikirim ke armada (tanpa POST /approvals, tanpa ping TMS).`
+      );
+      if (onApproveSuccess) {
+        onApproveSuccess('Mode Sandbox: rencana tersimpan lokal, tidak dikirim ke armada (tanpa POST server).');
+      }
+      return;
+    }
+    if (role === 'REGULATOR' && tacticalAction !== 'HOLD') {
+      if (onApproveSuccess) {
+        onApproveSuccess('Akses Regulator: hanya HOLD yang diizinkan [Khusus Dispatcher].');
+      }
+      return;
+    }
     setApprovingIdx(idx);
     const opId = user?.name || user?.email || user?.id || 'OP-CHIEF-01';
     try {
@@ -708,28 +753,21 @@ export function MitigationTab({
         onApproveSuccess(`${actionLabel} (#${idx + 1})!`);
       }
     } catch (err) {
+      // Phase 77: 403-safe — a 403 NEVER paints approved/committed state, never
+      // calls onCommitOperationalRoute, and never fires a TMS ping. Non-403
+      // network failures also leave the card unapproved with an honest toast.
+      const msg = err instanceof Error ? err.message : String(err);
       console.error('Failed to approve route:', err);
-      // Optimistic fallback for simulated crises
-      setApprovedRouteId(String(idx));
-      setLatestApproval({
-        id: String(Date.now()),
-        incident_id: crisis.crisis_id,
-        route_id: String(idx),
-        action,
-        tactical_action: tacticalAction,
-        recommended_route: route,
-        operator_id: 'OP-CHIEF-01',
-        notes,
-        approved_at: new Date().toISOString(),
-      });
-
-      if (onCommitOperationalRoute) {
-        onCommitOperationalRoute(route, action, tacticalAction);
-      }
-
-      if (onApproveSuccess) {
+      if (msg.includes('403') || msg.includes('Forbidden')) {
+        setSandboxNote(
+          `Mode Sandbox: rencana rute #${idx + 1} tersimpan lokal, tidak dikirim ke armada (403 memerlukan akun Dispatcher).`
+        );
+        if (onApproveSuccess) {
+          onApproveSuccess('Mode Sandbox: rencana tersimpan lokal, tidak dikirim ke armada (403 memerlukan akun Dispatcher).');
+        }
+      } else if (onApproveSuccess) {
         onApproveSuccess(
-          `Keputusan rute #${idx + 1} (${action}/${tacticalAction}) tersimpan secara lokal!`
+          `Gagal menyimpan keputusan rute #${idx + 1} — koneksi/server bermasalah, rute belum disetujui.`
         );
       }
     } finally {
@@ -741,6 +779,12 @@ export function MitigationTab({
 
   return (
     <div className="flex flex-col gap-4 text-slate-100">
+      {/* Phase 77: sandbox notice — local-only preview, zero server POST */}
+      {sandboxNote && (
+        <div className="bg-amber-950/30 border border-amber-500/40 p-3 rounded-md text-xs font-sans text-amber-200 leading-relaxed">
+          {sandboxNote}
+        </div>
+      )}
 
       {/* BLOCK A: CONSENSUS BADGE */}
       <div className="bg-[#121822] border border-[#1c2432] p-3 rounded-md">

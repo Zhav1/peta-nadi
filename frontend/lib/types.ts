@@ -138,6 +138,34 @@ export interface RouteRecommendation {
     requires_override: boolean;
   };
   chokepoint_delay_multiplier?: number;
+  // Phase 77: operator-facing risk transparency (optional, backend may omit).
+  dasar_risiko?: string;
+  dampak?: string;
+  keterbatasan_data?: string[];
+}
+
+export interface RouteDetailModalProps {
+  route: RouteRecommendation;
+  crisis: CrisisState | null;
+  open: boolean;
+  onClose: () => void;
+  role: 'DISPATCHER' | 'REGULATOR' | 'GUEST';
+  mode: 'live' | 'sandbox';
+  onAction: (
+    decision: 'APPROVE' | 'REJECT' | 'HOLD',
+    tactical: TacticalManeuver,
+    notes?: string
+  ) => Promise<void>;
+  isActing: boolean;
+  corridorIsFallback?: boolean;
+}
+
+export interface HitlPendingCreatePayload {
+  incident_id: string;
+  route_id: string;
+  route_name?: string;
+  origin?: string;
+  destination?: string;
 }
 
 export interface LTMEpisode {

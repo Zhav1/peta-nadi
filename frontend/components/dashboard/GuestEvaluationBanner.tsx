@@ -49,7 +49,7 @@ export function GuestEvaluationBanner() {
               Mode Evaluasi Tamu (Belum Terautentikasi)
             </span>
             <span className="block text-xs font-sans text-slate-300 truncate">
-              Akses preview terbatas: beralih peran operasional dan aksi persetujuan memerlukan akun resmi.
+              Mode Evaluasi Tamu: pilihan rute membuka pratinjau berwatermark lokal; tidak ada POST /approvals dan tidak ada ping TMS. Masuk untuk commit.
             </span>
           </div>
         </div>

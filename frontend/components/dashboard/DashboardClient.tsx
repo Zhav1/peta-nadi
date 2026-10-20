@@ -48,7 +48,7 @@ import {
   type TransportModality,
 } from '@/lib/aiDynamicRouter';
 import { api } from '@/lib/api';
-import type { CrisisState, WsEvent, CrisisType, Severity, RouteRecommendation, DisasterZone, HazardImpactProfile, ZoneTier, FleetVehicle } from '@/lib/types';
+import type { CrisisState, WsEvent, CrisisType, Severity, RouteRecommendation, DisasterZone, HazardImpactProfile, ZoneTier, FleetVehicle, TacticalManeuver } from '@/lib/types';
 import { useAuth } from '@/lib/authContext';
 import { AuthModal } from '@/components/auth/AuthModal';
 import { FleetOnboardingModal } from '@/components/fleet/FleetOnboardingModal';
@@ -57,6 +57,7 @@ import { useCrisisSimulationStream } from '@/hooks/useCrisisSimulationStream';
 import { TopNavTelemetry } from '@/components/dashboard/TopNavTelemetry';
 import { DispatcherAlertQueue } from '@/components/dashboard/DispatcherAlertQueue';
 import { HitlDecisionDrawer } from '@/components/dashboard/HitlDecisionDrawer';
+import { RouteDetailModal } from '@/components/sidebar/RouteDetailModal';
 import type { DisruptionImpactResponse, ImpactedVehicleAssessment } from '@/lib/types';
 
 // Dynamic import for map to avoid SSR issues
@@ -243,6 +244,9 @@ export default function DashboardClient() {
   const [selectedVehicle, setSelectedVehicle] = useState<FleetVehicle | null>(null);
   const [activeRouteIdx, setActiveRouteIdx] = useState<number | null>(null);
   const [currentMapRoutes, setCurrentMapRoutes] = useState<RouteRecommendation[]>([]);
+  // Phase 77: single selection entry point state — modal opens on every select.
+  const [routeModalIdx, setRouteModalIdx] = useState<number | null>(null);
+  const [isActing, setIsActing] = useState(false);
 
   // Dynamic Supabase Hub Nodes List & Clean Slate Selection (Null initial state)
   const [dynamicHubNodes] = useState<HubNode[]>(Object.values(HUB_NODES));
@@ -1511,6 +1515,67 @@ export default function DashboardClient() {
     void inspectNewsOrZoneAuditTrail(linked, zone);
   }, [newsFeed, inspectNewsOrZoneAuditTrail]);
 
+  // Phase 77: single selection entry point — every route select (sidebar card,
+  // map popover, map ETA badge, demo) converges here: sets active index, opens
+  // the Route Detail Modal, and creates a role-branched HITL pending item.
+  // Guest never issues POST (sandbox preview only); modal open never blocks.
+  const refreshHitlCount = useCallback(async () => {
+    try {
+      const res = await api.news.hitlPending();
+      if (res) {
+        setPendingHitlCount(res.count || (res.items ? res.items.length : 0));
+      }
+    } catch {
+      // quiet fallback: badge keeps last known count
+    }
+  }, []);
+
+  const handleSelectRoute = useCallback(async (
+    idx: number,
+    source: 'sidebar' | 'map-popover' | 'map-eta' | 'demo' = 'sidebar'
+  ) => {
+    void source;
+    setActiveRouteIdx(idx);
+    setRouteModalIdx(idx);
+    const routes =
+      currentMapRoutes.length > 0
+        ? currentMapRoutes
+        : (selectedCrisis?.route_recommendations || []);
+    const route = routes[idx];
+    if (!selectedCrisis?.crisis_id || !route) return;
+    // Guest sandbox: zero POST to /approvals or /news/hitl-action.
+    if (role === 'GUEST') {
+      setToast({
+        message: 'Mode Sandbox: pratinjau lokal berwatermark, tidak dikirim ke armada.',
+        type: 'info',
+      });
+      return;
+    }
+    try {
+      const originName =
+        resolveNodeInfo(selectedOriginNode)?.name || selectedOriginNode || undefined;
+      const destName =
+        resolveNodeInfo(selectedDestNode)?.name || selectedDestNode || undefined;
+      await api.approvals.create({
+        incident_id: selectedCrisis.crisis_id,
+        route_id: String(idx),
+        recommended_route: route,
+        action: 'ACCEPT',
+        tactical_action: 'REROUTE',
+        operator_id: user?.name || user?.email || user?.id || 'OP-CHIEF-01',
+        route_name: route.route_name || route.description,
+        origin: originName,
+        destination: destName,
+      });
+      await refreshHitlCount();
+    } catch {
+      setToast({
+        message: `HITL pending gagal dicatat (${selectedCrisis.crisis_id} #${idx}). Modal tetap terbuka.`,
+        type: 'error',
+      });
+    }
+  }, [currentMapRoutes, selectedCrisis, role, user, selectedOriginNode, selectedDestNode, resolveNodeInfo, refreshHitlCount]);
+
   const handleCommitOperationalRoute = useCallback(
     async (route: RouteRecommendation, action: any, tactical: any) => {
       // 1. Highlight approved route on BOTH route stores so the cyan operational corridor
@@ -1532,8 +1597,9 @@ export default function DashboardClient() {
       setActiveRouteIdx(0);
 
       // 2. Extract detour coordinates from waypoints
+      // Phase 77: TMS ping only on dispatcher success — guest/regulator never ping.
       const waypoints = route.waypoints || [];
-      if (waypoints.length > 0) {
+      if (waypoints.length > 0 && role === 'DISPATCHER') {
         const startWp = waypoints[0];
         // 3. Trigger outbound telematics dispatch ping
         try {
@@ -1566,8 +1632,70 @@ export default function DashboardClient() {
         type: 'success',
       });
     },
-    [applyOperationalImpact, currentMapRoutes]
+    [applyOperationalImpact, currentMapRoutes, role]
   );
+
+  // Phase 77: modal commit path — role-branched. Dispatcher commits + TMS ping
+  // (via handleCommitOperationalRoute); regulator HOLD-only; guest sandbox only.
+  const handleModalAction = useCallback(async (
+    decision: 'APPROVE' | 'REJECT' | 'HOLD',
+    tactical: TacticalManeuver,
+    notes?: string
+  ) => {
+    const routes =
+      currentMapRoutes.length > 0
+        ? currentMapRoutes
+        : (selectedCrisis?.route_recommendations || []);
+    const idx = routeModalIdx ?? activeRouteIdx ?? 0;
+    const route = routes[idx];
+    if (!route || !selectedCrisis?.crisis_id) return;
+    if (role === 'GUEST') {
+      setToast({
+        message: 'Mode Sandbox: rencana tersimpan lokal, tidak dikirim ke armada.',
+        type: 'info',
+      });
+      return;
+    }
+    if (role === 'REGULATOR' && decision !== 'HOLD') {
+      setToast({
+        message: 'Akses Regulator: hanya HOLD yang diizinkan. Persetujuan dispatch memerlukan peran Dispatcher.',
+        type: 'info',
+      });
+      return;
+    }
+    setIsActing(true);
+    try {
+      const action = decision === 'REJECT' ? 'REJECT' : 'ACCEPT';
+      await api.approvals.create({
+        incident_id: selectedCrisis.crisis_id,
+        route_id: String(idx),
+        recommended_route: route,
+        action,
+        tactical_action: tactical,
+        operator_id: user?.name || user?.email || user?.id || 'OP-CHIEF-01',
+        approved_by: user?.name || user?.email || user?.id || 'OP-CHIEF-01',
+        notes,
+      });
+      await handleCommitOperationalRoute(route, action, tactical);
+      await refreshHitlCount();
+      setRouteModalIdx(null);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('403') || msg.includes('Forbidden')) {
+        setToast({
+          message: 'Mode Sandbox: rencana tersimpan lokal, tidak dikirim ke armada (403 memerlukan akun Dispatcher).',
+          type: 'info',
+        });
+      } else {
+        setToast({
+          message: 'Gagal menyimpan keputusan rute. Rute belum disetujui.',
+          type: 'error',
+        });
+      }
+    } finally {
+      setIsActing(false);
+    }
+  }, [currentMapRoutes, selectedCrisis, routeModalIdx, activeRouteIdx, role, user, handleCommitOperationalRoute, refreshHitlCount]);
 
   // Triggered by Game-Like Map Location Click
   const handleMapPointTargeted = useCallback((
@@ -2204,7 +2332,7 @@ export default function DashboardClient() {
                 selectedDestNode={selectedDestNode || undefined}
                 onNodeSelected={handleNodeSelected}
                 onCustomPointSelected={handleCustomPointSelected}
-                onSelectRoute={(idx) => setActiveRouteIdx(idx)}
+                onSelectRoute={(idx) => void handleSelectRoute(idx, 'map-popover')}
                 hubNodesList={dynamicHubNodes}
                 corridorContext={corridorContext}
                 spatialWeatherPolygons={spatialWeatherPolygons}
@@ -2448,12 +2576,35 @@ export default function DashboardClient() {
                 activeTab={activeTab}
                 setActiveTab={setActiveTab}
                 activeRouteIdx={activeRouteIdx}
-                onSelectRoute={(idx) => setActiveRouteIdx(idx)}
+                onSelectRoute={(idx) => void handleSelectRoute(idx, 'sidebar')}
                 onApproveSuccess={(msg) => setToast({ message: msg, type: 'success' })}
                 onCommitOperationalRoute={handleCommitOperationalRoute}
                 selectedImpactedVehicle={selectedImpactedVehicle}
               />
             )}
+            {/* Phase 77: Route Detail Modal — opened by every select path */}
+            {(() => {
+              const routes =
+                currentMapRoutes.length > 0
+                  ? currentMapRoutes
+                  : (selectedCrisis?.route_recommendations || []);
+              const modalIdx = routeModalIdx ?? activeRouteIdx ?? 0;
+              const modalRoute = routes[modalIdx];
+              if (routeModalIdx === null || !modalRoute) return null;
+              return (
+                <RouteDetailModal
+                  route={modalRoute}
+                  crisis={selectedCrisis}
+                  open={routeModalIdx !== null}
+                  onClose={() => setRouteModalIdx(null)}
+                  role={role === 'REGULATOR' ? 'REGULATOR' : role === 'GUEST' ? 'GUEST' : 'DISPATCHER'}
+                  mode={role === 'GUEST' ? 'sandbox' : 'live'}
+                  onAction={handleModalAction}
+                  isActing={isActing}
+                  corridorIsFallback={!!corridorContext?.is_fallback}
+                />
+              );
+            })()}
           </div>
 
         </div>

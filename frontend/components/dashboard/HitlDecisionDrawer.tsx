@@ -19,6 +19,7 @@ import {
   FileText
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useAuth } from '@/lib/authContext';
 
 export interface HitlPendingItem {
   approval_id: string;
@@ -75,6 +76,9 @@ export function HitlDecisionDrawer({
   const [isLoading, setIsLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [reviewerNotes, setReviewerNotes] = useState('');
+  // Phase 77: role-gated commits — guest read-only, regulator HOLD-only.
+  const { role } = useAuth();
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const fetchPending = async () => {
     setIsLoading(true);
@@ -112,7 +116,17 @@ export function HitlDecisionDrawer({
 
   const handleDecision = async (decision: 'APPROVE' | 'REJECT' | 'HOLD') => {
     if (!selectedItem) return;
+    // Phase 77: guest never crosses the mutation boundary; regulator HOLD-only.
+    if (role === 'GUEST') {
+      setActionError('Pratinjau sandbox — masuk sebagai Dispatcher untuk mengeksekusi.');
+      return;
+    }
+    if (role === 'REGULATOR' && decision !== 'HOLD') {
+      setActionError('Memerlukan peran Dispatcher [Khusus Dispatcher]. Regulator hanya dapat TAHAN.');
+      return;
+    }
     setActionLoading(true);
+    setActionError(null);
     try {
       await api.news.hitlAction({
         approval_id: selectedItem.approval_id,
@@ -129,7 +143,14 @@ export function HitlDecisionDrawer({
       await fetchPending();
       setReviewerNotes('');
     } catch (err) {
+      // Phase 77: on 403 the item stays in the queue — never removed or marked decided.
+      const msg = err instanceof Error ? err.message : String(err);
       console.error('Failed to apply HITL decision:', err);
+      if (msg.includes('403') || msg.includes('Forbidden')) {
+        setActionError('Mode Sandbox (403): antrean dipertahankan, tidak ada keputusan yang dicatat.');
+      } else {
+        setActionError('Gagal mencatat keputusan — antrean dipertahankan, coba lagi.');
+      }
     } finally {
       setActionLoading(false);
     }
@@ -355,21 +376,33 @@ export function HitlDecisionDrawer({
 
       {/* Decision Action Toolbar */}
       {selectedItem && (
-        <div className="p-4 border-t border-[#1c2432] bg-[#080d14] flex items-center gap-2">
+        <div className="p-4 border-t border-[#1c2432] bg-[#080d14] flex flex-col gap-2">
+          {role === 'GUEST' && (
+            <p className="text-[11px] font-mono text-amber-300/90 text-center">
+              Pratinjau sandbox — masuk sebagai Dispatcher untuk mengeksekusi.
+            </p>
+          )}
+          {actionError && (
+            <p role="alert" className="text-[11px] font-mono text-rose-300 text-center">
+              {actionError}
+            </p>
+          )}
+          <div className="flex items-center gap-2">
           <button
             onClick={() => handleDecision('APPROVE')}
-            disabled={actionLoading}
-            className="cursor-pointer flex-1 py-2.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-xs font-bold transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/50 disabled:opacity-50"
+            disabled={actionLoading || role === 'GUEST' || role === 'REGULATOR'}
+            title={role === 'REGULATOR' ? 'Memerlukan peran Dispatcher [Khusus Dispatcher]' : role === 'GUEST' ? 'Pratinjau sandbox — masuk sebagai Dispatcher untuk mengeksekusi' : 'Setujui detour'}
+            className="cursor-pointer flex-1 py-2.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-mono text-xs font-bold transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/50"
           >
             <CheckCircle2 className="w-4 h-4" />
-            <span>SETUJUI DETOUR</span>
+            <span>{role === 'REGULATOR' ? 'SETUJUI [Khusus Dispatcher]' : 'SETUJUI DETOUR'}</span>
           </button>
 
           <button
             onClick={() => handleDecision('HOLD')}
-            disabled={actionLoading}
-            className="cursor-pointer py-2.5 px-3 rounded-lg border border-amber-500/40 hover:bg-amber-500/10 text-amber-300 font-mono text-xs font-medium transition flex items-center justify-center gap-1.5 disabled:opacity-50"
-            title="Tahan armada di kantong parkir buffer"
+            disabled={actionLoading || role === 'GUEST'}
+            title={role === 'GUEST' ? 'Pratinjau sandbox — masuk sebagai Dispatcher untuk mengeksekusi' : 'Tahan armada di buffer'}
+            className="cursor-pointer py-2.5 px-3 rounded-lg border border-amber-500/40 hover:bg-amber-500/10 disabled:opacity-40 disabled:cursor-not-allowed text-amber-300 font-mono text-xs font-medium transition flex items-center justify-center gap-1.5"
           >
             <PauseCircle className="w-4 h-4" />
             <span>TAHAN BUFFER</span>
@@ -377,13 +410,14 @@ export function HitlDecisionDrawer({
 
           <button
             onClick={() => handleDecision('REJECT')}
-            disabled={actionLoading}
-            className="cursor-pointer py-2.5 px-3 rounded-lg border border-rose-500/40 hover:bg-rose-500/10 text-rose-300 font-mono text-xs font-medium transition flex items-center justify-center gap-1.5 disabled:opacity-50"
-            title="Tolak deviasi, lanjutkan rute utama"
+            disabled={actionLoading || role === 'GUEST' || role === 'REGULATOR'}
+            title={role === 'REGULATOR' ? 'Memerlukan peran Dispatcher [Khusus Dispatcher]' : role === 'GUEST' ? 'Pratinjau sandbox — masuk sebagai Dispatcher untuk mengeksekusi' : 'Tolak deviasi, lanjutkan rute utama'}
+            className="cursor-pointer py-2.5 px-3 rounded-lg border border-rose-500/40 hover:bg-rose-500/10 disabled:opacity-40 disabled:cursor-not-allowed text-rose-300 font-mono text-xs font-medium transition flex items-center justify-center gap-1.5"
           >
             <XCircle className="w-4 h-4" />
-            <span>TETAP RUTE AWAL</span>
+            <span>{role === 'REGULATOR' ? 'TETAP [Khusus Dispatcher]' : 'TETAP RUTE AWAL'}</span>
           </button>
+          </div>
         </div>
       )}
     </div>

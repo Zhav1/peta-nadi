@@ -884,6 +884,8 @@ export default function CrisisMap({
         },
       });
       map.on('click', 'route-eta-badges-layer', (e) => {
+        // Phase 77: ETA badge delegates to parent handleSelectRoute (modal path);
+        // no direct active-route styling mutation happens on badge click.
         if (e.features && e.features[0]) {
           const rIdx = Number(e.features[0].properties?.routeIndex ?? 0);
           if (onSelectRouteRef.current) onSelectRouteRef.current(rIdx);
@@ -2307,7 +2309,10 @@ export default function CrisisMap({
                 <button
                   type="button"
                   onClick={() => {
+                    // Phase 77: delegate to parent handleSelectRoute (opens Route
+                    // Detail Modal + role-branched HITL); no direct styling here.
                     onSelectRouteRef.current?.(selectedRoutePopover.routeIndex);
+                    setSelectedRoutePopover(null);
                   }}
                   className="cursor-pointer flex-1 py-1.5 px-3 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all duration-200 shadow-sm"
                 >
