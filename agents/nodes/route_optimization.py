@@ -464,6 +464,45 @@ async def route_optimization_agent(state: CrisisState) -> dict:
                     from app.adapters.cpu_routing_adapter import generate_nautical_coastal_route
                     leg["coordinates"] = generate_nautical_coastal_route(l_coords[0], l_coords[1])
 
+    # Attach Route Detail Modal proof post-loop (same helper as CPU adapter).
+    # risk_score stays a float; proof lives under rec['proof'].
+    if recommendations:
+        try:
+            from app.adapters.cpu_routing_adapter import enrich_route_with_proof
+            _base_eta = None
+            try:
+                _base_eta = float(recommendations[0].get("eta_minutes", 0))
+            except (TypeError, ValueError):
+                _base_eta = None
+            _news_ctx = state.get("verified_news_citations") or []
+            _hz_ctx = hazard_polygons or []
+            for _rec in recommendations:
+                try:
+                    _rec["risk_score"] = float(_rec.get("risk_score", 0.2))
+                except (TypeError, ValueError):
+                    _rec["risk_score"] = 0.2
+                if _base_eta is not None:
+                    try:
+                        _rec_eta = float(_rec.get("eta_minutes", _base_eta))
+                        _rec["time_delta_minutes"] = round(_rec_eta - _base_eta, 1)
+                    except (TypeError, ValueError):
+                        _rec.setdefault("time_delta_minutes", 0.0)
+                else:
+                    _rec.setdefault("time_delta_minutes", 0.0)
+                _proof = enrich_route_with_proof(
+                    _rec,
+                    hazard_zones=_hz_ctx,
+                    congestion_segments=[],
+                    news_context=_news_ctx,
+                    is_fallback=False,
+                )
+                _rec["proof"] = _proof
+                _rec["dasar_risiko"] = _proof.get("dasar_risiko")
+                _rec["dampak_uncertainty"] = _proof.get("dampak_uncertainty")
+                _rec["keterbatasan_data"] = _proof.get("keterbatasan_data")
+        except Exception as _pe:
+            logger.debug(f"RouteOptimizationAgent proof enrichment skipped: {_pe}")
+
     # 4b. Phase 58 expansion (B): opencode-driver prose "why this route" explainer.
     # Computed distance_km / eta_minutes / risk_score / optimal_policy are injected
     # verbatim as ground truth; the model must not invent figures or alter waypoints/ETA.

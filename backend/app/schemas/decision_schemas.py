@@ -41,8 +41,9 @@ class DecisionTraceCreate(BaseModel):
             self.incident_id = self.crisis_id
         if not self.operator_id and self.approved_by:
             self.operator_id = self.approved_by
-        if not self.operator_id:
-            self.operator_id = "anonymous"
+        # NOTE: operator identity is resolved server-side in approvals router
+        # from current_user.id + committed_by_role; never default to "anonymous"
+        # here so the router precedence (session wins) cannot be shadowed.
 
         # Mandatory notes on REJECT or OVERRIDE
         if self.action in (DecisionAction.REJECT, DecisionAction.OVERRIDE):

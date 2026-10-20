@@ -47,8 +47,10 @@ async def create_approval(
         )
 
     inc_id = payload.incident_id or payload.crisis_id or "INC-DEFAULT"
-    op_id = payload.operator_id or payload.approved_by or current_user.name or "anonymous"
-    
+    # Operator identity precedence: authenticated session wins; no unauthenticated fallback.
+    op_id = payload.operator_id or payload.approved_by or current_user.id
+    committed_by_role = current_user.role
+
     db_payload = {
         "incident_id": inc_id,
         "route_id": payload.route_id,
@@ -57,9 +59,13 @@ async def create_approval(
         "operator_id": op_id,
         "recommended_route": payload.recommended_route or {},
         "custom_constraints": payload.custom_constraints or {},
-        "notes": payload.notes or "",
+        # committed_by_role tracked in notes + response + local mirror (no schema
+        # migration on route_approvals); server identity stays op_id (current_user.id).
+        "notes": payload.notes or f"committed_by {op_id} ({committed_by_role})",
         "sync_status": "synced"
     }
+    # Local mirror keeps the structured role field for audit without Supabase migration.
+    local_extra = {"committed_by_role": committed_by_role}
 
     # Closed-loop Fleet Reroute Sync: If recommended route has geometry, bind it to target vehicle
     try:
@@ -94,6 +100,7 @@ async def create_approval(
             
             # Also mirror locally as synced
             local_payload = dict(db_payload, id=record_id, created_at=approved_at, sync_status="synced")
+            local_payload.update(local_extra)
             local_storage.save_decision_trace(local_payload)
             
             # Register closed-loop outcome verification tracking
@@ -119,6 +126,8 @@ async def create_approval(
                 "approved_at": approved_at,
                 "action": payload.action.value,
                 "tactical_action": payload.tactical_action.value,
+                "operator_id": op_id,
+                "committed_by_role": committed_by_role,
                 "status": "success"
             }
     except Exception as e:
@@ -126,7 +135,9 @@ async def create_approval(
 
     # Offline / Local fallback
     db_payload["sync_status"] = "pending"
-    saved = local_storage.save_decision_trace(db_payload)
+    offline_payload = dict(db_payload)
+    offline_payload.update(local_extra)
+    saved = local_storage.save_decision_trace(offline_payload)
 
     # Register closed-loop outcome verification tracking in local fallback
     try:
@@ -153,6 +164,8 @@ async def create_approval(
         "approved_at": saved["created_at"],
         "action": payload.action.value,
         "tactical_action": payload.tactical_action.value,
+        "operator_id": op_id,
+        "committed_by_role": committed_by_role,
         "status": "local_queued"
     }
 
@@ -186,7 +199,7 @@ async def list_approvals(
                         route_id=str(item.get("route_id", "0")),
                         action=DecisionAction(item.get("action", "ACCEPT")),
                         tactical_action=TacticalManeuver(item.get("tactical_action", "REROUTE")),
-                        operator_id=item.get("operator_id", "anonymous"),
+                        operator_id=item.get("operator_id") or "unknown-operator",
                         recommended_route=item.get("recommended_route"),
                         custom_constraints=item.get("custom_constraints"),
                         notes=item.get("notes"),

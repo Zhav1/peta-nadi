@@ -10,8 +10,10 @@ import uuid
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from urllib.parse import urlparse
-from fastapi import APIRouter, Query, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks, status
 from pydantic import BaseModel
+
+from app.auth.supabase_auth import UserSession, get_current_user
 
 from app.services.redis_client import get_redis
 from app.services.news_aggregator import (
@@ -37,7 +39,7 @@ class HitlActionRequest(BaseModel):
     action: Optional[str] = None  # "ACCEPT", "APPROVE", "REJECT", "HOLD", "DISMISS"
     decision: Optional[str] = None  # Frontend alias for action
     tactical_action: Optional[str] = "REROUTE"
-    operator_id: Optional[str] = "dispatcher_lead"
+    operator_id: Optional[str] = None
     approved_by: Optional[str] = None  # Frontend alias for operator_id
     notes: Optional[str] = None
 
@@ -396,10 +398,13 @@ async def verify_news_claim(
 # ==================== GLOBOT-STYLE HITL DECISION ENDPOINTS ====================
 
 @router.get("/api/v1/news/hitl-pending")
-async def get_pending_hitl_approvals():
+async def get_pending_hitl_approvals(
+    current_user: UserSession = Depends(get_current_user),
+):
     """
     Returns pending disruption reviews from Supabase public.route_approvals
     where operator action is required.
+    Read endpoint: requires authenticated session (any role may read).
     """
     try:
         from app.db.supabase_client import get_write_client
@@ -473,10 +478,14 @@ async def get_pending_hitl_approvals():
 
 
 @router.post("/api/v1/news/hitl-action")
-async def submit_hitl_operator_action(req: HitlActionRequest):
+async def submit_hitl_operator_action(
+    req: HitlActionRequest,
+    current_user: UserSession = Depends(get_current_user),
+):
     """
     Executes a Human-In-The-Loop dispatcher action (Approve Detour, Hold, or Dismiss).
     Persists decision to Supabase public.route_approvals and broadcasts to telemetry.
+    RBAC: requires 'approvals:write' (Dispatcher only); GUEST/REGULATOR get 403.
     """
     try:
         uuid.UUID(str(req.approval_id))
@@ -486,6 +495,18 @@ async def submit_hitl_operator_action(req: HitlActionRequest):
             detail="Invalid UUID format for approval_id"
         )
 
+    # RBAC: only Dispatcher (approvals:write) may commit HITL actions.
+    if "approvals:write" not in (current_user.permissions or []):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": "FORBIDDEN",
+                "message": f"Akses ditolak: Hanya Dispatcher dengan wewenang 'approvals:write' yang dapat mengeksekusi HITL. Peran Anda saat ini adalah {current_user.role}.",
+                "current_role": current_user.role,
+                "required_permissions": ["approvals:write"],
+            },
+        )
+
     try:
         from app.db.supabase_client import get_service_client
         sb = get_service_client()
@@ -493,14 +514,16 @@ async def submit_hitl_operator_action(req: HitlActionRequest):
         raw_action = (req.decision or req.action or "APPROVE").upper()
         # Normalize action keywords
         action_verb = "ACCEPT" if raw_action in ["APPROVE", "ACCEPT"] else ("DISMISS" if raw_action in ["REJECT", "DISMISS"] else "HOLD")
-        op_id = req.approved_by or req.operator_id or "dispatcher_lead"
-        
+        # approved_by precedence: authenticated session wins over client-supplied aliases.
+        op_id = current_user.id or req.approved_by or req.operator_id
+        committed_by_role = current_user.role
+
         update_payload = {
             "action": action_verb,
             "tactical_action": req.tactical_action,
             "operator_id": op_id,
             "sync_status": "synced" if action_verb in ["ACCEPT", "DISMISS"] else "action_committed",
-            "notes": req.notes or f"Operator {op_id} executed {action_verb} for route reroute.",
+            "notes": req.notes or f"Operator {op_id} ({committed_by_role}) executed {action_verb} for route reroute.",
             "approved_at": datetime.now(timezone.utc).isoformat()
         }
         
@@ -508,10 +531,12 @@ async def submit_hitl_operator_action(req: HitlActionRequest):
         if not res.data:
             raise HTTPException(status_code=404, detail="Approval ID not found in Supabase")
             
-        logger.info(f"Operator {req.operator_id} committed action {req.action} for approval {req.approval_id}")
+        logger.info(f"Operator {op_id} ({committed_by_role}) committed action {req.action} for approval {req.approval_id}")
         return {
             "status": "success",
             "message": f"Action {req.action} successfully committed to Supabase",
+            "operator_id": op_id,
+            "committed_by_role": committed_by_role,
             "approval": res.data[0]
         }
     except HTTPException:

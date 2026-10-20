@@ -30,6 +30,173 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return R * c
 
 
+def enrich_route_with_proof(
+    route: Dict[str, Any],
+    hazard_zones: Optional[List[Dict[str, Any]]] = None,
+    congestion_segments: Optional[List[Dict[str, Any]]] = None,
+    news_context: Optional[List[Dict[str, Any]]] = None,
+    is_fallback: bool = False,
+) -> Dict[str, Any]:
+    """
+    Builds the Route Detail Modal proof triple for a single route dict.
+
+    Keeps ``risk_score`` as a float for backwards compatibility — the proof
+    lives under ``route['proof']`` (plus section shortcuts) and never
+    replaces the scalar risk_score field.
+    """
+    try:
+        from app.schemas.routing_proof_schemas import (
+            DasarRisiko,
+            DampakUncertainty,
+            KeterbatasanData,
+            RiskEvidenceItem,
+            RouteProof,
+        )
+    except Exception:
+        # Fallback when schemas module is unavailable (offline import order):
+        # return a minimal dict so callers never crash.
+        return {
+            "dasar_risiko": {"safety_tag": "WASPADA", "safety_status": "SAFE_DETOUR",
+                             "is_compromised": False, "passability": "CAUTION",
+                             "hazard_type": None, "hazard_radius_km": None, "evidence": []},
+            "dampak_uncertainty": {"time_delta_minutes": None, "congestion_levels": [],
+                                   "net_savings_idr": None, "spoilage_loss_idr": None,
+                                   "eta_confidence": 0.6, "evidence": []},
+            "keterbatasan_data": {"is_fallback": bool(is_fallback), "compliance_status": None,
+                                  "hedging_available": False, "news_links_alive": 0,
+                                  "news_links_total": 0, "missing_fields": ["proof_schemas_unavailable"],
+                                  "warnings": [], "evidence": []},
+        }
+
+    risk_raw = route.get("risk_score", 0.2)
+    try:
+        risk = float(risk_raw)
+    except (TypeError, ValueError):
+        risk = 0.2
+
+    if risk >= 0.6:
+        safety_tag, safety_status, is_compromised = "BERISIKO", "COMPROMISED", True
+    elif risk >= 0.3:
+        safety_tag, safety_status, is_compromised = "WASPADA", "SAFE_DETOUR", False
+    else:
+        safety_tag, safety_status, is_compromised = "AMAN", "CLEAR", False
+
+    if risk >= 0.8:
+        passability = "BLOCKED"
+    elif risk >= 0.5:
+        passability = "RESTRICTED"
+    elif risk >= 0.3:
+        passability = "CAUTION"
+    else:
+        passability = "CLEAR"
+
+    hazard_type = None
+    hazard_radius = None
+    if hazard_zones:
+        hz0 = hazard_zones[0] if isinstance(hazard_zones[0], dict) else {}
+        hazard_type = str(
+            hz0.get("incident_type") or hz0.get("type")
+            or hz0.get("event_type") or hz0.get("hazard_type") or "unknown"
+        )
+        try:
+            hazard_radius = float(hz0.get("radiusKm", hz0.get("radius_km", 10.0)))
+        except (TypeError, ValueError):
+            hazard_radius = 10.0
+
+    dasar = DasarRisiko(
+        safety_tag=safety_tag,
+        safety_status=safety_status,  # type: ignore[arg-type]
+        is_compromised=is_compromised,
+        passability=passability,  # type: ignore[arg-type]
+        hazard_type=hazard_type,
+        hazard_radius_km=hazard_radius,
+        evidence=[
+            RiskEvidenceItem(source="router", label="risk_score", value=round(risk, 3),
+                             confidence=0.9, detail="NetworkX hazard-penalized weight"),
+            RiskEvidenceItem(source="hazard", label="hazard_type", value=hazard_type or "none",
+                             confidence=0.8 if hazard_type else 0.5,
+                             detail=f"radius_km={hazard_radius}" if hazard_radius else "no hazard zone"),
+        ],
+    )
+
+    congestion_levels: List[str] = []
+    for seg in congestion_segments or []:
+        if isinstance(seg, dict):
+            lvl = str(seg.get("congestion_level") or seg.get("level") or "").lower()
+            if lvl in ("low", "moderate", "heavy"):
+                congestion_levels.append(lvl)
+    hedging = route.get("hedging") or {}
+    net_savings = hedging.get("net_savings_idr")
+    spoilage = hedging.get("spoilage_loss_idr")
+    try:
+        net_savings = float(net_savings) if net_savings is not None else None
+    except (TypeError, ValueError):
+        net_savings = None
+    try:
+        spoilage = float(spoilage) if spoilage is not None else None
+    except (TypeError, ValueError):
+        spoilage = None
+    time_delta = route.get("time_delta_minutes")
+    try:
+        time_delta = float(time_delta) if time_delta is not None else None
+    except (TypeError, ValueError):
+        time_delta = None
+
+    dampak = DampakUncertainty(
+        time_delta_minutes=time_delta,
+        congestion_levels=congestion_levels,
+        net_savings_idr=net_savings,
+        spoilage_loss_idr=spoilage,
+        eta_confidence=0.6 if is_fallback else 0.8,
+        evidence=[
+            RiskEvidenceItem(source="tomtom", label="congestion_levels",
+                             value=",".join(congestion_levels) if congestion_levels else "no live segments",
+                             confidence=0.5 if is_fallback else 0.8,
+                             detail="seed_fallback" if is_fallback else "tomtom_live_or_cache"),
+            RiskEvidenceItem(source="hedging", label="net_savings_idr",
+                             value=net_savings if net_savings is not None else "Data tidak tersedia",
+                             confidence=0.85 if net_savings is not None else 0.3),
+        ],
+    )
+
+    compliance = route.get("compliance") or {}
+    compliance_status = compliance.get("status")
+    hedging_available = bool(route.get("hedging"))
+    news_list = news_context or []
+    alive = sum(1 for n in news_list if isinstance(n, dict) and n.get("link_alive") == "alive")
+    missing: List[str] = []
+    if net_savings is None:
+        missing.append("hedging.net_savings_idr")
+    if spoilage is None:
+        missing.append("hedging.spoilage_loss_idr")
+    if not congestion_levels:
+        missing.append("congestion_segments")
+    if not news_list:
+        missing.append("news_attributions")
+    if compliance_status is None:
+        missing.append("compliance.status")
+
+    keterbatasan = KeterbatasanData(
+        is_fallback=bool(is_fallback),
+        compliance_status=str(compliance_status) if compliance_status else None,
+        hedging_available=hedging_available,
+        news_links_alive=alive,
+        news_links_total=len(news_list),
+        missing_fields=missing,
+        warnings=(["speed_source=seed_fallback: ETA memakai kecepatan asumsi"] if is_fallback else []),
+        evidence=[
+            RiskEvidenceItem(source="router", label="is_fallback", value=bool(is_fallback),
+                             confidence=0.95, detail="seed vs live provenance"),
+            RiskEvidenceItem(source="news", label="news_links_alive",
+                             value=f"{alive}/{len(news_list)}", confidence=0.8,
+                             detail="attributions with link_alive=='alive'"),
+        ],
+    )
+
+    proof = RouteProof(dasar_risiko=dasar, dampak_uncertainty=dampak, keterbatasan_data=keterbatasan)
+    return proof.model_dump()
+
+
 # =============================================================================
 # PAN-SUMATRA NAUTICAL SEA-LANES & INTERMODAL ROUTING
 # =============================================================================
@@ -379,6 +546,10 @@ class CPURoutingAdapter:
         origin_name: Optional[str] = None,
         dest_name: Optional[str] = None,
         modality: Optional[str] = None,
+        congestion_segments: Optional[List[Dict[str, Any]]] = None,
+        news_context: Optional[List[Dict[str, Any]]] = None,
+        include_proof: bool = True,
+        is_fallback: bool = False,
     ) -> Dict[str, Any]:
         """
         Computes k-shortest simple paths on CPU with dynamic hazard avoidance penalties.
@@ -602,6 +773,43 @@ class CPURoutingAdapter:
                 })
 
         elapsed_ms = (time.perf_counter() - t0) * 1000.0
+
+        # Attach Route Detail Modal proof at every emission site.
+        # risk_score stays a float; proof lives under route['proof'].
+        if include_proof:
+            try:
+                base_eta = None
+                if routes:
+                    try:
+                        base_eta = float(routes[0].get("eta_minutes", 0))
+                    except (TypeError, ValueError):
+                        base_eta = None
+                for r in routes:
+                    try:
+                        r["risk_score"] = float(r.get("risk_score", 0.2))
+                    except (TypeError, ValueError):
+                        r["risk_score"] = 0.2
+                    if base_eta is not None:
+                        try:
+                            r_eta = float(r.get("eta_minutes", base_eta))
+                            r["time_delta_minutes"] = round(r_eta - base_eta, 1)
+                        except (TypeError, ValueError):
+                            r["time_delta_minutes"] = 0.0
+                    else:
+                        r.setdefault("time_delta_minutes", 0.0)
+                    r["proof"] = enrich_route_with_proof(
+                        r,
+                        hazard_zones=hazard_zones,
+                        congestion_segments=congestion_segments,
+                        news_context=news_context,
+                        is_fallback=is_fallback,
+                    )
+                    # Section shortcuts for the modal (read from proof, no duplication of logic).
+                    r["dasar_risiko"] = r["proof"].get("dasar_risiko")
+                    r["dampak_uncertainty"] = r["proof"].get("dampak_uncertainty")
+                    r["keterbatasan_data"] = r["proof"].get("keterbatasan_data")
+            except Exception as proof_err:
+                logger.debug(f"Proof enrichment skipped: {proof_err}")
 
         return {
             "status": "success" if routes else "no_path_found",
