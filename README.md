@@ -130,6 +130,21 @@ Multisource Telemetry (BMKG Sensor, TomTom Speed Flow, Google News RSS, PIHPS Pr
 - **Post-Disaster Construction Guards:** Bare `"darurat"` removed from crisis/severity triggers; `pascabencana` (both spacings) + construction words (`pembangunan`, `tanggul`, `perbaikan`, `renovasi`, …) added to discourse markers; `other_disruption` without physical blockage can no longer corroborate impact — `"Pembangunan tanggul darurat pascabencana di Padang"` resolves to DROPPED, not RED.
 - **Schema v4 + Badge:** `EXTRACTION_SCHEMA_VERSION = 4` auto re-verifies legacy rows on read with zero migrations; Evidence tab shows a `✓ Konten Artikel Dianalisis Workhorse LLM` badge per analyzed item.
 
+### 17. Pan-Sumatra Spatial Precision, Multi-Agent Consensus Escalation & Unified God's-Eye HUD (Phase 76)
+- **Pan-Sumatra Gazetteer Collision Fix:** Removed bare `"panjang"` collision from `GAZETTEER_NODES`; enforced longest-key descending matching with strict word-boundary regex (`\b...\b`), eliminating misattributions of common adjectives (*"antrean panjang"*) to Pelabuhan Panjang Lampung. Expanded gazetteer with full coverage for all 23 Aceh regencies/cities and 34+ strategic Kecamatan nodes across Sumatra.
+- **Hybrid 3-Tier Micro-Spatial Hazard Bounding:**
+  - *Tier A (`corridor_point`)*: 0.6–1.2 km tight anisotropic highway ellipse oriented along corridor azimuth (`semi_minor <= 0.5 km`), preserving parallel alternate bypass routes for the CPU solver.
+  - *Tier B (`kecamatan_kelurahan`)*: Real/synthetic 1.5–2.2 km ADM3 subdistrict boundary polygon for localized floods.
+  - *Tier C (`kabupaten_kota` / `province_only`)*: Subtle 3.2–4.5 km advisory footprint strictly capped at `YELLOW_CLARIFY` (preventing city-wide RED road blockades).
+- **Two-Stage Multi-Sensor Consensus Gate Escalation:** Wired `compute_consensus` into live news ingestion, evaluating 4 physical and economic channels ($W$ BMKG radar/precipitation, $T$ TomTom traffic speed deltas, $I$ OSINT official press authority, $E$ PIHPS strategic food corridor impact) before elevating uncorroborated reports.
+- **True Bounded Flexbox Viewport Shell & Unified Top Command Bar:** Refactored `Peta Operasi` into a two-column bounded Flexbox layout where map canvas controls start strictly to the right of the Left Berita Sidebar with automatic `map.resize()` pulses. Integrated location search and TopNavTelemetry (`RUTE`, `LALULINTAS`, `BMKG`, `18 Hub`) side-by-side with mutual-exclusion popovers.
+
+### 18. Route Detail Modal & HITL Hardening (Phase 77)
+- **Dedicated 5-Section Route Detail Modal:** Every route selection across all entry points (sidebar card, map polyline hover/click, and ETA badge) opens the unified Route Detail Modal instead of silently switching corridors. Displays Corridor Overview, Multi-Hazard Exposure, Perishable Spoilage Hedging, Live Telemetry Multipliers, and Role-Gated Dispatch Action.
+- **Live HITL Review Queue Integration:** Selecting an operational route creates a pending HITL review record tracked by the `TopNavTelemetry` review badge counter and `HitlDecisionDrawer`.
+- **Strict Multi-Tenant RBAC Guardrails:** `DISPATCHER` role commits to `/api/v1/approvals` and simulates TMS ping. `GUEST` and `REGULATOR` roles receive watermarked sandbox previews with zero database mutations or TMS pings, explained via `GuestEvaluationBanner`.
+- **Database Schema Alignment:** Migration `013_hil_hardening.sql` aligned `route_approvals.route_id` with `incidents.incident_id`.
+
 ---
 
 ## Technology Stack

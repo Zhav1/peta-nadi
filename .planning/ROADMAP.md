@@ -2139,6 +2139,33 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 
 ---
 
+## Phase 77: Route Detail Modal & HITL Hardening
+
+**Goal:** Route selection across all entry points (sidebar card, map polyline, ETA badge) triggers the dedicated 5-section Route Detail Modal, links to the HITL review queue, enforces strict role-gating (Dispatcher commits approvals and TMS pings; Guest/Regulator receives watermarked sandbox preview without database mutations), applies Supabase migration 013 (`route_id` and `incident_id` alignment), and confirms probe parity.
+**Status:** COMPLETE ✅
+
+### Deliverables
+
+- **WP1 - 5-Section Route Detail Modal & HITL Queue Integration (`RouteDetailModal.tsx` + `DashboardClient.tsx` + `CrisisMap.tsx`)**:
+  - Unified entry point `handleSelectRoute` so that selecting any route from the left sidebar card, map polyline hover/click, or ETA badge triggers the 5-section Route Detail Modal instead of silently toggling active corridor state.
+  - Generates a pending HITL review record visible in `TopNavTelemetry` review badge counter and `HitlDecisionDrawer`.
+  - Displays real corridor telemetry across 5 locked sections: Corridor Overview, Multi-Hazard Exposure, Perishable Spoilage Hedging, Live Telemetry & Chokepoint Multipliers, and Role-Gated Action Dispatch.
+- **WP2 - Strict RBAC & Sandbox Guardrails (`MitigationTab.tsx` + `HitlDecisionDrawer.tsx` + `GuestEvaluationBanner.tsx` + `api.ts`)**:
+  - Enforced server and client role barriers: `DISPATCHER` role commits to `/api/v1/approvals` and simulates TMS ping.
+  - `GUEST` and `REGULATOR` roles are restricted to watermarked sandbox previews with zero POST `/approvals` mutations and zero TMS pings; displays explicit `GuestEvaluationBanner` explanation.
+  - Handled 403 authorization failures gracefully without displaying false `"DISETUJUI"` state.
+- **WP3 - Database Schema Alignment & Probe Parity (`013_hil_hardening.sql` + Backend Audits)**:
+  - Applied Supabase migration `013_hil_hardening.sql` aligning `route_approvals.route_id` with `incidents.incident_id`.
+  - Verified probe parity across 28 backend endpoints.
+
+### Verification
+
+- [x] Every route selection opens RouteDetailModal; HITL queue reflects pending count.
+- [x] Role-gated actions pass: Guest/Regulator blocked from approval mutations with watermarked preview.
+- [x] Next.js production build (`rtk npm run build`) passes cleanly with zero TypeScript or route errors.
+
+---
+
 ## Backlog (Post-Hackathon / v2 & New Context Window Backlog)
 
 ### Active Remediation & Audit Backlog (For New Context Window)
