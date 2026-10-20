@@ -74,6 +74,7 @@ export default function ReportsSection({
   const [approvalList, setApprovalList] = useState<ApprovalLogItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [reportView, setReportView] = useState<'erp' | 'audit'>('erp');
+  const [erpRefreshKey, setErpRefreshKey] = useState(0);
 
   // Client-side filter states
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -413,7 +414,10 @@ export default function ReportsSection({
           <button
             key={tab.id}
             type="button"
-            onClick={() => setReportView(tab.id)}
+            onClick={() => {
+              setReportView(tab.id);
+              if (tab.id === 'erp') setErpRefreshKey((k) => k + 1);
+            }}
             className={`px-3.5 py-1.5 rounded-md text-xs font-medium transition cursor-pointer whitespace-nowrap ${
               reportView === tab.id
                 ? 'bg-white text-[#080d14] font-semibold'
@@ -426,7 +430,7 @@ export default function ReportsSection({
       </div>
 
       {reportView === 'erp' ? (
-        <ERPSavingsPanel />
+        <ERPSavingsPanel refreshKey={erpRefreshKey} />
       ) : (
         <>
       {/* TOP KPI ROW */}

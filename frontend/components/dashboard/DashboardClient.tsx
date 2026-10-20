@@ -741,7 +741,7 @@ export default function DashboardClient() {
     }
     const startedAt = Date.now();
     setRoutingElapsedMs(0);
-    const timer = setInterval(() => setRoutingElapsedMs(Date.now() - startedAt), 250);
+    const timer = setInterval(() => setRoutingElapsedMs(Date.now() - startedAt), 1000);
     return () => clearInterval(timer);
   }, [isRoutingLoading]);
 
@@ -2636,7 +2636,7 @@ export default function DashboardClient() {
                 hubNodesList={dynamicHubNodes}
                 corridorContext={corridorContext}
                 spatialWeatherPolygons={spatialWeatherPolygons}
-                routingInfo={isRoutingLoading ? null : routingInfo}
+                routingInfo={routingInfo}
                 isLeftSidebarCollapsed={isLeftSidebarCollapsed}
                 onExpandSidebar={() => setIsLeftSidebarCollapsed(false)}
                 fleetModalityFilter={fleetModalityFilter}
@@ -2653,7 +2653,7 @@ export default function DashboardClient() {
                 hideEstimatedRoutes={isDispatcherWorkspace}
                 topNavTelemetrySlot={
                   <TopNavTelemetry
-                    routingInfo={isRoutingLoading ? null : routingInfo}
+                    routingInfo={routingInfo}
                     corridorContext={corridorContext}
                     isLoading={isCorridorLoading}
                     isRoutingLoading={isRoutingLoading}

@@ -123,6 +123,14 @@ class RoutingRequestPayload(BaseModel):
     k_alternatives: Optional[int] = 3
     modality: Optional[str] = None
     include_proof: Optional[bool] = Field(default=True, description="Attach Route Detail Modal proof triple")
+    # Optional grounded economics (BPJT + Pertamina + 4-tier decay). Absent => honest null, no invented Rp.
+    commodity: Optional[str] = None
+    cargo_tonnage: Optional[float] = None
+    vehicle_golongan: Optional[str] = None
+    fuel_type: Optional[str] = None
+    toll_segments: Optional[List[str]] = None
+    p_disruption: Optional[float] = None
+    disruption_delay_hours: Optional[float] = None
 
 
 @router.post("/routing/optimize")
@@ -161,6 +169,8 @@ async def optimize_routing(payload: RoutingRequestPayload = Body(...)) -> Dict[s
             )
             result["point_to_point_path"] = path_solution
             result["routes"] = path_solution.get("routes", [])
+            _enrich_routes_with_hedging(path_solution, payload)
+            result["routes"] = path_solution.get("routes", [])
             if payload.include_proof:
                 result["proof_context"] = {
                     "is_fallback": proof_ctx.get("is_fallback"),
@@ -171,6 +181,50 @@ async def optimize_routing(payload: RoutingRequestPayload = Body(...)) -> Dict[s
     except Exception as e:
         logger.error(f"Error executing CPU routing optimization: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+def _enrich_routes_with_hedging(result: Dict[str, Any], payload: "RoutingRequestPayload") -> None:
+    """Attach grounded hedging (BPJT + Pertamina + 4-tier decay) to detour routes.
+
+    Only runs when the caller supplies commodity; otherwise routes keep honest null
+    economics (no invented Rp). Never raises — failures leave hedging absent.
+    """
+    try:
+        if not payload.commodity:
+            return
+        routes = result.get("routes") or []
+        if len(routes) < 1:
+            return
+        from app.services.spoilage_hedging_service import SpoilageHedgingService
+        from app.schemas.intermodal import HedgingSolveRequest
+        svc = SpoilageHedgingService()
+        base = routes[0]
+        base_dist = float(base.get("distance_km") or 0.0)
+        base_eta = float(base.get("eta_minutes") or 0.0)
+        for r in routes[1:]:
+            try:
+                detour_km = max(0.0, float(r.get("distance_km") or 0.0) - base_dist)
+                detour_h = max(0.0, (float(r.get("eta_minutes") or 0.0) - base_eta) / 60.0)
+                req = HedgingSolveRequest(
+                    vehicle_id=str(r.get("route_index", "route")),
+                    commodity=str(payload.commodity),
+                    cargo_tonnage=float(payload.cargo_tonnage or 10.0),
+                    origin=str(payload.origin_id or "origin"),
+                    destination=str(payload.dest_id or "dest"),
+                    vehicle_golongan=(payload.vehicle_golongan or "GOL_II"),  # type: ignore[arg-type]
+                    fuel_type=(payload.fuel_type or "biosolar"),  # type: ignore[arg-type]
+                    p_disruption=float(payload.p_disruption if payload.p_disruption is not None else 0.85),
+                    disruption_delay_hours=float(payload.disruption_delay_hours if payload.disruption_delay_hours is not None else 12.0),
+                    detour_distance_km=detour_km,
+                    detour_time_hours=detour_h,
+                    toll_segments=payload.toll_segments,
+                )
+                hedged = svc.solve_hedging_matrix(req)
+                r["hedging"] = hedged.model_dump() if hasattr(hedged, "model_dump") else dict(hedged)
+            except Exception as e:
+                logger.warning(f"Hedging enrich skipped for route: {e}")
+    except Exception as e:
+        logger.warning(f"Hedging enrich disabled: {e}")
 
 
 @router.post("/routing/solve-path")
@@ -206,6 +260,7 @@ async def solve_routing_path(payload: RoutingRequestPayload = Body(...)) -> Dict
                 "speed_source": proof_ctx.get("speed_source"),
                 "fallback_reasons": proof_ctx.get("fallback_reasons", []),
             }
+        _enrich_routes_with_hedging(result, payload)
         return result
     except Exception as e:
         logger.error(f"Error solving routing path: {e}", exc_info=True)
