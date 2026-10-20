@@ -22,8 +22,19 @@ export function getAuthToken(): string | null {
   return currentAuthToken;
 }
 
+function isAbortError(err: unknown): boolean {
+  return !!err && typeof err === 'object' && (err as { name?: string }).name === 'AbortError';
+}
+
+function createAbortError(message: string = 'Request aborted'): Error {
+  const err = new Error(message);
+  err.name = 'AbortError';
+  return err;
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const baseUrl = getBaseUrl();
+  const signal = options?.signal;
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options?.headers as Record<string, string>),
@@ -38,8 +49,12 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     res = await fetch(`${baseUrl}${path}`, {
       ...options,
       headers,
+      signal: options?.signal,
     });
   } catch (err) {
+    // A cancelled request must never fall back to the proxy — that would restart
+    // the work the caller just aborted.
+    if (isAbortError(err) || signal?.aborted) throw err;
     if (typeof window !== 'undefined') {
       res = await fetch(`/api/proxy${path}`, {
         ...options,
@@ -53,6 +68,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     }
   }
 
+  if (signal?.aborted) throw createAbortError();
   if (!res.ok) throw new Error(`API ${path} → ${res.status}`);
   return res.json() as Promise<T>;
 }
@@ -173,7 +189,7 @@ export const api = {
       dest_name?: string;
       fleet_size?: number;
       hazard_zones?: Array<Record<string, unknown>>;
-    }) =>
+    }, signal?: AbortSignal) =>
       request<{
         status: string;
         is_fallback?: boolean;
@@ -185,6 +201,7 @@ export const api = {
       }>('/api/v1/routing/optimize', {
         method: 'POST',
         body: JSON.stringify(payload),
+        signal,
       }),
   },
   geocode: {

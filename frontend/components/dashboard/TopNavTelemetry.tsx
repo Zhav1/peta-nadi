@@ -9,6 +9,8 @@ interface TopNavTelemetryProps {
   routingInfo?: { solver: string; compute_time_ms: number | null; savings_pct: number | null } | null;
   corridorContext?: import('@/lib/types').CorridorContext | null;
   isLoading?: boolean;
+  /** True while a route computation is in flight — never render a stale latency. */
+  isRoutingLoading?: boolean;
   onOpenHitl?: () => void;
   pendingHitlCount?: number;
   // Compact zone filter pills when left sidebar collapsed
@@ -29,6 +31,7 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
   routingInfo,
   corridorContext,
   isLoading = false,
+  isRoutingLoading = false,
   onOpenHitl,
   pendingHitlCount = 0,
   isLeftSidebarCollapsed = false,
@@ -79,7 +82,9 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
           title="Latensi solver optimasi rute mitigasi CPU (NetworkX + OR-Tools / 2-Opt)"
         >
           <Zap className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-          <span>RUTE: {solverStats?.compute_time_ms != null ? `${solverStats.compute_time_ms}ms` : '< 15ms'}</span>
+          <span>
+            RUTE: {isRoutingLoading ? '...' : solverStats?.compute_time_ms != null ? `${solverStats.compute_time_ms}ms` : '< 15ms'}
+          </span>
           <ChevronDown className={`w-3 h-3 opacity-60 ml-0.5 transition-transform duration-150 ${activePopover === 'RUTE' ? 'rotate-180' : ''}`} />
         </button>
 
@@ -110,9 +115,11 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
               <div className="p-2 rounded-lg bg-[#121822] border border-[#1c2432]">
                 <span className="text-slate-400 block text-[10px] uppercase font-sans">Latensi Solver</span>
                 <span className="text-sm font-bold text-emerald-400">
-                  {solverStats?.compute_time_ms != null ? `${solverStats.compute_time_ms} ms` : '< 15 ms'}
+                  {isRoutingLoading ? '...' : solverStats?.compute_time_ms != null ? `${solverStats.compute_time_ms} ms` : '< 15 ms'}
                 </span>
-                <span className="text-[10px] text-slate-500 block font-sans">Sub-Detik Deterministik</span>
+                <span className="text-[10px] text-slate-500 block font-sans">
+                  {isRoutingLoading ? 'Menghitung rute...' : 'Sub-Detik Deterministik'}
+                </span>
               </div>
 
               <div className="p-2 rounded-lg bg-[#121822] border border-[#1c2432]">

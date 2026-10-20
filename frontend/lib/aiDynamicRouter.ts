@@ -804,6 +804,22 @@ export type MapboxDirectionsProfile = 'driving' | 'driving-traffic';
 
 const MAPBOX_DIRECTIONS_ENDPOINT = 'https://api.mapbox.com/directions/v5/mapbox';
 
+function isAbortError(err: unknown): boolean {
+  return !!err && typeof err === 'object' && (err as { name?: string }).name === 'AbortError';
+}
+
+function createAbortError(): Error {
+  const err = new Error('Perhitungan rute dibatalkan');
+  err.name = 'AbortError';
+  return err;
+}
+
+/** Throws an AbortError so cancelled route computations stop between network legs. */
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) throw createAbortError();
+}
+
+
 /**
  * Toll corridors are only avoided when the hazard actually threatens a toll gate or
  * interchange (radius + 2 km buffer), per D2.
@@ -827,7 +843,8 @@ export async function requestMapboxDirections(
   profile: MapboxDirectionsProfile,
   params: string,
   token: string,
-  excludeToll: boolean
+  excludeToll: boolean,
+  signal?: AbortSignal
 ): Promise<MapboxDirectionsResponse | null> {
   const buildUrl = (exclude: boolean) =>
     `${MAPBOX_DIRECTIONS_ENDPOINT}/${profile}/${coordString}?${params}${
@@ -835,7 +852,8 @@ export async function requestMapboxDirections(
     }&access_token=${token}`;
 
   const attempt = async (exclude: boolean) => {
-    const res = await fetch(buildUrl(exclude));
+    throwIfAborted(signal);
+    const res = await fetch(buildUrl(exclude), { signal });
     const data = (await res.json().catch(() => null)) as MapboxDirectionsResponse | null;
     const isNoRoute = data?.code === 'NoRoute' || (res.ok && !data?.routes?.length);
     return { data, isNoRoute };
@@ -853,7 +871,8 @@ async function fetchMapboxRouteWithForcedWaypoint(
   destination: LonLat,
   forcedWaypoint: LonLat,
   token: string,
-  excludeToll: boolean = false
+  excludeToll: boolean = false,
+  signal?: AbortSignal
 ): Promise<MapboxRouteResult | null> {
   const coordString = [
     `${origin[0].toFixed(6)},${origin[1].toFixed(6)}`,
@@ -867,7 +886,8 @@ async function fetchMapboxRouteWithForcedWaypoint(
       'driving-traffic',
       'overview=full&geometries=geojson&annotations=congestion',
       token,
-      excludeToll
+      excludeToll,
+      signal
     );
     if (!data?.routes || data.routes.length === 0) return null;
 
@@ -896,7 +916,8 @@ async function fetchMapboxRouteWithForcedWaypoint(
     }
 
     return { coordinates: coords, distanceKm, durationMinutes, congestionSegments, summary: route.legs?.[0]?.summary || 'Bypass Route', source: 'live' };
-  } catch {
+  } catch (err) {
+    if (isAbortError(err) || signal?.aborted) throw createAbortError();
     return null;
   }
 }
@@ -905,7 +926,8 @@ export async function fetchMapboxAlternativeDrivingRoutes(
   origin: LonLat,
   destination: LonLat,
   waypoints: LonLat[] = [],
-  excludeToll: boolean = false
+  excludeToll: boolean = false,
+  signal?: AbortSignal
 ): Promise<MapboxRouteResult[]> {
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
   const fallbackCoords = [origin, ...waypoints, destination];
@@ -922,7 +944,8 @@ export async function fetchMapboxAlternativeDrivingRoutes(
         'driving-traffic',
         'alternatives=true&annotations=congestion,distance,duration,speed&geometries=geojson&overview=full',
         token,
-        excludeToll
+        excludeToll,
+        signal
       );
       if (data?.routes && data.routes.length > 0) {
         for (let index = 0; index < data.routes.length; index++) {
@@ -957,9 +980,13 @@ export async function fetchMapboxAlternativeDrivingRoutes(
         }
       }
     } catch (err) {
+      if (isAbortError(err) || signal?.aborted) throw createAbortError();
       console.warn('Mapbox Directions API call failed:', err);
     }
   }
+
+  // A cancelled route computation must not fabricate an offline polyline.
+  throwIfAborted(signal);
 
   if (results.length === 0) {
     // Phase 57 WP-A3 (D4): honest unavailable path. Straight-line estimate is
@@ -982,8 +1009,10 @@ export async function fetchMapboxDrivingRoute(
   origin: LonLat,
   destination: LonLat,
   waypoints: LonLat[] = [],
-  modality: TransportModality = 'truck'
+  modality: TransportModality = 'truck',
+  signal?: AbortSignal
 ): Promise<LonLat[]> {
+  throwIfAborted(signal);
   if (modality === 'maritime') {
     return generateNauticalCoastalRoute(origin, destination);
   }
@@ -993,7 +1022,7 @@ export async function fetchMapboxDrivingRoute(
     const midLat = (origin[1] + destination[1]) / 2 + 0.08;
     return [origin, [midLon, midLat], destination];
   }
-  const results = await fetchMapboxAlternativeDrivingRoutes(origin, destination, waypoints);
+  const results = await fetchMapboxAlternativeDrivingRoutes(origin, destination, waypoints, false, signal);
   return results[0]?.coordinates || [origin, ...waypoints, destination];
 }
 
@@ -1024,8 +1053,10 @@ export async function calculateSeaIntermodalCorridor(
   hazardCenter: LonLat | null = null,
   radiusKm: number = DEFAULT_HAZARD_RADIUS_KM,
   hazardType: CrisisType = 'flood',
-  affectedModalities?: Array<'land' | 'sea' | 'air'>
+  affectedModalities?: Array<'land' | 'sea' | 'air'>,
+  signal?: AbortSignal
 ): Promise<RouteRecommendation> {
+  throwIfAborted(signal);
   const odDistanceKm = getHaversineDistanceKm(origin, destination);
   const modalities = affectedModalities ?? getAffectedModalities(hazardType);
   const nearestOriginPort = findClosestSeaport(origin).seaport;
@@ -1084,7 +1115,7 @@ export async function calculateSeaIntermodalCorridor(
 
   // True 3-Leg Chain:
   // Leg 1: First-Mile Land Truck to Origin Seaport
-  const leg1Coords = await fetchMapboxDrivingRoute(origin, originPort.coords, [], 'truck');
+  const leg1Coords = await fetchMapboxDrivingRoute(origin, originPort.coords, [], 'truck', signal);
   const leg1Dist = Math.round(getHaversineDistanceKm(origin, originPort.coords) * 1.15);
   const leg1Eta = Math.round((leg1Dist / 50) * 60);
 
@@ -1103,7 +1134,7 @@ export async function calculateSeaIntermodalCorridor(
   const leg2Eta = Math.round((leg2Dist / 26) * 60) + 120; // 26 km/h (~14 knots) + 120 min Pelindo port handling buffer
 
   // Leg 3: Last-Mile Land Truck from Destination Seaport to Destination
-  const leg3Coords = await fetchMapboxDrivingRoute(destPort.coords, destination, [], 'truck');
+  const leg3Coords = await fetchMapboxDrivingRoute(destPort.coords, destination, [], 'truck', signal);
   const leg3Dist = Math.round(getHaversineDistanceKm(destPort.coords, destination) * 1.15);
   const leg3Eta = Math.round((leg3Dist / 50) * 60);
 
@@ -1191,8 +1222,10 @@ export async function calculateSeaIntermodalCorridor(
  */
 export async function calculateAirIntermodalCorridor(
   origin: LonLat,
-  destination: LonLat
+  destination: LonLat,
+  signal?: AbortSignal
 ): Promise<RouteRecommendation> {
+  throwIfAborted(signal);
   const odDistanceKm = getHaversineDistanceKm(origin, destination);
   const depAirport = findClosestAirport(origin).airport;
   const arrAirport = findClosestAirport(destination).airport;
@@ -1222,7 +1255,7 @@ export async function calculateAirIntermodalCorridor(
 
   // True 3-Leg Chain:
   // Leg 1: First-Mile Land Truck to Departure Airport
-  const leg1Coords = await fetchMapboxDrivingRoute(origin, depAirport.coords, [], 'truck');
+  const leg1Coords = await fetchMapboxDrivingRoute(origin, depAirport.coords, [], 'truck', signal);
   const leg1Dist = Math.round(getHaversineDistanceKm(origin, depAirport.coords) * 1.15);
   const leg1Eta = Math.round((leg1Dist / 55) * 60);
 
@@ -1241,7 +1274,7 @@ export async function calculateAirIntermodalCorridor(
   }
 
   // Leg 3: Last-Mile Land Truck from Arrival Airport to Destination
-  const leg3Coords = await fetchMapboxDrivingRoute(arrAirport.coords, destination, [], 'truck');
+  const leg3Coords = await fetchMapboxDrivingRoute(arrAirport.coords, destination, [], 'truck', signal);
   const leg3Dist = Math.round(getHaversineDistanceKm(arrAirport.coords, destination) * 1.15);
   const leg3Eta = Math.round((leg3Dist / 55) * 60);
 
@@ -1510,15 +1543,17 @@ export async function calculateAIDynamicDetourRoutes(
   _modality: TransportModality = 'best',
   hazardType: CrisisType = 'flood',
   impactProfile?: HazardImpactProfile,
-  zoneTier: 'RED_CONFIRMED' | 'YELLOW_CLARIFY' = 'RED_CONFIRMED'
+  zoneTier: 'RED_CONFIRMED' | 'YELLOW_CLARIFY' = 'RED_CONFIRMED',
+  signal?: AbortSignal
 ): Promise<RouteRecommendation[]> {
   void zoneTier;
+  throwIfAborted(signal);
   const affectedModalities = getAffectedModalities(hazardType, impactProfile);
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
   const excludeToll = hazardCenter ? isHazardNearTollCorridor(hazardCenter, radiusKm) : false;
 
   // STEP 1: Compute Land Routes (Primary & Alternative / Bypass)
-  const mapboxResults = await fetchMapboxAlternativeDrivingRoutes(origin, destination, [], excludeToll);
+  const mapboxResults = await fetchMapboxAlternativeDrivingRoutes(origin, destination, [], excludeToll, signal);
   const primaryRes = mapboxResults[0];
   const primaryMetrics = hazardCenter
     ? calculateHazardExposureMetrics(primaryRes.coordinates, hazardCenter, radiusKm)
@@ -1600,7 +1635,8 @@ export async function calculateAIDynamicDetourRoutes(
     })).sort((a, b) => a.score - b.score);
 
     for (const cand of scoredNodes.slice(0, 4)) {
-      const bypass = await fetchMapboxRouteWithForcedWaypoint(origin, destination, cand.coords, token, excludeToll);
+      throwIfAborted(signal);
+      const bypass = await fetchMapboxRouteWithForcedWaypoint(origin, destination, cand.coords, token, excludeToll, signal);
       if (bypass) {
         const m = calculateHazardExposureMetrics(bypass.coordinates, hazardCenter, radiusKm);
         if (!m.isIntersecting) {
@@ -1626,6 +1662,7 @@ export async function calculateAIDynamicDetourRoutes(
       const dirLat = odLatKm / odLengthKm;
 
       for (const ang of [Math.PI / 2, -Math.PI / 2, Math.PI / 4, -Math.PI / 4]) {
+        throwIfAborted(signal);
         const cosA = Math.cos(ang);
         const sinA = Math.sin(ang);
         const rotLon = dirLon * cosA - dirLat * sinA;
@@ -1634,7 +1671,7 @@ export async function calculateAIDynamicDetourRoutes(
         const offsetLat = (rotLat * clearanceKm) / kmPerLatDegree;
         const waypoint: LonLat = [hazardLon + offsetLon, hazardLat + offsetLat];
 
-        const radial = await fetchMapboxRouteWithForcedWaypoint(origin, destination, waypoint, token, excludeToll);
+        const radial = await fetchMapboxRouteWithForcedWaypoint(origin, destination, waypoint, token, excludeToll, signal);
         if (radial) {
           const m = calculateHazardExposureMetrics(radial.coordinates, hazardCenter, radiusKm);
           if (!m.isIntersecting) {
@@ -1692,8 +1729,8 @@ export async function calculateAIDynamicDetourRoutes(
   // STEP 2: Simultaneously Compute Intermodal Corridors (Sea & Air)
   // Sea corridor is hazard-aware: blocked ports fail over to the nearest open port.
   const [seaCorridor, airCorridor] = await Promise.all([
-    calculateSeaIntermodalCorridor(origin, destination, hazardCenter, radiusKm, hazardType, affectedModalities),
-    calculateAirIntermodalCorridor(origin, destination),
+    calculateSeaIntermodalCorridor(origin, destination, hazardCenter, radiusKm, hazardType, affectedModalities, signal),
+    calculateAirIntermodalCorridor(origin, destination, signal),
   ]);
 
   // Baseline normal ETA / distance: fastest direct land time before hazard delay.

@@ -20,9 +20,11 @@ import {
   Sliders,
   Check,
   Gauge,
+  Ship,
+  Plane,
 } from 'lucide-react';
 import type { CrisisType, Severity, RouteRecommendation } from '@/lib/types';
-import { HUB_NODES } from '@/lib/mapboxRoutingService';
+import { formatNodeDisplay, prettyNodeSlug, resolveNodeDisplayInfo, type NodeDisplayInfo } from '@/lib/formatNode';
 import { HAZARD_RADIUS_OPTIONS_KM, type TransportModality } from '@/lib/aiDynamicRouter';
 import { resolveMapDockClasses } from '@/components/dashboard/mapDockLayout';
 
@@ -48,6 +50,9 @@ export interface CrisisSimulatorBarProps {
   onClearSimulation: () => void;
   originNodeId?: string | null;
   destNodeId?: string | null;
+  /** Pre-resolved display metadata (includes DashboardClient customNodesRef entries). */
+  originInfo?: NodeDisplayInfo | null;
+  destInfo?: NodeDisplayInfo | null;
   selectedRadius: number;
   setSelectedRadius: (radius: number) => void;
   selectedModality?: TransportModality;
@@ -73,6 +78,8 @@ export function CrisisSimulatorBar({
   onClearSimulation,
   originNodeId = null,
   destNodeId = null,
+  originInfo = null,
+  destInfo = null,
   selectedRadius,
   setSelectedRadius,
   selectedModality = 'best',
@@ -116,8 +123,56 @@ export function CrisisSimulatorBar({
     { type: 'congestion', label: 'Macet', icon: <Truck className="w-3.5 h-3.5 text-yellow-400" /> },
   ];
 
-  const originName = originNodeId ? HUB_NODES[originNodeId]?.name || originNodeId : null;
-  const destName = destNodeId ? HUB_NODES[destNodeId]?.name || destNodeId : null;
+  // Resolve human place names; never surface raw regency-/node-/pin- IDs in the banner.
+  const originResolved = originInfo ?? resolveNodeDisplayInfo(originNodeId);
+  const destResolved = destInfo ?? resolveNodeDisplayInfo(destNodeId);
+  const originName = originNodeId
+    ? formatNodeDisplay(originResolved) || prettyNodeSlug(originNodeId)
+    : null;
+  const destName = destNodeId
+    ? formatNodeDisplay(destResolved) || prettyNodeSlug(destNodeId)
+    : null;
+  const corridorSummary = originName && destName ? `${originName} -> ${destName}` : null;
+
+  // Route provenance: interpolated geometry is explicitly labeled, never shown as a live road.
+  const hasOfflineCorridors = activeCorridors.some(
+    (route) => typeof route.description === 'string' && /SIMULASI\/OFFLINE/i.test(route.description)
+  );
+  const corridorProvenance = hasOfflineCorridors
+    ? { label: 'SIMULASI/OFFLINE', className: 'bg-amber-500/15 text-amber-300 border-amber-500/40' }
+    : activeCorridors.length > 0
+      ? { label: 'LIVE', className: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40' }
+      : null;
+
+  const corridorToggles: Array<{
+    key: 'land' | 'sea' | 'air';
+    label: string;
+    hint: string;
+    icon: React.ReactNode;
+    activeClass: string;
+  }> = [
+    {
+      key: 'land',
+      label: 'Darat',
+      hint: 'Rute langsung',
+      icon: <Truck className="w-3.5 h-3.5" />,
+      activeClass: 'bg-emerald-500/15 border-emerald-500/50 text-emerald-300',
+    },
+    {
+      key: 'sea',
+      label: 'Laut',
+      hint: 'Ring pulau',
+      icon: <Ship className="w-3.5 h-3.5" />,
+      activeClass: 'bg-sky-500/15 border-sky-500/50 text-sky-300',
+    },
+    {
+      key: 'air',
+      label: 'Udara',
+      hint: 'Ring pulau',
+      icon: <Plane className="w-3.5 h-3.5" />,
+      activeClass: 'bg-cyan-500/15 border-cyan-400/50 text-cyan-300',
+    },
+  ];
 
   const effectiveHiddenCount =
     typeof hiddenRouteCount === 'number'
@@ -170,7 +225,7 @@ export function CrisisSimulatorBar({
             }`}
           >
             <MapPin className="w-3.5 h-3.5 text-cyan-400" />
-            <span>
+            <span className="max-w-[240px] truncate" title={corridorSummary || originName || destName || undefined}>
               {originName ? (destName ? `${originName} -> ${destName}` : `Start: ${originName}`) : 'Rute Asal & Tujuan'}
             </span>
             <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform duration-200 ${activePopover === 'nodes' ? 'rotate-180' : ''}`} />
@@ -178,20 +233,82 @@ export function CrisisSimulatorBar({
 
           {/* Node Selector Popover */}
           {activePopover === 'nodes' && (
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 rounded-md bg-[#0c1017] border border-[#1c2432] shadow-xl flex flex-col gap-2 z-50 animate-in fade-in slide-in-from-bottom-2 duration-150">
-              <span className="text-xs font-sans text-cyan-400 font-bold">TITIK RUTE KORIDOR</span>
-              <div className="p-2 rounded-md bg-[#121822] border border-[#1c2432] flex flex-col gap-1 text-xs font-mono">
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                  <span className="text-slate-400 font-sans">Start:</span>
-                  <span className="text-white font-bold">{originName || 'Klik kota di peta...'}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-amber-400" />
-                  <span className="text-slate-400 font-sans">End:</span>
-                  <span className="text-white font-bold">{destName || 'Klik kota di peta...'}</span>
-                </div>
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 rounded-md bg-[#0c1017] border border-[#1c2432] shadow-xl flex flex-col gap-2 z-50 animate-in fade-in slide-in-from-bottom-2 duration-150">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-sans text-cyan-400 font-bold">TITIK RUTE KORIDOR</span>
+                {corridorProvenance && (
+                  <span
+                    className={`px-1.5 py-0.5 rounded border text-[10px] font-mono font-bold tracking-wide ${corridorProvenance.className}`}
+                    title={
+                      corridorProvenance.label === 'SIMULASI/OFFLINE'
+                        ? 'Geometri hasil interpolasi garis lurus, bukan jalan raya live'
+                        : 'Geometri rute live dari Mapbox Directions'
+                    }
+                  >
+                    {corridorProvenance.label}
+                  </span>
+                )}
               </div>
+
+              <div className="p-2 rounded-md bg-[#121822] border border-[#1c2432] flex flex-col gap-1.5 text-xs">
+                <div className="flex items-start gap-2">
+                  <span className="mt-1 w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
+                  <div className="min-w-0">
+                    <span className="text-slate-400 font-sans text-[10px] block">Start</span>
+                    <span className="text-white font-bold block break-words">{originName || 'Klik kota di peta...'}</span>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="mt-1 w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+                  <div className="min-w-0">
+                    <span className="text-slate-400 font-sans text-[10px] block">End</span>
+                    <span className="text-white font-bold block break-words">{destName || 'Klik kota di peta...'}</span>
+                  </div>
+                </div>
+                {(originResolved?.province || destResolved?.province) && (
+                  <span className="text-[10px] text-slate-500 font-sans">
+                    {[originResolved?.province, destResolved?.province].filter(Boolean).join(' → ')}
+                  </span>
+                )}
+              </div>
+
+              {onToggleCorridor && (
+                <div className="border-t border-[#1c2432] pt-2 flex flex-col gap-1.5">
+                  <span className="text-[10px] font-sans text-slate-400 font-bold uppercase tracking-wider">
+                    Visibilitas Koridor
+                  </span>
+                  <div className="grid grid-cols-3 gap-1">
+                    {corridorToggles.map((toggle) => {
+                      const isVisible = corridorVisibility[toggle.key];
+                      return (
+                        <button
+                          key={toggle.key}
+                          type="button"
+                          onClick={() => onToggleCorridor(toggle.key)}
+                          aria-pressed={isVisible}
+                          title={`${toggle.label} — ${toggle.hint}`}
+                          className={`cursor-pointer px-1.5 py-1.5 rounded border text-[10px] font-sans font-medium transition flex flex-col items-center gap-0.5 ${
+                            isVisible
+                              ? toggle.activeClass
+                              : 'bg-[#121822]/60 border-[#1c2432] text-slate-500 hover:text-slate-300'
+                          }`}
+                        >
+                          <span className="flex items-center gap-1">
+                            {toggle.icon}
+                            <span>{toggle.label}</span>
+                          </span>
+                          <span className={`text-[9px] font-mono ${isVisible ? 'opacity-80' : 'opacity-60'}`}>
+                            {isVisible ? 'ON' : 'OFF'}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <span className="text-[10px] leading-tight text-slate-500 font-sans">
+                    Darat = rute langsung (garis penuh). Laut &amp; udara = ring pulau (warna biru/cyan).
+                  </span>
+                </div>
+              )}
 
               {onResetNodes && (originName || destName) && (
                 <button

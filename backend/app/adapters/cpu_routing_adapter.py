@@ -535,6 +535,41 @@ class CPURoutingAdapter:
             return self.nodes_dict[resolved]["lat"], self.nodes_dict[resolved]["lon"]
         return None
 
+    def _build_no_route_response(
+        self,
+        *,
+        origin_id: Optional[str],
+        dest_id: Optional[str],
+        origin_name: Optional[str],
+        dest_name: Optional[str],
+        origin_coords: Optional[List[float]],
+        dest_coords: Optional[List[float]],
+        message: str,
+        t0: float,
+    ) -> Dict[str, Any]:
+        """
+        Explicit no-route result for unresolvable endpoints.
+
+        Unknown IDs without coordinates must never silently snap to the first/last
+        graph node (that produced whole-island Belawan -> Bakauheni lines).
+        """
+        return {
+            "status": "no_route",
+            "solver": "NetworkX Dijkstra / A* CPU Solver",
+            "origin": origin_id,
+            "origin_name": origin_name or origin_id,
+            "origin_coords": origin_coords,
+            "destination": dest_id,
+            "dest_name": dest_name or dest_id,
+            "dest_coords": dest_coords,
+            "snapped_origin_node": None,
+            "snapped_dest_node": None,
+            "routes_count": 0,
+            "routes": [],
+            "message": message,
+            "compute_time_ms": round((time.perf_counter() - t0) * 1000.0, 3),
+        }
+
     def solve_shortest_path(
         self,
         origin_id: Optional[str] = None,
@@ -572,9 +607,23 @@ class CPURoutingAdapter:
             orig_resolved = NODE_ALIASES.get(origin_id, origin_id) if origin_id else None
             if orig_resolved and orig_resolved in self.graph:
                 origin_id = orig_resolved
-            elif origin_id not in self.graph:
-                origin_id = list(self.graph.nodes)[0] if len(self.graph.nodes) > 0 else "belawan_port"
-            snapped_orig_node = origin_id
+                snapped_orig_node = origin_id
+            elif origin_id in self.graph:
+                snapped_orig_node = origin_id
+            else:
+                return self._build_no_route_response(
+                    origin_id=origin_id,
+                    dest_id=dest_id,
+                    origin_name=origin_name,
+                    dest_name=dest_name,
+                    origin_coords=origin_coords,
+                    dest_coords=dest_coords,
+                    message=(
+                        f"Titik asal '{origin_id}' tidak dikenali pada graph jaringan jalan "
+                        "dan origin_coords tidak tersedia. Fallback ke node graph pertama dinonaktifkan."
+                    ),
+                    t0=t0,
+                )
 
         # Handle destination snapping & last-mile connector
         dest_connector_km = 0.0
@@ -590,9 +639,23 @@ class CPURoutingAdapter:
             dest_resolved = NODE_ALIASES.get(dest_id, dest_id) if dest_id else None
             if dest_resolved and dest_resolved in self.graph:
                 dest_id = dest_resolved
-            elif dest_id not in self.graph:
-                dest_id = list(self.graph.nodes)[-1] if len(self.graph.nodes) > 1 else "tebing_tinggi_toll"
-            snapped_dest_node = dest_id
+                snapped_dest_node = dest_id
+            elif dest_id in self.graph:
+                snapped_dest_node = dest_id
+            else:
+                return self._build_no_route_response(
+                    origin_id=origin_id,
+                    dest_id=dest_id,
+                    origin_name=origin_name,
+                    dest_name=dest_name,
+                    origin_coords=origin_coords,
+                    dest_coords=dest_coords,
+                    message=(
+                        f"Titik tujuan '{dest_id}' tidak dikenali pada graph jaringan jalan "
+                        "dan dest_coords tidak tersedia. Fallback ke node graph terakhir dinonaktifkan."
+                    ),
+                    t0=t0,
+                )
 
         # Build dynamic weighted copy of graph
         G = self.graph.copy()

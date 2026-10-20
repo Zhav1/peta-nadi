@@ -404,14 +404,65 @@ export const PAN_SUMATRA_GAZETTEER: GeocodeNode[] = [
 ];
 
 /**
+ * Normalizes a map node ID for gazetteer matching.
+ *
+ * CrisisMap emits regency nodes with a render index (`regency-159-indragiri-hilir`),
+ * while gazetteer lookups key on the slug-only form (`regency-indragiri-hilir`).
+ * The numeric index is a rendering artifact and must be stripped before matching.
+ * Callers should keep the original ID for React/map feature keys.
+ */
+export function normalizeRegencyId(nodeId: string): string {
+  return nodeId.replace(/^regency-\d+-/i, 'regency-');
+}
+
+/**
+ * Backend `/api/v1/geocode/nodes` predates the Q4 display-name contract and returns only
+ * `id/name/lat/lon/province/corridor/tier` (no `display_name`, `kabupaten`, or real place name).
+ * Matching each backend node to the local gazetteer by slug lets us enrich instead of overwrite,
+ * so a live backend can never downgrade a rich local label into `slug.title()` / raw IDs.
+ */
+function mergeBackendGazetteerNode(node: GeocodeNode): GeocodeNode {
+  const rawKey = String((node as GeocodeNode & { id?: string }).id || node.name || '').toLowerCase();
+  const normalizedKey = normalizeRegencyId(rawKey).toLowerCase();
+  const local = PAN_SUMATRA_GAZETTEER.find((g) => {
+    const slug = g.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
+    return (
+      g.name.toLowerCase() === normalizedKey ||
+      (g.display_name || '').toLowerCase() === normalizedKey ||
+      slug === normalizedKey ||
+      `node-${slug}` === normalizedKey ||
+      `regency-${slug}` === normalizedKey
+    );
+  });
+
+  if (!local) {
+    return { ...node, display_name: node.display_name || node.name, type: node.type || 'regency' };
+  }
+
+  return {
+    ...node,
+    name: node.name || local.name,
+    display_name: node.display_name || local.display_name || local.name,
+    lat: typeof node.lat === 'number' ? node.lat : local.lat,
+    lon: typeof node.lon === 'number' ? node.lon : local.lon,
+    type: node.type || local.type,
+    province: node.province || local.province,
+    kabupaten: node.kabupaten || local.kabupaten,
+    kecamatan: node.kecamatan ?? local.kecamatan,
+    corridor: node.corridor || local.corridor,
+  };
+}
+
+/**
  * Fetches Pan-Sumatra Gazetteer nodes from backend endpoint /api/v1/geocode/nodes,
  * with fallback to the local comprehensive PAN_SUMATRA_GAZETTEER catalog.
+ * Backend nodes missing rich display metadata are merged with the local gazetteer by slug.
  */
 export async function fetchGazetteerNodes(): Promise<GeocodeNode[]> {
   try {
     const res = await api.geocode.nodes();
     if (res && res.nodes && res.nodes.length > 0) {
-      return res.nodes;
+      return res.nodes.map(mergeBackendGazetteerNode);
     }
   } catch {
     // Offline or fallback cache
@@ -524,9 +575,12 @@ export async function fetchMapboxDirections(
   origin: LonLat,
   destination: LonLat,
   waypoints: LonLat[] = [],
-  excludeToll: boolean = false
+  excludeToll: boolean = false,
+  signal?: AbortSignal
 ): Promise<DirectionsFetchResult> {
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+
+  if (signal?.aborted) throw createAbortError();
 
   if (!token) {
     return { coords: fallbackHighwayRoute(origin, destination, waypoints), source: 'offline-interpolated' };
@@ -541,17 +595,26 @@ export async function fetchMapboxDirections(
       'driving',
       'geometries=geojson&overview=full',
       token,
-      excludeToll
+      excludeToll,
+      signal
     );
     if (data?.routes && data.routes.length > 0 && data.routes[0].geometry) {
       const coords: LonLat[] = data.routes[0].geometry.coordinates;
       return { coords, source: 'live' };
     }
   } catch (err) {
+    if (signal?.aborted || (err as { name?: string })?.name === 'AbortError') throw err;
     console.warn('Failed to fetch Mapbox Directions API, using highway fallback:', err);
   }
 
+  if (signal?.aborted) throw createAbortError();
   return { coords: fallbackHighwayRoute(origin, destination, waypoints), source: 'offline-interpolated' };
+}
+
+function createAbortError(): Error {
+  const err = new Error('Perhitungan rute dibatalkan');
+  err.name = 'AbortError';
+  return err;
 }
 
 function fallbackHighwayRoute(

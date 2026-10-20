@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
-import { HUB_NODES } from '@/lib/mapboxRoutingService';
+import { formatNodeId, type NodeDisplayInfo } from '@/lib/formatNode';
 import {
   CloudLightning,
   Car,
@@ -41,6 +41,8 @@ interface GuidedDemoPanelProps {
   isSidebarOpen?: boolean;
   selectedOrigin?: string | null;
   selectedDestination?: string | null;
+  originInfo?: NodeDisplayInfo | null;
+  destInfo?: NodeDisplayInfo | null;
   onSelectPreset?: (origin: string, dest: string) => void;
   inflationForecast?: CrisisState['inflation_forecast'];
   economicFinding?: CrisisState['economic_intelligence_finding'];
@@ -63,6 +65,8 @@ export function GuidedDemoPanel({
   isSidebarOpen = false,
   selectedOrigin = null,
   selectedDestination = null,
+  originInfo = null,
+  destInfo = null,
   onSelectPreset,
   inflationForecast,
   economicFinding,
@@ -142,6 +146,9 @@ export function GuidedDemoPanel({
 
 
   const dynamicRightOffset = isSidebarOpen ? 'right-[424px]' : 'right-6';
+
+  const originLabel = selectedOrigin ? formatNodeId(selectedOrigin, originInfo) : null;
+  const destLabel = selectedDestination ? formatNodeId(selectedDestination, destInfo) : null;
 
   const economicData = economicFinding?.data;
   const inflationPct =
@@ -229,9 +236,9 @@ export function GuidedDemoPanel({
                 {!selectedOrigin ? (
                   <span className="text-cyan-300 font-medium animate-pulse">Langkah 1: Klik marker kota/pelabuhan pada peta untuk menetapkan Titik Asal.</span>
                 ) : !selectedDestination ? (
-                  <span className="text-amber-300 font-medium animate-pulse">Langkah 2: Titik Asal diset ({HUB_NODES[selectedOrigin]?.name || selectedOrigin}). Sekarang klik marker kedua untuk Titik Tujuan.</span>
+                  <span className="text-amber-300 font-medium animate-pulse">Langkah 2: Titik Asal diset ({originLabel}). Sekarang klik marker kedua untuk Titik Tujuan.</span>
                 ) : (
-                  <span className="text-emerald-400 font-medium">Koridor siap ({HUB_NODES[selectedOrigin]?.name || selectedOrigin} &rarr; {HUB_NODES[selectedDestination]?.name || selectedDestination}). Silakan tekan tombol di bawah untuk mulai simulasi.</span>
+                  <span className="text-emerald-400 font-medium">Koridor siap ({originLabel} &rarr; {destLabel}). Silakan tekan tombol di bawah untuk mulai simulasi.</span>
                 )}
               </p>
             </div>
@@ -245,7 +252,7 @@ export function GuidedDemoPanel({
                   {selectedOrigin && <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400 ml-auto" />}
                 </span>
                 <span className="font-mono tabular-nums text-xs truncate">
-                  {selectedOrigin ? HUB_NODES[selectedOrigin]?.name || selectedOrigin.toUpperCase() : 'Pilih Marker Peta...'}
+                  {originLabel || 'Pilih Marker Peta...'}
                 </span>
               </div>
               <div className={`p-2 rounded-md border flex flex-col gap-1 text-xs transition-colors ${selectedDestination ? 'bg-[#0c1017] border-[#1c2432] text-slate-200' : 'bg-[#0c1017]/50 border-dashed border-[#1c2432] text-slate-500'}`}>
@@ -255,7 +262,7 @@ export function GuidedDemoPanel({
                   {selectedDestination && <CheckCircle2 className="w-3.5 h-3.5 text-amber-400 ml-auto" />}
                 </span>
                 <span className="font-mono tabular-nums text-xs truncate">
-                  {selectedDestination ? HUB_NODES[selectedDestination]?.name || selectedDestination.toUpperCase() : 'Pilih Marker Peta...'}
+                  {destLabel || 'Pilih Marker Peta...'}
                 </span>
               </div>
             </div>

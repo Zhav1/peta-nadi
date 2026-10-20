@@ -40,7 +40,8 @@ import ReportsSection from '@/components/dashboard/ReportsSection';
 import EvaluationSection from '@/components/dashboard/EvaluationSection';
 import { CrisisSimulatorBar } from '@/components/map/CrisisSimulatorBar';
 import { resolveMapDockClasses } from '@/components/dashboard/mapDockLayout';
-import { HUB_NODES, PAN_SUMATRA_GAZETTEER, type HubNode } from '@/lib/mapboxRoutingService';
+import { HUB_NODES, PAN_SUMATRA_GAZETTEER, normalizeRegencyId, type HubNode } from '@/lib/mapboxRoutingService';
+import { formatNodeId, type NodeDisplayInfo } from '@/lib/formatNode';
 import {
   calculateAIDynamicDetourRoutes,
   DEFAULT_HAZARD_RADIUS_KM,
@@ -55,6 +56,7 @@ import { FleetOnboardingModal } from '@/components/fleet/FleetOnboardingModal';
 import { useCrisisSimulationStream } from '@/hooks/useCrisisSimulationStream';
 
 import { TopNavTelemetry } from '@/components/dashboard/TopNavTelemetry';
+import { RoutingStatusBanner } from '@/components/dashboard/RoutingStatusBanner';
 import { DispatcherAlertQueue } from '@/components/dashboard/DispatcherAlertQueue';
 import { HitlDecisionDrawer } from '@/components/dashboard/HitlDecisionDrawer';
 import { RouteDetailModal } from '@/components/sidebar/RouteDetailModal';
@@ -62,6 +64,10 @@ import type { DisruptionImpactResponse, ImpactedVehicleAssessment } from '@/lib/
 
 // Dynamic import for map to avoid SSR issues
 const CrisisMap = dynamic(() => import('@/components/map/CrisisMap'), { ssr: false });
+
+function isAbortError(err: unknown): boolean {
+  return !!err && typeof err === 'object' && (err as { name?: string }).name === 'AbortError';
+}
 
 // Applies operational approval styling: the approved corridor turns cyan, its alternatives dim out.
 // Shared by handleDeployUnifiedActionPlan and handleCommitOperationalRoute so both route stores stay identical.
@@ -93,10 +99,16 @@ function resolveApprovedDelayMinutes(
 function FloatingMapLegend({
   isOpen,
   onToggle,
+  corridorVisibility = { land: true, sea: true, air: true },
+  onToggleCorridor,
+  onResetCorridorVisibility,
 }: {
   isOpen: boolean;
   onToggle: () => void;
   isSidebarOpen?: boolean;
+  corridorVisibility?: { land: boolean; sea: boolean; air: boolean };
+  onToggleCorridor?: (corridor: 'land' | 'sea' | 'air') => void;
+  onResetCorridorVisibility?: () => void;
 }) {
   return (
     <div className="relative pointer-events-auto">
@@ -217,6 +229,97 @@ function FloatingMapLegend({
                 </div>
               </div>
             </div>
+
+            {/* Q4/Q5: direct land vs island-ring corridors + live/offline provenance */}
+            <div className="pt-2 mt-2 border-t border-[#1c2432]/80 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-slate-400 font-sans font-semibold text-[11px] uppercase tracking-wider">
+                  Koridor Langsung vs Ring Pulau
+                </span>
+                <span className="px-1.5 py-0.5 rounded border border-amber-500/40 bg-amber-500/15 text-amber-300 font-mono text-[9px] font-bold tracking-wide">
+                  SIMULASI/OFFLINE
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="w-4 h-0.5 bg-emerald-400 shrink-0 rounded" />
+                <div>
+                  <span className="text-slate-200 font-medium block">Darat Langsung (disorot)</span>
+                  <span className="text-xs text-slate-400 font-sans">Garis penuh emerald: rute darat bebas bahaya.</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="w-4 h-0.5 border-b-2 border-sky-500 shrink-0" />
+                <div>
+                  <span className="text-slate-200 font-medium block">Laut — Ring Pulau</span>
+                  <span className="text-xs text-slate-400 font-sans">Biru: legs maritim/intermodal antar-pulau.</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="w-4 h-0.5 border-b-2 border-cyan-400 shrink-0" />
+                <div>
+                  <span className="text-slate-200 font-medium block">Udara — Ring Pulau</span>
+                  <span className="text-xs text-slate-400 font-sans">Cyan: legs kargo udara darurat antar-pulau.</span>
+                </div>
+              </div>
+
+              <p className="text-[10px] leading-tight text-amber-300/80 font-sans">
+                Badge SIMULASI/OFFLINE menandai geometri interpolasi (garis lurus), bukan rute jalan raya live.
+              </p>
+
+              {onToggleCorridor && (
+                <div className="space-y-1.5 pt-1 border-t border-[#1c2432]/60">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400 font-sans font-semibold text-[10px] uppercase tracking-wider">
+                      Visibilitas Koridor
+                    </span>
+                    {onResetCorridorVisibility && (
+                      <button
+                        type="button"
+                        onClick={onResetCorridorVisibility}
+                        className="cursor-pointer text-[10px] font-mono text-slate-400 hover:text-white transition-colors"
+                        title="Aktifkan kembali semua koridor"
+                      >
+                        Semua ON
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-3 gap-1">
+                    {([
+                      { key: 'land' as const, label: 'Darat', Icon: Truck, activeClass: 'bg-emerald-500/15 border-emerald-500/50 text-emerald-300' },
+                      { key: 'sea' as const, label: 'Laut', Icon: Anchor, activeClass: 'bg-sky-500/15 border-sky-500/50 text-sky-300' },
+                      { key: 'air' as const, label: 'Udara', Icon: Plane, activeClass: 'bg-cyan-500/15 border-cyan-400/50 text-cyan-300' },
+                    ]).map(({ key, label, Icon, activeClass }) => {
+                      const isVisible = corridorVisibility[key];
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => onToggleCorridor(key)}
+                          aria-pressed={isVisible}
+                          title={`${label}: ${isVisible ? 'tampil' : 'disembunyikan'}`}
+                          className={`cursor-pointer px-1.5 py-1.5 rounded border text-[10px] font-sans font-medium transition flex flex-col items-center gap-0.5 ${
+                            isVisible
+                              ? activeClass
+                              : 'bg-[#121822]/60 border-[#1c2432] text-slate-500 hover:text-slate-300'
+                          }`}
+                        >
+                          <span className="flex items-center gap-1">
+                            <Icon className="w-3 h-3" />
+                            <span>{label}</span>
+                          </span>
+                          <span className={`text-[9px] font-mono ${isVisible ? 'opacity-80' : 'opacity-60'}`}>
+                            {isVisible ? 'ON' : 'OFF'}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           <p className="text-xs text-slate-400 font-sans pt-1 border-t border-[#1c2432] leading-tight">
@@ -286,6 +389,8 @@ export default function DashboardClient() {
   const activeDestRef = useRef<string | null>(null);
   const customNodesRef = useRef<Record<string, { coords: [number, number]; name: string }>>({});
   const routeCalculationReqIdRef = useRef<number>(0);
+  const routingAbortControllerRef = useRef<AbortController | null>(null);
+  const routingInFlightKeyRef = useRef<string | null>(null);
   const demoDetourRoutesRef = useRef<RouteRecommendation[] | null>(null);
   const demoStateRef = useRef<ReturnType<typeof useDemoState> | null>(null);
   activeOriginRef.current = selectedOriginNode;
@@ -597,6 +702,22 @@ export default function DashboardClient() {
 
   const [spatialWeatherPolygons, setSpatialWeatherPolygons] = useState<GeoJSON.FeatureCollection | null>(null);
   const [routingInfo, setRoutingInfo] = useState<{ solver: string; compute_time_ms: number | null; savings_pct: number | null } | null>(null);
+  // Persistent route-computation status: a cold render can take 30-50s, so the
+  // operator needs lasting feedback plus an explicit abort action (not a 3s toast).
+  const [isRoutingLoading, setIsRoutingLoading] = useState(false);
+  const [routingError, setRoutingError] = useState<string | null>(null);
+  const [routingElapsedMs, setRoutingElapsedMs] = useState(0);
+
+  useEffect(() => {
+    if (!isRoutingLoading) {
+      setRoutingElapsedMs(0);
+      return;
+    }
+    const startedAt = Date.now();
+    setRoutingElapsedMs(0);
+    const timer = setInterval(() => setRoutingElapsedMs(Date.now() - startedAt), 250);
+    return () => clearInterval(timer);
+  }, [isRoutingLoading]);
 
   const [fleetModalityFilter, setFleetModalityFilter] = useState<'all' | 'truck' | 'maritime' | 'air'>('all');
 
@@ -624,26 +745,53 @@ export default function DashboardClient() {
 
 
   // Fetch multi-alternative Mapbox driving & hazard detour routes when node selection or modality changes
-  const resolveNodeInfo = useCallback((nodeId: string | null): { coords: [number, number]; name: string } | null => {
+  const resolveNodeInfo = useCallback((nodeId: string | null): ({ coords: [number, number] } & NodeDisplayInfo) | null => {
     if (!nodeId) return null;
     if (HUB_NODES[nodeId]) {
-      return { coords: HUB_NODES[nodeId].coords, name: HUB_NODES[nodeId].name };
+      return {
+        coords: HUB_NODES[nodeId].coords,
+        name: HUB_NODES[nodeId].name,
+        display_name: HUB_NODES[nodeId].name,
+        province: HUB_NODES[nodeId].province ?? null,
+        type: HUB_NODES[nodeId].type,
+      };
     }
+    // CrisisMap emits regency-<idx>-<slug>; strip the render index before gazetteer matching.
+    // The original nodeId is preserved for keys and custom node lookups.
+    const normalizedId = normalizeRegencyId(nodeId).toLowerCase();
     const gazetteerMatch = PAN_SUMATRA_GAZETTEER.find(
       (g) =>
-        g.name.toLowerCase() === nodeId.toLowerCase() ||
-        g.display_name.toLowerCase() === nodeId.toLowerCase() ||
-        `node-${g.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}` === nodeId.toLowerCase() ||
-        `regency-${g.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}` === nodeId.toLowerCase()
+        g.name.toLowerCase() === normalizedId ||
+        g.display_name.toLowerCase() === normalizedId ||
+        `node-${g.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}` === normalizedId ||
+        `regency-${g.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}` === normalizedId
     );
     if (gazetteerMatch) {
-      return { coords: [gazetteerMatch.lon, gazetteerMatch.lat], name: gazetteerMatch.display_name || gazetteerMatch.name };
+      return {
+        coords: [gazetteerMatch.lon, gazetteerMatch.lat],
+        name: gazetteerMatch.display_name || gazetteerMatch.name,
+        display_name: gazetteerMatch.display_name || gazetteerMatch.name,
+        kabupaten: gazetteerMatch.kabupaten ?? null,
+        province: gazetteerMatch.province ?? null,
+        type: gazetteerMatch.type,
+      };
     }
     if (customNodesRef.current[nodeId]) {
-      return customNodesRef.current[nodeId];
+      const custom = customNodesRef.current[nodeId];
+      return { coords: custom.coords, name: custom.name, display_name: custom.name };
     }
     return null;
   }, []);
+
+  // Human-readable endpoint metadata shared by the banner, guided demo and API payloads.
+  const originDisplayInfo = useMemo(
+    () => resolveNodeInfo(selectedOriginNode),
+    [resolveNodeInfo, selectedOriginNode]
+  );
+  const destDisplayInfo = useMemo(
+    () => resolveNodeInfo(selectedDestNode),
+    [resolveNodeInfo, selectedDestNode]
+  );
 
   const handleCustomPointSelected = useCallback(
     (role: 'origin' | 'dest', coords: [number, number], name: string, nodeId: string) => {
@@ -665,51 +813,117 @@ export default function DashboardClient() {
     []
   );
 
-  const updateBaselineMapboxRoute = useCallback(async (originId: string, destId: string, modality: TransportModality, hazardCenter: [number, number] | null = null, radiusKm: number = DEFAULT_HAZARD_RADIUS_KM, hazardType: CrisisType = 'flood', impactProfile?: HazardImpactProfile, zoneTier: 'RED_CONFIRMED' | 'YELLOW_CLARIFY' = 'RED_CONFIRMED') => {
+  const updateBaselineMapboxRoute = useCallback(async (originId: string, destId: string, modality: TransportModality, hazardCenter: [number, number] | null = null, radiusKm: number = DEFAULT_HAZARD_RADIUS_KM, hazardType: CrisisType = 'flood', impactProfile?: HazardImpactProfile, zoneTier: 'RED_CONFIRMED' | 'YELLOW_CLARIFY' = 'RED_CONFIRMED'): Promise<boolean> => {
     const originInfo = resolveNodeInfo(originId);
     const destInfo = resolveNodeInfo(destId);
     const originNode = originInfo?.coords;
     const destNode = destInfo?.coords;
-    if (!originNode || !destNode) return;
+    if (!originNode || !destNode) {
+      // No silent return: surface the failure and drop any route from the previous selection
+      // so the map never keeps showing a stale corridor for the new endpoints.
+      routingAbortControllerRef.current?.abort();
+      routingAbortControllerRef.current = null;
+      routingInFlightKeyRef.current = null;
+      routeCalculationReqIdRef.current++;
+      setIsRoutingLoading(false);
+      setRoutingError('Rute tidak ditemukan untuk titik yang dipilih.');
+      setCurrentMapRoutes([]);
+      setSelectedCrisis((prev) =>
+        prev ? { ...prev, route_recommendations: [] } : prev
+      );
+      setRoutingInfo(null);
+      setActiveRouteIdx(null);
+      setHiddenRouteIndices(new Set());
+      setToast({ message: 'Rute tidak ditemukan', type: 'error' });
+      return false;
+    }
+
+    // The node-selection handler calls this directly while the auto-recompute effect
+    // fires for the same selection right after state commits. Reuse the in-flight
+    // request instead of aborting it, so the click still resolves to a real result.
+    const routeKey = JSON.stringify([originId, destId, modality, hazardCenter, radiusKm, hazardType, zoneTier]);
+    if (routingInFlightKeyRef.current === routeKey) return false;
+    routingInFlightKeyRef.current = routeKey;
+
+    // Any new selection supersedes the previous computation entirely.
+    routingAbortControllerRef.current?.abort();
+    const controller = new AbortController();
+    routingAbortControllerRef.current = controller;
+    const signal = controller.signal;
+    const reqId = ++routeCalculationReqIdRef.current;
+    const isStale = () => signal.aborted || routeCalculationReqIdRef.current !== reqId;
+
+    setRoutingError(null);
+    // Never let a previous solver latency read as if it belonged to this request.
+    setRoutingInfo(null);
+    setIsRoutingLoading(true);
 
     if (isDemoRunningRef.current) {
       demoStateRef.current?.setIsCalculatingRoute(true);
     }
 
-    // Synchronize Deterministic CPU Route Solver (NetworkX + OR-Tools)
     try {
-      const routingRes = await api.routing.optimizeRouting({
-        origin_id: originId,
-        dest_id: destId,
-        origin_coords: originNode,
-        dest_coords: destNode,
-        origin_name: originInfo?.name || originId,
-        dest_name: destInfo?.name || destId,
-        fleet_size: 3,
-        hazard_zones: hazardCenter ? [{ center: hazardCenter, radiusKm }] : []
-      });
-      if (routingRes && routingRes.optimization_summary) {
-        // Savings stay null until the backend reports a real baseline comparison;
-        // the HUD hides the pill when null (no fabricated fallback).
-        setRoutingInfo({
-          solver: routingRes.solver || 'Deterministic CPU Routing Solver (NetworkX + OR-Tools)',
-          compute_time_ms: routingRes.compute_time_ms ?? routingRes.total_pipeline_time_ms ?? null,
-          savings_pct: routingRes.optimization_summary.fuel_cost_reduction_pct ?? null
-        });
+      // Synchronize Deterministic CPU Route Solver (NetworkX + OR-Tools)
+      try {
+        const routingRes = await api.routing.optimizeRouting({
+          origin_id: originId,
+          dest_id: destId,
+          ...(originNode ? { origin_coords: originNode } : {}),
+          ...(destNode ? { dest_coords: destNode } : {}),
+          ...(originInfo ? { origin_name: formatNodeId(originId, originInfo) } : {}),
+          ...(destInfo ? { dest_name: formatNodeId(destId, destInfo) } : {}),
+          fleet_size: 3,
+          hazard_zones: hazardCenter ? [{ center: hazardCenter, radiusKm }] : []
+        }, signal);
+        if (isStale()) return false;
+        if (routingRes && routingRes.optimization_summary) {
+          // Savings stay null until the backend reports a real baseline comparison;
+          // the HUD hides the pill when null (no fabricated fallback).
+          setRoutingInfo({
+            solver: routingRes.solver || 'Deterministic CPU Routing Solver (NetworkX + OR-Tools)',
+            compute_time_ms: routingRes.compute_time_ms ?? routingRes.total_pipeline_time_ms ?? null,
+            savings_pct: routingRes.optimization_summary.fuel_cost_reduction_pct ?? null
+          });
+        }
+      } catch (err) {
+        if (isStale() || isAbortError(err)) return false;
+        // The CPU solver is enrichment only; Mapbox routing below stays authoritative.
+        console.warn('CPU routing solver API fallback:', err);
       }
-    } catch (err) {
-      console.warn('CPU routing solver API fallback:', err);
-    }
 
-    try {
-      const routes = await calculateAIDynamicDetourRoutes(hazardCenter, radiusKm, originNode, destNode, modality, hazardType, impactProfile, zoneTier);
+      let routes: RouteRecommendation[];
+      try {
+        routes = await calculateAIDynamicDetourRoutes(hazardCenter, radiusKm, originNode, destNode, modality, hazardType, impactProfile, zoneTier, signal);
+      } catch (err) {
+        if (isStale() || isAbortError(err)) return false;
+        console.warn('Dynamic detour routing failed:', err);
+        const message = 'Gagal menghitung rute alternatif. Periksa koneksi lalu coba lagi.';
+        setRoutingError(message);
+        setToast({ message, type: 'error' });
+        return false;
+      }
+
+      if (isStale()) return false;
+      if (!routes || routes.length === 0) {
+        const message = 'Rute alternatif tidak tersedia untuk titik ini. Coba titik lain.';
+        setRoutingError(message);
+        setToast({ message, type: 'error' });
+        return false;
+      }
+
       setCurrentMapRoutes(routes);
       setSelectedCrisis((prev) =>
         prev ? { ...prev, route_recommendations: routes } : prev
       );
+      return true;
     } finally {
-      if (isDemoRunningRef.current) {
-        demoStateRef.current?.setIsCalculatingRoute(false);
+      if (routingInFlightKeyRef.current === routeKey) routingInFlightKeyRef.current = null;
+      if (routeCalculationReqIdRef.current === reqId) {
+        setIsRoutingLoading(false);
+        if (routingAbortControllerRef.current === controller) routingAbortControllerRef.current = null;
+        if (isDemoRunningRef.current) {
+          demoStateRef.current?.setIsCalculatingRoute(false);
+        }
       }
     }
   }, [resolveNodeInfo]);
@@ -733,7 +947,7 @@ export default function DashboardClient() {
 
   // FULL REACTIVE CLEAN SLATE NODE SELECTION HANDLER
   const handleNodeSelected = useCallback(async (nodeId: string) => {
-    const nodeName = resolveNodeInfo(nodeId)?.name || HUB_NODES[nodeId]?.name || nodeId;
+    const nodeName = formatNodeId(nodeId, resolveNodeInfo(nodeId));
     if (!selectedOriginNode) {
       // Step 1: Set Start Node
       setSelectedOriginNode(nodeId);
@@ -747,7 +961,7 @@ export default function DashboardClient() {
     if (!selectedDestNode && nodeId !== selectedOriginNode) {
       // Step 2: Set End Node
       setSelectedDestNode(nodeId);
-      await updateBaselineMapboxRoute(
+      const routesReady = await updateBaselineMapboxRoute(
         selectedOriginNode,
         nodeId,
         selectedModality,
@@ -755,18 +969,22 @@ export default function DashboardClient() {
         selectedRadius
       );
 
-      setToast({
-        message: `Titik Tujuan Terpilih: ${nodeName}. Rute alternatif siap.`,
-        type: 'success',
-      });
+      // Only claim success when routes were actually applied; failures and aborts
+      // already surface their own banner/error toast from the route pipeline.
+      if (routesReady) {
+        setToast({
+          message: `Titik Tujuan Terpilih: ${nodeName}. Rute alternatif siap.`,
+          type: 'success',
+        });
+      }
       return;
     }
 
     // Both already set -> User clicks a third node to update Destination
     if (nodeId !== selectedOriginNode) {
-      const originName = resolveNodeInfo(selectedOriginNode)?.name || HUB_NODES[selectedOriginNode]?.name || selectedOriginNode;
+      const originName = formatNodeId(selectedOriginNode, resolveNodeInfo(selectedOriginNode));
       setSelectedDestNode(nodeId);
-      await updateBaselineMapboxRoute(
+      const routesReady = await updateBaselineMapboxRoute(
         selectedOriginNode,
         nodeId,
         selectedModality,
@@ -774,16 +992,26 @@ export default function DashboardClient() {
         selectedRadius
       );
 
-      setToast({
-        message: `Tujuan Diperbarui: ${originName} -> ${nodeName}`,
-        type: 'info',
-      });
+      if (routesReady) {
+        setToast({
+          message: `Tujuan Diperbarui: ${originName} -> ${nodeName}`,
+          type: 'info',
+        });
+      }
     }
   }, [selectedOriginNode, selectedDestNode, selectedModality, simulatedShockwave, selectedRadius, updateBaselineMapboxRoute, resolveNodeInfo]);
 
   // 1-Click Reset Node Selection Handler
   const handleResetNodes = useCallback(() => {
+    // Abort any in-flight route computation and invalidate its result before clearing state.
+    routingAbortControllerRef.current?.abort();
+    routingAbortControllerRef.current = null;
+    routingInFlightKeyRef.current = null;
     routeCalculationReqIdRef.current++;
+    setIsRoutingLoading(false);
+    setRoutingError(null);
+    setRoutingElapsedMs(0);
+    demoStateRef.current?.setIsCalculatingRoute(false);
     customNodesRef.current = {};
     demoDetourRoutesRef.current = null;
     setRoutingInfo(null);
@@ -796,6 +1024,26 @@ export default function DashboardClient() {
     setHiddenRouteIndices(new Set());
     customNodesRef.current = {};
     setToast({ message: 'Titik rute dibersihkan. Silakan klik marker kota 1 untuk mengeset Start Node.', type: 'info' });
+  }, []);
+
+  // Explicit Batal: cancel the running route computation, drop its pending result,
+  // and clear the corridors so no stale route survives the abort.
+  const handleCancelRouting = useCallback(() => {
+    routingAbortControllerRef.current?.abort();
+    routingAbortControllerRef.current = null;
+    routingInFlightKeyRef.current = null;
+    routeCalculationReqIdRef.current++;
+    setIsRoutingLoading(false);
+    setRoutingElapsedMs(0);
+    setRoutingError(null);
+    setRoutingInfo(null);
+    setCurrentMapRoutes([]);
+    setSelectedCrisis((prev) =>
+      prev ? { ...prev, route_recommendations: [] } : prev
+    );
+    setActiveRouteIdx(null);
+    demoStateRef.current?.setIsCalculatingRoute(false);
+    setToast({ message: 'Perhitungan rute dibatalkan.', type: 'info' });
   }, []);
 
   // Two-way modality sync: fleet layer filter and route calculation modality stay in lockstep,
@@ -990,7 +1238,13 @@ export default function DashboardClient() {
 
   // Comprehensive Demo Reset Handler (Clears all demo states, shockwaves, dirty routes & restores map)
   const handleResetDemo = useCallback(() => {
+    routingAbortControllerRef.current?.abort();
+    routingAbortControllerRef.current = null;
+    routingInFlightKeyRef.current = null;
     routeCalculationReqIdRef.current++;
+    setIsRoutingLoading(false);
+    setRoutingError(null);
+    setRoutingElapsedMs(0);
     demoDetourRoutesRef.current = null;
     demoState.reset();
     setSimulatedShockwave(null);
@@ -1209,8 +1463,8 @@ export default function DashboardClient() {
         destination: destId,
         origin_coords: originCoords,
         dest_coords: destCoords,
-        origin_name: originInfo?.name || originId,
-        dest_name: destInfo?.name || destId,
+        origin_name: formatNodeId(originId, originInfo),
+        dest_name: formatNodeId(destId, destInfo),
         commodity: 'cabai_merah',
         cargoTonnage: 10.0,
         hasBkhitCert: true,
@@ -2336,7 +2590,7 @@ export default function DashboardClient() {
                 hubNodesList={dynamicHubNodes}
                 corridorContext={corridorContext}
                 spatialWeatherPolygons={spatialWeatherPolygons}
-                routingInfo={routingInfo}
+                routingInfo={isRoutingLoading ? null : routingInfo}
                 isLeftSidebarCollapsed={isLeftSidebarCollapsed}
                 onExpandSidebar={() => setIsLeftSidebarCollapsed(false)}
                 fleetModalityFilter={fleetModalityFilter}
@@ -2352,9 +2606,10 @@ export default function DashboardClient() {
                 onHideRoute={handleHideRoute}
                 topNavTelemetrySlot={
                   <TopNavTelemetry
-                    routingInfo={routingInfo}
+                    routingInfo={isRoutingLoading ? null : routingInfo}
                     corridorContext={corridorContext}
                     isLoading={isCorridorLoading}
+                    isRoutingLoading={isRoutingLoading}
                     onOpenHitl={() => setIsHitlDrawerOpen(true)}
                     pendingHitlCount={pendingHitlCount}
                     isLeftSidebarCollapsed={isLeftSidebarCollapsed}
@@ -2450,8 +2705,22 @@ export default function DashboardClient() {
                   <FloatingMapLegend
                     isOpen={isMapLegendOpen}
                     onToggle={() => setIsMapLegendOpen(v => !v)}
+                    corridorVisibility={corridorVisibility}
+                    onToggleCorridor={handleToggleCorridor}
+                    onResetCorridorVisibility={handleResetCorridors}
                   />
                 }
+              />
+            </div>
+
+            {/* Persistent route-computation banner: spinner + elapsed time + Batal */}
+            <div className="absolute top-14 left-1/2 -translate-x-1/2 z-40 pointer-events-none px-3">
+              <RoutingStatusBanner
+                isLoading={isRoutingLoading}
+                error={routingError}
+                elapsedMs={routingElapsedMs}
+                onCancel={handleCancelRouting}
+                onDismissError={() => setRoutingError(null)}
               />
             </div>
 
@@ -2490,6 +2759,8 @@ export default function DashboardClient() {
                 onClearSimulation={handleClearSimulation}
                 originNodeId={selectedOriginNode}
                 destNodeId={selectedDestNode}
+                originInfo={originDisplayInfo}
+                destInfo={destDisplayInfo}
                 selectedRadius={selectedRadius}
                 setSelectedRadius={setSelectedRadius}
                 selectedModality={selectedModality}
@@ -2536,6 +2807,8 @@ export default function DashboardClient() {
               isSidebarOpen={isSidebarOpen && !!selectedCrisis}
               selectedOrigin={selectedOriginNode}
               selectedDestination={selectedDestNode}
+              originInfo={originDisplayInfo}
+              destInfo={destDisplayInfo}
               inflationForecast={demoState.currentCrisisState?.inflation_forecast}
               economicFinding={demoState.currentCrisisState?.economic_intelligence_finding}
               onOpenMitigation={() => {

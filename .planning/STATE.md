@@ -2,19 +2,19 @@
 gsd_state_version: "1.0"
 milestone: M4
 milestone_name: PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability
-current_phase: 78
-current_phase_name: LLM Gateway Network Resilience, Connect Timeout Retry & Reasoning Effort Calibration
+current_phase: 79
+current_phase_name: Small-City Routing, Loading/Cancel Banner, Human Names
 status: complete
-stopped_at: "Phase 78 complete: LLM Gateway network resilience with 2-attempt exponential backoff retries, reasoning effort parameter (OPENCODE_REASONING_EFFORT=low) to avoid token starvation, fallback reasoning_content extraction, and 11 unit tests passing."
-last_updated: "2026-10-20T03:35:00.000Z"
+stopped_at: "Phase 79 complete: regency-ID normalization + explicit no_route backend refusal, persistent routing status banner with AbortController/Batal and stale-request guards, formatNode human labels, corridor legend with SIMULASI/OFFLINE provenance and visibility toggles."
+last_updated: "2026-10-20T12:00:00.000Z"
 last_activity: 2026-10-20
-last_activity_desc: "Phase 78 executed & verified: LLM Gateway retry loop, reasoning_effort support, reasoning_content fallback, all 11 unit tests passing, pushed to origin/main."
+last_activity_desc: "Phase 79 executed & verified: 11 code files (small-city routing, loading-cancel banner, human names + legend), tsc exit 0, py_compile exit 0, 10 routing tests passing, pushed to origin/main."
 state_head: HEAD
 progress:
-  total_phases: 78
-  completed_phases: 78
-  total_plans: 95
-  completed_plans: 95
+  total_phases: 79
+  completed_phases: 79
+  total_plans: 98
+  completed_plans: 98
   percent: 100.0
 ---
 
@@ -22,16 +22,16 @@ progress:
 
 **Last Updated:** 2026-10-20
 **Active Milestone:** M4 - PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability [COMPLETED ✅]
-**Current Phase:** 78
+**Current Phase:** 79
 
 ---
 
 ## Current Position
 
-Phase: 78 (LLM Gateway Network Resilience, Connect Timeout Retry & Reasoning Effort Calibration) - COMPLETE ✅
-Status: (1) Implemented 2-attempt exponential backoff retry for httpx.TimeoutException, httpx.NetworkError, and HTTP 502/503/504 server errors in agents/llm_gateway.py; (2) added reasoning_effort parameter and OPENCODE_REASONING_EFFORT=low config to throttle internal CoT token consumption on reasoning models (deepseek-v4.1-flash, mimo-v2.6-pro); (3) added fallback extraction of message['reasoning_content'] when content is empty; (4) verified 11 passing unit tests in backend/tests/test_llm_gateway.py and pushed commit 543855b to GitHub.
-Last activity: 2026-10-20 - Phase 78 fully executed, tested, and pushed.
-Next action: Production deployment to Render with OPENCODE_REASONING_EFFORT=low environment variable.
+Phase: 79 (Small-City Routing, Loading/Cancel Banner, Human Names) - COMPLETE ✅
+Status: (1) Fixed small-city routing by normalizing CrisisMap regency feature IDs (`regency-<idx>-<slug>`) before gazetteer matching and removing the silent early return in `updateBaselineMapboxRoute`; (2) replaced the backend's first/last-graph-node snap (Belawan→Bakauheni whole-island line) with an explicit `status: "no_route"` response; (3) added the persistent `RoutingStatusBanner` with elapsed time, cold-render hint and a working Batal (AbortController through api/aiDynamicRouter/mapboxRoutingService, request-id staleness guards); (4) added `lib/formatNode.ts` for human endpoint labels (name + kabupaten + province) and merged live `/geocode/nodes` data into the local gazetteer instead of overwriting it; (5) added the corridor legend (direct land vs island ring), SIMULASI/OFFLINE vs LIVE provenance badge and Darat/Laut/Udara visibility toggles. Verified tsc exit 0, py_compile exit 0, 10 routing tests passing.
+Last activity: 2026-10-20 - Phase 79 executed, docs written, verified, and pushed.
+Next action: Render redeploy with `OPENCODE_REASONING_EFFORT=low` (missing from render.yaml); then the P1 nits in `.planning/phases/79-small-city-routing-loading-human-names/79-06-NEXT-CONTEXT.md` (HITL raw-ID fallback, fitBounds, HUD ms scope, surface `no_route`).
 
 ---
 
@@ -119,6 +119,7 @@ Next action: Production deployment to Render with OPENCODE_REASONING_EFFORT=low 
 | 76 | Pan-Sumatra Spatial Precision, Multi-Agent Consensus Escalation & Unified God's-Eye HUD | **COMPLETE** ✅ | Bare panjang collision eliminated, longest-key matching, 3-tier micro-spatial bounding (Tier A: 0.6–1.2 km, Tier B: 1.5–2.2 km ADM3, Tier C: 3.2–4.5 km YELLOW cap), 4-channel consensus gate escalation, unified God's-Eye HUD. 0 tsc errors, Next.js build clean. |
 | 77 | Route Detail Modal & HITL Hardening | **COMPLETE** ✅ | Route detail modal with 5-section inspection (corridor metrics, multi-hazard exposure, commodity perishability, TMS telemetry, dispatch action); strict role-gated commits (Dispatcher creates approvals & TMS pings; Guest/Regulator gets sandbox preview without writes); Supabase migration 013 applied for route_id and incident_id schema convergence; probe parity verified across 28 backend endpoints. |
 | 78 | LLM Gateway Network Resilience, Connect Timeout Retry & Reasoning Effort Calibration | **COMPLETE** ✅ | 2-attempt exponential backoff retry loop for httpx.TimeoutException/NetworkError/5xx; reasoning effort calibration (OPENCODE_REASONING_EFFORT=low) preventing token exhaustion; fallback reasoning_content extraction; 11 passing unit tests in test_llm_gateway.py; git commit 543855b pushed. |
+| 79 | Small-City Routing, Loading/Cancel Banner, Human Names | **COMPLETE** ✅ | `normalizeRegencyId` fixes `regency-<idx>-<slug>` gazetteer mismatch; backend returns explicit `no_route` instead of Belawan→Bakauheni first/last-node snap; `RoutingStatusBanner` with elapsed time + Batal (AbortController through api/aiDynamicRouter/mapboxRoutingService, request-id guards); `lib/formatNode.ts` human labels merged with live `/geocode/nodes`; corridor legend (direct land vs island ring), SIMULASI/OFFLINE provenance, Darat/Laut/Udara toggles. tsc 0, py_compile 0, 10 routing tests passing. |
 
 ---
 

@@ -10,9 +10,11 @@ import {
   HUB_NODES,
   STRATEGIC_BASELINE_CORRIDORS,
   fetchGazetteerNodes,
+  normalizeRegencyId,
   PAN_SUMATRA_GAZETTEER,
   type HubNode,
 } from '@/lib/mapboxRoutingService';
+import { formatNodeDisplay, prettyNodeSlug } from '@/lib/formatNode';
 import {
   defaultSpatialHashArbiter,
   arbitrateVisibleLabels,
@@ -546,7 +548,8 @@ export default function CrisisMap({
         },
         paint: {
           'line-color': ['coalesce', ['get', 'color'], '#10b981'],
-          'line-width': 6,
+          // Direct-land corridors are the highlighted/default story; island-ring legs stay thinner.
+          'line-width': ['case', ['==', ['get', 'isDirectLand'], true], 6.5, 5],
           'line-opacity': 0.95,
         },
       });
@@ -785,7 +788,14 @@ export default function CrisisMap({
           setContextPopup({
             coords,
             nodeId: props.id,
-            name: props.displayName || props.name,
+            name:
+              formatNodeDisplay({
+                display_name: props.displayName,
+                name: props.name,
+                kabupaten: props.kabupaten,
+                province: props.province,
+                type: props.type,
+              }) || prettyNodeSlug(props.id),
             type: props.type === 'city' ? 'Kota' : props.type === 'kecamatan' ? 'Kecamatan' : 'Kabupaten',
             province: props.province,
             screenPos: { x: e.point.x, y: e.point.y },
@@ -1181,6 +1191,8 @@ export default function CrisisMap({
                   : legMode === 'air'
                     ? '#00F0FF'
                     : '#10B981');
+              const legCorridorClass =
+                legMode === 'maritime' ? 'sea' : legMode === 'air' ? 'air' : 'land';
               routeFeatures.push({
                 type: 'Feature',
                 geometry: {
@@ -1195,6 +1207,9 @@ export default function CrisisMap({
                   description: `${r.description} (${leg.title})`,
                   color: legColor,
                   legMode: legMode,
+                  corridorClass: legCorridorClass,
+                  isDirectLand: legCorridorClass === 'land',
+                  isIslandRing: legCorridorClass !== 'land',
                   isLeg: true,
                 },
               });
@@ -1213,6 +1228,12 @@ export default function CrisisMap({
                   : origIdx === 1
                     ? '#38BDF8'
                     : '#00F0FF';
+          const routeCorridorClass =
+            r.modality === 'maritime' || r.corridor_type === 'sea_intermodal'
+              ? 'sea'
+              : r.modality === 'air' || r.corridor_type === 'air_intermodal'
+                ? 'air'
+                : 'land';
           routeFeatures.push({
             type: 'Feature',
             geometry: {
@@ -1225,6 +1246,9 @@ export default function CrisisMap({
               isActive: isRouteActive,
               description: r.description,
               color: r.color || defaultColor,
+              corridorClass: routeCorridorClass,
+              isDirectLand: routeCorridorClass === 'land',
+              isIslandRing: routeCorridorClass !== 'land',
               isLeg: false,
             },
           });
@@ -1319,25 +1343,29 @@ export default function CrisisMap({
       if (selectedOriginNode) {
         registeredIds.add(selectedOriginNode);
         let originCoords: LonLat | null = null;
-        let originName = selectedOriginNode;
+        let originName = prettyNodeSlug(selectedOriginNode);
         if (HUB_NODES[selectedOriginNode]) {
           originCoords = HUB_NODES[selectedOriginNode].coords;
           originName = HUB_NODES[selectedOriginNode].name;
         } else {
+          // Strip the regency render index (regency-<idx>-<slug>) before gazetteer matching;
+          // the original selectedOriginNode is kept as the feature id.
+          const normalizedOriginId = normalizeRegencyId(selectedOriginNode).toLowerCase();
           const match = PAN_SUMATRA_GAZETTEER.find(
             (g) =>
-              g.name.toLowerCase() === selectedOriginNode.toLowerCase() ||
-              `node-${g.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}` === selectedOriginNode.toLowerCase() ||
-              `regency-${g.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}` === selectedOriginNode.toLowerCase()
+              g.name.toLowerCase() === normalizedOriginId ||
+              `node-${g.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}` === normalizedOriginId ||
+              `regency-${g.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}` === normalizedOriginId
           );
           if (match) {
             originCoords = [match.lon, match.lat];
-            originName = match.display_name || match.name;
+            originName = formatNodeDisplay(match) || match.name;
           }
         }
         if (originCoords) {
           const shortName = originName
             .split('(')[0]
+            .split(',')[0]
             .replace(/^(Hub Utama Pergudangan|Hub Logistik|Interchange Tol|Interchange|Pelabuhan|Bandara Internasional|Bandara|Kota)\s+/i, '')
             .trim();
           hubFeatures.push({
@@ -1360,25 +1388,29 @@ export default function CrisisMap({
       if (selectedDestNode) {
         registeredIds.add(selectedDestNode);
         let destCoords: LonLat | null = null;
-        let destName = selectedDestNode;
+        let destName = prettyNodeSlug(selectedDestNode);
         if (HUB_NODES[selectedDestNode]) {
           destCoords = HUB_NODES[selectedDestNode].coords;
           destName = HUB_NODES[selectedDestNode].name;
         } else {
+          // Strip the regency render index (regency-<idx>-<slug>) before gazetteer matching;
+          // the original selectedDestNode is kept as the feature id.
+          const normalizedDestId = normalizeRegencyId(selectedDestNode).toLowerCase();
           const match = PAN_SUMATRA_GAZETTEER.find(
             (g) =>
-              g.name.toLowerCase() === selectedDestNode.toLowerCase() ||
-              `node-${g.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}` === selectedDestNode.toLowerCase() ||
-              `regency-${g.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}` === selectedDestNode.toLowerCase()
+              g.name.toLowerCase() === normalizedDestId ||
+              `node-${g.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}` === normalizedDestId ||
+              `regency-${g.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}` === normalizedDestId
           );
           if (match) {
             destCoords = [match.lon, match.lat];
-            destName = match.display_name || match.name;
+            destName = formatNodeDisplay(match) || match.name;
           }
         }
         if (destCoords) {
           const shortName = destName
             .split('(')[0]
+            .split(',')[0]
             .replace(/^(Hub Utama Pergudangan|Hub Logistik|Interchange Tol|Interchange|Pelabuhan|Bandara Internasional|Bandara|Kota)\s+/i, '')
             .trim();
           hubFeatures.push({
@@ -1529,7 +1561,7 @@ export default function CrisisMap({
           geometry: { type: 'Point', coordinates: pt.coords },
           properties: {
             id: pt.id,
-            label: pt.role === 'origin' ? `${pt.name} (ASAL)` : pt.role === 'dest' ? `${pt.name} (TUJUAN)` : pt.name,
+            label: pt.role === 'origin' ? `${pt.name || prettyNodeSlug(pt.id)} (ASAL)` : pt.role === 'dest' ? `${pt.name || prettyNodeSlug(pt.id)} (TUJUAN)` : pt.name || prettyNodeSlug(pt.id),
             role: pt.role,
           },
         })),

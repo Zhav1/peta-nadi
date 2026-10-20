@@ -2195,6 +2195,45 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 
 ---
 
+## Phase 79: Small-City Routing, Loading/Cancel Banner, Human Names
+
+**Goal:** make non-hub regency clicks route correctly, give the operator persistent progress + a working cancel while the backend computes, and ensure every visible endpoint is a human place name with legible corridor provenance.
+**Status:** COMPLETE ✅
+
+### Deliverables
+
+- **WP1 - Small-City Routing & Regency-ID Normalization (`frontend/lib/mapboxRoutingService.ts`, `CrisisMap.tsx`, `DashboardClient.tsx`)**:
+  - `normalizeRegencyId()` strips the `regency-<idx>-` render index before gazetteer lookup (the map emits `regency-159-indragiri-hilir` while lookups keyed on `regency-indragiri-hilir`).
+  - `updateBaselineMapboxRoute` requires coordinates and, when resolution fails, aborts the in-flight request, clears stale corridors/`routingInfo`, raises `routingError` + error toast, and returns `false` — no silent early return.
+  - Callers only emit the success toast when routes were actually applied.
+- **WP2 - Explicit Backend No-Route (`backend/app/adapters/cpu_routing_adapter.py`)**:
+  - `_build_no_route_response()` returns `status: "no_route"`, `routes_count: 0`, `routes: []`, unresolved ID, and a message stating the positional fallback was disabled.
+  - Deleted the first/last-graph-node snap that produced whole-island Belawan → Bakauheni lines; aliases (`belawan` → `belawan_port`) and coordinate snapping remain.
+- **WP3 - Persistent Loading + Batal (`RoutingStatusBanner.tsx` new, `DashboardClient.tsx`, `TopNavTelemetry.tsx`, `api.ts`, `aiDynamicRouter.ts`, `mapboxRoutingService.ts`)**:
+  - Persistent banner with spinner, live elapsed seconds, `render dingin bisa 30-50 detik` hint after 10 s, and a **Batal** action (replaces the 3 s toast as the only feedback).
+  - `AbortSignal` threaded through `api.request` → `optimizeRouting` → `calculateAIDynamicDetourRoutes` → land/sea/air legs; aborted requests never fall back to the proxy or fabricate an offline polyline.
+  - `routeCalculationReqIdRef` staleness checks on every state write; `routingInFlightKeyRef` de-dupes handler/effect double invocation; reset/cancel/reset-demo all abort.
+  - HUD shows `...` while loading and nulls prior solver latency instead of displaying a stale `ms`.
+- **WP4 - Human Names (`frontend/lib/formatNode.ts` new, `CrisisSimulatorBar.tsx`, `GuidedDemoPanel.tsx`, `CrisisMap.tsx`, `mapboxRoutingService.ts`)**:
+  - `prettyNodeSlug`, `formatNodeDisplay` (name + kabupaten + province, duplicate-safe), `resolveNodeDisplayInfo`, `formatNodeId`.
+  - No surface renders `regency-159-...`, `node-...`, or `pin-...`; simulator bar and guided demo accept pre-resolved `originInfo`/`destInfo`.
+  - `fetchGazetteerNodes` merges backend nodes into `PAN_SUMATRA_GAZETTEER` (remote wins where present, local backfills) instead of replacing rich local labels with `slug.title()`.
+- **WP5 - Corridor Legend + Provenance (`DashboardClient.tsx`, `CrisisSimulatorBar.tsx`, `CrisisMap.tsx`)**:
+  - Legend block `KORIDOR LANGSUNG VS RING PULAU` with direct-land (emerald, 6.5 px) vs sea/air island-ring (sky/cyan, 5 px) plus a `SIMULASI/OFFLINE` badge and explanatory footnote.
+  - Provenance badge derived from route payload (`SIMULASI/OFFLINE` vs `LIVE`), never self-declared by the UI.
+  - `Darat` / `Laut` / `Udara` visibility toggles (`aria-pressed`, `ON/OFF`, `Semua ON`) wired into `isCorridorVisible` via `corridor_type` — preserving the Q1 always-show-all decision (nothing hidden by default, modality never filters computation).
+
+### Verification
+
+- [x] `npx tsc --noEmit -p tsconfig.json` → exit 0.
+- [x] `python -m py_compile backend/app/adapters/cpu_routing_adapter.py` → exit 0.
+- [x] `python -m pytest backend/tests/test_cpu_routing_weather.py -q` → 10 passed.
+- [x] Unknown endpoint without coords returns `status: "no_route"` with empty `routes` (no first/last-node snap).
+- [x] Regency feature IDs resolve through `normalizeRegencyId` in both `CrisisMap` and `DashboardClient`.
+- [ ] Live pilot verification on `pre-hub.vercel.app` × `peta-nadi.onrender.com` (Tembilahan → Rengat, Batal abort, label/legend audit) — steps documented in `79-04-WALKTHROUGH.md`; requires the Render redeploy with `OPENCODE_REASONING_EFFORT=low`.
+
+---
+
 ## Backlog (Post-Hackathon / v2 & New Context Window Backlog)
 
 ### Active Remediation & Audit Backlog (For New Context Window)
