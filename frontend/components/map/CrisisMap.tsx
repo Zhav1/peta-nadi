@@ -381,6 +381,10 @@ export default function CrisisMap({
   const mouseDownPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const lastFocusedCrisisIdRef = useRef<string | null>(null);
   const lastFocusedShockwaveKeyRef = useRef<string | null>(null);
+  // Blink-reduction: route-paths-source / congestion / ETA only rewrite when
+  // route inputs actually change. Fleet polls (~10s) flow via FleetVehicleLayer
+  // props and must NOT retrigger densifyPath + route setData.
+  const lastRouteWriteHashRef = useRef<string | null>(null);
 
   // Fetch updated gazetteer nodes from backend on mount (falls back to local PAN_SUMATRA_GAZETTEER)
   useEffect(() => {
@@ -1248,8 +1252,50 @@ export default function CrisisMap({
     }
 
     // 2. Update Active Route Paths (Per-Leg Multi-Color Corridors with Original Indices)
+    // Dedupe: fleet polls (~10s) must NOT rewrite route/congestion/ETA sources.
+    // Only rebuild when route inputs actually change; endpoint-clear effect
+    // below still clears directly and stays cleared until this hash flips.
+    const routeWriteHash = (() => {
+      const hiddenSorted = Array.from(hiddenRouteIndices ?? []).sort((a, b) => a - b).join(',');
+      const visFlag = `${corridorVisibility?.land ?? true},${corridorVisibility?.sea ?? true},${corridorVisibility?.air ?? true}`;
+      let s = `idx=${activeRouteIdx ?? 0}|vis=${visFlag}|hid=${hiddenSorted}|n=${activeRoutes?.length ?? 0};`;
+      (activeRoutes ?? []).forEach((r, ri) => {
+        s += `#${ri}:${r.viable ?? ''}|${r.corridor_type ?? ''}|${(r as any).modality ?? ''}|${(r as any).color ?? ''}|${r.description ?? ''}|${Number((r as any).distance_km ?? 0).toFixed(2)}|${Number((r as any).eta_minutes ?? 0).toFixed(2)}|${(r as any).safety_status ?? ''}|${(r as any).is_compromised ? 'C' : ''}|`;
+        const wps = (r as any).waypoints ?? [];
+        s += `w${wps.length}:`;
+        for (let wi = 0; wi < wps.length; wi++) {
+          const wp = wps[wi] as any;
+          s += `${Number(wp.lon ?? 0).toFixed(4)},${Number(wp.lat ?? 0).toFixed(4)};`;
+        }
+        const legs = (r as any).legs ?? [];
+        s += `l${legs.length}:`;
+        for (let li = 0; li < legs.length; li++) {
+          const leg = legs[li] as any;
+          const coords = leg.coordinates ?? [];
+          s += `${leg.title ?? ''}:${leg.color ?? ''}:${leg.mode ?? ''}:${leg.modality ?? ''}:c${coords.length}:`;
+          if (coords.length > 0) {
+            const step = Math.max(1, Math.floor(coords.length / 8));
+            for (let ci = 0; ci < coords.length; ci += step) {
+              const c = coords[ci];
+              s += `${Number(c[0] ?? 0).toFixed(4)},${Number(c[1] ?? 0).toFixed(4)};`;
+            }
+            const lastC = coords[coords.length - 1];
+            s += `${Number(lastC[0] ?? 0).toFixed(4)},${Number(lastC[1] ?? 0).toFixed(4)}|`;
+          }
+          if (leg.transfer_hub?.id) s += `hub=${leg.transfer_hub.id};`;
+        }
+        const segs = (r as any).congestion_segments ?? [];
+        s += `s${segs.length}:`;
+        for (let si = 0; si < segs.length; si++) {
+          const seg = segs[si] as any;
+          s += `${seg.level ?? ''}:${(seg.coordinates ?? []).length};`;
+        }
+      });
+      return s;
+    })();
+    const shouldRewriteRoutes = lastRouteWriteHashRef.current !== routeWriteHash;
     const routesSource = map.getSource('route-paths-source') as mapboxgl.GeoJSONSource;
-    if (routesSource) {
+    if (routesSource && shouldRewriteRoutes) {
       const targetIdx = activeRouteIdx ?? 0;
       const isCorridorVisible = (r: RouteRecommendation, origIdx: number) => {
         if (r.viable === false) return false;
@@ -1353,9 +1399,9 @@ export default function CrisisMap({
       });
     }
 
-    // 2b. Update Congestion Segments
+    // 2b. Update Congestion Segments (route-scoped: same dedupe gate as routes)
     const congestionSource = map.getSource('congestion-segments-source') as mapboxgl.GeoJSONSource;
-    if (congestionSource) {
+    if (congestionSource && shouldRewriteRoutes) {
       const targetIdx = activeRouteIdx ?? 0;
       const activeRoute = activeRoutes[targetIdx];
       const segments = activeRoute?.congestion_segments || [];
@@ -1594,9 +1640,9 @@ export default function CrisisMap({
       hubSource.setData({ type: 'FeatureCollection', features: hubFeatures });
     }
 
-    // 6. Update Native WebGL Route ETA Badges
+    // 6. Update Native WebGL Route ETA Badges (route-scoped: same dedupe gate)
     const etaSource = map.getSource('route-eta-badges-source') as mapboxgl.GeoJSONSource;
-    if (etaSource) {
+    if (etaSource && shouldRewriteRoutes) {
       const etaFeatures: GeoJSON.Feature<GeoJSON.Point>[] = [];
       if (activeRoutes && activeRoutes.length > 0) {
         activeRoutes.forEach((r, idx) => {
@@ -1619,6 +1665,9 @@ export default function CrisisMap({
         });
       }
       etaSource.setData({ type: 'FeatureCollection', features: etaFeatures });
+    }
+    if (shouldRewriteRoutes) {
+      lastRouteWriteHashRef.current = routeWriteHash;
     }
 
     // 8. Update Tier 2 Pan-Sumatra Regency & Gazetteer Nodes Source
@@ -1688,12 +1737,15 @@ export default function CrisisMap({
 
   useEffect(() => {
     updateMapSources();
+    // NOTE: activeFleet intentionally excluded — fleet renders via
+    // FleetVehicleLayer Deck overlay, not via these GeoJSON sources.
+    // Route/congestion/ETA rewrites are additionally gated by routeWriteHash.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     incidents,
     selectedCrisisId,
     activeRoutes,
     activeRouteIdx,
-    activeFleet,
     disasterZones,
     simulatedShockwave,
     selectedOriginNode,

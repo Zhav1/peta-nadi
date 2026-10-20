@@ -277,6 +277,13 @@ export function FleetVehicleLayer({
   const lastDeckUpdateRef = useRef<number>(0);
   const lastPopupSyncRef = useRef<number>(0);
   const isInteractingRef = useRef<boolean>(false);
+  // Blink-reduction dedupe: hash of visible fleet inputs + selection/follow +
+  // quantized pulse step + zoom bucket. Skips redundant setProps when nothing
+  // meaningful changed (static fleet polls every ~10s).
+  const lastFleetHashRef = useRef<string | null>(null);
+  const lastSelectionKeyRef = useRef<string | null>(null);
+  const lastPulseStepRef = useRef<number>(-1);
+  const lastZoomBucketRef = useRef<number>(-1);
   const vehiclesRef = useRef<FleetVehicle[]>(vehicles);
   vehiclesRef.current = vehicles;
 
@@ -459,10 +466,55 @@ export function FleetVehicleLayer({
         return true;
       });
 
+      // Dedupe: skip redundant Deck rebuilds when fleet inputs are static.
+      // Hash covers vehicle_id + rounded lon/lat + tracking_mode; selection /
+      // follow / modality / route context / quantized pulse step / zoom bucket
+      // force a refresh when they change so pulse motion + picking stay live.
+      const zoomForDedupe = map.getZoom();
+      const zoomBucketForDedupe = Math.round(zoomForDedupe * 4) / 4;
+      const globalPulseStep = Math.floor(((now % 1800) / 1800) * 4);
+      const selectionKeyForDedupe =
+        `${selectedVehicleIdRef.current ?? 'none'}|` +
+        `${isFollowCamActiveRef.current ? 'follow' : 'nofollow'}|` +
+        `${modalityFilter}|${hideEstimatedRoutes ? 'hide' : 'show'}|` +
+        `${activeRouteIdx ?? 'none'}|${activeRoutes?.length ?? 0}`;
+      let fleetHashForDedupe = `n=${visibleVehicles.length};`;
+      for (let hIdx = 0; hIdx < visibleVehicles.length; hIdx++) {
+        const hv = visibleVehicles[hIdx] as any;
+        const hRawLonLat: [number, number] =
+          Array.isArray(hv.current_coords) && hv.current_coords.length >= 2
+            ? [hv.current_coords[0], hv.current_coords[1]]
+            : hv.current_location?.coordinates
+              ? [hv.current_location.coordinates[0], hv.current_location.coordinates[1]]
+              : Array.isArray(hv.location) && hv.location.length >= 2
+                ? [hv.location[0], hv.location[1]]
+                : hv.location?.coordinates
+                  ? [hv.location.coordinates[0], hv.location.coordinates[1]]
+                  : Array.isArray(hv.origin_coords) && hv.origin_coords.length >= 2
+                    ? [hv.origin_coords[0], hv.origin_coords[1]]
+                    : [0, 0];
+        const hLon = Number(hRawLonLat[0]).toFixed(4);
+        const hLat = Number(hRawLonLat[1]).toFixed(4);
+        fleetHashForDedupe += `${hv.vehicle_id}:${hLon},${hLat}:${hv.tracking_mode ?? ''};`;
+      }
+      if (
+        lastFleetHashRef.current === fleetHashForDedupe &&
+        lastSelectionKeyRef.current === selectionKeyForDedupe &&
+        lastPulseStepRef.current === globalPulseStep &&
+        lastZoomBucketRef.current === zoomBucketForDedupe
+      ) {
+        animRef.current = requestAnimationFrame(animate);
+        return;
+      }
+
       if (visibleVehicles.length === 0) {
-        if (overlayRef.current) {
+        if (overlayRef.current && lastFleetHashRef.current !== fleetHashForDedupe) {
           overlayRef.current.setProps({ layers: [] });
         }
+        lastFleetHashRef.current = fleetHashForDedupe;
+        lastSelectionKeyRef.current = selectionKeyForDedupe;
+        lastPulseStepRef.current = globalPulseStep;
+        lastZoomBucketRef.current = zoomBucketForDedupe;
         animRef.current = requestAnimationFrame(animate);
         return;
       }
@@ -474,7 +526,7 @@ export function FleetVehicleLayer({
         }
       });
 
-      const currentZoom = map.getZoom();
+      const currentZoom = zoomForDedupe;
       const simSpeedMultiplier = typeof simSpeed === 'number' && simSpeed > 0 ? simSpeed : 1.0;
 
       const trailData: Array<{ path: [number, number][]; color: [number, number, number, number]; width: number }> = [];
@@ -699,8 +751,11 @@ export function FleetVehicleLayer({
         }
 
         // Hazard pulse ring for selected, delayed, or rerouting vehicles
+        // Quantized to 4 steps (0, 0.25, 0.5, 0.75) to cut per-tick shimmer
+        // while preserving the motion cue; pairs with the dedupe guard above.
         if (isSelected || isImpacted) {
-          const pulsePhase = ((now + idx * 250) % 1800) / 1800; // 0.0 to 1.0
+          const rawPulsePhase = ((now + idx * 250) % 1800) / 1800; // 0.0 to 1.0
+          const pulsePhase = Math.floor(rawPulsePhase * 4) / 4;
           const radiusPixels = isSelected ? 22 + pulsePhase * 16 : 16 + pulsePhase * 12;
           const alphaFill = Math.round((1.0 - pulsePhase) * 60);
           const alphaLine = Math.round((1.0 - pulsePhase) * 220);
@@ -1026,6 +1081,10 @@ export function FleetVehicleLayer({
       ];
 
       overlayRef.current.setProps({ layers: deckLayers });
+      lastFleetHashRef.current = fleetHashForDedupe;
+      lastSelectionKeyRef.current = selectionKeyForDedupe;
+      lastPulseStepRef.current = globalPulseStep;
+      lastZoomBucketRef.current = zoomBucketForDedupe;
 
       animRef.current = requestAnimationFrame(animate);
     };

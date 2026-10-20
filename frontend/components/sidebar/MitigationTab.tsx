@@ -55,6 +55,39 @@ interface RouteCardProps {
   approving: boolean;
   onApprove: (action: DecisionAction, tacticalAction: TacticalManeuver, notes?: string) => Promise<void>;
   selectedImpactedVehicle?: import('@/lib/types').ImpactedVehicleAssessment | null;
+  crisisHasEvidence: boolean;
+}
+
+// HITL integrity gate (Phase 82 audit): HITL approval is only enabled on a LIVE
+// grounded route + evidence. SIMULASI/OFFLINE straight-line interpolations or
+// routes without evidence keep Approve/Reroute disabled; HOLD stays allowed.
+const HITL_UNVERIFIED_COPY =
+  'Belum terverifikasi — rute SIMULASI/OFFLINE atau bukti belum tersedia. Approval dinonaktifkan.';
+const HITL_PENDING_COPY = 'Tercatat sebagai HITL pending — belum dikirim ke armada';
+
+function isSimulatedRoute(route: RouteRecommendation): boolean {
+  const combined = `${route.route_name ?? ''} ${route.description ?? ''} ${route.safety_tag ?? ''}`;
+  if (/SIMULASI/i.test(combined) || /OFFLINE/i.test(combined)) return true;
+  const source = (route as unknown as { source?: string }).source;
+  if (source === 'offline-interpolated') return true;
+  // No safety_status means the corridor was never grounded by live routing.
+  if (!route.safety_status) return true;
+  return false;
+}
+
+function hasRouteProof(route: RouteRecommendation): boolean {
+  const proof = (route as unknown as { proof?: unknown }).proof;
+  if (proof !== undefined && proof !== null && String(proof).trim().length > 0) return true;
+  if (typeof route.dampak === 'string' && route.dampak.trim().length > 0) return true;
+  if (typeof route.dasar_risiko === 'string' && route.dasar_risiko.trim().length > 0) return true;
+  return false;
+}
+
+function hasCrisisEvidence(crisis: CrisisState): boolean {
+  if ((crisis.news_attributions?.length ?? 0) > 0) return true;
+  if ((crisis.verified_news_citations?.length ?? 0) > 0) return true;
+  if (crisis.evidence?.osint_text?.trim() || crisis.evidence?.osint_author?.trim()) return true;
+  return false;
 }
 
 function FormattedMarkdown({ content }: { content: string }) {
@@ -106,6 +139,7 @@ function RouteCard({
   approving,
   onApprove,
   selectedImpactedVehicle,
+  crisisHasEvidence,
 }: RouteCardProps) {
   const { role } = useAuth();
   const [showOverrideModal, setShowOverrideModal] = useState(false);
@@ -116,6 +150,15 @@ function RouteCard({
   const isCompromised = route.is_compromised;
   const isNonViable = route.viable === false;
   const isHoldStaging = route.corridor_type === 'hold_staging';
+
+  // HITL integrity gate: LIVE grounded route + evidence required for Approve/Reroute.
+  const isSimulated = isSimulatedRoute(route);
+  const hasEvidence = crisisHasEvidence || hasRouteProof(route);
+  const hitlBlocked = isSimulated || !hasEvidence;
+  const provenanceLabel = isSimulated ? 'SIMULASI/OFFLINE' : 'LIVE';
+  // GUEST sandbox is zero-POST local preview, so its buttons stay enabled;
+  // the gate only locks real ledger writes. HOLD tactics stay allowed for all roles.
+  const approveLocked = hitlBlocked && !isHoldStaging && role !== 'GUEST';
 
   const cardBorderColor = isCompromised
     ? 'border-red-500/50 bg-red-950/20'
@@ -149,6 +192,10 @@ function RouteCard({
       setValidationError('Catatan alasan wajib diisi untuk tindakan Override / Modifikasi.');
       return;
     }
+    if (hitlBlocked && overrideTactical !== 'HOLD' && role !== 'GUEST') {
+      setValidationError(HITL_UNVERIFIED_COPY);
+      return;
+    }
     setValidationError(null);
     await onApprove('OVERRIDE', overrideTactical, overrideNotes.trim());
     setShowOverrideModal(false);
@@ -173,6 +220,7 @@ function RouteCard({
           <span>{titleText}</span>
         </span>
 
+        <span className="inline-flex items-center gap-1.5 shrink-0">
         {isCompromised ? (
           <span className="inline-flex items-center gap-1 text-[11px] font-semibold font-mono px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20">
             <AlertTriangle className="w-3.5 h-3.5 text-rose-400" /> TERDAMPAK
@@ -190,6 +238,17 @@ function RouteCard({
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> JALUR AMAN
           </span>
         )}
+          <span
+            className={`inline-flex items-center gap-1 text-[10px] font-bold font-mono px-2 py-0.5 rounded border ${
+              isSimulated
+                ? 'bg-amber-500/15 text-amber-300 border-amber-500/40'
+                : 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30'
+            }`}
+            title={isSimulated ? 'Geometri interpolasi, bukan jalan raya live' : 'Rute jalan raya live ter-grounding'}
+          >
+            {provenanceLabel}
+          </span>
+        </span>
       </div>
 
       <p className="text-xs text-slate-300 leading-relaxed mb-2 font-mono">
@@ -280,7 +339,7 @@ function RouteCard({
         </div>
       )}
 
-      <div className="flex gap-3 text-xs text-slate-300 font-mono mb-1">
+      <div className="flex flex-wrap items-center gap-3 text-xs text-slate-300 font-mono mb-1">
         <span className="inline-flex items-center gap-1">
           <MapPin className="w-3 h-3 text-slate-400" /> {(route.distance_km ?? 0).toFixed(0)} km
         </span>
@@ -289,6 +348,16 @@ function RouteCard({
         </span>
         <span className="inline-flex items-center gap-1">
           <Fuel className="w-3 h-3 text-emerald-400" /> +{(route.fuel_increase_pct ?? 0).toFixed(0)}%
+        </span>
+        <span
+          className={`inline-flex items-center gap-1 text-[10px] font-bold font-mono px-2 py-0.5 rounded border ${
+            isSimulated
+              ? 'bg-amber-500/15 text-amber-300 border-amber-500/40'
+              : 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30'
+          }`}
+          title={isSimulated ? 'Angka estimasi SIMULASI/OFFLINE, bukan pengukuran live' : 'Angka rute live ter-grounding'}
+        >
+          {provenanceLabel}
         </span>
       </div>
 
@@ -385,13 +454,18 @@ function RouteCard({
                       ? 'MODIFIKASI OPERATOR'
                       : approvalData?.tactical_action === 'HOLD'
                         ? 'INSTRUKSI TAHAN ARMADA'
-                        : 'DISETUJUI & DIKIRIM'}
+                        : 'TERCATAT • HITL PENDING'}
                   </span>
                 </span>
                 <span className="text-xs text-slate-400 font-mono">
                   {approvalData?.tactical_action || 'REROUTE'}
                 </span>
               </div>
+              {approvalData?.action !== 'OVERRIDE' && (
+                <p className="text-[10px] font-mono text-slate-400 leading-relaxed">
+                  {HITL_PENDING_COPY}
+                </p>
+              )}
               {approvalData?.notes && (
                 <div className="text-xs font-normal p-2 rounded border border-[#1c2432] bg-[#0c1017] text-slate-300 flex items-start gap-1.5 mt-1 font-mono">
                   <FileText className="w-3.5 h-3.5 shrink-0 mt-0.5 text-slate-400" />
@@ -454,6 +528,11 @@ function RouteCard({
                     </p>
                   </div>
                   {/* Regulator HOLD-only: APPROVE locked, HOLD enabled */}
+                  {hitlBlocked && (
+                    <div className="w-full p-2.5 rounded-md bg-amber-950/20 border border-amber-500/30 text-amber-200/90 text-xs font-mono leading-relaxed">
+                      {HITL_UNVERIFIED_COPY}
+                    </div>
+                  )}
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
@@ -481,6 +560,12 @@ function RouteCard({
                 </>
               ) : (
                 <>
+                  {/* HITL integrity gate: Approve/Reroute locked until LIVE + evidence; HOLD stays allowed. */}
+                  {hitlBlocked && role !== 'GUEST' && (
+                    <div className="w-full p-2.5 rounded-md bg-amber-950/20 border border-amber-500/30 text-amber-200/90 text-xs font-mono leading-relaxed">
+                      {HITL_UNVERIFIED_COPY}
+                    </div>
+                  )}
                   {/* Tactical Buttons Grid */}
                   <div className="grid grid-cols-2 gap-2">
                     {/* 1. Primary: Approve Reroute or Hold */}
@@ -494,14 +579,16 @@ function RouteCard({
                           onApprove('ACCEPT', 'REROUTE');
                         }
                       }}
-                      disabled={approving || isNonViable}
+                      disabled={approving || isNonViable || approveLocked}
                       className={`py-2 px-2.5 rounded-md text-xs font-semibold uppercase tracking-wider transition-colors shadow-sm flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
                         isHoldStaging
                           ? 'bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold'
                           : 'bg-white hover:bg-slate-200 text-[#080d14]'
                       }`}
                       title={
-                        isNonViable
+                        approveLocked
+                          ? HITL_UNVERIFIED_COPY
+                          : isNonViable
                           ? 'Koridor ini tidak viabel untuk eksekusi langsung'
                           : role === 'GUEST'
                           ? 'Simpan rencana rute dalam sandbox evaluasi tamu'
@@ -635,10 +722,16 @@ function RouteCard({
                     </span>
                   )}
 
+                  {hitlBlocked && role !== 'GUEST' && overrideTactical !== 'HOLD' && (
+                    <span className="text-xs font-mono text-amber-200/90 leading-relaxed">
+                      {HITL_UNVERIFIED_COPY} Hanya HOLD yang diizinkan.
+                    </span>
+                  )}
+
                   <button
                     type="button"
                     onClick={handleExecuteOverride}
-                    disabled={approving || !overrideNotes.trim()}
+                    disabled={approving || !overrideNotes.trim() || (hitlBlocked && overrideTactical !== 'HOLD' && role !== 'GUEST')}
                     className="w-full py-2 rounded-md bg-white hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed text-[#080d14] text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer transition-colors shadow-sm"
                   >
                     <Send className="w-3.5 h-3.5 text-[#080d14]" />
@@ -714,6 +807,18 @@ export function MitigationTab({
       }
       return;
     }
+    // HITL integrity gate (Phase 82): SIMULASI/OFFLINE or evidence-less routes
+    // never POST an Approve/Reroute. HOLD stays allowed (safe action, ledger).
+    // Sandbox 403 path below is unchanged.
+    if (
+      (isSimulatedRoute(route) || !(hasCrisisEvidence(crisis) || hasRouteProof(route))) &&
+      tacticalAction !== 'HOLD'
+    ) {
+      if (onApproveSuccess) {
+        onApproveSuccess(HITL_UNVERIFIED_COPY);
+      }
+      return;
+    }
     setApprovingIdx(idx);
     const opId = user?.name || user?.email || user?.id || 'OP-CHIEF-01';
     try {
@@ -748,8 +853,8 @@ export function MitigationTab({
         const actionLabel = action === 'OVERRIDE' 
           ? 'Override rute tersimpan' 
           : tacticalAction === 'HOLD' 
-            ? 'Instruksi Tahan Armada (HOLD) terkirim' 
-            : 'Rute pengalihan disetujui & dikirimkan ke armada';
+            ? 'Tercatat sebagai HITL pending (HOLD) — belum dikirim ke armada' 
+            : HITL_PENDING_COPY;
         onApproveSuccess(`${actionLabel} (#${idx + 1})!`);
       }
     } catch (err) {
@@ -776,6 +881,8 @@ export function MitigationTab({
   };
 
   const confidenceScore = Math.round((crisis.overall_confidence || 0.91) * 100);
+  // HITL integrity gate input: crisis-level evidence shared by all route cards.
+  const crisisHasEvidence = hasCrisisEvidence(crisis);
 
   // Impact block values come from the agent payload. When the field is absent we
   // state "belum terverifikasi" instead of inventing a headline percentage.
@@ -1075,6 +1182,7 @@ export function MitigationTab({
                           approving={approving}
                           onApprove={(action, tacticalAction, notes) => handleApprove(idx, route, action, tacticalAction, notes)}
                           selectedImpactedVehicle={selectedImpactedVehicle}
+                          crisisHasEvidence={crisisHasEvidence}
                         />
                       );
                 })

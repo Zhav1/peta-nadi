@@ -134,14 +134,22 @@ export interface RouteRecommendation {
   legs?: RouteLeg[];
   color?: string;
   hedging?: {
-    optimal_policy: 'CONTINUE' | 'REROUTE' | 'HOLD' | string;
-    net_savings_idr: number;
-    spoilage_loss_idr: number;
-    cargo_value_idr: number;
-    continue_cost_idr: number;
-    reroute_cost_idr: number;
-    hold_cost_idr: number;
-    recommendation_reason: string;
+    optimal_policy?: 'CONTINUE' | 'REROUTE' | 'HOLD' | string;
+    net_savings_idr?: number;
+    spoilage_loss_idr?: number;
+    cargo_value_idr?: number;
+    continue_cost_idr?: number;
+    reroute_cost_idr?: number;
+    hold_cost_idr?: number;
+    recommendation_reason?: string;
+    // Backend _enrich_routes_with_hedging attaches the full HedgingSolveResponse
+    // (grounded BPJT + Pertamina + 4-tier decay). All fields stay optional so a
+    // missing backend value reads as honest null instead of invented Rp.
+    perishability_tier?: string;
+    decay_rate_per_hour?: number;
+    continue_policy?: { policy?: string; cost_idr?: number; breakdown?: Record<string, number>; explanation?: string; risk_level?: string };
+    reroute_policy?: { policy?: string; cost_idr?: number; breakdown?: Record<string, number>; explanation?: string; risk_level?: string };
+    hold_policy?: { policy?: string; cost_idr?: number; breakdown?: Record<string, number>; explanation?: string; risk_level?: string };
   };
   compliance?: {
     status: 'PASSED' | 'WARNING' | 'HARD_BLOCK' | string;
