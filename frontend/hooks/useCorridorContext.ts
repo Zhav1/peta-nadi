@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { CorridorContext } from '@/lib/types';
+import { api } from '@/lib/api';
 
 const DEFAULT_FALLBACK_CORRIDOR: CorridorContext = {
   corridor_id: 'sumatra_belawan_medan',
@@ -137,14 +138,9 @@ export function useCorridorContext(corridorId: string = 'sumatra_belawan_medan')
 
   const fetchCorridor = useCallback(async () => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const res = await fetch(`${apiUrl}/api/v1/corridor/context?corridor_id=${corridorId}`, {
-        headers: { 'Content-Type': 'application/json' }
-      });
-      if (!res.ok) {
-        throw new Error(`HTTP error ${res.status}`);
-      }
-      const data = await res.json();
+      // Resolve through getBaseUrl() (via the shared api client) so this hook
+      // never points at a stale NEXT_PUBLIC_API_URL or skips the proxy fallback.
+      const data = await api.corridor.context(corridorId);
       const fresh: CorridorContext = { ...data, is_fallback: data.is_fallback === true };
       const activeImpact = activeImpactRef.current;
       setCorridorContext(activeImpact ? applyImpactToContext(fresh, activeImpact) : fresh);

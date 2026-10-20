@@ -95,10 +95,100 @@ export interface CrisisMapProps {
   selectedVehicleId?: string | null;
   onSelectVehicle?: (vehicle: FleetVehicle) => void;
   onCloseVehicle?: () => void;
+  /** Dispatcher tenant view: suppress ambient ROUTE_ESTIMATED projections. */
+  hideEstimatedRoutes?: boolean;
 }
 
 const INITIAL_CENTER: [number, number] = [100.5, 0.5];
 const INITIAL_ZOOM = 6.0;
+
+type SearchItem = GeocodeNode | GeocodeSearchResult;
+
+function normalizeSearchText(value: string | undefined): string {
+  return (value || '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Relevance rank for a search hit (0 = best). Keeps exact names ("Padang")
+ * ahead of unrelated matches that merely contain the query ("Padang Sidempuan"),
+ * which naive substring ordering gets wrong because the gazetteer is not
+ * alphabetically sorted.
+ */
+function scoreSearchItem(query: string, item: SearchItem): number {
+  const q = normalizeSearchText(query);
+  const name = normalizeSearchText(item.name);
+  const display = normalizeSearchText(item.display_name);
+  if (name === q || display === q) return 0;
+  if (name.startsWith(q) || display.startsWith(q)) return 1;
+  if (
+    name.includes(` ${q}`) ||
+    name.endsWith(` ${q}`) ||
+    display.includes(` ${q}`) ||
+    display.endsWith(` ${q}`)
+  ) {
+    return 2;
+  }
+  if (name.includes(q) || display.includes(q)) return 3;
+  return 4;
+}
+
+/** Union of local + live results, de-duplicated and relevance-sorted. */
+function mergeSearchResults(query: string, ...groups: SearchItem[][]): SearchItem[] {
+  const stripParen = (value: string) =>
+    normalizeSearchText(value).replace(/\s*\([^)]*\)\s*$/, '').trim();
+  const isSamePlace = (a: SearchItem, b: SearchItem) => {
+    const nameA = normalizeSearchText(a.name);
+    const nameB = normalizeSearchText(b.name);
+    // Same name, or the same base name with a parenthetical hub label
+    // ("Bukittinggi" vs "Bukittinggi (Sentra Sayur & Cabai Agam)").
+    const sameName = nameA === nameB || stripParen(a.name) === stripParen(b.name);
+    if (!sameName) return false;
+    // Within ~5 km → same place; same-named towns in different kabupaten stay.
+    return Math.abs(a.lat - b.lat) < 0.05 && Math.abs(a.lon - b.lon) < 0.05;
+  };
+  const candidates: Array<{ item: SearchItem; index: number; score: number }> = [];
+  let index = 0;
+  for (const group of groups) {
+    for (const item of group) {
+      candidates.push({ item, index: index++, score: scoreSearchItem(query, item) });
+    }
+  }
+  // Rank first, then de-dupe, so an exact gazetteer name beats a locally
+  // labelled hub variant of the same place ("Bukittinggi" vs "Bukittinggi (...)").
+  candidates.sort((a, b) => a.score - b.score || a.index - b.index);
+
+  const merged: SearchItem[] = [];
+  for (const candidate of candidates) {
+    if (merged.some((existing) => isSamePlace(existing, candidate.item))) continue;
+    merged.push(candidate.item);
+    if (merged.length >= 10) break;
+  }
+  return merged;
+}
+
+/** Honest type badge — never label a port/kabupaten as "Desa". */
+function searchResultBadge(item: SearchItem): string {
+  const type = (item.type || '').toLowerCase();
+  const name = normalizeSearchText(item.name);
+  if (type === 'port' || name.includes('pelabuhan') || name.includes('dermaga')) return 'Pelabuhan';
+  if (type === 'airport' || name.includes('bandara')) return 'Bandara';
+  if (type === 'city') return 'Kota';
+  if (type === 'kecamatan' || type === 'subdistrict' || type === 'municipality') return 'Kecamatan';
+  if (
+    type === 'village' ||
+    type === 'hamlet' ||
+    type === 'suburb' ||
+    type === 'neighbourhood' ||
+    type === 'residential' ||
+    type === 'quarter'
+  ) {
+    return 'Desa';
+  }
+  if (type === 'hub' || type === 'strategic_hub' || type === 'corridor_point') return 'Hub';
+  if (type === 'regency' || type === 'regency_hub' || type === 'county' || type === 'town') return 'Kota/Kab';
+  if (type === 'administrative' || type === 'state' || type === 'province') return 'Wilayah';
+  return 'Titik';
+}
 
 function createGeoJsonCircleRing(center: [number, number], radiusKm: number, points = 64): [number, number][] {
   const [lon, lat] = center;
@@ -169,6 +259,7 @@ export default function CrisisMap({
   selectedVehicleId = null,
   onSelectVehicle,
   onCloseVehicle,
+  hideEstimatedRoutes = false,
 }: CrisisMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   void corridorContext;
@@ -190,6 +281,7 @@ export default function CrisisMap({
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Array<GeocodeNode | GeocodeSearchResult>>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   // Click-to-Pin / Right-Click / Village Context Popup State
@@ -1781,13 +1873,35 @@ export default function CrisisMap({
   }, [demoStage, selectedOriginNode, selectedDestNode]);
 
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchAbortRef = useRef<AbortController | null>(null);
+  const searchSeqRef = useRef(0);
+
+  const cancelPendingSearch = useCallback(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+      searchTimeoutRef.current = null;
+    }
+    if (searchAbortRef.current) {
+      searchAbortRef.current.abort();
+      searchAbortRef.current = null;
+    }
+    searchSeqRef.current += 1;
+  }, []);
+
+  useEffect(() => () => cancelPendingSearch(), [cancelPendingSearch]);
 
   const handleSearchChange = useCallback((query: string) => {
     setSearchQuery(query);
     const q = query.trim().toLowerCase();
 
+    // Cancel any debounce/in-flight request first: otherwise a late response
+    // for a previous query repopulates the dropdown after the user cleared it.
+    cancelPendingSearch();
+
     if (q.length < 2) {
       setSearchResults([]);
+      setSearchError(null);
+      setIsSearching(false);
       setIsSearchOpen(false);
       return;
     }
@@ -1813,29 +1927,33 @@ export default function CrisisMap({
         province: h.province || 'Sumatra',
       }));
 
-    const combinedLocal = [...hubMatches, ...localMatches].slice(0, 8);
-    setSearchResults(combinedLocal);
+    setSearchResults(mergeSearchResults(query, hubMatches, localMatches).slice(0, 8));
+    setSearchError(null);
     setIsSearchOpen(true);
 
-    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    const seq = searchSeqRef.current;
+    const controller = new AbortController();
+    searchAbortRef.current = controller;
+
+    setIsSearching(true);
     searchTimeoutRef.current = setTimeout(async () => {
       try {
-        setIsSearching(true);
-        const res = await api.geocode.search(query.trim());
-        if (res && res.results && res.results.length > 0) {
-          setSearchResults((prev) => {
-            const seen = new Set(prev.map((p) => p.name.toLowerCase()));
-            const extended = res.results.filter((r) => !seen.has(r.name.toLowerCase()));
-            return [...prev, ...extended].slice(0, 10);
-          });
-        }
-      } catch {
-        // quiet fallback
+        const res = await api.geocode.search(query.trim(), controller.signal);
+        if (seq !== searchSeqRef.current) return;
+        const live = res?.results ?? [];
+        setSearchResults((prev) => mergeSearchResults(query, prev, live));
+        setSearchError(null);
+      } catch (err) {
+        if ((err as { name?: string })?.name === 'AbortError' || seq !== searchSeqRef.current) return;
+        // Keep the offline gazetteer hits but say the live lookup failed — never
+        // pretend a partial list is the full result set.
+        const detail = err instanceof Error && err.message ? ` (${err.message})` : '';
+        setSearchError(`Pencarian live gagal${detail} — menampilkan hasil gazetteer lokal saja.`);
       } finally {
-        setIsSearching(false);
+        if (seq === searchSeqRef.current) setIsSearching(false);
       }
     }, 280);
-  }, [hubNodesList]);
+  }, [hubNodesList, cancelPendingSearch]);
 
   const handleSelectSearchResult = useCallback(
     (item: GeocodeNode | GeocodeSearchResult, role: 'origin' | 'dest' | 'focus' = 'focus') => {
@@ -1894,6 +2012,7 @@ export default function CrisisMap({
           onSelectVehicle={onSelectVehicle}
           selectedVehicleId={selectedVehicleId}
           onCloseVehicle={onCloseVehicle}
+          hideEstimatedRoutes={hideEstimatedRoutes}
         />
       )}
 
@@ -1927,7 +2046,7 @@ export default function CrisisMap({
                   onFocus={() => {
                     if (searchQuery.trim().length >= 2) setIsSearchOpen(true);
                   }}
-                  placeholder="Cari desa, kota, atau titik..."
+                  placeholder="Cari desa, kecamatan, kota, atau hub..."
                   className="bg-transparent text-xs text-slate-200 placeholder-slate-500 outline-none w-full font-sans"
                 />
                 {isSearching ? (
@@ -1936,8 +2055,11 @@ export default function CrisisMap({
                   <button
                     type="button"
                     onClick={() => {
+                      cancelPendingSearch();
                       setSearchQuery('');
                       setSearchResults([]);
+                      setSearchError(null);
+                      setIsSearching(false);
                       setIsSearchOpen(false);
                     }}
                     className="text-slate-400 hover:text-white p-0.5 rounded cursor-pointer"
@@ -1947,26 +2069,45 @@ export default function CrisisMap({
                 ) : null}
               </div>
 
-              {isSearchOpen && searchResults.length > 0 && (
+              {isSearchOpen &&
+                searchQuery.trim().length >= 2 &&
+                (searchResults.length > 0 || isSearching || !!searchError) && (
                 <div className="absolute left-0 top-full mt-2 w-80 bg-[#0c1017]/95 backdrop-blur-md border border-[#1c2432] rounded-lg shadow-2xl p-2 text-xs space-y-1.5 max-h-80 overflow-y-auto no-scrollbar z-50 animate-in fade-in duration-150">
                   <div className="font-sans font-medium text-[11px] text-slate-400 uppercase tracking-wider px-1 pb-1 border-b border-[#1c2432] flex items-center justify-between">
                     <span>Hasil Temuan Pan-Sumatra</span>
                     <span className="text-slate-500 lowercase">{searchResults.length} titik</span>
                   </div>
 
+                  {isSearching && (
+                    <div className="px-2 py-2 text-[11px] text-slate-400 flex items-center gap-2">
+                      <Loader2 className="w-3 h-3 text-cyan-400 animate-spin shrink-0" />
+                      <span>Mencari gazetteer desa / kecamatan / kota…</span>
+                    </div>
+                  )}
+
+                  {searchError && (
+                    <div className="px-2 py-2 text-[10px] text-amber-300 leading-snug space-y-1.5">
+                      <p>{searchError}</p>
+                      <button
+                        type="button"
+                        onClick={() => handleSearchChange(searchQuery)}
+                        className="cursor-pointer px-2 py-0.5 rounded bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-200 text-[10px] font-semibold transition-colors"
+                      >
+                        Coba lagi
+                      </button>
+                    </div>
+                  )}
+
+                  {!isSearching && !searchError && searchResults.length === 0 && (
+                    <div className="px-2 py-3 text-[11px] text-slate-400 leading-snug">
+                      Tidak ada hasil untuk “{searchQuery.trim()}”. Coba nama desa, kecamatan, kota, atau hub lain.
+                    </div>
+                  )}
+
                   {searchResults.map((item, idx) => {
                     const key = `${item.name}-${idx}`;
                     const subtitle = `${item.province || 'Sumatra'}${item.kabupaten ? ' • ' + item.kabupaten : ''}`;
-                    const badgeType =
-                      item.type === 'city'
-                        ? 'Kota'
-                        : item.type === 'port'
-                        ? 'Pelabuhan'
-                        : item.type === 'airport'
-                        ? 'Bandara'
-                        : item.type === 'kecamatan'
-                        ? 'Kecamatan'
-                        : 'Desa';
+                    const badgeType = searchResultBadge(item);
                     return (
                       <div
                         key={key}

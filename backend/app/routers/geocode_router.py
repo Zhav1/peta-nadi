@@ -6,7 +6,7 @@ high-precision ADM boundaries, and OpenStreetMap Nominatim universal village
 """
 import math
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 import httpx
 from fastapi import APIRouter, Query, HTTPException
 
@@ -21,13 +21,90 @@ router = APIRouter(
     tags=["Universal Geocoding & Gazetteers"],
 )
 
-# In-memory LRU cache to avoid excessive external HTTP calls
+# In-memory LRU-ish cache to avoid excessive external HTTP calls.
+# Bounded so a long-running Render instance cannot grow without limit.
 _IN_MEMORY_SEARCH_CACHE: Dict[str, List[Dict[str, Any]]] = {}
 _IN_MEMORY_REVERSE_CACHE: Dict[str, Dict[str, Any]] = {}
+_IN_MEMORY_CACHE_LIMIT = 512
+
+# Administrative prefixes users type but gazetteer slugs usually omit.
+_ADMIN_PREFIXES = (
+    "kecamatan ",
+    "kec. ",
+    "kec ",
+    "kelurahan ",
+    "kel. ",
+    "kel ",
+    "desa ",
+    "gampong ",
+    "nagari ",
+    "pekon ",
+    "kabupaten ",
+    "kab. ",
+    "kab ",
+    "kota ",
+    "kotamadya ",
+    "kodya ",
+)
 
 NOMINATIM_HEADERS = {
     "User-Agent": "PreHubSumatraLogistics/1.0 (Live Fleet Pilot Sumatra; contact@pidi.id)"
 }
+
+
+def _remember(cache: Dict[str, Any], cache_key: str, value: Any) -> None:
+    """Insert into a bounded in-memory cache, evicting the oldest entry."""
+    cache[cache_key] = value
+    while len(cache) > _IN_MEMORY_CACHE_LIMIT:
+        cache.pop(next(iter(cache)))
+
+
+def _normalize_query(text: str) -> str:
+    """Lowercase + collapse whitespace + strip `kecamatan/kota/desa` prefixes."""
+    value = " ".join((text or "").lower().split())
+    changed = True
+    while changed:
+        changed = False
+        for prefix in _ADMIN_PREFIXES:
+            if value.startswith(prefix) and len(value.strip()) > len(prefix):
+                value = value[len(prefix):].strip()
+                changed = True
+    return value
+
+
+def _match_score(slug: str, query: str) -> Optional[int]:
+    """Rank a gazetteer slug against the normalized query (lower is better).
+
+    Exact matches must win: naive substring order returned Padang Sidempuan
+    ahead of Kota Padang for the query `padang`, because dict order is arbitrary.
+    """
+    if not query:
+        return None
+    s = slug.lower()
+    if s == query:
+        return 0
+    if s.startswith(query):
+        return 1
+    if f" {query}" in s:
+        return 2
+    if query in s:
+        return 3
+    return None
+
+
+def _gazetteer_result_type(data: Dict[str, Any]) -> str:
+    """Honest structural type for a gazetteer hit (used for UI badges)."""
+    precision = data.get("precision_tier")
+    if precision == "corridor_point":
+        return "hub"
+    if precision == "kecamatan_kelurahan":
+        return "kecamatan"
+    tier = data.get("tier", 2)
+    if tier == 1:
+        return "kecamatan"
+    if tier == 2:
+        return "regency"
+    return "hub"
 
 
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -49,7 +126,11 @@ async def get_gazetteer_nodes() -> Dict[str, Any]:
     try:
         nodes = []
         for slug, data in PAN_SUMATRA_GAZETTEER.items():
-            coords = data.get("coords", (3.5952, 98.6722))
+            # Never fabricate a Medan centroid for a node without coordinates.
+            coords = data.get("coords")
+            if not coords or len(coords) != 2:
+                logger.warning("Gazetteer node '%s' missing coords; skipping", slug)
+                continue
             nodes.append({
                 "id": slug,
                 "name": slug.title(),
@@ -58,6 +139,7 @@ async def get_gazetteer_nodes() -> Dict[str, Any]:
                 "province": data.get("province", "Sumatera"),
                 "corridor": data.get("corridor", "Jalinsum Arteri"),
                 "tier": "regency",
+                "precision_tier": data.get("precision_tier"),
             })
 
         boundaries = get_adm_boundaries()
@@ -101,11 +183,11 @@ async def search_places(
     r = get_redis()
     if r is not None:
         try:
-            cached_val = r.get(f"lrip:geocode:search:{cache_key}")
+            cached_val = r.get(f"lrip:geocode:search:v2:{cache_key}")
             if cached_val:
                 import json
                 parsed = json.loads(cached_val)
-                _IN_MEMORY_SEARCH_CACHE[cache_key] = parsed
+                _remember(_IN_MEMORY_SEARCH_CACHE, cache_key, parsed)
                 return {
                     "status": "success",
                     "query": query_clean,
@@ -119,28 +201,42 @@ async def search_places(
     results: List[Dict[str, Any]] = []
     seen_coords: List[Tuple[float, float]] = []
 
-    # 3. Match against PAN_SUMATRA_GAZETTEER
-    q_lower = query_clean.lower()
+    # 3. Match against PAN_SUMATRA_GAZETTEER (exact > prefix > word > substring).
+    query_norm = _normalize_query(query_clean) or query_clean.lower()
+    scored: List[Tuple[int, int, int, str, Dict[str, Any]]] = []
     for slug, data in PAN_SUMATRA_GAZETTEER.items():
-        if q_lower in slug or slug in q_lower:
-            coords = data["coords"]
-            results.append({
-                "name": slug.title(),
-                "display_name": f"{slug.title()}, {data['province']}, Indonesia",
-                "lat": coords[0],
-                "lon": coords[1],
-                "type": "regency_hub",
-                "province": data.get("province"),
-                "kabupaten": slug.title(),
-                "kecamatan": None,
-                "source": "PAN_SUMATRA_GAZETTEER"
-            })
-            seen_coords.append((coords[0], coords[1]))
-            if len(results) >= limit:
-                break
+        score = _match_score(slug, query_norm)
+        if score is None:
+            continue
+        scored.append((score, data.get("tier", 2), len(slug), slug, data))
 
-    # 4. Query OpenStreetMap Nominatim for villages, gampong, nagari, subdistricts
-    if len(results) < limit:
+    scored.sort(key=lambda row: (row[0], row[1], row[2], row[3]))
+    exact_gazetteer_hit = bool(scored) and scored[0][0] == 0
+    for _score, _tier, _len, slug, data in scored:
+        if len(results) >= limit:
+            break
+        coords = data["coords"]
+        # Collapse alias duplicates (e.g. "padangsidimpuan" / "padang sidempuan").
+        if any(haversine_km(coords[0], coords[1], sc[0], sc[1]) < 1.5 for sc in seen_coords):
+            continue
+        results.append({
+            "name": slug.title(),
+            "display_name": f"{slug.title()}, {data['province']}, Indonesia",
+            "lat": coords[0],
+            "lon": coords[1],
+            "type": _gazetteer_result_type(data),
+            "province": data.get("province"),
+            "kabupaten": slug.title(),
+            "kecamatan": None,
+            "source": "PAN_SUMATRA_GAZETTEER"
+        })
+        seen_coords.append((coords[0], coords[1]))
+
+    # 4. Query OpenStreetMap Nominatim for villages, gampong, nagari, subdistricts.
+    # Skip the external round-trip when the gazetteer already has an exact match
+    # (kota/hub queries): SPEC is gazetteer-first, and Nominatim adds seconds of
+    # latency to every keystroke search for no extra precision on an exact node.
+    if len(results) < limit and not exact_gazetteer_hit:
         try:
             osm_url = "https://nominatim.openstreetmap.org/search"
             params = {
@@ -199,15 +295,19 @@ async def search_places(
         except Exception as e:
             logger.warning(f"Nominatim search query exception: {e}")
 
-    # Cache results (both in-memory and Redis)
-    _IN_MEMORY_SEARCH_CACHE[cache_key] = results
-    if r is not None and results:
-        try:
-            import json
-            r.set(f"lrip:geocode:search:{cache_key}", json.dumps(results), ex=86400)
-        except Exception:
-            pass
+    # Cache only non-empty hits: caching an empty list after a transient
+    # Nominatim failure would pin "no results" for the process lifetime.
+    if results:
+        _remember(_IN_MEMORY_SEARCH_CACHE, cache_key, results)
+        if r is not None:
+            try:
+                import json
+                r.set(f"lrip:geocode:search:v2:{cache_key}", json.dumps(results), ex=86400)
+            except Exception:
+                pass
 
+    # NOTE: on a total miss we return an honest empty list — never a Medan or
+    # province centroid as a fabricated "best guess".
     return {
         "status": "success",
         "query": query_clean,
@@ -244,7 +344,7 @@ async def reverse_geocode(
             if cached_val:
                 import json
                 parsed = json.loads(cached_val)
-                _IN_MEMORY_REVERSE_CACHE[cache_key] = parsed
+                _remember(_IN_MEMORY_REVERSE_CACHE, cache_key, parsed)
                 return {
                     "status": "success",
                     "cached": True,
@@ -269,7 +369,7 @@ async def reverse_geocode(
                 "village": None,
                 "source": "PAN_SUMATRA_GAZETTEER"
             }
-            _IN_MEMORY_REVERSE_CACHE[cache_key] = info
+            _remember(_IN_MEMORY_REVERSE_CACHE, cache_key, info)
             return {"status": "success", "cached": False, **info}
 
     # 4. OSM Nominatim reverse geocode
@@ -320,7 +420,7 @@ async def reverse_geocode(
     except Exception as e:
         logger.warning(f"Reverse geocode lookup exception for ({lat}, {lon}): {e}")
 
-    _IN_MEMORY_REVERSE_CACHE[cache_key] = info
+    _remember(_IN_MEMORY_REVERSE_CACHE, cache_key, info)
     if r is not None:
         try:
             import json

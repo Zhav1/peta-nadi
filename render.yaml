@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: prehub-backend
+    name: peta-nadi
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
     dockerContext: .

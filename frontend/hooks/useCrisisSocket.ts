@@ -1,8 +1,7 @@
 'use client';
 import { useEffect, useRef, useCallback } from 'react';
 import type { WsEvent } from '@/lib/types';
-
-const WS_BASE = process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:8000';
+import { getWsBaseUrl } from '@/lib/baseUrl';
 
 export function useCrisisSocket(
   crisisId: string | null,
@@ -16,7 +15,9 @@ export function useCrisisSocket(
 
   const connect = useCallback(() => {
     if (!crisisId) return;
-    const ws = new WebSocket(`${WS_BASE}/ws/crisis/${crisisId}`);
+    // Resolved per connect() so the socket follows the canonical backend host
+    // (https -> wss) instead of a hardcoded localhost fallback.
+    const ws = new WebSocket(`${getWsBaseUrl()}/ws/crisis/${crisisId}`);
     socketRef.current = ws;
 
     ws.onopen = () => {

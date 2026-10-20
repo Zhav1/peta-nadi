@@ -18,6 +18,7 @@ from app.db.local_storage import (
     init_db,
     list_custom_vehicles,
     delete_custom_vehicle,
+    delete_truck_asset,
     get_latest_telemetry_ping,
 )
 
@@ -43,9 +44,17 @@ def setup_and_teardown():
     ]
     for vid in test_vids:
         delete_custom_vehicle(vid)
+        try:
+            delete_truck_asset(vid)
+        except Exception:
+            pass
     yield
     for vid in test_vids:
         delete_custom_vehicle(vid)
+        try:
+            delete_truck_asset(vid)
+        except Exception:
+            pass
 
 
 def test_manifest_template_endpoint():
@@ -259,6 +268,118 @@ def test_cold_chain_excursion_evaluation_on_custom_fleet():
     unit = next((v for v in unified if v["vehicle_id"] == "TEST-COLD-01"), None)
     assert unit is not None
     assert unit["cold_chain_status"] == "WARNING_EXCURSION"
+
+
+def test_registered_truck_visible_to_owning_dispatcher():
+    """
+    Regression for issue #2: a truck onboarded via /fleet/register must carry the
+    dispatcher's JWT company_id claim and show up in /fleet/vehicles for that
+    dispatcher, while staying invisible to other tenants and never leaking the
+    macro corridor fleet into a dispatcher view.
+    """
+    token = create_guest_token(role=ROLE_DISPATCHER, company_id="pos_logistik")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    payload = {
+        "vehicle_id": "TEST-TRK-01",
+        "name": "Truk Tenant Baru 01",
+        "modality": "truck",
+        "cargo": "12 Ton Cabai Merah",
+        "origin": "Kabanjahe (Karo)",
+        "destination": "Pasar Induk Lau Cih Medan",
+        "speed_kmh": 55.0,
+        "tracking_mode": "LIVE_GPS",
+    }
+    reg = client.post("/api/v1/fleet/register", json=payload, headers=headers)
+    assert reg.status_code == 200
+    saved = reg.json()["vehicles"][0]
+    assert saved["company_id"] == "pos_logistik"
+    assert saved["tracking_mode"] == "LIVE_GPS"
+
+    res = client.get("/api/v1/fleet/vehicles", headers=headers)
+    assert res.status_code == 200
+    data = res.json()
+    ids = [v["vehicle_id"] for v in data["vehicles"]]
+    assert "TEST-TRK-01" in ids
+    unit = next(v for v in data["vehicles"] if v["vehicle_id"] == "TEST-TRK-01")
+    assert unit["company_id"] == "pos_logistik"
+    assert unit["is_tenant_asset"] is True
+    # No macro/mock assets inside a dispatcher view
+    assert all(v.get("is_tenant_asset") is True for v in data["vehicles"])
+    assert all(v.get("company_id") == "pos_logistik" for v in data["vehicles"])
+
+    # A different tenant must not see it
+    other_token = create_guest_token(role=ROLE_DISPATCHER, company_id="jne_sumut")
+    other = client.get(
+        "/api/v1/fleet/vehicles", headers={"Authorization": f"Bearer {other_token}"}
+    )
+    assert other.status_code == 200
+    assert "TEST-TRK-01" not in [v["vehicle_id"] for v in other.json()["vehicles"]]
+
+
+def test_registered_estimated_truck_still_listed_for_owner():
+    """ROUTE_ESTIMATED tenant assets stay visible to their owner (flagged, not dropped)."""
+    token = create_guest_token(role=ROLE_DISPATCHER, company_id="pos_logistik")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    payload = {
+        "vehicle_id": "TEST-TRK-02",
+        "name": "Truk Estimasi 02",
+        "modality": "truck",
+        "origin": "Medan",
+        "destination": "Binjai",
+        "tracking_mode": "ROUTE_ESTIMATED",
+        "departure_time": "2026-01-01T08:00",
+    }
+    reg = client.post("/api/v1/fleet/register", json=payload, headers=headers)
+    assert reg.status_code == 200
+
+    data = client.get("/api/v1/fleet/vehicles", headers=headers).json()
+    unit = next((v for v in data["vehicles"] if v["vehicle_id"] == "TEST-TRK-02"), None)
+    assert unit is not None
+    assert unit["tracking_mode"] == "ROUTE_ESTIMATED"
+    assert unit["company_id"] == "pos_logistik"
+
+
+def test_master_truck_asset_appears_in_owning_dispatcher_fleet():
+    """
+    Issue #2 bridge: trucks onboarded through the truck-asset master (truck_assets)
+    must still resolve into the owning dispatcher's fleet as a PROYEKSI tenant unit,
+    even before any GPS fix exists.
+    """
+    token = create_guest_token(role=ROLE_DISPATCHER, company_id="pos_logistik")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    created = client.post(
+        "/api/v1/fleet/trucks",
+        json={
+            "truck_id": "TEST-TRK-03",
+            "name": "Truk Master 03",
+            "vin": "VIN-TEST-03",
+            "vehicle_golongan": "GOL_III",
+            "driver_name": "Sabar Ginting",
+        },
+        headers=headers,
+    )
+    assert created.status_code in (200, 201), created.text
+    assert created.json()["company_id"] == "pos_logistik"
+
+    data = client.get("/api/v1/fleet/vehicles", headers=headers).json()
+    unit = next((v for v in data["vehicles"] if v["vehicle_id"] == "TEST-TRK-03"), None)
+    assert unit is not None
+    assert unit["company_id"] == "pos_logistik"
+    assert unit["is_tenant_asset"] is True
+    assert unit["tracking_mode"] == "ROUTE_ESTIMATED"
+
+    # Other tenants must not see this master asset
+    other_token = create_guest_token(role=ROLE_DISPATCHER, company_id="jne_sumut")
+    other_ids = [
+        v["vehicle_id"]
+        for v in client.get(
+            "/api/v1/fleet/vehicles", headers={"Authorization": f"Bearer {other_token}"}
+        ).json()["vehicles"]
+    ]
+    assert "TEST-TRK-03" not in other_ids
 
 
 def test_custom_vehicle_listing_and_deletion():

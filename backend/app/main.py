@@ -21,7 +21,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.routers import health, incidents, agent_router, approvals, demo_router, commodity_router, corridor_router, routing_router, vehicles_router, news_router, outcomes_router, evaluation_router, auth_router, fleet_ingest_router, intermodal_router, geocode_router
+from app.routers import health, incidents, agent_router, approvals, demo_router, commodity_router, corridor_router, routing_router, vehicles_router, news_router, outcomes_router, evaluation_router, auth_router, fleet_ingest_router, intermodal_router, geocode_router, travels_router, erp_router
 from app.services.redis_client import get_redis, close_redis
 
 settings = get_settings()
@@ -258,6 +258,8 @@ app.include_router(outcomes_router.router, prefix="/api/v1")
 app.include_router(evaluation_router.router, prefix="/api/v1")
 app.include_router(auth_router.router, prefix="/api/v1")
 app.include_router(fleet_ingest_router.router, prefix="/api/v1")
+app.include_router(travels_router.router, prefix="/api/v1")
+app.include_router(erp_router.router, prefix="/api/v1")
 app.include_router(intermodal_router.router, prefix="/api/v1")
 app.include_router(geocode_router.router, prefix="/api/v1")
 

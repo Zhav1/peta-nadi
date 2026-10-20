@@ -9,7 +9,7 @@ from typing import Optional, Dict, Any
 import logging
 
 from app.schemas.fleet import FleetTelemetryListResponse
-from app.services.telemetry_service import telemetry_service, MASTER_FLEET_DEFINITIONS
+from app.services.telemetry_service import telemetry_service, MASTER_FLEET_DEFINITIONS, matches_tenant
 from app.auth.supabase_auth import get_optional_user, UserSession, ROLE_DISPATCHER
 
 router = APIRouter(tags=["fleet"])
@@ -30,27 +30,56 @@ async def get_active_fleet(
     """
     Returns active food logistics fleet with dynamic positions, transponder metadata,
     and route geometries across Pan-Sumatra strategic corridors.
-    Enforces company tenancy for dispatchers while allowing macro overview for regulators and guests.
+
+    Tenancy contract:
+      - DISPATCHER: strictly scoped to the JWT ``company_id`` claim and only to
+        assets that belong to that tenant. The ?company_id= query can never widen
+        the claim. A dispatcher with no claim gets an honest empty fleet instead of
+        the macro/demo corridor view.
+      - REGULATOR / GUEST: full macro corridor view (situational awareness).
     """
-    # Determine effective company filter: explicit query overrides, otherwise fallback to dispatcher claim
-    effective_company = company_id
-    if not effective_company and user and user.role == ROLE_DISPATCHER and user.company_id:
+    is_dispatcher = bool(user and user.role == ROLE_DISPATCHER)
+
+    if is_dispatcher:
+        # Never trust a query param to widen a tenant boundary.
         effective_company = user.company_id
+        tenant_only = True
+    else:
+        effective_company = company_id
+        tenant_only = False
+
+    if is_dispatcher and not effective_company:
+        logger.warning(
+            "Dispatcher session without company_id claim requested fleet; returning honest empty fleet."
+        )
+        empty_counts = {"all": 0, "truck": 0, "maritime": 0, "air": 0}
+        return FleetTelemetryListResponse(
+            status="success",
+            total_vehicles=0,
+            modality_counts=empty_counts,
+            updated_at=datetime.now(timezone.utc).isoformat(),
+            vehicles=[],
+        )
+
+    org_name = user.org_name if is_dispatcher and user else None
 
     vehicles = telemetry_service.get_unified_fleet(
         modality=modality,
         status=status,
-        company_id=effective_company
+        company_id=effective_company,
+        org_name=org_name,
+        tenant_only=tenant_only,
     )
-    all_units = telemetry_service.get_unified_fleet(company_id=effective_company)
+    all_units = telemetry_service.get_unified_fleet(
+        company_id=effective_company,
+        org_name=org_name,
+        tenant_only=tenant_only,
+    )
 
     # Tag tenant-owned assets vs macro situational awareness assets
     for v in vehicles:
         if effective_company:
-            v["is_tenant_asset"] = (
-                v.get("company_id") == effective_company or
-                v.get("organization_id") == effective_company
-            )
+            v["is_tenant_asset"] = matches_tenant(v, effective_company, org_name)
         else:
             v["is_tenant_asset"] = True
 

@@ -103,6 +103,12 @@ PERTAMINA_FUEL_BASE_RATES: Dict[str, float] = {
     "pertamina_dex": 15100.0
 }
 
+# Shared cost-model constants. Single source of truth for both the hedging solver
+# and the travel/rit ledger — never duplicate these literals in routers or UI.
+TRUCK_FUEL_CONSUMPTION_KM_PER_LITER = 3.5  # diesel freight truck, km per liter
+DRIVER_OVERTIME_HOURLY_IDR = 50000.0       # IDR / hour driver overtime
+DEPOT_HOURLY_FEE_IDR = 35000.0             # IDR / hour safe staging + depot security
+
 # 4-Tier Perishability Model Configuration
 PERISHABILITY_TIERS: Dict[str, Dict[str, Any]] = {
     "ULTRA_PERISHABLE": {
@@ -138,6 +144,18 @@ PERISHABILITY_TIERS: Dict[str, Dict[str, Any]] = {
         "default_price_per_kg": 14000.0
     }
 }
+
+
+def get_effective_fuel_rate(fuel_type: str, inflation_shock_factor: float = 0.0) -> float:
+    """Pertamina base rate modulated by an explicit inflation shock factor."""
+    base_fuel_rate = PERTAMINA_FUEL_BASE_RATES.get((fuel_type or "biosolar").lower(), 6800.0)
+    return base_fuel_rate * (1.0 + max(0.0, float(inflation_shock_factor or 0.0)))
+
+
+def get_spoilage_loss(cargo_value_idr: float, delta_per_hour: float, delay_hours: float) -> float:
+    """Exponential spoilage decay: CargoValue * (1 - e^(-delta * t))."""
+    delay = max(0.0, float(delay_hours or 0.0))
+    return float(cargo_value_idr) * (1.0 - math.exp(-float(delta_per_hour) * delay))
 
 
 class SpoilageHedgingService:
@@ -196,14 +214,13 @@ class SpoilageHedgingService:
         cargo_value_idr = cargo_weight_kg * price_per_kg
 
         # 2. Fuel Rate Modulated by Inflation Shock
-        base_fuel_rate = PERTAMINA_FUEL_BASE_RATES.get(req.fuel_type.lower(), 6800.0)
-        effective_fuel_rate = base_fuel_rate * (1.0 + max(0.0, inflation_shock_factor))
-        fuel_consumption_km_per_liter = 3.5 # Standard diesel freight truck consumption
+        effective_fuel_rate = get_effective_fuel_rate(req.fuel_type, inflation_shock_factor)
+        fuel_consumption_km_per_liter = TRUCK_FUEL_CONSUMPTION_KM_PER_LITER
 
         # 3. Spoilage Value Loss Calculation (Exponential Decay)
         # ValueLoss(t) = CargoValue * (1 - e^(-delta * t))
         delay_hours = max(0.0, req.disruption_delay_hours)
-        spoilage_loss_idr = cargo_value_idr * (1.0 - math.exp(-delta * delay_hours))
+        spoilage_loss_idr = get_spoilage_loss(cargo_value_idr, delta, delay_hours)
 
         # ----------------------------------------------------
         # Policy 1: CONTINUE (Risk Exposure)
@@ -237,7 +254,7 @@ class SpoilageHedgingService:
         detour_fuel_liters = req.detour_distance_km / fuel_consumption_km_per_liter
         reroute_fuel_cost = detour_fuel_liters * effective_fuel_rate
         reroute_toll_cost = self.get_bpjt_toll_cost(req.toll_segments, req.vehicle_golongan)
-        driver_overtime_hourly_wage = 50000.0 # IDR 50.000 / jam lembur sopir
+        driver_overtime_hourly_wage = DRIVER_OVERTIME_HOURLY_IDR
         reroute_labor_cost = req.detour_time_hours * driver_overtime_hourly_wage
 
         cost_reroute = reroute_fuel_cost + reroute_toll_cost + reroute_labor_cost
@@ -264,14 +281,14 @@ class SpoilageHedgingService:
         # Cost = StagingWaitHours * (DepotFee + ReeferDiesel)
         # ----------------------------------------------------
         hold_hours = max(1.0, req.hold_wait_hours)
-        depot_hourly_fee = 35000.0 # IDR 35.000 / jam parkir aman & keamanan depo
+        depot_hourly_fee = DEPOT_HOURLY_FEE_IDR
         hold_depot_cost = hold_hours * depot_hourly_fee
         hold_reefer_cost = hold_hours * tier_info["genset_cost_per_hour"]
         
         # In hold, small spoilage decay still occurs if non-reefer produce
         hold_spoilage_decay = 0.0
         if not tier_info["requires_reefer"]:
-            hold_spoilage_decay = cargo_value_idr * (1.0 - math.exp(-delta * (hold_hours * 0.5)))
+            hold_spoilage_decay = get_spoilage_loss(cargo_value_idr, delta, hold_hours * 0.5)
 
         cost_hold = hold_depot_cost + hold_reefer_cost + hold_spoilage_decay
 

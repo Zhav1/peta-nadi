@@ -53,6 +53,7 @@ import type { CrisisState, WsEvent, CrisisType, Severity, RouteRecommendation, D
 import { useAuth } from '@/lib/authContext';
 import { AuthModal } from '@/components/auth/AuthModal';
 import { FleetOnboardingModal } from '@/components/fleet/FleetOnboardingModal';
+import { TenantFleetRoster } from '@/components/fleet/TenantFleetRoster';
 import { useCrisisSimulationStream } from '@/hooks/useCrisisSimulationStream';
 
 import { TopNavTelemetry } from '@/components/dashboard/TopNavTelemetry';
@@ -340,6 +341,15 @@ export default function DashboardClient() {
     customCount: customFleetCount,
     isSimulationMode: isFleetSimMode,
     setIsSimulationMode: setIsFleetSimMode,
+    isLoading: isFleetLoading,
+    error: fleetError,
+    isDispatcher: isDispatcherFleetView,
+    isTenantScoped: isFleetTenantScoped,
+    companyId: fleetCompanyId,
+    liveTenantVehicles,
+    tenantVehicles: tenantFleetVehicles,
+    tenantAssetCount: tenantFleetAssetCount,
+    canToggleSimulation: canToggleFleetSimulation,
   } = useFleetVehicles();
   const [isOnboardingModalOpen, setIsOnboardingModalOpen] = useState(false);
   const [selectedCrisisId, setSelectedCrisisId] = useState<string | null>(null);
@@ -441,6 +451,22 @@ export default function DashboardClient() {
   const handleCloseVehicle = useCallback(() => {
     setSelectedVehicle(null);
   }, []);
+
+  // Dispatcher tenant view (issue #2): the map draws LIVE_GPS tenant units only.
+  // An explicitly inspected PROYEKSI unit is injected into the layer so it can be
+  // framed and inspected, but it never becomes ambient orange corridor noise.
+  const isDispatcherWorkspace = role === 'DISPATCHER';
+  const selectedIsProjected = selectedVehicle?.tracking_mode === 'ROUTE_ESTIMATED';
+  const mapFleetVehicles = useMemo(() => {
+    if (!selectedIsProjected || !selectedVehicle) return activeFleetVehicles;
+    if (activeFleetVehicles.some((v) => v.vehicle_id === selectedVehicle.vehicle_id)) {
+      return activeFleetVehicles;
+    }
+    return [...activeFleetVehicles, selectedVehicle];
+  }, [activeFleetVehicles, selectedIsProjected, selectedVehicle]);
+
+  // Counts follow what is actually drawable for the current role.
+  const fleetCountVehicles = isDispatcherWorkspace ? liveTenantVehicles : activeFleetVehicles;
 
   const isRightInspectorActive = (isSidebarOpen && !!selectedCrisis) || !!selectedVehicle;
 
@@ -2140,7 +2166,11 @@ export default function DashboardClient() {
       {/* Self-Serve Fleet Onboarding Modal */}
       <FleetOnboardingModal
         isOpen={isOnboardingModalOpen}
-        onClose={() => setIsOnboardingModalOpen(false)}
+        onClose={() => {
+          setIsOnboardingModalOpen(false);
+          // Pick up a truck asset that was saved without completing a rit yet.
+          refetchFleet();
+        }}
         onSuccess={() => {
           refetchFleet();
           setToast({
@@ -2149,6 +2179,8 @@ export default function DashboardClient() {
           });
         }}
         userRole={role}
+        companyId={user?.company_id}
+        companyName={user?.org_name}
       />
 
       {/* Toast Notification Container */}
@@ -2572,7 +2604,7 @@ export default function DashboardClient() {
                 }
                 activeRouteIdx={activeRouteIdx}
                 fireHotspots={[]}
-                activeFleet={activeFleetVehicles}
+                activeFleet={mapFleetVehicles}
                 demoStage={demoState.isRunning ? demoState.stage : null}
                 disasterZones={combinedDisasterZones}
                 onZoneClick={handleZoneClick}
@@ -2604,6 +2636,7 @@ export default function DashboardClient() {
                 onResetCorridorVisibility={handleResetCorridors}
                 hiddenRouteIndices={hiddenRouteIndices}
                 onHideRoute={handleHideRoute}
+                hideEstimatedRoutes={isDispatcherWorkspace}
                 topNavTelemetrySlot={
                   <TopNavTelemetry
                     routingInfo={isRoutingLoading ? null : routingInfo}
@@ -2634,10 +2667,10 @@ export default function DashboardClient() {
                   !(isSidebarOpen && selectedCrisis) ? (
                     <div className="flex items-center gap-1 p-1 rounded-lg bg-[#0c1017]/90 backdrop-blur-md border border-[#1c2432] shadow-xl overflow-x-auto no-scrollbar max-w-[calc(100vw-2rem)]">
                       {[
-                        { id: 'all', label: 'SEMUA', count: activeFleetVehicles.length, icon: null },
-                        { id: 'truck', label: 'TRUK', count: activeFleetVehicles.filter((v) => v.modality === 'truck').length, icon: Truck },
-                        { id: 'maritime', label: 'KAPAL', count: activeFleetVehicles.filter((v) => v.modality === 'maritime').length, icon: Anchor },
-                        { id: 'air', label: 'UDARA', count: activeFleetVehicles.filter((v) => v.modality === 'air').length, icon: Plane },
+                        { id: 'all', label: 'SEMUA', count: fleetCountVehicles.length, icon: null },
+                        { id: 'truck', label: 'TRUK', count: fleetCountVehicles.filter((v) => v.modality === 'truck').length, icon: Truck },
+                        { id: 'maritime', label: 'KAPAL', count: fleetCountVehicles.filter((v) => v.modality === 'maritime').length, icon: Anchor },
+                        { id: 'air', label: 'UDARA', count: fleetCountVehicles.filter((v) => v.modality === 'air').length, icon: Plane },
                       ].map((m) => {
                         const IconComp = m.icon;
                         return (
@@ -2669,35 +2702,51 @@ export default function DashboardClient() {
                         );
                       })}
                       <div className="w-[1px] h-4 bg-white/10 mx-1 shrink-0" />
-                      <button
-                        type="button"
-                        id="fleet-sim-toggle-btn"
-                        onClick={() => {
-                          const nextMode = !isFleetSimMode;
-                          setIsFleetSimMode(nextMode);
-                          setToast({
-                            message: nextMode
-                              ? 'Filter Armada: Semua Armada Live & Rute Terestimasi'
-                              : 'Filter Armada: Hanya Transponder (AIS/ADS-B) & GPS Aktif',
-                            type: 'info',
-                          });
-                        }}
-                        className={`cursor-pointer px-2.5 py-1 rounded-md text-xs font-mono font-medium transition-all flex items-center gap-1.5 shrink-0 ${isFleetSimMode
-                            ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40 font-bold'
-                            : 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 font-bold'
-                          }`}
-                        title="Mode Telemetri:&#10;• Cyan [Hanya GPS & Transponder Live]: Dispatch taktis instan berbasis sinyal fisik AIS & GPS satelit.&#10;• Amber [Live AIS/ADS-B + Rute Estimasi]: Perencanaan kapasitas makro koridor logistik pangan."
-                      >
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full ${isFleetSimMode ? 'bg-amber-400 animate-pulse' : 'bg-cyan-400 animate-pulse'
+                      {canToggleFleetSimulation ? (
+                        <button
+                          type="button"
+                          id="fleet-sim-toggle-btn"
+                          onClick={() => {
+                            const nextMode = !isFleetSimMode;
+                            setIsFleetSimMode(nextMode);
+                            setToast({
+                              message: nextMode
+                                ? 'Filter Armada: Semua Armada Live & Rute Terestimasi'
+                                : 'Filter Armada: Hanya Transponder (AIS/ADS-B) & GPS Aktif',
+                              type: 'info',
+                            });
+                          }}
+                          className={`cursor-pointer px-2.5 py-1 rounded-md text-xs font-mono font-medium transition-all flex items-center gap-1.5 shrink-0 ${isFleetSimMode
+                              ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40 font-bold'
+                              : 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 font-bold'
                             }`}
-                        />
-                        <span>
-                          {isFleetSimMode
-                            ? `Live AIS/ADS-B + Rute Estimasi (${activeFleetVehicles.length})`
-                            : `Hanya GPS & Transponder Live (${activeFleetVehicles.length})`}
+                          title="Mode Telemetri:&#10;• Cyan [Hanya GPS & Transponder Live]: Dispatch taktis instan berbasis sinyal fisik AIS & GPS satelit.&#10;• Amber [Live AIS/ADS-B + Rute Estimasi]: Perencanaan kapasitas makro koridor logistik pangan."
+                        >
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${isFleetSimMode ? 'bg-amber-400 animate-pulse' : 'bg-cyan-400 animate-pulse'
+                              }`}
+                          />
+                          <span>
+                            {isFleetSimMode
+                              ? `Live AIS/ADS-B + Rute Estimasi (${fleetCountVehicles.length})`
+                              : `Hanya GPS & Transponder Live (${fleetCountVehicles.length})`}
+                          </span>
+                        </button>
+                      ) : (
+                        <span
+                          id="fleet-tenant-scope-badge"
+                          className="px-2.5 py-1 rounded-md text-xs font-mono font-bold flex items-center gap-1.5 shrink-0 bg-cyan-500/20 text-cyan-300 border border-cyan-400/40"
+                          title="Sesi DISPATCHER: hanya armada tenant Anda dengan GPS live yang ditampilkan. Rute estimasi tersedia lewat panel Armada Tenant (badge PROYEKSI)."
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                          <span>Tenant Live GPS ({fleetCountVehicles.length})</span>
+                          {tenantFleetAssetCount > fleetCountVehicles.length && (
+                            <span className="px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-200 text-[10px] tabular-nums">
+                              {tenantFleetAssetCount - fleetCountVehicles.length} PROYEKSI
+                            </span>
+                          )}
                         </span>
-                      </button>
+                      )}
                     </div>
                   ) : null
                 }
@@ -2712,6 +2761,22 @@ export default function DashboardClient() {
                 }
               />
             </div>
+
+            {/* Dispatcher tenant roster: honest inventory of onboarded assets.
+                LIVE_GPS units drive the map; ROUTE_ESTIMATED units are listed
+                with a PROYEKSI badge and only drawn on click inspection. */}
+            {isDispatcherWorkspace && (
+              <TenantFleetRoster
+                vehicles={tenantFleetVehicles}
+                isLoading={isFleetLoading}
+                error={fleetError}
+                isTenantScoped={isFleetTenantScoped}
+                companyId={fleetCompanyId}
+                selectedVehicleId={selectedVehicle?.vehicle_id ?? null}
+                onSelectVehicle={handleSelectVehicle}
+                onOpenOnboarding={() => setIsOnboardingModalOpen(true)}
+              />
+            )}
 
             {/* Persistent route-computation banner: spinner + elapsed time + Batal */}
             <div className="absolute top-14 left-1/2 -translate-x-1/2 z-40 pointer-events-none px-3">

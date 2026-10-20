@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { CorridorContext, CrisisState, RouteRecommendation, DecisionAction, TacticalManeuver } from '@/lib/types';
+import ERPSavingsPanel from '@/components/dashboard/ERPSavingsPanel';
 
 interface ReportsSectionProps {
   approvalsCount?: number;
@@ -72,6 +73,7 @@ export default function ReportsSection({
   const [healthScore, setHealthScore] = useState<number>(92);
   const [approvalList, setApprovalList] = useState<ApprovalLogItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [reportView, setReportView] = useState<'erp' | 'audit'>('erp');
 
   // Client-side filter states
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -401,7 +403,32 @@ export default function ReportsSection({
 
   return (
     <div className="w-full min-h-full lg:h-full flex flex-col gap-6 pointer-events-auto">
-      
+
+      {/* VIEW TABS: ERP savings vs mitigation audit ledger */}
+      <div className="flex items-center gap-1 bg-[#0c1017] border border-white/10 rounded-lg p-1 shrink-0 w-fit">
+        {[
+          { id: 'erp' as const, label: 'ERP Penghematan' },
+          { id: 'audit' as const, label: 'Catatan Audit Mitigasi' },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setReportView(tab.id)}
+            className={`px-3.5 py-1.5 rounded-md text-xs font-medium transition cursor-pointer whitespace-nowrap ${
+              reportView === tab.id
+                ? 'bg-white text-[#080d14] font-semibold'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {reportView === 'erp' ? (
+        <ERPSavingsPanel />
+      ) : (
+        <>
       {/* TOP KPI ROW */}
       <div className="bg-[#0c1017] border border-white/10 p-5 rounded-xl shadow-xl shrink-0 grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-white/10">
         
@@ -680,6 +707,9 @@ export default function ReportsSection({
         </div>
 
       </div>
+
+        </>
+      )}
 
     </div>
   );

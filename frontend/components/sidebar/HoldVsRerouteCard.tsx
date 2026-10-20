@@ -29,6 +29,16 @@ export function HoldVsRerouteCard({
 }: HoldVsRerouteEconomicsCardProps) {
   const isHoldRecommended = economics.recommended_action === 'HOLD';
 
+  const money = (value?: number | null) =>
+    typeof value === 'number' && Number.isFinite(value)
+      ? `Rp ${Math.round(value).toLocaleString('id-ID')}`
+      : 'Belum tersedia';
+
+  const number = (value?: number | null, suffix = '') =>
+    typeof value === 'number' && Number.isFinite(value)
+      ? `${value.toLocaleString('id-ID', { maximumFractionDigits: 1 })}${suffix}`
+      : 'Belum tersedia';
+
   return (
     <div className="bg-[#0c1017]/90 backdrop-blur-md border border-white/10 rounded-xl p-3.5 shadow-lg flex flex-col gap-3">
       {/* Header */}
@@ -115,18 +125,37 @@ export function HoldVsRerouteCard({
             Rp {economics.reroute_total_cost_idr.toLocaleString('id-ID')}
           </div>
           <div className="space-y-1 text-[11px] text-slate-400 border-t border-white/5 pt-1.5">
-            <div className="flex justify-between">
-              <span>BBM & Maint:</span>
-              <span className="text-slate-200 font-medium">Rp 6.800/km</span>
+            <div className="flex justify-between gap-2">
+              <span>BBM (Pertamina):</span>
+              <span className="text-slate-200 font-medium text-right">
+                {money(economics.reroute_fuel_cost_idr)}
+                {typeof economics.reroute_fuel_liters === 'number' && (
+                  <span className="block text-[10px] text-slate-500">
+                    {number(economics.reroute_fuel_liters, ' L')}
+                  </span>
+                )}
+              </span>
             </div>
-            <div className="flex justify-between">
-              <span>Tarif Tol Tambahan:</span>
-              <span className="text-slate-200 font-medium">Rp 85.000</span>
+            <div className="flex justify-between gap-2">
+              <span>Tarif Tol BPJT:</span>
+              <span className="text-slate-200 font-medium text-right">
+                {money(economics.reroute_toll_cost_idr)}
+              </span>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between gap-2">
               <span>Uang Lembur Supir:</span>
-              <span className="text-slate-200 font-medium">Rp 40.000/jam</span>
+              <span className="text-slate-200 font-medium text-right">
+                {money(economics.reroute_labor_cost_idr)}
+              </span>
             </div>
+            {typeof economics.reroute_distance_km === 'number' && (
+              <div className="flex justify-between gap-2">
+                <span>Jarak Detour:</span>
+                <span className="text-slate-200 font-medium text-right">
+                  {number(economics.reroute_distance_km, ' km')}
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -152,19 +181,27 @@ export function HoldVsRerouteCard({
             Rp {economics.hold_total_cost_idr.toLocaleString('id-ID')}
           </div>
           <div className="space-y-1 text-[11px] text-slate-400 border-t border-white/5 pt-1.5">
-            <div className="flex justify-between">
+            <div className="flex justify-between gap-2">
               <span>Depo Aman:</span>
               <span className="text-amber-200 font-medium truncate max-w-[90px]" title={economics.hold_depot_name}>
                 {economics.hold_depot_name}
               </span>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between gap-2">
               <span>Est. Buka Jalur:</span>
               <span className="text-slate-200 font-medium">~{economics.estimated_clearance_hours} Jam</span>
             </div>
-            <div className="flex justify-between">
-              <span>Reefer & Demurrage:</span>
-              <span className="text-slate-200 font-medium">Rp 170k/jam</span>
+            <div className="flex justify-between gap-2">
+              <span>Biaya Depo:</span>
+              <span className="text-slate-200 font-medium text-right">{money(economics.hold_depot_cost_idr)}</span>
+            </div>
+            <div className="flex justify-between gap-2">
+              <span>Reefer &amp; Genset:</span>
+              <span className="text-slate-200 font-medium text-right">{money(economics.hold_reefer_cost_idr)}</span>
+            </div>
+            <div className="flex justify-between gap-2">
+              <span>Susut Muatan:</span>
+              <span className="text-slate-200 font-medium text-right">{money(economics.hold_spoilage_idr)}</span>
             </div>
           </div>
         </div>

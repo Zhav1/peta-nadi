@@ -115,6 +115,12 @@ def init_db(db_path: Optional[str] = None) -> None:
                     icao24 TEXT,
                     callsign TEXT,
                     organization_id TEXT DEFAULT 'org-prehub-pilot',
+                    company_id TEXT,
+                    company_name TEXT,
+                    tracking_mode TEXT DEFAULT 'ROUTE_ESTIMATED',
+                    departure_time TEXT,
+                    origin_coords_json TEXT,
+                    dest_coords_json TEXT,
                     created_by TEXT DEFAULT 'dispatcher',
                     sync_status TEXT DEFAULT 'pending',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -139,6 +145,16 @@ def init_db(db_path: Optional[str] = None) -> None:
                 ("gross_weight_ton", "REAL DEFAULT 12.0"),
                 ("sla_deadline_hours", "REAL DEFAULT 8.0"),
                 ("has_bkhit_cert", "INTEGER DEFAULT 0"),
+                # Tenancy + tracking mode must survive process restarts. Before
+                # this migration both lived only in TelemetryService memory, so
+                # a dispatcher's freshly onboarded truck lost its company_id on
+                # the next Render cold start and vanished from the tenant view.
+                ("company_id", "TEXT"),
+                ("company_name", "TEXT"),
+                ("tracking_mode", "TEXT DEFAULT 'ROUTE_ESTIMATED'"),
+                ("departure_time", "TEXT"),
+                ("origin_coords_json", "TEXT"),
+                ("dest_coords_json", "TEXT"),
             ]:
                 try:
                     conn.execute(f"ALTER TABLE custom_fleet_vehicles ADD COLUMN {col_def[0]} {col_def[1]};")
@@ -194,6 +210,128 @@ def init_db(db_path: Optional[str] = None) -> None:
                 CREATE INDEX IF NOT EXISTS idx_impact_assessments_evaluated 
                 ON incident_impact_assessments(evaluated_at DESC);
             """)
+
+            # --- Truck asset master (Step 1 onboarding) ---
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS truck_assets (
+                    id TEXT PRIMARY KEY,
+                    truck_id TEXT UNIQUE NOT NULL,
+                    name TEXT NOT NULL,
+                    modality TEXT NOT NULL DEFAULT 'truck',
+                    vin TEXT,
+                    vehicle_golongan TEXT DEFAULT 'GOL_II',
+                    driver_name TEXT,
+                    driver_phone TEXT,
+                    company_id TEXT DEFAULT 'org-prehub-pilot',
+                    company_name TEXT,
+                    gross_weight_ton REAL DEFAULT 12.0,
+                    fuel_type TEXT DEFAULT 'biosolar',
+                    notes TEXT,
+                    created_by TEXT,
+                    sync_status TEXT DEFAULT 'pending',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_truck_assets_company
+                ON truck_assets(company_id);
+            """)
+
+            # --- Transactional travel / rit ledger (Step 2 onboarding + ERP) ---
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS travels (
+                    id TEXT PRIMARY KEY,
+                    truck_id TEXT NOT NULL,
+                    truck_name TEXT,
+                    company_id TEXT,
+                    driver_name TEXT,
+                    origin_name TEXT NOT NULL,
+                    origin_ref TEXT,
+                    origin_coords_json TEXT NOT NULL,
+                    destination_name TEXT NOT NULL,
+                    destination_ref TEXT,
+                    dest_coords_json TEXT NOT NULL,
+                    commodity_key TEXT NOT NULL,
+                    cargo_tonnage REAL NOT NULL,
+                    cargo_value_idr REAL NOT NULL,
+                    cargo_value_source TEXT DEFAULT 'declared',
+                    vehicle_golongan TEXT,
+                    fuel_type TEXT,
+                    sla_deadline_hours REAL,
+                    baseline_distance_km REAL,
+                    distance_source TEXT,
+                    baseline_time_hours REAL,
+                    blocked_delay_hours REAL DEFAULT 0.0,
+                    baseline_fuel_liters REAL,
+                    baseline_toll_segments_json TEXT,
+                    actual_toll_segments_json TEXT,
+                    baseline_fuel_cost_idr REAL,
+                    baseline_toll_cost_idr REAL,
+                    baseline_spoilage_idr REAL,
+                    baseline_labor_idr REAL,
+                    baseline_cost_idr REAL,
+                    actual_time_hours REAL,
+                    actual_recorded INTEGER DEFAULT 0,
+                    actual_fuel_liters REAL,
+                    actual_fuel_cost_idr REAL,
+                    actual_toll_cost_idr REAL,
+                    actual_spoilage_idr REAL,
+                    actual_labor_idr REAL,
+                    actual_cost_idr REAL,
+                    saved_time_hours REAL,
+                    saved_fuel_liters REAL,
+                    saved_fuel_cost_idr REAL,
+                    saved_toll_idr REAL,
+                    saved_spoilage_idr REAL,
+                    saved_labor_idr REAL,
+                    saved_cost_idr REAL,
+                    efficiency_pct REAL,
+                    rerouted INTEGER DEFAULT 0,
+                    disruption_id TEXT,
+                    status TEXT DEFAULT 'planned',
+                    hedging_json TEXT,
+                    hedging_policy TEXT,
+                    hedging_net_savings_idr REAL,
+                    hedging_solved_at TEXT,
+                    notes TEXT,
+                    inflation_shock_factor REAL DEFAULT 0.0,
+                    created_by TEXT,
+                    sync_status TEXT DEFAULT 'pending',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    delivered_at TIMESTAMP
+                );
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_travels_company
+                ON travels(company_id);
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_travels_truck
+                ON travels(truck_id);
+            """)
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_travels_status
+                ON travels(status);
+            """)
+
+            # Dynamic column migrations for databases created before the split.
+            for table_name, col_def in [
+                ("travels", ("actual_recorded", "INTEGER DEFAULT 0")),
+                ("travels", ("cargo_value_source", "TEXT DEFAULT 'declared'")),
+                ("travels", ("distance_source", "TEXT DEFAULT 'declared'")),
+                ("travels", ("hedging_json", "TEXT")),
+                ("travels", ("hedging_policy", "TEXT")),
+                ("travels", ("hedging_net_savings_idr", "REAL")),
+                ("travels", ("hedging_solved_at", "TIMESTAMP")),
+                ("travels", ("inflation_shock_factor", "REAL DEFAULT 0.0")),
+                ("travels", ("delivered_at", "TIMESTAMP")),
+            ]:
+                try:
+                    conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {col_def[0]} {col_def[1]};")
+                except Exception:
+                    pass  # Column already exists
         logger.debug(f"Local SQLite database initialized at {db_path or DEFAULT_DB_PATH}")
     finally:
         conn.close()
@@ -430,7 +568,7 @@ def mark_as_synced(table_name: str, record_id: str, db_path: Optional[str] = Non
     conn = get_db_connection(db_path)
     try:
         with conn:
-            if table_name in ("route_decision_traces", "ground_truth_outcomes", "custom_fleet_vehicles"):
+            if table_name in ("route_decision_traces", "ground_truth_outcomes", "custom_fleet_vehicles", "truck_assets", "travels"):
                 conn.execute(f"UPDATE {table_name} SET sync_status = 'synced' WHERE id = ?", (record_id,))
     finally:
         conn.close()
@@ -458,6 +596,19 @@ def save_custom_vehicle(data: Dict[str, Any], db_path: Optional[str] = None) -> 
     else:
         path_json = None
 
+    origin_coords = data.get("origin_coords")
+    dest_coords = data.get("dest_coords")
+    origin_coords_json = json.dumps(origin_coords) if isinstance(origin_coords, (list, dict)) else origin_coords
+    dest_coords_json = json.dumps(dest_coords) if isinstance(dest_coords, (list, dict)) else dest_coords
+
+    organization_id = data.get("organization_id") or "org-prehub-pilot"
+    # company_id is the enforceable tenant claim from the JWT; organization_id is
+    # the human-readable org name kept for legacy rows. Never let a stored unit
+    # end up tenant-less or the owning dispatcher can no longer see it.
+    company_id = data.get("company_id") or organization_id
+    company_name = data.get("company_name") or organization_id
+    tracking_mode = data.get("tracking_mode") or "ROUTE_ESTIMATED"
+
     try:
         with conn:
             conn.execute("""
@@ -467,9 +618,10 @@ def save_custom_vehicle(data: Dict[str, Any], db_path: Optional[str] = None) -> 
                     vehicle_golongan, gross_weight_ton, sla_deadline_hours, has_bkhit_cert,
                     origin, destination, speed_kmh,
                     temperature_c, path_json, status, mmsi, imo, vin,
-                    icao24, callsign, organization_id, created_by,
-                    sync_status, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    icao24, callsign, organization_id, company_id, company_name,
+                    tracking_mode, departure_time, origin_coords_json, dest_coords_json,
+                    created_by, sync_status, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(vehicle_id) DO UPDATE SET
                     name = excluded.name,
                     driver_name = excluded.driver_name,
@@ -494,6 +646,13 @@ def save_custom_vehicle(data: Dict[str, Any], db_path: Optional[str] = None) -> 
                     vin = excluded.vin,
                     icao24 = excluded.icao24,
                     callsign = excluded.callsign,
+                    organization_id = excluded.organization_id,
+                    company_id = excluded.company_id,
+                    company_name = excluded.company_name,
+                    tracking_mode = excluded.tracking_mode,
+                    departure_time = excluded.departure_time,
+                    origin_coords_json = excluded.origin_coords_json,
+                    dest_coords_json = excluded.dest_coords_json,
                     updated_at = excluded.updated_at
             """, (
                 record_id,
@@ -521,7 +680,13 @@ def save_custom_vehicle(data: Dict[str, Any], db_path: Optional[str] = None) -> 
                 data.get("vin"),
                 data.get("icao24"),
                 data.get("callsign"),
-                data.get("organization_id") or "org-prehub-pilot",
+                organization_id,
+                company_id,
+                company_name,
+                tracking_mode,
+                data.get("departure_time"),
+                origin_coords_json,
+                dest_coords_json,
                 data.get("created_by") or "dispatcher",
                 data.get("sync_status") or "pending",
                 created_at,
@@ -554,7 +719,13 @@ def save_custom_vehicle(data: Dict[str, Any], db_path: Optional[str] = None) -> 
             "vin": data.get("vin"),
             "icao24": data.get("icao24"),
             "callsign": data.get("callsign"),
-            "organization_id": data.get("organization_id") or "org-prehub-pilot",
+            "organization_id": organization_id,
+            "company_id": company_id,
+            "company_name": company_name,
+            "tracking_mode": tracking_mode,
+            "departure_time": data.get("departure_time"),
+            "origin_coords": origin_coords if isinstance(origin_coords, (list, dict)) else None,
+            "dest_coords": dest_coords if isinstance(dest_coords, (list, dict)) else None,
             "created_by": data.get("created_by") or "dispatcher",
             "sync_status": data.get("sync_status") or "pending",
             "created_at": created_at,
@@ -576,67 +747,96 @@ def save_batch_custom_vehicles(data_list: List[Dict[str, Any]], db_path: Optiona
     return saved_count
 
 
+def _parse_json_list(raw: Optional[str]) -> Optional[List[float]]:
+    """Best-effort decode of a [lon, lat] pair stored as JSON text."""
+    if not raw:
+        return None
+    try:
+        val = json.loads(raw)
+        return val if isinstance(val, list) and len(val) == 2 else None
+    except Exception:
+        return None
+
+
+def _row_to_custom_vehicle_dict(r: sqlite3.Row) -> Dict[str, Any]:
+    """Maps a custom_fleet_vehicles row to the API-facing dict, tolerating legacy schemas."""
+    keys = r.keys()
+    path_val = None
+    if r["path_json"]:
+        try:
+            path_val = json.loads(r["path_json"])
+        except Exception:
+            path_val = None
+
+    organization_id = r["organization_id"]
+    company_id = r["company_id"] if "company_id" in keys else None
+    company_name = r["company_name"] if "company_name" in keys else None
+    tracking_mode = r["tracking_mode"] if "tracking_mode" in keys else None
+
+    return {
+        "id": r["id"],
+        "vehicle_id": r["vehicle_id"],
+        "name": r["name"],
+        "driver_name": r["driver_name"],
+        "driver_phone": r["driver_phone"],
+        "modality": r["modality"],
+        "cargo": r["cargo"],
+        "commodity_key": r["commodity_key"] if "commodity_key" in keys else None,
+        "cargo_tonnage": float(r["cargo_tonnage"]) if ("cargo_tonnage" in keys and r["cargo_tonnage"] is not None) else 10.0,
+        "cargo_value_idr": float(r["cargo_value_idr"]) if ("cargo_value_idr" in keys and r["cargo_value_idr"] is not None) else None,
+        "vehicle_golongan": r["vehicle_golongan"] if "vehicle_golongan" in keys else "GOL_II",
+        "gross_weight_ton": float(r["gross_weight_ton"]) if ("gross_weight_ton" in keys and r["gross_weight_ton"] is not None) else 12.0,
+        "sla_deadline_hours": float(r["sla_deadline_hours"]) if ("sla_deadline_hours" in keys and r["sla_deadline_hours"] is not None) else 8.0,
+        "has_bkhit_cert": bool(r["has_bkhit_cert"]) if "has_bkhit_cert" in keys else False,
+        "origin": r["origin"],
+        "destination": r["destination"],
+        "speed_kmh": float(r["speed_kmh"]) if r["speed_kmh"] is not None else 60.0,
+        "temperature_c": float(r["temperature_c"]) if r["temperature_c"] is not None else None,
+        "path": path_val,
+        "status": r["status"],
+        "mmsi": r["mmsi"],
+        "imo": r["imo"],
+        "vin": r["vin"],
+        "icao24": r["icao24"],
+        "callsign": r["callsign"],
+        "organization_id": organization_id,
+        # Legacy rows predate the company_id column: fall back to the org name so
+        # the owning dispatcher (matched on org_name) still resolves the asset.
+        "company_id": company_id or organization_id,
+        "company_name": company_name or organization_id,
+        "tracking_mode": tracking_mode or "ROUTE_ESTIMATED",
+        "departure_time": r["departure_time"] if "departure_time" in keys else None,
+        "origin_coords": _parse_json_list(r["origin_coords_json"]) if "origin_coords_json" in keys else None,
+        "dest_coords": _parse_json_list(r["dest_coords_json"]) if "dest_coords_json" in keys else None,
+        "created_by": r["created_by"],
+        "sync_status": r["sync_status"],
+        "created_at": r["created_at"],
+        "updated_at": r["updated_at"],
+    }
+
+
 def list_custom_vehicles(
     modality: Optional[str] = None,
-    db_path: Optional[str] = None
+    db_path: Optional[str] = None,
+    company_id: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
-    """Retrieve all custom registered vehicles from SQLite."""
+    """Retrieve custom registered vehicles from SQLite, optionally scoped to a tenant."""
     conn = get_db_connection(db_path)
     try:
+        query = "SELECT * FROM custom_fleet_vehicles"
+        params: List[Any] = []
+        conditions: List[str] = []
         if modality and modality != "all":
-            cursor = conn.execute("""
-                SELECT * FROM custom_fleet_vehicles 
-                WHERE modality = ?
-                ORDER BY created_at DESC
-            """, (modality,))
-        else:
-            cursor = conn.execute("""
-                SELECT * FROM custom_fleet_vehicles 
-                ORDER BY created_at DESC
-            """)
-        
-        rows = cursor.fetchall()
-        results = []
-        for r in rows:
-            path_val = None
-            if r["path_json"]:
-                try:
-                    path_val = json.loads(r["path_json"])
-                except Exception:
-                    path_val = None
-            results.append({
-                "id": r["id"],
-                "vehicle_id": r["vehicle_id"],
-                "name": r["name"],
-                "driver_name": r["driver_name"],
-                "driver_phone": r["driver_phone"],
-                "modality": r["modality"],
-                "cargo": r["cargo"],
-                "commodity_key": r["commodity_key"] if "commodity_key" in r.keys() else None,
-                "cargo_tonnage": float(r["cargo_tonnage"]) if ("cargo_tonnage" in r.keys() and r["cargo_tonnage"] is not None) else 10.0,
-                "cargo_value_idr": float(r["cargo_value_idr"]) if ("cargo_value_idr" in r.keys() and r["cargo_value_idr"] is not None) else None,
-                "vehicle_golongan": r["vehicle_golongan"] if "vehicle_golongan" in r.keys() else "GOL_II",
-                "gross_weight_ton": float(r["gross_weight_ton"]) if ("gross_weight_ton" in r.keys() and r["gross_weight_ton"] is not None) else 12.0,
-                "sla_deadline_hours": float(r["sla_deadline_hours"]) if ("sla_deadline_hours" in r.keys() and r["sla_deadline_hours"] is not None) else 8.0,
-                "has_bkhit_cert": bool(r["has_bkhit_cert"]) if "has_bkhit_cert" in r.keys() else False,
-                "origin": r["origin"],
-                "destination": r["destination"],
-                "speed_kmh": float(r["speed_kmh"]) if r["speed_kmh"] is not None else 60.0,
-                "temperature_c": float(r["temperature_c"]) if r["temperature_c"] is not None else None,
-                "path": path_val,
-                "status": r["status"],
-                "mmsi": r["mmsi"],
-                "imo": r["imo"],
-                "vin": r["vin"],
-                "icao24": r["icao24"],
-                "callsign": r["callsign"],
-                "organization_id": r["organization_id"],
-                "created_by": r["created_by"],
-                "sync_status": r["sync_status"],
-                "created_at": r["created_at"],
-                "updated_at": r["updated_at"]
-            })
-        return results
+            conditions.append("modality = ?")
+            params.append(modality)
+        if company_id:
+            conditions.append("(company_id = ? OR organization_id = ?)")
+            params.extend([company_id, company_id])
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+        query += " ORDER BY created_at DESC"
+        cursor = conn.execute(query, tuple(params))
+        return [_row_to_custom_vehicle_dict(r) for r in cursor.fetchall()]
     finally:
         conn.close()
 
@@ -651,44 +851,7 @@ def get_custom_vehicle(vehicle_id: str, db_path: Optional[str] = None) -> Option
         r = cursor.fetchone()
         if not r:
             return None
-        path_val = None
-        if r["path_json"]:
-            try:
-                path_val = json.loads(r["path_json"])
-            except Exception:
-                path_val = None
-        return {
-            "id": r["id"],
-            "vehicle_id": r["vehicle_id"],
-            "name": r["name"],
-            "driver_name": r["driver_name"],
-            "driver_phone": r["driver_phone"],
-            "modality": r["modality"],
-            "cargo": r["cargo"],
-            "commodity_key": r["commodity_key"] if "commodity_key" in r.keys() else None,
-            "cargo_tonnage": float(r["cargo_tonnage"]) if ("cargo_tonnage" in r.keys() and r["cargo_tonnage"] is not None) else 10.0,
-            "cargo_value_idr": float(r["cargo_value_idr"]) if ("cargo_value_idr" in r.keys() and r["cargo_value_idr"] is not None) else None,
-            "vehicle_golongan": r["vehicle_golongan"] if "vehicle_golongan" in r.keys() else "GOL_II",
-            "gross_weight_ton": float(r["gross_weight_ton"]) if ("gross_weight_ton" in r.keys() and r["gross_weight_ton"] is not None) else 12.0,
-            "sla_deadline_hours": float(r["sla_deadline_hours"]) if ("sla_deadline_hours" in r.keys() and r["sla_deadline_hours"] is not None) else 8.0,
-            "has_bkhit_cert": bool(r["has_bkhit_cert"]) if "has_bkhit_cert" in r.keys() else False,
-            "origin": r["origin"],
-            "destination": r["destination"],
-            "speed_kmh": float(r["speed_kmh"]) if r["speed_kmh"] is not None else 60.0,
-            "temperature_c": float(r["temperature_c"]) if r["temperature_c"] is not None else None,
-            "path": path_val,
-            "status": r["status"],
-            "mmsi": r["mmsi"],
-            "imo": r["imo"],
-            "vin": r["vin"],
-            "icao24": r["icao24"],
-            "callsign": r["callsign"],
-            "organization_id": r["organization_id"],
-            "created_by": r["created_by"],
-            "sync_status": r["sync_status"],
-            "created_at": r["created_at"],
-            "updated_at": r["updated_at"]
-        }
+        return _row_to_custom_vehicle_dict(r)
     finally:
         conn.close()
 
@@ -879,3 +1042,438 @@ def get_latest_telemetry_ping(vehicle_id: str, db_path: Optional[str] = None) ->
     """Retrieve the most recent GPS ping for a vehicle."""
     logs = list_telemetry_logs(vehicle_id=vehicle_id, limit=1, db_path=db_path)
     return logs[0] if logs else None
+
+
+# ==========================================
+# TRUCK ASSET MASTER & TRAVEL / RIT LEDGER
+# ==========================================
+
+def _travel_row_to_dict(r: sqlite3.Row) -> Dict[str, Any]:
+    """Deserialize a travels row (JSON columns -> Python lists)."""
+    def _loads(value: Any, default: Any) -> Any:
+        if value is None:
+            return default
+        try:
+            return json.loads(value)
+        except Exception:
+            return default
+
+    hedging = None
+    if r["hedging_json"]:
+        try:
+            hedging = json.loads(r["hedging_json"])
+        except Exception:
+            hedging = None
+
+    return {
+        "id": r["id"],
+        "truck_id": r["truck_id"],
+        "truck_name": r["truck_name"],
+        "company_id": r["company_id"],
+        "driver_name": r["driver_name"],
+        "origin_name": r["origin_name"],
+        "origin_ref": r["origin_ref"],
+        "origin_coords": _loads(r["origin_coords_json"], []),
+        "destination_name": r["destination_name"],
+        "destination_ref": r["destination_ref"],
+        "dest_coords": _loads(r["dest_coords_json"], []),
+        "commodity_key": r["commodity_key"],
+        "cargo_tonnage": float(r["cargo_tonnage"] or 0.0),
+        "cargo_value_idr": float(r["cargo_value_idr"] or 0.0),
+        "cargo_value_source": r["cargo_value_source"] or "declared",
+        "vehicle_golongan": r["vehicle_golongan"] or "GOL_II",
+        "fuel_type": r["fuel_type"] or "biosolar",
+        "sla_deadline_hours": float(r["sla_deadline_hours"] or 0.0),
+        "baseline_distance_km": float(r["baseline_distance_km"] or 0.0),
+        "distance_source": r["distance_source"] or "declared",
+        "baseline_time_hours": float(r["baseline_time_hours"] or 0.0),
+        "blocked_delay_hours": float(r["blocked_delay_hours"] or 0.0),
+        "baseline_fuel_liters": float(r["baseline_fuel_liters"] or 0.0),
+        "baseline_toll_segments": _loads(r["baseline_toll_segments_json"], []),
+        "actual_toll_segments": _loads(r["actual_toll_segments_json"], []),
+        "baseline_fuel_cost_idr": float(r["baseline_fuel_cost_idr"] or 0.0),
+        "baseline_toll_cost_idr": float(r["baseline_toll_cost_idr"] or 0.0),
+        "baseline_spoilage_idr": float(r["baseline_spoilage_idr"] or 0.0),
+        "baseline_labor_idr": float(r["baseline_labor_idr"] or 0.0),
+        "baseline_cost_idr": float(r["baseline_cost_idr"] or 0.0),
+        "actual_time_hours": float(r["actual_time_hours"] or 0.0),
+        "actual_recorded": bool(r["actual_recorded"]),
+        "actual_fuel_liters": float(r["actual_fuel_liters"] or 0.0),
+        "actual_fuel_cost_idr": float(r["actual_fuel_cost_idr"] or 0.0),
+        "actual_toll_cost_idr": float(r["actual_toll_cost_idr"] or 0.0),
+        "actual_spoilage_idr": float(r["actual_spoilage_idr"] or 0.0),
+        "actual_labor_idr": float(r["actual_labor_idr"] or 0.0),
+        "actual_cost_idr": float(r["actual_cost_idr"] or 0.0),
+        "saved_time_hours": float(r["saved_time_hours"] or 0.0),
+        "saved_fuel_liters": float(r["saved_fuel_liters"] or 0.0),
+        "saved_fuel_cost_idr": float(r["saved_fuel_cost_idr"] or 0.0),
+        "saved_toll_idr": float(r["saved_toll_idr"] or 0.0),
+        "saved_spoilage_idr": float(r["saved_spoilage_idr"] or 0.0),
+        "saved_labor_idr": float(r["saved_labor_idr"] or 0.0),
+        "saved_cost_idr": float(r["saved_cost_idr"] or 0.0),
+        "efficiency_pct": float(r["efficiency_pct"] or 0.0),
+        "rerouted": bool(r["rerouted"]),
+        "disruption_id": r["disruption_id"],
+        "status": r["status"] or "planned",
+        "hedging": hedging,
+        "hedging_policy": r["hedging_policy"],
+        "hedging_net_savings_idr": float(r["hedging_net_savings_idr"]) if r["hedging_net_savings_idr"] is not None else None,
+        "hedging_solved_at": r["hedging_solved_at"],
+        "notes": r["notes"],
+        "inflation_shock_factor": float(r["inflation_shock_factor"] or 0.0),
+        "created_by": r["created_by"],
+        "sync_status": r["sync_status"],
+        "created_at": r["created_at"],
+        "updated_at": r["updated_at"],
+        "delivered_at": r["delivered_at"],
+    }
+
+
+def save_truck_asset(data: Dict[str, Any], db_path: Optional[str] = None) -> Dict[str, Any]:
+    """Insert or update a master truck asset (unique key: truck_id)."""
+    conn = get_db_connection(db_path)
+    record_id = data.get("id") or f"TRKASSET-{uuid.uuid4().hex[:10]}"
+    now_iso = datetime.now().isoformat()
+    created_at = data.get("created_at") or now_iso
+
+    try:
+        with conn:
+            conn.execute("""
+                INSERT INTO truck_assets (
+                    id, truck_id, name, modality, vin, vehicle_golongan,
+                    driver_name, driver_phone, company_id, company_name,
+                    gross_weight_ton, fuel_type, notes, created_by,
+                    sync_status, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(truck_id) DO UPDATE SET
+                    name = excluded.name,
+                    modality = excluded.modality,
+                    vin = excluded.vin,
+                    vehicle_golongan = excluded.vehicle_golongan,
+                    driver_name = excluded.driver_name,
+                    driver_phone = excluded.driver_phone,
+                    company_id = excluded.company_id,
+                    company_name = excluded.company_name,
+                    gross_weight_ton = excluded.gross_weight_ton,
+                    fuel_type = excluded.fuel_type,
+                    notes = excluded.notes,
+                    updated_at = excluded.updated_at
+            """, (
+                record_id,
+                data["truck_id"],
+                data.get("name") or data["truck_id"],
+                data.get("modality") or "truck",
+                data.get("vin"),
+                data.get("vehicle_golongan") or "GOL_II",
+                data.get("driver_name"),
+                data.get("driver_phone"),
+                data.get("company_id") or "org-prehub-pilot",
+                data.get("company_name"),
+                float(data.get("gross_weight_ton") if data.get("gross_weight_ton") is not None else 12.0),
+                data.get("fuel_type") or "biosolar",
+                data.get("notes"),
+                data.get("created_by"),
+                data.get("sync_status") or "pending",
+                created_at,
+                now_iso,
+            ))
+
+        existing = get_truck_asset(data["truck_id"], db_path=db_path)
+        return existing or {}
+    finally:
+        conn.close()
+
+
+def _truck_row_to_dict(r: sqlite3.Row) -> Dict[str, Any]:
+    return {
+        "id": r["id"],
+        "truck_id": r["truck_id"],
+        "name": r["name"],
+        "modality": r["modality"],
+        "vin": r["vin"],
+        "vehicle_golongan": r["vehicle_golongan"] or "GOL_II",
+        "driver_name": r["driver_name"],
+        "driver_phone": r["driver_phone"],
+        "company_id": r["company_id"],
+        "company_name": r["company_name"],
+        "gross_weight_ton": float(r["gross_weight_ton"] or 0.0),
+        "fuel_type": r["fuel_type"] or "biosolar",
+        "notes": r["notes"],
+        "created_by": r["created_by"],
+        "sync_status": r["sync_status"],
+        "created_at": r["created_at"],
+        "updated_at": r["updated_at"],
+    }
+
+
+def get_truck_asset(truck_id: str, db_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Retrieve a master truck asset by truck_id (case-insensitive friendly)."""
+    conn = get_db_connection(db_path)
+    try:
+        cursor = conn.execute(
+            "SELECT * FROM truck_assets WHERE UPPER(truck_id) = UPPER(?)",
+            (truck_id,),
+        )
+        r = cursor.fetchone()
+        return _truck_row_to_dict(r) if r else None
+    finally:
+        conn.close()
+
+
+def list_truck_assets(company_id: Optional[str] = None, db_path: Optional[str] = None) -> List[Dict[str, Any]]:
+    """List master truck assets, optionally scoped to one tenant company."""
+    conn = get_db_connection(db_path)
+    try:
+        if company_id:
+            cursor = conn.execute(
+                "SELECT * FROM truck_assets WHERE company_id = ? ORDER BY created_at DESC",
+                (company_id,),
+            )
+        else:
+            cursor = conn.execute("SELECT * FROM truck_assets ORDER BY created_at DESC")
+        return [_truck_row_to_dict(r) for r in cursor.fetchall()]
+    finally:
+        conn.close()
+
+
+def delete_truck_asset(truck_id: str, db_path: Optional[str] = None) -> bool:
+    """Delete a master truck asset (travels keep their historical snapshot)."""
+    conn = get_db_connection(db_path)
+    try:
+        with conn:
+            cursor = conn.execute(
+                "DELETE FROM truck_assets WHERE UPPER(truck_id) = UPPER(?)",
+                (truck_id,),
+            )
+            return cursor.rowcount > 0
+    finally:
+        conn.close()
+
+
+def save_travel(data: Dict[str, Any], db_path: Optional[str] = None) -> Dict[str, Any]:
+    """Insert or update one travel/rit ledger row. All cost fields are pre-computed."""
+    conn = get_db_connection(db_path)
+    record_id = data.get("id") or f"RIT-{uuid.uuid4().hex[:10]}"
+    now_iso = datetime.now().isoformat()
+    created_at = data.get("created_at") or now_iso
+
+    def _dumps(value: Any) -> Optional[str]:
+        if value is None:
+            return None
+        return json.dumps(value)
+
+    try:
+        with conn:
+            conn.execute("""
+                INSERT INTO travels (
+                    id, truck_id, truck_name, company_id, driver_name,
+                    origin_name, origin_ref, origin_coords_json,
+                    destination_name, destination_ref, dest_coords_json,
+                    commodity_key, cargo_tonnage, cargo_value_idr, cargo_value_source,
+                    vehicle_golongan, fuel_type, sla_deadline_hours,
+                    baseline_distance_km, distance_source,
+                    baseline_time_hours, blocked_delay_hours, baseline_fuel_liters,
+                    baseline_toll_segments_json, actual_toll_segments_json,
+                    baseline_fuel_cost_idr, baseline_toll_cost_idr,
+                    baseline_spoilage_idr, baseline_labor_idr, baseline_cost_idr,
+                    actual_time_hours, actual_recorded, actual_fuel_liters, actual_fuel_cost_idr,
+                    actual_toll_cost_idr, actual_spoilage_idr, actual_labor_idr, actual_cost_idr,
+                    saved_time_hours, saved_fuel_liters, saved_fuel_cost_idr,
+                    saved_toll_idr, saved_spoilage_idr, saved_labor_idr, saved_cost_idr,
+                    efficiency_pct, rerouted, disruption_id, status,
+                    hedging_json, hedging_policy, hedging_net_savings_idr, hedging_solved_at,
+                    notes, inflation_shock_factor, created_by, sync_status,
+                    created_at, updated_at, delivered_at
+                ) VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                )
+                ON CONFLICT(id) DO UPDATE SET
+                    truck_id = excluded.truck_id,
+                    truck_name = excluded.truck_name,
+                    company_id = excluded.company_id,
+                    driver_name = excluded.driver_name,
+                    origin_name = excluded.origin_name,
+                    origin_ref = excluded.origin_ref,
+                    origin_coords_json = excluded.origin_coords_json,
+                    destination_name = excluded.destination_name,
+                    destination_ref = excluded.destination_ref,
+                    dest_coords_json = excluded.dest_coords_json,
+                    commodity_key = excluded.commodity_key,
+                    cargo_tonnage = excluded.cargo_tonnage,
+                    cargo_value_idr = excluded.cargo_value_idr,
+                    cargo_value_source = excluded.cargo_value_source,
+                    vehicle_golongan = excluded.vehicle_golongan,
+                    fuel_type = excluded.fuel_type,
+                    sla_deadline_hours = excluded.sla_deadline_hours,
+                    baseline_distance_km = excluded.baseline_distance_km,
+                    distance_source = excluded.distance_source,
+                    baseline_time_hours = excluded.baseline_time_hours,
+                    blocked_delay_hours = excluded.blocked_delay_hours,
+                    baseline_fuel_liters = excluded.baseline_fuel_liters,
+                    baseline_toll_segments_json = excluded.baseline_toll_segments_json,
+                    actual_toll_segments_json = excluded.actual_toll_segments_json,
+                    baseline_fuel_cost_idr = excluded.baseline_fuel_cost_idr,
+                    baseline_toll_cost_idr = excluded.baseline_toll_cost_idr,
+                    baseline_spoilage_idr = excluded.baseline_spoilage_idr,
+                    baseline_labor_idr = excluded.baseline_labor_idr,
+                    baseline_cost_idr = excluded.baseline_cost_idr,
+                    actual_time_hours = excluded.actual_time_hours,
+                    actual_recorded = excluded.actual_recorded,
+                    actual_fuel_liters = excluded.actual_fuel_liters,
+                    actual_fuel_cost_idr = excluded.actual_fuel_cost_idr,
+                    actual_toll_cost_idr = excluded.actual_toll_cost_idr,
+                    actual_spoilage_idr = excluded.actual_spoilage_idr,
+                    actual_labor_idr = excluded.actual_labor_idr,
+                    actual_cost_idr = excluded.actual_cost_idr,
+                    saved_time_hours = excluded.saved_time_hours,
+                    saved_fuel_liters = excluded.saved_fuel_liters,
+                    saved_fuel_cost_idr = excluded.saved_fuel_cost_idr,
+                    saved_toll_idr = excluded.saved_toll_idr,
+                    saved_spoilage_idr = excluded.saved_spoilage_idr,
+                    saved_labor_idr = excluded.saved_labor_idr,
+                    saved_cost_idr = excluded.saved_cost_idr,
+                    efficiency_pct = excluded.efficiency_pct,
+                    rerouted = excluded.rerouted,
+                    disruption_id = excluded.disruption_id,
+                    status = excluded.status,
+                    hedging_json = excluded.hedging_json,
+                    hedging_policy = excluded.hedging_policy,
+                    hedging_net_savings_idr = excluded.hedging_net_savings_idr,
+                    hedging_solved_at = excluded.hedging_solved_at,
+                    notes = excluded.notes,
+                    inflation_shock_factor = excluded.inflation_shock_factor,
+                    updated_at = excluded.updated_at,
+                    delivered_at = excluded.delivered_at
+            """, (
+                record_id,
+                data["truck_id"],
+                data.get("truck_name"),
+                data.get("company_id"),
+                data.get("driver_name"),
+                data["origin_name"],
+                data.get("origin_ref"),
+                _dumps(data.get("origin_coords") or []),
+                data["destination_name"],
+                data.get("destination_ref"),
+                _dumps(data.get("dest_coords") or []),
+                data["commodity_key"],
+                float(data.get("cargo_tonnage") or 0.0),
+                float(data.get("cargo_value_idr") or 0.0),
+                data.get("cargo_value_source") or "declared",
+                data.get("vehicle_golongan") or "GOL_II",
+                data.get("fuel_type") or "biosolar",
+                float(data.get("sla_deadline_hours") or 0.0),
+                float(data.get("baseline_distance_km") or 0.0),
+                data.get("distance_source") or "declared",
+                float(data.get("baseline_time_hours") or 0.0),
+                float(data.get("blocked_delay_hours") or 0.0),
+                float(data.get("baseline_fuel_liters") or 0.0),
+                _dumps(data.get("baseline_toll_segments") or []),
+                _dumps(data.get("actual_toll_segments") or []),
+                float(data.get("baseline_fuel_cost_idr") or 0.0),
+                float(data.get("baseline_toll_cost_idr") or 0.0),
+                float(data.get("baseline_spoilage_idr") or 0.0),
+                float(data.get("baseline_labor_idr") or 0.0),
+                float(data.get("baseline_cost_idr") or 0.0),
+                float(data.get("actual_time_hours") or 0.0),
+                1 if data.get("actual_recorded") else 0,
+                float(data.get("actual_fuel_liters") or 0.0),
+                float(data.get("actual_fuel_cost_idr") or 0.0),
+                float(data.get("actual_toll_cost_idr") or 0.0),
+                float(data.get("actual_spoilage_idr") or 0.0),
+                float(data.get("actual_labor_idr") or 0.0),
+                float(data.get("actual_cost_idr") or 0.0),
+                float(data.get("saved_time_hours") or 0.0),
+                float(data.get("saved_fuel_liters") or 0.0),
+                float(data.get("saved_fuel_cost_idr") or 0.0),
+                float(data.get("saved_toll_idr") or 0.0),
+                float(data.get("saved_spoilage_idr") or 0.0),
+                float(data.get("saved_labor_idr") or 0.0),
+                float(data.get("saved_cost_idr") or 0.0),
+                float(data.get("efficiency_pct") or 0.0),
+                1 if data.get("rerouted") else 0,
+                data.get("disruption_id"),
+                data.get("status") or "planned",
+                json.dumps(data["hedging"]) if data.get("hedging") is not None else None,
+                data.get("hedging_policy"),
+                float(data["hedging_net_savings_idr"]) if data.get("hedging_net_savings_idr") is not None else None,
+                data.get("hedging_solved_at"),
+                data.get("notes"),
+                float(data.get("inflation_shock_factor") or 0.0),
+                data.get("created_by"),
+                data.get("sync_status") or "pending",
+                created_at,
+                now_iso,
+                data.get("delivered_at"),
+            ))
+        return get_travel(record_id, db_path=db_path) or {}
+    finally:
+        conn.close()
+
+
+def get_travel(travel_id: str, db_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Retrieve one travel/rit by its RIT-* id."""
+    conn = get_db_connection(db_path)
+    try:
+        cursor = conn.execute("SELECT * FROM travels WHERE id = ?", (travel_id,))
+        r = cursor.fetchone()
+        return _travel_row_to_dict(r) if r else None
+    finally:
+        conn.close()
+
+
+def list_travels(
+    company_id: Optional[str] = None,
+    status: Optional[str] = None,
+    truck_id: Optional[str] = None,
+    limit: int = 500,
+    db_path: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """List travels newest first, filtered by tenant / status / truck."""
+    conn = get_db_connection(db_path)
+    try:
+        conditions: List[str] = []
+        params: List[Any] = []
+        if company_id:
+            conditions.append("company_id = ?")
+            params.append(company_id)
+        if status:
+            conditions.append("status = ?")
+            params.append(status)
+        if truck_id:
+            conditions.append("UPPER(truck_id) = UPPER(?)")
+            params.append(truck_id)
+        query = "SELECT * FROM travels"
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+        query += " ORDER BY created_at DESC, rowid DESC LIMIT ?"
+        params.append(limit)
+        cursor = conn.execute(query, tuple(params))
+        return [_travel_row_to_dict(r) for r in cursor.fetchall()]
+    finally:
+        conn.close()
+
+
+def delete_travel(travel_id: str, db_path: Optional[str] = None) -> bool:
+    """Delete a travel/rit from the local ledger."""
+    conn = get_db_connection(db_path)
+    try:
+        with conn:
+            cursor = conn.execute("DELETE FROM travels WHERE id = ?", (travel_id,))
+            return cursor.rowcount > 0
+    finally:
+        conn.close()
+
+
+def list_travel_companies(db_path: Optional[str] = None) -> List[str]:
+    """Distinct company_ids present in the travel ledger."""
+    conn = get_db_connection(db_path)
+    try:
+        cursor = conn.execute(
+            "SELECT DISTINCT company_id FROM travels WHERE company_id IS NOT NULL AND company_id != ''"
+        )
+        return [r["company_id"] for r in cursor.fetchall()]
+    finally:
+        conn.close()

@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "node --no-warnings --experimental-strip-types scripts/test_arbiter.ts"
+    "test": "node --no-warnings --experimental-strip-types scripts/test_arbiter.ts",
+    "test:fleet-scope": "node --no-warnings --experimental-strip-types scripts/test_fleet_scope.ts"
   },
   "dependencies": {
     "@deck.gl/aggregation-layers": "^9.4.0",

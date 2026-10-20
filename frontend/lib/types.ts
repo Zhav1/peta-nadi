@@ -71,6 +71,18 @@ export interface HoldVsRerouteEconomics {
   recommended_action: 'REROUTE' | 'HOLD';
   net_savings_idr: number;
   rationale_id: string;
+  // Optional real cost components (BPJT toll, Pertamina fuel, driver overtime,
+  // depot + reefer + spoilage). When absent the card hides the value rather
+  // than printing a hardcoded benchmark.
+  reroute_fuel_cost_idr?: number;
+  reroute_toll_cost_idr?: number;
+  reroute_labor_cost_idr?: number;
+  reroute_fuel_liters?: number;
+  reroute_distance_km?: number;
+  hold_depot_cost_idr?: number;
+  hold_reefer_cost_idr?: number;
+  hold_spoilage_idr?: number;
+  hold_wait_hours?: number;
 }
 
 export interface RouteLeg {
@@ -546,6 +558,10 @@ export interface FleetVehicle {
   // Phase 57 STEP 0 tenant contract (D3): stable tenant claim. Backend
   // GET /api/v1/fleet/vehicles accepts ?company_id= ; WP-B3 enforces filter.
   company_id?: string;
+  company_name?: string;
+  // Server-tagged tenancy (issue #2): true only when the asset belongs to the
+  // caller's company_id claim. Dispatcher views filter on this + LIVE_GPS.
+  is_tenant_asset?: boolean;
   tracking_mode?: 'LIVE_GPS' | 'ROUTE_ESTIMATED';
   current_coords?: [number, number];
   location?: {
@@ -957,3 +973,225 @@ export interface DisruptionImpactResponse {
 }
 
 
+
+// ==========================================
+// Truck asset master + travel/rit ledger + ERP savings
+// ==========================================
+
+export type TravelStatus = 'planned' | 'moving' | 'rerouted' | 'delivered' | 'failed';
+
+export interface TruckAsset {
+  id: string;
+  truck_id: string;
+  name: string;
+  modality: string;
+  vin?: string;
+  vehicle_golongan: string;
+  driver_name?: string;
+  driver_phone?: string;
+  company_id?: string;
+  company_name?: string;
+  gross_weight_ton: number;
+  fuel_type: string;
+  notes?: string;
+  source: 'master' | 'legacy_custom_fleet';
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface TruckAssetCreatePayload {
+  truck_id: string;
+  name: string;
+  vin?: string;
+  vehicle_golongan: string;
+  driver_name?: string;
+  driver_phone?: string;
+  company_id?: string;
+  company_name?: string;
+  gross_weight_ton?: number;
+  fuel_type?: 'biosolar' | 'dexlite' | 'pertamina_dex';
+  notes?: string;
+}
+
+export interface TravelCreatePayload {
+  truck_id: string;
+  origin_name: string;
+  origin_ref?: string;
+  origin_coords: [number, number];
+  destination_name: string;
+  destination_ref?: string;
+  dest_coords: [number, number];
+  commodity_key: string;
+  cargo_tonnage: number;
+  cargo_value_idr?: number;
+  sla_deadline_hours: number;
+  vehicle_golongan?: string;
+  fuel_type?: 'biosolar' | 'dexlite' | 'pertamina_dex';
+  baseline_distance_km?: number;
+  baseline_time_hours: number;
+  baseline_fuel_liters?: number;
+  baseline_toll_segments?: string[];
+  blocked_delay_hours?: number;
+  actual_time_hours?: number;
+  actual_fuel_liters?: number;
+  actual_toll_segments?: string[];
+  rerouted?: boolean;
+  disruption_id?: string;
+  status?: TravelStatus;
+  notes?: string;
+  inflation_shock_factor?: number;
+}
+
+export interface TravelUpdatePayload {
+  status?: TravelStatus;
+  actual_time_hours?: number;
+  actual_fuel_liters?: number;
+  actual_toll_segments?: string[];
+  baseline_fuel_liters?: number;
+  baseline_toll_segments?: string[];
+  blocked_delay_hours?: number;
+  rerouted?: boolean;
+  disruption_id?: string;
+  cargo_value_idr?: number;
+  inflation_shock_factor?: number;
+  notes?: string;
+  delivered_at?: string;
+}
+
+export interface TravelRecord {
+  id: string;
+  truck_id: string;
+  truck_name?: string;
+  company_id?: string;
+  driver_name?: string;
+  origin_name: string;
+  origin_ref?: string;
+  origin_coords: [number, number];
+  destination_name: string;
+  destination_ref?: string;
+  dest_coords: [number, number];
+  commodity_key: string;
+  cargo_tonnage: number;
+  cargo_value_idr: number;
+  cargo_value_source: string;
+  vehicle_golongan: string;
+  fuel_type: string;
+  sla_deadline_hours: number;
+  baseline_distance_km: number;
+  distance_source: string;
+  baseline_time_hours: number;
+  blocked_delay_hours: number;
+  baseline_fuel_liters: number;
+  baseline_toll_segments: string[];
+  actual_toll_segments: string[];
+  baseline_fuel_cost_idr: number;
+  baseline_toll_cost_idr: number;
+  baseline_spoilage_idr: number;
+  baseline_labor_idr: number;
+  baseline_cost_idr: number;
+  actual_time_hours: number;
+  actual_fuel_liters: number;
+  actual_recorded: boolean;
+  actual_fuel_cost_idr: number;
+  actual_toll_cost_idr: number;
+  actual_spoilage_idr: number;
+  actual_labor_idr: number;
+  actual_cost_idr: number;
+  saved_time_hours: number;
+  saved_fuel_liters: number;
+  saved_cost_idr: number;
+  saved_fuel_cost_idr: number;
+  saved_toll_idr: number;
+  saved_spoilage_idr: number;
+  saved_labor_idr: number;
+  efficiency_pct: number;
+  rerouted: boolean;
+  disruption_id?: string;
+  status: TravelStatus;
+  hedging?: Record<string, unknown> | null;
+  hedging_policy?: string | null;
+  hedging_net_savings_idr?: number | null;
+  hedging_solved_at?: string | null;
+  notes?: string;
+  created_by?: string;
+  created_at?: string;
+  updated_at?: string;
+  delivered_at?: string | null;
+}
+
+export interface TravelListResponse {
+  status: string;
+  total: number;
+  items: TravelRecord[];
+}
+
+export interface ERPSavingsBreakdown {
+  fuel_idr: number;
+  toll_idr: number;
+  spoilage_idr: number;
+  labor_idr: number;
+}
+
+export interface ERPTotals {
+  total_trips: number;
+  active_trips: number;
+  delivered_trips: number;
+  failed_trips: number;
+  reroute_success_count: number;
+  reroute_failed_count: number;
+  reroute_success_rate_pct: number;
+  sla_compliance_pct: number;
+  time_saved_hours: number;
+  fuel_saved_liters: number;
+  cost_saved_idr: number;
+  baseline_cost_idr: number;
+  actual_cost_idr: number;
+  cost_efficiency_pct: number;
+  avg_cost_saved_per_trip_idr: number;
+  savings_breakdown: ERPSavingsBreakdown;
+}
+
+export interface ERPCompanySummary {
+  company_id: string;
+  total_trips: number;
+  delivered_trips: number;
+  failed_trips: number;
+  reroute_success_count: number;
+  reroute_success_rate_pct: number;
+  time_saved_hours: number;
+  fuel_saved_liters: number;
+  cost_saved_idr: number;
+  cost_efficiency_pct: number;
+}
+
+export interface ERPTripRow {
+  id: string;
+  truck_id: string;
+  truck_name?: string;
+  origin_name: string;
+  destination_name: string;
+  commodity_key: string;
+  cargo_tonnage: number;
+  status: TravelStatus;
+  rerouted: boolean;
+  disruption_id?: string;
+  saved_time_hours: number;
+  saved_fuel_liters: number;
+  saved_cost_idr: number;
+  savings_breakdown: ERPSavingsBreakdown;
+  efficiency_pct: number;
+  hedging_policy?: string | null;
+  created_at?: string;
+}
+
+export interface ERPSummaryResponse {
+  status: string;
+  generated_at: string;
+  company_id?: string | null;
+  scope: 'DISPATCHER_DETAIL' | 'REGULATOR_AGGREGATE';
+  storage: string;
+  totals: ERPTotals;
+  per_company: ERPCompanySummary[];
+  trips: ERPTripRow[];
+  business_notes: string[];
+}

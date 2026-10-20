@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Bot, CheckCircle2, Loader2, Circle, ChevronDown, Activity, RefreshCw } from 'lucide-react';
+import { getBaseUrl } from '@/lib/api';
 
 interface AgentInfo {
   agent_id: string;
@@ -79,7 +80,7 @@ export const AgentStatusWidget: React.FC<{ isCompact?: boolean }> = () => {
 
   const fetchStatus = async () => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const apiUrl = getBaseUrl();
       const res = await fetch(`${apiUrl}/api/v1/agents/status`);
       if (res.ok) {
         const data: AgentStatusResponse = await res.json();

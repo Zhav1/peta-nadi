@@ -41,6 +41,12 @@ export interface FleetVehicleLayerProps {
   onSelectVehicle?: (vehicle: FleetVehicle) => void;
   selectedVehicleId?: string | null;
   onCloseVehicle?: () => void;
+  /**
+   * Dispatcher tenant view: never draw ROUTE_ESTIMATED corridor projections
+   * (orange lines / amber pulse rings) unless that unit is explicitly selected
+   * for inspection. Unselected projected units are not rendered at all.
+   */
+  hideEstimatedRoutes?: boolean;
 }
 
 interface DeadReckonState {
@@ -247,6 +253,7 @@ export function FleetVehicleLayer({
   onSelectVehicle,
   selectedVehicleId,
   onCloseVehicle,
+  hideEstimatedRoutes = false,
 }: FleetVehicleLayerProps) {
   const [selectedVehicle, setSelectedVehicle] = useState<{
     vehicle: FleetVehicle;
@@ -434,8 +441,22 @@ export function FleetVehicleLayer({
 
       const currentVehicles = vehiclesRef.current || [];
       const visibleVehicles = currentVehicles.filter((v) => {
-        if (!modalityFilter || modalityFilter === 'all') return true;
-        return v.modality === modalityFilter;
+        if (!modalityFilter || modalityFilter === 'all') {
+          // fallthrough to estimated filtering below
+        } else if (v.modality !== modalityFilter) {
+          return false;
+        }
+        // Tenant (dispatcher) view: projected units stay off the map unless the
+        // operator explicitly inspects them (the layer still renders the
+        // selected unit with its PROYEKSI badge and dashed-style corridor).
+        if (
+          hideEstimatedRoutes &&
+          v.tracking_mode === 'ROUTE_ESTIMATED' &&
+          selectedVehicleIdRef.current !== v.vehicle_id
+        ) {
+          return false;
+        }
+        return true;
       });
 
       if (visibleVehicles.length === 0) {
@@ -690,7 +711,7 @@ export function FleetVehicleLayer({
             fillColor: isSelected ? [0, 240, 255, alphaFill] : [245, 158, 11, alphaFill],
             lineColor: isSelected ? [0, 240, 255, alphaLine] : [245, 158, 11, alphaLine],
           });
-        } else if (v.tracking_mode === 'ROUTE_ESTIMATED') {
+        } else if (v.tracking_mode === 'ROUTE_ESTIMATED' && !hideEstimatedRoutes) {
           // Subtle amber tactical ring for estimated corridor units
           pulseData.push({
             position: finalPos,
@@ -700,8 +721,14 @@ export function FleetVehicleLayer({
           });
         }
 
-        // Collect planned trajectory line for ROUTE_ESTIMATED vehicles
-        if (v.tracking_mode === 'ROUTE_ESTIMATED' && coords.length >= 2) {
+        // Collect planned trajectory line for ROUTE_ESTIMATED vehicles.
+        // In the dispatcher tenant view the projection is only drawn for the
+        // unit currently under inspection, never as ambient orange corridors.
+        if (
+          v.tracking_mode === 'ROUTE_ESTIMATED' &&
+          coords.length >= 2 &&
+          (!hideEstimatedRoutes || isSelected)
+        ) {
           estimatedRouteData.push({
             path: coords,
             color: [245, 158, 11, 150],
@@ -856,7 +883,7 @@ export function FleetVehicleLayer({
               badge = 'ADS-B';
               textColor = [192, 132, 252, 255]; // purple
             } else if (targetVeh.tracking_mode === 'ROUTE_ESTIMATED') {
-              badge = 'ESTIMASI';
+              badge = 'PROYEKSI';
               textColor = [245, 158, 11, 255]; // amber
             }
 
@@ -1017,7 +1044,7 @@ export function FleetVehicleLayer({
         overlayRef.current.setProps({ layers: [] });
       }
     };
-  }, [map, activeRoutes, activeRouteIdx, modalityFilter, simSpeed, handleVehicleSelect]);
+  }, [map, activeRoutes, activeRouteIdx, modalityFilter, simSpeed, handleVehicleSelect, hideEstimatedRoutes]);
 
   const vehicle = selectedVehicle?.vehicle;
   const isMaritime = vehicle?.modality === 'maritime';

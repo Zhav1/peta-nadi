@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { CrisisState } from '@/lib/types';
+import { getBaseUrl } from '@/lib/api';
 
 export interface AgentStreamStatus {
   agent_id: string;
@@ -45,7 +46,7 @@ export function useCrisisSimulationStream() {
       setError(null);
       setActiveAgent('data_collection');
 
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const apiUrl = getBaseUrl();
 
       try {
         const response = await fetch(`${apiUrl}/api/v1/simulate/stream`, {

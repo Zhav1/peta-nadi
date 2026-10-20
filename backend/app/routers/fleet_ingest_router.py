@@ -7,7 +7,7 @@ import io
 import csv
 import logging
 from typing import Optional, List, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, status
 
 from app.schemas.fleet_ingest import (
     SingleVehicleRegisterRequest,
@@ -16,7 +16,7 @@ from app.schemas.fleet_ingest import (
     FleetIngestResponse,
     ManifestTemplateResponse,
 )
-from app.auth.supabase_auth import get_optional_user, UserSession
+from app.auth.supabase_auth import get_optional_user, UserSession, ROLE_DISPATCHER
 from app.services.telemetry_service import (
     telemetry_service,
     SUMATRA_STRATEGIC_HUBS,
@@ -282,9 +282,22 @@ async def ingest_tms_telemetry(payload: TMSVehicleTelemetryPing):
 
 
 @router.get("/custom", response_model=List[Dict[str, Any]])
-async def list_custom_fleet(modality: Optional[str] = None):
-    """Retrieve all custom user-onboarded fleet vehicles."""
-    return telemetry_service.list_custom_vehicles(modality=modality)
+async def list_custom_fleet(
+    modality: Optional[str] = None,
+    company_id: Optional[str] = Query(None, description="Tenant filter for regulator/guest introspection"),
+    user: UserSession = Depends(get_optional_user),
+):
+    """
+    Retrieve custom user-onboarded fleet vehicles.
+    Dispatchers only ever see their own tenant's onboarded assets; regulator and
+    guest sessions keep the macro view (optionally narrowed with ?company_id=).
+    """
+    scoped_company = company_id
+    if user and user.role == ROLE_DISPATCHER:
+        scoped_company = user.company_id
+        if not scoped_company:
+            return []
+    return telemetry_service.list_custom_vehicles(modality=modality, company_id=scoped_company)
 
 
 @router.delete("/custom/{vehicle_id}")

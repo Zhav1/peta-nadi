@@ -1,16 +1,10 @@
-export function getBaseUrl(): string {
-  if (process.env.NEXT_PUBLIC_API_URL) {
-    const envUrl = process.env.NEXT_PUBLIC_API_URL;
-    // Auto-sanitize deprecated host to eliminate CORS and 404s in production Vercel
-    if (!envUrl.includes('prehub-backend.onrender.com')) {
-      return envUrl;
-    }
-  }
-  if (typeof window !== 'undefined' && !['localhost', '127.0.0.1'].includes(window.location.hostname)) {
-    return 'https://peta-nadi.onrender.com';
-  }
-  return 'http://localhost:8000';
-}
+import {
+  PRODUCTION_API_BASE_URL,
+  getBaseUrl,
+  sanitizeBaseUrl,
+} from './baseUrl';
+
+export { PRODUCTION_API_BASE_URL, getBaseUrl, sanitizeBaseUrl };
 
 let currentAuthToken: string | null = null;
 
@@ -207,10 +201,43 @@ export const api = {
   geocode: {
     nodes: () =>
       request<{ nodes: import('./types').GeocodeNode[]; total: number }>('/api/v1/geocode/nodes'),
-    search: (q: string) =>
-      request<{ results: import('./types').GeocodeSearchResult[]; query: string }>(
-        `/api/v1/geocode/search?q=${encodeURIComponent(q)}`
-      ),
+    /**
+     * Gazetteer search with a hard client timeout.
+     *
+     * The Render backend cold-starts in 60-80s; without a timeout the fetch
+     * hangs forever and the map search spinner never resolves. On timeout we
+     * abort and throw a non-Abort error so the UI can say the lookup failed
+     * instead of silently showing a partial list.
+     */
+    search: async (
+      q: string,
+      signal?: AbortSignal,
+      timeoutMs: number = 20000
+    ) => {
+      const controller = new AbortController();
+      const forwardAbort = () => controller.abort();
+      if (signal) {
+        if (signal.aborted) controller.abort();
+        else signal.addEventListener('abort', forwardAbort, { once: true });
+      }
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        return await request<{
+          results: import('./types').GeocodeSearchResult[];
+          query: string;
+          count?: number;
+          status?: string;
+        }>(`/api/v1/geocode/search?q=${encodeURIComponent(q)}`, { signal: controller.signal });
+      } catch (err) {
+        if (isAbortError(err) && !(signal?.aborted)) {
+          throw new Error(`Pencarian backend melebihi ${Math.round(timeoutMs / 1000)} detik`);
+        }
+        throw err;
+      } finally {
+        clearTimeout(timer);
+        signal?.removeEventListener('abort', forwardAbort);
+      }
+    },
     reverse: (lat: number, lon: number) =>
       request<import('./types').GeocodeSearchResult>(`/api/v1/geocode/reverse?lat=${lat}&lon=${lon}`),
   },
@@ -296,8 +323,11 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(payload),
       }),
-    listCustom: (modality?: string) => {
-      const qs = modality && modality !== 'all' ? `?modality=${encodeURIComponent(modality)}` : '';
+    listCustom: (modality?: string, company_id?: string) => {
+      const sp = new URLSearchParams();
+      if (modality && modality !== 'all') sp.append('modality', modality);
+      if (company_id) sp.append('company_id', company_id);
+      const qs = sp.toString() ? `?${sp.toString()}` : '';
       return request<import('./types').FleetVehicle[]>(`/api/v1/fleet/custom${qs}`);
     },
     deleteCustom: (vehicleId: string) =>
@@ -311,6 +341,56 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(payload),
       }),
+    // Phase 44: master truck asset (Step 1) + travel/rit ledger (Step 2)
+    createTruck: (payload: import('./types').TruckAssetCreatePayload) =>
+      request<import('./types').TruckAsset>('/api/v1/fleet/trucks', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+    listTrucks: (company_id?: string) => {
+      const qs = company_id ? `?company_id=${encodeURIComponent(company_id)}` : '';
+      return request<import('./types').TruckAsset[]>(`/api/v1/fleet/trucks${qs}`);
+    },
+    createTravel: (payload: import('./types').TravelCreatePayload) =>
+      request<import('./types').TravelRecord>('/api/v1/fleet/travels', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+    listTravels: (params?: { company_id?: string; status?: string; truck_id?: string; limit?: number }) => {
+      const sp = new URLSearchParams();
+      if (params?.company_id) sp.append('company_id', params.company_id);
+      if (params?.status) sp.append('status', params.status);
+      if (params?.truck_id) sp.append('truck_id', params.truck_id);
+      if (params?.limit) sp.append('limit', String(params.limit));
+      const qs = sp.toString() ? `?${sp.toString()}` : '';
+      return request<import('./types').TravelListResponse>(`/api/v1/fleet/travels${qs}`);
+    },
+    getTravel: (travelId: string) =>
+      request<import('./types').TravelRecord>(`/api/v1/fleet/travels/${encodeURIComponent(travelId)}`),
+    updateTravel: (travelId: string, payload: import('./types').TravelUpdatePayload) =>
+      request<import('./types').TravelRecord>(`/api/v1/fleet/travels/${encodeURIComponent(travelId)}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      }),
+    solveTravelHedging: (travelId: string, payload: {
+      p_disruption?: number;
+      detour_distance_km?: number;
+      detour_time_hours?: number;
+      hold_wait_hours?: number;
+      toll_segments?: string[];
+      downtime_fixed_fee_idr?: number;
+      inflation_shock_factor?: number;
+    }) =>
+      request<{ status: string; travel_id: string; hedging: Record<string, any> }>(
+        `/api/v1/fleet/travels/${encodeURIComponent(travelId)}/hedging`,
+        { method: 'POST', body: JSON.stringify(payload) }
+      ),
+  },
+  erp: {
+    summary: (company_id?: string) => {
+      const qs = company_id ? `?company_id=${encodeURIComponent(company_id)}` : '';
+      return request<import('./types').ERPSummaryResponse>(`/api/v1/erp/summary${qs}`);
+    },
   },
   news: {
     live: () =>

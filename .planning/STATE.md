@@ -2,36 +2,42 @@
 gsd_state_version: "1.0"
 milestone: M4
 milestone_name: PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability
-current_phase: 79
-current_phase_name: Small-City Routing, Loading/Cancel Banner, Human Names
+current_phase: 82
+current_phase_name: Truck/Travel Split, ERP Ledger & Two-Step Onboarding
 status: complete
-stopped_at: "Phase 79 complete: regency-ID normalization + explicit no_route backend refusal, persistent routing status banner with AbortController/Batal and stale-request guards, formatNode human labels, corridor legend with SIMULASI/OFFLINE provenance and visibility toggles."
-last_updated: "2026-10-20T12:00:00.000Z"
-last_activity: 2026-10-20
-last_activity_desc: "Phase 79 executed & verified: 11 code files (small-city routing, loading-cancel banner, human names + legend), tsc exit 0, py_compile exit 0, 10 routing tests passing, pushed to origin/main."
+stopped_at: "Phase 82 complete: truck_assets + travels master/transaction split with migration 014, ledger-derived ERP savings from persisted columns, two-step onboarding wizard, tenant-scoped fleet with no mock fallback for dispatchers, canonical base-URL resolver + WebSocket base fix, render.yaml service renamed to peta-nadi."
+last_updated: "2026-10-21T00:00:00.000Z"
+last_activity: 2026-10-21
+last_activity_desc: "Phases 80-82 consolidated and pushed: gazetteer search E2E fix (ranking/dedupe/cache/timeout + single base-URL resolver), dispatcher tenant/fleet scope enforcement, truck/travel ERP ledger + onboarding, WS base-URL fix, render.yaml rename; consolidated learnings written, tsc exit 0."
 state_head: HEAD
 progress:
-  total_phases: 79
-  completed_phases: 79
-  total_plans: 98
-  completed_plans: 98
+  total_phases: 82
+  completed_phases: 82
+  total_plans: 101
+  completed_plans: 101
   percent: 100.0
 ---
 
 # STATE: PreHub Project Memory
 
-**Last Updated:** 2026-10-20
+**Last Updated:** 2026-10-21
 **Active Milestone:** M4 - PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability [COMPLETED ✅]
-**Current Phase:** 79
+**Current Phase:** 82
 
 ---
 
 ## Current Position
 
-Phase: 79 (Small-City Routing, Loading/Cancel Banner, Human Names) - COMPLETE ✅
-Status: (1) Fixed small-city routing by normalizing CrisisMap regency feature IDs (`regency-<idx>-<slug>`) before gazetteer matching and removing the silent early return in `updateBaselineMapboxRoute`; (2) replaced the backend's first/last-graph-node snap (Belawan→Bakauheni whole-island line) with an explicit `status: "no_route"` response; (3) added the persistent `RoutingStatusBanner` with elapsed time, cold-render hint and a working Batal (AbortController through api/aiDynamicRouter/mapboxRoutingService, request-id staleness guards); (4) added `lib/formatNode.ts` for human endpoint labels (name + kabupaten + province) and merged live `/geocode/nodes` data into the local gazetteer instead of overwriting it; (5) added the corridor legend (direct land vs island ring), SIMULASI/OFFLINE vs LIVE provenance badge and Darat/Laut/Udara visibility toggles. Verified tsc exit 0, py_compile exit 0, 10 routing tests passing.
-Last activity: 2026-10-20 - Phase 79 executed, docs written, verified, and pushed.
-Next action: Render redeploy with `OPENCODE_REASONING_EFFORT=low` (missing from render.yaml); then the P1 nits in `.planning/phases/79-small-city-routing-loading-human-names/79-06-NEXT-CONTEXT.md` (HITL raw-ID fallback, fitBounds, HUD ms scope, surface `no_route`).
+Phase: 82 (Truck/Travel Split, ERP Ledger & Two-Step Onboarding) - COMPLETE ✅
+Status: Phases 80-82 landed together in one working tree and commit.
+(1) **Phase 80 — Gazetteer search E2E fix.** `frontend/lib/baseUrl.ts` is now the single resolver (`sanitizeBaseUrl` rejects quotes/whitespace/trailing slash/missing scheme/non-http/relative/`prehub-backend.onrender.com`); `api.ts`, the `/api/proxy` route and `FleetOnboardingModal` all use it instead of reading `NEXT_PUBLIC_API_URL` directly. Search ranks by `(score, tier, len(slug), slug)` before truncating, de-dupes aliases by proximity (1.5 km server / 0.05° client), caches only non-empty results under `lrip:geocode:search:v2:` (24 h), skips Nominatim on an exact gazetteer hit, and raises a distinct timeout error (20 s) rather than `AbortError`. `/geocode/nodes` skips coordinate-less entries with a warning instead of defaulting to the Medan centroid; UI badge falls back to `Titik`.
+(2) **Phase 81 — Dispatcher tenant/fleet scope.** Dispatcher scope comes from the JWT `company_id` claim; `?company_id=` is ignored for that role. `get_unified_fleet` applies tenancy (`matches_tenant`, `tenant_only`) before modality, `FALLBACK_FLEET` is never substituted for a dispatcher, the vehicle cache is cleared on role/tenant change, null `path` normalizes to `[]` so one un-routed row cannot 500 the list, the retry keeps `Authorization` + `getBaseUrl()`, and `PROYEKSI` routes only render on explicit inspection.
+(3) **Phase 82 — Truck/travel ERP onboarding.** `truck_assets` (master, tenant-owned) + `travels` (transaction, snapshots `truck_name`/`company_id`/`driver_name`) with migration 014; `truck_id` is the business key and the ledger survives asset deletion. ERP savings are summed from persisted columns and named constants, rounded once at the component boundary (`saved_total == baseline − actual`), and planned rits show baseline but zero savings. Missing values render `Belum tersedia`. Two-step wizard requires and validates coordinates before submit.
+(4) **WebSocket base fix.** `useCrisisSocket` resolves `getWsBaseUrl()` per connection (derives `wss://` from the API base, rejects the dead host and localhost overrides outside dev) instead of capturing `ws://localhost:8000` at module scope.
+(5) **Render rename.** `render.yaml` service `prehub-backend` → `peta-nadi` to match the deployed host; dashboard name, health check, and `CORS_ORIGINS` still need reconciling before the next deploy.
+Verified: `npx tsc --noEmit` exit 0; search suite `test_geocode_search.py` 10 tests, travels/ERP 11 tests, fleet ingest 12 tests, combined 65-test run green. Supabase migration 014 is defined but not applied; all writes remain local SQLite.
+Last activity: 2026-10-21 - Phases 80-82 docs consolidated, learnings appended, committed and pushed.
+Next action: apply migration 014 + add RLS predicates keyed on the JWT `company_id` claim; wire a `sync_status` drain (or drop the `pending` write); reconcile the Render dashboard service name; add a backend `webServer` to `playwright.config.ts`; then the Phase 79 P1 nits in `.planning/phases/79-small-city-routing-loading-human-names/79-06-NEXT-CONTEXT.md`.
 
 ---
 
@@ -120,6 +126,9 @@ Next action: Render redeploy with `OPENCODE_REASONING_EFFORT=low` (missing from 
 | 77 | Route Detail Modal & HITL Hardening | **COMPLETE** ✅ | Route detail modal with 5-section inspection (corridor metrics, multi-hazard exposure, commodity perishability, TMS telemetry, dispatch action); strict role-gated commits (Dispatcher creates approvals & TMS pings; Guest/Regulator gets sandbox preview without writes); Supabase migration 013 applied for route_id and incident_id schema convergence; probe parity verified across 28 backend endpoints. |
 | 78 | LLM Gateway Network Resilience, Connect Timeout Retry & Reasoning Effort Calibration | **COMPLETE** ✅ | 2-attempt exponential backoff retry loop for httpx.TimeoutException/NetworkError/5xx; reasoning effort calibration (OPENCODE_REASONING_EFFORT=low) preventing token exhaustion; fallback reasoning_content extraction; 11 passing unit tests in test_llm_gateway.py; git commit 543855b pushed. |
 | 79 | Small-City Routing, Loading/Cancel Banner, Human Names | **COMPLETE** ✅ | `normalizeRegencyId` fixes `regency-<idx>-<slug>` gazetteer mismatch; backend returns explicit `no_route` instead of Belawan→Bakauheni first/last-node snap; `RoutingStatusBanner` with elapsed time + Batal (AbortController through api/aiDynamicRouter/mapboxRoutingService, request-id guards); `lib/formatNode.ts` human labels merged with live `/geocode/nodes`; corridor legend (direct land vs island ring), SIMULASI/OFFLINE provenance, Darat/Laut/Udara toggles. tsc 0, py_compile 0, 10 routing tests passing. |
+| 80 | Gazetteer Search Kota/Desa/Titik E2E Fix | **COMPLETE** ✅ | Single canonical base-URL resolver (`lib/baseUrl.ts`) across api/proxy/modal; ranking `(score, tier, len, slug)` + proximity de-dupe (1.5 km / 0.05°) before `limit`; no negative caching; Redis `search:v2` namespace; exact-hit Nominatim skip; distinct 20 s timeout error vs `AbortError`; no centroid default for missing coords; badge falls back to `Titik`. 10 search tests, tsc 0. |
+| 81 | Dispatcher Tenant & Fleet Scope | **COMPLETE** ✅ | JWT `company_id` claim is authoritative and `?company_id=` is ignored for dispatchers; `tenant_only` applies tenancy before modality in `get_unified_fleet`; no `FALLBACK_FLEET` for scoped roles; cache cleared on role/tenant change; null `path` → `[]`; retry keeps `Authorization` + resolver; `PROYEKSI` only on inspect. 12 fleet-ingest + 9 telemetry tests, 17/17 scope assertions, tsc 0. |
+| 82 | Truck/Travel Split, ERP Ledger & Two-Step Onboarding | **COMPLETE** ✅ | `truck_assets` + `travels` (snapshotted master fields) with migration 014; ledger-derived ERP savings, rounded once at component boundary, zero savings until `actual_recorded`; two-step wizard with required coordinates; WS base fix (`getWsBaseUrl` per connection); `render.yaml` renamed to `peta-nadi`. 11 travels/ERP tests, combined 65-test run green, tsc 0. |
 
 ---
 
@@ -127,6 +136,7 @@ Next action: Render redeploy with `OPENCODE_REASONING_EFFORT=low` (missing from 
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
+| 2026-10-21 | Phases 80-82: Search E2E, Dispatcher Scope, Truck/Travel ERP | (1) One canonical base-URL resolver; direct `NEXT_PUBLIC_API_URL` reads and module-scope `WS_BASE` removed, because a dead/malformed value produced different failures per screen. (2) Search ranks before truncating, de-dupes aliases by proximity, caches only positives under a versioned Redis namespace, and keeps timeout distinct from cancellation. (3) A token claim is the scope, not a default — dispatchers cannot widen scope via query params, and mock fleets are never substituted for scoped roles. (4) Assets (`truck_assets`) and trips (`travels`) are separate tables with snapshotted master fields so history and the ledger survive asset edits; ERP numbers derive only from persisted columns, planned trips claim no savings, and missing values stay explicit. |
 | 2026-10-20 | Phase 78: LLM Gateway Network Resilience, Connect Timeout Retry & Reasoning Effort Calibration | Resolved Render-to-Cloudflare ConnectTimeout and token exhaustion vulnerabilities: (1) Added 2-attempt exponential backoff retry (1s -> 2s) for network timeouts and 5xx errors; (2) added reasoning_effort parameter and config default to low so reasoning models (deepseek-v4.1-flash, mimo-v2.6-pro) allocate budget to content rather than running out of tokens during internal reasoning; (3) extracted reasoning_content fallback if content is empty; (4) verified 11 passing unit tests. |
 | 2026-10-20 | Phase 77: Route Detail Modal & HITL Hardening | Every route selection (sidebar, map polyline, map ETA badge) routes to full 5-section RouteDetailModal; selecting a route creates a HITL pending item in queue; strict role-gating ensures only DISPATCHER can POST /approvals or fire TMS pings, while GUEST and REGULATOR receive watermarked sandbox previews; migration 013 aligns route_id and incident_id columns across route_approvals and incidents tables; probe parity confirmed. |
 | 2026-10-19 | Phase 76: Pan-Sumatra Spatial Precision, Multi-Agent Consensus Escalation & Unified God's-Eye HUD | Removed generic bare 'panjang' from GAZETTEER_NODES and enforced longest-key descending matching with word boundary regex, permanently ending 'antrean panjang' misattribution to Pelabuhan Panjang Lampung; established 3-tier micro-spatial bounding replacing 16-20 km circles with Tier A corridor points (0.6–1.2 km anisotropic ellipse), Tier B subdistricts (1.5–2.2 km ADM3 polygons), and Tier C regencies (3.2–4.5 km advisory capped at YELLOW_CLARIFY, mathematically barred from synthesizing RED physical blockage); unified top HUD telemetry bar declutters map viewport; 0 tsc errors, 100% clean Next.js build. |
@@ -215,8 +225,8 @@ These scripts validate the economic correlation hypotheses that underpin Agent 5
 
 ## Session
 
-**Last session:** 2026-10-19T12:00:00.000Z
-**Stopped at:** Completed Phase 75 (full-body scraping, Workhorse LLM content verifier, post-disaster construction guards, schema v4) and documentation via gsd-docs-update
+**Last session:** 2026-10-21T00:00:00.000Z
+**Stopped at:** Phases 80-82 complete and consolidated — search E2E fix, dispatcher tenant/fleet scope, truck/travel ERP + onboarding, WS base-URL fix, render.yaml rename, consolidated learnings.
 **Resume file:** None
 
 ## Performance Metrics

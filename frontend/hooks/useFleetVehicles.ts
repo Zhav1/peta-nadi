@@ -2,8 +2,11 @@
 
 import { useState, useEffect, useRef } from 'react';
 import type { FleetVehicle } from '@/lib/types';
-import { api } from '@/lib/api';
+import { api, getBaseUrl, getAuthToken } from '@/lib/api';
 import { useAuth } from '@/lib/authContext';
+import { isLiveTracked, selectTenantVehicles } from '@/lib/fleetScope';
+
+export { isLiveTracked, isTenantAsset } from '@/lib/fleetScope';
 
 const FALLBACK_FLEET: FleetVehicle[] = [
   // Maritime (Live AIS Pelindo Radar & Malacca Strait Vessels)
@@ -285,6 +288,10 @@ export interface UseFleetVehiclesOptions {
   enableSimulationFallback?: boolean;
 }
 
+/**
+ * Builds the fleet query string. Tenant scoping is passed explicitly so a
+ * dispatcher request always carries the JWT company_id claim.
+ */
 function buildFleetQuery(modality?: string, company_id?: string): string {
   const sp = new URLSearchParams();
   if (modality && modality !== 'all') sp.append('modality', modality);
@@ -306,14 +313,21 @@ async function fetchFleetWithFallback(
   } catch (err: unknown) {
     if (typeof window !== 'undefined') {
       try {
+        // Same-origin/direct retry must keep the tenant scope: getBaseUrl() is the
+        // single source of truth for the API host (no hardcoded Render URL), and
+        // the bearer token keeps the server-side company_id claim intact.
         const qs = buildFleetQuery(modality, companyId);
+        const token = getAuthToken();
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 20000);
         const directRes = await fetch(
-          `https://peta-nadi.onrender.com/api/v1/fleet/vehicles${qs}`,
+          `${getBaseUrl()}/api/v1/fleet/vehicles${qs}`,
           {
             signal: controller.signal,
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
           }
         );
         clearTimeout(timeoutId);
@@ -324,7 +338,7 @@ async function fetchFleetWithFallback(
           }
         }
       } catch {
-        // Direct Render fallback failed or timed out, bubble original error
+        // Direct retry failed or timed out, bubble original error
       }
     }
     throw err;
@@ -336,7 +350,12 @@ export function useFleetVehicles(
   options?: UseFleetVehiclesOptions
 ) {
   const { user, role } = useAuth();
-  const effectiveCompanyId = role === 'DISPATCHER' ? user?.company_id : undefined;
+  const isDispatcher = role === 'DISPATCHER';
+  // Dispatchers are strictly tenant-scoped to their JWT claim; regulators and
+  // guests keep the macro situational-awareness view.
+  const claimCompanyId = user?.company_id;
+  const effectiveCompanyId = isDispatcher ? claimCompanyId : undefined;
+  const isTenantScoped = isDispatcher && Boolean(effectiveCompanyId);
 
   const [isSimulationMode, setIsSimulationMode] = useState<boolean>(
     options?.enableSimulationFallback ?? true
@@ -347,6 +366,12 @@ export function useFleetVehicles(
 
   // 90-second sliding TTL vehicle cache to prevent vessel count drops during partial polling
   const vehicleCacheRef = useRef<Map<string, { vehicle: FleetVehicle; timestamp: number }>>(new Map());
+
+  // Cache entries must never outlive a tenant/role switch (e.g. regulator →
+  // dispatcher) or a previous tenant's assets would linger in the new view.
+  useEffect(() => {
+    vehicleCacheRef.current.clear();
+  }, [effectiveCompanyId, isDispatcher]);
 
   const mergeWithCache = (incoming: FleetVehicle[]): FleetVehicle[] => {
     const now = Date.now();
@@ -432,7 +457,7 @@ export function useFleetVehicles(
       isMounted = false;
       clearInterval(interval);
     };
-  }, [modality, effectiveCompanyId]);
+  }, [modality, effectiveCompanyId, isDispatcher]);
 
   // Evaluate whether a vehicle has an active hardware transponder or live GPS ping
   const isTransponderActive = (v: FleetVehicle): boolean => {
@@ -460,9 +485,26 @@ export function useFleetVehicles(
     return false;
   };
 
-  const baseVehicles = rawVehicles.length > 0
-    ? rawVehicles
-    : (modality ? FALLBACK_FLEET.filter((v) => v.modality === modality) : FALLBACK_FLEET);
+  // --- Tenant scoping -------------------------------------------------------
+  // Dispatcher: only the caller's own assets survive. No FALLBACK_FLEET, ever —
+  // a mock corridor can never be mistaken for a real truck.
+  const tenantVehicles: FleetVehicle[] = isDispatcher
+    ? selectTenantVehicles(rawVehicles, effectiveCompanyId)
+    : rawVehicles;
+
+  // Tenant assets split by tracking fidelity. The map draws LIVE_GPS only;
+  // ROUTE_ESTIMATED rows stay discoverable (with a PROYEKSI badge) but are
+  // never drawn as orange corridor lines by default.
+  const liveTenantVehicles = tenantVehicles.filter(isLiveTracked);
+  const estimatedTenantVehicles = tenantVehicles.filter(
+    (v) => v.tracking_mode === 'ROUTE_ESTIMATED'
+  );
+
+  const baseVehicles = isDispatcher
+    ? tenantVehicles
+    : rawVehicles.length > 0
+      ? rawVehicles
+      : (modality ? FALLBACK_FLEET.filter((v) => v.modality === modality) : FALLBACK_FLEET);
 
   const customVehicles = baseVehicles.filter(
     (v) =>
@@ -471,13 +513,16 @@ export function useFleetVehicles(
       (v as any).is_custom === true
   );
 
-  // When isSimulationMode is true: "Semua Armada Live & Rute Terestimasi" (all active multimodal units)
+  // When isSimulationMode is true: "Semua Armada Live & Rute Terestimasikan" (all active multimodal units)
   // When isSimulationMode is false: "Hanya Transponder & GPS Aktif"
   // STILL keeps AIS_LIVE, ADSB_LIVE, OPENSKY_NETWORK, PELINDO_SUMATRA_RADAR, LIVE_GPS, TMS_GPS_WEBHOOK, and CUSTOM_DISPATCHER visible - NEVER an empty []!
+  // Dispatchers never get this toggle: their view is always the live tenant slice.
   const transponderOnlyVehicles = baseVehicles.filter(isTransponderActive);
-  const vehicles: FleetVehicle[] = isSimulationMode
-    ? baseVehicles
-    : (transponderOnlyVehicles.length > 0 ? transponderOnlyVehicles : baseVehicles);
+  const vehicles: FleetVehicle[] = isDispatcher
+    ? liveTenantVehicles
+    : isSimulationMode
+      ? baseVehicles
+      : (transponderOnlyVehicles.length > 0 ? transponderOnlyVehicles : baseVehicles);
 
   return {
     vehicles,
@@ -487,7 +532,17 @@ export function useFleetVehicles(
     customCount: customVehicles.length,
     activeTransponderCount: transponderOnlyVehicles.length,
     totalCount: baseVehicles.length,
-    isSimulationMode,
+    isSimulationMode: isDispatcher ? false : isSimulationMode,
     setIsSimulationMode,
+    // Tenant/diagnostics surface for honest empty states + PROYEKSI roster
+    isDispatcher,
+    isTenantScoped,
+    companyId: effectiveCompanyId ?? null,
+    tenantVehicles: isDispatcher ? tenantVehicles : baseVehicles,
+    liveTenantVehicles,
+    estimatedTenantVehicles,
+    tenantAssetCount: isDispatcher ? tenantVehicles.length : baseVehicles.length,
+    hasTenantAssets: isDispatcher ? tenantVehicles.length > 0 : baseVehicles.length > 0,
+    canToggleSimulation: !isDispatcher,
   };
 }

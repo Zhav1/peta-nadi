@@ -777,6 +777,15 @@ export function MitigationTab({
 
   const confidenceScore = Math.round((crisis.overall_confidence || 0.91) * 100);
 
+  // Impact block values come from the agent payload. When the field is absent we
+  // state "belum terverifikasi" instead of inventing a headline percentage.
+  const predictedDelayRaw = Number(crisis.prediction_finding?.data?.estimated_delay_hours);
+  const predictedDelayHours = Number.isFinite(predictedDelayRaw) ? predictedDelayRaw : null;
+  const inflationPctRaw = Number(crisis.inflation_forecast?.pct_increase);
+  const inflationPct = Number.isFinite(inflationPctRaw) ? inflationPctRaw : null;
+  const inflationRegion = crisis.inflation_forecast?.region || crisis.region;
+  const inflationCommodity = crisis.inflation_forecast?.commodity;
+
   return (
     <div className="flex flex-col gap-4 text-slate-100">
       {/* Phase 77: sandbox notice — local-only preview, zero server POST */}
@@ -818,11 +827,21 @@ export function MitigationTab({
           </div>
           <div className="flex items-center gap-2 text-amber-300">
             <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5 text-amber-400" /> Keterlambatan Logistik:</span>
-            <span className="font-bold">+4.2 Jam Delay Pasokan</span>
+            <span className={`font-bold ${predictedDelayHours === null ? 'text-slate-400' : ''}`}>
+              {predictedDelayHours === null
+                ? 'Belum terverifikasi'
+                : `+${predictedDelayHours.toFixed(1)} Jam Delay Pasokan`}
+            </span>
           </div>
           <div className="flex items-center gap-2 text-emerald-300">
             <span className="flex items-center gap-1"><TrendingUp className="w-3.5 h-3.5 text-emerald-400" /> Proyeksi Inflasi Pangan:</span>
-            <span className="font-bold">Potensi Inflasi Medan +2.1% (Cabai +14.2%)</span>
+            <span className={`font-bold ${inflationPct === null ? 'text-slate-400' : ''}`}>
+              {inflationPct === null
+                ? 'Belum terverifikasi'
+                : `Potensi Inflasi ${inflationRegion} +${inflationPct.toFixed(1)}%${
+                    inflationCommodity ? ` (${inflationCommodity.replace(/_/g, ' ')})` : ''
+                  }`}
+            </span>
           </div>
         </div>
       </div>

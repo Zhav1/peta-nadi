@@ -47,6 +47,8 @@ from app.db.local_storage import (
     delete_custom_vehicle as db_delete_custom_vehicle,
     log_telemetry_ping as db_log_telemetry_ping,
     get_latest_telemetry_ping as db_get_latest_telemetry_ping,
+    list_truck_assets as db_list_truck_assets,
+    list_travels as db_list_travels,
 )
 
 logger = logging.getLogger(__name__)
@@ -1062,6 +1064,37 @@ MASTER_FLEET_DEFINITIONS: List[Dict[str, Any]] = [
 ]
 
 
+def matches_tenant(
+    unit: Dict[str, Any],
+    company_id: Optional[str],
+    org_name: Optional[str] = None,
+) -> bool:
+    """
+    Resolves whether a fleet unit belongs to the caller's tenant.
+
+    The enforceable JWT claim (company_id) is matched against the unit's stored
+    company_id/organization_id. The human-readable org name is only used as a
+    fallback for *legacy* rows that never stored a claim (company_id missing or
+    identical to organization_id) — a unit with an explicit, different claim can
+    never be claimed just because two tenants share an org display name.
+    """
+    if company_id:
+        if unit.get("company_id") == company_id or unit.get("organization_id") == company_id:
+            return True
+
+    if org_name:
+        unit_company = unit.get("company_id")
+        unit_org = unit.get("organization_id")
+        legacy_row = not unit_company or unit_company == unit_org
+        if legacy_row and (
+            unit_org == org_name
+            or unit.get("company_name") == org_name
+            or unit_company == org_name
+        ):
+            return True
+    return False
+
+
 class TelemetryService:
     """
     Multi-modal telemetry ingestion and cache service.
@@ -1415,6 +1448,10 @@ class TelemetryService:
             d = dict(item)
             if not d.get("path") or len(d.get("path", [])) < 2:
                 d["path"] = self._resolve_vehicle_path(d.get("origin"), d.get("destination"))
+            if not d.get("tracking_mode"):
+                d["tracking_mode"] = "ROUTE_ESTIMATED"
+            if not d.get("company_id"):
+                d["company_id"] = d.get("organization_id")
             processed.append(d)
         count = save_batch_custom_vehicles(processed, db_path=db_path)
         logger.info(f"Registered batch manifest of {count} custom fleet vehicles.")
@@ -1437,9 +1474,14 @@ class TelemetryService:
             del self._live_pings[vehicle_id]
         return db_delete_custom_vehicle(vehicle_id, db_path=db_path)
 
-    def list_custom_vehicles(self, modality: Optional[str] = None, db_path: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Retrieves list of custom registered fleet vehicles."""
-        return db_list_custom_vehicles(modality=modality, db_path=db_path)
+    def list_custom_vehicles(
+        self,
+        modality: Optional[str] = None,
+        db_path: Optional[str] = None,
+        company_id: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Retrieves list of custom registered fleet vehicles, optionally tenant-scoped."""
+        return db_list_custom_vehicles(modality=modality, db_path=db_path, company_id=company_id)
 
     def _enrich_maritime_vessel(self, vessel: Dict[str, Any], live_ais: Dict[str, Any]) -> Dict[str, Any]:
         """Enriches maritime vessel with transponder kinematics and live AIS stream data if present."""
@@ -1592,7 +1634,7 @@ class TelemetryService:
             item["current_location"] = item["location"]
             item["speed_kmh"] = float(live_ping.get("speed_kmh") or item.get("speed_kmh") or 60.0)
             item["tracking_mode"] = "LIVE_GPS"
-            item["signal_status"] = "LIVE_GPS"
+            item["signal_status"] = "LIVE_STREAM"
             item["telemetry_source"] = "IOT_TRUCK_GPS"
             if live_ping.get("heading_deg") is not None:
                 item["heading_deg"] = float(live_ping["heading_deg"])
@@ -1611,7 +1653,7 @@ class TelemetryService:
             item["heading_deg"] = curr_h
             t_mode = item.get("tracking_mode", "ROUTE_ESTIMATED")
             item["tracking_mode"] = t_mode
-            item["signal_status"] = "ROUTE_ESTIMATED" if t_mode == "ROUTE_ESTIMATED" else "LIVE_GPS"
+            item["signal_status"] = "SIMULATION_CACHE" if t_mode == "ROUTE_ESTIMATED" else "LIVE_STREAM"
             item["telemetry_source"] = "CORRIDOR_DEAD_RECKONING"
 
         temp = item.get("temperature_c")
@@ -1628,6 +1670,11 @@ class TelemetryService:
         item = dict(custom_unit)
         vid = item.get("vehicle_id")
         path = item.get("path") or []
+        # Every unit in the list response needs a usable `path`; an asset
+        # registered before any route/GPS fix exists must still surface in the
+        # roster instead of failing payload validation for the whole fleet.
+        if item.get("path") is None:
+            item["path"] = path
 
         if vid and vid in self._active_reroutes:
             rr = self._active_reroutes[vid]
@@ -1698,7 +1745,7 @@ class TelemetryService:
             item["location"] = {"type": "Point", "coordinates": [lon, lat]}
             item["current_location"] = item["location"]
             item["tracking_mode"] = "LIVE_GPS"
-            item["signal_status"] = "LIVE_GPS"
+            item["signal_status"] = "LIVE_STREAM"
             item["telemetry_source"] = "TMS_GPS_WEBHOOK"
             item["last_ping_seconds_ago"] = 0.5
         else:
@@ -1724,7 +1771,7 @@ class TelemetryService:
             item["current_location"] = item["location"]
             item["heading_deg"] = curr_h
             item["tracking_mode"] = tracking_mode
-            item["signal_status"] = "ROUTE_ESTIMATED" if tracking_mode == "ROUTE_ESTIMATED" else "LIVE_GPS"
+            item["signal_status"] = "SIMULATION_CACHE" if tracking_mode == "ROUTE_ESTIMATED" else "LIVE_STREAM"
             item["telemetry_source"] = "ROUTE_DEAD_RECKONING" if tracking_mode == "ROUTE_ESTIMATED" else "CUSTOM_DISPATCHER"
             item["last_ping_seconds_ago"] = 1.2
 
@@ -1755,20 +1802,106 @@ class TelemetryService:
         modality: Optional[str] = None,
         status: Optional[str] = None,
         company_id: Optional[str] = None,
-        db_path: Optional[str] = None
+        db_path: Optional[str] = None,
+        org_name: Optional[str] = None,
+        tenant_only: bool = False,
     ) -> List[Dict[str, Any]]:
         """
         Merges custom user-registered fleets, baseline 45-unit assets, live AIS maritime vessels,
         and live Sumatra aviation flights, applying cold-chain checks, dead-reckoning, tenancy, and filters.
+
+        When ``tenant_only`` is True (dispatcher scope) only assets that match the tenant
+        claim are returned — no macro maritime/air corridors leak into the tenant view.
         """
         # 1. Custom registered vehicles from SQLite
         enriched_custom: List[Dict[str, Any]] = []
         try:
             custom_units = db_list_custom_vehicles(db_path=db_path)
             for c in custom_units:
-                enriched_custom.append(self._enrich_custom_vehicle(c))
+                enriched = self._enrich_custom_vehicle(c)
+                # Legacy onboarded rows only carry organization_id. When the caller
+                # is the owning tenant, stamp the enforceable claim so the asset is
+                # returned as a tenant asset instead of disappearing from the list.
+                if company_id and matches_tenant(enriched, company_id, org_name):
+                    enriched["company_id"] = company_id
+                enriched_custom.append(enriched)
         except Exception as e:
             logger.error(f"Error loading custom vehicles from SQLite: {e}")
+
+        # 1b. Master truck assets (truck_assets) that were onboarded through the
+        # asset-master wizard but never written to custom_fleet_vehicles. They are
+        # synthesized as ROUTE_ESTIMATED tenant units so the owning dispatcher can
+        # still find them (roster + PROYEKSI inspection) instead of them vanishing.
+        try:
+            known_ids = {str(v.get("vehicle_id", "")).upper() for v in enriched_custom}
+            truck_assets = db_list_truck_assets()
+            if truck_assets:
+                try:
+                    travels = db_list_travels(limit=500)
+                except Exception:
+                    travels = []
+                latest_travel_by_truck: Dict[str, Dict[str, Any]] = {}
+                for t in travels:  # list_travels returns newest first
+                    key = str(t.get("truck_id", "")).upper()
+                    if key and key not in latest_travel_by_truck:
+                        latest_travel_by_truck[key] = t
+
+                for asset in truck_assets:
+                    tid = str(asset.get("truck_id") or "")
+                    if not tid or tid.upper() in known_ids:
+                        continue
+                    travel = latest_travel_by_truck.get(tid.upper(), {})
+                    tenant_company = asset.get("company_id")
+                    origin_coords = travel.get("origin_coords") or None
+                    dest_coords = travel.get("dest_coords") or None
+                    if (
+                        isinstance(origin_coords, list) and len(origin_coords) == 2
+                        and isinstance(dest_coords, list) and len(dest_coords) == 2
+                    ):
+                        path = [
+                            origin_coords,
+                            [round((origin_coords[0] + dest_coords[0]) / 2, 4),
+                             round((origin_coords[1] + dest_coords[1]) / 2, 4)],
+                            dest_coords,
+                        ]
+                    else:
+                        path = self._resolve_vehicle_path(
+                            travel.get("origin_name"), travel.get("destination_name")
+                        )
+                    synthesized = {
+                        "vehicle_id": tid,
+                        "name": asset.get("name") or tid,
+                        "modality": asset.get("modality") or "truck",
+                        "path": path,
+                        "driver_name": asset.get("driver_name"),
+                        "driver_phone": asset.get("driver_phone"),
+                        "vin": asset.get("vin"),
+                        "vehicle_golongan": asset.get("vehicle_golongan") or "GOL_II",
+                        "gross_weight_ton": asset.get("gross_weight_ton"),
+                        "origin": travel.get("origin_name"),
+                        "destination": travel.get("destination_name"),
+                        "cargo": travel.get("commodity_key"),
+                        "commodity_key": travel.get("commodity_key"),
+                        "cargo_tonnage": travel.get("cargo_tonnage"),
+                        "cargo_value_idr": travel.get("cargo_value_idr"),
+                        "sla_deadline_hours": travel.get("sla_deadline_hours"),
+                        "speed_kmh": 55.0,
+                        "status": "moving",
+                        "tracking_mode": "ROUTE_ESTIMATED",
+                        "origin_coords": travel.get("origin_coords") or None,
+                        "dest_coords": travel.get("dest_coords") or None,
+                        "company_id": tenant_company,
+                        "organization_id": asset.get("company_name") or tenant_company,
+                        "company_name": asset.get("company_name"),
+                        "created_by": asset.get("created_by"),
+                    }
+                    enriched = self._enrich_custom_vehicle(synthesized)
+                    if company_id and matches_tenant(enriched, company_id, org_name):
+                        enriched["company_id"] = company_id
+                    enriched_custom.append(enriched)
+                    known_ids.add(tid.upper())
+        except Exception as e:
+            logger.error(f"Error loading master truck assets into fleet view: {e}")
 
         # 2. Road Trucks from MASTER_FLEET_DEFINITIONS
         enriched_trucks: List[Dict[str, Any]] = []
@@ -1890,18 +2023,28 @@ class TelemetryService:
             filtered_fleet = [v for v in filtered_fleet if v.get("status") == status]
 
         if company_id:
-            filtered_fleet = [
-                v for v in filtered_fleet
-                if v.get("modality") in ("maritime", "air")
-                or v.get("company_id") == company_id
-                or v.get("organization_id") == company_id
-            ]
+            if tenant_only:
+                filtered_fleet = [
+                    v for v in filtered_fleet
+                    if matches_tenant(v, company_id, org_name)
+                ]
+            else:
+                filtered_fleet = [
+                    v for v in filtered_fleet
+                    if v.get("modality") in ("maritime", "air")
+                    or matches_tenant(v, company_id, org_name)
+                ]
 
         return filtered_fleet
 
-    async def get_all_vehicles(self, company_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    async def get_all_vehicles(
+        self,
+        company_id: Optional[str] = None,
+        org_name: Optional[str] = None,
+        tenant_only: bool = False,
+    ) -> List[Dict[str, Any]]:
         """Convenience async accessor returning unified fleet vehicles, optionally filtered by company_id."""
-        return self.get_unified_fleet(company_id=company_id)
+        return self.get_unified_fleet(company_id=company_id, org_name=org_name, tenant_only=tenant_only)
 
 
 def assign_baseline_tenancy(unit: Dict[str, Any]) -> Dict[str, Any]:

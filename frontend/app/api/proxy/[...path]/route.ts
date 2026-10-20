@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { PRODUCTION_API_BASE_URL, sanitizeBaseUrl } from '@/lib/baseUrl';
 
 type RouteContext = {
   params: Promise<{ path?: string[] }> | { path?: string[] };
@@ -8,14 +9,12 @@ async function handleProxy(req: NextRequest, context: RouteContext) {
   const resolvedParams = await Promise.resolve(context.params);
   const pathSegments = resolvedParams?.path || [];
 
-  let baseUrl =
-    req.headers.get('x-target-base-url') ||
-    process.env.NEXT_PUBLIC_API_URL ||
-    'https://peta-nadi.onrender.com';
-
-  if (baseUrl.includes('prehub-backend.onrender.com')) {
-    baseUrl = 'https://peta-nadi.onrender.com';
-  }
+  // Same sanitization as the client (trailing slash, missing scheme, dead host)
+  // so the proxy can never forward to `https://host//api/...` or prehub-backend.
+  const baseUrl =
+    sanitizeBaseUrl(req.headers.get('x-target-base-url')) ||
+    sanitizeBaseUrl(process.env.NEXT_PUBLIC_API_URL) ||
+    (process.env.NODE_ENV === 'production' ? PRODUCTION_API_BASE_URL : 'http://localhost:8000');
 
   const cleanBase = baseUrl.replace(/\/$/, '');
   const subpath = pathSegments.join('/');

@@ -201,3 +201,58 @@ The following items are prioritized for subsequent development phases:
 ### Open Concerns
 1. Confirm live Render ingestor enriches short teasers (check `body_scraped` / `article_body_chars` on fresh rows) and the Workhorse overlay fires (`llm_verified` badges in Evidence tab on Vercel).
 2. Confirm `OPENCODE_API_KEY` is set on Render — without it the batch path keeps heuristic baselines and `tier_reason` stays heuristic.
+
+---
+
+## 2026-10-21 — Phases 80-82 (search E2E, dispatcher scope, truck/travel ERP)
+
+### Fixes applied
+
+1. **One canonical API-base resolver, and no direct env reads.** `frontend/lib/baseUrl.ts` is the only place `NEXT_PUBLIC_API_URL` is read; `lib/api.ts`, `app/api/proxy/[...path]/route.ts`, and `FleetOnboardingModal` all call it. `sanitizeBaseUrl` strips whitespace/quotes/trailing slashes, rejects non-http and relative values and the decommissioned `prehub-backend.onrender.com`, and returns `null` instead of a best-effort string. The WebSocket base is resolved per connection via `getWsBaseUrl()` — the old module-scope `WS_BASE` captured `ws://localhost:8000` into deployed bundles.
+2. **Search relevance, dedupe, and cache semantics.** `/geocode/search` ranks by `(score, tier, len(slug), slug)` and ranks *before* truncating to `limit`; alias duplicates are collapsed by proximity (1.5 km server, 0.05° client with parenthesis-stripped names) instead of by name; a 20 s deadline raises a distinct `Error` (`Pencarian backend melebihi 20 detik`), never `AbortError`; only non-empty results are cached; Redis keys moved to `lrip:geocode:search:v2:` (`ex=86400`); an exact gazetteer hit skips the Nominatim call entirely.
+3. **Gazetteer data honesty.** `/geocode/nodes` skips coordinate-less entries with a warning instead of defaulting to the Medan centroid; the client badge derives from an explicit type vocabulary and falls back to `Titik`, not `Desa`.
+4. **Dispatcher tenant scope is the token claim.** `vehicles_router` branches on role *before* reading `?company_id=`; for a dispatcher the claim wins and the query is ignored. `get_unified_fleet` applies authorization (`matches_tenant`) before modality via `tenant_only`; `FALLBACK_FLEET` is never substituted for a dispatcher; the 90 s vehicle cache is cleared on role/tenant change; a null `path` is normalized to `[]` so one un-routed row cannot 500 the collection; the retry path keeps `Authorization` and `getBaseUrl()`.
+5. **Master data split from transactions.** `truck_assets` (registered once, tenant-owned) + `travels` (append-mostly, snapshotting `truck_name`/`company_id`/`driver_name`) in migration 014; `truck_id` is the business key and the ledger never depends on the asset row surviving. `resolve_truck_asset` still reads legacy `custom_fleet_vehicles`.
+6. **Every rupiah/percent has a provenance path.** ERP figures are summed from persisted `travels` columns and named constants; `actual_recorded=false` mirrors baseline (zero savings); savings items are rounded once at the component boundary so `saved_total == baseline − actual` and `split ≈ saved_cost`; missing values render `Belum tersedia` / `Belum terverifikasi`. Artificially computed numbers left `HoldVsRerouteCard` / `MitigationTab`.
+7. **Coordinates are required at the schema boundary.** Gazetteer failure invalidates any previously selected coordinate; `[0,0]` and centroid defaults are not acceptable substitutes for "unknown".
+
+### Concerns (open, evidenced)
+
+1. **Render free-tier cold start (30–77 s observed) exceeds the 20 s client deadline** — the first search after idle fails; the failure is honest and retryable but there is no warm-up path.
+2. **CORS preflight during boot surfaces as a browser CORS error**, not the backend-asleep copy; the same 20 s deadline does not produce the intended message.
+3. **Supabase is provisioned but not written.** All asset/travel writes go to instance SQLite; `build_erp_summary` hardcodes `storage="local_sqlite"`; `sync_status='pending'` has no drain caller (`mark_as_synced` is never invoked outside `local_storage.py`), so a Render redeploy discards fleet and ERP history.
+4. **RLS on migration 014 tables is effectively open** (`USING (true)` / `WITH CHECK (true)` for `authenticated`); tenant isolation currently rests on router filters.
+5. **Single-record reads are unscoped** — `GET /fleet/trucks/{id}`, `GET /fleet/travels/{id}` take no session; `PATCH /travels/{id}` checks `fleet:write` but not tenant ownership.
+6. **Actual toll defaults to zero** when `actual_recorded` is true and no segments are supplied, overstating toll savings; the wizard has no actual-toll control.
+7. **Stale cache keys survive 24 h** — v1 keys are ignored but never deleted, and an intermediate build's `v2` entries bypass the fix.
+8. **Synchronous Redis calls inside async endpoints** (`socket_timeout=5`) can block the event loop for seconds when Redis is configured but unreachable.
+9. **In-flight fleet fetch is not cancelled on role switch** (no `isMounted`/sequence guard), so a slow request can render the previous tenant briefly.
+10. **Whole-response validation still has fleet-wide blast radius** — the `path` guard covers one trigger; other required fields can still 500 the list.
+11. **`matches_tenant` org-name fallback is a heuristic**; `truck_assets` rows created outside a dispatcher session default to `org-prehub-pilot`.
+12. **Playwright boots only the frontend** (`webServer` has no backend entry), so any API-backed wizard spec is environment-dependent; there is also no client test for search ranking, dedupe, or cancel.
+13. **Type vocabulary is duplicated across the API boundary** (`hub | kecamatan | regency` vs `searchResultBadge`); a new backend type silently degrades to `Titik`.
+14. **ERP panel does not refresh after onboarding** — `ERPSavingsPanel` accepts `refreshKey` but `ReportsSection` renders it without one.
+15. **Unrelated suite failures in this environment:** `simulate/stream` needs absent `langgraph`; `resolve_canonical_article_url` expects `google.com/search` while the resolver returns the publisher search URL; one order-dependent fleet test passes standalone but failed in a 6-file combined run.
+
+### Constraints and environment
+
+- Frontend prod `https://pre-hub.vercel.app` (Next.js `output: 'standalone'`, **no `vercel.json`**); backend `https://peta-nadi.onrender.com`; local `:3000` → `:8000`.
+- Vercel `NEXT_PUBLIC_API_URL` inspected on 2026-10-20 inlines `https://peta-nadi.onrender.com` — the defect was a **structural bypass of the resolver**, not a dead-host env value. Any future env edit still reaches unvalidated path concatenation if a direct read returns.
+- CORS allowlist: `pre-hub.vercel.app`, `peta-nadi.onrender.com`, `localhost:3000` (`render.yaml` `CORS_ORIGINS`, `allow_origin_regex` covers `*.vercel.app`).
+- `render.yaml` service renamed `prehub-backend` → `peta-nadi`; a dashboard-side rename must be reconciled or the service can take a new URL — check health check and `CORS_ORIGINS` before the next deploy.
+- Roles: `dispatcher → pos_logistik`, `regulator → bapanas`, `guest → demo_sandbox`; claim resolution `app_metadata.company_id` → `user_metadata.company_id` → `profiles.company_id` → role default.
+- Windows PowerShell, mixed CRLF/LF (git warns on `frontend/lib/types.ts`); gates are `tsc` + `pytest`, no shell scripts touched. Python 3.13, Pydantic 2.13 (v1-style `Config` deprecation).
+- Verification states are distinct: *in tree*, *built*, *deployed*. Local `tsc` exit 0 and green tests do not prove the deployed pair changed; use a cheap sentinel (e.g. `precision_tier` on `/geocode/nodes`).
+
+### Issues found — do not repeat
+
+- Do not claim a resolver is centralised while any call site reads `process.env.NEXT_PUBLIC_API_URL` directly (grep it) or captures an env value at module scope.
+- Do not reuse `AbortError` for a deadline; cancellation and timeout have different UI outcomes and a shared identity leaves `isSearching` stuck.
+- Do not cache empty/negative results, do not rely on dict/list insertion order for relevance, and do not `break` at `limit` before sorting.
+- Do not default a missing coordinate to a city centroid or `[0,0]`; skip and warn, or fail the schema.
+- Do not default a UI type label to a specific class (`Desa`); use the neutral term.
+- Do not let a query parameter widen a token-derived scope, and never `OR` a modality allowlist with a tenancy predicate — it silently disables tenancy.
+- Do not substitute mock/fleet fallback data for a scoped role; empty is a valid, renderable answer.
+- Do not write `sync_status='pending'` without a drain worker; a status the runtime does not honour is a silent data-loss contract.
+- Do not treat "field not recorded" as zero when the number feeds a savings claim.
+- Do not add an e2e spec for an API-backed flow to a harness that only starts the frontend.
