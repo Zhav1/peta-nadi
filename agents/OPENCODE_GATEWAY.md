@@ -55,6 +55,16 @@ If you see `400 Upstream request failed: Model is unavailable.`, you mixed surfa
 
 Per the official docs "Where can I use it?" section, the Go surface expects a stable session ID in `x-opencode-session` for prompt caching and routing. Without it requests still succeed today but get throttled / lose cache hits. The gateway already sends `x-opencode-session: prehub-backend`. Change it to something unique per conversation if you add per-conversation caching.
 
+### 5. Reasoning token budget & `reasoning_effort`
+
+Both `deepseek-v4.1-flash` and `mimo-v2.6-pro` are reasoning models that generate `reasoning_content` before generating final `content`. If `max_tokens` is small (e.g. `< 300`) and `reasoning_effort` is unconstrained, the model can spend the entire budget on internal reasoning tokens (`finish_reason: length`), returning empty `content: ""`.
+- Setting `OPENCODE_REASONING_EFFORT=low` (Phase 78) instructs the models to keep internal reasoning concise.
+- `LLMGateway` also automatically extracts `reasoning_content` as a fallback if `content` is empty.
+
+### 6. Network connection timeouts & automatic retries
+
+Outbound requests from cloud hosts (like Render) to Cloudflare edge nodes occasionally experience TCP handshake packet drops (`httpx.ConnectTimeout`). `LLMGateway` includes an automatic 2-attempt retry loop with exponential backoff ($1.0\text{s} \rightarrow 2.0\text{s}$) for timeouts, network drops, and transient HTTP 502/503/504 errors. Client errors (401, 403, 404) fail fast without retries.
+
 ---
 
 ## Required env (Render dashboard, `sync: false`)
@@ -63,6 +73,7 @@ Per the official docs "Where can I use it?" section, the Go surface expects a st
 OPENCODE_API_KEY=oc_sk_...                  # Service Account key, works on both surfaces
 OPENCODE_REASONING_MODEL=mimo-v2.6-pro       # Go plan reasoning ($0.435/$0.87 per 1M). NOT mimo-v2.6-flash-free (IDE-only)
 OPENCODE_DRIVER_MODEL=deepseek-v4.1-flash    # works on both, but Go bills against plan
+OPENCODE_REASONING_EFFORT=low               # Throttles excessive CoT tokens on reasoning models
 ```
 
 Do **not** set `OPENCODE_BASE_URL` in env unless you want to override the constant in `agents/llm_gateway.py`. The script-side override (`OPENCODE_CATALOG_URL` in `scripts/verify_opencode_models.py`) is the catalog path, not the chat completions path.
@@ -77,6 +88,8 @@ Do **not** set `OPENCODE_BASE_URL` in env unless you want to override the consta
 | `403 FreeTierError: OpenCode's free tier can only be used from within OpenCode` | Using a `*-free` model ID outside the IDE | Use the Go plan form (`mimo-v2.6-flash` not `-free`) |
 | `400 Upstream request failed: Model is unavailable.` | Endpoint ↔ model ID mismatch | Match Go URL with Go IDs, Console URL with Console IDs |
 | `404` on the chat completions endpoint | Old `inference/v1/chat/completions` URL or wrong path | Use `inference/go/openai/v1/chat/completions` |
+| `ConnectTimeout` / `NetworkError` in logs | Transient Cloudflare edge packet drop | Handled automatically by 2-attempt backoff ($1\text{s} \rightarrow 2\text{s}$). If persistent, check Render egress connectivity. |
+| `opencode returned an empty completion` | Reasoning model exhausted `max_tokens` during CoT | Set `OPENCODE_REASONING_EFFORT=low` and/or increase `max_tokens >= 500`. Gateway auto-extracts `reasoning_content` fallback. |
 | Catalog script prints `FAIL: expected model ID(s) absent from catalog` | Stale default or wrong catalog URL | `OPENCODE_BASE_URL=https://opencode.ai/inference/go/openai/v1` and `OPENCODE_CATALOG_URL=https://opencode.ai/inference/go/v1/models` |
 
 ---

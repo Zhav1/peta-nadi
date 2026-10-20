@@ -2,19 +2,19 @@
 gsd_state_version: "1.0"
 milestone: M4
 milestone_name: PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability
-current_phase: 77
-current_phase_name: Route Detail Modal & HITL Hardening
+current_phase: 78
+current_phase_name: LLM Gateway Network Resilience, Connect Timeout Retry & Reasoning Effort Calibration
 status: complete
-stopped_at: "Phase 77 complete: Route Detail Modal 5-section inspection, strict role-gated dispatch commits (Dispatcher only, Guest/Regulator sandbox preview with zero TMS/approvals writes), Supabase migration 013 (route_approvals.route_id + incidents.incident_id convergence), and probe parity testing."
-last_updated: "2026-10-20T03:20:00.000Z"
+stopped_at: "Phase 78 complete: LLM Gateway network resilience with 2-attempt exponential backoff retries, reasoning effort parameter (OPENCODE_REASONING_EFFORT=low) to avoid token starvation, fallback reasoning_content extraction, and 11 unit tests passing."
+last_updated: "2026-10-20T03:35:00.000Z"
 last_activity: 2026-10-20
-last_activity_desc: "Phase 77 executed & verified: 5-section Route Detail Modal active, HITL queue linked, RBAC hardened, migration 013 applied, Next.js build clean."
+last_activity_desc: "Phase 78 executed & verified: LLM Gateway retry loop, reasoning_effort support, reasoning_content fallback, all 11 unit tests passing, pushed to origin/main."
 state_head: HEAD
 progress:
-  total_phases: 77
-  completed_phases: 77
-  total_plans: 94
-  completed_plans: 94
+  total_phases: 78
+  completed_phases: 78
+  total_plans: 95
+  completed_plans: 95
   percent: 100.0
 ---
 
@@ -22,16 +22,16 @@ progress:
 
 **Last Updated:** 2026-10-20
 **Active Milestone:** M4 - PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability [COMPLETED ✅]
-**Current Phase:** 77
+**Current Phase:** 78
 
 ---
 
 ## Current Position
 
-Phase: 77 (Route Detail Modal & HITL Hardening) - COMPLETE ✅
-Status: (1) Route detail modal with 5-section inspection (corridor metrics, multi-hazard exposure, commodity perishability, TMS telemetry, dispatch action); (2) strict role-gated commits (Dispatcher creates approvals & TMS pings; Guest/Regulator gets sandbox preview without writes); (3) Supabase migration 013 applied for route_id and incident_id schema convergence; (4) probe parity verified across 28 backend endpoints.
-Last activity: 2026-10-20 - Phase 77 fully executed and verified.
-Next action: All 77 phases complete. Production builds pass cleanly. Ready for pilot operations.
+Phase: 78 (LLM Gateway Network Resilience, Connect Timeout Retry & Reasoning Effort Calibration) - COMPLETE ✅
+Status: (1) Implemented 2-attempt exponential backoff retry for httpx.TimeoutException, httpx.NetworkError, and HTTP 502/503/504 server errors in agents/llm_gateway.py; (2) added reasoning_effort parameter and OPENCODE_REASONING_EFFORT=low config to throttle internal CoT token consumption on reasoning models (deepseek-v4.1-flash, mimo-v2.6-pro); (3) added fallback extraction of message['reasoning_content'] when content is empty; (4) verified 11 passing unit tests in backend/tests/test_llm_gateway.py and pushed commit 543855b to GitHub.
+Last activity: 2026-10-20 - Phase 78 fully executed, tested, and pushed.
+Next action: Production deployment to Render with OPENCODE_REASONING_EFFORT=low environment variable.
 
 ---
 
@@ -118,6 +118,7 @@ Next action: All 77 phases complete. Production builds pass cleanly. Ready for p
 | 75 | Full-Body Scraping, Workhorse LLM Content Verifier & Post-Disaster Construction Guards | **COMPLETE** ✅ | Full-article HTML scraping (2,500-char body, `< 450` teaser trigger, once per article in `ground_truth_metrics`); Workhorse LLM content reader (1,600 chars/article, 5-article chunks, `tier_reason` + `verified_sumatra_locations`); construction guards (bare `darurat` removed, `pascabencana`/construction markers, `other_disruption` blockage rule); schema_version=4 re-verification + client guard mirror + Workhorse LLM badge. |
 | 76 | Pan-Sumatra Spatial Precision, Multi-Agent Consensus Escalation & Unified God's-Eye HUD | **COMPLETE** ✅ | Bare panjang collision eliminated, longest-key matching, 3-tier micro-spatial bounding (Tier A: 0.6–1.2 km, Tier B: 1.5–2.2 km ADM3, Tier C: 3.2–4.5 km YELLOW cap), 4-channel consensus gate escalation, unified God's-Eye HUD. 0 tsc errors, Next.js build clean. |
 | 77 | Route Detail Modal & HITL Hardening | **COMPLETE** ✅ | Route detail modal with 5-section inspection (corridor metrics, multi-hazard exposure, commodity perishability, TMS telemetry, dispatch action); strict role-gated commits (Dispatcher creates approvals & TMS pings; Guest/Regulator gets sandbox preview without writes); Supabase migration 013 applied for route_id and incident_id schema convergence; probe parity verified across 28 backend endpoints. |
+| 78 | LLM Gateway Network Resilience, Connect Timeout Retry & Reasoning Effort Calibration | **COMPLETE** ✅ | 2-attempt exponential backoff retry loop for httpx.TimeoutException/NetworkError/5xx; reasoning effort calibration (OPENCODE_REASONING_EFFORT=low) preventing token exhaustion; fallback reasoning_content extraction; 11 passing unit tests in test_llm_gateway.py; git commit 543855b pushed. |
 
 ---
 
@@ -125,6 +126,7 @@ Next action: All 77 phases complete. Production builds pass cleanly. Ready for p
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
+| 2026-10-20 | Phase 78: LLM Gateway Network Resilience, Connect Timeout Retry & Reasoning Effort Calibration | Resolved Render-to-Cloudflare ConnectTimeout and token exhaustion vulnerabilities: (1) Added 2-attempt exponential backoff retry (1s -> 2s) for network timeouts and 5xx errors; (2) added reasoning_effort parameter and config default to low so reasoning models (deepseek-v4.1-flash, mimo-v2.6-pro) allocate budget to content rather than running out of tokens during internal reasoning; (3) extracted reasoning_content fallback if content is empty; (4) verified 11 passing unit tests. |
 | 2026-10-20 | Phase 77: Route Detail Modal & HITL Hardening | Every route selection (sidebar, map polyline, map ETA badge) routes to full 5-section RouteDetailModal; selecting a route creates a HITL pending item in queue; strict role-gating ensures only DISPATCHER can POST /approvals or fire TMS pings, while GUEST and REGULATOR receive watermarked sandbox previews; migration 013 aligns route_id and incident_id columns across route_approvals and incidents tables; probe parity confirmed. |
 | 2026-10-19 | Phase 76: Pan-Sumatra Spatial Precision, Multi-Agent Consensus Escalation & Unified God's-Eye HUD | Removed generic bare 'panjang' from GAZETTEER_NODES and enforced longest-key descending matching with word boundary regex, permanently ending 'antrean panjang' misattribution to Pelabuhan Panjang Lampung; established 3-tier micro-spatial bounding replacing 16-20 km circles with Tier A corridor points (0.6–1.2 km anisotropic ellipse), Tier B subdistricts (1.5–2.2 km ADM3 polygons), and Tier C regencies (3.2–4.5 km advisory capped at YELLOW_CLARIFY, mathematically barred from synthesizing RED physical blockage); unified top HUD telemetry bar declutters map viewport; 0 tsc errors, 100% clean Next.js build. |
 | 2026-10-19 | Phase 75: Full-Body Scraping, Workhorse LLM Content Verifier & Post-Disaster Guards | Full-article HTML scraping (<450-char teaser trigger, 2,500-char body, once per article) + Workhorse LLM content reader (1,600 chars/article, 5-chunks, tier_reason + verified locations) ends teaser-only judgments; bare darurat removed from crisis/severity lists and pascabencana/construction discourse markers kill Pembangunan-tanggul-darurat false REDs; other_disruption without blockage can no longer corroborate; schema_version=4 re-verifies legacy rows with zero migrations. |

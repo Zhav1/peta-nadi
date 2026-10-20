@@ -2166,6 +2166,35 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 
 ---
 
+## Phase 78: LLM Gateway Network Resilience, Connect Timeout Retry & Reasoning Effort Calibration
+
+**Goal:** Eliminate single-shot TCP connect timeout failures from Render to OpenCode inference endpoints, introduce automatic exponential backoff retries, support reasoning effort calibration (`OPENCODE_REASONING_EFFORT`), and provide fallback reasoning content extraction to prevent empty completion crashes on length limits.
+**Status:** COMPLETE ✅
+
+### Deliverables
+
+- **WP1 - Automatic Retry with Exponential Backoff (`agents/llm_gateway.py`)**:
+  - Implemented 2-attempt retry loop (`max_retries = 2`, $1.0\text{s} \rightarrow 2.0\text{s}$ backoff) for `httpx.TimeoutException` (covering `ConnectTimeout`, `ReadTimeout`, `PoolTimeout`), `httpx.NetworkError` (covering TCP connection drops, resets, and DNS glitches), and transient HTTP 502/503/504 errors.
+  - Fail-fast client errors: `HTTP 401`, `403`, `404` fail loud immediately without retries.
+  - Mirrored identical retry resilience in the backup NVIDIA NIM branch for architectural consistency.
+- **WP2 - Reasoning Effort Parameter & Configuration (`backend/app/config.py` + `agents/llm_gateway.py` + `.env`)**:
+  - Added `reasoning_effort: Optional[str] = None` parameter to `LLMGateway.generate_content(...)`.
+  - Added `opencode_reasoning_effort: Optional[str] = None` setting in `Settings` (`backend/app/config.py`).
+  - Added `OPENCODE_REASONING_EFFORT=low` in `.env` and `backend/.env` to calibrate reasoning models (`deepseek-v4.1-flash`, `mimo-v2.6-pro`) so internal chain-of-thought tokens do not exhaust the total completion budget.
+- **WP3 - Reasoning Content Fallback & Unit Test Coverage (`agents/llm_gateway.py` + `backend/tests/test_llm_gateway.py`)**:
+  - Extracted `message["reasoning_content"]` as fallback if `content` is empty string due to token length termination, preventing unhandled `ValueError("opencode returned an empty completion")`.
+  - Added unit regression tests: `test_opencode_retries_on_connect_timeout_and_succeeds` and `test_opencode_recovers_reasoning_content_when_content_empty`.
+  - Verified all 11 gateway unit tests and 19 adapter tests pass.
+
+### Verification
+
+- [x] `ConnectTimeout` triggers automatic retry and succeeds on attempt 2 in unit tests.
+- [x] `reasoning_content` is extracted when `content` is empty string.
+- [x] All 11 pytest tests in `backend/tests/test_llm_gateway.py` pass.
+- [x] Live probe script (`test_opencode.py`) confirms `200 OK` on OpenCode Go with `reasoning_effort: "low"` for both `deepseek-v4.1-flash` and `mimo-v2.6-pro`.
+
+---
+
 ## Backlog (Post-Hackathon / v2 & New Context Window Backlog)
 
 ### Active Remediation & Audit Backlog (For New Context Window)
