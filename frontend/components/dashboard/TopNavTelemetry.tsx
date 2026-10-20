@@ -21,6 +21,15 @@ interface TopNavTelemetryProps {
   showYellowZones?: boolean;
   onToggleYellowZones?: () => void;
   yellowZoneCount?: number;
+  // Q3: two independent overlay toggles, default ON (weather polygons + FIRMS dots+heat)
+  showWeatherPolygons?: boolean;
+  onToggleWeatherPolygons?: () => void;
+  weatherPolygonCount?: number;
+  showFireHotspots?: boolean;
+  onToggleFireHotspots?: () => void;
+  fireHotspotCount?: number;
+  fireStatus?: 'ok' | 'degraded';
+  fireTooltip?: string;
   onSelectHub?: (hub: ChokePointItem) => void;
   onFocusRoute?: () => void;
 }
@@ -41,6 +50,14 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
   showYellowZones = true,
   onToggleYellowZones,
   yellowZoneCount = 0,
+  showWeatherPolygons = true,
+  onToggleWeatherPolygons,
+  weatherPolygonCount = 0,
+  showFireHotspots = true,
+  onToggleFireHotspots,
+  fireHotspotCount = 0,
+  fireStatus = 'ok',
+  fireTooltip,
   onSelectHub,
   onFocusRoute,
 }) => {
@@ -401,6 +418,46 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
             </span>
           </button>
         </div>
+      )}
+
+      {/* Q3: independent weather + FIRMS overlay toggles (default ON) */}
+      {onToggleWeatherPolygons && (
+        <button
+          type="button"
+          onClick={onToggleWeatherPolygons}
+          className={`cursor-pointer flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs font-mono transition-all duration-150 ${
+            showWeatherPolygons
+              ? 'bg-blue-950/50 border-blue-500/50 text-blue-200 shadow-[0_0_8px_rgba(59,130,246,0.3)]'
+              : 'bg-[#0c1017] border-white/5 text-slate-500 opacity-60 hover:opacity-100'
+          }`}
+          title="Overlay cuaca: poligon advisori BMKG + Open-Meteo (biru/ungu). Klik poligon = sumber + valid_until."
+        >
+          <span className={`w-2 h-2 rounded-full ${showWeatherPolygons ? 'bg-blue-500 shadow-[0_0_6px_rgba(59,130,246,0.9)]' : 'bg-slate-600'}`} />
+          <span className="font-sans text-[11px] font-semibold">Cuaca</span>
+          <span className="px-1 py-0.2 rounded bg-blue-500/20 text-[10px] font-bold text-blue-300 font-mono">
+            {weatherPolygonCount}
+          </span>
+        </button>
+      )}
+      {onToggleFireHotspots && (
+        <button
+          type="button"
+          onClick={onToggleFireHotspots}
+          className={`cursor-pointer flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs font-mono transition-all duration-150 ${
+            fireStatus === 'degraded'
+              ? 'bg-[#0c1017] border-white/10 text-slate-500 opacity-70'
+              : showFireHotspots
+                ? 'bg-orange-950/50 border-orange-500/50 text-orange-200 shadow-[0_0_8px_rgba(249,115,22,0.3)]'
+                : 'bg-[#0c1017] border-white/5 text-slate-500 opacity-60 hover:opacity-100'
+          }`}
+          title={fireTooltip || (fireStatus === 'degraded' ? 'butuh MAP_KEY' : 'Overlay FIRMS VIIRS_SNPP_NRT: titik + heat oranye. Klik titik = FRP/conf/jarak koridor.')}
+        >
+          <span className={`w-2 h-2 rounded-full ${fireStatus === 'degraded' ? 'bg-slate-600' : showFireHotspots ? 'bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.9)]' : 'bg-slate-600'}`} />
+          <span className="font-sans text-[11px] font-semibold">Karhutla</span>
+          <span className={`px-1 py-0.2 rounded text-[10px] font-bold font-mono ${fireStatus === 'degraded' ? 'bg-white/10 text-slate-400' : 'bg-orange-500/20 text-orange-300'}`}>
+            {fireStatus === 'degraded' ? '—' : fireHotspotCount}
+          </span>
+        </button>
       )}
 
       {/* 5. Globot HITL Review Drawer Trigger */}

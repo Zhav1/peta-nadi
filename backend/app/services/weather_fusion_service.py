@@ -50,7 +50,16 @@ async def get_fused_spatial_weather() -> Dict[str, Any]:
         lat = float(ev.get("lat", 3.58))
         lon = float(ev.get("lon", 98.67))
         severity = ev.get("severity", "medium")
-        is_om = ev.get("source") in ("openmeteo", "open_meteo")
+        is_om = ev.get("source") in ("openmeteo", "open_meteo", "open-meteo", "open-meteo-sim")
+        now = datetime.now(timezone.utc)
+        # Q3(A): blue/purple advisory palette (never RED semantics — corroborator only).
+        # Blue = high/critical advisory, purple = medium/low advisory.
+        if severity in ("critical", "high"):
+            fill_color = "rgba(59, 130, 246, 0.35)"
+            stroke_color = "#3b82f6"
+        else:
+            fill_color = "rgba(168, 85, 247, 0.30)"
+            stroke_color = "#a855f7"
 
         geom_feature = generate_flood_geometry(lon, lat, water_depth_m=1.2 if severity == "high" else 0.6)
 
@@ -61,11 +70,14 @@ async def get_fused_spatial_weather() -> Dict[str, Any]:
                 "name": ev.get("title", "Peringatan Cuaca Ekstrem BMKG / Open-Meteo"),
                 "severity": severity,
                 "status_label": "PROYEKSI PRESIPITASI EKSTREM OPEN-METEO" if is_om else "PERINGATAN CUACA EKSTREM BMKG",
-                "fill_color": "rgba(239, 68, 68, 0.35)" if severity in ["critical", "high"] else "rgba(245, 158, 11, 0.30)",
-                "stroke_color": "#ef4444" if severity in ["critical", "high"] else "#f59e0b",
+                "fill_color": fill_color,
+                "stroke_color": stroke_color,
+                # Q3(A) provenance click contract: source + valid_until always present.
+                "source": "Open-Meteo NWP (ECMWF/GFS)" if is_om else "BMKG Stasiun Klimatologi & Geofisika",
+                "valid_until": datetime.fromtimestamp(now.timestamp() + 6 * 3600, tz=timezone.utc).isoformat(),
                 "bmkg_source": "BMKG Stasiun Klimatologi & Geofisika",
                 "nwp_source": "Open-Meteo Global NWP (ECMWF/GFS)",
-                "updated_at": datetime.now(timezone.utc).isoformat()
+                "updated_at": now.isoformat()
             }
         })
 

@@ -160,7 +160,12 @@ class NASAFIRMSAdapter(BaseAdapter):
                                 "title": title,
                                 "raw": json.dumps(row),
                                 "ts": now_str,
-                                "dedup_key": dedup_key
+                                "dedup_key": dedup_key,
+                                # Q3(B) hotspot click contract: FRP + conf + dist-to-corridor.
+                                "frp": frp,
+                                "conf": confidence,
+                                "dist_to_corridor_km": round(min_dist_km, 2),
+                                "near_segment": near_segment,
                             })
                 except Exception as e:
                     logger.error(f"Error parsing row in FIRMS CSV: {e}")

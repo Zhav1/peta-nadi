@@ -101,10 +101,32 @@ def compute_consensus(state: CrisisState) -> Dict[str, Any]:
     traffic_dist = traffic_finding.get("distance_km")
 
     # Channel I: OSINT Verified News Intelligence (ANTARA regional bureaus)
+    # Q3: fire-as-I — FIRMS VIIRS_SNPP_NRT wildfire evidence corroborates the SAME
+    # I channel (never a solo fifth vote, never solo RED). Weights W0.35/T0.35/
+    # I0.30/E0.20 are preserved; active_sources counts I at most once.
     osint_finding = state.get("osint_hazard_finding") or {}
     osint_conf = float(osint_finding.get("confidence", 0.0)) if osint_finding else 0.0
     osint_ts = osint_finding.get("timestamp")
     osint_dist = osint_finding.get("distance_km")
+
+    fire_finding = (
+        state.get("fire_finding")
+        or state.get("wildfire_finding")
+        or state.get("nasa_firms_finding")
+        or {}
+    )
+    # Normalized-event fallback: a wildfire typed event without an explicit
+    # fire finding still corroborates I (honest, no invented confidence).
+    _norm = state.get("normalized_event") or {}
+    if not fire_finding and str(_norm.get("event_type", "")).lower() in ("wildfire", "fire"):
+        fire_finding = {
+            "confidence": 0.7 if str(_norm.get("severity", "")).lower() in ("high", "critical") else 0.55,
+            "timestamp": _norm.get("created_at") or _norm.get("timestamp"),
+            "distance_km": _norm.get("distance_km"),
+        }
+    fire_conf = float(fire_finding.get("confidence", 0.0)) if fire_finding else 0.0
+    fire_ts = fire_finding.get("timestamp") if fire_finding else None
+    fire_dist = fire_finding.get("distance_km") if fire_finding else None
 
     # Channel E: Commodity Price Anomaly (PIHPS)
     econ_finding = state.get("economic_intelligence_finding") or {}
@@ -115,20 +137,30 @@ def compute_consensus(state: CrisisState) -> Dict[str, Any]:
     # 2. Compute dynamic weights with spatio-temporal decay
     decay_w = compute_temporal_decay(weather_ts) * compute_spatial_decay(weather_dist)
     decay_t = compute_temporal_decay(traffic_ts) * compute_spatial_decay(traffic_dist)
-    decay_i = compute_temporal_decay(osint_ts) * compute_spatial_decay(osint_dist)
+    decay_i_osint = compute_temporal_decay(osint_ts) * compute_spatial_decay(osint_dist)
+    decay_i_fire = compute_temporal_decay(fire_ts) * compute_spatial_decay(fire_dist)
     decay_e = compute_temporal_decay(econ_ts) * compute_spatial_decay(econ_dist)
 
     w_w = DEFAULT_SENSOR_WEIGHTS["weather"] * decay_w
     w_t = DEFAULT_SENSOR_WEIGHTS["traffic"] * decay_t
-    w_i = DEFAULT_SENSOR_WEIGHTS["osint"] * decay_i
+    # I channel takes the stronger corroborator (OSINT vs fire) — single vote.
+    if (w_i_fire_c := DEFAULT_SENSOR_WEIGHTS["osint"] * decay_i_fire * fire_conf) > (
+        w_i_osint_c := DEFAULT_SENSOR_WEIGHTS["osint"] * decay_i_osint * osint_conf
+    ):
+        w_i_effective, i_conf_effective, i_source = (
+            DEFAULT_SENSOR_WEIGHTS["osint"] * decay_i_fire, fire_conf, "fire")
+    else:
+        w_i_effective, i_conf_effective, i_source = (
+            DEFAULT_SENSOR_WEIGHTS["osint"] * decay_i_osint, osint_conf, "osint")
+    w_i = w_i_effective
     w_e = DEFAULT_SENSOR_WEIGHTS["economics"] * decay_e
 
-    decay_applied = any(d < 0.999 for d in [decay_w, decay_t, decay_i, decay_e])
+    decay_applied = any(d < 0.999 for d in [decay_w, decay_t, decay_i_osint, decay_i_fire, decay_e])
 
     # 3. Probabilistic Independence Product: P = 1 - prod(1 - w_k * p_k)
     term_w = 1.0 - (w_w * weather_conf)
     term_t = 1.0 - (w_t * traffic_conf)
-    term_i = 1.0 - (w_i * osint_conf)
+    term_i = 1.0 - (w_i * i_conf_effective)
     term_e = 1.0 - (w_e * econ_conf)
 
     non_detection_prob = term_w * term_t * term_i * term_e
@@ -152,7 +184,11 @@ def compute_consensus(state: CrisisState) -> Dict[str, Any]:
     if osint_finding and osint_conf > 0.5:
         active_sources += 1
         active_weights["osint"] = DEFAULT_SENSOR_WEIGHTS["osint"]
-    elif osint_finding:
+    elif fire_finding and fire_conf > 0.5:
+        # fire-as-I: counts toward the SAME I vote, never a second vote.
+        active_sources += 1
+        active_weights["osint"] = DEFAULT_SENSOR_WEIGHTS["osint"]
+    elif osint_finding or fire_finding:
         active_weights["osint"] = DEFAULT_SENSOR_WEIGHTS["osint"]
 
     if econ_finding and econ_conf > 0.5:
@@ -176,14 +212,24 @@ def compute_consensus(state: CrisisState) -> Dict[str, Any]:
     breakdown = {
         "weather": round(w_w * weather_conf, 4),
         "traffic": round(w_t * traffic_conf, 4),
-        "osint": round(w_i * osint_conf, 4),
+        # I reports the effective (stronger) corroborator; weights preserved
+        # (single I product term — fire never adds a fifth vote).
+        "osint": round(w_i * i_conf_effective, 4),
         "economics": round(w_e * econ_conf, 4),
+    }
+    # Fire transparency lives OUTSIDE consensus_breakdown so the 4-channel
+    # contract (W/T/I/E) asserted by calibration tests is preserved.
+    fire_corroboration = {
+        "source": i_source,
+        "fire_contribution": round(DEFAULT_SENSOR_WEIGHTS["osint"] * decay_i_fire * fire_conf, 4),
+        "fire_confidence": round(fire_conf, 4),
     }
 
     return {
         "overall_confidence": round(calibrated_confidence, 4),
         "raw_probability": round(raw_p_disruption, 4),
         "consensus_breakdown": breakdown,
+        "fire_corroboration": fire_corroboration,
         "active_sources": active_sources,
         "decay_applied": decay_applied,
         "route": "validated" if is_validated else "unconfirmed",

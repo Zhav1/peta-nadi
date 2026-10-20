@@ -46,6 +46,9 @@ class BenchmarkThresholds(BaseModel):
     min_recall: float = Field(0.80, description="Required minimum recall")
     min_f1: float = Field(0.82, description="Required minimum composite F1 score")
     max_brier_score: float = Field(0.10, description="Maximum allowable Brier score for honesty calibration")
+    # SPEC-LOCKED M5 Phase A: news-precision work must preserve FPR <= 0.15.
+    # Admit uncertainty (DROPPED) over false positives.
+    max_false_positive_rate: float = Field(0.15, description="Maximum allowable false positive rate FP / (FP + TN)")
 
 
 class BenchmarkReportResponse(BaseModel):

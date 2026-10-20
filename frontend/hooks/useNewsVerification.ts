@@ -178,7 +178,10 @@ export function validateClientNewsFreshnessAndDiscourse(
     }
   }
 
-  // 3. Academic / policy / solution discourse check (without active closure phrase).
+  // 3. Academic / policy / solution / prevention-ceremonial discourse check
+  // (without active closure phrase). Mirrors backend NON_INCIDENT_DISCOURSE_MARKERS
+  // + PREVENTION_CEREMONIAL_MARKERS (M5 Phase A Q1): mitigasi/pemetaan/
+  // sosialisasi/apel-siaga without a physical blockage is never a zone.
   const combined = `${safeTitle} ${safeSummary}`.toLowerCase();
   const academicMarkers = [
     'akademisi',
@@ -204,6 +207,19 @@ export function validateClientNewsFreshnessAndDiscourse(
     'rekonstruksi',
     'normalisasi sungai',
     'peletakan batu',
+    'mitigasi',
+    'mitigasi bencana',
+    'pemetaan',
+    'pemetaan rawan',
+    'pemetaan risiko',
+    'apel siaga',
+    'apel-siaga',
+    'gladi',
+    'kesiapsiagaan',
+    'simulasi bencana',
+    'simulasi',
+    'edukasi',
+    'sosialisasi',
   ];
   const closurePhrases = ['lumpuh', 'putus', 'tutup total', 'amblas', 'tidak bisa dilalui'];
   const hasAcademic = academicMarkers.some((m) => combined.includes(m));
@@ -778,6 +794,9 @@ export function useNewsVerification() {
               if (n.zone_tier === 'DROPPED_IRRELEVANT') return false;
               if (n.is_geocoded === false) return false;
               if (n.lat == null || n.lon == null || !Number.isFinite(n.lat) || !Number.isFinite(n.lon)) return false;
+              // M5 Phase A Q1 client mirror: hard Sumatra island bbox
+              // 94-108E / -6..6N — out-of-Sumatra never renders a zone.
+              if (n.lat < -6 || n.lat > 6 || n.lon < 94 || n.lon > 108) return false;
               const check = validateClientNewsFreshnessAndDiscourse(
                 n.headline || '',
                 (n as NewsItem).summary || '',

@@ -12,6 +12,7 @@ from app.services.cpu_routing_service import optimize_fleet_routes_cpu, CORRIDOR
 from app.adapters.cpu_routing_adapter import get_cpu_router
 from app.adapters.tomtom_adapter import TomTomAdapter
 from app.auth.supabase_auth import UserSession, get_optional_user
+from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +109,120 @@ async def fetch_spatial_weather_polygons(
         return await get_fused_spatial_weather()
     except Exception as e:
         logger.error(f"Error fetching spatial weather polygons: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/fire/hotspots")
+async def fetch_fire_hotspots(
+    current_user: UserSession = Depends(get_optional_user),
+) -> Dict[str, Any]:
+    """
+    Q3(B)/Q6: FIRMS VIIRS_SNPP_NRT active fire hotspots near the Trans-Sumatra corridor.
+
+    Honest-degraded contract: when NASA_FIRMS_MAP_KEY is missing the endpoint
+    returns 200 with status=degraded + empty hotspots (never 500, never fake
+    points) so the frontend can render a gray toggle with a 'butuh MAP_KEY' tooltip.
+    Severity mapping: FRP > 500 → critical, FRP > 100 (or <5km to corridor) → high.
+    """
+    import json as _json
+    from datetime import datetime, timezone as _tz
+
+    settings = get_settings()
+    if not getattr(settings, "nasa_firms_map_key", ""):
+        return {
+            "hotspots": [],
+            "total": 0,
+            "status": "degraded",
+            "reason": "butuh MAP_KEY — set NASA_FIRMS_MAP_KEY di Render env / .env.local (never commit)",
+            "source": "VIIRS_SNPP_NRT",
+            "timestamp": datetime.now(_tz.utc).isoformat(),
+        }
+    try:
+        from app.services.redis_client import get_redis, SOURCE_CACHE_PREFIX
+
+        cached: List[Dict[str, Any]] = []
+        try:
+            r = get_redis()
+            raw_cached = r.get(f"{SOURCE_CACHE_PREFIX}nasa_firms")
+            if raw_cached:
+                parsed = _json.loads(raw_cached)
+                if isinstance(parsed, list):
+                    cached = parsed
+        except Exception as ce:
+            logger.debug(f"FIRMS cache read failed: {ce}")
+
+        # Live-fetch fallback when cache is cold (short timeout, never blocks UI long).
+        if not cached:
+            try:
+                from app.adapters.nasa_firms_adapter import NASAFIRMSAdapter
+
+                adapter = NASAFIRMSAdapter()
+                raw = await adapter.fetch()
+                if raw:
+                    cached = await adapter.parse(raw)
+                    try:
+                        r = get_redis()
+                        r.set(f"{SOURCE_CACHE_PREFIX}nasa_firms", _json.dumps(cached), ex=10800)
+                    except Exception:
+                        pass
+            except Exception as fe:
+                logger.warning(f"FIRMS live fetch fallback failed: {fe}")
+
+        hotspots: List[Dict[str, Any]] = []
+        for ev in cached:
+            try:
+                lat = float(ev.get("lat", 0))
+                lon = float(ev.get("lon", 0))
+                frp = float(ev.get("frp", 0) or 0)
+                # Raw FIRMS row may carry frp/confidence when event was cached pre-Q3.
+                if frp == 0 and ev.get("raw"):
+                    try:
+                        row = _json.loads(ev["raw"]) if isinstance(ev["raw"], str) else {}
+                        frp = float(row.get("frp", 0) or 0)
+                    except Exception:
+                        pass
+                conf_raw = str(ev.get("conf", "") or "").lower()
+                if not conf_raw and ev.get("raw"):
+                    try:
+                        row = _json.loads(ev["raw"]) if isinstance(ev["raw"], str) else {}
+                        conf_raw = str(row.get("confidence", "nominal") or "nominal").lower()
+                    except Exception:
+                        conf_raw = "nominal"
+                # Confidence 0–100 for heat weight: critical 95 / high 80 / medium 60.
+                sev = str(ev.get("severity", "medium")).lower()
+                confidence = 95 if sev == "critical" else 80 if sev == "high" else 60
+                dist_km = ev.get("dist_to_corridor_km")
+                try:
+                    dist_km = float(dist_km) if dist_km is not None else None
+                except Exception:
+                    dist_km = None
+                hotspots.append({
+                    "coordinates": [lon, lat],
+                    "lon": lon,
+                    "lat": lat,
+                    "confidence": confidence,
+                    "frp": frp,
+                    "conf": conf_raw or "nominal",
+                    "dist_to_corridor_km": dist_km,
+                    "severity": sev,
+                    "title": ev.get("title", f"Hotspot VIIRS FRP {frp}MW"),
+                    "source": "VIIRS_SNPP_NRT",
+                    "near_segment": ev.get("near_segment"),
+                    "ts": ev.get("ts"),
+                })
+            except Exception:
+                continue
+
+        return {
+            "hotspots": hotspots,
+            "total": len(hotspots),
+            "status": "ok" if hotspots else "degraded",
+            "reason": None if hotspots else "no active hotspots in corridor window",
+            "source": "VIIRS_SNPP_NRT",
+            "timestamp": datetime.now(_tz.utc).isoformat(),
+        }
+    except Exception as e:
+        logger.error(f"Error fetching FIRMS fire hotspots: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

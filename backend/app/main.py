@@ -133,6 +133,50 @@ async def _poll_open_meteo_loop():
         logger.error(f"Fatal error in Open-Meteo poller loop: {e}")
 
 
+async def _poll_firms_loop():
+    """Q6: Background poller for NASA FIRMS VIIRS_SNPP_NRT hotspots (3h satellite cadence).
+
+    Provision path: NASA_FIRMS_MAP_KEY via Render env (sync:false) + .env.local
+    locally (never commit). Without a key the loop stays honest-degraded and
+    never fabricates hotspots — GET /api/v1/fire/hotspots returns degraded.
+    Events land in lrip:events:nasa_firms with Redis 24h dedup (adapter-level).
+    """
+    logger.info("Starting background NASA FIRMS poller task (3h cadence)...")
+    try:
+        from app.adapters.nasa_firms_adapter import NASAFIRMSAdapter
+        from app.services.redis_client import SOURCE_CACHE_PREFIX
+        adapter = NASAFIRMSAdapter()
+        while True:
+            try:
+                if not settings.nasa_firms_map_key:
+                    logger.warning("NASA_FIRMS_MAP_KEY missing — FIRMS poller honest-degraded (butuh MAP_KEY)")
+                    adapter.update_source_health("degraded")
+                else:
+                    raw = await adapter.fetch()
+                    events = await adapter.parse(raw)
+                    r = get_redis()
+                    if events:
+                        for ev in events:
+                            r.lpush("lrip:events:nasa_firms", json.dumps(ev))
+                        r.ltrim("lrip:events:nasa_firms", 0, 999)
+                        r.set(f"{SOURCE_CACHE_PREFIX}nasa_firms", json.dumps(events), ex=10800)
+                        logger.info(f"Ingested {len(events)} FIRMS hotspot events into Redis lrip:events:nasa_firms")
+                    else:
+                        logger.debug("FIRMS poll: no new corridor hotspots in this pass")
+                    adapter.update_source_health("ok")
+            except Exception as e:
+                logger.warning(f"NASA FIRMS background poll error: {e}")
+                try:
+                    adapter.update_source_health("down")
+                except Exception:
+                    pass
+            await asyncio.sleep(10800)  # Every 3 hours
+    except asyncio.CancelledError:
+        logger.info("NASA FIRMS background poller task canceled.")
+    except Exception as e:
+        logger.error(f"Fatal error in NASA FIRMS poller loop: {e}")
+
+
 async def _run_aisstream():
     """Background WebSocket listener for AIS maritime vessels."""
     logger.info("Starting background AISstream WebSocket task...")
@@ -196,6 +240,7 @@ async def lifespan(app: FastAPI):
     bmkg_task = asyncio.create_task(_poll_bmkg_loop())
     tomtom_task = asyncio.create_task(_poll_tomtom_loop())
     open_meteo_task = asyncio.create_task(_poll_open_meteo_loop())
+    firms_task = asyncio.create_task(_poll_firms_loop())
     ais_task = asyncio.create_task(_run_aisstream())
     news_task = asyncio.create_task(_poll_news_loop())
     pihps_task = asyncio.create_task(_poll_pihps_loop())
@@ -204,7 +249,7 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Shutting down background workers...")
-    for t in [bmkg_task, tomtom_task, open_meteo_task, ais_task, news_task, pihps_task]:
+    for t in [bmkg_task, tomtom_task, open_meteo_task, firms_task, ais_task, news_task, pihps_task]:
         t.cancel()
     close_redis()
 

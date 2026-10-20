@@ -132,7 +132,7 @@ TARGETED_PRESS_QUERIES = [
 ]
 
 MAX_NEWS_AGE_HOURS = 48
-EXTRACTION_SCHEMA_VERSION = 4
+EXTRACTION_SCHEMA_VERSION = 6
 
 # Dedicated test fixtures reserved strictly for synthetic offline unit tests / demo runner
 DEMO_STANDARDIZED_SCENARIOS = [
@@ -571,7 +571,7 @@ def fetch_existing_processed_articles_map(article_ids: List[str], links: List[st
                 row = _unpack_ground_truth_metrics(dict(row))
             except Exception:
                 pass
-            # Stale rows (schema_version != 4) are re-classified on read so
+            # Stale rows (schema_version != 6) are re-classified on read so
             # old cached rows never serve stale tiering/geocoding.
             try:
                 _gtm = row.get("ground_truth_metrics") or {}
@@ -581,7 +581,7 @@ def fetch_existing_processed_articles_map(article_ids: List[str], links: List[st
                         _gtm = _js2.loads(_gtm)
                     except Exception:
                         _gtm = {}
-                if isinstance(_gtm, dict) and _gtm.get("schema_version") != 4:
+                if isinstance(_gtm, dict) and _gtm.get("schema_version") != 6:
                     from app.nlp.news_extractor import _fast_heuristic_extraction as _re_v2
                     _art = {
                         "title": row.get("title", ""),
@@ -1001,7 +1001,7 @@ async def upsert_articles_to_supabase(articles: List[Dict[str, Any]]) -> int:
             from app.nlp.news_extractor import EXTRACTION_SCHEMA_VERSION as _SV
             gtm["schema_version"] = _SV
         except Exception:
-            gtm.setdefault("schema_version", 4)
+            gtm.setdefault("schema_version", 6)
 
         record = {
             "id": a.get("id"),
@@ -1071,8 +1071,8 @@ def _unpack_ground_truth_metrics(row: Dict[str, Any]) -> Dict[str, Any]:
                    "article_body_excerpt"):
             if row.get(_k) is None and gtm.get(_k) is not None:
                 row[_k] = gtm[_k]
-        # Re-run v4 heuristic when cached/DB rows carry a stale schema version.
-        if gtm.get("schema_version") != 4:
+        # Re-run v6 heuristic when cached/DB rows carry a stale schema version.
+        if gtm.get("schema_version") != 6:
             try:
                 from app.nlp.news_extractor import _fast_heuristic_extraction as _re_tier_v2
                 legacy_art = {
@@ -1259,7 +1259,7 @@ async def fetch_news_from_supabase(limit: int = 50, province: Optional[str] = No
         except Exception:
             continue
         # Legacy rows missing zone_tier or carrying stale schema: re-run
-        # fast heuristic on read (schema_version != 4 forces v4 re-tier).
+        # fast heuristic on read (schema_version != 6 forces v6 re-tier).
         _needs_retier = (not row.get("zone_tier"))
         try:
             _gtm_chk = row.get("ground_truth_metrics") or {}
@@ -1269,7 +1269,7 @@ async def fetch_news_from_supabase(limit: int = 50, province: Optional[str] = No
                     _gtm_chk = _js3.loads(_gtm_chk)
                 except Exception:
                     _gtm_chk = {}
-            if isinstance(_gtm_chk, dict) and _gtm_chk.get("schema_version") != 4:
+            if isinstance(_gtm_chk, dict) and _gtm_chk.get("schema_version") != 6:
                 _needs_retier = True
         except Exception:
             pass
@@ -1305,13 +1305,13 @@ async def fetch_news_from_supabase(limit: int = 50, province: Optional[str] = No
                                     _sv = _g.get("schema_version")
                             except Exception:
                                 pass
-                            if row.get("latitude") is None or row.get("longitude") is None or row.get("zone_tier") is None or _sv != 4:
+                            if row.get("latitude") is None or row.get("longitude") is None or row.get("zone_tier") is None or _sv != 6:
                                 row[_k] = re_tiered.get(_k)
                             if _k == "affected_locations":
                                 row[_k] = re_tiered.get(_k)
                         else:
                             row[_k] = re_tiered.get(_k)
-                # Always refresh ground_truth_metrics to v4.
+                # Always refresh ground_truth_metrics to v6.
                 try:
                     row["ground_truth_metrics"] = re_tiered.get("ground_truth_metrics", row.get("ground_truth_metrics"))
                 except Exception:

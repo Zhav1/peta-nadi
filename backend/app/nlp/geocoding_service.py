@@ -7,21 +7,48 @@ from typing import Tuple, Optional, Dict, Any, List
 import httpx
 from app.services.redis_client import get_redis
 from app.config import get_settings
-from app.nlp.gazetteer_data import PAN_SUMATRA_GAZETTEER, SUMATRA_BOUNDING_BOX
+from app.nlp.gazetteer_data import PAN_SUMATRA_GAZETTEER, SUMATRA_BOUNDING_BOX, OUT_OF_SUMATRA_MARKERS
 
 logger = logging.getLogger(__name__)
 
 GEOCODE_CACHE_TTL = 7 * 24 * 3600  # 7 days in seconds
 
+# SPEC-LOCKED M5 Phase A Q1: hard island bbox 94-108E / -6..6N, enforced on
+# every resolved coordinate (gazetteer AND Nominatim). Outside => not
+# geocoded, never a blind centroid.
+STRICT_SUMATRA_BBOX = {
+    "min_lon": 94.0,
+    "max_lon": 108.0,
+    "min_lat": -6.0,
+    "max_lat": 6.0,
+}
+
+
+def is_within_strict_sumatra_bbox(lat: float, lon: float) -> bool:
+    """SPEC-LOCKED hard bbox: 94<=lon<=108, -6<=lat<=6. Admits uncertainty."""
+    try:
+        return (
+            STRICT_SUMATRA_BBOX["min_lat"] <= float(lat) <= STRICT_SUMATRA_BBOX["max_lat"]
+            and STRICT_SUMATRA_BBOX["min_lon"] <= float(lon) <= STRICT_SUMATRA_BBOX["max_lon"]
+        )
+    except (TypeError, ValueError):
+        return False
+
+
+def contains_out_of_sumatra_marker(text_lower: str) -> bool:
+    """True when a Java / out-of-island toponym (e.g. sumbing/jateng) appears."""
+    t = text_lower or ""
+    return any(m in t for m in OUT_OF_SUMATRA_MARKERS)
+
 KNOWN_POIS = {k: v["coords"] for k, v in PAN_SUMATRA_GAZETTEER.items()}
 
 
 def is_within_sumatra(lat: float, lon: float) -> bool:
-    """Verifies that coordinates fall strictly within Sumatra island boundaries."""
-    return (
-        SUMATRA_BOUNDING_BOX["min_lat"] <= lat <= SUMATRA_BOUNDING_BOX["max_lat"] and
-        SUMATRA_BOUNDING_BOX["min_lon"] <= lon <= SUMATRA_BOUNDING_BOX["max_lon"]
-    )
+    """Verifies that coordinates fall strictly within Sumatra island boundaries.
+
+    SPEC-LOCKED M5 Phase A Q1: delegates to the hard 94-108E/-6..6N bbox.
+    """
+    return is_within_strict_sumatra_bbox(lat, lon)
 
 
 def _tiered_keys() -> List[str]:
@@ -385,6 +412,9 @@ def resolve_all_sumatra_locations(text: str, fallback_province: str = "Sumatera 
         combined = _dedupe(tier1_hits + tier2_hits)
         result = []
         for e in combined:
+            # SPEC-LOCKED Q1: hard bbox — gazetteer typos can never leak Java.
+            if not is_within_strict_sumatra_bbox(e["latitude"], e["longitude"]):
+                continue
             result.append({
                 "name": e["name"],
                 "latitude": e["latitude"],
@@ -395,7 +425,16 @@ def resolve_all_sumatra_locations(text: str, fallback_province: str = "Sumatera 
                 "location_precision_legacy": e.get("location_precision_legacy", "exact_node"),
                 "tier": e.get("tier", 1),
             })
-        return result
+        # SPEC-LOCKED Q1: Java-marker guard. A Tier-1 pinpoint (port/pass/road
+        # node matched verbatim) is specific enough to keep even when a
+        # Java toponym is mentioned alongside (e.g. "Bakauheni-Merak").
+        # Tier-1 hits are therefore always kept; Tier-2 companions of a
+        # Java-marker article are kept only with explicit Sumatra context
+        # (checked below for the Tier-2-only path).
+        if result:
+            return result
+        # All Tier-1 hits were out-of-bbox (should never happen) → fall through
+        # to ungeocoded rather than a blind centroid.
 
     if tier2_hits:
         deduped = _dedupe(tier2_hits)
@@ -415,6 +454,27 @@ def resolve_all_sumatra_locations(text: str, fallback_province: str = "Sumatera 
             non_medan = [e for e in deduped if e["name"].lower() != "medan"]
             if len(non_medan) >= 2:
                 deduped = non_medan
+        # SPEC-LOCKED Q1 hard bbox: drop any Tier-2 hit outside 94-108/-6..6.
+        deduped = [e for e in deduped
+                   if is_within_strict_sumatra_bbox(e["latitude"], e["longitude"])]
+        # SPEC-LOCKED Q1 Java-marker guard (Sumbing Jateng must NOT resolve
+        # to Medan): a Tier-2-only result alongside a Java/out-of-island
+        # toponym is admitted uncertainty — drop it unless the text carries
+        # explicit Sumatra province context (sumut/sumbar/riau/aceh/jambi/
+        # sumsel/bengkulu/lampung/babel/kepri/sumatera...). Tier-1 pinpoints
+        # are exempt (handled above) since a verbatim port/pass node is
+        # specific enough.
+        if deduped and contains_out_of_sumatra_marker(text_lower):
+            _sumatra_ctx = (
+                "sumatera", "sumatra", "sumut", "sumbar", "sumsel", "babel",
+                "kepri", "bengkulu", "lampung", "jambi", "riau", "aceh",
+                "jalinsum", "jalintim", "jalinbar", "jalinteng", "jtts",
+            )
+            if not any(_c in text_lower for _c in _sumatra_ctx):
+                return []
+        if not deduped:
+            # Fell through bbox/marker filtering → ungeocoded, never centroid.
+            return []
         return [
             {
                 "name": e["name"],
@@ -430,9 +490,18 @@ def resolve_all_sumatra_locations(text: str, fallback_province: str = "Sumatera 
         ]
 
     if tier3_hit_key is not None:
+        # SPEC-LOCKED Q1: a Java/out-of-island marker without explicit Sumatra
+        # context vetoes even macro-corridor fallbacks (admit uncertainty).
+        if contains_out_of_sumatra_marker(text_lower):
+            _ctx3 = ("sumatera", "sumatra", "sumut", "sumbar", "sumsel", "babel",
+                     "kepri", "bengkulu", "lampung", "jambi", "riau", "aceh")
+            if not any(_c in text_lower for _c in _ctx3):
+                return []
         lat, lon = PROVINCE_CENTROIDS.get(fallback_province, (None, None))
         if lat is None:
             lat, lon = -1.0, 102.0
+        if not is_within_strict_sumatra_bbox(lat, lon):
+            return []
         return [{
             "name": tier3_hit_key.title(),
             "latitude": lat,

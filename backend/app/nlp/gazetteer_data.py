@@ -23,11 +23,38 @@ specificity tier:
 from typing import Dict, Tuple, Any
 
 SUMATRA_BOUNDING_BOX = {
-    "min_lon": 95.0,
-    "max_lon": 109.0,
-    "min_lat": -6.2,
+    # SPEC-LOCKED M5 Phase A Q1: hard Sumatra island bbox 94-108E / -6..6N.
+    # Anything outside (e.g. Gunung Sumbing Jateng ~110.07E/-7.38) is
+    # DROPPED_IRRELEVANT even if a crisis predicate fired. Admit
+    # uncertainty > false positive.
+    "min_lon": 94.0,
+    "max_lon": 108.0,
+    "min_lat": -6.0,
     "max_lat": 6.0
 }
+
+# SPEC-LOCKED M5 Phase A Q1: Java / out-of-Sumatra toponyms that must NEVER
+# resolve to a Sumatra gazetteer node (e.g. "Sumbing" Jateng must NOT map to
+# Medan). Matching stays longest-key with strict word boundaries; these
+# markers force an out-of-island verdict unless an explicit Sumatra Tier-1/2
+# node is also present verbatim in the same text.
+OUT_OF_SUMATRA_MARKERS = frozenset({
+    "sumbing",
+    "gunung sumbing",
+    "jawa tengah",
+    "jateng",
+    "jawa timur",
+    "jatim",
+    "semeru",
+    "jawa barat",
+    "jabar",
+    "jakarta",
+    "bandung",
+    "surabaya",
+    "yogyakarta",
+    "yogya",
+    "banten",
+})
 
 PAN_SUMATRA_GAZETTEER: Dict[str, Dict[str, Any]] = {
     # ==================== NORTH SUMATRA (SUMUT) — Tier 1 towns/passes/ports ====================

@@ -22,7 +22,72 @@ from app.nlp.geocoding_service import (
 
 logger = logging.getLogger(__name__)
 
-EXTRACTION_SCHEMA_VERSION = 5
+# SPEC-LOCKED M5 Phase A Q2+Q7: schema v6. Gate-1 (DB-first + deepseek-v4.1-flash
+# batch x5 sync) unchanged; v6 marks rows that passed the hardened Q1 island
+# bbox + prevention-ceremonial guards and are eligible for selective async
+# Gate-2 review. Stale rows (schema_version != 6) must be re-extracted.
+EXTRACTION_SCHEMA_VERSION = 6
+
+# SPEC-LOCKED M5 Phase A Q1: hard Sumatra island bbox 94-108E / -6..6N.
+# Coordinates outside (e.g. Gunung Sumbing Jateng ~110.07E/-7.38) force
+# DROPPED_IRRELEVANT with zero zone even when a crisis predicate fired.
+STRICT_SUMATRA_BBOX = {
+    "min_lon": 94.0,
+    "max_lon": 108.0,
+    "min_lat": -6.0,
+    "max_lat": 6.0,
+}
+
+
+def _is_within_strict_sumatra_bbox(lat: Any, lon: Any) -> bool:
+    try:
+        if lat is None or lon is None:
+            return False
+        return (
+            STRICT_SUMATRA_BBOX["min_lat"] <= float(lat) <= STRICT_SUMATRA_BBOX["max_lat"]
+            and STRICT_SUMATRA_BBOX["min_lon"] <= float(lon) <= STRICT_SUMATRA_BBOX["max_lon"]
+        )
+    except (TypeError, ValueError):
+        return False
+
+
+# SPEC-LOCKED M5 Phase A Q1: Java / out-of-island toponyms. When present
+# without an explicit Sumatra Tier-1/2 node, the article is out-of-scope
+# (Sumbing Jateng must NOT resolve to Medan). Admit uncertainty.
+OUT_OF_SUMATRA_TEXT_MARKERS = (
+    "sumbing", "gunung sumbing", "jawa tengah", "jateng", "semeru",
+    "jawa timur", "jatim", "jawa barat", "jabar",
+)
+
+
+def _contains_out_of_sumatra_marker(full_text_lower: str) -> bool:
+    t = full_text_lower or ""
+    return any(m in t for m in OUT_OF_SUMATRA_TEXT_MARKERS)
+
+
+# SPEC-LOCKED M5 Phase A Q1: prevention-ceremonial discourse. Mitigasi /
+# pemetaan / sosialisasi / apel-siaga WITHOUT a physical blockage predicate
+# (e.g. "Lampung Selatan Mitigasi") is ceremony/prevention, never an active
+# disruption → DROPPED_IRRELEVANT with zero zone + Indonesian tier_reason.
+PREVENTION_CEREMONIAL_MARKERS = (
+    "mitigasi", "mitigasi bencana", "pemetaan", "pemetaan rawan",
+    "pemetaan risiko", "sosialisasi", "edukasi", "simulasi bencana",
+    "simulasi", "apel siaga", "apel-siaga", "gladi", "kesiapsiagaan",
+    "pelatihan", "seminar", "diskusi",
+)
+
+# Selective async Gate-2 (Q2+Q7) tuning — ONLY for uncertain / YELLOW /
+# conf<0.7 / ambiguous items. Gate-1 sync path is never slowed.
+GATE2_MIN_BODY_CHARS = 2500
+GATE2_CONFIDENCE_THRESHOLD = 0.7
+GATE2_MAX_CONCURRENCY = 5
+GATE2_TIMEOUT_SECONDS = 60.0
+_GATE2_CACHE: Dict[str, Dict[str, Any]] = {}
+_GATE2_MAX_CACHE_ENTRIES = 500
+
+
+def _gate2_cache_key(title: str, link: str) -> str:
+    return hashlib.md5(f"gate2:{title}:{link}".encode("utf-8")).hexdigest()
 
 ECONOMIC_OPINION_CEREMONIAL_EXCLUSIONS = (
     "dukung perekonomian", "pertumbuhan ekonomi", "dorong ekonomi",
@@ -68,7 +133,9 @@ NON_INCIDENT_DISCOURSE_MARKERS = (
     "peneliti", "ahli:", "solusi", "solusi banjir", "pemulihan", "hulu das",
     "daerah aliran sungai", "rehabilitasi", "normalisasi", "reboisasi",
     "penghijauan", "pencegahan", "edukasi", "sosialisasi", "simulasi bencana",
-    "apel siaga", "pelatihan", "seminar", "diskusi", "kajian", "riset",
+    "simulasi", "apel siaga", "apel-siaga", "mitigasi", "mitigasi bencana",
+    "pemetaan", "pemetaan rawan", "pemetaan risiko", "gladi", "kesiapsiagaan",
+    "pelatihan", "seminar", "diskusi", "kajian", "riset",
     "studi", "wacana", "usulan", "rekomendasi", "program", "anggaran",
     "bantuan sosial", "penyaluran bantuan", "santunan", "pasca banjir",
     "pasca bencana", "pascabencana", "pasca-bencana", "pascabanjir",
@@ -248,7 +315,9 @@ def _classify_discourse_type(full_text_lower: str, has_non_incident: bool) -> st
         if any(w in t for w in ("pasca banjir", "pasca bencana", "pascabencana", "pasca-bencana", "pascabanjir", "pasca-banjir", "pascagempa", "pasca-gempa", "pascalongsor", "rekonstruksi", "trauma healing", "bantuan sosial", "penyaluran bantuan", "santunan", "penyerahan bantuan", "bantuan logistik", "dapur umum", "posko darurat", "tenda darurat", "sekolah darurat", "jembatan darurat", "jembatan bailey", "tanggul darurat", "peletakan batu", "tinjau lokasi", "meninjau", "kunjungan")):
             return "retrospective_aid"
         return "solution_policy_discourse"
-    if any(w in t for w in ("sosialisasi", "edukasi", "simulasi bencana", "apel siaga", "pelatihan", "seminar", "diskusi")):
+    if any(w in t for w in ("sosialisasi", "edukasi", "simulasi bencana", "simulasi", "apel siaga", "apel-siaga",
+                            "mitigasi", "mitigasi bencana", "pemetaan", "pemetaan rawan", "pemetaan risiko",
+                            "gladi", "kesiapsiagaan", "pelatihan", "seminar", "diskusi")):
         return "prevention_ceremonial"
     if any(w in t for w in ("pasca banjir", "pasca bencana", "pascabencana", "pasca-bencana", "pascabanjir", "pasca-banjir", "pascagempa", "pasca-gempa", "pascalongsor", "rekonstruksi", "trauma healing", "bantuan sosial", "penyaluran bantuan", "santunan", "penyerahan bantuan", "bantuan logistik", "dapur umum", "posko darurat", "tenda darurat", "sekolah darurat", "jembatan darurat", "pembangunan", "membangun", "tanggul", "perbaikan", "renovasi", "peletakan batu", "tinjau lokasi", "meninjau", "kunjungan")):
         return "retrospective_aid"
@@ -267,6 +336,7 @@ def run_agent_verification_gate(
     has_non_incident_discourse: bool = False,
     is_geocoded: bool = False,
     latitude: Any = None,
+    longitude: Any = None,
     location_precision: str = "none",
     temporal_phase: str = "active_disruption",
     severity: str = "medium",
@@ -277,7 +347,11 @@ def run_agent_verification_gate(
 
     Check 1 (freshness_passed): parse_and_validate_article_freshness <= 48h.
     Check 2 (discourse_passed): not (has_non_incident and not has_physical) AND has_crisis.
-    Check 3 (spatial_passed): is_geocoded and latitude is not None.
+        SPEC-LOCKED Q1: prevention_ceremonial (mitigasi/pemetaan/sosialisasi/
+        apel-siaga) without a physical blockage ALWAYS fails discourse.
+    Check 3 (spatial_passed): is_geocoded and latitude/longitude not None AND
+        inside the hard Sumatra bbox 94-108E/-6..6N. Out-of-Sumatra
+        (e.g. Gunung Sumbing Jateng) fails even when crisis-true.
     Check 4 (impact_corroborated): ALL must hold for RED_CONFIRMED.
     """
     # Allow calling as run_agent_verification_gate(article_dict) with everything inside.
@@ -301,6 +375,11 @@ def run_agent_verification_gate(
         is_geocoded = bool(article.get("is_geocoded")) if article else False
     if latitude is None:
         latitude = article.get("latitude") if article else None
+    if longitude is None:
+        longitude = (article.get("longitude") if article else None)
+        if longitude is None and article:
+            # Legacy rows store lon under alternate keys.
+            longitude = article.get("lon") or article.get("lng")
     if not location_precision or location_precision == "none":
         location_precision = article.get("location_precision") or location_precision or "none"
     if not temporal_phase or temporal_phase == "active_disruption":
@@ -343,10 +422,23 @@ def run_agent_verification_gate(
             pass
 
     # ---- Check 2: discourse ----
+    # SPEC-LOCKED Q1: prevention_ceremonial without physical blockage fails
+    # even if a bare crisis word (e.g. "siaga" inside "apel siaga") fired.
+    _discourse_type_early = _classify_discourse_type(full_text_lower, has_non_incident_discourse)
+    _is_prevention_ceremonial = (_discourse_type_early == "prevention_ceremonial")
     discourse_passed = (not (has_non_incident_discourse and not has_physical_blockage)) and bool(has_crisis_predicate)
+    if _is_prevention_ceremonial and not has_physical_blockage:
+        discourse_passed = False
 
-    # ---- Check 3: spatial ----
-    spatial_passed = bool(is_geocoded) and (latitude is not None)
+    # ---- Check 3: spatial (hard island bbox) ----
+    # SPEC-LOCKED Q1: out-of-Sumatra fails spatial even when crisis-true.
+    _in_bbox = _is_within_strict_sumatra_bbox(latitude, longitude)
+    spatial_passed = bool(is_geocoded) and (latitude is not None) and (longitude is not None) and _in_bbox
+    _is_out_of_sumatra = bool(
+        (is_geocoded and (latitude is not None) and (longitude is not None) and not _in_bbox)
+        or (_contains_out_of_sumatra_marker(full_text_lower) and not has_physical_blockage
+            and location_precision in ("none", "province_only"))
+    )
 
     # ---- Check 4: impact corroborated ----
     # Never allow generic other_disruption without a physical blockage to
@@ -358,6 +450,9 @@ def run_agent_verification_gate(
         freshness_passed
         and discourse_passed
         and spatial_passed
+        and _in_bbox
+        and not _is_prevention_ceremonial
+        and not _is_out_of_sumatra
         and (location_precision in ("corridor_point", "exact_node"))
         and (temporal_phase == "active_disruption")
         and (bool(has_physical_blockage) or str(severity).lower() in ("high", "critical"))
@@ -367,7 +462,11 @@ def run_agent_verification_gate(
     )
 
     discourse_type = _classify_discourse_type(full_text_lower, has_non_incident_discourse)
-    if impact_corroborated:
+    if _is_out_of_sumatra:
+        verdict_summary = "DROPPED: lokasi di luar Pulau Sumatera (di luar bbox 94-108E/-6..6N); bukan cakupan koridor."
+    elif _is_prevention_ceremonial and not has_physical_blockage:
+        verdict_summary = "DROPPED: kegiatan pencegahan/seremonial (mitigasi/pemetaan/sosialisasi/apel-siaga) tanpa blokade fisik aktif."
+    elif impact_corroborated:
         verdict_summary = "RED_CONFIRMED: active physical blockage corroborated."
     elif not freshness_passed:
         verdict_summary = "DROPPED: stale article beyond 48h freshness window."
@@ -390,6 +489,9 @@ def run_agent_verification_gate(
         "discourse_type": discourse_type,
         "age_hours": age_hours,
         "is_weather_warning_only": is_weather_warning_only,
+        "is_out_of_sumatra": _is_out_of_sumatra,
+        "is_prevention_ceremonial": _is_prevention_ceremonial,
+        "in_sumatra_bbox": _in_bbox,
         "has_crisis_predicate": bool(has_crisis_predicate),
         "has_physical_blockage": bool(has_physical_blockage),
         "has_non_incident_discourse": bool(has_non_incident_discourse),
@@ -459,6 +561,24 @@ def _fast_heuristic_extraction(art: Dict[str, Any]) -> Dict[str, Any]:
     region = loc_info.get("province") or art.get("province") or "Sumatera"
     is_geocoded = bool(loc_info.get("is_geocoded")) and latitude is not None and longitude is not None
     location_precision = loc_info.get("location_precision", "none")
+    # SPEC-LOCKED Q1 hard island bbox: coordinates outside 94-108E/-6..6N
+    # (e.g. Java volcano reports) are un-geocoded — never a blind centroid,
+    # never a zone. Admit uncertainty > false positive.
+    if is_geocoded and not _is_within_strict_sumatra_bbox(latitude, longitude):
+        is_geocoded = False
+        latitude = None
+        longitude = None
+        location_precision = "none"
+        loc_info = dict(loc_info)
+        loc_info.update({
+            "matched_node": None,
+            "latitude": None,
+            "longitude": None,
+            "is_geocoded": False,
+            "location_precision": "none",
+            "affected_locations": [],
+        })
+        nodes = []
 
     # 5. Commodities Affected
     commodities = []
@@ -493,6 +613,7 @@ def _fast_heuristic_extraction(art: Dict[str, Any]) -> Dict[str, Any]:
         _probe_article.update({
             "is_geocoded": is_geocoded,
             "latitude": latitude,
+            "longitude": longitude,
             "location_precision": location_precision,
             "temporal_phase": temporal_phase,
             "severity": severity,
@@ -506,6 +627,7 @@ def _fast_heuristic_extraction(art: Dict[str, Any]) -> Dict[str, Any]:
             has_non_incident_discourse=has_non_incident_discourse,
             is_geocoded=is_geocoded,
             latitude=latitude,
+            longitude=longitude,
             location_precision=location_precision,
             temporal_phase=temporal_phase,
             severity=severity,
@@ -530,14 +652,40 @@ def _fast_heuristic_extraction(art: Dict[str, Any]) -> Dict[str, Any]:
     is_weather_warning_only = bool(verification_audit.get("is_weather_warning_only", False))
     impact_corroborated = bool(verification_audit.get("impact_corroborated", False))
     discourse_type = verification_audit.get("discourse_type", "incident_report")
+    # SPEC-LOCKED Q1 flags (also recomputed locally so the tiering never
+    # depends on a single audit key).
+    _is_out_of_sumatra = bool(verification_audit.get("is_out_of_sumatra")) or (
+        _contains_out_of_sumatra_marker(full_text) and not is_geocoded
+    )
+    _is_prevention_ceremonial = bool(verification_audit.get("is_prevention_ceremonial")) or (
+        discourse_type == "prevention_ceremonial"
+    )
+    _has_prevention_marker = any(w in full_text for w in PREVENTION_CEREMONIAL_MARKERS)
 
     if (not freshness_passed) or (not discourse_passed):
         zone_tier = "DROPPED_IRRELEVANT"
         if not freshness_passed:
             tier_reason = "Berita arsip/lama melebihi batas 48 jam; tidak relevan untuk koridor aktif."
+        elif _is_prevention_ceremonial and not has_physical_blockage:
+            tier_reason = ("Kegiatan pencegahan/seremonial (mitigasi/pemetaan/sosialisasi/apel-siaga) "
+                           "tanpa blokade fisik aktif; bukan disrupsi logistik.")
         else:
             tier_reason = ("Artikel opini/akademik/kebijakan/solusi tanpa blokade fisik aktif; "
                            "bukan disrupsi logistik.")
+    elif _is_out_of_sumatra or (
+        _contains_out_of_sumatra_marker(full_text) and not is_geocoded
+    ):
+        # SPEC-LOCKED Q1: out-of-Sumatra (mis. Gunung Sumbing Jateng) → zero
+        # zone even when a crisis word fired. Indonesian reason.
+        zone_tier = "DROPPED_IRRELEVANT"
+        tier_reason = ("Lokasi kejadian di luar Pulau Sumatera (di luar bbox 94-108E/-6..6N); "
+                       "di luar cakupan koridor logistik Sumatera.")
+    elif (_is_prevention_ceremonial or _has_prevention_marker) and not has_physical_blockage:
+        # SPEC-LOCKED Q1: mitigasi/pemetaan/sosialisasi/apel-siaga without
+        # physical blockage (mis. Lampung Selatan Mitigasi) → zero zone.
+        zone_tier = "DROPPED_IRRELEVANT"
+        tier_reason = ("Kegiatan pencegahan/seremonial (mitigasi/pemetaan/sosialisasi/apel-siaga) "
+                       "tanpa blokade fisik aktif; bukan disrupsi logistik.")
     elif fails_crisis_gate or (not is_geocoded) or (latitude is None) or is_ad_noise or (not _hazard_signal):
         zone_tier = "DROPPED_IRRELEVANT"
         tier_reason = ("Artikel tidak memiliki lokasi insiden spesifik di koridor "
@@ -824,6 +972,42 @@ def _apply_batch_llm_item(structured: Dict[str, Any], item: Dict[str, Any]) -> D
                     structured["zone_tier"] = llm_tier
                     if item.get("tier_reason"):
                         structured["tier_reason"] = item["tier_reason"]
+        # SPEC-LOCKED Q1 post-LLM re-check: the deterministic island bbox and
+        # prevention-ceremonial guards are never overridden by the LLM.
+        try:
+            _slat = structured.get("latitude")
+            _slon = structured.get("longitude")
+            if _slat is not None and _slon is not None and not _is_within_strict_sumatra_bbox(_slat, _slon):
+                structured["zone_tier"] = "DROPPED_IRRELEVANT"
+                structured["tier_reason"] = ("Lokasi kejadian di luar Pulau Sumatera "
+                                             "(di luar bbox 94-108E/-6..6N); di luar cakupan "
+                                             "koridor logistik Sumatera.")
+                structured["is_geocoded"] = False
+                structured["latitude"] = None
+                structured["longitude"] = None
+                structured["location_precision"] = "none"
+            else:
+                _raw_llm = ((structured.get("raw_description") or "") + " " +
+                            (structured.get("title") or "")).lower()
+                _llm_loc_str = str(llm_loc or "").strip().lower()
+                # Hallucination guard: Java-marker text (mis. Sumbing Jateng)
+                # where the LLM's Sumatra location is not verbatim in the body
+                # → admit uncertainty, drop (never map Sumbing → Medan).
+                if (_contains_out_of_sumatra_marker(_raw_llm)
+                        and _llm_loc_str and _llm_loc_str != "null"
+                        and _llm_loc_str not in _raw_llm):
+                    structured["zone_tier"] = "DROPPED_IRRELEVANT"
+                    structured["tier_reason"] = ("Lokasi Sumatera terverifikasi LLM tidak disebut "
+                                                 "verbatim di isi berita yang memuat toponim luar "
+                                                 "Sumatera; ditahan demi presisi (admit uncertainty).")
+                elif (any(w in _raw_llm for w in PREVENTION_CEREMONIAL_MARKERS)
+                        and not any(w in _raw_llm for w in PHYSICAL_BLOCKAGE_PREDICATES)):
+                    structured["zone_tier"] = "DROPPED_IRRELEVANT"
+                    structured["tier_reason"] = ("Kegiatan pencegahan/seremonial "
+                                                 "(mitigasi/pemetaan/sosialisasi/apel-siaga) tanpa "
+                                                 "blokade fisik aktif; bukan disrupsi logistik.")
+        except Exception:
+            pass
         # Multi-location fan-out: every Kabupaten/pass found by the Workhorse LLM
         # in the body paragraphs gets geocoded with hazard-specific geometry.
         try:
@@ -891,6 +1075,428 @@ def _apply_batch_llm_item(structured: Dict[str, Any], item: Dict[str, Any]) -> D
     except Exception as e:
         logger.debug(f"Batch LLM merge skipped: {e}")
     return structured
+
+
+def _needs_gate2_review(structured: Dict[str, Any]) -> bool:
+    """SPEC-LOCKED Q2+Q7 Gate-2 selector: ONLY uncertain items cost extra calls.
+
+    Returns True when the Gate-1 verdict is still ambiguous:
+    - zone_tier == YELLOW_CLARIFY, or
+    - confidence_score < 0.7, or
+    - ambiguous discourse (prevention_ceremonial / solution_policy /
+      academic_commentary / retrospective_aid without physical blockage), or
+    - geocoded exact-node with impact NOT corroborated.
+    RED_CONFIRMED and DROPPED_IRRELEVANT never enter Gate-2.
+    """
+    try:
+        if not isinstance(structured, dict):
+            return False
+        zone = str(structured.get("zone_tier") or "").upper()
+        if zone in ("RED_CONFIRMED", "DROPPED_IRRELEVANT"):
+            return False
+        try:
+            conf = float(structured.get("confidence_score") or 1.0)
+        except (TypeError, ValueError):
+            conf = 1.0
+        if conf < GATE2_CONFIDENCE_THRESHOLD:
+            return True
+        if zone == "YELLOW_CLARIFY":
+            return True
+        audit = structured.get("verification_audit") or {}
+        disc = str(audit.get("discourse_type") or structured.get("discourse_type") or "incident_report")
+        if disc in ("prevention_ceremonial", "solution_policy_discourse",
+                    "academic_commentary", "retrospective_aid", "ceremonial_economic",
+                    "non_incident_discourse"):
+            return True
+        if (structured.get("is_geocoded") and audit.get("impact_corroborated") is False):
+            return True
+        return False
+    except Exception:
+        return False
+
+
+async def _gate2_web_search_verify(title: str, link: str = "", timeout: float = 8.0) -> Optional[bool]:
+    """Single web-search corroboration attempt (Q2+Q7). Never raises.
+
+    One HTTP call to Google News RSS search for the title; True when at
+    least one independent result shares a content token, False when the
+    search succeeds with zero overlap, None when the network is unavailable
+    (unknown — not evidence against).
+    """
+    try:
+        import urllib.parse as _up
+        import httpx as _httpx
+        import re as _re
+        import xml.etree.ElementTree as _ET
+        q = (title or "").strip()
+        if not q:
+            return None
+        url = f"https://news.google.com/rss/search?q={_up.quote(q[:120])}&hl=id&gl=ID&ceid=ID:id"
+        async with _httpx.AsyncClient(timeout=timeout, follow_redirects=True) as _client:
+            _resp = await _client.get(url, headers={"User-Agent": "Mozilla/5.0 (PreHub Gate2 Verify 1.0)"})
+            if _resp.status_code != 200 or not _resp.text:
+                return None
+            try:
+                _root = _ET.fromstring(_resp.text)
+            except Exception:
+                return None
+            _tokens = {w for w in _re.findall(r"[a-z]{4,}", q.lower())}
+            _hits = 0
+            for _it in _root.findall(".//item")[:6]:
+                _t = (_it.findtext("title", "") or "").lower()
+                if _tokens and len(_tokens.intersection(_re.findall(r"[a-z]{4,}", _t))) >= 2:
+                    _hits += 1
+            return True if _hits >= 1 else False
+    except Exception as e:
+        logger.debug(f"Gate-2 web-search verify skipped: {e}")
+        return None
+
+
+def _gate2_consensus_recheck(structured: Dict[str, Any]) -> Dict[str, Any]:
+    """W/T/I/E consensus re-check for Gate-2 (Q2+Q7). Never raises.
+
+    Reuses agents.tools.consensus_gate.compute_consensus with the same
+    4-channel construction as the ingestor; falls back to a deterministic
+    physical-blockage heuristic when the gate module is unavailable.
+    """
+    try:
+        from agents.tools.consensus_gate import compute_consensus as _cc
+    except Exception:
+        _cc = None  # type: ignore
+    full = ((structured.get("title") or "") + " " + (structured.get("raw_description") or "")).lower()
+    has_block = any(w in full for w in PHYSICAL_BLOCKAGE_PREDICATES)
+    if _cc is None:
+        return {
+            "p_disruption": 0.85 if has_block else 0.30,
+            "corroborating_agents": (["GATE2_PHYSICAL_BLOCKAGE"] if has_block else []),
+            "overall_confidence": 0.85 if has_block else 0.30,
+            "fallback": True,
+        }
+    try:
+        lat = structured.get("latitude")
+        src = str(structured.get("source") or "").lower()
+        tier = str(structured.get("source_tier") or "").upper()
+        if tier == "TIER_1_OFFICIAL" or any(w in src for w in ("antara", "bmkg", "bnpb", "bpbd", "kemenhub")):
+            _i = 0.90
+        elif any(w in src for w in ("detik", "waspada", "kompas", "tribun")):
+            _i = 0.75
+        else:
+            _i = 0.60
+        _w = 0.75 if any(w in full for w in ("hujan deras", "badai", "cuaca ekstrem", "gelombang tinggi", "banjir")) else 0.35 if "hujan" in full else 0.10
+        _t = 0.65 if ("macet" in full or "antrean" in full) else 0.15
+        _comms = structured.get("commodities_affected") or []
+        _e = 0.70 if any(c in _comms for c in ["Cabai Merah", "Beras BULOG", "Minyak Goreng", "Bawang Merah"]) else 0.20
+        _state = {
+            "data_collection_finding": {"confidence": _w, "timestamp": structured.get("published_at"), "distance_km": 5.0},
+            "prediction_finding": {"confidence": _t, "timestamp": structured.get("published_at"), "distance_km": 5.0},
+            "osint_hazard_finding": {"confidence": _i, "timestamp": structured.get("published_at"), "distance_km": 5.0},
+            "economic_intelligence_finding": {"confidence": _e, "timestamp": structured.get("published_at"), "distance_km": 5.0},
+        }
+        _res = _cc(_state)
+        _p = float(_res.get("raw_probability", 0.0))
+        _agents: List[str] = []
+        if _w >= 0.5:
+            _agents.append("BMKG_RADAR")
+        if _t >= 0.5:
+            _agents.append("TOMTOM_FLOW")
+        if _i >= 0.7:
+            _agents.append("OSINT_AUTHORITY")
+        if _e >= 0.5:
+            _agents.append("PIHPS_COMMODITY")
+        return {
+            "p_disruption": _p,
+            "corroborating_agents": _agents,
+            "overall_confidence": float(_res.get("overall_confidence", 0.0)),
+            "fallback": False,
+        }
+    except Exception as e:
+        logger.debug(f"Gate-2 consensus re-check fallback: {e}")
+        return {
+            "p_disruption": 0.85 if has_block else 0.30,
+            "corroborating_agents": (["GATE2_PHYSICAL_BLOCKAGE"] if has_block else []),
+            "overall_confidence": 0.85 if has_block else 0.30,
+            "fallback": True,
+        }
+
+
+async def _gate2_verify_single_item(structured: Dict[str, Any]) -> Dict[str, Any]:
+    """Runs one selective Gate-2 review (Q2+Q7). Never raises.
+
+    Steps: MD5 cache → full-body fetch (2500ch+) → mimo-v2.6-pro low-effort
+    reasoning + single web-search verify + W/T/I/E consensus re-check →
+    corroborated RED/YELLOW or still-uncertain DROPPED (tier_reason
+    menyebut koroborasi kurang). Hard Q1 guards (bbox / prevention) still
+    veto any upgrade.
+    """
+    try:
+        title = structured.get("title", "") or ""
+        link = structured.get("link") or structured.get("url") or ""
+        ck = _gate2_cache_key(title, link)
+        if ck in _GATE2_CACHE:
+            try:
+                _hit = dict(_GATE2_CACHE[ck])
+                structured["zone_tier"] = _hit.get("zone_tier", structured.get("zone_tier"))
+                structured["tier_reason"] = _hit.get("tier_reason", structured.get("tier_reason"))
+                _va = dict(structured.get("verification_audit") or {})
+                _va.update(_hit.get("verification_audit_add", {}))
+                _va["gate2_cache_hit"] = True
+                structured["verification_audit"] = _va
+                try:
+                    _gtm = dict(structured.get("ground_truth_metrics") or {})
+                    _gtm.update({"zone_tier": structured.get("zone_tier"),
+                                 "tier_reason": structured.get("tier_reason"),
+                                 "verification_audit": _va,
+                                 "schema_version": EXTRACTION_SCHEMA_VERSION})
+                    structured["ground_truth_metrics"] = _gtm
+                except Exception:
+                    pass
+                return structured
+            except Exception:
+                pass
+
+        # 1. Full-body fetch (2500ch+): expand short RSS teasers via the
+        # existing aggregator enricher (single fetch, short timeout).
+        try:
+            _body_len = len(structured.get("raw_description") or "")
+            if _body_len < GATE2_MIN_BODY_CHARS and str(link).startswith("http"):
+                from app.services.news_aggregator import enrich_article_description_if_needed as _enrich2
+                _tmp = dict(structured)
+                _tmp["raw_description"] = structured.get("raw_description") or structured.get("summary") or ""
+                _tmp["summary"] = structured.get("summary") or ""
+                try:
+                    _enriched = await asyncio.wait_for(_enrich2(_tmp, timeout=10.0), timeout=12.0)
+                    if len(_enriched.get("raw_description") or "") > _body_len:
+                        structured["raw_description"] = _enriched.get("raw_description")
+                        structured["body_scraped"] = _enriched.get("body_scraped", True)
+                        structured["article_body_chars"] = len(structured.get("raw_description") or "")
+                        if _enriched.get("html_published_at"):
+                            structured["html_published_at"] = _enriched.get("html_published_at")
+                except asyncio.TimeoutError:
+                    pass
+        except Exception:
+            pass
+
+        # Hard Q1 veto BEFORE any LLM spend: out-of-bbox or prevention
+        # ceremony without blockage can never be upgraded by Gate-2.
+        try:
+            _lat2, _lon2 = structured.get("latitude"), structured.get("longitude")
+            _full2 = ((structured.get("title") or "") + " " + (structured.get("raw_description") or "")).lower()
+            _blocked2 = any(w in _full2 for w in PHYSICAL_BLOCKAGE_PREDICATES)
+            if _lat2 is not None and _lon2 is not None and not _is_within_strict_sumatra_bbox(_lat2, _lon2):
+                structured["zone_tier"] = "DROPPED_IRRELEVANT"
+                structured["tier_reason"] = ("Lokasi kejadian di luar Pulau Sumatera "
+                                             "(di luar bbox 94-108E/-6..6N); koroborasi Gate-2 "
+                                             "tidak dapat mengonfirmasi zona.")
+                _veto = dict(structured.get("verification_audit") or {})
+                _veto.update({"gate2_reviewed": True, "gate2_verdict": "Q1_BBOX_VETO",
+                              "schema_version": EXTRACTION_SCHEMA_VERSION})
+                structured["verification_audit"] = _veto
+                return structured
+            if (any(w in _full2 for w in PREVENTION_CEREMONIAL_MARKERS) and not _blocked2):
+                structured["zone_tier"] = "DROPPED_IRRELEVANT"
+                structured["tier_reason"] = ("Kegiatan pencegahan/seremonial tanpa blokade fisik aktif; "
+                                             "koroborasi Gate-2 kurang untuk zona.")
+                _veto2 = dict(structured.get("verification_audit") or {})
+                _veto2.update({"gate2_reviewed": True, "gate2_verdict": "Q1_PREVENTION_VETO",
+                               "schema_version": EXTRACTION_SCHEMA_VERSION})
+                structured["verification_audit"] = _veto2
+                return structured
+        except Exception:
+            pass
+
+        # 2. mimo-v2.6-pro low-effort reasoning + 3. single web-search verify
+        # run concurrently inside the item budget.
+        _mimo_text: Optional[str] = None
+        _search_hit: Optional[bool] = None
+
+        async def _call_mimo() -> Optional[str]:
+            try:
+                from app.config import get_settings as _gs
+                _settings = _gs()
+                _key = getattr(_settings, "opencode_api_key", "")
+                if not _key or str(_key).startswith("your-"):
+                    return None
+                from agents.llm_gateway import LLMGateway
+                _desc = (structured.get("raw_description") or structured.get("summary") or "")[:2500]
+                _prompt = (
+                    "Anda verifikator bencana logistik Sumatera. Baca ISI BERITA dan jawab "
+                    "HANYA dengan objek JSON valid (tanpa markdown): "
+                    '{"is_active_disaster": true|false, "confidence": 0.0-1.0, '
+                    '"verified_sumatra_location": "string atau null", '
+                    '"has_physical_blockage": true|false, '
+                    '"tier_reason": "1 kalimat Bahasa Indonesia"}. '
+                    "true HANYA jika ada blokade fisik aktif (putus/amblas/lumpuh/tutup total/"
+                    "terisolir/tidak bisa dilalui) di koridor Sumatera (bbox 94-108E/-6..6N). "
+                    "Mitigasi/pemetaan/sosialisasi/apel-siaga tanpa blokade fisik, lokasi luar "
+                    "Sumatera (mis. Sumbing Jateng), opini/akademik, atau arsip >48 jam => false. "
+                    f"Judul: {title[:200]}. ISI BERITA: {_desc}"
+                )
+                return await LLMGateway.generate_content(
+                    prompt=_prompt,
+                    model_name="mimo-v2.6-pro",
+                    reasoning_effort="low",
+                    max_tokens=600,
+                    temperature=0.1,
+                )
+            except Exception as e:
+                logger.debug(f"Gate-2 mimo reasoning skipped: {e}")
+                return None
+
+        try:
+            _mimo_text, _search_hit = await asyncio.gather(_call_mimo(), _gate2_web_search_verify(title, link))
+        except Exception:
+            pass
+
+        # 4. W/T/I/E consensus re-check (local, no network).
+        _cons = _gate2_consensus_recheck(structured)
+        _p = float(_cons.get("p_disruption", 0.0))
+        _agents = list(_cons.get("corroborating_agents") or [])
+
+        # 5. Decide: admit uncertainty > false positive.
+        _mimo_active: Optional[bool] = None
+        _mimo_conf: Optional[float] = None
+        _mimo_loc: Optional[str] = None
+        _mimo_reason: Optional[str] = None
+        if _mimo_text:
+            try:
+                _parsed = json.loads(_clean_llm_json(_mimo_text))
+                if isinstance(_parsed, dict):
+                    _mimo_active = bool(_parsed.get("is_active_disaster")) if _parsed.get("is_active_disaster") is not None else None
+                    try:
+                        _mimo_conf = float(_parsed.get("confidence")) if _parsed.get("confidence") is not None else None
+                    except (TypeError, ValueError):
+                        _mimo_conf = None
+                    _mimo_loc = _parsed.get("verified_sumatra_location")
+                    _mimo_reason = _parsed.get("tier_reason")
+            except Exception:
+                _mimo_active = None
+
+        _full3 = ((structured.get("title") or "") + " " + (structured.get("raw_description") or "")).lower()
+        _blocked3 = any(w in _full3 for w in PHYSICAL_BLOCKAGE_PREDICATES)
+        _loc_prec3 = str(structured.get("location_precision") or "none")
+        _exact3 = _loc_prec3 in ("corridor_point", "exact_node")
+        _corroborated = bool((_p >= 0.70 and len(_agents) >= 2) or (_blocked3 and _exact3))
+        if _search_hit is False:
+            # One clean search with zero overlap weakens corroboration.
+            _corroborated = bool(_blocked3 and _exact3 and _p >= 0.70)
+
+        _va3 = dict(structured.get("verification_audit") or {})
+        _va3.update({
+            "gate2_reviewed": True,
+            "gate2_model": "mimo-v2.6-pro",
+            "gate2_reasoning_effort": "low",
+            "gate2_mimo_active": _mimo_active,
+            "gate2_mimo_confidence": _mimo_conf,
+            "gate2_mimo_location": _mimo_loc,
+            "gate2_web_search_hit": _search_hit,
+            "gate2_consensus_p": round(_p, 3),
+            "gate2_corroborating_agents": _agents,
+            "gate2_content_chars": len(structured.get("raw_description") or ""),
+            "schema_version": EXTRACTION_SCHEMA_VERSION,
+        })
+
+        if _mimo_active is False:
+            structured["zone_tier"] = "DROPPED_IRRELEVANT"
+            structured["tier_reason"] = (_mimo_reason
+                                         or "Verifikasi lanjutan Gate-2 (mimo): bukan bencana aktif; koroborasi kurang.")
+            _va3["gate2_verdict"] = "MIMO_INACTIVE_DROP"
+        elif _mimo_active is True and _corroborated and _blocked3 and _exact3:
+            structured["zone_tier"] = "RED_CONFIRMED"
+            structured["tier_reason"] = (_mimo_reason
+                                         or f"Gate-2 mengoroborasi blokade fisik ({', '.join(_agents) or 'sensor lokal'}); zona merah terkonfirmasi.")
+            _va3["gate2_verdict"] = "CORROBORATED_RED"
+        elif _mimo_active is True and (_corroborated or (_mimo_conf is not None and _mimo_conf >= 0.7)):
+            structured["zone_tier"] = "YELLOW_CLARIFY"
+            structured["tier_reason"] = (_mimo_reason
+                                         or "Gate-2: sinyal aktif parsial; koroborasi belum cukup untuk zona merah, perlu klarifikasi lapangan.")
+            _va3["gate2_verdict"] = "PARTIAL_YELLOW"
+        else:
+            # Still-uncertain (incl. LLM/search unavailable + consensus below
+            # threshold): DROPPED with koroborasi-kurang reason. Admit
+            # uncertainty > false positive.
+            structured["zone_tier"] = "DROPPED_IRRELEVANT"
+            structured["tier_reason"] = ("Masih belum pasti setelah verifikasi lanjutan Gate-2 "
+                                         "(isi penuh + penalaran mimo + 1x pencarian web + "
+                                         "cek ulang konsensus W/T/I/E); koroborasi kurang, "
+                                         "ditahan demi presisi.")
+            _va3["gate2_verdict"] = "UNCERTAIN_DROP"
+        structured["verification_audit"] = _va3
+        try:
+            _gtm3 = dict(structured.get("ground_truth_metrics") or {})
+            _gtm3.update({"zone_tier": structured.get("zone_tier"),
+                          "tier_reason": structured.get("tier_reason"),
+                          "verification_audit": _va3,
+                          "discourse_type": _va3.get("discourse_type", _gtm3.get("discourse_type")),
+                          "schema_version": EXTRACTION_SCHEMA_VERSION})
+            structured["ground_truth_metrics"] = _gtm3
+        except Exception:
+            pass
+        try:
+            if len(_GATE2_CACHE) > _GATE2_MAX_CACHE_ENTRIES:
+                _GATE2_CACHE.clear()
+            _GATE2_CACHE[ck] = {
+                "zone_tier": structured.get("zone_tier"),
+                "tier_reason": structured.get("tier_reason"),
+                "verification_audit_add": {k: _va3.get(k) for k in
+                                           ("gate2_reviewed", "gate2_model", "gate2_verdict",
+                                            "gate2_consensus_p", "gate2_corroborating_agents") if k in _va3},
+            }
+        except Exception:
+            pass
+        return structured
+    except Exception as e:
+        logger.debug(f"Gate-2 single-item review failed: {e}")
+        return structured
+
+
+async def run_gate2_async_verification(
+    structured_articles: List[Dict[str, Any]],
+    timeout_seconds: float = GATE2_TIMEOUT_SECONDS,
+    max_concurrency: int = GATE2_MAX_CONCURRENCY,
+) -> List[Dict[str, Any]]:
+    """Selective async Gate-2 for uncertain items (Q2+Q7). Never raises.
+
+    Gate-1 (DB-first + deepseek-v4.1-flash batch x5 sync) stays the hot path;
+    only items where _needs_gate2_review() is True spend the mimo-v2.6-pro
+    low-effort + single web-search + consensus re-check budget, at most
+    `max_concurrency` (default 5) in flight with `timeout_seconds` (default
+    60s) per item. Results carry schema_version 6. Still-uncertain items are
+    DROPPED with a koroborasi-kurang tier_reason (admit uncertainty).
+    """
+    if not structured_articles:
+        return []
+    _sem = asyncio.Semaphore(max(1, int(max_concurrency or GATE2_MAX_CONCURRENCY)))
+
+    async def _guarded(item: Dict[str, Any]) -> Dict[str, Any]:
+        async with _sem:
+            try:
+                return await asyncio.wait_for(
+                    _gate2_verify_single_item(item),
+                    timeout=float(timeout_seconds or GATE2_TIMEOUT_SECONDS),
+                )
+            except asyncio.TimeoutError:
+                try:
+                    item["zone_tier"] = "DROPPED_IRRELEVANT"
+                    item["tier_reason"] = ("Verifikasi lanjutan Gate-2 melampaui batas waktu; "
+                                           "koroborasi kurang, ditahan demi presisi.")
+                    _vat = dict(item.get("verification_audit") or {})
+                    _vat.update({"gate2_reviewed": True, "gate2_verdict": "TIMEOUT_DROP",
+                                 "schema_version": EXTRACTION_SCHEMA_VERSION})
+                    item["verification_audit"] = _vat
+                except Exception:
+                    pass
+                return item
+            except Exception:
+                return item
+
+    _targets = [a for a in structured_articles if isinstance(a, dict) and _needs_gate2_review(a)]
+    if not _targets:
+        return structured_articles
+    try:
+        await asyncio.gather(*[_guarded(a) for a in _targets])
+    except Exception as e:
+        logger.debug(f"Gate-2 batch review skipped: {e}")
+    return structured_articles
 
 
 async def extract_structured_news_batch(articles: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -983,7 +1589,9 @@ async def extract_structured_news_batch(articles: List[Dict[str, Any]]) -> List[
                 "=> zone_tier DROPPED_IRRELEVANT. Hanya lokasi node spesifik (kota/pelabuhan/jalan) "
                 "yang boleh RED_CONFIRMED; sebutan provinsi saja => YELLOW_CLARIFY. "
                 "Tandai opini/akademisi (Akademisi/Pakar/Solusi Banjir/Pemulihan DAS), usulan kebijakan, "
+                "mitigasi/pemetaan/sosialisasi/apel-siaga tanpa blokade fisik aktif, "
                 "seminar/diskusi/sosialisasi, bantuan/pasca-bencana/pembangunan/tanggul/perbaikan/renovasi, "
+                "lokasi di luar Sumatera (mis. Gunung Sumbing Jawa Tengah, Semeru) "
                 "dan berita arsip >48 jam sebagai DROPPED_IRRELEVANT.\n\n"
                 + "\n".join(lines)
             )

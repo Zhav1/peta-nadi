@@ -38,11 +38,14 @@ async def source_health_check():
     if _SOURCES_CACHE["data"] is not None and (now - _SOURCES_CACHE["timestamp"]) < SOURCES_CACHE_TTL:
         return _SOURCES_CACHE["data"]
 
+    # Q6: honest-degraded FIRMS status — never hardcode healthy when MAP_KEY is missing.
+    _firms_has_key = bool(getattr(settings, "nasa_firms_map_key", ""))
     default_sources = [
         {"name": "BMKG", "status": "healthy", "last_seen": None, "note": "verified_active_adapter"},
         {"name": "TomTom", "status": "healthy", "last_seen": None, "note": "verified_active_adapter"},
         {"name": "AISstream", "status": "healthy", "last_seen": None, "note": "verified_active_adapter"},
-        {"name": "NASA FIRMS", "status": "healthy", "last_seen": None, "note": "verified_active_adapter"},
+        {"name": "NASA FIRMS", "status": "healthy" if _firms_has_key else "degraded", "last_seen": None,
+         "note": "verified_active_adapter" if _firms_has_key else "butuh MAP_KEY — set NASA_FIRMS_MAP_KEY di Render env / .env.local"},
     ]
     
     try:
@@ -74,18 +77,36 @@ async def source_health_check():
         for db_name, fe_name in name_map.items():
             if db_name in db_map:
                 row = db_map[db_name]
-                sources.append({
-                    "name": fe_name,
-                    "status": status_map.get(row.get("status", "").lower(), "unknown"),
-                    "last_seen": row.get("updated_at")
-                })
+                mapped = status_map.get(row.get("status", "").lower(), "unknown")
+                # Q6: DB must never resurrect FIRMS to healthy when MAP_KEY is absent.
+                if db_name == "nasa_firms" and not getattr(settings, "nasa_firms_map_key", ""):
+                    sources.append({
+                        "name": fe_name,
+                        "status": "degraded",
+                        "last_seen": row.get("updated_at"),
+                        "note": "butuh MAP_KEY — set NASA_FIRMS_MAP_KEY di Render env / .env.local",
+                    })
+                else:
+                    sources.append({
+                        "name": fe_name,
+                        "status": mapped,
+                        "last_seen": row.get("updated_at")
+                    })
             else:
-                sources.append({
-                    "name": fe_name,
-                    "status": "healthy",
-                    "last_seen": None,
-                    "note": "verified_active_adapter"
-                })
+                if fe_name == "NASA FIRMS" and not getattr(settings, "nasa_firms_map_key", ""):
+                    sources.append({
+                        "name": fe_name,
+                        "status": "degraded",
+                        "last_seen": None,
+                        "note": "butuh MAP_KEY — set NASA_FIRMS_MAP_KEY di Render env / .env.local"
+                    })
+                else:
+                    sources.append({
+                        "name": fe_name,
+                        "status": "healthy",
+                        "last_seen": None,
+                        "note": "verified_active_adapter"
+                    })
                 
         payload = {"sources": sources}
         _SOURCES_CACHE["data"] = payload
