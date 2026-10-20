@@ -10,6 +10,7 @@ import json
 import hashlib
 import logging
 import asyncio
+import re
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
 
@@ -23,6 +24,41 @@ from app.nlp.geocoding_service import (
 logger = logging.getLogger(__name__)
 
 EXTRACTION_SCHEMA_VERSION = 5
+
+DISASTER_REGEX = re.compile(
+    r"\b(banjir|longsor|tanah amblas|tanah longsor|jalan putus|jembatan putus|gempa|tektonik|"
+    r"erupsi|gunung meletus|gelombang tinggi|ombak besar|abrasi|karhutla|kebakaran hutan|"
+    r"truk terguling|kemacetan parah|macet total|pelabuhan tutup|dermaga tutup|akses lumpuh|"
+    r"terendam|genangan|tebing runtuh|lahar dingin|puting beliung|badai|cuaca ekstrem)\b",
+    re.IGNORECASE,
+)
+
+SUMATRA_GEO_REGEX = re.compile(
+    r"\b(sumatera|sumut|sumbar|aceh|riau|jambi|sumsel|bengkulu|lampung|"
+    r"medan|belawan|tebing tinggi|asahan|deli serdang|langkat|binjai|karo|simalungun|"
+    r"sitinjau|padang|bukittinggi|solok|agam|pasaman|pariaman|tanah datar|pesisir selatan|"
+    r"pekanbaru|dumai|kampar|siak|indragiri|pelalawan|rokan|"
+    r"palembang|banyuasin|ogan|lahat|muara enim|lubuklinggau|prabumulih|"
+    r"bakauheni|bandar lampung|lampung selatan|lampung tengah|tanggamus|pesawaran|"
+    r"banda aceh|sabang|lhokseumawe|aceh besar|aceh utara|aceh timur|aceh barat|"
+    r"jambi|batanghari|muaro jambi|kerinci|merangin|sarolangun|"
+    r"bengkulu|rejang lebong|bengkulu utara|mukomuko)\b",
+    re.IGNORECASE,
+)
+
+
+def passes_disaster_regex_gate(title: str, text: str) -> bool:
+    """
+    Deterministic 2-factor pre-LLM gate:
+    Requires at least one disaster/disruption keyword AND at least one Sumatra geographic anchor
+    to co-occur within the title or lead text.
+    Articles failing this check spend 0 LLM tokens and are dropped immediately.
+    """
+    combined = f"{title or ''} {text or ''}".lower()
+    has_disaster = bool(DISASTER_REGEX.search(combined))
+    has_sumatra = bool(SUMATRA_GEO_REGEX.search(combined))
+    return has_disaster and has_sumatra
+
 
 ECONOMIC_OPINION_CEREMONIAL_EXCLUSIONS = (
     "dukung perekonomian", "pertumbuhan ekonomi", "dorong ekonomi",
@@ -935,8 +971,24 @@ async def extract_structured_news_batch(articles: List[Dict[str, Any]]) -> List[
         except Exception:
             pass
 
-    # Only send non-dropped candidates to the LLM, in chunks of up to 5.
-    candidates = [b for b in baselines if b.get("zone_tier") != "DROPPED_IRRELEVANT"]
+    # Only send non-dropped candidates that pass the 2-factor regex gate to the LLM.
+    # Non-matches drop immediately with 0 LLM tokens spent.
+    candidates: List[Dict[str, Any]] = []
+    for b in baselines:
+        if b.get("zone_tier") == "DROPPED_IRRELEVANT":
+            continue
+        _title = b.get("title") or ""
+        _desc = (b.get("raw_description") or b.get("concise_summary") or b.get("summary") or "")
+        if not passes_disaster_regex_gate(_title, _desc):
+            b["zone_tier"] = "DROPPED_IRRELEVANT"
+            b["tier_reason"] = "Gagal pra-filter deterministik 2-faktor (tidak terdeteksi kata kunci bencana dan jangkar geografis Sumatera)."
+            gtm = dict(b.get("ground_truth_metrics") or {})
+            gtm["zone_tier"] = "DROPPED_IRRELEVANT"
+            gtm["tier_reason"] = b["tier_reason"]
+            b["ground_truth_metrics"] = gtm
+            continue
+        candidates.append(b)
+
     if not candidates:
         return baselines
     try:
@@ -951,46 +1003,35 @@ async def extract_structured_news_batch(articles: List[Dict[str, Any]]) -> List[
             lines = []
             for b in _chunk:
                 _desc = (b.get("raw_description") or b.get("concise_summary") or b.get("summary") or "")
+                # Clamped: headline <= 120 chars, lead body <= 400 chars
                 lines.append(
-                    f"- id: {b.get('id')} | judul: {(b.get('title') or '')[:160]} | "
-                    f"ISI BERITA: {_desc[:1600]} | "
-                    f"heuristik: {b.get('incident_type')}/{b.get('severity')}/{b.get('zone_tier')}"
+                    f"- id: {b.get('id')} | judul: {(b.get('title') or '')[:120]} | "
+                    f"ringkasan: {_desc[:400]}"
                 )
             prompt = (
-                "Baca ISI BERITA setiap artikel Sumatera berikut secara penuh sebelum memutuskan. "
-                "Kembalikan HANYA array JSON valid (tanpa markdown) berisi satu objek per artikel:\n"
-                "{\n"
-                '  "id": "string (sama persis)",\n'
-                '  "is_active_disaster": true | false,\n'
-                '  "zone_tier": "RED_CONFIRMED | YELLOW_CLARIFY | DROPPED_IRRELEVANT",\n'
-                '  "tier_reason": "1-2 kalimat Bahasa Indonesia menjelaskan keputusan berdasarkan ISI BERITA",\n'
-                '  "verified_sumatra_locations": ["nama lokasi spesifik (pass, jalan, pelabuhan, Kecamatan, Kabupaten/Kota) yang disebut di ISI BERITA sebagai terdampak, atau []"],\n'
-                '  "verified_sumatra_location": "lokasi utama string atau null",\n'
-                '  "incident_type": "flood | landslide | earthquake | wildfire | port_closure | marine_wave | road_closure | congestion | volcanic_eruption | other_disruption",\n'
-                '  "custom_hazard_label": "label singkat Bahasa Indonesia",\n'
-                '  "severity": "low | medium | high | critical",\n'
-                '  "affected_modalities": ["land" dan/atau "sea" dan/atau "air"],\n'
-                '  "passability": "BLOCKED | RESTRICTED | CAUTION",\n'
-                '  "estimated_delay_hours": 0,\n'
-                '  "recommended_radius_km": 6.0,\n'
-                '  "discourse_type": "incident_report | academic_commentary | solution_policy_discourse | prevention_ceremonial | retrospective_aid | ceremonial_economic",\n'
-                '  "concise_summary": "1 kalimat ringkasan operasional Bahasa Indonesia"\n'
-                "}\n"
-                "Aturan: is_active_disaster=true HANYA jika ISI BERITA menggambarkan bencana fisik aktif "
-                "atau disrupsi transport/logistik yang sedang terjadi; false jika konstruksi/pemulihan pascabencana "
-                '(mis. Pembangunan tanggul darurat pascabencana), perbaikan, solusi akademik/pakar, seremonial, atau ekonomi. '
-                "is_active_disaster=false ATAU verified_sumatra_location=null ATAU iklan/tidak-relevan/di luar Sumatera "
-                "=> zone_tier DROPPED_IRRELEVANT. Hanya lokasi node spesifik (kota/pelabuhan/jalan) "
-                "yang boleh RED_CONFIRMED; sebutan provinsi saja => YELLOW_CLARIFY. "
-                "Tandai opini/akademisi (Akademisi/Pakar/Solusi Banjir/Pemulihan DAS), usulan kebijakan, "
-                "seminar/diskusi/sosialisasi, bantuan/pasca-bencana/pembangunan/tanggul/perbaikan/renovasi, "
-                "dan berita arsip >48 jam sebagai DROPPED_IRRELEVANT.\n\n"
+                "Ekstraksi disrupsi logistik bencana Pulau Sumatera. Kembalikan HANYA array JSON (tanpa markdown/penjelasan) satu objek per artikel:\n"
+                "[\n"
+                "  {\n"
+                '    "id": "string",\n'
+                '    "is_active_disaster": true,\n'
+                '    "zone_tier": "RED_CONFIRMED | YELLOW_CLARIFY | DROPPED_IRRELEVANT",\n'
+                '    "tier_reason": "alasan singkat",\n'
+                '    "incident_type": "flood | landslide | earthquake | wildfire | port_closure | marine_wave | road_closure | congestion | volcanic_eruption | other_disruption",\n'
+                '    "severity": "low | medium | high | critical",\n'
+                '    "verified_sumatra_location": "lokasi spesifik atau null",\n'
+                '    "verified_sumatra_locations": ["lokasi1", "lokasi2"],\n'
+                '    "passability": "BLOCKED | RESTRICTED | CAUTION",\n'
+                '    "custom_hazard_label": "label bencana singkat"\n'
+                "  }\n"
+                "]\n"
+                "Aturan: is_active_disaster=false atau bukan Sumatera => zone_tier DROPPED_IRRELEVANT. "
+                "Hanya bencana fisik aktif di jalur/pelabuhan logistik Sumatera yang valid.\n\n"
                 + "\n".join(lines)
             )
             try:
                 gen_text = await asyncio.wait_for(
-                    LLMGateway.generate_content(prompt=prompt, model_name=settings.opencode_driver_model, max_tokens=1600),
-                    timeout=35.0,
+                    LLMGateway.generate_content(prompt=prompt, model_name=settings.opencode_driver_model, max_tokens=600),
+                    timeout=25.0,
                 )
             except Exception as _ce:
                 logger.warning(f"Batched LLM chunk unavailable ({type(_ce).__name__}: {_ce}); keeping heuristics.")
@@ -1028,6 +1069,20 @@ async def extract_structured_news(art: Dict[str, Any]) -> Dict[str, Any]:
     # Baseline heuristic (already includes expanded taxonomy + tiering)
     structured = _fast_heuristic_extraction(art)
 
+    # Deterministic 2-factor regex pre-LLM gate check: drop immediately if non-matching
+    _desc = (art.get("raw_description") or art.get("summary") or "")
+    if not passes_disaster_regex_gate(title, _desc):
+        structured["zone_tier"] = "DROPPED_IRRELEVANT"
+        structured["tier_reason"] = "Gagal pra-filter deterministik 2-faktor (tidak terdeteksi kata kunci bencana dan jangkar geografis Sumatera)."
+        gtm = dict(structured.get("ground_truth_metrics") or {})
+        gtm["zone_tier"] = "DROPPED_IRRELEVANT"
+        gtm["tier_reason"] = structured["tier_reason"]
+        structured["ground_truth_metrics"] = gtm
+        if len(_EXTRACTION_CACHE) > MAX_CACHE_ENTRIES:
+            _EXTRACTION_CACHE.clear()
+        _EXTRACTION_CACHE[cache_key] = structured
+        return structured
+
     settings = get_settings()
     opencode_key = getattr(settings, "opencode_api_key", "")
     if opencode_key and not opencode_key.startswith("your-"):
@@ -1054,14 +1109,14 @@ async def extract_structured_news(art: Dict[str, Any]) -> Dict[str, Any]:
                 '  "estimated_delay_hours": 0,\n'
                 '  "ground_truth_metrics": {"lane_status": "BLOCKED | RESTRICTED | CLEAR", "water_level_cm": 0}\n'
                 "}\n\n"
-                f"Title: {title}\n"
+                f"Title: {title[:120]}\n"
                 f"Source: {source} ({art.get('source_tier', 'TIER_2')})\n"
-                f"Content: {art.get('raw_description', '')}"
+                f"Content: {_desc[:400]}"
             )
 
             gen_text = await asyncio.wait_for(
-                LLMGateway.generate_content(prompt=prompt, model_name=settings.opencode_driver_model),
-                timeout=35.0
+                LLMGateway.generate_content(prompt=prompt, model_name=settings.opencode_driver_model, max_tokens=400),
+                timeout=25.0
             )
             if gen_text:
                 parsed = json.loads(_clean_llm_json(gen_text))

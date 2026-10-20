@@ -1,43 +1,40 @@
 ---
 gsd_state_version: "1.0"
-milestone: M4
-milestone_name: PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability
-current_phase: 82
-current_phase_name: Truck/Travel Split, ERP Ledger & Two-Step Onboarding
-status: complete
-stopped_at: "Phase 82 complete: truck_assets + travels master/transaction split with migration 014, ledger-derived ERP savings from persisted columns, two-step onboarding wizard, tenant-scoped fleet with no mock fallback for dispatchers, canonical base-URL resolver + WebSocket base fix, render.yaml service renamed to peta-nadi."
-last_updated: "2026-10-21T00:00:00.000Z"
+milestone: M5
+milestone_name: High-Fidelity Intelligence & Isolated Operations Engine
+current_phase: 85
+current_phase_name: Mapbox Directions API Turn-by-Turn Road Network & Tangential Hazard Avoidance
+status: ready_to_plan
+stopped_at: "Phase 84 executed and verified: deterministic BMKG parameter matrix, haversine spatial checks (<=30km; <=50km for quakes), temporal delta (<=6h), physical thresholds (rain >= 20 mm/h, quake M >= 4.5, wave >= 2.5m), anti-tautology locks, uncorroborated claim confidence cap (<=0.50), and structured audit ledger. 8/8 tests passed in test_bmkg_consensus_validation.py, 67/67 regression tests passed."
+last_updated: "2026-10-21T01:18:00.000Z"
 last_activity: 2026-10-21
-last_activity_desc: "Phases 80-82 consolidated and pushed: gazetteer search E2E fix (ranking/dedupe/cache/timeout + single base-URL resolver), dispatcher tenant/fleet scope enforcement, truck/travel ERP ledger + onboarding, WS base-URL fix, render.yaml rename; consolidated learnings written, tsc exit 0."
+last_activity_desc: "Phase 84 execution complete: deterministic BMKG cross-validation and unconfirmed cap active in consensus_gate and unified_news_ingestor."
 state_head: HEAD
 progress:
-  total_phases: 82
-  completed_phases: 82
-  total_plans: 101
-  completed_plans: 101
-  percent: 100.0
+  total_phases: 86
+  completed_phases: 84
+  total_plans: 103
+  completed_plans: 103
+  percent: 97.6
 ---
 
 # STATE: PreHub Project Memory
 
 **Last Updated:** 2026-10-21
-**Active Milestone:** M4 - PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability [COMPLETED ✅]
-**Current Phase:** 82
+**Active Milestone:** M5 - High-Fidelity Intelligence & Isolated Operations Engine [ACTIVE 🚀]
+**Current Phase:** 85
 
 ---
 
 ## Current Position
 
-Phase: 82 (Truck/Travel Split, ERP Ledger & Two-Step Onboarding) - COMPLETE ✅
-Status: Phases 80-82 landed together in one working tree and commit.
-(1) **Phase 80 — Gazetteer search E2E fix.** `frontend/lib/baseUrl.ts` is now the single resolver (`sanitizeBaseUrl` rejects quotes/whitespace/trailing slash/missing scheme/non-http/relative/`prehub-backend.onrender.com`); `api.ts`, the `/api/proxy` route and `FleetOnboardingModal` all use it instead of reading `NEXT_PUBLIC_API_URL` directly. Search ranks by `(score, tier, len(slug), slug)` before truncating, de-dupes aliases by proximity (1.5 km server / 0.05° client), caches only non-empty results under `lrip:geocode:search:v2:` (24 h), skips Nominatim on an exact gazetteer hit, and raises a distinct timeout error (20 s) rather than `AbortError`. `/geocode/nodes` skips coordinate-less entries with a warning instead of defaulting to the Medan centroid; UI badge falls back to `Titik`.
-(2) **Phase 81 — Dispatcher tenant/fleet scope.** Dispatcher scope comes from the JWT `company_id` claim; `?company_id=` is ignored for that role. `get_unified_fleet` applies tenancy (`matches_tenant`, `tenant_only`) before modality, `FALLBACK_FLEET` is never substituted for a dispatcher, the vehicle cache is cleared on role/tenant change, null `path` normalizes to `[]` so one un-routed row cannot 500 the list, the retry keeps `Authorization` + `getBaseUrl()`, and `PROYEKSI` routes only render on explicit inspection.
-(3) **Phase 82 — Truck/travel ERP onboarding.** `truck_assets` (master, tenant-owned) + `travels` (transaction, snapshots `truck_name`/`company_id`/`driver_name`) with migration 014; `truck_id` is the business key and the ledger survives asset deletion. ERP savings are summed from persisted columns and named constants, rounded once at the component boundary (`saved_total == baseline − actual`), and planned rits show baseline but zero savings. Missing values render `Belum tersedia`. Two-step wizard requires and validates coordinates before submit.
-(4) **WebSocket base fix.** `useCrisisSocket` resolves `getWsBaseUrl()` per connection (derives `wss://` from the API base, rejects the dead host and localhost overrides outside dev) instead of capturing `ws://localhost:8000` at module scope.
-(5) **Render rename.** `render.yaml` service `prehub-backend` → `peta-nadi` to match the deployed host; dashboard name, health check, and `CORS_ORIGINS` still need reconciling before the next deploy.
-Verified: `npx tsc --noEmit` exit 0; search suite `test_geocode_search.py` 10 tests, travels/ERP 11 tests, fleet ingest 12 tests, combined 65-test run green. Supabase migration 014 is defined but not applied; all writes remain local SQLite.
-Last activity: 2026-10-21 - Phases 80-82 docs consolidated, learnings appended, committed and pushed.
-Next action: apply migration 014 + add RLS predicates keyed on the JWT `company_id` claim; wire a `sync_status` drain (or drop the `pending` write); reconcile the Render dashboard service name; add a backend `webServer` to `playwright.config.ts`; then the Phase 79 P1 nits in `.planning/phases/79-small-city-routing-loading-human-names/79-06-NEXT-CONTEXT.md`.
+Phase: 85 (Mapbox Directions API Turn-by-Turn Road Network & Tangential Hazard Avoidance) - READY TO PLAN 📋
+Status: Phases 83 & 84 successfully completed. Milestone M5 progressing to eliminate straight-line routing polylines.
+(1) **Phase 83 — Zero-Token Pre-LLM Filtering & DeepSeek Distillation.** [COMPLETE ✅] Zero-token DOM cleaning, 2-factor regex disaster + Sumatra location co-occurrence gating, and 400-char text clamping before calling DeepSeek; provides compact single-shot JSON prompt without `<think>` traces.
+(2) **Phase 84 — Deterministic BMKG Sensor Cross-Validation & Consensus Gate Hardening.** [COMPLETE ✅] Enforces strict spatial ($\le 30\text{km}$), temporal ($\le 6\text{h}$), and physical sensor thresholds (radar rainfall $\ge 20\text{mm/h}$, $M \ge 4.5$, wave $\ge 2.5\text{m}$) before promoting news to VALIDATED; caps uncorroborated news at $\le 0.50$ UNCONFIRMED; purges tautological title-based weather guessing; returns structured audit ledger.
+(3) **Phase 85 — Mapbox Directions API Turn-by-Turn Road Network & Tangential Hazard Avoidance.** [READY TO PLAN 📋] Implements street-snapped routing (`mapbox/driving`, `overview=full`, `geometries=geojson`, `steps=true`) obeying one-way streets, removes linear chord distortion (`densifyPath`), calculates forced tangential avoidance waypoints outside hazard buffer ($R + 2\text{km}$), and validates Manhattan Medan -> USU benchmark.
+(4) **Phase 86 — Client-Isolated Routing Session vs. Global Read-Only Environmental State.** Decouples ambient global hazard alerts from user-specific routing sessions using URL query parameters and local React state, preventing User A (Medan -> Belawan) from colliding with User B (Aceh -> Belawan).
+Next action: invoke `/gsd-plan-phase 85` to generate the atomic implementation plan for Phase 85.
 
 ---
 
@@ -129,6 +126,10 @@ Next action: apply migration 014 + add RLS predicates keyed on the JWT `company_
 | 80 | Gazetteer Search Kota/Desa/Titik E2E Fix | **COMPLETE** ✅ | Single canonical base-URL resolver (`lib/baseUrl.ts`) across api/proxy/modal; ranking `(score, tier, len, slug)` + proximity de-dupe (1.5 km / 0.05°) before `limit`; no negative caching; Redis `search:v2` namespace; exact-hit Nominatim skip; distinct 20 s timeout error vs `AbortError`; no centroid default for missing coords; badge falls back to `Titik`. 10 search tests, tsc 0. |
 | 81 | Dispatcher Tenant & Fleet Scope | **COMPLETE** ✅ | JWT `company_id` claim is authoritative and `?company_id=` is ignored for dispatchers; `tenant_only` applies tenancy before modality in `get_unified_fleet`; no `FALLBACK_FLEET` for scoped roles; cache cleared on role/tenant change; null `path` → `[]`; retry keeps `Authorization` + resolver; `PROYEKSI` only on inspect. 12 fleet-ingest + 9 telemetry tests, 17/17 scope assertions, tsc 0. |
 | 82 | Truck/Travel Split, ERP Ledger & Two-Step Onboarding | **COMPLETE** ✅ | `truck_assets` + `travels` (snapshotted master fields) with migration 014; ledger-derived ERP savings, rounded once at component boundary, zero savings until `actual_recorded`; two-step wizard with required coordinates; WS base fix (`getWsBaseUrl` per connection); `render.yaml` renamed to `peta-nadi`. 11 travels/ERP tests, combined 65-test run green, tsc 0. |
+| 83 | Zero-Token Pre-LLM Filtering & DeepSeek Distillation Pipeline | **READY TO PLAN** 📋 | DOM/HTML boilerplate & ad stripping; 2-factor regex disaster + Sumatra location co-occurrence gate; headline + lead clamping (<=400 chars, >80% token reduction); compact DeepSeek JSON schema without CoT. |
+| 84 | Deterministic BMKG Sensor Cross-Validation & Consensus Gate Hardening | **PLANNED** 📋 | Deterministic parameter cross-check matrix (spatial delta <= 30 km, temporal window <= 6h, radar rain / quake / wave thresholds); explicit audit ledger; uncorroborated news capped <= 0.50 UNCONFIRMED; <think> trace suppression. |
+| 85 | Mapbox Directions API Turn-by-Turn Road Network & Tangential Hazard Avoidance | **PLANNED** 📋 | Mapbox driving profile, geometries=geojson&overview=full&steps=true; OSM one-way compliance; 0 densifyPath chords on live road features; forced tangential avoidance waypoints (R+2km); Manhattan Medan -> USU benchmark verification. |
+| 86 | Client-Isolated Routing Session vs. Global Read-Only Environmental State | **PLANNED** 📋 | Decouple local routing (React state + URL search params ?origin=...&dest=...) from ambient global WebSocket/SSE hazards; guard /ws/crisis/{id} broadcasts; multi-tab concurrent isolation verification. |
 
 ---
 

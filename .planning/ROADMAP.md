@@ -1,7 +1,7 @@
 # ROADMAP: PreHub (Logistics Resilience Intelligence Platform)
 
-**Active Milestone:** M4 - PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability [COMPLETED ✅]
-**Previous Milestones:** M1 - Hackathon MVP [COMPLETED ✅], M2 - PreHub Final Defense [COMPLETED ✅], M3 - PreHub MVP Pilot Operations [COMPLETED ✅]
+**Active Milestone:** M5 - High-Fidelity Intelligence & Isolated Operations Engine [ACTIVE 🚀]
+**Previous Milestones:** M1 - Hackathon MVP [COMPLETED ✅], M2 - PreHub Final Defense [COMPLETED ✅], M3 - PreHub MVP Pilot Operations [COMPLETED ✅], M4 - PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability [COMPLETED ✅]
 **Development Mode:** Solo, AI-assisted (GSD Disciplined Workflow)
 
 ---
@@ -2231,6 +2231,172 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 - [x] Unknown endpoint without coords returns `status: "no_route"` with empty `routes` (no first/last-node snap).
 - [x] Regency feature IDs resolve through `normalizeRegencyId` in both `CrisisMap` and `DashboardClient`.
 - [ ] Live pilot verification on `pre-hub.vercel.app` × `peta-nadi.onrender.com` (Tembilahan → Rengat, Batal abort, label/legend audit) — steps documented in `79-04-WALKTHROUGH.md`; requires the Render redeploy with `OPENCODE_REASONING_EFFORT=low`.
+
+---
+
+## Phase 80: Gazetteer Search E2E Fix
+
+**Goal:** Centralize API base-URL resolution, fix search relevance ranking before truncation, eliminate duplicate spatial aliases, and raise distinct timeout errors.
+**Status:** COMPLETE ✅
+
+### Deliverables
+- **WP1 - Single Base-URL Resolver (`frontend/lib/baseUrl.ts`)**:
+  - `sanitizeBaseUrl` strips whitespace, quotes, and trailing slashes, rejecting non-http/relative and decommissioned hosts.
+  - Used uniformly across `api.ts`, `/api/proxy`, and onboarding modal.
+  - Dynamic WebSocket base resolver `getWsBaseUrl()` replacing hardcoded module-level strings.
+- **WP2 - Search Relevance & Proximity Deduplication (`backend/app/routers/geocode_router.py`)**:
+  - Sorts candidates by `(score, tier, len(slug), slug)` prior to truncating at limit.
+  - Collapses spatial duplicates within 1.5 km (server) and 0.05° (client).
+  - Caches only non-empty results under `lrip:geocode:search:v2:` (24h TTL).
+  - Skips external Nominatim queries on exact gazetteer hits.
+  - 20s client deadline raises explicit timeout error instead of generic `AbortError`.
+
+### Verification
+- [x] Pytest suite `backend/tests/test_geocode_search.py` passing (10/10 tests).
+- [x] BaseUrl sanitation verified against trailing slashes and invalid schemes.
+
+---
+
+## Phase 81: Dispatcher Tenant/Fleet Scope
+
+**Goal:** Enforce strict tenant isolation based on JWT claims, ban synthetic fallback fleet for dispatchers, and prevent null-path crashes.
+**Status:** COMPLETE ✅
+
+### Deliverables
+- **WP1 - Token Claim Precedence (`backend/app/routers/vehicles_router.py`)**:
+  - Branches on role before query parameters; dispatcher scope strictly derives from JWT `company_id`.
+  - Applies tenancy filtering before modality filtering; `FALLBACK_FLEET` is never substituted for dispatchers.
+  - Invalidates vehicle cache on role or tenant change.
+- **WP2 - Path Normalization & Retry Resilience (`frontend/lib/types.ts` + `frontend/hooks/useFleetVehicles.ts`)**:
+  - Normalizes null `path` to `[]` to prevent single unrouted rows from crashing the entire collection.
+  - Retains `Authorization` header and `getBaseUrl()` across fetch retries.
+
+### Verification
+- [x] Pytest suite `backend/tests/test_fleet_ingest.py` passing (12/12 tests).
+- [x] TypeScript build clean (`tsc --noEmit`).
+
+---
+
+## Phase 82: Truck/Travel Split, ERP Ledger & Two-Step Onboarding
+
+**Goal:** Separate master asset data from travel transactions, persist ERP savings columns without fabricated numbers, and require valid coordinates in the onboarding wizard.
+**Status:** COMPLETE ✅
+
+### Deliverables
+- **WP1 - Schema Split (`supabase/migrations/014_truck_assets_and_travels.sql`)**:
+  - Master `truck_assets` table (tenant-owned) and transaction `travels` table (snapshots truck/company/driver).
+  - Local SQLite persistence mirroring in `local_storage.py`.
+- **WP2 - Ledger-Derived ERP Savings (`frontend/components/dashboard/ERPSavingsPanel.tsx`)**:
+  - Computes savings purely from persisted `travels` columns and named operational constants.
+  - Unrecorded trips show baseline with 0 savings; missing values render `Belum tersedia`.
+- **WP3 - Two-Step Onboarding Wizard (`frontend/components/fleet/FleetOnboardingModal.tsx`)**:
+  - Step 1: Asset metadata validation.
+  - Step 2: Mandatory coordinate resolution before submission.
+
+### Verification
+- [x] Pytest suite `backend/tests/test_travels_erp.py` passing (11/11 tests).
+- [x] TypeScript compilation exit 0.
+
+---
+
+# MILESTONE M5: High-Fidelity Intelligence & Isolated Operations Engine
+
+**Goal:** Resolve the 4 core architectural bottlenecks identified in the system diagnostic: (1) Zero-token pre-LLM filtering and headline+lead text clamping for DeepSeek news classification; (2) Deterministic BMKG sensor cross-validation and raw `<think>` trace suppression in the Consensus Gate; (3) Street-snapped turn-by-turn road network routing via Mapbox Directions API (Free Tier) with forced tangential hazard avoidance waypoints; and (4) Strict state decoupling between ambient global hazard alerts and client-isolated routing sessions to permanently eliminate multi-user polyline collisions.
+
+---
+
+## Phase 83: Zero-Token Pre-LLM Filtering & DeepSeek Distillation Pipeline
+
+**Goal:** Eliminate token drain and false positives by enforcing deterministic DOM/HTML stripping, Sumatra crisis regex gating, and text clamping before invoking DeepSeek, paired with a compact single-shot JSON prompt without `<think>` CoT traces.
+**Status:** COMPLETE ✅
+
+### Deliverables
+- **WP1 - Deterministic DOM / Boilerplate & Ad Stripper (`news_aggregator.py`, `news_extractor.py`)**:
+  - Clean regex-based DOM stripper purging `<script>`, `<style>`, `<nav>`, `<footer>`, `<aside>`, `<header>`, `<form>`, `<iframe>`, and ad banners.
+  - Prioritizes `og:description` and primary `<p>` tags within article containers.
+  - Drops blacklisted phrases (e.g. "baca juga", "advertisement", "kolom pakar", "opini").
+- **WP2 - Two-Factor Sumatra Disaster & Location Regex Gate (`news_extractor.py`)**:
+  - Enforces mandatory co-occurrence of Disaster Keywords (`\b(banjir|longsor|tanah amblas|jalan putus|jembatan putus|gempa|erupsi|gelombang tinggi|truk terguling|kemacetan parah|pelabuhan tutup)\b`) and Sumatra Location Anchors (`\b(sumatera|sumut|sumbar|aceh|riau|jambi|sumsel|bengkulu|lampung|medan|belawan|tebing tinggi|asahan|deli serdang|langkat|sitinjau|padang|bukittinggi|pekanbaru|dumai|palembang|bakauheni)\b`).
+  - Drops non-matching candidates instantly with 0 LLM token expenditure.
+- **WP3 - Text Clamping & Distillation Engine (`news_extractor.py`)**:
+  - Clamps article payload to Headline ($\le 120$ chars) + Lead text ($\le 400$ chars), reducing prompt tokens by $>80\%$.
+- **WP4 - Compact Single-Shot DeepSeek JSON Schema & `<think>` Stripper (`agents/llm_gateway.py`)**:
+  - Configures strict JSON classification prompt without chain-of-thought: `{ "id": string, "is_active_disaster": boolean, "zone_tier": string, ... }`.
+  - Strips any `<think>...</think>` tags before response parsing and completion returning.
+
+### Verification
+- [x] Unit test `backend/tests/test_pre_llm_filter.py`: non-disaster / non-Sumatra articles dropped with 0 tokens; valid articles clamped $\le 400$ chars.
+- [x] Output response validation: zero `<think>` tokens returned (4/4 tests passed in `test_pre_llm_filter.py`).
+
+
+---
+
+## Phase 84: Deterministic BMKG Sensor Cross-Validation & Consensus Gate Hardening
+
+**Goal:** Ground Consensus Gate promotion on explicit deterministic matching against official BMKG physical telemetry (spatial distance, temporal window, physical sensor thresholds) and cap uncorroborated claims.
+**Status:** COMPLETE ✅
+
+### Deliverables
+- **WP1 - Deterministic Cross-Validation Parameter Matrix (`agents/tools/consensus_gate.py`)**:
+  - Spatial tolerance gate: $\Delta d \le 30\text{ km}$ between news claim coordinates and BMKG epicenter/warning centroid.
+  - Temporal tolerance window: $\Delta t \le 6\text{ hours}$ between news publication and BMKG sensor recording.
+  - Physical threshold checks:
+    - Flood: BMKG radar rainfall rate $\ge 20\text{ mm/h}$ or official warning level ("WASPADA" / "SIAGA").
+    - Earthquake: BMKG magnitude $M \ge 4.5$ within 50 km.
+    - Maritime/Port: BMKG wave height $\ge 2.5\text{ m}$.
+- **WP2 - Structured Consensus Audit Ledger (`agents/tools/consensus_gate.py`)**:
+  - Emits explicit audit record: `is_corroborated`, `spatial_delta_km`, `temporal_delta_hours`, `bmkg_parameter_matched`, `composite_confidence`.
+- **WP3 - Uncorroborated Claim Confidence Cap (`agents/tools/consensus_gate.py`)**:
+  - Uncorroborated news claims capped at confidence $\le 0.50$ (`UNCONFIRMED`); requires $\ge 2$ independent sensors (BMKG + TomTom or News) and score $\ge 0.85$ for `VALIDATED` promotion.
+- **WP4 - Purge Tautological News Inference (`backend/app/services/unified_news_ingestor.py`)**:
+  - Completely purged article title keyword guessing (e.g. `"hujan deras" in title -> weather_conf = 0.75`).
+  - Enforces external physical sensor ground-truth.
+
+### Verification
+- [x] Pytest suite `backend/tests/test_bmkg_consensus_validation.py`: asserts corroboration logic, spatial/temporal thresholds, anti-tautology locks, and unconfirmed caps (8/8 tests passing).
+
+---
+
+## Phase 85: Mapbox Directions API Turn-by-Turn Road Network & Tangential Hazard Avoidance
+
+**Goal:** Replace crude point-to-point straight lines with true street-snapped road geometry using Mapbox Directions API (Free Tier), obeying one-way streets and steering around hazard polygons via forced tangential waypoints.
+**Status:** READY TO PLAN 📋
+
+### Deliverables
+- **WP1 - Mapbox Directions API Free Tier Integration (`frontend/lib/aiDynamicRouter.ts`, `mapboxRoutingService.ts`)**:
+  - Enforces payload parameters: `profile='driving'` (or `'driving-traffic'`), `geometries='geojson'`, `overview='full'`, `steps='true'`, `annotations='distance,duration,congestion'`.
+  - Validates Mapbox Free Tier quota (100k requests/month).
+- **WP2 - Removal of Linear Chord Interpolation (`frontend/components/map/CrisisMap.tsx`)**:
+  - Removes `densifyPath` straight-line chord rendering on live road routes; feeds true GeoJSON LineString coordinates directly to `route-paths-source`.
+- **WP3 - Forced Tangential Avoidance Waypoint Engine (`frontend/lib/aiDynamicRouter.ts`)**:
+  - Calculates tangential normal vectors around active hazard polygons ($R + 2\text{ km}$ clearance) and encodes mandatory 3-stop waypoints (`origin;waypoint;destination`) into the Directions API call.
+- **WP4 - Benchmark Route Verification (Manhattan Medan -> USU)**:
+  - Validates road network snapping along Jl. Gatot Subroto $\rightarrow$ Jl. Sunggal $\rightarrow$ Jl. Setia Budi $\rightarrow$ Jl. Dr. Mansyur into USU campus, obeying one-way street constraints.
+
+### Verification
+- [ ] Playwright E2E test `frontend/tests/e2e/mapbox-turn-by-turn.spec.ts`: verifies Manhattan Medan -> USU route has $>50$ coordinates and snaps to road segments without straight-line cuts.
+
+---
+
+## Phase 86: Client-Isolated Routing Session vs. Global Read-Only Environmental State
+
+**Goal:** Architecturally decouple ambient global hazard alerts from user-specific routing sessions, storing route choices in local React memory and URL query parameters to eliminate multi-user polyline collisions.
+**Status:** READY TO PLAN 📋
+
+### Deliverables
+- **WP1 - Two-Layer State Architecture (`frontend/components/dashboard/DashboardClient.tsx`)**:
+  - Layer 1 (Global Shared State): Disaster incidents, BMKG alert polygons, fleet telemetry, traffic flow lines (read-only broadcast).
+  - Layer 2 (Session-Local State): Selected origin/destination nodes, active route recommendations, detour options, local simulation workbench (scoped strictly to current browser session).
+- **WP2 - URL Query Parameter Binding (`frontend/components/dashboard/DashboardClient.tsx`)**:
+  - Encapsulates active corridor endpoints in URL: `?origin=...&dest=...&modality=...&route=...`.
+  - Ensures each browser tab retains its own isolated routing state independently of other tabs.
+- **WP3 - WebSocket Broadcast Isolation (`frontend/hooks/useCrisisSocket.ts`, `backend/app/main.py`)**:
+  - Guards `/ws/crisis/{id}` so that route calculations and approvals are never broadcasted as ambient state overrides to other clients.
+- **WP4 - Multi-Client Concurrency Verification**:
+  - Verifies User A (Medan $\rightarrow$ Belawan) and User B (Aceh $\rightarrow$ Belawan) render their respective routes simultaneously without polylines colliding or overriding.
+
+### Verification
+- [ ] Playwright multi-context test verifying complete route isolation across two concurrent browser sessions.
 
 ---
 

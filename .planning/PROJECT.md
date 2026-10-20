@@ -1,31 +1,45 @@
 # PROJECT: PreHub (Logistics Resilience Intelligence Platform)
 
-**Active Milestone:** M4 - PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability [ACTIVE 🚀]
+**Active Milestone:** M5 - High-Fidelity Intelligence & Isolated Operations Engine [ACTIVE 🚀]
 **Previous Milestones:** 
 - M1 - Hackathon MVP (Pan-Sumatra Logistics & Swarm Intelligence) [COMPLETED ✅]
 - M2 - PreHub Final Defense: Empirical Evaluation, Tactical HUD & Multi-Source Maturity [COMPLETED ✅]
 - M3 - PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform [COMPLETED ✅]
+- M4 - PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability [COMPLETED ✅]
 
-## Current Milestone: M4 - PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability
+## Current Milestone: M5 - High-Fidelity Intelligence & Isolated Operations Engine
 
-**Goal:** Resolve all 9 systemic bugs and usability anomalies discovered during end-to-end audit and user field drills documented in `PILOT_BUGS_AND_E2E_AUDIT_REPORT.md`. Enforce strict multi-tenant tenancy isolation, complete user profile management, secure 1-click persona locks for corporate accounts, explicit visual locked states for non-dispatcher roles, curated Pan-Sumatra coastal highway routing geometry, econometric impact model data piping, and resilient simulation controls.
+**Goal:** Address and eliminate 4 critical architectural bottlenecks identified in the system diagnostic: (1) Zero-token pre-LLM filtering and headline+lead text clamping for DeepSeek news classification; (2) Deterministic BMKG sensor cross-validation and raw `<think>` trace suppression in the Consensus Gate; (3) Street-snapped turn-by-turn road network routing via Mapbox Directions API (Free Tier) with forced tangential hazard avoidance waypoints; and (4) Strict state decoupling between ambient global hazard alerts and client-isolated routing sessions to permanently eliminate multi-user polyline collisions.
 
 **Target features:**
-- Bug 1: Elimination of `GuestEvaluationBanner` pointer-events collision with top telemetry HUD.
-- Bug 2: Comprehensive Authenticated User Profile Card with active permissions and logout action in `AuthModal`.
-- Bug 3: Strict 1-Click Persona Switcher lockdown restricted exclusively to sandbox/guest evaluator accounts.
-- Bug 4: Explicit visual lock badges (`[Khusus Dispatcher]`) and role-aware disabled states across fleet onboarding and mitigation execution.
-- Bug 5: Curated arterial coastal road routing (Belawan -> Pantai Cermin -> Tebing Tinggi) replacing crude 4-point straight lines, correct destination node coordinates, and dynamic origin/destination support in backend demo engine.
-- Bug 6: Calibrated econometric intelligence data pipeline feeding live inflation and spoilage hedging forecasts into guided demo state.
-- Bug 7: Resilient fleet simulation mode filter in `useFleetVehicles` correctly clearing 45 baseline synthetic units when toggled off.
-- Bug 8: Exponential backoff and graceful inactive state in `/demo-remote` eliminating continuous 404 polling loops.
-- Bug 9: Unified toast notification dispatching eliminating duplicate conflicting popups in `SimulationSection`.
+- **Phase 83 (Zero-Token Pre-LLM Ingestion & DeepSeek Distillation Pipeline):**
+  - DOM/HTML boilerplate & ad stripping before NLP processing.
+  - Two-factor Sumatra crisis keyword & geographic anchor regex gating (dropping non-disaster news at 0 token cost).
+  - Text clamping to headline + first 2 paragraphs ($\le 400$ chars, saving $>80\%$ of LLM prompt tokens).
+  - Compact single-turn DeepSeek JSON classification prompt without `<think>` internal reasoning bloat.
+- **Phase 84 (Deterministic BMKG Sensor Cross-Validation & Consensus Gate Hardening):**
+  - Deterministic parameter cross-check matrix: spatial tolerance ($\Delta d \le 30\text{ km}$), temporal window ($\Delta t \le 6\text{ h}$), and physical sensor thresholds (radar rainfall $\ge 20\text{ mm/h}$, earthquake $M \ge 4.5$, marine waves $\ge 2.5\text{ m}$).
+  - Explicit parameter matching ledger and confidence calibration formulation in `consensus_gate.py`.
+  - Cap uncorroborated news claims at $\le 0.50$ (UNCONFIRMED) when physical sensor data is absent.
+  - Strict suppression and stripping of raw `<think>...</think>` traces across all LLM inference outputs.
+- **Phase 85 (Mapbox Directions API Turn-by-Turn Road Network & Tangential Hazard Avoidance):**
+  - Mapbox Directions API Free Tier (`mapbox/driving` & `mapbox/driving-traffic`) integration with `geometries=geojson&overview=full&steps=true`.
+  - OpenStreetMap one-way street rule compliance and road snapping.
+  - Elimination of straight-line `densifyPath` chord distortion on live highway/arterial features.
+  - Forced tangential avoidance waypoint engine ($R + 2\text{ km}$) for obstacle avoidance around hazard circles.
+  - Ground-truth benchmark verification: Manhattan Times Square Medan -> USU route via Jl. Gatot Subroto -> Jl. Sunggal -> Jl. Setia Budi -> Jl. Dr. Mansyur.
+- **Phase 86 (Client-Isolated Routing Session vs. Global Read-Only Environmental State):**
+  - Strict two-layer state decoupling in `DashboardClient.tsx`: Global Shared State (read-only broadcast) vs Session-Local State (client-isolated).
+  - URL query parameter binding (`?origin=...&dest=...&route=...`) and local React memory encapsulation.
+  - WebSocket broadcast decoupling preventing `/ws/crisis/{id}` from overriding active client routes.
+  - Multi-tab browser isolation verification preventing User A (Medan -> Belawan) from colliding with User B (Aceh -> Belawan).
 
 ## Milestones Overview
 - **M1 - Pan-Sumatra Logistics & Swarm Intelligence MVP**: Completed (Phases 0 to 35). Shipped 6-agent swarm, Mapbox canvas, live news pipeline across 8 ANTARA bureaus, and 39 pytest tests.
 - **M2 - PreHub Final Defense: Empirical Evaluation, Tactical HUD & Multi-Source Maturity**: Completed (Phases 36 to 41). Delivered ground-truth benchmark ($N=60$), 88-test matrix, mathematical consensus formula, Brier probability calibration, deterministic CPU routing, God's-Eye HUD telemetry, and sanitized UI.
 - **M3 - PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform**: Completed (Phases 42 to 56). Delivered multi-role auth, self-serve fleet/CSV manifest ingestion, spoilage hedging economics, intermodal port synchronization, and anti-collision dock layouts.
-- **M4 - PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability**: Completed (Phases 57 to 71). Remediated all audit findings, locked corporate RBAC, ported live telemetry to GPU-instanced @deck.gl/mapbox MapboxOverlay (5,000+ units @ 60 FPS), resolved AIS/ADS-B ingestion bottlenecks, established canonical news permalinks, pure [lon, lat] coordinate graph snapping, simultaneous multi-color intermodal routing with Hold-vs-Reroute Spoilage Hedging economics, purged legacy mock Past/Future/Predict and Simulasi tabs, hardened authentic PIHPS analytics and Laporan audit ledger, eliminated telemetry OOM crashes via 4 Hz Deck.gl buffer throttling and SpatialHash modality quotas, stabilized AIS vessel MMSI continuity with 96-vessel regional baseline + 90s sliding TTL, implemented 100% water-path coastal and estuary routing (`SUMATRA_PORT_CHANNELS` + `SUMATRA_NAUTICAL_PERIMETER`), and delivered on-map contextual corridor popovers with instant node glow cleanup.
+- **M4 - PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability**: Completed (Phases 57 to 82). Remediated all audit findings, locked corporate RBAC, ported live telemetry to GPU-instanced @deck.gl/mapbox MapboxOverlay (5,000+ units @ 60 FPS), resolved AIS/ADS-B ingestion bottlenecks, established canonical news permalinks, pure [lon, lat] coordinate graph snapping, simultaneous multi-color intermodal routing with Hold-vs-Reroute Spoilage Hedging economics, purged legacy mock Past/Future/Predict and Simulasi tabs, hardened authentic PIHPS analytics and Laporan audit ledger, eliminated telemetry OOM crashes, stabilized AIS vessel MMSI continuity with 96-vessel regional baseline, implemented 100% water-path coastal and estuary routing, delivered gazetteer search ranking and proximity deduplication, enforced token-derived tenant fleet scopes, and delivered master truck asset / travel ERP transaction split with migration 014.
+- **M5 - High-Fidelity Intelligence & Isolated Operations Engine**: Active (Phases 83 to 86). Delivers zero-token pre-LLM filtering, deterministic BMKG cross-validation, street-snapped Mapbox turn-by-turn routing, and client-isolated session state.
 
 ## Vision
 An AI-powered decision support platform that shifts logistics and disaster response from **reactive** to **proactive**. PreHub ingests real-time physical hazard data (weather, traffic, maritime, wildfire), detects logistics disruptions, predicts cascading economic impacts (commodity price spikes), and delivers actionable intelligence to field coordinators and government executives, all before the crisis escalates.

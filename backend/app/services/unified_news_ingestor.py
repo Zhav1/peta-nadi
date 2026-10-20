@@ -357,13 +357,13 @@ class UnifiedNewsIngestor:
         - E (PIHPS Commodity Exposure): Strategic food corridor sensitivity
         """
         try:
-            from agents.tools.consensus_gate import compute_consensus
+            from agents.tools.consensus_gate import compute_consensus, cross_validate_news_with_bmkg
         except ModuleNotFoundError:
             import sys, os
             workspace_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
             if workspace_root not in sys.path:
                 sys.path.insert(0, workspace_root)
-            from agents.tools.consensus_gate import compute_consensus
+            from agents.tools.consensus_gate import compute_consensus, cross_validate_news_with_bmkg
 
         from app.nlp.news_extractor import PHYSICAL_BLOCKAGE_PREDICATES
 
@@ -379,38 +379,29 @@ class UnifiedNewsIngestor:
         # 1. Channel W: Weather (BMKG Radar / Open-Meteo)
         weather_conf = 0.10
         w_telemetry = art.get("weather_telemetry") or {}
-        if w_telemetry:
-            rain_mm = float(w_telemetry.get("rainfall_mm") or w_telemetry.get("precipitation_mm") or 0.0)
-            wind_kt = float(w_telemetry.get("wind_speed_kt") or 0.0)
-            wave_m = float(w_telemetry.get("wave_height_m") or 0.0)
-            if rain_mm > 15.0 or wind_kt > 28.0 or wave_m > 2.5:
-                weather_conf = min(0.95, 0.70 + (rain_mm / 100.0))
-            elif rain_mm > 5.0 or wind_kt > 15.0 or wave_m > 1.5:
-                weather_conf = 0.55
-            elif rain_mm > 0.0:
-                weather_conf = 0.35
-        else:
+        if not w_telemetry:
             try:
                 r = get_redis()
                 cached_weather = r.get(f"lrip:weather:point:{lat:.2f}:{lon:.2f}") if r else None
                 if cached_weather:
                     import json as _js
-                    w_data = _js.loads(cached_weather)
-                    rain_mm = float(w_data.get("rainfall_mm") or w_data.get("precipitation_mm") or 0.0)
-                    wind_kt = float(w_data.get("wind_speed_kt") or 0.0)
-                    wave_m = float(w_data.get("wave_height_m") or 0.0)
-                    if rain_mm > 15.0 or wind_kt > 28.0 or wave_m > 2.5:
-                        weather_conf = min(0.95, 0.70 + (rain_mm / 100.0))
-                    elif rain_mm > 5.0 or wind_kt > 15.0 or wave_m > 1.5:
-                        weather_conf = 0.55
-                    elif rain_mm > 0.0:
-                        weather_conf = 0.35
-                elif any(w in str(art.get("title", "")).lower() for w in ("hujan deras", "badai", "cuaca ekstrem", "gelombang tinggi", "banjir")):
-                    weather_conf = 0.75
-                elif any(w in str(art.get("title", "")).lower() for w in ("hujan", "gerimis", "cuaca buruk")):
-                    weather_conf = 0.45
+                    w_telemetry = _js.loads(cached_weather)
             except Exception as we:
-                logger.debug(f"Weather sensor check skipped: {we}")
+                logger.debug(f"Weather sensor cache check skipped: {we}")
+
+        # Deterministic BMKG physical sensor cross-validation
+        bmkg_cross = cross_validate_news_with_bmkg(art, w_telemetry if w_telemetry else None)
+        if bmkg_cross.get("is_corroborated"):
+            weather_conf = float(bmkg_cross.get("composite_confidence", 0.70))
+        elif w_telemetry:
+            rain_mm = float(w_telemetry.get("rainfall_mm") or w_telemetry.get("precipitation_mm") or 0.0)
+            if rain_mm > 0.0:
+                weather_conf = 0.35
+            else:
+                weather_conf = 0.10
+        else:
+            # Strictly PURGED: Never inflate weather_conf from article title keywords!
+            weather_conf = 0.10
 
         # 2. Channel T: TomTom Traffic Flow Telemetry
         traffic_conf = 0.15
@@ -430,7 +421,7 @@ class UnifiedNewsIngestor:
                 elif delay_min >= 10.0 or (free_spd > 0 and (curr_spd / free_spd) < 0.70):
                     traffic_conf = 0.60
             elif "macet" in str(art.get("title", "")).lower() or "antrean" in str(art.get("title", "")).lower():
-                traffic_conf = 0.65
+                traffic_conf = 0.40  # Conservative unverified traffic hint
         except Exception as te:
             logger.debug(f"Traffic sensor check skipped: {te}")
 
@@ -450,10 +441,16 @@ class UnifiedNewsIngestor:
         econ_conf = 0.70 if has_staple else 0.20
 
         state = {
-            "data_collection_finding": {"confidence": weather_conf, "timestamp": art.get("published_at"), "distance_km": 5.0},
+            "data_collection_finding": {
+                "confidence": weather_conf,
+                "timestamp": art.get("published_at"),
+                "distance_km": float(bmkg_cross.get("spatial_delta_km", 5.0) if bmkg_cross.get("spatial_delta_km", 9999.0) < 9999.0 else 5.0),
+                "is_corroborated": bmkg_cross.get("is_corroborated", False),
+            },
             "prediction_finding": {"confidence": traffic_conf, "timestamp": art.get("published_at"), "distance_km": 5.0},
             "osint_hazard_finding": {"confidence": osint_conf, "timestamp": art.get("published_at"), "distance_km": 5.0},
             "economic_intelligence_finding": {"confidence": econ_conf, "timestamp": art.get("published_at"), "distance_km": 5.0},
+            "bmkg_cross_validation": bmkg_cross,
         }
 
         consensus_res = compute_consensus(state)
@@ -499,6 +496,7 @@ class UnifiedNewsIngestor:
             "escalation_reasoning": reasoning,
             "location_tier": "TIER_A" if loc_prec in ("corridor_point", "exact_node") else "TIER_B" if loc_prec == "kecamatan_kelurahan" else "TIER_C",
             "channel_breakdown": breakdown,
+            "bmkg_cross_validation": consensus_res.get("bmkg_cross_validation"),
             "llm_verified": True
         }
 

@@ -29,9 +29,10 @@ class SocialScraper(BaseScraper):
         settings = get_settings()
         posts = []
 
-        if settings.twitter_bearer_token:
+        twitter_token = getattr(settings, "twitter_bearer_token", "")
+        if twitter_token:
             logger.info("Fetching real-time posts from Twitter/X API...")
-            headers = {"Authorization": f"Bearer {settings.twitter_bearer_token}"}
+            headers = {"Authorization": f"Bearer {twitter_token}"}
             # Search recent tweets in Bahasa Indonesia mentioning disaster keywords in Sumatra
             query = "(banjir OR longsor OR macet OR belawan OR sumatera) lang:id"
             url = "https://api.twitter.com/2/tweets/search/recent"

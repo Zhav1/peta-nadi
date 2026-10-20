@@ -89,3 +89,17 @@ e2e/
 scratch/
 
 docs/skill
+docs/hki-manual/
+docs/Validasi/
+docs/validasi/
+
+# Internal proposals, validation & reimbursement scripts
+*reimburse*
+*reimbursement*
+*socfin*
+*validasi*
+*.docx
+*.pdf
+
+# Manual and HKI build scripts
+frontend/scripts/

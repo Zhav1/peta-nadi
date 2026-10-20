@@ -1103,17 +1103,30 @@ def _unpack_ground_truth_metrics(row: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def extract_lead_text_from_html(html: str) -> str:
-    """Extracts full-body article text (og:description + up to 18 <p> paragraphs, max 2500 chars)."""
+    """Extracts clean lead article text (og:description or lead <p> paragraphs, strictly clamped to <= 400 chars).
+    Strips scripts, styles, navs, footers, asides, headers, forms, iframes, and advertising containers.
+    """
     if not html or not isinstance(html, str):
         return ""
     lead = ""
     try:
-        # Strip non-content blocks first.
+        # Strip non-content and layout/ad blocks first.
         cleaned = re.sub(r'<script.*?</script>', ' ', html, flags=re.IGNORECASE | re.DOTALL)
         cleaned = re.sub(r'<style.*?</style>', ' ', cleaned, flags=re.IGNORECASE | re.DOTALL)
         cleaned = re.sub(r'<nav.*?</nav>', ' ', cleaned, flags=re.IGNORECASE | re.DOTALL)
         cleaned = re.sub(r'<footer.*?</footer>', ' ', cleaned, flags=re.IGNORECASE | re.DOTALL)
         cleaned = re.sub(r'<aside.*?</aside>', ' ', cleaned, flags=re.IGNORECASE | re.DOTALL)
+        cleaned = re.sub(r'<header.*?</header>', ' ', cleaned, flags=re.IGNORECASE | re.DOTALL)
+        cleaned = re.sub(r'<form.*?</form>', ' ', cleaned, flags=re.IGNORECASE | re.DOTALL)
+        cleaned = re.sub(r'<iframe.*?</iframe>', ' ', cleaned, flags=re.IGNORECASE | re.DOTALL)
+        # Strip common ad / widget / banner / social containers
+        cleaned = re.sub(
+            r'<(?:div|section)[^>]*(?:class|id)=["\'][^"\']*(?:ad-|ads-|advertisement|banner|popup|social-share|related-news|widget|sidebar)[^"\']*["\'][^>]*>.*?</(?:div|section)>',
+            ' ',
+            cleaned,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+
         m = re.search(r'<meta[^>]+property=["\']og:description["\'][^>]*content=["\'](.*?)["\']', cleaned, flags=re.IGNORECASE | re.DOTALL)
         if m:
             lead = m.group(1).strip()
@@ -1145,10 +1158,10 @@ def extract_lead_text_from_html(html: str) -> str:
         if not paras:
             paras = re.findall(r'<p[^>]*>(.*?)</p>', cleaned, flags=re.IGNORECASE | re.DOTALL)
         clean_paras = []
-        for p in paras[:18]:
+        for p in paras[:8]:
             t = re.sub(r'<[^>]+>', ' ', p)
             t = re.sub(r'\s+', ' ', t).strip()
-            if len(t) < 40:
+            if len(t) < 35:
                 continue
             low = t.lower()
             if any(b in low for b in ("copyright", "baca juga", "advertisement", "iklan", "langganan", "pewarta:", "editor:", "ikuti kami di")):
@@ -1156,13 +1169,13 @@ def extract_lead_text_from_html(html: str) -> str:
             clean_paras.append(t)
         para_text = " ".join(clean_paras)
         if lead and para_text:
-            combined = (lead + " " + para_text)[:2500]
-            return combined
+            combined = (lead + " " + para_text)[:400]
+            return combined.strip()
         if para_text:
-            return para_text[:2500]
-        return (lead or "")[:2500]
+            return para_text[:400].strip()
+        return (lead or "")[:400].strip()
     except Exception:
-        return lead
+        return (lead or "")[:400].strip()
 
 
 extract_full_article_body_from_html = extract_lead_text_from_html
@@ -1172,18 +1185,16 @@ async def enrich_article_description_if_needed(article: Dict[str, Any], timeout:
     """Fetches the article URL to enrich short/title-only descriptions.
 
     Scrapes the article URL whenever `body_scraped` is not set and the
-    description is shorter than 450 chars (1-sentence RSS teasers are
-    otherwise never expanded). Combines the original RSS summary with
-    scraped full-body paragraphs (up to 2,500 chars) so the Workhorse LLM
-    reads the full article content. Also extracts article:published_time /
-    pubdate / datePublished into html_published_at for the 48h freshness gate.
+    description is shorter than 200 chars. Combines the original RSS summary with
+    scraped lead paragraphs (strictly clamped to <= 400 chars) to prevent LLM token drain.
+    Also extracts article:published_time / pubdate / datePublished into html_published_at for the 48h freshness gate.
     """
     try:
         title = (article.get("title") or "").strip()
         desc = (article.get("raw_description") or article.get("summary") or "").strip()
         already_scraped = bool(article.get("body_scraped"))
         needs = (
-            (not already_scraped and len(desc) < 450)
+            (not already_scraped and len(desc) < 200)
             or (not desc)
             or desc == title
             or any(w in title.lower() for w in ("daerah", "kabupaten", "wilayah", "titik", "lokasi", "catat"))
@@ -1210,7 +1221,7 @@ async def enrich_article_description_if_needed(article: Dict[str, Any], timeout:
                     if needs:
                         full_body = extract_lead_text_from_html(resp.text)
                         if full_body:
-                            combined = ((desc + " " + full_body).strip() if desc and desc not in full_body else full_body)[:2500]
+                            combined = ((desc + " " + full_body).strip() if desc and desc not in full_body else full_body)[:400]
                             if len(combined) > len(desc):
                                 article["raw_description"] = combined
                             article["body_scraped"] = True
