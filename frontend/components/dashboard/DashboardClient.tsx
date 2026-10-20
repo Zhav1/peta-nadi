@@ -839,7 +839,7 @@ export default function DashboardClient() {
     []
   );
 
-  const updateBaselineMapboxRoute = useCallback(async (originId: string, destId: string, modality: TransportModality, hazardCenter: [number, number] | null = null, radiusKm: number = DEFAULT_HAZARD_RADIUS_KM, hazardType: CrisisType = 'flood', impactProfile?: HazardImpactProfile, zoneTier: 'RED_CONFIRMED' | 'YELLOW_CLARIFY' = 'RED_CONFIRMED'): Promise<boolean> => {
+  const updateBaselineMapboxRoute = useCallback(async (originId: string, destId: string, modality: TransportModality, hazardCenter: [number, number] | null = null, radiusKm: number = DEFAULT_HAZARD_RADIUS_KM, hazardType: CrisisType = 'flood', impactProfile?: HazardImpactProfile, zoneTier: 'RED_CONFIRMED' | 'YELLOW_CLARIFY' = 'RED_CONFIRMED', hedgingOpts?: { commodity?: string; cargo_tonnage?: number; vehicle_golongan?: string; fuel_type?: string; toll_segments?: string[]; p_disruption?: number; disruption_delay_hours?: number }): Promise<boolean> => {
     const originInfo = resolveNodeInfo(originId);
     const destInfo = resolveNodeInfo(destId);
     const originNode = originInfo?.coords;
@@ -889,6 +889,10 @@ export default function DashboardClient() {
     }
 
     try {
+      // Backend hedging stash: routes[0] is the baseline (no hedging by design);
+      // detour corridors (index >= 1) may carry grounded hedging economics.
+      // Absent => left undefined (honest null), never invented.
+      const backendHedgingByIndex = new Map<number, NonNullable<RouteRecommendation['hedging']>>();
       // Synchronize Deterministic CPU Route Solver (NetworkX + OR-Tools)
       try {
         const routingRes = await api.routing.optimizeRouting({
@@ -899,7 +903,16 @@ export default function DashboardClient() {
           ...(originInfo ? { origin_name: formatNodeId(originId, originInfo) } : {}),
           ...(destInfo ? { dest_name: formatNodeId(destId, destInfo) } : {}),
           fleet_size: 3,
-          hazard_zones: hazardCenter ? [{ center: hazardCenter, radiusKm }] : []
+          hazard_zones: hazardCenter ? [{ center: hazardCenter, radiusKm }] : [],
+          // Forward hedging economics only when the caller supplied them;
+          // no hardcoded cargo values are injected into every request.
+          ...(hedgingOpts?.commodity ? { commodity: hedgingOpts.commodity } : {}),
+          ...(hedgingOpts?.cargo_tonnage != null ? { cargo_tonnage: hedgingOpts.cargo_tonnage } : {}),
+          ...(hedgingOpts?.vehicle_golongan ? { vehicle_golongan: hedgingOpts.vehicle_golongan } : {}),
+          ...(hedgingOpts?.fuel_type ? { fuel_type: hedgingOpts.fuel_type } : {}),
+          ...(hedgingOpts?.toll_segments ? { toll_segments: hedgingOpts.toll_segments } : {}),
+          ...(hedgingOpts?.p_disruption != null ? { p_disruption: hedgingOpts.p_disruption } : {}),
+          ...(hedgingOpts?.disruption_delay_hours != null ? { disruption_delay_hours: hedgingOpts.disruption_delay_hours } : {}),
         }, signal);
         if (isStale()) return false;
         const nested = (routingRes as { point_to_point_path?: { status?: string; message?: string } } | null)?.point_to_point_path;
@@ -915,6 +928,13 @@ export default function DashboardClient() {
           setHiddenRouteIndices(new Set());
           setToast({ message, type: 'error' });
           return false;
+        }
+        const backendPtpRoutes = (nested as { routes?: Array<{ route_index?: number; hedging?: NonNullable<RouteRecommendation['hedging']> }> } | undefined)?.routes;
+        if (Array.isArray(backendPtpRoutes)) {
+          backendPtpRoutes.forEach((br, order) => {
+            const key = typeof br?.route_index === 'number' ? br.route_index : order;
+            if (br?.hedging) backendHedgingByIndex.set(key, br.hedging);
+          });
         }
         if (routingRes && routingRes.optimization_summary) {
           // Savings stay null until the backend reports a real baseline comparison;
@@ -949,6 +969,17 @@ export default function DashboardClient() {
         setRoutingError(message);
         setToast({ message, type: 'error' });
         return false;
+      }
+
+      // Merge backend hedging economics onto the Mapbox estimator routes by
+      // index order. routes[0] is the baseline and carries no hedging by design;
+      // detour corridors fall back to routes[1].hedging. Absent => undefined.
+      if (backendHedgingByIndex.size > 0) {
+        const detourHedging = backendHedgingByIndex.get(1);
+        routes.forEach((route, idx) => {
+          const match = backendHedgingByIndex.get(idx) ?? (idx > 0 ? detourHedging : undefined);
+          if (match) (route as { hedging?: NonNullable<RouteRecommendation['hedging']> }).hedging = match;
+        });
       }
 
       setCurrentMapRoutes(routes);

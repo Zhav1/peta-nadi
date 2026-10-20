@@ -183,6 +183,15 @@ export const api = {
       dest_name?: string;
       fleet_size?: number;
       hazard_zones?: Array<Record<string, unknown>>;
+      // Optional grounded hedging economics (backend _enrich_routes_with_hedging).
+      // Sent only when the caller supplies them; absent => honest null, no invented Rp.
+      commodity?: string;
+      cargo_tonnage?: number;
+      vehicle_golongan?: string;
+      fuel_type?: string;
+      toll_segments?: string[];
+      p_disruption?: number;
+      disruption_delay_hours?: number;
     }, signal?: AbortSignal) =>
       request<{
         status: string;
@@ -192,7 +201,7 @@ export const api = {
         compute_time_ms: number;
         total_pipeline_time_ms?: number;
         optimization_summary: { travel_time_savings_pct?: number | null; fuel_cost_reduction_pct?: number | null; hazard_segments_avoided: number; avg_corridor_speed_kmh: number; speed_source: string };
-        point_to_point_path?: { status?: string; message?: string; routes?: Array<Record<string, unknown>> };
+        point_to_point_path?: { status?: string; message?: string; routes?: Array<{ route_index?: number; hedging?: import('./types').RouteRecommendation['hedging']; distance_km?: number; eta_minutes?: number } & Record<string, unknown>> };
         routes?: Array<Record<string, unknown>>;
       }>('/api/v1/routing/optimize', {
         method: 'POST',

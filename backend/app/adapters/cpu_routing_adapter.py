@@ -14,9 +14,35 @@ import networkx as nx
 
 logger = logging.getLogger(__name__)
 
-ROAD_NETWORK_CACHE_PATH = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "../../../data/road_network_sumatra.json")
-)
+def _resolve_road_cache_path() -> str:
+    """Resolve road-network cache across local checkout and Docker (/app/data).
+
+    In the Render image backend/ is copied to /app and data/ to /app/data, so
+    the historical ../../../data relative path lands on /data (missing) and the
+    adapter boots an empty graph: every ID-only solve-path returns no_route and
+    every coords call degrades to a straight-line fallback. Prefer the first
+    existing candidate; never raise.
+    """
+    candidates = [
+        os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "../../../data/road_network_sumatra.json")
+        ),
+        "/app/data/road_network_sumatra.json",
+        os.path.abspath(os.path.join(os.getcwd(), "data/road_network_sumatra.json")),
+        os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "../../data/road_network_sumatra.json")
+        ),
+    ]
+    for cand in candidates:
+        try:
+            if cand and os.path.exists(cand):
+                return cand
+        except Exception:
+            continue
+    return candidates[0]
+
+
+ROAD_NETWORK_CACHE_PATH = _resolve_road_cache_path()
 
 
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
