@@ -264,8 +264,6 @@ export default function CrisisMap({
   const containerRef = useRef<HTMLDivElement>(null);
   void corridorContext;
   void routingInfo;
-  void demoStage;
-  void fireHotspots;
 
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const drawRef = useRef<InstanceType<typeof MapboxDraw> | null>(null);
@@ -355,6 +353,7 @@ export default function CrisisMap({
     baselineCorridors: true,
     bottlenecks: true,
     weatherRadar: true,
+    fireHotspots: true,
     fleetVehicles: true,
   });
 
@@ -417,6 +416,12 @@ export default function CrisisMap({
           const vis = next.weatherRadar ? 'visible' : 'none';
           if (map.getLayer('weather-polygons-fill')) map.setLayoutProperty('weather-polygons-fill', 'visibility', vis);
           if (map.getLayer('weather-polygons-outline')) map.setLayoutProperty('weather-polygons-outline', 'visibility', vis);
+        }
+        if (key === 'fireHotspots') {
+          const vis = next.fireHotspots ? 'visible' : 'none';
+          if (map.getLayer('firms-heat')) map.setLayoutProperty('firms-heat', 'visibility', vis);
+          if (map.getLayer('firms-dots')) map.setLayoutProperty('firms-dots', 'visibility', vis);
+          if (map.getLayer('firms-dots-outline')) map.setLayoutProperty('firms-dots-outline', 'visibility', vis);
         }
       }
       return next;
@@ -553,6 +558,65 @@ export default function CrisisMap({
           'line-color': ['coalesce', ['get', 'stroke_color'], '#ef4444'],
           'line-width': 2.0,
           'line-dasharray': [4, 3],
+        },
+      });
+
+      // 0c. FIRMS VIIRS_SNPP_NRT active fire hotspots (orange heat + FRP-sized dots)
+      map.addSource('firms-source', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+      map.addLayer({
+        id: 'firms-heat',
+        type: 'heatmap',
+        source: 'firms-source',
+        paint: {
+          'heatmap-weight': ['interpolate', ['linear'], ['coalesce', ['get', 'confidence'], 60], 0, 0, 100, 1],
+          'heatmap-intensity': 1.2,
+          'heatmap-radius': 28,
+          'heatmap-opacity': 0.85,
+          'heatmap-color': [
+            'interpolate', ['linear'], ['heatmap-density'],
+            0, 'rgba(255,140,0,0)',
+            0.4, 'rgba(255,140,0,0.55)',
+            0.7, 'rgba(249,115,22,0.85)',
+            1, 'rgba(255,50,0,1)',
+          ],
+        },
+      });
+      map.addLayer({
+        id: 'firms-dots',
+        type: 'circle',
+        source: 'firms-source',
+        paint: {
+          'circle-radius': [
+            'interpolate', ['linear'], ['coalesce', ['get', 'frp'], 10],
+            0, 5,
+            100, 9,
+            500, 14,
+          ],
+          'circle-color': '#f97316',
+          'circle-opacity': 0.9,
+          'circle-stroke-width': 1.5,
+          'circle-stroke-color': '#fff7ed',
+        },
+      });
+      map.addLayer({
+        id: 'firms-dots-outline',
+        type: 'circle',
+        source: 'firms-source',
+        paint: {
+          'circle-radius': [
+            'interpolate', ['linear'], ['coalesce', ['get', 'frp'], 10],
+            0, 8,
+            100, 12,
+            500, 18,
+          ],
+          'circle-color': 'rgba(249,115,22,0)',
+          'circle-opacity': 0,
+          'circle-stroke-width': 1.5,
+          'circle-stroke-color': '#fb923c',
+          'circle-stroke-opacity': 0.9,
         },
       });
 
@@ -1094,6 +1158,52 @@ export default function CrisisMap({
         });
       });
 
+      // Q3: weather polygon click → source + valid_until provenance popup.
+      const handleWeatherClick = (e: mapboxgl.MapLayerMouseEvent) => {
+        if (isClickTargetingRef.current) return;
+        if (!e.features || e.features.length === 0) return;
+        const props: any = e.features[0].properties || {};
+        const source = props.source || props.bmkg_source || 'BMKG / Open-Meteo';
+        const validUntil = props.valid_until || props.updated_at || '-';
+        const name = props.name || 'Advisori Cuaca';
+        new mapboxgl.Popup({ closeButton: true, closeOnClick: true })
+          .setLngLat(e.lngLat)
+          .setHTML(
+            `<div style="font:12px system-ui;color:#0c1017"><strong>${String(name).slice(0, 120)}</strong><br/>` +
+            `sumber: ${String(source).slice(0, 120)}<br/>valid_until: ${String(validUntil).slice(0, 64)}</div>`
+          )
+          .addTo(map);
+      };
+      map.on('click', 'weather-polygons-fill', handleWeatherClick);
+      map.on('click', 'weather-polygons-outline', handleWeatherClick);
+
+      // Q3: FIRMS hotspot click → FRP / conf / dist-to-corridor popup.
+      const handleFirmsClick = (e: mapboxgl.MapLayerMouseEvent) => {
+        if (isClickTargetingRef.current) return;
+        if (!e.features || e.features.length === 0) return;
+        const props: any = e.features[0].properties || {};
+        const frp = props.frp ?? '?';
+        const conf = props.conf ?? props.confidence ?? '?';
+        const dist = props.dist_to_corridor_km ?? '?';
+        const title = props.title || 'Hotspot Karhutla VIIRS';
+        new mapboxgl.Popup({ closeButton: true, closeOnClick: true })
+          .setLngLat(e.lngLat)
+          .setHTML(
+            `<div style="font:12px system-ui;color:#0c1017"><strong>${String(title).slice(0, 120)}</strong><br/>` +
+            `FRP: ${String(frp)} MW · conf: ${String(conf)}<br/>jarak koridor: ${String(dist)} km</div>`
+          )
+          .addTo(map);
+      };
+      map.on('click', 'firms-dots', handleFirmsClick);
+      ['firms-dots', 'weather-polygons-fill'].forEach((layerId) => {
+        map.on('mouseenter', layerId, () => {
+          if (mapRef.current) mapRef.current.getCanvas().style.cursor = 'pointer';
+        });
+        map.on('mouseleave', layerId, () => {
+          if (mapRef.current) mapRef.current.getCanvas().style.cursor = '';
+        });
+      });
+
       // Tier 3 Settlement & Village WebGL Labels Enhancement (High contrast halo)
       const enhanceSettlementLabels = () => {
         ['settlement-subdivision-label', 'settlement-minor-label', 'settlement-major-label'].forEach((layerId) => {
@@ -1248,6 +1358,40 @@ export default function CrisisMap({
         weatherSource.setData(spatialWeatherPolygons);
       } else {
         weatherSource.setData({ type: 'FeatureCollection', features: [] });
+      }
+    }
+
+    // 1b. Update FIRMS fire hotspots — gated ONLY by the parent toggle
+    // (DashboardClient passes [] when off / degraded). Never suppressed by
+    // demoStage: karhutla stays visible during demo when the toggle is ON.
+    const firmsSource = map.getSource('firms-source') as mapboxgl.GeoJSONSource;
+    if (firmsSource) {
+      if (fireHotspots && fireHotspots.length > 0) {
+        firmsSource.setData({
+          type: 'FeatureCollection',
+          features: fireHotspots.map((h, idx) => {
+            const lon = h.lon ?? h.coordinates?.[0] ?? 0;
+            const lat = h.lat ?? h.coordinates?.[1] ?? 0;
+            return {
+              type: 'Feature',
+              geometry: { type: 'Point', coordinates: [lon, lat] },
+              properties: {
+                id: `firms-${idx}`,
+                confidence: h.confidence ?? 60,
+                frp: h.frp ?? 0,
+                conf: h.conf ?? '',
+                dist_to_corridor_km: h.dist_to_corridor_km ?? null,
+                severity: h.severity ?? '',
+                title: h.title ?? `Hotspot VIIRS FRP ${h.frp ?? 0}MW`,
+                source: h.source ?? 'VIIRS_SNPP_NRT',
+                near_segment: h.near_segment ?? '',
+                ts: h.ts ?? '',
+              },
+            } as GeoJSON.Feature<GeoJSON.Point>;
+          }),
+        });
+      } else {
+        firmsSource.setData({ type: 'FeatureCollection', features: [] });
       }
     }
 
@@ -1755,6 +1899,9 @@ export default function CrisisMap({
     customPinnedPoints,
     corridorVisibility,
     hiddenRouteIndices,
+    spatialWeatherPolygons,
+    fireHotspots,
+    demoStage,
   ]);
 
   // Keep route popover screen position synchronized during map pan/zoom
@@ -2294,6 +2441,19 @@ export default function CrisisMap({
                           layerFilters.weatherRadar ? 'bg-white border-white text-[#080d14]' : 'border-[#1c2432]'
                         }`}>
                           {layerFilters.weatherRadar && <Check className="w-3 h-3 stroke-[3]" />}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => toggleLayerFilter('fireHotspots')}
+                        className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-[#121822] transition"
+                      >
+                        <span className="text-slate-200">Karhutla FIRMS (Heat + Titik)</span>
+                        <span className={`w-4 h-4 rounded flex items-center justify-center border ${
+                          layerFilters.fireHotspots ? 'bg-white border-white text-[#080d14]' : 'border-[#1c2432]'
+                        }`}>
+                          {layerFilters.fireHotspots && <Check className="w-3 h-3 stroke-[3]" />}
                         </span>
                       </button>
 

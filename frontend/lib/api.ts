@@ -164,6 +164,17 @@ export const api = {
     spatialPolygons: () =>
       request<GeoJSON.FeatureCollection>('/api/v1/weather/spatial-polygons'),
   },
+  fire: {
+    hotspots: () =>
+      request<{
+        hotspots: import('./types').FireHotspot[];
+        total: number;
+        status: 'ok' | 'degraded';
+        reason?: string | null;
+        source?: string;
+        timestamp?: string;
+      }>('/api/v1/fire/hotspots'),
+  },
   traffic: {
     flowSegments: () =>
       request<{

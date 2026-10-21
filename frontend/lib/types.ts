@@ -305,6 +305,16 @@ export type WsEvent =
 export interface FireHotspot {
   coordinates: [number, number];   // [lng, lat]
   confidence: number;               // 0–100
+  frp?: number;                     // Fire Radiative Power (MW, VIIRS)
+  conf?: string;                    // FIRMS confidence class (l/n/h)
+  dist_to_corridor_km?: number | null;
+  severity?: string;                // critical | high | medium
+  title?: string;
+  source?: string;                  // e.g. VIIRS_SNPP_NRT
+  near_segment?: string | null;
+  lon?: number;
+  lat?: number;
+  ts?: string;
 }
 
 export interface MaritimeVector {

@@ -49,7 +49,7 @@ import {
   type TransportModality,
 } from '@/lib/aiDynamicRouter';
 import { api } from '@/lib/api';
-import type { CrisisState, WsEvent, CrisisType, Severity, RouteRecommendation, DisasterZone, HazardImpactProfile, ZoneTier, FleetVehicle, TacticalManeuver } from '@/lib/types';
+import type { CrisisState, WsEvent, CrisisType, Severity, RouteRecommendation, DisasterZone, HazardImpactProfile, ZoneTier, FleetVehicle, TacticalManeuver, FireHotspot } from '@/lib/types';
 import { useAuth } from '@/lib/authContext';
 import { AuthModal } from '@/components/auth/AuthModal';
 import { FleetOnboardingModal } from '@/components/fleet/FleetOnboardingModal';
@@ -727,6 +727,11 @@ export default function DashboardClient() {
   }, []);
 
   const [spatialWeatherPolygons, setSpatialWeatherPolygons] = useState<GeoJSON.FeatureCollection | null>(null);
+  const [showWeatherPolygons, setShowWeatherPolygons] = useState<boolean>(true);
+  const [showFireHotspots, setShowFireHotspots] = useState<boolean>(true);
+  const [fireHotspots, setFireHotspots] = useState<FireHotspot[]>([]);
+  const [fireStatus, setFireStatus] = useState<'ok' | 'degraded'>('ok');
+  const [fireReason, setFireReason] = useState<string | null>(null);
   const [routingInfo, setRoutingInfo] = useState<{ solver: string; compute_time_ms: number | null; savings_pct: number | null } | null>(null);
   // Persistent route-computation status: a cold render can take 30-50s, so the
   // operator needs lasting feedback plus an explicit abort action (not a 3s toast).
@@ -765,6 +770,45 @@ export default function DashboardClient() {
       clearInterval(interval);
     };
   }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadFireHotspots() {
+      try {
+        const res = await api.fire.hotspots();
+        if (!isMounted) return;
+        if (res.status === 'degraded') {
+          setFireHotspots([]);
+          setFireStatus('degraded');
+          setFireReason(res.reason ?? 'butuh MAP_KEY — set NASA_FIRMS_MAP_KEY di Render env / .env.local');
+        } else {
+          setFireHotspots(res.hotspots ?? []);
+          setFireStatus('ok');
+          setFireReason(res.reason ?? null);
+        }
+      } catch (e) {
+        console.warn('Backend FIRMS fire hotspots fallback (degraded):', e);
+        if (isMounted) {
+          setFireHotspots([]);
+          setFireStatus('degraded');
+          setFireReason('butuh MAP_KEY — set NASA_FIRMS_MAP_KEY di Render env / .env.local');
+        }
+      }
+    }
+    loadFireHotspots();
+    const interval = setInterval(loadFireHotspots, 300000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  const weatherPolygonCount = spatialWeatherPolygons?.features?.length ?? 0;
+  const fireHotspotCount = fireHotspots.length;
+  const fireTooltip =
+    fireStatus === 'degraded'
+      ? (fireReason ?? 'butuh MAP_KEY — set NASA_FIRMS_MAP_KEY di Render env / .env.local')
+      : fireReason ?? `Overlay FIRMS VIIRS_SNPP_NRT: ${fireHotspotCount} titik + heat oranye. Klik titik = FRP/conf/jarak koridor.`;
 
 
 
@@ -2648,7 +2692,7 @@ export default function DashboardClient() {
                   currentMapRoutes.length > 0 ? currentMapRoutes : (selectedCrisis?.route_recommendations || [])
                 }
                 activeRouteIdx={activeRouteIdx}
-                fireHotspots={[]}
+                fireHotspots={showFireHotspots ? fireHotspots : []}
                 activeFleet={mapFleetVehicles}
                 demoStage={demoState.isRunning ? demoState.stage : null}
                 disasterZones={combinedDisasterZones}
@@ -2666,7 +2710,7 @@ export default function DashboardClient() {
                 onSelectRoute={(idx) => void handleSelectRoute(idx, 'map-popover')}
                 hubNodesList={dynamicHubNodes}
                 corridorContext={corridorContext}
-                spatialWeatherPolygons={spatialWeatherPolygons}
+                spatialWeatherPolygons={showWeatherPolygons ? spatialWeatherPolygons : null}
                 routingInfo={routingInfo}
                 isLeftSidebarCollapsed={isLeftSidebarCollapsed}
                 onExpandSidebar={() => setIsLeftSidebarCollapsed(false)}
@@ -2697,6 +2741,14 @@ export default function DashboardClient() {
                     showYellowZones={showYellowZones}
                     onToggleYellowZones={() => setShowYellowZones(v => !v)}
                     yellowZoneCount={liveNewsZoneCounts.yellow}
+                    showWeatherPolygons={showWeatherPolygons}
+                    onToggleWeatherPolygons={() => setShowWeatherPolygons(v => !v)}
+                    weatherPolygonCount={weatherPolygonCount}
+                    showFireHotspots={showFireHotspots}
+                    onToggleFireHotspots={() => setShowFireHotspots(v => !v)}
+                    fireHotspotCount={fireHotspotCount}
+                    fireStatus={fireStatus}
+                    fireTooltip={fireTooltip}
                     onSelectHub={(hub) => {
                       setMapFlyTo({ lon: hub.coords[0], lat: hub.coords[1], zoom: 11, ts: Date.now() });
                     }}
