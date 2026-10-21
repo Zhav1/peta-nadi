@@ -103,6 +103,9 @@ function FloatingMapLegend({
   corridorVisibility = { land: true, sea: true, air: true },
   onToggleCorridor,
   onResetCorridorVisibility,
+  weatherDisruptionCount = 0,
+  weatherAdvisoryCount = 0,
+  showWeatherAdvisory = false,
 }: {
   isOpen: boolean;
   onToggle: () => void;
@@ -110,6 +113,9 @@ function FloatingMapLegend({
   corridorVisibility?: { land: boolean; sea: boolean; air: boolean };
   onToggleCorridor?: (corridor: 'land' | 'sea' | 'air') => void;
   onResetCorridorVisibility?: () => void;
+  weatherDisruptionCount?: number;
+  weatherAdvisoryCount?: number;
+  showWeatherAdvisory?: boolean;
 }) {
   return (
     <div className="relative pointer-events-auto">
@@ -178,6 +184,14 @@ function FloatingMapLegend({
             </div>
 
             <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full border border-orange-400 bg-orange-500/25 shrink-0" />
+              <div>
+                <span className="text-slate-200 font-medium block">Karhutla FIRMS (Radius 1 / 2,5 / 5 km)</span>
+                <span className="text-xs text-slate-400 font-sans">Area oranye by FRP: kritis 5 km, tinggi 2,5 km, sedang 1 km. Klik area/titik = FRP/conf/jarak koridor.</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-white shrink-0" />
               <div>
                 <span className="text-slate-200 font-medium block">Hub Logistik Pangan</span>
@@ -227,6 +241,29 @@ function FloatingMapLegend({
                 <div>
                   <span className="text-slate-200 font-medium block">Proyeksi Rute Estimasi</span>
                   <span className="text-xs text-slate-400 font-sans">Lintasan terencana berbasis manifes pelayaran.</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Disruption-only weather legend: filtered set counts (biru=gangguan, ungu=advisori). */}
+            <div className="pt-2 mt-2 border-t border-[#1c2432]/80 space-y-2">
+              <span className="text-slate-400 font-sans font-semibold text-[11px] uppercase tracking-wider block">
+                Radar Cuaca (Gangguan)
+              </span>
+
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0 shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
+                <div>
+                  <span className="text-slate-200 font-medium block">Radar Cuaca (Gangguan, biru) — {weatherDisruptionCount} zona</span>
+                  <span className="text-xs text-slate-400 font-sans">Hujan lebat disruptif: high/critical, presipitasi 50mm/24j atau banjir 80%. Default ON.</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-purple-500 shrink-0 shadow-[0_0_8px_rgba(168,85,247,0.5)]" />
+                <div>
+                  <span className="text-slate-200 font-medium block">Advisori (ungu) — {weatherAdvisoryCount} zona {showWeatherAdvisory ? '(ON)' : '(OFF)'}</span>
+                  <span className="text-xs text-slate-400 font-sans">Medium drizzle (mis. BMKG 60): hanya tampil bila toggle advisori ON.</span>
                 </div>
               </div>
             </div>
@@ -727,7 +764,9 @@ export default function DashboardClient() {
   }, []);
 
   const [spatialWeatherPolygons, setSpatialWeatherPolygons] = useState<GeoJSON.FeatureCollection | null>(null);
+  const [advisoryWeatherPolygons, setAdvisoryWeatherPolygons] = useState<GeoJSON.FeatureCollection | null>(null);
   const [showWeatherPolygons, setShowWeatherPolygons] = useState<boolean>(true);
+  const [showWeatherAdvisory, setShowWeatherAdvisory] = useState<boolean>(false);
   const [showFireHotspots, setShowFireHotspots] = useState<boolean>(true);
   const [fireHotspots, setFireHotspots] = useState<FireHotspot[]>([]);
   const [fireStatus, setFireStatus] = useState<'ok' | 'degraded'>('ok');
@@ -757,7 +796,8 @@ export default function DashboardClient() {
     let isMounted = true;
     async function loadSpatialWeather() {
       try {
-        const geojson = await api.weather.spatialPolygons();
+        // Disruption-only default: heavy rain that can cause disruptions (high/critical).
+        const geojson = await api.weather.spatialPolygons({ min_severity: 'high', min_precip: 50, min_flood: 80 });
         if (isMounted) setSpatialWeatherPolygons(geojson);
       } catch (e) {
         console.warn('Backend spatial weather polygons fallback:', e);
@@ -770,6 +810,36 @@ export default function DashboardClient() {
       clearInterval(interval);
     };
   }, []);
+
+  // Advisory (purple, default OFF): full-fidelity medium path, fetched only when toggled ON.
+  useEffect(() => {
+    if (!showWeatherAdvisory) {
+      setAdvisoryWeatherPolygons(null);
+      return;
+    }
+    let isMounted = true;
+    async function loadAdvisoryWeather() {
+      try {
+        const geojson = await api.weather.spatialPolygons({ min_severity: 'medium', min_precip: 0, min_flood: 0 });
+        if (!isMounted) return;
+        // Keep advisory layer to medium-only to avoid double-counting disruption highs.
+        const mediumOnly: GeoJSON.FeatureCollection = {
+          type: 'FeatureCollection',
+          features: (geojson.features ?? []).filter((f) => {
+            const sev = String((f.properties as Record<string, unknown>)?.severity ?? 'medium').toLowerCase();
+            return sev === 'medium' || sev === 'low';
+          }),
+        };
+        setAdvisoryWeatherPolygons(mediumOnly);
+      } catch (e) {
+        console.warn('Backend advisory weather polygons fallback:', e);
+      }
+    }
+    void loadAdvisoryWeather();
+    return () => {
+      isMounted = false;
+    };
+  }, [showWeatherAdvisory]);
 
   useEffect(() => {
     let isMounted = true;
@@ -803,12 +873,37 @@ export default function DashboardClient() {
     };
   }, []);
 
-  const weatherPolygonCount = spatialWeatherPolygons?.features?.length ?? 0;
+  // Filtered-set counts: disruption (high/critical, biru) + advisory (medium, ungu when ON).
+  const disruptionFeatures = useMemo(
+    () => spatialWeatherPolygons?.features ?? [],
+    [spatialWeatherPolygons]
+  );
+  const advisoryFeatures = useMemo(
+    () => (showWeatherAdvisory ? (advisoryWeatherPolygons?.features ?? []) : []),
+    [showWeatherAdvisory, advisoryWeatherPolygons]
+  );
+  const combinedWeatherPolygons: GeoJSON.FeatureCollection | null = useMemo(() => {
+    if (!showWeatherPolygons && !showWeatherAdvisory) return null;
+    const feats: GeoJSON.Feature[] = [
+      ...(showWeatherPolygons ? disruptionFeatures : []),
+      ...advisoryFeatures,
+    ];
+    if (!showWeatherPolygons && advisoryFeatures.length > 0) {
+      return { type: 'FeatureCollection', features: advisoryFeatures } as GeoJSON.FeatureCollection;
+    }
+    if (feats.length === 0) {
+      return showWeatherPolygons ? spatialWeatherPolygons : null;
+    }
+    return { type: 'FeatureCollection', features: feats } as GeoJSON.FeatureCollection;
+  }, [showWeatherPolygons, showWeatherAdvisory, disruptionFeatures, advisoryFeatures, spatialWeatherPolygons]);
+  const weatherPolygonCount = combinedWeatherPolygons?.features?.length ?? 0;
+  const weatherDisruptionCount = showWeatherPolygons ? disruptionFeatures.length : 0;
+  const weatherAdvisoryCount = advisoryFeatures.length;
   const fireHotspotCount = fireHotspots.length;
   const fireTooltip =
     fireStatus === 'degraded'
       ? (fireReason ?? 'butuh MAP_KEY — set NASA_FIRMS_MAP_KEY di Render env / .env.local')
-      : fireReason ?? `Overlay FIRMS VIIRS_SNPP_NRT: ${fireHotspotCount} titik + heat oranye. Klik titik = FRP/conf/jarak koridor.`;
+      : fireReason ?? `Overlay FIRMS VIIRS_SNPP_NRT: ${fireHotspotCount} area radius (5/2,5/1 km by FRP) + heat oranye. Klik area/titik = FRP/conf/jarak koridor.`;
 
 
 
@@ -2710,7 +2805,9 @@ export default function DashboardClient() {
                 onSelectRoute={(idx) => void handleSelectRoute(idx, 'map-popover')}
                 hubNodesList={dynamicHubNodes}
                 corridorContext={corridorContext}
-                spatialWeatherPolygons={showWeatherPolygons ? spatialWeatherPolygons : null}
+                spatialWeatherPolygons={combinedWeatherPolygons}
+                showWeatherAdvisory={showWeatherAdvisory}
+                onToggleWeatherAdvisory={() => setShowWeatherAdvisory((v) => !v)}
                 routingInfo={routingInfo}
                 isLeftSidebarCollapsed={isLeftSidebarCollapsed}
                 onExpandSidebar={() => setIsLeftSidebarCollapsed(false)}
@@ -2744,6 +2841,10 @@ export default function DashboardClient() {
                     showWeatherPolygons={showWeatherPolygons}
                     onToggleWeatherPolygons={() => setShowWeatherPolygons(v => !v)}
                     weatherPolygonCount={weatherPolygonCount}
+                    showWeatherAdvisory={showWeatherAdvisory}
+                    onToggleWeatherAdvisory={() => setShowWeatherAdvisory((v) => !v)}
+                    weatherAdvisoryCount={weatherAdvisoryCount}
+                    weatherDisruptionCount={weatherDisruptionCount}
                     showFireHotspots={showFireHotspots}
                     onToggleFireHotspots={() => setShowFireHotspots(v => !v)}
                     fireHotspotCount={fireHotspotCount}
@@ -2854,6 +2955,9 @@ export default function DashboardClient() {
                     corridorVisibility={corridorVisibility}
                     onToggleCorridor={handleToggleCorridor}
                     onResetCorridorVisibility={handleResetCorridors}
+                    weatherDisruptionCount={weatherDisruptionCount}
+                    weatherAdvisoryCount={weatherAdvisoryCount}
+                    showWeatherAdvisory={showWeatherAdvisory}
                   />
                 }
               />

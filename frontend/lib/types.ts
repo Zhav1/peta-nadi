@@ -315,6 +315,7 @@ export interface FireHotspot {
   lon?: number;
   lat?: number;
   ts?: string;
+  radius_km?: number;             // affected-area radius (km): 5 critical / 2.5 high / 1 medium
 }
 
 export interface MaritimeVector {

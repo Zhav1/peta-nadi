@@ -161,8 +161,17 @@ export const api = {
       request<import('./types').CorridorContext>(`/api/v1/corridor/context?corridor_id=${corridorId}`),
   },
   weather: {
-    spatialPolygons: () =>
-      request<GeoJSON.FeatureCollection>('/api/v1/weather/spatial-polygons'),
+    spatialPolygons: (params?: { min_severity?: string; min_precip?: number; min_flood?: number }) => {
+      const sp = new URLSearchParams();
+      // Disruption-only default: only high/critical heavy rain shows.
+      sp.append('min_severity', params?.min_severity ?? 'high');
+      if (params?.min_precip != null) sp.append('min_precip', String(params.min_precip));
+      else if ((params?.min_severity ?? 'high') === 'high') sp.append('min_precip', '50');
+      if (params?.min_flood != null) sp.append('min_flood', String(params.min_flood));
+      else if ((params?.min_severity ?? 'high') === 'high') sp.append('min_flood', '80');
+      const qs = `?${sp.toString()}`;
+      return request<GeoJSON.FeatureCollection>(`/api/v1/weather/spatial-polygons${qs}`);
+    },
   },
   fire: {
     hotspots: () =>

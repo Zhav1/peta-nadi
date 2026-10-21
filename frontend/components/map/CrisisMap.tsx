@@ -76,6 +76,8 @@ export interface CrisisMapProps {
   hubNodesList?: HubNode[];
   corridorContext?: import('@/lib/types').CorridorContext | null;
   spatialWeatherPolygons?: GeoJSON.FeatureCollection | null;
+  showWeatherAdvisory?: boolean;
+  onToggleWeatherAdvisory?: () => void;
   routingInfo?: { solver: string; compute_time_ms: number | null; savings_pct: number | null } | null;
   isLeftSidebarCollapsed?: boolean;
   onExpandSidebar?: () => void;
@@ -217,6 +219,32 @@ function createGeoJsonCircleRing(center: [number, number], radiusKm: number, poi
   return ring;
 }
 
+/**
+ * FIRMS radius-area mapping (km, monotonic). Mirrors backend severity:
+ * FRP > 500 → critical → 5 km; FRP > 100 or dist < 5 km → high → 2.5 km;
+ * else medium → 1 km. Prefers backend radius_km when present.
+ */
+function firmsRadiusKm(h: { frp?: number; dist_to_corridor_km?: number | null; radius_km?: number }): number {
+  if (typeof h.radius_km === 'number' && Number.isFinite(h.radius_km) && h.radius_km > 0) {
+    return h.radius_km;
+  }
+  const frp = Number(h.frp ?? 0) || 0;
+  const dist = h.dist_to_corridor_km == null ? null : Number(h.dist_to_corridor_km);
+  if (frp > 500) return 5;
+  if (frp > 100 || (dist != null && Number.isFinite(dist) && dist < 5)) return 2.5;
+  return 1;
+}
+
+function firmsSeverityOf(h: { frp?: number; dist_to_corridor_km?: number | null; severity?: string }): string {
+  const sev = (h.severity || '').toLowerCase();
+  if (sev === 'critical' || sev === 'high' || sev === 'medium') return sev;
+  const frp = Number(h.frp ?? 0) || 0;
+  const dist = h.dist_to_corridor_km == null ? null : Number(h.dist_to_corridor_km);
+  if (frp > 500) return 'critical';
+  if (frp > 100 || (dist != null && Number.isFinite(dist) && dist < 5)) return 'high';
+  return 'medium';
+}
+
 export default function CrisisMap({
   incidents,
   selectedCrisisId,
@@ -240,6 +268,8 @@ export default function CrisisMap({
   hubNodesList,
   corridorContext,
   spatialWeatherPolygons,
+  showWeatherAdvisory = false,
+  onToggleWeatherAdvisory,
   routingInfo,
   isLeftSidebarCollapsed = false,
   onExpandSidebar,
@@ -348,14 +378,23 @@ export default function CrisisMap({
   }, [selectedOriginNode, selectedDestNode]);
 
   // Interactive Map Layer Filters State
+  // Disruption (biru, high/critical) default ON; advisory (ungu, medium) default OFF.
   const [showLayerFilterMenu, setShowLayerFilterMenu] = useState(false);
   const [layerFilters, setLayerFilters] = useState({
     baselineCorridors: true,
     bottlenecks: true,
     weatherRadar: true,
+    weatherAdvisory: false,
     fireHotspots: true,
     fleetVehicles: true,
   });
+
+  // Sync advisory toggle from parent (DashboardClient owns fetch); Layer Peta menu reflects it.
+  useEffect(() => {
+    setLayerFilters((prev) =>
+      prev.weatherAdvisory === showWeatherAdvisory ? prev : { ...prev, weatherAdvisory: showWeatherAdvisory }
+    );
+  }, [showWeatherAdvisory]);
 
   const onCrisisClickRef = useRef(onCrisisClick);
   onCrisisClickRef.current = onCrisisClick;
@@ -400,6 +439,19 @@ export default function CrisisMap({
 
   // Toggle map layer visibility
   const toggleLayerFilter = (key: keyof typeof layerFilters) => {
+    // Advisory toggle is owned by the parent (drives backend fetch); delegate then mirror locally.
+    if (key === 'weatherAdvisory') {
+      onToggleWeatherAdvisory?.();
+      setLayerFilters((prev) => {
+        const next = { ...prev, weatherAdvisory: !prev.weatherAdvisory };
+        const map = mapRef.current;
+        if (map && isMapLoadedRef.current) {
+          applyWeatherMapboxFilter(map, next.weatherRadar, next.weatherAdvisory);
+        }
+        return next;
+      });
+      return;
+    }
     setLayerFilters((prev) => {
       const next = { ...prev, [key]: !prev[key] };
       const map = mapRef.current;
@@ -416,10 +468,13 @@ export default function CrisisMap({
           const vis = next.weatherRadar ? 'visible' : 'none';
           if (map.getLayer('weather-polygons-fill')) map.setLayoutProperty('weather-polygons-fill', 'visibility', vis);
           if (map.getLayer('weather-polygons-outline')) map.setLayoutProperty('weather-polygons-outline', 'visibility', vis);
+          applyWeatherMapboxFilter(map, next.weatherRadar, next.weatherAdvisory);
         }
         if (key === 'fireHotspots') {
           const vis = next.fireHotspots ? 'visible' : 'none';
           if (map.getLayer('firms-heat')) map.setLayoutProperty('firms-heat', 'visibility', vis);
+          if (map.getLayer('firms-areas-fill')) map.setLayoutProperty('firms-areas-fill', 'visibility', vis);
+          if (map.getLayer('firms-areas-outline')) map.setLayoutProperty('firms-areas-outline', 'visibility', vis);
           if (map.getLayer('firms-dots')) map.setLayoutProperty('firms-dots', 'visibility', vis);
           if (map.getLayer('firms-dots-outline')) map.setLayoutProperty('firms-dots-outline', 'visibility', vis);
         }
@@ -427,6 +482,62 @@ export default function CrisisMap({
       return next;
     });
   };
+
+  // Disruption-only Mapbox filter: severity IN [high,critical] + optional flood>=80 when props present.
+  // Advisory ON expands severity to include medium (purple); flood gate still applies to disruption only.
+  function applyWeatherMapboxFilter(map: mapboxgl.Map, showDisruption: boolean, showAdvisory: boolean) {
+    try {
+      if (!showDisruption && !showAdvisory) return;
+      let sevFilter: unknown;
+      if (showDisruption && showAdvisory) {
+        sevFilter = ['in', ['get', 'severity'], ['literal', ['medium', 'high', 'critical']]];
+      } else if (showAdvisory && !showDisruption) {
+        sevFilter = ['in', ['get', 'severity'], ['literal', ['medium']]];
+      } else {
+        // ["in", severity, high, critical] — disruption-only default.
+        sevFilter = ['in', ['get', 'severity'], ['literal', ['high', 'critical']]];
+      }
+      // Optional flood>=80 when props present: features without the prop still pass.
+      const floodGate: unknown = [
+        'any',
+        ['!', ['has', 'flood_risk_pct']],
+        ['>=', ['coalesce', ['get', 'flood_risk_pct'], 80], 80],
+      ];
+      const combined: any =
+        showDisruption && !showAdvisory
+          ? (['all', sevFilter, floodGate] as unknown as never)
+          : (sevFilter as unknown as never);
+      if (map.getLayer('weather-polygons-fill')) map.setFilter('weather-polygons-fill', combined);
+      if (map.getLayer('weather-polygons-outline')) map.setFilter('weather-polygons-outline', combined);
+    } catch {
+      // quiet fallback: unfiltered render
+    }
+  }
+
+  // Client-side disruption gate mirroring the Mapbox filter (keeps source data honest
+  // when numeric props are present; backend already filters, this is defense-in-depth).
+  function filterDisruptionFeatures(
+    features: GeoJSON.Feature[],
+    showDisruption: boolean,
+    showAdvisory: boolean
+  ): GeoJSON.Feature[] {
+    return features.filter((f) => {
+      const p = (f.properties ?? {}) as Record<string, unknown>;
+      const sev = String(p.severity ?? '').toLowerCase();
+      const flood = typeof p.flood_risk_pct === 'number' ? (p.flood_risk_pct as number) : null;
+      if (sev === 'high' || sev === 'critical') {
+        if (!showDisruption) return false;
+        // Optional flood>=80 when props present.
+        if (flood != null && flood < 80) return false;
+        return true;
+      }
+      if (sev === 'medium' || sev === 'low') {
+        return showAdvisory;
+      }
+      // Unknown severity: show only when advisory is ON (fail-open for provenance).
+      return showAdvisory;
+    });
+  }
 
   // Mount map once
   useEffect(() => {
@@ -561,8 +672,13 @@ export default function CrisisMap({
         },
       });
 
-      // 0c. FIRMS VIIRS_SNPP_NRT active fire hotspots (orange heat + FRP-sized dots)
+      // 0c. FIRMS VIIRS_SNPP_NRT active fire hotspots
+      // (FRP-weighted heat + radius-area polygons + FRP-sized center dots)
       map.addSource('firms-source', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+      map.addSource('firms-areas-source', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
       });
@@ -571,9 +687,24 @@ export default function CrisisMap({
         type: 'heatmap',
         source: 'firms-source',
         paint: {
-          'heatmap-weight': ['interpolate', ['linear'], ['coalesce', ['get', 'confidence'], 60], 0, 0, 100, 1],
+          // FRP-driven weight (MW dominates; confidence as floor so low-FRP
+          // detections still render).
+          'heatmap-weight': [
+            'interpolate', ['linear'],
+            ['+', ['coalesce', ['get', 'frp'], 0], ['*', ['coalesce', ['get', 'confidence'], 60], 0.15]],
+            0, 0.05,
+            10, 0.25,
+            100, 0.6,
+            500, 1,
+          ],
           'heatmap-intensity': 1.2,
-          'heatmap-radius': 28,
+          // FRP-scaled influence radius in px: 0→20, 100→35, 500→60.
+          'heatmap-radius': [
+            'interpolate', ['linear'], ['coalesce', ['get', 'frp'], 10],
+            0, 20,
+            100, 35,
+            500, 60,
+          ],
           'heatmap-opacity': 0.85,
           'heatmap-color': [
             'interpolate', ['linear'], ['heatmap-density'],
@@ -582,6 +713,32 @@ export default function CrisisMap({
             0.7, 'rgba(249,115,22,0.85)',
             1, 'rgba(255,50,0,1)',
           ],
+        },
+      });
+      // Radius-area polygons: true km footprint per hotspot
+      // (5 km critical / 2.5 km high / 1 km medium).
+      map.addLayer({
+        id: 'firms-areas-fill',
+        type: 'fill',
+        source: 'firms-areas-source',
+        paint: {
+          'fill-color': '#f97316',
+          'fill-opacity': [
+            'match', ['get', 'severity'],
+            'critical', 0.25,
+            'high', 0.20,
+            0.15,
+          ],
+        },
+      });
+      map.addLayer({
+        id: 'firms-areas-outline',
+        type: 'line',
+        source: 'firms-areas-source',
+        paint: {
+          'line-color': '#fb923c',
+          'line-width': 1.5,
+          'line-opacity': 0.9,
         },
       });
       map.addLayer({
@@ -596,7 +753,7 @@ export default function CrisisMap({
             500, 14,
           ],
           'circle-color': '#f97316',
-          'circle-opacity': 0.9,
+          'circle-opacity': 0.55,
           'circle-stroke-width': 1.5,
           'circle-stroke-color': '#fff7ed',
         },
@@ -606,10 +763,11 @@ export default function CrisisMap({
         type: 'circle',
         source: 'firms-source',
         paint: {
+          // Transparent 18px-max click halo around each center dot.
           'circle-radius': [
             'interpolate', ['linear'], ['coalesce', ['get', 'frp'], 10],
-            0, 8,
-            100, 12,
+            0, 10,
+            100, 14,
             500, 18,
           ],
           'circle-color': 'rgba(249,115,22,0)',
@@ -1158,7 +1316,7 @@ export default function CrisisMap({
         });
       });
 
-      // Q3: weather polygon click → source + valid_until provenance popup.
+      // Weather polygon click → precip/flood/wind/source/valid_until provenance popup.
       const handleWeatherClick = (e: mapboxgl.MapLayerMouseEvent) => {
         if (isClickTargetingRef.current) return;
         if (!e.features || e.features.length === 0) return;
@@ -1166,10 +1324,17 @@ export default function CrisisMap({
         const source = props.source || props.bmkg_source || 'BMKG / Open-Meteo';
         const validUntil = props.valid_until || props.updated_at || '-';
         const name = props.name || 'Advisori Cuaca';
+        const precip = props.precipitation_mm_24h ?? '?';
+        const flood = props.flood_risk_pct ?? '?';
+        const wind = props.windspeed_kmh ?? props.wind_speed_kmh ?? '?';
+        const sev = props.severity ?? '?';
+        const code = props.bmkg_code ?? '-';
         new mapboxgl.Popup({ closeButton: true, closeOnClick: true })
           .setLngLat(e.lngLat)
           .setHTML(
             `<div style="font:12px system-ui;color:#0c1017"><strong>${String(name).slice(0, 120)}</strong><br/>` +
+            `severity: ${String(sev).slice(0, 16)}${code !== '-' ? ` · BMKG code ${String(code).slice(0, 8)}` : ''}<br/>` +
+            `presipitasi: ${String(precip)} mm/24j · banjir: ${String(flood)}% · angin: ${String(wind)} km/j<br/>` +
             `sumber: ${String(source).slice(0, 120)}<br/>valid_until: ${String(validUntil).slice(0, 64)}</div>`
           )
           .addTo(map);
@@ -1177,7 +1342,7 @@ export default function CrisisMap({
       map.on('click', 'weather-polygons-fill', handleWeatherClick);
       map.on('click', 'weather-polygons-outline', handleWeatherClick);
 
-      // Q3: FIRMS hotspot click → FRP / conf / dist-to-corridor popup.
+      // Q3: FIRMS hotspot click → FRP / conf / dist-to-corridor / radius provenance popup.
       const handleFirmsClick = (e: mapboxgl.MapLayerMouseEvent) => {
         if (isClickTargetingRef.current) return;
         if (!e.features || e.features.length === 0) return;
@@ -1185,17 +1350,25 @@ export default function CrisisMap({
         const frp = props.frp ?? '?';
         const conf = props.conf ?? props.confidence ?? '?';
         const dist = props.dist_to_corridor_km ?? '?';
+        const radiusKm = props.radius_km ?? '?';
+        const severity = props.severity ?? '-';
+        const nearSeg = props.near_segment ?? '-';
         const title = props.title || 'Hotspot Karhutla VIIRS';
         new mapboxgl.Popup({ closeButton: true, closeOnClick: true })
           .setLngLat(e.lngLat)
           .setHTML(
             `<div style="font:12px system-ui;color:#0c1017"><strong>${String(title).slice(0, 120)}</strong><br/>` +
-            `FRP: ${String(frp)} MW · conf: ${String(conf)}<br/>jarak koridor: ${String(dist)} km</div>`
+            `FRP: ${String(frp)} MW · conf: ${String(conf)} · severity: ${String(severity)}<br/>` +
+            `jarak koridor: ${String(dist)} km · radius: ${String(radiusKm)} km<br/>` +
+            `segmen: ${String(nearSeg).slice(0, 120)}</div>`
           )
           .addTo(map);
       };
       map.on('click', 'firms-dots', handleFirmsClick);
-      ['firms-dots', 'weather-polygons-fill'].forEach((layerId) => {
+      map.on('click', 'firms-dots-outline', handleFirmsClick);
+      map.on('click', 'firms-areas-fill', handleFirmsClick);
+      map.on('click', 'firms-areas-outline', handleFirmsClick);
+      ['firms-dots', 'firms-dots-outline', 'firms-areas-fill', 'firms-areas-outline', 'weather-polygons-fill'].forEach((layerId) => {
         map.on('mouseenter', layerId, () => {
           if (mapRef.current) mapRef.current.getCanvas().style.cursor = 'pointer';
         });
@@ -1350,12 +1523,18 @@ export default function CrisisMap({
     const map = mapRef.current;
     if (!map || !isMapLoadedRef.current) return;
 
-    // 1. Update Weather Polygons
+    // 1. Update Weather Polygons (disruption-only default: high/critical + flood>=80 when props present).
     const weatherSource = map.getSource('weather-polygons-source') as mapboxgl.GeoJSONSource;
     if (weatherSource) {
       // Suppress ambient weather polygons during active demo simulation to prevent visual clutter
       if (demoStage == null && spatialWeatherPolygons && spatialWeatherPolygons.features && spatialWeatherPolygons.features.length > 0) {
-        weatherSource.setData(spatialWeatherPolygons);
+        const filtered = filterDisruptionFeatures(
+          spatialWeatherPolygons.features as GeoJSON.Feature[],
+          layerFilters.weatherRadar,
+          layerFilters.weatherAdvisory
+        );
+        weatherSource.setData({ type: 'FeatureCollection', features: filtered });
+        applyWeatherMapboxFilter(map, layerFilters.weatherRadar, layerFilters.weatherAdvisory);
       } else {
         weatherSource.setData({ type: 'FeatureCollection', features: [] });
       }
@@ -1365,6 +1544,7 @@ export default function CrisisMap({
     // (DashboardClient passes [] when off / degraded). Never suppressed by
     // demoStage: karhutla stays visible during demo when the toggle is ON.
     const firmsSource = map.getSource('firms-source') as mapboxgl.GeoJSONSource;
+    const firmsAreasSource = map.getSource('firms-areas-source') as mapboxgl.GeoJSONSource;
     if (firmsSource) {
       if (fireHotspots && fireHotspots.length > 0) {
         firmsSource.setData({
@@ -1381,7 +1561,8 @@ export default function CrisisMap({
                 frp: h.frp ?? 0,
                 conf: h.conf ?? '',
                 dist_to_corridor_km: h.dist_to_corridor_km ?? null,
-                severity: h.severity ?? '',
+                severity: firmsSeverityOf(h as any),
+                radius_km: firmsRadiusKm(h as any),
                 title: h.title ?? `Hotspot VIIRS FRP ${h.frp ?? 0}MW`,
                 source: h.source ?? 'VIIRS_SNPP_NRT',
                 near_segment: h.near_segment ?? '',
@@ -1392,6 +1573,41 @@ export default function CrisisMap({
         });
       } else {
         firmsSource.setData({ type: 'FeatureCollection', features: [] });
+      }
+    }
+    if (firmsAreasSource) {
+      if (fireHotspots && fireHotspots.length > 0) {
+        firmsAreasSource.setData({
+          type: 'FeatureCollection',
+          features: fireHotspots.map((h, idx) => {
+            const lon = h.lon ?? h.coordinates?.[0] ?? 0;
+            const lat = h.lat ?? h.coordinates?.[1] ?? 0;
+            const radiusKm = firmsRadiusKm(h as any);
+            const severity = firmsSeverityOf(h as any);
+            return {
+              type: 'Feature',
+              geometry: {
+                type: 'Polygon',
+                coordinates: [createGeoJsonCircleRing([lon, lat], radiusKm, 64)],
+              },
+              properties: {
+                id: `firms-area-${idx}`,
+                confidence: h.confidence ?? 60,
+                frp: h.frp ?? 0,
+                conf: h.conf ?? '',
+                dist_to_corridor_km: h.dist_to_corridor_km ?? null,
+                severity,
+                radius_km: radiusKm,
+                title: h.title ?? `Hotspot VIIRS FRP ${h.frp ?? 0}MW`,
+                source: h.source ?? 'VIIRS_SNPP_NRT',
+                near_segment: h.near_segment ?? '',
+                ts: h.ts ?? '',
+              },
+            } as GeoJSON.Feature<GeoJSON.Polygon>;
+          }),
+        });
+      } else {
+        firmsAreasSource.setData({ type: 'FeatureCollection', features: [] });
       }
     }
 
@@ -1902,6 +2118,8 @@ export default function CrisisMap({
     spatialWeatherPolygons,
     fireHotspots,
     demoStage,
+    layerFilters.weatherRadar,
+    layerFilters.weatherAdvisory,
   ]);
 
   // Keep route popover screen position synchronized during map pan/zoom
@@ -2435,8 +2653,12 @@ export default function CrisisMap({
                         type="button"
                         onClick={() => toggleLayerFilter('weatherRadar')}
                         className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-[#121822] transition"
+                        title="Disruption-only: hujan lebat high/critical (biru). Default ON."
                       >
-                        <span className="text-slate-200">Radar Cuaca & Bahaya</span>
+                        <span className="text-slate-200 flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+                          <span>Radar Cuaca (Gangguan, biru)</span>
+                        </span>
                         <span className={`w-4 h-4 rounded flex items-center justify-center border ${
                           layerFilters.weatherRadar ? 'bg-white border-white text-[#080d14]' : 'border-[#1c2432]'
                         }`}>
@@ -2446,10 +2668,27 @@ export default function CrisisMap({
 
                       <button
                         type="button"
+                        onClick={() => toggleLayerFilter('weatherAdvisory')}
+                        className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-[#121822] transition"
+                        title="Advisory: medium drizzle termasuk BMKG 60 (ungu). Default OFF."
+                      >
+                        <span className="text-slate-200 flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-purple-500 shrink-0" />
+                          <span>Advisory Cuaca (ungu, medium)</span>
+                        </span>
+                        <span className={`w-4 h-4 rounded flex items-center justify-center border ${
+                          layerFilters.weatherAdvisory ? 'bg-white border-white text-[#080d14]' : 'border-[#1c2432]'
+                        }`}>
+                          {layerFilters.weatherAdvisory && <Check className="w-3 h-3 stroke-[3]" />}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
                         onClick={() => toggleLayerFilter('fireHotspots')}
                         className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-[#121822] transition"
                       >
-                        <span className="text-slate-200">Karhutla FIRMS (Heat + Titik)</span>
+                        <span className="text-slate-200">Karhutla FIRMS (Heat + Radius + Titik)</span>
                         <span className={`w-4 h-4 rounded flex items-center justify-center border ${
                           layerFilters.fireHotspots ? 'bg-white border-white text-[#080d14]' : 'border-[#1c2432]'
                         }`}>

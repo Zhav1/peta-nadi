@@ -22,9 +22,14 @@ interface TopNavTelemetryProps {
   onToggleYellowZones?: () => void;
   yellowZoneCount?: number;
   // Q3: two independent overlay toggles, default ON (weather polygons + FIRMS dots+heat)
+  // Disruption-only: Cuaca = high/critical biru (default ON); Advisori = medium ungu (default OFF).
   showWeatherPolygons?: boolean;
   onToggleWeatherPolygons?: () => void;
   weatherPolygonCount?: number;
+  showWeatherAdvisory?: boolean;
+  onToggleWeatherAdvisory?: () => void;
+  weatherAdvisoryCount?: number;
+  weatherDisruptionCount?: number;
   showFireHotspots?: boolean;
   onToggleFireHotspots?: () => void;
   fireHotspotCount?: number;
@@ -53,6 +58,10 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
   showWeatherPolygons = true,
   onToggleWeatherPolygons,
   weatherPolygonCount = 0,
+  showWeatherAdvisory = false,
+  onToggleWeatherAdvisory,
+  weatherAdvisoryCount = 0,
+  weatherDisruptionCount,
   showFireHotspots = true,
   onToggleFireHotspots,
   fireHotspotCount = 0,
@@ -420,7 +429,7 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
         </div>
       )}
 
-      {/* Q3: independent weather + FIRMS overlay toggles (default ON) */}
+      {/* Disruption-only weather (biru, default ON) + advisory (ungu, default OFF). Counts reflect filtered set. */}
       {onToggleWeatherPolygons && (
         <button
           type="button"
@@ -430,12 +439,30 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
               ? 'bg-blue-950/50 border-blue-500/50 text-blue-200 shadow-[0_0_8px_rgba(59,130,246,0.3)]'
               : 'bg-[#0c1017] border-white/5 text-slate-500 opacity-60 hover:opacity-100'
           }`}
-          title="Overlay cuaca: poligon advisori BMKG + Open-Meteo (biru/ungu). Klik poligon = sumber + valid_until."
+          title="Radar Cuaca (Gangguan, biru): hujan lebat disruptif high/critical 50mm/24j atau banjir 80%. Klik poligon = presipitasi/banjir/angin/sumber/valid_until."
         >
           <span className={`w-2 h-2 rounded-full ${showWeatherPolygons ? 'bg-blue-500 shadow-[0_0_6px_rgba(59,130,246,0.9)]' : 'bg-slate-600'}`} />
           <span className="font-sans text-[11px] font-semibold">Cuaca</span>
           <span className="px-1 py-0.2 rounded bg-blue-500/20 text-[10px] font-bold text-blue-300 font-mono">
-            {weatherPolygonCount}
+            {weatherDisruptionCount ?? weatherPolygonCount}
+          </span>
+        </button>
+      )}
+      {onToggleWeatherAdvisory && (
+        <button
+          type="button"
+          onClick={onToggleWeatherAdvisory}
+          className={`cursor-pointer flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs font-mono transition-all duration-150 ${
+            showWeatherAdvisory
+              ? 'bg-purple-950/50 border-purple-500/50 text-purple-200 shadow-[0_0_8px_rgba(168,85,247,0.3)]'
+              : 'bg-[#0c1017] border-white/5 text-slate-500 opacity-60 hover:opacity-100'
+          }`}
+          title="Advisory cuaca (ungu, default OFF): medium drizzle termasuk BMKG 60. Aktifkan untuk lapisan advisori penuh."
+        >
+          <span className={`w-2 h-2 rounded-full ${showWeatherAdvisory ? 'bg-purple-500 shadow-[0_0_6px_rgba(168,85,247,0.9)]' : 'bg-slate-600'}`} />
+          <span className="font-sans text-[11px] font-semibold">Advisori</span>
+          <span className="px-1 py-0.2 rounded bg-purple-500/20 text-[10px] font-bold text-purple-300 font-mono">
+            {weatherAdvisoryCount}
           </span>
         </button>
       )}

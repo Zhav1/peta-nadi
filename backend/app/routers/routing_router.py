@@ -99,14 +99,34 @@ async def _fetch_proof_context() -> Dict[str, Any]:
 @router.get("/weather/spatial-polygons")
 async def fetch_spatial_weather_polygons(
     current_user: UserSession = Depends(get_optional_user),
+    min_severity: str = Query(default="high", description="Minimum severity rank: low|medium|high|critical. Default high = disruption-only (BMKG 60/medium excluded). Use medium for full-fidelity advisory."),
+    min_precip: float = Query(default=50.0, description="Minimum 24h precipitation mm for disruption gate (OR with min_flood). Use 0 to disable."),
+    min_flood: float = Query(default=80.0, description="Minimum flood risk pct for disruption gate (OR with min_precip). Use 0 to disable."),
 ) -> Dict[str, Any]:
     """
     Returns GeoJSON multi-polygons combining BMKG station warnings + Open-Meteo Global NWP
     spatial weather predictions with data-driven rainfall_mm and flood_risk_pct.
     Read endpoint: optional auth (guest-safe), user attached for telemetry only.
+
+    Disruption-only default (min_severity=high, min_precip=50, min_flood=80):
+    only high/critical heavy rain that can cause disruptions is returned.
+    Advisory path: ?min_severity=medium&min_precip=0&min_flood=0 returns all as before.
     """
     try:
-        return await get_fused_spatial_weather()
+        # Advisory full-fidelity path: min_severity=medium/low disables numeric gates
+        # unless the caller explicitly set non-default numeric thresholds.
+        sev = (min_severity or "high").lower()
+        if sev in ("medium", "low", "all"):
+            eff_precip = None if min_precip == 50.0 else (None if min_precip is None else float(min_precip))
+            eff_flood = None if min_flood == 80.0 else (None if min_flood is None else float(min_flood))
+            if eff_precip == 0:
+                eff_precip = None
+            if eff_flood == 0:
+                eff_flood = None
+            return await get_fused_spatial_weather(min_severity=sev, min_precip=eff_precip, min_flood=eff_flood)
+        eff_precip_h = None if min_precip == 0 else float(min_precip)
+        eff_flood_h = None if min_flood == 0 else float(min_flood)
+        return await get_fused_spatial_weather(min_severity=sev, min_precip=eff_precip_h, min_flood=eff_flood_h)
     except Exception as e:
         logger.error(f"Error fetching spatial weather polygons: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -123,6 +143,8 @@ async def fetch_fire_hotspots(
     returns 200 with status=degraded + empty hotspots (never 500, never fake
     points) so the frontend can render a gray toggle with a 'butuh MAP_KEY' tooltip.
     Severity mapping: FRP > 500 → critical, FRP > 100 (or <5km to corridor) → high.
+    Radius-area mapping: critical → 5 km, high → 2.5 km, medium → 1 km
+    (radius_km included per hotspot, additive — existing shape unchanged).
     """
     import json as _json
     from datetime import datetime, timezone as _tz
@@ -196,6 +218,15 @@ async def fetch_fire_hotspots(
                     dist_km = float(dist_km) if dist_km is not None else None
                 except Exception:
                     dist_km = None
+                # Radius-area mapping (km, monotonic, mirrors severity):
+                # FRP > 500 → critical → 5 km; FRP > 100 or <5 km to corridor
+                # → high → 2.5 km; else medium → 1 km.
+                if frp > 500:
+                    radius_km = 5.0
+                elif frp > 100 or (dist_km is not None and dist_km < 5.0):
+                    radius_km = 2.5
+                else:
+                    radius_km = 1.0
                 hotspots.append({
                     "coordinates": [lon, lat],
                     "lon": lon,
@@ -205,6 +236,7 @@ async def fetch_fire_hotspots(
                     "conf": conf_raw or "nominal",
                     "dist_to_corridor_km": dist_km,
                     "severity": sev,
+                    "radius_km": radius_km,
                     "title": ev.get("title", f"Hotspot VIIRS FRP {frp}MW"),
                     "source": "VIIRS_SNPP_NRT",
                     "near_segment": ev.get("near_segment"),
