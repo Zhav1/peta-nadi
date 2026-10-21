@@ -95,6 +95,11 @@ export interface RouteLeg {
   to_name: string;
   coordinates?: [number, number][];
   color?: string;
+  maneuvers?: Array<{
+    instruction: string;
+    distance_meters: number;
+    duration_seconds: number;
+  }>;
   transfer_hub?: {
     id: string;
     name: string;

@@ -19,6 +19,8 @@ htmlcov/
 .coverage
 *.log
 *.db
+*.db-wal
+*.db-shm
 backend/data/*.db
 
 # Node / Next.js
@@ -85,7 +87,7 @@ repo
 # E2E Test runner and artifacts
 tests/e2e-runner/
 .e2e-artifacts/
-e2e/
+/e2e/
 scratch/
 
 docs/skill
@@ -97,9 +99,12 @@ docs/validasi/
 *reimburse*
 *reimbursement*
 *socfin*
+*pelindo*
 *validasi*
 *.docx
 *.pdf
 
 # Manual and HKI build scripts
-frontend/scripts/
+frontend/scripts/*
+!frontend/scripts/test_*.ts
+

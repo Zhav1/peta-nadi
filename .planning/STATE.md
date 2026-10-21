@@ -2,39 +2,43 @@
 gsd_state_version: "1.0"
 milestone: M5
 milestone_name: High-Fidelity Intelligence & Isolated Operations Engine
-current_phase: 85
-current_phase_name: Mapbox Directions API Turn-by-Turn Road Network & Tangential Hazard Avoidance
-status: ready_to_plan
-stopped_at: "Phase 84 executed and verified: deterministic BMKG parameter matrix, haversine spatial checks (<=30km; <=50km for quakes), temporal delta (<=6h), physical thresholds (rain >= 20 mm/h, quake M >= 4.5, wave >= 2.5m), anti-tautology locks, uncorroborated claim confidence cap (<=0.50), and structured audit ledger. 8/8 tests passed in test_bmkg_consensus_validation.py, 67/67 regression tests passed."
-last_updated: "2026-10-21T01:18:00.000Z"
+current_phase: 88
+current_phase_name: Client-Isolated Routing Session vs. Global Read-Only Environmental State
+status: completed
+stopped_at: "Phase 88 executed and verified: Two-layer state architecture, bidirectional URL query parameter synchronization, ambient WebSocket route isolation, standalone verification suite (4/4 passed), and Playwright multi-client concurrency E2E suite (passed)."
+last_updated: "2026-10-21T17:28:00.000Z"
 last_activity: 2026-10-21
-last_activity_desc: "Phase 84 execution complete: deterministic BMKG cross-validation and unconfirmed cap active in consensus_gate and unified_news_ingestor."
+last_activity_desc: "Phases 87 and 88 complete: Mapbox Turn-by-Turn Road Network & Client-isolated routing session decoupled. Integrated with remote phases 85 (Weather/FIRMS) and 86 (Deploy-readiness)."
 state_head: HEAD
 progress:
-  total_phases: 86
-  completed_phases: 84
-  total_plans: 103
-  completed_plans: 103
-  percent: 97.6
+  total_phases: 88
+  completed_phases: 88
+  total_plans: 107
+  completed_plans: 107
+  percent: 100.0
 ---
 
 # STATE: PreHub Project Memory
 
 **Last Updated:** 2026-10-21
-**Active Milestone:** M5 - High-Fidelity Intelligence & Isolated Operations Engine [ACTIVE 🚀]
-**Current Phase:** 85
+**Active Milestone:** M5 - High-Fidelity Intelligence & Isolated Operations Engine [COMPLETE ✅]
+**Current Phase:** 88
 
 ---
 
 ## Current Position
 
-Phase: 85 (Mapbox Directions API Turn-by-Turn Road Network & Tangential Hazard Avoidance) - READY TO PLAN 📋
-Status: Phases 83 & 84 successfully completed. Milestone M5 progressing to eliminate straight-line routing polylines.
-(1) **Phase 83 — Zero-Token Pre-LLM Filtering & DeepSeek Distillation.** [COMPLETE ✅] Zero-token DOM cleaning, 2-factor regex disaster + Sumatra location co-occurrence gating, and 400-char text clamping before calling DeepSeek; provides compact single-shot JSON prompt without `<think>` traces.
-(2) **Phase 84 — Deterministic BMKG Sensor Cross-Validation & Consensus Gate Hardening.** [COMPLETE ✅] Enforces strict spatial ($\le 30\text{km}$), temporal ($\le 6\text{h}$), and physical sensor thresholds (radar rainfall $\ge 20\text{mm/h}$, $M \ge 4.5$, wave $\ge 2.5\text{m}$) before promoting news to VALIDATED; caps uncorroborated news at $\le 0.50$ UNCONFIRMED; purges tautological title-based weather guessing; returns structured audit ledger.
-(3) **Phase 85 — Mapbox Directions API Turn-by-Turn Road Network & Tangential Hazard Avoidance.** [READY TO PLAN 📋] Implements street-snapped routing (`mapbox/driving`, `overview=full`, `geometries=geojson`, `steps=true`) obeying one-way streets, removes linear chord distortion (`densifyPath`), calculates forced tangential avoidance waypoints outside hazard buffer ($R + 2\text{km}$), and validates Manhattan Medan -> USU benchmark.
-(4) **Phase 86 — Client-Isolated Routing Session vs. Global Read-Only Environmental State.** Decouples ambient global hazard alerts from user-specific routing sessions using URL query parameters and local React state, preventing User A (Medan -> Belawan) from colliding with User B (Aceh -> Belawan).
-Next action: invoke `/gsd-plan-phase 85` to generate the atomic implementation plan for Phase 85.
+Phase: 88 (Client-Isolated Routing Session vs. Global Read-Only Environmental State) - COMPLETE ✅
+Status: All Milestone 5 phases (83 through 88) fully implemented, integrated, and verified:
+(1) **Phase 83 — Zero-Token Pre-LLM Filtering & Grounded Routing Hedging.** [COMPLETE ✅]
+(2) **Phase 84 — Deterministic BMKG Sensor Cross-Validation & News Precision Gate-2.** [COMPLETE ✅]
+(3) **Phase 85 — Weather & NASA FIRMS Spatial Overlay (Phase B).** [COMPLETE ✅]
+(4) **Phase 86 — Verification & Production Readiness Ledger.** [COMPLETE ✅]
+(5) **Phase 87 — Mapbox Directions API Turn-by-Turn Road Network & Tangential Hazard Avoidance.** [COMPLETE ✅]
+(6) **Phase 88 — Client-Isolated Routing Session vs. Global Read-Only Environmental State.** [COMPLETE ✅]
+Next action: Milestone 5 fully complete. Working tree verified with 0 TypeScript errors and passing Playwright & unit suites.
+
+
 
 ---
 
@@ -126,10 +130,12 @@ Next action: invoke `/gsd-plan-phase 85` to generate the atomic implementation p
 | 80 | Gazetteer Search Kota/Desa/Titik E2E Fix | **COMPLETE** ✅ | Single canonical base-URL resolver (`lib/baseUrl.ts`) across api/proxy/modal; ranking `(score, tier, len, slug)` + proximity de-dupe (1.5 km / 0.05°) before `limit`; no negative caching; Redis `search:v2` namespace; exact-hit Nominatim skip; distinct 20 s timeout error vs `AbortError`; no centroid default for missing coords; badge falls back to `Titik`. 10 search tests, tsc 0. |
 | 81 | Dispatcher Tenant & Fleet Scope | **COMPLETE** ✅ | JWT `company_id` claim is authoritative and `?company_id=` is ignored for dispatchers; `tenant_only` applies tenancy before modality in `get_unified_fleet`; no `FALLBACK_FLEET` for scoped roles; cache cleared on role/tenant change; null `path` → `[]`; retry keeps `Authorization` + resolver; `PROYEKSI` only on inspect. 12 fleet-ingest + 9 telemetry tests, 17/17 scope assertions, tsc 0. |
 | 82 | Truck/Travel Split, ERP Ledger & Two-Step Onboarding | **COMPLETE** ✅ | `truck_assets` + `travels` (snapshotted master fields) with migration 014; ledger-derived ERP savings, rounded once at component boundary, zero savings until `actual_recorded`; two-step wizard with required coordinates; WS base fix (`getWsBaseUrl` per connection); `render.yaml` renamed to `peta-nadi`. 11 travels/ERP tests, combined 65-test run green, tsc 0. |
-<| 83 | Grounded Routing Hedging, no_route Honesty, HITL SIMULASI Gate, Blink Dedupe (local) + Zero-Token Pre-LLM Filtering & DeepSeek Distillation (remote) | **MERGED ✅** | Local: Docker road-cache fix, hedging enrichment, no_route toast, SIMULASI/OFFLINE HITL gate, blink stabilizers. Remote: DOM/ad stripping, 2-factor regex disaster+Sumatra gate, headline+lead <=400ch clamp, compact DeepSeek JSON. Both kept; Gate-1 clamped, Gate-2 full-body 2500ch. Docs: both `83-grounded-routing-*` and `83-zero-token-pre-*`. |
-| 84 | News-Precision Gate-2 Phase A (local) + Deterministic BMKG Cross-Validation (remote) | **MERGED ✅** | Local: schema v7 (was v6); hard Sumatra bbox 94–108E/−6…6N + Java/out-of-island veto + prevention-ceremonial DROP; selective async Gate-2 (uncertain/YELLOW/conf<0.7, 5-conc/60s/MD5-500, still-uncertain→DROPPED). Remote: spatial <=30km (50km quake), temporal <=6h, rain>=20mm/h / M>=4.5 / wave>=2.5m, uncorroborated cap <=0.50, audit ledger. Both kept; fire-as-I single-vote preserved. Docs: both `84-news-precision-*` and `84-deterministic-bmkg-*`. |
-| 85 | Weather + FIRMS Overlay Phase B (local) + Mapbox Turn-by-Turn (remote) | **MERGED ✅** | Local: weather palette + `/fire/hotspots` + fire-as-I + 3h FIRMS poller + honest-degraded health + toggles. Remote: Mapbox driving profile, tangential avoidance R+2km. Both kept. |
-| 86 | Verify + Boost + Deploy-Readiness (local) + Client-Isolated Routing Session (remote) | **MERGED ✅** | Local docs-only verification ledger + boost knobs + deploy checklist. Remote: React state + URL params isolation. Both kept. |
+| 83 | Grounded Routing Hedging & Blink Dedupe + Zero-Token Pre-LLM Filtering | **COMPLETE** ✅ | Combined: Docker road-cache fix, hedging enrichment, no_route toast, SIMULASI/OFFLINE HITL gate, blink stabilizers, DOM/ad stripping, 2-factor regex disaster+Sumatra gate, headline+lead <=400ch clamp, compact DeepSeek JSON. Docs: both `83-grounded-routing-*` and `83-zero-token-pre-*`. |
+| 84 | News-Precision Gate-2 + Deterministic BMKG Sensor Cross-Validation | **COMPLETE** ✅ | Combined: schema v7; hard Sumatra bbox 94–108E/−6…6N + Java/out-of-island veto + ceremony DROP; selective async Gate-2; spatial <=30km (50km quake), temporal <=6h, rain>=20mm/h / M>=4.5 / wave>=2.5m, uncorroborated cap <=0.50, audit ledger. Docs: both `84-news-precision-*` and `84-deterministic-bmkg-*`. |
+| 85 | Weather & NASA FIRMS Spatial Overlay (Phase B) | **COMPLETE** ✅ | Full-Sumatra 23-point Open-Meteo bulk grid overlay + per-hub BMKG; blue/purple advisory palette (`#3b82f6`/`#a855f7`); VIIRS_SNPP_NRT satellite fire hotspots (`/fire/hotspots`); `fire-as-I` consensus rule; honest-degraded plumbing when MAP_KEY unprovisioned; TopNav toggles & CrisisMap popups. |
+| 86 | Verification & Production Readiness Ledger | **COMPLETE** ✅ | Consolidated M5 verification state ledger, capped-budget performance bounds (Gate-2 5-conc/60s/MD5-500, hash-gated map writes, 1000ms elapsed timer, Redis caps), operator deployment checklist (Render redeploy, MAP_KEY dashboard injection, migration 014). Docs in `86-verify-boost-deploy-readiness/`. |
+| 87 | Mapbox Directions API Turn-by-Turn Road Network & Tangential Hazard Avoidance | **COMPLETE** ✅ | True street-snapped road geometry via Mapbox Directions API (Free Tier), removal of linear chord interpolation (`densifyPath`), forced tangential normal waypoints ($R+2.0\text{ km}$ clearance), quota guard memoization cache (15 min TTL), Manhattan Medan -> USU benchmark (>50 pts road-snapped, 0 km hazard exposure). Direct unit (4/4) & Playwright E2E passing. |
+| 88 | Client-Isolated Routing Session vs. Global Read-Only Environmental State | **COMPLETE** ✅ | Two-layer state architecture (Layer 1 global environmental read-only broadcast vs Layer 2 session-local routing state in React memory + URL query parameters), in-place `window.history.replaceState` bidirectional sync (`origin`, `dest`, `modality`, `route`, `crisis`), Next.js 14 `<Suspense>` boundary in `app/dashboard/page.tsx`, WebSocket ambient `node_update` route strip guard. Direct unit (4/4) & Playwright multi-context concurrent E2E passing. |
 
 ---
 

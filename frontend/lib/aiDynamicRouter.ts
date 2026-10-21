@@ -1,4 +1,5 @@
 import type { LonLat } from './pathDensifier';
+export type { LonLat };
 import type { RouteRecommendation, CongestionSegment, RouteLeg, HoldVsRerouteEconomics, CrisisType, HazardImpactProfile, RouteTradeoffAnalysis } from './types';
 
 export type TransportModality = 'best' | 'truck' | 'maritime' | 'air' | 'multimodal' | 'auto';
@@ -775,6 +776,12 @@ export function calculateHazardExposureMetrics(
   };
 }
 
+export interface MapboxRouteManeuver {
+  instruction: string;
+  distance_meters: number;
+  duration_seconds: number;
+}
+
 export interface MapboxRouteResult {
   coordinates: LonLat[];
   distanceKm: number;
@@ -785,13 +792,32 @@ export interface MapboxRouteResult {
   // Mapbox Directions road geometry; 'offline-interpolated' = straight-line
   // estimate shown ONLY with a SIMULASI/OFFLINE label, never as a live road route.
   source: 'live' | 'offline-interpolated';
+  maneuvers?: MapboxRouteManeuver[];
+}
+
+export interface MapboxStep {
+  maneuver: { instruction: string; type?: string; location?: [number, number] };
+  distance: number;
+  duration: number;
+  name?: string;
+}
+
+export interface MapboxDirectionsLeg {
+  summary?: string;
+  annotation?: {
+    congestion?: string[];
+    distance?: number[];
+    duration?: number[];
+    speed?: number[];
+  };
+  steps?: MapboxStep[];
 }
 
 export interface MapboxDirectionsRoute {
   distance: number;
   duration: number;
   geometry: { coordinates: LonLat[] };
-  legs?: Array<{ summary?: string; annotation?: { congestion?: string[] } }>;
+  legs?: MapboxDirectionsLeg[];
 }
 
 export interface MapboxDirectionsResponse {
@@ -803,6 +829,37 @@ export interface MapboxDirectionsResponse {
 export type MapboxDirectionsProfile = 'driving' | 'driving-traffic';
 
 const MAPBOX_DIRECTIONS_ENDPOINT = 'https://api.mapbox.com/directions/v5/mapbox';
+
+export interface CachedDirectionsEntry {
+  data: MapboxDirectionsResponse;
+  expiresAt: number;
+}
+
+// In-memory cache guarding Mapbox Free Tier quota (100,000 requests/month)
+export const directionsCache = new Map<string, CachedDirectionsEntry>();
+export const DIRECTIONS_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes TTL
+const MAX_CACHE_ENTRIES = 200;
+
+export function getCachedDirections(key: string): MapboxDirectionsResponse | null {
+  const entry = directionsCache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    directionsCache.delete(key);
+    return null;
+  }
+  return entry.data;
+}
+
+export function setCachedDirections(key: string, data: MapboxDirectionsResponse): void {
+  if (directionsCache.size >= MAX_CACHE_ENTRIES) {
+    const oldestKey = directionsCache.keys().next().value;
+    if (oldestKey) directionsCache.delete(oldestKey);
+  }
+  directionsCache.set(key, {
+    data,
+    expiresAt: Date.now() + DIRECTIONS_CACHE_TTL_MS,
+  });
+}
 
 function isAbortError(err: unknown): boolean {
   return !!err && typeof err === 'object' && (err as { name?: string }).name === 'AbortError';
@@ -837,6 +894,7 @@ export function isHazardNearTollCorridor(
 /**
  * Requests Mapbox Directions. When `excludeToll` is applied and Mapbox answers NoRoute, the
  * request is retried once without the toll exclusion so routing never fails closed.
+ * Results are cached in-memory to prevent burning the 100k free tier monthly quota.
  */
 export async function requestMapboxDirections(
   coordString: string,
@@ -846,6 +904,10 @@ export async function requestMapboxDirections(
   excludeToll: boolean,
   signal?: AbortSignal
 ): Promise<MapboxDirectionsResponse | null> {
+  const cacheKey = `${profile}:${coordString}:${params}:${excludeToll}`;
+  const cached = getCachedDirections(cacheKey);
+  if (cached) return cached;
+
   const buildUrl = (exclude: boolean) =>
     `${MAPBOX_DIRECTIONS_ENDPOINT}/${profile}/${coordString}?${params}${
       exclude ? '&exclude=toll' : ''
@@ -860,10 +922,50 @@ export async function requestMapboxDirections(
   };
 
   const first = await attempt(excludeToll);
+  let finalData: MapboxDirectionsResponse | null = null;
   if (excludeToll && first.isNoRoute) {
-    return (await attempt(false)).data;
+    finalData = (await attempt(false)).data;
+  } else {
+    finalData = first.data;
   }
-  return first.data;
+
+  if (finalData && finalData.routes && finalData.routes.length > 0) {
+    setCachedDirections(cacheKey, finalData);
+  }
+  return finalData;
+}
+
+/**
+ * Computes a tangential avoidance waypoint around a hazard polygon perpendicular to the corridor vector.
+ * @param origin - Trip origin [lon, lat]
+ * @param destination - Trip destination [lon, lat]
+ * @param hazardCenter - Center coordinate of the hazard [lon, lat]
+ * @param clearanceKm - Safe clearance distance in km (calibrated to radiusKm + 2.0 km)
+ * @param angleRad - Angle relative to corridor vector (e.g. +PI/2, -PI/2, +PI/4, -PI/4)
+ */
+export function computeTangentialWaypoint(
+  origin: LonLat,
+  destination: LonLat,
+  hazardCenter: LonLat,
+  clearanceKm: number,
+  angleRad: number = Math.PI / 2
+): LonLat {
+  const [hazardLon, hazardLat] = hazardCenter;
+  const kmPerLonDegree = 111.32 * Math.cos((hazardLat * Math.PI) / 180);
+  const kmPerLatDegree = 110.574;
+  const odLonKm = (destination[0] - origin[0]) * kmPerLonDegree;
+  const odLatKm = (destination[1] - origin[1]) * kmPerLatDegree;
+  const odLengthKm = Math.sqrt(odLonKm * odLonKm + odLatKm * odLatKm) || 1;
+  const dirLon = odLonKm / odLengthKm;
+  const dirLat = odLatKm / odLengthKm;
+
+  const cosA = Math.cos(angleRad);
+  const sinA = Math.sin(angleRad);
+  const rotLon = dirLon * cosA - dirLat * sinA;
+  const rotLat = dirLon * sinA + dirLat * cosA;
+  const offsetLon = (rotLon * clearanceKm) / kmPerLonDegree;
+  const offsetLat = (rotLat * clearanceKm) / kmPerLatDegree;
+  return [Number((hazardLon + offsetLon).toFixed(6)), Number((hazardLat + offsetLat).toFixed(6))];
 }
 
 async function fetchMapboxRouteWithForcedWaypoint(
@@ -884,7 +986,7 @@ async function fetchMapboxRouteWithForcedWaypoint(
     const data = await requestMapboxDirections(
       coordString,
       'driving-traffic',
-      'overview=full&geometries=geojson&annotations=congestion',
+      'overview=full&geometries=geojson&steps=true&annotations=distance,duration,congestion,speed',
       token,
       excludeToll,
       signal
@@ -895,6 +997,13 @@ async function fetchMapboxRouteWithForcedWaypoint(
     const coords: LonLat[] = route.geometry.coordinates;
     const distanceKm = Math.round((route.distance / 1000) * 10) / 10;
     const durationMinutes = Math.round(route.duration / 60);
+
+    const maneuvers: MapboxRouteManeuver[] =
+      route.legs?.[0]?.steps?.map((step) => ({
+        instruction: step.maneuver.instruction,
+        distance_meters: Math.round(step.distance),
+        duration_seconds: Math.round(step.duration),
+      })) || [];
 
     const congestionSegments: CongestionSegment[] = [];
     const annotations = route.legs?.[0]?.annotation?.congestion;
@@ -915,7 +1024,15 @@ async function fetchMapboxRouteWithForcedWaypoint(
       }
     }
 
-    return { coordinates: coords, distanceKm, durationMinutes, congestionSegments, summary: route.legs?.[0]?.summary || 'Bypass Route', source: 'live' };
+    return {
+      coordinates: coords,
+      distanceKm,
+      durationMinutes,
+      congestionSegments,
+      summary: route.legs?.[0]?.summary || 'Bypass Route',
+      source: 'live',
+      maneuvers,
+    };
   } catch (err) {
     if (isAbortError(err) || signal?.aborted) throw createAbortError();
     return null;
@@ -942,7 +1059,7 @@ export async function fetchMapboxAlternativeDrivingRoutes(
       const data = await requestMapboxDirections(
         coordString,
         'driving-traffic',
-        'alternatives=true&annotations=congestion,distance,duration,speed&geometries=geojson&overview=full',
+        'alternatives=true&annotations=congestion,distance,duration,speed&geometries=geojson&overview=full&steps=true',
         token,
         excludeToll,
         signal
@@ -953,6 +1070,13 @@ export async function fetchMapboxAlternativeDrivingRoutes(
           const coords: LonLat[] = route.geometry.coordinates;
           const distanceKm = Math.round((route.distance / 1000) * 10) / 10;
           const durationMinutes = Math.round(route.duration / 60);
+
+          const maneuvers: MapboxRouteManeuver[] =
+            route.legs?.[0]?.steps?.map((step) => ({
+              instruction: step.maneuver.instruction,
+              distance_meters: Math.round(step.distance),
+              duration_seconds: Math.round(step.duration),
+            })) || [];
 
           const congestionSegments: CongestionSegment[] = [];
           const annotations = route.legs?.[0]?.annotation?.congestion;
@@ -976,7 +1100,15 @@ export async function fetchMapboxAlternativeDrivingRoutes(
           }
 
           const routeName = index === 0 ? 'Rute Utama (Jalan Tol / Jalinsum)' : index === 1 ? 'Alternatif 1 (Jalur Arteri)' : 'Alternatif 2 (Bypass Sekunder)';
-          results.push({ coordinates: coords, distanceKm, durationMinutes, congestionSegments, summary: route.legs?.[0]?.summary || routeName, source: 'live' });
+          results.push({
+            coordinates: coords,
+            distanceKm,
+            durationMinutes,
+            congestionSegments,
+            summary: route.legs?.[0]?.summary || routeName,
+            source: 'live',
+            maneuvers,
+          });
         }
       }
     } catch (err) {
@@ -1607,6 +1739,7 @@ export async function calculateAIDynamicDetourRoutes(
         to_name: 'Titik Tujuan Logistik',
         coordinates: primaryRes.coordinates,
         color: landPrimaryColor,
+        maneuvers: primaryRes.maneuvers,
       },
     ],
   };
@@ -1639,7 +1772,7 @@ export async function calculateAIDynamicDetourRoutes(
       const bypass = await fetchMapboxRouteWithForcedWaypoint(origin, destination, cand.coords, token, excludeToll, signal);
       if (bypass) {
         const m = calculateHazardExposureMetrics(bypass.coordinates, hazardCenter, radiusKm);
-        if (!m.isIntersecting) {
+        if (!m.isIntersecting && m.exposureKm === 0) {
           landDetourResult = bypass;
           landDetourColor = '#10B981';
           landDetourTag = `PENGALIHAN AMAN (${cand.name.toUpperCase()})`;
@@ -1649,39 +1782,32 @@ export async function calculateAIDynamicDetourRoutes(
       }
     }
 
-    // B. Radial clearance detour if junction bypass not clean
+    // B. Tangential normal clearance detour if junction bypass not clean
     if (!foundDetour) {
-      const [hazardLon, hazardLat] = hazardCenter;
-      const clearanceKm = radiusKm + 6.0;
-      const kmPerLonDegree = 111.32 * Math.cos((hazardLat * Math.PI) / 180);
-      const kmPerLatDegree = 110.574;
-      const odLonKm = (destination[0] - origin[0]) * kmPerLonDegree;
-      const odLatKm = (destination[1] - origin[1]) * kmPerLatDegree;
-      const odLengthKm = Math.sqrt(odLonKm * odLonKm + odLatKm * odLatKm) || 1;
-      const dirLon = odLonKm / odLengthKm;
-      const dirLat = odLatKm / odLengthKm;
+      // Calibrated tangential clearance: R + 2.0 km (strictly avoids hazard while keeping waypoints snug to road network)
+      const clearanceKm = radiusKm + 2.0;
+      const candidateAngles = [Math.PI / 2, -Math.PI / 2, Math.PI / 4, -Math.PI / 4];
+      const validTangents: Array<{ result: MapboxRouteResult; angle: number }> = [];
 
-      for (const ang of [Math.PI / 2, -Math.PI / 2, Math.PI / 4, -Math.PI / 4]) {
+      for (const ang of candidateAngles) {
         throwIfAborted(signal);
-        const cosA = Math.cos(ang);
-        const sinA = Math.sin(ang);
-        const rotLon = dirLon * cosA - dirLat * sinA;
-        const rotLat = dirLon * sinA + dirLat * cosA;
-        const offsetLon = (rotLon * clearanceKm) / kmPerLonDegree;
-        const offsetLat = (rotLat * clearanceKm) / kmPerLatDegree;
-        const waypoint: LonLat = [hazardLon + offsetLon, hazardLat + offsetLat];
-
+        const waypoint = computeTangentialWaypoint(origin, destination, hazardCenter, clearanceKm, ang);
         const radial = await fetchMapboxRouteWithForcedWaypoint(origin, destination, waypoint, token, excludeToll, signal);
         if (radial) {
           const m = calculateHazardExposureMetrics(radial.coordinates, hazardCenter, radiusKm);
-          if (!m.isIntersecting) {
-            landDetourResult = radial;
-            landDetourColor = '#10B981';
-            landDetourTag = 'RUTE PENGALIHAN BEBAS BENCANA';
-            foundDetour = true;
-            break;
+          if (!m.isIntersecting && m.exposureKm === 0) {
+            validTangents.push({ result: radial, angle: ang });
           }
         }
+      }
+
+      if (validTangents.length > 0) {
+        // Pick detour with shortest duration / distance
+        validTangents.sort((a, b) => a.result.durationMinutes - b.result.durationMinutes || a.result.distanceKm - b.result.distanceKm);
+        landDetourResult = validTangents[0].result;
+        landDetourColor = '#10B981';
+        landDetourTag = 'RUTE PENGALIHAN BEBAS BENCANA (TANGENSIAL)';
+        foundDetour = true;
       }
     }
 
@@ -1722,6 +1848,7 @@ export async function calculateAIDynamicDetourRoutes(
         to_name: 'Titik Tujuan Logistik',
         coordinates: landDetourResult.coordinates,
         color: landDetourColor,
+        maneuvers: landDetourResult.maneuvers,
       },
     ],
   };

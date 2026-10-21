@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import {
   PanelLeftClose,
   PanelLeftOpen,
@@ -396,21 +397,42 @@ export default function DashboardClient() {
     tenantAssetCount: tenantFleetAssetCount,
     canToggleSimulation: canToggleFleetSimulation,
   } = useFleetVehicles();
+
+  // Next.js App Router query parameters for session-local routing deep-linking
+  const searchParams = useSearchParams();
+  const initialOrigin = searchParams?.get('origin') || null;
+  const initialDest = searchParams?.get('dest') || null;
+  const initialModalityParam = searchParams?.get('modality');
+  const initialModality: TransportModality =
+    initialModalityParam === 'maritime' ||
+    initialModalityParam === 'air' ||
+    initialModalityParam === 'truck' ||
+    initialModalityParam === 'multimodal' ||
+    initialModalityParam === 'best'
+      ? initialModalityParam
+      : 'truck';
+  const initialRouteParam = searchParams?.get('route');
+  const initialRouteIdx =
+    initialRouteParam !== null && initialRouteParam !== undefined && !isNaN(Number(initialRouteParam))
+      ? Number(initialRouteParam)
+      : null;
+  const initialCrisis = searchParams?.get('crisis') || null;
+
   const [isOnboardingModalOpen, setIsOnboardingModalOpen] = useState(false);
-  const [selectedCrisisId, setSelectedCrisisId] = useState<string | null>(null);
+  const [selectedCrisisId, setSelectedCrisisId] = useState<string | null>(initialCrisis);
   const [selectedCrisis, setSelectedCrisis] = useState<CrisisState | null>(null);
   const [selectedVehicle, setSelectedVehicle] = useState<FleetVehicle | null>(null);
-  const [activeRouteIdx, setActiveRouteIdx] = useState<number | null>(null);
+  const [activeRouteIdx, setActiveRouteIdx] = useState<number | null>(initialRouteIdx);
   const [currentMapRoutes, setCurrentMapRoutes] = useState<RouteRecommendation[]>([]);
   // Phase 77: single selection entry point state — modal opens on every select.
   const [routeModalIdx, setRouteModalIdx] = useState<number | null>(null);
   const [isActing, setIsActing] = useState(false);
 
-  // Dynamic Supabase Hub Nodes List & Clean Slate Selection (Null initial state)
+  // Dynamic Supabase Hub Nodes List & Clean Slate Selection (Hydrated from URL or null)
   const [dynamicHubNodes] = useState<HubNode[]>(Object.values(HUB_NODES));
-  const [selectedOriginNode, setSelectedOriginNode] = useState<string | null>(null);
-  const [selectedDestNode, setSelectedDestNode] = useState<string | null>(null);
-  const [selectedModality, setSelectedModality] = useState<TransportModality>('truck');
+  const [selectedOriginNode, setSelectedOriginNode] = useState<string | null>(initialOrigin);
+  const [selectedDestNode, setSelectedDestNode] = useState<string | null>(initialDest);
+  const [selectedModality, setSelectedModality] = useState<TransportModality>(initialModality);
   const [corridorVisibility, setCorridorVisibility] = useState<{
     land: boolean;
     sea: boolean;
@@ -439,6 +461,25 @@ export default function DashboardClient() {
     (!corridorVisibility.land ? 1 : 0) +
     (!corridorVisibility.sea ? 1 : 0) +
     (!corridorVisibility.air ? 1 : 0);
+
+  // Synchronous in-place URL query parameter synchronization using window.history.replaceState
+  // Decouples session-local routing state into shareable deep links with zero page reloads.
+  const updateUrlParams = useCallback((updates: Record<string, string | null>) => {
+    if (typeof window === 'undefined') return;
+    try {
+      const url = new URL(window.location.href);
+      for (const [key, val] of Object.entries(updates)) {
+        if (val === null || val === undefined || val === '') {
+          url.searchParams.delete(key);
+        } else {
+          url.searchParams.set(key, val);
+        }
+      }
+      window.history.replaceState(null, '', url.pathname + url.search);
+    } catch (e) {
+      console.warn('[DashboardClient] Failed to update URL params:', e);
+    }
+  }, []);
 
   const activeOriginRef = useRef<string | null>(null);
   const activeDestRef = useRef<string | null>(null);
@@ -491,7 +532,8 @@ export default function DashboardClient() {
     setSelectedCrisis(null);
     setIsSidebarOpen(false);
     setSelectedVehicle(vehicle);
-  }, []);
+    updateUrlParams({ crisis: null });
+  }, [updateUrlParams]);
 
   const handleCloseVehicle = useCallback(() => {
     setSelectedVehicle(null);
@@ -999,19 +1041,21 @@ export default function DashboardClient() {
       customNodesRef.current[nodeId] = { coords, name };
       if (role === 'origin') {
         setSelectedOriginNode(nodeId);
+        updateUrlParams({ origin: nodeId, dest: null, route: null });
         setToast({
           message: `Titik Asal Terpilih: ${name}. Silakan tentukan Titik Tujuan.`,
           type: 'info',
         });
       } else {
         setSelectedDestNode(nodeId);
+        updateUrlParams({ dest: nodeId });
         setToast({
           message: `Titik Tujuan Terpilih: ${name}. Mengkalkulasi rute alternatif...`,
           type: 'success',
         });
       }
     },
-    []
+    [updateUrlParams]
   );
 
   const updateBaselineMapboxRoute = useCallback(async (originId: string, destId: string, modality: TransportModality, hazardCenter: [number, number] | null = null, radiusKm: number = DEFAULT_HAZARD_RADIUS_KM, hazardType: CrisisType = 'flood', impactProfile?: HazardImpactProfile, zoneTier: 'RED_CONFIRMED' | 'YELLOW_CLARIFY' = 'RED_CONFIRMED', hedgingOpts?: { commodity?: string; cargo_tonnage?: number; vehicle_golongan?: string; fuel_type?: string; toll_segments?: string[]; p_disruption?: number; disruption_delay_hours?: number }): Promise<boolean> => {
@@ -1197,6 +1241,7 @@ export default function DashboardClient() {
     if (!selectedOriginNode) {
       // Step 1: Set Start Node
       setSelectedOriginNode(nodeId);
+      updateUrlParams({ origin: nodeId, dest: null, route: null });
       setToast({
         message: `Titik Asal Terpilih: ${nodeName}. Silakan klik titik kedua untuk mengeset Titik Tujuan.`,
         type: 'info',
@@ -1207,6 +1252,7 @@ export default function DashboardClient() {
     if (!selectedDestNode && nodeId !== selectedOriginNode) {
       // Step 2: Set End Node
       setSelectedDestNode(nodeId);
+      updateUrlParams({ dest: nodeId });
       const routesReady = await updateBaselineMapboxRoute(
         selectedOriginNode,
         nodeId,
@@ -1230,6 +1276,7 @@ export default function DashboardClient() {
     if (nodeId !== selectedOriginNode) {
       const originName = formatNodeId(selectedOriginNode, resolveNodeInfo(selectedOriginNode));
       setSelectedDestNode(nodeId);
+      updateUrlParams({ dest: nodeId });
       const routesReady = await updateBaselineMapboxRoute(
         selectedOriginNode,
         nodeId,
@@ -1245,7 +1292,7 @@ export default function DashboardClient() {
         });
       }
     }
-  }, [selectedOriginNode, selectedDestNode, selectedModality, simulatedShockwave, selectedRadius, updateBaselineMapboxRoute, resolveNodeInfo]);
+  }, [selectedOriginNode, selectedDestNode, selectedModality, simulatedShockwave, selectedRadius, updateBaselineMapboxRoute, resolveNodeInfo, updateUrlParams]);
 
   // 1-Click Reset Node Selection Handler
   const handleResetNodes = useCallback(() => {
@@ -1269,8 +1316,9 @@ export default function DashboardClient() {
     setSelectedCrisisId(null);
     setHiddenRouteIndices(new Set());
     customNodesRef.current = {};
+    updateUrlParams({ origin: null, dest: null, route: null, crisis: null });
     setToast({ message: 'Titik rute dibersihkan. Silakan klik marker kota 1 untuk mengeset Start Node.', type: 'info' });
-  }, []);
+  }, [updateUrlParams]);
 
   // Explicit Batal: cancel the running route computation, drop its pending result,
   // and clear the corridors so no stale route survives the abort.
@@ -1288,22 +1336,28 @@ export default function DashboardClient() {
       prev ? { ...prev, route_recommendations: [] } : prev
     );
     setActiveRouteIdx(null);
+    updateUrlParams({ route: null });
     demoStateRef.current?.setIsCalculatingRoute(false);
     setToast({ message: 'Perhitungan rute dibatalkan.', type: 'info' });
-  }, []);
+  }, [updateUrlParams]);
 
   // Two-way modality sync: fleet layer filter and route calculation modality stay in lockstep,
   // so picking KAPAL switches both the maritime vehicle layer and the route visualization.
   const handleModalityChange = useCallback((modality: TransportModality) => {
     setSelectedModality(modality);
+    updateUrlParams({ modality });
     const fleetFilter: 'all' | 'truck' | 'maritime' | 'air' =
       modality === 'maritime' ? 'maritime' : modality === 'air' ? 'air' : modality === 'truck' ? 'truck' : 'all';
     setFleetModalityFilter(fleetFilter);
-  }, []);
+  }, [updateUrlParams]);
 
   const handleWsMessage = useCallback((event: WsEvent) => {
     if (event.event === 'node_update') {
-      setSelectedCrisis((prev) => prev ? { ...prev, ...event.data } : prev);
+      // Strip foreign or ambient route recommendations so broadcast ambient telemetry
+      // never overwrites the active user's session routing polylines.
+      const rawData = (event.data && typeof event.data === 'object' ? event.data : {}) as Record<string, any>;
+      const { route_recommendations, routes, ...ambientData } = rawData;
+      setSelectedCrisis((prev) => prev ? { ...prev, ...ambientData } : prev);
     }
     if (event.event === 'complete') {
       refetch();
@@ -1317,6 +1371,7 @@ export default function DashboardClient() {
     setSelectedCrisisId(id);
     setActiveRouteIdx(null);
     setIsSidebarOpen(true);
+    updateUrlParams({ crisis: id, route: null });
 
     if (id !== 'simulated-active') {
       let baseCrisis: CrisisState | null = null;
@@ -1377,7 +1432,30 @@ export default function DashboardClient() {
         }
       }
     }
-  }, [selectedOriginNode, selectedDestNode, selectedRadius, selectedModality, resolveNodeInfo]);
+  }, [selectedOriginNode, selectedDestNode, selectedRadius, selectedModality, resolveNodeInfo, updateUrlParams]);
+
+  // Deep-link initial hydration effect: when URL contains origin & dest, trigger baseline route computation
+  const initialDeepLinkHydratedRef = useRef(false);
+  useEffect(() => {
+    if (initialDeepLinkHydratedRef.current) return;
+    initialDeepLinkHydratedRef.current = true;
+
+    if (initialOrigin && initialDest) {
+      updateBaselineMapboxRoute(
+        initialOrigin,
+        initialDest,
+        initialModality,
+        null,
+        DEFAULT_HAZARD_RADIUS_KM
+      ).then((routesReady) => {
+        if (routesReady && initialRouteIdx !== null) {
+          setActiveRouteIdx(initialRouteIdx);
+        }
+      });
+    } else if (initialCrisis) {
+      handleCrisisClick(initialCrisis);
+    }
+  }, [initialOrigin, initialDest, initialModality, initialRouteIdx, initialCrisis, updateBaselineMapboxRoute, handleCrisisClick]);
 
   // LIVE VISUAL DEMO STEPPER TRIGGER
   const handleCrisisReadyFromDemo = useCallback(async (crisis: CrisisState) => {
@@ -1504,11 +1582,12 @@ export default function DashboardClient() {
     setSelectedOriginNode(null);
     setSelectedDestNode(null);
     setCurrentMapRoutes([]);
+    updateUrlParams({ origin: null, dest: null, route: null, crisis: null });
     setToast({
       message: 'Demo di-reset. Peta dikembalikan ke kondisi awal (pilih 2 titik simpul).',
       type: 'info'
     });
-  }, [demoState]);
+  }, [demoState, updateUrlParams]);
 
   // Robust Async-Locked Advance Handler with Strict Step-Gating
   const handleDemoAdvance = useCallback(() => {
@@ -2036,6 +2115,7 @@ export default function DashboardClient() {
   ) => {
     void source;
     setActiveRouteIdx(idx);
+    updateUrlParams({ route: String(idx) });
     setRouteModalIdx(idx);
     const routes =
       currentMapRoutes.length > 0
@@ -2576,6 +2656,7 @@ export default function DashboardClient() {
                     if (item.originNode && item.destNode) {
                       setSelectedOriginNode(item.originNode);
                       setSelectedDestNode(item.destNode);
+                      updateUrlParams({ origin: item.originNode, dest: item.destNode });
                     }
                     void inspectNewsOrZoneAuditTrail(item, undefined);
                   };
@@ -3097,6 +3178,7 @@ export default function DashboardClient() {
                 setSelectedOriginNode(origin);
                 setSelectedDestNode(dest);
                 setCurrentMapRoutes([]);
+                updateUrlParams({ origin, dest, route: '0' });
                 demoState.start({
                   mock_agents: true,
                   offline: false,
@@ -3121,6 +3203,7 @@ export default function DashboardClient() {
               onSelectPreset={(origin, dest) => {
                 setSelectedOriginNode(origin);
                 setSelectedDestNode(dest);
+                updateUrlParams({ origin, dest });
               }}
             />
 
@@ -3134,6 +3217,7 @@ export default function DashboardClient() {
                     setSelectedOriginNode('belawan');
                     setSelectedDestNode('tebingtinggi');
                     setCurrentMapRoutes([]);
+                    updateUrlParams({ origin: 'belawan', dest: 'tebingtinggi', route: '0' });
                     demoState.start({ mock_agents: true, offline: false, origin: 'belawan', destination: 'tebingtinggi' });
                   }}
                   className="flex items-center gap-1.5 px-3 py-1 rounded bg-white hover:bg-slate-200 text-[#080d14] font-semibold text-xs uppercase tracking-wider transition-colors shadow-sm cursor-pointer shrink-0"

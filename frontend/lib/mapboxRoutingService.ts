@@ -569,6 +569,9 @@ export interface DirectionsFetchResult {
   coords: LonLat[];
   /** 'live' = Mapbox road geometry; 'offline-interpolated' = straight-line estimate (SIMULASI/OFFLINE only). */
   source: 'live' | 'offline-interpolated';
+  distanceKm?: number;
+  durationMinutes?: number;
+  maneuvers?: Array<{ instruction: string; distance_meters: number; duration_seconds: number }>;
 }
 
 export async function fetchMapboxDirections(
@@ -593,14 +596,22 @@ export async function fetchMapboxDirections(
     const data = await requestMapboxDirections(
       coordString,
       'driving',
-      'geometries=geojson&overview=full',
+      'geometries=geojson&overview=full&steps=true&annotations=distance,duration,congestion,speed',
       token,
       excludeToll,
       signal
     );
     if (data?.routes && data.routes.length > 0 && data.routes[0].geometry) {
-      const coords: LonLat[] = data.routes[0].geometry.coordinates;
-      return { coords, source: 'live' };
+      const route = data.routes[0];
+      const coords: LonLat[] = route.geometry.coordinates;
+      const maneuvers = route.legs?.[0]?.steps?.map((st) => ({
+        instruction: st.maneuver.instruction,
+        distance_meters: Math.round(st.distance),
+        duration_seconds: Math.round(st.duration),
+      }));
+      const distanceKm = Math.round((route.distance / 1000) * 10) / 10;
+      const durationMinutes = Math.round(route.duration / 60);
+      return { coords, source: 'live', distanceKm, durationMinutes, maneuvers };
     }
   } catch (err) {
     if (signal?.aborted || (err as { name?: string })?.name === 'AbortError') throw err;

@@ -1699,8 +1699,15 @@ export default function CrisisMap({
           r.legs.forEach((leg, lIdx) => {
             const legCoords = leg.coordinates || [];
             if (legCoords.length >= 2) {
-              const finalCoords = legCoords.length > 5 ? legCoords : densifyPath(legCoords, 15);
               const legMode = (leg as any).modality || leg.mode;
+              const legCorridorClass =
+                legMode === 'maritime' ? 'sea' : legMode === 'air' ? 'air' : 'land';
+              // Phase 85: For land routes, strictly preserve real street geometry without spherical chord interpolation.
+              // densifyPath is only applied to maritime nautical arcs and air flights when points are sparse (<= 5).
+              const finalCoords =
+                legCorridorClass === 'land' || legCoords.length > 5
+                  ? legCoords
+                  : densifyPath(legCoords, 15);
               const legColor =
                 leg.color ||
                 (legMode === 'maritime'
@@ -1708,8 +1715,6 @@ export default function CrisisMap({
                   : legMode === 'air'
                     ? '#00F0FF'
                     : '#10B981');
-              const legCorridorClass =
-                legMode === 'maritime' ? 'sea' : legMode === 'air' ? 'air' : 'land';
               routeFeatures.push({
                 type: 'Feature',
                 geometry: {
@@ -1734,7 +1739,17 @@ export default function CrisisMap({
           });
         } else if (r.waypoints && r.waypoints.length >= 2) {
           const rawWaypoints: LonLat[] = r.waypoints.map((wp) => [wp.lon, wp.lat]);
-          const finalCoordinates = rawWaypoints.length > 5 ? rawWaypoints : densifyPath(rawWaypoints, 25);
+          const routeCorridorClass =
+            r.modality === 'maritime' || r.corridor_type === 'sea_intermodal'
+              ? 'sea'
+              : r.modality === 'air' || r.corridor_type === 'air_intermodal'
+                ? 'air'
+                : 'land';
+          // Phase 85: Preserve true road network coordinates directly for land routes.
+          const finalCoordinates =
+            routeCorridorClass === 'land' || rawWaypoints.length > 5
+              ? rawWaypoints
+              : densifyPath(rawWaypoints, 25);
           const defaultColor =
             r.modality === 'maritime' || r.corridor_type === 'sea_intermodal'
               ? '#3B82F6'
@@ -1745,12 +1760,6 @@ export default function CrisisMap({
                   : origIdx === 1
                     ? '#38BDF8'
                     : '#00F0FF';
-          const routeCorridorClass =
-            r.modality === 'maritime' || r.corridor_type === 'sea_intermodal'
-              ? 'sea'
-              : r.modality === 'air' || r.corridor_type === 'air_intermodal'
-                ? 'air'
-                : 'land';
           routeFeatures.push({
             type: 'Feature',
             geometry: {

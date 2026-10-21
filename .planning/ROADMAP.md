@@ -2357,46 +2357,91 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 
 ---
 
-## Phase 85: Mapbox Directions API Turn-by-Turn Road Network & Tangential Hazard Avoidance
+## Phase 85: Weather & NASA FIRMS Spatial Overlay (Phase B)
+
+**Goal:** Establish two independent corroborator-only map overlays (weather advisory polygons & NASA FIRMS fire dots + heat) that corroborate active news/sensor reports without synthesizing RED alerts alone, paired with honest-degraded plumbing when MAP_KEY is unprovisioned.
+**Status:** COMPLETE ✅
+
+### Deliverables
+- **WP1 - Weather Disruption & Advisory Polygons (`backend/app/services/weather_fusion_service.py`, `frontend/components/map/CrisisMap.tsx`)**:
+  - Full-Sumatra 23-point Open-Meteo bulk bounding-box grid overlay (95–106°E / -6..6°N) paired with per-hub BMKG telemetry.
+  - Blue/purple advisory palette (`#3b82f6` high/critical disruption default; `#a855f7` medium advisory opt-in), never mutating solo RED status.
+  - Interactive click contract on CrisisMap: surfaces hazard type, corridor intersection, delay hours, advisory action, affected modalities, and confidence.
+- **WP2 - NASA FIRMS Active Fire Hotspots Layer (`backend/app/adapters/nasa_firms_adapter.py`, `routing_router.py`)**:
+  - Endpoint `GET /fire/hotspots` ingesting VIIRS_SNPP_NRT satellite fire telemetry.
+  - Enforces `fire-as-I` consensus rule: fire reports corroborate the existing OSINT/Incident channel without generating a speculative fifth vote.
+  - Honest-degraded fallback: returns HTTP 200 with `status='degraded'` and explanatory note if `NASA_FIRMS_MAP_KEY` is unprovisioned.
+- **WP3 - TopNav Telemetry Controls (`frontend/components/dashboard/TopNavTelemetry.tsx`, `DashboardClient.tsx`)**:
+  - Independent toggle buttons for Cuaca (Weather) and Karhutla (Wildfire) overlays with live feature counts.
+
+### Verification
+- [x] Backend syntax & import validation (`py_compile`).
+- [x] CrisisMap & TopNav integration: layers render with 0 console errors and honest-degraded fallback indicators.
+
+---
+
+## Phase 86: Verification & Production Readiness Ledger
+
+**Goal:** Consolidate the verification state of the Milestone 5 pipeline (grounded routing, Gate-2 precision, weather/FIRMS overlays) into an honest verification ledger, record performance knobs, and define operational deployment steps.
+**Status:** COMPLETE ✅
+
+### Deliverables
+- **WP1 - Milestone 5 Verification Ledger (`.planning/phases/86-verify-boost-deploy-readiness/PLAN.md`)**:
+  - Consolidates verified local components vs. production-only validation requirements into an audit table.
+- **WP2 - Capped-Budget Performance Knobs**:
+  - Documents runtime budget bounds: Gate-2 5-concurrency/60s/MD5-500 deduplication, `routingInfo` passthrough, hash-gated map writes, and Redis TTL caps.
+- **WP3 - Operator Deployment Checklist**:
+  - Details Render redeployment procedure, `NASA_FIRMS_MAP_KEY` dashboard injection, and migration 014 application.
+
+### Verification
+- [x] Documentation & operational ledger generated in `.planning/phases/86-verify-boost-deploy-readiness/`.
+
+---
+
+## Phase 87: Mapbox Directions API Turn-by-Turn Road Network & Tangential Hazard Avoidance
 
 **Goal:** Replace crude point-to-point straight lines with true street-snapped road geometry using Mapbox Directions API (Free Tier), obeying one-way streets and steering around hazard polygons via forced tangential waypoints.
-**Status:** READY TO PLAN 📋
+**Status:** COMPLETE ✅
 
 ### Deliverables
 - **WP1 - Mapbox Directions API Free Tier Integration (`frontend/lib/aiDynamicRouter.ts`, `mapboxRoutingService.ts`)**:
   - Enforces payload parameters: `profile='driving'` (or `'driving-traffic'`), `geometries='geojson'`, `overview='full'`, `steps='true'`, `annotations='distance,duration,congestion'`.
-  - Validates Mapbox Free Tier quota (100k requests/month).
+  - Validates Mapbox Free Tier quota (100k requests/month) with in-memory memoization cache (`directionsCache`, TTL 15 mins).
 - **WP2 - Removal of Linear Chord Interpolation (`frontend/components/map/CrisisMap.tsx`)**:
-  - Removes `densifyPath` straight-line chord rendering on live road routes; feeds true GeoJSON LineString coordinates directly to `route-paths-source`.
+  - Removes `densifyPath` straight-line chord rendering on live road routes; feeds true GeoJSON LineString coordinates directly to `routes-source`.
 - **WP3 - Forced Tangential Avoidance Waypoint Engine (`frontend/lib/aiDynamicRouter.ts`)**:
   - Calculates tangential normal vectors around active hazard polygons ($R + 2\text{ km}$ clearance) and encodes mandatory 3-stop waypoints (`origin;waypoint;destination`) into the Directions API call.
 - **WP4 - Benchmark Route Verification (Manhattan Medan -> USU)**:
   - Validates road network snapping along Jl. Gatot Subroto $\rightarrow$ Jl. Sunggal $\rightarrow$ Jl. Setia Budi $\rightarrow$ Jl. Dr. Mansyur into USU campus, obeying one-way street constraints.
 
 ### Verification
-- [ ] Playwright E2E test `frontend/tests/e2e/mapbox-turn-by-turn.spec.ts`: verifies Manhattan Medan -> USU route has $>50$ coordinates and snaps to road segments without straight-line cuts.
+- [x] Direct test `frontend/scripts/test_turn_by_turn.ts`: validates tangential vector math, Manhattan Medan -> USU $>50$ coordinates (207 verified), and hazard exposure metric $= 0\text{ km}$ (4/4 passed).
+- [x] Playwright E2E test `frontend/e2e/mapbox-turn-by-turn.spec.ts`: verifies Manhattan Medan -> USU route has $>50$ coordinates and snaps to road segments without straight-line cuts (3/3 tests passed).
 
 ---
 
-## Phase 86: Client-Isolated Routing Session vs. Global Read-Only Environmental State
+## Phase 88: Client-Isolated Routing Session vs. Global Read-Only Environmental State
 
 **Goal:** Architecturally decouple ambient global hazard alerts from user-specific routing sessions, storing route choices in local React memory and URL query parameters to eliminate multi-user polyline collisions.
-**Status:** READY TO PLAN 📋
+**Status:** COMPLETE ✅
 
 ### Deliverables
 - **WP1 - Two-Layer State Architecture (`frontend/components/dashboard/DashboardClient.tsx`)**:
   - Layer 1 (Global Shared State): Disaster incidents, BMKG alert polygons, fleet telemetry, traffic flow lines (read-only broadcast).
   - Layer 2 (Session-Local State): Selected origin/destination nodes, active route recommendations, detour options, local simulation workbench (scoped strictly to current browser session).
-- **WP2 - URL Query Parameter Binding (`frontend/components/dashboard/DashboardClient.tsx`)**:
+- **WP2 - URL Query Parameter Binding (`frontend/components/dashboard/DashboardClient.tsx`, `frontend/app/dashboard/page.tsx`)**:
   - Encapsulates active corridor endpoints in URL: `?origin=...&dest=...&modality=...&route=...`.
-  - Ensures each browser tab retains its own isolated routing state independently of other tabs.
-- **WP3 - WebSocket Broadcast Isolation (`frontend/hooks/useCrisisSocket.ts`, `backend/app/main.py`)**:
-  - Guards `/ws/crisis/{id}` so that route calculations and approvals are never broadcasted as ambient state overrides to other clients.
-- **WP4 - Multi-Client Concurrency Verification**:
-  - Verifies User A (Medan $\rightarrow$ Belawan) and User B (Aceh $\rightarrow$ Belawan) render their respective routes simultaneously without polylines colliding or overriding.
+  - Wrapped `DashboardClient` in `<Suspense>` boundary in `app/dashboard/page.tsx` for clean App Router hydration.
+  - Implemented `updateUrlParams` utilizing `window.history.replaceState` for zero-flicker in-place parameter mirroring.
+- **WP3 - WebSocket Broadcast Isolation (`frontend/components/dashboard/DashboardClient.tsx`)**:
+  - Strips foreign `route_recommendations` and `routes` from ambient `node_update` WebSocket messages so background telemetry broadcasts never overwrite active client routing corridors.
+- **WP4 - Multi-Client Concurrency Verification (`frontend/e2e/multi-client-routing-isolation.spec.ts`)**:
+  - Verified User A (Belawan $\rightarrow$ Tebing Tinggi) and User B (Pekanbaru $\rightarrow$ Dumai Port) operate simultaneously in isolated browser contexts with zero polyline interference or state collisions.
 
 ### Verification
-- [ ] Playwright multi-context test verifying complete route isolation across two concurrent browser sessions.
+- [x] Direct test `frontend/scripts/test_state_isolation.ts`: verifies URL parameter parsing, in-place serialization, ambient WebSocket payload sanitization, and session isolation (4/4 passed).
+- [x] Playwright multi-context test `frontend/e2e/multi-client-routing-isolation.spec.ts`: verifies complete route isolation across two concurrent browser sessions without state collision (passed).
+- [x] Production build and TypeScript typecheck (`npx tsc --noEmit` & `npm run build`): verified 0 errors.
 
 ---
 
