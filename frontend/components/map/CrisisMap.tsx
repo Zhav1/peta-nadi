@@ -1316,7 +1316,7 @@ export default function CrisisMap({
         });
       });
 
-      // Weather polygon click → precip/flood/wind/source/valid_until provenance popup.
+      // Weather polygon click → dispatch-enriched provenance popup (hazard/impact/corridor/delay/action/modalities/confidence).
       const handleWeatherClick = (e: mapboxgl.MapLayerMouseEvent) => {
         if (isClickTargetingRef.current) return;
         if (!e.features || e.features.length === 0) return;
@@ -1329,12 +1329,31 @@ export default function CrisisMap({
         const wind = props.windspeed_kmh ?? props.wind_speed_kmh ?? '?';
         const sev = props.severity ?? '?';
         const code = props.bmkg_code ?? '-';
+        const hazardType = props.hazard_type ?? '-';
+        const corridorId = props.corridor_id ?? props.corridor_intersect ?? '-';
+        const corridorSeg = props.corridor_segment ?? (typeof props.corridor_intersect === 'string' ? props.corridor_intersect : '-');
+        const corridorDist = props.dist_to_corridor_km ?? '?';
+        const delayH = props.delay_hours ?? props.estimated_delay_hours ?? '?';
+        const action = props.advisory_action ?? '-';
+        let modalities = props.affected_modalities ?? '-';
+        try {
+          if (typeof modalities === 'string' && modalities.trim().startsWith('[')) {
+            modalities = (JSON.parse(modalities) as unknown[]).join(', ');
+          } else if (Array.isArray(modalities)) {
+            modalities = (modalities as unknown[]).join(', ');
+          }
+        } catch { /* keep raw */ }
+        const conf = props.confidence ?? '?';
+        const obsFc = props.observed_vs_forecast ?? '-';
         new mapboxgl.Popup({ closeButton: true, closeOnClick: true })
           .setLngLat(e.lngLat)
           .setHTML(
-            `<div style="font:12px system-ui;color:#0c1017"><strong>${String(name).slice(0, 120)}</strong><br/>` +
-            `severity: ${String(sev).slice(0, 16)}${code !== '-' ? ` · BMKG code ${String(code).slice(0, 8)}` : ''}<br/>` +
+            `<div style="font:12px system-ui;color:#0c1017;max-width:280px"><strong>${String(name).slice(0, 120)}</strong><br/>` +
+            `severity: ${String(sev).slice(0, 16)}${code !== '-' ? ` · BMKG code ${String(code).slice(0, 8)}` : ''} · hazard: ${String(hazardType).slice(0, 24)}<br/>` +
             `presipitasi: ${String(precip)} mm/24j · banjir: ${String(flood)}% · angin: ${String(wind)} km/j<br/>` +
+            `koridor: ${String(corridorId).slice(0, 80)} · ${String(corridorSeg).slice(0, 80)} (${String(corridorDist)} km)<br/>` +
+            `dampak: +${String(delayH)} jam · aksi: ${String(action).slice(0, 32)} · moda: ${String(modalities).slice(0, 60)}<br/>` +
+            `confidence: ${String(conf)} (${String(obsFc).slice(0, 16)})<br/>` +
             `sumber: ${String(source).slice(0, 120)}<br/>valid_until: ${String(validUntil).slice(0, 64)}</div>`
           )
           .addTo(map);

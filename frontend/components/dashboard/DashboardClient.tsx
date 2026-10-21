@@ -255,7 +255,15 @@ function FloatingMapLegend({
                 <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0 shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
                 <div>
                   <span className="text-slate-200 font-medium block">Radar Cuaca (Gangguan, biru) — {weatherDisruptionCount} zona</span>
-                  <span className="text-xs text-slate-400 font-sans">Hujan lebat disruptif: high/critical, presipitasi 50mm/24j atau banjir 80%. Default ON.</span>
+                  <span className="text-xs text-slate-400 font-sans">Hujan lebat disruptif: high/critical, presipitasi 50mm/24j atau banjir 80%. Default ON. Hazard: flood/landslide/severe_storm/marine_wave.</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shrink-0 shadow-[0_0_8px_rgba(251,191,36,0.5)]" />
+                <div>
+                  <span className="text-slate-200 font-medium block">Dampak Dispather per Zona Biru</span>
+                  <span className="text-xs text-slate-400 font-sans">Klik poligon: koridor+segmen+jarak, delay jam (flood 14/landslide 10/marine 18 × severity), aksi (CAUTION/DELAY/REROUTE/HOLD), moda truck/sea/air, confidence + observasi/prakiraan.</span>
                 </div>
               </div>
 
@@ -899,6 +907,34 @@ export default function DashboardClient() {
   const weatherPolygonCount = combinedWeatherPolygons?.features?.length ?? 0;
   const weatherDisruptionCount = showWeatherPolygons ? disruptionFeatures.length : 0;
   const weatherAdvisoryCount = advisoryFeatures.length;
+  // Top-1 blue disruption sample for the TopNav BMKG popover (hazard/koridor/delay/aksi/moda/confidence).
+  const weatherSample = useMemo(() => {
+    const f = disruptionFeatures[0] as GeoJSON.Feature | undefined;
+    const p = (f?.properties ?? {}) as Record<string, unknown>;
+    if (!f || Object.keys(p).length === 0) return null;
+    const asStr = (v: unknown) => (typeof v === 'string' ? v : v == null ? undefined : String(v));
+    let mods: string[] | string | undefined;
+    const rawMods = p.affected_modalities as unknown;
+    if (Array.isArray(rawMods)) mods = rawMods.map(String);
+    else if (typeof rawMods === 'string') {
+      try {
+        const parsed = JSON.parse(rawMods) as unknown;
+        mods = Array.isArray(parsed) ? parsed.map(String) : rawMods;
+      } catch { mods = rawMods; }
+    }
+    return {
+      hazard_type: asStr(p.hazard_type),
+      corridor_id: asStr(p.corridor_id),
+      corridor_segment: asStr(p.corridor_segment),
+      dist_to_corridor_km: (p.dist_to_corridor_km ?? p.dist_km) as number | string | undefined,
+      delay_hours: (p.delay_hours ?? p.estimated_delay_hours) as number | string | undefined,
+      advisory_action: asStr(p.advisory_action),
+      affected_modalities: mods,
+      confidence: p.confidence as number | string | undefined,
+      observed_vs_forecast: asStr(p.observed_vs_forecast),
+      severity: asStr(p.severity),
+    };
+  }, [disruptionFeatures]);
   const fireHotspotCount = fireHotspots.length;
   const fireTooltip =
     fireStatus === 'degraded'
@@ -2845,6 +2881,7 @@ export default function DashboardClient() {
                     onToggleWeatherAdvisory={() => setShowWeatherAdvisory((v) => !v)}
                     weatherAdvisoryCount={weatherAdvisoryCount}
                     weatherDisruptionCount={weatherDisruptionCount}
+                    weatherSample={weatherSample}
                     showFireHotspots={showFireHotspots}
                     onToggleFireHotspots={() => setShowFireHotspots(v => !v)}
                     fireHotspotCount={fireHotspotCount}

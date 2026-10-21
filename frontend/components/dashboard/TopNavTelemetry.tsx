@@ -37,6 +37,19 @@ interface TopNavTelemetryProps {
   fireTooltip?: string;
   onSelectHub?: (hub: ChokePointItem) => void;
   onFocusRoute?: () => void;
+  /** Dispatch-enriched sample from the top blue disruption polygon (hazard/corridor/delay/action/modalities/confidence). */
+  weatherSample?: {
+    hazard_type?: string;
+    corridor_id?: string;
+    corridor_segment?: string;
+    dist_to_corridor_km?: number | string;
+    delay_hours?: number | string;
+    advisory_action?: string;
+    affected_modalities?: string[] | string;
+    confidence?: number | string;
+    observed_vs_forecast?: string;
+    severity?: string;
+  } | null;
 }
 
 type ActivePopover = 'NONE' | 'RUTE' | 'LALULINTAS' | 'BMKG' | 'INTERMODAL';
@@ -69,6 +82,7 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
   fireTooltip,
   onSelectHub,
   onFocusRoute,
+  weatherSample = null,
 }) => {
   const solverStats = routingInfo;
   const bmkgRainfall = corridorContext?.weather?.rainfall_mm;
@@ -378,6 +392,38 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
                   </div>
                 </div>
               </div>
+            </div>
+
+            {/* Dispatch enrichment: top blue disruption impact (hazard/koridor/delay/aksi/moda/confidence). */}
+            <div className="space-y-1.5 text-xs">
+              <span className="text-[10px] font-mono uppercase text-slate-400 font-semibold block">
+                Dampak Dispather (Zona Biru Top-1):
+              </span>
+              {weatherSample ? (
+                <div className="p-2 rounded bg-[#121822] border border-[#1c2432] space-y-0.5 font-mono text-[11px]">
+                  <div className="flex justify-between text-slate-300">
+                    <span>hazard: {String(weatherSample.hazard_type ?? '-')}</span>
+                    <span>{String(weatherSample.severity ?? '')}</span>
+                  </div>
+                  <div className="text-slate-400 text-[10px]">
+                    koridor: {String(weatherSample.corridor_id ?? '-')} · {String(weatherSample.corridor_segment ?? '-')} ({String(weatherSample.dist_to_corridor_km ?? '?')} km)
+                  </div>
+                  <div className="flex justify-between text-slate-300">
+                    <span>delay: +{String(weatherSample.delay_hours ?? '?')} jam</span>
+                    <span>{String(weatherSample.advisory_action ?? '-')}</span>
+                  </div>
+                  <div className="text-slate-400 text-[10px]">
+                    moda: {Array.isArray(weatherSample.affected_modalities) ? weatherSample.affected_modalities.join(', ') : String(weatherSample.affected_modalities ?? '-')} · conf: {String(weatherSample.confidence ?? '?')} ({String(weatherSample.observed_vs_forecast ?? '-')})
+                  </div>
+                </div>
+              ) : (
+                <div className="p-2 rounded bg-[#121822] border border-[#1c2432] font-mono text-[11px] text-slate-500">
+                  Belum ada zona biru (high/critical). Hazard: flood/landslide/severe_storm/marine_wave.
+                </div>
+              )}
+              <p className="text-[10px] leading-tight text-slate-500 font-sans">
+                Aksi: PROCEED_WITH_CAUTION / CONSIDER_DELAY / REROUTE_RECOMMENDED / HOLD_DEPARTURE. Klik poligon biru untuk detail per-zona.
+              </p>
             </div>
           </div>
         )}

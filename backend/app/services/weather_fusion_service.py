@@ -13,7 +13,11 @@ from datetime import datetime, timezone
 
 from app.adapters.bmkg_adapter import BMKGAdapter
 from app.adapters.open_meteo_adapter import OpenMeteoAdapter
-from app.services.incident_geometry_service import generate_flood_geometry
+from app.services.incident_geometry_service import (
+    generate_flood_geometry,
+    generate_landslide_geometry,
+    generate_incident_geometry,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +45,137 @@ def _dist_to_spine_km(lat: float, lon: float) -> float:
         a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat)) * math.cos(math.radians(slat)) * math.sin(dlon / 2) ** 2
         best = min(best, 2 * r * math.asin(math.sqrt(a)))
     return best
+
+
+# Hill-spine nodes prone to landslide under heavy precip (lon, lat, label).
+_HILL_SPINE_NODES: List[Tuple[float, float, str]] = [
+    (100.37, -0.30, "Bukittinggi"),
+    (100.48, -0.48, "Sitinjau Lauik"),
+    (100.35, -0.95, "Padang"),
+    (100.66, -0.79, "Solok"),
+    (101.30, -2.00, "Kerinci"),
+]
+
+# Per-segment corridor mapping for the 10 spine legs (11 spine points).
+_SPINE_SEGMENT_CORRIDORS: List[Tuple[str, str]] = [
+    ("sumatra_aceh_malahayati", "Banda Aceh–Medan"),
+    ("sumatra_belawan_medan", "Medan–Tebing Tinggi"),
+    ("sumatra_riau_pekanbaru", "Tebing Tinggi–Pekanbaru"),
+    ("sumatra_riau_pekanbaru", "Pekanbaru–Rengat"),
+    ("sumatra_sumbar_padang", "Rengat–Padang"),
+    ("sumatra_sumbar_padang", "Padang–Bukittinggi"),
+    ("sumatra_sumsel_palembang", "Bukittinggi–Palembang"),
+    ("sumatra_sumsel_palembang", "Palembang–Lahat"),
+    ("sumatra_lampung_bakauheni", "Lahat–Bakauheni"),
+    ("sumatra_lampung_bakauheni", "Bakauheni–Panjang"),
+]
+
+_SEVERITY_MULT = {"critical": 1.2, "high": 1.0, "medium": 0.7, "low": 0.4}
+_HAZARD_BASE_DELAY = {"flood": 14.0, "landslide": 10.0, "marine_wave": 18.0, "severe_storm": 14.0}
+
+
+def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    r = 6371.0
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(a))
+
+
+def _dist_to_hill_spine_km(lat: float, lon: float) -> Tuple[float, str]:
+    best = float("inf")
+    label = ""
+    for slon, slat, name in _HILL_SPINE_NODES:
+        d = _haversine_km(lat, lon, slat, slon)
+        if d < best:
+            best, label = d, name
+    return best, label
+
+
+def _is_coastal(lon: float, lat: float) -> bool:
+    # West Indian-Ocean coast (lon < 98.5) or east Malacca/Sunda coast (lon > 104.0),
+    # plus Sunda strait southern tip (lat < -4.5).
+    return lon < 98.5 or lon > 104.0 or lat < -4.5
+
+
+def _nearest_spine_segment(lat: float, lon: float) -> Tuple[int, float]:
+    # Point-to-segment distance in degree space converted to km (deterministic,
+    # no new deps). Returns (segment_index, dist_km).
+    best_idx, best_d = 0, float("inf")
+    for i in range(len(_CORRIDOR_SPINE) - 1):
+        ax, ay = _CORRIDOR_SPINE[i][0], _CORRIDOR_SPINE[i][1]  # lon, lat
+        bx, by = _CORRIDOR_SPINE[i + 1][0], _CORRIDOR_SPINE[i + 1][1]
+        dx, dy = bx - ax, by - ay
+        denom = dx * dx + dy * dy
+        t = ((lon - ax) * dx + (lat - ay) * dy) / denom if denom else 0.0
+        t = max(0.0, min(1.0, t))
+        px, py = ax + t * dx, ay + t * dy
+        d = _haversine_km(lat, lon, py, px)
+        if d < best_d:
+            best_d, best_idx = d, i
+    return best_idx, best_d
+
+
+def _classify_hazard_type(
+    precip_mm: Optional[float],
+    flood_pct: Optional[float],
+    wind_kmh: Optional[float],
+    bmkg_code: Optional[int],
+    lat: float,
+    lon: float,
+) -> str:
+    coastal = _is_coastal(lon, lat)
+    wind = wind_kmh or 0.0
+    precip = precip_mm or 0.0
+    if coastal and wind >= 30.0:
+        return "marine_wave"
+    if (bmkg_code in (95, 97)) or wind >= 40.0:
+        return "severe_storm"
+    if precip >= 50.0:
+        hill_dist, _ = _dist_to_hill_spine_km(lat, lon)
+        if hill_dist < 75.0:
+            return "landslide"
+    return "flood"
+
+
+def _advisory_action(hazard_type: str, severity: str) -> str:
+    sev = (severity or "").lower()
+    if sev == "critical":
+        return "HOLD_DEPARTURE"
+    if sev == "high":
+        if hazard_type in ("marine_wave", "severe_storm"):
+            return "REROUTE_RECOMMENDED"
+        return "CONSIDER_DELAY"
+    return "PROCEED_WITH_CAUTION"
+
+
+def _affected_modalities(hazard_type: str, wind_kmh: Optional[float], lon: float, lat: float) -> List[str]:
+    mods = ["truck"]
+    wind = wind_kmh or 0.0
+    if hazard_type == "marine_wave" or _is_coastal(lon, lat):
+        mods.append("sea")
+    if wind >= 50.0 or hazard_type == "severe_storm":
+        mods.append("air")
+    return mods
+
+
+def _weather_geometry(hazard_type: str, lon: float, lat: float, severity: str) -> Dict[str, Any]:
+    try:
+        if hazard_type == "landslide":
+            return generate_landslide_geometry(lon, lat)
+        if hazard_type == "marine_wave":
+            feat = generate_incident_geometry("marine_wave", lat, lon)
+            # generate_incident_geometry fallback returns a Feature for unknown types.
+            if isinstance(feat, dict) and feat.get("type") == "Feature":
+                return feat
+            return generate_flood_geometry(lon, lat, water_depth_m=_water_depth_for_severity(severity))
+        # flood + severe_storm share the flood ellipse (storm scaled up slightly).
+        depth = _water_depth_for_severity(severity)
+        if hazard_type == "severe_storm":
+            depth = round(depth * 1.25, 2)
+        return generate_flood_geometry(lon, lat, water_depth_m=depth)
+    except Exception:
+        return generate_flood_geometry(lon, lat, water_depth_m=_water_depth_for_severity(severity))
 
 
 def _water_depth_for_severity(severity: str) -> float:
@@ -180,6 +315,23 @@ async def get_fused_spatial_weather(
 
     min_rank = _SEVERITY_RANK.get(str(min_severity).lower(), 2)
 
+    # Precompute opposite-source positions for deterministic BMKG+OM agreement check.
+    def _ev_latlon(e: Dict[str, Any]) -> Tuple[float, float]:
+        try:
+            return float(e.get("lat", 3.58)), float(e.get("lon", 98.67))
+        except Exception:
+            return 3.58, 98.67
+
+    bmkg_pts = [_ev_latlon(e) for e in bmkg_events if e.get("event_type") in ("weather_warning", "weather_prediction")]
+    om_pts = [_ev_latlon(e) for e in openmeteo_events if e.get("event_type") in ("weather_warning", "weather_prediction")]
+
+    def _has_cross_agreement(lat: float, lon: float, is_om: bool) -> bool:
+        others = bmkg_pts if is_om else om_pts
+        for ola, olo in others:
+            if _haversine_km(lat, lon, ola, olo) <= 55.0:
+                return True
+        return False
+
     for ev in weather_warnings:
         lat = float(ev.get("lat", 3.58))
         lon = float(ev.get("lon", 98.67))
@@ -217,8 +369,37 @@ async def get_fused_spatial_weather(
             fill_color = "rgba(168, 85, 247, 0.30)"
             stroke_color = "#a855f7"
 
-        geom_feature = generate_flood_geometry(lon, lat, water_depth_m=_water_depth_for_severity(severity))
+        geom_feature = _weather_geometry(
+            _classify_hazard_type(precip_mm, flood_pct, wind_kmh, bmkg_code, lat, lon),
+            lon, lat, severity,
+        )
         region_name = ev.get("region") or ev.get("title", "Sumatra")
+
+        # ---- Additive dispatch enrichment (deterministic, no new APIs) ----
+        hazard_type = _classify_hazard_type(precip_mm, flood_pct, wind_kmh, bmkg_code, lat, lon)
+        try:
+            seg_idx, seg_dist = _nearest_spine_segment(lat, lon)
+        except Exception:
+            seg_idx, seg_dist = 0, 0.0
+        seg_idx = max(0, min(seg_idx, len(_SPINE_SEGMENT_CORRIDORS) - 1))
+        corridor_id, segment = _SPINE_SEGMENT_CORRIDORS[seg_idx]
+        corridor_intersect = {
+            "corridor_id": corridor_id,
+            "segment": segment,
+            "dist_km": round(float(seg_dist), 1),
+        }
+        base_delay = _HAZARD_BASE_DELAY.get(hazard_type, 8.0)
+        delay_hours = round(base_delay * _SEVERITY_MULT.get(severity, 1.0), 1)
+        advisory_action = _advisory_action(hazard_type, severity)
+        affected_modalities = _affected_modalities(hazard_type, wind_kmh, lon, lat)
+        agree = _has_cross_agreement(lat, lon, is_om)
+        if agree:
+            confidence = 0.9 if severity == "critical" else 0.85
+        elif is_om:
+            confidence = 0.75 if severity == "critical" else 0.65
+        else:
+            confidence = 0.8 if bmkg_code in (95, 97) else 0.5
+        observed_vs_forecast = "forecast" if is_om else "observation"
 
         # Priority score for the MAX_WEATHER_FEATURES cap: severity rank first,
         # then flood/precip magnitude, then corridor proximity (nearer = kept).
@@ -257,6 +438,18 @@ async def get_fused_spatial_weather(
                     "windspeed_kmh": wind_kmh,
                     "wind_speed_kmh": wind_kmh,
                     "bmkg_code": bmkg_code,
+                    # Dispatch enrichment: weather-caused logistics impacts.
+                    "hazard_type": hazard_type,
+                    "corridor_intersect": corridor_intersect,
+                    "corridor_id": corridor_intersect["corridor_id"],
+                    "corridor_segment": corridor_intersect["segment"],
+                    "dist_to_corridor_km": corridor_intersect["dist_km"],
+                    "delay_hours": delay_hours,
+                    "estimated_delay_hours": delay_hours,
+                    "advisory_action": advisory_action,
+                    "affected_modalities": affected_modalities,
+                    "confidence": confidence,
+                    "observed_vs_forecast": observed_vs_forecast,
                 },
             },
         })
