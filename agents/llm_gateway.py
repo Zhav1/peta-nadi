@@ -1,5 +1,6 @@
 import logging
 import asyncio
+import re
 from typing import Optional
 import httpx
 from app.config import get_settings
@@ -61,6 +62,17 @@ OPENCODE_CHAT_COMPLETIONS_PATH = "/chat/completions"
 # User-Agents, which surfaces as a misleading 403. Same header everywhere
 # we call opencode (gateway + verify script must match).
 OPENCODE_USER_AGENT = "PreHub-LLMGateway/1.0 (+https://github.com/Zhav1/peta-nadi)"
+
+
+def strip_thinking_tags(text: str) -> str:
+    """Strips <think>...</think> and unclosed <think>... tags from LLM responses (DeepSeek-R1 CoT)."""
+    if not text or not isinstance(text, str):
+        return ""
+    # Strip closed think tags
+    cleaned = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL | re.IGNORECASE)
+    # Strip unclosed think tag at the beginning if generated
+    cleaned = re.sub(r'^<think>.*', '', cleaned, flags=re.DOTALL | re.IGNORECASE)
+    return cleaned.strip()
 
 
 class LLMGatewayUnavailable(RuntimeError):
@@ -157,7 +169,7 @@ class LLMGateway:
                         if not text:
                             raise ValueError("opencode returned an empty completion")
                         logger.info("LLMGateway: opencode call succeeded.")
-                        return text
+                        return strip_thinking_tags(text)
                 except (httpx.TimeoutException, httpx.NetworkError) as net_err:
                     if attempt < max_retries:
                         backoff = 1.0 * (2 ** attempt)
@@ -227,7 +239,7 @@ class LLMGateway:
                     if not text:
                         raise ValueError("NVIDIA NIM returned an empty completion")
                     logger.info("LLMGateway: NVIDIA NIM DeepSeek call succeeded.")
-                    return text
+                    return strip_thinking_tags(text)
             except (httpx.TimeoutException, httpx.NetworkError) as net_err:
                 if attempt < max_retries:
                     backoff = 1.0 * (2 ** attempt)

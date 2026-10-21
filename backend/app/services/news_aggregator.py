@@ -132,7 +132,7 @@ TARGETED_PRESS_QUERIES = [
 ]
 
 MAX_NEWS_AGE_HOURS = 48
-EXTRACTION_SCHEMA_VERSION = 6
+EXTRACTION_SCHEMA_VERSION = 7
 
 # Dedicated test fixtures reserved strictly for synthetic offline unit tests / demo runner
 DEMO_STANDARDIZED_SCENARIOS = [
@@ -571,7 +571,7 @@ def fetch_existing_processed_articles_map(article_ids: List[str], links: List[st
                 row = _unpack_ground_truth_metrics(dict(row))
             except Exception:
                 pass
-            # Stale rows (schema_version != 6) are re-classified on read so
+            # Stale rows (schema_version != 7) are re-classified on read so
             # old cached rows never serve stale tiering/geocoding.
             try:
                 _gtm = row.get("ground_truth_metrics") or {}
@@ -581,7 +581,7 @@ def fetch_existing_processed_articles_map(article_ids: List[str], links: List[st
                         _gtm = _js2.loads(_gtm)
                     except Exception:
                         _gtm = {}
-                if isinstance(_gtm, dict) and _gtm.get("schema_version") != 6:
+                if isinstance(_gtm, dict) and _gtm.get("schema_version") != 7:
                     from app.nlp.news_extractor import _fast_heuristic_extraction as _re_v2
                     _art = {
                         "title": row.get("title", ""),
@@ -1001,7 +1001,7 @@ async def upsert_articles_to_supabase(articles: List[Dict[str, Any]]) -> int:
             from app.nlp.news_extractor import EXTRACTION_SCHEMA_VERSION as _SV
             gtm["schema_version"] = _SV
         except Exception:
-            gtm.setdefault("schema_version", 6)
+            gtm.setdefault("schema_version", 7)
 
         record = {
             "id": a.get("id"),
@@ -1071,8 +1071,8 @@ def _unpack_ground_truth_metrics(row: Dict[str, Any]) -> Dict[str, Any]:
                    "article_body_excerpt"):
             if row.get(_k) is None and gtm.get(_k) is not None:
                 row[_k] = gtm[_k]
-        # Re-run v6 heuristic when cached/DB rows carry a stale schema version.
-        if gtm.get("schema_version") != 6:
+        # Re-run v7 heuristic when cached/DB rows carry a stale schema version.
+        if gtm.get("schema_version") != 7:
             try:
                 from app.nlp.news_extractor import _fast_heuristic_extraction as _re_tier_v2
                 legacy_art = {
@@ -1103,17 +1103,30 @@ def _unpack_ground_truth_metrics(row: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def extract_lead_text_from_html(html: str) -> str:
-    """Extracts full-body article text (og:description + up to 18 <p> paragraphs, max 2500 chars)."""
+    """Extracts clean lead article text (og:description or lead <p> paragraphs, strictly clamped to <= 400 chars).
+    Strips scripts, styles, navs, footers, asides, headers, forms, iframes, and advertising containers.
+    """
     if not html or not isinstance(html, str):
         return ""
     lead = ""
     try:
-        # Strip non-content blocks first.
+        # Strip non-content and layout/ad blocks first.
         cleaned = re.sub(r'<script.*?</script>', ' ', html, flags=re.IGNORECASE | re.DOTALL)
         cleaned = re.sub(r'<style.*?</style>', ' ', cleaned, flags=re.IGNORECASE | re.DOTALL)
         cleaned = re.sub(r'<nav.*?</nav>', ' ', cleaned, flags=re.IGNORECASE | re.DOTALL)
         cleaned = re.sub(r'<footer.*?</footer>', ' ', cleaned, flags=re.IGNORECASE | re.DOTALL)
         cleaned = re.sub(r'<aside.*?</aside>', ' ', cleaned, flags=re.IGNORECASE | re.DOTALL)
+        cleaned = re.sub(r'<header.*?</header>', ' ', cleaned, flags=re.IGNORECASE | re.DOTALL)
+        cleaned = re.sub(r'<form.*?</form>', ' ', cleaned, flags=re.IGNORECASE | re.DOTALL)
+        cleaned = re.sub(r'<iframe.*?</iframe>', ' ', cleaned, flags=re.IGNORECASE | re.DOTALL)
+        # Strip common ad / widget / banner / social containers
+        cleaned = re.sub(
+            r'<(?:div|section)[^>]*(?:class|id)=["\'][^"\']*(?:ad-|ads-|advertisement|banner|popup|social-share|related-news|widget|sidebar)[^"\']*["\'][^>]*>.*?</(?:div|section)>',
+            ' ',
+            cleaned,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+
         m = re.search(r'<meta[^>]+property=["\']og:description["\'][^>]*content=["\'](.*?)["\']', cleaned, flags=re.IGNORECASE | re.DOTALL)
         if m:
             lead = m.group(1).strip()
@@ -1126,6 +1139,84 @@ def extract_lead_text_from_html(html: str) -> str:
             if m3:
                 lead = m3.group(1).strip()
         # Prefer <p> tags inside <article> or known content containers.
+        search_scope = cleaned
+        try:
+            article_blocks = re.findall(r'<article.*?>(.*?)</article>', cleaned, flags=re.IGNORECASE | re.DOTALL)
+            if article_blocks:
+                search_scope = " ".join(article_blocks)
+            else:
+                container_pat = re.compile(
+                    r'<(?:div|section)[^>]*(?:post-content|entry-content|detail__body-text|read__content|article-content|text-body)[^>]*>(.*?)</(?:div|section)>',
+                    flags=re.IGNORECASE | re.DOTALL,
+                )
+                container_blocks = container_pat.findall(cleaned)
+                if container_blocks:
+                    search_scope = " ".join(container_blocks)
+        except Exception:
+            search_scope = cleaned
+        paras = re.findall(r'<p[^>]*>(.*?)</p>', search_scope, flags=re.IGNORECASE | re.DOTALL)
+        if not paras:
+            paras = re.findall(r'<p[^>]*>(.*?)</p>', cleaned, flags=re.IGNORECASE | re.DOTALL)
+        clean_paras = []
+        for p in paras[:8]:
+            t = re.sub(r'<[^>]+>', ' ', p)
+            t = re.sub(r'\s+', ' ', t).strip()
+            if len(t) < 35:
+                continue
+            low = t.lower()
+            if any(b in low for b in ("copyright", "baca juga", "advertisement", "iklan", "langganan", "pewarta:", "editor:", "ikuti kami di")):
+                continue
+            clean_paras.append(t)
+        para_text = " ".join(clean_paras)
+        if lead and para_text:
+            combined = (lead + " " + para_text)[:400]
+            return combined.strip()
+        if para_text:
+            return para_text[:400].strip()
+        return (lead or "")[:400].strip()
+    except Exception:
+        return (lead or "")[:400].strip()
+
+
+def extract_full_article_body_from_html(html: str) -> str:
+    """Extracts FULL-BODY article text for Gate-2 review only (up to 2500 chars).
+
+    Gate-1 stays on the clamped `extract_lead_text_from_html` (<=400 chars)
+    to save tokens. Gate-2 (uncertain/YELLOW/conf<0.7 only, mimo-v2.6-pro
+    low-effort + single web-search + consensus re-check) uses this full-body
+    path so the verifier reads beyond the RSS teaser. Keeps the remote
+    ad/layout stripping improvements (header/form/iframe/ad containers)
+    with the local 18-paragraph / 2500-char depth.
+    """
+    if not html or not isinstance(html, str):
+        return ""
+    lead = ""
+    try:
+        cleaned = re.sub(r'<script.*?</script>', ' ', html, flags=re.IGNORECASE | re.DOTALL)
+        cleaned = re.sub(r'<style.*?</style>', ' ', cleaned, flags=re.IGNORECASE | re.DOTALL)
+        cleaned = re.sub(r'<nav.*?</nav>', ' ', cleaned, flags=re.IGNORECASE | re.DOTALL)
+        cleaned = re.sub(r'<footer.*?</footer>', ' ', cleaned, flags=re.IGNORECASE | re.DOTALL)
+        cleaned = re.sub(r'<aside.*?</aside>', ' ', cleaned, flags=re.IGNORECASE | re.DOTALL)
+        cleaned = re.sub(r'<header.*?</header>', ' ', cleaned, flags=re.IGNORECASE | re.DOTALL)
+        cleaned = re.sub(r'<form.*?</form>', ' ', cleaned, flags=re.IGNORECASE | re.DOTALL)
+        cleaned = re.sub(r'<iframe.*?</iframe>', ' ', cleaned, flags=re.IGNORECASE | re.DOTALL)
+        cleaned = re.sub(
+            r'<(?:div|section)[^>]*(?:class|id)=["\'][^"\']*(?:ad-|ads-|advertisement|banner|popup|social-share|related-news|widget|sidebar)[^"\']*["\'][^>]*>.*?</(?:div|section)>',
+            ' ',
+            cleaned,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        m = re.search(r'<meta[^>]+property=["\']og:description["\'][^>]*content=["\'](.*?)["\']', cleaned, flags=re.IGNORECASE | re.DOTALL)
+        if m:
+            lead = m.group(1).strip()
+        if not lead:
+            m2 = re.search(r'<meta[^>]+name=["\']description["\'][^>]*content=["\'](.*?)["\']', cleaned, flags=re.IGNORECASE | re.DOTALL)
+            if m2:
+                lead = m2.group(1).strip()
+        if not lead:
+            m3 = re.search(r'<meta[^>]+content=["\'](.*?)["\'][^>]*property=["\']og:description["\']', cleaned, flags=re.IGNORECASE | re.DOTALL)
+            if m3:
+                lead = m3.group(1).strip()
         search_scope = cleaned
         try:
             article_blocks = re.findall(r'<article.*?>(.*?)</article>', cleaned, flags=re.IGNORECASE | re.DOTALL)
@@ -1165,25 +1256,20 @@ def extract_lead_text_from_html(html: str) -> str:
         return lead
 
 
-extract_full_article_body_from_html = extract_lead_text_from_html
-
-
 async def enrich_article_description_if_needed(article: Dict[str, Any], timeout: float = 5.0) -> Dict[str, Any]:
     """Fetches the article URL to enrich short/title-only descriptions.
 
     Scrapes the article URL whenever `body_scraped` is not set and the
-    description is shorter than 450 chars (1-sentence RSS teasers are
-    otherwise never expanded). Combines the original RSS summary with
-    scraped full-body paragraphs (up to 2,500 chars) so the Workhorse LLM
-    reads the full article content. Also extracts article:published_time /
-    pubdate / datePublished into html_published_at for the 48h freshness gate.
+    description is shorter than 200 chars. Combines the original RSS summary with
+    scraped lead paragraphs (strictly clamped to <= 400 chars) to prevent LLM token drain.
+    Also extracts article:published_time / pubdate / datePublished into html_published_at for the 48h freshness gate.
     """
     try:
         title = (article.get("title") or "").strip()
         desc = (article.get("raw_description") or article.get("summary") or "").strip()
         already_scraped = bool(article.get("body_scraped"))
         needs = (
-            (not already_scraped and len(desc) < 450)
+            (not already_scraped and len(desc) < 200)
             or (not desc)
             or desc == title
             or any(w in title.lower() for w in ("daerah", "kabupaten", "wilayah", "titik", "lokasi", "catat"))
@@ -1210,13 +1296,63 @@ async def enrich_article_description_if_needed(article: Dict[str, Any], timeout:
                     if needs:
                         full_body = extract_lead_text_from_html(resp.text)
                         if full_body:
-                            combined = ((desc + " " + full_body).strip() if desc and desc not in full_body else full_body)[:2500]
+                            combined = ((desc + " " + full_body).strip() if desc and desc not in full_body else full_body)[:400]
                             if len(combined) > len(desc):
                                 article["raw_description"] = combined
                             article["body_scraped"] = True
                             article["article_body_chars"] = len(article.get("raw_description") or "")
         except Exception as e:
             logger.debug(f"Description enrichment skipped for {raw_url}: {e}")
+    except Exception:
+        pass
+    return article
+
+
+async def enrich_article_description_full_body_if_needed(article: Dict[str, Any], timeout: float = 10.0) -> Dict[str, Any]:
+    """Gate-2 ONLY full-body enricher (up to 2500 chars).
+
+    Gate-1 stays clamped (<=400 chars). Gate-2 calls this to expand short
+    RSS teasers (<450 chars) into full article bodies via
+    `extract_full_article_body_from_html` so the mimo-v2.6-pro verifier
+    reads beyond the teaser. Never used on the Gate-1 hot path.
+    """
+    try:
+        title = (article.get("title") or "").strip()
+        desc = (article.get("raw_description") or article.get("summary") or "").strip()
+        already_scraped = bool(article.get("body_scraped"))
+        needs = (
+            (not already_scraped and len(desc) < 450)
+            or (not desc)
+            or desc == title
+            or any(w in title.lower() for w in ("daerah", "kabupaten", "wilayah", "titik", "lokasi", "catat"))
+        )
+        if not needs and article.get("html_published_at"):
+            return article
+        raw_url = article.get("link") or article.get("url") or ""
+        if not raw_url or not str(raw_url).startswith("http"):
+            return article
+        canonical = await resolve_canonical_article_url_async(raw_url, title, article.get("source", ""))
+        if canonical:
+            article["link"] = canonical
+            article["url"] = canonical
+            raw_url = canonical
+        try:
+            async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+                resp = await client.get(raw_url, headers={"User-Agent": "Mozilla/5.0 (PreHub Logistics Bot 2.0)"})
+                if resp.status_code == 200 and resp.text:
+                    html_time = extract_html_published_time(resp.text)
+                    if html_time:
+                        article["html_published_at"] = html_time
+                    if needs:
+                        full_body = extract_full_article_body_from_html(resp.text)
+                        if full_body:
+                            combined = ((desc + " " + full_body).strip() if desc and desc not in full_body else full_body)[:2500]
+                            if len(combined) > len(desc):
+                                article["raw_description"] = combined
+                            article["body_scraped"] = True
+                            article["article_body_chars"] = len(article.get("raw_description") or "")
+        except Exception as e:
+            logger.debug(f"Gate-2 full-body enrichment skipped for {raw_url}: {e}")
     except Exception:
         pass
     return article
@@ -1259,7 +1395,7 @@ async def fetch_news_from_supabase(limit: int = 50, province: Optional[str] = No
         except Exception:
             continue
         # Legacy rows missing zone_tier or carrying stale schema: re-run
-        # fast heuristic on read (schema_version != 6 forces v6 re-tier).
+        # fast heuristic on read (schema_version != 7 forces v7 re-tier).
         _needs_retier = (not row.get("zone_tier"))
         try:
             _gtm_chk = row.get("ground_truth_metrics") or {}
@@ -1269,7 +1405,7 @@ async def fetch_news_from_supabase(limit: int = 50, province: Optional[str] = No
                     _gtm_chk = _js3.loads(_gtm_chk)
                 except Exception:
                     _gtm_chk = {}
-            if isinstance(_gtm_chk, dict) and _gtm_chk.get("schema_version") != 6:
+            if isinstance(_gtm_chk, dict) and _gtm_chk.get("schema_version") != 7:
                 _needs_retier = True
         except Exception:
             pass
@@ -1305,13 +1441,13 @@ async def fetch_news_from_supabase(limit: int = 50, province: Optional[str] = No
                                     _sv = _g.get("schema_version")
                             except Exception:
                                 pass
-                            if row.get("latitude") is None or row.get("longitude") is None or row.get("zone_tier") is None or _sv != 6:
+                            if row.get("latitude") is None or row.get("longitude") is None or row.get("zone_tier") is None or _sv != 7:
                                 row[_k] = re_tiered.get(_k)
                             if _k == "affected_locations":
                                 row[_k] = re_tiered.get(_k)
                         else:
                             row[_k] = re_tiered.get(_k)
-                # Always refresh ground_truth_metrics to v6.
+                # Always refresh ground_truth_metrics to v7.
                 try:
                     row["ground_truth_metrics"] = re_tiered.get("ground_truth_metrics", row.get("ground_truth_metrics"))
                 except Exception:

@@ -434,3 +434,73 @@ async def test_crisis_mode_interval_switch(mock_get_redis):
     
     # 2. Normal mode check
     assert scraper.is_crisis_mode() is False
+
+
+# ==============================================================================
+# Marketplace Scraper Tests
+# ==============================================================================
+
+@pytest.mark.asyncio
+async def test_marketplace_parse_events():
+    from app.scrapers.marketplace_scraper import MarketplaceScraper, DEFAULT_MARKETPLACE_DATA
+
+    scraper = MarketplaceScraper()
+    events = await scraper.parse(DEFAULT_MARKETPLACE_DATA)
+
+    assert len(events) == 2
+    commodities = {json.loads(e["raw"])["commodity"] for e in events}
+    assert commodities == {"minyak_goreng", "beras"}
+
+    for event in events:
+        assert event["source"] == "marketplace"
+        assert event["event_type"] == "market_comparison"
+        assert event["severity"] == "low"
+        assert "lat" in event and "lon" in event
+        payload = json.loads(event["raw"])
+        assert payload["median_price"] > 0
+        assert payload["sample_size"] == 2
+
+
+@pytest.mark.asyncio
+async def test_marketplace_fetch_fallback_without_playwright():
+    from app.scrapers.marketplace_scraper import MarketplaceScraper, DEFAULT_MARKETPLACE_DATA
+
+    with patch("app.scrapers.marketplace_scraper.async_playwright", None):
+        scraper = MarketplaceScraper()
+        data = await scraper.fetch()
+        assert data == DEFAULT_MARKETPLACE_DATA
+
+
+@pytest.mark.asyncio
+async def test_marketplace_health_check_ok():
+    from app.scrapers.marketplace_scraper import MarketplaceScraper
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+
+    scraper = MarketplaceScraper()
+    with patch("httpx.AsyncClient.get", AsyncMock(return_value=mock_resp)):
+        is_healthy = await scraper.health_check()
+        assert is_healthy is True
+
+
+@pytest.mark.asyncio
+async def test_marketplace_health_check_failure():
+    from app.scrapers.marketplace_scraper import MarketplaceScraper
+    import httpx
+
+    scraper = MarketplaceScraper()
+    with patch("httpx.AsyncClient.get", AsyncMock(side_effect=httpx.ConnectTimeout("timeout"))):
+        is_healthy = await scraper.health_check()
+        assert is_healthy is False
+
+
+def test_marketplace_get_cached_events():
+    from app.scrapers.marketplace_scraper import MarketplaceScraper
+
+    scraper = MarketplaceScraper()
+    with patch("app.adapters.base.BaseAdapter.get_cached_events", return_value=[]):
+        events = scraper.get_cached_events()
+        assert len(events) == 2
+        assert all(e["source"] == "marketplace" for e in events)
+

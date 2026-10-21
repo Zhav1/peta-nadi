@@ -14,6 +14,7 @@ Phase 76 Unit Test Suite:
    - Tier C broad regency cannot synthesize physical RED_CONFIRMED incidents.
 """
 import pytest
+from datetime import datetime, timezone
 from unittest.mock import patch, MagicMock
 
 from app.nlp.geocoding_service import (
@@ -197,7 +198,9 @@ def test_consensus_gate_multi_sensor_escalation():
         "corridor_segment": "Medan - Berastagi",
         "commodities_affected": ["Cabai Merah", "Beras BULOG"],
         "location_precision": "corridor_point",
-        "weather_telemetry": {"rainfall_mm": 25.0, "wind_speed_kt": 15.0}
+        "published_at": datetime.now(timezone.utc).isoformat(),
+        "weather_telemetry": {"rainfall_mm": 25.0, "wind_speed_kt": 15.0, "latitude": 3.5333, "longitude": 98.6667,
+                              "timestamp": datetime.now(timezone.utc).isoformat()}
     }
 
     tier, audit = ingestor._verify_with_consensus_gate(art_critical)

@@ -55,6 +55,10 @@ class Settings(BaseSettings):
     whatsapp_recipient_number: str = ""
     app_url: str = "http://localhost:3000"
 
+    # Scraping & OSINT
+    lightpanda_url: str = ""
+    twitter_bearer_token: str = ""
+
     # Frontend (for reference)
     next_public_mapbox_token: str = ""
 
