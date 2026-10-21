@@ -21,10 +21,26 @@ class BMKGAdapter(BaseAdapter):
     def __init__(self):
         super().__init__()
         self.earthquake_url = "https://data.bmkg.go.id/DataMKG/TEWS/autogempa.json"
+        # BMKG public forecast requires a village-level adm4 code. Only Medan's
+        # adm4 is verified (12.71.01.1001); other hubs list None until their
+        # adm4 codes are confirmed — Open-Meteo grid covers them meanwhile.
+        # (Batam favours: Kepri island point, no adm4 yet → OM-grid covered.)
+        self.hub_adm4: Dict[str, Any] = {
+            "Medan": "12.71.01.1001",
+            "Banda Aceh": None,
+            "Padang": None,
+            "Pekanbaru": None,
+            "Jambi": None,
+            "Palembang": None,
+            "Bengkulu": None,
+            "Bandar Lampung": None,
+            "Batam": None,
+        }
         # Medan weather forecast URL (adm4 for Medan Kota)
         self.weather_url = "https://api.bmkg.go.id/publik/prakiraan-cuaca?adm4=12.71.01.1001"
         self._last_weather_poll = 0
         self.weather_poll_interval = 1800 # 30 mins
+        self._weather_cache: Dict[str, Any] = {}
 
     async def health_check(self) -> bool:
         """Verify BMKG is reachable by hitting the earthquake endpoint."""
@@ -36,10 +52,18 @@ class BMKGAdapter(BaseAdapter):
             logger.warning(f"BMKG health check failed: {e}")
             return False
 
+    def _weather_urls(self) -> Dict[str, str]:
+        """adm4 forecast URLs for hubs with known codes (unknown → skipped, OM-grid covers)."""
+        return {
+            name: f"https://api.bmkg.go.id/publik/prakiraan-cuaca?adm4={adm4}"
+            for name, adm4 in self.hub_adm4.items() if adm4
+        }
+
     async def fetch(self) -> Dict[str, Any]:
         """Fetch earthquake data, and optionally weather data if interval has passed."""
-        data = {"earthquake": None, "weather": None}
-        
+        import asyncio
+        data: Dict[str, Any] = {"earthquake": None, "weather": None, "weather_list": []}
+
         async with httpx.AsyncClient(timeout=10.0) as client:
             try:
                 res = await client.get(self.earthquake_url)
@@ -48,17 +72,37 @@ class BMKGAdapter(BaseAdapter):
             except Exception as e:
                 logger.error(f"Failed to fetch BMKG earthquake data: {e}")
 
-            # Fetch weather every 30 minutes
+            # Fetch weather every 30 minutes (cached); one call per known adm4, in parallel.
             now = datetime.now(timezone.utc).timestamp()
             if now - self._last_weather_poll >= self.weather_poll_interval:
+                urls = self._weather_urls()
+
+                async def _get(name: str, url: str):
+                    try:
+                        r = await client.get(url)
+                        if r.status_code == 200:
+                            return name, r.json()
+                    except Exception as e:
+                        logger.error(f"Failed to fetch BMKG weather for {name}: {e}")
+                    return name, None
+
                 try:
-                    res = await client.get(self.weather_url)
-                    if res.status_code == 200:
-                        data["weather"] = res.json()
+                    results = await asyncio.gather(*[_get(n, u) for n, u in urls.items()])
+                    weather_list = [{"hub": n, "payload": p} for n, p in results if p]
+                    if weather_list:
+                        self._weather_cache = {w["hub"]: w["payload"] for w in weather_list}
                         self._last_weather_poll = now
+                    data["weather_list"] = weather_list
+                    # Backward compat: data["weather"] = Medan (first known hub).
+                    data["weather"] = weather_list[0]["payload"] if weather_list else None
                 except Exception as e:
                     logger.error(f"Failed to fetch BMKG weather forecast data: {e}")
-                    
+            else:
+                # Serve 30-min cache without new HTTP calls.
+                cached = [{"hub": n, "payload": p} for n, p in self._weather_cache.items()]
+                data["weather_list"] = cached
+                data["weather"] = cached[0]["payload"] if cached else None
+
         return data
 
     async def parse(self, raw_data: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -117,9 +161,19 @@ class BMKGAdapter(BaseAdapter):
             except Exception as e:
                 logger.error(f"Error parsing BMKG earthquake: {e}")
 
-        # 2. Parse Weather
-        weather_raw = raw_data.get("weather")
-        if weather_raw and "data" in weather_raw:
+        # 2. Parse Weather (per-hub list + legacy single payload)
+        weather_payloads: List[Any] = []
+        for w in (raw_data.get("weather_list") or []):
+            if isinstance(w, dict) and w.get("payload"):
+                weather_payloads.append(w["payload"])
+            elif w:
+                weather_payloads.append(w)
+        if raw_data.get("weather"):
+            if not any(p is raw_data["weather"] for p in weather_payloads):
+                weather_payloads.append(raw_data["weather"])
+        for weather_raw in weather_payloads:
+            if not (weather_raw and "data" in weather_raw):
+                continue
             try:
                 # The BMKG public forecast JSON has structure:
                 # data: [{ cuaca: [[{ datetime, desc, code, ... }], ...] }] or similar.

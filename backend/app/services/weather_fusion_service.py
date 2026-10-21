@@ -5,8 +5,10 @@ into organic GeoJSON coverage polygons for Sumatra corridors.
 Zero GPU overhead.
 """
 import logging
+import asyncio
 import json
-from typing import Dict, Any, List, Optional
+import math
+from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timezone
 
 from app.adapters.bmkg_adapter import BMKGAdapter
@@ -16,6 +18,34 @@ from app.services.incident_geometry_service import generate_flood_geometry
 logger = logging.getLogger(__name__)
 
 _SEVERITY_RANK = {"low": 0, "medium": 1, "high": 2, "critical": 3}
+
+# Feature cap: whole-Sumatra grid yields ~15-23 gated points; cap keeps the
+# GeoJSON payload at ~30 KB max so the endpoint stays within timeout.
+MAX_WEATHER_FEATURES = 24
+
+# Corridor spine (lon, lat) used to prioritize corridor-adjacent polygons when
+# capping. Approximates the Jalinsum/Jalintim backbone Banda Aceh → Bakauheni.
+_CORRIDOR_SPINE: List[Tuple[float, float]] = [
+    (95.32, 5.55), (97.15, 5.18), (98.67, 3.59), (99.27, 1.38),
+    (101.45, 0.51), (100.42, -0.95), (103.61, -1.61),
+    (104.77, -2.98), (104.17, -4.10), (105.26, -5.43), (105.75, -5.87),
+]
+
+
+def _dist_to_spine_km(lat: float, lon: float) -> float:
+    r = 6371.0
+    best = float("inf")
+    for slon, slat in _CORRIDOR_SPINE:
+        dlat = math.radians(slat - lat)
+        dlon = math.radians(slon - lon)
+        a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat)) * math.cos(math.radians(slat)) * math.sin(dlon / 2) ** 2
+        best = min(best, 2 * r * math.asin(math.sqrt(a)))
+    return best
+
+
+def _water_depth_for_severity(severity: str) -> float:
+    # Scale flood ellipse by severity: critical 1.8 / high 1.2 / medium 0.6 / low 0.4.
+    return {"critical": 1.8, "high": 1.2, "medium": 0.6}.get(severity, 0.4)
 
 # Disruption-worthy defaults: heavy rain that can cause disruptions.
 # precip > 50mm/24h or flood >= 80%  <=> severity high/critical.
@@ -116,24 +146,32 @@ async def get_fused_spatial_weather(
     """
     logger.info("Fusing BMKG weather alerts + Open-Meteo atmospheric forecasts...")
 
-    bmkg_events = []
-    openmeteo_events = []
+    bmkg_events: List[Dict[str, Any]] = []
+    openmeteo_events: List[Dict[str, Any]] = []
 
-    try:
-        bmkg = BMKGAdapter()
-        raw_bmkg = await bmkg.fetch()
-        bmkg_events = await bmkg.parse(raw_bmkg)
-    except Exception as e:
-        logger.warning(f"Failed to fetch BMKG for weather fusion: {e}")
+    # Parallel gather: BMKG quake+weather and OM 23-pt bulk grid concurrently
+    # so the fused response stays well inside the 8 s proof timeout.
+    async def _safe_bmkg():
+        try:
+            bmkg = BMKGAdapter()
+            raw_bmkg = await bmkg.fetch()
+            return await bmkg.parse(raw_bmkg)
+        except Exception as e:
+            logger.warning(f"Failed to fetch BMKG for weather fusion: {e}")
+            return []
 
-    try:
-        openmeteo = OpenMeteoAdapter()
-        raw_om = await openmeteo.fetch()
-        openmeteo_events = await openmeteo.parse(raw_om)
-    except Exception as e:
-        logger.warning(f"Failed to fetch Open-Meteo data for weather fusion: {e}")
+    async def _safe_om():
+        try:
+            openmeteo = OpenMeteoAdapter()
+            raw_om = await openmeteo.fetch()
+            return await openmeteo.parse(raw_om)
+        except Exception as e:
+            logger.warning(f"Failed to fetch Open-Meteo data for weather fusion: {e}")
+            return []
 
-    features = []
+    bmkg_events, openmeteo_events = await asyncio.gather(_safe_bmkg(), _safe_om())
+
+    candidates = []
 
     # Combined active weather warnings (canonical OpenMeteoAdapter emits
     # event_type "weather_prediction" / source "open_meteo"; BMKG emits
@@ -179,31 +217,54 @@ async def get_fused_spatial_weather(
             fill_color = "rgba(168, 85, 247, 0.30)"
             stroke_color = "#a855f7"
 
-        geom_feature = generate_flood_geometry(lon, lat, water_depth_m=1.2 if severity == "high" else 0.6)
+        geom_feature = generate_flood_geometry(lon, lat, water_depth_m=_water_depth_for_severity(severity))
+        region_name = ev.get("region") or ev.get("title", "Sumatra")
 
-        features.append({
-            "type": "Feature",
-            "geometry": geom_feature["geometry"],
-            "properties": {
-                "name": ev.get("title", "Peringatan Cuaca Ekstrem BMKG / Open-Meteo"),
-                "severity": severity,
-                "status_label": "PROYEKSI PRESIPITASI EKSTREM OPEN-METEO" if is_om else "PERINGATAN CUACA EKSTREM BMKG",
-                "fill_color": fill_color,
-                "stroke_color": stroke_color,
-                # Q3(A) provenance click contract: source + valid_until always present.
-                "source": "Open-Meteo NWP (ECMWF/GFS)" if is_om else "BMKG Stasiun Klimatologi & Geofisika",
-                "valid_until": datetime.fromtimestamp(now.timestamp() + 6 * 3600, tz=timezone.utc).isoformat(),
-                "bmkg_source": "BMKG Stasiun Klimatologi & Geofisika",
-                "nwp_source": "Open-Meteo Global NWP (ECMWF/GFS)",
-                "updated_at": now.isoformat(),
-                # Disruption numerics: parsed from BMKG/Open-Meteo sources.
-                "precipitation_mm_24h": precip_mm,
-                "flood_risk_pct": flood_pct,
-                "windspeed_kmh": wind_kmh,
-                "wind_speed_kmh": wind_kmh,
-                "bmkg_code": bmkg_code,
-            }
+        # Priority score for the MAX_WEATHER_FEATURES cap: severity rank first,
+        # then flood/precip magnitude, then corridor proximity (nearer = kept).
+        rank = _SEVERITY_RANK.get(severity, 1)
+        mag = (flood_pct or 0.0) + (precip_mm or 0.0)
+        try:
+            dist_km = _dist_to_spine_km(lat, lon)
+        except Exception:
+            dist_km = 0.0
+
+        candidates.append({
+            "rank": rank,
+            "mag": mag,
+            "dist_km": dist_km,
+            "feature": {
+                "type": "Feature",
+                "geometry": geom_feature["geometry"],
+                "properties": {
+                    "name": ev.get("title", "Peringatan Cuaca Ekstrem BMKG / Open-Meteo"),
+                    "region": region_name,
+                    "lat": lat,
+                    "lon": lon,
+                    "severity": severity,
+                    "status_label": "PROYEKSI PRESIPITASI EKSTREM OPEN-METEO" if is_om else "PERINGATAN CUACA EKSTREM BMKG",
+                    "fill_color": fill_color,
+                    "stroke_color": stroke_color,
+                    # Q3(A) provenance click contract: source + valid_until always present.
+                    "source": "Open-Meteo NWP (ECMWF/GFS)" if is_om else "BMKG Stasiun Klimatologi & Geofisika",
+                    "valid_until": datetime.fromtimestamp(now.timestamp() + 6 * 3600, tz=timezone.utc).isoformat(),
+                    "bmkg_source": "BMKG Stasiun Klimatologi & Geofisika",
+                    "nwp_source": "Open-Meteo Global NWP (ECMWF/GFS)",
+                    "updated_at": now.isoformat(),
+                    # Disruption numerics: parsed from BMKG/Open-Meteo sources.
+                    "precipitation_mm_24h": precip_mm,
+                    "flood_risk_pct": flood_pct,
+                    "windspeed_kmh": wind_kmh,
+                    "wind_speed_kmh": wind_kmh,
+                    "bmkg_code": bmkg_code,
+                },
+            },
         })
+
+    # Cap features (max 24): prioritize high/critical severity, then magnitude,
+    # then corridor proximity — avoids overlay spam on widespread monsoon days.
+    candidates.sort(key=lambda c: (-c["rank"], -c["mag"], c["dist_km"]))
+    features = [c["feature"] for c in candidates[:MAX_WEATHER_FEATURES]]
 
     return {
         "type": "FeatureCollection",
@@ -212,6 +273,8 @@ async def get_fused_spatial_weather(
             "fusion_engine": "BMKG Radar Observation + Open-Meteo NWP Forecast",
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "total_regions": len(features),
+            "coverage": "full-sumatra-grid",
+            "max_features": MAX_WEATHER_FEATURES,
             "filter": {
                 "min_severity": min_severity,
                 "min_precip": min_precip,

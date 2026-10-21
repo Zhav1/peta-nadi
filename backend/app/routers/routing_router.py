@@ -108,6 +108,10 @@ async def fetch_spatial_weather_polygons(
     spatial weather predictions with data-driven rainfall_mm and flood_risk_pct.
     Read endpoint: optional auth (guest-safe), user attached for telemetry only.
 
+    Full-Sumatra coverage: Open-Meteo bulk grid (23 land points, 95-106E/-6..6N)
+    fused per-point with BMKG hub warnings; features capped at 24 (severity +
+    magnitude + corridor proximity priority, ~30KB max).
+
     Disruption-only default (min_severity=high, min_precip=50, min_flood=80):
     only high/critical heavy rain that can cause disruptions is returned.
     Advisory path: ?min_severity=medium&min_precip=0&min_flood=0 returns all as before.
