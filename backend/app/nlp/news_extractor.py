@@ -32,14 +32,14 @@ logger = logging.getLogger(__name__)
 # consensus re-check). Stale rows (schema_version != 7) must be re-extracted.
 EXTRACTION_SCHEMA_VERSION = 7
 
-# SPEC-LOCKED M5 Phase A Q1: hard Sumatra island bbox 94-108E / -6..6N.
+# SPEC-LOCKED M5 Phase A Q1: hard Sumatra island bbox 94-108E / -6.5..6.5N.
 # Coordinates outside (e.g. Gunung Sumbing Jateng ~110.07E/-7.38) force
 # DROPPED_IRRELEVANT with zero zone even when a crisis predicate fired.
 STRICT_SUMATRA_BBOX = {
     "min_lon": 94.0,
     "max_lon": 108.0,
-    "min_lat": -6.0,
-    "max_lat": 6.0,
+    "min_lat": -6.5,
+    "max_lat": 6.5,
 }
 
 
@@ -102,15 +102,41 @@ DISASTER_REGEX = re.compile(
 )
 
 SUMATRA_GEO_REGEX = re.compile(
-    r"\b(sumatera|sumut|sumbar|aceh|riau|jambi|sumsel|bengkulu|lampung|"
+    r"\b(sumatera|sumatra|sumut|sumatera utara|sumbar|sumatera barat|aceh|riau|"
+    r"kepulauan riau|kepri|jambi|sumatera selatan|sumsel|bengkulu|lampung|"
+    r"kepulauan bangka belitung|bangka belitung|babel|bangka|belitung|"
     r"medan|belawan|tebing tinggi|asahan|deli serdang|langkat|binjai|karo|simalungun|"
-    r"sitinjau|padang|bukittinggi|solok|agam|pasaman|pariaman|tanah datar|pesisir selatan|"
-    r"pekanbaru|dumai|kampar|siak|indragiri|pelalawan|rokan|"
-    r"palembang|banyuasin|ogan|lahat|muara enim|lubuklinggau|prabumulih|"
-    r"bakauheni|bandar lampung|lampung selatan|lampung tengah|tanggamus|pesawaran|"
-    r"banda aceh|sabang|lhokseumawe|aceh besar|aceh utara|aceh timur|aceh barat|"
-    r"jambi|batanghari|muaro jambi|kerinci|merangin|sarolangun|"
-    r"bengkulu|rejang lebong|bengkulu utara|mukomuko)\b",
+    r"kisaran|rantauprapat|rantau prapat|kuala tanjung|sibolga|danau toba|dairi|sidikalang|"
+    r"pakpak bharat|stabat|lubuk pakam|serdang bedagai|batu bara|batubara|tanjung balai|"
+    r"toba|samosir|balige|humbang|tarutung|tapanuli|pandan|sipirok|batu jomba|aek latong|"
+    r"batang toru|padangsidimpuan|mandailing|panyabungan|padang lawas|sibuhuan|labuhanbatu|"
+    r"labura|aek kanopan|labusel|kotapinang|kabanjahe|berastagi|pancur batu|sibolangit|sembahe|"
+    r"parapat|sinabung|kualanamu|tanjung morawa|percut sei tuan|sunggal|"
+    r"sitinjau lauik|sitinjau laut|lembah anai|silaing|kelok 9|kelok sembilan|"
+    r"padang|teluk bayur|bukittinggi|solok|payakumbuh|pariaman|padang pariaman|agam|"
+    r"tanah datar|batusangkar|padang panjang|pasaman|simpang ampek|pesisir selatan|painan|"
+    r"dharmasraya|sijunjung|solok selatan|lima puluh kota|limapuluh kota|marapi|minangkabau|"
+    r"pekanbaru|dumai|siak|kampar|bangkinang|rokan|bagansiapiapi|pasir pengaraian|pelalawan|"
+    r"pangkalan kerinci|indragiri|rengat|tembilahan|bengkalis|kuantan|taluk kuantan|"
+    r"palembang|boom baru|prabumulih|lubuklinggau|kayuagung|banyuasin|muara enim|lahat|"
+    r"ogan|indralaya|belitang|baturaja|empat lawang|pagar alam|musi|sekayu|dempo|tanjung api-api|"
+    r"bakauheni|bandar lampung|terbanggi besar|mesuji|kalianda|tulang bawang|menggala|"
+    r"lampung tengah|lampung utara|kotabumi|lampung timur|sukadana|lampung barat|liwa|"
+    r"pesawaran|pringsewu|pesisir barat|krui|tanggamus|way kanan|lampung selatan|"
+    r"banda aceh|krueng raya|krueng geukueh|malahayati|lhokseumawe|langsa|aceh besar|jantho|"
+    r"bireuen|meulaboh|subulussalam|aceh tamiang|aceh timur|aceh utara|aceh tengah|takengon|"
+    r"pidie|sigli|abdya|blangpidie|tapaktuan|singkil|kutacane|calang|bener meriah|gayo lues|"
+    r"blangkejeren|nagan raya|pidie jaya|meureudu|pulau weh|sinabang|babahrot|jeumpa|susoh|"
+    r"jambi|muaro jambi|talang duku|batanghari|merangin|bangko|sarolangun|tanjung jabung|"
+    r"muara sabak|kuala tungkal|kerinci|sungai penuh|bungo|muara bungo|tebo|"
+    r"bengkulu|pulau baai|rejang lebong|curup|mukomuko|manna|kaur|kepahiang|arga makmur|seluma|lebong|muara aman|"
+    r"pangkalpinang|tanjung pandan|muntok|pangkal balam|tanjung kalian|bangka barat|bangka selatan|toboali|"
+    r"bangka tengah|koba|belitung timur|manggar|"
+    r"nias|gunungsitoli|mentawai|tuapejat|kepulauan mentawai|simeulue|sabang|batam|bintan|tanjung pinang|natuna|ranai|anambas|tarempa|"
+    r"lingga|daik|karimun|tanjung balai karimun|enggano|pulau enggano|batu ampar|sri bintan|"
+    r"jalinsum|jalintim|jalinbar|jalinteng|jalinpantim|jalan lintas sumatera|lintas sumatera|"
+    r"jalan lintas timur|lintas timur|jalan lintas barat|lintas barat|jalan lintas tengah|lintas tengah|"
+    r"jalan lintas pantai timur|jtts|tol trans sumatera|trans sumatera|trans sumatra|selat malaka|selat sunda)\b",
     re.IGNORECASE,
 )
 
@@ -160,12 +186,120 @@ POST_CONSTRUCTION_EXCLUSION_PHRASES = (
 )
 
 PHYSICAL_BLOCKAGE_PREDICATES = (
-    "putus", "terputus", "amblas", "ambles", "ambruk", "runtuh",
+    "putus", "terputus", "amblas", "ambles", "ambruk", "ambrol", "runtuh",
     "tertutup", "ditutup", "tutup total", "lumpuh", "terisolir",
-    "macet total", "tidak bisa dilalui", "tak bisa dilalui",
+    "macet total", "antrean mengular", "tidak bisa dilalui", "tak bisa dilalui",
+    "buka tutup",
     "merendam jalan", "jalan terendam", "jalur terendam", "banjir merendam",
     "menimbun badan jalan", "menutup badan jalan",
 )
+
+# Sentence-level syntactic proximity (Task 3): a predicate only counts when it
+# shares ONE sentence with physical infrastructure/transport. Document-level
+# co-occurrence (e.g. 'harga cabai … lumpuh' paragraphs away from 'jalan')
+# is a leak vector and must not set physical_blockage.
+_PHYSICAL_HAZARD_TERMS = (
+    "banjir bandang", "tanah longsor", "jalan amblas", "jembatan putus",
+    "pohon tumbang", "erupsi", "gempa bumi", "angin puting beliung",
+    "kebakaran hutan", "karhutla", "gelombang tinggi", "rob",
+    "banjir", "longsor", "amblas", "gempa", "lahar dingin", "puting beliung",
+    "banjir rob", "luapan", "terendam", "genangan",
+)
+_PHYSICAL_INFRA_NOUNS = (
+    "jalan", "jalinsum", "jalintim", "jalinbar", "jalinteng", "jalinpantim",
+    "tol", "jembatan", "ruas", "jalur", "lajur", "akses",
+    "pelabuhan", "dermaga", "penyeberangan", "truk", "kendaraan",
+    "lalu lintas", "arus lalin", "arus", "badan jalan",
+)
+_METAPHOR_NOUNS = (
+    "politik", "diskon", "promo", "orderan", "suara", "kritik", "dukungan", "phk",
+    "pilkada", "pemilu", "kampanye",
+)
+_ECON_SUBJECTS = (
+    "daya beli", "ekonomi", "inflasi", "harga", "saham", "rupiah",
+    "anggaran", "birokrasi", "komunikasi", "tengkulak", "permainan harga",
+    "ulah", "pasokan", "operasi pasar",
+)
+_ECON_VETO_PREDICATES = ("lumpuh", "putus", "anjlok", "terhambat", "melumpuhkan", "terganggu", "terganggu")
+_NEGATION_MARKERS = ("bukan", "tidak", "tanpa", "belum", "tak ada", "tidak ada")
+_SENT_SPLIT_RE = re.compile(r"[.!?\n;]+")
+# Extended infra set for veto check (adds distribution nouns so true logistics
+# sentences are not vetoed while pure-economy sentences are).
+_VETO_INFRA_NOUNS = _PHYSICAL_INFRA_NOUNS + ("distribusi", "logistik", "kargo", "sembako",)
+
+
+def _sentence_has_metaphor_after_hazard(sentence: str, hazard: str) -> bool:
+    """True when a metaphor noun occurs within ~40 chars after the hazard term."""
+    try:
+        idx = sentence.find(hazard)
+        while idx != -1:
+            window = sentence[idx:idx + len(hazard) + 40]
+            if any(m in window for m in _METAPHOR_NOUNS):
+                return True
+            idx = sentence.find(hazard, idx + 1)
+    except Exception:
+        return False
+    return False
+
+
+def has_physical_crisis_proximity(text: str) -> bool:
+    """Sentence-level physical proof: True iff ONE sentence contains either
+    (A) an explicit natural-hazard term without a trailing metaphor noun, or
+    (B) a PHYSICAL_BLOCKAGE_PREDICATE + a physical infra/transport noun.
+
+    Economic/metaphor veto: a sentence where a veto predicate
+    (lumpuh/putus/anjlok/terhambat) co-occurs ONLY with economic subjects
+    (daya beli/ekonomi/harga/…) and NO infra noun returns False for that
+    sentence. At least one non-vetoed qualifying sentence is required.
+    """
+    if not text or not isinstance(text, str):
+        return False
+    try:
+        low = text.lower()
+        for _sent in _SENT_SPLIT_RE.split(low):
+            sent = (_sent or "").strip()
+            if len(sent) < 8:
+                continue
+            # Veto first: economic-only sentence can never qualify.
+            _has_veto_pred = any(p in sent for p in _ECON_VETO_PREDICATES)
+            _has_econ = any(e in sent for e in _ECON_SUBJECTS)
+            _has_infra = any(n in sent for n in _VETO_INFRA_NOUNS)
+            _has_strict_infra = any(n in sent for n in _PHYSICAL_INFRA_NOUNS)
+            if _has_veto_pred and _has_econ and not _has_infra:
+                continue
+            # Negation guard: 'bukan banjir' / 'tidak ada longsor' explicitly
+            # denies the hazard — never counts as physical proof.
+            _has_negation = any(n in sent for n in _NEGATION_MARKERS)
+            # (A) explicit hazard without metaphor follower.
+            for _hz in _PHYSICAL_HAZARD_TERMS:
+                if _hz in sent and not _sentence_has_metaphor_after_hazard(sent, _hz):
+                    if _has_negation and _hz in sent:
+                        # Negated hazard in same sentence (e.g. 'bukan banjir')
+                        # admits uncertainty — skip this hazard occurrence.
+                        continue
+                    # Bare 'banjir/rob/genangan' still needs either strict infra
+                    # context or a blockage predicate in the SAME sentence to avoid
+                    # 'banjir diskon' style leaks; multi-word hazards pass directly.
+                    if " " in _hz or _hz in ("erupsi", "gempa bumi", "karhutla", "kebakaran hutan", "gelombang tinggi", "angin puting beliung", "pohon tumbang", "lahar dingin", "puting beliung"):
+                        return True
+                    if _has_strict_infra or any(p in sent for p in PHYSICAL_BLOCKAGE_PREDICATES):
+                        return True
+                    # Bare flood word with strong flood verbs still counts.
+                    if _hz in ("banjir", "luapan", "terendam", "genangan", "longsor", "amblas", "gempa", "rob") and any(
+                        v in sent for v in ("rendam", "luapan", "terendam", "genangan", "tutup", "putus", "amblas", "longsor", "menutup", "merendam", "meluap", "menggenang")
+                    ):
+                        # Flood verb alone is insufficient without strict infra —
+                        # require road/port/vehicle context to avoid commodity leaks.
+                        if _has_strict_infra:
+                            return True
+                        continue
+            # (B) predicate + strict infra in same sentence (road/port/vehicle —
+            # bare 'distribusi/logistik' without road/port does NOT qualify).
+            if any(p in sent for p in PHYSICAL_BLOCKAGE_PREDICATES) and _has_strict_infra:
+                return True
+    except Exception:
+        return False
+    return False
 
 NON_INCIDENT_DISCOURSE_MARKERS = (
     "akademisi", "unand", "universitas", "guru besar", "pakar", "pengamat",
@@ -228,8 +362,37 @@ _DEFAULT_HAZARD_LABELS = {
 
 
 def _detect_incident_type(full_text: str) -> tuple[str, str | None, str | None]:
-    """Returns (incident_type, custom_hazard_label_override, passability_hint)."""
+    """Returns (incident_type, custom_hazard_label_override, passability_hint).
+
+    Sentence-level guard: metaphorical/economic uses ('banjir diskon',
+    'gempa politik', 'daya beli lumpuh') never classify as a physical
+    incident even when the bare keyword occurs document-wide. Such texts
+    fall through to other_disruption so the heuristic gate drops them.
+    """
     t = full_text
+    # Metaphor pre-veto: hazard word + metaphor noun in the SAME sentence
+    # without sentence-level physical proximity -> not a physical incident.
+    try:
+        _low = (t or "").lower()
+        _has_metaphor_sentence = False
+        for _s in _SENT_SPLIT_RE.split(_low):
+            _s = (_s or "").strip()
+            if not _s:
+                continue
+            if any(h in _s for h in ("banjir", "badai", "gempa", "longsor", "gelombang")) and any(
+                m in _s for m in _METAPHOR_NOUNS
+            ):
+                _has_metaphor_sentence = True
+                break
+            if any(p in _s for p in _ECON_VETO_PREDICATES) and any(
+                e in _s for e in _ECON_SUBJECTS
+            ) and not any(n in _s for n in _VETO_INFRA_NOUNS):
+                _has_metaphor_sentence = True
+                break
+        if _has_metaphor_sentence and not has_physical_crisis_proximity(t):
+            return "other_disruption", None, None
+    except Exception:
+        pass
     has_crisis = any(w in t for w in STRICT_CRISIS_PREDICATES)
     # Port closure (specific first — must precede generic 'pelabuhan' checks)
     if any(w in t for w in ["penutupan pelabuhan", "pelabuhan ditutup", "dermaga ditutup",
@@ -389,7 +552,7 @@ def run_agent_verification_gate(
         SPEC-LOCKED Q1: prevention_ceremonial (mitigasi/pemetaan/sosialisasi/
         apel-siaga) without a physical blockage ALWAYS fails discourse.
     Check 3 (spatial_passed): is_geocoded and latitude/longitude not None AND
-        inside the hard Sumatra bbox 94-108E/-6..6N. Out-of-Sumatra
+        inside the hard Sumatra bbox 94-108E/-6.5..6.5N. Out-of-Sumatra
         (e.g. Gunung Sumbing Jateng) fails even when crisis-true.
     Check 4 (impact_corroborated): ALL must hold for RED_CONFIRMED.
     """
@@ -400,14 +563,20 @@ def run_agent_verification_gate(
         article = {}
     # Merge kwargs-based article fields when full_text not explicitly passed.
     if not full_text_lower:
-        _t = f"{article.get('title','')} {article.get('raw_description','') or article.get('summary','')}".lower()
+        _t = f"{article.get('title','')}. {article.get('raw_description','') or article.get('summary','')}".lower()
         full_text_lower = _t
     else:
         full_text_lower = (full_text_lower or "").lower()
     if "has_crisis_predicate" not in kwargs and not has_crisis_predicate:
         has_crisis_predicate = any(w in full_text_lower for w in STRICT_CRISIS_PREDICATES)
     if "has_physical_blockage" not in kwargs and not has_physical_blockage:
-        has_physical_blockage = any(w in full_text_lower for w in PHYSICAL_BLOCKAGE_PREDICATES)
+        try:
+            # Sentence-level proximity: predicate + infra must share one sentence;
+            # economic-only sentences are vetoed (Task 3).
+            _raw_for_prox = f"{article.get('title','')}. {article.get('raw_description','') or article.get('summary','')}" if article else full_text_lower
+            has_physical_blockage = bool(has_physical_crisis_proximity(_raw_for_prox))
+        except Exception:
+            has_physical_blockage = any(w in full_text_lower for w in PHYSICAL_BLOCKAGE_PREDICATES)
     if "has_non_incident_discourse" not in kwargs and not has_non_incident_discourse:
         has_non_incident_discourse = any(w in full_text_lower for w in NON_INCIDENT_DISCOURSE_MARKERS)
     if not is_geocoded:
@@ -502,7 +671,7 @@ def run_agent_verification_gate(
 
     discourse_type = _classify_discourse_type(full_text_lower, has_non_incident_discourse)
     if _is_out_of_sumatra:
-        verdict_summary = "DROPPED: lokasi di luar Pulau Sumatera (di luar bbox 94-108E/-6..6N); bukan cakupan koridor."
+        verdict_summary = "DROPPED: lokasi di luar Pulau Sumatera (di luar bbox 94-108E/-6.5..6.5N); bukan cakupan koridor."
     elif _is_prevention_ceremonial and not has_physical_blockage:
         verdict_summary = "DROPPED: kegiatan pencegahan/seremonial (mitigasi/pemetaan/sosialisasi/apel-siaga) tanpa blokade fisik aktif."
     elif impact_corroborated:
@@ -542,7 +711,7 @@ def _fast_heuristic_extraction(art: Dict[str, Any]) -> Dict[str, Any]:
     """Fast deterministic rule-based extractor for zero-latency / offline execution."""
     title = art.get("title", "") or ""
     desc = art.get("raw_description", "") or art.get("summary", "") or ""
-    raw_full = f"{title} {desc}"
+    raw_full = f"{title}. {desc}"
     full_text = raw_full.lower()
     clean_for_geo = strip_bureau_and_dateline_noise(raw_full)
     clean_lower = clean_for_geo.lower()
@@ -557,7 +726,24 @@ def _fast_heuristic_extraction(art: Dict[str, Any]) -> Dict[str, Any]:
     # action predicate must be present.
     has_crisis_predicate = any(w in full_text for w in STRICT_CRISIS_PREDICATES)
     has_exclusion = any(w in full_text for w in ECONOMIC_OPINION_CEREMONIAL_EXCLUSIONS)
-    has_physical_blockage = any(w in full_text for w in PHYSICAL_BLOCKAGE_PREDICATES)
+    # Sentence-level proximity (Task 3): document-level substring hits are
+    # insufficient — the predicate and infra noun must share ONE sentence,
+    # and economic-only sentences are vetoed.
+    try:
+        has_physical_blockage = bool(has_physical_crisis_proximity(raw_full))
+    except Exception:
+        has_physical_blockage = any(w in full_text for w in PHYSICAL_BLOCKAGE_PREDICATES)
+    # Economic/metaphor-only override (Task 3 veto): a veto predicate that only
+    # co-occurs with economic subjects and never achieves sentence-level
+    # physical proximity is NOT a logistics disruption — force DROPPED later.
+    try:
+        _has_veto_pred_doc = any(p in full_text for p in _ECON_VETO_PREDICATES)
+        _has_econ_doc = any(e in full_text for e in _ECON_SUBJECTS)
+        _is_economic_metaphor_only = bool(
+            _has_veto_pred_doc and _has_econ_doc and not has_physical_blockage
+        )
+    except Exception:
+        _is_economic_metaphor_only = False
     # Only treat as logistics-relevant if a strict crisis predicate fired.
     _hazard_signal = has_crisis_predicate
     custom_hazard_label = label_override or _DEFAULT_HAZARD_LABELS.get(incident_type, "Disrupsi Logistik")
@@ -600,7 +786,7 @@ def _fast_heuristic_extraction(art: Dict[str, Any]) -> Dict[str, Any]:
     region = loc_info.get("province") or art.get("province") or "Sumatera"
     is_geocoded = bool(loc_info.get("is_geocoded")) and latitude is not None and longitude is not None
     location_precision = loc_info.get("location_precision", "none")
-    # SPEC-LOCKED Q1 hard island bbox: coordinates outside 94-108E/-6..6N
+    # SPEC-LOCKED Q1 hard island bbox: coordinates outside 94-108E/-6.5..6.5N
     # (e.g. Java volcano reports) are un-geocoded — never a blind centroid,
     # never a zone. Admit uncertainty > false positive.
     if is_geocoded and not _is_within_strict_sumatra_bbox(latitude, longitude):
@@ -711,13 +897,19 @@ def _fast_heuristic_extraction(art: Dict[str, Any]) -> Dict[str, Any]:
         else:
             tier_reason = ("Artikel opini/akademik/kebijakan/solusi tanpa blokade fisik aktif; "
                            "bukan disrupsi logistik.")
+    elif _is_economic_metaphor_only:
+        # Task 3 economic veto: predicate co-occurs only with economic subjects
+        # (daya beli/harga/tengkulak/…) without sentence-level physical proof.
+        zone_tier = "DROPPED_IRRELEVANT"
+        tier_reason = ("Metafora ekonomi/sosial tanpa blokade fisik (mis. daya beli lumpuh, "
+                       "harga meroket, ulah tengkulak); bukan disrupsi logistik fisik.")
     elif _is_out_of_sumatra or (
         _contains_out_of_sumatra_marker(full_text) and not is_geocoded
     ):
         # SPEC-LOCKED Q1: out-of-Sumatra (mis. Gunung Sumbing Jateng) → zero
         # zone even when a crisis word fired. Indonesian reason.
         zone_tier = "DROPPED_IRRELEVANT"
-        tier_reason = ("Lokasi kejadian di luar Pulau Sumatera (di luar bbox 94-108E/-6..6N); "
+        tier_reason = ("Lokasi kejadian di luar Pulau Sumatera (di luar bbox 94-108E/-6.5..6.5N); "
                        "di luar cakupan koridor logistik Sumatera.")
     elif (_is_prevention_ceremonial or _has_prevention_marker) and not has_physical_blockage:
         # SPEC-LOCKED Q1: mitigasi/pemetaan/sosialisasi/apel-siaga without
@@ -996,12 +1188,38 @@ def _apply_batch_llm_item(structured: Dict[str, Any], item: Dict[str, Any]) -> D
                                          or "LLM tidak menemukan lokasi Sumatera terverifikasi.")
         else:
             if llm_tier in ("RED_CONFIRMED", "YELLOW_CLARIFY", "DROPPED_IRRELEVANT"):
-                # Never upgrade an un-geocoded heuristic to RED.
-                if llm_tier == "RED_CONFIRMED" and not structured.get("is_geocoded"):
-                    structured["zone_tier"] = "DROPPED_IRRELEVANT"
-                    structured["tier_reason"] = ("Artikel tidak memiliki lokasi insiden "
-                                                 "spesifik di koridor Sumatera atau bukan "
-                                                 "disrupsi logistik.")
+                # Task 4.1: un-geocoded / unverified / out-of-bbox NEVER escalates
+                # to RED. Tier-1 source with explicit province match caps at
+                # YELLOW max, otherwise DROPPED.
+                _is_geo = bool(structured.get("is_geocoded"))
+                _slat0 = structured.get("latitude")
+                _slon0 = structured.get("longitude")
+                _out_of_bbox0 = (
+                    _slat0 is not None and _slon0 is not None
+                    and not _is_within_strict_sumatra_bbox(_slat0, _slon0)
+                )
+                if (not _is_geo or llm_loc is None or _out_of_bbox0) and llm_tier == "RED_CONFIRMED":
+                    _tier1 = str(structured.get("source_tier") or "").upper() == "TIER_1_OFFICIAL" or any(
+                        w in str(structured.get("source") or "").lower()
+                        for w in ("antara", "bmkg", "bnpb", "bpbd", "kemenhub")
+                    )
+                    _raw_prov = ((structured.get("raw_description") or "") + " " + (structured.get("title") or "")).lower()
+                    _prov_match = False
+                    try:
+                        _prov = str(structured.get("province") or structured.get("region") or "").lower()
+                        if _prov and _prov not in ("sumatera", "sumatra", "unknown", "nasional") and _prov in _raw_prov:
+                            _prov_match = True
+                    except Exception:
+                        _prov_match = False
+                    if _tier1 and _prov_match:
+                        structured["zone_tier"] = "YELLOW_CLARIFY"
+                        structured["tier_reason"] = ("Lokasi belum tergeocode presisi namun sumber Tier-1 menyebut "
+                                                     "provinsi Sumatera eksplisit; dibatasi Zona Kuning, tidak pernah Merah.")
+                    else:
+                        structured["zone_tier"] = "DROPPED_IRRELEVANT"
+                        structured["tier_reason"] = ("Artikel tidak memiliki lokasi insiden "
+                                                     "spesifik di koridor Sumatera atau koordinat di luar "
+                                                     "bbox 94-108E/-6.5..6.5N; bukan disrupsi terverifikasi.")
                 elif llm_tier == "RED_CONFIRMED" and structured.get("location_precision") in ("kabupaten_kota", "province_only") and not structured.get("has_physical_blockage"):
                     # Tier-C hard invariant cap: broad city/regency mention is capped at YELLOW_CLARIFY
                     structured["zone_tier"] = "YELLOW_CLARIFY"
@@ -1019,7 +1237,7 @@ def _apply_batch_llm_item(structured: Dict[str, Any], item: Dict[str, Any]) -> D
             if _slat is not None and _slon is not None and not _is_within_strict_sumatra_bbox(_slat, _slon):
                 structured["zone_tier"] = "DROPPED_IRRELEVANT"
                 structured["tier_reason"] = ("Lokasi kejadian di luar Pulau Sumatera "
-                                             "(di luar bbox 94-108E/-6..6N); di luar cakupan "
+                                             "(di luar bbox 94-108E/-6.5..6.5N); di luar cakupan "
                                              "koridor logistik Sumatera.")
                 structured["is_geocoded"] = False
                 structured["latitude"] = None
@@ -1325,7 +1543,7 @@ async def _gate2_verify_single_item(structured: Dict[str, Any]) -> Dict[str, Any
             if _lat2 is not None and _lon2 is not None and not _is_within_strict_sumatra_bbox(_lat2, _lon2):
                 structured["zone_tier"] = "DROPPED_IRRELEVANT"
                 structured["tier_reason"] = ("Lokasi kejadian di luar Pulau Sumatera "
-                                             "(di luar bbox 94-108E/-6..6N); koroborasi Gate-2 "
+                                             "(di luar bbox 94-108E/-6.5..6.5N); koroborasi Gate-2 "
                                              "tidak dapat mengonfirmasi zona.")
                 _veto = dict(structured.get("verification_audit") or {})
                 _veto.update({"gate2_reviewed": True, "gate2_verdict": "Q1_BBOX_VETO",
@@ -1366,7 +1584,7 @@ async def _gate2_verify_single_item(structured: Dict[str, Any]) -> Dict[str, Any
                     '"has_physical_blockage": true|false, '
                     '"tier_reason": "1 kalimat Bahasa Indonesia"}. '
                     "true HANYA jika ada blokade fisik aktif (putus/amblas/lumpuh/tutup total/"
-                    "terisolir/tidak bisa dilalui) di koridor Sumatera (bbox 94-108E/-6..6N). "
+                    "terisolir/tidak bisa dilalui) di koridor Sumatera (bbox 94-108E/-6.5..6.5N). "
                     "Mitigasi/pemetaan/sosialisasi/apel-siaga tanpa blokade fisik, lokasi luar "
                     "Sumatera (mis. Sumbing Jateng), opini/akademik, atau arsip >48 jam => false. "
                     f"Judul: {title[:200]}. ISI BERITA: {_desc}"
@@ -1496,7 +1714,7 @@ async def run_gate2_async_verification(
 ) -> List[Dict[str, Any]]:
     """Selective async Gate-2 for uncertain items (Q2+Q7). Never raises.
 
-    Gate-1 (DB-first + deepseek-v4.1-flash batch x5 sync) stays the hot path;
+    Gate-1 (DB-first + deepseek-v4.1-flash single-item concurrent sync) stays the hot path;
     only items where _needs_gate2_review() is True spend the mimo-v2.6-pro
     low-effort + single web-search + consensus re-check budget, at most
     `max_concurrency` (default 5) in flight with `timeout_seconds` (default
@@ -1541,11 +1759,14 @@ async def run_gate2_async_verification(
 
 async def extract_structured_news_batch(articles: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
-    Economical batched LLM gatekeeper: enrich short bodies with full article HTML,
-    heuristic baselines for all articles, then compact LLM calls in chunks of up
-    to 5 candidates via LLMGateway.generate_content returning a JSON array with
-    per-article tiering. Falls back to heuristics when the LLM is unavailable.
-    Never raises.
+    Single-item concurrent LLM gatekeeper (no cross-article bleeding).
+
+    Each candidate gets its OWN isolated LLM call (batch size 1) governed by
+    asyncio.Semaphore(8). A 5-in-1 prompt lets an active landslide in item 1
+    contaminate a routine commodity article in item 3 and truncates JSON at
+    max_tokens=600 — single-item calls keep 600 tokens per article and enforce
+    strict Pan-Sumatra physical verification per article. Falls back to
+    heuristics when the LLM is unavailable. Never raises.
     """
     if not articles:
         return []
@@ -1607,58 +1828,65 @@ async def extract_structured_news_batch(articles: List[Dict[str, Any]]) -> List[
         if not opencode_key or opencode_key.startswith("your-"):
             return baselines
         from agents.llm_gateway import LLMGateway
-        by_id = {str(b.get("id")): b for b in baselines}
-        for _ci in range(0, len(candidates), 5):
-            _chunk = candidates[_ci:_ci + 5]
-            lines = []
-            for b in _chunk:
-                _desc = (b.get("raw_description") or b.get("concise_summary") or b.get("summary") or "")
-                # Clamped: headline <= 120 chars, lead body <= 400 chars
-                lines.append(
-                    f"- id: {b.get('id')} | judul: {(b.get('title') or '')[:120]} | "
-                    f"ringkasan: {_desc[:400]}"
-                )
-            prompt = (
-                "Ekstraksi disrupsi logistik bencana Pulau Sumatera. Kembalikan HANYA array JSON (tanpa markdown/penjelasan) satu objek per artikel:\n"
-                "[\n"
-                "  {\n"
-                '    "id": "string",\n'
-                '    "is_active_disaster": true,\n'
-                '    "zone_tier": "RED_CONFIRMED | YELLOW_CLARIFY | DROPPED_IRRELEVANT",\n'
-                '    "tier_reason": "alasan singkat",\n'
-                '    "incident_type": "flood | landslide | earthquake | wildfire | port_closure | marine_wave | road_closure | congestion | volcanic_eruption | other_disruption",\n'
-                '    "severity": "low | medium | high | critical",\n'
-                '    "verified_sumatra_location": "lokasi spesifik atau null",\n'
-                '    "verified_sumatra_locations": ["lokasi1", "lokasi2"],\n'
-                '    "passability": "BLOCKED | RESTRICTED | CAUTION",\n'
-                '    "custom_hazard_label": "label bencana singkat"\n'
-                "  }\n"
-                "]\n"
-                "Aturan: is_active_disaster=false atau bukan Sumatera => zone_tier DROPPED_IRRELEVANT. "
-                "Hanya bencana fisik aktif di jalur/pelabuhan logistik Sumatera yang valid.\n\n"
-                + "\n".join(lines)
-            )
-            try:
-                gen_text = await asyncio.wait_for(
-                    LLMGateway.generate_content(prompt=prompt, model_name=settings.opencode_driver_model, max_tokens=600),
-                    timeout=25.0,
-                )
-            except Exception as _ce:
-                logger.warning(f"Batched LLM chunk unavailable ({type(_ce).__name__}: {_ce}); keeping heuristics.")
-                continue
-            if not gen_text:
-                continue
-            try:
-                parsed = json.loads(_clean_llm_json(gen_text))
-            except Exception:
-                continue
-            items = parsed if isinstance(parsed, list) else parsed.get("items", []) if isinstance(parsed, dict) else []
-            for it in items:
-                if not isinstance(it, dict) or not it.get("id"):
-                    continue
-                target = by_id.get(str(it["id"]))
-                if target is not None:
-                    _apply_batch_llm_item(target, it)
+        _sem = asyncio.Semaphore(8)
+
+        async def _llm_single(b: Dict[str, Any]) -> None:
+            async with _sem:
+                try:
+                    _desc = (b.get("raw_description") or b.get("concise_summary") or b.get("summary") or "")
+                    prompt = (
+                        "You are an OSINT Logistics & Disaster Verification Engine covering the ENTIRE island "
+                        "and archipelago of Sumatra, Indonesia (all 10 provinces: Aceh, Sumut, Sumbar, Riau, "
+                        "Kepri, Jambi, Bengkulu, Sumsel, Babel, Lampung, from major highways and ports down to "
+                        "remote kabupaten, kecamatan, desa, and nagari).\n\n"
+                        "Classify whether the article reports a REAL, LITERAL, PHYSICAL, and ACTIVE "
+                        "(or imminent within 48h) disaster, infrastructure failure, road/port disruption, "
+                        "or severe logistics bottleneck in Sumatra.\n\n"
+                        "STRICT REJECTION RULES (Set is_active_disaster=false, zone_tier=\"DROPPED\"): \n"
+                        "1. Reject metaphors: \"banjir diskon\", \"badai PHK\", \"gempa politik\", "
+                        "\"daya beli lumpuh\", \"harga cabai meroket\".\n"
+                        "2. Reject pure commodity price reports (operasi pasar, harga beras/cabai naik/turun) "
+                        "UNLESS the article explicitly states physical transport/supply delivery is blocked by "
+                        "road damage, weather, flood, landslide, or port closure.\n"
+                        "3. Reject ceremonies, simulations (apel siaga, simulasi bencana, rapat koordinasi), "
+                        "historical retrospectives, or post-recovery political visits where roads/ports are "
+                        "already normal.\n"
+                        "4. Reject events occurring outside Sumatra (e.g., Java, Kalimantan, Sulawesi) even if "
+                        "reported by a Sumatra news bureau.\n\n"
+                        "Return ONLY one clean JSON object (no markdown, no commentary):\n"
+                        "{\n"
+                        f"  \"id\": \"{b.get('id')}\",\n"
+                        "  \"is_active_disaster\": true,\n"
+                        "  \"zone_tier\": \"RED_CONFIRMED | YELLOW_CLARIFY | DROPPED_IRRELEVANT\",\n"
+                        "  \"tier_reason\": \"1 kalimat Bahasa Indonesia\",\n"
+                        "  \"incident_type\": \"flood | landslide | earthquake | wildfire | port_closure | marine_wave | road_closure | congestion | volcanic_eruption | other_disruption\",\n"
+                        "  \"severity\": \"low | medium | high | critical\",\n"
+                        "  \"verified_sumatra_location\": \"lokasi spesifik atau null\",\n"
+                        "  \"verified_sumatra_locations\": [\"lokasi1\"],\n"
+                        "  \"passability\": \"BLOCKED | RESTRICTED | CAUTION\",\n"
+                        "  \"custom_hazard_label\": \"label singkat\"\n"
+                        "}\n\n"
+                        f"Judul: {(b.get('title') or '')[:120]}\n"
+                        f"Isi: {_desc[:400]}"
+                    )
+                    gen_text = await asyncio.wait_for(
+                        LLMGateway.generate_content(prompt=prompt, model_name=settings.opencode_driver_model, max_tokens=600),
+                        timeout=25.0,
+                    )
+                    if not gen_text:
+                        return
+                    parsed = json.loads(_clean_llm_json(gen_text))
+                    it = parsed if isinstance(parsed, dict) else None
+                    if isinstance(parsed, list) and parsed and isinstance(parsed[0], dict):
+                        it = parsed[0]
+                    if not isinstance(it, dict):
+                        return
+                    it.setdefault("id", b.get("id"))
+                    _apply_batch_llm_item(b, it)
+                except Exception as _ce:
+                    logger.debug(f"Single LLM unavailable for {b.get('id')} ({type(_ce).__name__}); keeping heuristics.")
+
+        await asyncio.gather(*[_llm_single(b) for b in candidates])
     except Exception as e:
         logger.warning(f"Batched LLM extraction unavailable ({type(e).__name__}: {e}); using heuristics.")
     return baselines

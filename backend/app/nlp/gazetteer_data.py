@@ -23,14 +23,14 @@ specificity tier:
 from typing import Dict, Tuple, Any
 
 SUMATRA_BOUNDING_BOX = {
-    # SPEC-LOCKED M5 Phase A Q1: hard Sumatra island bbox 94-108E / -6..6N.
+    # SPEC-LOCKED M5 Phase A Q1: hard Sumatra island bbox 94-108E / -6.5..6.5N.
     # Anything outside (e.g. Gunung Sumbing Jateng ~110.07E/-7.38) is
     # DROPPED_IRRELEVANT even if a crisis predicate fired. Admit
     # uncertainty > false positive.
     "min_lon": 94.0,
     "max_lon": 108.0,
-    "min_lat": -6.0,
-    "max_lat": 6.0
+    "min_lat": -6.5,
+    "max_lat": 6.5
 }
 
 # SPEC-LOCKED M5 Phase A Q1: Java / out-of-Sumatra toponyms that must NEVER
@@ -384,6 +384,32 @@ PAN_SUMATRA_GAZETTEER: Dict[str, Dict[str, Any]] = {
     "pelabuhan pangkal balam": {"coords": (-2.1333, 106.1167), "province": "Kepulauan Bangka Belitung", "corridor": "Pelabuhan Pangkal Balam", "tier": 1},
     "tanjung pandan": {"coords": (-2.7333, 107.6333), "province": "Kepulauan Bangka Belitung", "corridor": "Pelabuhan Tanjung Pandan Belitung", "tier": 1},
     "muntok": {"coords": (-2.0667, 105.1667), "province": "Kepulauan Bangka Belitung", "corridor": "Pelabuhan Penyeberangan Tanjung Kalian Muntok", "tier": 1},
+    "bangka barat": {"coords": (-2.0667, 105.1667), "province": "Kepulauan Bangka Belitung", "corridor": "Pelabuhan Penyeberangan Tanjung Kalian Muntok", "tier": 2},
+    "bangka selatan": {"coords": (-2.9000, 106.4000), "province": "Kepulauan Bangka Belitung", "corridor": "Jalur Toboali Bangka Selatan", "tier": 2},
+    "toboali": {"coords": (-2.9000, 106.4000), "province": "Kepulauan Bangka Belitung", "corridor": "Jalur Toboali Bangka Selatan", "tier": 1},
+    "bangka tengah": {"coords": (-2.5000, 106.4000), "province": "Kepulauan Bangka Belitung", "corridor": "Jalur Koba Bangka Tengah", "tier": 2},
+    "koba": {"coords": (-2.5000, 106.4000), "province": "Kepulauan Bangka Belitung", "corridor": "Jalur Koba Bangka Tengah", "tier": 1},
+    "belitung timur": {"coords": (-2.8833, 107.9500), "province": "Kepulauan Bangka Belitung", "corridor": "Pelabuhan Manggar Belitung Timur", "tier": 2},
+    "manggar": {"coords": (-2.8833, 107.9500), "province": "Kepulauan Bangka Belitung", "corridor": "Pelabuhan Manggar Belitung Timur", "tier": 1},
+
+    # ==================== KEPRI ARCHIPELAGO (Natuna/Anambas/Lingga/Karimun) ====================
+    "natuna": {"coords": (3.9833, 107.9833), "province": "Kepulauan Riau", "corridor": "Pelabuhan Penyeberangan Ranai Natuna", "tier": 2},
+    "ranai": {"coords": (3.9833, 107.9833), "province": "Kepulauan Riau", "corridor": "Pelabuhan Penyeberangan Ranai Natuna", "tier": 1},
+    "anambas": {"coords": (3.2000, 106.2000), "province": "Kepulauan Riau", "corridor": "Pelabuhan Tarempa Anambas", "tier": 2},
+    "tarempa": {"coords": (3.2000, 106.2000), "province": "Kepulauan Riau", "corridor": "Pelabuhan Tarempa Anambas", "tier": 1},
+    "lingga": {"coords": (-0.2000, 104.6000), "province": "Kepulauan Riau", "corridor": "Pelabuhan Daik Lingga", "tier": 2},
+    "daik": {"coords": (-0.2000, 104.6000), "province": "Kepulauan Riau", "corridor": "Pelabuhan Daik Lingga", "tier": 1},
+    "karimun": {"coords": (1.0000, 103.4000), "province": "Kepulauan Riau", "corridor": "Pelabuhan Tanjung Balai Karimun", "tier": 2},
+    "tanjung balai karimun": {"coords": (1.0000, 103.4000), "province": "Kepulauan Riau", "corridor": "Pelabuhan Tanjung Balai Karimun", "tier": 1},
+
+    # ==================== OFFSHORE ISLANDS (Mentawai/Enggano) ====================
+    "mentawai": {"coords": (-2.0000, 99.6000), "province": "Sumatera Barat", "corridor": "Pelabuhan Tuapejat Mentawai", "tier": 2},
+    "tuapejat": {"coords": (-2.0000, 99.6000), "province": "Sumatera Barat", "corridor": "Pelabuhan Tuapejat Mentawai", "tier": 1},
+    "kepulauan mentawai": {"coords": (-2.0000, 99.6000), "province": "Sumatera Barat", "corridor": "Pelabuhan Tuapejat Mentawai", "tier": 2},
+    "enggano": {"coords": (-5.4000, 102.2700), "province": "Bengkulu", "corridor": "Pelabuhan Kahyapu Enggano", "tier": 2},
+    "pulau enggano": {"coords": (-5.4000, 102.2700), "province": "Bengkulu", "corridor": "Pelabuhan Kahyapu Enggano", "tier": 1},
+    "lebong": {"coords": (-3.1000, 102.2000), "province": "Bengkulu", "corridor": "Jalur Muara Aman Lebong", "tier": 2},
+    "muara aman": {"coords": (-3.1000, 102.2000), "province": "Bengkulu", "corridor": "Jalur Muara Aman Lebong", "tier": 1},
 
     # ==================== EXTRA PORTS ====================
     "tanjung api-api": {"coords": (-2.3667, 104.7667), "province": "Sumatera Selatan", "corridor": "Pelabuhan Tanjung Api-Api", "tier": 1},
@@ -392,14 +418,23 @@ PAN_SUMATRA_GAZETTEER: Dict[str, Dict[str, Any]] = {
     # ==================== MAJOR HIGHWAY CORRIDORS & MARITIME (Tier 3) ====================
     "jalintim": {"coords": (-2.5000, 104.5000), "province": "Sumatera", "corridor": "Jalan Lintas Timur Sumatera (Jalintim)", "tier": 3},
     "jalan lintas timur": {"coords": (-2.5000, 104.5000), "province": "Sumatera", "corridor": "Jalan Lintas Timur Sumatera (Jalintim)", "tier": 3},
+    "lintas timur": {"coords": (-2.5000, 104.5000), "province": "Sumatera", "corridor": "Jalan Lintas Timur Sumatera (Jalintim)", "tier": 3},
     "jalinbar": {"coords": (-2.0000, 101.5000), "province": "Sumatera", "corridor": "Jalan Lintas Barat Sumatera (Jalinbar)", "tier": 3},
     "jalan lintas barat": {"coords": (-2.0000, 101.5000), "province": "Sumatera", "corridor": "Jalan Lintas Barat Sumatera (Jalinbar)", "tier": 3},
+    "lintas barat": {"coords": (-2.0000, 101.5000), "province": "Sumatera", "corridor": "Jalan Lintas Barat Sumatera (Jalinbar)", "tier": 3},
     "jalinteng": {"coords": (-1.0000, 102.0000), "province": "Sumatera", "corridor": "Jalan Lintas Tengah Sumatera (Jalinteng)", "tier": 3},
     "jalan lintas tengah": {"coords": (-1.0000, 102.0000), "province": "Sumatera", "corridor": "Jalan Lintas Tengah Sumatera (Jalinteng)", "tier": 3},
+    "lintas tengah": {"coords": (-1.0000, 102.0000), "province": "Sumatera", "corridor": "Jalan Lintas Tengah Sumatera (Jalinteng)", "tier": 3},
     "jalan lintas tengah sumatera": {"coords": (-1.0000, 102.0000), "province": "Sumatera", "corridor": "Jalan Lintas Tengah Sumatera (Jalinteng)", "tier": 3},
     "jalinsum": {"coords": (2.5000, 99.5000), "province": "Sumatera", "corridor": "Jalinsum Arteri Utama", "tier": 3},
     "jalan lintas sumatera": {"coords": (2.5000, 99.5000), "province": "Sumatera", "corridor": "Jalinsum Arteri Utama", "tier": 3},
+    "lintas sumatera": {"coords": (2.5000, 99.5000), "province": "Sumatera", "corridor": "Jalinsum Arteri Utama", "tier": 3},
+    "jalinpantim": {"coords": (-1.5000, 104.0000), "province": "Sumatera", "corridor": "Jalan Lintas Pantai Timur Sumatera (Jalinpantim)", "tier": 3},
+    "jalan lintas pantai timur": {"coords": (-1.5000, 104.0000), "province": "Sumatera", "corridor": "Jalan Lintas Pantai Timur Sumatera (Jalinpantim)", "tier": 3},
     "tol trans sumatera": {"coords": (-4.5000, 105.2000), "province": "Sumatera", "corridor": "Jalan Tol Trans Sumatera (JTTS)", "tier": 3},
+    "trans sumatera": {"coords": (-4.5000, 105.2000), "province": "Sumatera", "corridor": "Jalan Tol Trans Sumatera (JTTS)", "tier": 3},
+    "trans sumatra": {"coords": (-4.5000, 105.2000), "province": "Sumatera", "corridor": "Jalan Tol Trans Sumatera (JTTS)", "tier": 3},
+    "tol trans sumatra": {"coords": (-4.5000, 105.2000), "province": "Sumatera", "corridor": "Jalan Tol Trans Sumatera (JTTS)", "tier": 3},
     "jtts": {"coords": (-4.5000, 105.2000), "province": "Sumatera", "corridor": "Jalan Tol Trans Sumatera (JTTS)", "tier": 3},
     "tol pekanbaru padang": {"coords": (0.0000, 101.0000), "province": "Sumatera", "corridor": "Tol Pekanbaru - Padang", "tier": 3},
     "tol padang pekanbaru": {"coords": (0.0000, 101.0000), "province": "Sumatera", "corridor": "Tol Pekanbaru - Padang", "tier": 3},

@@ -107,4 +107,7 @@ docs/validasi/
 # Manual and HKI build scripts
 frontend/scripts/*
 !frontend/scripts/test_*.ts
-
+
+# Miscellaneous
+gods-eye-view
+Globot  

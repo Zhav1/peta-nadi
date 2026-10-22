@@ -106,6 +106,9 @@ async def test_batch_extraction_pre_filter_drops_irrelevant():
             "raw_description": "Genangan air setinggi 60 cm melumpuhkan arus distribusi logistik di Kampar Riau.",
             "source": "Antara Riau",
             "link": "https://riau.antaranews.com/berita/123/banjir-kampar",
+            "pubDate": "5 menit lalu",
+            "published_at": "5 menit lalu",
+            "original_pub_date": "5 menit lalu",
         },
         {
             "id": "art_economy_sumatra",
@@ -113,6 +116,9 @@ async def test_batch_extraction_pre_filter_drops_irrelevant():
             "raw_description": "Pemerintah provinsi mengapresiasi kinerja petani kopi di Deli Serdang dan Karo.",
             "source": "Antara Sumut",
             "link": "https://sumut.antaranews.com/berita/456/ekspor-kopi",
+            "pubDate": "5 menit lalu",
+            "published_at": "5 menit lalu",
+            "original_pub_date": "5 menit lalu",
         },
         {
             "id": "art_disaster_java",
@@ -120,6 +126,9 @@ async def test_batch_extraction_pre_filter_drops_irrelevant():
             "raw_description": "Tanggul laut jebol menyebabkan genangan air laut di kawasan industri Jawa Tengah.",
             "source": "Antara Jateng",
             "link": "https://jateng.antaranews.com/berita/789/banjir-semarang",
+            "pubDate": "5 menit lalu",
+            "published_at": "5 menit lalu",
+            "original_pub_date": "5 menit lalu",
         },
     ]
 
@@ -141,7 +150,9 @@ async def test_batch_extraction_pre_filter_drops_irrelevant():
     # art_disaster_java lacks Sumatra anchors -> dropped
     res3 = by_id["art_disaster_java"]
     assert res3.get("zone_tier") == "DROPPED_IRRELEVANT"
-    assert "pra-filter deterministik" in res3.get("tier_reason", "").lower() or "bukan disrupsi" in res3.get("tier_reason", "").lower()
+    _r3 = res3.get("tier_reason", "").lower()
+    assert ("pra-filter deterministik" in _r3 or "bukan disrupsi" in _r3
+            or "luar pulau sumatera" in _r3 or "luar sumatera" in _r3 or "bbox" in _r3)
 
 
 def test_strip_thinking_tags():

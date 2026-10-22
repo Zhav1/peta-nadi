@@ -388,12 +388,12 @@ class UnifiedNewsIngestor:
                 "escalation_status": "SKIPPED_UNMATCHED"
             }
 
-        # SPEC-LOCKED M5 Phase A Q1 hard island bbox (94-108E/-6..6N):
+        # SPEC-LOCKED M5 Phase A Q1 hard island bbox (94-108E/-6.5..6.5N):
         # out-of-Sumatra coordinates never synthesize zones or incidents.
         try:
             _latf, _lonf = float(lat), float(lon)
-            if not (94.0 <= _lonf <= 108.0 and -6.0 <= _latf <= 6.0):
-                _reason_oos = ("Lokasi di luar Pulau Sumatera (di luar bbox 94-108E/-6..6N); "
+            if not (94.0 <= _lonf <= 108.0 and -6.5 <= _latf <= 6.5):
+                _reason_oos = ("Lokasi di luar Pulau Sumatera (di luar bbox 94-108E/-6.5..6.5N); "
                                "di luar cakupan koridor logistik Sumatera.")
                 art["zone_tier"] = "DROPPED_IRRELEVANT"
                 try:

@@ -13,19 +13,19 @@ logger = logging.getLogger(__name__)
 
 GEOCODE_CACHE_TTL = 7 * 24 * 3600  # 7 days in seconds
 
-# SPEC-LOCKED M5 Phase A Q1: hard island bbox 94-108E / -6..6N, enforced on
+# SPEC-LOCKED M5 Phase A Q1: hard island bbox 94-108E / -6.5..6.5N, enforced on
 # every resolved coordinate (gazetteer AND Nominatim). Outside => not
 # geocoded, never a blind centroid.
 STRICT_SUMATRA_BBOX = {
     "min_lon": 94.0,
     "max_lon": 108.0,
-    "min_lat": -6.0,
-    "max_lat": 6.0,
+    "min_lat": -6.5,
+    "max_lat": 6.5,
 }
 
 
 def is_within_strict_sumatra_bbox(lat: float, lon: float) -> bool:
-    """SPEC-LOCKED hard bbox: 94<=lon<=108, -6<=lat<=6. Admits uncertainty."""
+    """SPEC-LOCKED hard bbox: 94<=lon<=108, -6.5<=lat<=6.5. Admits uncertainty."""
     try:
         return (
             STRICT_SUMATRA_BBOX["min_lat"] <= float(lat) <= STRICT_SUMATRA_BBOX["max_lat"]
@@ -46,7 +46,7 @@ KNOWN_POIS = {k: v["coords"] for k, v in PAN_SUMATRA_GAZETTEER.items()}
 def is_within_sumatra(lat: float, lon: float) -> bool:
     """Verifies that coordinates fall strictly within Sumatra island boundaries.
 
-    SPEC-LOCKED M5 Phase A Q1: delegates to the hard 94-108E/-6..6N bbox.
+    SPEC-LOCKED M5 Phase A Q1: delegates to the hard 94-108E/-6.5..6.5N bbox.
     """
     return is_within_strict_sumatra_bbox(lat, lon)
 

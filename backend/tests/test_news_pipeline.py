@@ -287,9 +287,26 @@ async def test_get_live_news_returns_warming_state_when_cold(monkeypatch):
 async def test_get_live_news_returns_live_state_when_cached(monkeypatch):
     """When Supabase has articles, return live status immediately."""
     from fastapi import BackgroundTasks
+    from datetime import datetime, timezone
     from app.routers import news_router
 
-    sample_articles = [{"id": "art-1", "title": "Banjir Tebing Tinggi", "severity": "high"}]
+    _now = datetime.now(timezone.utc).isoformat()
+    sample_articles = [{
+        "id": "art-1",
+        "title": "Banjir Tebing Tinggi putus jalan arteri Jalinsum",
+        "severity": "high",
+        "link": "https://sumut.antaranews.com/berita/123456/banjir-tebing-tinggi-jalinsum",
+        "url": "https://sumut.antaranews.com/berita/123456/banjir-tebing-tinggi-jalinsum",
+        "pubDate": _now,
+        "original_pub_date": _now,
+        "published_at": _now,
+        "latitude": 3.3285,
+        "longitude": 99.1625,
+        "province": "Sumatera Utara",
+        "zone_tier": "YELLOW_CLARIFY",
+        "is_geocoded": True,
+        "ground_truth_metrics": {"zone_tier": "YELLOW_CLARIFY", "schema_version": 7, "original_pub_date": _now},
+    }]
     monkeypatch.setattr(news_router, "fetch_news_from_supabase", AsyncMock(return_value=sample_articles))
     monkeypatch.setattr(news_router, "_NEWS_CACHE", {"articles": [], "last_fetched_at": 0.0})
 

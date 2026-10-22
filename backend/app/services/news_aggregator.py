@@ -13,7 +13,7 @@ import re
 import urllib.parse
 from urllib.parse import urlparse, quote_plus
 import xml.etree.ElementTree as ET
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any, Optional
 import httpx
 from app.config import get_settings
@@ -659,15 +659,58 @@ def _parse_pub_date_to_utc(raw: Any) -> Optional[datetime]:
     return None
 
 
+_REL_DETIK_RE = re.compile(r"(\d+)\s*(detik|detiks|dtk|seconds?|secs?)\s*(yang\s*)?lalu", re.IGNORECASE)
+_REL_MENIT_RE = re.compile(r"(\d+)\s*(menit|menits|mnt|mins?|m)\s*(yang\s*)?lalu", re.IGNORECASE)
+_REL_JAM_RE = re.compile(r"(\d+)\s*(jam|jams?|j|hours?|hrs?|h)\s*(yang\s*)?lalu", re.IGNORECASE)
+_REL_HARI_RE = re.compile(r"(\d+)\s*(hari|haris?|days?|d)\s*(yang\s*)?lalu", re.IGNORECASE)
+
+
+def _parse_indonesian_relative_to_hours(s: Any) -> Optional[float]:
+    """Parses Indonesian relative timestamps (e.g. '15 menit lalu', '2 jam lalu',
+    '3 hari lalu', plus short forms '10m lalu', '1j lalu') into age_hours.
+
+    Returns None when no relative pattern matches.
+    """
+    if s is None:
+        return None
+    t = str(s).strip().lower()
+    if not t:
+        return None
+    try:
+        m = _REL_HARI_RE.search(t)
+        if m:
+            return float(int(m.group(1))) * 24.0
+        m = _REL_JAM_RE.search(t)
+        if m:
+            # Guard: bare 'h'/'j'/'m' single-letter matches only when 'lalu' present
+            # (regex already requires 'lalu'), so '10m lalu'/'1j lalu' are valid.
+            return float(int(m.group(1))) * 1.0
+        m = _REL_MENIT_RE.search(t)
+        if m:
+            return float(int(m.group(1))) / 60.0
+        m = _REL_DETIK_RE.search(t)
+        if m:
+            return float(int(m.group(1))) / 3600.0
+    except Exception:
+        return None
+    return None
+
+
 def parse_and_validate_article_freshness(
     pub_date_raw: str | None,
     url: str | None,
     html_meta_date: str | None = None,
     max_age_hours: int = 48,
+    is_test_fixture: bool = False,
 ) -> dict:
     """Strict 48h freshness gate with archival-URL extraction + true published_at preservation.
 
-    Check 1 inspects the URL for archival dates; Check 2 parses pubDate/HTML meta.
+    Check 1 inspects the URL for archival dates; Check 1b parses Indonesian
+    relative timestamps ('N menit/jam/hari lalu'); Check 2 parses pubDate/HTML meta.
+    Unparseable dates in production return is_fresh=False
+    (reject_reason='unparseable_date_in_prod') unless is_test_fixture=True,
+    in which case legacy fixture behaviour (fresh, age 0) is preserved.
+
     Returns {"is_fresh","published_at_iso","age_hours","reject_reason"}.
     """
     now = datetime.now(timezone.utc)
@@ -716,6 +759,28 @@ def parse_and_validate_article_freshness(
     except Exception:
         pass
 
+    # ---- Check 1b: Indonesian relative timestamps ('N menit/jam/hari lalu') ----
+    for _rel_raw in (html_meta_date, pub_date_raw):
+        try:
+            _rel_age = _parse_indonesian_relative_to_hours(_rel_raw)
+        except Exception:
+            _rel_age = None
+        if _rel_age is not None:
+            _rel_dt = now - timedelta(hours=float(_rel_age))
+            if _rel_age > max_age:
+                return {
+                    "is_fresh": False,
+                    "published_at_iso": _rel_dt.isoformat(),
+                    "age_hours": round(float(_rel_age), 2),
+                    "reject_reason": f"Berita sudah lewat {round(float(_rel_age), 1)} jam (batas {max_age} jam)",
+                }
+            return {
+                "is_fresh": True,
+                "published_at_iso": _rel_dt.isoformat(),
+                "age_hours": round(float(_rel_age), 2),
+                "reject_reason": None,
+            }
+
     # ---- Check 2: pubDate / HTML meta timestamp parsing ----
     parsed: Optional[datetime] = None
     if html_meta_date:
@@ -723,13 +788,21 @@ def parse_and_validate_article_freshness(
     if parsed is None and pub_date_raw:
         parsed = _parse_pub_date_to_utc(pub_date_raw)
     if parsed is None:
-        # Unparseable relative timestamps ("15m lalu", "Terkini", missing) ->
-        # treat as fresh with now as published_at so offline fixtures keep working.
+        # Production default: unparseable/missing dates fail closed so DOM-scraped
+        # pages with malformed dates cannot bypass the 48h gate. Fixtures opt in
+        # explicitly via is_test_fixture=True.
+        if is_test_fixture:
+            return {
+                "is_fresh": True,
+                "published_at_iso": now.isoformat(),
+                "age_hours": 0.0,
+                "reject_reason": None,
+            }
         return {
-            "is_fresh": True,
-            "published_at_iso": now.isoformat(),
-            "age_hours": 0.0,
-            "reject_reason": None,
+            "is_fresh": False,
+            "published_at_iso": None,
+            "age_hours": None,
+            "reject_reason": "unparseable_date_in_prod",
         }
     age_h = (now - parsed).total_seconds() / 3600.0
     if age_h < 0:
@@ -1102,6 +1175,57 @@ def _unpack_ground_truth_metrics(row: Dict[str, Any]) -> Dict[str, Any]:
     return row
 
 
+_CROSS_LINK_P_RE = re.compile(
+    r"^\s*(baca|lihat|simak|klik)\s+(juga|selengkapnya|berita\s+terkait)\b",
+    re.IGNORECASE,
+)
+_PROMO_FOOTER_RES = (
+    re.compile(r"saksikan\s+video\s+pilihan", re.IGNORECASE),
+    re.compile(r"ikuti\s+berita.*google\s+news", re.IGNORECASE),
+    re.compile(r"download\s+aplikasi", re.IGNORECASE),
+    re.compile(r"simak\s+selengkapnya", re.IGNORECASE),
+    re.compile(r"klik\s+selengkapnya", re.IGNORECASE),
+)
+_INLINE_ANCHOR_RE = re.compile(r"<a\b[^>]*>.*?</a\s*>", re.IGNORECASE | re.DOTALL)
+
+
+def _strip_inline_anchors_if_crosslink(p_html: str) -> str:
+    """Removes <a>…</a> inside a <p> when the paragraph carries a cross-link cue.
+
+    Detik/ANTARA/CNN embed related-article anchors inside <p> tags
+    ('Baca juga: …'). The anchor text often names past disasters in other
+    districts, poisoning geocoding + crisis detection. Stripping the anchor
+    while keeping surrounding prose prevents the leak.
+    """
+    try:
+        low = (p_html or "").lower()
+        if "baca juga" in low or "lihat juga" in low or "simak" in low:
+            return _INLINE_ANCHOR_RE.sub(" ", p_html or "")
+    except Exception:
+        pass
+    return p_html
+
+
+def _is_boilerplate_para(text: str) -> bool:
+    """True when a de-tagged paragraph is cross-link boilerplate or promo footer."""
+    try:
+        t = (text or "").strip()
+        if not t:
+            return True
+        if _CROSS_LINK_P_RE.search(t):
+            return True
+        low = t.lower()
+        # Legacy substring guard (kept) + stricter start-anchored regex above.
+        if low.startswith(("baca juga", "lihat juga", "simak selengkapnya", "klik selengkapnya")):
+            return True
+        for _rx in _PROMO_FOOTER_RES:
+            if _rx.search(t):
+                return True
+    except Exception:
+        return False
+    return False
+
+
 def extract_lead_text_from_html(html: str) -> str:
     """Extracts clean lead article text (og:description or lead <p> paragraphs, strictly clamped to <= 400 chars).
     Strips scripts, styles, navs, footers, asides, headers, forms, iframes, and advertising containers.
@@ -1159,12 +1283,15 @@ def extract_lead_text_from_html(html: str) -> str:
             paras = re.findall(r'<p[^>]*>(.*?)</p>', cleaned, flags=re.IGNORECASE | re.DOTALL)
         clean_paras = []
         for p in paras[:8]:
+            p = _strip_inline_anchors_if_crosslink(p)
             t = re.sub(r'<[^>]+>', ' ', p)
             t = re.sub(r'\s+', ' ', t).strip()
             if len(t) < 35:
                 continue
+            if _is_boilerplate_para(t):
+                continue
             low = t.lower()
-            if any(b in low for b in ("copyright", "baca juga", "advertisement", "iklan", "langganan", "pewarta:", "editor:", "ikuti kami di")):
+            if any(b in low for b in ("copyright", "advertisement", "iklan", "langganan", "pewarta:", "editor:", "ikuti kami di")):
                 continue
             clean_paras.append(t)
         para_text = " ".join(clean_paras)
@@ -1237,12 +1364,15 @@ def extract_full_article_body_from_html(html: str) -> str:
             paras = re.findall(r'<p[^>]*>(.*?)</p>', cleaned, flags=re.IGNORECASE | re.DOTALL)
         clean_paras = []
         for p in paras[:18]:
+            p = _strip_inline_anchors_if_crosslink(p)
             t = re.sub(r'<[^>]+>', ' ', p)
             t = re.sub(r'\s+', ' ', t).strip()
             if len(t) < 40:
                 continue
+            if _is_boilerplate_para(t):
+                continue
             low = t.lower()
-            if any(b in low for b in ("copyright", "baca juga", "advertisement", "iklan", "langganan", "pewarta:", "editor:", "ikuti kami di")):
+            if any(b in low for b in ("copyright", "advertisement", "iklan", "langganan", "pewarta:", "editor:", "ikuti kami di")):
                 continue
             clean_paras.append(t)
         para_text = " ".join(clean_paras)

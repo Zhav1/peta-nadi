@@ -99,7 +99,11 @@ def test_tier_c_regency_invariant_yellow_clarify_cap():
     article = {
         "title": "Cuaca buruk di Kabupaten Aceh Barat Daya melanda perkebunan warga",
         "source": "Antara Aceh",
-        "raw_description": "Hujan intensitas sedang mengguyur sebagian perkebunan kelapa sawit."
+        "raw_description": "Hujan intensitas sedang mengguyur sebagian perkebunan kelapa sawit.",
+        "pubDate": "5 menit lalu",
+        "published_at": "5 menit lalu",
+        "original_pub_date": "5 menit lalu",
+        "link": "https://aceh.antaranews.com/berita/321/cuaca-aceh-barat-daya",
     }
     extracted = _fast_heuristic_extraction(article)
 
