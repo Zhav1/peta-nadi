@@ -147,6 +147,10 @@ Upstream Phases 87/88 above (Mapbox turn-by-turn; client-isolated session, merge
 | 88 | Full-Sumatra Grid Overlay | **COMPLETE** ✅ | Git: `967dc2b`. 23-pt OM bulk grid (bbox 95-106E/-6…6N, gazetteer-snapped, 60km land mask); per-hub BMKG parallel fetch + 30-min cache (only Medan adm4 verified, 8 hubs None→OM-covered); cap-24 features (~30KB). Docs: `88-full-sumatra-grid-overlay/PLAN.md` + `LEARNINGS.md`. NOT probed. |
 | 89 | Weather Logistics Enrichment | **COMPLETE** ✅ | Git: `530b07d`. Per-feature hazard-type, corridor-leg intersect (10 spine legs), delay (base×severity: flood 14/landslide 10/marine 18/storm 14 × 1.2/1.0/0.7/0.4), advisory action, modalities, confidence; hill-spine landslide geometry switch; CrisisMap popup+legend + TopNav sample. Corroborator-only preserved. Docs: `89-weather-logistics-enrichment/PLAN.md` + `LEARNINGS.md`. NOT probed. |
 
+### Hotfix 2026-10-22 — Offline land-corridor honesty + toll-bypass spec (pilot rule: green = verified-driveable)
+
+Interpolated straight-line land geometry (no Mapbox token) no longer presents as green `SAFE_DETOUR`. Land corridors are flagged `COMPROMISED` with tag `TANPA GEOMETRI LIVE — GUNAKAN HOLD / ANTARMODA` (red); sea/air (graph-based, token-independent) and HOLD (no polyline, depot economics) stay the applicable options, and `DashboardClient` auto-select skips the flagged cards. Files: `frontend/lib/aiDynamicRouter.ts` (landPrimary + landDetour status/tag/color). Spec: `frontend/e2e/toll-bypass-routing.spec.ts` (7 tests: radius options, toll-gate gating, exclude=toll param + NoRoute retry, Lubuk Pakam clearance + HOLD-as-option, toll-free corridor, offline honesty; `directionsCache.clear()` per test — module cache otherwise leaks across tests). Verification: 7/7 pass, `tsc --noEmit` exit 0. Open (pre-existing, unrelated to this change): `e2e/multi-client-routing-isolation.spec.ts` fails on this tree with and without the fix (`corridor-summary-pill` never renders under the test webServer) — needs a live-app debugging pass, not caused here.
+
 ---
 
 ## Key Decisions Made

@@ -1702,8 +1702,13 @@ export async function calculateAIDynamicDetourRoutes(
 
   // Corridor 1: Fastest Direct Land Corridor
   const isPrimaryOffline = primaryRes.source === 'offline-interpolated';
+  // Pilot honesty rule: interpolated straight-line geometry is never a verified-driveable
+  // corridor. Without live Mapbox geometry the land corridors are flagged COMPROMISED with
+  // the cause stated, instead of presenting green SAFE_DETOUR on an estimate. Sea/air
+  // corridors are graph-based (no Mapbox needed) and HOLD carries real depot economics,
+  // so the pilot still gets applicable options.
   const landPrimaryName = isPrimaryOffline ? '[SIMULASI] Koridor Darat Utama (Tol / Jalinsum)' : 'Koridor Darat Utama (Tol / Jalinsum)';
-  const landPrimaryColor = isPrimaryCompromised ? '#EF4444' : '#10B981';
+  const landPrimaryColor = isPrimaryCompromised || isPrimaryOffline ? '#EF4444' : '#10B981';
 
   const landPrimary: RouteRecommendation = {
     id: 'corridor-land-primary',
@@ -1716,13 +1721,15 @@ export async function calculateAIDynamicDetourRoutes(
     eta_minutes: primaryRes.durationMinutes + (isPrimaryCompromised ? 60 : 0),
     fuel_increase_pct: isPrimaryCompromised ? 25.0 : 0,
     risk_score: isPrimaryCompromised ? 0.90 : 0.05,
-    is_compromised: isPrimaryCompromised,
-    safety_status: isPrimaryCompromised ? 'COMPROMISED' : 'SAFE_DETOUR',
+    is_compromised: isPrimaryCompromised || isPrimaryOffline,
+    safety_status: isPrimaryCompromised || isPrimaryOffline ? 'COMPROMISED' : 'SAFE_DETOUR',
     safety_tag: portAccessBlocked
       ? 'AKSES PELABUHAN ASAL TUTUP — PERLU RUTE ALTERNATIF'
-      : isPrimaryCompromised
-        ? 'TERDAMPAK ZONA BAHAYA (+60m Delay)'
-        : 'RUTE DARAT TERCEPAT',
+      : isPrimaryOffline
+        ? 'TANPA GEOMETRI LIVE — GUNAKAN HOLD / ANTARMODA'
+        : isPrimaryCompromised
+          ? 'TERDAMPAK ZONA BAHAYA (+60m Delay)'
+          : 'RUTE DARAT TERCEPAT',
     traffic_level: primaryRes.congestionSegments.some((s) => s.level === 'heavy') ? 'heavy' : 'low',
     congestion_segments: primaryRes.congestionSegments,
     modality: 'truck',
@@ -1829,15 +1836,15 @@ export async function calculateAIDynamicDetourRoutes(
     eta_minutes: landDetourResult.durationMinutes,
     fuel_increase_pct: isPrimaryCompromised ? 14.0 : 8.0,
     risk_score: isDetourCompromised ? 0.35 : 0.08,
-    is_compromised: isDetourCompromised,
-    safety_status: isDetourCompromised ? 'COMPROMISED' : 'SAFE_DETOUR',
-    safety_tag: landDetourTag,
+    is_compromised: isDetourCompromised || isPrimaryOffline,
+    safety_status: isDetourCompromised || isPrimaryOffline ? 'COMPROMISED' : 'SAFE_DETOUR',
+    safety_tag: isPrimaryOffline ? 'TANPA GEOMETRI LIVE — GUNAKAN HOLD / ANTARMODA' : landDetourTag,
     traffic_level: landDetourResult.congestionSegments.some((s) => s.level === 'heavy') ? 'heavy' : 'low',
     congestion_segments: landDetourResult.congestionSegments,
     modality: 'truck',
     corridor_type: 'land_detour',
     viable: true,
-    color: landDetourColor,
+    color: isPrimaryOffline ? '#EF4444' : landDetourColor,
     legs: [
       {
         title: isPrimaryCompromised ? 'Pengalihan Darat / Detour' : 'Jalur Arteri Sekunder',
