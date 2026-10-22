@@ -137,6 +137,16 @@ Next action: Milestone 5 fully complete. Working tree verified with 0 TypeScript
 | 87 | Mapbox Directions API Turn-by-Turn Road Network & Tangential Hazard Avoidance | **COMPLETE** ✅ | True street-snapped road geometry via Mapbox Directions API (Free Tier), removal of linear chord interpolation (`densifyPath`), forced tangential normal waypoints ($R+2.0\text{ km}$ clearance), quota guard memoization cache (15 min TTL), Manhattan Medan -> USU benchmark (>50 pts road-snapped, 0 km hazard exposure). Direct unit (4/4) & Playwright E2E passing. |
 | 88 | Client-Isolated Routing Session vs. Global Read-Only Environmental State | **COMPLETE** ✅ | Two-layer state architecture (Layer 1 global environmental read-only broadcast vs Layer 2 session-local routing state in React memory + URL query parameters), in-place `window.history.replaceState` bidirectional sync (`origin`, `dest`, `modality`, `route`, `crisis`), Next.js 14 `<Suspense>` boundary in `app/dashboard/page.tsx`, WebSocket ambient `node_update` route strip guard. Direct unit (4/4) & Playwright multi-context concurrent E2E passing. |
 
+### Local weather-enrichment increments (phase-number collision note)
+
+Upstream Phases 87/88 above (Mapbox turn-by-turn; client-isolated session, merged as `e78a21d`) reused numbers 87/88 that were already used locally for weather work committed in `b28a0db` / `967dc2b` / `530b07d` (all ancestors of this HEAD, so the code is already merged). The local doc folders are kept as-is; the increments are recorded here under their original local numbers — not as new roadmap phases (header stays 88/88):
+
+| Local # | Name | Status | Notes |
+|---|---|---|---|
+| 87 | FIRMS Radius-Area + Weather Disruption Threshold | **COMPLETE** ✅ | Git: `b28a0db`. Disruption-only default (min_severity=high, precip>=50mm/24h OR flood>=80%); BMKG code fallback mapping (60→25/55 drizzle, 95/97→65.5/87.5 severe); FIRMS `radius_km` 5.0/2.5/1.0 additive; advisory opt-in path. Docs: `87-firms-radius-weather-disruption-threshold/PLAN.md` + `LEARNINGS.md`. tsc/tests NOT re-run. |
+| 88 | Full-Sumatra Grid Overlay | **COMPLETE** ✅ | Git: `967dc2b`. 23-pt OM bulk grid (bbox 95-106E/-6…6N, gazetteer-snapped, 60km land mask); per-hub BMKG parallel fetch + 30-min cache (only Medan adm4 verified, 8 hubs None→OM-covered); cap-24 features (~30KB). Docs: `88-full-sumatra-grid-overlay/PLAN.md` + `LEARNINGS.md`. NOT probed. |
+| 89 | Weather Logistics Enrichment | **COMPLETE** ✅ | Git: `530b07d`. Per-feature hazard-type, corridor-leg intersect (10 spine legs), delay (base×severity: flood 14/landslide 10/marine 18/storm 14 × 1.2/1.0/0.7/0.4), advisory action, modalities, confidence; hill-spine landslide geometry switch; CrisisMap popup+legend + TopNav sample. Corroborator-only preserved. Docs: `89-weather-logistics-enrichment/PLAN.md` + `LEARNINGS.md`. NOT probed. |
+
 ---
 
 ## Key Decisions Made
