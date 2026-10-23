@@ -1,14 +1,449 @@
+import asyncio
 import hashlib
 import json
 import logging
+import math
 import re
-from datetime import datetime, timezone
-from typing import Any, Dict
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional, Tuple
 from agents.state import CrisisState, NormalizedEvent, AgentFinding
-from agents.memory.stm import is_seen, mark_seen
+from agents.memory.stm import get_async_redis, is_seen, mark_seen
 from agents.tools.supabase_tools import get_source_health
 
 logger = logging.getLogger(__name__)
+
+# Sources whose events are operator/UI initiated and must never be suppressed by
+# the short-lived `lrip:seen` dedup TTL (an interactive map simulation re-run is a
+# new, intentional observation). Legacy simulation/test spellings are retained so
+# the existing demo and benchmark replay paths keep bypassing dedup.
+DEDUP_EXEMPT_SOURCES = frozenset({
+    "interactive_ui",
+    "manual_trigger",
+    "simulator",
+    "simulation",
+    "simulated",
+    "internal_simulator",
+    "test",
+})
+
+# Confidence is grounded in the weather signal itself, never in Supabase
+# `data_sources` health. A live warning raises the baseline into 0.85-0.95.
+WEATHER_BASELINE_CONFIDENCE = 0.65
+WEATHER_WARNING_CONFIDENCE = 0.85
+WEATHER_MAX_CONFIDENCE = 0.95
+
+# PIHPS z-score gate for the fast pre-consensus economic signal.
+PIHPS_ANOMALY_Z = 1.5
+PIHPS_WINDOW_DAYS = 14
+
+
+def _as_float(value: Any) -> Optional[float]:
+    """Best-effort finite float conversion (booleans and blanks are ignored)."""
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(number):
+        return None
+    return number
+
+
+def _load_mapping(value: Any) -> Dict[str, Any]:
+    """Coerce a JSON string / mapping into a dict; anything else becomes {}."""
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, (str, bytes)):
+        try:
+            parsed = json.loads(value)
+        except (TypeError, ValueError):
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+    return {}
+
+
+def _source_health_ratio(status: str) -> float:
+    """Diagnostic ratio for the source-health channel (never used as confidence)."""
+    return {"green": 1.0, "yellow": 0.5, "red": 0.0}.get(str(status).lower(), 0.5)
+
+
+def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Great-circle distance in km (used to pick the nearest weather feature)."""
+    radius = 6371.0088
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    d_phi = math.radians(lat2 - lat1)
+    d_lambda = math.radians(lon2 - lon1)
+    a = (
+        math.sin(d_phi / 2) ** 2
+        + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2
+    )
+    return 2 * radius * math.asin(math.sqrt(min(1.0, max(0.0, a))))
+
+
+def _first_number(source: Dict[str, Any], keys: Tuple[str, ...]) -> Optional[float]:
+    """Return the first parseable numeric value for ``keys``."""
+    for key in keys:
+        if key in source:
+            value = _as_float(source.get(key))
+            if value is not None:
+                return value
+    return None
+
+
+_PRECIP_KEYS = (
+    "precipitation_mm_24h",
+    "precipitation_mm",
+    "rainfall_mm",
+    "rainfall_rate_mm_per_hour",
+    "rain_mm",
+    "rain_rate_mmh",
+    "precipitation",
+)
+_FLOOD_KEYS = ("flood_risk_pct", "flood_risk", "flood_pct")
+_WIND_KEYS = ("windspeed_kmh", "wind_speed_kmh", "wind_kmh", "windspeed")
+_LEVEL_KEYS = ("warning_level", "bmkg_warning_level", "alert_level")
+_CODE_KEYS = ("bmkg_code", "code", "weather_code")
+_PAYLOAD_SEVERITY_KEYS = ("severity", "alert_severity")
+
+
+def _nearest_weather_payload(
+    payload: Dict[str, Any], lat: Optional[float], lon: Optional[float]
+) -> Dict[str, Any]:
+    """Pick the weather feature nearest (lat, lon) from a FeatureCollection."""
+    features = payload.get("features")
+    if not isinstance(features, list) or not features:
+        return payload
+
+    best: Optional[Dict[str, Any]] = None
+    best_rank: Tuple[int, float] = (2, float("inf"))
+    for feature in features:
+        if not isinstance(feature, dict):
+            continue
+        properties = feature.get("properties")
+        if not isinstance(properties, dict):
+            continue
+        distance = 0.0
+        feature_lat = _as_float(properties.get("lat"))
+        feature_lon = _as_float(properties.get("lon"))
+        if lat is not None and lon is not None and feature_lat is not None and feature_lon is not None:
+            distance = _haversine_km(lat, lon, feature_lat, feature_lon)
+        # Prefer the closest feature that carries disruption numerics.
+        has_numeric = any(
+            key in properties for key in (_PRECIP_KEYS + _FLOOD_KEYS + _WIND_KEYS)
+        )
+        rank = (0 if has_numeric else 1, distance)
+        if rank < best_rank:
+            best = properties
+            best_rank = rank
+    return best or payload
+
+
+def _weather_signals(
+    state: Dict[str, Any],
+    normalized_event: Optional[NormalizedEvent],
+) -> Dict[str, Any]:
+    """Extract the weather telemetry available for this event at (lat, lon)."""
+    lat = _as_float(state.get("lat"))
+    lon = _as_float(state.get("lon"))
+
+    payloads: List[Tuple[Dict[str, Any], bool]] = []
+
+    raw_event = state.get("raw_event")
+    if isinstance(raw_event, dict):
+        payloads.append((raw_event, True))
+        for key in ("raw", "raw_payload", "weather", "weather_data", "bmkg", "bmkg_warning", "bmkg_telemetry"):
+            nested = _load_mapping(raw_event.get(key))
+            if nested:
+                payloads.append((nested, True))
+
+    for value in (
+        state.get("raw"),
+        state.get("raw_payload"),
+        state.get("weather"),
+        state.get("weather_data"),
+        state.get("weather_fusion"),
+        state.get("bmkg_warning"),
+        state.get("bmkg_telemetry"),
+    ):
+        if isinstance(value, list):
+            payloads.append(({"features": value}, True))
+            continue
+        nested = _load_mapping(value)
+        if nested:
+            payloads.append((nested, True))
+
+    if normalized_event:
+        nested = _load_mapping(normalized_event.get("raw_payload"))
+        if nested:
+            # The normalized payload mirrors the event's own severity; that is
+            # crisis severity, not weather severity, so it must not be scored.
+            payloads.append((nested, False))
+
+    # Top-level numeric keys (webhook payloads that put weather fields at root).
+    if any(key in state for key in _PRECIP_KEYS + _FLOOD_KEYS + _WIND_KEYS):
+        payloads.append((state, False))
+
+    signals: Dict[str, Any] = {
+        "precipitation_mm": None,
+        "flood_risk_pct": None,
+        "wind_kmh": None,
+        "warning_level": "",
+        "bmkg_code": None,
+        "payload_confidence": None,
+        "payload_severity": "",
+        "has_telemetry": False,
+    }
+
+    for payload, allow_payload_severity in payloads:
+        if not payload:
+            continue
+        selected = _nearest_weather_payload(payload, lat, lon)
+        precip = _first_number(selected, _PRECIP_KEYS)
+        flood = _first_number(selected, _FLOOD_KEYS)
+        wind = _first_number(selected, _WIND_KEYS)
+        level = ""
+        for key in _LEVEL_KEYS:
+            raw_level = selected.get(key)
+            if isinstance(raw_level, str) and raw_level.strip():
+                level = raw_level.strip().upper()
+                break
+        code_value = _first_number(selected, _CODE_KEYS)
+        payload_conf = (
+            _as_float(selected.get("confidence")) if allow_payload_severity else None
+        )
+        payload_severity = ""
+        if allow_payload_severity:
+            for key in _PAYLOAD_SEVERITY_KEYS:
+                raw_sev = selected.get(key)
+                if isinstance(raw_sev, str) and raw_sev.strip():
+                    payload_severity = raw_sev.strip().lower()
+                    break
+
+        if precip is not None:
+            signals["precipitation_mm"] = max(signals["precipitation_mm"] or precip, precip)
+            signals["has_telemetry"] = True
+        if flood is not None:
+            signals["flood_risk_pct"] = max(signals["flood_risk_pct"] or flood, flood)
+            signals["has_telemetry"] = True
+        if wind is not None:
+            signals["wind_kmh"] = max(signals["wind_kmh"] or wind, wind)
+            signals["has_telemetry"] = True
+        if level and not signals["warning_level"]:
+            signals["warning_level"] = level
+            signals["has_telemetry"] = True
+        if code_value is not None and signals["bmkg_code"] is None:
+            signals["bmkg_code"] = int(code_value)
+            signals["has_telemetry"] = True
+        if payload_conf is not None:
+            signals["payload_confidence"] = max(signals["payload_confidence"] or payload_conf, payload_conf)
+        if payload_severity and not signals["payload_severity"]:
+            signals["payload_severity"] = payload_severity
+
+    return signals
+
+
+def _weather_confidence(
+    state: Dict[str, Any],
+    normalized_event: Optional[NormalizedEvent],
+    source: str,
+    severity: str,
+) -> Tuple[float, str]:
+    """Derive DataCollection confidence from actual weather severity.
+
+    Baseline 0.65 accelerates to 0.85-0.95 on active BMKG/weather-fusion
+    warnings (explicit level, heavy precipitation, high flood risk, storm codes
+    or gale-force wind). Supabase source health never influences this value.
+    """
+    signals = _weather_signals(state, normalized_event)
+    confidence = WEATHER_BASELINE_CONFIDENCE
+    basis: List[str] = []
+
+    level = signals["warning_level"]
+    if level:
+        if level in ("AWAS", "RED", "DANGER", "EXTREME"):
+            confidence = 0.95
+        elif level in ("SIAGA", "ORANGE", "SEVERE"):
+            confidence = 0.90
+        elif level in ("WASPADA", "YELLOW", "ADVISORY"):
+            confidence = WEATHER_WARNING_CONFIDENCE
+        basis.append(f"warning_level={level}")
+
+    precip = signals["precipitation_mm"]
+    if precip is not None:
+        if precip >= 50.0:
+            confidence = max(confidence, 0.95)
+        elif precip >= 20.0:
+            confidence = max(confidence, 0.90)
+        elif precip >= 10.0:
+            confidence = max(confidence, WEATHER_WARNING_CONFIDENCE)
+        basis.append(f"precipitation_mm={precip:.1f}")
+
+    flood = signals["flood_risk_pct"]
+    if flood is not None:
+        if flood >= 85.0:
+            confidence = max(confidence, 0.95)
+        elif flood >= 70.0:
+            confidence = max(confidence, 0.90)
+        elif flood >= 50.0:
+            confidence = max(confidence, WEATHER_WARNING_CONFIDENCE)
+        basis.append(f"flood_risk_pct={flood:.1f}")
+
+    wind = signals["wind_kmh"]
+    if wind is not None:
+        if wind >= 60.0:
+            confidence = max(confidence, 0.92)
+        elif wind >= 40.0:
+            confidence = max(confidence, 0.87)
+        elif wind >= 30.0:
+            confidence = max(confidence, WEATHER_WARNING_CONFIDENCE)
+        basis.append(f"wind_kmh={wind:.1f}")
+
+    bmkg_code = signals["bmkg_code"]
+    if bmkg_code in (95, 97):
+        confidence = max(confidence, 0.90)
+        basis.append(f"bmkg_code={bmkg_code}")
+
+    payload_confidence = signals["payload_confidence"]
+    if payload_confidence is not None and payload_confidence > confidence:
+        confidence = min(WEATHER_MAX_CONFIDENCE, payload_confidence)
+        basis.append(f"weather_fusion_confidence={payload_confidence:.2f}")
+
+    payload_severity = signals["payload_severity"]
+    if payload_severity in ("critical", "extreme"):
+        confidence = max(confidence, 0.90)
+        basis.append(f"weather_severity={payload_severity}")
+    elif payload_severity == "high":
+        confidence = max(confidence, WEATHER_WARNING_CONFIDENCE)
+        basis.append(f"weather_severity={payload_severity}")
+
+    # A BMKG-sourced event is itself an active official warning: its declared
+    # severity carries the same 0.85-0.95 band as explicit telemetry.
+    if not signals["has_telemetry"] and str(source).strip().lower() == "bmkg":
+        if severity == "critical":
+            confidence = 0.95
+            basis.append("bmkg_source_severity=critical")
+        elif severity == "high":
+            confidence = 0.90
+            basis.append("bmkg_source_severity=high")
+        elif severity == "medium":
+            confidence = WEATHER_WARNING_CONFIDENCE
+            basis.append("bmkg_source_severity=medium")
+
+    if not basis:
+        basis.append("weather_baseline")
+
+    return round(min(WEATHER_MAX_CONFIDENCE, confidence), 4), "; ".join(basis)
+
+
+def _pihps_z_score(stats: Any) -> Optional[float]:
+    """Resolve a commodity z-score from a PIHPS snapshot entry."""
+    if not isinstance(stats, dict):
+        return None
+    z_score = _as_float(stats.get("z_score"))
+    if z_score is not None:
+        return z_score
+    current = _as_float(stats.get("current") if stats.get("current") is not None else stats.get("price"))
+    mean = _as_float(stats.get("mean"))
+    std = _as_float(stats.get("std"))
+    if current is None or mean is None or std is None or std <= 0:
+        return None
+    return (current - mean) / std
+
+
+def _collect_pihps_anomalies(snapshot: Any) -> Dict[str, float]:
+    """Return ``{commodity: |z|}`` for snapshot entries beyond the anomaly gate."""
+    mapping = _load_mapping(snapshot)
+    commodities = mapping.get("commodities") if isinstance(mapping.get("commodities"), dict) else mapping
+    anomalies: Dict[str, float] = {}
+    for commodity, stats in commodities.items():
+        if not isinstance(commodity, str):
+            continue
+        z_score = _pihps_z_score(stats)
+        if z_score is not None and abs(z_score) > PIHPS_ANOMALY_Z:
+            anomalies[commodity] = abs(z_score)
+    return anomalies
+
+
+async def _pihps_anomalies_from_supabase(window_days: int = PIHPS_WINDOW_DAYS) -> Dict[str, float]:
+    """Fallback: derive per-commodity z-scores from commodity_prices (14d window)."""
+    from app.db.supabase_client import get_client
+
+    since = (datetime.now(timezone.utc) - timedelta(days=window_days)).isoformat()
+
+    def _query():
+        return (
+            get_client()
+            .table("commodity_prices")
+            .select("commodity,time,price_idr")
+            .gte("time", since)
+            .execute()
+        )
+
+    response = await asyncio.to_thread(_query)
+    rows = getattr(response, "data", None) or []
+    if not isinstance(rows, list):
+        return {}
+
+    series: Dict[str, List[Tuple[str, float]]] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        commodity = row.get("commodity")
+        price = _as_float(row.get("price_idr"))
+        if not isinstance(commodity, str) or not commodity or price is None:
+            continue
+        series.setdefault(commodity, []).append((str(row.get("time") or ""), price))
+
+    anomalies: Dict[str, float] = {}
+    for commodity, points in series.items():
+        points.sort(key=lambda item: item[0])
+        prices = [price for _, price in points]
+        if len(prices) < 3:
+            continue
+        current = prices[-1]
+        baseline = prices[:-1]
+        mean = sum(baseline) / len(baseline)
+        variance = sum((price - mean) ** 2 for price in baseline) / len(baseline)
+        std = math.sqrt(variance)
+        if std <= 0:
+            continue
+        z_score = (current - mean) / std
+        if abs(z_score) > PIHPS_ANOMALY_Z:
+            anomalies[commodity] = abs(z_score)
+    return anomalies
+
+
+async def _pre_economic_signal() -> Optional[Dict[str, Any]]:
+    """Fast, non-LLM PIHPS pre-gate: Redis snapshot, then Supabase fallback."""
+    anomalies: Dict[str, float] = {}
+    snapshot_usable = False
+
+    try:
+        redis = get_async_redis()
+        raw_snapshot = await redis.get("lrip:pihps:latest")
+        snapshot = _load_mapping(raw_snapshot)
+        if snapshot:
+            snapshot_usable = True
+            anomalies = _collect_pihps_anomalies(snapshot)
+    except Exception as exc:
+        logger.debug(f"PIHPS pre-gate Redis lookup skipped: {exc}")
+
+    if not snapshot_usable:
+        try:
+            anomalies = await _pihps_anomalies_from_supabase()
+        except Exception as exc:
+            logger.debug(f"PIHPS pre-gate Supabase fallback skipped: {exc}")
+
+    if not anomalies:
+        return None
+
+    max_z = max(anomalies.values())
+    return {
+        "confidence": round(min(0.95, 0.60 + 0.10 * max_z), 4),
+        "anomalous_commodities": sorted(anomalies.keys()),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 # Canonical province slugs for the Pan-Sumatra operating area. Aliases cover
@@ -158,6 +593,11 @@ def _source_from_state(state: Dict[str, Any], is_sim: bool) -> str:
     declared = state.get("source")
     if isinstance(declared, str) and declared.strip():
         return declared.strip()
+    raw_event = state.get("raw_event")
+    if isinstance(raw_event, dict):
+        nested_source = raw_event.get("source")
+        if isinstance(nested_source, str) and nested_source.strip():
+            return nested_source.strip()
     return "simulation" if is_sim else "unknown"
 
 
@@ -289,7 +729,7 @@ def generate_event_hash(event: dict) -> str:
 async def data_collection_agent(state: CrisisState) -> dict:
     """Agent 1: Validates, deduplicates, and normalizes raw Redis/incoming events."""
     logger.info("Agent 1 [DataCollectionAgent] running...")
-    
+
     event_type = state.get("type") or state.get("event_type") or "unknown"
     severity = state.get("severity") or "medium"
     is_sim = bool(state.get("is_simulated"))
@@ -300,9 +740,9 @@ async def data_collection_agent(state: CrisisState) -> dict:
     lon = state.get("lon")
     region = state.get("region")
     region_slug = normalize_region(region)
-    
+
     validation_errors = []
-    
+
     # 1. Validate fields
     if event_type == "unknown":
         validation_errors.append("Missing event type")
@@ -310,42 +750,16 @@ async def data_collection_agent(state: CrisisState) -> dict:
         validation_errors.append("Missing location (lat/lon or region)")
     if source == "unknown":
         validation_errors.append("Missing source")
-        
+
     # Normalize severity
     valid_severities = ['low', 'medium', 'high', 'critical']
     severity = severity.lower()
     if severity not in valid_severities:
         severity = 'medium'
         validation_errors.append(f"Normalized invalid severity to 'medium'")
-        
-    # 2. Deduplication check (simulations always execute)
-    event_hash = generate_event_hash(state)
-    logger.debug(f"Computed event hash: {event_hash}")
-    
-    if not is_sim and source not in ["simulation", "simulated", "test"]:
-        if await is_seen(event_hash):
-            logger.info(f"Duplicate event detected for hash: {event_hash}. Terminating path.")
-            return {
-                "status": "duplicate",
-                "messages": state.get("messages", []) + ["DataCollectionAgent: Duplicate event suppressed."]
-            }
-            
-        await mark_seen(event_hash)
-    
-    # 3. Lookup source health
-    health_status = await get_source_health(source)
-    confidence_map = {
-        "green": 0.9,
-        "yellow": 0.6,
-        "red": 0.3
-    }
-    confidence = confidence_map.get(health_status, 0.7)
-    
-    # Adjust confidence if validation errors present
-    if validation_errors:
-        confidence = max(0.1, confidence - 0.2)
-        
-    # 4. Build finding and normalized event
+
+    # 2. Build the normalized event BEFORE the dedup check. Duplicate events are
+    # still fully normalized so callers always receive a usable payload.
     raw_payload = dict(state)
     normalized_ops = normalize_operational_fields(state)
     if normalized_ops:
@@ -378,26 +792,95 @@ async def data_collection_agent(state: CrisisState) -> dict:
     updated_fields: Dict[str, Any] = dict(normalized_ops)
     if region_slug:
         updated_fields["region"] = region_slug
-    
+
+    # 3. Deduplication check. Operator/UI-initiated and simulated events always
+    # execute: a 300s `lrip:seen` TTL must never swallow an interactive map sim.
+    event_hash = generate_event_hash(state)
+    logger.debug(f"Computed event hash: {event_hash}")
+
+    raw_event = state.get("raw_event")
+    raw_event_source = (
+        str(raw_event.get("source") or "").strip().lower()
+        if isinstance(raw_event, dict)
+        else ""
+    )
+    effective_source = raw_event_source or str(source).strip().lower()
+    dedup_enforced = not is_sim and effective_source not in DEDUP_EXEMPT_SOURCES
+
+    if dedup_enforced and await is_seen(event_hash):
+        logger.info(f"Duplicate event detected for hash: {event_hash}. Terminating path.")
+        duplicate_finding: AgentFinding = {
+            "agent": "DataCollectionAgent",
+            "confidence": 0.0,
+            "summary": (
+                f"Duplicate {event_type} event suppressed (hash={event_hash}, source={source})."
+            ),
+            "data": {
+                "duplicate": True,
+                "event_hash": event_hash,
+                "source": source,
+                "severity": severity,
+                "validation_errors": validation_errors,
+            },
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        return {
+            "normalized_event": normalized_event,
+            "data_collection_finding": duplicate_finding,
+            "status": "duplicate",
+            "messages": state.get("messages", [])
+            + ["DataCollectionAgent: Duplicate event suppressed."],
+            **updated_fields,
+        }
+
+    if dedup_enforced:
+        await mark_seen(event_hash)
+
+    # 4. Source health is DIAGNOSTIC ONLY. Confidence is grounded in the actual
+    # weather severity at (lat, lon), not in Supabase data_sources status.
+    health_status = await get_source_health(source)
+    confidence, weather_basis = _weather_confidence(
+        state, normalized_event, source, severity
+    )
+
+    # Adjust confidence if validation errors present
+    if validation_errors:
+        confidence = max(0.1, confidence - 0.2)
+
+    # 5. Fast non-LLM PIHPS pre-gate (Redis snapshot, Supabase 14d fallback).
+    pre_economic_signal = await _pre_economic_signal()
+
+    # 6. Build finding
     finding: AgentFinding = {
         "agent": "DataCollectionAgent",
         "confidence": confidence,
         "summary": f"Validated and normalized incoming {event_type} event from {source}. Severity: {severity}. Errors: {len(validation_errors)}",
-        "data": {"validation_errors": validation_errors, "source_health": health_status},
-        "timestamp": datetime.now(timezone.utc).isoformat()
+        "data": {
+            "validation_errors": validation_errors,
+            "source_health": health_status,
+            "source_health_ratio": _source_health_ratio(health_status),
+            "weather_basis": weather_basis,
+            "distance_km": 0.0,
+        },
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "distance_km": 0.0,
     }
-    
+
     try:
         from app.routers.agent_router import update_agent_status
         update_agent_status("DataCollectionAgent", "complete", confidence, finding["summary"])
     except Exception:
         pass
-        
+
     logger.info(f"Agent 1 finished. Confidence: {confidence}")
-    return {
+
+    result: Dict[str, Any] = {
         "normalized_event": normalized_event,
         "data_collection_finding": finding,
         "status": "validating",
         "messages": state.get("messages", []) + ["DataCollectionAgent: Event normalized and validated."],
         **updated_fields,
     }
+    if pre_economic_signal:
+        result["pre_economic_signal"] = pre_economic_signal
+    return result

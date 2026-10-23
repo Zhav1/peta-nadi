@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from starlette.testclient import TestClient
 from app.main import app
 from app.routers.news_router import get_live_news
+from app.auth.supabase_auth import create_guest_token, ROLE_DISPATCHER
 
 client = TestClient(app, raise_server_exceptions=False)
 
@@ -69,14 +70,25 @@ def test_get_live_news_background_tasks_none():
     print("PASS: test_get_live_news_background_tasks_none")
 
 def test_hitl_action_uuid_validation():
-    """Verify POST /api/v1/news/hitl-action returns 422 for invalid non-UUID approval_id."""
+    """Verify HITL endpoint auth-first (401 unauthenticated) and 422 for invalid non-UUID approval_id once authed."""
+    payload = {
+        "approval_id": "APPR-INVALID-NOT-UUID",
+        "decision": "HOLD",
+        "notes": "Testing invalid UUID validation"
+    }
+
+    # Auth-first contract: no bearer token => 401 before body/UUID validation.
+    unauth_res = client.post("/api/v1/news/hitl-action", json=payload)
+    assert unauth_res.status_code == 401, (
+        f"Expected 401 for missing token, got {unauth_res.status_code}: {unauth_res.text}"
+    )
+
+    # Authenticated Dispatcher (approvals:write) + bad UUID => 422 from UUID guard.
+    dispatcher_token = create_guest_token(role=ROLE_DISPATCHER)
     res = client.post(
         "/api/v1/news/hitl-action",
-        json={
-            "approval_id": "APPR-INVALID-NOT-UUID",
-            "decision": "HOLD",
-            "notes": "Testing invalid UUID validation"
-        }
+        json=payload,
+        headers={"Authorization": f"Bearer {dispatcher_token}"},
     )
     assert res.status_code == 422, f"Expected 422 for non-UUID, got {res.status_code}: {res.text}"
     detail = res.json().get("detail")

@@ -299,12 +299,33 @@ async def lifespan(app: FastAPI):
             "BOOT: POLLERS_ENABLED=false — HTTP-only process; background pollers not started"
         )
 
+    # Cross-process validated-alert bridge. Every API process tails its own copy
+    # of lrip:stream:validated_alerts so /ws/crisis/{crisis_id} clients see
+    # alerts produced by another worker. Not gated on POLLERS_ENABLED: WebSocket
+    # fan-out is per-process even for HTTP-only replicas. Redis being down is
+    # handled inside the consumer (exponential backoff, never crashes boot).
+    alert_consumer_task = None
+    try:
+        from app.services.alert_fanout import consume_validated_alerts_stream
+        alert_consumer_task = asyncio.create_task(consume_validated_alerts_stream())
+        logger.info("BOOT: validated-alert stream consumer registered")
+    except Exception as e:
+        logger.warning(f"Validated-alert stream consumer not started: {e}")
+
     yield  # Application runs here
 
     # Shutdown
     logger.info("Shutting down background workers...")
     for t in tasks:
         t.cancel()
+    if alert_consumer_task is not None:
+        alert_consumer_task.cancel()
+        try:
+            await alert_consumer_task
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.warning(f"Validated-alert stream consumer shutdown error: {e}")
     close_redis()
 
 

@@ -6,6 +6,7 @@ crisis intelligence, and manages Globot-style Human-In-The-Loop review workflows
 """
 import logging
 import asyncio
+import time
 import uuid
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
@@ -47,17 +48,91 @@ class HitlActionRequest(BaseModel):
 _ingestion_lock = asyncio.Lock()
 _is_ingesting = False
 
+# Cross-process guard: uvicorn --workers > 1 (or several replicas) each own a
+# separate in-process asyncio.Lock, so a best-effort Redis NX lock keeps a single
+# RSS/LLM cycle per interval. Non-fatal by design — if Redis is down the worker
+# still ingests (the in-process lock already serializes it).
+_INGESTION_REDIS_LOCK_KEY = "lrip:lock:news_ingestor"
+_INGESTION_REDIS_LOCK_TTL = 240
+_INGESTION_LOCK_TOKEN = uuid.uuid4().hex
+# Monotonic timestamp of the last completed cycle. A caller that queued behind a
+# running cycle is *already satisfied* by that cycle and must not start another.
+_last_cycle_completed_at: Optional[float] = None
+
+
+def _acquire_cross_process_ingestion_lock() -> bool:
+    """Non-blocking Redis lock acquire; True when this worker may ingest.
+
+    Returns False only when another worker provably holds the lock. Any Redis
+    failure degrades to True so a Redis outage never stalls ingestion.
+    """
+    try:
+        r = get_redis()
+        if r is None:
+            return True
+        return bool(
+            r.set(
+                _INGESTION_REDIS_LOCK_KEY,
+                _INGESTION_LOCK_TOKEN,
+                nx=True,
+                ex=_INGESTION_REDIS_LOCK_TTL,
+            )
+        )
+    except Exception as lock_err:
+        logger.debug(
+            f"Redis news ingestion lock unavailable ({lock_err}); "
+            "continuing with in-process lock only"
+        )
+        return True
+
+
+def _release_cross_process_ingestion_lock() -> None:
+    """Best-effort release, only when this worker still owns the token."""
+    try:
+        r = get_redis()
+        if r is None:
+            return
+        if r.get(_INGESTION_REDIS_LOCK_KEY) == _INGESTION_LOCK_TOKEN:
+            r.delete(_INGESTION_REDIS_LOCK_KEY)
+    except Exception as lock_err:
+        logger.debug(f"Redis news ingestion lock release skipped: {lock_err}")
+
 
 async def run_background_news_ingestion(force: bool = False):
     """
     Background worker for asynchronous news and disaster early-warning indexing.
-    Protected by module-level concurrency guard to eliminate stampedes.
+    Protected by a double-checked in-process lock plus a cross-process Redis lock
+    to eliminate stampedes across concurrent requests and uvicorn workers.
     """
-    global _is_ingesting
+    global _is_ingesting, _last_cycle_completed_at
     if _is_ingesting:
         logger.info("News ingestion cycle already in progress, skipping duplicate trigger.")
         return
+    entered_at = time.monotonic()
     async with _ingestion_lock:
+        # Double-checked locking: a second caller may have entered the flag while
+        # we were waiting on the lock; re-check before spending any RSS/LLM work.
+        if _is_ingesting:
+            logger.info(
+                "News ingestion cycle started while waiting for the lock, "
+                "skipping duplicate trigger."
+            )
+            return
+        if (
+            _last_cycle_completed_at is not None
+            and _last_cycle_completed_at >= entered_at
+        ):
+            logger.info(
+                "News ingestion cycle completed while this trigger was queued, "
+                "skipping duplicate cycle."
+            )
+            return
+        if not await asyncio.to_thread(_acquire_cross_process_ingestion_lock):
+            logger.info(
+                "News ingestion cycle is running in another worker "
+                "(lrip:lock:news_ingestor held), skipping duplicate trigger."
+            )
+            return
         _is_ingesting = True
         try:
             logger.info("Executing background news ingestion cycle into Supabase...")
@@ -67,6 +142,8 @@ async def run_background_news_ingestion(force: bool = False):
             logger.warning(f"Background news ingestion error: {ie}")
         finally:
             _is_ingesting = False
+            _last_cycle_completed_at = time.monotonic()
+            await asyncio.to_thread(_release_cross_process_ingestion_lock)
 
 
 @router.get("/api/v1/news/live")

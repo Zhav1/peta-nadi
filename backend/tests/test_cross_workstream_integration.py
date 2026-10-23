@@ -8,6 +8,7 @@ Verifies that:
 - resolve_canonical_article_url correctly normalizes Google News RSS and raw article URLs
 """
 import pytest
+from urllib.parse import urlparse
 from fastapi.testclient import TestClient
 from app.main import app
 from app.schemas.fleet import FleetVehicleTelemetry, SignalStatus
@@ -80,11 +81,13 @@ def test_routing_solve_path():
 
 
 def test_resolve_canonical_article_url():
-    """Validates resolve_canonical_article_url handles direct and syndicated URLs."""
-    direct = "https://sumut.antaranews.com/berita/123/kondisi-jalan-medan"
+    """Validates resolve_canonical_article_url handles direct, search, redirect and syndicated URLs."""
+    direct = "https://sumut.antaranews.com/berita/123456/kondisi-jalan-medan"
     assert resolve_canonical_article_url(direct) == direct
+    assert resolve_canonical_article_url(direct, "Kondisi Jalan Medan", "ANTARA Sumut") == direct
 
-    # Google News RSS fallback URL
+    # Google News RSS fallback URL (undecodable token) must land on the publisher host,
+    # never on a Google search/landing host (news_router treats news.google.com/search as legacy).
     gn_url = "https://news.google.com/rss/articles/opaque_sample_test"
     resolved = resolve_canonical_article_url(
         gn_url,
@@ -92,4 +95,17 @@ def test_resolve_canonical_article_url():
         source="Antara News"
     )
     assert resolved.startswith("http")
-    assert "google.com/search" in resolved
+    assert "google." not in urlparse(resolved).netloc
+    assert "antaranews.com/search" in resolved
+
+    # Legacy Google News search links are rewritten to the publisher host
+    goog_search = "https://news.google.com/search?q=Banjir%20Medan&hl=id-ID&gl=ID&ceid=ID:id"
+    rewritten = resolve_canonical_article_url(goog_search, title="Banjir Medan", source="ANTARA")
+    assert "google." not in urlparse(rewritten).netloc
+    assert rewritten.startswith("https://www.antaranews.com/search?q=")
+
+    # Google redirect wrappers unwrap to the real publisher host
+    wrapped = "https://www.google.com/url?q=https%3A%2F%2Fwww.detik.com%2Fsumut%2Fberita%2Fd-123%2Fjudul&sa=D"
+    assert resolve_canonical_article_url(wrapped, "Judul", "Detik") == \
+        "https://www.detik.com/sumut/berita/d-123/judul"
+

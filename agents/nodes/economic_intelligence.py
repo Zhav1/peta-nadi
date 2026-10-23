@@ -1,7 +1,9 @@
 import json
 import logging
+import math
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+from typing import Any, Dict, List
 from agents.state import CrisisState, AgentFinding, LTMEpisode
 from agents.memory.stm import get_async_redis
 from agents.memory.ltm import query_ltm
@@ -9,6 +11,65 @@ from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+
+# Redis-down fallback window for commodity anomaly detection.
+COMMODITY_HISTORY_DAYS = 14
+
+
+def _pihps_stats_from_supabase() -> Dict[str, Dict[str, Any]]:
+    """Recompute per-commodity current/mean/std from public.commodity_prices.
+
+    Blocking Supabase read (call via ``asyncio.to_thread``). Uses the last
+    ``COMMODITY_HISTORY_DAYS`` days per commodity; the newest price is "current".
+    """
+    from app.db.supabase_client import get_client
+
+    sb = get_client()
+    cutoff = (
+        datetime.now(timezone.utc) - timedelta(days=COMMODITY_HISTORY_DAYS)
+    ).isoformat()
+    res = (
+        sb.table("commodity_prices")
+        .select("commodity,price_idr,time")
+        .gte("time", cutoff)
+        .order("time", desc=False)
+        .execute()
+    )
+
+    grouped: Dict[str, List[Any]] = {}
+    for row in res.data or []:
+        if not isinstance(row, dict):
+            continue
+        commodity = row.get("commodity")
+        try:
+            price = float(row.get("price_idr"))
+        except (TypeError, ValueError):
+            continue
+        if not commodity or price <= 0:
+            continue
+        grouped.setdefault(str(commodity), []).append(
+            (str(row.get("time") or ""), price)
+        )
+
+    stats: Dict[str, Dict[str, Any]] = {}
+    for commodity, points in grouped.items():
+        points.sort(key=lambda item: item[0])
+        series = [price for _, price in points]
+        current = series[-1]
+        mean = sum(series) / len(series)
+        std = math.sqrt(
+            sum((price - mean) ** 2 for price in series) / len(series)
+        )
+        stats[commodity] = {
+            "current": round(current, 2),
+            "mean": round(mean, 2),
+            "std": round(std, 2),
+            "z_score": (
+                round((current - mean) / std, 2) if std > 0 else 0.0
+            ),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+    return stats
 
 
 async def economic_intelligence_agent(state: CrisisState) -> dict:
@@ -20,27 +81,51 @@ async def economic_intelligence_agent(state: CrisisState) -> dict:
     region = state.get("region", "north_sumatra")
     severity = norm_event.get("severity", "medium")
     
-    # 1. PIHPS anomaly detection (Read from Redis)
+    # 1. PIHPS anomaly detection (Redis snapshot, Supabase fallback when down/empty)
     r = get_async_redis()
     anomaly_detected = False
     anomalous_commodities = []
-    
+    pihps_source = "redis"
+
+    data = None
     try:
         latest_pihps = await r.get("lrip:pihps:latest")
         if latest_pihps:
             data = json.loads(latest_pihps)
-            for comm, stats in data.items():
-                if isinstance(stats, dict) and "current" in stats and "mean" in stats and "std" in stats:
-                    current = float(stats["current"])
-                    mean = float(stats["mean"])
-                    std = float(stats["std"])
-                    if std > 0:
-                        z_score = (current - mean) / std
-                        if abs(z_score) > 1.5:
-                            anomaly_detected = True
-                            anomalous_commodities.append(comm)
     except Exception as re:
-        logger.debug(f"Failed to read PIHPS data from Redis: {re}")
+        logger.warning(f"Failed to read PIHPS data from Redis: {re}")
+        data = None
+
+    if not isinstance(data, dict) or not data:
+        # Redis unavailable or the PIHPS scraper has not published this cycle:
+        # recompute current/mean/std on the fly from the last 14 days of
+        # public.commodity_prices so the anomaly channel still answers.
+        try:
+            data = await asyncio.to_thread(_pihps_stats_from_supabase)
+            pihps_source = "supabase_commodity_prices"
+            logger.info(
+                "EconomicIntelligenceAgent: PIHPS snapshot unavailable in Redis; "
+                f"recomputed {len(data)} commodities from commodity_prices"
+            )
+        except Exception as sb_err:
+            logger.warning(
+                "EconomicIntelligenceAgent: PIHPS Redis and Supabase fallback "
+                f"unavailable: {sb_err}"
+            )
+            data = None
+            pihps_source = "unavailable"
+
+    if isinstance(data, dict):
+        for comm, stats in data.items():
+            if isinstance(stats, dict) and "current" in stats and "mean" in stats and "std" in stats:
+                current = float(stats["current"])
+                mean = float(stats["mean"])
+                std = float(stats["std"])
+                if std > 0:
+                    z_score = (current - mean) / std
+                    if abs(z_score) > 1.5:
+                        anomaly_detected = True
+                        anomalous_commodities.append(comm)
 
     # Merge news-reported affected commodities
     news_commodities = state.get("news_affected_commodities") or []
@@ -145,6 +230,7 @@ async def economic_intelligence_agent(state: CrisisState) -> dict:
             "inflation_forecast": inflation_forecast,
             "ltm_episodes_used": len(ltm_episodes),
             "anomaly_detected": anomaly_detected,
+            "pihps_source": pihps_source,
             "news_commodities": list(news_commodities)
         },
         "timestamp": datetime.now(timezone.utc).isoformat()

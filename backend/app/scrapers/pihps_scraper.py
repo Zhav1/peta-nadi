@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import math
 import re
 import time
 from datetime import datetime, timedelta, timezone
@@ -110,6 +111,9 @@ class PIHPSScraper(BaseScraper):
         """Normalize raw price readings and detect spikes against the rolling baseline."""
         events = []
         r = get_redis()
+        # Per-commodity snapshot aggregated across the whole scrape cycle and
+        # published once under lrip:pihps:latest for the economic agent.
+        latest_snapshot: Dict[str, Dict[str, Any]] = {}
 
         for com_name, data_payload in raw_data.items():
             rows = data_payload.get('data', []) if isinstance(data_payload, dict) else data_payload
@@ -188,6 +192,27 @@ class PIHPSScraper(BaseScraper):
             latest_date, latest_price = price_readings[-1]["date"], price_readings[-1]["price"]
             dedup_key = f"pihps:{com_name}:sumut:{latest_date.replace('-', '')}"
 
+            # Aggregate the rolling statistics for this cycle. The series is the
+            # prior baseline plus today's reading (bounded to the same 7-point
+            # window the spike detector uses) so consumers see current/mean/std
+            # from one consistent, recomputable window.
+            series = (history + [latest_price])[-7:]
+            window_mean = sum(series) / len(series)
+            window_std = math.sqrt(
+                sum((price - window_mean) ** 2 for price in series) / len(series)
+            )
+            latest_snapshot[com_name] = {
+                "current": round(latest_price, 2),
+                "mean": round(window_mean, 2),
+                "std": round(window_std, 2),
+                "z_score": (
+                    round((latest_price - window_mean) / window_std, 2)
+                    if window_std > 0
+                    else 0.0
+                ),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }
+
             # Check if this reading has already been published/processed
             try:
                 if r.get(f"lrip:dedup:pihps:{dedup_key}"):
@@ -245,6 +270,20 @@ class PIHPSScraper(BaseScraper):
                 r.set(redis_key, json.dumps(history), ex=86400 * 10)
             except Exception as e:
                 logger.error(f"Failed to update rolling history in Redis: {e}")
+
+        # Publish the aggregated per-commodity snapshot once per scrape cycle.
+        # consumers (economic_intelligence) read this single key instead of
+        # scanning every rolling key. Never raises: a Redis blip must not lose
+        # the events already parsed in this cycle.
+        if latest_snapshot:
+            try:
+                r.set("lrip:pihps:latest", json.dumps(latest_snapshot), ex=86400)
+                logger.info(
+                    f"Published PIHPS snapshot for {len(latest_snapshot)} commodities "
+                    "to lrip:pihps:latest"
+                )
+            except Exception as e:
+                logger.error(f"Failed to publish PIHPS snapshot to Redis: {e}")
 
         return events
 

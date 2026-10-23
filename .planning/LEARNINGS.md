@@ -256,3 +256,72 @@ The following items are prioritized for subsequent development phases:
 - Do not write `sync_status='pending'` without a drain worker; a status the runtime does not honour is a silent data-loss contract.
 - Do not treat "field not recorded" as zero when the number feeds a savings claim.
 - Do not add an e2e spec for an API-backed flow to a harness that only starts the frontend.
+
+---
+
+## 2026-10-23 - Phases 97-99: Pilot-to-Real Interference Fixes, Risk Batch, Walkthroughs
+
+**Scope:** WP1-WP7. Docs live in `.planning/phases/97-pilot-interference-core/`, `98-ingestion-resilience-and-alert-bridge/`, and `99-honest-ui-and-risk-batch/`.
+
+### Decisions
+
+1. **Dedup terminates at Stage 1.** `agents/graph.py:32,69` sends `status="duplicate"` to `END`; `agents/nodes/data_collection.py:19,808` exempts operator/UI and simulation sources so the demo and interactive re-runs are never swallowed by the 300 s TTL.
+2. **Confidence is weather-grounded.** `agents/nodes/data_collection.py:246,857-865` derives confidence from warning level, precipitation, flood risk, wind, BMKG code, and payload severity. Supabase `data_sources` health is diagnostic only.
+3. **E channel votes only when it has an observation.** `agents/tools/consensus_gate.py:29,39,358-361` selects `W 0.35 / T 0.25 / I 0.20 / E 0.20` when `econ_conf > 0.50`, otherwise `W 0.4375 / T 0.3125 / I 0.25 / E 0.0`. A permanently-on 0.20 E weight structurally capped physical crises at `P_max = 0.688`.
+4. **Degrade, but say so.** PIHPS falls back to 14 days of `commodity_prices` (`economic_intelligence.py:19,88-116`); STM/dedup falls back to a bounded 500-entry local store (`stm.py:23-67`); OSINT falls back to 12 h of recent news (`osint_hazard.py:45,232,365`); prediction uses `SCAN` and a 25 km corridor anchor (`prediction.py:146,292`). Each path records a source/provenance field.
+5. **News replay is idempotent.** Deterministic UUIDv5 incident/approval ids + `upsert` (`unified_news_ingestor.py:648-658,715,769-798`). A news-derived incident is excluded from hazard fusion (`supabase_tools.py:581-610,684-692`) so a story cannot corroborate itself.
+6. **Alerts cross workers.** `alert_fanout.py:44,223` tails `lrip:stream:validated_alerts`; `main.py:307-314` starts the consumer in every API process; dedup identity is `(crisis_id, timestamp)` or a stable SHA-1.
+7. **UI cannot fake success.** Archived signals force `validated=false` and open `Evidence` with an `info` toast (`useCrisisSimulationStream.ts:177-178`; `DashboardClient.tsx:1965-1990`). Fallback news is labelled and excluded from the PIHPS-live indicator (`DashboardClient.tsx:2663-2667,3000`).
+8. **Brier uses two explicitly named scales.** NFR-4 scores `calibrate_confidence_scale(raw_prob, active_sources, SENSOR_WEIGHTS_ECONOMIC_ACTIVE)`; the raw product stays as `raw_brier_score` telemetry. Detection stays at `0.50` raw (equiv. `0.727` normalized). `overall_confidence` is not scored because its `0.50` OSINT cap would clip the benchmark.
+9. **Canonical URLs stay on the publisher.** `news_aggregator.py:328-405` unwraps Google redirect/AMP links, rejects any `google.` host, and falls back to `_map_publisher_deep_fallback` for undecodable tokens.
+10. **HITL is auth-first.** `test_audit_fixes.py:72-94` asserts `401` without a token and `422` only after a valid Dispatcher token.
+
+### Verification (docs pass)
+
+| Suite | Result |
+|---|---|
+| `test_agents.py + test_adapters.py + test_bmkg_consensus_validation.py` | 49 passed |
+| `test_consensus_calibration.py` | 12 passed |
+| `test_scrapers.py` | 22 passed |
+| `test_news_pipeline.py + test_osint_leak_hardening.py + test_phase76_news_spatial_consensus.py` | 84 passed |
+| `test_pilot_e2e.py` | 9 passed |
+| `test_audit_fixes.py + test_cross_workstream_integration.py` | 10 passed |
+| `npx tsc --noEmit` | exit 0 |
+| `test_benchmark_eval.py + test_evaluation_router.py` | 7 passed, 1 failed (`TP 35 != 34`) |
+
+The window log reported WP1 48, WP2 41p/1f (Brier), WP3 22+114, WP4 22+104, WP5 36, WP6 tsc PASS, risk batch 14. The re-run counts above are the subsets actually re-executed; differences are collection drift, not silently changed results.
+
+### Open concerns
+
+- `test_evaluation_router.py::test_get_benchmark_report` is red after normalization (`true_positives` 35 vs expected 34). No decision recorded yet on the correct label/cut.
+- The validated-alert bridge has no direct test (`grep` over `backend/tests` finds no `alert_fanout`/`validated_alert` reference).
+- STM/dedup fallback is per process; two workers can accept the same event during a Redis outage.
+- A held `lrip:lock:news_ingestor` silently skips a cycle for up to 240 s; the skip is logged but not surfaced in the API response.
+- UI honesty changes have TypeScript coverage only; no browser assertion for archived tab/toast or fallback labels.
+- `isFallbackNews` uses object identity, so a cloned fixture would not be labelled.
+
+### Mistakes not to repeat
+
+- Do not leave a dead E weight in the consensus formula; renormalize physical weights when E has no observation.
+- Do not use source health as crisis confidence.
+- Do not let a news article corroborate itself via the incident polygon created from it.
+- Do not use `KEYS` on a shared Redis event loop; use `SCAN`.
+- Do not make Redis a single point of failure for STM/dedup; degrade to a bounded local store.
+- Do not let archived/rejected UI reuse the success path (Mitigation tab + savings toast).
+- Do not default a validation flag to `true`.
+- Do not rely on Batchexecute as the only canonical-URL resolver; keep the publisher fallback and test the undecodable case.
+- Do not validate the body before authentication; `401` must precede `422`.
+- Do not compare raw-product Brier to a normalized NFR-4 target; name the scale.
+- Do not change a benchmark expectation just to make it green; record the label/cut decision.
+
+### Process constraints (this window)
+
+- DeepSeek subagents only, to keep manager context uncluttered.
+- Manager-only coordination; no direct manager edits.
+- `git add .` then one conventional commit, then `git push origin main` for Vercel visibility.
+- Continue numbering from the observed maximum phase (96).
+- Final docs under `.planning/phases/`; never `%TEMP%` or `/tmp`.
+- Keep the demo fixture intact and CPU routing only.
+- Keep the BMKG warning-code mapping (`60 -> 25 / 55`, `95/97 -> 65.5 / 87.5`).
+- Workflow: grill first, then boost.
+- `agents/llm_gateway.py`, `backend/tests/test_llm_gateway.py`, `.env.example` are off-limits.

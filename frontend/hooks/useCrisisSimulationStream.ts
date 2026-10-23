@@ -171,6 +171,12 @@ export function useCrisisSimulationStream() {
                   state.title || payload.title || `Simulasi ${payload.type.toUpperCase()}`;
                 const resolvedType = ((state.type || payload.type || 'flood') as CrisisType);
 
+                // Consensus Gate honesty: an archived signal was NOT validated, even
+                // if a stale/mock field claims otherwise. Never default to `true` —
+                // real simulations without an explicit validation flag are unverified.
+                const isArchived = (parsed.status ?? state.status) === 'archived';
+                const isValidated = isArchived ? false : (parsed.validated ?? state.validated ?? false);
+
                 const crisisState: CrisisState = {
                   crisis_id: parsed.crisis_id || state.crisis_id || 'simulated-active',
                   title: resolvedTitle,
@@ -183,7 +189,7 @@ export function useCrisisSimulationStream() {
                   // Keep the slug for API queries; display layers normalize it.
                   region: toRegionSlug(state.region) || payloadRegion,
                   overall_confidence: confidence,
-                  validated: parsed.validated ?? state.validated ?? true,
+                  validated: isValidated,
                   created_at: state.created_at || parsed.timestamp || new Date().toISOString(),
                   updated_at: state.updated_at || parsed.timestamp || new Date().toISOString(),
                   route_recommendations: parsed.routes || state.route_recommendations || [],

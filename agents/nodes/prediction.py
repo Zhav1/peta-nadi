@@ -21,6 +21,18 @@ MAX_DELAY_MIN = 300.0
 DEFAULT_BASE_DELAY_MIN = 30.0
 HISTORY_BBOX_DEG = 0.5
 
+# Corridor severity fallback: when the Redis TomTom cache has no segment at all,
+# anchor the forecast to the nearest adapter-owned corridor checkpoint within
+# 25 km so the traffic channel still carries a real distance (consensus t_dist is
+# never +inf) and a severity-derived delay instead of an invented segment.
+CORRIDOR_FALLBACK_RADIUS_KM = 25.0
+CORRIDOR_FALLBACK_DELAY_BY_SEVERITY = {
+    "critical": 120.0,
+    "high": 90.0,
+    "medium": 60.0,
+    "low": 30.0,
+}
+
 
 def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Great-circle distance in km; returns 9999.0 when coordinates are unusable."""
@@ -64,6 +76,47 @@ def _clamp_delay(value: float) -> float:
     return float(max(MIN_DELAY_MIN, min(MAX_DELAY_MIN, value)))
 
 
+def _nearest_corridor_anchor(
+    state_lat: float,
+    state_lon: float,
+    radius_km: float = CORRIDOR_FALLBACK_RADIUS_KM,
+) -> Optional[Dict[str, Any]]:
+    """Nearest TomTom corridor checkpoint within ``radius_km`` (no network call).
+
+    The checkpoint list is owned by the TomTom adapter, so this uses the same
+    corridor geometry the adapter polls instead of introducing a second, slower
+    live path into the agent.
+    """
+    try:
+        from app.adapters.tomtom_adapter import TomTomAdapter
+
+        anchors = list(TomTomAdapter.CHECKPOINTS)
+    except Exception as exc:
+        logger.warning("PredictionAgent: corridor anchors unavailable: %s", exc)
+        return None
+
+    best: Optional[Dict[str, Any]] = None
+    best_key = None
+    for checkpoint in anchors:
+        lat = _as_float(checkpoint.get("lat"))
+        lon = _as_float(checkpoint.get("lon"))
+        if lat is None or lon is None:
+            continue
+        distance = _haversine_km(state_lat, state_lon, lat, lon)
+        if distance >= 9999.0 or distance > radius_km:
+            continue
+        candidate = (distance, str(checkpoint.get("name") or "corridor"))
+        if best_key is None or candidate < best_key:
+            best_key = candidate
+            best = {
+                "name": candidate[1],
+                "lat": lat,
+                "lon": lon,
+                "distance_km": round(distance, 2),
+            }
+    return best
+
+
 async def prediction_agent(state: CrisisState) -> dict:
     """Agent 3: Multi-horizon congestion forecast (6h/12h/24h/48h) incorporating Open-Meteo predictions."""
     logger.info("Agent 3 [PredictionAgent] running...")
@@ -88,8 +141,17 @@ async def prediction_agent(state: CrisisState) -> dict:
     segments: List[Dict[str, Any]] = []
 
     try:
-        # Scan for TomTom segments keys (sorted for deterministic selection).
-        keys = await r.keys("lrip:tomtom:segment:*")
+        # Non-blocking key discovery: SCAN avoids the O(N) KEYS stall on the shared
+        # event loop. Fall back to KEYS only for clients without scan_iter.
+        if hasattr(r, "scan_iter"):
+            keys = [
+                key
+                async for key in r.scan_iter(
+                    match="lrip:tomtom:segment:*", count=100
+                )
+            ]
+        else:
+            keys = await r.keys("lrip:tomtom:segment:*")
         for k in sorted(keys or []):
             val = await r.get(k)
             if not val:
@@ -222,6 +284,43 @@ async def prediction_agent(state: CrisisState) -> dict:
             "degraded_sources=weather_unavailable"
         )
         _degrade("weather_unavailable", "no Open-Meteo cache entries")
+
+    # 2b. Corridor severity fallback (Redis cache empty). Anchor to the nearest
+    # TomTom corridor checkpoint within 25 km so the traffic channel keeps a real
+    # spatial distance; the delay comes from incident severity (escalated only by
+    # observed weather), never from an invented far-away segment.
+    corridor_fallback_used = False
+    if not segments and state_lat is not None and state_lon is not None:
+        anchor = _nearest_corridor_anchor(state_lat, state_lon)
+        if anchor is not None:
+            severity_key = str(
+                state.get("severity") or norm_event.get("severity") or "medium"
+            ).lower()
+            corridor_delay = CORRIDOR_FALLBACK_DELAY_BY_SEVERITY.get(
+                severity_key, DEFAULT_BASE_DELAY_MIN
+            )
+            observed_weather_alert = weather_provenance == "observed" and (
+                open_meteo_flood_risk > 50.0 or open_meteo_precip > 20.0
+            )
+            if observed_weather_alert:
+                corridor_delay *= 1.3
+            corridor_segment = {
+                "name": anchor["name"],
+                "delay_min": _clamp_delay(corridor_delay),
+                "lat": anchor["lat"],
+                "lon": anchor["lon"],
+            }
+            segments.append(corridor_segment)
+            nearest_segment = corridor_segment
+            nearest_segment_distance_km = anchor["distance_km"]
+            corridor_fallback_used = True
+            logger.info(
+                "PredictionAgent: no cached TomTom segment; using nearest corridor "
+                f"'{anchor['name']}' ({anchor['distance_km']} km) with "
+                f"{corridor_segment['delay_min']} min severity-derived delay"
+            )
+
+    delays = [seg["delay_min"] for seg in segments]
 
     # 3. Query incidents table for historical events near the event.
     # Preferred: lat/lon bbox +-0.5 deg. Fallback: filter region evidence in Python
@@ -396,6 +495,7 @@ async def prediction_agent(state: CrisisState) -> dict:
             "distance_km": nearest_segment_distance_km,
             "nearest_segment_name": nearest_segment["name"] if nearest_segment is not None else None,
             "nearest_segment_distance_km": nearest_segment_distance_km,
+            "corridor_fallback_used": corridor_fallback_used,
             "estimated_delay_hours": estimated_delay_hours,
             "open_meteo_flood_risk_pct": open_meteo_flood_risk,
             "open_meteo_precipitation_mm_24h": open_meteo_precip,

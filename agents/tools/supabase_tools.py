@@ -569,9 +569,44 @@ async def write_incident(
 
 
 # Explicit projection keeps legacy schemas working via the select("*") retry.
+# ``id`` + ``evidence`` are read so the news-ingestor provenance tag (below) is
+# available and id-only rows still normalize.
 _HAZARD_COLUMNS = (
-    "incident_id, title, type, severity, status, lat, lon, affected_area, location"
+    "id, incident_id, title, type, severity, status, lat, lon, affected_area, "
+    "location, evidence"
 )
+
+# Provenance tag written by backend.app.services.unified_news_ingestor into
+# incidents.evidence (public.incidents has no source_type column).
+_NEWS_INGESTOR_ORIGIN = "news_ingestor"
+_NEWS_INGESTOR_EVIDENCE_KEYS = ("source_type", "ingestion_origin", "ingested_by", "origin")
+_NEWS_INGESTOR_TITLE_PREFIX = "[News Alert]"
+
+
+def _is_news_ingestor_incident(row: Dict[str, Any]) -> bool:
+    """True when an ``incidents`` row was synthesized from a news article.
+
+    Such a polygon is a restatement of the article itself, so feeding it into
+    the hazard-fusion ``+0.20`` boost would let one uncorroborated article
+    corroborate itself. Detection prefers the explicit ``evidence.source_type``
+    tag written by the ingestor, falls back to a top-level ``source_type`` /
+    ``source`` column on deployments that have one, and finally to the
+    ``[News Alert]`` title provenance prefix for pre-tag rows.
+    """
+    evidence = row.get("evidence")
+    if isinstance(evidence, str):
+        try:
+            evidence = json.loads(evidence)
+        except (TypeError, ValueError):
+            evidence = None
+    if isinstance(evidence, dict):
+        for key in _NEWS_INGESTOR_EVIDENCE_KEYS:
+            if _NEWS_INGESTOR_ORIGIN in str(evidence.get(key) or "").strip().lower():
+                return True
+    for key in ("source_type", "source"):
+        if _NEWS_INGESTOR_ORIGIN in str(row.get(key) or "").strip().lower():
+            return True
+    return str(row.get("title") or "").startswith(_NEWS_INGESTOR_TITLE_PREFIX)
 
 
 async def get_hazard_polygons(
@@ -585,7 +620,9 @@ async def get_hazard_polygons(
     Reads ``affected_area`` (PostGIS, migration 000) with a fallback to the
     legacy ``affected_polygon`` key, drops resolved/archived rows in Python, and
     distance-checks bounding-box hits so corner rows outside the radius are not
-    returned as hazards.
+    returned as hazards. Rows synthesized from a news article by the news
+    ingestor are skipped: a news restatement is not an independent hazard source
+    and must never boost its own corroboration confidence.
 
     ``degraded_sources`` (optional) receives ``supabase_polygons`` when the query
     cannot answer, so the caller can distinguish a quiet area from a dead path
@@ -640,6 +677,16 @@ async def get_hazard_polygons(
 
             status = str(row.get("status") or "").strip().lower()
             if status in {"resolved", "archived"}:
+                continue
+
+            # Anti-self-corroboration: a news-derived incident must not act as an
+            # independent PostGIS polygon for the article it was created from.
+            if _is_news_ingestor_incident(row):
+                logger.debug(
+                    "get_hazard_polygons: skipping news-ingestor incident %s "
+                    "(news cannot corroborate itself)",
+                    row.get("incident_id") or row.get("id") or "?",
+                )
                 continue
 
             polygon_raw = (

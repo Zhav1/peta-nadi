@@ -17,13 +17,34 @@ from agents.state import CrisisState
 
 logger = logging.getLogger(__name__)
 
-# Default baseline sensor weights (proposal section 4.3)
-DEFAULT_SENSOR_WEIGHTS = {
+# Dynamic E-channel-aligned sensor weight profiles (proposal section 4.3).
+#
+# The economic (PIHPS) channel is an AUXILIARY validation signal: it only earns
+# a live vote while a staple-price anomaly is actually firing. Physical crises
+# arrive first — a flood blocks a corridor hours before PIHPS records the
+# resulting chili/rice/oil spike — so leaving a 0.20 dead weight on E would
+# discount the three physical sensors by 20% and under-report real floods.
+#
+# Active spike (econ_conf > 0.50): W 0.35 + T 0.25 + I 0.20 + E 0.20 = 1.00.
+SENSOR_WEIGHTS_ECONOMIC_ACTIVE = {
     "weather": 0.35,      # BMKG radar, severe weather warnings (w_W)
-    "traffic": 0.35,      # TomTom traffic flow, congestion, obstruction (w_T)
-    "osint": 0.30,        # ANTARA news, verified OSINT dispatch (w_I)
+    "traffic": 0.25,      # TomTom traffic flow, congestion, obstruction (w_T)
+    "osint": 0.20,        # ANTARA news, verified OSINT dispatch (w_I)
     "economics": 0.20,    # PIHPS staple price anomaly (auxiliary validation)
 }
+
+# No anomaly yet (econ_conf <= 0.50): E is 0.0 and W/T/I are re-normalized to
+# sum to 1.0 (0.35/0.80, 0.25/0.80, 0.20/0.80) so physical crises are not
+# penalized by a channel that has not observed anything.
+SENSOR_WEIGHTS_PHYSICAL_ONLY = {
+    "weather": 0.35 / 0.80,   # 0.4375
+    "traffic": 0.25 / 0.80,   # 0.3125
+    "osint": 0.20 / 0.80,     # 0.25
+    "economics": 0.0,
+}
+
+# Backwards-compatible default = the fully active profile.
+DEFAULT_SENSOR_WEIGHTS = SENSOR_WEIGHTS_ECONOMIC_ACTIVE
 
 LAMBDA_TEMPORAL_DECAY = 0.05  # Decay per hour (e^(-0.05 * hours))
 D0_SPATIAL_DECAY_KM = 25.0    # Characteristic distance in km (e^(-d / 25))
@@ -299,11 +320,45 @@ def compute_consensus(state: CrisisState) -> Dict[str, Any]:
     fire_ts = fire_finding.get("timestamp") if fire_finding else None
     fire_dist = fire_finding.get("distance_km") if fire_finding else None
 
-    # Channel E: Commodity Price Anomaly (PIHPS)
+    # Channel E: Commodity Price Anomaly (PIHPS).
+    # The E signal can arrive in two shapes:
+    #   * economic_intelligence_finding: AgentFinding
+    #     {agent, confidence, data: {...}, timestamp}
+    #   * pre_economic_signal: fast non-LLM PIHPS pre-gate emitted by
+    #     data_collection ({confidence, anomalous_commodities, timestamp})
+    # Prefer a finding that actually carries a confidence; otherwise fall back
+    # to the pre-gate signal so an early PIHPS anomaly is never masked by an
+    # empty economic finding.
     econ_finding = state.get("economic_intelligence_finding") or {}
-    econ_conf = float(econ_finding.get("confidence", 0.0)) if econ_finding else 0.0
-    econ_ts = econ_finding.get("timestamp")
-    econ_dist = econ_finding.get("distance_km")
+    pre_econ_signal = state.get("pre_economic_signal") or {}
+
+    econ_conf = 0.0
+    econ_ts = None
+    econ_dist = None
+    econ_signal_source = "none"
+
+    if econ_finding:
+        raw_econ_conf = econ_finding.get("confidence")
+        if raw_econ_conf is None and isinstance(econ_finding.get("data"), dict):
+            raw_econ_conf = econ_finding["data"].get("confidence")
+        econ_conf = float(raw_econ_conf or 0.0)
+        if econ_conf > 0.0:
+            econ_ts = econ_finding.get("timestamp")
+            econ_dist = econ_finding.get("distance_km")
+            econ_signal_source = "economic_intelligence_finding"
+
+    if econ_conf <= 0.0 and pre_econ_signal:
+        econ_conf = float(pre_econ_signal.get("confidence") or 0.0)
+        if econ_conf > 0.0:
+            econ_ts = pre_econ_signal.get("timestamp")
+            econ_dist = pre_econ_signal.get("distance_km")
+            econ_signal_source = "pre_economic_signal"
+
+    # Dynamic normalization: E votes only while the PIHPS anomaly is active.
+    econ_active = econ_conf > 0.50
+    sensor_weights = (
+        SENSOR_WEIGHTS_ECONOMIC_ACTIVE if econ_active else SENSOR_WEIGHTS_PHYSICAL_ONLY
+    )
 
     # 2. Compute dynamic weights with spatio-temporal decay
     decay_w = compute_temporal_decay(weather_ts) * compute_spatial_decay(weather_dist)
@@ -312,19 +367,19 @@ def compute_consensus(state: CrisisState) -> Dict[str, Any]:
     decay_i_fire = compute_temporal_decay(fire_ts) * compute_spatial_decay(fire_dist)
     decay_e = compute_temporal_decay(econ_ts) * compute_spatial_decay(econ_dist)
 
-    w_w = DEFAULT_SENSOR_WEIGHTS["weather"] * decay_w
-    w_t = DEFAULT_SENSOR_WEIGHTS["traffic"] * decay_t
+    w_w = sensor_weights["weather"] * decay_w
+    w_t = sensor_weights["traffic"] * decay_t
     # I channel takes the stronger corroborator (OSINT vs fire) — single vote.
-    if (w_i_fire_c := DEFAULT_SENSOR_WEIGHTS["osint"] * decay_i_fire * fire_conf) > (
-        w_i_osint_c := DEFAULT_SENSOR_WEIGHTS["osint"] * decay_i_osint * osint_conf
+    if (w_i_fire_c := sensor_weights["osint"] * decay_i_fire * fire_conf) > (
+        w_i_osint_c := sensor_weights["osint"] * decay_i_osint * osint_conf
     ):
         w_i_effective, i_conf_effective, i_source = (
-            DEFAULT_SENSOR_WEIGHTS["osint"] * decay_i_fire, fire_conf, "fire")
+            sensor_weights["osint"] * decay_i_fire, fire_conf, "fire")
     else:
         w_i_effective, i_conf_effective, i_source = (
-            DEFAULT_SENSOR_WEIGHTS["osint"] * decay_i_osint, osint_conf, "osint")
+            sensor_weights["osint"] * decay_i_osint, osint_conf, "osint")
     w_i = w_i_effective
-    w_e = DEFAULT_SENSOR_WEIGHTS["economics"] * decay_e
+    w_e = sensor_weights["economics"] * decay_e
 
     decay_applied = any(d < 0.999 for d in [decay_w, decay_t, decay_i_osint, decay_i_fire, decay_e])
 
@@ -342,34 +397,36 @@ def compute_consensus(state: CrisisState) -> Dict[str, Any]:
     active_weights = {}
     if weather_finding and weather_conf > 0.5:
         active_sources += 1
-        active_weights["weather"] = DEFAULT_SENSOR_WEIGHTS["weather"]
+        active_weights["weather"] = sensor_weights["weather"]
     elif weather_finding:
-        active_weights["weather"] = DEFAULT_SENSOR_WEIGHTS["weather"]
+        active_weights["weather"] = sensor_weights["weather"]
 
     if (state.get("prediction_finding") or state.get("traffic_finding")) and traffic_conf > 0.5:
         active_sources += 1
-        active_weights["traffic"] = DEFAULT_SENSOR_WEIGHTS["traffic"]
+        active_weights["traffic"] = sensor_weights["traffic"]
     elif traffic_finding:
-        active_weights["traffic"] = DEFAULT_SENSOR_WEIGHTS["traffic"]
+        active_weights["traffic"] = sensor_weights["traffic"]
 
     if osint_finding and osint_conf > 0.5:
         active_sources += 1
-        active_weights["osint"] = DEFAULT_SENSOR_WEIGHTS["osint"]
+        active_weights["osint"] = sensor_weights["osint"]
     elif fire_finding and fire_conf > 0.5:
         # fire-as-I: counts toward the SAME I vote, never a second vote.
         active_sources += 1
-        active_weights["osint"] = DEFAULT_SENSOR_WEIGHTS["osint"]
+        active_weights["osint"] = sensor_weights["osint"]
     elif osint_finding or fire_finding:
-        active_weights["osint"] = DEFAULT_SENSOR_WEIGHTS["osint"]
+        active_weights["osint"] = sensor_weights["osint"]
 
-    if econ_finding and econ_conf > 0.5:
+    if econ_active:
         active_sources += 1
-        active_weights["economics"] = DEFAULT_SENSOR_WEIGHTS["economics"]
-    elif econ_finding:
-        active_weights["economics"] = DEFAULT_SENSOR_WEIGHTS["economics"]
+        active_weights["economics"] = sensor_weights["economics"]
+    elif econ_finding or pre_econ_signal:
+        # E is present but below the anomaly gate: its normalized weight is 0.0,
+        # so it neither votes nor inflates P_max.
+        active_weights["economics"] = sensor_weights["economics"]
 
     if not active_weights:
-        active_weights = DEFAULT_SENSOR_WEIGHTS
+        active_weights = sensor_weights
 
     # 5. Calibrated operational confidence
     calibrated_confidence = calibrate_confidence_scale(raw_p_disruption, active_sources, active_weights)
@@ -445,7 +502,7 @@ def compute_consensus(state: CrisisState) -> Dict[str, Any]:
     # contract (W/T/I/E) asserted by calibration tests is preserved.
     fire_corroboration = {
         "source": i_source,
-        "fire_contribution": round(DEFAULT_SENSOR_WEIGHTS["osint"] * decay_i_fire * fire_conf, 4),
+        "fire_contribution": round(sensor_weights["osint"] * decay_i_fire * fire_conf, 4),
         "fire_confidence": round(fire_conf, 4),
     }
 
@@ -456,6 +513,10 @@ def compute_consensus(state: CrisisState) -> Dict[str, Any]:
         "fire_corroboration": fire_corroboration,
         "active_sources": active_sources,
         "decay_applied": decay_applied,
+        # E-channel provenance: which shape supplied the economic signal and
+        # whether its weight was normalized in (active spike) or out (no anomaly).
+        "economic_signal_source": econ_signal_source,
+        "economic_channel_active": econ_active,
         "route": "validated" if is_validated else "unconfirmed",
         "validation_status": "VALIDATED" if is_validated else "UNCONFIRMED",
         "validation_mode": validation_mode,

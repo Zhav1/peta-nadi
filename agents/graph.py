@@ -29,6 +29,18 @@ def route_after_gate(state: CrisisState) -> str:
     return "economic_intelligence" if state.get("validated") else "archive"
 
 
+def route_after_collection(state: CrisisState):
+    """Terminate duplicate ingestions; fan out unique events to Stage 2.
+
+    ``data_collection_agent`` returns ``status="duplicate"`` for an event already
+    observed inside the ``lrip:seen`` TTL. Running OSINT/prediction on that
+    payload would re-ingest the same evidence, so duplicates go straight to END.
+    """
+    if state.get("status") == "duplicate":
+        return END
+    return ["osint_hazard", "prediction"]
+
+
 def build_crisis_graph() -> StateGraph:
     """
     Assembles and compiles the LangGraph agent swarm StateGraph.
@@ -53,9 +65,8 @@ def build_crisis_graph() -> StateGraph:
     # 2. Set entry point (Stage 1)
     graph.set_entry_point("data_collection")
 
-    # 3. Stage 1 -> Stage 2: Sensory observation fan-out
-    graph.add_edge("data_collection", "osint_hazard")
-    graph.add_edge("data_collection", "prediction")
+    # 3. Stage 1 -> Stage 2: fan-out only for unique events (duplicates -> END)
+    graph.add_conditional_edges("data_collection", route_after_collection)
 
     # 4. Stage 2 -> Consensus Gate fan-in
     graph.add_edge("osint_hazard", "consensus_gate")

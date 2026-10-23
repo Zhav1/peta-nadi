@@ -12,7 +12,8 @@ from agents.tools.consensus_gate import (
     compute_temporal_decay,
     compute_spatial_decay,
     calibrate_confidence_scale,
-    DEFAULT_SENSOR_WEIGHTS
+    SENSOR_WEIGHTS_ECONOMIC_ACTIVE,
+    SENSOR_WEIGHTS_PHYSICAL_ONLY,
 )
 from app.services.probability_calibration import (
     brier_score,
@@ -42,15 +43,19 @@ def _distance_bearing_state():
 
 
 def test_consensus_formula_independence():
-    """Verify P = 1 - prod(1 - w_k(t, d) * p_k) including spatial decay."""
+    """Verify P = 1 - prod(1 - w_k(t, d) * p_k) including spatial decay.
+
+    econ_conf = 0.4 is below the 0.50 PIHPS activation gate, so the gate uses the
+    physically re-normalized W/T/I profile (0.4375/0.3125/0.25) and E = 0.0.
+    """
     state = _distance_bearing_state()
     res = compute_consensus(state)
 
     # Hand calculation with e^(-d / 25) applied per channel.
-    w_w = DEFAULT_SENSOR_WEIGHTS["weather"] * math.exp(-12.5 / 25.0)
-    w_t = DEFAULT_SENSOR_WEIGHTS["traffic"] * math.exp(-4.2 / 25.0)
-    w_i = DEFAULT_SENSOR_WEIGHTS["osint"] * math.exp(-4.2 / 25.0)
-    w_e = DEFAULT_SENSOR_WEIGHTS["economics"]
+    w_w = SENSOR_WEIGHTS_PHYSICAL_ONLY["weather"] * math.exp(-12.5 / 25.0)
+    w_t = SENSOR_WEIGHTS_PHYSICAL_ONLY["traffic"] * math.exp(-4.2 / 25.0)
+    w_i = SENSOR_WEIGHTS_PHYSICAL_ONLY["osint"] * math.exp(-4.2 / 25.0)
+    w_e = SENSOR_WEIGHTS_PHYSICAL_ONLY["economics"]
 
     term_w = 1.0 - (w_w * 0.8)
     term_t = 1.0 - (w_t * 0.8)
@@ -61,6 +66,7 @@ def test_consensus_formula_independence():
     assert pytest.approx(res["raw_probability"], 0.001) == round(expected_p, 4)
     assert res["active_sources"] == 3  # weather(0.8), traffic(0.8), osint(0.9) > 0.5; econ(0.4) <= 0.5
     assert set(res["consensus_breakdown"].keys()) == {"weather", "traffic", "osint", "economics"}
+    assert res["consensus_breakdown"]["economics"] == 0.0
     assert "RouteOptimizationAgent" not in res["consensus_breakdown"]
 
     # Real proximity still corroborates physically (both channels are <= 30 km),
@@ -70,9 +76,13 @@ def test_consensus_formula_independence():
     assert res["route"] == "unconfirmed"
     assert res["overall_confidence"] < 0.85
     # BMKG corroboration floors confidence at the weather finding's own value
-    # (0.80) — still honestly below the 0.85 promotion bar.
+    # (0.80) — still honestly below the 0.85 promotion bar. P_max uses the
+    # active physical subset only (E contributes no dead weight).
+    p_max = 1.0 - math.prod(
+        1.0 - SENSOR_WEIGHTS_PHYSICAL_ONLY[k] for k in ("weather", "traffic", "osint")
+    )
     assert res["overall_confidence"] == max(
-        round(expected_p / 0.7634, 4), 0.8
+        round(expected_p / p_max, 4), 0.8
     )
 
 
@@ -86,8 +96,9 @@ def test_consensus_missing_distance_blocks_corroboration():
     }
     res = compute_consensus(state)
 
-    # Probability product is undecayed, but the physical claim is refused.
-    assert pytest.approx(res["raw_probability"], 0.001) == 0.6518
+    # Probability product is undecayed (re-normalized physical W/T/I; E inactive),
+    # but the physical claim is refused.
+    assert pytest.approx(res["raw_probability"], 0.001) == 0.6222
     assert res["bmkg_cross_validation"]["is_corroborated"] is False
     assert res["route"] == "unconfirmed"
     assert res["overall_confidence"] <= 0.50
@@ -111,6 +122,49 @@ def test_consensus_simulated_run_is_discounted():
     assert simulated["overall_confidence"] == round(
         observed["overall_confidence"] * 0.90, 4
     )
+
+
+def test_consensus_dynamic_e_channel_normalization():
+    """E votes only while PIHPS is anomalous; otherwise W/T/I re-normalize to 1.0."""
+    physical = {
+        "data_collection_finding": {"confidence": 0.9, "distance_km": 5.0},
+        "prediction_finding": {"confidence": 0.8, "distance_km": 5.0},
+        "osint_hazard_finding": {"confidence": 0.9, "distance_km": 5.0},
+    }
+
+    quiet = compute_consensus(
+        {**physical, "pre_economic_signal": {"confidence": 0.30, "anomalous_commodities": []}}
+    )
+    assert quiet["economic_channel_active"] is False
+    assert quiet["economic_signal_source"] == "pre_economic_signal"
+    assert quiet["consensus_breakdown"]["economics"] == 0.0
+    assert quiet["active_sources"] == 3
+    assert quiet["route"] == "validated"
+
+    spiking = compute_consensus(
+        {**physical, "pre_economic_signal": {"confidence": 0.90, "anomalous_commodities": ["Cabai Merah"]}}
+    )
+    assert spiking["economic_channel_active"] is True
+    assert spiking["economic_signal_source"] == "pre_economic_signal"
+    assert spiking["consensus_breakdown"]["economics"] == round(
+        SENSOR_WEIGHTS_ECONOMIC_ACTIVE["economics"] * 0.90, 4
+    )
+    assert spiking["active_sources"] == 4
+    assert spiking["route"] == "validated"
+
+    # AgentFinding shape: confidence lives at top level, payload under data.
+    finding = compute_consensus(
+        {
+            **physical,
+            "economic_intelligence_finding": {
+                "confidence": 0.80,
+                "data": {"inflation_forecast": {"inflation_multiplier": 1.1}},
+            },
+        }
+    )
+    assert finding["economic_channel_active"] is True
+    assert finding["economic_signal_source"] == "economic_intelligence_finding"
+    assert finding["consensus_breakdown"]["economics"] > 0.0
 
 
 def test_consensus_temporal_decay():

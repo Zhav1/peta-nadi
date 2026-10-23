@@ -579,7 +579,7 @@ export default function DashboardClient() {
   const { corridorContext, isLoading: isCorridorLoading, applyOperationalImpact } = useCorridorContext('sumatra_belawan_medan');
 
   // Live OSINT News & Intelligence Hook (Google News RSS & Verified Sinyal Lapangan)
-  const { newsFeed } = useNewsVerification();
+  const { newsFeed, isFallbackNews } = useNewsVerification();
   const [newsSearchQuery, setNewsSearchQuery] = useState('');
   const [selectedNewsCategory, setSelectedNewsCategory] = useState<'ALL' | 'OFFICIAL' | 'WEATHER' | 'OSINT' | 'MARKET'>('ALL');
   const [selectedNewsId, setSelectedNewsId] = useState<string | null>(null);
@@ -1962,7 +1962,13 @@ export default function DashboardClient() {
 
         setActiveRouteIdx(0);
         setIsSidebarOpen(true);
-        setActiveTab('Mitigation');
+
+        // Consensus Gate honesty: an archived signal was never validated, so it
+        // must open the evidence trail — never the tactical Mitigation view.
+        const isArchived =
+          (backendCrisisState.status as string) === 'archived' || backendCrisisState.validated === false;
+
+        setActiveTab(isArchived ? 'Evidence' : 'Mitigation');
 
         // Honest savings: only claim hedging savings when the backend computed one.
         const rawSavings = backendCrisisState.hedging_breakdown?.net_savings_idr;
@@ -1970,12 +1976,19 @@ export default function DashboardClient() {
           ? `Rp ${Number(rawSavings).toLocaleString('id-ID')}`
           : null;
 
-        setToast({
-          message: netSavings
-            ? `Swarm AI Selesai: Keputusan taktis aktif. Proyeksi penghematan hedging: ${netSavings}.`
-            : 'Swarm AI Selesai: Keputusan taktis aktif.',
-          type: 'success',
-        });
+        if (isArchived) {
+          setToast({
+            message: 'Swarm AI Selesai: Sinyal diarsipkan oleh Consensus Gate (Kepercayaan di bawah ambang 85% atau belum ada koroborasi sensor fisik).',
+            type: 'info',
+          });
+        } else {
+          setToast({
+            message: netSavings
+              ? `Swarm AI Selesai: Keputusan taktis aktif. Proyeksi penghematan hedging: ${netSavings}.`
+              : 'Swarm AI Selesai: Keputusan taktis aktif.',
+            type: 'success',
+          });
+        }
       }
     );
   }, [selectedOriginNode, selectedDestNode, selectedModality, selectedVehicle, triggerSimulation, clearImpactAssessment]);
@@ -2647,7 +2660,9 @@ export default function DashboardClient() {
                     Intelijen Berita Resmi
                   </h2>
                   <span className="text-xs font-mono text-slate-400">
-                    {filteredNews.length} Sumber Terverifikasi
+                    {isFallbackNews
+                      ? `${filteredNews.length} Sumber Cadangan (Offline)`
+                      : `${filteredNews.length} Sumber Terverifikasi`}
                   </span>
                 </div>
               </div>
@@ -2982,7 +2997,7 @@ export default function DashboardClient() {
               {(() => {
                 const isBmkgLive = (corridorContext?.weather?.rainfall_mm !== undefined && corridorContext?.weather?.rainfall_mm !== null) || (corridorContext?.weather?.status != null && corridorContext?.weather?.status !== 'offline');
                 const isTomtomLive = (corridorContext?.traffic?.delay_minutes !== undefined && corridorContext?.traffic?.delay_minutes !== null) || (corridorContext?.traffic?.congestion_level_pct !== undefined && corridorContext?.traffic?.congestion_level_pct !== null);
-                const isPihpsLive = (corridorContext?.commodity_prices?.rice_price !== undefined && corridorContext?.commodity_prices?.rice_price !== null) || filteredNews.length > 0;
+                const isPihpsLive = (corridorContext?.commodity_prices?.rice_price !== undefined && corridorContext?.commodity_prices?.rice_price !== null) || (!isFallbackNews && filteredNews.length > 0);
 
                 return (
                   <div className="grid grid-cols-3 gap-1 text-xs text-center">

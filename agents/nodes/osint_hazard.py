@@ -1,6 +1,7 @@
 import json
 import logging
 import math
+import asyncio
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 from agents.state import CrisisState, AgentFinding
@@ -37,6 +38,13 @@ _HAZARD_TYPE_KEYWORDS: Dict[str, Tuple[str, ...]] = {
     "tsunami": ("tsunami",),
     "marine_accident": ("kapal", "kandas", "tabrakan kapal", "maritim"),
 }
+
+# Redis-outage fallback for the OSINT/news corroboration path. When the Redis
+# stream is empty or unreachable, recent gatekeeper-approved articles are read
+# straight from Supabase so the same spatial/corroboration loop still runs.
+NEWS_FALLBACK_WINDOW_HOURS = 12
+NEWS_FALLBACK_LIMIT = 30
+NEWS_FALLBACK_TIERS = ("RED_CONFIRMED", "YELLOW_CLARIFY")
 
 
 def _as_float(value: Any) -> Optional[float]:
@@ -190,6 +198,79 @@ def _evaluate_spatial_relevance(
     return False, None, "no_spatial_evidence"
 
 
+def _news_row_to_payload(row: Dict[str, Any]) -> Dict[str, Any]:
+    """Map a public.news_articles row onto the OSINT stream payload shape."""
+    gtm = row.get("ground_truth_metrics")
+    if not isinstance(gtm, dict):
+        gtm = {}
+    tier = row.get("gatekeeper_tier") or gtm.get("zone_tier")
+    commodities = row.get("commodities_affected")
+    if isinstance(commodities, (list, tuple, set)):
+        commodities = ",".join(str(c) for c in commodities if str(c).strip())
+    return {
+        "gatekeeper_tier": tier,
+        "source": row.get("source") or "news_articles",
+        # Provenance: every payload here is press/OSINT, never a physical sensor.
+        # `is_incident_triggered` rows were already turned into a news incident,
+        # so they can never be treated as independent corroboration.
+        "source_type": "news_ingestor" if row.get("is_incident_triggered") else "news_article",
+        "source_tier": row.get("source_tier") or "TIER_2_AUTHORITATIVE_PRESS",
+        "event_type": row.get("incident_type"),
+        "title": str(row.get("title") or ""),
+        "summary": str(row.get("summary") or row.get("raw_description") or ""),
+        "published_at": row.get("published_at") or row.get("created_at"),
+        "url": row.get("link") or "",
+        "lat": row.get("latitude"),
+        "lon": row.get("longitude"),
+        "corridor_segment": row.get("corridor_segment"),
+        "lane_status": gtm.get("lane_status", "CLEAR"),
+        "temporal_phase": row.get("temporal_phase") or "active_disruption",
+        "commodities_affected": commodities or "",
+    }
+
+
+def _query_recent_news_articles() -> List[Dict[str, Any]]:
+    """Blocking Supabase read of recent gatekeeper-approved news articles."""
+    from app.db.supabase_client import get_client
+
+    sb = get_client()
+    cutoff = (
+        datetime.now(timezone.utc) - timedelta(hours=NEWS_FALLBACK_WINDOW_HOURS)
+    ).isoformat()
+
+    try:
+        # Preferred contract: a dedicated gatekeeper_tier column.
+        res = (
+            sb.table("news_articles").select("*")
+            .gte("created_at", cutoff)
+            .in_("gatekeeper_tier", list(NEWS_FALLBACK_TIERS))
+            .order("created_at", desc=True)
+            .limit(NEWS_FALLBACK_LIMIT)
+            .execute()
+        )
+        rows = list(res.data or [])
+        return [_news_row_to_payload(r) for r in rows if isinstance(r, dict)]
+    except Exception:
+        # Deployments that persist the tier inside ground_truth_metrics JSONB
+        # reject the server-side filter; retry unfiltered and tier in Python.
+        res = (
+            sb.table("news_articles").select("*")
+            .gte("created_at", cutoff)
+            .order("created_at", desc=True)
+            .limit(NEWS_FALLBACK_LIMIT * 4)
+            .execute()
+        )
+        rows = [_news_row_to_payload(r) for r in (res.data or []) if isinstance(r, dict)]
+        return [
+            r for r in rows if r.get("gatekeeper_tier") in NEWS_FALLBACK_TIERS
+        ][:NEWS_FALLBACK_LIMIT]
+
+
+async def _load_news_articles_fallback() -> List[Dict[str, Any]]:
+    """Async wrapper: never block the event loop on the Supabase HTTP call."""
+    return await asyncio.to_thread(_query_recent_news_articles)
+
+
 async def osint_hazard_agent(state: CrisisState) -> dict:
     """Agent 2: PostGIS hazard fusion + Official News & OSINT corroboration."""
     logger.info("Agent 2 [OSINTHazardAgent] running...")
@@ -277,7 +358,30 @@ async def osint_hazard_agent(state: CrisisState) -> dict:
                         e_list,
                     )
                     _degrade("redis_osint", f"{stream_key}: {e_list}")
-                
+
+        # Redis-down / cold-stream fallback: read recent gatekeeper-approved
+        # articles from Supabase and feed them through the same parsing and
+        # spatial-corroboration loop below.
+        if not raw_events:
+            try:
+                fallback_payloads = await _load_news_articles_fallback()
+                raw_events = [(None, payload) for payload in fallback_payloads]
+                if fallback_payloads:
+                    logger.info(
+                        "OSINTHazardAgent: Redis OSINT stream empty; using %d "
+                        "Supabase news_articles rows (last %dh, tiers=%s)",
+                        len(fallback_payloads),
+                        NEWS_FALLBACK_WINDOW_HOURS,
+                        ",".join(NEWS_FALLBACK_TIERS),
+                    )
+            except Exception as fb_err:
+                logger.warning(
+                    "OSINTHazardAgent: Supabase news_articles fallback failed; "
+                    "degraded_sources=supabase_news error=%s",
+                    fb_err,
+                )
+                _degrade("supabase_news", fb_err)
+
         # Parse and count corroborations
         for _, payload in raw_events:
             if isinstance(payload, str):

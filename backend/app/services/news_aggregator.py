@@ -331,8 +331,10 @@ def resolve_canonical_article_url(raw_url: str, title: str = "", source: str = "
     - Preserves direct publisher article permalinks (antaranews.com, detik.com, etc.).
     - Decodes Google News opaque wrappers (news.google.com/rss/articles/CBMi... or /articles/...)
       extracting the embedded HTTP/HTTPS URL from base64/protobuf payload or batchexecute RPC.
-    - Rejects bare root domains (where path is empty or '/') and news.google.com/search queries,
-      resolving instead to authentic publisher deep links.
+    - Unwraps Google redirect hosts (google.com/url?q=..., news.google.com/redirect?url=...,
+      google.com/amp/s/<publisher>/...) to the real publisher host.
+    - Rejects bare root domains (where path is empty or '/') and Google search/landing URLs
+      (news.google.com/search?q=...), resolving instead to authentic publisher deep links.
     """
     if not raw_url or not isinstance(raw_url, str):
         if title:
@@ -340,6 +342,23 @@ def resolve_canonical_article_url(raw_url: str, title: str = "", source: str = "
         return ""
 
     clean_url = raw_url.strip()
+
+    # Unwrap Google redirect wrappers to their real target host before any host inspection
+    try:
+        gp = urlparse(clean_url)
+        if gp.netloc and "google." in gp.netloc:
+            gp_path = gp.path.rstrip("/")
+            if gp_path in ("/url", "/redirect"):
+                qs = dict(urllib.parse.parse_qsl(gp.query))
+                target = (qs.get("q") or qs.get("url") or "").strip()
+                if target.startswith(("http://", "https://")):
+                    clean_url = target
+            elif gp.path.startswith("/amp/s/"):
+                rest = gp.path[len("/amp/s/"):]
+                if rest:
+                    clean_url = "https://" + rest + (f"?{gp.query}" if gp.query else "")
+    except Exception:
+        pass
 
     # Reject bare root domains (path is empty or just '/')
     try:
@@ -366,10 +385,23 @@ def resolve_canonical_article_url(raw_url: str, title: str = "", source: str = "
     # If it's already a direct non-Google publisher link with a deep path, return it directly
     try:
         p = urlparse(clean_url)
-        if p.netloc and "google.com" not in p.netloc and p.path not in ("", "/"):
+        if p.netloc and "google." not in p.netloc and p.path not in ("", "/"):
             return clean_url
     except Exception:
         pass
+
+    # Google search / landing URLs are not article permalinks: map their query onto the
+    # publisher's own deep search page instead of echoing Google's host downstream.
+    try:
+        gp = urlparse(clean_url)
+    except Exception:
+        gp = None
+    if gp and gp.netloc and "google." in gp.netloc and not re.search(r'/(?:articles|read)/', gp.path):
+        query_title = (dict(urllib.parse.parse_qsl(gp.query)).get("q") or "").strip()
+        fallback_title = title or query_title
+        if fallback_title:
+            return _map_publisher_deep_fallback(fallback_title, source)
+        return clean_url
 
     # Handle Google News opaque wrappers
     if "news.google.com" in clean_url and ("/articles/" in clean_url or "/rss/articles/" in clean_url or "/read/" in clean_url):
@@ -424,7 +456,7 @@ async def resolve_canonical_article_url_async(
     # Fast check: already a direct publisher URL with deep path
     try:
         p = urlparse(clean_url)
-        if p.netloc and "google.com" not in p.netloc and p.path not in ("", "/"):
+        if p.netloc and "google." not in p.netloc and p.path not in ("", "/"):
             # Check for dummy test IDs without slug
             DUMMY_IDS = ("543210", "532190", "571234", "562341", "123456", "999999")
             if any(f"/{did}" in clean_url for did in DUMMY_IDS) and not re.search(r'/\d{6}/[a-z0-9-]+', clean_url):
@@ -434,10 +466,10 @@ async def resolve_canonical_article_url_async(
     except Exception:
         pass
 
-    # First check CBMi synchronous decode
+    # First check CBMi synchronous decode (also unwraps Google search/redirect hosts)
     resolved = resolve_canonical_article_url(clean_url, title, source)
     p_res = urlparse(resolved)
-    if p_res.netloc and "google.com" not in p_res.netloc and p_res.path not in ("", "/"):
+    if p_res.netloc and "google." not in p_res.netloc and p_res.path not in ("", "/"):
         return resolved
 
     # Handle Google News wrapper async

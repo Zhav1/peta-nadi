@@ -141,6 +141,11 @@ class CrisisState(TypedDict):
     consensus_breakdown: Optional[Dict[str, float]]
     validated: bool
 
+    # Ingestion provenance + pre-consensus signals (Workpackage 1)
+    raw_event: Optional[Dict[str, Any]]          # original adapter/UI event payload
+    weather_fusion: Optional[Dict[str, Any]]     # BMKG/Open-Meteo FeatureCollection
+    pre_economic_signal: Optional[Dict[str, Any]]  # fast PIHPS pre-gate anomaly
+
     # News Intelligence & Corridor Grounding
     verified_news_citations: Optional[List[Dict[str, Any]]]
     blocked_corridors: Optional[List[str]]

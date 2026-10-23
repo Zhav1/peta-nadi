@@ -2445,6 +2445,49 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 
 ---
 
+## Phase 97: Pilot-to-Real Interference Core (WP1 + WP2)
+
+**Goal:** Stop duplicate re-ingestion, ground DataCollection confidence in weather instead of source health, add a non-LLM PIHPS pre-gate, and remove the dead 0.20 economic weight from the consensus formula.
+**Status:** COMPLETE (docs in `.planning/phases/97-pilot-interference-core/`).
+
+### Deliverables
+- **WP1 - Dedup & topology (`agents/graph.py:32,69`; `agents/nodes/data_collection.py:19,780-865`; `agents/state.py:144-148`)**: duplicate events terminate at `END`; operator/UI and simulation sources bypass the 300 s TTL; confidence is derived from `weather_basis`; `pre_economic_signal` reaches the gate without an LLM call.
+- **WP2 - E-channel alignment (`agents/tools/consensus_gate.py:29,39,328-361,516-519`)**: E votes only while `econ_conf > 0.50`; physical weights renormalize to 1.0; `economic_channel_active` + `economic_signal_source` are auditable.
+
+### Verification
+- 49 passed (agents + adapters + BMKG consensus), 12 passed (consensus calibration) on re-run.
+
+---
+
+## Phase 98: Ingestion Resilience and Alert Bridge (WP3 + WP4 + WP5)
+
+**Goal:** Keep PIHPS/STM/OSINT/prediction honest during a Redis outage, make news replay idempotent and self-corroboration-free, and bridge validated alerts across API workers.
+**Status:** COMPLETE (docs in `.planning/phases/98-ingestion-resilience-and-alert-bridge/`).
+
+### Deliverables
+- **WP3 - Fallbacks (`pihps_scraper.py:114,274`; `economic_intelligence.py:19,88-116`; `stm.py:23-67`; `osint_hazard.py:45,232,365`; `prediction.py:146,292`)**: one PIHPS snapshot key, 14-day Supabase recompute, bounded local STM/dedup, 12 h news fallback, `SCAN` + 25 km corridor anchor.
+- **WP4 - News loop (`news_router.py:55-146`; `unified_news_ingestor.py:648-798`; `supabase_tools.py:581-610,684-692`)**: double-checked in-process lock + Redis NX lock, deterministic UUIDv5 writes, provenance-tagged incidents excluded from hazard fusion.
+- **WP5 - Alert bridge (`alert_fanout.py:44,85-292`; `main.py:307-329`)**: cross-process stream consumer with bounded dedup and 1-30 s backoff.
+
+### Verification
+- 22 passed (scrapers), 84 passed (news/OSINT/spatial), 9 passed (pilot E2E) on re-run. A live `lrip:lock:news_ingestor` caused a transient `calls == 0`; documented in the walkthrough.
+
+---
+
+## Phase 99: Honest UI and Risk Batch (WP6 + WP7)
+
+**Goal:** Never render an archived signal as validated, label offline news, score NFR-4 on a P_max-normalized forecast, keep canonical URLs on the publisher, and enforce HITL `401`-before-`422`.
+**Status:** COMPLETE (docs in `.planning/phases/99-honest-ui-and-risk-batch/`); one benchmark-router expectation remains open.
+
+### Deliverables
+- **WP6 - Honest UI (`useCrisisSimulationStream.ts:177-192`; `DashboardClient.tsx:1965-1990,2663-2667,3000`; `useNewsVerification.ts:850-854`)**: archived => `validated=false` + `Evidence` + `info` toast; fallback news labelled and excluded from PIHPS-live.
+- **WP7 - Risk batch (`scripts/evaluate_metrics.py:39-50,164-305`; `news_aggregator.py:328-405`; `test_audit_fixes.py:72-94`)**: dual-scale Brier (normalized scored, raw telemetry), Google redirect/AMP unwrapping + publisher fallback, auth-first HITL test.
+
+### Verification
+- `npx tsc --noEmit` exit 0; 10 passed (audit + cross-workstream); 7 passed / 1 failed (`test_evaluation_router.py`: TP 35 vs expected 34).
+
+---
+
 ## Backlog (Post-Hackathon / v2 & New Context Window Backlog)
 
 ### Active Remediation & Audit Backlog (For New Context Window)

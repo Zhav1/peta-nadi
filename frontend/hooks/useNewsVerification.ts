@@ -847,5 +847,9 @@ export function useNewsVerification() {
     };
   }, []);
 
-  return { newsFeed, marketRegime, isLoading, status, lastUpdated };
+  // Honest fallback flag: true only while the offline Sumatra fixture is the
+  // active feed (never for live/warming-but-cached real articles).
+  const isFallbackNews = newsFeed === FALLBACK_SUMATRA_NEWS;
+
+  return { newsFeed, marketRegime, isLoading, status, lastUpdated, isFallbackNews };
 }

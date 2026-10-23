@@ -30,6 +30,12 @@ from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
+# Provenance tag on incidents synthesized from a news article. public.incidents
+# has no source_type column, so the tag lives in the evidence JSONB (and the
+# title prefix is the human-readable fallback for read paths).
+NEWS_INGESTOR_SOURCE_TYPE = "news_ingestor"
+NEWS_INGESTOR_TITLE_PREFIX = "[News Alert]"
+
 
 def to_ewkt_polygon(ring: Any) -> Optional[str]:
     """Converts a GeoJSON coordinate ring or Polygon dict to EWKT for PostGIS."""
@@ -636,8 +642,21 @@ class UnifiedNewsIngestor:
         if lat is None or lon is None:
             return False
 
-        incident_uuid = str(uuid.uuid4())
-        title = f"[News Alert] {art.get('title', 'Disrupsi Logistik')}"
+        # Deterministic incident key: the same news article always maps to the
+        # same UUIDv5, so replaying an ingestion cycle upserts the existing row
+        # instead of creating a duplicate incident (and duplicate HITL review).
+        canonical_key = str(
+            art.get("link") or art.get("url") or art.get("id") or ""
+        ).strip()
+        if not canonical_key:
+            logger.warning(
+                "Cannot synthesize incident: article carries no canonical URL or id"
+            )
+            return False
+        incident_uuid = str(
+            uuid.uuid5(uuid.NAMESPACE_URL, f"news_incident:{canonical_key}")
+        )
+        title = f"{NEWS_INGESTOR_TITLE_PREFIX} {art.get('title', 'Disrupsi Logistik')}"
         severity = art.get("severity", "high")
         inc_type = art.get("incident_type", "road_closure")
         corridor = art.get("corridor_segment", "Jalur Logistik Sumatera")
@@ -649,8 +668,9 @@ class UnifiedNewsIngestor:
         gtm = art.get("ground_truth_metrics") or {}
         audit = gtm.get("verification_audit") or {}
 
-        # 1. Insert into public.incidents
+        # 1. Upsert into public.incidents (id = deterministic UUIDv5 above).
         incident_row = {
+            "id": incident_uuid,
             "incident_id": incident_uuid,
             "title": title,
             "description": f"{art.get('source')} melaporkan: {art.get('summary', title)}. Koridor terdampak: {corridor}.",
@@ -662,6 +682,11 @@ class UnifiedNewsIngestor:
             "lat": float(lat),
             "lon": float(lon),
             "evidence": {
+                # Provenance: this polygon is a news restatement, not an
+                # independent physical sensor (see get_hazard_polygons).
+                "source_type": NEWS_INGESTOR_SOURCE_TYPE,
+                "ingestion_origin": NEWS_INGESTOR_SOURCE_TYPE,
+                "ingested_by": "unified_news_ingestor",
                 "source": art.get("source"),
                 "source_tier": art.get("source_tier"),
                 "link": art.get("link"),
@@ -686,7 +711,8 @@ class UnifiedNewsIngestor:
             incident_row["affected_area"] = poly_ewkt
 
         try:
-            sb.table("incidents").insert(incident_row).execute()
+            # idempotent: re-running the cycle for the same article updates this row
+            sb.table("incidents").upsert(incident_row, on_conflict="id").execute()
             logger.info(f"Synthesized new incident in Supabase: {title[:60]} (ID: {incident_uuid})")
         except Exception as ie:
             logger.error(f"Error inserting incident into Supabase: {ie}")
@@ -737,9 +763,13 @@ class UnifiedNewsIngestor:
             except Exception as se_imp:
                 logger.debug(f"Incident impact assessment Supabase logging skipped: {se_imp}")
 
-            # 3. Create Pending Globot HITL Route Approval
+            # 3. Create Pending Globot HITL Route Approval (deterministic id so a
+            # replayed cycle cannot fan out duplicate reviews)
+            approval_uuid = str(
+                uuid.uuid5(uuid.NAMESPACE_URL, f"news_approval:{incident_uuid}")
+            )
             approval_row = {
-                "id": str(uuid.uuid4()),
+                "id": approval_uuid,
                 "incident_id": incident_uuid,
                 "route_id": f"REROUTE-{corridor[:15].upper().replace(' ', '-')}",
                 "recommended_route": {
@@ -761,7 +791,11 @@ class UnifiedNewsIngestor:
                 "approved_at": datetime.now(timezone.utc).isoformat()
             }
 
-            sb.table("route_approvals").insert(approval_row).execute()
+            # ignore_duplicates: first write wins, so replaying the cycle never
+            # resets an operator's ACCEPT/DISMISS back to PENDING_REVIEW.
+            sb.table("route_approvals").upsert(
+                approval_row, on_conflict="id", ignore_duplicates=True
+            ).execute()
             logger.info(f"Created pending Globot HITL route approval in Supabase for incident {incident_uuid}")
             return True
 
