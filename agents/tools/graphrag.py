@@ -9,78 +9,173 @@ from agents.state import GraphRAGNode
 
 logger = logging.getLogger(__name__)
 
+# Canonical knowledge-graph tables (000_init.sql) with legacy MVP fallbacks.
+# The graph used to be built ONLY from the legacy entities/entity_relations
+# tables, which do not exist in the current schema, so causal_chain was always
+# empty. kg_* is primary; legacy names remain as a read fallback.
+ENTITY_TABLES = ("kg_entities", "entities")
+RELATION_TABLES = ("kg_relationships", "entity_relations")
+
+_GRAPH_CACHE_KEY = "lrip:graph:entity:v2"  # v2: schema-aware rebuild (busts old empty cache)
+
+
+def _coerce_float(value: Any) -> Optional[float]:
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _entity_lat_lon(row: Dict[str, Any]) -> Tuple[Optional[float], Optional[float]]:
+    """Extracts coordinates from row columns, metadata, or GeoJSON-ish payloads."""
+    metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+    lat = _coerce_float(row.get("lat", metadata.get("lat", metadata.get("latitude"))))
+    lon = _coerce_float(row.get("lon", metadata.get("lon", metadata.get("longitude"))))
+    location = row.get("location")
+    if isinstance(location, dict):
+        coords = location.get("coordinates")
+        if isinstance(coords, (list, tuple)) and len(coords) >= 2:
+            lon = lon if lon is not None else _coerce_float(coords[0])
+            lat = lat if lat is not None else _coerce_float(coords[1])
+    return lat, lon
+
+
+def _normalize_entity(row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Normalizes kg_entities (id/type/location) and legacy entities rows."""
+    if not isinstance(row, dict):
+        return None
+    entity_id = row.get("entity_id") or row.get("id")
+    name = row.get("name")
+    if not entity_id or not name:
+        return None
+    lat, lon = _entity_lat_lon(row)
+    metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+    return {
+        "entity_id": str(entity_id),
+        "name": str(name),
+        "entity_type": row.get("entity_type") or row.get("type") or "unknown",
+        "lat": lat,
+        "lon": lon,
+        "region": row.get("region") or metadata.get("province") or metadata.get("region"),
+        "metadata": metadata,
+    }
+
+
+def _normalize_relation(row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Normalizes kg_relationships (relation) and legacy entity_relations rows."""
+    if not isinstance(row, dict):
+        return None
+    from_entity = (
+        row.get("from_entity") or row.get("from_entity_id") or row.get("from_id")
+    )
+    to_entity = row.get("to_entity") or row.get("to_entity_id") or row.get("to_id")
+    relation_type = row.get("relation_type") or row.get("relation") or "DEPENDS_ON"
+    if not from_entity or not to_entity:
+        return None
+    return {
+        "from_entity": str(from_entity),
+        "to_entity": str(to_entity),
+        "relation_type": str(relation_type),
+        "weight": _coerce_float(row.get("weight")) or 1.0,
+        "relation_id": str(
+            row.get("relation_id")
+            or row.get("id")
+            or f"{from_entity}->{to_entity}:{relation_type}"
+        ),
+    }
+
+
+async def _fetch_graph_rows(supabase, tables: Tuple[str, ...], label: str) -> List[Dict[str, Any]]:
+    """Reads the first available table in ``tables``; missing tables fall back."""
+    for table in tables:
+        try:
+            response = await asyncio.to_thread(
+                lambda t=table: supabase.table(t).select("*").execute()
+            )
+            rows = response.data or []
+            logger.debug("Loaded %d %s rows from %s", len(rows), label, table)
+            return rows
+        except Exception as exc:
+            logger.warning(
+                "Graph table %s unavailable for %s (%s); trying next fallback.",
+                table,
+                label,
+                exc,
+            )
+    logger.error("No readable %s table found among %s", label, tables)
+    return []
+
 
 async def load_entity_graph() -> nx.DiGraph:
     """Loads entities and relations from Supabase, builds a NetworkX DiGraph, and caches it in Redis."""
     r = get_async_redis()
-    cache_key = "lrip:graph:entity"
+    cache_key = _GRAPH_CACHE_KEY
     dirty_key = "lrip:graph:dirty"
-    
+
+    # 1. Cache read is best-effort: a Redis outage must not zero the graph.
     try:
-        # Check if cache is dirty or missing
         is_dirty = await r.get(dirty_key)
         if not is_dirty:
             cached_data = await r.get(cache_key)
-            if cached_data:
-                # Redis returns string, but we want bytes if we set it as bytes
-                # Since decode_responses=True is set on our Redis client, Redis will try to decode
-                # to string. So it's safer to store and load via hex or base64, or just skip decode for this key.
-                # Since our client has decode_responses=True, let's encode the string back to bytes to unpickle.
-                if isinstance(cached_data, str):
-                    try:
-                        # If we stored it as latin-1, decode it back
-                        return pickle.loads(cached_data.encode('latin-1'))
-                    except Exception as pe:
-                        logger.warning(f"Failed to unpickle cached graph: {pe}. Rebuilding.")
-        
-        # If dirty or missing, rebuild
+            if isinstance(cached_data, str):
+                try:
+                    return pickle.loads(cached_data.encode('latin-1'))
+                except Exception as pe:
+                    logger.warning(f"Failed to unpickle cached graph: {pe}. Rebuilding.")
+    except Exception as cache_err:
+        logger.warning(f"Graph cache read unavailable ({cache_err}); rebuilding from Supabase.")
+
+    # 2. Rebuild from the canonical knowledge-graph tables.
+    G = nx.DiGraph()
+    try:
         logger.info("Rebuilding entity graph from Supabase...")
-        G = nx.DiGraph()
         supabase = get_client()
-        
-        # 1. Fetch entities
-        ent_response = await asyncio.to_thread(
-            lambda: supabase.table("entities").select("*").execute()
-        )
-        entities = ent_response.data or []
-        for ent in entities:
-            e_id = ent["entity_id"]
+
+        entity_rows = await _fetch_graph_rows(supabase, ENTITY_TABLES, "entity")
+        for row in entity_rows:
+            entity = _normalize_entity(row)
+            if not entity:
+                continue
+            e_id = entity["entity_id"]
             G.add_node(
                 e_id,
                 entity_id=e_id,
-                name=ent["name"],
-                entity_type=ent["entity_type"],
-                lat=ent.get("lat"),
-                lon=ent.get("lon"),
-                region=ent.get("region"),
-                metadata=ent.get("metadata", {})
+                name=entity["name"],
+                entity_type=entity["entity_type"],
+                lat=entity["lat"],
+                lon=entity["lon"],
+                region=entity["region"],
+                metadata=entity["metadata"],
             )
-            
-        # 2. Fetch relations
-        rel_response = await asyncio.to_thread(
-            lambda: supabase.table("entity_relations").select("*").execute()
-        )
-        relations = rel_response.data or []
-        for rel in relations:
-            G.add_edge(
-                rel["from_entity"],
-                rel["to_entity"],
-                relation_type=rel["relation_type"],
-                weight=rel.get("weight", 1.0),
-                relation_id=rel["relation_id"]
-            )
-            
-        # 3. Cache the graph
-        serialized = pickle.dumps(G).decode('latin-1')
-        await r.set(cache_key, serialized, ex=3600)  # cache for 1 hour
-        await r.delete(dirty_key)
-        
-        return G
 
+        relation_rows = await _fetch_graph_rows(supabase, RELATION_TABLES, "relation")
+        for row in relation_rows:
+            relation = _normalize_relation(row)
+            if not relation:
+                continue
+            G.add_edge(
+                relation["from_entity"],
+                relation["to_entity"],
+                relation_type=relation["relation_type"],
+                weight=relation["weight"],
+                relation_id=relation["relation_id"],
+            )
     except Exception as e:
-        logger.error(f"Failed to load or cache entity graph: {e}")
-        # Return empty graph on error
+        logger.error(f"Failed to rebuild entity graph from Supabase: {e}")
         return nx.DiGraph()
+
+    # 3. Cache write is best-effort (never discard a successfully built graph).
+    if G.number_of_nodes() > 0:
+        try:
+            serialized = pickle.dumps(G).decode('latin-1')
+            await r.set(cache_key, serialized, ex=3600)  # cache for 1 hour
+            await r.delete(dirty_key)
+        except Exception as cache_err:
+            logger.warning(f"Graph cache write skipped ({cache_err}).")
+
+    return G
 
 
 def get_causal_chain(G: nx.DiGraph, disrupted_entity_id: str, max_depth: int = 4) -> List[GraphRAGNode]:
@@ -130,18 +225,43 @@ def get_causal_chain(G: nx.DiGraph, disrupted_entity_id: str, max_depth: int = 4
 
 
 async def query_graphrag(disrupted_entity_name: str) -> List[GraphRAGNode]:
-    """Top-level function: resolves name to UUID, loads graph, runs BFS traversal."""
+    """Top-level function: resolves name to entity id, loads graph, runs BFS traversal."""
+    if not disrupted_entity_name:
+        return []
     try:
         supabase = get_client()
-        # Resolve name to entity_id
-        res = await asyncio.to_thread(
-            lambda: supabase.table("entities").select("entity_id").ilike("name", f"%{disrupted_entity_name}%").execute()
-        )
-        if not res.data:
-            logger.warning(f"Could not resolve entity name '{disrupted_entity_name}' to UUID.")
+        pattern = f"%{disrupted_entity_name}%"
+        entity_id = None
+
+        # Resolve against kg_entities first, then the legacy entities table.
+        for table in ENTITY_TABLES:
+            try:
+                res = await asyncio.to_thread(
+                    lambda t=table: supabase.table(t)
+                    .select("*")
+                    .ilike("name", pattern)
+                    .execute()
+                )
+            except Exception as table_err:
+                logger.warning(
+                    "Entity resolution failed on %s (%s); trying fallback.",
+                    table,
+                    table_err,
+                )
+                continue
+
+            rows = res.data or []
+            if not rows:
+                continue
+            entity = _normalize_entity(rows[0])
+            if entity:
+                entity_id = entity["entity_id"]
+                break
+
+        if not entity_id:
+            logger.warning(f"Could not resolve entity name '{disrupted_entity_name}' to an id.")
             return []
-            
-        entity_id = res.data[0]["entity_id"]
+
         G = await load_entity_graph()
         return get_causal_chain(G, entity_id)
         

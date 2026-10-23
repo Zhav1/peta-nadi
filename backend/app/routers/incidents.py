@@ -255,7 +255,8 @@ async def simulate_incident(body: dict):
         scenario_id = str(uuid.uuid4())
         event = {
             "type": crisis_type,
-            "source": "simulation",
+            # Preserve attribution while keeping the simulation flag honest.
+            "source": body.get("source") or "simulation",
             "severity": "high",
             "lat": lat,
             "lon": lon,
@@ -301,7 +302,9 @@ async def simulate_incident_stream(body: dict):
     event = {
         **body,
         "type": crisis_type,
-        "source": "simulation",
+        # Preserve the caller's source (citizen_report/social) even in a
+        # simulated run; is_simulated remains the provenance source of truth.
+        "source": body.get("source") or "simulation",
         "severity": body.get("severity", "high"),
         "lat": lat,
         "lon": lon,

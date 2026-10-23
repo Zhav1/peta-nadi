@@ -44,6 +44,52 @@ export interface HazardImpactProfile {
   estimated_delay_hours: number;
 }
 
+/** GeoJSON polygon emitted by `get_hazard_polygons` (never a raw WKB hex string). */
+export interface GeoJsonPolygon {
+  type: 'Polygon';
+  coordinates: [number, number][][];
+}
+
+export interface GeoJsonMultiPolygon {
+  type: 'MultiPolygon';
+  coordinates: [number, number][][][];
+}
+
+export type HazardGeometry = GeoJsonPolygon | GeoJsonMultiPolygon;
+
+/** PostGIS hazard row normalized by the backend for map rendering. */
+export interface HazardPolygon {
+  incident_id?: string;
+  title?: string;
+  type?: CrisisType | string;
+  severity?: Severity | string;
+  /** GeoJSON polygon; `null` when stored geometry was empty/invalid. */
+  polygon?: HazardGeometry | null;
+  /** Alias of `polygon` kept for consumers that read `geometry`. */
+  geometry?: HazardGeometry | null;
+  /** Closed [[lon, lat], ...] outer ring when the geometry is a Polygon. */
+  polygon_ring?: [number, number][] | null;
+  geometry_format?: 'geojson' | null;
+  distance_km?: number;
+  lat?: number;
+  lon?: number;
+  [key: string]: unknown;
+}
+
+/** Per-horizon congestion forecast from PredictionAgent. */
+export interface CongestionForecastHorizon {
+  delay_min: number;
+  confidence_interval?: [number, number];
+}
+
+export interface CongestionForecast {
+  '6h'?: CongestionForecastHorizon;
+  '12h'?: CongestionForecastHorizon;
+  '24h'?: CongestionForecastHorizon;
+  '48h'?: CongestionForecastHorizon;
+  [horizon: string]: CongestionForecastHorizon | undefined;
+}
+
 export interface RouteTradeoffAnalysis {
   time_delta_minutes: number;
   additional_cost_idr: number;
@@ -249,7 +295,8 @@ export interface CrisisState {
     relation: string;
     impact_score?: number;
   }>;
-  hazard_polygons?: Array<Record<string, unknown>>;
+  hazard_polygons?: HazardPolygon[];
+  congestion_forecast?: CongestionForecast;
   consensus_breakdown?: Record<string, number>;
   validated: boolean;
   verified_news_citations?: Array<{

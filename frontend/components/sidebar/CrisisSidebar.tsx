@@ -6,6 +6,7 @@ import { MitigationTab } from './MitigationTab';
 import { EconomicTab } from './EconomicTab';
 import { CausalChainPanel } from './CausalChainPanel';
 import type { CrisisState, RouteRecommendation } from '@/lib/types';
+import { normalizeRegion } from '@/lib/region';
 
 const TABS = ['Evidence', 'Mitigation', 'Economic'] as const;
 type Tab = typeof TABS[number];
@@ -39,14 +40,24 @@ export function CrisisSidebar({
   const setActiveTab = controlledSetActiveTab || setInternalTab;
   const [showCausalChain, setShowCausalChain] = useState(false);
 
-  const severityColor = {
+  // Severity-driven badge. Never paint every crisis "high": fall back to a
+  // neutral slate chip when the payload carries no severity.
+  const severityColorMap: Record<string, string> = {
     critical: 'text-red-400 bg-red-400/10 ring-red-400/30 border border-red-500/30',
     high: 'text-orange-400 bg-orange-400/10 ring-orange-400/30 border border-orange-500/30',
     medium: 'text-yellow-400 bg-yellow-400/10 ring-yellow-400/30 border border-yellow-500/30',
     low: 'text-emerald-400 bg-emerald-400/10 ring-emerald-400/30 border border-emerald-500/30',
-  }['high'];
+  };
+  const severityColor =
+    (crisis.severity ? severityColorMap[crisis.severity] : undefined) ||
+    'text-slate-300 bg-slate-400/10 ring-slate-400/30 border border-slate-500/30';
 
-  const confidencePct = Math.round((crisis.overall_confidence || 0.92) * 100);
+  // Confidence is displayed only when the swarm reported one (no 0.92 stand-in).
+  const rawConfidence = Number(crisis.overall_confidence);
+  const confidencePct =
+    Number.isFinite(rawConfidence) && rawConfidence > 0
+      ? Math.round(rawConfidence * 100)
+      : null;
 
   return (
     <div
@@ -59,10 +70,10 @@ export function CrisisSidebar({
           <div className="flex-1 min-w-0 pr-2">
             <div className="flex items-center gap-2 mb-1.5 flex-wrap">
               <span className={`text-xs font-bold px-2 py-0.5 rounded font-mono uppercase tracking-wide ${severityColor}`}>
-                {crisis.status}
+                {crisis.severity ?? crisis.status}
               </span>
               <span className="text-xs text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded font-mono font-bold">
-                {confidencePct}% Keyakinan
+                {confidencePct === null ? 'Keyakinan belum tersedia' : `${confidencePct}% Keyakinan`}
               </span>
               {crisis.zone_tier === 'RED_CONFIRMED' && (
                 <span className="text-xs text-red-300 bg-red-950/60 border border-red-500/40 px-2 py-0.5 rounded font-mono font-bold">
@@ -89,7 +100,7 @@ export function CrisisSidebar({
               </p>
             )}
             <p className="text-xs text-slate-400 font-mono mt-0.5">
-              {crisis.region.replace(/_/g, ' ')} · {crisis.type}
+              {normalizeRegion(crisis.region)} · {crisis.type}
             </p>
           </div>
           <button

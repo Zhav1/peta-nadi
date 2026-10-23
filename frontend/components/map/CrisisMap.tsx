@@ -15,6 +15,7 @@ import {
   type HubNode,
 } from '@/lib/mapboxRoutingService';
 import { formatNodeDisplay, prettyNodeSlug } from '@/lib/formatNode';
+import { toLonLatRing } from '@/lib/polygonGeom';
 import {
   defaultSpatialHashArbiter,
   arbitrateVisibleLabels,
@@ -1809,16 +1810,18 @@ export default function CrisisMap({
       });
     }
 
-    // 3. Update Disaster Zones
+    // 3. Update Disaster Zones (invalid/empty rings are skipped, never sent to Mapbox)
     const zonesSource = map.getSource('disaster-zones-source') as mapboxgl.GeoJSONSource;
     if (zonesSource) {
-      zonesSource.setData({
-        type: 'FeatureCollection',
-        features: disasterZones.map((z) => ({
+      const zoneFeatures: GeoJSON.Feature<GeoJSON.Polygon>[] = [];
+      for (const z of disasterZones) {
+        const ring = toLonLatRing(z.polygon);
+        if (!ring) continue;
+        zoneFeatures.push({
           type: 'Feature',
           geometry: {
             type: 'Polygon',
-            coordinates: [z.polygon],
+            coordinates: [ring],
           },
           properties: {
             id: (z as any).id || (z as any).crisis_id || '',
@@ -1835,7 +1838,11 @@ export default function CrisisMap({
             radiusKm: (z as any).radiusKm ?? 15,
             impact_profile_json: (z as any).impact_profile ? JSON.stringify((z as any).impact_profile) : '',
           },
-        })),
+        } as GeoJSON.Feature<GeoJSON.Polygon>);
+      }
+      zonesSource.setData({
+        type: 'FeatureCollection',
+        features: zoneFeatures,
       });
     }
 
@@ -2040,7 +2047,23 @@ export default function CrisisMap({
           if (!midPt || midPt.lon == null || midPt.lat == null) return;
           const isActive = (activeRouteIdx ?? 0) === idx;
           const isHold = r.safety_status === 'HOLD_DELAY';
-          const label = isHold ? `HOLD (${r.distance_km.toFixed(0)} km)` : `${r.eta_minutes} min (${r.distance_km.toFixed(0)} km)`;
+          // Route payloads may omit/null distance_km or eta_minutes. Never call
+          // toFixed on null: render an honest label instead of throwing (which
+          // would kill the whole map effect).
+          const distanceKm = Number(r.distance_km);
+          const etaMinutes = Number(r.eta_minutes);
+          const hasDistance = r.distance_km != null && Number.isFinite(distanceKm);
+          const hasEta = r.eta_minutes != null && Number.isFinite(etaMinutes);
+          const distanceLabel = hasDistance ? `${distanceKm.toFixed(0)} km` : 'Belum terverifikasi';
+          const label = isHold
+            ? `HOLD (${distanceLabel})`
+            : hasEta && hasDistance
+              ? `${Math.round(etaMinutes)} min (${distanceLabel})`
+              : hasEta
+                ? `${Math.round(etaMinutes)} min`
+                : hasDistance
+                  ? `ETA Belum terverifikasi (${distanceLabel})`
+                  : 'ETA & jarak belum terverifikasi';
           etaFeatures.push({
             type: 'Feature',
             geometry: { type: 'Point', coordinates: [midPt.lon, midPt.lat] },
@@ -2920,26 +2943,33 @@ export default function CrisisMap({
               <div>
                 <span className="text-slate-400 block text-[10px] uppercase font-mono">Estimasi Waktu (ETA)</span>
                 <span className="font-semibold text-white font-mono">
-                  {Math.floor(selectedRoutePopover.route.eta_minutes / 60)}j {Math.round(selectedRoutePopover.route.eta_minutes % 60)}m
+                  {selectedRoutePopover.route.eta_minutes == null ||
+                  !Number.isFinite(Number(selectedRoutePopover.route.eta_minutes))
+                    ? 'Belum terverifikasi'
+                    : `${Math.floor(selectedRoutePopover.route.eta_minutes / 60)}j ${Math.round(selectedRoutePopover.route.eta_minutes % 60)}m`}
                 </span>
                 <span className="text-[10px] text-slate-400 block">
-                  ({selectedRoutePopover.route.distance_km.toFixed(0)} km)
+                  {selectedRoutePopover.route.distance_km == null ||
+                  !Number.isFinite(Number(selectedRoutePopover.route.distance_km))
+                    ? 'Jarak belum terverifikasi'
+                    : `(${selectedRoutePopover.route.distance_km.toFixed(0)} km)`}
                 </span>
               </div>
 
               <div>
                 <span className="text-slate-400 block text-[10px] uppercase font-mono">Estimasi Biaya Total</span>
-                <span className="font-semibold text-emerald-300 font-mono">
-                  Rp {(
-                    selectedRoutePopover.route.hedging?.reroute_cost_idr ||
-                    selectedRoutePopover.route.economic_comparison?.reroute_total_cost_idr ||
-                    (selectedRoutePopover.route.corridor_type === 'air_intermodal' || selectedRoutePopover.route.modality === 'air'
-                      ? 14500000
-                      : selectedRoutePopover.route.corridor_type === 'sea_intermodal' || selectedRoutePopover.route.modality === 'maritime'
-                        ? 6200000
-                        : 3850000)
-                  ).toLocaleString('id-ID')}
-                </span>
+                {(() => {
+                  const route = selectedRoutePopover.route;
+                  const costIdr =
+                    route.hedging?.reroute_cost_idr ??
+                    route.economic_comparison?.reroute_total_cost_idr;
+                  const hasCost = typeof costIdr === 'number' && Number.isFinite(costIdr) && costIdr > 0;
+                  return (
+                    <span className={`font-semibold font-mono ${hasCost ? 'text-emerald-300' : 'text-slate-400'}`}>
+                      {hasCost ? `Rp ${costIdr.toLocaleString('id-ID')}` : 'Belum tersedia'}
+                    </span>
+                  );
+                })()}
                 <span className="text-[10px] text-slate-400 block truncate">
                   {selectedRoutePopover.route.safety_status === 'SAFE_DETOUR'
                     ? 'Detour Terverifikasi'

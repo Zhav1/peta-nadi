@@ -61,7 +61,12 @@ def mock_supabase():
     import app.db.supabase_client
     client = MagicMock()
     app.db.supabase_client._supabase_client = client
-    yield client
+    # Backend write paths resolve get_write_client() first (service-role when the
+    # key is configured). Patch both the factory and the imported symbol so tests
+    # never build a real client from .env.
+    with patch("app.db.supabase_client.get_write_client", return_value=client), \
+         patch("agents.tools.supabase_tools.get_write_client", return_value=client):
+        yield client
     app.db.supabase_client._supabase_client = None
 
 
@@ -138,13 +143,15 @@ async def test_data_collection_malformed_event(mock_redis, mock_supabase):
 
 @pytest.mark.asyncio
 async def test_osint_hazard_with_polygon(mock_redis, mock_supabase):
-    # Mock Supabase get_hazard_polygons
+    # Mock Supabase get_hazard_polygons (schema: affected_area + severity + status)
     mock_supabase.table().select().gte().lte().gte().lte().execute.return_value = MagicMock(data=[
         {
             "incident_id": "1",
             "title": "Flood polygon",
             "type": "flood",
-            "affected_polygon": {"type": "Polygon", "coordinates": []}
+            "severity": "high",
+            "status": "validated",
+            "affected_area": {"type": "Polygon", "coordinates": []}
         }
     ])
     
@@ -157,7 +164,42 @@ async def test_osint_hazard_with_polygon(mock_redis, mock_supabase):
     
     result = await osint_hazard_agent(state)
     assert len(result["hazard_polygons"]) == 1
+    assert result["hazard_polygons"][0]["severity"] == "high"
     assert result["osint_hazard_finding"]["confidence"] >= 0.8
+
+
+@pytest.mark.asyncio
+async def test_osint_hazard_filters_resolved_and_preserves_severity(mock_redis, mock_supabase):
+    """Resolved incidents must not surface as active hazards; row severity is preserved."""
+    mock_supabase.table().select().gte().lte().gte().lte().execute.return_value = MagicMock(data=[
+        {
+            "incident_id": "resolved-1",
+            "title": "Old flood",
+            "type": "flood",
+            "severity": "critical",
+            "status": "resolved",
+            "affected_area": {"type": "Polygon", "coordinates": []}
+        },
+        {
+            "incident_id": "active-1",
+            "title": "Active flood",
+            "type": "flood",
+            "severity": "critical",
+            "status": "validated",
+            "affected_area": {"type": "Polygon", "coordinates": []}
+        }
+    ])
+
+    state: CrisisState = {
+        "normalized_event": {"event_type": "flood", "source": "bmkg"},
+        "lat": 3.5,
+        "lon": 98.5,
+        "region": "north_sumatra"
+    }
+
+    result = await osint_hazard_agent(state)
+    assert [h["incident_id"] for h in result["hazard_polygons"]] == ["active-1"]
+    assert result["hazard_polygons"][0]["severity"] == "critical"
 
 
 @pytest.mark.asyncio
@@ -187,6 +229,10 @@ async def test_prediction_with_tomtom_data(mock_redis, mock_supabase):
     mock_redis._keys_override = mock_keys
     mock_redis._get_override = mock_get
     mock_supabase.table().select().eq().execute.return_value = MagicMock(data=[{"incident_id": "1"}] * 10)
+    # History path now filters region *evidence* in Python (incidents has no region column).
+    mock_supabase.table().select().execute.return_value = MagicMock(
+        data=[{"incident_id": "1", "evidence": {"region": "north_sumatra"}}] * 10
+    )
     
     state: CrisisState = {
         "normalized_event": {"event_type": "congestion"},
@@ -285,8 +331,8 @@ async def test_economic_intelligence_rejects_degraded_llm_text(mock_query_ltm, m
 def test_consensus_gate_validates_at_85pct():
     state: CrisisState = {
         "osint_hazard_finding": {"confidence": 0.9},
-        "data_collection_finding": {"confidence": 0.9},
-        "prediction_finding": {"confidence": 0.8},
+        "data_collection_finding": {"confidence": 0.9, "distance_km": 5.0},
+        "prediction_finding": {"confidence": 0.8, "distance_km": 5.0},
         "route_optimization_finding": {"confidence": 0.8},
         "economic_intelligence_finding": {"confidence": 0.8}
     }
@@ -339,6 +385,29 @@ async def test_decision_support_output_format(mock_redis, mock_supabase):
     assert "decision_support_output" in result
 
 
+def test_demo_start_delegates_persistence_to_write_incident(mock_supabase):
+    """Demo persistence must delegate to write_incident, never insert dict(state)."""
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    with patch(
+        "agents.tools.supabase_tools.write_incident",
+        new=AsyncMock(return_value="inc-demo-1"),
+    ) as mock_write_incident:
+        response = TestClient(app).post(
+            "/api/demo/start",
+            json={"mock_agents": True, "offline": False},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert mock_write_incident.await_count == 1
+    saved_state = mock_write_incident.await_args.args[0]
+    assert saved_state["crisis_id"] == body["crisis_id"]
+    # The raw writer path must not be reached with an unwhitelisted row.
+    mock_supabase.table.assert_not_called()
+
+
 def test_graph_compiles():
     graph = build_crisis_graph()
     compiled = graph.compile()
@@ -370,10 +439,10 @@ async def test_four_stage_pipeline_execution(mock_redis, mock_supabase):
     ])
     
     # Mock TomTom traffic delay and Open-Meteo prediction in Redis
-    mock_redis.keys_return_value = ["lrip:tomtom:segment:medan"]
+    mock_redis.keys_return_value = [f"lrip:tomtom:segment:cp{i}" for i in range(5)]
     async def custom_get(key, *args, **kwargs):
         if "tomtom:segment" in key:
-            return '{"delay_min": 55.0, "currentTravelTime": 3300, "timestamp": 1720000000}'
+            return '{"delay_min": 55.0, "currentTravelTime": 3300, "lat": 3.78, "lon": 98.68, "timestamp": 1720000000}'
         if key == "lrip:cache:open_meteo":
             return '[{"raw_payload": {"predictions": {"precipitation_mm_24h": 45.0, "flood_risk_pct": 75.0}}}]'
         if key == "lrip:pihps:latest":
@@ -406,6 +475,15 @@ async def test_four_stage_pipeline_execution(mock_redis, mock_supabase):
         "messages": [],
         "route_recommendations": []
     }
+
+    # Prediction history: the gate no longer treats a missing distance/history as
+    # zero-distance corroboration, so seed >=5 real precedents in the bbox window.
+    mock_supabase.table().select().gte().lte().gte().lte().execute.return_value = MagicMock(
+        data=[
+            {"incident_id": f"hist-{i}", "type": "flood", "evidence": {"region": "Sumatera Utara"}}
+            for i in range(6)
+        ]
+    )
 
     final_state = await compiled.ainvoke(initial_event)
     
@@ -463,6 +541,148 @@ async def test_route_optimization_hedging_and_bkhit_block(mock_supabase):
     assert comp["status"] == "HARD_BLOCK"
     assert comp["is_compliant"] is False
     assert comp["requires_override"] is False
+
+
+def test_normalize_region_aliases():
+    """All province spellings collapse to canonical slugs (P2 region contract)."""
+    from agents.nodes.data_collection import normalize_region
+
+    for raw in ("north_sumatra", "North Sumatra", "Sumatera Utara", "Sumut", "Provinsi Sumatera Utara"):
+        assert normalize_region(raw) == "north_sumatra"
+    assert normalize_region("Sumatera Selatan") == "south_sumatra"
+    assert normalize_region("Kepulauan Riau") == "kepulauan_riau"
+    assert normalize_region("Lampung") == "lampung"
+
+
+@pytest.mark.asyncio
+async def test_data_collection_preserves_social_source_and_raw_text(mock_redis, mock_supabase):
+    """Simulation provenance never overwrites caller attribution; raw text is unwrapped."""
+    import json as _json
+
+    mock_redis.get_return_value = None
+    mock_supabase.table().select().eq().execute.return_value = MagicMock(data=[{"status": "green"}])
+
+    result = await data_collection_agent({
+        "type": "flood",
+        "severity": "high",
+        "source": "citizen_report",
+        "is_simulated": True,
+        "region": "North Sumatra",
+        "lat": 3.79,
+        "lon": 98.67,
+        "raw": _json.dumps({"raw_text": "Banjir parah Pelabuhan Belawan"}),
+        "title": "Laporan warga",
+        "messages": [],
+    })
+
+    norm = result["normalized_event"]
+    assert norm["source"] == "citizen_report"
+    assert norm["raw_payload"]["text"] == "Banjir parah Pelabuhan Belawan"
+    assert result["region"] == "north_sumatra"
+
+
+@pytest.mark.asyncio
+async def test_osint_social_raw_unpack_and_spatial_boost(mock_redis, mock_supabase):
+    """A nearby social report is unpacked (tier/published_at) and boosts +0.10."""
+    import json as _json
+    from datetime import datetime, timezone
+    from agents.nodes import osint_hazard as oh
+    from agents.llm_gateway import LLMGateway
+
+    mock_supabase.table().select().gte().lte().gte().lte().execute.return_value = MagicMock(data=[])
+    payload = {
+        "source": "social",
+        "event_type": "osint_report",
+        "lat": "3.80",
+        "lon": "98.70",
+        "title": "[TWITTER] Belawan: flood reported",
+        "raw": _json.dumps({
+            "raw_text": "Banjir parah Pelabuhan Belawan, jalan putus",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }),
+    }
+
+    async def _xrange(key, *args, **kwargs):
+        return [("1-0", payload)] if key == "lrip:events:social" else []
+
+    mock_redis.xrange = _xrange
+    with patch.object(oh, "get_hazard_polygons", AsyncMock(return_value=[])), \
+         patch.object(oh, "extract_locations", AsyncMock(return_value=[])), \
+         patch.object(LLMGateway, "generate_content", AsyncMock(return_value="high")):
+        result = await oh.osint_hazard_agent({
+            "normalized_event": {
+                "event_type": "flood", "source": "social", "severity": "medium",
+                "raw_payload": {"text": "Banjir parah Pelabuhan Belawan"},
+            },
+            "lat": 3.79,
+            "lon": 98.67,
+            "region": "North Sumatra",
+        })
+
+    data = result["osint_hazard_finding"]["data"]
+    assert result["osint_hazard_finding"]["confidence"] == 0.75
+    assert data["spatially_relevant"] is True
+    assert data["inferred_severity"] == "high"
+    assert result["verified_news_citations"][0]["tier"] == "TIER_3_CITIZEN_OSINT"
+    assert result["verified_news_citations"][0]["published_at"]
+
+
+@pytest.mark.asyncio
+async def test_osint_spatial_gate_rejects_distant_lampung(mock_redis, mock_supabase):
+    """Distant Lampung chatter must never corroborate a Belawan incident."""
+    import json as _json
+    from datetime import datetime, timezone
+    from agents.nodes import osint_hazard as oh
+    from agents.llm_gateway import LLMGateway
+
+    mock_supabase.table().select().gte().lte().gte().lte().execute.return_value = MagicMock(data=[])
+    payload = {
+        "source": "social",
+        "event_type": "osint_report",
+        "lat": "-5.45",
+        "lon": "105.26",
+        "title": "Banjir Lampung",
+        "raw": _json.dumps({
+            "raw_text": "Banjir parah Bandar Lampung, jalan putus",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }),
+    }
+
+    async def _xrange(key, *args, **kwargs):
+        return [("1-0", payload)] if key == "lrip:events:social" else []
+
+    mock_redis.xrange = _xrange
+    with patch.object(oh, "get_hazard_polygons", AsyncMock(return_value=[])), \
+         patch.object(oh, "extract_locations", AsyncMock(return_value=[])), \
+         patch.object(LLMGateway, "generate_content", AsyncMock(return_value="critical")):
+        result = await oh.osint_hazard_agent({
+            "normalized_event": {"event_type": "flood", "source": "social", "severity": "medium"},
+            "lat": 3.79,
+            "lon": 98.67,
+            "region": "North Sumatra",
+        })
+
+    data = result["osint_hazard_finding"]["data"]
+    assert result["osint_hazard_finding"]["confidence"] == 0.60
+    assert data["spatially_relevant"] is False
+    assert data["social_corroborations"] == 0
+    assert data["spatial_gate"]["rejected"][0]["spatially_relevant"] is False
+    assert result["verified_news_citations"] == []
+
+
+@pytest.mark.asyncio
+async def test_social_poller_disabled_without_token():
+    """No bearer token -> explicit disabled_no_token health, clean exit."""
+    import app.main as main
+
+    fake_redis = MagicMock()
+    with patch.object(main.settings, "twitter_bearer_token", ""), \
+         patch.object(main, "get_redis", return_value=fake_redis):
+        await main._poll_social_osint_loop()
+
+    fake_redis.hset.assert_any_call(
+        "lrip:health:social_scraper", "status", "disabled_no_token"
+    )
 
 
 

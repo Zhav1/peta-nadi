@@ -7,6 +7,17 @@ services:
     plan: free
     region: singapore
     envVars:
+      # Production-required secrets (set in the Render dashboard; repo keeps only
+      # `sync: false` placeholders):
+      #   SUPABASE_SERVICE_ROLE_KEY : true service_role JWT (NOT the anon key).
+      #                               Missing => RLS denies incident/data_sources
+      #                               writes; /health/sources flags Supabase Write.
+      #   TOMTOM_API_KEY            : traffic enrichment. Missing => TomTom
+      #                               reports degraded instead of healthy.
+      #   REDIS_URL                 : rediss:// Upstash/Render Redis. Powers
+      #                               health hashes, dedup, caches and SSE fan-out.
+      #   TWITTER_BEARER_TOKEN      : social OSINT. Missing => explicit
+      #                               disabled_no_token, never fabricated posts.
       - key: APP_NAME
         value: "PreHub API"
       - key: ENVIRONMENT
@@ -23,6 +34,11 @@ services:
         sync: false
       - key: DEMO_OFFLINE
         value: "false"
+      # Exactly one process owns the in-process ingestion pollers. Render's
+      # default (single uvicorn worker) already satisfies this; set "false" on
+      # any extra HTTP replica to avoid duplicate polling.
+      - key: POLLERS_ENABLED
+        value: "true"
       # Phase 58 LLM migration: secret values dashboard-only (sync:false, no value in yaml)
       - key: OPENCODE_API_KEY
         sync: false
@@ -41,6 +57,8 @@ services:
       - key: NVIDIA_DEEPSEEK_V4_FLASH
         sync: false
       - key: AISSTREAM_API_KEY
+        sync: false
+      - key: TWITTER_BEARER_TOKEN
         sync: false
       - key: NASA_FIRMS_MAP_KEY
         sync: false

@@ -77,17 +77,25 @@ def publish_event(stream: str, event: dict) -> str:
 
 
 def get_stm_state(crisis_id: str) -> dict:
-    """Get the current Short-Term Memory state for an active crisis."""
+    """Get the current Short-Term Memory state for an active crisis.
+
+    Stored as a JSON string (the same representation used by
+    ``agents.memory.stm``) so both readers share one canonical key without a
+    Redis WRONGTYPE conflict.
+    """
     r = get_redis()
-    raw = r.hgetall(f"{STM_PREFIX}{crisis_id}")
-    return raw or {}
+    raw = r.get(f"{STM_PREFIX}{crisis_id}")
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+        return parsed if isinstance(parsed, dict) else {}
+    except (TypeError, ValueError):
+        return {}
 
 
 def set_stm_state(crisis_id: str, state: dict, ttl_seconds: int = 86400):
     """Update the STM state for an active crisis. TTL defaults to 24 hours."""
     r = get_redis()
     key = f"{STM_PREFIX}{crisis_id}"
-    # Set each field individually for compatibility with Redis 3.0
-    for k, v in state.items():
-        r.hset(key, k, str(v))
-    r.expire(key, ttl_seconds)
+    r.set(key, json.dumps(state, default=str), ex=ttl_seconds)

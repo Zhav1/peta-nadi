@@ -28,6 +28,11 @@ DEFAULT_SENSOR_WEIGHTS = {
 LAMBDA_TEMPORAL_DECAY = 0.05  # Decay per hour (e^(-0.05 * hours))
 D0_SPATIAL_DECAY_KM = 25.0    # Characteristic distance in km (e^(-d / 25))
 
+# Simulated input is a weaker evidence class than observed telemetry. The gate
+# keeps the routing bypass for demo replay, but the reported confidence is
+# discounted instead of being rewritten to synthetic certainty (0.90).
+SIMULATED_EVIDENCE_DISCOUNT = 0.90
+
 
 def compute_temporal_decay(timestamp_str: Optional[str], ref_time: Optional[datetime] = None) -> float:
     """Calculates exponential temporal decay factor e^(-lambda * delta_t)."""
@@ -228,6 +233,25 @@ def cross_validate_news_with_bmkg(
     return res
 
 
+def _resolve_finding_distance(finding: Optional[Dict[str, Any]]) -> float:
+    """Resolve a finding's spatial distance.
+
+    Missing distance is UNKNOWN evidence, not zero proximity: it must never
+    satisfy the <= 30 km corroboration gate, so it resolves to +inf.
+    """
+    if not finding:
+        return float("inf")
+    distance = finding.get("distance_km")
+    if distance is None and isinstance(finding.get("data"), dict):
+        distance = finding["data"].get("distance_km")
+    if distance is None:
+        return float("inf")
+    try:
+        return float(distance)
+    except (TypeError, ValueError):
+        return float("inf")
+
+
 def compute_consensus(state: CrisisState) -> Dict[str, Any]:
     """
     Computes formal probabilistic consensus score across independent sensory observation channels.
@@ -352,8 +376,8 @@ def compute_consensus(state: CrisisState) -> Dict[str, Any]:
 
     # 6. Deterministic Physical Sensor Cross-Validation & Cap
     bmkg_cross = state.get("bmkg_cross_validation")
-    w_dist = float(weather_finding.get("distance_km", 0.0) if weather_finding and weather_finding.get("distance_km") is not None else 0.0)
-    t_dist = float(traffic_finding.get("distance_km", 0.0) if traffic_finding and traffic_finding.get("distance_km") is not None else 0.0)
+    w_dist = _resolve_finding_distance(weather_finding)
+    t_dist = _resolve_finding_distance(traffic_finding)
 
     if not bmkg_cross and weather_finding:
         if weather_finding.get("is_corroborated") is not None:
@@ -384,10 +408,18 @@ def compute_consensus(state: CrisisState) -> Dict[str, Any]:
     if osint_conf > 0.0 and not is_physically_corroborated and not is_sim:
         calibrated_confidence = min(0.50, calibrated_confidence)
 
-    # 7. Consensus promotion criteria: confidence >= 0.85 and at least 2 independent sensors
+    # Simulated evidence is discounted deterministically (never booted to 0.90).
+    if is_sim:
+        calibrated_confidence = round(calibrated_confidence * SIMULATED_EVIDENCE_DISCOUNT, 4)
+
+    # 7. Consensus promotion criteria: confidence >= 0.85 and at least 2 independent sensors.
+    # Simulated runs keep the is_sim routing bypass, but the calibrated confidence is
+    # never rewritten to a fixed value (0.90 was synthetic certainty).
     is_validated = (calibrated_confidence >= 0.85 and active_sources >= 2 and (is_physically_corroborated or is_sim)) or (is_sim and active_sources >= 2)
-    if is_sim and is_validated and calibrated_confidence < 0.85:
-        calibrated_confidence = 0.90
+    validation_mode = (
+        "simulation_bypass" if is_sim
+        else ("physical_corroboration" if is_physically_corroborated else "standard")
+    )
 
     if not bmkg_cross:
         bmkg_cross = {
@@ -426,5 +458,6 @@ def compute_consensus(state: CrisisState) -> Dict[str, Any]:
         "decay_applied": decay_applied,
         "route": "validated" if is_validated else "unconfirmed",
         "validation_status": "VALIDATED" if is_validated else "UNCONFIRMED",
+        "validation_mode": validation_mode,
         "bmkg_cross_validation": bmkg_cross,
     }

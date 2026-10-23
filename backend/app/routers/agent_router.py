@@ -104,6 +104,40 @@ async def get_agents_status():
     }
 
 
+@router.post("/api/v1/notify")
+@router.post("/api/notify")
+async def notify_validated_crisis(payload: dict):
+    """Internal validated-alert notification endpoint.
+
+    The original Agent 6 webhook targeted a non-existent ``/api/notify`` route
+    on localhost, so every alert silently 404'd. Agent 6 now calls the
+    notification service directly, and this endpoint remains for internal
+    callers/ops. It never raises: missing WHATSAPP_* config is reported as a
+    degraded (log-only) outcome.
+    """
+    from app.services.notification_service import notify_validated_alert
+
+    try:
+        result = await notify_validated_alert(payload or {})
+    except Exception as exc:  # defensive: notification must never 500 the caller
+        logger.error("Notify endpoint failed: %s", exc)
+        return {
+            "status": "failed",
+            "sent": False,
+            "configured": False,
+            "missing": [],
+            "degraded_sources": ["whatsapp"],
+            "detail": str(exc),
+        }
+
+    return {
+        **result,
+        "sent": result.get("status") == "sent",
+        "crisis_id": (payload or {}).get("crisis_id"),
+        "incident_id": (payload or {}).get("incident_id"),
+    }
+
+
 @router.post("/api/v1/simulate/stream")
 @router.post("/simulate/stream")
 async def simulate_crisis_stream(payload: dict):
@@ -132,7 +166,9 @@ async def simulate_crisis_stream(payload: dict):
     event = {
         **payload,
         "type": crisis_type,
-        "source": "simulation",
+        # Preserve the caller's declared source (e.g. citizen_report); the
+        # simulation provenance stays explicit via is_simulated below.
+        "source": payload.get("source") or "simulation",
         "severity": payload.get("severity", "high"),
         "lat": lat,
         "lon": lon,

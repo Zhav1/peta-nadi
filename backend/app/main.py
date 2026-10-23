@@ -84,6 +84,8 @@ async def _poll_tomtom_loop():
 
                             payload = {
                                 "name": name,
+                                "lat": item.get("_lat"),
+                                "lon": item.get("_lon"),
                                 "delay_min": round(delay_min, 1),
                                 "currentTravelTime": seg.get("currentTravelTime", 0),
                                 "currentSpeed": curr_speed,
@@ -121,9 +123,13 @@ async def _poll_open_meteo_loop():
                 raw = await adapter.fetch()
                 if raw:
                     events = await adapter.parse(raw)
-                    r = get_redis()
-                    r.set("lrip:cache:open_meteo", json.dumps(events), ex=21600)
-                    logger.info("Open-Meteo weather forecast cached in Redis.")
+                    if events:
+                        r = get_redis()
+                        r.set("lrip:cache:open_meteo", json.dumps(events), ex=25200)
+                        logger.info("Open-Meteo weather forecast cached in Redis.")
+                    else:
+                        # Never clobber a good cache with an empty parse result.
+                        logger.debug("Open-Meteo poll returned no events; retaining cached forecast")
             except Exception as e:
                 logger.warning(f"Open-Meteo/Weather poll error: {e}")
             await asyncio.sleep(21600)  # Every 6 hours
@@ -220,6 +226,36 @@ async def _poll_pihps_loop():
         logger.error(f"Fatal error in PIHPS poller loop: {e}")
 
 
+async def _poll_social_osint_loop():
+    """Background poller for citizen social OSINT (Twitter/X).
+
+    No token means no data: publish an explicit ``disabled_no_token`` health
+    state and exit cleanly instead of synthesising citizen reports or running a
+    second scrape path. The existing SocialScraper owns cadence and publishing.
+    """
+    logger.info("Starting background Social OSINT poller task...")
+    token = str(getattr(settings, "twitter_bearer_token", "") or "").strip()
+    if not token:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        try:
+            r = get_redis()
+            # Set fields individually for Redis 3.0 compatibility (matches adapters).
+            r.hset("lrip:health:social_scraper", "status", "disabled_no_token")
+            r.hset("lrip:health:social_scraper", "updated_at", now_iso)
+        except Exception as e:
+            logger.warning(f"Could not record social scraper health state: {e}")
+        logger.info("Social OSINT poller disabled: TWITTER_BEARER_TOKEN not configured.")
+        return
+
+    try:
+        from app.scrapers.social_scraper import SocialScraper
+        await SocialScraper().run()
+    except asyncio.CancelledError:
+        logger.info("Social OSINT background poller task canceled.")
+    except Exception as e:
+        logger.error(f"Fatal error in Social OSINT poller loop: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application startup and shutdown lifecycle."""
@@ -236,20 +272,38 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Redis connection failed: {e} : continuing without Redis")
 
-    # Start all background tasks
-    bmkg_task = asyncio.create_task(_poll_bmkg_loop())
-    tomtom_task = asyncio.create_task(_poll_tomtom_loop())
-    open_meteo_task = asyncio.create_task(_poll_open_meteo_loop())
-    firms_task = asyncio.create_task(_poll_firms_loop())
-    ais_task = asyncio.create_task(_run_aisstream())
-    news_task = asyncio.create_task(_poll_news_loop())
-    pihps_task = asyncio.create_task(_poll_pihps_loop())
+    # Startup: flag a missing service-role key before the first incident write.
+    # Without it the anon client is RLS-denied and writes vanish silently.
+    try:
+        from app.db.supabase_client import init_write_health
+        init_write_health()
+    except Exception as e:
+        logger.warning(f"Supabase write health check failed: {e}")
+
+    # Start all background tasks. `--workers > 1` duplicates every poller per
+    # process, so only the primary API process (POLLERS_ENABLED=true, default)
+    # runs ingestion; extra replicas serve HTTP only.
+    tasks = []
+    if bool(getattr(settings, "pollers_enabled", True)):
+        bmkg_task = asyncio.create_task(_poll_bmkg_loop())
+        tomtom_task = asyncio.create_task(_poll_tomtom_loop())
+        open_meteo_task = asyncio.create_task(_poll_open_meteo_loop())
+        firms_task = asyncio.create_task(_poll_firms_loop())
+        ais_task = asyncio.create_task(_run_aisstream())
+        news_task = asyncio.create_task(_poll_news_loop())
+        pihps_task = asyncio.create_task(_poll_pihps_loop())
+        social_task = asyncio.create_task(_poll_social_osint_loop())
+        tasks = [bmkg_task, tomtom_task, open_meteo_task, firms_task, ais_task, news_task, pihps_task, social_task]
+    else:
+        logger.warning(
+            "BOOT: POLLERS_ENABLED=false — HTTP-only process; background pollers not started"
+        )
 
     yield  # Application runs here
 
     # Shutdown
     logger.info("Shutting down background workers...")
-    for t in [bmkg_task, tomtom_task, open_meteo_task, firms_task, ais_task, news_task, pihps_task]:
+    for t in tasks:
         t.cancel()
     close_redis()
 
@@ -311,9 +365,34 @@ app.include_router(geocode_router.router, prefix="/api/v1")
 
 @app.websocket("/ws/crisis/{crisis_id}")
 async def websocket_crisis_endpoint(websocket: WebSocket, crisis_id: str):
-    """Real-time WebSocket endpoint for crisis streaming telemetry and agent events."""
+    """Real-time WebSocket endpoint for crisis streaming telemetry and agent events.
+
+    Validated alerts are fanned out here from ``app.services.alert_fanout`` when
+    Agent 6 runs in this process. Cross-process producers write to the Redis
+    stream ``lrip:stream:validated_alerts``; the terminal SSE event
+    ``simulation_complete`` also always carries an ``alert`` field, so SSE-only
+    clients never miss the validated alert.
+    """
+    from app.services.alert_fanout import (
+        get_last_alert,
+        register_listener,
+        unregister_listener,
+    )
+
     await websocket.accept()
+    alert_queue = register_listener(crisis_id)
     logger.info(f"WebSocket client connected for crisis: {crisis_id}")
+
+    async def _pump_validated_alerts():
+        while True:
+            alert = await alert_queue.get()
+            await websocket.send_json({
+                "event": "validated_alert",
+                "crisis_id": crisis_id,
+                "data": alert,
+            })
+
+    pump_task = None
     try:
         await websocket.send_json({
             "event": "connected",
@@ -323,6 +402,18 @@ async def websocket_crisis_endpoint(websocket: WebSocket, crisis_id: str):
                 "status": "active"
             }
         })
+
+        # Late subscribers still receive the last validated alert for this crisis.
+        last_alert = get_last_alert(crisis_id)
+        if last_alert:
+            await websocket.send_json({
+                "event": "validated_alert",
+                "crisis_id": crisis_id,
+                "data": last_alert,
+            })
+
+        pump_task = asyncio.create_task(_pump_validated_alerts())
+
         while True:
             # Keep connection open, receive client heartbeat or commands
             data = await websocket.receive_text()
@@ -332,5 +423,15 @@ async def websocket_crisis_endpoint(websocket: WebSocket, crisis_id: str):
         logger.info(f"WebSocket client disconnected for crisis: {crisis_id}")
     except Exception as e:
         logger.warning(f"WebSocket error for crisis {crisis_id}: {e}")
+    finally:
+        if pump_task is not None:
+            pump_task.cancel()
+            try:
+                await pump_task
+            except asyncio.CancelledError:
+                pass
+            except Exception as pump_err:
+                logger.debug(f"WebSocket alert pump stopped for {crisis_id}: {pump_err}")
+        unregister_listener(crisis_id, alert_queue)
 
 

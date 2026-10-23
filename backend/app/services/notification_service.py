@@ -5,11 +5,77 @@ Sends formatted crisis alerts when the consensus gate produces a validated event
 Falls back to log-only if WHATSAPP_TOKEN is not configured (safe for local dev).
 """
 import logging
+from typing import Any, Dict
 import httpx
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+
+# Env vars required for a live WhatsApp send. Kept as a mapping so callers can
+# report exactly which integration inputs are missing (degraded_sources).
+_WHATSAPP_SETTINGS = {
+    "WHATSAPP_TOKEN": "whatsapp_token",
+    "WHATSAPP_PHONE_NUMBER_ID": "whatsapp_phone_number_id",
+    "WHATSAPP_RECIPIENT_NUMBER": "whatsapp_recipient_number",
+}
+
+
+def whatsapp_config_status() -> Dict[str, Any]:
+    """Returns whether the WhatsApp integration is configured and what is missing.
+
+    A missing configuration is a *degraded* state, never an error: validated
+    alerts still flow to Redis/SSE and are logged locally.
+    """
+    missing = [
+        env_name
+        for env_name, attr_name in _WHATSAPP_SETTINGS.items()
+        if not getattr(settings, attr_name, "")
+    ]
+    return {"configured": not missing, "missing": missing}
+
+
+async def notify_validated_alert(incident: dict) -> Dict[str, Any]:
+    """Dispatches a validated alert through the WhatsApp service.
+
+    Never raises. Returns a structured outcome so the caller (Agent 6 / the
+    notify route) can surface honest degradation instead of swallowing a 404:
+
+        {"status": "sent" | "failed" | "degraded_log_only",
+         "configured": bool, "missing": [...], "degraded_sources": [...]}
+    """
+    status = whatsapp_config_status()
+    missing = status["missing"]
+
+    if not status["configured"]:
+        logger.warning(
+            "WhatsApp notification degraded to log-only; missing=%s",
+            ",".join(missing),
+        )
+        try:
+            # send_crisis_alert() logs the formatted body when unconfigured.
+            await send_crisis_alert(incident)
+        except Exception as exc:  # defensive: logging must never break the agent
+            logger.error("Log-only WhatsApp fallback failed: %s", exc)
+        return {
+            "status": "degraded_log_only",
+            "configured": False,
+            "missing": missing,
+            "degraded_sources": ["whatsapp"],
+        }
+
+    try:
+        sent = await send_crisis_alert(incident)
+    except Exception as exc:  # send_crisis_alert already guards; belt and braces
+        logger.error("WhatsApp notification dispatch crashed: %s", exc)
+        sent = False
+
+    return {
+        "status": "sent" if sent else "failed",
+        "configured": True,
+        "missing": [],
+        "degraded_sources": [] if sent else ["whatsapp"],
+    }
 
 
 async def send_crisis_alert(incident: dict) -> bool:

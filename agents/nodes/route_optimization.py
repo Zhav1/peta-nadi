@@ -76,6 +76,78 @@ def _resolve_network_node(raw, node_lookup: dict):
     return None
 
 
+def _first_present(state: dict, *keys):
+    """Return the first explicitly-set, non-None value among ``keys``."""
+    for key in keys:
+        if key in state:
+            value = state.get(key)
+            if value is not None:
+                return value
+    return None
+
+
+def _coerce_float(value, default):
+    """Coerce an operational numeric field; fall back only when unusable."""
+    if value is None or isinstance(value, bool):
+        return default
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return default
+    if number != number or number in (float("inf"), float("-inf")):
+        return default
+    return number
+
+
+def _coerce_bool(value, default):
+    """Coerce a boolean flag without treating the string ``"false"`` as True."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in ("1", "true", "yes", "y", "on"):
+            return True
+        if normalized in ("0", "false", "no", "n", "off"):
+            return False
+    return default
+
+
+def _coerce_coords(value):
+    """Normalize OD coordinates to a ``[lon, lat]`` float pair."""
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        lat, lon = value.get("lat"), value.get("lon")
+        if lat is None or lon is None:
+            return None
+        value = [lon, lat]
+    if isinstance(value, (list, tuple)) and len(value) >= 2:
+        try:
+            return [float(value[0]), float(value[1])]
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def _first_commodity(state: dict):
+    """Resolve the actual shipment commodity before any default is applied."""
+    for key in ("commodity", "commodity_key", "commodityKey"):
+        commodity = state.get(key)
+        if commodity is not None and str(commodity).strip():
+            return str(commodity).strip()
+
+    news_commodities = state.get("news_affected_commodities") or []
+    if isinstance(news_commodities, str):
+        news_commodities = [news_commodities]
+    for item in news_commodities:
+        if item is not None and str(item).strip():
+            return str(item).strip()
+
+    return None
+
+
 async def route_optimization_agent(state: CrisisState) -> dict:
     """Agent 4: NetworkX pgRouting matrix computation + dynamic hazard/news-weighted routing + Spoilage Hedging & Compliance."""
     logger.info("Agent 4 [RouteOptimizationAgent] running...")
@@ -214,27 +286,55 @@ async def route_optimization_agent(state: CrisisState) -> dict:
     top_compliance_status = None
     intermodal_sync = IntermodalSyncService()
     
-    # Extract cargo context from state
-    commodity_candidates = state.get("news_affected_commodities") or []
-    active_commodity = commodity_candidates[0] if commodity_candidates else "cabai_merah"
-    cargo_tonnage = float(state.get("cargo_tonnage", 15.0))
-    vehicle_gross_weight = float(state.get("vehicle_gross_weight_ton", 18.0))
-    has_bkhit = bool(state.get("has_bkhit_cert", True))
+    # Extract cargo context from state. camelCase dashboard aliases are read
+    # here too so this agent stays correct even when invoked outside the graph
+    # (where data_collection's normalization has not run).
+    active_commodity = _first_commodity(state) or "cabai_merah"
+    cargo_tonnage = _coerce_float(
+        _first_present(state, "cargo_tonnage", "cargoTonnage", "cargo_ton", "cargoTon"),
+        15.0,
+    )
+    vehicle_gross_weight = _coerce_float(
+        _first_present(
+            state,
+            "vehicle_gross_weight_ton",
+            "vehicleGrossWeightTon",
+            "gross_weight_ton",
+        ),
+        18.0,
+    )
+    has_bkhit = _coerce_bool(
+        _first_present(state, "has_bkhit_cert", "hasBkhitCert", "bkhit_cert", "bkhitCert"),
+        True,
+    )
     
     try:
-        # Robust origin & destination resolution
-        req_origin = state.get("origin") or state.get("start_location")
-        req_dest = state.get("destination") or state.get("end_location")
-        origin_coords = state.get("origin_coords")
-        dest_coords = state.get("dest_coords")
+        # Robust origin & destination resolution. The dashboard selection is
+        # authoritative; first/last graph nodes are only a legacy fallback when
+        # the caller supplied no OD at all.
+        req_origin = _first_present(state, "origin", "start_location", "origin_id", "origin_node")
+        req_dest = _first_present(state, "destination", "end_location", "dest_id", "destination_node")
+        origin_coords = _coerce_coords(_first_present(state, "origin_coords", "originCoords"))
+        dest_coords = _coerce_coords(_first_present(state, "dest_coords", "destCoords"))
 
         # Support if req_origin / req_dest were passed directly as [lon, lat]
         if isinstance(req_origin, (list, tuple)) and len(req_origin) >= 2:
-            origin_coords = [float(req_origin[0]), float(req_origin[1])]
+            origin_coords = _coerce_coords(req_origin)
+            req_origin = None
+        elif isinstance(req_origin, dict) and req_origin.get("lat") is not None:
+            origin_coords = _coerce_coords(req_origin)
             req_origin = None
         if isinstance(req_dest, (list, tuple)) and len(req_dest) >= 2:
-            dest_coords = [float(req_dest[0]), float(req_dest[1])]
+            dest_coords = _coerce_coords(req_dest)
             req_dest = None
+        elif isinstance(req_dest, dict) and req_dest.get("lat") is not None:
+            dest_coords = _coerce_coords(req_dest)
+            req_dest = None
+
+        od_declared = any(
+            value is not None
+            for value in (req_origin, req_dest, origin_coords, dest_coords)
+        )
 
         node_lookup = {str(n).lower(): n for n in G.nodes}
 
@@ -257,18 +357,53 @@ async def route_optimization_agent(state: CrisisState) -> dict:
         origin = _resolve_network_node(req_origin, node_lookup)
         if origin is None and origin_coords:
             origin = _find_nearest_graph_node(origin_coords)
-        if origin is None and len(G.nodes) > 0:
-            origin = list(G.nodes)[0]
 
         destination = _resolve_network_node(req_dest, node_lookup)
         if destination is None and dest_coords:
             destination = _find_nearest_graph_node(dest_coords)
-        if destination is None and len(G.nodes) > 1:
-            destination = list(G.nodes)[-1]
+
+        if od_declared:
+            # Never invent an endpoint from the graph's first/last node when the
+            # operator declared an OD but one side could not be resolved.
+            if origin is None or destination is None:
+                missing = []
+                if origin is None:
+                    missing.append("origin")
+                if destination is None:
+                    missing.append("destination")
+                reason = (
+                    f"Titik {' & '.join(missing)} tidak dikenali pada graph jaringan "
+                    "jalan dan koordinat tidak tersedia. Fallback ke node graph "
+                    "pertama/terakhir dinonaktifkan."
+                )
+                logger.warning(f"Agent 4: {reason}")
+                return {
+                    "route_recommendations": [],
+                    "route_optimization_finding": {
+                        "agent": "RouteOptimizationAgent",
+                        "confidence": 0.5,
+                        "summary": reason,
+                        "data": {
+                            "routes": [],
+                            "status": "no_route",
+                            "no_route_reason": reason,
+                            "disrupted_corridors": list(disrupted_corridors),
+                        },
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    },
+                    "messages": state.get("messages", []) + [f"RouteOptimizationAgent: {reason}"],
+                }
+        else:
+            # Legacy behaviour for callers that only supply a hazard event.
+            if origin is None and len(G.nodes) > 0:
+                origin = list(G.nodes)[0]
+            if destination is None and len(G.nodes) > 1:
+                destination = list(G.nodes)[-1]
 
         if origin and destination and origin != destination:
-            if not nx.has_path(G, origin, destination):
-                # Search for any connected pair between candidate origins and destinations
+            if not nx.has_path(G, origin, destination) and not od_declared:
+                # Legacy only: search for any connected pair between candidate
+                # origins and destinations. A declared OD is never rewritten.
                 connected_pair = None
                 for u in [origin] + list(G.nodes)[:5]:
                     for v in [destination] + list(G.nodes)[-5:]:
@@ -403,7 +538,7 @@ async def route_optimization_agent(state: CrisisState) -> dict:
                 })
 
             # Multi-modal / Intermodal Sea corridor injection
-            req_modality = state.get("modality") or "truck"
+            req_modality = _first_present(state, "modality", "transport_modality") or "truck"
             orig_pt = None
             dest_pt = None
             if origin_coords and len(origin_coords) >= 2:

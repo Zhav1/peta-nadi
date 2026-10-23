@@ -16,33 +16,35 @@ import type { HedgingSolveResponse, HedgingSolveRequest } from '@/lib/types';
 import { useIntermodalData } from '@/hooks/useIntermodalData';
 
 interface SpoilageHedgingCardProps {
-  commodity?: string;
-  vehicleId?: string;
-  cargoTonnage?: number;
-  origin?: string;
-  destination?: string;
-  detourDistanceKm?: number;
-  detourTimeHours?: number;
+  commodity: string;
+  vehicleId: string;
+  cargoTonnage: number;
+  origin: string;
+  destination: string;
+  detourDistanceKm: number;
+  detourTimeHours: number;
   onApplyPolicy?: (policy: 'CONTINUE' | 'REROUTE' | 'HOLD') => void;
 }
 
 export function SpoilageHedgingCard({
-  commodity = 'Cabai Merah Keriting',
-  vehicleId = 'TRK-MEDAN-08',
-  cargoTonnage = 10.0,
-  origin = 'Medan',
-  destination = 'Pekanbaru',
-  detourDistanceKm = 85.0,
-  detourTimeHours = 2.5,
+  commodity,
+  vehicleId,
+  cargoTonnage,
+  origin,
+  destination,
+  detourDistanceKm,
+  detourTimeHours,
   onApplyPolicy
 }: SpoilageHedgingCardProps) {
   const { solveHedging } = useIntermodalData();
   const [data, setData] = useState<HedgingSolveResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedPolicy, setSelectedPolicy] = useState<'CONTINUE' | 'REROUTE' | 'HOLD'>('REROUTE');
 
   const executeSolve = async () => {
     setLoading(true);
+    setError(null);
     try {
       const req: HedgingSolveRequest = {
         vehicle_id: vehicleId,
@@ -63,58 +65,11 @@ export function SpoilageHedgingCard({
       setData(res);
       setSelectedPolicy(res.optimal_policy);
     } catch (err) {
-      console.warn('Hedging solve error fallback:', err);
-      // Fallback deterministic evaluation
-      const cargoVal = cargoTonnage * 1000 * 55000;
-      const decayLoss = cargoVal * (1 - Math.exp(-0.025 * 14.0));
-      const costContinue = Math.round(0.85 * decayLoss + 500000);
-      const costReroute = Math.round((detourDistanceKm / 3.5) * 7140 + 85000 + (detourTimeHours * 50000));
-      const costHold = Math.round(6.0 * 35000 + (cargoVal * (1 - Math.exp(-0.025 * 3.0))));
-
-      const fallback: HedgingSolveResponse = {
-        vehicle_id: vehicleId,
-        commodity: commodity,
-        perishability_tier: 'Ultra-Perishable Fresh Produce',
-        decay_rate_per_hour: 0.025,
-        cargo_value_idr: cargoVal,
-        spoilage_loss_idr: decayLoss,
-        continue_policy: {
-          policy: 'CONTINUE',
-          cost_idr: costContinue,
-          breakdown: {
-            expected_spoilage_loss: Math.round(0.85 * decayLoss),
-            downtime_penalty: 425000
-          },
-          explanation: 'Risiko pembusukan masif jika tertahan di titik bencana banjir/longsor.',
-          risk_level: 'CRITICAL'
-        },
-        reroute_policy: {
-          policy: 'REROUTE',
-          cost_idr: costReroute,
-          breakdown: {
-            extra_fuel_cost: Math.round((detourDistanceKm / 3.5) * 7140),
-            bpjt_toll_tariff: 85000,
-            driver_overtime: Math.round(detourTimeHours * 50000)
-          },
-          explanation: 'Pengalihan via Tol Medan-Tebing Tinggi bebas hambatan.',
-          risk_level: 'LOW'
-        },
-        hold_policy: {
-          policy: 'HOLD',
-          cost_idr: costHold,
-          breakdown: {
-            depot_parking_fee: 210000,
-            staging_decay_loss: Math.round(cargoVal * (1 - Math.exp(-0.025 * 3.0)))
-          },
-          explanation: 'Penahanan di hub logistik Medan sampai surut.',
-          risk_level: 'MEDIUM'
-        },
-        optimal_policy: 'REROUTE',
-        net_savings_idr: Math.max(0, costContinue - costReroute),
-        recommendation_reason: 'Rekomendasi Kebijakan: REROUTE (Pengalihan Rute). Menyelamatkan muatan segar dari pembusukan total.'
-      };
-      setData(fallback);
-      setSelectedPolicy(fallback.optimal_policy);
+      // Never fabricate a cost matrix client-side. If the hedging solver is
+      // unreachable, the card states "belum tersedia" instead of inventing Rp.
+      console.warn('Hedging solve unavailable:', err);
+      setData(null);
+      setError('Belum tersedia — kalkulasi hedging gagal atau server tidak merespons. Tidak ada angka biaya yang ditampilkan.');
     } finally {
       setLoading(false);
     }
@@ -148,7 +103,7 @@ export function SpoilageHedgingCard({
             <div className="flex items-center gap-2 text-xs text-slate-400 font-mono mt-0.5">
               <span className="flex items-center gap-1">
                 <ThermometerSnowflake className="w-3 h-3 text-cyan-400" />
-                {data?.perishability_tier || 'Ultra-Perishable'}
+                {data?.perishability_tier || 'Tingkat pembusukan belum tersedia'}
               </span>
               <span>•</span>
               <span>Muatan: {cargoTonnage} Ton ({commodity})</span>
@@ -165,6 +120,12 @@ export function SpoilageHedgingCard({
           <RotateCcw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-cyan-400' : ''}`} />
         </button>
       </div>
+
+      {error && (
+        <div className="mb-3 p-2.5 rounded-md bg-amber-950/30 border border-amber-500/40 text-xs font-sans text-amber-200 leading-relaxed">
+          {error}
+        </div>
+      )}
 
       {/* Net Savings Highlight Box */}
       {data && (
@@ -277,10 +238,13 @@ export function SpoilageHedgingCard({
 
       {/* Action Button */}
       <button
-        onClick={() => onApplyPolicy && onApplyPolicy(selectedPolicy)}
-        className="cursor-pointer w-full py-2 px-3 rounded-md bg-white hover:bg-slate-200 text-[#080d14] font-sans font-semibold text-xs flex items-center justify-center gap-2 transition"
+        onClick={() => data && onApplyPolicy && onApplyPolicy(selectedPolicy)}
+        disabled={!data}
+        className="cursor-pointer w-full py-2 px-3 rounded-md bg-white hover:bg-slate-200 text-[#080d14] font-sans font-semibold text-xs flex items-center justify-center gap-2 transition disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        <span>Terapkan Kebijakan Mitigasi: {selectedPolicy}</span>
+        <span>
+          {data ? `Terapkan Kebijakan Mitigasi: ${selectedPolicy}` : 'Kebijakan mitigasi belum tersedia'}
+        </span>
         <ArrowRight className="w-3.5 h-3.5" />
       </button>
     </div>

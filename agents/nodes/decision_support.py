@@ -1,7 +1,5 @@
 import json
 import logging
-import httpx
-import asyncio
 from datetime import datetime, timezone
 from agents.state import CrisisState
 from agents.tools.supabase_tools import write_incident
@@ -163,62 +161,111 @@ async def decision_support_copilot(state: CrisisState) -> dict:
     # 5. Write to Supabase
     db_incident_id = await write_incident(state)
     
-    # 6. Publish to Redis stream lrip:stream:validated_alerts
+    # 6. Build the canonical validated-alert payload. This single object feeds
+    # the Redis bus, the in-process WebSocket fan-out and the terminal SSE event.
+    alert_payload = {
+        "crisis_id": crisis_id,
+        "incident_id": db_incident_id,
+        "supabase_id": db_incident_id,
+        "title": state.get("title"),
+        "summary": summary_text,
+        "overall_confidence": state.get("overall_confidence"),
+        "validated": True,
+        "causal_chain": causal_chain,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+    # 7. Publish to the durable Redis stream lrip:stream:validated_alerts.
+    # Consumers: external workers/notifiers tailing the stream. In-process
+    # WebSocket delivery is handled by broadcast_validated_alert() below, and
+    # the SSE ``simulation_complete`` event always carries ``alert`` too.
     r = get_async_redis()
+    redis_publish = "stream"
     try:
         await r.xadd(
             "lrip:stream:validated_alerts",
             {
                 "crisis_id": crisis_id,
-                "supabase_id": db_incident_id,
+                "supabase_id": str(db_incident_id or ""),
+                "title": str(state.get("title") or ""),
                 "summary": summary_text,
-                "timestamp": datetime.now(timezone.utc).isoformat()
+                "overall_confidence": str(state.get("overall_confidence") or ""),
+                "timestamp": alert_payload["timestamp"],
             }
         )
     except Exception as xadd_err:
+        logger.warning(f"Redis XADD for validated alerts failed ({xadd_err}); trying list fallback.")
+        redis_publish = "fallback_list"
         try:
             await r.lpush(
                 "lrip:stream:validated_alerts",
-                json.dumps({
-                    "crisis_id": crisis_id,
-                    "supabase_id": db_incident_id,
-                    "summary": summary_text,
-                    "timestamp": datetime.now(timezone.utc).isoformat()
-                })
+                json.dumps(alert_payload, default=str)
             )
         except Exception as list_err:
-            logger.debug(f"Redis validated alerts write skipped: {list_err}")
+            redis_publish = "failed"
+            logger.warning(f"Redis validated-alert fan-out unavailable: {list_err}")
 
-    # 7. Webhook notification (best-effort async)
-    async def send_notification():
-        try:
-            async with httpx.AsyncClient() as client:
-                url = f"http://localhost:8000/api/notify"
-                await client.post(
-                    url,
-                    json={
-                        "crisis_id": crisis_id,
-                        "incident_id": db_incident_id,
-                        "title": state.get("title"),
-                        "summary": summary_text
-                    },
-                    timeout=2.0
-                )
-        except Exception:
-            pass
-            
-    asyncio.create_task(send_notification())
-    
+    # 8. Notification dispatch: call the notification_service directly. The old
+    # implementation POSTed to the non-existent http://localhost:8000/api/notify
+    # and swallowed the 404, so no alert was ever sent. notify_validated_alert()
+    # never raises and reports degraded (missing WHATSAPP_*) explicitly.
+    notification_result = {
+        "status": "failed",
+        "configured": False,
+        "missing": [],
+        "degraded_sources": ["whatsapp"],
+    }
+    try:
+        from app.services.notification_service import notify_validated_alert
+        notification_result = await notify_validated_alert(
+            {**state, "incident_id": db_incident_id}
+        )
+    except Exception as notify_err:
+        logger.warning(f"Notification dispatch failed without crashing Agent 6: {notify_err}")
+
+    degraded_sources = list(state.get("degraded_sources") or [])
+    for src in notification_result.get("degraded_sources", []):
+        if src not in degraded_sources:
+            degraded_sources.append(src)
+    if redis_publish == "failed" and "redis_validated_alerts" not in degraded_sources:
+        degraded_sources.append("redis_validated_alerts")
+
+    alert_payload["notification"] = notification_result
+    alert_payload["redis_publish"] = redis_publish
+    state["degraded_sources"] = degraded_sources
+    state["notification_status"] = notification_result.get("status")
+    state["validated_alert"] = alert_payload
+
+    # 9. In-process WebSocket fan-out for /ws/crisis/{crisis_id}. Cross-process
+    # consumers must tail the Redis stream above. Best-effort, never raises.
+    try:
+        from app.services.alert_fanout import broadcast_validated_alert
+        await broadcast_validated_alert(alert_payload)
+    except Exception as fanout_err:
+        logger.debug(f"Validated alert WebSocket fan-out skipped: {fanout_err}")
+
     try:
         from app.routers.agent_router import update_agent_status
-        update_agent_status("DecisionSupportCopilot", "complete", 0.95, summary_text[:100] + "...")
+        # Report the gate's real calibrated confidence, not a fixed certainty.
+        decision_confidence = float(state.get("overall_confidence") or 0.0)
+        update_agent_status(
+            "DecisionSupportCopilot", "complete", decision_confidence, summary_text[:100] + "..."
+        )
     except Exception:
         pass
 
-    logger.info("Agent 6 finished. Executive summary generated.")
+    logger.info(
+        "Agent 6 finished. Executive summary generated (notification=%s, redis=%s, degraded=%s).",
+        notification_result.get("status"),
+        redis_publish,
+        degraded_sources or "none",
+    )
     return {
         "decision_support_output": summary_text,
         "causal_chain": causal_chain,
         "status": "validated",
+        "validated_alert": alert_payload,
+        "notification_status": notification_result.get("status"),
+        "degraded_sources": degraded_sources,
         "messages": state.get("messages", []) + ["DecisionSupportCopilot: Executive summary generated."]
     }

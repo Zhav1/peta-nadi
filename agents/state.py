@@ -89,6 +89,28 @@ class CrisisState(TypedDict):
     region: str                         # 'north_sumatra', 'java', etc.
     affected_polygon: Optional[List]    # GeoJSON polygon coordinates
 
+    # Operational decision (OD) inputs.
+    # LangGraph 0.2.28 only carries keys declared on the state schema, so these
+    # must stay listed here or a dashboard selection is silently dropped before
+    # the RouteOptimizationAgent runs. camelCase aliases are declared because the
+    # dashboard payload historically used them; data_collection normalizes both
+    # spellings onto the canonical snake_case channels.
+    origin: Optional[Any]                # node id / name / [lon, lat]
+    destination: Optional[Any]           # node id / name / [lon, lat]
+    start_location: Optional[Any]        # legacy alias for origin
+    end_location: Optional[Any]          # legacy alias for destination
+    origin_coords: Optional[List[float]]  # [lon, lat]
+    dest_coords: Optional[List[float]]    # [lon, lat]
+    commodity: Optional[str]
+    cargo_tonnage: Optional[float]
+    cargoTonnage: Optional[float]        # camelCase alias (dashboard payload)
+    has_bkhit_cert: Optional[bool]
+    hasBkhitCert: Optional[bool]         # camelCase alias (dashboard payload)
+    vehicle_gross_weight_ton: Optional[float]
+    vehicleGrossWeightTon: Optional[float]  # camelCase alias (dashboard payload)
+    modality: Optional[str]              # 'truck' | 'maritime' | 'air' | 'multimodal'
+    radius_km: Optional[float]
+
     # Status tracking
     status: str                         # 'detecting', 'validating', 'validated', 'resolved'
     overall_confidence: float           # 0.0 - 1.0 (gate fires at 0.85)
@@ -128,6 +150,11 @@ class CrisisState(TypedDict):
     hedging_breakdown: Optional[Dict[str, Any]]
     compliance_status: Optional[Dict[str, Any]]
     chokepoint_delay_multiplier: Optional[float]
+
+    # Validated-alert fan-out & degradation reporting (Agent 6 terminal stage)
+    validated_alert: Optional[Dict[str, Any]]
+    notification_status: Optional[str]       # 'sent' | 'failed' | 'degraded_log_only'
+    degraded_sources: Optional[List[str]]    # e.g. ['whatsapp', 'redis_validated_alerts']
 
     # Metadata
     created_at: str                     # ISO 8601

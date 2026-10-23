@@ -50,6 +50,8 @@ import {
   type TransportModality,
 } from '@/lib/aiDynamicRouter';
 import { api } from '@/lib/api';
+import { toLonLatRing } from '@/lib/polygonGeom';
+import { regionSlugFromLatLon } from '@/lib/region';
 import type { CrisisState, WsEvent, CrisisType, Severity, RouteRecommendation, DisasterZone, HazardImpactProfile, ZoneTier, FleetVehicle, TacticalManeuver, FireHotspot } from '@/lib/types';
 import { useAuth } from '@/lib/authContext';
 import { AuthModal } from '@/components/auth/AuthModal';
@@ -519,6 +521,18 @@ export default function DashboardClient() {
   const [isHitlDrawerOpen, setIsHitlDrawerOpen] = useState(false);
   const [pendingHitlCount, setPendingHitlCount] = useState<number>(0);
 
+  // Crisis switches must never leave the previous incident's DSS queue on screen:
+  // the alert card and the Mitigation vehicle card both read these two states.
+  // The counter also invalidates in-flight assessImpact responses so a slow
+  // crisis A can never overwrite crisis B after the user has moved on.
+  const crisisSelectionReqRef = useRef(0);
+  const clearImpactAssessment = useCallback(() => {
+    crisisSelectionReqRef.current += 1;
+    setImpactAssessmentData(null);
+    setSelectedImpactedVehicle(null);
+    setIsAlertQueueDismissed(false);
+  }, []);
+
   // Layout & Navigation States
   const [activeSection, setActiveSection] = useState<'map' | 'analytics' | 'reports' | 'evaluation'>('map');
   const [activeTab, setActiveTab] = useState<'Evidence' | 'Mitigation' | 'Economic'>('Evidence');
@@ -719,7 +733,71 @@ export default function DashboardClient() {
     return { red, yellow };
   }, [newsFeed]);
 
-  // Derive live Red & Yellow news zones + combine with manual disasterZones (independent checkboxes).
+  // PostGIS hazard polygons attached to the selected crisis. The backend already
+  // normalized them to GeoJSON; `toLonLatRing` re-validates so a stale WKB/WKT or
+  // empty shape is dropped instead of breaking the polygon layer.
+  const crisisHazardZones: DisasterZone[] = useMemo(() => {
+    const hazards = selectedCrisis?.hazard_polygons ?? [];
+    if (!Array.isArray(hazards) || hazards.length === 0) return [];
+
+    const zones: DisasterZone[] = [];
+    hazards.forEach((hazard, idx) => {
+      if (!hazard || typeof hazard !== 'object') return;
+      const record = hazard as Record<string, unknown>;
+      const properties = (
+        record.properties && typeof record.properties === 'object'
+          ? record.properties
+          : {}
+      ) as Record<string, unknown>;
+      // Backend rows carry `polygon`/`geometry`; legacy fixtures ship a bare GeoJSON
+      // geometry object, so the record itself is the last-resort source.
+      const ring = toLonLatRing(
+        record.polygon ?? record.geometry ?? record.polygon_ring ?? record
+      );
+      if (!ring || ring.length < 4) return;
+
+      const lat = Number(record.lat);
+      const lon = Number(record.lon);
+      const center: [number, number] =
+        Number.isFinite(lat) && Number.isFinite(lon)
+          ? [lon, lat]
+          : [
+              ring.reduce((sum, point) => sum + point[0], 0) / ring.length,
+              ring.reduce((sum, point) => sum + point[1], 0) / ring.length,
+            ];
+
+      const severity = String(record.severity ?? properties.severity ?? 'medium').toLowerCase();
+      const risk =
+        severity === 'critical' ? 0.95 :
+        severity === 'high' ? 0.8 :
+        severity === 'medium' ? 0.55 : 0.35;
+      const declaredType = String(record.type || '');
+      const hazardType = (
+        declaredType === 'Polygon' || declaredType === 'MultiPolygon'
+          ? (properties.hazard_type as CrisisType)
+          : (declaredType as CrisisType)
+      ) || 'other_disruption';
+      const incidentId = String(record.incident_id || `hazard-${idx}`);
+      const title = String(record.title || properties.title || 'Zona Bahaya Aktif');
+
+      zones.push({
+        polygon: ring,
+        type: hazardType,
+        risk,
+        crisis_id: incidentId,
+        id: incidentId,
+        zone_tier: 'RED_CONFIRMED',
+        title,
+        custom_hazard_label: title,
+        center,
+        geometry_polygon: ring,
+      });
+    });
+    return zones;
+  }, [selectedCrisis]);
+
+  // Derive live Red & Yellow news zones + combine with manual disasterZones (independent checkboxes)
+  // and the selected crisis' PostGIS hazard polygons.
   const combinedDisasterZones: DisasterZone[] = useMemo(() => {
     const live: DisasterZone[] = [];
     for (const n of newsFeed) {
@@ -778,8 +856,8 @@ export default function DashboardClient() {
         });
       }
     }
-    return [...disasterZones, ...live];
-  }, [disasterZones, newsFeed, showRedZones, showYellowZones, buildHazardSpecificZoneGeometry]);
+    return [...crisisHazardZones, ...disasterZones, ...live];
+  }, [crisisHazardZones, disasterZones, newsFeed, showRedZones, showYellowZones, buildHazardSpecificZoneGeometry]);
 
   // Synchronize activeSection from URL query parameters
   useEffect(() => {
@@ -1372,6 +1450,10 @@ export default function DashboardClient() {
     setActiveRouteIdx(null);
     setIsSidebarOpen(true);
     updateUrlParams({ crisis: id, route: null });
+    // Drop the outgoing crisis' impact queue immediately (including simulated-active,
+    // which has no DSS round-trip), so no stale vehicle survives the switch.
+    clearImpactAssessment();
+    const selectionReqId = crisisSelectionReqRef.current;
 
     if (id !== 'simulated-active') {
       let baseCrisis: CrisisState | null = null;
@@ -1380,6 +1462,9 @@ export default function DashboardClient() {
       } catch (err) {
         console.error('Failed to fetch crisis detail:', err);
       }
+
+      // A newer crisis switch (or an explicit clear) superseded this fetch.
+      if (selectionReqId !== crisisSelectionReqRef.current) return;
 
       if (baseCrisis) {
         // Trigger Decision Support System (DSS) Impact Assessment
@@ -1391,13 +1476,21 @@ export default function DashboardClient() {
             radius_km: selectedRadius || 25,
             hazard_type: baseCrisis.type || 'flood',
           });
+          if (selectionReqId !== crisisSelectionReqRef.current) return;
           setImpactAssessmentData(impactRes);
           setIsAlertQueueDismissed(false);
-          if (impactRes.impacted_vehicles && impactRes.impacted_vehicles.length > 0) {
-            setSelectedImpactedVehicle(impactRes.impacted_vehicles[0]);
-          }
+          setSelectedImpactedVehicle(
+            impactRes.impacted_vehicles && impactRes.impacted_vehicles.length > 0
+              ? impactRes.impacted_vehicles[0]
+              : null
+          );
         } catch (impactErr) {
           console.warn('Impact assessment offline/fallback:', impactErr);
+          // No partial DSS payload: keep the new crisis but drop the queue/vehicle
+          // so a failed assessment can't leave crisis A's units under crisis B.
+          setImpactAssessmentData(null);
+          setSelectedImpactedVehicle(null);
+          setIsAlertQueueDismissed(false);
         }
 
         if (selectedOriginNode && selectedDestNode) {
@@ -1417,6 +1510,7 @@ export default function DashboardClient() {
               baseCrisis.zone_tier || 'RED_CONFIRMED'
             );
 
+            if (selectionReqId !== crisisSelectionReqRef.current) return;
             setCurrentMapRoutes(dynamicRoutes);
             setSelectedCrisis({
               ...baseCrisis,
@@ -1432,7 +1526,7 @@ export default function DashboardClient() {
         }
       }
     }
-  }, [selectedOriginNode, selectedDestNode, selectedRadius, selectedModality, resolveNodeInfo, updateUrlParams]);
+  }, [selectedOriginNode, selectedDestNode, selectedRadius, selectedModality, resolveNodeInfo, updateUrlParams, clearImpactAssessment]);
 
   // Deep-link initial hydration effect: when URL contains origin & dest, trigger baseline route computation
   const initialDeepLinkHydratedRef = useRef(false);
@@ -1539,12 +1633,13 @@ export default function DashboardClient() {
     };
 
     setCurrentMapRoutes(resolvedRoutes);
+    clearImpactAssessment();
     setSelectedCrisis(fullDemoState);
     setSelectedCrisisId(crisis.crisis_id);
     setActiveRouteIdx(0);
     setIsSidebarOpen(true);
     setToast({ message: `Skenario Aktif: ${crisis.title}`, type: 'success' });
-  }, [selectedOriginNode, selectedDestNode, selectedRadius, selectedModality, resolveNodeInfo]);
+  }, [selectedOriginNode, selectedDestNode, selectedRadius, selectedModality, resolveNodeInfo, clearImpactAssessment]);
 
   // Phase 23: Lifted Demo Engine State & Stage-Wired Effects
   const demoState = useDemoState(handleCrisisReadyFromDemo);
@@ -1727,7 +1822,9 @@ export default function DashboardClient() {
     type: CrisisType,
     radiusKm: number,
     title: string,
-    isPolygonMode = false
+    isPolygonMode = false,
+    severity: Severity = 'critical',
+    polygon?: [number, number][]
   ) => {
     if (!isPolygonMode) {
       setSimulatedShockwave({
@@ -1776,7 +1873,10 @@ export default function DashboardClient() {
       type: 'info'
     });
 
-    // Trigger authentic LangGraph swarm streaming execution
+    // Trigger authentic LangGraph swarm streaming execution. OD/cargo keys are
+    // sent snake_case (the canonical agent contract). Cargo context comes from
+    // the focused shipment when one exists; otherwise it is omitted so the
+    // backend applies its documented fallback instead of a fake default.
     triggerSimulation(
       {
         lat,
@@ -1784,18 +1884,26 @@ export default function DashboardClient() {
         type,
         radiusKm,
         title,
+        // The click/polygon target owns severity + region; the hook only defaults
+        // when a caller omits them (never overwrites a targeted crisis).
+        severity,
+        region: regionSlugFromLatLon(lat, lon),
+        ...(polygon && polygon.length >= 3 ? { polygon } : {}),
         origin: originId,
         destination: destId,
         origin_coords: originCoords,
         dest_coords: destCoords,
         origin_name: formatNodeId(originId, originInfo),
         dest_name: formatNodeId(destId, destInfo),
-        commodity: 'cabai_merah',
-        cargoTonnage: 10.0,
-        hasBkhitCert: true,
-        vehicleGrossWeightTon: 18.0,
+        modality: selectedModality,
+        radius_km: radiusKm,
+        ...(selectedVehicle?.commodity_key ? { commodity: selectedVehicle.commodity_key } : {}),
+        ...(selectedVehicle?.cargo_tonnage != null ? { cargo_tonnage: selectedVehicle.cargo_tonnage } : {}),
+        ...(selectedVehicle?.has_bkhit_cert != null ? { has_bkhit_cert: selectedVehicle.has_bkhit_cert } : {}),
+        ...(selectedVehicle?.gross_weight_ton != null ? { vehicle_gross_weight_ton: selectedVehicle.gross_weight_ton } : {}),
       } as any,
       (backendCrisisState) => {
+        clearImpactAssessment();
         setSelectedCrisisId(backendCrisisState.crisis_id);
         setSelectedCrisis(backendCrisisState);
 
@@ -1870,7 +1978,7 @@ export default function DashboardClient() {
         });
       }
     );
-  }, [selectedOriginNode, selectedDestNode, selectedModality, triggerSimulation]);
+  }, [selectedOriginNode, selectedDestNode, selectedModality, selectedVehicle, triggerSimulation, clearImpactAssessment]);
 
   // Unified stored-audit-trail inspection for news "Fokus" & map zone clicks (zero extra LLM cost).
   const inspectNewsOrZoneAuditTrail = useCallback(async (
@@ -2081,11 +2189,12 @@ export default function DashboardClient() {
     };
 
     setSelectedVehicle(null);
+    clearImpactAssessment();
     setSelectedCrisis(auditCrisis);
     setSelectedCrisisId(auditCrisis.crisis_id);
     setActiveTab('Evidence');
     setIsSidebarOpen(true);
-  }, [newsFeed, selectedOriginNode, selectedDestNode, selectedModality, resolveNodeInfo, buildHazardSpecificZoneGeometry]);
+  }, [newsFeed, selectedOriginNode, selectedDestNode, selectedModality, resolveNodeInfo, buildHazardSpecificZoneGeometry, clearImpactAssessment]);
 
   const handleZoneClick = useCallback((zone: DisasterZone) => {
     const linked = zone.source_news_id
@@ -2292,7 +2401,8 @@ export default function DashboardClient() {
       type,
       radiusKm,
       `Simulated ${type.toUpperCase()} Disruption (${severity.toUpperCase()} - ${radiusKm}km Radius)`,
-      false // Point mode
+      false, // Point mode
+      severity
     );
   }, [selectedRadius, triggerFullSimulationEngine]);
 
@@ -2309,6 +2419,9 @@ export default function DashboardClient() {
     });
     const centerLon = sumLon / ring.length;
     const centerLat = sumLat / ring.length;
+    // Polygon draw has no severity control; the crisis payload still carries the
+    // explicit critical default instead of letting the hook invent one.
+    const severity: Severity = 'critical';
 
     triggerFullSimulationEngine(
       centerLat,
@@ -2316,7 +2429,9 @@ export default function DashboardClient() {
       'flood',
       selectedRadius,
       'Custom Area Disruption (MapboxDraw Polygon)',
-      true // Polygon mode
+      true, // Polygon mode
+      severity,
+      ring
     );
   }, [selectedRadius, triggerFullSimulationEngine]);
 
@@ -2330,6 +2445,7 @@ export default function DashboardClient() {
     setIsClickTargeting(false);
     setDrawModeActive(false);
     setIsSidebarOpen(false);
+    clearImpactAssessment();
     if (selectedOriginNode && selectedDestNode) {
       updateBaselineMapboxRoute(selectedOriginNode, selectedDestNode, selectedModality);
     } else {
@@ -2340,7 +2456,7 @@ export default function DashboardClient() {
       message: 'Simulasi dibersihkan. Tampilan peta dikembalikan ke baseline.',
       type: 'info'
     });
-  }, [selectedOriginNode, selectedDestNode, selectedModality, updateBaselineMapboxRoute]);
+  }, [selectedOriginNode, selectedDestNode, selectedModality, updateBaselineMapboxRoute, clearImpactAssessment]);
 
   // Live Dynamic Ingested Incidents (Earthquakes, Floods, CCTV alerts)
   const activeIncidents = incidents.filter(
@@ -2765,7 +2881,9 @@ export default function DashboardClient() {
                               TOMTOM
                             </span>
                             <span className="text-emerald-400 font-bold ml-0.5">
-                              {Math.round((item.confidence_score ?? 0.92) * 100)}%
+                              {item.confidence_score != null && Number.isFinite(Number(item.confidence_score))
+                                ? `${Math.round(Number(item.confidence_score) * 100)}%`
+                                : 'Keyakinan belum tersedia'}
                             </span>
                           </div>
                         </div>

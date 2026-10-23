@@ -1,6 +1,21 @@
 import { useState, useCallback, useRef } from 'react';
-import { CrisisState } from '@/lib/types';
+import { CrisisState, CrisisType, CrisisStatus, Severity } from '@/lib/types';
 import { getBaseUrl } from '@/lib/api';
+import { DEFAULT_REGION, toRegionSlug } from '@/lib/region';
+
+const VALID_SEVERITIES: readonly Severity[] = ['low', 'medium', 'high', 'critical'];
+
+/** Normalizes a backend/payload severity; missing/unknown keeps the critical default. */
+function normalizeSeverity(value: unknown): Severity {
+  const raw = String(value ?? '').trim().toLowerCase();
+  return (VALID_SEVERITIES as readonly string[]).includes(raw) ? (raw as Severity) : 'critical';
+}
+
+/** Coerces a candidate numeric value, returning `null` when it is not finite. */
+function finiteOrNull(value: unknown): number | null {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+}
 
 export interface AgentStreamStatus {
   agent_id: string;
@@ -17,9 +32,21 @@ export interface SimulationPayload {
   type: string;
   radiusKm: number;
   title?: string;
+  severity?: Severity;
+  region?: string;
   origin?: string;
   destination?: string;
+  origin_coords?: [number, number] | number[];
+  dest_coords?: [number, number] | number[];
+  origin_name?: string;
+  dest_name?: string;
   commodity?: string;
+  cargo_tonnage?: number;
+  has_bkhit_cert?: boolean;
+  vehicle_gross_weight_ton?: number;
+  modality?: string;
+  radius_km?: number;
+  // camelCase aliases remain accepted for older callers (backend normalizes).
   cargoTonnage?: number;
   hasBkhitCert?: boolean;
   vehicleGrossWeightTon?: number;
@@ -47,6 +74,10 @@ export function useCrisisSimulationStream() {
       setActiveAgent('data_collection');
 
       const apiUrl = getBaseUrl();
+      // The map click / polygon target is authoritative: fold any display label
+      // to the backend slug and only fall back when the caller omitted it.
+      const payloadRegion = toRegionSlug(payload.region) || DEFAULT_REGION;
+      const payloadSeverity = normalizeSeverity(payload.severity);
 
       try {
         const response = await fetch(`${apiUrl}/api/v1/simulate/stream`, {
@@ -56,8 +87,10 @@ export function useCrisisSimulationStream() {
           },
           body: JSON.stringify({
             ...payload,
-            severity: 'critical',
-            region: 'north_sumatra',
+            // Keep the slug contract for backend agents/APIs; `normalizeRegion`
+            // is applied only where the region is displayed.
+            severity: payloadSeverity,
+            region: payloadRegion,
           }),
           signal: abortController.signal,
         });
@@ -125,27 +158,64 @@ export function useCrisisSimulationStream() {
                   );
                 }
               } else if (parsed.event === 'simulation_complete') {
-                const state = parsed.state || {};
+                // The worker ships the full LangGraph state; forward every field the
+                // sidebar reads instead of synthesizing confidence/region/severity.
+                const state = (parsed.state || {}) as Partial<CrisisState> & Record<string, any>;
+
+                const confidence = finiteOrNull(state.overall_confidence)
+                  ?? finiteOrNull(parsed.overall_confidence)
+                  ?? 0;
+                const resolvedLat = finiteOrNull(state.lat) ?? payload.lat;
+                const resolvedLon = finiteOrNull(state.lon) ?? payload.lon;
+                const resolvedTitle =
+                  state.title || payload.title || `Simulasi ${payload.type.toUpperCase()}`;
+                const resolvedType = ((state.type || payload.type || 'flood') as CrisisType);
+
                 const crisisState: CrisisState = {
-                  crisis_id: parsed.crisis_id || 'simulated-active',
-                  title: state.title || payload.title || `Simulasi ${payload.type.toUpperCase()}`,
-                  type: (payload.type as any) || 'flood',
-                  severity: (state.severity || 'critical') as any,
-                  status: 'validated',
-                  is_simulated: true,
-                  lat: payload.lat,
-                  lon: payload.lon,
-                  region: state.region || 'Sumatera Utara',
-                  overall_confidence: parsed.validated ? 0.94 : 0.65,
-                  validated: parsed.validated ?? true,
-                  created_at: parsed.timestamp || new Date().toISOString(),
-                  updated_at: parsed.timestamp || new Date().toISOString(),
+                  crisis_id: parsed.crisis_id || state.crisis_id || 'simulated-active',
+                  title: resolvedTitle,
+                  type: resolvedType,
+                  severity: normalizeSeverity(state.severity ?? parsed.severity ?? payloadSeverity),
+                  status: ((state.status as CrisisStatus) || 'validated'),
+                  is_simulated: state.is_simulated ?? true,
+                  lat: resolvedLat,
+                  lon: resolvedLon,
+                  // Keep the slug for API queries; display layers normalize it.
+                  region: toRegionSlug(state.region) || payloadRegion,
+                  overall_confidence: confidence,
+                  validated: parsed.validated ?? state.validated ?? true,
+                  created_at: state.created_at || parsed.timestamp || new Date().toISOString(),
+                  updated_at: state.updated_at || parsed.timestamp || new Date().toISOString(),
                   route_recommendations: parsed.routes || state.route_recommendations || [],
                   hedging_breakdown: parsed.hedging || state.hedging_breakdown,
                   compliance_status: parsed.compliance || state.compliance_status,
                   decision_support_output: parsed.copilot_summary || state.decision_support_output,
                   causal_chain: parsed.causal_chain || state.causal_chain || [],
                   messages: state.messages || [],
+                  // Agent findings power EvidenceTab + the Mitigation/Economic impact cards.
+                  data_collection_finding: state.data_collection_finding,
+                  osint_hazard_finding: state.osint_hazard_finding,
+                  prediction_finding: state.prediction_finding,
+                  route_optimization_finding: state.route_optimization_finding,
+                  economic_intelligence_finding: state.economic_intelligence_finding,
+                  congestion_forecast: state.congestion_forecast,
+                  hazard_polygons: state.hazard_polygons,
+                  inflation_forecast: state.inflation_forecast,
+                  ltm_episodes: state.ltm_episodes,
+                  consensus_breakdown: state.consensus_breakdown,
+                  verified_news_citations: state.verified_news_citations,
+                  news_attributions: state.news_attributions,
+                  blocked_corridors: state.blocked_corridors,
+                  news_affected_commodities: state.news_affected_commodities,
+                  affected_locations: state.affected_locations,
+                  zone_tier: state.zone_tier,
+                  tier_reason: state.tier_reason,
+                  custom_hazard_label: state.custom_hazard_label,
+                  impact_profile: state.impact_profile,
+                  radius_km: state.radius_km,
+                  geometry_polygon: state.geometry_polygon,
+                  verification_audit: state.verification_audit,
+                  evidence: state.evidence,
                 };
 
                 setStreamResult(crisisState);

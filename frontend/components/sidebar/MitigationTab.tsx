@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
+import { normalizeRegion } from '@/lib/region';
 import type { 
   CrisisState, 
   RouteRecommendation, 
@@ -880,17 +881,36 @@ export function MitigationTab({
     }
   };
 
-  const confidenceScore = Math.round((crisis.overall_confidence || 0.91) * 100);
+  // Confidence is only rendered when the swarm actually produced one; never a
+  // canned benchmark (the SSE hook now forwards state.overall_confidence).
+  const rawConfidence = Number(crisis.overall_confidence);
+  const confidenceScore = Number.isFinite(rawConfidence) && rawConfidence > 0
+    ? Math.round(rawConfidence * 100)
+    : null;
   // HITL integrity gate input: crisis-level evidence shared by all route cards.
   const crisisHasEvidence = hasCrisisEvidence(crisis);
 
   // Impact block values come from the agent payload. When the field is absent we
   // state "belum terverifikasi" instead of inventing a headline percentage.
-  const predictedDelayRaw = Number(crisis.prediction_finding?.data?.estimated_delay_hours);
-  const predictedDelayHours = Number.isFinite(predictedDelayRaw) ? predictedDelayRaw : null;
-  const inflationPctRaw = Number(crisis.inflation_forecast?.pct_increase);
-  const inflationPct = Number.isFinite(inflationPctRaw) ? inflationPctRaw : null;
-  const inflationRegion = crisis.inflation_forecast?.region || crisis.region;
+  const predictedDelayValue = crisis.prediction_finding?.data?.estimated_delay_hours;
+  const predictedDelayFromFinding =
+    typeof predictedDelayValue === 'number' && Number.isFinite(predictedDelayValue)
+      ? predictedDelayValue
+      : null;
+  // Fallback: derive the 6h horizon ourselves when the finding projection is
+  // missing but PredictionAgent's congestion forecast is present.
+  const forecastDelayMin = crisis.congestion_forecast?.['6h']?.delay_min;
+  const fallbackDelayHours =
+    typeof forecastDelayMin === 'number' && Number.isFinite(forecastDelayMin) && forecastDelayMin > 0
+      ? forecastDelayMin / 60
+      : null;
+  const predictedDelayHours = predictedDelayFromFinding ?? fallbackDelayHours;
+  const inflationPctValue = crisis.inflation_forecast?.pct_increase;
+  const inflationPct =
+    typeof inflationPctValue === 'number' && Number.isFinite(inflationPctValue)
+      ? inflationPctValue
+      : null;
+  const inflationRegion = normalizeRegion(crisis.inflation_forecast?.region || crisis.region);
   const inflationCommodity = crisis.inflation_forecast?.commodity;
 
   return (
@@ -909,7 +929,7 @@ export function MitigationTab({
             Konsensus Sistem & Keyakinan
           </span>
           <span className="text-xs font-bold font-mono text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-500/30">
-            {confidenceScore}% Keyakinan
+            {confidenceScore === null ? 'Keyakinan belum tersedia' : `${confidenceScore}% Keyakinan`}
           </span>
         </div>
         <p className="text-xs text-slate-300 font-mono">
@@ -954,99 +974,116 @@ export function MitigationTab({
       </div>
 
       {/* BLOCK B2: OFFICIAL NEWS GROUNDING VERIFICATION */}
-      <div className="bg-[#121822] border border-[#1c2432] p-3 rounded-md">
+      {(() => {
+        const rawVerified = crisis.verified_news_citations;
+        const rawAttrs = crisis.news_attributions;
 
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <svg className="w-4 h-4 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-              <path d="m9 12 2 2 4-4"/>
-            </svg>
-            <span className="text-xs font-sans font-bold text-slate-200">
-              Verifikasi Berita Resmi
-            </span>
-          </div>
-          <span className="px-2 py-0.5 rounded text-xs font-mono font-bold bg-emerald-950 text-emerald-300 border border-emerald-500/40">
-            TERVERIFIKASI
-          </span>
-        </div>
+        // Only surface citations that the payload actually carries. The old
+        // Antara/Kompas fallback invented sources for every crisis.
+        const citations: Array<{ source_name: string; headline?: string; tier?: string; url: string }> =
+          rawVerified && rawVerified.length > 0
+            ? rawVerified.map((c) => {
+                const rawItem = c as Record<string, unknown>;
+                const src = String(c.source || c.source_name || 'Berita Resmi');
+                const headline = c.headline ? String(c.headline) : undefined;
+                const tier = c.tier ? String(c.tier) : undefined;
+                const rawUrl = String(c.url || rawItem.link || '');
+                const resolvedUrl = normalizeNewsPermalink(rawUrl, headline || crisis.title, src);
+                return {
+                  source_name: src,
+                  headline,
+                  tier,
+                  url: resolvedUrl,
+                };
+              })
+            : rawAttrs && rawAttrs.length > 0
+              ? rawAttrs.map((a) => {
+                  const src = a.source_name || 'Berita Resmi';
+                  const resolvedUrl = normalizeNewsPermalink(a.url, crisis.title, src);
+                  return {
+                    source_name: src,
+                    url: resolvedUrl,
+                  };
+                })
+              : [];
 
-        {/* Dynamic Source Attribution Pills with Real Working Links */}
-        <div className="flex flex-wrap gap-1.5 mt-2">
-          {(() => {
-            const rawVerified = crisis.verified_news_citations || (crisis as unknown as Record<string, unknown>).verified_news_citations as Array<Record<string, unknown>> | undefined;
-            const rawAttrs = crisis.news_attributions || (crisis as unknown as Record<string, unknown>).news_attributions as Array<{ source_name: string; url?: string; link?: string }> | undefined;
+        const hasCitations = citations.length > 0;
+        const isVerified = hasCitations && Boolean(crisis.validated);
 
-            const citations: Array<{ source_name: string; headline?: string; tier?: string; url: string }> = 
-              (rawVerified && rawVerified.length > 0)
-                ? rawVerified.map(c => {
-                    const rawItem = c as Record<string, unknown>;
-                    const src = String(c.source || c.source_name || 'Berita Resmi');
-                    const headline = c.headline ? String(c.headline) : undefined;
-                    const tier = c.tier ? String(c.tier) : undefined;
-                    const rawUrl = String(c.url || rawItem.link || '');
-                    const resolvedUrl = normalizeNewsPermalink(rawUrl, headline || crisis.title, src);
-                    return {
-                      source_name: src,
-                      headline,
-                      tier,
-                      url: resolvedUrl
-                    };
-                  })
-                : (rawAttrs && rawAttrs.length > 0)
-                ? rawAttrs.map(a => {
-                    const rawAttr = a as Record<string, unknown>;
-                    const src = a.source_name || 'Berita Resmi';
-                    const rawUrl = a.url || (rawAttr.link as string) || '';
-                    const resolvedUrl = normalizeNewsPermalink(rawUrl, crisis.title, src);
-                    return {
-                      source_name: src,
-                      url: resolvedUrl
-                    };
-                  })
-                : [
-                    {
-                      source_name: 'Antara News Sumatera',
-                      tier: 'Tier-1 Resmi',
-                      url: normalizeNewsPermalink('', (crisis.title || 'bencana logistik Sumatera') + ' Antara', 'LKBN ANTARA')
-                    },
-                    {
-                      source_name: 'Kompas.com Regional',
-                      tier: 'Media Nasional',
-                      url: normalizeNewsPermalink('', (crisis.title || 'jalur logistik Sumatera') + ' Kompas', 'Kompas')
-                    }
-                  ];
+        return (
+          <div className="bg-[#121822] border border-[#1c2432] p-3 rounded-md">
 
-            return citations.map((attr, aIdx) => (
-              <a 
-                key={aIdx} 
-                href={attr.url} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                referrerPolicy="no-referrer"
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#0c1017] hover:bg-slate-800 text-xs font-mono text-cyan-300 border border-[#1c2432] transition-all cursor-pointer"
-                title={attr.headline ? `${attr.source_name}: ${attr.headline}` : `Buka Berita Asli: ${attr.source_name}`}
-              >
-                <svg className="w-3 h-3 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                  <polyline points="15 3 21 3 21 9"/>
-                  <line x1="10" y1="14" x2="21" y2="3"/>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                  <path d="m9 12 2 2 4-4"/>
                 </svg>
-                <span>{attr.source_name}</span>
-                {attr.tier && (
-                  <span className="text-xs px-1.5 py-0.5 rounded bg-cyan-950/60 text-cyan-400 border border-cyan-500/30 uppercase font-sans">
-                    {attr.tier}
-                  </span>
-                )}
-              </a>
-            ));
-          })()}
-        </div>
+                <span className="text-xs font-sans font-bold text-slate-200">
+                  Verifikasi Berita Resmi
+                </span>
+              </div>
+              <span className={`px-2 py-0.5 rounded text-xs font-mono font-bold border ${
+                isVerified
+                  ? 'bg-emerald-950 text-emerald-300 border-emerald-500/40'
+                  : 'bg-amber-950/40 text-amber-300 border-amber-500/40'
+              }`}>
+                {isVerified ? 'TERVERIFIKASI' : hasCitations ? 'BELUM DIVERIFIKASI' : 'BELUM ADA SITASI'}
+              </span>
+            </div>
 
-        <p className="mt-2 text-xs text-slate-300 leading-relaxed font-sans">
-          <strong className="text-slate-200">Verifikasi Silang Berita:</strong> Informasi dikonfirmasi oleh kantor berita resmi regional. Laporan dinyatakan <span className="text-emerald-400 font-semibold">Valid</span>.
-        </p>
-      </div>
+            {/* Dynamic Source Attribution Pills with Real Working Links */}
+            {hasCitations ? (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {citations.map((attr, aIdx) => (
+                  <a
+                    key={aIdx}
+                    href={attr.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    referrerPolicy="no-referrer"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#0c1017] hover:bg-slate-800 text-xs font-mono text-cyan-300 border border-[#1c2432] transition-all cursor-pointer"
+                    title={attr.headline ? `${attr.source_name}: ${attr.headline}` : `Buka Berita Asli: ${attr.source_name}`}
+                  >
+                    <svg className="w-3 h-3 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                      <polyline points="15 3 21 3 21 9"/>
+                      <line x1="10" y1="14" x2="21" y2="3"/>
+                    </svg>
+                    <span>{attr.source_name}</span>
+                    {attr.tier && (
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-cyan-950/60 text-cyan-400 border border-cyan-500/30 uppercase font-sans">
+                        {attr.tier}
+                      </span>
+                    )}
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-2 text-xs text-slate-400 font-sans leading-relaxed">
+                Belum ada sitasi berita resmi yang tersimpan untuk insiden ini.
+              </p>
+            )}
+
+            <p className="mt-2 text-xs text-slate-300 leading-relaxed font-sans">
+              {isVerified ? (
+                <>
+                  <strong className="text-slate-200">Verifikasi Silang Berita:</strong> Informasi dikonfirmasi oleh sitasi resmi yang tersimpan. Laporan dinyatakan <span className="text-emerald-400 font-semibold">Valid</span>.
+                </>
+              ) : hasCitations ? (
+                <>
+                  <strong className="text-slate-200">Verifikasi Silang Berita:</strong> Sitasi tersimpan, tetapi belum diverifikasi silang. Status: <span className="text-amber-300 font-semibold">Belum terverifikasi</span>.
+                </>
+              ) : (
+                <>
+                  <strong className="text-slate-200">Verifikasi Silang Berita:</strong> <span className="text-amber-300 font-semibold">Belum terverifikasi</span> — tidak ada sitasi berita resmi yang dapat dikutip.
+                </>
+              )}
+            </p>
+
+          </div>
+        );
+      })()}
 
       {/* BLOCK C: OPERATIONAL REASONING TRACE */}
       <div className="bg-[#121822] border border-[#1c2432] p-3.5 rounded-md">
@@ -1059,16 +1096,18 @@ export function MitigationTab({
       {/* BLOCK C2: SPOILAGE HEDGING COST MATRIX (PHASE 44 / FR-18) */}
       {(() => {
         const activeRoute = crisis.route_recommendations?.[activeRouteIdx ?? 0];
-        const resolvedCommodity =
+        // Every value below is either real payload data or null. No invented
+        // commodity / plate / Medan-Pekanbaru / 10 t / 85 km stand-ins.
+        const resolvedCommodity: string | null =
           selectedImpactedVehicle?.commodity_key?.replace(/_/g, ' ') ||
           crisis.inflation_forecast?.commodity ||
-          ((crisis as unknown as Record<string, unknown>).commodities_affected as string[])?.[0] ||
-          'Cabai Merah Keriting';
-        const resolvedVehicleId =
+          ((crisis as unknown as Record<string, unknown>).commodities_affected as string[] | undefined)?.[0] ||
+          null;
+        const resolvedVehicleId: string | null =
           selectedImpactedVehicle?.vehicle_id ||
-          ((crisis as unknown as Record<string, unknown>).vehicle_id as string) ||
-          'TRK-MEDAN-08';
-        const resolvedOrigin = (() => {
+          ((crisis as unknown as Record<string, unknown>).vehicle_id as string | undefined) ||
+          null;
+        const resolvedOrigin: string | null = (() => {
           if (activeRoute?.legs && activeRoute.legs.length > 0 && activeRoute.legs[0].from_name) {
             return activeRoute.legs[0].from_name;
           }
@@ -1077,12 +1116,9 @@ export function MitigationTab({
             if (parts.length > 1 && parts[0].trim()) return parts[0].trim();
           }
           if (selectedImpactedVehicle?.origin) return selectedImpactedVehicle.origin;
-          if (crisis.region) {
-            return crisis.region.includes('Sumut') || crisis.region.includes('Medan') ? 'Medan' : crisis.region;
-          }
-          return 'Medan';
+          return crisis.region?.trim() || null;
         })();
-        const resolvedDestination = (() => {
+        const resolvedDestination: string | null = (() => {
           if (activeRoute?.legs && activeRoute.legs.length > 0 && activeRoute.legs[activeRoute.legs.length - 1].to_name) {
             return activeRoute.legs[activeRoute.legs.length - 1].to_name;
           }
@@ -1091,40 +1127,65 @@ export function MitigationTab({
             if (parts.length > 1 && parts[1].trim()) return parts[1].trim();
           }
           if (selectedImpactedVehicle?.destination) return selectedImpactedVehicle.destination;
-          return 'Pekanbaru';
+          return null;
         })();
-        const resolvedCargoTonnage = selectedImpactedVehicle?.cargo_tonnage ?? 10.0;
-        const resolvedDetourDist = selectedImpactedVehicle?.detour_route?.distance_km ?? activeRoute?.distance_km ?? 85.0;
-        const resolvedDetourHours = selectedImpactedVehicle?.detour_route?.eta_minutes
-          ? selectedImpactedVehicle.detour_route.eta_minutes / 60
-          : (activeRoute?.eta_minutes ? (activeRoute.eta_minutes / 60) : 2.5);
-        const resolvedTraversedRoads = (() => {
+        const resolvedCargoTonnage: number | null =
+          typeof selectedImpactedVehicle?.cargo_tonnage === 'number' &&
+          Number.isFinite(selectedImpactedVehicle.cargo_tonnage)
+            ? selectedImpactedVehicle.cargo_tonnage
+            : null;
+        const resolvedDetourDist: number | null =
+          typeof selectedImpactedVehicle?.detour_route?.distance_km === 'number' &&
+          Number.isFinite(selectedImpactedVehicle.detour_route.distance_km)
+            ? selectedImpactedVehicle.detour_route.distance_km
+            : typeof activeRoute?.distance_km === 'number' && Number.isFinite(activeRoute.distance_km)
+              ? activeRoute.distance_km
+              : null;
+        const resolvedDetourHours: number | null =
+          typeof selectedImpactedVehicle?.detour_route?.eta_minutes === 'number' &&
+          selectedImpactedVehicle.detour_route.eta_minutes > 0
+            ? selectedImpactedVehicle.detour_route.eta_minutes / 60
+            : typeof activeRoute?.eta_minutes === 'number' && activeRoute.eta_minutes > 0
+              ? activeRoute.eta_minutes / 60
+              : null;
+        const resolvedTraversedRoads: string[] = (() => {
           if (selectedImpactedVehicle?.detour_route?.nodes && selectedImpactedVehicle.detour_route.nodes.length > 0) {
             return selectedImpactedVehicle.detour_route.nodes;
           }
           const roads: string[] = [];
           if (activeRoute?.description) roads.push(activeRoute.description);
           if (activeRoute?.route_name) roads.push(activeRoute.route_name);
-          if (roads.length === 0) return ['Jalan Tol Medan - Tebing Tinggi', 'Lintas Timur Sumatera'];
           return roads;
         })();
 
         return (
           <>
-            <SpoilageHedgingCard
-              commodity={resolvedCommodity}
-              vehicleId={resolvedVehicleId}
-              cargoTonnage={resolvedCargoTonnage}
-              origin={resolvedOrigin}
-              destination={resolvedDestination}
-              detourDistanceKm={resolvedDetourDist}
-              detourTimeHours={resolvedDetourHours}
-              onApplyPolicy={(policy) => {
-                if (policy === 'REROUTE' && onSelectRoute) {
-                  onSelectRoute(0);
-                }
-              }}
-            />
+            {resolvedCommodity &&
+            resolvedVehicleId &&
+            resolvedOrigin &&
+            resolvedDestination &&
+            resolvedCargoTonnage != null &&
+            resolvedDetourDist != null &&
+            resolvedDetourHours != null ? (
+              <SpoilageHedgingCard
+                commodity={resolvedCommodity}
+                vehicleId={resolvedVehicleId}
+                cargoTonnage={resolvedCargoTonnage}
+                origin={resolvedOrigin}
+                destination={resolvedDestination}
+                detourDistanceKm={resolvedDetourDist}
+                detourTimeHours={resolvedDetourHours}
+                onApplyPolicy={(policy) => {
+                  if (policy === 'REROUTE' && onSelectRoute) {
+                    onSelectRoute(0);
+                  }
+                }}
+              />
+            ) : (
+              <div className="bg-[#121822] border border-[#1c2432] p-3 rounded-md text-xs font-sans text-slate-400 leading-relaxed">
+                Hedging biaya &amp; risiko pembusukan belum tersedia — komoditas, muatan, asal/tujuan, atau rute detour belum terverifikasi.
+              </div>
+            )}
 
             {/* BLOCK C3: HOLD VS REROUTE ECONOMIC DECISION CARD */}
             {(() => {
@@ -1194,16 +1255,26 @@ export function MitigationTab({
             </div>
 
             {/* BLOCK E: DIGITAL COMPLIANCE INSPECTOR (PHASE 44 / FR-19) */}
-            <ComplianceInspectorCard
-              vehicleId={resolvedVehicleId}
-              origin={resolvedOrigin}
-              destination={resolvedDestination}
-              traversedRoads={resolvedTraversedRoads}
-              vehicleGrossWeightTon={selectedImpactedVehicle?.cargo_tonnage ? (selectedImpactedVehicle.cargo_tonnage + 5.0) : 12.5}
-              commodity={resolvedCommodity}
-              hasBkhitCert={selectedImpactedVehicle ? selectedImpactedVehicle.compliance_status === 'PASSED' : false}
-              driverPhone={selectedImpactedVehicle?.driver_phone || '+6281234567891'}
-            />
+            {resolvedVehicleId &&
+            resolvedOrigin &&
+            resolvedDestination &&
+            resolvedTraversedRoads.length > 0 &&
+            resolvedCargoTonnage != null ? (
+              <ComplianceInspectorCard
+                vehicleId={resolvedVehicleId}
+                origin={resolvedOrigin}
+                destination={resolvedDestination}
+                traversedRoads={resolvedTraversedRoads}
+                vehicleGrossWeightTon={resolvedCargoTonnage + 5.0}
+                commodity={resolvedCommodity ?? undefined}
+                hasBkhitCert={selectedImpactedVehicle ? selectedImpactedVehicle.compliance_status === 'PASSED' : false}
+                driverPhone={selectedImpactedVehicle?.driver_phone ?? undefined}
+              />
+            ) : (
+              <div className="bg-[#121822] border border-[#1c2432] p-3 rounded-md text-xs font-sans text-slate-400 leading-relaxed">
+                Inspeksi kepatuhan digital belum tersedia — data kendaraan, asal/tujuan, atau jalan yang dilalui belum terverifikasi.
+              </div>
+            )}
           </>
         );
       })()}

@@ -3,10 +3,16 @@ import logging
 from typing import Optional
 from redis.asyncio import Redis
 from app.config import get_settings
+from app.services.redis_client import STM_PREFIX
 from agents.state import CrisisState
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+
+# Canonical STM key prefix shared with backend/app/services/redis_client.py.
+# The old agents-only prefix "lrip:crisis:" drifted from the backend contract
+# ("lrip:state:crisis:"); it is still read once for backward compatibility.
+LEGACY_STM_PREFIX = "lrip:crisis:"
 
 _async_redis_client: Optional[Redis] = None
 
@@ -36,23 +42,38 @@ async def close_async_redis():
 
 
 async def save_crisis_state(crisis_id: str, state: CrisisState, ttl_seconds: int = 86400):
-    """Serializes the CrisisState as JSON and saves to Redis."""
+    """Serializes the CrisisState as JSON and saves to the canonical Redis STM key."""
     r = get_async_redis()
-    key = f"lrip:crisis:{crisis_id}"
+    key = f"{STM_PREFIX}{crisis_id}"
     try:
         serialized = json.dumps(state, default=str)
         await r.set(key, serialized, ex=ttl_seconds)
+        # Drop the drifted legacy key so readers cannot observe a stale snapshot.
+        try:
+            await r.delete(f"{LEGACY_STM_PREFIX}{crisis_id}")
+        except Exception:
+            pass
         logger.debug(f"Saved crisis state to Redis key: {key}")
     except Exception as e:
         logger.error(f"Failed to save crisis state for {crisis_id}: {e}")
 
 
 async def load_crisis_state(crisis_id: str) -> Optional[CrisisState]:
-    """Loads and deserializes the CrisisState from Redis."""
+    """Loads and deserializes the CrisisState from the canonical Redis STM key."""
     r = get_async_redis()
-    key = f"lrip:crisis:{crisis_id}"
+    key = f"{STM_PREFIX}{crisis_id}"
     try:
         data = await r.get(key)
+        if not data:
+            # Backward compatibility: migrate a snapshot written under the old key.
+            legacy_key = f"{LEGACY_STM_PREFIX}{crisis_id}"
+            data = await r.get(legacy_key)
+            if data:
+                try:
+                    await r.set(key, data, ex=86400)
+                    await r.delete(legacy_key)
+                except Exception:
+                    pass
         if data:
             return json.loads(data)
     except Exception as e:

@@ -157,18 +157,28 @@ async def start_demo(payload: StartDemoPayload, background_tasks: BackgroundTask
 
     # 4. If not offline, write to Supabase (in background)
     if not offline:
-        def save_to_db(state):
+        async def save_to_db(state):
+            degraded_sources: List[str] = []
             try:
-                from app.db.supabase_client import get_write_client
-                sb = get_write_client()
-                # Create a database-compatible row
-                db_row = dict(state)
-                # Map route recommendations etc if schema requires
-                sb.table("incidents").insert(db_row).execute()
-                logger.info(f"Demo crisis {crisis_id} saved to Supabase")
+                # Delegate schema mapping/whitelisting to the shared writer; never
+                # insert dict(state) — agent-only keys are not incidents columns.
+                from agents.tools.supabase_tools import write_incident
+                incident_id = await write_incident(
+                    state, degraded_sources=degraded_sources
+                )
+                if incident_id:
+                    logger.info(f"Demo crisis {crisis_id} saved to Supabase as {incident_id}")
+                else:
+                    # Never crash the demo: the run stays replayable from DEMO_STORE.
+                    logger.warning(
+                        "Demo crisis %s was not persisted to Supabase; "
+                        "degraded_sources=%s (in-memory replay preserved)",
+                        crisis_id,
+                        degraded_sources or ["unknown"],
+                    )
             except Exception as db_err:
                 logger.error(f"Failed to save demo crisis {crisis_id} to Supabase: {db_err}")
-        
+
         background_tasks.add_task(save_to_db, crisis_state)
 
     # 5. Save to in-memory store

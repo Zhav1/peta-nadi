@@ -66,6 +66,12 @@ class Settings(BaseSettings):
     demo_mock_agents: bool = False
     demo_offline: bool = False
 
+    # Background ingestion pollers live in the API lifespan (BMKG, TomTom, news,
+    # PIHPS, social, ...). They are single-process by design: run uvicorn with
+    # `--workers 1`. On extra replicas set POLLERS_ENABLED=false so those
+    # processes only serve HTTP instead of duplicating every poller.
+    pollers_enabled: bool = True
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

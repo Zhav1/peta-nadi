@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { LineChart, TrendingUp } from 'lucide-react';
 import PriceChart from '@/components/charts/PriceChart';
 import { api } from '@/lib/api';
+import { normalizeRegion } from '@/lib/region';
 import type { CrisisState, LTMEpisode, PricePoint } from '@/lib/types';
 
 interface EconomicTabProps {
@@ -68,7 +69,7 @@ export function EconomicTab({ crisis }: EconomicTabProps) {
     forecast?.commodity ||
     forecast?.anomalous_commodities?.[0] ||
     null;
-  const regionLabel = (forecast?.region || crisis.region || '').replace(/_/g, ' ');
+  const regionLabel = normalizeRegion(forecast?.region || crisis.region);
 
   return (
     <div className="space-y-4">

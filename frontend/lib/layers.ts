@@ -1,6 +1,7 @@
 import { ScatterplotLayer, PathLayer, PolygonLayer } from '@deck.gl/layers';
 import { HeatmapLayer } from '@deck.gl/aggregation-layers';
 import { densifyPath, type LonLat } from './pathDensifier';
+import { toLonLatRing } from './polygonGeom';
 import type { FireHotspot, MaritimeVector, DisasterZone, IncidentSummary, RouteRecommendation } from './types';
 
 /** Severity → RGBA color */
@@ -96,10 +97,17 @@ export function buildDisasterZonesLayer(
   zones: DisasterZone[],
   onClick: (zone: DisasterZone) => void
 ) {
+  // Validate every ring before deck.gl sees it: an empty/hex/WKT polygon is
+  // dropped instead of producing a layer error that blanks the whole map.
+  const drawableZones = zones
+    .map((zone) => ({ zone, ring: toLonLatRing(zone.polygon) }))
+    .filter((entry): entry is { zone: DisasterZone; ring: LonLat[] } => entry.ring !== null)
+    .map((entry) => ({ ...entry.zone, polygon: entry.ring }));
+
   return new PolygonLayer({
     id: 'disaster-zones',
     slot: 'bottom',
-    data: zones,
+    data: drawableZones,
     getPolygon: (d) => d.polygon,
     getFillColor: (d) => {
       const r = Math.round(255 * d.risk);

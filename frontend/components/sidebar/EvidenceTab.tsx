@@ -36,15 +36,18 @@ const AGENT_LABELS: Record<string, { name: string; source: string; defaultSource
   economic_intelligence: { name: 'Pemantauan Harga Pangan', source: 'Data Harga Harian PIHPS BI', defaultSourceType: 'live' },
 };
 
-function ConfidenceBar({ value }: { value: number }) {
-  const pct = Math.round(value * 100);
-  const color = value >= 0.85 ? 'bg-emerald-400' : value >= 0.6 ? 'bg-amber-400' : 'bg-red-400';
+function ConfidenceBar({ value }: { value: number | null | undefined }) {
+  const numeric = typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
+  const pct = numeric === null ? 0 : Math.round(numeric * 100);
+  const color = numeric === null ? 'bg-slate-600' : numeric >= 0.85 ? 'bg-emerald-400' : numeric >= 0.6 ? 'bg-amber-400' : 'bg-red-400';
   return (
     <div className="flex items-center gap-2">
       <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
         <div className={`h-full ${color} rounded-full transition-all duration-300`} style={{ width: `${pct}%` }} />
       </div>
-      <span className="text-xs font-mono font-bold text-slate-300 w-9 text-right">{pct}%</span>
+      <span className="text-xs font-mono font-bold text-slate-300 w-9 text-right">
+        {numeric === null ? '—' : `${pct}%`}
+      </span>
     </div>
   );
 }
@@ -59,8 +62,37 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
   ].filter((f) => f.finding != null);
 
   const isSimulated = Boolean(crisis.is_simulated);
-  const confidenceScore = Math.round((crisis.overall_confidence || 0.92) * 100);
-  const disruptionProb = Math.min(Math.round(confidenceScore * 0.94), 98);
+  // Only show a confidence number the swarm actually produced. Never invent a
+  // stand-in (the old 0.92 fallback painted 92% on an empty payload).
+  const rawConfidence = Number(crisis.overall_confidence);
+  const hasConfidence =
+    crisis.overall_confidence != null && Number.isFinite(rawConfidence) && rawConfidence > 0;
+  const confidenceScore = hasConfidence ? Math.round(rawConfidence * 100) : null;
+  // No separate calibrated Brier probability is carried on CrisisState. The old
+  // confidence * 0.94 arithmetic was fabricated, so the card now states
+  // "belum tersedia" instead of printing a fake disruption probability.
+  const disruptionProb: number | null = null;
+
+  // Delay evidence: stored corridor history when present, otherwise the
+  // PredictionAgent horizons (never a canned [20,30,...120] chart).
+  const storedDelayHistory = Array.isArray(crisis.evidence?.delay_history)
+    ? crisis.evidence!.delay_history!.filter((v) => Number.isFinite(Number(v))).map(Number)
+    : [];
+  const forecastHorizons = ['6h', '12h', '24h', '48h'] as const;
+  const forecastDelaySeries = forecastHorizons
+    .map((horizon) => ({
+      horizon,
+      delay: Number(crisis.congestion_forecast?.[horizon]?.delay_min),
+    }))
+    .filter((entry) => Number.isFinite(entry.delay) && entry.delay > 0);
+  const delayHistory = storedDelayHistory.length > 0
+    ? storedDelayHistory
+    : forecastDelaySeries.map((entry) => entry.delay);
+  const usingForecastSeries = storedDelayHistory.length === 0 && forecastDelaySeries.length > 0;
+  const peakDelayMinutes = crisis.evidence?.delay_minutes
+    || (delayHistory.length > 0 ? `+${Math.round(Math.max(...delayHistory))} MIN` : null);
+  const impactDelayHours = Number(crisis.impact_profile?.estimated_delay_hours);
+  const hasImpactDelay = Number.isFinite(impactDelayHours);
 
   const osintFinding = findings.find((f) => f.key === 'osint_hazard')?.finding;
   const nestedCitations = (osintFinding?.data as Record<string, unknown> | undefined)?.verified_citations;
@@ -145,17 +177,17 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
                 Status Jalur: {crisis.impact_profile.passability}
               </span>
               <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-white/5 border border-white/10 text-slate-200">
-                Estimasi Penundaan: ~{crisis.impact_profile.estimated_delay_hours} Jam
+                Estimasi Penundaan: {hasImpactDelay ? `~${impactDelayHours} Jam` : 'Belum terverifikasi'}
               </span>
               <span className="px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-cyan-500/10 border border-cyan-500/40 text-cyan-200">
-                Radius Agen: ~{(crisis.radius_km || crisis.impact_profile?.estimated_delay_hours ? (crisis.radius_km ?? 4.5) : 4.5).toFixed(1)} km
+                Radius Agen: {typeof crisis.radius_km === 'number' ? `~${crisis.radius_km.toFixed(1)} km` : 'Belum tersedia'}
               </span>
             </div>
           )}
           {(!crisis.impact_profile) && (
             <div className="flex flex-wrap gap-1.5 pt-1">
               <span className="px-2 py-0.5 rounded text-[11px] font-mono font-bold bg-cyan-500/10 border border-cyan-500/40 text-cyan-200">
-                Radius Dampak Spesifik — Radius Agen: ~{((crisis.radius_km ?? 4.5)).toFixed(1)} km
+                Radius Dampak Spesifik — Radius Agen: {typeof crisis.radius_km === 'number' ? `~${crisis.radius_km.toFixed(1)} km` : 'Belum tersedia'}
               </span>
             </div>
           )}
@@ -217,14 +249,20 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
         <div className="grid grid-cols-2 gap-2 pt-1 font-mono">
           <div className="p-2.5 rounded-md bg-[#0c1017] border border-[#1c2432]">
             <span className="text-xs text-slate-400 block mb-0.5 font-sans">Keyakinan Bukti</span>
-            <span className="text-sm font-bold text-emerald-400">{confidenceScore}%</span>
-            <span className="text-xs text-slate-500 block font-sans">5 Sumber Konsisten</span>
+            <span className="text-sm font-bold text-emerald-400">
+              {confidenceScore === null ? 'Belum tersedia' : `${confidenceScore}%`}
+            </span>
+            <span className="text-xs text-slate-500 block font-sans">
+              {findings.length > 0 ? `${findings.length} agen melaporkan` : 'Belum ada laporan agen'}
+            </span>
           </div>
 
           <div className="p-2.5 rounded-md bg-[#0c1017] border border-[#1c2432]">
             <span className="text-xs text-slate-400 block mb-0.5 font-sans">Probabilitas Disrupsi</span>
-            <span className="text-sm font-bold text-cyan-400">{disruptionProb}%</span>
-            <span className="text-xs text-slate-500 block font-sans">Terkalibrasi Brier</span>
+            <span className="text-sm font-bold text-cyan-400">
+              {disruptionProb === null ? 'Belum tersedia' : `${disruptionProb}%`}
+            </span>
+            <span className="text-xs text-slate-500 block font-sans">Belum ada skor Brier terkalibrasi</span>
           </div>
         </div>
       </div>
@@ -280,6 +318,36 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
                 </div>
 
                 <ConfidenceBar value={finding!.confidence} />
+                {(() => {
+                  const findingData = (finding!.data || {}) as Record<string, unknown>;
+                  const degradedSources = Array.isArray(findingData.degraded_sources)
+                    ? (findingData.degraded_sources as unknown[]).filter(
+                        (s): s is string => typeof s === 'string' && s.length > 0
+                      )
+                    : [];
+                  const evidenceHealth = typeof findingData.evidence_health === 'string'
+                    ? findingData.evidence_health
+                    : null;
+                  if (degradedSources.length === 0 && evidenceHealth !== 'quiet') return null;
+                  const isDeadPath = degradedSources.length > 0;
+                  return (
+                    <div
+                      className={`flex items-start gap-1.5 rounded px-2 py-1 border text-[11px] font-mono ${
+                        isDeadPath
+                          ? 'bg-amber-950/40 border-amber-500/40 text-amber-200'
+                          : 'bg-slate-900/60 border-[#1c2432] text-slate-400'
+                      }`}
+                      title={isDeadPath ? 'Jalur data gagal atau sebagian — bukan hari tenang' : 'Semua jalur data menjawab, tanpa temuan'}
+                    >
+                      <AlertTriangle className={`w-3 h-3 mt-0.5 shrink-0 ${isDeadPath ? 'text-amber-400' : 'text-slate-500'}`} />
+                      <span>
+                        {isDeadPath
+                          ? `Jalur data terdegradasi: ${degradedSources.join(', ')}`
+                          : 'Hari tenang — semua jalur data menjawab, tanpa temuan'}
+                      </span>
+                    </div>
+                  );
+                })()}
                 <p className="text-xs text-slate-300 leading-relaxed font-sans pt-1 border-t border-[#1c2432]">
                   {finding!.summary}
                 </p>
@@ -351,7 +419,7 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
                   OSINT RESMI
                 </span>
                 <span className="text-emerald-400 font-bold ml-0.5">
-                  {confidenceScore}% Keyakinan
+                  {confidenceScore === null ? 'Keyakinan belum tersedia' : `${confidenceScore}% Keyakinan`}
                 </span>
               </div>
             </div>
@@ -409,51 +477,66 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
           <div className="flex justify-between items-center">
             <div>
               <span className="text-xs font-bold text-slate-300 font-sans block">
-                Histori Keterlambatan Koridor
+                {usingForecastSeries ? 'Prakiraan Keterlambatan Koridor' : 'Histori Keterlambatan Koridor'}
               </span>
-              <span className="text-xs font-mono text-slate-500">Speed Flow Matrix (Menit Delay)</span>
+              <span className="text-xs font-mono text-slate-500">
+                {usingForecastSeries ? 'Horizon Prediksi (Menit Delay)' : 'Speed Flow Matrix (Menit Delay)'}
+              </span>
             </div>
             <div className="text-right">
               <span className="text-xs font-mono text-rose-400 font-bold block">
-                {crisis.evidence?.delay_minutes || "+120 MIN"}
+                {peakDelayMinutes ?? 'Belum tersedia'}
               </span>
               <span className="text-xs font-mono text-slate-400">Puncak Disrupsi</span>
             </div>
           </div>
 
-          <div className="h-12 flex items-end gap-1.5 bg-[#080d14] p-2 rounded-md border border-[#1c2432]">
-            {(crisis.evidence?.delay_history || [20, 30, 25, 50, 70, 90, 120]).map((h: number, i: number) => {
-              const historyArray = crisis.evidence?.delay_history || [20, 30, 25, 50, 70, 90, 120];
-              const maxVal = Math.max(...historyArray, 10);
-              const heightPct = `${Math.min(Math.max((h / maxVal) * 100, 10), 100)}%`;
-              const isLast = i === historyArray.length - 1;
+          {delayHistory.length > 0 ? (
+            <>
+              <div className="h-12 flex items-end gap-1.5 bg-[#080d14] p-2 rounded-md border border-[#1c2432]">
+                {delayHistory.map((h: number, i: number) => {
+                  const maxVal = Math.max(...delayHistory, 10);
+                  const heightPct = `${Math.min(Math.max((h / maxVal) * 100, 10), 100)}%`;
+                  const isLast = i === delayHistory.length - 1;
 
-              return (
-                <div
-                  key={i}
-                  className="flex-1 flex flex-col items-center h-full justify-end group relative"
-                >
-                  <div
-                    className={`w-full rounded-sm transition-all duration-300 ${
-                      isLast
-                        ? 'bg-rose-500'
-                        : 'bg-cyan-500/40 hover:bg-cyan-400'
-                    }`}
-                    style={{ height: heightPct }}
-                  />
-                  <div className="opacity-0 group-hover:opacity-100 absolute -top-6 bg-slate-900 border border-white/20 px-1.5 py-0.5 rounded text-xs font-mono text-white pointer-events-none transition whitespace-nowrap z-20">
-                    +{h}m
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                  return (
+                    <div
+                      key={i}
+                      className="flex-1 flex flex-col items-center h-full justify-end group relative"
+                    >
+                      <div
+                        className={`w-full rounded-sm transition-all duration-300 ${
+                          isLast
+                            ? 'bg-rose-500'
+                            : 'bg-cyan-500/40 hover:bg-cyan-400'
+                        }`}
+                        style={{ height: heightPct }}
+                      />
+                      <div className="opacity-0 group-hover:opacity-100 absolute -top-6 bg-slate-900 border border-white/20 px-1.5 py-0.5 rounded text-xs font-mono text-white pointer-events-none transition whitespace-nowrap z-20">
+                        +{h}m
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
 
-          <div className="flex justify-between text-xs font-mono text-slate-500 pt-0.5">
-            <span>-4 Jam (Normal)</span>
-            <span>-2 Jam (Hambatan)</span>
-            <span className="text-rose-400 font-bold">Saat Ini (Puncak)</span>
-          </div>
+              <div className="flex justify-between text-xs font-mono text-slate-500 pt-0.5">
+                {usingForecastSeries ? (
+                  <span>{forecastDelaySeries[0]?.horizon ?? 'T+6j'} (Terdekat)</span>
+                ) : (
+                  <span>-4 Jam (Normal)</span>
+                )}
+                <span>{usingForecastSeries ? `${forecastDelaySeries[forecastDelaySeries.length - 1]?.horizon ?? 'T+48j'} (Terjauh)` : '-2 Jam (Hambatan)'}</span>
+                <span className="text-rose-400 font-bold">{usingForecastSeries ? 'Horizon Terburuk' : 'Saat Ini (Puncak)'}</span>
+              </div>
+            </>
+          ) : (
+            <div className="h-12 flex items-center justify-center bg-[#080d14] rounded-md border border-[#1c2432]">
+              <span className="text-xs font-mono text-slate-500">
+                Histori & prakiraan keterlambatan belum tersedia.
+              </span>
+            </div>
+          )}
         </div>
 
       </div>
