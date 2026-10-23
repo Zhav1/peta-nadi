@@ -3072,7 +3072,7 @@ export default function DashboardClient() {
                 onResetCorridorVisibility={handleResetCorridors}
                 hiddenRouteIndices={hiddenRouteIndices}
                 onHideRoute={handleHideRoute}
-                hideEstimatedRoutes={isDispatcherWorkspace}
+                hideEstimatedRoutes={true}
                 topNavTelemetrySlot={
                   <TopNavTelemetry
                     routingInfo={routingInfo}

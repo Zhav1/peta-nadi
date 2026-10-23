@@ -1,7 +1,7 @@
 # ROADMAP: PreHub (Logistics Resilience Intelligence Platform)
 
-**Active Milestone:** M5 - High-Fidelity Intelligence & Isolated Operations Engine [ACTIVE 🚀]
-**Previous Milestones:** M1 - Hackathon MVP [COMPLETED ✅], M2 - PreHub Final Defense [COMPLETED ✅], M3 - PreHub MVP Pilot Operations [COMPLETED ✅], M4 - PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability [COMPLETED ✅]
+**Active Milestone:** M6 - Turn-by-Turn Road Snapping, Offline Fleet Precomputation & Dual-Layer Hazard Avoidance [ACTIVE 🚀]
+**Previous Milestones:** M1 - Hackathon MVP [COMPLETED ✅], M2 - PreHub Final Defense [COMPLETED ✅], M3 - PreHub MVP Pilot Operations [COMPLETED ✅], M4 - PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability [COMPLETED ✅], M5 - High-Fidelity Intelligence & Isolated Operations Engine [COMPLETED ✅]
 **Development Mode:** Solo, AI-assisted (GSD Disciplined Workflow)
 
 ---
@@ -2485,6 +2485,66 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 
 ### Verification
 - `npx tsc --noEmit` exit 0; 10 passed (audit + cross-workstream); 7 passed / 1 failed (`test_evaluation_router.py`: TP 35 vs expected 34).
+
+---
+
+## Phase 100: Mapbox Directions API Street Snapping, Fleet Precomputation & Dual-Layer Hazard Avoidance
+
+**Goal:** Eradicate straight-line routing polylines across buildings for both fleet vehicles and dynamic operator corridors, precompute fleet road geometries offline to consume 0 runtime Mapbox API quota, implement dual-layer hazard avoidance (`exclude=point` + Forced Tangential Waypoint), and stitch CPU graph solver recommendations to real road networks.
+**Status:** COMPLETE ✅  
+**Plan:** `.planning/phases/100-mapbox-turn-by-turn-street-snapping-dual-layer-avoidance/PLAN.md`
+
+### Deliverables
+- **WP1 - Offline Fleet Corridors Precomputation (`scripts/generate_snapped_fleet_corridors.py`, `fleet_corridors_snapped.json`)**:
+  - Replace linear lerp interpolation with one-shot Mapbox Directions API batch precomputation for all 11 active Trans-Sumatra corridors.
+  - Output high-density GeoJSON LineString coordinates (>100-300 points per route) to `backend/data/fleet_corridors_snapped.json` and mirror to `frontend/public/data/fleet_corridors_snapped.json`.
+  - Zero Mapbox API consumption during dashboard page loads (0 ms latency, 100% quota protection).
+- **WP2 - Mapbox Client Hardening & Dynamic Exclude Builder (`frontend/lib/aiDynamicRouter.ts`)**:
+  - Generalize `requestMapboxDirections` with `ExcludeOptions` interface (`excludeToll`, `excludeMotorway`, `excludePoints: LonLat[]`).
+  - Construct dynamic `&exclude=point(lon lat),...` query string (capped at 8 nearest points).
+  - Add automatic retry without point exclusions on HTTP `NoRoute`.
+- **WP3 - Dual-Layer Hazard Avoidance Engine (`frontend/lib/aiDynamicRouter.ts`)**:
+  - Layer 1 (Discrete Point Obstacles): `exclude=point(lon lat)` for damaged bridges, single checkpoints, or localized rockfalls (< 500m radius).
+  - Layer 2 (Wide Disaster Polygons): Forced Tangential Waypoint ($R + 2.0\text{ km}$ clearance) encoded into 3-stop waypoints (`origin;waypoint;destination`) for BMKG flood inundations and FIRMS wildfire hotspots (>= 500m radius).
+  - Verify `calculateHazardExposureMetrics` reports `exposureKm === 0`.
+- **WP4 - Macro-Node Street Stitcher (`frontend/components/map/CrisisMap.tsx`, `DashboardClient.tsx`)**:
+  - Connect deterministic CPU solver recommendations (`r.legs[0].coordinates`) to real street networks via Mapbox Directions API with 15-minute in-memory cache (`directionsCache`).
+  - Offline fallback preserves honest `COMPROMISED` status with tag `"TANPA GEOMETRI LIVE — GUNAKAN HOLD / ANTARMODA"`.
+- **WP5 - Automated Benchmark & E2E Test Suite (`frontend/e2e/mapbox-turn-by-turn.spec.ts`, `frontend/scripts/test_turn_by_turn.ts`)**:
+  - Maintain Manhattan Times Square Medan -> USU benchmark (>200 coordinates, one-way/median U-turn compliance, 0 km hazard exposure).
+  - Assert 0 TypeScript errors and passing Playwright E2E tests.
+
+### Verification
+- [x] `scripts/generate_snapped_fleet_corridors.py` execution compiles high-resolution JSON (>50 points per corridor, non-linear deltas).
+- [x] `rtk npx tsc -p frontend/tsconfig.json --noEmit` returns exit code 0.
+- [x] `frontend/scripts/test_turn_by_turn.ts` passes 4/4 assertions.
+- [x] `npx playwright test frontend/e2e/mapbox-turn-by-turn.spec.ts` passes cleanly.
+
+---
+
+## Phase 101: 3D Globe Native Mapbox Fleet, Anti-Flicker & Impeccable Minimalist Visual Cleanup
+
+**Goal:** Restore the iconic 3D Globe projection ("4D") on Mapbox GL JS v3 with 100% surface grounding by migrating fleet vehicle rendering from Deck.gl to native Mapbox WebGL GeoJSON layers; eliminate visual flickering (kedap-kedip) through non-destructive GeoJSON source data updates; and apply impeccable visual minimalism (remove cluttering ambient orange lines across Sumatra, remove unnecessary pulsing rings, eliminate bulky badges, and render crisp tactical dots).
+**Status:** COMPLETE ✅  
+**Plan:** `.planning/phases/101-3d-globe-native-mapbox-fleet-anti-flicker-minimalist/PLAN.md`
+
+### Deliverables
+- Restored 3D Globe projection (`projection: { name: 'globe' }`) with deep space atmosphere fog in `CrisisMap.tsx` and `AnalyticsSection.tsx`.
+- Decommissioned `@deck.gl/mapbox` MapboxOverlay and Deck.gl layers from `FleetVehicleLayer.tsx`; replaced with 100% native Mapbox WebGL GeoJSON layers (`fleet-vehicles-source`, `fleet-selected-route-source`, `fleet-vehicle-dots`, `fleet-vehicle-selected-halo`, `fleet-selected-route-line`).
+- Eliminated visual flickering (*kedap-kedip*) using non-destructive 60 FPS in-place `source.setData()` GPU buffer updates without destroying or rebuilding WebGL layers.
+- Impeccable minimalist visual distillation:
+  - Default `hideEstimatedRoutes = true` in `CrisisMap.tsx` and `DashboardClient.tsx` (removes ambient orange spaghetti lines across Sumatra; routes appear only when an individual vehicle is selected).
+  - Eradicated redundant pulsing rings on normal units; preserved pulse aura strictly for emergency/rerouting/impacted units and selected vehicle.
+  - Eradicated permanent static badges (`[GPS LIVE]`, `[AIS PROYEKSI]`); replaced with on-demand glassmorphic micro-tooltip on hover.
+  - Rendered crisp tactical dots: Emerald `#10b981` (Trucks), Cyan `#06b6d4` (Maritime), Violet `#a855f7` (Air), Neon Cyan `#00f0ff` (Selected).
+
+### Verification
+- [x] `map.getProjection().name === 'globe'` validated on 3D Globe canvas.
+- [x] Native Mapbox WebGL layers (`fleet-vehicle-dots`, `fleet-vehicle-selected-halo`, `fleet-selected-route-line`) validated on globe surface across pitch (45°-60°) and bearing (60°-180°).
+- [x] Zero TypeScript errors (`tsc -p frontend/tsconfig.json --noEmit` exit code 0).
+- [x] 7/7 Playwright tests passing cleanly in `frontend/e2e/mapbox-turn-by-turn.spec.ts`.
+- [x] 22/22 backend pytest tests passing cleanly in `test_precision_fleet_telemetry.py` and `test_adapters.py`.
+- [x] Frontend unit verification suites passing cleanly (SpatialHashArbiter, fleet scope, turn-by-turn road snapping 4/4, state isolation 4/4, phase 70 logic).
 
 ---
 

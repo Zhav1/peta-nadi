@@ -891,9 +891,33 @@ export function isHazardNearTollCorridor(
   );
 }
 
+export interface ExcludeOptions {
+  excludeToll?: boolean;
+  excludeMotorway?: boolean;
+  excludePoints?: [number, number][];
+}
+
 /**
- * Requests Mapbox Directions. When `excludeToll` is applied and Mapbox answers NoRoute, the
- * request is retried once without the toll exclusion so routing never fails closed.
+ * Builds the URL exclude query parameter: &exclude=point(lon lat),point(lon lat),toll
+ * Caps points at 8 to prevent URL overflow.
+ */
+export function buildExcludeParam(options: ExcludeOptions): string {
+  const parts: string[] = [];
+  if (options.excludeToll) parts.push('toll');
+  if (options.excludeMotorway) parts.push('motorway');
+  if (options.excludePoints && options.excludePoints.length > 0) {
+    const pts = options.excludePoints.slice(0, 8);
+    for (const [lon, lat] of pts) {
+      parts.push(`point(${lon.toFixed(5)} ${lat.toFixed(5)})`);
+    }
+  }
+  return parts.join(',');
+}
+
+/**
+ * Requests Mapbox Directions with memoized cache and fail-safe auto-retry.
+ * If `excludePoints` triggers NoRoute, retries instantly without excludePoints.
+ * If `excludeToll` triggers NoRoute, retries without toll.
  * Results are cached in-memory to prevent burning the 100k free tier monthly quota.
  */
 export async function requestMapboxDirections(
@@ -901,34 +925,64 @@ export async function requestMapboxDirections(
   profile: MapboxDirectionsProfile,
   params: string,
   token: string,
-  excludeToll: boolean,
+  exclude: boolean | ExcludeOptions = false,
   signal?: AbortSignal
 ): Promise<MapboxDirectionsResponse | null> {
-  const cacheKey = `${profile}:${coordString}:${params}:${excludeToll}`;
+  const initialOpts: ExcludeOptions =
+    typeof exclude === 'boolean' ? { excludeToll: exclude } : { ...exclude };
+
+  const initialExcludeParam = buildExcludeParam(initialOpts);
+  const cacheKey = `${profile}:${coordString}:${params}:${initialExcludeParam}`;
   const cached = getCachedDirections(cacheKey);
   if (cached) return cached;
 
-  const buildUrl = (exclude: boolean) =>
-    `${MAPBOX_DIRECTIONS_ENDPOINT}/${profile}/${coordString}?${params}${
-      exclude ? '&exclude=toll' : ''
-    }&access_token=${token}`;
-
-  const attempt = async (exclude: boolean) => {
-    throwIfAborted(signal);
-    const res = await fetch(buildUrl(exclude), { signal });
-    const data = (await res.json().catch(() => null)) as MapboxDirectionsResponse | null;
-    const isNoRoute = data?.code === 'NoRoute' || (res.ok && !data?.routes?.length);
-    return { data, isNoRoute };
+  const buildUrl = (opts: ExcludeOptions) => {
+    const exStr = buildExcludeParam(opts);
+    const exQuery = exStr ? `&exclude=${encodeURIComponent(exStr)}` : '';
+    return `${MAPBOX_DIRECTIONS_ENDPOINT}/${profile}/${coordString}?${params}${exQuery}&access_token=${token}`;
   };
 
-  const first = await attempt(excludeToll);
-  let finalData: MapboxDirectionsResponse | null = null;
-  if (excludeToll && first.isNoRoute) {
-    finalData = (await attempt(false)).data;
-  } else {
-    finalData = first.data;
+  const attempt = async (opts: ExcludeOptions) => {
+    throwIfAborted(signal);
+    try {
+      const res = await fetch(buildUrl(opts), { signal });
+      const data = (await res.json().catch(() => null)) as MapboxDirectionsResponse | null;
+      const isNoRoute = data?.code === 'NoRoute' || (res.ok && !data?.routes?.length);
+      return { data, isNoRoute };
+    } catch (err) {
+      if (isAbortError(err) || signal?.aborted) throw createAbortError();
+      return { data: null, isNoRoute: true };
+    }
+  };
+
+  let currentOpts = { ...initialOpts };
+  let result = await attempt(currentOpts);
+
+  // Auto-retry 1: If NoRoute occurs and excludePoints was supplied, retry without excludePoints
+  if (result.isNoRoute && currentOpts.excludePoints && currentOpts.excludePoints.length > 0) {
+    currentOpts = { ...currentOpts, excludePoints: undefined };
+    const retryResult = await attempt(currentOpts);
+    if (!retryResult.isNoRoute && retryResult.data?.routes?.length) {
+      result = retryResult;
+      if (result.data) {
+        (result.data as any).warning = 'excludePoints caused NoRoute; retried without point exclusion';
+      }
+    }
   }
 
+  // Auto-retry 2: If still NoRoute and excludeToll was supplied, retry without toll exclusion
+  if (result.isNoRoute && currentOpts.excludeToll) {
+    currentOpts = { ...currentOpts, excludeToll: false };
+    const retryResult = await attempt(currentOpts);
+    if (!retryResult.isNoRoute && retryResult.data?.routes?.length) {
+      result = retryResult;
+      if (result.data) {
+        (result.data as any).warning = 'excludeToll caused NoRoute; retried without toll exclusion';
+      }
+    }
+  }
+
+  const finalData = result.data;
   if (finalData && finalData.routes && finalData.routes.length > 0) {
     setCachedDirections(cacheKey, finalData);
   }
@@ -973,7 +1027,7 @@ async function fetchMapboxRouteWithForcedWaypoint(
   destination: LonLat,
   forcedWaypoint: LonLat,
   token: string,
-  excludeToll: boolean = false,
+  exclude: boolean | ExcludeOptions = false,
   signal?: AbortSignal
 ): Promise<MapboxRouteResult | null> {
   const coordString = [
@@ -988,7 +1042,7 @@ async function fetchMapboxRouteWithForcedWaypoint(
       'driving-traffic',
       'overview=full&geometries=geojson&steps=true&annotations=distance,duration,congestion,speed',
       token,
-      excludeToll,
+      exclude,
       signal
     );
     if (!data?.routes || data.routes.length === 0) return null;
@@ -999,15 +1053,15 @@ async function fetchMapboxRouteWithForcedWaypoint(
     const durationMinutes = Math.round(route.duration / 60);
 
     const maneuvers: MapboxRouteManeuver[] =
-      route.legs?.[0]?.steps?.map((step) => ({
+      route.legs?.flatMap((leg) => leg.steps || []).map((step) => ({
         instruction: step.maneuver.instruction,
         distance_meters: Math.round(step.distance),
         duration_seconds: Math.round(step.duration),
       })) || [];
 
     const congestionSegments: CongestionSegment[] = [];
-    const annotations = route.legs?.[0]?.annotation?.congestion;
-    if (annotations && coords.length > 1) {
+    const annotations = route.legs?.flatMap((leg) => leg.annotation?.congestion || []) || [];
+    if (annotations.length > 0 && coords.length > 1) {
       for (let i = 0; i < annotations.length - 1; i++) {
         const raw = annotations[i];
         const level: 'low' | 'moderate' | 'heavy' =
@@ -1043,7 +1097,7 @@ export async function fetchMapboxAlternativeDrivingRoutes(
   origin: LonLat,
   destination: LonLat,
   waypoints: LonLat[] = [],
-  excludeToll: boolean = false,
+  exclude: boolean | ExcludeOptions = false,
   signal?: AbortSignal
 ): Promise<MapboxRouteResult[]> {
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
@@ -1061,7 +1115,7 @@ export async function fetchMapboxAlternativeDrivingRoutes(
         'driving-traffic',
         'alternatives=true&annotations=congestion,distance,duration,speed&geometries=geojson&overview=full&steps=true',
         token,
-        excludeToll,
+        exclude,
         signal
       );
       if (data?.routes && data.routes.length > 0) {
@@ -1072,14 +1126,14 @@ export async function fetchMapboxAlternativeDrivingRoutes(
           const durationMinutes = Math.round(route.duration / 60);
 
           const maneuvers: MapboxRouteManeuver[] =
-            route.legs?.[0]?.steps?.map((step) => ({
+            route.legs?.flatMap((leg) => leg.steps || []).map((step) => ({
               instruction: step.maneuver.instruction,
               distance_meters: Math.round(step.distance),
               duration_seconds: Math.round(step.duration),
             })) || [];
 
           const congestionSegments: CongestionSegment[] = [];
-          const annotations = route.legs?.[0]?.annotation?.congestion;
+          const annotations = route.legs?.flatMap((leg) => leg.annotation?.congestion || []) || [];
           if (annotations && annotations.length > 0 && coords.length > 1) {
             let currentLevel: 'low' | 'moderate' | 'heavy' = 'low';
             let currentCoords: Array<{ lat: number; lon: number }> = [];
@@ -1758,50 +1812,92 @@ export async function calculateAIDynamicDetourRoutes(
   let isDetourCompromised = false;
 
   // If primary route intersects hazard shockwave (or port access is blocked),
-  // actively solve detour around hazard / closed-port perimeter.
+  // actively solve detour around hazard / closed-port perimeter via Dual-Layer Hazard Avoidance.
   if (hazardCenter && isPrimaryCompromised && token) {
     let foundDetour = false;
+    const isPointObstacle = radiusKm < 0.5; // Scale < 500m (e.g. point landslide, bridge outage)
+    const evalBufferKm = isPointObstacle ? 0.05 : 0.1; // 50m margin for point obstacles, 100m for wide polygons
 
-    // A. Priority Bypass: Safe arterial junctions outside hazard zone
-    // Port closures need a wider perimeter buffer around the closed terminal.
-    const nodeBufferKm = hazardType === 'port_closure' ? 6.0 : 2.0;
-    const safeNodes = HIGHWAY_JUNCTION_NODES.filter(
-      (node) => getHaversineDistanceKm(node.coords, hazardCenter) >= radiusKm + nodeBufferKm
-    );
-    const scoredNodes = safeNodes.map((node) => ({
-      name: node.name,
-      coords: node.coords,
-      score: getHaversineDistanceKm(origin, node.coords) + getHaversineDistanceKm(node.coords, destination),
-    })).sort((a, b) => a.score - b.score);
-
-    for (const cand of scoredNodes.slice(0, 4)) {
+    // LAYER 1: Point Obstacle Avoidance via &exclude=point(lon lat)
+    if (isPointObstacle) {
       throwIfAborted(signal);
-      const bypass = await fetchMapboxRouteWithForcedWaypoint(origin, destination, cand.coords, token, excludeToll, signal);
-      if (bypass) {
-        const m = calculateHazardExposureMetrics(bypass.coordinates, hazardCenter, radiusKm);
-        if (!m.isIntersecting && m.exposureKm === 0) {
-          landDetourResult = bypass;
-          landDetourColor = '#10B981';
-          landDetourTag = `PENGALIHAN AMAN (${cand.name.toUpperCase()})`;
-          foundDetour = true;
-          break;
+      const pointExcludeOpts: ExcludeOptions = {
+        excludeToll,
+        excludePoints: [hazardCenter],
+      };
+      const pointBypassResults = await fetchMapboxAlternativeDrivingRoutes(
+        origin,
+        destination,
+        [],
+        pointExcludeOpts,
+        signal
+      );
+      if (pointBypassResults && pointBypassResults.length > 0) {
+        for (const bypass of pointBypassResults) {
+          const m = calculateHazardExposureMetrics(bypass.coordinates, hazardCenter, radiusKm, evalBufferKm);
+          if (!m.isIntersecting && m.exposureKm === 0) {
+            landDetourResult = bypass;
+            landDetourColor = '#10B981';
+            landDetourTag = 'PENGALIHAN BEBAS BENCANA (TITIK RINTANGAN)';
+            foundDetour = true;
+            break;
+          }
         }
       }
     }
 
-    // B. Tangential normal clearance detour if junction bypass not clean
+    // A. Priority Bypass: Safe arterial junctions outside hazard zone
+    // Port closures need a wider perimeter buffer around the closed terminal.
+    if (!foundDetour) {
+      const nodeBufferKm = hazardType === 'port_closure' ? 6.0 : 2.0;
+      const safeNodes = HIGHWAY_JUNCTION_NODES.filter(
+        (node) => getHaversineDistanceKm(node.coords, hazardCenter) >= radiusKm + nodeBufferKm
+      );
+      const scoredNodes = safeNodes.map((node) => ({
+        name: node.name,
+        coords: node.coords,
+        score: getHaversineDistanceKm(origin, node.coords) + getHaversineDistanceKm(node.coords, destination),
+      })).sort((a, b) => a.score - b.score);
+
+      const bypassExcludeOpts: ExcludeOptions = {
+        excludeToll,
+        excludePoints: [hazardCenter],
+      };
+
+      for (const cand of scoredNodes.slice(0, 4)) {
+        throwIfAborted(signal);
+        const bypass = await fetchMapboxRouteWithForcedWaypoint(origin, destination, cand.coords, token, bypassExcludeOpts, signal);
+        if (bypass) {
+          const m = calculateHazardExposureMetrics(bypass.coordinates, hazardCenter, radiusKm, evalBufferKm);
+          if (!m.isIntersecting && m.exposureKm === 0) {
+            landDetourResult = bypass;
+            landDetourColor = '#10B981';
+            landDetourTag = `PENGALIHAN AMAN (${cand.name.toUpperCase()})`;
+            foundDetour = true;
+            break;
+          }
+        }
+      }
+    }
+
+    // LAYER 2: Wide Hazard Polygon Avoidance via Forced Tangential Waypoint (R + 2.0 km)
     if (!foundDetour) {
       // Calibrated tangential clearance: R + 2.0 km (strictly avoids hazard while keeping waypoints snug to road network)
       const clearanceKm = radiusKm + 2.0;
       const candidateAngles = [Math.PI / 2, -Math.PI / 2, Math.PI / 4, -Math.PI / 4];
       const validTangents: Array<{ result: MapboxRouteResult; angle: number }> = [];
 
+      const tangentExcludeOpts: ExcludeOptions = {
+        excludeToll,
+        excludePoints: [hazardCenter],
+      };
+
       for (const ang of candidateAngles) {
         throwIfAborted(signal);
         const waypoint = computeTangentialWaypoint(origin, destination, hazardCenter, clearanceKm, ang);
-        const radial = await fetchMapboxRouteWithForcedWaypoint(origin, destination, waypoint, token, excludeToll, signal);
+        const radial = await fetchMapboxRouteWithForcedWaypoint(origin, destination, waypoint, token, tangentExcludeOpts, signal);
         if (radial) {
-          const m = calculateHazardExposureMetrics(radial.coordinates, hazardCenter, radiusKm);
+          const m = calculateHazardExposureMetrics(radial.coordinates, hazardCenter, radiusKm, evalBufferKm);
           if (!m.isIntersecting && m.exposureKm === 0) {
             validTangents.push({ result: radial, angle: ang });
           }

@@ -1,14 +1,25 @@
 """
 PreHub — High-Precision Snapped Fleet Corridor Polyline Generator.
-Generates multi-vertex highway-snapped polylines for trucks,
+Generates multi-vertex highway-snapped polylines for trucks via Mapbox Directions API,
 official marine fairway trajectories for maritime cargo, and
 densified orthodromes for air cargo across Pan-Sumatra.
-Outputs: backend/data/fleet_corridors_snapped.json
+Outputs:
+  - backend/data/fleet_corridors_snapped.json
+  - frontend/public/data/fleet_corridors_snapped.json
 """
+import argparse
 import json
 import math
 import os
 import sys
+import time
+import urllib.request
+import urllib.error
+from unittest.mock import MagicMock
+
+# Ensure redis mock is registered before importing backend services
+sys.modules.setdefault("redis", MagicMock())
+sys.modules.setdefault("redis.asyncio", MagicMock())
 
 # Ensure backend path is available
 backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "backend"))
@@ -16,6 +27,31 @@ if backend_dir not in sys.path:
     sys.path.insert(0, backend_dir)
 
 from app.services.telemetry_service import MASTER_FLEET_DEFINITIONS
+
+
+def find_mapbox_token() -> str:
+    """Finds Mapbox token from env, CLI, or frontend/.env.local."""
+    token = os.environ.get("MAPBOX_ACCESS_TOKEN") or os.environ.get("NEXT_PUBLIC_MAPBOX_TOKEN")
+    if token:
+        return token
+
+    # Check frontend/.env.local and .env
+    candidates = [
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend", ".env.local")),
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend", ".env")),
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".env.local")),
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".env")),
+    ]
+    for env_path in candidates:
+        if os.path.exists(env_path):
+            with open(env_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith("NEXT_PUBLIC_MAPBOX_TOKEN="):
+                        val = line.split("=", 1)[1].strip().strip('"').strip("'")
+                        if val:
+                            return val
+    return ""
 
 
 def haversine_km(c1, c2):
@@ -26,7 +62,7 @@ def haversine_km(c1, c2):
     dphi = math.radians(lat2 - lat1)
     dlam = math.radians(lon2 - lon1)
     a = math.sin(dphi / 2.0) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlam / 2.0) ** 2
-    return 2.0 * r * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
+    return 2.0 * r * math.atan2(math.sqrt(a), math.sqrt(max(0.0, 1.0 - a)))
 
 
 def densify_segment(p1, p2, max_step_km=1.5):
@@ -56,62 +92,66 @@ def densify_polyline(coords, max_step_km=1.5):
     return result
 
 
-def main():
-    road_cache_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data", "road_network_sumatra.json"))
-    nodes_by_id = {}
-    if os.path.exists(road_cache_path):
-        with open(road_cache_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            for n in data.get("nodes", []):
-                nodes_by_id[n["id"]] = [float(n["lon"]), float(n["lat"])]
+def fetch_mapbox_snapped_route(waypoints, token: str):
+    """
+    Fetches real road network turn-by-turn geometry via Mapbox Directions API.
+    Returns (coordinates, distance_km) or None if request fails.
+    """
+    if not token or len(waypoints) < 2:
+        return None
 
-    # Detailed intermediate road route waypoints mapped to real Trans-Sumatra highways
-    highway_snapping_map = {
-        # TRK-001: Bakauheni Port -> Tol JTTS (Kalianda -> Terbanggi Besar -> Menggala -> Kayu Agung) -> Palembang
-        "TRK-001-BAKAUHENI-PLM": [
-            [105.7533, -5.8711], [105.6500, -5.7800], [105.5800, -5.7100], [105.4200, -5.5500],
-            [105.2667, -5.4294], [105.2150, -5.1200], [105.1800, -4.8500], [105.1000, -4.4500],
-            [104.9800, -4.1500], [104.9200, -3.7500], [104.8450, -3.3900], [104.7950, -3.1500],
-            [104.7565, -2.9909]
-        ],
-        # TRK-002: Bukittinggi -> Payakumbuh -> Kelok 9 -> Bangkinang -> Pekanbaru
-        "TRK-002-HORTI-SUMBAR": [
-            [100.3692, -0.3056], [100.5200, -0.2600], [100.6300, -0.2200], [100.6700, 0.0800],
-            [100.7500, 0.1800], [100.8900, 0.2800], [101.0267, 0.3367], [101.2500, 0.4200],
-            [101.4478, 0.5071]
-        ],
-        # TRK-003: Belawan Port -> KIM -> Amplas -> Tol MKTT -> Lubuk Pakam -> Perbaungan -> Tebing Tinggi
-        "TRK-003-BELAWAN-TEBING": [
-            [98.6776, 3.7922], [98.6800, 3.6700], [98.7120, 3.5350], [98.8780, 3.6421],
-            [98.9200, 3.5600], [99.0200, 3.4800], [99.1100, 3.3900], [99.1625, 3.3285]
-        ],
-        # TRK-004: Pekanbaru -> Minas -> Kandis -> Duri -> Dumai Port (Tol Permai)
-        "TRK-004-CPO-DUMAI": [
-            [101.4478, 0.5071], [101.4100, 0.7200], [101.3500, 0.8500], [101.2500, 0.9500],
-            [101.2200, 1.1200], [101.2150, 1.2700], [101.3100, 1.4500], [101.4000, 1.5800],
-            [101.4533, 1.6811]
-        ],
-        # TRK-005: Banda Aceh -> Sigli -> Bireuen -> Lhokseumawe -> Langsa -> Kuala Simpang -> Binjai -> Medan
-        "TRK-005-BANDA-ACEH-MEDAN": [
-            [95.3238, 5.5483], [95.6200, 5.4800], [95.9600, 5.3850], [96.5000, 5.2000],
-            [97.1400, 5.1800], [97.5500, 4.8500], [97.9650, 4.4700], [98.0500, 4.2800],
-            [98.2500, 3.9500], [98.4850, 3.6000], [98.6722, 3.5952]
-        ],
-        # TRK-006: Jambi -> Tempino -> Betung -> Banyuasin -> Palembang (Jalintim)
-        "TRK-006-JAMBI-PALEMBANG": [
-            [103.6131, -1.6100], [103.7500, -1.8500], [103.9500, -2.1500], [104.1200, -2.3500],
-            [104.1800, -2.6000], [104.3500, -2.7500], [104.5800, -2.8900], [104.7565, -2.9909]
-        ],
-        # TRK-007: Padang Teluk Bayur -> Sitinjau Lauik -> Lubuk Selasih -> Solok -> Singkarak
-        "TRK-007-CABAI-KERITING": [
-            [100.3700, -0.9980], [100.4100, -0.9650], [100.4850, -0.9450], [100.5600, -0.9100],
-            [100.6539, -0.7989], [100.6200, -0.6500]
-        ],
-        # TRK-008: Medan KIM -> Tebing Tinggi -> Kisaran -> Rantauprapat (Jalinsum Tol)
-        "TRK-008-BERAS-KIM": [
-            [98.6800, 3.6700], [98.7120, 3.5350], [98.8780, 3.6421], [99.1625, 3.3285],
-            [99.4200, 3.1500], [99.6200, 2.9800], [99.7500, 2.5500], [99.8300, 2.0950]
-        ],
+    # Subsample waypoints if > 25, preserving exact origin (index 0) and destination (index -1)
+    if len(waypoints) > 25:
+        step = (len(waypoints) - 1) / 24.0
+        clipped_waypoints = [waypoints[int(round(i * step))] for i in range(24)]
+        if clipped_waypoints[-1] != waypoints[-1]:
+            clipped_waypoints.append(waypoints[-1])
+    else:
+        clipped_waypoints = waypoints
+
+    coord_str = ";".join([f"{pt[0]:.6f},{pt[1]:.6f}" for pt in clipped_waypoints])
+    url = f"https://api.mapbox.com/directions/v5/mapbox/driving/{coord_str}?geometries=geojson&overview=full&steps=true&access_token={token}"
+
+    for attempt in range(3):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "PreHub-CorridorGenerator/1.0"})
+            with urllib.request.urlopen(req, timeout=12) as response:
+                data = json.loads(response.read().decode("utf-8"))
+                if data.get("code") == "Ok" and data.get("routes"):
+                    route = data["routes"][0]
+                    coords = route.get("geometry", {}).get("coordinates", [])
+                    dist_km = round(route.get("distance", 0.0) / 1000.0, 2)
+                    if coords and len(coords) >= 2:
+                        return coords, dist_km
+            break
+        except urllib.error.HTTPError as e:
+            if e.code == 429:
+                time.sleep(1.0 * (attempt + 1))
+                continue
+            print(f"  [WARN] Mapbox API HTTP {e.code}: {e}")
+            break
+        except Exception as e:
+            if attempt < 2:
+                time.sleep(0.5)
+                continue
+            print(f"  [WARN] Mapbox API request failed: {e}")
+
+    return None
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Generate high-precision snapped fleet corridors for PreHub")
+    parser.add_argument("--token", type=str, default="", help="Mapbox access token")
+    args = parser.parse_args()
+
+    token = args.token or find_mapbox_token()
+    if token:
+        print(f"[INFO] Using Mapbox Access Token: {token[:12]}...{token[-4:]}")
+    else:
+        print("[WARN] No Mapbox token found. Falling back to geometric densification.")
+
+    # High-precision maritime fairway channels and key road junctions
+    fairway_and_highway_map = {
         # Maritime Fairway high-precision channel lines (keeping vessels off shallows & islands)
         "MV-001-SRIWIJAYA": [
             [98.6776, 3.7922], [98.9500, 3.8800], [99.3500, 3.7500], [99.8500, 3.3500],
@@ -138,51 +178,68 @@ def main():
     }
 
     snapped_cache = {}
+    truck_api_count = 0
+
+    print(f"[INFO] Processing {len(MASTER_FLEET_DEFINITIONS)} units from MASTER_FLEET_DEFINITIONS...")
 
     for unit in MASTER_FLEET_DEFINITIONS:
         vid = unit["vehicle_id"]
         modality = unit.get("modality", "truck")
         raw_coords = (unit.get("route_geometry", {}).get("coordinates") or unit.get("path") or [])
 
-        if vid in highway_snapping_map:
-            base_coords = highway_snapping_map[vid]
-        else:
-            base_coords = raw_coords
+        base_coords = fairway_and_highway_map.get(vid, raw_coords)
 
-        # Max step: 1.0 km for trucks, 3.0 km for maritime, 10.0 km for air
-        max_step = 1.0 if modality == "truck" else 3.0 if modality == "maritime" else 10.0
-        densified = densify_polyline(base_coords, max_step_km=max_step)
-
-        # Calculate exact route distance along densified coordinates
+        snapped_coords = None
         total_dist_km = 0.0
-        for i in range(len(densified) - 1):
-            total_dist_km += haversine_km(densified[i], densified[i + 1])
+
+        # WP1: For trucks, request live Mapbox Directions API for authentic road snapping
+        if modality == "truck" and token and len(base_coords) >= 2:
+            res = fetch_mapbox_snapped_route(base_coords, token)
+            if res:
+                snapped_coords, total_dist_km = res
+                truck_api_count += 1
+                print(f"  [SNAP] {vid}: Mapbox snapped {len(snapped_coords)} points ({total_dist_km} km)")
+                # Rate limiter: 500ms delay between calls
+                time.sleep(0.5)
+
+        # Fallback to densification if Mapbox not available or for maritime/aviation
+        if not snapped_coords:
+            max_step = 1.0 if modality == "truck" else 3.0 if modality == "maritime" else 10.0
+            snapped_coords = densify_polyline(base_coords, max_step_km=max_step)
+            total_dist_km = 0.0
+            for i in range(len(snapped_coords) - 1):
+                total_dist_km += haversine_km(snapped_coords[i], snapped_coords[i + 1])
+            total_dist_km = round(total_dist_km, 2)
+            source_tag = "lerp-densified" if modality == "truck" else "fairway-densified" if modality == "maritime" else "orthodrome"
+            print(f"  [DENS] {vid} ({modality}): {len(snapped_coords)} points ({total_dist_km} km) [{source_tag}]")
 
         snapped_cache[vid] = {
             "vehicle_id": vid,
             "modality": modality,
             "origin": unit.get("origin"),
             "destination": unit.get("destination"),
-            "total_distance_km": round(total_dist_km, 2),
-            "vertex_count": len(densified),
-            "coordinates": densified
+            "total_distance_km": total_dist_km,
+            "vertex_count": len(snapped_coords),
+            "coordinates": snapped_coords,
         }
 
+    # Write output to backend/data/fleet_corridors_snapped.json
     out_file = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "backend", "data", "fleet_corridors_snapped.json"))
     os.makedirs(os.path.dirname(out_file), exist_ok=True)
     with open(out_file, "w", encoding="utf-8") as f:
         json.dump(snapped_cache, f, indent=2)
 
-    # Also mirror into frontend public folder for direct high-speed client access if needed
+    # Mirror into frontend/public/data/fleet_corridors_snapped.json
     fe_public_data = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend", "public", "data"))
     os.makedirs(fe_public_data, exist_ok=True)
     fe_file = os.path.join(fe_public_data, "fleet_corridors_snapped.json")
     with open(fe_file, "w", encoding="utf-8") as f:
         json.dump(snapped_cache, f, indent=2)
 
-    print(f"[OK] Generated snapped fleet corridors for {len(snapped_cache)} units:")
-    print(f"     Backend:  {out_file}")
-    print(f"     Frontend: {fe_file}")
+    print("\n[OK] Successfully generated snapped fleet corridors:")
+    print(f"     Total units: {len(snapped_cache)} (Truck API snapped: {truck_api_count})")
+    print(f"     Backend target:  {out_file}")
+    print(f"     Frontend target: {fe_file}")
 
 
 if __name__ == "__main__":

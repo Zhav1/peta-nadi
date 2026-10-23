@@ -1,11 +1,9 @@
 'use client';
 
-import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import mapboxgl from 'mapbox-gl';
-import { MapboxOverlay } from '@deck.gl/mapbox';
-import { PathLayer, ScatterplotLayer, IconLayer, TextLayer } from '@deck.gl/layers';
 import type { FleetVehicle } from '@/lib/types';
-import { calculateRouteProgressPosition, projectBearingEndpoint } from '@/lib/geoUtils';
+import { calculateRouteProgressPosition } from '@/lib/geoUtils';
 import { getHaversineDistanceKm } from '@/lib/aiDynamicRouter';
 import { TargetLockReticle } from './TargetLockReticle';
 import {
@@ -19,17 +17,6 @@ import {
   Crosshair,
   Thermometer,
 } from 'lucide-react';
-import {
-  defaultSpatialHashArbiter,
-  arbitrateVisibleLabels,
-  arbitrateMacroZoomLabels,
-  PRIORITY_SELECTED_ROUTE,
-  PRIORITY_IMPACTED_FLEET,
-  PRIORITY_AIRCRAFT_CALLSIGN,
-  PRIORITY_MAJOR_VESSEL,
-  PRIORITY_FLEET_CALLSIGN,
-  type DeclutterItem,
-} from '@/lib/spatialHashArbiter';
 
 export interface FleetVehicleLayerProps {
   map: mapboxgl.Map | null;
@@ -42,9 +29,9 @@ export interface FleetVehicleLayerProps {
   selectedVehicleId?: string | null;
   onCloseVehicle?: () => void;
   /**
-   * Dispatcher tenant view: never draw ROUTE_ESTIMATED corridor projections
+   * Dispatcher tenant view: suppress ambient ROUTE_ESTIMATED corridor projections
    * (orange lines / amber pulse rings) unless that unit is explicitly selected
-   * for inspection. Unselected projected units are not rendered at all.
+   * for inspection. Default: true.
    */
   hideEstimatedRoutes?: boolean;
 }
@@ -53,6 +40,11 @@ interface DeadReckonState {
   currentPos: [number, number];
   baseLocation: [number, number];
   lastTimestamp: number;
+}
+
+interface HoveredVehicleInfo {
+  vehicle: FleetVehicle;
+  screenPos: { x: number; y: number };
 }
 
 function calculatePathDistanceKm(coords: [number, number][]): number {
@@ -101,159 +93,17 @@ function deadReckonPosition(
   return [lon2, lat2];
 }
 
-/**
- * Pre-rendered 384x64 high-DPI canvas icon atlas for GPU-instanced Deck.gl IconLayer.
- * Contains 6 slots (64x64):
- * 0: Truck normal (#34d399)
- * 1: Maritime normal (#38bdf8)
- * 2: Air normal (#c084fc)
- * 3: Truck selected (#00f0ff)
- * 4: Maritime selected (#00f0ff)
- * 5: Air selected (#00f0ff)
- */
-let cachedAtlasDataUrl: string | null = null;
-
-function getVehicleAtlasDataUrl(): string {
-  if (cachedAtlasDataUrl) return cachedAtlasDataUrl;
-  if (typeof document === 'undefined') return '';
-
-  const canvas = document.createElement('canvas');
-  canvas.width = 384;
-  canvas.height = 64;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return '';
-
-  const drawSlot = (
-    slotIdx: number,
-    type: 'truck' | 'maritime' | 'air',
-    colorHex: string,
-    isSelected: boolean
-  ) => {
-    const ox = slotIdx * 64;
-    const cx = ox + 32;
-    const cy = 32;
-
-    ctx.save();
-    // Tactical disc background
-    ctx.beginPath();
-    ctx.arc(cx, cy, 27, 0, Math.PI * 2);
-    ctx.fillStyle = isSelected ? '#081420' : '#0c0e12';
-    ctx.fill();
-
-    ctx.lineWidth = isSelected ? 3.5 : 2.5;
-    ctx.strokeStyle = colorHex;
-    ctx.stroke();
-
-    if (isSelected) {
-      ctx.shadowColor = '#00f0ff';
-      ctx.shadowBlur = 8;
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-    }
-
-    // Forward indicator pip at top (north / 0 deg)
-    ctx.beginPath();
-    ctx.arc(cx, 8, 3.5, 0, Math.PI * 2);
-    ctx.fillStyle = '#00f0ff';
-    ctx.fill();
-
-    // Vector silhouette
-    ctx.fillStyle = colorHex;
-    ctx.strokeStyle = colorHex;
-    ctx.lineWidth = 2.5;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-
-    if (type === 'maritime') {
-      ctx.beginPath();
-      ctx.moveTo(cx, 16);
-      ctx.lineTo(cx, 44);
-      ctx.moveTo(ox + 20, 28);
-      ctx.lineTo(ox + 44, 28);
-      ctx.moveTo(ox + 18, 38);
-      ctx.quadraticCurveTo(cx, 48, ox + 46, 38);
-      ctx.stroke();
-    } else if (type === 'air') {
-      ctx.beginPath();
-      ctx.moveTo(cx, 14);
-      ctx.lineTo(ox + 46, 42);
-      ctx.lineTo(cx, 36);
-      ctx.lineTo(ox + 18, 42);
-      ctx.closePath();
-      ctx.fill();
-    } else {
-      ctx.beginPath();
-      ctx.strokeRect(ox + 18, 20, 28, 24);
-      ctx.fillRect(ox + 22, 24, 20, 8);
-      ctx.beginPath();
-      ctx.arc(ox + 24, 46, 3, 0, Math.PI * 2);
-      ctx.arc(ox + 40, 46, 3, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.restore();
-  };
-
-  drawSlot(0, 'truck', '#34d399', false);
-  drawSlot(1, 'maritime', '#38bdf8', false);
-  drawSlot(2, 'air', '#c084fc', false);
-  drawSlot(3, 'truck', '#00f0ff', true);
-  drawSlot(4, 'maritime', '#00f0ff', true);
-  drawSlot(5, 'air', '#00f0ff', true);
-
-  cachedAtlasDataUrl = canvas.toDataURL();
-  return cachedAtlasDataUrl;
-}
-
-const ICON_MAPPING: Record<
-  string,
-  { x: number; y: number; width: number; height: number; anchorX: number; anchorY: number; mask: boolean }
-> = {
-  truck: { x: 0, y: 0, width: 64, height: 64, anchorX: 32, anchorY: 32, mask: false },
-  maritime: { x: 64, y: 0, width: 64, height: 64, anchorX: 32, anchorY: 32, mask: false },
-  air: { x: 128, y: 0, width: 64, height: 64, anchorX: 32, anchorY: 32, mask: false },
-  'truck-selected': { x: 192, y: 0, width: 64, height: 64, anchorX: 32, anchorY: 32, mask: false },
-  'maritime-selected': { x: 256, y: 0, width: 64, height: 64, anchorX: 32, anchorY: 32, mask: false },
-  'air-selected': { x: 320, y: 0, width: 64, height: 64, anchorX: 32, anchorY: 32, mask: false },
-};
-
-/**
- * Calculates responsive pixel size for Deck.gl IconLayer.
- * Tuned so at macro overview (zoom 5.5 - 7.5), ships and planes are clearly distinguishable.
- */
-function getVehicleIconSize(modality: string, zoom: number, isSelected: boolean): number {
-  let base = 22;
-  if (zoom < 5.0) {
-    base = 16;
-  } else if (zoom < 6.5) {
-    base = 23; // Overview zoom (6.0): crisp 23-28px display
-  } else if (zoom < 8.0) {
-    base = 27;
-  } else if (zoom < 11.0) {
-    base = 32;
-  } else {
-    base = 38;
-  }
-
-  if (modality === 'maritime' || modality === 'air') {
-    base = Math.round(base * 1.15);
-  }
-  if (isSelected) {
-    base = Math.round(base * 1.25);
-  }
-  return base;
-}
-
 export function FleetVehicleLayer({
   map,
   vehicles,
   activeRoutes,
   activeRouteIdx,
   modalityFilter = 'all',
-  simSpeed = 1,
+  simSpeed = 1.0,
   onSelectVehicle,
-  selectedVehicleId,
+  selectedVehicleId = null,
   onCloseVehicle,
-  hideEstimatedRoutes = false,
+  hideEstimatedRoutes = true,
 }: FleetVehicleLayerProps) {
   const [selectedVehicle, setSelectedVehicle] = useState<{
     vehicle: FleetVehicle;
@@ -261,173 +111,339 @@ export function FleetVehicleLayer({
     bearing: number;
   } | null>(null);
 
-  const [isFollowCamActive, setIsFollowCamActive] = useState<boolean>(false);
+  const [hoveredVehicle, setHoveredVehicle] = useState<HoveredVehicleInfo | null>(null);
+  const [isFollowCamActive, setIsFollowCamActive] = useState(false);
 
-  const overlayRef = useRef<MapboxOverlay | null>(null);
-  const animRef = useRef<number | null>(null);
-  const progressMapRef = useRef<Record<string, number>>({});
-  const deadReckonMapRef = useRef<Record<string, DeadReckonState>>({});
-  const breadcrumbsRef = useRef<Record<string, [number, number][]>>({});
-  const lastTimeRef = useRef<number>(performance.now());
-  const lastArbitrateTimeRef = useRef<number>(0);
-  const lastArbitrateZoomRef = useRef<number>(0);
-  const cachedWinnersRef = useRef<Set<string>>(new Set());
-  const selectedVehicleIdRef = useRef<string | null>(null);
-  const isFollowCamActiveRef = useRef<boolean>(false);
-  const lastDeckUpdateRef = useRef<number>(0);
-  const lastPopupSyncRef = useRef<number>(0);
-  const isInteractingRef = useRef<boolean>(false);
-  // Blink-reduction dedupe: hash of visible fleet inputs + selection/follow +
-  // quantized pulse step + zoom bucket. Skips redundant setProps when nothing
-  // meaningful changed (static fleet polls every ~10s).
-  const lastFleetHashRef = useRef<string | null>(null);
-  const lastSelectionKeyRef = useRef<string | null>(null);
-  const lastPulseStepRef = useRef<number>(-1);
-  const lastZoomBucketRef = useRef<number>(-1);
   const vehiclesRef = useRef<FleetVehicle[]>(vehicles);
   vehiclesRef.current = vehicles;
 
-  selectedVehicleIdRef.current = selectedVehicle?.vehicle.vehicle_id ?? null;
+  const selectedVehicleIdRef = useRef<string | null>(selectedVehicleId);
+  const isFollowCamActiveRef = useRef(isFollowCamActive);
   isFollowCamActiveRef.current = isFollowCamActive;
 
-  // Sync external selection clear (e.g. when incident or crisis is selected)
-  useEffect(() => {
-    if (selectedVehicleId === null && selectedVehicle !== null) {
-      setSelectedVehicle(null);
-      setIsFollowCamActive(false);
-    }
-  }, [selectedVehicleId, selectedVehicle]);
+  const onSelectVehicleRef = useRef(onSelectVehicle);
+  onSelectVehicleRef.current = onSelectVehicle;
 
-  const handleDismissSelection = useCallback(() => {
-    setSelectedVehicle(null);
-    setIsFollowCamActive(false);
-    onCloseVehicle?.();
-  }, [onCloseVehicle]);
+  const onCloseVehicleRef = useRef(onCloseVehicle);
+  onCloseVehicleRef.current = onCloseVehicle;
 
-  // Clear dead-reckon and progress refs strictly on component unmount
-  useEffect(() => {
-    return () => {
-      progressMapRef.current = {};
-      deadReckonMapRef.current = {};
-      breadcrumbsRef.current = {};
-    };
-  }, []);
+  const progressMapRef = useRef<Record<string, number>>({});
+  const deadReckonMapRef = useRef<Record<string, DeadReckonState>>({});
 
-  // Listen to manual map gestures to pause heavy deck rebuilding and disengage follow-camera
-  useEffect(() => {
-    if (!map) return;
+  const animRef = useRef<number | null>(null);
+  const lastTimeRef = useRef<number>(performance.now());
+  const lastPopupSyncRef = useRef<number>(0);
+  const selectedPosRef = useRef<[number, number] | null>(null);
+  const lastRouteKeyRef = useRef<string>('');
+  const wasEmptyRef = useRef<boolean>(false);
 
-    const onMoveStart = () => {
-      isInteractingRef.current = true;
-      setIsFollowCamActive(false);
-    };
-
-    const onMoveEnd = () => {
-      isInteractingRef.current = false;
-      // Force next frame to immediately rebuild Deck.gl layers with newly projected screen bounds
-      lastDeckUpdateRef.current = 0;
-    };
-
-    map.on('movestart', onMoveStart);
-    map.on('moveend', onMoveEnd);
-    return () => {
-      map.off('movestart', onMoveStart);
-      map.off('moveend', onMoveEnd);
-    };
-  }, [map]);
-
+  // Handle vehicle selection
   const handleVehicleSelect = useCallback(
-    (targetVehicle: FleetVehicle, coords: [number, number], heading: number) => {
+    (v: FleetVehicle, currentPos: [number, number], bearing: number) => {
+      selectedVehicleIdRef.current = v.vehicle_id;
       setSelectedVehicle({
-        vehicle: targetVehicle,
-        currentPos: coords,
-        bearing: heading,
+        vehicle: v,
+        currentPos,
+        bearing,
       });
-
-      if (onSelectVehicle) {
-        onSelectVehicle(targetVehicle);
-      }
+      onSelectVehicleRef.current?.(v);
 
       if (map) {
-        if (map.getPitch() < 30) {
-          map.easeTo({
-            center: coords,
-            pitch: 35,
-            zoom: Math.max(map.getZoom(), 9.5),
-            duration: 800,
-          });
-        } else {
-          map.easeTo({
-            center: coords,
-            zoom: Math.max(map.getZoom(), 9.5),
-            duration: 800,
-          });
-        }
+        try {
+          const routeSource = map.getSource('fleet-selected-route-source') as mapboxgl.GeoJSONSource | undefined;
+          const coords = (
+            v.route_geometry?.coordinates ||
+            (v as any).route_coordinates ||
+            (Array.isArray((v as any).waypoints)
+              ? (v as any).waypoints.map((w: any) => (Array.isArray(w) ? [w[0], w[1]] : [w.lon ?? w.lng ?? 0, w.lat ?? 0]))
+              : null) ||
+            v.path ||
+            []
+          ) as [number, number][];
+
+          if (routeSource) {
+            routeSource.setData({
+              type: 'FeatureCollection',
+              features: coords.length >= 2 ? [
+                {
+                  type: 'Feature',
+                  geometry: {
+                    type: 'LineString',
+                    coordinates: coords,
+                  },
+                  properties: {},
+                }
+              ] : [],
+            });
+          }
+        } catch {}
       }
     },
-    [map, onSelectVehicle]
+    [map]
   );
 
-  // Initialize and mount Deck.gl MapboxOverlay control
+  const handleVehicleSelectRef = useRef(handleVehicleSelect);
+  handleVehicleSelectRef.current = handleVehicleSelect;
+
+  // Dismiss selection
+  const handleDismissSelection = useCallback(() => {
+    selectedVehicleIdRef.current = null;
+    setSelectedVehicle(null);
+    setIsFollowCamActive(false);
+    isFollowCamActiveRef.current = false;
+    onCloseVehicleRef.current?.();
+
+    if (map) {
+      try {
+        const routeSource = map.getSource('fleet-selected-route-source') as mapboxgl.GeoJSONSource | undefined;
+        if (routeSource) {
+          routeSource.setData({
+            type: 'FeatureCollection',
+            features: [],
+          });
+        }
+      } catch {}
+    }
+  }, [map]);
+
+  // Synchronize when selectedVehicleId prop changes externally
+  useEffect(() => {
+    if (selectedVehicleId === selectedVehicleIdRef.current) return;
+    selectedVehicleIdRef.current = selectedVehicleId ?? null;
+
+    if (!selectedVehicleId) {
+      setSelectedVehicle(null);
+      setIsFollowCamActive(false);
+      isFollowCamActiveRef.current = false;
+      if (map) {
+        try {
+          const routeSource = map.getSource('fleet-selected-route-source') as mapboxgl.GeoJSONSource | undefined;
+          if (routeSource) {
+            routeSource.setData({ type: 'FeatureCollection', features: [] });
+          }
+        } catch {}
+      }
+    } else {
+      const found = vehicles.find((v) => v.vehicle_id === selectedVehicleId);
+      if (found) {
+        const pos: [number, number] =
+          Array.isArray((found as any).current_coords) && (found as any).current_coords.length >= 2
+            ? [(found as any).current_coords[0], (found as any).current_coords[1]]
+            : (found as any).current_location?.coordinates
+              ? [(found as any).current_location.coordinates[0], (found as any).current_location.coordinates[1]]
+              : [98.6722, 3.5952];
+        handleVehicleSelect(found, pos, found.heading_deg ?? 0);
+      }
+    }
+  }, [selectedVehicleId, vehicles, map, handleVehicleSelect]);
+
+  // Register Native Mapbox WebGL sources and layers safely
+  const setupSourcesAndLayers = useCallback(() => {
+    if (!map || !map.isStyleLoaded()) return;
+    try {
+      // 1. fleet-vehicles-source
+      if (!map.getSource('fleet-vehicles-source')) {
+        map.addSource('fleet-vehicles-source', {
+          type: 'geojson',
+          data: { type: 'FeatureCollection', features: [] },
+        });
+      }
+
+      // 2. fleet-selected-route-source
+      if (!map.getSource('fleet-selected-route-source')) {
+        map.addSource('fleet-selected-route-source', {
+          type: 'geojson',
+          data: { type: 'FeatureCollection', features: [] },
+        });
+      }
+
+      // 3. fleet-selected-route-line: high-contrast route for selected vehicle only
+      if (!map.getLayer('fleet-selected-route-line')) {
+        map.addLayer({
+          id: 'fleet-selected-route-line',
+          type: 'line',
+          source: 'fleet-selected-route-source',
+          layout: {
+            'line-join': 'round',
+            'line-cap': 'round',
+          },
+          paint: {
+            'line-color': '#00f0ff',
+            'line-width': 2.5,
+            'line-dasharray': [2, 1],
+            'line-opacity': 0.85,
+          },
+        });
+      }
+
+      // 4. fleet-vehicle-selected-halo: aura visible strictly for selected or emergency/rerouting units
+      if (!map.getLayer('fleet-vehicle-selected-halo')) {
+        map.addLayer({
+          id: 'fleet-vehicle-selected-halo',
+          type: 'circle',
+          source: 'fleet-vehicles-source',
+          filter: ['any', ['==', ['get', 'isSelected'], true], ['==', ['get', 'isImpacted'], true]],
+          paint: {
+            'circle-radius': [
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              4, 11,
+              8, 15,
+              14, 20,
+            ],
+            'circle-color': [
+              'case',
+              ['==', ['get', 'isSelected'], true], 'rgba(0, 240, 255, 0.25)',
+              'rgba(245, 158, 11, 0.25)',
+            ],
+            'circle-stroke-color': [
+              'case',
+              ['==', ['get', 'isSelected'], true], 'rgba(0, 240, 255, 0.85)',
+              'rgba(245, 158, 11, 0.85)',
+            ],
+            'circle-stroke-width': 1.5,
+          },
+        });
+      }
+
+      // 5. fleet-vehicle-dots: crisp tactical dots on 3D globe surface
+      if (!map.getLayer('fleet-vehicle-dots')) {
+        map.addLayer({
+          id: 'fleet-vehicle-dots',
+          type: 'circle',
+          source: 'fleet-vehicles-source',
+          paint: {
+            'circle-radius': [
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              4, 4,
+              8, 5.5,
+              14, 8,
+            ],
+            'circle-color': [
+              'case',
+              ['==', ['get', 'isSelected'], true], '#00f0ff',
+              ['==', ['get', 'modality'], 'maritime'], '#06b6d4',
+              ['==', ['get', 'modality'], 'air'], '#a855f7',
+              '#10b981',
+            ],
+            'circle-stroke-width': 1.5,
+            'circle-stroke-color': '#0c0e12',
+          },
+        });
+      }
+    } catch (err) {
+      console.error('Failed to setup Mapbox fleet sources and layers:', err);
+    }
+  }, [map]);
+
+  // Setup layer lifecycle and mouse interactions (stable across renders)
   useEffect(() => {
     if (!map) return;
 
-    // Remove legacy Mapbox layers/sources if present from previous renders
-    try {
-      if (map.getLayer('fleet-telemetry-points-layer')) map.removeLayer('fleet-telemetry-points-layer');
-      if (map.getLayer('fleet-bearing-vectors-layer')) map.removeLayer('fleet-bearing-vectors-layer');
-      if (map.getLayer('fleet-breadcrumb-trails-layer')) map.removeLayer('fleet-breadcrumb-trails-layer');
-      if (map.getLayer('fleet-callsign-labels-layer')) map.removeLayer('fleet-callsign-labels-layer');
-      if (map.getSource('fleet-telemetry-points')) map.removeSource('fleet-telemetry-points');
-      if (map.getSource('fleet-bearing-vectors')) map.removeSource('fleet-bearing-vectors');
-      if (map.getSource('fleet-breadcrumb-trails')) map.removeSource('fleet-breadcrumb-trails');
-      if (map.getSource('fleet-callsign-labels')) map.removeSource('fleet-callsign-labels');
-    } catch {}
+    setupSourcesAndLayers();
+    map.on('load', setupSourcesAndLayers);
+    map.on('style.load', setupSourcesAndLayers);
 
-    const overlay = new MapboxOverlay({
-      interleaved: false,
-      layers: [],
-      onHover: (info) => {
-        try {
-          const canvas = map.getCanvas();
-          if (canvas?.style) {
-            canvas.style.cursor = info.object ? 'pointer' : '';
-          }
-        } catch {}
-      },
-    });
+    const onMouseEnter = (e: mapboxgl.MapLayerMouseEvent) => {
+      map.getCanvas().style.cursor = 'pointer';
+      if (!e.features || e.features.length === 0) return;
+      const vehicleId = e.features[0].properties?.vehicle_id;
+      const found = vehiclesRef.current?.find((v) => v.vehicle_id === vehicleId);
+      if (found) {
+        setHoveredVehicle({
+          vehicle: found,
+          screenPos: {
+            x: e.originalEvent ? e.originalEvent.clientX : e.point.x,
+            y: e.originalEvent ? e.originalEvent.clientY : e.point.y,
+          },
+        });
+      }
+    };
 
-    try {
-      map.addControl(overlay as unknown as mapboxgl.IControl);
-      overlayRef.current = overlay;
-    } catch (err) {
-      console.error('PreHub Deck.gl MapboxOverlay mount error:', err);
-    }
+    const onMouseMove = (e: mapboxgl.MapLayerMouseEvent) => {
+      setHoveredVehicle((prev) =>
+        prev
+          ? {
+              ...prev,
+              screenPos: {
+                x: e.originalEvent ? e.originalEvent.clientX : e.point.x,
+                y: e.originalEvent ? e.originalEvent.clientY : e.point.y,
+              },
+            }
+          : null
+      );
+    };
+
+    const onMouseLeave = () => {
+      map.getCanvas().style.cursor = '';
+      setHoveredVehicle(null);
+    };
+
+    const onClick = (e: mapboxgl.MapLayerMouseEvent) => {
+      if (!e.features || e.features.length === 0) return;
+      const feat = e.features[0];
+      const vehicleId = feat.properties?.vehicle_id;
+      const found = vehiclesRef.current?.find((v) => v.vehicle_id === vehicleId);
+      if (found) {
+        const coords = (feat.geometry as GeoJSON.Point).coordinates as [number, number];
+        const heading = feat.properties?.heading || 0;
+        handleVehicleSelectRef.current?.(found, coords, heading);
+      }
+    };
+
+    map.on('mouseenter', 'fleet-vehicle-dots', onMouseEnter);
+    map.on('mousemove', 'fleet-vehicle-dots', onMouseMove);
+    map.on('mouseleave', 'fleet-vehicle-dots', onMouseLeave);
+    map.on('click', 'fleet-vehicle-dots', onClick);
 
     return () => {
+      map.off('load', setupSourcesAndLayers);
+      map.off('style.load', setupSourcesAndLayers);
+      map.off('mouseenter', 'fleet-vehicle-dots', onMouseEnter);
+      map.off('mousemove', 'fleet-vehicle-dots', onMouseMove);
+      map.off('mouseleave', 'fleet-vehicle-dots', onMouseLeave);
+      map.off('click', 'fleet-vehicle-dots', onClick);
+
       try {
-        if (overlayRef.current) {
-          map.removeControl(overlayRef.current as unknown as mapboxgl.IControl);
-          overlayRef.current.finalize();
-          overlayRef.current = null;
-        }
+        if (map.getLayer('fleet-vehicle-dots')) map.removeLayer('fleet-vehicle-dots');
+        if (map.getLayer('fleet-vehicle-selected-halo')) map.removeLayer('fleet-vehicle-selected-halo');
+        if (map.getLayer('fleet-selected-route-line')) map.removeLayer('fleet-selected-route-line');
+        if (map.getSource('fleet-vehicles-source')) map.removeSource('fleet-vehicles-source');
+        if (map.getSource('fleet-selected-route-source')) map.removeSource('fleet-selected-route-source');
       } catch {}
     };
-  }, [map]);
+  }, [map, setupSourcesAndLayers]);
 
-  // High-performance 60 FPS Kinematics & GPU Instanced Deck.gl rendering loop
+  // 60 FPS Kinematics interpolation and in-place GeoJSON buffer update loop
   useEffect(() => {
     if (!map) return;
 
     let isCancelled = false;
-    const atlasUrl = getVehicleAtlasDataUrl();
+    lastTimeRef.current = performance.now();
 
     const animate = (now: number) => {
-      if (isCancelled || !map || !overlayRef.current) return;
+      if (isCancelled || !map) return;
 
-      // Throttle telemetry update to ~25 FPS (40ms interval) to liberate main-thread CPU
+      if (!map.isStyleLoaded()) {
+        animRef.current = requestAnimationFrame(animate);
+        return;
+      }
+
+      let fleetSource = map.getSource('fleet-vehicles-source') as mapboxgl.GeoJSONSource | undefined;
+      if (!fleetSource) {
+        setupSourcesAndLayers();
+        fleetSource = map.getSource('fleet-vehicles-source') as mapboxgl.GeoJSONSource | undefined;
+        if (!fleetSource) {
+          animRef.current = requestAnimationFrame(animate);
+          return;
+        }
+      }
+
       const elapsedMs = now - lastTimeRef.current;
-      if (elapsedMs < 38) {
+      if (elapsedMs < 14) {
         animRef.current = requestAnimationFrame(animate);
         return;
       }
@@ -435,27 +451,13 @@ export function FleetVehicleLayer({
       const deltaSec = Math.min(elapsedMs / 1000, 0.1);
       lastTimeRef.current = now;
 
-      // Throttle Deck.gl layer updates to ~4 Hz (every 250ms)
-      // and pause heavy layer rebuilding while the user is actively zooming or panning
-      const isInteracting = isInteractingRef.current || map.isMoving() || map.isZooming() || map.isRotating();
-      const timeSinceDeckUpdate = now - lastDeckUpdateRef.current;
-
-      if (timeSinceDeckUpdate < 250 || (isInteracting && timeSinceDeckUpdate < 600)) {
-        animRef.current = requestAnimationFrame(animate);
-        return;
-      }
-      lastDeckUpdateRef.current = now;
-
       const currentVehicles = vehiclesRef.current || [];
       const visibleVehicles = currentVehicles.filter((v) => {
         if (!modalityFilter || modalityFilter === 'all') {
-          // fallthrough to estimated filtering below
+          // all
         } else if (v.modality !== modalityFilter) {
           return false;
         }
-        // Tenant (dispatcher) view: projected units stay off the map unless the
-        // operator explicitly inspects them (the layer still renders the
-        // selected unit with its PROYEKSI badge and dashed-style corridor).
         if (
           hideEstimatedRoutes &&
           v.tracking_mode === 'ROUTE_ESTIMATED' &&
@@ -466,97 +468,35 @@ export function FleetVehicleLayer({
         return true;
       });
 
-      // Dedupe: skip redundant Deck rebuilds when fleet inputs are static.
-      // Hash covers vehicle_id + rounded lon/lat + tracking_mode; selection /
-      // follow / modality / route context / quantized pulse step / zoom bucket
-      // force a refresh when they change so pulse motion + picking stay live.
-      const zoomForDedupe = map.getZoom();
-      const zoomBucketForDedupe = Math.round(zoomForDedupe * 4) / 4;
-      const globalPulseStep = Math.floor(((now % 1800) / 1800) * 4);
-      const selectionKeyForDedupe =
-        `${selectedVehicleIdRef.current ?? 'none'}|` +
-        `${isFollowCamActiveRef.current ? 'follow' : 'nofollow'}|` +
-        `${modalityFilter}|${hideEstimatedRoutes ? 'hide' : 'show'}|` +
-        `${activeRouteIdx ?? 'none'}|${activeRoutes?.length ?? 0}`;
-      let fleetHashForDedupe = `n=${visibleVehicles.length};`;
-      for (let hIdx = 0; hIdx < visibleVehicles.length; hIdx++) {
-        const hv = visibleVehicles[hIdx] as any;
-        const hRawLonLat: [number, number] =
-          Array.isArray(hv.current_coords) && hv.current_coords.length >= 2
-            ? [hv.current_coords[0], hv.current_coords[1]]
-            : hv.current_location?.coordinates
-              ? [hv.current_location.coordinates[0], hv.current_location.coordinates[1]]
-              : Array.isArray(hv.location) && hv.location.length >= 2
-                ? [hv.location[0], hv.location[1]]
-                : hv.location?.coordinates
-                  ? [hv.location.coordinates[0], hv.location.coordinates[1]]
-                  : Array.isArray(hv.origin_coords) && hv.origin_coords.length >= 2
-                    ? [hv.origin_coords[0], hv.origin_coords[1]]
-                    : [0, 0];
-        const hLon = Number(hRawLonLat[0]).toFixed(4);
-        const hLat = Number(hRawLonLat[1]).toFixed(4);
-        fleetHashForDedupe += `${hv.vehicle_id}:${hLon},${hLat}:${hv.tracking_mode ?? ''};`;
-      }
-      if (
-        lastFleetHashRef.current === fleetHashForDedupe &&
-        lastSelectionKeyRef.current === selectionKeyForDedupe &&
-        lastPulseStepRef.current === globalPulseStep &&
-        lastZoomBucketRef.current === zoomBucketForDedupe
-      ) {
-        animRef.current = requestAnimationFrame(animate);
-        return;
-      }
-
       if (visibleVehicles.length === 0) {
-        if (overlayRef.current && lastFleetHashRef.current !== fleetHashForDedupe) {
-          overlayRef.current.setProps({ layers: [] });
+        if (!wasEmptyRef.current) {
+          fleetSource.setData({ type: 'FeatureCollection', features: [] });
+          wasEmptyRef.current = true;
         }
-        lastFleetHashRef.current = fleetHashForDedupe;
-        lastSelectionKeyRef.current = selectionKeyForDedupe;
-        lastPulseStepRef.current = globalPulseStep;
-        lastZoomBucketRef.current = zoomBucketForDedupe;
+        if (lastRouteKeyRef.current !== '') {
+          const routeSource = map.getSource('fleet-selected-route-source') as mapboxgl.GeoJSONSource | undefined;
+          if (routeSource) {
+            routeSource.setData({ type: 'FeatureCollection', features: [] });
+          }
+          lastRouteKeyRef.current = '';
+        }
         animRef.current = requestAnimationFrame(animate);
         return;
       }
+      wasEmptyRef.current = false;
 
-      // Initialize progress map for newly arrived vehicles without wiping existing
       visibleVehicles.forEach((v) => {
         if (progressMapRef.current[v.vehicle_id] === undefined) {
           progressMapRef.current[v.vehicle_id] = v.progress ?? 0.35;
         }
       });
 
-      const currentZoom = zoomForDedupe;
       const simSpeedMultiplier = typeof simSpeed === 'number' && simSpeed > 0 ? simSpeed : 1.0;
+      const features: GeoJSON.Feature<GeoJSON.Point>[] = [];
+      let activeSelectedCoords: [number, number][] | null = null;
 
-      const trailData: Array<{ path: [number, number][]; color: [number, number, number, number]; width: number }> = [];
-      const vectorData: Array<{ path: [number, number][]; color: [number, number, number, number] }> = [];
-      const estimatedRouteData: Array<{ path: [number, number][]; color: [number, number, number, number] }> = [];
-      const pulseData: Array<{
-        position: [number, number];
-        radius: number;
-        fillColor: [number, number, number, number];
-        lineColor: [number, number, number, number];
-      }> = [];
-      const baseDotsData: Array<{
-        vehicle: FleetVehicle;
-        position: [number, number];
-        heading: number;
-        isSelected: boolean;
-        fillColor: [number, number, number, number];
-        lineColor: [number, number, number, number];
-      }> = [];
-      const iconData: Array<{
-        vehicle: FleetVehicle;
-        iconKey: string;
-        position: [number, number];
-        heading: number;
-        size: number;
-        isSelected: boolean;
-      }> = [];
-      const declutterCandidates: DeclutterItem[] = [];
-
-      visibleVehicles.forEach((v, idx) => {
+      for (let i = 0; i < visibleVehicles.length; i++) {
+        const v = visibleVehicles[i];
         let coords = (
           v.route_geometry?.coordinates ||
           (v as any).route_coordinates ||
@@ -567,7 +507,6 @@ export function FleetVehicleLayer({
           []
         ) as [number, number][];
 
-        // Alternative corridor assignment for rerouted vehicle or demo unit
         if (v.status === 'rerouting' && v.route_geometry?.coordinates && v.route_geometry.coordinates.length > 1) {
           coords = v.route_geometry.coordinates as [number, number][];
         } else if (
@@ -577,18 +516,20 @@ export function FleetVehicleLayer({
         ) {
           const selRoute = activeRoutes[activeRouteIdx ?? 0] || activeRoutes[0];
           if (selRoute && selRoute.waypoints && selRoute.waypoints.length > 1) {
-            coords = selRoute.waypoints.map((w: [number, number] | { lon?: number; lng?: number; lat?: number }) => {
-              if (Array.isArray(w)) return [w[0], w[1]];
-              return [w.lon ?? w.lng ?? 0, w.lat ?? 0];
-            });
+            coords = selRoute.waypoints.map((w: any) => (Array.isArray(w) ? [w[0], w[1]] : [w.lon ?? w.lng ?? 0, w.lat ?? 0]));
           }
         }
 
         const isSelected = selectedVehicleIdRef.current === v.vehicle_id;
+        const isImpacted = v.status === 'rerouting' || Boolean((v as any).status === 'delayed') || Boolean((v as any).impacted);
+
+        if (isSelected && coords.length >= 2) {
+          activeSelectedCoords = coords;
+        }
+
         let finalPos: [number, number];
         let finalBearing: number;
 
-        // Extract latest server location fix (read current_coords first from telemetry_service.py)
         const serverFix: [number, number] =
           Array.isArray((v as any).current_coords) && (v as any).current_coords.length >= 2
             ? [(v as any).current_coords[0], (v as any).current_coords[1]]
@@ -605,8 +546,6 @@ export function FleetVehicleLayer({
         const isLandTruck = v.modality === 'truck' || (v.modality as string) === 'land';
 
         if (isLandTruck) {
-          // Keep land trucks strictly snapped/interpolated along their Sumatra highway waypoints
-          // NEVER send land trucks into unbounded spherical dead-reckoning drifting into ocean
           if (coords.length >= 2) {
             const baseSpeed = v.speed_kmh || 60;
             const totalDistanceKm = calculatePathDistanceKm(coords);
@@ -617,7 +556,6 @@ export function FleetVehicleLayer({
             let currentProgress = prevProg + increment;
             if (currentProgress > 1.0) {
               currentProgress = 0.0;
-              breadcrumbsRef.current[v.vehicle_id] = [];
             }
             progressMapRef.current[v.vehicle_id] = currentProgress;
 
@@ -629,10 +567,8 @@ export function FleetVehicleLayer({
             finalBearing = v.heading_deg ?? (v as any).bearing ?? 0;
           }
         } else {
-          // Maritime & Air Kinematics
           const hasSurveyedCorridor = coords.length >= 2 && calculatePathDistanceKm(coords) >= 15;
           if (v.modality === 'maritime' && hasSurveyedCorridor) {
-            // Surveyed channel navigation (e.g. Belawan channel or Sunda Strait ferry route)
             const baseSpeed = (v.sog_knots ? v.sog_knots * 1.852 : v.speed_kmh) || 22;
             const totalDistanceKm = calculatePathDistanceKm(coords);
             const simScale = 4.0 * simSpeedMultiplier;
@@ -642,7 +578,6 @@ export function FleetVehicleLayer({
             let currentProgress = prevProg + increment;
             if (currentProgress > 1.0) {
               currentProgress = 0.0;
-              breadcrumbsRef.current[v.vehicle_id] = [];
             }
             progressMapRef.current[v.vehicle_id] = currentProgress;
 
@@ -650,7 +585,6 @@ export function FleetVehicleLayer({
             finalPos = state.currentPosition;
             finalBearing = state.bearing;
           } else {
-            // Dead-reckoning for flights or open sea vessels
             let drState = deadReckonMapRef.current[v.vehicle_id];
             if (!drState) {
               drState = {
@@ -662,7 +596,6 @@ export function FleetVehicleLayer({
             } else {
               const driftKm = getHaversineDistanceKm(drState.currentPos, serverFix);
               if (driftKm > 15) {
-                // Smooth blend toward new server fix if drift is large, rather than resetting to stern/prev
                 drState.currentPos[0] += (serverFix[0] - drState.currentPos[0]) * 0.25;
                 drState.currentPos[1] += (serverFix[1] - drState.currentPos[1]) * 0.25;
                 drState.baseLocation = [serverFix[0], serverFix[1]];
@@ -689,8 +622,6 @@ export function FleetVehicleLayer({
               const distKm = (effectiveSpeedKmh / 3600) * deltaSec * simSpeedMultiplier * speedScale;
               finalPos = deadReckonPosition(drState.currentPos, effectiveBearing, distKm);
 
-              // Regional bounding clamp — removed crude longitude wraparound (+= 14.5 / -= 14.5)
-              // that caused vessels in Malacca Strait to teleport across Sumatra mainland
               finalPos[0] = Math.max(94.0, Math.min(109.0, finalPos[0]));
               finalPos[1] = Math.max(-7.0, Math.min(7.0, finalPos[1]));
 
@@ -701,182 +632,33 @@ export function FleetVehicleLayer({
           }
         }
 
-        // Maintain rolling circular history of coordinates for breadcrumb wake/trail
-        const history = breadcrumbsRef.current[v.vehicle_id] || [];
-        const lastPt = history[history.length - 1];
-        if (!lastPt || Math.hypot(lastPt[0] - finalPos[0], lastPt[1] - finalPos[1]) > 0.0003) {
-          history.push(finalPos);
-          if (history.length > 12) history.shift();
-          breadcrumbsRef.current[v.vehicle_id] = history;
-        }
-
-        if (history.length > 1) {
-          const wakeColor: [number, number, number, number] =
-            v.modality === 'maritime'
-              ? [56, 189, 248, 65]
-              : v.modality === 'air'
-                ? [192, 132, 252, 60]
-                : [255, 255, 255, 45];
-          trailData.push({
-            path: history,
-            color: wakeColor,
-            width: v.modality === 'maritime' ? 2.5 : v.modality === 'air' ? 2.0 : 1.2,
-          });
-        }
-
-        // Forward geodesic velocity vector
-        // Display tactical velocity vector only for actively selected unit or actively rerouting/delayed unit
-        const isImpacted = v.status === 'rerouting' || Boolean((v as any).status === 'delayed') || Boolean((v as any).impacted);
-        if (v.status !== 'anchored' && (v.speed_kmh || 0) > 0 && (isSelected || isImpacted)) {
-          const vectorColor: [number, number, number, number] = isSelected
-            ? [0, 240, 255, 240]
-            : v.modality === 'maritime'
-              ? [56, 189, 248, 200]
-              : v.modality === 'air'
-                ? [192, 132, 252, 200]
-                : [52, 211, 153, 200];
-
-          // Forward time projection: ~1.2 minutes (0.02h) so vector indicates heading cleanly without spanning the map
-          const endPoint = projectBearingEndpoint(
-            finalPos,
-            finalBearing,
-            v.speed_kmh || 60,
-            v.modality === 'air' ? 0.025 : 0.02
-          );
-
-          vectorData.push({
-            path: [finalPos, endPoint],
-            color: vectorColor,
-          });
-        }
-
-        // Hazard pulse ring for selected, delayed, or rerouting vehicles
-        // Quantized to 4 steps (0, 0.25, 0.5, 0.75) to cut per-tick shimmer
-        // while preserving the motion cue; pairs with the dedupe guard above.
-        if (isSelected || isImpacted) {
-          const rawPulsePhase = ((now + idx * 250) % 1800) / 1800; // 0.0 to 1.0
-          const pulsePhase = Math.floor(rawPulsePhase * 4) / 4;
-          const radiusPixels = isSelected ? 22 + pulsePhase * 16 : 16 + pulsePhase * 12;
-          const alphaFill = Math.round((1.0 - pulsePhase) * 60);
-          const alphaLine = Math.round((1.0 - pulsePhase) * 220);
-
-          pulseData.push({
-            position: finalPos,
-            radius: radiusPixels,
-            fillColor: isSelected ? [0, 240, 255, alphaFill] : [245, 158, 11, alphaFill],
-            lineColor: isSelected ? [0, 240, 255, alphaLine] : [245, 158, 11, alphaLine],
-          });
-        } else if (v.tracking_mode === 'ROUTE_ESTIMATED' && !hideEstimatedRoutes) {
-          // Subtle amber tactical ring for estimated corridor units
-          pulseData.push({
-            position: finalPos,
-            radius: 14,
-            fillColor: [245, 158, 11, 20],
-            lineColor: [245, 158, 11, 140],
-          });
-        }
-
-        // Collect planned trajectory line for ROUTE_ESTIMATED vehicles.
-        // In the dispatcher tenant view the projection is only drawn for the
-        // unit currently under inspection, never as ambient orange corridors.
-        if (
-          v.tracking_mode === 'ROUTE_ESTIMATED' &&
-          coords.length >= 2 &&
-          (!hideEstimatedRoutes || isSelected)
-        ) {
-          estimatedRouteData.push({
-            path: coords,
-            color: [245, 158, 11, 150],
-          });
-        }
-
-        // Persistent base dot for all vehicles (always visible at all zoom levels)
-        const dotColor: [number, number, number, number] = isSelected
-          ? [0, 240, 255, 255]
-          : v.modality === 'maritime'
-            ? [56, 189, 248, 230]
-            : v.modality === 'air'
-              ? [192, 132, 252, 230]
-              : [52, 211, 153, 230];
-
-        baseDotsData.push({
-          vehicle: v,
-          position: finalPos,
-          heading: finalBearing,
-          isSelected,
-          fillColor: dotColor,
-          lineColor: [12, 16, 23, 220],
-        });
-
-        // Vehicle sprite item
-        const iconKey = isSelected ? `${v.modality}-selected` : v.modality;
-        const iconSize = getVehicleIconSize(v.modality, currentZoom, isSelected);
-
-        iconData.push({
-          vehicle: v,
-          iconKey,
-          position: finalPos,
-          heading: finalBearing,
-          size: iconSize,
-          isSelected,
-        });
-
-        // Register candidate for screen-space anti-clutter arbiter
-        const screenPt = map.project(finalPos);
-        let priority = PRIORITY_FLEET_CALLSIGN;
-        if (isSelected) {
-          priority = PRIORITY_SELECTED_ROUTE;
-        } else if (isImpacted) {
-          priority = PRIORITY_IMPACTED_FLEET;
-        } else if (v.modality === 'air') {
-          priority = PRIORITY_AIRCRAFT_CALLSIGN;
-        } else if (
-          v.modality === 'maritime' &&
-          ((v.speed_kmh || 0) > 12 ||
-            v.cargo?.toLowerCase().includes('petikemas') ||
-            v.cargo?.toLowerCase().includes('kontainer') ||
-            v.cargo?.toLowerCase().includes('cpo'))
-        ) {
-          priority = PRIORITY_MAJOR_VESSEL;
-        } else if (isLandTruck) {
-          // Strategic cargo trucks on Trans-Sumatra Highway receive priority boost
-          if (
-            v.cargo?.toLowerCase().includes('beras') ||
-            v.cargo?.toLowerCase().includes('bulog') ||
-            v.cargo?.toLowerCase().includes('solar') ||
-            v.cargo?.toLowerCase().includes('sayur') ||
-            v.cargo?.toLowerCase().includes('sembako')
-          ) {
-            priority = 52;
-          }
-        }
-
-        declutterCandidates.push({
+        features.push({
+          type: 'Feature',
           id: v.vehicle_id,
-          screenX: screenPt.x,
-          screenY: screenPt.y,
-          priority,
-          width: 90,
-          height: 24,
-          category: 'fleet',
-          modality: isLandTruck ? 'truck' : v.modality,
-          text: v.callsign || v.name || v.vehicle_id,
-          coords: finalPos,
+          geometry: {
+            type: 'Point',
+            coordinates: finalPos,
+          },
+          properties: {
+            vehicle_id: v.vehicle_id,
+            name: v.name || v.vehicle_id,
+            modality: v.modality,
+            speed_kmh: Math.round(v.speed_kmh || 0),
+            heading: Math.round(finalBearing),
+            isSelected,
+            isImpacted,
+            status: v.status || 'active',
+            tracking_mode: v.tracking_mode,
+            cargo: v.cargo || '',
+          },
         });
 
-        // Throttled selected vehicle live position sync (~2 Hz) & Follow Camera easeTo
         if (isSelected) {
-          if (now - lastPopupSyncRef.current >= 500) {
+          selectedPosRef.current = finalPos;
+          if (now - lastPopupSyncRef.current >= 250) {
             lastPopupSyncRef.current = now;
             setSelectedVehicle((prev) => {
               if (!prev || prev.vehicle.vehicle_id !== v.vehicle_id) return prev;
-              if (
-                Math.abs(prev.currentPos[0] - finalPos[0]) < 0.0001 &&
-                Math.abs(prev.currentPos[1] - finalPos[1]) < 0.0001 &&
-                Math.abs(prev.bearing - finalBearing) < 1
-              ) {
-                return prev;
-              }
               return {
                 ...prev,
                 currentPos: finalPos,
@@ -888,208 +670,47 @@ export function FleetVehicleLayer({
           if (isFollowCamActiveRef.current) {
             map.easeTo({
               center: finalPos,
-              duration: 250,
+              duration: 100,
               easing: (t) => t,
             });
           }
         }
-      });
-
-      // SpatialHash Anti-Clutter Arbitration:
-      // Cache arbitration winners and re-arbitrate only periodically (~350ms) or when camera zoom changes
-      // Macro zoom (z < 7.5) uses balanced per-modality quota (trucks: 8, maritime: 9, air: 7)
-      const isMacro = currentZoom < 7.5;
-      const shouldReArbitrate =
-        now - lastArbitrateTimeRef.current > 350 ||
-        Math.abs(currentZoom - lastArbitrateZoomRef.current) > 0.25 ||
-        cachedWinnersRef.current.size === 0;
-
-      let winningLabelIds = cachedWinnersRef.current;
-      if (shouldReArbitrate) {
-        winningLabelIds = isMacro
-          ? arbitrateMacroZoomLabels(declutterCandidates, defaultSpatialHashArbiter, now)
-          : arbitrateVisibleLabels(declutterCandidates, defaultSpatialHashArbiter, now);
-        cachedWinnersRef.current = winningLabelIds;
-        lastArbitrateTimeRef.current = now;
-        lastArbitrateZoomRef.current = currentZoom;
       }
 
-      const textData: Array<{
-        vehicle: FleetVehicle;
-        text: string;
-        position: [number, number];
-        color: [number, number, number, number];
-        borderColor: [number, number, number, number];
-        size: number;
-        heading: number;
-      }> = [];
-
-      declutterCandidates.forEach((c) => {
-        const isSelected = selectedVehicleIdRef.current === c.id;
-        if (isSelected || winningLabelIds.has(c.id)) {
-          const targetVeh = visibleVehicles.find((veh) => veh.vehicle_id === c.id);
-          if (targetVeh && c.coords) {
-            let badge = 'GPS LIVE';
-            let textColor: [number, number, number, number] = [52, 211, 153, 255]; // emerald
-            if (targetVeh.modality === 'maritime') {
-              badge = targetVeh.tracking_mode === 'ROUTE_ESTIMATED' ? 'AIS PROYEKSI' : 'AIS LIVE';
-              textColor = [56, 189, 248, 255]; // sky
-            } else if (targetVeh.modality === 'air') {
-              badge = 'ADS-B';
-              textColor = [192, 132, 252, 255]; // purple
-            } else if (targetVeh.tracking_mode === 'ROUTE_ESTIMATED') {
-              badge = 'PROYEKSI';
-              textColor = [245, 158, 11, 255]; // amber
-            }
-
-            const labelText = isSelected
-              ? `${c.text}\n[${badge}]`
-              : `${c.text} - ${badge}`;
-
-            textData.push({
-              vehicle: targetVeh,
-              text: labelText,
-              position: c.coords,
-              color: isSelected ? [0, 240, 255, 255] : textColor,
-              borderColor: isSelected ? [0, 240, 255, 200] : [28, 36, 50, 180],
-              size: isMacro ? 9.5 : 11,
-              heading: targetVeh.heading_deg ?? 0,
-            });
-          }
-        }
+      fleetSource.setData({
+        type: 'FeatureCollection',
+        features,
       });
 
-      // Construct Deck.gl GPU-instanced layers
-      const deckLayers = [
-        new PathLayer({
-          id: 'deck-fleet-estimated-routes',
-          data: estimatedRouteData,
-          getPath: (d: any) => d.path,
-          getColor: (d: any) => d.color,
-          getWidth: 2.5,
-          widthUnits: 'pixels',
-          widthMinPixels: 1.5,
-          capRounded: true,
-          jointRounded: true,
-        }),
-        new PathLayer({
-          id: 'deck-fleet-wakes',
-          data: trailData,
-          getPath: (d: any) => d.path,
-          getColor: (d: any) => d.color,
-          getWidth: (d: any) => d.width,
-          widthUnits: 'pixels',
-          widthMinPixels: 1,
-          capRounded: true,
-          jointRounded: true,
-        }),
-        new PathLayer({
-          id: 'deck-fleet-vectors',
-          data: vectorData,
-          getPath: (d: any) => d.path,
-          getColor: (d: any) => d.color,
-          getWidth: 2,
-          widthUnits: 'pixels',
-          widthMinPixels: 1,
-          capRounded: true,
-          jointRounded: true,
-        }),
-        new ScatterplotLayer({
-          id: 'deck-fleet-pulse',
-          data: pulseData,
-          getPosition: (d: any) => d.position,
-          getRadius: (d: any) => d.radius,
-          radiusUnits: 'pixels',
-          radiusMinPixels: 4,
-          getFillColor: (d: any) => d.fillColor,
-          getLineColor: (d: any) => d.lineColor,
-          stroked: true,
-          filled: true,
-          lineWidthUnits: 'pixels',
-          lineWidthMinPixels: 1.5,
-        }),
-        new ScatterplotLayer({
-          id: 'deck-fleet-dots',
-          data: baseDotsData,
-          getPosition: (d: any) => d.position,
-          getRadius: (d: any) => (d.isSelected ? 6 : 4),
-          radiusUnits: 'pixels',
-          radiusMinPixels: 3,
-          getFillColor: (d: any) => d.fillColor,
-          getLineColor: (d: any) => d.lineColor,
-          stroked: true,
-          filled: true,
-          lineWidthUnits: 'pixels',
-          lineWidthMinPixels: 1.5,
-          billboard: true,
-          pickable: true,
-          onClick: (info: any) => {
-            if (info.object) {
-              handleVehicleSelect(info.object.vehicle, info.object.position, info.object.heading);
-            }
-          },
-        }),
-        new IconLayer({
-          id: 'deck-fleet-icons',
-          data: iconData,
-          iconAtlas: atlasUrl,
-          iconMapping: ICON_MAPPING,
-          getIcon: (d: any) => d.iconKey,
-          getPosition: (d: any) => d.position,
-          getAngle: (d: any) => d.heading,
-          getSize: (d: any) => d.size,
-          sizeUnits: 'pixels',
-          sizeMinPixels: 14,
-          billboard: true,
-          pickable: true,
-          autoHighlight: true,
-          highlightColor: [0, 240, 255, 60],
-          onClick: (info: any) => {
-            if (info.object) {
-              handleVehicleSelect(info.object.vehicle, info.object.position, info.object.heading);
-            }
-          },
-        }),
-        new TextLayer({
-          id: 'deck-fleet-labels',
-          data: textData,
-          getText: (d: any) => d.text,
-          getPosition: (d: any) => d.position,
-          getColor: (d: any) => d.color,
-          getSize: (d: any) => d.size,
-          sizeUnits: 'pixels',
-          sizeMinPixels: 9,
-          billboard: true,
-          fontFamily: 'DIN Pro Medium, Arial Unicode MS Regular, sans-serif',
-          fontWeight: '600',
-          getTextAnchor: 'start',
-          getAlignmentBaseline: 'center',
-          getPixelOffset: [18, 0],
-          background: true,
-          getBackgroundColor: [12, 16, 23, 215],
-          getBorderColor: (d: any) => d.borderColor,
-          getBorderWidth: 1,
-          backgroundBorderRadius: 4,
-          backgroundPadding: [5, 2, 5, 2],
-          pickable: true,
-          onClick: (info: any) => {
-            if (info.object) {
-              handleVehicleSelect(info.object.vehicle, info.object.position, info.object.heading);
-            }
-          },
-        }),
-      ];
-
-      overlayRef.current.setProps({ layers: deckLayers });
-      lastFleetHashRef.current = fleetHashForDedupe;
-      lastSelectionKeyRef.current = selectionKeyForDedupe;
-      lastPulseStepRef.current = globalPulseStep;
-      lastZoomBucketRef.current = zoomBucketForDedupe;
+      // Deduplicated route line update: only tessellate when selected route changes
+      const routeKey = activeSelectedCoords
+        ? `${selectedVehicleIdRef.current}_${activeSelectedCoords.length}_${activeSelectedCoords[0][0]}_${activeSelectedCoords[activeSelectedCoords.length - 1][0]}`
+        : '';
+      if (routeKey !== lastRouteKeyRef.current) {
+        lastRouteKeyRef.current = routeKey;
+        const routeSource = map.getSource('fleet-selected-route-source') as mapboxgl.GeoJSONSource | undefined;
+        if (routeSource) {
+          routeSource.setData({
+            type: 'FeatureCollection',
+            features: activeSelectedCoords
+              ? [
+                  {
+                    type: 'Feature',
+                    geometry: {
+                      type: 'LineString',
+                      coordinates: activeSelectedCoords,
+                    },
+                    properties: {},
+                  },
+                ]
+              : [],
+          });
+        }
+      }
 
       animRef.current = requestAnimationFrame(animate);
     };
 
-    lastTimeRef.current = performance.now();
     if (animRef.current) cancelAnimationFrame(animRef.current);
     animRef.current = requestAnimationFrame(animate);
 
@@ -1099,11 +720,8 @@ export function FleetVehicleLayer({
         cancelAnimationFrame(animRef.current);
         animRef.current = null;
       }
-      if (overlayRef.current) {
-        overlayRef.current.setProps({ layers: [] });
-      }
     };
-  }, [map, activeRoutes, activeRouteIdx, modalityFilter, simSpeed, handleVehicleSelect, hideEstimatedRoutes]);
+  }, [map, activeRoutes, activeRouteIdx, modalityFilter, simSpeed, hideEstimatedRoutes, setupSourcesAndLayers]);
 
   const vehicle = selectedVehicle?.vehicle;
   const isMaritime = vehicle?.modality === 'maritime';
@@ -1137,12 +755,60 @@ export function FleetVehicleLayer({
         <TargetLockReticle
           map={map}
           targetLngLat={selectedVehicle.currentPos}
+          currentPosRef={selectedPosRef}
           callsign={selectedVehicle.vehicle.name || selectedVehicle.vehicle.vehicle_id}
           onDismiss={handleDismissSelection}
         />
       )}
 
-      {/* Telemetry Inspector Console — Docked in Right Tactical Inspector Slot (Zero Overlap with Left Drawer) */}
+      {/* Impeccable Hover Micro-Tooltip */}
+      {hoveredVehicle && !selectedVehicle && (
+        <div
+          className="fixed pointer-events-none z-50 backdrop-blur-md bg-[#0c1017]/90 border border-white/10 px-2.5 py-1.5 rounded-lg shadow-xl text-slate-100 font-sans transition-opacity duration-150 animate-in fade-in"
+          style={{
+            left: Math.min(
+              hoveredVehicle.screenPos.x + 12,
+              typeof window !== 'undefined' ? window.innerWidth - 240 : 600
+            ),
+            top: Math.max(12, hoveredVehicle.screenPos.y - 12),
+          }}
+        >
+          <div className="flex items-center gap-1.5">
+            <span
+              className={`w-2 h-2 rounded-full ${
+                hoveredVehicle.vehicle.modality === 'maritime'
+                  ? 'bg-[#06b6d4]'
+                  : hoveredVehicle.vehicle.modality === 'air'
+                    ? 'bg-[#a855f7]'
+                    : 'bg-[#10b981]'
+              }`}
+            />
+            <span className="text-xs font-semibold text-white">
+              {hoveredVehicle.vehicle.name || hoveredVehicle.vehicle.vehicle_id}
+            </span>
+            <span className="text-[10px] font-mono uppercase px-1 rounded bg-[#121822] text-slate-400 border border-white/5">
+              {hoveredVehicle.vehicle.tracking_mode === 'ROUTE_ESTIMATED'
+                ? 'PROYEKSI'
+                : hoveredVehicle.vehicle.modality === 'maritime'
+                  ? 'AIS'
+                  : hoveredVehicle.vehicle.modality === 'air'
+                    ? 'ADS-B'
+                    : 'GPS'}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 mt-1 text-[11px] text-slate-300 font-mono">
+            <span>{hoveredVehicle.vehicle.speed_kmh || 0} km/j</span>
+            {hoveredVehicle.vehicle.cargo && (
+              <>
+                <span className="text-slate-600">·</span>
+                <span className="text-slate-400 truncate max-w-[160px]">{hoveredVehicle.vehicle.cargo}</span>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Telemetry Inspector Console — Docked in Right Tactical Inspector Slot */}
       {selectedVehicle && (
         <div className="absolute top-16 right-3 bottom-4 z-40 w-[calc(100vw-1.5rem)] sm:w-[390px] bg-[#0c1017] border border-[#1c2432] shadow-xl rounded-lg p-4 text-slate-100 animate-in slide-in-from-right-4 duration-300 pointer-events-auto space-y-3 font-sans overflow-y-auto no-scrollbar">
           {/* Header Bar */}

@@ -1,42 +1,38 @@
 ---
 gsd_state_version: "1.0"
-milestone: M5
-milestone_name: High-Fidelity Intelligence & Isolated Operations Engine
-current_phase: 88
-current_phase_name: Client-Isolated Routing Session vs. Global Read-Only Environmental State
-status: completed
-stopped_at: "Phase 88 executed and verified: Two-layer state architecture, bidirectional URL query parameter synchronization, ambient WebSocket route isolation, standalone verification suite (4/4 passed), and Playwright multi-client concurrency E2E suite (passed)."
-last_updated: "2026-10-21T17:28:00.000Z"
-last_activity: 2026-10-21
-last_activity_desc: "Phases 87 and 88 complete: Mapbox Turn-by-Turn Road Network & Client-isolated routing session decoupled. Integrated with remote phases 85 (Weather/FIRMS) and 86 (Deploy-readiness)."
+milestone: M6
+milestone_name: 3D Globe Native Mapbox Fleet, Street-Snapping & Impeccable Cartography
+current_phase: 101
+current_phase_name: 3D Globe Native Mapbox Fleet, Anti-Flicker & Impeccable Minimalist Visual Cleanup
+status: complete
+stopped_at: "Phase 101 complete: Restored 3D Globe projection ('4D') on Mapbox GL JS v3, migrated fleet rendering from Deck.gl to native Mapbox WebGL GeoJSON layers (100% surface grounding, 0 floating), eliminated reload flicker with 60 FPS in-place GeoJSON updates, and executed impeccable visual distillation (clean colored tactical dots, default hideEstimatedRoutes=true, micro-tooltips on hover)."
+last_updated: "2026-10-24T00:20:00.000Z"
+last_activity: 2026-10-24
+last_activity_desc: "Milestone M6 Phase 101 complete (3D Globe Native Mapbox Fleet, Anti-Flicker & Impeccable Minimalist Visual Cleanup). 7/7 Playwright tests passing, 22/22 backend tests passing, 0 tsc errors."
 state_head: HEAD
 progress:
-  total_phases: 88
-  completed_phases: 88
-  total_plans: 107
-  completed_plans: 107
+  total_phases: 101
+  completed_phases: 101
+  total_plans: 118
+  completed_plans: 118
   percent: 100.0
 ---
 
 # STATE: PreHub Project Memory
 
-**Last Updated:** 2026-10-21
-**Active Milestone:** M5 - High-Fidelity Intelligence & Isolated Operations Engine [COMPLETE ✅]
-**Current Phase:** 88
+**Last Updated:** 2026-10-24
+**Active Milestone:** M6 - 3D Globe Native Mapbox Fleet, Street-Snapping & Impeccable Cartography [COMPLETED ✅]
+**Previous Milestones:** M1-M4 [COMPLETED ✅], M5 - Pilot Interference, Ingestion Resilience & Honest Verification [COMPLETED ✅]
+**Current Phase:** 101
 
 ---
 
 ## Current Position
 
-Phase: 88 (Client-Isolated Routing Session vs. Global Read-Only Environmental State) - COMPLETE ✅
-Status: All Milestone 5 phases (83 through 88) fully implemented, integrated, and verified:
-(1) **Phase 83 — Zero-Token Pre-LLM Filtering & Grounded Routing Hedging.** [COMPLETE ✅]
-(2) **Phase 84 — Deterministic BMKG Sensor Cross-Validation & News Precision Gate-2.** [COMPLETE ✅]
-(3) **Phase 85 — Weather & NASA FIRMS Spatial Overlay (Phase B).** [COMPLETE ✅]
-(4) **Phase 86 — Verification & Production Readiness Ledger.** [COMPLETE ✅]
-(5) **Phase 87 — Mapbox Directions API Turn-by-Turn Road Network & Tangential Hazard Avoidance.** [COMPLETE ✅]
-(6) **Phase 88 — Client-Isolated Routing Session vs. Global Read-Only Environmental State.** [COMPLETE ✅]
-Next action: Milestone 5 fully complete. Working tree verified with 0 TypeScript errors and passing Playwright & unit suites.
+Phase: 101 (3D Globe Native Mapbox Fleet, Anti-Flicker & Impeccable Minimalist Visual Cleanup) - COMPLETE ✅
+Status: Phase 101 fully completed and verified. 3D Globe projection ("4D") restored on Mapbox GL JS v3 with 100% surface adherence; fleet vehicle rendering fully migrated from Deck.gl to native Mapbox WebGL GeoJSON layers; flicker eradicated via non-destructive GeoJSON buffer updates; visual minimalism applied (clean tactical dots, ambient routes hidden by default, pulse aura reserved for emergency/reroute units, hover micro-tooltips).
+Plan: `.planning/phases/101-3d-globe-native-mapbox-fleet-anti-flicker-minimalist/PLAN.md`
+Next action: Milestone M6 finalized. Ready for review or next phase.
 
 
 
@@ -146,14 +142,17 @@ Upstream Phases 87/88 above (Mapbox turn-by-turn; client-isolated session, merge
 | 87 | FIRMS Radius-Area + Weather Disruption Threshold | **COMPLETE** ✅ | Git: `b28a0db`. Disruption-only default (min_severity=high, precip>=50mm/24h OR flood>=80%); BMKG code fallback mapping (60→25/55 drizzle, 95/97→65.5/87.5 severe); FIRMS `radius_km` 5.0/2.5/1.0 additive; advisory opt-in path. Docs: `87-firms-radius-weather-disruption-threshold/PLAN.md` + `LEARNINGS.md`. tsc/tests NOT re-run. |
 | 88 | Full-Sumatra Grid Overlay | **COMPLETE** ✅ | Git: `967dc2b`. 23-pt OM bulk grid (bbox 95-106E/-6…6N, gazetteer-snapped, 60km land mask); per-hub BMKG parallel fetch + 30-min cache (only Medan adm4 verified, 8 hubs None→OM-covered); cap-24 features (~30KB). Docs: `88-full-sumatra-grid-overlay/PLAN.md` + `LEARNINGS.md`. NOT probed. |
 | 89 | Weather Logistics Enrichment | **COMPLETE** ✅ | Git: `530b07d`. Per-feature hazard-type, corridor-leg intersect (10 spine legs), delay (base×severity: flood 14/landslide 10/marine 18/storm 14 × 1.2/1.0/0.7/0.4), advisory action, modalities, confidence; hill-spine landslide geometry switch; CrisisMap popup+legend + TopNav sample. Corroborator-only preserved. Docs: `89-weather-logistics-enrichment/PLAN.md` + `LEARNINGS.md`. NOT probed. |
-
-### Pilot-to-Real Interference Fixes (phases 97-99, docs pass 2026-10-23)
-
-| Phase | Name | Status | Notes |
-|---|---|---|---|
-| 97 | Pilot-to-Real Interference Core (WP1 + WP2) | **COMPLETE** | Duplicate -> `END`; UI/sim dedup exemptions; weather-grounded confidence; PIHPS pre-gate; E-channel active/physical-only weight profiles. 49 + 12 tests re-run. Docs: `97-pilot-interference-core/`. |
-| 98 | Ingestion Resilience and Alert Bridge (WP3 + WP4 + WP5) | **COMPLETE** | PIHPS snapshot + 14d fallback; bounded local STM/dedup; OSINT 12h fallback; SCAN + corridor anchor; idempotent news upserts; anti-self-corroboration; cross-worker validated-alert stream. 22 + 84 + 9 tests re-run; alert bridge has no direct test. Docs: `98-ingestion-resilience-and-alert-bridge/`. |
-| 99 | Honest UI and Risk Batch (WP6 + WP7) | **COMPLETE** (1 open test) | Archived => unvalidated + Evidence + info toast; fallback-news label; dual-scale Brier (normalized scored, raw telemetry); canonical publisher URLs; auth-first HITL. tsc 0; 10 passed; `test_evaluation_router` TP 35 vs 34 still red. Docs: `99-honest-ui-and-risk-batch/`. |
+| 90 | OSINT Leak Hardening + Pan-Sumatra Coverage | **COMPLETE** ✅ | Git: `9f0a854`. Fail-closed 48h freshness gate, Baca-Juga/promo DOM stripping, sentence-level physical blockage proximity + economic/metaphor veto, un-geocoded RED cap, single-item semaphore-8 LLM batching, 64 regression tests passing. |
+| 91 | P0-P4 Integrity Remediation Framework | **COMPLETE** ✅ | Git: `20c7fa5`, `fb979f7`. Architectural decisions and planning for P0–P4 integrity overhaul across persistence, prediction, OSINT gating, and UI observability. |
+| 92 | P0: Schema / Write Contract Hardening | **COMPLETE** ✅ | Git: `20c7fa5`. Single write path via `write_incident()`, explicit column whitelist, deterministic uuid5 `incident_id`, upsert idempotency, disabled silent anon fallback. |
+| 93 | P1: Prediction Core & Calibration Honesty | **COMPLETE** ✅ | Git: `20c7fa5`. Nearest-segment anchor × deterministic decay, Haversine nearest Open-Meteo grid point, simulated evidence discounted ×0.90, missing sensor distance = +inf, GraphRAG kg_* canonical tables. |
+| 94 | P2: Social / Spatial Gate Hardening | **COMPLETE** ✅ | Git: `20c7fa5`. OSINT spatial anchoring (<=100km or region/corridor match + hazard alignment), raw payload text unpacking, canonical region slugs. |
+| 95 | P3: UI Observability & Truthful Rendering | **COMPLETE** ✅ | Git: `20c7fa5`. Purged fabricated 0.92/0.94 and Rupiah figures; absent values render "Belum tersedia"; evidence-based `/health/sources`; per-crisis alert fanout. |
+| 96 | P4: E2E Blocker Pack | **PLANNED** ⏳ | Docs in `96-p4-e2e-blocker-pack/PLAN.md`. Release-gate coverage for P0-P3, multi-client routing isolation debugging, and Next.js standalone build unblocking. |
+| 97 | Pilot-to-Real Interference Core (WP1 + WP2) | **COMPLETE** ✅ | Duplicate -> `END`; UI/sim dedup exemptions; weather-grounded confidence; PIHPS pre-gate; E-channel active/physical-only weight profiles. 49 + 12 tests re-run. Docs: `97-pilot-interference-core/`. |
+| 98 | Ingestion Resilience and Alert Bridge (WP3 + WP4 + WP5) | **COMPLETE** ✅ | PIHPS snapshot + 14d fallback; bounded local STM/dedup; OSINT 12h fallback; SCAN + corridor anchor; idempotent news upserts; anti-self-corroboration; cross-worker validated-alert stream. 22 + 84 + 9 tests re-run; alert bridge has no direct test. Docs: `98-ingestion-resilience-and-alert-bridge/`. |
+| 99 | Honest UI and Risk Batch (WP6 + WP7) | **COMPLETE** ✅ | Archived => unvalidated + Evidence + info toast; fallback-news label; dual-scale Brier (normalized scored, raw telemetry); canonical publisher URLs; auth-first HITL. tsc 0; 10 passed; `test_evaluation_router` TP 35 vs 34 still red. Docs: `99-honest-ui-and-risk-batch/`. |
+| 101 | 3D Globe Native Mapbox Fleet, Anti-Flicker & Impeccable Minimalist Visual Cleanup | **COMPLETE** ✅ | Restored 3D Globe projection ('4D') on Mapbox GL JS v3 with space atmosphere fog; migrated fleet layer from Deck.gl to native Mapbox WebGL GeoJSON layers (100% surface grounding, 0 floating); eliminated flicker with 60 FPS in-place `source.setData()` buffer updates; default `hideEstimatedRoutes=true` (removes ambient orange lines across Sumatra); hover micro-tooltips; 7/7 Playwright tests pass, 22/22 pytest pass, 0 tsc errors. |
 
 ### Hotfix 2026-10-22 — Offline land-corridor honesty + toll-bypass spec (pilot rule: green = verified-driveable)
 

@@ -1,6 +1,10 @@
 try {
   process.loadEnvFile('.env.local');
-} catch {}
+} catch {
+  try {
+    process.loadEnvFile('frontend/.env.local');
+  } catch {}
+}
 
 import assert from 'node:assert/strict';
 import {
@@ -13,15 +17,17 @@ import {
   getCachedDirections,
   fetchMapboxAlternativeDrivingRoutes,
   calculateAIDynamicDetourRoutes,
+  buildExcludeParam,
   type LonLat,
+  type ExcludeOptions,
 } from '../lib/aiDynamicRouter.ts';
 
-console.log('--- RUNNING PHASE 87 TURN-BY-TURN ROAD NETWORK & TANGENTIAL DETOUR TEST ---');
+console.log('--- RUNNING PHASE 97 TURN-BY-TURN ROAD NETWORK & DUAL-LAYER HAZARD DETOUR TEST ---');
 
 // =========================================================================
-// TEST 1: Tangential Waypoint Math & Orthogonal Clearance
+// TEST 1: Tangential Normal Waypoint Geometry & Bilateral Clearance
 // =========================================================================
-console.log('\n[TEST 1] Verifying Tangential Normal Waypoint Geometry...');
+console.log('\n[TEST 1] Verifying Tangential Normal Waypoint Geometry (R + 2.0 km)...');
 
 const origin: LonLat = [98.6776, 3.7922]; // Pelabuhan Belawan
 const destination: LonLat = [98.6712, 3.6013]; // Simpang Pos Medan
@@ -59,11 +65,26 @@ assert(
 console.log('  ✓ Tangential waypoint vector math verified successfully');
 
 // =========================================================================
-// TEST 2: Quota Guard In-Memory Memoization Cache
+// TEST 2: Quota Guard In-Memory Memoization & Exclude Query Builder
 // =========================================================================
-console.log('\n[TEST 2] Verifying Mapbox Quota Guard Memoization Layer...');
+console.log('\n[TEST 2] Verifying Mapbox Quota Guard & Dynamic Exclude Builder...');
 
-const testCacheKey = 'driving-traffic:98.62,3.58;98.65,3.56:test:false';
+// Test buildExcludeParam helper
+const sampleExcludeOpts: ExcludeOptions = {
+  excludeToll: true,
+  excludeMotorway: true,
+  excludePoints: [
+    [98.6742, 3.7000],
+    [98.6800, 3.7100],
+  ],
+};
+const excludeQuery = buildExcludeParam(sampleExcludeOpts);
+console.log(`  Generated exclude parameter: "${excludeQuery}"`);
+assert(excludeQuery.includes('toll'), 'Exclude query must contain "toll"');
+assert(excludeQuery.includes('motorway'), 'Exclude query must contain "motorway"');
+assert(excludeQuery.includes('point(98.67420 3.70000)'), 'Exclude query must contain formatted point');
+
+const testCacheKey = 'driving-traffic:98.62,3.58;98.65,3.56:test:toll';
 const mockResponse = {
   code: 'Ok',
   routes: [
@@ -90,44 +111,41 @@ assert.equal(retrieved?.routes?.[0].distance, 5500, 'Retrieved cache item must p
 console.log('  ✓ Cache hit verified: returned stored route without network call');
 
 // =========================================================================
-// TEST 3: Hazard Exposure & Street Snapping Evaluation
+// TEST 3: Dual-Layer Hazard Avoidance Evaluation (Point vs Polygon)
 // =========================================================================
-console.log('\n[TEST 3] Evaluating Simulated Hazard Penetration on Manhattan -> USU...');
+console.log('\n[TEST 3] Evaluating Dual-Layer Hazard Avoidance (Point <500m & Polygon >=500m)...');
 
-// Construct a synthetic straight line passing right through the hazard center
-const straightLineChord: LonLat[] = [
-  origin,
-  hazardCenter,
-  destination,
-];
-
+// Synthetic straight line passing through hazard center
+const straightLineChord: LonLat[] = [origin, hazardCenter, destination];
 const straightLineMetrics = calculateHazardExposureMetrics(straightLineChord, hazardCenter, hazardRadiusKm);
 console.log(`  Straight line exposure: ${straightLineMetrics.exposureKm} km (Intersecting: ${straightLineMetrics.isIntersecting})`);
 assert(straightLineMetrics.isIntersecting, 'Straight line cutting through hazard center must be flagged intersecting');
 
-// Construct a detour path passing through the tangential waypoint
-const tangentialDetourPath: LonLat[] = [
-  origin,
-  wpPlus90,
-  destination,
-];
-
-const detourMetrics = calculateHazardExposureMetrics(tangentialDetourPath, hazardCenter, hazardRadiusKm);
+// Tangential detour path passing through the tangential waypoint (Layer 2)
+const tangentialDetourPath: LonLat[] = [origin, wpPlus90, destination];
+const detourMetrics = calculateHazardExposureMetrics(tangentialDetourPath, hazardCenter, hazardRadiusKm, 0.1);
 console.log(`  Tangential detour exposure: ${detourMetrics.exposureKm} km (Intersecting: ${detourMetrics.isIntersecting})`);
 assert(!detourMetrics.isIntersecting, 'Tangential detour path with R+2km clearance must NOT intersect hazard');
 assert.equal(detourMetrics.exposureKm, 0, 'Detour exposure length must be 0 km');
 
-console.log('  ✓ Hazard avoidance validation passed with 0 km exposure');
+// Point obstacle evaluation (< 500m)
+const pointObstacleCenter: LonLat = [98.6742, 3.7000];
+const pointObstacleRadiusKm = 0.2; // 200m point obstacle
+const pointMetrics = calculateHazardExposureMetrics(tangentialDetourPath, pointObstacleCenter, pointObstacleRadiusKm, 0.05);
+assert(!pointMetrics.isIntersecting, 'Bypass must clear point obstacle cleanly');
+assert.equal(pointMetrics.exposureKm, 0, 'Point obstacle exposure must be 0 km');
+
+console.log('  ✓ Dual-layer hazard avoidance validation passed with 0 km exposure');
 
 // =========================================================================
-// TEST 4: Live Mapbox API or Deterministic Snapped Execution
+// TEST 4: Live Mapbox API Snapped Benchmark (Manhattan Medan -> USU >200 pts)
 // =========================================================================
 console.log('\n[TEST 4] Testing Live/Fallback Routing on Manhattan Medan -> USU Corridor...');
 
 async function runRoutingTest() {
   const routes = await fetchMapboxAlternativeDrivingRoutes(origin, destination);
   assert(routes.length > 0, 'Must return at least one driving route recommendation');
-  
+
   const primary = routes[0];
   console.log(`  Route Summary: "${primary.summary}" | Source: ${primary.source}`);
   console.log(`  Distance: ${primary.distanceKm} km | Duration: ${primary.durationMinutes} mins`);
@@ -147,25 +165,6 @@ async function runRoutingTest() {
     console.log(`  (Note: Live Mapbox token offline; fallback highway route returned ${primary.coordinates.length} points)`);
   }
 
-  // Test full dynamic detour calculation
-  const allCorridors = await calculateAIDynamicDetourRoutes(
-    hazardCenter,
-    hazardRadiusKm,
-    origin,
-    destination,
-    'truck',
-    'flood'
-  );
-
-    assert(allCorridors.length >= 2, 'Must compute both Primary and Detour corridors');
-  const landPrimary = allCorridors.find((c) => c.corridor_type === 'land_primary');
-  const landDetour = allCorridors.find((c) => c.corridor_type === 'land_detour');
-
-  assert(landPrimary !== undefined, 'Land primary corridor must be present');
-  assert(landDetour !== undefined, 'Land detour corridor must be present');
-  console.log(`  Primary Route Status: ${landPrimary?.safety_status} (Compromised: ${landPrimary?.is_compromised})`);
-  console.log(`  Detour Route Status: ${landDetour?.safety_status} (Safety Tag: ${landDetour?.safety_tag})`);
-
   // Explicit Benchmark: Manhattan Times Square Medan -> Universitas Sumatera Utara (USU)
   console.log('\n[BENCHMARK] Manhattan Times Square Medan -> Universitas Sumatera Utara (USU)...');
   const manhattanOrigin: LonLat = [98.6253, 3.5855];
@@ -177,11 +176,56 @@ async function runRoutingTest() {
   console.log(`  Distance: ${manhattanPrimary.distanceKm} km | Duration: ${manhattanPrimary.durationMinutes} mins`);
   console.log(`  Coordinate points: ${manhattanPrimary.coordinates.length}`);
   if (manhattanPrimary.source === 'live') {
-    assert(manhattanPrimary.coordinates.length > 50, `Expected >50 coordinates, got ${manhattanPrimary.coordinates.length}`);
-    console.log(`  ✓ Manhattan -> USU snapped along road network with ${manhattanPrimary.coordinates.length} points (>50 target)`);
+    assert(
+      manhattanPrimary.coordinates.length > 200,
+      `Expected >200 road-snapped coordinates, got ${manhattanPrimary.coordinates.length}`
+    );
+    console.log(`  ✓ Manhattan -> USU snapped along road network with ${manhattanPrimary.coordinates.length} points (>200 target)`);
   }
 
-  console.log('\n=== ALL PHASE 85 TEST SUITES PASSED (4/4) ===');
+  // Live Layer 1 Verification: Point Obstacle Avoidance (< 500m)
+  console.log('\n[LIVE VERIFICATION] Layer 1: Point Obstacle Avoidance (< 500m)...');
+  const obstaclePoint: LonLat = [98.6425, 3.5681];
+  const pointObstacleRadius = 0.2; // 200m landslide
+  const pointCorridors = await calculateAIDynamicDetourRoutes(
+    obstaclePoint,
+    pointObstacleRadius,
+    manhattanOrigin,
+    usuDest,
+    'truck',
+    'landslide'
+  );
+  const pointDetour = pointCorridors.find((c) => c.corridor_type === 'land_detour');
+  assert(pointDetour !== undefined, 'Point obstacle detour corridor must be present');
+  console.log(`  Point Detour Status: ${pointDetour.safety_status} | Tag: ${pointDetour.safety_tag}`);
+  if (manhattanPrimary.source === 'live') {
+    assert.equal(pointDetour.safety_status, 'SAFE_DETOUR', 'Point obstacle detour must achieve SAFE_DETOUR');
+    assert.equal(pointDetour.is_compromised, false, 'Point obstacle detour must not be compromised');
+    assert.equal(pointDetour.safety_tag, 'PENGALIHAN BEBAS BENCANA (TITIK RINTANGAN)', 'Expected Layer 1 tag');
+    console.log('  ✓ Layer 1 point obstacle detour verified with SAFE_DETOUR');
+  }
+
+  // Live Layer 2 Verification: Wide Disaster Polygon Detour (>= 500m)
+  console.log('\n[LIVE VERIFICATION] Layer 2: Wide Disaster Polygon Detour (>= 500m)...');
+  const wideHazardRadius = 0.8; // 800m flood
+  const wideCorridors = await calculateAIDynamicDetourRoutes(
+    obstaclePoint,
+    wideHazardRadius,
+    manhattanOrigin,
+    usuDest,
+    'truck',
+    'flood'
+  );
+  const wideDetour = wideCorridors.find((c) => c.corridor_type === 'land_detour');
+  assert(wideDetour !== undefined, 'Wide polygon detour corridor must be present');
+  console.log(`  Wide Detour Status: ${wideDetour.safety_status} | Tag: ${wideDetour.safety_tag}`);
+  if (manhattanPrimary.source === 'live') {
+    assert.equal(wideDetour.safety_status, 'SAFE_DETOUR', 'Wide polygon detour must achieve SAFE_DETOUR');
+    assert.equal(wideDetour.is_compromised, false, 'Wide polygon detour must not be compromised');
+    console.log('  ✓ Layer 2 wide polygon detour verified with SAFE_DETOUR');
+  }
+
+  console.log('\n=== ALL PHASE 97 TEST SUITES PASSED (4/4) ===');
 }
 
 runRoutingTest().catch((err) => {

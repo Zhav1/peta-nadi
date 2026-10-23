@@ -107,6 +107,7 @@ docs/validasi/
 # Manual and HKI build scripts
 frontend/scripts/*
 !frontend/scripts/test_*.ts
+!frontend/scripts/copy-standalone-assets.js
 
 # Miscellaneous
 gods-eye-view

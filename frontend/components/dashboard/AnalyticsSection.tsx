@@ -85,6 +85,7 @@ export default function AnalyticsSection({
         zoom: 5.2,
         pitch: 35,
         bearing: -10,
+        projection: { name: 'globe' },
         attributionControl: false,
       });
 
@@ -92,6 +93,12 @@ export default function AnalyticsSection({
 
       map.on('load', () => {
         map.resize();
+        map.setFog({
+          color: 'rgb(8, 10, 15)',
+          'high-color': 'rgb(12, 16, 24)',
+          'space-color': 'rgb(4, 6, 8)',
+          'horizon-blend': 0.05,
+        });
         try {
           const deckOverlay = new MapboxOverlay({
             interleaved: false,

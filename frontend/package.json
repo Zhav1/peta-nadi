@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && node scripts/copy-standalone-assets.js",
     "start": "next start",
     "lint": "next lint",
     "test": "node --no-warnings --experimental-strip-types scripts/test_arbiter.ts",

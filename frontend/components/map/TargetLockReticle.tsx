@@ -6,6 +6,7 @@ import mapboxgl from 'mapbox-gl';
 interface TargetLockReticleProps {
   map: mapboxgl.Map | null;
   targetLngLat: [number, number] | null;
+  currentPosRef?: React.RefObject<[number, number] | null>;
   callsign: string;
   onDismiss?: () => void;
 }
@@ -13,17 +14,44 @@ interface TargetLockReticleProps {
 export function TargetLockReticle({
   map,
   targetLngLat,
+  currentPosRef,
   callsign,
 }: TargetLockReticleProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const targetLngLatRef = useRef<[number, number] | null>(targetLngLat);
+  targetLngLatRef.current = targetLngLat;
 
   useEffect(() => {
-    if (!map || !targetLngLat || !containerRef.current) return;
+    if (!map || !containerRef.current) return;
 
     const updatePosition = () => {
-      if (!containerRef.current || !map || !targetLngLat) return;
-      const pt = map.project(targetLngLat);
-      containerRef.current.style.transform = `translate3d(${pt.x - 32}px, ${pt.y - 32}px, 0)`;
+      if (!containerRef.current || !map) return;
+      const lngLat = currentPosRef?.current || targetLngLatRef.current;
+      if (!lngLat) return;
+
+      // 3D globe horizon occlusion check
+      let isOccluded = false;
+      const proj = map.getProjection?.();
+      if (proj && proj.name === 'globe') {
+        const center = map.getCenter();
+        const phi1 = (center.lat * Math.PI) / 180;
+        const phi2 = (lngLat[1] * Math.PI) / 180;
+        const deltaLambda = ((lngLat[0] - center.lng) * Math.PI) / 180;
+        const cosAngle =
+          Math.sin(phi1) * Math.sin(phi2) +
+          Math.cos(phi1) * Math.cos(phi2) * Math.cos(deltaLambda);
+        if (cosAngle < 0.05) {
+          isOccluded = true;
+        }
+      }
+
+      const pt = map.project(lngLat);
+      if (isOccluded || !Number.isFinite(pt.x) || !Number.isFinite(pt.y)) {
+        containerRef.current.style.opacity = '0';
+      } else {
+        containerRef.current.style.opacity = '1';
+        containerRef.current.style.transform = `translate3d(${Math.round(pt.x - 32)}px, ${Math.round(pt.y - 32)}px, 0)`;
+      }
     };
 
     updatePosition();
@@ -31,14 +59,16 @@ export function TargetLockReticle({
     map.on('zoom', updatePosition);
     map.on('pitch', updatePosition);
     map.on('rotate', updatePosition);
+    map.on('render', updatePosition);
 
     return () => {
       map.off('move', updatePosition);
       map.off('zoom', updatePosition);
       map.off('pitch', updatePosition);
       map.off('rotate', updatePosition);
+      map.off('render', updatePosition);
     };
-  }, [map, targetLngLat]);
+  }, [map, currentPosRef]);
 
   if (!targetLngLat) return null;
 

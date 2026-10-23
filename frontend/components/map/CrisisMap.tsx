@@ -6,6 +6,7 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import MapboxDraw from '@mapbox/mapbox-gl-draw';
 import '@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css';
 import { densifyPath, type LonLat } from '@/lib/pathDensifier';
+import { fetchMapboxAlternativeDrivingRoutes } from '@/lib/aiDynamicRouter';
 import {
   HUB_NODES,
   STRATEGIC_BASELINE_CORRIDORS,
@@ -290,7 +291,7 @@ export default function CrisisMap({
   selectedVehicleId = null,
   onSelectVehicle,
   onCloseVehicle,
-  hideEstimatedRoutes = false,
+  hideEstimatedRoutes = true,
 }: CrisisMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   void corridorContext;
@@ -425,6 +426,83 @@ export default function CrisisMap({
   // props and must NOT retrigger densifyPath + route setData.
   const lastRouteWriteHashRef = useRef<string | null>(null);
 
+  // WP4: Macro-Node Street Stitcher
+  // When a land corridor only has 2-5 macro-nodes (e.g. from CPU graph solver or crisis recommendation),
+  // asynchronously stitch intermediate street coordinates using Mapbox Directions API.
+  const [stitchedRoutesVersion, setStitchedRoutesVersion] = useState(0);
+  const macroNodeStitchCache = useRef<Map<string, LonLat[]>>(new Map());
+
+  useEffect(() => {
+    if (!activeRoutes || activeRoutes.length === 0) return;
+    let cancelled = false;
+
+    const stitchCandidates: Array<{ key: string; origin: LonLat; dest: LonLat; waypoints: LonLat[] }> = [];
+
+    activeRoutes.forEach((r, origIdx) => {
+      if (r.legs && r.legs.length > 0) {
+        r.legs.forEach((leg, lIdx) => {
+          const coords = leg.coordinates || [];
+          const legMode = (leg as any).modality || leg.mode;
+          const isLand = legMode !== 'maritime' && legMode !== 'air';
+          if (isLand && coords.length >= 2 && coords.length <= 5) {
+            const key = coords.map((c) => `${c[0].toFixed(5)},${c[1].toFixed(5)}`).join(';');
+            if (!macroNodeStitchCache.current.has(key)) {
+              stitchCandidates.push({
+                key,
+                origin: coords[0] as LonLat,
+                dest: coords[coords.length - 1] as LonLat,
+                waypoints: coords.slice(1, -1) as LonLat[],
+              });
+            }
+          }
+        });
+      } else if (r.waypoints && r.waypoints.length >= 2 && r.waypoints.length <= 5) {
+        const isLand =
+          r.modality !== 'maritime' &&
+          r.modality !== 'air' &&
+          r.corridor_type !== 'sea_intermodal' &&
+          r.corridor_type !== 'air_intermodal';
+        if (isLand) {
+          const coords: LonLat[] = r.waypoints.map((wp) => [wp.lon, wp.lat]);
+          const key = coords.map((c) => `${c[0].toFixed(5)},${c[1].toFixed(5)}`).join(';');
+          if (!macroNodeStitchCache.current.has(key)) {
+            stitchCandidates.push({
+              key,
+              origin: coords[0],
+              dest: coords[coords.length - 1],
+              waypoints: coords.slice(1, -1),
+            });
+          }
+        }
+      }
+    });
+
+    if (stitchCandidates.length === 0) return;
+
+    let updated = false;
+    Promise.all(
+      stitchCandidates.map(async (item) => {
+        try {
+          const results = await fetchMapboxAlternativeDrivingRoutes(item.origin, item.dest, item.waypoints);
+          if (results && results.length > 0 && results[0].source === 'live' && results[0].coordinates.length > 2) {
+            macroNodeStitchCache.current.set(item.key, results[0].coordinates);
+            updated = true;
+          }
+        } catch {
+          // Keep raw macro nodes on network error or offline fallback
+        }
+      })
+    ).then(() => {
+      if (!cancelled && updated) {
+        setStitchedRoutesVersion((v) => v + 1);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeRoutes]);
+
   // Fetch updated gazetteer nodes from backend on mount (falls back to local PAN_SUMATRA_GAZETTEER)
   useEffect(() => {
     let isMounted = true;
@@ -557,7 +635,10 @@ export default function CrisisMap({
       antialias: true,
     });
     mapRef.current = map;
-    if (typeof window !== 'undefined') (window as any)._mapboxMap = map;
+    if (typeof window !== 'undefined') {
+      (window as any)._mapboxMap = map;
+      (window as any).mapboxMap = map;
+    }
 
     map.on('mousedown', (e) => {
       mouseDownPosRef.current = { x: e.point.x, y: e.point.y };
@@ -603,7 +684,15 @@ export default function CrisisMap({
       isMapLoadedRef.current = true;
       setMapInstance(map);
       (window as any)._mapboxMap = map;
+      (window as any).mapboxMap = map;
       map.addControl(draw, 'bottom-right');
+
+      map.setFog({
+        color: 'rgb(8, 10, 15)',
+        'high-color': 'rgb(12, 16, 24)',
+        'space-color': 'rgb(4, 6, 8)',
+        'horizon-blend': 0.05,
+      });
 
       // 0a. Strategic Trans-Sumatra Baseline Corridors Layer (Backbone Transit Network)
       map.addSource('baseline-corridors-source', {
@@ -1638,7 +1727,7 @@ export default function CrisisMap({
     const routeWriteHash = (() => {
       const hiddenSorted = Array.from(hiddenRouteIndices ?? []).sort((a, b) => a - b).join(',');
       const visFlag = `${corridorVisibility?.land ?? true},${corridorVisibility?.sea ?? true},${corridorVisibility?.air ?? true}`;
-      let s = `idx=${activeRouteIdx ?? 0}|vis=${visFlag}|hid=${hiddenSorted}|n=${activeRoutes?.length ?? 0};`;
+      let s = `v=${stitchedRoutesVersion}|idx=${activeRouteIdx ?? 0}|vis=${visFlag}|hid=${hiddenSorted}|n=${activeRoutes?.length ?? 0};`;
       (activeRoutes ?? []).forEach((r, ri) => {
         s += `#${ri}:${r.viable ?? ''}|${r.corridor_type ?? ''}|${(r as any).modality ?? ''}|${(r as any).color ?? ''}|${r.description ?? ''}|${Number((r as any).distance_km ?? 0).toFixed(2)}|${Number((r as any).eta_minutes ?? 0).toFixed(2)}|${(r as any).safety_status ?? ''}|${(r as any).is_compromised ? 'C' : ''}|`;
         const wps = (r as any).waypoints ?? [];
@@ -1703,12 +1792,14 @@ export default function CrisisMap({
               const legMode = (leg as any).modality || leg.mode;
               const legCorridorClass =
                 legMode === 'maritime' ? 'sea' : legMode === 'air' ? 'air' : 'land';
-              // Phase 85: For land routes, strictly preserve real street geometry without spherical chord interpolation.
-              // densifyPath is only applied to maritime nautical arcs and air flights when points are sparse (<= 5).
+              // WP4: Check macro-node street stitcher cache for land routes with sparse macro-nodes
+              const legKey = legCoords.map((c) => `${c[0].toFixed(5)},${c[1].toFixed(5)}`).join(';');
+              const stitchedLeg = legCorridorClass === 'land' ? macroNodeStitchCache.current.get(legKey) : null;
               const finalCoords =
-                legCorridorClass === 'land' || legCoords.length > 5
+                stitchedLeg ||
+                (legCorridorClass === 'land' || legCoords.length > 5
                   ? legCoords
-                  : densifyPath(legCoords, 15);
+                  : densifyPath(legCoords, 15));
               const legColor =
                 leg.color ||
                 (legMode === 'maritime'
@@ -1746,11 +1837,14 @@ export default function CrisisMap({
               : r.modality === 'air' || r.corridor_type === 'air_intermodal'
                 ? 'air'
                 : 'land';
-          // Phase 85: Preserve true road network coordinates directly for land routes.
+          // WP4: Check macro-node street stitcher cache for sparse land waypoints
+          const wpsKey = rawWaypoints.map((c) => `${c[0].toFixed(5)},${c[1].toFixed(5)}`).join(';');
+          const stitchedWps = routeCorridorClass === 'land' ? macroNodeStitchCache.current.get(wpsKey) : null;
           const finalCoordinates =
-            routeCorridorClass === 'land' || rawWaypoints.length > 5
+            stitchedWps ||
+            (routeCorridorClass === 'land' || rawWaypoints.length > 5
               ? rawWaypoints
-              : densifyPath(rawWaypoints, 25);
+              : densifyPath(rawWaypoints, 25));
           const defaultColor =
             r.modality === 'maritime' || r.corridor_type === 'sea_intermodal'
               ? '#3B82F6'
@@ -2149,7 +2243,7 @@ export default function CrisisMap({
   useEffect(() => {
     updateMapSources();
     // NOTE: activeFleet intentionally excluded — fleet renders via
-    // FleetVehicleLayer Deck overlay, not via these GeoJSON sources.
+    // FleetVehicleLayer native Mapbox WebGL layers, not via these GeoJSON sources.
     // Route/congestion/ETA rewrites are additionally gated by routeWriteHash.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
