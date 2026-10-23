@@ -145,6 +145,13 @@ Multisource Telemetry (BMKG Sensor, TomTom Speed Flow, Google News RSS, PIHPS Pr
 - **Strict Multi-Tenant RBAC Guardrails:** `DISPATCHER` role commits to `/api/v1/approvals` and simulates TMS ping. `GUEST` and `REGULATOR` roles receive watermarked sandbox previews with zero database mutations or TMS pings, explained via `GuestEvaluationBanner`.
 - **Database Schema Alignment:** Migration `013_hil_hardening.sql` aligned `route_approvals.route_id` with `incidents.incident_id`.
 
+### 19. Integrity, Provenance & Honest Degradation (Phase 91)
+- **Single idempotent write path** for demo, simulation and production (`write_incident`, `incident_id` upsert). When only the anon key is available, incident writes are skipped and reported (`supabase_write_disabled`) instead of being silently denied by RLS.
+- **Geometry normalization** from PostGIS WKB/EWKT/WKT to GeoJSON on the backend and again on the client (`frontend/lib/polygonGeom.ts`); invalid shapes are dropped, never drawn.
+- **Evidence-anchored forecasts:** nearest TomTom segment + deterministic horizon decay (no cross-segment `polyfit`), nearest Open-Meteo grid point (no `events[-1]`), and a 100 km / region+hazard OSINT spatial gate.
+- **No invented UI values:** confidence, calibrated probability, ETA, distance, radius and cost render as unavailable when the payload lacks them; `degraded_sources` distinguishes a quiet network from a dead path.
+- **Operational rule:** one ingestion process (`--workers 1`); extra replicas run with `POLLERS_ENABLED=false`.
+
 ---
 
 ## Technology Stack

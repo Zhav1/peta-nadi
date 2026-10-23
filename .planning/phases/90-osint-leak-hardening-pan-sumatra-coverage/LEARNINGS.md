@@ -57,3 +57,12 @@ Evidence: `test_news_pipeline.py`, `test_phase76_news_spatial_consensus.py`,
 | Decision philosophy | Admit uncertainty over false positive (DROPPED > YELLOW; un-geocoded never RED; FPR ≤ 0.15 per Phase 84) |
 | Regression contract | Existing tests must stay green (88 hardening+news/pre_llm/phase76; 8 bmkg + 9 calibration + 10 geocode + 22 scrapers) |
 | No commit/push in docs tasks | Files only; a separate step owns commits |
+
+---
+
+## Follow-up phase
+
+The P0-P4 remediation committed as `20c7fa5` builds on this phase's OSINT gates
+(spatial corroboration, degraded-source ledger, idempotent writes, map/UI
+null-guards). Its record lives in
+`../91-p0-p4-integrity-remediation/LEARNINGS.md` and `DECISIONS.md`.
