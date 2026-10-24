@@ -2,36 +2,36 @@
 gsd_state_version: "1.0"
 milestone: M6
 milestone_name: 3D Globe Native Mapbox Fleet, Street-Snapping & Impeccable Cartography
-current_phase: 102
-current_phase_name: Fleet Telemetry Restoration, Payload Optimization & Zoom-Out LOD Cartography
+current_phase: 103
+current_phase_name: Industry Validation Alignment — Tactical Cargo Tiering, Non-Natural Social Hazard Ingestion & Empiric Verification HUD
 status: complete
-stopped_at: "Phase 102 complete: 24 truck dots restored, telemetry payload reduced to 28.7 KB for trucks and <10% for full fleet, corridorSnappingService preloads snapped corridors, zero-latency state hydration for news and corridor context, zero 401 guest console errors, and WebGL smooth dissolve cartographic LOD active."
-last_updated: "2026-10-24T02:12:00.000Z"
+stopped_at: "Phase 103 completed: Tactical 3-tier cargo selector (Pelindo reefer/dry matrix), moving genset fuel burn in spoilage hedging service, social disruption NLP ingestion (Ditmawalumni USU), and prominent empiric N=60 benchmark grounding (PT Sawita)."
+last_updated: "2026-10-24T11:40:00.000Z"
 last_activity: 2026-10-24
-last_activity_desc: "Phase 102 verified and completed with 26/26 pytest tests passing, 0 tsc errors, and E2E assertions passing."
+last_activity_desc: "Phase 103 executed with all 5 Work Packages verified (3/3 unit tests, 27/27 backend pytest, clean TypeScript check, 4/4 turn-by-turn and state isolation scripts)."
 state_head: HEAD
 progress:
-  total_phases: 102
-  completed_phases: 102
-  total_plans: 119
-  completed_plans: 119
+  total_phases: 103
+  completed_phases: 103
+  total_plans: 120
+  completed_plans: 120
   percent: 100.0
 ---
 
 # STATE: PreHub Project Memory
 
 **Last Updated:** 2026-10-24
-**Active Milestone:** M6 - 3D Globe Native Mapbox Fleet, Street-Snapping & Impeccable Cartography [COMPLETED ✅]
+**Active Milestone:** M6 - 3D Globe Native Mapbox Fleet, Street-Snapping & Impeccable Cartography [ACTIVE 🚀]
 **Previous Milestones:** M1-M4 [COMPLETED ✅], M5 - Pilot Interference, Ingestion Resilience & Honest Verification [COMPLETED ✅]
-**Current Phase:** 102
+**Current Phase:** 103
 
 ---
 
 ## Current Position
 
-Phase: 102 (Fleet Telemetry Restoration, Payload Optimization & Zoom-Out LOD Cartography) - COMPLETE ✅
-Status: All 24 truck dots restored in Emerald #10b981; backend telemetry polling optimized to 28.7 KB for trucks with include_geometry=false; frontend corridorSnappingService implemented; zero-latency state hydration active; guest 401 console errors resolved; WebGL smooth dissolve LOD enforced on 3D globe.
-Next action: Milestone M6 review or next task.
+Phase: 103 (Industry Validation Alignment — Tactical Cargo Tiering, Non-Natural Social Hazard Ingestion & Empiric Verification HUD) - COMPLETE ✅
+Status: All Work Packages (WP1 to WP5) successfully implemented and verified across frontend and backend.
+Next action: None. Phase 103 ready for code review.
 
 
 
@@ -154,6 +154,7 @@ Upstream Phases 87/88 above (Mapbox turn-by-turn; client-isolated session, merge
 | 100 | Turn-by-Turn Road Snapping, Offline Fleet Precomputation & Dual-Layer Hazard Avoidance | **COMPLETE** ✅ | Turn-by-turn road snapping (>200 pts), 24 precomputed offline truck corridors in fleet_corridors_snapped.json, dual-layer hazard avoidance (exclude=point + tangential waypoint clearance). 4/4 tests pass. |
 | 101 | 3D Globe Native Mapbox Fleet, Anti-Flicker & Impeccable Minimalist Visual Cleanup | **COMPLETE** ✅ | Restored 3D Globe projection ('4D') on Mapbox GL JS v3 with space atmosphere fog; migrated fleet layer from Deck.gl to native Mapbox WebGL GeoJSON layers (100% surface grounding, 0 floating); eliminated flicker with 60 FPS in-place `source.setData()` buffer updates; default `hideEstimatedRoutes=true` (removes ambient orange lines across Sumatra); hover micro-tooltips; 7/7 Playwright tests pass, 22/22 pytest pass, 0 tsc errors. |
 | 102 | Fleet Telemetry Restoration, Payload Optimization & Zoom-Out LOD Cartography | **COMPLETE** ✅ | Restored all 24 truck dots (Emerald #10b981), reduced telemetry polling payload to 28.7 KB for trucks via include_geometry=false, loaded high-density snapped corridors via corridorSnappingService, enabled zero-latency state hydration for news and corridor context, eliminated 401 guest console errors, and implemented WebGL smooth dissolve cartographic LOD between z=4.0 and z=3.2. 26/26 pytest passed, 0 tsc errors. |
+| 103 | Industry Validation Alignment — Tactical Cargo Tiering, Non-Natural Social Hazard Ingestion & Empiric Verification HUD | **COMPLETE** ✅ | 3-tier cargo selector (Pelindo reefer/dry matrix), moving genset fuel burn in spoilage hedging service (CONTINUE/REROUTE/HOLD), social disruption NLP ingestion (Ditmawalumni USU - pungli/blokir road_closure mapping), and prominent empiric N=60 benchmark grounding with data provenance badges (PT Sawita/Socfin). 27/27 backend pytest, 0 tsc errors, 4/4 turn-by-turn and state isolation scripts passed. |
 
 ### Hotfix 2026-10-22 — Offline land-corridor honesty + toll-bypass spec (pilot rule: green = verified-driveable)
 

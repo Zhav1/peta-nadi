@@ -224,41 +224,46 @@ class SpoilageHedgingService:
 
         # ----------------------------------------------------
         # Policy 1: CONTINUE (Risk Exposure)
-        # Cost = P(Disruption) * SpoilageLoss + FixedDowntimeFee
+        # Cost = P(Disruption) * SpoilageLoss + FixedDowntimeFee + ReeferGenset (if cold-chain)
         # ----------------------------------------------------
         p_risk = max(0.0, min(1.0, req.p_disruption))
         continue_spoilage_expected = p_risk * spoilage_loss_idr
         continue_downtime = p_risk * req.downtime_fixed_fee_idr
-        cost_continue = continue_spoilage_expected + continue_downtime
+        continue_reefer_cost = (delay_hours * tier_info["genset_cost_per_hour"]) if tier_info.get("requires_reefer") else 0.0
+        cost_continue = continue_spoilage_expected + continue_downtime + continue_reefer_cost
 
+        continue_reefer_expl = f" dan biaya genset pendingin Rp {int(continue_reefer_cost):,}" if continue_reefer_cost > 0 else ""
         continue_breakdown = PolicyBreakdown(
             policy="CONTINUE",
             cost_idr=round(cost_continue, 0),
             breakdown={
                 "expected_spoilage_loss": round(continue_spoilage_expected, 0),
                 "downtime_penalty": round(continue_downtime, 0),
+                "reefer_genset_fuel": round(continue_reefer_cost, 0),
                 "risk_probability": p_risk
             },
             explanation=(
                 f"Melanjutkan rute berisiko tinggi ({int(p_risk*100)}% probabilitas terjebak). "
                 f"Potensi kerugian pembusukan komoditas {req.commodity} mencapai "
-                f"Rp {int(continue_spoilage_expected):,} akibat waktu tunggu {delay_hours:.1f} jam."
+                f"Rp {int(continue_spoilage_expected):,}{continue_reefer_expl} akibat waktu tunggu {delay_hours:.1f} jam."
             ),
             risk_level="CRITICAL" if p_risk >= 0.7 else "HIGH"
         )
 
         # ----------------------------------------------------
         # Policy 2: REROUTE (Active Detour Mitigation)
-        # Cost = DetourFuel + BPJTToll + DriverOvertime
+        # Cost = DetourFuel + BPJTToll + DriverOvertime + ReeferGenset (if cold-chain)
         # ----------------------------------------------------
         detour_fuel_liters = req.detour_distance_km / fuel_consumption_km_per_liter
         reroute_fuel_cost = detour_fuel_liters * effective_fuel_rate
         reroute_toll_cost = self.get_bpjt_toll_cost(req.toll_segments, req.vehicle_golongan)
         driver_overtime_hourly_wage = DRIVER_OVERTIME_HOURLY_IDR
         reroute_labor_cost = req.detour_time_hours * driver_overtime_hourly_wage
+        reroute_reefer_cost = (req.detour_time_hours * tier_info["genset_cost_per_hour"]) if tier_info.get("requires_reefer") else 0.0
 
-        cost_reroute = reroute_fuel_cost + reroute_toll_cost + reroute_labor_cost
+        cost_reroute = reroute_fuel_cost + reroute_toll_cost + reroute_labor_cost + reroute_reefer_cost
 
+        reroute_reefer_expl = f", biaya genset pendingin Rp {int(reroute_reefer_cost):,}" if reroute_reefer_cost > 0 else ""
         reroute_breakdown = PolicyBreakdown(
             policy="REROUTE",
             cost_idr=round(cost_reroute, 0),
@@ -266,12 +271,13 @@ class SpoilageHedgingService:
                 "extra_fuel_cost": round(reroute_fuel_cost, 0),
                 "bpjt_toll_tariff": round(reroute_toll_cost, 0),
                 "driver_overtime": round(reroute_labor_cost, 0),
+                "reefer_genset_fuel": round(reroute_reefer_cost, 0),
                 "detour_km": req.detour_distance_km
             },
             explanation=(
                 f"Pengalihan rute alternatif sejauh +{req.detour_distance_km:.1f} km (+{req.detour_time_hours:.1f} jam). "
-                f"Menghindari zona bencana secara tuntas dengan biaya bahan bakar Rp {int(reroute_fuel_cost):,} "
-                f"dan tarif tol BPJT ({req.vehicle_golongan}) Rp {int(reroute_toll_cost):,}."
+                f"Menghindari zona bencana secara tuntas dengan biaya bahan bakar Rp {int(reroute_fuel_cost):,}"
+                f"{reroute_reefer_expl} dan tarif tol BPJT ({req.vehicle_golongan}) Rp {int(reroute_toll_cost):,}."
             ),
             risk_level="LOW"
         )
@@ -292,6 +298,8 @@ class SpoilageHedgingService:
 
         cost_hold = hold_depot_cost + hold_reefer_cost + hold_spoilage_decay
 
+        hold_reefer_expl = f"Biaya genset cold-chain Rp {int(hold_reefer_cost):,} dan " if hold_reefer_cost > 0 else ""
+        hold_decay_expl = f" (potensi susut Rp {int(hold_spoilage_decay):,})" if hold_spoilage_decay > 0 else ""
         hold_breakdown = PolicyBreakdown(
             policy="HOLD",
             cost_idr=round(cost_hold, 0),
@@ -303,7 +311,7 @@ class SpoilageHedgingService:
             },
             explanation=(
                 f"Penahanan sementara armada di depo/hub logistik terdekat selama {hold_hours:.1f} jam. "
-                f"Biaya genset cold-chain Rp {int(hold_reefer_cost):,} dan retribusi depo Rp {int(hold_depot_cost):,}."
+                f"{hold_reefer_expl}retribusi depo Rp {int(hold_depot_cost):,}{hold_decay_expl}."
             ),
             risk_level="MEDIUM"
         )

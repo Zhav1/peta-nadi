@@ -182,3 +182,71 @@ def test_strip_thinking_tags():
     # None or empty
     assert strip_thinking_tags("") == ""
     assert strip_thinking_tags(None) == ""
+
+
+@pytest.mark.asyncio
+async def test_social_disruption_nlp_ingestion():
+    """Phase 103 WP3: Ditmawalumni USU social disruption ingestion (pungli, civil blockades).
+    Validates articles pass 2-factor regex gate and map to road_closure with high severity.
+    """
+    # 1. Regex gate check
+    assert passes_disaster_regex_gate(
+        title="Pos pungli Lintas Sumatera resahkan sopir logistik",
+        text="Aksi pemalakan di badan jalan memicu antrean truk sembako."
+    ) is True
+
+    assert passes_disaster_regex_gate(
+        title="Warga blokir jalan lintas di Asahan Sumut",
+        text="Massa menggelar unjuk rasa dan memblokir akses distribusi pupuk dan sembako."
+    ) is True
+
+    # 2. Structured extraction mapping to road_closure
+    article_pungli = {
+        "id": "art_pungli_sumatra",
+        "title": "Pos pungli Lintas Sumatera di Rantauprapat resahkan angkutan logistik",
+        "raw_description": "Aksi pemalakan liar dan pos pungli di sepanjang Lintas Sumatera kawasan Rantauprapat membuat sopir truk logistik tertahan berjam-jam.",
+        "source": "Antara Sumut",
+        "link": "https://sumut.antaranews.com/berita/999/pungli-sumatera",
+        "pubDate": "10 menit lalu",
+        "published_at": "10 menit lalu",
+        "original_pub_date": "10 menit lalu",
+    }
+    extracted_pungli = await extract_structured_news(article_pungli)
+    assert extracted_pungli.get("incident_type") == "road_closure"
+    assert extracted_pungli.get("disaster_type") == "road_closure"
+    assert extracted_pungli.get("zone_tier") in ("RED_CONFIRMED", "YELLOW_CLARIFY")
+    assert extracted_pungli.get("severity") in ("high", "critical")
+
+    article_blokade = {
+        "id": "art_blokir_sumatra",
+        "title": "Warga blokir jalan nasional di Tebing Tinggi Sumut",
+        "raw_description": "Aksi unjuk rasa warga memblokir total akses jalan nasional Tebing Tinggi sehingga distribusi bahan pangan terhenti.",
+        "source": "Antara Sumut",
+        "link": "https://sumut.antaranews.com/berita/888/blokir-jalan-tebing",
+        "pubDate": "10 menit lalu",
+        "published_at": "10 menit lalu",
+        "original_pub_date": "10 menit lalu",
+    }
+    extracted_blokade = await extract_structured_news(article_blokade)
+    assert extracted_blokade.get("incident_type") == "road_closure"
+    assert extracted_blokade.get("disaster_type") == "road_closure"
+    assert extracted_blokade.get("zone_tier") in ("RED_CONFIRMED", "YELLOW_CLARIFY")
+    assert extracted_blokade.get("severity") in ("high", "critical")
+
+    # 3. Compound disruption: flood accompanied by extortion/pungli on detour
+    article_compound = {
+        "id": "art_compound_sumatra",
+        "title": "Banjir rendam Jalinsum Asahan, sopir truk keluhkan pos pungli dan pemalakan di jalur alternatif",
+        "raw_description": "Luapan banjir merendam badan jalan Jalinsum Asahan sehingga arus dialihkan. Namun sopir truk logistik mengaku dimintai pos pungli dan pemalakan liar oleh oknum di jalur alternatif.",
+        "source": "Antara Sumut",
+        "link": "https://sumut.antaranews.com/berita/777/banjir-pungli-asahan",
+        "pubDate": "5 menit lalu",
+        "published_at": "5 menit lalu",
+        "original_pub_date": "5 menit lalu",
+    }
+    assert passes_disaster_regex_gate(title=article_compound["title"], text=article_compound["raw_description"]) is True
+    extracted_compound = await extract_structured_news(article_compound)
+    assert extracted_compound.get("incident_type") in ("road_closure", "flood")
+    assert extracted_compound.get("zone_tier") in ("RED_CONFIRMED", "YELLOW_CLARIFY")
+    assert extracted_compound.get("severity") in ("high", "critical")
+

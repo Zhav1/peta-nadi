@@ -22,6 +22,9 @@ import {
   Gauge,
   Ship,
   Plane,
+  Snowflake,
+  Sprout,
+  Package,
 } from 'lucide-react';
 import type { CrisisType, Severity, RouteRecommendation } from '@/lib/types';
 import { formatNodeDisplay, prettyNodeSlug, resolveNodeDisplayInfo, type NodeDisplayInfo } from '@/lib/formatNode';
@@ -67,6 +70,8 @@ export interface CrisisSimulatorBarProps {
   isLeftSidebarCollapsed?: boolean;
   simSpeed?: number;
   setSimSpeed?: (speed: number) => void;
+  selectedCommodity?: string | null;
+  onSelectCommodity?: (commodity: string | null) => void;
 }
 
 export function CrisisSimulatorBar({
@@ -94,9 +99,11 @@ export function CrisisSimulatorBar({
   isLeftSidebarCollapsed = false,
   simSpeed = 1,
   setSimSpeed,
+  selectedCommodity = null,
+  onSelectCommodity,
 }: CrisisSimulatorBarProps) {
   const [selectedType, setSelectedType] = useState<CrisisType>('flood');
-  const [activePopover, setActivePopover] = useState<'nodes' | 'disruption' | 'radius' | 'speed' | null>(null);
+  const [activePopover, setActivePopover] = useState<'nodes' | 'disruption' | 'radius' | 'speed' | 'cargo' | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -181,7 +188,7 @@ export function CrisisSimulatorBar({
         (!corridorVisibility.sea ? 1 : 0) +
         (!corridorVisibility.air ? 1 : 0);
 
-  const togglePopover = (popover: 'nodes' | 'disruption' | 'radius' | 'speed') => {
+  const togglePopover = (popover: 'nodes' | 'disruption' | 'radius' | 'speed' | 'cargo') => {
     setActivePopover((prev) => (prev === popover ? null : popover));
   };
 
@@ -327,6 +334,125 @@ export function CrisisSimulatorBar({
             </div>
           )}
         </div>
+
+        {/* 2.5 Cargo Preset Selector (Pelindo Cold-Chain vs Horti vs Dry-Bulk) */}
+        {onSelectCommodity && (
+          <div className="relative">
+            <button
+              type="button"
+              data-testid="cargo-tier-pill"
+              onClick={() => togglePopover('cargo')}
+              className={`cursor-pointer px-3 py-1.5 rounded-md border text-xs font-sans font-medium transition-all flex items-center gap-1.5 ${
+                selectedCommodity
+                  ? 'bg-cyan-950/80 border-cyan-500/50 text-cyan-300'
+                  : 'bg-[#121822] border-[#1c2432] text-slate-300 hover:border-slate-600'
+              }`}
+              title="Pilih Tier Komoditas Kargo untuk Kalkulasi Hedging & Biaya Genset"
+            >
+              {selectedCommodity === 'ikan_segar' ? (
+                <>
+                  <Snowflake className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Cold Chain</span>
+                </>
+              ) : selectedCommodity === 'cabai_merah' ? (
+                <>
+                  <Sprout className="w-3.5 h-3.5 text-rose-400" />
+                  <span>Hortikultura</span>
+                </>
+              ) : selectedCommodity === 'beras' ? (
+                <>
+                  <Package className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Kargo Kering</span>
+                </>
+              ) : (
+                <>
+                  <Package className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Pilih Kargo</span>
+                </>
+              )}
+              <span className="font-mono text-[10px] opacity-75">(10T)</span>
+              <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform duration-200 ${activePopover === 'cargo' ? 'rotate-180' : ''}`} />
+            </button>
+
+            {/* Cargo Popover */}
+            {activePopover === 'cargo' && (
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-80 p-3 rounded-lg bg-[#0c1017] border border-[#1c2432] shadow-2xl flex flex-col gap-2 z-50 animate-in fade-in slide-in-from-bottom-2 duration-150 text-left">
+                <div className="flex items-center justify-between pb-1 border-b border-[#1c2432]">
+                  <span className="text-xs font-sans text-cyan-400 font-bold uppercase tracking-wider">Tier Kargo &amp; Hedging</span>
+                  <span className="text-[10px] font-mono text-slate-400">10.0 Ton · GOL II</span>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  {[
+                    {
+                      id: 'ikan_segar',
+                      label: 'Cold Chain',
+                      sub: 'Ikan Segar / Frozen Daging',
+                      desc: 'Reefer genset Rp 45.000/jam aktif pada delay & detour',
+                      icon: <Snowflake className="w-4 h-4 text-cyan-400 shrink-0" />,
+                      activeBorder: 'border-cyan-500/60 bg-cyan-950/40 text-cyan-200',
+                    },
+                    {
+                      id: 'cabai_merah',
+                      label: 'Hortikultura',
+                      sub: 'Cabai Merah / Sayur Mayur',
+                      desc: 'Ultra-perishable (susut 2.5%/jam), tanpa genset',
+                      icon: <Sprout className="w-4 h-4 text-rose-400 shrink-0" />,
+                      activeBorder: 'border-rose-500/60 bg-rose-950/40 text-rose-200',
+                    },
+                    {
+                      id: 'beras',
+                      label: 'Kargo Kering',
+                      sub: 'Beras Medium / Sembako Kering',
+                      desc: 'Daya simpan tinggi, Rp 0 genset, susut minimal',
+                      icon: <Package className="w-4 h-4 text-amber-400 shrink-0" />,
+                      activeBorder: 'border-amber-500/60 bg-amber-950/40 text-amber-200',
+                    },
+                  ].map((tier) => {
+                    const isSelected = selectedCommodity === tier.id;
+                    return (
+                      <button
+                        key={tier.id}
+                        type="button"
+                        onClick={() => {
+                          onSelectCommodity(isSelected ? null : tier.id);
+                          setActivePopover(null);
+                        }}
+                        className={`cursor-pointer p-2.5 rounded-md text-left transition flex items-start gap-2.5 border ${
+                          isSelected
+                            ? tier.activeBorder
+                            : 'bg-[#121822] border-[#1c2432] text-slate-300 hover:border-slate-600'
+                        }`}
+                      >
+                        <div className="mt-0.5">{tier.icon}</div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-white font-sans">{tier.label}</span>
+                            {isSelected && <Check className="w-3.5 h-3.5 text-cyan-400" />}
+                          </div>
+                          <span className="text-[11px] text-slate-400 block font-sans">{tier.sub}</span>
+                          <span className="text-[10px] text-slate-500 block font-mono mt-0.5">{tier.desc}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                {selectedCommodity && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onSelectCommodity(null);
+                      setActivePopover(null);
+                    }}
+                    className="cursor-pointer w-full py-1.5 mt-1 rounded bg-[#121822] hover:bg-slate-800 text-slate-400 hover:text-slate-200 text-xs font-sans font-medium flex items-center justify-center gap-1.5 transition border border-[#1c2432]"
+                  >
+                    <RotateCcw className="w-3 h-3 text-slate-400" />
+                    <span>Reset Kargo (Tanpa Hedging)</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* 3. Disruption Presets & Tools Bubble Pill */}
         <div className="relative">

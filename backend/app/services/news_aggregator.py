@@ -513,7 +513,8 @@ LOGISTICS_DISASTER_KEYWORDS = (
     "kapal", "cuaca", "hujan", "badai", "gelombang", "angin", "gempa", "erupsi", "gunung",
     "beras", "cabai", "minyak goreng", "gula", "pangan", "bawang", "sembako", "bulog", "pihps",
     "distribusi", "truk", "kargo", "logistik", "rantai pasok", "kontainer", "kemacetan", "antrean",
-    "bbm", "solar", "pertamina", "pupuk", "disrupsi", "bencana"
+    "bbm", "solar", "pertamina", "pupuk", "disrupsi", "bencana",
+    "pungli", "pos pungli", "pemalakan", "pemblokiran jalan", "blokade warga", "unjuk rasa", "aksi massa"
 )
 
 EXCLUDED_NOISE_KEYWORDS = (

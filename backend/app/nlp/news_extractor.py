@@ -97,7 +97,8 @@ DISASTER_REGEX = re.compile(
     r"\b(banjir|longsor|tanah amblas|tanah longsor|jalan putus|jembatan putus|gempa|tektonik|"
     r"erupsi|gunung meletus|gelombang tinggi|ombak besar|abrasi|karhutla|kebakaran hutan|"
     r"truk terguling|kemacetan parah|macet total|pelabuhan tutup|dermaga tutup|akses lumpuh|"
-    r"terendam|genangan|tebing runtuh|lahar dingin|puting beliung|badai|cuaca ekstrem)\b",
+    r"terendam|genangan|tebing runtuh|lahar dingin|puting beliung|badai|cuaca ekstrem|"
+    r"pungli|pos pungli|pemalakan|pemblokiran jalan|blokade warga|blokir jalan|warga blokir jalan|unjuk rasa|aksi massa)\b",
     re.IGNORECASE,
 )
 
@@ -176,6 +177,8 @@ STRICT_CRISIS_PREDICATES = (
     "darurat banjir", "darurat longsor", "siaga", "waspada",
     "peringatan dini", "rawan longsor", "rawan banjir", "rusak parah",
     "berlubang parah", "gangguan operasional", "dihentikan sementara", "ditunda",
+    "pungli", "pos pungli", "pemalakan", "pemblokiran jalan", "blokade warga",
+    "blokir jalan", "warga blokir jalan", "unjuk rasa", "aksi massa",
 )
 
 # Emergency-infra nouns that are post-disaster construction, NOT active crisis
@@ -192,6 +195,8 @@ PHYSICAL_BLOCKAGE_PREDICATES = (
     "buka tutup",
     "merendam jalan", "jalan terendam", "jalur terendam", "banjir merendam",
     "menimbun badan jalan", "menutup badan jalan",
+    "blokir", "pemblokiran", "blokade", "pos pungli", "pungli", "pemalakan",
+    "pemblokiran jalan", "blokade warga", "blokir jalan", "warga blokir jalan", "unjuk rasa", "aksi massa",
 )
 
 # Sentence-level syntactic proximity (Task 3): a predicate only counts when it
@@ -204,6 +209,8 @@ _PHYSICAL_HAZARD_TERMS = (
     "kebakaran hutan", "karhutla", "gelombang tinggi", "rob",
     "banjir", "longsor", "amblas", "gempa", "lahar dingin", "puting beliung",
     "banjir rob", "luapan", "terendam", "genangan",
+    "pos pungli", "pungli", "pemalakan", "pemblokiran jalan", "blokade warga",
+    "blokir jalan", "warga blokir jalan", "unjuk rasa", "aksi massa",
 )
 _PHYSICAL_INFRA_NOUNS = (
     "jalan", "jalinsum", "jalintim", "jalinbar", "jalinteng", "jalinpantim",
@@ -406,8 +413,16 @@ def _detect_incident_type(full_text: str) -> tuple[str, str | None, str | None]:
         return "volcanic_eruption", None, None
     if any(w in t for w in ["jembatan putus", "jembatan ambruk", "jalan putus",
                             "jalan amblas", "penutupan jalan", "blokade jalan",
-                            "jalan terputus", "akses jalan tertutup"]):
-        return "road_closure", None, None
+                            "jalan terputus", "akses jalan tertutup",
+                            "pungli", "pos pungli", "pemalakan", "pemblokiran jalan",
+                            "blokade warga", "blokir jalan", "warga blokir jalan",
+                            "unjuk rasa", "aksi massa", "blokir"]):
+        custom_label = (
+            "Pungli / Pemalakan Jalur" if ("pungli" in t or "pemalakan" in t)
+            else "Blokade / Unjuk Rasa Warga" if any(x in t for x in ["blokir", "blokade", "unjuk rasa", "aksi massa"])
+            else "Penutupan Jalan"
+        )
+        return "road_closure", custom_label, "BLOCKED"
     if any(w in t for w in ["kebakaran hutan", "karhutla", "kabut asap", "titik api hutan"]):
         return "wildfire", None, None
     if any(w in t for w in ["gempa", "tektonik", "guncangan gempa"]):
@@ -767,8 +782,12 @@ def _fast_heuristic_extraction(art: Dict[str, Any]) -> Dict[str, Any]:
                                     "terisolir", "120cm", "100cm", "ditutup",
                                     "ambruk", "erupsi"]):
         severity = "critical"
-    elif any(w in full_text for w in ["siaga 2", "tersendat", "antrean panjang",
-                                      "longsor", "gelombang tinggi", "parah", "berat"]):
+    elif (any(w in full_text for w in ["siaga 2", "tersendat", "antrean panjang",
+                                      "longsor", "gelombang tinggi", "parah", "berat",
+                                      "pungli", "pos pungli", "pemalakan", "pemblokiran jalan",
+                                      "blokade warga", "blokir jalan", "warga blokir jalan",
+                                      "unjuk rasa", "aksi massa", "blokir", "blokade"])
+          or incident_type == "road_closure"):
         severity = "high"
     elif any(w in full_text for w in ["stok aman", "normal", "terkendali", "bantuan", "surut"]):
         severity = "low"
@@ -1047,6 +1066,7 @@ def _fast_heuristic_extraction(art: Dict[str, Any]) -> Dict[str, Any]:
         "corridor_nodes": nodes,
         "corridor_segment": corridor_segment,
         "incident_type": incident_type,
+        "disaster_type": incident_type,
         "custom_hazard_label": custom_hazard_label,
         "impact_profile": impact_profile,
         "severity": severity,

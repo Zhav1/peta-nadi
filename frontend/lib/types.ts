@@ -229,6 +229,7 @@ export interface RouteDetailModalProps {
   ) => Promise<void>;
   isActing: boolean;
   corridorIsFallback?: boolean;
+  onOpenEvaluation?: () => void;
 }
 
 export interface HitlPendingCreatePayload {

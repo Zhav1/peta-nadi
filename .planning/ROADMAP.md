@@ -2588,6 +2588,38 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 
 ---
 
+## Phase 103: Industry Validation Alignment — Tactical Cargo Tiering, Non-Natural Social Hazard Ingestion & Empiric Verification HUD
+
+**Goal:** Implement tactical industry validation enhancements from stakeholder audits (Pelindo, Socfin, Sawita, Ditmawalumni USU): (1) 3-tier cargo selector (Cold Chain, Horticulture, Dry Bulk) in the simulator activating Pelindo's diesel genset vs. spoilage matrix; (2) moving genset fuel burn on detour/delay in `spoilage_hedging_service.py`; (3) non-natural social disruption NLP ingestion (pungli, blokade warga, unjuk rasa) mapped to `road_closure`; and (4) prominent empiric N=60 evaluation grounding and data provenance indicators in route inspection modals.  
+**Status:** COMPLETE ✅  
+**Plan:** `.planning/phases/103-industry-validation-tactical-cargo-tiering-social-disruption/PLAN.md`
+
+### Deliverables
+- **WP1 - UI Cargo Tier Quick-Selector & Frontend Hedging Integration (`CrisisSimulatorBar.tsx`, `DashboardClient.tsx`, `RouteDetailModal.tsx`)**:
+  - Tactical Glassmorphic 3-Pill selector for Cold Chain, Horticulture, and Dry Bulk with SVG Lucide icons (`Snowflake`, `Sprout`, `Package`).
+  - Active `commodity` synchronization with `hedgingOpts` in `DashboardClient.tsx`.
+  - Net savings, spoilage risk, and dynamic reefer diesel fuel breakdown in `RouteDetailModal.tsx`.
+- **WP2 - Backend Spoilage Hedging Engine Precision (`spoilage_hedging_service.py`)**:
+  - Incorporate active genset fuel burn on `CONTINUE` (delay waiting) and `REROUTE` (detour hours) for `COLD_CHAIN` commodities.
+  - Pytest unit tests verifying genset cost calculations across all 3 policies.
+- **WP3 - Non-Natural Social Disruption NLP Ingestion (`news_aggregator.py`, `news_extractor.py`)**:
+  - Ingest social hazard keywords (`pungli`, `pos pungli`, `pemalakan`, `pemblokiran jalan`, `unjuk rasa`) into zero-token regex gate.
+  - Map social hazards directly to `road_closure` category with high severity.
+- **WP4 - Empiric Evaluation HUD Prominence & Grounding (`RouteDetailModal.tsx`, `EvaluationSection.tsx`)**:
+  - Prominent N=60 benchmark link and 20/80 physical survey disclaimer.
+  - Tactical Data Provenance badges with clean tooltips and direct evaluation modal trigger.
+- **WP5 - Automated Verification Gate**:
+  - Typecheck, backend pytest, and frontend state isolation verification.
+
+### Verification
+- [x] 3-tier cargo selector operational in `CrisisSimulatorBar.tsx` with SVG Lucide icons and zero slop.
+- [x] Dynamic reefer fuel calculations verified on `CONTINUE`, `REROUTE`, and `HOLD` for cold-chain, and Rp 0 for dry bulk.
+- [x] Social hazard news articles mapped to `road_closure` in NLP pipeline.
+- [x] Data provenance badges and N=60 evaluation link rendered in `RouteDetailModal.tsx`.
+- [x] 0 TypeScript errors (`tsc --noEmit`).
+- [x] 27/27 backend pytest tests passing cleanly.
+- [x] 4/4 turn-by-turn road snapping and 4/4 client state isolation assertions passing.
+
 ---
 
 ## Backlog (Post-Hackathon / v2 & New Context Window Backlog)

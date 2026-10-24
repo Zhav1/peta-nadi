@@ -429,6 +429,7 @@ export default function DashboardClient() {
   // Phase 77: single selection entry point state — modal opens on every select.
   const [routeModalIdx, setRouteModalIdx] = useState<number | null>(null);
   const [isActing, setIsActing] = useState(false);
+  const [selectedCommodity, setSelectedCommodity] = useState<string | null>(null);
 
   // Dynamic Supabase Hub Nodes List & Clean Slate Selection (Hydrated from URL or null)
   const [dynamicHubNodes] = useState<HubNode[]>(Object.values(HUB_NODES));
@@ -1137,7 +1138,7 @@ export default function DashboardClient() {
     [updateUrlParams]
   );
 
-  const updateBaselineMapboxRoute = useCallback(async (originId: string, destId: string, modality: TransportModality, hazardCenter: [number, number] | null = null, radiusKm: number = DEFAULT_HAZARD_RADIUS_KM, hazardType: CrisisType = 'flood', impactProfile?: HazardImpactProfile, zoneTier: 'RED_CONFIRMED' | 'YELLOW_CLARIFY' = 'RED_CONFIRMED', hedgingOpts?: { commodity?: string; cargo_tonnage?: number; vehicle_golongan?: string; fuel_type?: string; toll_segments?: string[]; p_disruption?: number; disruption_delay_hours?: number }): Promise<boolean> => {
+  const updateBaselineMapboxRoute = useCallback(async (originId: string, destId: string, modality: TransportModality, hazardCenter: [number, number] | null = null, radiusKm: number = DEFAULT_HAZARD_RADIUS_KM, hazardType: CrisisType = 'flood', impactProfile?: HazardImpactProfile, zoneTier: 'RED_CONFIRMED' | 'YELLOW_CLARIFY' = 'RED_CONFIRMED', hedgingOpts?: { commodity?: string; cargo_tonnage?: number; vehicle_golongan?: string; fuel_type?: string; toll_segments?: string[]; p_disruption?: number; disruption_delay_hours?: number } | null): Promise<boolean> => {
     const originInfo = resolveNodeInfo(originId);
     const destInfo = resolveNodeInfo(destId);
     const originNode = originInfo?.coords;
@@ -1162,10 +1163,21 @@ export default function DashboardClient() {
       return false;
     }
 
+    const effectiveHedgingOpts = hedgingOpts !== undefined
+      ? (hedgingOpts ?? undefined)
+      : (selectedCommodity ? {
+          commodity: selectedCommodity,
+          cargo_tonnage: 10.0,
+          vehicle_golongan: 'GOL_II',
+          fuel_type: 'biosolar',
+          p_disruption: 0.85,
+          disruption_delay_hours: 8.0,
+        } : undefined);
+
     // The node-selection handler calls this directly while the auto-recompute effect
     // fires for the same selection right after state commits. Reuse the in-flight
     // request instead of aborting it, so the click still resolves to a real result.
-    const routeKey = JSON.stringify([originId, destId, modality, hazardCenter, radiusKm, hazardType, zoneTier]);
+    const routeKey = JSON.stringify([originId, destId, modality, hazardCenter, radiusKm, hazardType, zoneTier, effectiveHedgingOpts?.commodity]);
     if (routingInFlightKeyRef.current === routeKey) return false;
     routingInFlightKeyRef.current = routeKey;
 
@@ -1204,13 +1216,13 @@ export default function DashboardClient() {
           hazard_zones: hazardCenter ? [{ center: hazardCenter, radiusKm }] : [],
           // Forward hedging economics only when the caller supplied them;
           // no hardcoded cargo values are injected into every request.
-          ...(hedgingOpts?.commodity ? { commodity: hedgingOpts.commodity } : {}),
-          ...(hedgingOpts?.cargo_tonnage != null ? { cargo_tonnage: hedgingOpts.cargo_tonnage } : {}),
-          ...(hedgingOpts?.vehicle_golongan ? { vehicle_golongan: hedgingOpts.vehicle_golongan } : {}),
-          ...(hedgingOpts?.fuel_type ? { fuel_type: hedgingOpts.fuel_type } : {}),
-          ...(hedgingOpts?.toll_segments ? { toll_segments: hedgingOpts.toll_segments } : {}),
-          ...(hedgingOpts?.p_disruption != null ? { p_disruption: hedgingOpts.p_disruption } : {}),
-          ...(hedgingOpts?.disruption_delay_hours != null ? { disruption_delay_hours: hedgingOpts.disruption_delay_hours } : {}),
+          ...(effectiveHedgingOpts?.commodity ? { commodity: effectiveHedgingOpts.commodity } : {}),
+          ...(effectiveHedgingOpts?.cargo_tonnage != null ? { cargo_tonnage: effectiveHedgingOpts.cargo_tonnage } : {}),
+          ...(effectiveHedgingOpts?.vehicle_golongan ? { vehicle_golongan: effectiveHedgingOpts.vehicle_golongan } : {}),
+          ...(effectiveHedgingOpts?.fuel_type ? { fuel_type: effectiveHedgingOpts.fuel_type } : {}),
+          ...(effectiveHedgingOpts?.toll_segments ? { toll_segments: effectiveHedgingOpts.toll_segments } : {}),
+          ...(effectiveHedgingOpts?.p_disruption != null ? { p_disruption: effectiveHedgingOpts.p_disruption } : {}),
+          ...(effectiveHedgingOpts?.disruption_delay_hours != null ? { disruption_delay_hours: effectiveHedgingOpts.disruption_delay_hours } : {}),
         }, signal);
         if (isStale()) return false;
         const nested = (routingRes as { point_to_point_path?: { status?: string; message?: string } } | null)?.point_to_point_path;
@@ -1295,7 +1307,7 @@ export default function DashboardClient() {
         }
       }
     }
-  }, [resolveNodeInfo]);
+  }, [resolveNodeInfo, selectedCommodity]);
 
   // Sync road network routes when origin, destination, modality, or hazard changes
   useEffect(() => {
@@ -1312,7 +1324,35 @@ export default function DashboardClient() {
         selectedRadius
       );
     }
-  }, [selectedOriginNode, selectedDestNode, selectedModality, simulatedShockwave, selectedRadius, updateBaselineMapboxRoute]);
+  }, [selectedOriginNode, selectedDestNode, selectedModality, simulatedShockwave, selectedRadius, selectedCommodity, updateBaselineMapboxRoute]);
+
+  // Tactical Cargo Preset Selection Handler (Pelindo Cold-Chain vs Dry-Bulk alignment)
+  const handleSelectCommodity = useCallback((commodity: string | null) => {
+    setSelectedCommodity(commodity);
+    if (selectedOriginNode && selectedDestNode) {
+      const hedgingOpts = commodity ? {
+        commodity,
+        cargo_tonnage: 10.0,
+        vehicle_golongan: 'GOL_II',
+        fuel_type: 'biosolar',
+        p_disruption: 0.85,
+        disruption_delay_hours: 8.0,
+      } : null;
+      const currentHazardType = (simulatedShockwave?.hazardType as CrisisType) || selectedCrisis?.type || 'flood';
+      const currentZoneTier = (selectedCrisis?.zone_tier as 'RED_CONFIRMED' | 'YELLOW_CLARIFY') || 'RED_CONFIRMED';
+      void updateBaselineMapboxRoute(
+        selectedOriginNode,
+        selectedDestNode,
+        selectedModality,
+        simulatedShockwave?.center || null,
+        selectedRadius,
+        currentHazardType,
+        undefined,
+        currentZoneTier,
+        hedgingOpts
+      );
+    }
+  }, [selectedOriginNode, selectedDestNode, selectedModality, simulatedShockwave, selectedRadius, selectedCrisis, updateBaselineMapboxRoute]);
 
   // FULL REACTIVE CLEAN SLATE NODE SELECTION HANDLER
   const handleNodeSelected = useCallback(async (nodeId: string) => {
@@ -3293,6 +3333,8 @@ export default function DashboardClient() {
                 isLeftSidebarCollapsed={isLeftSidebarCollapsed}
                 simSpeed={simSpeed}
                 setSimSpeed={setSimSpeed}
+                selectedCommodity={selectedCommodity}
+                onSelectCommodity={handleSelectCommodity}
               />
             )}
 
@@ -3396,6 +3438,10 @@ export default function DashboardClient() {
                   onAction={handleModalAction}
                   isActing={isActing}
                   corridorIsFallback={!!corridorContext?.is_fallback}
+                  onOpenEvaluation={() => {
+                    setRouteModalIdx(null);
+                    setActiveSection('evaluation');
+                  }}
                 />
               );
             })()}

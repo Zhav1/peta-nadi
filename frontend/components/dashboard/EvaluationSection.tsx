@@ -162,6 +162,14 @@ export default function EvaluationSection({
                 </p>
               </div>
             </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="px-2.5 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-mono text-xs font-semibold">
+                N=60 Benchmark Sumatra
+              </span>
+              <span className="px-2.5 py-1 rounded-full bg-purple-500/10 border border-purple-500/30 text-purple-300 font-mono text-xs font-semibold">
+                Transparansi Provenance Data
+              </span>
+            </div>
           </div>
 
           {/* 5 Empirical Benchmark Ledger Row */}
