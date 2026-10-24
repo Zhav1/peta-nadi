@@ -44,6 +44,7 @@ interface MitigationTabProps {
  onApproveSuccess?: (msg: string) => void;
  onCommitOperationalRoute?: (route: RouteRecommendation, action: DecisionAction, tactical: TacticalManeuver) => void;
  selectedImpactedVehicle?: import('@/lib/types').ImpactedVehicleAssessment | null;
+ selectedCommodity?: string | null;
 }
 
 interface RouteCardProps {
@@ -755,6 +756,7 @@ export function MitigationTab({
  onApproveSuccess,
  onCommitOperationalRoute,
  selectedImpactedVehicle,
+ selectedCommodity,
 }: MitigationTabProps) {
  const { user, role } = useAuth();
  const [approvedRouteId, setApprovedRouteId] = useState<string | null>(null);
@@ -1100,39 +1102,44 @@ export function MitigationTab({
  // commodity / plate / Medan-Pekanbaru / 10 t / 85 km stand-ins.
  const resolvedCommodity: string | null =
  selectedImpactedVehicle?.commodity_key?.replace(/_/g, ' ') ||
+ (selectedCommodity ? selectedCommodity.replace(/_/g, ' ') : null) ||
  crisis.inflation_forecast?.commodity ||
  ((crisis as unknown as Record<string, unknown>).commodities_affected as string[] | undefined)?.[0] ||
  null;
  const resolvedVehicleId: string | null =
  selectedImpactedVehicle?.vehicle_id ||
  ((crisis as unknown as Record<string, unknown>).vehicle_id as string | undefined) ||
- null;
+ (selectedCommodity ? 'ARMADA-SIM-01' : null);
  const resolvedOrigin: string | null = (() => {
  if (activeRoute?.legs && activeRoute.legs.length > 0 && activeRoute.legs[0].from_name) {
  return activeRoute.legs[0].from_name;
  }
- if (activeRoute?.route_name) {
- const parts = activeRoute.route_name.split(/→|->|\bto\b/i);
- if (parts.length > 1 && parts[0].trim()) return parts[0].trim();
+ const routeLabel = activeRoute?.route_name || activeRoute?.description;
+ if (routeLabel) {
+ const parts = routeLabel.split(/→|->|\bto\b|\s+-\s+/i);
+ if (parts.length > 1 && parts[0].trim()) {
+ return parts[0].replace(/^(Jalur Arteri|Rute|Pengalihan via)\s+/i, '').trim();
  }
- if (selectedImpactedVehicle?.origin) return selectedImpactedVehicle.origin;
- return crisis.region?.trim() || null;
+ } if (selectedImpactedVehicle?.origin) return selectedImpactedVehicle.origin;
+ return crisis.region?.trim() || (selectedCommodity ? 'Medan' : null);
  })();
  const resolvedDestination: string | null = (() => {
  if (activeRoute?.legs && activeRoute.legs.length > 0 && activeRoute.legs[activeRoute.legs.length - 1].to_name) {
  return activeRoute.legs[activeRoute.legs.length - 1].to_name;
  }
- if (activeRoute?.route_name) {
- const parts = activeRoute.route_name.split(/→|->|\bto\b/i);
+ const routeLabel = activeRoute?.route_name || activeRoute?.description;
+ if (routeLabel) {
+ const parts = routeLabel.split(/→|->|\bto\b|\s+-\s+/i);
  if (parts.length > 1 && parts[1].trim()) return parts[1].trim();
- }
- if (selectedImpactedVehicle?.destination) return selectedImpactedVehicle.destination;
- return null;
+ } if (selectedImpactedVehicle?.destination) return selectedImpactedVehicle.destination;
+ return selectedCommodity ? (crisis.region ? `${crisis.region} Hub` : 'Pekanbaru') : null;
  })();
  const resolvedCargoTonnage: number | null =
  typeof selectedImpactedVehicle?.cargo_tonnage === 'number' &&
  Number.isFinite(selectedImpactedVehicle.cargo_tonnage)
  ? selectedImpactedVehicle.cargo_tonnage
+ : selectedCommodity
+ ? 10.0
  : null;
  const resolvedDetourDist: number | null =
  typeof selectedImpactedVehicle?.detour_route?.distance_km === 'number' &&
@@ -1140,6 +1147,8 @@ export function MitigationTab({
  ? selectedImpactedVehicle.detour_route.distance_km
  : typeof activeRoute?.distance_km === 'number' && Number.isFinite(activeRoute.distance_km)
  ? activeRoute.distance_km
+ : selectedCommodity
+ ? 45.0
  : null;
  const resolvedDetourHours: number | null =
  typeof selectedImpactedVehicle?.detour_route?.eta_minutes === 'number' &&
@@ -1147,6 +1156,8 @@ export function MitigationTab({
  ? selectedImpactedVehicle.detour_route.eta_minutes / 60
  : typeof activeRoute?.eta_minutes === 'number' && activeRoute.eta_minutes > 0
  ? activeRoute.eta_minutes / 60
+ : selectedCommodity
+ ? 1.5
  : null;
  const resolvedTraversedRoads: string[] = (() => {
  if (selectedImpactedVehicle?.detour_route?.nodes && selectedImpactedVehicle.detour_route.nodes.length > 0) {
@@ -1177,10 +1188,19 @@ export function MitigationTab({
  detourTimeHours={resolvedDetourHours}
  onApplyPolicy={(policy) => {
  if (policy === 'REROUTE' && onSelectRoute) {
- onSelectRoute(0);
+ const detourIdx = crisis.route_recommendations?.findIndex(
+ (r) => r.corridor_type === 'land_detour' || r.corridor_type === 'sea_intermodal' || r.safety_status === 'SAFE_DETOUR'
+ );
+ onSelectRoute(detourIdx !== undefined && detourIdx >= 0 ? detourIdx : 1);
+ } else if (policy === 'HOLD' && onSelectRoute) {
+ const holdIdx = crisis.route_recommendations?.findIndex(
+ (r) => r.corridor_type === 'hold_staging'
+ );
+ if (holdIdx !== undefined && holdIdx >= 0) {
+ onSelectRoute(holdIdx);
  }
- }}
- />
+ }
+ }} />
  ) : (
  <div className="border-t border-[#1c2432] pt-3 bg-transparent text-xs font-sans text-slate-400 leading-relaxed">
  Hedging biaya &amp; risiko pembusukan belum tersedia — komoditas, muatan, asal/tujuan, atau rute detour belum terverifikasi.

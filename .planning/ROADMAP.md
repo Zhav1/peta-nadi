@@ -2653,6 +2653,39 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 
 ---
 
+## Phase 105: UI Popover Portal Migration, End-to-End Cost Telemetry & Reactive Cargo Hedging
+
+**Goal:** Resolve the two critical user-facing issues on the dashboard: (1) migrate the Cargo Tier selector to Base UI `<Popover>` with Portal so it escapes `overflow-x-auto` clipping and opens reliably; (2) expand the Route Callout Popover cost resolution hierarchy to include operational tradeoff costs (fuel + toll + labor) and flat/nested hedging fields, supporting `Rp 0 (Normal)` for baseline routes; and (3) eliminate commodity state race conditions and propagate selected cargo into sidebar mitigation cards.  
+**Status:** COMPLETE ✅  
+**Plan:** `.planning/phases/105-ui-popover-portal-cost-telemetry-cargo-hedging/PLAN.md`
+
+### Deliverables
+- **WP1 - Base UI Popover Migration for Cargo Selector (`CrisisSimulatorBar.tsx`)**:
+  - Wrap Cargo Tier Selector with Base UI `<Popover>` and `<PopoverContent side="top">` to portalize dropdown above overflow containers.
+  - Clean up conflicting `handleClickOutside` listener.
+- **WP2 - Comprehensive Cost Telemetry Hierarchy & Reactive Map Popover (`CrisisMap.tsx`)**:
+  - Expand `costIdr` evaluation to check nested/flat hedging, economic comparison, and `tradeoff_analysis.additional_cost_idr`.
+  - Distinguish `Rp 0 (Normal)` from positive detour expenses `+Rp X` and uncalculated states.
+  - Dynamically synchronize `selectedRoutePopover.route` with `activeRoutes`.
+- **WP3 - Backend Hedging Response Flat Field Aliasing (`routing_router.py`)**:
+  - Attach `reroute_cost_idr`, `continue_cost_idr`, and `hold_cost_idr` directly to response dictionaries.
+- **WP4 - Race Condition Elimination & Sidebar Commodity Hydration (`DashboardClient.tsx`, `CrisisSidebar.tsx`, `MitigationTab.tsx`)**:
+  - Remove redundant `selectedCommodity` `useEffect` trigger and propagate commodity to `MitigationTab.tsx`.
+- **WP5 - Automated Verification Gate**:
+  - TypeScript check, pytest suite, and automated popover/cost verification script.
+
+### Verification
+- [x] Cargo Tier Selector rendered via Base UI `<Popover>` with Portal, cleanly escaping `overflow-x-auto` container without clipping.
+- [x] Conflicting legacy `handleClickOutside` listener removed from `CrisisSimulatorBar.tsx`.
+- [x] Comprehensive cost telemetry hierarchy implemented in `CrisisMap.tsx` checking nested hedging, flat hedging, economic comparison, tradeoff analysis, and `Rp 0 (Normal)` baseline.
+- [x] Reactive popover synchronization keeps `selectedRoutePopover.route` in sync with async `activeRoutes`.
+- [x] Backend `routing_router.py` aliases `reroute_cost_idr`, `continue_cost_idr`, and `hold_cost_idr` directly on route response dictionaries.
+- [x] Race condition in `DashboardClient.tsx` eliminated by removing redundant `selectedCommodity` dependency from `useEffect`.
+- [x] `selectedCommodity` successfully forwarded to `CrisisSidebar` and `MitigationTab` to hydrate `SpoilageHedgingCard`.
+- [x] 100% passing verification suite: 0 TypeScript errors, 5/5 backend pytests passing, and `test_phase105_popover_cost.ts`, `test_turn_by_turn.ts`, `test_state_isolation.ts` all green.
+
+---
+
 ## Backlog (Post-Hackathon / v2 & New Context Window Backlog)
 
 ### Active Remediation & Audit Backlog (For New Context Window)

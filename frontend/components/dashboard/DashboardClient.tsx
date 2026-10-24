@@ -431,6 +431,8 @@ export default function DashboardClient() {
   const [routeModalIdx, setRouteModalIdx] = useState<number | null>(null);
   const [isActing, setIsActing] = useState(false);
   const [selectedCommodity, setSelectedCommodity] = useState<string | null>(null);
+  const selectedCommodityRef = useRef<string | null>(selectedCommodity);
+  selectedCommodityRef.current = selectedCommodity;
 
   // Dynamic Supabase Hub Nodes List & Clean Slate Selection (Hydrated from URL or null)
   const [dynamicHubNodes] = useState<HubNode[]>(Object.values(HUB_NODES));
@@ -1171,8 +1173,8 @@ export default function DashboardClient() {
 
     const effectiveHedgingOpts = hedgingOpts !== undefined
       ? (hedgingOpts ?? undefined)
-      : (selectedCommodity ? {
-          commodity: selectedCommodity,
+      : (selectedCommodityRef.current ? {
+          commodity: selectedCommodityRef.current,
           cargo_tonnage: 10.0,
           vehicle_golongan: 'GOL_II',
           fuel_type: 'biosolar',
@@ -1325,7 +1327,7 @@ export default function DashboardClient() {
         }
       }
     }
-  }, [resolveNodeInfo, selectedCommodity]);
+  }, [resolveNodeInfo]);
 
   // Sync road network routes when origin, destination, modality, or hazard changes
   useEffect(() => {
@@ -1342,7 +1344,7 @@ export default function DashboardClient() {
         selectedRadius
       );
     }
-  }, [selectedOriginNode, selectedDestNode, selectedModality, simulatedShockwave, selectedRadius, selectedCommodity, updateBaselineMapboxRoute]);
+  }, [selectedOriginNode, selectedDestNode, selectedModality, simulatedShockwave, selectedRadius, updateBaselineMapboxRoute]);
 
   // Tactical Cargo Preset Selection Handler (Pelindo Cold-Chain vs Dry-Bulk alignment)
   const handleSelectCommodity = useCallback((commodity: string | null) => {
@@ -3426,6 +3428,7 @@ export default function DashboardClient() {
                 onApproveSuccess={(msg) => setToast({ message: msg, type: 'success' })}
                 onCommitOperationalRoute={handleCommitOperationalRoute}
                 selectedImpactedVehicle={selectedImpactedVehicle}
+                selectedCommodity={selectedCommodity}
               />
             )}
             {/* Phase 77: Route Detail Modal — opened by every select path */}

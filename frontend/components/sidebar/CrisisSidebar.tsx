@@ -21,6 +21,7 @@ interface CrisisSidebarProps {
  setActiveTab?: (tab: Tab) => void;
  onCommitOperationalRoute?: (route: RouteRecommendation, action: any, tactical: any) => void;
  selectedImpactedVehicle?: import('@/lib/types').ImpactedVehicleAssessment | null;
+ selectedCommodity?: string | null;
 }
 
 export function CrisisSidebar({
@@ -33,6 +34,7 @@ export function CrisisSidebar({
  activeTab: controlledTab,
  setActiveTab: controlledSetActiveTab,
  selectedImpactedVehicle,
+ selectedCommodity,
 }: CrisisSidebarProps) {
  const [internalTab, setInternalTab] = useState<Tab>('Evidence');
 
@@ -157,6 +159,7 @@ export function CrisisSidebar({
  onApproveSuccess={onApproveSuccess}
  onCommitOperationalRoute={onCommitOperationalRoute}
  selectedImpactedVehicle={selectedImpactedVehicle}
+ selectedCommodity={selectedCommodity}
  />
  )}
  {activeTab === 'Economic' && <EconomicTab crisis={crisis} />}

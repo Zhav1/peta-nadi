@@ -371,7 +371,14 @@ def _enrich_routes_with_hedging(result: Dict[str, Any], payload: "RoutingRequest
                     toll_segments=payload.toll_segments,
                 )
                 hedged = svc.solve_hedging_matrix(req)
-                r["hedging"] = hedged.model_dump() if hasattr(hedged, "model_dump") else dict(hedged)
+                d = hedged.model_dump() if hasattr(hedged, "model_dump") else dict(hedged)
+                reroute_pol = d.get("reroute_policy") or {}
+                continue_pol = d.get("continue_policy") or {}
+                hold_pol = d.get("hold_policy") or {}
+                d["reroute_cost_idr"] = reroute_pol.get("cost_idr") if isinstance(reroute_pol, dict) else getattr(reroute_pol, "cost_idr", None)
+                d["continue_cost_idr"] = continue_pol.get("cost_idr") if isinstance(continue_pol, dict) else getattr(continue_pol, "cost_idr", None)
+                d["hold_cost_idr"] = hold_pol.get("cost_idr") if isinstance(hold_pol, dict) else getattr(hold_pol, "cost_idr", None)
+                r["hedging"] = d
             except Exception as e:
                 logger.warning(f"Hedging enrich skipped for route: {e}")
     except Exception as e:

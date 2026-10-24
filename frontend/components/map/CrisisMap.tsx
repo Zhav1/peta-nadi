@@ -343,6 +343,19 @@ export default function CrisisMap({
   const activeRoutesRef = useRef<RouteRecommendation[]>(activeRoutes);
   activeRoutesRef.current = activeRoutes;
 
+  // Dynamically sync selectedRoutePopover.route whenever activeRoutes updates (e.g. async hedging resolution)
+  useEffect(() => {
+    setSelectedRoutePopover((prev) => {
+      if (!prev) return null;
+      const updatedRoute = activeRoutes?.[prev.routeIndex];
+      if (!updatedRoute) return null;
+      return {
+        ...prev,
+        route: updatedRoute,
+      };
+    });
+  }, [activeRoutes]);
+
   // Custom User Pinned Points on Map (Origins, Dests, POIs)
   const [customPinnedPoints, setCustomPinnedPoints] = useState<Array<{
     id: string;
@@ -3077,14 +3090,43 @@ export default function CrisisMap({
               <div>
  <span className="text-slate-400 block text-xs">Biaya</span>
                 {(() => {
-                  const route = selectedRoutePopover.route;
+                  const currentRoute = activeRoutes?.[selectedRoutePopover.routeIndex] ?? selectedRoutePopover.route;
+                  const isBaseline = selectedRoutePopover.routeIndex === 0;
                   const costIdr =
-                    route.hedging?.reroute_cost_idr ??
-                    route.economic_comparison?.reroute_total_cost_idr;
-                  const hasCost = typeof costIdr === 'number' && Number.isFinite(costIdr) && costIdr > 0;
+                    currentRoute.hedging?.reroute_policy?.cost_idr ??
+                    currentRoute.hedging?.reroute_cost_idr ??
+                    currentRoute.economic_comparison?.reroute_total_cost_idr ??
+                    (currentRoute.tradeoff_analysis?.additional_cost_idr !== undefined
+                      ? currentRoute.tradeoff_analysis.additional_cost_idr
+                      : (isBaseline ? 0 : undefined));
+
+                  if (typeof costIdr === 'number' && Number.isFinite(costIdr)) {
+                    if (costIdr === 0) {
+                      return (
+                        <span className="font-semibold font-mono tabular-nums text-slate-200">
+                          Rp 0 (Normal)
+                        </span>
+                      );
+                    }
+                    if (costIdr > 0) {
+                      return (
+                        <span className="font-semibold font-mono tabular-nums text-emerald-300">
+                          +Rp {costIdr.toLocaleString('id-ID')}
+                        </span>
+                      );
+                    }
+                    if (costIdr < 0) {
+                      return (
+                        <span className="font-semibold font-mono tabular-nums text-emerald-300">
+                          -Rp {Math.abs(costIdr).toLocaleString('id-ID')}
+                        </span>
+                      );
+                    }
+                  }
+
                   return (
- <span className={`font-semibold font-mono tabular-nums ${hasCost ? 'text-emerald-300' : 'text-slate-400'}`}>
-                      {hasCost ? `Rp ${costIdr.toLocaleString('id-ID')}` : 'Belum tersedia'}
+                    <span className="font-semibold font-mono tabular-nums text-slate-400">
+                      Belum tersedia
                     </span>
                   );
                 })()}

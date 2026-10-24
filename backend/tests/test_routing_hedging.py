@@ -34,3 +34,8 @@ def test_solve_path_with_commodity_attaches_bpjt_pertamina_hedging():
         assert h['net_savings_idr'] >= 0
         assert h['optimal_policy'] in ('CONTINUE', 'REROUTE', 'HOLD')
         assert 'reroute_policy' in h and 'breakdown' in h['reroute_policy']
+        # Phase 105 WP3: Flat alias fields alongside nested policies
+        assert 'reroute_cost_idr' in h and isinstance(h['reroute_cost_idr'], (int, float))
+        assert 'continue_cost_idr' in h and isinstance(h['continue_cost_idr'], (int, float))
+        assert 'hold_cost_idr' in h and isinstance(h['hold_cost_idr'], (int, float))
+        assert h['reroute_cost_idr'] == h['reroute_policy']['cost_idr']
