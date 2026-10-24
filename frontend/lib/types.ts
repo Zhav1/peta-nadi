@@ -213,6 +213,15 @@ export interface RouteRecommendation {
   dasar_risiko?: string;
   dampak?: string;
   keterbatasan_data?: string[];
+  // Phase 106: First-Principles Trip Operational Cost Engine (A/B Variant C)
+  total_operational_cost_idr?: number;
+  operational_cost_breakdown?: {
+    fuel_cost_idr: number;
+    labor_cost_idr: number;
+    reefer_genset_cost_idr: number;
+    toll_cost_idr: number;
+    total_operational_cost_idr: number;
+  };
 }
 
 export interface RouteDetailModalProps {

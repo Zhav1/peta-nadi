@@ -4,7 +4,7 @@ phase_name: Dual-Metric Operational Cost & First-Principles Trip Economics (A/B 
 milestone: M6
 milestone_name: 3D Globe Native Mapbox Fleet, Street-Snapping & Impeccable Cartography
 created_at: "2026-10-25T03:15:00.000Z"
-status: planned
+status: completed
 framework: GSD
 ---
 

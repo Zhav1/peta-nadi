@@ -16,6 +16,7 @@ import type {
   RouteDetailModalProps,
   TacticalManeuver,
 } from '@/lib/types';
+import { calculateTotalTripCost } from '@/lib/tripCostCalculator';
 import {
  AlertDialog,
  AlertDialogContent,
@@ -125,6 +126,23 @@ export function RouteDetailModal({
            : route.hedging?.reroute_policy));
 
   const reeferGensetCost = activePolicyBreakdown?.breakdown?.['reefer_genset_fuel'] ?? 0;
+
+  const operationalCostBreakdown =
+    route.operational_cost_breakdown ??
+    calculateTotalTripCost({
+      distanceKm: route.distance_km,
+      durationMinutes: route.eta_minutes,
+      commodity: route.hedging?.perishability_tier?.toLowerCase().includes('cold') ? 'ikan_segar' : undefined,
+      tollCostIdr: 0,
+    }).operational_cost_breakdown;
+
+  const detourAdditionalCost =
+    route.hedging?.reroute_policy?.cost_idr ??
+    route.hedging?.reroute_cost_idr ??
+    route.economic_comparison?.reroute_total_cost_idr ??
+    route.tradeoff_analysis?.additional_cost_idr ??
+    0;
+  const isBaseline = route.corridor_type === 'land_primary';
 
   const toggleCheck = (id: string) =>
     setChecked((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -316,56 +334,83 @@ export function RouteDetailModal({
             </div>
           </section>
 
-          {/* Section 3: Manfaat vs Konsekuensi */}
- <section aria-label="Manfaat vs Konsekuensi" className="border-t border-white/10 pt-3 bg-transparent space-y-2">
- <h3 className="text-xs font-bold font-sans text-cyan-300 flex items-center gap-1.5">
+          {/* Section 3: Manfaat vs Konsekuensi & Rincian Biaya Operasional */}
+          <section aria-label="Manfaat vs Konsekuensi" className="border-t border-white/10 pt-3 bg-transparent space-y-2">
+            <h3 className="text-xs font-bold font-sans text-cyan-300 flex items-center gap-1.5">
               <Scale className="w-4 h-4 text-cyan-400" />
-              <span>3. Manfaat vs Konsekuensi</span>
+              <span>3. Manfaat, Konsekuensi &amp; Rincian Biaya</span>
             </h3>
-            {route.tradeoff_analysis ? (
-              <>
- <div className="grid grid-cols-2 gap-2 text-xs leading-relaxed">
-                  <div className="p-2 rounded-md bg-emerald-950/30 border border-emerald-500/20">
- <span className="block text-xs font-bold text-emerald-300 mb-1 font-sans">
-                      Manfaat
-                    </span>
-                    <ul className="space-y-1 text-emerald-100/90 font-sans">
-                      {route.tradeoff_analysis.pros.map((pro, i) => (
-                        <li key={i}>• {pro}</li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div className="p-2 rounded-md bg-amber-950/20 border border-amber-500/20">
- <span className="block text-xs font-bold text-amber-300 mb-1 font-sans">
-                      Konsekuensi
-                    </span>
-                    <ul className="space-y-1 text-amber-100/90 font-sans">
-                      {route.tradeoff_analysis.cons.map((con, i) => (
-                        <li key={i}>• {con}</li>
-                      ))}
-                    </ul>
-                  </div>
+            {route.tradeoff_analysis && (
+              <div className="grid grid-cols-2 gap-2 text-xs leading-relaxed">
+                <div className="p-2 rounded-md bg-emerald-950/30 border border-emerald-500/20">
+                  <span className="block text-xs font-bold text-emerald-300 mb-1 font-sans">
+                    Manfaat
+                  </span>
+                  <ul className="space-y-1 text-emerald-100/90 font-sans">
+                    {route.tradeoff_analysis.pros.map((pro, i) => (
+                      <li key={i}>• {pro}</li>
+                    ))}
+                  </ul>
                 </div>
-                <div className="text-xs font-mono text-slate-300 space-y-1">
-                  <div className="flex justify-between gap-2">
-                    <span className="text-slate-400">Tambahan biaya:</span>
-                    <span className="font-bold text-white">
-                      {formatIDR(route.tradeoff_analysis.additional_cost_idr)}
-                    </span>
-                  </div>
-                  {route.tradeoff_analysis.cost_breakdown_items?.map((item, i) => (
- <div key={i} className="flex justify-between gap-2 text-xs">
-                      <span className="text-slate-400">{item.label}:</span>
-                      <span>Rp {item.amount_idr.toLocaleString('id-ID')}</span>
-                    </div>
-                  ))}
+                <div className="p-2 rounded-md bg-amber-950/20 border border-amber-500/20">
+                  <span className="block text-xs font-bold text-amber-300 mb-1 font-sans">
+                    Konsekuensi
+                  </span>
+                  <ul className="space-y-1 text-amber-100/90 font-sans">
+                    {route.tradeoff_analysis.cons.map((con, i) => (
+                      <li key={i}>• {con}</li>
+                    ))}
+                  </ul>
                 </div>
-              </>
-            ) : (
-              <p className="text-xs text-slate-500 italic">
-                Analisis manfaat vs konsekuensi belum tersedia untuk koridor ini.
-              </p>
+              </div>
             )}
+
+            {/* Rincian Biaya Operasional Total (First-Principles Trip Economics) */}
+            <div className="p-3 rounded-lg bg-[#080d14] border border-white/10 space-y-2 mt-2 font-mono">
+              <div className="flex justify-between items-center pb-2 border-b border-white/10">
+                <span className="text-xs font-sans font-semibold text-slate-200">
+                  Total Estimasi Biaya Rit:
+                </span>
+                <span className="text-sm font-bold text-emerald-400 font-mono tabular-nums">
+                  {formatIDR(operationalCostBreakdown.total_operational_cost_idr)}
+                </span>
+              </div>
+              <div className="space-y-1 text-xs text-slate-300">
+                <div className="flex justify-between gap-2">
+                  <span className="text-slate-400 font-sans">BBM Biosolar (3,5 km/L):</span>
+                  <span className="tabular-nums">Rp {operationalCostBreakdown.fuel_cost_idr.toLocaleString('id-ID')}</span>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <span className="text-slate-400 font-sans">Upah Supir Operasional:</span>
+                  <span className="tabular-nums">Rp {operationalCostBreakdown.labor_cost_idr.toLocaleString('id-ID')}</span>
+                </div>
+                {operationalCostBreakdown.reefer_genset_cost_idr > 0 && (
+                  <div className="flex justify-between gap-2 text-cyan-300">
+                    <span className="font-sans flex items-center gap-1">
+                      <Snowflake className="w-3 h-3 text-cyan-400" />
+                      Bahan Bakar Genset Reefer:
+                    </span>
+                    <span className="tabular-nums">Rp {operationalCostBreakdown.reefer_genset_cost_idr.toLocaleString('id-ID')}</span>
+                  </div>
+                )}
+                <div className="flex justify-between gap-2">
+                  <span className="text-slate-400 font-sans">Tarif Tol BPJT:</span>
+                  <span className="tabular-nums">
+                    {operationalCostBreakdown.toll_cost_idr > 0
+                      ? `Rp ${operationalCostBreakdown.toll_cost_idr.toLocaleString('id-ID')}`
+                      : 'Rp 0 (Non-Tol)'}
+                  </span>
+                </div>
+              </div>
+              <div className="pt-2 border-t border-white/5 flex justify-between items-center text-xs">
+                <span className="text-slate-400 font-sans">Tambahan Biaya Pengalihan:</span>
+                <span className={detourAdditionalCost > 0 && !isBaseline ? "font-bold text-emerald-400 tabular-nums" : "text-slate-400 tabular-nums"}>
+                  {detourAdditionalCost > 0 && !isBaseline
+                    ? `+Rp ${detourAdditionalCost.toLocaleString('id-ID')}`
+                    : 'Rp 0 (Jalur Normal Acuan)'}
+                </span>
+              </div>
+            </div>
           </section>
 
           {/* Section 4: Keterbatasan Data */}

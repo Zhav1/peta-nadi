@@ -2,6 +2,7 @@ import type { LonLat } from './pathDensifier';
 export type { LonLat };
 import type { RouteRecommendation, CongestionSegment, RouteLeg, HoldVsRerouteEconomics, CrisisType, HazardImpactProfile, RouteTradeoffAnalysis } from './types';
 import { getCachedDynamicRoutes, setCachedDynamicRoutes, findPrecomputedHubCorridor } from './hubCorridorCache';
+import { calculateTotalTripCost } from './tripCostCalculator';
 
 export type TransportModality = 'best' | 'truck' | 'maritime' | 'air' | 'multimodal' | 'auto';
 
@@ -1879,13 +1880,31 @@ export async function calculateAIDynamicDetourRoutes(
   hazardType: CrisisType = 'flood',
   impactProfile?: HazardImpactProfile,
   zoneTier: 'RED_CONFIRMED' | 'YELLOW_CLARIFY' = 'RED_CONFIRMED',
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  costOptions?: {
+    commodity?: string | null;
+    vehicleGolongan?: string | null;
+    tollCostIdr?: number | null;
+  }
 ): Promise<RouteRecommendation[]> {
   void zoneTier;
   throwIfAborted(signal);
   // Fast in-memory quantized cache check (<1 ms)
   const cached = getCachedDynamicRoutes<RouteRecommendation>(origin, destination, hazardCenter, radiusKm, _modality);
   if (cached && cached.length > 0) {
+    for (const route of cached) {
+      if (!route.total_operational_cost_idr || costOptions?.commodity) {
+        const tripCost = calculateTotalTripCost({
+          distanceKm: route.distance_km,
+          durationMinutes: route.eta_minutes,
+          commodity: costOptions?.commodity,
+          vehicleGolongan: costOptions?.vehicleGolongan,
+          tollCostIdr: costOptions?.tollCostIdr ?? 0,
+        });
+        route.total_operational_cost_idr = tripCost.total_operational_cost_idr;
+        route.operational_cost_breakdown = tripCost.operational_cost_breakdown;
+      }
+    }
     return cached;
   }
   const affectedModalities = getAffectedModalities(hazardType, impactProfile);
@@ -1930,7 +1949,7 @@ export async function calculateAIDynamicDetourRoutes(
     fuel_increase_pct: isPrimaryCompromised ? 25.0 : 0,
     risk_score: isPrimaryCompromised ? 0.90 : 0.05,
     is_compromised: isPrimaryCompromised || isPrimaryOffline,
-    safety_status: isPrimaryCompromised || isPrimaryOffline ? 'COMPROMISED' : 'SAFE_DETOUR',
+    safety_status: isPrimaryCompromised || isPrimaryOffline ? 'COMPROMISED' : 'CLEAR',
     safety_tag: portAccessBlocked
       ? 'AKSES PELABUHAN ASAL TUTUP — PERLU RUTE ALTERNATIF'
       : isPrimaryOffline
@@ -2189,6 +2208,21 @@ export async function calculateAIDynamicDetourRoutes(
       closedPortName: route.affected_port_name ?? seaCorridor.affected_port_name,
       altPortName: route.alternate_port_name ?? seaCorridor.alternate_port_name,
     });
+  }
+
+  // STEP 5 (Phase 106): Attach first-principles trip operational cost engine to ALL corridors
+  for (const route of allCorridors) {
+    if (!route.total_operational_cost_idr) {
+      const tripCost = calculateTotalTripCost({
+        distanceKm: route.distance_km,
+        durationMinutes: route.eta_minutes,
+        commodity: costOptions?.commodity,
+        vehicleGolongan: costOptions?.vehicleGolongan,
+        tollCostIdr: costOptions?.tollCostIdr ?? 0,
+      });
+      route.total_operational_cost_idr = tripCost.total_operational_cost_idr;
+      route.operational_cost_breakdown = tripCost.operational_cost_breakdown;
+    }
   }
 
   setCachedDynamicRoutes(origin, destination, hazardCenter, radiusKm, _modality, allCorridors);

@@ -1242,7 +1242,11 @@ export default function DashboardClient() {
         hazardType,
         impactProfile,
         zoneTier,
-        signal
+        signal,
+        {
+          commodity: effectiveHedgingOpts?.commodity,
+          vehicleGolongan: effectiveHedgingOpts?.vehicle_golongan,
+        }
       );
 
       // 1. Await visual detour corridors first for immediate sub-second rendering

@@ -25,6 +25,7 @@ import {
   type DeclutterItem,
 } from '@/lib/spatialHashArbiter';
 import { api } from '@/lib/api';
+import { formatCompactIDR, calculateTotalTripCost } from '@/lib/tripCostCalculator';
 import {
   Layers,
   Check,
@@ -3088,38 +3089,104 @@ export default function CrisisMap({
               </div>
 
               <div>
- <span className="text-slate-400 block text-xs">Biaya</span>
+                <span className="text-[11px] font-sans text-slate-400 block uppercase tracking-wider">Est. Operasional</span>
                 {(() => {
                   const currentRoute = activeRoutes?.[selectedRoutePopover.routeIndex] ?? selectedRoutePopover.route;
                   const isBaseline = selectedRoutePopover.routeIndex === 0;
-                  const costIdr =
+                  const baselineRoute = activeRoutes?.[0];
+
+                  // Detour delta additional cost
+                  const additionalCost =
                     currentRoute.hedging?.reroute_policy?.cost_idr ??
                     currentRoute.hedging?.reroute_cost_idr ??
                     currentRoute.economic_comparison?.reroute_total_cost_idr ??
                     (currentRoute.tradeoff_analysis?.additional_cost_idr !== undefined
                       ? currentRoute.tradeoff_analysis.additional_cost_idr
-                      : (isBaseline ? 0 : undefined));
+                      : undefined);
 
-                  if (typeof costIdr === 'number' && Number.isFinite(costIdr)) {
-                    if (costIdr === 0) {
-                      return (
-                        <span className="font-semibold font-mono tabular-nums text-slate-200">
-                          Rp 0 (Normal)
+                  // First-principles total operational trip cost
+                  let totalOperationalCost = currentRoute.total_operational_cost_idr;
+                  if (totalOperationalCost == null && currentRoute.distance_km != null && currentRoute.eta_minutes != null) {
+                    const commodity = currentRoute.hedging?.perishability_tier?.toLowerCase().includes('cold') ? 'ikan_segar' : undefined;
+                    const calc = calculateTotalTripCost({
+                      distanceKm: currentRoute.distance_km,
+                      durationMinutes: currentRoute.eta_minutes,
+                      commodity,
+                      tollCostIdr: isBaseline ? 0 : (additionalCost ?? 0),
+                    });
+                    totalOperationalCost = calc.total_operational_cost_idr;
+                  }
+
+                  // If detour route and hedging has an explicit additionalCost, align totalOperationalCost = baselineCost + additionalCost
+                  if (!isBaseline && additionalCost != null && additionalCost > 0 && baselineRoute) {
+                    let baselineTotal = baselineRoute.total_operational_cost_idr;
+                    if (baselineTotal == null && baselineRoute.distance_km != null && baselineRoute.eta_minutes != null) {
+                      const bCalc = calculateTotalTripCost({
+                        distanceKm: baselineRoute.distance_km,
+                        durationMinutes: baselineRoute.eta_minutes,
+                        commodity: baselineRoute.hedging?.perishability_tier?.toLowerCase().includes('cold') ? 'ikan_segar' : undefined,
+                        tollCostIdr: 0,
+                      });
+                      baselineTotal = bCalc.total_operational_cost_idr;
+                    }
+                    if (baselineTotal != null) {
+                      totalOperationalCost = Math.max(totalOperationalCost ?? 0, baselineTotal + additionalCost);
+                    }
+                  }
+
+                  if (typeof totalOperationalCost === 'number' && Number.isFinite(totalOperationalCost) && totalOperationalCost > 0) {
+                    return (
+                      <div className="flex flex-col gap-0.5">
+                        <span
+                          className="font-bold font-mono tabular-nums text-emerald-300 text-sm"
+                          title={`Rp ${totalOperationalCost.toLocaleString('id-ID')}`}
+                        >
+                          {formatCompactIDR(totalOperationalCost)}
                         </span>
+                        {isBaseline ? (
+                          <span className="text-[10px] font-mono text-slate-400 bg-white/5 px-1.5 py-0.5 rounded border border-white/10 w-fit">
+                            Acuan (Δ Rp 0)
+                          </span>
+                        ) : additionalCost != null && additionalCost > 0 ? (
+                          <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 w-fit">
+                            +{formatCompactIDR(additionalCost)} (Detour)
+                          </span>
+                        ) : additionalCost != null && additionalCost < 0 ? (
+                          <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 w-fit">
+                            -{formatCompactIDR(Math.abs(additionalCost))} (Hemat)
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-mono text-slate-400 bg-white/5 px-1.5 py-0.5 rounded border border-white/10 w-fit">
+                            Acuan (Δ Rp 0)
+                          </span>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  if (typeof additionalCost === 'number' && Number.isFinite(additionalCost)) {
+                    if (additionalCost === 0 || isBaseline) {
+                      return (
+                        <div className="flex flex-col gap-0.5">
+                          <span className="font-semibold font-mono tabular-nums text-slate-200">
+                            Rp 0 (Normal)
+                          </span>
+                          <span className="text-[10px] font-mono text-slate-400 bg-white/5 px-1.5 py-0.5 rounded border border-white/10 w-fit">
+                            Acuan (Δ Rp 0)
+                          </span>
+                        </div>
                       );
                     }
-                    if (costIdr > 0) {
+                    if (additionalCost > 0) {
                       return (
-                        <span className="font-semibold font-mono tabular-nums text-emerald-300">
-                          +Rp {costIdr.toLocaleString('id-ID')}
-                        </span>
-                      );
-                    }
-                    if (costIdr < 0) {
-                      return (
-                        <span className="font-semibold font-mono tabular-nums text-emerald-300">
-                          -Rp {Math.abs(costIdr).toLocaleString('id-ID')}
-                        </span>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="font-semibold font-mono tabular-nums text-emerald-300">
+                            +Rp {additionalCost.toLocaleString('id-ID')}
+                          </span>
+                          <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 w-fit">
+                            +{formatCompactIDR(additionalCost)} (Detour)
+                          </span>
+                        </div>
                       );
                     }
                   }
@@ -3130,16 +3197,53 @@ export default function CrisisMap({
                     </span>
                   );
                 })()}
- {selectedRoutePopover.route.safety_status === 'COMPROMISED' ? (
- <span className="text-xs text-red-400 flex items-center gap-1 truncate">
- <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
- Terdampak
-                </span>
- ) : (
- <span className="text-xs text-slate-400 block truncate">
- {selectedRoutePopover.route.safety_status === 'SAFE_DETOUR' ? 'Detour terverifikasi' : 'Bebas hambatan'}
- </span>
- )}
+                {(() => {
+                  const currentRoute = activeRoutes?.[selectedRoutePopover.routeIndex] ?? selectedRoutePopover.route;
+                  const isBaseline = selectedRoutePopover.routeIndex === 0;
+                  const isCompromised = currentRoute.is_compromised || currentRoute.safety_status === 'COMPROMISED';
+
+                  if (isBaseline) {
+                    if (isCompromised) {
+                      return (
+                        <span className="text-xs text-rose-400 flex items-center gap-1.5 truncate mt-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
+                          Terdampak bencana
+                        </span>
+                      );
+                    }
+                    return (
+                      <span className="text-xs text-emerald-400 flex items-center gap-1.5 truncate mt-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                        Jalur utama bebas hambatan
+                      </span>
+                    );
+                  }
+
+                  if (isCompromised) {
+                    return (
+                      <span className="text-xs text-rose-400 flex items-center gap-1.5 truncate mt-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
+                        Terdampak bencana
+                      </span>
+                    );
+                  }
+
+                  if (currentRoute.safety_status === 'SAFE_DETOUR') {
+                    return (
+                      <span className="text-xs text-emerald-400 flex items-center gap-1.5 truncate mt-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                        Detour terverifikasi
+                      </span>
+                    );
+                  }
+
+                  return (
+                    <span className="text-xs text-slate-400 flex items-center gap-1.5 truncate mt-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-500 shrink-0" />
+                      Bebas hambatan
+                    </span>
+                  );
+                })()}
               </div>
             </div>
 
