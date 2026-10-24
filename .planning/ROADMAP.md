@@ -2622,6 +2622,37 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 
 ---
 
+## Phase 104: Nautical Sea-Lane Precision, ICAO Airway Corridors & Sub-Second Parallel Routing Engine
+
+**Goal:** Eliminate landmass penetration on maritime sea routes and aviation air corridors, and compress route generation latency from 30s+ down to sub-second (<1.5s total round-trip, <50ms for pre-cached corridors) by replacing cloud API waterfall calls with parallel execution, optimized Mapbox query profiles, and high-density nautical waypoints.  
+**Status:** PLANNED ⏳  
+**Plan:** `.planning/phases/104-nautical-precision-icao-airways-subsecond-routing/PLAN.md`
+
+### Deliverables
+- **WP1 - Nautical Sea-Lane Precision & Bathymetric Fairway Expansion (`aiDynamicRouter.ts`, `cpu_routing_adapter.py`)**:
+  - Add 4 verified nautical waypoints along the Malacca Strait coastline between Lhokseumawe and Belawan (Peureulak Offshore, Langsa Outer Sea Lane, Pangkalan Brandan/Teluk Aru Offshore, and Belawan Navigational Pilot Fairway).
+  - Guarantee $\ge 12\text{ km}$ offshore clearance, mathematically preventing maritime lines from cutting across the Langkat and East Aceh landmass.
+- **WP2 - ICAO Airway Corridors & Smart Airport Hub Selection (`aiDynamicRouter.ts`)**:
+  - Add Malikussaleh Lhokseumawe Airport (`LSW` / `WITM`) to `CARGO_AIRPORT_NODES` for regional feeder air cargo.
+  - Align air corridors with Medan FIR ATS airways (W12 / W21 corridors) instead of naive quadratic Bézier curves.
+  - Implement directionality gating to prevent counter-productive 250 km backward feeder legs.
+- **WP3 - Elimination of API Waterfall & Parallel Route Dispatching (`DashboardClient.tsx`, `aiDynamicRouter.ts`)**:
+  - Dispatch backend `api.routing.optimizeRouting` and frontend `calculateAIDynamicDetourRoutes` in parallel via `Promise.allSettled`.
+  - Stream economic and proof enrichment asynchronously in the background so visual routes render immediately upon geometric resolution.
+  - Tune Mapbox parameters to `overview=simplified` on auxiliary routes and intermodal feeder legs, slashing Mapbox query time from 11.5s to <1.0s.
+- **WP4 - Pre-Computed Hub-to-Hub Corridor Matrix & In-Memory Cache (`hubCorridorCache.ts`, `aiDynamicRouter.ts`)**:
+  - Pre-compute and cache the 18 strategic logistics hubs of Sumatra, enabling instant sub-50ms corridor retrieval for common inter-city routes.
+- **WP5 - Automated Verification Gate**:
+  - Unit tests asserting 0 land intersection for sea routes, valid ICAO airway waypoints, sub-2.0s execution time, 0 TypeScript errors, and clean builds.
+
+### Verification
+- [ ] Maritime sea route between Lhokseumawe, Belawan, and Dumai follows open water without crossing Langkat / East Aceh coastline.
+- [ ] Aviation intermodal route uses ICAO-aligned waypoints and filters out counter-productive feeder backtracking.
+- [ ] Total route calculation time for Aceh Utara $\rightarrow$ Sei Rampah drops from 30s+ to $< 2.0\text{s}$ (and $< 50\text{ms}$ on cache hit).
+- [ ] Zero regressions on existing test suites (26/26 backend pytests pass, 0 TypeScript errors).
+
+---
+
 ## Backlog (Post-Hackathon / v2 & New Context Window Backlog)
 
 ### Active Remediation & Audit Backlog (For New Context Window)
