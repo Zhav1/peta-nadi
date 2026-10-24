@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "test": "node --no-warnings --experimental-strip-types scripts/test_arbiter.ts",
-    "test:fleet-scope": "node --no-warnings --experimental-strip-types scripts/test_fleet_scope.ts"
+    "test:fleet-scope": "node --no-warnings --experimental-strip-types scripts/test_fleet_scope.ts",
+    "test:corridors": "node --no-warnings --experimental-strip-types scripts/test_corridor_snapping.ts"
   },
   "dependencies": {
     "@deck.gl/aggregation-layers": "^9.4.0",

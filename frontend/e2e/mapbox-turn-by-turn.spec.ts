@@ -272,4 +272,73 @@ test.describe('Phase 97: Turn-by-Turn Road Network & Dual-Layer Hazard Avoidance
     expect(selectionCheck.hasHaloLayer).toBe(true);
     expect(selectionCheck.hasRouteLayer).toBe(true);
   });
+
+  test('Phase 102: Restored truck dots present in fleet-vehicles-source and zoom-out LOD cartography', async ({ page }) => {
+    const consoleErrors: string[] = [];
+    page.on('console', (msg) => {
+      if (msg.type() === 'error') {
+        consoleErrors.push(msg.text());
+      }
+    });
+
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await page.goto('http://localhost:3000/dashboard?guest=1');
+
+    await page.waitForFunction(() => {
+      const w = window as any;
+      const map = w.mapboxMap || w._mapboxMap;
+      return !!(map && map.getLayer && map.getLayer('fleet-vehicle-dots'));
+    }, { timeout: 20000 });
+
+    // Wait 3s for fleet animation frame to populate features
+    await page.waitForTimeout(3000);
+
+    const lodCheck = await page.evaluate(() => {
+      const map = (window as any).mapboxMap || (window as any)._mapboxMap;
+      if (!map) return { ok: false, error: 'no map' };
+
+      const minZoom = map.getMinZoom();
+      const dotsLayer = map.getLayer('fleet-vehicle-dots');
+      const haloLayer = map.getLayer('fleet-vehicle-selected-halo');
+      const routeLayer = map.getLayer('fleet-selected-route-line');
+      const pulseLayer = map.getLayer('hub-nodes-pulse-outer');
+      const corridorLine = map.getLayer('baseline-corridors-line');
+
+      // Check fleet-vehicles-source features
+      const source = map.getSource('fleet-vehicles-source');
+      const data = (source as any)?._data;
+      const features = data?.features || [];
+      const truckFeatures = features.filter((f: any) => f.properties?.modality === 'truck');
+
+      return {
+        ok: true,
+        minZoom,
+        totalFeatures: features.length,
+        truckCount: truckFeatures.length,
+        dotsOpacity: dotsLayer?.getPaintProperty('circle-opacity'),
+        haloMinZoom: haloLayer?.minzoom,
+        routeMinZoom: routeLayer?.minzoom,
+        pulseMinZoom: pulseLayer?.minzoom,
+        corridorMinZoom: corridorLine?.minzoom,
+      };
+    });
+
+    expect(lodCheck.ok).toBe(true);
+    // Camera minimum zoom enforced
+    expect(lodCheck.minZoom).toBe(2.8);
+    // Truck features restored (at least 20 trucks in feature collection)
+    expect(lodCheck.truckCount).toBeGreaterThanOrEqual(20);
+    // LOD minzoom constraints
+    expect(lodCheck.haloMinZoom).toBe(4.0);
+    expect(lodCheck.routeMinZoom).toBe(4.0);
+    expect(lodCheck.pulseMinZoom).toBe(4.5);
+    expect(lodCheck.corridorMinZoom).toBe(4.0);
+    // WebGL circle-opacity interpolate expression present
+    expect(Array.isArray(lodCheck.dotsOpacity)).toBe(true);
+
+    // Assert zero 401 Unauthorized console errors in guest mode
+    const unauthorizedErrors = consoleErrors.filter((e) => e.includes('401') || e.includes('Unauthorized'));
+    expect(unauthorizedErrors).toHaveLength(0);
+  });
 });
+

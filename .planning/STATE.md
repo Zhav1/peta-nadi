@@ -2,19 +2,19 @@
 gsd_state_version: "1.0"
 milestone: M6
 milestone_name: 3D Globe Native Mapbox Fleet, Street-Snapping & Impeccable Cartography
-current_phase: 101
-current_phase_name: 3D Globe Native Mapbox Fleet, Anti-Flicker & Impeccable Minimalist Visual Cleanup
+current_phase: 102
+current_phase_name: Fleet Telemetry Restoration, Payload Optimization & Zoom-Out LOD Cartography
 status: complete
-stopped_at: "Phase 101 complete: Restored 3D Globe projection ('4D') on Mapbox GL JS v3, migrated fleet rendering from Deck.gl to native Mapbox WebGL GeoJSON layers (100% surface grounding, 0 floating), eliminated reload flicker with 60 FPS in-place GeoJSON updates, and executed impeccable visual distillation (clean colored tactical dots, default hideEstimatedRoutes=true, micro-tooltips on hover)."
-last_updated: "2026-10-24T00:20:00.000Z"
+stopped_at: "Phase 102 complete: 24 truck dots restored, telemetry payload reduced to 28.7 KB for trucks and <10% for full fleet, corridorSnappingService preloads snapped corridors, zero-latency state hydration for news and corridor context, zero 401 guest console errors, and WebGL smooth dissolve cartographic LOD active."
+last_updated: "2026-10-24T02:12:00.000Z"
 last_activity: 2026-10-24
-last_activity_desc: "Milestone M6 Phase 101 complete (3D Globe Native Mapbox Fleet, Anti-Flicker & Impeccable Minimalist Visual Cleanup). 7/7 Playwright tests passing, 22/22 backend tests passing, 0 tsc errors."
+last_activity_desc: "Phase 102 verified and completed with 26/26 pytest tests passing, 0 tsc errors, and E2E assertions passing."
 state_head: HEAD
 progress:
-  total_phases: 101
-  completed_phases: 101
-  total_plans: 118
-  completed_plans: 118
+  total_phases: 102
+  completed_phases: 102
+  total_plans: 119
+  completed_plans: 119
   percent: 100.0
 ---
 
@@ -23,16 +23,15 @@ progress:
 **Last Updated:** 2026-10-24
 **Active Milestone:** M6 - 3D Globe Native Mapbox Fleet, Street-Snapping & Impeccable Cartography [COMPLETED ✅]
 **Previous Milestones:** M1-M4 [COMPLETED ✅], M5 - Pilot Interference, Ingestion Resilience & Honest Verification [COMPLETED ✅]
-**Current Phase:** 101
+**Current Phase:** 102
 
 ---
 
 ## Current Position
 
-Phase: 101 (3D Globe Native Mapbox Fleet, Anti-Flicker & Impeccable Minimalist Visual Cleanup) - COMPLETE ✅
-Status: Phase 101 fully completed and verified. 3D Globe projection ("4D") restored on Mapbox GL JS v3 with 100% surface adherence; fleet vehicle rendering fully migrated from Deck.gl to native Mapbox WebGL GeoJSON layers; flicker eradicated via non-destructive GeoJSON buffer updates; visual minimalism applied (clean tactical dots, ambient routes hidden by default, pulse aura reserved for emergency/reroute units, hover micro-tooltips).
-Plan: `.planning/phases/101-3d-globe-native-mapbox-fleet-anti-flicker-minimalist/PLAN.md`
-Next action: Milestone M6 finalized. Ready for review or next phase.
+Phase: 102 (Fleet Telemetry Restoration, Payload Optimization & Zoom-Out LOD Cartography) - COMPLETE ✅
+Status: All 24 truck dots restored in Emerald #10b981; backend telemetry polling optimized to 28.7 KB for trucks with include_geometry=false; frontend corridorSnappingService implemented; zero-latency state hydration active; guest 401 console errors resolved; WebGL smooth dissolve LOD enforced on 3D globe.
+Next action: Milestone M6 review or next task.
 
 
 
@@ -152,7 +151,9 @@ Upstream Phases 87/88 above (Mapbox turn-by-turn; client-isolated session, merge
 | 97 | Pilot-to-Real Interference Core (WP1 + WP2) | **COMPLETE** ✅ | Duplicate -> `END`; UI/sim dedup exemptions; weather-grounded confidence; PIHPS pre-gate; E-channel active/physical-only weight profiles. 49 + 12 tests re-run. Docs: `97-pilot-interference-core/`. |
 | 98 | Ingestion Resilience and Alert Bridge (WP3 + WP4 + WP5) | **COMPLETE** ✅ | PIHPS snapshot + 14d fallback; bounded local STM/dedup; OSINT 12h fallback; SCAN + corridor anchor; idempotent news upserts; anti-self-corroboration; cross-worker validated-alert stream. 22 + 84 + 9 tests re-run; alert bridge has no direct test. Docs: `98-ingestion-resilience-and-alert-bridge/`. |
 | 99 | Honest UI and Risk Batch (WP6 + WP7) | **COMPLETE** ✅ | Archived => unvalidated + Evidence + info toast; fallback-news label; dual-scale Brier (normalized scored, raw telemetry); canonical publisher URLs; auth-first HITL. tsc 0; 10 passed; `test_evaluation_router` TP 35 vs 34 still red. Docs: `99-honest-ui-and-risk-batch/`. |
+| 100 | Turn-by-Turn Road Snapping, Offline Fleet Precomputation & Dual-Layer Hazard Avoidance | **COMPLETE** ✅ | Turn-by-turn road snapping (>200 pts), 24 precomputed offline truck corridors in fleet_corridors_snapped.json, dual-layer hazard avoidance (exclude=point + tangential waypoint clearance). 4/4 tests pass. |
 | 101 | 3D Globe Native Mapbox Fleet, Anti-Flicker & Impeccable Minimalist Visual Cleanup | **COMPLETE** ✅ | Restored 3D Globe projection ('4D') on Mapbox GL JS v3 with space atmosphere fog; migrated fleet layer from Deck.gl to native Mapbox WebGL GeoJSON layers (100% surface grounding, 0 floating); eliminated flicker with 60 FPS in-place `source.setData()` buffer updates; default `hideEstimatedRoutes=true` (removes ambient orange lines across Sumatra); hover micro-tooltips; 7/7 Playwright tests pass, 22/22 pytest pass, 0 tsc errors. |
+| 102 | Fleet Telemetry Restoration, Payload Optimization & Zoom-Out LOD Cartography | **COMPLETE** ✅ | Restored all 24 truck dots (Emerald #10b981), reduced telemetry polling payload to 28.7 KB for trucks via include_geometry=false, loaded high-density snapped corridors via corridorSnappingService, enabled zero-latency state hydration for news and corridor context, eliminated 401 guest console errors, and implemented WebGL smooth dissolve cartographic LOD between z=4.0 and z=3.2. 26/26 pytest passed, 0 tsc errors. |
 
 ### Hotfix 2026-10-22 — Offline land-corridor honesty + toll-bypass spec (pilot rule: green = verified-driveable)
 
@@ -164,6 +165,7 @@ Interpolated straight-line land geometry (no Mapbox token) no longer presents as
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
+| 2026-10-24 | Phase 102: Fleet Telemetry Restoration, Payload Optimization & Zoom-Out LOD Cartography | (1) Removed the faulty ROUTE_ESTIMATED filter in FleetVehicleLayer.tsx that dropped trucks, restoring all 24 tactical green dots without resurrecting ambient orange route lines. (2) Decoupled telemetry polling from bulky polyline geometries via include_geometry=false (shrinking truck payload to 28.7 KB and full fleet from 4.9+ MB to <10%), while serving geometries on-demand (/api/v1/fleet/vehicles/{id}/geometry) and preloading fleet_corridors_snapped.json once via corridorSnappingService.ts. (3) Eliminated initial 'Memuat' and empty news flashes via fallback state hydration in useNewsVerification and useCorridorContext. (4) Gated checkHitl polling to authenticated non-guest operators, ending 401 console noise. (5) Enforced WebGL smooth dissolve (z=3.2 to 4.0) on fleet dots, minzoom 4.0 on route lines and halos, minzoom 4.5 on hub pulse rings, and camera minZoom 2.8. 26/26 pytest passed, 0 tsc errors. |
 | 2026-10-21 | Phases 80-82: Search E2E, Dispatcher Scope, Truck/Travel ERP | (1) One canonical base-URL resolver; direct `NEXT_PUBLIC_API_URL` reads and module-scope `WS_BASE` removed, because a dead/malformed value produced different failures per screen. (2) Search ranks before truncating, de-dupes aliases by proximity, caches only positives under a versioned Redis namespace, and keeps timeout distinct from cancellation. (3) A token claim is the scope, not a default — dispatchers cannot widen scope via query params, and mock fleets are never substituted for scoped roles. (4) Assets (`truck_assets`) and trips (`travels`) are separate tables with snapshotted master fields so history and the ledger survive asset edits; ERP numbers derive only from persisted columns, planned trips claim no savings, and missing values stay explicit. |
 | 2026-10-20 | Phase 78: LLM Gateway Network Resilience, Connect Timeout Retry & Reasoning Effort Calibration | Resolved Render-to-Cloudflare ConnectTimeout and token exhaustion vulnerabilities: (1) Added 2-attempt exponential backoff retry (1s -> 2s) for network timeouts and 5xx errors; (2) added reasoning_effort parameter and config default to low so reasoning models (deepseek-v4.1-flash, mimo-v2.6-pro) allocate budget to content rather than running out of tokens during internal reasoning; (3) extracted reasoning_content fallback if content is empty; (4) verified 11 passing unit tests. |
 | 2026-10-20 | Phase 77: Route Detail Modal & HITL Hardening | Every route selection (sidebar, map polyline, map ETA badge) routes to full 5-section RouteDetailModal; selecting a route creates a HITL pending item in queue; strict role-gating ensures only DISPATCHER can POST /approvals or fire TMS pings, while GUEST and REGULATOR receive watermarked sandbox previews; migration 013 aligns route_id and incident_id columns across route_approvals and incidents tables; probe parity confirmed. |

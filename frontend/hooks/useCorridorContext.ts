@@ -131,7 +131,7 @@ function applyImpactToContext(base: CorridorContext, impact: OperationalImpact):
 }
 
 export function useCorridorContext(corridorId: string = 'sumatra_belawan_medan') {
-  const [corridorContext, setCorridorContext] = useState<CorridorContext | null>(null);
+  const [corridorContext, setCorridorContext] = useState<CorridorContext | null>(DEFAULT_FALLBACK_CORRIDOR);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const activeImpactRef = useRef<OperationalImpact | null>(null);

@@ -5,6 +5,8 @@ import mapboxgl from 'mapbox-gl';
 import type { FleetVehicle } from '@/lib/types';
 import { calculateRouteProgressPosition } from '@/lib/geoUtils';
 import { getHaversineDistanceKm } from '@/lib/aiDynamicRouter';
+import { corridorSnappingService } from '@/lib/corridorSnappingService';
+import { api } from '@/lib/api';
 import { TargetLockReticle } from './TargetLockReticle';
 import {
   Truck,
@@ -151,9 +153,10 @@ export function FleetVehicleLayer({
       if (map) {
         try {
           const routeSource = map.getSource('fleet-selected-route-source') as mapboxgl.GeoJSONSource | undefined;
-          const coords = (
+          let coords = (
             v.route_geometry?.coordinates ||
             (v as any).route_coordinates ||
+            corridorSnappingService.getCorridorCoordinates(v.vehicle_id) ||
             (Array.isArray((v as any).waypoints)
               ? (v as any).waypoints.map((w: any) => (Array.isArray(w) ? [w[0], w[1]] : [w.lon ?? w.lng ?? 0, w.lat ?? 0]))
               : null) ||
@@ -175,6 +178,37 @@ export function FleetVehicleLayer({
                 }
               ] : [],
             });
+          }
+
+          // If coordinates are missing (lean telemetry mode or custom un-cached asset), fetch on demand
+          if (coords.length < 2 && v.vehicle_id) {
+            api.fleet.vehicleGeometry(v.vehicle_id).then((res) => {
+              if (!res) return;
+              const fetchedCoords = (res.route_geometry?.coordinates || res.path) as [number, number][];
+              if (Array.isArray(fetchedCoords) && fetchedCoords.length >= 2) {
+                corridorSnappingService.setCorridorCoordinates(v.vehicle_id, fetchedCoords);
+                if (selectedVehicleIdRef.current === v.vehicle_id && map) {
+                  try {
+                    const currentRouteSource = map.getSource('fleet-selected-route-source') as mapboxgl.GeoJSONSource | undefined;
+                    if (currentRouteSource) {
+                      currentRouteSource.setData({
+                        type: 'FeatureCollection',
+                        features: [
+                          {
+                            type: 'Feature',
+                            geometry: {
+                              type: 'LineString',
+                              coordinates: fetchedCoords,
+                            },
+                            properties: {},
+                          },
+                        ],
+                      });
+                    }
+                  } catch {}
+                }
+              }
+            }).catch(() => {});
           }
         } catch {}
       }
@@ -205,6 +239,11 @@ export function FleetVehicleLayer({
       } catch {}
     }
   }, [map]);
+
+  // Preload precomputed high-density snapped corridors on mount
+  useEffect(() => {
+    corridorSnappingService.loadCorridors().catch(() => {});
+  }, []);
 
   // Synchronize when selectedVehicleId prop changes externally
   useEffect(() => {
@@ -263,6 +302,7 @@ export function FleetVehicleLayer({
           id: 'fleet-selected-route-line',
           type: 'line',
           source: 'fleet-selected-route-source',
+          minzoom: 4.0,
           layout: {
             'line-join': 'round',
             'line-cap': 'round',
@@ -282,6 +322,7 @@ export function FleetVehicleLayer({
           id: 'fleet-vehicle-selected-halo',
           type: 'circle',
           source: 'fleet-vehicles-source',
+          minzoom: 4.0,
           filter: ['any', ['==', ['get', 'isSelected'], true], ['==', ['get', 'isImpacted'], true]],
           paint: {
             'circle-radius': [
@@ -307,7 +348,7 @@ export function FleetVehicleLayer({
         });
       }
 
-      // 5. fleet-vehicle-dots: crisp tactical dots on 3D globe surface
+      // 5. fleet-vehicle-dots: crisp tactical dots on 3D globe surface with smooth zoom LOD dissolve
       if (!map.getLayer('fleet-vehicle-dots')) {
         map.addLayer({
           id: 'fleet-vehicle-dots',
@@ -331,6 +372,16 @@ export function FleetVehicleLayer({
             ],
             'circle-stroke-width': 1.5,
             'circle-stroke-color': '#0c0e12',
+            'circle-opacity': [
+              'interpolate', ['linear'], ['zoom'],
+              3.2, 0.0,
+              4.0, 1.0,
+            ],
+            'circle-stroke-opacity': [
+              'interpolate', ['linear'], ['zoom'],
+              3.2, 0.0,
+              4.0, 1.0,
+            ],
           },
         });
       }
@@ -458,13 +509,6 @@ export function FleetVehicleLayer({
         } else if (v.modality !== modalityFilter) {
           return false;
         }
-        if (
-          hideEstimatedRoutes &&
-          v.tracking_mode === 'ROUTE_ESTIMATED' &&
-          selectedVehicleIdRef.current !== v.vehicle_id
-        ) {
-          return false;
-        }
         return true;
       });
 
@@ -500,6 +544,7 @@ export function FleetVehicleLayer({
         let coords = (
           v.route_geometry?.coordinates ||
           (v as any).route_coordinates ||
+          corridorSnappingService.getCorridorCoordinates(v.vehicle_id) ||
           (Array.isArray((v as any).waypoints)
             ? (v as any).waypoints.map((w: any) => (Array.isArray(w) ? [w[0], w[1]] : [w.lon ?? w.lng ?? 0, w.lat ?? 0]))
             : null) ||

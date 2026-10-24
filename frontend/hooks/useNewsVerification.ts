@@ -618,7 +618,7 @@ export const FALLBACK_SUMATRA_NEWS: NewsItem[] = [
 ];
 
 export function useNewsVerification() {
-  const [newsFeed, setNewsFeed] = useState<NewsItem[]>([]);
+  const [newsFeed, setNewsFeed] = useState<NewsItem[]>(FALLBACK_SUMATRA_NEWS);
   const [marketRegime, setMarketRegime] = useState<MarketRegimeData>({
     regime: 'NORMAL',
     critical_news_count: 0,

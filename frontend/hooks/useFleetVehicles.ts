@@ -5,6 +5,7 @@ import type { FleetVehicle } from '@/lib/types';
 import { api, getBaseUrl, getAuthToken } from '@/lib/api';
 import { useAuth } from '@/lib/authContext';
 import { isLiveTracked, selectTenantVehicles } from '@/lib/fleetScope';
+import { corridorSnappingService } from '@/lib/corridorSnappingService';
 
 export { isLiveTracked, isTenantAsset } from '@/lib/fleetScope';
 
@@ -292,10 +293,11 @@ export interface UseFleetVehiclesOptions {
  * Builds the fleet query string. Tenant scoping is passed explicitly so a
  * dispatcher request always carries the JWT company_id claim.
  */
-function buildFleetQuery(modality?: string, company_id?: string): string {
+function buildFleetQuery(modality?: string, company_id?: string, include_geometry: boolean = false): string {
   const sp = new URLSearchParams();
   if (modality && modality !== 'all') sp.append('modality', modality);
   if (company_id) sp.append('company_id', company_id);
+  sp.append('include_geometry', String(include_geometry));
   const qs = sp.toString();
   return qs ? `?${qs}` : '';
 }
@@ -305,7 +307,7 @@ async function fetchFleetWithFallback(
   companyId?: string
 ): Promise<FleetVehicle[]> {
   try {
-    const res = await api.fleet.vehicles(modality, companyId);
+    const res = await api.fleet.vehicles(modality, companyId, false);
     if (res.vehicles && res.vehicles.length > 0) {
       return res.vehicles;
     }
@@ -316,7 +318,7 @@ async function fetchFleetWithFallback(
         // Same-origin/direct retry must keep the tenant scope: getBaseUrl() is the
         // single source of truth for the API host (no hardcoded Render URL), and
         // the bearer token keeps the server-side company_id claim intact.
-        const qs = buildFleetQuery(modality, companyId);
+        const qs = buildFleetQuery(modality, companyId, false);
         const token = getAuthToken();
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 20000);

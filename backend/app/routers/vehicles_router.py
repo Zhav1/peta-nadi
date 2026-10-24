@@ -25,6 +25,7 @@ async def get_active_fleet(
     modality: Optional[str] = Query(None, description="Filter modality: truck, maritime, air"),
     status: Optional[str] = Query(None, description="Filter status: moving, anchored, rerouting"),
     company_id: Optional[str] = Query(None, description="Filter by company / tenant ID (e.g. pos_logistik, pelindo_belawan)"),
+    include_geometry: bool = Query(True, description="Whether to include dense road coordinates. Set False for lightweight polling."),
     user: UserSession = Depends(get_optional_user)
 ) -> FleetTelemetryListResponse:
     """
@@ -69,11 +70,13 @@ async def get_active_fleet(
         company_id=effective_company,
         org_name=org_name,
         tenant_only=tenant_only,
+        include_geometry=include_geometry,
     )
     all_units = telemetry_service.get_unified_fleet(
         company_id=effective_company,
         org_name=org_name,
         tenant_only=tenant_only,
+        include_geometry=False,
     )
 
     # Tag tenant-owned assets vs macro situational awareness assets
@@ -97,3 +100,30 @@ async def get_active_fleet(
         updated_at=datetime.now(timezone.utc).isoformat(),
         vehicles=vehicles
     )
+
+
+@router.get("/vehicles/{vehicle_id}/geometry")
+@router.get("/api/v1/fleet/vehicles/{vehicle_id}/geometry")
+async def get_vehicle_geometry(
+    vehicle_id: str,
+    user: UserSession = Depends(get_optional_user)
+) -> Dict[str, Any]:
+    """
+    Returns high-precision route geometry and coordinate waypoints for an individual fleet vehicle.
+    """
+    vehicles = telemetry_service.get_unified_fleet(include_geometry=True)
+    target = next((v for v in vehicles if v.get("vehicle_id") == vehicle_id), None)
+    if not target:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail=f"Vehicle {vehicle_id} not found")
+
+    return {
+        "status": "success",
+        "vehicle_id": vehicle_id,
+        "modality": target.get("modality"),
+        "origin": target.get("origin"),
+        "destination": target.get("destination"),
+        "route_geometry": target.get("route_geometry"),
+        "path": target.get("path", []),
+    }
+

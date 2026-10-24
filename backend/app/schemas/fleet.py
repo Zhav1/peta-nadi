@@ -56,7 +56,7 @@ class FleetVehicleTelemetry(BaseModel):
     vehicle_id: str = Field(..., description="Unique vehicle/vessel/flight asset ID")
     name: str = Field(..., description="Human-readable asset callsign or display name")
     modality: VehicleModality = Field(..., description="Modality: truck, maritime, air")
-    path: List[List[float]] = Field(..., description="Trajectory coordinate sequence [[lon, lat], ...]")
+    path: List[List[float]] = Field(default_factory=list, description="Trajectory coordinate sequence [[lon, lat], ...]")
     route_geometry: Optional[RouteGeometry] = Field(None, description="Full route GeoJSON geometry")
     speed_kmh: float = Field(..., ge=0.0, description="Speed in km/h")
     status: VehicleStatus = Field(..., description="Operating status: moving, anchored, rerouting")

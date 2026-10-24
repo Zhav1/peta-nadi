@@ -45,8 +45,9 @@ export function TargetLockReticle({
         }
       }
 
+      const zoom = map.getZoom();
       const pt = map.project(lngLat);
-      if (isOccluded || !Number.isFinite(pt.x) || !Number.isFinite(pt.y)) {
+      if (isOccluded || zoom < 3.8 || !Number.isFinite(pt.x) || !Number.isFinite(pt.y)) {
         containerRef.current.style.opacity = '0';
       } else {
         containerRef.current.style.opacity = '1';

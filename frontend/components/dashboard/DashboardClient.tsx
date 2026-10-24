@@ -870,10 +870,11 @@ export default function DashboardClient() {
     }
   }, []);
 
-  // Poll for pending HITL items from Supabase
+  // Poll for pending HITL items from Supabase (only for authenticated non-guest operators)
   useEffect(() => {
     let isMounted = true;
     const checkHitl = async () => {
+      if (role === 'GUEST' || !user) return;
       try {
         const res = await api.news.hitlPending();
         if (isMounted && res) {
@@ -889,7 +890,7 @@ export default function DashboardClient() {
       isMounted = false;
       clearInterval(interval);
     };
-  }, []);
+  }, [role, user]);
 
   const [spatialWeatherPolygons, setSpatialWeatherPolygons] = useState<GeoJSON.FeatureCollection | null>(null);
   const [advisoryWeatherPolygons, setAdvisoryWeatherPolygons] = useState<GeoJSON.FeatureCollection | null>(null);

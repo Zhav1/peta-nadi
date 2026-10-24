@@ -630,6 +630,7 @@ export default function CrisisMap({
       style: 'mapbox://styles/mapbox/dark-v11',
       center: INITIAL_CENTER,
       zoom: INITIAL_ZOOM,
+      minZoom: 2.8,
       pitch: 35,
       projection: { name: 'globe' },
       antialias: true,
@@ -703,6 +704,7 @@ export default function CrisisMap({
         id: 'baseline-corridors-line',
         type: 'line',
         source: 'baseline-corridors-source',
+        minzoom: 4.0,
         paint: {
           'line-color': [
             'match', ['get', 'type'],
@@ -718,6 +720,7 @@ export default function CrisisMap({
         id: 'baseline-corridors-symbol',
         type: 'symbol',
         source: 'baseline-corridors-source',
+        minzoom: 4.0,
         filter: ['==', ['get', 'type'], 'maritime'],
         layout: {
           'symbol-placement': 'line',
@@ -1040,6 +1043,7 @@ export default function CrisisMap({
         id: 'hub-nodes-pulse-outer',
         type: 'circle',
         source: 'hub-nodes-source',
+        minzoom: 4.5,
         paint: {
           'circle-radius': [
             'case',

@@ -65,3 +65,76 @@ def test_telemetry_service_reroute_vehicle():
     assert updated_target["status"] == "rerouting"
     assert updated_target["eta_minutes"] == 42
     assert updated_target["route_geometry"]["coordinates"] == mock_new_route
+
+
+def test_lightweight_telemetry_payload_reduction():
+    from fastapi.testclient import TestClient
+    from app.main import app
+    client = TestClient(app)
+
+    # 1. Fetch full geometry (include_geometry=true)
+    res_full = client.get("/api/v1/fleet/vehicles?include_geometry=true")
+    assert res_full.status_code == 200
+    full_data = res_full.json()
+    full_bytes = len(res_full.content)
+
+    # 2. Fetch lightweight telemetry (include_geometry=false)
+    res_lean = client.get("/api/v1/fleet/vehicles?include_geometry=false")
+    assert res_lean.status_code == 200
+    lean_data = res_lean.json()
+    lean_bytes = len(res_lean.content)
+
+    # Assert payload reduction > 90% and lean payload < 10% of full
+    assert full_bytes > 500 * 1024, f"Full payload expected > 500 KB, got {full_bytes / 1024:.2f} KB"
+    assert lean_bytes < 250 * 1024, f"Lean all-fleet payload must be < 250 KB, got {lean_bytes / 1024:.2f} KB"
+    assert lean_bytes < full_bytes * 0.1, f"Lean payload should be < 10% of full, full={full_bytes}, lean={lean_bytes}"
+
+    # Specific truck-only telemetry polling must be < 35 KB (< 30 KB objective)
+    res_truck = client.get("/api/v1/fleet/vehicles?include_geometry=false&modality=truck")
+    assert res_truck.status_code == 200
+    truck_bytes = len(res_truck.content)
+    assert truck_bytes < 35 * 1024, f"Truck lean payload must be < 35 KB, got {truck_bytes / 1024:.2f} KB"
+
+    # Verify vehicle kinematics fields are preserved in lean response
+    assert len(lean_data["vehicles"]) == len(full_data["vehicles"])
+    for v in lean_data["vehicles"]:
+        assert "vehicle_id" in v
+        assert "current_coords" in v and len(v["current_coords"]) == 2
+        assert "speed_kmh" in v
+        assert "heading_deg" in v
+        assert "progress" in v
+        assert "status" in v
+        # Bulky geometries must be stripped in lean mode
+        assert v.get("path") == []
+        assert v.get("route_geometry") is None
+
+
+def test_vehicle_geometry_endpoint():
+    from fastapi.testclient import TestClient
+    from app.main import app
+    client = TestClient(app)
+
+    # Get a vehicle ID from list
+    res_lean = client.get("/api/v1/fleet/vehicles?include_geometry=false")
+    assert res_lean.status_code == 200
+    first_vehicle = res_lean.json()["vehicles"][0]
+    vid = first_vehicle["vehicle_id"]
+
+    # Fetch geometry for this specific vehicle via /api/v1/fleet path
+    res_geom = client.get(f"/api/v1/fleet/vehicles/{vid}/geometry")
+    assert res_geom.status_code == 200
+    geom_data = res_geom.json()
+    assert geom_data["status"] == "success"
+    assert geom_data["vehicle_id"] == vid
+    assert "route_geometry" in geom_data
+    assert "path" in geom_data
+
+    # Fetch geometry via legacy /vehicles/{vid}/geometry alias path
+    res_alias = client.get(f"/vehicles/{vid}/geometry")
+    assert res_alias.status_code == 200
+    assert res_alias.json()["vehicle_id"] == vid
+
+    # Non-existent vehicle returns 404
+    res_404 = client.get("/api/v1/fleet/vehicles/NON_EXISTENT_XYZ/geometry")
+    assert res_404.status_code == 404
+

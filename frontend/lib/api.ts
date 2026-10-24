@@ -295,15 +295,20 @@ export const api = {
     // Phase 57 STEP 0 tenant contract (D3): ?company_id= filters custom +
     // baseline; missing claim = honest empty (dispatcher) / full corridor
     // (regulator, macro view). Enforced in WP-B3.
-    vehicles: (modality?: string, company_id?: string) => {
+    vehicles: (modality?: string, company_id?: string, include_geometry?: boolean) => {
       const sp = new URLSearchParams();
       if (modality && modality !== 'all') sp.append('modality', modality);
       if (company_id) sp.append('company_id', company_id);
+      if (include_geometry !== undefined) sp.append('include_geometry', String(include_geometry));
       const qs = sp.toString() ? `?${sp.toString()}` : '';
       return request<{ vehicles: import('./types').FleetVehicle[]; total_vehicles?: number; timestamp?: string }>(
         `/api/v1/fleet/vehicles${qs}`
       );
     },
+    vehicleGeometry: (vehicleId: string) =>
+      request<{ status: string; vehicle_id: string; route_geometry?: any; path: [number, number][] }>(
+        `/api/v1/fleet/vehicles/${encodeURIComponent(vehicleId)}/geometry`
+      ),
     register: (payload: import('./types').CustomVehicleRegisterPayload) =>
       request<import('./types').FleetIngestResponse>('/api/v1/fleet/register', {
         method: 'POST',

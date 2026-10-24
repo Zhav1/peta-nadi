@@ -1805,6 +1805,7 @@ class TelemetryService:
         db_path: Optional[str] = None,
         org_name: Optional[str] = None,
         tenant_only: bool = False,
+        include_geometry: bool = True,
     ) -> List[Dict[str, Any]]:
         """
         Merges custom user-registered fleets, baseline 45-unit assets, live AIS maritime vessels,
@@ -2035,6 +2036,15 @@ class TelemetryService:
                     or matches_tenant(v, company_id, org_name)
                 ]
 
+        if not include_geometry:
+            stripped_fleet = []
+            for v in filtered_fleet:
+                unit = dict(v)
+                unit["path"] = []
+                unit["route_geometry"] = None
+                stripped_fleet.append(unit)
+            return stripped_fleet
+
         return filtered_fleet
 
     async def get_all_vehicles(
@@ -2042,9 +2052,10 @@ class TelemetryService:
         company_id: Optional[str] = None,
         org_name: Optional[str] = None,
         tenant_only: bool = False,
+        include_geometry: bool = True,
     ) -> List[Dict[str, Any]]:
         """Convenience async accessor returning unified fleet vehicles, optionally filtered by company_id."""
-        return self.get_unified_fleet(company_id=company_id, org_name=org_name, tenant_only=tenant_only)
+        return self.get_unified_fleet(company_id=company_id, org_name=org_name, tenant_only=tenant_only, include_geometry=include_geometry)
 
 
 def assign_baseline_tenancy(unit: Dict[str, Any]) -> Dict[str, Any]:

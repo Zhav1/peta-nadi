@@ -2548,6 +2548,48 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 
 ---
 
+## Phase 102: Fleet Telemetry Restoration, Payload Optimization & Zoom-Out LOD Cartography
+
+**Goal:** Restore all 24 truck dots (Emerald `#10b981`) by removing the erroneous collection drop filter in `FleetVehicleLayer.tsx`; optimize backend telemetry payload from 5.5 MB to < 30 KB using lightweight kinematics polling and client-side snapped corridor loading; eliminate initial "Memuat" / "Tidak ada berita" latency via baseline state hydration; and implement cartographic Level-of-Detail (LOD) with WebGL smooth dissolve on global zoom-out.  
+**Status:** COMPLETE ✅  
+**Plan:** `.planning/phases/102-fleet-telemetry-restoration-payload-reduction-zoom-lod/PLAN.md`
+
+### Deliverables
+- **WP1 - Restorasi Titik Hijau Armada Truk (`FleetVehicleLayer.tsx`)**:
+  - Removed filter block dropping `ROUTE_ESTIMATED` vehicles in `currentVehicles.filter(...)`.
+  - Retained `activeSelectedCoords` isolation so route lines only render when a vehicle is selected.
+  - All 24 trucks render as crisp tactical dots (`#10b981`) with `#0c0e12` border.
+- **WP2 - Optimasi Payload Telemetri Backend & Frontend Corridor Snapping (`telemetry_service.py`, `vehicles_router.py`, `useFleetVehicles.ts`, `corridorSnappingService.ts`)**:
+  - Implemented `include_geometry=false` query parameter on `GET /api/v1/fleet/vehicles`, omitting heavy `path` and `route_geometry` polylines from 10s polling cycles. Added on-demand geometry endpoint `GET /api/v1/fleet/vehicles/{vehicle_id}/geometry`.
+  - Truck payload shrunk to 28.7 KB (< 30 KB target), and full-fleet payload shrunk from 4.9+ MB to < 10% (< 250 KB uncompressed, ~15 KB gzip).
+  - Created singleton `corridorSnappingService.ts` loading `public/data/fleet_corridors_snapped.json` once on startup to supply high-resolution waypoints for 60 FPS trajectory interpolation.
+- **WP3 - Zero-Latency State Hydration & Guest Security Guard (`useNewsVerification.ts`, `useCorridorContext.ts`, `DashboardClient.tsx`)**:
+  - Initialized news state with `FALLBACK_SUMATRA_NEWS` and corridor context with `DEFAULT_FALLBACK_CORRIDOR` eliminating empty flashes and "MEMUAT" delays.
+  - Added role check `if (role === 'GUEST' || !user) return;` on `checkHitl` interval to eliminate 401 Unauthorized console errors.
+- **WP4 - Kartografi Zoom-Out LOD & Smooth WebGL Dissolve (`FleetVehicleLayer.tsx`, `CrisisMap.tsx`, `TargetLockReticle.tsx`)**:
+  - Added data-driven `circle-opacity` and `circle-stroke-opacity` WebGL interpolation fading out fleet dots smoothly between $z=4.0$ and $z=3.2$.
+  - Enforced `minzoom: 4.0` on route lines and halos, `minzoom: 4.5` on hub pulse rings, and hid `TargetLockReticle` at $z < 3.8$.
+  - Enforced `minZoom: 2.8` on Mapbox camera options to prevent globe over-shrinkage.
+- **WP5 - Automated Verification & Verification Gate**:
+  - E2E assertions for truck visibility, payload size, zoom opacity dissolve, and zero 401 errors.
+  - 0 TypeScript errors (`tsc -p frontend/tsconfig.json --noEmit`).
+  - 26/26 backend pytest tests passing cleanly (`test_precision_fleet_telemetry.py`, `test_vehicles_telemetry.py`, `test_fleet_ingest.py`).
+
+### Verification
+- [x] All 24 trucks restored as tactical Emerald `#10b981` dots in `fleet-vehicles-source`.
+- [x] Backend telemetry lean payload verified at 28.7 KB (< 35 KB target) for trucks and < 10% of 4.9 MB for full fleet.
+- [x] Individual geometry endpoint `GET /api/v1/fleet/vehicles/{vehicle_id}/geometry` returns full high-precision coordinates.
+- [x] Frontend `corridorSnappingService.ts` preloads and caches snapped road coordinates once on startup.
+- [x] Zero-latency hydration verified for news feed and corridor context.
+- [x] Zero 401 Unauthorized console errors in guest mode.
+- [x] WebGL smooth dissolve active between $z=4.0$ and $z=3.2$; `minzoom` enforced on halos, route lines, pulse rings, and reticle.
+- [x] Zero TypeScript errors (`tsc --noEmit`).
+- [x] 26/26 pytest tests passing cleanly.
+
+---
+
+---
+
 ## Backlog (Post-Hackathon / v2 & New Context Window Backlog)
 
 ### Active Remediation & Audit Backlog (For New Context Window)
