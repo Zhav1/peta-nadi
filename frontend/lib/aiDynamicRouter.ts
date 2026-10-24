@@ -1871,6 +1871,69 @@ export function buildRouteTradeoffAnalysis(
  * Simultaneously computes all four corridors (Land Primary, Land Detour, Sea Intermodal, Air Intermodal)
  * with authentic per-leg multi-color coordinates and grounded Hold-vs-Reroute economics.
  */
+/**
+ * Attaches first-principles trip operational costs (BBM Biosolar, driver labor, reefer genset, tolls)
+ * and harmonizes detour corridor totals with baseline delta economics.
+ */
+function attachOperationalCostsToCorridors(
+  corridors: RouteRecommendation[],
+  costOptions?: {
+    commodity?: string | null;
+    vehicleGolongan?: string | null;
+    tollCostIdr?: number | null;
+  }
+): void {
+  if (corridors.length === 0) return;
+
+  // 1. Primary Corridor (corridors[0]) - Authentic first-principles baseline
+  const primary = corridors[0];
+  const baselineTrip = calculateTotalTripCost({
+    distanceKm: primary.distance_km,
+    durationMinutes: primary.eta_minutes,
+    commodity: costOptions?.commodity,
+    vehicleGolongan: costOptions?.vehicleGolongan,
+    tollCostIdr: costOptions?.tollCostIdr ?? 0,
+  });
+  primary.total_operational_cost_idr = baselineTrip.total_operational_cost_idr;
+  primary.operational_cost_breakdown = baselineTrip.operational_cost_breakdown;
+
+  // 2. Detour & Intermodal Corridors - Synchronize with baseline delta economics
+  for (let i = 1; i < corridors.length; i++) {
+    const route = corridors[i];
+    const rawTrip = calculateTotalTripCost({
+      distanceKm: route.distance_km,
+      durationMinutes: route.eta_minutes,
+      commodity: costOptions?.commodity,
+      vehicleGolongan: costOptions?.vehicleGolongan,
+      tollCostIdr: costOptions?.tollCostIdr ?? 0,
+    });
+
+    // Detour additional cost hierarchy
+    const additionalCost =
+      route.hedging?.reroute_policy?.cost_idr ??
+      route.hedging?.reroute_cost_idr ??
+      (route.corridor_type === 'land_detour' ? route.economic_comparison?.reroute_total_cost_idr : undefined) ??
+      route.tradeoff_analysis?.additional_cost_idr;
+
+    if (additionalCost != null && additionalCost > 0) {
+      // Total operational cost is baseline total + additional detour surcharge
+      const alignedTotal = primary.total_operational_cost_idr + additionalCost;
+      route.total_operational_cost_idr = Math.max(rawTrip.total_operational_cost_idr, alignedTotal);
+
+      // Adjust operational cost breakdown to keep items internally consistent
+      const deltaOverhead = Math.max(0, route.total_operational_cost_idr - rawTrip.total_operational_cost_idr);
+      route.operational_cost_breakdown = {
+        ...rawTrip.operational_cost_breakdown,
+        toll_cost_idr: rawTrip.operational_cost_breakdown.toll_cost_idr + deltaOverhead,
+        total_operational_cost_idr: route.total_operational_cost_idr,
+      };
+    } else {
+      route.total_operational_cost_idr = rawTrip.total_operational_cost_idr;
+      route.operational_cost_breakdown = rawTrip.operational_cost_breakdown;
+    }
+  }
+}
+
 export async function calculateAIDynamicDetourRoutes(
   hazardCenter: LonLat | null,
   radiusKm: number = DEFAULT_HAZARD_RADIUS_KM,
@@ -1892,19 +1955,7 @@ export async function calculateAIDynamicDetourRoutes(
   // Fast in-memory quantized cache check (<1 ms)
   const cached = getCachedDynamicRoutes<RouteRecommendation>(origin, destination, hazardCenter, radiusKm, _modality);
   if (cached && cached.length > 0) {
-    for (const route of cached) {
-      if (!route.total_operational_cost_idr || costOptions?.commodity) {
-        const tripCost = calculateTotalTripCost({
-          distanceKm: route.distance_km,
-          durationMinutes: route.eta_minutes,
-          commodity: costOptions?.commodity,
-          vehicleGolongan: costOptions?.vehicleGolongan,
-          tollCostIdr: costOptions?.tollCostIdr ?? 0,
-        });
-        route.total_operational_cost_idr = tripCost.total_operational_cost_idr;
-        route.operational_cost_breakdown = tripCost.operational_cost_breakdown;
-      }
-    }
+    attachOperationalCostsToCorridors(cached, costOptions);
     return cached;
   }
   const affectedModalities = getAffectedModalities(hazardType, impactProfile);
@@ -2211,19 +2262,7 @@ export async function calculateAIDynamicDetourRoutes(
   }
 
   // STEP 5 (Phase 106): Attach first-principles trip operational cost engine to ALL corridors
-  for (const route of allCorridors) {
-    if (!route.total_operational_cost_idr) {
-      const tripCost = calculateTotalTripCost({
-        distanceKm: route.distance_km,
-        durationMinutes: route.eta_minutes,
-        commodity: costOptions?.commodity,
-        vehicleGolongan: costOptions?.vehicleGolongan,
-        tollCostIdr: costOptions?.tollCostIdr ?? 0,
-      });
-      route.total_operational_cost_idr = tripCost.total_operational_cost_idr;
-      route.operational_cost_breakdown = tripCost.operational_cost_breakdown;
-    }
-  }
+  attachOperationalCostsToCorridors(allCorridors, costOptions);
 
   setCachedDynamicRoutes(origin, destination, hazardCenter, radiusKm, _modality, allCorridors);
   return allCorridors;

@@ -16,7 +16,12 @@ import type {
   RouteDetailModalProps,
   TacticalManeuver,
 } from '@/lib/types';
-import { calculateTotalTripCost } from '@/lib/tripCostCalculator';
+import {
+  calculateTotalTripCost,
+  formatTripCostIDR,
+  formatCompactIDR,
+  isColdChain,
+} from '@/lib/tripCostCalculator';
 import {
  AlertDialog,
  AlertDialogContent,
@@ -132,17 +137,19 @@ export function RouteDetailModal({
     calculateTotalTripCost({
       distanceKm: route.distance_km,
       durationMinutes: route.eta_minutes,
-      commodity: route.hedging?.perishability_tier?.toLowerCase().includes('cold') ? 'ikan_segar' : undefined,
+      commodity: isColdChain(route.hedging?.perishability_tier) ? 'ikan_segar' : undefined,
       tollCostIdr: 0,
     }).operational_cost_breakdown;
 
+  const isBaseline = route.corridor_type === 'land_primary';
   const detourAdditionalCost =
     route.hedging?.reroute_policy?.cost_idr ??
     route.hedging?.reroute_cost_idr ??
-    route.economic_comparison?.reroute_total_cost_idr ??
+    (route.corridor_type === 'land_detour' ? route.economic_comparison?.reroute_total_cost_idr : undefined) ??
     route.tradeoff_analysis?.additional_cost_idr ??
     0;
-  const isBaseline = route.corridor_type === 'land_primary';
+
+  const totalTripCost = route.total_operational_cost_idr ?? operationalCostBreakdown.total_operational_cost_idr;
 
   const toggleCheck = (id: string) =>
     setChecked((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -371,39 +378,61 @@ export function RouteDetailModal({
                 <span className="text-xs font-sans font-semibold text-slate-200">
                   Total Estimasi Biaya Rit:
                 </span>
-                <span className="text-sm font-bold text-emerald-400 font-mono tabular-nums">
-                  {formatIDR(operationalCostBreakdown.total_operational_cost_idr)}
-                </span>
-              </div>
-              <div className="space-y-1 text-xs text-slate-300">
-                <div className="flex justify-between gap-2">
-                  <span className="text-slate-400 font-sans">BBM Biosolar (3,5 km/L):</span>
-                  <span className="tabular-nums">Rp {operationalCostBreakdown.fuel_cost_idr.toLocaleString('id-ID')}</span>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <span className="text-slate-400 font-sans">Upah Supir Operasional:</span>
-                  <span className="tabular-nums">Rp {operationalCostBreakdown.labor_cost_idr.toLocaleString('id-ID')}</span>
-                </div>
-                {operationalCostBreakdown.reefer_genset_cost_idr > 0 && (
-                  <div className="flex justify-between gap-2 text-cyan-300">
-                    <span className="font-sans flex items-center gap-1">
-                      <Snowflake className="w-3 h-3 text-cyan-400" />
-                      Bahan Bakar Genset Reefer:
-                    </span>
-                    <span className="tabular-nums">Rp {operationalCostBreakdown.reefer_genset_cost_idr.toLocaleString('id-ID')}</span>
-                  </div>
-                )}
-                <div className="flex justify-between gap-2">
-                  <span className="text-slate-400 font-sans">Tarif Tol BPJT:</span>
-                  <span className="tabular-nums">
-                    {operationalCostBreakdown.toll_cost_idr > 0
-                      ? `Rp ${operationalCostBreakdown.toll_cost_idr.toLocaleString('id-ID')}`
-                      : 'Rp 0 (Non-Tol)'}
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-sm font-bold text-emerald-400 font-mono tabular-nums">
+                    {formatTripCostIDR(totalTripCost)}
+                  </span>
+                  <span className="text-xs font-mono text-emerald-300/70 tabular-nums">
+                    ({formatCompactIDR(totalTripCost)})
                   </span>
                 </div>
               </div>
+              <div className="space-y-1 text-xs text-slate-300">
+                {route.corridor_type === 'sea_intermodal' || route.corridor_type === 'air_intermodal' || route.corridor_type === 'hold_staging' ? (
+                  <>
+                    {route.tradeoff_analysis?.cost_breakdown_items?.map((item, i) => (
+                      <div key={i} className="flex justify-between gap-2">
+                        <span className="text-slate-400 font-sans">{item.label}:</span>
+                        <span className="tabular-nums">Rp {item.amount_idr.toLocaleString('id-ID')}</span>
+                      </div>
+                    ))}
+                  </>
+                ) : (
+                  <>
+                    <div className="flex justify-between gap-2">
+                      <span className="text-slate-400 font-sans">BBM Biosolar (3,5 km/L):</span>
+                      <span className="tabular-nums">Rp {operationalCostBreakdown.fuel_cost_idr.toLocaleString('id-ID')}</span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <span className="text-slate-400 font-sans">Upah Supir Operasional:</span>
+                      <span className="tabular-nums">Rp {operationalCostBreakdown.labor_cost_idr.toLocaleString('id-ID')}</span>
+                    </div>
+                    {operationalCostBreakdown.reefer_genset_cost_idr > 0 && (
+                      <div className="flex justify-between gap-2 text-cyan-300">
+                        <span className="font-sans flex items-center gap-1">
+                          <Snowflake className="w-3 h-3 text-cyan-400" />
+                          Bahan Bakar Genset Reefer:
+                        </span>
+                        <span className="tabular-nums">Rp {operationalCostBreakdown.reefer_genset_cost_idr.toLocaleString('id-ID')}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between gap-2">
+                      <span className="text-slate-400 font-sans">Tarif Tol BPJT:</span>
+                      <span className="tabular-nums">
+                        {operationalCostBreakdown.toll_cost_idr > 0
+                          ? `Rp ${operationalCostBreakdown.toll_cost_idr.toLocaleString('id-ID')}`
+                          : 'Rp 0 (Non-Tol)'}
+                      </span>
+                    </div>
+                  </>
+                )}
+              </div>
               <div className="pt-2 border-t border-white/5 flex justify-between items-center text-xs">
-                <span className="text-slate-400 font-sans">Tambahan Biaya Pengalihan:</span>
+                <span className="text-slate-400 font-sans">
+                  {route.corridor_type === 'sea_intermodal' || route.corridor_type === 'air_intermodal'
+                    ? 'Tambahan Biaya Alih Antarmoda:'
+                    : 'Tambahan Biaya Pengalihan:'}
+                </span>
                 <span className={detourAdditionalCost > 0 && !isBaseline ? "font-bold text-emerald-400 tabular-nums" : "text-slate-400 tabular-nums"}>
                   {detourAdditionalCost > 0 && !isBaseline
                     ? `+Rp ${detourAdditionalCost.toLocaleString('id-ID')}`

@@ -4,6 +4,7 @@ import {
   formatCompactIDR,
   formatTripCostIDR,
   isColdChain,
+  resolvePopoverDualMetric,
   FUEL_CONSUMPTION_KM_PER_LITER,
   BIOSOLAR_RATE_PER_LITER,
   DRIVER_LABOR_HOURLY_RATE,
@@ -55,6 +56,7 @@ assert.ok(
   `Baseline operational cost ${coldChainTrip.total_operational_cost_idr} must match 6.012.647 within +/- 100`
 );
 assert.strictEqual(formatCompactIDR(coldChainTrip.total_operational_cost_idr), 'Rp 6,01 Jt');
+assert.strictEqual(formatTripCostIDR(coldChainTrip.total_operational_cost_idr), 'Rp 6.012.647');
 console.log('  ✓ 1.1 Cold Chain baseline matches Rp 6.012.647 (+/- 100) and formats as "Rp 6,01 Jt"');
 
 // 1.2 Dry Bulk (Beras) - Zero Reefer Fuel
@@ -86,93 +88,28 @@ const expTollLabor = Math.round(3 * 50000);
 assert.strictEqual(tollTrip.total_operational_cost_idr, expTollFuel + expTollLabor + 155000);
 console.log('  ✓ 1.3 BPJT toll tariff correctly adds to total trip cost');
 
-// 1.4 Commodity detection keywords
+// 1.4 Commodity detection keywords across all cold produce variants
 assert.strictEqual(isColdChain('ikan_segar'), true);
 assert.strictEqual(isColdChain('daging_sapi'), true);
 assert.strictEqual(isColdChain('udang'), true);
+assert.strictEqual(isColdChain('udang_vaname'), true);
+assert.strictEqual(isColdChain('susu_segar'), true);
+assert.strictEqual(isColdChain('susu_pasteurisasi'), true);
+assert.strictEqual(isColdChain('ayam_potong'), true);
 assert.strictEqual(isColdChain('Cold Chain (10T)'), true);
+assert.strictEqual(isColdChain('chilled_beef'), true);
+assert.strictEqual(isColdChain('ikan_tongkol_beku'), true);
 assert.strictEqual(isColdChain('beras'), false);
 assert.strictEqual(isColdChain('cabai_merah'), false);
+assert.strictEqual(isColdChain('hortikultura'), false);
+assert.strictEqual(isColdChain('minyak_goreng'), false);
 assert.strictEqual(isColdChain(null), false);
-console.log('  ✓ 1.4 Cold chain commodity classification verified across all tiers\n');
+console.log('  ✓ 1.4 Cold chain commodity classification verified across all tiers and edge variants\n');
 
 // ==========================================
 // TEST 2: DUAL-METRIC POPOVER RESOLUTION (VARIANT C)
 // ==========================================
 console.log('[TEST 2] Verifying Dual-Metric Popover Resolution (Variant C)...');
-
-function resolveDualMetricPopover(
-  routeIndex: number,
-  route: RouteRecommendation,
-  activeRoutes: RouteRecommendation[]
-) {
-  const currentRoute = activeRoutes?.[routeIndex] ?? route;
-  const isBaseline = routeIndex === 0;
-  const baselineRoute = activeRoutes?.[0];
-
-  const additionalCost =
-    currentRoute.hedging?.reroute_policy?.cost_idr ??
-    currentRoute.hedging?.reroute_cost_idr ??
-    currentRoute.economic_comparison?.reroute_total_cost_idr ??
-    (currentRoute.tradeoff_analysis?.additional_cost_idr !== undefined
-      ? currentRoute.tradeoff_analysis.additional_cost_idr
-      : undefined);
-
-  let totalOperationalCost = currentRoute.total_operational_cost_idr;
-  if (totalOperationalCost == null && currentRoute.distance_km != null && currentRoute.eta_minutes != null) {
-    const commodity = currentRoute.hedging?.perishability_tier?.toLowerCase().includes('cold') ? 'ikan_segar' : undefined;
-    const calc = calculateTotalTripCost({
-      distanceKm: currentRoute.distance_km,
-      durationMinutes: currentRoute.eta_minutes,
-      commodity,
-      tollCostIdr: isBaseline ? 0 : (additionalCost ?? 0),
-    });
-    totalOperationalCost = calc.total_operational_cost_idr;
-  }
-
-  if (!isBaseline && additionalCost != null && additionalCost > 0 && baselineRoute) {
-    let baselineTotal = baselineRoute.total_operational_cost_idr;
-    if (baselineTotal == null && baselineRoute.distance_km != null && baselineRoute.eta_minutes != null) {
-      const bCalc = calculateTotalTripCost({
-        distanceKm: baselineRoute.distance_km,
-        durationMinutes: baselineRoute.eta_minutes,
-        commodity: baselineRoute.hedging?.perishability_tier?.toLowerCase().includes('cold') ? 'ikan_segar' : undefined,
-        tollCostIdr: 0,
-      });
-      baselineTotal = bCalc.total_operational_cost_idr;
-    }
-    if (baselineTotal != null) {
-      totalOperationalCost = Math.max(totalOperationalCost ?? 0, baselineTotal + additionalCost);
-    }
-  }
-
-  const badge = isBaseline
-    ? 'Acuan (Δ Rp 0)'
-    : additionalCost != null && additionalCost > 0
-    ? `+${formatCompactIDR(additionalCost)} (Detour)`
-    : additionalCost != null && additionalCost < 0
-    ? `-${formatCompactIDR(Math.abs(additionalCost))} (Hemat)`
-    : 'Acuan (Δ Rp 0)';
-
-  const isCompromised = currentRoute.is_compromised || currentRoute.safety_status === 'COMPROMISED';
-  let subtitle = 'Bebas hambatan';
-  if (isBaseline) {
-    subtitle = isCompromised ? 'Terdampak bencana' : 'Jalur utama bebas hambatan';
-  } else if (isCompromised) {
-    subtitle = 'Terdampak bencana';
-  } else if (currentRoute.safety_status === 'SAFE_DETOUR') {
-    subtitle = 'Detour terverifikasi';
-  }
-
-  return {
-    header: 'Est. Operasional',
-    totalDisplay: formatCompactIDR(totalOperationalCost),
-    badge,
-    subtitle,
-    totalOperationalCost,
-    additionalCost,
-  };
-}
 
 // 2.1 Baseline Route Popover Resolution
 const mockBaseline: RouteRecommendation = {
@@ -184,10 +121,18 @@ const mockBaseline: RouteRecommendation = {
   risk_score: 0.05,
   is_compromised: false,
   safety_status: 'CLEAR',
+  corridor_type: 'land_primary',
   total_operational_cost_idr: 6012647,
+  operational_cost_breakdown: {
+    fuel_cost_idr: expectedFuel,
+    labor_cost_idr: expectedLabor,
+    reefer_genset_cost_idr: expectedReefer,
+    toll_cost_idr: 0,
+    total_operational_cost_idr: 6012647,
+  },
 };
 
-const popover0 = resolveDualMetricPopover(0, mockBaseline, [mockBaseline]);
+const popover0 = resolvePopoverDualMetric(0, mockBaseline, [mockBaseline]);
 console.log(`  2.1 Baseline Route Popover:`);
 console.log(`      Header: ${popover0.header}`);
 console.log(`      Est. Total: ${popover0.totalDisplay}`);
@@ -197,7 +142,9 @@ console.log(`      Subtitle: ${popover0.subtitle}`);
 assert.strictEqual(popover0.header, 'Est. Operasional');
 assert.strictEqual(popover0.totalDisplay, 'Rp 6,01 Jt');
 assert.strictEqual(popover0.badge, 'Acuan (Δ Rp 0)');
+assert.strictEqual(popover0.badgeType, 'baseline');
 assert.strictEqual(popover0.subtitle, 'Jalur utama bebas hambatan');
+assert.strictEqual(popover0.statusDotClass, 'bg-emerald-500');
 console.log('  ✓ 2.1 Baseline renders "Est. Operasional: Rp 6,01 Jt", "Acuan (Δ Rp 0)", "Jalur utama bebas hambatan"');
 
 // 2.2 Detour Route Popover Resolution (Delta +Rp 3,05 Jt)
@@ -210,13 +157,14 @@ const mockDetour: RouteRecommendation = {
   risk_score: 0.08,
   is_compromised: false,
   safety_status: 'SAFE_DETOUR',
+  corridor_type: 'land_detour',
   hedging: {
     reroute_cost_idr: 3050000,
     reroute_policy: { cost_idr: 3050000 },
   },
 };
 
-const popover1 = resolveDualMetricPopover(1, mockDetour, [mockBaseline, mockDetour]);
+const popover1 = resolvePopoverDualMetric(1, mockDetour, [mockBaseline, mockDetour]);
 console.log(`  2.2 Detour Route Popover:`);
 console.log(`      Header: ${popover1.header}`);
 console.log(`      Est. Total: ${popover1.totalDisplay}`);
@@ -226,6 +174,7 @@ console.log(`      Subtitle: ${popover1.subtitle}`);
 assert.strictEqual(popover1.header, 'Est. Operasional');
 assert.strictEqual(popover1.totalDisplay, 'Rp 9,06 Jt'); // 6.012.647 + 3.050.000 = 9.062.647
 assert.strictEqual(popover1.badge, '+Rp 3,05 Jt (Detour)');
+assert.strictEqual(popover1.badgeType, 'detour');
 assert.strictEqual(popover1.subtitle, 'Detour terverifikasi');
 console.log('  ✓ 2.2 Detour renders "Est. Operasional: Rp 9,06 Jt", "+Rp 3,05 Jt (Detour)", "Detour terverifikasi"');
 
@@ -235,12 +184,42 @@ const mockBaselineCompromised: RouteRecommendation = {
   is_compromised: true,
   safety_status: 'COMPROMISED',
 };
-const popoverComp = resolveDualMetricPopover(0, mockBaselineCompromised, [mockBaselineCompromised]);
+const popoverComp = resolvePopoverDualMetric(0, mockBaselineCompromised, [mockBaselineCompromised]);
 assert.strictEqual(popoverComp.subtitle, 'Terdampak bencana');
-console.log('  ✓ 2.3 Compromised baseline renders "Terdampak bencana"\n');
+assert.strictEqual(popoverComp.statusDotClass, 'bg-rose-500');
+console.log('  ✓ 2.3 Compromised baseline renders "Terdampak bencana"');
+
+// 2.4 Hold Staging Route Popover Resolution
+const mockHold: RouteRecommendation = {
+  description: 'Depo Penahanan Sementara',
+  waypoints: [],
+  distance_km: 1517,
+  eta_minutes: 2656,
+  fuel_increase_pct: 0,
+  risk_score: 0.1,
+  is_compromised: false,
+  safety_status: 'HOLD_DELAY',
+  corridor_type: 'hold_staging',
+  tradeoff_analysis: {
+    time_delta_minutes: 720,
+    additional_cost_idr: 2500000,
+    cost_breakdown_items: [
+      { label: 'Reefer Plug (12 jam)', amount_idr: 540000 },
+      { label: 'Demurrage & Stacking', amount_idr: 1500000 },
+      { label: 'Risiko Susut Muatan', amount_idr: 460000 },
+    ],
+    pros: ['Aman dari banjir'],
+    cons: ['Pengiriman tertunda 12 jam'],
+  },
+};
+const popoverHold = resolvePopoverDualMetric(1, mockHold, [mockBaseline, mockHold]);
+assert.strictEqual(popoverHold.subtitle, 'Tahan muatan di depo');
+assert.strictEqual(popoverHold.statusDotClass, 'bg-amber-500');
+assert.strictEqual(popoverHold.badge, '+Rp 2,50 Jt (Detour)');
+console.log('  ✓ 2.4 Hold staging route popover renders "Tahan muatan di depo" with amber status\n');
 
 // ==========================================
-// TEST 3: PRIMARY ROUTE SAFETY STATUS INVARIANT (WP3)
+// TEST 3: PRIMARY ROUTE SAFETY STATUS & ROUTER INVARIANTS (WP3 & WP5)
 // ==========================================
 console.log('[TEST 3] Verifying Primary Route Safety Status Invariant Alignment...');
 
@@ -248,7 +227,7 @@ const origin: LonLat = [98.67, 3.59]; // Medan
 const destination: LonLat = [99.16, 3.32]; // Tebing Tinggi
 
 async function testDynamicRouterSafetyStatus() {
-  // Test with no hazard (Normal baseline condition)
+  // 3.1 Test with no hazard (Normal baseline condition)
   const routesNormal = await calculateAIDynamicDetourRoutes(
     null,
     8,
@@ -257,7 +236,9 @@ async function testDynamicRouterSafetyStatus() {
     'truck',
     'flood',
     undefined,
-    'RED_CONFIRMED'
+    'RED_CONFIRMED',
+    undefined,
+    { commodity: 'ikan_segar', vehicleGolongan: 'GOL_II' }
   );
 
   assert.ok(routesNormal.length >= 1, 'Router must return at least primary corridor');
@@ -291,7 +272,7 @@ async function testDynamicRouterSafetyStatus() {
   );
   console.log('  ✓ 3.1 Normal primary route safety_status is strictly "CLEAR" with full cost breakdown attached');
 
-  // Verify all corridors carry operational cost
+  // Verify all corridors carry operational cost and synchronized delta
   for (let i = 0; i < routesNormal.length; i++) {
     const r = routesNormal[i];
     assert.ok(
@@ -302,8 +283,51 @@ async function testDynamicRouterSafetyStatus() {
       r.operational_cost_breakdown != null,
       `Corridor [${i}] (${r.corridor_type}) must carry operational_cost_breakdown`
     );
+    assert.strictEqual(
+      r.operational_cost_breakdown.total_operational_cost_idr,
+      r.total_operational_cost_idr,
+      `Corridor [${i}] breakdown total must equal total_operational_cost_idr`
+    );
   }
-  console.log(`  ✓ 3.2 All ${routesNormal.length} generated corridors carry first-principles operational costs`);
+  console.log(`  ✓ 3.2 All ${routesNormal.length} generated corridors carry synchronized first-principles operational costs`);
+
+  // 3.2 Test with active hazard intersecting corridor
+  const hazardCenter: LonLat = [98.90, 3.45]; // Near Tebing Tinggi corridor
+  const routesDisrupted = await calculateAIDynamicDetourRoutes(
+    hazardCenter,
+    15,
+    origin,
+    destination,
+    'truck',
+    'flood',
+    undefined,
+    'RED_CONFIRMED',
+    undefined,
+    { commodity: 'ikan_segar', vehicleGolongan: 'GOL_II' }
+  );
+
+  const primaryDisrupted = routesDisrupted[0];
+  const detourDisrupted = routesDisrupted[1];
+
+  console.log(`  3.3 Disrupted Corridor Verification:`);
+  console.log(`      Primary Safety Status: ${primaryDisrupted.safety_status} (is_compromised: ${primaryDisrupted.is_compromised})`);
+  console.log(`      Detour Safety Status: ${detourDisrupted.safety_status} (is_compromised: ${detourDisrupted.is_compromised})`);
+  console.log(`      Primary Total Cost: Rp ${primaryDisrupted.total_operational_cost_idr?.toLocaleString('id-ID')}`);
+  console.log(`      Detour Total Cost: Rp ${detourDisrupted.total_operational_cost_idr?.toLocaleString('id-ID')}`);
+
+  if (primaryDisrupted.is_compromised) {
+    assert.strictEqual(primaryDisrupted.safety_status, 'COMPROMISED');
+    assert.strictEqual(detourDisrupted.safety_status, 'SAFE_DETOUR');
+    console.log('  ✓ 3.3 Active disaster correctly triggers COMPROMISED primary and SAFE_DETOUR on detour');
+  }
+
+  // 3.4 Verify popover telemetry resolution for both routes under disruption
+  const p0 = resolvePopoverDualMetric(0, primaryDisrupted, routesDisrupted);
+  const p1 = resolvePopoverDualMetric(1, detourDisrupted, routesDisrupted);
+  assert.strictEqual(p0.header, 'Est. Operasional');
+  assert.strictEqual(p1.header, 'Est. Operasional');
+  assert.ok(p1.totalOperationalCost! >= p0.totalOperationalCost!, 'Detour total cost must be >= primary baseline cost');
+  console.log('  ✓ 3.4 Dual-metric popover resolution verified on active disaster corridors');
 }
 
 void testDynamicRouterSafetyStatus().then(() => {
