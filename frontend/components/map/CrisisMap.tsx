@@ -43,6 +43,11 @@ import {
   RotateCcw,
   PanelLeftOpen,
 } from 'lucide-react';
+import {
+ Popover,
+ PopoverContent,
+ PopoverTrigger,
+} from '@/components/base-ui/popover';
 
 import type {
   IncidentSummary,
@@ -391,7 +396,7 @@ export default function CrisisMap({
     fleetVehicles: true,
   });
 
-  // Sync advisory toggle from parent (DashboardClient owns fetch); Layer Peta menu reflects it.
+ // Sync advisory toggle from parent (DashboardClient owns fetch); Lapisan menu reflects it.
   useEffect(() => {
     setLayerFilters((prev) =>
       prev.weatherAdvisory === showWeatherAdvisory ? prev : { ...prev, weatherAdvisory: showWeatherAdvisory }
@@ -2593,22 +2598,29 @@ export default function CrisisMap({
               <button
                 type="button"
                 onClick={onExpandSidebar}
-                className="cursor-pointer px-3 py-1.5 rounded-md bg-[#0c1017] border border-[#1c2432] text-slate-300 hover:text-white hover:bg-[#121822] shadow-xl transition-colors flex items-center gap-1.5 text-xs font-semibold shrink-0"
+ className="cursor-pointer px-3 py-1.5 rounded-md bg-[#0c1017] border border-white/10 text-slate-300 hover:text-white hover:bg-white/5 shadow-xl transition-colors flex items-center gap-1.5 text-xs font-semibold shrink-0"
                 title="Tampilkan Panel Berita"
               >
                 <PanelLeftOpen className="w-4 h-4 text-slate-300" />
-                <span>BERITA</span>
+ <span>Berita</span>
               </button>
             )}
 
             {/* 2. Universal Location Search Bar */}
             <div className="relative shrink-0">
-              <div className="flex items-center backdrop-blur-md bg-[#0c1017]/90 border border-[#1c2432] focus-within:border-cyan-500/50 rounded-lg px-2.5 py-1.5 shadow-xl transition-all w-52 sm:w-60 lg:w-68">
+ <Popover
+ open={isSearchOpen && searchQuery.trim().length >= 2 && (searchResults.length > 0 || isSearching || !!searchError)}
+ onOpenChange={setIsSearchOpen}
+ >
+ <PopoverTrigger asChild>
+ <div className="flex items-center bg-[#0c1017] border border-white/10 focus-within:border-cyan-500/50 rounded-lg px-2.5 py-1.5 shadow-xl transition-all w-52 sm:w-60 lg:w-68">
                 <Search className="w-3.5 h-3.5 text-slate-400 mr-2 shrink-0" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => handleSearchChange(e.target.value)}
+ onClick={(e) => e.stopPropagation()}
+ onMouseDown={(e) => e.stopPropagation()}
                   onFocus={() => {
                     if (searchQuery.trim().length >= 2) setIsSearchOpen(true);
                   }}
@@ -2620,7 +2632,8 @@ export default function CrisisMap({
                 ) : searchQuery ? (
                   <button
                     type="button"
-                    onClick={() => {
+ onClick={(e) => {
+ e.stopPropagation();
                       cancelPendingSearch();
                       setSearchQuery('');
                       setSearchResults([]);
@@ -2634,30 +2647,36 @@ export default function CrisisMap({
                   </button>
                 ) : null}
               </div>
-
+ </PopoverTrigger>
               {isSearchOpen &&
                 searchQuery.trim().length >= 2 &&
                 (searchResults.length > 0 || isSearching || !!searchError) && (
-                <div className="absolute left-0 top-full mt-2 w-80 bg-[#0c1017]/95 backdrop-blur-md border border-[#1c2432] rounded-lg shadow-2xl p-2 text-xs space-y-1.5 max-h-80 overflow-y-auto no-scrollbar z-50 animate-in fade-in duration-150">
-                  <div className="font-sans font-medium text-[11px] text-slate-400 uppercase tracking-wider px-1 pb-1 border-b border-[#1c2432] flex items-center justify-between">
-                    <span>Hasil Temuan Pan-Sumatra</span>
-                    <span className="text-slate-500 lowercase">{searchResults.length} titik</span>
+ <PopoverContent
+ side="bottom"
+ align="start"
+ sideOffset={8}
+ collisionPadding={12}
+ className="w-80 max-w-[calc(100vw-32px)] max-h-80 overflow-y-auto no-scrollbar p-2 space-y-1.5"
+ >
+ <div className="font-sans font-medium text-xs text-slate-400 px-1 pb-1 border-b border-white/10 flex items-center justify-between">
+ <span>Hasil</span>
+ <span className="text-slate-500 lowercase tabular-nums">{searchResults.length} titik</span>
                   </div>
 
                   {isSearching && (
-                    <div className="px-2 py-2 text-[11px] text-slate-400 flex items-center gap-2">
+ <div className="px-2 py-2 text-xs text-slate-400 flex items-center gap-2">
                       <Loader2 className="w-3 h-3 text-cyan-400 animate-spin shrink-0" />
                       <span>Mencari gazetteer desa / kecamatan / kota…</span>
                     </div>
                   )}
 
                   {searchError && (
-                    <div className="px-2 py-2 text-[10px] text-amber-300 leading-snug space-y-1.5">
+ <div className="px-2 py-2 text-xs text-amber-300 leading-snug space-y-1.5">
                       <p>{searchError}</p>
                       <button
                         type="button"
                         onClick={() => handleSearchChange(searchQuery)}
-                        className="cursor-pointer px-2 py-0.5 rounded bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-200 text-[10px] font-semibold transition-colors"
+ className="cursor-pointer px-2 py-0.5 rounded bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-200 text-xs font-semibold transition-colors"
                       >
                         Coba lagi
                       </button>
@@ -2665,7 +2684,7 @@ export default function CrisisMap({
                   )}
 
                   {!isSearching && !searchError && searchResults.length === 0 && (
-                    <div className="px-2 py-3 text-[11px] text-slate-400 leading-snug">
+ <div className="px-2 py-3 text-xs text-slate-400 leading-snug">
                       Tidak ada hasil untuk “{searchQuery.trim()}”. Coba nama desa, kecamatan, kota, atau hub lain.
                     </div>
                   )}
@@ -2677,18 +2696,18 @@ export default function CrisisMap({
                     return (
                       <div
                         key={key}
-                        className="p-2 rounded-md hover:bg-[#121822] transition-colors border border-transparent hover:border-[#1c2432]/60 group"
+ className="p-2 rounded-md hover:bg-white/5 transition-colors border border-transparent hover:border-white/10 group"
                       >
                         <div className="flex items-start justify-between gap-1.5">
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5">
                               <MapPin className="w-3 h-3 text-cyan-400 shrink-0" />
                               <span className="font-medium text-slate-100 truncate">{item.name}</span>
-                              <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 font-mono">
+ <span className="text-xs px-1.5 py-0.5 rounded bg-white/5 text-slate-300">
                                 {badgeType}
                               </span>
                             </div>
-                            <div className="text-[10px] text-slate-400 truncate pl-4.5 mt-0.5">{subtitle}</div>
+ <div className="text-xs text-slate-400 truncate pl-4.5 mt-0.5">{subtitle}</div>
                           </div>
                         </div>
 
@@ -2696,23 +2715,23 @@ export default function CrisisMap({
                           <button
                             type="button"
                             onClick={() => handleSelectSearchResult(item, 'origin')}
-                            className="cursor-pointer px-2 py-0.5 rounded bg-cyan-950/60 hover:bg-cyan-900 text-cyan-300 border border-cyan-800/50 text-[10px] flex items-center gap-1 transition-colors"
+ className="cursor-pointer px-2 py-0.5 rounded bg-cyan-950/60 hover:bg-cyan-900 text-cyan-300 border border-cyan-800/50 text-xs flex items-center gap-1 transition-colors"
                           >
                             <ArrowUpRight className="w-2.5 h-2.5" />
-                            <span>Set Asal</span>
+ <span>Asal</span>
                           </button>
                           <button
                             type="button"
                             onClick={() => handleSelectSearchResult(item, 'dest')}
-                            className="cursor-pointer px-2 py-0.5 rounded bg-emerald-950/60 hover:bg-emerald-900 text-emerald-300 border border-emerald-800/50 text-[10px] flex items-center gap-1 transition-colors"
+ className="cursor-pointer px-2 py-0.5 rounded bg-emerald-950/60 hover:bg-emerald-900 text-emerald-300 border border-emerald-800/50 text-xs flex items-center gap-1 transition-colors"
                           >
                             <Flag className="w-2.5 h-2.5" />
-                            <span>Set Tujuan</span>
+ <span>Tujuan</span>
                           </button>
                           <button
                             type="button"
                             onClick={() => handleSelectSearchResult(item, 'focus')}
-                            className="cursor-pointer px-2 py-0.5 rounded bg-[#1a2333] hover:bg-[#223044] text-slate-300 border border-[#2b3a50] text-[10px] flex items-center gap-1 transition-colors"
+ className="cursor-pointer px-2 py-0.5 rounded hover:bg-white/5 text-slate-300 border border-white/10 text-xs flex items-center gap-1 transition-colors"
                           >
                             <Crosshair className="w-2.5 h-2.5" />
                             <span>Fokus</span>
@@ -2721,15 +2740,16 @@ export default function CrisisMap({
                       </div>
                     );
                   })}
-                </div>
+ </PopoverContent>
               )}
+ </Popover>
             </div>
 
             {/* 3. TopNavTelemetry Slot */}
             {topNavTelemetrySlot}
           </div>
 
-          {/* Right Group: Action Controls (Restore + Layer Peta + Legenda Rute) */}
+ {/* Right Group: Action Controls (Restore + Lapisan + Legenda Rute) */}
           {!(isRightSidebarOpen || (demoStage != null && demoStage >= 2)) && (
             <div className="flex items-center gap-1.5 pointer-events-auto shrink-0">
               {(hiddenRouteIndices.size > 0 ||
@@ -2742,44 +2762,54 @@ export default function CrisisMap({
                     setInternalHiddenRouteIndices(new Set());
                     onResetCorridorVisibility?.();
                   }}
-                  className="cursor-pointer px-3 py-1.5 rounded-md backdrop-blur-md bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-xs font-semibold flex items-center gap-1.5 shadow-xl transition-all duration-200"
+ className="cursor-pointer px-3 py-1.5 rounded-md bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-xs font-semibold flex items-center gap-1.5 shadow-xl transition-all duration-200"
                   title="Tampilkan kembali seluruh koridor rute yang disembunyikan"
                 >
                   <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
-                  <span className="hidden sm:inline">Tampilkan Semua Rute</span>
+ <span className="hidden sm:inline">Tampil semua</span>
                 </button>
               )}
 
-              <div className="relative">
+ <Popover
+ open={showLayerFilterMenu}
+ onOpenChange={setShowLayerFilterMenu}
+ >
+ <PopoverTrigger asChild>
                 <button
                   type="button"
-                  onClick={() => setShowLayerFilterMenu((v) => !v)}
                   className={`cursor-pointer px-3 py-1.5 rounded-md border text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-xl ${
                     showLayerFilterMenu
                       ? 'bg-white text-[#080d14] border-white'
-                      : 'bg-[#0c1017] text-slate-300 border-[#1c2432] hover:text-white hover:bg-[#121822]'
+ : 'bg-[#0c1017] text-slate-300 border-white/10 hover:text-white hover:bg-white/5'
                   }`}
-                  title="Filter Layer Peta"
+ title="Filter Lapisan"
                 >
                   <Layers className="w-3.5 h-3.5 text-slate-400" />
-                  <span>Layer Peta</span>
+ <span>Lapisan</span>
                 </button>
+ </PopoverTrigger>
 
                 {showLayerFilterMenu && (
-                  <div className="absolute right-0 top-full mt-2 w-64 bg-[#0c1017] border border-[#1c2432] p-3 rounded-lg shadow-xl text-xs space-y-2 z-50 animate-in fade-in duration-150">
-                    <div className="font-sans font-medium text-xs text-slate-300 uppercase tracking-wider border-b border-[#1c2432] pb-1.5">
-                      Filter Visualisasi Layer
+ <PopoverContent
+ side="bottom"
+ align="end"
+ sideOffset={8}
+ collisionPadding={12}
+ className="w-64 max-w-[calc(100vw-32px)] p-3 space-y-2"
+ >
+ <div className="font-sans font-medium text-xs text-slate-300 border-b border-white/10 pb-1.5">
+ Lapisan
                     </div>
 
                     <div className="space-y-1 text-xs">
                       <button
                         type="button"
                         onClick={() => toggleLayerFilter('baselineCorridors')}
-                        className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-[#121822] transition"
+ className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-white/5 transition"
                       >
                         <span className="text-slate-200">Koridor Utama</span>
                         <span className={`w-4 h-4 rounded flex items-center justify-center border ${
-                          layerFilters.baselineCorridors ? 'bg-white border-white text-[#080d14]' : 'border-[#1c2432]'
+ layerFilters.baselineCorridors ? 'bg-white border-white text-[#080d14]' : 'border-white/10'
                         }`}>
                           {layerFilters.baselineCorridors && <Check className="w-3 h-3 stroke-[3]" />}
                         </span>
@@ -2788,11 +2818,11 @@ export default function CrisisMap({
                       <button
                         type="button"
                         onClick={() => toggleLayerFilter('bottlenecks')}
-                        className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-[#121822] transition"
+ className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-white/5 transition"
                       >
-                        <span className="text-slate-200">Kemacetan / Bottleneck</span>
+ <span className="text-slate-200">Macet</span>
                         <span className={`w-4 h-4 rounded flex items-center justify-center border ${
-                          layerFilters.bottlenecks ? 'bg-white border-white text-[#080d14]' : 'border-[#1c2432]'
+ layerFilters.bottlenecks ? 'bg-white border-white text-[#080d14]' : 'border-white/10'
                         }`}>
                           {layerFilters.bottlenecks && <Check className="w-3 h-3 stroke-[3]" />}
                         </span>
@@ -2801,15 +2831,15 @@ export default function CrisisMap({
                       <button
                         type="button"
                         onClick={() => toggleLayerFilter('weatherRadar')}
-                        className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-[#121822] transition"
+ className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-white/5 transition"
                         title="Disruption-only: hujan lebat high/critical (biru). Default ON."
                       >
                         <span className="text-slate-200 flex items-center gap-1.5">
                           <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
-                          <span>Radar Cuaca (Gangguan, biru)</span>
+ <span>Gangguan</span>
                         </span>
                         <span className={`w-4 h-4 rounded flex items-center justify-center border ${
-                          layerFilters.weatherRadar ? 'bg-white border-white text-[#080d14]' : 'border-[#1c2432]'
+ layerFilters.weatherRadar ? 'bg-white border-white text-[#080d14]' : 'border-white/10'
                         }`}>
                           {layerFilters.weatherRadar && <Check className="w-3 h-3 stroke-[3]" />}
                         </span>
@@ -2818,15 +2848,15 @@ export default function CrisisMap({
                       <button
                         type="button"
                         onClick={() => toggleLayerFilter('weatherAdvisory')}
-                        className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-[#121822] transition"
+ className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-white/5 transition"
                         title="Advisory: medium drizzle termasuk BMKG 60 (ungu). Default OFF."
                       >
                         <span className="text-slate-200 flex items-center gap-1.5">
                           <span className="w-2 h-2 rounded-full bg-purple-500 shrink-0" />
-                          <span>Advisory Cuaca (ungu, medium)</span>
+ <span>Advisori</span>
                         </span>
                         <span className={`w-4 h-4 rounded flex items-center justify-center border ${
-                          layerFilters.weatherAdvisory ? 'bg-white border-white text-[#080d14]' : 'border-[#1c2432]'
+ layerFilters.weatherAdvisory ? 'bg-white border-white text-[#080d14]' : 'border-white/10'
                         }`}>
                           {layerFilters.weatherAdvisory && <Check className="w-3 h-3 stroke-[3]" />}
                         </span>
@@ -2835,11 +2865,11 @@ export default function CrisisMap({
                       <button
                         type="button"
                         onClick={() => toggleLayerFilter('fireHotspots')}
-                        className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-[#121822] transition"
+ className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-white/5 transition"
                       >
-                        <span className="text-slate-200">Karhutla FIRMS (Heat + Radius + Titik)</span>
+ <span className="text-slate-200">Karhutla</span>
                         <span className={`w-4 h-4 rounded flex items-center justify-center border ${
-                          layerFilters.fireHotspots ? 'bg-white border-white text-[#080d14]' : 'border-[#1c2432]'
+ layerFilters.fireHotspots ? 'bg-white border-white text-[#080d14]' : 'border-white/10'
                         }`}>
                           {layerFilters.fireHotspots && <Check className="w-3 h-3 stroke-[3]" />}
                         </span>
@@ -2848,19 +2878,19 @@ export default function CrisisMap({
                       <button
                         type="button"
                         onClick={() => toggleLayerFilter('fleetVehicles')}
-                        className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-[#121822] transition"
+ className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-white/5 transition"
                       >
-                        <span className="text-slate-200">Armada Logistik</span>
+ <span className="text-slate-200">Armada</span>
                         <span className={`w-4 h-4 rounded flex items-center justify-center border ${
-                          layerFilters.fleetVehicles ? 'bg-white border-white text-[#080d14]' : 'border-[#1c2432]'
+ layerFilters.fleetVehicles ? 'bg-white border-white text-[#080d14]' : 'border-white/10'
                         }`}>
                           {layerFilters.fleetVehicles && <Check className="w-3 h-3 stroke-[3]" />}
                         </span>
                       </button>
                     </div>
-                  </div>
+ </PopoverContent>
                 )}
-              </div>
+ </Popover>
 
               {mapLegendSlot}
             </div>
@@ -2875,7 +2905,7 @@ export default function CrisisMap({
         )}
       </div>
 
-      {/* Glassmorphic Village & Right-Click Context Menu Popup Card */}
+ {/* Village & Right-Click Context Popup Card */}
       {contextPopup && (
         <div
           className="absolute z-50 pointer-events-auto transition-all duration-150"
@@ -2887,8 +2917,8 @@ export default function CrisisMap({
             top: Math.max(70, (contextPopup.screenPos?.y || 200) - 160),
           }}
         >
-          <div className="w-72 backdrop-blur-md bg-[#0c1017]/95 border border-[#1c2432] p-3 rounded-lg shadow-2xl space-y-2.5 text-xs animate-in zoom-in-95 duration-150">
-            <div className="flex items-start justify-between gap-2 border-b border-[#1c2432] pb-1.5">
+ <div className="w-72 bg-[#0c1017] border border-white/10 p-3 rounded-xl shadow-2xl space-y-2.5 text-xs">
+ <div className="flex items-start justify-between gap-2 border-b border-white/10 pb-1.5">
               <div className="flex items-center gap-1.5 min-w-0">
                 <MapPin className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
                 <span className="font-semibold text-slate-100 truncate">{contextPopup.name}</span>
@@ -2897,17 +2927,17 @@ export default function CrisisMap({
                 type="button"
                 onClick={() => setContextPopup(null)}
                 className="text-slate-400 hover:text-white p-0.5 rounded cursor-pointer"
-                title="Tutup Popup"
+ title="Tutup"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
 
-            <div className="flex items-center justify-between text-[11px] text-slate-400">
-              <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[10px]">
+ <div className="flex items-center justify-between text-xs text-slate-400">
+ <span className="px-1.5 py-0.5 rounded bg-white/5 text-slate-300 text-xs">
                 {contextPopup.type}
               </span>
-              <span className="font-mono text-[10px] text-slate-400">
+ <span className="font-mono tabular-nums text-xs text-slate-400">
                 {contextPopup.coords[0].toFixed(3)}°, {contextPopup.coords[1].toFixed(3)}°
               </span>
             </div>
@@ -2928,7 +2958,7 @@ export default function CrisisMap({
                 className="cursor-pointer px-2.5 py-1.5 rounded bg-cyan-950/80 hover:bg-cyan-900 text-cyan-200 border border-cyan-700/60 font-medium text-xs flex items-center justify-center gap-1 transition-colors"
               >
                 <ArrowUpRight className="w-3.5 h-3.5" />
-                <span>Jadikan Asal</span>
+ <span>Asal</span>
               </button>
 
               <button
@@ -2946,7 +2976,7 @@ export default function CrisisMap({
                 className="cursor-pointer px-2.5 py-1.5 rounded bg-emerald-950/80 hover:bg-emerald-900 text-emerald-200 border border-emerald-700/60 font-medium text-xs flex items-center justify-center gap-1 transition-colors"
               >
                 <Flag className="w-3.5 h-3.5" />
-                <span>Jadikan Tujuan</span>
+ <span>Tujuan</span>
               </button>
             </div>
 
@@ -2955,16 +2985,16 @@ export default function CrisisMap({
               onClick={() => {
                 mapRef.current?.flyTo({ center: contextPopup.coords, zoom: 12, duration: 1000 });
               }}
-              className="cursor-pointer w-full py-1 rounded bg-[#161d27] hover:bg-[#1e2736] text-slate-300 border border-[#2b3a50] text-[11px] flex items-center justify-center gap-1 transition-colors"
+ className="cursor-pointer w-full py-1 rounded hover:bg-white/5 text-slate-300 border border-white/10 text-xs flex items-center justify-center gap-1 transition-colors"
             >
               <Crosshair className="w-3 h-3 text-slate-400" />
-              <span>Fokuskan Kamera ke Titik Ini</span>
+ <span>Fokus</span>
             </button>
           </div>
         </div>
       )}
 
-      {/* Glassmorphic On-Map Route Corridor Selection & Metrics Popover Card */}
+ {/* On-Map Route Corridor Popover Card */}
       {selectedRoutePopover && (
         <div
           className="absolute z-50 pointer-events-auto transition-transform duration-75"
@@ -2976,7 +3006,7 @@ export default function CrisisMap({
             top: Math.max(70, selectedRoutePopover.screenPos.y - 190),
           }}
         >
-          <div className="w-80 backdrop-blur-md bg-[#0c0e12]/90 border border-white/10 p-3.5 rounded-xl shadow-2xl space-y-3 text-xs animate-in zoom-in-95 duration-150 text-slate-100 font-sans">
+ <div className="w-80 bg-[#0c1017] border border-white/10 p-3.5 rounded-xl shadow-2xl space-y-3 text-xs text-slate-100 font-sans">
             {/* Header: Corridor Name & Modality Badge */}
             <div className="flex items-start justify-between gap-2 border-b border-white/10 pb-2">
               <div className="flex items-center gap-2 min-w-0">
@@ -3001,26 +3031,16 @@ export default function CrisisMap({
                   <h4 className="font-semibold text-white truncate text-xs leading-tight">
                     {selectedRoutePopover.route.description || selectedRoutePopover.route.route_name || `Koridor #${selectedRoutePopover.routeIndex + 1}`}
                   </h4>
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <span
-                      className={`px-1.5 py-0.5 rounded text-[10px] font-mono uppercase border ${
-                        selectedRoutePopover.route.corridor_type === 'sea_intermodal' || selectedRoutePopover.route.modality === 'maritime'
-                          ? 'bg-blue-950/60 text-blue-300 border-blue-800/40'
-                          : selectedRoutePopover.route.corridor_type === 'air_intermodal' || selectedRoutePopover.route.modality === 'air'
-                            ? 'bg-cyan-950/60 text-cyan-300 border-cyan-800/40'
-                            : 'bg-emerald-950/60 text-emerald-300 border-emerald-800/40'
-                      }`}
-                    >
+ <div className="flex items-center gap-1.5 mt-0.5 text-xs">
+ <span className="text-slate-400">
                       {selectedRoutePopover.route.corridor_type === 'sea_intermodal' || selectedRoutePopover.route.modality === 'maritime'
-                        ? 'Laut + Darat'
+ ? 'Laut + darat'
                         : selectedRoutePopover.route.corridor_type === 'air_intermodal' || selectedRoutePopover.route.modality === 'air'
-                          ? 'Udara + Darat'
+ ? 'Udara + darat'
                           : 'Darat'}
                     </span>
                     {selectedRoutePopover.routeIndex === (activeRouteIdx ?? 0) && (
-                      <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                        AKTIF
-                      </span>
+ <span className="text-emerald-400">Aktif</span>
                     )}
                   </div>
                 </div>
@@ -3030,23 +3050,23 @@ export default function CrisisMap({
                 type="button"
                 onClick={() => setSelectedRoutePopover(null)}
                 className="text-slate-400 hover:text-white p-1 rounded hover:bg-white/5 cursor-pointer transition-colors"
-                title="Tutup Popover"
+ title="Tutup"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
 
             {/* Metrics Grid */}
-            <div className="grid grid-cols-2 gap-2 p-2 rounded-lg bg-[#121822]/70 border border-white/5 text-[11px]">
+ <div className="grid grid-cols-2 gap-2 py-2 border-t border-white/10 text-xs">
               <div>
-                <span className="text-slate-400 block text-[10px] uppercase font-mono">Estimasi Waktu (ETA)</span>
-                <span className="font-semibold text-white font-mono">
+ <span className="text-slate-400 block text-xs">ETA</span>
+ <span className="font-semibold text-white font-mono tabular-nums">
                   {selectedRoutePopover.route.eta_minutes == null ||
                   !Number.isFinite(Number(selectedRoutePopover.route.eta_minutes))
                     ? 'Belum terverifikasi'
                     : `${Math.floor(selectedRoutePopover.route.eta_minutes / 60)}j ${Math.round(selectedRoutePopover.route.eta_minutes % 60)}m`}
                 </span>
-                <span className="text-[10px] text-slate-400 block">
+ <span className="text-xs text-slate-400 block tabular-nums">
                   {selectedRoutePopover.route.distance_km == null ||
                   !Number.isFinite(Number(selectedRoutePopover.route.distance_km))
                     ? 'Jarak belum terverifikasi'
@@ -3055,7 +3075,7 @@ export default function CrisisMap({
               </div>
 
               <div>
-                <span className="text-slate-400 block text-[10px] uppercase font-mono">Estimasi Biaya Total</span>
+ <span className="text-slate-400 block text-xs">Biaya</span>
                 {(() => {
                   const route = selectedRoutePopover.route;
                   const costIdr =
@@ -3063,18 +3083,21 @@ export default function CrisisMap({
                     route.economic_comparison?.reroute_total_cost_idr;
                   const hasCost = typeof costIdr === 'number' && Number.isFinite(costIdr) && costIdr > 0;
                   return (
-                    <span className={`font-semibold font-mono ${hasCost ? 'text-emerald-300' : 'text-slate-400'}`}>
+ <span className={`font-semibold font-mono tabular-nums ${hasCost ? 'text-emerald-300' : 'text-slate-400'}`}>
                       {hasCost ? `Rp ${costIdr.toLocaleString('id-ID')}` : 'Belum tersedia'}
                     </span>
                   );
                 })()}
-                <span className="text-[10px] text-slate-400 block truncate">
-                  {selectedRoutePopover.route.safety_status === 'SAFE_DETOUR'
-                    ? 'Detour Terverifikasi'
-                    : selectedRoutePopover.route.safety_status === 'COMPROMISED'
-                      ? 'Terdampak Krisis'
-                      : 'Jalur Bebas Hambatan'}
+ {selectedRoutePopover.route.safety_status === 'COMPROMISED' ? (
+ <span className="text-xs text-red-400 flex items-center gap-1 truncate">
+ <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
+ Terdampak
                 </span>
+ ) : (
+ <span className="text-xs text-slate-400 block truncate">
+ {selectedRoutePopover.route.safety_status === 'SAFE_DETOUR' ? 'Detour terverifikasi' : 'Bebas hambatan'}
+ </span>
+ )}
               </div>
             </div>
 
@@ -3083,7 +3106,7 @@ export default function CrisisMap({
               {selectedRoutePopover.routeIndex === (activeRouteIdx ?? 0) ? (
                 <div className="flex-1 py-1.5 px-3 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center justify-center gap-1.5 select-none">
                   <Check className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Koridor Utama Aktif</span>
+ <span>Aktif</span>
                 </div>
               ) : (
                 <button
@@ -3097,7 +3120,7 @@ export default function CrisisMap({
                   className="cursor-pointer flex-1 py-1.5 px-3 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all duration-200 shadow-sm"
                 >
                   <Navigation className="w-3.5 h-3.5" />
-                  <span>Pilih Koridor Ini</span>
+ <span>Pilih koridor</span>
                 </button>
               )}
 
@@ -3129,8 +3152,8 @@ export default function CrisisMap({
       )}
 
       {drawModeActive && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[360] px-3.5 py-1.5 rounded-md bg-[#1a120b] border border-amber-500/40 shadow-xl flex items-center gap-2.5 animate-in fade-in duration-200">
-          <span className="h-2 w-2 rounded-full bg-amber-400"></span>
+ <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[360] px-3.5 py-1.5 rounded-md bg-[#1a120b] border border-amber-500/40 shadow-xl flex items-center gap-2.5 duration-200">
+ <span className="h-2 w-2 rounded-full bg-amber-400/60"></span>
           <span className="text-xs font-medium text-amber-300">
             Gambar Poligon Area Disrupsi
           </span>

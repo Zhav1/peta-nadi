@@ -30,7 +30,7 @@ import dynamic from 'next/dynamic';
 import { useIncidents } from '@/hooks/useIncidents';
 import { useCrisisSocket } from '@/hooks/useCrisisSocket';
 import { CrisisSidebar } from '@/components/sidebar/CrisisSidebar';
-import { Toast } from '@/components/ui/Toast';
+import { notifyToast } from '@/components/ui/Toast';
 import { useDemoState } from '@/hooks/useDemoState';
 import { useFleetVehicles } from '@/hooks/useFleetVehicles';
 import { useCorridorContext } from '@/hooks/useCorridorContext';
@@ -133,13 +133,13 @@ function FloatingMapLegend({
         title="Buka Legenda Peta & Rute"
       >
         <Info className="w-4 h-4 text-slate-300" />
-        <span>LEGENDA RUTE</span>
+ <span>Legenda</span>
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2 w-72 bg-[#0c1017] border border-[#1c2432] p-3.5 rounded-lg shadow-xl text-xs space-y-2.5 animate-in fade-in zoom-in-95 duration-150 z-50">
+ <div className="absolute right-0 top-full mt-2 w-72 bg-[#0c1017] border border-[#1c2432] p-3.5 rounded-lg shadow-xl text-xs space-y-2.5 duration-150 z-50">
           <div className="flex items-center justify-between border-b border-[#1c2432] pb-2">
-            <span className="font-mono font-semibold text-xs text-white uppercase tracking-wider flex items-center gap-1.5">
+ <span className="font-mono font-semibold text-xs text-white flex items-center gap-1.5">
               <Compass className="w-3.5 h-3.5 text-slate-300" />
               <span>Legenda Peta & Keputusan</span>
             </span>
@@ -203,12 +203,12 @@ function FloatingMapLegend({
             </div>
 
             <div className="pt-2 mt-2 border-t border-[#1c2432]/80 space-y-2">
-              <span className="text-slate-400 font-sans font-semibold text-[11px] uppercase tracking-wider block">
-                Armada Multimoda & Koridor Maritim
+ <span className="text-slate-400 font-sans font-semibold text-xs block">
+ Armada
               </span>
 
               <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-sky-400 shrink-0 shadow-[0_0_8px_rgba(56,189,248,0.5)]" />
+ <span className="w-2.5 h-2.5 rounded-full bg-sky-400 shrink-0 " />
                 <div>
                   <span className="text-slate-200 font-medium block">Kapal Kargo & Feri Maritim (AIS)</span>
                   <span className="text-xs text-slate-400 font-sans">Transponder AIS Selat Malaka, Selat Sunda & Teluk Palembang.</span>
@@ -216,7 +216,7 @@ function FloatingMapLegend({
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0 shadow-[0_0_8px_rgba(52,211,153,0.5)]" />
+ <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0 " />
                 <div>
                   <span className="text-slate-200 font-medium block">Truk Logistik Pangan (GPS)</span>
                   <span className="text-xs text-slate-400 font-sans">Telemetri satelit koridor Tol Trans-Sumatera & Jalinsum.</span>
@@ -224,7 +224,7 @@ function FloatingMapLegend({
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-purple-400 shrink-0 shadow-[0_0_8px_rgba(192,132,252,0.5)]" />
+ <span className="w-2.5 h-2.5 rounded-full bg-purple-400 shrink-0 " />
                 <div>
                   <span className="text-slate-200 font-medium block">Kargo Udara Darurat (ADS-B)</span>
                   <span className="text-xs text-slate-400 font-sans">Penerbangan logistik hub KNO, PDG, & PLM.</span>
@@ -250,28 +250,28 @@ function FloatingMapLegend({
 
             {/* Disruption-only weather legend: filtered set counts (biru=gangguan, ungu=advisori). */}
             <div className="pt-2 mt-2 border-t border-[#1c2432]/80 space-y-2">
-              <span className="text-slate-400 font-sans font-semibold text-[11px] uppercase tracking-wider block">
-                Radar Cuaca (Gangguan)
+ <span className="text-slate-400 font-sans font-semibold text-xs block">
+ Cuaca
               </span>
 
               <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0 shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
+ <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0 " />
                 <div>
-                  <span className="text-slate-200 font-medium block">Radar Cuaca (Gangguan, biru) — {weatherDisruptionCount} zona</span>
+ <span className="text-slate-200 font-medium block">Cuaca — {weatherDisruptionCount} zona</span>
                   <span className="text-xs text-slate-400 font-sans">Hujan lebat disruptif: high/critical, presipitasi 50mm/24j atau banjir 80%. Default ON. Hazard: flood/landslide/severe_storm/marine_wave.</span>
                 </div>
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shrink-0 shadow-[0_0_8px_rgba(251,191,36,0.5)]" />
+ <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shrink-0 " />
                 <div>
                   <span className="text-slate-200 font-medium block">Dampak Dispather per Zona Biru</span>
-                  <span className="text-xs text-slate-400 font-sans">Klik poligon: koridor+segmen+jarak, delay jam (flood 14/landslide 10/marine 18 × severity), aksi (CAUTION/DELAY/REROUTE/HOLD), moda truck/sea/air, confidence + observasi/prakiraan.</span>
+ <span className="text-xs text-slate-400 font-sans">Klik poligon: koridor+segmen+jarak, delay jam (flood 14/landslide 10/marine 18 × severity), aksi (caution/delay/reroute/hold), moda truck/sea/air, confidence + observasi/prakiraan.</span>
                 </div>
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-purple-500 shrink-0 shadow-[0_0_8px_rgba(168,85,247,0.5)]" />
+ <span className="w-2.5 h-2.5 rounded-full bg-purple-500 shrink-0 " />
                 <div>
                   <span className="text-slate-200 font-medium block">Advisori (ungu) — {weatherAdvisoryCount} zona {showWeatherAdvisory ? '(ON)' : '(OFF)'}</span>
                   <span className="text-xs text-slate-400 font-sans">Medium drizzle (mis. BMKG 60): hanya tampil bila toggle advisori ON.</span>
@@ -282,11 +282,12 @@ function FloatingMapLegend({
             {/* Q4/Q5: direct land vs island-ring corridors + live/offline provenance */}
             <div className="pt-2 mt-2 border-t border-[#1c2432]/80 space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-slate-400 font-sans font-semibold text-[11px] uppercase tracking-wider">
-                  Koridor Langsung vs Ring Pulau
+ <span className="text-slate-400 font-sans font-semibold text-xs">
+ Koridor
                 </span>
-                <span className="px-1.5 py-0.5 rounded border border-amber-500/40 bg-amber-500/15 text-amber-300 font-mono text-[9px] font-bold tracking-wide">
-                  SIMULASI/OFFLINE
+ <span className="flex items-center gap-1.5 text-xs text-slate-400">
+ <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+ Simulasi
                 </span>
               </div>
 
@@ -314,24 +315,24 @@ function FloatingMapLegend({
                 </div>
               </div>
 
-              <p className="text-[10px] leading-tight text-amber-300/80 font-sans">
-                Badge SIMULASI/OFFLINE menandai geometri interpolasi (garis lurus), bukan rute jalan raya live.
+ <p className="text-xs leading-tight text-amber-300/80 font-sans">
+ Simulasi menandai geometri interpolasi, bukan rute live.
               </p>
 
               {onToggleCorridor && (
                 <div className="space-y-1.5 pt-1 border-t border-[#1c2432]/60">
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-400 font-sans font-semibold text-[10px] uppercase tracking-wider">
-                      Visibilitas Koridor
+ <span className="text-slate-400 font-sans font-semibold text-xs">
+ Koridor
                     </span>
                     {onResetCorridorVisibility && (
                       <button
                         type="button"
                         onClick={onResetCorridorVisibility}
-                        className="cursor-pointer text-[10px] font-mono text-slate-400 hover:text-white transition-colors"
+ className="cursor-pointer text-xs font-mono text-slate-400 hover:text-white transition-colors"
                         title="Aktifkan kembali semua koridor"
                       >
-                        Semua ON
+ Semua
                       </button>
                     )}
                   </div>
@@ -349,7 +350,7 @@ function FloatingMapLegend({
                           onClick={() => onToggleCorridor(key)}
                           aria-pressed={isVisible}
                           title={`${label}: ${isVisible ? 'tampil' : 'disembunyikan'}`}
-                          className={`cursor-pointer px-1.5 py-1.5 rounded border text-[10px] font-sans font-medium transition flex flex-col items-center gap-0.5 ${
+ className={`cursor-pointer px-1.5 py-1.5 rounded border text-xs font-sans font-medium transition flex flex-col items-center gap-0.5 ${
                             isVisible
                               ? activeClass
                               : 'bg-[#121822]/60 border-[#1c2432] text-slate-500 hover:text-slate-300'
@@ -359,8 +360,8 @@ function FloatingMapLegend({
                             <Icon className="w-3 h-3" />
                             <span>{label}</span>
                           </span>
-                          <span className={`text-[9px] font-mono ${isVisible ? 'opacity-80' : 'opacity-60'}`}>
-                            {isVisible ? 'ON' : 'OFF'}
+ <span className={`text-xs font-mono ${isVisible ? 'opacity-80' : 'opacity-60'}`}>
+ {isVisible ? 'On' : 'Off'}
                           </span>
                         </button>
                       );
@@ -372,7 +373,7 @@ function FloatingMapLegend({
           </div>
 
           <p className="text-xs text-slate-400 font-sans pt-1 border-t border-[#1c2432] leading-tight">
-            <strong>Transparansi HITL:</strong> PreHub menampilkan semua alternatif rute agar operator dapat membandingkan trade-off waktu dan risiko sebelum persetujuan.
+ <strong>Transparansi HITL:</strong> Prehub menampilkan semua alternatif rute agar operator dapat membandingkan trade-off waktu dan risiko sebelum persetujuan.
           </p>
         </div>
       )}
@@ -512,7 +513,12 @@ export default function DashboardClient() {
   const [showRedZones, setShowRedZones] = useState<boolean>(true);
   const [showYellowZones, setShowYellowZones] = useState<boolean>(true);
   const [mapFlyTo, setMapFlyTo] = useState<{ lon: number; lat: number; zoom?: number; ts: number } | null>(null);
-  const [toast, setToast] = useState<{ message: string; type?: 'success' | 'error' | 'info' } | null>(null);
+ // Toasts render via the global Sonner <Toaster> (app/layout.tsx). setToast is a
+ // thin compat alias so existing call sites keep working unchanged; null is a no-op.
+ const setToast = useCallback((t: { message: string; type?: 'success' | 'error' | 'info'; duration?: number } | null) => {
+ if (!t) return;
+ notifyToast({ message: t.message, type: t.type, duration: t.duration });
+ }, []);
   const isDemoRunningRef = useRef<boolean>(false);
 
   // Decision Support System (DSS) Impact Assessment States
@@ -1461,7 +1467,7 @@ export default function DashboardClient() {
   }, [updateUrlParams]);
 
   // Two-way modality sync: fleet layer filter and route calculation modality stay in lockstep,
-  // so picking KAPAL switches both the maritime vehicle layer and the route visualization.
+ // so picking Kapal switches both the maritime vehicle layer and the route visualization.
   const handleModalityChange = useCallback((modality: TransportModality) => {
     setSelectedModality(modality);
     updateUrlParams({ modality });
@@ -2527,10 +2533,10 @@ export default function DashboardClient() {
         <div className="flex items-center gap-2 sm:gap-6 min-w-0">
           <div className="flex items-center gap-2 shrink-0">
             <div className="w-8 h-8 rounded-lg bg-[#080d14] border border-white/15 p-1 flex items-center justify-center">
-              <img src="/logo_prehub.png" alt="PreHub" className="w-6 h-6 object-contain" />
+ <img src="/logo_prehub.png" alt="Prehub" className="w-6 h-6 object-contain" />
             </div>
-            <span className="font-headline font-bold text-base tracking-wider text-slate-100 uppercase hidden sm:inline">
-              PreHub
+ <span className="font-headline font-bold text-base text-slate-100 hidden sm:inline">
+ Prehub
             </span>
             <Link
               href="/"
@@ -2594,7 +2600,7 @@ export default function DashboardClient() {
             )}
             <span className="hidden sm:inline">Onboard Armada</span>
             {role !== 'DISPATCHER' && (
-              <span className="hidden md:inline px-1 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px] font-mono">
+ <span className="hidden md:inline px-1 py-0.5 rounded bg-amber-500/20 text-amber-300 text-xs font-mono">
                 Khusus Dispatcher
               </span>
             )}
@@ -2653,15 +2659,6 @@ export default function DashboardClient() {
         companyName={user?.org_name}
       />
 
-      {/* Toast Notification Container */}
-      {toast && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          onClose={() => setToast(null)}
-        />
-      )}
-
       {/* Human-in-the-Loop Decision Drawer (Root Level Portal Context) */}
       <HitlDecisionDrawer
         isOpen={isHitlDrawerOpen}
@@ -2697,8 +2694,8 @@ export default function DashboardClient() {
                   <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
                 </div>
                 <div>
-                  <h2 className="text-xs font-bold font-sans text-white uppercase tracking-wider">
-                    Intelijen Berita Resmi
+ <h2 className="text-xs font-bold font-sans text-white">
+ Berita
                   </h2>
                   <span className="text-xs font-mono text-slate-400">
                     {isFallbackNews
@@ -2770,16 +2767,16 @@ export default function DashboardClient() {
                   onClick={() => setShowRedZones((v) => !v)}
                   className={`cursor-pointer flex-1 flex items-center justify-between px-2.5 py-1.5 rounded-lg border text-xs font-mono transition-all duration-150 ${
                     showRedZones
-                      ? 'bg-red-950/50 border-red-500/50 text-red-200 shadow-[0_0_8px_rgba(239,68,68,0.3)]'
+ ? 'bg-red-950/50 border-red-500/50 text-red-200 '
                       : 'bg-slate-950/40 border-white/5 text-slate-500 hover:text-slate-300'
                   }`}
                   title="Filter Peta: Zona Merah (Bencana Terkonfirmasi)"
                 >
                   <span className="flex items-center gap-1.5">
-                    <span className={`w-2 h-2 rounded-full ${showRedZones ? 'bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.9)]' : 'bg-slate-600'}`} />
-                    <span className="font-sans text-[11px] font-semibold">Zona Merah</span>
+ <span className={`w-2 h-2 rounded-full ${showRedZones ? 'bg-red-500 ' : 'bg-slate-600'}`} />
+ <span className="font-sans text-xs font-semibold">Merah</span>
                   </span>
-                  <span className="px-1.5 py-0.2 rounded bg-red-500/20 text-[10px] font-bold text-red-300 font-mono">
+ <span className="px-1.5 py-0.2 rounded bg-red-500/20 text-xs font-bold text-red-300 font-mono">
                     {liveNewsZoneCounts.red}
                   </span>
                 </button>
@@ -2789,16 +2786,16 @@ export default function DashboardClient() {
                   onClick={() => setShowYellowZones((v) => !v)}
                   className={`cursor-pointer flex-1 flex items-center justify-between px-2.5 py-1.5 rounded-lg border text-xs font-mono transition-all duration-150 ${
                     showYellowZones
-                      ? 'bg-yellow-950/50 border-yellow-500/50 text-yellow-200 shadow-[0_0_8px_rgba(234,179,8,0.3)]'
+ ? 'bg-yellow-950/50 border-yellow-500/50 text-yellow-200 '
                       : 'bg-slate-950/40 border-white/5 text-slate-500 hover:text-slate-300'
                   }`}
                   title="Filter Peta: Zona Kuning (Perlu Klarifikasi / Waspada)"
                 >
                   <span className="flex items-center gap-1.5">
-                    <span className={`w-2 h-2 rounded-full ${showYellowZones ? 'bg-yellow-400 shadow-[0_0_6px_rgba(234,179,8,0.9)]' : 'bg-slate-600'}`} />
-                    <span className="font-sans text-[11px] font-semibold">Zona Kuning</span>
+ <span className={`w-2 h-2 rounded-full ${showYellowZones ? 'bg-yellow-400 ' : 'bg-slate-600'}`} />
+ <span className="font-sans text-xs font-semibold">Kuning</span>
                   </span>
-                  <span className="px-1.5 py-0.2 rounded bg-yellow-500/20 text-[10px] font-bold text-yellow-300 font-mono">
+ <span className="px-1.5 py-0.2 rounded bg-yellow-500/20 text-xs font-bold text-yellow-300 font-mono">
                     {liveNewsZoneCounts.yellow}
                   </span>
                 </button>
@@ -2863,12 +2860,12 @@ export default function DashboardClient() {
                       {/* Headline with external link */}
                       <div className="flex flex-wrap items-center gap-1.5">
                         {itemZoneTier === 'RED_CONFIRMED' ? (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-red-500/15 border border-red-500/40 text-red-300">ZONA MERAH</span>
+ <span className="flex items-center gap-1.5 text-xs text-slate-300"><span className="w-1.5 h-1.5 rounded-full bg-red-500" />Merah</span>
                         ) : (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-yellow-400/10 border border-yellow-400/40 text-yellow-300">ZONA KUNING: PERLU KLARIFIKASI</span>
+ <span className="flex items-center gap-1.5 text-xs text-slate-300"><span className="w-1.5 h-1.5 rounded-full bg-amber-400" />Kuning</span>
                         )}
                         {(item.custom_hazard_label) && (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-sans text-slate-200 bg-white/5 border border-white/10 truncate max-w-[180px]" title={item.custom_hazard_label}>
+ <span className="px-1.5 py-0.5 rounded text-xs font-sans text-slate-200 bg-white/5 border border-white/10 truncate max-w-[180px]" title={item.custom_hazard_label}>
                             {item.custom_hazard_label}
                           </span>
                         )}
@@ -2895,7 +2892,7 @@ export default function DashboardClient() {
                       </h3>
 
                       {item.affected_locations && item.affected_locations.length > 1 && (
-                        <div className="px-2 py-1 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyan-200 text-[11px] font-sans leading-snug">
+ <div className="px-2 py-1 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyan-200 text-xs font-sans leading-snug">
                           📍 {item.affected_locations.length} Daerah: {item.affected_locations.map((l) => l.name).join(', ')}
                         </div>
                       )}
@@ -2911,10 +2908,10 @@ export default function DashboardClient() {
                       )}
 
                       {/* God's-Eye Monospaced Tactical Telemetry Grid */}
-                      <div className="p-2 rounded-lg bg-[#0a0e16] border border-[#1c2432] font-mono text-[11px] space-y-1.5 leading-snug">
-                        {/* Row 1 — CAKUPAN SPASIAL */}
+ <div className="p-2 rounded-lg bg-transparent border-t border-white/5 font-mono text-xs space-y-1.5 leading-snug">
+ {/* Row 1 — Lokasi */}
                         <div className="flex items-center justify-between text-slate-300">
-                          <span className="text-slate-500 uppercase tracking-wider text-[10px] font-semibold">CAKUPAN SPASIAL:</span>
+ <span className="text-slate-500 text-xs font-semibold">Lokasi:</span>
                           <span className="text-cyan-300 font-semibold truncate max-w-[170px]" title={item.location_name || 'Koridor Sumatera'}>
                             {item.location_name || 'Koridor Sumatera'}
                             {item.lat && item.lon ? ` · ${item.lat.toFixed(2)}°N, ${item.lon.toFixed(2)}°E` : ''}
@@ -2926,14 +2923,14 @@ export default function DashboardClient() {
                           </span>
                         </div>
 
-                        {/* Row 2 — KONSENSUS AGEN */}
+ {/* Row 2 — Keyakinan */}
                         <div className="flex items-center justify-between text-slate-300 border-t border-[#1c2432]/60 pt-1">
-                          <span className="text-slate-500 uppercase tracking-wider text-[10px] font-semibold">KONSENSUS AGEN:</span>
+ <span className="text-slate-500 text-xs font-semibold">Keyakinan:</span>
                           <div className="flex items-center gap-1">
-                            <span className="px-1 py-0.2 rounded bg-cyan-950/60 text-cyan-400 border border-cyan-500/30 text-[10px]">
+ <span className="px-1 py-0.2 rounded bg-cyan-950/60 text-cyan-400 border border-cyan-500/30 text-xs">
                               {isOfficial ? 'ANTARA' : 'BMKG'}
                             </span>
-                            <span className="px-1 py-0.2 rounded bg-emerald-950/60 text-emerald-400 border border-emerald-500/30 text-[10px]">
+ <span className="px-1 py-0.2 rounded bg-emerald-950/60 text-emerald-400 border border-emerald-500/30 text-xs">
                               TOMTOM
                             </span>
                             <span className="text-emerald-400 font-bold ml-0.5">
@@ -2944,9 +2941,9 @@ export default function DashboardClient() {
                           </div>
                         </div>
 
-                        {/* Row 3 — STATUS KORIDOR */}
+ {/* Row 3 — Jalur */}
                         <div className="flex items-center justify-between text-slate-300 border-t border-[#1c2432]/60 pt-1">
-                          <span className="text-slate-500 uppercase tracking-wider text-[10px] font-semibold">STATUS KORIDOR:</span>
+ <span className="text-slate-500 text-xs font-semibold">Jalur:</span>
                           <div className="flex items-center gap-1.5 truncate max-w-[185px]">
                             <span className={itemZoneTier === 'RED_CONFIRMED' ? 'text-red-400 font-semibold shrink-0' : 'text-amber-400 font-semibold shrink-0'}>
                               {itemZoneTier === 'RED_CONFIRMED' ? 'Terputus Total' : 'Lalin Tersendat'}
@@ -3018,7 +3015,7 @@ export default function DashboardClient() {
             {/* Honest Dynamic Sensor Pipeline Status Bar */}
             <div className="border-t border-white/10 pt-2.5 text-xs font-mono text-slate-400 space-y-1.5 shrink-0">
               <div className="flex items-center justify-between">
-                <span className="uppercase tracking-wider text-slate-400 font-bold">STATUS PIPELINE DATA</span>
+ <span className="text-slate-400 font-bold">Data</span>
                 <button
                   type="button"
                   onClick={() => setShowSensorInfo(v => !v)}
@@ -3030,7 +3027,7 @@ export default function DashboardClient() {
               </div>
 
               {showSensorInfo && (
-                <div className="p-2 rounded bg-slate-950/90 border border-white/10 text-xs font-sans text-slate-300 leading-relaxed animate-in fade-in duration-150">
+ <div className="p-2 rounded bg-slate-950/90 border border-white/10 text-xs font-sans text-slate-300 leading-relaxed duration-150">
                   <strong>Transparansi Data:</strong> Status koneksi telemetri dan integrasi API operasional.
                 </div>
               )}
@@ -3045,19 +3042,19 @@ export default function DashboardClient() {
                     <div className="p-1 rounded bg-slate-950/80 border border-white/5">
                       <span className="text-slate-500 block">BMKG</span>
                       <span className={`font-bold font-mono ${isCorridorLoading ? 'text-cyan-400' : isBmkgLive ? 'text-emerald-400' : 'text-amber-400'}`}>
-                        {isCorridorLoading ? 'MEMUAT' : isBmkgLive ? 'LIVE' : 'FALLBACK'}
+ {isCorridorLoading ? 'Memuat' : isBmkgLive ? 'Live' : 'Fallback'}
                       </span>
                     </div>
                     <div className="p-1 rounded bg-slate-950/80 border border-white/5">
                       <span className="text-slate-500 block">TOMTOM</span>
                       <span className={`font-bold font-mono ${isCorridorLoading ? 'text-cyan-400' : isTomtomLive ? 'text-emerald-400' : 'text-amber-400'}`}>
-                        {isCorridorLoading ? 'MEMUAT' : isTomtomLive ? 'LIVE' : 'FALLBACK'}
+ {isCorridorLoading ? 'Memuat' : isTomtomLive ? 'Live' : 'Fallback'}
                       </span>
                     </div>
                     <div className="p-1 rounded bg-slate-950/80 border border-white/5">
                       <span className="text-slate-500 block">PIHPS</span>
                       <span className={`font-bold font-mono ${isCorridorLoading ? 'text-cyan-400' : isPihpsLive ? 'text-emerald-400' : 'text-amber-400'}`}>
-                        {isCorridorLoading ? 'MEMUAT' : isPihpsLive ? 'LIVE' : 'FALLBACK'}
+ {isCorridorLoading ? 'Memuat' : isPihpsLive ? 'Live' : 'Fallback'}
                       </span>
                     </div>
                   </div>
@@ -3155,12 +3152,12 @@ export default function DashboardClient() {
                 }
                 fleetModalitySlot={
                   !(isSidebarOpen && selectedCrisis) ? (
-                    <div className="flex items-center gap-1 p-1 rounded-lg bg-[#0c1017]/90 backdrop-blur-md border border-[#1c2432] shadow-xl overflow-x-auto no-scrollbar max-w-[calc(100vw-2rem)]">
+ <div className="flex items-center gap-1 p-1 rounded-lg bg-[#0c1017]/90 border border-[#1c2432] shadow-xl overflow-x-auto no-scrollbar max-w-[calc(100vw-2rem)]">
                       {[
-                        { id: 'all', label: 'SEMUA', count: fleetCountVehicles.length, icon: null },
-                        { id: 'truck', label: 'TRUK', count: fleetCountVehicles.filter((v) => v.modality === 'truck').length, icon: Truck },
-                        { id: 'maritime', label: 'KAPAL', count: fleetCountVehicles.filter((v) => v.modality === 'maritime').length, icon: Anchor },
-                        { id: 'air', label: 'UDARA', count: fleetCountVehicles.filter((v) => v.modality === 'air').length, icon: Plane },
+ { id: 'all', label: 'Semua', count: fleetCountVehicles.length, icon: null },
+ { id: 'truck', label: 'Truk', count: fleetCountVehicles.filter((v) => v.modality === 'truck').length, icon: Truck },
+ { id: 'maritime', label: 'Kapal', count: fleetCountVehicles.filter((v) => v.modality === 'maritime').length, icon: Anchor },
+ { id: 'air', label: 'Udara', count: fleetCountVehicles.filter((v) => v.modality === 'air').length, icon: Plane },
                       ].map((m) => {
                         const IconComp = m.icon;
                         return (
@@ -3226,13 +3223,13 @@ export default function DashboardClient() {
                         <span
                           id="fleet-tenant-scope-badge"
                           className="px-2.5 py-1 rounded-md text-xs font-mono font-bold flex items-center gap-1.5 shrink-0 bg-cyan-500/20 text-cyan-300 border border-cyan-400/40"
-                          title="Sesi DISPATCHER: hanya armada tenant Anda dengan GPS live yang ditampilkan. Rute estimasi tersedia lewat panel Armada Tenant (badge PROYEKSI)."
+ title="Sesi DISPATCHER: hanya armada tenant Anda dengan GPS live yang ditampilkan. Rute estimasi tersedia lewat panel Armada Tenant (badge Proyeksi)."
                         >
                           <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
                           <span>Tenant Live GPS ({fleetCountVehicles.length})</span>
                           {tenantFleetAssetCount > fleetCountVehicles.length && (
-                            <span className="px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-200 text-[10px] tabular-nums">
-                              {tenantFleetAssetCount - fleetCountVehicles.length} PROYEKSI
+ <span className="px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-200 text-xs tabular-nums">
+ {tenantFleetAssetCount - fleetCountVehicles.length} Proyeksi
                             </span>
                           )}
                         </span>
@@ -3287,6 +3284,7 @@ export default function DashboardClient() {
               <DispatcherAlertQueue
                 impactData={impactAssessmentData}
                 selectedVehicleId={selectedImpactedVehicle?.vehicle_id || null}
+ isCrisisDrawerOpen={isRightInspectorActive}
                 onSelectVehicle={(assessment) => {
                   setSelectedImpactedVehicle(assessment);
                   setActiveTab('Mitigation');
@@ -3383,9 +3381,9 @@ export default function DashboardClient() {
               }}
             />
 
-            {/* Run Demo Dock */}
+ {/* Demo Dock */}
             {!demoState.isRunning && (
-              <footer className={`absolute bottom-4 sm:bottom-6 z-40 flex items-center gap-1.5 bg-[#0c1017] border border-[#1c2432] p-1.5 rounded-lg shadow-xl transition-all duration-300 pointer-events-auto -translate-x-1/2 overflow-x-auto no-scrollbar ${footerDockClass}`}>
+ <footer className={`absolute bottom-4 sm:bottom-6 z-40 flex items-center gap-1.5 bg-[#0c1017] border border-[#1c2432] p-1.5 rounded-lg shadow-xl transition-all duration-300 pointer-events-auto overflow-x-auto no-scrollbar ${footerDockClass}`}>
                 <button
                   type="button"
                   id="run-demo-btn"
@@ -3396,10 +3394,10 @@ export default function DashboardClient() {
                     updateUrlParams({ origin: 'belawan', dest: 'tebingtinggi', route: '0' });
                     demoState.start({ mock_agents: true, offline: false, origin: 'belawan', destination: 'tebingtinggi' });
                   }}
-                  className="flex items-center gap-1.5 px-3 py-1 rounded bg-white hover:bg-slate-200 text-[#080d14] font-semibold text-xs uppercase tracking-wider transition-colors shadow-sm cursor-pointer shrink-0"
+ className="flex items-center gap-1.5 px-3 py-1 rounded bg-white hover:bg-slate-200 text-[#080d14] font-semibold text-xs transition-colors shadow-sm cursor-pointer shrink-0"
                 >
                   <Play className="w-3 h-3 fill-current" />
-                  <span>Run Demo</span>
+ <span>Demo</span>
                 </button>
               </footer>
             )}

@@ -20,6 +20,7 @@ import {
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/authContext';
 import type { ERPSummaryResponse, ERPTripRow, TravelStatus } from '@/lib/types';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/base-ui/table';
 
 const STATUS_LABEL: Record<TravelStatus, string> = {
   planned: 'Direncanakan',
@@ -120,7 +121,7 @@ export default function ERPSavingsPanel({ refreshKey = 0 }: ERPSavingsPanelProps
   return (
     <div className="w-full flex flex-col gap-5">
       {/* Header */}
-      <div className="bg-[#0c1017] border border-white/10 rounded-xl p-5 shadow-xl flex flex-wrap items-start justify-between gap-3">
+      <div className="bg-[#0c1017] border border-white/10 rounded-xl p-5 flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-3">
           <div className="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
             <Wallet className="w-5 h-5 text-emerald-400" />
@@ -136,20 +137,15 @@ export default function ERPSavingsPanel({ refreshKey = 0 }: ERPSavingsPanelProps
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <span
-            className={`px-2.5 py-1 rounded-md text-[11px] font-mono font-semibold border ${
-              isAggregateOnly
-                ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
-                : 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30'
-            }`}
-          >
-            {isAggregateOnly ? 'AGREGAT REGULATOR' : 'DETAIL DISPATCHER'}
+          <span className="flex items-center gap-1.5 text-xs text-slate-400">
+            <span className={`w-1.5 h-1.5 rounded-full ${isAggregateOnly ? 'bg-amber-400' : 'bg-cyan-400'}`} />
+            {isAggregateOnly ? 'Regulator' : 'Dispatcher'}
           </span>
           <button
             type="button"
             onClick={loadSummary}
             disabled={isLoading}
-            className="px-3 py-1.5 rounded-md bg-[#121822] hover:bg-[#1a2230] border border-white/10 text-xs text-slate-200 flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+            className="px-3 py-1.5 rounded-md bg-transparent hover:bg-white/5 border border-white/10 text-xs text-slate-200 flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
             Muat Ulang
@@ -184,52 +180,52 @@ export default function ERPSavingsPanel({ refreshKey = 0 }: ERPSavingsPanelProps
           <ClipboardList className="w-8 h-8 text-slate-600 mb-1" />
           <p className="text-sm font-medium text-slate-300">Belum ada rit pada tenant ini</p>
           <p className="text-xs text-slate-500 max-w-md text-center">
-            Buat aset truk lalu buat rit pengiriman melalui tombol <strong>Onboard Armada</strong>. Angka
+            Buat aset truk lalu buat rit pengiriman melalui tombol <strong>Tambah armada</strong>. Angka
             penghematan baru muncul setelah waktu/BBM aktual diisi — sistem tidak menampilkan persentase karangan.
           </p>
         </div>
       ) : (
         <>
           {/* KPI grid */}
-          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-px bg-white/10 border border-white/10 rounded-xl overflow-hidden">
             {[
               {
-                label: 'Total Rit',
+                label: 'Total rit',
                 value: `${totals?.total_trips ?? 0}`,
                 sub: `${totals?.active_trips ?? 0} aktif • ${totals?.delivered_trips ?? 0} terkirim`,
                 icon: Truck,
                 color: 'text-slate-200',
               },
               {
-                label: 'Reroute Sukses',
+                label: 'Reroute sukses',
                 value: `${totals?.reroute_success_count ?? 0}`,
                 sub: `Rasio ${formatNumber(totals?.reroute_success_rate_pct)}%`,
                 icon: CheckCircle2,
                 color: 'text-emerald-400',
               },
               {
-                label: 'Rit Gagal',
+                label: 'Rit gagal',
                 value: `${totals?.failed_trips ?? 0}`,
                 sub: `${totals?.reroute_failed_count ?? 0} reroute merugi`,
                 icon: XCircle,
                 color: 'text-rose-400',
               },
               {
-                label: 'Waktu Hemat',
+                label: 'Waktu hemat',
                 value: `${formatNumber(totals?.time_saved_hours)} jam`,
                 sub: `SLA terpenuhi ${formatNumber(totals?.sla_compliance_pct)}%`,
                 icon: Clock,
                 color: 'text-amber-300',
               },
               {
-                label: 'BBM Hemat',
+                label: 'BBM hemat',
                 value: `${formatNumber(totals?.fuel_saved_liters)} L`,
                 sub: 'Biosolar/Dexlite Pertamina',
                 icon: Fuel,
                 color: 'text-cyan-300',
               },
               {
-                label: 'Biaya Hemat',
+                label: 'Biaya hemat',
                 value: formatIDR(totals?.cost_saved_idr),
                 sub: `Efisiensi ${formatNumber(totals?.cost_efficiency_pct)}%`,
                 icon: Wallet,
@@ -238,66 +234,66 @@ export default function ERPSavingsPanel({ refreshKey = 0 }: ERPSavingsPanelProps
             ].map((kpi) => (
               <div
                 key={kpi.label}
-                className="bg-[#0c1017] border border-white/10 rounded-xl p-3.5 shadow-lg"
+                className="bg-[#0c1017] p-3.5"
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400">{kpi.label}</span>
+                  <span className="text-xs font-medium text-slate-400">{kpi.label}</span>
                   <kpi.icon className={`w-3.5 h-3.5 ${kpi.color}`} />
                 </div>
-                <p className={`text-lg font-mono font-bold tabular-nums leading-tight ${kpi.color}`}>{kpi.value}</p>
-                <p className="text-[10px] text-slate-500 font-mono mt-0.5 truncate">{kpi.sub}</p>
+                <p className={`text-lg font-bold tabular-nums leading-tight ${kpi.color}`}>{kpi.value}</p>
+                <p className="text-xs text-slate-500 tabular-nums mt-0.5 truncate">{kpi.sub}</p>
               </div>
             ))}
           </div>
 
           {/* Savings split + business explanation */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="lg:col-span-2 bg-[#0c1017] border border-white/10 rounded-xl p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-xs font-semibold text-slate-200 uppercase tracking-wider">
-                  Rincian Penghematan (Split Biaya)
+            <div className="lg:col-span-2 bg-[#0c1017] border border-white/10 rounded-xl overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+                <h3 className="text-xs font-medium text-slate-200">
+                  Rincian penghematan
                 </h3>
-                <span className="text-[10px] font-mono text-slate-500">
+                <span className="text-xs text-slate-500 tabular-nums">
                   Baseline {formatIDR(totals?.baseline_cost_idr)} → Aktual {formatIDR(totals?.actual_cost_idr)}
                 </span>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-white/10">
                 {[
                   { label: 'BBM', value: totals?.savings_breakdown.fuel_idr, hint: 'Volume × harga Pertamina' },
                   { label: 'Tol BPJT', value: totals?.savings_breakdown.toll_idr, hint: 'Tarif resmi per golongan' },
-                  { label: 'Susut Pangan', value: totals?.savings_breakdown.spoilage_idr, hint: '1 − e^(−δ·t) per tier' },
-                  { label: 'Waktu Sopir', value: totals?.savings_breakdown.labor_idr, hint: 'Jam × upah lembur' },
+                  { label: 'Susut pangan', value: totals?.savings_breakdown.spoilage_idr, hint: '1 − e^(−δ·t) per tier' },
+                  { label: 'Waktu sopir', value: totals?.savings_breakdown.labor_idr, hint: 'Jam × upah lembur' },
                 ].map((item) => (
-                  <div key={item.label} className="p-2.5 rounded-lg bg-[#121822] border border-white/5">
-                    <span className="block text-[10px] font-mono uppercase tracking-wider text-slate-400">
+                  <div key={item.label} className="bg-[#0c1017] px-3 py-2.5">
+                    <span className="block text-xs font-medium text-slate-400">
                       {item.label}
                     </span>
                     <span
-                      className={`block text-sm font-mono font-bold tabular-nums mt-0.5 ${
+                      className={`block text-sm font-bold tabular-nums mt-0.5 ${
                         Number(item.value ?? 0) >= 0 ? 'text-emerald-300' : 'text-rose-300'
                       }`}
                     >
                       {formatIDR(item.value)}
                     </span>
-                    <span className="block text-[10px] text-slate-500 mt-0.5">{item.hint}</span>
+                    <span className="block text-xs text-slate-500 mt-0.5">{item.hint}</span>
                   </div>
                 ))}
               </div>
-              <div className="mt-3 pt-3 border-t border-white/5 flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-slate-400">
-                <span className="flex items-center gap-1.5">
+              <div className="px-4 py-2.5 border-t border-white/10 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
+                <span className="flex items-center gap-1.5 tabular-nums">
                   <ArrowDownRight className="w-3.5 h-3.5 text-emerald-400" />
-                  Rata-rata hemat per rit: <strong className="text-emerald-300">{formatIDR(totals?.avg_cost_saved_per_trip_idr)}</strong>
+                  Rata-rata hemat per rit: <strong className="text-emerald-300 tabular-nums">{formatIDR(totals?.avg_cost_saved_per_trip_idr)}</strong>
                 </span>
-                <span>Terakhir dihitung: {formatDateTime(summary?.generated_at)}</span>
+                <span className="tabular-nums">Terakhir dihitung: {formatDateTime(summary?.generated_at)}</span>
               </div>
             </div>
 
             <div className="bg-[#0c1017] border border-white/10 rounded-xl p-4">
               <div className="flex items-center gap-2 mb-2">
                 <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                <h3 className="text-xs font-semibold text-slate-200 uppercase tracking-wider">Cara Membaca</h3>
+                <h3 className="text-xs font-medium text-slate-200">Cara membaca</h3>
               </div>
-              <ul className="space-y-2 text-[11px] text-slate-400 leading-relaxed">
+              <ul className="space-y-2 text-xs text-slate-400 leading-relaxed">
                 {(summary?.business_notes || []).map((note, idx) => (
                   <li key={idx} className="flex items-start gap-1.5">
                     <span className="w-1 h-1 rounded-full bg-emerald-400 mt-1.5 shrink-0" />
@@ -320,39 +316,58 @@ export default function ERPSavingsPanel({ refreshKey = 0 }: ERPSavingsPanelProps
             <div className="bg-[#0c1017] border border-white/10 rounded-xl overflow-hidden">
               <div className="px-4 py-3 border-b border-white/10 flex items-center gap-2">
                 <Building2 className="w-4 h-4 text-amber-300" />
-                <h3 className="text-xs font-semibold text-slate-200 uppercase tracking-wider">
-                  Agregat per Perusahaan
+                <h3 className="text-xs font-medium text-slate-200">
+                  Agregat per perusahaan
                 </h3>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full text-left font-mono text-xs">
-                  <thead className="bg-[#121822] text-slate-400">
-                    <tr>
-                      <th className="py-2.5 px-3">Tenant</th>
-                      <th className="py-2.5 px-3">Rit</th>
-                      <th className="py-2.5 px-3">Sukses</th>
-                      <th className="py-2.5 px-3">Gagal</th>
-                      <th className="py-2.5 px-3">Waktu Hemat</th>
-                      <th className="py-2.5 px-3">BBM Hemat</th>
-                      <th className="py-2.5 px-3">Biaya Hemat</th>
-                      <th className="py-2.5 px-3">Efisiensi</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5 text-slate-300">
+                <Table className="w-full">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="h-11 bg-[#0c1017] font-medium">Tenant</TableHead>
+                      <TableHead className="h-11 bg-[#0c1017] text-right font-medium">Rit</TableHead>
+                      <TableHead className="h-11 bg-[#0c1017] text-right font-medium">Sukses</TableHead>
+                      <TableHead className="h-11 bg-[#0c1017] text-right font-medium">Gagal</TableHead>
+                      <TableHead className="h-11 bg-[#0c1017] text-right font-medium">Waktu hemat</TableHead>
+                      <TableHead className="h-11 bg-[#0c1017] text-right font-medium">BBM hemat</TableHead>
+                      <TableHead className="h-11 bg-[#0c1017] text-right font-medium">Biaya hemat</TableHead>
+                      <TableHead className="h-11 bg-[#0c1017] text-right font-medium">Efisiensi</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {(summary?.per_company || []).map((row) => (
-                      <tr key={row.company_id} className="hover:bg-white/5">
-                        <td className="py-2.5 px-3 text-white font-semibold">{row.company_id}</td>
-                        <td className="py-2.5 px-3 tabular-nums">{row.total_trips}</td>
-                        <td className="py-2.5 px-3 tabular-nums text-emerald-300">{row.reroute_success_count}</td>
-                        <td className="py-2.5 px-3 tabular-nums text-rose-300">{row.failed_trips}</td>
-                        <td className="py-2.5 px-3 tabular-nums">{formatNumber(row.time_saved_hours)} jam</td>
-                        <td className="py-2.5 px-3 tabular-nums">{formatNumber(row.fuel_saved_liters)} L</td>
-                        <td className="py-2.5 px-3 tabular-nums text-emerald-300">{formatIDR(row.cost_saved_idr)}</td>
-                        <td className="py-2.5 px-3 tabular-nums">{formatNumber(row.cost_efficiency_pct)}%</td>
-                      </tr>
+                      <TableRow key={row.company_id} className="hover:bg-white/5">
+                        <TableCell className="py-3">
+                          <span className="font-medium text-white">{row.company_id}</span>
+                        </TableCell>
+                        <TableCell className="py-3">
+                          <div className="text-right tabular-nums">{row.total_trips}</div>
+                        </TableCell>
+                        <TableCell className="py-3">
+                          <div className="text-right tabular-nums">{row.reroute_success_count}</div>
+                        </TableCell>
+                        <TableCell className="py-3">
+                          <div className="flex items-center justify-end gap-1.5 tabular-nums">
+                            {row.failed_trips > 0 && <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />}
+                            <span>{row.failed_trips}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="py-3">
+                          <div className="text-right tabular-nums">{formatNumber(row.time_saved_hours)} jam</div>
+                        </TableCell>
+                        <TableCell className="py-3">
+                          <div className="text-right tabular-nums">{formatNumber(row.fuel_saved_liters)} L</div>
+                        </TableCell>
+                        <TableCell className="py-3">
+                          <div className="text-right tabular-nums">{formatIDR(row.cost_saved_idr)}</div>
+                        </TableCell>
+                        <TableCell className="py-3">
+                          <div className="text-right tabular-nums">{formatNumber(row.cost_efficiency_pct)}%</div>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
             </div>
           )}
@@ -362,17 +377,17 @@ export default function ERPSavingsPanel({ refreshKey = 0 }: ERPSavingsPanelProps
             <div className="bg-[#0c1017] border border-white/10 rounded-xl overflow-hidden">
               <div className="px-4 py-3 border-b border-white/10 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <Route className="w-4 h-4 text-cyan-300" />
-                  <h3 className="text-xs font-semibold text-slate-200 uppercase tracking-wider">
-                    Rincian per Rit ({filteredTrips.length})
+                  <Route className="w-4 h-4 text-slate-400" />
+                  <h3 className="text-xs font-medium text-slate-200 tabular-nums">
+                    Rincian per rit ({filteredTrips.length})
                   </h3>
                 </div>
                 <select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value as 'ALL' | TravelStatus)}
-                  className="bg-[#121822] border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-cyan-500/50 cursor-pointer"
+                  className="bg-transparent border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none cursor-pointer"
                 >
-                  <option value="ALL">Semua Status</option>
+                  <option value="ALL">Semua status</option>
                   <option value="planned">Direncanakan</option>
                   <option value="moving">Berjalan</option>
                   <option value="rerouted">Dialihkan</option>
@@ -382,104 +397,93 @@ export default function ERPSavingsPanel({ refreshKey = 0 }: ERPSavingsPanelProps
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full text-left font-mono text-xs">
-                  <thead className="bg-[#121822] text-slate-400">
-                    <tr>
-                      <th className="py-2.5 px-3">ID Rit / Waktu</th>
-                      <th className="py-2.5 px-3">Truk</th>
-                      <th className="py-2.5 px-3">Rute</th>
-                      <th className="py-2.5 px-3">Status</th>
-                      <th className="py-2.5 px-3">Reroute</th>
-                      <th className="py-2.5 px-3">Waktu</th>
-                      <th className="py-2.5 px-3">BBM</th>
-                      <th className="py-2.5 px-3">Biaya</th>
-                      <th className="py-2.5 px-3">Efisiensi</th>
-                      <th className="py-2.5 px-3">Hedging</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
+                <Table className="w-full">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="h-11 bg-[#0c1017] font-medium">ID rit / waktu</TableHead>
+                      <TableHead className="h-11 bg-[#0c1017] font-medium">Truk</TableHead>
+                      <TableHead className="h-11 bg-[#0c1017] font-medium">Rute</TableHead>
+                      <TableHead className="h-11 bg-[#0c1017] font-medium">Status</TableHead>
+                      <TableHead className="h-11 bg-[#0c1017] font-medium">Reroute</TableHead>
+                      <TableHead className="h-11 bg-[#0c1017] text-right font-medium">Waktu</TableHead>
+                      <TableHead className="h-11 bg-[#0c1017] text-right font-medium">BBM</TableHead>
+                      <TableHead className="h-11 bg-[#0c1017] text-right font-medium">Biaya</TableHead>
+                      <TableHead className="h-11 bg-[#0c1017] text-right font-medium">Efisiensi</TableHead>
+                      <TableHead className="h-11 bg-[#0c1017] font-medium">Hedging</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {filteredTrips.length === 0 ? (
-                      <tr>
-                        <td colSpan={10} className="py-10 text-center text-slate-500">
+                      <TableRow>
+                        <TableCell colSpan={10} className="py-10 text-center text-slate-500">
                           Tidak ada rit dengan status ini.
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ) : (
                       filteredTrips.map((trip) => (
-                        <tr key={trip.id} className="hover:bg-white/5 align-top">
-                          <td className="py-2.5 px-3 whitespace-nowrap">
-                            <span className="block text-white font-semibold">{trip.id}</span>
-                            <span className="block text-[10px] text-slate-500">{formatDateTime(trip.created_at)}</span>
-                          </td>
-                          <td className="py-2.5 px-3">
+                        <TableRow key={trip.id} className="hover:bg-white/5 align-top">
+                          <TableCell className="py-3 whitespace-nowrap">
+                            <span className="block text-white font-medium">{trip.id}</span>
+                            <span className="block text-xs text-slate-500 tabular-nums">{formatDateTime(trip.created_at)}</span>
+                          </TableCell>
+                          <TableCell className="py-3">
                             <span className="block text-slate-200">{trip.truck_id}</span>
-                            <span className="block text-[10px] text-slate-500 truncate max-w-[140px]">
+                            <span className="block text-xs text-slate-500 truncate max-w-[140px]">
                               {trip.truck_name || '—'}
                             </span>
-                          </td>
-                          <td className="py-2.5 px-3">
+                          </TableCell>
+                          <TableCell className="py-3">
                             <span className="block text-slate-200">
                               {trip.origin_name} → {trip.destination_name}
                             </span>
-                            <span className="block text-[10px] text-slate-500">
+                            <span className="block text-xs text-slate-500 tabular-nums">
                               {trip.commodity_key} • {formatNumber(trip.cargo_tonnage)} ton
                             </span>
-                          </td>
-                          <td className="py-2.5 px-3">
-                            <span
-                              className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold border ${
-                                trip.status === 'delivered'
-                                  ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/25'
-                                  : trip.status === 'failed'
-                                  ? 'bg-rose-500/10 text-rose-300 border-rose-500/25'
-                                  : trip.status === 'rerouted'
-                                  ? 'bg-cyan-500/10 text-cyan-300 border-cyan-500/25'
-                                  : 'bg-slate-500/10 text-slate-300 border-slate-500/25'
-                              }`}
-                            >
+                          </TableCell>
+                          <TableCell className="py-3">
+                            <span className="flex items-center gap-1.5 text-xs text-slate-300">
+                              {trip.status === 'failed' && <span className="w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0" />}
                               {STATUS_LABEL[trip.status] || trip.status}
                             </span>
-                          </td>
-                          <td className="py-2.5 px-3">
-                            {trip.rerouted ? (
-                              <span className="text-cyan-300">Ya</span>
-                            ) : (
-                              <span className="text-slate-500">Tidak</span>
-                            )}
-                          </td>
-                          <td className="py-2.5 px-3 tabular-nums">
-                            <span className={trip.saved_time_hours >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
+                          </TableCell>
+                          <TableCell className="py-3">
+                            <span className="text-xs text-slate-300">
+                              {trip.rerouted ? 'Ya' : 'Tidak'}
+                            </span>
+                          </TableCell>
+                          <TableCell className="py-3">
+                            <div className="text-right text-xs tabular-nums text-slate-300">
                               {formatNumber(trip.saved_time_hours)} jam
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3 tabular-nums">
-                            <span className={trip.saved_fuel_liters >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-3">
+                            <div className="text-right text-xs tabular-nums text-slate-300">
                               {formatNumber(trip.saved_fuel_liters)} L
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3 tabular-nums">
-                            <span className={trip.saved_cost_idr >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-3">
+                            <div className="text-right text-xs tabular-nums text-slate-300">
                               {formatIDR(trip.saved_cost_idr)}
-                            </span>
-                            <span className="block text-[10px] text-slate-500">
+                            </div>
+                            <div className="text-right text-xs text-slate-500 tabular-nums">
                               BBM {formatIDR(trip.savings_breakdown.fuel_idr)} • Tol{' '}
                               {formatIDR(trip.savings_breakdown.toll_idr)}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3 tabular-nums">
-                            <span className={trip.efficiency_pct >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-3">
+                            <div className="text-right text-xs tabular-nums text-slate-300">
                               {formatNumber(trip.efficiency_pct)}%
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3">
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-3">
                             {trip.hedging_policy ? (
-                              <span className="text-[10px] text-slate-300">{trip.hedging_policy}</span>
+                              <span className="text-xs text-slate-300">{trip.hedging_policy}</span>
                             ) : (
                               <button
                                 type="button"
                                 onClick={() => handleSolveHedging(trip.id)}
                                 disabled={solvingTripId === trip.id}
-                                className="px-2 py-1 rounded border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 text-[10px] font-semibold hover:bg-cyan-500/20 transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1"
+                                className="px-2 py-1 rounded border border-white/10 text-slate-200 text-xs font-medium hover:bg-white/5 transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1"
                                 title="Hitung matriks Continue / Reroute / Hold untuk rit ini"
                               >
                                 {solvingTripId === trip.id && (
@@ -488,14 +492,14 @@ export default function ERPSavingsPanel({ refreshKey = 0 }: ERPSavingsPanelProps
                                 Hitung
                               </button>
                             )}
-                          </td>
-                        </tr>
+                          </TableCell>
+                        </TableRow>
                       ))
                     )}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
-              <div className="px-4 py-2.5 border-t border-white/5 text-[10px] font-mono text-slate-500">
+              <div className="px-4 py-2.5 border-t border-white/10 text-xs text-slate-500">
                 Nilai negatif ditampilkan sebagai kerugian aktual, bukan disembunyikan.
               </div>
             </div>

@@ -3,17 +3,26 @@
 import React from 'react';
 import {
   ShieldAlert,
-  Truck,
   ChevronRight,
   X
 } from 'lucide-react';
 import type { ImpactedVehicleAssessment, DisruptionImpactResponse } from '@/lib/types';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/base-ui/table';
+
+import { resolveAlertQueueClasses } from './mapDockLayout';
 
 interface DispatcherAlertQueueProps {
   impactData: DisruptionImpactResponse | null;
   selectedVehicleId: string | null;
   onSelectVehicle: (assessment: ImpactedVehicleAssessment) => void;
   onDismiss?: () => void;
+  isCrisisDrawerOpen?: boolean;
+}
+
+function policyLabel(policy: string): string {
+  if (policy === 'REROUTE') return 'Alih';
+  if (policy === 'HOLD') return 'Tahan';
+  return 'Lanjut';
 }
 
 export function DispatcherAlertQueue({
@@ -21,6 +30,7 @@ export function DispatcherAlertQueue({
   selectedVehicleId,
   onSelectVehicle,
   onDismiss,
+  isCrisisDrawerOpen = false,
 }: DispatcherAlertQueueProps) {
   if (!impactData || !impactData.impacted_vehicles || impactData.impacted_vehicles.length === 0) {
     return null;
@@ -39,39 +49,30 @@ export function DispatcherAlertQueue({
   );
 
   return (
-    <div className="absolute top-20 left-3 right-3 sm:left-4 z-30 pointer-events-auto max-w-4xl max-w-[calc(100vw-1.5rem)] lg:max-w-[calc(100%-410px)] animate-in slide-in-from-top-3 duration-200">
-      <div className="bg-[#0c1017] border border-[#1c2432] rounded-lg shadow-2xl p-3 text-slate-200">
-        {/* Header Ribbon */}
-        <div className="flex items-center justify-between pb-2 mb-2 border-b border-[#1c2432]">
-          <div className="flex items-center gap-2">
-            <div className="flex items-center justify-center w-6 h-6 rounded bg-rose-950/80 border border-rose-500/40 text-rose-400">
-              <ShieldAlert className="w-3.5 h-3.5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-mono font-bold uppercase tracking-wider text-white">
-                  DISPATCHER ALERT QUEUE
-                </span>
-                <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-rose-950/80 text-rose-400 border border-rose-500/40 font-bold">
-                  {criticalCount} ARMADA KRITIS
-                </span>
-                <span className="text-xs font-mono text-slate-400 hidden sm:inline">
-                  • Total Muatan Terancam: {formatIDR(totalValueAtRisk)}
-                </span>
-              </div>
-            </div>
+    <div className={resolveAlertQueueClasses({ isCrisisDrawerOpen })}>
+      <div className="bg-[#0c1017] border border-white/10 rounded-xl overflow-hidden text-slate-200">
+        <div className="flex items-center justify-between px-3 py-2.5 border-b border-white/10">
+          <div className="flex items-center gap-2 min-w-0">
+            <ShieldAlert className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+            <span className="text-xs font-medium text-white">
+              Peringatan
+            </span>
+            <span className="flex items-center gap-1.5 text-xs text-slate-400 tabular-nums">
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
+              {criticalCount} kritis
+            </span>
+            <span className="text-xs text-slate-500 hidden sm:inline tabular-nums">
+              Muatan {formatIDR(totalValueAtRisk)}
+            </span>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-xs font-sans text-slate-400 hidden md:inline">
-              Sistem Pendukung Keputusan (DSS) Pangan
-            </span>
             {onDismiss && (
               <button
                 type="button"
                 onClick={onDismiss}
-                className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
-                title="Tutup Antrean Peringatan"
+                className="p-1 rounded text-slate-400 hover:text-white hover:bg-white/5 transition cursor-pointer"
+                title="Tutup peringatan"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -79,80 +80,83 @@ export function DispatcherAlertQueue({
           </div>
         </div>
 
-        {/* Impacted Fleet Cards Strip */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-48 overflow-y-auto no-scrollbar">
-          {impactData.impacted_vehicles.map((item) => {
-            const isSelected = selectedVehicleId === item.vehicle_id;
-            const isCritical = item.optimal_policy === 'REROUTE' || item.late_arrival_risk_pct >= 70;
+        <div className="overflow-x-auto">
+          <Table className="w-full">
+            <TableHeader>
+              <TableRow>
+                <TableHead className="h-11 bg-[#0c1017] font-medium">Kendaraan</TableHead>
+                <TableHead className="h-11 bg-[#0c1017] font-medium">Kebijakan</TableHead>
+                <TableHead className="h-11 bg-[#0c1017] font-medium">Muatan</TableHead>
+                <TableHead className="h-11 bg-[#0c1017] text-right font-medium">Risiko</TableHead>
+                <TableHead className="h-11 bg-[#0c1017] text-right font-medium">Susut</TableHead>
+                <TableHead className="h-11 bg-[#0c1017] text-right font-medium">Hemat</TableHead>
+                <TableHead className="h-11 bg-[#0c1017] font-medium"><span className="sr-only">Aksi</span></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {impactData.impacted_vehicles.map((item) => {
+                const isSelected = selectedVehicleId === item.vehicle_id;
+                const isCritical = item.optimal_policy === 'REROUTE' || item.late_arrival_risk_pct >= 70;
 
-            return (
-              <div
-                key={item.vehicle_id}
-                onClick={() => onSelectVehicle(item)}
-                className={`p-2.5 rounded border transition-all cursor-pointer flex flex-col justify-between ${
-                  isSelected
-                    ? 'bg-cyan-950/40 border-cyan-400/80 shadow-md'
-                    : isCritical
-                      ? 'bg-[#121822] hover:bg-rose-950/20 border-rose-500/30 hover:border-rose-400/60'
-                      : 'bg-[#121822] hover:bg-slate-800/60 border-[#1c2432]'
-                }`}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Truck className={`w-3.5 h-3.5 shrink-0 ${isCritical ? 'text-rose-400' : 'text-cyan-400'}`} />
-                    <span className="text-xs font-mono font-bold text-white">
-                      {item.vehicle_id}
-                    </span>
-                    <span className="text-xs font-sans text-slate-400 truncate">
-                      {item.vehicle_name}
-                    </span>
-                  </div>
-
-                  <span className={`text-xs font-mono px-1.5 py-0.5 rounded uppercase font-bold shrink-0 ${
-                    item.optimal_policy === 'REROUTE'
-                      ? 'bg-amber-950 text-amber-300 border border-amber-500/40'
-                      : item.optimal_policy === 'CONTINUE'
-                        ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/40'
-                        : 'bg-slate-900 text-slate-300 border border-slate-700'
-                  }`}>
-                    {item.optimal_policy}
-                  </span>
-                </div>
-
-                {/* Cargo & Risk Details */}
-                <div className="mt-1.5 flex items-center justify-between text-xs font-sans text-slate-300">
-                  <span className="font-semibold text-slate-200">
-                    {item.cargo_tonnage}T {item.commodity_key.replace(/_/g, ' ')}
-                  </span>
-                  <span className="font-mono text-rose-400 font-bold">
-                    Risiko Terlambat {item.late_arrival_risk_pct.toFixed(0)}%
-                  </span>
-                </div>
-
-                {/* Economic Value & Recommendation CTA */}
-                <div className="mt-2 pt-1.5 border-t border-[#1c2432] flex items-center justify-between gap-2">
-                  <span className="text-xs font-mono text-slate-400">
-                    Susut: <strong className="text-rose-300">{formatIDR(item.spoilage_loss_idr)}</strong>
-                  </span>
-                  <span className="text-xs font-mono text-slate-400">
-                    Hemat: <strong className="text-emerald-300">{formatIDR(item.net_savings_idr)}</strong>
-                  </span>
-
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onSelectVehicle(item);
-                    }}
-                    className="inline-flex items-center gap-1 text-xs font-sans font-semibold text-cyan-400 hover:text-cyan-300 cursor-pointer shrink-0"
+                return (
+                  <TableRow
+                    key={item.vehicle_id}
+                    data-state={isSelected ? 'selected' : undefined}
+                    onClick={() => onSelectVehicle(item)}
+                    className="hover:bg-white/5 cursor-pointer data-[state=selected]:bg-white/5"
                   >
-                    <span>Mitigasi Rute</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+                    <TableCell className="py-3">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        {isCritical && <span className="w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0" />}
+                        <span className="text-xs font-medium text-white tabular-nums">
+                          {item.vehicle_id}
+                        </span>
+                        <span className="text-xs text-slate-400 truncate">
+                          {item.vehicle_name}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="py-3">
+                      <span className="text-xs text-slate-300">{policyLabel(item.optimal_policy)}</span>
+                    </TableCell>
+                    <TableCell className="py-3">
+                      <span className="text-xs text-slate-300 tabular-nums">
+                        {item.cargo_tonnage}T {item.commodity_key.replace(/_/g, ' ')}
+                      </span>
+                    </TableCell>
+                    <TableCell className="py-3">
+                      <div className="text-right text-xs text-slate-300 tabular-nums">
+                        {item.late_arrival_risk_pct.toFixed(0)}%
+                      </div>
+                    </TableCell>
+                    <TableCell className="py-3">
+                      <div className="text-right text-xs text-slate-300 tabular-nums">
+                        {formatIDR(item.spoilage_loss_idr)}
+                      </div>
+                    </TableCell>
+                    <TableCell className="py-3">
+                      <div className="text-right text-xs text-slate-300 tabular-nums">
+                        {formatIDR(item.net_savings_idr)}
+                      </div>
+                    </TableCell>
+                    <TableCell className="py-3">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelectVehicle(item);
+                        }}
+                        className="inline-flex items-center gap-1 text-xs font-medium text-slate-300 hover:text-white cursor-pointer shrink-0"
+                      >
+                        <span>Mitigasi</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
         </div>
       </div>
     </div>

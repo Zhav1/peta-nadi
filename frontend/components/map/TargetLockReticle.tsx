@@ -100,8 +100,8 @@ export function TargetLockReticle({
       </svg>
 
       {/* Callsign Target Badge */}
-      <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded bg-[#0c1017] border border-[#1c2432] text-xs font-mono tabular-nums text-white whitespace-nowrap shadow-xl">
-        ARMADA: {callsign}
+ <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded bg-[#0c1017] border border-white/10 text-xs tabular-nums text-slate-300 whitespace-nowrap shadow-xl">
+ Armada · {callsign}
       </div>
     </div>
   );

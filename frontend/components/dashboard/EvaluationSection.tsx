@@ -12,7 +12,7 @@ import {
   FileSpreadsheet,
   CheckCircle2,
   TrendingUp,
-  Sliders,
+
   AlertTriangle,
   History,
   Check,
@@ -176,7 +176,7 @@ export default function EvaluationSection({
           <div className="bg-[#0c1017] border border-white/10 p-5 rounded-xl shadow-xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 divide-y lg:divide-y-0 lg:divide-x divide-white/10">
             {/* Metric 1: Precision */}
             <div className="lg:px-4 first:pl-0 last:pr-0 py-3 lg:py-0">
-              <span className="text-xs font-mono text-slate-400 uppercase tracking-wider block mb-1">Presisi Deteksi</span>
+ <span className="text-xs font-mono text-slate-400 tracking-wide block mb-1">Presisi deteksi</span>
               {precision !== null ? (
                 <p className="text-2xl font-mono font-bold text-white tabular-nums">{(precision * 100).toFixed(1)}%</p>
               ) : (
@@ -187,7 +187,7 @@ export default function EvaluationSection({
 
             {/* Metric 2: Recall */}
             <div className="lg:px-4 first:pl-0 last:pr-0 py-3 lg:py-0">
-              <span className="text-xs font-mono text-slate-400 uppercase tracking-wider block mb-1">Sensitivitas (Recall)</span>
+ <span className="text-xs font-mono text-slate-400 tracking-wide block mb-1">Sensitivitas</span>
               {recall !== null ? (
                 <p className="text-2xl font-mono font-bold text-white tabular-nums">{(recall * 100).toFixed(1)}%</p>
               ) : (
@@ -198,7 +198,7 @@ export default function EvaluationSection({
 
             {/* Metric 3: F1-Score */}
             <div className="lg:px-4 first:pl-0 last:pr-0 py-3 lg:py-0">
-              <span className="text-xs font-mono text-slate-400 uppercase tracking-wider block mb-1">Skor F1 Komposit</span>
+ <span className="text-xs font-mono text-slate-400 tracking-wide block mb-1">Skor F1</span>
               {f1Score !== null ? (
                 <p className="text-2xl font-mono font-bold text-white tabular-nums">{f1Score.toFixed(3)}</p>
               ) : (
@@ -209,7 +209,7 @@ export default function EvaluationSection({
 
             {/* Metric 4: Brier Score */}
             <div className="lg:px-4 first:pl-0 last:pr-0 py-3 lg:py-0">
-              <span className="text-xs font-mono text-slate-400 uppercase tracking-wider block mb-1">Brier Kalibrasi</span>
+ <span className="text-xs font-mono text-slate-400 tracking-wide block mb-1">Brier</span>
               {brierScore !== null ? (
                 <p className="text-2xl font-mono font-bold text-white tabular-nums">{brierScore.toFixed(4)}</p>
               ) : (
@@ -220,7 +220,7 @@ export default function EvaluationSection({
 
             {/* Metric 5: Latency */}
             <div className="lg:px-4 first:pl-0 last:pr-0 py-3 lg:py-0">
-              <span className="text-xs font-mono text-slate-400 uppercase tracking-wider block mb-1">Latensi Inferensi</span>
+ <span className="text-xs font-mono text-slate-400 tracking-wide block mb-1">Latensi</span>
               {latencyMs !== null ? (
                 <p className="text-2xl font-mono font-bold text-white tabular-nums">{latencyMs.toFixed(1)} ms</p>
               ) : (
@@ -260,17 +260,17 @@ export default function EvaluationSection({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 font-mono text-xs">
-            <span className="px-2.5 py-1 rounded bg-[#121822] text-emerald-400 border border-[#1c2432] font-medium flex items-center gap-1.5">
-              <Sliders className="w-3.5 h-3.5 text-slate-400" />
-              Laju Rekalibrasi: η = 0.05
+ <div className="flex items-center gap-2 font-mono tabular-nums text-xs">
+ <span className="flex items-center gap-1.5 text-xs text-slate-400">
+ <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+ Rekalibrasi η 0,05
             </span>
           </div>
         </div>
 
         {/* Adaptive Sensor Weights Banner */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 my-4">
-          <div className="p-3 rounded-lg bg-[#121822] border border-[#1c2432] flex items-center justify-between font-mono text-xs">
+ <div className="p-3 border border-[#1c2432] rounded-lg flex items-center justify-between font-mono tabular-nums text-xs">
             <span className="text-slate-400">Bobot Sensor Cuaca (BMKG/NWP):</span>
             <div className="flex items-center gap-1.5 font-bold">
               <span className="text-slate-400">0.35</span>
@@ -279,7 +279,7 @@ export default function EvaluationSection({
             </div>
           </div>
 
-          <div className="p-3 rounded-lg bg-[#121822] border border-[#1c2432] flex items-center justify-between font-mono text-xs">
+ <div className="p-3 border border-[#1c2432] rounded-lg flex items-center justify-between font-mono tabular-nums text-xs">
             <span className="text-slate-400">Bobot Trafik Jalan (TomTom):</span>
             <div className="flex items-center gap-1.5 font-bold">
               <span className="text-slate-400">0.35</span>
@@ -288,7 +288,7 @@ export default function EvaluationSection({
             </div>
           </div>
 
-          <div className="p-3 rounded-lg bg-[#121822] border border-[#1c2432] flex items-center justify-between font-mono text-xs">
+ <div className="p-3 border border-[#1c2432] rounded-lg flex items-center justify-between font-mono tabular-nums text-xs">
             <span className="text-slate-400">Bobot Berita & OSINT (Antara):</span>
             <div className="flex items-center gap-1.5 font-bold">
               <span className="text-slate-400">0.30</span>
@@ -302,17 +302,17 @@ export default function EvaluationSection({
         <div className="overflow-x-auto -mx-5 px-5">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="border-b border-[#1c2432] text-xs font-mono text-slate-400 uppercase tracking-wider">
-                <th className="py-2.5 px-3">ID Log / Waktu</th>
-                <th className="py-2.5 px-3">Insiden Disrupsi</th>
-                <th className="py-2.5 px-3">Horizon</th>
-                <th className="py-2.5 px-3 text-right">Kemacetan Nyata</th>
-                <th className="py-2.5 px-3 text-right">Deviasi Harga</th>
-                <th className="py-2.5 px-3">Verifikator Lapangan</th>
-                <th className="py-2.5 px-3">Catatan Observasi</th>
+ <tr className="border-b border-[#1c2432] text-xs font-mono text-slate-400 tracking-wide">
+ <th className="py-2.5 px-3 font-medium">ID log / waktu</th>
+ <th className="py-2.5 px-3 font-medium">Insiden</th>
+ <th className="py-2.5 px-3 font-medium">Horizon</th>
+ <th className="py-2.5 px-3 text-right font-medium">Kemacetan</th>
+ <th className="py-2.5 px-3 text-right font-medium">Deviasi harga</th>
+ <th className="py-2.5 px-3 font-medium">Verifikator</th>
+ <th className="py-2.5 px-3 font-medium">Catatan</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#1c2432] font-mono">
+ <tbody className="divide-y divide-[#1c2432] font-mono tabular-nums">
               {outcomes.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-8 text-center text-xs text-slate-500 font-mono">
@@ -334,7 +334,7 @@ export default function EvaluationSection({
                     </td>
 
                     <td className="py-3 px-3 whitespace-nowrap">
-                      <span className="px-2 py-0.5 rounded bg-white/10 text-slate-200 border border-white/20 text-xs">
+ <span className="text-xs text-slate-300">
                         {item.horizon}
                       </span>
                     </td>

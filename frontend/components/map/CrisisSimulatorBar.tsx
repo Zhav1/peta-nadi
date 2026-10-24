@@ -30,6 +30,11 @@ import type { CrisisType, Severity, RouteRecommendation } from '@/lib/types';
 import { formatNodeDisplay, prettyNodeSlug, resolveNodeDisplayInfo, type NodeDisplayInfo } from '@/lib/formatNode';
 import { HAZARD_RADIUS_OPTIONS_KM, type TransportModality } from '@/lib/aiDynamicRouter';
 import { resolveMapDockClasses } from '@/components/dashboard/mapDockLayout';
+import {
+ Popover,
+ PopoverContent,
+ PopoverTrigger,
+} from '@/components/base-ui/popover';
 
 export interface CorridorVisibilityState {
   land: boolean;
@@ -143,12 +148,10 @@ export function CrisisSimulatorBar({
 
   // Route provenance: interpolated geometry is explicitly labeled, never shown as a live road.
   const hasOfflineCorridors = activeCorridors.some(
-    (route) => typeof route.description === 'string' && /SIMULASI\/OFFLINE/i.test(route.description)
+ (route) => typeof route.description === 'string' && /simulasi/i.test(route.description)
   );
   const corridorProvenance = hasOfflineCorridors
-    ? { label: 'SIMULASI/OFFLINE', className: 'bg-amber-500/15 text-amber-300 border-amber-500/40' }
-    : activeCorridors.length > 0
-      ? { label: 'LIVE', className: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40' }
+ ? { label: 'Simulasi', className: 'text-slate-400' }
       : null;
 
   const corridorToggles: Array<{
@@ -196,14 +199,14 @@ export function CrisisSimulatorBar({
     isLeftSidebarCollapsed,
     isCrisisDrawerOpen: isSidebarOpen,
   });
-  const pillsRowClass = `flex items-center gap-2 px-3 py-1.5 rounded-lg backdrop-blur-md bg-[#0c0e12]/80 border border-white/10 shadow-2xl max-w-full overflow-visible transition-all duration-200 ${
-    isSidebarOpen ? 'flex-wrap justify-center' : ''
+ const pillsRowClass = `flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#0c1017] border border-white/10 shadow-2xl max-w-full overflow-x-auto no-scrollbar transition-all duration-200 ${
+ isSidebarOpen ? 'justify-center' : ''
   }`;
 
   return (
     <div
       ref={containerRef}
-      className={`absolute bottom-16 sm:bottom-20 z-40 flex flex-col items-center gap-2 pointer-events-auto select-none transition-all duration-300 -translate-x-1/2 ${dockPositionClass}`}
+ className={`absolute bottom-16 sm:bottom-20 z-40 flex flex-col items-center gap-2 pointer-events-auto select-none transition-all duration-300 ${dockPositionClass}`}
     >
       {/* Floating Action Bubble Pills Row */}
       <div className={pillsRowClass}>
@@ -212,43 +215,50 @@ export function CrisisSimulatorBar({
           <button
             type="button"
             onClick={() => onResetCorridorVisibility?.()}
-            className="cursor-pointer px-3 py-1.5 rounded-md backdrop-blur-md bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-xs font-sans font-medium transition-all duration-200 flex items-center gap-1.5 shadow-sm"
+ className="cursor-pointer px-3 py-1.5 rounded-md bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-xs font-sans font-medium transition-all duration-200 flex items-center gap-1.5 shadow-sm"
             title="Tampilkan kembali seluruh koridor rute yang disembunyikan"
           >
             <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
-            <span>Tampilkan Semua Rute ({effectiveHiddenCount} Tersembunyi)</span>
+ <span>Tampil semua <span className="tabular-nums">({effectiveHiddenCount})</span></span>
           </button>
         )}
 
-        {/* 2. Node Selector Bubble Pill */}
-        <div className="relative">
+ {/* 2. Node Selector */}
+ <Popover
+ open={activePopover === 'nodes'}
+ onOpenChange={(open) => setActivePopover(open ? 'nodes' : null)}
+ >
+ <PopoverTrigger asChild>
           <button
             type="button"
             data-testid="corridor-summary-pill"
-            onClick={() => togglePopover('nodes')}
             className={`cursor-pointer px-3 py-1.5 rounded-md border text-xs font-sans font-medium transition-all flex items-center gap-2 ${
               originName || destName
                 ? 'bg-cyan-950/80 border-cyan-500/50 text-cyan-300'
-                : 'bg-[#121822] border-[#1c2432] text-slate-300 hover:border-slate-600'
+ : 'bg-[#121822] border-white/10 text-slate-300 hover:border-slate-600'
             }`}
           >
             <MapPin className="w-3.5 h-3.5 text-cyan-400" />
             <span className="max-w-[240px] truncate" title={corridorSummary || originName || destName || undefined}>
-              {originName ? (destName ? `${originName} -> ${destName}` : `Start: ${originName}`) : 'Rute Asal & Tujuan'}
+ {originName ? (destName ? `${originName} -> ${destName}` : `Asal: ${originName}`) : 'Rute'}
             </span>
             <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform duration-200 ${activePopover === 'nodes' ? 'rotate-180' : ''}`} />
           </button>
-
-          {/* Node Selector Popover */}
-          {activePopover === 'nodes' && (
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 rounded-md bg-[#0c1017] border border-[#1c2432] shadow-xl flex flex-col gap-2 z-50 animate-in fade-in slide-in-from-bottom-2 duration-150">
+ </PopoverTrigger>
+ <PopoverContent
+ side="top"
+ align="center"
+ sideOffset={8}
+ collisionPadding={12}
+ className="w-72 max-w-[calc(100vw-32px)] flex flex-col gap-2"
+ >
               <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-sans text-cyan-400 font-bold">TITIK RUTE KORIDOR</span>
+ <span className="text-xs text-cyan-400">Rute</span>
                 {corridorProvenance && (
                   <span
-                    className={`px-1.5 py-0.5 rounded border text-[10px] font-mono font-bold tracking-wide ${corridorProvenance.className}`}
+ className={`text-xs ${corridorProvenance.className}`}
                     title={
-                      corridorProvenance.label === 'SIMULASI/OFFLINE'
+ corridorProvenance.label === 'Simulasi'
                         ? 'Geometri hasil interpolasi garis lurus, bukan jalan raya live'
                         : 'Geometri rute live dari Mapbox Directions'
                     }
@@ -258,32 +268,32 @@ export function CrisisSimulatorBar({
                 )}
               </div>
 
-              <div className="p-2 rounded-md bg-[#121822] border border-[#1c2432] flex flex-col gap-1.5 text-xs">
+ <div className="py-2 border-t border-white/10 flex flex-col gap-1.5 text-xs">
                 <div className="flex items-start gap-2">
                   <span className="mt-1 w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
                   <div className="min-w-0">
-                    <span className="text-slate-400 font-sans text-[10px] block">Start</span>
+ <span className="text-slate-400 text-xs block">Asal</span>
                     <span className="text-white font-bold block break-words">{originName || 'Klik kota di peta...'}</span>
                   </div>
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="mt-1 w-2 h-2 rounded-full bg-amber-400 shrink-0" />
                   <div className="min-w-0">
-                    <span className="text-slate-400 font-sans text-[10px] block">End</span>
+ <span className="text-slate-400 text-xs block">Tujuan</span>
                     <span className="text-white font-bold block break-words">{destName || 'Klik kota di peta...'}</span>
                   </div>
                 </div>
                 {(originResolved?.province || destResolved?.province) && (
-                  <span className="text-[10px] text-slate-500 font-sans">
+ <span className="text-xs text-slate-500 font-sans">
                     {[originResolved?.province, destResolved?.province].filter(Boolean).join(' → ')}
                   </span>
                 )}
               </div>
 
               {onToggleCorridor && (
-                <div className="border-t border-[#1c2432] pt-2 flex flex-col gap-1.5">
-                  <span className="text-[10px] font-sans text-slate-400 font-bold uppercase tracking-wider">
-                    Visibilitas Koridor
+ <div className="border-t border-white/10 pt-2 flex flex-col gap-1.5">
+ <span className="text-xs text-slate-400">
+ Koridor
                   </span>
                   <div className="grid grid-cols-3 gap-1">
                     {corridorToggles.map((toggle) => {
@@ -295,25 +305,25 @@ export function CrisisSimulatorBar({
                           onClick={() => onToggleCorridor(toggle.key)}
                           aria-pressed={isVisible}
                           title={`${toggle.label} — ${toggle.hint}`}
-                          className={`cursor-pointer px-1.5 py-1.5 rounded border text-[10px] font-sans font-medium transition flex flex-col items-center gap-0.5 ${
+ className={`cursor-pointer px-1.5 py-1.5 rounded border text-xs font-sans font-medium transition flex flex-col items-center gap-0.5 ${
                             isVisible
                               ? toggle.activeClass
-                              : 'bg-[#121822]/60 border-[#1c2432] text-slate-500 hover:text-slate-300'
+ : 'bg-transparent border-white/10 text-slate-500 hover:text-slate-300'
                           }`}
                         >
                           <span className="flex items-center gap-1">
                             {toggle.icon}
                             <span>{toggle.label}</span>
                           </span>
-                          <span className={`text-[9px] font-mono ${isVisible ? 'opacity-80' : 'opacity-60'}`}>
+ <span className={`text-xs font-mono tabular-nums ${isVisible ? 'opacity-80' : 'opacity-60'}`}>
                             {isVisible ? 'ON' : 'OFF'}
                           </span>
                         </button>
                       );
                     })}
                   </div>
-                  <span className="text-[10px] leading-tight text-slate-500 font-sans">
-                    Darat = rute langsung (garis penuh). Laut &amp; udara = ring pulau (warna biru/cyan).
+ <span className="text-xs leading-tight text-slate-500 font-sans">
+ Darat langsung, laut/udara ring.
                   </span>
                 </div>
               )}
@@ -325,15 +335,14 @@ export function CrisisSimulatorBar({
                     onResetNodes();
                     setActivePopover(null);
                   }}
-                  className="cursor-pointer w-full py-1.5 rounded-md bg-[#121822] hover:bg-slate-800 text-slate-200 text-xs font-sans font-medium flex items-center justify-center gap-1.5 transition border border-[#1c2432]"
+ className="cursor-pointer w-full py-1.5 rounded-md hover:bg-white/5 text-slate-200 text-xs font-sans font-medium flex items-center justify-center gap-1.5 transition border border-white/10"
                 >
                   <RotateCcw className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>Reset Titik Node</span>
+ <span>Reset titik</span>
                 </button>
               )}
-            </div>
-          )}
-        </div>
+ </PopoverContent>
+ </Popover>
 
         {/* 2.5 Cargo Preset Selector (Pelindo Cold-Chain vs Horti vs Dry-Bulk) */}
         {onSelectCommodity && (
@@ -345,9 +354,9 @@ export function CrisisSimulatorBar({
               className={`cursor-pointer px-3 py-1.5 rounded-md border text-xs font-sans font-medium transition-all flex items-center gap-1.5 ${
                 selectedCommodity
                   ? 'bg-cyan-950/80 border-cyan-500/50 text-cyan-300'
-                  : 'bg-[#121822] border-[#1c2432] text-slate-300 hover:border-slate-600'
+                  : 'bg-transparent border-white/10 text-slate-300 hover:border-white/25'
               }`}
-              title="Pilih Tier Komoditas Kargo untuk Kalkulasi Hedging & Biaya Genset"
+              title="Pilih kargo"
             >
               {selectedCommodity === 'ikan_segar' ? (
                 <>
@@ -370,16 +379,16 @@ export function CrisisSimulatorBar({
                   <span>Pilih Kargo</span>
                 </>
               )}
-              <span className="font-mono text-[10px] opacity-75">(10T)</span>
+              <span className="font-mono text-xs tabular-nums opacity-75">(10T)</span>
               <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform duration-200 ${activePopover === 'cargo' ? 'rotate-180' : ''}`} />
             </button>
 
             {/* Cargo Popover */}
             {activePopover === 'cargo' && (
-              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-80 p-3 rounded-lg bg-[#0c1017] border border-[#1c2432] shadow-2xl flex flex-col gap-2 z-50 animate-in fade-in slide-in-from-bottom-2 duration-150 text-left">
-                <div className="flex items-center justify-between pb-1 border-b border-[#1c2432]">
-                  <span className="text-xs font-sans text-cyan-400 font-bold uppercase tracking-wider">Tier Kargo &amp; Hedging</span>
-                  <span className="text-[10px] font-mono text-slate-400">10.0 Ton · GOL II</span>
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-80 p-3 rounded-lg bg-[#0c1017] border border-white/10 shadow-2xl flex flex-col gap-2 z-50 text-left">
+                <div className="flex items-center justify-between pb-1 border-b border-white/10">
+                  <span className="text-xs font-sans text-slate-200 font-medium">Tier kargo</span>
+                  <span className="text-xs font-mono text-slate-400 tabular-nums">10 Ton</span>
                 </div>
                 <div className="flex flex-col gap-1.5">
                   {[
@@ -420,7 +429,7 @@ export function CrisisSimulatorBar({
                         className={`cursor-pointer p-2.5 rounded-md text-left transition flex items-start gap-2.5 border ${
                           isSelected
                             ? tier.activeBorder
-                            : 'bg-[#121822] border-[#1c2432] text-slate-300 hover:border-slate-600'
+                            : 'bg-transparent border-white/10 text-slate-300 hover:border-white/25'
                         }`}
                       >
                         <div className="mt-0.5">{tier.icon}</div>
@@ -429,8 +438,8 @@ export function CrisisSimulatorBar({
                             <span className="text-xs font-bold text-white font-sans">{tier.label}</span>
                             {isSelected && <Check className="w-3.5 h-3.5 text-cyan-400" />}
                           </div>
-                          <span className="text-[11px] text-slate-400 block font-sans">{tier.sub}</span>
-                          <span className="text-[10px] text-slate-500 block font-mono mt-0.5">{tier.desc}</span>
+                          <span className="text-xs text-slate-400 block font-sans">{tier.sub}</span>
+                          <span className="text-xs text-slate-500 block font-mono tabular-nums mt-0.5">{tier.desc}</span>
                         </div>
                       </button>
                     );
@@ -443,10 +452,10 @@ export function CrisisSimulatorBar({
                       onSelectCommodity(null);
                       setActivePopover(null);
                     }}
-                    className="cursor-pointer w-full py-1.5 mt-1 rounded bg-[#121822] hover:bg-slate-800 text-slate-400 hover:text-slate-200 text-xs font-sans font-medium flex items-center justify-center gap-1.5 transition border border-[#1c2432]"
+                    className="cursor-pointer w-full py-1.5 mt-1 rounded bg-transparent hover:bg-white/5 text-slate-400 hover:text-slate-200 text-xs font-sans font-medium flex items-center justify-center gap-1.5 transition border border-white/10"
                   >
                     <RotateCcw className="w-3 h-3 text-slate-400" />
-                    <span>Reset Kargo (Tanpa Hedging)</span>
+                    <span>Reset kargo</span>
                   </button>
                 )}
               </div>
@@ -455,25 +464,32 @@ export function CrisisSimulatorBar({
         )}
 
         {/* 3. Disruption Presets & Tools Bubble Pill */}
-        <div className="relative">
+ <Popover
+ open={activePopover === 'disruption'}
+ onOpenChange={(open) => setActivePopover(open ? 'disruption' : null)}
+ >
+ <PopoverTrigger asChild>
           <button
             type="button"
-            onClick={() => togglePopover('disruption')}
             className={`cursor-pointer px-3 py-1.5 rounded-md border text-xs font-sans font-medium transition-all flex items-center gap-2 ${
               isClickTargeting || drawModeActive || simulationActive
                 ? 'bg-amber-950/90 border-amber-500/60 text-amber-300'
-                : 'bg-[#121822] border-[#1c2432] text-slate-300 hover:border-slate-600'
+ : 'bg-[#121822] border-white/10 text-slate-300 hover:border-slate-600'
             }`}
           >
             <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
             <span>{isClickTargeting ? 'Set Hazard...' : drawModeActive ? 'Gambar Poligon...' : 'Simulasi Bencana'}</span>
             <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform duration-200 ${activePopover === 'disruption' ? 'rotate-180' : ''}`} />
           </button>
-
-          {/* Disruption Popover */}
-          {activePopover === 'disruption' && (
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 rounded-md bg-[#0c1017] border border-[#1c2432] shadow-xl flex flex-col gap-2.5 z-50 animate-in fade-in slide-in-from-bottom-2 duration-150 text-left">
-              <span className="text-xs font-sans text-amber-400 font-bold">PRESET SKENARIO CRISIS</span>
+ </PopoverTrigger>
+ <PopoverContent
+ side="top"
+ align="center"
+ sideOffset={8}
+ collisionPadding={12}
+ className="w-72 max-w-[calc(100vw-32px)] flex flex-col gap-2.5 text-left"
+ >
+ <span className="text-xs text-amber-400">Skenario</span>
               <div className="grid grid-cols-1 gap-1">
                 {hazardOptions.map((h) => (
                   <button
@@ -488,7 +504,7 @@ export function CrisisSimulatorBar({
                     className={`cursor-pointer p-2 rounded-md text-left font-sans text-xs font-medium transition flex items-center justify-between ${
                       selectedType === h.type
                         ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                        : 'hover:bg-slate-800 text-slate-300'
+ : 'hover:bg-white/5 text-slate-300'
                     }`}
                   >
                     <div className="flex items-center gap-2">
@@ -500,8 +516,8 @@ export function CrisisSimulatorBar({
                 ))}
               </div>
 
-              <div className="border-t border-[#1c2432] pt-2 flex flex-col gap-1.5">
-                <span className="text-xs font-sans text-slate-400 font-bold">MODES & ALAT MANUVER</span>
+ <div className="border-t border-white/10 pt-2 flex flex-col gap-1.5">
+ <span className="text-xs text-slate-400">Alat</span>
                 
                 {/* Freehand Draw Mode Toggle */}
                 <button
@@ -514,11 +530,11 @@ export function CrisisSimulatorBar({
                   className={`cursor-pointer w-full p-2 rounded-md font-sans text-xs font-medium transition flex items-center gap-2 ${
                     drawModeActive
                       ? 'bg-amber-400 text-amber-950 font-bold'
-                      : 'bg-[#121822] text-slate-300 border border-[#1c2432] hover:bg-slate-800'
+ : 'bg-transparent text-slate-300 border border-white/10 hover:bg-white/5'
                   }`}
                 >
                   <PenTool className={`w-4 h-4 ${drawModeActive ? 'text-amber-950' : 'text-amber-400'}`} />
-                  <span>Gambar Poligon Bebas</span>
+ <span>Poligon bebas</span>
                 </button>
 
                 {/* 1-Click Clear Simulation Button */}
@@ -532,30 +548,36 @@ export function CrisisSimulatorBar({
                     className="cursor-pointer w-full p-2 rounded-md font-sans text-xs font-medium bg-rose-500/20 text-rose-300 border border-rose-500/40 hover:bg-rose-500/30 transition flex items-center gap-2"
                   >
                     <Trash2 className="w-4 h-4 text-rose-400" />
-                    <span>Hapus Semua Simulasi</span>
+ <span>Hapus simulasi</span>
                   </button>
                 )}
               </div>
-            </div>
-          )}
-        </div>
+ </PopoverContent>
+ </Popover>
 
-        {/* 4. Radius Selector Bubble Pill */}
-        <div className="relative">
+ {/* 4. Radius Selector */}
+ <Popover
+ open={activePopover === 'radius'}
+ onOpenChange={(open) => setActivePopover(open ? 'radius' : null)}
+ >
+ <PopoverTrigger asChild>
           <button
             type="button"
-            onClick={() => togglePopover('radius')}
-            className="cursor-pointer px-3 py-1.5 rounded-md bg-[#121822] border border-[#1c2432] text-xs font-sans font-medium text-slate-300 hover:border-slate-600 transition-all flex items-center gap-1.5"
+ className="cursor-pointer px-3 py-1.5 rounded-md bg-[#121822] border border-white/10 text-xs font-sans font-medium text-slate-300 hover:border-slate-600 transition-all flex items-center gap-1.5"
           >
             <Sliders className="w-3.5 h-3.5 text-slate-400" />
-            <span className="font-mono">{selectedRadius}km</span>
+ <span className="font-mono tabular-nums">{selectedRadius}km</span>
             <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform duration-200 ${activePopover === 'radius' ? 'rotate-180' : ''}`} />
           </button>
-
-          {/* Radius Popover */}
-          {activePopover === 'radius' && (
-            <div className="absolute bottom-full right-0 mb-2 w-36 p-2 rounded-md bg-[#0c1017] border border-[#1c2432] shadow-xl flex flex-col gap-1 z-50 animate-in fade-in slide-in-from-bottom-2 duration-150">
-              <span className="px-2 py-1 text-xs font-sans text-slate-400 font-bold">RADIUS BAHAYA</span>
+ </PopoverTrigger>
+ <PopoverContent
+ side="top"
+ align="end"
+ sideOffset={8}
+ collisionPadding={12}
+ className="w-36 flex flex-col gap-1 p-2"
+ >
+ <span className="px-2 py-1 text-xs text-slate-400">Radius</span>
               {HAZARD_RADIUS_OPTIONS_KM.map((r) => (
                 <button
                   key={r}
@@ -567,39 +589,45 @@ export function CrisisSimulatorBar({
                   className={`cursor-pointer w-full px-3 py-1.5 rounded-md font-sans text-xs font-medium transition flex items-center justify-between ${
                     selectedRadius === r
                       ? 'bg-white text-[#080d14] font-semibold'
-                      : 'hover:bg-slate-800 text-slate-300'
+ : 'hover:bg-white/5 text-slate-300'
                   }`}
                 >
-                  <span>{r} kilometer</span>
+ <span className="tabular-nums">{r} km</span>
                   {selectedRadius === r && <Check className="w-3.5 h-3.5 text-[#080d14]" />}
                 </button>
               ))}
-            </div>
-          )}
-        </div>
+ </PopoverContent>
+ </Popover>
 
         {/* 5. Tactical Simulation Speed Selector Pill */}
         {setSimSpeed && (
-          <div className="relative">
+ <Popover
+ open={activePopover === 'speed'}
+ onOpenChange={(open) => setActivePopover(open ? 'speed' : null)}
+ >
+ <PopoverTrigger asChild>
             <button
               type="button"
-              onClick={() => togglePopover('speed')}
-              className="cursor-pointer px-3 py-1.5 rounded-md bg-[#121822] border border-[#1c2432] text-xs font-sans font-medium text-slate-300 hover:border-slate-600 transition-all flex items-center gap-1.5"
+ className="cursor-pointer px-3 py-1.5 rounded-md bg-[#121822] border border-white/10 text-xs font-sans font-medium text-slate-300 hover:border-slate-600 transition-all flex items-center gap-1.5"
               title="Kecepatan Simulasi Telemetri Peta"
             >
               <Gauge className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="font-mono text-cyan-400 font-bold">{simSpeed}x</span>
+ <span className="font-mono tabular-nums text-cyan-400">{simSpeed}x</span>
               <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform duration-200 ${activePopover === 'speed' ? 'rotate-180' : ''}`} />
             </button>
-
-            {/* Speed Popover */}
-            {activePopover === 'speed' && (
-              <div className="absolute bottom-full right-0 mb-2 w-36 p-2 rounded-md bg-[#0c1017] border border-[#1c2432] shadow-xl flex flex-col gap-1 z-50 animate-in fade-in slide-in-from-bottom-2 duration-150">
-                <span className="px-2 py-1 text-xs font-sans text-slate-400 font-bold uppercase tracking-wider">Pacing Peta</span>
+ </PopoverTrigger>
+ <PopoverContent
+ side="top"
+ align="end"
+ sideOffset={8}
+ collisionPadding={12}
+ className="w-36 flex flex-col gap-1 p-2"
+ >
+ <span className="px-2 py-1 text-xs text-slate-400">Kecepatan</span>
                 {[
-                  { speed: 1, label: '1x (Realistis)' },
-                  { speed: 5, label: '5x (Taktis)' },
-                  { speed: 15, label: '15x (Cepat)' },
+ { speed: 1, label: '1x' },
+ { speed: 5, label: '5x' },
+ { speed: 15, label: '15x' },
                 ].map(({ speed, label }) => (
                   <button
                     key={speed}
@@ -608,28 +636,27 @@ export function CrisisSimulatorBar({
                       setSimSpeed(speed);
                       setActivePopover(null);
                     }}
-                    className={`cursor-pointer w-full px-3 py-1.5 rounded-md font-sans text-xs font-medium transition flex items-center justify-between ${
+ className={`cursor-pointer w-full px-3 py-1.5 rounded-md font-sans text-xs font-medium transition flex items-center justify-between tabular-nums ${
                       simSpeed === speed
                         ? 'bg-cyan-500 text-[#080d14] font-bold'
-                        : 'hover:bg-slate-800 text-slate-300'
+ : 'hover:bg-white/5 text-slate-300'
                     }`}
                   >
                     <span>{label}</span>
                     {simSpeed === speed && <Check className="w-3.5 h-3.5 text-[#080d14]" />}
                   </button>
                 ))}
-              </div>
-            )}
-          </div>
+ </PopoverContent>
+ </Popover>
         )}
 
       </div>
 
       {/* Target Mode Helper Banner */}
       {isClickTargeting && (
-        <div className="px-4 py-1.5 rounded-md bg-[#0c1017] border border-amber-500/60 text-xs font-sans text-amber-300 shadow-xl flex items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+ <div className="px-4 py-1.5 rounded-md bg-[#0c1017] border border-amber-500/60 text-xs font-sans text-amber-300 shadow-xl flex items-center gap-2 slide-in-from-top-1 duration-200">
           <Target className="w-3.5 h-3.5 text-amber-400" />
-          <span>Klik lokasi mana saja di peta untuk menargetkan skenario {selectedType.toUpperCase()} ({selectedRadius}km)</span>
+ <span>Klik lokasi mana saja di peta untuk menargetkan skenario {hazardOptions.find((h) => h.type === selectedType)?.label ?? selectedType} (<span className="tabular-nums">{selectedRadius}km</span>)</span>
         </div>
       )}
     </div>

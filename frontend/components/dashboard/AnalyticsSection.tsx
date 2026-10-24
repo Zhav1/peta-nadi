@@ -183,30 +183,30 @@ export default function AnalyticsSection({
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="bg-[#121822] border border-white/10 px-3.5 py-2 rounded-lg flex items-center gap-2">
+ <div className="flex items-center gap-2 px-1 py-2">
               <Activity className="w-4 h-4 text-slate-300" />
               <div>
-                <span className="text-xs text-slate-400 font-medium block">Rute Operasional</span>
+ <span className="text-xs text-slate-400 font-medium block">Rute operasional</span>
                 <span className="text-xs font-mono font-bold text-white tabular-nums">
                   {activeRoutes && activeRoutes.length > 0 ? `${activeRoutes.length} Koridor` : 'Data tidak tersedia'}
                 </span>
               </div>
             </div>
 
-            <div className="bg-[#121822] border border-white/10 px-3.5 py-2 rounded-lg flex items-center gap-2">
+ <div className="flex items-center gap-2 px-1 py-2">
               <ShieldAlert className="w-4 h-4 text-slate-300" />
               <div>
-                <span className="text-xs text-slate-400 font-medium block">Disrupsi Aktif</span>
+ <span className="text-xs text-slate-400 font-medium block">Disrupsi aktif</span>
                 <span className="text-xs font-mono font-bold text-white tabular-nums truncate max-w-[140px] block" title={selectedCrisis?.title || 'Data tidak tersedia'}>
                   {selectedCrisis ? selectedCrisis.title : 'Data tidak tersedia'}
                 </span>
               </div>
             </div>
 
-            <div className="bg-[#121822] border border-white/10 px-3.5 py-2 rounded-lg flex items-center gap-2">
+ <div className="flex items-center gap-2 px-1 py-2">
               <TrendingUp className="w-4 h-4 text-slate-300" />
               <div>
-                <span className="text-xs text-slate-400 font-medium block">Delta Harga PIHPS</span>
+ <span className="text-xs text-slate-400 font-medium block">Delta harga</span>
                 <span className="text-xs font-mono font-bold text-white tabular-nums">
                   {shallotsDelta !== null ? shallotsDelta : 'Data tidak tersedia'}
                 </span>
@@ -222,7 +222,7 @@ export default function AnalyticsSection({
           <div ref={mapContainerRef} className="absolute inset-0 w-full h-full" />
 
           {/* Honest Status Overlay */}
-          <div className="absolute top-4 left-4 z-20 bg-[#0c1017]/90 backdrop-blur-md border border-white/10 px-3.5 py-2 rounded-lg text-xs flex items-center gap-2 shadow-lg">
+ <div className="absolute top-4 left-4 z-20 bg-[#0c1017]/90 border border-white/10 px-3.5 py-2 rounded-lg text-xs flex items-center gap-2">
             <Info className="w-4 h-4 text-slate-400" />
             <span className="text-slate-300 font-sans">
               Visualisasi Aliran Komoditas Spasial (Sumatera - Jawa)
@@ -230,12 +230,12 @@ export default function AnalyticsSection({
           </div>
 
           {/* Region Metric Badge */}
-          <div className="absolute bottom-4 left-4 z-20 bg-[#0c1017]/90 backdrop-blur-md border border-white/10 p-4 rounded-xl text-xs space-y-2 shadow-xl max-w-xs">
+ <div className="absolute bottom-4 left-4 z-20 bg-[#0c1017]/90 border border-white/10 p-4 rounded-xl text-xs space-y-2 max-w-xs">
             <div className="flex items-center gap-2">
               <span className={`w-2 h-2 rounded-full ${ricePrice !== null ? 'bg-emerald-400' : 'bg-slate-500'}`} />
-              <span className="font-semibold text-xs tracking-wide text-white">KORIDOR SUMATERA UTARA</span>
+ <span className="font-semibold text-xs tracking-wide text-white">Koridor</span>
             </div>
-            <div className="grid grid-cols-2 gap-x-4 pt-1 font-mono text-xs">
+ <div className="grid grid-cols-2 gap-x-4 pt-1 text-xs">
               <span className="text-slate-400">Harga Beras:</span>
               <span className="text-slate-200 font-bold tabular-nums">
                 {ricePrice !== null ? `Rp ${ricePrice.toLocaleString('id-ID')} / kg` : 'Data tidak tersedia'}
@@ -265,21 +265,21 @@ export default function AnalyticsSection({
       </section>
 
       {/* RIGHT SECTION: Sidebar (Real PIHPS Price History & Honest Risk Ranking) */}
-      <section className="col-span-12 lg:col-span-4 bg-[#0c1017] border border-white/10 p-5 flex flex-col gap-6 overflow-y-auto no-scrollbar rounded-xl shadow-xl">
+ <section className="col-span-12 lg:col-span-4 bg-[#0c1017] border border-white/10 p-5 flex flex-col gap-6 overflow-y-auto no-scrollbar rounded-xl">
         
         {/* Price History Card */}
         <div className="space-y-3">
           <div className="flex justify-between items-end">
             <h3 className="text-sm font-semibold tracking-wide text-white flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-slate-300" /> Riwayat Harga Beras (PIHPS)
+ <TrendingUp className="w-4 h-4 text-slate-300" /> Harga beras
             </h3>
-            <span className="text-xs font-mono text-slate-300 font-medium tabular-nums">
+ <span className="text-xs text-slate-300 font-medium tabular-nums">
               {ricePrice !== null ? `Rp ${ricePrice.toLocaleString('id-ID')} / kg` : 'Data tidak tersedia'}
             </span>
           </div>
 
-          <div className="h-44 bg-[#121822] border border-white/10 rounded-lg p-4 relative flex flex-col justify-between">
-            <div className="flex justify-between items-center text-xs text-slate-400 font-mono">
+ <div className="border-t border-white/10 pt-4 relative flex flex-col justify-between">
+ <div className="flex justify-between items-center text-xs text-slate-400">
               <span>Tren 5 Titik Terakhir</span>
               <span className="text-slate-300">Sumber: PIHPS Bank Indonesia</span>
             </div>
@@ -293,7 +293,7 @@ export default function AnalyticsSection({
                       className="w-full bg-white/20 border-t-2 border-white/60 hover:bg-white/30 transition-all duration-300" 
                       style={{ height: h }}
                     />
-                    <span className="font-mono text-xs text-slate-400 mt-1">T-{priceHistory.length - 1 - i}</span>
+ <span className="text-xs text-slate-400 tabular-nums mt-1">T-{priceHistory.length - 1 - i}</span>
                   </div>
                 ))}
               </div>
@@ -309,15 +309,15 @@ export default function AnalyticsSection({
         <div className="space-y-3 flex-1 flex flex-col min-h-0">
           <div className="flex justify-between items-center">
             <h3 className="text-sm font-semibold tracking-wide text-white flex items-center gap-2">
-              <ShieldAlert className="w-4 h-4 text-slate-400" /> Peringkat Risiko Komoditas (24 Jam)
+ <ShieldAlert className="w-4 h-4 text-slate-400" /> Risiko komoditas
             </h3>
             <span className="text-xs font-mono text-slate-400">PIHPS</span>
           </div>
 
-          <div className="flex-1 flex flex-col items-center justify-center p-6 text-center rounded-lg border border-dashed border-white/10 bg-[#121822]/50 text-slate-400">
+ <div className="flex-1 flex flex-col items-center justify-center p-6 text-center rounded-lg border border-dashed border-white/10 text-slate-400">
             <Info className="w-5 h-5 mb-2 text-slate-500" />
             <p className="text-xs font-medium text-slate-300">Data pemeringkatan risiko belum tersedia</p>
-            <p className="text-[11px] text-slate-500 mt-1 max-w-xs font-sans">
+ <p className="text-xs text-slate-500 mt-1 max-w-xs font-sans">
               Pemeringkatan risiko volatilitas memerlukan data deret waktu PIHPS kontinu multi-pasar yang saat ini belum terhubung.
             </p>
           </div>

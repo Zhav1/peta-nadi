@@ -16,13 +16,20 @@ import type {
   RouteDetailModalProps,
   TacticalManeuver,
 } from '@/lib/types';
+import {
+ AlertDialog,
+ AlertDialogContent,
+ AlertDialogDescription,
+ AlertDialogHeader,
+ AlertDialogTitle,
+} from '@/components/base-ui/alert-dialog';
 
 type Decision = 'APPROVE' | 'REJECT' | 'HOLD';
 
 const CHECKLIST_ITEMS = [
   {
     id: 'visual',
-    label: 'Rute bebas zona merah terverifikasi visual di peta',
+ label: 'Rute bebas bahaya terverifikasi visual di peta',
   },
   {
     id: 'tradeoff',
@@ -79,16 +86,9 @@ export function RouteDetailModal({
     }
   }, [open, route.corridor_type]);
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+ /* Escape-to-close and focus trapping are provided by the AlertDialog block (Root onOpenChange + Popup). */
 
-  if (!open) return null;
+ /* Dialog visibility is controlled by the AlertDialog open prop (Watermelon block pattern). */
 
   const isSandbox = mode === 'sandbox' || role === 'GUEST';
   const allChecked = CHECKLIST_ITEMS.every((c) => checked[c.id]);
@@ -151,47 +151,37 @@ export function RouteDetailModal({
               : route.description.slice(0, 60));
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Detail rute dan verifikasi operator"
-      className="fixed inset-0 z-[90] flex items-center justify-center p-3 sm:p-6"
-    >
-      <div
-        className="absolute inset-0 bg-[#080d14]/80 backdrop-blur-sm"
-        onClick={onClose}
-        aria-hidden="true"
-      />
-      <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-[#0c1017] border border-[#1c2432] rounded-xl shadow-2xl text-slate-200">
+ <AlertDialog open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
+ <AlertDialogContent className="max-w-2xl rounded-2xl border-white/10 bg-[#0c1017] p-0 shadow-2xl tabular-nums max-h-[90vh] overflow-y-auto">
         {/* Watermark ribbon for sandbox preview */}
         {isSandbox && (
           <div
             data-testid="sandbox-watermark"
-            className="pointer-events-none absolute -right-10 top-6 rotate-45 bg-amber-500/90 text-black text-[11px] font-bold font-mono px-10 py-1 tracking-widest shadow-lg"
+ className="pointer-events-none absolute -right-10 top-6 rotate-45 bg-amber-500/90 text-black text-xs font-bold px-10 py-1 shadow-lg"
           >
-            SANDBOX PREVIEW
+ Pratinjau sandbox
           </div>
         )}
 
         {/* Header */}
-        <div className="sticky top-0 bg-[#080d14] border-b border-[#1c2432] p-4 flex items-start justify-between gap-3">
+ <AlertDialogHeader className="sticky top-0 bg-[#0c1017] border-b border-white/10 p-4 flex-row items-start justify-between gap-3 text-left">
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 uppercase tracking-wider">
-                Detail Rute
+ <span className="text-xs font-bold px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/30">
+ Detail rute
               </span>
               {isSandbox && (
-                <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/40 uppercase tracking-wider">
+ <span className="text-xs font-bold px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/40">
                   Pratinjau lokal — tanpa POST server
                 </span>
               )}
             </div>
-            <h2 className="text-sm font-bold text-white font-sans mt-1.5 leading-snug">
+ <AlertDialogTitle className="text-sm font-bold text-white mt-1.5 leading-snug">
               {title}
-            </h2>
-            <p className="text-xs text-slate-400 font-mono mt-0.5">
+ </AlertDialogTitle>
+ <AlertDialogDescription className="text-xs text-slate-400 mt-0.5 tabular-nums">
               {(route.distance_km ?? 0).toFixed(0)} km · {route.eta_minutes ?? 0} mnt · +{(route.fuel_increase_pct ?? 0).toFixed(0)}% BBM
-            </p>
+ </AlertDialogDescription>
           </div>
           <button
             type="button"
@@ -201,12 +191,12 @@ export function RouteDetailModal({
           >
             <X className="w-4 h-4" />
           </button>
-        </div>
+ </AlertDialogHeader>
 
         <div className="p-4 space-y-4">
           {/* Section 1: Dasar Risiko */}
-          <section aria-label="Dasar Risiko" className="p-3.5 rounded-xl border border-white/10 bg-[#121822] space-y-2">
-            <h3 className="text-xs font-bold font-sans text-rose-300 flex items-center gap-1.5 uppercase tracking-wider">
+ <section aria-label="Dasar Risiko" className="border-t border-white/10 pt-3 bg-transparent space-y-2">
+ <h3 className="text-xs font-bold font-sans text-rose-300 flex items-center gap-1.5">
               <ShieldAlert className="w-4 h-4 text-rose-400" />
               <span>1. Dasar Risiko</span>
             </h3>
@@ -216,7 +206,7 @@ export function RouteDetailModal({
                 <span className="font-bold text-white text-right">{route.safety_status ?? 'Tidak tersedia'}</span>
               </div>
               {route.safety_tag && (
-                <div className="p-2 rounded bg-[#0c1017] border border-[#1c2432] text-slate-200">
+ <div className="p-2 rounded bg-[#0c1017] border border-white/10 text-slate-200">
                   {route.safety_tag}
                 </div>
               )}
@@ -247,10 +237,10 @@ export function RouteDetailModal({
           </section>
 
           {/* Section 2: Dampak + Uncertainty */}
-          <section aria-label="Dampak dan Ketidakpastian" className="p-3.5 rounded-xl border border-white/10 bg-[#121822] space-y-2">
-            <h3 className="text-xs font-bold font-sans text-amber-300 flex items-center gap-1.5 uppercase tracking-wider">
+ <section aria-label="Dampak dan Ketidakpastian" className="border-t border-white/10 pt-3 bg-transparent space-y-2">
+ <h3 className="text-xs font-bold font-sans text-amber-300 flex items-center gap-1.5">
               <Activity className="w-4 h-4 text-amber-400" />
-              <span>2. Dampak + Uncertainty</span>
+ <span>2. Dampak</span>
             </h3>
             <div className="text-xs font-mono space-y-1.5 text-slate-300">
               <div className="flex justify-between gap-2">
@@ -327,16 +317,16 @@ export function RouteDetailModal({
           </section>
 
           {/* Section 3: Manfaat vs Konsekuensi */}
-          <section aria-label="Manfaat vs Konsekuensi" className="p-3.5 rounded-xl border border-white/10 bg-[#121822] space-y-2">
-            <h3 className="text-xs font-bold font-sans text-cyan-300 flex items-center gap-1.5 uppercase tracking-wider">
+ <section aria-label="Manfaat vs Konsekuensi" className="border-t border-white/10 pt-3 bg-transparent space-y-2">
+ <h3 className="text-xs font-bold font-sans text-cyan-300 flex items-center gap-1.5">
               <Scale className="w-4 h-4 text-cyan-400" />
               <span>3. Manfaat vs Konsekuensi</span>
             </h3>
             {route.tradeoff_analysis ? (
               <>
-                <div className="grid grid-cols-2 gap-2 text-[11px] leading-relaxed">
+ <div className="grid grid-cols-2 gap-2 text-xs leading-relaxed">
                   <div className="p-2 rounded-md bg-emerald-950/30 border border-emerald-500/20">
-                    <span className="block text-[10px] font-bold uppercase tracking-wider text-emerald-300 mb-1 font-sans">
+ <span className="block text-xs font-bold text-emerald-300 mb-1 font-sans">
                       Manfaat
                     </span>
                     <ul className="space-y-1 text-emerald-100/90 font-sans">
@@ -346,7 +336,7 @@ export function RouteDetailModal({
                     </ul>
                   </div>
                   <div className="p-2 rounded-md bg-amber-950/20 border border-amber-500/20">
-                    <span className="block text-[10px] font-bold uppercase tracking-wider text-amber-300 mb-1 font-sans">
+ <span className="block text-xs font-bold text-amber-300 mb-1 font-sans">
                       Konsekuensi
                     </span>
                     <ul className="space-y-1 text-amber-100/90 font-sans">
@@ -364,7 +354,7 @@ export function RouteDetailModal({
                     </span>
                   </div>
                   {route.tradeoff_analysis.cost_breakdown_items?.map((item, i) => (
-                    <div key={i} className="flex justify-between gap-2 text-[11px]">
+ <div key={i} className="flex justify-between gap-2 text-xs">
                       <span className="text-slate-400">{item.label}:</span>
                       <span>Rp {item.amount_idr.toLocaleString('id-ID')}</span>
                     </div>
@@ -379,8 +369,8 @@ export function RouteDetailModal({
           </section>
 
           {/* Section 4: Keterbatasan Data */}
-          <section aria-label="Keterbatasan Data" className="p-3.5 rounded-xl border border-white/10 bg-[#121822] space-y-2">
-            <h3 className="text-xs font-bold font-sans text-slate-200 flex items-center gap-1.5 uppercase tracking-wider">
+ <section aria-label="Keterbatasan Data" className="border-t border-white/10 pt-3 bg-transparent space-y-2">
+ <h3 className="text-xs font-bold font-sans text-slate-200 flex items-center gap-1.5">
               <Database className="w-4 h-4 text-slate-300" />
               <span>4. Keterbatasan Data</span>
             </h3>
@@ -479,16 +469,16 @@ export function RouteDetailModal({
           </section>
 
           {/* Section 5: Verifikasi Operator Checklist */}
-          <section aria-label="Verifikasi Operator" className="p-3.5 rounded-xl border border-cyan-500/20 bg-cyan-950/10 space-y-2.5">
-            <h3 className="text-xs font-bold font-sans text-cyan-300 flex items-center gap-1.5 uppercase tracking-wider">
+ <section aria-label="Verifikasi Operator" className="border-t border-white/10 pt-3 bg-transparent space-y-2.5">
+ <h3 className="text-xs font-bold font-sans text-cyan-300 flex items-center gap-1.5">
               <ClipboardCheck className="w-4 h-4 text-cyan-400" />
-              <span>5. Verifikasi Operator (4/4)</span>
+ <span>5. Verifikasi operator</span>
             </h3>
             <div className="space-y-1.5">
               {CHECKLIST_ITEMS.map((item) => (
                 <label
                   key={item.id}
-                  className="flex items-start gap-2.5 p-2 rounded-lg bg-[#080d14] border border-[#1c2432] cursor-pointer hover:border-cyan-500/40 transition text-xs font-sans text-slate-200"
+ className="flex items-start gap-2.5 p-2 rounded-lg bg-[#080d14] border border-white/10 cursor-pointer hover:border-cyan-500/40 transition text-xs font-sans text-slate-200"
                 >
                   <input
                     type="checkbox"
@@ -500,7 +490,7 @@ export function RouteDetailModal({
                 </label>
               ))}
             </div>
-            <div className="text-[11px] font-mono text-slate-400">
+ <div className="text-xs font-mono text-slate-400">
               {Object.values(checked).filter(Boolean).length}/4 verifikasi selesai
             </div>
 
@@ -520,7 +510,7 @@ export function RouteDetailModal({
                       className={`cursor-pointer flex-1 py-1.5 rounded-md border text-xs transition ${
                         tactical === t
                           ? 'bg-white border-white text-[#080d14] font-semibold'
-                          : 'bg-[#121822] border-[#1c2432] text-slate-400 hover:text-white'
+ : 'bg-[#121822] border-white/10 text-slate-400 hover:text-white'
                       }`}
                     >
                       {t}
@@ -532,7 +522,7 @@ export function RouteDetailModal({
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="Catatan operator (wajib untuk HOLD)..."
                   rows={2}
-                  className="w-full bg-[#080d14] border border-[#1c2432] focus:border-cyan-500/50 rounded-md p-2 text-xs font-mono text-slate-200 placeholder:text-slate-500 focus:outline-none"
+ className="w-full bg-[#080d14] border border-white/10 focus:border-cyan-500/50 rounded-md p-2 text-xs font-mono text-slate-200 placeholder:text-slate-500 focus:outline-none"
                 />
                 <div className="grid grid-cols-3 gap-2">
                   <button
@@ -543,7 +533,7 @@ export function RouteDetailModal({
                     className="cursor-pointer py-2 px-2 rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition"
                   >
                     {role === 'REGULATOR' && <Lock className="w-3.5 h-3.5" />}
-                    <span>{role === 'REGULATOR' ? 'SETUJUI [Khusus Dispatcher]' : 'SETUJUI'}</span>
+ <span>{role === 'REGULATOR' ? 'Setujui' : 'Setujui'}</span>
                   </button>
                   <button
                     type="button"
@@ -552,7 +542,7 @@ export function RouteDetailModal({
                     title="Tahan armada di buffer"
                     className="cursor-pointer py-2 px-2 rounded-md bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 disabled:opacity-40 disabled:cursor-not-allowed text-amber-300 text-xs font-semibold transition"
                   >
-                    <span>TAHAN</span>
+ <span>Tahan</span>
                   </button>
                   <button
                     type="button"
@@ -561,11 +551,11 @@ export function RouteDetailModal({
                     title={role === 'REGULATOR' ? 'Memerlukan peran Dispatcher [Khusus Dispatcher]' : 'Tolak rute'}
                     className="cursor-pointer py-2 px-2 rounded-md border border-rose-500/40 hover:bg-rose-500/10 disabled:opacity-40 disabled:cursor-not-allowed text-rose-300 text-xs font-semibold transition"
                   >
-                    <span>{role === 'REGULATOR' ? 'TOLAK [Khusus Dispatcher]' : 'TOLAK'}</span>
+ <span>Tolak</span>
                   </button>
                 </div>
                 {!allChecked && (
-                  <p className="text-[11px] font-mono text-slate-500">
+ <p className="text-xs font-mono text-slate-500">
                     Lengkapi 4/4 verifikasi untuk mengaktifkan tombol keputusan.
                   </p>
                 )}
@@ -602,7 +592,7 @@ export function RouteDetailModal({
             </button>
           )}
         </div>
-      </div>
-    </div>
+ </AlertDialogContent>
+ </AlertDialog>
   );
 }

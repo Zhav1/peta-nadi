@@ -14,7 +14,6 @@ import {
   Plane,
   X,
   Navigation,
-  ShieldCheck,
   Video,
   Crosshair,
   Thermometer,
@@ -783,15 +782,12 @@ export function FleetVehicleLayer({
         : `ID: ${vehicle?.vehicle_id}`;
 
   const isEstimated = vehicle?.tracking_mode === 'ROUTE_ESTIMATED';
-  const statusLabel = isEstimated
-    ? 'PROYEKSI RUTE'
-    : isMaritime
-      ? 'AIS LIVE SATELIT'
-      : isAir
-        ? 'ADS-B LIVE'
-        : vehicle?.vehicle_id.startsWith('MMSI:')
-          ? 'AIS LIVE SATELIT'
-          : 'GPS LIVE SATELIT';
+ const isImpactedUnit = vehicle
+ ? vehicle.status === 'rerouting' ||
+ (vehicle as unknown as { status?: string }).status === 'delayed' ||
+ Boolean((vehicle as unknown as { impacted?: boolean }).impacted)
+ : false;
+ const statusLabel = isEstimated ? 'Rencana' : isImpactedUnit ? 'Terganggu' : '';
 
   return (
     <>
@@ -809,7 +805,7 @@ export function FleetVehicleLayer({
       {/* Impeccable Hover Micro-Tooltip */}
       {hoveredVehicle && !selectedVehicle && (
         <div
-          className="fixed pointer-events-none z-50 backdrop-blur-md bg-[#0c1017]/90 border border-white/10 px-2.5 py-1.5 rounded-lg shadow-xl text-slate-100 font-sans transition-opacity duration-150 animate-in fade-in"
+          className="fixed pointer-events-none z-50 bg-[#0c1017] border border-white/10 px-2.5 py-1.5 rounded-lg shadow-xl text-slate-100 font-sans"
           style={{
             left: Math.min(
               hoveredVehicle.screenPos.x + 12,
@@ -831,17 +827,17 @@ export function FleetVehicleLayer({
             <span className="text-xs font-semibold text-white">
               {hoveredVehicle.vehicle.name || hoveredVehicle.vehicle.vehicle_id}
             </span>
-            <span className="text-[10px] font-mono uppercase px-1 rounded bg-[#121822] text-slate-400 border border-white/5">
+            <span className="text-xs font-mono px-1 rounded text-slate-400 tabular-nums">
               {hoveredVehicle.vehicle.tracking_mode === 'ROUTE_ESTIMATED'
-                ? 'PROYEKSI'
+                ? 'Rencana'
                 : hoveredVehicle.vehicle.modality === 'maritime'
-                  ? 'AIS'
+                  ? 'Laut'
                   : hoveredVehicle.vehicle.modality === 'air'
-                    ? 'ADS-B'
-                    : 'GPS'}
+                    ? 'Udara'
+                    : 'Darat'}
             </span>
           </div>
-          <div className="flex items-center gap-2 mt-1 text-[11px] text-slate-300 font-mono">
+          <div className="flex items-center gap-2 mt-1 text-xs text-slate-300 font-mono tabular-nums">
             <span>{hoveredVehicle.vehicle.speed_kmh || 0} km/j</span>
             {hoveredVehicle.vehicle.cargo && (
               <>
@@ -855,9 +851,9 @@ export function FleetVehicleLayer({
 
       {/* Telemetry Inspector Console — Docked in Right Tactical Inspector Slot */}
       {selectedVehicle && (
-        <div className="absolute top-16 right-3 bottom-4 z-40 w-[calc(100vw-1.5rem)] sm:w-[390px] bg-[#0c1017] border border-[#1c2432] shadow-xl rounded-lg p-4 text-slate-100 animate-in slide-in-from-right-4 duration-300 pointer-events-auto space-y-3 font-sans overflow-y-auto no-scrollbar">
+ <div className="absolute top-16 right-3 bottom-4 z-40 w-[calc(100vw-1.5rem)] sm:w-[390px] bg-[#0c1017] border border-white/10 shadow-xl rounded-lg p-4 text-slate-100 duration-300 pointer-events-auto space-y-3 font-sans overflow-y-auto no-scrollbar">
           {/* Header Bar */}
-          <div className="flex items-start justify-between border-b border-[#1c2432] pb-3">
+ <div className="flex items-start justify-between border-b border-white/10 pb-3">
             <div className="flex items-center gap-2.5">
               <div
                 className={`p-2 rounded-lg border ${
@@ -884,18 +880,16 @@ export function FleetVehicleLayer({
                   {selectedVehicle.vehicle.name}
                 </h3>
                 <div className="flex items-center gap-2 mt-1">
-                  <span className="text-xs font-mono tabular-nums text-slate-400 uppercase">
+ <span className="text-xs font-mono tabular-nums text-slate-400">
                     {transponderId}
                   </span>
                   <span className="text-slate-600">·</span>
-                  <span className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-mono border ${
-                    isEstimated
-                      ? 'bg-amber-950/40 text-amber-300 border-amber-500/30'
-                      : 'bg-[#121822] text-slate-300 border-[#1c2432]'
-                  }`}>
-                    <ShieldCheck className={`w-3.5 h-3.5 ${isEstimated ? 'text-amber-400' : 'text-emerald-400'}`} />
+ {statusLabel ? (
+ <span className="flex items-center gap-1.5 text-xs text-slate-400">
+ <span className={`h-1.5 w-1.5 rounded-full ${isEstimated ? 'bg-amber-400/60' : 'bg-rose-400/60'}`} />
                     <span>{statusLabel}</span>
                   </span>
+ ) : null}
                 </div>
               </div>
             </div>
@@ -903,7 +897,7 @@ export function FleetVehicleLayer({
             <button
               type="button"
               onClick={handleDismissSelection}
-              className="cursor-pointer p-1 rounded-md bg-[#121822] text-slate-400 hover:text-white border border-[#1c2432] transition"
+ className="cursor-pointer p-1 rounded-md bg-transparent text-slate-400 hover:text-white border border-white/10 transition"
               title="Tutup Inspeksi Armada"
             >
               <X className="w-3.5 h-3.5" />
@@ -911,10 +905,10 @@ export function FleetVehicleLayer({
           </div>
 
           {/* Kinematics Grid */}
-          <div className="p-3 rounded-lg bg-[#121822] border border-[#1c2432] space-y-2.5">
-            <div className="flex items-baseline justify-between border-b border-[#1c2432]/60 pb-2">
+ <div className="py-3 border-t border-white/10 space-y-2.5">
+ <div className="flex items-baseline justify-between border-b border-white/10 pb-2">
               <div>
-                <span className="text-xs font-medium text-slate-400 flex items-center gap-1.5 uppercase tracking-wider">
+ <span className="text-xs font-medium text-slate-400 flex items-center gap-1.5">
                   <Navigation className="w-3.5 h-3.5 text-slate-400" />
                   <span>Kecepatan Telemetri</span>
                 </span>
@@ -931,7 +925,7 @@ export function FleetVehicleLayer({
               </div>
 
               <div className="text-right">
-                <span className="text-xs font-medium text-slate-400 block uppercase tracking-wider">
+ <span className="text-xs font-medium text-slate-400 block">
                   Heading
                 </span>
                 <span className="text-xs font-mono tabular-nums text-slate-200 mt-1 inline-block">
@@ -963,7 +957,7 @@ export function FleetVehicleLayer({
           </div>
 
           {/* Strategic Cargo & Cold-Chain */}
-          <div className="p-3 rounded-lg bg-[#121822] border border-[#1c2432] space-y-2">
+ <div className="py-3 border-t border-white/10 space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-slate-400">Muatan Logistik:</span>
               {(isTruck || vehicle?.temperature_c !== undefined) && (
@@ -987,16 +981,16 @@ export function FleetVehicleLayer({
           </div>
 
           {/* Route & Signal Freshness */}
-          <div className="p-3 rounded-lg bg-[#121822] border border-[#1c2432] space-y-2 text-xs">
+ <div className="py-3 border-t border-white/10 space-y-2 text-xs">
             <div className="flex items-center justify-between">
               <span className="text-slate-400">Koridor Rute:</span>
               <span className="text-slate-200 font-medium truncate max-w-[200px]">
                 {selectedVehicle.vehicle.origin || 'Asal'} → {selectedVehicle.vehicle.destination || 'Tujuan'}
               </span>
             </div>
-            <div className="flex items-center justify-between text-slate-400 pt-1.5 border-t border-[#1c2432]">
+ <div className="flex items-center justify-between text-slate-400 pt-1.5 border-t border-white/10">
               <span className="flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+ <span className="h-1.5 w-1.5 rounded-full bg-emerald-400/60"></span>
                 <span>Latensi Telemetri:</span>
               </span>
               <span className="text-slate-300 font-mono tabular-nums">
@@ -1024,7 +1018,7 @@ export function FleetVehicleLayer({
               className={`w-full py-2 px-3 rounded-md border text-xs font-medium flex items-center justify-center gap-2 cursor-pointer transition-colors duration-150 ${
                 isFollowCamActive
                   ? 'bg-white text-[#080d14] border-white font-semibold'
-                  : 'bg-[#121822] text-slate-200 hover:text-white hover:bg-[#1a2230] border-[#1c2432]'
+ : 'bg-transparent text-slate-200 hover:text-white hover:bg-white/5 border-white/10'
               }`}
             >
               <Video className="w-3.5 h-3.5" />

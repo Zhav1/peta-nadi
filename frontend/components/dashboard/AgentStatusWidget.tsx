@@ -3,225 +3,225 @@
 import React, { useState, useEffect } from 'react';
 import { Bot, CheckCircle2, Loader2, Circle, ChevronDown, Activity, RefreshCw } from 'lucide-react';
 import { getBaseUrl } from '@/lib/api';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/base-ui/popover';
 
 interface AgentInfo {
-  agent_id: string;
-  name: string;
-  status: 'idle' | 'running' | 'complete' | string;
-  confidence: number;
-  last_run_at: string;
-  summary: string;
+ agent_id: string;
+ name: string;
+ status: 'idle' | 'running' | 'complete' | string;
+ confidence: number;
+ last_run_at: string;
+ summary: string;
 }
 
 interface AgentStatusResponse {
-  status: string;
-  active_agents: number;
-  average_confidence: number;
-  updated_at: string;
-  agents: AgentInfo[];
+ status: string;
+ active_agents: number;
+ average_confidence: number;
+ updated_at: string;
+ agents: AgentInfo[];
 }
 
 const DEFAULT_AGENTS: AgentInfo[] = [
-  {
-    agent_id: 'DataCollectionAgent',
-    name: 'Data Collection & Health',
-    status: 'complete',
-    confidence: 0.88,
-    last_run_at: new Date().toISOString(),
-    summary: 'Validasi telemetri BMKG, TomTom, dan status sumber data pangan.'
-  },
-  {
-    agent_id: 'OSINTHazardAgent',
-    name: 'OSINT & Intelligence',
-    status: 'complete',
-    confidence: 0.84,
-    last_run_at: new Date().toISOString(),
-    summary: 'Ekstraksi berita RSS & analisis anomali krisis lapangan.'
-  },
-  {
-    agent_id: 'PredictionAgent',
-    name: 'Congestion & Weather Forecast',
-    status: 'complete',
-    confidence: 0.82,
-    last_run_at: new Date().toISOString(),
-    summary: 'Proyeksi kemacetan 48 jam & estimasi risiko presipitasi Open-Meteo.'
-  },
-  {
-    agent_id: 'RouteOptimizationAgent',
-    name: 'Logistics & Graph Routing',
-    status: 'complete',
-    confidence: 0.90,
-    last_run_at: new Date().toISOString(),
-    summary: 'Perhitungan rute pengalihan logistik dengan pembobotan hambatan rute.'
-  },
-  {
-    agent_id: 'EconomicIntelligenceAgent',
-    name: 'Price & Inflation Intelligence',
-    status: 'complete',
-    confidence: 0.86,
-    last_run_at: new Date().toISOString(),
-    summary: 'Deteksi anomali harga cabai/beras & proyeksi tren inflasi.'
-  },
-  {
-    agent_id: 'DecisionSupportCopilot',
-    name: 'Rekomendasi Kebijakan Mitigasi',
-    status: 'complete',
-    confidence: 0.94,
-    last_run_at: new Date().toISOString(),
-    summary: 'Sintesis rekomendasi tindakan koordinasi antar-lembaga.'
-  }
+ {
+ agent_id: 'DataCollectionAgent',
+ name: 'Data Collection & Health',
+ status: 'complete',
+ confidence: 0.88,
+ last_run_at: new Date().toISOString(),
+ summary: 'Validasi telemetri BMKG, TomTom, dan status sumber data pangan.'
+ },
+ {
+ agent_id: 'OSINTHazardAgent',
+ name: 'OSINT & Intelligence',
+ status: 'complete',
+ confidence: 0.84,
+ last_run_at: new Date().toISOString(),
+ summary: 'Ekstraksi berita RSS & analisis anomali krisis lapangan.'
+ },
+ {
+ agent_id: 'PredictionAgent',
+ name: 'Congestion & Weather Forecast',
+ status: 'complete',
+ confidence: 0.82,
+ last_run_at: new Date().toISOString(),
+ summary: 'Proyeksi kemacetan 48 jam & estimasi risiko presipitasi Open-Meteo.'
+ },
+ {
+ agent_id: 'RouteOptimizationAgent',
+ name: 'Logistics & Graph Routing',
+ status: 'complete',
+ confidence: 0.90,
+ last_run_at: new Date().toISOString(),
+ summary: 'Perhitungan rute pengalihan logistik dengan pembobotan hambatan rute.'
+ },
+ {
+ agent_id: 'EconomicIntelligenceAgent',
+ name: 'Price & Inflation Intelligence',
+ status: 'complete',
+ confidence: 0.86,
+ last_run_at: new Date().toISOString(),
+ summary: 'Deteksi anomali harga cabai/beras & proyeksi tren inflasi.'
+ },
+ {
+ agent_id: 'DecisionSupportCopilot',
+ name: 'Rekomendasi Kebijakan Mitigasi',
+ status: 'complete',
+ confidence: 0.94,
+ last_run_at: new Date().toISOString(),
+ summary: 'Sintesis rekomendasi tindakan koordinasi antar-lembaga.'
+ }
 ];
 
 export const AgentStatusWidget: React.FC<{ isCompact?: boolean }> = () => {
-  const [agents, setAgents] = useState<AgentInfo[]>(DEFAULT_AGENTS);
-  const [avgConfidence, setAvgConfidence] = useState<number>(0.87);
-  const [isOpen, setIsOpen] = useState<boolean>(false);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+ const [agents, setAgents] = useState<AgentInfo[]>(DEFAULT_AGENTS);
+ const [avgConfidence, setAvgConfidence] = useState<number>(0.87);
+ const [isOpen, setIsOpen] = useState<boolean>(false);
+ const [isLoading, setIsLoading] = useState<boolean>(false);
 
-  const fetchStatus = async () => {
-    try {
-      const apiUrl = getBaseUrl();
-      const res = await fetch(`${apiUrl}/api/v1/agents/status`);
-      if (res.ok) {
-        const data: AgentStatusResponse = await res.json();
-        if (data.agents && data.agents.length > 0) {
-          setAgents(data.agents);
-          setAvgConfidence(data.average_confidence || 0.87);
-        }
-      }
-    } catch {
-      // Keep state if backend is booting
-    }
-  };
+ const fetchStatus = async () => {
+ try {
+ const apiUrl = getBaseUrl();
+ const res = await fetch(`${apiUrl}/api/v1/agents/status`);
+ if (res.ok) {
+ const data: AgentStatusResponse = await res.json();
+ if (data.agents && data.agents.length > 0) {
+ setAgents(data.agents);
+ setAvgConfidence(data.average_confidence || 0.87);
+ }
+ }
+ } catch {
+ // Keep state if backend is booting
+ }
+ };
 
-  useEffect(() => {
-    fetchStatus();
-    const interval = setInterval(fetchStatus, 15000); // 15s polling
+ useEffect(() => {
+ fetchStatus();
+ const interval = setInterval(fetchStatus, 15000); // 15s polling
 
-    const handleStreamingUpdate = (e: Event) => {
-      const customEvent = e as CustomEvent<{ agent_id: string; status: string; confidence: number; summary: string }>;
-      if (customEvent.detail?.agent_id) {
-        setAgents((prev) =>
-          prev.map((a) =>
-            a.agent_id === customEvent.detail.agent_id
-              ? {
-                  ...a,
-                  status: customEvent.detail.status || 'complete',
-                  confidence: customEvent.detail.confidence ?? a.confidence,
-                  summary: customEvent.detail.summary || a.summary,
-                  last_run_at: new Date().toISOString(),
-                }
-              : a
-          )
-        );
-      }
-    };
+ const handleStreamingUpdate = (e: Event) => {
+ const customEvent = e as CustomEvent<{ agent_id: string; status: string; confidence: number; summary: string }>;
+ if (customEvent.detail?.agent_id) {
+ setAgents((prev) =>
+ prev.map((a) =>
+ a.agent_id === customEvent.detail.agent_id
+ ? {
+ ...a,
+ status: customEvent.detail.status || 'complete',
+ confidence: customEvent.detail.confidence ?? a.confidence,
+ summary: customEvent.detail.summary || a.summary,
+ last_run_at: new Date().toISOString(),
+ }
+ : a
+ )
+ );
+ }
+ };
 
-    window.addEventListener('prehub:agent_status_updated', handleStreamingUpdate);
+ window.addEventListener('prehub:agent_status_updated', handleStreamingUpdate);
 
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('prehub:agent_status_updated', handleStreamingUpdate);
-    };
-  }, []);
+ return () => {
+ clearInterval(interval);
+ window.removeEventListener('prehub:agent_status_updated', handleStreamingUpdate);
+ };
+ }, []);
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'running':
-        return <Loader2 className="w-3.5 h-3.5 text-cyan-400 animate-spin shrink-0" />;
-      case 'complete':
-      case 'healthy':
-        return <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />;
-      default:
-        return <Circle className="w-3.5 h-3.5 text-slate-400 shrink-0" />;
-    }
-  };
+ const getStatusIcon = (status: string) => {
+ switch (status) {
+ case 'running':
+ return <Loader2 className="w-3.5 h-3.5 text-cyan-400 animate-spin shrink-0" />;
+ case 'complete':
+ case 'healthy':
+ return <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />;
+ default:
+ return <Circle className="w-3.5 h-3.5 text-slate-400 shrink-0" />;
+ }
+ };
 
-  const getConfidenceColor = (conf: number) => {
-    if (conf >= 0.85) return 'bg-emerald-500 text-emerald-400';
-    if (conf >= 0.65) return 'bg-cyan-500 text-cyan-400';
-    return 'bg-amber-500 text-amber-400';
-  };
+ const getConfidenceColor = (conf: number) => {
+ if (conf >= 0.85) return 'bg-emerald-500 text-emerald-400';
+ if (conf >= 0.65) return 'bg-cyan-500 text-cyan-400';
+ return 'bg-amber-500 text-amber-400';
+ };
 
-  return (
-    <div className="relative">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className={`cursor-pointer flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs transition-colors duration-150 ${
-          isOpen
-            ? 'bg-white border-white text-[#080d14] font-semibold'
-            : 'bg-[#0c1017] border-[#1c2432] text-slate-300 hover:text-white hover:border-slate-500'
-        }`}
-        title="Status Modul Analisis Otomatis PreHub"
-      >
-        <Bot className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-        <span className="font-mono text-xs tabular-nums">
-          Analisis: {agents.filter((a) => a.status === 'complete').length}/6 Siap ({Math.round(avgConfidence * 100)}%)
-        </span>
-        <ChevronDown className={`w-3 h-3 opacity-60 ml-0.5 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
-      </button>
+ return (
+ <Popover open={isOpen} onOpenChange={setIsOpen}>
+ <PopoverTrigger
+ render={
+ <button
+ className={`cursor-pointer flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs transition-colors duration-150 ${
+ isOpen
+ ? 'bg-white border-white text-[#080d14] font-semibold'
+ : 'bg-[#0c1017] border-white/10 text-slate-300 hover:text-white hover:border-white/25'
+ }`}
+ title="Status modul analisis"
+ >
+ <Bot className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+ <span className="font-mono text-xs tabular-nums">
+ Analisis: {agents.filter((a) => a.status === 'complete').length}/6 siap ({Math.round(avgConfidence * 100)}%)
+ </span>
+ <ChevronDown className={`w-3 h-3 opacity-60 ml-0.5 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+ </button>
+ }
+ />
 
-      {isOpen && (
-        <div className="absolute top-full left-0 md:right-0 md:left-auto mt-2 w-84 sm:w-96 p-4 rounded-lg bg-[#0c1017] border border-[#1c2432] shadow-xl z-50 text-slate-200 animate-in fade-in duration-150">
-          <div className="flex items-center justify-between border-b border-[#1c2432] pb-2.5 mb-3">
-            <div className="flex items-center gap-2">
-              <Activity className="w-4 h-4 text-slate-400" />
-              <span className="font-sans font-semibold text-xs text-white">Status Modul Analisis</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 rounded bg-[#121822] border border-[#1c2432] text-slate-300 text-xs font-mono">
-                Aktif
-              </span>
-              <button
-                onClick={() => {
-                  setIsLoading(true);
-                  fetchStatus().finally(() => setIsLoading(false));
-                }}
-                className="cursor-pointer p-1 rounded hover:bg-[#121822] text-slate-400 hover:text-white transition-colors"
-                title="Perbarui Status Agen"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-              </button>
-            </div>
-          </div>
+ <PopoverContent side="bottom" align="start" sideOffset={8} collisionPadding={12} className="w-80 sm:w-96 p-4 text-slate-200">
+ <div className="flex items-center justify-between border-b border-white/10 pb-2.5 mb-3">
+ <div className="flex items-center gap-2">
+ <Activity className="w-4 h-4 text-slate-400" />
+ <span className="font-sans font-medium text-xs text-white">Modul analisis</span>
+ </div>
+ <div className="flex items-center gap-2">
+ 
+ <button
+ onClick={() => {
+ setIsLoading(true);
+ fetchStatus().finally(() => setIsLoading(false));
+ }}
+ className="cursor-pointer p-1 rounded hover:bg-white/5 text-slate-400 hover:text-white transition-colors"
+ title="Perbarui status agen"
+ >
+ <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+ </button>
+ </div>
+ </div>
 
-          <div className="space-y-2 max-h-[340px] overflow-y-auto pr-1">
-            {agents.map((agent) => (
-              <div
-                key={agent.agent_id}
-                className="p-2.5 rounded-md bg-[#121822] border border-[#1c2432] space-y-1.5"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    {getStatusIcon(agent.status)}
-                    <span className="font-sans text-xs font-medium text-slate-200">{agent.name}</span>
-                  </div>
-                  <span className="font-mono tabular-nums text-xs font-semibold text-slate-300">
-                    {Math.round(agent.confidence * 100)}%
-                  </span>
-                </div>
+ <div className="space-y-2 max-h-[340px] overflow-y-auto pr-1">
+ {agents.map((agent) => (
+ <div
+ key={agent.agent_id}
+ className="p-2.5 rounded-md bg-transparent border-t border-white/5 space-y-1.5"
+ >
+ <div className="flex items-center justify-between">
+ <div className="flex items-center gap-2">
+ {getStatusIcon(agent.status)}
+ <span className="font-sans text-xs font-medium text-slate-200">{agent.name}</span>
+ </div>
+ <span className="font-mono tabular-nums text-xs font-semibold text-slate-300">
+ {Math.round(agent.confidence * 100)}%
+ </span>
+ </div>
 
-                {/* Confidence Bar */}
-                <div className="w-full bg-[#080d14] rounded-full h-1 overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all duration-300 ${getConfidenceColor(agent.confidence).split(' ')[0]}`}
-                    style={{ width: `${Math.max(10, Math.min(100, agent.confidence * 100))}%` }}
-                  />
-                </div>
+ {/* Confidence Bar */}
+ <div className="w-full bg-[#080d14] rounded-full h-1 overflow-hidden">
+ <div
+ className={`h-full rounded-full transition-all duration-300 ${getConfidenceColor(agent.confidence).split(' ')[0]}`}
+ style={{ width: `${Math.max(10, Math.min(100, agent.confidence * 100))}%` }}
+ />
+ </div>
 
-                <p className="text-xs text-slate-400 font-sans leading-relaxed line-clamp-2">
-                  {agent.summary}
-                </p>
-              </div>
-            ))}
-          </div>
+ <p className="text-xs text-slate-400 font-sans leading-relaxed line-clamp-2">
+ {agent.summary}
+ </p>
+ </div>
+ ))}
+ </div>
 
-          <div className="mt-3 pt-2.5 border-t border-[#1c2432] flex items-center justify-between text-xs text-slate-400 font-mono">
-            <span>Interval polling: 15 detik</span>
-            <span className="text-emerald-400">Semua simpul aktif</span>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+ <div className="mt-3 pt-2.5 border-t border-white/10 flex items-center justify-between text-xs text-slate-400 font-mono">
+ <span className="tabular-nums">Polling 15 detik</span>
+ <span className="text-emerald-400">Semua simpul aktif</span>
+ </div>
+ </PopoverContent>
+ </Popover>
+ );
 };
