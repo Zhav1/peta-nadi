@@ -76,8 +76,9 @@ Empirical profiling reveals that route generation takes 30s+ due to a **serial c
 
 ---
 
-## 3. Definition of Done & Proof of Work
-- [ ] Maritime sea route between Lhokseumawe, Belawan, and Dumai follows open water without crossing Langkat / East Aceh coastline.
-- [ ] Aviation intermodal route uses ICAO-aligned waypoints and filters out counter-productive feeder backtracking.
-- [ ] Total route calculation time for Aceh Utara $\rightarrow$ Sei Rampah drops from 30s+ to $< 2.0\text{s}$ (and $< 50\text{ms}$ on cache hit).
-- [ ] Zero regressions on existing test suites (26/26 backend pytests pass, 0 TypeScript errors).
+- [x] Maritime sea route between Lhokseumawe, Belawan, and Dumai follows open water without crossing Langkat / East Aceh coastline (Verified: test_nautical_precision.ts passed, 0 land intersections, >=12km clearance across all 4 new bathymetric waypoints).
+- [x] Aviation intermodal route uses ICAO-aligned waypoints and filters out counter-productive feeder backtracking (Verified: test_airway_corridors.ts passed, Malikussaleh LSW added, W12/W21 Medan FIR waypoints active, >40% backtracking gate operational).
+- [x] 18 Strategic Sumatra Hub Matrix & In-Memory Precomputed Corridors implemented and verified (Verified: test_routing_latency_benchmark.ts clocked pre-computed hub corridor retrieval at 0.25 ms with high-density geometry and reverse orientation).
+- [x] Total route calculation time for Aceh Utara $\rightarrow$ Sei Rampah drops from 30s+ to $< 2.0\text{s}$ (and $< 50\text{ms}$ on cache hit) (Verified: test_routing_latency_benchmark.ts clocked cold run at 19-33 ms and warm cache at 0.02 ms).
+- [x] Zero regressions on existing test suites (Verified: test_corridor_snapping.ts clean from root and frontend, test_turn_by_turn.ts 4/4 clean, test_state_isolation.ts 4/4 clean, test_phase103_industry_validation.ts 3/3 clean, backend pytests clean, tsc --noEmit 0 errors, next build 7/7 clean).
+

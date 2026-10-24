@@ -232,51 +232,59 @@ SUMATRA_NAUTICAL_PERIMETER: List[List[float]] = [
     [95.4000, 5.7500],
     # 1: Lhokseumawe Offshore (Malacca Strait entrance)
     [97.2500, 5.3500],
-    # 2: Langkat / Belawan Offshore Approach
+    # 2: Peureulak Offshore Fairway
+    [97.8000, 5.1500],
+    # 3: Langsa Outer Sea Lane
+    [98.2500, 4.6500],
+    # 4: Teluk Aru / Pangkalan Brandan Offshore
+    [98.6000, 4.2500],
+    # 5: Belawan Navigational Pilot Fairway
+    [98.8200, 4.0200],
+    # 6: Langkat / Belawan Offshore Approach
     [98.7800, 3.9500],
-    # 3: Kuala Tanjung Sea Fairway
+    # 7: Kuala Tanjung Sea Fairway
     [99.5500, 3.5000],
-    # 4: Asahan / Tanjung Balai Sea Lane
+    # 8: Asahan / Tanjung Balai Sea Lane
     [100.1000, 3.1000],
-    # 5: Dumai Offshore Fairway
+    # 9: Dumai Offshore Fairway
     [101.4800, 1.7800],
-    # 6: Selat Bengkalis / Selat Rupat Waterway
+    # 10: Selat Bengkalis / Selat Rupat Waterway
     [102.3500, 1.4000],
-    # 7: Riau Islands / Batam - Singapore Strait Approach
+    # 11: Riau Islands / Batam - Singapore Strait Approach
     [103.9500, 1.1500],
-    # 8: Selat Berhala / Jambi Estuary
+    # 12: Selat Berhala / Jambi Estuary
     [104.4500, -0.7500],
-    # 9: Selat Bangka North Entrance
+    # 13: Selat Bangka North Entrance
     [105.0500, -1.8500],
-    # 10: Selat Bangka South (Musi River Entrance for Boom Baru)
+    # 14: Selat Bangka South (Musi River Entrance for Boom Baru)
     [105.2500, -2.7500],
-    # 11: Lampung East Coast Sea Fairway
+    # 15: Lampung East Coast Sea Fairway
     [106.1000, -4.7500],
-    # 12: Sunda Strait North / Panjang Port Entrance
+    # 16: Sunda Strait North / Panjang Port Entrance
     [105.4500, -5.6000],
-    # 13: Bakauheni - Merak Ferry Nautical Corridor
+    # 17: Bakauheni - Merak Ferry Nautical Corridor
     [105.8200, -5.9200],
-    # 14: Sunda Strait West Ocean Fairway
+    # 18: Sunda Strait West Ocean Fairway
     [105.5000, -6.1000],
-    # 15: Teluk Semangka South
+    # 19: Teluk Semangka South
     [104.6500, -5.9000],
-    # 16: Krui / Lampung Barat Offshore (Indian Ocean)
+    # 20: Krui / Lampung Barat Offshore (Indian Ocean)
     [103.7500, -5.2500],
-    # 17: Bengkulu / Pulau Baai Fairway (Indian Ocean)
+    # 21: Bengkulu / Pulau Baai Fairway (Indian Ocean)
     [102.1500, -3.9500],
-    # 18: Mukomuko Offshore
+    # 22: Mukomuko Offshore
     [101.0500, -2.6000],
-    # 19: Teluk Bayur (Padang) Fairway (Indian Ocean)
+    # 23: Teluk Bayur (Padang) Fairway (Indian Ocean)
     [100.2500, -1.0500],
-    # 20: Nias Strait / Pasaman West Waters
+    # 24: Nias Strait / Pasaman West Waters
     [99.4500, 0.1000],
-    # 21: Sibolga Bay Ocean Entrance (Indian Ocean)
+    # 25: Sibolga Bay Ocean Entrance (Indian Ocean)
     [98.6500, 1.6500],
-    # 22: Tapaktuan Offshore Waters
+    # 26: Tapaktuan Offshore Waters
     [97.0500, 3.1500],
-    # 23: Meulaboh Offshore Waters
+    # 27: Meulaboh Offshore Waters
     [95.9500, 4.0500],
-    # 24: Banda Aceh West Coast (Indian Ocean)
+    # 28: Banda Aceh West Coast (Indian Ocean)
     [95.1500, 5.4500],
 ]
 

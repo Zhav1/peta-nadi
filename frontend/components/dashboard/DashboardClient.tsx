@@ -1209,67 +1209,44 @@ export default function DashboardClient() {
       // detour corridors (index >= 1) may carry grounded hedging economics.
       // Absent => left undefined (honest null), never invented.
       const backendHedgingByIndex = new Map<number, NonNullable<RouteRecommendation['hedging']>>();
-      // Synchronize Deterministic CPU Route Solver (NetworkX + OR-Tools)
-      try {
-        const routingRes = await api.routing.optimizeRouting({
-          origin_id: originId,
-          dest_id: destId,
-          ...(originNode ? { origin_coords: originNode } : {}),
-          ...(destNode ? { dest_coords: destNode } : {}),
-          ...(originInfo ? { origin_name: formatNodeId(originId, originInfo) } : {}),
-          ...(destInfo ? { dest_name: formatNodeId(destId, destInfo) } : {}),
-          fleet_size: 3,
-          hazard_zones: hazardCenter ? [{ center: hazardCenter, radiusKm }] : [],
-          // Forward hedging economics only when the caller supplied them;
-          // no hardcoded cargo values are injected into every request.
-          ...(effectiveHedgingOpts?.commodity ? { commodity: effectiveHedgingOpts.commodity } : {}),
-          ...(effectiveHedgingOpts?.cargo_tonnage != null ? { cargo_tonnage: effectiveHedgingOpts.cargo_tonnage } : {}),
-          ...(effectiveHedgingOpts?.vehicle_golongan ? { vehicle_golongan: effectiveHedgingOpts.vehicle_golongan } : {}),
-          ...(effectiveHedgingOpts?.fuel_type ? { fuel_type: effectiveHedgingOpts.fuel_type } : {}),
-          ...(effectiveHedgingOpts?.toll_segments ? { toll_segments: effectiveHedgingOpts.toll_segments } : {}),
-          ...(effectiveHedgingOpts?.p_disruption != null ? { p_disruption: effectiveHedgingOpts.p_disruption } : {}),
-          ...(effectiveHedgingOpts?.disruption_delay_hours != null ? { disruption_delay_hours: effectiveHedgingOpts.disruption_delay_hours } : {}),
-        }, signal);
-        if (isStale()) return false;
-        const nested = (routingRes as { point_to_point_path?: { status?: string; message?: string } } | null)?.point_to_point_path;
-        if (nested?.status === 'no_route') {
-          const message = nested.message || 'Rute tidak ditemukan untuk titik yang dipilih.';
-          setRoutingError(message);
-          setCurrentMapRoutes([]);
-          setSelectedCrisis((prev) =>
-            prev ? { ...prev, route_recommendations: [] } : prev
-          );
-          setRoutingInfo(null);
-          setActiveRouteIdx(null);
-          setHiddenRouteIndices(new Set());
-          setToast({ message, type: 'error' });
-          return false;
-        }
-        const backendPtpRoutes = (nested as { routes?: Array<{ route_index?: number; hedging?: NonNullable<RouteRecommendation['hedging']> }> } | undefined)?.routes;
-        if (Array.isArray(backendPtpRoutes)) {
-          backendPtpRoutes.forEach((br, order) => {
-            const key = typeof br?.route_index === 'number' ? br.route_index : order;
-            if (br?.hedging) backendHedgingByIndex.set(key, br.hedging);
-          });
-        }
-        if (routingRes && routingRes.optimization_summary) {
-          // Savings stay null until the backend reports a real baseline comparison;
-          // the HUD hides the pill when null (no fabricated fallback).
-          setRoutingInfo({
-            solver: routingRes.solver || 'Deterministic CPU Routing Solver (NetworkX + OR-Tools)',
-            compute_time_ms: routingRes.compute_time_ms ?? routingRes.total_pipeline_time_ms ?? null,
-            savings_pct: routingRes.optimization_summary.fuel_cost_reduction_pct ?? null
-          });
-        }
-      } catch (err) {
-        if (isStale() || isAbortError(err)) return false;
-        // The CPU solver is enrichment only; Mapbox routing below stays authoritative.
-        console.warn('CPU routing solver API fallback:', err);
-      }
+      // PROGRESSIVE HYDRATION & PARALLEL EXECUTION:
+      // Concurrently dispatch CPU routing solver and dynamic detour calculation
+      const routingPromise = api.routing.optimizeRouting({
+        origin_id: originId,
+        dest_id: destId,
+        ...(originNode ? { origin_coords: originNode } : {}),
+        ...(destNode ? { dest_coords: destNode } : {}),
+        ...(originInfo ? { origin_name: formatNodeId(originId, originInfo) } : {}),
+        ...(destInfo ? { dest_name: formatNodeId(destId, destInfo) } : {}),
+        fleet_size: 3,
+        hazard_zones: hazardCenter ? [{ center: hazardCenter, radiusKm }] : [],
+        // Forward hedging economics only when the caller supplied them;
+        // no hardcoded cargo values are injected into every request.
+        ...(effectiveHedgingOpts?.commodity ? { commodity: effectiveHedgingOpts.commodity } : {}),
+        ...(effectiveHedgingOpts?.cargo_tonnage != null ? { cargo_tonnage: effectiveHedgingOpts.cargo_tonnage } : {}),
+        ...(effectiveHedgingOpts?.vehicle_golongan ? { vehicle_golongan: effectiveHedgingOpts.vehicle_golongan } : {}),
+        ...(effectiveHedgingOpts?.fuel_type ? { fuel_type: effectiveHedgingOpts.fuel_type } : {}),
+        ...(effectiveHedgingOpts?.toll_segments ? { toll_segments: effectiveHedgingOpts.toll_segments } : {}),
+        ...(effectiveHedgingOpts?.p_disruption != null ? { p_disruption: effectiveHedgingOpts.p_disruption } : {}),
+        ...(effectiveHedgingOpts?.disruption_delay_hours != null ? { disruption_delay_hours: effectiveHedgingOpts.disruption_delay_hours } : {}),
+      }, signal);
 
+      const detourPromise = calculateAIDynamicDetourRoutes(
+        hazardCenter,
+        radiusKm,
+        originNode,
+        destNode,
+        modality,
+        hazardType,
+        impactProfile,
+        zoneTier,
+        signal
+      );
+
+      // 1. Await visual detour corridors first for immediate sub-second rendering
       let routes: RouteRecommendation[];
       try {
-        routes = await calculateAIDynamicDetourRoutes(hazardCenter, radiusKm, originNode, destNode, modality, hazardType, impactProfile, zoneTier, signal);
+        routes = await detourPromise;
       } catch (err) {
         if (isStale() || isAbortError(err)) return false;
         console.warn('Dynamic detour routing failed:', err);
@@ -1287,21 +1264,56 @@ export default function DashboardClient() {
         return false;
       }
 
-      // Merge backend hedging economics onto the Mapbox estimator routes by
-      // index order. routes[0] is the baseline and carries no hedging by design;
-      // detour corridors fall back to routes[1].hedging. Absent => undefined.
-      if (backendHedgingByIndex.size > 0) {
-        const detourHedging = backendHedgingByIndex.get(1);
-        routes.forEach((route, idx) => {
-          const match = backendHedgingByIndex.get(idx) ?? (idx > 0 ? detourHedging : undefined);
-          if (match) (route as { hedging?: NonNullable<RouteRecommendation['hedging']> }).hedging = match;
-        });
-      }
-
+      // Render visual corridors immediately onto map
       setCurrentMapRoutes(routes);
       setSelectedCrisis((prev) =>
         prev ? { ...prev, route_recommendations: routes } : prev
       );
+
+      // 2. Asynchronously hydrate backend solver metrics & hedging economics without blocking visual render
+      routingPromise
+        .then((routingRes) => {
+          if (isStale()) return;
+          const nested = (routingRes as { point_to_point_path?: { status?: string; message?: string } } | null)?.point_to_point_path;
+          if (nested?.status === 'no_route') {
+            return;
+          }
+          const backendPtpRoutes = (nested as { routes?: Array<{ route_index?: number; hedging?: NonNullable<RouteRecommendation['hedging']> }> } | undefined)?.routes;
+          if (Array.isArray(backendPtpRoutes)) {
+            backendPtpRoutes.forEach((br, order) => {
+              const key = typeof br?.route_index === 'number' ? br.route_index : order;
+              if (br?.hedging) backendHedgingByIndex.set(key, br.hedging);
+            });
+          }
+          if (routingRes && routingRes.optimization_summary) {
+            setRoutingInfo({
+              solver: routingRes.solver || 'Deterministic CPU Routing Solver (NetworkX + OR-Tools)',
+              compute_time_ms: routingRes.compute_time_ms ?? routingRes.total_pipeline_time_ms ?? null,
+              savings_pct: routingRes.optimization_summary.fuel_cost_reduction_pct ?? null,
+            });
+          }
+
+          // If backend hedging arrived, merge onto current displayed routes
+          if (backendHedgingByIndex.size > 0) {
+            const detourHedging = backendHedgingByIndex.get(1);
+            setCurrentMapRoutes((prevRoutes) => {
+              if (!prevRoutes || prevRoutes.length === 0) return prevRoutes;
+              const merged = prevRoutes.map((route, idx) => {
+                const match = backendHedgingByIndex.get(idx) ?? (idx > 0 ? detourHedging : undefined);
+                return match ? { ...route, hedging: match } : route;
+              });
+              setSelectedCrisis((prev) =>
+                prev ? { ...prev, route_recommendations: merged } : prev
+              );
+              return merged;
+            });
+          }
+        })
+        .catch((err) => {
+          if (isStale() || isAbortError(err)) return;
+          console.warn('CPU routing solver API fallback (non-blocking):', err);
+        });
+
       return true;
     } finally {
       if (routingInFlightKeyRef.current === routeKey) routingInFlightKeyRef.current = null;

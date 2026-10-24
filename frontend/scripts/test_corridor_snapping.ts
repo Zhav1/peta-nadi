@@ -6,7 +6,12 @@ import { corridorSnappingService, type SnappedCorridorsData } from '../lib/corri
 console.log('--- RUNNING CORRIDOR SNAPPING SERVICE VERIFICATION SUITE ---');
 
 // 1. Verify static asset exists on disk and is non-empty
-const jsonPath = path.resolve('public/data/fleet_corridors_snapped.json');
+const candidatePaths = [
+  path.resolve('public/data/fleet_corridors_snapped.json'),
+  path.resolve('frontend/public/data/fleet_corridors_snapped.json'),
+  path.resolve(__dirname, '../public/data/fleet_corridors_snapped.json'),
+];
+const jsonPath = candidatePaths.find((p) => fs.existsSync(p)) || candidatePaths[0];
 assert(fs.existsSync(jsonPath), `Expected ${jsonPath} to exist on disk`);
 const rawJson = fs.readFileSync(jsonPath, 'utf-8');
 const data: SnappedCorridorsData = JSON.parse(rawJson);
