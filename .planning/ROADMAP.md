@@ -2686,6 +2686,29 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 
 ---
 
+## Phase 106: Dual-Metric Operational Cost & First-Principles Trip Economics (A/B Variant C)
+
+**Goal:** Implement A/B Variant C (Dual Metric) to permanently resolve operator confusion around "Rp 0 (Normal)": (1) build first-principles trip operational cost engine (fuel + labor + reefer genset + tolls) in `tripCostCalculator.ts`; (2) display dual-metric on the map callout popover (`Est. Operasional: Rp 6,01 Jt` with `Acuan (Δ Rp 0)` for baseline, and total + detour delta for alternatives); (3) fix safety status on primary route from `"Detour terverifikasi"` to `"Jalur utama bebas hambatan"`; and (4) synchronize trip cost breakdown in `RouteDetailModal.tsx`.  
+**Status:** READY TO EXECUTE ⏳  
+**Plan:** `.planning/phases/106-dual-metric-operational-cost-trip-economics/PLAN.md`
+
+### Deliverables
+- **WP1 - First-Principles Trip Operational Cost Engine (`tripCostCalculator.ts`, `aiDynamicRouter.ts`)**:
+  - Exact formula: Biosolar fuel (3.5 km/L @ Rp 6.800/L), labor (Rp 50.000/h), reefer diesel genset (Rp 45.000/h for cold chain), BPJT tolls.
+  - Zero magic numbers; attach `total_operational_cost_idr` and breakdown to all routes.
+- **WP2 - Dual-Metric Popover Rendering & Safety Status Correction (`CrisisMap.tsx`)**:
+  - Update popover header to `Est. Operasional`.
+  - Render total trip cost + delta badges (`Acuan (Δ Rp 0)` for baseline, `+Rp X (Detour)` for alternatives).
+  - Correct safety status subtitle to `Jalur utama bebas hambatan`.
+- **WP3 - Primary Route Safety Status Invariant Alignment (`aiDynamicRouter.ts`)**:
+  - Set `landPrimary.safety_status` to `'CLEAR'` when uncompromised.
+- **WP4 - RouteDetailModal Dual-Cost Synchronization (`RouteDetailModal.tsx`)**:
+  - Render full trip operational cost breakdown alongside detour delta.
+- **WP5 - Automated Verification Gate**:
+  - TypeScript check, backend tests, and `test_phase106_dual_metric.ts`.
+
+---
+
 ## Backlog (Post-Hackathon / v2 & New Context Window Backlog)
 
 ### Active Remediation & Audit Backlog (For New Context Window)

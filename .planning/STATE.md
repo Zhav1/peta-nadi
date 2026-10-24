@@ -2,20 +2,20 @@
 gsd_state_version: "1.0"
 milestone: M6
 milestone_name: 3D Globe Native Mapbox Fleet, Street-Snapping & Impeccable Cartography
-current_phase: 105
-current_phase_name: UI Popover Portal Migration, End-to-End Cost Telemetry & Reactive Cargo Hedging
-status: complete
-stopped_at: "Phase 105 complete: Base UI Popover Portal migration for Cargo Selector in CrisisSimulatorBar.tsx, expanded cost resolution hierarchy in CrisisMap.tsx (tradeoff additional_cost_idr + flat/nested hedging), backend flat cost aliasing in routing_router.py, race condition eliminated in DashboardClient.tsx, and sidebar commodity hydration in MitigationTab.tsx."
-last_updated: "2026-10-25T02:15:00.000Z"
+current_phase: 106
+current_phase_name: Dual-Metric Operational Cost & First-Principles Trip Economics (A/B Variant C)
+status: planned
+stopped_at: "Phase 106 planned: First-principles trip operational cost engine in tripCostCalculator.ts, dual-metric rendering on CrisisMap.tsx (Est. Total + Delta), primary route safety status fix (CLEAR -> Jalur utama bebas hambatan), and RouteDetailModal synchronization."
+last_updated: "2026-10-25T03:15:00.000Z"
 last_activity: 2026-10-25
-last_activity_desc: "Phase 105 executed and verified: Base UI Popover for cargo selector, comprehensive cost hierarchy resolution, flat hedging aliases, and sidebar commodity hydration. 0 tsc errors, 100% passing tests."
+last_activity_desc: "Phase 106 planned with detailed PLAN.md in .planning/phases/106-dual-metric-operational-cost-trip-economics/PLAN.md."
 state_head: HEAD
 progress:
-  total_phases: 105
+  total_phases: 106
   completed_phases: 105
-  total_plans: 122
+  total_plans: 123
   completed_plans: 122
-  percent: 100.0
+  percent: 99.2
 ---
 
 # STATE: PreHub Project Memory
@@ -23,15 +23,15 @@ progress:
 **Last Updated:** 2026-10-25
 **Active Milestone:** M6 - 3D Globe Native Mapbox Fleet, Street-Snapping & Impeccable Cartography [ACTIVE 🚀]
 **Previous Milestones:** M1-M4 [COMPLETED ✅], M5 - Pilot Interference, Ingestion Resilience & Honest Verification [COMPLETED ✅]
-**Current Phase:** 105
+**Current Phase:** 106
 
 ---
 
 ## Current Position
 
-Phase: 105 (UI Popover Portal Migration, End-to-End Cost Telemetry & Reactive Cargo Hedging) - COMPLETE ✅
-Status: All work packages (WP1 to WP5) executed and verified. 0 TypeScript errors, 100% passing backend pytests and automated script test suites.
-Next action: Ready for user review or next milestone.
+Phase: 106 (Dual-Metric Operational Cost & First-Principles Trip Economics - A/B Variant C) - PLANNED ⏳
+Status: Detailed GSD phase plan generated in .planning/phases/106-dual-metric-operational-cost-trip-economics/PLAN.md. Ready for wave-based execution via DeepCoder.
+Next action: Execute Phase 106 Work Packages (WP1 to WP5).
 
 
 
@@ -156,6 +156,7 @@ Upstream Phases 87/88 above (Mapbox turn-by-turn; client-isolated session, merge
 | 102 | Fleet Telemetry Restoration, Payload Optimization & Zoom-Out LOD Cartography | **COMPLETE** ✅ | Restored all 24 truck dots (Emerald #10b981), reduced telemetry polling payload to 28.7 KB for trucks via include_geometry=false, loaded high-density snapped corridors via corridorSnappingService, enabled zero-latency state hydration for news and corridor context, eliminated 401 guest console errors, and implemented WebGL smooth dissolve cartographic LOD between z=4.0 and z=3.2. 26/26 pytest passed, 0 tsc errors. |
 | 104 | Nautical Sea-Lane Precision, ICAO Airway Corridors & Sub-Second Parallel Routing Engine | **COMPLETE** ✅ | Bathymetric fairway expansion (29-pt nautical perimeter, >=12km clearance from Langkat/Aceh Timur coast), ICAO ATS airway corridors (Medan FIR W12/W21 + Malikussaleh LSW + >40% backtracking gate), eliminated cloud API waterfall via progressive parallel dispatch and simplified Mapbox feeder profiles, pre-computed in-memory hub-to-hub and quantized coordinate route cache. Latency compressed from 30s+ to 32.4ms cold (<0.05ms warm). 0 land crossings, all pytests green, tsc exit 0, next build clean. Docs: `104-nautical-precision-icao-airways-subsecond-routing/PLAN.md`. |
 | 105 | UI Popover Portal Migration, End-to-End Cost Telemetry & Reactive Cargo Hedging | **COMPLETE** ✅ | Base UI Popover migration with Portal for Cargo Selector in CrisisSimulatorBar.tsx to escape overflow-x-auto clipping, comprehensive cost hierarchy resolution in CrisisMap.tsx (tradeoff additional_cost_idr + flat/nested hedging + Rp 0 Normal baseline), reactive activeRoutes popover sync, backend flat cost aliasing in routing_router.py, race condition eliminated in DashboardClient.tsx, and sidebar commodity hydration in MitigationTab.tsx. 5/5 pytests pass, 0 tsc errors. Docs in `105-ui-popover-portal-cost-telemetry-cargo-hedging/PLAN.md`. |
+| 106 | Dual-Metric Operational Cost & First-Principles Trip Economics (A/B Variant C) | **PLANNED** ⏳ | Docs in `106-dual-metric-operational-cost-trip-economics/PLAN.md`. First-principles trip operational cost engine (fuel + labor + reefer genset + tolls) in tripCostCalculator.ts, dual-metric popover rendering on CrisisMap.tsx (Est. Total + Delta), primary route safety status fix (CLEAR -> Jalur utama bebas hambatan), and RouteDetailModal synchronization. |
 
 
 ### Hotfix 2026-10-22 — Offline land-corridor honesty + toll-bypass spec (pilot rule: green = verified-driveable)
