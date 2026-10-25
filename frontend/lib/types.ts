@@ -1295,3 +1295,32 @@ export interface ERPSummaryResponse {
   trips: ERPTripRow[];
   business_notes: string[];
 }
+
+// ==========================================
+// M8 Phase 1: Laporan aggregation foundation (frontend-only, no API change)
+// ==========================================
+
+export type LaporanTierKey = 'ultra' | 'cold' | 'semi' | 'dry' | 'Lainnya';
+
+export interface LaporanFilters {
+  startDate?: string;
+  endDate?: string;
+  tier?: LaporanTierKey | 'ALL';
+  status?: TravelStatus | 'ALL';
+  search?: string;
+}
+
+export interface CommodityTierGroup {
+  tier: LaporanTierKey;
+  tripCount: number;
+  totalSavedIdr: number;
+  totalSavedFuelLiters: number;
+  totalSavedHours: number;
+}
+
+export interface PeriodBucket {
+  key: string;
+  label: string;
+  tripCount: number;
+  totalSavedIdr: number;
+}

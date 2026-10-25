@@ -289,6 +289,74 @@ async def test_pihps_skips_when_no_level2_or_aggregate_row(mock_get_redis, mock_
     assert any("No usable PIHPS commodity row" in rec.getMessage() for rec in caplog.records)
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("region", ["north_sumatra", "aceh", "lampung"])
+@patch("app.scrapers.pihps_scraper.get_write_client")
+@patch("app.scrapers.pihps_scraper.get_redis")
+async def test_pihps_region_param_propagates(mock_get_redis, mock_get_write_client, region):
+    """Region-scoped keys persist eq(region) + region Redis keys; bare keys default north_sumatra."""
+    mock_redis = MagicMock()
+    mock_redis.get.return_value = None  # empty history + no dedup hits
+    mock_get_redis.return_value = mock_redis
+
+    scraper = PIHPSScraper()
+    key = "beras" if region == "north_sumatra" else f"beras@{region}"
+    raw_data = {key: {"data": [{"level": 2, "name": "Beras", "Jan 2026 (I)": "13,400"}]}}
+
+    events = await scraper.parse(raw_data)
+    assert len(events) == 1
+
+    builder = mock_get_write_client.return_value.table.return_value
+    inserted = [call.args[0] for call in builder.insert.call_args_list]
+    assert len(inserted) == 1
+    assert inserted[0]["region"] == region
+
+    set_calls = [str(c) for c in mock_redis.set.call_args_list]
+    assert any(f"lrip:pihps:rolling:beras:{region}" in s for s in set_calls)
+    assert any(f"lrip:pihps:latest:{region}" in s for s in set_calls)
+    if region == "north_sumatra":
+        assert any("lrip:pihps:latest'" in s or "lrip:pihps:latest\"" in s or "lrip:pihps:latest" in s for s in set_calls)
+    # dedup key carries the short slug
+    from app.scrapers.pihps_scraper import REGION_SHORT_SLUG
+    short = REGION_SHORT_SLUG[region]
+    assert events[0]["dedup_key"] == f"pihps:beras:{short}:20260104"
+
+
+@pytest.mark.asyncio
+@patch("app.scrapers.pihps_scraper.get_write_client")
+@patch("app.scrapers.pihps_scraper.get_redis")
+async def test_pihps_multi_province_two_regions(mock_get_redis, mock_get_write_client):
+    """2 provinces x 1 commodity: eq region params per region + per-region Redis keys."""
+    mock_redis = MagicMock()
+    mock_redis.get.return_value = None
+    mock_get_redis.return_value = mock_redis
+
+    scraper = PIHPSScraper()
+    raw_data = {
+        "beras@north_sumatra": {"data": [{"level": 2, "name": "Beras", "Jan 2026 (I)": "13,400"}]},
+        "beras@aceh": {"data": [{"level": 2, "name": "Beras", "Jan 2026 (I)": "14,000"}]},
+    }
+
+    events = await scraper.parse(raw_data)
+    assert len(events) == 2
+    regions = {e["region"] for e in events}
+    assert regions == {"north_sumatra", "aceh"}
+
+    builder = mock_get_write_client.return_value.table.return_value
+    inserted = [call.args[0] for call in builder.insert.call_args_list]
+    assert len(inserted) == 2
+    assert {r["region"] for r in inserted} == {"north_sumatra", "aceh"}
+
+    set_keys = [c.args[0] if c.args else "" for c in mock_redis.set.call_args_list]
+    assert "lrip:pihps:rolling:beras:north_sumatra" in set_keys
+    assert "lrip:pihps:rolling:beras:aceh" in set_keys
+    assert "lrip:pihps:latest:north_sumatra" in set_keys
+    assert "lrip:pihps:latest:aceh" in set_keys
+    assert "lrip:pihps:latest" in set_keys  # north_sumatra compat snapshot
+    dedups = {e["dedup_key"] for e in events}
+    assert dedups == {"pihps:beras:sumut:20260104", "pihps:beras:aceh:20260104"}
+
+
 # ==============================================================================
 # NER Pipeline Tests
 # ==============================================================================

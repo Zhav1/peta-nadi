@@ -3052,3 +3052,49 @@ M7 removes the remaining ways the Berita surface could look live when it was not
 - Enterprise GraphRAG private self-hosted deployment
 - Automated CI/CD pipeline with staging $	o$ production promotion
 - Multi-province rollout (Java corridor & Eastern Indonesia)
+
+## Phase 118: Analitik Fixes
+
+**Goal:** Fix Analitik follow-ups on the Phase 117 tree: map entirely removed (full-width), honest region mapping, date-true trend headers, zero-motion shimmer actions  no shadcn add.
+**Status:** COMPLETE ? (docs-only pass; fixes already in working tree; no app edits, no commit)
+
+### Deliverables
+
+- **Map removed, full-width:** no MapboxOverlay/globe canvas; single col-span-12 section (AnalyticsSection.tsx:343-346, contract 24-28).
+- **Hand-rolled glass days + shimmer Lihat Laporan (zero-motion, no shadcn add):** native buttons with glass classes (L319-339, 
+ole=group + ria-pressed/ria-label/	itle); Lihat Laporan hand-rolled relative/overflow-hidden + motion-safe: shimmer span (L469-480).
+- **REGION_TO_DB 8?north_sumatra, Semua?undefined:** all 8 slugs ? 
+orth_sumatra (L51-60); 
+egionToDb('') ? undefined (L62-65); applied at loadPrices (L195) + loadSpikes (L235).
+- **Trend DD/MM + header date + min(days,len) + green/red:** ormatDayMonth per bar (L116-122, T- fallback only when time missing L379) + ormatFullDate header (L124-130, call L359) + Tren {min(days,len)} (L370) + arHeights/arColors up #ef4444 / down #10b981 (L262-273, >= 3 guard L277).
+- **Spikes keep honest:** SpikeItem/severityBadge/prettifyRegion (L94-114); server-filtered loadSpikes + spikeRecordsTotal (L230-257); sorted ilteredSpikes (L280-284); guard length === 0 || spikeRecordsTotal < 3 + backend message (L431-438); Table h-11 (L441-466).
+
+### Verification
+
+- [x] 
+px tsc --noEmit ? exit 0.
+- [x] 
+pm run build ? 7/7 static routes, 0 errors.
+- [x] pytest ? shared window tail green.
+- [x] Playwright ? 1 passed (live, E2E no-interference on Peta/Laporan/Evaluasi + pprovals:write/leet:write 403 paths).
+
+## Phase 119: PIHPS 8-Province Scraper
+
+**Goal:** Expand PIHPS scraper from Sumut-only to all 8 Pan-Sumatra provinces with region-scoped persistence and a 1:1 UI slug map, keeping the legacy north_sumatra compat surface untouched.
+**Status:** COMPLETE (app edits + docs + commit in-window)
+
+### Deliverables
+
+- **Region tables (pihps_scraper.py, top):** PROVINCES 8 canonical DB slugs -> BI province_id (aceh 1, north_sumatra 2, west_sumatra 3, riau 4, jambi 6, bengkulu 7, south_sumatra 8, lampung 10); PROVINCE_DISPLAY Indonesian names; REGION_SHORT_SLUG (sumut/sumbar/sumsel shorts for dedup keys); REGION_CENTROID per-region city proxies (north_sumatra keeps legacy 3.5952/98.6722); FETCH_PROVINCE_ORDER fixed 8-order; REGION/SUMUT_PROVINCE_ID kept for back-compat imports.
+- **Region loop (fetch()):** provinces outer x commodities inner, sequential, results keyed {commodity}@{region}.
+- **Scoped Redis (parse()):** rolling keys lrip:pihps:rolling:{com}:{region}; dedup pihps:{com}:{short}:{YYYYMMDD}; per-region lrip:pihps:latest:{region}; bare lrip:pihps:latest stays north_sumatra snapshot.
+- **Scoped persistence (_persist_readings(..., region)):** delete+insert use eq("region", region); per-region event lat/lon/market/province.
+- **1:1 slug map (AnalyticsSection.tsx:51-60):** REGION_TO_DB 1:1; supersedes Phase 118 collapse map.
+- **Tests (test_scrapers.py +68):** parametrized region propagation (3 regions) + 2-region multi-province.
+- **Docs:** .planning/phases/119-pihps-8-province/ (PLAN.md + WALKTHROUGH.md + LEARNINGS.md).
+
+### Verification
+
+- [x] pytest backend/tests/test_scrapers.py + test_api_routers.py + test_agents.py -> 64 passed, exit 0.
+- [x] npx tsc --noEmit -> exit 0.
+- [x] npm run build -> 7/7 static routes, exit 0.

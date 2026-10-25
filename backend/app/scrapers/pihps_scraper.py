@@ -14,7 +14,62 @@ from app.db.supabase_client import get_write_client
 
 logger = logging.getLogger(__name__)
 
+# Canonical DB region slugs (must match agents/nodes/data_collection.py
+# normalize_region + existing commodity_prices rows).
+# UI-alias mapping (documented here, resolved frontend-side):
+#   sumut -> north_sumatra, sumbar -> west_sumatra, sumsel -> south_sumatra
+#   riau -> riau, aceh -> aceh, jambi -> jambi,
+#   bengkulu -> bengkulu, lampung -> lampung
+PROVINCES: Dict[str, int] = {
+    "aceh": 1,
+    "north_sumatra": 2,
+    "west_sumatra": 3,
+    "riau": 4,
+    "jambi": 6,
+    "bengkulu": 7,
+    "south_sumatra": 8,
+    "lampung": 10,
+}
+
+# Back-compat: single-region constant for callers importing REGION.
 REGION = "north_sumatra"
+SUMUT_PROVINCE_ID = 2  # == PROVINCES["north_sumatra"], kept for back-compat imports
+
+PROVINCE_DISPLAY: Dict[str, str] = {
+    "aceh": "Aceh",
+    "north_sumatra": "Sumatera Utara",
+    "west_sumatra": "Sumatera Barat",
+    "riau": "Riau",
+    "jambi": "Jambi",
+    "bengkulu": "Bengkulu",
+    "south_sumatra": "Sumatera Selatan",
+    "lampung": "Lampung",
+}
+
+# Short slugs for Redis dedup keys (region part of pihps:{com}:{short}:{YYYYMMDD}).
+REGION_SHORT_SLUG: Dict[str, str] = {
+    "aceh": "aceh",
+    "north_sumatra": "sumut",
+    "west_sumatra": "sumbar",
+    "riau": "riau",
+    "jambi": "jambi",
+    "bengkulu": "bengkulu",
+    "south_sumatra": "sumsel",
+    "lampung": "lampung",
+}
+
+# Per-region centroid proxies (city centroids, best-effort — comment as proxy).
+# north_sumatra keeps the legacy 3.5952/98.6722 value.
+REGION_CENTROID: Dict[str, tuple] = {
+    "aceh": ("5.5483", "95.3238"),          # Banda Aceh proxy
+    "north_sumatra": ("3.5952", "98.6722"),  # Medan proxy (legacy)
+    "west_sumatra": ("-0.9471", "100.4172"),  # Padang proxy
+    "riau": ("0.5071", "101.4478"),          # Pekanbaru proxy
+    "jambi": ("-1.6101", "103.6131"),        # Jambi city proxy
+    "bengkulu": ("-3.7928", "102.2608"),     # Bengkulu city proxy
+    "south_sumatra": ("-2.9909", "104.7565"),  # Palembang proxy
+    "lampung": ("-5.4297", "105.2626"),      # Bandar Lampung proxy
+}
 
 
 COMCAT_IDS = {
@@ -28,6 +83,16 @@ COMCAT_IDS = {
 }
 
 SUMUT_PROVINCE_ID = 2
+FETCH_PROVINCE_ORDER = [
+    "aceh",
+    "north_sumatra",
+    "west_sumatra",
+    "riau",
+    "jambi",
+    "bengkulu",
+    "south_sumatra",
+    "lampung",
+]
 
 class PIHPSScraper(BaseScraper):
     source_name = "pihps"
@@ -64,12 +129,16 @@ class PIHPSScraper(BaseScraper):
         return None
 
     async def fetch(self) -> Dict[str, Any]:
-        """Fetch data from Bank Indonesia PIHPS API for all commodities in Sumatera Utara."""
+        """Fetch data from Bank Indonesia PIHPS API for all commodities × Pan-Sumatra provinces.
+
+        Provinces outer x commodities inner (sequential, concurrency 1 ≤ 2).
+        Keyed ``{commodity}@{region}`` so parse() can resolve the region.
+        """
         results = {}
         # Fetch prices for the last 30 days to build/seed the baseline if empty
         end_date = datetime.now(timezone.utc).date()
         start_date = end_date - timedelta(days=30)
-        
+
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             'Referer': 'https://www.bi.go.id/hargapangan/TabelHarga/PasarTradisionalDaerah',
@@ -78,34 +147,48 @@ class PIHPSScraper(BaseScraper):
         }
 
         async with httpx.AsyncClient(follow_redirects=True) as client:
-            for com_name, comcat_id in COMCAT_IDS.items():
-                params = {
-                    'price_type_id': 1,
-                    'comcat_id': comcat_id,
-                    'province_id': SUMUT_PROVINCE_ID,
-                    'regency_id': '',
-                    'market_id': '',
-                    'tipe_laporan': 2,  # Weekly
-                    'start_date': start_date.strftime('%Y-%m-%d'),
-                    'end_date': end_date.strftime('%Y-%m-%d'),
-                    '_': int(time.time() * 1000)
-                }
-                
-                url = "https://www.bi.go.id/hargapangan/WebSite/TabelHarga/GetGridDataDaerah"
-                try:
-                    logger.debug(f"Fetching PIHPS for {com_name} ({comcat_id})")
-                    resp = await client.get(url, params=params, headers=headers, timeout=20)
-                    if resp.status_code == 200:
-                        results[com_name] = resp.json()
-                    else:
-                        logger.warning(f"Failed to fetch PIHPS for {com_name}: status {resp.status_code}")
-                except Exception as e:
-                    logger.error(f"Error fetching PIHPS for {com_name}: {e}")
-                
-                # Small courtesy sleep to not trigger anti-dos on BI server
-                await asyncio.sleep(0.5)
+            for region in FETCH_PROVINCE_ORDER:
+                province_id = PROVINCES[region]
+                for com_name, comcat_id in COMCAT_IDS.items():
+                    params = {
+                        'price_type_id': 1,
+                        'comcat_id': comcat_id,
+                        'province_id': province_id,
+                        'regency_id': '',
+                        'market_id': '',
+                        'tipe_laporan': 2,  # Weekly
+                        'start_date': start_date.strftime('%Y-%m-%d'),
+                        'end_date': end_date.strftime('%Y-%m-%d'),
+                        '_': int(time.time() * 1000)
+                    }
+
+                    url = "https://www.bi.go.id/hargapangan/WebSite/TabelHarga/GetGridDataDaerah"
+                    try:
+                        logger.debug(f"Fetching PIHPS for {com_name} ({comcat_id}) in {region}")
+                        resp = await client.get(url, params=params, headers=headers, timeout=20)
+                        if resp.status_code == 200:
+                            results[f"{com_name}@{region}"] = resp.json()
+                        else:
+                            logger.warning(f"Failed to fetch PIHPS for {com_name}@{region}: status {resp.status_code}")
+                    except Exception as e:
+                        logger.error(f"Error fetching PIHPS for {com_name}@{region}: {e}")
+
+                    # Small courtesy sleep to not trigger anti-dos on BI server
+                    await asyncio.sleep(0.5)
+                # 2s stagger between provinces (politeness)
+                await asyncio.sleep(2.0)
 
         return results
+
+    @staticmethod
+    def _split_key(key: str) -> tuple:
+        """Split fetch keys ``{commodity}@{region}``; legacy bare keys default to north_sumatra."""
+        if "@" in key:
+            com, region = key.split("@", 1)
+            if region in PROVINCES:
+                return com, region
+            return com, "north_sumatra"
+        return key, "north_sumatra"
 
     async def parse(self, raw_data: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Normalize raw price readings and detect spikes against the rolling baseline."""
@@ -114,8 +197,11 @@ class PIHPSScraper(BaseScraper):
         # Per-commodity snapshot aggregated across the whole scrape cycle and
         # published once under lrip:pihps:latest for the economic agent.
         latest_snapshot: Dict[str, Dict[str, Any]] = {}
+        # Per-region snapshots published under lrip:pihps:latest:{region}.
+        regional_snapshots: Dict[str, Dict[str, Dict[str, Any]]] = {}
 
-        for com_name, data_payload in raw_data.items():
+        for raw_key, data_payload in raw_data.items():
+            com_name, region = self._split_key(raw_key)
             rows = data_payload.get('data', []) if isinstance(data_payload, dict) else data_payload
             if not rows:
                 continue
@@ -168,10 +254,11 @@ class PIHPSScraper(BaseScraper):
                 price_readings,
                 row_name=com_row.get("name"),
                 level=com_row.get("level"),
+                region=region,
             )
 
-            # Retrieve rolling history from Redis
-            redis_key = f"lrip:pihps:rolling:{com_name}"
+            # Retrieve rolling history from Redis (region-scoped)
+            redis_key = f"lrip:pihps:rolling:{com_name}:{region}"
             try:
                 history_raw = r.get(redis_key)
                 history = json.loads(history_raw) if history_raw else []
@@ -190,7 +277,8 @@ class PIHPSScraper(BaseScraper):
 
             # Process the latest reading
             latest_date, latest_price = price_readings[-1]["date"], price_readings[-1]["price"]
-            dedup_key = f"pihps:{com_name}:sumut:{latest_date.replace('-', '')}"
+            short_slug = REGION_SHORT_SLUG.get(region, region)
+            dedup_key = f"pihps:{com_name}:{short_slug}:{latest_date.replace('-', '')}"
 
             # Aggregate the rolling statistics for this cycle. The series is the
             # prior baseline plus today's reading (bounded to the same 7-point
@@ -201,7 +289,7 @@ class PIHPSScraper(BaseScraper):
             window_std = math.sqrt(
                 sum((price - window_mean) ** 2 for price in series) / len(series)
             )
-            latest_snapshot[com_name] = {
+            entry = {
                 "current": round(latest_price, 2),
                 "mean": round(window_mean, 2),
                 "std": round(window_std, 2),
@@ -212,6 +300,11 @@ class PIHPSScraper(BaseScraper):
                 ),
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             }
+            regional_snapshots.setdefault(region, {})[com_name] = entry
+            if region == "north_sumatra":
+                # Legacy compat: lrip:pihps:latest stays the north_sumatra snapshot
+                # for economic_intelligence consumers.
+                latest_snapshot[com_name] = entry
 
             # Check if this reading has already been published/processed
             try:
@@ -239,6 +332,8 @@ class PIHPSScraper(BaseScraper):
                 severity = "low"
 
 
+            lat, lon = REGION_CENTROID.get(region, REGION_CENTROID["north_sumatra"])
+            province_display = PROVINCE_DISPLAY.get(region, region)
             title = f"Baseline price update for {com_name}: Rp {latest_price:,.0f}"
             if event_type == "price_spike":
                 title = f"SPIKE: {com_name} price rose to Rp {latest_price:,.0f} (+{deviation * 100:.1f}%)"
@@ -247,20 +342,22 @@ class PIHPSScraper(BaseScraper):
                 "source": self.source_name,
                 "event_type": event_type,
                 "severity": severity,
-                "lat": "3.5952",  # Centroid proxy for North Sumatra/Medan
-                "lon": "98.6722",
+                "lat": lat,  # Per-region centroid proxy
+                "lon": lon,
                 "title": title,
                 "raw": json.dumps({
                     "commodity": com_name,
                     "price_today": latest_price,
                     "rolling_mean_7d": rolling_mean,
                     "deviation_pct": round(deviation * 100, 2),
-                    "market": "Pasar Tradisional Sumatera Utara",
-                    "province": "Sumatera Utara",
+                    "market": f"Pasar Tradisional {province_display}",
+                    "province": province_display,
+                    "region": region,
                     "tanggal": latest_date
                 }),
                 "ts": datetime.now(timezone.utc).isoformat(),
                 "dedup_key": dedup_key,
+                "region": region,
             })
 
             # Update baseline in Redis
@@ -273,17 +370,24 @@ class PIHPSScraper(BaseScraper):
 
         # Publish the aggregated per-commodity snapshot once per scrape cycle.
         # consumers (economic_intelligence) read this single key instead of
-        # scanning every rolling key. Never raises: a Redis blip must not lose
-        # the events already parsed in this cycle.
-        if latest_snapshot:
-            try:
-                r.set("lrip:pihps:latest", json.dumps(latest_snapshot), ex=86400)
-                logger.info(
-                    f"Published PIHPS snapshot for {len(latest_snapshot)} commodities "
-                    "to lrip:pihps:latest"
-                )
-            except Exception as e:
-                logger.error(f"Failed to publish PIHPS snapshot to Redis: {e}")
+        # scanning every rolling key. lrip:pihps:latest stays the north_sumatra
+        # snapshot for compat; per-region snapshots go to lrip:pihps:latest:{region}.
+        # Never raises: a Redis blip must not lose the events already parsed.
+        if regional_snapshots:
+            for snap_region, snap in regional_snapshots.items():
+                try:
+                    r.set(f"lrip:pihps:latest:{snap_region}", json.dumps(snap), ex=86400)
+                except Exception as e:
+                    logger.error(f"Failed to publish PIHPS snapshot for {snap_region}: {e}")
+            if latest_snapshot:
+                try:
+                    r.set("lrip:pihps:latest", json.dumps(latest_snapshot), ex=86400)
+                    logger.info(
+                        f"Published PIHPS snapshot for {len(latest_snapshot)} commodities "
+                        "to lrip:pihps:latest"
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to publish PIHPS snapshot to Redis: {e}")
 
         return events
 
@@ -293,6 +397,7 @@ class PIHPSScraper(BaseScraper):
         readings: List[Dict[str, Any]],
         row_name: Optional[str] = None,
         level: Any = None,
+        region: str = REGION,
     ) -> int:
         """
         Persist per-period PIHPS readings into the Supabase commodity_prices table.
@@ -319,7 +424,7 @@ class PIHPSScraper(BaseScraper):
                 sb.table("commodity_prices")
                 .delete()
                 .eq("commodity", com_name)
-                .eq("region", REGION)
+                .eq("region", region)
                 .eq("time", time_iso)
                 .execute()
             )
@@ -328,18 +433,19 @@ class PIHPSScraper(BaseScraper):
             return sb.table("commodity_prices").insert(record).execute()
 
         written = 0
+        province_display = PROVINCE_DISPLAY.get(region, region)
         for reading in readings:
             time_iso = f"{reading['date']}T00:00:00+00:00"
             record = {
                 "time": time_iso,
                 "commodity": com_name,
-                "region": REGION,
+                "region": region,
                 "price_idr": reading["price"],
                 "source": self.source_name,
                 "metadata": {
                     "period": reading["period"],
-                    "province": "Sumatera Utara",
-                    "market": "Pasar Tradisional Sumatera Utara",
+                    "province": province_display,
+                    "market": f"Pasar Tradisional {province_display}",
                     "row_name": row_name,
                     "level": level,
                 },
@@ -352,7 +458,7 @@ class PIHPSScraper(BaseScraper):
                 logger.warning(f"Failed to persist PIHPS price point {com_name}@{reading['date']}: {e}")
 
         if written:
-            logger.info(f"Persisted {written} PIHPS price points for {com_name} into commodity_prices")
+            logger.info(f"Persisted {written} PIHPS price points for {com_name}@{region} into commodity_prices")
         return written
 
     async def health_check(self) -> bool:

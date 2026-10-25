@@ -44,6 +44,131 @@ from app.services.spoilage_hedging_service import (
 logger = logging.getLogger(__name__)
 
 
+# ==========================================
+# SUPABASE-PRIMARY PERSISTENCE ROUTING
+# ==========================================
+# Supabase is the primary store so rows survive Render free-plan filesystem
+# wipes. SQLite (`local_storage`) is only a dev fallback when Supabase env
+# (SUPABASE_URL + ANON/SERVICE key) is missing or the call fails.
+
+def _supabase_enabled() -> bool:
+    try:
+        from app.db import travel_supabase
+
+        return travel_supabase.is_configured()
+    except Exception:
+        return False
+
+
+def _persist_truck_asset(data: Dict[str, Any], db_path: Optional[str] = None) -> Dict[str, Any]:
+    """Save a master truck asset: Supabase primary, SQLite fallback."""
+    if _supabase_enabled():
+        try:
+            from app.db import travel_supabase
+
+            saved = travel_supabase.save_truck_asset(data)
+            saved["source"] = "master"
+            return saved
+        except Exception as exc:
+            logger.warning("Supabase truck_assets save failed, falling back to SQLite: %s", exc)
+    saved = local_storage.save_truck_asset(data, db_path=db_path)
+    saved["source"] = "master"
+    return saved
+
+
+def _fetch_master_assets(company_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Master assets from Supabase when configured, else SQLite (never both)."""
+    if _supabase_enabled():
+        try:
+            from app.db import travel_supabase
+
+            return travel_supabase.list_truck_assets(company_id=company_id)
+        except Exception as exc:
+            logger.warning("Supabase truck_assets read failed, falling back to SQLite: %s", exc)
+    return local_storage.list_truck_assets(company_id=company_id)
+
+
+def _fetch_master_asset(truck_id: str) -> Optional[Dict[str, Any]]:
+    if _supabase_enabled():
+        try:
+            from app.db import travel_supabase
+
+            found = travel_supabase.get_truck_asset(truck_id)
+            if found:
+                return found
+        except Exception as exc:
+            logger.warning("Supabase truck_assets read failed, falling back to SQLite: %s", exc)
+    return local_storage.get_truck_asset(truck_id)
+
+
+def _delete_master_asset(truck_id: str, db_path: Optional[str] = None) -> bool:
+    deleted = False
+    if _supabase_enabled():
+        try:
+            from app.db import travel_supabase
+
+            travel_supabase.delete_truck_asset(truck_id)
+            deleted = True
+        except Exception as exc:
+            logger.warning("Supabase truck_assets delete failed, trying SQLite: %s", exc)
+    return bool(local_storage.delete_truck_asset(truck_id, db_path=db_path)) or deleted
+
+
+def _persist_travel(data: Dict[str, Any], db_path: Optional[str] = None) -> Dict[str, Any]:
+    """Save one rit: Supabase primary, SQLite fallback. Returns the stored row."""
+    if _supabase_enabled():
+        try:
+            from app.db import travel_supabase
+
+            payload = dict(data)
+            payload["sync_status"] = "synced"
+            return travel_supabase.save_travel(payload)
+        except Exception as exc:
+            logger.warning("Supabase travels save failed, falling back to SQLite: %s", exc)
+    payload = dict(data)
+    payload["sync_status"] = "pending"
+    return local_storage.save_travel(payload, db_path=db_path)
+
+
+def _fetch_travel(travel_id: str, db_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Single-rit read: Supabase first, then SQLite (covers offline-created rows)."""
+    if _supabase_enabled():
+        try:
+            from app.db import travel_supabase
+
+            found = travel_supabase.get_travel(travel_id)
+            if found:
+                return found
+        except Exception as exc:
+            logger.warning("Supabase travels read failed, falling back to SQLite: %s", exc)
+    return local_storage.get_travel(travel_id, db_path=db_path)
+
+
+def _fetch_travels(
+    company_id: Optional[str] = None,
+    status: Optional[str] = None,
+    truck_id: Optional[str] = None,
+    limit: int = 5000,
+    db_path: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    if _supabase_enabled():
+        try:
+            from app.db import travel_supabase
+
+            return travel_supabase.list_travels(
+                company_id=company_id, status=status, truck_id=truck_id, limit=limit
+            )
+        except Exception as exc:
+            logger.warning("Supabase travels read failed, falling back to SQLite: %s", exc)
+    return local_storage.list_travels(
+        company_id=company_id, status=status, truck_id=truck_id, limit=limit, db_path=db_path
+    )
+
+
+def _storage_backend() -> str:
+    return "supabase" if _supabase_enabled() else "local_sqlite"
+
+
 class TruckNotFoundError(Exception):
     """Raised when a travel references a truck_id absent from master + legacy stores."""
 
@@ -82,7 +207,7 @@ def resolve_truck_asset(truck_id: str) -> Optional[Dict[str, Any]]:
     if not truck_id:
         return None
 
-    asset = local_storage.get_truck_asset(truck_id)
+    asset = _fetch_master_asset(truck_id)
     if asset:
         mapped = dict(asset)
         mapped["source"] = "master"
@@ -119,7 +244,7 @@ def list_truck_assets_with_legacy(company_id: Optional[str] = None) -> List[Dict
     """Union of master truck assets and legacy custom fleet trucks (deduped)."""
     master = []
     seen = set()
-    for asset in local_storage.list_truck_assets(company_id=company_id):
+    for asset in _fetch_master_assets(company_id=company_id):
         item = dict(asset)
         item["source"] = "master"
         master.append(item)
@@ -301,9 +426,8 @@ def create_travel(payload: TravelCreate, actor: Optional[str] = None, db_path: O
     data["actual_recorded"] = payload.actual_time_hours is not None
     data["status"] = payload.status.value if hasattr(payload.status, "value") else str(payload.status)
     data["created_by"] = actor or "dispatcher"
-    data["sync_status"] = "pending"
     _apply_ledger(data)
-    return local_storage.save_travel(data, db_path=db_path)
+    return _persist_travel(data, db_path=db_path)
 
 
 def update_travel(
@@ -312,7 +436,7 @@ def update_travel(
     db_path: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Apply realised outcomes to an existing rit and recompute the ledger."""
-    existing = local_storage.get_travel(travel_id, db_path=db_path)
+    existing = _fetch_travel(travel_id, db_path=db_path)
     if not existing:
         raise TravelNotFoundError(f"Rit '{travel_id}' tidak ditemukan.")
 
@@ -331,7 +455,7 @@ def update_travel(
     _apply_ledger(data)
     if data.get("status") == "delivered" and not data.get("delivered_at"):
         data["delivered_at"] = payload.delivered_at or datetime.now().isoformat()
-    return local_storage.save_travel(data, db_path=db_path)
+    return _persist_travel(data, db_path=db_path)
 
 
 def solve_and_persist_hedging(
@@ -343,7 +467,7 @@ def solve_and_persist_hedging(
     Solve the Continue/Reroute/Hold matrix for one rit and persist the full
     decision (costs, optimal policy, net savings, rationale) on that row.
     """
-    travel = local_storage.get_travel(travel_id, db_path=db_path)
+    travel = _fetch_travel(travel_id, db_path=db_path)
     if not travel:
         raise TravelNotFoundError(f"Rit '{travel_id}' tidak ditemukan.")
 
@@ -385,7 +509,7 @@ def solve_and_persist_hedging(
     travel["hedging_policy"] = solved.optimal_policy
     travel["hedging_net_savings_idr"] = float(solved.net_savings_idr)
     travel["hedging_solved_at"] = datetime.now().isoformat()
-    local_storage.save_travel(travel, db_path=db_path)
+    _persist_travel(travel, db_path=db_path)
     return solved_dict
 
 
@@ -492,7 +616,7 @@ def build_erp_summary(
     `include_trips=False` returns tenant-level aggregates only (regulator macro
     view) — no per-rit commercial detail crosses the role boundary.
     """
-    trips = local_storage.list_travels(company_id=company_id, limit=5000, db_path=db_path)
+    trips = _fetch_travels(company_id=company_id, limit=5000, db_path=db_path)
 
     if include_trips:
         scope = "DISPATCHER_DETAIL"
@@ -532,9 +656,62 @@ def build_erp_summary(
         generated_at=datetime.now().isoformat(),
         company_id=company_id,
         scope=scope,
-        storage="local_sqlite",
+        storage=_storage_backend(),
         totals=totals,
         per_company=per_company,
         trips=rows,
         business_notes=notes,
+    )
+
+
+# ==========================================
+# ROUTER-FACING READ/WRITE WRAPPERS
+# (Supabase primary, SQLite fallback — same shapes as local_storage)
+# ==========================================
+
+def save_truck_asset(data: Dict[str, Any], db_path: Optional[str] = None) -> Dict[str, Any]:
+    """Persist a master truck asset (used by POST /fleet/trucks)."""
+    return _persist_truck_asset(data, db_path=db_path)
+
+
+def delete_truck_asset(truck_id: str, db_path: Optional[str] = None) -> bool:
+    """Delete a master truck asset from Supabase and/or SQLite."""
+    return _delete_master_asset(truck_id, db_path=db_path)
+
+
+def get_truck_asset_master(
+    truck_id: str, db_path: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    """Read one master asset (no legacy fallback; used for tenant-collision checks)."""
+    if _supabase_enabled():
+        try:
+            from app.db import travel_supabase
+
+            found = travel_supabase.get_truck_asset(truck_id)
+            if found:
+                return found
+        except Exception as exc:
+            logger.warning("Supabase truck_assets read failed, falling back to SQLite: %s", exc)
+    return local_storage.get_truck_asset(truck_id, db_path=db_path)
+
+
+def get_travel(travel_id: str, db_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Read one rit (used by GET /fleet/travels/{id})."""
+    return _fetch_travel(travel_id, db_path=db_path)
+
+
+def list_travels(
+    company_id: Optional[str] = None,
+    status: Optional[str] = None,
+    truck_id: Optional[str] = None,
+    limit: int = 500,
+    db_path: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """List rits newest first (used by GET /fleet/travels)."""
+    return _fetch_travels(
+        company_id=company_id,
+        status=status,
+        truck_id=truck_id,
+        limit=limit,
+        db_path=db_path,
     )

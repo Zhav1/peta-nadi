@@ -24,7 +24,6 @@ from app.schemas.travel import (
     TravelHedgingRequest,
 )
 from app.auth.supabase_auth import get_optional_user, UserSession
-from app.db import local_storage
 from app.services import travel_ledger_service
 from app.services.travel_ledger_service import (
     TruckNotFoundError,
@@ -80,7 +79,7 @@ async def create_truck_asset(
     data["created_by"] = user.name
     data["sync_status"] = "pending"
 
-    existing = local_storage.get_truck_asset(payload.truck_id)
+    existing = travel_ledger_service.get_truck_asset_master(payload.truck_id)
     if existing and existing.get("company_id") != data["company_id"]:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -90,7 +89,7 @@ async def create_truck_asset(
             ),
         )
 
-    saved = local_storage.save_truck_asset(data)
+    saved = travel_ledger_service.save_truck_asset(data)
     saved["source"] = "master"
     clear_fleet_cache()
     return TruckAssetResponse(**saved)
@@ -124,7 +123,7 @@ async def delete_truck_asset(
 ):
     """Delete a master truck asset. Historical travels keep their snapshot."""
     _require_fleet_write(user)
-    deleted = local_storage.delete_truck_asset(truck_id)
+    deleted = travel_ledger_service.delete_truck_asset(truck_id)
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -171,7 +170,7 @@ async def list_travels(
 ):
     """List travels/rits newest first, scoped to the caller's tenant when known."""
     effective_company = _effective_company_filter(user, company_id)
-    items = local_storage.list_travels(
+    items = travel_ledger_service.list_travels(
         company_id=effective_company,
         status=status_filter,
         truck_id=truck_id,
@@ -186,7 +185,7 @@ async def list_travels(
 @router.get("/travels/{travel_id}", response_model=TravelResponse)
 async def get_travel(travel_id: str):
     """Read one travel/rit with its persisted hedging decision."""
-    travel = local_storage.get_travel(travel_id)
+    travel = travel_ledger_service.get_travel(travel_id)
     if not travel:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

@@ -409,7 +409,7 @@ export default function ReportsSection({
  {/* VIEW TABS: ERP savings vs mitigation audit ledger */}
  <div className="flex items-center gap-1 bg-[#0c1017] border border-white/10 rounded-lg p-1 shrink-0 w-fit">
  {[
- { id: 'erp' as const, label: 'ERP Penghematan' },
+ { id: 'erp' as const, label: 'Laporan' },
  { id: 'audit' as const, label: 'Catatan Audit Mitigasi' },
  ].map((tab) => (
  <button
