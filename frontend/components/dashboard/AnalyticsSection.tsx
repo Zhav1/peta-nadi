@@ -70,6 +70,17 @@ const REGION_TO_DB: Record<string, string> = {
   bengkulu: 'bengkulu',
 };
 
+const REGION_FULL_NAMES: Record<string, string> = {
+  sumut: 'Sumatera Utara',
+  sumbar: 'Sumatera Barat',
+  riau: 'Riau',
+  aceh: 'Aceh',
+  sumsel: 'Sumatera Selatan',
+  lampung: 'Lampung',
+  jambi: 'Jambi',
+  bengkulu: 'Bengkulu',
+};
+
 function regionToDb(slug: string): string | undefined {
   if (!slug) return undefined;
   return REGION_TO_DB[slug];
@@ -246,7 +257,7 @@ export default function DashboardAnalyticsSection({
         const mapped = regionToDb(priceRegion);
         const [spikeRes, priceRes] = await Promise.all([
           api.commodities.spikes(mapped ? { region: mapped } : undefined),
-          api.commodities.prices({ commodity, limit: 100 }),
+          api.commodities.prices({ commodity, region: mapped, limit: 100 }),
         ]);
         if (!isMounted) return;
         const spikeItems: SpikeItem[] = Array.isArray(spikeRes?.spikes) ? spikeRes.spikes : [];
@@ -434,7 +445,11 @@ export default function DashboardAnalyticsSection({
                   </TooltipContent>
                 </Tooltip>
               </span>
-              <span className="text-slate-300">Sumber: PIHPS Bank Indonesia</span>
+              <span className="text-slate-300">
+                {priceRegion
+                  ? `${REGION_FULL_NAMES[priceRegion] || prettifyRegion(priceRegion)} · PIHPS Bank Indonesia`
+                  : 'Rata-rata 8 Provinsi Sumatera · PIHPS Bank Indonesia'}
+              </span>
             </div>
 
             {/* Authentic Single-Dataset Bars or Honest Empty State (<3 records = no trend) */}
@@ -443,9 +458,10 @@ export default function DashboardAnalyticsSection({
                 {barHeights.map((h, i) => {
                   const t = priceTimes[i];
                   const dateLabel = t ? formatDayMonth(t) : `T-${priceHistory.length - 1 - i}`;
-                  const tooltipText = t
-                    ? `${dateLabel}: Rp ${priceHistory[i].toLocaleString('id-ID')}`
-                    : `T-${priceHistory.length - 1 - i}: Rp ${priceHistory[i].toLocaleString('id-ID')}`;
+                  const scopeLabel = priceRegion
+                    ? (REGION_FULL_NAMES[priceRegion] || prettifyRegion(priceRegion))
+                    : 'Rata-rata Sumatera';
+                  const tooltipText = `${dateLabel}: Rp ${priceHistory[i].toLocaleString('id-ID')} (${scopeLabel})`;
                   return (
                     <Tooltip key={i}>
                       <TooltipTrigger
