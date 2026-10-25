@@ -53,7 +53,7 @@ import {
 import { api } from '@/lib/api';
 import { toLonLatRing } from '@/lib/polygonGeom';
 import { regionSlugFromLatLon } from '@/lib/region';
-import type { CrisisState, WsEvent, CrisisType, Severity, RouteRecommendation, DisasterZone, HazardImpactProfile, ZoneTier, FleetVehicle, TacticalManeuver, FireHotspot } from '@/lib/types';
+import type { CrisisState, WsEvent, CrisisType, Severity, RouteRecommendation, DisasterZone, HazardImpactProfile, ZoneTier, FleetVehicle, TacticalManeuver, FireHotspot, RouteDecisionType, DecisionAction } from '@/lib/types';
 import { useAuth } from '@/lib/authContext';
 import { AuthModal } from '@/components/auth/AuthModal';
 import { FleetOnboardingModal } from '@/components/fleet/FleetOnboardingModal';
@@ -2308,7 +2308,7 @@ export default function DashboardClient() {
     }
   }, []);
 
-  const handleSelectRoute = useCallback(async (
+  const handleSelectRoute = useCallback((
     idx: number,
     source: 'sidebar' | 'map-popover' | 'map-eta' | 'demo' = 'sidebar'
   ) => {
@@ -2316,47 +2316,17 @@ export default function DashboardClient() {
     setActiveRouteIdx(idx);
     updateUrlParams({ route: String(idx) });
     setRouteModalIdx(idx);
-    const routes =
-      currentMapRoutes.length > 0
-        ? currentMapRoutes
-        : (selectedCrisis?.route_recommendations || []);
-    const route = routes[idx];
-    if (!selectedCrisis?.crisis_id || !route) return;
-    // Guest sandbox: zero POST to /approvals or /news/hitl-action.
-    if (role === 'GUEST') {
-      setToast({
-        message: 'Mode Sandbox: pratinjau lokal berwatermark, tidak dikirim ke armada.',
-        type: 'info',
-      });
-      return;
-    }
-    try {
-      const originName =
-        formatNodeId(selectedOriginNode, resolveNodeInfo(selectedOriginNode)) || undefined;
-      const destName =
-        formatNodeId(selectedDestNode, resolveNodeInfo(selectedDestNode)) || undefined;
-      await api.approvals.create({
-        incident_id: selectedCrisis.crisis_id,
-        route_id: String(idx),
-        recommended_route: route,
-        action: 'ACCEPT',
-        tactical_action: 'REROUTE',
-        operator_id: user?.name || user?.email || user?.id || 'OP-CHIEF-01',
-        route_name: route.route_name || route.description,
-        origin: originName,
-        destination: destName,
-      });
-      await refreshHitlCount();
-    } catch {
-      setToast({
-        message: `HITL pending gagal dicatat (${selectedCrisis.crisis_id} #${idx}). Modal tetap terbuka.`,
-        type: 'error',
-      });
-    }
-  }, [currentMapRoutes, selectedCrisis, role, user, selectedOriginNode, selectedDestNode, resolveNodeInfo, refreshHitlCount]);
+  }, [updateUrlParams]);
 
   const handleCommitOperationalRoute = useCallback(
     async (route: RouteRecommendation, action: any, tactical: any) => {
+      if (action === 'REJECT') {
+        setToast({
+          message: 'Rekomendasi rute berhasil ditolak. Armada tetap pada jalur operasional awal.',
+          type: 'info',
+        });
+        return;
+      }
       // 1. Highlight approved route on BOTH route stores so the cyan operational corridor
       //    reflects instantly on the map canvas (single source of truth, no state fighting)
       setCurrentMapRoutes((prev) => styleApprovedRoutes(prev.length > 0 ? prev : [route], route));
@@ -2414,10 +2384,10 @@ export default function DashboardClient() {
     [applyOperationalImpact, currentMapRoutes, role]
   );
 
-  // Phase 77: modal commit path — role-branched. Dispatcher commits + TMS ping
+  // Phase 107: unified modal decision commit path — role-branched. Dispatcher commits + TMS ping
   // (via handleCommitOperationalRoute); regulator HOLD-only; guest sandbox only.
   const handleModalAction = useCallback(async (
-    decision: 'APPROVE' | 'REJECT' | 'HOLD',
+    decision: RouteDecisionType,
     tactical: TacticalManeuver,
     notes?: string
   ) => {
@@ -2427,7 +2397,7 @@ export default function DashboardClient() {
         : (selectedCrisis?.route_recommendations || []);
     const idx = routeModalIdx ?? activeRouteIdx ?? 0;
     const route = routes[idx];
-    if (!route || !selectedCrisis?.crisis_id) return;
+    if (!route) return;
     if (role === 'GUEST') {
       setToast({
         message: 'Mode Sandbox: rencana tersimpan lokal, tidak dikirim ke armada.',
@@ -2442,22 +2412,58 @@ export default function DashboardClient() {
       });
       return;
     }
+
+    const incidentId =
+      selectedCrisis?.crisis_id ||
+      route.incident_id ||
+      (activeRouteIdx != null ? `INC-CORRIDOR-${activeRouteIdx}` : 'INC-ADHOC-CORRIDOR');
+
     setIsActing(true);
     try {
-      const action = decision === 'REJECT' ? 'REJECT' : 'ACCEPT';
+      const action: DecisionAction =
+        decision === 'REJECT' ? 'REJECT' : decision === 'OVERRIDE' ? 'OVERRIDE' : 'ACCEPT';
+      const tacticalAction: TacticalManeuver =
+        decision === 'HOLD' ? 'HOLD' : decision === 'OVERRIDE' ? 'CONTINUE' : tactical;
+
+      const originName =
+        formatNodeId(selectedOriginNode, resolveNodeInfo(selectedOriginNode)) || undefined;
+      const destName =
+        formatNodeId(selectedDestNode, resolveNodeInfo(selectedDestNode)) || undefined;
+
       await api.approvals.create({
-        incident_id: selectedCrisis.crisis_id,
+        incident_id: incidentId,
         route_id: String(idx),
         recommended_route: route,
         action,
-        tactical_action: tactical,
+        tactical_action: tacticalAction,
         operator_id: user?.name || user?.email || user?.id || 'OP-CHIEF-01',
         approved_by: user?.name || user?.email || user?.id || 'OP-CHIEF-01',
+        route_name: route.route_name || route.description,
+        origin: originName,
+        destination: destName,
         notes,
       });
-      await handleCommitOperationalRoute(route, action, tactical);
+
+      if (action === 'REJECT') {
+        setToast({
+          message: 'Rekomendasi rute berhasil ditolak. Armada tetap pada jalur operasional awal.',
+          type: 'info',
+        });
+        setRouteModalIdx(null);
+        await refreshHitlCount();
+        return;
+      }
+
+      await handleCommitOperationalRoute(route, action, tacticalAction);
       await refreshHitlCount();
       setRouteModalIdx(null);
+
+      if (!selectedCrisis?.crisis_id) {
+        setToast({
+          message: 'Keputusan koridor berhasil dicatat (Mode Ad-Hoc / Koridor Mandiri).',
+          type: 'success',
+        });
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes('403') || msg.includes('Forbidden')) {
@@ -2474,7 +2480,7 @@ export default function DashboardClient() {
     } finally {
       setIsActing(false);
     }
-  }, [currentMapRoutes, selectedCrisis, routeModalIdx, activeRouteIdx, role, user, handleCommitOperationalRoute, refreshHitlCount]);
+  }, [currentMapRoutes, selectedCrisis, routeModalIdx, activeRouteIdx, role, user, selectedOriginNode, selectedDestNode, resolveNodeInfo, handleCommitOperationalRoute, refreshHitlCount]);
 
   // Triggered by Game-Like Map Location Click
   const handleMapPointTargeted = useCallback((

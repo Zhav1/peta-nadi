@@ -72,7 +72,7 @@ async def create_approval(
         route_dict = payload.recommended_route or {}
         target_vid = (payload.custom_constraints or {}).get("vehicle_id") or route_dict.get("vehicle_id") or "TRK-003-BELAWAN-TEBING"
         rec_geom = route_dict.get("route_geometry") or route_dict.get("geometry")
-        if rec_geom and target_vid:
+        if rec_geom and target_vid and payload.action != DecisionAction.REJECT:
             from app.services.telemetry_service import telemetry_service
             telemetry_service.reroute_vehicle(
                 vehicle_id=target_vid,

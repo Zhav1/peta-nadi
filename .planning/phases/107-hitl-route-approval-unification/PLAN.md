@@ -4,7 +4,7 @@ phase_name: HITL Route Decision Control Unification & E2E Workflow Hardening
 milestone: M6
 milestone_name: 3D Globe Native Mapbox Fleet, Street-Snapping & Impeccable Cartography
 created_at: "2026-10-25T16:15:00.000Z"
-status: planned
+status: complete
 framework: GSD
 ---
 
@@ -126,10 +126,10 @@ During operational usability testing of the PreHub dispatch workflow on the map 
 
 ## Verification Criteria & Proof of Work
 
-- [ ] All 3 bottom decision buttons in `RouteDetailModal.tsx` execute their designated tactical actions (`REROUTE`, `HOLD`, `OVERRIDE`) without ambiguity.
-- [ ] Selecting an ad-hoc or map corridor without an active crisis (`selectedCrisis === null`) successfully commits the approval using the fallback incident ID without silent drop.
-- [ ] Rejection action cleanly closes the modal, registers `action: REJECT`, and strictly prevents TMS pinging or active route stylization.
-- [ ] Merely clicking a route card or map line does not create a premature approval record in the database.
-- [ ] Approved decisions appear immediately in `ReportsSection.tsx` Table 3 (Audit Tindakan Operator) with correct action badges.
-- [ ] WhatsApp dispatch links in `MitigationTab.tsx` generate accurate operational orders.
-- [ ] 100% automated test pass: `test_phase107_hitl_approval_unification.ts`, 0 TypeScript errors, and 5/5 backend pytests.
+- [x] All 3 bottom decision buttons in `RouteDetailModal.tsx` execute their designated tactical actions (`REROUTE`, `HOLD`, `OVERRIDE`) without ambiguity.
+- [x] Selecting an ad-hoc or map corridor without an active crisis (`selectedCrisis === null`) successfully commits the approval using the fallback incident ID without silent drop.
+- [x] Rejection action cleanly closes the modal, registers `action: REJECT`, and strictly prevents TMS pinging or active route stylization.
+- [x] Merely clicking a route card or map line does not create a premature approval record in the database.
+- [x] Approved decisions appear immediately in `ReportsSection.tsx` Table 3 (Audit Tindakan Operator) with correct action badges.
+- [x] WhatsApp dispatch links in `MitigationTab.tsx` generate accurate operational orders.
+- [x] 100% automated test pass: `test_phase107_hitl_approval_unification.ts`, 0 TypeScript errors, and 5/5 backend pytests.

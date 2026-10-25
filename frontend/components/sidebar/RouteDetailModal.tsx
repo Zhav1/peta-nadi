@@ -14,6 +14,7 @@ import {
 import type {
   CrisisState,
   RouteDetailModalProps,
+  RouteDecisionType,
   TacticalManeuver,
 } from '@/lib/types';
 import {
@@ -30,7 +31,7 @@ import {
  AlertDialogTitle,
 } from '@/components/base-ui/alert-dialog';
 
-type Decision = 'APPROVE' | 'REJECT' | 'HOLD';
+type Decision = RouteDecisionType;
 
 const CHECKLIST_ITEMS = [
   {
@@ -47,7 +48,7 @@ const CHECKLIST_ITEMS = [
   },
   {
     id: 'notes',
-    label: 'Catatan operator diisi untuk keputusan OVERRIDE / HOLD',
+    label: 'Catatan operator diisi untuk keputusan HOLD / OVERRIDE',
   },
 ] as const;
 
@@ -80,27 +81,37 @@ export function RouteDetailModal({
 }: RouteDetailModalProps) {
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [notes, setNotes] = useState('');
-  const [tactical, setTactical] = useState<TacticalManeuver>('REROUTE');
+  const [previewPolicy, setPreviewPolicy] = useState<TacticalManeuver>('REROUTE');
 
   useEffect(() => {
     if (open) {
       setChecked({});
       setNotes('');
-      setTactical(
+      setPreviewPolicy(
         route.corridor_type === 'hold_staging' ? 'HOLD' : 'REROUTE'
       );
     }
   }, [open, route.corridor_type]);
+
+  // Synchronize checklist item 4 with active notes input
+  useEffect(() => {
+    if (notes.trim().length > 0) {
+      setChecked((prev) => (prev.notes ? prev : { ...prev, notes: true }));
+    }
+  }, [notes]);
 
  /* Escape-to-close and focus trapping are provided by the AlertDialog block (Root onOpenChange + Popup). */
 
  /* Dialog visibility is controlled by the AlertDialog open prop (Watermelon block pattern). */
 
   const isSandbox = mode === 'sandbox' || role === 'GUEST';
-  const allChecked = CHECKLIST_ITEMS.every((c) => checked[c.id]);
-  const notesRequired = tactical === 'HOLD';
-  const notesOk = notesRequired ? notes.trim().length > 0 : true;
-  const canCommit = !isSandbox && allChecked && notesOk && !isActing;
+  const allChecked = CHECKLIST_ITEMS.every(
+    (c) => checked[c.id] || (c.id === 'notes' && notes.trim().length > 0)
+  );
+
+  const canApprove = !isSandbox && allChecked && !isActing && role !== 'REGULATOR';
+  const canHold = !isSandbox && allChecked && !isActing && notes.trim().length > 0;
+  const canOverride = !isSandbox && allChecked && !isActing && notes.trim().length > 0 && role !== 'REGULATOR';
 
   const passability =
     crisis?.impact_profile?.passability ??
@@ -119,9 +130,9 @@ export function RouteDetailModal({
   const deadLinks = newsLinks.filter((n) => n.link_alive === 'dead').length;
 
   const activePolicyBreakdown =
-    tactical === 'HOLD'
+    previewPolicy === 'HOLD'
       ? route.hedging?.hold_policy
-      : tactical === 'CONTINUE'
+      : previewPolicy === 'CONTINUE'
       ? route.hedging?.continue_policy
       : (route.hedging?.reroute_policy ??
          (route.hedging?.optimal_policy === 'HOLD'
@@ -154,11 +165,12 @@ export function RouteDetailModal({
   const toggleCheck = (id: string) =>
     setChecked((prev) => ({ ...prev, [id]: !prev[id] }));
 
-  const handleDecision = (decision: Decision) => {
+  const handleAction = (decision: RouteDecisionType, tacticalAction: TacticalManeuver) => {
     if (isSandbox) return;
     if (role === 'REGULATOR' && decision !== 'HOLD') return;
     if (!allChecked) return;
-    void onAction(decision, tactical, notes.trim() || undefined);
+    if ((decision === 'HOLD' || decision === 'OVERRIDE' || decision === 'REJECT') && !notes.trim()) return;
+    void onAction(decision, tacticalAction, notes.trim() || undefined);
   };
 
   const title =
@@ -304,7 +316,7 @@ export function RouteDetailModal({
                 <div className="flex justify-between items-center gap-2 p-2 rounded-lg bg-cyan-950/40 border border-cyan-500/30 text-xs font-mono">
                   <span className="text-cyan-300 flex items-center gap-1.5 font-sans font-medium">
                     <Snowflake className="w-3.5 h-3.5 text-cyan-400" />
-                    Bahan Bakar Genset Reefer ({tactical}):
+                    Bahan Bakar Genset Reefer ({previewPolicy}):
                   </span>
                   <span className="font-bold text-cyan-300 font-mono">
                     {formatIDR(reeferGensetCost)}
@@ -342,11 +354,45 @@ export function RouteDetailModal({
           </section>
 
           {/* Section 3: Manfaat vs Konsekuensi & Rincian Biaya Operasional */}
-          <section aria-label="Manfaat vs Konsekuensi" className="border-t border-white/10 pt-3 bg-transparent space-y-2">
+          <section aria-label="Manfaat vs Konsekuensi" className="border-t border-white/10 pt-3 bg-transparent space-y-2.5">
             <h3 className="text-xs font-bold font-sans text-cyan-300 flex items-center gap-1.5">
               <Scale className="w-4 h-4 text-cyan-400" />
               <span>3. Manfaat, Konsekuensi &amp; Rincian Biaya</span>
             </h3>
+
+            {/* Economic & Spoilage Trade-off Policy Preview Selector */}
+            <div className="p-2.5 rounded-xl bg-[#080d14] border border-white/10 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold font-sans text-slate-200">
+                  Pratinjau Dampak Kebijakan (Economic &amp; Spoilage Trade-off Preview)
+                </span>
+                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
+                  Simulasi Kalkulasi
+                </span>
+              </div>
+              <p className="text-[10px] font-sans text-slate-400 leading-snug">
+                Pilih opsi di bawah untuk mensimulasikan perbandingan biaya operasional &amp; potensi susut kargo. Pilihan ini murni pratinjau kalkulasi dan tidak mengikat keputusan akhir eksekusi.
+              </p>
+              <div className="grid grid-cols-3 gap-1.5 pt-0.5">
+                {(['REROUTE', 'HOLD', 'CONTINUE'] as TacticalManeuver[]).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setPreviewPolicy(t)}
+                    className={`cursor-pointer py-1.5 px-2 rounded-lg border text-xs font-mono transition-all flex flex-col items-center justify-center gap-0.5 ${
+                      previewPolicy === t
+                        ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200 font-bold shadow-sm'
+                        : 'bg-[#121822] border-white/10 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <span className="text-[11px] font-semibold">{t}</span>
+                    <span className="text-[9px] text-slate-400 font-sans">
+                      {t === 'REROUTE' ? 'Pengalihan' : t === 'HOLD' ? 'Tahan Depo' : 'Jalur Asal'}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
             {route.tradeoff_analysis && (
               <div className="grid grid-cols-2 gap-2 text-xs leading-relaxed">
                 <div className="p-2 rounded-md bg-emerald-950/30 border border-emerald-500/20">
@@ -549,23 +595,26 @@ export function RouteDetailModal({
  <span>5. Verifikasi operator</span>
             </h3>
             <div className="space-y-1.5">
-              {CHECKLIST_ITEMS.map((item) => (
-                <label
-                  key={item.id}
- className="flex items-start gap-2.5 p-2 rounded-lg bg-[#080d14] border border-white/10 cursor-pointer hover:border-cyan-500/40 transition text-xs font-sans text-slate-200"
-                >
-                  <input
-                    type="checkbox"
-                    checked={!!checked[item.id]}
-                    onChange={() => toggleCheck(item.id)}
-                    className="mt-0.5 w-4 h-4 accent-cyan-400 cursor-pointer"
-                  />
-                  <span>{item.label}</span>
-                </label>
-              ))}
+              {CHECKLIST_ITEMS.map((item) => {
+                const isChecked = !!checked[item.id] || (item.id === 'notes' && notes.trim().length > 0);
+                return (
+                  <label
+                    key={item.id}
+                    className="flex items-start gap-2.5 p-2 rounded-lg bg-[#080d14] border border-white/10 cursor-pointer hover:border-cyan-500/40 transition text-xs font-sans text-slate-200"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => toggleCheck(item.id)}
+                      className="mt-0.5 w-4 h-4 accent-cyan-400 cursor-pointer"
+                    />
+                    <span>{item.label}</span>
+                  </label>
+                );
+              })}
             </div>
- <div className="text-xs font-mono text-slate-400">
-              {Object.values(checked).filter(Boolean).length}/4 verifikasi selesai
+            <div className="text-xs font-mono text-slate-400">
+              {CHECKLIST_ITEMS.filter((item) => !!checked[item.id] || (item.id === 'notes' && notes.trim().length > 0)).length}/4 verifikasi selesai
             </div>
 
             {isSandbox ? (
@@ -575,64 +624,90 @@ export function RouteDetailModal({
               </div>
             ) : (
               <>
-                <div className="flex gap-2 text-xs font-mono">
-                  {(['REROUTE', 'HOLD', 'CONTINUE'] as TacticalManeuver[]).map((t) => (
+                <div className="space-y-1">
+                  <label htmlFor="operator-notes" className="text-[11px] font-sans font-medium text-slate-300 flex items-center justify-between">
+                    <span>Catatan Operator Justifikasi</span>
+                    <span className="text-[10px] font-mono text-amber-400/90">*Wajib untuk HOLD &amp; OVERRIDE</span>
+                  </label>
+                  <textarea
+                    id="operator-notes"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Wajib isi alasan penahanan depo / justifikasi rute asal (HOLD / OVERRIDE)..."
+                    rows={2}
+                    className="w-full bg-[#080d14] border border-white/10 focus:border-cyan-500/50 rounded-lg p-2.5 text-xs font-mono text-slate-200 placeholder:text-slate-500 focus:outline-none transition-colors"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     <button
-                      key={t}
                       type="button"
-                      onClick={() => setTactical(t)}
-                      className={`cursor-pointer flex-1 py-1.5 rounded-md border text-xs transition ${
-                        tactical === t
-                          ? 'bg-white border-white text-[#080d14] font-semibold'
- : 'bg-[#121822] border-white/10 text-slate-400 hover:text-white'
-                      }`}
+                      onClick={() => handleAction('APPROVE', 'REROUTE')}
+                      disabled={!canApprove}
+                      title={
+                        role === 'REGULATOR'
+                          ? 'Memerlukan peran Dispatcher [Khusus Dispatcher]'
+                          : !allChecked
+                          ? 'Lengkapi 4/4 verifikasi checklist'
+                          : 'Setujui pengalihan rute armada'
+                      }
+                      className="cursor-pointer py-2.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-sans font-semibold flex items-center justify-center gap-1.5 transition-all shadow-lg shadow-emerald-950/40"
                     >
-                      {t}
+                      {role === 'REGULATOR' && <Lock className="w-3.5 h-3.5 shrink-0" />}
+                      <span>Setujui Pengalihan (Reroute)</span>
                     </button>
-                  ))}
+                    <button
+                      type="button"
+                      onClick={() => handleAction('HOLD', 'HOLD')}
+                      disabled={!canHold}
+                      title={
+                        !notes.trim()
+                          ? 'Wajib mengisi catatan operator untuk aksi HOLD'
+                          : !allChecked
+                          ? 'Lengkapi 4/4 verifikasi checklist'
+                          : 'Tahan armada di buffer zone / depo'
+                      }
+                      className="cursor-pointer py-2.5 px-3 rounded-lg bg-amber-600/90 hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-sans font-semibold flex items-center justify-center gap-1.5 transition-all shadow-lg shadow-amber-950/40"
+                    >
+                      <span>Tahan Armada (Hold Fleet)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleAction('OVERRIDE', 'CONTINUE')}
+                      disabled={!canOverride}
+                      title={
+                        role === 'REGULATOR'
+                          ? 'Memerlukan peran Dispatcher [Khusus Dispatcher]'
+                          : !notes.trim()
+                          ? 'Wajib mengisi catatan operator untuk aksi OVERRIDE'
+                          : !allChecked
+                          ? 'Lengkapi 4/4 verifikasi checklist'
+                          : 'Lanjut rute asal dengan justifikasi operator'
+                      }
+                      className="cursor-pointer py-2.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 border border-white/10 text-xs font-sans font-medium flex items-center justify-center gap-1.5 transition-all"
+                    >
+                      {role === 'REGULATOR' && <Lock className="w-3.5 h-3.5 shrink-0" />}
+                      <span>Lanjut Jalur Asal (Override)</span>
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    disabled={isActing}
+                    className="cursor-pointer w-full py-2 px-3 rounded-lg bg-transparent hover:bg-white/5 disabled:opacity-40 text-slate-400 hover:text-slate-200 text-xs font-sans transition-all text-center border border-white/5"
+                  >
+                    Batal / Tutup
+                  </button>
                 </div>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Catatan operator (wajib untuk HOLD)..."
-                  rows={2}
- className="w-full bg-[#080d14] border border-white/10 focus:border-cyan-500/50 rounded-md p-2 text-xs font-mono text-slate-200 placeholder:text-slate-500 focus:outline-none"
-                />
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleDecision('APPROVE')}
-                    disabled={!canCommit || (role === 'REGULATOR')}
-                    title={role === 'REGULATOR' ? 'Memerlukan peran Dispatcher [Khusus Dispatcher]' : 'Setujui rute'}
-                    className="cursor-pointer py-2 px-2 rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition"
-                  >
-                    {role === 'REGULATOR' && <Lock className="w-3.5 h-3.5" />}
- <span>{role === 'REGULATOR' ? 'Setujui' : 'Setujui'}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDecision('HOLD')}
-                    disabled={!canCommit}
-                    title="Tahan armada di buffer"
-                    className="cursor-pointer py-2 px-2 rounded-md bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 disabled:opacity-40 disabled:cursor-not-allowed text-amber-300 text-xs font-semibold transition"
-                  >
- <span>Tahan</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDecision('REJECT')}
-                    disabled={!canCommit || (role === 'REGULATOR')}
-                    title={role === 'REGULATOR' ? 'Memerlukan peran Dispatcher [Khusus Dispatcher]' : 'Tolak rute'}
-                    className="cursor-pointer py-2 px-2 rounded-md border border-rose-500/40 hover:bg-rose-500/10 disabled:opacity-40 disabled:cursor-not-allowed text-rose-300 text-xs font-semibold transition"
-                  >
- <span>Tolak</span>
-                  </button>
-                </div>
-                {!allChecked && (
- <p className="text-xs font-mono text-slate-500">
+                {!allChecked ? (
+                  <p className="text-xs font-mono text-slate-500">
                     Lengkapi 4/4 verifikasi untuk mengaktifkan tombol keputusan.
                   </p>
-                )}
+                ) : !notes.trim() ? (
+                  <p className="text-xs font-mono text-amber-400/80">
+                    * Catatan wajib diisi jika memilih Tahan Armada (HOLD) atau Lanjut Jalur Asal (OVERRIDE).
+                  </p>
+                ) : null}
               </>
             )}
           </section>

@@ -481,16 +481,29 @@ function RouteCard({
  const targetTruck = selectedImpactedVehicle?.vehicle_id || 'TRK-003-BELAWAN-TEBING';
  const targetVehicleName = selectedImpactedVehicle?.vehicle_name || 'Unit Logistik';
  const targetCargo = selectedImpactedVehicle ? `${selectedImpactedVehicle.cargo_tonnage}T ${selectedImpactedVehicle.commodity_key}` : 'Cabai Merah';
- 
+ const tacticalAction = approvalData?.tactical_action || 'REROUTE';
+ const actionLabel =
+ tacticalAction === 'HOLD'
+ ? 'Tahan Armada di Depo (HOLD)'
+ : tacticalAction === 'CONTINUE'
+ ? 'Lanjut Rute Asal (OVERRIDE)'
+ : 'Alih Rute Alternatif (REROUTE)';
+ const statusGuidance =
+ tacticalAction === 'HOLD'
+ ? 'Jalur utama terblokir gangguan. Tahan armada di buffer zone / depo terdekat.'
+ : tacticalAction === 'CONTINUE'
+ ? 'Jalur utama berstatus darurat. Lanjut rute asal atas justifikasi operator.'
+ : 'Jalur utama terblokir gangguan. Ikuti koordinat alternatif mitigasi.';
+
  return (
  <a
  href={`https://wa.me/${targetPhone}?text=${encodeURIComponent(
  `PERINTAH DISPATCH RESMI - PIDI\n` +
  `Armada: ${targetTruck} (${targetVehicleName})\n` +
  `Muatan: ${targetCargo}\n` +
- `Tindakan: ${approvalData?.tactical_action === 'HOLD' ? 'Tahan' : approvalData?.tactical_action === 'CONTINUE' ? 'Lanjut' : 'Alih'}\n` +
+ `Tindakan: ${actionLabel}\n` +
  `Rute Pengalihan: ${route.route_name || route.description}\n` +
- `Status: Jalur utama terblokir gangguan. Ikuti koordinat alternatif mitigasi.\n` +
+ `Status: ${statusGuidance}\n` +
  (approvalData?.notes ? `Catatan: ${approvalData.notes}\n` : '') +
  `Harap segera konfirmasi penerimaan instruksi ini.`
  )}`}
@@ -793,7 +806,7 @@ export function MitigationTab({
  tacticalAction: TacticalManeuver = 'REROUTE',
  notes?: string
  ) => {
- if (!crisis.crisis_id) return;
+ const incId = crisis?.crisis_id || route.incident_id || 'INC-ADHOC-CORRIDOR';
  // Phase 77 role branches: Guest sandbox (zero POST), Regulator HOLD-only.
  if (role === 'GUEST') {
  setSandboxNote(
@@ -826,7 +839,7 @@ export function MitigationTab({
  const opId = user?.name || user?.email || user?.id || 'OP-CHIEF-01';
  try {
  const res = await api.approvals.create({
- incident_id: crisis.crisis_id,
+ incident_id: incId,
  route_id: String(idx),
  recommended_route: route,
  action,
@@ -838,7 +851,7 @@ export function MitigationTab({
  setApprovedRouteId(String(idx));
  setLatestApproval({
  id: res.approval_id || res.id || String(Date.now()),
- incident_id: crisis.crisis_id,
+ incident_id: incId,
  route_id: String(idx),
  action,
  tactical_action: tacticalAction,

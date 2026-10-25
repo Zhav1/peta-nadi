@@ -631,9 +631,13 @@ export default function ReportsSection({
  </TableCell>
  <TableCell className="py-3">
  <div className="flex flex-col gap-1 items-start">
- <span className="flex items-center gap-1.5 text-xs text-slate-300">
+ <span className="flex items-center gap-1.5 text-xs">
+ {actionUpper === 'ACCEPT' && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />}
  {actionUpper === 'REJECT' && <span className="w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0" />}
+ {actionUpper === 'OVERRIDE' && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />}
+ <span className={actionUpper === 'ACCEPT' ? 'text-emerald-300 font-semibold' : actionUpper === 'REJECT' ? 'text-rose-300 font-semibold' : 'text-amber-300 font-semibold'}>
  {actionUpper}
+ </span>
  </span>
  <span className="text-xs text-slate-500 flex items-center gap-1.5 tabular-nums">
  {!isSynced && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />}

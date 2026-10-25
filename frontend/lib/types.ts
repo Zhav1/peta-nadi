@@ -161,6 +161,7 @@ export interface CongestionSegment {
 
 export interface RouteRecommendation {
   id?: string;
+  incident_id?: string;
   route_name?: string;
   description: string;
   waypoints: Array<{ lat: number; lon: number }>;
@@ -224,6 +225,8 @@ export interface RouteRecommendation {
   };
 }
 
+export type RouteDecisionType = 'APPROVE' | 'REJECT' | 'HOLD' | 'OVERRIDE';
+
 export interface RouteDetailModalProps {
   route: RouteRecommendation;
   crisis: CrisisState | null;
@@ -232,7 +235,7 @@ export interface RouteDetailModalProps {
   role: 'DISPATCHER' | 'REGULATOR' | 'GUEST';
   mode: 'live' | 'sandbox';
   onAction: (
-    decision: 'APPROVE' | 'REJECT' | 'HOLD',
+    decision: RouteDecisionType,
     tactical: TacticalManeuver,
     notes?: string
   ) => Promise<void>;
