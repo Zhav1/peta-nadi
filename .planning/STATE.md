@@ -1,37 +1,37 @@
 ---
 gsd_state_version: "1.0"
-milestone: M6
-milestone_name: 3D Globe Native Mapbox Fleet, Street-Snapping & Impeccable Cartography
-current_phase: 107
-current_phase_name: HITL Route Decision Control Unification & E2E Workflow Hardening
+milestone: M7
+milestone_name: Live News Trust, Source Breadth & Forecast Waspada Integrity
+current_phase: 110
+current_phase_name: FORECAST_WASPADA Orthogonal Early-Warning Tag
 status: complete
-stopped_at: "Phase 107 completed: HITL decision control unification in RouteDetailModal.tsx, elimination of silent drops via incident fallback in DashboardClient.tsx, elimination of premature auto-commits and rejection logic inversion, and downstream E2E pipeline hardening."
-last_updated: "2026-10-25T17:00:00.000Z"
+stopped_at: "Phase 107 HITL route approval unification complete (7/7 tests pass, 0 tsc errors). Phases 107-110 news trust, source expansion, EWKB, and FORECAST_WASPADA documented and integrated."
+last_updated: "2026-10-25T17:50:00.000Z"
 last_activity: 2026-10-25
-last_activity_desc: "Phase 107 executed and verified: 7/7 automated test pass, 0 tsc errors, 8/8 backend pytests passed."
+last_activity_desc: "Integrated Phase 107 HITL decision unification with M7 news trust and FORECAST_WASPADA updates."
 state_head: HEAD
 progress:
-  total_phases: 107
-  completed_phases: 107
-  total_plans: 124
-  completed_plans: 124
+  total_phases: 110
+  completed_phases: 110
+  total_plans: 128
+  completed_plans: 128
   percent: 100.0
 ---
 
 # STATE: PreHub Project Memory
 
 **Last Updated:** 2026-10-25
-**Active Milestone:** M6 - 3D Globe Native Mapbox Fleet, Street-Snapping & Impeccable Cartography [ACTIVE 🚀]
-**Previous Milestones:** M1-M4 [COMPLETED ✅], M5 - Pilot Interference, Ingestion Resilience & Honest Verification [COMPLETED ✅]
-**Current Phase:** 107
+**Active Milestone:** M7 - Live News Trust, Source Breadth & Forecast Waspada Integrity [ACTIVE 🚀]
+**Previous Milestones:** M1-M5 [COMPLETED ✅], M6 - 3D Globe Native Mapbox Fleet, Street-Snapping & Impeccable Cartography [COMPLETED ✅]
+**Current Phase:** 110
 
 ---
 
 ## Current Position
 
-Phase: 107 (HITL Route Decision Control Unification & E2E Workflow Hardening) - COMPLETE ✅
-Status: Fully executed and verified. Decision control unified with 3 tactical buttons in RouteDetailModal.tsx, silent drops eliminated via fallback incident IDs in DashboardClient.tsx, premature auto-commit eliminated in handleSelectRoute, rejection logic inversion guarded, and downstream E2E pipeline hardened.
-Next action: Phase 107 ready for review and merge.
+Phase: 107 (HITL Route Decision Control Unification & E2E Workflow Hardening) & 110 (FORECAST_WASPADA Orthogonal Early-Warning Tag) - COMPLETE ✅
+Status: HITL route decision control unified with 3 tactical buttons in RouteDetailModal.tsx, silent drops eliminated via fallback incident IDs in DashboardClient.tsx, premature auto-commit eliminated in handleSelectRoute, rejection logic inversion guarded. News trust fix, 8-source expansion, EWKB intake, and FORECAST_WASPADA early warning tag fully integrated.
+Next action: Phase 107 & M7 merged and ready for deployment.
 
 
 
@@ -157,6 +157,10 @@ Upstream Phases 87/88 above (Mapbox turn-by-turn; client-isolated session, merge
 | 104 | Nautical Sea-Lane Precision, ICAO Airway Corridors & Sub-Second Parallel Routing Engine | **COMPLETE** ✅ | Bathymetric fairway expansion (29-pt nautical perimeter, >=12km clearance from Langkat/Aceh Timur coast), ICAO ATS airway corridors (Medan FIR W12/W21 + Malikussaleh LSW + >40% backtracking gate), eliminated cloud API waterfall via progressive parallel dispatch and simplified Mapbox feeder profiles, pre-computed in-memory hub-to-hub and quantized coordinate route cache. Latency compressed from 30s+ to 32.4ms cold (<0.05ms warm). 0 land crossings, all pytests green, tsc exit 0, next build clean. Docs: `104-nautical-precision-icao-airways-subsecond-routing/PLAN.md`. |
 | 106 | Dual-Metric Operational Cost & First-Principles Trip Economics (A/B Variant C) | **COMPLETE** ✅ | First-principles trip operational cost engine (Biosolar Rp 6.800 @ 3.5 km/L + labor Rp 50.000/h + reefer genset Rp 45.000/h + BPJT tolls) in `tripCostCalculator.ts` and `aiDynamicRouter.ts`, dual-metric popover rendering on `CrisisMap.tsx` (`Est. Operasional`: Total + Delta badges), primary route safety status invariant alignment (`CLEAR` -> `Jalur utama bebas hambatan`), `RouteDetailModal.tsx` Section 3 operational cost breakdown sync, and `test_phase106_dual_metric.ts` passing 3/3. 0 tsc errors, 100% test pass. Docs in `106-dual-metric-operational-cost-trip-economics/PLAN.md`. |
 | 107 | HITL Route Decision Control Unification & E2E Workflow Hardening | **COMPLETE** ✅ | Docs in `107-hitl-route-approval-unification/PLAN.md`. Eliminated silent drop on ad-hoc / map corridors via fallback incident ID, unified decision controls in `RouteDetailModal.tsx` into 3 explicit actions (`Setujui Reroute`, `Tahan di Depo`, `Lanjut Jalur Asal`), eliminated premature auto-commit in `handleSelectRoute`, enforced rejection safety guard, and hardened downstream E2E integrations. 7/7 automated tests pass, 0 tsc errors. |
+| 107 | News Live-Only Trust Fix | **COMPLETE** ✅ | Live-only feed (no `FALLBACK_SUMATRA_NEWS`), resolve-or-drop permalinks, `_max_published_at_iso` + frozen cache timestamps, 10-province reach (ANTARA Babel/Kepri, Q6/Q7), weather-warning-only → YELLOW, and 6 adversarial Playwright specs. Git: `4e8781b`. Docs: `107-news-live-only-trust-fix/`. |
+| 108 | News Source Expansion — 8 Realtime Feeds | **COMPLETE** ✅ | 5 Tribun editions + Detik Finance/Katadata/Republika (23 direct RSS total), Q8 BNPB/BMKG targeted query, Tribun promo/lifestyle noise prune, and Chrome UA fix for Tribun 403. Git: `1588d8b`. Docs: `108-news-source-expansion-8-feeds/`. |
+| 109 | EWKB Location Parsing & Fair Intake (60 / 150) | **COMPLETE** ✅ | Endian-aware EWKB Point parser (SRID 4326 only, WKT fallback, concrete lat/lon precedence), WKB/EWKB polygon → GeoJSON reader, `NEWS_INGEST_ITEM_BUDGET=60` round-robin by source, 150-row read window, and 240 s token-checked Redis lock. Git: `56045cf`. Docs: `109-ewkb-location-intake-round-robin/`. |
+| 110 | FORECAST_WASPADA Orthogonal Early-Warning Tag | **COMPLETE** ✅ | Orthogonal 24 h tag pinned to YELLOW, eligibility gate (W_present + consensus/official), `forecast_mode` disables E, forecast never synthesizes an incident, 409 HITL guard, separate Prakiraan counter/filter, zero-fill dashed cyan zones, HOLD-only panel, WIB expiry countdown. No dedicated tests found. Docs: `110-forecast-waspada-orthogonal-tag/`. |
 
 
 
@@ -170,6 +174,10 @@ Interpolated straight-line land geometry (no Mapbox token) no longer presents as
 
 | Date | Decision | Rationale |
 |------|----------|-----------|
+| 2026-10-25 | Phase 107: News Live-Only Trust Fix | (1) An empty feed renders `warming`, never a `FALLBACK_SUMATRA_NEWS` fixture, because a fabricated Belawan headline is worse than no headline. (2) Unresolvable links are dropped, not rewritten to publisher search pages, because a search page is not a citation. (3) `last_updated` is the newest real `published_at` (replayed from a 30 s cache), never `datetime.now()`. (4) The client freezes the feed by sorted article-id signature so a CDN-cached poll cannot move `pubDate` or the global clock. (5) Weather-warning-only text is capped at YELLOW server-side, with a client mirror. Git: `4e8781b`. |
+| 2026-10-25 | Phase 108: News Source Expansion | (1) Five Tribun regional editions and three economic/national outlets were added as direct RSS rather than relying on Google News queries, preserving province metadata. (2) Q8 targets BNPB/BMKG official domains for early-warning recall. (3) Tribun promo/lifestyle terms are excluded before the extractor to save tokens. (4) Direct RSS uses a browser UA because the legacy bot UA received HTTP 403. (5) The 23-feed set requires Phase 109's fair intake; breadth without a budget is a race. Git: `1588d8b`. |
+| 2026-10-25 | Phase 109: EWKB Location Parsing & Fair Intake | (1) PostgREST returns PostGIS geometry as EWKB hex, so incidents parse EWKB first (little/big endian, SRID 4326 only) and fall back to WKT. (2) Concrete migration-010 `lat`/`lon` columns are authoritative; `location` is compatibility fallback. (3) The per-cycle extraction budget is 60 items interleaved by source, because a flat head-slice starves late feeds. (4) The live read asks for 150 rows because a 60-row window let DROPPED rows push valid rows out. (5) The Redis ingestion lock uses a 240 s TTL and owner-checked release so a crash self-heals. Git: `56045cf`. |
+| 2026-10-25 | Phase 110: FORECAST_WASPADA Orthogonal Tag | (1) A forecast is a display tag, not a fourth `zone_tier`; it stays `YELLOW_CLARIFY` and can never become RED. (2) Validity is `min(published + 24h, now + 24h)` so an old warning cannot get a fresh 24 h. (3) `forecast_mode` disables the E commodity channel because a commodity mention is not a PIHPS anomaly. (4) A forecast never synthesizes a physical incident. (5) APPROVE on a non-RED forecast returns 409; HOLD is the only allowed operational action. Working tree only; unpushed. |
 | 2026-10-24 | Phase 102: Fleet Telemetry Restoration, Payload Optimization & Zoom-Out LOD Cartography | (1) Removed the faulty ROUTE_ESTIMATED filter in FleetVehicleLayer.tsx that dropped trucks, restoring all 24 tactical green dots without resurrecting ambient orange route lines. (2) Decoupled telemetry polling from bulky polyline geometries via include_geometry=false (shrinking truck payload to 28.7 KB and full fleet from 4.9+ MB to <10%), while serving geometries on-demand (/api/v1/fleet/vehicles/{id}/geometry) and preloading fleet_corridors_snapped.json once via corridorSnappingService.ts. (3) Eliminated initial 'Memuat' and empty news flashes via fallback state hydration in useNewsVerification and useCorridorContext. (4) Gated checkHitl polling to authenticated non-guest operators, ending 401 console noise. (5) Enforced WebGL smooth dissolve (z=3.2 to 4.0) on fleet dots, minzoom 4.0 on route lines and halos, minzoom 4.5 on hub pulse rings, and camera minZoom 2.8. 26/26 pytest passed, 0 tsc errors. |
 | 2026-10-21 | Phases 80-82: Search E2E, Dispatcher Scope, Truck/Travel ERP | (1) One canonical base-URL resolver; direct `NEXT_PUBLIC_API_URL` reads and module-scope `WS_BASE` removed, because a dead/malformed value produced different failures per screen. (2) Search ranks before truncating, de-dupes aliases by proximity, caches only positives under a versioned Redis namespace, and keeps timeout distinct from cancellation. (3) A token claim is the scope, not a default — dispatchers cannot widen scope via query params, and mock fleets are never substituted for scoped roles. (4) Assets (`truck_assets`) and trips (`travels`) are separate tables with snapshotted master fields so history and the ledger survive asset edits; ERP numbers derive only from persisted columns, planned trips claim no savings, and missing values stay explicit. |
 | 2026-10-20 | Phase 78: LLM Gateway Network Resilience, Connect Timeout Retry & Reasoning Effort Calibration | Resolved Render-to-Cloudflare ConnectTimeout and token exhaustion vulnerabilities: (1) Added 2-attempt exponential backoff retry (1s -> 2s) for network timeouts and 5xx errors; (2) added reasoning_effort parameter and config default to low so reasoning models (deepseek-v4.1-flash, mimo-v2.6-pro) allocate budget to content rather than running out of tokens during internal reasoning; (3) extracted reasoning_content fallback if content is empty; (4) verified 11 passing unit tests. |

@@ -273,12 +273,20 @@ def _resolve_finding_distance(finding: Optional[Dict[str, Any]]) -> float:
         return float("inf")
 
 
-def compute_consensus(state: CrisisState) -> Dict[str, Any]:
+def compute_consensus(state: CrisisState, forecast_mode: Optional[bool] = None) -> Dict[str, Any]:
     """
     Computes formal probabilistic consensus score across independent sensory observation channels.
     Strictly decouples external sensor evidence from internal agent outputs.
     Enforces deterministic BMKG cross-validation and caps uncorroborated news claims at <= 0.50.
+
+    ``forecast_mode`` (optional; also read from ``state["forecast_mode"]``) marks an
+    item as a forecast/advisory. A forecast may mention staple commodities, but that
+    mention is not an observed PIHPS price anomaly, so the E channel is NOT activated
+    by it — W/T/I evidence alone drives the score.
     """
+    forecast_mode_active = bool(
+        forecast_mode if forecast_mode is not None else state.get("forecast_mode")
+    )
     # 1. Extract sensory channels
     # Channel W: Meteorological / Weather (Data Collection / BMKG / Open-Meteo)
     weather_finding = state.get("data_collection_finding") or {}
@@ -355,7 +363,9 @@ def compute_consensus(state: CrisisState) -> Dict[str, Any]:
             econ_signal_source = "pre_economic_signal"
 
     # Dynamic normalization: E votes only while the PIHPS anomaly is active.
-    econ_active = econ_conf > 0.50
+    # Forecast mode: a staple mention inside a forecast/advisory is NOT an
+    # observed PIHPS anomaly — never let it activate the E channel.
+    econ_active = (econ_conf > 0.50) and not forecast_mode_active
     sensor_weights = (
         SENSOR_WEIGHTS_ECONOMIC_ACTIVE if econ_active else SENSOR_WEIGHTS_PHYSICAL_ONLY
     )
@@ -517,6 +527,7 @@ def compute_consensus(state: CrisisState) -> Dict[str, Any]:
         # whether its weight was normalized in (active spike) or out (no anomaly).
         "economic_signal_source": econ_signal_source,
         "economic_channel_active": econ_active,
+        "forecast_mode": forecast_mode_active,
         "route": "validated" if is_validated else "unconfirmed",
         "validation_status": "VALIDATED" if is_validated else "UNCONFIRMED",
         "validation_mode": validation_mode,

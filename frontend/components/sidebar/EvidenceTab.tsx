@@ -1,7 +1,7 @@
 'use client';
 import React from 'react';
 import type { CrisisState } from '@/lib/types';
-import { normalizeNewsPermalink } from '@/hooks/useNewsVerification';
+import { normalizeNewsPermalink, isForecastActive } from '@/hooks/useNewsVerification';
 import {
  FileText,
  Activity,
@@ -62,6 +62,9 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
  ].filter((f) => f.finding != null);
 
  const isSimulated = Boolean(crisis.is_simulated);
+ // Early-warning forecast: cyan advisory treatment, pinned to YELLOW_CLARIFY.
+ // The tag hides itself after its 24h window; the underlying evidence stays.
+ const isForecast = isForecastActive(crisis.forecast_tag, crisis.forecast_valid_until);
  // Only show a confidence number the swarm actually produced. Never invent a
  // stand-in (the old 0.92 fallback painted 92% on an empty payload).
  const rawConfidence = Number(crisis.overall_confidence);
@@ -149,11 +152,11 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
 
  {/* 0. AUDIT KLASIFIKASI AI & PENJELASAN ZONA */}
  {(crisis.zone_tier || crisis.tier_reason || crisis.impact_profile) && (
- <div className={`rounded-md border p-3 space-y-2 ${crisis.zone_tier === 'RED_CONFIRMED' ? 'bg-red-950/30 border-red-500/40' : 'bg-yellow-950/20 border-yellow-400/40'}`}>
+ <div className={`rounded-md border p-3 space-y-2 ${isForecast ? 'bg-cyan-950/30 border-cyan-500/40' : crisis.zone_tier === 'RED_CONFIRMED' ? 'bg-red-950/30 border-red-500/40' : 'bg-yellow-950/20 border-yellow-400/40'}`}>
  <div className="flex items-center gap-1.5 font-sans font-bold text-xs">
- <AlertTriangle className={`w-3.5 h-3.5 ${crisis.zone_tier === 'RED_CONFIRMED' ? 'text-red-400' : 'text-yellow-300'}`} />
- <span className={crisis.zone_tier === 'RED_CONFIRMED' ? 'text-red-200' : 'text-yellow-200'}>
- {crisis.zone_tier === 'RED_CONFIRMED' ? 'Bahaya' : 'Waspada'}
+ <AlertTriangle className={`w-3.5 h-3.5 ${isForecast ? 'text-cyan-300' : crisis.zone_tier === 'RED_CONFIRMED' ? 'text-red-400' : 'text-yellow-300'}`} />
+ <span className={isForecast ? 'text-cyan-200' : crisis.zone_tier === 'RED_CONFIRMED' ? 'text-red-200' : 'text-yellow-200'}>
+ {isForecast ? 'Prakiraan — Waspada Dini' : crisis.zone_tier === 'RED_CONFIRMED' ? 'Bahaya' : 'Waspada'}
  </span>
  </div>
  {crisis.custom_hazard_label && (
@@ -164,7 +167,7 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
  )}
  {crisis.tier_reason && (
  <p className="text-xs text-slate-300 leading-relaxed font-sans">
- <span className="text-slate-400 font-mono text-xs block">Mengapa zona ini diklasifikasikan {crisis.zone_tier === 'RED_CONFIRMED' ? 'Merah' : 'Kuning'} oleh LLM</span>
+ <span className="text-slate-400 font-mono text-xs block">Mengapa zona ini diklasifikasikan {isForecast ? 'Prakiraan (belum terkonfirmasi)' : crisis.zone_tier === 'RED_CONFIRMED' ? 'Merah' : 'Kuning'} oleh LLM</span>
  {crisis.tier_reason}
  </p>
  )}
@@ -201,9 +204,15 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
  <span className="px-2 py-0.5 rounded text-xs font-mono bg-emerald-500/10 border border-emerald-500/40 text-emerald-200">
  ✓ Presisi Geospasial
  </span>
+ {isForecast ? (
+ <span className="px-2 py-0.5 rounded text-xs font-mono font-bold bg-cyan-500/10 border border-cyan-500/40 text-cyan-200">
+  ◷ Prakiraan — Belum Terkonfirmasi (HOLD-only)
+ </span>
+ ) : (
  <span className={`px-2 py-0.5 rounded text-xs font-mono font-bold border ${crisis.zone_tier === 'RED_CONFIRMED' ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-200' : 'bg-yellow-400/10 border-yellow-400/40 text-yellow-200'}`}>
  {crisis.zone_tier === 'RED_CONFIRMED' ? '✓ Dampak Fisik Terkonfirmasi' : '⚠ Perlu Klarifikasi Lapangan'}
  </span>
+ )}
  {crisis.verification_audit?.llm_verified ? (
  <span className="px-2 py-0.5 rounded text-xs font-mono bg-emerald-500/10 border border-emerald-500/40 text-emerald-200">
  ✓ Konten Artikel Dianalisis Workhorse LLM{crisis.verification_audit.content_chars_analyzed ? ` (${crisis.verification_audit.content_chars_analyzed} kar)` : ''}

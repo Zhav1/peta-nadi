@@ -32,7 +32,7 @@ import {
  AlertCircle
 } from 'lucide-react';
 import { useAuth } from '@/lib/authContext';
-import { normalizeNewsPermalink } from '@/hooks/useNewsVerification';
+import { normalizeNewsPermalink, isForecastActive } from '@/hooks/useNewsVerification';
 import { SpoilageHedgingCard } from './SpoilageHedgingCard';
 import { ComplianceInspectorCard } from './ComplianceInspectorCard';
 import { HoldVsRerouteCard } from './HoldVsRerouteCard';
@@ -58,6 +58,8 @@ interface RouteCardProps {
  onApprove: (action: DecisionAction, tacticalAction: TacticalManeuver, notes?: string) => Promise<void>;
  selectedImpactedVehicle?: import('@/lib/types').ImpactedVehicleAssessment | null;
  crisisHasEvidence: boolean;
+ /** Prakiraan Waspada Dini: HOLD-only, no reroute/approve. */
+ isForecast?: boolean;
 }
 
 // HITL integrity gate (Phase 82 audit): HITL approval is only enabled on a LIVE
@@ -65,6 +67,10 @@ interface RouteCardProps {
 // routes without evidence keep Approve/Reroute disabled; HOLD stays allowed.
 const HITL_UNVERIFIED_COPY =
  'Belum terverifikasi — rute simulasi/offline atau bukti belum tersedia. Approval dinonaktifkan.';
+// Forecast (Prakiraan Waspada Dini) is advisory only: the zone is not a
+// confirmed disaster, so reroute/approve stay blocked and HOLD is the only path.
+const FORECAST_HOLD_COPY =
+ 'Prakiraan waspada dini — belum terkonfirmasi sebagai bencana. Pengalihan rute dinonaktifkan; hanya TAHAN armada yang diizinkan.';
 const HITL_PENDING_COPY = 'Tercatat sebagai HITL pending — belum dikirim ke armada';
 
 function isSimulatedRoute(route: RouteRecommendation): boolean {
@@ -142,6 +148,7 @@ function RouteCard({
  onApprove,
  selectedImpactedVehicle,
  crisisHasEvidence,
+ isForecast = false,
 }: RouteCardProps) {
  const { role } = useAuth();
  const [showOverrideModal, setShowOverrideModal] = useState(false);
@@ -156,7 +163,10 @@ function RouteCard({
  // HITL integrity gate: LIVE grounded route + evidence required for Approve/Reroute.
  const isSimulated = isSimulatedRoute(route);
  const hasEvidence = crisisHasEvidence || hasRouteProof(route);
- const hitlBlocked = isSimulated || !hasEvidence;
+ // HITL gate extension: a forecast zone may never POST a reroute — the tag keeps
+ // the card HOLD-only even when route proof exists.
+ const hitlBlocked = isSimulated || !hasEvidence || isForecast;
+ const blockedCopy = isForecast ? FORECAST_HOLD_COPY : HITL_UNVERIFIED_COPY;
  const provenanceLabel = isSimulated ? 'Simulasi' : 'Live';
  // GUEST sandbox is zero-POST local preview, so its buttons stay enabled;
  // the gate only locks real ledger writes. HOLD tactics stay allowed for all roles.
@@ -195,7 +205,7 @@ function RouteCard({
  return;
  }
  if (hitlBlocked && overrideTactical !== 'HOLD' && role !== 'GUEST') {
- setValidationError(HITL_UNVERIFIED_COPY);
+ setValidationError(blockedCopy);
  return;
  }
  setValidationError(null);
@@ -545,7 +555,7 @@ function RouteCard({
  {/* Regulator HOLD-only: APPROVE locked, HOLD enabled */}
  {hitlBlocked && (
  <div className="w-full text-xs text-slate-500 leading-relaxed">
- {HITL_UNVERIFIED_COPY}
+ {blockedCopy}
  </div>
  )}
  <div className="grid grid-cols-2 gap-2">
@@ -578,7 +588,7 @@ function RouteCard({
  {/* HITL integrity gate: Approve/Reroute locked until LIVE + evidence; HOLD stays allowed. */}
  {hitlBlocked && role !== 'GUEST' && (
  <div className="w-full text-xs text-slate-500 leading-relaxed">
- {HITL_UNVERIFIED_COPY}
+ {blockedCopy}
  </div>
  )}
  {/* Tactical Buttons Grid */}
@@ -602,7 +612,7 @@ function RouteCard({
  }`}
  title={
  approveLocked
- ? HITL_UNVERIFIED_COPY
+ ? blockedCopy
  : isNonViable
  ? 'Koridor ini tidak viabel untuk eksekusi langsung'
  : role === 'GUEST'
@@ -739,7 +749,7 @@ function RouteCard({
 
  {hitlBlocked && role !== 'GUEST' && overrideTactical !== 'HOLD' && (
  <span className="text-xs font-mono text-amber-200/90 leading-relaxed">
- {HITL_UNVERIFIED_COPY} Hanya tahan yang diizinkan.
+ {blockedCopy} Hanya tahan yang diizinkan.
  </span>
  )}
 
@@ -777,6 +787,8 @@ export function MitigationTab({
  const [approvingIdx, setApprovingIdx] = useState<number | null>(null);
  // Phase 77: guest/403 sandbox preview — local-only, never approved/committed.
  const [sandboxNote, setSandboxNote] = useState<string | null>(null);
+ // Prakiraan Waspada Dini: advisory-only crisis, so every route card is HOLD-only.
+ const isForecast = isForecastActive(crisis.forecast_tag, crisis.forecast_valid_until);
 
  // Load existing approvals on mount for this incident
  useEffect(() => {
@@ -827,11 +839,11 @@ export function MitigationTab({
  // never POST an Approve/Reroute. HOLD stays allowed (safe action, ledger).
  // Sandbox 403 path below is unchanged.
  if (
- (isSimulatedRoute(route) || !(hasCrisisEvidence(crisis) || hasRouteProof(route))) &&
+ (isSimulatedRoute(route) || !(hasCrisisEvidence(crisis) || hasRouteProof(route)) || isForecast) &&
  tacticalAction !== 'HOLD'
  ) {
  if (onApproveSuccess) {
- onApproveSuccess(HITL_UNVERIFIED_COPY);
+ onApproveSuccess(isForecast ? FORECAST_HOLD_COPY : HITL_UNVERIFIED_COPY);
  }
  return;
  }
@@ -934,6 +946,30 @@ export function MitigationTab({
  {sandboxNote && (
  <div className="bg-amber-950/30 border border-amber-500/40 p-3 rounded-md text-xs font-sans text-amber-200 leading-relaxed">
  {sandboxNote}
+ </div>
+ )}
+
+ {/* Prakiraan Waspada Dini: advisory-only zone — HOLD is the only legal action. */}
+ {isForecast && (
+ <div className="bg-cyan-950/30 border border-cyan-500/40 p-3 rounded-md text-xs font-sans text-cyan-100 leading-relaxed space-y-1">
+ <span className="flex items-center gap-1.5 font-bold text-cyan-200">
+ <Clock className="w-3.5 h-3.5 text-cyan-300 shrink-0" />
+ <span>Prakiraan — Waspada Dini</span>
+ </span>
+ <p>
+ Zona ini tetap <span className="font-mono">YELLOW_CLARIFY</span> dan belum terkonfirmasi sebagai bencana aktif. Pengalihan rute dinonaktifkan; hanya TAHAN armada yang diizinkan.
+ </p>
+ {crisis.forecast_valid_until && Number.isFinite(Date.parse(crisis.forecast_valid_until)) && (
+ <p className="font-mono text-cyan-300/80">
+ Berlaku s/d {(() => {
+  try {
+   return `${new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }).format(new Date(crisis.forecast_valid_until as string))} WIB`;
+  } catch {
+   return crisis.forecast_valid_until as string;
+  }
+ })()}
+ </p>
+ )}
  </div>
  )}
 
@@ -1280,6 +1316,7 @@ export function MitigationTab({
  onApprove={(action, tacticalAction, notes) => handleApprove(idx, route, action, tacticalAction, notes)}
  selectedImpactedVehicle={selectedImpactedVehicle}
  crisisHasEvidence={crisisHasEvidence}
+ isForecast={isForecast}
  />
  );
  })

@@ -1160,7 +1160,8 @@ async def upsert_articles_to_supabase(articles: List[Dict[str, Any]]) -> int:
         # so Supabase upserts never fail with unknown-column errors.
         gtm = dict(a.get("ground_truth_metrics") or {})
         for _k in ("zone_tier", "tier_reason", "custom_hazard_label", "impact_profile",
-                   "is_geocoded", "location_precision", "affected_locations", "schema_version"):
+                   "is_geocoded", "location_precision", "affected_locations", "schema_version",
+                   "forecast_tag", "forecast_valid_until"):
             if a.get(_k) is not None and _k not in gtm:
                 gtm[_k] = a.get(_k)
         # Also mirror nested impact_profile fields if present at top level
@@ -1285,7 +1286,7 @@ def _unpack_ground_truth_metrics(row: Dict[str, Any]) -> Dict[str, Any]:
                    "is_geocoded", "location_precision", "affected_locations", "schema_version",
                    "radius_km", "geometry_polygon", "verification_audit", "original_pub_date",
                    "published_at_iso", "age_hours", "body_scraped", "article_body_chars",
-                   "article_body_excerpt"):
+                   "article_body_excerpt", "forecast_tag", "forecast_valid_until"):
             if row.get(_k) is None and gtm.get(_k) is not None:
                 row[_k] = gtm[_k]
         # Re-run v7 heuristic when cached/DB rows carry a stale schema version.
@@ -1308,7 +1309,8 @@ def _unpack_ground_truth_metrics(row: Dict[str, Any]) -> Dict[str, Any]:
                 for _k in ("zone_tier", "tier_reason", "custom_hazard_label", "impact_profile",
                            "is_geocoded", "location_precision", "latitude", "longitude",
                            "incident_type", "severity", "corridor_nodes", "corridor_segment",
-                           "affected_locations", "radius_km", "geometry_polygon", "verification_audit"):
+                           "affected_locations", "radius_km", "geometry_polygon", "verification_audit",
+                           "forecast_tag", "forecast_valid_until"):
                     if re_tiered.get(_k) is not None:
                         row[_k] = re_tiered.get(_k)
                 row["ground_truth_metrics"] = re_tiered.get("ground_truth_metrics", row.get("ground_truth_metrics"))
@@ -1701,7 +1703,8 @@ async def fetch_news_from_supabase(limit: int = 150, province: Optional[str] = N
                 for _k in ("zone_tier", "tier_reason", "custom_hazard_label", "impact_profile",
                            "is_geocoded", "location_precision", "latitude", "longitude",
                            "incident_type", "severity", "corridor_nodes", "corridor_segment",
-                           "affected_locations", "radius_km", "geometry_polygon", "verification_audit"):
+                           "affected_locations", "radius_km", "geometry_polygon", "verification_audit",
+                           "forecast_tag", "forecast_valid_until"):
                     if re_tiered.get(_k) is not None:
                         # Only overwrite coordinates/geo when legacy row has none
                         # or was a blind fallback centroid without a real location,

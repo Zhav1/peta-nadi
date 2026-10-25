@@ -15,6 +15,14 @@ export type CrisisType =
 
 export type ZoneTier = 'RED_CONFIRMED' | 'YELLOW_CLARIFY' | 'DROPPED_IRRELEVANT';
 
+/**
+ * Early-warning marker. A forecast item keeps `zone_tier = 'YELLOW_CLARIFY'`
+ * (it never becomes RED_CONFIRMED) and is only advisory until
+ * `forecast_valid_until` passes — the tag is then hidden, while the article
+ * itself still follows the independent 48h admission gate.
+ */
+export type ForecastTag = 'FORECAST_WASPADA';
+
 export interface AffectedLocationNode {
   name: string;
   latitude: number;
@@ -330,6 +338,10 @@ export interface CrisisState {
   news_affected_commodities?: string[];
   affected_locations?: AffectedLocationNode[];
   zone_tier?: 'RED_CONFIRMED' | 'YELLOW_CLARIFY';
+  /** Set only for early-warning forecasts; zone_tier stays YELLOW_CLARIFY. */
+  forecast_tag?: ForecastTag | null;
+  /** ISO timestamp after which the forecast tag must not be rendered. */
+  forecast_valid_until?: string | null;
   tier_reason?: string;
   custom_hazard_label?: string;
   impact_profile?: HazardImpactProfile;
@@ -396,6 +408,10 @@ export interface DisasterZone {
   crisis_id?: string;
   id?: string;
   zone_tier?: 'RED_CONFIRMED' | 'YELLOW_CLARIFY';
+  /** Set only for early-warning forecasts; rendered dashed/zero-fill on the map. */
+  forecast_tag?: ForecastTag | null;
+  /** ISO timestamp after which the forecast tag must not be rendered. */
+  forecast_valid_until?: string | null;
   title?: string;
   tier_reason?: string;
   custom_hazard_label?: string;

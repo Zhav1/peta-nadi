@@ -430,7 +430,12 @@ class UnifiedNewsIngestor:
                 sys.path.insert(0, workspace_root)
             from agents.tools.consensus_gate import compute_consensus, cross_validate_news_with_bmkg
 
-        from app.nlp.news_extractor import PHYSICAL_BLOCKAGE_PREDICATES
+        from app.nlp.news_extractor import (
+            PHYSICAL_BLOCKAGE_PREDICATES,
+            FORECAST_TAG,
+            is_forecast_candidate,
+            compute_forecast_valid_until,
+        )
 
         lat = art.get("latitude")
         lon = art.get("longitude")
@@ -542,7 +547,7 @@ class UnifiedNewsIngestor:
             "bmkg_cross_validation": bmkg_cross,
         }
 
-        consensus_res = compute_consensus(state)
+        consensus_res = compute_consensus(state, forecast_mode=is_forecast_candidate(art))
         p_disruption = float(consensus_res.get("raw_probability", 0.0))
         calibrated_conf = float(consensus_res.get("overall_confidence", 0.0))
         breakdown = consensus_res.get("consensus_breakdown", {})
@@ -562,6 +567,26 @@ class UnifiedNewsIngestor:
         loc_prec = str(art.get("location_precision", "corridor_point")).lower()
         is_vague_region = loc_prec in ("kabupaten_kota", "province_only")
 
+        # ---- FORECAST_WASPADA (orthogonal display tag, never a zone_tier) ----
+        # Candidate = no physical blockage AND (forecast_early_warning OR
+        # weather-warning-only), evaluated from the structured row/audit.
+        forecast_candidate = is_forecast_candidate(art)
+
+        # W_present: physical BMKG corroboration OR an official BMKG/BNPB/BPBD
+        # source. Forecast eligibility never relies on the E (commodity) channel.
+        _source_l = f"{art.get('source', '')} {art.get('source_name', '')}".lower()
+        is_bmkg_official = "bmkg" in _source_l
+        is_official_agency = any(_a in _source_l for _a in ("bmkg", "bnpb", "bpbd"))
+        w_present = bool(bmkg_cross.get("is_corroborated")) or is_official_agency
+        forecast_eligible = bool(
+            forecast_candidate
+            and w_present
+            and (
+                (calibrated_conf >= 0.50 and len(corroborating_agents) >= 2)
+                or (weather_conf >= 0.60 and is_bmkg_official)
+            )
+        )
+
         # Hard invariant: Regency mention only can NEVER be RED_CONFIRMED
         if is_vague_region and not has_physical_obstruction:
             final_tier = "YELLOW_CLARIFY"
@@ -577,6 +602,33 @@ class UnifiedNewsIngestor:
             escalation_status = "ESKALASI_PENALARAN"
             reasoning = "Kandidat insiden belum mencapai ambang batas multi-sensor (P < 0.70); dialihkan untuk review operator."
 
+        # Hard cap: a forecast candidate is ALWAYS capped at YELLOW (or DROPPED),
+        # never RED — a forecast must never synthesize a physical incident.
+        forecast_valid_until = None
+        if forecast_candidate:
+            forecast_valid_until = (
+                art.get("forecast_valid_until")
+                or (art.get("verification_audit") or {}).get("forecast_valid_until")
+                or compute_forecast_valid_until(art)
+            )
+            if final_tier == "RED_CONFIRMED":
+                final_tier = "YELLOW_CLARIFY"
+            if forecast_eligible:
+                final_tier = "YELLOW_CLARIFY"
+                escalation_status = "FORECAST_WASPADA_YELLOW_PINNED"
+                reasoning = (
+                    f"Peringatan dini tervalidasi sensor (W_present, P={round(calibrated_conf, 3)}, "
+                    f"agen={len(corroborating_agents)}); dipin ke Zona Kuning sampai klarifikasi lapangan. "
+                    "Tag forecast adalah lapisan tampilan, bukan eskalasi insiden."
+                )
+            else:
+                escalation_status = "FORECAST_INELIGIBLE_CAPPED"
+                reasoning = (
+                    f"Peringatan dini belum memenuhi ambang eligibilitas (W_present={w_present}, "
+                    f"P={round(calibrated_conf, 3)}, agen={len(corroborating_agents)}); "
+                    "dibatasi maksimal Zona Kuning dan tidak pernah RED."
+                )
+
         audit_payload = {
             "consensus_probability": round(p_disruption, 3),
             "calibrated_confidence": round(calibrated_conf, 3),
@@ -586,8 +638,16 @@ class UnifiedNewsIngestor:
             "location_tier": "TIER_A" if loc_prec in ("corridor_point", "exact_node") else "TIER_B" if loc_prec == "kecamatan_kelurahan" else "TIER_C",
             "channel_breakdown": breakdown,
             "bmkg_cross_validation": consensus_res.get("bmkg_cross_validation"),
+            "forecast_candidate": forecast_candidate,
+            "forecast_eligible": forecast_eligible,
+            "forecast_w_present": w_present,
+            "forecast_bmkg_official": is_bmkg_official,
+            "forecast_weather_conf": round(weather_conf, 3),
             "llm_verified": True
         }
+        if forecast_eligible:
+            audit_payload["forecast_tag"] = FORECAST_TAG
+            audit_payload["forecast_valid_until"] = forecast_valid_until
 
         art["zone_tier"] = final_tier
         if "ground_truth_metrics" not in art or not isinstance(art["ground_truth_metrics"], dict):
@@ -598,6 +658,17 @@ class UnifiedNewsIngestor:
             art["ground_truth_metrics"]["verification_audit"] = {}
         art["ground_truth_metrics"]["verification_audit"].update(audit_payload)
         art["verification_audit"] = art["ground_truth_metrics"]["verification_audit"]
+
+        # Persist the orthogonal forecast tag/validity on the article row and
+        # inside ground_truth_metrics (eligible only — ineligible candidates keep
+        # their extractor-provided tag but never get a YELLOW eligibility pin).
+        _effective_tag = art.get("forecast_tag") or (FORECAST_TAG if forecast_eligible else None)
+        _effective_valid = art.get("forecast_valid_until") or forecast_valid_until
+        if _effective_tag:
+            art["forecast_tag"] = _effective_tag
+            art["forecast_valid_until"] = _effective_valid
+            art["ground_truth_metrics"]["forecast_tag"] = _effective_tag
+            art["ground_truth_metrics"]["forecast_valid_until"] = _effective_valid
 
         return final_tier, audit_payload
 
@@ -661,6 +732,15 @@ class UnifiedNewsIngestor:
 
             # Stage 2 ConsensusGate cross-verification
             final_tier, audit_payload = self._verify_with_consensus_gate(art)
+
+            # Orthogonal forecast (FORECAST_WASPADA) NEVER synthesizes a physical
+            # incident, even if a legacy row still carries a RED tier.
+            try:
+                from app.nlp.news_extractor import is_forecast_candidate as _is_fc
+                if _is_fc(art):
+                    continue
+            except Exception:
+                pass
 
             # Strict Invariant: Only RED_CONFIRMED synthesizes a physical road/port incident
             if final_tier == "RED_CONFIRMED":
