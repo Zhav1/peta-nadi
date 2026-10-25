@@ -30,9 +30,37 @@ router = APIRouter(prefix="", tags=["News Intelligence"])
 # In-memory cache for ultra-fast repeated UI reads (30s TTL before querying Supabase)
 _NEWS_CACHE: Dict[str, Any] = {
     "articles": [],
-    "last_fetched_at": 0.0
+    "last_fetched_at": 0.0,
+    # Captured from the response payload at fetch time (max published_at) — a cache
+    # hit replays THIS value instead of fabricating datetime.now().
+    "last_updated": None,
 }
 CACHE_TTL_SECONDS = 30
+
+
+def _max_published_at_iso(articles: List[Dict[str, Any]]) -> Optional[str]:
+    """Newest real `published_at` across rows; None when no row has one.
+
+    Used for the honest `last_updated`: never datetime.now() when data exists.
+    Naive timestamps are treated as UTC so comparisons never raise.
+    """
+    newest_dt = None
+    for a in articles or []:
+        try:
+            cand = a.get("published_at") if isinstance(a, dict) else None
+        except Exception:
+            cand = None
+        if not cand:
+            continue
+        try:
+            parsed = datetime.fromisoformat(str(cand).replace("Z", "+00:00"))
+        except Exception:
+            continue
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        if newest_dt is None or parsed > newest_dt:
+            newest_dt = parsed
+    return newest_dt.isoformat() if newest_dt else None
 
 
 class HitlActionRequest(BaseModel):
@@ -162,7 +190,7 @@ async def get_live_news(
 
     # Fast-path: Return cached articles if valid (<30s) and no specific query filters
     if not force_refresh and not province and not severity and _NEWS_CACHE["articles"]:
-        if (now - _NEWS_CACHE["last_fetched_at"]) <= CACHE_TTL_SECONDS:
+        if (now - _NEWS_CACHE.get("last_fetched_at", 0.0)) <= CACHE_TTL_SECONDS:
             cached_articles = _NEWS_CACHE["articles"]
             return {
                 "status": "live",
@@ -170,13 +198,18 @@ async def get_live_news(
                 "cached": True,
                 "count": len(cached_articles),
                 "total": len(cached_articles),
-                "last_updated": datetime.now(timezone.utc).isoformat(),
+                # Replay the stored fetch-time value; never datetime.now() on a hit.
+                "last_updated": (
+                    _NEWS_CACHE.get("last_updated")
+                    or _max_published_at_iso(cached_articles)
+                    or datetime.now(timezone.utc).isoformat()
+                ),
                 "articles": cached_articles,
                 "items": cached_articles
             }
 
     # If force refresh requested or cache expired (5 min), trigger background ingestion
-    if force_refresh or (now - _NEWS_CACHE["last_fetched_at"] > 300):
+    if force_refresh or (now - _NEWS_CACHE.get("last_fetched_at", 0.0) > 300):
         if background_tasks is not None:
             background_tasks.add_task(run_background_news_ingestion, force_refresh)
         else:
@@ -278,21 +311,15 @@ async def get_live_news(
             "items": []
         }
 
-    # Determine honest last_updated from newest article's published_at or ingested_at
-    latest_ts_iso = None
+    # Honest last_updated: the newest real published_at only (no ingested_at /
+    # pubDate guesses, no datetime.now()). Fall back to now only if truly empty.
+    latest_ts_iso = _max_published_at_iso(articles)
     newest_dt = None
-    for a in articles:
-        cand_str = a.get("published_at") or a.get("ingested_at") or a.get("pubDate")
-        if cand_str:
-            try:
-                cleaned = str(cand_str).replace("Z", "+00:00")
-                parsed_dt = datetime.fromisoformat(cleaned)
-                if newest_dt is None or parsed_dt > newest_dt:
-                    newest_dt = parsed_dt
-                    latest_ts_iso = parsed_dt.isoformat()
-            except Exception:
-                if latest_ts_iso is None and isinstance(cand_str, str):
-                    latest_ts_iso = cand_str
+    if latest_ts_iso:
+        try:
+            newest_dt = datetime.fromisoformat(latest_ts_iso)
+        except Exception:
+            newest_dt = None
 
     if not latest_ts_iso:
         latest_ts_iso = datetime.now(timezone.utc).isoformat()
@@ -315,7 +342,7 @@ async def get_live_news(
         needs_refresh = True
 
     # If force refresh requested or background refresh needed, trigger ingestion
-    if force_refresh or needs_refresh or (now - _NEWS_CACHE["last_fetched_at"] > 300):
+    if force_refresh or needs_refresh or (now - _NEWS_CACHE.get("last_fetched_at", 0.0) > 300):
         if background_tasks is not None:
             background_tasks.add_task(run_background_news_ingestion, force_refresh or needs_refresh)
         else:
@@ -330,6 +357,9 @@ async def get_live_news(
 
         if "news.google.com/search" in clean_l:
             clean_l = resolve_canonical_article_url(clean_l, art.get("title", ""), art.get("source", ""))
+            if not clean_l:
+                # M1: unresolvable link → drop the row, never surface a search page.
+                continue
 
         art["link"] = clean_l
         art["url"] = clean_l
@@ -345,6 +375,8 @@ async def get_live_news(
 
     _NEWS_CACHE["articles"] = enriched_articles
     _NEWS_CACHE["last_fetched_at"] = now
+    # Snapshot the fetch-time last_updated so 30s cache hits replay it verbatim.
+    _NEWS_CACHE["last_updated"] = latest_ts_iso
 
     return {
         "status": "live",
@@ -366,6 +398,10 @@ async def get_market_regime():
     articles = await fetch_news_from_supabase(limit=40)
     if not articles:
         articles = _NEWS_CACHE.get("articles", [])
+
+    # Honest regime timestamp: newest published_at (or the cached fetch-time
+    # snapshot); datetime.now() only when there is genuinely no data at all.
+    regime_updated_at = _max_published_at_iso(articles) or _NEWS_CACHE.get("last_updated")
 
     critical_items = [a for a in articles if a.get("severity") in ["critical", "high"]]
     early_warning_items = [a for a in articles if a.get("temporal_phase") == "forecast_early_warning"]
@@ -416,7 +452,7 @@ async def get_market_regime():
         "early_warning_count": early_warning_count,
         "corridor": primary_corridor,
         "primary_province": primary_prov,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": regime_updated_at or datetime.now(timezone.utc).isoformat(),
         "primary_threat": primary_threat
     }
 

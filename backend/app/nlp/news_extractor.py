@@ -506,10 +506,19 @@ def _detect_weather_warning_only(full_text_lower: str) -> bool:
     Returns True when warning markers are present without an active road/port
     blockage clause (putus/amblas/lumpuh/tutup total/dll). Such items gate to
     YELLOW_CLARIFY, never RED_CONFIRMED.
+
+    BMKG hazard warnings (gelombang tinggi / ombak besar / badai / angin
+    kencang) are warning markers on their own, so a weather advisory without a
+    physical blockage is admitted as advisory YELLOW instead of being promoted
+    to RED. Market/price/opinion pieces are still excluded upstream via
+    _AD_NOISE_KEYWORDS + ECONOMIC_OPINION_CEREMONIAL_EXCLUSIONS.
     """
     t = full_text_lower or ""
     warning_markers = (
         "catat", "peringatan dini", "berpotensi", "waspada", "prakiraan", "cuaca ekstrem",
+        # SPEC: BMKG hazard warnings count as warnings even without the boilerplate
+        # "waspada/prakiraan" wording (gelombang tinggi / ombak besar / badai).
+        "gelombang tinggi", "ombak besar", "ombak tinggi", "badai", "angin kencang",
     )
     blockage_clauses = (
         "putus", "terputus", "amblas", "ambles", "ambruk", "lumpuh", "tutup total",
@@ -1240,6 +1249,16 @@ def _apply_batch_llm_item(structured: Dict[str, Any], item: Dict[str, Any]) -> D
                         structured["tier_reason"] = ("Artikel tidak memiliki lokasi insiden "
                                                      "spesifik di koridor Sumatera atau koordinat di luar "
                                                      "bbox 94-108E/-6.5..6.5N; bukan disrupsi terverifikasi.")
+                elif (llm_tier == "RED_CONFIRMED"
+                      and not structured.get("has_physical_blockage")
+                      and _detect_weather_warning_only(
+                          ((structured.get("raw_description") or "") + " "
+                           + (structured.get("title") or "")).lower()
+                      )):
+                    # BMKG-style weather warning without an active blockage is never RED.
+                    structured["zone_tier"] = "YELLOW_CLARIFY"
+                    structured["tier_reason"] = ("Peringatan cuaca/gelombang tinggi/badai tanpa penutupan jalur "
+                                                 "aktif; dibatasi Zona Kuning dan memerlukan klarifikasi lapangan.")
                 elif llm_tier == "RED_CONFIRMED" and structured.get("location_precision") in ("kabupaten_kota", "province_only") and not structured.get("has_physical_blockage"):
                     # Tier-C hard invariant cap: broad city/regency mention is capped at YELLOW_CLARIFY
                     structured["zone_tier"] = "YELLOW_CLARIFY"

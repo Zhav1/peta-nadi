@@ -1,0 +1,406 @@
+import { test, expect, type Page } from '@playwright/test';
+
+/**
+ * Phase: Strict live audit of the OSINT news sidebar.
+ *
+ * These specs are intentionally adversarial: every assertion targets the
+ * *behaviour* the product promises, not the current implementation. A red
+ * test here means the live news pipeline still violates that promise.
+ *
+ * Contract under audit
+ * --------------------
+ * (a) `status: "warming"` + empty articles  -> honest warming/empty state and
+ *     ZERO FALLBACK_SUMATRA_NEWS content (no fabricated Belawan/Malaka/Lau Cih/
+ *     Sitinjau/Kualanamu/Belmera headlines, no FALLBACK-* ids).
+ * (b) live articles with unresolvable links (bare publisher root, dummy numeric
+ *     id, news.google.com/search) -> the item must be dropped, never rewritten
+ *     into a `/search?q=` or `news.google.com/search` anchor.
+ * (c) same article ids polled twice with a different `last_updated` -> the
+ *     per-article pubDate stays frozen and the global "diperbarui" clock must
+ *     not advance while the id set is unchanged.
+ * (d) 10-province feed -> non-Sumut (i.e. outside Sumatera Utara) provinces are
+ *     actually reachable through the sidebar search/filter.
+ *
+ * The dashboard is served from the standalone Next bundle; the backend is not
+ * running, so every network dependency used by the sidebar is stubbed here.
+ */
+
+const DASHBOARD_URL = '/dashboard?guest=1';
+
+// Distinctive tokens from every FALLBACK_SUMATRA_NEWS fixture (Belawan port,
+// Selat Malaka marine warning, Lau Cih market, Sitinjau Lauik landslide,
+// Kualanamu weather, Belmera toll). They are chosen to be literal substrings of
+// the rendered copy so a leaked fixture cannot slip through as a false pass.
+const FALLBACK_MARKERS = [
+  'Operasional Terminal Petikemas Belawan',
+  'Selat Malaka',
+  'Lau Cih',
+  'Sitinjau Lauik',
+  'Kualanamu',
+  'Tol Belmera',
+];
+
+const FALLBACK_ID = 'FALLBACK-BLW-01';
+
+type MockArticle = Record<string, unknown>;
+
+function newsArticle(overrides: MockArticle = {}): MockArticle {
+  return {
+    id: 'audit-article-1',
+    source: 'ANTARA Sumut',
+    source_tier: 'TIER_1_OFFICIAL',
+    title: 'Banjir lumpuh jalan nasional di Belawan',
+    summary: 'Banjir merendam badan jalan nasional dan memutus arus kendaraan logistik di Belawan.',
+    pubDate: new Date().toISOString(),
+    latitude: 3.7845,
+    longitude: 98.6923,
+    severity: 'high',
+    incident_type: 'flood',
+    zone_tier: 'RED_CONFIRMED',
+    link_alive: 'alive',
+    ...overrides,
+  };
+}
+
+function livePayload(articles: MockArticle[], lastUpdated = new Date().toISOString()) {
+  return {
+    status: 'live',
+    articles,
+    items: articles,
+    count: articles.length,
+    total: articles.length,
+    last_updated: lastUpdated,
+  };
+}
+
+/** Stub the non-news shell endpoints the dashboard needs to settle. */
+async function mockDashboardShell(page: Page) {
+  await page.route('**/api/v1/auth/me', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) });
+  });
+  await page.route('**/api/v1/auth/session', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) });
+  });
+  // Referenced from phase57-pilot-hardening.spec.ts:421 — keeps the HITL gate
+  // from opening over the news sidebar.
+  await page.route('**/api/v1/news/hitl-pending*', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ count: 0, items: [], pending_approvals: [] }),
+    });
+  });
+  await page.route('**/api/v1/news/market-regime', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        regime: 'NORMAL',
+        active_crisis_indicators: [],
+        commodity_volatility_score: 0,
+        critical_news_count: 0,
+        early_warning_count: 0,
+      }),
+    });
+  });
+}
+
+/** The left "Berita" sidebar (the only aside that owns the Berita heading). */
+function newsSidebar(page: Page) {
+  return page
+    .locator('aside')
+    .filter({ has: page.getByRole('heading', { name: 'Berita', exact: true }) })
+    .first();
+}
+
+function articleCards(page: Page) {
+  return newsSidebar(page).locator('div.p-3.rounded-lg.border');
+}
+
+async function openDashboard(page: Page) {
+  const firstLiveResponse = page.waitForResponse(
+    (res) => res.url().includes('/api/v1/news/live'),
+    { timeout: 60_000 }
+  );
+  await page.goto(DASHBOARD_URL, { waitUntil: 'domcontentloaded' });
+  await firstLiveResponse;
+  const sidebar = newsSidebar(page);
+  await expect(sidebar).toBeVisible({ timeout: 60_000 });
+  return sidebar;
+}
+
+test.describe('Strict live audit — news sidebar', () => {
+  test('(a) warming + empty articles never renders FALLBACK_SUMATRA_NEWS', async ({ page }) => {
+    await mockDashboardShell(page);
+    await page.route('**/api/v1/news/live', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          status: 'warming',
+          articles: [],
+          items: [],
+          count: 0,
+          total: 0,
+          last_updated: new Date().toISOString(),
+        }),
+      });
+    });
+
+    const sidebar = await openDashboard(page);
+    // Let React commit the warming response before snapshotting the DOM.
+    await page.waitForTimeout(1_000);
+
+    const sidebarText = (await sidebar.innerText()).replace(/\s+/g, ' ');
+    const cardCount = await articleCards(page).count();
+
+    // 1. No fabricated Sumatra fixtures, under any wording.
+    for (const marker of FALLBACK_MARKERS) {
+      expect
+        .soft(sidebarText, `FALLBACK_SUMATRA_NEWS marker "${marker}" rendered during warming`)
+        .not.toContain(marker);
+    }
+    expect.soft(sidebarText, 'FALLBACK id leaked into the warming UI').not.toContain('FALLBACK-');
+    expect.soft(sidebarText, `fixture id ${FALLBACK_ID} leaked into the warming UI`).not.toContain(FALLBACK_ID);
+    expect.soft(sidebarText, 'offline fixture is still labelled as a live source').not.toContain(
+      'Sumber Cadangan (Offline)'
+    );
+
+    // 2. An empty warming feed must not paint fixture cards.
+    expect.soft(cardCount, 'warming + empty articles rendered article cards').toBe(0);
+
+    // 3. An honest warming/empty state must be visible instead.
+    await expect
+      .soft(
+        sidebar
+          .getByText(/warming|menghangatkan|menyiapkan|memuat berita|mengambil berita|belum ada berita/i)
+          .first(),
+        'no warming/empty-state copy rendered for status:"warming" with zero articles'
+      )
+      .toBeVisible({ timeout: 5_000 });
+  });
+
+  test('(b) unresolvable source links are dropped, never rewritten to search URLs', async ({ page }) => {
+    await mockDashboardShell(page);
+
+    const GOOD_LINK =
+      'https://www.antaranews.com/berita/4567890/banjir-lumpuh-jalur-lampung';
+    const articles: MockArticle[] = [
+      newsArticle({
+        id: 'audit-bare-root',
+        title: 'Banjir lumpuh akses pelabuhan di Belawan',
+        link: 'https://www.antaranews.com/',
+        url: 'https://www.antaranews.com/',
+      }),
+      newsArticle({
+        id: 'audit-dummy-id',
+        title: 'Banjir lumpuh jalur logistik di Medan',
+        link: 'https://www.antaranews.com/berita/999999',
+        url: 'https://www.antaranews.com/berita/999999',
+      }),
+      newsArticle({
+        id: 'audit-google-search',
+        title: 'Banjir lumpuh koridor timur di Palembang',
+        link: 'https://news.google.com/search?q=banjir%20palembang',
+        url: 'https://news.google.com/search?q=banjir%20palembang',
+        latitude: -3.0123,
+        longitude: 104.7754,
+      }),
+      newsArticle({
+        id: 'audit-good-link',
+        title: 'Banjir lumpuh jalur utama Lampung',
+        link: GOOD_LINK,
+        url: GOOD_LINK,
+        latitude: -5.4292,
+        longitude: 105.261,
+      }),
+    ];
+
+    await page.route('**/api/v1/news/live', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(livePayload(articles)),
+      });
+    });
+
+    const sidebar = await openDashboard(page);
+    await expect(
+      sidebar.getByText('Banjir lumpuh jalur utama Lampung', { exact: false }),
+      'resolvable article never rendered — feed did not load mocked live payload'
+    ).toBeVisible({ timeout: 30_000 });
+
+    const hrefs = await sidebar
+      .locator('a[href]')
+      .evaluateAll((nodes) =>
+        Array.from(new Set(nodes.map((node) => node.getAttribute('href') || '')))
+      );
+
+    const searchRewrites = hrefs.filter(
+      (href) => /\/search\?q=/.test(href) || href.includes('news.google.com/search')
+    );
+    const bareRoots = hrefs.filter((href) => {
+      try {
+        const parsed = new URL(href);
+        return (parsed.pathname === '/' || parsed.pathname === '') && !parsed.search;
+      } catch {
+        return false;
+      }
+    });
+
+    expect
+      .soft(searchRewrites, 'unresolvable links were rewritten into search URLs instead of dropped')
+      .toEqual([]);
+    expect
+      .soft(bareRoots, 'bare publisher roots were rendered as article links instead of dropped')
+      .toEqual([]);
+    expect.soft(hrefs, 'resolvable permalink was not preserved').toContain(GOOD_LINK);
+  });
+
+  test('(c) identical article ids freeze per-article pubDate and the global updated clock', async ({ page }) => {
+    await mockDashboardShell(page);
+
+    const HEADLINE = 'Banjir lumpuh jalur utama di Belawan';
+    const LINK = 'https://www.antaranews.com/berita/4567890/banjir-lumpuh-belawan';
+    const firstPubDate = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    const secondPubDate = new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString();
+    const firstUpdated = new Date().toISOString();
+    const secondUpdated = new Date(Date.now() + 45_000).toISOString();
+
+    let livePolls = 0;
+    await page.route('**/api/v1/news/live', async (route) => {
+      livePolls += 1;
+      const isFirst = livePolls === 1;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(
+          livePayload(
+            [
+              newsArticle({
+                id: 'audit-stable-id',
+                title: HEADLINE,
+                link: LINK,
+                url: LINK,
+                pubDate: isFirst ? firstPubDate : secondPubDate,
+              }),
+            ],
+            isFirst ? firstUpdated : secondUpdated
+          )
+        ),
+      });
+    });
+
+    const sidebar = await openDashboard(page);
+    const card = articleCards(page).filter({ hasText: HEADLINE }).first();
+    await expect(card, 'mocked live article never rendered').toBeVisible({ timeout: 30_000 });
+
+    const pubStamp = card.locator('span.text-slate-400.truncate').first();
+    await expect(pubStamp, 'per-article pubDate span not found').toBeVisible({ timeout: 10_000 });
+    const pubBefore = (await pubStamp.innerText()).trim();
+
+    const updatedLabel = sidebar.getByText(/diperbarui/i).first();
+    await expect
+      .soft(updatedLabel, 'no global "diperbarui" clock rendered in the news sidebar')
+      .toBeVisible({ timeout: 5_000 });
+    const updatedBefore = (await updatedLabel.count()) > 0 ? (await updatedLabel.innerText()).trim() : '';
+    expect
+      .soft(updatedBefore, 'global "diperbarui" clock is empty before the second poll')
+      .not.toBe('');
+
+    // Wait for the hook's 30s poll to deliver the second (same-id) payload.
+    await expect
+      .poll(() => livePolls, { timeout: 45_000, message: 'second /api/v1/news/live poll never fired' })
+      .toBeGreaterThanOrEqual(2);
+    await page.waitForTimeout(1_000);
+
+    const pubAfter = (await pubStamp.innerText()).trim();
+    expect
+      .soft(
+        pubAfter,
+        `per-article pubDate advanced while the id set was unchanged: "${pubBefore}" -> "${pubAfter}" (feed was re-derived instead of frozen)`
+      )
+      .toBe(pubBefore);
+
+    if (updatedBefore) {
+      const updatedAfter = (await updatedLabel.innerText()).trim();
+      expect
+        .soft(
+          updatedAfter,
+          `global "diperbarui" clock advanced with an identical id set: "${updatedBefore}" -> "${updatedAfter}"`
+        )
+        .toBe(updatedBefore);
+    }
+  });
+
+  test('(d) multi-province feed exposes non-Sumut provinces (Kepri + Lampung)', async ({ page }) => {
+    await mockDashboardShell(page);
+
+    const provinces: Array<{ province: string; city: string; lat: number; lon: number }> = [
+      { province: 'Aceh', city: 'Banda Aceh', lat: 5.5483, lon: 95.3238 },
+      { province: 'Sumut', city: 'Medan', lat: 3.5952, lon: 98.6722 },
+      { province: 'Sumbar', city: 'Padang', lat: -0.9471, lon: 100.4172 },
+      { province: 'Riau', city: 'Pekanbaru', lat: 0.5071, lon: 101.4478 },
+      { province: 'Kepri', city: 'Batam', lat: 1.1301, lon: 104.0529 },
+      { province: 'Jambi', city: 'Jambi', lat: -1.6101, lon: 103.6131 },
+      { province: 'Sumsel', city: 'Palembang', lat: -2.9761, lon: 104.7754 },
+      { province: 'Babel', city: 'Pangkal Pinang', lat: -2.1316, lon: 106.1169 },
+      { province: 'Bengkulu', city: 'Bengkulu', lat: -3.7928, lon: 102.2608 },
+      { province: 'Lampung', city: 'Bandar Lampung', lat: -5.4292, lon: 105.261 },
+    ];
+
+    const articles = provinces.map(({ province, city, lat, lon }, index) =>
+      newsArticle({
+        id: `audit-prov-${index + 1}`,
+        title: `${province}: banjir lumpuh jalan nasional di ${city}`,
+        summary: `Banjir merendam jalan nasional di ${city} dan memutus arus kendaraan logistik.`,
+        location_name: `${city}, ${province}`,
+        latitude: lat,
+        longitude: lon,
+        severity: province === 'Kepri' || province === 'Lampung' ? 'critical' : 'high',
+        link: `https://www.antaranews.com/berita/456789${index}/banjir-${province.toLowerCase()}`,
+      })
+    );
+
+    await page.route('**/api/v1/news/live', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(livePayload(articles)),
+      });
+    });
+
+    const sidebar = await openDashboard(page);
+    const search = sidebar.getByPlaceholder('Cari berita atau lokasi...');
+    await expect(search, 'news search/filter input not found').toBeVisible({ timeout: 30_000 });
+
+    // Every province in the mocked feed must survive the client display gate.
+    await expect
+      .soft(articleCards(page), 'mocked multi-province feed was not fully rendered')
+      .toHaveCount(provinces.length, { timeout: 30_000 });
+
+    // Kepri (non-Sumut) must be reachable through the filter.
+    await search.fill('Kepri');
+    await expect
+      .soft(
+        sidebar.getByText('Kepri: banjir lumpuh jalan nasional di Batam', { exact: false }),
+        'Kepri item is not reachable through the news filter/search'
+      )
+      .toBeVisible({ timeout: 10_000 });
+    expect
+      .soft(await sidebar.getByText('Aceh: banjir lumpuh jalan nasional di Banda Aceh', { exact: false }).count())
+      .toBe(0);
+
+    // Lampung (non-Sumut) must be reachable through the filter.
+    await search.fill('Lampung');
+    await expect
+      .soft(
+        sidebar.getByText('Lampung: banjir lumpuh jalan nasional di Bandar Lampung', { exact: false }),
+        'Lampung item is not reachable through the news filter/search'
+      )
+      .toBeVisible({ timeout: 10_000 });
+    expect
+      .soft(await sidebar.getByText('Aceh: banjir lumpuh jalan nasional di Banda Aceh', { exact: false }).count())
+      .toBe(0);
+  });
+});

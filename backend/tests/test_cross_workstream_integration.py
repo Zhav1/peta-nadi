@@ -8,7 +8,6 @@ Verifies that:
 - resolve_canonical_article_url correctly normalizes Google News RSS and raw article URLs
 """
 import pytest
-from urllib.parse import urlparse
 from fastapi.testclient import TestClient
 from app.main import app
 from app.schemas.fleet import FleetVehicleTelemetry, SignalStatus
@@ -81,30 +80,43 @@ def test_routing_solve_path():
 
 
 def test_resolve_canonical_article_url():
-    """Validates resolve_canonical_article_url handles direct, search, redirect and syndicated URLs."""
+    """Validates resolve_canonical_article_url resolves permalinks and DROPS unresolvable items.
+
+    M1 contract: the old publisher *search-page* fallback is gone. Anything that
+    cannot be resolved to a real article permalink must return None so the caller
+    drops the row instead of publishing a dead citation.
+    """
+    # Direct permalinks (including a 6-digit id followed by a real slug) survive untouched
     direct = "https://sumut.antaranews.com/berita/123456/kondisi-jalan-medan"
     assert resolve_canonical_article_url(direct) == direct
     assert resolve_canonical_article_url(direct, "Kondisi Jalan Medan", "ANTARA Sumut") == direct
 
-    # Google News RSS fallback URL (undecodable token) must land on the publisher host,
-    # never on a Google search/landing host (news_router treats news.google.com/search as legacy).
+    # Empty / bare root / landing pages are not articles
+    assert resolve_canonical_article_url("") is None
+    assert resolve_canonical_article_url("https://www.antaranews.com/") is None
+    assert resolve_canonical_article_url("https://www.detik.com", "Judul", "Detik") is None
+
+    # Synthetic/dummy fixture IDs without a real slug never map to a live permalink
+    assert resolve_canonical_article_url("https://www.detik.com/sumut/berita/543210") is None
+
+    # Antara /berita/ URLs without the numeric CMS id 404 on Antara → dropped
+    assert resolve_canonical_article_url(
+        "https://www.antaranews.com/berita/kondisi-jalan-medan", "Kondisi Jalan Medan", "ANTARA"
+    ) is None
+
+    # Undecodable Google News wrapper token: dropped, never rewritten to a publisher search page
     gn_url = "https://news.google.com/rss/articles/opaque_sample_test"
-    resolved = resolve_canonical_article_url(
+    assert resolve_canonical_article_url(
         gn_url,
         title="Banjir Jalinsum Tebing Tinggi",
         source="Antara News"
-    )
-    assert resolved.startswith("http")
-    assert "google." not in urlparse(resolved).netloc
-    assert "antaranews.com/search" in resolved
+    ) is None
 
-    # Legacy Google News search links are rewritten to the publisher host
+    # Legacy Google News search links are not permalinks → dropped (not rewritten)
     goog_search = "https://news.google.com/search?q=Banjir%20Medan&hl=id-ID&gl=ID&ceid=ID:id"
-    rewritten = resolve_canonical_article_url(goog_search, title="Banjir Medan", source="ANTARA")
-    assert "google." not in urlparse(rewritten).netloc
-    assert rewritten.startswith("https://www.antaranews.com/search?q=")
+    assert resolve_canonical_article_url(goog_search, title="Banjir Medan", source="ANTARA") is None
 
-    # Google redirect wrappers unwrap to the real publisher host
+    # Google redirect wrappers still unwrap to the real publisher host
     wrapped = "https://www.google.com/url?q=https%3A%2F%2Fwww.detik.com%2Fsumut%2Fberita%2Fd-123%2Fjudul&sa=D"
     assert resolve_canonical_article_url(wrapped, "Judul", "Detik") == \
         "https://www.detik.com/sumut/berita/d-123/judul"

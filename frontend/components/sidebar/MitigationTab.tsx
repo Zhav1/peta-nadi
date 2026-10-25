@@ -1010,6 +1010,9 @@ export function MitigationTab({
  : [];
 
  const hasCitations = citations.length > 0;
+ // normalizeNewsPermalink returns '' when an item is unresolvable (dropped per
+ // M1); never render a pill with href="" for those — skip the link instead.
+ const linkableCitations = citations.filter((c) => Boolean(c.url));
  const isVerified = hasCitations && Boolean(crisis.validated);
 
  return (
@@ -1037,7 +1040,7 @@ export function MitigationTab({
  {/* Dynamic Source Attribution Pills with Real Working Links */}
  {hasCitations ? (
  <div className="flex flex-wrap gap-1.5 mt-2">
- {citations.map((attr, aIdx) => (
+ {linkableCitations.map((attr, aIdx) => (
  <a
  key={aIdx}
  href={attr.url}

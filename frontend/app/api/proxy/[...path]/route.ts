@@ -58,7 +58,11 @@ async function handleProxy(req: NextRequest, context: RouteContext) {
       'content-type': upstreamContentType,
     };
 
-    // Cache-Control for GET read requests: Vercel CDN/Edge cache for 60s with 120s stale-while-revalidate
+    // Cache-Control for GET read requests: Vercel CDN/Edge cache for 60s with 120s stale-while-revalidate.
+    // The upstream JSON body is forwarded verbatim, so its `last_updated` stays frozen for the
+    // whole cache window — it is the time the backend assembled the payload, NOT the time of this
+    // response. Clients must compare article IDs and only advance their own "diperbarui" clock
+    // when they change; a cached body time must never be treated as a freshness signal.
     if (req.method === 'GET' && upstreamRes.status === 200) {
       responseHeaders['cache-control'] = 'public, s-maxage=60, stale-while-revalidate=120';
     }

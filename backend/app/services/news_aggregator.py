@@ -11,7 +11,7 @@ import base64
 import json
 import re
 import urllib.parse
-from urllib.parse import urlparse, quote_plus
+from urllib.parse import urlparse
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any, Optional
@@ -86,6 +86,13 @@ OFFICIAL_RSS_FEEDS = [
         "province": "Bangka Belitung"
     },
     {
+        "source": "LKBN ANTARA Kepri",
+        "url": "https://kepri.antaranews.com/rss/terkini.xml",
+        "tier": "TIER_1_OFFICIAL",
+        "category": "REGIONAL_DISASTER",
+        "province": "Kepulauan Riau"
+    },
+    {
         "source": "LKBN ANTARA Ekonomi",
         "url": "https://www.antaranews.com/rss/ekonomi.xml",
         "tier": "TIER_1_OFFICIAL",
@@ -124,11 +131,17 @@ OFFICIAL_RSS_FEEDS = [
 
 # Targeted Google News queries for verified regional press & logistics corridors across Pulau Sumatera
 TARGETED_PRESS_QUERIES = [
-    "(site:antaranews.com OR site:detik.com OR site:tribunnews.com OR site:kompas.com) (banjir OR longsor OR jalan terputus) (Medan OR Tebing Tinggi OR Belawan OR Jalinsum) when:2d",
+    # Q1 — Sumut is NOT Medan-only: covers the whole Jalinsum spine
+    # (Belawan port, Tebing Tinggi, Asahan/Kisaran, Rantauprapat, Sibolga).
+    "(site:antaranews.com OR site:detik.com OR site:tribunnews.com OR site:kompas.com) (banjir OR longsor OR jalan terputus) (Medan OR Tebing Tinggi OR Belawan OR Jalinsum OR Asahan OR Kisaran OR Rantauprapat OR Sibolga) when:2d",
     "(site:antaranews.com OR site:tribunnews.com OR site:detik.com) (longsor Sitinjau Lauik OR jalan Padang Solok OR tol Pekanbaru Dumai) when:2d",
     "(site:antaranews.com OR site:bisnis.com OR site:tempo.co) (stok beras BULOG OR harga cabai OR pasokan pangan) (Sumatera OR Sumut OR Sumbar OR Riau OR Lampung) when:2d",
     "(site:antaranews.com OR site:detik.com) (gelombang Selat Malaka OR Pelabuhan Belawan OR Pelabuhan Panjang OR Bakauheni OR antrean truk tol) when:2d",
     "(site:antaranews.com OR site:kompas.com) (jalan lintas timur OR jalintim OR jalinbar OR jembatan putus OR amblas) (Palembang OR Jambi OR Lampung) when:2d",
+    # Q6 — Kepri/Babel maritime + tin corridors (Batam, Tanjung Pinang, Natuna, Pangkalpinang).
+    "(site:antaranews.com) (banjir OR longsor OR pelabuhan) (Batam OR Tanjung Pinang OR Natuna OR Pangkalpinang) when:2d",
+    # Q7 — Aceh east coast / Tamiang–Langsa–Lhokseumawe flood & landslide corridor.
+    "(site:antaranews.com OR site:detik.com) (banjir OR longsor OR jalan putus) (Aceh Tamiang OR Langsa OR Lhokseumawe OR Banda Aceh) when:2d",
 ]
 
 MAX_NEWS_AGE_HOURS = 48
@@ -203,19 +216,51 @@ _GARTURLREQ_CTX = [
 ]
 
 
-def _map_publisher_deep_fallback(title: str, source: str = "") -> str:
-    """Builds a deep news publisher search/article URL instead of a generic Google landing page."""
-    q = quote_plus(f"{title} {source}".strip())
-    s_lower = (source or "").lower()
-    if "sumbar" in s_lower:
-        return f"https://sumbar.antaranews.com/search?q={q}"
-    elif "sumut" in s_lower:
-        return f"https://sumut.antaranews.com/search?q={q}"
-    elif "detik" in s_lower:
-        return f"https://www.detik.com/search/searchall?query={q}"
-    elif "kompas" in s_lower:
-        return f"https://search.kompas.com/search/?q={q}"
-    return f"https://www.antaranews.com/search?q={q}"
+# Synthetic/dummy fixture IDs that never map to a live publisher permalink.
+_DUMMY_TEST_IDS = ("543210", "532190", "571234", "562341", "123456", "999999")
+
+
+def _map_publisher_deep_fallback(title: str, source: str = "", raw_url: str = "") -> Optional[str]:
+    """REMOVED publisher search-URL fallback — always returns None (drop the item).
+
+    An unresolved item used to be rewritten to a publisher *search* page
+    (…/search?q=…). A search page is not an article permalink, so those rows
+    reached the map as dead citations. Per M1, unresolvable items are dropped
+    by the caller instead of being given a fabricated URL. Signature kept so
+    every call site reads as "resolve or drop".
+    """
+    return None
+
+
+def _is_unresolvable_article_url(raw_url: str) -> bool:
+    """True when a URL can never be a live article permalink (caller drops it).
+
+    Unresolvable: empty, bare root/landing page, Google wrapper/search host,
+    synthetic dummy IDs without a real slug, and Antara /berita/ URLs missing
+    the numeric CMS id (they 404 on Antara).
+    """
+    u = (raw_url or "").strip() if isinstance(raw_url, str) else ""
+    if not u:
+        return True
+    try:
+        p = urlparse(u)
+    except Exception:
+        return True
+    if not p.netloc:
+        return True
+    # Bare root / landing page
+    if p.path in ("", "/"):
+        return True
+    # Google hosts (search, news wrappers, redirects) are never publisher permalinks
+    if "google." in p.netloc:
+        return True
+    # Rewrite synthetic or dummy test IDs without a slug (e.g. 543210, 532190)
+    if any(f"/{did}" in u for did in _DUMMY_TEST_IDS) and not re.search(r'/\d{6}/[a-z0-9-]+', u):
+        return True
+    # Antara URLs that lack a numeric article ID 404 on Antara's CMS
+    if "antaranews.com/berita/" in u and not re.search(r'antaranews\.com/berita/\d{5,8}/', u):
+        return True
+    return False
 
 
 def _decode_google_news_token_sync(art_id: str, timeout: float = 3.5) -> Optional[str]:
@@ -325,7 +370,7 @@ async def _decode_google_news_token_async(art_id: str, client: Optional[httpx.As
     return None
 
 
-def resolve_canonical_article_url(raw_url: str, title: str = "", source: str = "") -> str:
+def resolve_canonical_article_url(raw_url: str, title: str = "", source: str = "") -> Optional[str]:
     """
     Resolves raw or wrapped news URLs to permanent, direct article permalinks.
     - Preserves direct publisher article permalinks (antaranews.com, detik.com, etc.).
@@ -333,13 +378,12 @@ def resolve_canonical_article_url(raw_url: str, title: str = "", source: str = "
       extracting the embedded HTTP/HTTPS URL from base64/protobuf payload or batchexecute RPC.
     - Unwraps Google redirect hosts (google.com/url?q=..., news.google.com/redirect?url=...,
       google.com/amp/s/<publisher>/...) to the real publisher host.
-    - Rejects bare root domains (where path is empty or '/') and Google search/landing URLs
-      (news.google.com/search?q=...), resolving instead to authentic publisher deep links.
+    - Returns None when the item cannot be resolved to a real permalink (empty, bare root
+      domain, dummy IDs, Antara /berita/ without a numeric id, Google search/landing or an
+      undecodable Google wrapper). Callers MUST DROP the item instead of inventing a URL.
     """
     if not raw_url or not isinstance(raw_url, str):
-        if title:
-            return _map_publisher_deep_fallback(title, source)
-        return ""
+        return _map_publisher_deep_fallback(title, source, str(raw_url or ""))
 
     clean_url = raw_url.strip()
 
@@ -365,22 +409,17 @@ def resolve_canonical_article_url(raw_url: str, title: str = "", source: str = "
         parsed = urlparse(clean_url)
         if parsed.scheme in ("http", "https") and parsed.netloc:
             if parsed.path in ("", "/"):
-                if title:
-                    return _map_publisher_deep_fallback(title, source)
-                return clean_url
+                return _map_publisher_deep_fallback(title, source, clean_url)
     except Exception:
         pass
 
     # Rewrite synthetic or dummy test IDs without a slug (e.g. 543210, 532190)
-    DUMMY_IDS = ("543210", "532190", "571234", "562341", "123456", "999999")
-    if any(f"/{did}" in clean_url for did in DUMMY_IDS) and not re.search(r'/\d{6}/[a-z0-9-]+', clean_url):
-        if title:
-            return _map_publisher_deep_fallback(title, source)
+    if any(f"/{did}" in clean_url for did in _DUMMY_TEST_IDS) and not re.search(r'/\d{6}/[a-z0-9-]+', clean_url):
+        return _map_publisher_deep_fallback(title, source, clean_url)
 
     # Detect Antara URLs that lack a numeric article ID (which causes 404 on Antara's CMS)
     if "antaranews.com/berita/" in clean_url and not re.search(r'antaranews\.com/berita/\d{5,8}/', clean_url):
-        if title:
-            return _map_publisher_deep_fallback(title, source)
+        return _map_publisher_deep_fallback(title, source, clean_url)
 
     # If it's already a direct non-Google publisher link with a deep path, return it directly
     try:
@@ -390,18 +429,14 @@ def resolve_canonical_article_url(raw_url: str, title: str = "", source: str = "
     except Exception:
         pass
 
-    # Google search / landing URLs are not article permalinks: map their query onto the
-    # publisher's own deep search page instead of echoing Google's host downstream.
+    # Google search / landing URLs are not article permalinks: DROP, never echo
+    # Google's host or a publisher search page downstream.
     try:
         gp = urlparse(clean_url)
     except Exception:
         gp = None
     if gp and gp.netloc and "google." in gp.netloc and not re.search(r'/(?:articles|read)/', gp.path):
-        query_title = (dict(urllib.parse.parse_qsl(gp.query)).get("q") or "").strip()
-        fallback_title = title or query_title
-        if fallback_title:
-            return _map_publisher_deep_fallback(fallback_title, source)
-        return clean_url
+        return _map_publisher_deep_fallback(title, source, clean_url)
 
     # Handle Google News opaque wrappers
     if "news.google.com" in clean_url and ("/articles/" in clean_url or "/rss/articles/" in clean_url or "/read/" in clean_url):
@@ -429,9 +464,11 @@ def resolve_canonical_article_url(raw_url: str, title: str = "", source: str = "
             if decoded:
                 return decoded
 
-            if title:
-                return _map_publisher_deep_fallback(title, source)
+            # Token could not be decoded → unresolvable, caller drops the item.
+            return _map_publisher_deep_fallback(title, source, clean_url)
 
+    if _is_unresolvable_article_url(clean_url):
+        return None
     return clean_url
 
 
@@ -441,15 +478,14 @@ async def resolve_canonical_article_url_async(
     source: str = "",
     client: Optional[httpx.AsyncClient] = None,
     timeout: float = 4.0
-) -> str:
+) -> Optional[str]:
     """
     Async canonical permalink resolver. Follows redirects and decodes modern Google News
     AU_yqL tokens via batchexecute Fbv4je RPC so articles always resolve to actual deep publisher URLs.
+    Returns None when unresolvable — callers MUST DROP the item (no search-page fallback).
     """
     if not raw_url or not isinstance(raw_url, str):
-        if title:
-            return _map_publisher_deep_fallback(title, source)
-        return ""
+        return _map_publisher_deep_fallback(title, source, str(raw_url or ""))
 
     clean_url = raw_url.strip()
 
@@ -457,19 +493,16 @@ async def resolve_canonical_article_url_async(
     try:
         p = urlparse(clean_url)
         if p.netloc and "google." not in p.netloc and p.path not in ("", "/"):
-            # Check for dummy test IDs without slug
-            DUMMY_IDS = ("543210", "532190", "571234", "562341", "123456", "999999")
-            if any(f"/{did}" in clean_url for did in DUMMY_IDS) and not re.search(r'/\d{6}/[a-z0-9-]+', clean_url):
-                if title:
-                    return _map_publisher_deep_fallback(title, source)
+            # Reject dummy test IDs / Antara URLs missing their numeric CMS id
+            if _is_unresolvable_article_url(clean_url):
+                return _map_publisher_deep_fallback(title, source, clean_url)
             return clean_url
     except Exception:
         pass
 
     # First check CBMi synchronous decode (also unwraps Google search/redirect hosts)
     resolved = resolve_canonical_article_url(clean_url, title, source)
-    p_res = urlparse(resolved)
-    if p_res.netloc and "google." not in p_res.netloc and p_res.path not in ("", "/"):
+    if resolved:
         return resolved
 
     # Handle Google News wrapper async
@@ -502,9 +535,8 @@ async def resolve_canonical_article_url_async(
                 if close_client:
                     await client.aclose()
 
-    if title:
-        return _map_publisher_deep_fallback(title, source)
-    return clean_url
+    # Unresolvable (undecodable wrapper / Google landing / bare root) → drop.
+    return _map_publisher_deep_fallback(title, source, clean_url)
 
 
 LOGISTICS_DISASTER_KEYWORDS = (
@@ -904,6 +936,9 @@ async def fetch_rss_feed_items(feed_config: Dict[str, Any], timeout: float = 6.0
                         continue
                         
                     canonical_link = resolve_canonical_article_url(raw_link, title, source_name)
+                    # M1: unresolvable link → DROP the item (no search-page fallback).
+                    if not canonical_link:
+                        continue
                     # Strict 48h freshness gate (archival URL + pubDate).
                     try:
                         _fresh = parse_and_validate_article_freshness(pub_date, canonical_link, max_age_hours=MAX_NEWS_AGE_HOURS)
@@ -959,6 +994,9 @@ async def fetch_google_news_targeted(query: str, timeout: float = 6.0) -> List[D
                     source_tier = "TIER_1_OFFICIAL" if is_official else "TIER_2_AUTHORITATIVE_PRESS"
                     
                     canonical_link = await resolve_canonical_article_url_async(raw_link, title, source_name, client=client)
+                    # M1: unresolvable link → DROP the item (no search-page fallback).
+                    if not canonical_link:
+                        continue
                     try:
                         _fresh2 = parse_and_validate_article_freshness(pub_date, canonical_link, max_age_hours=MAX_NEWS_AGE_HOURS)
                     except Exception:

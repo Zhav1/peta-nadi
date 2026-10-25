@@ -35,6 +35,7 @@ import { useDemoState } from '@/hooks/useDemoState';
 import { useFleetVehicles } from '@/hooks/useFleetVehicles';
 import { useCorridorContext } from '@/hooks/useCorridorContext';
 import { useNewsVerification } from '@/hooks/useNewsVerification';
+import { FreshnessBadge } from '@/components/ui/FreshnessBadge';
 import { GuidedDemoPanel } from '@/components/demo/GuidedDemoPanel';
 import AnalyticsSection from '@/components/dashboard/AnalyticsSection';
 import ReportsSection from '@/components/dashboard/ReportsSection';
@@ -588,7 +589,7 @@ export default function DashboardClient() {
   const { corridorContext, isLoading: isCorridorLoading, applyOperationalImpact } = useCorridorContext('sumatra_belawan_medan');
 
   // Live OSINT News & Intelligence Hook (Google News RSS & Verified Sinyal Lapangan)
-  const { newsFeed, isFallbackNews } = useNewsVerification();
+  const { newsFeed, status: newsStatus, lastUpdated: newsLastUpdated } = useNewsVerification();
   const [newsSearchQuery, setNewsSearchQuery] = useState('');
   const [selectedNewsCategory, setSelectedNewsCategory] = useState<'ALL' | 'OFFICIAL' | 'WEATHER' | 'OSINT' | 'MARKET'>('ALL');
   const [selectedNewsId, setSelectedNewsId] = useState<string | null>(null);
@@ -596,6 +597,10 @@ export default function DashboardClient() {
 
   const filteredNews = useMemo(() => {
     return newsFeed.filter((item) => {
+      // Strict live-only + "Drop unresolvable": items without a real publisher
+      // permalink are never rendered (no search-page substitutes).
+      if (!item.link && !item.url) return false;
+
       if (selectedNewsCategory === 'OFFICIAL' && item.source_type !== 'OFFICIAL_NEWS') return false;
       if (selectedNewsCategory === 'WEATHER' && item.source_type !== 'BMKG_WEATHER') return false;
       if (selectedNewsCategory === 'OSINT' && item.source_type !== 'MEDSOS_OSINT') return false;
@@ -741,6 +746,13 @@ export default function DashboardClient() {
     }
     return { red, yellow };
   }, [newsFeed]);
+
+  // Global "diperbarui" clock for the feed, kept separate from each article's
+  // published_at. Only advances when the hook sees a changed article set.
+  const newsLastUpdatedDate = useMemo(
+    () => (newsLastUpdated ? new Date(newsLastUpdated) : null),
+    [newsLastUpdated]
+  );
 
   // PostGIS hazard polygons attached to the selected crisis. The backend already
   // normalized them to GeoJSON; `toLonLatRing` re-validates so a stale WKB/WKT or
@@ -2716,10 +2728,13 @@ export default function DashboardClient() {
  Berita
                   </h2>
                   <span className="text-xs font-mono text-slate-400">
-                    {isFallbackNews
-                      ? `${filteredNews.length} Sumber Cadangan (Offline)`
+                    {newsStatus === 'warming' && filteredNews.length === 0
+                      ? 'Menunggu feed live'
                       : `${filteredNews.length} Sumber Terverifikasi`}
                   </span>
+                  {newsLastUpdatedDate && (
+                    <FreshnessBadge lastUpdated={newsLastUpdatedDate} sourceLabel="" />
+                  )}
                 </div>
               </div>
 
@@ -2822,7 +2837,17 @@ export default function DashboardClient() {
 
             {/* Scrollable Feed List */}
             <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2.5 pr-0.5">
-              {filteredNews.length === 0 ? (
+              {newsFeed.length === 0 ? (
+                <div className="p-6 text-center text-slate-500 font-mono text-xs space-y-1">
+                  <Radio className="w-6 h-6 mx-auto text-slate-600 mb-2" />
+                  <p>
+                    {newsStatus === 'warming'
+                      ? 'Belum ada berita live terverifikasi.'
+                      : 'Belum ada berita live yang lolos verifikasi.'}
+                  </p>
+                  <p className="text-slate-600">Menunggu feed live — tidak ada data cadangan.</p>
+                </div>
+              ) : filteredNews.length === 0 ? (
                 <div className="p-6 text-center text-slate-500 font-mono text-xs space-y-1">
                   <Newspaper className="w-6 h-6 mx-auto text-slate-600 mb-2" />
                   <p>Tidak ada berita yang cocok.</p>
@@ -2866,7 +2891,15 @@ export default function DashboardClient() {
                             }`}>
                             {item.source_name || (isOfficial ? 'ANTARA' : 'BERITA')}
                           </span>
-                          <span className="text-slate-400 truncate">{item.pubDate || 'Terkini'}</span>
+                          {item.published_at ? (
+                            <FreshnessBadge
+                              publishedAt={item.published_at}
+                              lastUpdated={null}
+                              sourceLabel=""
+                            />
+                          ) : (
+                            <span className="text-slate-400 truncate">{item.pubDate || 'Waktu terbit tidak tersedia'}</span>
+                          )}
                         </div>
                         {isEarlyWarning && (
                           <span className="text-amber-400 font-semibold text-xs shrink-0">
@@ -2979,7 +3012,7 @@ export default function DashboardClient() {
                         <div className="flex flex-wrap items-center gap-1.5 min-w-0">
                           {canOpenSource ? (
                             <a
-                              href={item.link}
+                              href={articleLink}
                               target="_blank"
                               rel="noopener noreferrer"
                               onClick={(e) => e.stopPropagation()}
@@ -3053,7 +3086,7 @@ export default function DashboardClient() {
               {(() => {
                 const isBmkgLive = (corridorContext?.weather?.rainfall_mm !== undefined && corridorContext?.weather?.rainfall_mm !== null) || (corridorContext?.weather?.status != null && corridorContext?.weather?.status !== 'offline');
                 const isTomtomLive = (corridorContext?.traffic?.delay_minutes !== undefined && corridorContext?.traffic?.delay_minutes !== null) || (corridorContext?.traffic?.congestion_level_pct !== undefined && corridorContext?.traffic?.congestion_level_pct !== null);
-                const isPihpsLive = (corridorContext?.commodity_prices?.rice_price !== undefined && corridorContext?.commodity_prices?.rice_price !== null) || (!isFallbackNews && filteredNews.length > 0);
+                const isPihpsLive = (corridorContext?.commodity_prices?.rice_price !== undefined && corridorContext?.commodity_prices?.rice_price !== null) || filteredNews.length > 0;
 
                 return (
                   <div className="grid grid-cols-3 gap-1 text-xs text-center">
