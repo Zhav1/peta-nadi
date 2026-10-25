@@ -55,12 +55,14 @@ export interface TooltipContentProps
   className?: string;
   children?: React.ReactNode;
   showArrow?: boolean;
+  portal?: boolean;
 }
 
 export function TooltipContent({
   className,
   children,
   showArrow = true,
+  portal = true,
   side,
   sideOffset = 8,
   align,
@@ -70,34 +72,38 @@ export function TooltipContent({
   arrowPadding,
   sticky,
 }: TooltipContentProps) {
-  return (
-    <BaseTooltip.Portal>
-      <BaseTooltip.Positioner
-        side={side}
-        sideOffset={sideOffset}
-        align={align}
-        alignOffset={alignOffset}
-        collisionPadding={collisionPadding}
-        collisionBoundary={collisionBoundary}
-        arrowPadding={arrowPadding}
-        sticky={sticky}
+  const content = (
+    <BaseTooltip.Positioner
+      side={side}
+      sideOffset={sideOffset}
+      align={align}
+      alignOffset={alignOffset}
+      collisionPadding={collisionPadding}
+      collisionBoundary={collisionBoundary}
+      arrowPadding={arrowPadding}
+      sticky={sticky}
+    >
+      <BaseTooltip.Popup
+        data-slot="tooltip-content"
+        className={cn(
+          'z-50 w-fit max-w-xs rounded-lg border border-white/10 bg-[#0c1017] px-2.5 py-1.5 text-xs tabular-nums text-slate-200 shadow-xl outline-none',
+          className,
+        )}
       >
-        <BaseTooltip.Popup
-          data-slot="tooltip-content"
-          className={cn(
-            'z-50 w-fit max-w-xs rounded-lg border border-white/10 bg-[#0c1017] px-2.5 py-1.5 text-xs tabular-nums text-slate-200 shadow-xl outline-none',
-            className,
-          )}
-        >
-          {children}
-          {showArrow ? (
-            <BaseTooltip.Arrow
-              data-slot="tooltip-arrow"
-              className="fill-[#0c1017] stroke-white/10"
-            />
-          ) : null}
-        </BaseTooltip.Popup>
-      </BaseTooltip.Positioner>
-    </BaseTooltip.Portal>
+        {children}
+        {showArrow ? (
+          <BaseTooltip.Arrow
+            data-slot="tooltip-arrow"
+            className="fill-[#0c1017] stroke-white/10"
+          />
+        ) : null}
+      </BaseTooltip.Popup>
+    </BaseTooltip.Positioner>
   );
+
+  if (portal === false) {
+    return content;
+  }
+
+  return <BaseTooltip.Portal>{content}</BaseTooltip.Portal>;
 }

@@ -6,7 +6,7 @@ export function Card({ className, ...props }: React.HTMLAttributes<HTMLDivElemen
     <div
       data-slot="card"
       className={cn(
-        'rounded-3xl border border-white/10 bg-[#0c1017] text-xs text-slate-200 shadow-xl motion-safe:transition-colors',
+        'rounded-xl border border-white/10 bg-[#0c1017] text-xs text-slate-200 shadow-xl motion-safe:transition-colors',
         className,
       )}
       {...props}
