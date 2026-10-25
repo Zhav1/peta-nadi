@@ -101,10 +101,7 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
  };
 
  return (
- <div
- data-slot="tactical-command-ribbon"
- className="relative flex items-center gap-1.5 p-1 rounded-xl bg-[#0c1017]/90 border border-white/10 shadow-2xl backdrop-blur-md text-xs font-mono select-none overflow-x-auto no-scrollbar max-w-full sm:max-w-[calc(100vw-20rem)] lg:max-w-[calc(100vw-28rem)]"
- >
+ <div className="relative flex flex-wrap items-center gap-1.5 text-xs font-mono select-none overflow-visible">
  {/* 1. Routing Compute Latency */}
  <Popover
  open={activePopover === 'RUTE'}
@@ -113,10 +110,10 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
  <PopoverTrigger asChild>
  <button
  type="button"
- className={`cursor-pointer h-8 flex items-center gap-1.5 px-2.5 rounded-lg border text-xs font-mono transition-colors duration-150 shrink-0 ${
+ className={`cursor-pointer flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-mono transition-colors duration-150 shrink-0 ${
  activePopover === 'RUTE'
- ? 'bg-[#121822] border-cyan-500/50 text-cyan-300 ring-1 ring-cyan-500/30'
- : 'bg-white/5 border-white/5 text-emerald-400 hover:bg-white/10 hover:border-white/20'
+ ? 'bg-[#0c1017] border-[#00f0ff]/50 text-cyan-300 ring-1 ring-[#00f0ff]/30'
+ : 'bg-[#0c1017] border-white/10 text-emerald-400 hover:border-slate-500'
  }`}
  title="Latensi solver optimasi rute mitigasi CPU (NetworkX + OR-Tools / 2-Opt)"
  >
@@ -206,10 +203,10 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
  <PopoverTrigger asChild>
  <button
  type="button"
- className={`cursor-pointer h-8 flex items-center gap-1.5 px-2.5 rounded-lg border text-xs font-mono transition-colors duration-150 shrink-0 ${
+ className={`cursor-pointer flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-mono transition-colors duration-150 shrink-0 ${
  activePopover === 'LALULINTAS'
- ? 'bg-[#121822] border-cyan-500/50 text-cyan-300 ring-1 ring-cyan-500/30'
- : 'bg-white/5 border-white/5 text-amber-400 hover:bg-white/10 hover:border-white/20'
+ ? 'bg-[#0c1017] border-[#00f0ff]/50 text-cyan-300 ring-1 ring-[#00f0ff]/30'
+ : 'bg-[#0c1017] border-white/10 text-amber-400 hover:border-slate-500'
  }`}
  title={tomtomDelayMin != null ? `Pantauan keterlambatan arteri TomTom: +${tomtomDelayMin}m (${tomtomIndex ?? 0}%)` : 'Data lalu lintas TomTom'}
  >
@@ -303,10 +300,10 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
  <PopoverTrigger asChild>
  <button
  type="button"
- className={`cursor-pointer h-8 flex items-center gap-1.5 px-2.5 rounded-lg border text-xs font-mono transition-colors duration-150 shrink-0 ${
+ className={`cursor-pointer flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-mono transition-colors duration-150 shrink-0 ${
  activePopover === 'BMKG'
- ? 'bg-[#121822] border-cyan-500/50 text-cyan-300 ring-1 ring-cyan-500/30'
- : 'bg-white/5 border-white/5 text-sky-400 hover:bg-white/10 hover:border-white/20'
+ ? 'bg-[#0c1017] border-[#00f0ff]/50 text-cyan-300 ring-1 ring-[#00f0ff]/30'
+ : 'bg-[#0c1017] border-white/10 text-sky-400 hover:border-slate-500'
  }`}
  title="Intensitas curah hujan stasiun BMKG terdekat & fusi Open-Meteo"
  >
@@ -434,41 +431,38 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
  onSelectHub={onSelectHub}
  />
 
- {/* Segment Divider: Telemetry to Overlays */}
- <div className="h-4 w-px bg-white/10 shrink-0 mx-0.5" />
-
  {/* Compact Zone Filter Pills when Left OSINT Drawer is Collapsed */}
  {isLeftSidebarCollapsed && (
  <div className="flex items-center gap-1 shrink-0">
  <button
  type="button"
  onClick={onToggleRedZones}
- className={`cursor-pointer h-8 flex items-center gap-1.5 px-2.5 rounded-lg border text-xs font-mono transition-all duration-150 shrink-0 ${
+ className={`cursor-pointer flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs font-mono transition-all duration-150 ${
  showRedZones
- ? 'bg-red-950/50 border-red-500/50 text-red-200'
- : 'bg-white/5 border-white/5 text-slate-500 opacity-60 hover:opacity-100'
+ ? 'bg-red-950/50 border-red-500/50 text-red-200 '
+ : 'bg-[#0c1017] border-white/5 text-slate-500 opacity-60 hover:opacity-100'
  }`}
  title="Filter Peta: Zona Merah (Bencana Terkonfirmasi)"
  >
- <span className={`w-2 h-2 rounded-full ${showRedZones ? 'bg-red-500' : 'bg-slate-600'}`} />
+ <span className={`w-2 h-2 rounded-full ${showRedZones ? 'bg-red-500 ' : 'bg-slate-600'}`} />
  <span className="font-sans text-xs font-semibold">Merah</span>
- <span className="px-1.5 py-0.5 rounded bg-red-500/20 text-xs font-bold text-red-300 font-mono tabular-nums leading-none">
+ <span className="px-1 py-0.2 rounded bg-red-500/20 text-xs font-bold text-red-300 font-mono tabular-nums">
  {redZoneCount}
  </span>
  </button>
  <button
  type="button"
  onClick={onToggleYellowZones}
- className={`cursor-pointer h-8 flex items-center gap-1.5 px-2.5 rounded-lg border text-xs font-mono transition-all duration-150 shrink-0 ${
+ className={`cursor-pointer flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs font-mono transition-all duration-150 ${
  showYellowZones
- ? 'bg-yellow-950/50 border-yellow-500/50 text-yellow-200'
- : 'bg-white/5 border-white/5 text-slate-500 opacity-60 hover:opacity-100'
+ ? 'bg-yellow-950/50 border-yellow-500/50 text-yellow-200 '
+ : 'bg-[#0c1017] border-white/5 text-slate-500 opacity-60 hover:opacity-100'
  }`}
  title="Filter Peta: Zona Kuning (Perlu Klarifikasi / Waspada)"
  >
- <span className={`w-2 h-2 rounded-full ${showYellowZones ? 'bg-yellow-400' : 'bg-slate-600'}`} />
+ <span className={`w-2 h-2 rounded-full ${showYellowZones ? 'bg-yellow-400 ' : 'bg-slate-600'}`} />
  <span className="font-sans text-xs font-semibold">Kuning</span>
- <span className="px-1.5 py-0.5 rounded bg-yellow-500/20 text-xs font-bold text-yellow-300 font-mono tabular-nums leading-none">
+ <span className="px-1 py-0.2 rounded bg-yellow-500/20 text-xs font-bold text-yellow-300 font-mono tabular-nums">
  {yellowZoneCount}
  </span>
  </button>
@@ -480,16 +474,16 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
  <button
  type="button"
  onClick={onToggleWeatherPolygons}
- className={`cursor-pointer h-8 flex items-center gap-1.5 px-2.5 rounded-lg border text-xs font-mono transition-all duration-150 shrink-0 ${
+ className={`cursor-pointer flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs font-mono transition-all duration-150 ${
  showWeatherPolygons
- ? 'bg-blue-950/50 border-blue-500/50 text-blue-200'
- : 'bg-white/5 border-white/5 text-slate-500 opacity-60 hover:opacity-100'
+ ? 'bg-blue-950/50 border-blue-500/50 text-blue-200 '
+ : 'bg-[#0c1017] border-white/5 text-slate-500 opacity-60 hover:opacity-100'
  }`}
  title="Cuaca (gangguan, biru): hujan lebat disruptif high/critical 50mm/24j atau banjir 80%. Klik poligon = presipitasi/banjir/angin/sumber/valid_until."
  >
- <span className={`w-2 h-2 rounded-full ${showWeatherPolygons ? 'bg-blue-500' : 'bg-slate-600'}`} />
+ <span className={`w-2 h-2 rounded-full ${showWeatherPolygons ? 'bg-blue-500 ' : 'bg-slate-600'}`} />
  <span className="font-sans text-xs font-semibold">Cuaca</span>
- <span className="px-1.5 py-0.5 rounded bg-blue-500/20 text-xs font-bold text-blue-300 font-mono tabular-nums leading-none">
+ <span className="px-1 py-0.2 rounded bg-blue-500/20 text-xs font-bold text-blue-300 font-mono tabular-nums">
  {weatherDisruptionCount ?? weatherPolygonCount}
  </span>
  </button>
@@ -498,16 +492,16 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
  <button
  type="button"
  onClick={onToggleWeatherAdvisory}
- className={`cursor-pointer h-8 flex items-center gap-1.5 px-2.5 rounded-lg border text-xs font-mono transition-all duration-150 shrink-0 ${
+ className={`cursor-pointer flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs font-mono transition-all duration-150 ${
  showWeatherAdvisory
- ? 'bg-purple-950/50 border-purple-500/50 text-purple-200'
- : 'bg-white/5 border-white/5 text-slate-500 opacity-60 hover:opacity-100'
+ ? 'bg-purple-950/50 border-purple-500/50 text-purple-200 '
+ : 'bg-[#0c1017] border-white/5 text-slate-500 opacity-60 hover:opacity-100'
  }`}
  title="Advisory cuaca (ungu, default OFF): medium drizzle termasuk BMKG 60. Aktifkan untuk lapisan advisori penuh."
  >
- <span className={`w-2 h-2 rounded-full ${showWeatherAdvisory ? 'bg-purple-500' : 'bg-slate-600'}`} />
+ <span className={`w-2 h-2 rounded-full ${showWeatherAdvisory ? 'bg-purple-500 ' : 'bg-slate-600'}`} />
  <span className="font-sans text-xs font-semibold">Advisori</span>
- <span className="px-1.5 py-0.5 rounded bg-purple-500/20 text-xs font-bold text-purple-300 font-mono tabular-nums leading-none">
+ <span className="px-1 py-0.2 rounded bg-purple-500/20 text-xs font-bold text-purple-300 font-mono tabular-nums">
  {weatherAdvisoryCount}
  </span>
  </button>
@@ -516,38 +510,35 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
  <button
  type="button"
  onClick={onToggleFireHotspots}
- className={`cursor-pointer h-8 flex items-center gap-1.5 px-2.5 rounded-lg border text-xs font-mono transition-all duration-150 shrink-0 ${
+ className={`cursor-pointer flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs font-mono transition-all duration-150 ${
  fireStatus === 'degraded'
- ? 'bg-white/5 border-white/5 text-slate-500 opacity-70'
+ ? 'bg-[#0c1017] border-white/10 text-slate-500 opacity-70'
  : showFireHotspots
- ? 'bg-orange-950/50 border-orange-500/50 text-orange-200'
- : 'bg-white/5 border-white/5 text-slate-500 opacity-60 hover:opacity-100'
+ ? 'bg-orange-950/50 border-orange-500/50 text-orange-200 '
+ : 'bg-[#0c1017] border-white/5 text-slate-500 opacity-60 hover:opacity-100'
  }`}
  title={fireTooltip || (fireStatus === 'degraded' ? 'butuh MAP_KEY' : 'Overlay FIRMS VIIRS_SNPP_NRT: titik + heat oranye. Klik titik = FRP/conf/jarak koridor.')}
  >
- <span className={`w-2 h-2 rounded-full ${fireStatus === 'degraded' ? 'bg-slate-600' : showFireHotspots ? 'bg-orange-500' : 'bg-slate-600'}`} />
+ <span className={`w-2 h-2 rounded-full ${fireStatus === 'degraded' ? 'bg-slate-600' : showFireHotspots ? 'bg-orange-500 ' : 'bg-slate-600'}`} />
  <span className="font-sans text-xs font-semibold">Karhutla</span>
- <span className={`px-1.5 py-0.5 rounded text-xs font-bold font-mono tabular-nums leading-none ${fireStatus === 'degraded' ? 'bg-white/10 text-slate-400' : 'bg-orange-500/20 text-orange-300'}`}>
+ <span className={`px-1 py-0.2 rounded text-xs font-bold font-mono tabular-nums ${fireStatus === 'degraded' ? 'bg-white/10 text-slate-400' : 'bg-orange-500/20 text-orange-300'}`}>
  {fireStatus === 'degraded' ? '—' : fireHotspotCount}
  </span>
  </button>
  )}
-
- {/* Segment Divider: Overlays to Actions */}
- {onOpenHitl && <div className="h-4 w-px bg-white/10 shrink-0 mx-0.5" />}
 
  {/* 5. Globot HITL Review Drawer Trigger */}
  {onOpenHitl && (
  <button
  type="button"
  onClick={onOpenHitl}
- className="cursor-pointer h-8 flex items-center gap-1.5 px-3 rounded-lg border bg-amber-500/15 hover:bg-amber-500/25 border-amber-500/30 text-amber-300 hover:text-white transition shadow-sm shrink-0 font-medium tabular-nums text-xs"
+ className="cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-amber-950/40 border-amber-500/40 text-amber-300 hover:bg-amber-900/50 hover:text-white transition shadow-sm shrink-0"
  title="Buka Panel Tinjauan Keputusan Operator (HITL)"
  >
- <span className="w-2 h-2 rounded-full bg-amber-400 motion-safe:animate-pulse ring-2 ring-amber-400/30 shrink-0" />
+ <span className="w-2 h-2 rounded-full bg-amber-400 ring-2 ring-amber-400/30" />
  <span>Tinjau</span>
  {pendingHitlCount > 0 && (
- <span className="px-1.5 py-0.5 rounded bg-amber-500 text-black font-bold text-xs tabular-nums leading-none">
+ <span className="px-1.5 py-0.2 rounded bg-amber-500 text-black font-bold text-xs tabular-nums">
  {pendingHitlCount}
  </span>
  )}
