@@ -31,7 +31,14 @@ export function SelectTrigger({
 }: SelectTriggerProps) {
   const resolved = render ?? (asChild && React.isValidElement(children) ? children : undefined);
   if (resolved) {
-    return <BaseSelect.Trigger render={resolved} {...props} />;
+    return (
+      <BaseSelect.Trigger
+        data-slot="select-trigger"
+        render={resolved}
+        className={className}
+        {...props}
+      />
+    );
   }
   return (
     <BaseSelect.Trigger
@@ -158,7 +165,7 @@ export function SelectGroupLabel({
     <BaseSelect.GroupLabel
       data-slot="select-group-label"
       className={cn(
-        'px-2 py-1.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider',
+        'px-2 py-1.5 text-xs font-semibold text-slate-400 uppercase tracking-wider',
         className,
       )}
       {...props}

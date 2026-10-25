@@ -61,6 +61,8 @@ runTest('Suite 1: Select primitive contract & exports', () => {
   // Verify trigger composition safety (render and asChild)
   assert.ok(content.includes('render?:'), 'SelectTrigger must accept render prop');
   assert.ok(content.includes('asChild?:'), 'SelectTrigger must support asChild for backwards compatibility');
+  assert.ok(content.includes('data-slot="select-trigger"'), 'SelectTrigger must include data-slot');
+  assert.ok(!content.includes('text-[11px]'), 'Select must not use micro-text text-[11px], minimum text-xs required');
 
   // Verify positioning invariant: alignItemWithTrigger={false} for dropdown behavior
   assert.ok(content.includes('alignItemWithTrigger={false}'), 'Must specify alignItemWithTrigger={false} for standard dropdowns');
@@ -91,6 +93,7 @@ runTest('Suite 2: Chip primitive contract, variants & status dots', () => {
   assert.ok(content.includes('bg-rose-400'), 'Must support critical rose dot');
   assert.ok(content.includes('bg-slate-600'), 'Must support offline slate dot');
   assert.ok(content.includes('tabular-nums'), 'Chip must include tabular-nums');
+  assert.ok(!content.includes('text-[11px]'), 'Chip must not use micro-text text-[11px], minimum text-xs required');
 });
 
 // ---------------------------------------------------------------------------
@@ -261,6 +264,10 @@ runTest('Suite 8: Consumer integration in AnalyticsSection.tsx', () => {
   assert.ok(
     content.includes('<TooltipContent side="top" portal={false}>'),
     'TooltipContent in AnalyticsSection must explicitly pass portal={false}'
+  );
+  assert.ok(
+    !content.includes('title='),
+    'All static native title attributes in AnalyticsSection.tsx must be replaced with Base-UI Tooltip'
   );
 });
 

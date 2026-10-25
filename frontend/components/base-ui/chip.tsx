@@ -13,7 +13,7 @@ const variantClasses: Record<ChipVariant, string> = {
 };
 
 const sizeClasses: Record<ChipSize, string> = {
-  sm: 'px-2 py-0.5 text-[11px]',
+  sm: 'px-2 py-0.5 text-xs',
   default: 'px-2.5 py-1 text-xs',
 };
 

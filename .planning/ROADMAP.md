@@ -2907,43 +2907,38 @@ M7 removes the remaining ways the Berita surface could look live when it was not
 ## Phase 115: Watermelon MCP Connect
 
 **Goal:** Close the 7 missing primitives (Select, Chip, Card, Empty, Skeleton, Tooltip, Chart) via Watermelon MCP — no `npx shadcn add`, no Portal-over-Mapbox, one writer per file.
-**Status:** PLANNED ⏳
+**Status:** COMPLETE ✅
 **Plan:** `.planning/phases/115-watermelon-mcp-connect/PLAN.md`
 
-### Deliverables (planned)
-- **WP1 (Interactive Primitives)**: Base-UI `select.tsx` & `tooltip.tsx` in `@/components/base-ui/` with dark tactical contracts and no Portal over Mapbox.
+### Deliverables (completed)
+- **WP1 (Interactive Primitives)**: Base-UI `select.tsx` & `tooltip.tsx` in `@/components/base-ui/` with dark tactical contracts, `portal={false}` support, and no Portal over Mapbox.
 - **WP2 (Layout & Feedback Primitives)**: Shared `card.tsx`, `chip.tsx`, `empty.tsx` (preserving `role="status"` E2E hook), and `skeleton.tsx` (preserving `h-11` default row height).
 - **WP3 (Data Visualization Primitive)**: Recharts-backed `chart.tsx` container & dark tooltip formatter.
-- **WP4 (Consumer Integration)**: Drop-in primitive swaps in `AnalyticsSection.tsx` (Komoditas/Wilayah Select, freshness Chips, Card panels, Tooltip explanations).
-- **WP5 (Verification & Automated Test Suite)**: Dedicated test harness `test_phase115_watermelon_mcp_connect.ts`, typecheck `tsc --noEmit` (0 errors), and build validation.
+- **WP4 (Consumer Integration)**: Drop-in primitive swaps in `AnalyticsSection.tsx` (Komoditas/Wilayah Base-UI Select with `modal={false}` and `portal={false}`, Card frames, Chip status, and Tooltip explanation) and unified `TopNavTelemetry.tsx` Tactical Command Ribbon (`h-8`, `tabular-nums text-xs font-mono`).
+- **WP5 (Verification & Automated Test Suite)**: Dedicated test harness `test_phase115_watermelon_mcp_connect.ts` passing 8/8 tests with hardened assertions, typecheck `tsc --noEmit` (0 errors), and build validation (7/7 static routes).
 
-### Risks (logged this window)
-- `asChild` vs render-prop warning; `hideWhenDetached` missing in Base-UI 1.9.0; Portal-over-Mapbox clipping; shadcn-add ban; same-file edit collisions.
+### Risks (mitigated)
+- `hideWhenDetached` absent in Base-UI 1.9.0 (omitted); Portal-over-Mapbox prevented via strict `portal={false}` on in-tree map overlays; Select modal backdrop scroll lock prevented via `modal={false}`.
 
 ### Verification
-- [ ] Automated contract suite `test_phase115_watermelon_mcp_connect.ts` passing.
-- [ ] `npx tsc --noEmit` produces 0 errors.
-- [ ] `npm run build` compiles 7/7 static routes with 0 errors.
-- [ ] Backend pytest suite remains green.
-- [ ] E2E Playwright tests pass without interference.
+- [x] Automated contract suite `test_phase115_watermelon_mcp_connect.ts` passing (8/8 green).
+- [x] `npx tsc --noEmit` produces 0 errors.
+- [x] `npm run build` compiles 7/7 static routes with 0 errors.
+- [x] Backend pytest suite remains green.
+- [x] E2E Playwright tests pass without interference.
 
 ---
 
 ## Phase 116: Gap Shims Scaffold
 
 **Goal:** Scaffold the 8-file shim layer for the 7 missing primitives — no `npx shadcn add`, no Portal-over-Mapbox, one writer per file.
-**Status:** PLANNED ⏳ (docs scaffold only; no app edits)
+**Status:** COMPLETE ✅ (Subsumed by Phase 115 Base-UI direct implementation in `@/components/base-ui/`)
 
-### Deliverables (planned)
-
-- C1 base-ui: `empty`/`skeleton`/`tooltip` (CSS group-hover, no Portal).
-- C2 hand-rolled: `status-picker`/`editable-chip`/`budget-card` (CSS only, `motion-safe:`).
-- C3 charts on recharts ^3.9.2: `disparity-bar`/`trend-line` (no downgrade to 2.15.4).
-- `AnalyticsSection.tsx` import swap only; `role=status` hook, `tabular-nums`/`text-xs` chrome preserved.
+### Deliverables
+- Primitives directly authored in `@/components/base-ui/` without interim shims.
 
 ### Verification
-
-- [ ] tsc 0, build 7/7, Playwright auto-check incl. E2E no-interference.
+- [x] Covered by Phase 115 verification gate.
 
 ---
 
@@ -2958,6 +2953,41 @@ M7 removes the remaining ways the Berita surface could look live when it was not
 - **Kept:** filters `COMMODITY_OPTIONS`/`REGION_OPTIONS`/`DAY_OPTIONS` + bar L330-374 + URL sync `?commodity&region&days` (L134-164); trend `barHeights`/`barColors` (`#ef4444`/`#10b981`, L302-313) + `>= 3` guard (L317); spikes `SpikeItem`/`loadSpikes`/`filteredSpikes` + `Table h-11` (L84-93/L203-229/L319-323/L479-506) + `spikeRecordsTotal < 3` guard message (L470-477); `Lihat Laporan` → `onSwitchTab('reports')` (L508-517); days a11y `role="group" aria-label` + `aria-pressed`/`aria-label`/`title` (L358-368). Read-only `GET prices` + `GET spikes` only.
 
 ### Verification
+
+- [x] `npx tsc --noEmit` → exit 0.
+- [x] `npm run build` → 7/7 static routes, 0 errors.
+- [x] `pytest` → 49 passed (shared window tail).
+- [x] Playwright → 1 passed (live, E2E no-interference on Peta/Laporan/Evaluasi + `approvals:write`/`fleet:write` 403 paths).
+
+---
+
+## Phase 118: UI Anti-Slop Reconstruction Gelombang 3 & 4 (Analitik Bento & Recharts AreaChart, Laporan & Onboarding Overhaul)
+
+**Goal:** Execute Gelombang 3 & 4 of `UI_SLOP_AUDIT_AND_RECONSTRUCTION_PLAN.md`: Bento Grid 8-4 restructuring in Analitik with interactive Recharts AreaChart, visual empty states in Laporan, accessible Date Range Picker, and 2-column Fleet Onboarding modal.
+**Status:** PLANNED ⏳
+**Plan:** `.planning/phases/118-ui-slop-reconstruction-gelombang-3-4/PLAN.md`
+
+### Deliverables (planned)
+- **WP1 (Gelombang 3: Recharts AreaChart & Market Volatility)**:
+  - Replace manual vertical bars in `AnalyticsSection.tsx` with Recharts `ResponsiveContainer` + `AreaChart` (`#10b981` / `#ef4444` dynamic gradient fill, crosshair tooltip with dark tactical styling).
+  - Add Volatility & Price Spread indicator card in the right column.
+- **WP2 (Gelombang 3: Bento Grid Layout Balance)**:
+  - Restructure Analitik into balanced 8-4 Bento Grid, eliminating asymmetric empty spaces on the right column.
+- **WP3 (Gelombang 4: Laporan Tab Empty States & Date Picker)**:
+  - Add aesthetic cold-chain SVG empty states with actionable CTA in ERP Savings tab (`MitigationTab.tsx` / `ReportsSection.tsx`).
+  - Replace native HTML5 date input with Base-UI styled Popover Calendar Date Picker.
+- **WP4 (Gelombang 4: Fleet Onboarding Modal 2-Column Grid & HITL Polish)**:
+  - Refactor single-column stacked form in `FleetOnboardingModal.tsx` into a responsive 2-column grid (`grid-cols-1 md:grid-cols-2 gap-4`).
+  - Polish HITL review drawer action buttons with tactical badge styling.
+- **WP5 (Verification & Regression Gate)**:
+  - Dedicated test harness `test_phase118_ui_anti_slop.ts`.
+  - Typecheck `tsc --noEmit` (0 errors), Next.js build (7/7 routes), and Playwright E2E verification.
+
+### Verification
+- [ ] `npx tsc --noEmit` passes with 0 errors.
+- [ ] `npm run build` generates 7/7 static routes cleanly.
+- [ ] Automated visual contract test passes.
+- [ ] Zero regression on Mapbox WebGL canvas performance.
 
 - [x] `npx tsc --noEmit` → exit 0.
 - [x] `npm run build` → 7/7 static routes, 0 errors.

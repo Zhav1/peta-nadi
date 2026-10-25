@@ -253,6 +253,8 @@ async def test_news_stampede_guard_prevents_duplicate_runs(monkeypatch):
         calls += 1
         await asyncio.sleep(0.05)
 
+    monkeypatch.setattr(news_router, "_acquire_cross_process_ingestion_lock", lambda: True)
+    monkeypatch.setattr(news_router, "_release_cross_process_ingestion_lock", lambda: None)
     monkeypatch.setattr(news_router.unified_news_ingestor, "run_ingestion_cycle", fake_ingest)
 
     # Launch two ingestion triggers simultaneously

@@ -165,7 +165,8 @@ Upstream Phases 87/88 above (Mapbox turn-by-turn; client-isolated session, merge
 | 112 | Watermelon Chrome P1 | **COMPLETE** ✅ | Badge/Button/Popover/Separator/`AnalyticsEmpty` chrome; no Portal over Mapbox. Docs: `112-watermelon-chrome-p1/`. |
 | 113 | Watermelon Tables P2 | **COMPLETE** ✅ | `Table` block `h-11` rows + `Progress`; `priceRegion` vs `corridorFilter` (Koridor) scope split healed. Docs: `113-watermelon-tables-p2/`. |
 | 114 | Watermelon Polish P3 | **COMPLETE** ✅ | `AnimatedValue`/`LoadingSkeleton`/`motion-safe` throughout; P1/P3 collision healed via rename. Docs: `114-watermelon-polish-p3/`. |
-| 115 | Watermelon MCP Connect | **PLANNED** ⏳ | Gap inventory (no Select/Chip/Card/Empty/Skeleton/Tooltip/Chart primitives) + risk register (`asChild`, `hideWhenDetached` missing in 1.9.0, Portal-over-Mapbox, shadcn-add ban). Docs: `115-watermelon-mcp-connect/`. |
+| 115 | Watermelon MCP Connect | **COMPLETE** ✅ | Integrated Base-UI Select/Card/Chip/Tooltip/Empty/Skeleton primitives, de-cluttered TopNavTelemetry into Unified Tactical Command Ribbon (h-8, tabular-nums), enforced no-portal-over-mapbox. 8/8 tests, 0 tsc errors. Git: `f22109b`. Docs: `115-watermelon-mcp-connect/`. |
+| 118 | UI Anti-Slop Reconstruction Gelombang 3 & 4 | **PLANNED** ⏳ | Bento Grid 8-4 restructuring in Analitik with interactive Recharts AreaChart, visual empty states in Laporan, accessible Date Range Picker, and 2-column Fleet Onboarding modal. Docs: `118-ui-slop-reconstruction-gelombang-3-4/`. |
 
 
 

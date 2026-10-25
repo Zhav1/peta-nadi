@@ -394,7 +394,6 @@ export default function DashboardAnalyticsSection({
               size="sm"
               aria-pressed={days === d}
               aria-label={`${d} hari terakhir`}
-              title={`${d} hari terakhir`}
               onClick={() => setDays(d)}
               className="tabular-nums text-xs h-8 cursor-pointer"
             >
@@ -469,14 +468,22 @@ export default function DashboardAnalyticsSection({
             {hasEnoughRecords ? (
               <div className="h-28 flex items-end gap-2 pt-2">
                 {barHeights.map((h, i) => (
-                  <div key={i} className="flex-1 bg-white/5 relative group h-full rounded-t-sm overflow-hidden flex flex-col justify-end items-center">
-                    <div
-                      className="w-full border-t-2 motion-safe:transition-all motion-safe:duration-300"
-                      style={{ height: h, backgroundColor: `${barColors[i].bg}33`, borderColor: barColors[i].border }}
-                      title={`T-${priceHistory.length - 1 - i}: Rp ${priceHistory[i].toLocaleString('id-ID')}`}
+                  <Tooltip key={i}>
+                    <TooltipTrigger
+                      render={
+                        <div className="flex-1 bg-white/5 relative group h-full rounded-t-sm overflow-hidden flex flex-col justify-end items-center cursor-pointer">
+                          <div
+                            className="w-full border-t-2 motion-safe:transition-all motion-safe:duration-300"
+                            style={{ height: h, backgroundColor: `${barColors[i].bg}33`, borderColor: barColors[i].border }}
+                          />
+                          <span className="text-xs text-slate-400 tabular-nums mt-1">T-{priceHistory.length - 1 - i}</span>
+                        </div>
+                      }
                     />
-                    <span className="text-xs text-slate-400 tabular-nums mt-1">T-{priceHistory.length - 1 - i}</span>
-                  </div>
+                    <TooltipContent side="top" portal={false}>
+                      T-{priceHistory.length - 1 - i}: Rp {priceHistory[i].toLocaleString('id-ID')}
+                    </TooltipContent>
+                  </Tooltip>
                 ))}
               </div>
             ) : isLoadingPrices ? (
