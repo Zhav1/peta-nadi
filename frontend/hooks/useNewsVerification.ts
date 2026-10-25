@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { api } from '@/lib/api';
 
-import type { HazardImpactProfile, AffectedLocationNode, VerificationAudit } from '@/lib/types';
+import type { HazardImpactProfile, AffectedLocationNode, VerificationAudit, ForecastTag } from '@/lib/types';
 
 export interface NewsItem {
   id: string;
@@ -36,6 +36,10 @@ export interface NewsItem {
   url?: string;
   link_alive?: 'alive' | 'dead' | 'unknown';
   zone_tier?: 'RED_CONFIRMED' | 'YELLOW_CLARIFY' | 'DROPPED_IRRELEVANT';
+  /** Early-warning forecast marker (mirrors backend). zone_tier stays YELLOW_CLARIFY. */
+  forecast_tag?: ForecastTag | null;
+  /** ISO timestamp after which the forecast tag is hidden (article stays admitted). */
+  forecast_valid_until?: string | null;
   tier_reason?: string;
   custom_hazard_label?: string;
   impact_profile?: HazardImpactProfile;
@@ -228,6 +232,66 @@ export function validateClientNewsFreshnessAndDiscourse(
   return { valid: true, formattedPubDate };
 }
 
+// ---------------------------------------------------------------------------
+// Forecast (Prakiraan-Waspada Dini) — client mirror of the backend contract.
+//
+// Backend sends `forecast_tag = 'FORECAST_WASPADA'` + `forecast_valid_until`
+// (ISO) for early-warning articles/zones, and keeps `zone_tier` at
+// YELLOW_CLARIFY. The tag is a 24h display window: once it lapses the tag is
+// hidden, but the article itself is NOT removed — the 48h freshness/discourse
+// admission gate above is a separate concern and stays untouched.
+// ---------------------------------------------------------------------------
+
+export const FORECAST_TAG: ForecastTag = 'FORECAST_WASPADA';
+export const FORECAST_TTL_MS = 24 * 60 * 60 * 1000;
+
+/** Mirrors backend derivation when the tag is missing on an early-warning item. */
+export function deriveForecastTag(
+  rawTag: unknown,
+  temporalPhase?: string | null
+): ForecastTag | undefined {
+  if (rawTag === FORECAST_TAG) return FORECAST_TAG;
+  if (typeof rawTag === 'string' && rawTag.trim().toUpperCase() === FORECAST_TAG) return FORECAST_TAG;
+  if (temporalPhase === 'forecast_early_warning') return FORECAST_TAG;
+  return undefined;
+}
+
+/**
+ * Backend `forecast_valid_until` wins. When absent, derive it from the article
+ * publish time + 24h so an early-warning item still expires. Returns undefined
+ * when neither timestamp is parseable (never invent an expiry).
+ */
+export function deriveForecastValidUntil(
+  rawValidUntil: unknown,
+  publishedAt?: string | null
+): string | undefined {
+  if (typeof rawValidUntil === 'string' && rawValidUntil.trim()) {
+    const parsed = Date.parse(rawValidUntil.trim());
+    if (Number.isFinite(parsed)) return new Date(parsed).toISOString();
+  }
+  if (typeof publishedAt === 'string' && publishedAt.trim()) {
+    const parsed = Date.parse(publishedAt.trim());
+    if (Number.isFinite(parsed)) return new Date(parsed + FORECAST_TTL_MS).toISOString();
+  }
+  return undefined;
+}
+
+/**
+ * True while a forecast tag is still within its 24h window. An unknown expiry
+ * keeps the tag (honest: no timestamp means no evidence it lapsed).
+ */
+export function isForecastActive(
+  tag: unknown,
+  validUntil?: string | null,
+  nowMs: number = Date.now()
+): boolean {
+  if (tag !== FORECAST_TAG) return false;
+  if (!validUntil) return true;
+  const parsed = Date.parse(validUntil);
+  if (!Number.isFinite(parsed)) return true;
+  return parsed > nowMs;
+}
+
 export function useNewsVerification() {
   // M1 trust-fix "Strict live-only": no offline fixture. The feed starts empty and
   // only ever contains articles that came from the live backend and resolved to a
@@ -322,17 +386,28 @@ export function useNewsVerification() {
               const normalizedIncident = normalizeIncidentType(a.incident_type);
               const normalizedHazard = normalizeHazardType(a.hazardType || a.hazard_type, normalizedIncident);
 
+              // Contract mirror: forecast_tag may arrive explicitly, or be derived
+              // from temporal_phase='forecast_early_warning'.
+              const forecastTagRaw = deriveForecastTag(a.forecast_tag ?? gtm.forecast_tag, a.temporal_phase);
+
               // Legacy articles without zone_tier: critical/high → RED, else YELLOW with Indonesian reason.
+              // Forecasts never escalate to RED — the contract pins them to YELLOW_CLARIFY.
               let resolvedTier = zone_tier;
               let resolvedReason = tier_reason;
               if (!resolvedTier) {
-                if (severity === 'critical' || severity === 'high') {
+                if (forecastTagRaw) {
+                  resolvedTier = 'YELLOW_CLARIFY';
+                  resolvedReason = resolvedReason || 'Prakiraan waspada dini: potensi gangguan belum terkonfirmasi sebagai bencana aktif; pantau sebelum pengalihan penuh.';
+                } else if (severity === 'critical' || severity === 'high') {
                   resolvedTier = 'RED_CONFIRMED';
                   resolvedReason = resolvedReason || 'Berita berkekuatan tinggi dari sumber resmi; diklasifikasikan sebagai Zona Merah terkonfirmasi menunggu verifikasi lanjutan.';
                 } else {
                   resolvedTier = 'YELLOW_CLARIFY';
                   resolvedReason = resolvedReason || 'Sinyal intensitas rendah–menengah; masuk Zona Kuning untuk klarifikasi dan pemantauan lanjutan.';
                 }
+              } else if (forecastTagRaw && resolvedTier !== 'DROPPED_IRRELEVANT') {
+                resolvedTier = 'YELLOW_CLARIFY';
+                resolvedReason = resolvedReason || 'Prakiraan waspada dini: potensi gangguan belum terkonfirmasi sebagai bencana aktif; pantau sebelum pengalihan penuh.';
               }
 
               const latRaw = a.latitude ?? a.lat ?? gtm.latitude ?? gtm.lat;
@@ -366,6 +441,14 @@ export function useNewsVerification() {
                 : undefined;
               const rawPub = publishedAtRaw || 'Terkini';
               const summaryText = a.summary || a.title || '';
+              // 24h forecast window; an expired tag is hidden here but the article
+              // still passes the untouched 48h admission gate below.
+              const forecastValidUntil = forecastTagRaw
+                ? deriveForecastValidUntil(a.forecast_valid_until ?? gtm.forecast_valid_until, publishedAtRaw)
+                : undefined;
+              const forecastActive = forecastTagRaw
+                ? isForecastActive(forecastTagRaw, forecastValidUntil)
+                : false;
               const freshness = validateClientNewsFreshnessAndDiscourse(headline, summaryText, sourceLink, String(rawPub));
 
               return {
@@ -397,6 +480,8 @@ export function useNewsVerification() {
                 url: sourceLink,
                 link_alive: linkAlive,
                 zone_tier: resolvedTier,
+                forecast_tag: forecastActive ? forecastTagRaw : undefined,
+                forecast_valid_until: forecastActive ? forecastValidUntil : undefined,
                 tier_reason: resolvedReason,
                 custom_hazard_label: custom_hazard_label,
                 impact_profile: impact_profile,

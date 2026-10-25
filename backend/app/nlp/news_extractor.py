@@ -12,7 +12,7 @@ import logging
 import asyncio
 import re
 from typing import Dict, Any, List, Optional
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from app.config import get_settings
 from app.nlp.ner_pipeline import extract_locations_gazetteer
@@ -537,6 +537,153 @@ def _detect_weather_warning_only(full_text_lower: str) -> bool:
     return not has_blockage
 
 
+# SPEC-LOCKED: FORECAST_WASPADA is an ORTHOGONAL display tag — never a
+# zone_tier. A forecast candidate (no physical blockage + early-warning /
+# weather-only) is shown as a forecast with a 24h validity window; its
+# zone_tier may only be pinned to YELLOW_CLARIFY when the consensus gate
+# in unified_news_ingestor deems it eligible. Forecasts NEVER synthesize
+# RED_CONFIRMED incidents.
+FORECAST_TAG = "FORECAST_WASPADA"
+FORECAST_VALIDITY_HOURS = 24
+
+
+def _parse_forecast_published_at(structured: Dict[str, Any]) -> Optional[datetime]:
+    """Best-effort published_at parser for the forecast validity window."""
+    if not isinstance(structured, dict):
+        return None
+    raw = (
+        structured.get("published_at")
+        or structured.get("original_pub_date")
+        or structured.get("html_published_at")
+        or structured.get("pubDate")
+    )
+    if not raw:
+        gtm = structured.get("ground_truth_metrics") or {}
+        if isinstance(gtm, dict):
+            raw = gtm.get("published_at_iso") or gtm.get("original_pub_date")
+    if not raw:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    except Exception:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def compute_forecast_valid_until(structured: Dict[str, Any]) -> str:
+    """ISO validity for a FORECAST_WASPADA tag: min(published + 24h, now + 24h).
+
+    Falls back to now + 24h when the publication timestamp is unknown or
+    unparseable (relative labels like "10m lalu"), so the tag always carries a
+    bounded, honest expiry.
+    """
+    now = datetime.now(timezone.utc)
+    published = _parse_forecast_published_at(structured)
+    candidate = (published + timedelta(hours=FORECAST_VALIDITY_HOURS)) if published else (now + timedelta(hours=FORECAST_VALIDITY_HOURS))
+    return min(candidate, now + timedelta(hours=FORECAST_VALIDITY_HOURS)).isoformat()
+
+
+def is_forecast_candidate(structured: Dict[str, Any]) -> bool:
+    """True when an item is a forecast/advisory, not an observed disruption.
+
+    Contract: NO physical blockage AND (temporal_phase == forecast_early_warning
+    OR is_weather_warning_only). Accepts either a structured extraction row or a
+    flattened ingestor article (checks verification_audit / ground_truth_metrics
+    and falls back to deterministic text detection).
+    """
+    if not isinstance(structured, dict):
+        return False
+    audit: Dict[str, Any] = {}
+    _audit = structured.get("verification_audit")
+    if isinstance(_audit, dict):
+        audit = _audit
+    gtm = structured.get("ground_truth_metrics")
+    if not audit and isinstance(gtm, dict) and isinstance(gtm.get("verification_audit"), dict):
+        audit = gtm["verification_audit"]
+
+    has_blockage = structured.get("has_physical_blockage")
+    if has_blockage is None and isinstance(audit, dict):
+        has_blockage = audit.get("has_physical_blockage")
+    text = " ".join(
+        str(structured.get(k) or "")
+        for k in ("title", "raw_description", "summary", "concise_summary")
+    ).lower()
+
+    phase = structured.get("temporal_phase")
+    if not phase and isinstance(audit, dict):
+        phase = audit.get("temporal_phase")
+    weather_only = structured.get("is_weather_warning_only")
+    if weather_only is None and isinstance(audit, dict):
+        weather_only = audit.get("is_weather_warning_only")
+    if weather_only is None:
+        weather_only = _detect_weather_warning_only(text)
+
+    # A real closure/blockage clause always disqualifies a forecast candidate.
+    # NOTE: has_physical_blockage upstream is a sentence-level HAZARD proximity
+    # flag — for BMKG advisories ("waspada gelombang tinggi") it is True even
+    # though nothing is closed. A pure weather-warning-only item therefore lets
+    # us discount that proximity flag; an explicit True on any other item is
+    # still honored. An explicit True without any text disqualifies.
+    text_blockage = bool(text) and any(w in text for w in PHYSICAL_BLOCKAGE_PREDICATES)
+    if text:
+        if text_blockage:
+            has_blockage = True
+        elif has_blockage and not weather_only:
+            has_blockage = True
+        else:
+            has_blockage = False
+    elif has_blockage is None:
+        has_blockage = False
+    if bool(has_blockage):
+        return False
+
+    return bool(str(phase or "") == "forecast_early_warning" or weather_only)
+
+
+def apply_forecast_tag(structured: Dict[str, Any]) -> Dict[str, Any]:
+    """Persist FORECAST_WASPADA + validity into the structured row and audit.
+
+    Idempotent. Applies the hard invariant that a forecast candidate can never
+    be RED_CONFIRMED (orthogonal display tag, not an escalation path).
+    """
+    if not isinstance(structured, dict) or not is_forecast_candidate(structured):
+        return structured
+    valid_until = compute_forecast_valid_until(structured)
+    structured["forecast_tag"] = FORECAST_TAG
+    structured["forecast_valid_until"] = valid_until
+
+    audit = structured.get("verification_audit")
+    if not isinstance(audit, dict):
+        audit = {}
+    audit["forecast_tag"] = FORECAST_TAG
+    audit["forecast_valid_until"] = valid_until
+    audit["forecast_candidate"] = True
+    structured["verification_audit"] = audit
+
+    gtm = structured.get("ground_truth_metrics")
+    if not isinstance(gtm, dict):
+        gtm = {}
+    gtm["forecast_tag"] = FORECAST_TAG
+    gtm["forecast_valid_until"] = valid_until
+    gtm["verification_audit"] = audit
+    structured["ground_truth_metrics"] = gtm
+
+    # Hard cap: a forecast candidate must never be RED.
+    if str(structured.get("zone_tier") or "").upper() == "RED_CONFIRMED":
+        structured["zone_tier"] = "YELLOW_CLARIFY"
+        _reason = str(structured.get("tier_reason") or "")
+        structured["tier_reason"] = (
+            "Peringatan dini (forecast) tidak dapat dikonfirmasi sebagai insiden fisik aktif; "
+            "dibatasi pada Zona Kuning (advisory)."
+            + (f" {_reason}" if _reason else "")
+        )
+        gtm["zone_tier"] = "YELLOW_CLARIFY"
+        gtm["tier_reason"] = structured["tier_reason"]
+    return structured
+
+
 def _classify_discourse_type(full_text_lower: str, has_non_incident: bool) -> str:
     t = full_text_lower or ""
     if any(w in t for w in ("akademisi", "unand", "universitas", "guru besar", "pakar", "pengamat", "peneliti")):
@@ -1053,7 +1200,7 @@ def _fast_heuristic_extraction(art: Dict[str, Any]) -> Dict[str, Any]:
         else "TIER_C"
     )
 
-    return {
+    _structured = {
         "id": art_id,
         "title": title,
         "link": art_link,
@@ -1122,6 +1269,7 @@ def _fast_heuristic_extraction(art: Dict[str, Any]) -> Dict[str, Any]:
         "location_precision": location_precision,
         "confidence_score": base_conf,
     }
+    return apply_forecast_tag(_structured)
 
 
 def _clean_llm_json(text: str) -> str:
@@ -1846,6 +1994,9 @@ async def extract_structured_news_batch(articles: List[Dict[str, Any]]) -> List[
         except Exception:
             pass
 
+    for _b in baselines:
+        apply_forecast_tag(_b)
+
     # Only send non-dropped candidates that pass the 2-factor regex gate to the LLM.
     # Non-matches drop immediately with 0 LLM tokens spent.
     candidates: List[Dict[str, Any]] = []
@@ -1933,6 +2084,8 @@ async def extract_structured_news_batch(articles: List[Dict[str, Any]]) -> List[
         await asyncio.gather(*[_llm_single(b) for b in candidates])
     except Exception as e:
         logger.warning(f"Batched LLM extraction unavailable ({type(e).__name__}: {e}); using heuristics.")
+    for _b in baselines:
+        apply_forecast_tag(_b)
     return baselines
 
 
@@ -1960,6 +2113,7 @@ async def extract_structured_news(art: Dict[str, Any]) -> Dict[str, Any]:
         gtm["zone_tier"] = "DROPPED_IRRELEVANT"
         gtm["tier_reason"] = structured["tier_reason"]
         structured["ground_truth_metrics"] = gtm
+        structured = apply_forecast_tag(structured)
         if len(_EXTRACTION_CACHE) > MAX_CACHE_ENTRIES:
             _EXTRACTION_CACHE.clear()
         _EXTRACTION_CACHE[cache_key] = structured
@@ -2027,6 +2181,7 @@ async def extract_structured_news(art: Dict[str, Any]) -> Dict[str, Any]:
     # Store in memory cache
     if len(_EXTRACTION_CACHE) > MAX_CACHE_ENTRIES:
         _EXTRACTION_CACHE.clear()
+    structured = apply_forecast_tag(structured)
     _EXTRACTION_CACHE[cache_key] = structured
 
     return structured

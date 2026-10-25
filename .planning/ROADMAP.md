@@ -1,7 +1,7 @@
 # ROADMAP: PreHub (Logistics Resilience Intelligence Platform)
 
-**Active Milestone:** M6 - Turn-by-Turn Road Snapping, Offline Fleet Precomputation & Dual-Layer Hazard Avoidance [ACTIVE 🚀]
-**Previous Milestones:** M1 - Hackathon MVP [COMPLETED ✅], M2 - PreHub Final Defense [COMPLETED ✅], M3 - PreHub MVP Pilot Operations [COMPLETED ✅], M4 - PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability [COMPLETED ✅], M5 - High-Fidelity Intelligence & Isolated Operations Engine [COMPLETED ✅]
+**Active Milestone:** M7 - Live News Trust, Source Breadth & Forecast Waspada Integrity [ACTIVE 🚀]
+**Previous Milestones:** M1 - Hackathon MVP [COMPLETED ✅], M2 - PreHub Final Defense [COMPLETED ✅], M3 - PreHub MVP Pilot Operations [COMPLETED ✅], M4 - PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability [COMPLETED ✅], M5 - High-Fidelity Intelligence & Isolated Operations Engine [COMPLETED ✅], M6 - Turn-by-Turn Road Snapping, Offline Fleet Precomputation & Dual-Layer Hazard Avoidance [COMPLETED ✅]
 **Development Mode:** Solo, AI-assisted (GSD Disciplined Workflow)
 
 ---
@@ -2732,6 +2732,93 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
   - Verify WhatsApp dispatch link accuracy in `MitigationTab.tsx`.
 - **WP5 - Automated Verification Gate (`test_phase107_hitl_approval_unification.ts`)**:
   - TypeScript check (`tsc --noEmit`), backend pytests, and automated test suite.
+---
+
+# Milestone M7: Live News Trust, Source Breadth & Forecast Waspada Integrity
+
+M7 removes the remaining ways the Berita surface could look live when it was not: synthetic fallback rows, publisher search-page citations, moving `now()` timestamps, a Medan-centric feed set, and a 60-row read window that let DROPPED rows hide valid ones. It then adds a bounded, orthogonal early-warning tag (`FORECAST_WASPADA`) that can never become a confirmed RED incident. Phases 107–110 are committed.
+
+---
+
+## Phase 107: News Live-Only Trust Fix
+
+**Goal:** Make the feed honest: no offline fixture, resolve-or-drop links, freeze real timestamps, reach all 10 Sumatra provinces, and cap weather-only advisories at YELLOW.
+**Status:** COMPLETE ✅ (commit `4e8781b`)
+**Plan:** `.planning/phases/107-news-live-only-trust-fix/PLAN.md`
+
+### Deliverables
+- **Live-only feed (`useNewsVerification.ts`)**: empty start, `warming` status, last-good retention, no `FALLBACK_SUMATRA_NEWS`.
+- **Resolve-or-drop policy (`news_aggregator.py`, `news_router.py`)**: publisher search fallback removed; bare roots, dummy ids, Google hosts, and malformed ANTARA ids are dropped.
+- **Honest timestamps**: `_max_published_at_iso`; cache replays the stored fetch-time value; upsert preserves `original_pub_date`.
+- **10-province reach**: ANTARA Babel/Kepri added; Q6/Q7 corridors; weather-warning-only → YELLOW.
+- **Strict Playwright audit**: six specs in `frontend/e2e/news-live-audit.spec.ts` for warming, links, frozen clocks, multi-province, providers, and cache re-poll.
+
+### Verification
+- [x] Commit `4e8781b` exists with the stated subject.
+- [x] Six adversarial specs exist and cover the stated contracts.
+- [ ] Playwright suite re-run in this docs pass (not run).
+
+---
+
+## Phase 108: News Source Expansion — 8 Realtime Feeds
+
+**Goal:** Broaden the feed to 5 Tribun regional editions + Detik Finance/Katadata/Republika, add Q8 BNPB/BMKG, prune Tribun noise, and fix the Tribun 403 UA.
+**Status:** COMPLETE ✅ (commit `1588d8b`)
+**Plan:** `.planning/phases/108-news-source-expansion-8-feeds/PLAN.md`
+
+### Deliverables
+- **23 direct RSS feeds** (`news_aggregator.py:24-186`): 10 ANTARA bureaus + ANTARA Ekonomi + Detik/CNN/CNBC + 5 Tribun + 3 economic/national.
+- **8 targeted queries** (`news_aggregator.py:189-204`), including Q8 `site:bnpb.go.id OR site:bmkg.go.id`.
+- **Noise prune** (`news_aggregator.py:626-628`): Tribun promo/lifestyle terms excluded before relevance.
+- **Tribun UA fix** (`news_aggregator.py:983-995`): Chrome UA + RSS `Accept`.
+
+### Verification
+- [x] Commit `1588d8b` exists with the stated subject.
+- [x] Expanded-provider Playwright spec exists (`news-live-audit.spec.ts:415`).
+- [ ] Live RSS reachability proven for every new feed (not run; no per-feed health test).
+
+---
+
+## Phase 109: EWKB Location Parsing & Fair Intake (60 / 150)
+
+**Goal:** Parse PostGIS EWKB hex locations, normalize polygon geometry to GeoJSON, interleave the 60-item extraction budget by source, and read 150 rows before filtering.
+**Status:** COMPLETE ✅ (commit `56045cf`)
+**Plan:** `.planning/phases/109-ewkb-location-intake-round-robin/PLAN.md`
+
+### Deliverables
+- **EWKB Point parser** (`incidents.py:53-108`): endian-aware, SRID 4326 only, WKT fallback, concrete `lat/lon` precedence.
+- **WKB/EWKB polygon reader** (`agents/tools/supabase_tools.py:104-295`): Polygon/MultiPolygon/GeometryCollection → GeoJSON.
+- **Fair intake** (`unified_news_ingestor.py:39-84,153`): `NEWS_INGEST_ITEM_BUDGET = 60`, round-robin by source.
+- **Read 150** (`news_router.py:304-307`).
+- **Redis lock hardening** (`news_router.py:169-212`): 240 s TTL, owner token, queued-cycle suppression.
+
+### Verification
+- [x] Commit `56045cf` exists with the stated subject.
+- [x] EWKB Point/WKT/column-precedence tests exist (`test_api_routers.py:41-244`).
+- [ ] `round_robin_by_source` test (none exists).
+- [ ] Polygon WKB reader test (none exists).
+- [ ] Redis lock TTL/owner test (none exists).
+
+---
+
+## Phase 110: FORECAST_WASPADA Orthogonal Early-Warning Tag
+
+**Goal:** Add a 24 h early-warning display tag that is orthogonal to `zone_tier`, never becomes RED, never synthesizes an incident, never activates the E consensus channel, and is HOLD-only.
+**Status:** COMPLETE ✅ (committed with the phase docs)
+**Plan:** `.planning/phases/110-forecast-waspada-orthogonal-tag/PLAN.md`
+
+### Deliverables
+- **Backend contract** (`news_extractor.py:540-684`): `FORECAST_WASPADA`, 24 h validity, candidate/apply logic, RED→YELLOW cap.
+- **Eligibility gate** (`unified_news_ingestor.py:570-671`): W_present + consensus/official thresholds; `FORECAST_WASPADA_YELLOW_PINNED`.
+- **Consensus** (`consensus_gate.py:276-289,365-370`): `forecast_mode` disables E.
+- **API + HITL** (`news_router.py:66-124,494-506,727-780`): tag resolution, forecast-only early-warning count, 409 on APPROVE without RED.
+- **Frontend** (`types.ts`, `useNewsVerification.ts`, `DashboardClient.tsx`, `CrisisMap.tsx`, `MitigationTab.tsx`, `EvidenceTab.tsx`, `FreshnessBadge.tsx`): separate counter/filter, zero-fill dashed cyan zone, HOLD-only panel, WIB expiry countdown.
+
+### Verification
+- [x] All stated code paths exist in the working tree.
+- [x] Commit (shipped with the phase docs commit).
+- [ ] Dedicated forecast tests (none found).
+- [ ] `tsc` / pytest / Playwright run for this phase (not run in this docs pass).
 
 ---
 

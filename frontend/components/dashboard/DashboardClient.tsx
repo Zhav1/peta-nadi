@@ -34,7 +34,7 @@ import { notifyToast } from '@/components/ui/Toast';
 import { useDemoState } from '@/hooks/useDemoState';
 import { useFleetVehicles } from '@/hooks/useFleetVehicles';
 import { useCorridorContext } from '@/hooks/useCorridorContext';
-import { useNewsVerification } from '@/hooks/useNewsVerification';
+import { useNewsVerification, isForecastActive, deriveForecastValidUntil, FORECAST_TAG } from '@/hooks/useNewsVerification';
 import { FreshnessBadge } from '@/components/ui/FreshnessBadge';
 import { GuidedDemoPanel } from '@/components/demo/GuidedDemoPanel';
 import AnalyticsSection from '@/components/dashboard/AnalyticsSection';
@@ -184,6 +184,14 @@ function FloatingMapLegend({
               <div>
                 <span className="text-slate-200 font-medium block">Zona Radius Bahaya (Shockwave)</span>
                 <span className="text-xs text-slate-400 font-sans">Area bahaya hasil konsensus BMKG dan OSINT.</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="w-4 h-0 border-t-2 border-dashed border-cyan-400 shrink-0" />
+              <div>
+                <span className="text-slate-200 font-medium block">Prakiraan Waspada Dini (tanpa isi)</span>
+                <span className="text-xs text-slate-400 font-sans">Garis putus-putus cyan: prakiraan YELLOW_CLARIFY yang belum terkonfirmasi — hanya opsi TAHAN, tanpa pengalihan rute.</span>
               </div>
             </div>
 
@@ -515,6 +523,7 @@ export default function DashboardClient() {
   const [disasterZones, setDisasterZones] = useState<DisasterZone[]>([]);
   const [showRedZones, setShowRedZones] = useState<boolean>(true);
   const [showYellowZones, setShowYellowZones] = useState<boolean>(true);
+  const [showForecastZones, setShowForecastZones] = useState<boolean>(true);
   const [mapFlyTo, setMapFlyTo] = useState<{ lon: number; lat: number; zoom?: number; ts: number } | null>(null);
  // Toasts render via the global Sonner <Toaster> (app/layout.tsx). setToast is a
  // thin compat alias so existing call sites keep working unchanged; null is a no-op.
@@ -594,6 +603,14 @@ export default function DashboardClient() {
   const [selectedNewsCategory, setSelectedNewsCategory] = useState<'ALL' | 'OFFICIAL' | 'WEATHER' | 'OSINT' | 'MARKET'>('ALL');
   const [selectedNewsId, setSelectedNewsId] = useState<string | null>(null);
   const [expandedNewsId, setExpandedNewsId] = useState<string | null>(null);
+
+  // Forecast tags carry a 24h display window. A 60s clock keeps the chip count,
+  // the zone layer, and the card banner honest without waiting for a feed change.
+  const [forecastNowMs, setForecastNowMs] = useState<number>(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setForecastNowMs(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   const filteredNews = useMemo(() => {
     return newsFeed.filter((item) => {
@@ -738,14 +755,21 @@ export default function DashboardClient() {
   const liveNewsZoneCounts = useMemo(() => {
     let red = 0;
     let yellow = 0;
+    let forecast = 0;
     for (const n of newsFeed) {
       if (n.lat == null || n.lon == null) continue;
       if (n.zone_tier === 'DROPPED_IRRELEVANT') continue;
+      // Forecasts keep YELLOW_CLARIFY on the wire but are their own display
+      // bucket — never double-counted in the Kuning counter.
+      if (isForecastActive(n.forecast_tag, n.forecast_valid_until, forecastNowMs)) {
+        forecast += 1;
+        continue;
+      }
       if (n.zone_tier === 'YELLOW_CLARIFY') yellow += 1;
       else red += 1;
     }
-    return { red, yellow };
-  }, [newsFeed]);
+    return { red, yellow, forecast };
+  }, [newsFeed, forecastNowMs]);
 
   // Global "diperbarui" clock for the feed, kept separate from each article's
   // published_at. Only advances when the hook sees a changed article set.
@@ -817,29 +841,40 @@ export default function DashboardClient() {
     return zones;
   }, [selectedCrisis]);
 
-  // Derive live Red & Yellow news zones + combine with manual disasterZones (independent checkboxes)
-  // and the selected crisis' PostGIS hazard polygons.
+  // Derive live Red/Yellow/Forecast news zones + combine with manual disasterZones
+  // (independent checkboxes) and the selected crisis' PostGIS hazard polygons.
   const combinedDisasterZones: DisasterZone[] = useMemo(() => {
     const live: DisasterZone[] = [];
     for (const n of newsFeed) {
       if (n.lat == null || n.lon == null) continue;
       const tier = (n.zone_tier || 'RED_CONFIRMED') as ZoneTier;
       if (tier === 'DROPPED_IRRELEVANT') continue;
-      if (tier === 'RED_CONFIRMED' && !showRedZones) continue;
-      if (tier === 'YELLOW_CLARIFY' && !showYellowZones) continue;
+      // Forecasts are a separate layer bucket: the tag (not zone_tier) decides,
+      // and the zone stays YELLOW_CLARIFY / zero-fill dashed on the map.
+      const forecastActive = isForecastActive(n.forecast_tag, n.forecast_valid_until, forecastNowMs);
+      const effectiveTier: ZoneTier = forecastActive ? 'YELLOW_CLARIFY' : tier;
+      if (forecastActive) {
+        if (!showForecastZones) continue;
+      } else if (tier === 'RED_CONFIRMED') {
+        if (!showRedZones) continue;
+      } else if (!showYellowZones) {
+        continue;
+      }
       const hazardType = (n.hazardType || n.incident_type || 'other_disruption') as CrisisType;
-      const risk = tier === 'RED_CONFIRMED' ? 0.88 : 0.55;
+      const risk = effectiveTier === 'RED_CONFIRMED' ? 0.88 : 0.55;
       if (n.affected_locations && n.affected_locations.length > 0) {
         n.affected_locations.forEach((loc, idx) => {
           const agentRadius = loc.radius_km ?? n.radius_km;
-          const geom = buildHazardSpecificZoneGeometry(loc.longitude, loc.latitude, hazardType, tier, agentRadius, loc.geometry_polygon ?? n.geometry_polygon);
+          const geom = buildHazardSpecificZoneGeometry(loc.longitude, loc.latitude, hazardType, effectiveTier, agentRadius, loc.geometry_polygon ?? n.geometry_polygon);
           live.push({
             polygon: geom.polygon,
             type: hazardType,
             risk,
             crisis_id: `news-${n.id}-loc-${idx}`,
             id: `news-${n.id}-loc-${idx}`,
-            zone_tier: tier,
+            zone_tier: effectiveTier,
+            forecast_tag: forecastActive ? FORECAST_TAG : undefined,
+            forecast_valid_until: forecastActive ? (n.forecast_valid_until ?? null) : undefined,
             title: n.affected_locations!.length > 1 ? `${loc.name} — ${n.headline}` : n.headline,
             tier_reason: n.tier_reason || '',
             custom_hazard_label: n.custom_hazard_label || n.headline,
@@ -855,14 +890,16 @@ export default function DashboardClient() {
         });
       } else {
         const agentRadius = n.radius_km;
-        const geom = buildHazardSpecificZoneGeometry(n.lon, n.lat, hazardType, tier, agentRadius, n.geometry_polygon);
+        const geom = buildHazardSpecificZoneGeometry(n.lon, n.lat, hazardType, effectiveTier, agentRadius, n.geometry_polygon);
         live.push({
           polygon: geom.polygon,
           type: hazardType,
           risk,
           crisis_id: `news-${n.id}`,
           id: `news-${n.id}`,
-          zone_tier: tier,
+          zone_tier: effectiveTier,
+          forecast_tag: forecastActive ? FORECAST_TAG : undefined,
+          forecast_valid_until: forecastActive ? (n.forecast_valid_until ?? null) : undefined,
           title: n.headline,
           tier_reason: n.tier_reason || '',
           custom_hazard_label: n.custom_hazard_label || n.headline,
@@ -878,7 +915,7 @@ export default function DashboardClient() {
       }
     }
     return [...crisisHazardZones, ...disasterZones, ...live];
-  }, [crisisHazardZones, disasterZones, newsFeed, showRedZones, showYellowZones, buildHazardSpecificZoneGeometry]);
+  }, [crisisHazardZones, disasterZones, newsFeed, showRedZones, showYellowZones, showForecastZones, forecastNowMs, buildHazardSpecificZoneGeometry]);
 
   // Synchronize activeSection from URL query parameters
   useEffect(() => {
@@ -2075,10 +2112,26 @@ export default function DashboardClient() {
     newsItem: (typeof newsFeed)[number] | undefined,
     fallbackZone?: DisasterZone
   ) => {
-    const zoneTier: 'RED_CONFIRMED' | 'YELLOW_CLARIFY' = ((newsItem?.zone_tier as string) || (fallbackZone?.zone_tier as string) || 'RED_CONFIRMED') === 'YELLOW_CLARIFY' ? 'YELLOW_CLARIFY' : 'RED_CONFIRMED';
+    const forecastActive = isForecastActive(
+      newsItem?.forecast_tag ?? fallbackZone?.forecast_tag,
+      newsItem?.forecast_valid_until ?? fallbackZone?.forecast_valid_until,
+      Date.now()
+    );
+    // Contract pin: a forecast never escalates past YELLOW_CLARIFY.
+    const zoneTier: 'RED_CONFIRMED' | 'YELLOW_CLARIFY' = forecastActive
+      ? 'YELLOW_CLARIFY'
+      : (((newsItem?.zone_tier as string) || (fallbackZone?.zone_tier as string) || 'RED_CONFIRMED') === 'YELLOW_CLARIFY' ? 'YELLOW_CLARIFY' : 'RED_CONFIRMED');
+    const forecastValidUntil = forecastActive
+      ? (deriveForecastValidUntil(
+          newsItem?.forecast_valid_until ?? fallbackZone?.forecast_valid_until,
+          newsItem?.published_at ?? newsItem?.pubDate ?? null
+        ) ?? undefined)
+      : undefined;
     const tierReason: string =
       newsItem?.tier_reason || fallbackZone?.tier_reason ||
-      (zoneTier === 'RED_CONFIRMED'
+      (forecastActive
+        ? 'Prakiraan waspada dini: potensi gangguan belum terkonfirmasi sebagai bencana aktif; tahan armada dan pantau sebelum pengalihan penuh.'
+        : zoneTier === 'RED_CONFIRMED'
         ? 'Zona Merah: bencana terkonfirmasi dari sumber resmi, membutuhkan pengalihan koridor segera.'
         : 'Zona Kuning: sinyal perlu klarifikasi/waspada, pantau sebelum pengalihan penuh.');
     const customHazardLabel: string =
@@ -2177,9 +2230,32 @@ export default function DashboardClient() {
       }));
 
     let routes: RouteRecommendation[] = [];
+    // Forecast path is HOLD-only: no detour/re-route calculation and no reroute
+    // CTA. A single hold-staging option keeps the safe action available.
+    if (forecastActive) {
+      routes = [{
+        route_name: 'Tahan Armada (Prakiraan Waspada Dini)',
+        description: `Prakiraan waspada dini di ${corridorSegment}: tahan armada di safe point terdekat hingga status terkonfirmasi. Pengalihan rute tidak dihitung untuk prakiraan.`,
+        waypoints: [{ lat, lon }],
+        distance_km: 0,
+        eta_minutes: 0,
+        fuel_increase_pct: 0,
+        risk_score: 0.3,
+        safety_status: 'HOLD_DELAY',
+        corridor_type: 'hold_staging',
+        modality: selectedModality === 'truck' || selectedModality === 'maritime' || selectedModality === 'air'
+          ? selectedModality
+          : 'best',
+        viable: true,
+        dasar_risiko: tierReason,
+        dampak: 'Belum ada dampak fisik terkonfirmasi — prakiraan dini.',
+      }];
+      setCurrentMapRoutes([]);
+      setActiveRouteIdx(0);
+    }
     const originId = activeOriginRef.current || selectedOriginNode;
     const destId = activeDestRef.current || selectedDestNode;
-    if (originId && destId) {
+    if (!forecastActive && originId && destId) {
       const originInfo = resolveNodeInfo(originId);
       const destInfo = resolveNodeInfo(destId);
       const originCoords = originInfo?.coords;
@@ -2235,7 +2311,9 @@ export default function DashboardClient() {
       route_optimization_finding: mkFinding(
         'route_optimization',
         routes.length > 0 ? 0.9 : 0.66,
-        routes.length > 0
+        forecastActive
+          ? `Prakiraan waspada dini: pengalihan rute tidak dihitung. Opsi tahan armada (hold staging) tersedia untuk koridor ${corridorSegment}.`
+          : routes.length > 0
           ? `${routes.length} koridor darat/laut/udara dihitung ulang menghindari zona ${zoneTier === 'RED_CONFIRMED' ? 'Merah' : 'Kuning'} (${hazardType}, ${passability}).`
           : `Pilih Titik Asal & Tujuan untuk menghitung ulang koridor menghindari zona ${zoneTier === 'RED_CONFIRMED' ? 'Merah' : 'Kuning'} (${hazardType}).`
       ),
@@ -2244,7 +2322,7 @@ export default function DashboardClient() {
         0.7,
         `Estimasi penundaan ~${impactProfile?.estimated_delay_hours ?? (zoneTier === 'RED_CONFIRMED' ? 8 : 2)} jam untuk komoditas ${newsItem?.commodity_name || 'pangan pokok'}; pantau harga PIHPS koridor ${corridorSegment}.`
       ),
-      decision_support_output: `${customHazardLabel} — ${zoneTier === 'RED_CONFIRMED' ? 'Zona Merah terkonfirmasi' : 'Zona Kuning perlu klarifikasi'} di ${corridorSegment}. ${tierReason} Ringkasan tersimpan: ${summary} Moda terdampak: ${affectedModalities} (status ${passability}).`,
+      decision_support_output: `${customHazardLabel} — ${forecastActive ? 'Prakiraan Waspada Dini (YELLOW_CLARIFY, belum terkonfirmasi)' : zoneTier === 'RED_CONFIRMED' ? 'Zona Merah terkonfirmasi' : 'Zona Kuning perlu klarifikasi'} di ${corridorSegment}. ${tierReason} Ringkasan tersimpan: ${summary} Moda terdampak: ${affectedModalities} (status ${passability}).`,
       route_recommendations: routes,
       verified_news_citations: siblingCitations.length > 0 ? siblingCitations : [{
         headline: title,
@@ -2256,11 +2334,13 @@ export default function DashboardClient() {
       }],
       causal_chain: [
         { name: `Sumber Berita (${source})`, relation: 'melaporkan', impact_score: 0.9 },
-        { name: zoneTier === 'RED_CONFIRMED' ? 'Zona Merah: Bencana Aktif' : 'Zona Kuning: Perlu Klarifikasi', relation: 'diklasifikasikan LLM sebagai', impact_score: zoneTier === 'RED_CONFIRMED' ? 0.92 : 0.64 },
+        { name: forecastActive ? 'Prakiraan Waspada Dini: Belum Terkonfirmasi' : zoneTier === 'RED_CONFIRMED' ? 'Zona Merah: Bencana Aktif' : 'Zona Kuning: Perlu Klarifikasi', relation: 'diklasifikasikan LLM sebagai', impact_score: zoneTier === 'RED_CONFIRMED' ? 0.92 : 0.64 },
         { name: `Dampak Moda (${affectedModalities})`, relation: 'mengganggu', impact_score: 0.75 },
         { name: `Mitigasi Koridor (${corridorSegment})`, relation: 'dialihkan via', impact_score: 0.8 },
       ],
       zone_tier: zoneTier,
+      forecast_tag: forecastActive ? FORECAST_TAG : undefined,
+      forecast_valid_until: forecastValidUntil ?? null,
       tier_reason: tierReason,
       custom_hazard_label: customHazardLabel,
       impact_profile: impactProfile,
@@ -2322,6 +2402,9 @@ export default function DashboardClient() {
         : (selectedCrisis?.route_recommendations || []);
     const route = routes[idx];
     if (!selectedCrisis?.crisis_id || !route) return;
+    // Forecast (Prakiraan Waspada Dini) never records a REROUTE intent — the
+    // pending HITL item is HOLD-only, matching the advisory contract.
+    const isForecastCrisis = isForecastActive(selectedCrisis.forecast_tag, selectedCrisis.forecast_valid_until);
     // Guest sandbox: zero POST to /approvals or /news/hitl-action.
     if (role === 'GUEST') {
       setToast({
@@ -2340,7 +2423,7 @@ export default function DashboardClient() {
         route_id: String(idx),
         recommended_route: route,
         action: 'ACCEPT',
-        tactical_action: 'REROUTE',
+        tactical_action: isForecastCrisis ? 'HOLD' : 'REROUTE',
         operator_id: user?.name || user?.email || user?.id || 'OP-CHIEF-01',
         route_name: route.route_name || route.description,
         origin: originName,
@@ -2794,7 +2877,8 @@ export default function DashboardClient() {
               </div>
 
               {/* Compact Zona Filter Pills in Left News Drawer Header */}
-              <div className="flex items-center gap-1.5 pt-1">
+              <div className="space-y-1.5 pt-1">
+              <div className="flex items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() => setShowRedZones((v) => !v)}
@@ -2833,6 +2917,30 @@ export default function DashboardClient() {
                   </span>
                 </button>
               </div>
+
+                {/* 4th chip: forecast (Prakiraan) — cyan, dashed swatch, own counter.
+                    Forecasts keep YELLOW_CLARIFY on the wire but are never counted
+                    in the Kuning bucket above (48h admission stays independent). */}
+                <button
+                  type="button"
+                  onClick={() => setShowForecastZones((v) => !v)}
+                  className={`cursor-pointer w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg border text-xs font-mono transition-all duration-150 ${
+                    showForecastZones
+                      ? 'bg-cyan-950/50 border-cyan-500/50 text-cyan-200'
+                      : 'bg-slate-950/40 border-white/5 text-slate-500 hover:text-slate-300'
+                  }`}
+                  title="Filter Peta: Prakiraan Waspada Dini (YELLOW_CLARIFY, garis putus-putus cyan — belum terkonfirmasi)"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <span className={`w-2 h-2 rounded-full border border-dashed ${showForecastZones ? 'border-cyan-300 bg-cyan-400/30' : 'border-slate-600 bg-slate-700'}`} />
+                    <span className="font-sans text-xs font-semibold">Prakiraan</span>
+                    <span className="font-sans text-[10px] text-cyan-300/70 font-normal">Waspada Dini</span>
+                  </span>
+                  <span className="px-1.5 py-0.2 rounded bg-cyan-500/20 text-xs font-bold text-cyan-300 font-mono">
+                    {liveNewsZoneCounts.forecast}
+                  </span>
+                </button>
+              </div>
             </div>
 
             {/* Scrollable Feed List */}
@@ -2863,9 +2971,13 @@ export default function DashboardClient() {
                   const isExpiredLink = item.link_alive === 'dead';
                   const isExcerptExpanded = expandedNewsId === item.id;
                   const itemZoneTier = (item.zone_tier || 'RED_CONFIRMED') as ZoneTier;
+                  const isForecast = isForecastActive(item.forecast_tag, item.forecast_valid_until, forecastNowMs);
 
                   const handleFocusMap = () => {
-                    if (item.originNode && item.destNode) {
+                    // Forecast path: HOLD-only. No origin/dest reroute pairing and
+                    // no detour calculation — inspectNewsOrZoneAuditTrail emits a
+                    // single hold-staging option instead of a reroute CTA.
+                    if (!isForecast && item.originNode && item.destNode) {
                       setSelectedOriginNode(item.originNode);
                       setSelectedDestNode(item.destNode);
                       updateUrlParams({ origin: item.originNode, dest: item.destNode });
@@ -2910,7 +3022,9 @@ export default function DashboardClient() {
 
                       {/* Headline with external link */}
                       <div className="flex flex-wrap items-center gap-1.5">
-                        {itemZoneTier === 'RED_CONFIRMED' ? (
+                        {isForecast ? (
+ <span className="flex items-center gap-1.5 text-xs text-cyan-300"><span className="w-1.5 h-1.5 rounded-full border border-dashed border-cyan-300 bg-cyan-400/20" />Prakiraan</span>
+                        ) : itemZoneTier === 'RED_CONFIRMED' ? (
  <span className="flex items-center gap-1.5 text-xs text-slate-300"><span className="w-1.5 h-1.5 rounded-full bg-red-500" />Merah</span>
                         ) : (
  <span className="flex items-center gap-1.5 text-xs text-slate-300"><span className="w-1.5 h-1.5 rounded-full bg-amber-400" />Kuning</span>
@@ -2941,6 +3055,19 @@ export default function DashboardClient() {
                           </span>
                         )}
                       </h3>
+
+                      {isForecast && (
+                        <div className="rounded-md border border-cyan-500/40 bg-cyan-950/30 px-2 py-1.5 space-y-0.5">
+                          <span className="flex items-center gap-1 text-xs font-mono font-bold text-cyan-200 uppercase">
+                            <Info className="w-3 h-3 text-cyan-300 shrink-0" />
+                            Prakiraan — Waspada Dini
+                          </span>
+                          <p className="text-xs font-sans text-cyan-100/80 leading-snug">
+                            Belum bencana terkonfirmasi (zona kuning). Hanya tindakan TAHAN armada yang tersedia — tanpa pengalihan rute.
+                          </p>
+                          <FreshnessBadge lastUpdated={null} expiresAt={item.forecast_valid_until} />
+                        </div>
+                      )}
 
                       {item.affected_locations && item.affected_locations.length > 1 && (
  <div className="px-2 py-1 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyan-200 text-xs font-sans leading-snug">
@@ -2996,8 +3123,8 @@ export default function DashboardClient() {
                         <div className="flex items-center justify-between text-slate-300 border-t border-[#1c2432]/60 pt-1">
  <span className="text-slate-500 text-xs font-semibold">Jalur:</span>
                           <div className="flex items-center gap-1.5 truncate max-w-[185px]">
-                            <span className={itemZoneTier === 'RED_CONFIRMED' ? 'text-red-400 font-semibold shrink-0' : 'text-amber-400 font-semibold shrink-0'}>
-                              {itemZoneTier === 'RED_CONFIRMED' ? 'Terputus Total' : 'Lalin Tersendat'}
+                            <span className={isForecast ? 'text-cyan-300 font-semibold shrink-0' : itemZoneTier === 'RED_CONFIRMED' ? 'text-red-400 font-semibold shrink-0' : 'text-amber-400 font-semibold shrink-0'}>
+                              {isForecast ? 'Prakiraan Waspada Dini' : itemZoneTier === 'RED_CONFIRMED' ? 'Terputus Total' : 'Lalin Tersendat'}
                             </span>
                             <span className="text-slate-600">•</span>
                             <span className="text-slate-300 truncate" title={item.commodity_name || 'Komoditas Pangan'}>
@@ -3052,9 +3179,14 @@ export default function DashboardClient() {
                             e.stopPropagation();
                             handleFocusMap();
                           }}
-                          className="cursor-pointer flex items-center gap-1 px-2.5 py-1 rounded bg-white hover:bg-slate-200 text-[#080d14] text-xs font-mono font-semibold transition-colors shadow-sm shrink-0"
+                          title={isForecast ? 'Terapkan opsi TAHAN armada (prakiraan waspada dini — tanpa pengalihan rute)' : 'Fokuskan peta & audit trail zona ini'}
+                          className={`cursor-pointer flex items-center gap-1 px-2.5 py-1 rounded text-xs font-mono font-semibold transition-colors shadow-sm shrink-0 ${
+                            isForecast
+                              ? 'bg-cyan-500 hover:bg-cyan-400 text-[#080d14]'
+                              : 'bg-white hover:bg-slate-200 text-[#080d14]'
+                          }`}
                         >
-                          <span>Fokus</span>
+                          <span>{isForecast ? 'Tahan (Hold)' : 'Fokus'}</span>
                         </button>
                       </div>
                     </div>

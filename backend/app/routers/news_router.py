@@ -63,6 +63,92 @@ def _max_published_at_iso(articles: List[Dict[str, Any]]) -> Optional[str]:
     return newest_dt.isoformat() if newest_dt else None
 
 
+def _forecast_tag_of(article: Dict[str, Any]) -> Optional[str]:
+    """Resolve the orthogonal FORECAST_WASPADA tag from a row/audit/nested GTM.
+
+    Never consults temporal_phase — the tag is a display layer, distinct from
+    the forecast_early_warning phase (which may exist without an eligible tag).
+    """
+    if not isinstance(article, dict):
+        return None
+    candidates = [article.get("forecast_tag")]
+    audit = article.get("verification_audit")
+    if isinstance(audit, dict):
+        candidates.append(audit.get("forecast_tag"))
+    gtm = article.get("ground_truth_metrics")
+    if isinstance(gtm, str):
+        try:
+            import json as _json
+            gtm = _json.loads(gtm)
+        except Exception:
+            gtm = None
+    if isinstance(gtm, dict):
+        candidates.append(gtm.get("forecast_tag"))
+        nested_audit = gtm.get("verification_audit")
+        if isinstance(nested_audit, dict):
+            candidates.append(nested_audit.get("forecast_tag"))
+    for tag in candidates:
+        if tag:
+            return str(tag).strip().upper()
+    return None
+
+
+def _is_forecast_article(article: Dict[str, Any]) -> bool:
+    return _forecast_tag_of(article) is not None
+
+
+def _approval_forecast_tag(approval: Dict[str, Any]) -> Optional[str]:
+    """Find a forecast tag on a route_approvals row (or its recommended_route)."""
+    if not isinstance(approval, dict):
+        return None
+    tag = _forecast_tag_of(approval)
+    if tag:
+        return tag
+    rec = approval.get("recommended_route")
+    if isinstance(rec, str):
+        try:
+            import json as _json
+            rec = _json.loads(rec)
+        except Exception:
+            rec = None
+    if isinstance(rec, dict):
+        for key in ("forecast_tag", "news_forecast_tag", "forecast"):
+            if rec.get(key):
+                return str(rec.get(key)).strip().upper()
+        tag = _forecast_tag_of(rec)
+        if tag:
+            return tag
+    notes = str(approval.get("notes") or "")
+    if "FORECAST_WASPADA" in notes.upper():
+        return "FORECAST_WASPADA"
+    return None
+
+
+def _approval_zone_tier(approval: Dict[str, Any]) -> Optional[str]:
+    """Best-effort zone_tier for a route_approvals row."""
+    if not isinstance(approval, dict):
+        return None
+    if approval.get("zone_tier"):
+        return str(approval.get("zone_tier")).strip().upper()
+    rec = approval.get("recommended_route")
+    if isinstance(rec, str):
+        try:
+            import json as _json
+            rec = _json.loads(rec)
+        except Exception:
+            rec = None
+    if isinstance(rec, dict):
+        if rec.get("zone_tier"):
+            return str(rec.get("zone_tier")).strip().upper()
+        gtm = rec.get("ground_truth_metrics")
+        if isinstance(gtm, dict) and gtm.get("zone_tier"):
+            return str(gtm.get("zone_tier")).strip().upper()
+    gtm = approval.get("ground_truth_metrics")
+    if isinstance(gtm, dict) and gtm.get("zone_tier"):
+        return str(gtm.get("zone_tier")).strip().upper()
+    return None
+
+
 class HitlActionRequest(BaseModel):
     approval_id: str
     action: Optional[str] = None  # "ACCEPT", "APPROVE", "REJECT", "HOLD", "DISMISS"
@@ -405,8 +491,16 @@ async def get_market_regime():
     # snapshot); datetime.now() only when there is genuinely no data at all.
     regime_updated_at = _max_published_at_iso(articles) or _NEWS_CACHE.get("last_updated")
 
-    critical_items = [a for a in articles if a.get("severity") in ["critical", "high"]]
-    early_warning_items = [a for a in articles if a.get("temporal_phase") == "forecast_early_warning"]
+    critical_items = [
+        a for a in articles
+        if a.get("severity") in ["critical", "high"]
+        and a.get("temporal_phase") != "forecast_early_warning"
+        and not _is_forecast_article(a)
+    ]
+    # FORECAST_WASPADA is an orthogonal display tag: early-warning counts MUST
+    # come from the tag only (never from a raw temporal_phase), so a tagged
+    # forecast is counted exactly once and a non-tagged phase item never inflates it.
+    early_warning_items = [a for a in articles if _is_forecast_article(a)]
 
     critical_count = len(critical_items)
     early_warning_count = len(early_warning_items)
@@ -629,6 +723,62 @@ async def submit_hitl_operator_action(
         raw_action = (req.decision or req.action or "APPROVE").upper()
         # Normalize action keywords
         action_verb = "ACCEPT" if raw_action in ["APPROVE", "ACCEPT"] else ("DISMISS" if raw_action in ["REJECT", "DISMISS"] else "HOLD")
+
+        # ---- FORECAST_WASPADA HITL guard (orthogonal display tag) ----
+        # APPROVE/ACCEPT on a forecast-tagged item is only legal after an
+        # explicit RED conversion (zone_tier == RED_CONFIRMED). HOLD stays
+        # allowed so operators can park a forecast without fabricating an
+        # incident; DISMISS is also unaffected.
+        approval_row: Dict[str, Any] = {}
+        try:
+            _sel = (
+                sb.table("route_approvals")
+                .select("*")
+                .eq("id", req.approval_id)
+                .limit(1)
+                .execute()
+            )
+            if getattr(_sel, "data", None):
+                approval_row = _sel.data[0] or {}
+        except Exception as _se:
+            logger.debug(f"HITL approval pre-read skipped: {_se}")
+            approval_row = {}
+
+        forecast_tag = _approval_forecast_tag(approval_row)
+        forecast_zone_tier = _approval_zone_tier(approval_row)
+        # Legacy rows may not mirror the tag on route_approvals; inspect the
+        # linked news_articles row (by incident_id) before deciding.
+        if (not forecast_tag or not forecast_zone_tier) and approval_row.get("incident_id"):
+            try:
+                _na = (
+                    sb.table("news_articles")
+                    .select("forecast_tag,ground_truth_metrics,temporal_phase")
+                    .eq("incident_id", approval_row.get("incident_id"))
+                    .limit(5)
+                    .execute()
+                )
+                for _row in (getattr(_na, "data", None) or []):
+                    forecast_tag = forecast_tag or _approval_forecast_tag(_row)
+                    forecast_zone_tier = forecast_zone_tier or _approval_zone_tier(_row)
+            except Exception as _ne:
+                logger.debug(f"HITL forecast link lookup skipped: {_ne}")
+
+        if forecast_tag and action_verb == "ACCEPT" and forecast_zone_tier != "RED_CONFIRMED":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "error": "FORECAST_REQUIRES_RED_CONVERSION",
+                    "message": (
+                        "Tindakan APPROVE ditolak: item ini bertag FORECAST_WASPADA dan belum "
+                        "dikonversi menjadi RED_CONFIRMED. Gunakan HOLD untuk menahan prakiraan "
+                        "atau selesaikan klarifikasi lapangan terlebih dahulu."
+                    ),
+                    "forecast_tag": forecast_tag,
+                    "zone_tier": forecast_zone_tier or "UNKNOWN",
+                    "allowed_actions": ["HOLD", "REJECT", "DISMISS"],
+                },
+            )
+
         # approved_by precedence: authenticated session wins over client-supplied aliases.
         op_id = current_user.id or req.approved_by or req.operator_id
         committed_by_role = current_user.role

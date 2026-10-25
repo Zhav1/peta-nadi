@@ -915,10 +915,15 @@ export default function CrisisMap({
             ]
           ],
           'fill-opacity': [
-            'match', ['get', 'zone_tier'],
-            'RED_CONFIRMED', 0.32,
-            'YELLOW_CLARIFY', 0.28,
-            0.85
+            // Forecast (Prakiraan Waspada Dini): zero fill — dotted cyan outline
+            // only, so an advisory never reads as a confirmed hazard area.
+            'case',
+            ['==', ['get', 'forecast_tag'], 'FORECAST_WASPADA'], 0,
+            ['match', ['get', 'zone_tier'],
+              'RED_CONFIRMED', 0.32,
+              'YELLOW_CLARIFY', 0.28,
+              0.85
+            ]
           ],
         },
       });
@@ -926,6 +931,9 @@ export default function CrisisMap({
         id: 'disaster-zones-outline',
         type: 'line',
         source: 'disaster-zones-source',
+        // Forecast zones get their own dashed layer below; keep this solid one
+        // for confirmed/clarify zones only so the dashes never double-draw.
+        filter: ['!=', ['get', 'forecast_tag'], 'FORECAST_WASPADA'],
         paint: {
           'line-color': [
             'match', ['get', 'zone_tier'],
@@ -941,6 +949,20 @@ export default function CrisisMap({
             ]
           ],
           'line-width': 2.5,
+        },
+      });
+      // Forecast-only dashed cyan outline (line-dasharray is not data-driven in
+      // Mapbox GL, so it lives on its own filtered layer).
+      map.addLayer({
+        id: 'disaster-zones-forecast-outline',
+        type: 'line',
+        source: 'disaster-zones-source',
+        filter: ['==', ['get', 'forecast_tag'], 'FORECAST_WASPADA'],
+        paint: {
+          'line-color': '#22d3ee',
+          'line-width': 2,
+          'line-dasharray': [2, 1.5],
+          'line-opacity': 0.95,
         },
       });
 
@@ -1404,7 +1426,11 @@ export default function CrisisMap({
           risk: Number(props.risk ?? 0.85),
           crisis_id: props.crisis_id || props.id || undefined,
           id: props.id || props.crisis_id || undefined,
-          zone_tier: (props.zone_tier as any) || 'RED_CONFIRMED',
+          zone_tier: props.forecast_tag === 'FORECAST_WASPADA'
+            ? 'YELLOW_CLARIFY'
+            : ((props.zone_tier as any) || 'RED_CONFIRMED'),
+          forecast_tag: props.forecast_tag || null,
+          forecast_valid_until: props.forecast_valid_until || null,
           title: props.title || '',
           tier_reason: props.tier_reason || '',
           custom_hazard_label: props.custom_hazard_label || '',
@@ -1420,7 +1446,8 @@ export default function CrisisMap({
       };
       map.on('click', 'disaster-zones-fill', handleDisasterZoneClick);
       map.on('click', 'disaster-zones-outline', handleDisasterZoneClick);
-      ['disaster-zones-fill', 'disaster-zones-outline'].forEach((layerId) => {
+      map.on('click', 'disaster-zones-forecast-outline', handleDisasterZoneClick);
+      ['disaster-zones-fill', 'disaster-zones-outline', 'disaster-zones-forecast-outline'].forEach((layerId) => {
         map.on('mouseenter', layerId, () => {
           if (mapRef.current) mapRef.current.getCanvas().style.cursor = 'pointer';
         });
@@ -1946,6 +1973,8 @@ export default function CrisisMap({
             risk: z.risk,
             crisis_id: (z as any).crisis_id || (z as any).id || '',
             zone_tier: (z as any).zone_tier || 'RED_CONFIRMED',
+            forecast_tag: (z as any).forecast_tag || '',
+            forecast_valid_until: (z as any).forecast_valid_until || '',
             title: (z as any).title || '',
             tier_reason: (z as any).tier_reason || '',
             custom_hazard_label: (z as any).custom_hazard_label || '',
