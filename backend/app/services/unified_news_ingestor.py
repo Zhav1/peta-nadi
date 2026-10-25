@@ -36,6 +36,53 @@ logger = logging.getLogger(__name__)
 NEWS_INGESTOR_SOURCE_TYPE = "news_ingestor"
 NEWS_INGESTOR_TITLE_PREFIX = "[News Alert]"
 
+# Per-cycle extraction budget. With 23 RSS feeds + 8 targeted queries a flat
+# head-slice starves every feed whose results land late in the gather order, so
+# the budget is spent round-robin across outlets instead.
+NEWS_INGEST_ITEM_BUDGET = 60
+
+
+def round_robin_by_source(
+    items: List[Dict[str, Any]],
+    max_items: int = NEWS_INGEST_ITEM_BUDGET,
+) -> List[Dict[str, Any]]:
+    """Fairly order a flat feed list by interleaving sources one item per pass.
+
+    Buckets are keyed on the outlet name (`source`) in first-seen order and keep
+    their internal order, so a single high-volume feed can no longer consume the
+    whole budget before later feeds (Tribun Batam/Lampung/Aceh, Katadata,
+    BNPB/BMKG queries) are reached. At most ``max_items`` items are returned.
+    """
+    if not items or max_items <= 0:
+        return []
+
+    buckets: Dict[str, List[Dict[str, Any]]] = {}
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        key = str(item.get("source") or item.get("feed_name") or "unknown").strip().lower()
+        buckets.setdefault(key or "unknown", []).append(item)
+
+    if len(buckets) <= 1:
+        return list(items[:max_items]) if buckets else []
+
+    ordered: List[Dict[str, Any]] = []
+    cursor: Dict[str, int] = {key: 0 for key in buckets}
+    while len(ordered) < max_items:
+        progressed = False
+        for key, bucket in buckets.items():
+            idx = cursor[key]
+            if idx >= len(bucket):
+                continue
+            ordered.append(bucket[idx])
+            cursor[key] = idx + 1
+            progressed = True
+            if len(ordered) >= max_items:
+                break
+        if not progressed:
+            break
+    return ordered
+
 
 def to_ewkt_polygon(ring: Any) -> Optional[str]:
     """Converts a GeoJSON coordinate ring or Polygon dict to EWKT for PostGIS."""
@@ -103,7 +150,7 @@ class UnifiedNewsIngestor:
             return {"status": "empty", "ingested": 0, "disruptions_triggered": 0}
 
         # 1b. DB-first deduplication: reuse prior LLM classifications with 0 LLM calls.
-        top_items = raw_items[:30]
+        top_items = round_robin_by_source(raw_items, NEWS_INGEST_ITEM_BUDGET)
         try:
             import hashlib as _hl
             pre_ids: list[str] = []

@@ -216,7 +216,9 @@ async def get_live_news(
             asyncio.create_task(run_background_news_ingestion(force_refresh))
 
     # Query latest articles immediately from Supabase
-    articles = await fetch_news_from_supabase(limit=60, province=province, severity=severity)
+    # Over-fetch (150) so the 48h / tier / geo filters below have candidates;
+    # a 60-row window let valid rows get pushed out by dropped ones.
+    articles = await fetch_news_from_supabase(limit=150, province=province, severity=severity)
 
     # Defensive on-read guard: fetch_news_from_supabase already unpacks
     # ground_truth_metrics + re-tiers legacy rows, but re-apply here so legacy

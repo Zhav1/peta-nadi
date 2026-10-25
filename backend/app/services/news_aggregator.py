@@ -1632,7 +1632,7 @@ async def enrich_article_description_full_body_if_needed(article: Dict[str, Any]
     return article
 
 
-async def fetch_news_from_supabase(limit: int = 50, province: Optional[str] = None, severity: Optional[str] = None) -> List[Dict[str, Any]]:
+async def fetch_news_from_supabase(limit: int = 150, province: Optional[str] = None, severity: Optional[str] = None) -> List[Dict[str, Any]]:
     """
     Retrieves dynamic verified news articles from Supabase public.news_articles.
     Unpacks tiering metadata from ground_truth_metrics and filters out

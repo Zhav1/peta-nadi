@@ -49,6 +49,94 @@ def test_incidents_wkt_location_parsing():
     assert _parse_wkt_point("not-a-wkt-point") == (None, None)
 
 
+def test_incidents_ewkb_location_parsing():
+    """S4: PostgREST EWKB hex Points (SRID 4326, both endiannesses) parse into (lat, lon)."""
+    import struct
+
+    from app.routers.incidents import _parse_ewkb_point_hex, _parse_location_coords
+
+    little_endian = "0101000020E6100000C217265305AB584034A2B437F8C20C40"
+    assert _parse_ewkb_point_hex(little_endian) == pytest.approx((3.5952, 98.6722), abs=1e-4)
+
+    big_endian = "00" + "20000001" + "000010E6" + struct.pack(">dd", 98.6722, 3.5952).hex().upper()
+    assert _parse_ewkb_point_hex(big_endian) == pytest.approx((3.5952, 98.6722), abs=1e-4)
+
+    # SRID-less WKB hex and a non-WGS84 SRID
+    assert _parse_ewkb_point_hex("0101000000C217265305AB584034A2B437F8C20C40") == pytest.approx(
+        (3.5952, 98.6722), abs=1e-4
+    )
+    assert _parse_ewkb_point_hex("0101000020E6100000C217265305AB584034A2B437F8C20C40") == pytest.approx(
+        (3.5952, 98.6722), abs=1e-4
+    )
+    assert _parse_ewkb_point_hex("0101000020E8640000C217265305AB584034A2B437F8C20C40") == (None, None)
+    assert _parse_ewkb_point_hex(None) == (None, None)
+    assert _parse_ewkb_point_hex("") == (None, None)
+    assert _parse_ewkb_point_hex("not-an-ewkb-point") == (None, None)
+    assert _parse_ewkb_point_hex("0101000020E610") == (None, None)
+
+    # WKT still works through the combined parser
+    assert _parse_location_coords("POINT(98.6667 3.5833)") == pytest.approx((3.5833, 98.6667))
+    assert _parse_location_coords(little_endian) == pytest.approx((3.5952, 98.6722), abs=1e-4)
+
+
+def test_incidents_ewkb_rows_map_to_lat_lon_without_warning(monkeypatch, caplog):
+    """S4: EWKB 'location' rows surface as float coords and emit no 'unparseable' warning."""
+    import logging
+
+    import app.db.supabase_client as sb_client_module
+
+    class FakeResult:
+        data = [{
+            "incident_id": "INC-EWKB-1",
+            "title": "Banjir Belawan",
+            "type": "flood",
+            "severity": "high",
+            "status": "validated",
+            "confidence": 0.9,
+            "created_at": "2026-10-04T00:00:00Z",
+            "location": "0101000020E6100000C217265305AB584034A2B437F8C20C40",
+            "lat": None,
+            "lon": None,
+            "description": "Akses pelabuhan terendam",
+            "affected_area": "Belawan",
+        }]
+
+    class FakeQuery:
+        def select(self, columns, *args, **kwargs):
+            assert "location" in columns
+            return self
+
+        def order(self, *args, **kwargs):
+            return self
+
+        def limit(self, *args, **kwargs):
+            return self
+
+        def eq(self, *args, **kwargs):
+            return self
+
+        def execute(self):
+            return FakeResult()
+
+    class FakeClient:
+        def table(self, name):
+            assert name == "incidents"
+            return FakeQuery()
+
+    monkeypatch.setattr(sb_client_module, "get_client", lambda: FakeClient())
+
+    with caplog.at_level(logging.WARNING, logger="app.routers.incidents"):
+        res = client.get("/api/v1/incidents?limit=5")
+
+    assert res.status_code == 200
+    items = res.json()["items"]
+    incident = next((item for item in items if item["id"] == "INC-EWKB-1"), None)
+    assert incident is not None
+    assert incident["lat"] == pytest.approx(3.5952, abs=1e-4)
+    assert incident["lon"] == pytest.approx(98.6722, abs=1e-4)
+    assert not [rec for rec in caplog.records if "unparseable" in rec.getMessage()]
+
+
 def test_incidents_supabase_rows_map_wkt_location_to_lat_lon(monkeypatch):
     """S4: Supabase rows (WKT 'location', null concrete coords) surface as float coords in the API."""
     import app.db.supabase_client as sb_client_module

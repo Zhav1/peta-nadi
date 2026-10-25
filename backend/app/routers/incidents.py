@@ -1,5 +1,7 @@
 import logging
+import math
 import re
+import struct
 from fastapi import APIRouter, HTTPException, Query
 from typing import Optional
 from pydantic import BaseModel
@@ -15,6 +17,14 @@ _WKT_POINT_RE = re.compile(
     r"POINT\s*\(\s*([-+]?\d+(?:\.\d+)?)\s+([-+]?\d+(?:\.\d+)?)\s*\)",
     re.IGNORECASE,
 )
+
+_EWKB_HEX_RE = re.compile(r"^[0-9a-fA-F]+$")
+
+# EWKB flags (PostGIS extended WKB)
+_EWKB_SRID_FLAG = 0x20000000
+_EWKB_GEOM_TYPE_MASK = 0x0FFFFFFF
+_EWKB_POINT_TYPE = 1
+_WGS84_SRID = 4326
 
 # Migration 010 projection: concrete lat/lon columns alongside the legacy WKT 'location'
 INCIDENT_COLUMNS_WITH_COORDS = (
@@ -38,6 +48,64 @@ def _parse_wkt_point(location) -> tuple[Optional[float], Optional[float]]:
     lon = float(match.group(1))
     lat = float(match.group(2))
     return lat, lon
+
+
+def _parse_ewkb_point_hex(value) -> tuple[Optional[float], Optional[float]]:
+    """
+    Parse a PostGIS EWKB Point hex string (SRID 4326, little or big endian) into (lat, lon).
+
+    PostgREST returns geometry columns as hex EWKB (e.g. '0101000020E610...') rather
+    than WKT. Returns (None, None) when the value is not a 2D+ Point in WGS84.
+    """
+    if not value:
+        return None, None
+    raw = str(value).strip()
+    if raw[:2].lower() == "0x":
+        raw = raw[2:]
+    if not raw or len(raw) % 2 or not _EWKB_HEX_RE.match(raw):
+        return None, None
+    try:
+        data = bytes.fromhex(raw)
+    except ValueError:
+        return None, None
+
+    # byte_order (1) + geom_type (4) + optional srid (4) + x/y doubles (16)
+    if len(data) < 5:
+        return None, None
+    if data[0] == 0x01:
+        endian = "<"
+    elif data[0] == 0x00:
+        endian = ">"
+    else:
+        return None, None
+
+    (geom_type,) = struct.unpack(endian + "I", data[1:5])
+    if (geom_type & _EWKB_GEOM_TYPE_MASK) != _EWKB_POINT_TYPE:
+        return None, None
+
+    offset = 5
+    if geom_type & _EWKB_SRID_FLAG:
+        if len(data) < 9:
+            return None, None
+        (srid,) = struct.unpack(endian + "I", data[5:9])
+        if srid != _WGS84_SRID:
+            return None, None
+        offset = 9
+
+    if len(data) < offset + 16:
+        return None, None
+    lon, lat = struct.unpack(endian + "dd", data[offset:offset + 16])
+    if not (math.isfinite(lat) and math.isfinite(lon)):
+        return None, None
+    return lat, lon
+
+
+def _parse_location_coords(location) -> tuple[Optional[float], Optional[float]]:
+    """Parse an incidents 'location' value (EWKB hex from PostgREST, else WKT) into (lat, lon)."""
+    lat, lon = _parse_ewkb_point_hex(location)
+    if lat is not None and lon is not None:
+        return lat, lon
+    return _parse_wkt_point(location)
 
 
 def _coerce_coord(value) -> Optional[float]:
@@ -140,18 +208,20 @@ async def list_incidents(
             item_copy["id"] = item_copy.pop("incident_id", item_copy.get("id", ""))
             if "confidence" not in item_copy and "overall_confidence" in item_copy:
                 item_copy["confidence"] = item_copy["overall_confidence"]
-            # Prefer concrete lat/lon columns; fall back to parsing WKT 'location'
+            # Prefer concrete lat/lon columns; fall back to parsing 'location'
+            # (PostgREST EWKB hex, then legacy WKT)
             lat = _coerce_coord(item_copy.get("lat"))
             lon = _coerce_coord(item_copy.get("lon"))
             if lat is None or lon is None:
-                wkt_lat, wkt_lon = _parse_wkt_point(item_copy.get("location"))
-                lat = lat if lat is not None else wkt_lat
-                lon = lon if lon is not None else wkt_lon
+                loc_lat, loc_lon = _parse_location_coords(item_copy.get("location"))
+                lat = lat if lat is not None else loc_lat
+                lon = lon if lon is not None else loc_lon
             item_copy["lat"] = lat
             item_copy["lon"] = lon
-            if lat is None and item_copy.get("location"):
+            if (lat is None or lon is None) and item_copy.get("location"):
                 logger.warning(
-                    f"Incidents: unparseable WKT location for incident {item_copy['id']}: {item_copy.get('location')!r}"
+                    f"Incidents: unparseable location (WKT/EWKB) for incident {item_copy['id']}: "
+                    f"{item_copy.get('location')!r}"
                 )
             # Avoid duplicates if already in demo items
             if any(x.id == item_copy["id"] for x in formatted_items):
