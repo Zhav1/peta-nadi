@@ -2,20 +2,20 @@
 gsd_state_version: "1.0"
 milestone: M7
 milestone_name: Live News Trust, Source Breadth & Forecast Waspada Integrity
-current_phase: 110
-current_phase_name: FORECAST_WASPADA Orthogonal Early-Warning Tag
-status: complete
-stopped_at: "Phase 107 HITL route approval unification complete (7/7 tests pass, 0 tsc errors). Phases 107-110 news trust, source expansion, EWKB, and FORECAST_WASPADA documented and integrated."
+current_phase: 115
+current_phase_name: Watermelon MCP Connect (planned)
+status: in_progress
+stopped_at: "Phase 107 HITL route approval unification complete (7/7 tests pass, 0 tsc errors). Phases 107-110 news trust, source expansion, EWKB, and FORECAST_WASPADA documented and integrated. Phases 111-114 Analitik+M7/Watermelon P1-P3 documented; phase 115 logged as PLANNED with gap inventory + risk register."
 last_updated: "2026-10-25T17:50:00.000Z"
 last_activity: 2026-10-25
-last_activity_desc: "Integrated Phase 107 HITL decision unification with M7 news trust and FORECAST_WASPADA updates."
+last_activity_desc: "Integrated Phase 107 HITL decision unification with M7 news trust and FORECAST_WASPADA updates. Phases 111-114 Analitik+M7/Watermelon P1-P3 documented; phase 115 PLANNED."
 state_head: HEAD
 progress:
-  total_phases: 110
-  completed_phases: 110
+  total_phases: 115
+  completed_phases: 114
   total_plans: 128
-  completed_plans: 128
-  percent: 100.0
+  completed_plans: 127
+  percent: 99.2
 ---
 
 # STATE: PreHub Project Memory
@@ -23,15 +23,15 @@ progress:
 **Last Updated:** 2026-10-25
 **Active Milestone:** M7 - Live News Trust, Source Breadth & Forecast Waspada Integrity [ACTIVE 🚀]
 **Previous Milestones:** M1-M5 [COMPLETED ✅], M6 - 3D Globe Native Mapbox Fleet, Street-Snapping & Impeccable Cartography [COMPLETED ✅]
-**Current Phase:** 110
+**Current Phase:** 115
 
 ---
 
 ## Current Position
 
-Phase: 107 (HITL Route Decision Control Unification & E2E Workflow Hardening) & 110 (FORECAST_WASPADA Orthogonal Early-Warning Tag) - COMPLETE ✅
-Status: HITL route decision control unified with 3 tactical buttons in RouteDetailModal.tsx, silent drops eliminated via fallback incident IDs in DashboardClient.tsx, premature auto-commit eliminated in handleSelectRoute, rejection logic inversion guarded. News trust fix, 8-source expansion, EWKB intake, and FORECAST_WASPADA early warning tag fully integrated.
-Next action: Phase 107 & M7 merged and ready for deployment.
+Phase: 107 (HITL Route Decision Control Unification & E2E Workflow Hardening) & 110 (FORECAST_WASPADA Orthogonal Early-Warning Tag) - COMPLETE ✅; Phases 111-114 (Analitik Activation M7 + Watermelon P1-P3) - COMPLETE ✅; Phase 115 (Watermelon MCP Connect) - PLANNED ⏳
+Status: HITL route decision control unified with 3 tactical buttons in RouteDetailModal.tsx, silent drops eliminated via fallback incident IDs in DashboardClient.tsx, premature auto-commit eliminated in handleSelectRoute, rejection logic inversion guarded. News trust fix, 8-source expansion, EWKB intake, and FORECAST_WASPADA early warning tag fully integrated. Analitik 6-widget read-only view + Watermelon P1-P3 restyle integrated; Phase 115 gap inventory logged.
+Next action: Phase 107 & M7 merged; Phase 115 MCP connection pass (tsc 0, build 7/7, pytest green, Playwright) then deployment.
 
 
 
@@ -161,6 +161,11 @@ Upstream Phases 87/88 above (Mapbox turn-by-turn; client-isolated session, merge
 | 108 | News Source Expansion — 8 Realtime Feeds | **COMPLETE** ✅ | 5 Tribun editions + Detik Finance/Katadata/Republika (23 direct RSS total), Q8 BNPB/BMKG targeted query, Tribun promo/lifestyle noise prune, and Chrome UA fix for Tribun 403. Git: `1588d8b`. Docs: `108-news-source-expansion-8-feeds/`. |
 | 109 | EWKB Location Parsing & Fair Intake (60 / 150) | **COMPLETE** ✅ | Endian-aware EWKB Point parser (SRID 4326 only, WKT fallback, concrete lat/lon precedence), WKB/EWKB polygon → GeoJSON reader, `NEWS_INGEST_ITEM_BUDGET=60` round-robin by source, 150-row read window, and 240 s token-checked Redis lock. Git: `56045cf`. Docs: `109-ewkb-location-intake-round-robin/`. |
 | 110 | FORECAST_WASPADA Orthogonal Early-Warning Tag | **COMPLETE** ✅ | Orthogonal 24 h tag pinned to YELLOW, eligibility gate (W_present + consensus/official), `forecast_mode` disables E, forecast never synthesizes an incident, 409 HITL guard, separate Prakiraan counter/filter, zero-fill dashed cyan zones, HOLD-only panel, WIB expiry countdown. No dedicated tests found. Docs: `110-forecast-waspada-orthogonal-tag/`. |
+| 111 | Analitik Activation M7 | **COMPLETE** ✅ | 6 widgets on existing `prices`/`spikes` APIs, 4 commodities x 8 provinces x 7/14/30d, Globot Deck + gods-eye chips, no Cesium, read-only, honest empty <3 records, no RED synthesis, no PII. Docs: `111-analitik-activation-m7/`. |
+| 112 | Watermelon Chrome P1 | **COMPLETE** ✅ | Badge/Button/Popover/Separator/`AnalyticsEmpty` chrome; no Portal over Mapbox. Docs: `112-watermelon-chrome-p1/`. |
+| 113 | Watermelon Tables P2 | **COMPLETE** ✅ | `Table` block `h-11` rows + `Progress`; `priceRegion` vs `corridorFilter` (Koridor) scope split healed. Docs: `113-watermelon-tables-p2/`. |
+| 114 | Watermelon Polish P3 | **COMPLETE** ✅ | `AnimatedValue`/`LoadingSkeleton`/`motion-safe` throughout; P1/P3 collision healed via rename. Docs: `114-watermelon-polish-p3/`. |
+| 115 | Watermelon MCP Connect | **PLANNED** ⏳ | Gap inventory (no Select/Chip/Card/Empty/Skeleton/Tooltip/Chart primitives) + risk register (`asChild`, `hideWhenDetached` missing in 1.9.0, Portal-over-Mapbox, shadcn-add ban). Docs: `115-watermelon-mcp-connect/`. |
 
 
 
@@ -178,6 +183,9 @@ Interpolated straight-line land geometry (no Mapbox token) no longer presents as
 | 2026-10-25 | Phase 108: News Source Expansion | (1) Five Tribun regional editions and three economic/national outlets were added as direct RSS rather than relying on Google News queries, preserving province metadata. (2) Q8 targets BNPB/BMKG official domains for early-warning recall. (3) Tribun promo/lifestyle terms are excluded before the extractor to save tokens. (4) Direct RSS uses a browser UA because the legacy bot UA received HTTP 403. (5) The 23-feed set requires Phase 109's fair intake; breadth without a budget is a race. Git: `1588d8b`. |
 | 2026-10-25 | Phase 109: EWKB Location Parsing & Fair Intake | (1) PostgREST returns PostGIS geometry as EWKB hex, so incidents parse EWKB first (little/big endian, SRID 4326 only) and fall back to WKT. (2) Concrete migration-010 `lat`/`lon` columns are authoritative; `location` is compatibility fallback. (3) The per-cycle extraction budget is 60 items interleaved by source, because a flat head-slice starves late feeds. (4) The live read asks for 150 rows because a 60-row window let DROPPED rows push valid rows out. (5) The Redis ingestion lock uses a 240 s TTL and owner-checked release so a crash self-heals. Git: `56045cf`. |
 | 2026-10-25 | Phase 110: FORECAST_WASPADA Orthogonal Tag | (1) A forecast is a display tag, not a fourth `zone_tier`; it stays `YELLOW_CLARIFY` and can never become RED. (2) Validity is `min(published + 24h, now + 24h)` so an old warning cannot get a fresh 24 h. (3) `forecast_mode` disables the E commodity channel because a commodity mention is not a PIHPS anomaly. (4) A forecast never synthesizes a physical incident. (5) APPROVE on a non-RED forecast returns 409; HOLD is the only allowed operational action. Working tree only; unpushed. |
+| 2026-10-25 | Phase 111: Analitik Activation M7 | (1) Read-only stacked regulator+dispatcher view — 6 widgets on existing `prices`/`spikes` GETs, no new backend routes. (2) `< 3` records renders `AnalyticsEmpty`, never interpolated. (3) No RED synthesis; Phase 110 forecast contract untouched. (4) No Cesium; Globot Deck + gods-eye chips sufficed. Window verification: tsc 0, build 7/7, pytest 49 passed, Playwright 1 passed (live). |
+| 2026-10-25 | Phase 112-114: Watermelon P1-P3 Restyle | P1 chrome (Badge/Button/Popover/Separator) with no Portal over Mapbox; P2 `Table h-11` + `Progress` with `priceRegion`/`corridorFilter`-Koridor scope split; P3 `AnimatedValue`/`LoadingSkeleton` under `motion-safe:` with static reduced-motion finals. P1/P3 same-file overwrite healed via rename — one writer per file henceforth. |
+| 2026-10-25 | Phase 115: Watermelon MCP Connect (planned) | 7 primitives missing (Select/Chip/Card/Empty/Skeleton/Tooltip/Chart); `npx shadcn add` banned; `hideWhenDetached` absent in Base-UI 1.9.0; `asChild` pattern gated in review. Connection pass not started. |
 | 2026-10-24 | Phase 102: Fleet Telemetry Restoration, Payload Optimization & Zoom-Out LOD Cartography | (1) Removed the faulty ROUTE_ESTIMATED filter in FleetVehicleLayer.tsx that dropped trucks, restoring all 24 tactical green dots without resurrecting ambient orange route lines. (2) Decoupled telemetry polling from bulky polyline geometries via include_geometry=false (shrinking truck payload to 28.7 KB and full fleet from 4.9+ MB to <10%), while serving geometries on-demand (/api/v1/fleet/vehicles/{id}/geometry) and preloading fleet_corridors_snapped.json once via corridorSnappingService.ts. (3) Eliminated initial 'Memuat' and empty news flashes via fallback state hydration in useNewsVerification and useCorridorContext. (4) Gated checkHitl polling to authenticated non-guest operators, ending 401 console noise. (5) Enforced WebGL smooth dissolve (z=3.2 to 4.0) on fleet dots, minzoom 4.0 on route lines and halos, minzoom 4.5 on hub pulse rings, and camera minZoom 2.8. 26/26 pytest passed, 0 tsc errors. |
 | 2026-10-21 | Phases 80-82: Search E2E, Dispatcher Scope, Truck/Travel ERP | (1) One canonical base-URL resolver; direct `NEXT_PUBLIC_API_URL` reads and module-scope `WS_BASE` removed, because a dead/malformed value produced different failures per screen. (2) Search ranks before truncating, de-dupes aliases by proximity, caches only positives under a versioned Redis namespace, and keeps timeout distinct from cancellation. (3) A token claim is the scope, not a default — dispatchers cannot widen scope via query params, and mock fleets are never substituted for scoped roles. (4) Assets (`truck_assets`) and trips (`travels`) are separate tables with snapshotted master fields so history and the ledger survive asset edits; ERP numbers derive only from persisted columns, planned trips claim no savings, and missing values stay explicit. |
 | 2026-10-20 | Phase 78: LLM Gateway Network Resilience, Connect Timeout Retry & Reasoning Effort Calibration | Resolved Render-to-Cloudflare ConnectTimeout and token exhaustion vulnerabilities: (1) Added 2-attempt exponential backoff retry (1s -> 2s) for network timeouts and 5xx errors; (2) added reasoning_effort parameter and config default to low so reasoning models (deepseek-v4.1-flash, mimo-v2.6-pro) allocate budget to content rather than running out of tokens during internal reasoning; (3) extracted reasoning_content fallback if content is empty; (4) verified 11 passing unit tests. |

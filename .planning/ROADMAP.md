@@ -2830,6 +2830,99 @@ M7 removes the remaining ways the Berita surface could look live when it was not
 
 ---
 
+## Phase 111: Analitik Activation M7
+
+**Goal:** Activate the Analitik surface as a read-only, regulator+dispatcher stacked view: 6 widgets on existing APIs with commodity/province/range filters, Globot Deck layer + gods-eye chips, no Cesium, honest empty states, no RED synthesis, no simulation rebuild, no PII.
+**Status:** COMPLETE ✅
+
+### Deliverables
+
+- **6 widgets on existing GETs (`AnalyticsSection.tsx:360` + `lib/api.ts:149-174`)**: `commodities.prices` + `commodities.spikes` reuse; no new backend routes. Filters 4 commodities × 8 provinces × 7/14/30d; ops-scoped `corridorFilter`/`advisoryFilter` separated from price-scoped `priceRegion` (L377 vs L409).
+- **Honest empty (`AnalyticsEmpty`, L172)**: `< 3` records renders `Data tidak tersedia` with `role=status` E2E hook (L220); never interpolated.
+- **Globot Deck + gods-eye chips, no Cesium**: existing `ScatterplotLayer`/`TextLayer` (L5-6) + HUD chips only.
+
+### Verification
+
+- [x] `npx tsc --noEmit` → exit 0.
+- [x] `npm run build` → 7/7 static routes, 0 errors.
+- [x] `pytest` → 49 passed (`vehicles_telemetry` + `travels_erp` + `auth_rbac`).
+- [x] Playwright → 1 passed (live).
+- [x] Fixes: `getAlignmentBaseline` Deck v9, `Map downlevelIteration` forEach, strict-mode `getByText` collisions, `:3000` standalone killed → `next dev`, duplicate filter bars unified (`corridorFilter`→Koridor).
+
+---
+
+## Phase 112: Watermelon Chrome P1
+
+**Goal:** Restyle Analitik chrome to Watermelon P1 primitives (Badge, Button, Popover, Separator, `AnalyticsEmpty`) — dark editorial, 12px min, `tabular-nums`, Lucide only.
+**Status:** COMPLETE ✅
+
+### Deliverables
+
+- **Base-ui imports (`AnalyticsSection.tsx:30-35`)**: `Badge` (L30), `Button` (L31), `Popover/*` (L34), `Separator` (L35).
+- **Regime badge (L982) + freshness Popover (L1032-1051)**: outline trigger `Button` (L1035), `PopoverContent side="bottom" sideOffset={8} w-72 p-4` (L1040); vertical `Separator` (L1028).
+- **No Portal over Mapbox** (L1130 portal-clipping guard); static titles keep native `title` (L1196).
+
+### Verification
+
+- [x] Shared window tail: tsc 0, build 7/7, pytest 49 passed, Playwright 1 passed (live).
+- [x] P1/P3 same-file collision healed via `corridorFilter` rename (see Phase 114).
+
+---
+
+## Phase 113: Watermelon Tables P2
+
+**Goal:** Restyle Analitik tabular surfaces to `Table` block rows at `h-11` + `Progress` meters — `tabular-nums`, Lucide only.
+**Status:** COMPLETE ✅
+
+### Deliverables
+
+- **`Table` block (L33) + `Progress` (L32)**: spikes/disparity table on P1 `commodity`/`priceRegion`; `rankRows` memo (L878-882) gated by ops-scoped `corridorFilter`.
+- **Scope split (integration-heal)**: `priceRegion` (L377/L950) → `/prices`+`/spikes`; `corridorFilter` Koridor (L409) → rank rows.
+- **Skeleton parity**: `LoadingSkeleton` default `h-11` (L227) matches real rows — no layout shift.
+
+### Verification
+
+- [x] Shared window tail: tsc 0, build 7/7, pytest 49 passed, Playwright 1 passed (live).
+
+---
+
+## Phase 114: Watermelon Polish P3
+
+**Goal:** `AnimatedValue` count-ups, `LoadingSkeleton` placeholders, `motion-safe:` on every animation (reduced-motion → final static state).
+**Status:** COMPLETE ✅
+
+### Deliverables
+
+- **`AnimatedValue` (L200-212)**: `motion-safe:animate-[analytics-fade_300ms_ease]`, `tabular-nums` passthrough; call sites L988/L996/L1004/L1081/L1105.
+- **`LoadingSkeleton` (L221-227)**: `motion-safe:animate-pulse`, `h-11` default.
+- **Row transitions (L1141)**: `motion-safe:transition-colors motion-safe:duration-150`; no-new-deps rule (L187).
+
+### Verification
+
+- [x] Shared window tail: tsc 0, build 7/7, pytest 49 passed, Playwright 1 passed (live).
+- [x] P1/P3 collision healed; `:3000` killed → `next dev` only.
+
+---
+
+## Phase 115: Watermelon MCP Connect
+
+**Goal:** Close the 7 missing primitives (Select, Chip, Card, Empty, Skeleton, Tooltip, Chart) via Watermelon MCP — no `npx shadcn add`, no Portal-over-Mapbox, one writer per file.
+**Status:** PLANNED ⏳
+
+### Deliverables (planned)
+
+- MCP-sourced (or hand-rolled base-ui-consistent) Select/Chip/Card/Empty/Skeleton/Tooltip/Chart; drop-in swaps in `AnalyticsSection.tsx` preserving `role=status` hook, `tabular-nums`/`text-xs` chrome, and honest-empty semantics.
+
+### Risks (logged this window)
+
+- `asChild` vs render-prop warning; `hideWhenDetached` missing in Base-UI 1.9.0; Portal-over-Mapbox clipping; shadcn-add ban; same-file edit collisions.
+
+### Verification
+
+- [ ] Connection pass must produce: tsc 0, build 7/7, pytest green, Playwright auto-check incl. E2E no-interference.
+
+---
+
 ## Backlog (Post-Hackathon / v2 & New Context Window Backlog)
 
 ### Active Remediation & Audit Backlog (For New Context Window)

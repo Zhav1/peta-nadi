@@ -52,6 +52,9 @@ PreHub (*Predictive Logistics Hub & Early Warning System*) adalah platform intel
   - Pencatatan keputusan HITL (`ACCEPT`, `REJECT`, `OVERRIDE`), status sinkronisasi (`SYNCED`, `PENDING`), stempel waktu ISO dengan timezone (`GMT+7`), filter interaktif, serta ekspor PDF dan JSON dinamis.
 - **Analytics Honesty** (`AnalyticsSection.tsx`)
   - Integrasi serial harga pangan riil PIHPS (`GET /api/v1/commodities/prices`) dari Supabase `commodity_prices` dengan status kosong `"Data tidak tersedia"` tanpa kartu risiko rekaan.
+- **Analitik Activation M7 + Watermelon Restyle P1-P3 (Phase 111-114)**
+  - 6 widget read-only bertumpuk regulator+dispatcher di atas API `prices`/`spikes` yang ada (4 komoditas × 8 provinsi × 7/14/30d), Globot Deck + gods-eye chips, tanpa Cesium, empty jujur `< 3` records, tanpa sintesis RED, tanpa PII.
+  - Chrome P1 (Badge/Button/Popover/Separator), tabel P2 (`Table h-11` + `Progress`), polish P3 (`AnimatedValue`/`LoadingSkeleton`/`motion-safe:`); tanpa Portal di atas kanvas Mapbox; 12px min, `tabular-nums`, ikon Lucide.
 
 ---
 
@@ -89,3 +92,5 @@ PreHub (*Predictive Logistics Hub & Early Warning System*) adalah platform intel
   - Perluasan cakupan sistem pemantauan dari Koridor Sumatra menuju Koridor Trans-Jawa dan Kawasan Timur Indonesia.
 - **National Logistics Health Index API & GraphRAG Enterprise (v2 / Post-MVP)**
   - API publik kesehatan logistik dan deployment private cloud kementerian (Kemendag, Kemenhub, BNPB, Bapanas, Bulog).
+- **Watermelon MCP Connect (Phase 115, PLANNED ⏳)**
+  - Menutup 7 primitif yang belum ada (Select/Chip/Card/Empty/Skeleton/Tooltip/Chart) via Watermelon MCP; `npx shadcn add` dilarang; `hideWhenDetached` absen di Base-UI 1.9.0; pola `asChild` digate saat review.

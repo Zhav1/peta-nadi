@@ -154,6 +154,24 @@ export const api = {
       return request<{ items: Array<{ time: string; commodity: string; region: string; price_idr: number; source: string; metadata: Record<string, unknown> }>; total: number }>(
         `/api/v1/commodities/prices${qs}`
       );
+    },
+    spikes: (params?: { region?: string }) => {
+      const qs = params?.region
+        ? `?region=${encodeURIComponent(params.region)}`
+        : '';
+      return request<{
+        spikes: Array<{
+          commodity: string;
+          region: string;
+          current_price: number;
+          baseline_price: number;
+          spike_pct: number;
+          severity: string;
+          status: string;
+          detected_at: string;
+        }>;
+        total: number;
+      }>(`/api/v1/commodities/spikes${qs}`);
     }
   },
   corridor: {
