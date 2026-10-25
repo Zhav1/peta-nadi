@@ -270,12 +270,10 @@ runTest('Suite 8: Consumer integration in AnalyticsSection.tsx', () => {
     'All static native title attributes in AnalyticsSection.tsx must be replaced with Base-UI Tooltip'
   );
 
-  // Verify Phase 119 Layout: Map-less single full-width layout (no Mapbox canvas)
+  // Verify Phase 119 Layout: Map-less dashboard layout (no Mapbox canvas)
   assert.ok(!content.includes('mapContainerRef'), 'Mapbox canvas ref must be removed for map-less layout');
   assert.ok(!content.includes('mapboxgl'), 'Mapbox GL JS must not be imported in map-less layout');
-  assert.ok(content.includes('col-span-12'), 'AnalyticsSection must use full-width single column layout');
-  assert.ok(!content.includes('lg:col-span-8'), 'Split-screen map column must not exist');
-  assert.ok(!content.includes('lg:col-span-4'), 'Split-screen sidebar column must not exist');
+  assert.ok(content.includes('col-span-12'), 'AnalyticsSection must use grid layout');
 
   // Verify Phase 119 Zhav1 functional improvements
   assert.ok(content.includes('regionToDb'), 'Must implement regionToDb mapping');

@@ -35,6 +35,8 @@ import {
   risikoComposite,
 } from '@/lib/priceStats';
 import { PriceHeatmap } from '@/components/dashboard/analytics/PriceHeatmap';
+import { PriceTrendChart } from '@/components/dashboard/analytics/PriceTrendChart';
+import { SpikeShareDonut } from '@/components/dashboard/analytics/SpikeShareDonut';
 import { BencanaHeatmap, type BencanaRow } from '@/components/dashboard/analytics/BencanaHeatmap';
 import { CorrelationMatrix, type CorrCell } from '@/components/dashboard/analytics/CorrelationMatrix';
 import { TimeHeatstrip, type HeatStripRow } from '@/components/dashboard/analytics/TimeHeatstrip';
@@ -174,19 +176,21 @@ function prettifyRegion(region: string): string {
   return (region || '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function formatDayMonth(t: string): string {
-  try {
-    return new Date(t).toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit' });
-  } catch {
-    return t;
-  }
-}
-
 function formatFullDate(t: string): string {
   try {
     return new Date(t).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
   } catch {
     return t;
+  }
+}
+
+function formatDayMonth(iso: string | null | undefined): string {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    return `${d.getDate()}/${d.getMonth() + 1}`;
+  } catch {
+    return '';
   }
 }
 
@@ -453,37 +457,12 @@ export default function DashboardAnalyticsSection({
     }
   }, [bnpbUpdatedAt]);
 
-  const commodityLabel = useMemo(() => {
-    return COMMODITY_OPTIONS.find((o) => o.value === commodity)?.label || commodity;
-  }, [commodity]);
-
-  // Honest display guard: < 3 price history points cannot form a meaningful
-  // trend line; render honest Empty state instead of 1-2 lonely bars.
-  const hasEnoughRecords = priceHistory.length >= 3;
-
-  // Single dataset bar heights (PIHPS historical daily closes)
-  const maxP = priceHistory.length > 0 ? Math.max(...priceHistory) * 1.05 : 1;
-  const minP = priceHistory.length > 0 ? Math.min(...priceHistory) * 0.95 : 0;
-  const barHeights = useMemo(() => {
-    if (priceHistory.length === 0 || maxP === minP) return [];
-    return priceHistory.map((p) => {
-      const pct = Math.max(8, Math.min(100, Math.round(((p - minP) / (maxP - minP)) * 100)));
-      return `${pct}%`;
-    });
-  }, [priceHistory, maxP, minP]);
-
-  // Green vs red day-over-day delta bars (honest, standard financial histogram)
-  const barColors = useMemo(() => {
-    return priceHistory.map((p, i) => {
-      if (i === 0) return { bg: '#94a3b8', border: '#cbd5e1' }; // first day: neutral slate
-      const prev = priceHistory[i - 1];
-      if (p > prev) return { bg: '#ef4444', border: '#f87171' }; // up = red (inflation / price spike)
-      if (p < prev) return { bg: '#10b981', border: '#34d399' }; // down = green (deflation / price drops)
-      return { bg: '#94a3b8', border: '#cbd5e1' }; // flat = slate
-    });
-  }, [priceHistory]);
-
+  const commodityLabel = COMMODITY_OPTIONS.find((o) => o.value === commodity)?.label ?? commodity;
   const lastTime = priceTimes.length > 0 ? priceTimes[priceTimes.length - 1] : null;
+
+  const trendRegionLabel = priceRegion
+    ? (REGION_OPTIONS.find((o) => o.value === priceRegion)?.label ?? prettifyRegion(priceRegion))
+    : 'Semua';
 
   const filteredSpikes = useMemo(() => {
     const mapped = regionToDb(priceRegion);
@@ -492,6 +471,12 @@ export default function DashboardAnalyticsSection({
       .filter((s) => !mapped || s.region === mapped)
       .sort((a, b) => b.spike_pct - a.spike_pct);
   }, [spikes, commodity, priceRegion]);
+
+  // Shared honest-empty copy for spike consumers (donut + table guard).
+  const spikeEmptyMessage =
+    spikeRecordsTotal < 3
+      ? `Hanya ${spikeRecordsTotal} catatan harga untuk ${commodityLabel} — spike butuh ≥ 3 catatan (guard backend).`
+      : `Tidak ada lonjakan ≥ 5% untuk ${commodityLabel} pada filter ini.`;
 
   const nowMs = useMemo(() => Date.now(), []);
 
@@ -832,14 +817,13 @@ export default function DashboardAnalyticsSection({
       {/* 7 KPI Analitik — useMemo dari GETs yang ada */}
       <KpiStrip kpis={kpis} loading={spikesLoading || isLoadingPrices} />
 
-      <div className="w-full grid grid-cols-12 gap-6">
+      {/* Mixed dashboard grid (map canvas removed): tren 8 + donat 4 · heatmap 6+6 · korelasi 6+6 · tabel 8 + BNPB 4 */}
+      <div className="w-full grid grid-cols-12 gap-4">
 
-      {/* CONTENT SECTION: full-width single column (map canvas removed) */}
-      <section className="col-span-12 flex flex-col gap-6 overflow-y-auto no-scrollbar">
-
-        {/* Price History Card */}
-        <Card className="p-5 flex flex-col gap-4">
-          <div className="flex justify-between items-end">
+        {/* Row 1a: tren harga garis+area (deret waktu kontinu) */}
+        <Card className="col-span-12 lg:col-span-8 p-4 flex flex-col gap-3 min-w-0">
+        <div className="space-y-3">
+          <div className="flex justify-between items-end gap-2">
             <h3 className="text-sm font-semibold tracking-wide text-white flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-slate-300" /> Harga {commodityLabel}
             </h3>
@@ -857,8 +841,8 @@ export default function DashboardAnalyticsSection({
             </span>
           </div>
 
-          <div className="border-t border-white/10 pt-4 relative flex flex-col justify-between">
-            <div className="flex justify-between items-center text-xs text-slate-400">
+          <div className="border-t border-white/10 pt-3">
+            <div className="flex justify-between items-center text-xs text-slate-400 mb-2">
               <span className="flex items-center gap-1.5">
                 <span>Tren {Math.min(days, priceHistory.length)} Titik Terakhir</span>
                 <Tooltip>
@@ -878,80 +862,114 @@ export default function DashboardAnalyticsSection({
                   </TooltipContent>
                 </Tooltip>
               </span>
-              <span className="text-slate-300">
-                {priceRegion
-                  ? `${REGION_FULL_NAMES[priceRegion] || prettifyRegion(priceRegion)} · PIHPS Bank Indonesia`
-                  : 'Rata-rata 8 Provinsi Sumatera · PIHPS Bank Indonesia'}
-              </span>
+              <span className="text-slate-300">Sumber: PIHPS Bank Indonesia</span>
             </div>
-
-            {/* Authentic Single-Dataset Bars or Honest Empty State (<3 records = no trend) */}
-            {hasEnoughRecords ? (
-              <div className="h-28 flex items-end gap-2 pt-2">
-                {barHeights.map((h, i) => {
-                  const t = priceTimes[i];
-                  const price = priceHistory[i];
-                  const prev = i > 0 ? priceHistory[i - 1] : null;
-                  const dRp = prev != null ? price - prev : null;
-                  const dPct = prev != null && prev !== 0 && dRp != null ? (dRp / Math.abs(prev)) * 100 : null;
-                  const dateLabel = t ? formatDayMonth(t) : `T-${priceHistory.length - 1 - i}`;
-                  const tooltip = t
-                    ? `${dateLabel}: Rp ${price.toLocaleString('id-ID')}`
-                    : `T-${priceHistory.length - 1 - i}: Rp ${price.toLocaleString('id-ID')}`;
-                  const regionLabel = priceRegion
-                    ? (REGION_FULL_NAMES[priceRegion] ?? (REGION_OPTIONS.find((o) => o.value === priceRegion)?.label ?? prettifyRegion(priceRegion)))
-                    : 'Rata-rata 8 Provinsi Sumatera';
-                  return (
-                    <div key={i} className="flex-1 bg-white/5 h-full rounded-t-sm overflow-hidden flex flex-col justify-end items-center">
-                      <AnalyticsTip
-                        trigger={
-                          <div
-                            role="img"
-                            aria-label={tooltip}
-                            tabIndex={0}
-                            className="w-full border-t-2 motion-safe:transition-all motion-safe:duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 cursor-pointer"
-                            style={{ height: h, backgroundColor: `${barColors[i].bg}33`, borderColor: barColors[i].border }}
-                          />
-                        }
-                        content={
-                          <div className="min-w-44 space-y-0.5">
-                            <TipTitle>Harga {commodityLabel}</TipTitle>
-                            <TipRow k="Harga" v={`${fmtRp(price)} / kg`} />
-                            <TipRow k="Tgl" v={t ? formatFullDate(t) : dateLabel} />
-                            <TipRow k="Wilayah" v={regionLabel} />
-                            <TipRow
-                              k="Δ prev"
-                              v={
-                                dPct == null || dRp == null
-                                  ? 'titik pertama'
-                                  : `${dPct >= 0 ? '+' : ''}${dPct.toFixed(1)}% (${dRp >= 0 ? '+' : ''}${fmtRp(dRp)})`
-                              }
-                            />
-                            <TipSource>PIHPS Bank Indonesia</TipSource>
-                          </div>
-                        }
-                      />
-                      <span className="text-xs text-slate-400 tabular-nums mt-1">{dateLabel}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : isLoadingPrices ? (
-              <div className="flex flex-col gap-2 py-2">
-                <Skeleton rows={3} rowClassName="h-6" />
-                <Empty loading />
-              </div>
-            ) : (
-              <div className="h-28 flex items-center justify-center">
-                <Empty />
-              </div>
-            )}
+            <PriceTrendChart
+              prices={priceHistory}
+              times={priceTimes}
+              commodityLabel={commodityLabel}
+              regionLabel={trendRegionLabel}
+              loading={isLoadingPrices}
+            />
           </div>
+        </div>
         </Card>
 
-        {/* Lonjakan harga (spikes) — top spikes + honest empty */}
-        <Card className="p-5 flex-1 flex flex-col gap-4 min-h-0">
-          <div className="flex justify-between items-center">
+        {/* Row 1b: distribusi spike per wilayah (donat part-to-whole) */}
+        <section className="col-span-12 lg:col-span-4 bg-[#0c1017] border border-white/10 rounded-xl p-4 flex flex-col gap-3 min-w-0">
+          <div className="flex justify-between items-center gap-2">
+            <h3 className="text-sm font-semibold tracking-wide text-white flex items-center gap-2">
+              <Flame className="w-4 h-4 text-slate-400" /> Distribusi spike per wilayah
+            </h3>
+            <span className="text-xs font-mono text-slate-400 tabular-nums">
+              {spikesLoading ? (
+                'memuat…'
+              ) : (
+                <AnimatedValue value={filteredSpikes.length}>{`${filteredSpikes.length} spike`}</AnimatedValue>
+              )}
+            </span>
+          </div>
+          <p className="text-xs text-slate-500 font-sans -mt-1 tabular-nums">
+            {commodityLabel} · spike maks per wilayah · ambang 5/10/15%
+          </p>
+          <SpikeShareDonut
+            spikes={filteredSpikes}
+            loading={spikesLoading}
+            recordsTotal={spikeRecordsTotal}
+            emptyMessage={spikeEmptyMessage}
+          />
+        </section>
+
+        {/* Row 2a: heatmap harga lintas wilayah x komoditas (intensitas 2D) */}
+        <section className="col-span-12 lg:col-span-6 bg-[#0c1017] border border-white/10 rounded-xl p-4 flex flex-col gap-3 min-w-0">
+          <div className="flex justify-between items-center gap-2">
+            <h3 className="text-sm font-semibold tracking-wide text-white flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-slate-400" /> Peta panas lonjakan wilayah × komoditas
+            </h3>
+            <span className="text-xs font-mono text-slate-400 tabular-nums">
+              {spikesLoading ? 'memuat…' : `${heatCells.length} sel`}
+            </span>
+          </div>
+          <p className="text-xs text-slate-500 font-sans -mt-1 tabular-nums">
+            Spike% maksimum 30 hari · ambang 5/10/15% · semua wilayah &amp; komoditas
+          </p>
+          <PriceHeatmap
+            cells={heatCells}
+            commodities={[...COMMODITY_OPTIONS]}
+            regions={heatRegions}
+            loading={spikesLoading}
+          />
+        </section>
+
+        {/* Row 2b: heatmap ko-okurensi bencana x komoditas */}
+        <section className="col-span-12 lg:col-span-6 bg-[#0c1017] border border-white/10 rounded-xl p-4 flex flex-col gap-3 min-w-0">
+          <div className="flex justify-between items-center gap-2">
+            <h3 className="text-sm font-semibold tracking-wide text-white flex items-center gap-2">
+              <Flame className="w-4 h-4 text-slate-400" /> Ko-okurensi bencana × komoditas
+            </h3>
+            <span className="text-xs font-mono text-slate-400 tabular-nums">
+              {bencanaLoading || bnpbLoading ? 'memuat…' : '30 hari · flag 48 jam'}
+            </span>
+          </div>
+          <p className="text-xs text-slate-500 font-sans -mt-1 tabular-nums">
+            BNPB/BMKG/FIRMS aktif × spike komoditas · GET-only
+          </p>
+          <BencanaHeatmap
+            rows={bencanaRows}
+            commodities={[...COMMODITY_OPTIONS]}
+            loading={bencanaLoading || bnpbLoading}
+          />
+        </section>
+
+        {/* Row 3a: matriks korelasi (diverging symmetric matrix) */}
+        <section className="col-span-12 xl:col-span-6 bg-[#0c1017] border border-white/10 rounded-xl p-4 flex flex-col gap-3 min-w-0">
+          <h3 className="text-sm font-semibold tracking-wide text-white">Korelasi harga antar-komoditas</h3>
+          <p className="text-xs text-slate-500 font-sans -mt-1 tabular-nums">
+            Pearson −1…1 · |r|&gt;0.7 ditandai · n&lt;10 tidak dihitung
+          </p>
+          <CorrelationMatrix
+            commodities={[...COMMODITY_OPTIONS]}
+            cells={corrCells}
+            loading={multiLoading}
+          />
+        </section>
+
+        {/* Row 3b: streak mingguan (arah pekan + streak) */}
+        <section className="col-span-12 xl:col-span-6 bg-[#0c1017] border border-white/10 rounded-xl p-4 flex flex-col gap-3 min-w-0">
+          <h3 className="text-sm font-semibold tracking-wide text-white">Streak mingguan per komoditas</h3>
+          <p className="text-xs text-slate-500 font-sans -mt-1 tabular-nums">
+            4 pekan terakhir · WoW rata-rata pekan · butuh ≥14 titik
+          </p>
+          <TimeHeatstrip
+            rows={heatstripRows}
+            commodities={[...COMMODITY_OPTIONS]}
+            loading={multiLoading}
+          />
+        </section>
+
+        {/* Row 4a: tabel lonjakan harga (detail top-8) */}
+        <section className="col-span-12 lg:col-span-8 bg-[#0c1017] border border-white/10 rounded-xl p-4 flex flex-col gap-3 min-w-0">
+          <div className="flex justify-between items-center gap-2">
             <h3 className="text-sm font-semibold tracking-wide text-white flex items-center gap-2">
               <Flame className="w-4 h-4 text-slate-400" /> Lonjakan harga
             </h3>
@@ -973,13 +991,7 @@ export default function DashboardAnalyticsSection({
               <Empty loading />
             </div>
           ) : filteredSpikes.length === 0 || spikeRecordsTotal < 3 ? (
-            <Empty
-              message={
-                spikeRecordsTotal < 3
-                  ? `Hanya ${spikeRecordsTotal} catatan harga untuk ${commodityLabel} — spike butuh ≥ 3 catatan (guard backend).`
-                  : `Tidak ada lonjakan ≥ 5% untuk ${commodityLabel} pada filter ini.`
-              }
-            />
+            <Empty message={spikeEmptyMessage} />
           ) : (
             <div className="overflow-x-auto rounded-lg border border-white/10">
               <Table>
@@ -1051,11 +1063,11 @@ export default function DashboardAnalyticsSection({
               </span>
             </button>
           )}
-        </Card>
+        </section>
 
-        {/* BNPB disaster events — async, non-blocking, honest-empty */}
-        <div className="space-y-3 border-t border-white/10 pt-4">
-          <div className="flex justify-between items-center">
+        {/* Row 4b: panel BNPB ringkas (kolom sempit → daftar, bukan tabel) */}
+        <section className="col-span-12 lg:col-span-4 bg-[#0c1017] border border-white/10 rounded-xl p-4 flex flex-col gap-3 min-w-0">
+          <div className="flex justify-between items-center gap-2">
             <h3 className="text-sm font-semibold tracking-wide text-white flex items-center gap-2">
               Peringatan kebencanaan BNPB
             </h3>
@@ -1095,127 +1107,47 @@ export default function DashboardAnalyticsSection({
               }
             />
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-white/10">
-              <Table>
-                <TableHeader className="h-11 bg-[#0c1017]">
-                  <TableRow>
-                    <TableHead className="h-11 bg-[#0c1017]">Kejadian</TableHead>
-                    <TableHead className="h-11 bg-[#0c1017]">Jenis</TableHead>
-                    <TableHead className="h-11 bg-[#0c1017] text-right">Radius</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {bnpbEvents.slice(0, 8).map((e) => (
-                    <TableRow key={e.dedup_key} className="hover:bg-white/5">
-                      <TableCell className="py-3 text-xs tabular-nums font-medium text-slate-200 max-w-55">
-                        <AnalyticsTip
-                          trigger={
-                            <div
-                              role="img"
-                              aria-label={e.title}
-                              tabIndex={0}
-                              className="truncate rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
-                            >
-                              {e.title}
-                            </div>
-                          }
-                          content={
-                            <div className="min-w-48 max-w-64 space-y-0.5">
-                              <TipTitle>{e.title}</TipTitle>
-                              <TipRow k="Jenis" v={e.event_type} />
-                              <TipRow k="Severity" v={e.severity} />
-                              <TipRow k="Radius" v={e.radius_km != null ? `${Number(e.radius_km)} km` : '—'} />
-                              <TipRow k="Waktu" v={formatFullDate(e.ts)} />
-                              <TipSource>BNPB DIBI/bnpb.go.id · cache 1 jam</TipSource>
-                            </div>
-                          }
-                        />
-                      </TableCell>
-                      <TableCell className="py-3 text-xs tabular-nums text-slate-400">
-                        <Badge variant="outline" className={`${severityBadge(e.severity)} font-bold tabular-nums mr-1.5`}>
-                          {e.severity}
-                        </Badge>
-                        {e.event_type}
-                      </TableCell>
-                      <TableCell className="py-3 text-xs tabular-nums text-right text-slate-300">
-                        {e.radius_km != null ? `${Number(e.radius_km)} km` : '—'}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            <ul className="flex flex-col gap-2">
+              {bnpbEvents.slice(0, 8).map((e) => (
+                <li key={e.dedup_key} className="rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2">
+                  <AnalyticsTip
+                    trigger={
+                      <div
+                        role="img"
+                        aria-label={e.title}
+                        tabIndex={0}
+                        className="truncate rounded text-xs font-medium tabular-nums text-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+                      >
+                        {e.title}
+                      </div>
+                    }
+                    content={
+                      <div className="min-w-48 max-w-64 space-y-0.5">
+                        <TipTitle>{e.title}</TipTitle>
+                        <TipRow k="Jenis" v={e.event_type} />
+                        <TipRow k="Severity" v={e.severity} />
+                        <TipRow k="Radius" v={e.radius_km != null ? `${Number(e.radius_km)} km` : '—'} />
+                        <TipRow k="Waktu" v={formatFullDate(e.ts)} />
+                        <TipSource>BNPB DIBI/bnpb.go.id · cache 1 jam</TipSource>
+                      </div>
+                    }
+                  />
+                  <div className="mt-1 flex items-center justify-between gap-2 text-xs tabular-nums">
+                    <span className="flex min-w-0 items-center gap-1.5 text-slate-400">
+                      <Badge variant="outline" className={`${severityBadge(e.severity)} font-bold tabular-nums`}>
+                        {e.severity}
+                      </Badge>
+                      <span className="truncate">{e.event_type}</span>
+                    </span>
+                    <span className="shrink-0 text-slate-300">
+                      {e.radius_km != null ? `${Number(e.radius_km)} km` : '—'}
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
           )}
-        </div>
-
-        {/* Heatmap harga lintas wilayah x komoditas */}
-        <div className="space-y-3 border-t border-white/10 pt-4">
-          <div className="flex justify-between items-center">
-            <h3 className="text-sm font-semibold tracking-wide text-white flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-slate-400" /> Peta panas lonjakan wilayah × komoditas
-            </h3>
-            <span className="text-xs font-mono text-slate-400 tabular-nums">
-              {spikesLoading ? 'memuat…' : `${heatCells.length} sel`}
-            </span>
-          </div>
-          <p className="text-xs text-slate-500 font-sans -mt-1 tabular-nums">
-            Spike% maksimum 30 hari · ambang 5/10/15% · semua wilayah &amp; komoditas
-          </p>
-          <PriceHeatmap
-            cells={heatCells}
-            commodities={[...COMMODITY_OPTIONS]}
-            regions={heatRegions}
-            loading={spikesLoading}
-          />
-        </div>
-
-        {/* Heatmap ko-okurensi bencana x komoditas */}
-        <div className="space-y-3 border-t border-white/10 pt-4">
-          <div className="flex justify-between items-center">
-            <h3 className="text-sm font-semibold tracking-wide text-white flex items-center gap-2">
-              <Flame className="w-4 h-4 text-slate-400" /> Ko-okurensi bencana × komoditas
-            </h3>
-            <span className="text-xs font-mono text-slate-400 tabular-nums">
-              {bencanaLoading || bnpbLoading ? 'memuat…' : '30 hari · flag 48 jam'}
-            </span>
-          </div>
-          <p className="text-xs text-slate-500 font-sans -mt-1 tabular-nums">
-            BNPB/BMKG/FIRMS aktif × spike komoditas · GET-only
-          </p>
-          <BencanaHeatmap
-            rows={bencanaRows}
-            commodities={[...COMMODITY_OPTIONS]}
-            loading={bencanaLoading || bnpbLoading}
-          />
-        </div>
-
-        {/* Matriks korelasi + streak mingguan */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 border-t border-white/10 pt-4">
-          <div className="space-y-3">
-            <h3 className="text-sm font-semibold tracking-wide text-white">Korelasi harga antar-komoditas</h3>
-            <p className="text-xs text-slate-500 font-sans -mt-1 tabular-nums">
-              Pearson −1…1 · |r|&gt;0.7 ditandai · n&lt;10 tidak dihitung
-            </p>
-            <CorrelationMatrix
-              commodities={[...COMMODITY_OPTIONS]}
-              cells={corrCells}
-              loading={multiLoading}
-            />
-          </div>
-          <div className="space-y-3">
-            <h3 className="text-sm font-semibold tracking-wide text-white">Streak mingguan per komoditas</h3>
-            <p className="text-xs text-slate-500 font-sans -mt-1 tabular-nums">
-              4 pekan terakhir · WoW rata-rata pekan · butuh ≥14 titik
-            </p>
-            <TimeHeatstrip
-              rows={heatstripRows}
-              commodities={[...COMMODITY_OPTIONS]}
-              loading={multiLoading}
-            />
-          </div>
-        </div>
-
-      </section>
+        </section>
 
       </div>
 
