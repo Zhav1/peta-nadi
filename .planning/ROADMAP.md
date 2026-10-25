@@ -2941,6 +2941,25 @@ M7 removes the remaining ways the Berita surface could look live when it was not
 
 ---
 
+## Phase 117: Analitik Simplification
+
+**Goal:** Simplify Analitik to the 6-user-note contract: shared filters + green/red trend + honest-empty spikes + Reports link + accessible days — remove regime/freshness/telemetry/map-overlay/ops.
+**Status:** COMPLETE ✅ (docs-only pass; simplification already in working tree, 526-line `AnalyticsSection.tsx`; no app edits, no commit)
+
+### Deliverables
+
+- **Removed:** regime `Badge` (old L982), freshness `Popover` (old L1032-1051, trigger L1035, content L1040), `Separator` (old L1028); ops `corridorFilter`/`advisoryFilter` (old L399-409), `rankRows`/disparity + `Progress` (old L878-882/L32-33); telemetry gods-eye chips (old L988/L996/L1004/L1081/L1105); Deck data layers (old L5-6) → base globe `MapboxOverlay({ layers: [] })` + fog + `ResizeObserver` (current L231-297).
+- **Kept:** filters `COMMODITY_OPTIONS`/`REGION_OPTIONS`/`DAY_OPTIONS` + bar L330-374 + URL sync `?commodity&region&days` (L134-164); trend `barHeights`/`barColors` (`#ef4444`/`#10b981`, L302-313) + `>= 3` guard (L317); spikes `SpikeItem`/`loadSpikes`/`filteredSpikes` + `Table h-11` (L84-93/L203-229/L319-323/L479-506) + `spikeRecordsTotal < 3` guard message (L470-477); `Lihat Laporan` → `onSwitchTab('reports')` (L508-517); days a11y `role="group" aria-label` + `aria-pressed`/`aria-label`/`title` (L358-368). Read-only `GET prices` + `GET spikes` only.
+
+### Verification
+
+- [x] `npx tsc --noEmit` → exit 0.
+- [x] `npm run build` → 7/7 static routes, 0 errors.
+- [x] `pytest` → 49 passed (shared window tail).
+- [x] Playwright → 1 passed (live, E2E no-interference on Peta/Laporan/Evaluasi + `approvals:write`/`fleet:write` 403 paths).
+
+---
+
 ## Backlog (Post-Hackathon / v2 & New Context Window Backlog)
 
 ### Active Remediation & Audit Backlog (For New Context Window)

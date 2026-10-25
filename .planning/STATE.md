@@ -318,3 +318,11 @@ These scripts validate the economic correlation hypotheses that underpin Agent 5
 - Constraints carried: no shadcn add, no motion/react-icons/hugeicons/radix, no Portal over map, dark 12px tabular-nums, one writer per file, no recharts downgrade.
 - Learnings: registry via webfetch (not MCP execute in workers), stale .next ENOENT blocks rebuild (remove .next + retry), parallel same-file collision avoided by file-split, tooltip render-pattern, hideWhenDetached absent, recharts 2.15.4 vs 3.9.2 do-not-downgrade.
 - Docs: `.planning/phases/116-gap-shims-scaffold/` (PLAN.md + WALKTHROUGH.md + LEARNINGS.md).
+
+## Phase 117 Log (2026-10-25)
+
+- Phase 117 (Analitik Simplification) logged as COMPLETE ✅ — docs-only pass, no app edits, no commit.
+- Removed per 6 user notes: regime badge (old L982), freshness Popover (old L1032-1051), Separator (old L1028), ops `corridorFilter`/`advisoryFilter` (old L399-409), `rankRows`/disparity + `Progress` (old L878-882/L32-33), telemetry gods-eye chips (old L988/L996/L1004/L1081/L1105), Deck data layers (old L5-6) → base globe `layers: []` only.
+- Kept: shared filters (4 komoditas × 8 provinsi + Semua × 7/14/30d, URL sync `?commodity&region&days`), green/red trend (`#ef4444` up / `#10b981` down, `>= 3` guard), spikes honest-empty (`spikeRecordsTotal < 3` guard message), `Lihat Laporan` → `onSwitchTab('reports')`, days a11y (`role=group` + `aria-pressed`/`aria-label`/`title`).
+- Evidence (window tail): tsc 0, build 7/7, pytest 49 passed, Playwright 1 passed (live, E2E no-interference preserved).
+- Docs: `.planning/phases/117-analitik-simplification/` (PLAN.md + WALKTHROUGH.md + LEARNINGS.md).

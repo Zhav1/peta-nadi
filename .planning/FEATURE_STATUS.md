@@ -58,6 +58,8 @@ PreHub (*Predictive Logistics Hub & Early Warning System*) adalah platform intel
 - **Gap Shims Scaffold (Phase 116, PLANNED ⏳)**
   - 8 shim file direncanakan: C1 `empty`/`skeleton`/`tooltip` (base-ui), C2 `status-picker`/`editable-chip`/`budget-card` (hand-rolled CSS, `motion-safe:`), C3 `disparity-bar`/`trend-line` (recharts ^3.9.2); swap impor di `AnalyticsSection.tsx` tanpa ubah logika.
   - Batasan: tanpa `shadcn add`, tanpa `motion`/`react-icons`/`hugeicons`/`radix`, tanpa Portal di atas kanvas Mapbox; dark 12px `tabular-nums`. Docs: `116-gap-shims-scaffold/`.
+- **Analitik Simplification (Phase 117, COMPLETE ✅)**
+  - Hapus regime/freshness/telemetry/map-overlay/ops per 6 user notes; pertahankan filter bersama (4 komoditas × 8 provinsi × 7/14/30d + URL sync), tren hijau/merah (`#10b981`/`#ef4444`, guard `>= 3`), spikes honest-empty (`spikeRecordsTotal < 3` + pesan guard backend), tautan `Lihat Laporan` → Reports, days a11y (`role=group`, `aria-pressed`/`aria-label`/`title`). Read-only `GET prices` + `GET spikes`; globe dasar `layers: []`. tsc 0, build 7/7, Playwright 1 passed. Docs: `117-analitik-simplification/`.
 
 ---
 
