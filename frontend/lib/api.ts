@@ -202,6 +202,29 @@ export const api = {
         timestamp?: string;
       }>('/api/v1/fire/hotspots'),
   },
+  bnpb: {
+    events: (params?: { limit?: number }) => {
+      const qs = params?.limit != null ? `?limit=${encodeURIComponent(String(params.limit))}` : '';
+      return request<{
+        events: Array<{
+          source: string;
+          event_type: string;
+          severity: string;
+          lat: string | number;
+          lon: string | number;
+          radius_km?: number;
+          title: string;
+          ts: string;
+          dedup_key: string;
+        }>;
+        total: number;
+        status: 'ok' | 'unavailable';
+        reason?: string | null;
+        source?: string;
+        updated_at?: string | null;
+      }>(`/api/v1/bnpb/events${qs}`);
+    },
+  },
   traffic: {
     flowSegments: () =>
       request<{

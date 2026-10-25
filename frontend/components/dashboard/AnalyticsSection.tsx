@@ -13,6 +13,22 @@ import { Badge } from '@/components/base-ui/badge';
 import { Empty as AnalyticsEmpty } from '@/components/base-ui/empty';
 import { Skeleton as LoadingSkeleton } from '@/components/base-ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/base-ui/table';
+import {
+  pearson,
+  coeffVar,
+  wowChange,
+  disparitas,
+  pctNaik,
+  streakNaik,
+  alignByDate,
+  risikoComposite,
+} from '@/lib/priceStats';
+import { PriceHeatmap } from '@/components/dashboard/analytics/PriceHeatmap';
+import { BencanaHeatmap, type BencanaRow } from '@/components/dashboard/analytics/BencanaHeatmap';
+import { CorrelationMatrix, type CorrCell } from '@/components/dashboard/analytics/CorrelationMatrix';
+import { TimeHeatstrip, type HeatStripRow } from '@/components/dashboard/analytics/TimeHeatstrip';
+import { KpiStrip, fmtSigned, type Kpi } from '@/components/dashboard/analytics/KpiStrip';
+import { AnalyticsTip, TipRow, TipTitle, TipSource, fmtRp } from '@/components/dashboard/analytics/AnalyticsTip';
 
 interface AnalyticsSectionProps {
   selectedCrisis?: CrisisState | null;
@@ -44,6 +60,8 @@ const REGION_OPTIONS = [
   { value: 'lampung', label: 'Lampung' },
   { value: 'jambi', label: 'Jambi' },
   { value: 'bengkulu', label: 'Bengkulu' },
+  { value: 'babel', label: 'Babel' },
+  { value: 'kepri', label: 'Kepri' },
 ] as const;
 
 // URL/state slugs (sumut, sumbar, …) stay unchanged; backend expects DB region
@@ -57,6 +75,8 @@ const REGION_TO_DB: Record<string, string> = {
   lampung: 'lampung',
   jambi: 'jambi',
   bengkulu: 'bengkulu',
+  babel: 'bangka_belitung',
+  kepri: 'kepulauan_riau',
 };
 
 function regionToDb(slug: string): string | undefined {
@@ -65,6 +85,25 @@ function regionToDb(slug: string): string | undefined {
 }
 
 const DAY_OPTIONS = [7, 14, 30] as const;
+
+// Semua komoditas untuk matriks lintas-komoditas (heatmap/korelasi/streak).
+const ALL_COMMODITIES = COMMODITY_OPTIONS.map((o) => o.value);
+
+interface PricePoint {
+  price: number;
+  time: string;
+}
+
+function withinHours(iso: string | undefined | null, hours: number, nowMs: number): boolean {
+  if (!iso) return false;
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return false;
+  return nowMs - t <= hours * 3600_000;
+}
+
+function withinDays(iso: string | undefined | null, days: number, nowMs: number): boolean {
+  return withinHours(iso, days * 24, nowMs);
+}
 
 function AnalyticsMotionStyle() {
   return (
@@ -154,6 +193,33 @@ export default function DashboardAnalyticsSection({
   const [spikesLoading, setSpikesLoading] = useState<boolean>(true);
   const [spikeRecordsTotal, setSpikeRecordsTotal] = useState<number>(0);
 
+  // Lintas-komoditas: deret harga per komoditas (korelasi + streak mingguan).
+  const [multiSeries, setMultiSeries] = useState<Record<string, PricePoint[]>>({});
+  const [multiLoading, setMultiLoading] = useState<boolean>(true);
+
+  // Bencana GET-only: poligon cuaca (BMKG), hotspot (FIRMS).
+  const [weatherCount, setWeatherCount] = useState<number | null>(null);
+  const [fireCount, setFireCount] = useState<number | null>(null);
+  const [fireFresh, setFireFresh] = useState<boolean>(false);
+  const [bencanaLoading, setBencanaLoading] = useState<boolean>(true);
+
+  // BNPB disaster events — fully independent async fetch (never blocks prices/spikes).
+  interface BnpbEvent {
+    source: string;
+    event_type: string;
+    severity: string;
+    lat: string | number;
+    lon: string | number;
+    radius_km?: number;
+    title: string;
+    ts: string;
+    dedup_key: string;
+  }
+  const [bnpbEvents, setBnpbEvents] = useState<BnpbEvent[]>([]);
+  const [bnpbLoading, setBnpbLoading] = useState<boolean>(true);
+  const [bnpbUpdatedAt, setBnpbUpdatedAt] = useState<string | null>(null);
+  const [bnpbAvailable, setBnpbAvailable] = useState<boolean>(true);
+
   // URL sync (?commodity&region&days) — local state fallback when absent.
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -226,21 +292,21 @@ export default function DashboardAnalyticsSection({
     };
   }, [commodity, priceRegion, days]);
 
-  // Spikes (server region-filtered) + record-total guard source.
+  // Spikes (semua wilayah; filter region dilakukan lokal agar heatmap
+  // Wilayah x Komoditas tetap punya data penuh) + record-total guard source.
   useEffect(() => {
     let isMounted = true;
     async function loadSpikes() {
       setSpikesLoading(true);
       try {
-        const mapped = regionToDb(priceRegion);
         const [spikeRes, priceRes] = await Promise.all([
-          api.commodities.spikes(mapped ? { region: mapped } : undefined),
+          api.commodities.spikes(),
           api.commodities.prices({ commodity, limit: 100 }),
         ]);
         if (!isMounted) return;
         const spikeItems: SpikeItem[] = Array.isArray(spikeRes?.spikes) ? spikeRes.spikes : [];
         const priceItems = Array.isArray(priceRes?.items) ? priceRes.items : [];
-        setSpikes(spikeItems.filter((s) => !commodity || s.commodity === commodity));
+        setSpikes(spikeItems);
         setSpikeRecordsTotal(priceItems.length);
       } catch (err) {
         console.error('Failed to load spikes for AnalyticsSection:', err);
@@ -254,7 +320,116 @@ export default function DashboardAnalyticsSection({
     }
     loadSpikes();
     return () => { isMounted = false; };
-  }, [commodity, priceRegion]);
+  }, [commodity]);
+
+  // Deret per komoditas untuk korelasi + streak (GET-only, region-aware).
+  useEffect(() => {
+    let isMounted = true;
+    async function loadMulti() {
+      setMultiLoading(true);
+      try {
+        const mapped = regionToDb(priceRegion);
+        const results = await Promise.all(
+          ALL_COMMODITIES.map(async (c) => {
+            try {
+              const res = await api.commodities.prices({ commodity: c, region: mapped, limit: 60 });
+              const items = (res?.items ?? []).map((it: { price_idr: number; time: string }) => ({
+                price: it.price_idr,
+                time: it.time,
+              })).reverse();
+              return [c, items] as const;
+            } catch {
+              return [c, []] as const;
+            }
+          })
+        );
+        if (!isMounted) return;
+        setMultiSeries(Object.fromEntries(results));
+      } catch (err) {
+        console.error('Failed to load multi-commodity prices:', err);
+        if (isMounted) setMultiSeries({});
+      } finally {
+        if (isMounted) setMultiLoading(false);
+      }
+    }
+    loadMulti();
+    return () => { isMounted = false; };
+  }, [priceRegion]);
+
+  // Bencana GET-only: poligon cuaca (BMKG) + hotspot (FIRMS).
+  // Baris BNPB memakai feed bnpbEvents (efek independen di bawah).
+  // Tiap sumber dibungkus try/catch sendiri agar satu sumber mati tidak
+  // menenggelamkan yang lain (honest-empty per baris).
+  useEffect(() => {
+    let isMounted = true;
+    async function loadBencana() {
+      setBencanaLoading(true);
+      try {
+        const [wx, fire] = await Promise.all([
+          api.weather.spatialPolygons().then(
+            (g) => ({ ok: true as const, n: g?.features?.length ?? 0 }),
+            () => ({ ok: false as const, n: 0 }),
+          ),
+          api.fire.hotspots().then(
+            (r) => ({ ok: true as const, r }),
+            () => ({ ok: false as const, r: null as unknown as { hotspots: Array<{ ts?: string }>; status: string } }),
+          ),
+        ]);
+        if (!isMounted) return;
+        setWeatherCount(wx.ok ? wx.n : null);
+        const nowMs = Date.now();
+        if (fire.ok && fire.r && fire.r.status !== 'degraded') {
+          const hs = fire.r.hotspots ?? [];
+          setFireCount(hs.length);
+          setFireFresh(hs.length > 0 && hs.some((h) => !h.ts || withinHours(h.ts, 48, nowMs)));
+        } else {
+          setFireCount(null);
+          setFireFresh(false);
+        }
+      } finally {
+        if (isMounted) setBencanaLoading(false);
+      }
+    }
+    loadBencana();
+    return () => { isMounted = false; };
+  }, []);
+
+  // BNPB feed — mount-only, fire-and-forget, isolated from price/spike state.
+  useEffect(() => {
+    let isMounted = true;
+    async function loadBnpb() {
+      setBnpbLoading(true);
+      try {
+        const res = await api.bnpb.events({ limit: 20 });
+        if (!isMounted) return;
+        setBnpbEvents(Array.isArray(res?.events) ? res.events : []);
+        setBnpbUpdatedAt(res?.updated_at ?? null);
+        setBnpbAvailable(res?.status === 'ok');
+      } catch (err) {
+        console.error('Failed to load BNPB events for AnalyticsSection:', err);
+        if (isMounted) {
+          setBnpbEvents([]);
+          setBnpbUpdatedAt(null);
+          setBnpbAvailable(false);
+        }
+      } finally {
+        if (isMounted) setBnpbLoading(false);
+      }
+    }
+    loadBnpb();
+    return () => { isMounted = false; };
+    // mount-only: BNPB refresh is poller-driven (1h), not filter-driven
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const bnpbStale = useMemo(() => {
+    if (!bnpbUpdatedAt) return false;
+    try {
+      return Date.now() - new Date(bnpbUpdatedAt).getTime() > 24 * 3600 * 1000;
+    } catch {
+      return false;
+    }
+  }, [bnpbUpdatedAt]);
 
   // Compute bar heights safely from real priceHistory
   const maxP = priceHistory.length > 0 ? Math.max(...priceHistory) : 1;
@@ -278,10 +453,253 @@ export default function DashboardAnalyticsSection({
   const lastTime = priceTimes.length > 0 ? priceTimes[priceTimes.length - 1] : null;
 
   const filteredSpikes = useMemo(() => {
+    const mapped = regionToDb(priceRegion);
     return [...spikes]
       .filter((s) => !commodity || s.commodity === commodity)
+      .filter((s) => !mapped || s.region === mapped)
       .sort((a, b) => b.spike_pct - a.spike_pct);
-  }, [spikes, commodity]);
+  }, [spikes, commodity, priceRegion]);
+
+  const nowMs = useMemo(() => Date.now(), []);
+
+  // Spike maksimum 30 hari per komoditas (ko-okurensi bencana).
+  const maxSpikeByCommodity = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const s of spikes) {
+      if (!withinDays(s.detected_at, 30, nowMs)) continue;
+      const prev = m.get(s.commodity);
+      if (prev == null || s.spike_pct > prev) m.set(s.commodity, s.spike_pct);
+    }
+    return m;
+  }, [spikes, nowMs]);
+
+  const perCommoditySpikes = useMemo(() => {
+    const rec: Record<string, number | null> = {};
+    for (const c of ALL_COMMODITIES) rec[c] = maxSpikeByCommodity.get(c) ?? null;
+    return rec;
+  }, [maxSpikeByCommodity]);
+
+  // ---- 7 KPI (useMemo dari GETs yang ada; null = honest-empty bila <3) ----
+  const kpis: Kpi[] = useMemo(() => {
+    const enough = priceHistory.length >= 3;
+    const maxSpike = filteredSpikes.length > 0 ? filteredSpikes[0].spike_pct : null;
+    const cv = enough ? coeffVar(priceHistory) : null;
+    const wow = enough ? wowChange(priceHistory) : null;
+    const naik = enough ? pctNaik(priceHistory) : null;
+    const streak = enough ? streakNaik(priceHistory) : null;
+    const disp = enough ? disparitas(priceHistory) : null;
+    const risiko = enough ? risikoComposite(maxSpike, cv) : null;
+
+    const freshSpike = filteredSpikes.some((s) => withinHours(s.detected_at, 48, nowMs));
+    const bnpbFresh = bnpbAvailable && bnpbEvents.some((e) => withinHours(e.ts, 48, nowMs));
+    const bencanaActive = bnpbFresh || (weatherCount ?? 0) > 0 || fireFresh;
+    const overlap: boolean | null = !enough && filteredSpikes.length === 0 ? null : freshSpike && bencanaActive;
+
+    const toneOf = (v: number | null, hi: number, mid: number): Kpi['tone'] => {
+      if (v == null) return 'neutral';
+      if (v >= hi) return 'critical';
+      if (v >= mid) return 'high';
+      if (v >= mid / 2) return 'warn';
+      return 'neutral';
+    };
+
+    return [
+      {
+        key: 'risiko',
+        label: 'Risiko komposit',
+        display: risiko != null ? `${risiko}/100` : 'n/a',
+        value: risiko,
+        tone: risiko == null ? 'neutral' : risiko >= 70 ? 'critical' : risiko >= 40 ? 'high' : risiko >= 20 ? 'warn' : 'neutral',
+        hint: 'Komposit sqrt(max spike, CV). ≥70 kritis, ≥40 tinggi, ≥20 waspada.',
+      },
+      {
+        key: 'naik',
+        label: '% titik naik',
+        display: fmtSigned(naik),
+        value: naik,
+        tone: naik == null ? 'neutral' : naik >= 60 ? 'warn' : 'neutral',
+        hint: 'Porsi pergerakan harian naik pada deret filter aktif.',
+      },
+      {
+        key: 'wow',
+        label: 'WoW (7 vs 7)',
+        display: fmtSigned(wow),
+        value: wow,
+        tone: toneOf(wow, 15, 10),
+        hint: 'Rata-rata 7 hari terakhir vs 7 hari sebelumnya. Butuh ≥14 titik.',
+      },
+      {
+        key: 'cv',
+        label: 'Volatilitas (CV)',
+        display: fmtSigned(cv),
+        value: cv,
+        tone: cv == null ? 'neutral' : cv >= 10 ? 'high' : cv >= 5 ? 'warn' : 'neutral',
+        hint: 'std/mean deret filter aktif. ≥10% tinggi, ≥5% waspada.',
+      },
+      {
+        key: 'streak',
+        label: 'Streak naik',
+        display: streak != null ? `${streak} titik` : 'n/a',
+        value: streak,
+        tone: streak == null ? 'neutral' : streak >= 5 ? 'critical' : streak >= 3 ? 'high' : streak >= 1 ? 'warn' : 'neutral',
+        hint: 'Kenaikan beruntun di ujung deret filter aktif.',
+      },
+      {
+        key: 'disparitas',
+        label: 'Disparitas',
+        display: fmtSigned(disp),
+        value: disp,
+        tone: disp == null ? 'neutral' : disp >= 20 ? 'high' : disp >= 10 ? 'warn' : 'neutral',
+        hint: 'Spread (maks-min)/rata-rata deret filter aktif.',
+      },
+      {
+        key: 'overlap',
+        label: 'Overlap bencana 48j',
+        display: overlap == null ? 'n/a' : overlap ? 'Overlap' : 'Aman',
+        value: overlap,
+        tone: overlap == null ? 'neutral' : overlap ? 'critical' : 'neutral',
+        hint: 'Spike ≤48 jam berdampingan kejadian BNPB/BMKG/FIRMS aktif.',
+      },
+    ];
+  }, [priceHistory, filteredSpikes, bnpbEvents, bnpbAvailable, weatherCount, fireFresh, nowMs]);
+
+  // ---- PriceHeatmap: Wilayah x Komoditas (semua spike, tak tergantung filter) ----
+  const heatRegions = useMemo(() => {
+    const vals = Array.from(new Set(spikes.map((s) => s.region).filter(Boolean))).sort();
+    return vals.map((v) => ({ value: v, label: prettifyRegion(v) }));
+  }, [spikes]);
+
+  const heatCells = useMemo(
+    () => spikes.map((s) => ({ commodity: s.commodity, region: s.region, spikePct: s.spike_pct })),
+    [spikes],
+  );
+
+  // ---- BencanaHeatmap: BNPB/BMKG/FIRMS x komoditas ----
+  const bencanaRows: BencanaRow[] = useMemo(() => {
+    const bnpbRecent = bnpbAvailable ? bnpbEvents.filter((e) => withinDays(e.ts, 30, nowMs)) : [];
+    const bnpbActive = bnpbRecent.length;
+    const nullRec = (): Record<string, number | null> => {
+      const r: Record<string, number | null> = {};
+      for (const c of ALL_COMMODITIES) r[c] = null;
+      return r;
+    };
+    return [
+      {
+        source: 'BNPB',
+        count30d: bnpbAvailable ? bnpbActive : null,
+        fresh48h: bnpbAvailable && bnpbEvents.some((e) => withinHours(e.ts, 48, nowMs)),
+        perCommodity: bnpbActive > 0 ? { ...perCommoditySpikes } : nullRec(),
+        note: 'Feed BNPB DIBI',
+      },
+      {
+        source: 'BMKG',
+        count30d: weatherCount,
+        fresh48h: (weatherCount ?? 0) > 0,
+        perCommodity: (weatherCount ?? 0) > 0 ? { ...perCommoditySpikes } : nullRec(),
+        note: 'Snapshot poligon disruptif high/critical',
+      },
+      {
+        source: 'FIRMS',
+        count30d: fireCount,
+        fresh48h: fireFresh,
+        perCommodity: (fireCount ?? 0) > 0 ? { ...perCommoditySpikes } : nullRec(),
+        note: 'Hotspot VIIRS NRT',
+      },
+    ];
+  }, [bnpbEvents, bnpbAvailable, weatherCount, fireCount, fireFresh, perCommoditySpikes, nowMs]);
+
+  // ---- CorrelationMatrix: Pearson antar-komoditas, overlap ≥10 ----
+  const corrCells: CorrCell[] = useMemo(() => {
+    const aligned = alignByDate(
+      ALL_COMMODITIES.map((c) => {
+        const pts = multiSeries[c] ?? [];
+        return { times: pts.map((p) => p.time), prices: pts.map((p) => p.price) };
+      }),
+    );
+    const cells: CorrCell[] = [];
+    for (let i = 0; i < ALL_COMMODITIES.length; i++) {
+      for (let j = i + 1; j < ALL_COMMODITIES.length; j++) {
+        const xs: number[] = [];
+        const ys: number[] = [];
+        for (const row of aligned) {
+          const a = row.values[i];
+          const b = row.values[j];
+          if (a != null && b != null) {
+            xs.push(a);
+            ys.push(b);
+          }
+        }
+        cells.push({ a: ALL_COMMODITIES[i], b: ALL_COMMODITIES[j], r: pearson(xs, ys, 10), n: xs.length });
+      }
+    }
+    return cells;
+  }, [multiSeries]);
+
+  // ---- TimeHeatstrip: 4 pekan x komoditas + streak ----
+  const heatstripRows: HeatStripRow[] = useMemo(() => {
+    const rows: HeatStripRow[] = [];
+    for (const c of ALL_COMMODITIES) {
+      const pts = multiSeries[c] ?? [];
+      if (pts.length < 14) continue;
+      // Bucket per pekan kalender (ISO week) dari 4 pekan terakhir berdata.
+      const byWeek = new Map<string, number[]>();
+      for (const p of pts) {
+        const d = new Date(p.time);
+        if (Number.isNaN(d.getTime())) continue;
+        const monday = new Date(d);
+        const dow = (d.getDay() + 6) % 7;
+        monday.setDate(d.getDate() - dow);
+        const key = monday.toISOString().slice(0, 10);
+        const arr = byWeek.get(key) ?? [];
+        arr.push(p.price);
+        byWeek.set(key, arr);
+      }
+      const keys = Array.from(byWeek.keys()).sort().slice(-4);
+      if (keys.length < 2) continue;
+      const means = keys.map((k) => {
+        const arr = byWeek.get(k) ?? [];
+        return arr.reduce((s, v) => s + v, 0) / Math.max(arr.length, 1);
+      });
+      const weeks = keys.map((k, idx) => {
+        if (idx === 0) {
+          return {
+            key: k,
+            label: (() => {
+              try {
+                return new Date(k).toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit' });
+              } catch {
+                return k.slice(5);
+              }
+            })(),
+            changePct: null as number | null,
+            up: null as boolean | null,
+          };
+        }
+        const prev = means[idx - 1];
+        const cur = means[idx];
+        const ch = prev !== 0 ? ((cur - prev) / Math.abs(prev)) * 100 : null;
+        return {
+          key: k,
+          label: (() => {
+            try {
+              return new Date(k).toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit' });
+            } catch {
+              return k.slice(5);
+            }
+          })(),
+          changePct: ch,
+          up: ch != null ? ch > 0 : null,
+        };
+      });
+      let streak = 0;
+      for (let i = weeks.length - 1; i >= 1; i--) {
+        if (weeks[i].up) streak++;
+        else break;
+      }
+      rows.push({ commodity: c, weeks, streak });
+    }
+    return rows;
+  }, [multiSeries]);
 
   return (
     <div className="w-full min-h-full lg:h-full flex flex-col gap-6 pointer-events-auto">
@@ -319,26 +737,41 @@ export default function DashboardAnalyticsSection({
         <div className="flex items-center gap-1.5" role="group" aria-label="Rentang waktu">
           {DAY_OPTIONS.map((d) => {
             const isActive = days === d;
+            const pillTip = `${d} hari terakhir`;
             return (
-              <button
+              <AnalyticsTip
                 key={d}
-                type="button"
-                aria-pressed={isActive}
-                aria-label={`${d} hari terakhir`}
-                title={`${d} hari terakhir`}
-                onClick={() => setDays(d)}
-                className={`rounded-full border backdrop-blur text-xs tabular-nums font-medium h-8 px-3 motion-safe:transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-black ${
-                  isActive
-                    ? 'border-white/20 bg-white text-black'
-                    : 'border-white/20 bg-white/10 text-white/70 hover:text-white hover:bg-white/10'
-                }`}
-              >
-                {d} hari
-              </button>
+                trigger={
+                  <button
+                    type="button"
+                    aria-pressed={isActive}
+                    aria-label={pillTip}
+                    title={pillTip}
+                    onClick={() => setDays(d)}
+                    className={`rounded-full border backdrop-blur text-xs tabular-nums font-medium h-8 px-3 motion-safe:transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-black ${
+                      isActive
+                        ? 'border-white/20 bg-white text-black'
+                        : 'border-white/20 bg-white/10 text-white/70 hover:text-white hover:bg-white/10'
+                    }`}
+                  >
+                    {d} hari
+                  </button>
+                }
+                content={
+                  <div className="min-w-44 space-y-0.5">
+                    <TipTitle>Rentang {d} hari</TipTitle>
+                    <TipRow k="Deret" v={`${d} titik terakhir`} />
+                    <TipRow k="Sumber" v="PIHPS Bank Indonesia" />
+                  </div>
+                }
+              />
             );
           })}
         </div>
       </div>
+
+      {/* 7 KPI Analitik — useMemo dari GETs yang ada */}
+      <KpiStrip kpis={kpis} loading={spikesLoading || isLoadingPrices} />
 
       <div className="w-full grid grid-cols-12 gap-6">
 
@@ -376,16 +809,47 @@ export default function DashboardAnalyticsSection({
               <div className="h-28 flex items-end gap-2 pt-2">
                 {barHeights.map((h, i) => {
                   const t = priceTimes[i];
+                  const price = priceHistory[i];
+                  const prev = i > 0 ? priceHistory[i - 1] : null;
+                  const dRp = prev != null ? price - prev : null;
+                  const dPct = prev != null && prev !== 0 && dRp != null ? (dRp / Math.abs(prev)) * 100 : null;
                   const dateLabel = t ? formatDayMonth(t) : `T-${priceHistory.length - 1 - i}`;
                   const tooltip = t
-                    ? `${dateLabel}: Rp ${priceHistory[i].toLocaleString('id-ID')}`
-                    : `T-${priceHistory.length - 1 - i}: Rp ${priceHistory[i].toLocaleString('id-ID')}`;
+                    ? `${dateLabel}: Rp ${price.toLocaleString('id-ID')}`
+                    : `T-${priceHistory.length - 1 - i}: Rp ${price.toLocaleString('id-ID')}`;
+                  const regionLabel = priceRegion
+                    ? (REGION_OPTIONS.find((o) => o.value === priceRegion)?.label ?? prettifyRegion(priceRegion))
+                    : 'Semua';
                   return (
-                    <div key={i} className="flex-1 bg-white/5 relative group h-full rounded-t-sm overflow-hidden flex flex-col justify-end items-center">
-                      <div
-                        className="w-full border-t-2 motion-safe:transition-all motion-safe:duration-300"
-                        style={{ height: h, backgroundColor: `${barColors[i].bg}33`, borderColor: barColors[i].border }}
-                        title={tooltip}
+                    <div key={i} className="flex-1 bg-white/5 h-full rounded-t-sm overflow-hidden flex flex-col justify-end items-center">
+                      <AnalyticsTip
+                        trigger={
+                          <div
+                            role="img"
+                            aria-label={tooltip}
+                            title={tooltip}
+                            tabIndex={0}
+                            className="w-full border-t-2 motion-safe:transition-all motion-safe:duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+                            style={{ height: h, backgroundColor: `${barColors[i].bg}33`, borderColor: barColors[i].border }}
+                          />
+                        }
+                        content={
+                          <div className="min-w-44 space-y-0.5">
+                            <TipTitle>Harga {commodityLabel}</TipTitle>
+                            <TipRow k="Harga" v={`${fmtRp(price)} / kg`} />
+                            <TipRow k="Tgl" v={t ? formatFullDate(t) : dateLabel} />
+                            <TipRow k="Wilayah" v={regionLabel} />
+                            <TipRow
+                              k="Δ prev"
+                              v={
+                                dPct == null || dRp == null
+                                  ? 'titik pertama'
+                                  : `${dPct >= 0 ? '+' : ''}${dPct.toFixed(1)}% (${dRp >= 0 ? '+' : ''}${fmtRp(dRp)})`
+                              }
+                            />
+                            <TipSource>PIHPS Bank Indonesia</TipSource>
+                          </div>
+                        }
                       />
                       <span className="text-xs text-slate-400 tabular-nums mt-1">{dateLabel}</span>
                     </div>
@@ -448,20 +912,50 @@ export default function DashboardAnalyticsSection({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredSpikes.slice(0, 8).map((s) => (
-                    <TableRow key={`${s.commodity}::${s.region}`} className="hover:bg-white/5">
-                      <TableCell className="py-3 text-xs tabular-nums font-medium text-slate-200">{prettifyRegion(s.commodity)}</TableCell>
-                      <TableCell className="py-3 text-xs tabular-nums text-slate-400">{prettifyRegion(s.region)}</TableCell>
-                      <TableCell className="py-3 text-xs tabular-nums text-right">
-                        <Badge variant="outline" className={`${severityBadge(s.severity)} font-bold tabular-nums`}>
-                          {s.spike_pct >= 0 ? '+' : ''}{s.spike_pct.toFixed(1)}%
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="py-3 text-xs tabular-nums text-right font-bold text-slate-200">
-                        Rp {Math.round(s.current_price).toLocaleString('id-ID')}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {filteredSpikes.slice(0, 8).map((s) => {
+                    const spikeTip = `${prettifyRegion(s.commodity)} · ${prettifyRegion(s.region)}: ${s.spike_pct >= 0 ? '+' : ''}${s.spike_pct.toFixed(1)}% (${s.severity})`;
+                    return (
+                      <TableRow key={`${s.commodity}::${s.region}`} className="hover:bg-white/5">
+                        <TableCell className="py-3 text-xs tabular-nums font-medium text-slate-200">
+                          <AnalyticsTip
+                            trigger={
+                              <div
+                                role="img"
+                                aria-label={spikeTip}
+                                title={spikeTip}
+                                tabIndex={0}
+                                className="rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+                              >
+                                {prettifyRegion(s.commodity)}
+                              </div>
+                            }
+                            content={
+                              <div className="min-w-48 space-y-0.5">
+                                <TipTitle>Lonjakan {prettifyRegion(s.commodity)}</TipTitle>
+                                <TipRow k="Wilayah" v={prettifyRegion(s.region)} />
+                                <TipRow k="Harga" v={fmtRp(s.current_price)} />
+                                <TipRow k="Baseline 30 hari" v={fmtRp(s.baseline_price)} />
+                                <TipRow k="Spike" v={`${s.spike_pct >= 0 ? '+' : ''}${s.spike_pct.toFixed(1)}%`} />
+                                <TipRow k="Severity" v={s.severity} />
+                                <TipRow k="Status" v={s.status} />
+                                <TipRow k="Terdeteksi" v={formatFullDate(s.detected_at)} />
+                                <TipSource>PIHPS Bank Indonesia · ambang 5/10/15%</TipSource>
+                              </div>
+                            }
+                          />
+                        </TableCell>
+                        <TableCell className="py-3 text-xs tabular-nums text-slate-400">{prettifyRegion(s.region)}</TableCell>
+                        <TableCell className="py-3 text-xs tabular-nums text-right">
+                          <Badge variant="outline" className={`${severityBadge(s.severity)} font-bold tabular-nums`}>
+                            {s.spike_pct >= 0 ? '+' : ''}{s.spike_pct.toFixed(1)}%
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="py-3 text-xs tabular-nums text-right font-bold text-slate-200">
+                          Rp {Math.round(s.current_price).toLocaleString('id-ID')}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
@@ -478,6 +972,169 @@ export default function DashboardAnalyticsSection({
               </span>
             </button>
           )}
+        </div>
+
+        {/* BNPB disaster events — async, non-blocking, honest-empty */}
+        <div className="space-y-3 border-t border-white/10 pt-4">
+          <div className="flex justify-between items-center">
+            <h3 className="text-sm font-semibold tracking-wide text-white flex items-center gap-2">
+              Peringatan kebencanaan BNPB
+            </h3>
+            <span className="flex items-center gap-1.5">
+              {bnpbLoading ? (
+                <span className="text-xs font-mono text-slate-400 tabular-nums">memuat…</span>
+              ) : !bnpbAvailable ? (
+                <Badge variant="outline" className="bg-slate-500/15 text-slate-300 border-slate-400/30 text-[11px] tabular-nums">
+                  BNPB UNAVAILABLE
+                </Badge>
+              ) : bnpbStale ? (
+                <Badge variant="outline" className="bg-amber-500/15 text-amber-300 border-amber-400/30 text-[11px] tabular-nums">
+                  STALE &gt;24h
+                </Badge>
+              ) : (
+                <span className="text-xs font-mono text-slate-400 tabular-nums">
+                  {`${bnpbEvents.length} kejadian`}
+                </span>
+              )}
+            </span>
+          </div>
+          <p className="text-xs text-slate-500 font-sans -mt-1 tabular-nums">
+            Sumber: BNPB DIBI/bnpb.go.id · cache 1 jam · GET-only
+          </p>
+
+          {bnpbLoading ? (
+            <div className="flex flex-col gap-2">
+              <LoadingSkeleton rows={3} rowClassName="h-11" />
+              <AnalyticsEmpty loading />
+            </div>
+          ) : !bnpbAvailable || bnpbEvents.length === 0 ? (
+            <AnalyticsEmpty
+              message={
+                !bnpbAvailable
+                  ? 'Feed BNPB belum tersedia — poller 1 jam mencoba ulang (tidak memengaruhi harga/spike).'
+                  : 'Tidak ada kejadian kebencanaan BNPB di Sumatera pada jendela ini.'
+              }
+            />
+          ) : (
+            <div className="overflow-x-auto rounded-lg border border-white/10">
+              <Table>
+                <TableHeader className="h-11 bg-[#0c1017]">
+                  <TableRow>
+                    <TableHead className="h-11 bg-[#0c1017]">Kejadian</TableHead>
+                    <TableHead className="h-11 bg-[#0c1017]">Jenis</TableHead>
+                    <TableHead className="h-11 bg-[#0c1017] text-right">Radius</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {bnpbEvents.slice(0, 8).map((e) => (
+                    <TableRow key={e.dedup_key} className="hover:bg-white/5">
+                      <TableCell className="py-3 text-xs tabular-nums font-medium text-slate-200 max-w-55">
+                        <AnalyticsTip
+                          trigger={
+                            <div
+                              role="img"
+                              aria-label={e.title}
+                              title={e.title}
+                              tabIndex={0}
+                              className="truncate rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+                            >
+                              {e.title}
+                            </div>
+                          }
+                          content={
+                            <div className="min-w-48 max-w-64 space-y-0.5">
+                              <TipTitle>{e.title}</TipTitle>
+                              <TipRow k="Jenis" v={e.event_type} />
+                              <TipRow k="Severity" v={e.severity} />
+                              <TipRow k="Radius" v={e.radius_km != null ? `${Number(e.radius_km)} km` : '—'} />
+                              <TipRow k="Waktu" v={formatFullDate(e.ts)} />
+                              <TipSource>BNPB DIBI/bnpb.go.id · cache 1 jam</TipSource>
+                            </div>
+                          }
+                        />
+                      </TableCell>
+                      <TableCell className="py-3 text-xs tabular-nums text-slate-400">
+                        <Badge variant="outline" className={`${severityBadge(e.severity)} font-bold tabular-nums mr-1.5`}>
+                          {e.severity}
+                        </Badge>
+                        {e.event_type}
+                      </TableCell>
+                      <TableCell className="py-3 text-xs tabular-nums text-right text-slate-300">
+                        {e.radius_km != null ? `${Number(e.radius_km)} km` : '—'}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </div>
+
+        {/* Heatmap harga lintas wilayah x komoditas */}
+        <div className="space-y-3 border-t border-white/10 pt-4">
+          <div className="flex justify-between items-center">
+            <h3 className="text-sm font-semibold tracking-wide text-white flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-slate-400" /> Peta panas lonjakan wilayah × komoditas
+            </h3>
+            <span className="text-xs font-mono text-slate-400 tabular-nums">
+              {spikesLoading ? 'memuat…' : `${heatCells.length} sel`}
+            </span>
+          </div>
+          <p className="text-xs text-slate-500 font-sans -mt-1 tabular-nums">
+            Spike% maksimum 30 hari · ambang 5/10/15% · semua wilayah &amp; komoditas
+          </p>
+          <PriceHeatmap
+            cells={heatCells}
+            commodities={[...COMMODITY_OPTIONS]}
+            regions={heatRegions}
+            loading={spikesLoading}
+          />
+        </div>
+
+        {/* Heatmap ko-okurensi bencana x komoditas */}
+        <div className="space-y-3 border-t border-white/10 pt-4">
+          <div className="flex justify-between items-center">
+            <h3 className="text-sm font-semibold tracking-wide text-white flex items-center gap-2">
+              <Flame className="w-4 h-4 text-slate-400" /> Ko-okurensi bencana × komoditas
+            </h3>
+            <span className="text-xs font-mono text-slate-400 tabular-nums">
+              {bencanaLoading || bnpbLoading ? 'memuat…' : '30 hari · flag 48 jam'}
+            </span>
+          </div>
+          <p className="text-xs text-slate-500 font-sans -mt-1 tabular-nums">
+            BNPB/BMKG/FIRMS aktif × spike komoditas · GET-only
+          </p>
+          <BencanaHeatmap
+            rows={bencanaRows}
+            commodities={[...COMMODITY_OPTIONS]}
+            loading={bencanaLoading || bnpbLoading}
+          />
+        </div>
+
+        {/* Matriks korelasi + streak mingguan */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 border-t border-white/10 pt-4">
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold tracking-wide text-white">Korelasi harga antar-komoditas</h3>
+            <p className="text-xs text-slate-500 font-sans -mt-1 tabular-nums">
+              Pearson −1…1 · |r|&gt;0.7 ditandai · n&lt;10 tidak dihitung
+            </p>
+            <CorrelationMatrix
+              commodities={[...COMMODITY_OPTIONS]}
+              cells={corrCells}
+              loading={multiLoading}
+            />
+          </div>
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold tracking-wide text-white">Streak mingguan per komoditas</h3>
+            <p className="text-xs text-slate-500 font-sans -mt-1 tabular-nums">
+              4 pekan terakhir · WoW rata-rata pekan · butuh ≥14 titik
+            </p>
+            <TimeHeatstrip
+              rows={heatstripRows}
+              commodities={[...COMMODITY_OPTIONS]}
+              loading={multiLoading}
+            />
+          </div>
         </div>
 
       </section>
