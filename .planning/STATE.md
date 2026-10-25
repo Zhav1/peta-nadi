@@ -2,17 +2,17 @@
 gsd_state_version: "1.0"
 milestone: M7
 milestone_name: Live News Trust, Source Breadth & Forecast Waspada Integrity
-current_phase: 115
-current_phase_name: Watermelon MCP Connect (complete)
+current_phase: 119
+current_phase_name: Merge Reconciliation & Telemetry Pipeline Acceleration (complete)
 status: complete
-stopped_at: "Phase 115 Watermelon MCP Connect executed and verified. AnalyticsSection.tsx converted to Base-UI Select/Card/Chip/Tooltip/Empty/Skeleton; Map HUD Telemetry de-cluttered to Unified Tactical Command Ribbon (h-8, tabular-nums). Tooltip/Popover Portal context invariants hardened. Verified with tsc (0 errors), test_phase115 (8/8 pass), and live Chrome DevTools zero runtime errors."
+stopped_at: "Phase 119 Merge Reconciliation & Telemetry Pipeline Acceleration executed and verified. AnalyticsSection.tsx merged cleanly with Zhav1 improvements and Base-UI primitives (0 tsc errors, 8/8 test_phase115 pass); vehicles_router.py optimized to single-pass with in-process sliding TTL cache (warm latency ~10ms)."
 last_updated: "2026-10-25T21:05:00.000Z"
 last_activity: 2026-10-25
 last_activity_desc: "Executed Phase 115: Watermelon MCP Connect. Integrated Base-UI primitives in AnalyticsSection.tsx, unified Map HUD Tactical Command Ribbon, and fixed Base UI 1.9.0 Portal context invariant in Tooltip/Popover."
 state_head: HEAD
 progress:
-  total_phases: 115
-  completed_phases: 115
+  total_phases: 119
+  completed_phases: 119
   total_plans: 128
   completed_plans: 128
   percent: 100.0
@@ -166,7 +166,9 @@ Upstream Phases 87/88 above (Mapbox turn-by-turn; client-isolated session, merge
 | 113 | Watermelon Tables P2 | **COMPLETE** ✅ | `Table` block `h-11` rows + `Progress`; `priceRegion` vs `corridorFilter` (Koridor) scope split healed. Docs: `113-watermelon-tables-p2/`. |
 | 114 | Watermelon Polish P3 | **COMPLETE** ✅ | `AnimatedValue`/`LoadingSkeleton`/`motion-safe` throughout; P1/P3 collision healed via rename. Docs: `114-watermelon-polish-p3/`. |
 | 115 | Watermelon MCP Connect | **COMPLETE** ✅ | Integrated Base-UI Select/Card/Chip/Tooltip/Empty/Skeleton primitives, de-cluttered TopNavTelemetry into Unified Tactical Command Ribbon (h-8, tabular-nums), enforced no-portal-over-mapbox. 8/8 tests, 0 tsc errors. Git: `f22109b`. Docs: `115-watermelon-mcp-connect/`. |
-| 118 | UI Anti-Slop Reconstruction Gelombang 3 & 4 | **PLANNED** ⏳ | Bento Grid 8-4 restructuring in Analitik with interactive Recharts AreaChart, visual empty states in Laporan, accessible Date Range Picker, and 2-column Fleet Onboarding modal. Docs: `118-ui-slop-reconstruction-gelombang-3-4/`. |
+| 118 | Analitik Fixes | **COMPLETE** ✅ | Removed map/globe canvas entirely -> full-width single column; hand-rolled glass days and shimmer Lihat Laporan; REGION_TO_DB mapping; formatDayMonth / formatFullDate calendar date trend; table h-11. Docs: `118-analitik-fixes/`. |
+| 119 | Merge Reconciliation & Telemetry Pipeline Acceleration | **COMPLETE** ✅ | Reconciled 4aab64d with Phase 115 Base-UI primitives in AnalyticsSection.tsx; accelerated vehicles_router.py with single-pass computation and 8s sliding TTL cache (latency ~10ms). Docs: `119-merge-reconciliation-telemetry-acceleration/`. |
+| 120 | UI Anti-Slop Reconstruction Gelombang 3 & 4 | **PLANNED** ⏳ | Bento Grid 8-4 restructuring in Analitik with interactive Recharts AreaChart, visual empty states in Laporan, accessible Date Range Picker, and 2-column Fleet Onboarding modal. Docs: `120-ui-slop-reconstruction-gelombang-3-4/`. |
 
 
 
@@ -327,3 +329,11 @@ These scripts validate the economic correlation hypotheses that underpin Agent 5
 - Kept: shared filters (4 komoditas × 8 provinsi + Semua × 7/14/30d, URL sync `?commodity&region&days`), green/red trend (`#ef4444` up / `#10b981` down, `>= 3` guard), spikes honest-empty (`spikeRecordsTotal < 3` guard message), `Lihat Laporan` → `onSwitchTab('reports')`, days a11y (`role=group` + `aria-pressed`/`aria-label`/`title`).
 - Evidence (window tail): tsc 0, build 7/7, pytest 49 passed, Playwright 1 passed (live, E2E no-interference preserved).
 - Docs: `.planning/phases/117-analitik-simplification/` (PLAN.md + WALKTHROUGH.md + LEARNINGS.md).
+
+## Phase 118 Log (2026-10-25)
+
+- Phase 118 (Analitik Fixes) logged as COMPLETE ? � docs-only pass, no app edits, no commit.
+- Removed: map/globe canvas entirely ? full-width single column (AnalyticsSection.tsx:343-346, contract 24-28).
+- Kept/fixed: hand-rolled glass days (L319-339, role=group + aria-pressed/label/title, no shadcn add) + shimmer Lihat Laporan zero-motion (L469-480, motion-safe only); REGION_TO_DB 8 slugs ? north_sumatra, Semua '' ? undefined (L49-65, applied L195/L235); trend DD/MM per bar (formatDayMonth L116-122, T- fallback only when time missing L379) + header date (formatFullDate L124-130, call L359) + Tren min(days,len) header (L370) + green/red bars (#ef4444/#10b981, L267-273, >= 3 guard L277); spikes keep honest (SpikeItem/severityBadge L94-114, server-filtered loadSpikes + spikeRecordsTotal L230-257, sorted filteredSpikes L280-284, guard L431-438, Table h-11 L441-466).
+- Evidence (window tail): tsc 0, build 7/7, pytest green (shared tail), Playwright 1 passed (live, E2E no-interference preserved).
+- Docs: .planning/phases/118-analitik-fixes/ (PLAN.md + WALKTHROUGH.md + LEARNINGS.md).

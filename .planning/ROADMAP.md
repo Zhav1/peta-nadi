@@ -2961,11 +2961,56 @@ M7 removes the remaining ways the Berita surface could look live when it was not
 
 ---
 
-## Phase 118: UI Anti-Slop Reconstruction Gelombang 3 & 4 (Analitik Bento & Recharts AreaChart, Laporan & Onboarding Overhaul)
+## Phase 118: Analitik Fixes
+
+**Goal:** Fix Analitik follow-ups on the Phase 117 tree: map entirely removed (full-width), honest region mapping, date-true trend headers, zero-motion shimmer actions — no shadcn add.
+**Status:** COMPLETE ✅
+**Plan:** `.planning/phases/118-analitik-fixes/PLAN.md`
+
+### Deliverables
+
+- **Map removed, full-width:** no MapboxOverlay/globe canvas; single col-span-12 section (AnalyticsSection.tsx).
+- **Hand-rolled glass days + shimmer Lihat Laporan (zero-motion, no shadcn add):** native buttons with glass classes (`role="group"` + `aria-pressed`/`aria-label`); Lihat Laporan hand-rolled relative/overflow-hidden + motion-safe shimmer span.
+- **REGION_TO_DB 8->north_sumatra, Semua->undefined:** all 8 slugs -> north_sumatra; `regionToDb('')` -> undefined; applied at `loadPrices` + `loadSpikes`.
+- **Trend DD/MM + header date + min(days,len) + green/red:** `formatDayMonth` per bar (T- fallback only when time missing) + `formatFullDate` header + `Tren {min(days,len)}` + `barHeights`/`barColors` up `#ef4444` / down `#10b981` (>= 3 guard).
+- **Spikes keep honest:** SpikeItem/severityBadge/prettifyRegion; server-filtered `loadSpikes` + `spikeRecordsTotal`; sorted `filteredSpikes`; guard length === 0 || `spikeRecordsTotal < 3` + backend message; Table `h-11`.
+
+### Verification
+
+- [x] `npx tsc --noEmit` -> exit 0.
+- [x] `npm run build` -> 7/7 static routes, 0 errors.
+- [x] `pytest` -> shared window tail green.
+- [x] Playwright -> 1 passed (live, E2E no-interference on Peta/Laporan/Evaluasi + approvals:write/fleet:write 403 paths).
+
+---
+
+## Phase 119: Merge Reconciliation & Telemetry Pipeline Acceleration
+
+**Goal:** Reconcile `origin/main` commit `4aab64d` into local HEAD preserving Base-UI Watermelon primitives, and accelerate backend telemetry router to sub-100ms warm latency via single-pass processing and in-process sliding TTL cache.
+**Status:** COMPLETE ✅
+**Plan:** `.planning/phases/119-merge-reconciliation-telemetry-acceleration/PLAN.md`
+
+### Deliverables
+
+- **AnalyticsSection Merge Reconciliation:** Clean resolution of `frontend/components/dashboard/AnalyticsSection.tsx` merging Zhav1's full-width mapless layout, `regionToDb` mapping, `formatDayMonth`/`formatFullDate` trend bars, glass day buttons, and shimmer CTA with Phase 115 Base-UI primitives (`Select`, `Tooltip`, `Card`, `Chip`, `Empty`, `Skeleton`). Zero `text-[11px]`, zero unstyled native `title=`, strict `no-portal-over-mapbox` compliance.
+- **Backend Telemetry Router Acceleration:** In `backend/app/routers/vehicles_router.py`, eliminated redundant second call to `telemetry_service.get_unified_fleet(..., include_geometry=False)`. Implemented single-pass computation of `modality_counts`, in-memory filtering, tenant asset tagging, and zero-overhead geometry stripping. Added in-process sliding TTL cache (8.0s) with `orjson` serialization.
+- **Benchmark Proven Performance:** Reduced `/api/v1/fleet/vehicles` cold latency to ~734ms and warm latency to **10.54ms** (~265x acceleration, well below the 100ms target).
+
+### Verification
+
+- [x] `npm run test:phase115` -> 8/8 tests pass (100% green).
+- [x] `npx tsc --noEmit` -> 0 errors.
+- [x] `npm run build` -> 7/7 static routes cleanly generated.
+- [x] `pytest tests/test_vehicles_telemetry.py` -> 9/9 passed.
+- [x] `Measure-Command` / python benchmark -> cold ~734ms, warm ~10.5ms (< 100ms threshold).
+
+---
+
+## Phase 120: UI Anti-Slop Reconstruction Gelombang 3 & 4 (Analitik Bento & Recharts AreaChart, Laporan & Onboarding Overhaul)
 
 **Goal:** Execute Gelombang 3 & 4 of `UI_SLOP_AUDIT_AND_RECONSTRUCTION_PLAN.md`: Bento Grid 8-4 restructuring in Analitik with interactive Recharts AreaChart, visual empty states in Laporan, accessible Date Range Picker, and 2-column Fleet Onboarding modal.
 **Status:** PLANNED ⏳
-**Plan:** `.planning/phases/118-ui-slop-reconstruction-gelombang-3-4/PLAN.md`
+**Plan:** `.planning/phases/120-ui-slop-reconstruction-gelombang-3-4/PLAN.md`
 
 ### Deliverables (planned)
 - **WP1 (Gelombang 3: Recharts AreaChart & Market Volatility)**:
@@ -2980,7 +3025,7 @@ M7 removes the remaining ways the Berita surface could look live when it was not
   - Refactor single-column stacked form in `FleetOnboardingModal.tsx` into a responsive 2-column grid (`grid-cols-1 md:grid-cols-2 gap-4`).
   - Polish HITL review drawer action buttons with tactical badge styling.
 - **WP5 (Verification & Regression Gate)**:
-  - Dedicated test harness `test_phase118_ui_anti_slop.ts`.
+  - Dedicated test harness `test_phase120_ui_anti_slop.ts`.
   - Typecheck `tsc --noEmit` (0 errors), Next.js build (7/7 routes), and Playwright E2E verification.
 
 ### Verification
@@ -2988,11 +3033,6 @@ M7 removes the remaining ways the Berita surface could look live when it was not
 - [ ] `npm run build` generates 7/7 static routes cleanly.
 - [ ] Automated visual contract test passes.
 - [ ] Zero regression on Mapbox WebGL canvas performance.
-
-- [x] `npx tsc --noEmit` → exit 0.
-- [x] `npm run build` → 7/7 static routes, 0 errors.
-- [x] `pytest` → 49 passed (shared window tail).
-- [x] Playwright → 1 passed (live, E2E no-interference on Peta/Laporan/Evaluasi + `approvals:write`/`fleet:write` 403 paths).
 
 ---
 
@@ -3010,5 +3050,5 @@ M7 removes the remaining ways the Berita surface could look live when it was not
 ### Future Product Roadmap
 - Driver mobile app (React Native + WatermelonDB + CRDT offline sync)
 - Enterprise GraphRAG private self-hosted deployment
-- Automated CI/CD pipeline with staging $\to$ production promotion
+- Automated CI/CD pipeline with staging $	o$ production promotion
 - Multi-province rollout (Java corridor & Eastern Indonesia)

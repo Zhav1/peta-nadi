@@ -99,3 +99,7 @@ PreHub (*Predictive Logistics Hub & Early Warning System*) adalah platform intel
   - API publik kesehatan logistik dan deployment private cloud kementerian (Kemendag, Kemenhub, BNPB, Bapanas, Bulog).
 - **Watermelon MCP Connect (Phase 115, PLANNED ⏳)**
   - Menutup 7 primitif yang belum ada (Select/Chip/Card/Empty/Skeleton/Tooltip/Chart) via Watermelon MCP; `npx shadcn add` dilarang; `hideWhenDetached` absen di Base-UI 1.9.0; pola `asChild` digate saat review.
+
+- **Analitik Fixes (Phase 118, COMPLETE ?)**
+  - Peta/globe canvas dihapus total ? satu kolom penuh col-span-12; day pills glass hand-rolled + tombol Lihat Laporan shimmer motion-safe: tanpa shadcn add; REGION_TO_DB 8 slug ? 
+orth_sumatra, Semua ? undefined; tren DD/MM per bar + tanggal header + Tren min(days,len) + hijau/merah (#10b981/#ef4444, guard >= 3); spikes tetap honest-empty (spikeRecordsTotal < 3 guard + pesan backend). Read-only GET prices + GET spikes. Docs: 118-analitik-fixes/.
