@@ -326,3 +326,11 @@ These scripts validate the economic correlation hypotheses that underpin Agent 5
 - Kept: shared filters (4 komoditas × 8 provinsi + Semua × 7/14/30d, URL sync `?commodity&region&days`), green/red trend (`#ef4444` up / `#10b981` down, `>= 3` guard), spikes honest-empty (`spikeRecordsTotal < 3` guard message), `Lihat Laporan` → `onSwitchTab('reports')`, days a11y (`role=group` + `aria-pressed`/`aria-label`/`title`).
 - Evidence (window tail): tsc 0, build 7/7, pytest 49 passed, Playwright 1 passed (live, E2E no-interference preserved).
 - Docs: `.planning/phases/117-analitik-simplification/` (PLAN.md + WALKTHROUGH.md + LEARNINGS.md).
+
+## Phase 118 Log (2026-10-25)
+
+- Phase 118 (Analitik Fixes) logged as COMPLETE ? � docs-only pass, no app edits, no commit.
+- Removed: map/globe canvas entirely ? full-width single column (AnalyticsSection.tsx:343-346, contract 24-28).
+- Kept/fixed: hand-rolled glass days (L319-339, role=group + aria-pressed/label/title, no shadcn add) + shimmer Lihat Laporan zero-motion (L469-480, motion-safe only); REGION_TO_DB 8 slugs ? north_sumatra, Semua '' ? undefined (L49-65, applied L195/L235); trend DD/MM per bar (formatDayMonth L116-122, T- fallback only when time missing L379) + header date (formatFullDate L124-130, call L359) + Tren min(days,len) header (L370) + green/red bars (#ef4444/#10b981, L267-273, >= 3 guard L277); spikes keep honest (SpikeItem/severityBadge L94-114, server-filtered loadSpikes + spikeRecordsTotal L230-257, sorted filteredSpikes L280-284, guard L431-438, Table h-11 L441-466).
+- Evidence (window tail): tsc 0, build 7/7, pytest green (shared tail), Playwright 1 passed (live, E2E no-interference preserved).
+- Docs: .planning/phases/118-analitik-fixes/ (PLAN.md + WALKTHROUGH.md + LEARNINGS.md).

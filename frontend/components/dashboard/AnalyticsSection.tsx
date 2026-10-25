@@ -1,11 +1,8 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import mapboxgl from 'mapbox-gl';
-import { MapboxOverlay } from '@deck.gl/mapbox';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   TrendingUp,
-  Info,
   Filter,
   Flame,
   FileText
@@ -13,14 +10,9 @@ import {
 import { api } from '@/lib/api';
 import type { CrisisState, CorridorContext, RouteRecommendation } from '@/lib/types';
 import { Badge } from '@/components/base-ui/badge';
-import { Button } from '@/components/base-ui/button';
 import { Empty as AnalyticsEmpty } from '@/components/base-ui/empty';
 import { Skeleton as LoadingSkeleton } from '@/components/base-ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/base-ui/table';
-
-import 'mapbox-gl/dist/mapbox-gl.css';
-
-mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || '';
 
 interface AnalyticsSectionProps {
   selectedCrisis?: CrisisState | null;
@@ -31,7 +23,7 @@ interface AnalyticsSectionProps {
 
 // ---------------------------------------------------------------------------
 // Analitik (simplified): shared filter bar (commodity/region/days) + price
-// trend + spikes table + base Mapbox globe canvas (no overlay).
+// trend + spikes table, single full-width column (no map canvas).
 // Read-only: GET prices + spikes only.
 // ---------------------------------------------------------------------------
 
@@ -53,6 +45,24 @@ const REGION_OPTIONS = [
   { value: 'jambi', label: 'Jambi' },
   { value: 'bengkulu', label: 'Bengkulu' },
 ] as const;
+
+// URL/state slugs (sumut, sumbar, …) stay unchanged; backend expects DB region
+// codes, so map slugs → DB codes at fetch time. '' → undefined (no filter).
+const REGION_TO_DB: Record<string, string> = {
+  sumut: 'north_sumatra',
+  sumbar: 'north_sumatra',
+  riau: 'north_sumatra',
+  aceh: 'north_sumatra',
+  sumsel: 'north_sumatra',
+  lampung: 'north_sumatra',
+  jambi: 'north_sumatra',
+  bengkulu: 'north_sumatra',
+};
+
+function regionToDb(slug: string): string | undefined {
+  if (!slug) return undefined;
+  return REGION_TO_DB[slug];
+}
 
 const DAY_OPTIONS = [7, 14, 30] as const;
 
@@ -103,6 +113,22 @@ function prettifyRegion(region: string): string {
   return (region || '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+function formatDayMonth(t: string): string {
+  try {
+    return new Date(t).toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit' });
+  } catch {
+    return t;
+  }
+}
+
+function formatFullDate(t: string): string {
+  try {
+    return new Date(t).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+  } catch {
+    return t;
+  }
+}
+
 export default function DashboardAnalyticsSection({
   selectedCrisis,
   corridorContext,
@@ -115,12 +141,9 @@ export default function DashboardAnalyticsSection({
   void corridorContext;
   void activeRoutes;
 
-  const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<mapboxgl.Map | null>(null);
-  const deckOverlayRef = useRef<MapboxOverlay | null>(null);
-
   const [ricePrice, setRicePrice] = useState<number | null>(null);
   const [priceHistory, setPriceHistory] = useState<number[]>([]);
+  const [priceTimes, setPriceTimes] = useState<string[]>([]);
   const [isLoadingPrices, setIsLoadingPrices] = useState<boolean>(true);
 
   const [commodity, setCommodity] = useState<string>('beras');
@@ -169,25 +192,29 @@ export default function DashboardAnalyticsSection({
     async function loadPrices() {
       setIsLoadingPrices(true);
       try {
+        const mapped = regionToDb(priceRegion);
         const res = await api.commodities.prices({
           commodity,
-          ...(priceRegion ? { region: priceRegion } : {}),
+          region: mapped,
           limit: days,
         });
         if (!isMounted) return;
         const items = res?.items ?? [];
         if (items.length > 0) {
           setRicePrice(items[0].price_idr);
-          setPriceHistory(items.map((item: { price_idr: number }) => item.price_idr).reverse());
+          setPriceHistory(items.map((item: { price_idr: number; time: string }) => item.price_idr).reverse());
+          setPriceTimes(items.map((item: { price_idr: number; time: string }) => item.time).reverse());
         } else {
           setRicePrice(null);
           setPriceHistory([]);
+          setPriceTimes([]);
         }
       } catch (err) {
         console.error('Failed to load prices for AnalyticsSection:', err);
         if (isMounted) {
           setRicePrice(null);
           setPriceHistory([]);
+          setPriceTimes([]);
         }
       } finally {
         if (isMounted) setIsLoadingPrices(false);
@@ -205,8 +232,9 @@ export default function DashboardAnalyticsSection({
     async function loadSpikes() {
       setSpikesLoading(true);
       try {
+        const mapped = regionToDb(priceRegion);
         const [spikeRes, priceRes] = await Promise.all([
-          api.commodities.spikes(priceRegion ? { region: priceRegion } : undefined),
+          api.commodities.spikes(mapped ? { region: mapped } : undefined),
           api.commodities.prices({ commodity, limit: 100 }),
         ]);
         if (!isMounted) return;
@@ -228,74 +256,6 @@ export default function DashboardAnalyticsSection({
     return () => { isMounted = false; };
   }, [commodity, priceRegion]);
 
-  // Initialize Mapbox base globe canvas (no data layers). ResizeObserver kept
-  // so the canvas fills its container on layout updates / tab switches.
-  useEffect(() => {
-    if (!mapContainerRef.current || mapRef.current) return;
-
-    try {
-      const map = new mapboxgl.Map({
-        container: mapContainerRef.current,
-        style: 'mapbox://styles/mapbox/dark-v11',
-        center: [104.5, 1.8],
-        zoom: 5.2,
-        pitch: 35,
-        bearing: -10,
-        projection: { name: 'globe' },
-        attributionControl: false,
-      });
-
-      mapRef.current = map;
-
-      map.on('load', () => {
-        map.resize();
-        map.setFog({
-          color: 'rgb(8, 10, 15)',
-          'high-color': 'rgb(12, 16, 24)',
-          'space-color': 'rgb(4, 6, 8)',
-          'horizon-blend': 0.05,
-        });
-        try {
-          const deckOverlay = new MapboxOverlay({
-            interleaved: false,
-            layers: []
-          });
-          map.addControl(deckOverlay as unknown as mapboxgl.IControl);
-          deckOverlayRef.current = deckOverlay;
-        } catch (deckErr) {
-          console.warn('Deck.gl overlay initialization error:', deckErr);
-        }
-      });
-    } catch (err) {
-      console.warn('Mapbox initialization error in AnalyticsSection:', err);
-    }
-
-    const resizeObserver = new ResizeObserver(() => {
-      if (mapRef.current) {
-        mapRef.current.resize();
-      }
-    });
-
-    if (mapContainerRef.current) {
-      resizeObserver.observe(mapContainerRef.current);
-    }
-
-    const timer = setTimeout(() => {
-      if (mapRef.current) {
-        mapRef.current.resize();
-      }
-    }, 150);
-
-    return () => {
-      clearTimeout(timer);
-      resizeObserver.disconnect();
-      if (mapRef.current) {
-        mapRef.current.remove();
-        mapRef.current = null;
-      }
-    };
-  }, []);
-
   // Compute bar heights safely from real priceHistory
   const maxP = priceHistory.length > 0 ? Math.max(...priceHistory) : 1;
   const minP = priceHistory.length > 0 ? Math.min(...priceHistory) * 0.95 : 0;
@@ -315,6 +275,7 @@ export default function DashboardAnalyticsSection({
   const commodityLabel = COMMODITY_OPTIONS.find((o) => o.value === commodity)?.label ?? commodity;
   // Honest empty: fewer than 3 records is not a trend.
   const hasEnoughRecords = priceHistory.length >= 3;
+  const lastTime = priceTimes.length > 0 ? priceTimes[priceTimes.length - 1] : null;
 
   const filteredSpikes = useMemo(() => {
     return [...spikes]
@@ -356,45 +317,33 @@ export default function DashboardAnalyticsSection({
           </select>
         </label>
         <div className="flex items-center gap-1.5" role="group" aria-label="Rentang waktu">
-          {DAY_OPTIONS.map((d) => (
-            <Button
-              key={d}
-              variant={days === d ? 'secondary' : 'outline'}
-              size="sm"
-              aria-pressed={days === d}
-              aria-label={`${d} hari terakhir`}
-              title={`${d} hari terakhir`}
-              onClick={() => setDays(d)}
-              className="tabular-nums text-xs h-8"
-            >
-              {d} hari
-            </Button>
-          ))}
+          {DAY_OPTIONS.map((d) => {
+            const isActive = days === d;
+            return (
+              <button
+                key={d}
+                type="button"
+                aria-pressed={isActive}
+                aria-label={`${d} hari terakhir`}
+                title={`${d} hari terakhir`}
+                onClick={() => setDays(d)}
+                className={`rounded-full border backdrop-blur text-xs tabular-nums font-medium h-8 px-3 motion-safe:transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-black ${
+                  isActive
+                    ? 'border-white/20 bg-white text-black'
+                    : 'border-white/20 bg-white/10 text-white/70 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                {d} hari
+              </button>
+            );
+          })}
         </div>
       </div>
 
       <div className="w-full grid grid-cols-12 gap-6">
 
-      {/* LEFT SECTION: Spatial Canvas */}
-      <section className="col-span-12 lg:col-span-8 flex flex-col min-h-0 gap-4">
-        {/* MAP CANVAS VIEWPORT CONTAINER */}
-        <div className="flex-1 relative rounded-xl border border-white/10 overflow-hidden bg-[#080d14] min-h-[360px]">
-
-          {/* Mapbox Canvas */}
-          <div ref={mapContainerRef} className="absolute inset-0 w-full h-full" />
-
-          {/* Honest Status Overlay */}
-          <div className="absolute top-4 left-4 z-20 bg-[#0c1017]/90 border border-white/10 px-3.5 py-2 rounded-lg text-xs flex items-center gap-2">
-            <Info className="w-4 h-4 text-slate-400" />
-            <span className="text-slate-300 font-sans">
-              Visualisasi Aliran Komoditas Spasial (Sumatera - Jawa)
-            </span>
-          </div>
-        </div>
-      </section>
-
-      {/* RIGHT SECTION: Sidebar (Real PIHPS Price History + spikes) */}
-      <section className="col-span-12 lg:col-span-4 bg-[#0c1017] border border-white/10 p-5 flex flex-col gap-6 overflow-y-auto no-scrollbar rounded-xl">
+      {/* CONTENT SECTION: full-width single column (map canvas removed) */}
+      <section className="col-span-12 bg-[#0c1017] border border-white/10 p-5 flex flex-col gap-6 overflow-y-auto no-scrollbar rounded-xl">
 
         {/* Price History Card */}
         <div className="space-y-3">
@@ -402,9 +351,14 @@ export default function DashboardAnalyticsSection({
             <h3 className="text-sm font-semibold tracking-wide text-white flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-slate-300" /> Harga {commodityLabel}
             </h3>
-            <span className="text-xs text-slate-300 font-medium tabular-nums">
+            <span className="text-xs text-slate-300 font-medium tabular-nums flex flex-col items-end gap-0.5">
               {ricePrice !== null ? (
-                <AnimatedValue value={ricePrice}>{`Rp ${ricePrice.toLocaleString('id-ID')} / kg`}</AnimatedValue>
+                <>
+                  <AnimatedValue value={ricePrice}>{`Rp ${ricePrice.toLocaleString('id-ID')} / kg`}</AnimatedValue>
+                  {lastTime ? (
+                    <span className="text-[11px] text-slate-500">{formatFullDate(lastTime)}</span>
+                  ) : null}
+                </>
               ) : (
                 'Data tidak tersedia'
               )}
@@ -413,23 +367,30 @@ export default function DashboardAnalyticsSection({
 
           <div className="border-t border-white/10 pt-4 relative flex flex-col justify-between">
             <div className="flex justify-between items-center text-xs text-slate-400">
-              <span>Tren {days} Titik Terakhir</span>
+              <span>Tren {Math.min(days, priceHistory.length)} Titik Terakhir</span>
               <span className="text-slate-300">Sumber: PIHPS Bank Indonesia</span>
             </div>
 
             {/* Authentic Single-Dataset Bars or Honest Empty State (<3 records = no trend) */}
             {hasEnoughRecords ? (
               <div className="h-28 flex items-end gap-2 pt-2">
-                {barHeights.map((h, i) => (
-                  <div key={i} className="flex-1 bg-white/5 relative group h-full rounded-t-sm overflow-hidden flex flex-col justify-end items-center">
-                    <div
-                      className="w-full border-t-2 motion-safe:transition-all motion-safe:duration-300"
-                      style={{ height: h, backgroundColor: `${barColors[i].bg}33`, borderColor: barColors[i].border }}
-                      title={`T-${priceHistory.length - 1 - i}: Rp ${priceHistory[i].toLocaleString('id-ID')}`}
-                    />
-                    <span className="text-xs text-slate-400 tabular-nums mt-1">T-{priceHistory.length - 1 - i}</span>
-                  </div>
-                ))}
+                {barHeights.map((h, i) => {
+                  const t = priceTimes[i];
+                  const dateLabel = t ? formatDayMonth(t) : `T-${priceHistory.length - 1 - i}`;
+                  const tooltip = t
+                    ? `${dateLabel}: Rp ${priceHistory[i].toLocaleString('id-ID')}`
+                    : `T-${priceHistory.length - 1 - i}: Rp ${priceHistory[i].toLocaleString('id-ID')}`;
+                  return (
+                    <div key={i} className="flex-1 bg-white/5 relative group h-full rounded-t-sm overflow-hidden flex flex-col justify-end items-center">
+                      <div
+                        className="w-full border-t-2 motion-safe:transition-all motion-safe:duration-300"
+                        style={{ height: h, backgroundColor: `${barColors[i].bg}33`, borderColor: barColors[i].border }}
+                        title={tooltip}
+                      />
+                      <span className="text-xs text-slate-400 tabular-nums mt-1">{dateLabel}</span>
+                    </div>
+                  );
+                })}
               </div>
             ) : isLoadingPrices ? (
               <div className="flex flex-col gap-2 py-2">
@@ -506,14 +467,16 @@ export default function DashboardAnalyticsSection({
             </div>
           )}
           {onSwitchTab && (
-            <Button
-              variant="outline"
-              size="sm"
+            <button
+              type="button"
               onClick={() => onSwitchTab('reports')}
-              className="mt-1 w-full text-xs tabular-nums"
+              className="group relative mt-1 w-full overflow-hidden rounded-lg border border-white/20 bg-white/10 backdrop-blur px-3 py-2 text-xs tabular-nums font-medium text-white/80 hover:text-white hover:bg-white/15 motion-safe:transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-black disabled:opacity-60"
             >
-              Lihat Laporan <FileText className="w-3.5 h-3.5" />
-            </Button>
+              <span aria-hidden="true" className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/20 to-transparent group-hover:translate-x-full motion-safe:transition-transform motion-safe:duration-700" />
+              <span className="relative flex items-center justify-center gap-1.5">
+                Lihat Laporan <FileText className="w-3.5 h-3.5" />
+              </span>
+            </button>
           )}
         </div>
 

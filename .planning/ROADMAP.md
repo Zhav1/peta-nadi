@@ -2976,3 +2976,26 @@ M7 removes the remaining ways the Berita surface could look live when it was not
 - Enterprise GraphRAG private self-hosted deployment
 - Automated CI/CD pipeline with staging $\to$ production promotion
 - Multi-province rollout (Java corridor & Eastern Indonesia)
+
+## Phase 118: Analitik Fixes
+
+**Goal:** Fix Analitik follow-ups on the Phase 117 tree: map entirely removed (full-width), honest region mapping, date-true trend headers, zero-motion shimmer actions — no shadcn add.
+**Status:** COMPLETE ? (docs-only pass; fixes already in working tree; no app edits, no commit)
+
+### Deliverables
+
+- **Map removed, full-width:** no MapboxOverlay/globe canvas; single col-span-12 section (AnalyticsSection.tsx:343-346, contract 24-28).
+- **Hand-rolled glass days + shimmer Lihat Laporan (zero-motion, no shadcn add):** native buttons with glass classes (L319-339, ole=group + ria-pressed/ria-label/	itle); Lihat Laporan hand-rolled relative/overflow-hidden + motion-safe: shimmer span (L469-480).
+- **REGION_TO_DB 8?north_sumatra, Semua?undefined:** all 8 slugs ? 
+orth_sumatra (L51-60); egionToDb('') ? undefined (L62-65); applied at loadPrices (L195) + loadSpikes (L235).
+- **Trend DD/MM + header date + min(days,len) + green/red:** ormatDayMonth per bar (L116-122, T- fallback only when time missing L379) + ormatFullDate header (L124-130, call L359) + Tren {min(days,len)} (L370) + arHeights/arColors up #ef4444 / down #10b981 (L262-273, >= 3 guard L277).
+- **Spikes keep honest:** SpikeItem/severityBadge/prettifyRegion (L94-114); server-filtered loadSpikes + spikeRecordsTotal (L230-257); sorted ilteredSpikes (L280-284); guard length === 0 || spikeRecordsTotal < 3 + backend message (L431-438); Table h-11 (L441-466).
+
+### Verification
+
+- [x] 
+px tsc --noEmit ? exit 0.
+- [x] 
+pm run build ? 7/7 static routes, 0 errors.
+- [x] pytest ? shared window tail green.
+- [x] Playwright ? 1 passed (live, E2E no-interference on Peta/Laporan/Evaluasi + pprovals:write/leet:write 403 paths).
