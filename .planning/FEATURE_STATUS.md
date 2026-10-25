@@ -55,6 +55,9 @@ PreHub (*Predictive Logistics Hub & Early Warning System*) adalah platform intel
 - **Analitik Activation M7 + Watermelon Restyle P1-P3 (Phase 111-114)**
   - 6 widget read-only bertumpuk regulator+dispatcher di atas API `prices`/`spikes` yang ada (4 komoditas × 8 provinsi × 7/14/30d), Globot Deck + gods-eye chips, tanpa Cesium, empty jujur `< 3` records, tanpa sintesis RED, tanpa PII.
   - Chrome P1 (Badge/Button/Popover/Separator), tabel P2 (`Table h-11` + `Progress`), polish P3 (`AnimatedValue`/`LoadingSkeleton`/`motion-safe:`); tanpa Portal di atas kanvas Mapbox; 12px min, `tabular-nums`, ikon Lucide.
+- **Gap Shims Scaffold (Phase 116, PLANNED ⏳)**
+  - 8 shim file direncanakan: C1 `empty`/`skeleton`/`tooltip` (base-ui), C2 `status-picker`/`editable-chip`/`budget-card` (hand-rolled CSS, `motion-safe:`), C3 `disparity-bar`/`trend-line` (recharts ^3.9.2); swap impor di `AnalyticsSection.tsx` tanpa ubah logika.
+  - Batasan: tanpa `shadcn add`, tanpa `motion`/`react-icons`/`hugeicons`/`radix`, tanpa Portal di atas kanvas Mapbox; dark 12px `tabular-nums`. Docs: `116-gap-shims-scaffold/`.
 
 ---
 

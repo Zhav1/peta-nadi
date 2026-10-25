@@ -2923,6 +2923,24 @@ M7 removes the remaining ways the Berita surface could look live when it was not
 
 ---
 
+## Phase 116: Gap Shims Scaffold
+
+**Goal:** Scaffold the 8-file shim layer for the 7 missing primitives — no `npx shadcn add`, no Portal-over-Mapbox, one writer per file.
+**Status:** PLANNED ⏳ (docs scaffold only; no app edits)
+
+### Deliverables (planned)
+
+- C1 base-ui: `empty`/`skeleton`/`tooltip` (CSS group-hover, no Portal).
+- C2 hand-rolled: `status-picker`/`editable-chip`/`budget-card` (CSS only, `motion-safe:`).
+- C3 charts on recharts ^3.9.2: `disparity-bar`/`trend-line` (no downgrade to 2.15.4).
+- `AnalyticsSection.tsx` import swap only; `role=status` hook, `tabular-nums`/`text-xs` chrome preserved.
+
+### Verification
+
+- [ ] tsc 0, build 7/7, Playwright auto-check incl. E2E no-interference.
+
+---
+
 ## Backlog (Post-Hackathon / v2 & New Context Window Backlog)
 
 ### Active Remediation & Audit Backlog (For New Context Window)

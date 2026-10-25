@@ -29,6 +29,8 @@ import { api } from '@/lib/api';
 import type { CrisisState, CorridorContext, RouteRecommendation, ChokePointItem } from '@/lib/types';
 import { Badge } from '@/components/base-ui/badge';
 import { Button } from '@/components/base-ui/button';
+import { Empty as AnalyticsEmpty } from '@/components/base-ui/empty';
+import { Skeleton as LoadingSkeleton } from '@/components/base-ui/skeleton';
 import { Progress } from '@/components/base-ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/base-ui/table';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/base-ui/popover';
@@ -169,24 +171,11 @@ function regimeBadgeVariant(regime: string): 'secondary' | 'outline' | 'destruct
   return 'outline';
 }
 
-function AnalyticsEmpty({ loading = false, title = 'Data tidak tersedia', message }: { loading?: boolean; title?: string; message?: string }) {
-  return (
-    <div
-      {...(loading ? { role: 'status' as const } : {})}
-      className="flex flex-col items-center justify-center p-6 text-center rounded-lg border border-dashed border-white/10 text-slate-400"
-    >
-      <Info className="w-5 h-5 mb-2 text-slate-500" />
-      <p className="text-xs font-medium text-slate-300">{loading ? 'Memuat…' : title}</p>
-      {message ? <p className="text-xs text-slate-500 mt-1 max-w-xs font-sans">{message}</p> : null}
-    </div>
-  );
-}
-
 // ---------------------------------------------------------------------------
-// U5-P3 Watermelon polish (presentational only): CSS-only animated numbers +
-// skeleton blocks. No new deps. motion-safe: guards every animation so
-// prefers-reduced-motion renders static. Keyframes are defined once via the
-// <AnalyticsMotionStyle /> style tag rendered at the section root.
+// U5-P3 Watermelon polish (presentational only): CSS-only animated numbers.
+// Skeleton blocks now live in base-ui/skeleton (motion-safe guarded).
+// Keyframes are defined once via the <AnalyticsMotionStyle /> style tag
+// rendered at the section root.
 // ---------------------------------------------------------------------------
 
 function AnalyticsMotionStyle() {
@@ -216,20 +205,9 @@ function AnimatedValue({
   );
 }
 
-// Skeleton rows matching table/cards row height. aria-hidden: the visible
-// role=status text inside AnalyticsEmpty stays the E2E hook.
-function LoadingSkeleton({ rows = 4, rowClassName }: { rows?: number; rowClassName?: string }) {
-  return (
-    <div className="flex flex-col gap-2" aria-hidden="true">
-      {Array.from({ length: rows }).map((_, i) => (
-        <div
-          key={i}
-          className={`motion-safe:animate-pulse bg-white/5 rounded-md w-full ${rowClassName ?? 'h-11'}`}
-        />
-      ))}
-    </div>
-  );
-}
+// Skeleton rows matching table/cards row height live in base-ui/skeleton.
+// aria-hidden there; the visible role=status text inside base-ui/empty stays
+// the E2E hook.
 
 // ---------------------------------------------------------------------------
 // M7-P2 Analitik: price disparity heatmap + spikes table.

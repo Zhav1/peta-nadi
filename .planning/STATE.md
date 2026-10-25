@@ -310,3 +310,11 @@ These scripts validate the economic correlation hypotheses that underpin Agent 5
 5. **Full E2E Suite Run & Visual Browser Audit**: Run full Playwright test suite and perform visual audit of all pages.
 6. **Render Backend Redeployment**: Deploy backend to Render to complete endpoint deprecation.
 7. **Review `handleCrisisReadyFromDemo` Default Corridor**: Review fallback to `'belawan'` -> `'tebingtinggi'`.
+
+## Phase 116 Log (2026-10-25)
+
+- Phase 116 (Gap Shims Scaffold) logged as PLANNED — docs-only scaffold, no app edits.
+- C1 base-ui (empty/skeleton/tooltip) + C2 hand-rolled (status-picker/editable-chip/budget-card, motion-safe CSS) + C3 recharts ^3.9.2 (disparity-bar/trend-line); AnalyticsSection import swap planned.
+- Constraints carried: no shadcn add, no motion/react-icons/hugeicons/radix, no Portal over map, dark 12px tabular-nums, one writer per file, no recharts downgrade.
+- Learnings: registry via webfetch (not MCP execute in workers), stale .next ENOENT blocks rebuild (remove .next + retry), parallel same-file collision avoided by file-split, tooltip render-pattern, hideWhenDetached absent, recharts 2.15.4 vs 3.9.2 do-not-downgrade.
+- Docs: `.planning/phases/116-gap-shims-scaffold/` (PLAN.md + WALKTHROUGH.md + LEARNINGS.md).
