@@ -85,10 +85,10 @@ export const IntermodalTerminalPopover: React.FC<IntermodalTerminalPopoverProps>
  <PopoverTrigger asChild>
  <button
  type="button"
- className={`cursor-pointer flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs transition-colors duration-150 shrink-0 ${
+ className={`cursor-pointer h-8 flex items-center gap-1.5 px-2.5 rounded-lg border text-xs font-mono transition-colors duration-150 shrink-0 ${
  isOpen
- ? 'bg-white border-white text-[#080d14] font-semibold'
- : 'bg-[#0c1017] border-white/10 text-slate-300 hover:text-white hover:border-slate-500'
+ ? 'bg-[#121822] border-cyan-500/50 text-cyan-300 ring-1 ring-cyan-500/30'
+ : 'bg-white/5 border-white/5 text-slate-300 hover:bg-white/10 hover:border-white/20 hover:text-white'
  }`}
  title={`Pan-Sumatra Intermodal: ${totalCount} Hub (${congestedCount + restrictedCount} Padat/Terbatas)`}
  >

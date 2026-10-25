@@ -14,8 +14,18 @@ import { api } from '@/lib/api';
 import type { CrisisState, CorridorContext, RouteRecommendation } from '@/lib/types';
 import { Badge } from '@/components/base-ui/badge';
 import { Button } from '@/components/base-ui/button';
-import { Empty as AnalyticsEmpty } from '@/components/base-ui/empty';
-import { Skeleton as LoadingSkeleton } from '@/components/base-ui/skeleton';
+import { Card } from '@/components/base-ui/card';
+import { Chip } from '@/components/base-ui/chip';
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/base-ui/select';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/base-ui/tooltip';
+import { Empty } from '@/components/base-ui/empty';
+import { Skeleton } from '@/components/base-ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/base-ui/table';
 
 import 'mapbox-gl/dist/mapbox-gl.css';
@@ -327,34 +337,53 @@ export default function DashboardAnalyticsSection({
       <AnalyticsMotionStyle />
 
       {/* Shared analitik filter bar — drives PIHPS price refetch */}
-      <div className="bg-[#0c1017] border border-white/10 rounded-xl px-4 py-3 flex flex-wrap items-center gap-3 text-xs">
+      <div className="bg-[#0c1017] border border-white/10 rounded-xl px-4 py-3 flex flex-wrap items-center gap-3 text-xs shadow-xl">
         <span className="flex items-center gap-1.5 font-semibold text-slate-200">
           <Filter className="w-3.5 h-3.5 text-slate-400" /> Filter harga
         </span>
-        <label className="flex items-center gap-1.5 text-slate-400">
-          Komoditas
-          <select
+
+        <div className="flex items-center gap-2 text-slate-400">
+          <span className="text-xs">Komoditas</span>
+          <Select
             value={commodity}
-            onChange={(e) => setCommodity(e.target.value)}
-            className="bg-white/5 border border-white/10 rounded-lg text-xs text-slate-200 px-2 py-1.5 cursor-pointer"
+            onValueChange={(val) => {
+              if (val) setCommodity(val);
+            }}
+            items={COMMODITY_OPTIONS}
           >
-            {COMMODITY_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value} className="bg-[#0c1017]">{o.label}</option>
-            ))}
-          </select>
-        </label>
-        <label className="flex items-center gap-1.5 text-slate-400">
-          Wilayah
-          <select
+            <SelectTrigger className="h-8 min-w-[140px] bg-white/5 border border-white/10 rounded-lg text-xs text-slate-200 px-2.5 py-1.5 cursor-pointer">
+              <SelectValue placeholder="Pilih komoditas" />
+            </SelectTrigger>
+            <SelectContent portal={false}>
+              {COMMODITY_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value} className="text-xs cursor-pointer">
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex items-center gap-2 text-slate-400">
+          <span className="text-xs">Wilayah</span>
+          <Select
             value={priceRegion}
-            onChange={(e) => setPriceRegion(e.target.value)}
-            className="bg-white/5 border border-white/10 rounded-lg text-xs text-slate-200 px-2 py-1.5 cursor-pointer"
+            onValueChange={(val) => setPriceRegion(val ?? '')}
+            items={REGION_OPTIONS}
           >
-            {REGION_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value} className="bg-[#0c1017]">{o.label}</option>
-            ))}
-          </select>
-        </label>
+            <SelectTrigger className="h-8 min-w-[120px] bg-white/5 border border-white/10 rounded-lg text-xs text-slate-200 px-2.5 py-1.5 cursor-pointer">
+              <SelectValue placeholder="Semua wilayah" />
+            </SelectTrigger>
+            <SelectContent portal={false}>
+              {REGION_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value} className="text-xs cursor-pointer">
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
         <div className="flex items-center gap-1.5" role="group" aria-label="Rentang waktu">
           {DAY_OPTIONS.map((d) => (
             <Button
@@ -365,11 +394,17 @@ export default function DashboardAnalyticsSection({
               aria-label={`${d} hari terakhir`}
               title={`${d} hari terakhir`}
               onClick={() => setDays(d)}
-              className="tabular-nums text-xs h-8"
+              className="tabular-nums text-xs h-8 cursor-pointer"
             >
               {d} hari
             </Button>
           ))}
+        </div>
+
+        <div className="ml-auto hidden sm:flex items-center gap-2">
+          <Chip variant="outline" size="sm" statusDot status="online">
+            PIHPS Live
+          </Chip>
         </div>
       </div>
 
@@ -384,20 +419,23 @@ export default function DashboardAnalyticsSection({
           <div ref={mapContainerRef} className="absolute inset-0 w-full h-full" />
 
           {/* Honest Status Overlay */}
-          <div className="absolute top-4 left-4 z-20 bg-[#0c1017]/90 border border-white/10 px-3.5 py-2 rounded-lg text-xs flex items-center gap-2">
+          <div className="absolute top-4 left-4 z-20 bg-[#0c1017]/90 border border-white/10 px-3.5 py-2 rounded-lg text-xs flex items-center gap-2 shadow-xl">
             <Info className="w-4 h-4 text-slate-400" />
             <span className="text-slate-300 font-sans">
               Visualisasi Aliran Komoditas Spasial (Sumatera - Jawa)
             </span>
+            <Chip variant="outline" size="sm" statusDot status="online" className="ml-1">
+              Aktif
+            </Chip>
           </div>
         </div>
       </section>
 
       {/* RIGHT SECTION: Sidebar (Real PIHPS Price History + spikes) */}
-      <section className="col-span-12 lg:col-span-4 bg-[#0c1017] border border-white/10 p-5 flex flex-col gap-6 overflow-y-auto no-scrollbar rounded-xl">
+      <section className="col-span-12 lg:col-span-4 flex flex-col gap-6 overflow-y-auto no-scrollbar">
 
         {/* Price History Card */}
-        <div className="space-y-3">
+        <Card className="p-5 flex flex-col gap-4 bg-[#0c1017] border-white/10">
           <div className="flex justify-between items-end">
             <h3 className="text-sm font-semibold tracking-wide text-white flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-slate-300" /> Harga {commodityLabel}
@@ -413,7 +451,15 @@ export default function DashboardAnalyticsSection({
 
           <div className="border-t border-white/10 pt-4 relative flex flex-col justify-between">
             <div className="flex justify-between items-center text-xs text-slate-400">
-              <span>Tren {days} Titik Terakhir</span>
+              <span className="flex items-center gap-1.5">
+                <span>Tren {days} Titik Terakhir</span>
+                <Tooltip>
+                  <TooltipTrigger render={<span className="text-slate-400 hover:text-slate-200 cursor-pointer inline-flex items-center"><Info className="w-3.5 h-3.5" /></span>} />
+                  <TooltipContent side="top">
+                    Grafik historis harga harian {commodityLabel} berdasarkan data PIHPS Bank Indonesia.
+                  </TooltipContent>
+                </Tooltip>
+              </span>
               <span className="text-slate-300">Sumber: PIHPS Bank Indonesia</span>
             </div>
 
@@ -433,19 +479,19 @@ export default function DashboardAnalyticsSection({
               </div>
             ) : isLoadingPrices ? (
               <div className="flex flex-col gap-2 py-2">
-                <LoadingSkeleton rows={3} rowClassName="h-6" />
-                <AnalyticsEmpty loading />
+                <Skeleton rows={3} rowClassName="h-6" />
+                <Empty loading />
               </div>
             ) : (
               <div className="h-28 flex items-center justify-center">
-                <AnalyticsEmpty />
+                <Empty />
               </div>
             )}
           </div>
-        </div>
+        </Card>
 
         {/* Lonjakan harga (spikes) — top spikes + honest empty */}
-        <div className="space-y-3 flex-1 flex flex-col min-h-0">
+        <Card className="p-5 flex-1 flex flex-col gap-4 min-h-0 bg-[#0c1017] border-white/10">
           <div className="flex justify-between items-center">
             <h3 className="text-sm font-semibold tracking-wide text-white flex items-center gap-2">
               <Flame className="w-4 h-4 text-slate-400" /> Lonjakan harga
@@ -464,11 +510,11 @@ export default function DashboardAnalyticsSection({
 
           {spikesLoading ? (
             <div className="flex flex-col gap-2">
-              <LoadingSkeleton rows={4} rowClassName="h-11" />
-              <AnalyticsEmpty loading />
+              <Skeleton rows={4} rowClassName="h-11" />
+              <Empty loading />
             </div>
           ) : filteredSpikes.length === 0 || spikeRecordsTotal < 3 ? (
-            <AnalyticsEmpty
+            <Empty
               message={
                 spikeRecordsTotal < 3
                   ? `Hanya ${spikeRecordsTotal} catatan harga untuk ${commodityLabel} — spike butuh ≥ 3 catatan (guard backend).`
@@ -510,12 +556,12 @@ export default function DashboardAnalyticsSection({
               variant="outline"
               size="sm"
               onClick={() => onSwitchTab('reports')}
-              className="mt-1 w-full text-xs tabular-nums"
+              className="mt-1 w-full text-xs tabular-nums cursor-pointer"
             >
               Lihat Laporan <FileText className="w-3.5 h-3.5" />
             </Button>
           )}
-        </div>
+        </Card>
 
       </section>
 

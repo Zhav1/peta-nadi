@@ -3,19 +3,19 @@ gsd_state_version: "1.0"
 milestone: M7
 milestone_name: Live News Trust, Source Breadth & Forecast Waspada Integrity
 current_phase: 115
-current_phase_name: Watermelon MCP Connect (planned)
-status: in_progress
-stopped_at: "Phase 115 Watermelon MCP Connect fully planned in .planning/phases/115-watermelon-mcp-connect/PLAN.md (WP1-WP5 covering Select, Chip, Card, Empty, Skeleton, Tooltip, Chart). Ready for wave-based execution."
-last_updated: "2026-10-25T19:15:00.000Z"
+current_phase_name: Watermelon MCP Connect (complete)
+status: complete
+stopped_at: "Phase 115 Watermelon MCP Connect executed and verified. AnalyticsSection.tsx converted to Base-UI Select/Card/Chip/Tooltip/Empty/Skeleton; Map HUD Telemetry de-cluttered to Unified Tactical Command Ribbon (h-8, tabular-nums). Verified with tsc (0 errors) and test_phase115 (8/8 pass)."
+last_updated: "2026-10-25T20:10:00.000Z"
 last_activity: 2026-10-25
-last_activity_desc: "Planned Phase 115: Watermelon MCP Connect. Formulated 5 Work Packages covering 7 Base-UI primitives, AnalyticsSection.tsx integration, and automated verification."
+last_activity_desc: "Executed Phase 115: Watermelon MCP Connect. Integrated Base-UI primitives in AnalyticsSection.tsx and unified Map HUD Tactical Command Ribbon."
 state_head: HEAD
 progress:
   total_phases: 115
-  completed_phases: 114
+  completed_phases: 115
   total_plans: 128
-  completed_plans: 127
-  percent: 99.2
+  completed_plans: 128
+  percent: 100.0
 ---
 
 # STATE: PreHub Project Memory
@@ -29,9 +29,9 @@ progress:
 
 ## Current Position
 
-Phase: 107 (HITL Route Decision Control Unification & E2E Workflow Hardening) & 110 (FORECAST_WASPADA Orthogonal Early-Warning Tag) - COMPLETE ✅; Phases 111-114 (Analitik Activation M7 + Watermelon P1-P3) - COMPLETE ✅; Phase 115 (Watermelon MCP Connect) - PLANNED ⏳
-Status: HITL route decision control unified with 3 tactical buttons in RouteDetailModal.tsx, silent drops eliminated via fallback incident IDs in DashboardClient.tsx, premature auto-commit eliminated in handleSelectRoute, rejection logic inversion guarded. News trust fix, 8-source expansion, EWKB intake, and FORECAST_WASPADA early warning tag fully integrated. Analitik 6-widget read-only view + Watermelon P1-P3 restyle integrated; Phase 115 gap inventory logged.
-Next action: Phase 107 & M7 merged; Phase 115 MCP connection pass (tsc 0, build 7/7, pytest green, Playwright) then deployment.
+Phase: 107 (HITL Route Decision Control Unification & E2E Workflow Hardening) & 110 (FORECAST_WASPADA Orthogonal Early-Warning Tag) - COMPLETE ✅; Phases 111-114 (Analitik Activation M7 + Watermelon P1-P3) - COMPLETE ✅; Phase 115 (Watermelon MCP Connect) - COMPLETE ✅
+Status: HITL route decision control unified with 3 tactical buttons in RouteDetailModal.tsx, silent drops eliminated via fallback incident IDs in DashboardClient.tsx, premature auto-commit eliminated in handleSelectRoute, rejection logic inversion guarded. News trust fix, 8-source expansion, EWKB intake, and FORECAST_WASPADA early warning tag fully integrated. Analitik 6-widget read-only view + Watermelon P1-P3 restyle integrated; Phase 115 Base-UI Select/Card/Chip/Tooltip/Empty/Skeleton gap closure and Map HUD Tactical Command Ribbon de-cluttering verified (8/8 tests, 0 tsc errors).
+Next action: PreHub M7 final regression check & demo dry run.
 
 
 
