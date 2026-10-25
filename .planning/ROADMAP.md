@@ -2709,6 +2709,32 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 
 ---
 
+## Phase 107: HITL Route Decision Control Unification & E2E Workflow Hardening
+
+**Goal:** Permanently resolve HITL dispatch decision defects in `RouteDetailModal.tsx` and `DashboardClient.tsx`: (1) eliminate silent drop on ad-hoc / non-crisis routes by adding fallback incident ID resolution; (2) resolve control duplication by refactoring the top toggle into an economic preview tab and unifying the bottom action buttons into 3 distinct tactical actions (`Setujui Reroute`, `Tahan di Depo`, `Lanjut Jalur Asal`); (3) eliminate premature auto-commit on route click; (4) fix logic inversion on route rejection; and (5) harden downstream E2E integrations (Reports audit table, WhatsApp dispatch, TMS telematics, and evaluation outcomes).  
+**Status:** READY TO EXECUTE ⏳  
+**Plan:** `.planning/phases/107-hitl-route-approval-unification/PLAN.md`
+
+### Deliverables
+- **WP1 - Decision Control Unification in `RouteDetailModal.tsx`**:
+  - Reframe top toggle as Economic & Spoilage Trade-off Preview tab.
+  - Replace ambiguous bottom buttons with 3 distinct tactical actions: `[ Setujui Pengalihan (Reroute) ]`, `[ Tahan Armada (Hold Fleet) ]`, `[ Lanjut Jalur Asal (Override) ]`, and `[ Batal / Tutup ]`.
+  - Enforce mandatory notes validation for Hold and Override before enabling action buttons.
+- **WP2 - Incident Fallback & Silent Drop Elimination in `DashboardClient.tsx`**:
+  - Remove `if (!selectedCrisis?.crisis_id) return;` guard and provide fallback incident ID (`INC-ADHOC-CORRIDOR`).
+  - Provide informative toast feedback across all scenarios.
+- **WP3 - Premature Approval Elimination & Rejection Guard in `DashboardClient.tsx`**:
+  - Remove premature `api.approvals.create` call from `handleSelectRoute`.
+  - Add strict rejection guard in `handleCommitOperationalRoute` to prevent route activation and TMS pings on reject.
+- **WP4 - E2E Downstream Pipeline Verification & Telemetry Alignment**:
+  - Verify audit logging into `route_approvals` (Supabase + local SQLite fallback).
+  - Verify visibility in `ReportsSection.tsx` Table 3 (Audit Tindakan Operator).
+  - Verify WhatsApp dispatch link accuracy in `MitigationTab.tsx`.
+- **WP5 - Automated Verification Gate (`test_phase107_hitl_approval_unification.ts`)**:
+  - TypeScript check (`tsc --noEmit`), backend pytests, and automated test suite.
+
+---
+
 ## Backlog (Post-Hackathon / v2 & New Context Window Backlog)
 
 ### Active Remediation & Audit Backlog (For New Context Window)
