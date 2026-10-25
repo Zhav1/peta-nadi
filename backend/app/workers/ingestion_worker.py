@@ -20,6 +20,7 @@ from app.adapters.tomtom_adapter import TomTomAdapter
 from app.adapters.aisstream_adapter import AISstreamAdapter
 from app.adapters.nasa_firms_adapter import NASAFIRMSAdapter
 from app.adapters.open_meteo_adapter import OpenMeteoAdapter
+from app.adapters.bnpb_adapter import BNPBAdapter
 
 # Load configuration
 settings = get_settings()
@@ -38,7 +39,8 @@ class IngestionWorker:
             TomTomAdapter(),
             AISstreamAdapter(),
             NASAFIRMSAdapter(),
-            OpenMeteoAdapter()
+            OpenMeteoAdapter(),
+            BNPBAdapter()
         ]
         self.tasks = []
         self.running = False

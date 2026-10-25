@@ -21,7 +21,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.routers import health, incidents, agent_router, approvals, demo_router, commodity_router, corridor_router, routing_router, vehicles_router, news_router, outcomes_router, evaluation_router, auth_router, fleet_ingest_router, intermodal_router, geocode_router, travels_router, erp_router
+from app.routers import health, incidents, agent_router, approvals, demo_router, commodity_router, corridor_router, routing_router, vehicles_router, news_router, outcomes_router, evaluation_router, auth_router, fleet_ingest_router, intermodal_router, geocode_router, travels_router, erp_router, bnpb_router
 from app.services.redis_client import get_redis, close_redis
 
 settings = get_settings()
@@ -183,6 +183,51 @@ async def _poll_firms_loop():
         logger.error(f"Fatal error in NASA FIRMS poller loop: {e}")
 
 
+async def _poll_bnpb_loop():
+    """Background poller for BNPB DIBI/bulletin disaster events (1h cadence).
+
+    Honest-degraded by design: DIBI + bnpb.go.id both unreachable means an
+    empty parse, so the last-known-good cache is retained and
+    GET /api/v1/bnpb/events keeps serving [] with status=unavailable.
+    Events land in lrip:events:bnpb with adapter-level 7d Redis dedup.
+    """
+    logger.info("Starting background BNPB poller task (1h cadence)...")
+    try:
+        from app.adapters.bnpb_adapter import BNPBAdapter
+        from app.services.redis_client import SOURCE_CACHE_PREFIX, STREAM_BNPB
+        adapter = BNPBAdapter()
+        while True:
+            try:
+                healthy = await adapter.health_check()
+                if not healthy:
+                    adapter.update_source_health("degraded")
+                    logger.warning("BNPB health check failed; retaining cached disaster events")
+                else:
+                    raw = await adapter.fetch()
+                    events = await adapter.parse(raw)
+                    r = get_redis()
+                    if events:
+                        for ev in events:
+                            r.lpush(STREAM_BNPB, json.dumps(ev))
+                        r.ltrim(STREAM_BNPB, 0, 999)
+                        r.set(f"{SOURCE_CACHE_PREFIX}bnpb", json.dumps(events), ex=86400)
+                        logger.info(f"Ingested {len(events)} BNPB disaster events into Redis {STREAM_BNPB}")
+                    else:
+                        logger.debug("BNPB poll: no new Sumatra disaster events in this pass")
+                    adapter.update_source_health("ok")
+            except Exception as e:
+                logger.warning(f"BNPB background poll error: {e}")
+                try:
+                    adapter.update_source_health("down")
+                except Exception:
+                    pass
+            await asyncio.sleep(3600)  # Every 1 hour
+    except asyncio.CancelledError:
+        logger.info("BNPB background poller task canceled.")
+    except Exception as e:
+        logger.error(f"Fatal error in BNPB poller loop: {e}")
+
+
 async def _run_aisstream():
     """Background WebSocket listener for AIS maritime vessels."""
     logger.info("Starting background AISstream WebSocket task...")
@@ -293,7 +338,8 @@ async def lifespan(app: FastAPI):
         news_task = asyncio.create_task(_poll_news_loop())
         pihps_task = asyncio.create_task(_poll_pihps_loop())
         social_task = asyncio.create_task(_poll_social_osint_loop())
-        tasks = [bmkg_task, tomtom_task, open_meteo_task, firms_task, ais_task, news_task, pihps_task, social_task]
+        bnpb_task = asyncio.create_task(_poll_bnpb_loop())
+        tasks = [bmkg_task, tomtom_task, open_meteo_task, firms_task, ais_task, news_task, pihps_task, social_task, bnpb_task]
     else:
         logger.warning(
             "BOOT: POLLERS_ENABLED=false — HTTP-only process; background pollers not started"
@@ -382,6 +428,7 @@ app.include_router(travels_router.router, prefix="/api/v1")
 app.include_router(erp_router.router, prefix="/api/v1")
 app.include_router(intermodal_router.router, prefix="/api/v1")
 app.include_router(geocode_router.router, prefix="/api/v1")
+app.include_router(bnpb_router.router, prefix="/api/v1")
 
 
 @app.websocket("/ws/crisis/{crisis_id}")

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { AuthProvider } from '@/lib/authContext';
+import { TooltipProvider } from '@/components/base-ui/tooltip';
 import { Toaster } from 'sonner';
 
 export const metadata: Metadata = {
@@ -24,7 +25,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
  </head>
  <body className="bg-[#080d14] text-slate-100 min-h-screen w-full font-sans antialiased selection:bg-white selection:text-[#080d14]">
  <AuthProvider>
+ <TooltipProvider delay={100}>
  {children}
+ </TooltipProvider>
  </AuthProvider>
  <Toaster
  theme="dark"

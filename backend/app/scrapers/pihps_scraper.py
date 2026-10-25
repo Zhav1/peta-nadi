@@ -19,15 +19,21 @@ logger = logging.getLogger(__name__)
 # UI-alias mapping (documented here, resolved frontend-side):
 #   sumut -> north_sumatra, sumbar -> west_sumatra, sumsel -> south_sumatra
 #   riau -> riau, aceh -> aceh, jambi -> jambi,
-#   bengkulu -> bengkulu, lampung -> lampung
+#   bengkulu -> bengkulu, lampung -> lampung,
+#   babel -> bangka_belitung, kepri -> kepulauan_riau
+# BI province_id verified via scripts/fetch_pihps_api.py PROV_IDS:
+#   'Kepulauan Bangka Belitung': 9, 'Kepulauan Riau': 5
+# (note: 21 is Kalimantan Selatan, NOT Kepulauan Riau).
 PROVINCES: Dict[str, int] = {
     "aceh": 1,
     "north_sumatra": 2,
     "west_sumatra": 3,
     "riau": 4,
+    "kepulauan_riau": 5,
     "jambi": 6,
     "bengkulu": 7,
     "south_sumatra": 8,
+    "bangka_belitung": 9,
     "lampung": 10,
 }
 
@@ -40,9 +46,11 @@ PROVINCE_DISPLAY: Dict[str, str] = {
     "north_sumatra": "Sumatera Utara",
     "west_sumatra": "Sumatera Barat",
     "riau": "Riau",
+    "kepulauan_riau": "Kepulauan Riau",
     "jambi": "Jambi",
     "bengkulu": "Bengkulu",
     "south_sumatra": "Sumatera Selatan",
+    "bangka_belitung": "Kepulauan Bangka Belitung",
     "lampung": "Lampung",
 }
 
@@ -52,9 +60,11 @@ REGION_SHORT_SLUG: Dict[str, str] = {
     "north_sumatra": "sumut",
     "west_sumatra": "sumbar",
     "riau": "riau",
+    "kepulauan_riau": "kepri",
     "jambi": "jambi",
     "bengkulu": "bengkulu",
     "south_sumatra": "sumsel",
+    "bangka_belitung": "babel",
     "lampung": "lampung",
 }
 
@@ -65,9 +75,11 @@ REGION_CENTROID: Dict[str, tuple] = {
     "north_sumatra": ("3.5952", "98.6722"),  # Medan proxy (legacy)
     "west_sumatra": ("-0.9471", "100.4172"),  # Padang proxy
     "riau": ("0.5071", "101.4478"),          # Pekanbaru proxy
+    "kepulauan_riau": ("0.9176", "104.4500"),  # Tanjung Pinang proxy (provincial capital)
     "jambi": ("-1.6101", "103.6131"),        # Jambi city proxy
     "bengkulu": ("-3.7928", "102.2608"),     # Bengkulu city proxy
     "south_sumatra": ("-2.9909", "104.7565"),  # Palembang proxy
+    "bangka_belitung": ("-2.1317", "106.1167"),  # Pangkal Pinang proxy (provincial capital)
     "lampung": ("-5.4297", "105.2626"),      # Bandar Lampung proxy
 }
 
@@ -88,9 +100,11 @@ FETCH_PROVINCE_ORDER = [
     "north_sumatra",
     "west_sumatra",
     "riau",
+    "kepulauan_riau",
     "jambi",
     "bengkulu",
     "south_sumatra",
+    "bangka_belitung",
     "lampung",
 ]
 

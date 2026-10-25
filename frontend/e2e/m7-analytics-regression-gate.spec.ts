@@ -17,9 +17,12 @@ test('m7-analytics-regression-gate', async ({ page }) => {
   await expect(page.getByRole('button', { name: /14 hari/ })).toBeVisible();
   await expect(page.getByRole('button', { name: /30 hari/ })).toBeVisible();
 
-  // 2. Map canvas + honest overlay (simplified: base Mapbox globe, no deck layers)
-  await expect(page.getByText('Visualisasi Aliran Komoditas Spasial (Sumatera - Jawa)')).toBeVisible();
-  expect(await page.locator('canvas').count()).toBeGreaterThanOrEqual(1);
+  // 2. Analitik is a full-width single column with NO map canvas (the map lives
+  // on the Peta Operasi tab only). The stale "Visualisasi Aliran Komoditas
+  // Spasial" heading is gone: assert it is absent and no canvas is visible
+  // while the analytics section is active.
+  await expect(page.getByText('Visualisasi Aliran Komoditas Spasial')).toHaveCount(0);
+  await expect(page.locator('main canvas:visible')).toHaveCount(0);
 
   // 3. Price trend card: heading + value or honest empty
   await expect(page.getByText(/Harga Beras/)).toBeVisible();

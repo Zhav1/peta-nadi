@@ -21,6 +21,7 @@ STREAM_AISSTREAM = "lrip:events:aisstream"
 STREAM_NASA_FIRMS = "lrip:events:nasa_firms"
 STREAM_PIHPS = "lrip:events:pihps"
 STREAM_SOCIAL = "lrip:events:social"
+STREAM_BNPB = "lrip:events:bnpb"
 
 STM_PREFIX = "lrip:state:crisis:"          # STM key per crisis: lrip:state:crisis:{id}
 SOURCE_CACHE_PREFIX = "lrip:state:source:" # Last-known-good cache: lrip:state:source:{name}
