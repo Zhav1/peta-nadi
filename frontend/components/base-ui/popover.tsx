@@ -19,7 +19,11 @@ export interface PopoverTriggerProps
 export function PopoverTrigger({ children, render, asChild, ...props }: PopoverTriggerProps) {
   const resolved = render ?? (asChild && React.isValidElement(children) ? children : undefined);
   if (resolved) {
-    return <BasePopover.Trigger render={resolved} {...props} />;
+    const isNativeButton =
+      props.nativeButton !== undefined
+        ? props.nativeButton
+        : React.isValidElement(resolved) && resolved.type === 'button';
+    return <BasePopover.Trigger render={resolved} nativeButton={isNativeButton} {...props} />;
   }
   return <BasePopover.Trigger {...props}>{children}</BasePopover.Trigger>;
 }
@@ -79,11 +83,15 @@ export function PopoverContent({
     </BasePopover.Positioner>
   );
 
+  // In @base-ui/react 1.9.0, PopoverPositioner strictly requires PopoverPortalContext
+  // provided by BasePopover.Portal. Even when portal === false, Popover.Portal is required
+  // to avoid runtime crash ('Base UI: <Popover.Portal> is missing').
+  const portalNode = <BasePopover.Portal>{content}</BasePopover.Portal>;
   if (portal === false) {
-    return content;
+    return portalNode;
   }
 
-  return <BasePopover.Portal>{content}</BasePopover.Portal>;
+  return portalNode;
 }
 
 export function PopoverClose(props: React.ComponentProps<typeof BasePopover.Close>) {

@@ -101,9 +101,13 @@ export function TooltipContent({
     </BaseTooltip.Positioner>
   );
 
+  // In @base-ui/react 1.9.0, TooltipPositioner strictly requires TooltipPortalContext
+  // provided by BaseTooltip.Portal. Even when portal === false, Tooltip.Portal is required
+  // to avoid runtime crash ('Base UI: <Tooltip.Portal> is missing').
+  const portalNode = <BaseTooltip.Portal>{content}</BaseTooltip.Portal>;
   if (portal === false) {
-    return content;
+    return portalNode;
   }
 
-  return <BaseTooltip.Portal>{content}</BaseTooltip.Portal>;
+  return portalNode;
 }

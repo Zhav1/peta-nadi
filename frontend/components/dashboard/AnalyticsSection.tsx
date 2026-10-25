@@ -455,7 +455,17 @@ export default function DashboardAnalyticsSection({
               <span className="flex items-center gap-1.5">
                 <span>Tren {days} Titik Terakhir</span>
                 <Tooltip>
-                  <TooltipTrigger render={<span className="text-slate-400 hover:text-slate-200 cursor-pointer inline-flex items-center"><Info className="w-3.5 h-3.5" /></span>} />
+                  <TooltipTrigger
+                    render={
+                      <button
+                        type="button"
+                        aria-label="Informasi grafik tren harga"
+                        className="text-slate-400 hover:text-slate-200 cursor-pointer inline-flex items-center bg-transparent border-0 p-0 focus:outline-none"
+                      >
+                        <Info className="w-3.5 h-3.5" />
+                      </button>
+                    }
+                  />
                   <TooltipContent side="top" portal={false}>
                     Grafik historis harga harian {commodityLabel} berdasarkan data PIHPS Bank Indonesia.
                   </TooltipContent>
@@ -471,13 +481,17 @@ export default function DashboardAnalyticsSection({
                   <Tooltip key={i}>
                     <TooltipTrigger
                       render={
-                        <div className="flex-1 bg-white/5 relative group h-full rounded-t-sm overflow-hidden flex flex-col justify-end items-center cursor-pointer">
+                        <button
+                          type="button"
+                          aria-label={`Harga T-${priceHistory.length - 1 - i}: Rp ${priceHistory[i].toLocaleString('id-ID')}`}
+                          className="flex-1 bg-white/5 relative group h-full rounded-t-sm overflow-hidden flex flex-col justify-end items-center cursor-pointer p-0 border-0 text-left focus:outline-none"
+                        >
                           <div
                             className="w-full border-t-2 motion-safe:transition-all motion-safe:duration-300"
                             style={{ height: h, backgroundColor: `${barColors[i].bg}33`, borderColor: barColors[i].border }}
                           />
                           <span className="text-xs text-slate-400 tabular-nums mt-1">T-{priceHistory.length - 1 - i}</span>
-                        </div>
+                        </button>
                       }
                     />
                     <TooltipContent side="top" portal={false}>
