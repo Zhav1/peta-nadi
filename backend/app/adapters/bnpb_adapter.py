@@ -1,4 +1,15 @@
-"""BNPB disaster bulletin adapter (DIBI + bnpb.go.id fallback, 1h cadence).
+"""BNPB disaster adapter (CKAN Action API Tier-0 + DIBI + bnpb.go.id fallback, 1h cadence).
+
+Poll pattern follows BaseAdapter.run(): health -> fetch -> parse -> publish -> cache.
+Tier-0 source: BNPB CKAN Action API at https://data.bnpb.go.id/api/3/action/
+(no auth, polite <=1 req/s): package_show for the kompilasi-2025 and
+data-bencana-indonesia datasets -> datastore_active resources ->
+datastore_search limit+offset paging. Rows carry per-province/per-kab
+Latitude/Longitude plus per-hazard count columns; each nonzero hazard cell
+becomes one aggregate-labeled event (severity low, status stats — never a
+live alert).
+
+Then DIBI guesses, then a formalized bnpb.go.id bulletin-listing fallback.
 
 Poll pattern follows BaseAdapter.run(): health -> fetch -> parse -> publish -> cache.
 Source: BNPB Data Informasi Bencana Indonesia (DIBI) with a formalized
@@ -24,6 +35,7 @@ match), then the shared geocode_router/gazetteer Nominatim path via
 app.nlp.geocoding_service.geocode; unresolvable or out-of-Sumatra
 (94-108E / -6.5..6.5N) items are dropped, never centroid-fabricated.
 """
+import asyncio
 import hashlib
 import json
 import logging
@@ -58,6 +70,26 @@ DIBI_CANDIDATES = [
     "https://dibi.bnpb.go.id/api/v1/kejadian",
     "https://data.bnpb.go.id/api/kejadian",
 ]
+
+# --- Tier 0: BNPB CKAN Action API (data.bnpb.go.id, CKAN 2.9.11, no auth) ---
+# Base is openly reachable (HTTP 200 JSON, no key, no Cloudflare bypass).
+# Datasets (resolved dynamically via package_show so future years keep working):
+CKAN_BASE = "https://data.bnpb.go.id/api/3/action"
+CKAN_DATASETS = [
+    "kompilasi-data-kejadian-dan-dampak-bencana-2025",
+    "data-bencana-indonesia",
+]
+# Bootstrap: confirmed datastore resource (prov-2025-by-hazard, total 39).
+# The 2010-2024 prov and 2024 kab resources were confirmed reachable via
+# datastore_search during research but only by ID prefix, so they are NOT
+# hardcoded here — they resolve dynamically via package_show (primary path).
+CKAN_BOOTSTRAP_RESOURCES = [
+    {"id": "df39e8c3-117e-40fa-b518-ff1037743955", "level": "prov"},
+]
+CKAN_PAGE_LIMIT = 500          # datastore_search limit per request
+CKAN_MAX_PAGES_PER_RESOURCE = 12
+CKAN_MAX_ROWS_TOTAL = 5000
+CKAN_POLITE_DELAY_SECONDS = 1.0  # <=1 req/s politeness (tests patch to 0)
 # Formalized bulletin listing fallback.
 BNPB_BULLETIN_URLS = [
     "https://bnpb.go.id/berita",
@@ -77,6 +109,40 @@ EVENT_KEYWORDS: List[Tuple[str, Tuple[str, ...]]] = [
 ]
 
 SEVERITY_RADIUS_KM = {"critical": 10.0, "high": 5.0, "medium": 2.5, "low": 1.0}
+
+# CKAN datastore hazard-column -> event_type mapping (substring match on the
+# UPPERCASED column name; each column is claimed by the first matching type).
+# NOTE: schema event types are flood|landslide|earthquake|wildfire|storm|
+# drought|tsunami|coastal|other, so GELOMBANG* maps to "coastal".
+CKAN_HAZARD_COLUMNS: List[Tuple[str, Tuple[str, ...]]] = [
+    ("tsunami", ("TSUNAMI",)),
+    ("earthquake", ("GEMPABUMI", "GEMPA")),
+    ("landslide", ("LONGSOR", "TANAH BERGERAK", "TEBING RUNTUH")),
+    ("wildfire", ("KARHUTLA", "KEBAKARAN")),
+    ("flood", ("BANJIR",)),
+    ("storm", ("CUACA EKSTREM", "PUTING BELIUNG", "ANGIN KENCANG", "ANGIN PUTING", "BADAI")),
+    ("drought", ("KEKERINGAN",)),
+    ("coastal", ("GELOMBANG", "ABRASI")),
+]
+
+CKAN_GEO_KEYS = ("latitude", "longitude", "lat", "lon", "lintang", "bujur")
+CKAN_ID_KEYS = ("_id", "id", "id_kejadian")
+CKAN_LEVEL_RADIUS_KM = {"kab": 10.0, "prov": 25.0}
+
+# Sumatra-only province tokens (incl. Babel + Kepri variants).
+SUMATRA_PROVINCE_TOKENS = (
+    "aceh",
+    "sumatera utara", "sumut",
+    "sumatera barat", "sumbar",
+    "riau",
+    "kepulauan riau", "kepri",
+    "jambi",
+    "sumatera selatan", "sumsel",
+    "kepulauan bangka belitung", "bangka", "belitung", "babel",
+    "bengkulu",
+    "lampung",
+    "sumatera",
+)
 
 _NUM = r"(\d[\d\.]*)"
 
@@ -188,6 +254,114 @@ async def resolve_coords(text: str) -> Optional[Tuple[float, float, str]]:
     return None
 
 
+# --- CKAN datastore helpers (Tier 0) ---
+
+def _ckan_count(value: Any) -> int:
+    """Parse a CKAN hazard count cell (int, numeric string, float) to int."""
+    if value is None or isinstance(value, bool):
+        return 0
+    try:
+        text = str(value).strip().replace(",", "")
+        if not text:
+            return 0
+        return max(0, int(float(text)))
+    except (ValueError, TypeError):
+        return 0
+
+
+def _ckan_float(value: Any) -> Optional[float]:
+    try:
+        if value is None or isinstance(value, bool):
+            return None
+        text = str(value).strip().replace(",", "")
+        if not text:
+            return None
+        return float(text)
+    except (ValueError, TypeError):
+        return None
+
+
+def ckan_row_hazards(row: Dict[str, Any]) -> Dict[str, int]:
+    """Map a CKAN datastore row's hazard columns to {event_type: count}.
+
+    Each column is claimed by the first matching CKAN_HAZARD_COLUMNS entry
+    (prevents double counting); geo/name/id columns are never hazards.
+    """
+    hazards: Dict[str, int] = {}
+    skip = set(CKAN_GEO_KEYS) | {"_id", "id", "id_kejadian", "provinsi",
+                                 "province", "nama provinsi", "kabupaten",
+                                 "kabupaten/kota", "kota", "nama kabupaten",
+                                 "daerah", "wilayah", "tahun", "year",
+                                 "rank", "_full_text"}
+    for key, value in row.items():
+        if not isinstance(key, str):
+            continue
+        upper = key.strip().upper()
+        if key.strip().lower() in skip or upper in ("LATITUDE", "LONGITUDE", "LAT", "LON"):
+            continue
+        for event_type, aliases in CKAN_HAZARD_COLUMNS:
+            if any(alias in upper for alias in aliases):
+                count = _ckan_count(value)
+                if count > 0:
+                    hazards[event_type] = hazards.get(event_type, 0) + count
+                break
+    return hazards
+
+
+def ckan_row_geo(row: Dict[str, Any]) -> Optional[Tuple[float, float]]:
+    """Extract (lat, lon) from a CKAN row; None when missing/unparsable."""
+    lowered = {str(k).strip().lower(): v for k, v in row.items() if isinstance(k, str)}
+    lat = _ckan_float(lowered.get("latitude", lowered.get("lat", lowered.get("lintang"))))
+    lon = _ckan_float(lowered.get("longitude", lowered.get("lon", lowered.get("bujur"))))
+    if lat is None or lon is None:
+        return None
+    return lat, lon
+
+
+def ckan_row_region(row: Dict[str, Any]) -> str:
+    """Best-effort region label (province, else kabupaten/kota, else '')."""
+    lowered = {str(k).strip().lower(): str(v or "").strip()
+               for k, v in row.items() if isinstance(k, str)}
+    for key in ("provinsi", "province", "nama provinsi"):
+        if lowered.get(key):
+            return lowered[key]
+    for key in ("kabupaten/kota", "kabupaten", "nama kabupaten", "kota", "daerah", "wilayah"):
+        if lowered.get(key):
+            return lowered[key]
+    return ""
+
+
+def ckan_row_in_sumatra(row: Dict[str, Any], lat: float, lon: float) -> bool:
+    """Sumatra-only gate: coords inside bbox AND a Sumatra province token
+    (or PAN_SUMATRA_GAZETTEER hit for kab rows lacking a province token)
+    in the row's combined text."""
+    if not within_sumatra(lat, lon):
+        return False
+    combined = " ".join(str(v or "") for v in row.values()).lower()
+    if any(tok in combined for tok in SUMATRA_PROVINCE_TOKENS):
+        return True
+    try:
+        if gazetteer_coords(combined) is not None:
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def ckan_row_level(row: Dict[str, Any]) -> str:
+    """'kab' for kabupaten/kota-level rows, else 'prov' (drives radius_km)."""
+    if isinstance(row.get("_ckan_level"), str) and row["_ckan_level"] in ("kab", "prov"):
+        return str(row["_ckan_level"])
+    lowered_keys = {str(k).strip().lower() for k in row.keys() if isinstance(k, str)}
+    if lowered_keys & {"kabupaten", "kabupaten/kota", "nama kabupaten", "kota"}:
+        # A row carrying both province + kabupaten columns is kab-level.
+        return "kab"
+    name = f"{row.get('_ckan_resource_name') or ''}".lower()
+    if "kab" in name or "kota" in name:
+        return "kab"
+    return "prov"
+
+
 class BNPBAdapter(BaseAdapter):
     source_name = "bnpb"
     stream_key = STREAM_BNPB
@@ -199,6 +373,16 @@ class BNPBAdapter(BaseAdapter):
                 res = await client.head("https://bnpb.go.id/", headers={"User-Agent": "PreHubSumatraLogistics/1.0"})
                 if res.status_code == 200:
                     return True
+                # CKAN Action API counts as healthy too (Tier-0 feed).
+                try:
+                    cres = await client.get(
+                        f"{CKAN_BASE}/status_show",
+                        headers={"User-Agent": "PreHubSumatraLogistics/1.0"},
+                    )
+                    if cres.status_code == 200:
+                        return True
+                except Exception as ce:
+                    logger.debug(f"BNPB CKAN health probe failed: {ce}")
                 res = await client.get("https://bnpb.go.id/", headers={"User-Agent": "PreHubSumatraLogistics/1.0"})
                 return res.status_code == 200
         except Exception as e:
@@ -206,9 +390,16 @@ class BNPBAdapter(BaseAdapter):
             return False
 
     async def fetch(self) -> Dict[str, Any]:
-        """Try DIBI/API scrape first; fall back to bnpb.go.id bulletin listing."""
+        """Tier-0 CKAN Action API first; then DIBI guesses; then bulletin; else honest empty."""
         headers = {"User-Agent": "PreHubSumatraLogistics/1.0 (Live Fleet Pilot Sumatra; contact@pidi.id)"}
         async with httpx.AsyncClient(timeout=12.0, follow_redirects=True, headers=headers) as client:
+            try:
+                ckan_items = await self._fetch_ckan(client)
+                if ckan_items:
+                    logger.info(f"BNPB adapter: CKAN hit ({len(ckan_items)} rows)")
+                    return {"status": "ckan", "endpoint": CKAN_BASE, "items": ckan_items}
+            except Exception as e:
+                logger.debug(f"BNPB CKAN tier failed, falling through: {e}")
             for url in DIBI_CANDIDATES:
                 try:
                     res = await client.get(url)
@@ -238,6 +429,112 @@ class BNPBAdapter(BaseAdapter):
                     continue
         logger.warning("BNPB adapter: DIBI + bulletin unreachable — honest empty")
         return {"status": "unavailable", "endpoint": None, "items": []}
+
+    async def _ckan_get(self, client: httpx.AsyncClient, action: str,
+                        params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """GET one CKAN Action API call; None on any failure (never raises)."""
+        try:
+            res = await client.get(f"{CKAN_BASE}/{action}", params=params)
+            if res.status_code != 200:
+                return None
+            payload = res.json()
+            if not isinstance(payload, dict) or not payload.get("success"):
+                return None
+            result = payload.get("result")
+            return result if isinstance(result, dict) else None
+        except Exception as e:
+            logger.debug(f"BNPB CKAN {action} failed: {e}")
+            return None
+
+    async def _fetch_ckan(self, client: httpx.AsyncClient) -> List[Dict[str, Any]]:
+        """package_show (both datasets) -> datastore_active resources ->
+        datastore_search limit+offset paging. Bootstrap IDs cover the case
+        where package_show itself is unreachable. Never raises."""
+        resources: List[Dict[str, Any]] = []
+        seen_ids = set()
+        first_call = True
+        for dataset in CKAN_DATASETS:
+            if not first_call:
+                await asyncio.sleep(CKAN_POLITE_DELAY_SECONDS)
+            first_call = False
+            result = await self._ckan_get(client, "package_show", {"id": dataset})
+            if not result:
+                continue
+            pkg_updated = str(result.get("metadata_modified") or "")
+            for res in result.get("resources") or []:
+                if not isinstance(res, dict):
+                    continue
+                rid = str(res.get("id") or "")
+                if not rid or rid in seen_ids:
+                    continue
+                if res.get("datastore_active") is not True:
+                    continue
+                seen_ids.add(rid)
+                name = str(res.get("name") or "")
+                level = "kab" if "kab" in name.lower() or "kota" in name.lower() else "prov"
+                resources.append({
+                    "id": rid,
+                    "level": level,
+                    "name": name,
+                    "dataset": dataset,
+                    "updated_at": str(res.get("last_modified") or res.get("metadata_modified") or pkg_updated),
+                })
+        if not resources:
+            # Bootstrap fallback: confirmed datastore resources only.
+            for boot in CKAN_BOOTSTRAP_RESOURCES:
+                if boot["id"] not in seen_ids:
+                    seen_ids.add(boot["id"])
+                    resources.append({
+                        "id": boot["id"],
+                        "level": boot.get("level", "prov"),
+                        "name": "",
+                        "dataset": CKAN_DATASETS[0],
+                        "updated_at": "",
+                    })
+        items: List[Dict[str, Any]] = []
+        for res in resources:
+            if len(items) >= CKAN_MAX_ROWS_TOTAL:
+                break
+            await asyncio.sleep(CKAN_POLITE_DELAY_SECONDS)
+            rows = await self._datastore_search_all(client, res)
+            for row in rows:
+                if len(items) >= CKAN_MAX_ROWS_TOTAL:
+                    break
+                if isinstance(row, dict):
+                    row["_ckan_resource_id"] = res["id"]
+                    row["_ckan_resource_name"] = res.get("name", "")
+                    row["_ckan_level"] = res.get("level", "prov")
+                    row["_ckan_dataset"] = res.get("dataset", "")
+                    row["_ckan_updated_at"] = res.get("updated_at", "")
+                    items.append(row)
+        return items
+
+    async def _datastore_search_all(self, client: httpx.AsyncClient,
+                                    res: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Page datastore_search (limit 500 + offset) for one resource."""
+        out: List[Dict[str, Any]] = []
+        offset = 0
+        for _ in range(CKAN_MAX_PAGES_PER_RESOURCE):
+            result = await self._ckan_get(client, "datastore_search", {
+                "resource_id": res["id"],
+                "limit": CKAN_PAGE_LIMIT,
+                "offset": offset,
+            })
+            if not result:
+                break
+            records = result.get("records") or []
+            if not isinstance(records, list) or not records:
+                break
+            out.extend(r for r in records if isinstance(r, dict))
+            try:
+                total = int(result.get("total") or 0)
+            except (ValueError, TypeError):
+                total = 0
+            offset += len(records)
+            if len(records) < CKAN_PAGE_LIMIT or (total and offset >= total):
+                break
+            await asyncio.sleep(CKAN_POLITE_DELAY_SECONDS)
+        return out
 
     def _bulletin_items(self, html: str, base_url: str) -> List[Dict[str, Any]]:
         """Formalized bulletin parse: anchor titles matching Q8 keywords+regions."""
@@ -272,6 +569,11 @@ class BNPBAdapter(BaseAdapter):
         items = raw_data.get("items") or []
         if not items:
             return events
+        if raw_data.get("status") == "ckan" or any(
+            isinstance(r, dict) and ("_ckan_resource_id" in r or "Latitude" in r or "latitude" in r)
+            for r in items
+        ):
+            return await self._parse_ckan_items(items)
         try:
             r = get_redis()
         except Exception:
@@ -322,5 +624,81 @@ class BNPBAdapter(BaseAdapter):
                 })
             except Exception as e:
                 logger.debug(f"BNPB parse row skipped: {e}")
+                continue
+        return events
+
+    async def _parse_ckan_items(self, items: List[Any]) -> List[Dict[str, Any]]:
+        """Row->event mapper for CKAN datastore rows.
+
+        One event per (row, nonzero hazard column). Aggregates are labeled
+        honestly: severity is always "low" with status "stats" — never
+        presented as live alerts. Rows without lat/lon, outside the Sumatra
+        gate, or with zero counts in every hazard column are dropped.
+        """
+        events: List[Dict[str, Any]] = []
+        try:
+            r = get_redis()
+        except Exception:
+            r = None
+        now_iso = datetime.now(timezone.utc).isoformat()
+        for row in items:
+            try:
+                if not isinstance(row, dict):
+                    continue
+                geo = ckan_row_geo(row)
+                if not geo:
+                    continue
+                lat, lon = geo
+                if not ckan_row_in_sumatra(row, lat, lon):
+                    continue
+                hazards = ckan_row_hazards(row)
+                if not hazards:
+                    continue
+                region = ckan_row_region(row) or "Sumatera"
+                level = ckan_row_level(row)
+                radius = CKAN_LEVEL_RADIUS_KM.get(level, 25.0)
+                resource_id = str(row.get("_ckan_resource_id") or "bootstrap")
+                dataset = str(row.get("_ckan_dataset") or "")
+                ts = str(row.get("_ckan_updated_at") or now_iso) or now_iso
+                record_id = row.get("_id", row.get("id", ""))
+                if record_id in (None, ""):
+                    record_id = hashlib.md5(
+                        json.dumps(row, default=str, sort_keys=True).encode("utf-8")
+                    ).hexdigest()[:12]
+                record_id = str(record_id)
+                link = f"https://data.bnpb.go.id/dataset/{dataset}" if dataset else None
+                for event_type in sorted(hazards):
+                    count = hazards[event_type]
+                    dedup_key = f"bnpb:ckan:{resource_id}:{record_id}:{event_type}"
+                    if r is not None:
+                        try:
+                            if r.get(f"lrip:dedup:{dedup_key}"):
+                                continue
+                            r.set(f"lrip:dedup:{dedup_key}", "1", ex=7 * 86400)
+                        except Exception as de:
+                            logger.debug(f"BNPB CKAN dedup skipped: {de}")
+                    level_label = "kabupaten/kota" if level == "kab" else "provinsi"
+                    title = (
+                        f"[BNPB aggregate stats] {event_type} {level_label} "
+                        f"{region}: {count} kejadian"
+                    )
+                    events.append({
+                        "source": self.source_name,
+                        "event_type": event_type,
+                        "severity": "low",
+                        "status": "stats",
+                        "lat": str(lat),
+                        "lon": str(lon),
+                        "radius_km": radius,
+                        "title": title[:220],
+                        "link": link,
+                        "matched_region": region[:80],
+                        "impact": json.dumps({"aggregate_count": count, "hazard": event_type}),
+                        "raw": json.dumps(row, default=str)[:4000],
+                        "ts": ts,
+                        "dedup_key": dedup_key,
+                    })
+            except Exception as e:
+                logger.debug(f"BNPB CKAN parse row skipped: {e}")
                 continue
         return events
