@@ -352,6 +352,11 @@ _AD_NOISE_KEYWORDS = (
     "narkoba", "pencurian", "varises", "osteoporosis", "kanker", "klinik",
     "rumah sakit", "artis", "hiburan", "film", "fashion", "kecantikan", "kosmetik",
     "olahraga", "sepak bola",
+    # Tribun-style promo / quiz spam (mirrors news_aggregator). Weather wording
+    # ("prakiraan cuaca"/"info cuaca") is deliberately NOT mirrored here: in this
+    # module those tokens would DROP BMKG advisories, whereas the aggregator
+    # already prunes them at fetch time.
+    "jalan sehat", "jalan santai", "kunci jawaban",
 )
 
 _DEFAULT_HAZARD_LABELS = {

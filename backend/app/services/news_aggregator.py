@@ -126,6 +126,62 @@ OFFICIAL_RSS_FEEDS = [
         "tier": "TIER_2_AUTHORITATIVE_PRESS",
         "category": "COMMODITY_MARKET",
         "province": "Nasional"
+    },
+    {
+        "source": "Tribun Padang",
+        "url": "https://padang.tribunnews.com/rss",
+        "tier": "TIER_2_AUTHORITATIVE_PRESS",
+        "category": "REGIONAL_DISASTER",
+        "province": "Sumatera Barat"
+    },
+    {
+        "source": "Tribun Palembang",
+        "url": "https://palembang.tribunnews.com/rss",
+        "tier": "TIER_2_AUTHORITATIVE_PRESS",
+        "category": "REGIONAL_DISASTER",
+        "province": "Sumatera Selatan"
+    },
+    {
+        "source": "Tribun Batam",
+        "url": "https://batam.tribunnews.com/rss",
+        "tier": "TIER_2_AUTHORITATIVE_PRESS",
+        "category": "REGIONAL_DISASTER",
+        "province": "Kepulauan Riau"
+    },
+    {
+        "source": "Tribun Lampung",
+        "url": "https://lampung.tribunnews.com/rss",
+        "tier": "TIER_2_AUTHORITATIVE_PRESS",
+        "category": "REGIONAL_DISASTER",
+        "province": "Lampung"
+    },
+    {
+        "source": "Tribun Aceh",
+        "url": "https://aceh.tribunnews.com/rss",
+        "tier": "TIER_2_AUTHORITATIVE_PRESS",
+        "category": "REGIONAL_DISASTER",
+        "province": "Aceh"
+    },
+    {
+        "source": "Detik Finance",
+        "url": "https://finance.detik.com/rss",
+        "tier": "TIER_2_AUTHORITATIVE_PRESS",
+        "category": "ECONOMIC_LOGISTICS",
+        "province": "Nasional"
+    },
+    {
+        "source": "Katadata",
+        "url": "https://katadata.co.id/rss",
+        "tier": "TIER_2_AUTHORITATIVE_PRESS",
+        "category": "ECONOMIC_LOGISTICS",
+        "province": "Nasional"
+    },
+    {
+        "source": "Republika",
+        "url": "https://www.republika.co.id/rss",
+        "tier": "TIER_2_AUTHORITATIVE_PRESS",
+        "category": "NATIONAL_ALERT",
+        "province": "Nasional"
     }
 ]
 
@@ -135,13 +191,16 @@ TARGETED_PRESS_QUERIES = [
     # (Belawan port, Tebing Tinggi, Asahan/Kisaran, Rantauprapat, Sibolga).
     "(site:antaranews.com OR site:detik.com OR site:tribunnews.com OR site:kompas.com) (banjir OR longsor OR jalan terputus) (Medan OR Tebing Tinggi OR Belawan OR Jalinsum OR Asahan OR Kisaran OR Rantauprapat OR Sibolga) when:2d",
     "(site:antaranews.com OR site:tribunnews.com OR site:detik.com) (longsor Sitinjau Lauik OR jalan Padang Solok OR tol Pekanbaru Dumai) when:2d",
-    "(site:antaranews.com OR site:bisnis.com OR site:tempo.co) (stok beras BULOG OR harga cabai OR pasokan pangan) (Sumatera OR Sumut OR Sumbar OR Riau OR Lampung) when:2d",
+    "(site:antaranews.com OR site:bisnis.com OR site:tempo.co OR site:liputan6.com OR site:merdeka.com OR site:kontan.co.id) (stok beras BULOG OR harga cabai OR pasokan pangan) (Sumatera OR Sumut OR Sumbar OR Riau OR Lampung) when:2d",
     "(site:antaranews.com OR site:detik.com) (gelombang Selat Malaka OR Pelabuhan Belawan OR Pelabuhan Panjang OR Bakauheni OR antrean truk tol) when:2d",
     "(site:antaranews.com OR site:kompas.com) (jalan lintas timur OR jalintim OR jalinbar OR jembatan putus OR amblas) (Palembang OR Jambi OR Lampung) when:2d",
     # Q6 — Kepri/Babel maritime + tin corridors (Batam, Tanjung Pinang, Natuna, Pangkalpinang).
     "(site:antaranews.com) (banjir OR longsor OR pelabuhan) (Batam OR Tanjung Pinang OR Natuna OR Pangkalpinang) when:2d",
     # Q7 — Aceh east coast / Tamiang–Langsa–Lhokseumawe flood & landslide corridor.
     "(site:antaranews.com OR site:detik.com) (banjir OR longsor OR jalan putus) (Aceh Tamiang OR Langsa OR Lhokseumawe OR Banda Aceh) when:2d",
+    # Q8 — Official agency bulletins (BNPB/BMKG) for pan-Sumatra flood, landslide,
+    # quake, early-warning and extreme-weather alerts (Tier-1 authority recall).
+    "(site:bnpb.go.id OR site:bmkg.go.id) (banjir OR longsor OR gempa OR peringatan dini OR cuaca ekstrem) (Sumatera OR Sumut OR Sumbar OR Riau OR Lampung OR Aceh OR Jambi) when:2d",
 ]
 
 MAX_NEWS_AGE_HOURS = 48
@@ -564,6 +623,8 @@ EXCLUDED_NOISE_KEYWORDS = (
     "saham", "crypto", "kripto", "trading", "forex", "pinjol",
     # Sports & entertainment leftovers
     "bulutangkis", "motogp", "piala dunia", "timnas",
+    # Tribun-style promo / lifestyle spam (jalan sehat, kuis, forecast boilerplate)
+    "jalan sehat", "jalan santai", "prakiraan cuaca", "info cuaca", "kunci jawaban",
 )
 
 # In-process memory cache of already-processed articles (id -> row, link -> row)
@@ -919,10 +980,22 @@ async def fetch_rss_feed_items(feed_config: Dict[str, Any], timeout: float = 6.0
     items = []
     try:
         async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
-            resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0 (PreHub Logistics Bot 2.0)"})
+            # Tribun regional networks (padang/palembang/batam/lampung/aceh
+            # .tribunnews.com) reject the legacy "PreHub Logistics Bot" UA with
+            # HTTP 403 while serving normal RSS to a standard browser UA.
+            resp = await client.get(
+                url,
+                headers={
+                    "User-Agent": (
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+                    ),
+                    "Accept": "application/rss+xml,application/xml,text/xml,*/*",
+                },
+            )
             if resp.status_code == 200:
                 root = ET.fromstring(resp.text)
-                for item in root.findall(".//item")[:15]:
+                for item in root.findall(".//item")[:40]:
                     title = item.findtext("title", "").strip()
                     raw_link = item.findtext("link", "").strip()
                     pub_date = item.findtext("pubDate", "").strip()

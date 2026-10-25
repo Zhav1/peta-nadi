@@ -20,6 +20,14 @@ import { test, expect, type Page } from '@playwright/test';
  *     not advance while the id set is unchanged.
  * (d) 10-province feed -> non-Sumut (i.e. outside Sumatera Utara) provinces are
  *     actually reachable through the sidebar search/filter.
+ * (e) expanded provider set (Tribun network in Padang/Batam/Aceh/Lampung/
+ *     Palembang + Detik Finance + Katadata + Republika + Antara Kepri) -> every
+ *     outlet renders with its own source badge, the province filter still
+ *     narrows the feed, and no item is rewritten into a `/search?q=` anchor.
+ * (f) DB-cache token saving -> two byte-identical polls must be served from the
+ *     client cache: the second poll performs no `/api/v1/news/verify` call, no
+ *     LLM call, no cache-busting re-fetch beyond the regular poll, and every
+ *     per-article text stays frozen.
  *
  * The dashboard is served from the standalone Next bundle; the backend is not
  * running, so every network dependency used by the sidebar is stubbed here.
@@ -402,5 +410,336 @@ test.describe('Strict live audit — news sidebar', () => {
     expect
       .soft(await sidebar.getByText('Aceh: banjir lumpuh jalan nasional di Banda Aceh', { exact: false }).count())
       .toBe(0);
+  });
+
+  test('(e) expanded providers render every outlet and the province filter still narrows', async ({ page }) => {
+    await mockDashboardShell(page);
+
+    // Tribun's city editions carry the province in the outlet name, so the
+    // sidebar must render the provider badge verbatim while the headline stays
+    // province-searchable. The national outlets are interleaved to prove the
+    // feed is not silently collapsed onto a single source.
+    const providers: Array<{
+      source: string;
+      headline: string;
+      location: string;
+      lat: number;
+      lon: number;
+      link: string;
+    }> = [
+      {
+        source: 'Tribun Padang',
+        headline: 'Banjir lumpuh jalan nasional di Padang',
+        location: 'Padang, Sumbar',
+        lat: -0.9471,
+        lon: 100.4172,
+        link: 'https://www.tribunnews.com/regional/4567801/banjir-lumpuh-jalan-nasional-padang',
+      },
+      {
+        source: 'Tribun Batam',
+        headline: 'Banjir lumpuh akses pelabuhan di Batam',
+        location: 'Batam, Kepri',
+        lat: 1.1301,
+        lon: 104.0529,
+        link: 'https://www.tribunnews.com/regional/4567802/banjir-lumpuh-akses-pelabuhan-batam',
+      },
+      {
+        source: 'Tribun Aceh',
+        headline: 'Banjir lumpuh jalur utama di Banda Aceh',
+        location: 'Banda Aceh, Aceh',
+        lat: 5.5483,
+        lon: 95.3238,
+        link: 'https://www.tribunnews.com/regional/4567803/banjir-lumpuh-jalur-utama-banda-aceh',
+      },
+      {
+        source: 'Tribun Lampung',
+        headline: 'Banjir lumpuh jalan lintas di Bandar Lampung',
+        location: 'Bandar Lampung, Lampung',
+        lat: -5.4292,
+        lon: 105.261,
+        link: 'https://www.tribunnews.com/regional/4567804/banjir-lumpuh-jalan-lintas-bandar-lampung',
+      },
+      {
+        source: 'Tribun Palembang',
+        headline: 'Banjir lumpuh jalur logistik di Palembang',
+        location: 'Palembang, Sumsel',
+        lat: -2.9761,
+        lon: 104.7754,
+        link: 'https://www.tribunnews.com/regional/4567805/banjir-lumpuh-jalur-logistik-palembang',
+      },
+      {
+        source: 'Detik Finance',
+        headline: 'Banjir lumpuh arus barang di Medan',
+        location: 'Medan, Sumut',
+        lat: 3.5952,
+        lon: 98.6722,
+        link: 'https://finance.detik.com/berita-ekonomi-bisnis/d-6789012/banjir-lumpuh-arus-barang-medan',
+      },
+      {
+        source: 'Katadata',
+        headline: 'Banjir lumpuh jalur distribusi di Pekanbaru',
+        location: 'Pekanbaru, Riau',
+        lat: 0.5071,
+        lon: 101.4478,
+        link: 'https://katadata.co.id/berita/ekonomi/6789013/banjir-lumpuh-jalur-distribusi-pekanbaru',
+      },
+      {
+        source: 'Republika',
+        headline: 'Banjir lumpuh akses jalan nasional di Jambi',
+        location: 'Jambi, Jambi',
+        lat: -1.6101,
+        lon: 103.6131,
+        link: 'https://www.republika.co.id/berita/s9xyz123/banjir-lumpuh-akses-jalan-nasional-jambi',
+      },
+      {
+        source: 'Antara Kepri',
+        headline: 'Banjir lumpuh jalur pelabuhan di Tanjungpinang',
+        location: 'Tanjungpinang, Kepri',
+        lat: 0.9186,
+        lon: 104.4467,
+        link: 'https://www.antaranews.com/berita/4567895/banjir-lumpuh-jalur-pelabuhan-tanjungpinang',
+      },
+    ];
+
+    const articles = providers.map(({ source, headline, location, lat, lon, link }, index) =>
+      newsArticle({
+        id: `audit-provider-${index + 1}`,
+        source,
+        source_tier: 'TIER_2_AUTHORITATIVE_PRESS',
+        title: headline,
+        summary: `${headline}. Air merendam badan jalan dan memutus arus kendaraan logistik di ${location}.`,
+        location_name: location,
+        latitude: lat,
+        longitude: lon,
+        link,
+        url: link,
+      })
+    );
+
+    await page.route('**/api/v1/news/live', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(livePayload(articles)),
+      });
+    });
+
+    const sidebar = await openDashboard(page);
+
+    // 1. Every outlet survives the client display gate — no provider is dropped.
+    await expect
+      .soft(articleCards(page), 'expanded provider feed was not fully rendered')
+      .toHaveCount(providers.length, { timeout: 30_000 });
+
+    // 2. Each outlet owns a visible source badge (not collapsed to ANTARA/BERITA).
+    for (const provider of providers) {
+      await expect
+        .soft(
+          sidebar.getByText(provider.source, { exact: true }).first(),
+          `source badge "${provider.source}" never rendered in the news sidebar`
+        )
+        .toBeVisible({ timeout: 10_000 });
+    }
+
+    // 3. No unresolvable link was rewritten into a search anchor.
+    const hrefs = await sidebar
+      .locator('a[href]')
+      .evaluateAll((nodes) =>
+        Array.from(new Set(nodes.map((node) => node.getAttribute('href') || '')))
+      );
+    expect
+      .soft(
+        hrefs.filter((href) => /\/search\?q=/.test(href) || href.includes('news.google.com/search')),
+        'a provider link was rewritten into a search URL instead of being dropped'
+      )
+      .toEqual([]);
+
+    // 4. The province filter still narrows the expanded provider set.
+    const search = sidebar.getByPlaceholder('Cari berita atau lokasi...');
+    await expect(search, 'news search/filter input not found').toBeVisible({ timeout: 10_000 });
+
+    await search.fill('Batam');
+    await expect
+      .soft(
+        sidebar.getByRole('heading', { name: 'Banjir lumpuh akses pelabuhan di Batam' }),
+        'Batam provider item is not reachable through the news filter/search'
+      )
+      .toBeVisible({ timeout: 10_000 });
+    expect
+      .soft(
+        await sidebar
+          .getByRole('heading', { name: 'Banjir lumpuh jalan nasional di Padang' })
+          .count(),
+        'Padang item leaked through a Batam-only filter'
+      )
+      .toBe(0);
+
+    await search.fill('Palembang');
+    await expect
+      .soft(
+        sidebar.getByRole('heading', { name: 'Banjir lumpuh jalur logistik di Palembang' }),
+        'Palembang provider item is not reachable through the news filter/search'
+      )
+      .toBeVisible({ timeout: 10_000 });
+    expect
+      .soft(
+        await sidebar
+          .getByRole('heading', { name: 'Banjir lumpuh akses pelabuhan di Batam' })
+          .count(),
+        'Batam item leaked through a Palembang-only filter'
+      )
+      .toBe(0);
+
+    // 5. Clearing the filter restores the full provider feed.
+    await search.fill('');
+    await expect
+      .soft(articleCards(page), 'clearing the filter did not restore the full provider feed')
+      .toHaveCount(providers.length, { timeout: 10_000 });
+
+    // 6. Still no fabricated Sumatra fixtures anywhere in the expanded feed.
+    const sidebarText = (await sidebar.innerText()).replace(/\s+/g, ' ');
+    for (const marker of FALLBACK_MARKERS) {
+      expect
+        .soft(sidebarText, `FALLBACK_SUMATRA_NEWS marker "${marker}" rendered with new providers`)
+        .not.toContain(marker);
+    }
+    expect.soft(sidebarText, 'FALLBACK id leaked with the expanded provider set').not.toContain('FALLBACK-');
+  });
+
+  test('(f) identical re-poll is served from cache: no re-verify, no LLM call, text frozen', async ({ page }) => {
+    await mockDashboardShell(page);
+
+    const requests: string[] = [];
+    page.on('request', (request) => requests.push(request.url()));
+
+    const frozenUpdated = new Date(Date.now() - 90_000).toISOString();
+    const articles: MockArticle[] = [
+      newsArticle({
+        id: 'audit-cache-1',
+        source: 'Tribun Batam',
+        title: 'Banjir lumpuh akses pelabuhan di Batam',
+        link: 'https://www.tribunnews.com/regional/4567811/banjir-lumpuh-akses-pelabuhan-batam',
+        url: 'https://www.tribunnews.com/regional/4567811/banjir-lumpuh-akses-pelabuhan-batam',
+        location_name: 'Batam, Kepri',
+        latitude: 1.1301,
+        longitude: 104.0529,
+        pubDate: new Date(Date.now() - 90 * 60 * 1000).toISOString(),
+      }),
+      newsArticle({
+        id: 'audit-cache-2',
+        source: 'Katadata',
+        title: 'Banjir lumpuh jalur distribusi di Pekanbaru',
+        link: 'https://katadata.co.id/berita/ekonomi/6789021/banjir-lumpuh-jalur-distribusi-pekanbaru',
+        url: 'https://katadata.co.id/berita/ekonomi/6789021/banjir-lumpuh-jalur-distribusi-pekanbaru',
+        location_name: 'Pekanbaru, Riau',
+        latitude: 0.5071,
+        longitude: 101.4478,
+        pubDate: new Date(Date.now() - 100 * 60 * 1000).toISOString(),
+      }),
+      newsArticle({
+        id: 'audit-cache-3',
+        source: 'Antara Kepri',
+        title: 'Banjir lumpuh jalur pelabuhan di Tanjungpinang',
+        link: 'https://www.antaranews.com/berita/4567896/banjir-lumpuh-jalur-pelabuhan-tanjungpinang',
+        url: 'https://www.antaranews.com/berita/4567896/banjir-lumpuh-jalur-pelabuhan-tanjungpinang',
+        location_name: 'Tanjungpinang, Kepri',
+        latitude: 0.9186,
+        longitude: 104.4467,
+        pubDate: new Date(Date.now() - 110 * 60 * 1000).toISOString(),
+      }),
+    ];
+
+    // Byte-identical body on every poll: this is the DB/CDN cache hit shape.
+    const cachedBody = JSON.stringify(livePayload(articles, frozenUpdated));
+    let livePolls = 0;
+    const liveUrls: string[] = [];
+    await page.route('**/api/v1/news/live', async (route) => {
+      livePolls += 1;
+      liveUrls.push(route.request().url());
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: cachedBody,
+      });
+    });
+
+    const sidebar = await openDashboard(page);
+    const cards = articleCards(page);
+    await expect(cards, 'cached live feed never rendered').toHaveCount(articles.length, { timeout: 30_000 });
+    await page.waitForTimeout(1_000);
+
+    // Baseline: per-article text of the first (cache-warm) render.
+    const textBefore = await cards.evaluateAll((nodes) =>
+      nodes.map((node) => (node.textContent || '').replace(/\s+/g, ' ').trim())
+    );
+    expect(textBefore, 'per-article text snapshot is empty').toHaveLength(articles.length);
+
+    const requestCountBefore = requests.length;
+
+    // Second poll: the hook's 30s interval returns the same cached body.
+    await expect
+      .poll(() => livePolls, { timeout: 45_000, message: 'second /api/v1/news/live poll never fired' })
+      .toBeGreaterThanOrEqual(2);
+    // Grace window: any verification/LLM side effect would land right after the poll.
+    await page.waitForTimeout(2_000);
+
+    const duringSecondPoll = requests.slice(requestCountBefore);
+
+    // 1. Token-saving contract: a cache hit must never re-run verification.
+    const verifyCalls = requests.filter((url) => /\/news\/verify(\/|\?|$)/.test(url));
+    expect
+      .soft(verifyCalls, 'a cache hit triggered /api/v1/news/verify instead of reusing the stored result')
+      .toEqual([]);
+
+    // 2. No LLM/agent endpoint is hit on a cache hit either.
+    const llmCalls = duringSecondPoll.filter((url) =>
+      /\/api\/v1\/(llm|ai|generate|completion|inference|agent)(\/|\?|$)/i.test(url)
+    );
+    expect
+      .soft(llmCalls, 'a cache hit triggered an LLM/agent call instead of reusing the stored result')
+      .toEqual([]);
+
+    // 3. No extra data fetch beyond the regular poll: the only news endpoints hit
+    //    after the cache-warm render are the periodic live/market-regime polls
+    //    (and the shell's HITL polling), each exactly once.
+    const newsCalls = duringSecondPoll.filter((url) => url.includes('/api/v1/news'));
+    const unexpectedNewsCalls = newsCalls.filter(
+      (url) => !/\/api\/v1\/news\/(live|market-regime|hitl-pending)(\/|\?|$)/.test(url)
+    );
+    expect
+      .soft(unexpectedNewsCalls, 'the second poll issued a news request outside the cached poll set')
+      .toEqual([]);
+    const extraLiveFetches = newsCalls.filter((url) => /\/api\/v1\/news\/live(\/|\?|$)/.test(url));
+    expect
+      .soft(extraLiveFetches.length, 'the second poll re-fetched /api/v1/news/live more than once')
+      .toBeLessThanOrEqual(1);
+
+    // 4. The re-poll uses the same cache key: no cache-busting query params.
+    expect
+      .soft(liveUrls.length, 'second live poll never recorded a URL')
+      .toBeGreaterThanOrEqual(2);
+    for (const url of liveUrls) {
+      const { pathname, search } = new URL(url);
+      expect.soft(pathname, 'live poll URL drifted away from the cache key').toBe('/api/v1/news/live');
+      expect.soft(search, 'live poll appended a cache-busting query string').toBe('');
+    }
+
+    // 5. Per-article text is frozen across the cache hit.
+    const textAfter = await cards.evaluateAll((nodes) =>
+      nodes.map((node) => (node.textContent || '').replace(/\s+/g, ' ').trim())
+    );
+    expect
+      .soft(textAfter, 'per-article text changed when an identical (cached) payload was re-polled')
+      .toEqual(textBefore);
+
+    // 6. The stored rows are still the ones on screen (no empty/refetch flash).
+    for (const article of articles) {
+      await expect
+        .soft(
+          sidebar.getByText(String(article.title), { exact: false }),
+          `cached article "${article.title}" dropped after the identical re-poll`
+        )
+        .toBeVisible({ timeout: 5_000 });
+    }
   });
 });
