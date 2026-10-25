@@ -103,7 +103,7 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
  return (
  <div
  data-slot="tactical-command-ribbon"
- className="relative flex items-center gap-1.5 p-1 rounded-xl bg-[#0c1017]/90 border border-white/10 shadow-2xl backdrop-blur-md text-xs font-mono select-none overflow-x-auto no-scrollbar max-w-[calc(100vw-28rem)]"
+ className="relative flex items-center gap-1.5 p-1 rounded-xl bg-[#0c1017]/90 border border-white/10 shadow-2xl backdrop-blur-md text-xs font-mono select-none overflow-x-auto no-scrollbar max-w-full sm:max-w-[calc(100vw-20rem)] lg:max-w-[calc(100vw-28rem)]"
  >
  {/* 1. Routing Compute Latency */}
  <Popover

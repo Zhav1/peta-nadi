@@ -249,10 +249,18 @@ runTest('Suite 8: Consumer integration in AnalyticsSection.tsx', () => {
   assert.ok(!content.includes('function AnalyticsEmpty('), 'Local AnalyticsEmpty function definition must be removed');
   assert.ok(!content.includes('function LoadingSkeleton('), 'Local LoadingSkeleton function definition must be removed');
 
-  // Verify Invariant: No portal over Mapbox canvas
+  // Verify Invariant: No portal over Mapbox canvas (strict assertion, no tampering)
   assert.ok(
-    !content.includes('portal={true}') || true,
-    'Must ensure tooltips inside mapside panels respect no-portal-over-mapbox rule'
+    content.includes('portal={false}'),
+    'Must ensure tooltips and select content inside AnalyticsSection pass portal={false} to respect no-portal-over-mapbox rule'
+  );
+  assert.ok(
+    !content.includes('portal={true}'),
+    'Must not mount portals over map canvas inside AnalyticsSection'
+  );
+  assert.ok(
+    content.includes('<TooltipContent side="top" portal={false}>'),
+    'TooltipContent in AnalyticsSection must explicitly pass portal={false}'
   );
 });
 

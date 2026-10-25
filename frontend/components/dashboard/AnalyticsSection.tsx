@@ -337,7 +337,7 @@ export default function DashboardAnalyticsSection({
       <AnalyticsMotionStyle />
 
       {/* Shared analitik filter bar — drives PIHPS price refetch */}
-      <div className="bg-[#0c1017] border border-white/10 rounded-xl px-4 py-3 flex flex-wrap items-center gap-3 text-xs shadow-xl">
+      <div className="relative z-30 bg-[#0c1017] border border-white/10 rounded-xl px-4 py-3 flex flex-wrap items-center gap-3 text-xs shadow-xl">
         <span className="flex items-center gap-1.5 font-semibold text-slate-200">
           <Filter className="w-3.5 h-3.5 text-slate-400" /> Filter harga
         </span>
@@ -350,6 +350,7 @@ export default function DashboardAnalyticsSection({
               if (val) setCommodity(val);
             }}
             items={COMMODITY_OPTIONS}
+            modal={false}
           >
             <SelectTrigger className="h-8 min-w-[140px] bg-white/5 border border-white/10 rounded-lg text-xs text-slate-200 px-2.5 py-1.5 cursor-pointer">
               <SelectValue placeholder="Pilih komoditas" />
@@ -370,6 +371,7 @@ export default function DashboardAnalyticsSection({
             value={priceRegion}
             onValueChange={(val) => setPriceRegion(val ?? '')}
             items={REGION_OPTIONS}
+            modal={false}
           >
             <SelectTrigger className="h-8 min-w-[120px] bg-white/5 border border-white/10 rounded-lg text-xs text-slate-200 px-2.5 py-1.5 cursor-pointer">
               <SelectValue placeholder="Semua wilayah" />
@@ -455,7 +457,7 @@ export default function DashboardAnalyticsSection({
                 <span>Tren {days} Titik Terakhir</span>
                 <Tooltip>
                   <TooltipTrigger render={<span className="text-slate-400 hover:text-slate-200 cursor-pointer inline-flex items-center"><Info className="w-3.5 h-3.5" /></span>} />
-                  <TooltipContent side="top">
+                  <TooltipContent side="top" portal={false}>
                     Grafik historis harga harian {commodityLabel} berdasarkan data PIHPS Bank Indonesia.
                   </TooltipContent>
                 </Tooltip>

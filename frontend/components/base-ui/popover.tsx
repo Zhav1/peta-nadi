@@ -40,6 +40,7 @@ export interface PopoverContentProps
   > {
   className?: string;
   children?: React.ReactNode;
+  portal?: boolean;
 }
 
 export function PopoverContent({
@@ -53,31 +54,36 @@ export function PopoverContent({
   collisionBoundary,
   arrowPadding,
   sticky,
+  portal = true,
 }: PopoverContentProps) {
-  return (
-    <BasePopover.Portal>
-      <BasePopover.Positioner
-        side={side}
-        sideOffset={sideOffset}
-        align={align}
-        alignOffset={alignOffset}
-        collisionPadding={collisionPadding}
-        collisionBoundary={collisionBoundary}
-        arrowPadding={arrowPadding}
-        sticky={sticky}
+  const content = (
+    <BasePopover.Positioner
+      side={side}
+      sideOffset={sideOffset}
+      align={align}
+      alignOffset={alignOffset}
+      collisionPadding={collisionPadding}
+      collisionBoundary={collisionBoundary}
+      arrowPadding={arrowPadding}
+      sticky={sticky}
+    >
+      <BasePopover.Popup
+        data-slot="popover-content"
+        className={cn(
+          'z-50 w-72 rounded-xl border border-white/10 bg-[#0c1017] p-4 text-xs text-slate-100 shadow-xl outline-none',
+          className,
+        )}
       >
-        <BasePopover.Popup
-          data-slot="popover-content"
-          className={cn(
-            'z-50 w-72 rounded-xl border border-white/10 bg-[#0c1017] p-4 text-xs text-slate-100 shadow-xl outline-none',
-            className,
-          )}
-        >
-          {children}
-        </BasePopover.Popup>
-      </BasePopover.Positioner>
-    </BasePopover.Portal>
+        {children}
+      </BasePopover.Popup>
+    </BasePopover.Positioner>
   );
+
+  if (portal === false) {
+    return content;
+  }
+
+  return <BasePopover.Portal>{content}</BasePopover.Portal>;
 }
 
 export function PopoverClose(props: React.ComponentProps<typeof BasePopover.Close>) {
