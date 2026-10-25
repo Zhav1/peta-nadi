@@ -402,3 +402,50 @@ async def test_intermodal_legs_and_coastal_maritime_routing():
     assert "legs" in rec
     assert any(l["modality"] == "maritime" and l["color"] == "#3B82F6" for l in rec["legs"])
 
+
+def test_fleet_modality_and_status_all_filters():
+    """Verify that modality=all and status=all return full fleet instead of dropping to 0."""
+    from app.routers.vehicles_router import clear_fleet_cache
+
+    clear_fleet_cache()
+    res_base = client.get("/api/v1/fleet/vehicles")
+    assert res_base.status_code == 200
+    base_count = res_base.json()["total_vehicles"]
+    assert base_count > 0
+
+    # modality=all must match baseline count
+    res_all = client.get("/api/v1/fleet/vehicles?modality=all")
+    assert res_all.status_code == 200
+    assert res_all.json()["total_vehicles"] == base_count
+
+    # status=all must match baseline count
+    res_stat = client.get("/api/v1/fleet/vehicles?status=all")
+    assert res_stat.status_code == 200
+    assert res_stat.json()["total_vehicles"] == base_count
+
+    # Warm cache test on stripped geometry
+    res_warm = client.get("/api/v1/fleet/vehicles?include_geometry=false")
+    assert res_warm.status_code == 200
+    assert res_warm.json()["total_vehicles"] == base_count
+
+
+def test_vehicle_geometry_caching_and_not_found():
+    """Verify route geometry lookup succeeds on valid asset and 404s on nonexistent asset."""
+    res_fleet = client.get("/api/v1/fleet/vehicles")
+    assert res_fleet.status_code == 200
+    vehicles = res_fleet.json()["vehicles"]
+    assert len(vehicles) > 0
+    valid_vid = vehicles[0]["vehicle_id"]
+
+    res_geo = client.get(f"/api/v1/fleet/vehicles/{valid_vid}/geometry")
+    assert res_geo.status_code == 200
+    geo_data = res_geo.json()
+    assert geo_data["status"] == "success"
+    assert geo_data["vehicle_id"] == valid_vid
+    assert "path" in geo_data
+
+    # 404 test
+    res_404 = client.get("/api/v1/fleet/vehicles/NON_EXISTENT_ID_999/geometry")
+    assert res_404.status_code == 404
+
+

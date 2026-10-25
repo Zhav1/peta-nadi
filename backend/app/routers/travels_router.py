@@ -30,6 +30,7 @@ from app.services.travel_ledger_service import (
     TruckNotFoundError,
     TravelNotFoundError,
 )
+from app.routers.vehicles_router import clear_fleet_cache
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +92,7 @@ async def create_truck_asset(
 
     saved = local_storage.save_truck_asset(data)
     saved["source"] = "master"
+    clear_fleet_cache()
     return TruckAssetResponse(**saved)
 
 
@@ -131,6 +133,7 @@ async def delete_truck_asset(
                 "Aset legacy hanya dapat dihapus melalui DELETE /api/v1/fleet/custom/{vehicle_id}."
             ),
         )
+    clear_fleet_cache()
     return {"status": "success", "message": f"Aset truk '{truck_id}' berhasil dihapus.", "truck_id": truck_id}
 
 
@@ -150,6 +153,7 @@ async def create_travel(
     _require_fleet_write(user)
     try:
         created = travel_ledger_service.create_travel(payload, actor=user.name)
+        clear_fleet_cache()
     except TruckNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValueError as e:
@@ -201,6 +205,7 @@ async def update_travel(
     _require_fleet_write(user)
     try:
         updated = travel_ledger_service.update_travel(travel_id, payload)
+        clear_fleet_cache()
     except TravelNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValueError as e:

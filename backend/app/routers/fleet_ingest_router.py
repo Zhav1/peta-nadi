@@ -21,6 +21,7 @@ from app.services.telemetry_service import (
     telemetry_service,
     SUMATRA_STRATEGIC_HUBS,
 )
+from app.routers.vehicles_router import clear_fleet_cache
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +131,7 @@ async def register_single_vehicle(
         vehicle_dict["dest_coords"] = payload.dest_coords
         
         saved = telemetry_service.register_custom_vehicle(vehicle_dict)
+        clear_fleet_cache()
         return FleetIngestResponse(
             status="success",
             message=f"Armada {saved.get('vehicle_id')} ({saved.get('name')}) berhasil didaftarkan [mode: {saved.get('tracking_mode', 'ROUTE_ESTIMATED')}].",
@@ -185,6 +187,7 @@ async def upload_fleet_manifest(
 
     try:
         registered_count = telemetry_service.register_batch_custom_vehicles(vehicles_to_register)
+        clear_fleet_cache()
         custom_list = telemetry_service.list_custom_vehicles()
         
         return FleetIngestResponse(
@@ -243,6 +246,7 @@ async def upload_fleet_manifest_file(
             v["created_by"] = user.name
 
         registered_count = telemetry_service.register_batch_custom_vehicles(vehicles_to_register)
+        clear_fleet_cache()
         custom_list = telemetry_service.list_custom_vehicles()
         
         return FleetIngestResponse(
@@ -268,6 +272,7 @@ async def ingest_tms_telemetry(payload: TMSVehicleTelemetryPing):
     try:
         ping_dict = payload.model_dump()
         logged = telemetry_service.ingest_gps_ping(ping_dict)
+        clear_fleet_cache()
         return {
             "status": "success",
             "message": f"Telemetri GPS untuk {payload.vehicle_id} berhasil diterima.",
@@ -327,6 +332,7 @@ async def delete_custom_fleet_unit(
             detail=f"Armada dengan ID '{vehicle_id}' tidak ditemukan dalam database kustom.",
         )
 
+    clear_fleet_cache()
     return {
         "status": "success",
         "message": f"Armada '{vehicle_id}' berhasil dihapus dari sistem.",

@@ -269,6 +269,25 @@ runTest('Suite 8: Consumer integration in AnalyticsSection.tsx', () => {
     !content.includes('title='),
     'All static native title attributes in AnalyticsSection.tsx must be replaced with Base-UI Tooltip'
   );
+
+  // Verify Phase 119 Layout: Map-less single full-width layout (no Mapbox canvas)
+  assert.ok(!content.includes('mapContainerRef'), 'Mapbox canvas ref must be removed for map-less layout');
+  assert.ok(!content.includes('mapboxgl'), 'Mapbox GL JS must not be imported in map-less layout');
+  assert.ok(content.includes('col-span-12'), 'AnalyticsSection must use full-width single column layout');
+  assert.ok(!content.includes('lg:col-span-8'), 'Split-screen map column must not exist');
+  assert.ok(!content.includes('lg:col-span-4'), 'Split-screen sidebar column must not exist');
+
+  // Verify Phase 119 Zhav1 functional improvements
+  assert.ok(content.includes('regionToDb'), 'Must implement regionToDb mapping');
+  assert.ok(content.includes('formatDayMonth'), 'Must implement formatDayMonth calendar date formatting');
+  assert.ok(content.includes('formatFullDate'), 'Must implement formatFullDate calendar date formatting');
+  assert.ok(content.includes('Lihat Laporan'), 'Must retain Lihat Laporan button with shimmer');
+
+  // Verify Anti-Slop typography invariant: zero micro-text text-[11px]
+  assert.ok(
+    !content.includes('text-[11px]'),
+    'AnalyticsSection must not use micro-text text-[11px], minimum text-xs required'
+  );
 });
 
 console.log(`\n================================================================`);

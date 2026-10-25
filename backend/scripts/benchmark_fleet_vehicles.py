@@ -1,4 +1,10 @@
+import sys
 import time
+from pathlib import Path
+
+# Ensure backend root is on sys.path when running standalone
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 from fastapi.testclient import TestClient
 from app.main import app
 from app.routers.vehicles_router import clear_fleet_cache

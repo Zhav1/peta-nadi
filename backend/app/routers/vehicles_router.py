@@ -78,10 +78,14 @@ async def get_active_fleet(
 
     org_name = user.org_name if is_dispatcher and user else None
 
+    # Normalize filters: 'all' or empty strings hit the exact same cache keys
+    norm_modality = None if (not modality or modality.lower() == "all") else modality.lower()
+    norm_status = None if (not status or status.lower() == "all") else status
+
     # Check fast serialized response cache (sliding TTL)
     now = time.monotonic()
     cache_key = f"{effective_company}:{org_name}:{tenant_only}"
-    resp_key = (cache_key, modality, status, include_geometry)
+    resp_key = (cache_key, norm_modality, norm_status, include_geometry)
 
     cached_resp = _response_cache.get(resp_key)
     if cached_resp and (now - cached_resp[0]) < FLEET_CACHE_TTL_SECONDS:
@@ -98,6 +102,8 @@ async def get_active_fleet(
             tenant_only=tenant_only,
             include_geometry=True,
         )
+        if len(_fleet_cache) > 50:
+            _fleet_cache.clear()
         _fleet_cache[cache_key] = (now, base_fleet)
 
     # Single-pass computation:
@@ -119,9 +125,9 @@ async def get_active_fleet(
         if m in modality_counts:
             modality_counts[m] += 1
 
-        if modality and m != modality:
+        if norm_modality and m != norm_modality:
             continue
-        if status and item.get("status") != status:
+        if norm_status and item.get("status") != norm_status:
             continue
 
         # Shallow copy to allow non-destructive per-request mutation
@@ -146,6 +152,8 @@ async def get_active_fleet(
         "vehicles": vehicles,
     }
     serialized = orjson.dumps(payload)
+    if len(_response_cache) > 200:
+        _response_cache.clear()
     _response_cache[resp_key] = (now, serialized)
 
     return Response(content=serialized, media_type="application/json")
@@ -161,16 +169,26 @@ async def get_vehicle_geometry(
     Returns high-precision route geometry and coordinate waypoints for an individual fleet vehicle.
     """
     now = time.monotonic()
-    macro_key = "None:None:False"
-    cached = _fleet_cache.get(macro_key)
+    target = None
 
-    if cached and (now - cached[0]) < FLEET_CACHE_TTL_SECONDS:
-        vehicles = cached[1]
-    else:
-        vehicles = telemetry_service.get_unified_fleet(include_geometry=True)
-        _fleet_cache[macro_key] = (now, vehicles)
+    # Check if target vehicle is already present in any active cached fleet
+    for ts, cached_fleet in _fleet_cache.values():
+        if (now - ts) < FLEET_CACHE_TTL_SECONDS:
+            found = next((v for v in cached_fleet if v.get("vehicle_id") == vehicle_id), None)
+            if found and (found.get("path") or found.get("route_geometry")):
+                target = found
+                break
 
-    target = next((v for v in vehicles if v.get("vehicle_id") == vehicle_id), None)
+    if not target:
+        macro_key = "None:None:False"
+        cached = _fleet_cache.get(macro_key)
+        if cached and (now - cached[0]) < FLEET_CACHE_TTL_SECONDS:
+            vehicles = cached[1]
+        else:
+            vehicles = telemetry_service.get_unified_fleet(include_geometry=True)
+            _fleet_cache[macro_key] = (now, vehicles)
+        target = next((v for v in vehicles if v.get("vehicle_id") == vehicle_id), None)
+
     if not target:
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail=f"Vehicle {vehicle_id} not found")
