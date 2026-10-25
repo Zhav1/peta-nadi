@@ -25,8 +25,15 @@
   4. **Divider**: `h-4 w-px bg-white/10`.
   5. **HITL Review Trigger**: Operator intervention button (`Tinjau`) with motion-safe pulsing amber dot.
 
-### 1.3 Primitives Contract Hardening in `popover.tsx`
-- **Added `portal?: boolean` to `PopoverContent`**: Aligned `PopoverContent` with `TooltipContent` and `SelectContent` by supporting `portal={false}` for safe in-tree rendering when overlaying WebGL canvases.
+### 1.3 Primitives Contract Hardening & Portal Context Invariant in `tooltip.tsx` & `popover.tsx`
+- **Resolved Unhandled Runtime Error (`<Tooltip.Portal> is missing`)**:
+  - In `@base-ui/react` 1.9.0, both `TooltipPositioner` and `PopoverPositioner` enforce an internal context invariant: `useTooltipPortalContext()` and `usePopoverPortalContext()` strictly require that a `<BaseTooltip.Portal>` / `<BasePopover.Portal>` provider wraps the positioner.
+  - When earlier code returned raw positioner content for `portal === false`, this invariant was violated, throwing `Unhandled Runtime Error: Base UI: <Tooltip.Portal> is missing.` during live client rendering.
+  - Updated both `tooltip.tsx` and `popover.tsx` so `<BaseTooltip.Portal>` and `<BasePopover.Portal>` always wrap the positioner node, satisfying the context provider requirement while maintaining full backwards compatibility with `portal?: boolean` props in test suites.
+- **Enforced Native Button Semantics on Triggers**:
+  - Addressed Base UI accessibility warning: `Base UI: A component that acts as a button expected a native <button> because the nativeButton prop is true. Use a real <button> in the render prop, or set nativeButton to false.`
+  - In `popover.tsx`, automatically infer `nativeButton={isNativeButton}` for custom rendered elements (e.g., search container `<div>` in `CrisisMap.tsx`).
+  - In `AnalyticsSection.tsx`, converted Info icon trigger and price bar triggers from raw `<span>`/`<div>` elements to semantic, accessible `<button type="button">` with descriptive `aria-label`s.
 
 ---
 
@@ -64,6 +71,7 @@
 1. `frontend/components/dashboard/AnalyticsSection.tsx`: Replaced raw selects with Base-UI Select (`modal={false}`), wrapped containers in Card, added `relative z-30` to filter bar, integrated Chip, Tooltip (`portal={false}`), Empty, and Skeleton.
 2. `frontend/components/dashboard/TopNavTelemetry.tsx`: Unified ribbon container, standardized all items to `h-8`, added visual dividers, responsive max-width, and polished tactile feedback.
 3. `frontend/components/dashboard/IntermodalTerminalPopover.tsx`: Standardized popover trigger button to `h-8` with dark tactical token styling.
-4. `frontend/components/base-ui/popover.tsx`: Added `portal?: boolean` support to `PopoverContent`.
-5. `frontend/scripts/test_phase115_watermelon_mcp_connect.ts`: Hardened test suite by removing weakened `|| true` assertion and strictly validating non-portal rendering.
-6. `.planning/phases/115-watermelon-mcp-connect/WALKTHROUGH.md`: Detailed walkthrough and verification logs.
+4. `frontend/components/base-ui/popover.tsx`: Wrapped Positioner in `BasePopover.Portal` to satisfy internal Base UI 1.9.0 context invariant; inferred `nativeButton` on custom trigger elements.
+5. `frontend/components/base-ui/tooltip.tsx`: Wrapped Positioner in `BaseTooltip.Portal` to eliminate runtime `<Tooltip.Portal> is missing` crash while honoring props.
+6. `frontend/scripts/test_phase115_watermelon_mcp_connect.ts`: Hardened test suite by removing weakened `|| true` assertion and strictly validating non-portal rendering.
+7. `.planning/phases/115-watermelon-mcp-connect/WALKTHROUGH.md`: Detailed walkthrough and verification logs.

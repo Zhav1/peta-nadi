@@ -5,10 +5,10 @@ milestone_name: Live News Trust, Source Breadth & Forecast Waspada Integrity
 current_phase: 115
 current_phase_name: Watermelon MCP Connect (complete)
 status: complete
-stopped_at: "Phase 115 Watermelon MCP Connect executed and verified. AnalyticsSection.tsx converted to Base-UI Select/Card/Chip/Tooltip/Empty/Skeleton; Map HUD Telemetry de-cluttered to Unified Tactical Command Ribbon (h-8, tabular-nums). Verified with tsc (0 errors) and test_phase115 (8/8 pass)."
-last_updated: "2026-10-25T20:10:00.000Z"
+stopped_at: "Phase 115 Watermelon MCP Connect executed and verified. AnalyticsSection.tsx converted to Base-UI Select/Card/Chip/Tooltip/Empty/Skeleton; Map HUD Telemetry de-cluttered to Unified Tactical Command Ribbon (h-8, tabular-nums). Tooltip/Popover Portal context invariants hardened. Verified with tsc (0 errors), test_phase115 (8/8 pass), and live Chrome DevTools zero runtime errors."
+last_updated: "2026-10-25T21:05:00.000Z"
 last_activity: 2026-10-25
-last_activity_desc: "Executed Phase 115: Watermelon MCP Connect. Integrated Base-UI primitives in AnalyticsSection.tsx and unified Map HUD Tactical Command Ribbon."
+last_activity_desc: "Executed Phase 115: Watermelon MCP Connect. Integrated Base-UI primitives in AnalyticsSection.tsx, unified Map HUD Tactical Command Ribbon, and fixed Base UI 1.9.0 Portal context invariant in Tooltip/Popover."
 state_head: HEAD
 progress:
   total_phases: 115
