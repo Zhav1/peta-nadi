@@ -50,13 +50,13 @@ const REGION_OPTIONS = [
 // codes, so map slugs → DB codes at fetch time. '' → undefined (no filter).
 const REGION_TO_DB: Record<string, string> = {
   sumut: 'north_sumatra',
-  sumbar: 'north_sumatra',
-  riau: 'north_sumatra',
-  aceh: 'north_sumatra',
-  sumsel: 'north_sumatra',
-  lampung: 'north_sumatra',
-  jambi: 'north_sumatra',
-  bengkulu: 'north_sumatra',
+  sumbar: 'west_sumatra',
+  riau: 'riau',
+  aceh: 'aceh',
+  sumsel: 'south_sumatra',
+  lampung: 'lampung',
+  jambi: 'jambi',
+  bengkulu: 'bengkulu',
 };
 
 function regionToDb(slug: string): string | undefined {

@@ -103,3 +103,6 @@ PreHub (*Predictive Logistics Hub & Early Warning System*) adalah platform intel
 - **Analitik Fixes (Phase 118, COMPLETE ?)**
   - Peta/globe canvas dihapus total ? satu kolom penuh col-span-12; day pills glass hand-rolled + tombol Lihat Laporan shimmer motion-safe: tanpa shadcn add; REGION_TO_DB 8 slug ? 
 orth_sumatra, Semua ? undefined; tren DD/MM per bar + tanggal header + Tren min(days,len) + hijau/merah (#10b981/#ef4444, guard >= 3); spikes tetap honest-empty (spikeRecordsTotal < 3 guard + pesan backend). Read-only GET prices + GET spikes. Docs: 118-analitik-fixes/.
+
+- **PIHPS 8-Province Scraper (Phase 119, COMPLETE)**
+  - PROVINCES 8 slugs -> BI ids + DISPLAY/SHORT_SLUG/CENTROID tables; fetch() region-outer loop keyed {commodity}@{region}; parse() region-scoped rolling/dedup/latest:{region}; bare latest stays north_sumatra compat; _persist_readings eq(region); REGION_TO_DB 1:1 (supersedes Phase 118 collapse). Tests +2. Docs: 119-pihps-8-province/.

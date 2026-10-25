@@ -334,3 +334,12 @@ These scripts validate the economic correlation hypotheses that underpin Agent 5
 - Kept/fixed: hand-rolled glass days (L319-339, role=group + aria-pressed/label/title, no shadcn add) + shimmer Lihat Laporan zero-motion (L469-480, motion-safe only); REGION_TO_DB 8 slugs ? north_sumatra, Semua '' ? undefined (L49-65, applied L195/L235); trend DD/MM per bar (formatDayMonth L116-122, T- fallback only when time missing L379) + header date (formatFullDate L124-130, call L359) + Tren min(days,len) header (L370) + green/red bars (#ef4444/#10b981, L267-273, >= 3 guard L277); spikes keep honest (SpikeItem/severityBadge L94-114, server-filtered loadSpikes + spikeRecordsTotal L230-257, sorted filteredSpikes L280-284, guard L431-438, Table h-11 L441-466).
 - Evidence (window tail): tsc 0, build 7/7, pytest green (shared tail), Playwright 1 passed (live, E2E no-interference preserved).
 - Docs: .planning/phases/118-analitik-fixes/ (PLAN.md + WALKTHROUGH.md + LEARNINGS.md).
+
+## Phase 119 Log (2026-10-25)
+
+- Phase 119 (PIHPS 8-Province Scraper) logged as COMPLETE - app edits + docs + commit in-window.
+- Scraper: PROVINCES 8 slugs->BI ids + DISPLAY/SHORT_SLUG/CENTROID tables + FETCH_PROVINCE_ORDER; fetch() provinces-outer x commodities-inner sequential keyed {commodity}@{region}; parse() region-scoped rolling keys + short-slug dedup + lrip:pihps:latest:{region}; bare lrip:pihps:latest stays north_sumatra compat; _persist_readings(..., region) eq(region); per-region event lat/lon/market/province.
+- Frontend: REGION_TO_DB 1:1 (AnalyticsSection.tsx:51-60), supersedes Phase 118 collapse map.
+- Tests: +2 (parametrized region propagation x3, 2-region multi-province) in test_scrapers.py.
+- Evidence (finisher verify): pytest 64 passed (26 scrapers + 38 api_routers/agents, two runs), tsc --noEmit exit 0, npm run build 7/7 exit 0 first try (no ENOENT; :3000 free).
+- Docs: .planning/phases/119-pihps-8-province/ (PLAN.md + WALKTHROUGH.md + LEARNINGS.md).

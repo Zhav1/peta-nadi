@@ -2999,3 +2999,24 @@ px tsc --noEmit ? exit 0.
 pm run build ? 7/7 static routes, 0 errors.
 - [x] pytest ? shared window tail green.
 - [x] Playwright ? 1 passed (live, E2E no-interference on Peta/Laporan/Evaluasi + pprovals:write/leet:write 403 paths).
+
+## Phase 119: PIHPS 8-Province Scraper
+
+**Goal:** Expand PIHPS scraper from Sumut-only to all 8 Pan-Sumatra provinces with region-scoped persistence and a 1:1 UI slug map, keeping the legacy north_sumatra compat surface untouched.
+**Status:** COMPLETE (app edits + docs + commit in-window)
+
+### Deliverables
+
+- **Region tables (pihps_scraper.py, top):** PROVINCES 8 canonical DB slugs -> BI province_id (aceh 1, north_sumatra 2, west_sumatra 3, riau 4, jambi 6, bengkulu 7, south_sumatra 8, lampung 10); PROVINCE_DISPLAY Indonesian names; REGION_SHORT_SLUG (sumut/sumbar/sumsel shorts for dedup keys); REGION_CENTROID per-region city proxies (north_sumatra keeps legacy 3.5952/98.6722); FETCH_PROVINCE_ORDER fixed 8-order; REGION/SUMUT_PROVINCE_ID kept for back-compat imports.
+- **Region loop (fetch()):** provinces outer x commodities inner, sequential, results keyed {commodity}@{region}.
+- **Scoped Redis (parse()):** rolling keys lrip:pihps:rolling:{com}:{region}; dedup pihps:{com}:{short}:{YYYYMMDD}; per-region lrip:pihps:latest:{region}; bare lrip:pihps:latest stays north_sumatra snapshot.
+- **Scoped persistence (_persist_readings(..., region)):** delete+insert use eq("region", region); per-region event lat/lon/market/province.
+- **1:1 slug map (AnalyticsSection.tsx:51-60):** REGION_TO_DB 1:1; supersedes Phase 118 collapse map.
+- **Tests (test_scrapers.py +68):** parametrized region propagation (3 regions) + 2-region multi-province.
+- **Docs:** .planning/phases/119-pihps-8-province/ (PLAN.md + WALKTHROUGH.md + LEARNINGS.md).
+
+### Verification
+
+- [x] pytest backend/tests/test_scrapers.py + test_api_routers.py + test_agents.py -> 64 passed, exit 0.
+- [x] npx tsc --noEmit -> exit 0.
+- [x] npm run build -> 7/7 static routes, exit 0.
