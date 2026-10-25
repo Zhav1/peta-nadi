@@ -2712,7 +2712,7 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 ## Phase 107: HITL Route Decision Control Unification & E2E Workflow Hardening
 
 **Goal:** Permanently resolve HITL dispatch decision defects in `RouteDetailModal.tsx` and `DashboardClient.tsx`: (1) eliminate silent drop on ad-hoc / non-crisis routes by adding fallback incident ID resolution; (2) resolve control duplication by refactoring the top toggle into an economic preview tab and unifying the bottom action buttons into 3 distinct tactical actions (`Setujui Reroute`, `Tahan di Depo`, `Lanjut Jalur Asal`); (3) eliminate premature auto-commit on route click; (4) fix logic inversion on route rejection; and (5) harden downstream E2E integrations (Reports audit table, WhatsApp dispatch, TMS telematics, and evaluation outcomes).  
-**Status:** READY TO EXECUTE ⏳  
+**Status:** COMPLETE ✅  
 **Plan:** `.planning/phases/107-hitl-route-approval-unification/PLAN.md`
 
 ### Deliverables
@@ -2732,6 +2732,14 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
   - Verify WhatsApp dispatch link accuracy in `MitigationTab.tsx`.
 - **WP5 - Automated Verification Gate (`test_phase107_hitl_approval_unification.ts`)**:
   - TypeScript check (`tsc --noEmit`), backend pytests, and automated test suite.
+
+### Verification
+- [x] All 3 tactical decision buttons in `RouteDetailModal.tsx` execute distinct maneuvers (`REROUTE`, `HOLD`, `OVERRIDE`) with mandatory notes enforcement for HOLD and OVERRIDE.
+- [x] Selecting ad-hoc / non-crisis routes resolves fallback incident ID (`INC-ADHOC-CORRIDOR`) without silent drop.
+- [x] Premature `api.approvals.create` removed from route selection (`handleSelectRoute`).
+- [x] Rejection guard in `handleCommitOperationalRoute` and backend prevents route activation and TMS pings.
+- [x] Downstream audit records populate `ReportsSection.tsx` and driver WhatsApp dispatch links in `MitigationTab.tsx`.
+- [x] 100% verification pass: 7/7 automated tests in `test_phase107_hitl_approval_unification.ts`, `tsc --noEmit` 0 errors, and backend pytests.
 
 ---
 
