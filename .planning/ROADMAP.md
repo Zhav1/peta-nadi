@@ -2908,18 +2908,24 @@ M7 removes the remaining ways the Berita surface could look live when it was not
 
 **Goal:** Close the 7 missing primitives (Select, Chip, Card, Empty, Skeleton, Tooltip, Chart) via Watermelon MCP — no `npx shadcn add`, no Portal-over-Mapbox, one writer per file.
 **Status:** PLANNED ⏳
+**Plan:** `.planning/phases/115-watermelon-mcp-connect/PLAN.md`
 
 ### Deliverables (planned)
-
-- MCP-sourced (or hand-rolled base-ui-consistent) Select/Chip/Card/Empty/Skeleton/Tooltip/Chart; drop-in swaps in `AnalyticsSection.tsx` preserving `role=status` hook, `tabular-nums`/`text-xs` chrome, and honest-empty semantics.
+- **WP1 (Interactive Primitives)**: Base-UI `select.tsx` & `tooltip.tsx` in `@/components/base-ui/` with dark tactical contracts and no Portal over Mapbox.
+- **WP2 (Layout & Feedback Primitives)**: Shared `card.tsx`, `chip.tsx`, `empty.tsx` (preserving `role="status"` E2E hook), and `skeleton.tsx` (preserving `h-11` default row height).
+- **WP3 (Data Visualization Primitive)**: Recharts-backed `chart.tsx` container & dark tooltip formatter.
+- **WP4 (Consumer Integration)**: Drop-in primitive swaps in `AnalyticsSection.tsx` (Komoditas/Wilayah Select, freshness Chips, Card panels, Tooltip explanations).
+- **WP5 (Verification & Automated Test Suite)**: Dedicated test harness `test_phase115_watermelon_mcp_connect.ts`, typecheck `tsc --noEmit` (0 errors), and build validation.
 
 ### Risks (logged this window)
-
 - `asChild` vs render-prop warning; `hideWhenDetached` missing in Base-UI 1.9.0; Portal-over-Mapbox clipping; shadcn-add ban; same-file edit collisions.
 
 ### Verification
-
-- [ ] Connection pass must produce: tsc 0, build 7/7, pytest green, Playwright auto-check incl. E2E no-interference.
+- [ ] Automated contract suite `test_phase115_watermelon_mcp_connect.ts` passing.
+- [ ] `npx tsc --noEmit` produces 0 errors.
+- [ ] `npm run build` compiles 7/7 static routes with 0 errors.
+- [ ] Backend pytest suite remains green.
+- [ ] E2E Playwright tests pass without interference.
 
 ---
 
