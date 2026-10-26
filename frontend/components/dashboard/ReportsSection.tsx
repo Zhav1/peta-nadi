@@ -12,8 +12,10 @@ import {
  RotateCcw
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useAuth } from '@/lib/authContext';
 import type { CorridorContext, CrisisState, RouteRecommendation, DecisionAction, TacticalManeuver } from '@/lib/types';
 import ERPSavingsPanel from '@/components/dashboard/ERPSavingsPanel';
+import { OutcomeVerificationForm } from '@/components/dashboard/LaporanAktualModal';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/base-ui/table';
 
 interface ReportsSectionProps {
@@ -79,10 +81,15 @@ export default function ReportsSection({
  activeRoutes,
  onCreateMitigation
 }: ReportsSectionProps) {
+ const { role } = useAuth();
+ const isDispatcher = role === 'DISPATCHER';
+ const verifyDisabledHint = 'Hanya peran Dispatcher yang dapat mencatat verifikasi.';
  const [liveApprovals, setLiveApprovals] = useState<number>(approvalsCount);
  const [healthScore, setHealthScore] = useState<number>(92);
  const [approvalList, setApprovalList] = useState<ApprovalLogItem[]>([]);
  const [isLoading, setIsLoading] = useState<boolean>(true);
+ // Hybrid C (secondary): audit-row deep-link -> OutcomeVerificationForm pre-fill incident_id.
+ const [verifyIncidentId, setVerifyIncidentId] = useState<string | null>(null);
  const [reportView, setReportView] = useState<'erp' | 'audit'>('erp');
  const [erpRefreshKey, setErpRefreshKey] = useState(0);
  const [reloadTick, setReloadTick] = useState(0);
@@ -681,6 +688,16 @@ export default function ReportsSection({
  {!isSynced && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />}
  {syncLabel}
  </span>
+ <button
+ type="button"
+ data-testid={`verifikasi-${item.incident_id || item.crisis_id || item.id || idx}`}
+ onClick={() => setVerifyIncidentId(item.incident_id || item.crisis_id || item.id || '')}
+ disabled={!isDispatcher}
+ title={isDispatcher ? 'Catat verifikasi lapangan untuk insiden ini' : verifyDisabledHint}
+ className="mt-1.5 px-2 py-1 rounded border border-white/10 text-slate-200 text-xs hover:bg-white/5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+ >
+ Verifikasi
+ </button>
  </div>
  </TableCell>
  </TableRow>
@@ -709,10 +726,8 @@ export default function ReportsSection({
  <>
  <FileText className="w-8 h-8 text-slate-600 mb-1" aria-hidden="true" />
  <p className="text-sm font-medium text-slate-300">Belum ada catatan persetujuan mitigasi</p>
- <p className="text-xs text-slate-500 max-w-md leading-relaxed">
- Audit terisi otomatis setelah Dispatcher melakukan commit keputusan
- (Accept / Reject / Override) dari Peta Operasi melalui POST /approvals.
- Mode Sandbox tamu tidak dapat mengisi audit — masuk sebagai Dispatcher untuk mencatat mitigasi.
+ <p className="text-xs text-slate-500 max-w-md leading-relaxed" title="Audit terisi otomatis setelah Dispatcher commit dari Peta Operasi via POST /approvals. Mode Sandbox tamu tidak dapat mengisi audit.">
+ Buka Peta sebagai Dispatcher untuk mencatat mitigasi.
  </p>
  <div className="flex flex-wrap items-center justify-center gap-2 mt-3">
  <button
@@ -771,6 +786,56 @@ export default function ReportsSection({
  </div>
 
  </div>
+
+ {/* Hybrid C: audit deep-link verification modal (same OutcomeVerificationForm). */}
+ {verifyIncidentId !== null && (
+ <div
+ className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+ onClick={() => setVerifyIncidentId(null)}
+ role="dialog"
+ aria-modal="true"
+ aria-label={`Verifikasi lapangan ${verifyIncidentId}`}
+ >
+ <div
+ className="w-full max-w-md max-h-[90vh] overflow-y-auto bg-[#0c1017] border border-white/10 rounded-xl"
+ onClick={(e) => e.stopPropagation()}
+ >
+ <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
+ <div>
+ <h3 className="text-sm font-medium text-white">Verifikasi lapangan</h3>
+ <p className="text-xs text-slate-500 tabular-nums font-mono">{verifyIncidentId}</p>
+ </div>
+ <button
+ type="button"
+ onClick={() => setVerifyIncidentId(null)}
+ className="p-1.5 rounded-md hover:bg-white/5 text-slate-400 hover:text-white cursor-pointer"
+ title="Tutup"
+ >
+ <X className="w-4 h-4" />
+ </button>
+ </div>
+ <div className="px-4 py-4">
+ <OutcomeVerificationForm
+ initialIncidentId={verifyIncidentId}
+ initialObservedDelay={null}
+ baselineKnown={false}
+ canEdit={isDispatcher}
+ disabledHint={verifyDisabledHint}
+ onSubmitted={() => handleReloadAudit()}
+ />
+ </div>
+ <div className="px-4 py-3 border-t border-white/10 flex items-center justify-end">
+ <button
+ type="button"
+ onClick={() => setVerifyIncidentId(null)}
+ className="px-4 py-2 bg-transparent hover:bg-white/5 text-slate-200 border border-white/10 rounded-md text-xs font-medium cursor-pointer"
+ >
+ Tutup
+ </button>
+ </div>
+ </div>
+ </div>
+ )}
 
  </>
  )}

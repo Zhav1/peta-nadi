@@ -102,8 +102,12 @@ export default function ReliabilityDiagram({
   )}
   */}
   </h3>
-  <p className="text-xs text-slate-400 tabular-nums">
+  {/* PHASE3: subtitle "Model vs empiris (N=...)" disembunyi dari default view — N tetap di rincian per-bin (collapsed). */}
+  {/* <p className="text-xs text-slate-400 tabular-nums">
   Model vs empiris (N={totalN ?? activeBins.reduce((s, b) => s + b.sample_count, 0)})
+  </p> */}
+  <p className="text-xs text-slate-400 tabular-nums">
+  Kalibrasi model vs empiris
   </p>
   </div>
   </div>

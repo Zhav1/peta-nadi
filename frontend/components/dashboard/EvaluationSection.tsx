@@ -25,6 +25,7 @@ import {
   GitBranch
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useAuth } from '@/lib/authContext';
 import type {
   BenchmarkReportResponse,
   TestMatrixResponse,
@@ -232,6 +233,11 @@ export default function EvaluationSection({
   const [selectedBin, setSelectedBin] = useState<number | null>(null);
   // Lazy per-outcome evaluation cache (predicted delay -> proxy prob)
   const [evalCache, setEvalCache] = useState<Record<string, { loading: boolean; predictedDelay?: number; predictedPrice?: number; error?: string }>>({});
+  // PHASE4: provenance/download gate — dispatcher-atau-terautentikasi saja.
+  // Evaluasi sendiri sudah hard-block tamu di DashboardClient; gate ini
+  // defense-in-depth agar tautan berkas tak pernah render untuk sesi anonim.
+  const { role: authRole, isAuthenticated } = useAuth();
+  const canSeeProvenance = isAuthenticated || authRole === 'DISPATCHER';
 
   const loadAllEvaluationData = useCallback(async () => {
     setIsLoading(true);
@@ -375,7 +381,8 @@ export default function EvaluationSection({
     setScenPage(1);
   }, []);
 
-  const versionTag = showLive ? `live N=${live!.n}` : 'batch N=60';
+  // PHASE3: versionTag disembunyi dari default view (chrome batch N=60 / live N) — hanya angka keputusan yang tampil.
+  // const versionTag = showLive ? `live N=${live!.n}` : 'batch N=60';
 
   return (
     <div className="w-full min-h-full flex flex-col gap-6">
@@ -391,7 +398,9 @@ export default function EvaluationSection({
                 : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
             }`}
           >
-            Tolok Ukur Model ({testMatrix?.total_tests || 133} Uji)
+            {/* PHASE3: count "Model (X Uji)" disembunyi dari default view — tab disederhanakan jadi "Tolok Ukur". */}
+            {/* Tolok Ukur Model ({testMatrix?.total_tests || 133} Uji) */}
+            Tolok Ukur
           </button>
           {/* PHASE2: commented per spec — tombol Diagnostik API & Observabilitas disembunyi dari default view. File SystemObservabilitySection.tsx untouched.
           <button
@@ -437,6 +446,7 @@ export default function EvaluationSection({
       */}
         <>
           {/* PHASE2 distilled: N valid + Status keputusan (pengganti badge baseline/live verbose) */}
+          {/* PHASE3: distilled bar N valid + Status disembunyi dari default view — Status tetap di collapsed "Data apa yang diuji?".
           <div className="bg-[#0c1017] border border-white/10 rounded-xl px-5 py-3 shadow-xl flex flex-wrap items-center gap-x-4 gap-y-1 text-xs tabular-nums">
             <span className="text-slate-400">N valid: <strong className="text-white">{dispN}</strong></span>
             <span className="text-slate-400">Status: {report ? (report.gating_passed ? <strong className="text-emerald-300">LULUS</strong> : <strong className="text-rose-300">BELUM</strong>) : <span className="text-slate-500">Belum dihitung</span>}</span>
@@ -444,6 +454,7 @@ export default function EvaluationSection({
               <span className="text-slate-500">Belum ada data live yang cukup (N&lt;{LIVE_MIN_N}) — bukan 0% maupun 100%.</span>
             )}
           </div>
+          */}
           {/* PHASE2: badge baseline sintetis / live operasional / live N<10 / batch-v selector disembunyi per spec (dispatcher: hanya N+Status).
           <div className="bg-[#0c1017] border border-white/10 rounded-xl p-5 shadow-xl">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -508,8 +519,13 @@ export default function EvaluationSection({
                 <h1 className="text-base font-headline font-semibold text-white tracking-wide">
                   Evaluasi Empiris & Tolok Ukur Validasi
                 </h1>
+                {/* PHASE3: subtitle "Bukti empiris..." disembunyi dari default view (jargon N/confusion/Pmax) — diganti satu baris netral.
                 <p className="text-xs text-slate-400 font-sans mt-0.5">
                   Bukti empiris keandalan model kecerdasan logistik PreHub berdasarkan dataset ground truth sintetis Sumatra (N={report?.total_scenarios ?? '–'}), pengujian otomatis, dan kalibrasi probabilitas. Angka live operasional ditampilkan terpisah bila N≥{LIVE_MIN_N}.
+                </p>
+                */}
+                <p className="text-xs text-slate-400 font-sans mt-0.5">
+                  Ringkasan angka validasi model.
                 </p>
               </div>
             </div>
@@ -519,18 +535,18 @@ export default function EvaluationSection({
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-white/10 border border-white/10 rounded-xl overflow-hidden">
             {/* Metric 1: Precision */}
             <div className="bg-[#0c1017] p-3.5">
-              <span className="text-xs font-medium text-slate-400 block mb-1">Presisi deteksi <span className="text-slate-500">({versionTag})</span></span>
+              <span className="text-xs font-medium text-slate-400 block mb-1">Presisi deteksi {/* PHASE3: <span className="text-slate-500">({versionTag})</span> disembunyi dari default view */}</span>
               {precision !== null ? (
                 <p className="text-2xl font-bold text-white tabular-nums">{(precision * 100).toFixed(1)}%</p>
               ) : (
                 <p className="text-base text-slate-500 py-1">Belum dihitung</p>
               )}
-              <p className="text-xs text-slate-500 tabular-nums mt-1">Target: &gt; 85.0% (N=60 Sumatra)</p>
+              <p className="text-xs text-slate-500 tabular-nums mt-1">Target: &gt; 85.0% {/* PHASE3: (N=60 Sumatra) disembunyi dari default view */}{/* (N=60 Sumatra) */}</p>
             </div>
 
             {/* Metric 2: Recall */}
             <div className="bg-[#0c1017] p-3.5">
-              <span className="text-xs font-medium text-slate-400 block mb-1">Sensitivitas <span className="text-slate-500">({versionTag})</span></span>
+              <span className="text-xs font-medium text-slate-400 block mb-1">Sensitivitas {/* PHASE3: <span className="text-slate-500">({versionTag})</span> disembunyi dari default view */}</span>
               {recall !== null ? (
                 <p className="text-2xl font-bold text-white tabular-nums">{(recall * 100).toFixed(1)}%</p>
               ) : (
@@ -541,7 +557,7 @@ export default function EvaluationSection({
 
             {/* Metric 3: F1-Score */}
             <div className="bg-[#0c1017] p-3.5">
-              <span className="text-xs font-medium text-slate-400 block mb-1">Skor F1 <span className="text-slate-500">({versionTag})</span></span>
+              <span className="text-xs font-medium text-slate-400 block mb-1">Skor F1 {/* PHASE3: <span className="text-slate-500">({versionTag})</span> disembunyi dari default view */}</span>
               {f1Score !== null ? (
                 <p className="text-2xl font-bold text-white tabular-nums">{f1Score.toFixed(3)}</p>
               ) : (
@@ -552,7 +568,7 @@ export default function EvaluationSection({
 
             {/* Metric 4: Brier Score */}
             <div className="bg-[#0c1017] p-3.5">
-              <span className="text-xs font-medium text-slate-400 block mb-1">Brier (ternormalisasi) <span className="text-slate-500">({versionTag})</span></span>
+              <span className="text-xs font-medium text-slate-400 block mb-1">Brier (ternormalisasi) {/* PHASE3: <span className="text-slate-500">({versionTag})</span> disembunyi dari default view */}</span>
               {brierScore !== null ? (
                 <p className="text-2xl font-bold text-white tabular-nums">{brierScore.toFixed(4)}</p>
               ) : (
@@ -610,8 +626,10 @@ export default function EvaluationSection({
               <div className="p-3 rounded-lg bg-white/[0.02] border border-white/10 space-y-1.5 text-slate-300">
                 <p className="text-[11px] font-sans font-bold text-slate-200 uppercase tracking-wider">Ambang kelulusan</p>
                 <p>Brier ≤ {(thresholds?.max_brier_score ?? 0.10).toFixed(3)} · Status gerbang: {report ? (report.gating_passed ? 'LULUS' : 'BELUM LULUS') : 'Belum dihitung'}</p>
-                {/* PHASE2: latensi solver / provenance hash / salinan unduhan disembunyi dari default view (tetap collapsed di sini).
-                <p>Latensi solver: {showLive ? 'n/a (outcome lapangan tanpa latensi solver)' : latencyMs !== null ? `${latencyMs.toFixed(2)} ms/skenario (target < 5.0 ms)` : 'Belum dihitung'}</p>
+                {/* PHASE4: provenance + unduhan dipulihkan di dalam collapsed <details> ini saja
+                    (bukan default view, bukan tab Laporan) — gated dispatcher-atau-terautentikasi.
+                    Default view tetap angka saja. */}
+                {canSeeProvenance && (
                 <div className="pt-1 mt-1 border-t border-white/10 space-y-1">
                   <p className="text-[11px] font-sans font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5"><Database className="w-3 h-3 text-cyan-400" /> Provenance berkas</p>
                   <p className="break-all">Laporan API: <code className="text-cyan-300">{formatFullTimestamp(report?.timestamp)}</code></p>
@@ -633,7 +651,7 @@ export default function EvaluationSection({
                     </a>
                   </p>
                 </div>
-                */}
+                )}
               </div>
             </div>
           </details>
@@ -672,6 +690,10 @@ export default function EvaluationSection({
                       {filteredScen.length}/{scenRows.length} skenario
                     </span>
                     {/* PHASE2: badge hash salinan disembunyi per spec (audit tetap via berkas bila perlu).
+                        PHASE4: tetap disembunyi di default view agar ringkas angka saja; badge hash
+                        sudah dipulihkan gated di dalam collapsed "Data apa yang diuji?" di atas,
+                        bukan di tab Laporan.
+                    
                     {fileState === 'ready' && reportHashOk === true && (
                       <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 text-xs font-mono" title={`sha256 ${reportHash}`}>
                         salinan berkas terverifikasi ✓

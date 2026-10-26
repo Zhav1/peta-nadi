@@ -130,6 +130,14 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(body),
       }),
+    // Alias required by Catat verifikasi hybrid A+C (LaporanAktualModal step-2 +
+    // ReportsSection audit deep-link). Same POST /api/v1/outcomes as record;
+    // kept separate so call-sites read as api.outcomes.create.
+    create: (body: import('./types').OutcomePayload) =>
+      request<{ id: string; incident_id: string; horizon: string; status: string }>('/api/v1/outcomes', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
     list: (incidentId?: string, horizon?: string) => {
       const params = new URLSearchParams();
       if (incidentId) params.append('incident_id', incidentId);
