@@ -3117,3 +3117,20 @@ pm run build ? 7/7 static routes, 0 errors.
 ### Verification
 
 - [x] Window-tail evidence carried: tsc 0, build 7/7, pytest green (shared tail), Playwright 1 passed (live, E2E no-interference).
+
+## Phase 138: Evaluasi Credibility Docs Commit
+
+**Goal:** Close out the evaluasi-credibility workstream with verified planning records (no code changes).
+**Status:** COMPLETE ✅ (docs-only, no commit)
+
+### Deliverables
+
+- Workstream verification: `ccb5bbd` (ringkas+expandable, batch immutable `batch-v2026-10-26-N60`, live recompute N>=10, Diagnostik live-wire AbortController 15 s, keep-alive `--max-time 90`, `healthCheckPath: /health`, `docs/KEEPALIVE_RUNBOOK.md`); `de078d7` (pred tersimpan migration 021, offline per-row ledger `row_hash`, raw vs normalized Brier, UI hash/download); `b8d27a1` (phases 134-137 docs).
+- Docs: `.planning/phases/138-evaluasi-credibility-docs-commit/` (PLAN.md + WALKTHROUGH.md + LEARNINGS.md).
+- Root touch-ups: `STATE.md` current_phase 138, this ROADMAP entry, `LEARNINGS.md` appended entry.
+
+### Verification
+
+- [x] pytest evaluasi suite -> 16 passed.
+- [x] `npx tsc --noEmit` -> exit 0.
+- [x] `GET /health` -> 200; `GET /api/v1/evaluation/benchmark` -> 200 (dataset_hash `e6c7645c`, raw_brier `0.1106`); `GET /api/v1/evaluation/live` -> 200.

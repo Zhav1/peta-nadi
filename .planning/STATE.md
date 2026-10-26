@@ -2,36 +2,36 @@
 gsd_state_version: "1.0"
 milestone: M7
 milestone_name: Live News Trust, Source Breadth & Forecast Waspada Integrity
-current_phase: 119
-current_phase_name: Merge Reconciliation & Telemetry Pipeline Acceleration (complete)
+current_phase: 138
+current_phase_name: Evaluasi Credibility Docs Commit
 status: complete
-stopped_at: "Phase 119 Merge Reconciliation & Telemetry Pipeline Acceleration executed and verified. AnalyticsSection.tsx merged cleanly with Zhav1 improvements and Base-UI primitives (0 tsc errors, 8/8 test_phase115 pass); vehicles_router.py optimized to single-pass with in-process sliding TTL cache (warm latency ~10ms)."
-last_updated: "2026-10-25T21:05:00.000Z"
-last_activity: 2026-10-25
-last_activity_desc: "Executed Phase 115: Watermelon MCP Connect. Integrated Base-UI primitives in AnalyticsSection.tsx, unified Map HUD Tactical Command Ribbon, and fixed Base UI 1.9.0 Portal context invariant in Tooltip/Popover."
+stopped_at: "Phase 138 Evaluasi Credibility Docs Commit executed. Workstream ccb5bbd/de078d7/b8d27a1 verified; evidence: pytest 16 passed, tsc exit 0, /health 200, /benchmark 200 (e6c7645c, raw_brier 0.1106), /live 200."
+last_updated: "2026-10-26T00:00:00.000Z"
+last_activity: 2026-10-26
+last_activity_desc: "Executed Phase 138: Evaluasi Credibility Docs Commit. Verified evaluasi-credibility workstream (ccb5bbd/de078d7/b8d27a1) and extracted learnings into .planning/phases/138-evaluasi-credibility-docs-commit/."
 state_head: HEAD
 progress:
-  total_phases: 119
-  completed_phases: 119
-  total_plans: 128
-  completed_plans: 128
+  total_phases: 138
+  completed_phases: 138
+  total_plans: 129
+  completed_plans: 129
   percent: 100.0
 ---
 
 # STATE: PreHub Project Memory
 
-**Last Updated:** 2026-10-25
+**Last Updated:** 2026-10-26
 **Active Milestone:** M7 - Live News Trust, Source Breadth & Forecast Waspada Integrity [ACTIVE 🚀]
 **Previous Milestones:** M1-M5 [COMPLETED ✅], M6 - 3D Globe Native Mapbox Fleet, Street-Snapping & Impeccable Cartography [COMPLETED ✅]
-**Current Phase:** 119
+**Current Phase:** 138
 
 ---
 
 ## Current Position
 
-Phase: 115 (Watermelon MCP Connect) - COMPLETE ✅; Phase 118 (Analitik Fixes) - COMPLETE ✅; Phase 119 (Merge Reconciliation & Telemetry Pipeline Acceleration) - COMPLETE ✅
-Status: Merge reconciliation between origin/main 4aab64d and Phase 115 Watermelon Base-UI primitives in AnalyticsSection.tsx completed cleanly (0 tsc errors, 8/8 test_phase115 tests pass). Single-pass telemetry router with bounded in-process sliding TTL cache (8.0s) and reactive cache invalidation across fleet registrations/travels/pings implemented in vehicles_router.py (warm latency < 10ms).
-Next action: Phase 120 (UI Anti-Slop Reconstruction Gelombang 3 & 4).
+Phase: 138 (Evaluasi Credibility Docs Commit) - COMPLETE ✅; prior: Phase 119 (Merge Reconciliation & Telemetry Pipeline Acceleration) - COMPLETE ✅.
+Status: Evaluasi-credibility workstream documented and verified (`ccb5bbd` ringkas+expandable/batch-immutable/live-recompute/diagnostik-live-wire/keep-alive, `de078d7` pred-tersimpan migration 021 + offline per-row ledger, `b8d27a1` phases 134-137 docs). Evidence: pytest 16 passed, tsc exit 0, `/health` 200, `/api/v1/evaluation/benchmark` 200 (dataset_hash `e6c7645c`, raw_brier `0.1106`), `/live` 200.
+Next action: Merge `evaluasi-credibility-milestone-20261026` to main (Vercel prod redeploy) and apply migration 021 on Supabase; then continue Phase 120 (UI Anti-Slop Reconstruction Gelombang 3 & 4).
 
 
 
@@ -349,8 +349,8 @@ These scripts validate the economic correlation hypotheses that underpin Agent 5
 
 ## Phase 121 Log (2026-10-26)
 
-- Phase 121 (Analitik Fixes Followup) logged as COMPLETE � docs-only pass, no app edits, no commit.
-- Documented 6 user-note follow-ups: map canvas removed entirely (was layers:[] empty globe + misleading Sumatera-Jawa label); hand-rolled glass days pills + shimmer Lihat Laporan (base-ui outline transparent on #0c1017 was bare text; registry only shimmer-button adoptable, others need motion � hand-rolled motion-safe, no shadcn add, no new deps); REGION_TO_DB short-term collapse (8 slugs to north_sumatra, Semua to undefined; superseded by Phase 119 1:1 map); trend DD/MM from time + min(days,rows) header + green down/red up + latest+date header; spikes kept honest-empty (eq(sumut) 0 rows + <3 guard + <5%); tooltip.tsx scaffold-only (103 lines, zero consumers, native title stands).
+- Phase 121 (Analitik Fixes Followup) logged as COMPLETE � docs-only pass, no app edits, no commit.
+- Documented 6 user-note follow-ups: map canvas removed entirely (was layers:[] empty globe + misleading Sumatera-Jawa label); hand-rolled glass days pills + shimmer Lihat Laporan (base-ui outline transparent on #0c1017 was bare text; registry only shimmer-button adoptable, others need motion � hand-rolled motion-safe, no shadcn add, no new deps); REGION_TO_DB short-term collapse (8 slugs to north_sumatra, Semua to undefined; superseded by Phase 119 1:1 map); trend DD/MM from time + min(days,rows) header + green down/red up + latest+date header; spikes kept honest-empty (eq(sumut) 0 rows + <3 guard + <5%); tooltip.tsx scaffold-only (103 lines, zero consumers, native title stands).
 - Root cause noted: pihps_scraper.py REGION=north_sumatra + SUMUT_PROVINCE_ID=2 hardcode; consumers expanded, producer not (fixed in prior unit; BI ids 1/2/3/4/6/7/8/10 live-confirmed).
 - Evidence (window tail): tsc 0, build 7/7, pytest green (shared tail), Playwright 1 passed (live, E2E no-interference preserved).
 - Note: actual phases max was 120 (not 119 as tasked); created 121-analitik-fixes-followup to avoid collision with 120-pihps-multiregion-aggregation-timeseries.

@@ -325,3 +325,27 @@ The window log reported WP1 48, WP2 41p/1f (Brier), WP3 22+114, WP4 22+104, WP5 
 - Keep the BMKG warning-code mapping (`60 -> 25 / 55`, `95/97 -> 65.5 / 87.5`).
 - Workflow: grill first, then boost.
 - `agents/llm_gateway.py`, `backend/tests/test_llm_gateway.py`, `.env.example` are off-limits.
+
+---
+
+## 2026-10-26 — Phase 138: Evaluasi Credibility Docs Commit (`.planning/phases/138-evaluasi-credibility-docs-commit/`)
+
+### Fixes (verified in tree)
+
+1. Ringkas+expandable evaluasi UI; batch immutable (`batch-v2026-10-26-N60`) + live recompute with metrics null when N<10 (`backend/app/routers/evaluation_router.py`).
+2. Diagnostik live-wire: per-probe AbortController, 15 s timeout (`SystemObservabilitySection.tsx:151,157`).
+3. Keep-alive `--max-time 90` on `/health`; `healthCheckPath: /health` in `render.yaml` (`ccb5bbd`).
+4. Pred tersimpan: nullable forecast columns via `021_pred_tersimpan.sql` (idempotent; NULL rows excluded as `missing_pred`).
+5. Offline ledger per-row `row_hash` + raw vs normalized Brier (`outcome_evaluation_service.py:252,380-423,588-603`); UI hash/download (`EvaluationSection.tsx`).
+
+### Concerns
+
+- Benchmark 100% circular-synthetic; P_max 0.688 with 0.0063 pass margin; ECE 0.1994; static `DEFAULT_BENCHMARK_REPORT` can mask a missing report file; echo-exclusion label sensitivity; delay/4.0 proxy circularity for forecast-less rows; no fitted `.pkl` calibrator.
+
+### Constraints / conditions
+
+- DO NOT touch `agents/graph.py`, consensus-gate formula, SSE `simulate/stream`, or `lifespan`; Vercel prod from main; Render free-tier 30-77 s cold start; Supabase primary ledger; orchestrator delegates to high subagents; no parallel `DashboardClient.tsx` edits. Branch `evaluasi-credibility-milestone-20261026`; backend `peta-nadi.onrender.com`; `NEXT_PUBLIC_API_URL` baked; `OPENCODE_API_KEY`/`MAP_KEY` via render env sync.
+
+### Issues (do not repeat)
+
+- Flaky `solver_latency<10ms` point assertion (measured live per request); stale `STATE.md` vs filesystem; duplicate phase numbers 107/118/119 (use full slugs); `TestMatrixTable` still partial; live N=0 must render honest-empty; `git add .` risks `screenshots/` + `Final-Gemastik/` + `outputs/`.
