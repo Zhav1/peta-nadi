@@ -36,7 +36,7 @@ test('guest laporan hard-block: nav disabled, deep-link bounces to map + modal +
   await expect(page.locator('#nav-map')).toHaveClass(/bg-white/, { timeout: 15000 });
   await expect(page.getByText('Laporan terkunci — Mode Sandbox')).not.toBeVisible();
   await expect(page.getByRole('alertdialog')).toBeVisible({ timeout: 15000 });
-  await expect(page.getByText('Mode Sandbox: Laporan terkunci')).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText('Mode Sandbox: Laporan terkunci').first()).toBeVisible({ timeout: 15000 });
 
   // 4. Clicking the disabled nav keeps the block (no navigation side-effects).
   await navReports.click({ force: true });

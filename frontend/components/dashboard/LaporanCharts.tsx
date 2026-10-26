@@ -41,7 +41,7 @@ function ChartTooltip({ active, payload, label }: any) {
         <p key={i} className="text-slate-200 tabular-nums">
           {p.name}: <strong className="text-emerald-300">{formatFullIDR(p.value)}</strong>
           {p.payload?.tripCount != null && (
-            <span className="text-slate-500"> • {p.payload.tripCount} rit</span>
+            <span className="text-slate-500"> • {p.payload.tripCount} Trip</span>
           )}
         </p>
       ))}

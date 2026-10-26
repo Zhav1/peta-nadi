@@ -1,4 +1,5 @@
 import logging
+import json
 from fastapi import APIRouter, Query, status
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
@@ -8,6 +9,82 @@ import asyncio
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/commodities", tags=["commodities"])
+
+# Phase 5 perf: short-lived caches so the 60s-window dashboard polling
+# (prices + spikes) rarely re-scans commodity_prices.
+_COMMODITY_CACHE_TTL_SECONDS = 60
+_PRICES_CACHE_PREFIX = "lrip:cache:commodity:prices:"
+_SPIKES_CACHE_PREFIX = "lrip:cache:commodity:spikes:"
+
+
+def _cache_read(key: str) -> Optional[str]:
+    try:
+        from app.services.redis_client import cache_get
+
+        return cache_get(key)
+    except Exception as exc:
+        logger.debug(f"Commodity cache read skipped: {exc}")
+        return None
+
+
+def _cache_write(key: str, value: str) -> None:
+    try:
+        from app.services.redis_client import cache_set
+
+        cache_set(key, value, ex=_COMMODITY_CACHE_TTL_SECONDS)
+    except Exception as exc:
+        logger.debug(f"Commodity cache write skipped: {exc}")
+
+
+def clear_commodity_cache() -> None:
+    """Drop all cached commodity prices/spikes entries (tests + admin use)."""
+    try:
+        import app.services.redis_client as _rc
+
+        for prefix in (_PRICES_CACHE_PREFIX, _SPIKES_CACHE_PREFIX):
+            for key in [k for k in list(_rc._mem_kv) if k.startswith(prefix)]:
+                _rc._mem_kv.pop(key, None)
+                _rc._mem_expire.pop(key, None)
+    except Exception:
+        pass
+    try:
+        from app.services.redis_client import get_redis
+
+        r = get_redis()
+        for prefix in (_PRICES_CACHE_PREFIX, _SPIKES_CACHE_PREFIX):
+            cursor = 0
+            while True:
+                cursor, keys = r.scan(cursor=cursor, match=f"{prefix}*", count=100)
+                if keys:
+                    r.delete(*keys)
+                if cursor == 0:
+                    break
+    except Exception as exc:
+        logger.debug(f"Commodity cache clear skipped: {exc}")
+
+
+def _rpc_window_means(sb, since_iso: str, region: Optional[str]) -> Optional[Dict[tuple, tuple]]:
+    """One-call SQL baseline means via `commodity_baseline_means` (migration 022).
+
+    Returns {(commodity, region): (mean_price, n)} or None when the RPC is
+    unavailable — callers fall back to the Python mean over fetched rows.
+    """
+    try:
+        params = {"p_since": since_iso, "p_region": region}
+        resp = sb.rpc("commodity_baseline_means", params).execute()
+        out: Dict[tuple, tuple] = {}
+        for row in resp.data or []:
+            try:
+                out[(row["commodity"], row.get("region", "north_sumatra"))] = (
+                    float(row["mean_price"]),
+                    int(row["n"]),
+                )
+            except (KeyError, TypeError, ValueError):
+                continue
+        return out
+    except Exception as exc:
+        logger.debug(f"commodity_baseline_means RPC unavailable, using Python mean: {exc}")
+        return None
 
 
 class PricePoint(BaseModel):
@@ -50,6 +127,15 @@ async def get_commodity_prices(
     except (TypeError, ValueError):
         clean_limit = 30
 
+    # Phase 5 perf: cache the exact (commodity, region, limit) response 60s.
+    cache_key = f"{_PRICES_CACHE_PREFIX}{clean_commodity or 'all'}:{clean_region or 'agg'}:{clean_limit}"
+    cached_raw = _cache_read(cache_key)
+    if cached_raw:
+        try:
+            return CommodityPriceResponse(**json.loads(cached_raw))
+        except Exception:
+            pass
+
     try:
         from app.db.supabase_client import get_client
         sb = get_client()
@@ -58,8 +144,9 @@ async def get_commodity_prices(
         is_aggregate = clean_region is None
 
         if is_aggregate:
-            # Multi-region aggregation: fetch candidate rows (limit * 10 to cover 8 provinces)
-            fetch_limit = min(clean_limit * 10, 1000)
+            # Multi-region aggregation: fetch candidate rows (limit * 10 to cover 8 provinces,
+            # capped at 300 — was 1000; the per-(date, commodity) top-K only needs a small window).
+            fetch_limit = min(clean_limit * 10, 300)
             query = sb.table("commodity_prices").select("*").order("time", desc=True).limit(fetch_limit)
             if clean_commodity:
                 query = query.eq("commodity", clean_commodity)
@@ -125,10 +212,12 @@ async def get_commodity_prices(
                         )
                     )
 
-                return CommodityPriceResponse(
+                resp = CommodityPriceResponse(
                     items=aggregate_items,
                     total=len(aggregate_items)
                 )
+                _cache_write(cache_key, resp.model_dump_json())
+                return resp
 
         else:
             query = sb.table("commodity_prices").select("*").order("time", desc=True).limit(clean_limit)
@@ -140,7 +229,7 @@ async def get_commodity_prices(
             items = result.data or []
 
             if len(items) > 0:
-                return CommodityPriceResponse(
+                resp = CommodityPriceResponse(
                     items=[
                         PricePoint(
                             time=(
@@ -157,6 +246,8 @@ async def get_commodity_prices(
                     ],
                     total=len(items)
                 )
+                _cache_write(cache_key, resp.model_dump_json())
+                return resp
 
     except Exception as e:
         logger.warning(f"Error querying commodity_prices from Supabase: {e}")
@@ -183,6 +274,15 @@ async def get_commodity_spikes(
     MIN_RECORDS_GUARD = 3
     spikes: List[Dict[str, Any]] = []
 
+    # Phase 5 perf: spikes response cached 60s per region filter.
+    spikes_key = f"{_SPIKES_CACHE_PREFIX}{clean_region or 'all'}"
+    cached_spikes = _cache_read(spikes_key)
+    if cached_spikes:
+        try:
+            return json.loads(cached_spikes)
+        except Exception:
+            pass
+
     try:
         from app.db.supabase_client import get_client
         sb = get_client()
@@ -190,12 +290,18 @@ async def get_commodity_spikes(
         now = datetime.now(timezone.utc)
         thirty_days_ago = (now - timedelta(days=30)).isoformat()
 
-        query = sb.table("commodity_prices").select("*").gte("time", thirty_days_ago).order("time", desc=True).limit(1000)
+        # Phase 5 perf: window capped at 300 rows (was 1000) — the grouped
+        # baseline only needs a small recent window per commodity.
+        query = sb.table("commodity_prices").select("*").gte("time", thirty_days_ago).order("time", desc=True).limit(300)
         if clean_region:
             query = query.eq("region", clean_region)
 
         result = await asyncio.to_thread(lambda: query.execute())
         items = result.data or []
+
+        # SQL-first baseline means (one RPC for the whole 30-day window);
+        # falls back to the Python mean over fetched rows when unavailable.
+        sql_means = _rpc_window_means(sb, thirty_days_ago, clean_region)
 
         # Group by commodity (and region if not explicitly filtered)
         grouped: Dict[tuple, List[Dict[str, Any]]] = {}
@@ -216,19 +322,26 @@ async def get_commodity_spikes(
             except (ValueError, TypeError):
                 continue
 
-            baseline_prices = []
-            for r in records:
-                try:
-                    p = float(r.get("price_idr", 0))
-                    if p > 0:
-                        baseline_prices.append(p)
-                except (ValueError, TypeError):
+            baseline_price: Optional[float] = None
+            if sql_means is not None and (commodity_name, reg) in sql_means:
+                mean_val, mean_n = sql_means[(commodity_name, reg)]
+                if mean_n >= MIN_RECORDS_GUARD and mean_val > 0:
+                    baseline_price = mean_val
+
+            if baseline_price is None:
+                baseline_prices = []
+                for r in records:
+                    try:
+                        p = float(r.get("price_idr", 0))
+                        if p > 0:
+                            baseline_prices.append(p)
+                    except (ValueError, TypeError):
+                        continue
+
+                if len(baseline_prices) < MIN_RECORDS_GUARD:
                     continue
 
-            if len(baseline_prices) < MIN_RECORDS_GUARD:
-                continue
-
-            baseline_price = sum(baseline_prices) / len(baseline_prices)
+                baseline_price = sum(baseline_prices) / len(baseline_prices)
             if baseline_price <= 0:
                 continue
 
@@ -259,4 +372,6 @@ async def get_commodity_spikes(
     except Exception as e:
         logger.warning(f"Error querying commodity_prices for spikes: {e}")
 
-    return {"spikes": spikes, "total": len(spikes)}
+    payload = {"spikes": spikes, "total": len(spikes)}
+    _cache_write(spikes_key, json.dumps(payload, default=str))
+    return payload

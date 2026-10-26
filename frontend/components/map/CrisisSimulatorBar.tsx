@@ -19,7 +19,6 @@ import {
   Trash2,
   Sliders,
   Check,
-  Gauge,
   Ship,
   Plane,
   Snowflake,
@@ -73,10 +72,17 @@ export interface CrisisSimulatorBarProps {
   onResetNodes?: () => void;
   isSidebarOpen?: boolean;
   isLeftSidebarCollapsed?: boolean;
+  /** Fixed telemetry playback speed (hardcoded 1x); kept for prop plumbing. */
   simSpeed?: number;
+  /** No-op retained for prop plumbing; speed control was removed (fixed 1x). */
   setSimSpeed?: (speed: number) => void;
   selectedCommodity?: string | null;
   onSelectCommodity?: (commodity: string | null) => void;
+  /** True while the simulator target/polygon tools are armed. Manual 5/8/15
+   *  pills render ONLY in this mode; otherwise the live-zone Auto badge shows. */
+  isSimulatorArmed?: boolean;
+  /** Backend-derived live zone radius (zoneGeom.radiusKm / agentRadiusKm). */
+  autoRadiusKm?: number | null;
 }
 
 export function CrisisSimulatorBar({
@@ -106,9 +112,14 @@ export function CrisisSimulatorBar({
   setSimSpeed,
   selectedCommodity = null,
   onSelectCommodity,
+  isSimulatorArmed = false,
+  autoRadiusKm = null,
 }: CrisisSimulatorBarProps) {
   const [selectedType, setSelectedType] = useState<CrisisType>('flood');
-  const [activePopover, setActivePopover] = useState<'nodes' | 'disruption' | 'radius' | 'speed' | 'cargo' | null>(null);
+  const [activePopover, setActivePopover] = useState<'nodes' | 'disruption' | 'radius' | 'cargo' | null>(null);
+  // Speed is fixed at 1x — the prop is plumbing only; never surfaces a control.
+  void simSpeed;
+  void setSimSpeed;
 
 
   const hazardOptions: Array<{ type: CrisisType; label: string; icon: React.ReactNode }> = [
@@ -545,7 +556,22 @@ export function CrisisSimulatorBar({
  </PopoverContent>
  </Popover>
 
- {/* 4. Radius Selector */}
+ {/* 4. Radius Selector — manual pills ONLY while simulator target/polygon
+     tools are armed; live zone inspect shows the Auto badge from backend
+     geometry (zoneGeom.radiusKm / agentRadiusKm), 8km fallback. */}
+ {!isSimulatorArmed ? (
+   <span
+     data-testid="radius-auto-badge"
+     title="Radius zona live dari geometri backend (Auto)"
+     className="px-3 py-1.5 rounded-md bg-cyan-950/60 border border-cyan-500/40 text-xs font-sans font-medium text-cyan-300 flex items-center gap-1.5"
+   >
+     <Sliders className="w-3.5 h-3.5 text-cyan-400" />
+     <span>Auto</span>
+     <span className="font-mono tabular-nums">
+       {(autoRadiusKm ?? selectedRadius ?? 8).toFixed(1)}km
+     </span>
+   </span>
+ ) : (
  <Popover
  open={activePopover === 'radius'}
  onOpenChange={(open) => setActivePopover(open ? 'radius' : null)}
@@ -588,57 +614,7 @@ export function CrisisSimulatorBar({
               ))}
  </PopoverContent>
  </Popover>
-
-        {/* 5. Tactical Simulation Speed Selector Pill */}
-        {setSimSpeed && (
- <Popover
- open={activePopover === 'speed'}
- onOpenChange={(open) => setActivePopover(open ? 'speed' : null)}
- >
- <PopoverTrigger asChild>
-            <button
-              type="button"
- className="cursor-pointer px-3 py-1.5 rounded-md bg-[#121822] border border-white/10 text-xs font-sans font-medium text-slate-300 hover:border-slate-600 transition-all flex items-center gap-1.5"
-              title="Kecepatan Simulasi Telemetri Peta"
-            >
-              <Gauge className="w-3.5 h-3.5 text-cyan-400" />
- <span className="font-mono tabular-nums text-cyan-400">{simSpeed}x</span>
-              <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform duration-200 ${activePopover === 'speed' ? 'rotate-180' : ''}`} />
-            </button>
- </PopoverTrigger>
- <PopoverContent
- side="top"
- align="end"
- sideOffset={8}
- collisionPadding={12}
- className="w-36 flex flex-col gap-1 p-2"
- >
- <span className="px-2 py-1 text-xs text-slate-400">Kecepatan</span>
-                {[
- { speed: 1, label: '1x' },
- { speed: 5, label: '5x' },
- { speed: 15, label: '15x' },
-                ].map(({ speed, label }) => (
-                  <button
-                    key={speed}
-                    type="button"
-                    onClick={() => {
-                      setSimSpeed(speed);
-                      setActivePopover(null);
-                    }}
- className={`cursor-pointer w-full px-3 py-1.5 rounded-md font-sans text-xs font-medium transition flex items-center justify-between tabular-nums ${
-                      simSpeed === speed
-                        ? 'bg-cyan-500 text-[#080d14] font-bold'
- : 'hover:bg-white/5 text-slate-300'
-                    }`}
-                  >
-                    <span>{label}</span>
-                    {simSpeed === speed && <Check className="w-3.5 h-3.5 text-[#080d14]" />}
-                  </button>
-                ))}
- </PopoverContent>
- </Popover>
-        )}
+ )}
 
       </div>
 

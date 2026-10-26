@@ -213,7 +213,7 @@ export function regulatorSummary(): ERPSummaryResponse {
       },
     ],
     trips: [],
-    business_notes: ['Agregat pengawas: rincian per rit disembunyikan.'],
+    business_notes: ['Agregat pengawas: rincian per Trip disembunyikan.'],
   };
 }
 
@@ -223,6 +223,8 @@ interface MockLaporanApiOptions {
   onPatchTravel?: (url: string, body: unknown) => unknown;
   /** Override the /api/v1/approvals payload (default: empty ledger). Additive; existing callers unaffected. */
   approvals?: () => unknown;
+  /** Override the POST /api/v1/fleet/travels/:id/hedging payload (default: {status:'ok'}). Additive; existing callers unaffected. */
+  onPostHedging?: (url: string, body: unknown) => unknown;
 }
 
 /** Single branch handler for every /api/ request: specific mocks first, generic hermetic sink last. */
@@ -259,6 +261,19 @@ export async function mockLaporanApi(page: Page, opts: MockLaporanApiOptions = {
         body = {};
       }
       return ok(opts.onPatchTravel ? opts.onPatchTravel(url, body) : { id: 'RIT-001', status: 'delivered' });
+    }
+    if (url.includes('/api/v1/fleet/travels/') && url.includes('/hedging') && method === 'POST') {
+      let body: unknown = {};
+      try {
+        body = req.postDataJSON();
+      } catch {
+        body = {};
+      }
+      return ok(
+        opts.onPostHedging
+          ? opts.onPostHedging(url, body)
+          : { status: 'ok', travel_id: '', hedging: {} }
+      );
     }
     if (url.includes('/api/v1/approvals')) return ok(opts.approvals ? opts.approvals() : { items: [], total: 0 });
     if (url.includes('/health/sources')) return ok({ sources: [] });

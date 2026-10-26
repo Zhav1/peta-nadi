@@ -4,15 +4,12 @@ import { useEffect, useState } from 'react';
 import {
   X,
   ShieldAlert,
-  Activity,
   Scale,
-  Database,
   ClipboardCheck,
   Lock,
   Snowflake,
 } from 'lucide-react';
 import type {
-  CrisisState,
   RouteDetailModalProps,
   RouteDecisionType,
   TacticalManeuver,
@@ -26,31 +23,32 @@ import {
 } from '@/lib/tripCostCalculator';
 import { api } from '@/lib/api';
 import {
- AlertDialog,
- AlertDialogContent,
- AlertDialogDescription,
- AlertDialogHeader,
- AlertDialogTitle,
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogHeader,
+  AlertDialogTitle,
 } from '@/components/base-ui/alert-dialog';
+import { HoldVsRerouteCard } from './HoldVsRerouteCard';
 
 type Decision = RouteDecisionType;
 
 const CHECKLIST_ITEMS = [
   {
     id: 'visual',
- label: 'Rute bebas bahaya terverifikasi visual di peta',
+    label: 'Rute bebas bahaya terverifikasi di peta',
   },
   {
     id: 'tradeoff',
-    label: 'Analisis trade-off waktu vs biaya telah dibaca',
+    label: 'Trade-off waktu vs biaya dibaca',
   },
   {
     id: 'legs',
-    label: 'Moda dan simpul alih (transfer hub) tiap leg dikonfirmasi',
+    label: 'Moda dan simpul alih tiap leg dikonfirmasi',
   },
   {
     id: 'notes',
-    label: 'Catatan operator diisi untuk keputusan HOLD / OVERRIDE',
+    label: 'Catatan operator diisi untuk HOLD / OVERRIDE',
   },
 ] as const;
 
@@ -127,18 +125,34 @@ export function RouteDetailModal({
     }
   }, [notes]);
 
- /* Escape-to-close and focus trapping are provided by the AlertDialog block (Root onOpenChange + Popup). */
+  /* Escape-to-close and focus trapping are provided by the AlertDialog block (Root onOpenChange + Popup). */
 
- /* Dialog visibility is controlled by the AlertDialog open prop (Watermelon block pattern). */
+  /* Dialog visibility is controlled by the AlertDialog open prop (Watermelon block pattern). */
 
   const isSandbox = mode === 'sandbox' || role === 'GUEST';
   const allChecked = CHECKLIST_ITEMS.every(
     (c) => checked[c.id] || (c.id === 'notes' && notes.trim().length > 0)
   );
 
-  const canApprove = !isSandbox && allChecked && !isActing && role !== 'REGULATOR';
+  // Evidence gate: approve/override need a grounded route or crisis evidence.
+  // HOLD stays allowed (safe action, ledger-recorded).
+  const crisisEvidence =
+    !!crisis &&
+    ((crisis.news_attributions?.length ?? 0) > 0 ||
+      (crisis.verified_news_citations?.length ?? 0) > 0 ||
+      !!crisis.evidence?.osint_text?.trim() ||
+      !!crisis.validated);
+  const routeProof =
+    !!route.safety_status ||
+    !!route.dasar_risiko ||
+    !!route.dampak ||
+    !!route.tradeoff_analysis ||
+    !!route.hedging;
+  const hasEvidence = crisisEvidence || routeProof;
+
+  const canApprove = !isSandbox && allChecked && !isActing && role !== 'REGULATOR' && hasEvidence;
   const canHold = !isSandbox && allChecked && !isActing && notes.trim().length > 0;
-  const canOverride = !isSandbox && allChecked && !isActing && notes.trim().length > 0 && role !== 'REGULATOR';
+  const canOverride = !isSandbox && allChecked && !isActing && notes.trim().length > 0 && role !== 'REGULATOR' && hasEvidence;
 
   const passability =
     crisis?.impact_profile?.passability ??
@@ -189,6 +203,8 @@ export function RouteDetailModal({
 
   const totalTripCost = route.total_operational_cost_idr ?? operationalCostBreakdown.total_operational_cost_idr;
 
+  const holdVsRerouteEconomics = route.economic_comparison;
+
   const toggleCheck = (id: string) =>
     setChecked((prev) => ({ ...prev, [id]: !prev[id] }));
 
@@ -197,6 +213,8 @@ export function RouteDetailModal({
     if (role === 'REGULATOR' && decision !== 'HOLD') return;
     if (!allChecked) return;
     if ((decision === 'HOLD' || decision === 'OVERRIDE' || decision === 'REJECT') && !notes.trim()) return;
+    // Evidence gate: only HOLD may pass without grounded evidence.
+    if (decision !== 'HOLD' && !hasEvidence) return;
     void onAction(decision, tacticalAction, notes.trim() || undefined);
   };
 
@@ -215,37 +233,46 @@ export function RouteDetailModal({
               : route.description.slice(0, 60));
 
   return (
- <AlertDialog open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
- <AlertDialogContent className="max-w-2xl rounded-2xl border-white/10 bg-[#0c1017] p-0 shadow-2xl tabular-nums max-h-[90vh] overflow-y-auto">
+  <AlertDialog open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
+  <AlertDialogContent
+    aria-label="Detail rute dan verifikasi operator"
+    className="max-w-2xl rounded-2xl border-white/10 bg-[#0c1017] p-0 shadow-2xl tabular-nums max-h-[90vh] overflow-y-auto"
+  >
+        <style>{`@keyframes wm-modal-rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}.wm-modal-rise{animation:wm-modal-rise .22s ease both}`}</style>
         {/* Watermark ribbon for sandbox preview */}
         {isSandbox && (
           <div
             data-testid="sandbox-watermark"
- className="pointer-events-none absolute -right-10 top-6 rotate-45 bg-amber-500/90 text-black text-xs font-bold px-10 py-1 shadow-lg"
+            className="pointer-events-none absolute -right-10 top-6 rotate-45 bg-amber-500/90 text-black text-xs font-bold px-10 py-1 shadow-lg"
           >
- Pratinjau sandbox
+            Pratinjau sandbox
           </div>
         )}
 
         {/* Header */}
- <AlertDialogHeader className="sticky top-0 bg-[#0c1017] border-b border-white/10 p-4 flex-row items-start justify-between gap-3 text-left">
+        <AlertDialogHeader className="sticky top-0 bg-[#0c1017] border-b border-white/10 p-4 flex-row items-start justify-between gap-3 text-left">
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
- <span className="text-xs font-bold px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/30">
- Detail rute
+              <span className="text-xs font-bold px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/30">
+                Detail rute
               </span>
               {isSandbox && (
- <span className="text-xs font-bold px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/40">
-                  Pratinjau lokal — tanpa POST server
-                </span>
+                <>
+                  <span className="text-xs font-bold px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/40">
+                    Pratinjau lokal — tanpa POST server
+                  </span>
+                  <span className="text-xs font-bold px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/40">
+                    SANDBOX PREVIEW
+                  </span>
+                </>
               )}
             </div>
- <AlertDialogTitle className="text-sm font-bold text-white mt-1.5 leading-snug">
+            <AlertDialogTitle className="text-sm font-bold text-white mt-1.5 leading-snug">
               {title}
- </AlertDialogTitle>
- <AlertDialogDescription className="text-xs text-slate-400 mt-0.5 tabular-nums">
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-slate-400 mt-0.5 tabular-nums">
               {(route.distance_km ?? 0).toFixed(0)} km · {route.eta_minutes ?? 0} mnt · +{(route.fuel_increase_pct ?? 0).toFixed(0)}% BBM
- </AlertDialogDescription>
+            </AlertDialogDescription>
           </div>
           <button
             type="button"
@@ -255,14 +282,14 @@ export function RouteDetailModal({
           >
             <X className="w-4 h-4" />
           </button>
- </AlertDialogHeader>
+        </AlertDialogHeader>
 
         <div className="p-4 space-y-4">
-          {/* Section 1: Dasar Risiko */}
- <section aria-label="Dasar Risiko" className="border-t border-white/10 pt-3 bg-transparent space-y-2">
- <h3 className="text-xs font-bold font-sans text-rose-300 flex items-center gap-1.5">
+          {/* Section 1: Risiko */}
+          <section aria-label="Risiko" className="wm-modal-rise border border-white/10 rounded-xl bg-[#080d14] p-3 space-y-2">
+            <h3 className="text-xs font-bold font-sans text-slate-100 flex items-center gap-1.5">
               <ShieldAlert className="w-4 h-4 text-rose-400" />
-              <span>1. Dasar Risiko</span>
+              <span>1. Risiko</span>
             </h3>
             <div className="text-xs font-mono space-y-1.5 text-slate-300">
               <div className="flex justify-between gap-2">
@@ -270,7 +297,7 @@ export function RouteDetailModal({
                 <span className="font-bold text-white text-right">{route.safety_status ?? 'Tidak tersedia'}</span>
               </div>
               {route.safety_tag && (
- <div className="p-2 rounded bg-[#0c1017] border border-white/10 text-slate-200">
+                <div className="p-2 rounded bg-[#0c1017] border border-white/10 text-slate-200">
                   {route.safety_tag}
                 </div>
               )}
@@ -300,11 +327,11 @@ export function RouteDetailModal({
             </div>
           </section>
 
-          {/* Section 2: Dampak + Uncertainty */}
- <section aria-label="Dampak dan Ketidakpastian" className="border-t border-white/10 pt-3 bg-transparent space-y-2">
- <h3 className="text-xs font-bold font-sans text-amber-300 flex items-center gap-1.5">
-              <Activity className="w-4 h-4 text-amber-400" />
- <span>2. Dampak</span>
+          {/* Section 2: Dampak & Biaya */}
+          <section aria-label="Dampak dan Biaya" className="wm-modal-rise border border-white/10 rounded-xl bg-[#080d14] p-3 space-y-2.5" style={{ animationDelay: '.05s' }}>
+            <h3 className="text-xs font-bold font-sans text-slate-100 flex items-center gap-1.5">
+              <Scale className="w-4 h-4 text-cyan-400" />
+              <span>2. Dampak &amp; Biaya</span>
             </h3>
             <div className="text-xs font-mono space-y-1.5 text-slate-300">
               <div className="flex justify-between gap-2">
@@ -343,7 +370,7 @@ export function RouteDetailModal({
                 <div className="flex justify-between items-center gap-2 p-2 rounded-lg bg-cyan-950/40 border border-cyan-500/30 text-xs font-mono">
                   <span className="text-cyan-300 flex items-center gap-1.5 font-sans font-medium">
                     <Snowflake className="w-3.5 h-3.5 text-cyan-400" />
-                    Bahan Bakar Genset Reefer ({previewPolicy}):
+                    Genset reefer ({previewPolicy}):
                   </span>
                   <span className="font-bold text-cyan-300 font-mono">
                     {formatIDR(reeferGensetCost)}
@@ -363,7 +390,7 @@ export function RouteDetailModal({
                 </div>
               )}
               {(activePolicyBreakdown?.explanation || route.hedging?.recommendation_reason) && (
-                <p className="text-[11px] font-sans text-slate-300 leading-relaxed p-2 rounded bg-[#080d14] border border-white/5">
+                <p className="text-[11px] font-sans text-slate-300 leading-relaxed p-2 rounded bg-[#0c1017] border border-white/5">
                   {activePolicyBreakdown?.explanation || route.hedging?.recommendation_reason}
                 </p>
               )}
@@ -374,52 +401,11 @@ export function RouteDetailModal({
               )}
               {!route.tradeoff_analysis && !route.hedging && (
                 <p className="text-xs text-slate-500 italic">
-                  Data dampak kuantitatif belum tersedia untuk koridor ini. Kargo belum dipilih.
+                  Data dampak kuantitatif belum tersedia. Kargo belum dipilih.
                 </p>
               )}
             </div>
-          </section>
 
-          {/* Section 3: Manfaat vs Konsekuensi & Rincian Biaya Operasional */}
-          <section aria-label="Manfaat vs Konsekuensi" className="border-t border-white/10 pt-3 bg-transparent space-y-2.5">
-            <h3 className="text-xs font-bold font-sans text-cyan-300 flex items-center gap-1.5">
-              <Scale className="w-4 h-4 text-cyan-400" />
-              <span>3. Manfaat, Konsekuensi &amp; Rincian Biaya</span>
-            </h3>
-
-            {/* Economic & Spoilage Trade-off Policy Preview Selector */}
-            <div className="p-2.5 rounded-xl bg-[#080d14] border border-white/10 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold font-sans text-slate-200">
-                  Pratinjau Dampak Kebijakan (Economic &amp; Spoilage Trade-off Preview)
-                </span>
-                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
-                  Simulasi Kalkulasi
-                </span>
-              </div>
-              <p className="text-[10px] font-sans text-slate-400 leading-snug">
-                Pilih opsi di bawah untuk mensimulasikan perbandingan biaya operasional &amp; potensi susut kargo. Pilihan ini murni pratinjau kalkulasi dan tidak mengikat keputusan akhir eksekusi.
-              </p>
-              <div className="grid grid-cols-3 gap-1.5 pt-0.5">
-                {(['REROUTE', 'HOLD', 'CONTINUE'] as TacticalManeuver[]).map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setPreviewPolicy(t)}
-                    className={`cursor-pointer py-1.5 px-2 rounded-lg border text-xs font-mono transition-all flex flex-col items-center justify-center gap-0.5 ${
-                      previewPolicy === t
-                        ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200 font-bold shadow-sm'
-                        : 'bg-[#121822] border-white/10 text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    <span className="text-[11px] font-semibold">{t}</span>
-                    <span className="text-[9px] text-slate-400 font-sans">
-                      {t === 'REROUTE' ? 'Pengalihan' : t === 'HOLD' ? 'Tahan Depo' : 'Jalur Asal'}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
             {route.tradeoff_analysis && (
               <div className="grid grid-cols-2 gap-2 text-xs leading-relaxed">
                 <div className="p-2 rounded-md bg-emerald-950/30 border border-emerald-500/20">
@@ -445,8 +431,8 @@ export function RouteDetailModal({
               </div>
             )}
 
-            {/* Rincian Biaya Operasional Total (First-Principles Trip Economics) */}
-            <div className="p-3 rounded-lg bg-[#080d14] border border-white/10 space-y-2 mt-2 font-mono">
+            {/* Rincian Biaya Operasional Total */}
+            <div className="p-3 rounded-lg bg-[#0c1017] border border-white/10 space-y-2 mt-2 font-mono">
               <div className="flex justify-between items-center pb-2 border-b border-white/10">
                 <span className="text-xs font-sans font-semibold text-slate-200">
                   Total Estimasi Biaya Rit:
@@ -484,7 +470,7 @@ export function RouteDetailModal({
                       <div className="flex justify-between gap-2 text-cyan-300">
                         <span className="font-sans flex items-center gap-1">
                           <Snowflake className="w-3 h-3 text-cyan-400" />
-                          Bahan Bakar Genset Reefer:
+                          Genset Reefer:
                         </span>
                         <span className="tabular-nums">Rp {operationalCostBreakdown.reefer_genset_cost_idr.toLocaleString('id-ID')}</span>
                       </div>
@@ -513,17 +499,56 @@ export function RouteDetailModal({
                 </span>
               </div>
             </div>
+
+            {/* Pratinjau Hold vs Reroute */}
+            {holdVsRerouteEconomics ? (
+              <HoldVsRerouteCard
+                economics={holdVsRerouteEconomics}
+                onApplyTactical={(action) => setPreviewPolicy(action)}
+                selectedAction={previewPolicy === 'CONTINUE' ? 'CONTINUE' : previewPolicy}
+              />
+            ) : (
+              <div className="p-2.5 rounded-xl bg-[#0c1017] border border-white/10 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold font-sans text-slate-200">
+                    Pratinjau kebijakan (Hold vs Reroute)
+                  </span>
+                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
+                    Simulasi
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-1.5 pt-0.5">
+                  {(['REROUTE', 'HOLD', 'CONTINUE'] as TacticalManeuver[]).map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setPreviewPolicy(t)}
+                      className={`cursor-pointer py-1.5 px-2 rounded-lg border text-xs font-mono transition-all flex flex-col items-center justify-center gap-0.5 ${
+                        previewPolicy === t
+                          ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200 font-bold shadow-sm'
+                          : 'bg-[#121822] border-white/10 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <span className="text-[11px] font-semibold">{t}</span>
+                      <span className="text-[9px] text-slate-400 font-sans">
+                        {t === 'REROUTE' ? 'Pengalihan' : t === 'HOLD' ? 'Tahan Depo' : 'Jalur Asal'}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </section>
 
-          {/* Section 4: Keterbatasan Data */}
- <section aria-label="Keterbatasan Data" className="border-t border-white/10 pt-3 bg-transparent space-y-2">
- <h3 className="text-xs font-bold font-sans text-slate-200 flex items-center gap-1.5">
-              <Database className="w-4 h-4 text-slate-300" />
-              <span>4. Keterbatasan Data</span>
+          {/* Section 3: Verifikasi */}
+          <section aria-label="Verifikasi" className="wm-modal-rise border border-white/10 rounded-xl bg-[#080d14] p-3 space-y-2.5" style={{ animationDelay: '.1s' }}>
+            <h3 className="text-xs font-bold font-sans text-slate-100 flex items-center gap-1.5">
+              <ClipboardCheck className="w-4 h-4 text-cyan-400" />
+              <span>3. Verifikasi</span>
             </h3>
             <ul className="text-xs font-mono text-slate-300 space-y-1.5">
               <li className="flex justify-between gap-2">
-                <span className="text-slate-400">Kepatuhan (compliance):</span>
+                <span className="text-slate-400">Kepatuhan:</span>
                 <span className="text-right">
                   {route.compliance
                     ? `${route.compliance.status} — ${route.compliance.summary}`
@@ -532,40 +557,40 @@ export function RouteDetailModal({
               </li>
               <li className="flex justify-between gap-2">
                 <span className="text-slate-400">Data hedging:</span>
-                <span>{route.hedging ? 'Tersedia' : 'Tidak tersedia — estimasi belum dihitung'}</span>
+                <span>{route.hedging ? 'Tersedia' : 'Tidak tersedia'}</span>
               </li>
               <li className="flex justify-between gap-2">
-                <span className="text-slate-400">Tautan berita rujukan:</span>
+                <span className="text-slate-400">Tautan berita:</span>
                 <span>
                   {newsLinks.length === 0
-                    ? 'Tidak ada rujukan terverifikasi'
+                    ? 'Tidak ada rujukan'
                     : `${newsLinks.length} rujukan${deadLinks > 0 ? ` (${deadLinks} kedaluwarsa)` : ''}`}
                 </span>
               </li>
               <li className="flex justify-between gap-2">
                 <span className="text-slate-400">Konteks koridor:</span>
-                <span>{corridorIsFallback ? 'CACHE/FALLBACK — telemetri mungkin basi' : 'Live'}</span>
+                <span>{corridorIsFallback ? 'CACHE/FALLBACK — telemetri basi' : 'Live'}</span>
               </li>
               {route.keterbatasan_data?.map((item, i) => (
                 <li key={i} className="text-slate-400">• {item}</li>
               ))}
             </ul>
 
-            {/* High-Contrast Data Provenance Indicators (PT Sawita / Socfin Compliance) */}
+            {/* Provenance */}
             <div className="pt-2.5 border-t border-white/5 space-y-1.5">
               <span className="text-[10px] font-sans text-slate-400 font-bold uppercase tracking-wider block">
-                Transparansi Sumber Data (Audit Provenance)
+                Sumber data
               </span>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                 <div
-                  className={`p-1.5 rounded border text-[10px] font-mono flex flex-col items-center text-center transition cursor-help ${
+                  className={`p-1.5 rounded border text-[10px] font-mono flex flex-col items-center text-center transition ${
                     corridorIsFallback
                       ? 'bg-amber-500/10 border-amber-500/30 text-amber-300'
                       : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
                   }`}
                   title={
                     corridorIsFallback
-                      ? 'Fallback: Data historis / simulasi ketika live TomTom API tidak tersedia'
+                      ? 'Fallback: data historis / simulasi ketika live TomTom API tidak tersedia'
                       : 'Live: Segment flow TomTom Traffic API realtime'
                   }
                 >
@@ -573,14 +598,14 @@ export function RouteDetailModal({
                   <span className="text-[9px] text-slate-400">Trafik Jalan</span>
                 </div>
                 <div
-                  className="p-1.5 rounded border text-[10px] font-mono flex flex-col items-center text-center bg-cyan-500/10 border-cyan-500/30 text-cyan-300 cursor-help"
+                  className="p-1.5 rounded border text-[10px] font-mono flex flex-col items-center text-center bg-cyan-500/10 border-cyan-500/30 text-cyan-300"
                   title="Live: Radar cuaca presipitasi BMKG 10 provinsi Sumatra + spatial fusion Open-Meteo NWP"
                 >
                   <span className="font-bold">[BMKG RADAR]</span>
                   <span className="text-[9px] text-slate-400">Cuaca Ekstrem</span>
                 </div>
                 <div
-                  className="p-1.5 rounded border text-[10px] font-mono flex flex-col items-center text-center bg-sky-500/10 border-sky-500/30 text-sky-300 cursor-help"
+                  className="p-1.5 rounded border text-[10px] font-mono flex flex-col items-center text-center bg-sky-500/10 border-sky-500/30 text-sky-300"
                   title="Live: AIS Stream satelit pelacakan posisi kapal kargo Selat Malaka, Selat Sunda, dan Pelabuhan Belawan"
                 >
                   <span className="font-bold">[AIS STREAM]</span>
@@ -594,7 +619,7 @@ export function RouteDetailModal({
                       onOpenEvaluation();
                     }}
                     className="cursor-pointer p-1.5 rounded border text-[10px] font-mono flex flex-col items-center text-center bg-purple-500/10 hover:bg-purple-500/25 border-purple-500/30 hover:border-purple-400/60 text-purple-300 transition"
-                    title={`Klik untuk membuka Benchmark Empiris N=${benchN ?? '–'} Skenario Disrupsi Sumatra: ${benchSummary}`}
+                    title={`Buka Benchmark Empiris N=${benchN ?? '–'} Skenario Disrupsi Sumatra: ${benchSummary}`}
                   >
                     <span className="font-bold flex items-center gap-0.5">
                       [BENCHMARK N={benchN ?? '–'}]
@@ -604,7 +629,7 @@ export function RouteDetailModal({
                   </button>
                 ) : (
                   <div
-                    className="p-1.5 rounded border text-[10px] font-mono flex flex-col items-center text-center bg-purple-500/10 border-purple-500/30 text-purple-300 cursor-help"
+                    className="p-1.5 rounded border text-[10px] font-mono flex flex-col items-center text-center bg-purple-500/10 border-purple-500/30 text-purple-300"
                     title={`Benchmark Empiris N=${benchN ?? '–'} Skenario Disrupsi Sumatra: ${benchSummary}`}
                   >
                     <span className="font-bold">[BENCHMARK N={benchN ?? '–'}]</span>
@@ -613,21 +638,14 @@ export function RouteDetailModal({
                 )}
               </div>
             </div>
-          </section>
 
-          {/* Section 5: Verifikasi Operator Checklist */}
- <section aria-label="Verifikasi Operator" className="border-t border-white/10 pt-3 bg-transparent space-y-2.5">
- <h3 className="text-xs font-bold font-sans text-cyan-300 flex items-center gap-1.5">
-              <ClipboardCheck className="w-4 h-4 text-cyan-400" />
- <span>5. Verifikasi operator</span>
-            </h3>
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 pt-1">
               {CHECKLIST_ITEMS.map((item) => {
                 const isChecked = !!checked[item.id] || (item.id === 'notes' && notes.trim().length > 0);
                 return (
                   <label
                     key={item.id}
-                    className="flex items-start gap-2.5 p-2 rounded-lg bg-[#080d14] border border-white/10 cursor-pointer hover:border-cyan-500/40 transition text-xs font-sans text-slate-200"
+                    className="flex items-start gap-2.5 p-2 rounded-lg bg-[#0c1017] border border-white/10 cursor-pointer hover:border-cyan-500/40 transition text-xs font-sans text-slate-200"
                   >
                     <input
                       type="checkbox"
@@ -653,93 +671,104 @@ export function RouteDetailModal({
               <>
                 <div className="space-y-1">
                   <label htmlFor="operator-notes" className="text-[11px] font-sans font-medium text-slate-300 flex items-center justify-between">
-                    <span>Catatan Operator Justifikasi</span>
+                    <span>Catatan operator</span>
                     <span className="text-[10px] font-mono text-amber-400/90">*Wajib untuk HOLD &amp; OVERRIDE</span>
                   </label>
                   <textarea
                     id="operator-notes"
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
-                    placeholder="Wajib isi alasan penahanan depo / justifikasi rute asal (HOLD / OVERRIDE)..."
+                    placeholder="Catatan operator: alasan penahanan depo / justifikasi rute asal (HOLD / OVERRIDE)..."
                     rows={2}
-                    className="w-full bg-[#080d14] border border-white/10 focus:border-cyan-500/50 rounded-lg p-2.5 text-xs font-mono text-slate-200 placeholder:text-slate-500 focus:outline-none transition-colors"
+                    className="w-full bg-[#0c1017] border border-white/10 focus:border-cyan-500/50 rounded-lg p-2.5 text-xs font-mono text-slate-200 placeholder:text-slate-500 focus:outline-none transition-colors"
                   />
                 </div>
-                <div className="space-y-2">
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleAction('APPROVE', 'REROUTE')}
-                      disabled={!canApprove}
-                      title={
-                        role === 'REGULATOR'
-                          ? 'Memerlukan peran Dispatcher [Khusus Dispatcher]'
-                          : !allChecked
-                          ? 'Lengkapi 4/4 verifikasi checklist'
-                          : 'Setujui pengalihan rute armada'
-                      }
-                      className="cursor-pointer py-2.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-sans font-semibold flex items-center justify-center gap-1.5 transition-all shadow-lg shadow-emerald-950/40"
-                    >
-                      {role === 'REGULATOR' && <Lock className="w-3.5 h-3.5 shrink-0" />}
-                      <span>Setujui Pengalihan (Reroute)</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleAction('HOLD', 'HOLD')}
-                      disabled={!canHold}
-                      title={
-                        !notes.trim()
-                          ? 'Wajib mengisi catatan operator untuk aksi HOLD'
-                          : !allChecked
-                          ? 'Lengkapi 4/4 verifikasi checklist'
-                          : 'Tahan armada di buffer zone / depo'
-                      }
-                      className="cursor-pointer py-2.5 px-3 rounded-lg bg-amber-600/90 hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-sans font-semibold flex items-center justify-center gap-1.5 transition-all shadow-lg shadow-amber-950/40"
-                    >
-                      <span>Tahan Armada (Hold Fleet)</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleAction('OVERRIDE', 'CONTINUE')}
-                      disabled={!canOverride}
-                      title={
-                        role === 'REGULATOR'
-                          ? 'Memerlukan peran Dispatcher [Khusus Dispatcher]'
-                          : !notes.trim()
-                          ? 'Wajib mengisi catatan operator untuk aksi OVERRIDE'
-                          : !allChecked
-                          ? 'Lengkapi 4/4 verifikasi checklist'
-                          : 'Lanjut rute asal dengan justifikasi operator'
-                      }
-                      className="cursor-pointer py-2.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 border border-white/10 text-xs font-sans font-medium flex items-center justify-center gap-1.5 transition-all"
-                    >
-                      {role === 'REGULATOR' && <Lock className="w-3.5 h-3.5 shrink-0" />}
-                      <span>Lanjut Jalur Asal (Override)</span>
-                    </button>
-                  </div>
+                {!hasEvidence && (
+                  <p className="text-xs font-mono text-amber-300/90 leading-relaxed">
+                    Belum terverifikasi — rute simulasi/offline atau bukti belum tersedia. Approval dinonaktifkan, hanya TAHAN yang diizinkan.
+                  </p>
+                )}
+                {/* Single CTA row */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <button
                     type="button"
-                    onClick={onClose}
-                    disabled={isActing}
-                    className="cursor-pointer w-full py-2 px-3 rounded-lg bg-transparent hover:bg-white/5 disabled:opacity-40 text-slate-400 hover:text-slate-200 text-xs font-sans transition-all text-center border border-white/5"
+                    onClick={() => handleAction('APPROVE', 'REROUTE')}
+                    disabled={!canApprove}
+                    aria-label={role === 'REGULATOR' ? 'SETUJUI [Khusus Dispatcher]' : 'SETUJUI'}
+                    title={
+                      role === 'REGULATOR'
+                        ? 'Memerlukan peran Dispatcher [Khusus Dispatcher]'
+                        : !hasEvidence
+                        ? 'Belum terverifikasi — approval dinonaktifkan'
+                        : !allChecked
+                        ? 'Lengkapi 4/4 verifikasi checklist'
+                        : 'Setujui pengalihan rute armada'
+                    }
+                    className="cursor-pointer py-2.5 px-3 rounded-lg bg-cyan-500 hover:bg-cyan-400 disabled:opacity-40 disabled:cursor-not-allowed text-[#080d14] text-xs font-sans font-bold flex items-center justify-center gap-1.5 transition-all shadow-lg shadow-cyan-950/40"
                   >
-                    Batal / Tutup
+                    {role === 'REGULATOR' && <Lock className="w-3.5 h-3.5 shrink-0" />}
+                    <span>Setujui Pengalihan</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAction('HOLD', 'HOLD')}
+                    disabled={!canHold}
+                    aria-label="TAHAN"
+                    title={
+                      !notes.trim()
+                        ? 'Wajib mengisi catatan operator untuk aksi HOLD'
+                        : !allChecked
+                        ? 'Lengkapi 4/4 verifikasi checklist'
+                        : 'Tahan armada di buffer zone / depo'
+                    }
+                    className="cursor-pointer py-2.5 px-3 rounded-lg bg-amber-600/90 hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-sans font-semibold flex items-center justify-center gap-1.5 transition-all shadow-lg shadow-amber-950/40"
+                  >
+                    <span>Tahan Armada</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAction('OVERRIDE', 'CONTINUE')}
+                    disabled={!canOverride}
+                    aria-label={role === 'REGULATOR' ? 'OVERRIDE [Khusus Dispatcher]' : 'OVERRIDE'}
+                    title={
+                      role === 'REGULATOR'
+                        ? 'Memerlukan peran Dispatcher [Khusus Dispatcher]'
+                        : !hasEvidence
+                        ? 'Belum terverifikasi — approval dinonaktifkan'
+                        : !notes.trim()
+                        ? 'Wajib mengisi catatan operator untuk aksi OVERRIDE'
+                        : !allChecked
+                        ? 'Lengkapi 4/4 verifikasi checklist'
+                        : 'Lanjut rute asal dengan justifikasi operator'
+                    }
+                    className="cursor-pointer py-2.5 px-3 rounded-lg bg-[#121822] hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 border border-white/10 text-xs font-sans font-medium flex items-center justify-center gap-1.5 transition-all"
+                  >
+                    {role === 'REGULATOR' && <Lock className="w-3.5 h-3.5 shrink-0" />}
+                    <span>Lanjut Jalur Asal</span>
                   </button>
                 </div>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  disabled={isActing}
+                  className="cursor-pointer w-full py-2 px-3 rounded-lg bg-transparent hover:bg-white/5 disabled:opacity-40 text-slate-400 hover:text-slate-200 text-xs font-sans transition-all text-center border border-white/5"
+                >
+                  Batal / Tutup
+                </button>
                 {!allChecked ? (
                   <p className="text-xs font-mono text-slate-500">
                     Lengkapi 4/4 verifikasi untuk mengaktifkan tombol keputusan.
                   </p>
                 ) : !notes.trim() ? (
                   <p className="text-xs font-mono text-amber-400/80">
-                    * Catatan wajib diisi jika memilih Tahan Armada (HOLD) atau Lanjut Jalur Asal (OVERRIDE).
+                    * Catatan wajib diisi jika memilih Tahan Armada atau Lanjut Jalur Asal.
                   </p>
                 ) : null}
               </>
             )}
           </section>
 
-          {/* Prinsip Operasional 20/80 Disclaimer (PT Sawita / Socfin Compliance) */}
+          {/* Prinsip Operasional 20/80 */}
           <div className="p-3 rounded-xl bg-[#080d14] border border-white/10 text-[11px] font-sans text-slate-400 leading-relaxed space-y-1">
             <span className="font-bold text-amber-300 flex items-center gap-1.5">
               <ShieldAlert className="w-3.5 h-3.5 text-amber-400 shrink-0" />
@@ -768,7 +797,7 @@ export function RouteDetailModal({
             </button>
           )}
         </div>
- </AlertDialogContent>
- </AlertDialog>
-  );
-}
+  </AlertDialogContent>
+  </AlertDialog>
+   );
+ }

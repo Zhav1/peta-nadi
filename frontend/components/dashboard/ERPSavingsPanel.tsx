@@ -6,8 +6,6 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/lib/authContext';
 import { notifyToast } from '@/components/ui/Toast';
 import type { ERPSummaryResponse, ERPTripRow, LaporanFilters } from '@/lib/types';
-import { averageTripEconomy } from '@/lib/laporanAggregations';
-import { formatEconomyKmpl } from '@/lib/tripCostCalculator';
 import LaporanHybridPanel from '@/components/dashboard/LaporanHybridPanel';
 import LaporanAktualModal from '@/components/dashboard/LaporanAktualModal';
 import type { LaporanGranularity } from '@/components/dashboard/LaporanFilterBar';
@@ -49,7 +47,7 @@ export default function ERPSavingsPanel({ refreshKey = 0 }: ERPSavingsPanelProps
   const [aktualTrip, setAktualTrip] = useState<ERPTripRow | null>(null);
 
   const isDispatcher = role === 'DISPATCHER';
-  const disabledHint = 'Hanya peran Dispatcher yang dapat mengubah data rit.';
+  const disabledHint = 'Hanya peran Dispatcher yang dapat mengubah data Trip.';
 
   const loadSummary = useCallback(async () => {
     setIsLoading(true);
@@ -62,8 +60,8 @@ export default function ERPSavingsPanel({ refreshKey = 0 }: ERPSavingsPanelProps
       setSummary(null);
       setError(
         err instanceof Error
-          ? `Gagal memuat ringkasan ERP (${err.message}).`
-          : 'Gagal memuat ringkasan ERP.'
+          ? `Gagal memuat laporan (${err.message}).`
+          : 'Gagal memuat laporan.'
       );
     } finally {
       setIsLoading(false);
@@ -88,8 +86,10 @@ export default function ERPSavingsPanel({ refreshKey = 0 }: ERPSavingsPanelProps
 
   const isAggregateOnly = summary?.scope === 'REGULATOR_AGGREGATE';
 
-  const economyAvg = useMemo(() => averageTripEconomy(summary?.trips ?? []), [summary?.trips]);
-
+  // M8 Phase 5 (legacy, hidden from table): standalone hedging kept for E2E
+  // compat — the visible 'Selesaikan Trip' flow now chains
+  // updateTravel -> solveTravelHedging inside LaporanAktualModal.
+  // Do not delete this export/handler.
   const handleSolveHedging = async (travelId: string) => {
     if (!isDispatcher) {
       notifyToast({ message: 'Aksi ditolak (403): hedging hanya untuk Dispatcher.', type: 'error' });
@@ -103,8 +103,8 @@ export default function ERPSavingsPanel({ refreshKey = 0 }: ERPSavingsPanelProps
     } catch (err: unknown) {
       const message =
         err instanceof Error
-          ? `Gagal menghitung hedging rit ${travelId} (${err.message}).`
-          : `Gagal menghitung hedging rit ${travelId}.`;
+          ? `Gagal menghitung hedging Trip ${travelId} (${err.message}).`
+          : `Gagal menghitung hedging Trip ${travelId}.`;
       setError(message);
       if (err instanceof Error && /403/.test(err.message)) {
         notifyToast({ message: 'Aksi ditolak (403): hedging hanya untuk Dispatcher.', type: 'error' });
@@ -113,6 +113,18 @@ export default function ERPSavingsPanel({ refreshKey = 0 }: ERPSavingsPanelProps
       setSolvingTripId(null);
     }
   };
+
+  // M8 Phase 5: single 'Selesaikan Trip' entry — Dispatcher-only.
+  const handleOpenAktual = useCallback(
+    (trip: ERPTripRow) => {
+      if (!isDispatcher) {
+        notifyToast({ message: 'Aksi ditolak (403): Selesaikan Trip hanya untuk Dispatcher.', type: 'error' });
+        return;
+      }
+      setAktualTrip(trip);
+    },
+    [isDispatcher]
+  );
 
   return (
     <div className="w-full flex flex-col gap-5">
@@ -124,7 +136,7 @@ export default function ERPSavingsPanel({ refreshKey = 0 }: ERPSavingsPanelProps
           </div>
           <div>
             <h2 className="font-headline font-semibold text-base text-white tracking-wide">
-              ERP Penghematan Logistik
+              Laporan Penghematan Operasional
             </h2>
             {/* M8 Phase 1: verbose subtitle removed (was: Rekonsiliasi biaya per rit...).
                 Ledger detail tetap tersedia pada tabel rincian per rit di bawah. */}
@@ -155,25 +167,17 @@ export default function ERPSavingsPanel({ refreshKey = 0 }: ERPSavingsPanelProps
       )}
 
       {isAggregateOnly && (
-        <div className="p-3 rounded-lg bg-amber-950/20 border border-amber-500/25 text-xs text-amber-200/90 flex items-start gap-2">
+        <div
+          className="p-3 rounded-lg bg-amber-950/20 border border-amber-500/25 text-xs text-amber-200/90 flex items-start gap-2"
+          title="Tampilan Regulator hanya memuat agregat tenant. Rincian komersial per Trip tidak ditampilkan pada peran pengawas."
+        >
           <Scale className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-          <span>
-            Tampilan Regulator hanya memuat agregat tenant. Rincian komersial per rit tidak ditampilkan pada peran
-            pengawas.
-          </span>
+          <span>Agregat saja untuk pengawas.</span>
         </div>
       )}
 
       {/* M8 Phase 2: hybrid composition (KPI strip + FilterBar + Charts +
           tier/period tables + rincian + ledger) */}
-      {!isAggregateOnly && summary && economyAvg.measuredCount > 0 && (
-        <div className="px-4 py-2.5 rounded-xl bg-[#0c1017] border border-white/10 text-xs text-slate-400 tabular-nums">
-          Rata-rata ekonomi armada:{' '}
-          <strong className="text-slate-200">{formatEconomyKmpl(economyAvg.avgKmpl)}</strong>{' '}
-          ({economyAvg.measuredCount} rit terukur
-          {economyAvg.unmeasuredCount > 0 && ` • ${economyAvg.unmeasuredCount} rit belum diinput dikecualikan`})
-        </div>
-      )}
       <LaporanHybridPanel
         summary={summary}
         isLoading={isLoading}
@@ -187,7 +191,7 @@ export default function ERPSavingsPanel({ refreshKey = 0 }: ERPSavingsPanelProps
         disabledHint={disabledHint}
         solvingTripId={solvingTripId}
         onSolveHedging={handleSolveHedging}
-        onOpenAktual={setAktualTrip}
+        onOpenAktual={handleOpenAktual}
         onReload={loadSummary}
       />
 
@@ -203,7 +207,7 @@ export default function ERPSavingsPanel({ refreshKey = 0 }: ERPSavingsPanelProps
               <TableHeader>
                 <TableRow>
                   <TableHead className="h-11 bg-[#0c1017] font-medium">Tenant</TableHead>
-                  <TableHead className="h-11 bg-[#0c1017] text-right font-medium">Rit</TableHead>
+                  <TableHead className="h-11 bg-[#0c1017] text-right font-medium">Trip</TableHead>
                   <TableHead className="h-11 bg-[#0c1017] text-right font-medium">Sukses</TableHead>
                   <TableHead className="h-11 bg-[#0c1017] text-right font-medium">Gagal</TableHead>
                   <TableHead className="h-11 bg-[#0c1017] text-right font-medium">Waktu hemat</TableHead>

@@ -386,65 +386,11 @@ export default function EvaluationSection({
 
   return (
     <div className="w-full min-h-full flex flex-col gap-6">
-      {/* Sub-Tab Navigation Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-1 bg-[#0c1017] border border-white/10 rounded-lg p-1 shrink-0 w-fit">
-          <button
-            type="button"
-            onClick={() => setActiveSubTab('benchmarks')}
-            className={`px-3.5 py-1.5 rounded-md text-xs font-medium transition cursor-pointer whitespace-nowrap ${
-              activeSubTab === 'benchmarks'
-                ? 'bg-white text-[#080d14] font-semibold'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
-            }`}
-          >
-            {/* PHASE3: count "Model (X Uji)" disembunyi dari default view — tab disederhanakan jadi "Tolok Ukur". */}
-            {/* Tolok Ukur Model ({testMatrix?.total_tests || 133} Uji) */}
-            Tolok Ukur
-          </button>
-          {/* PHASE2: commented per spec — tombol Diagnostik API & Observabilitas disembunyi dari default view. File SystemObservabilitySection.tsx untouched.
-          <button
-            type="button"
-            onClick={() => setActiveSubTab('observability')}
-            className={`cursor-pointer px-4 py-2 rounded-lg transition font-medium ${
-              activeSubTab === 'observability'
-                ? 'bg-white text-[#080d14] font-semibold'
-                : 'text-slate-400 hover:text-white hover:bg-white/5'
-            }`}
-          >
-            Diagnostik API & Observabilitas
-          </button>
-          */}
-        </div>
-
-        {activeSubTab === 'benchmarks' && (
-          <div className="flex items-center gap-2">
-            {/* PHASE2: "terakhir sinkron" disembunyi per spec (dispatcher: hanya angka keputusan)
-            {lastRefreshed && (
-              <span className="text-xs text-slate-400 hidden md:inline">
-                Sinkronisasi: <strong className="text-slate-200">{lastRefreshed}</strong>
-              </span>
-            )}
-            */}
-            <button
-              type="button"
-              onClick={loadAllEvaluationData}
-              disabled={isLoading}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-transparent hover:bg-white/5 text-slate-200 border border-white/10 transition disabled:opacity-50 cursor-pointer text-xs font-medium"
-            >
-              <RotateCcw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-              <span>Muat Ulang</span>
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* PHASE2: commented per spec — mount Diagnostik disembunyi, SystemObservabilitySection.tsx untouched.
-      {activeSubTab === 'observability' ? (
-        <SystemObservabilitySection />
-      ) : (
-      */}
-        <>
+      {/* REMOVED per user request 2026-10-26: sub-tab button row above Evaluasi title
+          (Tolok Ukur button + commented Diagnostik + top "Muat Ulang").
+          Refresh dipindah ke tombol kecil di header judul di bawah agar fungsi tetap ada.
+          showLive/versionSel logic untouched. */}
+      <>
           {/* PHASE2 distilled: N valid + Status keputusan (pengganti badge baseline/live verbose) */}
           {/* PHASE3: distilled bar N valid + Status disembunyi dari default view — Status tetap di collapsed "Data apa yang diuji?".
           <div className="bg-[#0c1017] border border-white/10 rounded-xl px-5 py-3 shadow-xl flex flex-wrap items-center gap-x-4 gap-y-1 text-xs tabular-nums">
@@ -524,13 +470,44 @@ export default function EvaluationSection({
                   Bukti empiris keandalan model kecerdasan logistik PreHub berdasarkan dataset ground truth sintetis Sumatra (N={report?.total_scenarios ?? '–'}), pengujian otomatis, dan kalibrasi probabilitas. Angka live operasional ditampilkan terpisah bila N≥{LIVE_MIN_N}.
                 </p>
                 */}
-                <p className="text-xs text-slate-400 font-sans mt-0.5">
-                  Ringkasan angka validasi model.
-                </p>
+                <div className="mt-0.5 flex flex-wrap items-center gap-2">
+                  <p className="text-xs text-slate-400 font-sans">
+                    Ringkasan angka validasi model.
+                  </p>
+                  {!showLive && (
+                    <span
+                      className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-500/15 text-slate-300 border border-white/10 text-[11px] font-medium"
+                      title="Metrik batch dari ground-truth sintetis Sumatra (data/benchmark/sumatra_disruptions_ground_truth.json, N=60) — bukan data live operasional. Agregat live tampil bila N≥10."
+                    >
+                      Simulasi N=60 — bukan data live
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
+            <button
+              type="button"
+              onClick={loadAllEvaluationData}
+              disabled={isLoading}
+              title="Muat ulang data evaluasi"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-transparent hover:bg-white/5 text-slate-200 border border-white/10 transition disabled:opacity-50 cursor-pointer text-xs font-medium self-start md:self-center shrink-0"
+            >
+              <RotateCcw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+              <span>Muat Ulang</span>
+            </button>
           </div>
 
+          {/* Label batch sintetis — tampil hanya saat metrik batch (bukan live) dirender */}
+          {!showLive && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-500/15 text-slate-300 border border-white/10 text-[11px] font-medium"
+                title="KPI Presisi/Sensitivitas/F1/Brier dari ground-truth sintetis Sumatra (data/benchmark/sumatra_disruptions_ground_truth.json, N=60) — bukan data live operasional."
+              >
+                Simulasi N=60 — bukan data live
+              </span>
+            </div>
+          )}
           {/* 4 Empirical Benchmark KPI Cards (Presisi / Sensitivitas / F1 / Brier) — Laporan hybrid strip */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-white/10 border border-white/10 rounded-xl overflow-hidden">
             {/* Metric 1: Precision */}
@@ -608,6 +585,16 @@ export default function EvaluationSection({
             <div className="pt-3 mt-3 border-t border-white/10 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs tabular-nums">
               <div className="p-3 rounded-lg bg-white/[0.02] border border-white/10 space-y-1.5 text-slate-300">
                 <p className="text-[11px] font-sans font-bold text-slate-200 uppercase tracking-wider">Dataset & keputusan</p>
+                {!showLive && (
+                  <p>
+                    <span
+                      className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-500/15 text-slate-300 border border-white/10 text-[11px] font-medium normal-case tracking-normal"
+                      title="Rincian batch dari ground-truth sintetis Sumatra (data/benchmark/sumatra_disruptions_ground_truth.json, N=60) — bukan data live operasional."
+                    >
+                      Simulasi N=60 — bukan data live
+                    </span>
+                  </p>
+                )}
                 <p>N = {report?.total_scenarios ?? 60} skenario · Status: {report ? (report.gating_passed ? 'LULUS' : 'BELUM') : 'Belum dihitung'}</p>
                 <p>Matriks konfusi: TP {cm?.true_positives ?? '–'} / FP {cm?.false_positives ?? '–'} / TN {cm?.true_negatives ?? '–'} / FN {cm?.false_negatives ?? '–'}</p>
                 <p>Ambang: Presisi &gt; {(thresholds?.min_precision ?? 0.85).toFixed(2)} · Sensitivitas &gt; {(thresholds?.min_recall ?? 0.80).toFixed(2)} · F1 &gt; {(thresholds?.min_f1 ?? 0.82).toFixed(3)} · Brier ≤ {(thresholds?.max_brier_score ?? 0.10).toFixed(3)}</p>
@@ -981,7 +968,7 @@ export default function EvaluationSection({
               </table>
             </div>
           </div>
-        </>
+      </>
       {/* PHASE2: penutup ternary observability dikomentari per spec — selalu tampilkan benchmarks
       )}
       */}

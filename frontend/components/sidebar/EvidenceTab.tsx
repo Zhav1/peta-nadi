@@ -167,7 +167,7 @@ export function EvidenceTab({ crisis }: EvidenceTabProps) {
  )}
  {crisis.tier_reason && (
  <p className="text-xs text-slate-300 leading-relaxed font-sans">
- <span className="text-slate-400 font-mono text-xs block">Mengapa zona ini diklasifikasikan {isForecast ? 'Prakiraan (belum terkonfirmasi)' : crisis.zone_tier === 'RED_CONFIRMED' ? 'Merah' : 'Kuning'} oleh LLM</span>
+ <span className="text-slate-400 font-mono text-xs block">Alasan klasifikasi</span>
  {crisis.tier_reason}
  </p>
  )}

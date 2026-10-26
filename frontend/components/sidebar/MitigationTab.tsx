@@ -178,7 +178,7 @@ function RouteCard({
  ? 'border-white/5 bg-slate-900/40 opacity-75 hover:opacity-100'
  : isActive
  ? 'border-cyan-400/80 bg-cyan-950/30 ring-2 ring-cyan-400/40'
- : 'border-white/10 bg-slate-800/40 hover:border-white/20';
+ : 'border-white/10 bg-[#121822] hover:border-cyan-500/30';
 
  const titleText =
  route.route_name ||
@@ -217,7 +217,7 @@ function RouteCard({
  <div
  id={`route-option-${idx}`}
  onClick={onSelect}
- className={`w-full text-left p-3.5 rounded-xl border transition-all cursor-pointer ${cardBorderColor}`}
+ className={`wm-route-rise w-full text-left p-3.5 rounded-xl border transition-all cursor-pointer ${cardBorderColor}`}
  >
  <div className="flex justify-between items-start mb-1.5 gap-2">
  <span className="text-xs font-bold text-slate-100 flex items-center gap-1.5">
@@ -608,7 +608,7 @@ function RouteCard({
  className={`py-2 px-2.5 rounded-md text-xs font-semibold transition-colors shadow-sm flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
  isHoldStaging
  ? 'bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold'
- : 'bg-white hover:bg-slate-200 text-[#080d14]'
+ : 'bg-cyan-500 hover:bg-cyan-400 text-[#080d14]'
  }`}
  title={
  approveLocked
@@ -941,7 +941,7 @@ export function MitigationTab({
  const inflationCommodity = crisis.inflation_forecast?.commodity;
 
  return (
- <div className="flex flex-col gap-4 text-slate-100">
+ <div className="flex flex-col gap-4 text-slate-100"><style>{`@keyframes wm-route-rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}.wm-route-rise{animation:wm-route-rise .22s ease both}`}</style>
  {/* Phase 77: sandbox notice — local-only preview, zero server POST */}
  {sandboxNote && (
  <div className="bg-amber-950/30 border border-amber-500/40 p-3 rounded-md text-xs font-sans text-amber-200 leading-relaxed">

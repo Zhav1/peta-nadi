@@ -349,14 +349,14 @@ export function FleetOnboardingModal({
  setWizardStep(2);
  setFeedback({
  type: 'success',
- message: `Aset truk ${saved.truck_id} tersimpan. Lanjut membuat rit pertama.`,
+ message: `Aset truk ${saved.truck_id} tersimpan. Lanjut membuat Trip pertama.`,
  });
  } catch (err: unknown) {
  const msg = err instanceof Error ? err.message : '';
  setFeedback({
  type: 'error',
  message: msg.includes('409')
- ? `Nomor polisi ${truckForm.truck_id} sudah terdaftar pada tenant lain. Gunakan ID berbeda.`
+ ? `Nomor polisi ${truckForm.truck_id} sudah terdaftar pada perusahaan lain. Gunakan ID berbeda.`
  : msg || 'Gagal menyimpan aset truk.',
  });
  } finally {
@@ -370,7 +370,7 @@ export function FleetOnboardingModal({
  if (!isDispatcher) {
  setFeedback({
  type: 'error',
- message: 'Wewenang ditolak: pembuatan rit hanya dapat dilakukan oleh Dispatcher.',
+ message: 'Wewenang ditolak: pembuatan Trip hanya dapat dilakukan oleh Dispatcher.',
  });
  return;
  }
@@ -405,7 +405,7 @@ export function FleetOnboardingModal({
  });
  setFeedback({
  type: 'success',
- message: `Rit ${created.id} (${created.truck_id}) tersimpan. Baseline Rp ${Math.round(
+ message: `Trip ${created.id} (${created.truck_id}) tersimpan. Baseline Rp ${Math.round(
  created.baseline_cost_idr
  ).toLocaleString('id-ID')} • penghematan tercatat saat hasil aktual diisi.`,
  });
@@ -414,7 +414,7 @@ export function FleetOnboardingModal({
  } catch (err: unknown) {
  setFeedback({
  type: 'error',
- message: err instanceof Error ? err.message : 'Gagal membuat rit.',
+ message: err instanceof Error ? err.message : 'Gagal membuat Trip.',
  });
  } finally {
  setIsSubmitting(false);
@@ -510,7 +510,7 @@ export function FleetOnboardingModal({
  Tambah armada
  </AlertDialogTitle>
  <AlertDialogDescription className="text-xs text-slate-400">
- Daftarkan truk, lalu buat rit
+ Daftarkan truk, lalu buat Trip
  </AlertDialogDescription>
  </div>
  </div>
@@ -588,7 +588,7 @@ export function FleetOnboardingModal({
  <div className="flex items-center gap-2">
  {[
  { step: 1 as const, label: 'Armada', hint: 'Sekali daftar' },
- { step: 2 as const, label: 'Rit', hint: 'Per rit' },
+ { step: 2 as const, label: 'Trip', hint: 'Per Trip' },
  ].map((item) => (
  <React.Fragment key={item.step}>
  <button
@@ -622,7 +622,7 @@ export function FleetOnboardingModal({
  <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
  <span>
  Aset truk adalah data master (nopol, VIN, golongan BPJT, pengemudi, perusahaan). Data ini
- dipakai ulang oleh semua rit sehingga tidak perlu diinput berulang.
+ dipakai ulang oleh semua Trip sehingga tidak perlu diinput berulang.
  </span>
  </div>
 
@@ -788,7 +788,7 @@ export function FleetOnboardingModal({
 
  <div className="pt-3 border-t border-[#1c2432] flex justify-between items-center gap-3">
  <span className="text-xs text-slate-500 font-mono tabular-nums">
- {companyId ? `Tenant: ${companyId}` : 'Tenant: mengikuti sesi login'}
+ {companyId ? `Perusahaan: ${companyId}` : 'Perusahaan: mengikuti sesi login'}
  </span>
  <button
  type="submit"
@@ -1222,7 +1222,7 @@ export function FleetOnboardingModal({
  className="flex items-center gap-2 px-5 py-2 text-xs font-semibold rounded-md bg-white hover:bg-slate-200 text-[#080d14] shadow-sm transition-colors cursor-pointer disabled:opacity-50"
  >
  {isSubmitting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <PlusCircle className="w-3.5 h-3.5" />}
- <span>Buat rit</span>
+ <span>Buat Trip</span>
  </button>
  </div>
  </form>

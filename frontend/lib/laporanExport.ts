@@ -268,8 +268,8 @@ export function printLaporanPDF(ctx: LaporanExportContext): boolean {
           .join('')
       : `<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:24px;">${
           isAggregateOnly
-            ? 'Rincian per rit disembunyikan pada peran pengawas (agregat saja).'
-            : 'Tidak ada rit yang cocok dengan filter ini.'
+            ? 'Rincian per Trip disembunyikan pada peran pengawas (agregat saja).'
+            : 'Tidak ada Trip yang cocok dengan filter ini.'
         }</td></tr>`;
 
   const html = `<!DOCTYPE html><html><head><title>PreHub Laporan Penghematan Logistik</title><style>
@@ -290,15 +290,15 @@ export function printLaporanPDF(ctx: LaporanExportContext): boolean {
   @media print{body{padding:20px;}}
   </style></head><body>
   <div class="header"><h1 class="title">PreHub Laporan Penghematan Logistik</h1>
-  <div class="subtitle">Ringkasan hemat bersih per rit terverifikasi (negatif = kerugian tercatat)</div>
+  <div class="subtitle">Ringkasan hemat bersih per Trip terverifikasi (negatif = kerugian tercatat)</div>
   <div class="meta">Diterbitkan: ${timestamp} • Dihitung: ${escapeLaporanHtml(summary?.generated_at ?? '—')}</div></div>
   <div class="kpi-grid">
-    <div class="kpi-card"><div class="kpi-label">Total rit</div><div class="kpi-value">${totals?.total_trips ?? 0}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Total Trip</div><div class="kpi-value">${totals?.total_trips ?? 0}</div></div>
     <div class="kpi-card"><div class="kpi-label">Biaya hemat</div><div class="kpi-value">${escapeLaporanHtml(formatIDR(totals?.cost_saved_idr))}</div></div>
-    <div class="kpi-card"><div class="kpi-label">Rit gagal</div><div class="kpi-value">${totals?.failed_trips ?? 0}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Trip gagal</div><div class="kpi-value">${totals?.failed_trips ?? 0}</div></div>
   </div>
   <div class="filter-badge">Filter Aktif: ${badge}</div>
-  <table class="table"><thead><tr><th>ID rit</th><th>Truk</th><th>Rute</th><th>Ekonomi</th><th>SK / Reefer</th><th style="text-align:right;">Hemat</th></tr></thead><tbody>${tripRows}</tbody></table>
+  <table class="table"><thead><tr><th>ID Trip</th><th>Truk</th><th>Rute</th><th>Ekonomi</th><th>SK / Reefer</th><th style="text-align:right;">Hemat</th></tr></thead><tbody>${tripRows}</tbody></table>
   <div class="footer">Laporan Penghematan Logistik • PreHub • Nilai negatif ditampilkan sebagai kerugian aktual</div>
   </body></html>`;
 

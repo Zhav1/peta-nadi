@@ -8,6 +8,17 @@ import app.db.supabase_client as sb_client_module
 client = TestClient(app)
 
 
+@pytest.fixture(autouse=True)
+def _isolate_commodity_cache():
+    """Phase 5: the 60s prices/spikes cache must not leak across tests
+    (live-data tests run before mock-data tests in this file)."""
+    from app.routers.commodity_router import clear_commodity_cache
+
+    clear_commodity_cache()
+    yield
+    clear_commodity_cache()
+
+
 @pytest.mark.asyncio
 async def test_get_commodity_prices_aggregate_distinct_dates():
     """

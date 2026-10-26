@@ -372,15 +372,51 @@ def get_travel(travel_id: str) -> Optional[Dict[str, Any]]:
     return _row_to_travel(rows[0]) if rows else None
 
 
+# Lightweight column projection for list/aggregate paths (Phase 5 perf).
+# Full rows carry heavy JSONB (origin_coords, dest_coords, toll segments,
+# hedging) that the ERP aggregate and regulator views never need — selecting
+# only these keeps list payloads small. `include_trips=False` callers
+# (REGULATOR_AGGREGATE) must use this projection.
+_TRAVEL_LIGHT_COLUMNS = (
+    "id, truck_id, truck_name, company_id, driver_name, origin_name, "
+    "destination_name, commodity_key, cargo_tonnage, cargo_value_idr, "
+    "sla_deadline_hours, baseline_cost_idr, baseline_time_hours, "
+    "actual_cost_idr, actual_time_hours, actual_recorded, "
+    "saved_time_hours, saved_fuel_liters, saved_cost_idr, saved_fuel_cost_idr, "
+    "saved_toll_idr, saved_spoilage_idr, saved_labor_idr, efficiency_pct, "
+    "rerouted, disruption_id, status, hedging_policy, "
+    "hedging_net_savings_idr, created_at, updated_at, delivered_at"
+)
+
+# Numeric-only projection for server-side ERP aggregation (Phase 5 perf):
+# no names, no timestamps, no JSONB — just the SUM/COUNT inputs.
+_TRAVEL_NUMERIC_COLUMNS = (
+    "company_id, status, rerouted, saved_cost_idr, baseline_cost_idr, "
+    "actual_cost_idr, saved_time_hours, saved_fuel_liters, saved_fuel_cost_idr, "
+    "saved_toll_idr, saved_spoilage_idr, saved_labor_idr, "
+    "sla_deadline_hours, actual_time_hours"
+)
+
+
 def list_travels(
     company_id: Optional[str] = None,
     status: Optional[str] = None,
     truck_id: Optional[str] = None,
     limit: int = 500,
+    include_trips: bool = True,
 ) -> List[Dict[str, Any]]:
-    """List rits newest first, filtered by tenant / status / truck."""
+    """List rits newest first, filtered by tenant / status / truck.
+
+    `include_trips=False` selects only the light (non-JSONB) columns — for
+    aggregate callers that never need coords/toll-segment/hedging payloads.
+    Ordered by the composite (company_id, created_at desc) hint so the
+    `idx_travels_company_created` index serves tenant-scoped lists.
+    """
     sb = _read_client()
-    q = sb.table("travels").select("*").order("created_at", desc=True).limit(limit)
+    cols = "*" if include_trips else _TRAVEL_LIGHT_COLUMNS
+    # Composite order hint (company_id, created_at desc) matches the
+    # migration-022 composite index; tenant lists become an index range scan.
+    q = sb.table("travels").select(cols).order("company_id").order("created_at", desc=True).limit(limit)
     if company_id:
         q = q.eq("company_id", company_id)
     if status:
@@ -389,6 +425,47 @@ def list_travels(
         q = q.ilike("truck_id", truck_id)
     resp = q.execute()
     return [_row_to_travel(r) for r in (resp.data or [])]
+
+
+def count_travels(
+    company_id: Optional[str] = None,
+    status: Optional[str] = None,
+) -> int:
+    """Exact COUNT(*) for the ledger (used for ERP total + limit windows)."""
+    sb = _read_client()
+    try:
+        q = sb.table("travels").select("id", count="exact").limit(1)
+        if company_id:
+            q = q.eq("company_id", company_id)
+        if status:
+            q = q.eq("status", status)
+        resp = q.execute()
+        total = getattr(resp, "count", None)
+        if isinstance(total, int):
+            return total
+        return len(resp.data or [])
+    except Exception as exc:
+        logger.warning("Supabase travels count failed: %s", exc)
+        return -1
+
+
+def list_travels_numeric(
+    company_id: Optional[str] = None,
+    limit: int = 1000,
+) -> List[Dict[str, Any]]:
+    """Numeric-only projection for ERP aggregation (no JSONB, no names)."""
+    sb = _read_client()
+    q = (
+        sb.table("travels")
+        .select(_TRAVEL_NUMERIC_COLUMNS)
+        .order("company_id")
+        .order("created_at", desc=True)
+        .limit(limit)
+    )
+    if company_id:
+        q = q.eq("company_id", company_id)
+    resp = q.execute()
+    return list(resp.data or [])
 
 
 def delete_travel(travel_id: str) -> bool:

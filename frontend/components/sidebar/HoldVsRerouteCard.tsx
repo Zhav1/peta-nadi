@@ -26,7 +26,7 @@ export function HoldVsRerouteCard({
  economics,
  onApplyTactical,
  selectedAction,
-}: HoldVsRerouteEconomicsCardProps) {
+}: HoldVsRerouteCardProps) {
  const isHoldRecommended = economics.recommended_action === 'HOLD';
 
  const money = (value?: number | null) =>
