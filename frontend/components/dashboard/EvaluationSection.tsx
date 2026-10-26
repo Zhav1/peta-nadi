@@ -208,7 +208,7 @@ export default function EvaluationSection({
   selectedCrisis,
   activeRoutes
 }: EvaluationSectionProps) {
-  const [activeSubTab, setActiveSubTab] = useState<'benchmarks' | 'observability'>('benchmarks');
+  const [activeSubTab, setActiveSubTab] = useState<'internal' | 'aktual'>('internal');
   const [report, setReport] = useState<BenchmarkReportResponse | null>(null);
   const [testMatrix, setTestMatrix] = useState<TestMatrixResponse | null>(null);
   const [efficiency, setEfficiency] = useState<CorridorEfficiencyResponse | null>(null);
@@ -216,8 +216,8 @@ export default function EvaluationSection({
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [lastRefreshed, setLastRefreshed] = useState<string>('');
 
-  // WS2 batch-vs-live version selector (null = follow backend mode_recommendation)
-  const [versionSel, setVersionSel] = useState<'batch' | 'live' | null>(null);
+  // WS2: tab "Internal Skenario" memaksa batch, tab "Aktual" memaksa live
+  // (pemilih versi manual lama dihapus — seleksi via switcher internal).
   // Static report copy (/data/*.json) for per-scenario verification + hash check
   const [staticReport, setStaticReport] = useState<StaticReportFile | null>(null);
   const [fileState, setFileState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
@@ -335,32 +335,43 @@ export default function EvaluationSection({
   const ext = report as BenchmarkReportExtended | null;
   const live: LiveAggregate | null = ext?.live ?? null;
   const liveSufficient = live?.sufficient === true && !!live?.metrics && !!live?.calibration;
-  const effectiveVersion: 'batch' | 'live' =
-    versionSel ?? (ext?.mode_recommendation === 'live' && liveSufficient ? 'live' : 'batch');
-  const showLive = effectiveVersion === 'live' && liveSufficient;
-  // Default view = live when live sufficient (N>=10), else batch.
-  // mode drives badge gating: Simulasi only in batch, Live N=X only in live.
-  const mode: 'batch' | 'live' = showLive ? 'live' : 'batch';
 
-  const dispMetrics = showLive ? live!.metrics! : report?.metrics ?? null;
-  const dispCalib = showLive ? live!.calibration ?? null : report?.calibration ?? null;
-  const dispCM = showLive ? live!.confusion_matrix ?? null : report?.confusion_matrix ?? null;
-  const dispN = showLive ? live!.n ?? outcomes.length : report?.total_scenarios ?? 60;
-  const dispBins = useMemo(() => {
-    const b = dispCalib?.reliability_bins;
+  // Tab A "Internal Skenario": read-only batch (report.*, N=60) — rumus 1:1.
+  const batchMetrics = report?.metrics ?? null;
+  const batchCalib = report?.calibration ?? null;
+  const batchCM = report?.confusion_matrix ?? null;
+  const batchN = report?.total_scenarios ?? 60;
+  const batchBins = useMemo(() => {
+    const b = batchCalib?.reliability_bins;
     return Array.isArray(b) ? b : [];
-  }, [dispCalib]);
+  }, [batchCalib]);
+  const batchPrecision = batchMetrics?.precision ?? null;
+  const batchRecall = batchMetrics?.recall ?? null;
+  const batchF1 = batchMetrics?.f1_score ?? null;
+  const batchBrier = batchCalib?.brier_score ?? null;
+  const batchEce = batchCalib?.expected_calibration_error ?? null;
+  const batchPlatt = batchCalib?.platt_calibrated_brier ?? null;
+  const batchRawBrier: number | null =
+    (batchCalib as { raw_brier_score?: number } | null)?.raw_brier_score ?? null;
 
-  const precision = dispMetrics?.precision ?? null;
-  const recall = dispMetrics?.recall ?? null;
-  const f1Score = dispMetrics?.f1_score ?? null;
-  const brierScore = dispCalib?.brier_score ?? null;
-  const ece = dispCalib?.expected_calibration_error ?? null;
-  const plattBrier = dispCalib?.platt_calibrated_brier ?? null;
-  const rawBrierApi: number | null =
-    (dispCalib as { raw_brier_score?: number } | null)?.raw_brier_score ?? null;
-  const latencyMs = dispMetrics?.mean_latency_ms ?? null;
-  const cm = dispCM;
+  // Tab B "Aktual": agregat live (report.live.*, N) — rumus 1:1.
+  const liveMetrics = live?.metrics ?? null;
+  const liveCalib = live?.calibration ?? null;
+  const liveCM = live?.confusion_matrix ?? null;
+  const liveN = live?.n ?? outcomes.length;
+  const liveBins = useMemo(() => {
+    const b = liveCalib?.reliability_bins;
+    return Array.isArray(b) ? b : [];
+  }, [liveCalib]);
+  const livePrecision = liveMetrics?.precision ?? null;
+  const liveRecall = liveMetrics?.recall ?? null;
+  const liveF1 = liveMetrics?.f1_score ?? null;
+  const liveBrier = liveCalib?.brier_score ?? null;
+  const liveEce = liveCalib?.expected_calibration_error ?? null;
+  const livePlatt = liveCalib?.platt_calibrated_brier ?? null;
+  const liveRawBrier: number | null =
+    (liveCalib as { raw_brier_score?: number } | null)?.raw_brier_score ?? null;
+
   const thresholds = report?.thresholds ?? null;
 
   const scenRows = useMemo(() => staticReport?.scenario_details ?? [], [staticReport]);
@@ -475,23 +486,8 @@ export default function EvaluationSection({
                 */}
                 <div className="mt-0.5 flex flex-wrap items-center gap-2">
                   <p className="text-xs text-slate-400 font-sans">
-                    Ringkasan angka validasi model.
+                    Ringkasan angka validasi model — pilih simulasi internal atau agregat aktual di bawah.
                   </p>
-                  {mode === 'batch' ? (
-                    <span
-                      className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-500/15 text-slate-300 border border-white/10 text-[11px] font-medium"
-                      title="Metrik batch dari ground-truth sintetis Sumatra (data/benchmark/sumatra_disruptions_ground_truth.json, N=60) — bukan data live operasional. Agregat live tampil bila N≥10."
-                    >
-                      Simulasi N=60 — bukan data live
-                    </span>
-                  ) : (
-                    <span
-                      className="inline-flex items-center px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[11px] font-medium"
-                      title={`Agregat live operasional kumulatif N=${dispN} — metrik live, bukan simulasi.`}
-                    >
-                      Live N={dispN}
-                    </span>
-                  )}
                 </div>
               </div>
             </div>
@@ -507,33 +503,48 @@ export default function EvaluationSection({
             </button>
           </div>
 
-          {/* Label batch sintetis — tampil hanya saat mode==batch (live insufficient) */}
-          {mode === 'batch' ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <span
-                className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-500/15 text-slate-300 border border-white/10 text-[11px] font-medium"
-                title="KPI Presisi/Sensitivitas/F1/Brier dari ground-truth sintetis Sumatra (data/benchmark/sumatra_disruptions_ground_truth.json, N=60) — bukan data live operasional."
-              >
-                Simulasi N=60 — bukan data live
-              </span>
-            </div>
-          ) : (
-            <div className="flex flex-wrap items-center gap-2">
-              <span
-                className="inline-flex items-center px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[11px] font-medium"
-                title={`KPI Presisi/Sensitivitas/F1/Brier dari agregat live operasional N=${dispN} — bukan simulasi.`}
-              >
-                Live N={dispN}
-              </span>
-            </div>
-          )}
-          {/* 4 Empirical Benchmark KPI Cards (Presisi / Sensitivitas / F1 / Brier) — Laporan hybrid strip */}
+          {/* Internal switcher: Internal Skenario (batch read-only) vs Aktual (live) */}
+          <div role="tablist" aria-label="Jenis evaluasi" className="flex items-center gap-1 bg-[#0c1017] p-1 rounded-lg border border-white/10 w-fit">
+            <button
+              type="button"
+              role="tab"
+              data-testid="eval-tab-skenario"
+              aria-selected={activeSubTab === 'internal'}
+              onClick={() => setActiveSubTab('internal')}
+              className={`px-3.5 py-1.5 rounded-md text-xs font-medium transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 ${activeSubTab === 'internal' ? 'bg-white text-[#080d14] font-semibold' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}`}
+            >
+              Internal Skenario
+            </button>
+            <button
+              type="button"
+              role="tab"
+              data-testid="eval-tab-aktual"
+              aria-selected={activeSubTab === 'aktual'}
+              onClick={() => setActiveSubTab('aktual')}
+              className={`px-3.5 py-1.5 rounded-md text-xs font-medium transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 ${activeSubTab === 'aktual' ? 'bg-white text-[#080d14] font-semibold' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}`}
+            >
+              Aktual
+            </button>
+          </div>
+
+          {activeSubTab === 'internal' ? (
+          <>
+          {/* Tab A "Internal Skenario" — read-only simulasi batch. Tanpa tulis outcomes. */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-500/15 text-slate-300 border border-white/10 text-[11px] font-medium"
+              title="KPI Presisi/Sensitivitas/F1/Brier dari ground-truth sintetis Sumatra (data/benchmark/sumatra_disruptions_ground_truth.json, N=60) — bukan data live operasional."
+            >
+              Simulasi N=60 — bukan data live
+            </span>
+          </div>
+          {/* 4 Empirical Benchmark KPI Cards (Presisi / Sensitivitas / F1 / Brier) — batch */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-white/10 border border-white/10 rounded-xl overflow-hidden">
             {/* Metric 1: Precision */}
             <div className="bg-[#0c1017] p-3.5">
               <span className="text-xs font-medium text-slate-400 block mb-1">Presisi deteksi {/* PHASE3: <span className="text-slate-500">({versionTag})</span> disembunyi dari default view */}</span>
-              {precision !== null ? (
-                <p className="text-2xl font-bold text-white tabular-nums">{(precision * 100).toFixed(1)}%</p>
+              {batchPrecision !== null ? (
+                <p className="text-2xl font-bold text-white tabular-nums">{(batchPrecision * 100).toFixed(1)}%</p>
               ) : (
                 <p className="text-base text-slate-500 py-1">Belum dihitung</p>
               )}
@@ -543,8 +554,8 @@ export default function EvaluationSection({
             {/* Metric 2: Recall */}
             <div className="bg-[#0c1017] p-3.5">
               <span className="text-xs font-medium text-slate-400 block mb-1">Sensitivitas {/* PHASE3: <span className="text-slate-500">({versionTag})</span> disembunyi dari default view */}</span>
-              {recall !== null ? (
-                <p className="text-2xl font-bold text-white tabular-nums">{(recall * 100).toFixed(1)}%</p>
+              {batchRecall !== null ? (
+                <p className="text-2xl font-bold text-white tabular-nums">{(batchRecall * 100).toFixed(1)}%</p>
               ) : (
                 <p className="text-base text-slate-500 py-1">Belum dihitung</p>
               )}
@@ -554,8 +565,8 @@ export default function EvaluationSection({
             {/* Metric 3: F1-Score */}
             <div className="bg-[#0c1017] p-3.5">
               <span className="text-xs font-medium text-slate-400 block mb-1">Skor F1 {/* PHASE3: <span className="text-slate-500">({versionTag})</span> disembunyi dari default view */}</span>
-              {f1Score !== null ? (
-                <p className="text-2xl font-bold text-white tabular-nums">{f1Score.toFixed(3)}</p>
+              {batchF1 !== null ? (
+                <p className="text-2xl font-bold text-white tabular-nums">{batchF1.toFixed(3)}</p>
               ) : (
                 <p className="text-base text-slate-500 py-1">Belum dihitung</p>
               )}
@@ -565,8 +576,8 @@ export default function EvaluationSection({
             {/* Metric 4: Brier Score */}
             <div className="bg-[#0c1017] p-3.5">
               <span className="text-xs font-medium text-slate-400 block mb-1">Brier (ternormalisasi) {/* PHASE3: <span className="text-slate-500">({versionTag})</span> disembunyi dari default view */}</span>
-              {brierScore !== null ? (
-                <p className="text-2xl font-bold text-white tabular-nums">{brierScore.toFixed(4)}</p>
+              {batchBrier !== null ? (
+                <p className="text-2xl font-bold text-white tabular-nums">{batchBrier.toFixed(4)}</p>
               ) : (
                 <p className="text-base text-slate-500 py-1">Belum dihitung</p>
               )}
@@ -604,27 +615,16 @@ export default function EvaluationSection({
             <div className="pt-3 mt-3 border-t border-white/10 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs tabular-nums">
               <div className="p-3 rounded-lg bg-white/[0.02] border border-white/10 space-y-1.5 text-slate-300">
                 <p className="text-[11px] font-sans font-bold text-slate-200 uppercase tracking-wider">Dataset & keputusan</p>
-                {mode === 'batch' ? (
-                  <p>
-                    <span
-                      className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-500/15 text-slate-300 border border-white/10 text-[11px] font-medium normal-case tracking-normal"
-                      title="Rincian batch dari ground-truth sintetis Sumatra (data/benchmark/sumatra_disruptions_ground_truth.json, N=60) — bukan data live operasional."
-                    >
-                      Simulasi N=60 — bukan data live
-                    </span>
-                  </p>
-                ) : (
-                  <p>
-                    <span
-                      className="inline-flex items-center px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[11px] font-medium normal-case tracking-normal"
-                      title={`Rincian agregat live operasional N=${dispN} — bukan simulasi.`}
-                    >
-                      Live N={dispN}
-                    </span>
-                  </p>
-                )}
+                <p>
+                  <span
+                    className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-500/15 text-slate-300 border border-white/10 text-[11px] font-medium normal-case tracking-normal"
+                    title="Rincian batch dari ground-truth sintetis Sumatra (data/benchmark/sumatra_disruptions_ground_truth.json, N=60) — bukan data live operasional."
+                  >
+                    Simulasi N=60 — bukan data live
+                  </span>
+                </p>
                 <p>N = {report?.total_scenarios ?? 60} skenario · Status: {report ? (report.gating_passed ? 'LULUS' : 'BELUM') : 'Belum dihitung'}</p>
-                <p>Matriks konfusi: TP {cm?.true_positives ?? '–'} / FP {cm?.false_positives ?? '–'} / TN {cm?.true_negatives ?? '–'} / FN {cm?.false_negatives ?? '–'}</p>
+                <p>Matriks konfusi: TP {batchCM?.true_positives ?? '–'} / FP {batchCM?.false_positives ?? '–'} / TN {batchCM?.true_negatives ?? '–'} / FN {batchCM?.false_negatives ?? '–'}</p>
                 <p>Ambang: Presisi &gt; {(thresholds?.min_precision ?? 0.85).toFixed(2)} · Sensitivitas &gt; {(thresholds?.min_recall ?? 0.80).toFixed(2)} · F1 &gt; {(thresholds?.min_f1 ?? 0.82).toFixed(3)} · Brier ≤ {(thresholds?.max_brier_score ?? 0.10).toFixed(3)}</p>
                 {/* PHASE2: dual-scale Pmax / rumus forecast / proxy live / sensor mapping disembunyi per spec (jargon sintetis).
                 <p>Ambang deteksi: skor konsensus mentah raw_prob ge; 0.50 (setara ternormalisasi asymp; 0.727)</p>
@@ -675,13 +675,13 @@ export default function EvaluationSection({
           <div className="grid grid-cols-12 gap-4">
             <div className="col-span-12 lg:col-span-6 min-w-0">
             <ReliabilityDiagram
-              bins={dispBins}
-              brierScore={brierScore ?? undefined}
-              ece={ece ?? undefined}
-              plattBrier={plattBrier ?? undefined}
-              rawBrier={rawBrierApi}
-              totalN={dispN}
-              isFallback={dispBins.length === 0}
+              bins={batchBins}
+              brierScore={batchBrier ?? undefined}
+              ece={batchEce ?? undefined}
+              plattBrier={batchPlatt ?? undefined}
+              rawBrier={batchRawBrier}
+              totalN={batchN}
+              isFallback={batchBins.length === 0}
               selectedBin={selectedBin}
               onSelectBin={handleSelectBin}
             />
@@ -820,6 +820,122 @@ export default function EvaluationSection({
 
           {/* Exhaustive Automated Test Suite Matrix */}
           <TestMatrixTable tests={testMatrix?.tests} isLoading={isLoading} />
+          </>
+          ) : (
+          <>
+          {/* Tab B "Aktual" — agregat live operasional (report.live.*). Tulis via alur Laporan. */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className="inline-flex items-center px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[11px] font-medium"
+              title={`KPI Presisi/Sensitivitas/F1/Brier dari agregat live operasional N=${liveN} — bukan simulasi.`}
+            >
+              Live N={liveN}
+            </span>
+            {!liveSufficient && (
+              <span className="text-xs text-slate-500">
+                Belum ada data live yang cukup (N&lt;{LIVE_MIN_N}) — bukan 0% maupun 100%.
+              </span>
+            )}
+          </div>
+          {/* 4 Live KPI Cards (Presisi / Sensitivitas / F1 / Brier) — live */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-white/10 border border-white/10 rounded-xl overflow-hidden">
+            <div className="bg-[#0c1017] p-3.5">
+              <span className="text-xs font-medium text-slate-400 block mb-1">Presisi deteksi</span>
+              {livePrecision !== null ? (
+                <p className="text-2xl font-bold text-white tabular-nums">{(livePrecision * 100).toFixed(1)}%</p>
+              ) : (
+                <p className="text-base text-slate-500 py-1">Belum dihitung</p>
+              )}
+              <p className="text-xs text-slate-500 tabular-nums mt-1">Target: &gt; 85.0%</p>
+            </div>
+            <div className="bg-[#0c1017] p-3.5">
+              <span className="text-xs font-medium text-slate-400 block mb-1">Sensitivitas</span>
+              {liveRecall !== null ? (
+                <p className="text-2xl font-bold text-white tabular-nums">{(liveRecall * 100).toFixed(1)}%</p>
+              ) : (
+                <p className="text-base text-slate-500 py-1">Belum dihitung</p>
+              )}
+              <p className="text-xs text-slate-500 tabular-nums mt-1">Target: &gt; 80.0%</p>
+            </div>
+            <div className="bg-[#0c1017] p-3.5">
+              <span className="text-xs font-medium text-slate-400 block mb-1">Skor F1</span>
+              {liveF1 !== null ? (
+                <p className="text-2xl font-bold text-white tabular-nums">{liveF1.toFixed(3)}</p>
+              ) : (
+                <p className="text-base text-slate-500 py-1">Belum dihitung</p>
+              )}
+              <p className="text-xs text-slate-500 tabular-nums mt-1">Target: &gt; 0.820</p>
+            </div>
+            <div className="bg-[#0c1017] p-3.5">
+              <span className="text-xs font-medium text-slate-400 block mb-1">Brier (ternormalisasi)</span>
+              {liveBrier !== null ? (
+                <p className="text-2xl font-bold text-white tabular-nums">{liveBrier.toFixed(4)}</p>
+              ) : (
+                <p className="text-base text-slate-500 py-1">Belum dihitung</p>
+              )}
+              <p className="text-xs text-slate-500 tabular-nums mt-1">Target: &le; 0.100</p>
+            </div>
+          </div>
+
+          {liveSufficient && live?.deltas_vs_batch && (
+            <div className="bg-emerald-950/20 border border-emerald-500/20 rounded-xl px-5 py-3 text-xs font-mono tabular-nums text-slate-300 flex flex-wrap items-center gap-x-4 gap-y-1">
+              <span className="flex items-center gap-1.5 text-emerald-300 font-bold">
+                <ShieldCheck className="w-3.5 h-3.5" /> Delta live vs batch:
+              </span>
+              <span>dPresisi <strong className="text-white">{(live.deltas_vs_batch.precision ?? 0) >= 0 ? '+' : ''}{(live.deltas_vs_batch.precision ?? 0).toFixed(4)}</strong></span>
+              <span>dRecall <strong className="text-white">{(live.deltas_vs_batch.recall ?? 0) >= 0 ? '+' : ''}{(live.deltas_vs_batch.recall ?? 0).toFixed(4)}</strong></span>
+              <span>dF1 <strong className="text-white">{(live.deltas_vs_batch.f1_score ?? 0) >= 0 ? '+' : ''}{(live.deltas_vs_batch.f1_score ?? 0).toFixed(4)}</strong></span>
+              <span>dBrier <strong className="text-white">{(live.deltas_vs_batch.brier_score ?? 0) >= 0 ? '+' : ''}{(live.deltas_vs_batch.brier_score ?? 0).toFixed(4)}</strong></span>
+              {typeof live.excluded_echoes === 'number' && live.excluded_echoes > 0 && (
+                <span className="text-slate-400">echo sistem dikecualikan: <strong className="text-white">{live.excluded_echoes}</strong> (verification_source=DISPATCHER_APPROVAL)</span>
+              )}
+            </div>
+          )}
+
+          {/* Live canvas: ReliabilityDiagram (live) + Catat verifikasi entry */}
+          <div className="grid grid-cols-12 gap-4">
+            <div className="col-span-12 lg:col-span-6 min-w-0">
+            <ReliabilityDiagram
+              bins={liveBins}
+              brierScore={liveBrier ?? undefined}
+              ece={liveEce ?? undefined}
+              plattBrier={livePlatt ?? undefined}
+              rawBrier={liveRawBrier}
+              totalN={liveN}
+              isFallback={liveBins.length === 0}
+            />
+            </div>
+            <div className="col-span-12 lg:col-span-6 min-w-0">
+            <div className="flex flex-col bg-[#0c1017] border border-white/10 rounded-xl p-4 gap-3 shadow-xl h-full justify-center">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-md bg-white/5 border border-white/10 text-slate-300">
+                  <FileSpreadsheet className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-white tracking-wide font-sans">
+                    Catat verifikasi lapangan
+                  </h3>
+                  <p className="text-xs text-slate-400 font-sans mt-0.5">
+                    Pencatatan memakai alur yang sama dengan tab Laporan (OutcomeVerificationForm) — tanpa duplikasi form di sini.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                data-testid="catat-verifikasi-button"
+                title="Catat verifikasi lapangan via alur Laporan (OutcomeVerificationForm di tab Laporan)"
+                onClick={() => {
+                  if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('pidi:open-verifikasi'));
+                  }
+                }}
+                className="cursor-pointer px-4 py-2 rounded-md bg-white text-[#080d14] text-xs font-semibold hover:bg-slate-200 transition w-fit focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
+              >
+                Catat verifikasi
+              </button>
+            </div>
+            </div>
+          </div>
 
           {/* PHASE2: log verifikasi lapangan disederhanakan per spec — ringkas keputusan, detail verbose disembunyi. */}
           <div className="flex flex-col bg-[#0c1017] border border-white/10 rounded-xl p-4 gap-3 shadow-xl overflow-hidden">
@@ -996,10 +1112,9 @@ export default function EvaluationSection({
               </table>
             </div>
           </div>
+          </>
+          )}
       </>
-      {/* PHASE2: penutup ternary observability dikomentari per spec — selalu tampilkan benchmarks
-      )}
-      */}
     </div>
   );
 }
