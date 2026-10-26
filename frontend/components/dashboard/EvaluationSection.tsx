@@ -16,6 +16,7 @@ import {
   History,
   Check,
   XCircle,
+  X,
   Truck,
   Download,
   ExternalLink,
@@ -39,6 +40,7 @@ import ReliabilityDiagram from './ReliabilityDiagram';
 import TestMatrixTable from './TestMatrixTable';
 import RouteEfficiencyCard from './RouteEfficiencyCard';
 import SystemObservabilitySection from './SystemObservabilitySection';
+import { OutcomeVerificationForm } from '@/components/dashboard/LaporanAktualModal';
 
 interface EvaluationSectionProps {
   corridorContext?: CorridorContext | null;
@@ -238,6 +240,11 @@ export default function EvaluationSection({
   // defense-in-depth agar tautan berkas tak pernah render untuk sesi anonim.
   const { role: authRole, isAuthenticated } = useAuth();
   const canSeeProvenance = isAuthenticated || authRole === 'DISPATCHER';
+  // PHASE5: dispatcher gate for Catat verifikasi — same rule as ReportsSection
+  // (form stays read-only with hint for non-dispatcher via canEdit=false).
+  const isDispatcher = authRole === 'DISPATCHER';
+  const verifyDisabledHint = 'Hanya peran Dispatcher yang dapat mencatat verifikasi.';
+  const [showVerifyModal, setShowVerifyModal] = useState<boolean>(false);
 
   const loadAllEvaluationData = useCallback(async () => {
     setIsLoading(true);
@@ -548,7 +555,7 @@ export default function EvaluationSection({
               ) : (
                 <p className="text-base text-slate-500 py-1">Belum dihitung</p>
               )}
-              <p className="text-xs text-slate-500 tabular-nums mt-1">Target: &gt; 85.0% {/* PHASE3: (N=60 Sumatra) disembunyi dari default view */}{/* (N=60 Sumatra) */}</p>
+              {/* PHASE5: hint ambang KPI dihapus dari default view — angka KPI tetap. */}
             </div>
 
             {/* Metric 2: Recall */}
@@ -559,7 +566,7 @@ export default function EvaluationSection({
               ) : (
                 <p className="text-base text-slate-500 py-1">Belum dihitung</p>
               )}
-              <p className="text-xs text-slate-500 tabular-nums mt-1">Target: &gt; 80.0%</p>
+              {/* PHASE5: hint ambang KPI dihapus dari default view — angka KPI tetap. */}
             </div>
 
             {/* Metric 3: F1-Score */}
@@ -570,7 +577,7 @@ export default function EvaluationSection({
               ) : (
                 <p className="text-base text-slate-500 py-1">Belum dihitung</p>
               )}
-              <p className="text-xs text-slate-500 tabular-nums mt-1">Target: &gt; 0.820</p>
+              {/* PHASE5: hint ambang KPI dihapus dari default view — angka KPI tetap. */}
             </div>
 
             {/* Metric 4: Brier Score */}
@@ -581,7 +588,7 @@ export default function EvaluationSection({
               ) : (
                 <p className="text-base text-slate-500 py-1">Belum dihitung</p>
               )}
-              <p className="text-xs text-slate-500 tabular-nums mt-1">Target: &le; 0.100</p>
+              {/* PHASE5: hint ambang KPI dihapus dari default view — angka KPI tetap. */}
             </div>
           </div>
 
@@ -846,7 +853,7 @@ export default function EvaluationSection({
               ) : (
                 <p className="text-base text-slate-500 py-1">Belum dihitung</p>
               )}
-              <p className="text-xs text-slate-500 tabular-nums mt-1">Target: &gt; 85.0%</p>
+              {/* PHASE5: hint ambang KPI dihapus dari default view — angka KPI tetap. */}
             </div>
             <div className="bg-[#0c1017] p-3.5">
               <span className="text-xs font-medium text-slate-400 block mb-1">Sensitivitas</span>
@@ -855,7 +862,7 @@ export default function EvaluationSection({
               ) : (
                 <p className="text-base text-slate-500 py-1">Belum dihitung</p>
               )}
-              <p className="text-xs text-slate-500 tabular-nums mt-1">Target: &gt; 80.0%</p>
+              {/* PHASE5: hint ambang KPI dihapus dari default view — angka KPI tetap. */}
             </div>
             <div className="bg-[#0c1017] p-3.5">
               <span className="text-xs font-medium text-slate-400 block mb-1">Skor F1</span>
@@ -864,7 +871,7 @@ export default function EvaluationSection({
               ) : (
                 <p className="text-base text-slate-500 py-1">Belum dihitung</p>
               )}
-              <p className="text-xs text-slate-500 tabular-nums mt-1">Target: &gt; 0.820</p>
+              {/* PHASE5: hint ambang KPI dihapus dari default view — angka KPI tetap. */}
             </div>
             <div className="bg-[#0c1017] p-3.5">
               <span className="text-xs font-medium text-slate-400 block mb-1">Brier (ternormalisasi)</span>
@@ -873,10 +880,13 @@ export default function EvaluationSection({
               ) : (
                 <p className="text-base text-slate-500 py-1">Belum dihitung</p>
               )}
-              <p className="text-xs text-slate-500 tabular-nums mt-1">Target: &le; 0.100</p>
+              {/* PHASE5: hint ambang KPI dihapus dari default view — angka KPI tetap. */}
             </div>
           </div>
 
+          {/* PHASE5: strip delta live-vs-batch disembunyi dari tab Aktual —
+              data logic agregat live tetap utuh di atas. */}
+          {/*
           {liveSufficient && live?.deltas_vs_batch && (
             <div className="bg-emerald-950/20 border border-emerald-500/20 rounded-xl px-5 py-3 text-xs font-mono tabular-nums text-slate-300 flex flex-wrap items-center gap-x-4 gap-y-1">
               <span className="flex items-center gap-1.5 text-emerald-300 font-bold">
@@ -891,6 +901,7 @@ export default function EvaluationSection({
               )}
             </div>
           )}
+          */}
 
           {/* Live canvas: ReliabilityDiagram (live) + Catat verifikasi entry */}
           <div className="grid grid-cols-12 gap-4">
@@ -916,26 +927,79 @@ export default function EvaluationSection({
                     Catat verifikasi lapangan
                   </h3>
                   <p className="text-xs text-slate-400 font-sans mt-0.5">
-                    Pencatatan memakai alur yang sama dengan tab Laporan (OutcomeVerificationForm) — tanpa duplikasi form di sini.
+                    Pencatatan memakai OutcomeVerificationForm yang sama dengan tab Laporan — dibuka inline di sini.
                   </p>
                 </div>
               </div>
               <button
                 type="button"
                 data-testid="catat-verifikasi-button"
-                title="Catat verifikasi lapangan via alur Laporan (OutcomeVerificationForm di tab Laporan)"
-                onClick={() => {
-                  if (typeof window !== 'undefined') {
-                    window.dispatchEvent(new CustomEvent('pidi:open-verifikasi'));
-                  }
-                }}
-                className="cursor-pointer px-4 py-2 rounded-md bg-white text-[#080d14] text-xs font-semibold hover:bg-slate-200 transition w-fit focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
+                title={isDispatcher ? 'Catat verifikasi lapangan (OutcomeVerificationForm)' : verifyDisabledHint}
+                disabled={!isDispatcher}
+                onClick={() => setShowVerifyModal(true)}
+                className="cursor-pointer px-4 py-2 rounded-md bg-white text-[#080d14] text-xs font-semibold hover:bg-slate-200 transition w-fit focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
               >
                 Catat verifikasi
               </button>
             </div>
             </div>
           </div>
+
+          {/* PHASE5: Catat verifikasi modal inline — OutcomeVerificationForm yang sama
+              dengan tab Laporan. Pengganti dispatch 'pidi:open-verifikasi' yang tak punya
+              listener (no-op). Gate dispatcher: tombol disabled + form read-only bila
+              non-dispatcher (canEdit=false). */}
+          {showVerifyModal && (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+              onClick={() => setShowVerifyModal(false)}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Catat verifikasi lapangan"
+            >
+              <div
+                className="w-full max-w-md max-h-[90vh] overflow-y-auto bg-[#0c1017] border border-white/10 rounded-xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-medium text-white">Verifikasi lapangan</h3>
+                    <p className="text-xs text-slate-500 tabular-nums font-mono">OutcomeVerificationForm</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowVerifyModal(false)}
+                    className="p-1.5 rounded-md hover:bg-white/5 text-slate-400 hover:text-white cursor-pointer"
+                    title="Tutup"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="px-4 py-4">
+                  <OutcomeVerificationForm
+                    initialIncidentId=""
+                    initialObservedDelay={null}
+                    baselineKnown={false}
+                    canEdit={isDispatcher}
+                    disabledHint={verifyDisabledHint}
+                    onSubmitted={() => {
+                      setShowVerifyModal(false);
+                      loadAllEvaluationData();
+                    }}
+                  />
+                </div>
+                <div className="px-4 py-3 border-t border-white/10 flex items-center justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setShowVerifyModal(false)}
+                    className="px-4 py-2 bg-transparent hover:bg-white/5 text-slate-200 border border-white/10 rounded-md text-xs font-medium cursor-pointer"
+                  >
+                    Tutup
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* PHASE2: log verifikasi lapangan disederhanakan per spec — ringkas keputusan, detail verbose disembunyi. */}
           <div className="flex flex-col bg-[#0c1017] border border-white/10 rounded-xl p-4 gap-3 shadow-xl overflow-hidden">

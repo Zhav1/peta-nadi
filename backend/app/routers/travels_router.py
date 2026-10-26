@@ -28,6 +28,7 @@ from app.services import travel_ledger_service
 from app.services.travel_ledger_service import (
     TruckNotFoundError,
     TravelNotFoundError,
+    FuelPlausibilityError,
 )
 from app.routers.vehicles_router import clear_fleet_cache
 
@@ -155,6 +156,8 @@ async def create_travel(
         clear_fleet_cache()
     except TruckNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except FuelPlausibilityError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     return TravelResponse(**created)
@@ -207,6 +210,8 @@ async def update_travel(
         clear_fleet_cache()
     except TravelNotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except FuelPlausibilityError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     return TravelResponse(**updated)

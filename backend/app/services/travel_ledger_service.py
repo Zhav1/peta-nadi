@@ -184,6 +184,92 @@ class TravelNotFoundError(Exception):
     """Raised when a travel/rit id does not exist."""
 
 
+class FuelPlausibilityError(ValueError):
+    """Raised when actual fuel implies an implausible economy (typo guard)."""
+
+
+# Plausibility guard for actual fuel (demo-typo protection, e.g. 120L/73km):
+# truck diesel economy is expected within 1.5–25 km/L. Anything outside is
+# almost certainly an input typo and would otherwise create a huge negative
+# saving + bogus spoilage signal. Actual fuel > 3x the expected baseline
+# (distance / payload-adjusted efficiency, incl. reefer burn) is rejected
+# with the same message.
+MIN_PLAUSIBLE_KMPL = 1.5
+MAX_PLAUSIBLE_KMPL = 25.0
+FUEL_BASELINE_MULTIPLIER = 3.0
+
+
+def _resolve_distance_km(data: Dict[str, Any]) -> float:
+    """Declared baseline distance when > 0, else haversine gazetteer distance."""
+    try:
+        declared = data.get("baseline_distance_km")
+        if declared is not None and float(declared) > 0:
+            return float(declared)
+    except (TypeError, ValueError):
+        pass
+    try:
+        origin = data.get("origin_coords")
+        dest = data.get("dest_coords")
+        if origin and dest:
+            return float(haversine_km(origin, dest))
+    except (TypeError, ValueError):
+        pass
+    return 0.0
+
+
+def _expected_baseline_fuel_liters(data: Dict[str, Any], truck: Optional[Dict[str, Any]]) -> Optional[float]:
+    """Baseline fuel from distance / payload-adjusted efficiency (+ reefer burn)."""
+    try:
+        fctx = _resolve_trip_fuel_context(data, truck or {})
+        eff = float(fctx.get("eff_adj") or 0.0)
+        if eff <= 0:
+            return None
+        dist = _resolve_distance_km(data)
+        if dist <= 0:
+            return None
+        base = dist / eff
+        if fctx.get("reefer_active") and float(fctx.get("reefer_lph_used") or 0.0) > 0:
+            try:
+                base += float(fctx["reefer_lph_used"]) * (
+                    float(data.get("baseline_time_hours") or 0.0)
+                    + float(data.get("blocked_delay_hours") or 0.0)
+                )
+            except (TypeError, ValueError):
+                pass
+        return float(base) if base > 0 else None
+    except Exception:
+        return None
+
+
+def validate_actual_fuel_plausibility(
+    *,
+    distance_km: float,
+    actual_fuel_liters: float,
+    baseline_fuel_expected: Optional[float] = None,
+) -> None:
+    """Reject demo-typo fuel (e.g. 120L/73km = 0.61 km/L) with a clear ID message."""
+    try:
+        d = float(distance_km)
+        a = float(actual_fuel_liters)
+    except (TypeError, ValueError):
+        return
+    if d <= 0 or a <= 0:
+        return
+    econ = d / a
+    msg = (
+        f"BBM aktual {a:g}L untuk {d:g}km = {econ:.2f} km/L "
+        f"tidak wajar (batas 1.5–25 km/L). Cek ulang input."
+    )
+    if econ < MIN_PLAUSIBLE_KMPL or econ > MAX_PLAUSIBLE_KMPL:
+        raise FuelPlausibilityError(msg)
+    try:
+        b = float(baseline_fuel_expected) if baseline_fuel_expected is not None else 0.0
+    except (TypeError, ValueError):
+        b = 0.0
+    if b > 0 and a > FUEL_BASELINE_MULTIPLIER * b:
+        raise FuelPlausibilityError(msg)
+
+
 def _money(value: Any) -> float:
     return round(float(value or 0.0), 0)
 
@@ -550,6 +636,30 @@ def create_travel(payload: TravelCreate, actor: Optional[str] = None, db_path: O
     data["actual_recorded"] = payload.actual_time_hours is not None
     data["status"] = payload.status.value if hasattr(payload.status, "value") else str(payload.status)
     data["created_by"] = actor or "dispatcher"
+    if payload.actual_fuel_liters is not None:
+        try:
+            if float(payload.actual_fuel_liters) > 0:
+                _dist = _resolve_distance_km(data)
+                _base_exp = _expected_baseline_fuel_liters(data, truck)
+                validate_actual_fuel_plausibility(
+                    distance_km=_dist,
+                    actual_fuel_liters=float(payload.actual_fuel_liters),
+                    baseline_fuel_expected=_base_exp,
+                )
+                try:
+                    _declared_base = float(data.get("baseline_fuel_liters") or 0.0)
+                except (TypeError, ValueError):
+                    _declared_base = 0.0
+                if _declared_base > 0 and float(payload.actual_fuel_liters) > FUEL_BASELINE_MULTIPLIER * _declared_base:
+                    _econ = _dist / float(payload.actual_fuel_liters) if _dist > 0 else 0.0
+                    raise FuelPlausibilityError(
+                        f"BBM aktual {float(payload.actual_fuel_liters):g}L untuk {_dist:g}km = {_econ:.2f} km/L "
+                        f"tidak wajar (batas 1.5–25 km/L). Cek ulang input."
+                    )
+        except FuelPlausibilityError:
+            raise
+        except (TypeError, ValueError):
+            pass
     _apply_ledger(data, truck=truck)
     saved = _persist_travel(data, db_path=db_path)
     invalidate_erp_cache(saved.get("company_id"))
@@ -584,6 +694,35 @@ def update_travel(
             _truck_u = local_storage.get_truck_asset(data.get("truck_id") or "", db_path=db_path)
         except Exception:
             _truck_u = None
+    if updates.get("actual_fuel_liters") is not None:
+        try:
+            _new_fuel = float(updates["actual_fuel_liters"])
+        except (TypeError, ValueError):
+            _new_fuel = 0.0
+        if _new_fuel > 0:
+            _dist_u = _resolve_distance_km(data)
+            # Prefer the already-persisted distance when the payload omits it.
+            if _dist_u <= 0:
+                try:
+                    _dist_u = float(existing.get("baseline_distance_km") or 0.0)
+                except (TypeError, ValueError):
+                    _dist_u = 0.0
+            _base_exp_u = _expected_baseline_fuel_liters(data, _truck_u)
+            validate_actual_fuel_plausibility(
+                distance_km=_dist_u,
+                actual_fuel_liters=_new_fuel,
+                baseline_fuel_expected=_base_exp_u,
+            )
+            try:
+                _declared_u = float(data.get("baseline_fuel_liters") or 0.0)
+            except (TypeError, ValueError):
+                _declared_u = 0.0
+            if _declared_u > 0 and _new_fuel > FUEL_BASELINE_MULTIPLIER * _declared_u:
+                _econ_u = _dist_u / _new_fuel if _dist_u > 0 else 0.0
+                raise FuelPlausibilityError(
+                    f"BBM aktual {_new_fuel:g}L untuk {_dist_u:g}km = {_econ_u:.2f} km/L "
+                    f"tidak wajar (batas 1.5–25 km/L). Cek ulang input."
+                )
     _apply_ledger(data, truck=_truck_u)
     if data.get("status") == "delivered" and not data.get("delivered_at"):
         data["delivered_at"] = payload.delivered_at or datetime.now().isoformat()

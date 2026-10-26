@@ -353,6 +353,27 @@ export default function LaporanAktualModal({
       setFieldError('BBM aktual harus angka > 0 liter.');
       return;
     }
+    // Plausibility guard (mirror backend 422): truck diesel 1.5–25 km/L.
+    // Blocks demo typos like 120L/73km = 0.61 km/L before PATCH.
+    const distKm = Number((trip as { baseline_distance_km?: number | null }).baseline_distance_km);
+    if (Number.isFinite(distKm) && distKm > 0) {
+      const econ = distKm / fuelL;
+      const msg = `BBM aktual ${fuelL}L untuk ${distKm}km = ${econ.toFixed(2)} km/L tidak wajar (batas 1.5–25 km/L). Cek ulang input.`;
+      if (econ < 1.5 || econ > 25) {
+        setFieldError(msg);
+        return;
+      }
+      const effKmpl = Number(
+        (trip as { fuel_efficiency_used_kmpl?: number | null }).fuel_efficiency_used_kmpl
+      );
+      if (Number.isFinite(effKmpl) && effKmpl > 0) {
+        const baselineEst = distKm / effKmpl;
+        if (baselineEst > 0 && fuelL > 3 * baselineEst) {
+          setFieldError(msg);
+          return;
+        }
+      }
+    }
     setFieldError(null);
     setSubmitError(null);
     setIsSaving(true);
@@ -370,9 +391,15 @@ export default function LaporanAktualModal({
           status,
         });
       } catch (err: unknown) {
-        setSubmitError(
-          err instanceof Error ? `Gagal menyimpan aktual Trip ${trip.id} (${err.message}).` : `Gagal menyimpan aktual Trip ${trip.id}.`
-        );
+        const rawMsg = err instanceof Error ? err.message : `Gagal menyimpan aktual Trip ${trip.id}.`;
+        // Backend 422 plausibility guard -> inline field error (no shape change).
+        if (/tidak wajar|422/.test(rawMsg)) {
+          setFieldError(rawMsg);
+        } else {
+          setSubmitError(
+            err instanceof Error ? `Gagal menyimpan aktual Trip ${trip.id} (${err.message}).` : `Gagal menyimpan aktual Trip ${trip.id}.`
+          );
+        }
         return;
       }
       // M8 Phase 5: tindakan tunggal — otomatis hitung opsi Lanjut / Ubah Rute / Tahan.
@@ -472,7 +499,7 @@ export default function LaporanAktualModal({
                   value={actualFuelLiters}
                   onChange={(e) => setActualFuelLiters(e.target.value)}
                   disabled={!canEdit || isSaving}
-                  placeholder="cth. 120"
+                  placeholder="cth. 25"
                   className="bg-transparent border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-white/30 transition-colors disabled:opacity-50 [color-scheme:dark]"
                 />
               </label>

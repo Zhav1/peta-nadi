@@ -532,13 +532,16 @@ def test_erp_trip_row_golongan_default_efficiency():
 
 def test_erp_negative_savings_surfaced_as_kerugian():
     """Loss-making rits stay visible with negative savings (never hidden)."""
+    # NOTE: 40L keeps the loss intent while respecting the fuel plausibility
+    # guard (1.5–25 km/L; ~74.5km/40L ≈ 1.86 km/L). The old 60L fixture
+    # (≈1.24 km/L) is now rejected as a typo by design.
     _register_truck()
     client.post(
         "/api/v1/fleet/travels",
         headers=DISPATCHER,
         json=_travel_payload(
             actual_time_hours=20.0,
-            actual_fuel_liters=60.0,
+            actual_fuel_liters=40.0,
             status="delivered",
         ),
     )
@@ -547,7 +550,7 @@ def test_erp_negative_savings_surfaced_as_kerugian():
     assert row["saved_cost_idr"] < 0
     assert body["totals"]["cost_saved_idr"] < 0
     # Economy still resolves from measured actuals even on a loss
-    assert row["economy_kmpl"] == pytest.approx(row["baseline_distance_km"] / 60.0, abs=0.01)
+    assert row["economy_kmpl"] == pytest.approx(row["baseline_distance_km"] / 40.0, abs=0.01)
 
 
 def test_regulator_aggregate_hides_per_rit_provenance():
