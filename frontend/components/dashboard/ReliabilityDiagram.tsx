@@ -80,16 +80,17 @@ export default function ReliabilityDiagram({
     : null;
 
   return (
-  <div className="flex flex-col h-full bg-[#0c1017] border border-[#1c2432] rounded-lg p-5 shadow-xl relative overflow-hidden">
+  <div className="flex flex-col h-full min-w-0 bg-[#0c1017] border border-white/10 rounded-xl p-4 gap-3 shadow-xl relative overflow-hidden">
   {/* Card Header */}
-  <div className="flex items-center justify-between pb-3 border-b border-[#1c2432]">
+  <div className="flex items-center justify-between pb-3 border-b border-white/10">
   <div className="flex items-center gap-2.5">
   <div className="p-2 rounded-md bg-white/5 border border-white/10 text-slate-300">
   <Target className="w-4 h-4" />
   </div>
   <div>
-  <h3 className="text-sm font-medium text-white tracking-tight font-sans flex items-center gap-2">
+  <h3 className="text-sm font-semibold text-white tracking-wide font-sans flex items-center gap-2">
   Diagram kalibrasi
+  {/* PHASE2: badge FALLBACK/SIMULASI + LIVE disembunyi per spec — hanya diagram + N.
   {usingFallback ? (
   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/30 font-mono text-[10px] font-bold" title="Bin ilustratif sinkron 2026-10-26 — API /benchmark tak terjangkau, bukan pengukuran live">
   <FlaskConical className="w-3 h-3" /> FALLBACK/SIMULASI
@@ -99,8 +100,9 @@ export default function ReliabilityDiagram({
   <Radio className="w-3 h-3" /> LIVE
   </span>
   )}
+  */}
   </h3>
-  <p className="text-xs text-slate-400 font-mono tabular-nums">
+  <p className="text-xs text-slate-400 tabular-nums">
   Model vs empiris (N={totalN ?? activeBins.reduce((s, b) => s + b.sample_count, 0)})
   </p>
   </div>
@@ -185,8 +187,8 @@ export default function ReliabilityDiagram({
   y={y1}
   width={Math.max(w - 2, 1)}
   height={Math.max(barH, 2)}
-  fill={isSel ? 'rgba(0, 240, 255, 0.30)' : 'rgba(56, 189, 248, 0.12)'}
-  stroke={isSel ? '#00f0ff' : 'rgba(56, 189, 248, 0.25)'}
+  fill={isSel ? 'rgba(255, 255, 255, 0.14)' : 'rgba(56, 189, 248, 0.12)'}
+  stroke={isSel ? '#e2e8f0' : 'rgba(56, 189, 248, 0.25)'}
   strokeWidth={isSel ? '1.5' : '0.5'}
   rx="2"
   className={onSelectBin ? 'cursor-pointer' : undefined}
@@ -203,7 +205,7 @@ export default function ReliabilityDiagram({
   y1={padTop + chartHeight}
   x2={padLeft + chartWidth}
   y2={padTop}
-  stroke="#00f0ff"
+  stroke="#94a3b8"
   strokeWidth="1.5"
   strokeDasharray="4 4"
   opacity="0.6"
@@ -245,7 +247,7 @@ export default function ReliabilityDiagram({
   cy={cy}
   r={isHovered || isSel ? '7' : '5'}
   fill="#0c0e12"
-  stroke={isSel ? '#00f0ff' : isHovered ? '#00f0ff' : '#10b981'}
+  stroke={isSel ? '#e2e8f0' : isHovered ? '#e2e8f0' : '#10b981'}
   strokeWidth={isSel || isHovered ? '2.5' : '2'}
   className="transition-all duration-150"
   />
@@ -254,7 +256,7 @@ export default function ReliabilityDiagram({
   cx={cx}
   cy={cy}
   r="2"
-  fill={isSel || isHovered ? '#00f0ff' : '#34d399'}
+  fill={isSel || isHovered ? '#e2e8f0' : '#34d399'}
   />
   </g>
   );
@@ -290,7 +292,7 @@ export default function ReliabilityDiagram({
   {/* Interactive Hover Tooltip Overlay */}
   {hoveredBin && !selectedDetail && (
   <div className="absolute top-4 right-4 bg-[#0c1017] border border-white/10 rounded-md p-3 pointer-events-none z-20 min-w-[200px]">
-  <div className="text-xs font-mono text-slate-200 border-b border-[#1c2432] pb-1 mb-1.5 flex items-center justify-between">
+  <div className="text-xs font-mono text-slate-200 border-b border-white/10 pb-1 mb-1.5 flex items-center justify-between">
   <span>Interval [{(hoveredBin.range[0] * 100).toFixed(0)}% - {(hoveredBin.range[1] * 100).toFixed(0)}%]</span>
   <span className="text-slate-400 font-normal">Bin #{hoveredBin.bin_index + 1}</span>
   </div>
@@ -310,9 +312,9 @@ export default function ReliabilityDiagram({
 
   {/* Selected-bin drill-down detail */}
   {selectedDetail && (
-  <div className="mb-3 p-3 rounded-lg bg-cyan-950/30 border border-cyan-500/30 text-xs font-mono tabular-nums">
-  <div className="flex items-center justify-between pb-2 mb-2 border-b border-cyan-500/20">
-  <span className="text-cyan-200 font-bold">
+  <div className="mb-3 p-3 rounded-lg bg-white/[0.02] border border-white/10 text-xs tabular-nums">
+  <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/10">
+  <span className="text-slate-200 font-bold">
   Drill-down Bin #{selectedDetail.bin_index + 1} [{(selectedDetail.range[0] * 100).toFixed(0)}%–{(selectedDetail.range[1] * 100).toFixed(0)}%]
   </span>
   <button
@@ -331,45 +333,47 @@ export default function ReliabilityDiagram({
   <span className="text-slate-400">Diprediksi positif (cut 0.50): <strong className="text-white">{selectedDetail.range[0] >= 0.5 ? selectedDetail.sample_count : selectedDetail.range[1] <= 0.5 ? 0 : `parsial (rentang campur)`}</strong></span>
   <span className="text-slate-400">Error kalibrasi: <strong className="text-amber-300">{selectedDetail.calibration_error.toFixed(4)}</strong></span>
   </div>
+  {/* PHASE2: penjelasan predicted-vs-ground-truth disembunyi per spec.
   <p className="mt-2 text-slate-500">
   Prediksi vs ground truth per skenario tersedia di tabel per-skenario (filter bin #{selectedDetail.bin_index + 1}) — sumber: berkas laporan → scenario_details.
   </p>
+  */}
   </div>
   )}
 
   {/* N-per-bin table (collapsible) */}
   <details className="mb-3 group">
-  <summary className="cursor-pointer list-none text-xs font-mono text-slate-400 hover:text-slate-200 flex items-center gap-1.5">
+  <summary className="cursor-pointer list-none text-xs text-slate-400 hover:text-slate-200 flex items-center gap-1.5">
   <Activity className="w-3.5 h-3.5" />
   <span>Rincian N per bin (10 interval)</span>
   <span className="group-open:hidden">+ tampilkan</span>
   <span className="hidden group-open:inline">− sembunyikan</span>
   </summary>
   <div className="mt-2 overflow-x-auto">
-  <table className="w-full text-left text-xs font-mono tabular-nums border-collapse">
+  <table className="w-full text-left text-xs tabular-nums border-collapse">
   <thead>
-  <tr className="border-b border-[#1c2432] text-slate-500">
-  <th className="py-1.5 px-2 font-medium">Bin</th>
-  <th className="py-1.5 px-2 font-medium">Interval</th>
-  <th className="py-1.5 px-2 text-right font-medium">N</th>
-  <th className="py-1.5 px-2 text-right font-medium">Rata konf.</th>
-  <th className="py-1.5 px-2 text-right font-medium">Akurasi</th>
-  <th className="py-1.5 px-2 text-right font-medium">Error</th>
+  <tr className="border-b border-white/10 text-slate-500">
+  <th className="h-11 px-2 font-medium">Bin</th>
+  <th className="h-11 px-2 font-medium">Interval</th>
+  <th className="h-11 px-2 text-right font-medium">N</th>
+  <th className="h-11 px-2 text-right font-medium">Rata konf.</th>
+  <th className="h-11 px-2 text-right font-medium">Akurasi</th>
+  <th className="h-11 px-2 text-right font-medium">Error</th>
   </tr>
   </thead>
-  <tbody className="divide-y divide-white/5">
+  <tbody className="divide-y divide-white/10">
   {activeBins.map((b) => (
   <tr
   key={b.bin_index}
   onClick={() => handleBinClick(b)}
-  className={`hover:bg-white/5 ${onSelectBin ? 'cursor-pointer' : ''} ${selectedBin === b.bin_index ? 'bg-cyan-500/10' : ''}`}
+  className={`hover:bg-white/5 ${onSelectBin ? 'cursor-pointer' : ''} ${selectedBin === b.bin_index ? 'bg-white/5' : ''}`}
   >
-  <td className="py-1.5 px-2 text-cyan-300 font-bold">#{b.bin_index + 1}</td>
-  <td className="py-1.5 px-2 text-slate-300">[{(b.range[0] * 100).toFixed(0)}%–{(b.range[1] * 100).toFixed(0)}%]</td>
-  <td className="py-1.5 px-2 text-right text-white">{b.sample_count}</td>
-  <td className="py-1.5 px-2 text-right text-slate-300">{(b.mean_confidence * 100).toFixed(1)}%</td>
-  <td className="py-1.5 px-2 text-right text-emerald-300">{(b.empirical_accuracy * 100).toFixed(1)}%</td>
-  <td className="py-1.5 px-2 text-right text-amber-300">{b.calibration_error.toFixed(4)}</td>
+  <td className="py-3 px-2 text-cyan-300 font-bold">#{b.bin_index + 1}</td>
+  <td className="py-3 px-2 text-slate-300">[{(b.range[0] * 100).toFixed(0)}%–{(b.range[1] * 100).toFixed(0)}%]</td>
+  <td className="py-3 px-2 text-right text-white">{b.sample_count}</td>
+  <td className="py-3 px-2 text-right text-slate-300">{(b.mean_confidence * 100).toFixed(1)}%</td>
+  <td className="py-3 px-2 text-right text-emerald-300">{(b.empirical_accuracy * 100).toFixed(1)}%</td>
+  <td className="py-3 px-2 text-right text-amber-300">{b.calibration_error.toFixed(4)}</td>
   </tr>
   ))}
   </tbody>
@@ -378,7 +382,7 @@ export default function ReliabilityDiagram({
   </details>
 
   {/* Legend & Calibration Footnotes */}
-  <div className="pt-3 border-t border-[#1c2432] flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
+  <div className="pt-3 border-t border-white/10 flex flex-wrap items-center justify-between gap-3 text-xs tabular-nums">
   <div className="flex items-center gap-4">
   <div className="flex items-center gap-1.5">
   <span className="w-3 h-0.5 border-t-2 border-dashed border-slate-400 inline-block" />
@@ -389,19 +393,21 @@ export default function ReliabilityDiagram({
   <span className="text-slate-300">Kurva Empiris</span>
   </div>
   <div className="flex items-center gap-1.5">
-  <span className="w-2 h-2 rounded bg-sky-500/30 border border-sky-400/40 inline-block" />
+  <span className="w-2 h-2 rounded bg-white/10 border border-white/20 inline-block" />
   <span className="text-slate-300">Distribusi Sampel (klik bar/titik = drill-down)</span>
   </div>
   </div>
 
   <div className="flex items-center gap-3 text-slate-400">
   <span>ECE: <strong className="text-white font-mono tabular-nums">{ece != null ? `${(ece * 100).toFixed(2)}%` : 'Belum Dihitung'}</strong></span>
+  {/* PHASE2: Platt Brier disembunyi per spec — hanya Brier + ECE sebagai angka keputusan.
   <span>·</span>
   <span title="Skor Brier setelah kalibrasi Platt">Platt Brier: {plattBrier != null ? (<strong className="text-emerald-400 font-mono tabular-nums">{plattBrier.toFixed(4)}</strong>) : (<strong className="text-slate-500 font-mono tabular-nums">Belum dihitung</strong>)}</span>
+  */}
   </div>
   </div>
 
-  {/* Raw vs normalized Brier scale disclosure */}
+  {/* PHASE2: catatan skala ganda Pmax + raw Brier disembunyi per spec (hanya Brier/ECE di kartu KPI + footer ringkas).
   <div className="pt-2 mt-1 text-[11px] font-mono text-slate-500 flex items-start gap-1.5">
   <Info className="w-3.5 h-3.5 mt-0.5 shrink-0 text-slate-500" />
   <span>
@@ -415,6 +421,7 @@ export default function ReliabilityDiagram({
   )}
   </span>
   </div>
+  */}
   </div>
   );
 }

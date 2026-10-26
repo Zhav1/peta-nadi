@@ -378,21 +378,22 @@ export default function EvaluationSection({
   const versionTag = showLive ? `live N=${live!.n}` : 'batch N=60';
 
   return (
-    <div className="flex flex-col space-y-5 max-w-7xl mx-auto pb-12">
+    <div className="w-full min-h-full flex flex-col gap-6">
       {/* Sub-Tab Navigation Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-1.5 rounded-xl bg-[#0c1017] border border-white/10 shadow-lg">
-        <div className="flex items-center gap-1.5 font-sans text-xs">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-1 bg-[#0c1017] border border-white/10 rounded-lg p-1 shrink-0 w-fit">
           <button
             type="button"
             onClick={() => setActiveSubTab('benchmarks')}
-            className={`cursor-pointer px-4 py-2 rounded-lg transition font-medium ${
+            className={`px-3.5 py-1.5 rounded-md text-xs font-medium transition cursor-pointer whitespace-nowrap ${
               activeSubTab === 'benchmarks'
                 ? 'bg-white text-[#080d14] font-semibold'
-                : 'text-slate-400 hover:text-white hover:bg-white/5'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
             }`}
           >
             Tolok Ukur Model ({testMatrix?.total_tests || 133} Uji)
           </button>
+          {/* PHASE2: commented per spec — tombol Diagnostik API & Observabilitas disembunyi dari default view. File SystemObservabilitySection.tsx untouched.
           <button
             type="button"
             onClick={() => setActiveSubTab('observability')}
@@ -404,20 +405,23 @@ export default function EvaluationSection({
           >
             Diagnostik API & Observabilitas
           </button>
+          */}
         </div>
 
         {activeSubTab === 'benchmarks' && (
-          <div className="flex items-center gap-3 pr-2 font-mono text-xs">
+          <div className="flex items-center gap-2">
+            {/* PHASE2: "terakhir sinkron" disembunyi per spec (dispatcher: hanya angka keputusan)
             {lastRefreshed && (
               <span className="text-xs text-slate-400 hidden md:inline">
                 Sinkronisasi: <strong className="text-slate-200">{lastRefreshed}</strong>
               </span>
             )}
+            */}
             <button
               type="button"
               onClick={loadAllEvaluationData}
               disabled={isLoading}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 text-slate-300 hover:text-white hover:bg-white/10 border border-white/10 transition disabled:opacity-50 cursor-pointer font-medium text-xs"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-transparent hover:bg-white/5 text-slate-200 border border-white/10 transition disabled:opacity-50 cursor-pointer text-xs font-medium"
             >
               <RotateCcw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
               <span>Muat Ulang</span>
@@ -426,11 +430,21 @@ export default function EvaluationSection({
         )}
       </div>
 
+      {/* PHASE2: commented per spec — mount Diagnostik disembunyi, SystemObservabilitySection.tsx untouched.
       {activeSubTab === 'observability' ? (
         <SystemObservabilitySection />
       ) : (
+      */}
         <>
-          {/* WS2 Headline: Baseline sintetis vs Live operasional */}
+          {/* PHASE2 distilled: N valid + Status keputusan (pengganti badge baseline/live verbose) */}
+          <div className="bg-[#0c1017] border border-white/10 rounded-xl px-5 py-3 shadow-xl flex flex-wrap items-center gap-x-4 gap-y-1 text-xs tabular-nums">
+            <span className="text-slate-400">N valid: <strong className="text-white">{dispN}</strong></span>
+            <span className="text-slate-400">Status: {report ? (report.gating_passed ? <strong className="text-emerald-300">LULUS</strong> : <strong className="text-rose-300">BELUM</strong>) : <span className="text-slate-500">Belum dihitung</span>}</span>
+            {outcomes.length < LIVE_MIN_N && (
+              <span className="text-slate-500">Belum ada data live yang cukup (N&lt;{LIVE_MIN_N}) — bukan 0% maupun 100%.</span>
+            )}
+          </div>
+          {/* PHASE2: badge baseline sintetis / live operasional / live N<10 / batch-v selector disembunyi per spec (dispatcher: hanya N+Status).
           <div className="bg-[#0c1017] border border-white/10 rounded-xl p-5 shadow-xl">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
               <div className="flex items-center gap-2 flex-wrap font-mono text-xs">
@@ -482,6 +496,7 @@ export default function EvaluationSection({
               </p>
             )}
           </div>
+          */}
 
           {/* Top Banner Header */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[#0c1017] border border-white/10 rounded-xl p-5 shadow-xl">
@@ -490,7 +505,7 @@ export default function EvaluationSection({
                 <Award className="w-5 h-5" />
               </div>
               <div>
-                <h1 className="text-base md:text-lg font-bold text-white tracking-wide font-headline">
+                <h1 className="text-base font-headline font-semibold text-white tracking-wide">
                   Evaluasi Empiris & Tolok Ukur Validasi
                 </h1>
                 <p className="text-xs text-slate-400 font-sans mt-0.5">
@@ -500,54 +515,54 @@ export default function EvaluationSection({
             </div>
           </div>
 
-          {/* 4 Empirical Benchmark KPI Cards (Presisi / Sensitivitas / F1 / Brier) */}
-          <div className="bg-[#0c1017] border border-white/10 p-5 rounded-xl shadow-xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y lg:divide-y-0 lg:divide-x divide-white/10">
+          {/* 4 Empirical Benchmark KPI Cards (Presisi / Sensitivitas / F1 / Brier) — Laporan hybrid strip */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-white/10 border border-white/10 rounded-xl overflow-hidden">
             {/* Metric 1: Precision */}
-            <div className="lg:px-4 first:pl-0 last:pr-0 py-3 lg:py-0">
-              <span className="text-xs font-mono text-slate-400 tracking-wide block mb-1">Presisi deteksi <span className="text-slate-600">({versionTag})</span></span>
+            <div className="bg-[#0c1017] p-3.5">
+              <span className="text-xs font-medium text-slate-400 block mb-1">Presisi deteksi <span className="text-slate-500">({versionTag})</span></span>
               {precision !== null ? (
-                <p className="text-2xl font-mono font-bold text-white tabular-nums">{(precision * 100).toFixed(1)}%</p>
+                <p className="text-2xl font-bold text-white tabular-nums">{(precision * 100).toFixed(1)}%</p>
               ) : (
-                <p className="text-base font-mono text-slate-500 py-1">Belum dihitung</p>
+                <p className="text-base text-slate-500 py-1">Belum dihitung</p>
               )}
-              <p className="text-xs font-mono text-slate-400 mt-1 tabular-nums">Target: &gt; 85.0% (N=60 Sumatra)</p>
+              <p className="text-xs text-slate-500 tabular-nums mt-1">Target: &gt; 85.0% (N=60 Sumatra)</p>
             </div>
 
             {/* Metric 2: Recall */}
-            <div className="lg:px-4 first:pl-0 last:pr-0 py-3 lg:py-0">
-              <span className="text-xs font-mono text-slate-400 tracking-wide block mb-1">Sensitivitas <span className="text-slate-600">({versionTag})</span></span>
+            <div className="bg-[#0c1017] p-3.5">
+              <span className="text-xs font-medium text-slate-400 block mb-1">Sensitivitas <span className="text-slate-500">({versionTag})</span></span>
               {recall !== null ? (
-                <p className="text-2xl font-mono font-bold text-white tabular-nums">{(recall * 100).toFixed(1)}%</p>
+                <p className="text-2xl font-bold text-white tabular-nums">{(recall * 100).toFixed(1)}%</p>
               ) : (
-                <p className="text-base font-mono text-slate-500 py-1">Belum dihitung</p>
+                <p className="text-base text-slate-500 py-1">Belum dihitung</p>
               )}
-              <p className="text-xs font-mono text-slate-400 mt-1 tabular-nums">Target: &gt; 80.0%</p>
+              <p className="text-xs text-slate-500 tabular-nums mt-1">Target: &gt; 80.0%</p>
             </div>
 
             {/* Metric 3: F1-Score */}
-            <div className="lg:px-4 first:pl-0 last:pr-0 py-3 lg:py-0">
-              <span className="text-xs font-mono text-slate-400 tracking-wide block mb-1">Skor F1 <span className="text-slate-600">({versionTag})</span></span>
+            <div className="bg-[#0c1017] p-3.5">
+              <span className="text-xs font-medium text-slate-400 block mb-1">Skor F1 <span className="text-slate-500">({versionTag})</span></span>
               {f1Score !== null ? (
-                <p className="text-2xl font-mono font-bold text-white tabular-nums">{f1Score.toFixed(3)}</p>
+                <p className="text-2xl font-bold text-white tabular-nums">{f1Score.toFixed(3)}</p>
               ) : (
-                <p className="text-base font-mono text-slate-500 py-1">Belum dihitung</p>
+                <p className="text-base text-slate-500 py-1">Belum dihitung</p>
               )}
-              <p className="text-xs font-mono text-slate-400 mt-1 tabular-nums">Target: &gt; 0.820</p>
+              <p className="text-xs text-slate-500 tabular-nums mt-1">Target: &gt; 0.820</p>
             </div>
 
             {/* Metric 4: Brier Score */}
-            <div className="lg:px-4 first:pl-0 last:pr-0 py-3 lg:py-0">
-              <span className="text-xs font-mono text-slate-400 tracking-wide block mb-1">Brier (ternormalisasi) <span className="text-slate-600">({versionTag})</span></span>
+            <div className="bg-[#0c1017] p-3.5">
+              <span className="text-xs font-medium text-slate-400 block mb-1">Brier (ternormalisasi) <span className="text-slate-500">({versionTag})</span></span>
               {brierScore !== null ? (
-                <p className="text-2xl font-mono font-bold text-white tabular-nums">{brierScore.toFixed(4)}</p>
+                <p className="text-2xl font-bold text-white tabular-nums">{brierScore.toFixed(4)}</p>
               ) : (
-                <p className="text-base font-mono text-slate-500 py-1">Belum dihitung</p>
+                <p className="text-base text-slate-500 py-1">Belum dihitung</p>
               )}
-              <p className="text-xs font-mono text-slate-400 mt-1 tabular-nums">Target: &le; 0.100</p>
+              <p className="text-xs text-slate-500 tabular-nums mt-1">Target: &le; 0.100</p>
             </div>
           </div>
 
-          {/* Live deltas strip (only when live aggregate is sufficient) */}
+          {/* PHASE2: delta live vs batch disembunyi per spec (hanya N+Status di bar distilled).
           {liveSufficient && live?.deltas_vs_batch && (
             <div className="bg-emerald-950/20 border border-emerald-500/20 rounded-xl px-5 py-3 text-xs font-mono tabular-nums text-slate-300 flex flex-wrap items-center gap-x-4 gap-y-1">
               <span className="flex items-center gap-1.5 text-emerald-300 font-bold">
@@ -562,23 +577,26 @@ export default function EvaluationSection({
               )}
             </div>
           )}
+          */}
 
-          {/* Collapsible provenance: Data apa yang diuji? */}
-          <details className="bg-[#0c1017] border border-white/10 rounded-xl shadow-xl px-5 py-4 group" open>
+          {/* PHASE2: provenance detail — collapsed (tanpa open) agar default view hanya KPI+N+Status. Rincian audit tetap tersedia bila dibuka. */}
+          <details className="bg-[#0c1017] border border-white/10 rounded-xl shadow-xl px-5 py-4 group">
             <summary className="cursor-pointer list-none flex items-center justify-between gap-3 text-sm font-sans font-semibold text-slate-200">
               <span className="flex items-center gap-2">
-                <FileSpreadsheet className="w-4 h-4 text-cyan-400" />
+                <FileSpreadsheet className="w-4 h-4 text-slate-400" />
                 Data apa yang diuji?
               </span>
-              <span className="text-xs font-mono text-slate-400 group-open:hidden">+ tampilkan</span>
-              <span className="text-xs font-mono text-slate-400 hidden group-open:inline">− sembunyikan</span>
+              <span className="text-xs tabular-nums text-slate-400 group-open:hidden">+ tampilkan</span>
+              <span className="text-xs tabular-nums text-slate-400 hidden group-open:inline">− sembunyikan</span>
             </summary>
-            <div className="pt-3 mt-3 border-t border-white/10 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-mono">
-              <div className="p-3 rounded-lg bg-[#080d14] border border-white/10 space-y-1.5 text-slate-300">
+            <div className="pt-3 mt-3 border-t border-white/10 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs tabular-nums">
+              <div className="p-3 rounded-lg bg-white/[0.02] border border-white/10 space-y-1.5 text-slate-300">
                 <p className="text-[11px] font-sans font-bold text-slate-200 uppercase tracking-wider">Dataset & keputusan</p>
-                <p>N = {report?.total_scenarios ?? 60} skenario ground truth {showLive ? 'live operasional' : 'sintetis Sumatra'} · batch immutable v2026-10-26</p>
+                <p>N = {report?.total_scenarios ?? 60} skenario · Status: {report ? (report.gating_passed ? 'LULUS' : 'BELUM') : 'Belum dihitung'}</p>
                 <p>Matriks konfusi: TP {cm?.true_positives ?? '–'} / FP {cm?.false_positives ?? '–'} / TN {cm?.true_negatives ?? '–'} / FN {cm?.false_negatives ?? '–'}</p>
-                <p>Ambang deteksi: skor konsensus mentah raw_prob &ge; 0.50 (setara ternormalisasi &asymp; 0.727)</p>
+                <p>Ambang: Presisi &gt; {(thresholds?.min_precision ?? 0.85).toFixed(2)} · Sensitivitas &gt; {(thresholds?.min_recall ?? 0.80).toFixed(2)} · F1 &gt; {(thresholds?.min_f1 ?? 0.82).toFixed(3)} · Brier ≤ {(thresholds?.max_brier_score ?? 0.10).toFixed(3)}</p>
+                {/* PHASE2: dual-scale Pmax / rumus forecast / proxy live / sensor mapping disembunyi per spec (jargon sintetis).
+                <p>Ambang deteksi: skor konsensus mentah raw_prob ge; 0.50 (setara ternormalisasi asymp; 0.727)</p>
                 <p>Normalisasi P<sub>maks</sub> = {PINNED_P_MAX} (profil bobot W 0.35 / T 0.25 / I 0.20 / E 0.20)</p>
                 <p>Pemetaan sensor: cuaca (BMKG/NWP) · trafik (TomTom) · maritim (AIS) · berita (Antara/OSINT)</p>
                 <div className="pt-1 mt-1 border-t border-white/10 space-y-1">
@@ -587,11 +605,12 @@ export default function EvaluationSection({
                   <p className="break-words">Live: forecast = clamp(pred_delay_jam / 4.0, 0.05, 0.99) = <strong className="text-amber-300">PROXY</strong> (cut 2.0j ⟺ 0.50); tanpa decision trace → fallback pred_delay 4.0j; echo DISPATCHER_APPROVAL dikecualikan ({live?.excluded_echoes ?? 0}).</p>
                   <p>Brier ternormalisasi (diskor, ≤0.100): <strong className="text-white tabular-nums">{brierScore != null ? brierScore.toFixed(4) : 'n/a'}</strong> · mentah pra-normalisasi (telemetri): <strong className="text-white tabular-nums">{rawBrierApi != null ? rawBrierApi.toFixed(4) : `${PINNED_RAW_BRIER_FILE} (berkas, API tak mengekspos)`}</strong> · ECE: <strong className="text-white tabular-nums">{ece != null ? ece.toFixed(4) : 'n/a'}</strong></p>
                 </div>
+                */}
               </div>
-              <div className="p-3 rounded-lg bg-[#080d14] border border-white/10 space-y-1.5 text-slate-300">
-                <p className="text-[11px] font-sans font-bold text-slate-200 uppercase tracking-wider">Ambang kelulusan & latensi</p>
-                <p>Presisi &gt; {(thresholds?.min_precision ?? 0.85).toFixed(2)} · Sensitivitas &gt; {(thresholds?.min_recall ?? 0.80).toFixed(2)} · F1 &gt; {(thresholds?.min_f1 ?? 0.82).toFixed(3)}</p>
-                <p>Brier &le; {(thresholds?.max_brier_score ?? 0.10).toFixed(3)} · Status gerbang: {report ? (report.gating_passed ? 'LULUS' : 'BELUM LULUS') : 'Belum dihitung'}</p>
+              <div className="p-3 rounded-lg bg-white/[0.02] border border-white/10 space-y-1.5 text-slate-300">
+                <p className="text-[11px] font-sans font-bold text-slate-200 uppercase tracking-wider">Ambang kelulusan</p>
+                <p>Brier ≤ {(thresholds?.max_brier_score ?? 0.10).toFixed(3)} · Status gerbang: {report ? (report.gating_passed ? 'LULUS' : 'BELUM LULUS') : 'Belum dihitung'}</p>
+                {/* PHASE2: latensi solver / provenance hash / salinan unduhan disembunyi dari default view (tetap collapsed di sini).
                 <p>Latensi solver: {showLive ? 'n/a (outcome lapangan tanpa latensi solver)' : latencyMs !== null ? `${latencyMs.toFixed(2)} ms/skenario (target < 5.0 ms)` : 'Belum dihitung'}</p>
                 <div className="pt-1 mt-1 border-t border-white/10 space-y-1">
                   <p className="text-[11px] font-sans font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5"><Database className="w-3 h-3 text-cyan-400" /> Provenance berkas</p>
@@ -614,12 +633,14 @@ export default function EvaluationSection({
                     </a>
                   </p>
                 </div>
+                */}
               </div>
             </div>
           </details>
 
           {/* Split Analytical Canvas: Reliability Diagram + Corridor Efficiency */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div className="grid grid-cols-12 gap-4">
+            <div className="col-span-12 lg:col-span-6 min-w-0">
             <ReliabilityDiagram
               bins={dispBins}
               brierScore={brierScore ?? undefined}
@@ -631,22 +652,26 @@ export default function EvaluationSection({
               selectedBin={selectedBin}
               onSelectBin={handleSelectBin}
             />
+            </div>
+            <div className="col-span-12 lg:col-span-6 min-w-0">
             <RouteEfficiencyCard corridors={efficiency?.corridors} />
+            </div>
           </div>
 
           {/* Per-scenario ground-truth audit table (SUM-SCN-001..060) */}
-          <div className="flex flex-col bg-[#0c1017] border border-[#1c2432] rounded-lg p-5 shadow-xl overflow-hidden">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-4 border-b border-[#1c2432]">
+          <div className="flex flex-col bg-[#0c1017] border border-white/10 rounded-xl p-4 gap-3 shadow-xl overflow-hidden">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-4 border-b border-white/10">
               <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-md bg-cyan-500/10 border border-cyan-500/20 text-cyan-300">
+                <div className="p-2 rounded-md bg-white/5 border border-white/10 text-slate-300">
                   <Target className="w-4 h-4" />
                 </div>
                 <div>
                   <h3 className="text-sm font-semibold text-white tracking-wide font-sans flex items-center gap-2">
                     <span>Tabel per-skenario ground truth</span>
-                    <span className="px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 text-xs font-mono">
+                    <span className="px-2 py-0.5 rounded bg-white/5 text-slate-300 border border-white/10 text-xs tabular-nums">
                       {filteredScen.length}/{scenRows.length} skenario
                     </span>
+                    {/* PHASE2: badge hash salinan disembunyi per spec (audit tetap via berkas bila perlu).
                     {fileState === 'ready' && reportHashOk === true && (
                       <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 text-xs font-mono" title={`sha256 ${reportHash}`}>
                         salinan berkas terverifikasi ✓
@@ -657,13 +682,14 @@ export default function EvaluationSection({
                         hash salinan BERBEDA — verifikasi ulang berkas
                       </span>
                     )}
+                    */}
                   </h3>
                   <p className="text-xs text-slate-400 font-sans mt-0.5">
-                    predicted vs ground_truth per SUM-SCN-001…060 — sumber: berkas laporan → scenario_details (kolom confidence tersimpan = forecast ternormalisasi; bukan eta/4.0).
+                    Hasil per skenario SUM-SCN (aktual vs prediksi).
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-2 font-mono text-xs">
+              <div className="flex items-center gap-2 text-xs tabular-nums">
                 <select
                   value={scenBinFilter === 'all' ? 'all' : String(scenBinFilter)}
                   onChange={(e) => { setScenBinFilter(e.target.value === 'all' ? 'all' : Number(e.target.value)); setScenPage(1); }}
@@ -689,50 +715,55 @@ export default function EvaluationSection({
               </div>
             </div>
 
-            <div className="overflow-x-auto mt-2 -mx-5 px-5">
+            <div className="overflow-x-auto rounded-lg border border-white/10">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr className="border-b border-[#1c2432] text-xs font-sans text-slate-400">
-                    <th className="py-2.5 px-3">ID</th>
-                    <th className="py-2.5 px-3">Skenario</th>
-                    <th className="py-2.5 px-3 text-center">Aktual</th>
-                    <th className="py-2.5 px-3 text-center">Prediksi</th>
+                  <tr className="border-b border-white/10 text-slate-400">
+                    <th className="h-11 px-3 text-left">ID</th>
+                    <th className="h-11 px-3 text-left">Skenario</th>
+                    <th className="h-11 px-3 text-center">Aktual</th>
+                    <th className="h-11 px-3 text-center">Prediksi</th>
+                    <th className="h-11 px-3 text-center">Klas</th>
+                    {/* PHASE2: kolom raw_prob / forecast / src / latensi disembunyi per spec — tabel ringkas keputusan saja.
                     <th className="py-2.5 px-3 text-right">raw_prob</th>
                     <th className="py-2.5 px-3 text-right">forecast (tersimpan)</th>
                     <th className="py-2.5 px-3 text-right">src</th>
                     <th className="py-2.5 px-3 text-center">Klas</th>
                     <th className="py-2.5 px-3 text-right">Latensi</th>
+                    */}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/5 font-mono tabular-nums">
+                <tbody className="divide-y divide-white/10 tabular-nums">
                   {fileState === 'loading' && (
-                    <tr><td colSpan={9} className="py-8 text-center text-slate-500">Memuat salinan berkas laporan…</td></tr>
+                    <tr><td colSpan={5} className="py-8 text-center text-slate-500">Memuat salinan berkas laporan…</td></tr>
                   )}
                   {fileState === 'error' && (
                     <tr>
-                      <td colSpan={9} className="py-8 text-center text-slate-500">
-                        Salinan berkas tak termuat (mungkin basePath deployment). Verifikasi manual: <code className="text-slate-300">{REPO_REPORT_PATH}</code> → <code className="text-slate-300">scenario_details[]</code> (60 baris SUM-SCN-001…060, kolom actual/predicted/raw_probability/forecast_probability).
+                      <td colSpan={5} className="py-8 text-center text-slate-500">
+                        Belum ada data skenario — bukan 0% maupun 100%.
                       </td>
                     </tr>
                   )}
                   {fileState === 'ready' && scenPageRows.length === 0 && (
-                    <tr><td colSpan={9} className="py-8 text-center text-slate-500">Tidak ada skenario pada filter ini (bin {String(scenBinFilter)}, klas {scenClassFilter}).</td></tr>
+                    <tr><td colSpan={5} className="py-8 text-center text-slate-500">Tidak ada skenario pada filter ini (bin {String(scenBinFilter)}, klas {scenClassFilter}).</td></tr>
                   )}
                   {fileState === 'ready' && scenPageRows.map((s) => (
-                    <tr key={s.id} className="hover:bg-white/[0.02] transition-colors">
-                      <td className="py-2 px-3 text-cyan-300 font-bold whitespace-nowrap">{s.id}</td>
-                      <td className="py-2 px-3 text-slate-200 font-sans text-xs max-w-[240px] truncate" title={`${s.name} — ${s.province}`}>{s.name}</td>
-                      <td className="py-2 px-3 text-center text-white">{s.actual}</td>
-                      <td className="py-2 px-3 text-center text-white">{s.predicted}</td>
+                    <tr key={s.id} className="hover:bg-white/5 transition-colors">
+                      <td className="py-3 px-3 text-cyan-300 font-bold whitespace-nowrap">{s.id}</td>
+                      <td className="py-3 px-3 text-slate-200 text-xs max-w-[240px] truncate" title={`${s.name} — ${s.province}`}>{s.name}</td>
+                      <td className="py-3 px-3 text-center text-white">{s.actual}</td>
+                      <td className="py-3 px-3 text-center text-white">{s.predicted}</td>
+                      {/* PHASE2: sel raw/forecast/src/latensi disembunyi per spec.
                       <td className="py-2 px-3 text-right text-slate-400">{s.raw_probability.toFixed(4)}</td>
                       <td className="py-2 px-3 text-right text-slate-200" title="forecast_probability tersimpan (ternormalisasi P_maks), bukan eta/4.0">{s.forecast_probability.toFixed(4)}</td>
                       <td className="py-2 px-3 text-right text-slate-500">{s.active_sources}</td>
-                      <td className="py-2 px-3 text-center">
-                        <span className={`px-1.5 py-0.5 rounded text-[11px] font-bold ${s.classification === 'TP' ? 'bg-emerald-500/10 text-emerald-300' : s.classification === 'TN' ? 'bg-slate-500/10 text-slate-300' : 'bg-rose-500/10 text-rose-300'}`}>
+                      */}
+                      <td className="py-3 px-3 text-center">
+                        <span className={`px-1.5 py-0.5 rounded border text-[11px] font-bold ${s.classification === 'TP' ? 'bg-emerald-500/15 text-emerald-300 border-emerald-400/30' : s.classification === 'TN' ? 'bg-slate-500/15 text-slate-300 border-slate-400/30' : 'bg-rose-500/15 text-rose-300 border-rose-400/30'}`}>
                           {s.classification}
                         </span>
                       </td>
-                      <td className="py-2 px-3 text-right text-slate-500">{s.latency_ms.toFixed(2)} ms</td>
+                      {/* <td className="py-2 px-3 text-right text-slate-500">{s.latency_ms.toFixed(2)} ms</td> */}
                     </tr>
                   ))}
                 </tbody>
@@ -740,8 +771,8 @@ export default function EvaluationSection({
             </div>
 
             {fileState === 'ready' && (
-              <div className="flex items-center justify-between pt-3 border-t border-white/10 text-xs font-mono text-slate-400">
-                <span>Halaman <strong className="text-white">{scenPage}</strong> dari <strong className="text-white">{scenTotalPages}</strong> · {filteredScen.length} baris (fallback/missing_pred: 0 — semua 60 baris punya forecast & raw)</span>
+              <div className="flex items-center justify-between pt-3 border-t border-white/10 text-xs text-slate-400 tabular-nums">
+                <span>Halaman <strong className="text-white">{scenPage}</strong> dari <strong className="text-white">{scenTotalPages}</strong> · {filteredScen.length} baris</span>
                 <div className="flex items-center gap-2">
                   <button type="button" onClick={() => setScenPage((p) => Math.max(1, p - 1))} disabled={scenPage === 1} className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-slate-300 disabled:opacity-40 cursor-pointer">‹</button>
                   <button type="button" onClick={() => setScenPage((p) => Math.min(scenTotalPages, p + 1))} disabled={scenPage === scenTotalPages} className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-slate-300 disabled:opacity-40 cursor-pointer">›</button>
@@ -753,32 +784,34 @@ export default function EvaluationSection({
           {/* Exhaustive Automated Test Suite Matrix */}
           <TestMatrixTable tests={testMatrix?.tests} isLoading={isLoading} />
 
-          {/* Closed-Loop Decision Trace & Ground-Truth Outcome Audit Log */}
-          <div className="flex flex-col bg-[#0c1017] border border-[#1c2432] rounded-lg p-5 shadow-xl overflow-hidden">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-4 border-b border-[#1c2432]">
+          {/* PHASE2: log verifikasi lapangan disederhanakan per spec — ringkas keputusan, detail verbose disembunyi. */}
+          <div className="flex flex-col bg-[#0c1017] border border-white/10 rounded-xl p-4 gap-3 shadow-xl overflow-hidden">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-4 border-b border-white/10">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 rounded-md bg-white/5 border border-white/10 text-slate-300">
                   <History className="w-4 h-4" />
                 </div>
                 <div>
                   <h3 className="text-sm font-semibold text-white tracking-wide font-sans">
-                    Audit Keputusan Operator & Verifikasi Realitas Lapangan (T+12h / T+24h)
+                    Verifikasi lapangan (T+12h / T+24h)
                   </h3>
-                  <p className="text-xs text-slate-400 font-mono">
-                    Pencatatan Keputusan Tindakan Mitigasi, Verifikasi Lapangan Pasca-Disrupsi & Faktor Rekalibrasi Bobot
+                  <p className="text-xs text-slate-400">
+                    {outcomes.length === 0 ? 'Belum ada data verifikasi lapangan — bukan 0% maupun 100%.' : `${outcomes.length} kejadian tercatat`}
                   </p>
                 </div>
               </div>
 
+              {/* PHASE2: pill rekalibrasi disembunyi per spec.
               <div className="flex items-center gap-2 font-mono tabular-nums text-xs">
                 <span className="flex items-center gap-1.5 text-xs text-slate-400">
                   <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
                   Rekalibrasi η 0,05
                 </span>
               </div>
+              */}
             </div>
 
-            {/* Adaptive Sensor Weights Banner */}
+            {/* PHASE2: banner bobot adaptif + catatan ilustratif disembunyi per spec (jargon kalibrasi, bukan angka keputusan).
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 my-4">
               <div className="p-3 border border-[#1c2432] rounded-lg flex items-center justify-between font-mono tabular-nums text-xs">
                 <span className="text-slate-400">Bobot Sensor Cuaca (BMKG/NWP):</span>
@@ -810,34 +843,38 @@ export default function EvaluationSection({
             <p className="text-[11px] font-mono text-slate-500 -mt-1 mb-2">
               Angka bobot di atas ilustratif (baseline W 0.35 / T 0.35 / I 0.30); penasihat aktual dihitung per-insiden dari varians (η=0.05) — muat evaluasi per baris di bawah.
             </p>
+            */}
 
-            {/* Live sufficiency note for the outcomes log */}
+            {/* PHASE2: catatan live-sufficiency disederhanakan jadi satu baris honest-empty di subjudul di atas.
             {outcomes.length < LIVE_MIN_N && (
               <div className="mb-3 px-3 py-2 rounded-lg bg-amber-500/5 border border-amber-500/20 text-xs font-mono text-amber-200/90">
                 Outcome tersinkron N={outcomes.length} &lt; {LIVE_MIN_N} — agregat live belum dihitung backend (jujur-kosong, bukan 0%). Tabel di bawah adalah log mentah per kejadian.
               </div>
             )}
+            */}
 
             {/* Outcomes Log Table */}
-            <div className="overflow-x-auto -mx-5 px-5">
+            <div className="overflow-x-auto rounded-lg border border-white/10">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr className="border-b border-[#1c2432] text-xs font-mono text-slate-400 tracking-wide">
-                    <th className="py-2.5 px-3 font-medium">ID log / waktu</th>
-                    <th className="py-2.5 px-3 font-medium">Insiden</th>
-                    <th className="py-2.5 px-3 font-medium">Horizon</th>
-                    <th className="py-2.5 px-3 text-right font-medium">Kemacetan</th>
-                    <th className="py-2.5 px-3 text-right font-medium">Deviasi harga</th>
-                    <th className="py-2.5 px-3 font-medium">Verifikasi (sumber)</th>
+                  <tr className="border-b border-white/10 text-slate-400">
+                    <th className="h-11 px-3 text-left font-medium">ID log / waktu</th>
+                    <th className="h-11 px-3 text-left font-medium">Insiden</th>
+                    <th className="h-11 px-3 text-left font-medium">Horizon</th>
+                    <th className="h-11 px-3 text-right font-medium">Kemacetan</th>
+                    <th className="h-11 px-3 text-right font-medium">Deviasi harga</th>
+                    <th className="h-11 px-3 text-left font-medium">Verifikasi (sumber)</th>
+                    {/* PHASE2: kolom Pred (proxy) + Catatan disembunyi per spec — bukan angka keputusan.
                     <th className="py-2.5 px-3 text-right font-medium">Pred (proxy)</th>
                     <th className="py-2.5 px-3 font-medium">Catatan / sumber</th>
+                    */}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#1c2432] font-mono tabular-nums">
+                <tbody className="divide-y divide-white/10 tabular-nums">
                   {outcomes.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="py-8 text-center text-xs text-slate-500 font-mono">
-                        Belum ada log verifikasi lapangan (outcomes) yang tersinkronisasi.
+                      <td colSpan={6} className="py-8 text-center text-xs text-slate-500">
+                        Belum ada data verifikasi lapangan — bukan 0% maupun 100%.
                       </td>
                     </tr>
                   ) : (
@@ -848,7 +885,7 @@ export default function EvaluationSection({
                         ? clampProxy(cached.predictedDelay / 4.0)
                         : null;
                       return (
-                        <tr key={item.id} className="hover:bg-white/[0.02] transition-colors">
+                        <tr key={item.id} className="hover:bg-white/5 transition-colors">
                           <td className="py-3 px-3 text-slate-400 whitespace-nowrap text-xs">
                             <span className="text-white font-bold block">{item.id}</span>
                             <span className="text-xs text-slate-500 tabular-nums">
@@ -876,11 +913,12 @@ export default function EvaluationSection({
 
                           <td className="py-3 px-3 text-slate-300 text-xs whitespace-nowrap">
                             <span className="block">{item.verified_by}</span>
-                            <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[11px] text-cyan-300" title="Sumber verifikasi — baris DISPATCHER_APPROVAL adalah echo sistem dan dikecualikan dari agregat live">
+                            <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[11px] text-slate-300" title="Sumber verifikasi — baris DISPATCHER_APPROVAL adalah echo sistem dan dikecualikan dari agregat live">
                               {item.verification_source || 'tak tercatat'}
                             </span>
                           </td>
 
+                          {/* PHASE2: kolom proxy predicted-vs-ground-truth + catatan/sumber disembunyi per spec.
                           <td className="py-3 px-3 text-right whitespace-nowrap text-xs">
                             {proxy !== null ? (
                               <span className="text-slate-200" title={`Proxy live clamp(${cached!.predictedDelay}/4.0) — BUKAN confidence tersimpan; pred_delay ${cached!.predictedDelay}j`}>
@@ -912,6 +950,7 @@ export default function EvaluationSection({
                               </a>
                             )}
                           </td>
+                          */}
                         </tr>
                       );
                     })
@@ -921,7 +960,9 @@ export default function EvaluationSection({
             </div>
           </div>
         </>
+      {/* PHASE2: penutup ternary observability dikomentari per spec — selalu tampilkan benchmarks
       )}
+      */}
     </div>
   );
 }

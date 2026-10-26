@@ -107,31 +107,33 @@ export default function RouteEfficiencyCard({
  const totalFleetFuelSaved = curr.fuel_saved_liters * fleetSize;
 
  return (
- <div className="flex flex-col h-full bg-[#0c1017] border border-[#1c2432] rounded-lg p-5 shadow-xl relative overflow-hidden">
+ <div className="flex flex-col h-full min-w-0 bg-[#0c1017] border border-white/10 rounded-xl p-4 gap-3 shadow-xl relative overflow-hidden">
  {/* Header */}
- <div className="flex items-center justify-between pb-3 border-b border-[#1c2432]">
+ <div className="flex items-center justify-between pb-3 border-b border-white/10">
  <div className="flex items-center gap-2.5">
  <div className="p-2 rounded-md bg-white/5 border border-white/10 text-slate-300">
  <Zap className="w-4 h-4" />
  </div>
  <div>
- <h3 className="text-sm font-medium text-white tracking-tight font-sans">
+ <h3 className="text-sm font-semibold text-white tracking-wide font-sans">
  Efisiensi rerute
  </h3>
- <p className="text-xs text-slate-400 font-mono tabular-nums">
+ <p className="text-xs text-slate-400 tabular-nums">
  Penghematan operasional
  </p>
  </div>
  </div>
 
+ {/* PHASE2: badge latensi solver disembunyi per spec — hanya angka penghematan keputusan.
  <span className="flex items-center gap-1.5 text-xs text-slate-400 tabular-nums">
  <Clock className="w-3.5 h-3.5 text-slate-400" />
  Solver: {curr.solver_latency_ms.toFixed(1)} ms
  </span>
+ */}
  </div>
 
  {/* Corridor Selector Chips */}
- <div className="flex items-center gap-1.5 overflow-x-auto py-3 border-b border-[#1c2432] no-scrollbar">
+ <div className="flex items-center gap-1.5 overflow-x-auto py-3 border-b border-white/10 no-scrollbar">
  {activeCorridors.map((c, idx) => {
  const isSelected = selectedIdx === idx;
  return (
@@ -142,7 +144,7 @@ export default function RouteEfficiencyCard({
  className={`px-3 py-1 rounded-md text-xs font-sans transition whitespace-nowrap cursor-pointer border ${
  isSelected
  ? 'bg-white text-[#080d14] font-semibold border-white'
- : 'bg-transparent text-slate-400 hover:text-white border-white/10'
+ : 'bg-transparent text-slate-400 hover:text-white hover:bg-white/5 border-white/10'
  }`}
  >
  {c.origin} → {c.destination}
@@ -154,7 +156,7 @@ export default function RouteEfficiencyCard({
  {/* Comparison Grid: Blocked vs CPU Reroute */}
  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 my-3">
  {/* Scenario 1: Terjebak Disrupsi */}
- <div className="p-3.5 rounded-md border border-[#1c2432] flex flex-col justify-between">
+ <div className="p-3.5 rounded-md bg-white/[0.02] border border-white/10 flex flex-col justify-between">
  <div className="flex items-center justify-between text-xs mb-2">
  <span className="font-medium flex items-center gap-1.5 text-slate-200">
  <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
@@ -166,49 +168,49 @@ export default function RouteEfficiencyCard({
  <div className="space-y-2 text-xs">
  <div className="flex justify-between items-center text-slate-300">
  <span>Estimasi Kemacetan:</span>
- <strong className="text-red-400 text-sm font-mono tabular-nums">+{curr.blocked_delay_hours.toFixed(1)} Jam</strong>
+ <strong className="text-rose-400 text-sm tabular-nums">+{curr.blocked_delay_hours.toFixed(1)} Jam</strong>
  </div>
  <div className="flex justify-between items-center text-slate-300">
  <span>Jarak Normal:</span>
- <span className="text-slate-200 font-mono tabular-nums">{curr.baseline_distance_km.toFixed(1)} km</span>
+ <span className="text-slate-200 tabular-nums">{curr.baseline_distance_km.toFixed(1)} km</span>
  </div>
  <div className="flex justify-between items-center text-slate-400 text-xs">
  <span>Risiko Muatan:</span>
- <span className="text-red-300 font-medium">Tinggi (Pangan Rentan Rusak)</span>
+ <span className="text-rose-300 font-medium">Tinggi (Pangan Rentan Rusak)</span>
  </div>
  </div>
  </div>
 
  {/* Scenario 2: Dynamic Detour */}
- <div className="p-3.5 rounded-md border border-[#1c2432] flex flex-col justify-between">
+ <div className="p-3.5 rounded-md bg-white/[0.02] border border-white/10 flex flex-col justify-between">
  <div className="flex items-center justify-between text-xs mb-2">
  <span className="font-medium flex items-center gap-1.5 text-slate-200">
  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
  Rute pengalihan
  </span>
- <span className="text-slate-400 text-xs font-mono">Solver Graf</span>
+ <span className="text-slate-400 text-xs tabular-nums">Solver Graf</span>
  </div>
 
  <div className="space-y-2 text-xs">
  <div className="flex justify-between items-center text-slate-300">
  <span>Waktu Tempuh Detour:</span>
- <strong className="text-emerald-400 text-sm font-mono tabular-nums">{curr.reroute_delay_minutes.toFixed(0)} Menit</strong>
+ <strong className="text-emerald-400 text-sm tabular-nums">{curr.reroute_delay_minutes.toFixed(0)} Menit</strong>
  </div>
  <div className="flex justify-between items-center text-slate-300">
  <span>Jarak Reroute Optimal:</span>
- <span className="text-slate-200 font-mono tabular-nums">{curr.reroute_distance_km.toFixed(1)} km (+{(curr.reroute_distance_km - curr.baseline_distance_km).toFixed(1)} km)</span>
+ <span className="text-slate-200 tabular-nums">{curr.reroute_distance_km.toFixed(1)} km (+{(curr.reroute_distance_km - curr.baseline_distance_km).toFixed(1)} km)</span>
  </div>
  <div className="flex justify-between items-center text-slate-300">
  <span>Penghematan Bersih / Rit:</span>
- <span className="text-emerald-400 font-mono tabular-nums font-semibold">-{curr.time_saved_hours.toFixed(1)} Jam</span>
+ <span className="text-emerald-400 tabular-nums font-semibold">-{curr.time_saved_hours.toFixed(1)} Jam</span>
  </div>
  </div>
  </div>
  </div>
 
  {/* Interactive Fleet Scaler & Cost Calculation */}
- <div className="border-t border-[#1c2432] pt-3.5 mt-auto">
- <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#1c2432]">
+ <div className="border-t border-white/10 pt-3.5 mt-auto">
+ <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-white/10">
  <div className="flex items-center gap-2">
  <Truck className="w-4 h-4 text-slate-400" />
  <span className="text-xs font-medium text-slate-200">
@@ -217,7 +219,7 @@ export default function RouteEfficiencyCard({
  </div>
 
  {/* Stepper Buttons */}
- <div className="flex items-center gap-1.5 font-mono text-xs">
+ <div className="flex items-center gap-1.5 text-xs tabular-nums">
  {[1, 5, 10, 25, 50].map((num) => (
  <button
  key={num}
@@ -226,7 +228,7 @@ export default function RouteEfficiencyCard({
  className={`px-2.5 py-1 rounded-md border text-xs font-medium transition cursor-pointer ${
  fleetSize === num
  ? 'bg-white text-[#080d14] border-white font-semibold shadow-sm'
- : 'bg-[#0c1017] text-slate-400 border-[#1c2432] hover:text-white'
+ : 'bg-transparent text-slate-400 border-white/10 hover:text-white hover:bg-white/5'
  }`}
  >
  {num} Truk
@@ -237,23 +239,23 @@ export default function RouteEfficiencyCard({
 
  {/* Aggregated Savings Display */}
  <div className="grid grid-cols-3 gap-2.5 pt-3 text-center">
- <div className="p-2.5 rounded-md border border-[#1c2432]">
+ <div className="p-2.5 rounded-md bg-white/[0.02] border border-white/10">
  <span className="text-xs text-slate-400 block mb-1">Waktu Terselamatkan</span>
- <strong className="text-sm md:text-base text-emerald-400 font-semibold font-mono tabular-nums">
+ <strong className="text-sm md:text-base text-emerald-400 font-semibold tabular-nums">
  {totalFleetHoursSaved.toFixed(1)} Jam
  </strong>
  </div>
 
- <div className="p-2.5 rounded-md border border-[#1c2432]">
+ <div className="p-2.5 rounded-md bg-white/[0.02] border border-white/10">
  <span className="text-xs text-slate-400 block mb-1">BBM Terhemat</span>
- <strong className="text-sm md:text-base text-slate-200 font-semibold font-mono tabular-nums">
+ <strong className="text-sm md:text-base text-slate-200 font-semibold tabular-nums">
  {totalFleetFuelSaved.toFixed(0)} Liter
  </strong>
  </div>
 
- <div className="p-2.5 rounded-md border border-[#1c2432]">
+ <div className="p-2.5 rounded-md bg-white/[0.02] border border-white/10">
  <span className="text-xs text-slate-400 block mb-1">Estimasi Penghematan Biaya</span>
- <strong className="text-sm md:text-base text-emerald-400 font-semibold font-mono tabular-nums">
+ <strong className="text-sm md:text-base text-emerald-400 font-semibold tabular-nums">
  Rp {(totalFleetCostSaved).toLocaleString('id-ID')}
  </strong>
  </div>

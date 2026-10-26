@@ -49,9 +49,9 @@ const DOMAIN_OPTIONS = [
 
 function statusStyle(result: string): string {
   const r = (result || '').toUpperCase();
-  if (r === 'PASSED') return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
-  if (r === 'FAILED') return 'bg-rose-500/10 text-rose-300 border-rose-500/20';
-  return 'bg-slate-500/10 text-slate-300 border-slate-500/20';
+  if (r === 'PASSED') return 'bg-emerald-500/15 text-emerald-300 border-emerald-400/30';
+  if (r === 'FAILED') return 'bg-rose-500/15 text-rose-300 border-rose-400/30';
+  return 'bg-slate-500/15 text-slate-300 border-slate-400/30';
 }
 
 function StatusIcon({ result }: { result: string }) {
@@ -119,24 +119,29 @@ export default function TestMatrixTable({
     : 'n/a (belum ada data)';
 
   return (
-    <div className="flex flex-col bg-[#0c1017] border border-[#1c2432] rounded-lg p-5 shadow-xl overflow-hidden">
+    <div className="flex flex-col bg-[#0c1017] border border-white/10 rounded-xl p-4 gap-3 shadow-xl overflow-hidden">
       {/* Table Header Controls */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-4 border-b border-[#1c2432]">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-4 border-b border-white/10">
         <div className="flex items-center gap-2.5">
-          <div className="p-2 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+          <div className="p-2 rounded-md bg-white/5 border border-white/10 text-slate-300">
             <ShieldCheck className="w-4 h-4" />
           </div>
           <div>
             <h3 className="text-sm font-semibold text-white tracking-wide font-sans flex items-center gap-2">
               <span>Matriks Uji Otomatis & Inventaris Verifikasi</span>
-              <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-mono">
+              <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-400/30 text-xs tabular-nums">
                 {tests.length} Skenario • {passedCount}/{tests.length} ({passRateLabel}) Lolos
                 {failedCount > 0 && <span className="text-rose-300"> • {failedCount} Gagal</span>}
               </span>
             </h3>
             <p className="text-xs text-slate-400 font-sans mt-0.5">
+              Hasil uji otomatis per skenario.
+            </p>
+            {/* PHASE2: penjelasan pemetaan FR-1 s.d. FR-20 disembunyi per spec (jargon) — filter domain tetap tersedia di bawah.
+            <p className="text-xs text-slate-400 font-sans mt-0.5">
               Pemetaan Kebutuhan Fungsional FR-1 s.d. FR-20 dengan Pengujian Otomatis Pytest & WebGL
             </p>
+            */}
           </div>
         </div>
 
@@ -148,13 +153,20 @@ export default function TestMatrixTable({
             value={search}
             onChange={handleSearchChange}
             placeholder="Cari ID uji, modul, atau skenario..."
-            className="w-full pl-9 pr-3 py-1.5 rounded-md bg-white/5 border border-white/10 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-400 font-sans"
+            className="w-full pl-9 pr-3 py-1.5 rounded-md bg-white/5 border border-white/10 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-white/30 font-sans"
           />
         </div>
       </div>
 
-      {/* Domain Filter Pills Bar */}
-      <div className="flex items-center gap-1.5 overflow-x-auto py-3 no-scrollbar border-b border-[#1c2432]">
+      {/* PHASE2: filter domain FR dipindah ke <details> collapsed per spec — default view hanya search + tabel. */}
+      <details className="group border-b border-white/10">
+        <summary className="cursor-pointer list-none flex items-center gap-1.5 py-3 text-xs font-sans text-slate-400 hover:text-slate-200">
+          <Filter className="w-3.5 h-3.5" />
+          <span>Filter domain (FR-1…FR-20)</span>
+          <span className="tabular-nums group-open:hidden">+ tampilkan</span>
+          <span className="tabular-nums hidden group-open:inline">− sembunyikan</span>
+        </summary>
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-3 no-scrollbar">
         {DOMAIN_OPTIONS.map((opt) => {
           const isActive = selectedDomain === opt.id;
           const label = opt.id === 'all' ? `${opt.label} (${tests.length} Uji)` : opt.label;
@@ -163,10 +175,10 @@ export default function TestMatrixTable({
               key={opt.id}
               type="button"
               onClick={() => handleDomainSelect(opt.id)}
-              className={`px-3 py-1 rounded-md text-xs font-sans transition whitespace-nowrap cursor-pointer ${
+              className={`px-3 py-1 rounded-md text-xs font-sans transition whitespace-nowrap cursor-pointer border ${
                 isActive
-                  ? 'bg-white text-[#080d14] font-semibold'
-                  : 'bg-transparent text-slate-400 hover:text-slate-200 border border-white/10'
+                  ? 'bg-white text-[#080d14] font-semibold border-white'
+                  : 'bg-transparent text-slate-400 hover:text-slate-200 hover:bg-white/5 border-white/10'
               }`}
             >
               {label}
@@ -174,25 +186,26 @@ export default function TestMatrixTable({
           );
         })}
       </div>
+      </details>
 
       {/* Table Canvas */}
-      <div className="overflow-x-auto mt-2 -mx-5 px-5">
+      <div className="overflow-x-auto rounded-lg border border-white/10">
         <table className="w-full text-left text-xs border-collapse">
           <thead>
-            <tr className="border-b border-[#1c2432] text-xs font-sans text-slate-400">
-              <th className="py-2.5 px-3">Test ID</th>
-              <th className="py-2.5 px-3">FR Domain</th>
-              <th className="py-2.5 px-3">Modul Pengujian</th>
-              <th className="py-2.5 px-3">Skenario & Vektor Uji</th>
-              <th className="py-2.5 px-3">Invarian / Ekspektasi</th>
-              <th className="py-2.5 px-3 text-right">Durasi</th>
-              <th className="py-2.5 px-3 text-center">Status</th>
+            <tr className="border-b border-white/10 text-slate-400">
+              <th className="h-11 px-3 text-left">Test ID</th>
+              <th className="h-11 px-3 text-left">FR Domain</th>
+              <th className="h-11 px-3 text-left">Modul Pengujian</th>
+              <th className="h-11 px-3 text-left">Skenario & Vektor Uji</th>
+              <th className="h-11 px-3 text-left">Invarian / Ekspektasi</th>
+              <th className="h-11 px-3 text-right">Durasi</th>
+              <th className="h-11 px-3 text-center">Status</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-white/5">
+          <tbody className="divide-y divide-white/10">
             {paginatedTests.length === 0 ? (
               <tr>
-                <td colSpan={7} className="py-8 text-center text-slate-500 font-mono text-xs">
+                <td colSpan={7} className="py-8 text-center text-slate-500 text-xs">
                   {tests.length === 0
                     ? 'Belum ada data matriks uji (API /evaluation/test-matrix tak terjangkau) — bukan 0% maupun 100%.'
                     : `Tidak ada skenario uji yang cocok dengan pencarian "${search}".`}
@@ -208,44 +221,44 @@ export default function TestMatrixTable({
                       className="hover:bg-white/5 transition-colors cursor-pointer group"
                     >
                       {/* Test ID */}
-                      <td className="py-2.5 px-3 font-mono font-bold text-cyan-400 whitespace-nowrap flex items-center gap-1.5">
+                      <td className="py-3 px-3 font-mono font-bold text-cyan-300 whitespace-nowrap flex items-center gap-1.5">
                         {isExpanded ? (
                           <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
                         ) : (
-                          <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-cyan-400 transition" />
+                          <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-white transition" />
                         )}
                         <span>{t.test_id}</span>
                       </td>
 
                       {/* FR Domain */}
-                      <td className="py-2.5 px-3 whitespace-nowrap">
-                        <span className="px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 font-mono text-xs">
+                      <td className="py-3 px-3 whitespace-nowrap">
+                        <span className="px-2 py-0.5 rounded bg-white/5 text-slate-300 border border-white/10 font-mono text-xs">
                           {t.fr_id}
                         </span>
                       </td>
 
                       {/* Module Path */}
-                      <td className="py-2.5 px-3 font-mono text-slate-400 text-xs max-w-[180px] truncate" title={t.module}>
+                      <td className="py-3 px-3 font-mono text-slate-400 text-xs max-w-[180px] truncate" title={t.module}>
                         {t.module}
                       </td>
 
                       {/* Scenario Description */}
-                      <td className="py-2.5 px-3 text-slate-200 text-xs max-w-[260px] truncate" title={t.scenario}>
+                      <td className="py-3 px-3 text-slate-200 text-xs max-w-[260px] truncate" title={t.scenario}>
                         {t.scenario}
                       </td>
 
                       {/* Invariant */}
-                      <td className="py-2.5 px-3 text-slate-400 text-xs max-w-[240px] truncate" title={t.expected_invariant}>
+                      <td className="py-3 px-3 text-slate-400 text-xs max-w-[240px] truncate" title={t.expected_invariant}>
                         {t.expected_invariant}
                       </td>
 
                       {/* Execution Time */}
-                      <td className="py-2.5 px-3 font-mono text-slate-400 text-right whitespace-nowrap text-xs">
+                      <td className="py-3 px-3 text-slate-400 tabular-nums text-right whitespace-nowrap text-xs">
                         {t.execution_time_ms ? `${t.execution_time_ms.toFixed(1)} ms` : '< 5 ms'}
                       </td>
 
                       {/* Status */}
-                      <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                      <td className="py-3 px-3 text-center whitespace-nowrap">
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border font-mono text-xs font-bold ${statusStyle(t.result)}`}>
                           <StatusIcon result={t.result} />
                           {t.result.toUpperCase()}
@@ -255,7 +268,7 @@ export default function TestMatrixTable({
 
                     {/* Expandable Drawer Row */}
                     {isExpanded && (
-                      <tr className="bg-black/40 border-y border-cyan-500/20">
+                      <tr className="bg-white/[0.02] border-y border-white/10">
                         <td colSpan={7} className="py-3 px-6">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
                             <div className="space-y-1.5">
@@ -264,7 +277,7 @@ export default function TestMatrixTable({
                                 {t.scenario}
                               </p>
                               <div className="flex items-center gap-3 text-xs text-slate-400 pt-1">
-                                <span>Tipe Uji: <strong className="text-cyan-300">{t.test_type}</strong></span>
+                                <span>Tipe Uji: <strong className="text-slate-200">{t.test_type}</strong></span>
                                 <span>•</span>
                                 <span>Kategori: <strong className="text-slate-200">{t.category}</strong></span>
                               </div>
@@ -272,11 +285,11 @@ export default function TestMatrixTable({
 
                             <div className="space-y-1.5">
                               <span className="text-slate-400 text-xs font-medium tracking-wide">Invarian logika</span>
-                              <p className="text-emerald-300 bg-emerald-950/30 p-2.5 rounded-lg border border-emerald-500/20">
+                              <p className="text-emerald-300 bg-emerald-500/5 p-2.5 rounded-lg border border-emerald-400/30">
                                 {t.expected_invariant}
                               </p>
                               <div className="flex items-center gap-2 text-xs text-slate-400 pt-1">
-                                <Code className="w-3.5 h-3.5 text-cyan-400" />
+                                <Code className="w-3.5 h-3.5 text-slate-400" />
                                 <span>Modul: <code className="text-slate-300">{t.module}</code></span>
                               </div>
                             </div>
@@ -293,7 +306,7 @@ export default function TestMatrixTable({
       </div>
 
       {/* Pagination Footer */}
-      <div className="flex items-center justify-between pt-4 border-t border-white/10 text-xs font-mono text-slate-400">
+      <div className="flex items-center justify-between pt-3 border-t border-white/10 text-xs text-slate-400 tabular-nums">
         <div>
           Menampilkan <strong className="text-white">{paginatedTests.length}</strong> dari <strong className="text-white">{filteredTests.length}</strong> skenario terfilter ({tests.length} total)
         </div>
@@ -303,7 +316,7 @@ export default function TestMatrixTable({
             type="button"
             onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
             disabled={currentPage === 1}
-            className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-300 hover:text-cyan-400 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+            className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-300 hover:text-white disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
           >
             <ChevronLeft className="w-3.5 h-3.5" />
           </button>
@@ -314,7 +327,7 @@ export default function TestMatrixTable({
             type="button"
             onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
             disabled={currentPage === totalPages}
-            className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-300 hover:text-cyan-400 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+            className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-slate-300 hover:text-white disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
           >
             <ChevronRight className="w-3.5 h-3.5" />
           </button>

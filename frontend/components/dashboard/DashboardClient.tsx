@@ -918,18 +918,22 @@ export default function DashboardClient() {
   }, [crisisHazardZones, disasterZones, newsFeed, showRedZones, showYellowZones, showForecastZones, forecastNowMs, buildHazardSpecificZoneGeometry]);
 
   // Synchronize activeSection from URL query parameters.
-  // GUEST hard-block: ?section=reports never opens the audit ledger — it
-  // forces the login modal + a Mode Sandbox toast instead.
+  // GUEST hard-block: ?section=reports|analytics|evaluation never opens the
+  // locked ledger — it forces the login modal + a Mode Sandbox toast instead.
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const section = params.get('section') as 'map' | 'analytics' | 'reports' | 'evaluation';
       if (section && ['map', 'analytics', 'reports', 'evaluation'].includes(section)) {
-        if (section === 'reports' && (role === 'GUEST' || !isAuthenticated)) {
+        if (['reports', 'analytics', 'evaluation'].includes(section) && (role === 'GUEST' || !isAuthenticated)) {
           setActiveSection('map');
           openAuthModal();
           setToast({
-            message: 'Mode Sandbox: Laporan terkunci untuk tamu. Masuk untuk membuka audit mitigasi.',
+            message: section === 'reports'
+              ? 'Mode Sandbox: Laporan terkunci untuk tamu. Masuk untuk membuka audit mitigasi.'
+              : section === 'analytics'
+                ? 'Mode Sandbox: Analitik terkunci untuk tamu. Masuk untuk membuka analitik.'
+                : 'Mode Sandbox: Evaluasi terkunci untuk tamu. Masuk untuk membuka evaluasi.',
             type: 'info',
           });
           return;
@@ -939,14 +943,19 @@ export default function DashboardClient() {
     }
   }, [role, isAuthenticated, openAuthModal]);
 
-  // Safety net: a live downgrade to GUEST (logout/expiry) while on Laporan
-  // bounces back to the map and re-locks via the modal + toast.
+  // Safety net: a live downgrade to GUEST (logout/expiry) while on a locked
+  // section (Laporan/Analitik/Evaluasi) bounces back to the map and re-locks
+  // via the modal + toast.
   useEffect(() => {
-    if (activeSection === 'reports' && (role === 'GUEST' || !isAuthenticated)) {
+    if (['reports', 'analytics', 'evaluation'].includes(activeSection) && (role === 'GUEST' || !isAuthenticated)) {
       setActiveSection('map');
       openAuthModal();
       setToast({
-        message: 'Mode Sandbox: Laporan terkunci untuk tamu. Masuk untuk membuka audit mitigasi.',
+        message: activeSection === 'reports'
+          ? 'Mode Sandbox: Laporan terkunci untuk tamu. Masuk untuk membuka audit mitigasi.'
+          : activeSection === 'analytics'
+            ? 'Mode Sandbox: Analitik terkunci untuk tamu. Masuk untuk membuka analitik.'
+            : 'Mode Sandbox: Evaluasi terkunci untuk tamu. Masuk untuk membuka evaluasi.',
         type: 'info',
       });
     }
@@ -2688,7 +2697,7 @@ export default function DashboardClient() {
             </Link>
           </div>
 
-          {/* Section Navigation Tabs — Laporan hard-locked for GUEST */}
+          {/* Section Navigation Tabs — Laporan/Analitik/Evaluasi hard-locked for GUEST */}
           <nav aria-label="Bagian dasbor" className="flex items-center gap-1 bg-[#080d14] p-1 rounded-lg border border-white/10 overflow-x-auto no-scrollbar shrink">
             {[
               { id: 'map', label: 'Peta Operasi' },
@@ -2696,34 +2705,40 @@ export default function DashboardClient() {
               { id: 'reports', label: 'Laporan' },
               { id: 'evaluation', label: 'Evaluasi' },
             ].map((tab) => {
-              const isReportsLocked = tab.id === 'reports' && (role === 'GUEST' || !isAuthenticated);
+              const isLockedSection = ['reports', 'analytics', 'evaluation'].includes(tab.id) && (role === 'GUEST' || !isAuthenticated);
+              const lockLabel = tab.id === 'reports' ? 'Laporan' : tab.id === 'analytics' ? 'Analitik' : 'Evaluasi';
+              const lockDetail = tab.id === 'reports' ? 'audit mitigasi' : tab.id === 'analytics' ? 'analitik' : 'evaluasi';
               return (
                 <button
                   key={tab.id}
                   id={`nav-${tab.id}`}
                   type="button"
-                  disabled={isReportsLocked}
-                  aria-disabled={isReportsLocked}
-                  title={isReportsLocked ? 'Laporan terkunci: masuk untuk membuka audit mitigasi (Mode Sandbox)' : tab.label}
+                  disabled={isLockedSection}
+                  aria-disabled={isLockedSection}
+                  title={isLockedSection ? `${lockLabel} terkunci: masuk untuk membuka ${lockDetail} (Mode Sandbox)` : tab.label}
                   onClick={() => {
-                    if (isReportsLocked) {
+                    if (isLockedSection) {
                       openAuthModal();
                       setToast({
-                        message: 'Mode Sandbox: Laporan terkunci untuk tamu. Masuk untuk membuka audit mitigasi.',
+                        message: tab.id === 'reports'
+                          ? 'Mode Sandbox: Laporan terkunci untuk tamu. Masuk untuk membuka audit mitigasi.'
+                          : tab.id === 'analytics'
+                            ? 'Mode Sandbox: Analitik terkunci untuk tamu. Masuk untuk membuka analitik.'
+                            : 'Mode Sandbox: Evaluasi terkunci untuk tamu. Masuk untuk membuka evaluasi.',
                         type: 'info',
                       });
                       return;
                     }
                     setActiveSection(tab.id as typeof activeSection);
                   }}
-                  className={`px-3 sm:px-3.5 py-1.5 rounded-md text-xs font-medium transition whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 ${isReportsLocked
+                  className={`px-3 sm:px-3.5 py-1.5 rounded-md text-xs font-medium transition whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 ${isLockedSection
                     ? 'text-slate-500 cursor-not-allowed opacity-60 flex items-center gap-1.5'
                     : activeSection === tab.id
                       ? 'bg-white text-[#080d14] font-semibold cursor-pointer'
                       : 'text-slate-400 hover:text-slate-200 hover:bg-white/5 cursor-pointer'
                     }`}
                 >
-                  {isReportsLocked && <Lock className="w-3 h-3 shrink-0" aria-hidden="true" />}
+                  {isLockedSection && <Lock className="w-3 h-3 shrink-0" aria-hidden="true" />}
                   {tab.label}
                 </button>
               );
@@ -3681,14 +3696,47 @@ export default function DashboardClient() {
 
         </div>
 
-        {/* Section 2: Analytics Dashboard */}
+        {/* Section 2: Analytics Dashboard — GUEST hard-blocked at mount */}
         <div className={`w-full h-full p-4 lg:p-6 overflow-y-auto ${activeSection === 'analytics' ? 'block' : 'hidden'}`}>
+          {(role === 'GUEST' || !isAuthenticated) ? (
+            <div
+              role="alert"
+              aria-label="Analitik terkunci untuk tamu"
+              className="w-full h-full min-h-[320px] flex flex-col items-center justify-center gap-3 bg-[#0c1017] border border-white/10 rounded-xl p-8 text-center"
+            >
+              <div className="w-10 h-10 rounded-lg bg-amber-500/10 border border-amber-500/25 flex items-center justify-center">
+                <Lock className="w-5 h-5 text-amber-300" aria-hidden="true" />
+              </div>
+              <h2 className="font-headline font-semibold text-base text-white">Analitik terkunci — Mode Sandbox</h2>
+              <p className="text-xs text-slate-400 max-w-md leading-relaxed">
+                Tamu tidak dapat membuka Analitik. Masuk sebagai Dispatcher untuk melihat analitik
+                operasional atau sebagai Regulator untuk melihat agregat pengawasan.
+              </p>
+              <div className="flex items-center gap-2 mt-1">
+                <button
+                  type="button"
+                  onClick={openAuthModal}
+                  className="cursor-pointer px-4 py-2 rounded-md bg-white text-[#080d14] text-xs font-semibold hover:bg-slate-200 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
+                >
+                  Masuk untuk membuka Analitik
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveSection('map')}
+                  className="cursor-pointer px-4 py-2 rounded-md bg-white/5 border border-white/10 text-slate-200 text-xs font-medium hover:bg-white/10 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
+                >
+                  Kembali ke Peta
+                </button>
+              </div>
+            </div>
+          ) : (
           <AnalyticsSection
             selectedCrisis={selectedCrisis}
             corridorContext={corridorContext}
             activeRoutes={currentMapRoutes}
             onSwitchTab={(tab) => setActiveSection(tab)}
           />
+          )}
         </div>
 
         {/* Section 3: Executive Reports — GUEST hard-blocked at mount */}
@@ -3735,13 +3783,46 @@ export default function DashboardClient() {
           )}
         </div>
 
-        {/* Section 5: Dedicated Evaluation & Benchmark Dashboard */}
+        {/* Section 5: Dedicated Evaluation & Benchmark Dashboard — GUEST hard-blocked at mount */}
         <div className={`w-full h-full p-4 lg:p-6 overflow-y-auto ${activeSection === 'evaluation' ? 'block' : 'hidden'}`}>
+          {(role === 'GUEST' || !isAuthenticated) ? (
+            <div
+              role="alert"
+              aria-label="Evaluasi terkunci untuk tamu"
+              className="w-full h-full min-h-[320px] flex flex-col items-center justify-center gap-3 bg-[#0c1017] border border-white/10 rounded-xl p-8 text-center"
+            >
+              <div className="w-10 h-10 rounded-lg bg-amber-500/10 border border-amber-500/25 flex items-center justify-center">
+                <Lock className="w-5 h-5 text-amber-300" aria-hidden="true" />
+              </div>
+              <h2 className="font-headline font-semibold text-base text-white">Evaluasi terkunci — Mode Sandbox</h2>
+              <p className="text-xs text-slate-400 max-w-md leading-relaxed">
+                Tamu tidak dapat membuka Evaluasi. Masuk sebagai Dispatcher untuk melihat evaluasi
+                operasional atau sebagai Regulator untuk melihat agregat pengawasan.
+              </p>
+              <div className="flex items-center gap-2 mt-1">
+                <button
+                  type="button"
+                  onClick={openAuthModal}
+                  className="cursor-pointer px-4 py-2 rounded-md bg-white text-[#080d14] text-xs font-semibold hover:bg-slate-200 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
+                >
+                  Masuk untuk membuka Evaluasi
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveSection('map')}
+                  className="cursor-pointer px-4 py-2 rounded-md bg-white/5 border border-white/10 text-slate-200 text-xs font-medium hover:bg-white/10 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
+                >
+                  Kembali ke Peta
+                </button>
+              </div>
+            </div>
+          ) : (
           <EvaluationSection
             corridorContext={corridorContext}
             selectedCrisis={selectedCrisis}
             activeRoutes={currentMapRoutes}
           />
+          )}
         </div>
 
       </main>
