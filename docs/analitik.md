@@ -21,3 +21,10 @@
 ## Gates
 
 - `test_bnpb_ckan.py` 6 passed; Playwright `analitik-heatmap-tooltip-bnpb` + M7 regression gate 2 passed; laporan 5 passed; phase57 8 pre-existing failures (copy drift, unrelated).
+
+## Analitik/Laporan milestone 4-fase (commit `8f30522`, phases 134–137)
+
+- 134 palette 3+neutral canonical → `.planning/phases/134-analitik-palette-3neutral-canonical/`
+- 135 guest hard-block + audit guided + demo seed → `.planning/phases/135-laporan-guest-hardblock-audit-seed/`
+- 136 real PIHPS backfill 180d + korelasi/streak UX → `.planning/phases/136-pihps-backfill-korelasi-streak-ux/`
+- 137 playwright gate green → `.planning/phases/137-analitik-laporan-playwright-gate/`

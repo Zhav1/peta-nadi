@@ -1,11 +1,11 @@
 # SPEC — Final-Gemastik Laporan-PreHub Rewrite
 
-Status: DRAFT for review. Date: 2026-10-26. Scope: `Final-Gemastik/` only.
-Method: local evidence first; no new data collection; no Proposal edits.
+Status: READY. Date: 2026-10-26. Scope: Laporan only (`Final-Gemastik/` DOCX, SPEC, PDF, audit); no Proposal or product-code edits.
+Method: PreHub is the factual spine; BeforeYouBet (BYB) supplies structure and fills only. Anchor every PreHub claim to PreHub evidence; no new data collection or external claims.
 
 ## 1. Goal
 
-- G1. Rewrite `Laporan-PreHub` from local evidence only (code, probe logs, validation letters, screenshots), not from memory or external claims. Generator entry point is `scripts/generate_docx_technical_doc.py:319` (`build_technical_document(output_path, project_root)`).
+- G1. Keep PreHub as the report spine; use BeforeYouBet (BYB) only for shared report structure and fill. Anchor PreHub claims to local code, probe logs, validation letters, and screenshots. Do not add claims from memory or external sources. Generator: `scripts/generate_docx_technical_doc.py:319` (`build_technical_document(output_path, project_root)`).
 - G2. `Proposal-PreHub-GEMASTIK19.docx` is frozen. Proposal-vs-implementation divergence is already recorded: Proposal states data largely simulated and decisions not auto-executed, while technical document claims ready-to-deploy routing updates (`Final-Gemastik/last-judgement.txt:20`); reference baseline for this divergence is `.planning/PROPOSAL_VS_IMPLEMENTATION_GAP_ANALYSIS.md:5-9`.
 - G3. Laporan describes an operational decision-support demonstrator for Sumatra food-logistics corridors, explicitly non-BULOG-operational: no joint pilot with BULOG/Bapanas/fleet operator exists yet (`Final-Gemastik/last-judgement.txt:11`); BULOG strings in tree are fixture labels only, e.g. `backend/app/services/telemetry_service.py:247` (`1.800 Ton Beras BULOG`) and `backend/app/routers/fleet_ingest_router.py:49` (`Truk Beras BULOG Tebing` sample CSV).
 
@@ -50,8 +50,8 @@ Road-snapping grill lock is additive, not replaced: offline precompute + dual-la
 ### 3.4 DOCX preservation and changelog
 
 - Preserve SDT dropdown controls in validation-letter derivatives: row extension deep-copies `w:sdt` (`scripts/generate_ditmawalumni_usu_doc.py:206-209`); rating updates write `dropDownList lastValue` + visible `w:t` (`scripts/generate_ditmawalumni_usu_doc.py:261-276`); save path fixed (`scripts/generate_ditmawalumni_usu_doc.py:338`).
-- Preserve Laporan generator structure (BAB 1-11 headings, styled tables, screenshot figures) in `scripts/generate_docx_technical_doc.py:319-322`; output path fixed `docs/Dokumen_Pendukung_PreHub_Technical_Document.docx` (`scripts/generate_docx_technical_doc.py:689-691`).
-- Changelog: every Laporan content change appends Phase log entries; current tail is Phase 119 + Phase 121 (`.planning/STATE.md:341-347`, `.planning/STATE.md:350-356`).
+- Preserve the report's PreHub narrative spine, required BYB fills, styled tables, and figures. Source generator: `scripts/generate_docx_technical_doc.py:319-322`; generated output path: `scripts/generate_docx_technical_doc.py:689-691`. Final edits stay in `Final-Gemastik/`.
+- Changelog: record Laporan edits in `Apa yang Berubah`; this task stays in `Final-Gemastik/` and does not edit `.planning/STATE.md` or product code.
 
 ## 4. Open / deferred (not in this rewrite)
 
@@ -67,7 +67,7 @@ Road-snapping grill lock is additive, not replaced: offline precompute + dual-la
 - I-04 HOLD for Regulator is UI-only; server stays 403. Regulator perms exclude `approvals:write` (`backend/app/auth/supabase_auth.py:58-65`); HOLD is HITL advisory flag, not commit (`backend/app/auth/supabase_auth.py:42-45`); role gate raises 403 (`backend/app/auth/supabase_auth.py:386-393`); regulator APPROVE denied 403 (`backend/tests/test_auth_rbac.py:233-251`); fleet writes similarly 403-gated (`backend/app/routers/fleet_ingest_router.py:108-120`).
 - I-05 PetaNadi alias. Service name is `peta-nadi` (`render.yaml:3`); public URL + CORS list use `https://peta-nadi.onrender.com` (`render.yaml:69-72`); rename `prehub-backend` → `peta-nadi` noted (`.planning/LEARNINGS.md:239-243`). Laporan must name both: PreHub (product) / peta-nadi (deploy alias).
 - I-06 BULOG fixture labels. Do not present as integration: sample manifest BULOG row (`backend/app/routers/fleet_ingest_router.py:46-52`); telemetry BULOG cargo rows (`backend/app/services/telemetry_service.py:247`, `backend/app/services/telemetry_service.py:375`); Laporan target-user table still lists Perum BULOG as audience (`scripts/generate_docx_technical_doc.py:351`), which stays audience, not pilot evidence.
-- I-07 Screenshots are localhost captures. Playwright baseURL + webServer both `http://localhost:3000` (`frontend/playwright.config.ts:14`, `frontend/playwright.config.ts:25-32`); generator reads `docs/screenshots` (`scripts/generate_docx_technical_doc.py:541`); figures 7.1-7.7 bound to `01_..07_` PNGs (`scripts/generate_docx_technical_doc.py:543-597`); SOP references localhost URL (`scripts/generate_docx_technical_doc.py:523`). Caption every figure with host + date; never label localhost captures as production.
+- I-07 Vercel figures. Embed `docs/screenshots/vercel-01-dashboard.png` through `vercel-06-evaluasi.png` as Gambar VIII.1-VIII.6. Captions read `Gambar VIII.x. Tampilan laman ...`; no host or date. Localhost remains the SOP/test environment, not the source label for these six figures (`Final-Gemastik/Laporan-PreHub-GEMASTIK19.docx`, Mockup section, paras 266-277).
 
 ## 6. Verification hooks (must all pass before Laporan export)
 
@@ -77,31 +77,31 @@ Road-snapping grill lock is additive, not replaced: offline precompute + dual-la
 - V-04 Eval: benchmark/calibration report endpoint + 133-test matrix + corridor efficiency (`backend/app/routers/evaluation_router.py:176-180` — TEST-FR14-01..05).
 - V-05 Backend suite: `pytest backend/tests` green; known exception is eval TP 35-vs-34 red (`.planning/LEARNINGS.md:290`) — fix label/cut first, never edit expectation silently.
 - V-06 Frontend: `npx tsc --noEmit` exit 0; Playwright suite against localhost webServer (`frontend/playwright.config.ts:25-32`) with no-errors gate; turn-by-turn 4/4 (`frontend/scripts/test_turn_by_turn.ts:231`).
+- V-07 DOCX/export/similarity: back up before edits; use run-level changes and do not alter `w:sdt`. Keep `w:sdt` count 133, Mendeley strings 18 citations + 3 bibliography, 15 entries in the bibliography SDT + 4 plain references, N=60 table, Tabel VII.4, six plain sync boxes, eight chapter stubs, and 6 Vercel figures (maximum 12 inline shapes). Export PDF and record pages/bytes. Screen exact 5-word n-gram overlap between Makalah and Laporan; target <25%, not a certified similarity score.
 
-## 7. Six BAB verifications (Laporan-PreHub content gates)
+## 7. Report content gates (PreHub spine, BYB fill, and 8 chapter stubs)
 
-- BAB 1 Executive summary + 3 structural vulnerabilities + 4 integration bullets (`scripts/generate_docx_technical_doc.py:365-381`).
-- BAB 2 Hardware CPU-only table + software stack bullets (`scripts/generate_docx_technical_doc.py:385-401`).
-- BAB 3 Clone + backend/frontend env blocks + backend/frontend run blocks (`scripts/generate_docx_technical_doc.py:406-452`).
-- BAB 4 Six-agent topology + three math formulations (independence product, Brier, tri-option matrix) (`scripts/generate_docx_technical_doc.py:457-491`).
-- BAB 5 Five functional modules 5.1-5.5 + B2G briefing 5.6 (`scripts/generate_docx_technical_doc.py:496-514`).
-- BAB 6 Nine-row SOP table with localhost access + Run Demo + Evidence + Mitigation + Evaluation + Reports (`scripts/generate_docx_technical_doc.py:519-533`).
-- Supporting gates (not BAB-counted): screenshot gallery 7.1-7.7 (`scripts/generate_docx_technical_doc.py:538-597`); cloud table + Koyeb/Render callout (`scripts/generate_docx_technical_doc.py:602-620`); troubleshooting matrix (`scripts/generate_docx_technical_doc.py:625-635`); test matrix + benchmark tables (`scripts/generate_docx_technical_doc.py:640-676`).
+- PreHub spine: keep the problem, method, implementation, and evaluation tied to the demonstrator's evidence; do not turn a design target or fixture into an operational result (`Final-Gemastik/last-judgement.txt:11,20`).
+- BYB fill: use only source-backed material to complete required report sections; retain status labels for live, fallback, simulated, draft, and final evidence.
+- Six sync boxes: six plain paragraphs, numbered 1-6; place 1-3 in Latar Belakang and 4-6 in Metodologi. Keep the comparison table in Batasan and roadmap in Metodologi (`Final-Gemastik/taskC_sync.py:128-267`).
+- Chapter stubs: eight plain `Catatan sinkronisasi` paragraphs; each points readers to the relevant sync box or evidence without adding a new claim (`Final-Gemastik/taskC_sync.py:158-255`).
+- Validation: retain Tabel VII.4 for five sources, verbatim quotes with source/status in Lampiran B, and Lampiran A's N=60 evidence and open TP 35-vs-34 note (`Final-Gemastik/taskC_sync.py:170-196`; `Final-Gemastik/Laporan-PreHub-GEMASTIK19.docx`, paras 262,303-340).
+- Figures: embed six Vercel screenshots as Gambar VIII.1-VIII.6; each caption starts `Gambar VIII.x. Tampilan laman` and omits host/date. Keep aspect ratio and at most 12 inline shapes.
+- Other report gates: retain the Proposal comparison, CPU-only solver framing, test/benchmark tables, draft/final labels, and the TOC refresh note. Main TOC refresh remains pending F9 (Laporan para 347); Daftar Gambar VIII.1-VIII.6 page labels are updated. Proposal remains frozen (`Final-Gemastik/SPEC.md:8-16`; `.planning/STATE.md:341-356`).
 
 ## 8. Traceability
 
 | SPEC item | Evidence |
 |---|---|
 | Proposal frozen | `Final-Gemastik/last-judgement.txt:20`, `.planning/PROPOSAL_VS_IMPLEMENTATION_GAP_ANALYSIS.md:5-9` |
-| Non-BULOG operational scope | `Final-Gemastik/last-judgement.txt:11`, `backend/app/services/telemetry_service.py:247`, `backend/app/routers/fleet_ingest_router.py:49` |
-| No kritis-nasional / no auto-actuation | `Final-Gemastik/last-judgement.txt:11`, `Final-Gemastik/last-judgement.txt:20` |
+| Non-BULOG, non-national-critical, no auto-actuation | `Final-Gemastik/last-judgement.txt:11`, `Final-Gemastik/last-judgement.txt:20`, `backend/app/services/telemetry_service.py:247`, `backend/app/routers/fleet_ingest_router.py:49` |
 | Grill 9+integrator | `.planning/LEARNINGS.md:267-277`, `.planning/phases/100-mapbox-turn-by-turn-street-snapping-dual-layer-avoidance/PLAN.md:26-38` |
 | 4 probes | `scripts/check_tomtom.py:40-89`, `backend/app/services/telemetry_service.py:239-249`, `frontend/scripts/test_turn_by_turn.ts:168-183`, `backend/app/routers/evaluation_router.py:32-56` |
 | IBM/SYRI/CPU | `Final-Gemastik/last-judgement.txt:6`, `Final-Gemastik/last-judgement.txt:8`, `backend/app/adapters/cpu_routing_adapter.py:1-5`, `.planning/FEATURE_STATUS.md:69` |
 | SDT + changelog | `scripts/generate_ditmawalumni_usu_doc.py:206-209`, `scripts/generate_ditmawalumni_usu_doc.py:261-276`, `.planning/STATE.md:341-356` |
-| Socfin/USU deferred | `.planning/phases/103-industry-validation-tactical-cargo-tiering-social-disruption/PLAN.md:14`, `.planning/phases/103-industry-validation-tactical-cargo-tiering-social-disruption/PLAN.md:25-28`, `scripts/generate_ditmawalumni_usu_doc.py:51-56` |
-| SUS deferred | `Final-Gemastik/last-judgement.txt:13`, `Final-Gemastik/last-judgement.txt:22` |
+| Socfin/USU signatures and SUS deferred | `.planning/phases/103-industry-validation-tactical-cargo-tiering-social-disruption/PLAN.md:14,25-28`, `scripts/generate_ditmawalumni_usu_doc.py:51-56`, `Final-Gemastik/last-judgement.txt:13,22` |
 | TomTom edge | `backend/app/adapters/tomtom_adapter.py:38-58`, `backend/app/adapters/tomtom_adapter.py:183-189`, `backend/app/adapters/tomtom_adapter.py:257-288` |
 | HOLD 403 edge | `backend/app/auth/supabase_auth.py:42-65`, `backend/app/auth/supabase_auth.py:386-393`, `backend/tests/test_auth_rbac.py:233-251` |
 | PetaNadi alias | `render.yaml:3`, `render.yaml:69-72` |
-| Screenshots | `frontend/playwright.config.ts:14`, `frontend/playwright.config.ts:25-32`, `scripts/generate_docx_technical_doc.py:541-597` |
+| Task D: PreHub spine + BYB structure/fill, six plain sync boxes, validation, and eight stubs | `Final-Gemastik/Laporan-PreHub-GEMASTIK19.docx`, paras 99-101,177-179,262,303-340; stubs 98,127,150,176,236,263,277,286; `Final-Gemastik/Laporan Akhir - BeforeYouBet.pdf`, pp.2-3 |
+| Task E: six Vercel figures, SDT-safe audit, export, and similarity screen | `docs/screenshots/vercel-01-dashboard.png` through `vercel-06-evaluasi.png`; Laporan paras 262,266-277,350; PDF 45 pp / 2,909,811 B; Makalah-to-Laporan exact 5-gram overlap 0.25% |
