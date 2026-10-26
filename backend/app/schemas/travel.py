@@ -17,6 +17,20 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 TollGolongan = Literal["GOL_I", "GOL_II", "GOL_III", "GOL_IV", "GOL_V"]
 FuelType = Literal["biosolar", "dexlite", "pertamina_dex"]
 
+# Fuel-spec contract (Phase 1, DB + contract only — ledger math untouched):
+# default fuel efficiency per BPJT golongan (km per liter).
+# NULL asset efficiency MUST resolve via this map. The legacy flat 3.5 km/L
+# constant (TRUCK_FUEL_CONSUMPTION_KM_PER_LITER) remains the GOL_II default and
+# is DEPRECATED as a universal fallback for other golongan.
+GOLONGAN_DEFAULT_KMPL: dict[str, float] = {
+    "GOL_I": 4.0,
+    "GOL_II": 3.5,
+    "GOL_III": 3.0,
+    "GOL_IV": 2.8,
+    "GOL_V": 2.5,
+}
+LEGACY_FLAT_KMPL_FALLBACK_DEPRECATED = 3.5
+
 
 class TravelStatus(str, Enum):
     PLANNED = "planned"
@@ -43,6 +57,15 @@ class TruckAssetCreate(BaseModel):
     company_name: Optional[str] = Field(default=None, description="Nama perusahaan pemilik aset")
     gross_weight_ton: float = Field(default=12.0, ge=0.0, description="Berat kotor kendaraan (ton) untuk audit MST")
     fuel_type: FuelType = Field(default="biosolar", description="Jenis BBM Pertamina")
+    fuel_efficiency_kmpl: Optional[float] = Field(
+        default=None, gt=0.0,
+        description="Efisiensi BBM aset (km/L). NULL = default golongan (GOL_I 4.0, GOL_II 3.5, GOL_III 3.0, GOL_IV 2.8, GOL_V 2.5)",
+    )
+    is_reefer: bool = Field(default=False, description="True bila unit membawa genset reefer cold-chain")
+    reefer_fuel_lph: Optional[float] = Field(
+        default=None, ge=0.0,
+        description="Konsumsi genset reefer (liter/jam). NULL = non-reefer / belum diketahui",
+    )
     notes: Optional[str] = Field(default=None, description="Catatan dispatcher")
 
     @field_validator("truck_id")
@@ -69,6 +92,9 @@ class TruckAssetResponse(BaseModel):
     company_name: Optional[str] = None
     gross_weight_ton: float = 12.0
     fuel_type: str = "biosolar"
+    fuel_efficiency_kmpl: Optional[float] = None
+    is_reefer: bool = False
+    reefer_fuel_lph: Optional[float] = None
     notes: Optional[str] = None
     source: Literal["master", "legacy_custom_fleet"] = "master"
     created_at: Optional[str] = None
@@ -99,10 +125,28 @@ class TravelCreate(BaseModel):
 
     vehicle_golongan: Optional[TollGolongan] = Field(default=None, description="Override golongan; default dari aset truk")
     fuel_type: Optional[FuelType] = Field(default=None, description="Override BBM; default dari aset truk")
+    fuel_efficiency_kmpl: Optional[float] = Field(
+        default=None, gt=0.0,
+        description="Fuel-spec contract override (km/L). Phase 1: diterima untuk forward-compat; "
+                    "resolusi ledger belum berubah (tetap default golongan / aset)",
+    )
+    is_reefer: Optional[bool] = Field(
+        default=None,
+        description="Fuel-spec contract override. Phase 1: diterima untuk forward-compat; ledger belum berubah",
+    )
+    reefer_fuel_lph: Optional[float] = Field(
+        default=None, ge=0.0,
+        description="Fuel-spec contract override (liter/jam). Phase 1: diterima untuk forward-compat; ledger belum berubah",
+    )
 
     baseline_distance_km: Optional[float] = Field(default=None, gt=0.0, description="Jarak baseline (km). Kosong = haversine gazetteer")
     baseline_time_hours: float = Field(..., gt=0.0, description="Waktu tempuh baseline pada koridor terbuka (jam)")
-    baseline_fuel_liters: Optional[float] = Field(default=None, ge=0.0, description="BBM baseline (L). Kosong = jarak / 3,5 km/L")
+    baseline_fuel_liters: Optional[float] = Field(
+        default=None, ge=0.0,
+        description="BBM baseline (L). Kosong = jarak / efisiensi golongan. "
+                    "DEPRECATED: fallback datar 3,5 km/L hanya valid untuk GOL_II — "
+                    "gunakan default golongan (GOL_I 4.0, GOL_II 3.5, GOL_III 3.0, GOL_IV 2.8, GOL_V 2.5)",
+    )
     baseline_toll_segments: List[str] = Field(default_factory=list, description="Segmen tol BPJT pada rute baseline")
     blocked_delay_hours: float = Field(default=0.0, ge=0.0, description="Perkiraan delay jika tetap menerobos gangguan (jam)")
 

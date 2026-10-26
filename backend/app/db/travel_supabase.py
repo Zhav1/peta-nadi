@@ -56,7 +56,8 @@ def _write_client():
 _ASSET_FIELDS = (
     "id", "truck_id", "name", "modality", "vin", "vehicle_golongan",
     "driver_name", "driver_phone", "company_id", "company_name",
-    "gross_weight_ton", "fuel_type", "notes", "created_by",
+    "gross_weight_ton", "fuel_type", "fuel_efficiency_kmpl", "is_reefer",
+    "reefer_fuel_lph", "notes", "created_by",
     "sync_status", "created_at", "updated_at",
 )
 
@@ -68,6 +69,15 @@ def _asset_to_row(data: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _row_to_asset(r: Dict[str, Any]) -> Dict[str, Any]:
+    def _opt_float(key: str) -> Optional[float]:
+        v = r.get(key)
+        if v is None:
+            return None
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return None
+
     return {
         "id": r.get("id"),
         "truck_id": r.get("truck_id"),
@@ -81,6 +91,9 @@ def _row_to_asset(r: Dict[str, Any]) -> Dict[str, Any]:
         "company_name": r.get("company_name"),
         "gross_weight_ton": float(r.get("gross_weight_ton") or 0.0),
         "fuel_type": r.get("fuel_type") or "biosolar",
+        "fuel_efficiency_kmpl": _opt_float("fuel_efficiency_kmpl"),
+        "is_reefer": bool(r.get("is_reefer")) if r.get("is_reefer") is not None else False,
+        "reefer_fuel_lph": _opt_float("reefer_fuel_lph"),
         "notes": r.get("notes"),
         "created_by": r.get("created_by"),
         "sync_status": r.get("sync_status") or "synced",

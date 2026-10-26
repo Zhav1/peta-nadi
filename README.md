@@ -100,6 +100,8 @@ Multisource Telemetry (BMKG Sensor, TomTom Speed Flow, Google News RSS, PIHPS Pr
 ### 11. Analytics Honesty (Empirical PIHPS Series & Honest Empty States)
 - **Empirical Market Data:** Integrates live strategic food commodity price series for rice and red chili (`GET /api/v1/commodities/prices`) queried from Supabase `commodity_prices`.
 - **Zero Fabricated Claims:** Completely eradicated ungrounded 24-hour risk cards (+18.5%, +24.5%), static causal chains, and synthetic Deck.gl arcs/nodes in favor of honest, transparent `"Data tidak tersedia"` empty states.
+- **Analitik Mixed Dashboard (Phase 126):** Trend + donut side-by-side (8+4), 4 heatmaps in 2-col pairs (6+6: wilayah × komoditas, bencana × komoditas, korelasi Pearson overlap ≥10, streak 4-pekan), table + BNPB panel bottom row (8+4); 7-KPI strip with base-ui rich tooltips; 10-province PIHPS (`babel`/`kepri` backfill); map canvas removed (GET-only, zero-canvas Playwright gate).
+- **BNPB CKAN Status (Phase 126):** DEGRADED → CKAN stats live via Tier-0 `data.bnpb.go.id/api/3/action` (`datastore_search` limit+offset paging, 1h async cadence, kab 10 km / prov 25 km aggregate mapper); annual aggregates labelled as stats (stale chip >24h), never as live alerts; realtime hazard signal stays on BMKG/FIRMS.
 
 ### 12. Decommissioned Stubs & Purged Time Replays
 - **Purged Past/Future/Predict Tabs:** Purged mock Past, Future, and Predict dock tabs, synthetic fallback fixtures, `TimelineScrubber.tsx`, and dead backend endpoints (`/historical/episodes`, `/predictive/risks`).

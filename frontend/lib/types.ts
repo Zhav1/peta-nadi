@@ -1080,6 +1080,31 @@ export interface DisruptionImpactResponse {
 
 export type TravelStatus = 'planned' | 'moving' | 'rerouted' | 'delivered' | 'failed';
 
+// Fuel-spec contract (Phase 1, DB + contract only — ledger math untouched).
+// Default fuel efficiency per BPJT golongan (km/L). A null asset efficiency
+// MUST resolve via this map. The legacy flat 3.5 km/L fallback is DEPRECATED
+// as a universal value (it remains the GOL_II default only).
+export const GOLONGAN_DEFAULT_KMPL: Record<string, number> = {
+  GOL_I: 4.0,
+  GOL_II: 3.5,
+  GOL_III: 3.0,
+  GOL_IV: 2.8,
+  GOL_V: 2.5,
+};
+/** @deprecated Flat 3.5 km/L fallback — valid for GOL_II only. Use GOLONGAN_DEFAULT_KMPL. */
+export const LEGACY_FLAT_KMPL_FALLBACK_DEPRECATED = 3.5;
+
+export interface FuelPrice {
+  id: string;
+  fuel_type: string;
+  region: string;
+  price_idr: number;
+  sk_number?: string | null;
+  effective_date: string;
+  source_url?: string | null;
+  is_fallback: boolean;
+}
+
 export interface TruckAsset {
   id: string;
   truck_id: string;
@@ -1093,6 +1118,11 @@ export interface TruckAsset {
   company_name?: string;
   gross_weight_ton: number;
   fuel_type: string;
+  /** Null = resolve from vehicle_golongan via GOLONGAN_DEFAULT_KMPL. */
+  fuel_efficiency_kmpl?: number | null;
+  is_reefer?: boolean;
+  /** Null = non-reefer / unknown. */
+  reefer_fuel_lph?: number | null;
   notes?: string;
   source: 'master' | 'legacy_custom_fleet';
   created_at?: string;
@@ -1110,6 +1140,9 @@ export interface TruckAssetCreatePayload {
   company_name?: string;
   gross_weight_ton?: number;
   fuel_type?: 'biosolar' | 'dexlite' | 'pertamina_dex';
+  fuel_efficiency_kmpl?: number | null;
+  is_reefer?: boolean;
+  reefer_fuel_lph?: number | null;
   notes?: string;
 }
 
@@ -1127,8 +1160,13 @@ export interface TravelCreatePayload {
   sla_deadline_hours: number;
   vehicle_golongan?: string;
   fuel_type?: 'biosolar' | 'dexlite' | 'pertamina_dex';
+  /** Fuel-spec contract overrides (Phase 1: accepted, ledger resolution unchanged). */
+  fuel_efficiency_kmpl?: number | null;
+  is_reefer?: boolean | null;
+  reefer_fuel_lph?: number | null;
   baseline_distance_km?: number;
   baseline_time_hours: number;
+  /** Null = distance / golongan efficiency. Flat 3.5 km/L fallback deprecated except GOL_II. */
   baseline_fuel_liters?: number;
   baseline_toll_segments?: string[];
   blocked_delay_hours?: number;

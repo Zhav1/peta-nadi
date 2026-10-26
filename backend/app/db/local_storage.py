@@ -226,6 +226,9 @@ def init_db(db_path: Optional[str] = None) -> None:
                     company_name TEXT,
                     gross_weight_ton REAL DEFAULT 12.0,
                     fuel_type TEXT DEFAULT 'biosolar',
+                    fuel_efficiency_kmpl REAL,
+                    is_reefer INTEGER DEFAULT 0,
+                    reefer_fuel_lph REAL,
                     notes TEXT,
                     created_by TEXT,
                     sync_status TEXT DEFAULT 'pending',
@@ -318,6 +321,9 @@ def init_db(db_path: Optional[str] = None) -> None:
 
             # Dynamic column migrations for databases created before the split.
             for table_name, col_def in [
+                ("truck_assets", ("fuel_efficiency_kmpl", "REAL")),
+                ("truck_assets", ("is_reefer", "INTEGER DEFAULT 0")),
+                ("truck_assets", ("reefer_fuel_lph", "REAL")),
                 ("travels", ("actual_recorded", "INTEGER DEFAULT 0")),
                 ("travels", ("cargo_value_source", "TEXT DEFAULT 'declared'")),
                 ("travels", ("distance_source", "TEXT DEFAULT 'declared'")),
@@ -1142,9 +1148,10 @@ def save_truck_asset(data: Dict[str, Any], db_path: Optional[str] = None) -> Dic
                 INSERT INTO truck_assets (
                     id, truck_id, name, modality, vin, vehicle_golongan,
                     driver_name, driver_phone, company_id, company_name,
-                    gross_weight_ton, fuel_type, notes, created_by,
+                    gross_weight_ton, fuel_type, fuel_efficiency_kmpl,
+                    is_reefer, reefer_fuel_lph, notes, created_by,
                     sync_status, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(truck_id) DO UPDATE SET
                     name = excluded.name,
                     modality = excluded.modality,
@@ -1156,6 +1163,9 @@ def save_truck_asset(data: Dict[str, Any], db_path: Optional[str] = None) -> Dic
                     company_name = excluded.company_name,
                     gross_weight_ton = excluded.gross_weight_ton,
                     fuel_type = excluded.fuel_type,
+                    fuel_efficiency_kmpl = excluded.fuel_efficiency_kmpl,
+                    is_reefer = excluded.is_reefer,
+                    reefer_fuel_lph = excluded.reefer_fuel_lph,
                     notes = excluded.notes,
                     updated_at = excluded.updated_at
             """, (
@@ -1171,6 +1181,9 @@ def save_truck_asset(data: Dict[str, Any], db_path: Optional[str] = None) -> Dic
                 data.get("company_name"),
                 float(data.get("gross_weight_ton") if data.get("gross_weight_ton") is not None else 12.0),
                 data.get("fuel_type") or "biosolar",
+                float(data["fuel_efficiency_kmpl"]) if data.get("fuel_efficiency_kmpl") is not None else None,
+                1 if data.get("is_reefer") else 0,
+                float(data["reefer_fuel_lph"]) if data.get("reefer_fuel_lph") is not None else None,
                 data.get("notes"),
                 data.get("created_by"),
                 data.get("sync_status") or "pending",
@@ -1185,6 +1198,10 @@ def save_truck_asset(data: Dict[str, Any], db_path: Optional[str] = None) -> Dic
 
 
 def _truck_row_to_dict(r: sqlite3.Row) -> Dict[str, Any]:
+    def _opt_float(value: Any) -> Optional[float]:
+        return float(value) if value is not None else None
+
+    keys = set(r.keys())
     return {
         "id": r["id"],
         "truck_id": r["truck_id"],
@@ -1198,6 +1215,9 @@ def _truck_row_to_dict(r: sqlite3.Row) -> Dict[str, Any]:
         "company_name": r["company_name"],
         "gross_weight_ton": float(r["gross_weight_ton"] or 0.0),
         "fuel_type": r["fuel_type"] or "biosolar",
+        "fuel_efficiency_kmpl": _opt_float(r["fuel_efficiency_kmpl"]) if "fuel_efficiency_kmpl" in keys else None,
+        "is_reefer": bool(r["is_reefer"]) if "is_reefer" in keys else False,
+        "reefer_fuel_lph": _opt_float(r["reefer_fuel_lph"]) if "reefer_fuel_lph" in keys else None,
         "notes": r["notes"],
         "created_by": r["created_by"],
         "sync_status": r["sync_status"],
