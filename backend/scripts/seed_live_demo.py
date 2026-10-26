@@ -150,7 +150,7 @@ def main() -> None:
     print("2a. Rit dibuat ->", travel_id)
     patched = client.patch(f"/api/v1/fleet/travels/{travel_id}", json={
         "actual_time_hours": 7.7,
-        "actual_fuel_liters": 120.0,
+        "actual_fuel_liters": 22.0,
         "disruption_id": WORKFLOW_INCIDENT,
         "status": "delivered",
     }, headers=headers)

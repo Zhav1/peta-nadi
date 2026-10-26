@@ -457,6 +457,96 @@ def resolve_predicted_delay(incident_id: str) -> float:
     return 4.0
 
 
+def _load_supabase_outcomes(limit: int = 1000) -> List[Dict[str, Any]]:
+    """Best-effort remote read of ground_truth_outcomes (anon SELECT).
+
+    Vercel/Render backends run on an ephemeral filesystem, so the local
+    SQLite mirror is empty after every cold start / redeploy. The remote
+    Supabase table is the durable store — without this fallback the live
+    aggregate would permanently report N=0 in prod and hide behind the
+    batch baseline. Any failure (no creds, offline, RLS, missing table)
+    degrades to [] — never raises. Rows from projects that have not
+    applied migration 021 simply lack pred_* keys and are counted as
+    missing_pred downstream (never defaulted).
+    """
+    try:
+        from app.db.supabase_client import get_client
+
+        sb = get_client()
+    except Exception as e:
+        logger.debug(f"Live aggregate: Supabase client unavailable ({e})")
+        return []
+    try:
+        res = (
+            sb.table("ground_truth_outcomes")
+            .select("*")
+            .order("created_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        rows = getattr(res, "data", None) or []
+        return [dict(r) for r in rows if isinstance(r, dict)]
+    except Exception as e:
+        logger.warning(f"Live aggregate: Supabase outcome read skipped ({e})")
+        return []
+
+
+def _merge_outcome_rows(
+    local_rows: Optional[List[Dict[str, Any]]],
+    remote_rows: Optional[List[Dict[str, Any]]],
+) -> tuple:
+    """Union local + remote outcomes, suppressing dual-write mirrors.
+
+    POST /outcomes dual-writes (Supabase first, then a local mirror), so
+    the same field verification normally exists in BOTH stores. A remote
+    row whose mirror key (incident_id, verification_source,
+    observed_delay_hours) already exists locally is dropped — unless the
+    local copy lacks a usable pred_prob and the remote copy has one, in
+    which case the remote copy upgrades it in place (this is how pre-021
+    slim mirrors regain their forecast after migration 021 is applied).
+    Rows novel to either store are always kept verbatim: local row
+    identity is untouched, so localhost aggregates are byte-identical to
+    the pre-fallback behaviour, and a cold-start host (empty local store)
+    sees the full remote union. Echo rows (DISPATCHER_APPROVAL) keep
+    their own key and stay countable as excluded_echoes.
+    Returns (merged, local_n, remote_n).
+    """
+    merged: List[Dict[str, Any]] = []
+    index: Dict[str, int] = {}
+
+    def _mirror_key(r: Dict[str, Any]) -> str:
+        try:
+            delay = round(float(r.get("observed_delay_hours") or 0.0), 2)
+        except (TypeError, ValueError):
+            delay = 0.0
+        return (
+            f"{r.get('incident_id') or ''}|{r.get('verification_source') or ''}|{delay}"
+        )
+
+    def _has_usable_pred(r: Dict[str, Any]) -> bool:
+        return _safe_float_or_none(r.get("pred_prob")) is not None
+
+    for r in list(local_rows or []):
+        if not isinstance(r, dict):
+            continue
+        key = _mirror_key(r)
+        index.setdefault(key, len(merged))
+        merged.append(r)
+    for r in list(remote_rows or []):
+        if not isinstance(r, dict):
+            continue
+        # Only local keys are indexed: a remote mirror of a known local
+        # verification is dropped (or upgrades a pred-less local copy),
+        # while remote rows novel to the local store — and remote-remote
+        # repeats — are kept verbatim, exactly as local-local repeats are.
+        pos = index.get(_mirror_key(r))
+        if pos is None:
+            merged.append(r)
+        elif not _has_usable_pred(merged[pos]) and _has_usable_pred(r):
+            merged[pos] = r
+    return merged, len(local_rows or []), len(remote_rows or [])
+
+
 def compute_live_cumulative_metrics(
     outcomes: Optional[List[Dict[str, Any]]] = None,
     min_n: int = LIVE_MIN_N,
@@ -477,10 +567,21 @@ def compute_live_cumulative_metrics(
 
     if outcomes is None:
         try:
-            outcomes = local_storage.list_outcomes(limit=limit)
+            local_rows = local_storage.list_outcomes(limit=limit)
         except Exception as e:
             logger.warning(f"Live aggregate: outcome store unreadable ({e})")
-            outcomes = []
+            local_rows = []
+        # Prod hosts (Vercel/Render) have an ephemeral FS: local SQLite is
+        # empty after each deploy, so merge the durable Supabase rows.
+        # Explicit `outcomes=` callers (tests, scripts) bypass the merge.
+        remote_rows = _load_supabase_outcomes(limit=limit)
+        outcomes, local_n, remote_n = _merge_outcome_rows(local_rows, remote_rows)
+        live_source = (
+            "live_outcomes_merged" if remote_rows else "live_outcomes_offline"
+        )
+    else:
+        local_n, remote_n = len(outcomes or []), 0
+        live_source = "live_outcomes_offline"
 
     genuine: List[Dict[str, Any]] = []
     excluded_echoes = 0
@@ -543,7 +644,9 @@ def compute_live_cumulative_metrics(
             "n": n,
             "min_n": min_n,
             "sufficient": False,
-            "source": "live_outcomes_offline",
+            "source": live_source,
+            "local_n": local_n,
+            "remote_n": remote_n,
             "excluded_echoes": excluded_echoes,
             "missing_pred": missing_pred,
             "proxy_count": proxy_count,
@@ -622,7 +725,9 @@ def compute_live_cumulative_metrics(
         "n": n,
         "min_n": min_n,
         "sufficient": True,
-        "source": "live_outcomes_offline",
+        "source": live_source,
+        "local_n": local_n,
+        "remote_n": remote_n,
         "excluded_echoes": excluded_echoes,
         "missing_pred": missing_pred,
         "proxy_count": proxy_count,

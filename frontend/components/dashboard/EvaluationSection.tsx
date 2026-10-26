@@ -338,6 +338,9 @@ export default function EvaluationSection({
   const effectiveVersion: 'batch' | 'live' =
     versionSel ?? (ext?.mode_recommendation === 'live' && liveSufficient ? 'live' : 'batch');
   const showLive = effectiveVersion === 'live' && liveSufficient;
+  // Default view = live when live sufficient (N>=10), else batch.
+  // mode drives badge gating: Simulasi only in batch, Live N=X only in live.
+  const mode: 'batch' | 'live' = showLive ? 'live' : 'batch';
 
   const dispMetrics = showLive ? live!.metrics! : report?.metrics ?? null;
   const dispCalib = showLive ? live!.calibration ?? null : report?.calibration ?? null;
@@ -474,12 +477,19 @@ export default function EvaluationSection({
                   <p className="text-xs text-slate-400 font-sans">
                     Ringkasan angka validasi model.
                   </p>
-                  {!showLive && (
+                  {mode === 'batch' ? (
                     <span
                       className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-500/15 text-slate-300 border border-white/10 text-[11px] font-medium"
                       title="Metrik batch dari ground-truth sintetis Sumatra (data/benchmark/sumatra_disruptions_ground_truth.json, N=60) — bukan data live operasional. Agregat live tampil bila N≥10."
                     >
                       Simulasi N=60 — bukan data live
+                    </span>
+                  ) : (
+                    <span
+                      className="inline-flex items-center px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[11px] font-medium"
+                      title={`Agregat live operasional kumulatif N=${dispN} — metrik live, bukan simulasi.`}
+                    >
+                      Live N={dispN}
                     </span>
                   )}
                 </div>
@@ -497,14 +507,23 @@ export default function EvaluationSection({
             </button>
           </div>
 
-          {/* Label batch sintetis — tampil hanya saat metrik batch (bukan live) dirender */}
-          {!showLive && (
+          {/* Label batch sintetis — tampil hanya saat mode==batch (live insufficient) */}
+          {mode === 'batch' ? (
             <div className="flex flex-wrap items-center gap-2">
               <span
                 className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-500/15 text-slate-300 border border-white/10 text-[11px] font-medium"
                 title="KPI Presisi/Sensitivitas/F1/Brier dari ground-truth sintetis Sumatra (data/benchmark/sumatra_disruptions_ground_truth.json, N=60) — bukan data live operasional."
               >
                 Simulasi N=60 — bukan data live
+              </span>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className="inline-flex items-center px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[11px] font-medium"
+                title={`KPI Presisi/Sensitivitas/F1/Brier dari agregat live operasional N=${dispN} — bukan simulasi.`}
+              >
+                Live N={dispN}
               </span>
             </div>
           )}
@@ -585,13 +604,22 @@ export default function EvaluationSection({
             <div className="pt-3 mt-3 border-t border-white/10 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs tabular-nums">
               <div className="p-3 rounded-lg bg-white/[0.02] border border-white/10 space-y-1.5 text-slate-300">
                 <p className="text-[11px] font-sans font-bold text-slate-200 uppercase tracking-wider">Dataset & keputusan</p>
-                {!showLive && (
+                {mode === 'batch' ? (
                   <p>
                     <span
                       className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-500/15 text-slate-300 border border-white/10 text-[11px] font-medium normal-case tracking-normal"
                       title="Rincian batch dari ground-truth sintetis Sumatra (data/benchmark/sumatra_disruptions_ground_truth.json, N=60) — bukan data live operasional."
                     >
                       Simulasi N=60 — bukan data live
+                    </span>
+                  </p>
+                ) : (
+                  <p>
+                    <span
+                      className="inline-flex items-center px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[11px] font-medium normal-case tracking-normal"
+                      title={`Rincian agregat live operasional N=${dispN} — bukan simulasi.`}
+                    >
+                      Live N={dispN}
                     </span>
                   </p>
                 )}
