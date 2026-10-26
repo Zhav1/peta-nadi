@@ -23,6 +23,7 @@ import type {
 } from '@/lib/types';
 import {
   applyLaporanFilters,
+  averageTripEconomy,
   formatJtM,
   groupByCommodityTier,
   groupByPeriod,
@@ -137,7 +138,31 @@ export default function LaporanHybridPanel({
     [filteredTrips, granularity]
   );
 
+  const fleetEconomy = useMemo(() => averageTripEconomy(filteredTrips), [filteredTrips]);
+
   const hasTrips = (totals?.total_trips ?? 0) > 0;
+
+  // Komposisi kebijakan hedging (frontend-only count dari trips terfilter).
+  const keputusanCounts = useMemo(() => {
+    let lanjut = 0;
+    let ubahRute = 0;
+    let tahan = 0;
+    let adaOpsi = 0;
+    for (const t of filteredTrips) {
+      const raw = (t.hedging_policy ?? '').toString().trim();
+      if (!raw) continue;
+      adaOpsi += 1;
+      const u = raw.toUpperCase();
+      if (u.includes('REROUTE') || u.includes('UBAH') || u.includes('RUTE') || u.includes('ALIH')) {
+        ubahRute += 1;
+      } else if (u.includes('HOLD') || u.includes('TAHAN') || u.includes('TUNDA')) {
+        tahan += 1;
+      } else if (u.includes('CONTINUE') || u.includes('LANJUT')) {
+        lanjut += 1;
+      }
+    }
+    return { lanjut, ubahRute, tahan, adaOpsi };
+  }, [filteredTrips]);
 
   if (isLoading && !summary) {
     return (
@@ -276,6 +301,15 @@ export default function LaporanHybridPanel({
           </span>
           <span className="tabular-nums">Terakhir dihitung: {formatDateTime(summary?.generated_at)}</span>
         </div>
+        <div
+          className="px-4 py-2 border-t border-white/5 text-xs text-slate-400 tabular-nums truncate"
+          data-testid="fleet-economy-footer"
+          title="Rata-rata km/L hanya dari Trip dengan aktual terisi"
+        >
+          {fleetEconomy.avgKmpl != null
+            ? `Efisiensi armada ${formatEconomyKmpl(fleetEconomy.avgKmpl)} • ${fleetEconomy.measuredCount} Trip terukur • ${fleetEconomy.unmeasuredCount} belum diinput`
+            : `Efisiensi armada Belum ada Trip terukur • ${fleetEconomy.measuredCount} Trip terukur • ${fleetEconomy.unmeasuredCount} belum diinput`}
+        </div>
       </div>
 
       {/* Global filter bar */}
@@ -328,6 +362,21 @@ export default function LaporanHybridPanel({
         periodBuckets={periodBuckets}
         granularityLabel={granularity === 'weekly' ? 'mingguan' : 'bulanan'}
       />
+
+      {/* Keputusan: komposisi kebijakan + reroute split (samping agregasi tier) */}
+      <div className="bg-[#0c1017] border border-white/10 rounded-xl px-4 py-3" data-testid="keputusan-strip">
+        <h3 className="text-xs font-medium text-slate-200">Keputusan</h3>
+        {keputusanCounts.adaOpsi === 0 ? (
+          <p className="mt-1 text-xs text-slate-500">Belum ada opsi dihitung</p>
+        ) : (
+          <p className="mt-1 text-xs text-slate-300 tabular-nums">
+            Lanjut {keputusanCounts.lanjut} • Ubah Rute {keputusanCounts.ubahRute} • Tahan {keputusanCounts.tahan}
+          </p>
+        )}
+        <p className="mt-1 text-xs text-slate-500 tabular-nums">
+          Reroute sukses {totals?.reroute_success_count ?? 0} / gagal {totals?.reroute_failed_count ?? 0}
+        </p>
+      </div>
 
       {/* Aggregation tables per-tier + per-periode */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -534,6 +583,17 @@ export default function LaporanHybridPanel({
                           >
                             {formatIDR(trip.saved_cost_idr)}
                           </div>
+                          {trip.savings_breakdown != null && (
+                            <div
+                              className="text-right text-[11px] text-slate-500 tabular-nums"
+                              title={`BBM ${formatIDR(trip.savings_breakdown?.fuel_idr)} • Tol ${formatIDR(trip.savings_breakdown?.toll_idr)} • Susut ${formatIDR(trip.savings_breakdown?.spoilage_idr)} • Sopir ${formatIDR(trip.savings_breakdown?.labor_idr)}`}
+                            >
+                              BBM {formatJtM(trip.savings_breakdown?.fuel_idr)} • Tol{' '}
+                              {formatJtM(trip.savings_breakdown?.toll_idr)} • Susut{' '}
+                              {formatJtM(trip.savings_breakdown?.spoilage_idr)} • Sopir{' '}
+                              {formatJtM(trip.savings_breakdown?.labor_idr)}
+                            </div>
+                          )}
                           {Number(trip.saved_cost_idr) < 0 && (
                             <div className="text-right text-xs text-rose-400/80">kerugian</div>
                           )}
