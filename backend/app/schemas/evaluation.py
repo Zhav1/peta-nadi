@@ -35,6 +35,8 @@ class ReliabilityBinItem(BaseModel):
 
 class CalibrationReport(BaseModel):
     brier_score: float = Field(..., description="Mean squared difference between predicted prob and outcome (BS <= 0.10)")
+    normalized_brier_score: Optional[float] = Field(None, description="Brier on the P_max-normalized forecast (equals brier_score for live)")
+    raw_brier_score: Optional[float] = Field(None, description="Brier on the raw un-normalized product probability (telemetry)")
     expected_calibration_error: float = Field(..., description="Weighted average calibration error across bins")
     platt_calibrated_brier: float = Field(..., description="Brier score after parametric Platt scaling")
     isotonic_calibrated_brier: float = Field(..., description="Brier score after non-parametric Isotonic regression")
@@ -80,6 +82,10 @@ class BenchmarkReportResponse(BaseModel):
     versions: Optional[List[Dict[str, Any]]] = Field(
         None,
         description="Version dropdown entries: immutable batch version + live cumulative snapshot.",
+    )
+    dataset_hash: Optional[str] = Field(
+        None,
+        description="sha256 of the benchmark report file bytes (batch provenance).",
     )
 
 

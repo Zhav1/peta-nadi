@@ -422,14 +422,23 @@ class UnifiedNewsIngestor:
         - E (PIHPS Commodity Exposure): Strategic food corridor sensitivity
         """
         try:
-            from agents.tools.consensus_gate import compute_consensus, cross_validate_news_with_bmkg
+            from agents.tools.consensus_gate import (
+                compute_consensus,
+                cross_validate_news_with_bmkg,
+                SENSOR_WEIGHTS_ECONOMIC_ACTIVE,
+                SENSOR_WEIGHTS_PHYSICAL_ONLY,
+            )
         except ModuleNotFoundError:
             import sys, os
             workspace_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
             if workspace_root not in sys.path:
                 sys.path.insert(0, workspace_root)
-            from agents.tools.consensus_gate import compute_consensus, cross_validate_news_with_bmkg
-
+            from agents.tools.consensus_gate import (
+                compute_consensus,
+                cross_validate_news_with_bmkg,
+                SENSOR_WEIGHTS_ECONOMIC_ACTIVE,
+                SENSOR_WEIGHTS_PHYSICAL_ONLY,
+            )
         from app.nlp.news_extractor import (
             PHYSICAL_BLOCKAGE_PREDICATES,
             FORECAST_TAG,
@@ -643,6 +652,30 @@ class UnifiedNewsIngestor:
             "forecast_w_present": w_present,
             "forecast_bmkg_official": is_bmkg_official,
             "forecast_weather_conf": round(weather_conf, 3),
+            # WS-A stored forecast provenance: persisted verbatim (NO prob
+            # recompute) as top-level incident/approval columns downstream.
+            # p_max is the theoretical max of the active weight profile:
+            # ECONOMIC_ACTIVE 0.688 = 1-(1-0.35)(1-0.25)(1-0.20)(1-0.20);
+            # PHYSICAL_ONLY 0.71 = 1-(1-0.4375)(1-0.3125)(1-0.25) (4dp).
+            "pred_prob": round(calibrated_conf, 4),
+            "raw_prob": round(p_disruption, 4),
+            "p_max": round(
+                1.0 - (
+                    (1.0 - SENSOR_WEIGHTS_ECONOMIC_ACTIVE["weather"])
+                    * (1.0 - SENSOR_WEIGHTS_ECONOMIC_ACTIVE["traffic"])
+                    * (1.0 - SENSOR_WEIGHTS_ECONOMIC_ACTIVE["osint"])
+                    * (1.0 - SENSOR_WEIGHTS_ECONOMIC_ACTIVE["economics"])
+                ), 4,
+            ) if bool(consensus_res.get("economic_channel_active")) else round(
+                1.0 - (
+                    (1.0 - SENSOR_WEIGHTS_PHYSICAL_ONLY["weather"])
+                    * (1.0 - SENSOR_WEIGHTS_PHYSICAL_ONLY["traffic"])
+                    * (1.0 - SENSOR_WEIGHTS_PHYSICAL_ONLY["osint"])
+                ), 4,
+            ),
+            "weights_version": "ECONOMIC_ACTIVE" if bool(consensus_res.get("economic_channel_active")) else "PHYSICAL_ONLY",
+            "active_sources": list(corroborating_agents),
+            "forecast_created_at": datetime.now(timezone.utc).isoformat(),
             "llm_verified": True
         }
         if forecast_eligible:
@@ -796,6 +829,8 @@ class UnifiedNewsIngestor:
         audit = gtm.get("verification_audit") or {}
 
         # 1. Upsert into public.incidents (id = deterministic UUIDv5 above).
+        # WS-A stored forecast: top-level columns mirror the audit values
+        # verbatim (no prob recompute here); NULL when the audit predates WS-A.
         incident_row = {
             "id": incident_uuid,
             "incident_id": incident_uuid,
@@ -808,6 +843,12 @@ class UnifiedNewsIngestor:
             "location": postgis_point,
             "lat": float(lat),
             "lon": float(lon),
+            "pred_prob": audit.get("pred_prob"),
+            "raw_prob": audit.get("raw_prob"),
+            "p_max": audit.get("p_max"),
+            "weights_version": audit.get("weights_version"),
+            "active_sources": audit.get("active_sources"),
+            "forecast_created_at": audit.get("forecast_created_at"),
             "evidence": {
                 # Provenance: this polygon is a news restatement, not an
                 # independent physical sensor (see get_hazard_polygons).
@@ -914,6 +955,14 @@ class UnifiedNewsIngestor:
                 "action": "PENDING_REVIEW",
                 "tactical_action": "REROUTE",
                 "sync_status": "pending_operator_review",
+                # WS-A stored forecast: same audit values as the incident row
+                # (no prob recompute); NULL when the audit predates WS-A.
+                "pred_prob": audit.get("pred_prob"),
+                "raw_prob": audit.get("raw_prob"),
+                "p_max": audit.get("p_max"),
+                "weights_version": audit.get("weights_version"),
+                "active_sources": audit.get("active_sources"),
+                "forecast_created_at": audit.get("forecast_created_at"),
                 "notes": f"Disrupsi terdeteksi dari {art.get('source')} di {corridor}. {impact_res.impacted_vehicles_count} armada logistik berada dalam radius bahaya.",
                 "approved_at": datetime.now(timezone.utc).isoformat()
             }

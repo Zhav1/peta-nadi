@@ -22,6 +22,17 @@ _VALID_SEVERITIES = {"low", "medium", "high", "critical"}
 
 # Columns refreshed on an idempotent replay (same incident_id / crisis_id).
 # ``incident_id`` itself is the conflict target and is never in the SET clause.
+# WS-A forecast columns ride along so a replayed crisis refreshes its stored
+# forecast instead of leaving a stale pred_prob behind.
+_FORECAST_COLUMNS = (
+    "pred_prob",
+    "raw_prob",
+    "p_max",
+    "weights_version",
+    "active_sources",
+    "forecast_created_at",
+)
+
 _INCIDENT_UPDATE_FIELDS = (
     "title",
     "description",
@@ -36,7 +47,7 @@ _INCIDENT_UPDATE_FIELDS = (
     "recommendations",
     "evidence",
     "updated_at",
-)
+) + _FORECAST_COLUMNS
 
 
 def _coerce_float(value: Any) -> Optional[float]:
@@ -352,7 +363,85 @@ def _extract_incident_id(res: Any, fallback: str) -> str:
     return fallback
 
 
-def _persist_incident(supabase: Any, db_payload: Dict[str, Any]) -> Tuple[Any, bool]:
+def _strip_forecast_columns(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Return the payload without WS-A forecast columns (pre-migration fallback)."""
+    return {k: v for k, v in payload.items() if k not in _FORECAST_COLUMNS}
+
+
+def _forecast_provenance(state: CrisisState) -> Dict[str, Any]:
+    """Derive stored-forecast columns from state WITHOUT recomputing consensus.
+
+    graph.py's consensus_gate_node keeps only ``overall_confidence`` (calibrated
+    P) and ``consensus_breakdown`` (the stored w_k*p_k channel terms) on state,
+    so the raw independence product is recovered exactly from those terms:
+    ``raw = 1 - prod(1 - v_k)``. Breakdown values are rounded to 4dp, so the
+    recovery carries at most ~1e-4 rounding versus the in-graph raw value.
+    ``weights_version`` follows the E-channel term: a nonzero economics
+    contribution means the ECONOMIC_ACTIVE profile earned its vote, otherwise
+    the PHYSICAL_ONLY profile. ``active_sources`` lists the contributing
+    channels. Anything unknown stays None (NULL) — the live aggregate excludes
+    NULL-pred rows instead of defaulting them, so honesty is preserved even
+    when the breakdown is absent.
+    """
+    from agents.tools.consensus_gate import (
+        SENSOR_WEIGHTS_ECONOMIC_ACTIVE,
+        SENSOR_WEIGHTS_PHYSICAL_ONLY,
+    )
+
+    def _p_max_for(weights: Dict[str, float]) -> float:
+        prod = 1.0
+        for w in weights.values():
+            prod *= 1.0 - float(w)
+        return round(1.0 - prod, 4)
+
+    blank: Dict[str, Any] = {
+        "pred_prob": None,
+        "raw_prob": None,
+        "p_max": None,
+        "weights_version": None,
+        "active_sources": None,
+        "forecast_created_at": None,
+    }
+
+    pred = _coerce_float(state.get("overall_confidence"))
+    breakdown = state.get("consensus_breakdown")
+    if pred is None or not isinstance(breakdown, dict) or not breakdown:
+        return blank
+
+    terms = []
+    contributors = []
+    for channel, value in breakdown.items():
+        v = _coerce_float(value)
+        if v is None:
+            continue
+        v = min(1.0, max(0.0, v))
+        terms.append(1.0 - v)
+        if v > 0.0:
+            contributors.append(str(channel))
+    if not terms:
+        return blank
+
+    raw = 1.0
+    for t in terms:
+        raw *= t
+    raw = round(1.0 - raw, 4)
+
+    econ_term = _coerce_float(breakdown.get("economics")) or 0.0
+    econ_active = econ_term > 0.0
+    weights_version = "ECONOMIC_ACTIVE" if econ_active else "PHYSICAL_ONLY"
+    weights = SENSOR_WEIGHTS_ECONOMIC_ACTIVE if econ_active else SENSOR_WEIGHTS_PHYSICAL_ONLY
+
+    return {
+        "pred_prob": pred,
+        "raw_prob": raw,
+        "p_max": _p_max_for(weights),
+        "weights_version": weights_version,
+        "active_sources": contributors,
+        "forecast_created_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+def _persist_incident_inner(supabase: Any, db_payload: Dict[str, Any]) -> Tuple[Any, bool]:
     """Persist idempotently on ``incident_id`` (never a bare insert).
 
     Strategy: a cheap existence check, then update the existing row (true
@@ -364,7 +453,7 @@ def _persist_incident(supabase: Any, db_payload: Dict[str, Any]) -> Tuple[Any, b
     if an insert races the replay.
     """
     incident_id = db_payload["incident_id"]
-    update_fields = {key: db_payload[key] for key in _INCIDENT_UPDATE_FIELDS}
+    update_fields = {key: db_payload[key] for key in _INCIDENT_UPDATE_FIELDS if key in db_payload}
 
     reused = False
     try:
@@ -447,6 +536,30 @@ def _persist_incident(supabase: Any, db_payload: Dict[str, Any]) -> Tuple[Any, b
             .execute(),
             True,
         )
+
+
+def _persist_incident(supabase: Any, db_payload: Dict[str, Any]) -> Tuple[Any, bool]:
+    """Persist idempotently; retry without forecast columns on pre-migration DBs.
+
+    Deployments that have not applied migration 021 reject the WS-A forecast
+    columns (PostgREST schema-cache error naming the column). In that case the
+    write is retried once with the forecast columns stripped so the incident
+    itself is never lost — the row simply carries NULL pred and is excluded
+    from the live aggregate until the migration lands.
+    """
+    try:
+        return _persist_incident_inner(supabase, db_payload)
+    except Exception as exc:
+        has_forecast = any(col in db_payload for col in _FORECAST_COLUMNS)
+        names_column = any(col in str(exc) for col in _FORECAST_COLUMNS)
+        if has_forecast and names_column:
+            logger.warning(
+                "incidents forecast columns rejected (%s); retrying without them "
+                "(apply migration 021_pred_tersimpan.sql to persist pred)",
+                exc,
+            )
+            return _persist_incident_inner(supabase, _strip_forecast_columns(db_payload))
+        raise
 
 
 async def write_incident(
@@ -536,6 +649,10 @@ async def write_incident(
                 "decision_support_output": state.get("decision_support_output"),
             },
             "updated_at": datetime.now(timezone.utc).isoformat(),
+            # WS-A stored forecast: calibrated P + raw recovered from the stored
+            # breakdown terms + profile P_max + contributing channels. The
+            # evidence block above is untouched (evidence_chain preserved).
+            **_forecast_provenance(state),
         }
 
         res, reused = await asyncio.to_thread(_persist_incident, supabase, db_payload)

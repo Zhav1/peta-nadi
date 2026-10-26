@@ -53,6 +53,8 @@ DEFAULT_BENCHMARK_REPORT: Dict[str, Any] = {
     },
     "calibration": {
         "brier_score": 0.0937,
+        "normalized_brier_score": 0.0937,
+        "raw_brier_score": 0.1106,
         "expected_calibration_error": 0.1994,
         "platt_calibrated_brier": 0.0,
         "isotonic_calibrated_brier": 0.0,
@@ -314,6 +316,22 @@ CORRIDOR_EFFICIENCY_DATA: List[Dict[str, Any]] = [
 ]
 
 
+def _benchmark_file_hash() -> str:
+    """sha256 of the benchmark report file bytes (fallback: default payload)."""
+    import hashlib as _hashlib
+
+    try:
+        if BENCHMARK_REPORT_PATH.exists():
+            return _hashlib.sha256(BENCHMARK_REPORT_PATH.read_bytes()).hexdigest()
+    except Exception:
+        pass
+    try:
+        payload = json.dumps(DEFAULT_BENCHMARK_REPORT, sort_keys=True, ensure_ascii=False)
+        return _hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    except Exception:
+        return ""
+
+
 @router.get("/benchmark", response_model=BenchmarkReportResponse)
 async def get_benchmark_report():
     """
@@ -352,6 +370,7 @@ async def get_benchmark_report():
         "immutable": True,
         "timestamp": data.get("timestamp", "2026-10-26T10:50:51.599108"),
         "total_scenarios": data.get("total_scenarios", 60),
+        "dataset_hash": _benchmark_file_hash(),
         "confusion_matrix": batch_cm,
         "metrics": batch_metrics,
         "calibration": batch_calib,
@@ -373,6 +392,7 @@ async def get_benchmark_report():
         mode_recommendation=mode,
         headline=headline,
         versions=versions,
+        dataset_hash=batch_snapshot["dataset_hash"],
     )
 
 
@@ -401,6 +421,7 @@ async def get_live_aggregate():
         "status": "success",
         "batch_version": "batch-v2026-10-26-N60",
         "batch_n": data.get("total_scenarios", 60),
+        "dataset_hash": _benchmark_file_hash(),
         "live": live,
         "mode_recommendation": mode,
         "headline": _build_headline(live, mode),
@@ -426,6 +447,14 @@ def _build_live_overlay(batch_metrics: Dict[str, Any], batch_calib: Dict[str, An
                 deltas[key] = round(float(lc.get(key, 0.0)) - float(batch_calib.get(key, 0.0)), 4)
             except (TypeError, ValueError):
                 deltas[key] = 0.0
+        # WS-B: raw Brier delta only when both sides expose a numeric value.
+        try:
+            live_raw = lc.get("raw_brier_score")
+            batch_raw = batch_calib.get("raw_brier_score")
+            if live_raw is not None and batch_raw is not None:
+                deltas["raw_brier_score"] = round(float(live_raw) - float(batch_raw), 4)
+        except (TypeError, ValueError):
+            pass
         live["deltas_vs_batch"] = deltas
     return live
 

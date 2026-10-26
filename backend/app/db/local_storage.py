@@ -47,7 +47,15 @@ def init_db(db_path: Optional[str] = None) -> None:
                     custom_constraints TEXT,
                     notes TEXT,
                     sync_status TEXT DEFAULT 'pending',
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    -- WS-A stored forecast provenance (nullable: legacy rows stay
+                    -- NULL and are excluded from the live aggregate, never defaulted)
+                    pred_prob REAL,
+                    raw_prob REAL,
+                    p_max REAL,
+                    weights_version TEXT,
+                    active_sources TEXT,
+                    forecast_created_at TIMESTAMP
                 );
             """)
             conn.execute("""
@@ -71,7 +79,15 @@ def init_db(db_path: Optional[str] = None) -> None:
                     verification_source TEXT NOT NULL,
                     notes TEXT,
                     sync_status TEXT DEFAULT 'pending',
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    -- WS-A stored forecast provenance (nullable: rows without a
+                    -- stored pred are excluded from live N as missing_pred)
+                    pred_prob REAL,
+                    raw_prob REAL,
+                    p_max REAL,
+                    weights_version TEXT,
+                    active_sources TEXT,
+                    forecast_created_at TIMESTAMP
                 );
             """)
             conn.execute("""
@@ -351,6 +367,20 @@ def init_db(db_path: Optional[str] = None) -> None:
                 ("travels", ("fuel_efficiency_source", "TEXT")),
                 ("travels", ("fuel_load_factor", "REAL")),
                 ("travels", ("delivered_at", "TIMESTAMP")),
+                # WS-A stored forecast provenance (nullable; legacy rows keep
+                # NULL and are excluded from the live aggregate as missing_pred)
+                ("route_decision_traces", ("pred_prob", "REAL")),
+                ("route_decision_traces", ("raw_prob", "REAL")),
+                ("route_decision_traces", ("p_max", "REAL")),
+                ("route_decision_traces", ("weights_version", "TEXT")),
+                ("route_decision_traces", ("active_sources", "TEXT")),
+                ("route_decision_traces", ("forecast_created_at", "TIMESTAMP")),
+                ("ground_truth_outcomes", ("pred_prob", "REAL")),
+                ("ground_truth_outcomes", ("raw_prob", "REAL")),
+                ("ground_truth_outcomes", ("p_max", "REAL")),
+                ("ground_truth_outcomes", ("weights_version", "TEXT")),
+                ("ground_truth_outcomes", ("active_sources", "TEXT")),
+                ("ground_truth_outcomes", ("forecast_created_at", "TIMESTAMP")),
             ]:
                 try:
                     conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {col_def[0]} {col_def[1]};")
@@ -363,6 +393,41 @@ def init_db(db_path: Optional[str] = None) -> None:
 
 # Auto-initialize on module load
 init_db()
+
+
+def _serialize_sources(value: Any) -> Optional[str]:
+    """Serialize active_sources to JSON text for SQLite (None stays NULL)."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    try:
+        return json.dumps(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_sources(value: Any) -> Optional[Any]:
+    """Best-effort decode of stored active_sources JSON text."""
+    if value is None or not isinstance(value, str):
+        return value
+    try:
+        return json.loads(value)
+    except (TypeError, ValueError):
+        return value
+
+
+def _get_float_or_none(data: Dict[str, Any], key: str) -> Optional[float]:
+    """Best-effort float coercion; blank/invalid stays None (NULL, not 0.0)."""
+    raw = data.get(key)
+    if raw is None or raw == "":
+        return None
+    try:
+        result = float(raw)
+    except (TypeError, ValueError):
+        return None
+    import math as _math
+    return result if _math.isfinite(result) else None
 
 
 def save_decision_trace(data: Dict[str, Any], db_path: Optional[str] = None) -> Dict[str, Any]:
@@ -387,8 +452,10 @@ def save_decision_trace(data: Dict[str, Any], db_path: Optional[str] = None) -> 
                 INSERT INTO route_decision_traces (
                     id, incident_id, route_id, action, tactical_action,
                     operator_id, recommended_route, custom_constraints,
-                    notes, sync_status, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    notes, sync_status, created_at,
+                    pred_prob, raw_prob, p_max, weights_version,
+                    active_sources, forecast_created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 record_id,
                 data.get("incident_id") or "INC-DEFAULT",
@@ -400,7 +467,13 @@ def save_decision_trace(data: Dict[str, Any], db_path: Optional[str] = None) -> 
                 constraints,
                 data.get("notes") or "",
                 data.get("sync_status") or "pending",
-                created_at
+                created_at,
+                _get_float_or_none(data, "pred_prob"),
+                _get_float_or_none(data, "raw_prob"),
+                _get_float_or_none(data, "p_max"),
+                data.get("weights_version"),
+                _serialize_sources(data.get("active_sources")),
+                data.get("forecast_created_at")
             ))
         return {
             "id": record_id,
@@ -413,7 +486,13 @@ def save_decision_trace(data: Dict[str, Any], db_path: Optional[str] = None) -> 
             "custom_constraints": data.get("custom_constraints"),
             "notes": data.get("notes") or "",
             "sync_status": data.get("sync_status") or "pending",
-            "created_at": created_at
+            "created_at": created_at,
+            "pred_prob": _get_float_or_none(data, "pred_prob"),
+            "raw_prob": _get_float_or_none(data, "raw_prob"),
+            "p_max": _get_float_or_none(data, "p_max"),
+            "weights_version": data.get("weights_version"),
+            "active_sources": _parse_sources(_serialize_sources(data.get("active_sources"))),
+            "forecast_created_at": data.get("forecast_created_at")
         }
     finally:
         conn.close()
@@ -456,6 +535,9 @@ def list_decision_traces(
                     constraints = json.loads(constraints)
                 except Exception:
                     pass
+            # WS-A: legacy SQLite files predate the forecast columns — .keys()
+            # guard keeps reads working without a forced VACUUM/migration.
+            cols = r.keys()
             results.append({
                 "id": r["id"],
                 "incident_id": r["incident_id"],
@@ -467,7 +549,13 @@ def list_decision_traces(
                 "custom_constraints": constraints,
                 "notes": r["notes"],
                 "sync_status": r["sync_status"],
-                "created_at": r["created_at"]
+                "created_at": r["created_at"],
+                "pred_prob": float(r["pred_prob"]) if ("pred_prob" in cols and r["pred_prob"] is not None) else None,
+                "raw_prob": float(r["raw_prob"]) if ("raw_prob" in cols and r["raw_prob"] is not None) else None,
+                "p_max": float(r["p_max"]) if ("p_max" in cols and r["p_max"] is not None) else None,
+                "weights_version": r["weights_version"] if "weights_version" in cols else None,
+                "active_sources": _parse_sources(r["active_sources"]) if "active_sources" in cols else None,
+                "forecast_created_at": r["forecast_created_at"] if "forecast_created_at" in cols else None
             })
         return results
     finally:
@@ -489,8 +577,10 @@ def save_outcome(data: Dict[str, Any], db_path: Optional[str] = None) -> Dict[st
                 INSERT INTO ground_truth_outcomes (
                     id, incident_id, horizon, actual_clearance_time,
                     observed_delay_hours, actual_price_spike_pct,
-                    verified_by, verification_source, notes, sync_status, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    verified_by, verification_source, notes, sync_status, created_at,
+                    pred_prob, raw_prob, p_max, weights_version,
+                    active_sources, forecast_created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 record_id,
                 data.get("incident_id") or "INC-DEFAULT",
@@ -502,7 +592,13 @@ def save_outcome(data: Dict[str, Any], db_path: Optional[str] = None) -> Dict[st
                 data.get("verification_source") or "FIELD_REPORT",
                 data.get("notes") or "",
                 data.get("sync_status") or "pending",
-                created_at
+                created_at,
+                _get_float_or_none(data, "pred_prob"),
+                _get_float_or_none(data, "raw_prob"),
+                _get_float_or_none(data, "p_max"),
+                data.get("weights_version"),
+                _serialize_sources(data.get("active_sources")),
+                data.get("forecast_created_at")
             ))
         return {
             "id": record_id,
@@ -515,7 +611,13 @@ def save_outcome(data: Dict[str, Any], db_path: Optional[str] = None) -> Dict[st
             "verification_source": data.get("verification_source") or "FIELD_REPORT",
             "notes": data.get("notes") or "",
             "sync_status": data.get("sync_status") or "pending",
-            "created_at": created_at
+            "created_at": created_at,
+            "pred_prob": _get_float_or_none(data, "pred_prob"),
+            "raw_prob": _get_float_or_none(data, "raw_prob"),
+            "p_max": _get_float_or_none(data, "p_max"),
+            "weights_version": data.get("weights_version"),
+            "active_sources": _parse_sources(_serialize_sources(data.get("active_sources"))),
+            "forecast_created_at": data.get("forecast_created_at")
         }
     finally:
         conn.close()
@@ -553,6 +655,8 @@ def list_outcomes(
         rows = cursor.fetchall()
         results = []
         for r in rows:
+            # WS-A: tolerate legacy SQLite files without forecast columns.
+            cols = r.keys()
             results.append({
                 "id": r["id"],
                 "incident_id": r["incident_id"],
@@ -564,7 +668,13 @@ def list_outcomes(
                 "verification_source": r["verification_source"],
                 "notes": r["notes"],
                 "sync_status": r["sync_status"],
-                "created_at": r["created_at"]
+                "created_at": r["created_at"],
+                "pred_prob": float(r["pred_prob"]) if ("pred_prob" in cols and r["pred_prob"] is not None) else None,
+                "raw_prob": float(r["raw_prob"]) if ("raw_prob" in cols and r["raw_prob"] is not None) else None,
+                "p_max": float(r["p_max"]) if ("p_max" in cols and r["p_max"] is not None) else None,
+                "weights_version": r["weights_version"] if "weights_version" in cols else None,
+                "active_sources": _parse_sources(r["active_sources"]) if "active_sources" in cols else None,
+                "forecast_created_at": r["forecast_created_at"] if "forecast_created_at" in cols else None
             })
         return results
     finally:
