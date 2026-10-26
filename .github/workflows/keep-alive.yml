@@ -4,6 +4,8 @@ on:
   schedule:
     # Runs every 10 minutes (cron: '*/10 * * * *')
     # Ensures Render never sleeps (15m idle limit) and Supabase stays active (7d inactivity rule)
+    # NOTE: cron-job.org pings GET /health every 5 min as the PRIMARY waker
+    # (see docs/KEEPALIVE_RUNBOOK.md). This workflow is the secondary safety net.
     - cron: '*/10 * * * *'
   workflow_dispatch: # Allows manual trigger from GitHub Actions tab
 
@@ -17,7 +19,7 @@ jobs:
       - name: Ping Render Backend Health
         run: |
           echo "=== 1. Probing Render Web Service ==="
-          RENDER_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 45 "https://peta-nadi.onrender.com/health")
+          RENDER_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 90 --retry 2 --retry-delay 10 "https://peta-nadi.onrender.com/health")
           echo "Render /health HTTP Status: $RENDER_HTTP_CODE"
           if [ "$RENDER_HTTP_CODE" -ge 200 ] && [ "$RENDER_HTTP_CODE" -lt 400 ]; then
             echo "Render backend is alive and warm."
@@ -25,10 +27,25 @@ jobs:
             echo "Warning: Render returned status $RENDER_HTTP_CODE (cold start may be underway)"
           fi
 
-      - name: Ping Backend Data Sources (Wakes Render & Probes DB)
+      - name: Warm Ping Render Health (second hit after boot window)
         run: |
-          echo "=== 2. Probing Render Data Sources Endpoint ==="
-          SOURCES_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 45 "https://peta-nadi.onrender.com/api/v1/health/sources")
+          echo "=== 2. Warm ping (wake confirmation, /health only) ==="
+          echo "Sleeping 20s to let a cold-starting instance finish booting..."
+          sleep 20
+          WARM_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 90 --retry 2 --retry-delay 10 "https://peta-nadi.onrender.com/health")
+          echo "Render /health (warm) HTTP Status: $WARM_HTTP_CODE"
+          if [ "$WARM_HTTP_CODE" -ge 200 ] && [ "$WARM_HTTP_CODE" -lt 400 ]; then
+            echo "Render backend confirmed warm."
+          else
+            echo "Warning: warm ping returned status $WARM_HTTP_CODE"
+          fi
+
+      - name: Ping Backend Data Sources (DB probe only, NOT for wake)
+        run: |
+          echo "=== 3. Probing Render Data Sources Endpoint (DB probe only) ==="
+          # NOTE: /sources is a DB health probe, never the wake mechanism.
+          # Wake uses GET /health only (cheap, no DB fan-out).
+          SOURCES_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 90 --retry 2 --retry-delay 10 "https://peta-nadi.onrender.com/api/v1/health/sources")
           echo "Render /api/v1/health/sources HTTP Status: $SOURCES_HTTP_CODE"
 
       - name: Directly Ping Supabase REST API (Database Activity)
@@ -36,7 +53,7 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
-          echo "=== 3. Executing Direct REST Query against Supabase ==="
+          echo "=== 4. Executing Direct REST Query against Supabase ==="
           # Query data_sources table with count to generate genuine database query traffic
           SB_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" --max-time 20 \
             -H "apikey: $SUPABASE_ANON_KEY" \

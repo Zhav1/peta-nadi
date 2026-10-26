@@ -60,6 +60,27 @@ class BenchmarkReportResponse(BaseModel):
     calibration: CalibrationReport
     thresholds: BenchmarkThresholds
     gating_passed: bool = Field(True, description="Whether all benchmark thresholds were satisfied")
+    # --- WS2: batch-immutable + live-cumulative overlay (additive, backward compatible) ---
+    batch: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Immutable batch baseline snapshot (v2026-10-26 N=60). Mirrors the legacy top-level fields.",
+    )
+    live: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Live cumulative aggregate from field outcomes: {n, sufficient, metrics|null, calibration|null, ...}. Metrics are null when n < min_n (10).",
+    )
+    mode_recommendation: Optional[str] = Field(
+        None,
+        description="Headline mode: 'batch' when live N<10, 'live' when live N>=10.",
+    )
+    headline: Optional[str] = Field(
+        None,
+        description="Indonesian headline rule text for the dashboard banner.",
+    )
+    versions: Optional[List[Dict[str, Any]]] = Field(
+        None,
+        description="Version dropdown entries: immutable batch version + live cumulative snapshot.",
+    )
 
 
 class TestCaseItem(BaseModel):

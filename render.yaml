@@ -6,6 +6,7 @@ services:
     dockerContext: .
     plan: free
     region: singapore
+    healthCheckPath: /health
     envVars:
       # Production-required secrets (set in the Render dashboard; repo keeps only
       # `sync: false` placeholders):

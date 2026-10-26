@@ -319,34 +319,155 @@ async def get_benchmark_report():
     """
     Retrieve empirical benchmark metrics, confusion matrix, and 10-bin probability calibration details.
     Reads from test-results/benchmark_evaluation_report.json if present; falls back to verified static data.
+
+    WS2 overlay (backward compatible — legacy top-level fields still carry the
+    immutable batch baseline): adds `batch` (immutable snapshot), `live`
+    (cumulative field-outcome aggregate, metrics null when N<10),
+    `mode_recommendation` (batch|live), `headline` (ID banner rule), and
+    `versions` (batch/live dropdown entries).
     """
     if BENCHMARK_REPORT_PATH.exists():
         try:
             with open(BENCHMARK_REPORT_PATH, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            return BenchmarkReportResponse(
-                status="success",
-                timestamp=data.get("timestamp", "2026-10-26T10:50:51.599108"),
-                total_scenarios=data.get("total_scenarios", 60),
-                confusion_matrix=ConfusionMatrix(**data.get("confusion_matrix", DEFAULT_BENCHMARK_REPORT["confusion_matrix"])),
-                metrics=EvaluationMetrics(**data.get("metrics", DEFAULT_BENCHMARK_REPORT["metrics"])),
-                calibration=CalibrationReport(**data.get("calibration", DEFAULT_BENCHMARK_REPORT["calibration"])),
-                thresholds=BenchmarkThresholds(**data.get("thresholds", DEFAULT_BENCHMARK_REPORT["thresholds"])),
-                gating_passed=data.get("gating_passed", True)
-            )
         except Exception as e:
             logger.warning(f"Failed to read benchmark_evaluation_report.json: {e}. Using verified default.")
+            data = dict(DEFAULT_BENCHMARK_REPORT)
+    else:
+        data = dict(DEFAULT_BENCHMARK_REPORT)
+
+    batch_cm = data.get("confusion_matrix", DEFAULT_BENCHMARK_REPORT["confusion_matrix"])
+    batch_metrics = data.get("metrics", DEFAULT_BENCHMARK_REPORT["metrics"])
+    batch_calib = data.get("calibration", DEFAULT_BENCHMARK_REPORT["calibration"])
+    batch_thresholds = data.get("thresholds", DEFAULT_BENCHMARK_REPORT["thresholds"])
+
+    # WS2: live cumulative aggregate from field outcomes (batch untouched).
+    live = _build_live_overlay(batch_metrics, batch_calib)
+    mode = "live" if live.get("sufficient") else "batch"
+    headline = _build_headline(live, mode)
+    versions = _build_versions(data.get("timestamp"), live)
+
+    batch_snapshot = {
+        "version": "batch-v2026-10-26-N60",
+        "immutable": True,
+        "timestamp": data.get("timestamp", "2026-10-26T10:50:51.599108"),
+        "total_scenarios": data.get("total_scenarios", 60),
+        "confusion_matrix": batch_cm,
+        "metrics": batch_metrics,
+        "calibration": batch_calib,
+        "thresholds": batch_thresholds,
+        "gating_passed": data.get("gating_passed", True),
+    }
 
     return BenchmarkReportResponse(
         status="success",
-        timestamp=DEFAULT_BENCHMARK_REPORT["timestamp"],
-        total_scenarios=DEFAULT_BENCHMARK_REPORT["total_scenarios"],
-        confusion_matrix=ConfusionMatrix(**DEFAULT_BENCHMARK_REPORT["confusion_matrix"]),
-        metrics=EvaluationMetrics(**DEFAULT_BENCHMARK_REPORT["metrics"]),
-        calibration=CalibrationReport(**DEFAULT_BENCHMARK_REPORT["calibration"]),
-        thresholds=BenchmarkThresholds(**DEFAULT_BENCHMARK_REPORT["thresholds"]),
-        gating_passed=DEFAULT_BENCHMARK_REPORT["gating_passed"]
+        timestamp=data.get("timestamp", "2026-10-26T10:50:51.599108"),
+        total_scenarios=data.get("total_scenarios", 60),
+        confusion_matrix=ConfusionMatrix(**batch_cm),
+        metrics=EvaluationMetrics(**batch_metrics),
+        calibration=CalibrationReport(**batch_calib),
+        thresholds=BenchmarkThresholds(**batch_thresholds),
+        gating_passed=data.get("gating_passed", True),
+        batch=batch_snapshot,
+        live=live,
+        mode_recommendation=mode,
+        headline=headline,
+        versions=versions,
     )
+
+
+@router.get("/live")
+async def get_live_aggregate():
+    """
+    WS2 focused live endpoint: cumulative field-outcome aggregate vs the
+    immutable batch baseline. Returns {batch_version, live, mode_recommendation,
+    headline, versions}. Use alongside GET /evaluation/benchmark for batch-vs-live
+    curl evidence.
+    """
+    if BENCHMARK_REPORT_PATH.exists():
+        try:
+            with open(BENCHMARK_REPORT_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            data = dict(DEFAULT_BENCHMARK_REPORT)
+    else:
+        data = dict(DEFAULT_BENCHMARK_REPORT)
+
+    batch_metrics = data.get("metrics", DEFAULT_BENCHMARK_REPORT["metrics"])
+    batch_calib = data.get("calibration", DEFAULT_BENCHMARK_REPORT["calibration"])
+    live = _build_live_overlay(batch_metrics, batch_calib)
+    mode = "live" if live.get("sufficient") else "batch"
+    return {
+        "status": "success",
+        "batch_version": "batch-v2026-10-26-N60",
+        "batch_n": data.get("total_scenarios", 60),
+        "live": live,
+        "mode_recommendation": mode,
+        "headline": _build_headline(live, mode),
+        "versions": _build_versions(data.get("timestamp"), live),
+    }
+
+
+def _build_live_overlay(batch_metrics: Dict[str, Any], batch_calib: Dict[str, Any]) -> Dict[str, Any]:
+    """Compute the live aggregate and its deltas vs the batch baseline."""
+    from app.services.outcome_evaluation_service import compute_live_cumulative_metrics
+
+    live = compute_live_cumulative_metrics()
+    if live.get("sufficient") and live.get("metrics") and live.get("calibration"):
+        lm, lc = live["metrics"], live["calibration"]
+        deltas = {}
+        for key in ("precision", "recall", "f1_score", "false_positive_rate", "accuracy"):
+            try:
+                deltas[key] = round(float(lm.get(key, 0.0)) - float(batch_metrics.get(key, 0.0)), 4)
+            except (TypeError, ValueError):
+                deltas[key] = 0.0
+        for key in ("brier_score", "expected_calibration_error"):
+            try:
+                deltas[key] = round(float(lc.get(key, 0.0)) - float(batch_calib.get(key, 0.0)), 4)
+            except (TypeError, ValueError):
+                deltas[key] = 0.0
+        live["deltas_vs_batch"] = deltas
+    return live
+
+
+def _build_headline(live: Dict[str, Any], mode: str) -> str:
+    """Headline rule: batch banner while live N<10, live+delta banner once N>=10."""
+    n = live.get("n", 0)
+    if mode == "live" and live.get("deltas_vs_batch"):
+        d = live["deltas_vs_batch"]
+        return (
+            f"Live kumulatif N={n} ditampilkan dengan delta vs batch N=60 "
+            f"(dPresisi {d.get('precision', 0.0):+.4f}, dRecall {d.get('recall', 0.0):+.4f}, "
+            f"dF1 {d.get('f1_score', 0.0):+.4f}, dBrier {d.get('brier_score', 0.0):+.4f}) - "
+            f"pilih versi via dropdown (batch/live)."
+        )
+    return (
+        f"Baseline batch N=60 (immutable v2026-10-26) ditampilkan - "
+        f"Live N={n} belum cukup (butuh >=10) untuk agregat kumulatif."
+    )
+
+
+def _build_versions(batch_timestamp: Optional[str], live: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Version dropdown entries: one immutable batch row + one live snapshot row."""
+    from datetime import datetime as _dt
+
+    n = live.get("n", 0)
+    return [
+        {
+            "version": "batch-v2026-10-26-N60",
+            "kind": "batch",
+            "n": 60,
+            "immutable": True,
+            "timestamp": batch_timestamp,
+        },
+        {
+            "version": f"live-cumulative-N{n}-{_dt.now().strftime('%Y%m%d')}",
+            "kind": "live",
+            "n": n,
+            "immutable": False,
+            "sufficient": live.get("sufficient", False),
+        },
+    ]
 
 
 @router.get("/test-matrix", response_model=TestMatrixResponse)

@@ -16,6 +16,7 @@ import type {
   RouteDetailModalProps,
   RouteDecisionType,
   TacticalManeuver,
+  BenchmarkReportResponse,
 } from '@/lib/types';
 import {
   calculateTotalTripCost,
@@ -23,6 +24,7 @@ import {
   formatCompactIDR,
   isColdChain,
 } from '@/lib/tripCostCalculator';
+import { api } from '@/lib/api';
 import {
  AlertDialog,
  AlertDialogContent,
@@ -82,6 +84,31 @@ export function RouteDetailModal({
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [notes, setNotes] = useState('');
   const [previewPolicy, setPreviewPolicy] = useState<TacticalManeuver>('REROUTE');
+  const [benchmark, setBenchmark] = useState<BenchmarkReportResponse | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    api.evaluation.getBenchmark()
+      .then((res) => { if (!cancelled && res) setBenchmark(res); })
+      .catch(() => { if (!cancelled) setBenchmark(null); });
+    return () => { cancelled = true; };
+  }, [open ]);
+
+  // Honest benchmark headline: live API values or explicit "Belum dihitung".
+  const benchPrecision = benchmark?.metrics?.precision ?? null;
+  const benchRecall = benchmark?.metrics?.recall ?? null;
+  const benchBrier = benchmark?.calibration?.brier_score ?? null;
+  const benchN = benchmark?.total_scenarios ?? null;
+  const benchSummary = benchPrecision !== null && benchRecall !== null && benchBrier !== null
+    ? `${(benchPrecision * 100).toFixed(1)}% Presisi, ${(benchRecall * 100).toFixed(1)}% Sensitivitas, ${benchBrier.toFixed(2)} Brier`
+    : 'Belum dihitung';
+  const benchShort = benchPrecision !== null
+    ? `Presisi ${(benchPrecision * 100).toFixed(1)}%`
+    : 'Belum dihitung';
+  const benchHud = benchPrecision !== null && benchN !== null
+    ? `Metrik Validasi Empiris: ${(benchPrecision * 100).toFixed(1)}% Presisi (N=${benchN} Benchmark)`
+    : 'Metrik Validasi Empiris: Belum dihitung';
 
   useEffect(() => {
     if (open) {
@@ -567,21 +594,21 @@ export function RouteDetailModal({
                       onOpenEvaluation();
                     }}
                     className="cursor-pointer p-1.5 rounded border text-[10px] font-mono flex flex-col items-center text-center bg-purple-500/10 hover:bg-purple-500/25 border-purple-500/30 hover:border-purple-400/60 text-purple-300 transition"
-                    title="Klik untuk membuka Benchmark Empiris N=60 Skenario Disrupsi Sumatra: 92.5% Presisi, 89.2% Recall, 0.04 Brier Score"
+                    title={`Klik untuk membuka Benchmark Empiris N=${benchN ?? '–'} Skenario Disrupsi Sumatra: ${benchSummary}`}
                   >
                     <span className="font-bold flex items-center gap-0.5">
-                      [BENCHMARK N=60]
+                      [BENCHMARK N={benchN ?? '–'}]
                       <span className="text-[9px] text-purple-400">↗</span>
                     </span>
-                    <span className="text-[9px] text-purple-400/80">Presisi 92.5%</span>
+                    <span className="text-[9px] text-purple-400/80">{benchShort}</span>
                   </button>
                 ) : (
                   <div
                     className="p-1.5 rounded border text-[10px] font-mono flex flex-col items-center text-center bg-purple-500/10 border-purple-500/30 text-purple-300 cursor-help"
-                    title="Benchmark Empiris N=60 Skenario Disrupsi Sumatra: 92.5% Presisi, 89.2% Recall, 0.04 Brier Score"
+                    title={`Benchmark Empiris N=${benchN ?? '–'} Skenario Disrupsi Sumatra: ${benchSummary}`}
                   >
-                    <span className="font-bold">[BENCHMARK N=60]</span>
-                    <span className="text-[9px] text-slate-400">Presisi 92.5%</span>
+                    <span className="font-bold">[BENCHMARK N={benchN ?? '–'}]</span>
+                    <span className="text-[9px] text-slate-400">{benchShort}</span>
                   </div>
                 )}
               </div>
@@ -735,7 +762,7 @@ export function RouteDetailModal({
             >
               <span className="flex items-center gap-2">
                 <Scale className="w-4 h-4 text-cyan-400 shrink-0" />
-                <span>Metrik Validasi Empiris: 92.5% Presisi (N=60 Benchmark)</span>
+                <span>{benchHud}</span>
               </span>
               <span className="text-cyan-400 font-bold group-hover:translate-x-1 transition-transform">→</span>
             </button>

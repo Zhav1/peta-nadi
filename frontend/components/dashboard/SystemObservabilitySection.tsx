@@ -86,14 +86,49 @@ interface LogEntry {
  message: string;
 }
 
-const INITIAL_LOGS: LogEntry[] = [
- { timestamp: new Date(Date.now() - 120000).toISOString().slice(11, 19), level: 'INFO', component: 'main.lifespan', message: 'FastAPI core workers initialized in async lifecycle.' },
- { timestamp: new Date(Date.now() - 90000).toISOString().slice(11, 19), level: 'INFO', component: 'bmkg_poller', message: 'BMKG early-warning poller active. Polling interval: 60s.' },
- { timestamp: new Date(Date.now() - 60000).toISOString().slice(11, 19), level: 'INFO', component: 'tomtom_adapter', message: 'TomTom arterial corridor traffic flow updated. 5 checkpoints cached.' },
- { timestamp: new Date(Date.now() - 45000).toISOString().slice(11, 19), level: 'INFO', component: 'news_rss', message: 'LKBN Antara & regional RSS feeds synchronized. 25 articles evaluated.' },
- { timestamp: new Date(Date.now() - 30000).toISOString().slice(11, 19), level: 'INFO', component: 'fleet_service', message: 'Multi-modal telemetry active. 45 fleet units synchronized.' },
- { timestamp: new Date(Date.now() - 10000).toISOString().slice(11, 19), level: 'DEBUG', component: 'health_router', message: 'Periodic ping from frontend dashboard client acknowledged.' }
-];
+type SourceTier = 'nominal' | 'degraded' | 'stale';
+
+interface SourceHealthEntry {
+ name: string;
+ status: string;
+ last_seen: string | null;
+ note?: string | null;
+}
+
+function mapSourceToTier(status: string): SourceTier {
+ const s = (status || '').toLowerCase();
+ if (s === 'healthy' || s === 'ok' || s === 'up' || s === 'enabled') return 'nominal';
+ if (s === 'degraded' || s === 'disabled' || s === 'disabled_no_token' || s === 'disabled_no_service_key') return 'degraded';
+ return 'stale';
+}
+
+function formatSourceAge(iso: string | null): string {
+ if (!iso) return 'belum pernah terlihat';
+ try {
+ const past = new Date(iso).getTime();
+ if (Number.isNaN(past)) return 'waktu tak valid';
+ const diffMs = Date.now() - past;
+ if (diffMs < 0) return 'baru saja';
+ const s = Math.floor(diffMs / 1000);
+ if (s < 60) return `${s}d lalu`;
+ const m = Math.floor(s / 60);
+ if (m < 60) return `${m}m lalu`;
+ const h = Math.floor(m / 60);
+ if (h < 24) return `${h}j lalu`;
+ return new Date(iso).toLocaleDateString('id-ID');
+ } catch {
+ return '-';
+ }
+}
+
+function formatSourceTimestamp(iso: string | null): string {
+ if (!iso) return '-';
+ try {
+ return new Date(iso).toLocaleString('id-ID');
+ } catch {
+ return iso;
+ }
+}
 
 export default function SystemObservabilitySection() {
  const [targetUrl, setTargetUrl] = useState<string>('https://peta-nadi.onrender.com');
@@ -103,20 +138,29 @@ export default function SystemObservabilitySection() {
  const [isTesting, setIsTesting] = useState<boolean>(false);
  const [searchQuery, setSearchQuery] = useState<string>('');
  const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
- const [logs, setLogs] = useState<LogEntry[]>(INITIAL_LOGS);
+ const [logs, setLogs] = useState<LogEntry[]>([]);
+ const [sources, setSources] = useState<SourceHealthEntry[]>([]);
+ const [sourcesLoading, setSourcesLoading] = useState<boolean>(true);
+ const [sourcesError, setSourcesError] = useState<string | null>(null);
+ const [sourcesUpdatedAt, setSourcesUpdatedAt] = useState<string>('');
  const [logFilter, setLogFilter] = useState<'ALL' | 'INFO' | 'WARN' | 'ERROR'>('ALL');
  const [lastRunTime, setLastRunTime] = useState<string>('');
 
  const activeUrl = isCustom ? customUrl.trim() : targetUrl;
 
+ const PROBE_TIMEOUT_MS = 15000;
+
  const runSingleProbe = async (item: EndpointProbeItem, baseUrl: string): Promise<EndpointProbeItem> => {
  const t0 = performance.now();
  const url = `${baseUrl.replace(/\/$/, '')}${item.path}`;
  const nowStr = new Date().toLocaleTimeString('id-ID');
+ const controller = new AbortController();
+ const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
 
  try {
  const options: RequestInit = {
  method: item.method,
+ signal: controller.signal,
  headers: {
  'Accept': 'application/json',
  ...(item.method === 'POST' ? { 'Content-Type': 'application/json' } : {})
@@ -134,15 +178,23 @@ export default function SystemObservabilitySection() {
  let res: Response;
  try {
  res = await fetch(url, options);
- } catch (directErr) {
+ } catch (directErr: any) {
+ if (directErr?.name === 'AbortError') throw directErr;
  if (typeof window !== 'undefined') {
+ const proxyController = new AbortController();
+ const proxyTimer = setTimeout(() => proxyController.abort(), PROBE_TIMEOUT_MS);
+ try {
  res = await fetch(`/api/proxy${item.path}`, {
  ...options,
+ signal: proxyController.signal,
  headers: {
  ...(options.headers as Record<string, string>),
  'x-target-base-url': baseUrl.replace(/\/$/, '')
  }
  });
+ } finally {
+ clearTimeout(proxyTimer);
+ }
  } else {
  throw directErr;
  }
@@ -174,6 +226,7 @@ export default function SystemObservabilitySection() {
  }
  } catch (err: any) {
  const elapsed = Math.round(performance.now() - t0);
+ const isTimeout = err?.name === 'AbortError';
  return {
  ...item,
  status: 'FAIL',
@@ -181,10 +234,57 @@ export default function SystemObservabilitySection() {
  latencyMs: elapsed,
  responseBytes: 0,
  lastChecked: nowStr,
- error: err?.message || 'Connection failed'
+ error: isTimeout ? `Timeout ${PROBE_TIMEOUT_MS / 1000}s: probe melebihi batas waktu` : (err?.message || 'Connection failed')
  };
+ } finally {
+ clearTimeout(timer);
  }
  };
+
+ const fetchSourceHealth = useCallback(async (baseUrl: string) => {
+ setSourcesLoading(true);
+ setSourcesError(null);
+ const controller = new AbortController();
+ const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
+ const path = '/api/v1/health/sources';
+ try {
+ let res: Response;
+ try {
+ res = await fetch(`${baseUrl.replace(/\/$/, '')}${path}`, {
+ headers: { 'Accept': 'application/json' },
+ signal: controller.signal,
+ });
+ } catch (directErr: any) {
+ if (directErr?.name === 'AbortError') throw directErr;
+ if (typeof window !== 'undefined') {
+ res = await fetch(`/api/proxy${path}`, {
+ headers: {
+ 'Accept': 'application/json',
+ 'x-target-base-url': baseUrl.replace(/\/$/, '')
+ },
+ signal: controller.signal,
+ });
+ } else {
+ throw directErr;
+ }
+ }
+ if (!res.ok) {
+ const text = await res.text().catch(() => '');
+ throw new Error(`HTTP ${res.status}: ${text.slice(0, 120)}`);
+ }
+ const payload = await res.json();
+ const list: SourceHealthEntry[] = Array.isArray(payload?.sources) ? payload.sources : [];
+ setSources(list);
+ setSourcesUpdatedAt(new Date().toLocaleTimeString('id-ID'));
+ } catch (err: any) {
+ const isTimeout = err?.name === 'AbortError';
+ setSources([]);
+ setSourcesError(isTimeout ? `Timeout ${PROBE_TIMEOUT_MS / 1000}s: /health/sources melebihi batas waktu` : (err?.message || 'Gagal memuat /health/sources'));
+ } finally {
+ clearTimeout(timer);
+ setSourcesLoading(false);
+ }
+ }, []);
 
  const runAllProbes = useCallback(async () => {
  if (!activeUrl) return;
@@ -197,6 +297,8 @@ export default function SystemObservabilitySection() {
  message: `Initiated complete API smoke test against ${activeUrl}`
  };
  setLogs(prev => [logEntry, ...prev.slice(0, 49)]);
+
+ void fetchSourceHealth(activeUrl);
 
  const updated = [...endpoints];
 
@@ -223,7 +325,7 @@ export default function SystemObservabilitySection() {
  message: `Audit complete. Passed: ${passCount}/${updated.length} (${Math.round(passCount / updated.length * 100)}%), Failed: ${failCount}`
  };
  setLogs(prev => [completeLog, ...prev.slice(0, 49)]);
- }, [activeUrl, endpoints]);
+ }, [activeUrl, endpoints, fetchSourceHealth]);
 
  // Initial automatic run on component mount
  useEffect(() => {
@@ -491,27 +593,65 @@ export default function SystemObservabilitySection() {
  </div>
 
  <div className="space-y-2 text-xs">
- {[
- { name: 'BMKG Geospasial', desc: 'Gempa M5.0+ & radar cuaca', interval: '60s', status: 'ACTIVE' },
- { name: 'TomTom Traffic Flow', desc: 'Kecepatan jalan arteri', interval: '300s', status: 'ACTIVE' },
- { name: 'OpenSky Network ADS-B', desc: 'Kargo udara Kualanamu', interval: '60s', status: 'ACTIVE' },
- { name: 'AISstream Maritime', desc: 'Antrean Pelabuhan Belawan', interval: 'STREAM', status: 'ACTIVE' },
- { name: 'LKBN Antara RSS', desc: 'Berita & early warning', interval: '180s', status: 'ACTIVE' },
- { name: 'Supabase PostGIS', desc: 'LTM & simpanan entitas', interval: 'SYNC', status: 'ACTIVE' },
- ].map((src) => (
- <div key={src.name} className="flex items-center justify-between p-2.5 rounded-md bg-transparent border-t border-white/5">
- <div>
- <div className="font-bold text-slate-200 text-xs font-sans">{src.name}</div>
- <div className="text-xs text-slate-400 font-sans">{src.desc}</div>
+ {sourcesLoading && sources.length === 0 && !sourcesError && (
+ <div className="flex items-center justify-center gap-2 p-3 text-slate-400 font-sans">
+ <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+ <span>Memuat /health/sources...</span>
  </div>
- <div className="text-right">
- <span className="text-xs font-mono text-slate-500">
- Aktif
+ )}
+ {sourcesError && (
+ <div className="p-3 rounded-md border border-rose-500/30 bg-rose-500/5">
+ <div className="font-bold text-rose-300 text-xs font-sans">Sumber tak dapat dimuat</div>
+ <div className="text-xs text-rose-200/80 font-mono mt-0.5 break-words">{sourcesError}</div>
+ <button
+ type="button"
+ onClick={() => fetchSourceHealth(activeUrl)}
+ className="cursor-pointer mt-2 px-2.5 py-1 rounded bg-white text-[#080d14] font-semibold text-xs"
+ >
+ Coba lagi
+ </button>
+ </div>
+ )}
+ {!sourcesLoading && !sourcesError && sources.length === 0 && (
+ <div className="p-3 rounded-md border border-white/10 text-slate-400 font-sans">
+ Belum ada data sumber dari backend. Jalankan Uji Semua API atau periksa gateway /health/sources.
+ </div>
+ )}
+ {sources.map((src) => {
+ const tier = mapSourceToTier(src.status);
+ const dot = tier === 'nominal' ? 'bg-emerald-500/70' : tier === 'degraded' ? 'bg-amber-400' : 'bg-rose-500';
+ const label = tier === 'nominal' ? 'Nominal' : tier === 'degraded' ? 'Degraded' : 'Stale';
+ return (
+ <div key={src.name} className="flex items-center justify-between gap-2 p-2.5 rounded-md bg-transparent border-t border-white/5">
+ <div className="min-w-0">
+ <div className="flex items-center gap-1.5">
+ <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />
+ <span className="font-bold text-slate-200 text-xs font-sans truncate" title={src.note || src.status}>{src.name}</span>
+ </div>
+ <div className="text-xs text-slate-400 font-mono mt-0.5 truncate" title={src.last_seen || ''}>
+ {formatSourceTimestamp(src.last_seen)} &middot; {formatSourceAge(src.last_seen)}
+ </div>
+ {src.note && (
+ <div className="text-xs text-slate-500 font-sans truncate" title={src.note}>{src.note}</div>
+ )}
+ </div>
+ <div className="text-right shrink-0">
+ <span className="text-xs font-mono text-slate-300" title={`backend: ${src.status}`}>
+ {label}
  </span>
- <div className="text-xs font-mono text-slate-500 mt-0.5">{src.interval}</div>
+ <div className="text-xs font-mono text-slate-500 mt-0.5">{src.status}</div>
  </div>
  </div>
- ))}
+ );
+ })}
+ </div>
+ <div className="pt-1 border-t border-[#1c2432] text-xs text-slate-500 font-sans space-y-1">
+ <div>
+ Terakhir sinkron: <span className="font-mono text-slate-400">{sourcesUpdatedAt || '-'}</span>
+ </div>
+ <div>
+ OpenSky ADS-B / Antara RSS / label PostGIS: tanpa health backend &mdash; tidak ditampilkan sebagai aktif.
+ </div>
  </div>
  </div>
 
@@ -537,6 +677,12 @@ export default function SystemObservabilitySection() {
  </div>
 
  <div className="bg-[#080d14] border border-[#1c2432] rounded-md p-3 font-mono text-xs h-64 overflow-y-auto space-y-2">
+ {filteredLogs.length === 0 && (
+ <div className="text-slate-500 font-sans text-xs leading-relaxed">
+ Belum ada log probe. Jalankan &ldquo;Uji Semua API&rdquo; untuk mengisi Event &amp; Worker Logs
+ dengan entri probe_runner yang jujur &mdash; tidak ada log fiktif.
+ </div>
+ )}
  {filteredLogs.map((log, idx) => (
  <div key={idx} className="leading-relaxed border-b border-white/5 pb-1 last:border-0">
  <div className="flex items-center gap-1.5 text-slate-500 text-xs">

@@ -8,12 +8,14 @@ interface ReliabilityDiagramProps {
  bins?: ReliabilityBinItem[];
  brierScore?: number;
  ece?: number;
+ plattBrier?: number;
 }
 
 export default function ReliabilityDiagram({
  bins = [],
  brierScore,
  ece,
+ plattBrier,
 }: ReliabilityDiagramProps) {
  const [hoveredBin, setHoveredBin] = useState<ReliabilityBinItem | null>(null);
 
@@ -285,7 +287,7 @@ export default function ReliabilityDiagram({
  <div className="flex items-center gap-3 text-slate-400">
  <span>ECE: <strong className="text-white font-mono tabular-nums">{ece != null ? `${(ece * 100).toFixed(2)}%` : 'Belum Dihitung'}</strong></span>
  <span>·</span>
- <span>Platt Brier: <strong className="text-emerald-400 font-mono tabular-nums">0.0000</strong></span>
+ <span>Platt Brier: {plattBrier != null ? (<strong className="text-emerald-400 font-mono tabular-nums">{plattBrier.toFixed(4)}</strong>) : (<strong className="text-slate-500 font-mono tabular-nums">Belum dihitung</strong>)}</span>
  </div>
  </div>
  </div>

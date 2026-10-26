@@ -214,3 +214,196 @@ def evaluate_benchmark_outcomes(benchmark_path: Optional[str] = None) -> Dict[st
         "average_accuracy_score": round(total_acc / n, 4),
         "reports": reports
     }
+
+
+# ==========================================================================
+# WS2: Live cumulative aggregate from field outcomes (batch stays immutable)
+# --------------------------------------------------------------------------
+# Mapping contract (documented, honest about what outcomes store):
+# - Outcomes persist observed_delay_hours + actual_price_spike_pct but NO
+#   forecast probability, so the live forecast is a delay-proportional proxy:
+#       forecast_prob = clamp(predicted_delay_hours / 4.0, 0.05, 0.99)
+#   The 2.0h binary cut maps exactly to the 0.50 decision cut, keeping the
+#   predicted label consistent with the probability threshold.
+# - predicted_delay_hours comes from the linked decision trace
+#   (recommended_route.eta_minutes / eta_hours); fallback 4.0h mirrors
+#   evaluate_incident_outcome() so no-decision outcomes count as flagged.
+# - actual = 1 iff observed_delay_hours >= LIVE_DISRUPTION_DELAY_HOURS.
+# - Rows with verification_source == DISPATCHER_APPROVAL are system echoes
+#   (approvals.py mirrors eta_hours as observed_delay), NOT field truth, and
+#   are excluded from the aggregate (counted as excluded_echoes).
+# - Classification + calibration formulas are identical to
+#   scripts/evaluate_metrics.py (TP/FP/TN/FN -> precision/recall/F1/FPR/
+#   accuracy; Brier + 10-bin ECE via probability_calibration).
+# ==========================================================================
+
+LIVE_MIN_N = 10
+LIVE_DISRUPTION_DELAY_HOURS = 2.0
+LIVE_ECHO_VERIFICATION_SOURCE = "DISPATCHER_APPROVAL"
+LIVE_BATCH_VERSION = "batch-v2026-10-26-N60"
+
+
+def _clamp_prob(p: float) -> float:
+    return min(0.99, max(0.05, float(p)))
+
+
+def forecast_prob_from_delay(predicted_delay_hours: float) -> float:
+    """Delay-proportional live forecast proxy (2.0h -> 0.50, same cut as binary)."""
+    return round(_clamp_prob(float(predicted_delay_hours) / 4.0), 4)
+
+
+def resolve_predicted_delay(incident_id: str) -> float:
+    """Best-effort predicted delay from the latest linked decision trace."""
+    try:
+        traces = local_storage.list_decision_traces(incident_id=incident_id, limit=1)
+    except Exception:
+        traces = []
+    if traces:
+        rec = traces[0].get("recommended_route") or {}
+        if isinstance(rec, dict):
+            eta_min = rec.get("eta_minutes")
+            if eta_min is not None:
+                try:
+                    return round(float(eta_min) / 60.0, 2)
+                except (TypeError, ValueError):
+                    pass
+            eta_h = rec.get("eta_hours")
+            if eta_h is not None:
+                try:
+                    return round(float(eta_h), 2)
+                except (TypeError, ValueError):
+                    pass
+    return 4.0
+
+
+def compute_live_cumulative_metrics(
+    outcomes: Optional[List[Dict[str, Any]]] = None,
+    min_n: int = LIVE_MIN_N,
+    limit: int = 1000,
+) -> Dict[str, Any]:
+    """
+    Aggregate live field outcomes into classification + calibration metrics.
+    Returns {n, sufficient, metrics|None, calibration|None, confusion_matrix|None,
+    excluded_echoes, note}. Metrics are None when n < min_n.
+    """
+    from app.services.probability_calibration import (
+        brier_score,
+        expected_calibration_error,
+        PlattScalingCalibrator,
+        IsotonicRegressionCalibrator,
+    )
+
+    if outcomes is None:
+        try:
+            outcomes = local_storage.list_outcomes(limit=limit)
+        except Exception as e:
+            logger.warning(f"Live aggregate: outcome store unreadable ({e})")
+            outcomes = []
+
+    genuine: List[Dict[str, Any]] = []
+    excluded_echoes = 0
+    for o in outcomes or []:
+        if str(o.get("verification_source") or "") == LIVE_ECHO_VERIFICATION_SOURCE:
+            excluded_echoes += 1
+            continue
+        genuine.append(o)
+
+    n = len(genuine)
+    if n < min_n:
+        return {
+            "n": n,
+            "min_n": min_n,
+            "sufficient": False,
+            "excluded_echoes": excluded_echoes,
+            "confusion_matrix": None,
+            "metrics": None,
+            "calibration": None,
+            "deltas_vs_batch": None,
+            "note": (
+                f"Live N={n} belum cukup (butuh >= {min_n}) untuk agregat kumulatif - "
+                f"menampilkan baseline batch immutable {LIVE_BATCH_VERSION}."
+            ),
+        }
+
+    y_true: List[int] = []
+    y_prob: List[float] = []
+    tp = fp = tn = fn = 0
+    for o in genuine:
+        try:
+            actual_delay = float(o.get("observed_delay_hours") or 0.0)
+        except (TypeError, ValueError):
+            actual_delay = 0.0
+        actual = 1 if actual_delay >= LIVE_DISRUPTION_DELAY_HOURS else 0
+        pred_delay = resolve_predicted_delay(str(o.get("incident_id") or ""))
+        prob = forecast_prob_from_delay(pred_delay)
+        predicted = 1 if prob >= 0.50 else 0
+
+        y_true.append(actual)
+        y_prob.append(prob)
+        if actual == 1 and predicted == 1:
+            tp += 1
+        elif actual == 0 and predicted == 1:
+            fp += 1
+        elif actual == 0 and predicted == 0:
+            tn += 1
+        else:
+            fn += 1
+
+    precision = round(tp / (tp + fp), 4) if (tp + fp) > 0 else 0.0
+    recall = round(tp / (tp + fn), 4) if (tp + fn) > 0 else 0.0
+    f1 = round(2 * precision * recall / (precision + recall), 4) if (precision + recall) > 0 else 0.0
+    fpr = round(fp / (fp + tn), 4) if (fp + tn) > 0 else 0.0
+    accuracy = round((tp + tn) / n, 4) if n > 0 else 0.0
+
+    b_score = round(float(brier_score(y_true, y_prob)), 4)
+    ece_score, bin_details = expected_calibration_error(y_true, y_prob, n_bins=10)
+
+    try:
+        platt = PlattScalingCalibrator().fit(y_prob, y_true)
+        platt_probs = list(platt.predict_proba(y_prob))
+        platt_brier = round(float(brier_score(y_true, platt_probs)), 4)
+        platt_ece, _ = expected_calibration_error(y_true, platt_probs)
+    except Exception:
+        platt_brier, platt_ece = 0.0, 0.0
+    try:
+        isotonic = IsotonicRegressionCalibrator().fit(y_prob, y_true)
+        iso_probs = list(isotonic.predict_proba(y_prob))
+        isotonic_brier = round(float(brier_score(y_true, iso_probs)), 4)
+        isotonic_ece, _ = expected_calibration_error(y_true, iso_probs)
+    except Exception:
+        isotonic_brier, isotonic_ece = 0.0, 0.0
+
+    return {
+        "n": n,
+        "min_n": min_n,
+        "sufficient": True,
+        "excluded_echoes": excluded_echoes,
+        "confusion_matrix": {
+            "true_positives": tp,
+            "false_positives": fp,
+            "true_negatives": tn,
+            "false_negatives": fn,
+        },
+        "metrics": {
+            "precision": precision,
+            "recall": recall,
+            "f1_score": f1,
+            "false_positive_rate": fpr,
+            "accuracy": accuracy,
+            # No per-scenario solver latency exists for field outcomes; 0.0 = N/A.
+            "mean_latency_ms": 0.0,
+            "total_latency_ms": 0.0,
+        },
+        "calibration": {
+            "brier_score": b_score,
+            "expected_calibration_error": ece_score,
+            "platt_calibrated_brier": platt_brier,
+            "isotonic_calibrated_brier": isotonic_brier,
+            "reliability_bins": bin_details,
+        },
+        "deltas_vs_batch": None,  # filled by the router against the batch baseline
+        "note": (
+            f"Live kumulatif N={n} (minus {excluded_echoes} echo sistem) - "
+            f"delta vs batch {LIVE_BATCH_VERSION} dihitung pada metrik yang sama."
+        ),
+    }

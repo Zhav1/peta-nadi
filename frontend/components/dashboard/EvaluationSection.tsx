@@ -93,6 +93,9 @@ export default function EvaluationSection({
   const f1Score = report?.metrics?.f1_score ?? null;
   const brierScore = report?.calibration?.brier_score ?? null;
   const latencyMs = report?.metrics?.mean_latency_ms ?? null;
+  const plattBrier = report?.calibration?.platt_calibrated_brier ?? null;
+  const cm = report?.confusion_matrix ?? null;
+  const thresholds = report?.thresholds ?? null;
 
   return (
     <div className="flex flex-col space-y-5 max-w-7xl mx-auto pb-12">
@@ -161,19 +164,11 @@ export default function EvaluationSection({
                   Bukti empiris keandalan model kecerdasan logistik PreHub berdasarkan dataset ground truth Sumatra (N=60), pengujian otomatis, dan kalibrasi probabilitas.
                 </p>
               </div>
-            </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="px-2.5 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-mono text-xs font-semibold">
-                N=60 Benchmark Sumatra
-              </span>
-              <span className="px-2.5 py-1 rounded-full bg-purple-500/10 border border-purple-500/30 text-purple-300 font-mono text-xs font-semibold">
-                Transparansi Provenance Data
-              </span>
-            </div>
+          </div>
           </div>
 
-          {/* 5 Empirical Benchmark Ledger Row */}
-          <div className="bg-[#0c1017] border border-white/10 p-5 rounded-xl shadow-xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 divide-y lg:divide-y-0 lg:divide-x divide-white/10">
+          {/* 4 Empirical Benchmark KPI Cards (Presisi / Sensitivitas / F1 / Brier) */}
+          <div className="bg-[#0c1017] border border-white/10 p-5 rounded-xl shadow-xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y lg:divide-y-0 lg:divide-x divide-white/10">
             {/* Metric 1: Precision */}
             <div className="lg:px-4 first:pl-0 last:pr-0 py-3 lg:py-0">
  <span className="text-xs font-mono text-slate-400 tracking-wide block mb-1">Presisi deteksi</span>
@@ -217,18 +212,37 @@ export default function EvaluationSection({
               )}
               <p className="text-xs font-mono text-slate-400 mt-1 tabular-nums">Target: &le; 0.100</p>
             </div>
-
-            {/* Metric 5: Latency */}
-            <div className="lg:px-4 first:pl-0 last:pr-0 py-3 lg:py-0">
- <span className="text-xs font-mono text-slate-400 tracking-wide block mb-1">Latensi</span>
-              {latencyMs !== null ? (
-                <p className="text-2xl font-mono font-bold text-white tabular-nums">{latencyMs.toFixed(1)} ms</p>
-              ) : (
-                <p className="text-base font-mono text-slate-500 py-1">Belum dihitung</p>
-              )}
-              <p className="text-xs font-mono text-slate-400 mt-1 tabular-nums">Target: &lt; 5.0 ms</p>
-            </div>
           </div>
+
+          {/* Collapsible provenance: Data apa yang diuji? */}
+          <details className="bg-[#0c1017] border border-white/10 rounded-xl shadow-xl px-5 py-4 group">
+            <summary className="cursor-pointer list-none flex items-center justify-between gap-3 text-sm font-sans font-semibold text-slate-200">
+              <span className="flex items-center gap-2">
+                <FileSpreadsheet className="w-4 h-4 text-cyan-400" />
+                Data apa yang diuji?
+              </span>
+              <span className="text-xs font-mono text-slate-400 group-open:hidden">+ tampilkan</span>
+              <span className="text-xs font-mono text-slate-400 hidden group-open:inline">− sembunyikan</span>
+            </summary>
+            <div className="pt-3 mt-3 border-t border-white/10 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs font-mono">
+              <div className="p-3 rounded-lg bg-[#080d14] border border-white/10 space-y-1.5 text-slate-300">
+                <p className="text-[11px] font-sans font-bold text-slate-200 uppercase tracking-wider">Dataset &amp; keputusan</p>
+                <p>N = {report?.total_scenarios ?? 60} skenario ground truth Sumatra · {report?.timestamp ? new Date(report.timestamp).toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' }) : '2026-10-26'}</p>
+                <p>Matriks konfusi: TP {cm?.true_positives ?? '–'} / FP {cm?.false_positives ?? '–'} / TN {cm?.true_negatives ?? '–'} / FN {cm?.false_negatives ?? '–'}</p>
+                <p>Ambang deteksi: skor konsensus mentah raw_prob &ge; 0.50 (setara ternormalisasi &asymp; 0.727)</p>
+                <p>Normalisasi P<sub>maks</sub> = 0.688 (profil bobot W 0.35 / T 0.25 / I 0.20 / E 0.20)</p>
+                <p>Pemetaan sensor: cuaca (BMKG/NWP) · trafik (TomTom) · maritim (AIS) · berita (Antara/OSINT)</p>
+              </div>
+              <div className="p-3 rounded-lg bg-[#080d14] border border-white/10 space-y-1.5 text-slate-300">
+                <p className="text-[11px] font-sans font-bold text-slate-200 uppercase tracking-wider">Ambang kelulusan &amp; latensi</p>
+                <p>Presisi &gt; {(thresholds?.min_precision ?? 0.85).toFixed(2)} · Sensitivitas &gt; {(thresholds?.min_recall ?? 0.80).toFixed(2)} · F1 &gt; {(thresholds?.min_f1 ?? 0.82).toFixed(3)}</p>
+                <p>Brier &le; {(thresholds?.max_brier_score ?? 0.10).toFixed(3)} · Status gerbang: {report ? (report.gating_passed ? 'LULUS' : 'BELUM LULUS') : 'Belum dihitung'}</p>
+                <p>Latensi solver: {latencyMs !== null ? `${latencyMs.toFixed(2)} ms/skenario (target < 5.0 ms)` : 'Belum dihitung'}</p>
+                <p className="text-slate-400">Transparansi provenance: laporan JSON + ground truth per skenario</p>
+                <p className="break-all">test-results/benchmark_evaluation_report.json<br />data/benchmark/sumatra_disruptions_ground_truth.json</p>
+              </div>
+            </div>
+          </details>
 
       {/* Split Analytical Canvas: Reliability Diagram + Corridor Efficiency */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -236,6 +250,7 @@ export default function EvaluationSection({
           bins={report?.calibration?.reliability_bins}
           brierScore={brierScore ?? undefined}
           ece={report?.calibration?.expected_calibration_error ?? undefined}
+          plattBrier={plattBrier ?? undefined}
         />
         <RouteEfficiencyCard corridors={efficiency?.corridors} />
       </div>
