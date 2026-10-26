@@ -346,3 +346,12 @@ These scripts validate the economic correlation hypotheses that underpin Agent 5
 - Tests: +2 (parametrized region propagation x3, 2-region multi-province) in test_scrapers.py.
 - Evidence (finisher verify): pytest 64 passed (26 scrapers + 38 api_routers/agents, two runs), tsc --noEmit exit 0, npm run build 7/7 exit 0 first try (no ENOENT; :3000 free).
 - Docs: .planning/phases/119-pihps-8-province/ (PLAN.md + WALKTHROUGH.md + LEARNINGS.md).
+
+## Phase 121 Log (2026-10-26)
+
+- Phase 121 (Analitik Fixes Followup) logged as COMPLETE — docs-only pass, no app edits, no commit.
+- Documented 6 user-note follow-ups: map canvas removed entirely (was layers:[] empty globe + misleading Sumatera-Jawa label); hand-rolled glass days pills + shimmer Lihat Laporan (base-ui outline transparent on #0c1017 was bare text; registry only shimmer-button adoptable, others need motion — hand-rolled motion-safe, no shadcn add, no new deps); REGION_TO_DB short-term collapse (8 slugs to north_sumatra, Semua to undefined; superseded by Phase 119 1:1 map); trend DD/MM from time + min(days,rows) header + green down/red up + latest+date header; spikes kept honest-empty (eq(sumut) 0 rows + <3 guard + <5%); tooltip.tsx scaffold-only (103 lines, zero consumers, native title stands).
+- Root cause noted: pihps_scraper.py REGION=north_sumatra + SUMUT_PROVINCE_ID=2 hardcode; consumers expanded, producer not (fixed in prior unit; BI ids 1/2/3/4/6/7/8/10 live-confirmed).
+- Evidence (window tail): tsc 0, build 7/7, pytest green (shared tail), Playwright 1 passed (live, E2E no-interference preserved).
+- Note: actual phases max was 120 (not 119 as tasked); created 121-analitik-fixes-followup to avoid collision with 120-pihps-multiregion-aggregation-timeseries.
+- Docs: .planning/phases/121-analitik-fixes-followup/ (PLAN.md + WALKTHROUGH.md + LEARNINGS.md).

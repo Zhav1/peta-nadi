@@ -151,6 +151,9 @@ export default function ReportsSection({
  if (s.includes('padat') || s.includes('terhambat')) {
  return { text: 'Waspada', color: 'text-amber-400', sub: 'Kepadatan Arus Lalu Lintas' };
  }
+ if (s.includes('degraded') || s.includes('fallback') || s.includes('offline') || s.includes('terbatas')) {
+ return { text: 'Waspada', color: 'text-amber-400', sub: 'Data Terbatas — Fallback Aktif' };
+ }
  return { text: 'Normal', color: 'text-emerald-400', sub: 'Arus Koridor Lancar' };
  }
  return { text: 'Stabil', color: 'text-emerald-400', sub: 'Koridor Beroperasi Normal' };

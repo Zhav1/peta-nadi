@@ -1369,8 +1369,6 @@ class TelemetryService:
         for unit in MASTER_FLEET_DEFINITIONS:
             if unit.get("modality") == "air":
                 enriched = self._enrich_air_cargo(unit)
-                enriched["tracking_mode"] = "LIVE_GPS"
-                enriched["signal_status"] = "ADSB_LIVE"
                 assign_baseline_tenancy(enriched)
                 simulated_flights.append(enriched)
 
@@ -1526,9 +1524,9 @@ class TelemetryService:
                 item["sog_knots"] = round(float(live_data["sog"]), 1)
                 item["speed_kmh"] = round(item["sog_knots"] * 1.852, 1)
         else:
-            item["signal_status"] = "AIS_LIVE"
-            item["tracking_mode"] = "LIVE_GPS"
-            item["telemetry_source"] = "PELINDO_SUMATRA_RADAR"
+            item["signal_status"] = "SIMULATION_CACHE"
+            item["tracking_mode"] = "ROUTE_ESTIMATED"
+            item["telemetry_source"] = "BASELINE_SIM"
 
         if path:
             if len(path) == 3:
@@ -1593,9 +1591,9 @@ class TelemetryService:
             item["location"] = {"type": "Point", "coordinates": p_curr}
             item["current_location"] = item["location"]
 
-        item["signal_status"] = "ADSB_LIVE"
-        item["tracking_mode"] = "LIVE_GPS"
-        item["telemetry_source"] = "OPENSKY_NETWORK"
+        item["signal_status"] = "SIMULATION_CACHE"
+        item["tracking_mode"] = "ROUTE_ESTIMATED"
+        item["telemetry_source"] = "BASELINE_SIM"
         item["last_ping_seconds_ago"] = round(random.uniform(1.0, 2.5), 1)
         return item
 

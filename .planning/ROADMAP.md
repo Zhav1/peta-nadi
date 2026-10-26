@@ -3098,3 +3098,22 @@ pm run build ? 7/7 static routes, 0 errors.
 - [x] pytest backend/tests/test_scrapers.py + test_api_routers.py + test_agents.py -> 64 passed, exit 0.
 - [x] npx tsc --noEmit -> exit 0.
 - [x] npm run build -> 7/7 static routes, exit 0.
+
+## Phase 121: Analitik Fixes Followup
+
+**Goal:** Document the 6 user-note Analitik follow-ups (map removal, hand-rolled buttons, short-term slug map, DD/MM trend, honest spikes, tooltip scaffold status).
+**Status:** COMPLETE (docs-only, no app edits, no commit)
+
+### Deliverables
+
+- **Map removal:** empty globe (layers:[]) + misleading label ? canvas deleted, col-span-12 single column.
+- **Buttons:** hand-rolled glass days + zero-motion shimmer Lihat Laporan (motion-safe only); no shadcn add, no new deps.
+- **REGION_TO_DB (short-term):** 8 slugs ? north_sumatra, Semua ? undefined; superseded by Phase 119 1:1 map.
+- **Trend:** DD/MM per bar from time (T- fallback only), latest + date header, Tren min(days,len), green/red (#10b981/#ef4444, >= 3 guard).
+- **Spikes:** honest-empty retained (spikeRecordsTotal < 3 + <5% guards; eq(sumut) 0 rows live).
+- **Tooltip:** tooltip.tsx scaffold-only (103 lines, zero consumers); native title stands per no-Portal-over-map.
+- **Docs:** .planning/phases/121-analitik-fixes-followup/ (PLAN.md + WALKTHROUGH.md + LEARNINGS.md).
+
+### Verification
+
+- [x] Window-tail evidence carried: tsc 0, build 7/7, pytest green (shared tail), Playwright 1 passed (live, E2E no-interference).

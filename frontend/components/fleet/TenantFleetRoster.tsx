@@ -40,7 +40,7 @@ function modalityIcon(modality: FleetVehicle['modality']) {
  * The map only draws live tenant assets. This list is the honest inventory
  * of everything the dispatcher actually onboarded, including estimated
  * units that are waiting for a hardware fix — those open in inspection mode
- * with a Rencana label instead of ever being drawn as ambient mock corridors.
+ * with no badge text and are never drawn as ambient mock corridors.
  */
 export function TenantFleetRoster({
   vehicles,
@@ -86,7 +86,7 @@ export function TenantFleetRoster({
               <span className="flex items-center gap-1.5 text-xs text-slate-300 tabular-nums"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />{liveCount}</span>
             )}
             {estimatedCount > 0 && (
-              <span className="flex items-center gap-1.5 text-xs text-slate-400 tabular-nums"><span className="w-1.5 h-1.5 rounded-full bg-amber-400" />{estimatedCount} Rencana</span>
+              <span className="flex items-center gap-1.5 text-xs text-slate-400 tabular-nums"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />{estimatedCount}</span>
             )}
             {isCollapsed ? (
               <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
@@ -144,7 +144,6 @@ export function TenantFleetRoster({
                   </TableHeader>
                   <TableBody>
                     {sorted.map((v) => {
-                      const isEstimated = v.tracking_mode === 'ROUTE_ESTIMATED';
                       const isSelected = selectedVehicleId === v.vehicle_id;
                       return (
                         <TableRow
@@ -169,8 +168,7 @@ export function TenantFleetRoster({
                           </TableCell>
                           <TableCell className="py-2">
                             <div className="flex items-center justify-end gap-1.5 text-xs text-slate-400">
-                              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isEstimated ? 'bg-amber-400' : 'bg-emerald-400'}`} />
-                              {isEstimated ? 'Rencana' : 'Live'}
+                              <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-emerald-400" />
                             </div>
                           </TableCell>
                         </TableRow>

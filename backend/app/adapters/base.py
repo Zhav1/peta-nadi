@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 
-from app.services.redis_client import publish_event, get_redis, SOURCE_CACHE_PREFIX
+from app.services.redis_client import publish_event, get_redis, SOURCE_CACHE_PREFIX, cache_get, cache_set, health_set
 from app.db.supabase_client import get_write_client
 
 logger = logging.getLogger(__name__)
@@ -84,18 +84,29 @@ class BaseAdapter(ABC):
         if status == "ok":
             last_ok_at = now_str
             
-        # 1. Update Redis KV for fast dashboard lookup
+        # 1. Update Redis KV for fast dashboard lookup (memory fallback if Redis down)
         try:
-            r = get_redis()
             health_key = f"lrip:health:source:{self.source_name}"
-            # Set each field individually for Redis 3.0 compatibility
-            r.hset(health_key, "status", status)
-            r.hset(health_key, "updated_at", now_str)
-            
-            existing_last_ok = r.hget(health_key, "last_ok_at") or ""
-            r.hset(health_key, "last_ok_at", last_ok_at or existing_last_ok)
+            r = get_redis()
+            try:
+                existing_last_ok = r.hget(health_key, "last_ok_at") or ""
+            except Exception:
+                existing_last_ok = ""
+            try:
+                # Set each field individually for Redis 3.0 compatibility
+                r.hset(health_key, "status", status)
+                r.hset(health_key, "updated_at", now_str)
+                r.hset(health_key, "last_ok_at", last_ok_at or existing_last_ok)
+            except Exception as e:
+                # Redis down: mirror to process-local memory so health still readable
+                logger.warning(f"Redis health write failed, using memory fallback for {health_key}: {e}")
+                health_set(health_key, {
+                    "status": status,
+                    "updated_at": now_str,
+                    "last_ok_at": last_ok_at or existing_last_ok or "",
+                })
         except Exception as e:
-            logger.error(f"Failed to update Redis health state for {self.source_name}: {e}")
+            logger.error(f"Failed to update health state for {self.source_name}: {e}")
 
         # 2. Update Supabase data_sources table (gracefully skip if no credentials)
         try:
@@ -115,22 +126,20 @@ class BaseAdapter(ABC):
             logger.error(f"Failed to update Supabase health for {self.source_name}: {e}")
 
     def cache_events(self, events: List[Dict[str, Any]]):
-        """Cache current active events in Redis KV as fallback."""
+        """Cache current active events in Redis KV as fallback (memory fallback if Redis down)."""
         try:
-            r = get_redis()
             cache_key = f"{SOURCE_CACHE_PREFIX}{self.source_name}"
-            r.set(cache_key, json.dumps(events), ex=86400) # cache for 24h
+            cache_set(cache_key, json.dumps(events), ex=86400)  # cache for 24h
         except Exception as e:
-            logger.error(f"Failed to cache events in Redis for {self.source_name}: {e}")
+            logger.error(f"Failed to cache events for {self.source_name}: {e}")
 
     def get_cached_events(self) -> List[Dict[str, Any]]:
-        """Retrieve cached fallback events from Redis KV."""
+        """Retrieve cached fallback events (Redis primary, memory fallback)."""
         try:
-            r = get_redis()
             cache_key = f"{SOURCE_CACHE_PREFIX}{self.source_name}"
-            cached_data = r.get(cache_key)
+            cached_data = cache_get(cache_key)
             if cached_data:
                 return json.loads(cached_data)
         except Exception as e:
-            logger.error(f"Failed to retrieve cached events from Redis for {self.source_name}: {e}")
+            logger.error(f"Failed to retrieve cached events for {self.source_name}: {e}")
         return []

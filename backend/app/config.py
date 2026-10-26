@@ -26,6 +26,10 @@ class Settings(BaseSettings):
 
     # External APIs
     tomtom_api_key: str = ""
+    tomtom_api_key_2: str = ""
+    tomtom_poll_seconds: int = 1800
+    tomtom_incidents_enabled: bool = False
+    tomtom_incidents_every_n: int = 6
     aisstream_api_key: str = ""
     nasa_firms_map_key: str = ""
     gemini_api_key: str = ""

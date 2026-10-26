@@ -5,11 +5,13 @@ Aggregates real-time & cached telemetry from BMKG, TomTom, and PIHPS for corrido
 import logging
 import json
 import asyncio
+import os
+import time
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timezone
 
 from app.adapters.bmkg_adapter import BMKGAdapter
-from app.adapters.tomtom_adapter import TomTomAdapter
+from app.adapters.tomtom_adapter import TomTomAdapter, read_cached_flow_items
 from app.scrapers.pihps_scraper import PIHPSScraper
 from app.services.redis_client import get_redis
 from app.db.supabase_client import get_client
@@ -128,6 +130,18 @@ async def get_corridor_context(corridor_id: str = "sumatra_belawan_medan", force
         return await bmkg.parse(raw)
 
     async def _fetch_tomtom():
+        # Cache share: serve fresh lrip:tomtom:segment:* written by the main
+        # poller when fresh (<TOMTOM_POLL_SECONDS, default 1800s); only fresh
+        # fetch() on cache miss. Never breaks seed fallback when cache empty.
+        try:
+            cached = read_cached_flow_items()
+            if cached and cached.get("flow"):
+                logger.debug(
+                    f"Serving TomTom speeds from shared poller cache ({len(cached['flow'])} segments)"
+                )
+                return cached
+        except Exception as e:
+            logger.debug(f"TomTom shared-cache bypass: {e}")
         tomtom = TomTomAdapter()
         return await tomtom.fetch()
 

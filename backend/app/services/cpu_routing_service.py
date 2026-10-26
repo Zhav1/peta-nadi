@@ -6,11 +6,13 @@ Served at POST /api/v1/routing/optimize.
 """
 import logging
 import math
+import json
+import time
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timezone
 
 from app.adapters.cpu_routing_adapter import get_cpu_router, haversine_km
-from app.adapters.tomtom_adapter import TomTomAdapter
+from app.adapters.tomtom_adapter import TomTomAdapter, read_cached_flow_items
 
 logger = logging.getLogger(__name__)
 
@@ -39,9 +41,27 @@ async def _fetch_live_checkpoint_speeds() -> Tuple[Dict[str, float], bool, Optio
     """
     Returns (checkpoint_speeds, is_live, degraded_reason).
     is_live is True only when TomTom returned actual flow segment data.
+
+    Cache share: reuse fresh lrip:tomtom:segment:* from the main poller when
+    fresh (<TOMTOM_POLL_SECONDS, default 1800s); only fresh fetch() on cache
+    miss. Falls back to seeds when cache empty and fetch yields nothing.
     """
     speeds = dict(DEFAULT_CHECKPOINT_SPEEDS)
     try:
+        try:
+            cached = read_cached_flow_items()
+            if cached and cached.get("flow"):
+                live_points = 0
+                for f in cached["flow"]:
+                    name = f.get("_checkpoint_name")
+                    curr_speed = f.get("flowSegmentData", {}).get("currentSpeed")
+                    if name and curr_speed:
+                        speeds[name] = float(curr_speed)
+                        live_points += 1
+                if live_points:
+                    return speeds, True, None
+        except Exception as e:
+            logger.debug(f"TomTom shared-cache bypass (routing): {e}")
         tomtom = TomTomAdapter()
         raw = await tomtom.fetch()
         live_points = 0

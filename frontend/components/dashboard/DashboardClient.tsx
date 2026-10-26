@@ -573,7 +573,7 @@ export default function DashboardClient() {
   }, []);
 
   // Dispatcher tenant view (issue #2): the map draws LIVE_GPS tenant units only.
-  // An explicitly inspected PROYEKSI unit is injected into the layer so it can be
+  // An explicitly inspected ROUTE_ESTIMATED unit is injected into the layer so it can be
   // framed and inspected, but it never becomes ambient orange corridor noise.
   const isDispatcherWorkspace = role === 'DISPATCHER';
   const selectedIsProjected = selectedVehicle?.tracking_mode === 'ROUTE_ESTIMATED';
@@ -3219,9 +3219,18 @@ export default function DashboardClient() {
               )}
 
               {(() => {
-                const isBmkgLive = (corridorContext?.weather?.rainfall_mm !== undefined && corridorContext?.weather?.rainfall_mm !== null) || (corridorContext?.weather?.status != null && corridorContext?.weather?.status !== 'offline');
-                const isTomtomLive = (corridorContext?.traffic?.delay_minutes !== undefined && corridorContext?.traffic?.delay_minutes !== null) || (corridorContext?.traffic?.congestion_level_pct !== undefined && corridorContext?.traffic?.congestion_level_pct !== null);
-                const isPihpsLive = (corridorContext?.commodity_prices?.rice_price !== undefined && corridorContext?.commodity_prices?.rice_price !== null) || filteredNews.length > 0;
+                const isLiveStatus = (s?: string | null): boolean => {
+                  if (!s) return false;
+                  const v = String(s).trim().toLowerCase();
+                  return v === 'online' || v === 'live' || v === 'ok' || v === 'healthy' || v === 'operational';
+                };
+                const topFallback = corridorContext?.is_fallback === true;
+                const weatherFallback = (corridorContext?.weather as { is_fallback?: boolean } | undefined)?.is_fallback === true;
+                const trafficFallback = (corridorContext?.traffic as { is_fallback?: boolean } | undefined)?.is_fallback === true;
+                const commodityFallback = (corridorContext?.commodity_prices as { is_fallback?: boolean } | undefined)?.is_fallback === true;
+                const isBmkgLive = !topFallback && !weatherFallback && isLiveStatus(corridorContext?.data_integrity?.bmkg_status);
+                const isTomtomLive = !topFallback && !trafficFallback && isLiveStatus(corridorContext?.data_integrity?.tomtom_status);
+                const isPihpsLive = !topFallback && !commodityFallback && isLiveStatus(corridorContext?.data_integrity?.pihps_status);
 
                 return (
                   <div className="grid grid-cols-3 gap-1 text-xs text-center">
@@ -3409,15 +3418,10 @@ export default function DashboardClient() {
                         <span
                           id="fleet-tenant-scope-badge"
                           className="px-2.5 py-1 rounded-md text-xs font-mono font-bold flex items-center gap-1.5 shrink-0 bg-cyan-500/20 text-cyan-300 border border-cyan-400/40"
- title="Sesi DISPATCHER: hanya armada tenant Anda dengan GPS live yang ditampilkan. Rute estimasi tersedia lewat panel Armada Tenant (badge Proyeksi)."
+ title="Sesi DISPATCHER: hanya armada tenant Anda dengan GPS live yang ditampilkan. Unit estimasi tersedia lewat panel Armada Tenant."
                         >
                           <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
                           <span>Tenant Live GPS ({fleetCountVehicles.length})</span>
-                          {tenantFleetAssetCount > fleetCountVehicles.length && (
- <span className="px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-200 text-xs tabular-nums">
- {tenantFleetAssetCount - fleetCountVehicles.length} Proyeksi
-                            </span>
-                          )}
                         </span>
                       )}
                     </div>
@@ -3440,7 +3444,7 @@ export default function DashboardClient() {
 
             {/* Dispatcher tenant roster: honest inventory of onboarded assets.
                 LIVE_GPS units drive the map; ROUTE_ESTIMATED units are listed
-                with a PROYEKSI badge and only drawn on click inspection. */}
+                roster only, no badge, and only drawn on click inspection. */}
             {isDispatcherWorkspace && (
               <TenantFleetRoster
                 vehicles={tenantFleetVehicles}

@@ -150,11 +150,8 @@ async def test_bmkg_dedup(mock_get_redis):
 # ==============================================================================
 
 @pytest.mark.asyncio
-@patch("app.adapters.tomtom_adapter.get_redis")
-async def test_tomtom_congestion_score(mock_get_redis):
-    mock_redis = MagicMock()
-    mock_redis.get.return_value = None
-    mock_get_redis.return_value = mock_redis
+@patch("app.adapters.tomtom_adapter.dedup_seen_or_mark", return_value=False)
+async def test_tomtom_congestion_score(mock_dedup):
 
     adapter = TomTomAdapter()
     
@@ -184,11 +181,8 @@ async def test_tomtom_congestion_score(mock_get_redis):
 
 
 @pytest.mark.asyncio
-@patch("app.adapters.tomtom_adapter.get_redis")
-async def test_tomtom_road_closure(mock_get_redis):
-    mock_redis = MagicMock()
-    mock_redis.get.return_value = None
-    mock_get_redis.return_value = mock_redis
+@patch("app.adapters.tomtom_adapter.dedup_seen_or_mark", return_value=False)
+async def test_tomtom_road_closure(mock_dedup):
 
     adapter = TomTomAdapter()
     
@@ -289,7 +283,11 @@ async def test_tomtom_incident_tiles_dedupe_by_id(mock_settings, mock_client_cls
     """S5: incidents are queried per tile sequentially with sleeps and deduplicated by ID."""
     mock_settings.tomtom_api_key = "test-key"
     TomTomAdapter.reset_credit_latch()
+    TomTomAdapter.reset_fetch_cycle()
     monkeypatch.setattr(TomTomAdapter, "TILE_REQUEST_SLEEP_SECONDS", 0)
+    # Cost-cut unit: incidents are cadence-gated (default disabled); enable for this test.
+    monkeypatch.setenv("TOMTOM_INCIDENTS_ENABLED", "true")
+    monkeypatch.setenv("TOMTOM_INCIDENTS_EVERY_N", "1")
 
     shared_incident = {
         "properties": {"id": "INC-42", "iconCategory": 6, "delay": 900},
@@ -338,6 +336,7 @@ async def test_tomtom_403_sets_credit_latch_and_skips_further_calls(mock_setting
     """S5: a 403 InsufficientFunds latches credit exhaustion, logs once, and halts further TomTom calls."""
     mock_settings.tomtom_api_key = "test-key"
     TomTomAdapter.reset_credit_latch()
+    TomTomAdapter.reset_fetch_cycle()
 
     mock_client = AsyncMock()
     mock_client_cls.return_value.__aenter__.return_value = mock_client
@@ -360,6 +359,37 @@ async def test_tomtom_403_sets_credit_latch_and_skips_further_calls(mock_setting
 
     assert await adapter.health_check() is False
     assert mock_client.get.call_count == calls_after_first
+
+    TomTomAdapter.reset_credit_latch()
+    assert TomTomAdapter.is_credit_exhausted() is False
+
+
+@pytest.mark.asyncio
+@patch("app.adapters.tomtom_adapter.httpx.AsyncClient")
+@patch("app.adapters.tomtom_adapter.settings")
+async def test_tomtom_fallback_key_on_credit_403(mock_settings, mock_client_cls):
+    """Key rotation: key1 InsufficientFunds fails over to key2 without latching."""
+    mock_settings.tomtom_api_key = "key-1"
+    mock_settings.tomtom_api_key_2 = "key-2"
+    TomTomAdapter.reset_credit_latch()
+    TomTomAdapter.reset_fetch_cycle()
+
+    async def fake_get(url, params=None, **kwargs):
+        if (params or {}).get("key") == "key-1":
+            return _mock_tomtom_response(403, {"detailedError": {"code": "InsufficientFunds"}})
+        return _mock_tomtom_response(200, {"flowSegmentData": {"currentSpeed": 40, "freeFlowSpeed": 60}})
+
+    mock_client = AsyncMock()
+    mock_client.get.side_effect = fake_get
+    mock_client_cls.return_value.__aenter__.return_value = mock_client
+
+    adapter = TomTomAdapter()
+    data = await adapter.fetch()
+    assert len(data["flow"]) == len(TomTomAdapter.CHECKPOINTS)
+    assert data["credit_exhausted"] is False
+    assert TomTomAdapter.is_credit_exhausted() is False
+    assert TomTomAdapter.active_key_index() == 1
+    assert data["api_keys_configured"] == 2
 
     TomTomAdapter.reset_credit_latch()
     assert TomTomAdapter.is_credit_exhausted() is False
@@ -395,6 +425,7 @@ async def test_tomtom_flow_failures_report_degraded_status(mock_settings, mock_c
     """S5: non-403 flow failures surface as an explicit degraded status, not silent empty data."""
     mock_settings.tomtom_api_key = "test-key"
     TomTomAdapter.reset_credit_latch()
+    TomTomAdapter.reset_fetch_cycle()
 
     async def fake_get(url, params=None, **kwargs):
         if "flowSegmentData" in url:

@@ -100,3 +100,84 @@ def set_stm_state(crisis_id: str, state: dict, ttl_seconds: int = 86400):
     r = get_redis()
     key = f"{STM_PREFIX}{crisis_id}"
     r.set(key, json.dumps(state, default=str), ex=ttl_seconds)
+
+
+# ------------------------------------------------------------------
+# Backend-direct fallback when Redis is unavailable.
+# Process-local memory so adapters/pollers keep working without Redis.
+# Redis remains primary; memory is only used when Redis raises.
+# ------------------------------------------------------------------
+import time as _time
+
+_mem_kv: dict = {}
+_mem_expire: dict = {}
+
+
+def _mem_get(key: str):
+    exp = _mem_expire.get(key)
+    if exp is not None and _time.time() > exp:
+        _mem_kv.pop(key, None)
+        _mem_expire.pop(key, None)
+        return None
+    return _mem_kv.get(key)
+
+
+def _mem_set(key: str, value, ex: Optional[int] = None):
+    _mem_kv[key] = value
+    if ex:
+        _mem_expire[key] = _time.time() + ex
+    elif key in _mem_expire:
+        _mem_expire.pop(key, None)
+
+
+def dedup_seen_or_mark(key: str, ex: int = 3600) -> bool:
+    """Return True if dedup key was already seen. Never raises.
+
+    Tries Redis first; on any Redis error falls back to process-local
+    memory so a Redis outage never drops live events.
+    """
+    try:
+        r = get_redis()
+        if r.get(key):
+            return True
+        r.set(key, "1", ex=ex)
+        return False
+    except Exception as e:
+        logger.warning(f"Redis dedup unavailable, using memory fallback for {key}: {e}")
+        if _mem_get(key):
+            return True
+        _mem_set(key, "1", ex=ex)
+        return False
+
+
+def cache_set(key: str, value: str, ex: int = 86400):
+    """Best-effort cache write: Redis primary, memory fallback. Never raises."""
+    try:
+        get_redis().set(key, value, ex=ex)
+    except Exception as e:
+        logger.warning(f"Redis cache write failed, using memory fallback for {key}: {e}")
+        _mem_set(key, value, ex=ex)
+
+
+def cache_get(key: str) -> Optional[str]:
+    """Best-effort cache read: Redis primary, memory fallback. Never raises."""
+    try:
+        val = get_redis().get(key)
+        if val:
+            return val
+    except Exception as e:
+        logger.warning(f"Redis cache read failed, using memory fallback for {key}: {e}")
+    return _mem_get(key)
+
+
+def health_set(health_key: str, mapping: dict):
+    """Best-effort health write: Redis primary, memory fallback. Never raises."""
+    try:
+        r = get_redis()
+        for k, v in mapping.items():
+            r.hset(health_key, k, v)
+        return
+    except Exception as e:
+        logger.warning(f"Redis health write failed, using memory fallback for {health_key}: {e}")
+    for k, v in mapping.items():
+        _mem_set(f"{health_key}:{k}", v, ex=3600)

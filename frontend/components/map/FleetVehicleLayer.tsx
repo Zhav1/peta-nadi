@@ -787,7 +787,7 @@ export function FleetVehicleLayer({
  (vehicle as unknown as { status?: string }).status === 'delayed' ||
  Boolean((vehicle as unknown as { impacted?: boolean }).impacted)
  : false;
- const statusLabel = isEstimated ? 'Rencana' : isImpactedUnit ? 'Terganggu' : '';
+ const statusLabel = isImpactedUnit ? 'Terganggu' : '';
 
   return (
     <>
@@ -826,15 +826,6 @@ export function FleetVehicleLayer({
             />
             <span className="text-xs font-semibold text-white">
               {hoveredVehicle.vehicle.name || hoveredVehicle.vehicle.vehicle_id}
-            </span>
-            <span className="text-xs font-mono px-1 rounded text-slate-400 tabular-nums">
-              {hoveredVehicle.vehicle.tracking_mode === 'ROUTE_ESTIMATED'
-                ? 'Rencana'
-                : hoveredVehicle.vehicle.modality === 'maritime'
-                  ? 'Laut'
-                  : hoveredVehicle.vehicle.modality === 'air'
-                    ? 'Udara'
-                    : 'Darat'}
             </span>
           </div>
           <div className="flex items-center gap-2 mt-1 text-xs text-slate-300 font-mono tabular-nums">
@@ -886,7 +877,7 @@ export function FleetVehicleLayer({
                   <span className="text-slate-600">·</span>
  {statusLabel ? (
  <span className="flex items-center gap-1.5 text-xs text-slate-400">
- <span className={`h-1.5 w-1.5 rounded-full ${isEstimated ? 'bg-amber-400/60' : 'bg-rose-400/60'}`} />
+ <span className="h-1.5 w-1.5 rounded-full bg-rose-400/60" />
                     <span>{statusLabel}</span>
                   </span>
  ) : null}

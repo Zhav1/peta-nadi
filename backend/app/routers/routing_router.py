@@ -464,8 +464,26 @@ async def fetch_tomtom_flow_segments(
             "segments": segments,
             "incidents": raw.get("incidents", []),
             "total_segments": len(segments),
-            "total_incidents": len(raw.get("incidents", []))
+            "total_incidents": len(raw.get("incidents", [])),
+            "status": raw.get("status", "ok"),
+            "degraded_reason": raw.get("degraded_reason"),
+            "credit_exhausted": raw.get("credit_exhausted", False),
+            "credit_exhausted_until": raw.get("credit_exhausted_until", ""),
+            "is_fallback": not bool(raw.get("flow")),
         }
     except Exception as e:
         logger.error(f"Error fetching TomTom traffic flow segments: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/traffic/tomtom/reset-latch")
+async def reset_tomtom_credit_latch(
+    current_user: UserSession = Depends(get_optional_user),
+) -> Dict[str, Any]:
+    """Manual recovery: clear the in-process TomTom credit-exhaustion latch."""
+    try:
+        TomTomAdapter.reset_credit_latch()
+        return {"reset": True, "is_credit_exhausted": False}
+    except Exception as e:
+        logger.error(f"Error resetting TomTom credit latch: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

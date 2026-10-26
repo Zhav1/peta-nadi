@@ -1,0 +1,23 @@
+null
+Juri A
+Secara sistem, sangat luar biasa. Hanya validitas datanya yang perlu diperhatikan.
+Juri B
+Aspek inovasi — 5
+Sistem supply-chain control tower yang menggabungkan data eksternal, mendeteksi gangguan, melakukan simulasi, dan memberikan rekomendasi mitigasi bukan konsep baru. IBM telah menawarkan control tower dengan integrasi data, prediksi gangguan, dan rekomendasi tindakan. Proyek SYRI-Alert juga mengembangkan peringatan dini gangguan rantai pasok pangan bagi pemerintah dan perusahaan. IBM Supply Chain Control Tower · SYRI-Alert
+
+Pembeda PreHub terletak pada konteks distribusi pangan Indonesia, pemetaan multimoda, validasi independensi sumber, Evidence Chain, dan perbandingan Continue–Reroute–Hold. Kombinasinya menarik, tetapi istilah “multi-agent swarm” sedikit berlebihan karena implementasinya lebih menyerupai orkestrasi pipeline spesialis melalui LangGraph daripada agen yang benar-benar berkolaborasi secara otonom.
+
+Dampak dan sustainability — 5
+Potensi dampaknya besar: mempercepat deteksi gangguan, mengurangi keterlambatan, dan menjaga distribusi komoditas mudah rusak. Namun, belum ada pilot bersama BULOG, Bapanas, operator armada, atau perusahaan logistik. Infrastruktur gratis yang diajukan cocok untuk demonstrasi, tetapi tidak memadai untuk sistem operasional kritis yang memerlukan SLA, redundansi, keamanan, dan kapasitas data tinggi.
+UI, usability, dan user experience — 5
+Dashboard terlihat sangat matang secara visual. Peta, moda transportasi, insiden, Evidence Chain, tingkat risiko, serta alternatif rute disajikan dalam satu antarmuka yang konsisten. Nilai belum lebih tinggi karena tampilannya cukup padat dan belum ada pengujian dengan dispatcher sebenarnya. Tidak tersedia hasil task completion, waktu pengambilan keputusan, tingkat kesalahan, SUS, atau perbandingan dengan proses kerja manual.
+Proses pengembangan — 5
+Proposal menjelaskan Agile incremental, arsitektur modular, pengujian komponen, integrasi, skenario, metrik probabilistik, dan evaluasi end-to-end secara cukup serius. Dokumen teknis juga menyebut 34 unit dan integration test lulus 100%. Namun, tidak disertakan daftar test case, keluaran pengujian, coverage, dataset, maupun hasil metrik aktual. Sebagian besar precision, recall, F1, Brier Score, dan latensi masih berupa rancangan evaluasi.
+
+Kesesuaian ide dan perangkat lunak — 3
+Aplikasi web, backend, dashboard, peta, alur LangGraph, Evidence Chain, dan simulasi rute telah ditunjukkan. Akan tetapi, komponen yang menentukan klaim utama masih belum matang: pipeline data, BMKG, TomTom, OSINT, Consensus Engine, dan optimasi rute masih parsial; probability calibration dan feedback loop masih dikembangkan; telemetri armada menggunakan data dummy; cuOpt belum digunakan.
+
+Terdapat perbedaan klaim antara dokumen. Proposal menyatakan data masih banyak disimulasikan dan keputusan tidak dieksekusi otomatis, sedangkan dokumen teknis menyebut sistem siap diimplementasikan dan tombol mitigasi memperbarui rute armada. Dengan kondisi ini, produk yang tersedia lebih tepat disebut demonstrator decision-support, belum sistem peringatan dini operasional.
+
+Urgensi masalah — 6
+Gangguan distribusi pangan akibat cuaca, kerusakan infrastruktur, kemacetan, dan bencana memiliki dampak ekonomi dan sosial yang tinggi. Kemampuan merespons gangguan lebih awal sangat relevan bagi negara kepulauan seperti Indonesia. Skor belum 7 karena proposal belum menunjukkan besarnya kerugian pada koridor target maupun bukti bahwa rekomendasi PreHub lebih baik dibanding prosedur dispatcher yang berjalan saat ini.

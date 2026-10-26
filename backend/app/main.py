@@ -59,53 +59,57 @@ async def _poll_bmkg_loop():
 
 
 async def _poll_tomtom_loop():
-    """Background poller for TomTom traffic speeds & segment delays."""
+    """Background poller for TomTom traffic speeds & segment delays.
+
+    Single fetch() per cycle (no separate health_check flow request — health is
+    derived from fetch status). Interval from TOMTOM_POLL_SECONDS (default 1800s).
+    Writes lrip:tomtom:segment:* for cache sharing with corridor/routing services.
+    """
     logger.info("Starting background TomTom poller task...")
     try:
-        from app.adapters.tomtom_adapter import TomTomAdapter
+        from app.adapters.tomtom_adapter import TomTomAdapter, tomtom_poll_seconds
         adapter = TomTomAdapter()
         while True:
             try:
-                healthy = await adapter.health_check()
-                if not healthy:
+                raw = await adapter.fetch()
+                flow_items = raw.get("flow", [])
+                if flow_items:
+                    r = get_redis()
+                    cache_ex = tomtom_poll_seconds()
+                    for item in flow_items:
+                        seg = item.get("flowSegmentData", {})
+                        name = item.get("_checkpoint_name", "checkpoint")
+                        free_speed = max(1.0, float(seg.get("freeFlowSpeed", 60.0)))
+                        curr_speed = float(seg.get("currentSpeed", 30.0))
+                        delay_min = max(0.0, (1.0 - (curr_speed / free_speed)) * 45.0)
+
+                        payload = {
+                            "name": name,
+                            "lat": item.get("_lat"),
+                            "lon": item.get("_lon"),
+                            "delay_min": round(delay_min, 1),
+                            "currentTravelTime": seg.get("currentTravelTime", 0),
+                            "currentSpeed": curr_speed,
+                            "freeFlowSpeed": free_speed,
+                            "timestamp": datetime.now(timezone.utc).timestamp()
+                        }
+                        r.set(f"lrip:tomtom:segment:{name}", json.dumps(payload), ex=cache_ex)
+                    logger.info(f"TomTom poller cached {len(flow_items)} segment delays in Redis.")
+
+                fetch_status = raw.get("status", "ok")
+                if fetch_status == "down":
+                    adapter.update_source_health("down")
+                elif fetch_status == "degraded":
                     adapter.update_source_health("degraded")
-                    logger.warning("TomTom health check failed; retaining cached segment delays")
                 else:
-                    raw = await adapter.fetch()
-                    flow_items = raw.get("flow", [])
-                    if flow_items:
-                        r = get_redis()
-                        for item in flow_items:
-                            seg = item.get("flowSegmentData", {})
-                            name = item.get("_checkpoint_name", "checkpoint")
-                            free_speed = max(1.0, float(seg.get("freeFlowSpeed", 60.0)))
-                            curr_speed = float(seg.get("currentSpeed", 30.0))
-                            delay_min = max(0.0, (1.0 - (curr_speed / free_speed)) * 45.0)
-
-                            payload = {
-                                "name": name,
-                                "lat": item.get("_lat"),
-                                "lon": item.get("_lon"),
-                                "delay_min": round(delay_min, 1),
-                                "currentTravelTime": seg.get("currentTravelTime", 0),
-                                "currentSpeed": curr_speed,
-                                "freeFlowSpeed": free_speed,
-                                "timestamp": datetime.now(timezone.utc).timestamp()
-                            }
-                            r.set(f"lrip:tomtom:segment:{name}", json.dumps(payload), ex=600)
-                        logger.info(f"TomTom poller cached {len(flow_items)} segment delays in Redis.")
-
-                    fetch_status = raw.get("status", "ok")
-                    if fetch_status == "down":
-                        adapter.update_source_health("down")
-                    elif fetch_status == "degraded":
-                        adapter.update_source_health("degraded")
-                    else:
-                        adapter.update_source_health("ok")
+                    adapter.update_source_health("ok")
             except Exception as e:
                 logger.warning(f"TomTom background poll error: {e}")
-                adapter.update_source_health("down")
-            await asyncio.sleep(300)  # Poll every 5 minutes
+                try:
+                    adapter.update_source_health("down")
+                except Exception:
+                    pass
+            await asyncio.sleep(tomtom_poll_seconds())  # Interval from TOMTOM_POLL_SECONDS (default 1800s)
     except asyncio.CancelledError:
         logger.info("TomTom background poller task canceled.")
     except Exception as e:

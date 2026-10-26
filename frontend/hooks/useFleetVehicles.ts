@@ -495,7 +495,7 @@ export function useFleetVehicles(
     : rawVehicles;
 
   // Tenant assets split by tracking fidelity. The map draws LIVE_GPS only;
-  // ROUTE_ESTIMATED rows stay discoverable (with a PROYEKSI badge) but are
+  // ROUTE_ESTIMATED rows stay discoverable in the roster only, no badge, but are
   // never drawn as orange corridor lines by default.
   const liveTenantVehicles = tenantVehicles.filter(isLiveTracked);
   const estimatedTenantVehicles = tenantVehicles.filter(
@@ -536,7 +536,7 @@ export function useFleetVehicles(
     totalCount: baseVehicles.length,
     isSimulationMode: isDispatcher ? false : isSimulationMode,
     setIsSimulationMode,
-    // Tenant/diagnostics surface for honest empty states + PROYEKSI roster
+    // Tenant/diagnostics surface for honest empty states + roster
     isDispatcher,
     isTenantScoped,
     companyId: effectiveCompanyId ?? null,

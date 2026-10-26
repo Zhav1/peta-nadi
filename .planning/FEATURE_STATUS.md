@@ -106,3 +106,6 @@ orth_sumatra, Semua ? undefined; tren DD/MM per bar + tanggal header + Tren min(
 
 - **PIHPS 8-Province Scraper (Phase 119, COMPLETE)**
   - PROVINCES 8 slugs -> BI ids + DISPLAY/SHORT_SLUG/CENTROID tables; fetch() region-outer loop keyed {commodity}@{region}; parse() region-scoped rolling/dedup/latest:{region}; bare latest stays north_sumatra compat; _persist_readings eq(region); REGION_TO_DB 1:1 (supersedes Phase 118 collapse). Tests +2. Docs: 119-pihps-8-province/.
+
+- **Analitik Fixes Followup (Phase 121, COMPLETE — docs-only)**
+  - Peta dihapus total (layers:[] + label menyesatkan); days glass + Lihat Laporan shimmer hand-rolled motion-safe; REGION_TO_DB short-term 8?north_sumatra / Semua?undefined (diganti peta 1:1 Phase 119); tren DD/MM + header latest/tanggal + min(days,rows) + hijau/merah; spikes honest-empty; tooltip.tsx scaffold-only (0 konsumen, native title tetap). Docs: 121-analitik-fixes-followup/.
