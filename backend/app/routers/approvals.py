@@ -25,6 +25,103 @@ ApprovalResponse = DecisionTraceResponse
 ApprovalListResponse = DecisionTraceListResponse
 
 
+def _coerce_pred(value: Any) -> Optional[float]:
+    """Best-effort usable-probability coercion; unusable stays None (never defaulted)."""
+    try:
+        if value is None or value == "":
+            return None
+        result = float(value)
+    except (TypeError, ValueError):
+        return None
+    import math as _math
+    if not _math.isfinite(result) or not (0.0 <= result <= 1.0):
+        return None
+    return result
+
+
+def _resolve_approval_forecast(inc_id: str, route_dict: Dict[str, Any]) -> tuple:
+    """Resolve the decision-time forecast to persist with an approval.
+
+    Priority (never recomputes or defaults a probability):
+    1. pred carried on the recommended_route payload -> "explicit_route";
+    2. Supabase incidents row for the incident (migration 021 columns,
+       written by the news ingestor) -> "stored_supabase_incident";
+    3. newest Supabase route_approvals (pending HITL) row for the incident
+       with a usable pred -> "stored_supabase_approval";
+    4. nothing usable -> (None, "missing") with a notes audit flag.
+    """
+    if _coerce_pred((route_dict or {}).get("pred_prob")) is not None:
+        return {
+            "pred_prob": route_dict.get("pred_prob"),
+            "raw_prob": route_dict.get("raw_prob"),
+            "p_max": route_dict.get("p_max"),
+            "weights_version": route_dict.get("weights_version"),
+            "active_sources": route_dict.get("active_sources"),
+            "forecast_created_at": route_dict.get("forecast_created_at"),
+        }, "explicit_route"
+
+    try:
+        from app.db.supabase_client import get_write_client
+        sb = get_write_client()
+        cols = "pred_prob,raw_prob,p_max,weights_version,active_sources,forecast_created_at"
+        try:
+            res = sb.table("incidents").select(cols).eq("incident_id", inc_id).limit(1).execute()
+            for row in (getattr(res, "data", None) or []):
+                if _coerce_pred((row or {}).get("pred_prob")) is not None:
+                    return dict(row), "stored_supabase_incident"
+        except Exception as ie:
+            logger.debug(f"Approval forecast lookup skipped Supabase incidents ({ie})")
+        try:
+            res = sb.table("route_approvals").select(cols).eq("incident_id", inc_id).limit(10).execute()
+            for row in (getattr(res, "data", None) or []):
+                if _coerce_pred((row or {}).get("pred_prob")) is not None:
+                    return dict(row), "stored_supabase_approval"
+        except Exception as ae:
+            logger.debug(f"Approval forecast lookup skipped Supabase route_approvals ({ae})")
+    except Exception as e:
+        logger.debug(f"Approval forecast lookup skipped Supabase ({e})")
+
+    return None, "missing"
+
+
+PRED_COLUMN_KEYS = (
+    "pred_prob",
+    "raw_prob",
+    "p_max",
+    "weights_version",
+    "active_sources",
+    "forecast_created_at",
+)
+
+
+async def _insert_row_resilient(sb: Any, table: str, payload: Dict[str, Any]) -> Any:
+    """Insert tolerating Supabase projects that have not applied migration 021.
+
+    Falls back to a forecast-less insert (PGRST204) so cloud sync keeps working;
+    the local mirror retains the full pred bundle for the live aggregate.
+    """
+    import asyncio as _asyncio
+
+    try:
+        return await _asyncio.to_thread(
+            lambda: sb.table(table).insert(payload).execute()
+        )
+    except Exception as e:
+        msg = str(e)
+        if ("PGRST204" in msg or "schema cache" in msg) and any(
+            k in msg for k in PRED_COLUMN_KEYS
+        ):
+            logger.warning(
+                f"Supabase {table} lacks migration 021 pred columns; "
+                "syncing row without stored forecast (pred kept in local mirror)."
+            )
+            slim = {k: v for k, v in payload.items() if k not in PRED_COLUMN_KEYS}
+            return await _asyncio.to_thread(
+                lambda: sb.table(table).insert(slim).execute()
+            )
+        raise
+
+
 @router.post("", response_model=Dict[str, Any], status_code=status.HTTP_201_CREATED)
 async def create_approval(
     payload: DecisionTraceCreate,
@@ -51,6 +148,15 @@ async def create_approval(
     op_id = payload.operator_id or payload.approved_by or current_user.id
     committed_by_role = current_user.role
 
+    # WS-LIVE: persist the decision-time forecast with the approval so a later
+    # FIELD_REPORT outcome can auto-join it into the live aggregate. Missing
+    # forecasts stay NULL (missing_pred) with a notes audit flag — never defaulted.
+    route_dict_forecast = payload.recommended_route or {}
+    forecast, pred_source = _resolve_approval_forecast(
+        inc_id, route_dict_forecast if isinstance(route_dict_forecast, dict) else {}
+    )
+    forecast_notes_flag = "" if forecast else " pred_unavailable(no stored forecast at decision time)"
+
     db_payload = {
         "incident_id": inc_id,
         "route_id": payload.route_id,
@@ -61,8 +167,14 @@ async def create_approval(
         "custom_constraints": payload.custom_constraints or {},
         # committed_by_role tracked in notes + response + local mirror (no schema
         # migration on route_approvals); server identity stays op_id (current_user.id).
-        "notes": payload.notes or f"committed_by {op_id} ({committed_by_role})",
-        "sync_status": "synced"
+        "notes": (payload.notes or f"committed_by {op_id} ({committed_by_role})") + forecast_notes_flag,
+        "sync_status": "synced",
+        "pred_prob": (forecast or {}).get("pred_prob"),
+        "raw_prob": (forecast or {}).get("raw_prob"),
+        "p_max": (forecast or {}).get("p_max"),
+        "weights_version": (forecast or {}).get("weights_version"),
+        "active_sources": (forecast or {}).get("active_sources"),
+        "forecast_created_at": (forecast or {}).get("forecast_created_at"),
     }
     # Local mirror keeps the structured role field for audit without Supabase migration.
     local_extra = {"committed_by_role": committed_by_role}
@@ -87,11 +199,9 @@ async def create_approval(
     try:
         from app.db.supabase_client import get_write_client
         sb = get_write_client()
-        
+
         # Insert into route_decision_traces or legacy route_approvals
-        result = await asyncio.to_thread(
-            lambda: sb.table("route_approvals").insert(db_payload).execute()
-        )
+        result = await _insert_row_resilient(sb, "route_approvals", db_payload)
         
         if result.data and len(result.data) > 0:
             item = result.data[0]
@@ -128,7 +238,9 @@ async def create_approval(
                 "tactical_action": payload.tactical_action.value,
                 "operator_id": op_id,
                 "committed_by_role": committed_by_role,
-                "status": "success"
+                "status": "success",
+                "pred_source": pred_source,
+                "pred_prob": db_payload.get("pred_prob"),
             }
     except Exception as e:
         logger.warning(f"Supabase unavailable for decision log, persisting to local SQLite: {e}")
@@ -166,7 +278,9 @@ async def create_approval(
         "tactical_action": payload.tactical_action.value,
         "operator_id": op_id,
         "committed_by_role": committed_by_role,
-        "status": "local_queued"
+        "status": "local_queued",
+        "pred_source": pred_source,
+        "pred_prob": db_payload.get("pred_prob"),
     }
 
 

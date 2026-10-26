@@ -98,6 +98,25 @@ class OutcomeCreate(BaseModel):
     verified_by: str = Field("operator-1", description="Observer or organization confirming ground truth")
     verification_source: VerificationSource = Field(VerificationSource.FIELD_REPORT, description="Information channel")
     notes: Optional[str] = Field(None, description="Field observation details")
+    # WS-LIVE: stored forecast provenance (optional — auto-joined from the
+    # linked decision/incident forecast when omitted). Rows without a usable
+    # pred_prob in [0, 1] are EXCLUDED from the live aggregate (missing_pred),
+    # never silently defaulted.
+    pred_prob: Optional[float] = Field(None, description="Stored calibrated consensus probability P (overall_confidence)")
+    raw_prob: Optional[float] = Field(None, description="Stored raw independence-product probability")
+    p_max: Optional[float] = Field(None, description="Theoretical max of the active weight profile")
+    weights_version: Optional[str] = Field(None, description="'ECONOMIC_ACTIVE' | 'PHYSICAL_ONLY'")
+    active_sources: Optional[List[str]] = Field(None, description="Contributing channels/agents at decision time")
+    forecast_created_at: Optional[datetime] = Field(None, description="When the stored forecast was produced")
+
+    @model_validator(mode="after")
+    def validate_stored_pred(self) -> "OutcomeCreate":
+        # Honest exclusion upstream: only a usable probability may be stored.
+        if self.pred_prob is not None and not (0.0 <= self.pred_prob <= 1.0):
+            raise ValueError(f"pred_prob must lie in [0, 1], got {self.pred_prob}.")
+        if self.raw_prob is not None and not (0.0 <= self.raw_prob <= 1.0):
+            raise ValueError(f"raw_prob must lie in [0, 1], got {self.raw_prob}.")
+        return self
 
 
 class OutcomeResponse(BaseModel):
@@ -112,6 +131,14 @@ class OutcomeResponse(BaseModel):
     notes: Optional[str] = None
     sync_status: str = "synced"
     created_at: datetime
+    # WS-LIVE: stored forecast provenance echoed back for audit (None = legacy
+    # row excluded from the live aggregate as missing_pred).
+    pred_prob: Optional[float] = None
+    raw_prob: Optional[float] = None
+    p_max: Optional[float] = None
+    weights_version: Optional[str] = None
+    active_sources: Optional[List[str]] = None
+    forecast_created_at: Optional[datetime] = None
 
 
 class OutcomeListResponse(BaseModel):

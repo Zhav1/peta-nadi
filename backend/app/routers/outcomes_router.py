@@ -23,6 +23,146 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/outcomes", tags=["outcomes"])
 
 
+def _coerce_pred(value: Any) -> Optional[float]:
+    """Best-effort usable-probability coercion; unusable stays None (never defaulted)."""
+    try:
+        if value is None or value == "":
+            return None
+        result = float(value)
+    except (TypeError, ValueError):
+        return None
+    import math as _math
+    if not _math.isfinite(result) or not (0.0 <= result <= 1.0):
+        return None
+    return result
+
+
+def _resolve_outcome_forecast(
+    incident_id: str,
+    explicit: Dict[str, Any],
+) -> tuple:
+    """Resolve the stored decision-time forecast for an outcome row.
+
+    Priority (never recomputes or defaults a probability):
+    1. explicit usable pred_prob supplied on POST /outcomes -> "explicit";
+    2. newest local decision trace for the incident with a usable pred_prob
+       (persisted at approval time) -> "stored_decision_trace";
+    3. Supabase incidents / route_approvals rows (migration 021 columns,
+       written by the news ingestor) -> "stored_supabase";
+    4. nothing usable -> (None, "missing").
+    """
+    if _coerce_pred(explicit.get("pred_prob")) is not None:
+        return explicit, "explicit"
+
+    try:
+        for trace in local_storage.list_decision_traces(incident_id=incident_id, limit=10):
+            if _coerce_pred(trace.get("pred_prob")) is not None:
+                return {
+                    "pred_prob": trace.get("pred_prob"),
+                    "raw_prob": trace.get("raw_prob"),
+                    "p_max": trace.get("p_max"),
+                    "weights_version": trace.get("weights_version"),
+                    "active_sources": trace.get("active_sources"),
+                    "forecast_created_at": trace.get("forecast_created_at"),
+                }, "stored_decision_trace"
+    except Exception as e:
+        logger.debug(f"Outcome forecast auto-join skipped local traces ({e})")
+
+    try:
+        from app.db.supabase_client import get_client
+        sb = get_client()
+        for table in ("incidents", "route_approvals"):
+            try:
+                res = sb.table(table).select(
+                    "pred_prob,raw_prob,p_max,weights_version,active_sources,forecast_created_at"
+                ).eq("incident_id", incident_id).limit(5).execute()
+                for row in (getattr(res, "data", None) or []):
+                    if _coerce_pred((row or {}).get("pred_prob")) is not None:
+                        return dict(row), "stored_supabase"
+            except Exception as te:
+                logger.debug(f"Outcome forecast auto-join skipped Supabase {table} ({te})")
+                continue
+    except Exception as e:
+        logger.debug(f"Outcome forecast auto-join skipped Supabase ({e})")
+
+    return None, "missing"
+
+
+PRED_COLUMN_KEYS = (
+    "pred_prob",
+    "raw_prob",
+    "p_max",
+    "weights_version",
+    "active_sources",
+    "forecast_created_at",
+)
+
+
+async def _insert_row_resilient(sb: Any, table: str, payload: Dict[str, Any]) -> Any:
+    """Insert tolerating Supabase projects that have not applied migration 021.
+
+    The stored-forecast columns may be absent from the remote schema cache
+    (PGRST204). In that case the row still syncs WITHOUT the forecast bundle
+    while the local mirror keeps the full pred provenance for the live
+    aggregate — sync is never sacrificed for provenance.
+    """
+    try:
+        return await asyncio.to_thread(
+            lambda: sb.table(table).insert(payload).execute()
+        )
+    except Exception as e:
+        msg = str(e)
+        if ("PGRST204" in msg or "schema cache" in msg) and any(
+            k in msg for k in PRED_COLUMN_KEYS
+        ):
+            logger.warning(
+                f"Supabase {table} lacks migration 021 pred columns; "
+                "syncing row without stored forecast (pred kept in local mirror)."
+            )
+            slim = {k: v for k, v in payload.items() if k not in PRED_COLUMN_KEYS}
+            return await asyncio.to_thread(
+                lambda: sb.table(table).insert(slim).execute()
+            )
+        raise
+
+
+def _response_pred_fields(item: Dict[str, Any]) -> Dict[str, Any]:
+    """Coerce stored forecast provenance for OutcomeResponse (audit echo)."""
+    fc = item.get("forecast_created_at")
+    fc_dt = None
+    if fc:
+        try:
+            fc_dt = fc if isinstance(fc, datetime) else datetime.fromisoformat(str(fc).replace("Z", "+00:00"))
+        except Exception:
+            fc_dt = None
+    src = item.get("active_sources")
+    if isinstance(src, str):
+        try:
+            import json as _json
+            parsed = _json.loads(src)
+            src = parsed if isinstance(parsed, list) else None
+        except Exception:
+            src = None
+    if src is not None and not isinstance(src, list):
+        src = None
+
+    def _num(key: str) -> Optional[float]:
+        try:
+            val = item.get(key)
+            return float(val) if val is not None and val != "" else None
+        except (TypeError, ValueError):
+            return None
+
+    return {
+        "pred_prob": _num("pred_prob"),
+        "raw_prob": _num("raw_prob"),
+        "p_max": _num("p_max"),
+        "weights_version": item.get("weights_version"),
+        "active_sources": src,
+        "forecast_created_at": fc_dt,
+    }
+
+
 @router.post("", response_model=Dict[str, Any], status_code=status.HTTP_201_CREATED)
 async def record_outcome(payload: OutcomeCreate):
     """
@@ -30,6 +170,19 @@ async def record_outcome(payload: OutcomeCreate):
     Persists to Supabase cloud with automatic fallback to local SQLite.
     """
     clearance_str = payload.actual_clearance_time.isoformat() if payload.actual_clearance_time else None
+    # WS-LIVE: persist the stored decision-time forecast with the row so the
+    # live aggregate (pred_prob in [0, 1] + non-echo source) can count it.
+    # Omitted pred auto-joins from the linked decision/incident
+    # forecast; rows that resolve to nothing stay NULL (missing_pred).
+    explicit_forecast = {
+        "pred_prob": payload.pred_prob,
+        "raw_prob": payload.raw_prob,
+        "p_max": payload.p_max,
+        "weights_version": payload.weights_version,
+        "active_sources": payload.active_sources,
+        "forecast_created_at": payload.forecast_created_at.isoformat() if payload.forecast_created_at else None,
+    }
+    forecast, pred_source = _resolve_outcome_forecast(payload.incident_id, explicit_forecast)
     db_payload = {
         "incident_id": payload.incident_id,
         "horizon": payload.horizon.value,
@@ -39,17 +192,21 @@ async def record_outcome(payload: OutcomeCreate):
         "verified_by": payload.verified_by,
         "verification_source": payload.verification_source.value,
         "notes": payload.notes or "",
-        "sync_status": "synced"
+        "sync_status": "synced",
+        "pred_prob": (forecast or {}).get("pred_prob"),
+        "raw_prob": (forecast or {}).get("raw_prob"),
+        "p_max": (forecast or {}).get("p_max"),
+        "weights_version": (forecast or {}).get("weights_version"),
+        "active_sources": (forecast or {}).get("active_sources"),
+        "forecast_created_at": (forecast or {}).get("forecast_created_at"),
     }
 
     # Attempt Supabase cloud write
     try:
         from app.db.supabase_client import get_client
         sb = get_client()
-        
-        result = await asyncio.to_thread(
-            lambda: sb.table("ground_truth_outcomes").insert(db_payload).execute()
-        )
+
+        result = await _insert_row_resilient(sb, "ground_truth_outcomes", db_payload)
         
         if result.data and len(result.data) > 0:
             item = result.data[0]
@@ -65,7 +222,9 @@ async def record_outcome(payload: OutcomeCreate):
                 "id": record_id,
                 "incident_id": payload.incident_id,
                 "horizon": payload.horizon.value,
-                "status": "success"
+                "status": "success",
+                "pred_source": pred_source,
+                "pred_prob": db_payload.get("pred_prob"),
             }
     except Exception as e:
         logger.warning(f"Supabase unavailable for outcome log, persisting to local SQLite: {e}")
@@ -80,7 +239,9 @@ async def record_outcome(payload: OutcomeCreate):
         "id": saved["id"],
         "incident_id": saved["incident_id"],
         "horizon": saved["horizon"],
-        "status": "local_queued"
+        "status": "local_queued",
+        "pred_source": pred_source,
+        "pred_prob": db_payload.get("pred_prob"),
     }
 
 
@@ -140,7 +301,8 @@ async def list_outcomes(
                         verification_source=v_source,
                         notes=item.get("notes"),
                         sync_status="synced",
-                        created_at=created_dt
+                        created_at=created_dt,
+                        **_response_pred_fields(item),
                     )
                 )
             return OutcomeListResponse(items=responses, total=len(responses))
@@ -188,7 +350,8 @@ async def list_outcomes(
                 verification_source=v_source,
                 notes=item.get("notes"),
                 sync_status=item.get("sync_status", "pending"),
-                created_at=created_dt
+                created_at=created_dt,
+                **_response_pred_fields(item),
             )
         )
     return OutcomeListResponse(items=responses, total=len(responses))
