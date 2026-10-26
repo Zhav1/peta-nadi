@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { mockDispatcherAuth } from './analitik-fixtures';
 
 // Analitik heatmap + tooltip + BNPB gate: 4 heatmap headings, KPI strip,
 // base-ui rich tooltip on hover, Babel/Kepri region options, BNPB
@@ -8,6 +9,11 @@ import { test, expect } from '@playwright/test';
 test('analitik-heatmap-tooltip-bnpb', async ({ page }) => {
   const pageerrors: string[] = [];
   page.on('pageerror', (e) => pageerrors.push(String(e)));
+
+  // DISPATCHER shim: the guest hard-block disables #nav-reports, which this
+  // gate's tab cycle needs. Guest behavior is covered by
+  // guest-laporan-hardblock.spec.ts instead.
+  await mockDispatcherAuth(page);
 
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto('/dashboard?section=analytics', { waitUntil: 'domcontentloaded' });
@@ -25,11 +31,14 @@ test('analitik-heatmap-tooltip-bnpb', async ({ page }) => {
   await expect(kpiList.getByText('Risiko komposit')).toBeVisible();
   await expect(kpiList.getByRole('listitem').first()).toBeVisible();
 
-  // 3. Babel/Kepri backfill options in the Wilayah filter.
+  // 3. Babel/Kepri backfill options in the Wilayah filter (Base-UI Select:
+  // options render on open, so open the trigger then assert role=option).
   const wilayah = page.getByLabel(/Wilayah/);
   await expect(wilayah).toBeVisible();
-  await expect(wilayah.locator('option[value="babel"]')).toHaveCount(1);
-  await expect(wilayah.locator('option[value="kepri"]')).toHaveCount(1);
+  await wilayah.click();
+  await expect(page.getByRole('option', { name: 'Babel' })).toHaveCount(1);
+  await expect(page.getByRole('option', { name: 'Kepri' })).toHaveCount(1);
+  await page.keyboard.press('Escape');
 
   // 4. ?commodity&region&days merged into the URL (?section preserved).
   const url = new URL(page.url());

@@ -190,7 +190,7 @@ async def get_commodity_spikes(
         now = datetime.now(timezone.utc)
         thirty_days_ago = (now - timedelta(days=30)).isoformat()
 
-        query = sb.table("commodity_prices").select("*").gte("time", thirty_days_ago).order("time", desc=True).limit(500)
+        query = sb.table("commodity_prices").select("*").gte("time", thirty_days_ago).order("time", desc=True).limit(1000)
         if clean_region:
             query = query.eq("region", clean_region)
 

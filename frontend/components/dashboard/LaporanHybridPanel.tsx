@@ -218,7 +218,7 @@ export default function LaporanHybridPanel({
             value: `${formatNumber(totals?.fuel_saved_liters)} L`,
             sub: 'Biosolar/Dexlite Pertamina',
             icon: Fuel,
-            color: 'text-cyan-300',
+            color: 'text-slate-300',
           },
           {
             label: 'Biaya hemat',
@@ -516,7 +516,7 @@ export default function LaporanHybridPanel({
                             );
                           })()}
                           {trip.reefer_fuel_lph_used != null && Number(trip.reefer_fuel_lph_used) > 0 && (
-                            <span className="block text-xs text-cyan-300/80 tabular-nums">
+                            <span className="block text-xs text-slate-400 tabular-nums">
                               reefer {Number(trip.reefer_fuel_lph_used).toLocaleString('id-ID')} L/jam
                             </span>
                           )}

@@ -17,10 +17,19 @@ export function CorrelationMatrix({
   commodities,
   cells,
   loading,
+  regionActive = false,
+  windowDays = 30,
+  onShowAll,
 }: {
   commodities: Array<{ value: string; label: string }>;
   cells: CorrCell[];
   loading: boolean;
+  /** True bila filter wilayah sempit aktif — CTA menyarankan Semua wilayah. */
+  regionActive?: boolean;
+  /** Jendela hari aktif untuk CTA perpanjang window. */
+  windowDays?: number;
+  /** Reset filter ke Semua wilayah (dipakai CTA fallback). */
+  onShowAll?: () => void;
 }) {
   const lookup = React.useMemo(() => {
     const m = new Map<string, CorrCell>();
@@ -43,6 +52,9 @@ export function CorrelationMatrix({
   }
 
   const short = (v: string) => commodities.find((c) => c.value === v)?.label ?? v;
+  const maxN = cells.reduce((m, c) => Math.max(m, c.n ?? 0), 0);
+  const validCount = cells.filter((c) => c.r != null).length;
+  const progressPct = Math.min(100, Math.round((maxN / 10) * 100));
 
   return (
     <div className="space-y-2">
@@ -141,10 +153,59 @@ export function CorrelationMatrix({
       <HeatLegend
         items={[
           { swatch: 'rgba(239,68,68,0.85)', label: 'positif kuat (|r|>0.7)' },
-          { swatch: 'rgba(56,189,248,0.85)', label: 'negatif kuat (|r|>0.7)' },
+          { swatch: 'rgba(100,116,139,0.85)', label: 'negatif kuat (|r|>0.7)' },
           { swatch: 'rgba(255,255,255,0.03)', label: 'n<10 tak dihitung' },
         ]}
       />
+      {/* UX n aktual + progres ke 10 + cara baca + CTA — threshold 10 tetap. */}
+      <div className="rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-xs tabular-nums">
+        <div className="flex items-center justify-between gap-2 text-slate-300">
+          <span>
+            Overlap maks <span className="font-bold text-white">n={maxN}/10</span>
+            {' · '}
+            {validCount}/{cells.length} pasangan terhitung
+          </span>
+          {maxN < 10 ? (
+            <span className="shrink-0 text-slate-400">butuh {10 - maxN} titik lagi</span>
+          ) : (
+            <span className="shrink-0 text-slate-400">ambang terpenuhi</span>
+          )}
+        </div>
+        <div
+          className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/10"
+          role="progressbar"
+          aria-valuenow={maxN}
+          aria-valuemin={0}
+          aria-valuemax={10}
+          aria-label={`Progres overlap korelasi ${maxN} dari 10`}
+        >
+          <div
+            className="h-full rounded-full bg-red-400/80 motion-safe:transition-all"
+            style={{ width: `${progressPct}%` }}
+          />
+        </div>
+        <p className="mt-1.5 text-[11px] leading-relaxed text-slate-500">
+          Cara baca: r mendekati +1 berarti kedua komoditas naik-turun bersama; mendekati −1
+          berarti berlawanan arah; |r|&gt;0.7 ditandai ring tegas. n&lt;10 tak dihitung (bukan 0).
+          {maxN < 10 ? (
+            <>
+              {' '}Perpanjang window ({windowDays} hari → 30 hari) atau{' '}
+              {onShowAll ? (
+                <button
+                  type="button"
+                  onClick={onShowAll}
+                  className="cursor-pointer font-medium text-slate-200 underline decoration-white/30 underline-offset-2 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 rounded"
+                >
+                  pilih Semua wilayah
+                </button>
+              ) : (
+                'pilih Semua wilayah'
+              )}
+              {' '}untuk menambah titik bersama.{regionActive ? ' Filter wilayah sempit mengurangi overlap.' : ''}
+            </>
+          ) : null}
+        </p>
+      </div>
     </div>
   );
 }

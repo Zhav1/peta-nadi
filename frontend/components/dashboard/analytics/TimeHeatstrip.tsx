@@ -22,10 +22,16 @@ export function TimeHeatstrip({
   rows,
   commodities,
   loading,
+  fallbackActive = false,
+  minPoints = 14,
 }: {
   rows: HeatStripRow[];
   commodities: Array<{ value: string; label: string }>;
   loading: boolean;
+  /** True bila deret memakai fallback agregat Sumatera (filter sempit <14 titik). */
+  fallbackActive?: boolean;
+  /** Ambang titik minimum (tetap 14 — honest-empty, bukan 0). */
+  minPoints?: number;
 }) {
   if (loading) {
     return (
@@ -38,7 +44,15 @@ export function TimeHeatstrip({
   }
 
   if (rows.length === 0) {
-    return <AnalyticsEmpty message="Streak mingguan butuh ≥ 14 titik harga per komoditas." />;
+    return (
+      <div className="flex flex-col gap-2">
+        <AnalyticsEmpty message={`Streak mingguan butuh ≥ ${minPoints} titik harga per komoditas — data filter ini belum cukup (bukan streak 0).`} />
+        <p className="text-[11px] tabular-nums text-slate-500">
+          Bedakan: &ldquo;data kurang&rdquo; berarti deret &lt;{minPoints} titik; &ldquo;0 mggu&rdquo; berarti
+          data cukup tapi pekan terakhir turun. Perpanjang window atau pilih Semua wilayah.
+        </p>
+      </div>
+    );
   }
 
   const label = (v: string) => commodities.find((c) => c.value === v)?.label ?? v;
@@ -52,6 +66,12 @@ export function TimeHeatstrip({
 
   return (
     <div className="space-y-2">
+      {fallbackActive ? (
+        <p className="rounded-lg border border-white/10 bg-white/[0.02] px-3 py-1.5 text-[11px] tabular-nums text-slate-400" role="note">
+          Fallback agregat Sumatera aktif — filter wilayah sempit &lt;{minPoints} titik, memakai deret
+          agregat PIHPS agar streak tetap terhitung (real backfill, bukan sintetis).
+        </p>
+      ) : null}
       <div className="overflow-x-auto">
         <table className="w-full border-separate text-xs" style={{ borderSpacing: 3 }}>
           <thead>

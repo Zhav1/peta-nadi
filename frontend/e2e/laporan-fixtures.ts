@@ -221,6 +221,8 @@ interface MockLaporanApiOptions {
   role?: 'DISPATCHER' | 'REGULATOR';
   summary?: () => unknown;
   onPatchTravel?: (url: string, body: unknown) => unknown;
+  /** Override the /api/v1/approvals payload (default: empty ledger). Additive; existing callers unaffected. */
+  approvals?: () => unknown;
 }
 
 /** Single branch handler for every /api/ request: specific mocks first, generic hermetic sink last. */
@@ -258,7 +260,7 @@ export async function mockLaporanApi(page: Page, opts: MockLaporanApiOptions = {
       }
       return ok(opts.onPatchTravel ? opts.onPatchTravel(url, body) : { id: 'RIT-001', status: 'delivered' });
     }
-    if (url.includes('/api/v1/approvals')) return ok({ items: [], total: 0 });
+    if (url.includes('/api/v1/approvals')) return ok(opts.approvals ? opts.approvals() : { items: [], total: 0 });
     if (url.includes('/health/sources')) return ok({ sources: [] });
     return ok({ status: 'ok', items: [], total: 0, sources: [] });
   });

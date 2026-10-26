@@ -11,8 +11,9 @@ test('laporan tier and search filters narrow the table', async ({ page }) => {
   await expect(panel).toBeVisible({ timeout: 30000 });
   await expect(panel.getByText(/Agregasi per tier \(3 rit terfilter\)/)).toBeVisible({ timeout: 15000 });
 
-  // Tier filter: dry (beras) narrows 3 -> 1.
-  await page.locator('select[title="Filter tier komoditas"]').selectOption('dry');
+  // Tier filter: Base-UI Select (canonical Analitik pattern) — dry (beras) narrows 3 -> 1.
+  await panel.locator('[data-slot="select-trigger"]', { hasText: 'Semua tier' }).click();
+  await page.getByRole('option', { name: /Kering/ }).click();
   await expect(panel.getByText(/Agregasi per tier \(1 rit terfilter\)/)).toBeVisible();
   await expect(panel.getByText('RIT-001')).toBeVisible();
   await expect(panel.getByText('RIT-002')).toBeHidden();

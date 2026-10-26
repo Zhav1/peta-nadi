@@ -3,9 +3,18 @@
 import React from 'react';
 import { Calendar, Filter, RotateCcw, Search, X } from 'lucide-react';
 import type { LaporanFilters, LaporanTierKey, TravelStatus } from '@/lib/types';
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/base-ui/select';
 
 // M8 Phase 2: global filter bar for Laporan. Controlled props only —
-// no data fetching here. Reuses the toolbar pattern from ReportsSection.
+// no data fetching here. Tier/status use Base-UI Select (canonical
+// Analitik pattern); granularity uses pills; dates keep native inputs
+// styled as pills with dark color-scheme.
 
 export type LaporanGranularity = 'weekly' | 'monthly';
 
@@ -17,6 +26,24 @@ interface LaporanFilterBarProps {
   hasActiveFilters: boolean;
   onReset: () => void;
 }
+
+const TIER_OPTIONS = [
+  { value: 'ALL', label: 'Semua tier' },
+  { value: 'ultra', label: 'Ultra (cabai/tomat/sayur)' },
+  { value: 'cold', label: 'Dingin (daging/ikan/susu)' },
+  { value: 'semi', label: 'Semi (bawang/kentang)' },
+  { value: 'dry', label: 'Kering (beras/minyak/gula)' },
+  { value: 'Lainnya', label: 'Lainnya' },
+] as const;
+
+const STATUS_OPTIONS = [
+  { value: 'ALL', label: 'Semua status' },
+  { value: 'planned', label: 'Direncanakan' },
+  { value: 'moving', label: 'Berjalan' },
+  { value: 'rerouted', label: 'Dialihkan' },
+  { value: 'delivered', label: 'Terkirim' },
+  { value: 'failed', label: 'Gagal' },
+] as const;
 
 export default function LaporanFilterBar({
   filters,
@@ -30,7 +57,7 @@ export default function LaporanFilterBar({
   const status = filters.status ?? 'ALL';
 
   return (
-    <div className="bg-[#0c1017] border border-white/10 rounded-xl px-4 py-3 flex flex-wrap items-center gap-2.5">
+    <div className="bg-[#0c1017] border border-white/10 rounded-xl px-4 py-3 flex flex-wrap items-center gap-2.5 text-xs">
       {/* Search */}
       <div className="relative flex-1 min-w-[200px]">
         <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -39,7 +66,7 @@ export default function LaporanFilterBar({
           value={filters.search ?? ''}
           onChange={(e) => onFiltersChange({ ...filters, search: e.target.value })}
           placeholder="Cari ID rit, truk, rute, komoditas..."
-          className="w-full bg-transparent border border-white/10 rounded-lg pl-8 pr-8 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-white/30 transition-colors"
+          className="w-full bg-transparent border border-white/10 rounded-lg pl-8 pr-8 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-white/30 transition-colors tabular-nums"
         />
         {filters.search && (
           <button
@@ -53,63 +80,77 @@ export default function LaporanFilterBar({
         )}
       </div>
 
-      {/* Tier filter */}
+      {/* Tier filter — Base-UI Select */}
       <div className="flex items-center gap-1.5 shrink-0">
         <Filter className="w-3.5 h-3.5 text-slate-400" />
-        <select
+        <Select
           value={tier}
-          onChange={(e) => onFiltersChange({ ...filters, tier: e.target.value as LaporanTierKey | 'ALL' })}
-          className="bg-transparent border border-white/10 rounded-lg px-2.5 py-2 text-xs text-slate-200 focus:outline-none cursor-pointer"
-          title="Filter tier komoditas"
+          onValueChange={(val) => {
+            if (val) onFiltersChange({ ...filters, tier: val as LaporanTierKey | 'ALL' });
+          }}
+          items={TIER_OPTIONS}
+          modal={false}
         >
-          <option value="ALL">Semua tier</option>
-          <option value="ultra">Ultra (cabai/tomat/sayur)</option>
-          <option value="cold">Dingin (daging/ikan/susu)</option>
-          <option value="semi">Semi (bawang/kentang)</option>
-          <option value="dry">Kering (beras/minyak/gula)</option>
-          <option value="Lainnya">Lainnya</option>
-        </select>
+          <SelectTrigger className="h-8 min-w-[130px] bg-white/5 border border-white/10 rounded-lg text-xs text-slate-200 px-2.5 py-1.5 cursor-pointer">
+            <SelectValue placeholder="Semua tier" />
+          </SelectTrigger>
+          <SelectContent portal={false}>
+            {TIER_OPTIONS.map((o) => (
+              <SelectItem key={o.value} value={o.value} className="text-xs cursor-pointer">
+                {o.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
-      {/* Status filter */}
+      {/* Status filter — Base-UI Select */}
       <div className="flex items-center gap-1.5 shrink-0">
-        <select
+        <Select
           value={status}
-          onChange={(e) => onFiltersChange({ ...filters, status: e.target.value as TravelStatus | 'ALL' })}
-          className="bg-transparent border border-white/10 rounded-lg px-2.5 py-2 text-xs text-slate-200 focus:outline-none cursor-pointer"
-          title="Filter status rit"
+          onValueChange={(val) => {
+            if (val) onFiltersChange({ ...filters, status: val as TravelStatus | 'ALL' });
+          }}
+          items={STATUS_OPTIONS}
+          modal={false}
         >
-          <option value="ALL">Semua status</option>
-          <option value="planned">Direncanakan</option>
-          <option value="moving">Berjalan</option>
-          <option value="rerouted">Dialihkan</option>
-          <option value="delivered">Terkirim</option>
-          <option value="failed">Gagal</option>
-        </select>
+          <SelectTrigger className="h-8 min-w-[130px] bg-white/5 border border-white/10 rounded-lg text-xs text-slate-200 px-2.5 py-1.5 cursor-pointer">
+            <SelectValue placeholder="Semua status" />
+          </SelectTrigger>
+          <SelectContent portal={false}>
+            {STATUS_OPTIONS.map((o) => (
+              <SelectItem key={o.value} value={o.value} className="text-xs cursor-pointer">
+                {o.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
-      {/* Date range */}
-      <div className="flex items-center gap-1.5 shrink-0">
+      {/* Date range — pill-styled native inputs */}
+      <div className="flex items-center gap-1.5 shrink-0 rounded-full border border-white/20 bg-white/10 px-2.5 py-1 backdrop-blur tabular-nums">
         <Calendar className="w-3.5 h-3.5 text-slate-400" />
         <input
           type="date"
           value={filters.startDate ?? ''}
           onChange={(e) => onFiltersChange({ ...filters, startDate: e.target.value })}
-          className="bg-transparent border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none cursor-pointer [color-scheme:dark]"
+          className="bg-transparent text-xs text-slate-200 focus:outline-none cursor-pointer [color-scheme:dark] tabular-nums"
           title="Tanggal mulai"
+          aria-label="Tanggal mulai"
         />
         <span className="text-slate-500 text-xs">-</span>
         <input
           type="date"
           value={filters.endDate ?? ''}
           onChange={(e) => onFiltersChange({ ...filters, endDate: e.target.value })}
-          className="bg-transparent border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none cursor-pointer [color-scheme:dark]"
+          className="bg-transparent text-xs text-slate-200 focus:outline-none cursor-pointer [color-scheme:dark] tabular-nums"
           title="Tanggal selesai"
+          aria-label="Tanggal selesai"
         />
       </div>
 
-      {/* Granularity */}
-      <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-lg p-1 shrink-0">
+      {/* Granularity pills */}
+      <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-lg p-1 shrink-0" role="group" aria-label="Granularitas">
         {(
           [
             { id: 'weekly' as const, label: 'Mingguan' },
@@ -120,7 +161,8 @@ export default function LaporanFilterBar({
             key={g.id}
             type="button"
             onClick={() => onGranularityChange(g.id)}
-            className={`px-2.5 py-1 rounded-md text-xs font-medium transition cursor-pointer whitespace-nowrap ${
+            aria-pressed={granularity === g.id}
+            className={`px-2.5 py-1 rounded-md text-xs font-medium transition cursor-pointer whitespace-nowrap tabular-nums ${
               granularity === g.id
                 ? 'bg-white text-[#080d14] font-semibold'
                 : 'text-slate-400 hover:text-slate-200'

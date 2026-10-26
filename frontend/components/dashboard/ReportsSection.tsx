@@ -21,6 +21,7 @@ interface ReportsSectionProps {
  corridorContext?: CorridorContext | null;
  selectedCrisis?: CrisisState | null;
  activeRoutes?: RouteRecommendation[];
+ onCreateMitigation?: () => void;
 }
 
 interface ApprovalLogItem {
@@ -37,7 +38,14 @@ interface ApprovalLogItem {
  operator_id?: string;
  notes?: string;
  sync_status?: string;
+ is_demo?: boolean;
  recommended_route?: RouteRecommendation;
+}
+
+function isDemoApproval(item: { id?: string; incident_id?: string; notes?: string; is_demo?: boolean }): boolean {
+ if (item.is_demo === true) return true;
+ const hay = `${item.id || ''} ${item.incident_id || ''} ${item.notes || ''}`.toUpperCase();
+ return hay.includes('DEMO');
 }
 
 function escapeHtml(str: string): string {
@@ -68,7 +76,8 @@ export default function ReportsSection({
  approvalsCount = 0,
  corridorContext,
  selectedCrisis,
- activeRoutes
+ activeRoutes,
+ onCreateMitigation
 }: ReportsSectionProps) {
  const [liveApprovals, setLiveApprovals] = useState<number>(approvalsCount);
  const [healthScore, setHealthScore] = useState<number>(92);
@@ -76,6 +85,7 @@ export default function ReportsSection({
  const [isLoading, setIsLoading] = useState<boolean>(true);
  const [reportView, setReportView] = useState<'erp' | 'audit'>('erp');
  const [erpRefreshKey, setErpRefreshKey] = useState(0);
+ const [reloadTick, setReloadTick] = useState(0);
 
  // Client-side filter states
  const [searchQuery, setSearchQuery] = useState<string>('');
@@ -96,10 +106,10 @@ export default function ReportsSection({
 
  if (appRes && typeof appRes.total === 'number') {
  setLiveApprovals(appRes.total);
- if (Array.isArray(appRes.items)) setApprovalList(appRes.items);
+ if (Array.isArray(appRes.items)) setApprovalList(appRes.items.map((it) => ({ ...it, is_demo: isDemoApproval(it) })));
  } else if (appRes && Array.isArray(appRes.items)) {
  setLiveApprovals(appRes.items.length);
- setApprovalList(appRes.items);
+ setApprovalList(appRes.items.map((it) => ({ ...it, is_demo: isDemoApproval(it) })));
  } else {
  setLiveApprovals(0);
  setApprovalList([]);
@@ -126,7 +136,7 @@ export default function ReportsSection({
  return () => {
  isMounted = false;
  };
- }, []);
+ }, [reloadTick]);
 
  // Derive corridor status from actual crisis and corridor metrics
  const corridorStatus = useMemo(() => {
@@ -215,12 +225,17 @@ export default function ReportsSection({
 
  const hasActiveFilters = statusFilter !== 'ALL' || Boolean(startDate) || Boolean(endDate) || Boolean(searchQuery.trim());
 
+ const demoCount = useMemo(() => approvalList.filter((it) => it.is_demo).length, [approvalList]);
+ const realCount = useMemo(() => approvalList.filter((it) => !it.is_demo).length, [approvalList]);
+
  const handleResetFilters = () => {
  setStatusFilter('ALL');
  setStartDate('');
  setEndDate('');
  setSearchQuery('');
  };
+
+ const handleReloadAudit = () => setReloadTick((k) => k + 1);
 
  const handleGeneratePDF = () => {
  if (typeof window === 'undefined') return;
@@ -246,10 +261,10 @@ export default function ReportsSection({
  const dt = formatDateTime(item.created_at || item.approved_at);
  const inc = escapeHtml(item.crisis_id || item.incident_id || 'INC-DEFAULT');
  const route = escapeHtml(item.route_name || item.recommended_route?.description || `Rute #${item.route_id || '0'}`);
- const tactical = item.tactical_action ? ` <span style="font-size: 10px; color: #0284c7;">(${escapeHtml(item.tactical_action)})</span>` : '';
+ const tactical = item.tactical_action ? ` <span style="font-size: 10px; color: #64748b;">(${escapeHtml(item.tactical_action)})</span>` : '';
  const op = escapeHtml(item.approved_by || item.operator_id || 'Operator');
  const act = (item.action || 'ACCEPT').toUpperCase();
- const actColor = act === 'ACCEPT' ? '#059669' : act === 'REJECT' ? '#e11d48' : '#d97706';
+ const actColor = act === 'ACCEPT' ? '#059669' : act === 'REJECT' ? '#e11d48' : '#b45309';
  const sync = escapeHtml((item.sync_status || 'synced').toUpperCase());
  const notes = item.notes ? `<div style="font-size: 10px; color: #64748b; margin-top: 3px; font-style: italic;">Catatan: ${escapeHtml(item.notes)}</div>` : '';
 
@@ -281,14 +296,14 @@ export default function ReportsSection({
  <title>${reportTitle}</title>
  <style>
  body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px; color: #0f172a; background: #fff; line-height: 1.6; }
- .header { border-bottom: 3px solid #0284c7; padding-bottom: 20px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; }
+ .header { border-bottom: 3px solid #0f172a; padding-bottom: 20px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; }
  .title { font-size: 20px; font-weight: bold; color: #0f172a; margin: 0; text-transform: uppercase; }
  .subtitle { font-size: 13px; color: #64748b; margin-top: 4px; }
  .meta { font-size: 12px; color: #475569; text-align: right; }
  .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 30px; }
  .kpi-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; }
  .kpi-label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #64748b; font-weight: bold; }
- .kpi-value { font-size: 22px; font-weight: bold; color: #0284c7; margin-top: 8px; }
+ .kpi-value { font-size: 22px; font-weight: bold; color: #047857; margin-top: 8px; }
  .section { margin-bottom: 30px; }
  .section-title { font-size: 14px; font-weight: bold; text-transform: uppercase; color: #0f172a; border-bottom: 1px solid #cbd5e1; padding-bottom: 8px; margin-bottom: 12px; }
  .text { font-size: 13px; color: #334155; }
@@ -499,10 +514,22 @@ export default function ReportsSection({
  </p>
  </div>
  </div>
- <div className="text-right">
+ <div className="text-right flex flex-col items-end gap-1.5">
  <span className="text-xs text-slate-400 tabular-nums">
  {filteredList.length} dari {liveApprovals} Catatan
  </span>
+ {approvalList.length > 0 && (
+ <span className="flex items-center gap-1.5" aria-label="Label keaslian data">
+ {demoCount > 0 && (
+ <span className="px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-200 text-xs font-mono tabular-nums" title="Baris seed demonstrasi — bukan transaksi operasional nyata">
+ Demo {demoCount}
+ </span>
+ )}
+ <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-200 text-xs font-mono tabular-nums" title="Baris commit operator nyata via POST /approvals">
+ Real {realCount}
+ </span>
+ </span>
+ )}
  </div>
  </div>
 
@@ -512,11 +539,12 @@ export default function ReportsSection({
  <div className="relative flex-1 min-w-[200px]">
  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
  <input
+ id="audit-filter-search"
  type="text"
  value={searchQuery}
  onChange={(e) => setSearchQuery(e.target.value)}
  placeholder="Cari ID insiden, rute, operator, catatan..."
- className="w-full bg-transparent border border-white/10 rounded-lg pl-8 pr-8 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-white/30 transition-colors"
+ className="w-full bg-transparent border border-white/10 rounded-lg pl-8 pr-8 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-white/30 focus-visible:ring-2 focus-visible:ring-emerald-400/60 transition-colors"
  />
  {searchQuery && (
  <button
@@ -612,7 +640,14 @@ export default function ReportsSection({
  {formatDateTime(item.created_at || item.approved_at)}
  </TableCell>
  <TableCell className="py-3 font-medium text-white tabular-nums">
+ <span className="flex items-center gap-1.5 flex-wrap">
  {item.crisis_id || item.incident_id || 'INC-DEFAULT'}
+ {item.is_demo && (
+ <span className="px-1 py-px rounded bg-amber-500/15 border border-amber-500/30 text-amber-200 text-xs font-mono" title="Baris seed demonstrasi — bukan transaksi operasional nyata">
+ Demo
+ </span>
+ )}
+ </span>
  </TableCell>
  <TableCell className="py-3">
  <div className="font-medium text-slate-200">
@@ -664,7 +699,7 @@ export default function ReportsSection({
  </p>
  <button
  onClick={handleResetFilters}
- className="mt-3 px-3 py-1.5 bg-white/10 hover:bg-white/15 text-slate-200 border border-white/10 rounded-md text-xs font-medium cursor-pointer transition-colors flex items-center gap-1.5"
+ className="mt-3 px-3 py-1.5 bg-white/10 hover:bg-white/15 text-slate-200 border border-white/10 rounded-md text-xs font-medium cursor-pointer transition-colors flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
  >
  <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
  Reset Semua Filter
@@ -672,11 +707,35 @@ export default function ReportsSection({
  </>
  ) : (
  <>
- <FileText className="w-8 h-8 text-slate-600 mb-1" />
+ <FileText className="w-8 h-8 text-slate-600 mb-1" aria-hidden="true" />
  <p className="text-sm font-medium text-slate-300">Belum ada catatan persetujuan mitigasi</p>
- <p className="text-xs text-slate-500 max-w-sm">
- Tindakan keputusan operator (Accept, Reject, Override) pada rute mitigasi akan terekam secara otomatis di sini.
+ <p className="text-xs text-slate-500 max-w-md leading-relaxed">
+ Audit terisi otomatis setelah Dispatcher melakukan commit keputusan
+ (Accept / Reject / Override) dari Peta Operasi melalui POST /approvals.
+ Mode Sandbox tamu tidak dapat mengisi audit — masuk sebagai Dispatcher untuk mencatat mitigasi.
  </p>
+ <div className="flex flex-wrap items-center justify-center gap-2 mt-3">
+ <button
+ onClick={() => { if (onCreateMitigation) onCreateMitigation(); }}
+ className="px-4 py-2 bg-white hover:bg-slate-200 text-[#080d14] text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
+ >
+ Buat mitigasi — buka Peta
+ </button>
+ <button
+ onClick={handleReloadAudit}
+ className="px-3 py-2 bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 rounded-md text-xs font-medium cursor-pointer transition-colors flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
+ >
+ <RotateCcw className="w-3.5 h-3.5 text-slate-400" aria-hidden="true" />
+ Muat ulang data
+ </button>
+ </div>
+ <a
+ href="#audit-filter-search"
+ onClick={(e) => { e.preventDefault(); handleResetFilters(); handleReloadAudit(); }}
+ className="mt-1 text-xs text-slate-400 hover:text-slate-200 underline underline-offset-2 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 rounded"
+ >
+ Reset filter & tampilkan semua
+ </a>
  </>
  )}
  </div>

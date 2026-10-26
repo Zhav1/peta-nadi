@@ -101,6 +101,8 @@ const REGION_FULL_NAMES: Record<string, string> = {
   lampung: 'Lampung',
   jambi: 'Jambi',
   bengkulu: 'Bengkulu',
+  babel: 'Bangka Belitung',
+  kepri: 'Kepulauan Riau',
 };
 
 function regionToDb(slug: string): string | undefined {
@@ -168,7 +170,7 @@ interface SpikeItem {
 function severityBadge(severity: string): string {
   const s = (severity || '').toLowerCase();
   if (s === 'critical') return 'bg-red-500/15 text-red-300 border-red-400/30';
-  if (s === 'high') return 'bg-orange-500/15 text-orange-300 border-orange-400/30';
+  if (s === 'high') return 'bg-red-500/15 text-red-300 border-red-400/30';
   return 'bg-amber-500/15 text-amber-300 border-amber-400/30';
 }
 
@@ -222,6 +224,8 @@ export default function DashboardAnalyticsSection({
   // Lintas-komoditas: deret harga per komoditas (korelasi + streak mingguan).
   const [multiSeries, setMultiSeries] = useState<Record<string, PricePoint[]>>({});
   const [multiLoading, setMultiLoading] = useState<boolean>(true);
+  // True bila sebagian deret memakai fallback agregat Sumatera (filter sempit <14 titik).
+  const [multiFallback, setMultiFallback] = useState<boolean>(false);
 
   // Bencana GET-only: poligon cuaca (BMKG), hotspot (FIRMS).
   const [weatherCount, setWeatherCount] = useState<number | null>(null);
@@ -349,31 +353,57 @@ export default function DashboardAnalyticsSection({
   }, [commodity]);
 
   // Deret per komoditas untuk korelasi + streak (GET-only, region-aware).
+  // Window 100 titik (real PIHPS backfill 180 hari mingguan — bukan sintetis);
+  // bila filter wilayah sempit menghasilkan <14 titik, fallback ke agregat
+  // Sumatera untuk komoditas tersebut (satu Promise.all tambahan, hanya bila perlu).
   useEffect(() => {
     let isMounted = true;
     async function loadMulti() {
       setMultiLoading(true);
+      setMultiFallback(false);
       try {
         const mapped = regionToDb(priceRegion);
+        const fetchSeries = async (c: string, region?: string): Promise<[string, PricePoint[]]> => {
+          try {
+            const res = await api.commodities.prices({ commodity: c, region, limit: 100 });
+            const items: PricePoint[] = (res?.items ?? []).map((it: { price_idr: number; time: string }) => ({
+              price: it.price_idr,
+              time: it.time,
+            })).reverse();
+            return [c, items];
+          } catch {
+            return [c, []];
+          }
+        };
         const results = await Promise.all(
-          ALL_COMMODITIES.map(async (c) => {
-            try {
-              const res = await api.commodities.prices({ commodity: c, region: mapped, limit: 60 });
-              const items = (res?.items ?? []).map((it: { price_idr: number; time: string }) => ({
-                price: it.price_idr,
-                time: it.time,
-              })).reverse();
-              return [c, items] as const;
-            } catch {
-              return [c, []] as const;
-            }
-          })
+          ALL_COMMODITIES.map((c) => fetchSeries(c, mapped)),
         );
         if (!isMounted) return;
-        setMultiSeries(Object.fromEntries(results));
+        const merged: Record<string, PricePoint[]> = Object.fromEntries(results);
+        // Fallback agregat Sumatera bila filter sempit: hanya untuk deret <14 titik.
+        let usedFallback = false;
+        if (mapped) {
+          const thin = ALL_COMMODITIES.filter((c) => (merged[c] ?? []).length < 14);
+          if (thin.length > 0) {
+            const aggResults = await Promise.all(thin.map((c) => fetchSeries(c, undefined)));
+            if (!isMounted) return;
+            for (const [c, items] of aggResults) {
+              if (items.length >= 14 && items.length > (merged[c] ?? []).length) {
+                merged[c] = items;
+                usedFallback = true;
+              }
+            }
+          }
+        }
+        if (!isMounted) return;
+        setMultiSeries(merged);
+        setMultiFallback(usedFallback);
       } catch (err) {
         console.error('Failed to load multi-commodity prices:', err);
-        if (isMounted) setMultiSeries({});
+        if (isMounted) {
+          setMultiSeries({});
+          setMultiFallback(false);
+        }
       } finally {
         if (isMounted) setMultiLoading(false);
       }
@@ -739,7 +769,7 @@ export default function DashboardAnalyticsSection({
             items={COMMODITY_OPTIONS}
             modal={false}
           >
-            <SelectTrigger className="h-8 min-w-[140px] bg-white/5 border border-white/10 rounded-lg text-xs text-slate-200 px-2.5 py-1.5 cursor-pointer">
+            <SelectTrigger aria-label="Komoditas" className="h-8 min-w-[140px] bg-white/5 border border-white/10 rounded-lg text-xs text-slate-200 px-2.5 py-1.5 cursor-pointer">
               <SelectValue placeholder="Pilih komoditas" />
             </SelectTrigger>
             <SelectContent portal={false}>
@@ -760,7 +790,7 @@ export default function DashboardAnalyticsSection({
             items={REGION_OPTIONS}
             modal={false}
           >
-            <SelectTrigger className="h-8 min-w-[120px] bg-white/5 border border-white/10 rounded-lg text-xs text-slate-200 px-2.5 py-1.5 cursor-pointer">
+            <SelectTrigger aria-label="Wilayah" className="h-8 min-w-[120px] bg-white/5 border border-white/10 rounded-lg text-xs text-slate-200 px-2.5 py-1.5 cursor-pointer">
               <SelectValue placeholder="Semua wilayah" />
             </SelectTrigger>
             <SelectContent portal={false}>
@@ -945,12 +975,15 @@ export default function DashboardAnalyticsSection({
         <section className="col-span-12 xl:col-span-6 bg-[#0c1017] border border-white/10 rounded-xl p-4 flex flex-col gap-3 min-w-0">
           <h3 className="text-sm font-semibold tracking-wide text-white">Korelasi harga antar-komoditas</h3>
           <p className="text-xs text-slate-500 font-sans -mt-1 tabular-nums">
-            Pearson −1…1 · |r|&gt;0.7 ditandai · n&lt;10 tidak dihitung
+            Pearson −1…1 · |r|&gt;0.7 ditandai · n&lt;10 tidak dihitung (bukan 0) · ambang 10 tetap
           </p>
           <CorrelationMatrix
             commodities={[...COMMODITY_OPTIONS]}
             cells={corrCells}
             loading={multiLoading}
+            regionActive={Boolean(priceRegion)}
+            windowDays={days}
+            onShowAll={() => setPriceRegion('')}
           />
         </section>
 
@@ -958,12 +991,15 @@ export default function DashboardAnalyticsSection({
         <section className="col-span-12 xl:col-span-6 bg-[#0c1017] border border-white/10 rounded-xl p-4 flex flex-col gap-3 min-w-0">
           <h3 className="text-sm font-semibold tracking-wide text-white">Streak mingguan per komoditas</h3>
           <p className="text-xs text-slate-500 font-sans -mt-1 tabular-nums">
-            4 pekan terakhir · WoW rata-rata pekan · butuh ≥14 titik
+            4 pekan terakhir · WoW rata-rata pekan · butuh ≥14 titik (kurang = data kurang, bukan 0)
+            {multiFallback ? ' · fallback agregat Sumatera aktif' : ''}
           </p>
           <TimeHeatstrip
             rows={heatstripRows}
             commodities={[...COMMODITY_OPTIONS]}
             loading={multiLoading}
+            fallbackActive={multiFallback}
+            minPoints={14}
           />
         </section>
 

@@ -1,9 +1,15 @@
 import { test, expect } from '@playwright/test';
+import { mockDispatcherAuth } from './analitik-fixtures';
 
 // Temporary M7 regression gate for the simplified AnalyticsSection (deleted after run).
 test('m7-analytics-regression-gate', async ({ page }) => {
   const pageerrors: string[] = [];
   page.on('pageerror', (e) => pageerrors.push(String(e)));
+
+  // DISPATCHER shim: the guest hard-block disables #nav-reports, which this
+  // gate's tab cycle needs. Guest behavior is covered by
+  // guest-laporan-hardblock.spec.ts instead.
+  await mockDispatcherAuth(page);
 
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto('/dashboard?section=analytics', { waitUntil: 'domcontentloaded' });

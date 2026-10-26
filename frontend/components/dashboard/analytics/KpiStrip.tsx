@@ -18,7 +18,7 @@ export interface Kpi {
 
 const TONE: Record<Kpi['tone'], string> = {
   critical: 'bg-red-500/15 text-red-300 border-red-400/30',
-  high: 'bg-orange-500/15 text-orange-300 border-orange-400/30',
+  high: 'bg-red-500/15 text-red-300 border-red-400/30',
   warn: 'bg-amber-500/15 text-amber-300 border-amber-400/30',
   neutral: 'text-slate-400',
 };

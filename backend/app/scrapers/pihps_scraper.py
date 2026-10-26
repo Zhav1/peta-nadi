@@ -147,11 +147,18 @@ class PIHPSScraper(BaseScraper):
 
         Provinces outer x commodities inner (sequential, concurrency 1 ≤ 2).
         Keyed ``{commodity}@{region}`` so parse() can resolve the region.
+        Window: 180 hari mingguan (tipe_laporan=2) — real PIHPS backfill, bukan
+        sintetis. 180 hari ≈ 25 titik mingguan per deret, memenuhi guard
+        korelasi (n≥10) dan streak (≥14 titik). Babel (id 9) + Kepri (id 5)
+        ikut FETCH_PROVINCE_ORDER; tidak ada data fabrikasi.
         """
         results = {}
-        # Fetch prices for the last 30 days to build/seed the baseline if empty
+        # Fetch prices for the last 180 days (weekly) to seed/backfill the baseline.
+        # 180d ≈ 25 weekly points per commodity×province: covers streak (≥14)
+        # + correlation overlap (n≥10) for every region incl. babel/kepri.
+        # Real PIHPS only — never synthesize when BI returns empty.
         end_date = datetime.now(timezone.utc).date()
-        start_date = end_date - timedelta(days=30)
+        start_date = end_date - timedelta(days=180)
 
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',

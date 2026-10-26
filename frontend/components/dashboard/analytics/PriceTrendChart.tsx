@@ -135,8 +135,8 @@ export function PriceTrendChart({
         <ComposedChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
           <defs>
             <linearGradient id="analyticsTrendFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#38bdf8" stopOpacity={0.35} />
-              <stop offset="100%" stopColor="#38bdf8" stopOpacity={0.02} />
+              <stop offset="0%" stopColor="#38b8f8" stopOpacity={0.35} />
+              <stop offset="100%" stopColor="#38b8f8" stopOpacity={0.02} />
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" vertical={false} />
@@ -174,7 +174,7 @@ export function PriceTrendChart({
             type="monotone"
             dataKey="harga"
             name="Harga"
-            stroke="#38bdf8"
+            stroke="#38b8f8"
             strokeWidth={2}
             dot={false}
             activeDot={{ r: 4 }}

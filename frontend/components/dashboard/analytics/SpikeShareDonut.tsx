@@ -7,7 +7,7 @@ import { spikeBand } from './AnalyticsTip';
 
 function severityColor(v: number): string {
   if (v >= 15) return '#ef4444';
-  if (v >= 10) return '#f97316';
+  if (v >= 10) return '#ef4444';
   if (v >= 5) return '#f59e0b';
   return '#64748b';
 }

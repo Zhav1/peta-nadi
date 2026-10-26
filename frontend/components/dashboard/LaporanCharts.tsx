@@ -109,7 +109,7 @@ export default function LaporanCharts({ tierGroups, periodBuckets, granularityLa
                 width={56}
               />
               <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
-              <Bar dataKey="Hemat" fill="#34d399" radius={[4, 4, 0, 0]} maxBarSize={44} />
+              <Bar dataKey="Hemat" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={44} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -130,8 +130,8 @@ export default function LaporanCharts({ tierGroups, periodBuckets, granularityLa
             <ComposedChart data={periodData} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
               <defs>
                 <linearGradient id="laporanHematFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#22d3ee" stopOpacity={0.35} />
-                  <stop offset="100%" stopColor="#22d3ee" stopOpacity={0.02} />
+                  <stop offset="0%" stopColor="#10b981" stopOpacity={0.35} />
+                  <stop offset="100%" stopColor="#10b981" stopOpacity={0.02} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" vertical={false} />
@@ -145,7 +145,7 @@ export default function LaporanCharts({ tierGroups, periodBuckets, granularityLa
               />
               <Tooltip content={<ChartTooltip />} cursor={{ stroke: 'rgba(255,255,255,0.15)' }} />
               <Area type="monotone" dataKey="Hemat" name="Hemat" fill="url(#laporanHematFill)" stroke="transparent" />
-              <Line type="monotone" dataKey="Hemat" name="Hemat" stroke="#22d3ee" strokeWidth={2} dot={{ r: 2.5, fill: '#22d3ee' }} activeDot={{ r: 4 }} />
+              <Line type="monotone" dataKey="Hemat" name="Hemat" stroke="#10b981" strokeWidth={2} dot={{ r: 2.5, fill: '#10b981' }} activeDot={{ r: 4 }} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>

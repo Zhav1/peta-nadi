@@ -391,7 +391,7 @@ function FloatingMapLegend({
 }
 
 export default function DashboardClient() {
-  const { user, role, openAuthModal, isAuthModalOpen, closeAuthModal } = useAuth();
+  const { user, role, isAuthenticated, openAuthModal, isAuthModalOpen, closeAuthModal } = useAuth();
   const { incidents, refetch } = useIncidents();
   const {
     vehicles: activeFleetVehicles,
@@ -917,16 +917,40 @@ export default function DashboardClient() {
     return [...crisisHazardZones, ...disasterZones, ...live];
   }, [crisisHazardZones, disasterZones, newsFeed, showRedZones, showYellowZones, showForecastZones, forecastNowMs, buildHazardSpecificZoneGeometry]);
 
-  // Synchronize activeSection from URL query parameters
+  // Synchronize activeSection from URL query parameters.
+  // GUEST hard-block: ?section=reports never opens the audit ledger — it
+  // forces the login modal + a Mode Sandbox toast instead.
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const section = params.get('section') as 'map' | 'analytics' | 'reports' | 'evaluation';
       if (section && ['map', 'analytics', 'reports', 'evaluation'].includes(section)) {
+        if (section === 'reports' && (role === 'GUEST' || !isAuthenticated)) {
+          setActiveSection('map');
+          openAuthModal();
+          setToast({
+            message: 'Mode Sandbox: Laporan terkunci untuk tamu. Masuk untuk membuka audit mitigasi.',
+            type: 'info',
+          });
+          return;
+        }
         setActiveSection(section);
       }
     }
-  }, []);
+  }, [role, isAuthenticated, openAuthModal]);
+
+  // Safety net: a live downgrade to GUEST (logout/expiry) while on Laporan
+  // bounces back to the map and re-locks via the modal + toast.
+  useEffect(() => {
+    if (activeSection === 'reports' && (role === 'GUEST' || !isAuthenticated)) {
+      setActiveSection('map');
+      openAuthModal();
+      setToast({
+        message: 'Mode Sandbox: Laporan terkunci untuk tamu. Masuk untuk membuka audit mitigasi.',
+        type: 'info',
+      });
+    }
+  }, [activeSection, role, isAuthenticated, openAuthModal]);
 
   // Poll for pending HITL items from Supabase (only for authenticated non-guest operators)
   useEffect(() => {
@@ -2664,27 +2688,46 @@ export default function DashboardClient() {
             </Link>
           </div>
 
-          {/* Section Navigation Tabs */}
-          <nav className="flex items-center gap-1 bg-[#080d14] p-1 rounded-lg border border-white/10 overflow-x-auto no-scrollbar shrink">
+          {/* Section Navigation Tabs — Laporan hard-locked for GUEST */}
+          <nav aria-label="Bagian dasbor" className="flex items-center gap-1 bg-[#080d14] p-1 rounded-lg border border-white/10 overflow-x-auto no-scrollbar shrink">
             {[
               { id: 'map', label: 'Peta Operasi' },
               { id: 'analytics', label: 'Analitik' },
               { id: 'reports', label: 'Laporan' },
               { id: 'evaluation', label: 'Evaluasi' },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                id={`nav-${tab.id}`}
-                type="button"
-                onClick={() => setActiveSection(tab.id as typeof activeSection)}
-                className={`cursor-pointer px-3 sm:px-3.5 py-1.5 rounded-md text-xs font-medium transition whitespace-nowrap ${activeSection === tab.id
-                    ? 'bg-white text-[#080d14] font-semibold'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
-                  }`}
-              >
-                {tab.label}
-              </button>
-            ))}
+            ].map((tab) => {
+              const isReportsLocked = tab.id === 'reports' && (role === 'GUEST' || !isAuthenticated);
+              return (
+                <button
+                  key={tab.id}
+                  id={`nav-${tab.id}`}
+                  type="button"
+                  disabled={isReportsLocked}
+                  aria-disabled={isReportsLocked}
+                  title={isReportsLocked ? 'Laporan terkunci: masuk untuk membuka audit mitigasi (Mode Sandbox)' : tab.label}
+                  onClick={() => {
+                    if (isReportsLocked) {
+                      openAuthModal();
+                      setToast({
+                        message: 'Mode Sandbox: Laporan terkunci untuk tamu. Masuk untuk membuka audit mitigasi.',
+                        type: 'info',
+                      });
+                      return;
+                    }
+                    setActiveSection(tab.id as typeof activeSection);
+                  }}
+                  className={`px-3 sm:px-3.5 py-1.5 rounded-md text-xs font-medium transition whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 ${isReportsLocked
+                    ? 'text-slate-500 cursor-not-allowed opacity-60 flex items-center gap-1.5'
+                    : activeSection === tab.id
+                      ? 'bg-white text-[#080d14] font-semibold cursor-pointer'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-white/5 cursor-pointer'
+                    }`}
+                >
+                  {isReportsLocked && <Lock className="w-3 h-3 shrink-0" aria-hidden="true" />}
+                  {tab.label}
+                </button>
+              );
+            })}
           </nav>
         </div>
 
@@ -2735,7 +2778,7 @@ export default function DashboardClient() {
             className="cursor-pointer px-2.5 sm:px-3 py-1.5 rounded-lg border border-white/10 bg-[#080d14] hover:border-white/20 transition flex items-center gap-2 group text-left"
             title="Ganti Persona Akses & Ruang Kerja (RBAC)"
           >
-            <div className={`w-2 h-2 rounded-full shrink-0 ${role === 'DISPATCHER' ? 'bg-cyan-400' : role === 'REGULATOR' ? 'bg-amber-400' : 'bg-emerald-400'
+            <div className={`w-2 h-2 rounded-full shrink-0 ${role === 'DISPATCHER' ? 'bg-emerald-400' : role === 'REGULATOR' ? 'bg-amber-400' : 'bg-slate-400'
               }`} />
             <div className="leading-tight">
               <div className="flex items-center gap-1.5">
@@ -3648,14 +3691,48 @@ export default function DashboardClient() {
           />
         </div>
 
-        {/* Section 3: Executive Reports */}
+        {/* Section 3: Executive Reports — GUEST hard-blocked at mount */}
         <div className={`w-full h-full p-4 lg:p-6 overflow-y-auto ${activeSection === 'reports' ? 'block' : 'hidden'}`}>
-          <ReportsSection
-            approvalsCount={approvalsCount}
-            corridorContext={corridorContext}
-            selectedCrisis={selectedCrisis}
-            activeRoutes={currentMapRoutes}
-          />
+          {(role === 'GUEST' || !isAuthenticated) ? (
+            <div
+              role="alert"
+              aria-label="Laporan terkunci untuk tamu"
+              className="w-full h-full min-h-[320px] flex flex-col items-center justify-center gap-3 bg-[#0c1017] border border-white/10 rounded-xl p-8 text-center"
+            >
+              <div className="w-10 h-10 rounded-lg bg-amber-500/10 border border-amber-500/25 flex items-center justify-center">
+                <Lock className="w-5 h-5 text-amber-300" aria-hidden="true" />
+              </div>
+              <h2 className="font-headline font-semibold text-base text-white">Laporan terkunci — Mode Sandbox</h2>
+              <p className="text-xs text-slate-400 max-w-md leading-relaxed">
+                Tamu tidak dapat membuka Laporan. Masuk sebagai Dispatcher untuk mencatat mitigasi
+                atau sebagai Regulator untuk melihat agregat pengawasan.
+              </p>
+              <div className="flex items-center gap-2 mt-1">
+                <button
+                  type="button"
+                  onClick={openAuthModal}
+                  className="cursor-pointer px-4 py-2 rounded-md bg-white text-[#080d14] text-xs font-semibold hover:bg-slate-200 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
+                >
+                  Masuk untuk membuka Laporan
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveSection('map')}
+                  className="cursor-pointer px-4 py-2 rounded-md bg-white/5 border border-white/10 text-slate-200 text-xs font-medium hover:bg-white/10 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
+                >
+                  Kembali ke Peta
+                </button>
+              </div>
+            </div>
+          ) : (
+            <ReportsSection
+              approvalsCount={approvalsCount}
+              corridorContext={corridorContext}
+              selectedCrisis={selectedCrisis}
+              activeRoutes={currentMapRoutes}
+              onCreateMitigation={() => setActiveSection('map')}
+            />
+          )}
         </div>
 
         {/* Section 5: Dedicated Evaluation & Benchmark Dashboard */}

@@ -111,7 +111,7 @@ export function PriceHeatmap({
       <HeatLegend
         items={[
           { swatch: 'rgba(239,68,68,0.85)', label: '≥ 15% kritis' },
-          { swatch: 'rgba(249,115,22,0.75)', label: '≥ 10% tinggi' },
+          { swatch: 'rgba(239,68,68,0.55)', label: '≥ 10% tinggi' },
           { swatch: 'rgba(245,158,11,0.6)', label: '≥ 5% waspada' },
           { swatch: 'rgba(255,255,255,0.03)', label: prettify('tanpa spike') },
         ]}

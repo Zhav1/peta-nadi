@@ -132,7 +132,7 @@ export default function ERPSavingsPanel({ refreshKey = 0 }: ERPSavingsPanelProps
         </div>
         <div className="flex items-center gap-2">
           <span className="flex items-center gap-1.5 text-xs text-slate-400">
-            <span className={`w-1.5 h-1.5 rounded-full ${isAggregateOnly ? 'bg-amber-400' : 'bg-cyan-400'}`} />
+            <span className={`w-1.5 h-1.5 rounded-full ${isAggregateOnly ? 'bg-amber-400' : 'bg-emerald-400'}`} />
             {isAggregateOnly ? 'Regulator' : 'Dispatcher'}
           </span>
           <button
