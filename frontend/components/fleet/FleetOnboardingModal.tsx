@@ -41,6 +41,7 @@ import type {
  TravelCreatePayload,
  TravelStatus,
 } from '@/lib/types';
+import { GOLONGAN_DEFAULT_KMPL } from '@/lib/types';
 
 interface FleetOnboardingModalProps {
  isOpen: boolean;
@@ -92,6 +93,9 @@ export function FleetOnboardingModal({
  driver_phone: '',
  gross_weight_ton: 12.0,
  fuel_type: 'biosolar',
+ fuel_efficiency_kmpl: null,
+ is_reefer: false,
+ reefer_fuel_lph: null,
  });
  const [truckAssets, setTruckAssets] = useState<TruckAsset[]>([]);
  const [isLoadingTrucks, setIsLoadingTrucks] = useState(false);
@@ -725,6 +729,60 @@ export function FleetOnboardingModal({
  <option value="dexlite" className="bg-[#0c1017]">Dexlite</option>
  <option value="pertamina_dex" className="bg-[#0c1017]">Pertamina Dex</option>
  </select>
+ </div>
+ <div>
+ <label className="block text-xs font-medium text-slate-300 mb-1">Efisiensi BBM (km/L) — opsional</label>
+ <input
+ type="number"
+ step="0.1"
+ min={0}
+ disabled={isRegulator}
+ placeholder={`Default ${truckForm.vehicle_golongan}: ${GOLONGAN_DEFAULT_KMPL[truckForm.vehicle_golongan] ?? 3.5} km/L`}
+ value={truckForm.fuel_efficiency_kmpl ?? ''}
+ onChange={(e) =>
+ setTruckForm({
+ ...truckForm,
+ fuel_efficiency_kmpl: e.target.value ? parseFloat(e.target.value) : null,
+ })
+ }
+ className="w-full px-3 py-2 text-xs rounded-lg bg-white/5 border border-white/10 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 font-mono"
+ />
+ <p className="mt-1 text-xs text-slate-500">
+ Kosong = default golongan {truckForm.vehicle_golongan} ({GOLONGAN_DEFAULT_KMPL[truckForm.vehicle_golongan] ?? 3.5} km/L).
+ </p>
+ </div>
+ <div>
+ <label className="flex items-center gap-2 text-xs font-medium text-slate-300 mb-1 cursor-pointer">
+ <input
+ type="checkbox"
+ disabled={isRegulator}
+ checked={Boolean(truckForm.is_reefer)}
+ onChange={(e) => setTruckForm({ ...truckForm, is_reefer: e.target.checked })}
+ className="w-3.5 h-3.5 rounded accent-cyan-400"
+ />
+ Unit reefer (genset cold-chain)
+ </label>
+ </div>
+ <div>
+ <label className="block text-xs font-medium text-slate-300 mb-1">Konsumsi genset reefer (L/jam) — opsional</label>
+ <input
+ type="number"
+ step="0.1"
+ min={0}
+ disabled={isRegulator || !truckForm.is_reefer}
+ placeholder="cth. 2.0"
+ value={truckForm.reefer_fuel_lph ?? ''}
+ onChange={(e) =>
+ setTruckForm({
+ ...truckForm,
+ reefer_fuel_lph: e.target.value ? parseFloat(e.target.value) : null,
+ })
+ }
+ className="w-full px-3 py-2 text-xs rounded-lg bg-white/5 border border-white/10 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 font-mono disabled:opacity-50"
+ />
+ <p className="mt-1 text-xs text-slate-500">
+ Kosong = tarif genset per jam. Isi bila burn rate terukur (liter/jam).
+ </p>
  </div>
  </div>
 

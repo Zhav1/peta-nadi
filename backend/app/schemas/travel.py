@@ -223,6 +223,16 @@ class TravelResponse(BaseModel):
     fuel_type: str
     sla_deadline_hours: float
 
+    fuel_rate_used_idr: Optional[float] = None
+    fuel_sk_id: Optional[str] = None
+    fuel_sk_number: Optional[str] = None
+    fuel_effective_date: Optional[str] = None
+    fuel_source: Optional[str] = None
+    fuel_efficiency_used_kmpl: Optional[float] = None
+    fuel_efficiency_source: Optional[str] = None
+    fuel_load_factor: Optional[float] = None
+    reefer_fuel_lph_used: Optional[float] = None
+
     baseline_distance_km: float
     distance_source: str
     baseline_time_hours: float
@@ -352,6 +362,23 @@ class ERPTripRow(BaseModel):
     efficiency_pct: float
     hedging_policy: Optional[str] = None
     created_at: Optional[str] = None
+    # ---- Phase 4 fuel-economy provenance (so Laporan stops showing
+    # "belum diinput" when the ledger already has data) ----
+    baseline_distance_km: Optional[float] = None
+    actual_fuel_liters: Optional[float] = None
+    actual_recorded: Optional[bool] = None
+    fuel_rate_used_idr: Optional[float] = None
+    fuel_sk_id: Optional[str] = None
+    fuel_sk_number: Optional[str] = None
+    fuel_effective_date: Optional[str] = None
+    fuel_source: Optional[str] = None
+    fuel_is_fallback: Optional[bool] = None
+    fuel_efficiency_used_kmpl: Optional[float] = None
+    fuel_efficiency_source: Optional[str] = None
+    fuel_load_factor: Optional[float] = None
+    reefer_fuel_lph_used: Optional[float] = None
+    economy_kmpl: Optional[float] = None
+    l_per_100km: Optional[float] = None
 
 
 class ERPSummaryResponse(BaseModel):

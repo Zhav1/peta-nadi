@@ -6,6 +6,8 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/lib/authContext';
 import { notifyToast } from '@/components/ui/Toast';
 import type { ERPSummaryResponse, ERPTripRow, LaporanFilters } from '@/lib/types';
+import { averageTripEconomy } from '@/lib/laporanAggregations';
+import { formatEconomyKmpl } from '@/lib/tripCostCalculator';
 import LaporanHybridPanel from '@/components/dashboard/LaporanHybridPanel';
 import LaporanAktualModal from '@/components/dashboard/LaporanAktualModal';
 import type { LaporanGranularity } from '@/components/dashboard/LaporanFilterBar';
@@ -86,6 +88,8 @@ export default function ERPSavingsPanel({ refreshKey = 0 }: ERPSavingsPanelProps
 
   const isAggregateOnly = summary?.scope === 'REGULATOR_AGGREGATE';
 
+  const economyAvg = useMemo(() => averageTripEconomy(summary?.trips ?? []), [summary?.trips]);
+
   const handleSolveHedging = async (travelId: string) => {
     if (!isDispatcher) {
       notifyToast({ message: 'Aksi ditolak (403): hedging hanya untuk Dispatcher.', type: 'error' });
@@ -162,6 +166,14 @@ export default function ERPSavingsPanel({ refreshKey = 0 }: ERPSavingsPanelProps
 
       {/* M8 Phase 2: hybrid composition (KPI strip + FilterBar + Charts +
           tier/period tables + rincian + ledger) */}
+      {!isAggregateOnly && summary && economyAvg.measuredCount > 0 && (
+        <div className="px-4 py-2.5 rounded-xl bg-[#0c1017] border border-white/10 text-xs text-slate-400 tabular-nums">
+          Rata-rata ekonomi armada:{' '}
+          <strong className="text-slate-200">{formatEconomyKmpl(economyAvg.avgKmpl)}</strong>{' '}
+          ({economyAvg.measuredCount} rit terukur
+          {economyAvg.unmeasuredCount > 0 && ` • ${economyAvg.unmeasuredCount} rit belum diinput dikecualikan`})
+        </div>
+      )}
       <LaporanHybridPanel
         summary={summary}
         isLoading={isLoading}

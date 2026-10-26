@@ -2,7 +2,14 @@ import type { LonLat } from './pathDensifier';
 export type { LonLat };
 import type { RouteRecommendation, CongestionSegment, RouteLeg, HoldVsRerouteEconomics, CrisisType, HazardImpactProfile, RouteTradeoffAnalysis } from './types';
 import { getCachedDynamicRoutes, setCachedDynamicRoutes, findPrecomputedHubCorridor } from './hubCorridorCache';
-import { calculateTotalTripCost } from './tripCostCalculator';
+import {
+  DEPOT_HOURLY_FEE_IDR,
+  DRIVER_LABOR_HOURLY_RATE,
+  REEFER_GENSET_HOURLY_RATE,
+  calculateTotalTripCost,
+  resolveFuelEfficiencyKmpl,
+  resolveFuelRateIdr,
+} from './tripCostCalculator';
 
 export type TransportModality = 'best' | 'truck' | 'maritime' | 'air' | 'multimodal' | 'auto';
 
@@ -242,6 +249,12 @@ export function bowNauticalPathAroundHazard(
   });
 }
 
+export interface HoldRerouteCostSpec {
+  fuelEfficiencyKmpl?: number | null;
+  fuelRateIdr?: number | null;
+  vehicleGolongan?: string | null;
+}
+
 export function calculateHoldVsRerouteEconomics(
   origin: LonLat,
   destination: LonLat,
@@ -249,7 +262,8 @@ export function calculateHoldVsRerouteEconomics(
   detourDistKm: number,
   hazardCenter: LonLat | null,
   radiusKm: number,
-  hazardType: string = 'flood'
+  hazardType: string = 'flood',
+  costSpec?: HoldRerouteCostSpec
 ): HoldVsRerouteEconomics {
   const safeDepot = findClosestSafeHoldDepot(origin, hazardCenter, radiusKm).depot;
   const clearanceByHazard: Record<string, number> = {
@@ -267,16 +281,20 @@ export function calculateHoldVsRerouteEconomics(
   const estimated_clearance_hours = clearanceByHazard[hazardType] ?? 12;
 
   const deltaKm = Math.max(0, detourDistKm - primaryDistKm);
-  const fuelAndMaintenanceCost = Math.round(deltaKm * 6800);
+  // Shared calculator provenance: fuel priced as (Δkm / eff) × rate, never
+  // the legacy 1 km/L bug (Δkm × 6800). Defaults resolve GOL_II 3.5 km/L.
+  const { effKmpl } = resolveFuelEfficiencyKmpl(costSpec?.fuelEfficiencyKmpl, costSpec?.vehicleGolongan);
+  const { rateIdr } = resolveFuelRateIdr(costSpec?.fuelRateIdr);
+  const fuelAndMaintenanceCost = Math.round((deltaKm / effKmpl) * rateIdr);
   const tollDifferential = 85000;
-  const driverOvertimeBonus = Math.round((deltaKm / 45) * 40000);
+  const driverOvertimeBonus = Math.round((deltaKm / 45) * DRIVER_LABOR_HOURLY_RATE);
   const isSeaPortHazard = hazardType === 'port_closure' || hazardType === 'marine_wave';
   // Alternate-port failover incurs feeder trucking + stevedoring transfer fee.
   const alternatePortTransferFee = isSeaPortHazard ? 450000 : 0;
   const reroute_total_cost_idr = Math.max(750000, fuelAndMaintenanceCost + tollDifferential + driverOvertimeBonus + alternatePortTransferFee);
 
-  const reeferPlugCost = estimated_clearance_hours * 45000;
-  const demurrageCost = estimated_clearance_hours * 125000;
+  const reeferPlugCost = estimated_clearance_hours * REEFER_GENSET_HOURLY_RATE;
+  const demurrageCost = estimated_clearance_hours * DEPOT_HOURLY_FEE_IDR;
   // Port closure / marine wave adds container stacking & port demurrage exposure.
   const containerStackingCost = isSeaPortHazard ? estimated_clearance_hours * 85000 : 0;
   const baseCargoValue = 180000000;
@@ -1707,18 +1725,20 @@ export function buildRouteTradeoffAnalysis(
   baselineEtaMinutes: number,
   baselineDistKm: number,
   econ: HoldVsRerouteEconomics | undefined,
-  opts: { hazardType?: CrisisType; closedPortName?: string; altPortName?: string } = {}
+  opts: { hazardType?: CrisisType; closedPortName?: string; altPortName?: string; costSpec?: HoldRerouteCostSpec } = {}
 ): RouteTradeoffAnalysis {
   const time_delta_minutes = Math.max(0, Math.round(route.eta_minutes - baselineEtaMinutes));
   const deltaKm = Math.max(0, route.distance_km - baselineDistKm);
+  const { effKmpl } = resolveFuelEfficiencyKmpl(opts.costSpec?.fuelEfficiencyKmpl, opts.costSpec?.vehicleGolongan);
+  const { rateIdr } = resolveFuelRateIdr(opts.costSpec?.fuelRateIdr);
   const corridor = route.corridor_type;
   const closed = opts.closedPortName ?? route.affected_port_name;
   const alt = opts.altPortName ?? route.alternate_port_name;
 
   if (corridor === 'land_detour') {
-    const fuelCost = Math.round(deltaKm * 6800);
+    const fuelCost = Math.round((deltaKm / effKmpl) * rateIdr);
     const tollDiff = 85000;
-    const overtime = Math.round((deltaKm / 45) * 40000);
+    const overtime = Math.round((deltaKm / 45) * DRIVER_LABOR_HOURLY_RATE);
     return {
       time_delta_minutes,
       additional_cost_idr: fuelCost + tollDiff + overtime,
@@ -1777,7 +1797,7 @@ export function buildRouteTradeoffAnalysis(
   if (corridor === 'air_intermodal') {
     const uplift = 4500000;
     const airportHandling = 1200000;
-    const extraFuel = Math.round(deltaKm * 6800);
+    const extraFuel = Math.round((deltaKm / effKmpl) * rateIdr);
     return {
       time_delta_minutes,
       additional_cost_idr: uplift + airportHandling + extraFuel,
@@ -1802,8 +1822,8 @@ export function buildRouteTradeoffAnalysis(
   if (corridor === 'hold_staging') {
     const clearanceH = econ?.estimated_clearance_hours ?? 12;
     const holdTotal = econ?.hold_total_cost_idr ?? 2500000;
-    const reefer = clearanceH * 45000;
-    const demurrage = clearanceH * 125000;
+    const reefer = clearanceH * REEFER_GENSET_HOURLY_RATE;
+    const demurrage = clearanceH * DEPOT_HOURLY_FEE_IDR;
     const spoilage = Math.max(0, holdTotal - reefer - demurrage);
     return {
       time_delta_minutes,

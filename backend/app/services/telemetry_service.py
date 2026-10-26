@@ -1095,6 +1095,36 @@ def matches_tenant(
     return False
 
 
+def _list_master_truck_assets_supabase_first() -> List[Dict[str, Any]]:
+    """
+    Master truck_assets read, Supabase-first.
+
+    Writes (POST /fleet/trucks) are Supabase-primary via travel_ledger_service,
+    so reading SQLite only makes master assets vanish from the fleet view when
+    Supabase creds are configured. travel_ledger_service fetchers already
+    implement "Supabase when configured, else SQLite" — when Supabase is off
+    this returns exactly db_list_truck_assets().
+    """
+    try:
+        from app.services import travel_ledger_service as _tls
+
+        return _tls._fetch_master_assets()
+    except Exception as exc:
+        logger.warning("Supabase-first master asset read failed, falling back to SQLite: %s", exc)
+    return db_list_truck_assets()
+
+
+def _list_travels_supabase_first(limit: int = 500) -> List[Dict[str, Any]]:
+    """Travel/rit ledger read, Supabase-first (same routing as the ledger service)."""
+    try:
+        from app.services import travel_ledger_service as _tls
+
+        return _tls._fetch_travels(limit=limit)
+    except Exception as exc:
+        logger.warning("Supabase-first travels read failed, falling back to SQLite: %s", exc)
+    return db_list_travels(limit=limit)
+
+
 class TelemetryService:
     """
     Multi-modal telemetry ingestion and cache service.
@@ -1833,10 +1863,10 @@ class TelemetryService:
         # still find them (roster + PROYEKSI inspection) instead of them vanishing.
         try:
             known_ids = {str(v.get("vehicle_id", "")).upper() for v in enriched_custom}
-            truck_assets = db_list_truck_assets()
+            truck_assets = _list_master_truck_assets_supabase_first()
             if truck_assets:
                 try:
-                    travels = db_list_travels(limit=500)
+                    travels = _list_travels_supabase_first(limit=500)
                 except Exception:
                     travels = []
                 latest_travel_by_truck: Dict[str, Dict[str, Any]] = {}

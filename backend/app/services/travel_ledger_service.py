@@ -37,8 +37,11 @@ from app.services.spoilage_hedging_service import (
     spoilage_hedging_service,
     TRUCK_FUEL_CONSUMPTION_KM_PER_LITER,
     DRIVER_OVERTIME_HOURLY_IDR,
-    get_effective_fuel_rate,
+    REEFER_DEFAULT_LPH,
+    get_fuel_rate_for_trip,
     get_spoilage_loss,
+    payload_adjusted_kmpl,
+    resolve_fuel_efficiency_kmpl,
 )
 
 logger = logging.getLogger(__name__)
@@ -281,14 +284,116 @@ def list_truck_assets_with_legacy(company_id: Optional[str] = None) -> List[Dict
     return master
 
 
-def _apply_ledger(travel: Dict[str, Any]) -> Dict[str, Any]:
+def _resolve_trip_fuel_context(
+    travel: Dict[str, Any],
+    truck: Optional[Dict[str, Any]] = None,
+    at_date_override: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Resolve per-trip fuel math (Phase 2 fuel-spec contract).
+
+    Efficiency: travel override -> asset `fuel_efficiency_kmpl` ->
+    GOLONGAN_DEFAULT_KMPL[vehicle_golongan] -> legacy flat 3.5 (unknown
+    golongan only). Payload penalty (documented formula):
+
+        load_factor = clamp(cargo_tonnage / gross_weight_ton, 0, 1)
+        eff_adj     = eff_base * (1 - 0.15 * load_factor)
+
+    Reefer: when the commodity tier requires_reefer AND the unit is a reefer
+    (travel override wins over the asset flag), trip fuel gains
+    `reefer_lph * hours` (lph from travel/asset, else 2.0 default).
+
+    Price: Supabase `fuel_prices` row effective at `created_at`
+    (freeze-at-created_at: new trips price at creation, old rows keep their
+    frozen rate unless explicitly repriced) with PERTAMINA_FALLBACK when no
+    SK row applies; the inflation shock multiplies on top.
+    """
+    from app.services.spoilage_hedging_service import SpoilageHedgingService as _SHS
+
+    _tier_key, tier_info = _SHS.classify_commodity(travel.get("commodity_key") or "beras")
+    truck = truck or {}
+    fuel_type = (travel.get("fuel_type") or truck.get("fuel_type") or "biosolar").lower()
+    golongan = (travel.get("vehicle_golongan") or truck.get("vehicle_golongan") or "GOL_II").upper()
+    shock = float(travel.get("inflation_shock_factor") or 0.0)
+    tonnage = float(travel.get("cargo_tonnage") or 0.0)
+
+    eff_override = travel.get("fuel_efficiency_kmpl")
+    if eff_override is None:
+        eff_override = truck.get("fuel_efficiency_kmpl")
+    eff_base, eff_source = resolve_fuel_efficiency_kmpl(eff_override, golongan)
+
+    try:
+        gross = float(truck.get("gross_weight_ton") or 12.0)
+    except (TypeError, ValueError):
+        gross = 12.0
+    eff_adj, load_factor = payload_adjusted_kmpl(eff_base, tonnage, gross)
+
+    is_reefer_move = travel.get("is_reefer")
+    if is_reefer_move is None:
+        is_reefer_move = bool(truck.get("is_reefer"))
+    else:
+        is_reefer_move = bool(is_reefer_move)
+    reefer_active = bool(tier_info.get("requires_reefer")) and is_reefer_move
+    reefer_lph = travel.get("reefer_fuel_lph")
+    if reefer_lph is None:
+        reefer_lph = truck.get("reefer_fuel_lph")
+    if reefer_lph is None and reefer_active:
+        reefer_lph = REEFER_DEFAULT_LPH
+    reefer_lph_used = float(reefer_lph) if reefer_lph is not None else 0.0
+
+    at_date = at_date_override or travel.get("created_at")
+    region = travel.get("region") or travel.get("province") or truck.get("region")
+    rate_info = get_fuel_rate_for_trip(fuel_type, region=region, at_date=at_date)
+    fuel_rate = float(rate_info["rate_idr"]) * (1.0 + max(0.0, shock))
+    if eff_source == "legacy_3p5_flat" and rate_info.get("is_fallback"):
+        fuel_source = "legacy_3p5"
+    else:
+        fuel_source = rate_info["source"]
+
+    return {
+        "tier_info": tier_info,
+        "fuel_type": fuel_type,
+        "golongan": golongan,
+        "eff_base": float(eff_base),
+        "eff_source": eff_source,
+        "eff_adj": float(eff_adj),
+        "load_factor": float(load_factor),
+        "gross_weight_ton": float(gross),
+        "is_reefer_move": bool(is_reefer_move),
+        "reefer_active": bool(reefer_active),
+        "reefer_lph_used": float(reefer_lph_used),
+        "fuel_rate": float(fuel_rate),
+        "fuel_base_rate_idr": float(rate_info["rate_idr"]),
+        "fuel_sk_id": rate_info.get("fuel_sk_id"),
+        "fuel_sk_number": rate_info.get("sk_number"),
+        "fuel_effective_date": rate_info.get("effective_date"),
+        "fuel_region": rate_info.get("region"),
+        "fuel_source": fuel_source,
+        "fuel_is_fallback": bool(rate_info.get("is_fallback")),
+    }
+
+
+def _apply_ledger(
+    travel: Dict[str, Any],
+    truck: Optional[Dict[str, Any]] = None,
+    db_path: Optional[str] = None,
+) -> Dict[str, Any]:
     """
     Recompute every cost/savings field in-place from the travel's raw inputs.
 
     Required keys: commodity_key, cargo_tonnage, vehicle_golongan, fuel_type,
     origin_coords, dest_coords, baseline_time_hours.
     """
-    tier_key, tier_info = SpoilageHedgingService.classify_commodity(travel.get("commodity_key") or "beras")
+    # Phase 2 fuel-spec math: per-truck efficiency + SK-frozen fuel price.
+    # Freeze-at-created_at: the SK lookup is keyed on the row's created_at so
+    # existing rows keep their frozen rate; only an explicit `_reprice_at_date`
+    # (one-time backfill) reprices to the current SK.
+    _truck_ctx = truck
+    if _truck_ctx is None and travel.get("truck_id"):
+        _truck_ctx = resolve_truck_asset(travel.get("truck_id") or "")
+    _reprice_at = travel.pop("_reprice_at_date", None)
+    _fctx = _resolve_trip_fuel_context(travel, _truck_ctx, at_date_override=_reprice_at)
+    tier_info = _fctx["tier_info"]
     delta = float(tier_info["delta"])
 
     tonnage = float(travel.get("cargo_tonnage") or 0.0)
@@ -300,10 +405,12 @@ def _apply_ledger(travel: Dict[str, Any]) -> Dict[str, Any]:
         cargo_value = tonnage * 1000.0 * float(tier_info["default_price_per_kg"])
         value_source = "tier_default_price"
 
-    fuel_type = (travel.get("fuel_type") or "biosolar").lower()
-    golongan = (travel.get("vehicle_golongan") or "GOL_II").upper()
-    shock = float(travel.get("inflation_shock_factor") or 0.0)
-    fuel_rate = get_effective_fuel_rate(fuel_type, shock)
+    fuel_type = _fctx["fuel_type"]
+    golongan = _fctx["golongan"]
+    fuel_rate = _fctx["fuel_rate"]
+    eff_adj = _fctx["eff_adj"]
+    reefer_active = _fctx["reefer_active"]
+    reefer_lph_used = _fctx["reefer_lph_used"]
 
     origin = travel.get("origin_coords") or [0.0, 0.0]
     dest = travel.get("dest_coords") or [0.0, 0.0]
@@ -320,7 +427,10 @@ def _apply_ledger(travel: Dict[str, Any]) -> Dict[str, Any]:
 
     baseline_fuel = travel.get("baseline_fuel_liters")
     if baseline_fuel is None or float(baseline_fuel) <= 0:
-        baseline_fuel = distance_km / TRUCK_FUEL_CONSUMPTION_KM_PER_LITER
+        _eff_div = eff_adj if eff_adj > 0 else TRUCK_FUEL_CONSUMPTION_KM_PER_LITER
+        baseline_fuel = distance_km / _eff_div
+        if reefer_active and reefer_lph_used > 0:
+            baseline_fuel += reefer_lph_used * (baseline_time + blocked_delay)
     baseline_fuel = float(baseline_fuel)
 
     actual_recorded = bool(travel.get("actual_recorded"))
@@ -376,6 +486,16 @@ def _apply_ledger(travel: Dict[str, Any]) -> Dict[str, Any]:
     saved_total = _money(saved_fuel + saved_toll + saved_spoilage + saved_labor)
 
     travel.update({
+        "fuel_rate_used_idr": _money(fuel_rate),
+        "fuel_sk_id": _fctx["fuel_sk_id"],
+        "fuel_sk_number": _fctx.get("fuel_sk_number"),
+        "fuel_effective_date": _fctx.get("fuel_effective_date"),
+        "fuel_source": _fctx["fuel_source"],
+        "fuel_is_fallback": bool(_fctx["fuel_is_fallback"]),
+        "fuel_efficiency_used_kmpl": _dec(eff_adj, 3),
+        "fuel_efficiency_source": _fctx["eff_source"],
+        "fuel_load_factor": _dec(_fctx["load_factor"], 3),
+        "reefer_fuel_lph_used": _dec(reefer_lph_used, 3),
         "cargo_value_idr": _money(cargo_value),
         "cargo_value_source": value_source,
         "baseline_distance_km": _dec(distance_km, 2),
@@ -426,7 +546,7 @@ def create_travel(payload: TravelCreate, actor: Optional[str] = None, db_path: O
     data["actual_recorded"] = payload.actual_time_hours is not None
     data["status"] = payload.status.value if hasattr(payload.status, "value") else str(payload.status)
     data["created_by"] = actor or "dispatcher"
-    _apply_ledger(data)
+    _apply_ledger(data, truck=truck)
     return _persist_travel(data, db_path=db_path)
 
 
@@ -452,7 +572,13 @@ def update_travel(
     if updates.get("actual_time_hours") is not None:
         data["actual_recorded"] = True
 
-    _apply_ledger(data)
+    _truck_u = resolve_truck_asset(data.get("truck_id") or "")
+    if _truck_u is None and db_path:
+        try:
+            _truck_u = local_storage.get_truck_asset(data.get("truck_id") or "", db_path=db_path)
+        except Exception:
+            _truck_u = None
+    _apply_ledger(data, truck=_truck_u)
     if data.get("status") == "delivered" and not data.get("delivered_at"):
         data["delivered_at"] = payload.delivered_at or datetime.now().isoformat()
     return _persist_travel(data, db_path=db_path)
@@ -475,12 +601,21 @@ def solve_and_persist_hedging(
     if tonnage <= 0:
         raise ValueError("Rit tidak memiliki tonase muatan; solver pembusukan membutuhkan cargo_tonnage > 0.")
 
+    # Per-trip efficiency inversion (Phase 2): never the global 3.5 constant.
+    _truck_h = resolve_truck_asset(travel.get("truck_id") or "")
+    if _truck_h is None and db_path:
+        try:
+            _truck_h = local_storage.get_truck_asset(travel.get("truck_id") or "", db_path=db_path)
+        except Exception:
+            _truck_h = None
+    _fctx_h = _resolve_trip_fuel_context(travel, _truck_h)
+    _eff_for_detour = _fctx_h["eff_adj"] if _fctx_h["eff_adj"] > 0 else TRUCK_FUEL_CONSUMPTION_KM_PER_LITER
     detour_distance = request.detour_distance_km
     if detour_distance is None:
         detour_distance = max(
             0.0,
             (float(travel.get("actual_fuel_liters") or 0.0) - float(travel.get("baseline_fuel_liters") or 0.0))
-            * TRUCK_FUEL_CONSUMPTION_KM_PER_LITER,
+            * _eff_for_detour,
         )
     detour_time = request.detour_time_hours
     if detour_time is None:
@@ -502,7 +637,16 @@ def solve_and_persist_hedging(
         hold_wait_hours=request.hold_wait_hours,
         downtime_fixed_fee_idr=request.downtime_fixed_fee_idr,
     )
-    solved = spoilage_hedging_service.solve_hedging_matrix(solve_req, request.inflation_shock_factor)
+    solved = spoilage_hedging_service.solve_hedging_matrix(
+        solve_req,
+        request.inflation_shock_factor,
+        fuel_efficiency_kmpl=_fctx_h["eff_base"],
+        reefer_lph=_fctx_h["reefer_lph_used"] if _fctx_h["reefer_active"] else None,
+        cargo_tonnage=float(travel.get("cargo_tonnage") or 0.0),
+        gross_weight_ton=_fctx_h["gross_weight_ton"],
+        is_reefer=_fctx_h["is_reefer_move"],
+        fuel_rate_override=_fctx_h["fuel_rate"],
+    )
     solved_dict = solved.model_dump()
 
     travel["hedging"] = solved_dict
@@ -579,6 +723,21 @@ def _compute_totals(trips: List[Dict[str, Any]]) -> ERPTotals:
 
 
 def _trip_row(travel: Dict[str, Any]) -> ERPTripRow:
+    _dist = travel.get("baseline_distance_km")
+    _actual_fuel = travel.get("actual_fuel_liters")
+    _recorded = travel.get("actual_recorded")
+    try:
+        _d = float(_dist) if _dist is not None else 0.0
+        _f = float(_actual_fuel) if _actual_fuel is not None else 0.0
+    except (TypeError, ValueError):
+        _d, _f = 0.0, 0.0
+    _has_actual = bool(_recorded) and _d > 0 and _f > 0 and _actual_fuel is not None
+    _economy = round(_d / _f, 2) if _has_actual else None
+    _l100 = round(100.0 / (_d / _f), 1) if _has_actual and (_d / _f) > 0 else None
+    _fuel_source = travel.get("fuel_source")
+    _is_fallback = travel.get("fuel_is_fallback")
+    if _is_fallback is None:
+        _is_fallback = _fuel_source in ("PERTAMINA_FALLBACK", "legacy_3p5")
     return ERPTripRow(
         id=travel["id"],
         truck_id=travel.get("truck_id") or "",
@@ -602,6 +761,21 @@ def _trip_row(travel: Dict[str, Any]) -> ERPTripRow:
         efficiency_pct=_dec(travel.get("efficiency_pct"), 2),
         hedging_policy=travel.get("hedging_policy"),
         created_at=travel.get("created_at"),
+        baseline_distance_km=float(_dist) if _dist is not None else None,
+        actual_fuel_liters=float(_actual_fuel) if _actual_fuel is not None else None,
+        actual_recorded=bool(_recorded) if _recorded is not None else None,
+        fuel_rate_used_idr=float(travel["fuel_rate_used_idr"]) if travel.get("fuel_rate_used_idr") is not None else None,
+        fuel_sk_id=travel.get("fuel_sk_id"),
+        fuel_sk_number=travel.get("fuel_sk_number"),
+        fuel_effective_date=str(travel["fuel_effective_date"]) if travel.get("fuel_effective_date") is not None else None,
+        fuel_source=_fuel_source,
+        fuel_is_fallback=bool(_is_fallback) if _fuel_source is not None or travel.get("fuel_is_fallback") is not None else None,
+        fuel_efficiency_used_kmpl=float(travel["fuel_efficiency_used_kmpl"]) if travel.get("fuel_efficiency_used_kmpl") is not None else None,
+        fuel_efficiency_source=travel.get("fuel_efficiency_source"),
+        fuel_load_factor=float(travel["fuel_load_factor"]) if travel.get("fuel_load_factor") is not None else None,
+        reefer_fuel_lph_used=float(travel["reefer_fuel_lph_used"]) if travel.get("reefer_fuel_lph_used") is not None else None,
+        economy_kmpl=_economy,
+        l_per_100km=_l100,
     )
 
 

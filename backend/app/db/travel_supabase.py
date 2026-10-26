@@ -64,6 +64,12 @@ _ASSET_FIELDS = (
 
 def _asset_to_row(data: Dict[str, Any]) -> Dict[str, Any]:
     row = {k: data.get(k) for k in _ASSET_FIELDS if data.get(k) is not None}
+    # Let the server default (019: gen_random_uuid()::text) fire when the
+    # caller omits id — same omit-when-absent pattern as _travel_to_row.
+    # Omitting (not minting) keeps the PK stable across repeated upserts of
+    # the same truck_id.
+    if not row.get("id"):
+        row.pop("id", None)
     row["sync_status"] = "synced"
     return row
 
@@ -103,12 +109,30 @@ def _row_to_asset(r: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def save_truck_asset(data: Dict[str, Any]) -> Dict[str, Any]:
-    """Upsert a master truck asset (conflict key: truck_id)."""
+    """Upsert a master truck asset (conflict key: truck_id).
+
+    Supabase-first: omit id when absent so the 019 server default
+    (gen_random_uuid()::text) fires — the PK then stays stable across
+    repeated upserts of the same truck_id. Client mint (TRKASSET-*) is kept
+    only as a retry fallback for remotes without the 019 default.
+    """
     sb = _write_client()
-    row = _asset_to_row(data)
-    sb.table("truck_assets").upsert(row, on_conflict="truck_id").execute()
-    saved = get_truck_asset(data["truck_id"])
-    return saved or _row_to_asset({**row, "id": data.get("id")})
+    payload = dict(data)
+    row = _asset_to_row(payload)
+    try:
+        sb.table("truck_assets").upsert(row, on_conflict="truck_id").execute()
+    except Exception:
+        # Retry fallback: mint client-side once (SQLite/offline shape) when
+        # the server has no id default yet.
+        if not row.get("id"):
+            import uuid as _uuid
+
+            row["id"] = payload.get("id") or f"TRKASSET-{_uuid.uuid4().hex[:10]}"
+            sb.table("truck_assets").upsert(row, on_conflict="truck_id").execute()
+        else:
+            raise
+    saved = get_truck_asset(payload["truck_id"])
+    return saved or _row_to_asset({**row, "id": row.get("id") or payload.get("id")})
 
 
 def get_truck_asset(truck_id: str) -> Optional[Dict[str, Any]]:
@@ -204,6 +228,15 @@ def _travel_to_row(data: Dict[str, Any]) -> Dict[str, Any]:
         "hedging_net_savings_idr": data.get("hedging_net_savings_idr"),
         "hedging_solved_at": data.get("hedging_solved_at"),
         "notes": data.get("notes"),
+        "fuel_rate_used_idr": data.get("fuel_rate_used_idr") or 0,
+        "fuel_sk_id": data.get("fuel_sk_id"),
+        "fuel_source": data.get("fuel_source"),
+        "fuel_efficiency_used_kmpl": data.get("fuel_efficiency_used_kmpl"),
+        "reefer_fuel_lph_used": data.get("reefer_fuel_lph_used"),
+        "fuel_effective_date": data.get("fuel_effective_date"),
+        "fuel_sk_number": data.get("fuel_sk_number"),
+        "fuel_efficiency_source": data.get("fuel_efficiency_source"),
+        "fuel_load_factor": data.get("fuel_load_factor"),
         "created_by": data.get("created_by"),
         "sync_status": "synced",
         "delivered_at": data.get("delivered_at"),
@@ -278,6 +311,16 @@ def _row_to_travel(r: Dict[str, Any]) -> Dict[str, Any]:
         "hedging_net_savings_idr": float(hedging_net) if hedging_net is not None else None,
         "hedging_solved_at": r.get("hedging_solved_at"),
         "notes": r.get("notes"),
+        "fuel_rate_used_idr": _f("fuel_rate_used_idr"),
+        "fuel_sk_id": r.get("fuel_sk_id"),
+        "fuel_source": r.get("fuel_source"),
+        "fuel_efficiency_used_kmpl": r.get("fuel_efficiency_used_kmpl"),
+        "reefer_fuel_lph_used": r.get("reefer_fuel_lph_used"),
+        "fuel_effective_date": r.get("fuel_effective_date"),
+        "fuel_sk_number": r.get("fuel_sk_number"),
+        "fuel_efficiency_source": r.get("fuel_efficiency_source"),
+        "fuel_load_factor": r.get("fuel_load_factor"),
+        "fuel_is_fallback": (str(r.get("fuel_source")) in ("PERTAMINA_FALLBACK", "legacy_3p5")) if r.get("fuel_source") is not None else None,
         "inflation_shock_factor": _f("inflation_shock_factor"),
         "created_by": r.get("created_by"),
         "sync_status": r.get("sync_status") or "synced",
@@ -288,16 +331,36 @@ def _row_to_travel(r: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def save_travel(data: Dict[str, Any]) -> Dict[str, Any]:
-    """Upsert one rit ledger row (conflict key: id)."""
-    import uuid as _uuid
+    """Upsert one rit ledger row (conflict key: id).
 
+    Supabase-first: omit id when absent so the 019 server default
+    (gen_random_uuid()::text) fires — no client pre-mint, so repeated saves
+    never rotate the PK. Client mint (RIT-*) is kept only as a retry
+    fallback for remotes without the 019 default.
+    """
     sb = _write_client()
     payload = dict(data)
-    if not payload.get("id"):
-        payload["id"] = f"RIT-{_uuid.uuid4().hex[:10]}"
     row = _travel_to_row(payload)
+    travel_id = row.get("id") or payload.get("id")
+    if not travel_id:
+        # No id yet: insert (no conflict key to upsert on) and return the
+        # server-minted row from the insert response.
+        try:
+            resp = sb.table("travels").insert(row).execute()
+        except Exception:
+            import uuid as _uuid
+
+            travel_id = f"RIT-{_uuid.uuid4().hex[:10]}"
+            row["id"] = travel_id
+            sb.table("travels").upsert(row, on_conflict="id").execute()
+            saved = get_travel(travel_id)
+            return saved or _row_to_travel({**row})
+        rows = (resp.data or []) if resp else []
+        if rows:
+            return _row_to_travel(rows[0])
+        return _row_to_travel({**row})
     sb.table("travels").upsert(row, on_conflict="id").execute()
-    saved = get_travel(payload["id"])
+    saved = get_travel(travel_id)
     return saved or _row_to_travel({**row})
 
 

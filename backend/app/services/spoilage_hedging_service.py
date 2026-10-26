@@ -109,6 +109,26 @@ TRUCK_FUEL_CONSUMPTION_KM_PER_LITER = 3.5  # diesel freight truck, km per liter
 DRIVER_OVERTIME_HOURLY_IDR = 50000.0       # IDR / hour driver overtime
 DEPOT_HOURLY_FEE_IDR = 35000.0             # IDR / hour safe staging + depot security
 
+# Fuel-spec contract (Phase 1/2): per-golongan default efficiency (km/L).
+# NULL asset efficiency MUST resolve via this map. The legacy flat 3.5 km/L
+# constant above remains the GOL_II default and is DEPRECATED as a universal
+# fallback for other golongan.
+GOLONGAN_DEFAULT_KMPL: Dict[str, float] = {
+    "GOL_I": 4.0,
+    "GOL_II": 3.5,
+    "GOL_III": 3.0,
+    "GOL_IV": 2.8,
+    "GOL_V": 2.5,
+}
+LEGACY_FLAT_KMPL_FALLBACK_DEPRECATED = 3.5
+
+# Default reefer genset burn (liters/hour) when a cold-chain unit is flagged
+# as reefer but carries no measured reefer_fuel_lph.
+REEFER_DEFAULT_LPH = 2.0
+
+# fuel_source provenance values persisted per travel row.
+VALID_FUEL_SOURCES = ("ESDM_SK", "PERTAMINA_FALLBACK", "legacy_3p5", "migrated_golongan")
+
 # 4-Tier Perishability Model Configuration
 PERISHABILITY_TIERS: Dict[str, Dict[str, Any]] = {
     "ULTRA_PERISHABLE": {
@@ -150,6 +170,156 @@ def get_effective_fuel_rate(fuel_type: str, inflation_shock_factor: float = 0.0)
     """Pertamina base rate modulated by an explicit inflation shock factor."""
     base_fuel_rate = PERTAMINA_FUEL_BASE_RATES.get((fuel_type or "biosolar").lower(), 6800.0)
     return base_fuel_rate * (1.0 + max(0.0, float(inflation_shock_factor or 0.0)))
+
+
+def _parse_rate_date(at_date: Any) -> Any:
+    """Normalise str/datetime/date/None into a `date` (defaults to today)."""
+    from datetime import date as _date, datetime as _dt
+
+    if at_date is None:
+        return _date.today()
+    if isinstance(at_date, _dt):
+        return at_date.date()
+    if isinstance(at_date, _date):
+        return at_date
+    try:
+        return _dt.fromisoformat(str(at_date)[:26]).date()
+    except Exception:
+        try:
+            return _dt.strptime(str(at_date)[:10], "%Y-%m-%d").date()
+        except Exception:
+            return _date.today()
+
+
+def get_fuel_rate_for_trip(
+    fuel_type: str,
+    region: Optional[str] = None,
+    at_date: Any = None,
+) -> Dict[str, Any]:
+    """
+    Resolve the applicable fuel price for one trip (freeze-at-created_at).
+
+    Lookup order per region candidate:
+      1. Supabase `fuel_prices` row with matching fuel_type + region and the
+         latest effective_date <= at_date, preferring non-fallback (ESDM_SK)
+         rows over PERTAMINA_FALLBACK artifact rows when both apply
+         (016 seed FP-BIOSOLAR-NASIONAL carries effective_date=CURRENT_DATE
+         which otherwise shadows the SK freeze 2026-10-05).
+      2. Fallback to PERTAMINA_FUEL_BASE_RATES with is_fallback=True.
+
+    Region candidates tried in order: [region, "NASIONAL"] (deduped, upper-cased).
+    Returns a dict with: rate_idr, fuel_sk_id (row id or None), sk_number,
+    effective_date (ISO), region, source (ESDM_SK | PERTAMINA_FALLBACK),
+    is_fallback.
+    """
+    from datetime import date as _date
+
+    fuel = (fuel_type or "biosolar").lower()
+    ref_date = _parse_rate_date(at_date)
+    base_rate = float(PERTAMINA_FUEL_BASE_RATES.get(fuel, 6800.0))
+
+    def _fallback() -> Dict[str, Any]:
+        return {
+            "rate_idr": base_rate,
+            "fuel_sk_id": None,
+            "sk_number": None,
+            "effective_date": ref_date.isoformat(),
+            "region": (region or "NASIONAL").upper(),
+            "source": "PERTAMINA_FALLBACK",
+            "is_fallback": True,
+        }
+
+    candidates: List[str] = []
+    if region:
+        candidates.append(str(region).upper())
+    if "NASIONAL" not in candidates:
+        candidates.append("NASIONAL")
+
+    try:
+        from app.db.supabase_client import get_client, get_write_client
+
+        try:
+            sb = get_client()
+        except RuntimeError:
+            sb = get_write_client()
+        for cand in candidates:
+            resp = (
+                sb.table("fuel_prices")
+                .select("*")
+                .eq("fuel_type", fuel)
+                .eq("region", cand)
+                .lte("effective_date", ref_date.isoformat())
+                .order("effective_date", desc=True)
+                .limit(5)
+                .execute()
+            )
+            rows = resp.data or []
+            if rows:
+                # Prefer the newest non-fallback (ESDM_SK) row: the 016
+                # artifact FP-BIOSOLAR-NASIONAL (is_fallback TRUE,
+                # effective_date=CURRENT_DATE) otherwise shadows the SK
+                # freeze 2026-10-05 despite identical price. Old trips keep
+                # working: freeze-at-created_at still keys on at_date, only
+                # the tie-break changes.
+                sk_rows = [x for x in rows if not x.get("is_fallback")]
+                r = sk_rows[0] if sk_rows else rows[0]
+                return {
+                    "rate_idr": float(r.get("price_idr") or base_rate),
+                    "fuel_sk_id": r.get("id"),
+                    "sk_number": r.get("sk_number"),
+                    "effective_date": str(r.get("effective_date") or ref_date.isoformat()),
+                    "region": cand,
+                    "source": "PERTAMINA_FALLBACK" if r.get("is_fallback") else "ESDM_SK",
+                    "is_fallback": bool(r.get("is_fallback", True)),
+                }
+    except Exception as exc:
+        logger.debug("fuel_prices lookup failed, using Pertamina fallback: %s", exc)
+    return _fallback()
+
+
+def resolve_fuel_efficiency_kmpl(
+    truck_efficiency: Optional[float],
+    golongan: str,
+) -> tuple:
+    """
+    Resolve per-trip base efficiency (km/L).
+
+    Priority: explicit asset/trip override -> GOLONGAN_DEFAULT_KMPL[golongan]
+    -> legacy flat 3.5 (DEPRECATED, only for unknown golongan).
+    Returns (eff_base, eff_source) where eff_source is one of
+    "asset_override" | "golongan_default" | "legacy_3p5_flat".
+    """
+    if truck_efficiency is not None and float(truck_efficiency) > 0:
+        return float(truck_efficiency), "asset_override"
+    g = (golongan or "GOL_II").upper()
+    if g in GOLONGAN_DEFAULT_KMPL:
+        return float(GOLONGAN_DEFAULT_KMPL[g]), "golongan_default"
+    return float(LEGACY_FLAT_KMPL_FALLBACK_DEPRECATED), "legacy_3p5_flat"
+
+
+def payload_adjusted_kmpl(
+    eff_base: float,
+    cargo_tonnage: float,
+    gross_weight_ton: float,
+) -> tuple:
+    """
+    Payload penalty model (documented formula):
+
+        load_factor = clamp(cargo_tonnage / gross_weight_ton, 0, 1)
+        eff_adj     = eff_base * (1 - 0.15 * load_factor)
+
+    A fully-loaded truck (load_factor = 1) burns ~15% more fuel per km than
+    empty; the factor is clamped so overload never inverts the efficiency.
+    Returns (eff_adj, load_factor).
+    """
+    try:
+        gross = float(gross_weight_ton or 0.0)
+        cargo = float(cargo_tonnage or 0.0)
+        lf = (cargo / gross) if gross > 0 else 0.0
+    except (TypeError, ValueError):
+        lf = 0.0
+    lf = max(0.0, min(1.0, lf))
+    return float(eff_base) * (1.0 - 0.15 * lf), lf
 
 
 def get_spoilage_loss(cargo_value_idr: float, delta_per_hour: float, delay_hours: float) -> float:
@@ -197,13 +367,29 @@ class SpoilageHedgingService:
     def solve_hedging_matrix(
         self, 
         req: HedgingSolveRequest, 
-        inflation_shock_factor: float = 0.05
+        inflation_shock_factor: float = 0.05,
+        fuel_efficiency_kmpl: Optional[float] = None,
+        reefer_lph: Optional[float] = None,
+        cargo_tonnage: Optional[float] = None,
+        gross_weight_ton: Optional[float] = None,
+        is_reefer: Optional[bool] = None,
+        fuel_rate_override: Optional[float] = None,
     ) -> HedgingSolveResponse:
         """
         Solves the monetary cost matrix for:
         1. CONTINUE: High risk of disruption, severe spoilage exposure, fixed downtime penalty.
         2. REROUTE: Active mitigation via detour, fuel consumption, BPJT tolls, driver overtime.
         3. HOLD: Staging at safe logistics hub, depot fees, reefer diesel genset cost.
+
+        Fuel-spec contract (Phase 2): detour fuel uses an explicit per-trip
+        efficiency - fuel_efficiency_kmpl (asset override) resolved against
+        GOLONGAN_DEFAULT_KMPL[req.vehicle_golongan], with the payload penalty
+        eff_adj = eff * (1 - 0.15 * load_factor) applied when cargo/gross
+        weights are supplied. The legacy global 3.5 km/L inversion is only a
+        last resort for unknown golongan. When reefer_lph is supplied for a
+        reefer cold-chain move, detour/hold reefer burn is priced from fuel
+        volume (lph * hours * fuel rate); otherwise the legacy Rp/hour genset
+        tariff is kept for backward compatibility.
         """
         tier_key, tier_info = self.classify_commodity(req.commodity)
         delta = tier_info["delta"]
@@ -213,9 +399,35 @@ class SpoilageHedgingService:
         cargo_weight_kg = req.cargo_tonnage * 1000.0
         cargo_value_idr = cargo_weight_kg * price_per_kg
 
-        # 2. Fuel Rate Modulated by Inflation Shock
-        effective_fuel_rate = get_effective_fuel_rate(req.fuel_type, inflation_shock_factor)
-        fuel_consumption_km_per_liter = TRUCK_FUEL_CONSUMPTION_KM_PER_LITER
+        # 2. Fuel Rate Modulated by Inflation Shock (frozen override wins)
+        if fuel_rate_override is not None and float(fuel_rate_override) > 0:
+            effective_fuel_rate = float(fuel_rate_override)
+        else:
+            effective_fuel_rate = get_effective_fuel_rate(req.fuel_type, inflation_shock_factor)
+
+        # 2b. Per-trip efficiency (no more global 3.5 inversion)
+        _eff_base, _eff_source = resolve_fuel_efficiency_kmpl(
+            fuel_efficiency_kmpl, req.vehicle_golongan
+        )
+        _cargo_for_lf = cargo_tonnage if cargo_tonnage is not None else req.cargo_tonnage
+        _gross_for_lf = gross_weight_ton if gross_weight_ton is not None else 0.0
+        if _gross_for_lf and float(_gross_for_lf) > 0:
+            fuel_consumption_km_per_liter, _load_factor = payload_adjusted_kmpl(
+                _eff_base, _cargo_for_lf, _gross_for_lf
+            )
+        else:
+            fuel_consumption_km_per_liter, _load_factor = float(_eff_base), 0.0
+
+        # 2c. Reefer burn mode: fuel-volume pricing when a measured lph is
+        # supplied for a reefer cold-chain move, else legacy Rp/hour tariff.
+        _reefer_is_reefer_move = bool(is_reefer) if is_reefer is not None else True
+        _use_reefer_lph = (
+            tier_info.get("requires_reefer")
+            and _reefer_is_reefer_move
+            and reefer_lph is not None
+            and float(reefer_lph) > 0
+        )
+        _reefer_lph_val = float(reefer_lph) if _use_reefer_lph else 0.0
 
         # 3. Spoilage Value Loss Calculation (Exponential Decay)
         # ValueLoss(t) = CargoValue * (1 - e^(-delta * t))
@@ -229,7 +441,13 @@ class SpoilageHedgingService:
         p_risk = max(0.0, min(1.0, req.p_disruption))
         continue_spoilage_expected = p_risk * spoilage_loss_idr
         continue_downtime = p_risk * req.downtime_fixed_fee_idr
-        continue_reefer_cost = (delay_hours * tier_info["genset_cost_per_hour"]) if tier_info.get("requires_reefer") else 0.0
+        if tier_info.get("requires_reefer"):
+            if _use_reefer_lph:
+                continue_reefer_cost = delay_hours * _reefer_lph_val * effective_fuel_rate
+            else:
+                continue_reefer_cost = delay_hours * tier_info["genset_cost_per_hour"]
+        else:
+            continue_reefer_cost = 0.0
         cost_continue = continue_spoilage_expected + continue_downtime + continue_reefer_cost
 
         continue_reefer_expl = f" dan biaya genset pendingin Rp {int(continue_reefer_cost):,}" if continue_reefer_cost > 0 else ""
@@ -259,7 +477,13 @@ class SpoilageHedgingService:
         reroute_toll_cost = self.get_bpjt_toll_cost(req.toll_segments, req.vehicle_golongan)
         driver_overtime_hourly_wage = DRIVER_OVERTIME_HOURLY_IDR
         reroute_labor_cost = req.detour_time_hours * driver_overtime_hourly_wage
-        reroute_reefer_cost = (req.detour_time_hours * tier_info["genset_cost_per_hour"]) if tier_info.get("requires_reefer") else 0.0
+        if tier_info.get("requires_reefer"):
+            if _use_reefer_lph:
+                reroute_reefer_cost = req.detour_time_hours * _reefer_lph_val * effective_fuel_rate
+            else:
+                reroute_reefer_cost = req.detour_time_hours * tier_info["genset_cost_per_hour"]
+        else:
+            reroute_reefer_cost = 0.0
 
         cost_reroute = reroute_fuel_cost + reroute_toll_cost + reroute_labor_cost + reroute_reefer_cost
 
@@ -272,7 +496,9 @@ class SpoilageHedgingService:
                 "bpjt_toll_tariff": round(reroute_toll_cost, 0),
                 "driver_overtime": round(reroute_labor_cost, 0),
                 "reefer_genset_fuel": round(reroute_reefer_cost, 0),
-                "detour_km": req.detour_distance_km
+                "detour_km": req.detour_distance_km,
+                "fuel_kmpl_used": round(fuel_consumption_km_per_liter, 3),
+                "fuel_rate_idr": round(effective_fuel_rate, 0),
             },
             explanation=(
                 f"Pengalihan rute alternatif sejauh +{req.detour_distance_km:.1f} km (+{req.detour_time_hours:.1f} jam). "
@@ -289,7 +515,10 @@ class SpoilageHedgingService:
         hold_hours = max(1.0, req.hold_wait_hours)
         depot_hourly_fee = DEPOT_HOURLY_FEE_IDR
         hold_depot_cost = hold_hours * depot_hourly_fee
-        hold_reefer_cost = hold_hours * tier_info["genset_cost_per_hour"]
+        if tier_info.get("requires_reefer") and _use_reefer_lph:
+            hold_reefer_cost = hold_hours * _reefer_lph_val * effective_fuel_rate
+        else:
+            hold_reefer_cost = hold_hours * tier_info["genset_cost_per_hour"]
         
         # In hold, small spoilage decay still occurs if non-reefer produce
         hold_spoilage_decay = 0.0

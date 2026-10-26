@@ -30,40 +30,43 @@ router = APIRouter(prefix="/evaluation", tags=["Evaluation & Benchmark Dashboard
 BENCHMARK_REPORT_PATH = Path(__file__).resolve().parent.parent.parent.parent / "test-results" / "benchmark_evaluation_report.json"
 
 # Static Fallback Benchmark Dataset (Ground-Truth Sumatra N=60)
+# Synced 2026-10-26 to canonical scripts/evaluate_metrics.py output
+# (P_max-normalized forecast; TP=35 FP=0 TN=25 FN=0; Brier=0.0937).
+# Used only when test-results/benchmark_evaluation_report.json is unreadable.
 DEFAULT_BENCHMARK_REPORT: Dict[str, Any] = {
-    "timestamp": "2026-09-23T07:15:10.664988",
+    "timestamp": "2026-10-26T10:50:51.599108",
     "total_scenarios": 60,
     "confusion_matrix": {
-        "true_positives": 34,
+        "true_positives": 35,
         "false_positives": 0,
         "true_negatives": 25,
-        "false_negatives": 1
+        "false_negatives": 0
     },
     "metrics": {
         "precision": 1.0,
-        "recall": 0.9714,
-        "f1_score": 0.9855,
+        "recall": 1.0,
+        "f1_score": 1.0,
         "false_positive_rate": 0.0,
-        "accuracy": 0.9833,
-        "mean_latency_ms": 0.019,
-        "total_latency_ms": 1.28
+        "accuracy": 1.0,
+        "mean_latency_ms": 0.05,
+        "total_latency_ms": 4.29
     },
     "calibration": {
-        "brier_score": 0.0782,
-        "expected_calibration_error": 0.1899,
+        "brier_score": 0.0937,
+        "expected_calibration_error": 0.1994,
         "platt_calibrated_brier": 0.0,
         "isotonic_calibrated_brier": 0.0,
         "reliability_bins": [
             {"bin_index": 0, "range": [0.0, 0.1], "sample_count": 0, "mean_confidence": 0.05, "empirical_accuracy": 0.0, "calibration_error": 0.0},
             {"bin_index": 1, "range": [0.1, 0.2], "sample_count": 0, "mean_confidence": 0.15, "empirical_accuracy": 0.0, "calibration_error": 0.0},
-            {"bin_index": 2, "range": [0.2, 0.3], "sample_count": 7, "mean_confidence": 0.2604, "empirical_accuracy": 0.0, "calibration_error": 0.2604},
-            {"bin_index": 3, "range": [0.3, 0.4], "sample_count": 5, "mean_confidence": 0.3758, "empirical_accuracy": 0.0, "calibration_error": 0.3758},
-            {"bin_index": 4, "range": [0.4, 0.5], "sample_count": 6, "mean_confidence": 0.4414, "empirical_accuracy": 0.0, "calibration_error": 0.4414},
-            {"bin_index": 5, "range": [0.5, 0.6], "sample_count": 4, "mean_confidence": 0.5227, "empirical_accuracy": 0.0, "calibration_error": 0.5227},
-            {"bin_index": 6, "range": [0.6, 0.7], "sample_count": 3, "mean_confidence": 0.6299, "empirical_accuracy": 0.0, "calibration_error": 0.6299},
-            {"bin_index": 7, "range": [0.7, 0.8], "sample_count": 0, "mean_confidence": 0.75, "empirical_accuracy": 0.0, "calibration_error": 0.0},
-            {"bin_index": 8, "range": [0.8, 0.9], "sample_count": 1, "mean_confidence": 0.8483, "empirical_accuracy": 1.0, "calibration_error": 0.1517},
-            {"bin_index": 9, "range": [0.9, 1.0], "sample_count": 34, "mean_confidence": 0.9731, "empirical_accuracy": 1.0, "calibration_error": 0.0269}
+            {"bin_index": 2, "range": [0.2, 0.3], "sample_count": 7, "mean_confidence": 0.2567, "empirical_accuracy": 0.0, "calibration_error": 0.2567},
+            {"bin_index": 3, "range": [0.3, 0.4], "sample_count": 5, "mean_confidence": 0.3656, "empirical_accuracy": 0.0, "calibration_error": 0.3656},
+            {"bin_index": 4, "range": [0.4, 0.5], "sample_count": 2, "mean_confidence": 0.4163, "empirical_accuracy": 0.0, "calibration_error": 0.4163},
+            {"bin_index": 5, "range": [0.5, 0.6], "sample_count": 6, "mean_confidence": 0.5278, "empirical_accuracy": 0.0, "calibration_error": 0.5278},
+            {"bin_index": 6, "range": [0.6, 0.7], "sample_count": 2, "mean_confidence": 0.6469, "empirical_accuracy": 0.0, "calibration_error": 0.6469},
+            {"bin_index": 7, "range": [0.7, 0.8], "sample_count": 4, "mean_confidence": 0.7346, "empirical_accuracy": 0.25, "calibration_error": 0.4846},
+            {"bin_index": 8, "range": [0.8, 0.9], "sample_count": 0, "mean_confidence": 0.85, "empirical_accuracy": 0.0, "calibration_error": 0.0},
+            {"bin_index": 9, "range": [0.9, 1.0], "sample_count": 34, "mean_confidence": 0.9674, "empirical_accuracy": 1.0, "calibration_error": 0.0326}
         ]
     },
     "thresholds": {
@@ -146,7 +149,7 @@ TEST_CASES_DATA: List[Dict[str, Any]] = [
     {"test_id": "TEST-FR11-06", "fr_id": "FR-11", "category": "Consensus, Calibration & CPU Routing", "module": "test_consensus_calibration.py::test_expected_calibration_error", "test_type": "Unit", "scenario": "Partitioning predictions into 10 uniform intervals", "expected_invariant": "ECE correctly measures weighted bin accuracy gap", "result": "Passed", "execution_time_ms": 1.8},
     {"test_id": "TEST-FR11-07", "fr_id": "FR-11", "category": "Consensus, Calibration & CPU Routing", "module": "test_consensus_calibration.py::test_platt_scaling_calibrator", "test_type": "Unit", "scenario": "Fitting Platt logistic scaling on uncalibrated probabilities", "expected_invariant": "Sigmoid output bounded strictly in (0, 1), reduces ECE", "result": "Passed", "execution_time_ms": 8.5},
     {"test_id": "TEST-FR11-08", "fr_id": "FR-11", "category": "Consensus, Calibration & CPU Routing", "module": "test_consensus_calibration.py::test_isotonic_regression_calibrator", "test_type": "Unit", "scenario": "Applying Isotonic Regression via PAVA algorithm", "expected_invariant": "Calibrated probabilities strictly non-decreasing monotonic", "result": "Passed", "execution_time_ms": 4.2},
-    {"test_id": "TEST-FR11-09", "fr_id": "FR-11", "category": "Consensus, Calibration & CPU Routing", "module": "test_consensus_calibration.py::test_benchmark_brier_score_threshold_nfr4", "test_type": "Unit", "scenario": "Evaluation on N=60 Sumatra benchmark dataset", "expected_invariant": "Brier Score BS = 0.0782 <= 0.10 target", "result": "Passed", "execution_time_ms": 2.1},
+    {"test_id": "TEST-FR11-09", "fr_id": "FR-11", "category": "Consensus, Calibration & CPU Routing", "module": "test_consensus_calibration.py::test_benchmark_brier_score_threshold_nfr4", "test_type": "Unit", "scenario": "Evaluation on N=60 Sumatra benchmark dataset", "expected_invariant": "Brier Score BS = 0.0937 <= 0.10 target", "result": "Passed", "execution_time_ms": 2.1},
     {"test_id": "TEST-FR11-10", "fr_id": "FR-11", "category": "Consensus, Calibration & CPU Routing", "module": "test_cpu_routing_weather.py::test_road_network_cache_integrity", "test_type": "Unit", "scenario": "Loading data/road_network_sumatra.json graph", "expected_invariant": "Graph contains 54 arterial nodes and 60 bidirectional edges", "result": "Passed", "execution_time_ms": 5.8},
     {"test_id": "TEST-FR11-11", "fr_id": "FR-11", "category": "Consensus, Calibration & CPU Routing", "module": "test_cpu_routing_weather.py::test_cpu_routing_shortest_path_latency", "test_type": "Unit", "scenario": "Running NetworkX Dijkstra from Belawan to Tebing Tinggi", "expected_invariant": "Returns valid path in < 10 ms CPU latency (measured; see compute_time_ms)", "result": "Passed", "execution_time_ms": 1.4},
     {"test_id": "TEST-FR11-12", "fr_id": "FR-11", "category": "Consensus, Calibration & CPU Routing", "module": "test_cpu_routing_weather.py::test_cpu_routing_hazard_avoidance", "test_type": "Unit", "scenario": "Injecting flood hazard polygon over Medan-Tebing Tinggi", "expected_invariant": "Weights arterial edge with penalty, routes via Lubuk Pakam detour", "result": "Passed", "execution_time_ms": 2.2},
@@ -323,7 +326,7 @@ async def get_benchmark_report():
                 data = json.load(f)
             return BenchmarkReportResponse(
                 status="success",
-                timestamp=data.get("timestamp", "2026-09-23T07:15:10.664988"),
+                timestamp=data.get("timestamp", "2026-10-26T10:50:51.599108"),
                 total_scenarios=data.get("total_scenarios", 60),
                 confusion_matrix=ConfusionMatrix(**data.get("confusion_matrix", DEFAULT_BENCHMARK_REPORT["confusion_matrix"])),
                 metrics=EvaluationMetrics(**data.get("metrics", DEFAULT_BENCHMARK_REPORT["metrics"])),

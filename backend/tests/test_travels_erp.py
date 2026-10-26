@@ -31,6 +31,24 @@ def cleanup():
                 local_storage.delete_travel(travel["id"])
         local_storage.delete_truck_asset(TRUCK_ID)
         local_storage.delete_custom_vehicle(LEGACY_ID)
+        # Phase 4: the same tenant ids must not leak across runs on the shared
+        # remote Supabase either — purge both stores (best-effort, hermetic).
+        try:
+            from app.db import travel_supabase
+
+            if travel_supabase.is_configured():
+                for travel in travel_supabase.list_travels(limit=5000):
+                    if travel.get("truck_id") in (TRUCK_ID, LEGACY_ID) or travel.get("company_id") == COMPANY:
+                        try:
+                            travel_supabase.delete_travel(travel["id"])
+                        except Exception:
+                            pass
+                try:
+                    travel_supabase.delete_truck_asset(TRUCK_ID)
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
     _purge()
     yield
@@ -398,3 +416,148 @@ def test_erp_summary_is_empty_not_fabricated():
     assert body["totals"]["total_trips"] == 0
     assert body["totals"]["cost_saved_idr"] == 0
     assert body["trips"] == []
+
+
+# ==========================================
+# PHASE 4 — fuel-provenance exposure on ERPTripRow
+# ==========================================
+
+def _erp_trips(company: str = COMPANY):
+    res = client.get("/api/v1/erp/summary", headers=DISPATCHER, params={"company_id": company})
+    assert res.status_code == 200, res.text
+    return res.json()
+
+
+def test_erp_trip_row_exposes_fuel_provenance():
+    """Ledger SK/eff provenance must reach the dispatcher trip row (Phase 3 UI reads it)."""
+    _register_truck()
+    created = client.post("/api/v1/fleet/travels", headers=DISPATCHER, json=_travel_payload()).json()
+    row = _erp_trips()["trips"][0]
+    assert row["id"] == created["id"]
+    # Biosolar 6.800/L. Hermetic SQLite has no fuel_prices rows (sk None,
+    # PERTAMINA_FALLBACK); remote Supabase carries the 018 real SK rows
+    # (SK 218.K/MG.01/MEM.M/2022, ESDM_SK, same 6800 rate). Both modes must
+    # agree on rate; provenance assertions branch on which seed is present.
+    assert row["fuel_rate_used_idr"] == pytest.approx(6800.0, abs=1)
+    assert row["fuel_sk_id"] is None or str(row["fuel_sk_id"]).startswith("FP-")
+    assert row["fuel_sk_number"] in (None, "218.K/MG.01/MEM.M/2022")
+    if row["fuel_sk_number"] is None:
+        assert row["fuel_source"] == "PERTAMINA_FALLBACK"
+        assert row["fuel_is_fallback"] is True
+    else:
+        assert row["fuel_source"] == "ESDM_SK"
+        assert row["fuel_is_fallback"] is False
+    # GOL_II default 3.5 km/L with payload penalty: 10t / 14t gross
+    assert row["fuel_efficiency_source"] == "golongan_default"
+    assert row["fuel_efficiency_used_kmpl"] == pytest.approx(3.5 * (1 - 0.15 * (10.0 / 14.0)), abs=0.01)
+    assert row["fuel_load_factor"] == pytest.approx(10.0 / 14.0, abs=0.001)
+    # Non-reefer commodity (cabai) on a non-reefer truck: no reefer burn
+    assert row["reefer_fuel_lph_used"] == pytest.approx(0.0, abs=1e-9)
+    # Economy = measured distance / measured actual fuel; L/100km is its inverse
+    assert row["actual_recorded"] is True
+    assert row["baseline_distance_km"] and row["baseline_distance_km"] > 0
+    assert row["actual_fuel_liters"] == pytest.approx(22.0, abs=1e-9)
+    assert row["economy_kmpl"] == pytest.approx(row["baseline_distance_km"] / 22.0, abs=0.01)
+    assert row["l_per_100km"] == pytest.approx(100.0 / row["economy_kmpl"], abs=0.05)
+
+
+def test_erp_trip_row_null_actual_excluded_from_economy():
+    """Planned rits (aktual belum diinput) carry no economy — excluded, not zero."""
+    _register_truck()
+    client.post(
+        "/api/v1/fleet/travels",
+        headers=DISPATCHER,
+        json=_travel_payload(
+            actual_time_hours=None,
+            actual_fuel_liters=None,
+            actual_toll_segments=None,
+            rerouted=False,
+            status="planned",
+            disruption_id=None,
+        ),
+    )
+    row = _erp_trips()["trips"][0]
+    assert row["actual_recorded"] is False
+    assert row["economy_kmpl"] is None
+    assert row["l_per_100km"] is None
+
+
+def test_erp_trip_row_asset_override_efficiency_and_reefer():
+    """Per-truck efficiency override + reefer L/h flow into the trip row."""
+    client.post(
+        "/api/v1/fleet/trucks",
+        headers=DISPATCHER,
+        json={
+            "truck_id": TRUCK_ID,
+            "name": "Truk Reefer Uji",
+            "vehicle_golongan": "GOL_II",
+            "company_id": COMPANY,
+            "gross_weight_ton": 20.0,
+            "fuel_type": "biosolar",
+            "fuel_efficiency_kmpl": 4.2,
+            "is_reefer": True,
+            "reefer_fuel_lph": 2.5,
+        },
+    )
+    assert client.post(
+        "/api/v1/fleet/travels", headers=DISPATCHER, json=_travel_payload(commodity_key="ikan_segar")
+    ).status_code == 201
+    row = _erp_trips()["trips"][0]
+    assert row["fuel_efficiency_source"] == "asset_override"
+    assert row["fuel_efficiency_used_kmpl"] == pytest.approx(4.2 * (1 - 0.15 * (10.0 / 20.0)), abs=0.01)
+    assert row["reefer_fuel_lph_used"] == pytest.approx(2.5, abs=1e-9)
+
+
+def test_erp_trip_row_golongan_default_efficiency():
+    """GOL_V without override resolves via GOLONGAN_DEFAULT_KMPL, never flat 3.5."""
+    client.post(
+        "/api/v1/fleet/trucks",
+        headers=DISPATCHER,
+        json={
+            "truck_id": TRUCK_ID,
+            "name": "Truk Gol V Uji",
+            "vehicle_golongan": "GOL_V",
+            "company_id": COMPANY,
+            "gross_weight_ton": 20.0,
+            "fuel_type": "biosolar",
+        },
+    )
+    assert client.post(
+        "/api/v1/fleet/travels", headers=DISPATCHER, json=_travel_payload()
+    ).status_code == 201
+    row = _erp_trips()["trips"][0]
+    assert row["fuel_efficiency_source"] == "golongan_default"
+    assert row["fuel_efficiency_used_kmpl"] == pytest.approx(2.5 * (1 - 0.15 * (10.0 / 20.0)), abs=0.01)
+
+
+def test_erp_negative_savings_surfaced_as_kerugian():
+    """Loss-making rits stay visible with negative savings (never hidden)."""
+    _register_truck()
+    client.post(
+        "/api/v1/fleet/travels",
+        headers=DISPATCHER,
+        json=_travel_payload(
+            actual_time_hours=20.0,
+            actual_fuel_liters=60.0,
+            status="delivered",
+        ),
+    )
+    body = _erp_trips()
+    row = body["trips"][0]
+    assert row["saved_cost_idr"] < 0
+    assert body["totals"]["cost_saved_idr"] < 0
+    # Economy still resolves from measured actuals even on a loss
+    assert row["economy_kmpl"] == pytest.approx(row["baseline_distance_km"] / 60.0, abs=0.01)
+
+
+def test_regulator_aggregate_hides_per_rit_provenance():
+    """REGULATOR_AGGREGATE carries totals only — no per-rit fuel/SK detail."""
+    _register_truck()
+    client.post("/api/v1/fleet/travels", headers=DISPATCHER, json=_travel_payload())
+    reg = client.get("/api/v1/erp/summary", headers=REGULATOR, params={"company_id": COMPANY})
+    assert reg.status_code == 200
+    reg_body = reg.json()
+    assert reg_body["scope"] == "REGULATOR_AGGREGATE"
+    assert reg_body["trips"] == []
+    assert reg_body["totals"]["total_trips"] == 1
+    assert reg_body["totals"]["baseline_cost_idr"] > 0

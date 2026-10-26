@@ -7,6 +7,7 @@ import type {
   ERPTotals,
   LaporanFilters,
 } from './types';
+import { calculateFuelEconomyKmpl, litersPer100Km } from './tripCostCalculator';
 import type { LaporanGranularity } from '@/components/dashboard/LaporanFilterBar';
 
 export function escapeLaporanHtml(str: string): string {
@@ -138,10 +139,24 @@ export function buildLaporanCSV(ctx: LaporanExportContext): string {
     'saved_fuel_liters',
     'saved_time_hours',
     'efficiency_pct',
+    'baseline_distance_km',
+    'actual_fuel_liters',
+    'economy_kmpl',
+    'l_per_100km',
+    'fuel_rate_used_idr',
+    'fuel_sk_number',
+    'fuel_is_fallback',
+    'fuel_efficiency_used_kmpl',
+    'reefer_fuel_lph_used',
     'created_at',
   ];
   const lines = [header.join(',')];
   for (const t of filtered) {
+    const kmpl = calculateFuelEconomyKmpl(
+      t.baseline_distance_km ?? null,
+      t.actual_fuel_liters ?? null
+    );
+    const l100 = litersPer100Km(kmpl);
     lines.push(
       [
         t.id,
@@ -154,6 +169,15 @@ export function buildLaporanCSV(ctx: LaporanExportContext): string {
         t.saved_fuel_liters,
         t.saved_time_hours,
         t.efficiency_pct,
+        t.baseline_distance_km ?? '',
+        t.actual_fuel_liters ?? '',
+        kmpl != null ? kmpl.toFixed(2) : '',
+        l100 != null ? l100.toFixed(1) : '',
+        t.fuel_rate_used_idr ?? '',
+        t.fuel_sk_number ?? '',
+        t.fuel_is_fallback === true || t.fuel_source === 'PERTAMINA_FALLBACK' ? 'fallback' : '',
+        t.fuel_efficiency_used_kmpl ?? '',
+        t.reefer_fuel_lph_used ?? '',
         t.created_at ?? '',
       ]
         .map(csvCell)
@@ -205,16 +229,44 @@ export function printLaporanPDF(ctx: LaporanExportContext): boolean {
     filtered.length > 0 && !isAggregateOnly
       ? filtered
           .map(
-            (t) => `
+            (t) => {
+              const kmpl = calculateFuelEconomyKmpl(
+                t.baseline_distance_km ?? null,
+                t.actual_fuel_liters ?? null
+              );
+              const l100 = litersPer100Km(kmpl);
+              const isFallback =
+                t.fuel_is_fallback === true || t.fuel_source === 'PERTAMINA_FALLBACK';
+              const economyCell =
+                kmpl != null && l100 != null
+                  ? `${kmpl.toFixed(2)} km/L (${l100.toFixed(1)} L/100km)`
+                  : 'belum diinput';
+              const skCell = t.fuel_sk_number
+                ? escapeLaporanHtml(t.fuel_sk_number)
+                : isFallback
+                  ? 'fallback'
+                  : '—';
+              const reeferCell =
+                t.reefer_fuel_lph_used != null && Number(t.reefer_fuel_lph_used) > 0
+                  ? `${Number(t.reefer_fuel_lph_used).toLocaleString('id-ID')} L/jam`
+                  : '—';
+              const savedCell =
+                Number(t.saved_cost_idr) < 0
+                  ? `kerugian ${escapeLaporanHtml(formatIDR(t.saved_cost_idr))}`
+                  : escapeLaporanHtml(formatIDR(t.saved_cost_idr));
+              return `
       <tr>
         <td>${escapeLaporanHtml(t.id)}</td>
         <td>${escapeLaporanHtml(t.truck_id)}${t.truck_name ? ` (${escapeLaporanHtml(t.truck_name)})` : ''}</td>
         <td>${escapeLaporanHtml(t.origin_name)} → ${escapeLaporanHtml(t.destination_name)}<div style="font-size:10px;color:#64748b;">${escapeLaporanHtml(t.commodity_key)} • ${Number(t.cargo_tonnage ?? 0).toLocaleString('id-ID')} ton • ${escapeLaporanHtml(t.status)}</div></td>
-        <td style="text-align:right;">${escapeLaporanHtml(formatIDR(t.saved_cost_idr))}</td>
-      </tr>`
+        <td>${escapeLaporanHtml(economyCell)}</td>
+        <td>${skCell}${reeferCell !== '—' ? ` • ${escapeLaporanHtml(reeferCell)}` : ''}</td>
+        <td style="text-align:right;">${savedCell}</td>
+      </tr>`;
+            }
           )
           .join('')
-      : `<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:24px;">${
+      : `<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:24px;">${
           isAggregateOnly
             ? 'Rincian per rit disembunyikan pada peran pengawas (agregat saja).'
             : 'Tidak ada rit yang cocok dengan filter ini.'
@@ -246,7 +298,7 @@ export function printLaporanPDF(ctx: LaporanExportContext): boolean {
     <div class="kpi-card"><div class="kpi-label">Rit gagal</div><div class="kpi-value">${totals?.failed_trips ?? 0}</div></div>
   </div>
   <div class="filter-badge">Filter Aktif: ${badge}</div>
-  <table class="table"><thead><tr><th>ID rit</th><th>Truk</th><th>Rute</th><th style="text-align:right;">Hemat</th></tr></thead><tbody>${tripRows}</tbody></table>
+  <table class="table"><thead><tr><th>ID rit</th><th>Truk</th><th>Rute</th><th>Ekonomi</th><th>SK / Reefer</th><th style="text-align:right;">Hemat</th></tr></thead><tbody>${tripRows}</tbody></table>
   <div class="footer">Laporan Penghematan Logistik • PreHub • Nilai negatif ditampilkan sebagai kerugian aktual</div>
   </body></html>`;
 

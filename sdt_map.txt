@@ -1,0 +1,96 @@
+﻿P167 sdt=0 img=0 style=Heading 1 len=52 :: Analisis Kebutuhan dan Desain Solusi Perangkat Lunak
+P168 sdt=0 img=0 style=Heading 2 len=27 :: Analisis Kebutuhan Pengguna
+P169 sdt=0 img=0 style=Normal len=358 :: PreHub dirancang untuk Operations Coordinator atau Logistics Dispatcher, yaitu pengguna yang memanta
+P170 sdt=0 img=0 style=Heading 4 len=18 :: Analisis Kebutuhan
+P171 sdt=0 img=0 style=Normal len=531 :: Kebutuhan tersebut diterjemahkan menjadi fungsi utama PreHub: integrasi data multisumber, deteksi in
+P172 sdt=0 img=0 style=Normal len=107 :: Berikut pula user persona PreHub yang menjadi bukti proses emphatize dari pengembangan perangkat lun
+P173 sdt=0 img=1 style=Normal len=0 :: 
+P174 sdt=0 img=0 style=Heading 5 len=12 :: User Persona
+P175 sdt=0 img=0 style=Normal len=134 :: Merangkum hasil analisis dan persona yang ada didapatkan use case canvas untuk memperkuat analisis k
+P176 sdt=0 img=1 style=Normal len=0 :: 
+P177 sdt=0 img=0 style=Heading 5 len=15 :: Use Case Canvas
+P178 sdt=0 img=0 style=Heading 2 len=32 :: Desain Solusi dan Integrasi Data
+P179 sdt=0 img=0 style=Normal len=514 :: PreHub menggunakan arsitektur pengolahan data multisumber yang menggabungkan data terstruktur (cuaca
+P180 sdt=1 img=0 style=Normal len=500 :: Untuk prakiraan cuaca, PreHub memanfaatkan FourCastNet berbasis Adaptive Fourier Neural Operator  ya
+P181 sdt=0 img=0 style=Heading 2 len=36 :: Desain Deteksi dan Validasi Gangguan
+P182 sdt=0 img=0 style=Normal len=587 :: PreHub membedakan indikasi gangguan dari gangguan yang telah tervalidasi. Setiap agen menghasilkan s
+P183 sdt=0 img=0 style=Normal len=746 :: Validasi tidak dilakukan dengan menghitung jumlah sumber secara sederhana karena beberapa sumber dap
+P184 sdt=0 img=0 style=Heading 2 len=44 :: Penentuan Confidence dan Probabilitas Risiko
+P185 sdt=0 img=0 style=Normal len=119 :: PreHub memisahkan evidence confidence dari probabilitas gangguan karena keduanya merepresentasikan k
+P186 sdt=0 img=0 style=Normal len=235 :: Evidence confidence menunjukkan kekuatan dukungan suatu bukti terhadap indikasi tertentu. Penilaiann
+P187 sdt=0 img=0 style=Normal len=372 :: Sementara itu, probabilitas gangguan menunjukkan kemungkinan bahwa kondisi yang teridentifikasi bena
+P188 sdt=0 img=0 style=Normal len=354 :: Probabilitas kemudian dievaluasi menggunakan data pengujian yang memiliki outcome aktual. Kalibrasi 
+P189 sdt=0 img=0 style=Normal len=319 :: Evaluasi probabilitas menggunakan Brier Score dan analisis kalibrasi, sedangkan precision, recall, d
+P190 sdt=0 img=0 style=Heading 2 len=36 :: Penentuan Tingkat Risiko Operasional
+P191 sdt=0 img=0 style=Normal len=645 :: PreHub tidak menentukan risiko hanya berdasarkan nilai confidence. Suatu kejadian dengan probabilita
+P192 sdt=0 img=0 style=Normal len=64 :: Secara konseptual, mekanisme tersebut direpresentasikan sebagai,
+P193 sdt=0 img=0 style=Normal len=65 :: Operational Risk = f(Disruption Probability, Operational Impact) 
+P194 sdt=0 img=0 style=Normal len=345 :: Bentuk fungsi, bobot, dan ambang kategorisasi risiko ditentukan berdasarkan karakteristik data dan d
+P195 sdt=0 img=0 style=Normal len=270 :: Jika probabilitas tinggi tetapi dampak rendah, sistem tidak otomatis memberikan prioritas intervensi
+P196 sdt=0 img=0 style=Heading 2 len=33 :: Desain Multi-Agent dan Orkestrasi
+P197 sdt=0 img=0 style=Normal len=113 :: PreHub membagi proses analitik menjadi beberapa komponen spesialis berdasarkan domain data dan jenis
+P198 sdt=0 img=0 style=Heading 4 len=19 :: Komponen Orkestrasi
+P199 sdt=0 img=0 style=Normal len=263 :: Pembagian tersebut digunakan karena setiap domain memiliki sumber data, metode analisis, dan bentuk 
+P200 sdt=1 img=0 style=Normal len=247 :: Orkestrasi dilakukan menggunakan LangGraph, yang memang dirancang sebagai framework/runtime untuk wo
+P201 sdt=0 img=1 style=Normal len=0 :: 
+P202 sdt=0 img=0 style=Heading 5 len=24 :: Agentic Workflow Diagram
+P203 sdt=0 img=0 style=Normal len=223 :: Dalam PreHub, LangGraph berfungsi sebagai orchestrator, bukan sumber kebenaran. Validasi evidence, p
+P204 sdt=0 img=0 style=Heading 2 len=40 :: Analisis Dampak dan Rekomendasi Mitigasi
+P205 sdt=0 img=0 style=Normal len=339 :: Setelah gangguan tervalidasi dan memiliki relevansi terhadap perjalanan, PreHub melakukan analisis d
+P206 sdt=1 img=0 style=Normal len=381 :: Untuk alternatif rute, PreHub menggunakan NVIDIA cuOpt sebagai mesin optimasi. Permasalahan rute dir
+P207 sdt=0 img=0 style=Normal len=258 :: Keluaran optimasi tidak langsung diterapkan kepada armada. PreHub membandingkan alternatif yang ters
+P208 sdt=0 img=0 style=List Paragraph len=36 :: Continue, mempertahankan perjalanan,
+P209 sdt=0 img=0 style=List Paragraph len=37 :: Reroute, menggunakan rute alternatif,
+P210 sdt=0 img=0 style=List Paragraph len=59 :: Hold/Delay, menunda perjalanan sampai kondisi lebih sesuai.
+P211 sdt=0 img=0 style=Normal len=281 :: Operator kemudian memilih tindakan berdasarkan informasi sistem dan konteks lapangan. Dengan demikia
+P212 sdt=0 img=0 style=Heading 2 len=41 :: Transparansi Keputusan dan Evidence Chain
+P213 sdt=1 img=0 style=Normal len=743 :: PreHub menyediakan fitur Evidence Chain untuk menelusuri alur keputusan mulai dari data sumber, anal
+P214 sdt=0 img=0 style=Heading 2 len=22 :: Desain Evaluasi Solusi
+P215 sdt=0 img=0 style=Normal len=474 :: Evaluasi PreHub dilakukan secara bertingkat pada tiga tingkatan, yaitu komponen, integrasi, dan end-
+P216 sdt=0 img=0 style=Normal len=549 :: Tingkat integrasi menguji kelancaran alur data dari pengolahan awal hingga penyusunan rekomendasi, s
+P217 sdt=0 img=0 style=Heading 2 len=18 :: Desain Alur Solusi
+P218 sdt=0 img=0 style=Normal len=612 :: PreHub dirancang sebagai sistem pendukung keputusan closed-loop yang mengintegrasikan seluruh tahapa
+P219 sdt=0 img=1 style=Normal len=0 :: 
+P220 sdt=0 img=0 style=Heading 5 len=23 :: End-to-end Flow Diagram
+P221 sdt=0 img=0 style=Normal len=582 :: Jika risiko membutuhkan tindakan, modul optimasi akan menyusun alternatif respons seperti melanjutka
+P222 sdt=0 img=0 style=Heading 1 len=28 :: Implementasi Perangkat Lunak
+P223 sdt=0 img=0 style=Heading 2 len=23 :: Arsitektur Implementasi
+P224 sdt=0 img=0 style=Normal len=653 :: PreHub dikembangkan sebagai aplikasi web berarsitektur modular yang memisahkan antarmuka pengguna be
+P225 sdt=0 img=1 style=Normal len=0 :: 
+P226 sdt=0 img=0 style=Heading 5 len=18 :: Diagram Arsitektur
+P227 sdt=0 img=0 style=Heading 2 len=26 :: Implementasi Pipeline Data
+P228 sdt=0 img=0 style=Normal len=561 :: Data dari API eksternal diproses oleh layanan ingestion melalui tahap normalisasi, validasi, dedupli
+P229 sdt=0 img=0 style=Heading 2 len=24 :: Implementasi Multi-Agent
+P230 sdt=0 img=0 style=Normal len=582 :: Pada lapisan analitik, PreHub menerapkan alur kerja berbasis komponen spesialis untuk mengolah data 
+P231 sdt=0 img=0 style=Heading 2 len=55 :: Implementasi Validasi, Confidence, dan Penilaian Risiko
+P232 sdt=0 img=0 style=Normal len=410 :: PreHub mengimplementasikan Consensus Engine sebagai lapisan terpisah untuk mengevaluasi sinyal dari 
+P233 sdt=0 img=0 style=Normal len=362 :: Jika data yang diterima tidak mencukupi, saling bertentangan, atau sumber utama terganggu, sistem me
+P234 sdt=0 img=0 style=Heading 2 len=51 :: Implementasi Analisis Kondisi dan Optimasi Mitigasi
+P235 sdt=0 img=0 style=Normal len=378 :: PreHub mengintegrasikan informasi kondisi perjalanan sebagai bukti pendukung yang perlu divalidasi b
+P236 sdt=0 img=0 style=Normal len=347 :: Dalam tahap mitigasi, sistem menyusun pilihan respons seperti melanjutkan perjalanan, mengalihkan ru
+P237 sdt=0 img=0 style=Heading 2 len=43 :: Implementasi Antarmuka dan Decision Support
+P238 sdt=0 img=0 style=Normal len=680 :: Antarmuka PreHub dirancang sebagai dasbor yang menyatukan pemantauan koridor, bukti gangguan, tingka
+P239 sdt=0 img=0 style=Heading 2 len=35 :: Status Implementasi Perangkat Lunak
+P240 sdt=0 img=0 style=Normal len=476 :: Untuk menjaga kesesuaian antara proposal, perangkat lunak, dan demonstrasi, status setiap komponen P
+P241 sdt=0 img=0 style=Heading 4 len=19 :: Status Implementasi
+P242 sdt=0 img=0 style=Heading 2 len=35 :: Pengujian dan Evaluasi Implementasi
+P243 sdt=0 img=0 style=Normal len=552 :: Pengujian implementasi PreHub dilakukan secara bertahap sesuai tingkat kesiapan komponen, dimulai da
+P244 sdt=0 img=0 style=Normal len=433 :: Di tingkat sistem, pengujian berbasis skenario mengevaluasi alur end-to-end, termasuk ketahanan sist
+P245 sdt=0 img=0 style=Heading 1 len=24 :: Mockup Tampilan Aplikasi
+P246 sdt=0 img=1 style=Normal len=0 :: 
+P247 sdt=0 img=0 style=Heading 5 len=28 :: Tampilan Hero Section PreHub
+P248 sdt=0 img=1 style=Normal len=0 :: 
+P249 sdt=0 img=0 style=Heading 5 len=23 :: Tampilan Evidence Chain
+P250 sdt=0 img=1 style=Normal len=0 :: 
+P251 sdt=0 img=0 style=Heading 5 len=33 :: Tampilan Antarmuka  Map 4D PreHub
+P252 sdt=0 img=1 style=Normal len=0 :: 
+P253 sdt=0 img=0 style=Heading 5 len=53 :: Tampilan Antarmuka Simulasi Kebijakan Alternatif Rute
+P254 sdt=0 img=0 style=Heading 1 len=43 :: Dokumentasi Cara Penggunaan Perangkat Lunak
+P255 sdt=0 img=0 style=Heading 2 len=22 :: Alur Penggunaan PreHub
+P256 sdt=0 img=0 style=Normal len=494 :: Penggunaan PreHub dimulai saat Koordinator Operasional memantau koridor distribusi melalui dasbor. K
+P257 sdt=0 img=1 style=Normal len=0 :: 
+P258 sdt=0 img=0 style=Heading 5 len=17 :: User Flow Diagram
+P259 sdt=0 img=0 style=Normal len=607 :: Selanjutnya, pengguna membuka Mitigation Recommendation untuk membandingkan alternatif tindakan, sep
+P260 sdt=0 img=0 style=Heading 2 len=29 :: Pencegahan Kesalahan Pengguna
+P261 sdt=0 img=0 style=Normal len=827 :: PreHub menggunakan beberapa mekanisme untuk mengurangi kesalahan pengambilan keputusan. Peringatan d
+P262 sdt=0 img=0 style=Heading 1 len=14 :: Daftar Pustaka

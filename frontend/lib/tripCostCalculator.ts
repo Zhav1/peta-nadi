@@ -23,6 +23,24 @@ export interface TripCostParams {
   commodity?: string | null;
   vehicleGolongan?: string | null;
   tollCostIdr?: number | null;
+  /**
+   * Explicit per-trip fuel efficiency (km/L). Null/undefined resolves via
+   * GOLONGAN_DEFAULT_KMPL[vehicleGolongan] (GOL_II 3.5 legacy default).
+   */
+  fuelEfficiencyKmpl?: number | null;
+  /**
+   * Explicit Pertamina/SK fuel rate (IDR/L). Null/undefined falls back to
+   * FUEL_RATE_FALLBACK_IDR (Biosolar Rp 6.800/L).
+   */
+  fuelRateIdr?: number | null;
+  /** Explicit reefer flag override. Undefined = derive from commodity. */
+  isReefer?: boolean | null;
+  /**
+   * Measured reefer genset burn (L/h). When > 0 on a reefer cold-chain move,
+   * reefer cost is priced from fuel volume (lph × hours × rate); otherwise the
+   * legacy Rp/hour genset tariff applies (backward compat).
+   */
+  reeferFuelLph?: number | null;
 }
 
 export interface OperationalCostBreakdown {
@@ -39,6 +57,20 @@ export interface TripCostResult {
 }
 
 import type { RouteRecommendation } from './types';
+import { GOLONGAN_DEFAULT_KMPL } from './types';
+
+/**
+ * Canonical Pertamina Biosolar fallback rate (IDR/L) when no SK rate is
+ * supplied. Mirrors backend PERTAMINA_FUEL_BASE_RATES["biosolar"].
+ */
+export const FUEL_RATE_FALLBACK_IDR = 6800;
+/**
+ * Safe-staging depot hourly fee (IDR/h). Single source of truth for
+ * hold/demurrage economics — backend DEPOT_HOURLY_FEE_IDR.
+ */
+export const DEPOT_HOURLY_FEE_IDR = 35000;
+/** Default reefer genset burn (L/h) when a reefer unit has no measured lph. */
+export const REEFER_DEFAULT_LPH = 2.0;
 
 /**
  * Detects whether a commodity requires temperature-controlled cold chain logistics
@@ -65,6 +97,38 @@ export function isColdChain(commodity?: string | null): boolean {
 }
 
 /**
+ * Resolve per-trip fuel efficiency (km/L).
+ * Priority: explicit override -> GOLONGAN_DEFAULT_KMPL[golongan] ->
+ * legacy flat 3.5 (GOL_II default, deprecated for other golongan).
+ */
+export function resolveFuelEfficiencyKmpl(
+  overrideKmpl?: number | null,
+  vehicleGolongan?: string | null
+): { effKmpl: number; source: 'override' | 'golongan_default' | 'legacy_flat' } {
+  if (overrideKmpl != null && Number(overrideKmpl) > 0) {
+    return { effKmpl: Number(overrideKmpl), source: 'override' };
+  }
+  const g = String(vehicleGolongan ?? 'GOL_II').toUpperCase();
+  if (g in GOLONGAN_DEFAULT_KMPL) {
+    return { effKmpl: GOLONGAN_DEFAULT_KMPL[g], source: 'golongan_default' };
+  }
+  return { effKmpl: FUEL_CONSUMPTION_KM_PER_LITER, source: 'legacy_flat' };
+}
+
+/**
+ * Resolve per-trip fuel rate (IDR/L). Explicit SK rate wins; otherwise the
+ * Pertamina Biosolar fallback (Rp 6.800/L).
+ */
+export function resolveFuelRateIdr(
+  overrideRate?: number | null
+): { rateIdr: number; isFallback: boolean } {
+  if (overrideRate != null && Number(overrideRate) > 0) {
+    return { rateIdr: Number(overrideRate), isFallback: false };
+  }
+  return { rateIdr: BIOSOLAR_RATE_PER_LITER, isFallback: true };
+}
+
+/**
  * Calculates first-principles total operational trip cost.
  * Zero magic numbers; 100% grounded arithmetic.
  */
@@ -72,12 +136,21 @@ export function calculateTotalTripCost(params: TripCostParams): TripCostResult {
   const { distanceKm, durationMinutes, commodity, tollCostIdr } = params;
   const dist = Math.max(0, Number(distanceKm) || 0);
   const durationH = Math.max(0, Number(durationMinutes) || 0) / 60;
+  const { effKmpl } = resolveFuelEfficiencyKmpl(params.fuelEfficiencyKmpl, params.vehicleGolongan);
+  const { rateIdr } = resolveFuelRateIdr(params.fuelRateIdr);
 
-  const fuel_cost_idr = Math.round((dist / FUEL_CONSUMPTION_KM_PER_LITER) * BIOSOLAR_RATE_PER_LITER);
+  const fuel_cost_idr = Math.round((dist / effKmpl) * rateIdr);
   const labor_cost_idr = Math.round(durationH * DRIVER_LABOR_HOURLY_RATE);
-  const reefer_genset_cost_idr = isColdChain(commodity)
-    ? Math.round(durationH * REEFER_GENSET_HOURLY_RATE)
-    : 0;
+  const coldChain = isColdChain(commodity);
+  const reeferMove = params.isReefer === true || (params.isReefer == null && coldChain);
+  let reefer_genset_cost_idr = 0;
+  if (reeferMove) {
+    if (params.reeferFuelLph != null && Number(params.reeferFuelLph) > 0) {
+      reefer_genset_cost_idr = Math.round(durationH * Number(params.reeferFuelLph) * rateIdr);
+    } else {
+      reefer_genset_cost_idr = Math.round(durationH * REEFER_GENSET_HOURLY_RATE);
+    }
+  }
   const toll_cost_idr = Math.max(0, Math.round(Number(tollCostIdr) || 0));
 
   const total_operational_cost_idr =
@@ -125,6 +198,37 @@ export function formatCompactIDR(val?: number | null): string {
     return `${sign}Rp ${num} Jt`;
   }
   return `${sign}Rp ${Math.round(absVal).toLocaleString('id-ID')}`;
+}
+
+/**
+ * Per-rit fuel economy helpers (Laporan Phase 3).
+ * Null-safe: returns null when distance/fuel are missing or non-positive so
+ * callers render "belum diinput" and exclude the rit from averages.
+ */
+export function calculateFuelEconomyKmpl(
+  distanceKm?: number | null,
+  fuelLiters?: number | null
+): number | null {
+  const d = Number(distanceKm);
+  const f = Number(fuelLiters);
+  if (!Number.isFinite(d) || !Number.isFinite(f) || d <= 0 || f <= 0) return null;
+  return d / f;
+}
+
+export function litersPer100Km(economyKmpl?: number | null): number | null {
+  const e = Number(economyKmpl);
+  if (!Number.isFinite(e) || e <= 0) return null;
+  return 100 / e;
+}
+
+export function formatEconomyKmpl(v?: number | null): string {
+  if (v == null || !Number.isFinite(Number(v))) return 'belum diinput';
+  return `${Number(v).toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} km/L`;
+}
+
+export function formatLitersPer100Km(v?: number | null): string {
+  if (v == null || !Number.isFinite(Number(v))) return 'belum diinput';
+  return `${Number(v).toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L/100km`;
 }
 
 export interface DualMetricPopoverResult {

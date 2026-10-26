@@ -1255,6 +1255,24 @@ export interface TravelRecord {
   created_at?: string;
   updated_at?: string;
   delivered_at?: string | null;
+  // ---- Phase 3 fuel-economy provenance (optional; backend may omit) ----
+  /** Frozen Pertamina/SK rate used for this rit (IDR/L). */
+  fuel_rate_used_idr?: number | null;
+  /** ESDM SK document number; null when Pertamina fallback. */
+  fuel_sk_number?: string | null;
+  fuel_sk_id?: string | null;
+  fuel_effective_date?: string | null;
+  /** ESDM_SK | PERTAMINA_FALLBACK | legacy_3p5 | migrated_golongan */
+  fuel_source?: string | null;
+  /** True when Pertamina fallback was used (no SK row). */
+  fuel_is_fallback?: boolean | null;
+  /** Resolved efficiency used (km/L): override > golongan default. */
+  fuel_efficiency_used_kmpl?: number | null;
+  /** asset_override | golongan_default | legacy_3p5_flat */
+  fuel_efficiency_source?: string | null;
+  fuel_load_factor?: number | null;
+  /** Measured reefer burn used (L/h); null = non-reefer/belum diketahui. */
+  reefer_fuel_lph_used?: number | null;
 }
 
 export interface TravelListResponse {
@@ -1320,6 +1338,23 @@ export interface ERPTripRow {
   efficiency_pct: number;
   hedging_policy?: string | null;
   created_at?: string;
+  // ---- Phase 3 fuel-economy provenance (optional; absent = belum diinput) ----
+  /** Baseline distance (km); null/undefined = belum diketahui. */
+  baseline_distance_km?: number | null;
+  /** Actual fuel burned (L); null/undefined = aktual belum diinput. */
+  actual_fuel_liters?: number | null;
+  /** True bila aktual sudah direkam ledger; false/null = exclude from averages. */
+  actual_recorded?: boolean | null;
+  fuel_rate_used_idr?: number | null;
+  fuel_sk_number?: string | null;
+  fuel_sk_id?: string | null;
+  fuel_effective_date?: string | null;
+  fuel_source?: string | null;
+  fuel_is_fallback?: boolean | null;
+  fuel_efficiency_used_kmpl?: number | null;
+  fuel_efficiency_source?: string | null;
+  fuel_load_factor?: number | null;
+  reefer_fuel_lph_used?: number | null;
 }
 
 export interface ERPSummaryResponse {

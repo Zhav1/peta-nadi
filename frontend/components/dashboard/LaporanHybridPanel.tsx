@@ -23,10 +23,16 @@ import type {
 } from '@/lib/types';
 import {
   applyLaporanFilters,
+  averageTripEconomy,
   formatJtM,
   groupByCommodityTier,
   groupByPeriod,
+  resolveTripEconomy,
 } from '@/lib/laporanAggregations';
+import {
+  formatEconomyKmpl,
+  formatLitersPer100Km,
+} from '@/lib/tripCostCalculator';
 import LaporanFilterBar, { type LaporanGranularity } from '@/components/dashboard/LaporanFilterBar';
 import LaporanCharts from '@/components/dashboard/LaporanCharts';
 import { exportLaporanCSV, exportLaporanJSON, printLaporanPDF } from '@/lib/laporanExport';
@@ -133,6 +139,8 @@ export default function LaporanHybridPanel({
   );
 
   const hasTrips = (totals?.total_trips ?? 0) > 0;
+
+  const economyAvg = useMemo(() => averageTripEconomy(filteredTrips), [filteredTrips]);
 
   if (isLoading && !summary) {
     return (
@@ -427,6 +435,18 @@ export default function LaporanHybridPanel({
           </button>
           {rincianOpen && (
             <div className="overflow-x-auto border-t border-white/10">
+              <div className="px-4 py-2 border-b border-white/10 text-xs text-slate-400 tabular-nums">
+                {economyAvg.avgKmpl != null ? (
+                  <span>
+                    Rata-rata ekonomi{' '}
+                    <strong className="text-slate-200">{formatEconomyKmpl(economyAvg.avgKmpl)}</strong>
+                    {' '}({economyAvg.measuredCount} rit terukur
+                    {economyAvg.unmeasuredCount > 0 && ` • ${economyAvg.unmeasuredCount} rit belum diinput dikecualikan`})
+                  </span>
+                ) : (
+                  <span>Belum ada rit dengan aktual BBM terisi — ekonomi belum dapat dihitung.</span>
+                )}
+              </div>
               <Table className="w-full" data-testid="audit-table">
                 <TableHeader>
                   <TableRow>
@@ -434,6 +454,8 @@ export default function LaporanHybridPanel({
                     <TableHead className="h-11 bg-[#0c1017] font-medium">Truk</TableHead>
                     <TableHead className="h-11 bg-[#0c1017] font-medium">Rute</TableHead>
                     <TableHead className="h-11 bg-[#0c1017] font-medium">Status</TableHead>
+                    <TableHead className="h-11 bg-[#0c1017] font-medium">Ekonomi</TableHead>
+                    <TableHead className="h-11 bg-[#0c1017] font-medium">SK BBM</TableHead>
                     <TableHead className="h-11 bg-[#0c1017] text-right font-medium">Hemat</TableHead>
                     <TableHead className="h-11 bg-[#0c1017] font-medium">Aksi</TableHead>
                   </TableRow>
@@ -441,7 +463,7 @@ export default function LaporanHybridPanel({
                 <TableBody>
                   {filteredTrips.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="py-10 text-center text-xs text-slate-500">
+                      <TableCell colSpan={8} className="py-10 text-center text-xs text-slate-500">
                         Tidak ada rit yang cocok dengan filter ini.
                       </TableCell>
                     </TableRow>
@@ -477,9 +499,57 @@ export default function LaporanHybridPanel({
                           </span>
                         </TableCell>
                         <TableCell className="py-3">
-                          <div className="text-right text-xs tabular-nums text-slate-300">
+                          {(() => {
+                            const econ = resolveTripEconomy(trip);
+                            if (!econ.hasActual || econ.economyKmpl == null) {
+                              return (
+                                <span className="text-xs text-slate-500 italic">belum diinput</span>
+                              );
+                            }
+                            return (
+                              <span className="block text-xs text-slate-200 tabular-nums">
+                                {formatEconomyKmpl(econ.economyKmpl)}
+                                <span className="block text-slate-500">
+                                  {formatLitersPer100Km(econ.litersPer100Km)}
+                                </span>
+                              </span>
+                            );
+                          })()}
+                          {trip.reefer_fuel_lph_used != null && Number(trip.reefer_fuel_lph_used) > 0 && (
+                            <span className="block text-xs text-cyan-300/80 tabular-nums">
+                              reefer {Number(trip.reefer_fuel_lph_used).toLocaleString('id-ID')} L/jam
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="py-3">
+                          {trip.fuel_sk_number ? (
+                            <span className="inline-block px-1.5 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 text-xs font-mono">
+                              {trip.fuel_sk_number}
+                            </span>
+                          ) : (trip.fuel_is_fallback === true || trip.fuel_source === 'PERTAMINA_FALLBACK') ? (
+                            <span className="inline-block px-1.5 py-0.5 rounded border border-amber-500/30 bg-amber-500/10 text-amber-300 text-xs">
+                              fallback
+                            </span>
+                          ) : (
+                            <span className="text-xs text-slate-500">—</span>
+                          )}
+                          {trip.fuel_rate_used_idr != null && (
+                            <span className="block text-xs text-slate-500 tabular-nums">
+                              Rp {Math.round(Number(trip.fuel_rate_used_idr)).toLocaleString('id-ID')}/L
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="py-3">
+                          <div
+                            className={`text-right text-xs tabular-nums ${
+                              Number(trip.saved_cost_idr) < 0 ? 'text-rose-300' : 'text-slate-300'
+                            }`}
+                          >
                             {formatIDR(trip.saved_cost_idr)}
                           </div>
+                          {Number(trip.saved_cost_idr) < 0 && (
+                            <div className="text-right text-xs text-rose-400/80">kerugian</div>
+                          )}
                           <div className="text-right text-xs text-slate-500 tabular-nums">
                             {formatNumber(trip.efficiency_pct)}%
                           </div>

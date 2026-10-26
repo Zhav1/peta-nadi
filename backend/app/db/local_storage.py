@@ -299,6 +299,15 @@ def init_db(db_path: Optional[str] = None) -> None:
                     hedging_solved_at TEXT,
                     notes TEXT,
                     inflation_shock_factor REAL DEFAULT 0.0,
+                    fuel_rate_used_idr REAL,
+                    fuel_sk_id TEXT,
+                    fuel_source TEXT,
+                    fuel_efficiency_used_kmpl REAL,
+                    reefer_fuel_lph_used REAL,
+                    fuel_effective_date TEXT,
+                    fuel_sk_number TEXT,
+                    fuel_efficiency_source TEXT,
+                    fuel_load_factor REAL,
                     created_by TEXT,
                     sync_status TEXT DEFAULT 'pending',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -332,6 +341,15 @@ def init_db(db_path: Optional[str] = None) -> None:
                 ("travels", ("hedging_net_savings_idr", "REAL")),
                 ("travels", ("hedging_solved_at", "TIMESTAMP")),
                 ("travels", ("inflation_shock_factor", "REAL DEFAULT 0.0")),
+                ("travels", ("fuel_rate_used_idr", "REAL")),
+                ("travels", ("fuel_sk_id", "TEXT")),
+                ("travels", ("fuel_source", "TEXT")),
+                ("travels", ("fuel_efficiency_used_kmpl", "REAL")),
+                ("travels", ("reefer_fuel_lph_used", "REAL")),
+                ("travels", ("fuel_effective_date", "TEXT")),
+                ("travels", ("fuel_sk_number", "TEXT")),
+                ("travels", ("fuel_efficiency_source", "TEXT")),
+                ("travels", ("fuel_load_factor", "REAL")),
                 ("travels", ("delivered_at", "TIMESTAMP")),
             ]:
                 try:
@@ -1064,6 +1082,7 @@ def _travel_row_to_dict(r: sqlite3.Row) -> Dict[str, Any]:
         except Exception:
             return default
 
+    keys = set(r.keys())
     hedging = None
     if r["hedging_json"]:
         try:
@@ -1127,6 +1146,16 @@ def _travel_row_to_dict(r: sqlite3.Row) -> Dict[str, Any]:
         "hedging_solved_at": r["hedging_solved_at"],
         "notes": r["notes"],
         "inflation_shock_factor": float(r["inflation_shock_factor"] or 0.0),
+        "fuel_rate_used_idr": float(r["fuel_rate_used_idr"] or 0.0) if "fuel_rate_used_idr" in keys else 0.0,
+        "fuel_sk_id": r["fuel_sk_id"] if "fuel_sk_id" in keys else None,
+        "fuel_source": r["fuel_source"] if "fuel_source" in keys else None,
+        "fuel_efficiency_used_kmpl": float(r["fuel_efficiency_used_kmpl"]) if "fuel_efficiency_used_kmpl" in keys and r["fuel_efficiency_used_kmpl"] is not None else None,
+        "reefer_fuel_lph_used": float(r["reefer_fuel_lph_used"]) if "reefer_fuel_lph_used" in keys and r["reefer_fuel_lph_used"] is not None else None,
+        "fuel_effective_date": r["fuel_effective_date"] if "fuel_effective_date" in keys else None,
+        "fuel_sk_number": r["fuel_sk_number"] if "fuel_sk_number" in keys else None,
+        "fuel_efficiency_source": r["fuel_efficiency_source"] if "fuel_efficiency_source" in keys else None,
+        "fuel_load_factor": float(r["fuel_load_factor"]) if "fuel_load_factor" in keys and r["fuel_load_factor"] is not None else None,
+        "fuel_is_fallback": (r["fuel_source"] in ("PERTAMINA_FALLBACK", "legacy_3p5")) if "fuel_source" in keys and r["fuel_source"] is not None else None,
         "created_by": r["created_by"],
         "sync_status": r["sync_status"],
         "created_at": r["created_at"],
@@ -1302,14 +1331,19 @@ def save_travel(data: Dict[str, Any], db_path: Optional[str] = None) -> Dict[str
                     saved_toll_idr, saved_spoilage_idr, saved_labor_idr, saved_cost_idr,
                     efficiency_pct, rerouted, disruption_id, status,
                     hedging_json, hedging_policy, hedging_net_savings_idr, hedging_solved_at,
-                    notes, inflation_shock_factor, created_by, sync_status,
+                    notes, inflation_shock_factor,
+                    fuel_rate_used_idr, fuel_sk_id, fuel_source,
+                    fuel_efficiency_used_kmpl, reefer_fuel_lph_used,
+                    fuel_effective_date, fuel_sk_number,
+                    fuel_efficiency_source, fuel_load_factor,
+                    created_by, sync_status,
                     created_at, updated_at, delivered_at
                 ) VALUES (
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-                )
-                ON CONFLICT(id) DO UPDATE SET
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?
+                )                ON CONFLICT(id) DO UPDATE SET
                     truck_id = excluded.truck_id,
                     truck_name = excluded.truck_name,
                     company_id = excluded.company_id,
@@ -1364,6 +1398,15 @@ def save_travel(data: Dict[str, Any], db_path: Optional[str] = None) -> Dict[str
                     hedging_solved_at = excluded.hedging_solved_at,
                     notes = excluded.notes,
                     inflation_shock_factor = excluded.inflation_shock_factor,
+                    fuel_rate_used_idr = excluded.fuel_rate_used_idr,
+                    fuel_sk_id = excluded.fuel_sk_id,
+                    fuel_source = excluded.fuel_source,
+                    fuel_efficiency_used_kmpl = excluded.fuel_efficiency_used_kmpl,
+                    reefer_fuel_lph_used = excluded.reefer_fuel_lph_used,
+                    fuel_effective_date = excluded.fuel_effective_date,
+                    fuel_sk_number = excluded.fuel_sk_number,
+                    fuel_efficiency_source = excluded.fuel_efficiency_source,
+                    fuel_load_factor = excluded.fuel_load_factor,
                     updated_at = excluded.updated_at,
                     delivered_at = excluded.delivered_at
             """, (
@@ -1422,6 +1465,15 @@ def save_travel(data: Dict[str, Any], db_path: Optional[str] = None) -> Dict[str
                 data.get("hedging_solved_at"),
                 data.get("notes"),
                 float(data.get("inflation_shock_factor") or 0.0),
+                float(data.get("fuel_rate_used_idr") or 0.0) or None,
+                data.get("fuel_sk_id"),
+                data.get("fuel_source"),
+                float(data["fuel_efficiency_used_kmpl"]) if data.get("fuel_efficiency_used_kmpl") is not None else None,
+                float(data["reefer_fuel_lph_used"]) if data.get("reefer_fuel_lph_used") is not None else None,
+                data.get("fuel_effective_date"),
+                data.get("fuel_sk_number"),
+                data.get("fuel_efficiency_source"),
+                float(data["fuel_load_factor"]) if data.get("fuel_load_factor") is not None else None,
                 data.get("created_by"),
                 data.get("sync_status") or "pending",
                 created_at,

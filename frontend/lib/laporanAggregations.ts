@@ -8,6 +8,81 @@ import type {
   LaporanTierKey,
   PeriodBucket,
 } from './types';
+import { calculateFuelEconomyKmpl, litersPer100Km } from './tripCostCalculator';
+
+export interface TripEconomy {
+  /** km/L; null = aktual belum diinput (exclude from averages). */
+  economyKmpl: number | null;
+  /** L/100km; null when economyKmpl is null. */
+  litersPer100Km: number | null;
+  /** True when the rit carries a recorded actual (fuel + distance). */
+  hasActual: boolean;
+  /** True when fuel rate came from Pertamina fallback (no SK row). */
+  isFallbackRate: boolean;
+}
+
+/** Resolve per-rit fuel economy. Missing actual/distance → hasActual=false. */
+export function resolveTripEconomy(trip?: Pick<
+  ERPTripRow,
+  'baseline_distance_km' | 'actual_fuel_liters' | 'actual_recorded' | 'fuel_is_fallback' | 'fuel_source'
+> | null): TripEconomy {
+  const dist = Number(trip?.baseline_distance_km);
+  const fuel = Number(trip?.actual_fuel_liters);
+  const hasDist = Number.isFinite(dist) && dist > 0;
+  const hasFuel = Number.isFinite(fuel) && fuel > 0;
+  // actual_recorded=false (or missing actuals) means "belum diinput".
+  const recorded = trip?.actual_recorded;
+  const hasActual = hasDist && hasFuel && recorded !== false && trip?.actual_fuel_liters != null;
+  if (!hasActual) {
+    return {
+      economyKmpl: null,
+      litersPer100Km: null,
+      hasActual: false,
+      isFallbackRate: trip?.fuel_is_fallback === true || trip?.fuel_source === 'PERTAMINA_FALLBACK',
+    };
+  }
+  const economyKmpl = calculateFuelEconomyKmpl(dist, fuel);
+  return {
+    economyKmpl,
+    litersPer100Km: litersPer100Km(economyKmpl),
+    hasActual: economyKmpl != null,
+    isFallbackRate: trip?.fuel_is_fallback === true || trip?.fuel_source === 'PERTAMINA_FALLBACK',
+  };
+}
+
+export interface EconomyAverages {
+  /** Mean km/L across rits with recorded actuals; null when none. */
+  avgKmpl: number | null;
+  /** Mean L/100km across rits with recorded actuals; null when none. */
+  avgLPer100Km: number | null;
+  /** Count of rits included in the average (recorded actuals only). */
+  measuredCount: number;
+  /** Count excluded (aktual belum diinput). */
+  unmeasuredCount: number;
+}
+
+/** Mean economy across trips, excluding "belum diinput" rits. */
+export function averageTripEconomy(trips: ERPTripRow[]): EconomyAverages {
+  let sum = 0;
+  let n = 0;
+  let unmeasured = 0;
+  for (const t of trips ?? []) {
+    const e = resolveTripEconomy(t);
+    if (e.hasActual && e.economyKmpl != null) {
+      sum += e.economyKmpl;
+      n += 1;
+    } else {
+      unmeasured += 1;
+    }
+  }
+  const avgKmpl = n > 0 ? sum / n : null;
+  return {
+    avgKmpl,
+    avgLPer100Km: avgKmpl != null ? 100 / avgKmpl : null,
+    measuredCount: n,
+    unmeasuredCount: unmeasured,
+  };
+}
 
 const ULTRA_KEYS = ['cabai_merah', 'cabai_rawit', 'tomat', 'sayur_segar', 'sayuran_daun'];
 const COLD_KEYS = ['daging_sapi', 'daging_ayam', 'ikan_segar', 'udang', 'susu_segar'];
