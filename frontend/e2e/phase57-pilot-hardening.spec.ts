@@ -342,7 +342,7 @@ test('guest deploy on 403 shows the sandbox toast and saves locally', async ({ p
 
 // ---------------------------------------------------------------------------
 // Wave 3 — RBAC verification (mocked, no live backend)
-// Covers: modal 5 headings on 3 select surfaces, 1 HITL POST per select,
+// Covers: modal 3 sections on 3 select surfaces, 1 HITL POST per select,
 // Guest zero-POST sandbox + banner + watermark, 403 never paints DISETUJUI,
 // Regulator APPROVE-locked / HOLD-enabled.
 // All network is intercepted; the suite never touches a live backend.
@@ -488,11 +488,9 @@ function wave3Dialog(page: Page) {
 }
 
 async function expectFiveSections(dialog: ReturnType<Page['getByRole']>) {
-  await expect(dialog.getByText('1. Dasar Risiko')).toBeVisible();
-  await expect(dialog.getByText('2. Dampak + Uncertainty')).toBeVisible();
-  await expect(dialog.getByText('3. Manfaat vs Konsekuensi')).toBeVisible();
-  await expect(dialog.getByText('4. Keterbatasan Data')).toBeVisible();
-  await expect(dialog.getByText(/5\. Verifikasi Operator/)).toBeVisible();
+  await expect(dialog.getByText('1. Risiko')).toBeVisible();
+  await expect(dialog.getByText('2. Dampak')).toBeVisible();
+  await expect(dialog.getByText('3. Verifikasi')).toBeVisible();
 }
 
 async function wave3CheckAll(page: Page) {
@@ -503,8 +501,8 @@ async function wave3CheckAll(page: Page) {
   }
 }
 
-// Wave 3.1 — dispatcher select: modal with 5 headings + exactly 1 HITL POST.
-test('wave3 dispatcher select opens modal with 5 sections and fires one HITL POST', async ({
+// Wave 3.1 — dispatcher select: modal with 3 sections + exactly 1 HITL POST.
+test('wave3 dispatcher select opens modal with 3 sections and fires one HITL POST', async ({
   page,
 }) => {
   await wave3SeedSession(page, 'DISPATCHER');
@@ -540,6 +538,12 @@ test('wave3 dispatcher select opens modal with 5 sections and fires one HITL POS
   await expectFiveSections(dialog);
   // Checklist gates commit buttons until 4/4 verified.
   await expect(dialog.getByRole('button', { name: 'SETUJUI' })).toBeDisabled();
+  // Opening the modal is read-only: no auto-POST on select.
+  expect(approvalPosts).toBe(0);
+  await wave3CheckAll(page);
+  const postPromise = page.waitForResponse((r) => r.url().includes('/api/v1/approvals') && r.request().method() === 'POST', { timeout: 15000 });
+  await dialog.getByRole('button', { name: 'SETUJUI' }).click();
+  await postPromise;
   expect(approvalPosts).toBe(1);
   expect(lastPostBody['incident_id']).toBe(WAVE3_CRISIS);
   expect(String(lastPostBody['route_id'])).toBe('0');

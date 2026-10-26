@@ -28,7 +28,7 @@ test('analitik-heatmap-tooltip-bnpb', async ({ page }) => {
   // 2. KPI strip (7 pills, honest-empty n/a when data is short).
   const kpiList = page.getByRole('list', { name: 'Indikator analitik' });
   await expect(kpiList).toBeVisible();
-  await expect(kpiList.getByText('Risiko komposit')).toBeVisible();
+  await expect(kpiList.getByText('Risiko harga')).toBeVisible();
   await expect(kpiList.getByRole('listitem').first()).toBeVisible();
 
   // 3. Babel/Kepri backfill options in the Wilayah filter (Base-UI Select:
@@ -47,9 +47,9 @@ test('analitik-heatmap-tooltip-bnpb', async ({ page }) => {
   expect(url.searchParams.get('days')).toMatch(/^(7|14|30)$/);
 
   // 5. BNPB block: heading + one of UNAVAILABLE / STALE / live count chip.
+  // Retrying (not snapshot) read: the BNPB feed resolves async post-mount.
   await expect(page.getByText('Peringatan kebencanaan BNPB')).toBeVisible();
-  const bodyText = (await page.textContent('body')) ?? '';
-  expect(/BNPB UNAVAILABLE|STALE|kejadian/.test(bodyText)).toBeTruthy();
+  await expect(page.getByText(/BNPB UNAVAILABLE|STALE|kejadian/).first()).toBeVisible({ timeout: 30000 });
 
   // 6. Rich tooltip: hovering a KPI pill (always rendered) shows the
   // base-ui tooltip popup (data-slot="tooltip-content").

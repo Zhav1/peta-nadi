@@ -253,6 +253,123 @@ function firmsSeverityOf(h: { frp?: number; dist_to_corridor_km?: number | null;
   return 'medium';
 }
 
+/** Haversine distance in km between two [lon, lat] points. */
+function haversineKm(lon1: number, lat1: number, lon2: number, lat2: number): number {
+  const R = 6371.0;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/** High-confidence hotspot gate for clustering: confidence >= 80 or FRP > 100. */
+function isHighConfHotspot(h: { confidence?: number; frp?: number }): boolean {
+  const conf = Number(h.confidence ?? 0) || 0;
+  const frp = Number(h.frp ?? 0) || 0;
+  return conf >= 80 || frp > 100;
+}
+
+export interface HotspotCluster {
+  lon: number;
+  lat: number;
+  count: number;
+  maxFrp: number;
+  maxConfidence: number;
+  minDistKm: number | null;
+  radiusKm: number;
+}
+
+/**
+ * Single-link clustering over high-confidence hotspots (5 km radius).
+ * Only components with >= 3 points become highlight zones; anything
+ * smaller renders as plain neutral dots with no highlight circle.
+ */
+export function buildHotspotClusters(
+  hotspots: Array<{ lon?: number; lat?: number; confidence?: number; frp?: number; dist_to_corridor_km?: number | null }>
+): HotspotCluster[] {
+  const pts = (hotspots ?? [])
+    .map((h, idx) => ({ h, idx }))
+    .filter(({ h }) => {
+      const lon = Number(h.lon);
+      const lat = Number(h.lat);
+      return Number.isFinite(lon) && Number.isFinite(lat) && isHighConfHotspot(h);
+    });
+  if (pts.length < 3) return [];
+  const parent = pts.map((_, i) => i);
+  const find = (i: number): number => {
+    let r = i;
+    while (parent[r] !== r) r = parent[r];
+    while (parent[i] !== r) {
+      const nxt = parent[i];
+      parent[i] = r;
+      i = nxt;
+    }
+    return r;
+  };
+  const union = (a: number, b: number) => {
+    const ra = find(a);
+    const rb = find(b);
+    if (ra !== rb) parent[rb] = ra;
+  };
+  for (let i = 0; i < pts.length; i++) {
+    for (let j = i + 1; j < pts.length; j++) {
+      const a = pts[i].h;
+      const b = pts[j].h;
+      if (haversineKm(Number(a.lon), Number(a.lat), Number(b.lon), Number(b.lat)) <= 5) {
+        union(i, j);
+      }
+    }
+  }
+  const groups = new Map<number, typeof pts>();
+  pts.forEach((p, i) => {
+    const r = find(i);
+    if (!groups.has(r)) groups.set(r, []);
+    groups.get(r)!.push(p);
+  });
+  const clusters: HotspotCluster[] = [];
+  groups.forEach((members) => {
+    if (members.length < 3) return;
+    let sumLon = 0;
+    let sumLat = 0;
+    let maxFrp = 0;
+    let maxConf = 0;
+    let minDist: number | null = null;
+    for (const { h } of members) {
+      sumLon += Number(h.lon);
+      sumLat += Number(h.lat);
+      const frp = Number(h.frp ?? 0) || 0;
+      const conf = Number(h.confidence ?? 0) || 0;
+      if (frp > maxFrp) maxFrp = frp;
+      if (conf > maxConf) maxConf = conf;
+      const d = h.dist_to_corridor_km == null ? null : Number(h.dist_to_corridor_km);
+      if (d != null && Number.isFinite(d) && (minDist == null || d < minDist)) minDist = d;
+    }
+    const clon = sumLon / members.length;
+    const clat = sumLat / members.length;
+    let extentKm = 0;
+    for (const { h } of members) {
+      const d = haversineKm(clon, clat, Number(h.lon), Number(h.lat));
+      if (d > extentKm) extentKm = d;
+    }
+    clusters.push({
+      lon: clon,
+      lat: clat,
+      count: members.length,
+      maxFrp,
+      maxConfidence: maxConf,
+      minDistKm: minDist,
+      // Enclosing circle: member spread + 1 km base footprint.
+      radiusKm: Math.max(1, extentKm + 1),
+    });
+  });
+  return clusters;
+}
+
 export default function CrisisMap({
   incidents,
   selectedCrisisId,
@@ -827,20 +944,15 @@ export default function CrisisMap({
           ],
         },
       });
-      // Radius-area polygons: true km footprint per hotspot
-      // (5 km critical / 2.5 km high / 1 km medium).
+      // Radius-area polygons: TRUE highlight footprint per cluster only
+      // (>=3 high-conf points within 5 km). Map-only orange exception.
       map.addLayer({
         id: 'firms-areas-fill',
         type: 'fill',
         source: 'firms-areas-source',
         paint: {
           'fill-color': '#f97316',
-          'fill-opacity': [
-            'match', ['get', 'severity'],
-            'critical', 0.25,
-            'high', 0.20,
-            0.15,
-          ],
+          'fill-opacity': 0.22,
         },
       });
       map.addLayer({
@@ -858,16 +970,13 @@ export default function CrisisMap({
         type: 'circle',
         source: 'firms-source',
         paint: {
-          'circle-radius': [
-            'interpolate', ['linear'], ['coalesce', ['get', 'frp'], 10],
-            0, 5,
-            100, 9,
-            500, 14,
-          ],
-          'circle-color': '#f97316',
-          'circle-opacity': 0.55,
-          'circle-stroke-width': 1.5,
-          'circle-stroke-color': '#fff7ed',
+          // Raw detections stay small + neutral (slate): only cluster
+          // highlight circles carry the orange map-only exception.
+          'circle-radius': 3,
+          'circle-color': '#cbd5e1',
+          'circle-opacity': 0.8,
+          'circle-stroke-width': 1,
+          'circle-stroke-color': '#64748b',
         },
       });
       map.addLayer({
@@ -875,18 +984,13 @@ export default function CrisisMap({
         type: 'circle',
         source: 'firms-source',
         paint: {
-          // Transparent 18px-max click halo around each center dot.
-          'circle-radius': [
-            'interpolate', ['linear'], ['coalesce', ['get', 'frp'], 10],
-            0, 10,
-            100, 14,
-            500, 18,
-          ],
-          'circle-color': 'rgba(249,115,22,0)',
+          // Transparent click halo around each center dot (neutral, map-only).
+          'circle-radius': 8,
+          'circle-color': 'rgba(203,213,225,0)',
           'circle-opacity': 0,
-          'circle-stroke-width': 1.5,
-          'circle-stroke-color': '#fb923c',
-          'circle-stroke-opacity': 0.9,
+          'circle-stroke-width': 1,
+          'circle-stroke-color': '#94a3b8',
+          'circle-stroke-opacity': 0.5,
         },
       });
 
@@ -1463,7 +1567,7 @@ export default function CrisisMap({
         const props: any = e.features[0].properties || {};
         const source = props.source || props.bmkg_source || 'BMKG / Open-Meteo';
         const validUntil = props.valid_until || props.updated_at || '-';
-        const name = props.name || 'Advisori Cuaca';
+        const name = props.name || 'Waspada Dini';
         const precip = props.precipitation_mm_24h ?? '?';
         const flood = props.flood_risk_pct ?? '?';
         const wind = props.windspeed_kmh ?? props.wind_speed_kmh ?? '?';
@@ -1501,18 +1605,35 @@ export default function CrisisMap({
       map.on('click', 'weather-polygons-fill', handleWeatherClick);
       map.on('click', 'weather-polygons-outline', handleWeatherClick);
 
-      // Q3: FIRMS hotspot click → FRP / conf / dist-to-corridor / radius provenance popup.
+      // Q3: FIRMS hotspot click → count + FRP / conf / dist-to-corridor provenance.
+      // Cluster highlight circles report the cluster; raw dots report the single detection.
       const handleFirmsClick = (e: mapboxgl.MapLayerMouseEvent) => {
         if (isClickTargetingRef.current) return;
         if (!e.features || e.features.length === 0) return;
         const props: any = e.features[0].properties || {};
+        const clusterCount = Number(props.cluster_count ?? 0) || 0;
+        if (clusterCount >= 3) {
+          const maxFrp = props.max_frp ?? '?';
+          const maxConf = props.max_confidence ?? '?';
+          const minDist = props.min_dist_km ?? '?';
+          new mapboxgl.Popup({ closeButton: true, closeOnClick: true })
+            .setLngLat(e.lngLat)
+            .setHTML(
+              `<div style="font:12px system-ui;color:#0c1017"><strong>Zona Titik Panas (Satelit) — ${clusterCount} titik</strong><br/>` +
+              `FRP maks: ${String(maxFrp)} MW · conf maks: ${String(maxConf)}<br/>` +
+              `jarak koridor terdekat: ${String(minDist)} km · radius: ${String(props.radius_km ?? '?')} km<br/>` +
+              `sumber: VIIRS_SNPP_NRT (sorotan bila ≥3 titik keyakinan tinggi dalam 5 km)</div>`
+            )
+            .addTo(map);
+          return;
+        }
         const frp = props.frp ?? '?';
         const conf = props.conf ?? props.confidence ?? '?';
         const dist = props.dist_to_corridor_km ?? '?';
         const radiusKm = props.radius_km ?? '?';
         const severity = props.severity ?? '-';
         const nearSeg = props.near_segment ?? '-';
-        const title = props.title || 'Hotspot Karhutla VIIRS';
+        const title = props.title || 'Titik Panas VIIRS';
         new mapboxgl.Popup({ closeButton: true, closeOnClick: true })
           .setLngLat(e.lngLat)
           .setHTML(
@@ -1701,7 +1822,9 @@ export default function CrisisMap({
 
     // 1b. Update FIRMS fire hotspots — gated ONLY by the parent toggle
     // (DashboardClient passes [] when off / degraded). Never suppressed by
-    // demoStage: karhutla stays visible during demo when the toggle is ON.
+    // demoStage: titik panas stays visible during demo when the toggle is ON.
+    // Raw dots render every detection (small neutral); highlight circles
+    // render ONLY >=3 high-conf clusters within 5 km (orange map exception).
     const firmsSource = map.getSource('firms-source') as mapboxgl.GeoJSONSource;
     const firmsAreasSource = map.getSource('firms-areas-source') as mapboxgl.GeoJSONSource;
     if (firmsSource) {
@@ -1722,7 +1845,7 @@ export default function CrisisMap({
                 dist_to_corridor_km: h.dist_to_corridor_km ?? null,
                 severity: firmsSeverityOf(h as any),
                 radius_km: firmsRadiusKm(h as any),
-                title: h.title ?? `Hotspot VIIRS FRP ${h.frp ?? 0}MW`,
+                title: h.title ?? `Titik Panas VIIRS FRP ${h.frp ?? 0}MW`,
                 source: h.source ?? 'VIIRS_SNPP_NRT',
                 near_segment: h.near_segment ?? '',
                 ts: h.ts ?? '',
@@ -1735,32 +1858,27 @@ export default function CrisisMap({
       }
     }
     if (firmsAreasSource) {
-      if (fireHotspots && fireHotspots.length > 0) {
+      const clusters = buildHotspotClusters((fireHotspots ?? []) as any[]);
+      if (clusters.length > 0) {
         firmsAreasSource.setData({
           type: 'FeatureCollection',
-          features: fireHotspots.map((h, idx) => {
-            const lon = h.lon ?? h.coordinates?.[0] ?? 0;
-            const lat = h.lat ?? h.coordinates?.[1] ?? 0;
-            const radiusKm = firmsRadiusKm(h as any);
-            const severity = firmsSeverityOf(h as any);
+          features: clusters.map((c, idx) => {
             return {
               type: 'Feature',
               geometry: {
                 type: 'Polygon',
-                coordinates: [createGeoJsonCircleRing([lon, lat], radiusKm, 64)],
+                coordinates: [createGeoJsonCircleRing([c.lon, c.lat], c.radiusKm, 64)],
               },
               properties: {
-                id: `firms-area-${idx}`,
-                confidence: h.confidence ?? 60,
-                frp: h.frp ?? 0,
-                conf: h.conf ?? '',
-                dist_to_corridor_km: h.dist_to_corridor_km ?? null,
-                severity,
-                radius_km: radiusKm,
-                title: h.title ?? `Hotspot VIIRS FRP ${h.frp ?? 0}MW`,
-                source: h.source ?? 'VIIRS_SNPP_NRT',
-                near_segment: h.near_segment ?? '',
-                ts: h.ts ?? '',
+                id: `firms-cluster-${idx}`,
+                cluster_count: c.count,
+                max_frp: c.maxFrp,
+                max_confidence: c.maxConfidence,
+                min_dist_km: c.minDistKm,
+                radius_km: c.radiusKm,
+                severity: 'high',
+                title: `Zona Titik Panas (Satelit) — ${c.count} titik`,
+                source: 'VIIRS_SNPP_NRT',
               },
             } as GeoJSON.Feature<GeoJSON.Polygon>;
           }),
@@ -2892,11 +3010,11 @@ export default function CrisisMap({
                         type="button"
                         onClick={() => toggleLayerFilter('weatherAdvisory')}
  className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-white/5 transition"
-                        title="Advisory: medium drizzle termasuk BMKG 60 (ungu). Default OFF."
+                        title="Waspada Dini: medium drizzle termasuk BMKG 60. Default OFF."
                       >
                         <span className="text-slate-200 flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-purple-500 shrink-0" />
- <span>Advisori</span>
+                          <span className="w-2 h-2 rounded-full bg-slate-400 border border-cyan-400 shrink-0" />
+ <span>Waspada Dini (Advisory)</span>
                         </span>
                         <span className={`w-4 h-4 rounded flex items-center justify-center border ${
  layerFilters.weatherAdvisory ? 'bg-white border-white text-[#080d14]' : 'border-white/10'
@@ -2910,7 +3028,10 @@ export default function CrisisMap({
                         onClick={() => toggleLayerFilter('fireHotspots')}
  className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-white/5 transition"
                       >
- <span className="text-slate-200">Karhutla</span>
+ <span className="text-slate-200 flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-slate-400 shrink-0" />
+                          <span>Titik Panas (Satelit)</span>
+                        </span>
                         <span className={`w-4 h-4 rounded flex items-center justify-center border ${
  layerFilters.fireHotspots ? 'bg-white border-white text-[#080d14]' : 'border-white/10'
                         }`}>

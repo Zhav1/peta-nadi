@@ -25,9 +25,9 @@ test('laporan rincian renders SK badge, economy, fallback chip, and reefer line'
   await expect(panel.getByText('fallback').first()).toBeVisible();
   await expect(panel.getByText(/reefer 2 L\/jam/)).toBeVisible();
 
-  // RIT-002 (unmeasured): honest "belum diinput", excluded from the average.
+  // RIT-002 (unmeasured): honest "belum diinput" per-row exclusion.
   await expect(panel.getByText('belum diinput', { exact: true })).toBeVisible();
-  await expect(panel.getByText(/rit belum diinput dikecualikan/)).toBeVisible();
+  await expect(panel.getByText(/Rata-rata hemat per Trip/)).toBeVisible();
 
   expect(pageerrors).toEqual([]);
 });

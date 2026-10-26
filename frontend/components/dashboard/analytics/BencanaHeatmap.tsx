@@ -20,7 +20,7 @@ export interface BencanaRow {
 const SOURCE_LABEL: Record<BencanaRow['source'], string> = {
   BNPB: 'BNPB · insiden',
   BMKG: 'BMKG · cuaca disruptif',
-  FIRMS: 'FIRMS · karhutla',
+  FIRMS: 'FIRMS · titik panas',
 };
 
 function cellBg(v: number | null, active: boolean): string {
@@ -53,7 +53,9 @@ export function BencanaHeatmap({
 
   if (rows.length === 0 || rows.every((r) => r.count30d == null)) {
     return (
-      <AnalyticsEmpty message="Sumber bencana (BNPB/BMKG/FIRMS) tak tersedia saat ini — ko-okurensi tidak dihitung, bukan nol." />
+      <div title="Sumber bencana (BNPB/BMKG/FIRMS) tak tersedia saat ini — ko-okurensi tidak dihitung, bukan nol.">
+        <AnalyticsEmpty message="Sumber bencana tak tersedia." />
+      </div>
     );
   }
 

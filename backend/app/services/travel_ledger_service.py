@@ -16,7 +16,9 @@ spoilage / labour components that sum exactly to the total. No percentage is
 ever accepted from a client and no "18.5% / 14.2%" literals exist here.
 """
 import math
+import json
 import logging
+import time
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 
@@ -153,13 +155,15 @@ def _fetch_travels(
     truck_id: Optional[str] = None,
     limit: int = 5000,
     db_path: Optional[str] = None,
+    include_trips: bool = True,
 ) -> List[Dict[str, Any]]:
     if _supabase_enabled():
         try:
             from app.db import travel_supabase
 
             return travel_supabase.list_travels(
-                company_id=company_id, status=status, truck_id=truck_id, limit=limit
+                company_id=company_id, status=status, truck_id=truck_id, limit=limit,
+                include_trips=include_trips,
             )
         except Exception as exc:
             logger.warning("Supabase travels read failed, falling back to SQLite: %s", exc)
@@ -547,7 +551,9 @@ def create_travel(payload: TravelCreate, actor: Optional[str] = None, db_path: O
     data["status"] = payload.status.value if hasattr(payload.status, "value") else str(payload.status)
     data["created_by"] = actor or "dispatcher"
     _apply_ledger(data, truck=truck)
-    return _persist_travel(data, db_path=db_path)
+    saved = _persist_travel(data, db_path=db_path)
+    invalidate_erp_cache(saved.get("company_id"))
+    return saved
 
 
 def update_travel(
@@ -581,7 +587,9 @@ def update_travel(
     _apply_ledger(data, truck=_truck_u)
     if data.get("status") == "delivered" and not data.get("delivered_at"):
         data["delivered_at"] = payload.delivered_at or datetime.now().isoformat()
-    return _persist_travel(data, db_path=db_path)
+    saved = _persist_travel(data, db_path=db_path)
+    invalidate_erp_cache(saved.get("company_id"))
+    return saved
 
 
 def solve_and_persist_hedging(
@@ -654,6 +662,7 @@ def solve_and_persist_hedging(
     travel["hedging_net_savings_idr"] = float(solved.net_savings_idr)
     travel["hedging_solved_at"] = datetime.now().isoformat()
     _persist_travel(travel, db_path=db_path)
+    invalidate_erp_cache(travel.get("company_id"))
     return solved_dict
 
 
@@ -779,54 +788,326 @@ def _trip_row(travel: Dict[str, Any]) -> ERPTripRow:
     )
 
 
+# ==========================================
+# ERP SQL-FIRST AGGREGATION + CACHE (Phase 5 perf)
+# Totals are pushed to SQL (SUM/COUNT/GROUP BY) so the service never scans
+# O(C×N) rows in Python; only the dispatcher detail window (≤1000 rows) is
+# materialised. Responses are cached 120s per (company, scope, limit).
+# Shape of ERPSummaryResponse is unchanged.
+# ==========================================
+
+_ERP_CACHE_TTL_SECONDS = 120
+_ERP_CACHE_PREFIX = "lrip:cache:erp:"
+_erp_mem: Dict[str, tuple] = {}
+
+
+def _erp_cache_key(company_id: Optional[str], scope: str, limit: int) -> str:
+    return f"{_ERP_CACHE_PREFIX}{company_id or 'all'}:{scope}:{limit}"
+
+
+def _erp_cache_get(key: str) -> Optional[ERPSummaryResponse]:
+    now = time.time()
+    entry = _erp_mem.get(key)
+    if entry and entry[0] > now:
+        try:
+            return ERPSummaryResponse(**json.loads(entry[1]))
+        except Exception:
+            _erp_mem.pop(key, None)
+    elif entry:
+        _erp_mem.pop(key, None)
+    try:
+        from app.services.redis_client import cache_get
+
+        raw = cache_get(key)
+        if raw:
+            resp = ERPSummaryResponse(**json.loads(raw))
+            _erp_mem[key] = (now + _ERP_CACHE_TTL_SECONDS, raw)
+            return resp
+    except Exception as exc:
+        logger.debug(f"ERP cache read skipped: {exc}")
+    return None
+
+
+def _erp_cache_set(key: str, response: ERPSummaryResponse) -> None:
+    try:
+        raw = response.model_dump_json()
+        _erp_mem[key] = (time.time() + _ERP_CACHE_TTL_SECONDS, raw)
+        from app.services.redis_client import cache_set
+
+        cache_set(key, raw, ex=_ERP_CACHE_TTL_SECONDS)
+    except Exception as exc:
+        logger.debug(f"ERP cache write skipped: {exc}")
+
+
+def invalidate_erp_cache(company_id: Optional[str] = None) -> None:
+    """Drop cached ERP summaries (called on create/update/hedging).
+
+    Clears the process-local entries and best-effort Redis keys sharing the
+    `lrip:cache:erp:` prefix. Never raises — caching must not break writes.
+    """
+    try:
+        for key in [k for k in _erp_mem if k.startswith(_ERP_CACHE_PREFIX)]:
+            _erp_mem.pop(key, None)
+        try:
+            import app.services.redis_client as _rc
+
+            for key in [k for k in list(_rc._mem_kv) if k.startswith(_ERP_CACHE_PREFIX)]:
+                _rc._mem_kv.pop(key, None)
+                _rc._mem_expire.pop(key, None)
+        except Exception:
+            pass
+        try:
+            from app.services.redis_client import get_redis
+
+            r = get_redis()
+            cursor = 0
+            while True:
+                cursor, keys = r.scan(cursor=cursor, match=f"{_ERP_CACHE_PREFIX}*", count=100)
+                if keys:
+                    r.delete(*keys)
+                if cursor == 0:
+                    break
+        except Exception as exc:
+            logger.debug(f"ERP Redis invalidation skipped: {exc}")
+    except Exception as exc:
+        logger.debug(f"ERP cache invalidation skipped: {exc}")
+
+
+def _totals_from_agg(agg: Dict[str, Any]) -> ERPTotals:
+    """Build ERPTotals from summed fields — same formulas as _compute_totals."""
+    total = int(agg.get("n") or 0)
+    delivered = int(agg.get("delivered") or 0)
+    failed = int(agg.get("failed") or 0)
+    rok = int(agg.get("reroute_ok") or 0)
+    rfail = int(agg.get("reroute_fail") or 0)
+    attempts = rok + rfail
+    sla_ok = int(agg.get("sla_ok") or 0)
+    baseline_total = _money(agg.get("base") or 0.0)
+    actual_total = _money(agg.get("actual") or 0.0)
+    saved_total = _money(agg.get("saved") or 0.0)
+    return ERPTotals(
+        total_trips=total,
+        active_trips=int(agg.get("active") or 0),
+        delivered_trips=delivered,
+        failed_trips=failed,
+        reroute_success_count=rok,
+        reroute_failed_count=rfail,
+        reroute_success_rate_pct=_dec((rok / attempts) * 100.0, 2) if attempts else 0.0,
+        sla_compliance_pct=_dec((sla_ok / delivered) * 100.0, 2) if delivered else 0.0,
+        time_saved_hours=_dec(agg.get("th") or 0.0, 2),
+        fuel_saved_liters=_dec(agg.get("fl") or 0.0, 2),
+        cost_saved_idr=saved_total,
+        baseline_cost_idr=baseline_total,
+        actual_cost_idr=actual_total,
+        cost_efficiency_pct=_dec((saved_total / baseline_total) * 100.0, 2) if baseline_total > 0 else 0.0,
+        avg_cost_saved_per_trip_idr=_money(saved_total / total) if total else 0.0,
+        savings_breakdown=ERPSavingsBreakdown(
+            fuel_idr=_money(agg.get("f") or 0.0),
+            toll_idr=_money(agg.get("t") or 0.0),
+            spoilage_idr=_money(agg.get("s") or 0.0),
+            labor_idr=_money(agg.get("l") or 0.0),
+        ),
+    )
+
+
+def _company_summary_from_agg(agg: Dict[str, Any]) -> ERPCompanySummary:
+    t = _totals_from_agg(agg)
+    return ERPCompanySummary(
+        company_id=str(agg.get("company_id")),
+        total_trips=t.total_trips,
+        delivered_trips=t.delivered_trips,
+        failed_trips=t.failed_trips,
+        reroute_success_count=t.reroute_success_count,
+        reroute_success_rate_pct=t.reroute_success_rate_pct,
+        time_saved_hours=t.time_saved_hours,
+        fuel_saved_liters=t.fuel_saved_liters,
+        cost_saved_idr=t.cost_saved_idr,
+        cost_efficiency_pct=t.cost_efficiency_pct,
+    )
+
+
+def _merge_aggs(aggs: List[Dict[str, Any]]) -> Dict[str, Any]:
+    merged: Dict[str, Any] = {"company_id": None}
+    for key in ("n", "active", "delivered", "failed", "reroute_ok", "reroute_fail",
+                "sla_ok", "base", "actual", "saved", "th", "fl", "f", "t", "s", "l"):
+        merged[key] = sum(float(a.get(key) or 0.0) for a in aggs)
+    return merged
+
+
+def _erp_sql_aggregates(
+    company_id: Optional[str] = None,
+    db_path: Optional[str] = None,
+) -> Optional[List[Dict[str, Any]]]:
+    """SQL SUM/COUNT/GROUP BY per company. Returns None when unavailable.
+
+    Order: Supabase RPC `erp_ledger_totals` (migration 022) → SQLite SUM
+    query (local fallback) → None (caller uses the bounded Python path).
+    """
+    if _supabase_enabled():
+        try:
+            from app.db import travel_supabase
+            from app.db.supabase_client import get_client
+
+            sb = get_client()
+            params = {"p_company_id": company_id} if company_id else {"p_company_id": None}
+            try:
+                resp = sb.rpc("erp_ledger_totals", params).execute()
+                rows = resp.data or []
+                if rows:
+                    return [dict(r) for r in rows]
+                # Zero rows: distinguish "no data" from "RPC missing" —
+                # an empty ledger is a valid empty aggregate.
+                return []
+            except Exception as rpc_err:
+                logger.debug(f"erp_ledger_totals RPC unavailable, using projection: {rpc_err}")
+                return None
+        except Exception as exc:
+            logger.debug(f"Supabase ERP aggregate skipped: {exc}")
+            return None
+    try:
+        from app.db import local_storage
+
+        conn = local_storage.get_db_connection(db_path)
+        try:
+            where = "WHERE company_id = ?" if company_id else ""
+            params: tuple = (company_id,) if company_id else ()
+            cur = conn.execute(
+                f"""SELECT company_id,
+                    COUNT(*) AS n,
+                    SUM(CASE WHEN status IN ('planned','moving','rerouted') THEN 1 ELSE 0 END) AS active,
+                    SUM(CASE WHEN status='delivered' THEN 1 ELSE 0 END) AS delivered,
+                    SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END) AS failed,
+                    SUM(CASE WHEN rerouted = 1 AND status IN ('rerouted','delivered')
+                        AND saved_cost_idr > 0 THEN 1 ELSE 0 END) AS reroute_ok,
+                    SUM(CASE WHEN rerouted = 1 AND (status='failed' OR saved_cost_idr < 0)
+                        THEN 1 ELSE 0 END) AS reroute_fail,
+                    SUM(CASE WHEN status='delivered' AND sla_deadline_hours > 0
+                        AND actual_time_hours <= sla_deadline_hours THEN 1 ELSE 0 END) AS sla_ok,
+                    COALESCE(SUM(baseline_cost_idr),0) AS base,
+                    COALESCE(SUM(actual_cost_idr),0) AS actual,
+                    COALESCE(SUM(saved_cost_idr),0) AS saved,
+                    COALESCE(SUM(saved_time_hours),0) AS th,
+                    COALESCE(SUM(saved_fuel_liters),0) AS fl,
+                    COALESCE(SUM(saved_fuel_cost_idr),0) AS f,
+                    COALESCE(SUM(saved_toll_idr),0) AS t,
+                    COALESCE(SUM(saved_spoilage_idr),0) AS s,
+                    COALESCE(SUM(saved_labor_idr),0) AS l
+                FROM travels {where} GROUP BY company_id""",
+                params,
+            )
+            cols = [d[0] for d in cur.description]
+            return [dict(zip(cols, row)) for row in cur.fetchall()]
+        finally:
+            conn.close()
+    except Exception as exc:
+        logger.debug(f"SQLite ERP aggregate skipped: {exc}")
+        return None
+
+
 def build_erp_summary(
     company_id: Optional[str] = None,
     include_trips: bool = True,
+    limit: int = 500,
     db_path: Optional[str] = None,
 ) -> ERPSummaryResponse:
     """
     Aggregate the travel ledger into dispatcher/regulator ERP figures.
 
     `include_trips=False` returns tenant-level aggregates only (regulator macro
-    view) — no per-rit commercial detail crosses the role boundary.
+    view) — no per-rit commercial detail crosses the role boundary, and no
+    trip rows are fetched at all (REGULATOR_AGGREGATE early-return).
+
+    Perf (Phase 5): totals are pushed to SQL (SUM/COUNT/GROUP BY, unbounded)
+    instead of Python O(C×N); only the dispatcher detail window is fetched
+    (default 500, max 1000). Results are cached 120s per
+    (company, scope, limit) and invalidated on create/update/hedging.
+    Response shape is unchanged.
     """
-    trips = _fetch_travels(company_id=company_id, limit=5000, db_path=db_path)
+    try:
+        limit = int(limit or 500)
+    except (TypeError, ValueError):
+        limit = 500
+    limit = max(1, min(limit, 1000))
 
-    if include_trips:
-        scope = "DISPATCHER_DETAIL"
-        rows = [_trip_row(t) for t in trips]
-    else:
-        scope = "REGULATOR_AGGREGATE"
-        rows = []
+    scope = "DISPATCHER_DETAIL" if include_trips else "REGULATOR_AGGREGATE"
+    cache_key = _erp_cache_key(company_id, scope, limit)
+    cached = _erp_cache_get(cache_key)
+    if cached is not None:
+        return cached
 
-    companies = sorted({str(t.get("company_id")) for t in trips if t.get("company_id")})
     per_company: List[ERPCompanySummary] = []
-    for comp in companies:
-        comp_trips = [t for t in trips if str(t.get("company_id")) == comp]
-        comp_totals = _compute_totals(comp_trips)
-        per_company.append(
-            ERPCompanySummary(
-                company_id=comp,
-                total_trips=comp_totals.total_trips,
-                delivered_trips=comp_totals.delivered_trips,
-                failed_trips=comp_totals.failed_trips,
-                reroute_success_count=comp_totals.reroute_success_count,
-                reroute_success_rate_pct=comp_totals.reroute_success_rate_pct,
-                time_saved_hours=comp_totals.time_saved_hours,
-                fuel_saved_liters=comp_totals.fuel_saved_liters,
-                cost_saved_idr=comp_totals.cost_saved_idr,
-                cost_efficiency_pct=comp_totals.cost_efficiency_pct,
-            )
-        )
+    totals: Optional[ERPTotals] = None
 
-    totals = _compute_totals(trips)
+    # SQL-first aggregates (SUM saved_*/COUNT/GROUP BY company_id).
+    sql_aggs = _erp_sql_aggregates(company_id=company_id, db_path=db_path)
+    if sql_aggs is not None:
+        for agg in sql_aggs:
+            per_company.append(_company_summary_from_agg(agg))
+        totals = _totals_from_agg(_merge_aggs(sql_aggs))
+
+    rows: List[ERPTripRow] = []
+    if totals is None:
+        # Fallback: bounded numeric projection, same formulas as SQL path.
+        if _supabase_enabled():
+            try:
+                from app.db import travel_supabase
+
+                numeric_rows = travel_supabase.list_travels_numeric(
+                    company_id=company_id, limit=limit
+                )
+                trips = [dict(r) for r in numeric_rows]
+            except Exception as exc:
+                logger.warning("Supabase numeric projection failed, using full rows: %s", exc)
+                trips = _fetch_travels(company_id=company_id, limit=limit, db_path=db_path)
+        else:
+            trips = _fetch_travels(company_id=company_id, limit=limit, db_path=db_path)
+
+        if include_trips:
+            scope = "DISPATCHER_DETAIL"
+            # Detail window only — totals already cover the full ledger.
+            detail = trips if not _supabase_enabled() else _fetch_travels(
+                company_id=company_id, limit=limit, db_path=db_path, include_trips=True
+            )
+            rows = [_trip_row(t) for t in detail]
+        else:
+            scope = "REGULATOR_AGGREGATE"
+            rows = []
+
+        companies = sorted({str(t.get("company_id")) for t in trips if t.get("company_id")})
+        for comp in companies:
+            comp_trips = [t for t in trips if str(t.get("company_id")) == comp]
+            comp_totals = _compute_totals(comp_trips)
+            per_company.append(
+                ERPCompanySummary(
+                    company_id=comp,
+                    total_trips=comp_totals.total_trips,
+                    delivered_trips=comp_totals.delivered_trips,
+                    failed_trips=comp_totals.failed_trips,
+                    reroute_success_count=comp_totals.reroute_success_count,
+                    reroute_success_rate_pct=comp_totals.reroute_success_rate_pct,
+                    time_saved_hours=comp_totals.time_saved_hours,
+                    fuel_saved_liters=comp_totals.fuel_saved_liters,
+                    cost_saved_idr=comp_totals.cost_saved_idr,
+                    cost_efficiency_pct=comp_totals.cost_efficiency_pct,
+                )
+            )
+        totals = _compute_totals(trips)
+    elif include_trips:
+        # SQL totals hit; fetch only the dispatcher detail window (no JSONB
+        # beyond what _trip_row needs — light projection when on Supabase).
+        detail = _fetch_travels(
+            company_id=company_id, limit=limit, db_path=db_path, include_trips=True
+        )
+        rows = [_trip_row(t) for t in detail]
+    # else: REGULATOR_AGGREGATE early-return — trips rows never fetched.
+
     notes = [
         "Penghematan dihitung dari tarif tol BPJT (Golongan I–V), harga BBM Pertamina, dan peluruhan komoditas 4-tier.",
-        "Reroute sukses = rit yang dialihkan, selesai/berjalan, dan menghasilkan penghematan biaya bersih positif.",
-        "Rit gagal = status failed atau pengalihan rute yang justru menaikkan biaya aktual di atas baseline.",
+        "Reroute sukses = Trip yang dialihkan, selesai/berjalan, dan menghasilkan penghematan biaya bersih positif.",
+        "Trip gagal = status failed atau pengalihan rute yang justru menaikkan biaya aktual di atas baseline.",
     ]
 
-    return ERPSummaryResponse(
+    response = ERPSummaryResponse(
         generated_at=datetime.now().isoformat(),
         company_id=company_id,
         scope=scope,
@@ -836,6 +1117,8 @@ def build_erp_summary(
         trips=rows,
         business_notes=notes,
     )
+    _erp_cache_set(cache_key, response)
+    return response
 
 
 # ==========================================

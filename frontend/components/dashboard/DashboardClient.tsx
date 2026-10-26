@@ -196,10 +196,10 @@ function FloatingMapLegend({
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full border border-orange-400 bg-orange-500/25 shrink-0" />
+              <span className="w-2.5 h-2.5 rounded-full border border-slate-400 bg-slate-500/25 shrink-0" />
               <div>
-                <span className="text-slate-200 font-medium block">Karhutla FIRMS (Radius 1 / 2,5 / 5 km)</span>
-                <span className="text-xs text-slate-400 font-sans">Area oranye by FRP: kritis 5 km, tinggi 2,5 km, sedang 1 km. Klik area/titik = FRP/conf/jarak koridor.</span>
+                <span className="text-slate-200 font-medium block">Titik Panas (Satelit) — sorotan bila ≥3 titik keyakinan tinggi dalam 5 km</span>
+                <span className="text-xs text-slate-400 font-sans">Titik netral per deteksi VIIRS; sorotan oranye khusus peta bila ≥3 titik keyakinan tinggi (conf ≥80 atau FRP&gt;100) dalam 5 km. Klik area/titik = jumlah + FRP/conf/jarak koridor.</span>
               </div>
             </div>
 
@@ -257,7 +257,7 @@ function FloatingMapLegend({
               </div>
             </div>
 
-            {/* Disruption-only weather legend: filtered set counts (biru=gangguan, ungu=advisori). */}
+            {/* Disruption-only weather legend: filtered set counts (biru=gangguan, netral=waspada dini). */}
             <div className="pt-2 mt-2 border-t border-[#1c2432]/80 space-y-2">
  <span className="text-slate-400 font-sans font-semibold text-xs block">
  Cuaca
@@ -280,10 +280,10 @@ function FloatingMapLegend({
               </div>
 
               <div className="flex items-center gap-2">
- <span className="w-2.5 h-2.5 rounded-full bg-purple-500 shrink-0 " />
+ <span className="w-2.5 h-2.5 rounded-full border border-cyan-400 bg-slate-500/25 shrink-0 " />
                 <div>
-                  <span className="text-slate-200 font-medium block">Advisori (ungu) — {weatherAdvisoryCount} zona {showWeatherAdvisory ? '(ON)' : '(OFF)'}</span>
-                  <span className="text-xs text-slate-400 font-sans">Medium drizzle (mis. BMKG 60): hanya tampil bila toggle advisori ON.</span>
+                  <span className="text-slate-200 font-medium block">Waspada Dini (Advisory) — {weatherAdvisoryCount} zona {showWeatherAdvisory ? '(ON)' : '(OFF)'}</span>
+                  <span className="text-xs text-slate-400 font-sans">Medium drizzle (mis. BMKG 60): hanya tampil bila toggle waspada dini ON. Default OFF, HOLD-only.</span>
                 </div>
               </div>
             </div>
@@ -381,8 +381,9 @@ function FloatingMapLegend({
             </div>
           </div>
 
+          {/* Transparansi HITL — minimalist one-liner. */}
           <p className="text-xs text-slate-400 font-sans pt-1 border-t border-[#1c2432] leading-tight">
- <strong>Transparansi HITL:</strong> Prehub menampilkan semua alternatif rute agar operator dapat membandingkan trade-off waktu dan risiko sebelum persetujuan.
+ Transparansi HITL: semua alternatif tampil sebelum persetujuan.
           </p>
         </div>
       )}
@@ -431,6 +432,8 @@ export default function DashboardClient() {
   const initialCrisis = searchParams?.get('crisis') || null;
 
   const [isOnboardingModalOpen, setIsOnboardingModalOpen] = useState(false);
+  // Header roster trigger (dispatcher-gated): toggles the Armada Perusahaan overlay.
+  const [isRosterVisible, setIsRosterVisible] = useState(true);
   const [selectedCrisisId, setSelectedCrisisId] = useState<string | null>(initialCrisis);
   const [selectedCrisis, setSelectedCrisis] = useState<CrisisState | null>(null);
   const [selectedVehicle, setSelectedVehicle] = useState<FleetVehicle | null>(null);
@@ -516,7 +519,10 @@ export default function DashboardClient() {
 
   // Interactive Simulation Controls
   const [selectedRadius, setSelectedRadius] = useState<number>(DEFAULT_HAZARD_RADIUS_KM);
-  const [simSpeed, setSimSpeed] = useState<number>(1);
+  // Telemetry playback speed is fixed at 1x — no UI control is rendered.
+  // The prop is kept purely for CrisisMap/CrisisSimulatorBar plumbing.
+  const [simSpeed] = useState<number>(1);
+  const setSimSpeed = useCallback((_v: number) => { void _v; }, []);
   const [drawModeActive, setDrawModeActive] = useState(false);
   const [isClickTargeting, setIsClickTargeting] = useState(false);
   const [simulatedShockwave, setSimulatedShockwave] = useState<{ center: [number, number]; radiusKm: number; hazardType: string } | null>(null);
@@ -572,7 +578,7 @@ export default function DashboardClient() {
     setSelectedVehicle(null);
   }, []);
 
-  // Dispatcher tenant view (issue #2): the map draws LIVE_GPS tenant units only.
+  // Dispatcher perusahaan view (issue #2): the map draws LIVE_GPS units only.
   // An explicitly inspected ROUTE_ESTIMATED unit is injected into the layer so it can be
   // framed and inspected, but it never becomes ambient orange corridor noise.
   const isDispatcherWorkspace = role === 'DISPATCHER';
@@ -1151,7 +1157,7 @@ export default function DashboardClient() {
   const fireTooltip =
     fireStatus === 'degraded'
       ? (fireReason ?? 'butuh MAP_KEY — set NASA_FIRMS_MAP_KEY di Render env / .env.local')
-      : fireReason ?? `Overlay FIRMS VIIRS_SNPP_NRT: ${fireHotspotCount} area radius (5/2,5/1 km by FRP) + heat oranye. Klik area/titik = FRP/conf/jarak koridor.`;
+      : fireReason ?? `Titik Panas (Satelit) VIIRS_SNPP_NRT: ${fireHotspotCount} titik; sorotan oranye khusus peta bila ≥3 titik keyakinan tinggi dalam 5 km. Klik area/titik = jumlah + FRP/conf/jarak koridor.`;
 
 
 
@@ -2284,7 +2290,7 @@ export default function DashboardClient() {
         dampak: 'Belum ada dampak fisik terkonfirmasi — prakiraan dini.',
       }];
       setCurrentMapRoutes([]);
-      setActiveRouteIdx(0);
+      setActiveRouteIdx(null);
     }
     const originId = activeOriginRef.current || selectedOriginNode;
     const destId = activeDestRef.current || selectedDestNode;
@@ -2311,6 +2317,11 @@ export default function DashboardClient() {
           console.warn('Audit-trail route calc fallback:', e);
         }
       }
+    if (!forecastActive && !(originId && destId)) {
+      // Highlighted zone, no route yet: evidence-only, no stale corridor.
+      setCurrentMapRoutes([]);
+      setActiveRouteIdx(null);
+    }
     }
 
     const auditCrisis: CrisisState = {
@@ -2748,6 +2759,24 @@ export default function DashboardClient() {
 
         {/* Workspace Actions */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          {/* Dispatcher roster trigger: sits left of the onboard button, same gating. */}
+          {isDispatcherWorkspace && (
+            <button
+              type="button"
+              id="fleet-roster-toggle"
+              onClick={() => setIsRosterVisible((v) => !v)}
+              aria-pressed={isRosterVisible}
+              aria-label="Tampilkan atau sembunyikan panel Armada Perusahaan"
+              title="Armada Perusahaan — daftar aset terdaftar"
+              className="cursor-pointer px-2.5 sm:px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-slate-200 hover:text-white text-xs font-medium transition flex items-center gap-1.5"
+            >
+              <Truck className="w-3.5 h-3.5 text-[#00f0ff]" />
+              <span className="hidden sm:inline">Armada Perusahaan</span>
+              <span className="px-1.5 py-0.5 rounded bg-white text-[#080d14] font-mono text-xs font-bold tabular-nums">
+                {tenantFleetVehicles.length}
+              </span>
+            </button>
+          )}
           {/* Phase 43: Self-Serve Fleet Onboarding Action Button */}
           <button
             type="button"
@@ -2763,18 +2792,18 @@ export default function DashboardClient() {
             id="onboard-armada-btn"
             className={`cursor-pointer px-2.5 sm:px-3 py-1.5 rounded-lg border text-xs font-medium transition flex items-center gap-1.5 ${role === 'DISPATCHER'
                 ? 'border-white/10 bg-white/5 hover:bg-white/10 text-slate-200 hover:text-white'
-                : 'border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-200 hover:text-white'
+                : 'border-white/10 bg-white/5 hover:bg-white/10 text-slate-200 hover:text-white'
               }`}
             title={role === 'DISPATCHER' ? 'Onboard Armada & Unggah Manifest Pengiriman' : 'Onboard Armada (Terkunci: Khusus Wewenang Dispatcher)'}
           >
             {role === 'DISPATCHER' ? (
               <PlusCircle className="w-3.5 h-3.5 text-slate-300" />
             ) : (
-              <Lock className="w-3.5 h-3.5 text-amber-400" />
+              <Lock className="w-3.5 h-3.5 text-slate-400" />
             )}
             <span className="hidden sm:inline">Onboard Armada</span>
             {role !== 'DISPATCHER' && (
- <span className="hidden md:inline px-1 py-0.5 rounded bg-amber-500/20 text-amber-300 text-xs font-mono">
+ <span className="hidden md:inline px-1 py-0.5 rounded bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 text-xs font-mono">
                 Khusus Dispatcher
               </span>
             )}
@@ -2877,7 +2906,11 @@ export default function DashboardClient() {
                       : `${filteredNews.length} Sumber Terverifikasi`}
                   </span>
                   {newsLastUpdatedDate && (
-                    <FreshnessBadge lastUpdated={newsLastUpdatedDate} sourceLabel="" />
+                    <span
+                      title={`Integritas data — BMKG: ${String(corridorContext?.data_integrity?.bmkg_status ?? (corridorContext?.is_fallback ? 'fallback' : 'live'))} · TomTom: ${String(corridorContext?.data_integrity?.tomtom_status ?? (corridorContext?.is_fallback ? 'fallback' : 'live'))} · PIHPS: ${String(corridorContext?.data_integrity?.pihps_status ?? (corridorContext?.is_fallback ? 'fallback' : 'live'))}${corridorContext?.is_fallback ? ' · mode fallback' : ''}`}
+                    >
+                      <FreshnessBadge lastUpdated={newsLastUpdatedDate} sourceLabel="" />
+                    </span>
                   )}
                 </div>
               </div>
@@ -3050,7 +3083,9 @@ export default function DashboardClient() {
                     <div
                       key={item.id}
                       onClick={handleFocusMap}
-                      className={`p-3 rounded-lg border transition-colors space-y-2 cursor-pointer ${isSelected
+                      data-testid={`berita-card-${item.id}`}
+                      role="article"
+                      className={`p-3 rounded-lg border transition-all duration-200 space-y-2 cursor-pointer ${isSelected
                           ? 'bg-[#121822] border-white/40 ring-1 ring-white/20'
                           : 'bg-[#0c1017] border-[#1c2432] hover:border-slate-600 hover:bg-[#121822]'
                         }`}
@@ -3058,10 +3093,7 @@ export default function DashboardClient() {
                       {/* Source & Timestamp */}
                       <div className="flex items-center justify-between gap-1 text-xs font-mono">
                         <div className="flex items-center gap-1.5 truncate">
-                          <span className={`px-1.5 py-0.5 rounded border text-xs font-semibold uppercase ${isOfficial
-                              ? 'bg-white/10 text-slate-200 border-white/20'
-                              : 'bg-[#121822] text-slate-400 border-[#1c2432]'
-                            }`}>
+                          <span className="px-1.5 py-0.5 rounded border text-xs font-semibold uppercase bg-white/5 text-slate-300 border-white/10">
                             {item.source_name || (isOfficial ? 'ANTARA' : 'BERITA')}
                           </span>
                           {item.published_at ? (
@@ -3131,7 +3163,7 @@ export default function DashboardClient() {
                       )}
 
                       {item.affected_locations && item.affected_locations.length > 1 && (
- <div className="px-2 py-1 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyan-200 text-xs font-sans leading-snug">
+ <div className="px-2 py-1 rounded bg-white/5 border border-white/10 text-slate-300 text-xs font-sans leading-snug">
                           📍 {item.affected_locations.length} Daerah: {item.affected_locations.map((l) => l.name).join(', ')}
                         </div>
                       )}
@@ -3151,7 +3183,7 @@ export default function DashboardClient() {
  {/* Row 1 — Lokasi */}
                         <div className="flex items-center justify-between text-slate-300">
  <span className="text-slate-500 text-xs font-semibold">Lokasi:</span>
-                          <span className="text-cyan-300 font-semibold truncate max-w-[170px]" title={item.location_name || 'Koridor Sumatera'}>
+                          <span className="text-slate-200 font-semibold truncate max-w-[170px]" title={item.location_name || 'Koridor Sumatera'}>
                             {item.location_name || 'Koridor Sumatera'}
                             {item.lat && item.lon ? ` · ${item.lat.toFixed(2)}°N, ${item.lon.toFixed(2)}°E` : ''}
                             {' '}({item.location_precision === 'corridor_point'
@@ -3165,19 +3197,12 @@ export default function DashboardClient() {
  {/* Row 2 — Keyakinan */}
                         <div className="flex items-center justify-between text-slate-300 border-t border-[#1c2432]/60 pt-1">
  <span className="text-slate-500 text-xs font-semibold">Keyakinan:</span>
-                          <div className="flex items-center gap-1">
- <span className="px-1 py-0.2 rounded bg-cyan-950/60 text-cyan-400 border border-cyan-500/30 text-xs">
-                              {isOfficial ? 'ANTARA' : 'BMKG'}
-                            </span>
- <span className="px-1 py-0.2 rounded bg-emerald-950/60 text-emerald-400 border border-emerald-500/30 text-xs">
-                              TOMTOM
-                            </span>
-                            <span className="text-emerald-400 font-bold ml-0.5">
+                          <span data-testid={`berita-confidence-${item.id}`} className="px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 text-xs font-bold tabular-nums" title="Keyakinan verifikasi artikel">
+
                               {item.confidence_score != null && Number.isFinite(Number(item.confidence_score))
                                 ? `${Math.round(Number(item.confidence_score) * 100)}%`
                                 : 'Keyakinan belum tersedia'}
                             </span>
-                          </div>
                         </div>
 
  {/* Row 3 — Jalur */}
@@ -3234,21 +3259,32 @@ export default function DashboardClient() {
                           )}
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleFocusMap();
-                          }}
-                          title={isForecast ? 'Terapkan opsi TAHAN armada (prakiraan waspada dini — tanpa pengalihan rute)' : 'Fokuskan peta & audit trail zona ini'}
-                          className={`cursor-pointer flex items-center gap-1 px-2.5 py-1 rounded text-xs font-mono font-semibold transition-colors shadow-sm shrink-0 ${
-                            isForecast
-                              ? 'bg-cyan-500 hover:bg-cyan-400 text-[#080d14]'
-                              : 'bg-white hover:bg-slate-200 text-[#080d14]'
-                          }`}
-                        >
-                          <span>{isForecast ? 'Tahan (Hold)' : 'Fokus'}</span>
-                        </button>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            data-testid={`berita-focus-${item.id}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleFocusMap();
+                            }}
+                            title="Fokuskan peta & audit trail zona ini"
+                            className="cursor-pointer flex items-center gap-1 px-2.5 py-1 rounded text-xs font-mono font-semibold transition-colors shadow-sm bg-white hover:bg-slate-200 text-[#080d14]"
+                          >
+                            <span>Fokus</span>
+                          </button>
+                          <button
+                            type="button"
+                            data-testid={`berita-hold-${item.id}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleFocusMap();
+                            }}
+                            title={isForecast ? 'Terapkan opsi TAHAN armada (prakiraan waspada dini — tanpa pengalihan rute)' : 'Tahan armada terkait zona ini'}
+                            className="cursor-pointer flex items-center gap-1 px-2.5 py-1 rounded text-xs font-mono font-semibold transition-colors shadow-sm bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30"
+                          >
+                            <span>Tahan (Hold)</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );
@@ -3256,10 +3292,10 @@ export default function DashboardClient() {
               )}
             </div>
 
-            {/* Honest Dynamic Sensor Pipeline Status Bar */}
+            {/* Data-integrity provenance lives in the FreshnessBadge tooltip (title attr) — no 3-col grid. */}
             <div className="border-t border-white/10 pt-2.5 text-xs font-mono text-slate-400 space-y-1.5 shrink-0">
               <div className="flex items-center justify-between">
- <span className="text-slate-400 font-bold">Data</span>
+                <span className="text-slate-400 font-bold">Data</span>
                 <button
                   type="button"
                   onClick={() => setShowSensorInfo(v => !v)}
@@ -3275,44 +3311,6 @@ export default function DashboardClient() {
                   <strong>Transparansi Data:</strong> Status koneksi telemetri dan integrasi API operasional.
                 </div>
               )}
-
-              {(() => {
-                const isLiveStatus = (s?: string | null): boolean => {
-                  if (!s) return false;
-                  const v = String(s).trim().toLowerCase();
-                  return v === 'online' || v === 'live' || v === 'ok' || v === 'healthy' || v === 'operational';
-                };
-                const topFallback = corridorContext?.is_fallback === true;
-                const weatherFallback = (corridorContext?.weather as { is_fallback?: boolean } | undefined)?.is_fallback === true;
-                const trafficFallback = (corridorContext?.traffic as { is_fallback?: boolean } | undefined)?.is_fallback === true;
-                const commodityFallback = (corridorContext?.commodity_prices as { is_fallback?: boolean } | undefined)?.is_fallback === true;
-                const isBmkgLive = !topFallback && !weatherFallback && isLiveStatus(corridorContext?.data_integrity?.bmkg_status);
-                const isTomtomLive = !topFallback && !trafficFallback && isLiveStatus(corridorContext?.data_integrity?.tomtom_status);
-                const isPihpsLive = !topFallback && !commodityFallback && isLiveStatus(corridorContext?.data_integrity?.pihps_status);
-
-                return (
-                  <div className="grid grid-cols-3 gap-1 text-xs text-center">
-                    <div className="p-1 rounded bg-slate-950/80 border border-white/5">
-                      <span className="text-slate-500 block">BMKG</span>
-                      <span className={`font-bold font-mono ${isCorridorLoading ? 'text-cyan-400' : isBmkgLive ? 'text-emerald-400' : 'text-amber-400'}`}>
- {isCorridorLoading ? 'Memuat' : isBmkgLive ? 'Live' : 'Fallback'}
-                      </span>
-                    </div>
-                    <div className="p-1 rounded bg-slate-950/80 border border-white/5">
-                      <span className="text-slate-500 block">TOMTOM</span>
-                      <span className={`font-bold font-mono ${isCorridorLoading ? 'text-cyan-400' : isTomtomLive ? 'text-emerald-400' : 'text-amber-400'}`}>
- {isCorridorLoading ? 'Memuat' : isTomtomLive ? 'Live' : 'Fallback'}
-                      </span>
-                    </div>
-                    <div className="p-1 rounded bg-slate-950/80 border border-white/5">
-                      <span className="text-slate-500 block">PIHPS</span>
-                      <span className={`font-bold font-mono ${isCorridorLoading ? 'text-cyan-400' : isPihpsLive ? 'text-emerald-400' : 'text-amber-400'}`}>
- {isCorridorLoading ? 'Memuat' : isPihpsLive ? 'Live' : 'Fallback'}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })()}
             </div>
           </aside>
 
@@ -3476,10 +3474,10 @@ export default function DashboardClient() {
                         <span
                           id="fleet-tenant-scope-badge"
                           className="px-2.5 py-1 rounded-md text-xs font-mono font-bold flex items-center gap-1.5 shrink-0 bg-cyan-500/20 text-cyan-300 border border-cyan-400/40"
- title="Sesi DISPATCHER: hanya armada tenant Anda dengan GPS live yang ditampilkan. Unit estimasi tersedia lewat panel Armada Tenant."
+ title="Sesi DISPATCHER: hanya armada perusahaan Anda dengan GPS live yang ditampilkan. Unit estimasi tersedia lewat panel Armada Perusahaan."
                         >
                           <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
-                          <span>Tenant Live GPS ({fleetCountVehicles.length})</span>
+                          <span>Perusahaan Live GPS ({fleetCountVehicles.length})</span>
                         </span>
                       )}
                     </div>
@@ -3500,10 +3498,10 @@ export default function DashboardClient() {
               />
             </div>
 
-            {/* Dispatcher tenant roster: honest inventory of onboarded assets.
+            {/* Dispatcher roster overlay: honest inventory of onboarded assets.
                 LIVE_GPS units drive the map; ROUTE_ESTIMATED units are listed
                 roster only, no badge, and only drawn on click inspection. */}
-            {isDispatcherWorkspace && (
+            {isDispatcherWorkspace && isRosterVisible && (
               <TenantFleetRoster
                 vehicles={tenantFleetVehicles}
                 isLoading={isFleetLoading}
@@ -3516,16 +3514,15 @@ export default function DashboardClient() {
               />
             )}
 
-            {/* Persistent route-computation banner: spinner + elapsed time + Batal */}
-            <div className="absolute top-14 left-1/2 -translate-x-1/2 z-40 pointer-events-none px-3">
-              <RoutingStatusBanner
-                isLoading={isRoutingLoading}
-                error={routingError}
-                elapsedMs={routingElapsedMs}
-                onCancel={handleCancelRouting}
-                onDismissError={() => setRoutingError(null)}
-              />
-            </div>
+            {/* Route-computation status modal: centered overlay (Watermelon
+                Dialog-1 pattern), auto-closes on done. Test-id + role kept. */}
+            <RoutingStatusBanner
+              isLoading={isRoutingLoading}
+              error={routingError}
+              elapsedMs={routingElapsedMs}
+              onCancel={handleCancelRouting}
+              onDismissError={() => setRoutingError(null)}
+            />
 
             {/* Decision Support System (DSS): Dispatcher Alert Queue Strip */}
             {!isAlertQueueDismissed && impactAssessmentData && impactAssessmentData.impacted_vehicles.length > 0 && (
@@ -3581,6 +3578,8 @@ export default function DashboardClient() {
                 setSimSpeed={setSimSpeed}
                 selectedCommodity={selectedCommodity}
                 onSelectCommodity={handleSelectCommodity}
+                isSimulatorArmed={isClickTargeting || drawModeActive}
+                autoRadiusKm={selectedCrisis?.radius_km ?? simulatedShockwave?.radiusKm ?? selectedRadius ?? 8}
               />
             )}
 
@@ -3658,6 +3657,7 @@ export default function DashboardClient() {
                 activeTab={activeTab}
                 setActiveTab={setActiveTab}
                 activeRouteIdx={activeRouteIdx}
+                hasRoute={activeRouteIdx != null || currentMapRoutes.length > 0}
                 onSelectRoute={(idx) => void handleSelectRoute(idx, 'sidebar')}
                 onApproveSuccess={(msg) => setToast({ message: msg, type: 'success' })}
                 onCommitOperationalRoute={handleCommitOperationalRoute}

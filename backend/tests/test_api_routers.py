@@ -6,6 +6,16 @@ from app.auth.supabase_auth import create_guest_token, ROLE_DISPATCHER
 client = TestClient(app)
 
 
+@pytest.fixture(autouse=True)
+def _isolate_commodity_cache():
+    """Phase 5: the 60s prices/spikes cache must not leak across tests."""
+    from app.routers.commodity_router import clear_commodity_cache
+
+    clear_commodity_cache()
+    yield
+    clear_commodity_cache()
+
+
 def test_health_endpoints():
     """Verify health endpoints return 200 with service metadata and source statuses."""
     res_health = client.get("/health")
@@ -368,6 +378,11 @@ def test_commodity_spikes_calculation_and_guard(monkeypatch):
     assert res1.status_code == 200
     assert res1.json()["spikes"] == []
     assert res1.json()["total"] == 0
+
+    # Phase 2 uses a different mock backend: drop the phase-1 cached [] first.
+    from app.routers.commodity_router import clear_commodity_cache
+
+    clear_commodity_cache()
 
     # Test 2: sufficient records (>= 3) computes percent change
     class SufficientQuery:

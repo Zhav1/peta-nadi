@@ -65,7 +65,7 @@ export default function LaporanFilterBar({
           type="text"
           value={filters.search ?? ''}
           onChange={(e) => onFiltersChange({ ...filters, search: e.target.value })}
-          placeholder="Cari ID rit, truk, rute, komoditas..."
+          placeholder="Cari ID Trip, truk, rute, komoditas..."
           className="w-full bg-transparent border border-white/10 rounded-lg pl-8 pr-8 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-white/30 transition-colors tabular-nums"
         />
         {filters.search && (

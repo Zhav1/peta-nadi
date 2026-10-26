@@ -22,6 +22,8 @@ interface CrisisSidebarProps {
  onCommitOperationalRoute?: (route: RouteRecommendation, action: any, tactical: any) => void;
  selectedImpactedVehicle?: import('@/lib/types').ImpactedVehicleAssessment | null;
  selectedCommodity?: string | null;
+ /** P3 zone evidence-only gate: true once a route is chosen/available. */
+ hasRoute?: boolean;
 }
 
 export function CrisisSidebar({
@@ -35,6 +37,7 @@ export function CrisisSidebar({
  setActiveTab: controlledSetActiveTab,
  selectedImpactedVehicle,
  selectedCommodity,
+ hasRoute: hasRouteProp,
 }: CrisisSidebarProps) {
  const [internalTab, setInternalTab] = useState<Tab>('Evidence');
 
@@ -49,7 +52,12 @@ export function CrisisSidebar({
  
  const activeTab = controlledTab || internalTab;
  const setActiveTab = controlledSetActiveTab || setInternalTab;
- const [showCausalChain, setShowCausalChain] = useState(false);
+ const [showCausalChain, setShowCausalChain] = useState(true);
+ // P3: zone click (highlighted zone, no route yet) is evidence-only.
+ // Mitigasi/Ekonomi reappear once a route is chosen or candidates exist.
+ const hasRoute = hasRouteProp ?? (activeRouteIdx != null || (crisis.route_recommendations?.length ?? 0) > 0);
+ const visibleTabs: Tab[] = hasRoute ? ['Evidence', 'Mitigation', 'Economic'] : ['Evidence'];
+ const effectiveTab: Tab = hasRoute ? activeTab : 'Evidence';
 
  // Severity dot only for critical/high. Medium/low stay quiet plain text.
  const isCritical = crisis.severity === 'critical';
@@ -103,13 +111,8 @@ export function CrisisSidebar({
  <h2 className="text-sm font-bold text-white leading-snug font-sans">
  {crisis.title}
  </h2>
- {crisis.custom_hazard_label && (
- <p className="text-xs text-cyan-300 font-sans mt-0.5 font-medium">
- {crisis.custom_hazard_label}
- </p>
- )}
  <p className="text-xs text-slate-400 font-mono mt-0.5">
- {normalizeRegion(crisis.region)} · {crisis.type}
+ {normalizeRegion(crisis.region)}
  </p>
  </div>
  <button
@@ -127,18 +130,21 @@ export function CrisisSidebar({
 
  {/* Tabs */}
  <div className="flex border-b border-[#1c2432] bg-[#0c1017]">
- {[
+ {(hasRoute
+ ? [
  { id: 'Evidence', label: 'Bukti & Sensor' },
  { id: 'Mitigation', label: 'Mitigasi & Rute' },
  { id: 'Economic', label: 'Dampak Ekonomi' },
- ].map((tab) => (
+ ]
+ : [{ id: 'Evidence', label: 'Bukti & Sensor' }]
+ ).filter((tab) => visibleTabs.includes(tab.id as Tab)).map((tab) => (
  <button
  key={tab.id}
  id={`tab-${tab.id.toLowerCase()}`}
  type="button"
  onClick={() => setActiveTab(tab.id as Tab)}
  className={`cursor-pointer flex-1 py-2 text-xs font-sans font-medium transition-colors ${
- activeTab === tab.id
+ effectiveTab === tab.id
  ? 'text-white border-b-2 border-white bg-white/5 font-semibold'
  : 'text-slate-400 hover:text-slate-200'
  }`}
@@ -150,8 +156,8 @@ export function CrisisSidebar({
 
  {/* Tab content */}
  <div className="flex-1 overflow-y-auto panel-scroll p-4 space-y-4">
- {activeTab === 'Evidence' && <EvidenceTab crisis={crisis} />}
- {activeTab === 'Mitigation' && (
+ {effectiveTab === 'Evidence' && <EvidenceTab crisis={crisis} />}
+ {hasRoute && effectiveTab === 'Mitigation' && (
  <MitigationTab
  crisis={crisis}
  activeRouteIdx={activeRouteIdx}
@@ -162,29 +168,36 @@ export function CrisisSidebar({
  selectedCommodity={selectedCommodity}
  />
  )}
- {activeTab === 'Economic' && <EconomicTab crisis={crisis} />}
+ {hasRoute && effectiveTab === 'Economic' && <EconomicTab crisis={crisis} />}
  </div>
 
- {/* GraphRAG causal chain */}
+ {/* GraphRAG causal chain — always-visible Why-this-alert section with collapse */}
  {crisis.causal_chain && crisis.causal_chain.length > 0 && (
  <div className="border-t border-[#1c2432] bg-[#0c1017]">
  <button
  id="causal-chain-toggle"
+ aria-expanded={showCausalChain}
+ aria-controls="causal-chain-body"
  type="button"
  onClick={() => setShowCausalChain((v) => !v)}
  className="cursor-pointer w-full flex items-center justify-between px-4 py-2.5 text-xs font-sans text-slate-300 hover:text-slate-100 transition-colors"
  >
  <span className="flex items-center gap-1.5">
  <Link2 className="w-3.5 h-3.5 text-cyan-400" />
- <span>Mengapa Peringatan Ini Muncul? (Causal Chain)</span>
+ <span>Mengapa Peringatan Ini Muncul? <span className="text-slate-500">Why this alert</span></span>
  </span>
  <span>{showCausalChain ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}</span>
  </button>
- {showCausalChain && (
+ <div
+ id="causal-chain-body"
+ className={`grid transition-all duration-300 ease-out motion-reduce:transition-none ${showCausalChain ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}
+ >
+ <div className="overflow-hidden">
  <div className="px-4 pb-3">
  <CausalChainPanel chain={crisis.causal_chain} />
  </div>
- )}
+ </div>
+ </div>
  </div>
  )}
  </div>

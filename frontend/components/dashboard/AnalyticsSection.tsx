@@ -353,7 +353,7 @@ export default function DashboardAnalyticsSection({
   }, [commodity]);
 
   // Deret per komoditas untuk korelasi + streak (GET-only, region-aware).
-  // Window 100 titik (real PIHPS backfill 180 hari mingguan — bukan sintetis);
+  // Window 60 titik (real PIHPS backfill 180 hari mingguan — bukan sintetis);
   // bila filter wilayah sempit menghasilkan <14 titik, fallback ke agregat
   // Sumatera untuk komoditas tersebut (satu Promise.all tambahan, hanya bila perlu).
   useEffect(() => {
@@ -365,7 +365,7 @@ export default function DashboardAnalyticsSection({
         const mapped = regionToDb(priceRegion);
         const fetchSeries = async (c: string, region?: string): Promise<[string, PricePoint[]]> => {
           try {
-            const res = await api.commodities.prices({ commodity: c, region, limit: 100 });
+            const res = await api.commodities.prices({ commodity: c, region, limit: 60 });
             const items: PricePoint[] = (res?.items ?? []).map((it: { price_idr: number; time: string }) => ({
               price: it.price_idr,
               time: it.time,
@@ -505,8 +505,12 @@ export default function DashboardAnalyticsSection({
   // Shared honest-empty copy for spike consumers (donut + table guard).
   const spikeEmptyMessage =
     spikeRecordsTotal < 3
-      ? `Hanya ${spikeRecordsTotal} catatan harga untuk ${commodityLabel} — spike butuh ≥ 3 catatan (guard backend).`
+      ? `Data ${commodityLabel} kurang — butuh ≥ 3 catatan.`
       : `Tidak ada lonjakan ≥ 5% untuk ${commodityLabel} pada filter ini.`;
+  const spikeEmptyFull =
+    spikeRecordsTotal < 3
+      ? `Hanya ${spikeRecordsTotal} catatan harga untuk ${commodityLabel} — spike butuh ≥ 3 catatan (guard backend).`
+      : `Tidak ada lonjakan ≥ 5% untuk ${commodityLabel} pada filter ini (ambang 5/10/15%, baseline 30 hari).`;
 
   const nowMs = useMemo(() => Date.now(), []);
 
@@ -554,15 +558,15 @@ export default function DashboardAnalyticsSection({
     return [
       {
         key: 'risiko',
-        label: 'Risiko komposit',
+        label: 'Risiko harga',
         display: risiko != null ? `${risiko}/100` : 'n/a',
         value: risiko,
         tone: risiko == null ? 'neutral' : risiko >= 70 ? 'critical' : risiko >= 40 ? 'high' : risiko >= 20 ? 'warn' : 'neutral',
-        hint: 'Komposit sqrt(max spike, CV). ≥70 kritis, ≥40 tinggi, ≥20 waspada.',
+        hint: 'Skor gabungan spike & CV (0–100); ≥70 kritis.',
       },
       {
         key: 'naik',
-        label: '% titik naik',
+        label: 'Porsi naik',
         display: fmtSigned(naik),
         value: naik,
         tone: naik == null ? 'neutral' : naik >= 60 ? 'warn' : 'neutral',
@@ -570,7 +574,7 @@ export default function DashboardAnalyticsSection({
       },
       {
         key: 'wow',
-        label: 'WoW (7 vs 7)',
+        label: 'WoW — Perubahan sepekan',
         display: fmtSigned(wow),
         value: wow,
         tone: toneOf(wow, 15, 10),
@@ -586,7 +590,7 @@ export default function DashboardAnalyticsSection({
       },
       {
         key: 'streak',
-        label: 'Streak naik',
+        label: 'Naik beruntun',
         display: streak != null ? `${streak} titik` : 'n/a',
         value: streak,
         tone: streak == null ? 'neutral' : streak >= 5 ? 'critical' : streak >= 3 ? 'high' : streak >= 1 ? 'warn' : 'neutral',
@@ -602,7 +606,7 @@ export default function DashboardAnalyticsSection({
       },
       {
         key: 'overlap',
-        label: 'Overlap bencana 48j',
+        label: 'Bencana bersamaan',
         display: overlap == null ? 'n/a' : overlap ? 'Overlap' : 'Aman',
         value: overlap,
         tone: overlap == null ? 'neutral' : overlap ? 'critical' : 'neutral',
@@ -940,8 +944,11 @@ export default function DashboardAnalyticsSection({
               {spikesLoading ? 'memuat…' : `${heatCells.length} sel`}
             </span>
           </div>
-          <p className="text-xs text-slate-500 font-sans -mt-1 tabular-nums">
-            Spike% maksimum 30 hari · ambang 5/10/15% · semua wilayah &amp; komoditas
+          <p
+            className="text-xs text-slate-500 font-sans -mt-1 tabular-nums"
+            title="Spike% maksimum 30 hari · ambang 5/10/15% · semua wilayah & komoditas"
+          >
+            Spike maksimum 30 hari per wilayah
           </p>
           <PriceHeatmap
             cells={heatCells}
@@ -961,8 +968,11 @@ export default function DashboardAnalyticsSection({
               {bencanaLoading || bnpbLoading ? 'memuat…' : '30 hari · flag 48 jam'}
             </span>
           </div>
-          <p className="text-xs text-slate-500 font-sans -mt-1 tabular-nums">
-            BNPB/BMKG/FIRMS aktif × spike komoditas · GET-only
+          <p
+            className="text-xs text-slate-500 font-sans -mt-1 tabular-nums"
+            title="BNPB/BMKG/FIRMS aktif × spike komoditas"
+          >
+            Bencana aktif × spike komoditas
           </p>
           <BencanaHeatmap
             rows={bencanaRows}
@@ -974,8 +984,11 @@ export default function DashboardAnalyticsSection({
         {/* Row 3a: matriks korelasi (diverging symmetric matrix) */}
         <section className="col-span-12 xl:col-span-6 bg-[#0c1017] border border-white/10 rounded-xl p-4 flex flex-col gap-3 min-w-0">
           <h3 className="text-sm font-semibold tracking-wide text-white">Korelasi harga antar-komoditas</h3>
-          <p className="text-xs text-slate-500 font-sans -mt-1 tabular-nums">
-            Pearson −1…1 · |r|&gt;0.7 ditandai · n&lt;10 tidak dihitung (bukan 0) · ambang 10 tetap
+          <p
+            className="text-xs text-slate-500 font-sans -mt-1 tabular-nums"
+            title="Pearson −1…1 · |r|>0.7 ditandai · n<10 tidak dihitung (bukan 0) · ambang 10 tetap"
+          >
+            Hubungan harga antar barang
           </p>
           <CorrelationMatrix
             commodities={[...COMMODITY_OPTIONS]}
@@ -990,9 +1003,11 @@ export default function DashboardAnalyticsSection({
         {/* Row 3b: streak mingguan (arah pekan + streak) */}
         <section className="col-span-12 xl:col-span-6 bg-[#0c1017] border border-white/10 rounded-xl p-4 flex flex-col gap-3 min-w-0">
           <h3 className="text-sm font-semibold tracking-wide text-white">Streak mingguan per komoditas</h3>
-          <p className="text-xs text-slate-500 font-sans -mt-1 tabular-nums">
-            4 pekan terakhir · WoW rata-rata pekan · butuh ≥14 titik (kurang = data kurang, bukan 0)
-            {multiFallback ? ' · fallback agregat Sumatera aktif' : ''}
+          <p
+            className="text-xs text-slate-500 font-sans -mt-1 tabular-nums"
+            title="4 pekan terakhir · WoW rata-rata pekan · butuh ≥14 titik (kurang = data kurang, bukan 0)"
+          >
+            4 pekan terakhir{multiFallback ? ' · agregat Sumatera' : ''}
           </p>
           <TimeHeatstrip
             rows={heatstripRows}
@@ -1017,8 +1032,11 @@ export default function DashboardAnalyticsSection({
               )}
             </span>
           </div>
-          <p className="text-xs text-slate-500 font-sans -mt-1 tabular-nums">
-            {commodityLabel}{priceRegion ? ` · ${prettifyRegion(priceRegion)}` : ' · semua wilayah'} · baseline 30 hari · ambang 5/10/15%
+          <p
+            className="text-xs text-slate-500 font-sans -mt-1 tabular-nums"
+            title={`${commodityLabel}${priceRegion ? ` · ${prettifyRegion(priceRegion)}` : ' · semua wilayah'} · baseline 30 hari · ambang 5/10/15%`}
+          >
+            {commodityLabel}{priceRegion ? ` · ${prettifyRegion(priceRegion)}` : ' · semua wilayah'} · baseline 30 hari
           </p>
 
           {spikesLoading ? (
@@ -1027,7 +1045,9 @@ export default function DashboardAnalyticsSection({
               <Empty loading />
             </div>
           ) : filteredSpikes.length === 0 || spikeRecordsTotal < 3 ? (
-            <Empty message={spikeEmptyMessage} />
+            <div title={spikeEmptyFull}>
+              <Empty message={spikeEmptyMessage} />
+            </div>
           ) : (
             <div className="overflow-x-auto rounded-lg border border-white/10">
               <Table>
@@ -1125,8 +1145,11 @@ export default function DashboardAnalyticsSection({
               )}
             </span>
           </div>
-          <p className="text-xs text-slate-500 font-sans -mt-1 tabular-nums">
-            Sumber: BNPB DIBI/bnpb.go.id · cache 1 jam · GET-only
+          <p
+            className="text-xs text-slate-500 font-sans -mt-1 tabular-nums"
+            title="Sumber: BNPB DIBI/bnpb.go.id · cache 1 jam"
+          >
+            Sumber: BNPB DIBI · cache 1 jam
           </p>
 
           {bnpbLoading ? (
@@ -1135,13 +1158,15 @@ export default function DashboardAnalyticsSection({
               <Empty loading />
             </div>
           ) : !bnpbAvailable || bnpbEvents.length === 0 ? (
-            <Empty
-              message={
-                !bnpbAvailable
-                  ? 'Feed BNPB belum tersedia — poller 1 jam mencoba ulang (tidak memengaruhi harga/spike).'
-                  : 'Tidak ada kejadian kebencanaan BNPB di Sumatera pada jendela ini.'
-              }
-            />
+            <div title={!bnpbAvailable ? 'Feed BNPB belum tersedia — poller 1 jam mencoba ulang (tidak memengaruhi harga/spike).' : undefined}>
+              <Empty
+                message={
+                  !bnpbAvailable
+                    ? 'Feed BNPB belum tersedia.'
+                    : 'Tidak ada kejadian BNPB di Sumatera pada jendela ini.'
+                }
+              />
+            </div>
           ) : (
             <ul className="flex flex-col gap-2">
               {bnpbEvents.slice(0, 8).map((e) => (

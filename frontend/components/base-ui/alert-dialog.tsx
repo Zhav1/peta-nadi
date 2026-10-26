@@ -25,12 +25,13 @@ export function AlertDialogTrigger({ children, render, asChild, ...props }: Aler
   return <BaseAlertDialog.Trigger {...props}>{children}</BaseAlertDialog.Trigger>;
 }
 
-export interface AlertDialogContentProps {
+export interface AlertDialogContentProps
+  extends Omit<React.HTMLAttributes<HTMLDivElement>, 'children'> {
   className?: string;
   children?: React.ReactNode;
 }
 
-export function AlertDialogContent({ className, children }: AlertDialogContentProps) {
+export function AlertDialogContent({ className, children, ...props }: AlertDialogContentProps) {
   return (
     <BaseAlertDialog.Portal>
       <BaseAlertDialog.Backdrop
@@ -39,6 +40,7 @@ export function AlertDialogContent({ className, children }: AlertDialogContentPr
       />
       <BaseAlertDialog.Popup
         data-slot="alert-dialog-content"
+        {...props}
         className={cn(
           'fixed left-1/2 top-1/2 z-50 w-[calc(100vw-32px)] max-w-[420px] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-white/10 bg-[#0c1017] p-6 text-xs text-slate-100 shadow-2xl outline-none',
           className,

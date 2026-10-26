@@ -8,6 +8,8 @@ Complies with Supabase Security Guidelines:
 - Provides resilient offline guest session generation for competition evaluators.
 """
 
+import hashlib
+import json
 import logging
 import time
 from typing import Callable, Optional
@@ -170,6 +172,84 @@ def get_jwks_client(jwks_url: str) -> PyJWKClient:
     return _jwks_clients[jwks_url]
 
 
+# ==========================================
+# AUTH SESSION CACHE (Phase 5 perf)
+# Verified UserSessions are cached 60s by token hash: process-local dict
+# first, Redis (`lrip:cache:auth:*`) second. Cache NEVER bypasses signature
+# verification — only a fully verified session is stored, and entries are
+# time-boxed so revocation/expiry still takes effect within 60s. 403
+# behavior in `require_roles` is untouched (it runs after this returns).
+# ==========================================
+_AUTH_CACHE_TTL_SECONDS = 60
+_AUTH_CACHE_PREFIX = "lrip:cache:auth:"
+_auth_session_mem: dict[str, tuple[float, dict]] = {}
+
+# Reused Supabase clients (Phase 5 perf): Path-3 relay and profiles lookups
+# previously built a fresh client per request (~TLS + auth overhead each).
+_supabase_relay_client = None
+_supabase_admin_client = None
+
+
+def _get_relay_client():
+    """Singleton anon client for the get_user relay fallback."""
+    global _supabase_relay_client
+    if _supabase_relay_client is None:
+        from app.db.supabase_client import get_client
+
+        _supabase_relay_client = get_client()
+    return _supabase_relay_client
+
+
+def _get_admin_client():
+    """Singleton service-role client for the profiles enrichment lookup."""
+    global _supabase_admin_client
+    if _supabase_admin_client is None:
+        from app.db.supabase_client import get_service_client
+
+        _supabase_admin_client = get_service_client()
+    return _supabase_admin_client
+
+
+def _token_cache_key(token: str) -> str:
+    digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    return f"{_AUTH_CACHE_PREFIX}{digest}"
+
+
+def _auth_cache_get(token: str) -> Optional[dict]:
+    """Return cached session dict if fresh, else None. Never raises."""
+    now = time.time()
+    entry = _auth_session_mem.get(_token_cache_key(token))
+    if entry and entry[0] > now:
+        return entry[1]
+    elif entry:
+        _auth_session_mem.pop(_token_cache_key(token), None)
+    try:
+        from app.services.redis_client import cache_get
+
+        raw = cache_get(_token_cache_key(token))
+        if raw:
+            data = json.loads(raw)
+            if isinstance(data, dict) and float(data.get("exp") or 0) > now:
+                _auth_session_mem[_token_cache_key(token)] = (now + _AUTH_CACHE_TTL_SECONDS, data)
+                return data
+    except Exception as exc:
+        logger.debug(f"Auth session cache read skipped: {exc}")
+    return None
+
+
+def _auth_cache_set(token: str, session: "UserSession") -> None:
+    """Store a verified session for 60s. Never raises."""
+    try:
+        data = session.model_dump()
+        key = _token_cache_key(token)
+        _auth_session_mem[key] = (time.time() + _AUTH_CACHE_TTL_SECONDS, data)
+        from app.services.redis_client import cache_set
+
+        cache_set(key, json.dumps(data, default=str), ex=_AUTH_CACHE_TTL_SECONDS)
+    except Exception as exc:
+        logger.debug(f"Auth session cache write skipped: {exc}")
+
+
 def decode_and_verify_token(token: str) -> UserSession:
     """
     Decode and verify a JWT token from Supabase Auth or offline session generator.
@@ -181,6 +261,16 @@ def decode_and_verify_token(token: str) -> UserSession:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"error": "UNAUTHORIZED", "message": "Token otentikasi tidak disediakan atau tidak valid."},
         )
+
+    # Fast path: fully-verified session cached within the last 60s.
+    # The cache key is the token hash (no raw tokens in keys) and entries
+    # carry the original `exp`; expired entries are never returned.
+    try:
+        cached = _auth_cache_get(token)
+        if cached:
+            return UserSession(**cached)
+    except Exception as exc:
+        logger.debug(f"Auth cache fast-path skipped: {exc}")
 
     try:
         unverified_header = jwt.get_unverified_header(token)
@@ -243,11 +333,10 @@ def decode_and_verify_token(token: str) -> UserSession:
             if verification_error is None:
                 verification_error = e
 
-    # Path 3: Server-side relay fallback via Supabase client get_user
+    # Path 3: Server-side relay fallback via Supabase client get_user (reused singleton client)
     if payload is None and settings.supabase_url and (settings.supabase_anon_key or settings.supabase_service_role_key):
         try:
-            from supabase import create_client
-            sb_client = create_client(settings.supabase_url, settings.supabase_anon_key or settings.supabase_service_role_key)
+            sb_client = _get_relay_client()
             user_response = sb_client.auth.get_user(token)
             if user_response and user_response.user:
                 sb_user = user_response.user
@@ -293,11 +382,13 @@ def decode_and_verify_token(token: str) -> UserSession:
     user_id = payload.get("sub") or payload.get("id") or f"user-{normalized_role.lower()}"
     email = payload.get("email") or DEFAULT_ROLE_EMAILS.get(normalized_role, "")
 
-    # Profile enrichment from public.profiles for registered Supabase accounts if company_id is unset
+    # Profile enrichment from public.profiles for registered Supabase accounts.
+    # SKIPPED whenever company_id is already present in the JWT claims
+    # (offline guest tokens + mirrored claims) — one fewer network round-trip
+    # on the hot path. Only runs for UUID subjects missing a tenant claim.
     if not company_id and settings.supabase_url and settings.supabase_service_role_key and len(str(user_id)) == 36:
         try:
-            from supabase import create_client
-            sb_admin = create_client(settings.supabase_url, settings.supabase_service_role_key)
+            sb_admin = _get_admin_client()
             prof_res = sb_admin.table("profiles").select("company_id, role, name").eq("id", user_id).limit(1).execute()
             if prof_res.data and len(prof_res.data) > 0:
                 p_row = prof_res.data[0]
@@ -318,7 +409,7 @@ def decode_and_verify_token(token: str) -> UserSession:
     permissions = app_meta.get("permissions") or ROLE_PERMISSIONS.get(normalized_role, [])
     is_offline = app_meta.get("provider") == "guest_session" or payload.get("iss") == "prehub-auth-engine"
 
-    return UserSession(
+    session = UserSession(
         id=user_id,
         email=email,
         role=normalized_role,
@@ -329,6 +420,11 @@ def decode_and_verify_token(token: str) -> UserSession:
         is_offline_guest=is_offline,
         exp=payload.get("exp"),
     )
+    # Cache the fully-verified session so repeat calls with the same token
+    # skip JWKS/JWT verification for 60s. 403 semantics are unchanged:
+    # `require_roles` still evaluates the (cached) role the same way.
+    _auth_cache_set(token, session)
+    return session
 
 
 async def get_current_user(

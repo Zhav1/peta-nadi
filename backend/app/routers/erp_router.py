@@ -21,6 +21,7 @@ router = APIRouter(prefix="/erp", tags=["ERP Savings & Travel Ledger"])
 @router.get("/summary", response_model=ERPSummaryResponse)
 async def get_erp_summary(
     company_id: Optional[str] = Query(None, description="Filter tenant perusahaan (kosong = sesuai peran/agregat)"),
+    limit: int = Query(500, ge=1, le=1000, description="Jendela baris detail (agregat SQL selalu penuh)"),
     user: UserSession = Depends(get_optional_user),
 ):
     """
@@ -40,4 +41,5 @@ async def get_erp_summary(
     return build_erp_summary(
         company_id=effective_company,
         include_trips=include_trips,
+        limit=limit,
     )

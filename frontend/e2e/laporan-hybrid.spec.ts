@@ -19,7 +19,7 @@ test('laporan hybrid panel loads via nav with KPI, charts, and tables', async ({
   await expect(panel).not.toContainText('Rekonsiliasi');
 
   // KPI strip.
-  await expect(panel.getByText('Total rit')).toBeVisible();
+  await expect(panel.getByText('Total Trip')).toBeVisible();
   await expect(panel.getByText('Biaya hemat')).toBeVisible();
 
   // Charts: bar per-tier + line per-periode.
@@ -35,7 +35,7 @@ test('laporan hybrid panel loads via nav with KPI, charts, and tables', async ({
   await expect(panel.getByText('RIT-001')).toBeVisible();
 
   // Negative savings render as an honest loss, never hidden.
-  await expect(panel.getByText('kerugian aktual', { exact: false })).toBeVisible();
+  await expect(panel.getByText(/Negatif = kerugian tercatat/)).toBeVisible();
 
   expect(pageerrors).toEqual([]);
 });

@@ -159,17 +159,13 @@ export function CorrelationMatrix({
       />
       {/* UX n aktual + progres ke 10 + cara baca + CTA — threshold 10 tetap. */}
       <div className="rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-xs tabular-nums">
-        <div className="flex items-center justify-between gap-2 text-slate-300">
+        <div
+          className="flex items-center justify-between gap-2 text-slate-300"
+          title={`Overlap maks n=${maxN}/10 · ${validCount}/${cells.length} pasangan terhitung · syarat 10${maxN < 10 ? ` · kurang ${10 - maxN} titik` : ' · tercapai'}`}
+        >
           <span>
-            Overlap maks <span className="font-bold text-white">n={maxN}/10</span>
-            {' · '}
-            {validCount}/{cells.length} pasangan terhitung
+            {validCount} dari {cells.length} pasangan terhitung
           </span>
-          {maxN < 10 ? (
-            <span className="shrink-0 text-slate-400">butuh {10 - maxN} titik lagi</span>
-          ) : (
-            <span className="shrink-0 text-slate-400">ambang terpenuhi</span>
-          )}
         </div>
         <div
           className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/10"
@@ -184,9 +180,11 @@ export function CorrelationMatrix({
             style={{ width: `${progressPct}%` }}
           />
         </div>
-        <p className="mt-1.5 text-[11px] leading-relaxed text-slate-500">
-          Cara baca: r mendekati +1 berarti kedua komoditas naik-turun bersama; mendekati −1
-          berarti berlawanan arah; |r|&gt;0.7 ditandai ring tegas. n&lt;10 tak dihitung (bukan 0).
+        <p
+          className="mt-1.5 text-[11px] leading-relaxed text-slate-500"
+          title="Cara baca: r mendekati +1 berarti kedua komoditas naik-turun bersama; mendekati −1 berarti berlawanan arah; |r|>0.7 ditandai ring tegas. n<10 tak dihitung (bukan 0)."
+        >
+          r +1 searah · −1 berlawanan · |r|&gt;0.7 kuat.
           {maxN < 10 ? (
             <>
               {' '}Perpanjang window ({windowDays} hari → 30 hari) atau{' '}

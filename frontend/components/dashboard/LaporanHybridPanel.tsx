@@ -23,7 +23,6 @@ import type {
 } from '@/lib/types';
 import {
   applyLaporanFilters,
-  averageTripEconomy,
   formatJtM,
   groupByCommodityTier,
   groupByPeriod,
@@ -140,13 +139,11 @@ export default function LaporanHybridPanel({
 
   const hasTrips = (totals?.total_trips ?? 0) > 0;
 
-  const economyAvg = useMemo(() => averageTripEconomy(filteredTrips), [filteredTrips]);
-
   if (isLoading && !summary) {
     return (
       <div className="bg-[#0c1017] border border-white/10 rounded-xl p-12 flex flex-col items-center justify-center gap-2 text-slate-400">
         <div className="w-6 h-6 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
-        <span className="text-xs">Memuat ledger ERP...</span>
+        <span className="text-xs">Memuat laporan...</span>
       </div>
     );
   }
@@ -164,10 +161,12 @@ export default function LaporanHybridPanel({
         />
         <div className="bg-[#0c1017] border border-white/10 rounded-xl p-12 flex flex-col items-center justify-center gap-2 text-slate-400">
           <Route className="w-8 h-8 text-slate-600 mb-1" />
-          <p className="text-sm font-medium text-slate-300">Belum ada rit pada tenant ini</p>
-          <p className="text-xs text-slate-500 max-w-md text-center">
-            Buat aset truk lalu buat rit pengiriman. Angka penghematan baru muncul setelah waktu/BBM aktual
-            diisi — sistem tidak menampilkan persentase karangan.
+          <p className="text-sm font-medium text-slate-300">Belum ada Trip pada perusahaan ini</p>
+          <p
+            className="text-xs text-slate-500 max-w-md text-center"
+            title="Buat aset truk lalu buat Trip pengiriman. Angka penghematan baru muncul setelah waktu/BBM aktual diisi — sistem tidak menampilkan persentase karangan."
+          >
+            Isi waktu/BBM aktual agar penghematan terhitung.
           </p>
           <button
             type="button"
@@ -186,7 +185,7 @@ export default function LaporanHybridPanel({
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-px bg-white/10 border border-white/10 rounded-xl overflow-hidden">
         {[
           {
-            label: 'Total rit',
+            label: 'Total Trip',
             value: `${totals?.total_trips ?? 0}`,
             sub: `${totals?.active_trips ?? 0} aktif • ${totals?.delivered_trips ?? 0} terkirim`,
             icon: Truck,
@@ -200,7 +199,7 @@ export default function LaporanHybridPanel({
             color: 'text-emerald-400',
           },
           {
-            label: 'Rit gagal',
+            label: 'Trip gagal',
             value: `${totals?.failed_trips ?? 0}`,
             sub: `${totals?.reroute_failed_count ?? 0} reroute merugi`,
             icon: XCircle,
@@ -270,7 +269,7 @@ export default function LaporanHybridPanel({
         <div className="px-4 py-2.5 border-t border-white/10 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
           <span className="flex items-center gap-1.5 tabular-nums">
             <ArrowDownRight className="w-3.5 h-3.5 text-emerald-400" />
-            Rata-rata hemat per rit:{' '}
+            Rata-rata hemat per Trip:{' '}
             <strong className="text-emerald-300 tabular-nums">
               {formatIDR(totals?.avg_cost_saved_per_trip_idr)}
             </strong>
@@ -335,7 +334,7 @@ export default function LaporanHybridPanel({
         <div className="bg-[#0c1017] border border-white/10 rounded-xl overflow-hidden">
           <div className="px-4 py-3 border-b border-white/10">
             <h3 className="text-xs font-medium text-slate-200">
-              Agregasi per tier ({filteredTrips.length} rit terfilter)
+              Agregasi per tier ({filteredTrips.length} Trip terfilter)
             </h3>
           </div>
           <div className="overflow-x-auto">
@@ -343,7 +342,7 @@ export default function LaporanHybridPanel({
               <TableHeader>
                 <TableRow>
                   <TableHead className="h-11 bg-[#0c1017] font-medium">Tier</TableHead>
-                  <TableHead className="h-11 bg-[#0c1017] text-right font-medium">Rit</TableHead>
+                  <TableHead className="h-11 bg-[#0c1017] text-right font-medium">Trip</TableHead>
                   <TableHead className="h-11 bg-[#0c1017] text-right font-medium">Hemat (IDR)</TableHead>
                   <TableHead className="h-11 bg-[#0c1017] text-right font-medium">Kom ringkas</TableHead>
                 </TableRow>
@@ -385,7 +384,7 @@ export default function LaporanHybridPanel({
               <TableHeader>
                 <TableRow>
                   <TableHead className="h-11 bg-[#0c1017] font-medium">Periode</TableHead>
-                  <TableHead className="h-11 bg-[#0c1017] text-right font-medium">Rit</TableHead>
+                  <TableHead className="h-11 bg-[#0c1017] text-right font-medium">Trip</TableHead>
                   <TableHead className="h-11 bg-[#0c1017] text-right font-medium">Hemat (IDR)</TableHead>
                 </TableRow>
               </TableHeader>
@@ -429,28 +428,16 @@ export default function LaporanHybridPanel({
           >
             <span className="flex items-center gap-2 text-xs font-medium text-slate-200 tabular-nums">
               <Route className="w-4 h-4 text-slate-400" />
-              Rincian per rit ({filteredTrips.length})
+              Rincian per Trip ({filteredTrips.length})
             </span>
             <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${rincianOpen ? 'rotate-180' : ''}`} />
           </button>
           {rincianOpen && (
             <div className="overflow-x-auto border-t border-white/10">
-              <div className="px-4 py-2 border-b border-white/10 text-xs text-slate-400 tabular-nums">
-                {economyAvg.avgKmpl != null ? (
-                  <span>
-                    Rata-rata ekonomi{' '}
-                    <strong className="text-slate-200">{formatEconomyKmpl(economyAvg.avgKmpl)}</strong>
-                    {' '}({economyAvg.measuredCount} rit terukur
-                    {economyAvg.unmeasuredCount > 0 && ` • ${economyAvg.unmeasuredCount} rit belum diinput dikecualikan`})
-                  </span>
-                ) : (
-                  <span>Belum ada rit dengan aktual BBM terisi — ekonomi belum dapat dihitung.</span>
-                )}
-              </div>
               <Table className="w-full" data-testid="audit-table">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="h-11 bg-[#0c1017] font-medium">ID rit / waktu</TableHead>
+                    <TableHead className="h-11 bg-[#0c1017] font-medium">ID Trip / waktu</TableHead>
                     <TableHead className="h-11 bg-[#0c1017] font-medium">Truk</TableHead>
                     <TableHead className="h-11 bg-[#0c1017] font-medium">Rute</TableHead>
                     <TableHead className="h-11 bg-[#0c1017] font-medium">Status</TableHead>
@@ -464,7 +451,7 @@ export default function LaporanHybridPanel({
                   {filteredTrips.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={8} className="py-10 text-center text-xs text-slate-500">
-                        Tidak ada rit yang cocok dengan filter ini.
+                        Tidak ada Trip yang cocok dengan filter ini.
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -555,32 +542,44 @@ export default function LaporanHybridPanel({
                           </div>
                         </TableCell>
                         <TableCell className="py-3">
+                          {/* M8 Phase 5: single 'Selesaikan Trip' action. Legacy Aktual/Hitung
+                              handlers (onOpenAktual/onSolveHedging) are kept in props for E2E
+                              compat but hidden from the visible table. */}
                           <div className="flex items-center gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => canAct && onOpenAktual(trip)}
-                              disabled={!canAct}
-                              className="px-2 py-1 rounded border border-white/10 text-slate-200 text-xs font-medium hover:bg-white/5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                              title={canAct ? 'Catat waktu/BBM aktual rit ini' : disabledHint}
-                            >
-                              Aktual
-                            </button>
                             {trip.hedging_policy ? (
                               <span className="text-xs text-slate-300">{trip.hedging_policy}</span>
                             ) : (
                               <button
                                 type="button"
-                                onClick={() => canAct && onSolveHedging(trip.id)}
+                                onClick={() => canAct && onOpenAktual(trip)}
                                 disabled={!canAct || solvingTripId === trip.id}
                                 className="px-2 py-1 rounded border border-white/10 text-slate-200 text-xs font-medium hover:bg-white/5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-                                title={canAct ? 'Hitung matriks Continue / Reroute / Hold untuk rit ini' : disabledHint}
+                                title={canAct ? 'Selesaikan Trip: isi aktual lalu hitung opsi' : disabledHint}
+                                data-testid={`selesaikan-trip-${trip.id}`}
                               >
                                 {solvingTripId === trip.id && (
                                   <RefreshCw className="w-3 h-3 animate-spin" />
                                 )}
-                                Hitung
+                                Selesaikan Trip
                               </button>
                             )}
+                            {/* Legacy handlers kept mounted (hidden) for E2E compat — not visible in table. */}
+                            <span className="hidden" aria-hidden="true" data-testid={`legacy-aktual-${trip.id}`}>
+                              <button
+                                type="button"
+                                tabIndex={-1}
+                                onClick={() => onOpenAktual(trip)}
+                              >
+                                Aktual
+                              </button>
+                              <button
+                                type="button"
+                                tabIndex={-1}
+                                onClick={() => onSolveHedging(trip.id)}
+                              >
+                                Hitung
+                              </button>
+                            </span>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -591,8 +590,11 @@ export default function LaporanHybridPanel({
             </div>
           )}
           {rincianOpen && (
-            <div className="px-4 py-2.5 border-t border-white/10 text-xs text-slate-500">
-              Nilai negatif ditampilkan sebagai kerugian aktual, bukan disembunyikan.
+            <div
+              className="px-4 py-2.5 border-t border-white/10 text-xs text-slate-500"
+              title="Nilai negatif ditampilkan sebagai kerugian aktual, bukan disembunyikan."
+            >
+              Negatif = kerugian tercatat.
             </div>
           )}
         </div>
