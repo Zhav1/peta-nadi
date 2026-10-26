@@ -83,6 +83,26 @@ function formatDateTime(iso?: string): string {
   });
 }
 
+/** Gagal tegas: status failed dari ledger (backend _compute_totals: failed). */
+function isFailedTrip(trip: ERPTripRow): boolean {
+  return trip.status === 'failed';
+}
+
+/**
+ * Rugi tercatat: saved_total negatif (ledger math tidak diubah — hanya display).
+ * Mencakup kasus reroute-merugi backend (rerouted + delivered + saved<0)
+ * maupun delivered negatif lainnya agar -55jt tidak tampil sebagai angka
+ * minus polos.
+ */
+function isRugiTrip(trip: ERPTripRow): boolean {
+  return Number(trip.saved_cost_idr ?? 0) < 0;
+}
+
+/** Reroute-merugi versi backend: rerouted && (failed || saved<0). */
+function isRerouteRugiTrip(trip: ERPTripRow): boolean {
+  return Boolean(trip.rerouted) && (trip.status === 'failed' || Number(trip.saved_cost_idr ?? 0) < 0);
+}
+
 export interface LaporanHybridPanelProps {
   summary: ERPSummaryResponse | null;
   isLoading: boolean;
@@ -375,6 +395,15 @@ export default function LaporanHybridPanel({
         )}
         <p className="mt-1 text-xs text-slate-500 tabular-nums">
           Reroute sukses {totals?.reroute_success_count ?? 0} / gagal {totals?.reroute_failed_count ?? 0}
+          {(totals?.failed_trips ?? 0) > 0 && (
+            <span
+              data-testid="keputusan-gagal-badge"
+              title="Trip gagal (status failed dari ledger)"
+              className="ml-2 inline-block px-1.5 py-0.5 rounded border border-rose-500/40 bg-rose-500/15 text-rose-300 text-[11px] font-semibold"
+            >
+              Gagal {totals?.failed_trips}
+            </span>
+          )}
         </p>
       </div>
 
@@ -528,10 +557,33 @@ export default function LaporanHybridPanel({
                         </TableCell>
                         <TableCell className="py-3">
                           <span className="flex items-center gap-1.5 text-xs text-slate-300">
-                            {trip.status === 'failed' && (
+                            {(trip.status === 'failed' || isRerouteRugiTrip(trip)) && (
                               <span className="w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0" />
                             )}
                             {STATUS_LABEL[trip.status] || trip.status}
+                            {isFailedTrip(trip) ? (
+                              <span
+                                data-testid={`gagal-badge-${trip.id}`}
+                                title="Trip gagal (status failed dari ledger)"
+                                className="inline-block px-1.5 py-0.5 rounded border border-rose-500/40 bg-rose-500/15 text-rose-300 text-[11px] font-semibold"
+                              >
+                                Gagal
+                              </span>
+                            ) : (
+                              isRugiTrip(trip) && (
+                                <span
+                                  data-testid={`rugi-badge-${trip.id}`}
+                                  title={
+                                    trip.status === 'delivered' && trip.rerouted
+                                      ? 'Reroute merugi: delivered namun saved_total negatif (kerugian tercatat)'
+                                      : 'Rugi tercatat: saved_total negatif (kerugian tercatat)'
+                                  }
+                                  className="inline-block px-1.5 py-0.5 rounded border border-rose-500/40 bg-rose-500/15 text-rose-300 text-[11px] font-semibold"
+                                >
+                                  Rugi
+                                </span>
+                              )
+                            )}
                           </span>
                         </TableCell>
                         <TableCell className="py-3">
@@ -577,11 +629,19 @@ export default function LaporanHybridPanel({
                         </TableCell>
                         <TableCell className="py-3">
                           <div
+                            data-testid={`hemat-${trip.id}`}
+                            title={
+                              Number(trip.saved_cost_idr) < 0
+                                ? `Rugi tercatat ${formatIDR(Number(trip.saved_cost_idr))} (negatif = kerugian tercatat)`
+                                : formatIDR(trip.saved_cost_idr)
+                            }
                             className={`text-right text-xs tabular-nums ${
                               Number(trip.saved_cost_idr) < 0 ? 'text-rose-300' : 'text-slate-300'
                             }`}
                           >
-                            {formatIDR(trip.saved_cost_idr)}
+                            {Number(trip.saved_cost_idr) < 0
+                              ? `Rugi ${formatIDR(Math.abs(Number(trip.saved_cost_idr)))}`
+                              : formatIDR(trip.saved_cost_idr)}
                           </div>
                           {trip.savings_breakdown != null && (
                             <div
@@ -595,7 +655,9 @@ export default function LaporanHybridPanel({
                             </div>
                           )}
                           {Number(trip.saved_cost_idr) < 0 && (
-                            <div className="text-right text-xs text-rose-400/80">kerugian</div>
+                            <div className="text-right text-xs text-rose-300 font-medium">
+                              Rugi tercatat
+                            </div>
                           )}
                           <div className="text-right text-xs text-slate-500 tabular-nums">
                             {formatNumber(trip.efficiency_pct)}%

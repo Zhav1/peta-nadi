@@ -452,10 +452,15 @@ export const api = {
     },
     getTravel: (travelId: string) =>
       request<import('./types').TravelRecord>(`/api/v1/fleet/travels/${encodeURIComponent(travelId)}`),
-    updateTravel: (travelId: string, payload: import('./types').TravelUpdatePayload) =>
+    updateTravel: (
+      travelId: string,
+      payload: import('./types').TravelUpdatePayload,
+      opts?: { idempotencyKey?: string }
+    ) =>
       request<import('./types').TravelRecord>(`/api/v1/fleet/travels/${encodeURIComponent(travelId)}`, {
         method: 'PATCH',
         body: JSON.stringify(payload),
+        ...(opts?.idempotencyKey ? { headers: { 'Idempotency-Key': opts.idempotencyKey } } : {}),
       }),
     solveTravelHedging: (travelId: string, payload: {
       p_disruption?: number;
@@ -465,10 +470,16 @@ export const api = {
       toll_segments?: string[];
       downtime_fixed_fee_idr?: number;
       inflation_shock_factor?: number;
-    }) =>
+    },
+      opts?: { idempotencyKey?: string }
+    ) =>
       request<{ status: string; travel_id: string; hedging: Record<string, any> }>(
         `/api/v1/fleet/travels/${encodeURIComponent(travelId)}/hedging`,
-        { method: 'POST', body: JSON.stringify(payload) }
+        {
+          method: 'POST',
+          body: JSON.stringify(payload),
+          ...(opts?.idempotencyKey ? { headers: { 'Idempotency-Key': opts.idempotencyKey } } : {}),
+        }
       ),
   },
   erp: {

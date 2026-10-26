@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { notifyToast } from '@/components/ui/Toast';
-import type { ERPTripRow, TravelRecord, TravelStatus } from '@/lib/types';
+import type { ERPTripRow, TravelRecord } from '@/lib/types';
 
 // M8 Phase 2: modal pencatatan aktual Trip. PATCH /api/v1/fleet/travels/{id}
 // via api.fleet.updateTravel, lalu otomatis POST hedging via
@@ -84,21 +84,21 @@ export function OutcomeVerificationForm({
     const delayH = Number(observedDelay);
     const spikeP = Number(priceSpike);
     if (!incidentId.trim()) {
-      setFieldError('incident_id wajib diisi.');
+      setFieldError('ID gangguan wajib diisi.');
       return;
     }
     if (!Number.isFinite(delayH) || delayH < 0) {
-      setFieldError('Keterlambatan observasi harus angka >= 0 jam.');
+      setFieldError('Keterlambatan di lapangan harus angka >= 0 jam.');
       return;
     }
     // OutcomeCreate.actual_price_spike_pct wajib (tanpa default) — validasi
     // client-side dulu agar 422 backend tidak perlu terjadi.
     if (priceSpike.trim() === '' || !Number.isFinite(spikeP)) {
-      setFieldError('Kenaikan harga aktual wajib diisi (angka %, cth. 9.2).');
+      setFieldError('Kenaikan harga di pasar wajib diisi (angka %, cth. 9.2).');
       return;
     }
     if (!verifiedBy.trim()) {
-      setFieldError('verified_by wajib diisi.');
+      setFieldError('Nama pencatat wajib diisi.');
       return;
     }
     setFieldError(null);
@@ -155,7 +155,7 @@ export function OutcomeVerificationForm({
       )}
 
       <label className="flex flex-col gap-1.5">
-        <span className="text-xs text-slate-400">incident_id</span>
+        <span className="text-xs text-slate-400">ID gangguan</span>
         <input
           type="text"
           value={incidentId}
@@ -170,7 +170,7 @@ export function OutcomeVerificationForm({
       <div className="grid grid-cols-2 gap-3">
         <label className="flex flex-col gap-1.5">
           <span className="text-xs text-slate-400">
-            Keterlambatan observasi (jam)
+            Keterlambatan di lapangan (jam)
             {!baselineKnown && <span className="text-slate-500"> — isi manual</span>}
           </span>
           <input
@@ -186,7 +186,7 @@ export function OutcomeVerificationForm({
           />
         </label>
         <label className="flex flex-col gap-1.5">
-          <span className="text-xs text-slate-400">Horizon</span>
+          <span className="text-xs text-slate-400">Jangka pantau</span>
           <select
             value={horizon}
             onChange={(e) => setHorizon(e.target.value as VerificationHorizon)}
@@ -207,7 +207,7 @@ export function OutcomeVerificationForm({
 
       <div className="grid grid-cols-2 gap-3">
         <label className="flex flex-col gap-1.5">
-          <span className="text-xs text-slate-400">Kenaikan harga aktual (%) *</span>
+          <span className="text-xs text-slate-400">Kenaikan harga di pasar (%) *</span>
           <input
             type="number"
             step="any"
@@ -220,7 +220,7 @@ export function OutcomeVerificationForm({
           />
         </label>
         <label className="flex flex-col gap-1.5">
-          <span className="text-xs text-slate-400">verified_by</span>
+          <span className="text-xs text-slate-400">Dicatat oleh</span>
           <input
             type="text"
             value={verifiedBy}
@@ -239,7 +239,7 @@ export function OutcomeVerificationForm({
       </p>
 
       <label className="flex flex-col gap-1.5">
-        <span className="text-xs text-slate-400">Catatan lapangan (opsional)</span>
+        <span className="text-xs text-slate-400">Catatan (opsional)</span>
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
@@ -280,6 +280,22 @@ export function OutcomeVerificationForm({
   );
 }
 
+// Known BPJT Sumatra segment codes (mirror backend BPJT_SUMATRA_TOLL_SEGMENTS keys).
+// Unknown codes are accepted but warned — backend toll cost counts Rp 0 for them.
+const KNOWN_TOLL_SEGMENTS = [
+  'BAKAUHENI_TERBANGGI',
+  'TERBANGGI_KAYUAGUNG',
+  'KAYUAGUNG_PALEMBANG',
+  'PEKANBARU_DUMAI',
+  'MEDAN_TEBINGTINGGI',
+  'BELMERA',
+  'SIGLI_BANDAACEH',
+];
+
+function formatIDRShort(value: number): string {
+  return `Rp ${Math.round(value).toLocaleString('id-ID')}`;
+}
+
 interface LaporanAktualModalProps {
   trip: ERPTripRow | null;
   open: boolean;
@@ -301,10 +317,17 @@ export default function LaporanAktualModal({
   const [actualTimeHours, setActualTimeHours] = useState('');
   const [actualFuelLiters, setActualFuelLiters] = useState('');
   const [actualTollSegments, setActualTollSegments] = useState('');
-  const [status, setStatus] = useState<TravelStatus>('delivered');
+  const [noToll, setNoToll] = useState(false);
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  // Double-submit guard: ref flips synchronously on first click, so a second
+  // click / StrictMode remount cannot fire a duplicate PATCH+hedging pair
+  // before setIsSaving re-renders. Key is per-modal-open; a retry after
+  // close gets a fresh key while repeats in one open share it.
+  const submitGuardRef = useRef(false);
+  const idempotencyKeyRef = useRef<string | null>(null);
+  const [hedgeSuggest, setHedgeSuggest] = useState<{ policy: string; savings: number } | null>(null);
   // Hybrid A: 'aktual' -> (PATCH + hedging sukses) -> 'verifikasi' inline.
   const [step, setStep] = useState<'aktual' | 'verifikasi'>('aktual');
   const [verifyPrefill, setVerifyPrefill] = useState<{
@@ -318,11 +341,21 @@ export default function LaporanAktualModal({
       setActualTimeHours('');
       setActualFuelLiters('');
       setActualTollSegments('');
-      setStatus('delivered');
+      setNoToll(false);
       setFieldError(null);
       setSubmitError(null);
+      setHedgeSuggest(null);
       setStep('aktual');
       setVerifyPrefill(null);
+      submitGuardRef.current = false;
+      try {
+        idempotencyKeyRef.current =
+          typeof crypto !== 'undefined' && 'randomUUID' in crypto
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      } catch {
+        idempotencyKeyRef.current = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      }
     }
   }, [open, trip?.id]);
 
@@ -343,14 +376,17 @@ export default function LaporanAktualModal({
       setSubmitError(disabledHint);
       return;
     }
+    // Guard sinkron ringan di sini; kunci guard baru diklaim setelah
+    // validasi lolos agar error validasi tidak mengunci form.
+    if (isSaving || submitGuardRef.current) return;
     const timeH = Number(actualTimeHours);
     const fuelL = Number(actualFuelLiters);
     if (!Number.isFinite(timeH) || timeH <= 0) {
-      setFieldError('Waktu aktual harus angka > 0 jam.');
+      setFieldError('Waktu jalan harus angka > 0 jam.');
       return;
     }
     if (!Number.isFinite(fuelL) || fuelL <= 0) {
-      setFieldError('BBM aktual harus angka > 0 liter.');
+      setFieldError('BBM terpakai harus angka > 0 liter.');
       return;
     }
     // Plausibility guard (mirror backend 422): truck diesel 1.5–25 km/L.
@@ -376,22 +412,38 @@ export default function LaporanAktualModal({
     }
     setFieldError(null);
     setSubmitError(null);
+    // Klaim guard sinkron tepat sebelum POST pertama — double-click kedua
+    // melihat ref ini dan batal sebelum PATCH ganda terjadi.
+    if (submitGuardRef.current) return;
+    submitGuardRef.current = true;
     setIsSaving(true);
+    const idemKey = idempotencyKeyRef.current;
     try {
-      const segments = actualTollSegments
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean);
+      // Explicit [] when no-toll (checked) or empty input — never omit the key
+      // (backend exclude_unset would otherwise keep stale baseline segments).
+      const segments = noToll
+        ? []
+        : actualTollSegments
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean)
+            .map((s) => s.toUpperCase());
       let updated: TravelRecord | null = null;
       try {
-        updated = await api.fleet.updateTravel(trip.id, {
-          actual_time_hours: timeH,
-          actual_fuel_liters: fuelL,
-          ...(segments.length > 0 ? { actual_toll_segments: segments } : {}),
-          status,
-        });
+        updated = await api.fleet.updateTravel(
+          trip.id,
+          {
+            actual_time_hours: timeH,
+            actual_fuel_liters: fuelL,
+            actual_toll_segments: segments,
+            status: 'delivered',
+          },
+          idemKey ? { idempotencyKey: idemKey } : undefined
+        );
       } catch (err: unknown) {
         const rawMsg = err instanceof Error ? err.message : `Gagal menyimpan aktual Trip ${trip.id}.`;
+        // PATCH belum tersimpan — buka guard agar retry diperbolehkan.
+        submitGuardRef.current = false;
         // Backend 422 plausibility guard -> inline field error (no shape change).
         if (/tidak wajar|422/.test(rawMsg)) {
           setFieldError(rawMsg);
@@ -404,7 +456,29 @@ export default function LaporanAktualModal({
       }
       // M8 Phase 5: tindakan tunggal — otomatis hitung opsi Lanjut / Ubah Rute / Tahan.
       try {
-        await api.fleet.solveTravelHedging(trip.id, {});
+        const hedgeRes = await api.fleet.solveTravelHedging(
+          trip.id,
+          {},
+          idemKey ? { idempotencyKey: `${idemKey}-hedging` } : undefined
+        );
+        const hedgeData = (hedgeRes?.hedging ?? {}) as Record<string, unknown>;
+        const policy =
+          typeof hedgeData.optimal_policy === 'string'
+            ? hedgeData.optimal_policy
+            : (updated?.hedging_policy ?? null);
+        const rawSavings =
+          typeof hedgeData.net_savings_idr === 'number'
+            ? hedgeData.net_savings_idr
+            : (updated?.hedging_net_savings_idr ?? null);
+        setHedgeSuggest(
+          policy
+            ? {
+                policy,
+                savings:
+                  typeof rawSavings === 'number' && Number.isFinite(rawSavings) ? rawSavings : 0,
+              }
+            : null
+        );
       } catch (err: unknown) {
         // Aktual sudah tersimpan; tampilkan kegagalan hedging berurutan lalu refetch.
         setSubmitError(
@@ -445,15 +519,15 @@ export default function LaporanAktualModal({
         <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
           <div>
             <h3 className="text-sm font-medium text-white">
-              {step === 'aktual' ? `Selesaikan Trip ${trip.id}` : `Verifikasi lapangan — ${trip.id}`}
+              {step === 'aktual' ? `Selesaikan Trip ${trip.id}` : `Cek lapangan — ${trip.id}`}
             </h3>
             <p className="text-xs text-slate-500 tabular-nums">
               {trip.id} • {trip.origin_name} → {trip.destination_name}
             </p>
             <p className="text-xs text-slate-400 mt-1">
               {step === 'aktual'
-                ? 'Isi jam + BBM nyata, lalu sistem langsung hitung opsi Lanjut / Ubah Rute / Tahan.'
-                : 'Langkah 2: catat hasil observasi lapangan ke POST /outcomes.'}
+                ? 'Isi jam dan BBM sebenarnya. Sistem langsung hitung saran trip berikutnya.'
+                : 'Langkah 2: catat kondisi di lapangan.'}
             </p>
           </div>
           <button
@@ -477,7 +551,7 @@ export default function LaporanAktualModal({
               )}
 
               <label className="flex flex-col gap-1.5">
-                <span className="text-xs text-slate-400">Waktu tempuh aktual (jam)</span>
+                <span className="text-xs text-slate-400">Waktu jalan (jam)</span>
                 <input
                   type="number"
                   min={0}
@@ -491,7 +565,7 @@ export default function LaporanAktualModal({
               </label>
 
               <label className="flex flex-col gap-1.5">
-                <span className="text-xs text-slate-400">BBM aktual (liter)</span>
+                <span className="text-xs text-slate-400">BBM terpakai (liter)</span>
                 <input
                   type="number"
                   min={0}
@@ -502,48 +576,49 @@ export default function LaporanAktualModal({
                   placeholder="cth. 25"
                   className="bg-transparent border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-white/30 transition-colors disabled:opacity-50 [color-scheme:dark]"
                 />
+                <span className="text-xs text-slate-500">Lihat struk SPBU.</span>
               </label>
 
               <label className="flex flex-col gap-1.5">
-                <span className="text-xs text-slate-400">Segmen tol aktual (opsional, pisahkan koma)</span>
+                <span className="text-xs text-slate-400">Ruas tol yang dilewati</span>
                 <input
                   type="text"
                   value={actualTollSegments}
                   onChange={(e) => setActualTollSegments(e.target.value)}
-                  disabled={!canEdit || isSaving}
-                  placeholder="cth. BKJ-Tebing Tinggi, Medan-Binjai"
-                  className="bg-transparent border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-white/30 transition-colors disabled:opacity-50"
+                  disabled={!canEdit || isSaving || noToll}
+                  placeholder="cth. MEDAN_TEBINGTINGGI, BELMERA"
+                  className="bg-transparent border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-white/30 transition-colors disabled:opacity-50 font-mono"
                 />
+                <span className="text-xs text-slate-500">
+                  Kosongkan bila tidak lewat tol. Tulis kode ruas, pisahkan koma.
+                </span>
               </label>
 
-              <label className="flex flex-col gap-1.5">
-                <span className="text-xs text-slate-400">Status</span>
-                <select
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value as TravelStatus)}
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={noToll}
+                  onChange={(e) => setNoToll(e.target.checked)}
                   disabled={!canEdit || isSaving}
-                  className="bg-transparent border border-white/10 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none cursor-pointer disabled:opacity-50"
-                >
-                  <option value="delivered">Terkirim</option>
-                  <option value="moving">Berjalan</option>
-                  <option value="rerouted">Dialihkan</option>
-                  <option value="failed">Gagal</option>
-                  <option value="planned">Direncanakan</option>
-                </select>
+                  className="w-3.5 h-3.5 accent-emerald-500 cursor-pointer disabled:cursor-not-allowed"
+                />
+                <span className="text-xs text-slate-400">Tidak lewat tol</span>
               </label>
 
-              {fieldError && (
-                <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-xs text-rose-300 flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 shrink-0" />
-                  <span>{fieldError}</span>
-                </div>
-              )}
-              {submitError && (
-                <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-xs text-rose-300 flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 shrink-0" />
-                  <span>{submitError}</span>
-                </div>
-              )}
+              {!noToll &&
+                actualTollSegments
+                  .split(',')
+                  .map((s) => s.trim())
+                  .filter(Boolean)
+                  .filter((s) => !KNOWN_TOLL_SEGMENTS.includes(s.toUpperCase()))
+                  .map((s) => (
+                    <p key={s.toUpperCase()} className="text-xs text-amber-300">
+                      Kode {s.toUpperCase()} tidak dikenal — tol dihitung Rp 0.
+                    </p>
+                  ))}
+
+              {fieldError && <p className="text-xs text-rose-300">{fieldError}</p>}
+              {submitError && <p className="text-xs text-rose-300">{submitError}</p>}
             </div>
 
             <div className="px-4 py-3 border-t border-white/10 flex items-center justify-end gap-2">
@@ -573,6 +648,13 @@ export default function LaporanAktualModal({
                 <CheckCircle2 className="w-4 h-4 shrink-0" />
                 <span>Aktual + hedging tersimpan. Lengkapi verifikasi lapangan (langkah 2).</span>
               </div>
+              {hedgeSuggest && (
+                <div className="p-2.5 rounded-lg bg-sky-500/10 border border-sky-500/20 text-xs text-sky-300">
+                  <span>
+                    Saran sistem: {hedgeSuggest.policy} — hemat {formatIDRShort(hedgeSuggest.savings)}
+                  </span>
+                </div>
+              )}
               {verifyPrefill && (
                 <OutcomeVerificationForm
                   initialIncidentId={verifyPrefill.incidentId}

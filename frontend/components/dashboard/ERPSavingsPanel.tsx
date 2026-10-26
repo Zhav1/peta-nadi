@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Building2, RefreshCw, Scale, Wallet } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/authContext';
@@ -40,6 +40,9 @@ export default function ERPSavingsPanel({ refreshKey = 0 }: ERPSavingsPanelProps
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [solvingTripId, setSolvingTripId] = useState<string | null>(null);
+  // Double-submit guard sinkron untuk handler hedging legacy (hidden E2E):
+  // state solvingTripId update async, ref menahan klik kedua langsung.
+  const solvingGuardRef = useRef<string | null>(null);
 
   // M8 Phase 2: global laporan filter state (shared by FilterBar + HybridPanel).
   const [filters, setFilters] = useState<LaporanFilters>(EMPTY_FILTERS);
@@ -95,6 +98,9 @@ export default function ERPSavingsPanel({ refreshKey = 0 }: ERPSavingsPanelProps
       notifyToast({ message: 'Aksi ditolak (403): hedging hanya untuk Dispatcher.', type: 'error' });
       return;
     }
+    // Guard sinkron: abaikan klik kedua saat POST hedging masih berjalan.
+    if (solvingGuardRef.current === travelId) return;
+    solvingGuardRef.current = travelId;
     setSolvingTripId(travelId);
     setError(null);
     try {
@@ -110,6 +116,7 @@ export default function ERPSavingsPanel({ refreshKey = 0 }: ERPSavingsPanelProps
         notifyToast({ message: 'Aksi ditolak (403): hedging hanya untuk Dispatcher.', type: 'error' });
       }
     } finally {
+      solvingGuardRef.current = null;
       setSolvingTripId(null);
     }
   };

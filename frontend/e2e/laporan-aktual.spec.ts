@@ -43,7 +43,7 @@ test('laporan aktual PATCH + hedging POST refreshes the KPI strip', async ({ pag
   const dialog = page.getByRole('dialog', { name: /Selesaikan Trip RIT-001/ });
   await expect(dialog).toBeVisible({ timeout: 15000 });
   await dialog.getByPlaceholder('cth. 7.5').fill('7.5');
-  await dialog.getByPlaceholder('cth. 120').fill('115');
+  await dialog.getByPlaceholder('cth. 25').fill('115');
   await dialog.getByRole('button', { name: 'Simpan aktual' }).click();
 
   // Hybrid step-2: PATCH + hedging success shows inline verification.
