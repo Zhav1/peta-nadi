@@ -1397,3 +1397,29 @@ export interface PeriodBucket {
   tripCount: number;
   totalSavedIdr: number;
 }
+
+/** Phase 160 — hazard counter truth states. `degraded` means unknown, not 0. */
+export type HazardCounterStatus = 'ok' | 'stale' | 'degraded' | 'empty';
+
+/** One world-truth hazard counter (cuaca = disruption, waspada = medium watch). */
+export interface HazardCounterBucket {
+  /** null ONLY when status is degraded — never a fabricated 0. */
+  count: number | null;
+  /** Uncapped total before the render cap; equals count on this endpoint. */
+  total: number | null;
+  status: HazardCounterStatus;
+  reason: string | null;
+  source: string;
+  valid_until: string | null;
+  /** Hazard window in hours (24h precipitation gate). */
+  window_hours: number;
+}
+
+/** GET /api/v1/weather/summary — toggle-independent, full-Sumatra counters. */
+export interface WeatherHazardSummary {
+  /** [minLon, minLat, maxLon, maxLat] */
+  bbox: number[];
+  generated_at: string;
+  cuaca: HazardCounterBucket;
+  waspada: HazardCounterBucket;
+}

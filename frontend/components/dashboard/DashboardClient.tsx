@@ -53,7 +53,7 @@ import {
 import { api } from '@/lib/api';
 import { toLonLatRing } from '@/lib/polygonGeom';
 import { regionSlugFromLatLon } from '@/lib/region';
-import type { CrisisState, WsEvent, CrisisType, Severity, RouteRecommendation, DisasterZone, HazardImpactProfile, ZoneTier, FleetVehicle, TacticalManeuver, FireHotspot, RouteDecisionType, DecisionAction } from '@/lib/types';
+import type { CrisisState, WsEvent, CrisisType, Severity, RouteRecommendation, DisasterZone, HazardImpactProfile, ZoneTier, FleetVehicle, TacticalManeuver, FireHotspot, RouteDecisionType, DecisionAction, WeatherHazardSummary } from '@/lib/types';
 import { useAuth } from '@/lib/authContext';
 import { AuthModal } from '@/components/auth/AuthModal';
 import { FleetOnboardingModal } from '@/components/fleet/FleetOnboardingModal';
@@ -1073,6 +1073,51 @@ export default function DashboardClient() {
     };
   }, [showWeatherAdvisory]);
 
+  // Phase 160: world-truth counters. Fetched on mount + on the weather interval
+  // regardless of layer toggles; the last good summary is kept in a ref so a
+  // failed refresh marks the counters stale instead of blanking them.
+  const [weatherSummary, setWeatherSummary] = useState<WeatherHazardSummary | null>(null);
+  const weatherSummaryRef = useRef<WeatherHazardSummary | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const asStale = (prev: WeatherHazardSummary | null): WeatherHazardSummary | null => {
+      if (!prev) return null;
+      const reason = 'Sumber cuaca tidak tersedia — angka terakhir dipertahankan';
+      return {
+        ...prev,
+        cuaca: { ...prev.cuaca, status: 'stale' as const, reason },
+        waspada: { ...prev.waspada, status: 'stale' as const, reason },
+      };
+    };
+
+    async function loadWeatherSummary() {
+      try {
+        const summary = await api.weather.summary();
+        if (!isMounted) return;
+        if (!summary?.cuaca || !summary?.waspada) {
+          throw new Error('weather summary shape invalid');
+        }
+        weatherSummaryRef.current = summary;
+        setWeatherSummary(summary);
+      } catch (e) {
+        if (!isMounted) return;
+        console.warn('Weather summary fallback (stale counters):', e);
+        const stale = asStale(weatherSummaryRef.current);
+        if (stale) weatherSummaryRef.current = stale;
+        setWeatherSummary(stale);
+      }
+    }
+
+    void loadWeatherSummary();
+    const interval = setInterval(loadWeatherSummary, 120000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
   useEffect(() => {
     let isMounted = true;
     async function loadFireHotspots() {
@@ -1128,9 +1173,14 @@ export default function DashboardClient() {
     }
     return { type: 'FeatureCollection', features: feats } as GeoJSON.FeatureCollection;
   }, [showWeatherPolygons, showWeatherAdvisory, disruptionFeatures, advisoryFeatures, spatialWeatherPolygons]);
-  const weatherPolygonCount = combinedWeatherPolygons?.features?.length ?? 0;
-  const weatherDisruptionCount = showWeatherPolygons ? disruptionFeatures.length : 0;
-  const weatherAdvisoryCount = advisoryFeatures.length;
+  // Counters = world truth from /weather/summary (Phase 160). They are never
+  // derived from the toggle-gated map slice; null means unknown → "—".
+  const weatherDisruptionCount = weatherSummary?.cuaca.count ?? null;
+  const weatherAdvisoryCount = weatherSummary?.waspada.count ?? null;
+  const weatherPolygonCount =
+    weatherSummary?.cuaca.count != null && weatherSummary?.waspada.count != null
+      ? weatherSummary.cuaca.count + weatherSummary.waspada.count
+      : null;
   // Top-1 blue disruption sample for the TopNav BMKG popover (hazard/koridor/delay/aksi/moda/confidence).
   const weatherSample = useMemo(() => {
     const f = disruptionFeatures[0] as GeoJSON.Feature | undefined;
@@ -3377,6 +3427,7 @@ export default function DashboardClient() {
                     onToggleWeatherAdvisory={() => setShowWeatherAdvisory((v) => !v)}
                     weatherAdvisoryCount={weatherAdvisoryCount}
                     weatherDisruptionCount={weatherDisruptionCount}
+                    weatherSummary={weatherSummary}
                     weatherSample={weatherSample}
                     showFireHotspots={showFireHotspots}
                     onToggleFireHotspots={() => setShowFireHotspots(v => !v)}
@@ -3483,8 +3534,8 @@ export default function DashboardClient() {
                     corridorVisibility={corridorVisibility}
                     onToggleCorridor={handleToggleCorridor}
                     onResetCorridorVisibility={handleResetCorridors}
-                    weatherDisruptionCount={weatherDisruptionCount}
-                    weatherAdvisoryCount={weatherAdvisoryCount}
+                    weatherDisruptionCount={weatherDisruptionCount ?? 0}
+                    weatherAdvisoryCount={weatherAdvisoryCount ?? 0}
                     showWeatherAdvisory={showWeatherAdvisory}
                   />
                 }

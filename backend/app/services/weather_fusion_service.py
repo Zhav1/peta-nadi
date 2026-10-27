@@ -264,49 +264,64 @@ def _extract_bmkg_numbers(ev: Dict[str, Any]):
     return code, precip_f, flood_f, wind_f
 
 
-async def get_fused_spatial_weather(
-    min_severity: str = DEFAULT_MIN_SEVERITY,
-    min_precip: Optional[float] = None,
-    min_flood: Optional[float] = None,
-) -> Dict[str, Any]:
+async def _collect_weather_events() -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], Dict[str, Any]]:
+    """Fetch BMKG + Open-Meteo events once and report honest upstream health.
+
+    Returns ``(bmkg_events, openmeteo_events, upstream)``. A source that raises
+    is unhealthy; a source that answers with zero weather events is
+    healthy-but-empty. Callers must never turn ``degraded`` into a zero count.
     """
-    Fuses BMKG station data and Open-Meteo global numerical weather model forecasts.
-    Returns organic GeoJSON FeatureCollection of active weather coverage polygons.
-
-    Disruption-only default: min_severity="high" keeps high/critical only,
-    excluding BMKG code 60 / medium drizzle unless explicitly requested via
-    min_severity="medium" (full-fidelity advisory path, returns all as before).
-    Optional numeric gates min_precip (mm/24h) / min_flood (pct) apply as an OR
-    disruption check when provided and when numeric props are present.
-    """
-    logger.info("Fusing BMKG weather alerts + Open-Meteo atmospheric forecasts...")
-
-    bmkg_events: List[Dict[str, Any]] = []
-    openmeteo_events: List[Dict[str, Any]] = []
-
     # Parallel gather: BMKG quake+weather and OM 23-pt bulk grid concurrently
     # so the fused response stays well inside the 8 s proof timeout.
     async def _safe_bmkg():
         try:
             bmkg = BMKGAdapter()
             raw_bmkg = await bmkg.fetch()
-            return await bmkg.parse(raw_bmkg)
+            return await bmkg.parse(raw_bmkg), None
         except Exception as e:
             logger.warning(f"Failed to fetch BMKG for weather fusion: {e}")
-            return []
+            return [], f"bmkg_error: {e}"
 
     async def _safe_om():
         try:
             openmeteo = OpenMeteoAdapter()
             raw_om = await openmeteo.fetch()
-            return await openmeteo.parse(raw_om)
+            return await openmeteo.parse(raw_om), None
         except Exception as e:
             logger.warning(f"Failed to fetch Open-Meteo data for weather fusion: {e}")
-            return []
+            return [], f"open_meteo_error: {e}"
 
-    bmkg_events, openmeteo_events = await asyncio.gather(_safe_bmkg(), _safe_om())
+    (bmkg_events, bmkg_err), (openmeteo_events, om_err) = await asyncio.gather(
+        _safe_bmkg(), _safe_om()
+    )
 
-    candidates = []
+    errors = [e for e in (bmkg_err, om_err) if e]
+    upstream = {
+        "bmkg_ok": bmkg_err is None,
+        "open_meteo_ok": om_err is None,
+        # Only a total upstream outage is degraded; one healthy source still
+        # yields real zones (reason records the partial outage).
+        "degraded": bmkg_err is not None and om_err is not None,
+        "errors": errors,
+        "reason": "; ".join(errors) if errors else None,
+    }
+    return bmkg_events or [], openmeteo_events or [], upstream
+
+
+def _build_weather_candidates(
+    bmkg_events: List[Dict[str, Any]],
+    openmeteo_events: List[Dict[str, Any]],
+    min_severity: str = DEFAULT_MIN_SEVERITY,
+    min_precip: Optional[float] = None,
+    min_flood: Optional[float] = None,
+) -> List[Dict[str, Any]]:
+    """Build the full UNCAPPED candidate list for one fusion snapshot.
+
+    ``get_fused_spatial_weather`` slices this list for rendering; the summary
+    endpoint counts it before slicing so the 24-feature render cap can never
+    truncate a counter.
+    """
+    candidates: List[Dict[str, Any]] = []
 
     # Combined active weather warnings (canonical OpenMeteoAdapter emits
     # event_type "weather_prediction" / source "open_meteo"; BMKG emits
@@ -454,6 +469,34 @@ async def get_fused_spatial_weather(
             },
         })
 
+    return candidates
+
+
+async def get_fused_spatial_weather(
+    min_severity: str = DEFAULT_MIN_SEVERITY,
+    min_precip: Optional[float] = None,
+    min_flood: Optional[float] = None,
+) -> Dict[str, Any]:
+    """
+    Fuses BMKG station data and Open-Meteo global numerical weather model forecasts.
+    Returns organic GeoJSON FeatureCollection of active weather coverage polygons.
+
+    Disruption-only default: min_severity="high" keeps high/critical only,
+    excluding BMKG code 60 / medium drizzle unless explicitly requested via
+    min_severity="medium" (full-fidelity advisory path, returns all as before).
+    Optional numeric gates min_precip (mm/24h) / min_flood (pct) apply as an OR
+    disruption check when provided and when numeric props are present.
+
+    The GeoJSON stays capped at MAX_WEATHER_FEATURES for rendering. Counting is
+    NOT done here — use get_weather_zone_inventory() for world-truth totals.
+    """
+    logger.info("Fusing BMKG weather alerts + Open-Meteo atmospheric forecasts...")
+
+    bmkg_events, openmeteo_events, upstream = await _collect_weather_events()
+    candidates = _build_weather_candidates(
+        bmkg_events, openmeteo_events, min_severity, min_precip, min_flood
+    )
+
     # Cap features (max 24): prioritize high/critical severity, then magnitude,
     # then corridor proximity — avoids overlay spam on widespread monsoon days.
     candidates.sort(key=lambda c: (-c["rank"], -c["mag"], c["dist_km"]))
@@ -468,10 +511,66 @@ async def get_fused_spatial_weather(
             "total_regions": len(features),
             "coverage": "full-sumatra-grid",
             "max_features": MAX_WEATHER_FEATURES,
+            "upstream_degraded": bool(upstream.get("degraded")),
             "filter": {
                 "min_severity": min_severity,
                 "min_precip": min_precip,
                 "min_flood": min_flood,
             },
         }
+    }
+
+
+# World-truth hazard summary contract (Phase 160).
+# bbox = whole-Sumatra (minlon, minlat, maxlon, maxlat).
+SUMATRA_BBOX: List[float] = [94.0, -6.0, 108.0, 6.0]
+# cuaca = active disruption; waspada = early warning (forecast watch tier).
+# Mutually exclusive by construction — a zone is counted in exactly one bucket.
+DISRUPTION_SEVERITIES = ("high", "critical")
+ADVISORY_SEVERITIES = ("medium",)
+# Hazard window the fusion numerics describe (mm/24h precipitation gate).
+HAZARD_WINDOW_HOURS = 24
+_ZONE_VALIDITY_HOURS = 6
+WEATHER_SUMMARY_SOURCE = "BMKG Stasiun Klimatologi & Geofisika + Open-Meteo NWP (ECMWF/GFS)"
+
+
+async def get_weather_zone_inventory() -> Dict[str, Any]:
+    """Uncapped, severity-partitioned zone inventory for the counters.
+
+    Never truncated by MAX_WEATHER_FEATURES: the render cap is applied only by
+    get_fused_spatial_weather(). ``upstream.degraded`` tells the caller that no
+    count may be published (degraded must not become 0).
+    """
+    bmkg_events, openmeteo_events, upstream = await _collect_weather_events()
+    candidates = _build_weather_candidates(
+        bmkg_events, openmeteo_events, min_severity="low", min_precip=None, min_flood=None
+    )
+
+    disruption = 0
+    advisory = 0
+    below_advisory = 0
+    for cand in candidates:
+        severity = str(cand["feature"]["properties"].get("severity", "")).lower()
+        if severity in DISRUPTION_SEVERITIES:
+            disruption += 1
+        elif severity in ADVISORY_SEVERITIES:
+            advisory += 1
+        else:
+            below_advisory += 1
+
+    now = datetime.now(timezone.utc)
+    return {
+        "bbox": list(SUMATRA_BBOX),
+        "generated_at": now.isoformat(),
+        "valid_until": datetime.fromtimestamp(
+            now.timestamp() + _ZONE_VALIDITY_HOURS * 3600, tz=timezone.utc
+        ).isoformat(),
+        "window_hours": HAZARD_WINDOW_HOURS,
+        "source": WEATHER_SUMMARY_SOURCE,
+        # total = full fused inventory before any render cap.
+        "total": len(candidates),
+        "cuaca_total": disruption,
+        "waspada_total": advisory,
+        "below_advisory_total": below_advisory,
+        "upstream": upstream,
     }

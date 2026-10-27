@@ -2,12 +2,21 @@
 FastAPI Router for CPU Routing Optimization, Weather Fusion Polygons & TomTom Traffic Flow
 """
 import asyncio
+import json
 import logging
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Query, HTTPException, Body
 from typing import Dict, Any, List, Optional
 from pydantic import BaseModel, Field
 
-from app.services.weather_fusion_service import get_fused_spatial_weather
+from app.services.weather_fusion_service import (
+    get_fused_spatial_weather,
+    get_weather_zone_inventory,
+    SUMATRA_BBOX,
+    HAZARD_WINDOW_HOURS,
+    WEATHER_SUMMARY_SOURCE,
+)
+from app.services.redis_client import SOURCE_CACHE_PREFIX, cache_get, cache_set
 from app.services.cpu_routing_service import optimize_fleet_routes_cpu, CORRIDOR_JUNCTION_NODES
 from app.adapters.cpu_routing_adapter import get_cpu_router
 from app.adapters.tomtom_adapter import TomTomAdapter
@@ -134,6 +143,194 @@ async def fetch_spatial_weather_polygons(
     except Exception as e:
         logger.error(f"Error fetching spatial weather polygons: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+WEATHER_SUMMARY_CACHE_KEY = f"{SOURCE_CACHE_PREFIX}weather_summary"
+# Short refresh window; the key itself lives for the 24 h stale ceiling so a
+# failed refresh can still serve last-known-good instead of a fabricated 0.
+WEATHER_SUMMARY_REFRESH_S = 300
+WEATHER_SUMMARY_VALIDITY_HOURS = 6
+WEATHER_SUMMARY_STALE_CEILING_HOURS = 24
+WEATHER_SUMMARY_TIMEOUT_S = 12.0
+
+
+def _weather_counter_bucket(
+    count: Optional[int],
+    status: str,
+    reason: Optional[str],
+    source: str,
+    valid_until: Optional[str],
+    window_hours: int,
+) -> Dict[str, Any]:
+    """One counter bucket. Unknown (degraded) is null — never a fake 0."""
+    known = status in ("ok", "empty", "stale") and count is not None
+    return {
+        "count": int(count) if known else None,
+        "total": int(count) if known else None,
+        "status": status,
+        "reason": reason,
+        "source": source,
+        "valid_until": valid_until,
+        "window_hours": int(window_hours),
+    }
+
+
+def _weather_summary_age_seconds(generated_at: Any, now: Any) -> Optional[float]:
+    try:
+        parsed = datetime.fromisoformat(str(generated_at).replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return max(0.0, (now - parsed).total_seconds())
+    except Exception:
+        return None
+
+
+def _read_weather_summary_cache() -> Optional[Dict[str, Any]]:
+    """Best-effort cache read. Shape-validated so a bad payload is a miss."""
+    try:
+        raw = cache_get(WEATHER_SUMMARY_CACHE_KEY)
+        if not raw:
+            return None
+        parsed = json.loads(raw)
+        if not isinstance(parsed, dict):
+            return None
+        if not isinstance(parsed.get("cuaca"), dict) or not isinstance(parsed.get("waspada"), dict):
+            return None
+        return parsed
+    except Exception as e:
+        logger.debug(f"Weather summary cache read failed: {e}")
+        return None
+
+
+def _write_weather_summary_cache(payload: Dict[str, Any]) -> None:
+    try:
+        cache_set(
+            WEATHER_SUMMARY_CACHE_KEY,
+            json.dumps(payload),
+            ex=WEATHER_SUMMARY_STALE_CEILING_HOURS * 3600,
+        )
+    except Exception as e:
+        logger.debug(f"Weather summary cache write failed: {e}")
+
+
+def _stale_weather_summary(
+    cached: Dict[str, Any], now: Any, upstream_reason: Optional[str]
+) -> Dict[str, Any]:
+    """Serve last-known-good when the live refresh fails; count is preserved."""
+    age_s = _weather_summary_age_seconds(cached.get("generated_at"), now)
+    if age_s is None:
+        age_s = float(WEATHER_SUMMARY_STALE_CEILING_HOURS * 3600)
+    age_h = age_s / 3600.0
+    stale = age_h > WEATHER_SUMMARY_VALIDITY_HOURS
+    suffix = upstream_reason or "sumber live tidak tersedia"
+    payload: Dict[str, Any] = {
+        "bbox": cached.get("bbox") or list(SUMATRA_BBOX),
+        "generated_at": cached.get("generated_at") or now.isoformat(),
+        "cuaca": dict(cached.get("cuaca") or {}),
+        "waspada": dict(cached.get("waspada") or {}),
+    }
+    for key in ("cuaca", "waspada"):
+        bucket = payload[key]
+        prev_status = bucket.get("status") if bucket.get("status") in ("ok", "empty") else "ok"
+        bucket["status"] = "stale" if stale else prev_status
+        bucket["total"] = bucket.get("total", bucket.get("count"))
+        bucket["reason"] = (
+            f"Data terakhir {age_h:.1f} jam lalu (valid {WEATHER_SUMMARY_VALIDITY_HOURS}j); {suffix}"
+            if stale
+            else f"Data valid terakhir {int(age_s // 60)} menit lalu; {suffix}"
+        )
+        bucket.setdefault("source", WEATHER_SUMMARY_SOURCE)
+        bucket.setdefault("window_hours", HAZARD_WINDOW_HOURS)
+        bucket.setdefault("valid_until", None)
+    return payload
+
+
+@router.get("/weather/summary")
+async def fetch_weather_summary(
+    current_user: UserSession = Depends(get_optional_user),
+) -> Dict[str, Any]:
+    """
+    World-truth hazard counters for the whole Sumatra bbox (Phase 160).
+
+    ``cuaca``   = active disruption: severity high|critical (mutually exclusive).
+    ``waspada`` = early warning: severity medium only.
+
+    This endpoint has NO severity/precip/flood parameters and is NEVER truncated
+    by MAX_WEATHER_FEATURES — totals come from the uncapped inventory, while the
+    polygon endpoints stay capped for rendering.
+
+    Honest tri-state per counter:
+      - degraded → count/total are null (never 0) + reason explains the outage;
+      - empty    → count 0, reason "Tidak ada zona aktif" (source healthy);
+      - stale    → last-known-good count preserved, reason carries the age;
+      - ok       → live, valid zone count.
+
+    Redis cache: 5-min refresh window, 24 h stale ceiling. A cache miss always
+    recomputes from the fusion path — it never fabricates a 0.
+    """
+    now = datetime.now(timezone.utc)
+    cached = _read_weather_summary_cache()
+
+    if cached is not None:
+        age_s = _weather_summary_age_seconds(cached.get("generated_at"), now)
+        if age_s is not None and age_s <= WEATHER_SUMMARY_REFRESH_S:
+            return cached
+
+    inventory: Optional[Dict[str, Any]] = None
+    try:
+        inventory = await asyncio.wait_for(
+            get_weather_zone_inventory(), timeout=WEATHER_SUMMARY_TIMEOUT_S
+        )
+    except asyncio.TimeoutError:
+        logger.warning(
+            "Weather summary inventory timed out after %ss", WEATHER_SUMMARY_TIMEOUT_S
+        )
+    except Exception as e:
+        logger.warning(f"Weather summary inventory failed: {e}")
+
+    upstream = (inventory or {}).get("upstream") or {}
+    if inventory is not None and not upstream.get("degraded"):
+        cuaca_total = int(inventory.get("cuaca_total") or 0)
+        waspada_total = int(inventory.get("waspada_total") or 0)
+        payload = {
+            "bbox": inventory.get("bbox") or list(SUMATRA_BBOX),
+            "generated_at": inventory.get("generated_at") or now.isoformat(),
+            "cuaca": _weather_counter_bucket(
+                cuaca_total,
+                "ok" if cuaca_total > 0 else "empty",
+                None if cuaca_total > 0 else "Tidak ada zona aktif",
+                inventory.get("source") or WEATHER_SUMMARY_SOURCE,
+                inventory.get("valid_until"),
+                int(inventory.get("window_hours") or HAZARD_WINDOW_HOURS),
+            ),
+            "waspada": _weather_counter_bucket(
+                waspada_total,
+                "ok" if waspada_total > 0 else "empty",
+                None if waspada_total > 0 else "Tidak ada zona aktif",
+                inventory.get("source") or WEATHER_SUMMARY_SOURCE,
+                inventory.get("valid_until"),
+                int(inventory.get("window_hours") or HAZARD_WINDOW_HOURS),
+            ),
+        }
+        _write_weather_summary_cache(payload)
+        return payload
+
+    # Upstream unavailable: serve last-known-good if we have it (never a 0).
+    if cached is not None:
+        return _stale_weather_summary(cached, now, upstream.get("reason"))
+
+    reason = "Sumber cuaca tidak tersedia"
+    if upstream.get("reason"):
+        reason = f"{reason}: {upstream['reason']}"
+    bucket = _weather_counter_bucket(
+        None, "degraded", reason, WEATHER_SUMMARY_SOURCE, None, HAZARD_WINDOW_HOURS
+    )
+    return {
+        "bbox": list(SUMATRA_BBOX),
+        "generated_at": now.isoformat(),
+        "cuaca": dict(bucket),
+        "waspada": dict(bucket),
+    }
 
 
 @router.get("/fire/hotspots")

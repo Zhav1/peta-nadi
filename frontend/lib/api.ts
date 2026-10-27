@@ -198,6 +198,10 @@ export const api = {
       const qs = `?${sp.toString()}`;
       return request<GeoJSON.FeatureCollection>(`/api/v1/weather/spatial-polygons${qs}`);
     },
+    // Phase 160: world-truth counters — no severity params, never capped by
+    // MAX_WEATHER_FEATURES, independent of the map layer toggles.
+    summary: () =>
+      request<import('./types').WeatherHazardSummary>('/api/v1/weather/summary'),
   },
   fire: {
     hotspots: () =>
