@@ -527,6 +527,18 @@ link-local target still returns the configured upstream's 200 body).
 
 ---
 
+## Production prerequisites (2026-10-27)
+
+| Item | Status | Evidence |
+|---|---|---|
+| Supabase migration `023_scheduler_jobs` | **APPLIED** | version `20261027111905`; `scheduler_jobs` + `acquire_scheduler_job` / `release_scheduler_job`; smoke: acquire `true` → second acquire `false` → release → cleanup (0 rows) |
+| Supabase migration `024_dashboard_snapshots` | **APPLIED** | version `20261027111919`; 6 columns, RLS enabled |
+| Render env `INPROCESS_BATCH_POLLERS=false`, `INTERNAL_TICK_TOKEN`, `TICK_MAX_JOBS=2`, `TICK_BUDGET_SECONDS=120` | **PENDING** | user action in the Render dashboard |
+| cron-job.org `POST /internal/tick` every 5 min with `X-Internal-Token`, 90 s timeout | **PENDING** | user action; `docs/KEEPALIVE_RUNBOOK.md` updated |
+| Merge + deploy the integration branch | **WAITING** | user chose to wait for the M9 geocode/gazetteer commit |
+| Production SLO run (`M8_REQUIRE_BOOTSTRAP=1`) | **PENDING** | phase 165 |
+| 7-day soak | **NOT STARTED** | phase 166 (follow-up review) |
+
 ## Remaining phases — TODO
 
 | Phase | Name | Gate that must pass |

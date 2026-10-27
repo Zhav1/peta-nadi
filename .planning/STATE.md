@@ -2,20 +2,20 @@
 gsd_state_version: "1.0"
 milestone: M8
 milestone_name: Fast & Durable
-current_phase: 160
-current_phase_name: Baseline, Audit, State Repair
-status: planning
-stopped_at: "M8 registered; phase 160 pending"
+current_phase: 165
+current_phase_name: Production Verification + SLO Gate
+status: blocked
+stopped_at: "Phases 160-163 complete, 164a complete; 164b deferred; 165 waiting on M9 commit + Render/cron env"
 last_updated: "2026-10-27T00:00:00.000Z"
 last_activity: 2026-10-27
-last_activity_desc: "Registered milestone M8 Fast & Durable (phases 160-166) and scaffolded phase 160 plan."
+last_activity_desc: "Completed auth, thin-web tick, bootstrap read path, proxy/news hardening; applied Supabase migrations 023/024."
 state_head: HEAD
 progress:
   total_phases: 7
-  completed_phases: 0
+  completed_phases: 4
   total_plans: 0
   completed_plans: 0
-  percent: 0
+  percent: 57.1
 ---
 
 # STATE: PreHub Project Memory
@@ -23,18 +23,18 @@ progress:
 **Last Updated:** 2026-10-27
 **Active Milestone:** M8 - Fast & Durable [ACTIVE 🚀]
 **Previous Milestones:** M1-M5 [COMPLETED ✅], M6 - 3D Globe Native Mapbox Fleet, Street-Snapping & Impeccable Cartography [COMPLETED ✅], M7 - Live News Trust, Source Breadth & Forecast Waspada Integrity [COMPLETED ✅]
-**Current Phase:** 160
+**Current Phase:** 165
 
 ---
 
 ## Current Position
 
-Phase: 160 — Baseline, Audit, State Repair
-Plan: —
-Status: Planning
-Last activity: 2026-10-27 — Milestone M8 started
-Previous: M7 complete through Phase 159 (docs recorded; pytest fleet_ingest 12 passed, pytest firms 2 passed, tsc exit 0; no commit).
-Next action: Execute Phase 160 tasks (baseline metrics, `BACKEND-AUDIT.md`, Playwright smoke scaffold, keep-alive probe fix, state reconciliation record).
+Phase: 165 — Production Verification + SLO Gate
+Plan: `.planning/phases/165-production-verification-slo/PLAN.md`
+Status: Blocked — waiting on M9 geocode/gazetteer commit, Render env, cron-job.org switch
+Last activity: 2026-10-27 — Phases 160–163 and 164a complete; Supabase migrations 023/024 applied
+Previous: M7 complete through Phase 159. M8: 160 baseline/audit, 161 auth, 162 thin web/tick, 163 bootstrap read path, 164a proxy/news.
+Next action: commit M9 work, merge `m9-operational-truth` to `main`, set Render env, switch cron to `POST /internal/tick`, run the production SLO gate.
 
 
 
