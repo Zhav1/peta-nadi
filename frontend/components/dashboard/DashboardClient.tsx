@@ -550,8 +550,8 @@ export default function DashboardClient() {
   const initialCrisis = searchParams?.get('crisis') || null;
 
   const [isOnboardingModalOpen, setIsOnboardingModalOpen] = useState(false);
-  // Header roster trigger (dispatcher-gated): toggles the Armada Perusahaan overlay.
-  const [isRosterVisible, setIsRosterVisible] = useState(true);
+  // Header roster trigger (dispatcher-gated): opens the Armada Perusahaan drawer.
+  const [isRosterVisible, setIsRosterVisible] = useState(false);
   const [selectedCrisisId, setSelectedCrisisId] = useState<string | null>(initialCrisis);
   const [selectedCrisis, setSelectedCrisis] = useState<CrisisState | null>(null);
   const [selectedVehicle, setSelectedVehicle] = useState<FleetVehicle | null>(null);
@@ -717,6 +717,22 @@ export default function DashboardClient() {
   // liveTenantVehicles directly (honest tenant live GPS only).
   const isDispatcherWorkspace = role === 'DISPATCHER';
   const fleetCountVehicles = activeFleetVehicles;
+
+  // Active DSS exposure per vehicle, only when an assessment exists. No
+  // assessment means no hazard line — never a guessed hazard.
+  const fleetHazards = useMemo(() => {
+    const exposure: Record<string, { hazardType?: string; distanceKm?: number; policy?: string }> = {};
+    if (!impactAssessmentData) return exposure;
+    const hazardType = impactAssessmentData.disruption?.hazard_type;
+    for (const assessment of impactAssessmentData.impacted_vehicles ?? []) {
+      exposure[assessment.vehicle_id] = {
+        hazardType,
+        distanceKm: assessment.distance_to_hazard_km,
+        policy: assessment.optimal_policy,
+      };
+    }
+    return exposure;
+  }, [impactAssessmentData]);
 
   const isRightInspectorActive = (isSidebarOpen && !!selectedCrisis) || !!selectedVehicle;
 
@@ -3158,10 +3174,11 @@ export default function DashboardClient() {
             <button
               type="button"
               id="fleet-roster-toggle"
+              data-testid="armada-trigger"
               onClick={() => setIsRosterVisible((v) => !v)}
               aria-pressed={isRosterVisible}
-              aria-label="Tampilkan atau sembunyikan panel Armada Perusahaan"
-              title="Armada Perusahaan — daftar aset terdaftar"
+              aria-label={`Armada Perusahaan: ${tenantFleetVehicles.length} unit · ${liveTenantVehicles.length} live GPS. Tampilkan atau sembunyikan panel.`}
+              title={`Armada Perusahaan — ${tenantFleetVehicles.length} unit · ${liveTenantVehicles.length} live GPS`}
               className="cursor-pointer px-2.5 sm:px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-slate-200 hover:text-white text-xs font-medium transition flex items-center gap-1.5"
             >
               <Truck className="w-3.5 h-3.5 text-[#00f0ff]" />
@@ -3268,6 +3285,23 @@ export default function DashboardClient() {
           setApprovalsCount((prev) => prev + 1);
         }}
       />
+
+      {/* Armada Perusahaan drawer — dispatcher-only, tenant-scoped roster + detail */}
+      {isDispatcherWorkspace && (
+        <TenantFleetRoster
+          isOpen={isRosterVisible}
+          onClose={() => setIsRosterVisible(false)}
+          vehicles={tenantFleetVehicles}
+          liveVehicles={liveTenantVehicles}
+          isLoading={isFleetLoading}
+          error={fleetError}
+          isTenantScoped={isFleetTenantScoped}
+          companyId={fleetCompanyId}
+          hazardByVehicleId={fleetHazards}
+          onFocusVehicle={handleSelectVehicle}
+          onOpenOnboarding={() => setIsOnboardingModalOpen(true)}
+        />
+      )}
 
       {/* MAIN CONTENT CANVAS AREA */}
       <main className="absolute left-0 top-16 right-0 bottom-0 overflow-hidden flex">
