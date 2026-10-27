@@ -2272,11 +2272,10 @@ export default function DashboardClient() {
     // Forecast path is info-only: no detour/re-route calculation, no reroute
     // CTA, and no hold-staging synthesis. The audit crisis carries zero
     // route_recommendations; Evidence + causal timeline stay readable.
+    // The operator's active corridors (incl. sea/air intermodal legs) are
+    // NEVER wiped by a zone click — map keeps drawing currentMapRoutes.
     if (forecastActive) {
-      // Info-only: no actionable route objects for a forecast.
-      routes = [];
-      setCurrentMapRoutes([]);
-      setActiveRouteIdx(null);
+      // Info-only: no actionable route objects for a forecast. Preserve.
     }
     const originId = activeOriginRef.current || selectedOriginNode;
     const destId = activeDestRef.current || selectedDestNode;
@@ -2303,12 +2302,12 @@ export default function DashboardClient() {
           console.warn('Audit-trail route calc fallback:', e);
         }
       }
-    if (!forecastActive && !(originId && destId)) {
-      // Highlighted zone, no route yet: evidence-only, no stale corridor.
-      setCurrentMapRoutes([]);
-      setActiveRouteIdx(null);
     }
-    }
+    // Zone click never wipes active corridors: with no O-D pair (or a
+    // forecast zone) there is nothing to recalculate, so currentMapRoutes
+    // (incl. sea/air intermodal legs) is preserved. The audit crisis honestly
+    // carries zero route_recommendations for this zone; the map keeps drawing
+    // the operator's active corridors.
 
     const auditCrisis: CrisisState = {
       crisis_id: crisisId,
