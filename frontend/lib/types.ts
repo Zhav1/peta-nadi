@@ -1516,14 +1516,29 @@ export type DashboardBootstrapReason =
   | 'live_build_failed'
   | 'live_build_timeout';
 
+/** Read-time breadth metadata (`GET /api/v1/news/live` → `meta`, Phase 172 / M9). */
+export interface NewsBreadthMetaPayload {
+  source_counts?: Record<string, number>;
+  province_counts?: Record<string, number>;
+  truncated?: boolean;
+  provinces_present?: string[];
+  provinces_missing?: string[];
+  max_per_source?: number;
+  budget?: number;
+  total?: number;
+  confidence_note?: string;
+}
+
 /** `GET /api/v1/news/live` payload (also embedded as the `news` section). */
 export interface NewsLivePayload {
   status?: string;
   total?: number;
   last_updated?: string | null;
+  meta?: NewsBreadthMetaPayload | null;
   articles?: Array<Record<string, unknown>>;
   items?: Array<Record<string, unknown>>;
 }
+
 
 export type WeatherPolygonCollection = GeoJSON.FeatureCollection & {
   metadata?: WeatherPolygonMeta;

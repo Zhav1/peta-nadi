@@ -327,13 +327,15 @@ def _classify_location_precision(entry_prec_tier: str, tier_val: int, text_lower
     return "kabupaten_kota"
 
 
-def resolve_all_sumatra_locations(text: str, fallback_province: str = "Sumatera Utara") -> List[Dict[str, Any]]:
+def resolve_all_sumatra_locations(text: str, fallback_province: Optional[str] = None) -> List[Dict[str, Any]]:
     """Finds ALL distinct matched locations with 3-tier micro-spatial specificity.
 
     - Tier 1 present  -> Tier 1 location(s) + Tier 2 outside masked road-name
       descriptors (dedupe within 15 km).
     - Else Tier 2     -> ALL matched Tier 2 Kabupaten/Kota (dedupe 15 km).
-    - Else Tier 3 only-> single fallback-province centroid entry (province_only).
+    - Else Tier 3 only-> single fallback-province centroid entry (province_only),
+      and ONLY when the caller declared a real province. A feed that declares no
+      province gets no centroid: admitting "unknown" beats a fabricated Sumut pin.
     - Else            -> [] (bare-province scan may still yield province_only).
     """
     clean_text = strip_bureau_and_dateline_noise(text or "")
@@ -497,21 +499,25 @@ def resolve_all_sumatra_locations(text: str, fallback_province: str = "Sumatera 
                      "kepri", "bengkulu", "lampung", "jambi", "riau", "aceh")
             if not any(_c in text_lower for _c in _ctx3):
                 return []
-        lat, lon = PROVINCE_CENTROIDS.get(fallback_province, (None, None))
-        if lat is None:
-            lat, lon = -1.0, 102.0
-        if not is_within_strict_sumatra_bbox(lat, lon):
-            return []
-        return [{
-            "name": tier3_hit_key.title(),
-            "latitude": lat,
-            "longitude": lon,
-            "province": fallback_province,
-            "corridor_segment": PAN_SUMATRA_GAZETTEER[tier3_hit_key]["corridor"],
-            "location_precision": "province_only",
-            "location_precision_legacy": "province_only",
-            "tier": 3,
-        }]
+        # Phase 172 (M9): a macro-corridor hit only has a centroid when the feed
+        # actually declared a province. No declared province -> no centroid, no
+        # province label; fall through to the explicit bare-province scan.
+        if str(fallback_province or "") in PROVINCE_CENTROIDS:
+            lat, lon = PROVINCE_CENTROIDS.get(fallback_province, (None, None))
+            if lat is None:
+                lat, lon = -1.0, 102.0
+            if not is_within_strict_sumatra_bbox(lat, lon):
+                return []
+            return [{
+                "name": tier3_hit_key.title(),
+                "latitude": lat,
+                "longitude": lon,
+                "province": fallback_province,
+                "corridor_segment": PAN_SUMATRA_GAZETTEER[tier3_hit_key]["corridor"],
+                "location_precision": "province_only",
+                "location_precision_legacy": "province_only",
+                "tier": 3,
+            }]
 
     # Bare-province scan → province_only.
     for needle, canon in sorted(BARE_PROVINCE_ALIASES.items(), key=lambda kv: len(kv[0]), reverse=True):
@@ -532,7 +538,7 @@ def resolve_all_sumatra_locations(text: str, fallback_province: str = "Sumatera 
     return []
 
 
-def resolve_sumatra_location_and_corridor(text: str, fallback_province: str = "Sumatera Utara") -> Dict[str, Any]:
+def resolve_sumatra_location_and_corridor(text: str, fallback_province: Optional[str] = None) -> Dict[str, Any]:
     """
     Resolves the best matching location, coordinates, province, and corridor segment
     from article text using the pan-Sumatra gazetteer.
@@ -545,7 +551,9 @@ def resolve_sumatra_location_and_corridor(text: str, fallback_province: str = "S
       * "kabupaten_kota": regency/city broad mention
       * "province_only": bare province mention
     - CRITICAL: when nothing matches, NO blind fallback-centroid assignment is
-      performed; returns is_geocoded=False with None coordinates.
+      performed; returns is_geocoded=False with None coordinates AND province=None.
+      The caller's fallback province is never echoed back as if it were resolved
+      (Phase 172 / M9) — an unlocated article must not inherit a province label.
     """
     locations = resolve_all_sumatra_locations(text, fallback_province=fallback_province)
     if locations:
@@ -562,15 +570,17 @@ def resolve_sumatra_location_and_corridor(text: str, fallback_province: str = "S
             "affected_locations": locations,
         }
 
-    # CRITICAL FIX: No blind fallback-centroid assignment.
+    # CRITICAL FIX: No blind fallback-centroid assignment, and never echo the
+    # caller's fallback province — nothing was resolved, so nothing is claimed.
     return {
         "matched_node": None,
         "latitude": None,
         "longitude": None,
-        "province": fallback_province or "unknown",
+        "province": None,
         "corridor_segment": "unknown",
         "is_geocoded": False,
         "location_precision": "none",
         "location_precision_legacy": "none",
         "affected_locations": [],
     }
+

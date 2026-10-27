@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from urllib.parse import urlparse
-from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks, status
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks, Header, status
 from pydantic import BaseModel
 
 from app.auth.supabase_auth import UserSession, get_current_user
@@ -23,10 +23,201 @@ from app.services.news_aggregator import (
     resolve_canonical_article_url,
 )
 from app.services.unified_news_ingestor import unified_news_ingestor
+from app.services import news_yield
+from app.services.news_confidence import build_display_confidence
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="", tags=["News Intelligence"])
+
+# Phase 172 (M9): read-time breadth contract (SPEC decision 8).
+# The SQL path is untouched — `order("created_at", desc).limit(150)` still picks
+# the candidate window; the diversity quota is a Python post-process on that
+# window, so there is no costly rewrite and no extra query.
+MAX_NEWS_PER_SOURCE = 12
+NEWS_READ_BUDGET = 150
+SUMATRA_PROVINCES = (
+    "Aceh",
+    "Sumatera Utara",
+    "Sumatera Barat",
+    "Riau",
+    "Kepulauan Riau",
+    "Jambi",
+    "Sumatera Selatan",
+    "Bangka Belitung",
+    "Bengkulu",
+    "Lampung",
+)
+# Area-wide bucket for rows that resolve to the island, not a province.
+AREA_WIDE_PROVINCE = "Sumatera"
+
+_PROVINCE_ALIASES = {
+    "sumut": "Sumatera Utara",
+    "sumatera utara": "Sumatera Utara",
+    "north sumatra": "Sumatera Utara",
+    "sumbar": "Sumatera Barat",
+    "sumatera barat": "Sumatera Barat",
+    "west sumatra": "Sumatera Barat",
+    "riau": "Riau",
+    "kepri": "Kepulauan Riau",
+    "kepulauan riau": "Kepulauan Riau",
+    "jambi": "Jambi",
+    "sumsel": "Sumatera Selatan",
+    "sumatera selatan": "Sumatera Selatan",
+    "south sumatra": "Sumatera Selatan",
+    "babel": "Bangka Belitung",
+    "bangka belitung": "Bangka Belitung",
+    "bengkulu": "Bengkulu",
+    "lampung": "Lampung",
+    "aceh": "Aceh",
+    "sumatera": AREA_WIDE_PROVINCE,
+    "sumatra": AREA_WIDE_PROVINCE,
+    "nasional": AREA_WIDE_PROVINCE,
+}
+
+
+def normalize_province(raw: Any) -> str:
+    """Canonical province bucket for an article/`meta` key.
+
+    Unlocated rows (None/unknown) belong to the area-wide bucket — never a
+    province they were never resolved to.
+    """
+    value = str(raw or "").strip()
+    if not value:
+        return AREA_WIDE_PROVINCE
+    canonical = _PROVINCE_ALIASES.get(value.lower())
+    return canonical or value
+
+
+def _province_sort_key(province: str) -> tuple[int, str]:
+    if province == AREA_WIDE_PROVINCE:
+        # Area-wide after the ten real provinces, before any unknown label.
+        return (len(SUMATRA_PROVINCES), "")
+    try:
+        return (SUMATRA_PROVINCES.index(province), "")
+    except ValueError:
+        return (len(SUMATRA_PROVINCES) + 1, province)
+
+
+def _source_key(article: Dict[str, Any]) -> str:
+    return str(article.get("source") or article.get("source_name") or "Media").strip() or "Media"
+
+
+def apply_breadth_contract(
+    articles: List[Dict[str, Any]],
+    max_total: int = NEWS_READ_BUDGET,
+    per_source_cap: int = MAX_NEWS_PER_SOURCE,
+) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    """Per-source cap + one-per-province round-robin, backfilled by recency.
+
+    Input order is the SQL order (newest first) and is preserved inside every
+    group, so the round-robin only re-orders *which source/province* gets a slot
+    early — the "backfill by recency" tail is the untouched SQL order.
+    """
+    rows = [row for row in (articles or []) if isinstance(row, dict)]
+
+    # 1. Per-source cap, applied in recency order.
+    capped: List[Dict[str, Any]] = []
+    per_source: Dict[str, int] = {}
+    dropped_by_cap = 0
+    for row in rows:
+        key = _source_key(row)
+        if per_source.get(key, 0) >= per_source_cap:
+            dropped_by_cap += 1
+            continue
+        per_source[key] = per_source.get(key, 0) + 1
+        capped.append(row)
+
+    # 2. Group by province, keeping each group's recency order.
+    groups: Dict[str, List[Dict[str, Any]]] = {}
+    for row in capped:
+        groups.setdefault(normalize_province(row.get("province") or row.get("region")), []).append(row)
+
+    ordered_provinces = sorted(groups, key=_province_sort_key)
+
+    # 3. Round-robin: every province with ≥1 qualifying article lands in the
+    #    first page before any province gets a second slot.
+    selected: List[Dict[str, Any]] = []
+    cursor = {province: 0 for province in ordered_provinces}
+    progress = True
+    while progress and len(selected) < max_total:
+        progress = False
+        for province in ordered_provinces:
+            if len(selected) >= max_total:
+                break
+            idx = cursor[province]
+            items = groups[province]
+            if idx < len(items):
+                selected.append(items[idx])
+                cursor[province] = idx + 1
+                progress = True
+
+    # 4. Backfill any remaining slots in the original (recency) order.
+    chosen_ids = {id(row) for row in selected}
+    truncated = dropped_by_cap > 0
+    for row in capped:
+        if len(selected) >= max_total:
+            truncated = True
+            break
+        if id(row) in chosen_ids:
+            continue
+        selected.append(row)
+        chosen_ids.add(id(row))
+
+    if len(capped) > max_total:
+        truncated = True
+    # A round-robin reorder is itself a truncation of the pure recency view.
+    if selected and [id(r) for r in selected] != [id(r) for r in capped[: len(selected)]]:
+        truncated = True
+
+    source_counts: Dict[str, int] = {}
+    province_counts: Dict[str, int] = {}
+    for row in selected:
+        source_counts[_source_key(row)] = source_counts.get(_source_key(row), 0) + 1
+        bucket = normalize_province(row.get("province") or row.get("region"))
+        province_counts[bucket] = province_counts.get(bucket, 0) + 1
+
+    return selected, build_breadth_meta(
+        selected, per_source_cap=per_source_cap, budget=max_total, truncated=truncated
+    )
+
+
+def build_breadth_meta(
+    articles: List[Dict[str, Any]],
+    per_source_cap: int = MAX_NEWS_PER_SOURCE,
+    budget: int = NEWS_READ_BUDGET,
+    truncated: bool = False,
+) -> Dict[str, Any]:
+    """Counts that describe exactly the articles being returned."""
+    source_counts: Dict[str, int] = {}
+    province_counts: Dict[str, int] = {}
+    for row in articles or []:
+        if not isinstance(row, dict):
+            continue
+        source_counts[_source_key(row)] = source_counts.get(_source_key(row), 0) + 1
+        bucket = normalize_province(row.get("province") or row.get("region"))
+        province_counts[bucket] = province_counts.get(bucket, 0) + 1
+
+    provinces_present = sorted(province_counts, key=_province_sort_key)
+    provinces_missing = [p for p in SUMATRA_PROVINCES if p not in province_counts]
+
+    return {
+        "source_counts": dict(sorted(source_counts.items(), key=lambda kv: (-kv[1], kv[0]))),
+        "province_counts": {p: province_counts[p] for p in provinces_present},
+        "truncated": bool(truncated),
+        "provinces_present": provinces_present,
+        "provinces_missing": provinces_missing,
+        "max_per_source": per_source_cap,
+        "budget": budget,
+        "total": len(articles or []),
+        # Documented deprecation: the UI must read display_confidence, never the
+        # extractor's static tier constant carried on confidence_score.
+        "confidence_note": (
+            "confidence_score is deprecated for display (static tier constant); "
+            "use display_confidence."
+        ),
+    }
+
 
 # In-memory cache for ultra-fast repeated UI reads (30s TTL before querying Supabase)
 _NEWS_CACHE: Dict[str, Any] = {
@@ -35,7 +226,11 @@ _NEWS_CACHE: Dict[str, Any] = {
     # Captured from the response payload at fetch time (max published_at) — a cache
     # hit replays THIS value instead of fabricating datetime.now().
     "last_updated": None,
+    # Breadth meta of the cached payload, so a hit reports the same honest
+    # province/source distribution instead of an empty `meta`.
+    "meta": None,
 }
+
 CACHE_TTL_SECONDS = 30
 
 
@@ -161,7 +356,29 @@ class HitlActionRequest(BaseModel):
 
 
 _ingestion_lock = asyncio.Lock()
+# Loop that currently owns `_ingestion_lock`. A module-level Lock is created at
+# import (no running loop) and binds to the first loop that waits on it; a second
+# loop — a fresh pytest-asyncio test loop, or a rebuilt app loop — then raises
+# "bound to a different event loop" instead of ingesting. Track the owner and
+# rebuild the lock when the loop changes (production has exactly one loop, so
+# this is a no-op there).
+_ingestion_lock_loop: Optional[asyncio.AbstractEventLoop] = None
 _is_ingesting = False
+
+
+def _lock_for_running_loop() -> asyncio.Lock:
+    """The ingestion lock, rebound when called from a different event loop."""
+    global _ingestion_lock, _ingestion_lock_loop, _is_ingesting
+    loop = asyncio.get_running_loop()
+    if _ingestion_lock_loop is not loop:
+        # A different loop cannot share this lock. No cycle of ours can still be
+        # running on the old loop, so a fresh lock preserves mutual exclusion
+        # within the new loop.
+        _ingestion_lock = asyncio.Lock()
+        _ingestion_lock_loop = loop
+        _is_ingesting = False
+    return _ingestion_lock
+
 
 # Cross-process guard: uvicorn --workers > 1 (or several replicas) each own a
 # separate in-process asyncio.Lock, so a best-effort Redis NX lock keeps a single
@@ -224,7 +441,7 @@ async def run_background_news_ingestion(force: bool = False):
         logger.info("News ingestion cycle already in progress, skipping duplicate trigger.")
         return
     entered_at = time.monotonic()
-    async with _ingestion_lock:
+    async with _lock_for_running_loop():
         # Double-checked locking: a second caller may have entered the flag while
         # we were waiting on the lock; re-check before spending any RSS/LLM work.
         if _is_ingesting:
@@ -296,9 +513,12 @@ async def get_live_news(
                     or _max_published_at_iso(cached_articles)
                     or datetime.now(timezone.utc).isoformat()
                 ),
+                # Replay the breadth meta captured with these exact articles.
+                "meta": _NEWS_CACHE.get("meta"),
                 "articles": cached_articles,
                 "items": cached_articles
             }
+
 
     # If force refresh requested or cache expired (5 min), trigger background ingestion
     if force_refresh or (now - _NEWS_CACHE.get("last_fetched_at", 0.0) > 300):
@@ -377,21 +597,29 @@ async def get_live_news(
                         max_age_hours=48,
                     )
                     if not _fr.get("is_fresh"):
+                        news_yield.record_read_drop(_row.get("id"), _row.get("source"), "dropped_stale", _row.get("province"))
                         continue
                 except Exception:
                     pass
             if _row.get("zone_tier") == "DROPPED_IRRELEVANT":
+                news_yield.record_read_drop(_row.get("id"), _row.get("source"), "dropped_gate", _row.get("province"))
                 continue
             if _row.get("is_geocoded") is False:
+                news_yield.record_read_drop(_row.get("id"), _row.get("source"), "dropped_ungeocoded", _row.get("province"))
                 continue
             if _row.get("latitude") is None or _row.get("longitude") is None:
+                news_yield.record_read_drop(_row.get("id"), _row.get("source"), "dropped_ungeocoded", _row.get("province"))
                 continue
             if _row_was_retiered:
                 _router_retiered.append(_row)
             _guarded.append(_row)
         except Exception:
             continue
-    articles = _guarded
+
+    # Phase 172 (M9): read-time breadth contract (SPEC decision 8). Applied to
+    # the already-filtered window — SQL ordering/limits above are untouched.
+    articles, breadth_meta = apply_breadth_contract(_guarded, max_total=NEWS_READ_BUDGET)
+
 
     # Phase 164a (M8): persist what the read path just re-tiered, once, so the
     # heuristic stops running on every request (audit F8). `fetch_news_from_supabase`
@@ -417,6 +645,7 @@ async def get_live_news(
             "total": 0,
             "message": "Indeks intelijen berita sedang disinkronkan di latar belakang...",
             "last_updated": datetime.now(timezone.utc).isoformat(),
+            "meta": breadth_meta,
             "articles": [],
             "items": []
         }
@@ -481,12 +710,35 @@ async def get_live_news(
         elif not clean_l or p.path in ("", "/"):
             art["link_alive"] = "dead"
 
+        # Phase 172 (M9): honest per-article confidence. `confidence_score` is the
+        # extractor's static tier constant (0.86/0.94) and is DEPRECATED for
+        # display — the UI reads `display_confidence` only.
+        try:
+            art["display_confidence"] = build_display_confidence(art)
+        except Exception:
+            art["display_confidence"] = {
+                "value": None,
+                "label": "Belum terverifikasi",
+                "basis": "unverified",
+                "tier": str(art.get("source_tier") or "TIER_2_AUTHORITATIVE_PRESS"),
+            }
+
         enriched_articles.append(art)
+
+    # Re-derive the breadth meta from exactly the rows being returned (the
+    # permalink pass above can drop a row, and a stale count would be a lie).
+    breadth_meta = build_breadth_meta(
+        enriched_articles,
+        per_source_cap=MAX_NEWS_PER_SOURCE,
+        budget=NEWS_READ_BUDGET,
+        truncated=bool(breadth_meta.get("truncated")) or len(enriched_articles) > NEWS_READ_BUDGET,
+    )
 
     _NEWS_CACHE["articles"] = enriched_articles
     _NEWS_CACHE["last_fetched_at"] = now
     # Snapshot the fetch-time last_updated so 30s cache hits replay it verbatim.
     _NEWS_CACHE["last_updated"] = latest_ts_iso
+    _NEWS_CACHE["meta"] = breadth_meta
 
     return {
         "status": "live",
@@ -494,9 +746,50 @@ async def get_live_news(
         "count": len(enriched_articles),
         "total": len(enriched_articles),
         "last_updated": latest_ts_iso,
+        "meta": breadth_meta,
         "articles": enriched_articles,
         "items": enriched_articles
     }
+
+
+@router.get("/api/v1/news/yield")
+async def get_news_yield(
+    x_internal_token: Optional[str] = Header(default=None, alias="X-Internal-Token"),
+    window_hours: int = Query(news_yield.YIELD_WINDOW_HOURS, ge=1, le=24),
+):
+    """Per-feed ingest/read yield over the rolling 24h window (Phase 172 / M9).
+
+    Diagnostic instrumentation only — it observes the funnel, it never alters
+    ingest or read behaviour. Shape::
+
+        {"window_hours": 24, "storage": "redis"|"memory",
+         "sources": {"<feed>": {fetched, dropped_gate, dropped_stale,
+                                dropped_ungeocoded, published, last_seen_at}},
+         "provinces": {"<province>": {...}}, "totals": {...}}
+
+    Auth follows the source-health convention (an operational aggregate with no
+    user data): when ``INTERNAL_TICK_TOKEN`` is configured, the same
+    ``X-Internal-Token`` header the scheduler uses is required; when it is not
+    configured the endpoint stays open like ``/api/v1/health/sources``.
+    """
+    from app.config import get_settings
+    import secrets as _secrets
+
+    expected = str(getattr(get_settings(), "internal_tick_token", "") or "")
+    supplied = x_internal_token if isinstance(x_internal_token, str) else ""
+    if expected and (not supplied or not _secrets.compare_digest(supplied, expected)):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid internal token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    hours = window_hours if isinstance(window_hours, int) else news_yield.YIELD_WINDOW_HOURS
+    try:
+        await asyncio.to_thread(news_yield.flush_yield_counters)
+    except Exception as exc:  # never fail the diagnostic on a flush problem
+        logger.debug(f"News yield flush skipped: {exc}")
+    return news_yield.get_yield_report(window_hours=hours)
 
 
 @router.get("/api/v1/news/market-regime")

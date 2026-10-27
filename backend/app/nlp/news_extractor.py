@@ -42,6 +42,66 @@ STRICT_SUMATRA_BBOX = {
     "max_lat": 6.5,
 }
 
+# Phase 172 (M9 / SPEC decision 8): the ten Sumatra provinces a *feed* may
+# legitimately declare. Anything else ("Nasional", empty, an outlet's city) is
+# not a province claim and must never be copied into the article's province.
+SUMATRA_PROVINCES = frozenset({
+    "Aceh",
+    "Sumatera Utara",
+    "Sumatera Barat",
+    "Riau",
+    "Kepulauan Riau",
+    "Jambi",
+    "Sumatera Selatan",
+    "Bangka Belitung",
+    "Bengkulu",
+    "Lampung",
+})
+
+# Area-wide label for an article that resolves to the island but no province.
+AREA_WIDE_PROVINCE = "Sumatera"
+
+_PROVINCE_ALIASES = {
+    "sumut": "Sumatera Utara",
+    "sumatera utara": "Sumatera Utara",
+    "sumbar": "Sumatera Barat",
+    "sumatera barat": "Sumatera Barat",
+    "riau": "Riau",
+    "kepri": "Kepulauan Riau",
+    "kepulauan riau": "Kepulauan Riau",
+    "jambi": "Jambi",
+    "sumsel": "Sumatera Selatan",
+    "sumatera selatan": "Sumatera Selatan",
+    "babel": "Bangka Belitung",
+    "bangka belitung": "Bangka Belitung",
+    "bengkulu": "Bengkulu",
+    "lampung": "Lampung",
+    "aceh": "Aceh",
+}
+
+
+def declared_province(value: Any) -> Optional[str]:
+    """The province a feed/article row *declares*, or None when it declares none.
+
+    Only the ten Sumatra provinces count. "Nasional", a city name, an empty
+    string or the area-wide bucket all mean "no province declared" — returning
+    one of those as a province is how unlocated Google-News items used to be
+    mislabelled as Sumatera Utara.
+    """
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    canonical = _PROVINCE_ALIASES.get(raw.lower(), raw)
+    return canonical if canonical in SUMATRA_PROVINCES else None
+
+
+def declared_province_of(article: Any) -> Optional[str]:
+    """declared_province() over a row that may carry province or region."""
+    if not isinstance(article, dict):
+        return None
+    return declared_province(article.get("province")) or declared_province(article.get("region"))
+
+
 
 def _is_within_strict_sumatra_bbox(lat: Any, lon: Any) -> bool:
     try:
@@ -954,8 +1014,11 @@ def _fast_heuristic_extraction(art: Dict[str, Any]) -> Dict[str, Any]:
         severity = "low"
 
     # 4. Pan-Sumatra Location, Corridor & Coordinate Resolution (bureau-stripped, no blind centroid)
+    # Phase 172 (M9): only a *declared* feed province may act as a fallback, so an
+    # unlocated Google-News item is never silently labelled Sumatera Utara.
+    _declared = declared_province_of(art)
     loc_info = resolve_sumatra_location_and_corridor(
-        raw_full, fallback_province=art.get("province", "Sumatera Utara"))
+        raw_full, fallback_province=_declared)
     nodes = extract_locations_gazetteer(raw_full)
     if not nodes and loc_info.get("matched_node"):
         nodes = [loc_info["matched_node"]]
@@ -963,7 +1026,11 @@ def _fast_heuristic_extraction(art: Dict[str, Any]) -> Dict[str, Any]:
     corridor_segment = loc_info.get("corridor_segment") or "unknown"
     latitude = loc_info.get("latitude")
     longitude = loc_info.get("longitude")
-    region = loc_info.get("province") or art.get("province") or "Sumatera"
+    # Honest province: resolved location > declared feed province > area-wide.
+    region = (loc_info.get("province")
+              or _declared
+              or AREA_WIDE_PROVINCE)
+
     is_geocoded = bool(loc_info.get("is_geocoded")) and latitude is not None and longitude is not None
     location_precision = loc_info.get("location_precision", "none")
     # SPEC-LOCKED Q1 hard island bbox: coordinates outside 94-108E/-6.5..6.5N
@@ -1463,8 +1530,9 @@ def _apply_batch_llm_item(structured: Dict[str, Any], item: Dict[str, Any]) -> D
             if isinstance(llm_locs, list) and any(isinstance(x, str) and x.strip() for x in llm_locs):
                 from app.nlp.geocoding_service import resolve_all_sumatra_locations as _resolve_all
                 _loc_text = ", ".join([str(x).strip() for x in llm_locs if isinstance(x, str) and str(x).strip()])
-                _fallback = structured.get("province") or structured.get("region") or "Sumatera Utara"
+                _fallback = declared_province_of(structured)
                 _all = _resolve_all(_loc_text, fallback_province=_fallback)
+
                 if _all:
                     structured["affected_locations"] = _all
                     # Promote primary to top hit.

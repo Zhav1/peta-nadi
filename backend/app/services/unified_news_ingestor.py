@@ -26,7 +26,9 @@ from app.services.news_aggregator import (
 )
 from app.nlp.news_extractor import extract_structured_news, extract_structured_news_batch
 from app.services.redis_client import get_redis
+from app.services import news_yield
 from app.config import get_settings
+
 
 logger = logging.getLogger(__name__)
 
@@ -149,8 +151,31 @@ class UnifiedNewsIngestor:
             logger.warning("No news articles returned from feeds.")
             return {"status": "empty", "ingested": 0, "disruptions_triggered": 0}
 
+        # Phase 172 (M9): observe per-feed yield. Diagnostic only — nothing below
+        # branches on these counters.
+        for _raw in raw_items:
+            news_yield.record_yield(_raw.get("source"), "fetched", _raw.get("province"))
+
         # 1b. DB-first deduplication: reuse prior LLM classifications with 0 LLM calls.
         top_items = round_robin_by_source(raw_items, NEWS_INGEST_ITEM_BUDGET)
+        # Items the per-cycle extraction budget left out are a gate drop, counted
+        # per source so a single prolific feed cannot hide behind the total.
+        try:
+            _in_budget: Dict[str, int] = {}
+            for _bi in top_items:
+                _bs = str(_bi.get("source") or "").strip()
+                _in_budget[_bs] = _in_budget.get(_bs, 0) + 1
+            _fetched_by_source: Dict[str, int] = {}
+            for _ri in raw_items:
+                _rs = str(_ri.get("source") or "").strip()
+                _fetched_by_source[_rs] = _fetched_by_source.get(_rs, 0) + 1
+            for _src, _n in _fetched_by_source.items():
+                _cut = _n - _in_budget.get(_src, 0)
+                if _cut > 0:
+                    news_yield.record_yield(_src, "dropped_gate", count=_cut)
+        except Exception:
+            pass
+
         try:
             import hashlib as _hl
             pre_ids: list[str] = []
@@ -270,6 +295,22 @@ class UnifiedNewsIngestor:
                        and a.get("is_geocoded") is not False
                        and a.get("latitude") is not None
                        and a.get("longitude") is not None]
+
+        # Phase 172 (M9): close the funnel per source — gate drops (irrelevant)
+        # and geo drops (no usable coordinates) are separated from `published`.
+        try:
+            _published_ids = {id(a) for a in publishable}
+            for _sa in structured_articles:
+                _src = _sa.get("source")
+                if _sa.get("zone_tier") == "DROPPED_IRRELEVANT":
+                    news_yield.record_yield(_src, "dropped_gate", _sa.get("province"))
+                elif id(_sa) not in _published_ids:
+                    news_yield.record_yield(_src, "dropped_ungeocoded", _sa.get("province"))
+                else:
+                    news_yield.record_yield(_src, "published", _sa.get("province"))
+            await asyncio.to_thread(news_yield.flush_yield_counters)
+        except Exception as _yield_err:
+            logger.debug(f"News yield accounting skipped: {_yield_err}")
 
         # 5. Push to Redis Stream
         await self._publish_to_redis(publishable)

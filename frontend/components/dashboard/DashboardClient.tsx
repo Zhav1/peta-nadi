@@ -35,7 +35,7 @@ import { useDemoState } from '@/hooks/useDemoState';
 import { useFleetVehicles } from '@/hooks/useFleetVehicles';
 import { useCorridorContext } from '@/hooks/useCorridorContext';
 import { useDashboardBootstrap } from '@/hooks/useDashboardBootstrap';
-import { useNewsVerification, isForecastActive, deriveForecastValidUntil, FORECAST_TAG, type MarketRegimeData } from '@/hooks/useNewsVerification';
+import { useNewsVerification, isForecastActive, deriveForecastValidUntil, FORECAST_TAG, normalizeProvince, provinceSlug, displayTierLabel, AREA_WIDE_PROVINCE, SUMATRA_PROVINCE_ORDER, type MarketRegimeData } from '@/hooks/useNewsVerification';
 import { isDocumentVisible } from '@/lib/visibility';
 import { FreshnessBadge } from '@/components/ui/FreshnessBadge';
 import { FreshnessBadge as StatusFreshnessBadge } from '@/components/dashboard/FreshnessBadge';
@@ -735,12 +735,14 @@ export default function DashboardClient() {
   // Live OSINT News & Intelligence Hook (Google News RSS & Verified Sinyal Lapangan)
   // Phase 163b: seeded by `sections.news` + `sections.news_market_regime`; the
   // seed still passes through the same permalink/freshness/discourse gates.
-  const { newsFeed, status: newsStatus, lastUpdated: newsLastUpdated } = useNewsVerification({
+  const { newsFeed, status: newsStatus, lastUpdated: newsLastUpdated, meta: newsBreadthMeta } = useNewsVerification({
     enabled: !bootstrap.isLoading,
     initialNews: seededNews,
     initialMarketRegime: seededMarketRegime,
   });
   const [newsSearchQuery, setNewsSearchQuery] = useState('');
+  const [newsProvinceFilter, setNewsProvinceFilter] = useState<string>('ALL');
+
   const [selectedNewsCategory, setSelectedNewsCategory] = useState<'ALL' | 'OFFICIAL' | 'WEATHER' | 'OSINT' | 'MARKET'>('ALL');
   const [selectedNewsId, setSelectedNewsId] = useState<string | null>(null);
   const [expandedNewsId, setExpandedNewsId] = useState<string | null>(null);
@@ -764,6 +766,12 @@ export default function DashboardClient() {
       if (selectedNewsCategory === 'OSINT' && item.source_type !== 'MEDSOS_OSINT') return false;
       if (selectedNewsCategory === 'MARKET' && item.source_type !== 'PIHPS_MARKET') return false;
 
+      // Province chip narrows on the article's resolved province bucket (never a
+      // guess: unlocated rows live in the area-wide "Sumatera" bucket).
+      if (newsProvinceFilter !== 'ALL' && normalizeProvince(item.province) !== newsProvinceFilter) {
+        return false;
+      }
+
       if (newsSearchQuery.trim()) {
         const q = newsSearchQuery.toLowerCase();
         return (
@@ -774,7 +782,51 @@ export default function DashboardClient() {
       }
       return true;
     });
-  }, [newsFeed, selectedNewsCategory, newsSearchQuery]);
+  }, [newsFeed, selectedNewsCategory, newsSearchQuery, newsProvinceFilter]);
+
+  // Province chips: every province the payload reports, in canonical order, plus
+  // any bucket the visible feed actually carries.
+  const newsProvinceChips = useMemo(() => {
+    const present = new Set<string>();
+    for (const province of newsBreadthMeta?.provinces_present || []) {
+      present.add(normalizeProvince(province));
+    }
+    for (const item of newsFeed) {
+      if (item.link || item.url) present.add(normalizeProvince(item.province));
+    }
+    const order = (p: string) => {
+      const idx = (SUMATRA_PROVINCE_ORDER as readonly string[]).indexOf(p);
+      return idx === -1 ? (p === AREA_WIDE_PROVINCE ? 99 : 100) : idx;
+    };
+    return Array.from(present).sort((a, b) => order(a) - order(b) || a.localeCompare(b));
+  }, [newsFeed, newsBreadthMeta]);
+
+  // Provinces the backend reported as empty in the 48h window (honest emptiness).
+  const newsProvincesMissing = useMemo(
+    () => (newsBreadthMeta?.provinces_missing || []).map((p) => normalizeProvince(p)),
+    [newsBreadthMeta]
+  );
+
+  // Group the visible feed by province. Group order follows the chip order so the
+  // list and the filter row tell the same story; order is deterministic, so an
+  // identical cached re-poll cannot re-shuffle the DOM (freeze contract).
+  const groupedNews = useMemo(() => {
+    const groups = new Map<string, typeof filteredNews>();
+    for (const item of filteredNews) {
+      const key = normalizeProvince(item.province);
+      const bucket = groups.get(key);
+      if (bucket) bucket.push(item);
+      else groups.set(key, [item]);
+    }
+    const order = (p: string) => {
+      const idx = (SUMATRA_PROVINCE_ORDER as readonly string[]).indexOf(p);
+      return idx === -1 ? (p === AREA_WIDE_PROVINCE ? 99 : 100) : idx;
+    };
+    return Array.from(groups.entries())
+      .sort((a, b) => order(a[0]) - order(b[0]) || a[0].localeCompare(b[0]))
+      .map(([province, items]) => ({ province, items }));
+  }, [filteredNews]);
+
 
   // 32-point polygon ring around [lon, lat] with radius rKm (RED 16km / YELLOW 20km).
   const buildZoneRing = useCallback((lon: number, lat: number, rKm: number, points = 32): [number, number][] => {
@@ -3293,6 +3345,59 @@ export default function DashboardClient() {
                 ))}
               </div>
 
+              {/* Province chips (Phase 172 / M9): the read path guarantees every
+                  province with a qualifying 48h article is present, so a chip per
+                  province is an honest map of what the window contains. Empty
+                  provinces are named, never hidden. */}
+              {(newsProvinceChips.length > 0 || newsProvincesMissing.length > 0) && (
+              <div className="flex flex-wrap items-center gap-1" data-testid="news-province-filter">
+                <button
+                  type="button"
+                  data-testid="news-province-chip-all"
+                  onClick={() => setNewsProvinceFilter('ALL')}
+                  className={`cursor-pointer px-1.5 py-0.5 rounded border text-[10px] font-mono transition ${
+                    newsProvinceFilter === 'ALL'
+                      ? 'bg-white/10 text-slate-100 border-white/20'
+                      : 'bg-slate-950/50 text-slate-400 border-white/5 hover:border-white/20 hover:text-slate-200'
+                  }`}
+                  title="Tampilkan semua provinsi"
+                >
+                  Semua
+                </button>
+                {newsProvinceChips.map((province) => {
+                  const slug = provinceSlug(province);
+                  const active = newsProvinceFilter === province;
+                  const count = newsBreadthMeta?.province_counts?.[province];
+                  return (
+                    <button
+                      key={province}
+                      type="button"
+                      data-testid={`news-province-chip-${slug}`}
+                      onClick={() => setNewsProvinceFilter(active ? 'ALL' : province)}
+                      title={`Filter provinsi: ${province}${typeof count === 'number' ? ` (${count} artikel)` : ''}`}
+                      className={`cursor-pointer px-1.5 py-0.5 rounded border text-[10px] font-mono transition ${
+                        active
+                          ? 'bg-cyan-950/60 text-cyan-200 border-cyan-500/50'
+                          : 'bg-slate-950/50 text-slate-400 border-white/5 hover:border-white/20 hover:text-slate-200'
+                      }`}
+                    >
+                      {province}
+                      {typeof count === 'number' ? <span className="ml-1 text-slate-500">{count}</span> : null}
+                    </button>
+                  );
+                })}
+                {newsProvincesMissing.length > 0 && (
+                  <span
+                    data-testid="news-provinces-missing"
+                    className="px-1.5 py-0.5 rounded border border-dashed border-white/10 text-[10px] font-mono text-slate-500"
+                    title="Provinsi tanpa artikel yang lolos gerbang 48 jam pada jendela baca ini"
+                  >
+                    {newsProvincesMissing.join(' · ')}: Tidak ada artikel 48 jam
+                  </span>
+                )}
+              </div>
+              )}
+
               {/* Compact Zona Filter Pills in Left News Drawer Header */}
               <div className="space-y-1.5 pt-1">
               <div className="flex items-center gap-1.5">
@@ -3378,7 +3483,21 @@ export default function DashboardClient() {
                   <p>Tidak ada berita yang cocok.</p>
                 </div>
               ) : (
-                filteredNews.map((item) => {
+                groupedNews.map((group) => (
+                  <div key={group.province} className="space-y-2.5">
+                    <div
+                      data-testid={`news-province-group-${provinceSlug(group.province)}`}
+                      className="sticky top-0 z-10 flex items-center justify-between gap-2 px-2 py-1 rounded-md bg-[#0c1017]/95 backdrop-blur border border-[#1c2432] text-[10px] font-mono uppercase tracking-wide text-slate-400"
+                    >
+                      <span className="truncate">{group.province}</span>
+                      <span
+                        data-testid={`news-province-count-${provinceSlug(group.province)}`}
+                        className="text-slate-300 font-bold shrink-0"
+                      >
+                        {group.items.length} artikel
+                      </span>
+                    </div>
+                    {group.items.map((item) => {
                   const isSelected = selectedNewsId === item.id;
                   const isOfficial = item.source_tier === 'TIER_1_OFFICIAL' || item.source_type === 'OFFICIAL_NEWS';
                   const isEarlyWarning = item.temporal_phase === 'forecast_early_warning';
@@ -3517,16 +3636,25 @@ export default function DashboardClient() {
                           </span>
                         </div>
 
- {/* Row 2 — Keyakinan */}
-                        <div className="flex items-center justify-between text-slate-300 border-t border-[#1c2432]/60 pt-1">
- <span className="text-slate-500 text-xs font-semibold">Keyakinan:</span>
-                          <span data-testid={`berita-confidence-${item.id}`} className="px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 text-xs font-bold tabular-nums" title="Keyakinan verifikasi artikel">
-
-                              {item.confidence_score != null && Number.isFinite(Number(item.confidence_score))
-                                ? `${Math.round(Number(item.confidence_score) * 100)}%`
-                                : 'Keyakinan belum tersedia'}
-                            </span>
+ {/* Row 2 — Keyakinan (Phase 172 / M9): tier + honest label; a percentage only
+     when a calibrated consensus value exists. The static 0.86/0.94 tier
+     constant is never rendered as confidence. */}
+                        <div className="flex items-center justify-between gap-1 text-slate-300 border-t border-[#1c2432]/60 pt-1">
+ <span className="text-slate-500 text-xs font-semibold shrink-0">Keyakinan:</span>
+                          <span
+                            data-testid={`berita-confidence-${item.id}`}
+                            className="px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 text-xs font-bold tabular-nums truncate"
+                            title={`${displayTierLabel(item.display_confidence?.tier || item.source_tier)} · ${item.display_confidence?.label || 'Belum terverifikasi'}${item.display_confidence?.basis ? ` (${item.display_confidence.basis})` : ''}`}
+                          >
+                            {item.display_confidence?.value != null && Number.isFinite(Number(item.display_confidence.value))
+                              ? `${Math.round(Number(item.display_confidence.value) * 100)}% · `
+                              : ''}
+                            {displayTierLabel(item.display_confidence?.tier || item.source_tier)}
+                            {' · '}
+                            <span className="font-semibold">{item.display_confidence?.label || 'Belum terverifikasi'}</span>
+                          </span>
                         </div>
+
 
  {/* Row 3 — Jalur */}
                         <div className="flex items-center justify-between text-slate-300 border-t border-[#1c2432]/60 pt-1">
@@ -3613,7 +3741,9 @@ export default function DashboardClient() {
                       </div>
                     </div>
                   );
-                })
+                })}
+                  </div>
+                ))
               )}
             </div>
 

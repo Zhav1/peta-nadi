@@ -5,6 +5,28 @@ import { isDocumentVisible, subscribeVisibility } from '@/lib/visibility';
 
 import type { HazardImpactProfile, AffectedLocationNode, VerificationAudit, ForecastTag, NewsLivePayload } from '@/lib/types';
 
+/** Honest confidence contract (Phase 172 / M9, SPEC decision 7). */
+export interface NewsDisplayConfidence {
+  /** Calibrated consensus value, or null when nothing corroborates the claim. */
+  value: number | null;
+  label: 'Terverifikasi sensor' | 'Terkonfirmasi multi-sumber' | 'Satu sumber' | 'Belum terverifikasi' | string;
+  basis: 'sensor_corroborated' | 'multi_source' | 'single_source' | 'unverified' | string;
+  tier: string;
+}
+
+/** Read-time breadth metadata of the returned page (Phase 172 / M9). */
+export interface NewsBreadthMeta {
+  source_counts?: Record<string, number>;
+  province_counts?: Record<string, number>;
+  truncated?: boolean;
+  provinces_present?: string[];
+  provinces_missing?: string[];
+  max_per_source?: number;
+  budget?: number;
+  total?: number;
+  confidence_note?: string;
+}
+
 export interface NewsItem {
   id: string;
   source_type: 'OFFICIAL_NEWS' | 'BMKG_WEATHER' | 'PIHPS_MARKET' | 'MEDSOS_OSINT';
@@ -13,6 +35,11 @@ export interface NewsItem {
   headline: string;
   summary: string;
   location_name?: string;
+  /**
+   * Canonical province bucket ("Aceh", "Sumatera Barat", … or the area-wide
+   * "Sumatera" when nothing resolved). Never a guessed province.
+   */
+  province?: string;
   lat?: number;
   lon?: number;
   pubDate?: string;
@@ -26,7 +53,14 @@ export interface NewsItem {
   commodities_affected?: string[];
   ground_truth_metrics?: { lane_status?: string; water_level_cm?: number };
   verification_status: 'UNVERIFIED_GRASSROOTS' | 'CORROBORATED_OFFICIAL' | 'MARKET_IMPACT_CONFIRMED' | 'REJECTED_UNFOUNDED';
+  /**
+   * @deprecated for display — this is the extractor's static tier constant
+   * (0.86 / 0.94). Render `display_confidence` instead.
+   */
   confidence_score: number;
+  /** Honest display contract: label + calibrated value (or null). */
+  display_confidence?: NewsDisplayConfidence;
+
   attributions?: Array<{ source_name: string; url?: string; credibility_score?: number }>;
   originNode?: string;
   destNode?: string;
@@ -54,7 +88,105 @@ export interface NewsItem {
   verification_audit?: VerificationAudit;
 }
 
+// ---------------------------------------------------------------------------
+// Province buckets + honest confidence (Phase 172 / M9, SPEC decisions 7 + 8)
+// ---------------------------------------------------------------------------
+
+/** The ten Sumatra provinces, in display order, plus the area-wide bucket. */
+export const SUMATRA_PROVINCE_ORDER = [
+  'Aceh',
+  'Sumatera Utara',
+  'Sumatera Barat',
+  'Riau',
+  'Kepulauan Riau',
+  'Jambi',
+  'Sumatera Selatan',
+  'Bangka Belitung',
+  'Bengkulu',
+  'Lampung',
+] as const;
+
+export const AREA_WIDE_PROVINCE = 'Sumatera';
+
+const PROVINCE_ALIASES: Record<string, string> = {
+  aceh: 'Aceh',
+  sumut: 'Sumatera Utara',
+  'sumatera utara': 'Sumatera Utara',
+  sumbar: 'Sumatera Barat',
+  'sumatera barat': 'Sumatera Barat',
+  riau: 'Riau',
+  kepri: 'Kepulauan Riau',
+  'kepulauan riau': 'Kepulauan Riau',
+  jambi: 'Jambi',
+  sumsel: 'Sumatera Selatan',
+  'sumatera selatan': 'Sumatera Selatan',
+  babel: 'Bangka Belitung',
+  'bangka belitung': 'Bangka Belitung',
+  bengkulu: 'Bengkulu',
+  lampung: 'Lampung',
+  sumatera: AREA_WIDE_PROVINCE,
+  sumatra: AREA_WIDE_PROVINCE,
+  nasional: AREA_WIDE_PROVINCE,
+};
+
+/**
+ * Canonical province bucket for grouping/filtering. An article with no resolved
+ * province belongs to the area-wide bucket — the UI never guesses a province.
+ */
+export function normalizeProvince(raw: unknown): string {
+  const value = typeof raw === 'string' ? raw.trim() : '';
+  if (!value) return AREA_WIDE_PROVINCE;
+  return PROVINCE_ALIASES[value.toLowerCase()] || value;
+}
+
+/** URL/testid-safe slug for a province (`Sumatera Utara` -> `sumatera-utara`). */
+export function provinceSlug(province: string): string {
+  return province
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+/**
+ * Coerce a payload `display_confidence` into the display contract.
+ *
+ * Missing/unusable input degrades to the honest "Belum terverifikasi" — the
+ * static `confidence_score` (0.86/0.94) is NEVER used as a fallback value.
+ */
+export function normalizeDisplayConfidence(
+  raw: unknown,
+  sourceTier?: string
+): NewsDisplayConfidence {
+  const tier = typeof sourceTier === 'string' && sourceTier ? sourceTier : 'TIER_2_AUTHORITATIVE_PRESS';
+  const source = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : null;
+  if (!source) {
+    return { value: null, label: 'Belum terverifikasi', basis: 'unverified', tier };
+  }
+  const numeric = source.value == null ? NaN : Number(source.value);
+  const value = Number.isFinite(numeric) && numeric > 0 && numeric <= 1 ? numeric : null;
+  const label =
+    typeof source.label === 'string' && source.label.trim()
+      ? source.label
+      : value == null
+        ? 'Belum terverifikasi'
+        : 'Terkonfirmasi multi-sumber';
+  const basis = typeof source.basis === 'string' && source.basis.trim() ? source.basis : 'unverified';
+  const resolvedTier = typeof source.tier === 'string' && source.tier.trim() ? source.tier : tier;
+  return { value, label, basis, tier: resolvedTier };
+}
+
+/** Short, human tier badge. The raw token stays available via `title`. */
+export function displayTierLabel(tier: string | undefined): string {
+  const value = String(tier || '').toUpperCase();
+  if (value === 'TIER_1_OFFICIAL') return 'TIER 1 · RESMI';
+  if (value === 'TIER_2_AUTHORITATIVE_PRESS') return 'TIER 2 · PERS';
+  return value || 'TIER 2 · PERS';
+}
+
 export interface MarketRegimeData {
+
   regime: 'NORMAL' | 'ELEVATED' | 'CRISIS' | 'EARLY_WARNING_ACTIVE' | 'HIGH_DISRUPTION_RISK';
   active_crisis_indicators?: string[];
   commodity_volatility_score?: number;
@@ -315,6 +447,9 @@ export function useNewsVerification(options?: UseNewsVerificationOptions) {
   const seedRegime = options?.initialMarketRegime ?? null;
 
   const [newsFeed, setNewsFeed] = useState<NewsItem[]>([]);
+  // Breadth meta of the last accepted payload (provinces present/missing, caps).
+  const [newsMeta, setNewsMeta] = useState<NewsBreadthMeta | null>(null);
+
   const [marketRegime, setMarketRegime] = useState<MarketRegimeData>({
     regime: 'NORMAL',
     critical_news_count: 0,
@@ -373,6 +508,7 @@ export function useNewsVerification(options?: UseNewsVerificationOptions) {
             articles?: any[];
             items?: any[];
             last_updated?: string;
+            meta?: NewsBreadthMeta | null;
           };
 
           const backendLastUpdated = typeof res.last_updated === 'string' && res.last_updated.trim().length > 0
@@ -525,7 +661,13 @@ export function useNewsVerification(options?: UseNewsVerificationOptions) {
                 link: sourceLink,
                 url: sourceLink,
                 link_alive: linkAlive,
+                province: normalizeProvince(a.province ?? a.region),
+                display_confidence: normalizeDisplayConfidence(
+                  a.display_confidence,
+                  a.source_tier || (isOfficial ? 'TIER_1_OFFICIAL' : 'TIER_2_AUTHORITATIVE_PRESS')
+                ),
                 zone_tier: resolvedTier,
+
                 forecast_tag: forecastActive ? forecastTagRaw : undefined,
                 forecast_valid_until: forecastActive ? forecastValidUntil : undefined,
                 tier_reason: resolvedReason,
@@ -567,6 +709,8 @@ export function useNewsVerification(options?: UseNewsVerificationOptions) {
               if (signature !== lastArticleSignatureRef.current) {
                 lastArticleSignatureRef.current = signature;
                 setNewsFeed(mapped);
+                // meta always travels with the article set it describes.
+                setNewsMeta(res.meta && typeof res.meta === 'object' ? res.meta : null);
                 if (backendLastUpdated) setLastUpdated(backendLastUpdated);
               }
               setStatus('live');
@@ -575,6 +719,7 @@ export function useNewsVerification(options?: UseNewsVerificationOptions) {
               // Never substitute an offline fixture.
               setStatus('warming');
             }
+
           } else {
             setStatus('warming');
           }
@@ -626,5 +771,5 @@ export function useNewsVerification(options?: UseNewsVerificationOptions) {
     };
   }, [enabled]);
 
-  return { newsFeed, marketRegime, isLoading, status, lastUpdated, lastGoodAt };
+  return { newsFeed, marketRegime, isLoading, status, lastUpdated, lastGoodAt, meta: newsMeta };
 }
