@@ -1243,7 +1243,7 @@ def build_erp_summary(
     notes = [
         "Penghematan dihitung dari tarif tol BPJT (Golongan I–V), harga BBM Pertamina, dan peluruhan komoditas 4-tier.",
         "Reroute sukses = Trip yang dialihkan, selesai/berjalan, dan menghasilkan penghematan biaya bersih positif.",
-        "Trip gagal = status failed atau pengalihan rute yang justru menaikkan biaya aktual di atas baseline.",
+        "Trip gagal = status failed. Reroute merugi = pengalihan rute namun biaya naik (tetap Terkirim, tercatat sebagai Rugi).",
     ]
 
     response = ERPSummaryResponse(

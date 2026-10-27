@@ -246,7 +246,8 @@ export default function LaporanHybridPanel({
           {
             label: 'Trip gagal',
             value: `${totals?.failed_trips ?? 0}`,
-            sub: `${totals?.reroute_failed_count ?? 0} reroute merugi`,
+            sub: `${totals?.reroute_failed_count ?? 0} reroute merugi (tetap Terkirim)`,
+            hint: 'Trip gagal = status failed. Reroute merugi = Terkirim namun biaya naik (badge Rugi).',
             icon: XCircle,
             color: 'text-rose-400',
           },
@@ -271,14 +272,14 @@ export default function LaporanHybridPanel({
             icon: Wallet,
             color: 'text-emerald-300',
           },
-        ].map((kpi) => (
-          <div key={kpi.label} className="bg-[#0c1017] p-3.5">
+        ].map((kpi: { label: string; value: string; sub: string; icon: typeof XCircle; color: string; hint?: string }) => (
+          <div key={kpi.label} className="bg-[#0c1017] p-3.5" title={kpi.hint}>
             <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-medium text-slate-400">{kpi.label}</span>
+              <span className="text-xs font-medium text-slate-400" title={kpi.hint}>{kpi.label}</span>
               <kpi.icon className={`w-3.5 h-3.5 ${kpi.color}`} />
             </div>
             <p className={`text-lg font-bold tabular-nums leading-tight ${kpi.color}`}>{kpi.value}</p>
-            <p className="text-xs text-slate-500 tabular-nums mt-0.5 truncate">{kpi.sub}</p>
+            <p className="text-xs text-slate-500 tabular-nums mt-0.5 truncate" title={kpi.hint ?? kpi.sub}>{kpi.sub}</p>
           </div>
         ))}
       </div>
