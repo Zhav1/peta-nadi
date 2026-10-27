@@ -10,7 +10,11 @@ from typing import Dict, Any, List, Optional, Tuple
 import httpx
 from fastapi import APIRouter, Query, HTTPException
 
-from app.nlp.gazetteer_data import PAN_SUMATRA_GAZETTEER, SUMATRA_BOUNDING_BOX
+from app.nlp.gazetteer_data import (
+    PAN_SUMATRA_GAZETTEER,
+    SUMATRA_BOUNDING_BOX,
+    rank_admin_gazetteer,
+)
 from app.services.adm_boundary_service import get_adm_boundaries
 from app.services.redis_client import get_redis
 
@@ -73,10 +77,11 @@ def _normalize_query(text: str) -> str:
 
 
 def _match_score(slug: str, query: str) -> Optional[int]:
-    """Rank a gazetteer slug against the normalized query (lower is better).
+    """Rank a legacy hub slug against the normalized query (lower is better).
 
-    Exact matches must win: naive substring order returned Padang Sidempuan
-    ahead of Kota Padang for the query `padang`, because dict order is arbitrary.
+    Legacy hub nodes (ports, passes, corridors) have no aliases/parent data, so
+    they only ever score exact/prefix/word/substring. The admin gazetteer's
+    alias/typo matcher lives in ``app.nlp.gazetteer_data``.
     """
     if not query:
         return None
@@ -90,6 +95,45 @@ def _match_score(slug: str, query: str) -> Optional[int]:
     if query in s:
         return 3
     return None
+
+
+# Rank per result type used only as a tie-breaker (kota/kabupaten above kecamatan).
+_RESULT_TYPE_RANK = {
+    "city": 0,
+    "kota": 0,
+    "regency": 1,
+    "kabupaten": 1,
+    "kecamatan": 2,
+    "subdistrict": 2,
+    "hub": 3,
+    "strategic_hub": 3,
+    "corridor_point": 3,
+}
+
+
+def _normalized_name(value: str) -> str:
+    return " ".join((value or "").lower().split())
+
+
+def _is_same_place(a: Dict[str, Any], b: Dict[str, Any]) -> bool:
+    """Same display name AND within 5 km → one place, not two."""
+    if _normalized_name(a.get("name")) != _normalized_name(b.get("name")):
+        return False
+    try:
+        return haversine_km(float(a["lat"]), float(a["lon"]), float(b["lat"]), float(b["lon"])) < 5.0
+    except (KeyError, TypeError, ValueError):
+        return False
+
+
+def _merge_ranked(rows: List[Tuple[int, int, int, Dict[str, Any]]]) -> List[Dict[str, Any]]:
+    """Merge ranked rows (tier, type_rank, name_len, result), de-duping places."""
+    rows.sort(key=lambda row: (row[0], row[1], row[2], _normalized_name(row[3].get("name"))))
+    merged: List[Dict[str, Any]] = []
+    for _tier, _type_rank, _name_len, result in rows:
+        if any(_is_same_place(existing, result) for existing in merged):
+            continue
+        merged.append(result)
+    return merged
 
 
 def _gazetteer_result_type(data: Dict[str, Any]) -> str:
@@ -161,22 +205,27 @@ async def search_places(
     limit: int = Query(10, ge=1, le=50, description="Maximum number of results to return")
 ) -> Dict[str, Any]:
     """
-    Searches PAN_SUMATRA_GAZETTEER first, then queries OpenStreetMap Nominatim
-    bounded to Sumatra (95.0, -6.2 to 109.0, 6.0) with caching so searching ANY
-    remote village (desa/kelurahan/nagari/gampong) or kecamatan in Sumatra
-    returns structured results.
+    Searches the offline kabupaten/kota + kecamatan gazetteer first (aliases,
+    province/parent, diacritics, typos), then strategic hub nodes, then queries
+    OpenStreetMap Nominatim bounded to Sumatra (95.0, -6.2 to 109.0, 6.0) for
+    desa/kelurahan/nagari/gampong. `nominatim` in the response is
+    ``ok|unavailable|skipped|cached`` so the UI can say when a desa lookup
+    needs a connection instead of implying the place does not exist.
     """
     query_clean = q.strip()
     cache_key = f"{query_clean.lower()}:{limit}"
 
     # 1. Check in-memory cache
     if cache_key in _IN_MEMORY_SEARCH_CACHE:
+        cached_results = _IN_MEMORY_SEARCH_CACHE[cache_key]
         return {
             "status": "success",
             "query": query_clean,
             "cached": True,
-            "count": len(_IN_MEMORY_SEARCH_CACHE[cache_key]),
-            "results": _IN_MEMORY_SEARCH_CACHE[cache_key]
+            "count": len(cached_results),
+            "nominatim": "cached",
+            "offline": sum(1 for row in cached_results if row.get("source") == "gazetteer"),
+            "results": cached_results
         }
 
     # 2. Check Redis cache
@@ -193,50 +242,62 @@ async def search_places(
                     "query": query_clean,
                     "cached": True,
                     "count": len(parsed),
+                    "nominatim": "cached",
+                    "offline": sum(1 for row in parsed if row.get("source") == "gazetteer"),
                     "results": parsed
                 }
         except Exception as e:
             logger.debug(f"Redis search cache lookup error: {e}")
 
     results: List[Dict[str, Any]] = []
-    seen_coords: List[Tuple[float, float]] = []
 
-    # 3. Match against PAN_SUMATRA_GAZETTEER (exact > prefix > word > substring).
+    # 3. Offline gazetteer: kabupaten/kota + kecamatan (alias/province/parent/
+    # slug matching with diacritic + typo tolerance) followed by the legacy
+    # strategic-hub nodes (ports, passes, corridors).
     query_norm = _normalize_query(query_clean) or query_clean.lower()
-    scored: List[Tuple[int, int, int, str, Dict[str, Any]]] = []
+    rows: List[Tuple[int, int, int, Dict[str, Any]]] = []
+
+    admin_hits = rank_admin_gazetteer(query_clean, limit=max(limit * 2, 10))
+    for tier, result in admin_hits:
+        rows.append((tier, _RESULT_TYPE_RANK.get(result["type"], 9), len(result["name"]), result))
+
+    admin_exact_hit = bool(admin_hits) and admin_hits[0][0] == 0
+
     for slug, data in PAN_SUMATRA_GAZETTEER.items():
         score = _match_score(slug, query_norm)
         if score is None:
             continue
-        scored.append((score, data.get("tier", 2), len(slug), slug, data))
-
-    scored.sort(key=lambda row: (row[0], row[1], row[2], row[3]))
-    exact_gazetteer_hit = bool(scored) and scored[0][0] == 0
-    for _score, _tier, _len, slug, data in scored:
-        if len(results) >= limit:
-            break
         coords = data["coords"]
-        # Collapse alias duplicates (e.g. "padangsidimpuan" / "padang sidempuan").
-        if any(haversine_km(coords[0], coords[1], sc[0], sc[1]) < 1.5 for sc in seen_coords):
-            continue
-        results.append({
-            "name": slug.title(),
-            "display_name": f"{slug.title()}, {data['province']}, Indonesia",
-            "lat": coords[0],
-            "lon": coords[1],
-            "type": _gazetteer_result_type(data),
-            "province": data.get("province"),
-            "kabupaten": slug.title(),
-            "kecamatan": None,
-            "source": "PAN_SUMATRA_GAZETTEER"
-        })
-        seen_coords.append((coords[0], coords[1]))
+        result_type = _gazetteer_result_type(data)
+        rows.append((
+            score,
+            _RESULT_TYPE_RANK.get(result_type, 9),
+            len(slug),
+            {
+                "name": slug.title(),
+                "display_name": f"{slug.title()}, {data['province']}, Indonesia",
+                "lat": coords[0],
+                "lon": coords[1],
+                "type": result_type,
+                "province": data.get("province"),
+                "parent": data.get("province"),
+                "kabupaten": slug.title(),
+                "kecamatan": None,
+                "source": "gazetteer",
+            },
+        ))
+
+    exact_gazetteer_hit = admin_exact_hit or any(row[0] == 0 for row in rows)
+    results = _merge_ranked(rows)[:limit]
+    offline_count = len(results)
 
     # 4. Query OpenStreetMap Nominatim for villages, gampong, nagari, subdistricts.
     # Skip the external round-trip when the gazetteer already has an exact match
     # (kota/hub queries): SPEC is gazetteer-first, and Nominatim adds seconds of
     # latency to every keystroke search for no extra precision on an exact node.
+    nominatim_state = "skipped"
     if len(results) < limit and not exact_gazetteer_hit:
+        nominatim_state = "unavailable"
         try:
             osm_url = "https://nominatim.openstreetmap.org/search"
             params = {
@@ -251,6 +312,7 @@ async def search_places(
             async with httpx.AsyncClient(timeout=4.5) as client:
                 resp = await client.get(osm_url, params=params, headers=NOMINATIM_HEADERS)
                 if resp.status_code == 200:
+                    nominatim_state = "ok"
                     items = resp.json()
                     for item in items:
                         try:
@@ -263,11 +325,6 @@ async def search_places(
                         if not (-6.2 <= lat <= 6.0 and 95.0 <= lon <= 109.0):
                             continue
 
-                        # Avoid duplicates
-                        is_dup = any(haversine_km(lat, lon, sc[0], sc[1]) < 1.5 for sc in seen_coords)
-                        if is_dup:
-                            continue
-
                         addr = item.get("address", {})
                         prov = addr.get("state") or addr.get("province") or "Sumatera"
                         kab = addr.get("county") or addr.get("city") or addr.get("regency") or ""
@@ -277,23 +334,28 @@ async def search_places(
                         place_name = village or kec or item.get("name") or query_clean.title()
                         p_type = item.get("type") or item.get("addresstype") or "village"
 
-                        results.append({
+                        candidate = {
                             "name": place_name,
                             "display_name": item.get("display_name", f"{place_name}, {kab}, {prov}"),
                             "lat": round(lat, 6),
                             "lon": round(lon, 6),
                             "type": p_type,
                             "province": prov,
+                            "parent": kec or kab or prov,
                             "kabupaten": kab,
                             "kecamatan": kec,
                             "village": village,
-                            "source": "OSM_NOMINATIM"
-                        })
-                        seen_coords.append((lat, lon))
+                            "source": "nominatim"
+                        }
+                        # Same name + within 5 km of an offline hit → one place.
+                        if any(_is_same_place(existing, candidate) for existing in results):
+                            continue
+                        results.append(candidate)
                         if len(results) >= limit:
                             break
         except Exception as e:
             logger.warning(f"Nominatim search query exception: {e}")
+            nominatim_state = "unavailable"
 
     # Cache only non-empty hits: caching an empty list after a transient
     # Nominatim failure would pin "no results" for the process lifetime.
@@ -313,6 +375,8 @@ async def search_places(
         "query": query_clean,
         "cached": False,
         "count": len(results),
+        "nominatim": nominatim_state,
+        "offline": offline_count,
         "results": results
     }
 

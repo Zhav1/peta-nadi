@@ -882,6 +882,8 @@ export interface GeocodeNode {
   lon: number;
   type: 'port' | 'airport' | 'city' | 'regency' | 'kecamatan' | 'village' | 'hub';
   province: string;
+  parent?: string;
+  source?: string;
   kabupaten?: string;
   kecamatan?: string;
   corridor?: string;
@@ -894,6 +896,10 @@ export interface GeocodeSearchResult {
   lon: number;
   type: string;
   province: string;
+  /** Phase 171: enclosing kabupaten/kota (kecamatan) or province (kab/kota). */
+  parent?: string;
+  /** Phase 171: `gazetteer` (offline) or `nominatim` (live desa lookup). */
+  source?: string;
   kabupaten?: string;
   kecamatan?: string;
   corridor?: string;

@@ -471,6 +471,9 @@ export const api = {
           query: string;
           count?: number;
           status?: string;
+          /** `ok` | `unavailable` | `skipped` | `cached` — live desa lookup state. */
+          nominatim?: string;
+          offline?: number;
         }>(`/api/v1/geocode/search?q=${encodeURIComponent(q)}`, {
           signal: controller.signal,
           // Our own budget must never fire before the caller's: the caller owns
