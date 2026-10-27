@@ -1,8 +1,9 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { api } from '@/lib/api';
+import { isDocumentVisible, subscribeVisibility } from '@/lib/visibility';
 
-import type { HazardImpactProfile, AffectedLocationNode, VerificationAudit, ForecastTag } from '@/lib/types';
+import type { HazardImpactProfile, AffectedLocationNode, VerificationAudit, ForecastTag, NewsLivePayload } from '@/lib/types';
 
 export interface NewsItem {
   id: string;
@@ -292,10 +293,27 @@ export function isForecastActive(
   return parsed > nowMs;
 }
 
-export function useNewsVerification() {
+export interface UseNewsVerificationOptions {
+  /**
+   * Bootstrap seed (`sections.news.data`). Goes through the same normalisation
+   * as a live poll, so the seed can never bypass the trust gates. When present
+   * the first network read is skipped.
+   */
+  initialNews?: NewsLivePayload | null;
+  /** Bootstrap seed (`sections.news_market_regime.data`). */
+  initialMarketRegime?: MarketRegimeData | null;
+  /** False while the bootstrap snapshot is still loading (M8 phase 163b). */
+  enabled?: boolean;
+}
+
+export function useNewsVerification(options?: UseNewsVerificationOptions) {
   // M1 trust-fix "Strict live-only": no offline fixture. The feed starts empty and
   // only ever contains articles that came from the live backend and resolved to a
   // real publisher permalink.
+  const enabled = options?.enabled ?? true;
+  const seedNews = options?.initialNews ?? null;
+  const seedRegime = options?.initialMarketRegime ?? null;
+
   const [newsFeed, setNewsFeed] = useState<NewsItem[]>([]);
   const [marketRegime, setMarketRegime] = useState<MarketRegimeData>({
     regime: 'NORMAL',
@@ -309,17 +327,45 @@ export function useNewsVerification() {
   // Timestamp of the last poll that actually returned a usable live feed (last-good snapshot).
   const [lastGoodAt, setLastGoodAt] = useState<string | null>(null);
   const lastArticleSignatureRef = useRef<string | null>(null);
+  const inFlightRef = useRef<AbortController | null>(null);
+  // The bootstrap seed is consumed exactly once, by the first load() after the
+  // snapshot settles (the seed arrives in the same render that flips `enabled`).
+  const seedConsumedRef = useRef(false);
+  const seedRef = useRef<{ news: NewsLivePayload | null; regime: MarketRegimeData | null }>({
+    news: seedNews,
+    regime: seedRegime,
+  });
+  seedRef.current = { news: seedNews, regime: seedRegime };
 
   useEffect(() => {
+    if (!enabled) return;
     let isMounted = true;
-    async function load() {
-      try {
-        const [newsResult, regimeResult] = await Promise.allSettled([
-          api.news.live(),
-          api.news.marketRegime()
-        ]);
 
-        if (!isMounted) return;
+    async function load(seed?: { news: NewsLivePayload | null; regime: MarketRegimeData | null }) {
+      // Never overlap polls: the previous in-flight read is cancelled first.
+      inFlightRef.current?.abort();
+      const controller = new AbortController();
+      inFlightRef.current = controller;
+      try {
+        let newsResult: PromiseSettledResult<unknown>;
+        let regimeResult: PromiseSettledResult<unknown>;
+        if (seed) {
+          // Snapshot seed: no network, but the exact same normalisation pipeline
+          // (permalink/freshness/discourse gates) still runs below.
+          newsResult = seed.news
+            ? { status: 'fulfilled', value: seed.news }
+            : { status: 'rejected', reason: new Error('no bootstrap news section') };
+          regimeResult = seed.regime
+            ? { status: 'fulfilled', value: seed.regime }
+            : { status: 'rejected', reason: new Error('no bootstrap regime section') };
+        } else {
+          [newsResult, regimeResult] = await Promise.allSettled([
+            api.news.live(controller.signal),
+            api.news.marketRegime(controller.signal)
+          ]);
+        }
+
+        if (!isMounted || controller.signal.aborted) return;
 
         if (newsResult.status === 'fulfilled') {
           const res = newsResult.value as {
@@ -540,12 +586,12 @@ export function useNewsVerification() {
           setMarketRegime(regimeResult.value as unknown as MarketRegimeData);
         }
       } catch (err) {
-        if (isMounted) {
+        if (isMounted && !controller.signal.aborted) {
           setStatus('warming');
         }
         logger_err(err);
       } finally {
-        if (isMounted) setIsLoading(false);
+        if (isMounted && !controller.signal.aborted) setIsLoading(false);
       }
     }
     
@@ -553,13 +599,32 @@ export function useNewsVerification() {
       // Network failure: last-good articles stay mounted; status flips to warming.
     }
 
-    load();
-    const interval = setInterval(load, 30000);
+    // First load consumes the bootstrap seed exactly once, then the poll owns
+    // freshness. No seed (guest/failed bootstrap) → normal network read.
+    const pendingSeed = seedRef.current;
+    const seed =
+      !seedConsumedRef.current && (pendingSeed.news || pendingSeed.regime)
+        ? pendingSeed
+        : undefined;
+    seedConsumedRef.current = true;
+    void load(seed);
+
+    const interval = setInterval(() => {
+      // A backgrounded tab must not poll the 0.1-CPU backend.
+      if (!isDocumentVisible()) return;
+      void load();
+    }, 30000);
+    const unsubscribe = subscribeVisibility((visible) => {
+      if (visible) void load();
+    });
+
     return () => {
       isMounted = false;
       clearInterval(interval);
+      unsubscribe();
+      inFlightRef.current?.abort();
     };
-  }, []);
+  }, [enabled]);
 
   return { newsFeed, marketRegime, isLoading, status, lastUpdated, lastGoodAt };
 }

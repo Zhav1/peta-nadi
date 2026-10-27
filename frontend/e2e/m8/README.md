@@ -91,6 +91,31 @@ npx playwright test e2e/m8-auth.spec.ts --config=playwright.m8.config.ts
 The first configured account (DISPATCHER → GUEST → REGULATOR) is used; the
 assertions are role-agnostic. No credentials → the tests skip.
 
+## Read-path spec (phase 163b)
+
+`e2e/m8-readpath.spec.ts` proves the bootstrap snapshot replaced the first-mount
+fan-out and that the operator sections lazy-mount:
+
+```powershell
+$env:M8_DISPATCHER_EMAIL='…'
+$env:M8_DISPATCHER_PASSWORD='…'
+npx playwright test e2e/m8-readpath.spec.ts --config=playwright.m8.config.ts
+```
+
+| Assertion | Threshold |
+|---|---|
+| `GET /api/v1/dashboard/bootstrap` called on first mount and answered `200` | ≥ 1 call |
+| backend API requests on first mount | ≤ 15 (phase-160 baseline: 28 to the API host) |
+| total requests on first mount | < 91 (phase-160 DISPATCHER run 08:48) |
+| Analitik / Laporan / Evaluasi endpoints before their tab is clicked | none |
+| clicking `#nav-analytics` / `#nav-reports` / `#nav-evaluation` | fires a matching request |
+| first meaningful data | `N Sumber Terverifikasi` in the wire, else a hazard counter ≠ `—` |
+
+It prints the full count + API URL list to stdout and as a `m8-readpath`
+annotation. Run it against a **production build** (`npm run build && npm start`)
+or production: `next dev` double-invokes effects under React StrictMode and would
+double every mount request.
+
 ## CI
 
 Same command; export the env vars from CI secrets. The spec is Chromium-only and

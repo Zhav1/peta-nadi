@@ -6,7 +6,7 @@ import { defineConfig, devices } from '@playwright/test';
 // match) untouched. Pass a spec path to run just one of them.
 export default defineConfig({
   testDir: './e2e',
-  testMatch: /m8-(baseline|auth)\.spec\.ts/,
+  testMatch: /m8-(baseline|auth|readpath)\.spec\.ts/,
   timeout: 420 * 1000,
   expect: {
     timeout: 20 * 1000,

@@ -26,43 +26,150 @@ function createAbortError(message: string = 'Request aborted'): Error {
   return err;
 }
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const baseUrl = getBaseUrl();
-  const signal = options?.signal;
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(options?.headers as Record<string, string>),
-  };
+/**
+ * Phase 163b (M8) — hard client budget so a cold backend can never hang the UI.
+ *
+ * Reads use 15 s (the read path is either a snapshot hit or a bounded build);
+ * writes keep 60 s because route optimisation and the crisis pipeline legitimately
+ * run 30-50 s on the 0.1-CPU box — a 15 s cap there would abort real work.
+ * Per-call override with `timeoutMs` (bootstrap uses 30 s).
+ */
+export const DEFAULT_READ_TIMEOUT_MS = 15_000;
+export const DEFAULT_WRITE_TIMEOUT_MS = 60_000;
+export const BOOTSTRAP_TIMEOUT_MS = 30_000;
+const TIMEOUT_RETRY_BACKOFF_MS = 400;
 
+export type ApiRequestInit = RequestInit & { timeoutMs?: number };
+
+function createTimeoutError(path: string, timeoutMs: number): Error {
+  const err = new Error(`API ${path} timed out after ${timeoutMs} ms`) as Error & {
+    code?: string;
+  };
+  err.name = 'TimeoutError';
+  err.code = 'API_TIMEOUT';
+  return err;
+}
+
+interface FetchAttempt {
+  response?: Response;
+  /** Our own deadline fired (not a caller abort). */
+  timedOut: boolean;
+  /** The caller's signal aborted the attempt. */
+  aborted: boolean;
+  error?: unknown;
+}
+
+/**
+ * One fetch attempt with a composed signal (caller abort + our deadline).
+ *
+ * `AbortSignal.any` is avoided on purpose: it is still missing on older Safari
+ * and this path must work everywhere the dashboard works.
+ */
+async function fetchAttempt(
+  url: string,
+  init: RequestInit,
+  callerSignal: AbortSignal | null | undefined,
+  timeoutMs: number,
+): Promise<FetchAttempt> {
+  if (callerSignal?.aborted) return { timedOut: false, aborted: true };
+
+  const controller = new AbortController();
+  let timedOut = false;
+  const forwardAbort = () => controller.abort();
+  if (callerSignal) callerSignal.addEventListener('abort', forwardAbort, { once: true });
+
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+
+  try {
+    const response = await fetch(url, { ...init, signal: controller.signal });
+    return { response, timedOut, aborted: false };
+  } catch (error) {
+    return {
+      timedOut,
+      // A caller abort wins over our deadline: same-request cancellation must
+      // surface as AbortError (callers treat it as "no work was done").
+      aborted: Boolean(callerSignal?.aborted),
+      error,
+    };
+  } finally {
+    clearTimeout(timer);
+    callerSignal?.removeEventListener('abort', forwardAbort);
+  }
+}
+
+async function request<T>(path: string, options?: ApiRequestInit): Promise<T> {
+  const {
+    timeoutMs,
+    headers: rawHeaders,
+    signal: callerSignal,
+    ...init
+  } = options ?? {};
+  const baseUrl = getBaseUrl();
+  const method = (init.method ?? 'GET').toUpperCase();
+  const isRead = method === 'GET' || method === 'HEAD';
+  const budgetMs = timeoutMs ?? (isRead ? DEFAULT_READ_TIMEOUT_MS : DEFAULT_WRITE_TIMEOUT_MS);
+
+  const headers: Record<string, string> = {
+    ...(rawHeaders as Record<string, string> | undefined),
+  };
+  // Only requests with a body carry Content-Type. On a GET it is not a
+  // CORS-safelisted header value, so for anonymous reads it forces a preflight
+  // that the request does not need. (A bearer `Authorization` already triggers
+  // one; dropping this at least removes the extra header from every read.)
+  if (init.body != null && headers['Content-Type'] == null) {
+    headers['Content-Type'] = 'application/json';
+  }
   if (currentAuthToken) {
     headers['Authorization'] = `Bearer ${currentAuthToken}`;
   }
 
-  let res: Response;
-  try {
-    res = await fetch(`${baseUrl}${path}`, {
-      ...options,
-      headers,
-      signal: options?.signal,
-    });
-  } catch (err) {
-    // A cancelled request must never fall back to the proxy — that would restart
-    // the work the caller just aborted.
-    if (isAbortError(err) || signal?.aborted) throw err;
-    if (typeof window !== 'undefined') {
-      res = await fetch(`/api/proxy${path}`, {
-        ...options,
-        headers: {
-          ...headers,
-          'x-target-base-url': baseUrl,
-        },
-      });
-    } else {
-      throw err;
+  if (callerSignal?.aborted) throw createAbortError();
+
+  const directUrl = `${baseUrl}${path}`;
+  let attempt = await fetchAttempt(directUrl, { ...init, headers }, callerSignal, budgetMs);
+
+  if (!attempt.response) {
+    if (attempt.aborted) throw createAbortError();
+
+    if (attempt.timedOut) {
+      // Cold backend: exactly one direct retry after a short backoff. Never the
+      // proxy — a timed-out read must not be replayed through a second hop that
+      // would restart the same slow work.
+      await new Promise((resolve) => setTimeout(resolve, TIMEOUT_RETRY_BACKOFF_MS));
+      if (callerSignal?.aborted) throw createAbortError();
+      attempt = await fetchAttempt(directUrl, { ...init, headers }, callerSignal, budgetMs);
+      if (!attempt.response) {
+        if (attempt.aborted) throw createAbortError();
+        if (attempt.timedOut) throw createTimeoutError(path, budgetMs);
+        // Second attempt failed as a network/CORS error → proxy fallback below.
+      }
+    }
+
+    if (!attempt.response) {
+      if (typeof window === 'undefined') {
+        throw attempt.error ?? createTimeoutError(path, budgetMs);
+      }
+      // Network/CORS failure only: same-origin proxy keeps the app usable when
+      // the direct Render host is unreachable from the browser.
+      const proxied = await fetchAttempt(
+        `/api/proxy${path}`,
+        { ...init, headers: { ...headers, 'x-target-base-url': baseUrl } },
+        callerSignal,
+        budgetMs,
+      );
+      if (!proxied.response) {
+        if (proxied.aborted) throw createAbortError();
+        throw proxied.error ?? createTimeoutError(path, budgetMs);
+      }
+      attempt = proxied;
     }
   }
 
-  if (signal?.aborted) throw createAbortError();
+  const res = attempt.response as Response;
+  if (callerSignal?.aborted) throw createAbortError();
   if (!res.ok) {
     // Preserve the HTTP status so auth code can distinguish "session is dead"
     // (401 → clear token + re-authenticate) from "backend is cold/failing"
@@ -75,13 +182,35 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  dashboard: {
+    /**
+     * Phase 163 (M8): one auth-aware read replaces the per-section first-paint
+     * fan-out. Public sections come from the DB snapshot; DISPATCHER/REGULATOR
+     * additionally get tenant `fleet` + `erp`. `stale` means the backend served a
+     * bounded live build (or the last stored row) instead of a fresh snapshot.
+     */
+    bootstrap: (
+      params?: { modality?: 'truck' | 'vessel' | 'air'; corridor_id?: string },
+      signal?: AbortSignal
+    ) => {
+      const sp = new URLSearchParams();
+      if (params?.modality) sp.append('modality', params.modality);
+      if (params?.corridor_id) sp.append('corridor_id', params.corridor_id);
+      const qs = sp.toString() ? `?${sp.toString()}` : '';
+      return request<import('./types').DashboardBootstrapResponse>(
+        `/api/v1/dashboard/bootstrap${qs}`,
+        { signal, timeoutMs: BOOTSTRAP_TIMEOUT_MS }
+      );
+    },
+  },
   incidents: {
-    list: (params?: { status?: string; severity?: string; limit?: number }) => {
+    list: (params?: { status?: string; severity?: string; limit?: number }, signal?: AbortSignal) => {
       const qs = params
         ? '?' + new URLSearchParams(Object.entries(params).filter(([, v]) => v != null) as string[][]).toString()
         : '';
       return request<{ items: import('./types').IncidentSummary[]; total: number }>(
-        `/api/v1/incidents${qs}`
+        `/api/v1/incidents${qs}`,
+        { signal }
       );
     },
     get: (id: string) =>
@@ -190,11 +319,13 @@ export const api = {
     }
   },
   corridor: {
-    context: (corridorId: string = 'sumatra_belawan_medan') =>
-      request<import('./types').CorridorContext>(`/api/v1/corridor/context?corridor_id=${corridorId}`),
+    context: (corridorId: string = 'sumatra_belawan_medan', signal?: AbortSignal) =>
+      request<import('./types').CorridorContext>(`/api/v1/corridor/context?corridor_id=${corridorId}`, {
+        signal,
+      }),
   },
   weather: {
-    spatialPolygons: (params?: { min_severity?: string; min_precip?: number; min_flood?: number }) => {
+    spatialPolygons: (params?: { min_severity?: string; min_precip?: number; min_flood?: number }, signal?: AbortSignal) => {
       const sp = new URLSearchParams();
       // Disruption-only default: only high/critical heavy rain shows.
       sp.append('min_severity', params?.min_severity ?? 'high');
@@ -206,17 +337,17 @@ export const api = {
       return request<GeoJSON.FeatureCollection & {
         metadata?: import('./types').WeatherPolygonMeta;
         meta?: import('./types').WeatherPolygonMeta;
-      }>(`/api/v1/weather/spatial-polygons${qs}`);
+      }>(`/api/v1/weather/spatial-polygons${qs}`, { signal });
     },
     // Phase 160: world-truth counters — no severity params, never capped by
     // MAX_WEATHER_FEATURES, independent of the map layer toggles.
-    summary: () =>
-      request<import('./types').WeatherHazardSummary>('/api/v1/weather/summary'),
+    summary: (signal?: AbortSignal) =>
+      request<import('./types').WeatherHazardSummary>('/api/v1/weather/summary', { signal }),
   },
   fire: {
     // Phase 168: keyless CSV fallback + tri-state envelope.
-    hotspots: () =>
-      request<import('./types').FireHotspotResponse>('/api/v1/fire/hotspots'),
+    hotspots: (signal?: AbortSignal) =>
+      request<import('./types').FireHotspotResponse>('/api/v1/fire/hotspots', { signal }),
   },
   bnpb: {
     events: (params?: { limit?: number }) => {
@@ -325,7 +456,12 @@ export const api = {
           query: string;
           count?: number;
           status?: string;
-        }>(`/api/v1/geocode/search?q=${encodeURIComponent(q)}`, { signal: controller.signal });
+        }>(`/api/v1/geocode/search?q=${encodeURIComponent(q)}`, {
+          signal: controller.signal,
+          // Our own budget must never fire before the caller's: the caller owns
+          // the timeout contract and converts it into a user-facing message.
+          timeoutMs: timeoutMs + 5_000,
+        });
       } catch (err) {
         if (isAbortError(err) && !(signal?.aborted)) {
           throw new Error(`Pencarian backend melebihi ${Math.round(timeoutMs / 1000)} detik`);
@@ -362,14 +498,15 @@ export const api = {
     // Phase 57 STEP 0 tenant contract (D3): ?company_id= filters custom +
     // baseline; missing claim = honest empty (dispatcher) / full corridor
     // (regulator, macro view). Enforced in WP-B3.
-    vehicles: (modality?: string, company_id?: string, include_geometry?: boolean) => {
+    vehicles: (modality?: string, company_id?: string, include_geometry?: boolean, signal?: AbortSignal) => {
       const sp = new URLSearchParams();
       if (modality && modality !== 'all') sp.append('modality', modality);
       if (company_id) sp.append('company_id', company_id);
       if (include_geometry !== undefined) sp.append('include_geometry', String(include_geometry));
       const qs = sp.toString() ? `?${sp.toString()}` : '';
       return request<{ vehicles: import('./types').FleetVehicle[]; total_vehicles?: number; timestamp?: string }>(
-        `/api/v1/fleet/vehicles${qs}`
+        `/api/v1/fleet/vehicles${qs}`,
+        { signal }
       );
     },
     vehicleGeometry: (vehicleId: string) =>
@@ -507,19 +644,22 @@ export const api = {
     },
   },
   news: {
-    live: () =>
-      request<{ items: Array<Record<string, unknown>>; total: number }>('/api/v1/news/live'),
+    live: (signal?: AbortSignal) =>
+      request<{ items: Array<Record<string, unknown>>; total: number }>('/api/v1/news/live', { signal }),
     verify: (claim: string, location: string = 'Koridor Sumatera') =>
       request<{ verification_status: string; confidence_score: number; attributions: Array<Record<string, unknown>>; reasoning: string }>(
         `/api/v1/news/verify?claim=${encodeURIComponent(claim)}&location=${encodeURIComponent(location)}`,
         { method: 'POST' }
       ),
-    marketRegime: () =>
+    marketRegime: (signal?: AbortSignal) =>
       request<{ regime: string; active_crisis_indicators: string[]; commodity_volatility_score: number }>(
-        '/api/v1/news/market-regime'
+        '/api/v1/news/market-regime',
+        { signal }
       ),
-    hitlPending: () =>
-      request<{ items: Array<Record<string, unknown>>; count: number }>('/api/v1/news/hitl-pending'),
+    hitlPending: (signal?: AbortSignal) =>
+      request<{ items: Array<Record<string, unknown>>; count: number }>('/api/v1/news/hitl-pending', {
+        signal,
+      }),
     hitlAction: (payload: { approval_id: string; decision: 'APPROVE' | 'REJECT' | 'HOLD'; approved_by?: string; notes?: string }) =>
       request<{ status: string; approval_id: string; decision: string; message: string }>('/api/v1/news/hitl-action', {
         method: 'POST',

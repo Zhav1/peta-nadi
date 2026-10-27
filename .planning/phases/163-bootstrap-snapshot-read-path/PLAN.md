@@ -18,13 +18,14 @@ path was persisted: every mount recomputed weather (no cache), evaluation
 ingestion).
 
 Phase 163 replaces that fan-out with **one** auth-aware request that reads a
-DB-backed read model. The unit is split because the concurrent M9 session owns the
-frontend dashboard files:
+DB-backed read model. The unit is split because the concurrent M9 session owned the
+frontend dashboard files while the backend half landed; 163b was implemented once
+M9's work was committed (`bb9b61b`):
 
 | Unit | Scope | Status |
 |---|---|---|
-| **163a** | Migration, snapshot service, bootstrap endpoint, tick write hook, backend tests | **DONE in this unit** |
-| **163b** | Frontend: mount the endpoint instead of the fan-out, lazy sections, timeouts/abort, stale badge | **DEFERRED** until the concurrent M9 dashboard edits settle |
+| **163a** | Migration, snapshot service, bootstrap endpoint, tick write hook, backend tests | **DONE** |
+| **163b** | Frontend: mount the endpoint instead of the fan-out, lazy sections, timeouts/abort, stale badge | **DONE (implementation) — production measurement pending in 165** |
 
 ---
 
@@ -209,25 +210,119 @@ roles cannot read or tamper with the read model.
 
 ---
 
-## 163b — frontend integration (DEFERRED)
+## 163b — frontend integration — DONE (implementation)
 
-Blocked on the concurrent M9 dashboard edits (`frontend/components/dashboard/
-DashboardClient.tsx`, `frontend/lib/api.ts`, `frontend/lib/types.ts`) settling.
+Delivered on `m9-operational-truth`, **uncommitted**. The concurrent M9 work was
+already committed (`bb9b61b`); every M9 surface named in the brief was preserved
+(world-truth hazard counters, freshness badges, route provenance, shared weather
+snapshot, no-route surfacing).
 
-1. **Transport:** `fetchWithTimeout` (30 s bootstrap budget, one retry, no proxy
-   fallback on timeout); abort on unmount; no overlapping polls.
-2. **Mount:** one `GET /api/v1/dashboard/bootstrap?modality=…` for the sections above;
-   remove the per-section first-paint calls (incidents, news live, market regime,
-   corridor, weather polygons, fire hotspots, commodities ×2, approvals, source
-   health, evaluation ×4, outcomes, BNPB, fleet, ERP).
-3. **Render:** `sections.<name>.status` drives the degraded/stale badge;
-   `stale === true` shows the timestamp + reason, never a spinner over stale data.
-4. **Lazy:** keep route/travel/telemetry/routing POSTs out of the bootstrap; mount
-   them on section visibility.
-5. **Types:** add `DashboardBootstrapResponse` (schema_version, computed_at, stale,
-   reason?, role, company_id, modality, sections) to `frontend/lib/types.ts`.
-6. **Proof:** Playwright trace on Fast 4G — request count and first-data time versus
-   the phase-160 baseline (50–94 requests / 9.8–73.8 s).
+### Delivered
+
+| Deliverable | Path |
+|---|---|
+| `api.dashboard.bootstrap()` (`GET /api/v1/dashboard/bootstrap`, 30 s budget) + per-call `timeoutMs` transport with a composed abort signal | `frontend/lib/api.ts` |
+| `DashboardBootstrapResponse` / `DashboardSection<T>` / section payload types | `frontend/lib/types.ts` |
+| One-shot bootstrap hook: abort on unmount, 60 s visible-only refresh, manual `refresh()`, server + local staleness | `frontend/hooks/useDashboardBootstrap.ts` |
+| Poll gating helper (`isDocumentVisible`, `subscribeVisibility`) | `frontend/lib/visibility.ts` |
+| Abort-per-request + no overlapping polls + hidden-tab skip + bootstrap seed for incidents / news / market regime / corridor / weather polygons / fire hotspots | `frontend/hooks/useIncidents.ts`, `useNewsVerification.ts`, `useCorridorContext.ts`, `useFleetVehicles.ts` |
+| Lazy-mounted Analitik / Laporan / Evaluasi, bootstrap seeding, visibility-gated pollers, snapshot freshness row in the legend | `frontend/components/dashboard/DashboardClient.tsx` |
+| Read-path Playwright proof (bootstrap called, API count vs baseline, lazy tabs, first-data signal) | `frontend/e2e/m8-readpath.spec.ts` |
+| Spec registration | `frontend/playwright.m8.config.ts` |
+
+### Transport contract (`frontend/lib/api.ts`)
+
+| Rule | Implementation |
+|---|---|
+| Read budget | 15 s default (`DEFAULT_READ_TIMEOUT_MS`) |
+| Write budget | 60 s default (`DEFAULT_WRITE_TIMEOUT_MS`) — route optimisation and the crisis pipeline legitimately run 30–50 s on 0.1 CPU; a 15 s cap would abort real work |
+| Bootstrap | 30 s (`BOOTSTRAP_TIMEOUT_MS`), per-call override |
+| On timeout | one **direct** retry after a 400 ms backoff, then `TimeoutError` — never the proxy (a replay would restart the same slow work) |
+| On network/CORS failure | unchanged same-origin `/api/proxy` fallback |
+| Abort | caller `AbortSignal` × deadline composed through a manual `AbortController` (`AbortSignal.any` avoided for older Safari) |
+| `Content-Type` | only sent when a body exists, so anonymous GETs stop paying a preflight |
+| Preserved | `getAuthToken` / `setAuthToken` and every existing API signature (new params are optional/trailing) |
+
+**Deviation from the brief:** the brief said "default 15 s". A literal 15 s cap on
+POST/PATCH/DELETE would abort route optimisation (documented 30–50 s) and the
+crisis pipeline, so writes default to 60 s. Reads — the path this phase is about —
+keep the 15 s default, and `timeoutMs` still overrides per call.
+
+### What is seeded, lazy, aborted
+
+| Surface | Before (first paint) | After |
+|---|---|---|
+| `incidents` | `GET /api/v1/incidents?limit=100` | seeded from `sections.incidents`; 15 s poll |
+| `news` + `news_market_regime` | `GET /news/live` + `/news/market-regime` | seeded from `sections.news` / `sections.news_market_regime`; seed still passes through the same permalink/freshness/discourse gates; 30 s poll |
+| `corridor_context` | `GET /corridor/context` | seeded from `sections.corridor_context`; 30 s poll |
+| `weather_spatial_polygons` (high/50/80) | `GET /weather/spatial-polygons?...` | seeded from `sections.weather_spatial_polygons` (same payload incl. `meta`); 120 s poll |
+| `fire_hotspots` | `GET /fire/hotspots` | seeded from `sections.fire_hotspots` (same envelope); 300 s poll |
+| Analitik (commodities ×N, BNPB) | fired on every mount (CSS-hidden) | mounted only while `activeSection === 'analytics'` |
+| Laporan (approvals, source health) | fired on every mount | mounted only while `activeSection === 'reports'` |
+| Evaluasi (benchmark, matrix, corridor efficiency, outcomes) | fired on every mount | mounted only while `activeSection === 'evaluation'` |
+| All of the above + HITL poll + weather summary | no abort, poll while hidden | one in-flight request, previous aborted, skipped while `document.hidden`, resumed on visibility |
+
+### Deliberately not seeded
+
+1. **`fleet`** — the snapshot section is built for one modality (default `truck`)
+   while the map draws the multimodal macro slice (tenant trucks + situational
+   vessels/air). Seeding it would blank the Kapal/Udara pills until the next 10 s
+   sync, so `useFleetVehicles` keeps its own read (abort/visibility hardened).
+2. **`erp`** — only Laporan consumes it, and Laporan is now lazy.
+3. **`weather_summary`** — not a bootstrap section; M9's world-truth counters still
+   read `GET /api/v1/weather/summary` on mount (kept unchanged on purpose).
+
+Remaining first-mount API calls (authenticated DISPATCHER, expected):
+`auth/me` (phase 161 reconcile) · `dashboard/bootstrap` · `weather/summary` ·
+`news/hitl-pending` · `fleet/vehicles`. That is 5, versus 28 to the API host in the
+phase-160 baseline.
+
+### Stale rendering
+
+`sections.<name>.status` decides seeding (`ok` only — a `degraded`/`timeout` section
+is `null` and the owning hook falls back to its own read, so a spinner never sits
+over stale data). The legend's freshness block gains one row, `Snapshot`, driven by
+`stale` + `computed_at` + `reason`; the M9 Cuaca/Waspada/Titik Panas rows are
+untouched.
+
+### Verification (this session, 2026-10-27)
+
+| Command (from `frontend/`) | Result |
+|---|---|
+| `npx tsc --noEmit` | **exit 0** (run after the final edit; also covers `e2e/`) |
+| `npm run build` | **exit 0** — Next 14.2.35, compiled successfully, 7/7 static pages, `/dashboard` 3.29 kB / 163 kB First Load JS; no dev server was running, `.next` rewritten |
+| `npx playwright test e2e/m8-readpath.spec.ts --config=playwright.m8.config.ts` | **1 passed** (12.7 s) against a local production build (`npm start`, `M8_BASE_URL=http://localhost:3000`) with the DISPATCHER account: first data **1,236 ms**, **6** API requests (baseline 28), **35** total (baseline 91), bootstrap called once. `bootstrap_status=null` because `/api/v1/dashboard/bootstrap` is not deployed on the target yet; the spec treats that as a soft gate unless `M8_REQUIRE_BOOTSTRAP=1` (phase 165). Lazy tabs verified: analytics/reports/evaluation only fired after their tab was clicked. |
+
+**Measured on 2026-10-27** on a local production build with the DISPATCHER account.
+`next dev` was not used (React StrictMode doubles mount effects). The phase-165 gate
+must re-run with `M8_REQUIRE_BOOTSTRAP=1` against the deployed backend.
+
+### Decisions / deviations
+
+1. **Bootstrap is held until the session is resolved** (`enabled: !isAuthLoading`).
+   The endpoint is auth-aware; firing before `setAuthToken` runs would fetch the
+   guest shape and seed an operator with no tenant sections.
+2. **Dependent hooks are gated on `bootstrap.isLoading`**, which only flips once
+   (the 60 s refresh never sets it again). That is what removes the duplicate
+   mount read; if the bootstrap fails, `isLoading` still flips and every hook falls
+   back to its own request.
+3. **Sections are conditionally mounted, not merely hidden.** Re-opening a tab
+   refetches it (freshness over cache), which is the intended trade against the
+   first-paint fan-out.
+4. **One snapshot row in the legend.** No new colours, no layout change; the M9
+   badge components are reused (`StatusFreshnessBadge`).
+
+### Risks / follow-ups
+
+1. **Production measurement still owed** (phase 165): request count, first data
+   < 5 s on Fast 4G, and the `stale` badge against a real snapshot row.
+2. **Migration 024 must be applied**, otherwise every mount takes the bounded live
+   path (`stale=true`) — correct but slower, and it exercises the 8 s cap.
+3. **`evaluation_test_matrix` is still in the bootstrap payload** even though
+   Evaluasi is lazy; it inflates the response but not the request count. Move it
+   out of the snapshot if the 165 trace shows payload size as the bottleneck.
+4. **A long-hidden tab** resumes on visibility only if the last answer is older
+   than 60 s; hooks poll immediately on resume. No overlapping requests.
 
 ---
 

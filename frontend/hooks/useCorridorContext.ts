@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { CorridorContext } from '@/lib/types';
 import { api } from '@/lib/api';
+import { isDocumentVisible, subscribeVisibility } from '@/lib/visibility';
 
 const DEFAULT_FALLBACK_CORRIDOR: CorridorContext = {
   corridor_id: 'sumatra_belawan_medan',
@@ -56,6 +57,20 @@ export interface OperationalImpact {
   delayMinutes: number;
   fuelIncreasePct: number;
   commoditySpikePct?: number;
+}
+
+export interface UseCorridorContextOptions {
+  /**
+   * Bootstrap seed (`sections.corridor_context.data`). Skips the first network
+   * fetch; the 30 s poll keeps it live afterwards.
+   */
+  initialData?: CorridorContext | null;
+  /** False while the bootstrap snapshot is still loading (M8 phase 163b). */
+  enabled?: boolean;
+}
+
+function isAbortError(err: unknown): boolean {
+  return !!err && typeof err === 'object' && (err as { name?: string }).name === 'AbortError';
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -130,30 +145,60 @@ function applyImpactToContext(base: CorridorContext, impact: OperationalImpact):
   };
 }
 
-export function useCorridorContext(corridorId: string = 'sumatra_belawan_medan') {
-  const [corridorContext, setCorridorContext] = useState<CorridorContext | null>(DEFAULT_FALLBACK_CORRIDOR);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+export function useCorridorContext(
+  corridorId: string = 'sumatra_belawan_medan',
+  options?: UseCorridorContextOptions
+) {
+  const enabled = options?.enabled ?? true;
+  const seed = options?.initialData ?? null;
+  const hasSeed = seed !== null;
+
+  const [corridorContext, setCorridorContext] = useState<CorridorContext | null>(
+    seed ?? DEFAULT_FALLBACK_CORRIDOR
+  );
+  const [isLoading, setIsLoading] = useState<boolean>(!hasSeed);
   const [error, setError] = useState<string | null>(null);
   const activeImpactRef = useRef<OperationalImpact | null>(null);
+  const inFlightRef = useRef<AbortController | null>(null);
+  const hasSeedRef = useRef<boolean>(hasSeed);
+  hasSeedRef.current = hasSeed;
+  // True once live telemetry (not the fallback/seed) is on screen.
+  const fetchedRef = useRef<boolean>(false);
 
   const fetchCorridor = useCallback(async () => {
+    inFlightRef.current?.abort();
+    const controller = new AbortController();
+    inFlightRef.current = controller;
     try {
       // Resolve through getBaseUrl() (via the shared api client) so this hook
       // never points at a stale NEXT_PUBLIC_API_URL or skips the proxy fallback.
-      const data = await api.corridor.context(corridorId);
+      const data = await api.corridor.context(corridorId, controller.signal);
+      if (controller.signal.aborted) return;
       const fresh: CorridorContext = { ...data, is_fallback: data.is_fallback === true };
       const activeImpact = activeImpactRef.current;
       setCorridorContext(activeImpact ? applyImpactToContext(fresh, activeImpact) : fresh);
       setError(null);
+      fetchedRef.current = true;
     } catch (err: unknown) {
+      if (isAbortError(err) || controller.signal.aborted) return;
       const msg = err instanceof Error ? err.message : 'Failed to fetch corridor telemetry';
       setError(msg);
       // If we don't have context yet, initialize with default fallback so UI doesn't break
       setCorridorContext((prev) => prev || DEFAULT_FALLBACK_CORRIDOR);
     } finally {
-      setIsLoading(false);
+      if (!controller.signal.aborted) setIsLoading(false);
     }
   }, [corridorId]);
+
+  // Seed arriving after mount: never overwrite live telemetry or an applied
+  // operational impact with an older snapshot row.
+  useEffect(() => {
+    if (!seed) return;
+    if (fetchedRef.current || activeImpactRef.current) return;
+    setCorridorContext({ ...seed, is_fallback: seed.is_fallback === true });
+    setError(null);
+    setIsLoading(false);
+  }, [seed]);
 
   // Persist the latest approved-detour impact so the 30s poll can re-base on
   // fresh backend telemetry and reapply the impact instead of losing it.
@@ -163,10 +208,28 @@ export function useCorridorContext(corridorId: string = 'sumatra_belawan_medan')
   }, []);
 
   useEffect(() => {
-    fetchCorridor();
-    const interval = setInterval(fetchCorridor, 30000); // 30s polling
-    return () => clearInterval(interval);
-  }, [fetchCorridor]);
+    if (!enabled) return;
+
+    const tick = () => {
+      if (!isDocumentVisible()) return;
+      void fetchCorridor();
+    };
+
+    // Seeded by the bootstrap snapshot: the first poll owns freshness, no
+    // duplicate mount request.
+    if (!hasSeedRef.current) tick();
+
+    const interval = setInterval(tick, 30000); // 30s polling
+    const unsubscribe = subscribeVisibility((visible) => {
+      if (visible) tick();
+    });
+
+    return () => {
+      clearInterval(interval);
+      unsubscribe();
+      inFlightRef.current?.abort();
+    };
+  }, [enabled, fetchCorridor]);
 
   return { corridorContext, isLoading, error, refetch: fetchCorridor, applyOperationalImpact };
 }

@@ -1481,3 +1481,91 @@ export interface WeatherPolygonMeta {
   refresh_seconds?: number;
   max_features?: number;
 }
+
+// ==========================================
+// M8 Phase 163b: dashboard bootstrap read model
+// (`GET /api/v1/dashboard/bootstrap`)
+// ==========================================
+
+/**
+ * Per-section freshness reported by the bootstrap endpoint. `degraded` is an
+ * exception inside that one section (data is null); `timeout` means it exceeded
+ * its 5 s budget. A section can be `ok` even when the overall response is
+ * `stale` (bounded live build), so render them independently.
+ */
+export type DashboardSectionStatus = 'ok' | 'degraded' | 'timeout';
+
+export interface DashboardSection<T = unknown> {
+  status: DashboardSectionStatus;
+  data: T | null;
+  error?: string | null;
+  /** True when a degraded section reused an in-process last-good value. */
+  cached?: boolean;
+}
+
+export type DashboardBootstrapReason =
+  | 'missing_snapshot'
+  | 'snapshot_stale'
+  | 'unparseable_computed_at'
+  | 'live_build_failed'
+  | 'live_build_timeout';
+
+/** `GET /api/v1/news/live` payload (also embedded as the `news` section). */
+export interface NewsLivePayload {
+  status?: string;
+  total?: number;
+  last_updated?: string | null;
+  articles?: Array<Record<string, unknown>>;
+  items?: Array<Record<string, unknown>>;
+}
+
+export type WeatherPolygonCollection = GeoJSON.FeatureCollection & {
+  metadata?: WeatherPolygonMeta;
+  meta?: WeatherPolygonMeta;
+};
+
+export interface FleetSectionPayload {
+  vehicles: FleetVehicle[];
+  total_vehicles?: number;
+  timestamp?: string;
+}
+
+/**
+ * Known sections. The endpoint may add one, so every consumer must handle an
+ * absent key (all of them are optional here) — an unknown key is ignored rather
+ * than typed as present.
+ */
+export interface DashboardBootstrapSections {
+  incidents?: DashboardSection<{ items: IncidentSummary[]; total: number }>;
+  news?: DashboardSection<NewsLivePayload>;
+  news_market_regime?: DashboardSection<Record<string, unknown>>;
+  corridor_context?: DashboardSection<CorridorContext>;
+  weather_spatial_polygons?: DashboardSection<WeatherPolygonCollection>;
+  fire_hotspots?: DashboardSection<FireHotspotResponse>;
+  commodity_prices?: DashboardSection<{ items: Array<Record<string, unknown>>; total: number }>;
+  commodity_spikes?: DashboardSection<{ spikes: Array<Record<string, unknown>>; total: number }>;
+  approvals?: DashboardSection<ApprovalListResponse>;
+  source_health?: DashboardSection<SourceHealthResponse>;
+  evaluation_benchmark?: DashboardSection<BenchmarkReportResponse>;
+  evaluation_test_matrix?: DashboardSection<TestMatrixResponse>;
+  evaluation_corridor_efficiency?: DashboardSection<CorridorEfficiencyResponse>;
+  outcomes?: DashboardSection<OutcomeListResponse>;
+  bnpb_events?: DashboardSection<Record<string, unknown>>;
+  /** Tenant-only (DISPATCHER / REGULATOR), always built live, never stored. */
+  fleet?: DashboardSection<FleetSectionPayload>;
+  /** Tenant-only (DISPATCHER / REGULATOR). */
+  erp?: DashboardSection<ERPSummaryResponse>;
+}
+
+export interface DashboardBootstrapResponse {
+  schema_version: number;
+  /** Snapshot build time (or the live-build time when `stale` is true). */
+  computed_at: string | null;
+  stale: boolean;
+  /** Present only when `stale` is true. */
+  reason?: DashboardBootstrapReason | null;
+  role: UserRole | string;
+  company_id: string | null;
+  modality: 'truck' | 'vessel' | 'air';
+  sections: DashboardBootstrapSections;
+}

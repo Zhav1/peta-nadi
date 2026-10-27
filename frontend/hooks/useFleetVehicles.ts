@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import type { FleetVehicle } from '@/lib/types';
 import { api, getBaseUrl, getAuthToken } from '@/lib/api';
 import { useAuth } from '@/lib/authContext';
 import { isLiveTracked, selectTenantVehicles } from '@/lib/fleetScope';
 import { corridorSnappingService } from '@/lib/corridorSnappingService';
+import { isDocumentVisible, subscribeVisibility } from '@/lib/visibility';
 
 export { isLiveTracked, isTenantAsset } from '@/lib/fleetScope';
 
@@ -287,6 +288,14 @@ const FALLBACK_FLEET: FleetVehicle[] = [
 
 export interface UseFleetVehiclesOptions {
   enableSimulationFallback?: boolean;
+  /**
+   * Bootstrap seed (`sections.fleet.data.vehicles`). Tenant-scoped by the backend,
+   * so a DISPATCHER never receives another tenant's fleet. Skips the first
+   * network fetch; the 10 s sync keeps it live afterwards.
+   */
+  initialVehicles?: FleetVehicle[] | null;
+  /** False while the bootstrap snapshot is still loading (M8 phase 163b). */
+  enabled?: boolean;
 }
 
 /**
@@ -304,15 +313,17 @@ function buildFleetQuery(modality?: string, company_id?: string, include_geometr
 
 async function fetchFleetWithFallback(
   modality?: string,
-  companyId?: string
+  companyId?: string,
+  signal?: AbortSignal
 ): Promise<FleetVehicle[]> {
   try {
-    const res = await api.fleet.vehicles(modality, companyId, false);
+    const res = await api.fleet.vehicles(modality, companyId, false, signal);
     if (res.vehicles && res.vehicles.length > 0) {
       return res.vehicles;
     }
     return [];
   } catch (err: unknown) {
+    if (signal?.aborted) throw err;
     if (typeof window !== 'undefined') {
       try {
         // Same-origin/direct retry must keep the tenant scope: getBaseUrl() is the
@@ -321,23 +332,31 @@ async function fetchFleetWithFallback(
         const qs = buildFleetQuery(modality, companyId, false);
         const token = getAuthToken();
         const controller = new AbortController();
+        const forwardAbort = () => controller.abort();
+        if (signal) {
+          if (signal.aborted) controller.abort();
+          else signal.addEventListener('abort', forwardAbort, { once: true });
+        }
         const timeoutId = setTimeout(() => controller.abort(), 20000);
-        const directRes = await fetch(
-          `${getBaseUrl()}/api/v1/fleet/vehicles${qs}`,
-          {
-            signal: controller.signal,
-            headers: {
-              'Content-Type': 'application/json',
-              ...(token ? { Authorization: `Bearer ${token}` } : {}),
-            },
+        try {
+          const directRes = await fetch(
+            `${getBaseUrl()}/api/v1/fleet/vehicles${qs}`,
+            {
+              signal: controller.signal,
+              headers: {
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+              },
+            }
+          );
+          if (directRes.ok) {
+            const data = await directRes.json();
+            if (data.vehicles && data.vehicles.length > 0) {
+              return data.vehicles;
+            }
           }
-        );
-        clearTimeout(timeoutId);
-        if (directRes.ok) {
-          const data = await directRes.json();
-          if (data.vehicles && data.vehicles.length > 0) {
-            return data.vehicles;
-          }
+        } finally {
+          clearTimeout(timeoutId);
+          signal?.removeEventListener('abort', forwardAbort);
         }
       } catch {
         // Direct retry failed or timed out, bubble original error
@@ -359,12 +378,20 @@ export function useFleetVehicles(
   const effectiveCompanyId = isDispatcher ? claimCompanyId : undefined;
   const isTenantScoped = isDispatcher && Boolean(effectiveCompanyId);
 
+  const enabled = options?.enabled ?? true;
+  const seededVehicles = Array.isArray(options?.initialVehicles) ? options.initialVehicles : null;
+  const hasSeed = seededVehicles !== null;
+
   const [isSimulationMode, setIsSimulationMode] = useState<boolean>(
     options?.enableSimulationFallback ?? true
   );
-  const [rawVehicles, setRawVehicles] = useState<FleetVehicle[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [rawVehicles, setRawVehicles] = useState<FleetVehicle[]>(seededVehicles ?? []);
+  const [isLoading, setIsLoading] = useState(!hasSeed);
   const [error, setError] = useState<string | null>(null);
+
+  const inFlightRef = useRef<AbortController | null>(null);
+  const hasSeedRef = useRef<boolean>(hasSeed);
+  hasSeedRef.current = hasSeed;
 
   // 90-second sliding TTL vehicle cache to prevent vessel count drops during partial polling
   const vehicleCacheRef = useRef<Map<string, { vehicle: FleetVehicle; timestamp: number }>>(new Map());
@@ -394,9 +421,23 @@ export function useFleetVehicles(
     return merged;
   };
 
-  const fetchFleet = async () => {
+  // Seed arriving after mount (bootstrap resolves after the first render).
+  useEffect(() => {
+    if (!seededVehicles) return;
+    const seededMerge = mergeWithCache(seededVehicles);
+    setRawVehicles((prev) => (prev.length > 0 ? prev : seededMerge));
+    setError(null);
+    setIsLoading(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seededVehicles]);
+
+  const fetchFleet = useCallback(async () => {
+    inFlightRef.current?.abort();
+    const controller = new AbortController();
+    inFlightRef.current = controller;
     try {
-      const vehicles = await fetchFleetWithFallback(modality, effectiveCompanyId);
+      const vehicles = await fetchFleetWithFallback(modality, effectiveCompanyId, controller.signal);
+      if (controller.signal.aborted) return;
       const merged = mergeWithCache(vehicles);
       if (merged.length > 0) {
         setRawVehicles(merged);
@@ -405,25 +446,31 @@ export function useFleetVehicles(
         setRawVehicles([]);
       }
     } catch (err: unknown) {
+      if (controller.signal.aborted) return;
       // PRESERVE previous live units from 90s cache across transient network/cold-start errors!
       const cached = mergeWithCache([]);
       setRawVehicles((prev) => (cached.length > 0 ? cached : prev.length > 0 ? prev : []));
       setError(err instanceof Error ? err.message : 'Gagal memuat telemetri armada');
     } finally {
-      setIsLoading(false);
+      if (!controller.signal.aborted) setIsLoading(false);
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modality, effectiveCompanyId]);
 
   useEffect(() => {
+    if (!enabled) return;
     let isMounted = true;
 
     async function initialFetch() {
+      const controller = new AbortController();
+      inFlightRef.current?.abort();
+      inFlightRef.current = controller;
       let lastErr: unknown = null;
       for (let attempt = 0; attempt < 3; attempt++) {
-        if (!isMounted) return;
+        if (!isMounted || controller.signal.aborted) return;
         try {
-          const vehicles = await fetchFleetWithFallback(modality, effectiveCompanyId);
-          if (isMounted) {
+          const vehicles = await fetchFleetWithFallback(modality, effectiveCompanyId, controller.signal);
+          if (isMounted && !controller.signal.aborted) {
             const merged = mergeWithCache(vehicles);
             if (merged.length > 0) {
               setRawVehicles(merged);
@@ -443,7 +490,7 @@ export function useFleetVehicles(
         }
       }
 
-      if (isMounted) {
+      if (isMounted && !controller.signal.aborted) {
         // Retain any cached vehicles if available, otherwise fallback handles display
         const cached = mergeWithCache([]);
         setRawVehicles((prev) => (cached.length > 0 ? cached : prev.length > 0 ? prev : []));
@@ -452,14 +499,27 @@ export function useFleetVehicles(
       }
     }
 
-    initialFetch();
-    const interval = setInterval(fetchFleet, 10000); // 10s sync
+    // Seeded by the bootstrap snapshot: no duplicate mount request, the 10 s
+    // sync takes over immediately.
+    if (!hasSeedRef.current) void initialFetch();
+
+    const tick = () => {
+      if (!isDocumentVisible()) return;
+      void fetchFleet();
+    };
+    const interval = setInterval(tick, 10000); // 10s sync
+    const unsubscribe = subscribeVisibility((visible) => {
+      if (visible) tick();
+    });
 
     return () => {
       isMounted = false;
       clearInterval(interval);
+      unsubscribe();
+      inFlightRef.current?.abort();
     };
-  }, [modality, effectiveCompanyId, isDispatcher]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modality, effectiveCompanyId, isDispatcher, enabled]);
 
   // Evaluate whether a vehicle has an active hardware transponder or live GPS ping
   const isTransponderActive = (v: FleetVehicle): boolean => {

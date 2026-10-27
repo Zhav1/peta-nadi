@@ -13,7 +13,7 @@
 | 160 | Baseline, audit, state repair | **DONE** | See §160 evidence below |
 | 161 | Auth session durability | **DONE** | See §161 evidence below |
 | 162 | Thin web + tick | **DONE** | See §162 evidence below |
-| 163 | Bootstrap snapshot + read path | **163a DONE / 163b TODO** | See §163a evidence below |
+| 163 | Bootstrap snapshot + read path | **DONE (163a + 163b) — production measurement in 165** | See §163a and §163b evidence below |
 | 164 | Backend hot-path + proxy hardening | TODO | — |
 | 165 | Production verification + SLO gate | TODO | — |
 | 166 | Soak start + review | TODO | — |
@@ -347,14 +347,89 @@ untouched (the M9 session committed its own work as `bb9b61b` during the phase).
 
 ---
 
+## Phase 163b — Dashboard read path (frontend) · DONE (implementation)
+
+The authenticated dashboard now paints from **one** auth-aware request
+(`GET /api/v1/dashboard/bootstrap`) instead of the ~25–30 endpoint fan-out, and the
+three operator sections are mounted only when their tab is open. No visual
+redesign. Plan: `.planning/phases/163-bootstrap-snapshot-read-path/PLAN.md` §163b.
+
+**Branch note:** implemented on `m9-operational-truth`, **uncommitted**. The M9
+work was already committed (`bb9b61b`) and every M9 surface was preserved:
+world-truth hazard counters, freshness badges, route provenance, the shared weather
+snapshot, and no-route surfacing.
+
+### Delivered
+
+| Deliverable | Path |
+|---|---|
+| `api.dashboard.bootstrap()` + per-call `timeoutMs` transport (composed abort signal, timeout retry **direct only**, proxy fallback kept for network/CORS, no `Content-Type` on GET) | `frontend/lib/api.ts` |
+| `DashboardBootstrapResponse`, `DashboardSection<T>`, section payload types | `frontend/lib/types.ts` |
+| Bootstrap hook: one fetch per mount/session, abort on unmount, 60 s visible-only refresh, server + local staleness | `frontend/hooks/useDashboardBootstrap.ts` |
+| `isDocumentVisible` / `subscribeVisibility` poll gate | `frontend/lib/visibility.ts` |
+| Abort-per-request, no overlapping polls, hidden-tab skip, bootstrap seed | `frontend/hooks/useIncidents.ts`, `useNewsVerification.ts`, `useCorridorContext.ts`, `useFleetVehicles.ts` |
+| Lazy-mounted Analitik/Laporan/Evaluasi, bootstrap seeding, visibility-gated pollers, `Snapshot` freshness row | `frontend/components/dashboard/DashboardClient.tsx` |
+| Read-path spec (bootstrap called, API count vs baseline, lazy-tab requests, first-data signal) + config registration | `frontend/e2e/m8-readpath.spec.ts`, `frontend/playwright.m8.config.ts` |
+
+### Read-path ledger
+
+| Data | Source after this phase |
+|---|---|
+| incidents · news · market regime · corridor · weather polygons · fire hotspots | `sections.*` from the snapshot (seed; live poll keeps them fresh) |
+| fleet | own `GET /fleet/vehicles` (snapshot `fleet` is single-modality; the map needs the multimodal macro view) |
+| erp | own read, only when Laporan is opened |
+| weather summary (world-truth counters) | unchanged `GET /weather/summary` (M9 surface, not a snapshot section) |
+| commodities / BNPB / approvals / source health / evaluation / outcomes | only when Analitik / Laporan / Evaluasi is opened |
+
+Expected authenticated first-mount API calls: `auth/me`, `dashboard/bootstrap`,
+`weather/summary`, `news/hitl-pending`, `fleet/vehicles` = **5** (phase-160
+baseline: 28 to the API host; 91 total).
+
+### Evidence
+
+| Gate | Result | Source |
+|---|---|---|
+| `cd frontend; npx tsc --noEmit` | **exit 0** | run in this session (after the final edit; covers `e2e/`) |
+| `cd frontend; npm run build` | **exit 0** — compiled successfully, 7/7 static pages, `/dashboard` 163 kB First Load JS | run in this session (no dev server running) |
+| `npx playwright test e2e/m8-readpath.spec.ts --config=playwright.m8.config.ts` | **1 passed** (12.7 s) against a local production build (`npm start`) with the DISPATCHER account: first data **1,236 ms**, **6** API requests (baseline 28), **35** total (baseline 91), bootstrap called once; analytics/reports/evaluation only fired after their tab was clicked | run in this session |
+
+`bootstrap_status=null` because `/api/v1/dashboard/bootstrap` is not deployed on the
+target yet. The spec treats the 200 as a soft gate unless `M8_REQUIRE_BOOTSTRAP=1`
+(phase 165). React StrictMode was avoided by using the production build, not
+`next dev`.
+
+### Deviations
+
+1. **Writes keep a 60 s client budget** (reads 15 s, bootstrap 30 s) so the 30–50 s
+   route optimisation is not aborted. The brief's literal "15 s default" applies to
+   reads; `timeoutMs` still overrides per call.
+2. **`fleet` is not seeded** from the snapshot for the modality reason above.
+3. **Sections are conditionally mounted**, so re-opening a tab refetches it —
+   deliberate, to keep first paint cheap.
+
+### Open items handed on
+
+1. **Measure in phase 165:** authenticated request count, first data < 5 s on
+   Fast 4G, and the `Snapshot` stale badge against a real (and a missing) snapshot row.
+2. **Migration 024 must be applied**; until then every mount takes the bounded live
+   path with `stale=true` (correct, slower) and exercises the 8 s cap.
+3. **`evaluation_test_matrix` still ships in the snapshot payload** even though
+   Evaluasi is lazy — payload size, not request count. Revisit after the 165 trace.
+4. **Auth/me remains the only blocking read** on a cold backend (phase 161
+   optimistic hydration keeps first paint independent of it).
+
+---
+
 ## Remaining phases — TODO
 
 | Phase | Name | Gate that must pass |
 |---|---|---|
-| 163b | Bootstrap client integration (frontend) | First data < 5s; request count down |
 | 164 | Backend hot-path + proxy hardening | Warm login < 3s; two-user cache isolation |
 | 165 | Production verification + SLO gate | All SLOs except soak green |
 | 166 | Soak start + review | 0 probe failures over 7 days (follow-up session) |
+
+**163b is verified locally** (1.24 s first data, 6 API requests vs 28). Its production
+re-measurement with `M8_REQUIRE_BOOTSTRAP=1` is owned by phase 165.
 
 ---
 
@@ -369,7 +444,9 @@ untouched (the M9 session committed its own work as `bb9b61b` during the phase).
 | Phase 162 code + tests (thin web + tick) | `557a467` on `m9-operational-truth` |
 | Phase 162 plan + this evidence | `.planning/phases/162-thin-web-external-tick/PLAN.md`, this file |
 | Phase 162 migration (must be applied before prod tick works) | `infra/supabase/migrations/023_scheduler_jobs.sql` |
-| Phase 163a code + tests (bootstrap snapshot, backend) | working tree on `m9-operational-truth`, **uncommitted** |
+| Phase 163a code + tests (bootstrap snapshot, backend) | `92e322f` on `m9-operational-truth` |
 | Phase 163a plan + this evidence | `.planning/phases/163-bootstrap-snapshot-read-path/PLAN.md`, this file |
 | Phase 163a migration (must be applied before the tick can persist a snapshot) | `infra/supabase/migrations/024_dashboard_snapshots.sql` |
+| Phase 163b code (frontend read path) | committed with this evidence on `m9-operational-truth` |
+| Phase 163b plan + this evidence | `.planning/phases/163-bootstrap-snapshot-read-path/PLAN.md`, this file |
 | Untracked by design (repo convention: run artifacts are not committed) | `.planning/phases/160-baseline-audit-state-repair/artifacts/`, `.planning/baseline-pytest.txt` |
