@@ -191,7 +191,7 @@ function FloatingMapLegend({
               <span className="w-4 h-0 border-t-2 border-dashed border-cyan-400 shrink-0" />
               <div>
                 <span className="text-slate-200 font-medium block">Prakiraan Waspada Dini (tanpa isi)</span>
-                <span className="text-xs text-slate-400 font-sans">Garis putus-putus cyan: prakiraan YELLOW_CLARIFY yang belum terkonfirmasi — hanya opsi TAHAN, tanpa pengalihan rute.</span>
+                <span className="text-xs text-slate-400 font-sans">Garis putus-putus cyan: prakiraan YELLOW_CLARIFY yang belum terkonfirmasi — info pantauan saja, tanpa pengalihan rute maupun penahanan armada.</span>
               </div>
             </div>
 
@@ -283,7 +283,7 @@ function FloatingMapLegend({
  <span className="w-2.5 h-2.5 rounded-full border border-cyan-400 bg-slate-500/25 shrink-0 " />
                 <div>
                   <span className="text-slate-200 font-medium block">Waspada Dini (Advisory) — {weatherAdvisoryCount} zona {showWeatherAdvisory ? '(ON)' : '(OFF)'}</span>
-                  <span className="text-xs text-slate-400 font-sans">Medium drizzle (mis. BMKG 60): hanya tampil bila toggle waspada dini ON. Default OFF, HOLD-only.</span>
+                  <span className="text-xs text-slate-400 font-sans">Medium drizzle (mis. BMKG 60): hanya tampil bila toggle waspada dini ON. Default OFF, info-only.</span>
                 </div>
               </div>
             </div>
@@ -2169,7 +2169,7 @@ export default function DashboardClient() {
     const tierReason: string =
       newsItem?.tier_reason || fallbackZone?.tier_reason ||
       (forecastActive
-        ? 'Prakiraan waspada dini: potensi gangguan belum terkonfirmasi sebagai bencana aktif; tahan armada dan pantau sebelum pengalihan penuh.'
+        ? 'Prakiraan waspada dini: potensi gangguan belum terkonfirmasi sebagai bencana aktif; pantau sebelum tindakan operasional.'
         : zoneTier === 'RED_CONFIRMED'
         ? 'Zona Merah: bencana terkonfirmasi dari sumber resmi, membutuhkan pengalihan koridor segera.'
         : 'Zona Kuning: sinyal perlu klarifikasi/waspada, pantau sebelum pengalihan penuh.');
@@ -2269,26 +2269,12 @@ export default function DashboardClient() {
       }));
 
     let routes: RouteRecommendation[] = [];
-    // Forecast path is HOLD-only: no detour/re-route calculation and no reroute
-    // CTA. A single hold-staging option keeps the safe action available.
+    // Forecast path is info-only: no detour/re-route calculation, no reroute
+    // CTA, and no hold-staging synthesis. The audit crisis carries zero
+    // route_recommendations; Evidence + causal timeline stay readable.
     if (forecastActive) {
-      routes = [{
-        route_name: 'Tahan Armada (Prakiraan Waspada Dini)',
-        description: `Prakiraan waspada dini di ${corridorSegment}: tahan armada di safe point terdekat hingga status terkonfirmasi. Pengalihan rute tidak dihitung untuk prakiraan.`,
-        waypoints: [{ lat, lon }],
-        distance_km: 0,
-        eta_minutes: 0,
-        fuel_increase_pct: 0,
-        risk_score: 0.3,
-        safety_status: 'HOLD_DELAY',
-        corridor_type: 'hold_staging',
-        modality: selectedModality === 'truck' || selectedModality === 'maritime' || selectedModality === 'air'
-          ? selectedModality
-          : 'best',
-        viable: true,
-        dasar_risiko: tierReason,
-        dampak: 'Belum ada dampak fisik terkonfirmasi — prakiraan dini.',
-      }];
+      // Info-only: no actionable route objects for a forecast.
+      routes = [];
       setCurrentMapRoutes([]);
       setActiveRouteIdx(null);
     }
@@ -2356,7 +2342,7 @@ export default function DashboardClient() {
         'route_optimization',
         routes.length > 0 ? 0.9 : 0.66,
         forecastActive
-          ? `Prakiraan waspada dini: pengalihan rute tidak dihitung. Opsi tahan armada (hold staging) tersedia untuk koridor ${corridorSegment}.`
+          ? `Prakiraan waspada dini: informasi pantauan saja, belum perlu tindakan. Pengalihan rute maupun penahanan armada tidak dihitung untuk koridor ${corridorSegment}.`
           : routes.length > 0
           ? `${routes.length} koridor darat/laut/udara dihitung ulang menghindari zona ${zoneTier === 'RED_CONFIRMED' ? 'Merah' : 'Kuning'} (${hazardType}, ${passability}).`
           : `Pilih Titik Asal & Tujuan untuk menghitung ulang koridor menghindari zona ${zoneTier === 'RED_CONFIRMED' ? 'Merah' : 'Kuning'} (${hazardType}).`
@@ -3068,9 +3054,9 @@ export default function DashboardClient() {
                   const isForecast = isForecastActive(item.forecast_tag, item.forecast_valid_until, forecastNowMs);
 
                   const handleFocusMap = () => {
-                    // Forecast path: HOLD-only. No origin/dest reroute pairing and
-                    // no detour calculation — inspectNewsOrZoneAuditTrail emits a
-                    // single hold-staging option instead of a reroute CTA.
+                    // Forecast path: info-only. No origin/dest reroute pairing and
+                    // no detour calculation — inspectNewsOrZoneAuditTrail emits
+                    // zero routes instead of a reroute CTA.
                     if (!isForecast && item.originNode && item.destNode) {
                       setSelectedOriginNode(item.originNode);
                       setSelectedDestNode(item.destNode);
@@ -3156,7 +3142,7 @@ export default function DashboardClient() {
                             Prakiraan — Waspada Dini
                           </span>
                           <p className="text-xs font-sans text-cyan-100/80 leading-snug">
-                            Belum bencana terkonfirmasi (zona kuning). Hanya tindakan TAHAN armada yang tersedia — tanpa pengalihan rute.
+                            Belum bencana terkonfirmasi (zona kuning). Waspada — pantau, belum perlu tindakan — tanpa pengalihan rute.
                           </p>
                           <FreshnessBadge lastUpdated={null} expiresAt={item.forecast_valid_until} />
                         </div>
@@ -3272,7 +3258,7 @@ export default function DashboardClient() {
                           >
                             <span>Fokus</span>
                           </button>
-                          {(activeRouteIdx != null || currentMapRoutes.length > 0) && (
+                          {activeRouteIdx != null && currentMapRoutes.length > 0 && currentMapRoutes.some((r) => r.corridor_type !== 'hold_staging') && currentMapRoutes[activeRouteIdx]?.corridor_type !== 'hold_staging' && !isForecast && (
                           <button
                             type="button"
                             data-testid={`berita-hold-${item.id}`}
@@ -3646,7 +3632,13 @@ export default function DashboardClient() {
                 activeTab={activeTab}
                 setActiveTab={setActiveTab}
                 activeRouteIdx={activeRouteIdx}
-                hasRoute={activeRouteIdx != null || currentMapRoutes.length > 0}
+                hasRoute={(() => {
+                  // Evidence-only gate: hold_staging (forecast HOLD placeholder)
+                  // never counts as a route — only real corridors unlock tabs.
+                  const routes = currentMapRoutes.length > 0 ? currentMapRoutes : (selectedCrisis?.route_recommendations ?? []);
+                  if (activeRouteIdx != null && routes[activeRouteIdx]?.corridor_type !== 'hold_staging') return true;
+                  return routes.some((r) => r.corridor_type !== 'hold_staging');
+                })()}
                 onSelectRoute={(idx) => void handleSelectRoute(idx, 'sidebar')}
                 onApproveSuccess={(msg) => setToast({ message: msg, type: 'success' })}
                 onCommitOperationalRoute={handleCommitOperationalRoute}

@@ -159,7 +159,7 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
         </button>
       )}
 
-      {/* Waspada Dini advisory (medium drizzle, default OFF, HOLD-only). Off-map: single slate/cyan dot. */}
+      {/* Waspada Dini advisory (medium drizzle, default OFF, info-only). Off-map: single slate/cyan dot. */}
       {onToggleWeatherAdvisory && (
         <button
           type="button"
@@ -169,7 +169,7 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
               ? 'bg-[#0c1017] border-cyan-500/50 text-cyan-200'
               : 'bg-[#0c1017] border-white/5 text-slate-500 opacity-60 hover:opacity-100'
           }`}
-          title="Waspada Dini (Advisory): medium drizzle (mis. BMKG 60). Hanya tampil bila toggle ON. Default OFF, HOLD-only — tanpa pengalihan rute."
+          title="Waspada Dini (Advisory): medium drizzle (mis. BMKG 60). Hanya tampil bila toggle ON. Default OFF, info-only — tanpa pengalihan rute."
         >
           <span className={`w-2 h-2 rounded-full ${showWeatherAdvisory ? 'bg-cyan-300' : 'bg-slate-600'}`} />
           <span className="font-sans text-xs font-semibold">Waspada Dini</span>

@@ -608,8 +608,8 @@ test('wave3 all three select surfaces open the same Route Detail Modal', async (
   await expect(wave3Dialog(page)).toBeHidden({ timeout: 10000 }).catch(() => undefined);
 });
 
-// Wave 3.3 — guest sandbox: zero mutation POSTs + banner + watermark.
-test('wave3 guest select is sandbox-only: zero POSTs, banner, watermark', async ({ page }) => {
+// Wave 3.3 — guest sandbox: zero mutation POSTs, silent neutral header, read-only Verifikasi.
+test('wave3 guest select is sandbox-only: zero POSTs, no badges, read-only', async ({ page }) => {
   await wave3SeedSession(page, null);
   let approvalPosts = 0;
   let telemetryPosts = 0;
@@ -643,10 +643,15 @@ test('wave3 guest select is sandbox-only: zero POSTs, banner, watermark', async 
 
   const dialog = wave3Dialog(page);
   await expect(dialog).toBeVisible({ timeout: 15000 });
-  // Sandbox watermark + explicit no-POST contract copy.
-  await expect(dialog.getByTestId('sandbox-watermark')).toBeVisible();
-  await expect(dialog.getByText('SANDBOX PREVIEW')).toBeVisible();
-  await expect(dialog.getByText(/Tidak ada POST \/approvals/)).toBeVisible();
+  // Silent guest contract: neutral header only — no sandbox badges or watermark.
+  await expect(dialog.getByText('Detail rute')).toBeVisible();
+  await expect(dialog.getByTestId('sandbox-watermark')).toHaveCount(0);
+  await expect(dialog.getByText('SANDBOX PREVIEW')).toHaveCount(0);
+  await expect(dialog.getByText(/Pratinjau lokal/)).toHaveCount(0);
+  // Guest Verifikasi is read-only: no checklist, no notes gate, no commit CTAs.
+  await expect(dialog.getByText('3. Verifikasi')).toBeVisible();
+  await expect(dialog.getByRole('checkbox')).toHaveCount(0);
+  await expect(dialog.getByText(/Pratinjau read-only/)).toBeVisible();
   // Guest banner stays visible (explicit restriction, dismissible per-session).
   await expect(page.getByTestId('guest-evaluation-banner')).toBeVisible({ timeout: 30000 });
   // Sandbox preview replaces commit buttons with SIMPAN RENCANA copy in MitigationTab.

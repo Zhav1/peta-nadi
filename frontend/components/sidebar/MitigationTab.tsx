@@ -58,7 +58,7 @@ interface RouteCardProps {
  onApprove: (action: DecisionAction, tacticalAction: TacticalManeuver, notes?: string) => Promise<void>;
  selectedImpactedVehicle?: import('@/lib/types').ImpactedVehicleAssessment | null;
  crisisHasEvidence: boolean;
- /** Prakiraan Waspada Dini: HOLD-only, no reroute/approve. */
+ /** Prakiraan Waspada Dini: info-only, no actions. */
  isForecast?: boolean;
 }
 
@@ -68,9 +68,9 @@ interface RouteCardProps {
 const HITL_UNVERIFIED_COPY =
  'Belum terverifikasi — rute simulasi/offline atau bukti belum tersedia. Approval dinonaktifkan.';
 // Forecast (Prakiraan Waspada Dini) is advisory only: the zone is not a
-// confirmed disaster, so reroute/approve stay blocked and HOLD is the only path.
-const FORECAST_HOLD_COPY =
- 'Prakiraan waspada dini — belum terkonfirmasi sebagai bencana. Pengalihan rute dinonaktifkan; hanya TAHAN armada yang diizinkan.';
+// confirmed disaster. Info-only: no reroute, no HOLD, no approval CTA.
+const FORECAST_INFO_COPY =
+ 'Prakiraan waspada dini — belum terkonfirmasi sebagai bencana aktif. Waspada — pantau, belum perlu tindakan; tanpa pengalihan rute maupun penahanan armada.';
 const HITL_PENDING_COPY = 'Tercatat sebagai HITL pending — belum dikirim ke armada';
 
 function isSimulatedRoute(route: RouteRecommendation): boolean {
@@ -164,13 +164,13 @@ function RouteCard({
  const isSimulated = isSimulatedRoute(route);
  const hasEvidence = crisisHasEvidence || hasRouteProof(route);
  // HITL gate extension: a forecast zone may never POST a reroute — the tag keeps
- // the card HOLD-only even when route proof exists.
+ // no card actions render for a forecast, even when route proof exists.
  const hitlBlocked = isSimulated || !hasEvidence || isForecast;
- const blockedCopy = isForecast ? FORECAST_HOLD_COPY : HITL_UNVERIFIED_COPY;
+ const blockedCopy = isForecast ? FORECAST_INFO_COPY : HITL_UNVERIFIED_COPY;
  const provenanceLabel = isSimulated ? 'Simulasi' : 'Live';
  // GUEST sandbox is zero-POST local preview, so its buttons stay enabled;
  // the gate only locks real ledger writes. HOLD tactics stay allowed for all roles.
- const approveLocked = hitlBlocked && !isHoldStaging && role !== 'GUEST';
+ const approveLocked = (hitlBlocked && !isHoldStaging && role !== 'GUEST') || (isForecast && role !== 'GUEST');
 
  const cardBorderColor = isCompromised
  ? 'border-red-500/50 bg-red-950/20'
@@ -199,12 +199,29 @@ function RouteCard({
  }
  })();
 
+ // Forecast info-only: the card renders with zero action buttons.
+ if (isForecast) {
+ return (
+ <div className={`w-full text-left p-3.5 rounded-xl border ${cardBorderColor}`}>
+ <div className="flex justify-between items-start mb-1.5 gap-2">
+ <span className="text-xs font-bold text-slate-100">{titleText}</span>
+ </div>
+ <p className="text-xs text-slate-300 leading-relaxed mb-2 font-mono">
+ {route.description}
+ </p>
+ <p className="text-xs font-sans text-cyan-100/80 leading-relaxed">
+ {FORECAST_INFO_COPY}
+ </p>
+ </div>
+ );
+ }
+
  const handleExecuteOverride = async () => {
  if (!overrideNotes.trim()) {
  setValidationError('Catatan alasan wajib diisi untuk tindakan Override / Modifikasi.');
  return;
  }
- if (hitlBlocked && overrideTactical !== 'HOLD' && role !== 'GUEST') {
+ if ((hitlBlocked && overrideTactical !== 'HOLD' && role !== 'GUEST') || (isForecast && role !== 'GUEST')) {
  setValidationError(blockedCopy);
  return;
  }
@@ -749,7 +766,7 @@ function RouteCard({
 
  {hitlBlocked && role !== 'GUEST' && overrideTactical !== 'HOLD' && (
  <span className="text-xs font-mono text-amber-200/90 leading-relaxed">
- {blockedCopy} Hanya tahan yang diizinkan.
+ {blockedCopy}
  </span>
  )}
 
@@ -787,7 +804,7 @@ export function MitigationTab({
  const [approvingIdx, setApprovingIdx] = useState<number | null>(null);
  // Phase 77: guest/403 sandbox preview — local-only, never approved/committed.
  const [sandboxNote, setSandboxNote] = useState<string | null>(null);
- // Prakiraan Waspada Dini: advisory-only crisis, so every route card is HOLD-only.
+ // Prakiraan Waspada Dini: advisory-only crisis: info-only, no route actions rendered.
  const isForecast = isForecastActive(crisis.forecast_tag, crisis.forecast_valid_until);
 
  // Load existing approvals on mount for this incident
@@ -835,15 +852,22 @@ export function MitigationTab({
  }
  return;
  }
+ // Forecast info-only: no POST of any kind (not even HOLD).
+ if (isForecast) {
+ if (onApproveSuccess) {
+ onApproveSuccess(FORECAST_INFO_COPY);
+ }
+ return;
+ }
  // HITL integrity gate (Phase 82): SIMULASI/OFFLINE or evidence-less routes
  // never POST an Approve/Reroute. HOLD stays allowed (safe action, ledger).
  // Sandbox 403 path below is unchanged.
  if (
- (isSimulatedRoute(route) || !(hasCrisisEvidence(crisis) || hasRouteProof(route)) || isForecast) &&
+ (isSimulatedRoute(route) || !(hasCrisisEvidence(crisis) || hasRouteProof(route))) &&
  tacticalAction !== 'HOLD'
  ) {
  if (onApproveSuccess) {
- onApproveSuccess(isForecast ? FORECAST_HOLD_COPY : HITL_UNVERIFIED_COPY);
+ onApproveSuccess(HITL_UNVERIFIED_COPY);
  }
  return;
  }
@@ -949,7 +973,7 @@ export function MitigationTab({
  </div>
  )}
 
- {/* Prakiraan Waspada Dini: advisory-only zone — HOLD is the only legal action. */}
+ {/* Prakiraan Waspada Dini: advisory-only zone — no actions (info-only). */}
  {isForecast && (
  <div className="bg-cyan-950/30 border border-cyan-500/40 p-3 rounded-md text-xs font-sans text-cyan-100 leading-relaxed space-y-1">
  <span className="flex items-center gap-1.5 font-bold text-cyan-200">
@@ -957,7 +981,7 @@ export function MitigationTab({
  <span>Prakiraan — Waspada Dini</span>
  </span>
  <p>
- Zona ini tetap <span className="font-mono">YELLOW_CLARIFY</span> dan belum terkonfirmasi sebagai bencana aktif. Pengalihan rute dinonaktifkan; hanya TAHAN armada yang diizinkan.
+ Zona ini tetap <span className="font-mono">YELLOW_CLARIFY</span> dan belum terkonfirmasi sebagai bencana aktif. Waspada — pantau, belum perlu tindakan; tanpa pengalihan rute maupun penahanan armada.
  </p>
  {crisis.forecast_valid_until && Number.isFinite(Date.parse(crisis.forecast_valid_until)) && (
  <p className="font-mono text-cyan-300/80">
@@ -1147,8 +1171,22 @@ export function MitigationTab({
  <FormattedMarkdown content={crisis.decision_support_output || ''} />
  </div>
 
- {/* BLOCK C2: SPOILAGE HEDGING COST MATRIX (PHASE 44 / FR-18) */}
- {(() => {
+ {/* BLOCK C2: SPOILAGE HEDGING COST MATRIX (PHASE 44 / FR-18) — skipped for forecast (info-only) */}
+ {isForecast ? (
+ <div className="border-t border-[#1c2432] pt-3 bg-transparent flex flex-col gap-2">
+ <span className="text-xs font-sans text-cyan-300 font-bold">
+ Waspada dini — yang perlu diketahui
+ </span>
+ <div className="text-xs font-sans text-slate-300 leading-relaxed space-y-1.5">
+ <p><span className="font-bold text-slate-100">Mengapa waspada: </span>{crisis.tier_reason || 'Sinyal prakiraan belum terkonfirmasi sebagai bencana aktif.'}</p>
+ <p><span className="font-bold text-slate-100">Wilayah yang dipantau: </span>{crisis.region || 'Koridor Sumatera'}</p>
+ <p><span className="font-bold text-slate-100">Yang dipantau: </span>curah hujan, debit sungai, dan kepadatan lalu lintas koridor; rute dihitung setelah status terkonfirmasi.</p>
+ </div>
+ <p className="text-xs font-sans text-cyan-100/70 leading-relaxed">
+ {FORECAST_INFO_COPY}
+ </p>
+ </div>
+ ) : (() => {
  const activeRoute = crisis.route_recommendations?.[activeRouteIdx ?? 0];
  // Every value below is either real payload data or null. No invented
  // commodity / plate / Medan-Pekanbaru / 10 t / 85 km stand-ins.

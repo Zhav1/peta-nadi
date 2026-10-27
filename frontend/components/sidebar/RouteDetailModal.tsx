@@ -3,11 +3,6 @@
 import { useEffect, useState } from 'react';
 import {
   X,
-  ShieldAlert,
-  Scale,
-  ClipboardCheck,
-  Lock,
-  Snowflake,
 } from 'lucide-react';
 import type {
   RouteDetailModalProps,
@@ -22,6 +17,7 @@ import {
   isColdChain,
 } from '@/lib/tripCostCalculator';
 import { api } from '@/lib/api';
+import { isForecastActive } from '@/hooks/useNewsVerification';
 import {
   AlertDialog,
   AlertDialogContent,
@@ -104,9 +100,6 @@ export function RouteDetailModal({
   const benchShort = benchPrecision !== null
     ? `Presisi ${(benchPrecision * 100).toFixed(1)}%`
     : 'Belum dihitung';
-  const benchHud = benchPrecision !== null && benchN !== null
-    ? `Metrik Validasi Empiris: ${(benchPrecision * 100).toFixed(1)}% Presisi (N=${benchN} Benchmark)`
-    : 'Metrik Validasi Empiris: Belum dihitung';
 
   useEffect(() => {
     if (open) {
@@ -150,9 +143,11 @@ export function RouteDetailModal({
     !!route.hedging;
   const hasEvidence = crisisEvidence || routeProof;
 
-  const canApprove = !isSandbox && allChecked && !isActing && role !== 'REGULATOR' && hasEvidence;
-  const canHold = !isSandbox && allChecked && !isActing && notes.trim().length > 0;
-  const canOverride = !isSandbox && allChecked && !isActing && notes.trim().length > 0 && role !== 'REGULATOR' && hasEvidence;
+  // Forecast info-only: every decision CTA stays disabled — pantau saja.
+  const isForecast = !!crisis && isForecastActive(crisis.forecast_tag, crisis.forecast_valid_until);
+  const canApprove = !isForecast && !isSandbox && allChecked && !isActing && role !== 'REGULATOR' && hasEvidence;
+  const canHold = !isForecast && !isSandbox && allChecked && !isActing && notes.trim().length > 0;
+  const canOverride = !isForecast && !isSandbox && allChecked && !isActing && notes.trim().length > 0 && role !== 'REGULATOR' && hasEvidence;
 
   const passability =
     crisis?.impact_profile?.passability ??
@@ -209,6 +204,7 @@ export function RouteDetailModal({
     setChecked((prev) => ({ ...prev, [id]: !prev[id] }));
 
   const handleAction = (decision: RouteDecisionType, tacticalAction: TacticalManeuver) => {
+    if (isForecast) return;
     if (isSandbox) return;
     if (role === 'REGULATOR' && decision !== 'HOLD') return;
     if (!allChecked) return;
@@ -239,33 +235,13 @@ export function RouteDetailModal({
     className="max-w-2xl rounded-2xl border-white/10 bg-[#0c1017] p-0 shadow-2xl tabular-nums max-h-[90vh] overflow-y-auto"
   >
         <style>{`@keyframes wm-modal-rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}.wm-modal-rise{animation:wm-modal-rise .22s ease both}`}</style>
-        {/* Watermark ribbon for sandbox preview */}
-        {isSandbox && (
-          <div
-            data-testid="sandbox-watermark"
-            className="pointer-events-none absolute -right-10 top-6 rotate-45 bg-amber-500/90 text-black text-xs font-bold px-10 py-1 shadow-lg"
-          >
-            Pratinjau sandbox
-          </div>
-        )}
-
         {/* Header */}
         <AlertDialogHeader className="sticky top-0 bg-[#0c1017] border-b border-white/10 p-4 flex-row items-start justify-between gap-3 text-left">
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-bold px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/30">
+              <span className="text-xs font-medium px-2 py-0.5 rounded bg-white/5 text-slate-200 border border-white/10">
                 Detail rute
               </span>
-              {isSandbox && (
-                <>
-                  <span className="text-xs font-bold px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/40">
-                    Pratinjau lokal — tanpa POST server
-                  </span>
-                  <span className="text-xs font-bold px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/40">
-                    SANDBOX PREVIEW
-                  </span>
-                </>
-              )}
             </div>
             <AlertDialogTitle className="text-sm font-bold text-white mt-1.5 leading-snug">
               {title}
@@ -287,14 +263,13 @@ export function RouteDetailModal({
         <div className="p-4 space-y-4">
           {/* Section 1: Risiko */}
           <section aria-label="Risiko" className="wm-modal-rise border border-white/10 rounded-xl bg-[#080d14] p-3 space-y-2">
-            <h3 className="text-xs font-bold font-sans text-slate-100 flex items-center gap-1.5">
-              <ShieldAlert className="w-4 h-4 text-rose-400" />
+            <h3 className="text-xs font-bold font-sans text-slate-100">
               <span>1. Risiko</span>
             </h3>
             <div className="text-xs font-mono space-y-1.5 text-slate-300">
               <div className="flex justify-between gap-2">
                 <span className="text-slate-400">Status keselamatan:</span>
-                <span className="font-bold text-white text-right">{route.safety_status ?? 'Tidak tersedia'}</span>
+                <span className="font-semibold text-cyan-300 text-right">{route.safety_status ?? 'Tidak tersedia'}</span>
               </div>
               {route.safety_tag && (
                 <div className="p-2 rounded bg-[#0c1017] border border-white/10 text-slate-200">
@@ -303,13 +278,13 @@ export function RouteDetailModal({
               )}
               <div className="flex justify-between gap-2">
                 <span className="text-slate-400">Kompromi zona bahaya:</span>
-                <span className={route.is_compromised ? 'text-rose-400 font-bold' : 'text-emerald-400 font-bold'}>
+                <span className={route.is_compromised ? 'text-rose-400 font-bold' : 'text-slate-200 font-semibold'}>
                   {route.is_compromised ? 'TERDAMPAK' : 'BEBAS'}
                 </span>
               </div>
               <div className="flex justify-between gap-2">
                 <span className="text-slate-400">Passabilitas koridor:</span>
-                <span className="font-bold text-white">{passability}</span>
+                <span className={passability === 'BLOCKED' ? 'font-bold text-rose-400' : passability === 'CAUTION' ? 'font-semibold text-amber-300' : 'font-semibold text-cyan-300'}>{passability}</span>
               </div>
               <div className="flex justify-between gap-2">
                 <span className="text-slate-400">Bahaya:</span>
@@ -329,14 +304,13 @@ export function RouteDetailModal({
 
           {/* Section 2: Dampak & Biaya */}
           <section aria-label="Dampak dan Biaya" className="wm-modal-rise border border-white/10 rounded-xl bg-[#080d14] p-3 space-y-2.5" style={{ animationDelay: '.05s' }}>
-            <h3 className="text-xs font-bold font-sans text-slate-100 flex items-center gap-1.5">
-              <Scale className="w-4 h-4 text-cyan-400" />
+            <h3 className="text-xs font-bold font-sans text-slate-100">
               <span>2. Dampak &amp; Biaya</span>
             </h3>
             <div className="text-xs font-mono space-y-1.5 text-slate-300">
               <div className="flex justify-between gap-2">
                 <span className="text-slate-400">Deviasi waktu:</span>
-                <span className="font-bold text-white">
+                <span className="font-semibold text-cyan-300">
                   {route.tradeoff_analysis
                     ? formatDelay(route.tradeoff_analysis.time_delta_minutes)
                     : 'Data tidak tersedia'}
@@ -349,7 +323,7 @@ export function RouteDetailModal({
               <div className="flex justify-between items-center gap-2">
                 <span className="text-slate-400">Penghematan bersih (hedging):</span>
                 {route.hedging ? (
-                  <span className="font-bold text-emerald-400 font-mono px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30">
+                  <span className="font-semibold text-cyan-300 font-mono">
                     {formatIDR(route.hedging.net_savings_idr)}
                   </span>
                 ) : (
@@ -359,7 +333,7 @@ export function RouteDetailModal({
               <div className="flex justify-between items-center gap-2">
                 <span className="text-slate-400">Potensi susut (spoilage):</span>
                 {route.hedging ? (
-                  <span className="font-bold text-rose-400 font-mono px-2 py-0.5 rounded bg-rose-500/10 border border-rose-500/30">
+                  <span className="font-semibold text-rose-400 font-mono">
                     {formatIDR(route.hedging.spoilage_loss_idr)}
                   </span>
                 ) : (
@@ -367,12 +341,11 @@ export function RouteDetailModal({
                 )}
               </div>
               {reeferGensetCost > 0 && (
-                <div className="flex justify-between items-center gap-2 p-2 rounded-lg bg-cyan-950/40 border border-cyan-500/30 text-xs font-mono">
-                  <span className="text-cyan-300 flex items-center gap-1.5 font-sans font-medium">
-                    <Snowflake className="w-3.5 h-3.5 text-cyan-400" />
+                <div className="flex justify-between items-center gap-2 p-2 rounded-lg bg-[#0c1017] border border-white/10 text-xs font-mono">
+                  <span className="text-slate-400 font-sans font-medium">
                     Genset reefer ({previewPolicy}):
                   </span>
-                  <span className="font-bold text-cyan-300 font-mono">
+                  <span className="font-semibold text-cyan-300 font-mono">
                     {formatIDR(reeferGensetCost)}
                   </span>
                 </div>
@@ -380,10 +353,10 @@ export function RouteDetailModal({
               {route.hedging?.optimal_policy && (
                 <div className="flex justify-between items-center gap-2 text-xs font-mono pt-1">
                   <span className="text-slate-400">Kebijakan optimal:</span>
-                  <span className={`px-2 py-0.5 rounded text-[11px] font-bold font-mono ${
-                    route.hedging.optimal_policy === 'REROUTE' ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30' :
-                    route.hedging.optimal_policy === 'HOLD' ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30' :
-                    'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                  <span className={`px-2 py-0.5 rounded text-[11px] font-semibold font-mono border ${
+                    route.hedging.optimal_policy === 'HOLD'
+                      ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                      : 'bg-white/5 text-slate-200 border-white/10'
                   }`}>
                     {route.hedging.optimal_policy}
                   </span>
@@ -408,23 +381,23 @@ export function RouteDetailModal({
 
             {route.tradeoff_analysis && (
               <div className="grid grid-cols-2 gap-2 text-xs leading-relaxed">
-                <div className="p-2 rounded-md bg-emerald-950/30 border border-emerald-500/20">
-                  <span className="block text-xs font-bold text-emerald-300 mb-1 font-sans">
+                <div className="p-2 rounded-md bg-[#0c1017] border border-white/10">
+                  <span className="block text-xs font-semibold text-slate-200 mb-1 font-sans">
                     Manfaat
                   </span>
-                  <ul className="space-y-1 text-emerald-100/90 font-sans">
+                  <ul className="space-y-1 text-slate-300 font-sans">
                     {route.tradeoff_analysis.pros.map((pro, i) => (
-                      <li key={i}>• {pro}</li>
+                      <li key={i}><span className="text-slate-500">• </span>{pro}</li>
                     ))}
                   </ul>
                 </div>
-                <div className="p-2 rounded-md bg-amber-950/20 border border-amber-500/20">
-                  <span className="block text-xs font-bold text-amber-300 mb-1 font-sans">
+                <div className="p-2 rounded-md bg-[#0c1017] border border-white/10">
+                  <span className="block text-xs font-semibold text-slate-200 mb-1 font-sans">
                     Konsekuensi
                   </span>
-                  <ul className="space-y-1 text-amber-100/90 font-sans">
+                  <ul className="space-y-1 text-slate-300 font-sans">
                     {route.tradeoff_analysis.cons.map((con, i) => (
-                      <li key={i}>• {con}</li>
+                      <li key={i}><span className="text-slate-500">• </span>{con}</li>
                     ))}
                   </ul>
                 </div>
@@ -438,10 +411,10 @@ export function RouteDetailModal({
                   Total Estimasi Biaya Rit:
                 </span>
                 <div className="flex items-baseline gap-1.5">
-                  <span className="text-sm font-bold text-emerald-400 font-mono tabular-nums">
+                  <span className="text-sm font-bold text-cyan-300 font-mono tabular-nums">
                     {formatTripCostIDR(totalTripCost)}
                   </span>
-                  <span className="text-xs font-mono text-emerald-300/70 tabular-nums">
+                  <span className="text-xs font-mono text-slate-500 tabular-nums">
                     ({formatCompactIDR(totalTripCost)})
                   </span>
                 </div>
@@ -467,12 +440,11 @@ export function RouteDetailModal({
                       <span className="tabular-nums">Rp {operationalCostBreakdown.labor_cost_idr.toLocaleString('id-ID')}</span>
                     </div>
                     {operationalCostBreakdown.reefer_genset_cost_idr > 0 && (
-                      <div className="flex justify-between gap-2 text-cyan-300">
-                        <span className="font-sans flex items-center gap-1">
-                          <Snowflake className="w-3 h-3 text-cyan-400" />
+                      <div className="flex justify-between gap-2">
+                        <span className="font-sans text-slate-400">
                           Genset Reefer:
                         </span>
-                        <span className="tabular-nums">Rp {operationalCostBreakdown.reefer_genset_cost_idr.toLocaleString('id-ID')}</span>
+                        <span className="tabular-nums text-cyan-300">Rp {operationalCostBreakdown.reefer_genset_cost_idr.toLocaleString('id-ID')}</span>
                       </div>
                     )}
                     <div className="flex justify-between gap-2">
@@ -492,7 +464,7 @@ export function RouteDetailModal({
                     ? 'Tambahan Biaya Alih Antarmoda:'
                     : 'Tambahan Biaya Pengalihan:'}
                 </span>
-                <span className={detourAdditionalCost > 0 && !isBaseline ? "font-bold text-emerald-400 tabular-nums" : "text-slate-400 tabular-nums"}>
+                <span className={detourAdditionalCost > 0 && !isBaseline ? "font-semibold text-cyan-300 tabular-nums" : "text-slate-400 tabular-nums"}>
                   {detourAdditionalCost > 0 && !isBaseline
                     ? `+Rp ${detourAdditionalCost.toLocaleString('id-ID')}`
                     : 'Rp 0 (Jalur Normal Acuan)'}
@@ -513,7 +485,7 @@ export function RouteDetailModal({
                   <span className="text-[11px] font-bold font-sans text-slate-200">
                     Pratinjau kebijakan (Hold vs Reroute)
                   </span>
-                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
+                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-slate-400 border border-white/10">
                     Simulasi
                   </span>
                 </div>
@@ -542,8 +514,7 @@ export function RouteDetailModal({
 
           {/* Section 3: Verifikasi */}
           <section aria-label="Verifikasi" className="wm-modal-rise border border-white/10 rounded-xl bg-[#080d14] p-3 space-y-2.5" style={{ animationDelay: '.1s' }}>
-            <h3 className="text-xs font-bold font-sans text-slate-100 flex items-center gap-1.5">
-              <ClipboardCheck className="w-4 h-4 text-cyan-400" />
+            <h3 className="text-xs font-bold font-sans text-slate-100">
               <span>3. Verifikasi</span>
             </h3>
             <ul className="text-xs font-mono text-slate-300 space-y-1.5">
@@ -639,6 +610,16 @@ export function RouteDetailModal({
               </div>
             </div>
 
+            {isForecast ? (
+              <p className="text-xs font-sans text-cyan-100/80 leading-relaxed p-2.5 rounded-lg bg-cyan-950/30 border border-cyan-500/40">
+                Prakiraan waspada dini — belum terkonfirmasi sebagai bencana aktif. Waspada — pantau, belum perlu tindakan; tanpa pengalihan rute maupun penahanan armada.
+              </p>
+            ) : role === 'GUEST' ? (
+              <p className="text-xs font-sans text-slate-400 leading-relaxed p-2.5 rounded-lg bg-[#0c1017] border border-white/10">
+                Pratinjau read-only — masuk sebagai Dispatcher untuk verifikasi operator dan commit.
+              </p>
+            ) : (
+              <>
             <div className="space-y-1.5 pt-1">
               {CHECKLIST_ITEMS.map((item) => {
                 const isChecked = !!checked[item.id] || (item.id === 'notes' && notes.trim().length > 0);
@@ -663,10 +644,9 @@ export function RouteDetailModal({
             </div>
 
             {isSandbox ? (
-              <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs font-sans text-amber-200 leading-relaxed">
-                Mode Evaluasi Tamu — pratinjau berwatermark lokal. Tidak ada POST /approvals
-                dan tidak ada ping TMS. Masuk sebagai Dispatcher untuk commit operasional.
-              </div>
+              <p className="text-xs font-sans text-slate-400 leading-relaxed p-2.5 rounded-lg bg-[#0c1017] border border-white/10">
+                Pratinjau read-only — tidak ada commit operasional pada peran ini.
+              </p>
             ) : (
               <>
                 <div className="space-y-1">
@@ -706,7 +686,6 @@ export function RouteDetailModal({
                     }
                     className="cursor-pointer py-2.5 px-3 rounded-lg bg-cyan-500 hover:bg-cyan-400 disabled:opacity-40 disabled:cursor-not-allowed text-[#080d14] text-xs font-sans font-bold flex items-center justify-center gap-1.5 transition-all shadow-lg shadow-cyan-950/40"
                   >
-                    {role === 'REGULATOR' && <Lock className="w-3.5 h-3.5 shrink-0" />}
                     <span>Setujui Pengalihan</span>
                   </button>
                   <button
@@ -743,7 +722,6 @@ export function RouteDetailModal({
                     }
                     className="cursor-pointer py-2.5 px-3 rounded-lg bg-[#121822] hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 border border-white/10 text-xs font-sans font-medium flex items-center justify-center gap-1.5 transition-all"
                   >
-                    {role === 'REGULATOR' && <Lock className="w-3.5 h-3.5 shrink-0" />}
                     <span>Lanjut Jalur Asal</span>
                   </button>
                 </div>
@@ -766,36 +744,19 @@ export function RouteDetailModal({
                 ) : null}
               </>
             )}
+              </>
+            )}
           </section>
 
           {/* Prinsip Operasional 20/80 */}
           <div className="p-3 rounded-xl bg-[#080d14] border border-white/10 text-[11px] font-sans text-slate-400 leading-relaxed space-y-1">
-            <span className="font-bold text-amber-300 flex items-center gap-1.5">
-              <ShieldAlert className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <span className="font-semibold text-slate-200">
               <span>Prinsip Operasional 20/80</span>
             </span>
             <p>
               Rekomendasi rute sistem merupakan panduan digital awal; konfirmasi kondisi fisik lapangan dan kelas jalan tetap menjadi kewenangan Dispatcher.
             </p>
           </div>
-
-          {/* Tactical Empirical Validation HUD Link */}
-          {onOpenEvaluation && (
-            <button
-              type="button"
-              onClick={() => {
-                onClose();
-                onOpenEvaluation();
-              }}
-              className="cursor-pointer w-full py-2.5 px-3.5 rounded-xl bg-cyan-950/40 hover:bg-cyan-900/50 border border-cyan-500/40 text-cyan-300 hover:text-cyan-200 text-xs font-mono font-medium flex items-center justify-between transition group shadow-lg"
-            >
-              <span className="flex items-center gap-2">
-                <Scale className="w-4 h-4 text-cyan-400 shrink-0" />
-                <span>{benchHud}</span>
-              </span>
-              <span className="text-cyan-400 font-bold group-hover:translate-x-1 transition-transform">→</span>
-            </button>
-          )}
         </div>
   </AlertDialogContent>
   </AlertDialog>

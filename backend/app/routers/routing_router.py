@@ -141,11 +141,14 @@ async def fetch_fire_hotspots(
     current_user: UserSession = Depends(get_optional_user),
 ) -> Dict[str, Any]:
     """
-    Q3(B)/Q6: FIRMS VIIRS_SNPP_NRT active fire hotspots near the Trans-Sumatra corridor.
+    Q3(B)/Q6: FIRMS VIIRS_SNPP_NRT active fire hotspots, whole-Sumatra scope
+    (bbox 94,-6,108,6 only — no corridor-distance drop; bbox is the only geo gate).
 
-    Honest-degraded contract: when NASA_FIRMS_MAP_KEY is missing the endpoint
-    returns 200 with status=degraded + empty hotspots (never 500, never fake
-    points) so the frontend can render a gray toggle with a 'butuh MAP_KEY' tooltip.
+    Honest-degraded contract: when NASA_FIRMS_MAP_KEY is missing or the fetch
+    throws, the endpoint returns 200 with status=degraded + empty hotspots
+    (never 500, never fake points) so the frontend can render a gray toggle
+    with a 'butuh MAP_KEY' tooltip. Empty-but-healthy returns status=ok with
+    total=0. Response capped at 500 hotspots by FRP desc to protect the map.
     Severity mapping: FRP > 500 → critical, FRP > 100 (or <5km to corridor) → high.
     Radius-area mapping: critical → 5 km, high → 2.5 km, medium → 1 km
     (radius_km included per hotspot, additive — existing shape unchanged).
@@ -249,11 +252,15 @@ async def fetch_fire_hotspots(
             except Exception:
                 continue
 
+        # Whole-Sumatra scope: no location drop — cap at 500 by FRP desc to protect the map.
+        hotspots.sort(key=lambda h: float(h.get("frp", 0) or 0), reverse=True)
+        hotspots = hotspots[:500]
+
         return {
             "hotspots": hotspots,
             "total": len(hotspots),
-            "status": "ok" if hotspots else "degraded",
-            "reason": None if hotspots else "no active hotspots in corridor window",
+            "status": "ok",
+            "reason": None if hotspots else "no active hotspots in Sumatra window",
             "source": "VIIRS_SNPP_NRT",
             "timestamp": datetime.now(_tz.utc).isoformat(),
         }

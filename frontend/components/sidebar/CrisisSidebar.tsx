@@ -54,8 +54,17 @@ export function CrisisSidebar({
  const setActiveTab = controlledSetActiveTab || setInternalTab;
  const [showCausalChain, setShowCausalChain] = useState(true);
  // P3: zone click (highlighted zone, no route yet) is evidence-only.
- // Mitigasi/Ekonomi reappear once a route is chosen or candidates exist.
- const hasRoute = hasRouteProp ?? (activeRouteIdx != null || (crisis.route_recommendations?.length ?? 0) > 0);
+ // Mitigasi/Ekonomi reappear once a real corridor is chosen or available.
+ // hold_staging (forecast HOLD placeholder) never counts as a route.
+  const hasRealFallbackRoute = (crisis.route_recommendations ?? []).some(
+   (r) => r.corridor_type !== 'hold_staging'
+ );
+ const activeFallbackRoute =
+  activeRouteIdx != null ? crisis.route_recommendations?.[activeRouteIdx] : undefined;
+ const hasRoute =
+  hasRouteProp ??
+  ((activeRouteIdx != null && activeFallbackRoute?.corridor_type !== 'hold_staging') ||
+  hasRealFallbackRoute);
  const visibleTabs: Tab[] = hasRoute ? ['Evidence', 'Mitigation', 'Economic'] : ['Evidence'];
  const effectiveTab: Tab = hasRoute ? activeTab : 'Evidence';
 

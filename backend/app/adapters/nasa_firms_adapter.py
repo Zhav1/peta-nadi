@@ -95,7 +95,13 @@ class NASAFIRMSAdapter(BaseAdapter):
         return ""
 
     async def parse(self, raw_data: str) -> List[Dict[str, Any]]:
-        """Parse FIRMS CSV data, filter for Pan-Sumatra and proximity to Trans-Sumatra Highway, map to events."""
+        """Parse FIRMS CSV data, filter for whole-Sumatra bbox, map to events.
+
+        Whole-Sumatra scope: bbox 94,-6,108,6 only (no corridor-distance drop).
+        HIGHWAY_SPINE is kept purely for nearest-segment provenance
+        (dist_to_corridor_km / near_segment click contract), never as a filter.
+        Keeps: confidence==low drop, 24h dedup, FRP severity mapping, Redis 3h cache.
+        """
         events = []
         if not raw_data or raw_data.strip() == "":
             return events
@@ -124,49 +130,48 @@ class NASAFIRMSAdapter(BaseAdapter):
                     if not (self.MIN_LAT <= lat <= self.MAX_LAT and self.MIN_LON <= lon <= self.MAX_LON):
                         continue
 
-                    # 3. Check proximity to Trans-Sumatra Highway spine
-                    # Calculate simple distance (Haversine or approx Euclidean)
+                    # 3. Nearest Trans-Sumatra Highway spine segment — provenance only
+                    # (dist_to_corridor_km / near_segment for the hotspot click contract).
+                    # Whole-Sumatra scope: NEVER drop by distance; bbox above is the only geo gate.
                     near_segment = None
                     min_dist_km = 999.0
-                    
+
                     for segment in self.HIGHWAY_SPINE:
                         dist = self._haversine_distance(lat, lon, segment["lat"], segment["lon"])
                         if dist < min_dist_km:
                             min_dist_km = dist
                             near_segment = segment["name"]
 
-                    # Threshold: within 20km of the highway segment
-                    if min_dist_km <= 20.0:
-                        # Determine severity based on FRP (intensity) and proximity
-                        if frp > 500:
-                            severity = "critical"
-                        elif frp > 100 or min_dist_km < 5.0:
-                            severity = "high"
-                        else:
-                            severity = "medium"
+                    # Severity from FRP intensity (+ <5km proximity booster, provenance only).
+                    if frp > 500:
+                        severity = "critical"
+                    elif frp > 100 or min_dist_km < 5.0:
+                        severity = "high"
+                    else:
+                        severity = "medium"
 
-                        title = f"Wildfire Hazard: Active hotspot near {near_segment} (FRP: {frp}MW)"
-                        dedup_key = f"firms:fire:{acq_date}:{acq_time}:{lat:.2f}:{lon:.2f}"
+                    title = f"Wildfire Hazard: Active hotspot (FRP: {frp}MW, nearest {near_segment} {round(min_dist_km, 1)}km)"
+                    dedup_key = f"firms:fire:{acq_date}:{acq_time}:{lat:.2f}:{lon:.2f}"
 
-                        if not r.get(f"lrip:dedup:{dedup_key}"):
-                            r.set(f"lrip:dedup:{dedup_key}", "1", ex=86400)  # 24h dedup
-                            
-                            events.append({
-                                "source": self.source_name,
-                                "event_type": "wildfire",
-                                "severity": severity,
-                                "lat": str(lat),
-                                "lon": str(lon),
-                                "title": title,
-                                "raw": json.dumps(row),
-                                "ts": now_str,
-                                "dedup_key": dedup_key,
-                                # Q3(B) hotspot click contract: FRP + conf + dist-to-corridor.
-                                "frp": frp,
-                                "conf": confidence,
-                                "dist_to_corridor_km": round(min_dist_km, 2),
-                                "near_segment": near_segment,
-                            })
+                    if not r.get(f"lrip:dedup:{dedup_key}"):
+                        r.set(f"lrip:dedup:{dedup_key}", "1", ex=86400)  # 24h dedup
+
+                        events.append({
+                            "source": self.source_name,
+                            "event_type": "wildfire",
+                            "severity": severity,
+                            "lat": str(lat),
+                            "lon": str(lon),
+                            "title": title,
+                            "raw": json.dumps(row),
+                            "ts": now_str,
+                            "dedup_key": dedup_key,
+                            # Q3(B) hotspot click contract: FRP + conf + dist-to-corridor.
+                            "frp": frp,
+                            "conf": confidence,
+                            "dist_to_corridor_km": round(min_dist_km, 2),
+                            "near_segment": near_segment,
+                        })
                 except Exception as e:
                     logger.error(f"Error parsing row in FIRMS CSV: {e}")
                     
