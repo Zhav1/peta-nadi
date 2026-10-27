@@ -53,7 +53,7 @@ import {
 import { api } from '@/lib/api';
 import { toLonLatRing } from '@/lib/polygonGeom';
 import { regionSlugFromLatLon } from '@/lib/region';
-import type { CrisisState, WsEvent, CrisisType, Severity, RouteRecommendation, DisasterZone, HazardImpactProfile, ZoneTier, FleetVehicle, TacticalManeuver, FireHotspot, RouteDecisionType, DecisionAction, WeatherHazardSummary } from '@/lib/types';
+import type { CrisisState, WsEvent, CrisisType, Severity, RouteRecommendation, DisasterZone, HazardImpactProfile, ZoneTier, FleetVehicle, TacticalManeuver, FireHotspot, RouteDecisionType, DecisionAction, WeatherHazardSummary, HazardCounterStatus, FireHotspotSource } from '@/lib/types';
 import { useAuth } from '@/lib/authContext';
 import { AuthModal } from '@/components/auth/AuthModal';
 import { FleetOnboardingModal } from '@/components/fleet/FleetOnboardingModal';
@@ -1001,8 +1001,17 @@ export default function DashboardClient() {
   const [showWeatherAdvisory, setShowWeatherAdvisory] = useState<boolean>(false);
   const [showFireHotspots, setShowFireHotspots] = useState<boolean>(true);
   const [fireHotspots, setFireHotspots] = useState<FireHotspot[]>([]);
-  const [fireStatus, setFireStatus] = useState<'ok' | 'degraded'>('ok');
+  // Phase 168: tri-state (ok|empty|stale|degraded) + true count from the
+  // envelope; null count means unknown ("—"), never a fabricated 0.
+  const [fireStatus, setFireStatus] = useState<HazardCounterStatus>('degraded');
   const [fireReason, setFireReason] = useState<string | null>(null);
+  const [fireCount, setFireCount] = useState<number | null>(null);
+  const [fireSource, setFireSource] = useState<FireHotspotSource | null>(null);
+  const [fireUpdatedAt, setFireUpdatedAt] = useState<string | null>(null);
+  const [fireWindowHours, setFireWindowHours] = useState<number>(24);
+  // True once the backend returned a known count (ok/empty/stale), so a fetch
+  // failure is marked stale instead of degraded when we still hold data.
+  const fireHasDataRef = useRef(false);
   const [routingInfo, setRoutingInfo] = useState<{ solver: string; compute_time_ms: number | null; savings_pct: number | null } | null>(null);
   // Persistent route-computation status: a cold render can take 30-50s, so the
   // operator needs lasting feedback plus an explicit abort action (not a 3s toast).
@@ -1124,22 +1133,26 @@ export default function DashboardClient() {
       try {
         const res = await api.fire.hotspots();
         if (!isMounted) return;
-        if (res.status === 'degraded') {
-          setFireHotspots([]);
-          setFireStatus('degraded');
-          setFireReason(res.reason ?? 'butuh MAP_KEY — set NASA_FIRMS_MAP_KEY di Render env / .env.local');
-        } else {
-          setFireHotspots(res.hotspots ?? []);
-          setFireStatus('ok');
-          setFireReason(res.reason ?? null);
-        }
+        // The backend already separates ok/empty (healthy) from stale
+        // (last-known-good) and degraded (no data at all). Use its truth.
+        setFireHotspots(res.hotspots ?? []);
+        setFireStatus(res.status ?? (res.count == null ? 'degraded' : 'ok'));
+        setFireCount(res.count ?? null);
+        setFireReason(res.reason ?? null);
+        setFireSource(res.source ?? null);
+        setFireUpdatedAt(res.updated_at ?? null);
+        setFireWindowHours(res.window_hours ?? 24);
+        fireHasDataRef.current = res.count != null;
       } catch (e) {
-        console.warn('Backend FIRMS fire hotspots fallback (degraded):', e);
-        if (isMounted) {
-          setFireHotspots([]);
-          setFireStatus('degraded');
-          setFireReason('butuh MAP_KEY — set NASA_FIRMS_MAP_KEY di Render env / .env.local');
-        }
+        // Transient failure: keep the last-good layer/count (never blank it).
+        if (!isMounted) return;
+        console.warn('Backend FIRMS hotspots fetch failed; keeping last-known-good layer:', e);
+        setFireStatus(fireHasDataRef.current ? 'stale' : 'degraded');
+        setFireReason(
+          fireHasDataRef.current
+            ? 'Gagal memperbarui; menampilkan data terakhir yang tersimpan.'
+            : 'Sumber Titik Panas tidak tersedia.'
+        );
       }
     }
     loadFireHotspots();
@@ -1209,11 +1222,9 @@ export default function DashboardClient() {
       severity: asStr(p.severity),
     };
   }, [disruptionFeatures]);
-  const fireHotspotCount = fireHotspots.length;
-  const fireTooltip =
-    fireStatus === 'degraded'
-      ? (fireReason ?? 'butuh MAP_KEY — set NASA_FIRMS_MAP_KEY di Render env / .env.local')
-      : fireReason ?? `Titik Panas (Satelit) VIIRS_SNPP_NRT: ${fireHotspotCount} titik; sorotan oranye khusus peta bila ≥3 titik keyakinan tinggi dalam 5 km. Klik area/titik = jumlah + FRP/conf/jarak koridor.`;
+  // Phase 168: counter = true pre-cap hotspot count from the envelope.
+  // null (degraded) renders "—" in TopNavTelemetry, never a 0.
+  const fireHotspotCount = fireCount;
 
 
 
@@ -3431,9 +3442,13 @@ export default function DashboardClient() {
                     weatherSample={weatherSample}
                     showFireHotspots={showFireHotspots}
                     onToggleFireHotspots={() => setShowFireHotspots(v => !v)}
-                    fireHotspotCount={fireHotspotCount}
+                    fireHotspotCount={fireHotspotCount ?? undefined}
+                    fireCount={fireHotspotCount}
                     fireStatus={fireStatus}
-                    fireTooltip={fireTooltip}
+                    fireReason={fireReason}
+                    fireSource={fireSource}
+                    fireUpdatedAt={fireUpdatedAt}
+                    fireWindowHours={fireWindowHours}
                     onSelectHub={(hub) => {
                       setMapFlyTo({ lon: hub.coords[0], lat: hub.coords[1], zoom: 11, ts: Date.now() });
                     }}

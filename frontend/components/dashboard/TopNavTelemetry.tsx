@@ -35,7 +35,13 @@ interface TopNavTelemetryProps {
   showFireHotspots?: boolean;
   onToggleFireHotspots?: () => void;
   fireHotspotCount?: number;
-  fireStatus?: 'ok' | 'degraded';
+  /** Phase 168: true hotspot count (pre-cap). null = unknown → "—". */
+  fireCount?: number | null;
+  fireStatus?: HazardCounterStatus;
+  fireReason?: string | null;
+  fireSource?: import('@/lib/types').FireHotspotSource | null;
+  fireUpdatedAt?: string | null;
+  fireWindowHours?: number;
   fireTooltip?: string;
   onSelectHub?: (hub: ChokePointItem) => void;
   onFocusRoute?: () => void;
@@ -81,8 +87,13 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
   showFireHotspots = true,
   onToggleFireHotspots,
   fireHotspotCount = 0,
+  fireCount,
   fireStatus = 'ok',
-  fireTooltip,
+  fireReason,
+  fireSource,
+  fireUpdatedAt,
+  fireWindowHours,
+  fireTooltip: _fireTooltip,
   // Dormant P2 props — accepted for API compatibility, rendered nowhere.
   routingInfo: _routingInfo,
   corridorContext: _corridorContext,
@@ -103,6 +114,7 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
   void _onSelectHub;
   void _onFocusRoute;
   void _weatherSample;
+  void _fireTooltip;
 
   // --- Phase 160: counters are world truth, never toggle-gated ---------------
   // Degraded/unknown renders "—"; verified-empty renders 0. The layer toggles
@@ -151,6 +163,34 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
     }
     return lines.join('\n');
   };
+
+  // --- Phase 168: Titik Panas uses the same tri-state rule as cuaca/waspada.
+  // Number for ok/stale/empty; "—" only when unknown (degraded). The tooltip
+  // must always name source + window + last-updated.
+  const titikPanasCount = fireCount ?? (fireStatus === 'degraded' ? null : fireHotspotCount);
+  const fireSourceLabel =
+    fireSource === 'nasa-firms-api'
+      ? 'NASA FIRMS API (MAP_KEY)'
+      : fireSource === 'cache'
+        ? 'Cache data terakhir (last-known-good)'
+        : 'NASA FIRMS CSV publik (keyless)';
+  const fireTooltipText = (() => {
+    const lines = [
+      'Titik Panas (Satelit): titik panas aktif seluruh Sumatra',
+      `Area: Sumatra ${bboxLabel}`,
+      `Jendela: ${fireWindowHours ?? 24} jam`,
+      `Sumber: ${fireSourceLabel}`,
+      `Diperbarui: ${updatedLabel(fireUpdatedAt)}`,
+    ];
+    if (fireStatus === 'degraded') {
+      lines.push(`Status: tidak diketahui — ${fireReason ?? 'sumber tidak tersedia'}`);
+    } else if (fireStatus === 'stale') {
+      lines.push(`Status: data lama${fireReason ? ` — ${fireReason}` : ''}`);
+    } else if (fireStatus === 'empty') {
+      lines.push('Status: kosong terverifikasi');
+    }
+    return lines.join('\n');
+  })();
 
   return (
     <div className="relative flex flex-wrap items-center gap-1.5 text-xs font-mono select-none overflow-visible">
@@ -248,10 +288,7 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
               ? 'bg-[#0c1017] border-white/20 text-slate-200'
               : 'bg-[#0c1017] border-white/5 text-slate-500 opacity-60 hover:opacity-100'
           }`}
-          title={
-            fireTooltip ??
-            'Titik Panas (Satelit) VIIRS: sorotan oranye khusus peta bila >=3 titik keyakinan tinggi dalam 5 km.\nSumber: NASA FIRMS VIIRS_SNPP_NRT\nJendela: 24 jam'
-          }
+          title={fireTooltipText}
         >
           <span className={`w-2 h-2 rounded-full ${showFireHotspots ? 'bg-orange-400' : 'bg-slate-600'}`} />
           <span className="font-sans text-xs font-semibold">Titik Panas</span>
@@ -259,7 +296,7 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
             data-testid="counter-titik-panas"
             className="px-1 py-0.2 rounded bg-white/5 text-xs font-bold text-slate-300 font-mono tabular-nums"
           >
-            {fireStatus === 'degraded' ? '—' : fireHotspotCount}
+            {counterText(fireStatus, titikPanasCount)}
           </span>
         </button>
       )}

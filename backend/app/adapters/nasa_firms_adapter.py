@@ -14,6 +14,44 @@ from app.config import get_settings
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
+# ---------------------------------------------------------------------------
+# Keyless public CSV path (Phase 168)
+# ---------------------------------------------------------------------------
+# NASA FIRMS publishes the same active-fire detections as static CSV files with
+# no MAP_KEY and no quota. This is the default source when the key is absent so
+# Titik Panas can never be empty-by-misconfiguration again.
+FIRMS_KEYLESS_BASE = "https://firms.modaps.eosdis.nasa.gov/data/active_fire"
+
+# Default window for the live counter (decision 3/4). Exposed so the router and
+# UI read one number: 24h / 48h / 7d (168h) are the published windows.
+FIRMS_KEYLESS_WINDOW_HOURS = 24
+FIRMS_KEYLESS_WINDOWS = {24: "24h", 48: "48h", 168: "7d"}
+
+VIIRS_KEYLESS_CSV_TEMPLATE = (
+    FIRMS_KEYLESS_BASE + "/suomi-npp-viirs-c2/csv/SUOMI_VIIRS_C2_Indonesia_{window}.csv"
+)
+MODIS_KEYLESS_CSV_TEMPLATE = (
+    FIRMS_KEYLESS_BASE + "/modis-c6-1/csv/MODIS_C6_1_Indonesia_{window}.csv"
+)
+# Empirical fallback (2026-10-27): the per-country files above are not published
+# for Indonesia (both 404), so the keyless path also tries the Global static
+# files — still no key/quota — and keeps only the Sumatra bbox server-side.
+VIIRS_GLOBAL_CSV_TEMPLATE = (
+    FIRMS_KEYLESS_BASE + "/suomi-npp-viirs-c2/csv/SUOMI_VIIRS_C2_Global_{window}.csv"
+)
+MODIS_GLOBAL_CSV_TEMPLATE = (
+    FIRMS_KEYLESS_BASE + "/modis-c6-1/csv/MODIS_C6_1_Global_{window}.csv"
+)
+
+
+async def _http_get_text(url: str, timeout: float = 15.0) -> str:
+    """Single HTTP text fetch. Module-level so tests can monkeypatch it."""
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        res = await client.get(url)
+        res.raise_for_status()
+        return res.text
+
+
 class NASAFIRMSAdapter(BaseAdapter):
     source_name = "nasa_firms"
     stream_key = STREAM_NASA_FIRMS
@@ -93,6 +131,176 @@ class NASAFIRMSAdapter(BaseAdapter):
         except Exception as e:
             logger.error(f"Failed to fetch NASA FIRMS CSV data: {e}")
         return ""
+
+    # -- Phase 168: keyless public CSV -------------------------------------
+
+    @staticmethod
+    def _keyless_window_tag(window_hours: int = FIRMS_KEYLESS_WINDOW_HOURS) -> str:
+        """Map an hour window to the published CSV suffix (24h/48h/7d)."""
+        try:
+            hours = int(window_hours)
+        except (TypeError, ValueError):
+            hours = FIRMS_KEYLESS_WINDOW_HOURS
+        return FIRMS_KEYLESS_WINDOWS.get(hours, "24h")
+
+    def keyless_csv_urls(
+        self, window_hours: int = FIRMS_KEYLESS_WINDOW_HOURS
+    ) -> List[str]:
+        """Per-country Indonesia CSVs first, then the Global static fallback."""
+        tag = self._keyless_window_tag(window_hours)
+        return [
+            VIIRS_KEYLESS_CSV_TEMPLATE.format(window=tag),
+            MODIS_KEYLESS_CSV_TEMPLATE.format(window=tag),
+            VIIRS_GLOBAL_CSV_TEMPLATE.format(window=tag),
+            MODIS_GLOBAL_CSV_TEMPLATE.format(window=tag),
+        ]
+
+    async def fetch_keyless_csv(
+        self, window_hours: int = FIRMS_KEYLESS_WINDOW_HOURS
+    ) -> str:
+        """Fetch the keyless Indonesia CSV (no MAP_KEY, no quota).
+
+        Returns "" when every candidate fails — never a fabricated payload.
+        """
+        for url in self.keyless_csv_urls(window_hours):
+            try:
+                text = await _http_get_text(url)
+            except Exception as e:
+                logger.warning(f"NASA FIRMS keyless CSV unavailable ({url}): {e}")
+                continue
+            if not text or not text.strip():
+                logger.warning(f"NASA FIRMS keyless CSV empty ({url})")
+                continue
+            if "latitude" not in text[:512].lower():
+                logger.warning(f"NASA FIRMS keyless CSV has no header ({url})")
+                continue
+            logger.info(f"NASA FIRMS keyless CSV loaded: {url}")
+            return text
+        return ""
+
+    @staticmethod
+    def _confidence_class(raw: Any) -> str:
+        """Normalise VIIRS (l/n/h) and MODIS (0-100) confidence to a class."""
+        text = str(raw or "").strip()
+        if not text:
+            return "nominal"
+        try:
+            value = float(text)
+        except ValueError:
+            lowered = text.lower()
+            if lowered in ("l", "low"):
+                return "low"
+            if lowered in ("h", "high"):
+                return "high"
+            if lowered in ("n", "nominal"):
+                return "nominal"
+            return lowered
+        if value >= 80:
+            return "high"
+        if value >= 50:
+            return "nominal"
+        return "low"
+
+    def _nearest_spine(self, lat: float, lon: float) -> tuple:
+        """Nearest Trans-Sumatra spine segment — provenance only, never a filter."""
+        near_segment = None
+        min_dist_km = 999.0
+        for segment in self.HIGHWAY_SPINE:
+            dist = self._haversine_distance(lat, lon, segment["lat"], segment["lon"])
+            if dist < min_dist_km:
+                min_dist_km = dist
+                near_segment = segment["name"]
+        return near_segment, min_dist_km
+
+    @staticmethod
+    def _severity_radius_confidence(frp: float, dist_km: float) -> tuple:
+        """Single severity→(radius, heat confidence) mapping for every source."""
+        if frp > 500:
+            return "critical", 5.0, 95
+        if frp > 100 or dist_km < 5.0:
+            return "high", 2.5, 80
+        return "medium", 1.0, 60
+
+    def _normalise_keyless_row(
+        self,
+        row: Dict[str, Any],
+        now_str: str,
+        window_hours: int,
+    ) -> Dict[str, Any] | None:
+        """One CSV row → hotspot dict, or None when unparseable / out of bbox."""
+        try:
+            lat = float(row.get("latitude"))
+            lon = float(row.get("longitude"))
+        except (TypeError, ValueError):
+            return None
+        if not (self.MIN_LAT <= lat <= self.MAX_LAT and self.MIN_LON <= lon <= self.MAX_LON):
+            return None
+
+        try:
+            frp = float(row.get("frp") or 0)
+        except (TypeError, ValueError):
+            frp = 0.0
+
+        conf_class = self._confidence_class(row.get("confidence"))
+        near_segment, min_dist_km = self._nearest_spine(lat, lon)
+        severity, radius_km, confidence = self._severity_radius_confidence(frp, min_dist_km)
+        acq_date = str(row.get("acq_date") or "")
+        acq_time = str(row.get("acq_time") or "").zfill(4)
+        satellite = str(row.get("satellite") or "")
+        instrument = str(row.get("instrument") or "")
+        daynight = str(row.get("daynight") or "")
+        title = (
+            f"Titik Panas (Satelit): FRP {frp}MW, conf {conf_class}"
+            f"{f', {satellite}' if satellite else ''}"
+            f"{f' {acq_date} {acq_time}' if acq_date else ''}"
+            f", nearest {near_segment} {round(min_dist_km, 1)}km"
+        )
+
+        return {
+            "source": "VIIRS_SNPP_NRT",
+            "event_type": "wildfire",
+            "type": "wildfire",
+            "severity": severity,
+            "lat": lat,
+            "lon": lon,
+            "coordinates": [lon, lat],
+            "frp": frp,
+            "confidence": confidence,
+            "conf": conf_class,
+            "acq_date": acq_date,
+            "acq_time": acq_time,
+            "satellite": satellite,
+            "instrument": instrument,
+            "daynight": daynight,
+            "dist_to_corridor_km": round(min_dist_km, 2),
+            "near_segment": near_segment,
+            "radius_km": radius_km,
+            "title": title,
+            "ts": now_str,
+            "window_hours": int(window_hours),
+        }
+
+    async def parse_keyless_csv(
+        self, raw_data: str, window_hours: int = FIRMS_KEYLESS_WINDOW_HOURS
+    ) -> List[Dict[str, Any]]:
+        """Parse the public CSV into normalised hotspot dicts (bbox-filtered).
+
+        No dedup and no confidence drop here: the CSV is a published snapshot,
+        so count == number of in-bbox rows.
+        """
+        hotspots: List[Dict[str, Any]] = []
+        if not raw_data or not raw_data.strip():
+            return hotspots
+        now_str = datetime.now(timezone.utc).isoformat()
+        try:
+            reader = csv.DictReader(io.StringIO(raw_data.strip()))
+            for row in reader:
+                hotspot = self._normalise_keyless_row(row, now_str, int(window_hours))
+                if hotspot is not None:
+                    hotspots.append(hotspot)
+        except Exception as e:
+            logger.error(f"Error parsing NASA FIRMS keyless CSV: {e}")
+        return hotspots
 
     async def parse(self, raw_data: str) -> List[Dict[str, Any]]:
         """Parse FIRMS CSV data, filter for whole-Sumatra bbox, map to events.

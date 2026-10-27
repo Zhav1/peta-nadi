@@ -381,7 +381,7 @@ export type WsEvent =
 // Map layer data shapes
 export interface FireHotspot {
   coordinates: [number, number];   // [lng, lat]
-  confidence: number;               // 0–100
+  confidence: number;               // 0-100
   frp?: number;                     // Fire Radiative Power (MW, VIIRS)
   conf?: string;                    // FIRMS confidence class (l/n/h)
   dist_to_corridor_km?: number | null;
@@ -393,6 +393,38 @@ export interface FireHotspot {
   lat?: number;
   ts?: string;
   radius_km?: number;             // affected-area radius (km): 5 critical / 2.5 high / 1 medium
+  // Phase 168: raw detection provenance (keyless CSV + API parity)
+  acq_date?: string;
+  acq_time?: string;
+  satellite?: string;
+  instrument?: string;
+  daynight?: string;
+  type?: string;                    // wildfire
+}
+
+/** Phase 168: where the hotspot payload came from. */
+export type FireHotspotSource = 'nasa-firms-api' | 'nasa-firms-csv' | 'cache';
+
+/**
+ * GET /api/v1/fire/hotspots — stable envelope.
+ * count is null ONLY when unknown (degraded); status "ok" with count 0 is
+ * forbidden (healthy zero is "empty").
+ */
+export interface FireHotspotResponse {
+  /** Render-capped list (unchanged hotspot shape). */
+  hotspots: FireHotspot[];
+  /** True pre-cap count; null only when unknown. */
+  count: number | null;
+  /** Pre-cap count. */
+  total: number;
+  /** True when the render cap truncated hotspots. */
+  capped: boolean;
+  status: HazardCounterStatus;
+  reason: string | null;
+  source: FireHotspotSource;
+  updated_at: string;
+  /** Observation window in hours (24h default). */
+  window_hours: number;
 }
 
 export interface MaritimeVector {

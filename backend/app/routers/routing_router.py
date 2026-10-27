@@ -20,6 +20,7 @@ from app.services.redis_client import SOURCE_CACHE_PREFIX, cache_get, cache_set
 from app.services.cpu_routing_service import optimize_fleet_routes_cpu, CORRIDOR_JUNCTION_NODES
 from app.adapters.cpu_routing_adapter import get_cpu_router
 from app.adapters.tomtom_adapter import TomTomAdapter
+from app.adapters.nasa_firms_adapter import NASAFIRMSAdapter
 from app.auth.supabase_auth import UserSession, get_optional_user
 from app.config import get_settings
 
@@ -333,137 +334,322 @@ async def fetch_weather_summary(
     }
 
 
+# ---------------------------------------------------------------------------
+# Phase 168: FIRMS hotspot envelope helpers
+# ---------------------------------------------------------------------------
+FIRMS_WINDOW_HOURS = 24  # live-counter observation window (decision 3/4)
+FIRMS_REFRESH_S = 3600  # 1h poll window
+FIRMS_STALE_CEILING_HOURS = 6  # stale ceiling (decision 4)
+FIRMS_RENDER_CAP = 500  # map-protection cap; the count path stays uncapped
+FIRMS_EMPTY_REASON = "Tidak ada titik panas aktif di Sumatra pada jendela ini"
+FIRMS_CACHE_KEY = f"{SOURCE_CACHE_PREFIX}firms_hotspots"
+FIRMS_LAST_GOOD_KEY = f"{SOURCE_CACHE_PREFIX}firms_last_good"
+FIRMS_LEGACY_CACHE_KEY = f"{SOURCE_CACHE_PREFIX}nasa_firms"
+
+
+def _firms_age_seconds(updated_at: Any, now: Any) -> Optional[float]:
+    try:
+        parsed = datetime.fromisoformat(str(updated_at).replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return max(0.0, (now - parsed).total_seconds())
+    except Exception:
+        return None
+
+
+def _read_firms_payload(key: str) -> Optional[Dict[str, Any]]:
+    """Best-effort cache read. Shape-validated so a bad payload is a miss."""
+    try:
+        raw = cache_get(key)
+        if not raw:
+            return None
+        parsed = json.loads(raw)
+        if not isinstance(parsed, dict) or not isinstance(parsed.get("hotspots"), list):
+            return None
+        return parsed
+    except Exception as e:
+        logger.debug(f"FIRMS cache read failed ({key}): {e}")
+        return None
+
+
+def _write_firms_payload(key: str, payload: Dict[str, Any], ex: int) -> None:
+    try:
+        cache_set(key, json.dumps(payload), ex=ex)
+    except Exception as e:
+        logger.debug(f"FIRMS cache write failed ({key}): {e}")
+
+
+def _firms_envelope_from_cache(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Render envelope from a persisted payload (fresh, stale, API or CSV)."""
+    raw_list = payload.get("hotspots")
+    hotspots = raw_list if isinstance(raw_list, list) else []
+    total = payload.get("total")
+    if not isinstance(total, int) or total < len(hotspots):
+        total = len(hotspots)
+    status = payload.get("status")
+    if status not in ("ok", "empty", "stale"):
+        status = "ok" if total > 0 else "empty"
+    if status == "ok" and total == 0:
+        status = "empty"  # ok with count 0 is forbidden
+    return {
+        "hotspots": hotspots[:FIRMS_RENDER_CAP],
+        "count": int(total),
+        "total": int(total),
+        "capped": len(hotspots) > FIRMS_RENDER_CAP,
+        "status": status,
+        "reason": payload.get("reason"),
+        "source": payload.get("source") or "cache",
+        "updated_at": payload.get("updated_at")
+        or datetime.now(timezone.utc).isoformat(),
+        "window_hours": int(payload.get("window_hours") or FIRMS_WINDOW_HOURS),
+    }
+
+
+def _firms_hotspot(raw: Any) -> Optional[Dict[str, Any]]:
+    """Normalise one API event or keyless CSV row into the UI hotspot shape."""
+    if not isinstance(raw, dict):
+        return None
+
+    try:
+        lat = float(raw.get("lat"))
+        lon = float(raw.get("lon"))
+    except (TypeError, ValueError):
+        coords = raw.get("coordinates")
+        try:
+            lon = float(coords[0])
+            lat = float(coords[1])
+        except (TypeError, ValueError, IndexError, KeyError):
+            return None
+
+    if not (
+        SUMATRA_BBOX[1] <= lat <= SUMATRA_BBOX[3]
+        and SUMATRA_BBOX[0] <= lon <= SUMATRA_BBOX[2]
+    ):
+        return None
+
+    # Legacy API events store the raw CSV row; recover frp/confidence from it.
+    row: Dict[str, Any] = {}
+    if raw.get("raw"):
+        try:
+            parsed = json.loads(raw["raw"]) if isinstance(raw["raw"], str) else {}
+            row = parsed if isinstance(parsed, dict) else {}
+        except Exception:
+            row = {}
+
+    try:
+        frp = float(raw.get("frp") or 0)
+    except (TypeError, ValueError):
+        frp = 0.0
+    if frp == 0 and row:
+        try:
+            frp = float(row.get("frp") or 0)
+        except (TypeError, ValueError):
+            frp = 0.0
+
+    conf_raw = str(raw.get("conf") or "").lower()
+    if not conf_raw and row:
+        conf_raw = str(row.get("confidence") or "nominal").lower()
+
+    dist_km: Optional[float] = None
+    if raw.get("dist_to_corridor_km") is not None:
+        try:
+            dist_km = float(raw.get("dist_to_corridor_km"))
+        except (TypeError, ValueError):
+            dist_km = None
+
+    fallback_sev, fallback_radius, fallback_conf = NASAFIRMSAdapter._severity_radius_confidence(
+        frp, dist_km if dist_km is not None else 999.0
+    )
+    sev = str(raw.get("severity") or "").lower()
+    if sev not in ("critical", "high", "medium"):
+        sev = fallback_sev
+
+    try:
+        confidence = int(float(raw.get("confidence")))
+    except (TypeError, ValueError):
+        confidence = fallback_conf
+
+    try:
+        radius_km = float(raw.get("radius_km"))
+    except (TypeError, ValueError):
+        radius_km = fallback_radius
+
+    hotspot: Dict[str, Any] = {
+        "coordinates": [lon, lat],
+        "lon": lon,
+        "lat": lat,
+        "confidence": confidence,
+        "frp": frp,
+        "conf": conf_raw or "nominal",
+        "dist_to_corridor_km": dist_km,
+        "severity": sev,
+        "radius_km": radius_km,
+        "title": raw.get("title") or f"Hotspot VIIRS FRP {frp}MW",
+        "source": raw.get("source") or "VIIRS_SNPP_NRT",
+        "near_segment": raw.get("near_segment"),
+        "ts": raw.get("ts"),
+    }
+    for extra in ("acq_date", "acq_time", "satellite", "instrument", "daynight", "type"):
+        value = raw.get(extra)
+        if value:
+            hotspot[extra] = value
+    return hotspot
+
+
+def _finalise_firms_hotspots(raws: Any) -> List[Dict[str, Any]]:
+    """Filter to valid Sumatra hotspots and sort by FRP (render priority)."""
+    hotspots: List[Dict[str, Any]] = []
+    for raw in raws or []:
+        hotspot = _firms_hotspot(raw)
+        if hotspot is not None:
+            hotspots.append(hotspot)
+    hotspots.sort(key=lambda h: float(h.get("frp", 0) or 0), reverse=True)
+    return hotspots
+
+
+async def _fetch_live_firms(adapter: Any, has_key: bool) -> tuple:
+    """API when keyed → keyless CSV. Returns (hotspots|None, source, problems)."""
+    problems: List[str] = []
+
+    if has_key:
+        try:
+            raw = await adapter.fetch()
+            if raw and raw.strip():
+                events = await adapter.parse(raw)
+                return _finalise_firms_hotspots(events), "nasa-firms-api", problems
+            problems.append("NASA FIRMS API tidak merespons")
+        except Exception as e:
+            logger.warning(f"FIRMS API path failed: {e}")
+            problems.append(f"NASA FIRMS API gagal: {e}")
+
+    try:
+        raw = await adapter.fetch_keyless_csv(FIRMS_WINDOW_HOURS)
+        if raw and raw.strip():
+            keyless = await adapter.parse_keyless_csv(raw, FIRMS_WINDOW_HOURS)
+            return _finalise_firms_hotspots(keyless), "nasa-firms-csv", problems
+        problems.append("CSV publik NASA FIRMS tidak tersedia (VIIRS + MODIS)")
+    except Exception as e:
+        logger.warning(f"FIRMS keyless CSV path failed: {e}")
+        problems.append(f"CSV publik NASA FIRMS gagal: {e}")
+
+    return None, None, problems
+
+
+def _read_legacy_firms_cache() -> Optional[Dict[str, Any]]:
+    """Poller-era `lrip:state:source:nasa_firms` events, kept as last-known-good."""
+    try:
+        raw = cache_get(FIRMS_LEGACY_CACHE_KEY)
+        if not raw:
+            return None
+        parsed = json.loads(raw)
+        if not isinstance(parsed, list) or not parsed:
+            return None
+        hotspots = _finalise_firms_hotspots(parsed)
+        if not hotspots:
+            return None
+        stamps = [str(h.get("ts")) for h in hotspots if h.get("ts")]
+        return {
+            "hotspots": hotspots,
+            "total": len(hotspots),
+            "status": "ok",
+            "reason": None,
+            "source": "cache",
+            "updated_at": max(stamps) if stamps else None,
+            "window_hours": FIRMS_WINDOW_HOURS,
+        }
+    except Exception as e:
+        logger.debug(f"FIRMS legacy cache read failed: {e}")
+        return None
+
+
 @router.get("/fire/hotspots")
 async def fetch_fire_hotspots(
     current_user: UserSession = Depends(get_optional_user),
 ) -> Dict[str, Any]:
     """
-    Q3(B)/Q6: FIRMS VIIRS_SNPP_NRT active fire hotspots, whole-Sumatra scope
-    (bbox 94,-6,108,6 only — no corridor-distance drop; bbox is the only geo gate).
+    Q3(B)/Q6 + Phase 168: NASA FIRMS active fire hotspots, whole-Sumatra scope
+    (bbox 94,-6,108,6 only — bbox is the only geo gate).
 
-    Honest-degraded contract: when NASA_FIRMS_MAP_KEY is missing or the fetch
-    throws, the endpoint returns 200 with status=degraded + empty hotspots
-    (never 500, never fake points) so the frontend can render a gray toggle
-    with a 'butuh MAP_KEY' tooltip. Empty-but-healthy returns status=ok with
-    total=0. Response capped at 500 hotspots by FRP desc to protect the map.
-    Severity mapping: FRP > 500 → critical, FRP > 100 (or <5km to corridor) → high.
-    Radius-area mapping: critical → 5 km, high → 2.5 km, medium → 1 km
-    (radius_km included per hotspot, additive — existing shape unchanged).
+    Source precedence (decision 3): MAP_KEY API when a key is configured →
+    keyless public Indonesia CSV (no key, no quota) → last-known-good cache →
+    degraded. Points are never fabricated.
+
+    Envelope contract (stable, additive to the old payload):
+      hotspots    render-capped list, unchanged shape
+      count       true pre-cap count, null ONLY when unknown (degraded)
+      total       pre-cap count
+      capped      true when the render cap truncated the list
+      status      ok | empty | stale | degraded (ok with count 0 is forbidden)
+      reason      human explanation for empty/stale/degraded
+      source      nasa-firms-api | nasa-firms-csv | cache
+      updated_at  ISO8601 of the observation payload
+      window_hours observation window (24h default)
+
+    Severity mapping: FRP > 500 → critical, FRP > 100 (or <5km to corridor)
+    → high. Radius-area: critical 5 km, high 2.5 km, medium 1 km.
+    Redis: short refresh cache (1h) + separate last-known-good (6h ceiling).
     """
-    import json as _json
-    from datetime import datetime, timezone as _tz
+    now = datetime.now(timezone.utc)
+
+    cached = _read_firms_payload(FIRMS_CACHE_KEY)
+    if cached is not None:
+        age_s = _firms_age_seconds(cached.get("updated_at"), now)
+        if age_s is not None and age_s <= FIRMS_REFRESH_S:
+            return _firms_envelope_from_cache(cached)
 
     settings = get_settings()
-    if not getattr(settings, "nasa_firms_map_key", ""):
-        return {
-            "hotspots": [],
-            "total": 0,
-            "status": "degraded",
-            "reason": "butuh MAP_KEY — set NASA_FIRMS_MAP_KEY di Render env / .env.local (never commit)",
-            "source": "VIIRS_SNPP_NRT",
-            "timestamp": datetime.now(_tz.utc).isoformat(),
-        }
-    try:
-        from app.services.redis_client import get_redis, SOURCE_CACHE_PREFIX
+    adapter = NASAFIRMSAdapter()
+    hotspots, source, problems = await _fetch_live_firms(
+        adapter, bool(getattr(settings, "nasa_firms_map_key", ""))
+    )
 
-        cached: List[Dict[str, Any]] = []
-        try:
-            r = get_redis()
-            raw_cached = r.get(f"{SOURCE_CACHE_PREFIX}nasa_firms")
-            if raw_cached:
-                parsed = _json.loads(raw_cached)
-                if isinstance(parsed, list):
-                    cached = parsed
-        except Exception as ce:
-            logger.debug(f"FIRMS cache read failed: {ce}")
-
-        # Live-fetch fallback when cache is cold (short timeout, never blocks UI long).
-        if not cached:
-            try:
-                from app.adapters.nasa_firms_adapter import NASAFIRMSAdapter
-
-                adapter = NASAFIRMSAdapter()
-                raw = await adapter.fetch()
-                if raw:
-                    cached = await adapter.parse(raw)
-                    try:
-                        r = get_redis()
-                        r.set(f"{SOURCE_CACHE_PREFIX}nasa_firms", _json.dumps(cached), ex=10800)
-                    except Exception:
-                        pass
-            except Exception as fe:
-                logger.warning(f"FIRMS live fetch fallback failed: {fe}")
-
-        hotspots: List[Dict[str, Any]] = []
-        for ev in cached:
-            try:
-                lat = float(ev.get("lat", 0))
-                lon = float(ev.get("lon", 0))
-                frp = float(ev.get("frp", 0) or 0)
-                # Raw FIRMS row may carry frp/confidence when event was cached pre-Q3.
-                if frp == 0 and ev.get("raw"):
-                    try:
-                        row = _json.loads(ev["raw"]) if isinstance(ev["raw"], str) else {}
-                        frp = float(row.get("frp", 0) or 0)
-                    except Exception:
-                        pass
-                conf_raw = str(ev.get("conf", "") or "").lower()
-                if not conf_raw and ev.get("raw"):
-                    try:
-                        row = _json.loads(ev["raw"]) if isinstance(ev["raw"], str) else {}
-                        conf_raw = str(row.get("confidence", "nominal") or "nominal").lower()
-                    except Exception:
-                        conf_raw = "nominal"
-                # Confidence 0–100 for heat weight: critical 95 / high 80 / medium 60.
-                sev = str(ev.get("severity", "medium")).lower()
-                confidence = 95 if sev == "critical" else 80 if sev == "high" else 60
-                dist_km = ev.get("dist_to_corridor_km")
-                try:
-                    dist_km = float(dist_km) if dist_km is not None else None
-                except Exception:
-                    dist_km = None
-                # Radius-area mapping (km, monotonic, mirrors severity):
-                # FRP > 500 → critical → 5 km; FRP > 100 or <5 km to corridor
-                # → high → 2.5 km; else medium → 1 km.
-                if frp > 500:
-                    radius_km = 5.0
-                elif frp > 100 or (dist_km is not None and dist_km < 5.0):
-                    radius_km = 2.5
-                else:
-                    radius_km = 1.0
-                hotspots.append({
-                    "coordinates": [lon, lat],
-                    "lon": lon,
-                    "lat": lat,
-                    "confidence": confidence,
-                    "frp": frp,
-                    "conf": conf_raw or "nominal",
-                    "dist_to_corridor_km": dist_km,
-                    "severity": sev,
-                    "radius_km": radius_km,
-                    "title": ev.get("title", f"Hotspot VIIRS FRP {frp}MW"),
-                    "source": "VIIRS_SNPP_NRT",
-                    "near_segment": ev.get("near_segment"),
-                    "ts": ev.get("ts"),
-                })
-            except Exception:
-                continue
-
-        # Whole-Sumatra scope: no location drop — cap at 500 by FRP desc to protect the map.
-        hotspots.sort(key=lambda h: float(h.get("frp", 0) or 0), reverse=True)
-        hotspots = hotspots[:500]
-
-        return {
+    if hotspots is not None:
+        total = len(hotspots)
+        payload = {
             "hotspots": hotspots,
-            "total": len(hotspots),
-            "status": "ok",
-            "reason": None if hotspots else "no active hotspots in Sumatra window",
-            "source": "VIIRS_SNPP_NRT",
-            "timestamp": datetime.now(_tz.utc).isoformat(),
+            "total": total,
+            "status": "ok" if total > 0 else "empty",
+            "reason": None if total > 0 else FIRMS_EMPTY_REASON,
+            "source": source,
+            "updated_at": now.isoformat(),
+            "window_hours": FIRMS_WINDOW_HOURS,
         }
-    except Exception as e:
-        logger.error(f"Error fetching FIRMS fire hotspots: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        _write_firms_payload(FIRMS_CACHE_KEY, payload, FIRMS_REFRESH_S)
+        _write_firms_payload(FIRMS_LAST_GOOD_KEY, payload, FIRMS_STALE_CEILING_HOURS * 3600)
+        return _firms_envelope_from_cache(payload)
+
+    # Upstream unavailable: serve last-known-good, clearly marked stale.
+    last_good = _read_firms_payload(FIRMS_LAST_GOOD_KEY)
+    if last_good is None:
+        last_good = _read_legacy_firms_cache()
+    if last_good is not None:
+        age_s = _firms_age_seconds(last_good.get("updated_at"), now)
+        if age_s is None:
+            age_s = float(FIRMS_STALE_CEILING_HOURS * 3600)
+        age_h = age_s / 3600.0
+        suffix = "; ".join(p for p in problems if p) or "sumber live tidak tersedia"
+        payload = dict(last_good)
+        payload["status"] = "stale"
+        payload["source"] = "cache"
+        payload["reason"] = (
+            f"Data terakhir {age_h:.1f} jam lalu (batas {FIRMS_STALE_CEILING_HOURS} jam); {suffix}"
+        )
+        return _firms_envelope_from_cache(payload)
+
+    reason = "Sumber Titik Panas tidak tersedia"
+    if problems:
+        reason = f"{reason}: {'; '.join(problems)}"
+    return {
+        "hotspots": [],
+        "count": None,
+        "total": 0,
+        "capped": False,
+        "status": "degraded",
+        "reason": reason,
+        "source": "nasa-firms-csv",
+        "updated_at": now.isoformat(),
+        "window_hours": FIRMS_WINDOW_HOURS,
+    }
 
 
 class RoutingRequestPayload(BaseModel):

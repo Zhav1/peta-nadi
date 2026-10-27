@@ -63,7 +63,14 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   }
 
   if (signal?.aborted) throw createAbortError();
-  if (!res.ok) throw new Error(`API ${path} → ${res.status}`);
+  if (!res.ok) {
+    // Preserve the HTTP status so auth code can distinguish "session is dead"
+    // (401 → clear token + re-authenticate) from "backend is cold/failing"
+    // (5xx → keep the session and retry later).
+    const error = new Error(`API ${path} → ${res.status}`) as Error & { status?: number };
+    error.status = res.status;
+    throw error;
+  }
   return res.json() as Promise<T>;
 }
 
@@ -204,15 +211,9 @@ export const api = {
       request<import('./types').WeatherHazardSummary>('/api/v1/weather/summary'),
   },
   fire: {
+    // Phase 168: keyless CSV fallback + tri-state envelope.
     hotspots: () =>
-      request<{
-        hotspots: import('./types').FireHotspot[];
-        total: number;
-        status: 'ok' | 'degraded';
-        reason?: string | null;
-        source?: string;
-        timestamp?: string;
-      }>('/api/v1/fire/hotspots'),
+      request<import('./types').FireHotspotResponse>('/api/v1/fire/hotspots'),
   },
   bnpb: {
     events: (params?: { limit?: number }) => {
