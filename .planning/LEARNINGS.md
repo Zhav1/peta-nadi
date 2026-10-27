@@ -349,3 +349,50 @@ The window log reported WP1 48, WP2 41p/1f (Brier), WP3 22+114, WP4 22+104, WP5 
 ### Issues (do not repeat)
 
 - Flaky `solver_latency<10ms` point assertion (measured live per request); stale `STATE.md` vs filesystem; duplicate phase numbers 107/118/119 (use full slugs); `TestMatrixTable` still partial; live N=0 must render honest-empty; `git add .` risks `screenshots/` + `Final-Gemastik/` + `outputs/`.
+
+---
+
+## 2026-10-27 — Phases 142–149: Laporan/Evaluasi Docs Slices (`.planning/phases/142-*` … `149-*`)
+
+**Scope:** Docs-only records for 8 slices; no code edits, no test re-runs, no commits in this window. Grounded facts only; no assumptions.
+
+### Fixes
+
+1. **142 laporan-rename-erp-trip** — UI-only `ERP` → `Laporan Penghematan Operasional`, `rit` → `Trip`; `RIT-*` IDs and `GET /erp/summary` path/shape frozen; no migration. Concurrent-edit revert fixed via one-shot rename script with count assertions.
+2. **143 selesaikan-trip** — `Aktual` + `Hitung` merged into single `Selesaikan Trip` PATCH then auto-POST hedging; legacy controls hidden (mounted for E2E); 403 sandbox guards kept. Known spec drift: `laporan-aktual` spec still two-button (code canonical).
+3. **144 remove-avg-distill** — `Rata-rata ekonomi` avg banner+header deleted, per-row kept; subtitles distilled to 1 line with `title` tooltips; GET-only/guard-backend/Komposit-sqrt removed from visible copy only.
+4. **145 kamus-sebagian** — KPI labels only (`Risiko harga`, `Porsi naik`, `WoW — Perubahan sepekan`, `Naik beruntun`, `Bencana bersamaan`); `Disparitas`/`Volatilitas`/`Spike` locked; tooltips/tables stay technical.
+5. **146 backend-sql-rewrite** — Auth 60 s cache; ERP SQL aggregates + `LIMIT 500` + Redis 120 s + regulator early-return; select projections; commodity caps; migration 022 (`erp_ledger_totals`, `commodity_baseline_means`); shapes intact. Env: Supabase prod, Render free single worker, Redis TTL.
+6. **147 modal-gagal-badges** — Hard-code `delivered` removed from Status dropdown; toll rework (`MEDAN_TEBINGTINGGI`/`BELMERA` + `Tidak lewat tol` checkbox + unknown warning + explicit `[]`); both forms reworded; `Saran sistem` banner; `Gagal` vs `Rugi` badges + idempotency guard; `cth. 25` + fill-25.
+7. **148 metrics-keputusan-split** — `Keputusan` strip (`Lanjut`/`Ubah Rute`/`Tahan`), `Hemat` split (`BBM•Tol•Susut•Sopir`, single rounding point), `Efisiensi armada` footer (avg km/L + measured/unmeasured); all frontend-only over existing fields.
+8. **149 dedupe-gagal-wording** — Deleted `257bb100`/`063d28c1`/`a1d88536` → 22 trips; fuel -102.8 L → -8.55 L; `gagal` = failed strict vs `merugi` = loss-making; Render live verified total 22.
+
+### Concerns (open, evidenced)
+
+- Judges wording consistency across Analitik/Laporan/Evaluasi after renames (142, 145).
+- `laporan-aktual` spec drift vs single-action code (143).
+- Tooltip-only detail undiscoverable on touch; avg-without-counts misleading (144, 148).
+- `LIMIT 500` tail-row exclusion; Redis 120 s with no purge tool (146).
+- Unknown-toll `[]` downstream math rule must stay exclude-not-zero (147).
+- Insert path still lacks business-key uniqueness guard; retroactive fuel needs per-trip review (149).
+
+### Constraints
+
+- Never break E2E/API shapes (routes, keys, `RIT-*` IDs, selectors frozen).
+- Subagents-only to protect main context; no default subagent — High only.
+- Additive/display-only slices unless a migration is explicitly named (022 only).
+
+### Conditions
+
+- Roles: Dispatcher (writes), Regulator (read-only aggregates/audit), Guest (sandbox preview, no writes).
+- Honest-empty: missing/zero states render explicit empty copy, never zeros-as-data or `Rp 0` as fact.
+- Graceful fallback: cache miss / hedging-POST failure / Redis miss degrades to labeled fallback, never a 500 panel or blocked submit.
+
+### Issues (do not repeat)
+
+- Duplicate double-submit (rapid clicks fire two PATCHes/inserts) — disable-while-pending + idempotency key everywhere (143, 147, 149).
+- Placeholder drift — `cth.` values must pass the same plausibility guard as real input; use `cth. 25` (141, 142, 147).
+- Stale `.next/standalone` serves pre-change copy/layout — rebuild before verifying (142–149).
+- Render cold start exceeds client deadlines — retry before judging (142–149).
+- Redis has no invalidation tool — version cache keys, never hand-edit (142–149).
+- 5 pre-existing `system_audit` fails unrelated to these slices — do not chase inside docs passes.

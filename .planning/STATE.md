@@ -2,8 +2,8 @@
 gsd_state_version: "1.0"
 milestone: M7
 milestone_name: Live News Trust, Source Breadth & Forecast Waspada Integrity
-current_phase: 138
-current_phase_name: Evaluasi Credibility Docs Commit
+current_phase: 149
+current_phase_name: Dedupe Gagal Wording
 status: complete
 stopped_at: "Phase 138 Evaluasi Credibility Docs Commit executed. Workstream ccb5bbd/de078d7/b8d27a1 verified; evidence: pytest 16 passed, tsc exit 0, /health 200, /benchmark 200 (e6c7645c, raw_brier 0.1106), /live 200."
 last_updated: "2026-10-26T00:00:00.000Z"
@@ -11,8 +11,8 @@ last_activity: 2026-10-26
 last_activity_desc: "Executed Phase 138: Evaluasi Credibility Docs Commit. Verified evaluasi-credibility workstream (ccb5bbd/de078d7/b8d27a1) and extracted learnings into .planning/phases/138-evaluasi-credibility-docs-commit/."
 state_head: HEAD
 progress:
-  total_phases: 138
-  completed_phases: 138
+  total_phases: 149
+  completed_phases: 149
   total_plans: 129
   completed_plans: 129
   percent: 100.0
@@ -23,13 +23,13 @@ progress:
 **Last Updated:** 2026-10-26
 **Active Milestone:** M7 - Live News Trust, Source Breadth & Forecast Waspada Integrity [ACTIVE 🚀]
 **Previous Milestones:** M1-M5 [COMPLETED ✅], M6 - 3D Globe Native Mapbox Fleet, Street-Snapping & Impeccable Cartography [COMPLETED ✅]
-**Current Phase:** 138
+**Current Phase:** 149
 
 ---
 
 ## Current Position
 
-Phase: 138 (Evaluasi Credibility Docs Commit) - COMPLETE ✅; prior: Phase 119 (Merge Reconciliation & Telemetry Pipeline Acceleration) - COMPLETE ✅.
+Phase: 149 (Dedupe Gagal Wording) - COMPLETE ✅; prior: Phase 138 (Evaluasi Credibility Docs Commit) - COMPLETE ✅.
 Status: Evaluasi-credibility workstream documented and verified (`ccb5bbd` ringkas+expandable/batch-immutable/live-recompute/diagnostik-live-wire/keep-alive, `de078d7` pred-tersimpan migration 021 + offline per-row ledger, `b8d27a1` phases 134-137 docs). Evidence: pytest 16 passed, tsc exit 0, `/health` 200, `/api/v1/evaluation/benchmark` 200 (dataset_hash `e6c7645c`, raw_brier `0.1106`), `/live` 200.
 Next action: Merge `evaluasi-credibility-milestone-20261026` to main (Vercel prod redeploy) and apply migration 021 on Supabase; then continue Phase 120 (UI Anti-Slop Reconstruction Gelombang 3 & 4).
 
