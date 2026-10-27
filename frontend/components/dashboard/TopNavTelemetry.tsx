@@ -1,7 +1,8 @@
 'use client';
 
 import React from 'react';
-import type { ChokePointItem, HazardCounterBucket, HazardCounterStatus, WeatherHazardSummary } from '@/lib/types';
+import type { ChokePointItem, HazardCounterBucket, HazardCounterStatus, WeatherHazardSummary, WeatherPolygonMeta } from '@/lib/types';
+import { freshnessText } from '@/components/dashboard/FreshnessBadge';
 
 interface TopNavTelemetryProps {
   routingInfo?: { solver: string; compute_time_ms: number | null; savings_pct: number | null } | null;
@@ -32,6 +33,8 @@ interface TopNavTelemetryProps {
   weatherDisruptionCount?: number | null;
   /** World-truth counter source (status/count/source/window/validity per tier). */
   weatherSummary?: WeatherHazardSummary | null;
+  /** Phase 169: render-cap + retention meta from the polygon response. */
+  weatherPolygonMeta?: WeatherPolygonMeta | null;
   showFireHotspots?: boolean;
   onToggleFireHotspots?: () => void;
   fireHotspotCount?: number;
@@ -84,6 +87,7 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
   onToggleWeatherAdvisory,
   weatherAdvisoryCount,
   weatherSummary,
+  weatherPolygonMeta,
   showFireHotspots = true,
   onToggleFireHotspots,
   fireHotspotCount = 0,
@@ -145,6 +149,7 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
   const bucketTooltip = (
     bucket: HazardCounterBucket | null | undefined,
     what: string,
+    options?: { updatedAt?: string | null; capNotice?: string | null },
   ): string => {
     const status = bucket?.status ?? 'degraded';
     const lines = [
@@ -152,8 +157,10 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
       `Area: Sumatra ${bboxLabel}`,
       `Jendela: ${bucket?.window_hours ?? 24} jam`,
       `Sumber: ${bucket?.source ?? 'BMKG + Open-Meteo NWP'}`,
-      `Diperbarui: ${updatedLabel(weatherSummary?.generated_at)}`,
+      `Diperbarui: ${updatedLabel(options?.updatedAt ?? weatherSummary?.generated_at)}`,
+      `Kesegaran: ${freshnessText(status, options?.updatedAt ?? weatherSummary?.generated_at ?? null)}`,
     ];
+    if (options?.capNotice) lines.push(options.capNotice);
     if (status === 'degraded') {
       lines.push(`Status: tidak diketahui — ${bucket?.reason ?? 'sumber tidak tersedia'}`);
     } else if (status === 'stale') {
@@ -181,6 +188,7 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
       `Jendela: ${fireWindowHours ?? 24} jam`,
       `Sumber: ${fireSourceLabel}`,
       `Diperbarui: ${updatedLabel(fireUpdatedAt)}`,
+      `Kesegaran: ${freshnessText(fireStatus, fireUpdatedAt)}`,
     ];
     if (fireStatus === 'degraded') {
       lines.push(`Status: tidak diketahui — ${fireReason ?? 'sumber tidak tersedia'}`);
@@ -242,7 +250,13 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
               ? 'bg-blue-950/50 border-blue-500/50 text-blue-200 '
               : 'bg-[#0c1017] border-white/5 text-slate-500 opacity-60 hover:opacity-100'
           }`}
-          title={bucketTooltip(weatherSummary?.cuaca, 'Cuaca: zona gangguan aktif (high/critical)')}
+          title={bucketTooltip(weatherSummary?.cuaca, 'Cuaca: zona gangguan aktif (high/critical)', {
+            updatedAt: weatherSummary?.generated_at ?? weatherPolygonMeta?.updated_at ?? null,
+            capNotice:
+              weatherPolygonMeta?.capped
+                ? `Render: menampilkan ${weatherPolygonMeta.count ?? 0} dari ${weatherPolygonMeta.total ?? 0} poligon`
+                : null,
+          })}
         >
           <span className={`w-2 h-2 rounded-full ${showWeatherPolygons ? 'bg-blue-500 ' : 'bg-slate-600'}`} />
           <span className="font-sans text-xs font-semibold">Cuaca</span>
@@ -265,7 +279,9 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
               ? 'bg-[#0c1017] border-cyan-500/50 text-cyan-200'
               : 'bg-[#0c1017] border-white/5 text-slate-500 opacity-60 hover:opacity-100'
           }`}
-          title={bucketTooltip(weatherSummary?.waspada, 'Waspada Dini: zona pantau medium (advisory), dihitung walau layer OFF')}
+          title={bucketTooltip(weatherSummary?.waspada, 'Waspada Dini: zona pantau medium (advisory), dihitung walau layer OFF', {
+            updatedAt: weatherSummary?.generated_at ?? null,
+          })}
         >
           <span className={`w-2 h-2 rounded-full ${showWeatherAdvisory ? 'bg-cyan-300' : 'bg-slate-600'}`} />
           <span className="font-sans text-xs font-semibold">Waspada Dini</span>

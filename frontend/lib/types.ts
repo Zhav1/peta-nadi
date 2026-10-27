@@ -1455,3 +1455,21 @@ export interface WeatherHazardSummary {
   cuaca: HazardCounterBucket;
   waspada: HazardCounterBucket;
 }
+
+/**
+ * Phase 169 — render-cap + retention contract of a weather polygon
+ * FeatureCollection (`metadata` is the full block, `meta` the compact copy).
+ * `total` is the pre-cap qualifying count, `count` the returned polygons.
+ */
+export interface WeatherPolygonMeta {
+  status: HazardCounterStatus;
+  reason: string | null;
+  total: number | null;
+  count: number | null;
+  capped: boolean;
+  updated_at: string | null;
+  validity_hours?: number;
+  stale_ceiling_hours?: number;
+  refresh_seconds?: number;
+  max_features?: number;
+}

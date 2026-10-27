@@ -203,7 +203,10 @@ export const api = {
       if (params?.min_flood != null) sp.append('min_flood', String(params.min_flood));
       else if ((params?.min_severity ?? 'high') === 'high') sp.append('min_flood', '80');
       const qs = `?${sp.toString()}`;
-      return request<GeoJSON.FeatureCollection>(`/api/v1/weather/spatial-polygons${qs}`);
+      return request<GeoJSON.FeatureCollection & {
+        metadata?: import('./types').WeatherPolygonMeta;
+        meta?: import('./types').WeatherPolygonMeta;
+      }>(`/api/v1/weather/spatial-polygons${qs}`);
     },
     // Phase 160: world-truth counters — no severity params, never capped by
     // MAX_WEATHER_FEATURES, independent of the map layer toggles.

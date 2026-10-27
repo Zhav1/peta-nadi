@@ -1,5 +1,4 @@
 import logging
-import math
 import httpx
 from datetime import datetime, timezone
 from typing import Any, List, Dict
@@ -12,69 +11,92 @@ settings = get_settings()
 
 OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
 
-# Full-Sumatra bbox coverage grid (95-106E / -6..6N, coarse step ~1.5-2 deg).
-# Each lattice center is snapped to the nearest PAN_SUMATRA_GAZETTEER corridor
-# node (land mask via gazetteer proximity: 0 km by construction, well within
-# the ~50-60 km keep rule) so sea cells are skipped and every point carries a
-# corridor-meaningful name. 23 land points spanning Banda Aceh (5.55N) to
-# Bakauheni (-5.87N) — whole-island overlay, not hub-only.
+# Full-Sumatra coverage grid (Phase 169): every one of the 10 Sumatra
+# provinces carries at least 4 sample points, spaced ~0.4-1.0 deg (~50-110 km,
+# i.e. roughly 0.75 deg). Points are curated land/hub locations across the full
+# 94,-6,108,6 bbox — no corridor bias and no sea-point dropping, so the whole
+# island can produce a polygon. 58 points => one bulk HTTP request per poll.
 SUMATRA_GRID: List[Dict[str, Any]] = [
-    {"name": "Banda Aceh", "lat": 5.55, "lon": 95.32},
-    {"name": "Lhokseumawe", "lat": 5.18, "lon": 97.15},
-    {"name": "Takengon", "lat": 4.62, "lon": 96.82},
-    {"name": "Kutacane", "lat": 3.48, "lon": 97.82},
-    {"name": "Medan", "lat": 3.59, "lon": 98.67},
-    {"name": "Sibolga", "lat": 1.74, "lon": 98.78},
-    {"name": "Padangsidimpuan", "lat": 1.38, "lon": 99.27},
-    {"name": "Dumai", "lat": 1.68, "lon": 101.45},
-    {"name": "Pasir Pengaraian", "lat": 0.90, "lon": 100.53},
-    {"name": "Pekanbaru", "lat": 0.51, "lon": 101.45},
-    {"name": "Payakumbuh", "lat": -0.22, "lon": 100.63},
-    {"name": "Padang", "lat": -0.95, "lon": 100.42},
-    {"name": "Rengat", "lat": -0.55, "lon": 102.32},
-    {"name": "Batam", "lat": 1.13, "lon": 104.05},
-    {"name": "Tembilahan", "lat": -0.33, "lon": 103.15},
-    {"name": "Jambi", "lat": -1.61, "lon": 103.61},
-    {"name": "Kerinci", "lat": -2.08, "lon": 101.48},
-    {"name": "Bengkulu", "lat": -3.80, "lon": 102.26},
-    {"name": "Curup", "lat": -3.47, "lon": 102.53},
-    {"name": "Palembang", "lat": -2.98, "lon": 104.77},
-    {"name": "Baturaja", "lat": -4.10, "lon": 104.17},
-    {"name": "Bandar Lampung", "lat": -5.43, "lon": 105.26},
-    {"name": "Bakauheni", "lat": -5.87, "lon": 105.75},
+    # --- Aceh (6) ---
+    {"name": "Banda Aceh", "lat": 5.55, "lon": 95.32, "province": "Aceh"},
+    {"name": "Lhokseumawe", "lat": 5.18, "lon": 97.15, "province": "Aceh"},
+    {"name": "Takengon", "lat": 4.60, "lon": 96.85, "province": "Aceh"},
+    {"name": "Langsa", "lat": 4.45, "lon": 97.95, "province": "Aceh"},
+    {"name": "Kutacane", "lat": 3.45, "lon": 97.80, "province": "Aceh"},
+    {"name": "Singkil", "lat": 2.28, "lon": 97.80, "province": "Aceh"},
+    # --- Sumatera Utara (6) ---
+    {"name": "Medan", "lat": 3.59, "lon": 98.67, "province": "Sumatera Utara"},
+    {"name": "Tebing Tinggi", "lat": 3.33, "lon": 99.16, "province": "Sumatera Utara"},
+    {"name": "Pematangsiantar", "lat": 2.96, "lon": 99.07, "province": "Sumatera Utara"},
+    {"name": "Rantauprapat", "lat": 2.10, "lon": 99.83, "province": "Sumatera Utara"},
+    {"name": "Sibolga", "lat": 1.74, "lon": 98.78, "province": "Sumatera Utara"},
+    {"name": "Padangsidimpuan", "lat": 1.38, "lon": 99.27, "province": "Sumatera Utara"},
+    # --- Sumatera Barat (6) ---
+    {"name": "Lubuk Sikaping", "lat": 0.14, "lon": 100.16, "province": "Sumatera Barat"},
+    {"name": "Bukittinggi", "lat": -0.30, "lon": 100.37, "province": "Sumatera Barat"},
+    {"name": "Sitinjau Lauik", "lat": -0.48, "lon": 100.48, "province": "Sumatera Barat"},
+    {"name": "Solok", "lat": -0.79, "lon": 100.66, "province": "Sumatera Barat"},
+    {"name": "Padang", "lat": -0.95, "lon": 100.42, "province": "Sumatera Barat"},
+    {"name": "Painan", "lat": -1.35, "lon": 100.58, "province": "Sumatera Barat"},
+    # --- Riau (6) ---
+    {"name": "Dumai", "lat": 1.68, "lon": 101.45, "province": "Riau"},
+    {"name": "Pasir Pengaraian", "lat": 0.90, "lon": 100.53, "province": "Riau"},
+    {"name": "Pekanbaru", "lat": 0.51, "lon": 101.45, "province": "Riau"},
+    {"name": "Siak", "lat": 0.79, "lon": 102.05, "province": "Riau"},
+    {"name": "Rengat", "lat": -0.55, "lon": 102.32, "province": "Riau"},
+    {"name": "Tembilahan", "lat": -0.33, "lon": 103.15, "province": "Riau"},
+    # --- Jambi (6) ---
+    {"name": "Kuala Tungkal", "lat": -0.85, "lon": 103.45, "province": "Jambi"},
+    {"name": "Muara Bungo", "lat": -1.47, "lon": 101.99, "province": "Jambi"},
+    {"name": "Tebo", "lat": -1.49, "lon": 102.35, "province": "Jambi"},
+    {"name": "Jambi", "lat": -1.61, "lon": 103.61, "province": "Jambi"},
+    {"name": "Kerinci", "lat": -2.08, "lon": 101.48, "province": "Jambi"},
+    {"name": "Sarolangun", "lat": -2.30, "lon": 102.70, "province": "Jambi"},
+    # --- Bengkulu (6) ---
+    {"name": "Mukomuko", "lat": -2.57, "lon": 101.30, "province": "Bengkulu"},
+    {"name": "Arga Makmur", "lat": -3.42, "lon": 102.20, "province": "Bengkulu"},
+    {"name": "Curup", "lat": -3.47, "lon": 102.53, "province": "Bengkulu"},
+    {"name": "Bengkulu", "lat": -3.80, "lon": 102.26, "province": "Bengkulu"},
+    {"name": "Manna", "lat": -4.47, "lon": 102.90, "province": "Bengkulu"},
+    {"name": "Bintuhan", "lat": -4.55, "lon": 103.35, "province": "Bengkulu"},
+    # --- Sumatera Selatan (6) ---
+    {"name": "Sekayu", "lat": -2.87, "lon": 103.85, "province": "Sumatera Selatan"},
+    {"name": "Palembang", "lat": -2.98, "lon": 104.77, "province": "Sumatera Selatan"},
+    {"name": "Lubuklinggau", "lat": -3.30, "lon": 102.86, "province": "Sumatera Selatan"},
+    {"name": "Kayuagung", "lat": -3.40, "lon": 104.80, "province": "Sumatera Selatan"},
+    {"name": "Muara Enim", "lat": -3.65, "lon": 103.77, "province": "Sumatera Selatan"},
+    {"name": "Baturaja", "lat": -4.10, "lon": 104.17, "province": "Sumatera Selatan"},
+    # --- Lampung (6) ---
+    {"name": "Liwa", "lat": -5.03, "lon": 104.08, "province": "Lampung"},
+    {"name": "Kotabumi", "lat": -4.83, "lon": 104.90, "province": "Lampung"},
+    {"name": "Terbanggi Besar", "lat": -4.85, "lon": 105.18, "province": "Lampung"},
+    {"name": "Bandar Lampung", "lat": -5.43, "lon": 105.26, "province": "Lampung"},
+    {"name": "Kalianda", "lat": -5.73, "lon": 105.60, "province": "Lampung"},
+    {"name": "Bakauheni", "lat": -5.87, "lon": 105.75, "province": "Lampung"},
+    # --- Kepulauan Bangka Belitung (5) ---
+    {"name": "Belinyu", "lat": -1.65, "lon": 105.78, "province": "Kepulauan Bangka Belitung"},
+    {"name": "Muntok", "lat": -2.07, "lon": 105.16, "province": "Kepulauan Bangka Belitung"},
+    {"name": "Pangkalpinang", "lat": -2.13, "lon": 106.10, "province": "Kepulauan Bangka Belitung"},
+    {"name": "Toboali", "lat": -2.99, "lon": 106.50, "province": "Kepulauan Bangka Belitung"},
+    {"name": "Tanjungpandan", "lat": -2.75, "lon": 107.65, "province": "Kepulauan Bangka Belitung"},
+    # --- Kepulauan Riau (5) ---
+    {"name": "Karimun", "lat": 1.05, "lon": 103.39, "province": "Kepulauan Riau"},
+    {"name": "Batam", "lat": 1.13, "lon": 104.05, "province": "Kepulauan Riau"},
+    {"name": "Tanjungpinang", "lat": 0.92, "lon": 104.45, "province": "Kepulauan Riau"},
+    {"name": "Daik Lingga", "lat": -0.20, "lon": 104.62, "province": "Kepulauan Riau"},
+    {"name": "Tarempa Anambas", "lat": 3.20, "lon": 106.22, "province": "Kepulauan Riau"},
 ]
-
-GRID_KEEP_RADIUS_KM = 60.0  # land mask: keep lattice pts within ~50-60 km of a gazetteer node
-
-
-def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    r = 6371.0
-    dlat = math.radians(lat2 - lat1)
-    dlon = math.radians(lon2 - lon1)
-    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
-    return 2 * r * math.asin(math.sqrt(a))
 
 
 def _grid_points() -> List[Dict[str, Any]]:
-    """Return land grid points (gazetteer-proximity mask, <= GRID_KEEP_RADIUS_KM).
+    """Return the whole-Sumatra grid.
 
-    Grid entries are pre-snapped to gazetteer nodes (0 km), so this is a
-    defense-in-depth re-check: if the gazetteer import is available, verify
-    proximity; otherwise trust the curated list.
+    Phase 169 removed the ``GRID_KEEP_RADIUS_KM`` corridor/land-mask filter: it
+    silently dropped every point far from a gazetteer node, which is exactly the
+    whole-island coverage this phase restores. The curated grid is already land
+    points inside the full bbox, so every fetched point is represented.
     """
-    try:
-        from app.nlp.gazetteer_data import PAN_SUMATRA_GAZETTEER
-        gaz_coords = [v["coords"] for v in PAN_SUMATRA_GAZETTEER.values()]
-        kept = []
-        for p in SUMATRA_GRID:
-            dmin = min(_haversine_km(p["lat"], p["lon"], glat, glon) for glat, glon in gaz_coords)
-            if dmin <= GRID_KEEP_RADIUS_KM:
-                kept.append(p)
-            else:
-                logger.debug(f"Open-Meteo grid: dropping sea point {p['name']} (nearest node {dmin:.0f} km)")
-        return kept or SUMATRA_GRID
-    except Exception:
-        return SUMATRA_GRID
+    return list(SUMATRA_GRID)
 
 
 class OpenMeteoAdapter(BaseAdapter):

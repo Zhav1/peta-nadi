@@ -15,6 +15,16 @@ from app.services.weather_fusion_service import (
     SUMATRA_BBOX,
     HAZARD_WINDOW_HOURS,
     WEATHER_SUMMARY_SOURCE,
+    MAX_WEATHER_FEATURES,
+    compact_polygon_meta,
+)
+from app.services.retention import (
+    WEATHER_REFRESH_S,
+    WEATHER_VALIDITY_HOURS,
+    WEATHER_STALE_CEILING_HOURS,
+    FIRMS_REFRESH_S,
+    FIRMS_STALE_CEILING_HOURS,
+    human_age_id,
 )
 from app.services.redis_client import SOURCE_CACHE_PREFIX, cache_get, cache_set
 from app.services.cpu_routing_service import optimize_fleet_routes_cpu, CORRIDOR_JUNCTION_NODES
@@ -118,40 +128,202 @@ async def fetch_spatial_weather_polygons(
     spatial weather predictions with data-driven rainfall_mm and flood_risk_pct.
     Read endpoint: optional auth (guest-safe), user attached for telemetry only.
 
-    Full-Sumatra coverage: Open-Meteo bulk grid (23 land points, 95-106E/-6..6N)
-    fused per-point with BMKG hub warnings; features capped at 24 (severity +
-    magnitude + corridor proximity priority, ~30KB max).
+    Whole-Sumatra coverage (Phase 169): every Open-Meteo grid point across the
+    full 94,-6,108,6 bbox can produce a zone. MAX_WEATHER_FEATURES is a RENDER
+    cap only; the response publishes ``meta.total`` (pre-cap), ``meta.count``
+    (returned) and ``meta.capped`` so the UI can say "menampilkan N dari M".
+
+    Stale-while-revalidate (SPEC decision 4): a failed upstream refresh serves
+    last-known-good polygons with ``meta.status="stale"`` and the age in
+    ``meta.reason``. Only a cold cache is ``degraded`` (emitted as an empty
+    FeatureCollection, never a fabricated 0 zone count, never a 500).
 
     Disruption-only default (min_severity=high, min_precip=50, min_flood=80):
     only high/critical heavy rain that can cause disruptions is returned.
     Advisory path: ?min_severity=medium&min_precip=0&min_flood=0 returns all as before.
     """
+    sev, eff_precip, eff_flood = _effective_polygon_filters(min_severity, min_precip, min_flood)
+    return await _served_weather_polygons(sev, eff_precip, eff_flood)
+
+
+def _effective_polygon_filters(
+    min_severity: Optional[str],
+    min_precip: Optional[float],
+    min_flood: Optional[float],
+) -> tuple:
+    """Map query params to the fusion gate triple (advisory path disables gates)."""
+    sev = (min_severity or "high").lower()
+    if sev in ("medium", "low", "all"):
+        eff_precip = None if min_precip in (None, 0, 50.0) else float(min_precip)
+        eff_flood = None if min_flood in (None, 0, 80.0) else float(min_flood)
+        return sev, eff_precip, eff_flood
+    eff_precip = None if min_precip is None or min_precip == 0 else float(min_precip)
+    eff_flood = None if min_flood is None or min_flood == 0 else float(min_flood)
+    return sev, eff_precip, eff_flood
+
+
+def _polygon_cache_key(
+    sev: str, eff_precip: Optional[float], eff_flood: Optional[float]
+) -> str:
+    def _num(value: Optional[float]) -> str:
+        return "all" if value is None else f"{float(value):g}"
+
+    return f"{SOURCE_CACHE_PREFIX}weather_polygons:{sev}:{_num(eff_precip)}:{_num(eff_flood)}"
+
+
+def _age_seconds(stamp: Any, now: Any) -> Optional[float]:
     try:
-        # Advisory full-fidelity path: min_severity=medium/low disables numeric gates
-        # unless the caller explicitly set non-default numeric thresholds.
-        sev = (min_severity or "high").lower()
-        if sev in ("medium", "low", "all"):
-            eff_precip = None if min_precip == 50.0 else (None if min_precip is None else float(min_precip))
-            eff_flood = None if min_flood == 80.0 else (None if min_flood is None else float(min_flood))
-            if eff_precip == 0:
-                eff_precip = None
-            if eff_flood == 0:
-                eff_flood = None
-            return await get_fused_spatial_weather(min_severity=sev, min_precip=eff_precip, min_flood=eff_flood)
-        eff_precip_h = None if min_precip == 0 else float(min_precip)
-        eff_flood_h = None if min_flood == 0 else float(min_flood)
-        return await get_fused_spatial_weather(min_severity=sev, min_precip=eff_precip_h, min_flood=eff_flood_h)
+        parsed = datetime.fromisoformat(str(stamp).replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return max(0.0, (now - parsed).total_seconds())
+    except Exception:
+        return None
+
+
+def _read_polygon_cache(key: str) -> Optional[Dict[str, Any]]:
+    """Shape-validated cache read; a malformed entry is a miss, never a crash."""
+    try:
+        raw = cache_get(key)
+        if not raw:
+            return None
+        parsed = json.loads(raw)
+        if not isinstance(parsed, dict):
+            return None
+        payload = parsed.get("payload")
+        if not isinstance(payload, dict) or not isinstance(payload.get("features"), list):
+            return None
+        return parsed
     except Exception as e:
-        logger.error(f"Error fetching spatial weather polygons: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.debug(f"Weather polygon cache read failed: {e}")
+        return None
+
+
+def _write_polygon_cache(key: str, payload: Dict[str, Any], now: Any) -> None:
+    try:
+        cache_set(
+            key,
+            json.dumps({"payload": payload, "fetched_at": now.isoformat()}),
+            ex=WEATHER_STALE_CEILING_HOURS * 3600,
+        )
+    except Exception as e:
+        logger.debug(f"Weather polygon cache write failed: {e}")
+
+
+def _carry_meta(payload: Dict[str, Any], metadata: Dict[str, Any]) -> Dict[str, Any]:
+    updated = dict(payload)
+    updated["metadata"] = metadata
+    updated["meta"] = compact_polygon_meta(metadata)
+    return updated
+
+
+def _stale_polygon_payload(
+    cached: Dict[str, Any], now: Any, upstream_reason: Optional[str]
+) -> Dict[str, Any]:
+    """Serve last-known-good polygons, clearly marked stale (features kept)."""
+    payload = cached.get("payload") or {}
+    features = payload.get("features") or []
+    age_s = _age_seconds(cached.get("fetched_at"), now)
+    if age_s is None:
+        age_s = float(WEATHER_STALE_CEILING_HOURS * 3600)
+    suffix = upstream_reason or "sumber live tidak tersedia"
+    metadata = dict(payload.get("metadata") or {})
+    total = metadata.get("total")
+    if not isinstance(total, int) or total < len(features):
+        total = len(features)
+    metadata.update(
+        {
+            "status": "stale",
+            "reason": (
+                f"Data terakhir {human_age_id(age_s)} lalu "
+                f"(valid {WEATHER_VALIDITY_HOURS}j); {suffix}"
+            ),
+            "total": total,
+            "count": len(features),
+            "capped": bool(total > len(features)),
+            "updated_at": cached.get("fetched_at") or metadata.get("updated_at"),
+            "validity_hours": WEATHER_VALIDITY_HOURS,
+            "stale_ceiling_hours": WEATHER_STALE_CEILING_HOURS,
+        }
+    )
+    return _carry_meta(payload, metadata)
+
+
+def _degraded_polygon_payload(now: Any, upstream_reason: Optional[str]) -> Dict[str, Any]:
+    """Cold-cache outage: no polygons AND no numbers. Unknown is never 0."""
+    reason = "Sumber cuaca tidak tersedia"
+    if upstream_reason:
+        reason = f"{reason}: {upstream_reason}"
+    metadata = {
+        "fusion_engine": "BMKG Radar Observation + Open-Meteo NWP Forecast",
+        "timestamp": now.isoformat(),
+        "updated_at": now.isoformat(),
+        "total": None,
+        "count": None,
+        "capped": False,
+        "total_regions": 0,
+        "coverage": "full-sumatra-grid",
+        "bbox": list(SUMATRA_BBOX),
+        "max_features": MAX_WEATHER_FEATURES,
+        "status": "degraded",
+        "reason": reason,
+        "validity_hours": WEATHER_VALIDITY_HOURS,
+        "stale_ceiling_hours": WEATHER_STALE_CEILING_HOURS,
+        "refresh_seconds": WEATHER_REFRESH_S,
+        "upstream_degraded": True,
+    }
+    return _carry_meta({"type": "FeatureCollection", "features": []}, metadata)
+
+
+async def _served_weather_polygons(
+    sev: str, eff_precip: Optional[float], eff_flood: Optional[float]
+) -> Dict[str, Any]:
+    """Stale-while-revalidate wrapper around the fusion snapshot."""
+    now = datetime.now(timezone.utc)
+    key = _polygon_cache_key(sev, eff_precip, eff_flood)
+    cached = _read_polygon_cache(key)
+
+    if cached is not None:
+        age_s = _age_seconds(cached.get("fetched_at"), now)
+        # Fresh window: serve without touching BMKG/Open-Meteo.
+        if age_s is not None and age_s <= WEATHER_REFRESH_S:
+            return cached["payload"]
+
+    payload: Optional[Dict[str, Any]] = None
+    failure_reason: Optional[str] = None
+    try:
+        payload = await asyncio.wait_for(
+            get_fused_spatial_weather(
+                min_severity=sev, min_precip=eff_precip, min_flood=eff_flood
+            ),
+            timeout=WEATHER_SUMMARY_TIMEOUT_S,
+        )
+    except asyncio.TimeoutError:
+        failure_reason = f"timeout {WEATHER_SUMMARY_TIMEOUT_S:g}s"
+        logger.warning("Weather polygon fusion timed out after %ss", WEATHER_SUMMARY_TIMEOUT_S)
+    except Exception as e:
+        failure_reason = str(e)
+        logger.warning(f"Weather polygon fusion failed: {e}")
+
+    metadata = (payload or {}).get("metadata") or {}
+    if payload is not None and metadata.get("status") in ("ok", "empty"):
+        _write_polygon_cache(key, payload, now)
+        return payload
+
+    upstream_reason = failure_reason or metadata.get("reason")
+    if cached is not None:
+        return _stale_polygon_payload(cached, now, upstream_reason)
+    return _degraded_polygon_payload(now, upstream_reason)
 
 
 WEATHER_SUMMARY_CACHE_KEY = f"{SOURCE_CACHE_PREFIX}weather_summary"
-# Short refresh window; the key itself lives for the 24 h stale ceiling so a
-# failed refresh can still serve last-known-good instead of a fabricated 0.
-WEATHER_SUMMARY_REFRESH_S = 300
-WEATHER_SUMMARY_VALIDITY_HOURS = 6
-WEATHER_SUMMARY_STALE_CEILING_HOURS = 24
+# Windows live in app.services.retention (single source of truth, phase 169):
+# 10-min refresh, 6 h validity, 24 h stale ceiling. The cache key itself lives
+# for the full stale ceiling so a failed refresh can serve last-known-good
+# instead of a fabricated 0.
+WEATHER_SUMMARY_REFRESH_S = WEATHER_REFRESH_S
+WEATHER_SUMMARY_VALIDITY_HOURS = WEATHER_VALIDITY_HOURS
+WEATHER_SUMMARY_STALE_CEILING_HOURS = WEATHER_STALE_CEILING_HOURS
 WEATHER_SUMMARY_TIMEOUT_S = 12.0
 
 
@@ -177,13 +349,7 @@ def _weather_counter_bucket(
 
 
 def _weather_summary_age_seconds(generated_at: Any, now: Any) -> Optional[float]:
-    try:
-        parsed = datetime.fromisoformat(str(generated_at).replace("Z", "+00:00"))
-        if parsed.tzinfo is None:
-            parsed = parsed.replace(tzinfo=timezone.utc)
-        return max(0.0, (now - parsed).total_seconds())
-    except Exception:
-        return None
+    return _age_seconds(generated_at, now)
 
 
 def _read_weather_summary_cache() -> Optional[Dict[str, Any]]:
@@ -221,8 +387,6 @@ def _stale_weather_summary(
     age_s = _weather_summary_age_seconds(cached.get("generated_at"), now)
     if age_s is None:
         age_s = float(WEATHER_SUMMARY_STALE_CEILING_HOURS * 3600)
-    age_h = age_s / 3600.0
-    stale = age_h > WEATHER_SUMMARY_VALIDITY_HOURS
     suffix = upstream_reason or "sumber live tidak tersedia"
     payload: Dict[str, Any] = {
         "bbox": cached.get("bbox") or list(SUMATRA_BBOX),
@@ -232,13 +396,13 @@ def _stale_weather_summary(
     }
     for key in ("cuaca", "waspada"):
         bucket = payload[key]
-        prev_status = bucket.get("status") if bucket.get("status") in ("ok", "empty") else "ok"
-        bucket["status"] = "stale" if stale else prev_status
+        # A failed refresh always reports stale; the count is preserved.
+        bucket["status"] = "stale"
         bucket["total"] = bucket.get("total", bucket.get("count"))
         bucket["reason"] = (
-            f"Data terakhir {age_h:.1f} jam lalu (valid {WEATHER_SUMMARY_VALIDITY_HOURS}j); {suffix}"
-            if stale
-            else f"Data valid terakhir {int(age_s // 60)} menit lalu; {suffix}"
+            f"Data terakhir {human_age_id(age_s)} lalu "
+            f"(valid {WEATHER_SUMMARY_VALIDITY_HOURS}j, batas {WEATHER_SUMMARY_STALE_CEILING_HOURS}j); "
+            f"{suffix}"
         )
         bucket.setdefault("source", WEATHER_SUMMARY_SOURCE)
         bucket.setdefault("window_hours", HAZARD_WINDOW_HOURS)
@@ -335,11 +499,12 @@ async def fetch_weather_summary(
 
 
 # ---------------------------------------------------------------------------
-# Phase 168: FIRMS hotspot envelope helpers
+# Phase 168/169: FIRMS hotspot envelope helpers
 # ---------------------------------------------------------------------------
 FIRMS_WINDOW_HOURS = 24  # live-counter observation window (decision 3/4)
-FIRMS_REFRESH_S = 3600  # 1h poll window
-FIRMS_STALE_CEILING_HOURS = 6  # stale ceiling (decision 4)
+# Windows come from app.services.retention (single source): 1 h refresh, 6 h
+# validity, 6 h stale ceiling.
+FIRMS_REFRESH_WINDOW_S = FIRMS_REFRESH_S
 FIRMS_RENDER_CAP = 500  # map-protection cap; the count path stays uncapped
 FIRMS_EMPTY_REASON = "Tidak ada titik panas aktif di Sumatra pada jendela ini"
 FIRMS_CACHE_KEY = f"{SOURCE_CACHE_PREFIX}firms_hotspots"
@@ -626,13 +791,13 @@ async def fetch_fire_hotspots(
         age_s = _firms_age_seconds(last_good.get("updated_at"), now)
         if age_s is None:
             age_s = float(FIRMS_STALE_CEILING_HOURS * 3600)
-        age_h = age_s / 3600.0
         suffix = "; ".join(p for p in problems if p) or "sumber live tidak tersedia"
         payload = dict(last_good)
+        # A failed refresh always reports stale (never a silent "ok").
         payload["status"] = "stale"
         payload["source"] = "cache"
         payload["reason"] = (
-            f"Data terakhir {age_h:.1f} jam lalu (batas {FIRMS_STALE_CEILING_HOURS} jam); {suffix}"
+            f"Data terakhir {human_age_id(age_s)} lalu (batas {FIRMS_STALE_CEILING_HOURS} jam); {suffix}"
         )
         return _firms_envelope_from_cache(payload)
 

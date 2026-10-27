@@ -18,17 +18,25 @@ from app.services.incident_geometry_service import (
     generate_landslide_geometry,
     generate_incident_geometry,
 )
+from app.services.retention import (
+    WEATHER_REFRESH_S,
+    WEATHER_STALE_CEILING_HOURS,
+    WEATHER_VALIDITY_HOURS,
+)
 
 logger = logging.getLogger(__name__)
 
 _SEVERITY_RANK = {"low": 0, "medium": 1, "high": 2, "critical": 3}
 
-# Feature cap: whole-Sumatra grid yields ~15-23 gated points; cap keeps the
-# GeoJSON payload at ~30 KB max so the endpoint stays within timeout.
+# Feature cap: whole-Sumatra grid yields far more qualifying points than the
+# map can draw legibly. This is a RENDER cap only — it never filters the
+# candidate list and never truncates a counter (see get_weather_zone_inventory).
 MAX_WEATHER_FEATURES = 24
 
-# Corridor spine (lon, lat) used to prioritize corridor-adjacent polygons when
-# capping. Approximates the Jalinsum/Jalintim backbone Banda Aceh → Bakauheni.
+# Corridor spine (lon, lat) used to PRIORITISE corridor-adjacent polygons when
+# the render cap has to choose which zones to draw. It is ordering only: a zone
+# outside the spine is still built, still counted and still returned while it
+# fits under MAX_WEATHER_FEATURES. (Phase 169 removed corridor *filtering*.)
 _CORRIDOR_SPINE: List[Tuple[float, float]] = [
     (95.32, 5.55), (97.15, 5.18), (98.67, 3.59), (99.27, 1.38),
     (101.45, 0.51), (100.42, -0.95), (103.61, -1.61),
@@ -187,6 +195,27 @@ def _water_depth_for_severity(severity: str) -> float:
 DEFAULT_MIN_SEVERITY = "high"
 DEFAULT_MIN_PRECIP_MM = 50.0
 DEFAULT_MIN_FLOOD_PCT = 80.0
+
+# Fields every polygon response publishes (both ``metadata`` and the compact
+# ``meta`` block) so freshness/cap notices read from one contract.
+POLYGON_META_FIELDS: Tuple[str, ...] = (
+    "status",
+    "reason",
+    "total",
+    "count",
+    "capped",
+    "updated_at",
+    "validity_hours",
+    "stale_ceiling_hours",
+    "refresh_seconds",
+    "max_features",
+)
+
+
+def compact_polygon_meta(metadata: Dict[str, Any]) -> Dict[str, Any]:
+    """Compact, additive render contract for a polygon FeatureCollection."""
+    return {key: metadata.get(key) for key in POLYGON_META_FIELDS}
+
 
 
 def _extract_openmeteo_numbers(ev: Dict[str, Any]):
@@ -497,27 +526,61 @@ async def get_fused_spatial_weather(
         bmkg_events, openmeteo_events, min_severity, min_precip, min_flood
     )
 
-    # Cap features (max 24): prioritize high/critical severity, then magnitude,
-    # then corridor proximity — avoids overlay spam on widespread monsoon days.
+    # Render cap only: sort for drawing priority (severity, magnitude, then
+    # corridor proximity) and slice. No zone is ever dropped for being far from
+    # _CORRIDOR_SPINE — the spine is ordering, not a filter.
     candidates.sort(key=lambda c: (-c["rank"], -c["mag"], c["dist_km"]))
+    total = len(candidates)
     features = [c["feature"] for c in candidates[:MAX_WEATHER_FEATURES]]
+    count = len(features)
+    capped = total > count
+    degraded = bool(upstream.get("degraded"))
 
+    if degraded and count == 0:
+        # Unknown, not zero: a total outage publishes null counts.
+        status, reason = "degraded", upstream.get("reason") or "Sumber cuaca tidak tersedia"
+        published_total: Optional[int] = None
+        published_count: Optional[int] = None
+    else:
+        status = "ok" if count > 0 else "empty"
+        reason = upstream.get("reason") if degraded else (None if count else "Tidak ada zona aktif")
+        published_total = total
+        published_count = count
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    metadata = {
+        "fusion_engine": "BMKG Radar Observation + Open-Meteo NWP Forecast",
+        "timestamp": now_iso,
+        "updated_at": now_iso,
+        # total = qualifying zones BEFORE the render cap. count = polygons
+        # returned. capped = the render cap truncated the draw list.
+        "total": published_total,
+        "count": published_count,
+        "capped": capped,
+        # Legacy alias kept frozen (decision 14): it always meant "returned".
+        "total_regions": count,
+        "coverage": "full-sumatra-grid",
+        "bbox": list(SUMATRA_BBOX),
+        "max_features": MAX_WEATHER_FEATURES,
+        "status": status,
+        "reason": reason,
+        "validity_hours": WEATHER_VALIDITY_HOURS,
+        "stale_ceiling_hours": WEATHER_STALE_CEILING_HOURS,
+        "refresh_seconds": WEATHER_REFRESH_S,
+        "upstream_degraded": degraded,
+        "filter": {
+            "min_severity": min_severity,
+            "min_precip": min_precip,
+            "min_flood": min_flood,
+        },
+    }
     return {
         "type": "FeatureCollection",
         "features": features,
-        "metadata": {
-            "fusion_engine": "BMKG Radar Observation + Open-Meteo NWP Forecast",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "total_regions": len(features),
-            "coverage": "full-sumatra-grid",
-            "max_features": MAX_WEATHER_FEATURES,
-            "upstream_degraded": bool(upstream.get("degraded")),
-            "filter": {
-                "min_severity": min_severity,
-                "min_precip": min_precip,
-                "min_flood": min_flood,
-            },
-        }
+        "metadata": metadata,
+        # Compact render contract (same values) so clients do not need to parse
+        # the whole fusion metadata block to draw "menampilkan N dari M".
+        "meta": compact_polygon_meta(metadata),
     }
 
 
@@ -530,7 +593,7 @@ DISRUPTION_SEVERITIES = ("high", "critical")
 ADVISORY_SEVERITIES = ("medium",)
 # Hazard window the fusion numerics describe (mm/24h precipitation gate).
 HAZARD_WINDOW_HOURS = 24
-_ZONE_VALIDITY_HOURS = 6
+_ZONE_VALIDITY_HOURS = WEATHER_VALIDITY_HOURS
 WEATHER_SUMMARY_SOURCE = "BMKG Stasiun Klimatologi & Geofisika + Open-Meteo NWP (ECMWF/GFS)"
 
 

@@ -36,6 +36,7 @@ import { useFleetVehicles } from '@/hooks/useFleetVehicles';
 import { useCorridorContext } from '@/hooks/useCorridorContext';
 import { useNewsVerification, isForecastActive, deriveForecastValidUntil, FORECAST_TAG } from '@/hooks/useNewsVerification';
 import { FreshnessBadge } from '@/components/ui/FreshnessBadge';
+import { FreshnessBadge as StatusFreshnessBadge } from '@/components/dashboard/FreshnessBadge';
 import { GuidedDemoPanel } from '@/components/demo/GuidedDemoPanel';
 import AnalyticsSection from '@/components/dashboard/AnalyticsSection';
 import ReportsSection from '@/components/dashboard/ReportsSection';
@@ -53,7 +54,7 @@ import {
 import { api } from '@/lib/api';
 import { toLonLatRing } from '@/lib/polygonGeom';
 import { regionSlugFromLatLon } from '@/lib/region';
-import type { CrisisState, WsEvent, CrisisType, Severity, RouteRecommendation, DisasterZone, HazardImpactProfile, ZoneTier, FleetVehicle, TacticalManeuver, FireHotspot, RouteDecisionType, DecisionAction, WeatherHazardSummary, HazardCounterStatus, FireHotspotSource } from '@/lib/types';
+import type { CrisisState, WsEvent, CrisisType, Severity, RouteRecommendation, DisasterZone, HazardImpactProfile, ZoneTier, FleetVehicle, TacticalManeuver, FireHotspot, RouteDecisionType, DecisionAction, WeatherHazardSummary, HazardCounterStatus, FireHotspotSource, WeatherPolygonMeta } from '@/lib/types';
 import { useAuth } from '@/lib/authContext';
 import { AuthModal } from '@/components/auth/AuthModal';
 import { FleetOnboardingModal } from '@/components/fleet/FleetOnboardingModal';
@@ -110,6 +111,12 @@ function FloatingMapLegend({
   weatherDisruptionCount = 0,
   weatherAdvisoryCount = 0,
   showWeatherAdvisory = false,
+  weatherPolygonFeatureCount = 0,
+  weatherPolygonMeta = null,
+  weatherSummary = null,
+  fireStatus = 'degraded',
+  fireUpdatedAt = null,
+  fireReason = null,
 }: {
   isOpen: boolean;
   onToggle: () => void;
@@ -120,6 +127,15 @@ function FloatingMapLegend({
   weatherDisruptionCount?: number;
   weatherAdvisoryCount?: number;
   showWeatherAdvisory?: boolean;
+  /** Polygons currently handed to the map (kept across failed refreshes). */
+  weatherPolygonFeatureCount?: number;
+  /** Render-cap + retention meta of the last polygon response. */
+  weatherPolygonMeta?: WeatherPolygonMeta | null;
+  /** World-truth counters (status/generated_at/reason per bucket). */
+  weatherSummary?: WeatherHazardSummary | null;
+  fireStatus?: HazardCounterStatus;
+  fireUpdatedAt?: string | null;
+  fireReason?: string | null;
 }) {
   return (
     <div className="relative pointer-events-auto">
@@ -152,6 +168,49 @@ function FloatingMapLegend({
             >
               <X className="w-3.5 h-3.5" />
             </button>
+          </div>
+
+          {/* Phase 169: retention truth. Freshness per layer + honest render-cap
+              notice ("menampilkan N dari M"). No new colour families. */}
+          <div className="space-y-1 pt-1.5 pb-2 border-b border-[#1c2432]">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] font-sans text-slate-500">Cuaca</span>
+              <span data-testid="freshness-cuaca">
+                <StatusFreshnessBadge
+                  status={weatherSummary?.cuaca.status ?? weatherPolygonMeta?.status ?? 'degraded'}
+                  updatedAt={weatherSummary?.generated_at ?? weatherPolygonMeta?.updated_at ?? null}
+                  reason={weatherSummary?.cuaca.reason ?? weatherPolygonMeta?.reason ?? null}
+                />
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] font-sans text-slate-500">Waspada Dini</span>
+              <span data-testid="freshness-waspada">
+                <StatusFreshnessBadge
+                  status={weatherSummary?.waspada.status ?? 'degraded'}
+                  updatedAt={weatherSummary?.generated_at ?? null}
+                  reason={weatherSummary?.waspada.reason ?? null}
+                />
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] font-sans text-slate-500">Titik Panas</span>
+              <span data-testid="freshness-titik-panas">
+                <StatusFreshnessBadge
+                  status={fireStatus}
+                  updatedAt={fireUpdatedAt}
+                  reason={fireReason}
+                />
+              </span>
+            </div>
+            {weatherPolygonMeta?.capped && (
+              <div
+                data-testid="weather-capped-notice"
+                className="text-[10px] font-sans text-slate-400 pt-0.5"
+              >
+                menampilkan {weatherPolygonMeta.count ?? 0} dari {weatherPolygonMeta.total ?? 0}
+              </div>
+            )}
           </div>
 
           <div className="space-y-2 font-mono text-xs">
@@ -268,6 +327,12 @@ function FloatingMapLegend({
                 <div>
  <span className="text-slate-200 font-medium block">Cuaca — {weatherDisruptionCount} zona</span>
                   <span className="text-xs text-slate-400 font-sans">Hujan lebat disruptif: high/critical, presipitasi 50mm/24j atau banjir 80%. Default ON. Hazard: flood/landslide/severe_storm/marine_wave.</span>
+                  <span
+                    data-testid="weather-polygon-count"
+                    className="text-[10px] text-slate-500 font-sans tabular-nums block"
+                  >
+                    {weatherPolygonFeatureCount} poligon digambar (seluruh Sumatra)
+                  </span>
                 </div>
               </div>
 
@@ -1033,15 +1098,65 @@ export default function DashboardClient() {
   const [fleetModalityFilter, setFleetModalityFilter] = useState<'all' | 'truck' | 'maritime' | 'air'>('all');
 
 
+  const [weatherPolygonMeta, setWeatherPolygonMeta] = useState<WeatherPolygonMeta | null>(null);
+  const spatialWeatherRef = useRef<GeoJSON.FeatureCollection | null>(null);
+  const weatherPolygonMetaRef = useRef<WeatherPolygonMeta | null>(null);
+
   useEffect(() => {
     let isMounted = true;
+    const readMeta = (
+      geojson: GeoJSON.FeatureCollection & { metadata?: WeatherPolygonMeta; meta?: WeatherPolygonMeta },
+    ): WeatherPolygonMeta | null => geojson?.meta ?? geojson?.metadata ?? null;
+
     async function loadSpatialWeather() {
       try {
         // Disruption-only default: heavy rain that can cause disruptions (high/critical).
         const geojson = await api.weather.spatialPolygons({ min_severity: 'high', min_precip: 50, min_flood: 80 });
-        if (isMounted) setSpatialWeatherPolygons(geojson);
+        if (!isMounted) return;
+        const meta = readMeta(geojson);
+        const previous = spatialWeatherRef.current;
+        // Phase 169: a failed refresh never clears the layer. When the backend
+        // has no cache (degraded) we keep the polygons we already drew and mark
+        // them stale instead of blanking the map.
+        if (meta?.status === 'degraded' && (previous?.features?.length ?? 0) > 0) {
+          const kept: WeatherPolygonMeta = {
+            ...(weatherPolygonMetaRef.current ?? meta),
+            status: 'stale',
+            reason: meta.reason ?? 'Gagal memperbarui; menampilkan poligon terakhir.',
+          };
+          weatherPolygonMetaRef.current = kept;
+          setWeatherPolygonMeta(kept);
+          return;
+        }
+        spatialWeatherRef.current = geojson;
+        weatherPolygonMetaRef.current = meta;
+        setSpatialWeatherPolygons(geojson);
+        setWeatherPolygonMeta(meta);
       } catch (e) {
+        // Transient failure: keep the last-good polygons/counters (never blank).
+        if (!isMounted) return;
         console.warn('Backend spatial weather polygons fallback:', e);
+        const previousMeta = weatherPolygonMetaRef.current;
+        if (previousMeta) {
+          const kept: WeatherPolygonMeta = {
+            ...previousMeta,
+            status: 'stale',
+            reason: 'Gagal memperbarui; menampilkan poligon terakhir yang tersimpan.',
+          };
+          weatherPolygonMetaRef.current = kept;
+          setWeatherPolygonMeta(kept);
+        } else {
+          const unknown: WeatherPolygonMeta = {
+            status: 'degraded',
+            reason: 'Sumber cuaca tidak tersedia.',
+            total: null,
+            count: null,
+            capped: false,
+            updated_at: null,
+          };
+          weatherPolygonMetaRef.current = unknown;
+          setWeatherPolygonMeta(unknown);
+        }
       }
     }
     loadSpatialWeather();
@@ -3440,6 +3555,7 @@ export default function DashboardClient() {
                     weatherDisruptionCount={weatherDisruptionCount}
                     weatherSummary={weatherSummary}
                     weatherSample={weatherSample}
+                    weatherPolygonMeta={weatherPolygonMeta}
                     showFireHotspots={showFireHotspots}
                     onToggleFireHotspots={() => setShowFireHotspots(v => !v)}
                     fireHotspotCount={fireHotspotCount ?? undefined}
@@ -3552,6 +3668,12 @@ export default function DashboardClient() {
                     weatherDisruptionCount={weatherDisruptionCount ?? 0}
                     weatherAdvisoryCount={weatherAdvisoryCount ?? 0}
                     showWeatherAdvisory={showWeatherAdvisory}
+                    weatherPolygonFeatureCount={disruptionFeatures.length}
+                    weatherPolygonMeta={weatherPolygonMeta}
+                    weatherSummary={weatherSummary}
+                    fireStatus={fireStatus}
+                    fireUpdatedAt={fireUpdatedAt}
+                    fireReason={fireReason}
                   />
                 }
               />
