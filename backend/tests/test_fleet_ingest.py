@@ -304,9 +304,15 @@ def test_registered_truck_visible_to_owning_dispatcher():
     unit = next(v for v in data["vehicles"] if v["vehicle_id"] == "TEST-TRK-01")
     assert unit["company_id"] == "pos_logistik"
     assert unit["is_tenant_asset"] is True
-    # No macro/mock assets inside a dispatcher view
-    assert all(v.get("is_tenant_asset") is True for v in data["vehicles"])
-    assert all(v.get("company_id") == "pos_logistik" for v in data["vehicles"])
+    # Dispatcher trucks stay tenant-scoped; public maritime/air vessels ride
+    # along as situational awareness (is_tenant_asset False) so Kapal/Udara
+    # pills + map dots never read 0.
+    trucks = [v for v in data["vehicles"] if v.get("modality") == "truck"]
+    assert len(trucks) > 0
+    assert all(v.get("is_tenant_asset") is True for v in trucks)
+    assert all(v.get("company_id") == "pos_logistik" for v in trucks)
+    vessels = [v for v in data["vehicles"] if v.get("modality") in ("maritime", "air")]
+    assert len(vessels) > 0
 
     # A different tenant must not see it
     other_token = create_guest_token(role=ROLE_DISPATCHER, company_id="jne_sumut")

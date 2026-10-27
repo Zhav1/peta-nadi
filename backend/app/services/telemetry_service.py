@@ -1839,8 +1839,10 @@ class TelemetryService:
         Merges custom user-registered fleets, baseline 45-unit assets, live AIS maritime vessels,
         and live Sumatra aviation flights, applying cold-chain checks, dead-reckoning, tenancy, and filters.
 
-        When ``tenant_only`` is True (dispatcher scope) only assets that match the tenant
-        claim are returned — no macro maritime/air corridors leak into the tenant view.
+        When ``tenant_only`` is True (dispatcher scope) only tenant trucks are
+        isolated — maritime/air stay visible as public AIS/ADS-B situational
+        awareness (they are not another tenant's private live GPS). Trucks
+        remain strictly tenant-scoped so no other company's live GPS leaks.
         """
         # 1. Custom registered vehicles from SQLite
         enriched_custom: List[Dict[str, Any]] = []
@@ -2053,9 +2055,13 @@ class TelemetryService:
 
         if company_id:
             if tenant_only:
+                # Dispatcher scope: tenant assets + public maritime/air corridors.
+                # Restores pre-regression (pre-Phase-81) behavior where vessels
+                # bypassed tenancy; trucks stay strictly tenant-scoped.
                 filtered_fleet = [
                     v for v in filtered_fleet
                     if matches_tenant(v, company_id, org_name)
+                    or v.get("modality") in ("maritime", "air")
                 ]
             else:
                 filtered_fleet = [

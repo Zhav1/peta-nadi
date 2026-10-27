@@ -46,8 +46,9 @@ async def get_active_fleet(
     and route geometries across Pan-Sumatra strategic corridors.
 
     Tenancy contract:
-      - DISPATCHER: strictly scoped to the JWT ``company_id`` claim and only to
-        assets that belong to that tenant. The ?company_id= query can never widen
+      - DISPATCHER: trucks strictly scoped to the JWT ``company_id`` claim;
+        maritime/air ride along as public AIS/ADS-B situational awareness
+        (pre-Phase-81 macro vessels). The ?company_id= query can never widen
         the claim. A dispatcher with no claim gets an honest empty fleet instead of
         the macro/demo corridor view.
       - REGULATOR / GUEST: full macro corridor view (situational awareness).

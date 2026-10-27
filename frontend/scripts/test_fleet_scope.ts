@@ -67,15 +67,26 @@ const fleet: FleetVehicle[] = [
   }),
 ];
 
-/** Mirrors the role branching inside useFleetVehicles. */
+/** Mirrors the role branching inside useFleetVehicles.
+ * Dispatcher roster stays tenant-scoped; the map/pills add public
+ * situational vessels (maritime/air, non-tenant) so Kapal/Udara never read 0.
+ * Trucks from other tenants never leak. */
 function viewForRole(role: Role, companyId?: string | null) {
   if (role === 'DISPATCHER') {
     const { all, live, projected } = scopeDispatcherFleet(fleet, companyId);
-    // Map-bound slice is live tenant units only (plus explicit inspection).
-    return { tenantAll: all, mapFleet: live, roster: all, projected };
+    if (!companyId) {
+      return { tenantAll: all, mapFleet: [], roster: all, projected, situational: [] };
+    }
+    const situational = fleet.filter(
+      (v) =>
+        (v.modality === 'maritime' || v.modality === 'air') &&
+        !all.some((t) => t.vehicle_id === v.vehicle_id)
+    );
+    // Map-bound slice is live tenant units + situational vessels.
+    return { tenantAll: all, mapFleet: [...live, ...situational], roster: all, projected, situational };
   }
   // REGULATOR / GUEST: full macro visibility, no tenant filter.
-  return { tenantAll: fleet, mapFleet: fleet, roster: fleet, projected: [] };
+  return { tenantAll: fleet, mapFleet: fleet, roster: fleet, projected: [], situational: [] };
 }
 
 let failures = 0;
@@ -94,11 +105,14 @@ console.log('Role matrix: DISPATCHER + company_id=pos_logistik');
   const ids = v.tenantAll.map((x) => x.vehicle_id).sort();
   check('sees both own assets', ids.join(',') === 'OWN-LIVE-01,OWN-PROJ-01', ids);
   check('does not see other tenant truck', !ids.includes('OTHER-TENANT-01'), ids);
-  check('does not see macro maritime', !ids.includes('AIS-MACRO-01'), ids);
+  check('roster excludes macro maritime (vessels ride in map only)', !ids.includes('AIS-MACRO-01'), ids);
   check('does not see mock corridor unit', !ids.includes('TRK-005-BANDA-ACEH-MEDAN'), ids);
   check(
-    'map slice is LIVE_GPS only',
-    v.mapFleet.every(isLiveTracked) && v.mapFleet.length === 1,
+    'map slice is live tenant + situational vessels (no cross-tenant trucks)',
+    v.mapFleet.some((x) => x.vehicle_id === 'OWN-LIVE-01') &&
+      v.mapFleet.some((x) => x.vehicle_id === 'AIS-MACRO-01') &&
+      !v.mapFleet.some((x) => x.vehicle_id === 'OTHER-TENANT-01') &&
+      !v.mapFleet.some((x) => x.vehicle_id === 'TRK-005-BANDA-ACEH-MEDAN'),
     v.mapFleet.map((x) => x.vehicle_id)
   );
   check(

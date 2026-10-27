@@ -578,10 +578,12 @@ export default function DashboardClient() {
     setSelectedVehicle(null);
   }, []);
 
-  // Dispatcher perusahaan view (issue #2): the map draws LIVE_GPS units only.
+  // Dispatcher perusahaan view (issue #2): the map draws live tenant trucks
+  // + public situational vessels (maritime/air AIS/ADS-B). Trucks stay
+  // tenant-scoped; vessels restore the pre-Phase-81 macro view. The
+  // Perusahaan Live GPS badge (below) stays liveTenantVehicles only.
   // An explicitly inspected ROUTE_ESTIMATED unit is injected into the layer so it can be
   // framed and inspected, but it never becomes ambient orange corridor noise.
-  const isDispatcherWorkspace = role === 'DISPATCHER';
   const selectedIsProjected = selectedVehicle?.tracking_mode === 'ROUTE_ESTIMATED';
   const mapFleetVehicles = useMemo(() => {
     if (!selectedIsProjected || !selectedVehicle) return activeFleetVehicles;
@@ -591,8 +593,12 @@ export default function DashboardClient() {
     return [...activeFleetVehicles, selectedVehicle];
   }, [activeFleetVehicles, selectedIsProjected, selectedVehicle]);
 
-  // Counts follow what is actually drawable for the current role.
-  const fleetCountVehicles = isDispatcherWorkspace ? liveTenantVehicles : activeFleetVehicles;
+  // Counts follow what is actually drawable: dispatcher pills show the
+  // combined live-tenant + situational-vessel slice (Semua/Kapal/Udara),
+  // regulator/guest show the macro fleet. Perusahaan badge uses
+  // liveTenantVehicles directly (honest tenant live GPS only).
+  const isDispatcherWorkspace = role === 'DISPATCHER';
+  const fleetCountVehicles = activeFleetVehicles;
 
   const isRightInspectorActive = (isSidebarOpen && !!selectedCrisis) || !!selectedVehicle;
 
@@ -3461,10 +3467,10 @@ export default function DashboardClient() {
                         <span
                           id="fleet-tenant-scope-badge"
                           className="px-2.5 py-1 rounded-md text-xs font-mono font-bold flex items-center gap-1.5 shrink-0 bg-cyan-500/20 text-cyan-300 border border-cyan-400/40"
- title="Sesi DISPATCHER: hanya armada perusahaan Anda dengan GPS live yang ditampilkan. Unit estimasi tersedia lewat panel Armada Perusahaan."
+ title="Sesi DISPATCHER: badge ini hanya armada perusahaan Anda dengan GPS live. Peta + pills Semua/Kapal/Udara menambahkan koridor publik AIS/ADS-B situasional. Unit estimasi tersedia lewat panel Armada Perusahaan."
                         >
                           <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
-                          <span>Perusahaan Live GPS ({fleetCountVehicles.length})</span>
+                          <span>Perusahaan Live GPS ({liveTenantVehicles.length})</span>
                         </span>
                       )}
                     </div>

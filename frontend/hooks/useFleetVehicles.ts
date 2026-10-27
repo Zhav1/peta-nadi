@@ -488,8 +488,11 @@ export function useFleetVehicles(
   };
 
   // --- Tenant scoping -------------------------------------------------------
-  // Dispatcher: only the caller's own assets survive. No FALLBACK_FLEET, ever —
-  // a mock corridor can never be mistaken for a real truck.
+  // Dispatcher roster honesty: tenantVehicles stays strictly tenant-scoped.
+  // Trucks must never leak across tenants, so the roster never fills with
+  // FALLBACK_FLEET trucks. Maritime/air are public AIS/ADS-B situational
+  // awareness (pre-Phase-81 behavior): they ride along in the map/pills as
+  // non-tenant vessels, never counted as Perusahaan Live GPS.
   const tenantVehicles: FleetVehicle[] = isDispatcher
     ? selectTenantVehicles(rawVehicles, effectiveCompanyId)
     : rawVehicles;
@@ -501,6 +504,53 @@ export function useFleetVehicles(
   const estimatedTenantVehicles = tenantVehicles.filter(
     (v) => v.tracking_mode === 'ROUTE_ESTIMATED'
   );
+
+  // Situational vessels: maritime/air from the backend macro feed that do not
+  // belong to this tenant (is_tenant_asset === false). Trucks are excluded by
+  // construction — no cross-tenant live GPS leak. No claim => honest empty
+  // (never backfill vessels for a claim-less session).
+  const situationalVessels: FleetVehicle[] =
+    isDispatcher && effectiveCompanyId
+      ? rawVehicles.filter(
+          (v) =>
+            (v.modality === 'maritime' || v.modality === 'air') &&
+            (v as any).is_tenant_asset !== true &&
+            !tenantVehicles.some((t) => t.vehicle_id === v.vehicle_id)
+        )
+      : [];
+
+  // Vessel fallback (dispatchers only, vessels only, claim required): when the
+  // backend macro feed is empty (cold start / AIS down), show the static
+  // FALLBACK_FLEET ships/planes so Kapal/Udara pills + map dots never read 0.
+  // Trucks stay tenant-scoped — never backfilled with mocks.
+  const fallbackVessels: FleetVehicle[] = isDispatcher && effectiveCompanyId
+    ? (() => {
+        const present = new Set(
+          [...liveTenantVehicles, ...situationalVessels].map((v) => v.vehicle_id)
+        );
+        const needMaritime =
+          !liveTenantVehicles.some((v) => v.modality === 'maritime') &&
+          !situationalVessels.some((v) => v.modality === 'maritime');
+        const needAir =
+          !liveTenantVehicles.some((v) => v.modality === 'air') &&
+          !situationalVessels.some((v) => v.modality === 'air');
+        const out: FleetVehicle[] = [];
+        if (needMaritime)
+          out.push(...FALLBACK_FLEET.filter((v) => v.modality === 'maritime'));
+        if (needAir)
+          out.push(...FALLBACK_FLEET.filter((v) => v.modality === 'air'));
+        return out.filter((v) => !present.has(v.vehicle_id));
+      })()
+    : [];
+
+  // Dispatcher map/pills = live tenant trucks + live tenant vessels + public
+  // situational vessels + vessel fallback. Perusahaan Live GPS badge stays
+  // liveTenantVehicles only (see DashboardClient).
+  const dispatcherCombinedVehicles: FleetVehicle[] = [
+    ...liveTenantVehicles,
+    ...situationalVessels,
+    ...fallbackVessels,
+  ];
 
   const baseVehicles = isDispatcher
     ? tenantVehicles
@@ -518,10 +568,12 @@ export function useFleetVehicles(
   // When isSimulationMode is true: "Semua Armada Live & Rute Terestimasikan" (all active multimodal units)
   // When isSimulationMode is false: "Hanya Transponder & GPS Aktif"
   // STILL keeps AIS_LIVE, ADSB_LIVE, OPENSKY_NETWORK, PELINDO_SUMATRA_RADAR, LIVE_GPS, TMS_GPS_WEBHOOK, and CUSTOM_DISPATCHER visible - NEVER an empty []!
-  // Dispatchers never get this toggle: their view is always the live tenant slice.
-  const transponderOnlyVehicles = baseVehicles.filter(isTransponderActive);
+  // Dispatchers never get this toggle: their view is always the combined
+  // live-tenant + situational-vessel slice (trucks tenant-scoped).
+  const transponderSource = isDispatcher ? dispatcherCombinedVehicles : baseVehicles;
+  const transponderOnlyVehicles = transponderSource.filter(isTransponderActive);
   const vehicles: FleetVehicle[] = isDispatcher
-    ? liveTenantVehicles
+    ? dispatcherCombinedVehicles
     : isSimulationMode
       ? baseVehicles
       : (transponderOnlyVehicles.length > 0 ? transponderOnlyVehicles : baseVehicles);
