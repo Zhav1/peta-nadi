@@ -13,7 +13,7 @@
 | 160 | Baseline, audit, state repair | **DONE** | See §160 evidence below |
 | 161 | Auth session durability | **DONE** | See §161 evidence below |
 | 162 | Thin web + tick | **DONE** | See §162 evidence below |
-| 163 | Bootstrap snapshot + read path | TODO | — |
+| 163 | Bootstrap snapshot + read path | **163a DONE / 163b TODO** | See §163a evidence below |
 | 164 | Backend hot-path + proxy hardening | TODO | — |
 | 165 | Production verification + SLO gate | TODO | — |
 | 166 | Soak start + review | TODO | — |
@@ -273,11 +273,85 @@ No phase-162 test failed; no auth test regressed. The full-suite count rose from
 
 ---
 
+## Phase 163a — DB-backed dashboard bootstrap snapshot (backend) · DONE
+
+The first dashboard paint no longer has to fan out to ~25–30 endpoints. The 15
+public dashboard sections are composed **once per tick** and persisted in Supabase;
+`GET /api/v1/dashboard/bootstrap` reads that row in one authenticated request
+(`Cache-Control: private, no-store`), with a bounded live fallback and tenant-scoped
+`fleet`/`erp` for DISPATCHER/REGULATOR. Plan:
+`.planning/phases/163-bootstrap-snapshot-read-path/PLAN.md`.
+
+**Branch note:** implemented on `m9-operational-truth`, **uncommitted**; the
+concurrent M9 weather/routing/frontend files were read-only for this unit and left
+untouched (the M9 session committed its own work as `bb9b61b` during the phase).
+
+### Delivered
+
+| Deliverable | Path |
+|---|---|
+| `dashboard_snapshots` table (payload, computed_at, schema_version, source_freshness), `computed_at` index, RLS enabled with no policies, write/read contract comment | `infra/supabase/migrations/024_dashboard_snapshots.sql` |
+| Snapshot builder (15 public sections, parallel, 5 s each, isolated), store/read, staleness helper, never-raising tick entry point | `backend/app/services/dashboard_snapshot_service.py` |
+| `GET /api/v1/dashboard/bootstrap` + hidden `/dashboard/bootstrap` alias | `backend/app/routers/dashboard_bootstrap.py` |
+| Router registration (2-line delta) | `backend/app/main.py` |
+| Post-tick snapshot refresh, `snapshot_built`/`snapshot_failed`, 30 s outer bound, runs even when no job is due | `backend/app/routers/internal_tick.py` |
+| Service tests (11) + endpoint tests (13) | `backend/tests/test_dashboard_snapshot.py`, `backend/tests/test_dashboard_bootstrap.py` |
+| Tick-hook tests (3) added to the phase-162 suite | `backend/tests/test_internal_tick.py` |
+
+### Endpoint contract
+
+| Case | Response |
+|---|---|
+| No `Authorization` header | `200`, `role=GUEST`, `company_id=null`, public sections only |
+| Invalid/expired token | `401` + `WWW-Authenticate: Bearer` (phase 161 fail-closed), `Cache-Control: private, no-store` |
+| Fresh stored row (≤ 600 s) | `200`, `stale=false`, sections from `dashboard_snapshots.payload` |
+| Missing/stale/unparseable row | bounded live build (8 s cap), `200`, `stale=true`, `reason` |
+| Live build fails/times out | `200` with the stored payload if any (else `sections={}`), `stale=true`, `reason=live_build_failed|live_build_timeout` |
+| `DISPATCHER` / `REGULATOR` | adds live `fleet` (geometry excluded, claim-scoped) + `erp` (same role policy as `/api/v1/erp/summary`); failures are `degraded`, still `200` |
+| `modality` | `truck` (default) \| `vessel` \| `air`; unknown → `400 INVALID_MODALITY` |
+| Headers | `private, no-store` on 200, 400 and 401 |
+| Side effects | none — the tick is the only writer; a read never ingests or writes |
+
+### Cached vs live
+
+- **Cached (Supabase, survives restart):** all 15 public sections, written by
+  `POST /internal/tick` every 5 minutes after the batch jobs.
+- **Live:** `fleet` (vehicles router 8 s per-tenant cache → telemetry) and `erp`
+  (ledger 120 s Redis/mem cache) for operators; the bounded fallback build for
+  guests when the row is missing/stale (returned to that caller, **not** written).
+- **Degraded public section:** in-process last-good value (`cached: true`) if the
+  process has one, else `null`. Tenant sections never reuse the last-good cache
+  (name-only key would cross tenants).
+
+### Evidence
+
+| Gate | Result | Source |
+|---|---|---|
+| `pytest tests/test_dashboard_snapshot.py tests/test_dashboard_bootstrap.py -q` | **24 passed**, 3 warnings, 2.68 s, exit 0 | run in this session |
+| `pytest tests/test_internal_tick.py tests/test_m8_auth_contract.py -q` | **41 passed** (20 tick incl. 3 new + 21 auth), 3 warnings, 3.17 s, exit 0 | run in this session |
+| `python -c "import app.main"` | `import ok in 2.67s`; `/api/v1/dashboard/bootstrap` + `/dashboard/bootstrap` registered | run in this session |
+| Migration 024 SQL | reviewed manually; no SQL parser installed (`pglast`/`sqlparse`/`sqlglot` absent); idempotent style matched to 022/023 | run in this session |
+
+### Open items handed on
+
+1. **Migration 024 must be applied** before the tick can persist a snapshot. Until
+   then every mount takes the bounded live path with `stale=true` (correct, slower).
+2. **163b (frontend) is deferred** until the concurrent M9 dashboard edits settle:
+   mount the single endpoint, lazy sections, 30 s timeout/abort, stale badge, types.
+3. **`fleet`/`incidents`/`erp` still block on sync PostgREST** (audit F4); the 5 s
+   section budget cannot preempt that. Phase 164 owns the async-I/O sweep.
+4. **`evaluation_test_matrix` is a large section** (137 cases); if the 163b trace
+   shows it dominating the payload, move it to a lazy-mounted section.
+5. **No production measurement yet** — the "< 5 s first data / request count down"
+   gate needs the 163b client and a Playwright trace (phase 165).
+
+---
+
 ## Remaining phases — TODO
 
 | Phase | Name | Gate that must pass |
 |---|---|---|
-| 163 | Bootstrap snapshot + read path | First data < 5s; request count down |
+| 163b | Bootstrap client integration (frontend) | First data < 5s; request count down |
 | 164 | Backend hot-path + proxy hardening | Warm login < 3s; two-user cache isolation |
 | 165 | Production verification + SLO gate | All SLOs except soak green |
 | 166 | Soak start + review | 0 probe failures over 7 days (follow-up session) |
@@ -292,7 +366,10 @@ No phase-162 test failed; no auth test regressed. The full-suite count rose from
 | Phase 160 audit/keep-alive docs + this file | see commit following `51b3903` on the same branch |
 | Phase 161 code + tests (auth durability) | `b76baa1` on `m9-operational-truth` (M8 branch cherry-pick pending) |
 | Phase 161 plan + this evidence | `.planning/phases/161-auth-session-durability/PLAN.md`, this file |
-| Phase 162 code + tests (thin web + tick) | working tree on `m9-operational-truth`, **uncommitted** |
+| Phase 162 code + tests (thin web + tick) | `557a467` on `m9-operational-truth` |
 | Phase 162 plan + this evidence | `.planning/phases/162-thin-web-external-tick/PLAN.md`, this file |
 | Phase 162 migration (must be applied before prod tick works) | `infra/supabase/migrations/023_scheduler_jobs.sql` |
+| Phase 163a code + tests (bootstrap snapshot, backend) | working tree on `m9-operational-truth`, **uncommitted** |
+| Phase 163a plan + this evidence | `.planning/phases/163-bootstrap-snapshot-read-path/PLAN.md`, this file |
+| Phase 163a migration (must be applied before the tick can persist a snapshot) | `infra/supabase/migrations/024_dashboard_snapshots.sql` |
 | Untracked by design (repo convention: run artifacts are not committed) | `.planning/phases/160-baseline-audit-state-repair/artifacts/`, `.planning/baseline-pytest.txt` |

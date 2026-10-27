@@ -45,6 +45,33 @@ def _clean_tick_state():
     internal_tick.reset_tick_state()
 
 
+@pytest.fixture(autouse=True)
+def _stub_dashboard_snapshot(monkeypatch):
+    """The tick refreshes the dashboard read model (Phase 163a).
+
+    Stub it for every tick test: the real builder composes 15 live sections and
+    would reach Supabase/BMKG/Open-Meteo. Tests that care about the hook set
+    their own fake on top of this one.
+    """
+    from app.services import dashboard_snapshot_service
+
+    calls: list[dict] = []
+
+    async def _record(**kwargs):
+        calls.append(kwargs)
+        return {
+            "status": "ok",
+            "sections": 0,
+            "computed_at": "2026-10-27T00:00:00+00:00",
+            "ms": 0,
+        }
+
+    monkeypatch.setattr(
+        dashboard_snapshot_service, "build_and_store_global_snapshot", _record
+    )
+    return calls
+
+
 @pytest.fixture
 def tick_token(monkeypatch):
     monkeypatch.setattr(job_scheduler.get_settings(), "internal_tick_token", TOKEN)
@@ -463,3 +490,95 @@ async def test_continuous_consumer_starts_after_the_delay(monkeypatch):
     finally:
         task.cancel()
         await asyncio.gather(task, return_exceptions=True)
+
+
+# ---------------------------------------------------------------------------
+# 5. Dashboard snapshot refresh (Phase 163a)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_tick_refreshes_the_dashboard_snapshot_after_jobs(monkeypatch, tick_token):
+    from app.services import dashboard_snapshot_service
+
+    order = []
+
+    async def fake_plan():
+        return job_scheduler.TickPlan(due=[])
+
+    async def fake_run(plan=None, run_id=None):
+        order.append("jobs")
+        return {}
+
+    async def fake_snapshot(**kwargs):
+        order.append("snapshot")
+        return {
+            "status": "ok",
+            "sections": 15,
+            "computed_at": "2026-10-27T00:00:00+00:00",
+            "ms": 5,
+        }
+
+    monkeypatch.setattr(job_scheduler, "plan_tick", fake_plan)
+    monkeypatch.setattr(job_scheduler, "run_tick", fake_run)
+    monkeypatch.setattr(
+        dashboard_snapshot_service, "build_and_store_global_snapshot", fake_snapshot
+    )
+
+    await internal_tick.internal_tick(x_internal_token=TOKEN)
+    await internal_tick.wait_for_pending_ticks()
+
+    # The snapshot is built even when no batch job was due, and always after
+    # the jobs (the 202 has already been returned to the cron caller).
+    assert order == ["jobs", "snapshot"]
+    assert internal_tick._tick_lock.locked() is False
+
+
+@pytest.mark.asyncio
+async def test_snapshot_failure_never_fails_the_tick(monkeypatch, tick_token):
+    from app.services import dashboard_snapshot_service
+
+    async def fake_plan():
+        return job_scheduler.TickPlan(due=[])
+
+    async def fake_run(plan=None, run_id=None):
+        return {}
+
+    async def boom(**kwargs):
+        raise RuntimeError("supabase down")
+
+    monkeypatch.setattr(job_scheduler, "plan_tick", fake_plan)
+    monkeypatch.setattr(job_scheduler, "run_tick", fake_run)
+    monkeypatch.setattr(dashboard_snapshot_service, "build_and_store_global_snapshot", boom)
+
+    body = await internal_tick.internal_tick(x_internal_token=TOKEN)
+    await internal_tick.wait_for_pending_ticks()
+
+    assert body["accepted"] is True
+    assert internal_tick._tick_lock.locked() is False
+
+
+@pytest.mark.asyncio
+async def test_snapshot_build_is_bounded_and_never_holds_the_lock(monkeypatch, tick_token):
+    from app.services import dashboard_snapshot_service
+
+    async def fake_plan():
+        return job_scheduler.TickPlan(due=[])
+
+    async def fake_run(plan=None, run_id=None):
+        return {}
+
+    async def hang(**kwargs):
+        await asyncio.sleep(30)
+
+    monkeypatch.setattr(job_scheduler, "plan_tick", fake_plan)
+    monkeypatch.setattr(job_scheduler, "run_tick", fake_run)
+    monkeypatch.setattr(dashboard_snapshot_service, "build_and_store_global_snapshot", hang)
+    monkeypatch.setattr(internal_tick, "SNAPSHOT_BUILD_TIMEOUT_SECONDS", 0.05)
+
+    started = asyncio.get_running_loop().time()
+    await internal_tick.internal_tick(x_internal_token=TOKEN)
+    await internal_tick.wait_for_pending_ticks()
+    elapsed = asyncio.get_running_loop().time() - started
+
+    assert elapsed < 2.0
+    assert internal_tick._tick_lock.locked() is False

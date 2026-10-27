@@ -21,7 +21,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
-from app.routers import health, incidents, agent_router, approvals, demo_router, commodity_router, corridor_router, routing_router, vehicles_router, news_router, outcomes_router, evaluation_router, auth_router, fleet_ingest_router, intermodal_router, geocode_router, travels_router, erp_router, bnpb_router, internal_tick
+from app.routers import health, incidents, agent_router, approvals, demo_router, commodity_router, corridor_router, routing_router, vehicles_router, news_router, outcomes_router, evaluation_router, auth_router, fleet_ingest_router, intermodal_router, geocode_router, travels_router, erp_router, bnpb_router, internal_tick, dashboard_bootstrap
 from app.services.redis_client import get_redis, close_redis
 
 settings = get_settings()
@@ -622,6 +622,9 @@ app.include_router(health.router)
 # Protected external tick (M8 / Phase 162). Declares both /internal/tick and the
 # /api/v1/internal/tick alias, so no prefix is applied here.
 app.include_router(internal_tick.router)
+# Dashboard bootstrap read model (M8 / Phase 163a). Declares both
+# /api/v1/dashboard/bootstrap and the /dashboard/bootstrap alias.
+app.include_router(dashboard_bootstrap.router)
 app.include_router(incidents.router, prefix="/api/v1")
 app.include_router(approvals.router, prefix="/api/v1")
 app.include_router(corridor_router.router, prefix="/api/v1")
