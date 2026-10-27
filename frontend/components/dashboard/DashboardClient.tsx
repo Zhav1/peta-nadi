@@ -3272,6 +3272,7 @@ export default function DashboardClient() {
                           >
                             <span>Fokus</span>
                           </button>
+                          {(activeRouteIdx != null || currentMapRoutes.length > 0) && (
                           <button
                             type="button"
                             data-testid={`berita-hold-${item.id}`}
@@ -3284,6 +3285,7 @@ export default function DashboardClient() {
                           >
                             <span>Tahan (Hold)</span>
                           </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -3498,21 +3500,8 @@ export default function DashboardClient() {
               />
             </div>
 
-            {/* Dispatcher roster overlay: honest inventory of onboarded assets.
-                LIVE_GPS units drive the map; ROUTE_ESTIMATED units are listed
-                roster only, no badge, and only drawn on click inspection. */}
-            {isDispatcherWorkspace && isRosterVisible && (
-              <TenantFleetRoster
-                vehicles={tenantFleetVehicles}
-                isLoading={isFleetLoading}
-                error={fleetError}
-                isTenantScoped={isFleetTenantScoped}
-                companyId={fleetCompanyId}
-                selectedVehicleId={selectedVehicle?.vehicle_id ?? null}
-                onSelectVehicle={handleSelectVehicle}
-                onOpenOnboarding={() => setIsOnboardingModalOpen(true)}
-              />
-            )}
+            {/* Dispatcher roster lives by the header trigger (#fleet-roster-toggle):
+                no bottom-left floating mount (single source of truth). */}
 
             {/* Route-computation status modal: centered overlay (Watermelon
                 Dialog-1 pattern), auto-closes on done. Test-id + role kept. */}
