@@ -1,7 +1,7 @@
 # ROADMAP: PreHub (Logistics Resilience Intelligence Platform)
 
-**Active Milestone:** M7 - Live News Trust, Source Breadth & Forecast Waspada Integrity [ACTIVE 🚀]
-**Previous Milestones:** M1 - Hackathon MVP [COMPLETED ✅], M2 - PreHub Final Defense [COMPLETED ✅], M3 - PreHub MVP Pilot Operations [COMPLETED ✅], M4 - PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability [COMPLETED ✅], M5 - High-Fidelity Intelligence & Isolated Operations Engine [COMPLETED ✅], M6 - Turn-by-Turn Road Snapping, Offline Fleet Precomputation & Dual-Layer Hazard Avoidance [COMPLETED ✅]
+**Active Milestone:** M8 - Fast & Durable [ACTIVE 🚀] — phases 160–166
+**Previous Milestones:** M1 - Hackathon MVP [COMPLETED ✅], M2 - PreHub Final Defense [COMPLETED ✅], M3 - PreHub MVP Pilot Operations [COMPLETED ✅], M4 - PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability [COMPLETED ✅], M5 - High-Fidelity Intelligence & Isolated Operations Engine [COMPLETED ✅], M6 - Turn-by-Turn Road Snapping, Offline Fleet Precomputation & Dual-Layer Hazard Avoidance [COMPLETED ✅], M7 - Live News Trust, Source Breadth & Forecast Waspada Integrity [COMPLETED ✅]
 **Development Mode:** Solo, AI-assisted (GSD Disciplined Workflow)
 
 ---
@@ -2736,6 +2736,8 @@ Milestone M2 addresses critical feedback from competition judges (Development Pr
 
 # Milestone M7: Live News Trust, Source Breadth & Forecast Waspada Integrity
 
+**Status:** COMPLETE ✅ (2026-10-27, phases 107–159)
+
 M7 removes the remaining ways the Berita surface could look live when it was not: synthetic fallback rows, publisher search-page citations, moving `now()` timestamps, a Medan-centric feed set, and a 60-row read window that let DROPPED rows hide valid ones. It then adds a bounded, orthogonal early-warning tag (`FORECAST_WASPADA`) that can never become a confirmed RED incident. Phases 107–110 are committed.
 
 ---
@@ -3135,7 +3137,7 @@ pm run build ? 7/7 static routes, 0 errors.
 - [x] `npx tsc --noEmit` -> exit 0.
 - [x] `GET /health` -> 200; `GET /api/v1/evaluation/benchmark` -> 200 (dataset_hash `e6c7645c`, raw_brier `0.1106`); `GET /api/v1/evaluation/live` -> 200.
 
-## Phase 150: P1 Foundation � Auto-Radius, Modal, Perusahaan (docs record)
+## Phase 150: P1 Foundation � Auto-Radius, Modal, Perusahaan (docs record)
 
 **Goal:** Record the P1 foundation slice (no code changes).
 **Status:** COMPLETE ? (docs-only, no commit)
@@ -3264,7 +3266,7 @@ pm run build ? 7/7 static routes, 0 errors.
 
 - [x] `npx tsc --noEmit` -> exit 0 (window tail).
 
-## Phase 159: Vessel Restore � Dispatcher (docs record)
+## Phase 159: Vessel Restore � Dispatcher (docs record)
 
 **Goal:** Record tenant-truck + situational-vessel split (`b0072cc`).
 **Status:** COMPLETE ? (docs-only, no commit)
@@ -3278,3 +3280,152 @@ pm run build ? 7/7 static routes, 0 errors.
 
 - [x] `pytest backend/tests/test_fleet_ingest.py` -> 12 passed.
 - [x] `npx tsc --noEmit` -> exit 0.
+
+---
+
+# Milestone M8: Fast & Durable [ACTIVE 🚀]
+
+**Status:** ACTIVE 🚀 (registered 2026-10-27; phases 160–166)
+**Spec:** `.planning/M8-SPEC.md`
+**Budget:** $0. Free-host migration is a fallback gate only, not a paid upgrade.
+
+M8 makes the authenticated dashboard fast on first load and durable across sessions on the zero-cost Render/Vercel stack. It fixes Supabase session refresh and cookie policy, thins the web process so batch ingestion moves to an idempotent external tick, serves a DB-backed `dashboard_snapshots` bootstrap with lazy-mounted sections, hardens the proxy cache boundary, and proves the result with Playwright plus a 7-day soak.
+
+---
+
+## Phase 160: Baseline, Audit, State Repair
+
+**Goal:** Record an honest baseline (production latencies, request count, token claims) and audit the backend read path before any change, so later SLO claims have a starting point and the playback probe stops lying.
+**Status:** PLANNED ⏳
+**Plan:** `.planning/phases/160-baseline-audit-state-repair/PLAN.md`
+
+### Deliverables
+- **Baseline metrics**: cold/warm `/health`, login latency, dashboard first-data time, first-mount request count, token `exp`, and role/`company_id` claims from the three test accounts.
+- **`BACKEND-AUDIT.md`**: all 81 routes, the 23 auth-dependent handlers, cache status, sync I/O inside `async def`, persistence gaps, ranked findings.
+- **Playwright scaffold**: local + production smoke specs and a baseline report artifact.
+- **GitHub probe fix** (`.github/workflows/keep-alive.yml`): timeout math, `--fail-with-body`, `concurrency`, JSON artifact + daily summary.
+- **State reconciliation**: M2/M4/M5/M7 stale state reconciled and M8 registered.
+
+### Verification
+- [ ] `npx tsc --noEmit` → exit 0.
+- [ ] `npm run build` → all static routes, 0 errors.
+- [ ] `pytest backend/tests` → green.
+- [ ] Playwright baseline suite runs and writes a baseline report.
+
+---
+
+## Phase 161: Auth Session Durability
+
+**Goal:** Make a Supabase session survive the ~1h access-token lifetime and a 7-day idle window without silently downgrading the operator to guest.
+**Status:** PLANNED ⏳
+
+### Deliverables
+- **Refresh wiring**: `getSession()` at boot; `onAuthStateChange` mirrors every `TOKEN_REFRESHED` / `SIGNED_IN` into localStorage and the `prehub_auth_token` cookie.
+- **Magic link**: `detectSessionInUrl` + `SIGNED_IN` handling for the redirect landing.
+- **Cookie policy**: `Max-Age=604800`, `Path=/`, `SameSite=Lax`, `Secure` in production, renewed on refresh, cleared on logout.
+- **Fail-closed backend**: no token → guest; supplied-but-invalid token → 401; middleware rejects tokens without `exp`.
+- **Session edges**: optimistic JWT-claim hydration with background `/auth/me` reconcile, cross-tab login/logout sync, auth-generation counter cancelling a logout during an in-flight login.
+
+### Verification
+- [ ] Session survives refresh and a simulated expiry (short-TTL test), with no silent guest downgrade.
+- [ ] Invalid supplied token returns 401; tokenless request stays guest.
+- [ ] Cross-tab login and logout converge in both tabs.
+- [ ] Logout during in-flight login does not resurrect the session.
+
+---
+
+## Phase 162: Thin Web + Tick
+
+**Goal:** Free the single 0.1-CPU uvicorn worker from nine boot pollers by moving batch ingestion to a protected, idempotent external tick.
+**Status:** PLANNED ⏳
+
+### Deliverables
+- **No batch pollers at boot**; AIS WebSocket and alert fanout start 60–90s after boot, supervised with backoff.
+- **Lazy imports** for numpy/scipy/langgraph/adapters; no `init_db()` at import in production; JWKS pre-warm after startup.
+- **`GET /internal/tick`**: `X-Internal-Token` constant-time check, `202 { accepted, due, run_id }` returned immediately.
+- **Single-flight**: Postgres advisory lock or `job_runs.locked_until`; cadence gated on `last_run_at` + per-tick CPU budget; missed ticks catch up without duplicating a completed cycle.
+- **Trigger**: cron-job.org every 5 minutes, 90s timeout; GitHub Actions as secondary prober.
+
+### Verification
+- [ ] Cold boot responds in < 20s and `/health` returns 200 while a tick runs.
+- [ ] Overlapping tick returns `202 skipped`; a due job runs exactly once.
+- [ ] `/internal/tick` without a valid token is rejected.
+- [ ] No batch poller starts in the first 60s of process life.
+
+---
+
+## Phase 163: Bootstrap Snapshot + Read Path
+
+**Goal:** Replace the ~25–30-request first dashboard mount with one auth-aware bootstrap read over a DB-backed snapshot, plus lazy-mounted sections.
+**Status:** PLANNED ⏳
+
+### Deliverables
+- **`dashboard_snapshots` table** in Supabase with per-section payload and `computed_at`.
+- **`GET /api/v1/dashboard/bootstrap?modality=truck|vessel|air`**: guest → public data, dispatcher → `company_id`-scoped fleet; returns `computed_at`, `stale`, per-section freshness; `private, no-store`.
+- **Bounded fallback**: missing snapshot → 10s-capped live compute + async snapshot write.
+- **Client**: bootstrap-first render, skeleton shell, lazy-mounted hidden sections, poll only visible sections.
+- **Transport**: `fetchWithTimeout` (15s default / 30s bootstrap), one retry with backoff, abort on unmount, no overlapping polls.
+- **Caches**: weather (BMKG + Open-Meteo fusion) and incidents served from cache instead of live fusion.
+
+### Verification
+- [ ] First data < 5s on throttled Fast 4G.
+- [ ] First-mount request count materially below the recorded baseline.
+- [ ] Snapshot missing/corrupt falls back honestly with a stale badge.
+- [ ] No overlapping polls; aborted fetches leave no state write.
+
+---
+
+## Phase 164: Backend Hot-Path + Proxy Hardening
+
+**Goal:** Remove the remaining synchronous work on auth/hot paths and make the cache boundary truthful, so two different users can never receive each other's authenticated payload.
+**Status:** PLANNED ⏳
+
+### Deliverables
+- **Supabase client singleton** + JWKS pre-warm; async I/O on auth and hot handlers.
+- **Persistence fixes**: news re-tier write-back, `last_fetched_at` fix.
+- **Proxy**: authenticated GET → `Cache-Control: private, no-store`; explicit anonymous allowlist may use `public, s-maxage=60, stale-while-revalidate=120`; `Idempotency-Key` preserved; SSE never cached; direct-to-Render remains primary.
+- **Client transport**: no `Content-Type` on GET (no CORS preflight).
+
+### Verification
+- [ ] Warm login p95 < 3s.
+- [ ] Two-user cache-isolation assertion passes in production.
+- [ ] Authenticated GET responses carry `private, no-store`; anonymous allowlisted GETs keep the 60s s-maxage.
+- [ ] Anonymous GET issues no preflight.
+
+---
+
+## Phase 165: Production Verification + SLO Gate
+
+**Goal:** Prove the milestone on production infrastructure and decide — on evidence — whether the free host still meets the cold-start gate.
+**Status:** PLANNED ⏳
+**Deploy path:** branch → local verify → merge main → production smoke.
+
+### Deliverables
+- Production Playwright smoke on `pre-hub.vercel.app` + `peta-nadi.onrender.com`.
+- SLO table with measured values against baseline (cold first response, warm `/health`, warm login, first data, session survival, request count).
+- Free-host migration decision: triggered only if the cold-start gate fails, never a paid upgrade.
+
+### Verification
+- [ ] All SLOs except the soak are green, or the failing gate is documented with its migration decision.
+- [ ] Production smoke suite green twice (repeat run, no flakes).
+- [ ] Two-user cache isolation and session survival verified against real accounts.
+- [ ] Cold first response p95 < 20s, warm `/health` p95 < 500ms.
+
+---
+
+## Phase 166: Soak Start + Review
+
+**Goal:** Start the 7-day stability window with a probe that cannot lie, and leave a review checklist for the follow-up verdict session.
+**Status:** PLANNED ⏳
+
+### Deliverables
+- GitHub Actions probe every 10 minutes: `--fail-with-body`, `max-time 120`, one retry, 15-minute job timeout, `concurrency` guard.
+- JSON artifact + daily summary retained 90 days; delayed runs recorded as delayed, not failed.
+- Soak start timestamp recorded; artifact URL recorded; any deploy resets the window and the new start time is recorded.
+- Review checklist for the follow-up verdict.
+
+### Verification
+- [ ] Probe workflow green for the first 24h with artifact + summary present.
+- [ ] A deliberately delayed run is recorded as delayed, not failed.
+- [ ] Soak start time and artifact URL are recorded in `.planning/`.
+- [ ] 7-day verdict explicitly deferred to the follow-up session (0 failures target).

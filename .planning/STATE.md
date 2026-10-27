@@ -1,37 +1,40 @@
 ---
 gsd_state_version: "1.0"
-milestone: M7
-milestone_name: Live News Trust, Source Breadth & Forecast Waspada Integrity
-current_phase: 159
-current_phase_name: Vessel Restore Dispatcher
-status: complete
-stopped_at: "Phases 150-159 docs recorded (P1-P5 + regression batch + waspada + FIRMS bbox + corridor-preserve + vessel restore). Evidence: pytest fleet_ingest 12 passed, pytest firms 2 passed, tsc exit 0. No commit."
+milestone: M8
+milestone_name: Fast & Durable
+current_phase: 160
+current_phase_name: Baseline, Audit, State Repair
+status: planning
+stopped_at: "M8 registered; phase 160 pending"
 last_updated: "2026-10-27T00:00:00.000Z"
 last_activity: 2026-10-27
-last_activity_desc: "Executed Phases 150-159: dashboard/FIRMS/fleet docs pass (auto-radius, berita+TopNav, evidence-only zone, titik panas cluster, HITL 3-section, regression batch, waspada info-only, FIRMS bbox, corridor-preserve, vessel restore)."
+last_activity_desc: "Registered milestone M8 Fast & Durable (phases 160-166) and scaffolded phase 160 plan."
 state_head: HEAD
 progress:
-  total_phases: 159
-  completed_phases: 159
-  total_plans: 129
-  completed_plans: 129
-  percent: 100.0
+  total_phases: 7
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # STATE: PreHub Project Memory
 
-**Last Updated:** 2026-10-26
-**Active Milestone:** M7 - Live News Trust, Source Breadth & Forecast Waspada Integrity [ACTIVE ðŸš€]
-**Previous Milestones:** M1-M5 [COMPLETED âœ…], M6 - 3D Globe Native Mapbox Fleet, Street-Snapping & Impeccable Cartography [COMPLETED âœ…]
-**Current Phase:** 149
+**Last Updated:** 2026-10-27
+**Active Milestone:** M8 - Fast & Durable [ACTIVE ðŸš€]
+**Previous Milestones:** M1-M5 [COMPLETED âœ…], M6 - 3D Globe Native Mapbox Fleet, Street-Snapping & Impeccable Cartography [COMPLETED âœ…], M7 - Live News Trust, Source Breadth & Forecast Waspada Integrity [COMPLETED âœ…]
+**Current Phase:** 160
 
 ---
 
 ## Current Position
 
-Phase: 149 (Dedupe Gagal Wording) - COMPLETE âœ…; prior: Phase 138 (Evaluasi Credibility Docs Commit) - COMPLETE âœ….
-Status: Evaluasi-credibility workstream documented and verified (`ccb5bbd` ringkas+expandable/batch-immutable/live-recompute/diagnostik-live-wire/keep-alive, `de078d7` pred-tersimpan migration 021 + offline per-row ledger, `b8d27a1` phases 134-137 docs). Evidence: pytest 16 passed, tsc exit 0, `/health` 200, `/api/v1/evaluation/benchmark` 200 (dataset_hash `e6c7645c`, raw_brier `0.1106`), `/live` 200.
-Next action: Merge `evaluasi-credibility-milestone-20261026` to main (Vercel prod redeploy) and apply migration 021 on Supabase; then continue Phase 120 (UI Anti-Slop Reconstruction Gelombang 3 & 4).
+Phase: 160 â€” Baseline, Audit, State Repair
+Plan: â€”
+Status: Planning
+Last activity: 2026-10-27 â€” Milestone M8 started
+Previous: M7 complete through Phase 159 (docs recorded; pytest fleet_ingest 12 passed, pytest firms 2 passed, tsc exit 0; no commit).
+Next action: Execute Phase 160 tasks (baseline metrics, `BACKEND-AUDIT.md`, Playwright smoke scaffold, keep-alive probe fix, state reconciliation record).
 
 
 
@@ -358,62 +361,69 @@ These scripts validate the economic correlation hypotheses that underpin Agent 5
 
 ## Phase 150 Log (2026-10-27)
 
-- Phase 150 (P1 Foundation) logged as COMPLETE — docs-only pass, no app edits, no commit.
+- Phase 150 (P1 Foundation) logged as COMPLETE ï¿½ docs-only pass, no app edits, no commit.
 - Auto-radius chain `radius_km ?? simulatedShockwave.radiusKm ?? selectedRadius ?? 8` (DashboardClient.tsx:3562); `autoRadiusKm` prop (CrisisSimulatorBar.tsx:85,116,571); speed fixed 1x (:522).
 - Modal 3-section shell (Risiko / Dampak & Biaya / Verifikasi); roster single-source `#fleet-roster-toggle`.
 - Evidence (window tail): tsc 0. Docs: .planning/phases/150-p1-foundation-auto-radius-modal-perusahaan/.
 
 ## Phase 151 Log (2026-10-27)
 
-- Phase 151 (P2 Berita + TopNav) logged as COMPLETE — docs-only pass, no app edits, no commit.
+- Phase 151 (P2 Berita + TopNav) logged as COMPLETE ï¿½ docs-only pass, no app edits, no commit.
 - Hold gated on real route (DashboardClient.tsx:3275); TopNav 3 pills, dormant props kept `_`-prefixed; zero-cost Fokus via stored audit trail.
 - Evidence (window tail): tsc 0. Docs: .planning/phases/151-p2-berita-topnav/.
 
 ## Phase 152 Log (2026-10-27)
 
-- Phase 152 (P3 Zone Evidence-Only + Causal) logged as COMPLETE — docs-only pass, no app edits, no commit.
+- Phase 152 (P3 Zone Evidence-Only + Causal) logged as COMPLETE ï¿½ docs-only pass, no app edits, no commit.
 - Tab lock + hold_staging double exclusion (CrisisSidebar.tsx:56-68); always-visible causal collapse (:183-206).
 - Evidence (window tail): tsc 0. Docs: .planning/phases/152-p3-zone-evidence-only-causal/.
 
 ## Phase 153 Log (2026-10-27)
 
-- Phase 153 (P4 Titik Panas Cluster + Advisory) logged as COMPLETE — docs-only pass, no app edits, no commit.
+- Phase 153 (P4 Titik Panas Cluster + Advisory) logged as COMPLETE ï¿½ docs-only pass, no app edits, no commit.
 - Single-link 5 km cluster, >=3 high-conf (conf>=80 or FRP>100); orange map-only exception; Waspada Dini default OFF.
 - Evidence (window tail): tsc 0. Docs: .planning/phases/153-p4-titik-panas-cluster-advisory/.
 
 ## Phase 154 Log (2026-10-27)
 
-- Phase 154 (P5 HITL / Detail 3-Section) logged as COMPLETE — docs-only pass, no app edits, no commit.
+- Phase 154 (P5 HITL / Detail 3-Section) logged as COMPLETE ï¿½ docs-only pass, no app edits, no commit.
 - Evidence-gated APPROVE/OVERRIDE, HOLD-only fallback, forecast total block, silent guest, Mitigation hitlBlocked mirror.
 - Evidence (window tail): tsc 0. Docs: .planning/phases/154-p5-hitl-detail-3section/.
 
 ## Phase 155 Log (2026-10-27)
 
-- Phase 155 (Regression-Fix Batch 5) logged as COMPLETE — docs-only pass, no app edits, no commit.
+- Phase 155 (Regression-Fix Batch 5) logged as COMPLETE ï¿½ docs-only pass, no app edits, no commit.
 - Records `2de5ff8` (+529/-637): evidence distill, histori removal, armada dedup, titik panas/waspada restore, berita hold gate.
 - Note: untracked probe debris (`bench.json`, `erp1/5.json`, `evlive.json`, `h1.json`, `headers1.txt`) must be deleted before any commit.
 - Evidence (window tail): tsc 0. Docs: .planning/phases/155-regression-fix-batch-5/.
 
 ## Phase 156 Log (2026-10-27)
 
-- Phase 156 (Waspada Info-Only) logged as COMPLETE — docs-only pass, no app edits, no commit.
+- Phase 156 (Waspada Info-Only) logged as COMPLETE ï¿½ docs-only pass, no app edits, no commit.
 - Default OFF, no forecast detour calc, disruption-only `min_severity=high` default, 409 guard kept.
 - Evidence (window tail): tsc 0. Docs: .planning/phases/156-waspada-info-only/.
 
 ## Phase 157 Log (2026-10-27)
 
-- Phase 157 (FIRMS Whole-Sumatra BBox) logged as COMPLETE — docs-only pass, no app edits, no commit.
+- Phase 157 (FIRMS Whole-Sumatra BBox) logged as COMPLETE ï¿½ docs-only pass, no app edits, no commit.
 - Bbox 94,-6,108,6 only geo gate; spine = provenance; 500-cap FRP desc; honest-degraded on missing MAP_KEY; MAP_KEY Render-backend-only.
 - Evidence (this pass): pytest firms 2 passed, tsc 0. Docs: .planning/phases/157-firms-whole-sumatra-bbox/.
 
 ## Phase 158 Log (2026-10-27)
 
-- Phase 158 (Corridor-Preserve) logged as COMPLETE — docs-only pass, no app edits, no commit.
+- Phase 158 (Corridor-Preserve) logged as COMPLETE ï¿½ docs-only pass, no app edits, no commit.
 - Records `af0f60d` (+8/-9): both zone-click wipes removed; audit payload honest-empty; explicit reset kept.
 - Evidence (window tail): tsc 0. Docs: .planning/phases/158-corridor-preserve-zone-click/.
 
 ## Phase 159 Log (2026-10-27)
 
-- Phase 159 (Vessel Restore) logged as COMPLETE — docs-only pass, no app edits, no commit.
+- Phase 159 (Vessel Restore) logged as COMPLETE ï¿½ docs-only pass, no app edits, no commit.
 - Records `b0072cc` (+110/-25): modality-split tenancy (trucks scoped, maritime/air public); badge = liveTenantVehicles; test contract updated.
 - Evidence (this pass): pytest test_fleet_ingest 12 passed, tsc 0. Docs: .planning/phases/159-vessel-restore-dispatcher/.
+
+## M8 Registration Log (2026-10-27)
+
+- Milestone M8 (Fast & Durable) registered from `.planning/M8-SPEC.md`: 7 phases, 160-166. Planning-artifact update only - no app edits, no commit, no phase directories moved.
+- Scope: auth session durability, thin web + external tick, DB-backed dashboard bootstrap snapshot, read-path/proxy hardening, SLO production gate, 7-day soak start.
+- Non-goals carried: no visual redesign, no `@supabase/ssr` HttpOnly migration, no paid infrastructure, no full async rewrite of 81 routes, no new product features.
+- Current position: Phase 160 (Baseline, Audit, State Repair) - planning. Plan: `.planning/phases/160-baseline-audit-state-repair/PLAN.md`.
