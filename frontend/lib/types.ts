@@ -185,6 +185,14 @@ export interface RouteRecommendation {
   congestion_segments?: CongestionSegment[];
   modality?: 'truck' | 'maritime' | 'air' | 'multimodal' | 'best';
   corridor_type?: 'land_primary' | 'land_detour' | 'sea_intermodal' | 'air_intermodal' | 'hold_staging';
+  /**
+   * Phase 170 provenance (decision 5): 'live' = Mapbox road geometry,
+   * 'offline-interpolated' = straight-line estimate, 'solver-hub' = CPU solver
+   * hub-graph geometry. Surfaced as `geometri jalan` / `koridor hub` /
+   * `simulasi offline`; never implied by styling alone.
+   */
+  source?: 'live' | 'offline-interpolated' | 'solver-hub';
+
   viable?: boolean;
   non_viable_reason?: string;
   economic_comparison?: HoldVsRerouteEconomics;

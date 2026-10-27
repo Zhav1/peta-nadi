@@ -337,6 +337,30 @@ async def _collect_weather_events() -> Tuple[List[Dict[str, Any]], List[Dict[str
     return bmkg_events or [], openmeteo_events or [], upstream
 
 
+def _passes_numeric_gate(
+    precip_mm: Optional[float],
+    flood_pct: Optional[float],
+    min_precip: Optional[float],
+    min_flood: Optional[float],
+) -> bool:
+    """Disruption gate on the numerics (OR semantics when both gates are set).
+
+    A zone with no numerics at all is kept: absence of measurement is not
+    evidence of calm. Shared by the candidate builder and the in-memory filter
+    so a cached snapshot can never be re-gated differently.
+    """
+    if min_precip is None and min_flood is None:
+        return True
+    has_numeric = precip_mm is not None or flood_pct is not None
+    if not has_numeric:
+        return True
+    precip_ok = min_precip is None or (precip_mm is not None and precip_mm >= min_precip)
+    flood_ok = min_flood is None or (flood_pct is not None and flood_pct >= min_flood)
+    if min_precip is not None and min_flood is not None:
+        return bool(precip_ok or flood_ok)
+    return bool(precip_ok and flood_ok)
+
+
 def _build_weather_candidates(
     bmkg_events: List[Dict[str, Any]],
     openmeteo_events: List[Dict[str, Any]],
@@ -392,16 +416,8 @@ def _build_weather_candidates(
         if _SEVERITY_RANK.get(severity, 1) < min_rank:
             continue
         # Optional numeric disruption gates (OR semantics: heavy precip OR high flood).
-        if min_precip is not None or min_flood is not None:
-            has_numeric = precip_mm is not None or flood_pct is not None
-            if has_numeric:
-                precip_ok = min_precip is None or (precip_mm is not None and precip_mm >= min_precip)
-                flood_ok = min_flood is None or (flood_pct is not None and flood_pct >= min_flood)
-                if min_precip is not None and min_flood is not None:
-                    if not (precip_ok or flood_ok):
-                        continue
-                elif not (precip_ok and flood_ok):
-                    continue
+        if not _passes_numeric_gate(precip_mm, flood_pct, min_precip, min_flood):
+            continue
 
         now = datetime.now(timezone.utc)
         # Q3(A): blue/purple advisory palette (never RED semantics — corroborator only).
@@ -501,6 +517,140 @@ def _build_weather_candidates(
     return candidates
 
 
+async def get_fusion_snapshot() -> Dict[str, Any]:
+    """ONE upstream fusion pass: BMKG + Open-Meteo at full fidelity.
+
+    Returns the UNCAPPED candidate list plus upstream health. This is the only
+    function that touches the metered weather upstreams; the router caches its
+    result once (keyed by bbox + window only) and every weather endpoint —
+    ``/weather/summary`` and the polygon endpoints — derives from it. Filtering
+    by severity/precip/flood happens in memory, so a second endpoint can never
+    trigger a second upstream fetch.
+    """
+    logger.info("Fusing BMKG weather alerts + Open-Meteo atmospheric forecasts...")
+
+    bmkg_events, openmeteo_events, upstream = await _collect_weather_events()
+    candidates = _build_weather_candidates(
+        bmkg_events, openmeteo_events, min_severity="low", min_precip=None, min_flood=None
+    )
+
+    now = datetime.now(timezone.utc)
+    return {
+        "bbox": list(SUMATRA_BBOX),
+        "generated_at": now.isoformat(),
+        "valid_until": datetime.fromtimestamp(
+            now.timestamp() + WEATHER_VALIDITY_HOURS * 3600, tz=timezone.utc
+        ).isoformat(),
+        "window_hours": HAZARD_WINDOW_HOURS,
+        "source": WEATHER_SUMMARY_SOURCE,
+        "candidates": candidates,
+        "upstream": upstream,
+    }
+
+
+def filter_candidates(
+    candidates: Optional[List[Dict[str, Any]]],
+    min_severity: str = DEFAULT_MIN_SEVERITY,
+    min_precip: Optional[float] = None,
+    min_flood: Optional[float] = None,
+) -> List[Dict[str, Any]]:
+    """Apply the request's render gates to a cached snapshot's candidates.
+
+    Identical semantics to the gates applied inside ``_build_weather_candidates``
+    (severity rank first, then the numeric OR gate) — re-implemented as a filter
+    so the shared snapshot serves every filter combination without refetching.
+    """
+    min_rank = _SEVERITY_RANK.get(str(min_severity).lower(), 2)
+    kept: List[Dict[str, Any]] = []
+    for cand in candidates or []:
+        props = ((cand or {}).get("feature") or {}).get("properties") or {}
+        severity = str(props.get("severity", "")).lower()
+        if _SEVERITY_RANK.get(severity, 1) < min_rank:
+            continue
+        if not _passes_numeric_gate(
+            props.get("precipitation_mm_24h"), props.get("flood_risk_pct"),
+            min_precip, min_flood,
+        ):
+            continue
+        kept.append(cand)
+    return kept
+
+
+def render_polygon_payload(
+    snapshot: Dict[str, Any],
+    min_severity: str = DEFAULT_MIN_SEVERITY,
+    min_precip: Optional[float] = None,
+    min_flood: Optional[float] = None,
+) -> Dict[str, Any]:
+    """Render-capped GeoJSON FeatureCollection from a fusion snapshot.
+
+    The cap is a RENDER cap only: ``total`` publishes the pre-cap count for the
+    requested filter, ``count`` what is drawn, ``capped`` whether they differ.
+    """
+    candidates = filter_candidates(
+        snapshot.get("candidates"), min_severity, min_precip, min_flood
+    )
+
+    # Render cap only: sort for drawing priority (severity, magnitude, then
+    # corridor proximity) and slice. No zone is ever dropped for being far from
+    # _CORRIDOR_SPINE — the spine is ordering, not a filter.
+    candidates.sort(key=lambda c: (-c["rank"], -c["mag"], c["dist_km"]))
+    total = len(candidates)
+    features = [c["feature"] for c in candidates[:MAX_WEATHER_FEATURES]]
+    count = len(features)
+    capped = total > count
+
+    upstream = snapshot.get("upstream") or {}
+    degraded = bool(upstream.get("degraded"))
+    generated_at = snapshot.get("generated_at")
+
+    if degraded and count == 0:
+        # Unknown, not zero: a total outage publishes null counts.
+        status, reason = "degraded", upstream.get("reason") or "Sumber cuaca tidak tersedia"
+        published_total: Optional[int] = None
+        published_count: Optional[int] = None
+    else:
+        status = "ok" if count > 0 else "empty"
+        reason = upstream.get("reason") if degraded else (None if count else "Tidak ada zona aktif")
+        published_total = total
+        published_count = count
+
+    metadata = {
+        "fusion_engine": "BMKG Radar Observation + Open-Meteo NWP Forecast",
+        "timestamp": generated_at,
+        "updated_at": generated_at,
+        # total = qualifying zones BEFORE the render cap. count = polygons
+        # returned. capped = the render cap truncated the draw list.
+        "total": published_total,
+        "count": published_count,
+        "capped": capped,
+        # Legacy alias kept frozen (decision 14): it always meant "returned".
+        "total_regions": count,
+        "coverage": "full-sumatra-grid",
+        "bbox": list(snapshot.get("bbox") or SUMATRA_BBOX),
+        "max_features": MAX_WEATHER_FEATURES,
+        "status": status,
+        "reason": reason,
+        "validity_hours": WEATHER_VALIDITY_HOURS,
+        "stale_ceiling_hours": WEATHER_STALE_CEILING_HOURS,
+        "refresh_seconds": WEATHER_REFRESH_S,
+        "upstream_degraded": degraded,
+        "filter": {
+            "min_severity": min_severity,
+            "min_precip": min_precip,
+            "min_flood": min_flood,
+        },
+    }
+    return {
+        "type": "FeatureCollection",
+        "features": features,
+        "metadata": metadata,
+        # Compact render contract (same values) so clients do not need to parse
+        # the whole fusion metadata block to draw "menampilkan N dari M".
+        "meta": compact_polygon_meta(metadata),
+    }
+
+
 async def get_fused_spatial_weather(
     min_severity: str = DEFAULT_MIN_SEVERITY,
     min_precip: Optional[float] = None,
@@ -519,33 +669,9 @@ async def get_fused_spatial_weather(
     The GeoJSON stays capped at MAX_WEATHER_FEATURES for rendering. Counting is
     NOT done here — use get_weather_zone_inventory() for world-truth totals.
     """
-    logger.info("Fusing BMKG weather alerts + Open-Meteo atmospheric forecasts...")
+    snapshot = await get_fusion_snapshot()
+    return render_polygon_payload(snapshot, min_severity, min_precip, min_flood)
 
-    bmkg_events, openmeteo_events, upstream = await _collect_weather_events()
-    candidates = _build_weather_candidates(
-        bmkg_events, openmeteo_events, min_severity, min_precip, min_flood
-    )
-
-    # Render cap only: sort for drawing priority (severity, magnitude, then
-    # corridor proximity) and slice. No zone is ever dropped for being far from
-    # _CORRIDOR_SPINE — the spine is ordering, not a filter.
-    candidates.sort(key=lambda c: (-c["rank"], -c["mag"], c["dist_km"]))
-    total = len(candidates)
-    features = [c["feature"] for c in candidates[:MAX_WEATHER_FEATURES]]
-    count = len(features)
-    capped = total > count
-    degraded = bool(upstream.get("degraded"))
-
-    if degraded and count == 0:
-        # Unknown, not zero: a total outage publishes null counts.
-        status, reason = "degraded", upstream.get("reason") or "Sumber cuaca tidak tersedia"
-        published_total: Optional[int] = None
-        published_count: Optional[int] = None
-    else:
-        status = "ok" if count > 0 else "empty"
-        reason = upstream.get("reason") if degraded else (None if count else "Tidak ada zona aktif")
-        published_total = total
-        published_count = count
 
     now_iso = datetime.now(timezone.utc).isoformat()
     metadata = {
@@ -597,17 +723,14 @@ _ZONE_VALIDITY_HOURS = WEATHER_VALIDITY_HOURS
 WEATHER_SUMMARY_SOURCE = "BMKG Stasiun Klimatologi & Geofisika + Open-Meteo NWP (ECMWF/GFS)"
 
 
-async def get_weather_zone_inventory() -> Dict[str, Any]:
+def count_weather_zones(snapshot: Dict[str, Any]) -> Dict[str, Any]:
     """Uncapped, severity-partitioned zone inventory for the counters.
 
     Never truncated by MAX_WEATHER_FEATURES: the render cap is applied only by
-    get_fused_spatial_weather(). ``upstream.degraded`` tells the caller that no
+    render_polygon_payload(). ``upstream.degraded`` tells the caller that no
     count may be published (degraded must not become 0).
     """
-    bmkg_events, openmeteo_events, upstream = await _collect_weather_events()
-    candidates = _build_weather_candidates(
-        bmkg_events, openmeteo_events, min_severity="low", min_precip=None, min_flood=None
-    )
+    candidates = snapshot.get("candidates") or []
 
     disruption = 0
     advisory = 0
@@ -621,19 +744,23 @@ async def get_weather_zone_inventory() -> Dict[str, Any]:
         else:
             below_advisory += 1
 
-    now = datetime.now(timezone.utc)
     return {
-        "bbox": list(SUMATRA_BBOX),
-        "generated_at": now.isoformat(),
-        "valid_until": datetime.fromtimestamp(
-            now.timestamp() + _ZONE_VALIDITY_HOURS * 3600, tz=timezone.utc
-        ).isoformat(),
-        "window_hours": HAZARD_WINDOW_HOURS,
-        "source": WEATHER_SUMMARY_SOURCE,
+        "bbox": list(snapshot.get("bbox") or SUMATRA_BBOX),
+        "generated_at": snapshot.get("generated_at"),
+        "valid_until": snapshot.get("valid_until"),
+        "window_hours": int(snapshot.get("window_hours") or HAZARD_WINDOW_HOURS),
+        "source": snapshot.get("source") or WEATHER_SUMMARY_SOURCE,
         # total = full fused inventory before any render cap.
         "total": len(candidates),
         "cuaca_total": disruption,
         "waspada_total": advisory,
         "below_advisory_total": below_advisory,
-        "upstream": upstream,
+        "upstream": snapshot.get("upstream") or {},
     }
+
+
+async def get_weather_zone_inventory() -> Dict[str, Any]:
+    """Uncapped zone inventory from a fresh fusion snapshot (one upstream pass)."""
+    snapshot = await get_fusion_snapshot()
+    return count_weather_zones(snapshot)
+

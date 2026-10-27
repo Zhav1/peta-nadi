@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/lib/authContext';
 import { normalizeNewsPermalink, isForecastActive } from '@/hooks/useNewsVerification';
+import { routeProvenanceLabel, routeProvenanceTitle } from '@/lib/routeProvenance';
 import { SpoilageHedgingCard } from './SpoilageHedgingCard';
 import { ComplianceInspectorCard } from './ComplianceInspectorCard';
 import { HoldVsRerouteCard } from './HoldVsRerouteCard';
@@ -167,7 +168,7 @@ function RouteCard({
  // no card actions render for a forecast, even when route proof exists.
  const hitlBlocked = isSimulated || !hasEvidence || isForecast;
  const blockedCopy = isForecast ? FORECAST_INFO_COPY : HITL_UNVERIFIED_COPY;
- const provenanceLabel = isSimulated ? 'Simulasi' : 'Live';
+ const provenance = routeProvenanceLabel(route);
  // GUEST sandbox is zero-POST local preview, so its buttons stay enabled;
  // the gate only locks real ledger writes. HOLD tactics stay allowed for all roles.
  const approveLocked = (hitlBlocked && !isHoldStaging && role !== 'GUEST') || (isForecast && role !== 'GUEST');
@@ -268,14 +269,15 @@ function RouteCard({
  </span>
  )}
  <span
+ data-testid={`route-provenance-${idx}`}
  className={`text-xs text-slate-500 ${
  isSimulated
  ? 'bg-amber-500/15 text-amber-300 border-amber-500/40'
  : 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30'
  }`}
- title={isSimulated ? 'Geometri interpolasi, bukan jalan live' : 'Rute jalan live'}
+ title={routeProvenanceTitle(provenance)}
  >
- {provenanceLabel}
+ {provenance}
  </span>
  </span>
  </div>
@@ -386,7 +388,7 @@ function RouteCard({
  }`}
  title={isSimulated ? 'Angka estimasi simulasi, bukan pengukuran live' : 'Angka rute live'}
  >
- {provenanceLabel}
+ {provenance}
  </span>
  </div>
 

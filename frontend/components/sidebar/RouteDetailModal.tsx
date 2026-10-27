@@ -18,6 +18,7 @@ import {
 } from '@/lib/tripCostCalculator';
 import { api } from '@/lib/api';
 import { isForecastActive } from '@/hooks/useNewsVerification';
+import { routeProvenanceLabel, routeProvenanceTitle } from '@/lib/routeProvenance';
 import {
   AlertDialog,
   AlertDialogContent,
@@ -228,6 +229,10 @@ export function RouteDetailModal({
               ? 'Opsi Tahan di Depo Penyangga (Hold & Buffer)'
               : route.description.slice(0, 60));
 
+  // Phase 170: same provenance vocabulary as the corridor cards, so the modal
+  // can never present hub-graph or interpolated geometry as live road lines.
+  const provenance = routeProvenanceLabel(route);
+
   return (
   <AlertDialog open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
   <AlertDialogContent
@@ -241,6 +246,19 @@ export function RouteDetailModal({
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs font-medium px-2 py-0.5 rounded bg-white/5 text-slate-200 border border-white/10">
                 Detail rute
+              </span>
+              <span
+                data-testid="route-provenance-modal"
+                title={routeProvenanceTitle(provenance)}
+                className={`text-xs font-mono px-2 py-0.5 rounded border ${
+                  provenance === 'simulasi offline'
+                    ? 'bg-amber-500/15 text-amber-300 border-amber-500/40'
+                    : provenance === 'koridor hub'
+                    ? 'bg-white/5 text-slate-200 border-white/10'
+                    : 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30'
+                }`}
+              >
+                {provenance}
               </span>
             </div>
             <AlertDialogTitle className="text-sm font-bold text-white mt-1.5 leading-snug">

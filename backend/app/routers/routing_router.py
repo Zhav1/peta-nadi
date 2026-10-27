@@ -11,7 +11,9 @@ from pydantic import BaseModel, Field
 
 from app.services.weather_fusion_service import (
     get_fused_spatial_weather,
-    get_weather_zone_inventory,
+    get_fusion_snapshot,
+    render_polygon_payload,
+    count_weather_zones,
     SUMATRA_BBOX,
     HAZARD_WINDOW_HOURS,
     WEATHER_SUMMARY_SOURCE,
@@ -217,6 +219,119 @@ def _carry_meta(payload: Dict[str, Any], metadata: Dict[str, Any]) -> Dict[str, 
     return updated
 
 
+# ---------------------------------------------------------------------------
+# Phase 170: ONE shared fusion snapshot for every weather endpoint.
+#
+# Before this, /weather/summary and the polygon endpoints each kept their own
+# 600 s cache, so a 24 h day cost 2 x (58 pts x 144 polls) = 16,704 metered
+# Open-Meteo location-calls against a 10,000/day free ceiling — a guaranteed
+# 429 that leaves both layers permanently stale. The snapshot below is keyed by
+# the bbox/window ONLY (never by severity/precip/flood) and is the single gate
+# in front of the upstream, so the whole day costs 58 x 144 = 8,352 calls.
+# Per-filter polygon payloads remain cached, but only as derived renders: a
+# derived miss can never reach upstream on its own.
+# ---------------------------------------------------------------------------
+WEATHER_FUSION_CACHE_KEY = f"{SOURCE_CACHE_PREFIX}weather_fusion"
+
+
+def _read_fusion_cache() -> Optional[Dict[str, Any]]:
+    """Shape-validated read of the shared snapshot (malformed => miss)."""
+    try:
+        raw = cache_get(WEATHER_FUSION_CACHE_KEY)
+        if not raw:
+            return None
+        parsed = json.loads(raw)
+        if not isinstance(parsed, dict):
+            return None
+        snapshot = parsed.get("snapshot")
+        if not isinstance(snapshot, dict):
+            return None
+        if not isinstance(snapshot.get("candidates"), list):
+            return None
+        return parsed
+    except Exception as e:
+        logger.debug(f"Fusion snapshot cache read failed: {e}")
+        return None
+
+
+def _write_fusion_cache(snapshot: Dict[str, Any], now: Any) -> None:
+    try:
+        cache_set(
+            WEATHER_FUSION_CACHE_KEY,
+            json.dumps({"snapshot": snapshot, "fetched_at": now.isoformat()}),
+            ex=WEATHER_STALE_CEILING_HOURS * 3600,
+        )
+    except Exception as e:
+        logger.debug(f"Fusion snapshot cache write failed: {e}")
+
+
+async def _load_fusion_snapshot() -> tuple:
+    """Return ``(snapshot, last_known_good, failure_reason)``.
+
+    ``snapshot`` is present only when it is fresh (served from the shared cache
+    inside the refresh window) or was just fetched successfully. Callers that
+    get ``None`` MUST NOT fetch again in the same request — the failed upstream
+    attempt is already recorded in ``failure_reason``.
+    """
+    now = datetime.now(timezone.utc)
+    cached = _read_fusion_cache()
+
+    if cached is not None:
+        age_s = _age_seconds(cached.get("fetched_at"), now)
+        if age_s is not None and age_s <= WEATHER_REFRESH_S:
+            return cached.get("snapshot"), cached, None
+
+    failure_reason: Optional[str] = None
+    snapshot: Optional[Dict[str, Any]] = None
+    try:
+        snapshot = await asyncio.wait_for(
+            get_fusion_snapshot(), timeout=WEATHER_SUMMARY_TIMEOUT_S
+        )
+    except asyncio.TimeoutError:
+        failure_reason = f"timeout {WEATHER_SUMMARY_TIMEOUT_S:g}s"
+        logger.warning("Shared weather fusion timed out after %ss", WEATHER_SUMMARY_TIMEOUT_S)
+    except Exception as e:
+        failure_reason = str(e)
+        logger.warning(f"Shared weather fusion failed: {e}")
+
+    if snapshot is not None:
+        upstream = snapshot.get("upstream") or {}
+        if not upstream.get("degraded"):
+            _write_fusion_cache(snapshot, now)
+            return snapshot, cached, None
+        failure_reason = failure_reason or upstream.get("reason")
+
+    return None, cached, failure_reason
+
+
+def _stale_polygon_from_snapshot(
+    snapshot: Dict[str, Any],
+    sev: str,
+    eff_precip: Optional[float],
+    eff_flood: Optional[float],
+    now: Any,
+    upstream_reason: Optional[str],
+) -> Dict[str, Any]:
+    """Re-render last-known-good candidates and mark the payload stale."""
+    payload = render_polygon_payload(snapshot, sev, eff_precip, eff_flood)
+    age_s = _age_seconds(snapshot.get("generated_at"), now)
+    if age_s is None:
+        age_s = float(WEATHER_STALE_CEILING_HOURS * 3600)
+    suffix = upstream_reason or "sumber live tidak tersedia"
+    metadata = dict(payload.get("metadata") or {})
+    metadata.update(
+        {
+            "status": "stale",
+            "reason": (
+                f"Data terakhir {human_age_id(age_s)} lalu "
+                f"(valid {WEATHER_VALIDITY_HOURS}j); {suffix}"
+            ),
+            "updated_at": snapshot.get("generated_at") or metadata.get("updated_at"),
+        }
+    )
+    return _carry_meta(payload, metadata)
+
+
 def _stale_polygon_payload(
     cached: Dict[str, Any], now: Any, upstream_reason: Optional[str]
 ) -> Dict[str, Any]:
@@ -278,42 +393,41 @@ def _degraded_polygon_payload(now: Any, upstream_reason: Optional[str]) -> Dict[
 async def _served_weather_polygons(
     sev: str, eff_precip: Optional[float], eff_flood: Optional[float]
 ) -> Dict[str, Any]:
-    """Stale-while-revalidate wrapper around the fusion snapshot."""
+    """Stale-while-revalidate around the ONE shared fusion snapshot.
+
+    The per-filter payload below is a derived render cache: its TTL is the same
+    10 min window, but a miss never reaches the upstream on its own. Only
+    ``_load_fusion_snapshot()`` may fetch, and it is shared with /weather/summary.
+    """
     now = datetime.now(timezone.utc)
     key = _polygon_cache_key(sev, eff_precip, eff_flood)
     cached = _read_polygon_cache(key)
 
     if cached is not None:
         age_s = _age_seconds(cached.get("fetched_at"), now)
-        # Fresh window: serve without touching BMKG/Open-Meteo.
+        # Fresh render: serve without even touching the shared snapshot.
         if age_s is not None and age_s <= WEATHER_REFRESH_S:
             return cached["payload"]
 
-    payload: Optional[Dict[str, Any]] = None
-    failure_reason: Optional[str] = None
-    try:
-        payload = await asyncio.wait_for(
-            get_fused_spatial_weather(
-                min_severity=sev, min_precip=eff_precip, min_flood=eff_flood
-            ),
-            timeout=WEATHER_SUMMARY_TIMEOUT_S,
-        )
-    except asyncio.TimeoutError:
-        failure_reason = f"timeout {WEATHER_SUMMARY_TIMEOUT_S:g}s"
-        logger.warning("Weather polygon fusion timed out after %ss", WEATHER_SUMMARY_TIMEOUT_S)
-    except Exception as e:
-        failure_reason = str(e)
-        logger.warning(f"Weather polygon fusion failed: {e}")
+    snapshot, last_good, failure_reason = await _load_fusion_snapshot()
+    if snapshot is not None:
+        payload = render_polygon_payload(snapshot, sev, eff_precip, eff_flood)
+        metadata = payload.get("metadata") or {}
+        if metadata.get("status") in ("ok", "empty"):
+            _write_polygon_cache(key, payload, now)
+            return payload
+        failure_reason = failure_reason or metadata.get("reason")
 
-    metadata = (payload or {}).get("metadata") or {}
-    if payload is not None and metadata.get("status") in ("ok", "empty"):
-        _write_polygon_cache(key, payload, now)
-        return payload
-
-    upstream_reason = failure_reason or metadata.get("reason")
     if cached is not None:
-        return _stale_polygon_payload(cached, now, upstream_reason)
-    return _degraded_polygon_payload(now, upstream_reason)
+        return _stale_polygon_payload(cached, now, failure_reason)
+
+    last_good_snapshot = (last_good or {}).get("snapshot")
+    if last_good_snapshot is not None:
+        return _stale_polygon_from_snapshot(
+            last_good_snapshot, sev, eff_precip, eff_flood, now, failure_reason
+        )
+
+    return _degraded_polygon_payload(now, failure_reason)
 
 
 WEATHER_SUMMARY_CACHE_KEY = f"{SOURCE_CACHE_PREFIX}weather_summary"
@@ -410,6 +524,34 @@ def _stale_weather_summary(
     return payload
 
 
+def _summary_payload_from_inventory(
+    inventory: Dict[str, Any], fallback_now: Any
+) -> Dict[str, Any]:
+    """Counter payload from an uncapped inventory (never a fake 0)."""
+    cuaca_total = int(inventory.get("cuaca_total") or 0)
+    waspada_total = int(inventory.get("waspada_total") or 0)
+    return {
+        "bbox": inventory.get("bbox") or list(SUMATRA_BBOX),
+        "generated_at": inventory.get("generated_at") or fallback_now.isoformat(),
+        "cuaca": _weather_counter_bucket(
+            cuaca_total,
+            "ok" if cuaca_total > 0 else "empty",
+            None if cuaca_total > 0 else "Tidak ada zona aktif",
+            inventory.get("source") or WEATHER_SUMMARY_SOURCE,
+            inventory.get("valid_until"),
+            int(inventory.get("window_hours") or HAZARD_WINDOW_HOURS),
+        ),
+        "waspada": _weather_counter_bucket(
+            waspada_total,
+            "ok" if waspada_total > 0 else "empty",
+            None if waspada_total > 0 else "Tidak ada zona aktif",
+            inventory.get("source") or WEATHER_SUMMARY_SOURCE,
+            inventory.get("valid_until"),
+            int(inventory.get("window_hours") or HAZARD_WINDOW_HOURS),
+        ),
+    }
+
+
 @router.get("/weather/summary")
 async def fetch_weather_summary(
     current_user: UserSession = Depends(get_optional_user),
@@ -430,8 +572,9 @@ async def fetch_weather_summary(
       - stale    → last-known-good count preserved, reason carries the age;
       - ok       → live, valid zone count.
 
-    Redis cache: 5-min refresh window, 24 h stale ceiling. A cache miss always
-    recomputes from the fusion path — it never fabricates a 0.
+    Phase 170: this endpoint shares ONE fusion snapshot with the polygon
+    endpoints, so polling both costs a single metered Open-Meteo batch per
+    refresh window instead of two.
     """
     now = datetime.now(timezone.utc)
     cached = _read_weather_summary_cache()
@@ -441,52 +584,24 @@ async def fetch_weather_summary(
         if age_s is not None and age_s <= WEATHER_SUMMARY_REFRESH_S:
             return cached
 
-    inventory: Optional[Dict[str, Any]] = None
-    try:
-        inventory = await asyncio.wait_for(
-            get_weather_zone_inventory(), timeout=WEATHER_SUMMARY_TIMEOUT_S
-        )
-    except asyncio.TimeoutError:
-        logger.warning(
-            "Weather summary inventory timed out after %ss", WEATHER_SUMMARY_TIMEOUT_S
-        )
-    except Exception as e:
-        logger.warning(f"Weather summary inventory failed: {e}")
-
-    upstream = (inventory or {}).get("upstream") or {}
-    if inventory is not None and not upstream.get("degraded"):
-        cuaca_total = int(inventory.get("cuaca_total") or 0)
-        waspada_total = int(inventory.get("waspada_total") or 0)
-        payload = {
-            "bbox": inventory.get("bbox") or list(SUMATRA_BBOX),
-            "generated_at": inventory.get("generated_at") or now.isoformat(),
-            "cuaca": _weather_counter_bucket(
-                cuaca_total,
-                "ok" if cuaca_total > 0 else "empty",
-                None if cuaca_total > 0 else "Tidak ada zona aktif",
-                inventory.get("source") or WEATHER_SUMMARY_SOURCE,
-                inventory.get("valid_until"),
-                int(inventory.get("window_hours") or HAZARD_WINDOW_HOURS),
-            ),
-            "waspada": _weather_counter_bucket(
-                waspada_total,
-                "ok" if waspada_total > 0 else "empty",
-                None if waspada_total > 0 else "Tidak ada zona aktif",
-                inventory.get("source") or WEATHER_SUMMARY_SOURCE,
-                inventory.get("valid_until"),
-                int(inventory.get("window_hours") or HAZARD_WINDOW_HOURS),
-            ),
-        }
+    snapshot, last_good, failure_reason = await _load_fusion_snapshot()
+    if snapshot is not None:
+        payload = _summary_payload_from_inventory(count_weather_zones(snapshot), now)
         _write_weather_summary_cache(payload)
         return payload
 
     # Upstream unavailable: serve last-known-good if we have it (never a 0).
     if cached is not None:
-        return _stale_weather_summary(cached, now, upstream.get("reason"))
+        return _stale_weather_summary(cached, now, failure_reason)
+
+    last_good_snapshot = (last_good or {}).get("snapshot")
+    if last_good_snapshot is not None:
+        stale = _summary_payload_from_inventory(count_weather_zones(last_good_snapshot), now)
+        return _stale_weather_summary(stale, now, failure_reason)
 
     reason = "Sumber cuaca tidak tersedia"
-    if upstream.get("reason"):
-        reason = f"{reason}: {upstream['reason']}"
+    if failure_reason:
+        reason = f"{reason}: {failure_reason}"
     bucket = _weather_counter_bucket(
         None, "degraded", reason, WEATHER_SUMMARY_SOURCE, None, HAZARD_WINDOW_HOURS
     )

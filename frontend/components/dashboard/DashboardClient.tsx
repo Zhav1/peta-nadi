@@ -54,6 +54,7 @@ import {
 import { api } from '@/lib/api';
 import { toLonLatRing } from '@/lib/polygonGeom';
 import { regionSlugFromLatLon } from '@/lib/region';
+import { dedupeRoutesByGeometry } from '@/lib/routeProvenance';
 import type { CrisisState, WsEvent, CrisisType, Severity, RouteRecommendation, DisasterZone, HazardImpactProfile, ZoneTier, FleetVehicle, TacticalManeuver, FireHotspot, RouteDecisionType, DecisionAction, WeatherHazardSummary, HazardCounterStatus, FireHotspotSource, WeatherPolygonMeta } from '@/lib/types';
 import { useAuth } from '@/lib/authContext';
 import { AuthModal } from '@/components/auth/AuthModal';
@@ -1082,6 +1083,10 @@ export default function DashboardClient() {
   // operator needs lasting feedback plus an explicit abort action (not a 3s toast).
   const [isRoutingLoading, setIsRoutingLoading] = useState(false);
   const [routingError, setRoutingError] = useState<string | null>(null);
+  // Phase 170: a solver refusal (too far / same hub) must be visible, not a
+  // silent early-return. Kept separate from routingError so the rendered route
+  // corridor survives and the reason stays on screen after the toast fades.
+  const [routingNoRouteReason, setRoutingNoRouteReason] = useState<string | null>(null);
   const [routingElapsedMs, setRoutingElapsedMs] = useState(0);
 
   useEffect(() => {
@@ -1468,6 +1473,7 @@ export default function DashboardClient() {
     const isStale = () => signal.aborted || routeCalculationReqIdRef.current !== reqId;
 
     setRoutingError(null);
+    setRoutingNoRouteReason(null);
     // Never let a previous solver latency read as if it belonged to this request.
     setRoutingInfo(null);
     setIsRoutingLoading(true);
@@ -1491,6 +1497,9 @@ export default function DashboardClient() {
         ...(originInfo ? { origin_name: formatNodeId(originId, originInfo) } : {}),
         ...(destInfo ? { dest_name: formatNodeId(destId, destInfo) } : {}),
         fleet_size: 3,
+        // Phase 170: the solver must actually return up to 3 alternatives; the
+        // backend default alone is not enough when the UI expects them.
+        k_alternatives: 3,
         hazard_zones: hazardCenter ? [{ center: hazardCenter, radiusKm }] : [],
         // Forward hedging economics only when the caller supplied them;
         // no hardcoded cargo values are injected into every request.
@@ -1540,20 +1549,36 @@ export default function DashboardClient() {
         return false;
       }
 
-      // Render visual corridors immediately onto map
-      setCurrentMapRoutes(routes);
+      // Render visual corridors immediately onto map. Identical geometries
+      // (Mapbox alternatives can repeat a polyline) render once only.
+      const uniqueRoutes = dedupeRoutesByGeometry(routes);
+      setCurrentMapRoutes(uniqueRoutes);
       setSelectedCrisis((prev) =>
-        prev ? { ...prev, route_recommendations: routes } : prev
+        prev ? { ...prev, route_recommendations: uniqueRoutes } : prev
       );
 
       // 2. Asynchronously hydrate backend solver metrics & hedging economics without blocking visual render
       routingPromise
         .then((routingRes) => {
           if (isStale()) return;
-          const nested = (routingRes as { point_to_point_path?: { status?: string; message?: string } } | null)?.point_to_point_path;
-          if (nested?.status === 'no_route') {
+          const nested = (routingRes as {
+            point_to_point_path?: { status?: string; message?: string; reason?: string; reason_code?: string };
+          } | null)?.point_to_point_path;
+          // Phase 170: a refusal is never silent. The previously rendered
+          // corridor stays on the map (we only add a reason), because clearing
+          // it would leave the operator with nothing at all.
+          if (nested && (nested.status === 'no_route' || nested.status === 'no_path_found')) {
+            const reason =
+              nested.reason ||
+              nested.message ||
+              (nested.status === 'no_route'
+                ? 'Rute solver tidak tersedia untuk titik ini.'
+                : 'Jalur pada graph arteri tidak ditemukan untuk titik ini.');
+            setRoutingNoRouteReason(reason);
+            setToast({ message: reason, type: 'error' });
             return;
           }
+          setRoutingNoRouteReason(null);
           const backendPtpRoutes = (nested as { routes?: Array<{ route_index?: number; hedging?: NonNullable<RouteRecommendation['hedging']> }> } | undefined)?.routes;
           if (Array.isArray(backendPtpRoutes)) {
             backendPtpRoutes.forEach((br, order) => {
@@ -1846,18 +1871,22 @@ export default function DashboardClient() {
             );
 
             if (selectionReqId !== crisisSelectionReqRef.current) return;
-            setCurrentMapRoutes(dynamicRoutes);
+            const uniqueRoutes = dedupeRoutesByGeometry(dynamicRoutes);
+            setCurrentMapRoutes(uniqueRoutes);
             setSelectedCrisis({
               ...baseCrisis,
-              route_recommendations: dynamicRoutes,
+              route_recommendations: uniqueRoutes,
             });
           } else {
             setSelectedCrisis(baseCrisis);
           }
         } else {
           // Clean Slate: If user has not selected Start and End nodes, do not force a mockup route on the map
-          setCurrentMapRoutes(baseCrisis.route_recommendations || []);
-          setSelectedCrisis(baseCrisis);
+          const uniqueBaseRoutes = baseCrisis.route_recommendations
+            ? dedupeRoutesByGeometry(baseCrisis.route_recommendations)
+            : baseCrisis.route_recommendations;
+          setCurrentMapRoutes(uniqueBaseRoutes || []);
+          setSelectedCrisis({ ...baseCrisis, route_recommendations: uniqueBaseRoutes });
         }
       }
     }
@@ -3689,8 +3718,39 @@ export default function DashboardClient() {
               error={routingError}
               elapsedMs={routingElapsedMs}
               onCancel={handleCancelRouting}
-              onDismissError={() => setRoutingError(null)}
+              onDismissError={() => {
+                setRoutingError(null);
+                setRoutingNoRouteReason(null);
+              }}
             />
+
+            {/* Phase 170: solver refusals (origin/destination too far from the
+                hub graph, or both endpoints collapsing onto one hub) used to be
+                swallowed by an early return. The reason is now always visible
+                and the already-rendered corridor is never cleared. */}
+            {routingNoRouteReason && (
+              <div
+                data-testid="routing-no-route-reason"
+                role="status"
+                aria-live="polite"
+                className="absolute left-1/2 top-16 z-[85] w-[min(92vw,32rem)] -translate-x-1/2 rounded-xl border border-amber-500/40 bg-[#0c1017]/95 px-3.5 py-2.5 text-xs font-sans text-amber-200 shadow-2xl"
+              >
+                <div className="flex items-start gap-2">
+                  <span className="mt-0.5 shrink-0 font-mono text-[10px] font-bold text-amber-300">
+                    RUTE SOLVER
+                  </span>
+                  <span className="min-w-0 flex-1 leading-relaxed">{routingNoRouteReason}</span>
+                  <button
+                    type="button"
+                    onClick={() => setRoutingNoRouteReason(null)}
+                    aria-label="Tutup alasan rute solver"
+                    className="shrink-0 cursor-pointer rounded p-0.5 text-amber-300/70 transition-colors hover:bg-white/10 hover:text-amber-100"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Decision Support System (DSS): Dispatcher Alert Queue Strip */}
             {!isAlertQueueDismissed && impactAssessmentData && impactAssessmentData.impacted_vehicles.length > 0 && (

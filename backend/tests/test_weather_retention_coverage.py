@@ -322,3 +322,72 @@ def test_open_meteo_grid_covers_every_sumatra_province():
 
     # 58 points => exactly one bulk HTTP call per poll (all locations in one GET).
     assert len(points) == 58
+
+
+# ---------------------------------------------------------------------------
+# 7. Phase 170 — summary + polygons share ONE upstream fusion snapshot
+# ---------------------------------------------------------------------------
+
+# Metered Open-Meteo math, hard-coded so a future grid/window change fails here
+# instead of 429-ing production. Free tier = 10,000 location-calls/day.
+GRID_POINTS = 58
+POLLS_PER_DAY = 24 * 3600 // 600  # 600 s refresh window => 144 polls
+LOCATION_CALLS_PER_DAY = GRID_POINTS * POLLS_PER_DAY
+
+
+def test_shared_cache_call_budget_is_under_the_free_tier():
+    from app.services.retention import WEATHER_REFRESH_S
+
+    assert WEATHER_REFRESH_S == 600, "call math below assumes the 600 s window"
+    assert POLLS_PER_DAY == 144
+    assert GRID_POINTS == 58, "grid grew: update the metered budget, do not raise it silently"
+    assert LOCATION_CALLS_PER_DAY == 8_352
+    # One shared cache stays under the free ceiling...
+    assert LOCATION_CALLS_PER_DAY < 9_000
+    # ...while the old two independent 600 s caches (summary + polygons) did not.
+    assert LOCATION_CALLS_PER_DAY * 2 == 16_704
+    assert LOCATION_CALLS_PER_DAY * 2 > 10_000
+
+
+@pytest.mark.asyncio
+async def test_summary_then_polygons_perform_exactly_one_upstream_fetch(weather_env):
+    """Cold cache: /weather/summary then /weather/spatial-polygons => 1 fetch."""
+    calls = {"bmkg": 0, "open_meteo": 0}
+
+    def _bmkg_factory():
+        calls["bmkg"] += 1
+        return _FakeBMKG([_om_event(0, "high", -3.0, 102.0)])
+
+    def _om_factory():
+        calls["open_meteo"] += 1
+        return _FakeOpenMeteo([_om_event(1, "high", -2.98, 104.77)])
+
+    weather_env["monkeypatch"].setattr(fusion, "BMKGAdapter", _bmkg_factory)
+    weather_env["monkeypatch"].setattr(fusion, "OpenMeteoAdapter", _om_factory)
+
+    app = FastAPI()
+    app.include_router(routing_router.router, prefix="/api/v1")
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        summary = await client.get("/api/v1/weather/summary")
+        assert summary.status_code == 200, summary.text
+        polygons = await client.get("/api/v1/weather/spatial-polygons")
+        assert polygons.status_code == 200, polygons.text
+        # A different filter must be served from the same snapshot, not refetched.
+        advisory = await client.get(
+            "/api/v1/weather/spatial-polygons?min_severity=medium&min_precip=0&min_flood=0"
+        )
+        assert advisory.status_code == 200, advisory.text
+
+    assert calls == {"bmkg": 1, "open_meteo": 1}, (
+        "summary and polygons must share ONE fusion snapshot; "
+        f"got {calls} upstream fetches"
+    )
+    body = polygons.json()
+    assert body["meta"]["status"] == "ok"
+    assert body["meta"]["total"] >= 2
+    assert summary.json()["cuaca"]["count"] == 2
+    # The shared snapshot is keyed by bbox/window only — never by the filters.
+    assert routing_router.WEATHER_FUSION_CACHE_KEY in weather_env["store"]
+    assert "min_severity" not in routing_router.WEATHER_FUSION_CACHE_KEY
+
