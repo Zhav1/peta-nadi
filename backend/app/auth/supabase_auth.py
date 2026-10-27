@@ -8,9 +8,11 @@ Complies with Supabase Security Guidelines:
 - Provides resilient offline guest session generation for competition evaluators.
 """
 
+import asyncio
 import hashlib
 import json
 import logging
+import threading
 import time
 from typing import Callable, Optional
 import jwt
@@ -95,6 +97,19 @@ DEFAULT_ROLE_EMAILS: dict[str, str] = {
     ROLE_GUEST: "evaluator@kompetisi-lrip.id",
 }
 
+# Demo/evaluator sandbox tenant. Signed guest tokens are only ever minted for
+# this tenant (or an explicitly allowlisted one) — see `is_evaluator` below.
+DEMO_SANDBOX_COMPANY = "demo_sandbox"
+
+# Sentinel identity for the dependency-produced anonymous session. It is the
+# only way to distinguish "no Authorization header was sent" from "a real GUEST
+# token was verified" once the request reaches a handler.
+DEFAULT_GUEST_USER_ID = "default-guest-user"
+
+# Every fail-closed 401 carries the RFC 6750 challenge so clients can tell
+# "re-authenticate" apart from "you are not allowed".
+UNAUTHORIZED_HEADERS: dict[str, str] = {"WWW-Authenticate": "Bearer"}
+
 
 class UserSession(BaseModel):
     """Authenticated user session payload."""
@@ -112,6 +127,57 @@ class UserSession(BaseModel):
 def get_jwt_secret() -> str:
     """Return JWT secret with fallback."""
     return settings.supabase_jwt_secret or "prehub-dev-jwt-secret-key-32-chars-minimum-length-2026"
+
+
+def _csv_setting(name: str, default: str) -> set[str]:
+    """Read a comma-separated setting as a lowercase set (never raises)."""
+    raw = getattr(settings, name, None)
+    if raw is None or str(raw).strip() == "":
+        raw = default
+    return {part.strip().lower() for part in str(raw).split(",") if part.strip()}
+
+
+def evaluator_emails() -> set[str]:
+    """Emails allowed to mint/switch personas (Phase 161 allowlist)."""
+    return _csv_setting("m8_evaluator_emails", DEFAULT_ROLE_EMAILS[ROLE_GUEST])
+
+
+def evaluator_companies() -> set[str]:
+    """Tenants an evaluator may mint tokens for. Defaults to demo_sandbox only."""
+    return _csv_setting("m8_evaluator_companies", DEMO_SANDBOX_COMPANY)
+
+
+def is_anonymous_guest(user: Optional["UserSession"]) -> bool:
+    """True only for the sentinel session produced when no Authorization header was sent."""
+    return bool(user) and getattr(user, "id", None) == DEFAULT_GUEST_USER_ID
+
+
+def is_evaluator(user: Optional["UserSession"]) -> bool:
+    """
+    Authenticated evaluator policy (Phase 161):
+    - tenant claim is demo_sandbox, OR
+    - email is in M8_EVALUATOR_EMAILS (comma-separated, default evaluator@kompetisi-lrip.id).
+    Anonymous callers are never evaluators.
+    """
+    if not user or is_anonymous_guest(user):
+        return False
+    if (user.company_id or "").strip().lower() == DEMO_SANDBOX_COMPANY:
+        return True
+    email = (user.email or "").strip().lower()
+    return bool(email) and email in evaluator_emails()
+
+
+def default_guest_session() -> "UserSession":
+    """Anonymous request session: GUEST with no tenant claim and no permissions."""
+    return UserSession(
+        id=DEFAULT_GUEST_USER_ID,
+        email=DEFAULT_ROLE_EMAILS[ROLE_GUEST],
+        role=ROLE_GUEST,
+        org_name=DEFAULT_ROLE_ORGS[ROLE_GUEST],
+        name=DEFAULT_ROLE_NAMES[ROLE_GUEST],
+        permissions=ROLE_PERMISSIONS[ROLE_GUEST],
+        is_offline_guest=True,
+    )
 
 
 def create_guest_token(
@@ -164,12 +230,49 @@ def create_guest_token(
 _jwks_clients: dict[str, PyJWKClient] = {}
 
 
+def get_jwks_url() -> str:
+    """Resolve the Supabase JWKS endpoint from settings (empty when unconfigured)."""
+    jwks_url = getattr(settings, "supabase_jwks_key", "") or ""
+    if not jwks_url and getattr(settings, "supabase_url", ""):
+        jwks_url = f"{settings.supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json"
+    return jwks_url
+
+
 def get_jwks_client(jwks_url: str) -> PyJWKClient:
     """Returns cached PyJWKClient instance for given JWKS endpoint."""
     global _jwks_clients
     if jwks_url not in _jwks_clients:
         _jwks_clients[jwks_url] = PyJWKClient(jwks_url, cache_keys=True, max_cached_keys=16)
     return _jwks_clients[jwks_url]
+
+
+def prewarm_jwks() -> bool:
+    """
+    Best-effort JWKS pre-warm (blocking; call via `asyncio.to_thread`).
+
+    The first asymmetric token verification otherwise pays the full TLS fetch of
+    the JWKS document inside the auth dependency, i.e. on the login SLO. This
+    fetches and caches the key set once after boot. Failures are logged and
+    swallowed: a cold JWKS must never make the process fail to start.
+    """
+    jwks_url = get_jwks_url()
+    if not jwks_url:
+        logger.debug("JWKS pre-warm skipped: no supabase_jwks_key / supabase_url configured")
+        return False
+    try:
+        client = get_jwks_client(jwks_url)
+        # PyJWT >= 2.5 exposes get_signing_keys(); older builds only have fetch_data().
+        get_keys = getattr(client, "get_signing_keys", None)
+        if callable(get_keys):
+            keys = get_keys()
+        else:  # pragma: no cover - compatibility with older PyJWT
+            client.fetch_data()
+            keys = None
+        logger.info("JWKS pre-warm complete: %s (%s keys)", jwks_url, len(keys) if keys is not None else "?")
+        return True
+    except Exception as exc:
+        logger.warning(f"JWKS pre-warm failed (non-fatal, will retry on first verify): {exc}")
+        return False
 
 
 # ==========================================
@@ -184,19 +287,24 @@ _AUTH_CACHE_TTL_SECONDS = 60
 _AUTH_CACHE_PREFIX = "lrip:cache:auth:"
 _auth_session_mem: dict[str, tuple[float, dict]] = {}
 
-# Reused Supabase clients (Phase 5 perf): Path-3 relay and profiles lookups
-# previously built a fresh client per request (~TLS + auth overhead each).
+# Reused Supabase clients (Phase 5 perf, hardened in Phase 161): Path-3 relay
+# and profiles lookups previously built a fresh client per request (~TLS +
+# auth overhead each). Both are idempotent singletons guarded by a lock so
+# concurrent first requests cannot race two clients into existence.
 _supabase_relay_client = None
 _supabase_admin_client = None
+_supabase_client_lock = threading.Lock()
 
 
 def _get_relay_client():
     """Singleton anon client for the get_user relay fallback."""
     global _supabase_relay_client
     if _supabase_relay_client is None:
-        from app.db.supabase_client import get_client
+        with _supabase_client_lock:
+            if _supabase_relay_client is None:
+                from app.db.supabase_client import get_client
 
-        _supabase_relay_client = get_client()
+                _supabase_relay_client = get_client()
     return _supabase_relay_client
 
 
@@ -204,9 +312,11 @@ def _get_admin_client():
     """Singleton service-role client for the profiles enrichment lookup."""
     global _supabase_admin_client
     if _supabase_admin_client is None:
-        from app.db.supabase_client import get_service_client
+        with _supabase_client_lock:
+            if _supabase_admin_client is None:
+                from app.db.supabase_client import get_service_client
 
-        _supabase_admin_client = get_service_client()
+                _supabase_admin_client = get_service_client()
     return _supabase_admin_client
 
 
@@ -260,6 +370,7 @@ def decode_and_verify_token(token: str) -> UserSession:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"error": "UNAUTHORIZED", "message": "Token otentikasi tidak disediakan atau tidak valid."},
+            headers=UNAUTHORIZED_HEADERS,
         )
 
     # Fast path: fully-verified session cached within the last 60s.
@@ -278,6 +389,7 @@ def decode_and_verify_token(token: str) -> UserSession:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"error": "INVALID_TOKEN", "message": f"Header token tidak valid: {str(e)}"},
+            headers=UNAUTHORIZED_HEADERS,
         )
 
     token_alg = unverified_header.get("alg", "HS256")
@@ -285,9 +397,7 @@ def decode_and_verify_token(token: str) -> UserSession:
     verification_error = None
 
     # Path 1: Asymmetric Supabase Auth JWT (ES256 / RS256 or presence of kid)
-    jwks_url = getattr(settings, "supabase_jwks_key", "") or ""
-    if not jwks_url and getattr(settings, "supabase_url", ""):
-        jwks_url = f"{settings.supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json"
+    jwks_url = get_jwks_url()
 
     if (token_alg in ["ES256", "RS256"] or unverified_header.get("kid")) and jwks_url:
         try:
@@ -303,6 +413,7 @@ def decode_and_verify_token(token: str) -> UserSession:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail={"error": "TOKEN_EXPIRED", "message": "Sesi token telah kedaluwarsa. Silakan masuk kembali."},
+                headers=UNAUTHORIZED_HEADERS,
             )
         except jwt.InvalidSignatureError as e:
             verification_error = e
@@ -325,6 +436,7 @@ def decode_and_verify_token(token: str) -> UserSession:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail={"error": "TOKEN_EXPIRED", "message": "Sesi token telah kedaluwarsa. Silakan masuk kembali."},
+                headers=UNAUTHORIZED_HEADERS,
             )
         except jwt.InvalidSignatureError as e:
             if verification_error is None:
@@ -362,11 +474,13 @@ def decode_and_verify_token(token: str) -> UserSession:
                     "error": "INVALID_SIGNATURE",
                     "message": "Tanda tangan token tidak valid. Sesi ditolak; silakan masuk kembali.",
                 },
+                headers=UNAUTHORIZED_HEADERS,
             )
         err_msg = str(verification_error) if verification_error else "Verifikasi tanda tangan token gagal."
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"error": "INVALID_TOKEN", "message": f"Token tidak valid: {err_msg}"},
+            headers=UNAUTHORIZED_HEADERS,
         )
 
     # Supabase Security: Extract role strictly from app_metadata
@@ -433,38 +547,44 @@ async def get_current_user(
     """
     FastAPI dependency requiring a valid authenticated Bearer token.
     Raises 401 if missing or invalid.
+
+    Verification is blocking (JWKS / Supabase relay / profile lookup), so it runs
+    in a worker thread: a cold JWKS fetch or a slow PostgREST round-trip must not
+    stall the single event loop (M8 root cause #1 / audit F4).
     """
     if not credentials or not credentials.credentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"error": "UNAUTHORIZED", "message": "Autentikasi Bearer token diperlukan untuk mengakses endpoint ini."},
+            headers=UNAUTHORIZED_HEADERS,
         )
-    return decode_and_verify_token(credentials.credentials)
+    return await asyncio.to_thread(decode_and_verify_token, credentials.credentials)
 
 
 async def get_optional_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme),
 ) -> UserSession:
     """
-    FastAPI dependency that returns authenticated UserSession if valid token provided,
-    or falls back to a default GUEST UserSession if token is missing.
+    FastAPI dependency for endpoints that are useful to anonymous visitors.
+
+    Contract (Phase 161):
+    - **No** `Authorization` header → anonymous GUEST session (sentinel id
+      `default-guest-user`). This is an intentional guest visit.
+    - Header **present** but the token is invalid/expired/unverifiable → HTTP 401
+      with `WWW-Authenticate: Bearer`. A supplied credential is never silently
+      downgraded to guest: that turned "session expired" into "read-only visitor"
+      (audit F1) and hid the re-authentication signal from the client.
     """
     if credentials and credentials.credentials:
         try:
-            return decode_and_verify_token(credentials.credentials)
-        except HTTPException:
-            logger.info("Optional auth token invalid, falling back to default Guest session.")
+            return await asyncio.to_thread(decode_and_verify_token, credentials.credentials)
+        except HTTPException as exc:
+            # Fail closed, and guarantee the RFC 6750 challenge on every 401 path.
+            if exc.status_code == status.HTTP_401_UNAUTHORIZED and not exc.headers:
+                exc.headers = dict(UNAUTHORIZED_HEADERS)
+            raise
 
-    # Default Guest Session Fallback
-    return UserSession(
-        id="default-guest-user",
-        email=DEFAULT_ROLE_EMAILS[ROLE_GUEST],
-        role=ROLE_GUEST,
-        org_name=DEFAULT_ROLE_ORGS[ROLE_GUEST],
-        name=DEFAULT_ROLE_NAMES[ROLE_GUEST],
-        permissions=ROLE_PERMISSIONS[ROLE_GUEST],
-        is_offline_guest=True,
-    )
+    return default_guest_session()
 
 
 def require_roles(allowed_roles: list[str]) -> Callable:

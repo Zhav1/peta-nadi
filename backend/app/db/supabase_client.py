@@ -3,6 +3,7 @@ Supabase client factory for PetaNadi.
 Provides a typed client for all database operations.
 """
 import logging
+import threading
 from typing import Optional
 from supabase import create_client, Client
 from app.config import get_settings
@@ -11,6 +12,11 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 _supabase_client: Optional[Client] = None
+# Phase 161: the service-role/admin client used to be rebuilt on every call
+# (TLS + header setup per approval/HITL/write). It is now an idempotent
+# singleton; the lock keeps concurrent first calls from racing two clients.
+_service_client: Optional[Client] = None
+_service_client_lock = threading.Lock()
 
 # Pilot health flag: surfaced via Redis so ops can see *why* incident writes are
 # being skipped instead of a silent RLS denial on the anon client.
@@ -107,16 +113,27 @@ def get_client() -> Client:
 
 def get_service_client() -> Client:
     """
-    Get a Supabase client with service role key.
+    Get the service-role Supabase client (singleton).
     Use for admin operations that bypass Row Level Security (RLS).
     Never expose this client to the frontend.
+
+    Cached per process: the key is checked on every call so a missing
+    `SUPABASE_SERVICE_ROLE_KEY` still raises instead of silently reusing a
+    previously built client from a different configuration.
     """
+    global _service_client
     if not settings.supabase_service_role_key:
         raise RuntimeError("SUPABASE_SERVICE_ROLE_KEY not configured")
-    return create_client(
-        settings.supabase_url,
-        settings.supabase_service_role_key,
-    )
+    if _service_client is not None:
+        return _service_client
+    with _service_client_lock:
+        if _service_client is None:
+            _service_client = create_client(
+                settings.supabase_url,
+                settings.supabase_service_role_key,
+            )
+            logger.info("Supabase service-role client initialized (cached)")
+    return _service_client
 
 
 def get_write_client() -> Client:

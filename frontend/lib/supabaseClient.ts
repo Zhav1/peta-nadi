@@ -10,6 +10,11 @@ export function getSupabaseClient(): SupabaseClient | null {
 
   if (supabaseUrl && supabaseAnonKey && !supabaseUrl.includes('placeholder') && !supabaseAnonKey.includes('placeholder')) {
     try {
+      // Phase 161 (M8): all three flags are load-bearing and must stay on.
+      // persistSession keeps the refresh token across reloads; autoRefreshToken
+      // renews the ~1h access token; detectSessionInUrl applies a magic-link
+      // session on landing. The app mirrors every refreshed token into
+      // localStorage['prehub_auth_token'] + the 7-day cookie (lib/authContext.tsx).
       clientInstance = createClient(supabaseUrl, supabaseAnonKey, {
         auth: {
           persistSession: true,

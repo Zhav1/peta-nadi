@@ -20,6 +20,14 @@ class Settings(BaseSettings):
     supabase_jwt_secret: str = "prehub-dev-jwt-secret-key-32-chars-minimum-length-2026"
     supabase_jwks_key: str = ""
 
+    # M8 / Phase 161 — evaluator persona policy.
+    # Anonymous callers may only mint GUEST tokens for demo_sandbox. A caller is
+    # an "authenticated evaluator" when their verified company_id is demo_sandbox
+    # OR their email is in this comma-separated allowlist.
+    m8_evaluator_emails: str = "evaluator@kompetisi-lrip.id"
+    # Tenants an evaluator may mint tokens for / switch personas into.
+    m8_evaluator_companies: str = "demo_sandbox"
+
     # Redis
     redis_url: str = "redis://localhost:6379"
     redis_password: str = ""

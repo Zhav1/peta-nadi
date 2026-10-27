@@ -73,6 +73,24 @@ A test whose credentials are absent is **skipped with a message**, not failed.
    middleware's `?guest=1` flag after login (`guest_flag_cleared_by_app`). This
    is a finding, not a gating assertion.
 
+## Auth durability spec (phase 161)
+
+`e2e/m8-auth.spec.ts` reuses the same env matrix and config, and adds the session
+survival checks:
+
+```powershell
+npx playwright test e2e/m8-auth.spec.ts --config=playwright.m8.config.ts
+```
+
+| Test | Asserts |
+|---|---|
+| login mirrors the cookie | `prehub_auth_token` equals the localStorage token, expires in ~7 days, `Path=/`, `SameSite=Lax`, `Secure` on HTTPS |
+| stale app token recovery | overwriting localStorage + cookie with `invalid.token.value` and reloading `/dashboard` re-applies the valid Supabase session (same `sub`), rewrites the cookie, and never lands on `?guest=1` or a guest banner |
+| cross-tab logout | logging out in a second tab clears the token and cookie in the first tab via the `storage` event |
+
+The first configured account (DISPATCHER → GUEST → REGULATOR) is used; the
+assertions are role-agnostic. No credentials → the tests skip.
+
 ## CI
 
 Same command; export the env vars from CI secrets. The spec is Chromium-only and

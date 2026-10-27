@@ -5,6 +5,8 @@ const GUEST_EVALUATION_FLAG = 'guest';
 
 // Lightweight structural session check for Edge middleware: the token must be a
 // well-formed, unexpired JWT. Cryptographic verification stays server-side (FastAPI).
+// Phase 161: `exp` is required. A token without a numeric `exp` previously passed
+// this check, so a malformed/expired-by-omission credential looked like a session.
 function decodeJwtPayload(token: string): Record<string, unknown> | null {
   const parts = token.split('.');
   if (parts.length !== 3) return null;
@@ -21,8 +23,9 @@ function hasVerifiableSession(token?: string): boolean {
   if (!token) return false;
   const payload = decodeJwtPayload(token);
   if (!payload) return false;
-  const exp = typeof payload.exp === 'number' ? payload.exp : null;
-  if (exp !== null && exp * 1000 <= Date.now()) return false;
+  const exp = payload.exp;
+  if (typeof exp !== 'number' || !Number.isFinite(exp)) return false;
+  if (exp * 1000 <= Date.now()) return false;
   return true;
 }
 

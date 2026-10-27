@@ -362,10 +362,33 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Validated-alert stream consumer not started: {e}")
 
+    # Best-effort JWKS pre-warm (Phase 161). The first asymmetric token
+    # verification otherwise pays the JWKS TLS fetch inside the auth dependency —
+    # i.e. on the login SLO. Runs in a worker thread so boot is not blocked, and
+    # a failure is logged rather than fatal (verification retries on demand).
+    jwks_task = None
+    if getattr(settings, "supabase_jwks_key", "") or getattr(settings, "supabase_url", ""):
+        try:
+            from app.auth.supabase_auth import prewarm_jwks
+            jwks_task = asyncio.create_task(asyncio.to_thread(prewarm_jwks))
+            logger.info("BOOT: JWKS pre-warm scheduled")
+        except Exception as e:
+            logger.warning(f"JWKS pre-warm not scheduled (non-fatal): {e}")
+    else:
+        logger.info("BOOT: JWKS pre-warm skipped (no SUPABASE_URL / SUPABASE_JWKS_KEY)")
+
     yield  # Application runs here
 
     # Shutdown
     logger.info("Shutting down background workers...")
+    if jwks_task is not None:
+        jwks_task.cancel()
+        try:
+            await jwks_task
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.warning(f"JWKS pre-warm shutdown error: {e}")
     for t in tasks:
         t.cancel()
     if alert_consumer_task is not None:

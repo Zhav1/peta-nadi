@@ -22,6 +22,26 @@ Make the authenticated PreHub dashboard fast on first load and durable across se
 3. **Read-path fan-out.** ~25–30 requests on first dashboard mount, including hidden sections; weather is fused live from BMKG + Open-Meteo with no cache; no request timeouts; overlapping polls. The LLM is not re-run on refresh (DB-first dedupe), but read-path re-tiering, evaluation, routes, and cold caches are recomputed.
 4. **False monitoring.** The GitHub keep-alive job can take 600s of curl time under a 5-minute job timeout, and `curl` lacks `-f`. The proxy marks authenticated GETs `public, s-maxage=60`.
 
+### P0 prerequisite discovered in phase 160
+
+The phase-160 audit (`phases/160-baseline-audit-state-repair/BACKEND-AUDIT.md` §6)
+found two P0 defects that sit **inside** the auth work and must be fixed before any
+session-durability claim is meaningful:
+
+1. **Optional auth fails open (F1).** All 20 `get_optional_user` routes downgraded a
+   supplied-but-invalid token to GUEST with HTTP 200, so an expired dispatcher token
+   looked like a read-only visitor and the client never learned it had to re-auth.
+2. **Anonymous persona minting (F2).** `POST /api/v1/auth/guest-session` issued a
+   signed DISPATCHER/REGULATOR token for any role and tenant to an unauthenticated
+   caller, which made the 24-route auth boundary bypassable outright.
+
+Phase 161 therefore lands the fail-closed contract (`no header → guest`,
+`supplied invalid token → 401`) and restricts persona minting/switching to
+authenticated evaluators inside `demo_sandbox` (env-extendable via
+`M8_EVALUATOR_EMAILS` / `M8_EVALUATOR_COMPANIES`) **in the same phase** as the
+client refresh work. Scope is unchanged otherwise; the fixes are prerequisites, not
+new milestone scope.
+
 ## Non-goals
 
 - No visual redesign; landing page and its 121-frame sequence are untouched.

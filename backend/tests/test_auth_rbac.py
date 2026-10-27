@@ -135,16 +135,24 @@ def test_api_auth_session_fallback():
 
 
 def test_api_create_guest_session():
-    """Verify POST /api/v1/auth/guest-session generates valid token for specified persona."""
+    """Phase 161: anonymous callers may not mint operator personas (403)."""
     response = client.post(
         "/api/v1/auth/guest-session",
         json={"role": "REGULATOR", "org_name": "Dinas Perhubungan Sumut"},
     )
+    assert response.status_code == 403
+    detail = response.json()["detail"]
+    assert detail["error"] == "FORBIDDEN"
+    assert detail["allowed_roles"] == [ROLE_GUEST]
+
+
+def test_api_create_guest_session_anonymous_guest_allowed():
+    """Phase 161: anonymous callers may still mint a GUEST token for demo_sandbox."""
+    response = client.post("/api/v1/auth/guest-session", json={"role": "GUEST"})
     assert response.status_code == 200
     data = response.json()
-    assert "access_token" in data
-    assert data["user"]["role"] == ROLE_REGULATOR
-    assert data["user"]["org_name"] == "Dinas Perhubungan Sumut"
+    assert data["user"]["role"] == ROLE_GUEST
+    assert data["user"]["company_id"] == "demo_sandbox"
 
 
 def test_api_create_guest_session_invalid_role():
@@ -467,18 +475,34 @@ def test_rbac_company_id_tenancy_propagation():
 
 
 def test_guest_session_endpoint_accepts_company_id():
-    """Verify that /api/v1/auth/guest-session accepts company_id and returns it in user payload."""
+    """
+    Phase 161: an authenticated evaluator may mint any role, but only inside the
+    evaluator tenant allowlist (default demo_sandbox). A real pilot tenant is 403.
+    """
+    evaluator_token = create_guest_token(role=ROLE_GUEST, company_id="demo_sandbox")
     payload = {
         "role": "DISPATCHER",
         "company_id": "pelindo_belawan",
         "org_name": "PT Pelabuhan Indonesia",
-        "name": "Dispatcher Pelindo"
+        "name": "Dispatcher Pelindo",
     }
-    res = client.post("/api/v1/auth/guest-session", json=payload)
-    assert res.status_code == 200
-    data = res.json()
+    res = client.post(
+        "/api/v1/auth/guest-session",
+        json=payload,
+        headers={"Authorization": f"Bearer {evaluator_token}"},
+    )
+    assert res.status_code == 403
+    assert res.json()["detail"]["error"] == "FORBIDDEN"
+
+    allowed = client.post(
+        "/api/v1/auth/guest-session",
+        json={"role": "DISPATCHER", "company_id": "demo_sandbox"},
+        headers={"Authorization": f"Bearer {evaluator_token}"},
+    )
+    assert allowed.status_code == 200
+    data = allowed.json()
     assert "access_token" in data
-    assert data["user"]["company_id"] == "pelindo_belawan"
+    assert data["user"]["company_id"] == "demo_sandbox"
     assert data["user"]["role"] == "DISPATCHER"
 
 
