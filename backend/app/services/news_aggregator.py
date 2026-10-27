@@ -1270,8 +1270,17 @@ async def upsert_articles_to_supabase(articles: List[Dict[str, Any]]) -> int:
     return upsert_count
 
 
-def _unpack_ground_truth_metrics(row: Dict[str, Any]) -> Dict[str, Any]:
-    """Unpacks zone_tier/tiering metadata from ground_truth_metrics JSONB onto the row."""
+def _unpack_ground_truth_metrics(
+    row: Dict[str, Any],
+    applied: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    """Unpacks zone_tier/tiering metadata from ground_truth_metrics JSONB onto the row.
+
+    `applied`, when supplied, receives the row exactly once if the v7 heuristic
+    actually re-tiered it. The read path uses that signal to write the repaired
+    fields back to Supabase (see `persist_re_tiered_news_rows`) so a legacy row
+    is healed once instead of on every read.
+    """
     try:
         gtm = row.get("ground_truth_metrics") or {}
         if isinstance(gtm, str):
@@ -1314,11 +1323,92 @@ def _unpack_ground_truth_metrics(row: Dict[str, Any]) -> Dict[str, Any]:
                     if re_tiered.get(_k) is not None:
                         row[_k] = re_tiered.get(_k)
                 row["ground_truth_metrics"] = re_tiered.get("ground_truth_metrics", row.get("ground_truth_metrics"))
+                if applied is not None:
+                    applied.append(row)
             except Exception:
                 pass
     except Exception:
         pass
     return row
+
+
+# Fields the on-read v7 heuristic can overwrite. The same list is written back
+# after a successful re-tier, so the next read finds `schema_version == 7` and
+# skips the heuristic entirely (audit F8: without this it ran twice per request
+# forever and never converged).
+RE_TIER_WRITE_BACK_FIELDS = (
+    "zone_tier", "tier_reason", "custom_hazard_label", "impact_profile",
+    "is_geocoded", "location_precision", "latitude", "longitude",
+    "incident_type", "severity", "corridor_nodes", "corridor_segment",
+    "province", "affected_locations", "radius_km", "geometry_polygon",
+    "verification_audit", "forecast_tag", "forecast_valid_until",
+)
+
+
+def build_re_tier_write_back(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Builds the upsert records for rows that were re-tiered on read.
+
+    Pure (no I/O) so the batching contract is testable. Rows without a `link`
+    are skipped: `link` is the `news_articles` unique key this upsert targets.
+    """
+    records: List[Dict[str, Any]] = []
+    for row in rows or []:
+        try:
+            if not isinstance(row, dict):
+                continue
+            link = row.get("link")
+            if not link:
+                continue
+            record: Dict[str, Any] = {"link": link}
+            if row.get("id") is not None:
+                record["id"] = row.get("id")
+            for _k in RE_TIER_WRITE_BACK_FIELDS:
+                if row.get(_k) is not None:
+                    record[_k] = row.get(_k)
+            gtm = row.get("ground_truth_metrics")
+            if isinstance(gtm, str):
+                try:
+                    gtm = json.loads(gtm)
+                except Exception:
+                    gtm = None
+            if isinstance(gtm, dict):
+                gtm = dict(gtm)
+            else:
+                gtm = {}
+            # The whole point of the write-back: the stored row must claim v7,
+            # otherwise the next read re-tiers it again.
+            gtm["schema_version"] = 7
+            if record.get("zone_tier") is not None:
+                gtm.setdefault("zone_tier", record["zone_tier"])
+            record["ground_truth_metrics"] = gtm
+            records.append(record)
+        except Exception:
+            continue
+    return records
+
+
+def persist_re_tiered_news_rows(rows: List[Dict[str, Any]]) -> int:
+    """Writes re-tiered fields back to `news_articles` in ONE batched upsert.
+
+    Best effort by contract: the read path calls this after it already has the
+    repaired rows in memory, so any failure is logged and the read still
+    succeeds (the row simply re-tiers again next time). Because only rows the
+    heuristic actually touched are passed in, unchanged rows are never rewritten.
+    """
+    records = build_re_tier_write_back(rows)
+    if not records:
+        return 0
+    try:
+        from app.db.supabase_client import get_write_client
+        sb = get_write_client()
+        res = sb.table("news_articles").upsert(records, on_conflict="link").execute()
+        written = len(getattr(res, "data", None) or [])
+        logger.info(f"Persisted v7 re-tier for {written or len(records)} news rows")
+        return written or len(records)
+    except Exception as e:
+        logger.warning(f"News re-tier write-back failed ({len(records)} rows): {e}")
+        return 0
+
 
 
 _CROSS_LINK_P_RE = re.compile(
@@ -1641,6 +1731,11 @@ async def fetch_news_from_supabase(limit: int = 150, province: Optional[str] = N
     DROPPED_IRRELEVANT / un-geocoded bureau-centroid noise. Legacy rows missing
     `zone_tier` are re-tiered on read via the fast heuristic + bureau stripping
     so polluted Bengkulu-centroid rows are immediately cleaned.
+
+    Rows repaired by that heuristic are written back to Supabase in one batched
+    upsert before returning (`persist_re_tiered_news_rows`), so the next read
+    sees `schema_version == 7` and never runs the heuristic again. The write-back
+    is best effort and can never fail this read.
     """
     try:
         from app.db.supabase_client import get_client
@@ -1665,11 +1760,14 @@ async def fetch_news_from_supabase(limit: int = 150, province: Optional[str] = N
         _re_tier = None
 
     cleaned: List[Dict[str, Any]] = []
+    re_tiered_rows: List[Dict[str, Any]] = []
     for row in rows:
+        _unpack_applied: List[Dict[str, Any]] = []
         try:
-            row = _unpack_ground_truth_metrics(dict(row))
+            row = _unpack_ground_truth_metrics(dict(row), _unpack_applied)
         except Exception:
             continue
+        _was_re_tiered = bool(_unpack_applied)
         # Legacy rows missing zone_tier or carrying stale schema: re-run
         # fast heuristic on read (schema_version != 7 forces v7 re-tier).
         _needs_retier = (not row.get("zone_tier"))
@@ -1727,6 +1825,7 @@ async def fetch_news_from_supabase(limit: int = 150, province: Optional[str] = N
                 # Always refresh ground_truth_metrics to v7.
                 try:
                     row["ground_truth_metrics"] = re_tiered.get("ground_truth_metrics", row.get("ground_truth_metrics"))
+                    _was_re_tiered = True
                 except Exception:
                     pass
             except Exception:
@@ -1768,5 +1867,15 @@ async def fetch_news_from_supabase(limit: int = 150, province: Optional[str] = N
             # Old rows that only matched a fallback province centroid without a
             # real location carry no usable coordinates → hide from map.
             continue
+        if _was_re_tiered:
+            re_tiered_rows.append(row)
         cleaned.append(row)
+
+    # One batched write-back for exactly the rows this read re-tiered. Never
+    # fails the read, never rewrites an already-v7 row.
+    if re_tiered_rows:
+        try:
+            await asyncio.to_thread(persist_re_tiered_news_rows, re_tiered_rows)
+        except Exception as e:
+            logger.warning(f"News re-tier write-back skipped: {e}")
     return cleaned

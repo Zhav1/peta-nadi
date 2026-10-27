@@ -19,6 +19,7 @@ from app.auth.supabase_auth import UserSession, get_current_user
 from app.services.redis_client import get_redis
 from app.services.news_aggregator import (
     fetch_news_from_supabase,
+    persist_re_tiered_news_rows,
     resolve_canonical_article_url,
 )
 from app.services.unified_news_ingestor import unified_news_ingestor
@@ -251,7 +252,12 @@ async def run_background_news_ingestion(force: bool = False):
         try:
             logger.info("Executing background news ingestion cycle into Supabase...")
             await unified_news_ingestor.run_ingestion_cycle(force_refresh=force)
-            _NEWS_CACHE["last_fetched_at"] = 0.0
+            # Phase 164a (M8): a completed cycle must *stamp* the cache, not
+            # invalidate it. Resetting to 0.0 made the very next poll miss the
+            # 30s window and immediately queue another cycle (audit F8), so the
+            # free tier ran a continuous ingestion loop that competed with
+            # request handling. The stored articles stay valid for the full TTL.
+            _NEWS_CACHE["last_fetched_at"] = time.time()
         except Exception as ie:
             logger.warning(f"Background news ingestion error: {ie}")
         finally:
@@ -318,9 +324,11 @@ async def get_live_news(
     except Exception:
         _router_fresh = None  # type: ignore
     _guarded: list[dict] = []
+    _router_retiered: list[dict] = []
     for _r in articles or []:
         try:
             _row = dict(_r)
+            _row_was_retiered = False
             _gtm = _row.get("ground_truth_metrics") or {}
             if isinstance(_gtm, str):
                 import json as _js
@@ -356,6 +364,7 @@ async def get_live_news(
                         _row[_k] = _re[_k]
                 try:
                     _row["ground_truth_metrics"] = _re.get("ground_truth_metrics", _row.get("ground_truth_metrics"))
+                    _row_was_retiered = True
                 except Exception:
                     pass
             # Strict 48h freshness gate on read (archival URL or stale pubDate).
@@ -377,10 +386,23 @@ async def get_live_news(
                 continue
             if _row.get("latitude") is None or _row.get("longitude") is None:
                 continue
+            if _row_was_retiered:
+                _router_retiered.append(_row)
             _guarded.append(_row)
         except Exception:
             continue
     articles = _guarded
+
+    # Phase 164a (M8): persist what the read path just re-tiered, once, so the
+    # heuristic stops running on every request (audit F8). `fetch_news_from_supabase`
+    # already writes back its own re-tiers, so this only fires for rows this
+    # router guard repaired. Batched + best effort: a failure is logged and the
+    # read still answers.
+    if _router_retiered:
+        try:
+            await asyncio.to_thread(persist_re_tiered_news_rows, _router_retiered)
+        except Exception as _wb_err:
+            logger.warning(f"Router news re-tier write-back skipped: {_wb_err}")
 
     # If Supabase is cold or empty, trigger background ingestion and return honest warming state
     if not articles:

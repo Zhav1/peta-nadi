@@ -16,6 +16,21 @@ export function getAuthToken(): string | null {
   return currentAuthToken;
 }
 
+/**
+ * Phase 164a (M8): the proxy resolves its upstream from server env and only
+ * accepts a client-chosen target in local development, restricted to a loopback
+ * backend. Production builds never send this header — it used to make the proxy
+ * an open forwarder (audit F12).
+ */
+function proxyTargetHeader(baseUrl: string): Record<string, string> {
+  if (process.env.NODE_ENV === 'production') return {};
+  const normalized = baseUrl.replace(/\/+$/, '');
+  if (normalized === 'http://localhost:8000' || normalized === 'http://127.0.0.1:8000') {
+    return { 'x-target-base-url': normalized };
+  }
+  return {};
+}
+
 function isAbortError(err: unknown): boolean {
   return !!err && typeof err === 'object' && (err as { name?: string }).name === 'AbortError';
 }
@@ -156,7 +171,7 @@ async function request<T>(path: string, options?: ApiRequestInit): Promise<T> {
       // the direct Render host is unreachable from the browser.
       const proxied = await fetchAttempt(
         `/api/proxy${path}`,
-        { ...init, headers: { ...headers, 'x-target-base-url': baseUrl } },
+        { ...init, headers: { ...headers, ...proxyTargetHeader(baseUrl) } },
         callerSignal,
         budgetMs,
       );
@@ -547,7 +562,7 @@ export const api = {
             method: 'POST',
             headers: {
               ...headers,
-              'x-target-base-url': baseUrl,
+              ...proxyTargetHeader(baseUrl),
             },
             body: formData,
           });

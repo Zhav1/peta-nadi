@@ -14,7 +14,7 @@
 | 161 | Auth session durability | **DONE** | See §161 evidence below |
 | 162 | Thin web + tick | **DONE** | See §162 evidence below |
 | 163 | Bootstrap snapshot + read path | **DONE (163a + 163b) — production measurement in 165** | See §163a and §163b evidence below |
-| 164 | Backend hot-path + proxy hardening | TODO | — |
+| 164 | Backend hot-path + proxy hardening | **164a DONE — 164b (sync-I/O sweep) DEFERRED (M9 conflict)** | See §164a evidence below |
 | 165 | Production verification + SLO gate | TODO | — |
 | 166 | Soak start + review | TODO | — |
 | 167–170 | *not defined* | TODO | `ROADMAP.md` and `M8-SPEC.md` define only 160–166; no 167–170 scope exists yet. Create them in the roadmap before planning. |
@@ -420,16 +420,127 @@ target yet. The spec treats the 200 as a soft gate unless `M8_REQUIRE_BOOTSTRAP=
 
 ---
 
+## Phase 164a — Proxy cache isolation + news hot-path defects · DONE
+
+Two audit findings that blocked the milestone's own gates: the proxy shared-cached
+authenticated reads across tenants (so "two-user cache isolation" could never pass) and
+the news read path paid for the same work forever (`last_fetched_at` reset + a re-tier
+that never wrote back). Plan:
+`.planning/phases/164-backend-hotpath-proxy-hardening/PLAN.md`.
+
+**Branch note:** implemented on `m9-operational-truth`, **uncommitted**. The concurrent
+M9 session's files (`geocode_router.py`, `gazetteer_data.py`,
+`scripts/build_sumatra_gazetteer.py`, routing/weather) were read-only for this unit and
+left untouched, as were the frontend dashboard files. Phases 161–163 changes preserved.
+
+**Split:** **164a** (this unit) is the proxy + news read path. **164b** — the sync-I/O
+sweep (audit F4 rows 1–14, F13, F9, F10, F12 route sprawl) — is deferred because it
+touches the same routing/weather files the M9 session owns.
+
+### Delivered
+
+| Deliverable | Path |
+|---|---|
+| Cache matrix in one decision function; auth/cookie ⇒ `private, no-store`; explicit anonymous allowlist; non-GET + SSE ⇒ `no-store`; dev-only loopback target override, `400` otherwise; forwarded-header allowlists | `frontend/app/api/proxy/[...path]/route.ts` |
+| `x-target-base-url` sent only in non-production builds, only for a loopback backend (2 call sites) | `frontend/lib/api.ts` |
+| `last_fetched_at = time.time()` after a completed cycle (was `0.0`) | `backend/app/routers/news_router.py` |
+| Batched v7 re-tier write-back: `applied` out-param, `RE_TIER_WRITE_BACK_FIELDS`, `build_re_tier_write_back`, `persist_re_tiered_news_rows`, one `upsert` per read, failure-logged | `backend/app/services/news_aggregator.py` |
+| Router guard persists what it repaired (defensive path only) | `backend/app/routers/news_router.py` |
+| Hermetic read-path tests (8) | `backend/tests/test_news_read_path.py` |
+| Proxy cache matrix spec (7) + config registration | `frontend/e2e/m8-proxy-cache.spec.ts`, `frontend/playwright.m8.config.ts` |
+
+### Proxy cache matrix (observed, not asserted-only)
+
+Captured directly against the built server (`npm start`, `API_PROXY_TARGET` → a local
+stub upstream that also serves an SSE path):
+
+| # | Request | Status | `Cache-Control` |
+|---|---|---|---|
+| A | anonymous GET `/api/proxy/api/v1/health` (allowlisted) | 200 | `public, s-maxage=60, stale-while-revalidate=120` (+ `Vary: … Authorization, Cookie`) |
+| B | `Authorization` GET `/api/proxy/api/v1/health` | 200 | `private, no-store` |
+| C | anonymous GET `/api/proxy/api/v1/fleet/vehicles` | 200 | `private, no-store` |
+| D | `Authorization` GET `/api/proxy/api/v1/fleet/vehicles` | 200 | `private, no-store` |
+| E | cookie-only GET `/api/proxy/api/v1/fleet/vehicles` | 200 | `private, no-store` |
+| F | `Authorization` POST `/api/proxy/api/v1/fleet/vehicles` | 200 | `no-store` |
+| G | anonymous GET SSE `/api/proxy/api/v1/incidents/simulate/stream` | 200 | `no-store` |
+| H | `Authorization` GET SSE (same path) | 200 | `no-store` |
+
+Dev-only upstream override (`next dev`):
+
+| `x-target-base-url` | Result |
+|---|---|
+| absent → `NEXT_PUBLIC_API_URL` | 200 |
+| `http://127.0.0.1:8000` (allowlisted loopback) | 200 |
+| `http://169.254.169.254` | **400** + `private, no-store` |
+| `https://evil.example` | **400** + `private, no-store` |
+
+In a production build the header is ignored entirely (verified in case G: a forged
+link-local target still returns the configured upstream's 200 body).
+
+### News regression evidence
+
+| Behaviour | Before | After |
+|---|---|---|
+| Cycle completes | `last_fetched_at = 0.0` ⇒ next read misses the 30 s window and queues another cycle | `last_fetched_at = time.time()` ⇒ two consecutive reads inside the TTL schedule **0** ingestions and **1** Supabase fetch; the second is a `cached: true` hit |
+| Legacy row (`schema_version != 7`) | heuristic re-runs on every read, result discarded | heuristic runs once, one batched `upsert(on_conflict="link")` with `zone_tier` + `ground_truth_metrics.schema_version = 7`, and the next read neither re-tiers nor rewrites |
+| Write-back failure | n/a | logged, read still returns the repaired rows |
+| `force_refresh` / 30 s TTL | — | unchanged (asserted) |
+
+### Verification (this session, 2026-10-27)
+
+| Command | Result |
+|---|---|
+| `cd backend; .venv/Scripts/python.exe -m pytest tests/test_news_read_path.py -q` | **8 passed**, 3 warnings, 0.95 s, exit 0 |
+| `… -m pytest tests/test_news_read_path.py tests/test_news_pipeline.py tests/test_phase76_news_spatial_consensus.py tests/test_osint_leak_hardening.py tests/test_pre_llm_filter.py -q` | **97 passed**, 3 warnings, 25.65 s, exit 0 |
+| `… -m pytest tests/test_api_routers.py -q` | **16 passed**, 4 warnings, 174.56 s, exit 0 |
+| `cd frontend; npx tsc --noEmit` | **exit 0** |
+| `cd frontend; npm run build` | **exit 0** — Next 14.2.35, 7/7 static pages, `/api/proxy/[...path]` dynamic, no dev server running |
+| `npx playwright test e2e/m8-proxy-cache.spec.ts --config=playwright.m8.config.ts` (`npm start`, local stub upstream, `M8_BASE_URL=http://localhost:3000`) | **7 passed**, 1.0 s |
+| same spec against `next dev -p 3001` with `M8_PROXY_MODE=dev` | **7 passed**, 1.1 s (case G asserts the `400`) |
+
+### Decisions / deviations
+
+1. **Non-GET ⇒ `no-store`** (not `private, no-store`): a mutation must not enter any cache.
+2. **`Vary: Authorization, Cookie` on the public branch only** — the belt-and-braces
+   header for shared caches that do not key on credentials.
+3. **SSE bodies are streamed, not buffered** (the old `.text()` never resolved for a
+   stream); the cache rule is `no-store` regardless of method or path.
+4. **`x-target-base-url` keeps its name** so an undeployed client still works; only its
+   authority changed.
+5. **The write-back skips rows the read drops** — a read must not make a
+   `DROPPED_IRRELEVANT` heuristic verdict permanent.
+6. **`fetch_existing_articles`' third re-tier site is untouched** — not in the brief;
+   a one-line follow-up once the helper is shared (164b).
+
+### Open items handed on
+
+1. **The deployed proxy is still the pre-164a handler.** `https://pre-hub.vercel.app`
+   will fail spec cases B–E until phase 165 deploys — that is the gate.
+2. **164b (sync-I/O sweep) is not started.** Audit F4/F13/F9/F10/F12 remain open; the
+   items that touch routing/weather must wait for the M9 window.
+3. **`force_refresh` can still queue two ingestion tasks for one request** (two
+   scheduling blocks, pre-existing). The ingestion lock dedupes concurrent runs, not
+   sequential ones; left out of scope deliberately.
+4. **No production measurement** of the cache fix (two-user isolation) — phase 165.
+5. **A partial-payload upsert** relies on `ON CONFLICT DO UPDATE` skipping insert-side
+   NOT NULL checks; a row deleted between read and write logs a warning and nothing else.
+
+---
+
 ## Remaining phases — TODO
 
 | Phase | Name | Gate that must pass |
 |---|---|---|
-| 164 | Backend hot-path + proxy hardening | Warm login < 3s; two-user cache isolation |
+| 164b | Backend hot-path async-I/O sweep (deferred from 164; needs the M9 routing/weather window) | No sync PostgREST/Redis on the auth + hot read paths |
 | 165 | Production verification + SLO gate | All SLOs except soak green |
 | 166 | Soak start + review | 0 probe failures over 7 days (follow-up session) |
 
 **163b is verified locally** (1.24 s first data, 6 API requests vs 28). Its production
 re-measurement with `M8_REQUIRE_BOOTSTRAP=1` is owned by phase 165.
+
+**164a is verified locally** (proxy matrix 7/7 in both production and dev modes; news
+read path 8 new + 97 news-suite tests green). Its production gate — two-user cache
+isolation against the deployed proxy — is owned by phase 165.
 
 ---
 
@@ -449,4 +560,6 @@ re-measurement with `M8_REQUIRE_BOOTSTRAP=1` is owned by phase 165.
 | Phase 163a migration (must be applied before the tick can persist a snapshot) | `infra/supabase/migrations/024_dashboard_snapshots.sql` |
 | Phase 163b code (frontend read path) | committed with this evidence on `m9-operational-truth` |
 | Phase 163b plan + this evidence | `.planning/phases/163-bootstrap-snapshot-read-path/PLAN.md`, this file |
+| Phase 164a code (proxy + news read path) | on `m9-operational-truth`, **uncommitted** (pending the 164b sweep / M8 branch cherry-pick) |
+| Phase 164a plan + this evidence | `.planning/phases/164-backend-hotpath-proxy-hardening/PLAN.md`, this file |
 | Untracked by design (repo convention: run artifacts are not committed) | `.planning/phases/160-baseline-audit-state-repair/artifacts/`, `.planning/baseline-pytest.txt` |
