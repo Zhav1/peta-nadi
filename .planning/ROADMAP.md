@@ -3134,3 +3134,147 @@ pm run build ? 7/7 static routes, 0 errors.
 - [x] pytest evaluasi suite -> 16 passed.
 - [x] `npx tsc --noEmit` -> exit 0.
 - [x] `GET /health` -> 200; `GET /api/v1/evaluation/benchmark` -> 200 (dataset_hash `e6c7645c`, raw_brier `0.1106`); `GET /api/v1/evaluation/live` -> 200.
+
+## Phase 150: P1 Foundation — Auto-Radius, Modal, Perusahaan (docs record)
+
+**Goal:** Record the P1 foundation slice (no code changes).
+**Status:** COMPLETE ? (docs-only, no commit)
+
+### Deliverables
+
+- Auto-radius live + manual fallback (`DashboardClient.tsx:3562`, `CrisisSimulatorBar.tsx:571`); speed fixed 1x.
+- Route detail modal 3-section shell (Risiko / Dampak & Biaya / Verifikasi).
+- Armada Perusahaan header trigger single roster source.
+- Docs: `.planning/phases/150-p1-foundation-auto-radius-modal-perusahaan/`.
+
+### Verification
+
+- [x] `npx tsc --noEmit` -> exit 0 (window tail).
+
+## Phase 151: P2 Berita + TopNav (docs record)
+
+**Goal:** Record live-only Berita (Fokus / route-gated Hold) + minimalist TopNav.
+**Status:** COMPLETE ? (docs-only, no commit)
+
+### Deliverables
+
+- Hold gated on real route; dormant TopNav props kept for compatibility.
+- Docs: `.planning/phases/151-p2-berita-topnav/`.
+
+### Verification
+
+- [x] `npx tsc --noEmit` -> exit 0 (window tail).
+
+## Phase 152: P3 Zone Evidence-Only + Causal (docs record)
+
+**Goal:** Record zone evidence-only gating with hold_staging exclusion + always-visible causal chain.
+**Status:** COMPLETE ? (docs-only, no commit)
+
+### Deliverables
+
+- `CrisisSidebar.tsx` tab lock; causal collapse section.
+- Docs: `.planning/phases/152-p3-zone-evidence-only-causal/`.
+
+### Verification
+
+- [x] `npx tsc --noEmit` -> exit 0 (window tail).
+
+## Phase 153: P4 Titik Panas Cluster + Advisory Rename (docs record)
+
+**Goal:** Record FIRMS clustering rule + Waspada Dini naming.
+**Status:** COMPLETE ? (docs-only, no commit)
+
+### Deliverables
+
+- >=3 high-conf / 5 km orange map-only exception; advisory pill default OFF.
+- Docs: `.planning/phases/153-p4-titik-panas-cluster-advisory/`.
+
+### Verification
+
+- [x] `npx tsc --noEmit` -> exit 0 (window tail).
+
+## Phase 154: P5 HITL / Detail 3-Section (docs record)
+
+**Goal:** Record evidence-gated HITL decisions, silent guest, forecast block.
+**Status:** COMPLETE ? (docs-only, no commit)
+
+### Deliverables
+
+- `RouteDetailModal.tsx` evidence + forecast guards; `MitigationTab.tsx` hitlBlocked mirror.
+- Docs: `.planning/phases/154-p5-hitl-detail-3section/`.
+
+### Verification
+
+- [x] `npx tsc --noEmit` -> exit 0 (window tail).
+
+## Phase 155: Regression-Fix Batch (5) (docs record)
+
+**Goal:** Record the 5-item regression batch (`2de5ff8`).
+**Status:** COMPLETE ? (docs-only, no commit)
+
+### Deliverables
+
+- Evidence distill, histori removal, armada dedup, titik panas/waspada restore, berita hold gate.
+- Docs: `.planning/phases/155-regression-fix-batch-5/`.
+
+### Verification
+
+- [x] `npx tsc --noEmit` -> exit 0 (window tail).
+
+## Phase 156: Waspada Info-Only (docs record)
+
+**Goal:** Record the advisory display-only contract.
+**Status:** COMPLETE ? (docs-only, no commit)
+
+### Deliverables
+
+- Default OFF, no detour calc, disruption-only `min_severity=high` default.
+- Docs: `.planning/phases/156-waspada-info-only/`.
+
+### Verification
+
+- [x] `npx tsc --noEmit` -> exit 0 (window tail).
+
+## Phase 157: FIRMS Whole-Sumatra BBox (docs record)
+
+**Goal:** Record bbox-only geo gate (20 km drop removed).
+**Status:** COMPLETE ? (docs-only, no commit)
+
+### Deliverables
+
+- `nasa_firms_adapter.py` bbox gate; router 500-cap + honest-degraded.
+- Docs: `.planning/phases/157-firms-whole-sumatra-bbox/`.
+
+### Verification
+
+- [x] `pytest backend/tests/test_adapters.py -k firms` -> 2 passed.
+- [x] `npx tsc --noEmit` -> exit 0.
+
+## Phase 158: Corridor-Preserve on Zone Click (docs record)
+
+**Goal:** Record zone-click corridor preservation (`af0f60d`).
+**Status:** COMPLETE ? (docs-only, no commit)
+
+### Deliverables
+
+- Both `setCurrentMapRoutes([])` wipes removed; honest-empty audit payload.
+- Docs: `.planning/phases/158-corridor-preserve-zone-click/`.
+
+### Verification
+
+- [x] `npx tsc --noEmit` -> exit 0 (window tail).
+
+## Phase 159: Vessel Restore — Dispatcher (docs record)
+
+**Goal:** Record tenant-truck + situational-vessel split (`b0072cc`).
+**Status:** COMPLETE ? (docs-only, no commit)
+
+### Deliverables
+
+- Modality-split tenancy; Perusahaan badge = liveTenantVehicles only; test contract updated.
+- Docs: `.planning/phases/159-vessel-restore-dispatcher/`.
+
+### Verification
+
+- [x] `pytest backend/tests/test_fleet_ingest.py` -> 12 passed.
+- [x] `npx tsc --noEmit` -> exit 0.

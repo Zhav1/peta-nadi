@@ -396,3 +396,53 @@ The window log reported WP1 48, WP2 41p/1f (Brier), WP3 22+114, WP4 22+104, WP5 
 - Render cold start exceeds client deadlines â€” retry before judging (142â€“149).
 - Redis has no invalidation tool â€” version cache keys, never hand-edit (142â€“149).
 - 5 pre-existing `system_audit` fails unrelated to these slices â€” do not chase inside docs passes.
+
+## 2026-10-27 - Phases 150-159: Dashboard/FIRMS/Fleet Docs Slices (`.planning/phases/150-*` .. `159-*`)
+
+**Scope:** Docs-only record of P1-P5 + follow-up fixes (auto-radius/modal/Perusahaan, berita+TopNav, evidence-only zone+causal, titik panas cluster+advisory, HITL 3-section, 5-regression batch, waspada info-only, FIRMS bbox, corridor-preserve, vessel restore). No code changes, no commit.
+
+### Fixes tried (what worked)
+
+- Auto radius live + manual fallback precedence (`radius_km ?? simulatedShockwave.radiusKm ?? selectedRadius ?? 8`) (150).
+- Roster single-source via header trigger; floating mount deleted (150, 155).
+- Route-gated Hold (hidden, not disabled); dormant props `_`-prefixed, kept (151).
+- Tab-level evidence-only zone lock + `hold_staging` double exclusion (152).
+- Cluster-before-highlight (>=3 high-conf / 5 km); orange reserved for clusters (153).
+- Evidence-gated APPROVE/OVERRIDE + forecast total block (client+handler+409) + silent guest (154).
+- Waspada default OFF, no forecast detour calc, disruption-only `min_severity=high` (156).
+- FIRMS bbox-only gate; spine kept as provenance; 500-cap FRP desc; honest-degraded 200 (157).
+- Zone-click corridor preserve: both `setCurrentMapRoutes([])` wipes deleted (158).
+- Modality-split tenancy: trucks scoped, maritime/air public; badge = liveTenantVehicles (159).
+
+### Verification (this pass, read-only re-runs)
+
+- `pytest backend/tests/test_fleet_ingest.py` -> 12 passed.
+- `pytest backend/tests/test_adapters.py -k firms` -> 2 passed.
+- `npx tsc --noEmit` -> exit 0.
+
+### Concerns (open, evidenced)
+
+- Two `hold_staging` guards + tab/HITL/modal triple-checks must stay in sync; prefer a shared `isRealRoute()` helper (152, 154).
+- Whole-island FIRMS volume vs low-end devices; watch map cap + clustering (157).
+- New modalities default tenant-scoped; document when adding (159).
+- Batch commits mix concerns; split by concern for cleaner reverts (155).
+
+### Constraints
+
+- Dashboard minimalist; main+neutral semantics; single orange map exception (clusters only).
+- E2E route->HITL->commit never breaks; hold/reroute only after real route; forecast = pantau saja.
+- Tenant scoping: JWT `company_id` authoritative; `?company_id=` never widens; no FALLBACK_FLEET for scoped roles.
+- Vercel Root Directory = `frontend` + env vars; Render `NASA_FIRMS_MAP_KEY` backend-only.
+- Subagents-only (High only); no temp files; Watermelon blocks; Playwright per phase.
+
+### Conditions (user-stated this window)
+
+- Speed fixed 1x, no control; auto radius live + manual simulator; evidence-only zone gating with `hold_staging` exclusion; waspada info-only; 20km->bbox lesson; corridor-preserve lesson.
+
+### Issues (do not repeat)
+
+- Distance-as-filter loses island fires — provenance only (157).
+- Syncing map to inspection payload reads as data loss — decouple (158).
+- Blanket tenancy zeroes situational pills — scope by modality (159).
+- Banners do not enforce; gates do (154).
+- Probe debris (`bench.json`, `erp*.json`, `evlive.json`, `h1.json`, `headers1.txt`) must be deleted before any commit (155).
