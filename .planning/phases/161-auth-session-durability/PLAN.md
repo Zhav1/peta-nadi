@@ -3,7 +3,7 @@
 **Window:** 2026-10-27 · **Mode:** implementation
 **Milestone:** M8 — Fast & Durable (phase 2 of 7)
 **Depends on:** phase 160 (`BACKEND-AUDIT.md` findings F1 + F2, baseline session measurements)
-**Branch:** implemented on the session branch `m9-operational-truth`, **uncommitted** (M8's own branch is `m8-operational-truth`). No commit, no branch switch, per the phase instruction.
+**Branch:** committed on the session branch `m9-operational-truth` as `b76baa1` (M8's own branch is `m8-operational-truth`; cherry-pick pending). The concurrent M9 weather work was deliberately left unstaged.
 
 ## Goal
 

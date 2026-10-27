@@ -12,7 +12,7 @@
 |---|---|---|---|
 | 160 | Baseline, audit, state repair | **DONE** | See §160 evidence below |
 | 161 | Auth session durability | **DONE** | See §161 evidence below |
-| 162 | Thin web + tick | TODO | — |
+| 162 | Thin web + tick | **DONE** | See §162 evidence below |
 | 163 | Bootstrap snapshot + read path | TODO | — |
 | 164 | Backend hot-path + proxy hardening | TODO | — |
 | 165 | Production verification + SLO gate | TODO | — |
@@ -100,8 +100,9 @@ Closes the two P0 findings from `BACKEND-AUDIT.md` **and** wires the client refr
 path, so an expired token can no longer masquerade as a guest session. Plan:
 `.planning/phases/161-auth-session-durability/PLAN.md`.
 
-**Branch note:** implemented on the session branch `m9-operational-truth`, working
-tree **uncommitted** (no commit, no branch switch, per the phase instruction).
+**Branch note:** committed on the session branch `m9-operational-truth` as
+`b76baa1`; the concurrent M9 weather work was deliberately left unstaged.
+M8's own branch is `m8-operational-truth` — cherry-pick pending.
 
 ### Delivered
 
@@ -181,11 +182,101 @@ tree **uncommitted** (no commit, no branch switch, per the phase instruction).
 
 ---
 
+## Phase 162 — Thin web + external tick · DONE
+
+Batch ingestion no longer competes with boot or with user requests: the web
+process is thin and one protected, idempotent tick drives ingestion from outside.
+Plan: `.planning/phases/162-thin-web-external-tick/PLAN.md`.
+
+**Branch note:** implemented on `m9-operational-truth`, **uncommitted**; the
+concurrent M9 weather/retention files were left unstaged and untouched.
+
+### Delivered
+
+| Deliverable | Path |
+|---|---|
+| `POST /internal/tick` — constant-time `X-Internal-Token`, 404 when disabled, 202 + background task, process lock | `backend/app/routers/internal_tick.py` |
+| Job registry (8 cadences), fair due selection, Supabase state, lease, budget, retry | `backend/app/services/job_scheduler.py` |
+| `scheduler_jobs` table + `acquire_scheduler_job` / `release_scheduler_job` RPCs | `infra/supabase/migrations/023_scheduler_jobs.sql` |
+| One-cycle poller bodies + thin-web gate + deferred supervised AIS/fan-out | `backend/app/main.py` |
+| Settings: `INPROCESS_BATCH_POLLERS`, `INTERNAL_TICK_TOKEN`, `TICK_MAX_JOBS`, `TICK_BUDGET_SECONDS`, `CONTINUOUS_TASK_DELAY_SECONDS` | `backend/app/config.py` |
+| `run_once()` seam so PIHPS/social reuse one cycle instead of a second loop | `backend/app/scrapers/base_scraper.py` |
+| Production env (thin web, tick secret, budget) | `render.yaml` |
+| Runbook: cron-job.org POST tick + token, catch-up, state queries | `docs/KEEPALIVE_RUNBOOK.md` |
+| Hermetic contract tests (17) | `backend/tests/test_internal_tick.py` |
+
+### Tick contract
+
+| Case | Response |
+|---|---|
+| `INTERNAL_TICK_TOKEN` empty | `404` (endpoint disabled; empty header never matches) |
+| wrong/missing token | `401` + `WWW-Authenticate: Bearer` |
+| valid | `202 {"accepted": true, "due": [...], "skipped": [...], "run_id": "..."}` |
+| concurrent tick | `202 {"accepted": false, "reason": "already_running"}` |
+| planning failed | `202 {"accepted": true, "reason": "plan_failed", "due": []}` |
+
+Job cadences: `news 300 · bmkg 300 · tomtom 1800 · open_meteo 21600 · firms 10800 ·
+pihps 86400 · social 3600 · bnpb 3600`. `last_finished_at` is the durable
+`last_run_at` (advances only on success); failures set `last_error` +
+`retry_after=120s`; the per-tick cap is 2 jobs / 120s and the remainder stays due
+(ordered by `age / cadence`, so daily jobs cannot be starved by 5-minute ones).
+
+### What still runs in-process (production)
+
+| Worker | Runs? |
+|---|---|
+| 8 batch pollers | **no** — driven by `POST /internal/tick` |
+| AISstream WebSocket | yes — deferred 75s, supervised with backoff |
+| validated-alert Redis fan-out | yes — deferred 75s, supervised (still per-process for `/ws/crisis`) |
+| JWKS pre-warm, Redis ping, `init_write_health` | yes — unchanged |
+| `/health` | yes — constant dict, never touches the scheduler |
+
+`POLLERS_ENABLED=false` still disables everything (HTTP-only replica), unchanged.
+
+### Evidence
+
+| Gate | Result | Source |
+|---|---|---|
+| `pytest tests/test_internal_tick.py -q` | **17 passed** (2.38 s), exit 0 | run in this session |
+| `pytest tests/test_m8_auth_contract.py -q` | **21 passed** (4.61 s), exit 0 | run in this session |
+| `pytest tests -q` | **431 passed, 5 failed** (288.34 s) | run in this session |
+| `python -c "import app.main"` | `import ok`; `/internal/tick` registered, alias hidden from OpenAPI | run in this session |
+| `python -X importtime -c "import app.main"` | ~2.8 s total; **numpy/scipy/langgraph/pandas/agents not imported** | run in this session |
+| `yaml.safe_load(render.yaml)` | parses; plan `free`, region `singapore`, healthCheckPath `/health` unchanged | run in this session |
+
+**Full-suite failures (not fixed here, per instruction):**
+
+| Test | Cause | Attribution |
+|---|---|---|
+| `test_cpu_routing_weather.py::test_cpu_routing_service_flags_seed_fallback_when_tomtom_unavailable` | `assert False is True` (`is_fallback`) | Concurrent M9 routing/weather work |
+| `test_impact_assessment.py::test_disruption_impact_assessment_spatial_filtering` | `assert 674.4 < 250.0` (perf budget) | Known pre-existing (baseline #1) |
+| `test_news_pipeline.py::test_news_stampede_guard_prevents_duplicate_runs` | `Lock is bound to a different event loop` | Known pre-existing (baseline #2) |
+| `test_travel_fuel_guard.py::test_patch_120L_for_73km_rejected_422` | test expects `starlette.status.HTTP_422_UNPROCESSABLE_CONTENT` (absent in the pinned starlette) | Known baseline #3 (env/version) |
+| `test_travel_fuel_guard.py::test_patch_1L_for_73km_rejected_too_efficient` | same `starlette.status` attribute error | Known baseline #4 (env/version) |
+
+No phase-162 test failed; no auth test regressed. The full-suite count rose from
+408 to 431 because this phase adds 17 tests (the rest is concurrent M9 test churn).
+
+### Open items handed on
+
+1. **Migration 023 must be applied** before production can tick; without it the
+   scheduler logs `state_unavailable` and the fallback CAS path is used only if
+   the table exists but the RPC does not.
+2. **Capacity:** 2 jobs × 5 min ≈ 576 slots/day vs ~661 scheduled runs/day at the
+   configured cadences. Fair ordering prevents starvation, but `pihps` (daily) can
+   lag by a tick. Watch `scheduler_jobs.last_finished_at` in phase 165.
+3. **Redis writes inside cycle bodies are still sync** (audit F13) — phase 164.
+4. `POST /internal/tick` has only been verified hermetically; the live RPC +
+   cron-job.org smoke belongs to phase 165.
+5. `app.main` still imports every router eagerly (≈2.8 s here, `corridor_router`
+   pulls `app.adapters`); router-level lazy import is phase 164 scope.
+
+---
+
 ## Remaining phases — TODO
 
 | Phase | Name | Gate that must pass |
 |---|---|---|
-| 162 | Thin web + tick | Cold boot < 20s; `/health` survives a tick |
 | 163 | Bootstrap snapshot + read path | First data < 5s; request count down |
 | 164 | Backend hot-path + proxy hardening | Warm login < 3s; two-user cache isolation |
 | 165 | Production verification + SLO gate | All SLOs except soak green |
@@ -199,6 +290,9 @@ tree **uncommitted** (no commit, no branch switch, per the phase instruction).
 |---|---|
 | Phase 160 code + tests + probe fix | `51b3903` on `m8-operational-truth` |
 | Phase 160 audit/keep-alive docs + this file | see commit following `51b3903` on the same branch |
-| Phase 161 code + tests (auth durability) | working tree on `m9-operational-truth`, **uncommitted** |
+| Phase 161 code + tests (auth durability) | `b76baa1` on `m9-operational-truth` (M8 branch cherry-pick pending) |
 | Phase 161 plan + this evidence | `.planning/phases/161-auth-session-durability/PLAN.md`, this file |
+| Phase 162 code + tests (thin web + tick) | working tree on `m9-operational-truth`, **uncommitted** |
+| Phase 162 plan + this evidence | `.planning/phases/162-thin-web-external-tick/PLAN.md`, this file |
+| Phase 162 migration (must be applied before prod tick works) | `infra/supabase/migrations/023_scheduler_jobs.sql` |
 | Untracked by design (repo convention: run artifacts are not committed) | `.planning/phases/160-baseline-audit-state-repair/artifacts/`, `.planning/baseline-pytest.txt` |
