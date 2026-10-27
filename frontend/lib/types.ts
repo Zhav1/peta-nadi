@@ -1526,6 +1526,11 @@ export interface NewsBreadthMetaPayload {
   max_per_source?: number;
   budget?: number;
   total?: number;
+  /** Display tiers (Phase 172.5): crisis passes the gate, regional is context. */
+  tier_counts?: { crisis?: number; regional?: number };
+  crisis_count?: number;
+  regional_count?: number;
+  tier_note?: string;
   confidence_note?: string;
 }
 

@@ -6,6 +6,7 @@ crisis intelligence, and manages Globot-style Human-In-The-Loop review workflows
 """
 import logging
 import asyncio
+import re
 import time
 import uuid
 from datetime import datetime, timezone
@@ -50,6 +51,58 @@ SUMATRA_PROVINCES = (
 )
 # Area-wide bucket for rows that resolve to the island, not a province.
 AREA_WIDE_PROVINCE = "Sumatera"
+
+# ---------------------------------------------------------------------------
+# Phase 172.5 (M9): display tiers — one unchanged hazard gate, two honest tiers.
+#
+# Measured in 172: of the 150 newest rows, 149 are rejected by the crisis gate.
+# Quotas cannot fill an empty candidate pool, so the read path now classifies
+# for DISPLAY without touching the gate:
+#
+#   crisis   — `zone_tier != DROPPED_IRRELEVANT`: passes the existing gate
+#              exactly as before. Priority tier; this is the only tier the
+#              hazard/agent pipeline may ever consume.
+#   regional — rejected by the crisis gate, but honest regional context:
+#              geocoded to one of the ten provinces, published within 48h, and
+#              about a broad regional topic. DISPLAY ONLY — it claims no crisis
+#              relevance, keeps `zone_tier = DROPPED_IRRELEVANT`, is never
+#              published to the Redis OSINT stream, and is never returned to a
+#              hazard consumer (`fetch_news_from_supabase` excludes it unless
+#              the display read path explicitly opts in).
+#   dropped  — everything else, unchanged.
+# ---------------------------------------------------------------------------
+TIER_CRISIS = "crisis"
+TIER_REGIONAL = "regional"
+TIER_DROPPED = "dropped"
+RELEVANCE_TIERS = (TIER_CRISIS, TIER_REGIONAL, TIER_DROPPED)
+
+# A regional row must be recent: display context older than 48h is not context.
+REGIONAL_MAX_AGE_HOURS = 48
+REGIONAL_TOPIC_KEYWORDS = (
+    "logistik",
+    "transportasi",
+    "jalan",
+    "pelabuhan",
+    "banjir",
+    "cuaca",
+    "gempa",
+    "kebakaran",
+    "karhutla",
+    "harga pangan",
+    "panen",
+    "distribusi",
+    "infrastruktur",
+    "tol",
+    "kapal",
+    "truk",
+    "bandara",
+)
+# Word-boundary match so short tokens cannot fire inside other words
+# (e.g. "tol" inside "kontrol"/"protokol") while multi-word topics still match.
+_REGIONAL_TOPIC_RE = re.compile(
+    r"\b(?:" + "|".join(re.escape(k).replace("\\ ", r"\s+") for k in REGIONAL_TOPIC_KEYWORDS) + r")\b",
+    re.IGNORECASE,
+)
 
 _PROVINCE_ALIASES = {
     "sumut": "Sumatera Utara",
@@ -101,6 +154,82 @@ def _province_sort_key(province: str) -> tuple[int, str]:
 
 def _source_key(article: Dict[str, Any]) -> str:
     return str(article.get("source") or article.get("source_name") or "Media").strip() or "Media"
+
+
+def _parse_published_at(article: Dict[str, Any]) -> Optional[datetime]:
+    """Best-effort publication time of a row (naive timestamps treated as UTC)."""
+    candidates = (
+        article.get("original_pub_date"),
+        article.get("published_at"),
+        article.get("pubDate"),
+        article.get("created_at"),
+    )
+    gtm = article.get("ground_truth_metrics")
+    if isinstance(gtm, dict):
+        candidates = (gtm.get("original_pub_date"),) + candidates
+    for cand in candidates:
+        if not cand:
+            continue
+        try:
+            parsed = datetime.fromisoformat(str(cand).replace("Z", "+00:00"))
+        except Exception:
+            continue
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed
+    return None
+
+
+def is_regional_context(article: Dict[str, Any], now: Optional[datetime] = None) -> bool:
+    """True when a gate-rejected row is honest regional display context.
+
+    ALL of the following must hold — a single miss means the row stays dropped:
+
+    * geocoded to one of the ten Sumatra provinces (never the area-wide
+      `"Sumatera"` bucket, never `"Nasional"`, never an unknown label),
+    * published within `REGIONAL_MAX_AGE_HOURS` (no timestamp → not provable),
+    * the headline/lead matches the broad regional topic set.
+
+    This is a DISPLAY predicate only. It never promotes a row to crisis and it
+    never rewrites `zone_tier`.
+    """
+    if article.get("is_geocoded") is False:
+        return False
+    if article.get("latitude") is None or article.get("longitude") is None:
+        return False
+    province = normalize_province(article.get("province") or article.get("region"))
+    if province not in SUMATRA_PROVINCES:
+        return False
+
+    reference = now or datetime.now(timezone.utc)
+    if reference.tzinfo is None:
+        reference = reference.replace(tzinfo=timezone.utc)
+    published = _parse_published_at(article)
+    if published is None:
+        return False
+    if (reference - published).total_seconds() > REGIONAL_MAX_AGE_HOURS * 3600:
+        return False
+    if (published - reference).total_seconds() > REGIONAL_MAX_AGE_HOURS * 3600:
+        # A publication time far in the future is not evidence of freshness.
+        return False
+
+    text = " ".join(
+        str(article.get(key) or "")
+        for key in ("title", "headline", "summary", "raw_description", "lead")
+    )
+    return bool(_REGIONAL_TOPIC_RE.search(text))
+
+
+def classify_relevance_tier(article: Dict[str, Any], now: Optional[datetime] = None) -> str:
+    """`crisis` (existing gate passed) | `regional` (display context) | `dropped`.
+
+    `crisis` reuses the gate verbatim: a row is crisis exactly when the
+    extractor did not tier it `DROPPED_IRRELEVANT`. Nothing in this function
+    changes a row's `zone_tier`.
+    """
+    if str(article.get("zone_tier") or "") != "DROPPED_IRRELEVANT":
+        return TIER_CRISIS
+    return TIER_REGIONAL if is_regional_context(article, now=now) else TIER_DROPPED
 
 
 def apply_breadth_contract(
@@ -182,6 +311,43 @@ def apply_breadth_contract(
     )
 
 
+def apply_tiered_breadth_contract(
+    articles: List[Dict[str, Any]],
+    max_total: int = NEWS_READ_BUDGET,
+    per_source_cap: int = MAX_NEWS_PER_SOURCE,
+) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    """Breadth contract applied per tier, crisis block first (Phase 172.5).
+
+    Ordering of the returned page is therefore: every `crisis` article (recency
+    order, per-source cap 12, province round-robin inside the tier), then every
+    `regional` article under the same rules with its own per-source counter.
+    The shared `max_total` budget is spent crisis-first.
+    """
+    rows = [row for row in (articles or []) if isinstance(row, dict)]
+    by_tier = {
+        TIER_CRISIS: [r for r in rows if r.get("relevance_tier") == TIER_CRISIS],
+        TIER_REGIONAL: [r for r in rows if r.get("relevance_tier") == TIER_REGIONAL],
+    }
+
+    selected: List[Dict[str, Any]] = []
+    truncated = False
+    for tier in (TIER_CRISIS, TIER_REGIONAL):
+        tier_rows = by_tier[tier]
+        remaining = max_total - len(selected)
+        if remaining <= 0:
+            truncated = truncated or bool(tier_rows)
+            break
+        picked, tier_meta = apply_breadth_contract(
+            tier_rows, max_total=remaining, per_source_cap=per_source_cap
+        )
+        selected.extend(picked)
+        truncated = truncated or bool(tier_meta.get("truncated"))
+
+    return selected, build_breadth_meta(
+        selected, per_source_cap=per_source_cap, budget=max_total, truncated=truncated
+    )
+
+
 def build_breadth_meta(
     articles: List[Dict[str, Any]],
     per_source_cap: int = MAX_NEWS_PER_SOURCE,
@@ -191,12 +357,16 @@ def build_breadth_meta(
     """Counts that describe exactly the articles being returned."""
     source_counts: Dict[str, int] = {}
     province_counts: Dict[str, int] = {}
+    tier_counts: Dict[str, int] = {TIER_CRISIS: 0, TIER_REGIONAL: 0}
     for row in articles or []:
         if not isinstance(row, dict):
             continue
         source_counts[_source_key(row)] = source_counts.get(_source_key(row), 0) + 1
         bucket = normalize_province(row.get("province") or row.get("region"))
         province_counts[bucket] = province_counts.get(bucket, 0) + 1
+        tier = row.get("relevance_tier")
+        if tier in tier_counts:
+            tier_counts[tier] += 1
 
     provinces_present = sorted(province_counts, key=_province_sort_key)
     provinces_missing = [p for p in SUMATRA_PROVINCES if p not in province_counts]
@@ -210,6 +380,15 @@ def build_breadth_meta(
         "max_per_source": per_source_cap,
         "budget": budget,
         "total": len(articles or []),
+        # Display tiers (SPEC decision 8): `crisis` passes the hazard gate,
+        # `regional` is display-only context and never claims crisis relevance.
+        "tier_counts": dict(tier_counts),
+        "crisis_count": tier_counts[TIER_CRISIS],
+        "regional_count": tier_counts[TIER_REGIONAL],
+        "tier_note": (
+            "regional = display-only regional context; it does not pass the crisis "
+            "gate and is never consumed by the hazard pipeline."
+        ),
         # Documented deprecation: the UI must read display_confidence, never the
         # extractor's static tier constant carried on confidence_score.
         "confidence_note": (
@@ -530,7 +709,12 @@ async def get_live_news(
     # Query latest articles immediately from Supabase
     # Over-fetch (150) so the 48h / tier / geo filters below have candidates;
     # a 60-row window let valid rows get pushed out by dropped ones.
-    articles = await fetch_news_from_supabase(limit=150, province=province, severity=severity)
+    # `include_regional=True` is DISPLAY-ONLY: it lets the read path classify rows
+    # the crisis gate rejected. Every other caller of the service keeps the
+    # default (False) and therefore never sees a regional row.
+    articles = await fetch_news_from_supabase(
+        limit=150, province=province, severity=severity, include_regional=True
+    )
 
     # Defensive on-read guard: fetch_news_from_supabase already unpacks
     # ground_truth_metrics + re-tiers legacy rows, but re-apply here so legacy
@@ -563,7 +747,10 @@ async def get_live_news(
                 if _row.get(_k) is None and isinstance(_gtm, dict) and _gtm.get(_k) is not None:
                     _row[_k] = _gtm[_k]
             _sv_row = _gtm.get("schema_version") if isinstance(_gtm, dict) else None
-            if (not _row.get("zone_tier") or _sv_row != 7) and _router_re_tier is not None:
+            # A gate-dropped candidate was already re-tiered once by the service,
+            # so the router must not resurrect it through a second heuristic pass.
+            _gate_dropped = bool(_row.pop("_gate_dropped", False))
+            if not _gate_dropped and (not _row.get("zone_tier") or _sv_row != 7) and _router_re_tier is not None:
                 _re = _router_re_tier({
                     "title": _row.get("title", ""),
                     "raw_description": _row.get("raw_description") or _row.get("summary") or "",
@@ -601,8 +788,18 @@ async def get_live_news(
                         continue
                 except Exception:
                     pass
-            if _row.get("zone_tier") == "DROPPED_IRRELEVANT":
+            # Phase 172.5 (M9): display tier. `crisis` = the unchanged gate passed;
+            # `regional` = gate-rejected but honest 48h regional context (display
+            # only — `zone_tier` stays DROPPED_IRRELEVANT); `dropped` = everything
+            # else. A regional row is only ever added to the display page.
+            _row["relevance_tier"] = classify_relevance_tier(_row)
+            if _row["relevance_tier"] == TIER_DROPPED:
                 news_yield.record_read_drop(_row.get("id"), _row.get("source"), "dropped_gate", _row.get("province"))
+                news_yield.record_read_drop(_row.get("id"), _row.get("source"), "regional_dropped", _row.get("province"))
+                continue
+            if _row["relevance_tier"] == TIER_REGIONAL:
+                news_yield.record_read_drop(_row.get("id"), _row.get("source"), "regional_admitted", _row.get("province"))
+                _guarded.append(_row)
                 continue
             if _row.get("is_geocoded") is False:
                 news_yield.record_read_drop(_row.get("id"), _row.get("source"), "dropped_ungeocoded", _row.get("province"))
@@ -616,9 +813,10 @@ async def get_live_news(
         except Exception:
             continue
 
-    # Phase 172 (M9): read-time breadth contract (SPEC decision 8). Applied to
-    # the already-filtered window — SQL ordering/limits above are untouched.
-    articles, breadth_meta = apply_breadth_contract(_guarded, max_total=NEWS_READ_BUDGET)
+    # Phase 172.5 (M9): breadth contract applied per display tier, crisis block
+    # first (SPEC decision 8 quotas + the two-tier admission above). SQL
+    # ordering/limits are untouched.
+    articles, breadth_meta = apply_tiered_breadth_contract(_guarded, max_total=NEWS_READ_BUDGET)
 
 
     # Phase 164a (M8): persist what the read path just re-tiered, once, so the
@@ -801,6 +999,14 @@ async def get_market_regime():
     articles = await fetch_news_from_supabase(limit=40)
     if not articles:
         articles = _NEWS_CACHE.get("articles", [])
+
+    # Phase 172.5 (M9): the regime is a HAZARD counter — regional display context
+    # must never move it. Cache rows carry the read-path tier; service rows do
+    # not (that path only ever returns crisis rows), so an untiered row is crisis.
+    articles = [
+        a for a in articles
+        if isinstance(a, dict) and a.get("relevance_tier", TIER_CRISIS) == TIER_CRISIS
+    ]
 
     # Honest regime timestamp: newest published_at (or the cached fetch-time
     # snapshot); datetime.now() only when there is genuinely no data at all.

@@ -2,13 +2,17 @@ import { test, expect, type Page } from '@playwright/test';
 
 /**
  * Phase 172 (M9) — Berita honesty + breadth.
+ * Phase 172.5 (M9) — two display tiers, one unchanged hazard gate.
  *
  * SPEC decision 7: confidence is tier + calibrated consensus; the static
  * 0.86/0.94 tier constant is NEVER displayed as confidence, and an
  * uncorroborated article reads "Belum terverifikasi".
  * SPEC decision 8: the read path guarantees breadth, so the sidebar groups by
  * province, offers a chip per province, and names provinces with no qualifying
- * 48h article instead of hiding the gap.
+ * 48h article instead of hiding the gap. 172.5 adds `crisis` (gate-passing) and
+ * `regional` (display-only context) so a nearly-empty crisis page still shows an
+ * honest regional picture — the regional card is labelled, never dressed as a
+ * hazard.
  *
  * Hermetic: `/api/v1/news/live` and the shell endpoints are stubbed; the
  * backend is not running.
@@ -330,4 +334,147 @@ test('(d) a province with no 48h article shows the honest empty label', async ({
   await expect(missing).toContainText('Bengkulu');
   await expect(missing).toContainText('Lampung');
   await expect(missing).toContainText('Tidak ada artikel 48 jam');
+});
+
+// ---------------------------------------------------------------------------
+// 6. Phase 172.5 — crisis / regional display tiers
+// ---------------------------------------------------------------------------
+
+test('(e) tier chips split crisis from regional, label context, keep crisis first', async ({ page }) => {
+  await mockDashboardShell(page);
+
+  const articles: MockArticle[] = [
+    // Regional rows are listed FIRST on purpose: the sidebar must still render
+    // the crisis block ahead of context inside each province group.
+    newsArticle({
+      id: 'tier-regional-aceh',
+      relevance_tier: 'regional',
+      zone_tier: 'DROPPED_IRRELEVANT',
+      source: 'Tribun Aceh',
+      province: 'Aceh',
+      title: 'Antrean truk di Pelabuhan Banda Aceh',
+      summary: 'Antrean truk mengular di pelabuhan dan menunda distribusi barang.',
+      latitude: 5.5483,
+      longitude: 95.3238,
+      link: 'https://www.tribunnews.com/regional/4567931/antrean-truk-banda-aceh',
+    }),
+    newsArticle({
+      id: 'tier-crisis-new',
+      relevance_tier: 'crisis',
+      source: 'Tribun Aceh',
+      province: 'Aceh',
+      title: 'Banjir lumpuh jalan nasional di Banda Aceh',
+      latitude: 5.5483,
+      longitude: 95.3238,
+      link: 'https://www.tribunnews.com/regional/4567932/banjir-banda-aceh',
+    }),
+    newsArticle({
+      id: 'tier-crisis-old',
+      relevance_tier: 'crisis',
+      source: 'Tribun Aceh',
+      province: 'Aceh',
+      title: 'Longsor tutup jalur lintas di Aceh Besar',
+      incident_type: 'landslide',
+      latitude: 5.3667,
+      longitude: 95.5333,
+      link: 'https://www.tribunnews.com/regional/4567933/longsor-aceh-besar',
+    }),
+    newsArticle({
+      id: 'tier-regional-sumut',
+      relevance_tier: 'regional',
+      zone_tier: 'DROPPED_IRRELEVANT',
+      source: 'Detik Sumut',
+      province: 'Sumatera Utara',
+      title: 'Kapal dan truk tertahan cuaca di Pelabuhan Belawan',
+      summary: 'Cuaca buruk menahan kapal dan truk di pelabuhan Belawan.',
+      latitude: 3.7845,
+      longitude: 98.6923,
+      link: 'https://www.detik.com/sumut/berita/d-6789101/kapal-truk-belawan',
+    }),
+  ];
+
+  await page.route('**/api/v1/news/live', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(
+        livePayload(articles, {
+          province_counts: { Aceh: 3, 'Sumatera Utara': 1 },
+          provinces_present: ['Aceh', 'Sumatera Utara'],
+          provinces_missing: ['Bengkulu'],
+          source_counts: { 'Tribun Aceh': 3, 'Detik Sumut': 1 },
+          truncated: false,
+          max_per_source: 12,
+          budget: 150,
+          crisis_count: 2,
+          regional_count: 2,
+          tier_counts: { crisis: 2, regional: 2 },
+        })
+      ),
+    });
+  });
+
+  const sidebar = await openDashboard(page);
+  await expect(articleCards(page)).toHaveCount(articles.length, { timeout: 30_000 });
+
+  const renderedIds = () =>
+    articleCards(page).evaluateAll((nodes) =>
+      nodes.map((node) => node.getAttribute('data-testid') || '')
+    );
+
+  // Semua (default) shows both tiers, crisis first inside the province group.
+  await expect(sidebar.getByTestId('news-tier-all')).toBeVisible();
+  await expect(sidebar.getByTestId('news-tier-crisis')).toBeVisible();
+  await expect(sidebar.getByTestId('news-tier-regional')).toBeVisible();
+  expect(await renderedIds(), 'crisis block must precede regional context').toEqual([
+    'berita-card-tier-crisis-new',
+    'berita-card-tier-crisis-old',
+    'berita-card-tier-regional-aceh',
+    'berita-card-tier-regional-sumut',
+  ]);
+
+  // A regional card is labelled as context, and never dressed as a hazard zone.
+  const regionalCard = sidebar.getByTestId('berita-card-tier-regional-aceh');
+  await expect(regionalCard.getByTestId('berita-tier-label-tier-regional-aceh')).toBeVisible();
+  await expect(regionalCard.getByTestId('berita-tier-label-tier-regional-aceh')).toHaveText('Regional');
+  expect(
+    await sidebar
+      .getByTestId('berita-card-tier-crisis-new')
+      .getByTestId('berita-tier-label-tier-crisis-new')
+      .count(),
+    'a crisis card must not carry the neutral regional label'
+  ).toBe(0);
+
+  // Krisis chip: only gate-passing rows.
+  await sidebar.getByTestId('news-tier-crisis').click();
+  await expect(articleCards(page)).toHaveCount(2, { timeout: 10_000 });
+  expect(await renderedIds()).toEqual([
+    'berita-card-tier-crisis-new',
+    'berita-card-tier-crisis-old',
+  ]);
+
+  // Regional chip: only context rows, still labelled.
+  await sidebar.getByTestId('news-tier-regional').click();
+  await expect(articleCards(page)).toHaveCount(2, { timeout: 10_000 });
+  expect(await renderedIds()).toEqual([
+    'berita-card-tier-regional-aceh',
+    'berita-card-tier-regional-sumut',
+  ]);
+  await expect(
+    sidebar.getByTestId('berita-tier-label-tier-regional-sumut')
+  ).toBeVisible();
+
+  // Back to Semua: the full page returns.
+  await sidebar.getByTestId('news-tier-all').click();
+  await expect(articleCards(page)).toHaveCount(articles.length, { timeout: 10_000 });
+
+  // Province chips (172) still compose with the tier chips (172.5).
+  await sidebar.getByTestId('news-province-chip-aceh').click();
+  await expect(articleCards(page)).toHaveCount(3, { timeout: 10_000 });
+  await sidebar.getByTestId('news-tier-crisis').click();
+  await expect(articleCards(page)).toHaveCount(2, { timeout: 10_000 });
+  await sidebar.getByTestId('news-province-chip-all').click();
+  await expect(articleCards(page)).toHaveCount(2, { timeout: 10_000 });
+  await sidebar.getByTestId('news-tier-all').click();
+  await expect(articleCards(page)).toHaveCount(articles.length, { timeout: 10_000 });
 });

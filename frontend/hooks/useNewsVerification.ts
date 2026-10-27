@@ -24,8 +24,19 @@ export interface NewsBreadthMeta {
   max_per_source?: number;
   budget?: number;
   total?: number;
+  /** Display tiers (Phase 172.5 / M9). */
+  tier_counts?: { crisis?: number; regional?: number };
+  crisis_count?: number;
+  regional_count?: number;
+  tier_note?: string;
   confidence_note?: string;
 }
+
+/**
+ * Display tier (Phase 172.5 / M9). `crisis` passes the hazard gate; `regional`
+ * is honest regional context that never claims crisis relevance.
+ */
+export type NewsRelevanceTier = 'crisis' | 'regional';
 
 export interface NewsItem {
   id: string;
@@ -60,6 +71,13 @@ export interface NewsItem {
   confidence_score: number;
   /** Honest display contract: label + calibrated value (or null). */
   display_confidence?: NewsDisplayConfidence;
+
+  /**
+   * Display tier (Phase 172.5 / M9). `crisis` passed the hazard gate; `regional`
+   * is display-only regional context and is rendered with a neutral label. A
+   * legacy payload without the field is crisis (the pre-172.5 contract).
+   */
+  relevance_tier?: NewsRelevanceTier;
 
   attributions?: Array<{ source_name: string; url?: string; credibility_score?: number }>;
   originNode?: string;
@@ -177,9 +195,17 @@ export function normalizeDisplayConfidence(
   return { value, label, basis, tier: resolvedTier };
 }
 
+/**
+ * Coerce a payload `relevance_tier` into the display tier (Phase 172.5).
+ * Absent/unknown → `crisis`: the pre-172.5 contract only ever served gate-passing
+ * rows, so a legacy payload cannot be silently downgraded to "regional".
+ */
+export function normalizeRelevanceTier(raw: unknown): NewsRelevanceTier {
+  return raw === 'regional' ? 'regional' : 'crisis';
+}
+
 /** Short, human tier badge. The raw token stays available via `title`. */
-export function displayTierLabel(tier: string | undefined): string {
-  const value = String(tier || '').toUpperCase();
+export function displayTierLabel(tier: string | undefined): string {  const value = String(tier || '').toUpperCase();
   if (value === 'TIER_1_OFFICIAL') return 'TIER 1 · RESMI';
   if (value === 'TIER_2_AUTHORITATIVE_PRESS') return 'TIER 2 · PERS';
   return value || 'TIER 2 · PERS';
@@ -667,6 +693,7 @@ export function useNewsVerification(options?: UseNewsVerificationOptions) {
                   a.source_tier || (isOfficial ? 'TIER_1_OFFICIAL' : 'TIER_2_AUTHORITATIVE_PRESS')
                 ),
                 zone_tier: resolvedTier,
+                relevance_tier: normalizeRelevanceTier(a.relevance_tier),
 
                 forecast_tag: forecastActive ? forecastTagRaw : undefined,
                 forecast_valid_until: forecastActive ? forecastValidUntil : undefined,
@@ -684,7 +711,10 @@ export function useNewsVerification(options?: UseNewsVerificationOptions) {
               } as NewsItem;
             }).filter((n): n is NewsItem => {
               if (!n) return false;
-              if (n.zone_tier === 'DROPPED_IRRELEVANT') return false;
+              // Phase 172.5: a regional row is deliberately gate-rejected — it is
+              // display context, not a hazard — so it is admitted here and labelled
+              // as such, while every other DROPPED_IRRELEVANT row stays hidden.
+              if (n.zone_tier === 'DROPPED_IRRELEVANT' && n.relevance_tier !== 'regional') return false;
               if (n.is_geocoded === false) return false;
               if (!n.link && !n.url) return false;
               if (n.lat == null || n.lon == null || !Number.isFinite(n.lat) || !Number.isFinite(n.lon)) return false;

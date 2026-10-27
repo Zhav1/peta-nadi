@@ -35,7 +35,7 @@ import { useDemoState } from '@/hooks/useDemoState';
 import { useFleetVehicles } from '@/hooks/useFleetVehicles';
 import { useCorridorContext } from '@/hooks/useCorridorContext';
 import { useDashboardBootstrap } from '@/hooks/useDashboardBootstrap';
-import { useNewsVerification, isForecastActive, deriveForecastValidUntil, FORECAST_TAG, normalizeProvince, provinceSlug, displayTierLabel, AREA_WIDE_PROVINCE, SUMATRA_PROVINCE_ORDER, type MarketRegimeData } from '@/hooks/useNewsVerification';
+import { useNewsVerification, isForecastActive, deriveForecastValidUntil, FORECAST_TAG, normalizeProvince, provinceSlug, displayTierLabel, AREA_WIDE_PROVINCE, SUMATRA_PROVINCE_ORDER, type MarketRegimeData, type NewsRelevanceTier } from '@/hooks/useNewsVerification';
 import { isDocumentVisible } from '@/lib/visibility';
 import { FreshnessBadge } from '@/components/ui/FreshnessBadge';
 import { FreshnessBadge as StatusFreshnessBadge } from '@/components/dashboard/FreshnessBadge';
@@ -742,6 +742,10 @@ export default function DashboardClient() {
   });
   const [newsSearchQuery, setNewsSearchQuery] = useState('');
   const [newsProvinceFilter, setNewsProvinceFilter] = useState<string>('ALL');
+  // Phase 172.5 (M9): display-tier filter. `Semua` shows both tiers; `Krisis`
+  // and `Regional` narrow to one. Defaults to Semua so the first render matches
+  // the backend's crisis-first page.
+  const [newsTierFilter, setNewsTierFilter] = useState<'ALL' | NewsRelevanceTier>('ALL');
 
   const [selectedNewsCategory, setSelectedNewsCategory] = useState<'ALL' | 'OFFICIAL' | 'WEATHER' | 'OSINT' | 'MARKET'>('ALL');
   const [selectedNewsId, setSelectedNewsId] = useState<string | null>(null);
@@ -772,6 +776,12 @@ export default function DashboardClient() {
         return false;
       }
 
+      // Tier chip (Phase 172.5): crisis = gate-passing hazard news, regional =
+      // display-only context. The filter is additive with the province chip.
+      if (newsTierFilter !== 'ALL' && (item.relevance_tier || 'crisis') !== newsTierFilter) {
+        return false;
+      }
+
       if (newsSearchQuery.trim()) {
         const q = newsSearchQuery.toLowerCase();
         return (
@@ -782,7 +792,7 @@ export default function DashboardClient() {
       }
       return true;
     });
-  }, [newsFeed, selectedNewsCategory, newsSearchQuery, newsProvinceFilter]);
+  }, [newsFeed, selectedNewsCategory, newsSearchQuery, newsProvinceFilter, newsTierFilter]);
 
   // Province chips: every province the payload reports, in canonical order, plus
   // any bucket the visible feed actually carries.
@@ -810,6 +820,8 @@ export default function DashboardClient() {
   // Group the visible feed by province. Group order follows the chip order so the
   // list and the filter row tell the same story; order is deterministic, so an
   // identical cached re-poll cannot re-shuffle the DOM (freeze contract).
+  // Inside a province the backend's crisis-first order is preserved: a stable
+  // sort ranks crisis before regional, so a context card never precedes a hazard.
   const groupedNews = useMemo(() => {
     const groups = new Map<string, typeof filteredNews>();
     for (const item of filteredNews) {
@@ -822,9 +834,14 @@ export default function DashboardClient() {
       const idx = (SUMATRA_PROVINCE_ORDER as readonly string[]).indexOf(p);
       return idx === -1 ? (p === AREA_WIDE_PROVINCE ? 99 : 100) : idx;
     };
+    const tierRank = (item: { relevance_tier?: NewsRelevanceTier }) =>
+      item.relevance_tier === 'regional' ? 1 : 0;
     return Array.from(groups.entries())
       .sort((a, b) => order(a[0]) - order(b[0]) || a[0].localeCompare(b[0]))
-      .map(([province, items]) => ({ province, items }));
+      .map(([province, items]) => ({
+        province,
+        items: [...items].sort((a, b) => tierRank(a) - tierRank(b)),
+      }));
   }, [filteredNews]);
 
 
@@ -2640,6 +2657,8 @@ export default function DashboardClient() {
 
     const siblingCitations = newsFeed
       .filter((n) => {
+        // Phase 172.5: regional context is never hazard evidence.
+        if (n.relevance_tier === 'regional') return false;
         if (!newsItem) return n.id === fallbackZone?.source_news_id;
         const sameCorridor = n.corridor_segment && newsItem?.corridor_segment
           ? n.corridor_segment === newsItem.corridor_segment
@@ -3345,6 +3364,41 @@ export default function DashboardClient() {
                 ))}
               </div>
 
+              {/* Display-tier chips (Phase 172.5 / M9). `Krisis` = the rows that
+                  passed the hazard gate; `Regional` = honest 48h regional context
+                  that never claims crisis relevance. Additive with the province
+                  chips below. */}
+              <div className="flex items-center gap-1" data-testid="news-tier-filter">
+                {([
+                  { id: 'ALL', label: 'Semua', testid: 'news-tier-all' },
+                  { id: 'crisis', label: 'Krisis', testid: 'news-tier-crisis' },
+                  { id: 'regional', label: 'Regional', testid: 'news-tier-regional' },
+                ] as const).map((tier) => (
+                  <button
+                    key={tier.id}
+                    type="button"
+                    data-testid={tier.testid}
+                    onClick={() => setNewsTierFilter(tier.id)}
+                    className={`cursor-pointer px-1.5 py-0.5 rounded border text-[10px] font-mono transition ${
+                      newsTierFilter === tier.id
+                        ? tier.id === 'regional'
+                          ? 'bg-white/10 text-slate-100 border-white/25'
+                          : 'bg-white/10 text-slate-100 border-white/20'
+                        : 'bg-slate-950/50 text-slate-400 border-white/5 hover:border-white/20 hover:text-slate-200'
+                    }`}
+                    title={
+                      tier.id === 'crisis'
+                        ? 'Berita yang lolos gerbang krisis (zona merah/kuning)'
+                        : tier.id === 'regional'
+                          ? 'Konteks regional 48 jam — bukan klaim krisis'
+                          : 'Tampilkan kedua tingkat: krisis dan regional'
+                    }
+                  >
+                    {tier.label}
+                  </button>
+                ))}
+              </div>
+
               {/* Province chips (Phase 172 / M9): the read path guarantees every
                   province with a qualifying 48h article is present, so a chip per
                   province is an honest map of what the window contains. Empty
@@ -3508,8 +3562,12 @@ export default function DashboardClient() {
                   const isExcerptExpanded = expandedNewsId === item.id;
                   const itemZoneTier = (item.zone_tier || 'RED_CONFIRMED') as ZoneTier;
                   const isForecast = isForecastActive(item.forecast_tag, item.forecast_valid_until, forecastNowMs);
+                  // Phase 172.5: regional context never renders a hazard zone badge.
+                  const isRegional = item.relevance_tier === 'regional';
 
                   const handleFocusMap = () => {
+                    // Regional context is not an incident: no zone/route audit trail.
+                    if (isRegional) return;
                     // Forecast path: info-only. No origin/dest reroute pairing and
                     // no detour calculation — inspectNewsOrZoneAuditTrail emits
                     // zero routes instead of a reroute CTA.
@@ -3557,7 +3615,18 @@ export default function DashboardClient() {
 
                       {/* Headline with external link */}
                       <div className="flex flex-wrap items-center gap-1.5">
-                        {isForecast ? (
+                        {isRegional ? (
+                          // Neutral, non-hazard label: this is regional context,
+                          // not a zone. No red/amber emphasis, no crisis claim.
+                          <span
+                            data-testid={`berita-tier-label-${item.id}`}
+                            className="flex items-center gap-1.5 text-xs text-slate-400"
+                            title="Konteks regional 48 jam — bukan klaim krisis"
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+                            Regional
+                          </span>
+                        ) : isForecast ? (
  <span className="flex items-center gap-1.5 text-xs text-cyan-300"><span className="w-1.5 h-1.5 rounded-full border border-dashed border-cyan-300 bg-cyan-400/20" />Prakiraan</span>
                         ) : itemZoneTier === 'RED_CONFIRMED' ? (
  <span className="flex items-center gap-1.5 text-xs text-slate-300"><span className="w-1.5 h-1.5 rounded-full bg-red-500" />Merah</span>

@@ -1724,13 +1724,26 @@ async def enrich_article_description_full_body_if_needed(article: Dict[str, Any]
     return article
 
 
-async def fetch_news_from_supabase(limit: int = 150, province: Optional[str] = None, severity: Optional[str] = None) -> List[Dict[str, Any]]:
+async def fetch_news_from_supabase(
+    limit: int = 150,
+    province: Optional[str] = None,
+    severity: Optional[str] = None,
+    include_regional: bool = False,
+) -> List[Dict[str, Any]]:
     """
     Retrieves dynamic verified news articles from Supabase public.news_articles.
     Unpacks tiering metadata from ground_truth_metrics and filters out
     DROPPED_IRRELEVANT / un-geocoded bureau-centroid noise. Legacy rows missing
     `zone_tier` are re-tiered on read via the fast heuristic + bureau stripping
     so polluted Bengkulu-centroid rows are immediately cleaned.
+
+    `include_regional` (Phase 172.5 / M9) is DISPLAY-ONLY and defaults to False:
+    every hazard/agent consumer (routing proof context, market regime, claim
+    verification) therefore keeps the exact crisis-only contract. When the Berita
+    display read path opts in, gate-dropped rows that are geocoded are returned
+    as *candidates* marked `_gate_dropped=True`, with `zone_tier` untouched
+    (`DROPPED_IRRELEVANT`) so nothing downstream can mistake them for hazards.
+    The read path decides `crisis | regional | dropped` and drops the marker.
 
     Rows repaired by that heuristic are written back to Supabase in one batched
     upsert before returning (`persist_re_tiered_news_rows`), so the next read
@@ -1860,6 +1873,17 @@ async def fetch_news_from_supabase(limit: int = 150, province: Optional[str] = N
             pass
         # Filter DROPPED_IRRELEVANT or un-geocoded bureau-centroid noise.
         if row.get("zone_tier") == "DROPPED_IRRELEVANT":
+            if not include_regional:
+                continue
+            # Display-only candidate for the regional tier. Requires real
+            # coordinates; `zone_tier` stays DROPPED_IRRELEVANT and the row is
+            # never reported as re-tiered (no write-back, no payload claim).
+            if row.get("is_geocoded") is False:
+                continue
+            if row.get("latitude") is None or row.get("longitude") is None:
+                continue
+            row["_gate_dropped"] = True
+            cleaned.append(row)
             continue
         if row.get("is_geocoded") is False:
             continue

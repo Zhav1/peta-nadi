@@ -14,12 +14,17 @@ Funnel stages (all counted per source)
 * ``dropped_stale``      — read-path rejections for the 48h freshness gate.
 * ``dropped_ungeocoded`` — read-path rejections for the geo gate (no coordinates
                            / ``is_geocoded=False``).
+* ``regional_admitted``  — gate-rejected rows the display read path admitted as
+                           ``regional`` context (Phase 172.5). Display only.
+* ``regional_dropped``   — gate-rejected rows that failed the regional
+                           predicate too, so they stay ``dropped``.
 
 ``dropped_stale`` / ``dropped_ungeocoded`` are observed where they happen (the
 read path when its 30 s cache misses), so they describe the sampled window, not
-the whole hourly ingest. They are deduped per article id (`record_read_drop`) so
-a repeatedly re-scanned window cannot inflate one rejected row into thousands of
-"drops". That is honest: there is no SQL rewrite behind this.
+the whole hourly ingest. They are deduped per `(article id, stage)`
+(`record_read_drop`) so a repeatedly re-scanned window cannot inflate one
+rejected row into thousands of "drops". That is honest: there is no SQL rewrite
+behind this.
 
 Storage
 -------
@@ -51,6 +56,8 @@ STAGES = (
     "dropped_stale",
     "dropped_ungeocoded",
     "published",
+    "regional_admitted",
+    "regional_dropped",
 )
 
 _SOURCE_FIELD = "s"
@@ -148,7 +155,9 @@ def _redis():
 # The read path re-evaluates the same ~150-row window on every cache miss (~30 s).
 # Counting each observation would turn one rejected article into ~2,880 "drops"
 # per day, which is not a yield number. Read-path drops are therefore deduped per
-# article per window: the counter means "distinct articles rejected".
+# `(article, stage)` per window: one row can be `dropped_gate` AND
+# `regional_dropped` once, but no single stage is counted twice. The counter
+# means "distinct articles rejected at this stage".
 _READ_SEEN: Dict[str, float] = {}
 _READ_SEEN_TTL_SECONDS = 3600
 _READ_SEEN_MAX = 20000
@@ -161,10 +170,10 @@ def record_read_drop(
     province: Optional[Any] = None,
     dedupe_ttl_seconds: int = _READ_SEEN_TTL_SECONDS,
 ) -> None:
-    """Count a read-path rejection once per article id. Never raises."""
+    """Count a read-path observation once per (article id, stage). Never raises."""
     try:
-        key = str(article_id or "").strip()
-        if not key:
+        key = f"{str(article_id or '').strip()}|{stage}"
+        if not str(article_id or "").strip():
             record_yield(source, stage, province)
             return
         now = time.monotonic()
@@ -319,8 +328,8 @@ def get_yield_report(window_hours: int = YIELD_WINDOW_HOURS) -> Dict[str, Any]:
         "totals": totals,
         "note": (
             "fetched/dropped_gate/published are ingest-cycle counts; "
-            "dropped_stale/dropped_ungeocoded are read-path rejections observed "
-            "when the news cache misses."
+            "dropped_stale/dropped_ungeocoded/regional_admitted/regional_dropped "
+            "are read-path observations of the sampled window."
         ),
     }
 

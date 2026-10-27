@@ -208,7 +208,7 @@ async def test_two_live_reads_within_ttl_do_not_reingest(monkeypatch):
     fetches: List[int] = []
     cycles: List[bool] = []
 
-    async def fake_fetch(limit: int = 150, province=None, severity=None):
+    async def fake_fetch(limit: int = 150, province=None, severity=None, **_kwargs):
         fetches.append(limit)
         return [_fresh_v7_row()]
 
@@ -246,7 +246,7 @@ async def test_two_live_reads_within_ttl_do_not_reingest(monkeypatch):
 @pytest.mark.asyncio
 async def test_expired_cache_still_rearms_ingestion(monkeypatch):
     """Contrast case: proves the assertion above is load-bearing, not vacuous."""
-    async def fake_fetch(limit: int = 150, province=None, severity=None):
+    async def fake_fetch(limit: int = 150, province=None, severity=None, **_kwargs):
         return [_fresh_v7_row()]
 
     monkeypatch.setattr(news_router, "fetch_news_from_supabase", fake_fetch)
@@ -264,7 +264,7 @@ async def test_expired_cache_still_rearms_ingestion(monkeypatch):
 @pytest.mark.asyncio
 async def test_force_refresh_still_schedules_ingestion(monkeypatch):
     """The poller's force path is unchanged by the timestamp fix."""
-    async def fake_fetch(limit: int = 150, province=None, severity=None):
+    async def fake_fetch(limit: int = 150, province=None, severity=None, **_kwargs):
         return [_fresh_v7_row()]
 
     monkeypatch.setattr(news_router, "fetch_news_from_supabase", fake_fetch)
@@ -362,7 +362,7 @@ async def test_router_write_back_covers_rows_the_guard_repaired(monkeypatch):
     legacy.pop("latitude", None)
     legacy.pop("longitude", None)
 
-    async def fake_fetch(limit: int = 150, province=None, severity=None):
+    async def fake_fetch(limit: int = 150, province=None, severity=None, **_kwargs):
         return [legacy]
 
     monkeypatch.setattr(news_router, "fetch_news_from_supabase", fake_fetch)
