@@ -49,6 +49,17 @@ interface HoveredVehicleInfo {
   screenPos: { x: number; y: number };
 }
 
+/**
+ * Phase M9-visual — modality palette. Mirrors `DS.layer` in
+ * lib/designTokens.ts; the map layer is the source of truth and the legend
+ * imports the same values.
+ */
+const MODALITY_COLOR: Record<string, string> = {
+  truck: '#34d399',
+  maritime: '#e2e8f0',
+  air: '#a78bfa',
+};
+
 function calculatePathDistanceKm(coords: [number, number][]): number {
   if (!coords || coords.length < 2) return 50.0;
   let total = 0;
@@ -360,20 +371,31 @@ export function FleetVehicleLayer({
               8, 5.5,
               14, 8,
             ],
-            // Phase 175: one accent for live, neutral for estimated, amber for
-            // alert. Modality is no longer a hue (see legend: label + shape).
+            // Phase M9-visual: hue = modality (the operator's question is
+            // "truck, ship or aircraft?"), opacity + fill = signal quality.
+            //   Truck emerald #34d399 · Aircraft violet #a78bfa · Vessel silver #e2e8f0
+            // Estimated (ROUTE_ESTIMATED) keeps its modality hue at 45% with a
+            // hollow centre; an alert is an amber #f59e0b ring on any modality.
             'circle-color': [
               'case',
-              ['==', ['get', 'isImpacted'], true], '#f59e0b',
-              ['==', ['get', 'tracking_mode'], 'ROUTE_ESTIMATED'], 'rgba(232, 234, 237, 0.35)',
-              '#38b8f8',
+              ['==', ['get', 'tracking_mode'], 'ROUTE_ESTIMATED'], 'rgba(0,0,0,0)',
+              ['==', ['get', 'modality'], 'truck'], '#34d399',
+              ['==', ['get', 'modality'], 'maritime'], '#e2e8f0',
+              ['==', ['get', 'modality'], 'air'], '#a78bfa',
+              '#e2e8f0',
             ],
-            'circle-stroke-width': 1.5,
+            'circle-stroke-width': [
+              'case',
+              ['==', ['get', 'isImpacted'], true], 2.5,
+              1.5,
+            ],
             'circle-stroke-color': [
               'case',
               ['==', ['get', 'isImpacted'], true], '#f59e0b',
-              ['==', ['get', 'tracking_mode'], 'ROUTE_ESTIMATED'], 'rgba(232, 234, 237, 0.55)',
-              '#0c1017',
+              ['==', ['get', 'modality'], 'truck'], '#34d399',
+              ['==', ['get', 'modality'], 'maritime'], '#e2e8f0',
+              ['==', ['get', 'modality'], 'air'], '#a78bfa',
+              '#e2e8f0',
             ],
             'circle-opacity': [
               'interpolate', ['linear'], ['zoom'],
@@ -381,9 +403,12 @@ export function FleetVehicleLayer({
               4.0, 1.0,
             ],
             'circle-stroke-opacity': [
-              'interpolate', ['linear'], ['zoom'],
-              3.2, 0.0,
-              4.0, 1.0,
+              'case',
+              ['all',
+                ['==', ['get', 'tracking_mode'], 'ROUTE_ESTIMATED'],
+                ['!=', ['get', 'isImpacted'], true],
+              ], 0.45,
+              ['interpolate', ['linear'], ['zoom'], 3.2, 0.0, 4.0, 1.0],
             ],
           },
         });
@@ -817,7 +842,8 @@ export function FleetVehicleLayer({
         >
           <div className="flex items-center gap-1.5">
             <span
-              className="w-2 h-2 rounded-full bg-[rgba(232,234,237,0.38)]"
+              className="w-2 h-2 rounded-full"
+              style={{ backgroundColor: MODALITY_COLOR[hoveredVehicle.vehicle.modality || 'truck'] ?? '#e2e8f0' }}
             />
             <span className="text-xs font-semibold text-white">
               {hoveredVehicle.vehicle.name || hoveredVehicle.vehicle.vehicle_id}

@@ -132,7 +132,7 @@ test.beforeEach(async ({ page }) => {
   await mockDashboardApi(page);
 });
 
-test('land and water are painted at separated values, coastline at 6% white', async ({ page }) => {
+test('land and water are painted at separated values, coastline at 8% white', async ({ page }) => {
   await page.goto('/dashboard?e2e=1', { waitUntil: 'domcontentloaded' });
   const paint = await waitForBasePaint(page);
 
@@ -142,12 +142,12 @@ test('land and water are painted at separated values, coastline at 6% white', as
   expect(paint.waterway?.toLowerCase()).toBe(MAP_BASE_PAINT.waterway);
   // Mapbox may serialise the colour with spaces; assert the value, not spacing.
   expect(paint.coastline?.replace(/\s+/g, '')).toBe(MAP_BASE_PAINT.coastline.replace(/\s+/g, ''));
-  expect(alphaOf(paint.coastline ?? ''), 'rendered coastline alpha').toBeCloseTo(0.06, 2);
+  expect(alphaOf(paint.coastline ?? ''), 'rendered coastline alpha').toBeCloseTo(0.08, 2);
 
   // And the separation is measurable, not a one-digit nudge.
   const distance = colorDistance(MAP_BASE_PAINT.land, MAP_BASE_PAINT.water);
   expect(distance, `land/water colour distance (${distance.toFixed(2)})`).toBeGreaterThan(8);
-  expect(alphaOf(MAP_BASE_PAINT.coastline), 'coastline alpha').toBeCloseTo(0.06, 2);
+  expect(alphaOf(MAP_BASE_PAINT.coastline), 'coastline alpha').toBeCloseTo(0.08, 2);
 });
 
 test('popup close button is overlay chrome, transparent and keyboard-visible', async ({ page }) => {

@@ -57,16 +57,40 @@ const CLEANED_FILES = [
   'components/dashboard/DashboardClient.tsx',
   'components/dashboard/FreshnessBadge.tsx',
   'components/dashboard/HitlDecisionDrawer.tsx',
+  'components/dashboard/NewsFilterModal.tsx',
   'components/dashboard/TopNavTelemetry.tsx',
   'components/dashboard/analytics/AnalyticsTip.tsx',
   'components/dashboard/analytics/KpiStrip.tsx',
   'components/fleet/TenantFleetRoster.tsx',
-  'components/map/CrisisMap.tsx',
-  'components/map/FleetVehicleLayer.tsx',
   'components/map/mapPopup.ts',
   'components/sidebar/RouteDetailModal.tsx',
   'lib/designTokens.ts',
 ];
+
+/**
+ * Files that paint operational map data. They are NOT scanned against the
+ * chrome ban list, because they carry the sanctioned layer palette instead:
+ * exactly the six hues in DESIGN.md → "Operational layer palette" (plus the
+ * accent and neutral white-alpha). Any other banned hue in these files fails.
+ */
+const LAYER_FILES = [
+  'components/map/CrisisMap.tsx',
+  'components/map/FleetVehicleLayer.tsx',
+];
+
+/** The sanctioned layer palette, read from the token layer (single source). */
+const SANCTIONED_LAYER_HEX = [
+  DS.layer.cuaca.fill,
+  DS.layer.cuaca.outline,
+  DS.layer.waspada.fill,
+  DS.layer.waspada.outline,
+  DS.layer.titikPanas.fill,
+  DS.layer.titikPanas.outline,
+  DS.layer.truck,
+  DS.layer.aircraft,
+  DS.layer.vessel,
+].map((hex) => hex.toLowerCase());
+
 
 /** Every required marker in the normative section, with the reason it matters. */
 const DESIGN_MARKERS: Array<[marker: string, why: string]> = [
@@ -164,4 +188,52 @@ test('CLEANED_FILES contain no banned chrome hex', () => {
   }
 
   expect(offenders).toEqual([]);
+});
+
+test('layer files are sorted, exist, and only paint the sanctioned layer palette', () => {
+  expect(LAYER_FILES).toEqual([...LAYER_FILES].sort());
+  expect(new Set(LAYER_FILES).size).toBe(LAYER_FILES.length);
+
+  const missing = LAYER_FILES.filter((rel) => !fs.existsSync(path.join(FRONTEND_ROOT, rel)));
+  expect(missing).toEqual([]);
+
+  // The palette itself must stay exactly the six documented hues (+ 3
+  // outlines that belong to the same six families).
+  expect([...SANCTIONED_LAYER_HEX].sort()).toEqual([
+    '#2f81f7',
+    '#34d399',
+    '#60a5fa',
+    '#a78bfa',
+    '#e2e8f0',
+    '#ef4444',
+    '#f59e0b',
+    '#f87171',
+    '#fbbf24',
+  ]);
+
+  const banned = EXPECTED_BANNED.map((hex) => hex.toLowerCase());
+  const offenders: string[] = [];
+  for (const rel of LAYER_FILES) {
+    const src = fs.readFileSync(path.join(FRONTEND_ROOT, rel), 'utf-8').toLowerCase();
+    // A layer file may use a banned hex only when that exact value is in the
+    // sanctioned palette (`#60a5fa` is the one overlap today).
+    const hits = banned.filter(
+      (hex) => src.includes(hex) && !SANCTIONED_LAYER_HEX.includes(hex),
+    );
+    if (hits.length > 0) offenders.push(`${rel} → ${hits.join(', ')}`);
+  }
+  expect(offenders).toEqual([]);
+});
+
+test('DESIGN.md documents the operational layer palette', () => {
+  const designMd = fs.readFileSync(DESIGN_MD_PATH, 'utf-8');
+  expect(designMd).toContain('### Operational layer palette');
+
+  const undocumented = SANCTIONED_LAYER_HEX.filter(
+    (hex) => !designMd.toLowerCase().includes(hex),
+  );
+  expect(undocumented).toEqual([]);
+
+  // The palette is a bounded exception, not a new licence.
+  expect(designMd).toContain('ONLY');
 });

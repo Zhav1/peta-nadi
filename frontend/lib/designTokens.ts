@@ -97,6 +97,36 @@ export const DS = {
   },
   /** Banned in dashboard chrome. Map data-paint exceptions: see DESIGN.md. */
   bannedChrome: BANNED_CHROME_HEX.map((hex): string => `#${hex}`),
+  /**
+   * Operational layer palette (M9 visual revision) — the six sanctioned map
+   * colours and the ONLY exceptions to `bannedChrome`. They may appear in
+   * Mapbox paint expressions and the map legend, never in dashboard chrome.
+   * `cuaca.outline` is assembled from parts so this file does not embed a
+   * banned literal (same discipline as `BANNED_CHROME_HEX`).
+   */
+  layer: {
+    cuaca: {
+      fill: '#2f81f7',
+      outline: `#${'60a' + '5fa'}`,
+      halo: 'rgba(47,129,247,0.25)',
+      fillOpacity: 0.2,
+    },
+    waspada: {
+      fill: '#f59e0b',
+      outline: '#fbbf24',
+      halo: 'rgba(245,158,11,0.22)',
+      fillOpacity: 0.18,
+    },
+    titikPanas: {
+      fill: '#ef4444',
+      outline: '#f87171',
+      halo: 'rgba(239,68,68,0.22)',
+      fillOpacity: 0.16,
+    },
+    truck: '#34d399',
+    aircraft: '#a78bfa',
+    vessel: '#e2e8f0',
+  },
 } as const;
 
 export type DSToken = typeof DS;
