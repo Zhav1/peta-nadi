@@ -1,8 +1,19 @@
-# SPEC — M8: Operational Truth & Distilled Command Surface
+# SPEC — M9: Operational Truth & Distilled Command Surface
 
 **Status:** APPROVED 2026-10-27
-**Active milestone:** M8 (follows M7, completed at phase 159)
+**Active milestone:** M9, phases 167–176
+**Supersedes:** nothing. M8 "Fast & Durable" (phases 160–166) remains valid and independent.
 **Execution mode:** `/goal` outer loop + `/boost` delegation (`explore` for investigation, `general` for coding, one unit per subagent)
+
+## Milestone reconciliation (read this first)
+
+Two milestones briefly shared the M8 label. Resolution, chosen to avoid destroying approved work:
+
+- **M8 — Fast & Durable** (`.planning/M8-SPEC.md`, phases 160–166: auth durability, thin web + tick, bootstrap snapshot, hot-path/proxy, prod SLO gate, soak) is committed to git and **stays as M8**. It is not abandoned, not renumbered, and not overwritten.
+- **M9 — Operational Truth & Distilled Command Surface** is this document. It takes phases **167–176** because 160–166 are already allocated.
+- Phase 160's delivered code (`51b3903`) legitimately serves both: it shipped M8's baseline/audit **and** M9's world-truth hazard counters. M9 records that as phase **167 = carry-forward, already landed**.
+
+Consequence: no renumbering of any committed phase, no `M8-SPEC.md` edits, no struck plans. `ROADMAP.md` gains an M9 section when R1 deploys.
 
 ---
 
@@ -45,26 +56,25 @@ Two outcomes, in this order:
 
 ## Phase map
 
-### Wave 1 — Operational Truth (deploy R1 at the end)
+### Wave 1 — Operational Truth (deploy R1 after 173)
 
 | Phase | Scope |
 |---|---|
-| 160 | Hazard counters: world-truth Waspada/Cuaca, remove toggle gating + count cap, tri-state contract |
-| 161 | FIRMS keyless CSV fallback, tri-state, cluster threshold audit |
-| 162 | Retention + freshness: stale-while-revalidate, provenance badge, TTL fix, full-Sumatra bbox, render caps |
-| 163 | Small-town routing: snap ceiling, same-node rejection, visible `no_route`, engine provenance |
-| 164 | Gazetteer: seed kab/kota + kecamatan, alias/province/parent matching, fuzzy + diacritics, desa fallback |
-| 165 | Berita: per-feed yield diagnostic, province derivation, diversity quotas, calibrated confidence, grouping |
-| 166 | Armada drawer: roster + vehicle detail, live vs estimated counts, tenant scope |
+| 167 | **Carry-forward.** Hazard counters: world-truth Waspada/Cuaca, toggle-independent, uncapped count path, tri-state contract — landed in `51b3903`; M9 verifies and documents it |
+| 168 | FIRMS keyless CSV fallback, tri-state, cluster threshold audit |
+| 169 | Retention + freshness: stale-while-revalidate, provenance badge, TTL fix, full-Sumatra bbox, render caps |
+| 170 | Small-town routing: snap ceiling, same-node rejection, visible `no_route`, engine provenance |
+| 171 | Gazetteer: seed kab/kota + kecamatan, alias/province/parent matching, fuzzy + diacritics, desa fallback |
+| 172 | Berita: per-feed yield diagnostic, province derivation, diversity quotas, calibrated confidence, grouping |
+| 173 | Armada drawer: roster + vehicle detail, live vs estimated counts, tenant scope |
 
-### Wave 2 — Distilled Command Surface (deploy R2 at the end)
+### Wave 2 — Distilled Command Surface (deploy R2 after 176)
 
 | Phase | Scope |
 |---|---|
-| 167 | Design contract: rewrite DESIGN.md dashboard section, token layer, extend palette spec, freeze banned-hue set |
-| 168 | Shell rebuild: telemetry HUD, counters, legend, dock, tabs — Watermelon audit + adoptions + purposeful motion |
-| 169 | Overlay rebuild: one tooltip/popover system for cuaca/waspada/FIRMS zones, HITL, route modal, fleet drawer, auth, empty states |
-| 170 | Regression: a11y, reduced-motion, perf, screenshot goldens 1920×1080 + 390×844, full suite |
+| 174 | Design contract: DESIGN.md dashboard section, token layer, extend palette spec, freeze banned-hue set |
+| 175 | Shell rebuild: telemetry HUD, counters, legend, dock, tabs — Watermelon audit + adoptions + purposeful motion |
+| 176 | Overlay rebuild + regression: one tooltip/popover system for cuaca/waspada/FIRMS zones, HITL, route modal, fleet drawer, auth, empty states; a11y, reduced-motion, screenshot goldens 1920×1080 + 390×844, full suite |
 
 ## Interfaces and edge cases
 
