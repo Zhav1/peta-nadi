@@ -194,3 +194,78 @@ No auth test regressed: `test_auth_rbac.py` and `test_m8_auth_contract.py` are g
 5. **JWKS pre-warm opens a network call at boot on the free tier.** It is scheduled
    non-blocking and its failure is logged; if it proves noisy in production, guard it
    behind an env flag (phase 164 has the hot-path budget).
+
+---
+
+## Final status (2026-10-28)
+
+**Status: DONE** — both P0 audit findings closed and the client refresh path wired in
+the same phase, so the fail-closed contract is observable rather than academic. The
+milestone claim that is **not** closed is session survival past access-token expiry
+(see §Open).
+
+### Commit and lineage
+
+| Item | Value |
+|---|---|
+| Commit | `b76baa1` — `feat(m8-161): durable auth sessions + fail-closed auth boundary` |
+| Size | 19 files, +1704/−150 |
+| Contained by | `m9-operational-truth`, `m9-*` descendants, `main` |
+| **Not** contained by | `m8-operational-truth` (stops at `61c0ae5`) and `m8-fast-durable` (still `2eeb1ca`) |
+
+The M8 branch therefore holds phase 160 only; 161–164 live on the M9 integration
+branch and `main`. Cherry-picking to `m8-operational-truth` is still owed, but `main`
+already has the work.
+
+### Gate results
+
+| Command | Result | Source |
+|---|---|---|
+| `pytest backend/tests/test_m8_auth_contract.py -q` | **21 passed**, 1 deprecation warning, 4.09 s (phase run); **21 passed**, 3 warnings, 2.68 s (re-run 2026-10-28) | both first-hand |
+| `pytest backend/tests -q` | **408 passed, 3 failed**, 12 warnings, 332.50 s | phase run |
+| `cd frontend; npx tsc --noEmit` | **exit 0** | phase run (twice, after the final edit) |
+| `npx playwright test e2e/m8-auth.spec.ts --config=playwright.m8.config.ts` | **3 passed** (1.7 m), DISPATCHER account, local target | phase run — **not re-run** in this pass |
+
+The three full-suite failures are the two known baseline failures plus
+`test_cpu_routing_weather.py::test_cpu_routing_service_flags_seed_fallback_when_tomtom_unavailable`
+(concurrent M9 routing/weather work, reproducible in isolation). No auth test regressed;
+the baseline fuel-guard pair passed.
+
+The three Playwright cases exist and are named
+(`frontend/e2e/m8-auth.spec.ts:149,179,250`): 7-day `Secure`-on-HTTPS cookie, stale-token
+recovery, cross-tab logout. The 3/3 result is the phase's record, not a
+re-measurement — the spec needs a live target plus `M8_*` credentials.
+
+### Acceptance accounting
+
+All 14 acceptance boxes in this plan are ticked; the ones worth re-reading against the
+code (verified 2026-10-28) are:
+
+| Claim | Code evidence |
+|---|---|
+| No header → guest `200`; supplied invalid → `401` + challenge | `supabase_auth.py:564-587` (`get_optional_user` re-raises with `UNAUTHORIZED_HEADERS`) |
+| Auth deps are `async`, verification off-loop | `supabase_auth.py:561,580` — `await asyncio.to_thread(decode_and_verify_token, …)` |
+| Anonymous mint restricted to GUEST/`demo_sandbox` | `auth_router.py:131-148`; `is_evaluator` at `supabase_auth.py:155-167` |
+| `switch-role` tenant forced from caller claim | `auth_router.py:223-231` |
+| 7-day cookie, `SameSite=Lax`, `Secure` on HTTPS | `authContext.tsx:60,64,131-137` (`TOKEN_COOKIE_MAX_AGE_SECONDS = 604800`) |
+| Refresh mirrored on every token event | `authContext.tsx:332-359` (`SIGNED_IN` / `TOKEN_REFRESHED` / `INITIAL_SESSION`) |
+| Boot from Supabase, localStorage migration-only | `authContext.tsx:240-321` |
+| Logout race cancelled | `authGenerationRef` at `authContext.tsx:172-174,336,417` |
+| Cross-tab sync | `authContext.tsx:371-402` (`storage` event) |
+| `exp` required at the edge | `middleware.ts:26-28` |
+| Async clients cached | `supabase_auth.py:294-320`; `db/supabase_client.py` service-role singleton |
+| JWKS pre-warm non-fatal | `main.py:554-566` |
+
+### Handoff
+
+1. Session survival past expiry is **unverified** — the refresh path is wired and the
+   Playwright case proves recovery from a *stale stored* token, not survival across a
+   real expiry. Needs a short-TTL token or a ≥1 h wait (owner: 165).
+2. `test_optional_auth_*` covers the 401 contract hermetically; the deployed behaviour
+   was verified for `/auth/me` only, via the spec's direct call.
+3. `backend/scripts/seed_laporan_render.py` now hard-requires `DISPATCHER_TOKEN`
+   (`seed_laporan_render.py:88,234-238`) — any documented one-shot seed command is gone
+   by design.
+4. Cross-tenant gaps (audit F6) and client-wide 401 handling outside the auth context
+   are untouched.
+

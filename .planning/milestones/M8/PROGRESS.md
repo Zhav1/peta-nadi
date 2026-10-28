@@ -13,11 +13,11 @@
 | 160 | Baseline, audit, state repair | **DONE** | See §160 evidence below |
 | 161 | Auth session durability | **DONE** | See §161 evidence below |
 | 162 | Thin web + tick | **DONE** | See §162 evidence below |
-| 163 | Bootstrap snapshot + read path | **DONE (163a + 163b) — production measurement in 165** | See §163a and §163b evidence below |
+| 163 | Bootstrap snapshot + read path | **DONE (163a + 163b + trim) — measured in production by 165** | See §163a, §163b and "Snapshot payload trim" below |
 | 164 | Backend hot-path + proxy hardening | **164a DONE — 164b (sync-I/O sweep) DEFERRED (M9 conflict)** | See §164a evidence below |
-| 165 | Production verification + SLO gate | TODO | — |
-| 166 | Soak start + review | TODO | — |
-| 167–170 | *not defined* | TODO | `ROADMAP.md` and `M8-SPEC.md` define only 160–166; no 167–170 scope exists yet. Create them in the roadmap before planning. |
+| 165 | Production verification + SLO gate | **IMPLEMENTATION-GREEN — gate PARTIALLY CLOSED** (readpath/auth/proxy pass; cold start, 2 h session, PIHPS, `/health` p95 open) | See §165 evidence below |
+| 166 | Soak start + review | **NOT STARTED** — planned only | See §166 below and `.planning/phases/166-soak-start-review/` |
+| 167–170 | *not M8* | — | These numbers were allocated to **M9** (167–176.12), which shipped separately. M8 ends at 166. |
 
 ---
 
@@ -527,32 +527,101 @@ link-local target still returns the configured upstream's 200 body).
 
 ---
 
-## Production prerequisites (2026-10-27)
+## Phase 165 — Production verification + SLO gate · IMPLEMENTATION-GREEN (gate partially closed)
+
+Production gate run on 2026-10-28 against the deployed stack. Phase docs:
+`.planning/phases/165-production-verification-slo/PLAN.md`, `WALKTHROUGH.md`, `LEARNINGS.md`.
+
+**Why it is not "DONE":** `PLAN.md` says explicitly "Do not mark the phase done on a partial
+pass." Cold start, warm login, 2 h session survival and the PIHPS retry were never measured.
+
+### Gate results
+
+| # | Gate | Target | Measured | Verdict |
+|---|---|---|---|---|
+| 1 | Warm `/health` | < 500 ms | **0.6 s** | **FAIL (marginal, small sample)** |
+| 2 | Cold first response | < 20 s | not measured | **UNVERIFIED** |
+| 3 | Warm login | < 3 s | not measured | **UNVERIFIED** |
+| 4 | Dashboard first data | < 5 s Fast 4G | **1.017 s** (unthrottled) | PASS; throttled run owed |
+| 5 | First-mount API calls | ≤ 15 | **8** (total **50** vs 91) | PASS |
+| 6 | Bootstrap endpoint | 200 | **200**, response **1.9 s** | PASS |
+| 7 | Session survival 2 h | authenticated | not run | **UNVERIFIED** |
+| 8 | Proxy cache isolation | 7/7 | **7/7** | PASS |
+| 9 | Auth durability | 3/3 | **3/3** | PASS |
+| 10 | Tick | 202 + `run_id` | **202** | PASS |
+| 11 | Snapshot row | 4 sections | **291 KB / 4 sections** | PASS on shape; < 250 KB missed by 41 KB |
+| 12 | Jobs after tick | news + bmkg ok | **news ok, bmkg ok** | PASS |
+| 13 | PIHPS | completes | **error after 93 s** | **FAIL** |
+| 14 | 7-day stability | 0 failures | not started | **NOT STARTED** |
+
+### Production config that changed during the phase
+
+| Key | Value | Note |
+|---|---|---|
+| `ENVIRONMENT` | `production` | was `development` — the Render dashboard overrode `render.yaml` |
+| `TICK_MAX_JOBS` | **3** (was 2) | 2 starved news/bmkg |
+| `TICK_BUDGET_SECONDS` | **180** (was 120) | 120 starved PIHPS (failed at 93 s) |
+
+**Drift warning:** `render.yaml` and `backend/app/config.py` still declare 2 / 120. A blueprint
+re-sync reverts the fix.
+
+### Reproduce
+
+```powershell
+curl.exe -s https://peta-nadi.onrender.com/health
+curl.exe -i -X POST https://peta-nadi.onrender.com/internal/tick -H "X-Internal-Token: $env:INTERNAL_TICK_TOKEN"
+cd frontend
+npx playwright test e2e/m8-proxy-cache.spec.ts --config=playwright.m8.config.ts   # 7/7
+npx playwright test e2e/m8-auth.spec.ts --config=playwright.m8.config.ts         # 3/3
+$env:M8_REQUIRE_BOOTSTRAP='1'; npx playwright test e2e/m8-readpath.spec.ts --config=playwright.m8.config.ts
+```
+
+---
+
+## Phase 166 — Soak start + review · NOT STARTED
+
+No soak window is open. No start time, commit pin or artifact URL exists. The phase directory
+holds the plan and the start checklist only:
+`.planning/phases/166-soak-start-review/{PLAN,WALKTHROUGH,LEARNINGS}.md`.
+
+Minimum start conditions (`PLAN.md` § Start conditions): running build matches the pinned
+commit, migrations applied, tick answers 202, snapshot fresh with 4 sections, keep-alive green
+with an artifact, Actions minutes confirmed, and the cold-start gate measured or waived in
+writing. Any deploy during the window resets it.
+
+The keep-alive artifact cannot see `dashboard_snapshots.computed_at`, so the daily manual query
+is mandatory — a "0 failures" artifact with a stale snapshot is a misread pass.
+
+---
+
+## Production prerequisites (updated 2026-10-28)
 
 | Item | Status | Evidence |
 |---|---|---|
 | Supabase migration `023_scheduler_jobs` | **APPLIED** | version `20261027111905`; `scheduler_jobs` + `acquire_scheduler_job` / `release_scheduler_job`; smoke: acquire `true` → second acquire `false` → release → cleanup (0 rows) |
 | Supabase migration `024_dashboard_snapshots` | **APPLIED** | version `20261027111919`; 6 columns, RLS enabled |
-| Render env `INPROCESS_BATCH_POLLERS=false`, `INTERNAL_TICK_TOKEN`, `TICK_MAX_JOBS=2`, `TICK_BUDGET_SECONDS=120` | **PENDING** | user action in the Render dashboard |
-| cron-job.org `POST /internal/tick` every 5 min with `X-Internal-Token`, 90 s timeout | **PENDING** | user action; `docs/KEEPALIVE_RUNBOOK.md` updated |
-| Merge + deploy the integration branch | **WAITING** | user chose to wait for the M9 geocode/gazetteer commit |
-| Production SLO run (`M8_REQUIRE_BOOTSTRAP=1`) | **PENDING** | phase 165 |
+| Render env `INPROCESS_BATCH_POLLERS=false`, `INTERNAL_TICK_TOKEN` | **DONE** | tick answers 202 in production |
+| Render `TICK_MAX_JOBS=3`, `TICK_BUDGET_SECONDS=180` | **DONE (dashboard override)** | `render.yaml` still says 2 / 120 — blueprint drift |
+| Render `ENVIRONMENT=production` | **DONE** | `/health` reports `production`; was `development` until 2026-10-28 |
+| cron-job.org `POST /internal/tick` every 5 min, 90 s timeout | **DONE** | 202 + `run_id` observed |
+| Merge + deploy the integration branch | **DONE** | M8 code on `main` via `bfa3337`; live on Render + Vercel |
+| Production SLO run (`M8_REQUIRE_BOOTSTRAP=1`) | **PARTIAL** | read path/auth/proxy pass; cold start + 2 h session unmeasured |
 | 7-day soak | **NOT STARTED** | phase 166 (follow-up review) |
 
-## Remaining phases — TODO
+## Remaining work
 
-| Phase | Name | Gate that must pass |
-|---|---|---|
-| 164b | Backend hot-path async-I/O sweep (deferred from 164; needs the M9 routing/weather window) | No sync PostgREST/Redis on the auth + hot read paths |
-| 165 | Production verification + SLO gate | All SLOs except soak green |
-| 166 | Soak start + review | 0 probe failures over 7 days (follow-up session) |
+| Item | Gate that must pass |
+|---|---|
+| 164b — backend hot-path async-I/O sweep (deferred from 164; needs the M9 routing/weather window) | No sync PostgREST/Redis on the auth + hot read paths |
+| 165 closure — cold start, warm login, 2 h session, PIHPS retry, `/health` re-sample | All SLOs except soak green |
+| 166 — soak start + review | 0 probe failures over 7 days (follow-up session) |
 
-**163b is verified locally** (1.24 s first data, 6 API requests vs 28). Its production
-re-measurement with `M8_REQUIRE_BOOTSTRAP=1` is owned by phase 165.
+**163b is verified locally AND in production** (1.24 s local / 1.017 s production first data;
+6 and 8 API requests vs the 28 baseline; bootstrap 200 with `M8_REQUIRE_BOOTSTRAP=1`).
 
-**164a is verified locally** (proxy matrix 7/7 in both production and dev modes; news
-read path 8 new + 97 news-suite tests green). Its production gate — two-user cache
-isolation against the deployed proxy — is owned by phase 165.
+**164a is verified locally AND in production** (proxy matrix 7/7 in production-build, dev and
+deployed modes; news read path 8 new + 97 news-suite tests green; two-user isolation passes on
+the deployed proxy).
 
 ---
 
@@ -570,10 +639,14 @@ isolation against the deployed proxy — is owned by phase 165.
 | Phase 163a code + tests (bootstrap snapshot, backend) | `92e322f` on `m9-operational-truth` |
 | Phase 163a plan + this evidence | `.planning/phases/163-bootstrap-snapshot-read-path/PLAN.md`, this file |
 | Phase 163a migration (must be applied before the tick can persist a snapshot) | `infra/supabase/migrations/024_dashboard_snapshots.sql` |
-| Phase 163b code (frontend read path) | committed with this evidence on `m9-operational-truth` |
-| Phase 163b plan + this evidence | `.planning/phases/163-bootstrap-snapshot-read-path/PLAN.md`, this file |
-| Phase 164a code (proxy + news read path) | on `m9-operational-truth`, **uncommitted** (pending the 164b sweep / M8 branch cherry-pick) |
-| Phase 164a plan + this evidence | `.planning/phases/164-backend-hotpath-proxy-hardening/PLAN.md`, this file |
+| Phase 163b code (frontend read path) | `c4034f9` on `m9-operational-truth` → `main` |
+| Phase 163b plan + this evidence | `.planning/phases/163-bootstrap-snapshot-read-path/PLAN.md`, `WALKTHROUGH.md`, `LEARNINGS.md`, this file |
+| Phase 163 snapshot trim (15 → 4 sections, `asyncio.to_thread`) | `60bca8a` |
+| Phase 164a code (proxy + news read path) | `0f20068` on `m9-operational-truth` → `main` |
+| Phase 164a plan + this evidence | `.planning/phases/164-backend-hotpath-proxy-hardening/PLAN.md`, `WALKTHROUGH.md`, `LEARNINGS.md`, this file |
+| Phase 165 production gate + docs | no code change; `.planning/phases/165-production-verification-slo/{PLAN,WALKTHROUGH,LEARNINGS}.md`, this file |
+| Phase 166 soak plan (not started) | `.planning/phases/166-soak-start-review/{PLAN,WALKTHROUGH,LEARNINGS}.md` |
+| Milestone handoff for a fresh context | `.planning/milestones/M8/HANDOFF.md` |
 | Untracked by design (repo convention: run artifacts are not committed) | `.planning/phases/160-baseline-audit-state-repair/artifacts/`, `.planning/baseline-pytest.txt` |
 
 ---
@@ -588,7 +661,7 @@ loop (the first bootstrap request took 50 s).
 | Change | Before | After |
 |---|---|---|
 | Snapshot sections | 15 ("all public sections") | **4** map-bootstrap sections: `incidents`, `news`, `news_market_regime`, `fire_hotspots` |
-| Snapshot payload | 796 KB | **target < 250 KB** (not yet measured in production) |
+| Snapshot payload | 796 KB | **291 KB measured** (target < 250 KB — missed by 41 KB) |
 | News section | `get_live_news` (150-article breadth contract, re-tier, may schedule ingestion) | direct `fetch_news_from_supabase(limit=40, include_regional=True)` -> **40 articles max** |
 | Incidents section | `limit=100` | `limit=50` |
 | News PostgREST read | sync `query.execute()` on the event loop | `await asyncio.to_thread(query.execute)` |
@@ -602,6 +675,17 @@ only mount when opened): `corridor_context`, `weather_spatial_polygons`, `commod
 `evaluation_test_matrix`, `evaluation_corridor_efficiency`, `outcomes`, `bnpb_events`.
 
 `run_section` isolation/timeouts are unchanged; the `to_thread` fixes are what make the 5 s
-per-section budget effective instead of decorative. **No production size/build-time claim
-until the redeploy and a fresh tick.**
+per-section budget effective instead of decorative.
+
+### Post-redeploy measurement (2026-10-28)
+
+| Claim | Result |
+|---|---|
+| Snapshot row size | **291 KB**, 4 sections (of which news is **249 KB** — the bulk) |
+| Bootstrap response | **1.9 s**, `200` |
+| First data | **1.017 s**, 8 API / 50 total requests |
+| Build time | `snapshot_built` logged; **not timed separately** |
+
+The `< 250 KB` target was missed; the `< 5 s` build target was not measured. Both are recorded
+as open in `phases/163-bootstrap-snapshot-read-path/PLAN.md` § Final evidence.
 

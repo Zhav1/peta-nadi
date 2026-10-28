@@ -208,3 +208,72 @@ router import list (phase 164 hot-path scope), not ingestion.
    in the dashboard before the tick can return anything but 404.
 5. The tick was verified hermetically (no live Supabase RPC call was made). The
    migration should be applied and `POST /internal/tick` smoke-tested in phase 165.
+
+---
+
+## Final status (2026-10-28)
+
+**Status: DONE** — the web process is thin, one protected idempotent tick drives the
+eight batch jobs, and the continuous consumers start late instead of at boot. What is
+**not** done: the capacity is short by design (see §Capacity), and the live RPC path was
+never exercised from this phase.
+
+### Commit and lineage
+
+| Item | Value |
+|---|---|
+| Commit | `557a467` — `feat(m8-162): thin web + external ingestion tick` |
+| Size | 12 files, +2107/−252 |
+| Contained by | `m9-operational-truth`, all `m9-*` branches, `main` |
+| **Not** contained by | `m8-operational-truth` (stops at `61c0ae5`), `m8-fast-durable` (`2eeb1ca`) |
+
+### Gate results
+
+| Command | Result | Source |
+|---|---|---|
+| `pytest tests/test_internal_tick.py -q` | **17 passed**, 3.53 s, exit 0 at `557a467`; **20 passed**, 2.18 s on 2026-10-28 | phase run + re-run (the extra 3 are the phase-163a tick-hook tests appended to the same file) |
+| `pytest tests/test_m8_auth_contract.py -q` | **21 passed**, 4.61 s | phase run; re-verified 21/2.68 s on 2026-10-28 |
+| `pytest tests -q` | **431 passed, 5 failed**, 288.34 s | phase run — all 5 are known baseline or concurrent-M9 failures |
+| `python -c "import app.main"` | `import ok`; `/internal/tick` + `/api/v1/internal/tick` registered, alias hidden from OpenAPI | phase run |
+| `python -X importtime -c "import app.main"` | ~2.8 s; **no** `numpy` / `scipy` / `langgraph` / `pandas` / `sklearn` | phase run; re-verified 2026-10-28: exit 0, `app.main` cumulative **2.72 s**, zero matches |
+| `yaml.safe_load(render.yaml)` | parses; plan `free`, region `singapore`, `healthCheckPath: /health` unchanged; `INPROCESS_BATCH_POLLERS=false`, `TICK_MAX_JOBS=2`, `TICK_BUDGET_SECONDS=120`, `INTERNAL_TICK_TOKEN` `sync:false` | phase run; re-read in the file 2026-10-28 |
+
+The full-suite 5: `test_cpu_routing_weather.py::…seed_fallback…` (concurrent M9),
+`test_impact_assessment.py::…spatial_filtering` (baseline #1),
+`test_news_pipeline.py::…stampede_guard…` (baseline #2), and the two
+`test_travel_fuel_guard.py` cases that fail on a missing
+`starlette.status.HTTP_422_UNPROCESSABLE_CONTENT` attribute in the pinned Starlette
+(environment/version, not this phase). The suite went 408 → 431 because this phase adds
+17 tests; the rest is concurrent M9 test churn.
+
+### Deployed prerequisites (as of 2026-10-28)
+
+| Item | Status |
+|---|---|
+| Migration `023_scheduler_jobs` | **APPLIED** — Supabase version `20261027111905`; acquire/release smoke: acquire `true` → second acquire `false` → release → 0 rows |
+| Render env (`INPROCESS_BATCH_POLLERS=false`, `INTERNAL_TICK_TOKEN`, `TICK_MAX_JOBS=2`, `TICK_BUDGET_SECONDS=120`) | set in `render.yaml`; **dashboard values still PENDING** — and see `LEARNINGS.md` §4 on why the yaml alone is not proof |
+| cron-job.org `POST /internal/tick` every 5 min | **PENDING** (user action) |
+
+### Capacity (arithmetic, not a measurement)
+
+| Quantity | Value | Derivation |
+|---|---|---|
+| Ticks per day | 288 | 24 × 60 / 5 |
+| Job slots per day | **576** | 288 × `TICK_MAX_JOBS=2` |
+| Scheduled runs per day at the configured cadences | **685** | 2×288 (news, bmkg) + 48 (tomtom) + 24 (social) + 24 (bnpb) + 8 (firms) + 4 (open_meteo) + 1 (pihps) |
+
+576 < 685, so **109 runs/day are structurally deferred** at the default settings. The
+`age / cadence` ordering means the short-cadence jobs absorb the shortfall (news and
+bmkg run slower than their 300 s cadence), while daily jobs still fire. This is a
+deliberate budget choice, not a bug — but it must be stated before anyone claims "news
+every 5 minutes in production".
+
+### Directions for phase 165
+
+1. Smoke the live path: `202 accepted:true` with a `run_id`, an immediate second call
+   returning `already_running`, `scheduler_jobs` rows, `/health` unaffected during a tick.
+2. Watch `scheduler_jobs.last_finished_at` for lag; raise `TICK_MAX_JOBS` only after
+   measuring CPU, not because the arithmetic says 576 < 685.
+3. Do not treat the first tick after a sleep as a failure — the cron client times out
+   before the instance finishes booting (see `LEARNINGS.md` §5).
+

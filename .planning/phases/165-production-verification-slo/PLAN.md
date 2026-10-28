@@ -3,7 +3,10 @@
 **Window:** 2026-10-27 · **Mode:** deploy + verification
 **Milestone:** M8 — Fast & Durable (phase 6 of 7)
 **Depends on:** phases 160–164a (all committed), migrations 023/024 applied (done), M9 geocode/gazetteer work committed by the concurrent session.
-**Status:** BLOCKED on the M9 commit + Render/cron environment values.
+**Status:** **IMPLEMENTATION-GREEN — gate partially closed.** Deployed 2026-10-28; read
+path, auth and proxy gates pass in production. Cold start, 2 h session survival, PIHPS tick
+completion and the 7-day soak are open. See `## Production evidence (2026-10-28)` at the end
+of this file and `WALKTHROUGH.md`.
 
 ## Goal
 
@@ -136,3 +139,80 @@ If any target fails: diagnose, fix on a branch, redeploy, and re-run the gate. D
 - Full RLS/security pass.
 - Landing-page media optimization.
 - Paid infrastructure.
+
+---
+
+## Production evidence (2026-10-28)
+
+Recorded by the phase-165 verification window. Targets are from the `## SLO gate` table
+above. **Nothing in this section was re-measured in the 2026-10-28 docs pass** — the commands
+to reproduce each row are given so the next session can re-run them.
+
+### Deploy state
+
+| Item | State |
+|---|---|
+| Branch | `main` (M8 work was delivered on `m9-operational-truth` and merged; `m8-operational-truth` was never the delivery branch) |
+| Backend | `https://peta-nadi.onrender.com` (Render free, Docker, `backend/Dockerfile`) |
+| Frontend | `https://pre-hub.vercel.app` (Vercel) |
+| Migration `023_scheduler_jobs` | **APPLIED** — version `20261027111905` |
+| Migration `024_dashboard_snapshots` | **APPLIED** — version `20261027111919` |
+| Render `ENVIRONMENT` | **now `production`** (was `development`; see `LEARNINGS.md` §1) |
+| Render `INPROCESS_BATCH_POLLERS=false` + `INTERNAL_TICK_TOKEN` | set |
+| Render `TICK_MAX_JOBS` / `TICK_BUDGET_SECONDS` | **3 / 180** (dashboard override; `render.yaml` still says 2 / 120) |
+| cron-job.org `POST /internal/tick` every 5 min, `X-Internal-Token`, 90 s timeout | live |
+
+### Gate results
+
+| # | Gate | Target | Measured | Verdict |
+|---|---|---|---|---|
+| 1 | Warm `/health` | < 500 ms | **0.6 s** | **FAIL (marginal, 1 sample)** |
+| 2 | Cold first response | < 20 s | not measured | **UNVERIFIED** — no cold window was forced |
+| 3 | Warm login | < 3 s | not measured separately | **UNVERIFIED** |
+| 4 | Dashboard first data | < 5 s Fast 4G | **1.017 s** (unthrottled) | PASS on the unthrottled number; throttled run still owed |
+| 5 | First-mount API requests | ≤ 15 | **8** (total **50** vs baseline 91) | PASS |
+| 6 | Bootstrap endpoint | must answer 200 | **200** with `M8_REQUIRE_BOOTSTRAP=1`; response **1.9 s** | PASS |
+| 7 | Session 2 h idle + refresh | still authenticated | not run | **UNVERIFIED** |
+| 8 | Proxy cache isolation | 7/7 | **7/7** | PASS |
+| 9 | Auth durability spec | 3/3 | **3/3** | PASS |
+| 10 | Tick | `202` + `run_id` | **202** accepted | PASS |
+| 11 | Snapshot | 4 sections, fresh | **291 KB / 4 sections** | PASS on shape; **< 250 KB target missed by 41 KB** |
+| 12 | Job health after tick | news + bmkg ok | **news ok, bmkg ok** | PASS |
+| 13 | PIHPS job | completes | **failed after 93 s** | **FAIL** — see `LEARNINGS.md` §4 |
+| 14 | 7-day stability | 0 failures | not started | **NOT STARTED** (phase 166) |
+
+### Reproduce
+
+```powershell
+# 1 / 11 — warm health (5 samples)
+1..5 | ForEach-Object { curl.exe -s -o NUL -w "%{http_code} %{time_total}\n" https://peta-nadi.onrender.com/health }
+
+# 6 / 12 — tick (token from the Render dashboard; never paste it into a doc)
+curl.exe -i -X POST https://peta-nadi.onrender.com/internal/tick -H "X-Internal-Token: $env:INTERNAL_TICK_TOKEN"
+
+# 8 — proxy matrix
+cd frontend
+npx playwright test e2e/m8-proxy-cache.spec.ts --config=playwright.m8.config.ts
+
+# 9 — auth durability
+$env:M8_BASE_URL='https://pre-hub.vercel.app'
+npx playwright test e2e/m8-auth.spec.ts --config=playwright.m8.config.ts
+
+# 4 / 5 / 6 — read path, hard bootstrap gate
+$env:M8_REQUIRE_BOOTSTRAP='1'
+npx playwright test e2e/m8-readpath.spec.ts --config=playwright.m8.config.ts
+```
+
+### Gate decision
+
+The cold-start gate is the one that would have triggered the free-host migration fallback
+(M8-SPEC decision #2). It was **not measured**, so no migration decision can be made yet —
+and none is warranted on the current evidence. Phase 165 stays open on items 1, 2, 3, 7 and
+13; items 8–12 are closed. Phase 166 (soak) is explicitly out of this phase's closure.
+
+### Rollback (still valid)
+
+- Revert the merge commit on `main`; Render/Vercel redeploy the previous build.
+- Migrations 023/024 are additive; leave the tables.
+- If the tick misbehaves, set `INPROCESS_BATCH_POLLERS=true` to restore the old in-process
+  pollers while keeping the endpoint available.

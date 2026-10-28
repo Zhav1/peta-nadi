@@ -104,3 +104,80 @@ Additional gates:
 4. The probe must fail visibly (`--fail-with-body`) — a green job that never
    verified the endpoint is worse than a red one.
 5. Planning-state reconciliation is part of the phase, not a side task.
+
+---
+
+## Final status (2026-10-28)
+
+**Status: DONE** — baseline recorded, audit published, probe rewritten, planning
+state reconciled. Three gates did not close as written (full suite not green, probe
+never dispatched, audit's 23-route count corrected to 24); they are listed as open
+below rather than ticked. Cold-start measurement was out of scope by design (needs a
+≥15 min idle window).
+
+### Commits
+
+| Commit | Contents | Contained by |
+|---|---|---|
+| `51b3903` | 13 files, +2297/−275: `keep-alive.yml` rewrite, `GET /api/v1/weather/summary` + world-truth counters, `tests/test_weather_summary_contract.py`, `e2e/hazard-counter-truth.spec.ts`, `e2e/m8-baseline.spec.ts`, `playwright.m8.config.ts`, `SPEC.md` | `m8-operational-truth`, `main` |
+| `61c0ae5` | 3 docs, +551: `M8/PROGRESS.md` §160, `BACKEND-AUDIT.md`, `KEEPALIVE-FIX.md` | `m8-operational-truth`, `main` |
+
+**Branch reality check** (`git branch --contains`, verified 2026-10-28):
+`m8-fast-durable` — the branch named in the `BACKEND-AUDIT.md` header — is still at
+`2eeb1ca` and contains **neither** commit. `m8-operational-truth` has `51b3903` +
+`61c0ae5` and stops there (phase 161+ never landed on it).
+
+**Artifact tracking changed after the phase.** `BASELINE.md` and all nine baseline runs
+(18 `artifacts/m8-baseline-*` json+md files) are **tracked**: they were added by the
+later bulk docs commit `8a4c7c2`, not by `61c0ae5`. `PROGRESS.md`'s "untracked by
+design" note no longer describes the repository.
+
+### Gate results
+
+| PLAN gate | Result | Evidence / caveat |
+|---|---|---|
+| `npx tsc --noEmit` → exit 0 | **PASS** | re-verified in the phase; re-run in 161, 163b and 164a as well |
+| `npm run build` → 0 errors, all static routes | **reported, not reproduced** | no build artifact kept; not re-run here |
+| `pytest backend/tests` → green | **FAIL (recorded)** | baseline run **380 passed / 4 failed / 14 warnings / 436.77 s**. The 4 failures are pre-existing and named in `PROGRESS.md` §160 — the honest baseline, not regressions |
+| Playwright baseline green + artifact | **PASS** | canonical run `m8-baseline-2026-10-27T08-48-56-659Z` = 3/3 accounts unthrottled; Fast 4G `…08-45-38` = 3/3 |
+| Audit 81 routes / 23 auth-dependent, divergence stated | **PASS with correction** | 81 decorators confirmed; auth-dependent is **24**, unauth **49**. §1.1 states the 23/51 split is defensible only if `/auth/session` is deliberately classed "guest-intentional" |
+| Baseline metrics for all three accounts | **PASS, partial** | all three captured with `exp` + claims; cold first response and refresh-token TTL explicitly unknown |
+| `keep-alive.yml` math consistent + manual dispatch artifact | **HALF** | math is internally consistent (775 s worst case under a 900 s ceiling) and both shell steps were run against fake backends; the workflow was **never dispatched** |
+
+### Route-count reconciliation
+
+`BACKEND-AUDIT.md` pins its counts to base `2eeb1ca`; the tree has moved twice since.
+
+| Ref | Routers | Decorators | Handlers (router + root) | Auth-dependent | Unauth (router) |
+|---|---|---|---|---|---|
+| `2eeb1ca` (audited) | 19 | 81 | 74 | 24 (4 + 20) | 49 |
+| phase-160 working tree (§1.1a) | 19 | 82 | 75 | 25 (4 + 21) | 49 |
+| current tree, 2026-10-28 | 21 | 87 | 77 | 27 (4 + 22 + `bootstrap_user`) | 49 |
+
+Unauthenticated **router** handlers did not change (49); with the unauthenticated root
+`GET /` the total is 50 in every row. Only the auth-dependent side grew.
+
+Measured deltas: `internal_tick.py` +2 decorators, `dashboard_bootstrap.py` +2,
+`routing_router.py` +1 (`/weather/summary`, this phase), `news_router.py` +1
+(`/api/v1/news/yield`, M9 commit `83a12fe`). The wrapper is `bootstrap_user`
+(`dashboard_bootstrap.py:67`), which calls `get_optional_user` directly, so a naive
+`Depends(get_optional_user)` grep undercounts by one. `/news/yield` is guarded by
+`X-Internal-Token`, not a `Depends(...)`, so the audit's dependency-based
+classification no longer covers every route.
+
+**No re-pin of `BACKEND-AUDIT.md` was performed in this pass.** Later phases must
+quote the count they measure, not the count in the audit title.
+
+### Re-verified in this pass (2026-10-28)
+
+| Command | Result |
+|---|---|
+| `backend\.venv\Scripts\python.exe -m pytest tests\test_weather_summary_contract.py -q` | **7 passed**, 3 warnings, 1.53 s |
+| `backend\.venv\Scripts\python.exe -X importtime -c "import app.main"` | exit 0; `app.main` cumulative **2.72 s**; **zero** `numpy` / `scipy` / `langgraph` / `pandas` / `sklearn` entries |
+| Route/auth count | AST walk over 21 `backend/app/routers/*.py` modules (decorator + `Depends` count) |
+
+### Not done here (owned elsewhere)
+
+Cold-window measurement, refresh-token TTL, `workflow_dispatch` of the probe,
+throttled login, RLS verification, and re-pinning the audit — see `LEARNINGS.md` §5
+and the owner table in `PROGRESS.md`.

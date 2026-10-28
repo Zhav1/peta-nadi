@@ -1,41 +1,51 @@
 ---
 gsd_state_version: "1.0"
-milestone: M9
-milestone_name: Operational Truth & Distilled Command Surface
-current_phase: 176.12
-current_phase_name: Fleet Regression & Waspada Dots
-status: complete
-stopped_at: "M9 complete and deployed through R2.3 / visual / fleet; 8 open items carried in .planning/milestones/M9/COMPLETION.md"
+milestone: M8
+milestone_name: Fast & Durable
+current_phase: 166
+current_phase_name: Soak start + review
+status: in_progress
+stopped_at: "M8 160-164 done and deployed; 165 implementation-green with the SLO gate partially closed (cold start, 2 h session, PIHPS retry, /health p95 open); 166 7-day soak NOT STARTED. Handoff: .planning/milestones/M8/HANDOFF.md"
 last_updated: 2026-10-28
 last_activity: 2026-10-28
-last_activity_desc: "Completed M9 phases 167-176.12, deployed R1 through R2.3 plus the visual and fleet passes, and closed the milestone with .planning/milestones/M9/LEARNINGS.md."
+last_activity_desc: "Recorded M8 phase 163/164/165/166 artifacts, milestone HANDOFF.md, and production evidence; no code changes."
 state_head: HEAD
 progress:
-  total_phases: 21
-  completed_phases: 21
+  total_phases: 7
+  completed_phases: 5
   total_plans: 0
   completed_plans: 0
-  percent: 100
+  percent: 71
 ---
 
 # STATE: PreHub Project Memory
 
 **Last Updated:** 2026-10-28
-**Active Milestone:** M9 - Operational Truth & Distilled Command Surface [COMPLETE ✅]
-**Previous Milestones:** M1-M5 [COMPLETED ✅], M6 - 3D Globe Native Mapbox Fleet, Street-Snapping & Impeccable Cartography [COMPLETED ✅], M7 - Live News Trust, Source Breadth & Forecast Waspada Integrity [COMPLETED ✅], M8 - Fast & Durable [COMPLETED ✅]
-**Current Phase:** 176.12
+**Active Milestone:** M8 - Fast & Durable (phases 160-166) [CODE-COMPLETE, GATE PARTIALLY CLOSED]
+**Previous Milestones:** M1-M5 [COMPLETED ✅], M6 - 3D Globe Native Mapbox Fleet, Street-Snapping & Impeccable Cartography [COMPLETED ✅], M7 - Live News Trust, Source Breadth & Forecast Waspada Integrity [COMPLETED ✅], M9 - Operational Truth & Distilled Command Surface (167-176.12) [COMPLETED ✅, deployed]
+**Current Phase:** 166 — Soak start + review (**NOT STARTED**)
 
 ---
 
 ## Current Position
 
-Phase: 176.12 — Fleet Regression & Waspada Dots. Milestone M9 is **complete** (21 phases, 167 → 176.12).
-Plan: `.planning/phases/176.12-fleet-regression-waspada-dots/PLAN.md` · Ledger: `.planning/milestones/M9/PROGRESS.md`
-Status: Complete and deployed. All eight original complaints closed; two live defects from R2.1 were closed in R2.2; the remainder are listed as open items below.
-Deploy chain: **R1** (`bfa3337`) → **R1.1** (`c250a09`, FIRMS day-range fix) → **R2** (`3d5f3b5`, distilled surface) → **R2.1** (`c84018d`, geocode cache v3) → **R2.2** (`6db893a`, docked guest banner + prod assertions 4/4) → **R2.3** (`fe4c876`, mobile counter labels) → **visual** (`a1b6e1b`, layer/modality colour pass) → **fleet** (`a1b68de`, fleet telemetry + Waspada violet dots).
-Last activity: 2026-10-28 — documentation and learning-extraction pass for M9; `.planning/milestones/M9/LEARNINGS.md` written, `STATE.md` and `PROJECT.md` brought back in line with the shipped code.
-Previous: M8 "Fast & Durable" (160–166) remains valid and independent; M9 was numbered after it and absorbed none of its phases.
-Next action: work the eight open items in `.planning/milestones/M9/COMPLETION.md` §5 and §7 (start with `/health` environment, Riau/Kepri feed supply, and the four baseline backend failures).
+Phase: **165 implementation-green, 166 soak pending.** M8's code (160-164a) is complete and
+live on Render + Vercel. The production gate is partially closed: read path (`1.017 s`, `8`
+API / `50` total requests), bootstrap (`200`, `1.9 s`), auth (`3/3`) and proxy isolation
+(`7/7`) pass. **Open:** cold start never measured, warm login never timed, 2 h session
+survival never run, PIHPS failed at `93 s`, warm `/health` `0.6 s` vs a `500 ms` target.
+The 7-day soak has **not** started — no start time, commit pin or artifact URL exists.
+Plan: `.planning/phases/166-soak-start-review/PLAN.md` ·
+Ledger: `.planning/milestones/M8/PROGRESS.md` ·
+**Handoff (read first): `.planning/milestones/M8/HANDOFF.md`**
+Status: 160-164 DONE · 165 PARTIAL · 166 NOT STARTED · 164b (sync-I/O sweep) DEFERRED
+Next action: measure cold start, warm `/health` p95, 2 h session survival and the PIHPS
+retry; then start the soak per `phases/166-soak-start-review/WALKTHROUGH.md` and freeze
+deploys for 7 days. Do not close M8 on a partial gate.
+Last activity: 2026-10-28 — M8 phase artifacts (163/164/165/166), `HANDOFF.md`, production
+evidence recorded; no code touched.
+Previous: M9 "Operational Truth & Distilled Command Surface" (167-176.12) is complete and
+deployed independently of M8; M8 was numbered first and remains its own milestone.
 
 
 
@@ -428,3 +438,27 @@ These scripts validate the economic correlation hypotheses that underpin Agent 5
 - Scope: auth session durability, thin web + external tick, DB-backed dashboard bootstrap snapshot, read-path/proxy hardening, SLO production gate, 7-day soak start.
 - Non-goals carried: no visual redesign, no `@supabase/ssr` HttpOnly migration, no paid infrastructure, no full async rewrite of 81 routes, no new product features.
 - Current position: Phase 160 (Baseline, Audit, State Repair) - planning. Plan: `.planning/phases/160-baseline-audit-state-repair/PLAN.md`.
+
+## M8 Log (2026-10-28) — phase artifacts + production evidence
+
+- 163 **DONE**: `92e322f` (backend snapshot + endpoint + migration 024), `c4034f9` (frontend
+  bootstrap read path + lazy tabs), `60bca8a` (trim 15 → 4 sections, `asyncio.to_thread` on the
+  news/incidents PostgREST reads). Production: snapshot `291 KB` / 4 sections, bootstrap `1.9 s`,
+  first data `1.017 s`, `8` API / `50` total requests (baseline `28` / `91`).
+- 164 **164a DONE / 164b DEFERRED**: `0f20068` — proxy cache matrix (auth/cookie/tenant
+  `private, no-store`, anonymous allowlist public, SSE + non-GET `no-store`, server-pinned
+  upstream), news `last_fetched_at` fix, batched v7 re-tier write-back. Deployed proxy verified
+  `7/7`. 164b (sync-I/O sweep) still deferred on the M9 routing/weather surface.
+- 165 **PARTIAL**: migrations `20261027111905` / `20261027111919` applied; Render
+  `ENVIRONMENT=production` (was `development`), `TICK_MAX_JOBS=3`, `TICK_BUDGET_SECONDS=180`.
+  Tick `202`, news/bmkg ok, auth `3/3`, proxy `7/7`, `/health` `0.6 s`. **Open:** cold start,
+  warm login, 2 h session, PIHPS (failed at `93 s`), `/health` p95 vs `500 ms`.
+- 166 **NOT STARTED**: plan + start checklist written; no soak window, no commit pin, no
+  artifact. Deploys must be frozen for the 7 days once started.
+- Docs written this pass: `phases/163-*/{WALKTHROUGH,LEARNINGS}.md`,
+  `phases/164-*/{WALKTHROUGH,LEARNINGS}.md`, `phases/165-*/{WALKTHROUGH,LEARNINGS}.md`,
+  `phases/166-soak-start-review/{PLAN,WALKTHROUGH,LEARNINGS}.md`,
+  `milestones/M8/HANDOFF.md`. No source files touched; no commit.
+- Warning carried forward: `render.yaml` and `backend/app/config.py` still declare
+  `TICK_MAX_JOBS=2` / `TICK_BUDGET_SECONDS=120`; production is dashboard-overridden to `3`/`180`.
+  A blueprint re-sync re-starves news/bmkg/PIHPS.

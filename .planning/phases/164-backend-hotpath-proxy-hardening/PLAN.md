@@ -205,3 +205,65 @@ B/C/D/E `private, no-store` · F `no-store` · G/H `no-store`.
 - No `SPEC.md` edit, no `.planning/baseline-pytest.txt` edit, no commit, no deploy.
 - No frontend dashboard file touched (M9-owned), no geocode/gazetteer/routing/weather
   file touched.
+
+---
+
+## Final state — 164a DONE, 164b DEFERRED (docs pass, 2026-10-28)
+
+**Commit:** `0f20068` — `feat(m8-164a): proxy cache isolation + news read-path fixes`
+(9 files, +1187/−33, including this PLAN and `PROGRESS.md`). Deployed with the M9 merge and
+verified in production by phase 165.
+
+### 164a — closed
+
+| Item | State |
+|---|---|
+| Proxy cache matrix in one decision function (`resolveCacheControl`) | shipped, 7/7 in production |
+| Authenticated / cookie / tenant GET → `private, no-store` | shipped, verified |
+| Anonymous allowlist (`/api/v1/health`, `/api/v1/health/sources`) → `public, s-maxage=60, stale-while-revalidate=120` | shipped, verified |
+| Non-GET and SSE → `no-store`; SSE streamed, not buffered | shipped, verified |
+| Open forwarder removed — `x-target-base-url` honoured only in non-production, loopback only, else `400` | shipped, verified |
+| Header allowlists (request + response, `www-authenticate` preserved) | shipped |
+| News `last_fetched_at = time.time()` after a completed cycle | shipped (`news_router.py:657`), 8 hermetic cases |
+| v7 re-tier batched write-back (`persist_re_tiered_news_rows`, one upsert per read) | shipped (`news_aggregator.py:1450`), tested |
+
+### Verification re-run (this docs pass)
+
+| Command | Result |
+|---|---|
+| `cd backend; .venv/Scripts/python.exe -m pytest tests/test_news_read_path.py -q` | **8 passed** (run as part of a 28-test invocation with `test_internal_tick.py`: 28 passed, 3 warnings, 2.12 s, exit 0) |
+
+The implementation pass additionally recorded 97 passed (news suite) and 16 passed
+(`test_api_routers.py`, 174.56 s), plus 7/7 Playwright in both production-build and
+`next dev` modes, and `tsc`/`npm run build` exit 0. Those were not re-run here.
+
+### 164b — still deferred, not done
+
+The sync-I/O sweep (audit F4 rows 1–14, F13, F9, F10, F12) is **not started**. It was
+deferred because it touches the routing/weather surface a concurrent M9 session owned, and
+that overlap has not gone away: `/fleet/vehicles`, `/weather/summary`, `/evaluation/*` and
+`/incidents` are all still sync-inside-async on the live path.
+
+Note the split of responsibility after phase 163's trim: **the snapshot's own news and
+incidents reads were moved off-loop in `60bca8a`** (`asyncio.to_thread`), so the read model
+is no longer the worst offender. The browser-facing endpoints still are.
+
+Carry-forward backlog (unchanged from the table above):
+
+1. `asyncio.to_thread` for `/incidents`, `/fleet/vehicles`, `/erp/summary`,
+   `/evaluation/*`, `/intermodal/toll-tariffs`.
+2. Async Redis for every `cache_get/cache_set` reached from `async def`, incl.
+   `/weather/summary`.
+3. JWKS negative cache per `kid` (161 already removed the cold-login block).
+4. `get_write_client()` singleton.
+5. Route/alias sprawl + explicit `Cache-Control` on JSON.
+6. `fetch_existing_articles` third re-tier site still read-only.
+7. `force_refresh` can still queue two ingestion tasks for one request (pre-existing; the
+   ingestion lock dedupes concurrent runs, not sequential ones).
+
+### Production result that closes the 164a gate
+
+Two-user cache isolation was the phase's own exit criterion. Verified in production on
+2026-10-28: `e2e/m8-proxy-cache.spec.ts` → **7/7 passed** against
+`https://pre-hub.vercel.app`, i.e. the deployed proxy now returns `private, no-store` for
+authenticated GETs. The pre-164a handler is gone from production.

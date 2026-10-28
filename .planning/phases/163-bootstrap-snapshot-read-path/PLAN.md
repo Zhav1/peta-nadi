@@ -389,3 +389,67 @@ The old `_NoopBackgroundTasks` helper is gone: the news section no longer calls
 4. **No production size/timing claim.** 796 KB -> < 250 KB and ~15 s -> < 5 s are targets;
    they must be measured on the first tick after redeploy (phase 165).
 
+---
+
+## Final evidence — 163a, 163b and the snapshot trim (docs pass, 2026-10-28)
+
+**Status: DONE.** Phase 163 is code-complete, deployed, and measured in production
+(phase 165). Three commits:
+
+| Commit | Scope |
+|---|---|
+| `92e322f` | 163a — migration 024, `dashboard_snapshot_service.py`, `GET /api/v1/dashboard/bootstrap`, tick write hook, 24 backend tests |
+| `c4034f9` | 163b — one bootstrap read on first mount, lazy Analitik/Laporan/Evaluasi, abort + visibility gating, `e2e/m8-readpath.spec.ts` |
+| `60bca8a` | Snapshot trim — 15 sections → 4, news 40-article direct read, `asyncio.to_thread` on the news/incidents PostgREST reads |
+
+### Test re-run (this docs pass, post-trim)
+
+| Command (from `backend/`) | Result |
+|---|---|
+| `.venv/Scripts/python.exe -m pytest tests/test_dashboard_snapshot.py tests/test_dashboard_bootstrap.py -q` | **27 passed**, 3 warnings, **3.26 s**, exit 0 |
+| `... -m pytest tests/test_news_read_path.py tests/test_internal_tick.py -q` | **28 passed**, 3 warnings, **2.12 s**, exit 0 |
+
+The implementation pass recorded **24 passed** (11 service + 13 endpoint) before the trim;
+`60bca8a` added 3 cases to `test_dashboard_snapshot.py`, which is why the same two files
+now report 27. Both numbers are real; 27 is the current one.
+
+### Production gate (measured 2026-10-28, recorded by phase 165)
+
+| Gate | Baseline (phase 160) | Result | Verdict |
+|---|---|---|---|
+| Bootstrap endpoint | did not exist | `200` on first mount with `M8_REQUIRE_BOOTSTRAP=1` | PASS |
+| Dashboard first data | 73.8 s (DISPATCHER, unthrottled) | **1.017 s** | PASS |
+| First-mount API requests | 28 | **8** | PASS (≤ 15) |
+| First-mount total requests | 91 | **50** | PASS |
+| Bootstrap response time | n/a | **1.9 s** | PASS |
+| Snapshot row size | 796 KB | **291 KB**, 4 sections | **PARTIAL** — the < 250 KB target was missed by 41 KB |
+| Snapshot build | ~15 s | tick reports `snapshot_built` with 4 sections | PASS (build time not recorded separately) |
+
+### Where the read path ended up
+
+```text
+first mount (DISPATCHER)
+  auth/me · dashboard/bootstrap · weather/summary · news/hitl-pending · fleet/vehicles  = 5 API reads
+  Analitik / Laporan / Evaluasi = 0 requests until their tab is clicked
+```
+
+The snapshot now carries only the four map-bootstrap sections
+(`incidents`, `news`, `news_market_regime`, `fire_hotspots`). Weather, corridor and every
+Analitik/Laporan/Evaluasi section are fetched live or lazily.
+
+### Known consequence of the trim (not a defect, but it changes the contract)
+
+`sections.corridor_context` and `sections.weather_spatial_polygons` are still *read* by
+`DashboardClient.tsx` (lines ~924 and ~1544; the fire-hotspot seed at ~1692 is still valid) but
+are no longer *written* by `section_plan()`. Those two seeds are now always `undefined`, so the
+owning effects take their live fallback. Correct behaviour, dead seed path — remove the reads or
+re-add the sections when someone next touches this file.
+
+### Unverified in this pass
+
+- No throttled (Fast 4G) first-data measurement was taken; the 1.017 s figure is an
+  unthrottled production run.
+- Per-section `source_freshness` after the trim was not read back from Supabase.
+- The `291 KB` figure is the stored row size as reported by the phase-165 run; the JSON
+  payload alone was not re-measured here.
+
