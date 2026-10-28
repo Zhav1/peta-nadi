@@ -734,13 +734,16 @@ def build_document() -> Tuple[Document, Dict[str, Any]]:
 
 
 def backup(path: Path) -> Optional[Path]:
+    """Snapshot the previous output into .backups/ so the folder stays clean."""
     if not path.exists():
         return None
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    candidate = path.with_name(f"{path.name}.bak-{stamp}")
+    backup_dir = OUT_DIR / ".backups"
+    backup_dir.mkdir(exist_ok=True)
+    candidate = backup_dir / f"{path.name}.bak-{stamp}"
     counter = 1
     while candidate.exists():
-        candidate = path.with_name(f"{path.name}.bak-{stamp}-{counter}")
+        candidate = backup_dir / f"{path.name}.bak-{stamp}-{counter}"
         counter += 1
     shutil.copy2(path, candidate)
     return candidate

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-28T23:37:50",
+  "generated_at": "2026-10-28T23:42:51",
   "pdf_engine": "word_com",
   "source": {
     "markdown": {
@@ -23,34 +23,34 @@
     {
       "path": "Final-Gemastik/Lembar_Validasi_Internal_PreHub.docx",
       "bytes": 62132,
-      "sha256": "8f85a9899301d7811900b33f86b5178c1759aa0b27ea4c0399e0e10287434855",
+      "sha256": "e74e576ef9091a68e14f9080de0a538bf7885c719c8893367dedee019e1d3028",
       "kind": "docx"
     },
     {
       "path": "Final-Gemastik/Lampiran_N60_PreHub.docx",
       "bytes": 62132,
-      "sha256": "8f85a9899301d7811900b33f86b5178c1759aa0b27ea4c0399e0e10287434855",
+      "sha256": "e74e576ef9091a68e14f9080de0a538bf7885c719c8893367dedee019e1d3028",
       "kind": "docx"
     },
     {
       "path": "Final-Gemastik/Lembar_Validasi_Internal_PreHub.pdf",
       "bytes": 504589,
-      "sha256": "6508a6f71b79f9327c93058d57308a456e62f6cc8d395bac4067263c5ecac756",
+      "sha256": "0e7152baa83a93b87af6e5039aacfa25f781c6994de20012a09d0168a4bbe3a3",
       "kind": "pdf",
       "pages": 7
     },
     {
       "path": "Final-Gemastik/Lampiran_N60_PreHub.pdf",
       "bytes": 504589,
-      "sha256": "6508a6f71b79f9327c93058d57308a456e62f6cc8d395bac4067263c5ecac756",
+      "sha256": "0e7152baa83a93b87af6e5039aacfa25f781c6994de20012a09d0168a4bbe3a3",
       "kind": "pdf",
       "pages": 7
     }
   ],
   "backups": [
-    "D:\\College\\Pidi.id\\Final-Gemastik\\Lembar_Validasi_Internal_PreHub.docx.bak-20261028-233739",
-    "D:\\College\\Pidi.id\\Final-Gemastik\\Lampiran_N60_PreHub.docx.bak-20261028-233739",
-    "D:\\College\\Pidi.id\\Final-Gemastik\\Lembar_Validasi_Internal_PreHub.pdf.bak-20261028-233739",
-    "D:\\College\\Pidi.id\\Final-Gemastik\\Lampiran_N60_PreHub.pdf.bak-20261028-233739"
+    "D:\\College\\Pidi.id\\Final-Gemastik\\.backups\\Lembar_Validasi_Internal_PreHub.docx.bak-20261028-234240",
+    "D:\\College\\Pidi.id\\Final-Gemastik\\.backups\\Lampiran_N60_PreHub.docx.bak-20261028-234240",
+    "D:\\College\\Pidi.id\\Final-Gemastik\\.backups\\Lembar_Validasi_Internal_PreHub.pdf.bak-20261028-234240",
+    "D:\\College\\Pidi.id\\Final-Gemastik\\.backups\\Lampiran_N60_PreHub.pdf.bak-20261028-234240"
   ]
 }

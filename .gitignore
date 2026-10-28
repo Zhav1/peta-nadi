@@ -116,3 +116,7 @@ frontend/scripts/*
 # Miscellaneous
 gods-eye-view
 Globot  
+# Generated document backups (kept in .backups/ so the folder stays clean)
+*.bak-*
+Final-Gemastik/.backups/
+
