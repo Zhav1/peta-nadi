@@ -227,7 +227,7 @@ async def test_map_key_uses_api_and_never_calls_csv(firms_env):
     async def fake_fetch(self):
         return _csv(IN_BBOX_ROWS)
 
-    async def fake_parse(self, raw):
+    async def fake_parse(self, raw, window_hours=24):
         return [
             {
                 "lat": "3.60",
@@ -243,7 +243,11 @@ async def test_map_key_uses_api_and_never_calls_csv(firms_env):
         ]
 
     firms_env["monkeypatch"].setattr(routing_router.NASAFIRMSAdapter, "fetch", fake_fetch)
-    firms_env["monkeypatch"].setattr(routing_router.NASAFIRMSAdapter, "parse", fake_parse)
+    # Phase 173.6: the counter parses the API CSV with the stateless parser
+    # (parse() applies the poller's Redis dedup and collapses to 0).
+    firms_env["monkeypatch"].setattr(
+        routing_router.NASAFIRMSAdapter, "parse_keyless_csv", fake_parse
+    )
 
     body = await _get_hotspots()
 
@@ -282,3 +286,99 @@ async def test_failed_csv_serves_stale_last_known_good(firms_env):
     assert body["source"] == "cache"
     assert body["updated_at"] == stale_at
     assert "jam" in (body["reason"] or "").lower()
+
+
+# ---------------------------------------------------------------------------
+# Phase 173.6 — a key must never make the counter LESS truthful than no key.
+#
+# Production smoke (2026-10-28) returned {"count":0,"status":"empty",
+# "source":"nasa-firms-api"} while the keyless CSV held ~190 in-bbox rows:
+# the area API's `day_range=1` is "today only" and answers header-only until the
+# current UTC day's first NRT pass lands.
+# ---------------------------------------------------------------------------
+
+HEADER_ONLY = HEADER + "\n"
+
+FIVE_ROWS = [
+    _csv_row(3.60, 98.60, 12.5),
+    _csv_row(-2.98, 104.76, 210.0, confidence="high"),
+    _csv_row(-5.45, 105.30, 8.0),
+    _csv_row(0.51, 101.45, 30.0),
+    _csv_row(-1.61, 103.61, 4.0),
+]
+
+
+def _stub_api(firms_env, *, raw: str = "", exc: Exception | None = None):
+    """Make the keyed API path answer with an empty CSV or raise."""
+
+    async def fake_fetch(self):
+        if exc is not None:
+            raise exc
+        return raw
+
+    firms_env["monkeypatch"].setattr(routing_router.NASAFIRMSAdapter, "fetch", fake_fetch)
+
+
+@pytest.mark.asyncio
+async def test_api_empty_is_crosschecked_against_csv(firms_env):
+    """API answers 0 rows (header-only 200) but the CSV has 5 -> serve 5."""
+    firms_env["set_key"]("test-map-key")
+    _stub_api(firms_env, raw=HEADER_ONLY)
+    calls = firms_env["serve_csv"](_csv(FIVE_ROWS))
+
+    body = await _get_hotspots()
+
+    assert body["count"] == 5
+    assert body["total"] == 5
+    assert body["status"] == "ok"
+    assert body["source"] == "nasa-firms-csv"
+    assert "cross-check" in (body["reason"] or "")
+    assert calls, "the keyless CSV must be consulted when the API yields 0"
+
+
+@pytest.mark.asyncio
+async def test_api_error_falls_back_to_csv_not_degraded(firms_env):
+    """API raises -> CSV 5 rows is served, the error is recorded in reason."""
+    firms_env["set_key"]("test-map-key")
+    _stub_api(firms_env, exc=httpx.ReadTimeout("FIRMS API timed out"))
+    firms_env["serve_csv"](_csv(FIVE_ROWS))
+
+    body = await _get_hotspots()
+
+    assert body["status"] == "ok"
+    assert body["count"] == 5
+    assert body["source"] == "nasa-firms-csv"
+    reason = body["reason"] or ""
+    assert "cross-check" in reason
+    assert "timed out" in reason or "gagal" in reason.lower()
+
+
+@pytest.mark.asyncio
+async def test_api_and_csv_both_zero_is_verified_empty(firms_env):
+    """Both sources genuinely 0 -> empty, count 0 (never degraded, never ok)."""
+    firms_env["set_key"]("test-map-key")
+    _stub_api(firms_env, raw=HEADER_ONLY)
+    firms_env["serve_csv"](_csv([OUT_OF_BBOX_ROW]))
+
+    body = await _get_hotspots()
+
+    assert body["status"] == "empty"
+    assert body["count"] == 0
+    assert body["total"] == 0
+    assert body["hotspots"] == []
+    assert body["reason"] == routing_router.FIRMS_EMPTY_REASON
+
+
+@pytest.mark.asyncio
+async def test_api_request_uses_rolling_24h_day_range(firms_env):
+    """Regression: day_range=1 is "today only" and silently under-reports."""
+    adapter = routing_router.NASAFIRMSAdapter()
+
+    url = adapter.api_csv_url(map_key="test-map-key")
+
+    assert "/VIIRS_SNPP_NRT/94,-6,108,6/2" in url, url
+    assert url.startswith("https://firms.modaps.eosdis.nasa.gov/api/area/csv/")
+    assert adapter.api_csv_url(map_key="k", day_range=3).endswith("/94,-6,108,6/3")
+    # Default window is the rolling 24h two-day range, pinned.
+    assert adapter_module.FIRMS_API_DAY_RANGE == 2
+
