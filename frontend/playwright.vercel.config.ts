@@ -4,7 +4,9 @@ import { defineConfig, devices } from '@playwright/test';
 // Does NOT modify playwright.config.ts. No webServer (targets live prod).
 export default defineConfig({
   testDir: './e2e',
-  testMatch: /vercel-capture\.spec\.ts/,
+  // M9 R2: the production capture spec lives beside vercel-capture.spec.ts and
+  // needs the same prod-only config (baseURL, no webServer).
+  testMatch: /(?:vercel-capture|r2-production-capture)\.spec\.ts/,
   timeout: 180 * 1000,
   expect: {
     timeout: 20 * 1000,

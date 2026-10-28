@@ -26,6 +26,27 @@ router = APIRouter(
     tags=["Universal Geocoding & Gazetteers"],
 )
 
+# Redis namespace version (Phase 176.8 / M9). The TTL is 24h, which outlives a
+# deploy: after 176.7 changed the gazetteer vocabulary to kabupaten/kota/
+# kecamatan, pre-deploy entries under `search:v2` kept answering
+# `/geocode/search?q=natuna` with the retired `type:"regency"` payload for a
+# full day. The version segment is the cache-invalidation contract — bump it
+# whenever the value shape or vocabulary changes, and never read an older one.
+GEOCODE_CACHE_VERSION = "v3"
+_SEARCH_CACHE_PREFIX = f"lrip:geocode:search:{GEOCODE_CACHE_VERSION}:"
+_REVERSE_CACHE_PREFIX = f"lrip:geocode:reverse:{GEOCODE_CACHE_VERSION}:"
+
+
+def search_cache_key(query: str, limit: int) -> str:
+    """Versioned Redis key for a search query (query is already lowercased)."""
+    return f"{_SEARCH_CACHE_PREFIX}{query}:{limit}"
+
+
+def reverse_cache_key(lat: float, lon: float) -> str:
+    """Versioned Redis key for a reverse-geocode coordinate pair."""
+    return f"{_REVERSE_CACHE_PREFIX}{round(lat, 4)}:{round(lon, 4)}"
+
+
 # In-memory LRU-ish cache to avoid excessive external HTTP calls.
 # Bounded so a long-running Render instance cannot grow without limit.
 _IN_MEMORY_SEARCH_CACHE: Dict[str, List[Dict[str, Any]]] = {}
@@ -226,6 +247,7 @@ async def search_places(
     """
     query_clean = q.strip()
     cache_key = f"{query_clean.lower()}:{limit}"
+    redis_key = search_cache_key(query_clean.lower(), limit)
 
     # 1. Check in-memory cache
     if cache_key in _IN_MEMORY_SEARCH_CACHE:
@@ -244,7 +266,7 @@ async def search_places(
     r = get_redis()
     if r is not None:
         try:
-            cached_val = r.get(f"lrip:geocode:search:v2:{cache_key}")
+            cached_val = r.get(redis_key)
             if cached_val:
                 import json
                 parsed = json.loads(cached_val)
@@ -379,7 +401,7 @@ async def search_places(
         if r is not None:
             try:
                 import json
-                r.set(f"lrip:geocode:search:v2:{cache_key}", json.dumps(results), ex=86400)
+                r.set(redis_key, json.dumps(results), ex=86400)
             except Exception:
                 pass
 
@@ -406,6 +428,7 @@ async def reverse_geocode(
     check and OSM Nominatim /reverse to return the exact village / kelurahan / kecamatan.
     """
     cache_key = f"{round(lat, 4)}:{round(lon, 4)}"
+    redis_key = reverse_cache_key(lat, lon)
 
     # 1. In-memory cache
     if cache_key in _IN_MEMORY_REVERSE_CACHE:
@@ -419,7 +442,7 @@ async def reverse_geocode(
     r = get_redis()
     if r is not None:
         try:
-            cached_val = r.get(f"lrip:geocode:reverse:{cache_key}")
+            cached_val = r.get(redis_key)
             if cached_val:
                 import json
                 parsed = json.loads(cached_val)
@@ -505,7 +528,7 @@ async def reverse_geocode(
     if r is not None:
         try:
             import json
-            r.set(f"lrip:geocode:reverse:{cache_key}", json.dumps(info), ex=86400)
+            r.set(redis_key, json.dumps(info), ex=86400)
         except Exception:
             pass
 

@@ -3754,8 +3754,14 @@ export default function DashboardClient() {
               </div>
             </div>
 
-            {/* Scrollable Feed List */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2.5 pr-0.5">
+            {/* Scrollable Feed List. Phase 176.8 (M9): reserve the floating
+                guest-banner's measured occlusion as bottom padding so the last
+                card can always be scrolled clear of it (never covered). */}
+            <div
+              data-testid="news-feed-scroll"
+              className="flex-1 overflow-y-auto custom-scrollbar space-y-2.5 pr-0.5"
+              style={{ paddingBottom: 'var(--guest-banner-clearance, 0px)' }}
+            >
               {newsFeed.length === 0 ? (
                 <div className="p-6 text-center text-[rgba(232,234,237,0.62)] font-mono text-xs space-y-1">
                   <Radio className="w-6 h-6 mx-auto text-[rgba(232,234,237,0.38)] mb-2" />
@@ -3926,10 +3932,19 @@ export default function DashboardClient() {
 
                       {/* God's-Eye Monospaced Tactical Telemetry Grid */}
  <div className="p-2 rounded-lg bg-transparent border-t border-white/5 font-mono text-xs space-y-1.5 leading-snug">
- {/* Row 1 — Lokasi */}
-                        <div className="flex items-center justify-between text-[#e8eaed]">
- <span className="text-[rgba(232,234,237,0.62)] text-xs font-semibold">Lokasi:</span>
-                          <span className="text-[#e8eaed] font-semibold truncate max-w-[170px]" title={item.location_name || 'Koridor Sumatera'}>
+ {/* Row 1 — Lokasi. The only value allowed to clip: a raw address may be
+     two lines, never one ellipsised line, and the full text stays in `title`. */}
+                        <div className="flex items-start justify-between gap-2 text-[#e8eaed]">
+ <span className="text-[rgba(232,234,237,0.62)] text-xs font-semibold shrink-0 whitespace-nowrap">Lokasi:</span>
+                          <span
+                            data-testid={`berita-lokasi-${item.id}`}
+                            className="min-w-0 flex-1 text-right line-clamp-2 break-words"
+                            title={`${item.location_name || 'Koridor Sumatera'}${item.lat && item.lon ? ` · ${item.lat.toFixed(2)}°N, ${item.lon.toFixed(2)}°E` : ''} (${item.location_precision === 'corridor_point'
+                              ? 'Koridor ~0.9 km'
+                              : item.location_precision === 'kecamatan_kelurahan'
+                                ? 'Sub-Distrik ~1.8 km'
+                                : 'Kab/Kota'})`}
+                          >
                             {item.location_name || 'Koridor Sumatera'}
                             {item.lat && item.lon ? ` · ${item.lat.toFixed(2)}°N, ${item.lon.toFixed(2)}°E` : ''}
                             {' '}({item.location_precision === 'corridor_point'
@@ -3942,33 +3957,43 @@ export default function DashboardClient() {
 
  {/* Row 2 — Keyakinan (Phase 172 / M9): tier + honest label; a percentage only
      when a calibrated consensus value exists. The static 0.86/0.94 tier
-     constant is never rendered as confidence. */}
-                        <div className="flex items-center justify-between gap-1 text-[#e8eaed] border-t border-white/10 pt-1">
- <span className="text-[rgba(232,234,237,0.62)] text-xs font-semibold shrink-0">Keyakinan:</span>
+     constant is never rendered as confidence. Phase 176.8: the tier badge is
+     one line and the honest label is a second line — "Belum terverifikasi" is
+     the most important string on the card and must never be ellipsised. */}
+                        <div className="flex items-start justify-between gap-2 text-[#e8eaed] border-t border-white/10 pt-1">
+ <span className="text-[rgba(232,234,237,0.62)] text-xs font-semibold shrink-0 whitespace-nowrap">Keyakinan:</span>
                           <span
                             data-testid={`berita-confidence-${item.id}`}
-                            className="px-1.5 py-0.5 rounded bg-white/[0.06] text-[#e8eaed] border border-white/10 text-xs font-bold tabular-nums truncate"
+                            className="flex min-w-0 flex-col items-end gap-0.5 text-right"
                             title={`${displayTierLabel(item.display_confidence?.tier || item.source_tier)} · ${item.display_confidence?.label || 'Belum terverifikasi'}${item.display_confidence?.basis ? ` (${item.display_confidence.basis})` : ''}`}
                           >
-                            {item.display_confidence?.value != null && Number.isFinite(Number(item.display_confidence.value))
-                              ? `${Math.round(Number(item.display_confidence.value) * 100)}% · `
-                              : ''}
-                            {displayTierLabel(item.display_confidence?.tier || item.source_tier)}
-                            {' · '}
-                            <span className="font-semibold">{item.display_confidence?.label || 'Belum terverifikasi'}</span>
+                            <span className="px-1.5 py-0.5 rounded bg-white/[0.06] text-[#e8eaed] border border-white/10 text-xs font-bold tabular-nums whitespace-nowrap">
+                              {item.display_confidence?.value != null && Number.isFinite(Number(item.display_confidence.value))
+                                ? `${Math.round(Number(item.display_confidence.value) * 100)}% · `
+                                : ''}
+                              {displayTierLabel(item.display_confidence?.tier || item.source_tier)}
+                            </span>
+                            <span className="text-xs font-semibold leading-snug break-words">
+                              {item.display_confidence?.label || 'Belum terverifikasi'}
+                            </span>
                           </span>
                         </div>
 
 
- {/* Row 3 — Jalur */}
-                        <div className="flex items-center justify-between text-[#e8eaed] border-t border-white/10 pt-1">
- <span className="text-[rgba(232,234,237,0.62)] text-xs font-semibold">Jalur:</span>
-                          <div className="flex items-center gap-1.5 truncate max-w-[185px]">
-                            <span className={isForecast ? 'text-[#f59e0b] font-semibold shrink-0' : itemZoneTier === 'RED_CONFIRMED' ? 'text-[#ef4444] font-semibold shrink-0' : 'text-[#f59e0b] font-semibold shrink-0'}>
+ {/* Row 3 — Jalur. Status + commodity wrap as whole units instead of being
+     cut by `truncate`; the bullet travels with the commodity so a wrapped
+     line never starts with an orphan separator. */}
+                        <div className="flex items-start justify-between gap-2 text-[#e8eaed] border-t border-white/10 pt-1">
+ <span className="text-[rgba(232,234,237,0.62)] text-xs font-semibold shrink-0 whitespace-nowrap">Jalur:</span>
+                          <div
+                            data-testid={`berita-route-${item.id}`}
+                            className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-x-1.5 gap-y-0.5 text-right"
+                          >
+                            <span className={isForecast ? 'text-[#f59e0b] font-semibold shrink-0 whitespace-nowrap' : itemZoneTier === 'RED_CONFIRMED' ? 'text-[#ef4444] font-semibold shrink-0 whitespace-nowrap' : 'text-[#f59e0b] font-semibold shrink-0 whitespace-nowrap'}>
                               {isForecast ? 'Prakiraan Waspada Dini' : itemZoneTier === 'RED_CONFIRMED' ? 'Terputus Total' : 'Lalin Tersendat'}
                             </span>
-                            <span className="text-[rgba(232,234,237,0.38)]">•</span>
-                            <span className="text-[#e8eaed] truncate" title={item.commodity_name || 'Komoditas Pangan'}>
+                            <span className="text-[#e8eaed] break-words" title={item.commodity_name || 'Komoditas Pangan'}>
+                              <span className="text-[rgba(232,234,237,0.38)]">• </span>
                               {item.commodity_name || 'Pangan'}
                             </span>
                           </div>
