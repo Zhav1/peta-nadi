@@ -1,0 +1,22 @@
+{
+  "baseUrl": "https://pre-hub.vercel.app",
+  "at": "2026-10-28T14:50:37.110Z",
+  "report": [
+    {
+      "file": "D:\\College\\Pidi.id\\.planning\\milestones\\M9\\phase-fleet\\1920x1080.png",
+      "suffix": "1920x1080",
+      "bytes": 534901
+    },
+    {
+      "file": "D:\\College\\Pidi.id\\.planning\\milestones\\M9\\phase-fleet\\390x844.png",
+      "suffix": "390x844",
+      "bytes": 176846
+    },
+    {
+      "file": "D:\\College\\Pidi.id\\.planning\\milestones\\M9\\phase-fleet\\waspada-1920x1080.png",
+      "suffix": "waspada-1920x1080",
+      "bytes": 558931,
+      "advisoryClicked": true
+    }
+  ]
+}
