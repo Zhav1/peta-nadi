@@ -391,8 +391,13 @@ export function TenantFleetRoster({
                               {modalityIcon(v.modality)}
                               <span className="min-w-0">
                                 <span className="block text-xs text-slate-100 truncate">{v.name || v.vehicle_id}</span>
-                                <span className="block text-xs tabular-nums text-slate-500 truncate">
-                                  {v.speed_kmh ? `${Math.round(v.speed_kmh)} km/j` : 'kecepatan tidak diketahui'}
+                                {/* Phase 176.5 — one clean subtitle. The old
+                                    speed-only fragment ("64 km/j") read as a
+                                    truncated distance. Modality + status are
+                                    both labelled, never concatenated with a
+                                    stray ")" or a cut-off number. */}
+                                <span className="block text-xs text-slate-500 truncate">
+                                  {(MODALITY_LABEL[v.modality] ?? v.modality) + ' · ' + statusLabel(v)}
                                 </span>
                               </span>
                             </div>

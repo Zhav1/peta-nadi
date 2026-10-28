@@ -255,27 +255,50 @@ html, body, #__next {
 /* No arrow ornament: the container is a plain rectangle. */
 .mapboxgl-popup-tip {
   display: none !important;
+  border: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
+/* Phase 176.5 — the close affordance is part of the surface, not a browser
+   button. Mapbox ships a bare <button> whose UA/hover chrome (white box on
+   hover) overrode the earlier rule through stylesheet order, so every property
+   is pinned here. 20×20, transparent surface, 10px radius, 12px glyph. */
 .mapboxgl-popup-close-button {
-  position: absolute;
-  top: 2px;
-  right: 4px;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: rgba(232, 234, 237, 0.38);
-  font-size: 14px;
-  line-height: 18px;
+  position: absolute !important;
+  top: 2px !important;
+  right: 4px !important;
+  display: block !important;
+  width: 20px !important;
+  height: 20px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 10px !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  color: rgba(232, 234, 237, 0.5) !important;
+  font-family: var(--font-sans) !important;
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  line-height: 20px !important;
+  text-align: center !important;
   cursor: pointer;
 }
 
 .mapboxgl-popup-close-button:hover {
-  color: #e8eaed;
-  background: rgba(255, 255, 255, 0.08);
+  color: #e8eaed !important;
+  background: rgba(255, 255, 255, 0.12) !important;
+  background-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+/* Keyboard focus must stay visible on the dark surface. */
+.mapboxgl-popup-close-button:focus,
+.mapboxgl-popup-close-button:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.55) !important;
+  outline-offset: 1px !important;
+  color: #e8eaed !important;
 }
 
 .ds-popup {

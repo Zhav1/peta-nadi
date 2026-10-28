@@ -26,6 +26,7 @@ import {
 } from '@/lib/spatialHashArbiter';
 import { api } from '@/lib/api';
 import { resolvePopoverDualMetric } from '@/lib/tripCostCalculator';
+import { MAP_BASE_PAINT, MAP_BASE_LAYER_IDS } from '@/lib/mapBasePaint';
 import {
   buildFirmsClusterPopup,
   buildFirmsPopup,
@@ -907,6 +908,18 @@ export default function CrisisMap({
           handleWeatherClick(fakePopupEvent(properties)),
         openFirmsPopup: (properties: Record<string, unknown>) =>
           handleFirmsClick(fakePopupEvent(properties)),
+        /**
+         * Phase 176.5 — legibility gate. Reads the paint the map instance is
+         * actually rendering (not the literal we asked for), so the spec fails
+         * if the style reloads or a later layer override wins.
+         */
+        getBasePaint: () => ({
+          ready: map.isStyleLoaded(),
+          land: map.getPaintProperty(MAP_BASE_LAYER_IDS.land, 'background-color') ?? null,
+          water: map.getPaintProperty(MAP_BASE_LAYER_IDS.water, 'fill-color') ?? null,
+          waterway: map.getPaintProperty(MAP_BASE_LAYER_IDS.waterway, 'line-color') ?? null,
+          coastline: map.getPaintProperty(MAP_BASE_LAYER_IDS.coastline, 'line-color') ?? null,
+        }),
       };
     }
 
@@ -956,6 +969,30 @@ export default function CrisisMap({
       (window as any)._mapboxMap = map;
       (window as any).mapboxMap = map;
       map.addControl(draw, 'bottom-right');
+
+      // ── Phase 176.5 base legibility ───────────────────────────────────────
+      // dark-v11 puts land at 16% grey and water at 12%: under the command
+      // surface chrome the island silhouette flattens out. Re-paint the three
+      // base carriers + the coastline stroke, same neutral palette, wider
+      // separation. `land` is background-typed in dark-v11, hence
+      // `background-color` rather than `fill-color`.
+      const setBasePaint = (
+        layerId: string,
+        property: Parameters<mapboxgl.Map['setPaintProperty']>[1],
+        value: Parameters<mapboxgl.Map['setPaintProperty']>[2],
+      ) => {
+        if (!map.getLayer(layerId)) return;
+        try {
+          map.setPaintProperty(layerId, property, value);
+        } catch {
+          /* style revision without that layer — keep the stock paint */
+        }
+      };
+      setBasePaint(MAP_BASE_LAYER_IDS.land, 'background-color', MAP_BASE_PAINT.land);
+      setBasePaint(MAP_BASE_LAYER_IDS.water, 'fill-color', MAP_BASE_PAINT.water);
+      setBasePaint(MAP_BASE_LAYER_IDS.waterway, 'line-color', MAP_BASE_PAINT.waterway);
+      setBasePaint(MAP_BASE_LAYER_IDS.coastline, 'line-color', MAP_BASE_PAINT.coastline);
+      setBasePaint(MAP_BASE_LAYER_IDS.coastlineBg, 'line-color', MAP_BASE_PAINT.coastline);
 
       map.setFog({
         color: 'rgb(8, 10, 15)',
@@ -2814,19 +2851,21 @@ export default function CrisisMap({
       {/* Unified Top Command Bar inside Bounded Map Viewport */}
       <div className="absolute top-3 left-3 right-3 z-40 pointer-events-none flex flex-col gap-2">
         {/* Row 1: Primary Command & Telemetry Strip */}
-        <div className="flex items-center justify-between gap-2 w-full">
+        <div className="flex items-center justify-between gap-2 w-full min-w-0">
           {/* Left Group: Expand Button + Universal Search Bar + TopNavTelemetry */}
-          <div className="flex flex-wrap items-center gap-1.5 pointer-events-auto">
+          <div className="flex flex-wrap items-center gap-1.5 pointer-events-auto min-w-0 flex-1">
             {/* 1. Expand Left Sidebar Button when Collapsed */}
             {isLeftSidebarCollapsed && onExpandSidebar && (
               <button
                 type="button"
+                data-testid="news-sheet-toggle"
                 onClick={onExpandSidebar}
- className="cursor-pointer px-3 py-1.5 rounded-md bg-[#0c1017] border border-white/10 text-[rgba(232,234,237,0.62)] hover:text-white hover:bg-white/5 shadow-[0_12px_32px_rgba(0,0,0,0.4)] transition-colors flex items-center gap-1.5 text-xs font-semibold shrink-0"
+ aria-label="Buka panel Berita"
+ className="cursor-pointer px-3 sm:px-3 py-1.5 rounded-md bg-[#0c1017] border border-white/10 text-[rgba(232,234,237,0.62)] hover:text-white hover:bg-white/5 shadow-[0_12px_32px_rgba(0,0,0,0.4)] transition-colors flex items-center justify-center gap-1.5 text-xs font-semibold shrink-0"
                 title="Tampilkan Panel Berita"
               >
                 <PanelLeftOpen className="w-4 h-4 text-[rgba(232,234,237,0.62)]" />
- <span>Berita</span>
+ <span className="hidden sm:inline">Berita</span>
               </button>
             )}
 
@@ -2985,7 +3024,7 @@ export default function CrisisMap({
 
  {/* Right Group: Action Controls (Restore + Lapisan + Legenda Rute) */}
           {!(isRightSidebarOpen || (demoStage != null && demoStage >= 2)) && (
-            <div className="flex items-center gap-1.5 pointer-events-auto shrink-0">
+            <div className="hidden sm:flex items-center gap-1.5 pointer-events-auto shrink-0">
               {(hiddenRouteIndices.size > 0 ||
                 !corridorVisibility?.land ||
                 !corridorVisibility?.sea ||

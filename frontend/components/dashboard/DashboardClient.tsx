@@ -25,6 +25,8 @@ import {
   Play,
   Home,
   Lock,
+  Map as MapIcon,
+  MoreHorizontal,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useIncidents } from '@/hooks/useIncidents';
@@ -90,6 +92,20 @@ const chipClass = (active: boolean): string =>
   active
     ? 'px-1 py-0.5 rounded bg-black/10 text-xs font-bold tabular-nums'
     : 'px-1 py-0.5 rounded bg-white/[0.06] text-xs font-bold tabular-nums';
+
+/**
+ * Phase 176.5 — the section nav is one list rendered twice by breakpoint:
+ * `Peta Operasi` is the primary tab (icon-only below xl), the three secondary
+ * sections collapse into an overflow menu below xl so no label can ever
+ * overflow a 360px header. Desktop keeps the labelled strip and the #nav-* ids
+ * every existing spec drives.
+ */
+const NAV_TABS = [
+  { id: 'map', label: 'Peta Operasi', icon: MapIcon, primary: true },
+  { id: 'analytics', label: 'Analitik', icon: null, primary: false },
+  { id: 'reports', label: 'Laporan', icon: null, primary: false },
+  { id: 'evaluation', label: 'Evaluasi', icon: null, primary: false },
+] as const;
 
 function isAbortError(err: unknown): boolean {
   return !!err && typeof err === 'object' && (err as { name?: string }).name === 'AbortError';
@@ -761,7 +777,40 @@ export default function DashboardClient() {
   const [activeTab, setActiveTab] = useState<'Evidence' | 'Mitigation' | 'Economic'>('Evidence');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState(false);
+  const [isNavOverflowOpen, setIsNavOverflowOpen] = useState(false);
   const [approvalsCount, setApprovalsCount] = useState<number>(14);
+
+  // Phase 176.5 — the Berita panel is a closed-by-default bottom sheet on
+  // phones/tablets, so the map is the first thing on screen at 360–767px.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.matchMedia('(max-width: 767px)').matches) setIsLeftSidebarCollapsed(true);
+  }, []);
+
+  // One click path for every section entry point (primary tab + overflow menu),
+  // keeping the guest hard-lock and its toast identical to the desktop strip.
+  const handleNavTab = useCallback(
+    (tabId: 'map' | 'analytics' | 'reports' | 'evaluation') => {
+      setIsNavOverflowOpen(false);
+      const isLockedSection =
+        ['reports', 'analytics', 'evaluation'].includes(tabId) && (role === 'GUEST' || !isAuthenticated);
+      if (isLockedSection) {
+        openAuthModal();
+        setToast({
+          message:
+            tabId === 'reports'
+              ? 'Mode Sandbox: Laporan terkunci untuk tamu. Masuk untuk membuka audit mitigasi.'
+              : tabId === 'analytics'
+                ? 'Mode Sandbox: Analitik terkunci untuk tamu. Masuk untuk membuka analitik.'
+                : 'Mode Sandbox: Evaluasi terkunci untuk tamu. Masuk untuk membuka evaluasi.',
+          type: 'info',
+        });
+        return;
+      }
+      setActiveSection(tabId);
+    },
+    [isAuthenticated, openAuthModal, role, setToast],
+  );
 
   // Strict Mutual Exclusion: selecting vehicle closes incident inspector, and vice-versa
   const handleSelectVehicle = useCallback((vehicle: FleetVehicle) => {
@@ -3190,71 +3239,133 @@ export default function DashboardClient() {
   return (
     <div className="relative w-full h-screen bg-[#080d14] text-[#e8eaed] overflow-hidden select-none">
       {/* Top Header Navbar */}
-      <header className="fixed top-0 left-0 right-0 h-16 bg-[#0c1017] border-b border-white/10 z-50 flex items-center justify-between px-3 md:px-6 select-none">
-        <div className="flex items-center gap-2 sm:gap-6 min-w-0">
-          <div className="flex items-center gap-2 shrink-0">
-            <div className="w-8 h-8 rounded-lg bg-[#080d14] border border-white/15 p-1 flex items-center justify-center">
+      <header className="fixed top-0 left-0 right-0 h-16 bg-[#0c1017] border-b border-white/10 z-50 flex items-center justify-between gap-2 px-2 sm:px-3 md:px-6 select-none">
+        <div className="flex items-center gap-1.5 sm:gap-3 xl:gap-6 min-w-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <div className="w-8 h-8 rounded-lg bg-[#080d14] border border-white/15 p-1 flex items-center justify-center shrink-0">
  <img src="/logo_prehub.png" alt="Prehub" className="w-6 h-6 object-contain" />
             </div>
- <span className="font-headline font-bold text-base text-[#e8eaed] hidden sm:inline">
+ <span className="font-headline font-bold text-base text-[#e8eaed] hidden xl:inline">
  Prehub
             </span>
             <Link
               href="/"
-              className="ml-1 sm:ml-2 px-2 sm:px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs font-sans text-[#e8eaed] hover:text-white hover:border-white/20 transition flex items-center gap-1.5 cursor-pointer shrink-0"
+              aria-label="Kembali ke Portal Utama (Landing Page)"
               title="Kembali ke Portal Utama (Landing Page)"
+              className="ml-0.5 sm:ml-2 px-2 sm:px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs font-sans text-[#e8eaed] hover:text-white hover:border-white/20 transition hidden sm:flex items-center gap-1.5 cursor-pointer shrink-0"
             >
               <Home className="w-3.5 h-3.5 text-[rgba(232,234,237,0.62)]" />
               <span className="hidden md:inline">Portal Utama</span>
             </Link>
           </div>
 
-          {/* Section Navigation Tabs — Laporan/Analitik/Evaluasi hard-locked for GUEST */}
-          <nav aria-label="Bagian dasbor" className="flex items-center gap-1 bg-[#080d14] p-1 rounded-lg border border-white/10 overflow-x-auto no-scrollbar shrink">
-            {[
-              { id: 'map', label: 'Peta Operasi' },
-              { id: 'analytics', label: 'Analitik' },
-              { id: 'reports', label: 'Laporan' },
-              { id: 'evaluation', label: 'Evaluasi' },
-            ].map((tab) => {
-              const isLockedSection = ['reports', 'analytics', 'evaluation'].includes(tab.id) && (role === 'GUEST' || !isAuthenticated);
-              const lockLabel = tab.id === 'reports' ? 'Laporan' : tab.id === 'analytics' ? 'Analitik' : 'Evaluasi';
-              const lockDetail = tab.id === 'reports' ? 'audit mitigasi' : tab.id === 'analytics' ? 'analitik' : 'evaluasi';
+          {/* Section Navigation Tabs — Laporan/Analitik/Evaluasi hard-locked for GUEST.
+              Below xl the secondary sections live in an overflow menu, so the
+              strip is icon-only and every control fits at 360px. */}
+          <nav
+            aria-label="Bagian dasbor"
+            data-testid="top-nav"
+            className="flex items-center gap-1 bg-[#080d14] p-1 rounded-lg border border-white/10 shrink-0"
+          >
+            {NAV_TABS.filter((tab) => tab.primary).map((tab) => {
+              const Icon = tab.icon;
               return (
                 <button
                   key={tab.id}
                   id={`nav-${tab.id}`}
                   type="button"
-                  disabled={isLockedSection}
-                  aria-disabled={isLockedSection}
-                  title={isLockedSection ? `${lockLabel} terkunci: masuk untuk membuka ${lockDetail} (Mode Sandbox)` : tab.label}
-                  onClick={() => {
-                    if (isLockedSection) {
-                      openAuthModal();
-                      setToast({
-                        message: tab.id === 'reports'
-                          ? 'Mode Sandbox: Laporan terkunci untuk tamu. Masuk untuk membuka audit mitigasi.'
-                          : tab.id === 'analytics'
-                            ? 'Mode Sandbox: Analitik terkunci untuk tamu. Masuk untuk membuka analitik.'
-                            : 'Mode Sandbox: Evaluasi terkunci untuk tamu. Masuk untuk membuka evaluasi.',
-                        type: 'info',
-                      });
-                      return;
-                    }
-                    setActiveSection(tab.id as typeof activeSection);
-                  }}
-                  className={`px-3 sm:px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 ${isLockedSection
-                    ? 'text-[rgba(232,234,237,0.38)] cursor-not-allowed flex items-center gap-1.5'
-                    : activeSection === tab.id
-                      ? 'bg-white text-[#080d14] font-semibold cursor-pointer'
-                      : 'text-[rgba(232,234,237,0.62)] hover:text-[#e8eaed] hover:bg-white/5 cursor-pointer'
-                    }`}
+                  aria-label={tab.label}
+                  title={tab.label}
+                  onClick={() => handleNavTab(tab.id)}
+                  className={`cursor-pointer h-8 w-8 xl:w-auto xl:px-3.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap flex items-center justify-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 ${
+                    activeSection === tab.id
+                      ? 'bg-white text-[#080d14] font-semibold'
+                      : 'text-[rgba(232,234,237,0.62)] hover:text-[#e8eaed] hover:bg-white/5'
+                  }`}
                 >
-                  {isLockedSection && <Lock className="w-3 h-3 shrink-0" aria-hidden="true" />}
-                  {tab.label}
+                  <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
+                  <span className="hidden xl:inline">{tab.label}</span>
                 </button>
               );
             })}
+
+            {/* Desktop: labelled secondary strip (keeps #nav-* ids for every spec). */}
+            <div className="hidden xl:flex items-center gap-1">
+              {NAV_TABS.filter((tab) => !tab.primary).map((tab) => {
+                const isLockedSection = role === 'GUEST' || !isAuthenticated;
+                return (
+                  <button
+                    key={tab.id}
+                    id={`nav-${tab.id}`}
+                    type="button"
+                    disabled={isLockedSection}
+                    aria-disabled={isLockedSection}
+                    title={
+                      isLockedSection
+                        ? `${tab.label} terkunci: masuk untuk membuka ${tab.id === 'reports' ? 'audit mitigasi' : tab.id === 'analytics' ? 'analitik' : 'evaluasi'} (Mode Sandbox)`
+                        : tab.label
+                    }
+                    onClick={() => handleNavTab(tab.id)}
+                    className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 ${
+                      isLockedSection
+                        ? 'text-[rgba(232,234,237,0.38)] cursor-not-allowed flex items-center gap-1.5'
+                        : activeSection === tab.id
+                          ? 'bg-white text-[#080d14] font-semibold cursor-pointer'
+                          : 'text-[rgba(232,234,237,0.62)] hover:text-[#e8eaed] hover:bg-white/5 cursor-pointer'
+                    }`}
+                  >
+                    {isLockedSection && <Lock className="w-3 h-3 shrink-0" aria-hidden="true" />}
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Below xl: secondary sections collapse into an overflow menu. */}
+            <div className="relative xl:hidden">
+              <button
+                type="button"
+                data-testid="nav-overflow-toggle"
+                aria-label="Menu bagian lainnya"
+                title="Menu bagian lainnya"
+                aria-expanded={isNavOverflowOpen}
+                onClick={() => setIsNavOverflowOpen((v) => !v)}
+                className={`cursor-pointer h-8 w-8 rounded-lg transition-colors flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 ${
+                  isNavOverflowOpen
+                    ? 'bg-white text-[#080d14]'
+                    : 'text-[rgba(232,234,237,0.62)] hover:text-[#e8eaed] hover:bg-white/5'
+                }`}
+              >
+                <MoreHorizontal className="w-4 h-4" aria-hidden="true" />
+              </button>
+              {isNavOverflowOpen && (
+                <div
+                  data-testid="nav-overflow-menu"
+                  className="absolute left-0 top-full mt-2 z-50 w-44 rounded-xl border border-white/10 bg-[#0c1017] p-1 shadow-[0_12px_32px_rgba(0,0,0,0.4)]"
+                >
+                  {NAV_TABS.filter((tab) => !tab.primary).map((tab) => {
+                    const isLockedSection = role === 'GUEST' || !isAuthenticated;
+                    return (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        data-testid={`nav-overflow-${tab.id}`}
+                        onClick={() => handleNavTab(tab.id)}
+                        aria-disabled={isLockedSection}
+                        className={`w-full cursor-pointer px-2.5 py-2 rounded-lg text-left text-xs font-medium transition-colors flex items-center justify-between gap-2 ${
+                          activeSection === tab.id
+                            ? 'bg-white text-[#080d14] font-semibold'
+                            : 'text-[rgba(232,234,237,0.62)] hover:text-[#e8eaed] hover:bg-white/5'
+                        }`}
+                      >
+                        <span>{tab.label}</span>
+                        {isLockedSection && <Lock className="w-3 h-3 shrink-0 opacity-60" aria-hidden="true" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </nav>
         </div>
 
@@ -3270,7 +3381,7 @@ export default function DashboardClient() {
               aria-pressed={isRosterVisible}
               aria-label={`Armada Perusahaan: ${tenantFleetVehicles.length} unit · ${liveTenantVehicles.length} live GPS. Tampilkan atau sembunyikan panel.`}
               title={`Armada Perusahaan — ${tenantFleetVehicles.length} unit · ${liveTenantVehicles.length} live GPS`}
-              className="cursor-pointer px-2.5 sm:px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-[#e8eaed] hover:text-white text-xs font-medium transition-colors flex items-center gap-1.5"
+              className="cursor-pointer px-2 sm:px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-[#e8eaed] hover:text-white text-xs font-medium transition-colors flex items-center gap-1.5 shrink-0"
             >
               <Truck className="w-3.5 h-3.5 text-[rgba(232,234,237,0.62)]" />
               <span className="hidden sm:inline">Armada Perusahaan</span>
@@ -3292,7 +3403,7 @@ export default function DashboardClient() {
               setIsOnboardingModalOpen(true);
             }}
             id="onboard-armada-btn"
-            className={`cursor-pointer px-2.5 sm:px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-[#e8eaed] hover:text-white text-xs font-medium transition-colors flex items-center gap-1.5`}
+            className={`cursor-pointer px-2 sm:px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-[#e8eaed] hover:text-white text-xs font-medium transition-colors flex items-center gap-1.5 shrink-0`}
             title={role === 'DISPATCHER' ? 'Onboard Armada & Unggah Manifest Pengiriman' : 'Onboard Armada (Terkunci: Khusus Wewenang Dispatcher)'}
           >
             {role === 'DISPATCHER' ? (
@@ -3318,17 +3429,17 @@ export default function DashboardClient() {
             type="button"
             id="auth-persona-badge-btn"
             onClick={openAuthModal}
-            className="cursor-pointer px-2.5 sm:px-3 py-1.5 rounded-lg border border-white/10 bg-[#080d14] hover:border-white/20 transition flex items-center gap-2 group text-left"
+            className="cursor-pointer px-2 sm:px-3 py-1.5 rounded-lg border border-white/10 bg-[#080d14] hover:border-white/20 transition flex items-center gap-2 group text-left shrink-0"
             title="Ganti Persona Akses & Ruang Kerja (RBAC)"
           >
             <div className={`w-2 h-2 rounded-full shrink-0 ${role === 'DISPATCHER' ? 'bg-emerald-500' : role === 'REGULATOR' ? 'bg-[#f59e0b]' : 'bg-white/25'
               }`} />
-            <div className="leading-tight">
+            <div className="leading-tight min-w-0">
               <div className="flex items-center gap-1.5">
                 <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#e8eaed]">
                   {role}
                 </span>
-                <ChevronDown className="w-3 h-3 text-[rgba(232,234,237,0.62)] group-hover:text-white transition-colors" />
+                <ChevronDown className="w-3 h-3 hidden sm:block text-[rgba(232,234,237,0.62)] group-hover:text-white transition-colors" />
               </div>
               <span className="text-xs font-sans text-[rgba(232,234,237,0.62)] max-w-[120px] truncate hidden sm:block">
                 {user.org_name || (role === 'DISPATCHER' ? 'PT Samudera Logistik' : role === 'REGULATOR' ? 'Badan Pangan Nasional' : 'Sandbox LRIP')}
@@ -3399,12 +3510,28 @@ export default function DashboardClient() {
 
           {/* COLUMN 1: COLLAPSIBLE LEFT OSINT & NEWS SIDEBAR (GLOBOT STYLE) */}
           <aside
-            className={`h-full bg-[#0c1017] flex flex-col gap-3 overflow-hidden pointer-events-auto transition-all duration-300 ease-in-out ${
+            data-testid="news-sheet"
+            className={`bg-[#0c1017] flex flex-col gap-3 overflow-hidden pointer-events-auto transition-all duration-300 ease-in-out ${
               isLeftSidebarCollapsed
-                ? 'w-0 p-0 overflow-hidden border-r-0 opacity-0 pointer-events-none -translate-x-full md:translate-x-0 shrink-0'
-                : 'absolute md:relative inset-y-0 left-0 md:inset-auto z-40 md:z-30 shrink-0 w-80 md:w-[352px] p-3.5 border-r border-white/10 opacity-100 translate-x-0'
+                ? 'hidden md:flex md:w-0 md:p-0 md:border-r-0 md:opacity-0 md:pointer-events-none shrink-0'
+                : 'absolute inset-x-0 bottom-0 z-40 h-[68vh] w-full rounded-t-xl border-t border-white/10 p-3.5 md:relative md:inset-auto md:z-30 md:h-full md:max-h-none md:w-[352px] md:rounded-none md:border-t-0 md:border-r md:border-white/10 md:opacity-100'
             }`}
           >
+            {/* Mobile sheet handle + close — the sheet never traps the map. */}
+            <div className="md:hidden flex items-center justify-between shrink-0 -mt-1">
+              <span aria-hidden="true" className="mx-auto h-1 w-10 rounded-full bg-white/20" />
+              <button
+                type="button"
+                data-testid="news-sheet-close"
+                onClick={() => setIsLeftSidebarCollapsed(true)}
+                aria-label="Tutup panel Berita"
+                title="Tutup panel Berita"
+                className="cursor-pointer p-1.5 rounded-lg bg-[#121822] hover:bg-white/10 text-[rgba(232,234,237,0.62)] hover:text-white transition -mr-0.5"
+              >
+                <ChevronDown className="w-4 h-4" />
+              </button>
+            </div>
+
             {/* Header: OSINT Wire & Live Pulse */}
             <div className="flex items-center justify-between pb-2 border-b border-white/10 shrink-0">
               <div className="flex items-center gap-2">
@@ -4041,7 +4168,7 @@ export default function DashboardClient() {
                 }
                 fleetModalitySlot={
                   !(isSidebarOpen && selectedCrisis) ? (
- <div className="flex items-center gap-1 p-1 rounded-xl bg-[#0c1017] border border-white/10 shadow-[0_12px_32px_rgba(0,0,0,0.4)] overflow-x-auto no-scrollbar max-w-[calc(100vw-2rem)]">
+ <div className="flex items-center gap-1 p-1 rounded-xl bg-[#0c1017] border border-white/10 shadow-[0_12px_32px_rgba(0,0,0,0.4)] overflow-x-auto no-scrollbar snap-x snap-mandatory max-w-[calc(100vw-2rem)]">
                       {[
  { id: 'all', label: 'Semua', count: fleetCountVehicles.length, icon: null },
  { id: 'truck', label: 'Truk', count: fleetCountVehicles.filter((v) => v.modality === 'truck').length, icon: Truck },
@@ -4061,7 +4188,7 @@ export default function DashboardClient() {
                                 type: 'info',
                               });
                             }}
-                            className={`cursor-pointer px-2.5 py-1 rounded-lg text-xs font-mono font-medium transition-colors flex items-center gap-1.5 shrink-0 ${fleetModalityFilter === m.id
+                            className={`cursor-pointer px-2.5 py-1 rounded-lg text-xs font-mono font-medium transition-colors flex items-center gap-1.5 shrink-0 snap-start ${fleetModalityFilter === m.id
                                 ? 'bg-white text-[#080d14] font-bold'
                                 : 'text-[rgba(232,234,237,0.62)] hover:text-[#e8eaed] hover:bg-white/5'
                               }`}

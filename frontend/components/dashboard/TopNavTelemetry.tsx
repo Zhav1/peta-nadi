@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import type { ChokePointItem, HazardCounterBucket, HazardCounterStatus, WeatherHazardSummary, WeatherPolygonMeta } from '@/lib/types';
 import { freshnessText } from '@/components/dashboard/FreshnessBadge';
 
@@ -126,6 +126,15 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
   void _weatherSample;
   void _fireTooltip;
 
+  // Phase 176.5 — the compact Merah/Kuning pills are inserted ahead of the
+  // weather counters when the sidebar collapses on mobile. Scroll anchoring
+  // would otherwise keep Cuaca in place and park the strip mid-list (a partial
+  // pill at rest). Reset to the first pill whenever that set changes.
+  const stripRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    stripRef.current?.scrollTo({ left: 0, behavior: 'auto' });
+  }, [isLeftSidebarCollapsed]);
+
   // --- Phase 160: counters are world truth, never toggle-gated ---------------
   // Degraded/unknown renders "—"; verified-empty renders 0. The layer toggles
   // below change what the map draws, never these numbers.
@@ -211,7 +220,7 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
   // is the only state that fills white (the selected signal). Hazard hue is
   // carried by the number alone, never by the pill surface or its label.
   const PILL_BASE =
-    'cursor-pointer flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs font-mono tabular-nums transition-colors duration-150';
+    'cursor-pointer flex-none flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs font-mono tabular-nums transition-colors duration-150 snap-start';
   const pillClass = (active: boolean): string =>
     active
       ? `${PILL_BASE} bg-white text-[#080d14] border-white font-semibold`
@@ -241,10 +250,14 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
   };
 
   return (
-    <div className="relative flex flex-wrap items-center gap-1.5 text-xs font-mono select-none overflow-visible">
+    <div
+      ref={stripRef}
+      data-testid="counter-strip"
+      className="relative flex items-center gap-1.5 text-xs font-mono select-none overflow-x-auto no-scrollbar [overflow-anchor:none] snap-x snap-mandatory w-full min-w-0 md:w-auto md:flex-wrap md:overflow-visible md:snap-none"
+    >
       {/* Compact Zone Filter Pills when Left OSINT Drawer is Collapsed */}
       {isLeftSidebarCollapsed && (
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex items-center gap-1 shrink-0 snap-start">
           <button
             type="button"
             data-testid="counter-pill"
