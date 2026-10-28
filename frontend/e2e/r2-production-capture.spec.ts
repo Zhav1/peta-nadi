@@ -127,10 +127,10 @@ async function assertCountersLive(page: Page, width: number): Promise<void> {
 }
 
 /**
- * R2.1 assertion 2 — the floating guest banner never covers a Berita card.
- * Measured at scroll-bottom: the only state where the last card can reach the
- * banner, and the state the panel's `--guest-banner-clearance` padding exists
- * for.
+ * R2.1 assertion 2 — the docked guest banner never covers a Berita card.
+ * Phase 176.9: the banner is an in-flow sibling below the feed's only scroll
+ * container, so the visible bottom of the feed can never pass the banner top at
+ * any scroll position. Measured at scroll-bottom, the worst case.
  */
 async function assertLastCardClearsGuestBanner(page: Page, width: number): Promise<void> {
   const scroller = page.getByTestId('news-feed-scroll');
