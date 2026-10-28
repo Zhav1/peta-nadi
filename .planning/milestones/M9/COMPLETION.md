@@ -96,3 +96,59 @@ None touch the geocode, weather, FIRMS, news, routing or approval code paths cha
 |---|---|---|
 | `.planning/milestones/M9/phaseR2.1/live-dashboard-1920.png` | 1920×1080 | Cuaca 1 · Waspada 28 · Titik Panas 145; 34 sumber terverifikasi; first card `Belum terverifikasi` whole; province chips incl. Jambi 1 / Bangka Belitung 3 / Bengkulu 2; "Kepulauan Riau: tidak ada artikel 48 jam" |
 | `.planning/milestones/M9/phaseR2.1/live-dashboard-390.png` | 390×844 | Counters pinned in one row (1 / 28 / 145); sheet open; chips visible; banner overlapping the feed's bottom sliver — the defect in §5.1 |
+
+## 7. R2.2 rollout - final layout fix (merged; assertions still red on one defect)
+
+Merged `m9-r2.2` (`fa2edc9`) into `main` as **`6db893a`** (`--no-ff`), with tag `pre-m9-r2.2` on the pre-merge `main` (`ca1fca1`). `origin/main` had not moved past `ca1fca1` at fetch time; no merge conflicts (the other session's uncommitted files do not overlap the merged paths).
+
+### Deploy
+
+| Item | Value |
+|---|---|
+| ETag before (R2.1 build) | `"280784705310b5e782dc9619b2df9014"` |
+| ETag after (R2.2 build) | `"9a59ba70a3f437eadbe051fcfd55063a"` |
+| Time to flip | ~100 s (5 polls at 20 s) |
+| Evidence commit | `693e1d4` - `.planning/milestones/M9/phaseR2.2/` |
+
+### Production assertions - `playwright.vercel.config.ts` (4 tests: **2 passed / 2 failed**)
+
+Both **legibility** tests passed at 1920 and 390 (honest label fully inside the first card, counters `28` / `145` live). Both **banner clearance** tests failed - but not on geometry. They failed on a duplicated mount:
+
+```
+Error: strict mode violation: getByTestId('guest-evaluation-banner') resolved to 2 elements:
+  1) <div id="guest-evaluation-banner" ...>   (parent: <body>, page-level strip)
+  2) <div id="guest-evaluation-banner" ...>   (inside [data-testid="news-sheet"])
+```
+
+`6db893a` mounts `<GuestEvaluationBanner />` twice: `frontend/app/dashboard/page.tsx:24` (carried over from R2.1, top level) and `frontend/components/dashboard/DashboardClient.tsx:4119` (new in 176.9, docked in flow inside the panel). The local 121-pass run was measured against a working tree in which the other session had already removed the `page.tsx` mount - that edit was never committed, so the merged tree regressed. Full log: `.planning/milestones/M9/phaseR2.2/prod-assertions.txt`.
+
+Measured geometry (`.planning/milestones/M9/phaseR2.2/prod-measure.txt`), scoping the locator to the in-sheet banner:
+
+| Viewport | last card bottom | feed box bottom | innerHeight | in-sheet banner top | clearance |
+|---|---|---|---|---|---|
+| 1920x1080 | 1016.5 | 1017.0 | 1080 | 1029.0 | **+12.5 px** |
+| 390x844 | 789.0 | 789.0 | 844 | 797.0 | **+8.0 px** (was **-17.6 px**) |
+
+So the 176.9 layout fix itself is correct: the feed now ends 55 px above `innerHeight` (R2.1: 26 px below), and the banner sits in flow below it at every scroll position. The only blocker is the duplicate mount - a one-line removal of the `page.tsx` mount. **Not fixed in this rollout**, because that file is the other session's uncommitted work.
+
+### Smoke (prod API `https://peta-nadi.onrender.com`)
+
+| Check | Result |
+|---|---|
+| `/api/v1/weather/summary` | 200, `waspada.count 28` / `total 28`, `status ok`, `window_hours 24` |
+| `/api/v1/fire/hotspots` | 200, `count 145`, `total 145`, `status ok` |
+| `/api/v1/geocode/search?q=natuna` | 200, top result `type "kabupaten"` (`Natuna`, Kepulauan Riau, gazetteer) |
+| `/api/v1/news/live` | 200, `total 39` (crisis 2 / regional 37); present 8 - Aceh, Sumut, Sumbar, Jambi, Sumsel, Bangka Belitung, Bengkulu, Lampung; **missing 2** - Riau, Kepulauan Riau |
+| `/health` | 200 `{"status":"ok","version":"0.1.0","environment":"development","service":"prehub-api"}` |
+
+Log: `.planning/milestones/M9/phaseR2.2/smoke.txt`. `waspada.count` and the FIRMS count match the R2.1 snapshot; the news feed lost Riau (R2.1 had 9 present / 1 missing) - a feed-side fluctuation, not a regression.
+
+### Open item (blocks R2.2 sign-off)
+
+1. **Guest banner rendered twice on `/dashboard`.** Remove `<GuestEvaluationBanner />` from `frontend/app/dashboard/page.tsx` (the `DashboardClient` mount is the correct one) and re-run `r2-production-capture.spec.ts`; expect 4/4 green. Until then the page shows a redundant full-width banner strip at `y 0-50` above the command center.
+
+No rollback: the frontend stayed 200 and `/health` stayed 200 throughout.
+
+### R2.2 captures
+
+`live-dashboard-1920.png` and `live-dashboard-390.png` in `.planning/milestones/M9/phaseR2.2/` - same capture step as the prod spec (scroll-bottom, sheet open), retaken against the R2.2 deployment.
