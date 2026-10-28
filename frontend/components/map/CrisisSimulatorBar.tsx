@@ -194,16 +194,16 @@ export function CrisisSimulatorBar({
     isLeftSidebarCollapsed,
     isCrisisDrawerOpen: isSidebarOpen,
   });
- const pillsRowClass = `flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#0c1017] border border-white/10 shadow-2xl max-w-full overflow-x-auto no-scrollbar transition-all duration-200 ${
- isSidebarOpen ? 'justify-center' : ''
+ const pillsRowClass = `flex flex-wrap items-center justify-center gap-2 px-3 py-2 rounded-lg bg-[#0c1017] border border-white/10 shadow-2xl w-fit max-w-[calc(100vw-1.5rem)] transition-all duration-200 md:flex-nowrap md:w-auto ${
+ isSidebarOpen ? 'md:justify-center' : ''
   }`;
 
   return (
     <div
- className={`absolute bottom-16 sm:bottom-20 z-40 flex flex-col items-center gap-2 pointer-events-auto select-none transition-all duration-300 ${dockPositionClass}`}
+ className={`absolute bottom-16 sm:bottom-20 z-40 ${isLeftSidebarCollapsed ? 'flex' : 'hidden md:flex'} flex-col items-center gap-2 pointer-events-auto select-none transition-all duration-300 ${dockPositionClass}`}
     >
       {/* Floating Action Bubble Pills Row */}
-      <div className={pillsRowClass}>
+      <div className={pillsRowClass} data-testid="map-dock">
         {/* Reset Hidden Corridors Pill (shows only when user has hidden any route corridors on map) */}
         {effectiveHiddenCount > 0 && (
           <button

@@ -10,6 +10,7 @@
     "test": "node --no-warnings --experimental-strip-types scripts/test_arbiter.ts",
     "test:fleet-scope": "node --no-warnings --experimental-strip-types scripts/test_fleet_scope.ts",
     "test:corridors": "node --no-warnings --experimental-strip-types scripts/test_corridor_snapping.ts",
+    "test:map-popup": "node --no-warnings --experimental-strip-types scripts/test-map-popup.ts",
     "test:phase115": "node --no-warnings --experimental-strip-types scripts/test_phase115_watermelon_mcp_connect.ts"
   },
   "dependencies": {

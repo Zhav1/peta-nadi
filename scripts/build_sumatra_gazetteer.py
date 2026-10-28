@@ -108,6 +108,30 @@ PROVINCE_CODES = {
 _ADMIN_NAME_PREFIXES = ("Kecamatan ", "Kec. ", "Kec ", "Kabupaten ", "Kab. ", "Kab ", "Kota ", "Kotamadya ")
 _ALIAS_TAGS = ("name", "name:id", "alt_name", "official_name", "old_name", "short_name", "int_name", "loc_name")
 
+# Phase 176.7: the committed dataset must use exactly one `type` vocabulary so
+# an API consumer never sees `regency`/`city`/`district` for a kabupaten/kota/
+# kecamatan. The generator only emits the three canonical values; this alias map
+# keeps a future source that speaks OSM/Nominatim English from leaking them.
+GAZETTEER_TYPES = ("kabupaten", "kota", "kecamatan")
+_TYPE_ALIASES = {
+    "regency": "kabupaten",
+    "kabupaten": "kabupaten",
+    "county": "kabupaten",
+    "city": "kota",
+    "kota": "kota",
+    "district": "kecamatan",
+    "subdistrict": "kecamatan",
+    "sub_district": "kecamatan",
+    "kecamatan": "kecamatan",
+}
+
+
+def normalize_gazetteer_type(value) -> Optional[str]:
+    """Canonical `type` for the committed dataset, or None when unrecognised."""
+    if value is None:
+        return None
+    return _TYPE_ALIASES.get(str(value).strip().lower())
+
 
 # --------------------------------------------------------------------------- #
 # text helpers (mirrored by backend/app/nlp/gazetteer_data.py)
@@ -1161,9 +1185,17 @@ def dedupe_and_validate(records: Iterable[dict]) -> List[dict]:
     kept: List[dict] = []
     seen_names: set[Tuple[str, str, str]] = set()
     seen_ids: set[str] = set()
-    dropped_province = dropped_bbox = duplicates = 0
+    dropped_province = dropped_bbox = dropped_type = duplicates = 0
 
     for record in records:
+        # Phase 176.7: normalise `type` (regency->kabupaten, city->kota,
+        # district->kecamatan) BEFORE the dedupe/validate pass, so the committed
+        # JSON can only ever contain kota|kabupaten|kecamatan.
+        kind = normalize_gazetteer_type(record.get("type"))
+        if kind is None:
+            dropped_type += 1
+            continue
+        record["type"] = kind
         if record.get("province") not in PROVINCES:
             dropped_province += 1
             continue
@@ -1191,8 +1223,11 @@ def dedupe_and_validate(records: Iterable[dict]) -> List[dict]:
         seen_ids.add(record["id"])
         kept.append(record)
 
-    if dropped_province or dropped_bbox or duplicates:
-        print(f"[validate] dropped province={dropped_province} bbox={dropped_bbox} duplicate-name={duplicates}")
+    if dropped_province or dropped_bbox or dropped_type or duplicates:
+        print(
+            f"[validate] dropped province={dropped_province} bbox={dropped_bbox} "
+            f"type={dropped_type} duplicate-name={duplicates}"
+        )
     kept.sort(key=lambda r: (PROVINCES.index(r["province"]), r["type"], normalize_text(r["name"])))
     return kept
 

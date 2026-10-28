@@ -74,6 +74,11 @@ _PROVINCE_ALIASES = {
     "sumatera selatan": "Sumatera Selatan",
     "babel": "Bangka Belitung",
     "bangka belitung": "Bangka Belitung",
+    # Phase 176.7: the official province name. Feeds and the gazetteer both use
+    # "Kepulauan Bangka Belitung"; without this alias the declared province was
+    # silently discarded as "not a Sumatra province" (and the articles were
+    # bucketed as area-wide).
+    "kepulauan bangka belitung": "Bangka Belitung",
     "bengkulu": "Bengkulu",
     "lampung": "Lampung",
     "aceh": "Aceh",

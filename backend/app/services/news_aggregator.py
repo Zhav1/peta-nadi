@@ -83,7 +83,7 @@ OFFICIAL_RSS_FEEDS = [
         "url": "https://babel.antaranews.com/rss/terkini.xml",
         "tier": "TIER_1_OFFICIAL",
         "category": "REGIONAL_DISASTER",
-        "province": "Bangka Belitung"
+        "province": "Kepulauan Bangka Belitung"
     },
     {
         "source": "LKBN ANTARA Kepri",
@@ -182,6 +182,66 @@ OFFICIAL_RSS_FEEDS = [
         "tier": "TIER_2_AUTHORITATIVE_PRESS",
         "category": "NATIONAL_ALERT",
         "province": "Nasional"
+    },
+    # Phase 176.7 (M9): the 150-row read window had zero qualifying regional
+    # articles for Jambi, Bangka Belitung and Bengkulu. These feeds were
+    # verified live (HTTP 200 + parseable RSS with items) before being added -
+    # more *supply* for the three thin provinces, not a looser gate.
+    {
+        "source": "Tribun Jambi",
+        "url": "https://jambi.tribunnews.com/rss",
+        "tier": "TIER_2_AUTHORITATIVE_PRESS",
+        "category": "REGIONAL_DISASTER",
+        "province": "Jambi"
+    },
+    {
+        "source": "Jambi Seru",
+        "url": "https://jambiseru.com/feed",
+        "tier": "TIER_2_AUTHORITATIVE_PRESS",
+        "category": "REGIONAL_DISASTER",
+        "province": "Jambi"
+    },
+    {
+        "source": "Tribun Bangka (Bangkapos)",
+        "url": "https://bangka.tribunnews.com/rss",
+        "tier": "TIER_2_AUTHORITATIVE_PRESS",
+        "category": "REGIONAL_DISASTER",
+        "province": "Kepulauan Bangka Belitung"
+    },
+    {
+        "source": "BaBelnews.id",
+        "url": "https://babel.tribunnews.com/rss",
+        "tier": "TIER_2_AUTHORITATIVE_PRESS",
+        "category": "REGIONAL_DISASTER",
+        "province": "Kepulauan Bangka Belitung"
+    },
+    {
+        "source": "Bangka Terkini",
+        "url": "https://bangkaterkini.id/feed",
+        "tier": "TIER_2_AUTHORITATIVE_PRESS",
+        "category": "REGIONAL_DISASTER",
+        "province": "Kepulauan Bangka Belitung"
+    },
+    {
+        "source": "Tribun Bengkulu",
+        "url": "https://bengkulu.tribunnews.com/rss",
+        "tier": "TIER_2_AUTHORITATIVE_PRESS",
+        "category": "REGIONAL_DISASTER",
+        "province": "Bengkulu"
+    },
+    {
+        "source": "Bengkulu Satu",
+        "url": "https://bengkulusatu.com/feed",
+        "tier": "TIER_2_AUTHORITATIVE_PRESS",
+        "category": "REGIONAL_DISASTER",
+        "province": "Bengkulu"
+    },
+    {
+        "source": "Kupas Bengkulu",
+        "url": "https://www.kupasbengkulu.com/feed",
+        "tier": "TIER_2_AUTHORITATIVE_PRESS",
+        "category": "REGIONAL_DISASTER",
+        "province": "Bengkulu"
     }
 ]
 

@@ -220,6 +220,7 @@ BARE_PROVINCE_ALIASES = {
     "sumatera selatan": "Sumatera Selatan",
     "sumsel": "Sumatera Selatan",
     "bangka belitung": "Bangka Belitung",
+    "kepulauan bangka belitung": "Bangka Belitung",
     "babel": "Bangka Belitung",
     "kepulauan riau": "Kepulauan Riau",
     "kepri": "Kepulauan Riau",

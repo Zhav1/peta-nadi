@@ -213,6 +213,12 @@ test('drawer states both counts and lists all tenant units', async ({ page }) =>
   // Provenance is textual, not colour-only.
   await expect(page.getByTestId('armada-row-TRK-GPS-01')).toContainText('live');
   await expect(page.getByTestId('armada-row-TRK-EST-04')).toContainText('estimasi rute');
+
+  // Phase 176.5 — row subtitle is modality + status, never a truncated
+  // distance with a stray parenthesis ("... km)").
+  const row = page.getByTestId('armada-row-TRK-GPS-01');
+  await expect(row).toContainText('truk · bergerak');
+  await expect(row).not.toContainText('km)');
 });
 
 test('selecting a row opens the in-drawer detail with plate, driver and status', async ({ page }) => {

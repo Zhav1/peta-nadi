@@ -25,6 +25,8 @@ import {
   Play,
   Home,
   Lock,
+  Map as MapIcon,
+  MoreHorizontal,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useIncidents } from '@/hooks/useIncidents';
@@ -64,7 +66,7 @@ import { FleetOnboardingModal } from '@/components/fleet/FleetOnboardingModal';
 import { TenantFleetRoster } from '@/components/fleet/TenantFleetRoster';
 import { useCrisisSimulationStream } from '@/hooks/useCrisisSimulationStream';
 
-import { TopNavTelemetry } from '@/components/dashboard/TopNavTelemetry';
+import { TopNavTelemetry, HazardLegendPills } from '@/components/dashboard/TopNavTelemetry';
 import { RoutingStatusBanner } from '@/components/dashboard/RoutingStatusBanner';
 import { DispatcherAlertQueue } from '@/components/dashboard/DispatcherAlertQueue';
 import { HitlDecisionDrawer } from '@/components/dashboard/HitlDecisionDrawer';
@@ -74,16 +76,48 @@ import type { DisruptionImpactResponse, ImpactedVehicleAssessment } from '@/lib/
 // Dynamic import for map to avoid SSR issues
 const CrisisMap = dynamic(() => import('@/components/map/CrisisMap'), { ssr: false });
 
+/**
+ * Phase 175 — the command surface has exactly one pill recipe. Chrome is
+ * monochrome; the enabled/selected state is the white pill. Shared by the
+ * top-nav counters, the zone filters, and the dock, so a hue cannot leak back
+ * in through a one-off class string.
+ */
+const PILL_BASE =
+  'cursor-pointer flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs font-mono tabular-nums transition-colors duration-150';
+const pillClass = (active: boolean): string =>
+  active
+    ? `${PILL_BASE} bg-white text-[#080d14] border-white font-semibold`
+    : `${PILL_BASE} bg-[#0c1017] text-[rgba(232,234,237,0.62)] border-white/[0.08] hover:border-white/15 hover:text-[#e8eaed]`;
+const chipClass = (active: boolean): string =>
+  active
+    ? 'px-1 py-0.5 rounded bg-black/10 text-xs font-bold tabular-nums'
+    : 'px-1 py-0.5 rounded bg-white/[0.06] text-xs font-bold tabular-nums';
+
+/**
+ * Phase 176.5 — the section nav is one list rendered twice by breakpoint:
+ * `Peta Operasi` is the primary tab (icon-only below xl), the three secondary
+ * sections collapse into an overflow menu below xl so no label can ever
+ * overflow a 360px header. Desktop keeps the labelled strip and the #nav-* ids
+ * every existing spec drives.
+ */
+const NAV_TABS = [
+  { id: 'map', label: 'Peta Operasi', icon: MapIcon, primary: true },
+  { id: 'analytics', label: 'Analitik', icon: null, primary: false },
+  { id: 'reports', label: 'Laporan', icon: null, primary: false },
+  { id: 'evaluation', label: 'Evaluasi', icon: null, primary: false },
+] as const;
+
 function isAbortError(err: unknown): boolean {
   return !!err && typeof err === 'object' && (err as { name?: string }).name === 'AbortError';
 }
 
-// Applies operational approval styling: the approved corridor turns cyan, its alternatives dim out.
+// Applies operational approval styling: the approved corridor takes the single
+// data accent (live/selected), its alternatives recede to a neutral steel line.
 // Shared by handleDeployUnifiedActionPlan and handleCommitOperationalRoute so both route stores stay identical.
 function styleApprovedRoutes(routes: RouteRecommendation[], approved: RouteRecommendation): RouteRecommendation[] {
   return routes.map((r) =>
     (r.id && r.id === approved.id) || (r.description && r.description === approved.description)
-      ? { ...r, color: '#00f0ff', is_compromised: false, safety_status: 'SAFE_DETOUR' }
+      ? { ...r, color: '#38b8f8', is_compromised: false, safety_status: 'SAFE_DETOUR' }
       : { ...r, color: '#334155' }
   );
 }
@@ -123,6 +157,7 @@ function FloatingMapLegend({
   bootstrapComputedAt = null,
   bootstrapStale = false,
   bootstrapReason = null,
+  liveFireCluster = false,
 }: {
   isOpen: boolean;
   onToggle: () => void;
@@ -147,34 +182,44 @@ function FloatingMapLegend({
   /** Phase 163b: the backend served a bounded live build / stored row. */
   bootstrapStale?: boolean;
   bootstrapReason?: string | null;
+  /** Phase 176: >=3 high-confidence FIRMS detections — genuinely live cluster. */
+  liveFireCluster?: boolean;
 }) {
+  // Exactly one live pulse per viewport, only while the feed is genuinely live:
+  // a critical weather zone wins over a FIRMS cluster. Never at rest.
+  const liveHazardPulse: 'critical' | 'cluster' | null =
+    weatherDisruptionCount > 0 ? 'critical' : liveFireCluster ? 'cluster' : null;
+
   return (
     <div className="relative pointer-events-auto">
       <button
         type="button"
         onClick={onToggle}
-        className={`cursor-pointer px-3 py-1.5 rounded-md border text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-xl ${
+        className={`cursor-pointer px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors flex items-center gap-1.5 ${
           isOpen
             ? 'bg-white text-[#080d14] border-white'
-            : 'bg-[#0c1017] text-slate-300 border-[#1c2432] hover:text-white hover:bg-[#121822]'
+            : 'bg-[#0c1017] text-[rgba(232,234,237,0.62)] border-white/10 hover:text-[#e8eaed] hover:border-white/15 hover:bg-[#121822]'
         }`}
         title="Buka Legenda Peta & Rute"
       >
-        <Info className="w-4 h-4 text-slate-300" />
+        <Info className="w-4 h-4 text-current" />
  <span>Legenda</span>
       </button>
 
       {isOpen && (
- <div className="absolute right-0 top-full mt-2 w-72 bg-[#0c1017] border border-[#1c2432] p-3.5 rounded-lg shadow-xl text-xs space-y-2.5 duration-150 z-50">
-          <div className="flex items-center justify-between border-b border-[#1c2432] pb-2">
- <span className="font-mono font-semibold text-xs text-white flex items-center gap-1.5">
-              <Compass className="w-3.5 h-3.5 text-slate-300" />
+        <div
+          data-testid="map-legend-panel"
+          className="absolute right-0 top-full mt-2 w-80 max-h-[calc(100vh-9rem)] overflow-y-auto custom-scrollbar bg-[#0c1017] border border-white/10 p-3.5 rounded-xl shadow-[0_12px_32px_rgba(0,0,0,0.4)] text-xs space-y-2.5 duration-150 z-50"
+        >
+          <div className="flex items-center justify-between border-b border-white/10 pb-2">
+            <span className="font-mono font-semibold text-xs text-[#e8eaed] flex items-center gap-1.5">
+              <Compass className="w-3.5 h-3.5 text-[rgba(232,234,237,0.62)]" />
               <span>Legenda Peta & Keputusan</span>
             </span>
             <button
               type="button"
               onClick={onToggle}
-              className="cursor-pointer p-1 rounded-md bg-[#121822] text-slate-400 hover:text-white border border-[#1c2432] transition-colors"
+              className="cursor-pointer p-1 rounded-md bg-[#121822] text-[rgba(232,234,237,0.62)] hover:text-[#e8eaed] border border-white/10 transition-colors"
               title="Tutup Legenda"
             >
               <X className="w-3.5 h-3.5" />
@@ -183,9 +228,9 @@ function FloatingMapLegend({
 
           {/* Phase 169: retention truth. Freshness per layer + honest render-cap
               notice ("menampilkan N dari M"). No new colour families. */}
-          <div className="space-y-1 pt-1.5 pb-2 border-b border-[#1c2432]">
+          <div className="space-y-1 pt-1.5 pb-2 border-b border-white/10">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[10px] font-sans text-slate-500">Cuaca</span>
+              <span className="text-xs font-sans text-[rgba(232,234,237,0.62)]">Cuaca</span>
               <span data-testid="freshness-cuaca">
                 <StatusFreshnessBadge
                   status={weatherSummary?.cuaca.status ?? weatherPolygonMeta?.status ?? 'degraded'}
@@ -195,7 +240,7 @@ function FloatingMapLegend({
               </span>
             </div>
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[10px] font-sans text-slate-500">Waspada Dini</span>
+              <span className="text-xs font-sans text-[rgba(232,234,237,0.62)]">Waspada Dini</span>
               <span data-testid="freshness-waspada">
                 <StatusFreshnessBadge
                   status={weatherSummary?.waspada.status ?? 'degraded'}
@@ -205,7 +250,7 @@ function FloatingMapLegend({
               </span>
             </div>
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[10px] font-sans text-slate-500">Titik Panas</span>
+              <span className="text-xs font-sans text-[rgba(232,234,237,0.62)]">Titik Panas</span>
               <span data-testid="freshness-titik-panas">
                 <StatusFreshnessBadge
                   status={fireStatus}
@@ -218,7 +263,7 @@ function FloatingMapLegend({
                 was built and why it is stale instead of showing a spinner over it. */}
             {bootstrapComputedAt && (
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[10px] font-sans text-slate-500">Snapshot</span>
+                <span className="text-xs font-sans text-[rgba(232,234,237,0.62)]">Snapshot</span>
                 <span data-testid="freshness-snapshot">
                   <StatusFreshnessBadge
                     status={bootstrapStale ? 'stale' : 'ok'}
@@ -231,7 +276,7 @@ function FloatingMapLegend({
             {weatherPolygonMeta?.capped && (
               <div
                 data-testid="weather-capped-notice"
-                className="text-[10px] font-sans text-slate-400 pt-0.5"
+                className="text-xs font-sans text-[rgba(232,234,237,0.62)] pt-0.5 tabular-nums"
               >
                 menampilkan {weatherPolygonMeta.count ?? 0} dari {weatherPolygonMeta.total ?? 0}
               </div>
@@ -239,122 +284,148 @@ function FloatingMapLegend({
           </div>
 
           <div className="space-y-2 font-mono text-xs">
+            {/* ── Routes & hazard: hue only where a hazard / live route exists ── */}
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0" />
+              <span className="w-4 h-0.5 bg-[#38b8f8] shrink-0 rounded" />
               <div>
-                <span className="text-slate-200 font-medium block">Rute Rekomendasi Tercepat</span>
-                <span className="text-xs text-slate-400 font-sans">Bebas bahaya dengan jarak dan waktu tempuh paling efisien.</span>
+                <span className="text-[#e8eaed] font-medium block">Rute Rekomendasi Tercepat</span>
+                <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Bebas bahaya dengan jarak dan waktu tempuh paling efisien.</span>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shrink-0" />
+              <span className="w-4 h-0 border-t-2 border-dashed border-white/40 shrink-0" />
               <div>
-                <span className="text-slate-200 font-medium block">Rute Alternatif Sekunder</span>
-                <span className="text-xs text-slate-400 font-sans">Jalur alternatif cadangan dengan deviasi waktu lebih panjang.</span>
+                <span className="text-[#e8eaed] font-medium block">Rute Alternatif Sekunder</span>
+                <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Jalur alternatif cadangan dengan deviasi waktu lebih panjang.</span>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" />
+              <span className="w-4 h-0.5 bg-[#ef4444] shrink-0 rounded" />
               <div>
-                <span className="text-slate-200 font-medium block">Koridor Utama Terblokir</span>
-                <span className="text-xs text-slate-400 font-sans">Jalur utama yang terhambat genangan atau longsor.</span>
+                <span className="text-[#e8eaed] font-medium block">Koridor Utama Terblokir</span>
+                <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Jalur utama yang terhambat genangan atau longsor.</span>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full border border-rose-500 bg-rose-500/20 shrink-0" />
+              <span
+                data-live-hazard={liveHazardPulse === 'critical' ? 'critical' : undefined}
+                className={`w-2.5 h-2.5 rounded-full border border-[#ef4444] bg-[#ef4444]/15 shrink-0 ${
+                  liveHazardPulse === 'critical' ? 'ds-live-pulse' : ''
+                }`}
+              />
               <div>
-                <span className="text-slate-200 font-medium block">Zona Radius Bahaya (Shockwave)</span>
-                <span className="text-xs text-slate-400 font-sans">Area bahaya hasil konsensus BMKG dan OSINT.</span>
+                <span className="text-[#e8eaed] font-medium block">Zona Radius Bahaya (Shockwave)</span>
+                <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Area bahaya hasil konsensus BMKG dan OSINT.</span>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="w-4 h-0 border-t-2 border-dashed border-cyan-400 shrink-0" />
+              <span className="w-4 h-0 border-t-2 border-dashed border-[#f59e0b] shrink-0" />
               <div>
-                <span className="text-slate-200 font-medium block">Prakiraan Waspada Dini (tanpa isi)</span>
-                <span className="text-xs text-slate-400 font-sans">Garis putus-putus cyan: prakiraan YELLOW_CLARIFY yang belum terkonfirmasi — info pantauan saja, tanpa pengalihan rute maupun penahanan armada.</span>
+                <span className="text-[#e8eaed] font-medium block">Prakiraan Waspada Dini (tanpa isi)</span>
+                <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Garis putus-putus amber: prakiraan YELLOW_CLARIFY yang belum terkonfirmasi — info pantauan saja, tanpa pengalihan rute maupun penahanan armada.</span>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full border border-slate-400 bg-slate-500/25 shrink-0" />
+              <span
+                data-live-hazard={liveHazardPulse === 'cluster' ? 'cluster' : undefined}
+                className={`w-2.5 h-2.5 rounded-full bg-[#f59e0b]/70 shrink-0 ${
+                  liveHazardPulse === 'cluster' ? 'ds-live-pulse' : ''
+                }`}
+              />
               <div>
-                <span className="text-slate-200 font-medium block">Titik Panas (Satelit) — sorotan bila ≥3 titik keyakinan tinggi dalam 5 km</span>
-                <span className="text-xs text-slate-400 font-sans">Titik netral per deteksi VIIRS; sorotan oranye khusus peta bila ≥3 titik keyakinan tinggi (conf ≥80 atau FRP&gt;100) dalam 5 km. Klik area/titik = jumlah + FRP/conf/jarak koridor.</span>
+                <span className="text-[#e8eaed] font-medium block">Titik Panas (Satelit) — sorotan bila ≥3 titik keyakinan tinggi dalam 5 km</span>
+                <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Titik netral per deteksi VIIRS; sorotan amber khusus peta bila ≥3 titik keyakinan tinggi (conf ≥80 atau FRP&gt;100) dalam 5 km. Klik area/titik = jumlah + FRP/conf/jarak koridor.</span>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-white shrink-0" />
-              <div>
-                <span className="text-slate-200 font-medium block">Hub Logistik Pangan</span>
-                <span className="text-xs text-slate-400 font-sans">Pelabuhan Utama, Gudang BULOG, Pasar Induk.</span>
-              </div>
-            </div>
-
-            <div className="pt-2 mt-2 border-t border-[#1c2432]/80 space-y-2">
- <span className="text-slate-400 font-sans font-semibold text-xs block">
- Armada
+            {/* ── Infrastructure: monochrome, separated by SHAPE not hue ─────── */}
+            <div className="pt-2 mt-2 border-t border-white/10 space-y-2">
+              <span className="text-[rgba(232,234,237,0.62)] font-sans font-semibold text-xs block">
+                Infrastruktur
               </span>
 
               <div className="flex items-center gap-2">
- <span className="w-2.5 h-2.5 rounded-full bg-sky-400 shrink-0 " />
+                <span data-legend-glyph="infra" className="w-2.5 h-2.5 rounded-full border border-white/40 shrink-0" />
                 <div>
-                  <span className="text-slate-200 font-medium block">Kapal Kargo & Feri Maritim (AIS)</span>
-                  <span className="text-xs text-slate-400 font-sans">Transponder AIS Selat Malaka, Selat Sunda & Teluk Palembang.</span>
+                  <span className="text-[#e8eaed] font-medium block">Pelabuhan</span>
+                  <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Terminal laut utama Sumatra (lingkaran).</span>
                 </div>
               </div>
 
               <div className="flex items-center gap-2">
- <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0 " />
+                <span data-legend-glyph="infra" className="w-2 h-2 rotate-45 border border-white/40 shrink-0" />
                 <div>
-                  <span className="text-slate-200 font-medium block">Truk Logistik Pangan (GPS)</span>
-                  <span className="text-xs text-slate-400 font-sans">Telemetri satelit koridor Tol Trans-Sumatera & Jalinsum.</span>
+                  <span className="text-[#e8eaed] font-medium block">Bandara</span>
+                  <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Hub kargo udara KNO, PDG, PLM (belah ketupat).</span>
                 </div>
               </div>
 
               <div className="flex items-center gap-2">
- <span className="w-2.5 h-2.5 rounded-full bg-purple-400 shrink-0 " />
+                <span data-legend-glyph="infra" className="w-2.5 h-2.5 rounded-[2px] border border-white/40 shrink-0" />
                 <div>
-                  <span className="text-slate-200 font-medium block">Kargo Udara Darurat (ADS-B)</span>
-                  <span className="text-xs text-slate-400 font-sans">Penerbangan logistik hub KNO, PDG, & PLM.</span>
+                  <span className="text-[#e8eaed] font-medium block">Hub Logistik Pangan</span>
+                  <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Gudang BULOG dan Pasar Induk (kotak).</span>
                 </div>
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="w-4 h-0.5 border-b-2 border-dashed border-blue-600 shrink-0" />
+                <span data-legend-glyph="infra" className="w-4 h-0.5 bg-white/50 shrink-0 rounded" />
                 <div>
-                  <span className="text-slate-200 font-medium block">Alur Laut Selat Malaka (TSS)</span>
-                  <span className="text-xs text-slate-400 font-sans">Koridor pelayaran vital logistik maritim Sumatra.</span>
+                  <span className="text-[#e8eaed] font-medium block">Tol Trans-Sumatera</span>
+                  <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Koridor darat utama (garis penuh).</span>
                 </div>
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="w-4 h-0.5 border-b-2 border-dashed border-amber-400 shrink-0" />
+                <span data-legend-glyph="infra" className="w-4 h-0 border-t border-dashed border-white/40 shrink-0" />
                 <div>
-                  <span className="text-slate-200 font-medium block">Proyeksi Rute Estimasi</span>
-                  <span className="text-xs text-slate-400 font-sans">Lintasan terencana berbasis manifes pelayaran.</span>
+                  <span className="text-[#e8eaed] font-medium block">Alur Laut Selat Malaka (TSS)</span>
+                  <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Koridor pelayaran vital logistik maritim Sumatra (garis putus-putus).</span>
                 </div>
               </div>
             </div>
 
-            {/* Disruption-only weather legend: filtered set counts (biru=gangguan, netral=waspada dini). */}
-            <div className="pt-2 mt-2 border-t border-[#1c2432]/80 space-y-2">
- <span className="text-slate-400 font-sans font-semibold text-xs block">
- Cuaca
+            <div className="pt-2 mt-2 border-t border-white/10 space-y-2">
+              <span className="text-[rgba(232,234,237,0.62)] font-sans font-semibold text-xs block">
+                Armada
               </span>
 
               <div className="flex items-center gap-2">
- <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0 " />
+                <span className="w-2.5 h-2.5 rounded-full bg-[#38b8f8] shrink-0" />
                 <div>
- <span className="text-slate-200 font-medium block">Cuaca — {weatherDisruptionCount} zona</span>
-                  <span className="text-xs text-slate-400 font-sans">Hujan lebat disruptif: high/critical, presipitasi 50mm/24j atau banjir 80%. Default ON. Hazard: flood/landslide/severe_storm/marine_wave.</span>
+                  <span className="text-[#e8eaed] font-medium block">Armada Live (AIS · ADS-B · GPS)</span>
+                  <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Kapal, truk, dan kargo udara dengan transponder aktif.</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full border border-white/25 shrink-0" />
+                <div>
+                  <span className="text-[#e8eaed] font-medium block">Proyeksi Rute Estimasi</span>
+                  <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Lintasan terencana berbasis manifes pelayaran — posisi tanpa sinyal live.</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Weather: disruption is critical, advisory is warning. */}
+            <div className="pt-2 mt-2 border-t border-white/10 space-y-2">
+              <span className="text-[rgba(232,234,237,0.62)] font-sans font-semibold text-xs block">
+                Cuaca
+              </span>
+
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#ef4444] shrink-0" />
+                <div>
+                  <span className="text-[#e8eaed] font-medium block">Cuaca — {weatherDisruptionCount} zona</span>
+                  <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Hujan lebat disruptif: high/critical, presipitasi 50mm/24j atau banjir 80%. Default ON. Hazard: flood/landslide/severe_storm/marine_wave.</span>
                   <span
                     data-testid="weather-polygon-count"
-                    className="text-[10px] text-slate-500 font-sans tabular-nums block"
+                    className="text-xs text-[rgba(232,234,237,0.38)] font-sans tabular-nums block"
                   >
                     {weatherPolygonFeatureCount} poligon digambar (seluruh Sumatra)
                   </span>
@@ -362,85 +433,85 @@ function FloatingMapLegend({
               </div>
 
               <div className="flex items-center gap-2">
- <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shrink-0 " />
+                <span className="w-2.5 h-2.5 rounded-full bg-white/40 shrink-0" />
                 <div>
-                  <span className="text-slate-200 font-medium block">Dampak Dispather per Zona Biru</span>
- <span className="text-xs text-slate-400 font-sans">Klik poligon: koridor+segmen+jarak, delay jam (flood 14/landslide 10/marine 18 × severity), aksi (caution/delay/reroute/hold), moda truck/sea/air, confidence + observasi/prakiraan.</span>
+                  <span className="text-[#e8eaed] font-medium block">Dampak Dispatcher per Zona Cuaca</span>
+                  <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Klik poligon: koridor+segmen+jarak, delay jam (flood 14/landslide 10/marine 18 × severity), aksi (caution/delay/reroute/hold), moda truck/sea/air, confidence + observasi/prakiraan.</span>
                 </div>
               </div>
 
               <div className="flex items-center gap-2">
- <span className="w-2.5 h-2.5 rounded-full border border-cyan-400 bg-slate-500/25 shrink-0 " />
+                <span className="w-2.5 h-2.5 rounded-full border border-dashed border-[#f59e0b] shrink-0" />
                 <div>
-                  <span className="text-slate-200 font-medium block">Waspada Dini (Advisory) — {weatherAdvisoryCount} zona {showWeatherAdvisory ? '(ON)' : '(OFF)'}</span>
-                  <span className="text-xs text-slate-400 font-sans">Medium drizzle (mis. BMKG 60): hanya tampil bila toggle waspada dini ON. Default OFF, info-only.</span>
+                  <span className="text-[#e8eaed] font-medium block">Waspada Dini (Advisory) — {weatherAdvisoryCount} zona {showWeatherAdvisory ? '(ON)' : '(OFF)'}</span>
+                  <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Medium drizzle (mis. BMKG 60): hanya tampil bila toggle waspada dini ON. Default OFF, info-only.</span>
                 </div>
               </div>
             </div>
 
             {/* Q4/Q5: direct land vs island-ring corridors + live/offline provenance */}
-            <div className="pt-2 mt-2 border-t border-[#1c2432]/80 space-y-2">
+            <div className="pt-2 mt-2 border-t border-white/10 space-y-2">
               <div className="flex items-center justify-between gap-2">
- <span className="text-slate-400 font-sans font-semibold text-xs">
- Koridor
+                <span className="text-[rgba(232,234,237,0.62)] font-sans font-semibold text-xs">
+                  Koridor
                 </span>
- <span className="flex items-center gap-1.5 text-xs text-slate-400">
- <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
- Simulasi
+                <span className="flex items-center gap-1.5 text-xs text-[rgba(232,234,237,0.62)]">
+                  <span className="w-1.5 h-1.5 rounded-full border border-[#f59e0b]" />
+                  Simulasi
                 </span>
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="w-4 h-0.5 bg-emerald-400 shrink-0 rounded" />
+                <span className="w-4 h-0.5 bg-white/60 shrink-0 rounded" />
                 <div>
-                  <span className="text-slate-200 font-medium block">Darat Langsung (disorot)</span>
-                  <span className="text-xs text-slate-400 font-sans">Garis penuh emerald: rute darat bebas bahaya.</span>
+                  <span className="text-[#e8eaed] font-medium block">Darat Langsung (disorot)</span>
+                  <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Garis penuh: rute darat bebas bahaya.</span>
                 </div>
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="w-4 h-0.5 border-b-2 border-sky-500 shrink-0" />
+                <span className="w-4 h-0 border-t-2 border-dashed border-[#38b8f8] shrink-0" />
                 <div>
-                  <span className="text-slate-200 font-medium block">Laut — Ring Pulau</span>
-                  <span className="text-xs text-slate-400 font-sans">Biru: legs maritim/intermodal antar-pulau.</span>
+                  <span className="text-[#e8eaed] font-medium block">Laut — Ring Pulau</span>
+                  <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Garis putus-putus accent: legs maritim/intermodal antar-pulau.</span>
                 </div>
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="w-4 h-0.5 border-b-2 border-cyan-400 shrink-0" />
+                <span className="w-4 h-0 border-t-2 border-dashed border-white/30 shrink-0" />
                 <div>
-                  <span className="text-slate-200 font-medium block">Udara — Ring Pulau</span>
-                  <span className="text-xs text-slate-400 font-sans">Cyan: legs kargo udara darurat antar-pulau.</span>
+                  <span className="text-[#e8eaed] font-medium block">Udara — Ring Pulau</span>
+                  <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Garis putus-putus redup: legs kargo udara darurat antar-pulau.</span>
                 </div>
               </div>
 
- <p className="text-xs leading-tight text-amber-300/80 font-sans">
- Simulasi menandai geometri interpolasi, bukan rute live.
+              <p className="text-xs leading-tight text-[rgba(232,234,237,0.62)] font-sans">
+                Simulasi menandai geometri interpolasi, bukan rute live.
               </p>
 
               {onToggleCorridor && (
-                <div className="space-y-1.5 pt-1 border-t border-[#1c2432]/60">
+                <div className="space-y-1.5 pt-1 border-t border-white/10">
                   <div className="flex items-center justify-between">
- <span className="text-slate-400 font-sans font-semibold text-xs">
- Koridor
+                    <span className="text-[rgba(232,234,237,0.62)] font-sans font-semibold text-xs">
+                      Koridor
                     </span>
                     {onResetCorridorVisibility && (
                       <button
                         type="button"
                         onClick={onResetCorridorVisibility}
- className="cursor-pointer text-xs font-mono text-slate-400 hover:text-white transition-colors"
+                        className="cursor-pointer text-xs font-mono text-[rgba(232,234,237,0.62)] hover:text-[#e8eaed] transition-colors"
                         title="Aktifkan kembali semua koridor"
                       >
- Semua
+                        Semua
                       </button>
                     )}
                   </div>
                   <div className="grid grid-cols-3 gap-1">
                     {([
-                      { key: 'land' as const, label: 'Darat', Icon: Truck, activeClass: 'bg-emerald-500/15 border-emerald-500/50 text-emerald-300' },
-                      { key: 'sea' as const, label: 'Laut', Icon: Anchor, activeClass: 'bg-sky-500/15 border-sky-500/50 text-sky-300' },
-                      { key: 'air' as const, label: 'Udara', Icon: Plane, activeClass: 'bg-cyan-500/15 border-cyan-400/50 text-cyan-300' },
-                    ]).map(({ key, label, Icon, activeClass }) => {
+                      { key: 'land' as const, label: 'Darat', Icon: Truck },
+                      { key: 'sea' as const, label: 'Laut', Icon: Anchor },
+                      { key: 'air' as const, label: 'Udara', Icon: Plane },
+                    ]).map(({ key, label, Icon }) => {
                       const isVisible = corridorVisibility[key];
                       return (
                         <button
@@ -449,18 +520,18 @@ function FloatingMapLegend({
                           onClick={() => onToggleCorridor(key)}
                           aria-pressed={isVisible}
                           title={`${label}: ${isVisible ? 'tampil' : 'disembunyikan'}`}
- className={`cursor-pointer px-1.5 py-1.5 rounded border text-xs font-sans font-medium transition flex flex-col items-center gap-0.5 ${
+                          className={`cursor-pointer px-1.5 py-1.5 rounded-lg border text-xs font-sans font-medium transition-colors flex flex-col items-center gap-0.5 ${
                             isVisible
-                              ? activeClass
-                              : 'bg-[#121822]/60 border-[#1c2432] text-slate-500 hover:text-slate-300'
+                              ? 'bg-white text-[#080d14] border-white'
+                              : 'bg-[#121822]/60 border-white/10 text-[rgba(232,234,237,0.62)] hover:border-white/15 hover:text-[#e8eaed]'
                           }`}
                         >
                           <span className="flex items-center gap-1">
                             <Icon className="w-3 h-3" />
                             <span>{label}</span>
                           </span>
- <span className={`text-xs font-mono ${isVisible ? 'opacity-80' : 'opacity-60'}`}>
- {isVisible ? 'On' : 'Off'}
+                          <span className={`text-xs font-mono tabular-nums ${isVisible ? 'opacity-80' : 'opacity-60'}`}>
+                            {isVisible ? 'On' : 'Off'}
                           </span>
                         </button>
                       );
@@ -472,8 +543,8 @@ function FloatingMapLegend({
           </div>
 
           {/* Transparansi HITL — minimalist one-liner. */}
-          <p className="text-xs text-slate-400 font-sans pt-1 border-t border-[#1c2432] leading-tight">
- Transparansi HITL: semua alternatif tampil sebelum persetujuan.
+          <p className="text-xs text-[rgba(232,234,237,0.62)] font-sans pt-1 border-t border-white/10 leading-tight">
+            Transparansi HITL: semua alternatif tampil sebelum persetujuan.
           </p>
         </div>
       )}
@@ -664,6 +735,31 @@ export default function DashboardClient() {
   const [isHitlDrawerOpen, setIsHitlDrawerOpen] = useState(false);
   const [pendingHitlCount, setPendingHitlCount] = useState<number>(0);
 
+  /**
+   * Phase 176 — narrow test-only hook. The HITL drawer has no production
+   * trigger in the current shell, so the reduced-motion gate needs a way to
+   * mount it. Gated exactly like the map tooltip hook: never installed unless
+   * the harness opts in with NEXT_PUBLIC_E2E=1 or `?e2e=1`.
+   */
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    let enabled = process.env.NEXT_PUBLIC_E2E === '1';
+    if (!enabled) {
+      try {
+        enabled = new URLSearchParams(window.location.search).get('e2e') === '1';
+      } catch {
+        enabled = false;
+      }
+    }
+    if (!enabled) return;
+    (window as any).__dsTest = {
+      openHitlDrawer: () => setIsHitlDrawerOpen(true),
+    };
+    return () => {
+      delete (window as any).__dsTest;
+    };
+  }, []);
+
   // Crisis switches must never leave the previous incident's DSS queue on screen:
   // the alert card and the Mitigation vehicle card both read these two states.
   // The counter also invalidates in-flight assessImpact responses so a slow
@@ -681,7 +777,40 @@ export default function DashboardClient() {
   const [activeTab, setActiveTab] = useState<'Evidence' | 'Mitigation' | 'Economic'>('Evidence');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState(false);
+  const [isNavOverflowOpen, setIsNavOverflowOpen] = useState(false);
   const [approvalsCount, setApprovalsCount] = useState<number>(14);
+
+  // Phase 176.5 — the Berita panel is a closed-by-default bottom sheet on
+  // phones/tablets, so the map is the first thing on screen at 360–767px.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.matchMedia('(max-width: 767px)').matches) setIsLeftSidebarCollapsed(true);
+  }, []);
+
+  // One click path for every section entry point (primary tab + overflow menu),
+  // keeping the guest hard-lock and its toast identical to the desktop strip.
+  const handleNavTab = useCallback(
+    (tabId: 'map' | 'analytics' | 'reports' | 'evaluation') => {
+      setIsNavOverflowOpen(false);
+      const isLockedSection =
+        ['reports', 'analytics', 'evaluation'].includes(tabId) && (role === 'GUEST' || !isAuthenticated);
+      if (isLockedSection) {
+        openAuthModal();
+        setToast({
+          message:
+            tabId === 'reports'
+              ? 'Mode Sandbox: Laporan terkunci untuk tamu. Masuk untuk membuka audit mitigasi.'
+              : tabId === 'analytics'
+                ? 'Mode Sandbox: Analitik terkunci untuk tamu. Masuk untuk membuka analitik.'
+                : 'Mode Sandbox: Evaluasi terkunci untuk tamu. Masuk untuk membuka evaluasi.',
+          type: 'info',
+        });
+        return;
+      }
+      setActiveSection(tabId);
+    },
+    [isAuthenticated, openAuthModal, role, setToast],
+  );
 
   // Strict Mutual Exclusion: selecting vehicle closes incident inspector, and vice-versa
   const handleSelectVehicle = useCallback((vehicle: FleetVehicle) => {
@@ -1557,6 +1686,17 @@ export default function DashboardClient() {
   // Phase 168: counter = true pre-cap hotspot count from the envelope.
   // null (degraded) renders "—" in TopNavTelemetry, never a 0.
   const fireHotspotCount = fireCount;
+
+  // Phase 176: the one live-hazard pulse. A cluster only counts as live when
+  // >=3 high-confidence detections exist — the same per-point gate the map's
+  // 5 km single-link cluster highlight uses (conf >= 80 or FRP > 100).
+  const liveFireCluster = useMemo(
+    () =>
+      (fireHotspots ?? []).filter(
+        (h) => (Number(h.confidence ?? 0) || 0) >= 80 || (Number(h.frp ?? 0) || 0) > 100
+      ).length >= 3,
+    [fireHotspots]
+  );
 
 
 
@@ -3097,73 +3237,135 @@ export default function DashboardClient() {
   const footerDockClass = resolveMapDockClasses({ isLeftSidebarCollapsed, isCrisisDrawerOpen });
 
   return (
-    <div className="relative w-full h-screen bg-[#080d14] text-slate-100 overflow-hidden select-none">
+    <div className="relative w-full h-screen bg-[#080d14] text-[#e8eaed] overflow-hidden select-none">
       {/* Top Header Navbar */}
-      <header className="fixed top-0 left-0 right-0 h-16 bg-[#0c1017] border-b border-white/10 z-50 flex items-center justify-between px-3 md:px-6 select-none">
-        <div className="flex items-center gap-2 sm:gap-6 min-w-0">
-          <div className="flex items-center gap-2 shrink-0">
-            <div className="w-8 h-8 rounded-lg bg-[#080d14] border border-white/15 p-1 flex items-center justify-center">
+      <header className="fixed top-0 left-0 right-0 h-16 bg-[#0c1017] border-b border-white/10 z-50 flex items-center justify-between gap-2 px-2 sm:px-3 md:px-6 select-none">
+        <div className="flex items-center gap-1.5 sm:gap-3 xl:gap-6 min-w-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <div className="w-8 h-8 rounded-lg bg-[#080d14] border border-white/15 p-1 flex items-center justify-center shrink-0">
  <img src="/logo_prehub.png" alt="Prehub" className="w-6 h-6 object-contain" />
             </div>
- <span className="font-headline font-bold text-base text-slate-100 hidden sm:inline">
+ <span className="font-headline font-bold text-base text-[#e8eaed] hidden xl:inline">
  Prehub
             </span>
             <Link
               href="/"
-              className="ml-1 sm:ml-2 px-2 sm:px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs font-sans text-slate-300 hover:text-white hover:border-white/20 transition flex items-center gap-1.5 cursor-pointer shrink-0"
+              aria-label="Kembali ke Portal Utama (Landing Page)"
               title="Kembali ke Portal Utama (Landing Page)"
+              className="ml-0.5 sm:ml-2 px-2 sm:px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs font-sans text-[#e8eaed] hover:text-white hover:border-white/20 transition hidden sm:flex items-center gap-1.5 cursor-pointer shrink-0"
             >
-              <Home className="w-3.5 h-3.5 text-slate-400" />
+              <Home className="w-3.5 h-3.5 text-[rgba(232,234,237,0.62)]" />
               <span className="hidden md:inline">Portal Utama</span>
             </Link>
           </div>
 
-          {/* Section Navigation Tabs — Laporan/Analitik/Evaluasi hard-locked for GUEST */}
-          <nav aria-label="Bagian dasbor" className="flex items-center gap-1 bg-[#080d14] p-1 rounded-lg border border-white/10 overflow-x-auto no-scrollbar shrink">
-            {[
-              { id: 'map', label: 'Peta Operasi' },
-              { id: 'analytics', label: 'Analitik' },
-              { id: 'reports', label: 'Laporan' },
-              { id: 'evaluation', label: 'Evaluasi' },
-            ].map((tab) => {
-              const isLockedSection = ['reports', 'analytics', 'evaluation'].includes(tab.id) && (role === 'GUEST' || !isAuthenticated);
-              const lockLabel = tab.id === 'reports' ? 'Laporan' : tab.id === 'analytics' ? 'Analitik' : 'Evaluasi';
-              const lockDetail = tab.id === 'reports' ? 'audit mitigasi' : tab.id === 'analytics' ? 'analitik' : 'evaluasi';
+          {/* Section Navigation Tabs — Laporan/Analitik/Evaluasi hard-locked for GUEST.
+              Below xl the secondary sections live in an overflow menu, so the
+              strip is icon-only and every control fits at 360px. */}
+          <nav
+            aria-label="Bagian dasbor"
+            data-testid="top-nav"
+            className="flex items-center gap-1 bg-[#080d14] p-1 rounded-lg border border-white/10 shrink-0"
+          >
+            {NAV_TABS.filter((tab) => tab.primary).map((tab) => {
+              const Icon = tab.icon;
               return (
                 <button
                   key={tab.id}
                   id={`nav-${tab.id}`}
                   type="button"
-                  disabled={isLockedSection}
-                  aria-disabled={isLockedSection}
-                  title={isLockedSection ? `${lockLabel} terkunci: masuk untuk membuka ${lockDetail} (Mode Sandbox)` : tab.label}
-                  onClick={() => {
-                    if (isLockedSection) {
-                      openAuthModal();
-                      setToast({
-                        message: tab.id === 'reports'
-                          ? 'Mode Sandbox: Laporan terkunci untuk tamu. Masuk untuk membuka audit mitigasi.'
-                          : tab.id === 'analytics'
-                            ? 'Mode Sandbox: Analitik terkunci untuk tamu. Masuk untuk membuka analitik.'
-                            : 'Mode Sandbox: Evaluasi terkunci untuk tamu. Masuk untuk membuka evaluasi.',
-                        type: 'info',
-                      });
-                      return;
-                    }
-                    setActiveSection(tab.id as typeof activeSection);
-                  }}
-                  className={`px-3 sm:px-3.5 py-1.5 rounded-md text-xs font-medium transition whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 ${isLockedSection
-                    ? 'text-slate-500 cursor-not-allowed opacity-60 flex items-center gap-1.5'
-                    : activeSection === tab.id
-                      ? 'bg-white text-[#080d14] font-semibold cursor-pointer'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-white/5 cursor-pointer'
-                    }`}
+                  aria-label={tab.label}
+                  title={tab.label}
+                  onClick={() => handleNavTab(tab.id)}
+                  className={`cursor-pointer h-8 w-8 xl:w-auto xl:px-3.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap flex items-center justify-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 ${
+                    activeSection === tab.id
+                      ? 'bg-white text-[#080d14] font-semibold'
+                      : 'text-[rgba(232,234,237,0.62)] hover:text-[#e8eaed] hover:bg-white/5'
+                  }`}
                 >
-                  {isLockedSection && <Lock className="w-3 h-3 shrink-0" aria-hidden="true" />}
-                  {tab.label}
+                  <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
+                  <span className="hidden xl:inline">{tab.label}</span>
                 </button>
               );
             })}
+
+            {/* Desktop: labelled secondary strip (keeps #nav-* ids for every spec). */}
+            <div className="hidden xl:flex items-center gap-1">
+              {NAV_TABS.filter((tab) => !tab.primary).map((tab) => {
+                const isLockedSection = role === 'GUEST' || !isAuthenticated;
+                return (
+                  <button
+                    key={tab.id}
+                    id={`nav-${tab.id}`}
+                    type="button"
+                    disabled={isLockedSection}
+                    aria-disabled={isLockedSection}
+                    title={
+                      isLockedSection
+                        ? `${tab.label} terkunci: masuk untuk membuka ${tab.id === 'reports' ? 'audit mitigasi' : tab.id === 'analytics' ? 'analitik' : 'evaluasi'} (Mode Sandbox)`
+                        : tab.label
+                    }
+                    onClick={() => handleNavTab(tab.id)}
+                    className={`px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 ${
+                      isLockedSection
+                        ? 'text-[rgba(232,234,237,0.38)] cursor-not-allowed flex items-center gap-1.5'
+                        : activeSection === tab.id
+                          ? 'bg-white text-[#080d14] font-semibold cursor-pointer'
+                          : 'text-[rgba(232,234,237,0.62)] hover:text-[#e8eaed] hover:bg-white/5 cursor-pointer'
+                    }`}
+                  >
+                    {isLockedSection && <Lock className="w-3 h-3 shrink-0" aria-hidden="true" />}
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Below xl: secondary sections collapse into an overflow menu. */}
+            <div className="relative xl:hidden">
+              <button
+                type="button"
+                data-testid="nav-overflow-toggle"
+                aria-label="Menu bagian lainnya"
+                title="Menu bagian lainnya"
+                aria-expanded={isNavOverflowOpen}
+                onClick={() => setIsNavOverflowOpen((v) => !v)}
+                className={`cursor-pointer h-8 w-8 rounded-lg transition-colors flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 ${
+                  isNavOverflowOpen
+                    ? 'bg-white text-[#080d14]'
+                    : 'text-[rgba(232,234,237,0.62)] hover:text-[#e8eaed] hover:bg-white/5'
+                }`}
+              >
+                <MoreHorizontal className="w-4 h-4" aria-hidden="true" />
+              </button>
+              {isNavOverflowOpen && (
+                <div
+                  data-testid="nav-overflow-menu"
+                  className="absolute left-0 top-full mt-2 z-50 w-44 rounded-xl border border-white/10 bg-[#0c1017] p-1 shadow-[0_12px_32px_rgba(0,0,0,0.4)]"
+                >
+                  {NAV_TABS.filter((tab) => !tab.primary).map((tab) => {
+                    const isLockedSection = role === 'GUEST' || !isAuthenticated;
+                    return (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        data-testid={`nav-overflow-${tab.id}`}
+                        onClick={() => handleNavTab(tab.id)}
+                        aria-disabled={isLockedSection}
+                        className={`w-full cursor-pointer px-2.5 py-2 rounded-lg text-left text-xs font-medium transition-colors flex items-center justify-between gap-2 ${
+                          activeSection === tab.id
+                            ? 'bg-white text-[#080d14] font-semibold'
+                            : 'text-[rgba(232,234,237,0.62)] hover:text-[#e8eaed] hover:bg-white/5'
+                        }`}
+                      >
+                        <span>{tab.label}</span>
+                        {isLockedSection && <Lock className="w-3 h-3 shrink-0 opacity-60" aria-hidden="true" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </nav>
         </div>
 
@@ -3179,9 +3381,9 @@ export default function DashboardClient() {
               aria-pressed={isRosterVisible}
               aria-label={`Armada Perusahaan: ${tenantFleetVehicles.length} unit · ${liveTenantVehicles.length} live GPS. Tampilkan atau sembunyikan panel.`}
               title={`Armada Perusahaan — ${tenantFleetVehicles.length} unit · ${liveTenantVehicles.length} live GPS`}
-              className="cursor-pointer px-2.5 sm:px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-slate-200 hover:text-white text-xs font-medium transition flex items-center gap-1.5"
+              className="cursor-pointer px-2 sm:px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-[#e8eaed] hover:text-white text-xs font-medium transition-colors flex items-center gap-1.5 shrink-0"
             >
-              <Truck className="w-3.5 h-3.5 text-[#00f0ff]" />
+              <Truck className="w-3.5 h-3.5 text-[rgba(232,234,237,0.62)]" />
               <span className="hidden sm:inline">Armada Perusahaan</span>
               <span className="px-1.5 py-0.5 rounded bg-white text-[#080d14] font-mono text-xs font-bold tabular-nums">
                 {tenantFleetVehicles.length}
@@ -3201,20 +3403,17 @@ export default function DashboardClient() {
               setIsOnboardingModalOpen(true);
             }}
             id="onboard-armada-btn"
-            className={`cursor-pointer px-2.5 sm:px-3 py-1.5 rounded-lg border text-xs font-medium transition flex items-center gap-1.5 ${role === 'DISPATCHER'
-                ? 'border-white/10 bg-white/5 hover:bg-white/10 text-slate-200 hover:text-white'
-                : 'border-white/10 bg-white/5 hover:bg-white/10 text-slate-200 hover:text-white'
-              }`}
+            className={`cursor-pointer px-2 sm:px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-[#e8eaed] hover:text-white text-xs font-medium transition-colors flex items-center gap-1.5 shrink-0`}
             title={role === 'DISPATCHER' ? 'Onboard Armada & Unggah Manifest Pengiriman' : 'Onboard Armada (Terkunci: Khusus Wewenang Dispatcher)'}
           >
             {role === 'DISPATCHER' ? (
-              <PlusCircle className="w-3.5 h-3.5 text-slate-300" />
+              <PlusCircle className="w-3.5 h-3.5 text-[rgba(232,234,237,0.62)]" />
             ) : (
-              <Lock className="w-3.5 h-3.5 text-slate-400" />
+              <Lock className="w-3.5 h-3.5 text-[rgba(232,234,237,0.38)]" />
             )}
             <span className="hidden sm:inline">Onboard Armada</span>
             {role !== 'DISPATCHER' && (
- <span className="hidden md:inline px-1 py-0.5 rounded bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 text-xs font-mono">
+ <span className="hidden md:inline px-1 py-0.5 rounded border border-white/10 text-[rgba(232,234,237,0.62)] text-xs font-mono">
                 Khusus Dispatcher
               </span>
             )}
@@ -3230,19 +3429,19 @@ export default function DashboardClient() {
             type="button"
             id="auth-persona-badge-btn"
             onClick={openAuthModal}
-            className="cursor-pointer px-2.5 sm:px-3 py-1.5 rounded-lg border border-white/10 bg-[#080d14] hover:border-white/20 transition flex items-center gap-2 group text-left"
+            className="cursor-pointer px-2 sm:px-3 py-1.5 rounded-lg border border-white/10 bg-[#080d14] hover:border-white/20 transition flex items-center gap-2 group text-left shrink-0"
             title="Ganti Persona Akses & Ruang Kerja (RBAC)"
           >
-            <div className={`w-2 h-2 rounded-full shrink-0 ${role === 'DISPATCHER' ? 'bg-emerald-400' : role === 'REGULATOR' ? 'bg-amber-400' : 'bg-slate-400'
+            <div className={`w-2 h-2 rounded-full shrink-0 ${role === 'DISPATCHER' ? 'bg-emerald-500' : role === 'REGULATOR' ? 'bg-[#f59e0b]' : 'bg-white/25'
               }`} />
-            <div className="leading-tight">
+            <div className="leading-tight min-w-0">
               <div className="flex items-center gap-1.5">
-                <span className="text-xs font-mono font-bold uppercase tracking-wider text-slate-200">
+                <span className="text-xs font-mono font-bold uppercase tracking-wider text-[#e8eaed]">
                   {role}
                 </span>
-                <ChevronDown className="w-3 h-3 text-slate-400 group-hover:text-white transition" />
+                <ChevronDown className="w-3 h-3 hidden sm:block text-[rgba(232,234,237,0.62)] group-hover:text-white transition-colors" />
               </div>
-              <span className="text-xs font-sans text-slate-400 max-w-[120px] truncate hidden sm:block">
+              <span className="text-xs font-sans text-[rgba(232,234,237,0.62)] max-w-[120px] truncate hidden sm:block">
                 {user.org_name || (role === 'DISPATCHER' ? 'PT Samudera Logistik' : role === 'REGULATOR' ? 'Badan Pangan Nasional' : 'Sandbox LRIP')}
               </span>
             </div>
@@ -3311,24 +3510,40 @@ export default function DashboardClient() {
 
           {/* COLUMN 1: COLLAPSIBLE LEFT OSINT & NEWS SIDEBAR (GLOBOT STYLE) */}
           <aside
-            className={`h-full bg-[#0c1017] flex flex-col gap-3 overflow-hidden pointer-events-auto transition-all duration-300 ease-in-out shadow-xl ${
+            data-testid="news-sheet"
+            className={`bg-[#0c1017] flex flex-col gap-3 overflow-hidden pointer-events-auto transition-all duration-300 ease-in-out ${
               isLeftSidebarCollapsed
-                ? 'w-0 p-0 overflow-hidden border-r-0 opacity-0 pointer-events-none -translate-x-full md:translate-x-0 shrink-0'
-                : 'absolute md:relative inset-y-0 left-0 md:inset-auto z-40 md:z-30 shrink-0 w-80 md:w-[352px] p-3.5 border-r border-[#1c2432] opacity-100 translate-x-0'
+                ? 'hidden md:flex md:w-0 md:p-0 md:border-r-0 md:opacity-0 md:pointer-events-none shrink-0'
+                : 'absolute inset-x-0 bottom-0 z-40 h-[68vh] w-full rounded-t-xl border-t border-white/10 p-3.5 md:relative md:inset-auto md:z-30 md:h-full md:max-h-none md:w-[352px] md:rounded-none md:border-t-0 md:border-r md:border-white/10 md:opacity-100'
             }`}
           >
+            {/* Mobile sheet handle + close — the sheet never traps the map. */}
+            <div className="md:hidden flex items-center justify-between shrink-0 -mt-1">
+              <span aria-hidden="true" className="mx-auto h-1 w-10 rounded-full bg-white/20" />
+              <button
+                type="button"
+                data-testid="news-sheet-close"
+                onClick={() => setIsLeftSidebarCollapsed(true)}
+                aria-label="Tutup panel Berita"
+                title="Tutup panel Berita"
+                className="cursor-pointer p-1.5 rounded-lg bg-[#121822] hover:bg-white/10 text-[rgba(232,234,237,0.62)] hover:text-white transition -mr-0.5"
+              >
+                <ChevronDown className="w-4 h-4" />
+              </button>
+            </div>
+
             {/* Header: OSINT Wire & Live Pulse */}
-            <div className="flex items-center justify-between pb-2 border-b border-[#1c2432] shrink-0">
+            <div className="flex items-center justify-between pb-2 border-b border-white/10 shrink-0">
               <div className="flex items-center gap-2">
-                <div className="relative flex items-center justify-center w-7 h-7 rounded-md bg-[#121822] border border-[#1c2432] text-slate-300">
+                <div className="relative flex items-center justify-center w-7 h-7 rounded-lg bg-[#121822] border border-white/10 text-[rgba(232,234,237,0.62)]">
                   <Radio className="w-4 h-4" />
-                  <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                  <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-500" />
                 </div>
                 <div>
  <h2 className="text-xs font-bold font-sans text-white">
  Berita
                   </h2>
-                  <span className="text-xs font-mono text-slate-400">
+                  <span className="text-xs font-mono text-[rgba(232,234,237,0.62)]">
                     {newsStatus === 'warming' && filteredNews.length === 0
                       ? 'Menunggu feed live'
                       : `${filteredNews.length} Sumber Terverifikasi`}
@@ -3347,7 +3562,7 @@ export default function DashboardClient() {
                 <button
                   type="button"
                   onClick={() => setIsLeftSidebarCollapsed(true)}
-                  className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
+                  className="p-1.5 rounded-lg bg-[#121822] hover:bg-white/10 text-[rgba(232,234,237,0.62)] hover:text-white transition cursor-pointer"
                   title="Sembunyikan Panel"
                 >
                   <PanelLeftClose className="w-3.5 h-3.5" />
@@ -3358,19 +3573,19 @@ export default function DashboardClient() {
             {/* Quick Search & Category Filter */}
             <div className="space-y-2 shrink-0">
               <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[rgba(232,234,237,0.62)]" />
                 <input
                   type="text"
                   value={newsSearchQuery}
                   onChange={(e) => setNewsSearchQuery(e.target.value)}
                   placeholder="Cari berita atau lokasi..."
-                  className="w-full pl-8 pr-7 py-1.5 rounded-xl bg-slate-950/70 border border-white/10 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/60 transition font-sans"
+                  className="w-full pl-8 pr-7 py-1.5 rounded-lg bg-[#080d14] border border-white/10 text-xs text-[#e8eaed] placeholder:text-[rgba(232,234,237,0.38)] focus:outline-none focus:border-white/40 transition-colors font-sans"
                 />
                 {newsSearchQuery && (
                   <button
                     type="button"
                     onClick={() => setNewsSearchQuery('')}
-                    className="cursor-pointer absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-0.5"
+                    className="cursor-pointer absolute right-2 top-1/2 -translate-y-1/2 text-[rgba(232,234,237,0.62)] hover:text-white p-0.5"
                   >
                     <X className="w-3 h-3" />
                   </button>
@@ -3388,9 +3603,9 @@ export default function DashboardClient() {
                     key={tab.id}
                     type="button"
                     onClick={() => setSelectedNewsCategory(tab.id as 'ALL' | 'OFFICIAL' | 'WEATHER' | 'OSINT' | 'MARKET')}
-                    className={`cursor-pointer px-1.5 py-1 text-center rounded-lg border font-medium transition text-xs ${selectedNewsCategory === tab.id
-                        ? 'bg-cyan-950 text-cyan-300 border-cyan-500/50'
-                        : 'bg-slate-950/50 text-slate-400 border-white/5 hover:border-white/20 hover:text-slate-200'
+                    className={`cursor-pointer px-1.5 py-1 text-center rounded-lg border font-medium transition-colors text-xs ${selectedNewsCategory === tab.id
+                        ? 'bg-white text-[#080d14] border-white font-semibold'
+                        : 'bg-[#080d14] text-[rgba(232,234,237,0.62)] border-white/[0.08] hover:border-white/15 hover:text-[#e8eaed]'
                       }`}
                   >
                     {tab.label}
@@ -3413,12 +3628,10 @@ export default function DashboardClient() {
                     type="button"
                     data-testid={tier.testid}
                     onClick={() => setNewsTierFilter(tier.id)}
-                    className={`cursor-pointer px-1.5 py-0.5 rounded border text-[10px] font-mono transition ${
+                    className={`cursor-pointer px-1.5 py-0.5 rounded border text-xs font-mono transition-colors ${
                       newsTierFilter === tier.id
-                        ? tier.id === 'regional'
-                          ? 'bg-white/10 text-slate-100 border-white/25'
-                          : 'bg-white/10 text-slate-100 border-white/20'
-                        : 'bg-slate-950/50 text-slate-400 border-white/5 hover:border-white/20 hover:text-slate-200'
+                        ? 'bg-white text-[#080d14] border-white font-semibold'
+                        : 'bg-[#080d14] text-[rgba(232,234,237,0.62)] border-white/[0.08] hover:border-white/15 hover:text-[#e8eaed]'
                     }`}
                     title={
                       tier.id === 'crisis'
@@ -3443,10 +3656,10 @@ export default function DashboardClient() {
                   type="button"
                   data-testid="news-province-chip-all"
                   onClick={() => setNewsProvinceFilter('ALL')}
-                  className={`cursor-pointer px-1.5 py-0.5 rounded border text-[10px] font-mono transition ${
+                  className={`cursor-pointer px-1.5 py-0.5 rounded border text-xs font-mono transition-colors ${
                     newsProvinceFilter === 'ALL'
-                      ? 'bg-white/10 text-slate-100 border-white/20'
-                      : 'bg-slate-950/50 text-slate-400 border-white/5 hover:border-white/20 hover:text-slate-200'
+                      ? 'bg-white text-[#080d14] border-white font-semibold'
+                      : 'bg-[#080d14] text-[rgba(232,234,237,0.62)] border-white/[0.08] hover:border-white/15 hover:text-[#e8eaed]'
                   }`}
                   title="Tampilkan semua provinsi"
                 >
@@ -3463,21 +3676,21 @@ export default function DashboardClient() {
                       data-testid={`news-province-chip-${slug}`}
                       onClick={() => setNewsProvinceFilter(active ? 'ALL' : province)}
                       title={`Filter provinsi: ${province}${typeof count === 'number' ? ` (${count} artikel)` : ''}`}
-                      className={`cursor-pointer px-1.5 py-0.5 rounded border text-[10px] font-mono transition ${
+                      className={`cursor-pointer px-1.5 py-0.5 rounded border text-xs font-mono transition-colors ${
                         active
-                          ? 'bg-cyan-950/60 text-cyan-200 border-cyan-500/50'
-                          : 'bg-slate-950/50 text-slate-400 border-white/5 hover:border-white/20 hover:text-slate-200'
+                          ? 'bg-white text-[#080d14] border-white font-semibold'
+                          : 'bg-[#080d14] text-[rgba(232,234,237,0.62)] border-white/[0.08] hover:border-white/15 hover:text-[#e8eaed]'
                       }`}
                     >
                       {province}
-                      {typeof count === 'number' ? <span className="ml-1 text-slate-500">{count}</span> : null}
+                      {typeof count === 'number' ? <span className="ml-1 text-[rgba(232,234,237,0.38)] tabular-nums">{count}</span> : null}
                     </button>
                   );
                 })}
                 {newsProvincesMissing.length > 0 && (
                   <span
                     data-testid="news-provinces-missing"
-                    className="px-1.5 py-0.5 rounded border border-dashed border-white/10 text-[10px] font-mono text-slate-500"
+                    className="px-1.5 py-0.5 rounded border border-dashed border-white/10 text-xs font-mono text-[rgba(232,234,237,0.38)]"
                     title="Provinsi tanpa artikel yang lolos gerbang 48 jam pada jendela baca ini"
                   >
                     {newsProvincesMissing.join(' · ')}: Tidak ada artikel 48 jam
@@ -3492,18 +3705,14 @@ export default function DashboardClient() {
                 <button
                   type="button"
                   onClick={() => setShowRedZones((v) => !v)}
-                  className={`cursor-pointer flex-1 flex items-center justify-between px-2.5 py-1.5 rounded-lg border text-xs font-mono transition-all duration-150 ${
-                    showRedZones
- ? 'bg-red-950/50 border-red-500/50 text-red-200 '
-                      : 'bg-slate-950/40 border-white/5 text-slate-500 hover:text-slate-300'
-                  }`}
+                  className={`${pillClass(showRedZones)} flex-1 justify-between`}
                   title="Filter Peta: Zona Merah (Bencana Terkonfirmasi)"
                 >
                   <span className="flex items-center gap-1.5">
- <span className={`w-2 h-2 rounded-full ${showRedZones ? 'bg-red-500 ' : 'bg-slate-600'}`} />
+ <span className={`w-2 h-2 rounded-full ${showRedZones ? 'bg-[#ef4444]' : 'border border-white/25'}`} />
  <span className="font-sans text-xs font-semibold">Merah</span>
                   </span>
- <span className="px-1.5 py-0.2 rounded bg-red-500/20 text-xs font-bold text-red-300 font-mono">
+ <span className={`${chipClass(showRedZones)} ${liveNewsZoneCounts.red > 0 ? 'text-[#ef4444]' : ''}`}>
                     {liveNewsZoneCounts.red}
                   </span>
                 </button>
@@ -3511,42 +3720,34 @@ export default function DashboardClient() {
                 <button
                   type="button"
                   onClick={() => setShowYellowZones((v) => !v)}
-                  className={`cursor-pointer flex-1 flex items-center justify-between px-2.5 py-1.5 rounded-lg border text-xs font-mono transition-all duration-150 ${
-                    showYellowZones
- ? 'bg-yellow-950/50 border-yellow-500/50 text-yellow-200 '
-                      : 'bg-slate-950/40 border-white/5 text-slate-500 hover:text-slate-300'
-                  }`}
+                  className={`${pillClass(showYellowZones)} flex-1 justify-between`}
                   title="Filter Peta: Zona Kuning (Perlu Klarifikasi / Waspada)"
                 >
                   <span className="flex items-center gap-1.5">
- <span className={`w-2 h-2 rounded-full ${showYellowZones ? 'bg-yellow-400 ' : 'bg-slate-600'}`} />
+ <span className={`w-2 h-2 rounded-full ${showYellowZones ? 'bg-[#f59e0b]' : 'border border-white/25'}`} />
  <span className="font-sans text-xs font-semibold">Kuning</span>
                   </span>
- <span className="px-1.5 py-0.2 rounded bg-yellow-500/20 text-xs font-bold text-yellow-300 font-mono">
+ <span className={`${chipClass(showYellowZones)} ${liveNewsZoneCounts.yellow > 0 ? 'text-[#f59e0b]' : ''}`}>
                     {liveNewsZoneCounts.yellow}
                   </span>
                 </button>
               </div>
 
-                {/* 4th chip: forecast (Prakiraan) — cyan, dashed swatch, own counter.
+                {/* 4th chip: forecast (Prakiraan) — amber dashed swatch, own counter.
                     Forecasts keep YELLOW_CLARIFY on the wire but are never counted
                     in the Kuning bucket above (48h admission stays independent). */}
                 <button
                   type="button"
                   onClick={() => setShowForecastZones((v) => !v)}
-                  className={`cursor-pointer w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg border text-xs font-mono transition-all duration-150 ${
-                    showForecastZones
-                      ? 'bg-cyan-950/50 border-cyan-500/50 text-cyan-200'
-                      : 'bg-slate-950/40 border-white/5 text-slate-500 hover:text-slate-300'
-                  }`}
-                  title="Filter Peta: Prakiraan Waspada Dini (YELLOW_CLARIFY, garis putus-putus cyan — belum terkonfirmasi)"
+                  className={`${pillClass(showForecastZones)} w-full justify-between`}
+                  title="Filter Peta: Prakiraan Waspada Dini (YELLOW_CLARIFY, garis putus-putus amber — belum terkonfirmasi)"
                 >
                   <span className="flex items-center gap-1.5">
-                    <span className={`w-2 h-2 rounded-full border border-dashed ${showForecastZones ? 'border-cyan-300 bg-cyan-400/30' : 'border-slate-600 bg-slate-700'}`} />
+                    <span className={`w-2 h-2 rounded-full border border-dashed ${showForecastZones ? 'border-[#f59e0b] bg-[#f59e0b]/25' : 'border-white/25 bg-transparent'}`} />
                     <span className="font-sans text-xs font-semibold">Prakiraan</span>
-                    <span className="font-sans text-[10px] text-cyan-300/70 font-normal">Waspada Dini</span>
+                    <span className={`font-sans text-xs font-normal ${showForecastZones ? 'opacity-70' : 'text-[rgba(232,234,237,0.38)]'}`}>Waspada Dini</span>
                   </span>
-                  <span className="px-1.5 py-0.2 rounded bg-cyan-500/20 text-xs font-bold text-cyan-300 font-mono">
+                  <span className={`${chipClass(showForecastZones)} ${liveNewsZoneCounts.forecast > 0 ? 'text-[#f59e0b]' : ''}`}>
                     {liveNewsZoneCounts.forecast}
                   </span>
                 </button>
@@ -3556,18 +3757,18 @@ export default function DashboardClient() {
             {/* Scrollable Feed List */}
             <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2.5 pr-0.5">
               {newsFeed.length === 0 ? (
-                <div className="p-6 text-center text-slate-500 font-mono text-xs space-y-1">
-                  <Radio className="w-6 h-6 mx-auto text-slate-600 mb-2" />
+                <div className="p-6 text-center text-[rgba(232,234,237,0.62)] font-mono text-xs space-y-1">
+                  <Radio className="w-6 h-6 mx-auto text-[rgba(232,234,237,0.38)] mb-2" />
                   <p>
                     {newsStatus === 'warming'
                       ? 'Belum ada berita live terverifikasi.'
                       : 'Belum ada berita live yang lolos verifikasi.'}
                   </p>
-                  <p className="text-slate-600">Menunggu feed live — tidak ada data cadangan.</p>
+                  <p className="text-[rgba(232,234,237,0.38)]">Menunggu feed live — tidak ada data cadangan.</p>
                 </div>
               ) : filteredNews.length === 0 ? (
-                <div className="p-6 text-center text-slate-500 font-mono text-xs space-y-1">
-                  <Newspaper className="w-6 h-6 mx-auto text-slate-600 mb-2" />
+                <div className="p-6 text-center text-[rgba(232,234,237,0.62)] font-mono text-xs space-y-1">
+                  <Newspaper className="w-6 h-6 mx-auto text-[rgba(232,234,237,0.38)] mb-2" />
                   <p>Tidak ada berita yang cocok.</p>
                 </div>
               ) : (
@@ -3575,12 +3776,12 @@ export default function DashboardClient() {
                   <div key={group.province} className="space-y-2.5">
                     <div
                       data-testid={`news-province-group-${provinceSlug(group.province)}`}
-                      className="sticky top-0 z-10 flex items-center justify-between gap-2 px-2 py-1 rounded-md bg-[#0c1017]/95 backdrop-blur border border-[#1c2432] text-[10px] font-mono uppercase tracking-wide text-slate-400"
+                      className="sticky top-0 z-10 flex items-center justify-between gap-2 px-2 py-1 rounded-md bg-[#0c1017] border border-white/10 text-xs font-mono uppercase tracking-wide text-[rgba(232,234,237,0.62)]"
                     >
                       <span className="truncate">{group.province}</span>
                       <span
                         data-testid={`news-province-count-${provinceSlug(group.province)}`}
-                        className="text-slate-300 font-bold shrink-0"
+                        className="text-[#e8eaed] font-bold shrink-0 tabular-nums"
                       >
                         {group.items.length} artikel
                       </span>
@@ -3619,15 +3820,15 @@ export default function DashboardClient() {
                       onClick={handleFocusMap}
                       data-testid={`berita-card-${item.id}`}
                       role="article"
-                      className={`p-3 rounded-lg border transition-all duration-200 space-y-2 cursor-pointer ${isSelected
+                      className={`p-3 rounded-lg border transition-colors duration-200 space-y-2 cursor-pointer ${isSelected
                           ? 'bg-[#121822] border-white/40 ring-1 ring-white/20'
-                          : 'bg-[#0c1017] border-[#1c2432] hover:border-slate-600 hover:bg-[#121822]'
+                          : 'bg-[#0c1017] border-white/10 hover:border-white/15 hover:bg-[#121822]'
                         }`}
                     >
                       {/* Source & Timestamp */}
                       <div className="flex items-center justify-between gap-1 text-xs font-mono">
                         <div className="flex items-center gap-1.5 truncate">
-                          <span className="px-1.5 py-0.5 rounded border text-xs font-semibold uppercase bg-white/5 text-slate-300 border-white/10">
+                          <span className="px-1.5 py-0.5 rounded border text-xs font-semibold uppercase bg-white/5 text-[#e8eaed] border-white/10">
                             {item.source_name || (isOfficial ? 'ANTARA' : 'BERITA')}
                           </span>
                           {item.published_at ? (
@@ -3637,11 +3838,11 @@ export default function DashboardClient() {
                               sourceLabel=""
                             />
                           ) : (
-                            <span className="text-slate-400 truncate">{item.pubDate || 'Waktu terbit tidak tersedia'}</span>
+                            <span className="text-[rgba(232,234,237,0.62)] truncate">{item.pubDate || 'Waktu terbit tidak tersedia'}</span>
                           )}
                         </div>
                         {isEarlyWarning && (
-                          <span className="text-amber-400 font-semibold text-xs shrink-0">
+                          <span className="text-[#f59e0b] font-semibold text-xs shrink-0">
                             Early Warning {item.lead_time_hours ? `(${item.lead_time_hours}j)` : ''}
                           </span>
                         )}
@@ -3654,26 +3855,26 @@ export default function DashboardClient() {
                           // not a zone. No red/amber emphasis, no crisis claim.
                           <span
                             data-testid={`berita-tier-label-${item.id}`}
-                            className="flex items-center gap-1.5 text-xs text-slate-400"
+                            className="flex items-center gap-1.5 text-xs text-[rgba(232,234,237,0.62)]"
                             title="Konteks regional 48 jam — bukan klaim krisis"
                           >
-                            <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+                            <span className="w-1.5 h-1.5 rounded-full bg-white/25" />
                             Regional
                           </span>
                         ) : isForecast ? (
- <span className="flex items-center gap-1.5 text-xs text-cyan-300"><span className="w-1.5 h-1.5 rounded-full border border-dashed border-cyan-300 bg-cyan-400/20" />Prakiraan</span>
+ <span className="flex items-center gap-1.5 text-xs text-[rgba(232,234,237,0.62)]"><span className="w-1.5 h-1.5 rounded-full border border-dashed border-[#f59e0b]" />Prakiraan</span>
                         ) : itemZoneTier === 'RED_CONFIRMED' ? (
- <span className="flex items-center gap-1.5 text-xs text-slate-300"><span className="w-1.5 h-1.5 rounded-full bg-red-500" />Merah</span>
+ <span className="flex items-center gap-1.5 text-xs text-[#e8eaed]"><span className="w-1.5 h-1.5 rounded-full bg-[#ef4444]" />Merah</span>
                         ) : (
- <span className="flex items-center gap-1.5 text-xs text-slate-300"><span className="w-1.5 h-1.5 rounded-full bg-amber-400" />Kuning</span>
+ <span className="flex items-center gap-1.5 text-xs text-[#e8eaed]"><span className="w-1.5 h-1.5 rounded-full bg-[#f59e0b]" />Kuning</span>
                         )}
                         {(item.custom_hazard_label) && (
- <span className="px-1.5 py-0.5 rounded text-xs font-sans text-slate-200 bg-white/5 border border-white/10 truncate max-w-[180px]" title={item.custom_hazard_label}>
+ <span className="px-1.5 py-0.5 rounded text-xs font-sans text-[#e8eaed] bg-white/5 border border-white/10 truncate max-w-[180px]" title={item.custom_hazard_label}>
                             {item.custom_hazard_label}
                           </span>
                         )}
                       </div>
-                      <h3 className="text-xs font-semibold text-slate-100 leading-snug font-sans group">
+                      <h3 className="text-xs font-semibold text-[#e8eaed] leading-snug font-sans group">
                         {canOpenSource ? (
                           <a
                             href={articleLink}
@@ -3681,11 +3882,11 @@ export default function DashboardClient() {
                             rel="noopener noreferrer"
                             referrerPolicy="no-referrer"
                             onClick={(e) => e.stopPropagation()}
-                            className="hover:text-cyan-300 hover:underline transition-colors flex items-start gap-1 cursor-pointer"
+                            className="hover:text-white hover:underline transition-colors flex items-start gap-1 cursor-pointer"
                             title="Buka Berita Asli (Tab Baru)"
                           >
                             <span className="flex-1">{item.headline}</span>
-                            <ExternalLink className="w-3 h-3 text-slate-500 group-hover:text-cyan-400 shrink-0 mt-0.5" />
+                            <ExternalLink className="w-3 h-3 text-[rgba(232,234,237,0.38)] group-hover:text-[#e8eaed] shrink-0 mt-0.5" />
                           </a>
                         ) : (
                           <span className="flex items-start gap-1">
@@ -3695,12 +3896,12 @@ export default function DashboardClient() {
                       </h3>
 
                       {isForecast && (
-                        <div className="rounded-md border border-cyan-500/40 bg-cyan-950/30 px-2 py-1.5 space-y-0.5">
-                          <span className="flex items-center gap-1 text-xs font-mono font-bold text-cyan-200 uppercase">
-                            <Info className="w-3 h-3 text-cyan-300 shrink-0" />
+                        <div className="rounded-md border border-[#f59e0b]/40 bg-[#f59e0b]/[0.06] px-2 py-1.5 space-y-0.5">
+                          <span className="flex items-center gap-1 text-xs font-mono font-bold text-[#f59e0b] uppercase">
+                            <Info className="w-3 h-3 text-[#f59e0b] shrink-0" />
                             Prakiraan — Waspada Dini
                           </span>
-                          <p className="text-xs font-sans text-cyan-100/80 leading-snug">
+                          <p className="text-xs font-sans text-[rgba(232,234,237,0.62)] leading-snug">
                             Belum bencana terkonfirmasi (zona kuning). Waspada — pantau, belum perlu tindakan — tanpa pengalihan rute.
                           </p>
                           <FreshnessBadge lastUpdated={null} expiresAt={item.forecast_valid_until} />
@@ -3708,7 +3909,7 @@ export default function DashboardClient() {
                       )}
 
                       {item.affected_locations && item.affected_locations.length > 1 && (
- <div className="px-2 py-1 rounded bg-white/5 border border-white/10 text-slate-300 text-xs font-sans leading-snug">
+ <div className="px-2 py-1 rounded bg-white/5 border border-white/10 text-[#e8eaed] text-xs font-sans leading-snug">
                           📍 {item.affected_locations.length} Daerah: {item.affected_locations.map((l) => l.name).join(', ')}
                         </div>
                       )}
@@ -3716,7 +3917,7 @@ export default function DashboardClient() {
                       {/* Stored excerpt: rendered only when distinct from headline */}
                       {item.summary && item.summary.trim().toLowerCase() !== item.headline.trim().toLowerCase() && item.summary.trim().length >= 15 && (
                         <p
-                          className={`text-xs text-slate-400 font-sans leading-relaxed transition-all duration-200 ${isExcerptExpanded ? '' : 'line-clamp-2'
+                          className={`text-xs text-[rgba(232,234,237,0.62)] font-sans leading-relaxed transition-all duration-200 ${isExcerptExpanded ? '' : 'line-clamp-2'
                             }`}
                         >
                           {item.summary}
@@ -3726,9 +3927,9 @@ export default function DashboardClient() {
                       {/* God's-Eye Monospaced Tactical Telemetry Grid */}
  <div className="p-2 rounded-lg bg-transparent border-t border-white/5 font-mono text-xs space-y-1.5 leading-snug">
  {/* Row 1 — Lokasi */}
-                        <div className="flex items-center justify-between text-slate-300">
- <span className="text-slate-500 text-xs font-semibold">Lokasi:</span>
-                          <span className="text-slate-200 font-semibold truncate max-w-[170px]" title={item.location_name || 'Koridor Sumatera'}>
+                        <div className="flex items-center justify-between text-[#e8eaed]">
+ <span className="text-[rgba(232,234,237,0.62)] text-xs font-semibold">Lokasi:</span>
+                          <span className="text-[#e8eaed] font-semibold truncate max-w-[170px]" title={item.location_name || 'Koridor Sumatera'}>
                             {item.location_name || 'Koridor Sumatera'}
                             {item.lat && item.lon ? ` · ${item.lat.toFixed(2)}°N, ${item.lon.toFixed(2)}°E` : ''}
                             {' '}({item.location_precision === 'corridor_point'
@@ -3742,11 +3943,11 @@ export default function DashboardClient() {
  {/* Row 2 — Keyakinan (Phase 172 / M9): tier + honest label; a percentage only
      when a calibrated consensus value exists. The static 0.86/0.94 tier
      constant is never rendered as confidence. */}
-                        <div className="flex items-center justify-between gap-1 text-slate-300 border-t border-[#1c2432]/60 pt-1">
- <span className="text-slate-500 text-xs font-semibold shrink-0">Keyakinan:</span>
+                        <div className="flex items-center justify-between gap-1 text-[#e8eaed] border-t border-white/10 pt-1">
+ <span className="text-[rgba(232,234,237,0.62)] text-xs font-semibold shrink-0">Keyakinan:</span>
                           <span
                             data-testid={`berita-confidence-${item.id}`}
-                            className="px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 text-xs font-bold tabular-nums truncate"
+                            className="px-1.5 py-0.5 rounded bg-white/[0.06] text-[#e8eaed] border border-white/10 text-xs font-bold tabular-nums truncate"
                             title={`${displayTierLabel(item.display_confidence?.tier || item.source_tier)} · ${item.display_confidence?.label || 'Belum terverifikasi'}${item.display_confidence?.basis ? ` (${item.display_confidence.basis})` : ''}`}
                           >
                             {item.display_confidence?.value != null && Number.isFinite(Number(item.display_confidence.value))
@@ -3760,14 +3961,14 @@ export default function DashboardClient() {
 
 
  {/* Row 3 — Jalur */}
-                        <div className="flex items-center justify-between text-slate-300 border-t border-[#1c2432]/60 pt-1">
- <span className="text-slate-500 text-xs font-semibold">Jalur:</span>
+                        <div className="flex items-center justify-between text-[#e8eaed] border-t border-white/10 pt-1">
+ <span className="text-[rgba(232,234,237,0.62)] text-xs font-semibold">Jalur:</span>
                           <div className="flex items-center gap-1.5 truncate max-w-[185px]">
-                            <span className={isForecast ? 'text-cyan-300 font-semibold shrink-0' : itemZoneTier === 'RED_CONFIRMED' ? 'text-red-400 font-semibold shrink-0' : 'text-amber-400 font-semibold shrink-0'}>
+                            <span className={isForecast ? 'text-[#f59e0b] font-semibold shrink-0' : itemZoneTier === 'RED_CONFIRMED' ? 'text-[#ef4444] font-semibold shrink-0' : 'text-[#f59e0b] font-semibold shrink-0'}>
                               {isForecast ? 'Prakiraan Waspada Dini' : itemZoneTier === 'RED_CONFIRMED' ? 'Terputus Total' : 'Lalin Tersendat'}
                             </span>
-                            <span className="text-slate-600">•</span>
-                            <span className="text-slate-300 truncate" title={item.commodity_name || 'Komoditas Pangan'}>
+                            <span className="text-[rgba(232,234,237,0.38)]">•</span>
+                            <span className="text-[#e8eaed] truncate" title={item.commodity_name || 'Komoditas Pangan'}>
                               {item.commodity_name || 'Pangan'}
                             </span>
                           </div>
@@ -3783,15 +3984,15 @@ export default function DashboardClient() {
                               target="_blank"
                               rel="noopener noreferrer"
                               onClick={(e) => e.stopPropagation()}
-                              className="cursor-pointer p-1 rounded bg-[#121822] text-slate-400 hover:text-white border border-[#1c2432] transition-colors"
+                              className="cursor-pointer p-1 rounded bg-[#121822] text-[rgba(232,234,237,0.62)] hover:text-white border border-white/10 transition-colors"
                               title="Buka Berita Asli di Tab Baru"
                             >
                               <ExternalLink className="w-3.5 h-3.5" />
                             </a>
                           ) : (
                             <>
-                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded border border-amber-500/40 bg-amber-950/40 text-amber-300 text-xs font-mono">
-                                <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />
+                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded border border-[#f59e0b]/40 bg-[#f59e0b]/[0.06] text-[#f59e0b] text-xs font-mono">
+                                <AlertTriangle className="w-3 h-3 text-[#f59e0b] shrink-0" />
                                 <span>{isExpiredLink ? 'Tautan asli kedaluwarsa' : 'Tautan sumber tidak tersedia'}</span>
                               </span>
                               <button
@@ -3800,7 +4001,7 @@ export default function DashboardClient() {
                                   e.stopPropagation();
                                   setExpandedNewsId(isExcerptExpanded ? null : item.id);
                                 }}
-                                className="cursor-pointer inline-flex items-center gap-1 px-2 py-1 rounded bg-[#121822] text-slate-300 hover:text-white border border-[#1c2432] transition-colors text-xs font-mono"
+                                className="cursor-pointer inline-flex items-center gap-1 px-2 py-1 rounded bg-[#121822] text-[#e8eaed] hover:text-white border border-white/10 transition-colors text-xs font-mono"
                                 title={isExcerptExpanded ? 'Sembunyikan kutipan tersimpan' : 'Tampilkan kutipan tersimpan'}
                               >
                                 <ChevronDown
@@ -3822,7 +4023,7 @@ export default function DashboardClient() {
                               handleFocusMap();
                             }}
                             title="Fokuskan peta & audit trail zona ini"
-                            className="cursor-pointer flex items-center gap-1 px-2.5 py-1 rounded text-xs font-mono font-semibold transition-colors shadow-sm bg-white hover:bg-slate-200 text-[#080d14]"
+                            className="cursor-pointer flex items-center gap-1 px-2.5 py-1 rounded text-xs font-mono font-semibold transition-colors shadow-sm bg-white hover:opacity-90 text-[#080d14]"
                           >
                             <span>Fokus</span>
                           </button>
@@ -3835,7 +4036,7 @@ export default function DashboardClient() {
                               handleFocusMap();
                             }}
                             title={isForecast ? 'Terapkan opsi TAHAN armada (prakiraan waspada dini — tanpa pengalihan rute)' : 'Tahan armada terkait zona ini'}
-                            className="cursor-pointer flex items-center gap-1 px-2.5 py-1 rounded text-xs font-mono font-semibold transition-colors shadow-sm bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30"
+                            className="cursor-pointer flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-mono font-semibold transition-colors border border-white/10 text-[rgba(232,234,237,0.62)] hover:border-white/25 hover:text-[#e8eaed]"
                           >
                             <span>Tahan (Hold)</span>
                           </button>
@@ -3851,13 +4052,13 @@ export default function DashboardClient() {
             </div>
 
             {/* Data-integrity provenance lives in the FreshnessBadge tooltip (title attr) — no 3-col grid. */}
-            <div className="border-t border-white/10 pt-2.5 text-xs font-mono text-slate-400 space-y-1.5 shrink-0">
+            <div className="border-t border-white/10 pt-2.5 text-xs font-mono text-[rgba(232,234,237,0.62)] space-y-1.5 shrink-0">
               <div className="flex items-center justify-between">
-                <span className="text-slate-400 font-bold">Data</span>
+                <span className="text-[rgba(232,234,237,0.62)] font-bold">Data</span>
                 <button
                   type="button"
                   onClick={() => setShowSensorInfo(v => !v)}
-                  className="cursor-pointer text-slate-400 hover:text-cyan-400 transition"
+                  className="cursor-pointer text-[rgba(232,234,237,0.62)] hover:text-[#e8eaed] transition-colors"
                   title="Transparansi Data"
                 >
                   <HelpCircle className="w-3 h-3" />
@@ -3865,7 +4066,7 @@ export default function DashboardClient() {
               </div>
 
               {showSensorInfo && (
- <div className="p-2 rounded bg-slate-950/90 border border-white/10 text-xs font-sans text-slate-300 leading-relaxed duration-150">
+ <div className="p-2 rounded bg-[#080d14] border border-white/10 text-xs font-sans text-[#e8eaed] leading-relaxed duration-150">
                   <strong>Transparansi Data:</strong> Status koneksi telemetri dan integrasi API operasional.
                 </div>
               )}
@@ -3908,6 +4109,7 @@ export default function DashboardClient() {
                 routingInfo={routingInfo}
                 isLeftSidebarCollapsed={isLeftSidebarCollapsed}
                 onExpandSidebar={() => setIsLeftSidebarCollapsed(false)}
+                onCollapseSidebar={() => setIsLeftSidebarCollapsed(true)}
                 fleetModalityFilter={fleetModalityFilter}
                 simSpeed={simSpeed}
                 isRightSidebarOpen={isRightInspectorActive}
@@ -3967,7 +4169,28 @@ export default function DashboardClient() {
                 }
                 fleetModalitySlot={
                   !(isSidebarOpen && selectedCrisis) ? (
- <div className="flex items-center gap-1 p-1 rounded-lg bg-[#0c1017]/90 border border-[#1c2432] shadow-xl overflow-x-auto no-scrollbar max-w-[calc(100vw-2rem)]">
+ <div data-testid="filter-strip" className="flex items-center gap-1 p-1 rounded-xl bg-[#0c1017] border border-white/10 shadow-[0_12px_32px_rgba(0,0,0,0.4)] overflow-x-auto no-scrollbar snap-x snap-mandatory max-w-[calc(100vw-2rem)]">
+                      {/*
+                        Phase 176.6 — Row 2 below `md`: the Merah/Kuning legend
+                        toggles open this same scroll strip, so the counters above
+                        are the only pinned line. At `md`+ the legend lives back in
+                        the telemetry row and this stays the modality bar.
+                      */}
+                      {isLeftSidebarCollapsed && (
+                        <>
+                          <div className="md:hidden flex items-center gap-1 shrink-0 snap-start">
+                            <HazardLegendPills
+                              showRedZones={showRedZones}
+                              onToggleRedZones={() => setShowRedZones((v) => !v)}
+                              redZoneCount={liveNewsZoneCounts.red}
+                              showYellowZones={showYellowZones}
+                              onToggleYellowZones={() => setShowYellowZones((v) => !v)}
+                              yellowZoneCount={liveNewsZoneCounts.yellow}
+                            />
+                          </div>
+                          <div className="md:hidden w-[1px] h-4 bg-white/10 mx-0.5 shrink-0" aria-hidden="true" />
+                        </>
+                      )}
                       {[
  { id: 'all', label: 'Semua', count: fleetCountVehicles.length, icon: null },
  { id: 'truck', label: 'Truk', count: fleetCountVehicles.filter((v) => v.modality === 'truck').length, icon: Truck },
@@ -3987,15 +4210,15 @@ export default function DashboardClient() {
                                 type: 'info',
                               });
                             }}
-                            className={`cursor-pointer px-2.5 py-1 rounded-md text-xs font-mono font-medium transition-all flex items-center gap-1.5 shrink-0 ${fleetModalityFilter === m.id
+                            className={`cursor-pointer px-2.5 py-1 rounded-lg text-xs font-mono font-medium transition-colors flex items-center gap-1.5 shrink-0 snap-start ${fleetModalityFilter === m.id
                                 ? 'bg-white text-[#080d14] font-bold'
-                                : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                : 'text-[rgba(232,234,237,0.62)] hover:text-[#e8eaed] hover:bg-white/5'
                               }`}
                           >
                             {IconComp && <IconComp className="w-3.5 h-3.5" />}
                             <span>{m.label}</span>
                             <span
-                              className={`px-1.5 py-0.5 rounded text-xs ${fleetModalityFilter === m.id ? 'bg-[#080d14] text-white' : 'bg-white/10 text-slate-400'
+                              className={`px-1.5 py-0.5 rounded text-xs tabular-nums ${fleetModalityFilter === m.id ? 'bg-[#080d14] text-white' : 'bg-white/10 text-[rgba(232,234,237,0.62)]'
                                 }`}
                             >
                               {m.count}
@@ -4018,14 +4241,15 @@ export default function DashboardClient() {
                               type: 'info',
                             });
                           }}
-                          className={`cursor-pointer px-2.5 py-1 rounded-md text-xs font-mono font-medium transition-all flex items-center gap-1.5 shrink-0 ${isFleetSimMode
-                              ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40 font-bold'
-                              : 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 font-bold'
-                            }`}
-                          title="Mode Telemetri:&#10;• Cyan [Hanya GPS & Transponder Live]: Dispatch taktis instan berbasis sinyal fisik AIS & GPS satelit.&#10;• Amber [Live AIS/ADS-B + Rute Estimasi]: Perencanaan kapasitas makro koridor logistik pangan."
+                          className={`cursor-pointer px-2.5 py-1 rounded-lg text-xs font-mono font-medium transition-colors flex items-center gap-1.5 shrink-0 border ${
+                            isFleetSimMode
+                              ? 'bg-white/[0.06] text-[rgba(232,234,237,0.62)] border-white/10'
+                              : 'bg-white text-[#080d14] border-white font-bold'
+                          }`}
+                          title="Mode Telemetri:&#10;• Live [Hanya GPS & Transponder Live]: Dispatch taktis instan berbasis sinyal fisik AIS & GPS satelit.&#10;• Estimasi [Live AIS/ADS-B + Rute Estimasi]: Perencanaan kapasitas makro koridor logistik pangan."
                         >
                           <span
-                            className={`w-1.5 h-1.5 rounded-full ${isFleetSimMode ? 'bg-amber-400 animate-pulse' : 'bg-cyan-400 animate-pulse'
+                            className={`w-1.5 h-1.5 rounded-full ${isFleetSimMode ? 'bg-white/40' : 'bg-[#10b981]'}
                               }`}
                           />
                           <span>
@@ -4037,10 +4261,10 @@ export default function DashboardClient() {
                       ) : (
                         <span
                           id="fleet-tenant-scope-badge"
-                          className="px-2.5 py-1 rounded-md text-xs font-mono font-bold flex items-center gap-1.5 shrink-0 bg-cyan-500/20 text-cyan-300 border border-cyan-400/40"
+                          className="px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 shrink-0 bg-white/[0.06] text-[#e8eaed] border border-white/10 tabular-nums"
  title="Sesi DISPATCHER: badge ini hanya armada perusahaan Anda dengan GPS live. Peta + pills Semua/Kapal/Udara menambahkan koridor publik AIS/ADS-B situasional. Unit estimasi tersedia lewat panel Armada Perusahaan."
                         >
-                          <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#10b981]" />
                           <span>Perusahaan Live GPS ({liveTenantVehicles.length})</span>
                         </span>
                       )}
@@ -4070,6 +4294,7 @@ export default function DashboardClient() {
                         ? `Snapshot tertunda (${bootstrap.data?.reason ?? 'usia snapshot > 10 mnt'})`
                         : 'Snapshot DB segar'
                     }
+                    liveFireCluster={liveFireCluster}
                   />
                 }
               />
@@ -4100,10 +4325,10 @@ export default function DashboardClient() {
                 data-testid="routing-no-route-reason"
                 role="status"
                 aria-live="polite"
-                className="absolute left-1/2 top-16 z-[85] w-[min(92vw,32rem)] -translate-x-1/2 rounded-xl border border-amber-500/40 bg-[#0c1017]/95 px-3.5 py-2.5 text-xs font-sans text-amber-200 shadow-2xl"
+                className="absolute left-1/2 top-16 z-[85] w-[min(92vw,32rem)] -translate-x-1/2 rounded-xl border border-[#f59e0b]/40 bg-[#0c1017] px-3.5 py-2.5 text-xs font-sans text-[#e8eaed] shadow-[0_12px_32px_rgba(0,0,0,0.4)]"
               >
                 <div className="flex items-start gap-2">
-                  <span className="mt-0.5 shrink-0 font-mono text-[10px] font-bold text-amber-300">
+                  <span className="mt-0.5 shrink-0 font-mono text-xs font-bold text-[#f59e0b]">
                     RUTE SOLVER
                   </span>
                   <span className="min-w-0 flex-1 leading-relaxed">{routingNoRouteReason}</span>
@@ -4111,7 +4336,7 @@ export default function DashboardClient() {
                     type="button"
                     onClick={() => setRoutingNoRouteReason(null)}
                     aria-label="Tutup alasan rute solver"
-                    className="shrink-0 cursor-pointer rounded p-0.5 text-amber-300/70 transition-colors hover:bg-white/10 hover:text-amber-100"
+                    className="shrink-0 cursor-pointer rounded p-0.5 text-[rgba(232,234,237,0.62)] transition-colors hover:bg-white/10 hover:text-[#e8eaed]"
                   >
                     ×
                   </button>
@@ -4225,7 +4450,7 @@ export default function DashboardClient() {
 
  {/* Demo Dock */}
             {!demoState.isRunning && (
- <footer className={`absolute bottom-4 sm:bottom-6 z-40 flex items-center gap-1.5 bg-[#0c1017] border border-[#1c2432] p-1.5 rounded-lg shadow-xl transition-all duration-300 pointer-events-auto overflow-x-auto no-scrollbar ${footerDockClass}`}>
+ <footer className={`absolute bottom-4 sm:bottom-6 z-40 flex items-center gap-1.5 bg-[#0c1017] border border-white/10 p-1.5 rounded-xl shadow-[0_12px_32px_rgba(0,0,0,0.4)] transition-all duration-300 pointer-events-auto overflow-x-auto no-scrollbar ${footerDockClass}`}>
                 <button
                   type="button"
                   id="run-demo-btn"
@@ -4236,7 +4461,7 @@ export default function DashboardClient() {
                     updateUrlParams({ origin: 'belawan', dest: 'tebingtinggi', route: '0' });
                     demoState.start({ mock_agents: true, offline: false, origin: 'belawan', destination: 'tebingtinggi' });
                   }}
- className="flex items-center gap-1.5 px-3 py-1 rounded bg-white hover:bg-slate-200 text-[#080d14] font-semibold text-xs transition-colors shadow-sm cursor-pointer shrink-0"
+ className="flex items-center gap-1.5 px-3 py-1 rounded bg-white hover:opacity-90 text-[#080d14] font-semibold text-xs transition-colors shadow-sm cursor-pointer shrink-0"
                 >
                   <Play className="w-3 h-3 fill-current" />
  <span>Demo</span>
@@ -4305,11 +4530,11 @@ export default function DashboardClient() {
               aria-label="Analitik terkunci untuk tamu"
               className="w-full h-full min-h-[320px] flex flex-col items-center justify-center gap-3 bg-[#0c1017] border border-white/10 rounded-xl p-8 text-center"
             >
-              <div className="w-10 h-10 rounded-lg bg-amber-500/10 border border-amber-500/25 flex items-center justify-center">
-                <Lock className="w-5 h-5 text-amber-300" aria-hidden="true" />
+              <div className="w-10 h-10 rounded-lg bg-[#121822] border border-white/10 flex items-center justify-center">
+                <Lock className="w-5 h-5 text-[rgba(232,234,237,0.62)]" aria-hidden="true" />
               </div>
               <h2 className="font-headline font-semibold text-base text-white">Analitik terkunci — Mode Sandbox</h2>
-              <p className="text-xs text-slate-400 max-w-md leading-relaxed">
+              <p className="text-xs text-[rgba(232,234,237,0.62)] max-w-md leading-relaxed">
                 Tamu tidak dapat membuka Analitik. Masuk sebagai Dispatcher untuk melihat analitik
                 operasional atau sebagai Regulator untuk melihat agregat pengawasan.
               </p>
@@ -4317,14 +4542,14 @@ export default function DashboardClient() {
                 <button
                   type="button"
                   onClick={openAuthModal}
-                  className="cursor-pointer px-4 py-2 rounded-md bg-white text-[#080d14] text-xs font-semibold hover:bg-slate-200 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
+                  className="cursor-pointer px-4 py-2 rounded-md bg-white text-[#080d14] text-xs font-semibold hover:opacity-90 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
                 >
                   Masuk untuk membuka Analitik
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveSection('map')}
-                  className="cursor-pointer px-4 py-2 rounded-md bg-white/5 border border-white/10 text-slate-200 text-xs font-medium hover:bg-white/10 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
+                  className="cursor-pointer px-4 py-2 rounded-md bg-white/5 border border-white/10 text-[#e8eaed] text-xs font-medium hover:bg-white/10 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
                 >
                   Kembali ke Peta
                 </button>
@@ -4354,11 +4579,11 @@ export default function DashboardClient() {
               aria-label="Laporan terkunci untuk tamu"
               className="w-full h-full min-h-[320px] flex flex-col items-center justify-center gap-3 bg-[#0c1017] border border-white/10 rounded-xl p-8 text-center"
             >
-              <div className="w-10 h-10 rounded-lg bg-amber-500/10 border border-amber-500/25 flex items-center justify-center">
-                <Lock className="w-5 h-5 text-amber-300" aria-hidden="true" />
+              <div className="w-10 h-10 rounded-lg bg-[#121822] border border-white/10 flex items-center justify-center">
+                <Lock className="w-5 h-5 text-[rgba(232,234,237,0.62)]" aria-hidden="true" />
               </div>
               <h2 className="font-headline font-semibold text-base text-white">Laporan terkunci — Mode Sandbox</h2>
-              <p className="text-xs text-slate-400 max-w-md leading-relaxed">
+              <p className="text-xs text-[rgba(232,234,237,0.62)] max-w-md leading-relaxed">
                 Tamu tidak dapat membuka Laporan. Masuk sebagai Dispatcher untuk mencatat mitigasi
                 atau sebagai Regulator untuk melihat agregat pengawasan.
               </p>
@@ -4366,14 +4591,14 @@ export default function DashboardClient() {
                 <button
                   type="button"
                   onClick={openAuthModal}
-                  className="cursor-pointer px-4 py-2 rounded-md bg-white text-[#080d14] text-xs font-semibold hover:bg-slate-200 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
+                  className="cursor-pointer px-4 py-2 rounded-md bg-white text-[#080d14] text-xs font-semibold hover:opacity-90 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
                 >
                   Masuk untuk membuka Laporan
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveSection('map')}
-                  className="cursor-pointer px-4 py-2 rounded-md bg-white/5 border border-white/10 text-slate-200 text-xs font-medium hover:bg-white/10 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
+                  className="cursor-pointer px-4 py-2 rounded-md bg-white/5 border border-white/10 text-[#e8eaed] text-xs font-medium hover:bg-white/10 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
                 >
                   Kembali ke Peta
                 </button>
@@ -4400,11 +4625,11 @@ export default function DashboardClient() {
               aria-label="Evaluasi terkunci untuk tamu"
               className="w-full h-full min-h-[320px] flex flex-col items-center justify-center gap-3 bg-[#0c1017] border border-white/10 rounded-xl p-8 text-center"
             >
-              <div className="w-10 h-10 rounded-lg bg-amber-500/10 border border-amber-500/25 flex items-center justify-center">
-                <Lock className="w-5 h-5 text-amber-300" aria-hidden="true" />
+              <div className="w-10 h-10 rounded-lg bg-[#121822] border border-white/10 flex items-center justify-center">
+                <Lock className="w-5 h-5 text-[rgba(232,234,237,0.62)]" aria-hidden="true" />
               </div>
               <h2 className="font-headline font-semibold text-base text-white">Evaluasi terkunci — Mode Sandbox</h2>
-              <p className="text-xs text-slate-400 max-w-md leading-relaxed">
+              <p className="text-xs text-[rgba(232,234,237,0.62)] max-w-md leading-relaxed">
                 Tamu tidak dapat membuka Evaluasi. Masuk sebagai Dispatcher untuk melihat evaluasi
                 operasional atau sebagai Regulator untuk melihat agregat pengawasan.
               </p>
@@ -4412,14 +4637,14 @@ export default function DashboardClient() {
                 <button
                   type="button"
                   onClick={openAuthModal}
-                  className="cursor-pointer px-4 py-2 rounded-md bg-white text-[#080d14] text-xs font-semibold hover:bg-slate-200 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
+                  className="cursor-pointer px-4 py-2 rounded-md bg-white text-[#080d14] text-xs font-semibold hover:opacity-90 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
                 >
                   Masuk untuk membuka Evaluasi
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveSection('map')}
-                  className="cursor-pointer px-4 py-2 rounded-md bg-white/5 border border-white/10 text-slate-200 text-xs font-medium hover:bg-white/10 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
+                  className="cursor-pointer px-4 py-2 rounded-md bg-white/5 border border-white/10 text-[#e8eaed] text-xs font-medium hover:bg-white/10 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
                 >
                   Kembali ke Peta
                 </button>
