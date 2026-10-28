@@ -1,10 +1,19 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ShieldAlert, KeyRound, X } from 'lucide-react';
 import { useAuth } from '@/lib/authContext';
 
 const DISMISS_KEY = 'prehub_guest_banner_dismissed';
+
+/**
+ * CSS custom property the news panel reads to reserve scroll runway under the
+ * floating banner. Phase 176.8 (M9): the fixed banner used to sit on top of the
+ * last Berita card. The banner measures its own occlusion (its top edge to the
+ * bottom of the viewport) and publishes it here, so the panel can pad instead
+ * of guessing a constant.
+ */
+export const GUEST_BANNER_CLEARANCE_VAR = '--guest-banner-clearance';
 
 // Explicit guest evaluation banner: shown whenever /dashboard is accessed without a
 // verified session (middleware guest redirect or client-side logout), so restricted
@@ -15,6 +24,8 @@ export function GuestEvaluationBanner() {
  // Phase 57 WP-A3 follow-up: read storage in an effect, not during render,
  // so server prerender and first client render agree (no hydration mismatch).
  const [dismissed, setDismissed] = useState<boolean>(false);
+ const bannerRef = useRef<HTMLDivElement | null>(null);
+ const visible = !isAuthenticated && !isLoading && !dismissed;
 
  useEffect(() => {
  try {
@@ -24,7 +35,40 @@ export function GuestEvaluationBanner() {
  }
  }, []);
 
- if (isAuthenticated || isLoading || dismissed) return null;
+ // Publish/retract the clearance the panel must reserve. Everything from the
+ // banner's top edge down is occluded, plus an 8px breathing gap; the value is
+ // removed (not zeroed) when the banner is hidden so the panel returns to its
+ // natural padding.
+ useEffect(() => {
+ const root = document.documentElement;
+ const clear = () => {
+ root.style.removeProperty(GUEST_BANNER_CLEARANCE_VAR);
+ delete root.dataset.guestBanner;
+ };
+ if (!visible) {
+ clear();
+ return;
+ }
+ const el = bannerRef.current;
+ if (!el) return;
+ const measure = () => {
+ const rect = el.getBoundingClientRect();
+ const clearance = Math.max(0, Math.ceil(window.innerHeight - rect.top + 8));
+ root.style.setProperty(GUEST_BANNER_CLEARANCE_VAR, `${clearance}px`);
+ root.dataset.guestBanner = 'open';
+ };
+ measure();
+ const observer = new ResizeObserver(measure);
+ observer.observe(el);
+ window.addEventListener('resize', measure);
+ return () => {
+ observer.disconnect();
+ window.removeEventListener('resize', measure);
+ clear();
+ };
+ }, [visible]);
+
+ if (!visible) return null;
 
  const handleDismiss = () => {
  try {
@@ -37,6 +81,7 @@ export function GuestEvaluationBanner() {
 
  return (
  <div
+ ref={bannerRef}
  id="guest-evaluation-banner"
  data-testid="guest-evaluation-banner"
  className="fixed bottom-24 left-4 z-[45] w-[92%] sm:w-80 pointer-events-none"
