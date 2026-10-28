@@ -240,3 +240,137 @@ for (const viewport of VIEWPORTS) {
     });
   });
 }
+
+// ---------------------------------------------------------------------------
+// Phase 176.10 — the pinned counters never truncate their label.
+//
+// Live defect (390×844): `Titik Panas` rendered as `Titik Pa…` inside the pill,
+// because the mobile pill kept `truncate` on a 12px label sharing one line with
+// the number. The fix stacks label (line 1) over number (line 2) below `md`, so
+// each label owns the pill's full content width. These tests hold that line at
+// the three narrow widths the product is used at, and prove the desktop row is
+// untouched.
+// ---------------------------------------------------------------------------
+
+const COUNTER_LABELS = [
+  { counterId: 'counter-cuaca', labelId: 'hazard-label-cuaca', name: 'Cuaca' },
+  { counterId: 'counter-waspada', labelId: 'hazard-label-waspada', name: 'Waspada Dini' },
+  { counterId: 'counter-titik-panas', labelId: 'hazard-label-titik-panas', name: 'Titik Panas' },
+] as const;
+
+const STACK_VIEWPORTS = [
+  { width: 320, height: 700 },
+  { width: 360, height: 740 },
+  { width: 390, height: 844 },
+] as const;
+
+async function openDashboard(page: Page): Promise<void> {
+  await mockDashboardApi(page);
+  await page.goto('/dashboard?e2e=1', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('#nav-map')).toBeVisible({ timeout: 30000 });
+  await expect(page.getByTestId('counter-strip')).toBeVisible({ timeout: 30000 });
+  await page.waitForTimeout(1200);
+}
+
+for (const viewport of STACK_VIEWPORTS) {
+  const label = `${viewport.width}x${viewport.height}`;
+
+  test.describe(`counter stack ${label}`, () => {
+    test.use({ viewport });
+
+    test.beforeEach(async ({ page }) => {
+      await openDashboard(page);
+    });
+
+    test(`counter labels are never truncated ${label}`, async ({ page }) => {
+      const inner = await page.evaluate(() => window.innerWidth);
+      const widths: number[] = [];
+
+      for (const counter of COUNTER_LABELS) {
+        const labelEl = page.getByTestId(counter.labelId);
+        await expect(labelEl, `${counter.name} label visible at ${label}`).toBeVisible();
+
+        // The visible label must fit its own box: no ellipsis, no clipping.
+        const metrics = await labelEl.evaluate((el) => ({
+          scrollWidth: el.scrollWidth,
+          clientWidth: el.clientWidth,
+          whiteSpace: getComputedStyle(el).whiteSpace,
+          textOverflow: getComputedStyle(el).textOverflow,
+        }));
+        expect(
+          metrics.scrollWidth,
+          `${counter.name} label overflow at ${label} (${metrics.scrollWidth}px in ${metrics.clientWidth}px)`,
+        ).toBeLessThanOrEqual(metrics.clientWidth + 1);
+        expect(metrics.textOverflow, `${counter.name} label is not ellipsised at ${label}`).not.toBe('ellipsis');
+        expect(metrics.whiteSpace, `${counter.name} label stays on one line at ${label}`).toBe('nowrap');
+        expect((await labelEl.innerText()).trim(), `${counter.name} visible label text at ${label}`).toBe(counter.name);
+
+        const pill = page.locator(`button:has([data-testid="${counter.counterId}"])`);
+        const count = (await page.getByTestId(counter.counterId).innerText()).trim();
+        // The whole pill still exposes the full label to assistive tech.
+        await expect(pill, `${counter.name} accessible name at ${label}`).toHaveAccessibleName(
+          `${counter.name} ${count}`,
+        );
+
+        const box = await pill.boundingBox();
+        expect(box, `${counter.name} pill box at ${label}`).not.toBeNull();
+        expect(box!.x, `${counter.name} pill left at ${label}`).toBeGreaterThanOrEqual(-0.5);
+        expect(box!.x + box!.width, `${counter.name} pill right at ${label}`).toBeLessThanOrEqual(inner + 0.5);
+        widths.push(box!.width);
+
+        // Stacked: the number sits on its own line below the label.
+        const numberBox = await page.getByTestId(counter.counterId).boundingBox();
+        const labelBox = await labelEl.boundingBox();
+        expect(numberBox, `${counter.name} number box at ${label}`).not.toBeNull();
+        expect(labelBox, `${counter.name} label box at ${label}`).not.toBeNull();
+        expect(
+          numberBox!.y,
+          `${counter.name} number sits below the label at ${label}`,
+        ).toBeGreaterThanOrEqual(labelBox!.y + labelBox!.height - 1);
+      }
+
+      // Three equal columns: the pills may not size to their own content.
+      expect(Math.max(...widths) - Math.min(...widths), `equal pill widths at ${label}`).toBeLessThanOrEqual(1);
+
+      // The stacked pills stay a compact pill, not a two-row panel.
+      for (const counter of COUNTER_LABELS) {
+        const box = await page.locator(`button:has([data-testid="${counter.counterId}"])`).boundingBox();
+        expect(box!.height, `${counter.name} pill height at ${label}`).toBeLessThanOrEqual(52);
+        expect(box!.height, `${counter.name} pill height at ${label}`).toBeGreaterThanOrEqual(40);
+      }
+    });
+  });
+}
+
+test.describe('counter row desktop 1920x1080', () => {
+  test.use({ viewport: { width: 1920, height: 1080 } });
+
+  test.beforeEach(async ({ page }) => {
+    await openDashboard(page);
+  });
+
+  test('desktop keeps the single-row counter layout', async ({ page }) => {
+    const pills = COUNTER_LABELS.map((counter) =>
+      page.locator(`button:has([data-testid="${counter.counterId}"])`),
+    );
+
+    const tops: number[] = [];
+    for (let index = 0; index < COUNTER_LABELS.length; index += 1) {
+      const counter = COUNTER_LABELS[index];
+      await expect(pills[index], `${counter.name} pill visible on desktop`).toBeVisible();
+      const box = await pills[index].boundingBox();
+      expect(box, `${counter.name} pill box on desktop`).not.toBeNull();
+      tops.push(box!.y);
+
+      // Label and number share one line again at `md`+.
+      const labelBox = await page.getByTestId(counter.labelId).boundingBox();
+      const numberBox = await page.getByTestId(counter.counterId).boundingBox();
+      expect(Math.abs(labelBox!.y - numberBox!.y), `${counter.name} label/number share a line`).toBeLessThan(
+        labelBox!.height,
+      );
+    }
+
+    const spread = Math.max(...tops) - Math.min(...tops);
+    expect(spread, 'all three counters on one line').toBeLessThanOrEqual(2);
+  });
+});

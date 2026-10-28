@@ -72,19 +72,30 @@ interface TopNavTelemetryProps {
 // equal columns instead of scrolling out of reach.
 const PILL_BASE =
   'cursor-pointer flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs font-mono tabular-nums transition-colors duration-150 snap-start';
+// Phase 176.10 — below `md` the three pinned counters stack inside the pill:
+// label on line 1, number on line 2. The label gets a full column of its own
+// (dot in column 1), so "Titik Panas" / "Waspada Dini" are never truncated.
+// Padding and gaps tighten at the smallest width so 320px still fits the full
+// word without ellipsis. At `md`+ this collapses back to the desktop row.
+const PILL_STACK =
+  'max-md:grid max-md:grid-cols-[auto_minmax(0,1fr)] max-md:gap-x-0.5 max-md:gap-y-0.5 max-md:px-1 max-md:py-1';
 const pillClass = (active: boolean, grow = false): string =>
-  `${PILL_BASE} ${grow ? 'flex-1 basis-0 min-w-0 md:flex-none' : 'flex-none'} ${
+  `${PILL_BASE} ${
+    grow ? `flex-1 basis-0 min-w-0 ${PILL_STACK} md:flex-none` : 'flex-none'
+  } ${
     active
       ? 'bg-white text-[#080d14] border-white font-semibold'
       : 'bg-[#0c1017] text-[rgba(232,234,237,0.62)] border-white/[0.08] hover:border-white/15 hover:text-[#e8eaed]'
   }`;
 const chipClass = (active: boolean): string =>
   active
-    ? 'shrink-0 whitespace-nowrap px-1 py-0.5 rounded bg-black/10 text-xs font-bold tabular-nums'
-    : 'shrink-0 whitespace-nowrap px-1 py-0.5 rounded bg-white/[0.06] text-xs font-bold tabular-nums';
+    ? 'shrink-0 whitespace-nowrap px-1 py-0.5 rounded bg-black/10 text-xs font-bold tabular-nums max-md:col-start-2 max-md:justify-self-center max-md:text-base max-md:leading-tight max-md:py-0'
+    : 'shrink-0 whitespace-nowrap px-1 py-0.5 rounded bg-white/[0.06] text-xs font-bold tabular-nums max-md:col-start-2 max-md:justify-self-center max-md:text-base max-md:leading-tight max-md:py-0';
 /** Only a one-line-hint label may truncate; the number never does. */
 const pillLabelClass = (grow: boolean): string =>
-  `font-sans text-xs font-semibold ${grow ? 'truncate min-w-0' : 'whitespace-nowrap'}`;
+  `font-sans text-xs font-semibold ${
+    grow ? 'min-w-0 whitespace-nowrap max-md:leading-tight md:truncate' : 'whitespace-nowrap'
+  }`;
 /** Marker dot: solid on an enabled pill, hollow neutral when the layer is off. */
 const dotClass = (active: boolean, hazard: 'critical' | 'warning' | null): string => {
   if (!active) return 'w-2 h-2 rounded-full border border-white/25 bg-transparent shrink-0';
@@ -330,7 +341,7 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
       */}
       <div
         data-testid="counter-row"
-        className="flex w-full min-w-0 items-center gap-1.5 md:contents"
+        className="flex w-full min-w-0 items-center gap-1 md:contents md:gap-1.5"
       >
         {/* Disruption-only weather (biru, default ON) — the single map-critical hazard count. */}
         {onToggleWeatherPolygons && (
@@ -348,7 +359,7 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
             })}
           >
             <span className={dotClass(showWeatherPolygons, null)} />
-            <span className={pillLabelClass(true)}>Cuaca</span>
+            <span className={pillLabelClass(true)} data-testid="hazard-label-cuaca">Cuaca</span>
             <span
               data-testid="counter-cuaca"
               className={`${chipClass(showWeatherPolygons)} ${numberTone(
@@ -373,7 +384,7 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
             })}
           >
             <span className={dotClass(showWeatherAdvisory, null)} />
-            <span className={pillLabelClass(true)}>Waspada Dini</span>
+            <span className={pillLabelClass(true)} data-testid="hazard-label-waspada">Waspada Dini</span>
             <span
               data-testid="counter-waspada"
               className={`${chipClass(showWeatherAdvisory)} ${numberTone(
@@ -396,7 +407,7 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
             title={fireTooltipText}
           >
             <span className={dotClass(showFireHotspots, null)} />
-            <span className={pillLabelClass(true)}>Titik Panas</span>
+            <span className={pillLabelClass(true)} data-testid="hazard-label-titik-panas">Titik Panas</span>
             <span
               data-testid="counter-titik-panas"
               className={`${chipClass(showFireHotspots)} ${numberTone(
