@@ -196,6 +196,120 @@ PreHub enforces pure tonal flatness. The interface does not simulate glass, wate
 - **Style:** Monospaced 12px indicator with an un-animated 6px solid dot.
 - **Colors:** Red for critical, amber for warning, emerald for clear. Never pulse or bounce continuously at rest.
 
+## Distilled Command Surface
+
+**Scope.** Every command viewport: `app/dashboard`, `components/dashboard/**`, `components/sidebar/**`, `components/fleet/**`, `components/auth/**`, `components/ui/**`, and `components/base-ui/**`. The editorial sections above govern the public/landing surface. This section is the normative contract for the command surface and wins on conflict. Colour distribution follows `gods-eye-view/src/ui/styles/foundation.css`: a near-black ground, one tonally stepped panel ladder, text expressed as opacity tiers over a single near-white, and hue reserved for state.
+
+### Surface ladder
+
+| Token | Value | Use | Never |
+|---|---|---|---|
+| `--ds-surface-base` | `#080d14` | App ground, fixed nav ground, map letterbox, inset wells | Any shade lighter "for warmth" |
+| `--ds-surface-panel` | `#0c1017` | Cards, panels, drawers, tooltips, popovers, modals | `#1c2432` or any ad-hoc hex as a second panel tone |
+| `--ds-surface-raised` | `#121822` | Inputs, chips, hovered rows, inset sub-blocks inside a panel | As a third nesting level |
+| `--ds-border-rest` | `rgba(255, 255, 255, 0.08)` | Every resting 1px boundary | Heavy 2px or coloured borders |
+| `--ds-border-hover` | `rgba(255, 255, 255, 0.15)` | Hover and active boundary on the same element | A hue-shifted "accent border" |
+
+Three surfaces, two border weights. A component that needs a fourth tone uses an opacity of `--ds-surface-raised`, not a new hex.
+
+### Text tiers
+
+| Token | Value | Use |
+|---|---|---|
+| `--ds-text-primary` | `#e8eaed` | Headings, metric values, active tab labels, selected row text |
+| `--ds-text-secondary` | `rgba(232, 234, 237, 0.62)` | Field labels, metadata, table headers, tooltip labels |
+| `--ds-text-dim` | `rgba(232, 234, 237, 0.38)` | Timestamps, units, footnotes, disabled states, freshness footer |
+
+One near-white, three opacities. Never introduce a fourth text colour (no slate/blue/orange labels).
+
+### Emphasis and data accent
+
+| Token | Value | Rule |
+|---|---|---|
+| `--ds-chrome-primary` | `#ffffff` fill, `#080d14` text | Exactly one primary action per viewport. Hover is `opacity: 0.92`, never a shadow or a transform. |
+| `--ds-accent` | `#38b8f8` | The single data accent. Reserved for live, selected, and route (one component may carry one accent element). Never a label colour, never decoration, never a gradient stop. |
+| `--ds-hazard-critical` | `#ef4444` | Active disruption, closure, collapse, shutdown |
+| `--ds-hazard-warning` | `#f59e0b` | Elevated risk, congestion, volatility, unconfirmed signal |
+| `--ds-hazard-clear` | `#10b981` | Healthy / live / cleared — never decoration, never a generic "success" chip on static content |
+
+Chrome is monochrome. `#38b8f8` is the only non-hazard hue permitted in chrome. The front-matter `status-info` `#38bdf8` is the landing/editorial informational sky and is not used on the dashboard surface.
+
+### Banned in dashboard UI chrome
+
+These values may not appear in any command-surface source file, in any case, as a literal, a CSS variable fallback, a Tailwind arbitrary value, or a `style` object:
+
+`#00d4ff`, `#00f0ff`, `#22d3ee`, `#06b6d4`, `#f97316`, `#fb923c`, `#ff8c00`, `#eab308`, `#facc15`, `#a855f7`, `#c084fc`, `#3b82f6`, `#60a5fa`, `#1c2432`
+
+Enforced by `frontend/e2e/dashboard-palette-contract.spec.ts`, which scans `CLEANED_FILES` and grows file-by-file across phases 175 and 176. The list is a ratchet: it may only grow; a listed file that regresses fails the suite.
+
+**Map data-paint exceptions.** Banned hues survive only inside Mapbox paint expressions where a hazard or modality ramp genuinely needs graded steps. Exact, exhaustive ranges:
+
+| File | Lines | What it paints |
+|---|---|---|
+| `components/map/CrisisMap.tsx` | 800–818 | Hazard-zone fill/stroke and selected-node halo |
+| `components/map/CrisisMap.tsx` | 876 | Macro-node label text |
+| `components/map/CrisisMap.tsx` | 958–967 | Disruption footprint fill and stroke |
+| `components/map/CrisisMap.tsx` | 1014–1070 | Hazard-type and intensity ramps |
+| `components/map/CrisisMap.tsx` | 1153 | Moderate intensity tier |
+| `components/map/CrisisMap.tsx` | 1207–1229 | Port / airport / key-node symbol ramps |
+| `components/map/CrisisMap.tsx` | 1248 | Airport glyph |
+| `components/map/CrisisMap.tsx` | 1386–1408 | Route origin marker |
+| `components/map/CrisisMap.tsx` | 1978–2029 | Route-leg geometry colour ramp |
+| `components/map/CrisisMap.tsx` | 2341 | Route-label text colour |
+| `components/map/FleetVehicleLayer.tsx` | 308 | Selected-vehicle line |
+| `components/map/FleetVehicleLayer.tsx` | 365–367 | Modality line ramp (sea / air) |
+
+`components/map/FleetVehicleLayer.tsx:816–818` (hover-tooltip modality dot) is chrome, not data paint, and is **not** excepted. No other exception exists: every occurrence in `components/dashboard/**`, `components/sidebar/**`, `components/fleet/**`, `components/auth/**`, `components/ui/**` and `components/base-ui/**` must reach zero by the end of phase 176.
+
+### Type
+
+| Rule | Value |
+|---|---|
+| UI text floor | `12px`. No command-surface text renders below it. |
+| Dense-table exception | `11px` is permitted only inside a `<table>` cell or header. Never in cards, labels, tabs, or tooltips. |
+| Numerals | Every metric, count, price, timestamp and percentage carries `font-variant-numeric: tabular-nums`. |
+| Monospace | Codes, coordinates, IDs, units and timestamps only. Never prose, never a heading, never a sentence. |
+
+### Radius
+
+| Token | Value | Use |
+|---|---|---|
+| `--ds-radius-panel` | `12px` | Panels, cards, drawers, modals, tooltips |
+| `--ds-radius-control` | `10px` | Buttons, inputs, selects, chips, tabs (supersedes the 8px editorial control radius on this surface only) |
+| `--ds-radius-pill` | `999px` | Count badges, freshness pills, standalone status capsules |
+
+### Elevation
+
+One soft neutral shadow maximum: `0 12px 32px rgba(0, 0, 0, 0.4)`, and only on a detached overlay (tooltip, popover, dropdown, modal). Panels are flat; their boundary is the border. No coloured glow (`0 0 20px rgba(0,212,255,.4)`), no `backdrop-filter`, no ambient blur halo.
+
+### Motion
+
+| Property | Value |
+|---|---|
+| Duration | `120ms`–`300ms`. Nothing longer on the command surface. |
+| Easing | `cubic-bezier(.4, 0, .2, 1)` for every transition and entrance. |
+| Properties | `transform` and `opacity` only. Never animate `width`, `height`, `top`, `left`, `background-color` on the hot path. |
+| Live pulse | Exactly one pulsing element per viewport, and only for a genuinely live hazard feed. A pulse at rest is a lie. |
+| Reduced motion | `@media (prefers-reduced-motion: reduce)` disables the pulse, all transitions and all transforms. Honoured everywhere, no exceptions. |
+
+### Tooltip and popover contract
+
+This is the single overlay system phase 176 builds; every earlier ad-hoc tooltip is replaced by it.
+
+| Property | Value |
+|---|---|
+| Surface | `#0c1017`, opaque (no blur, no translucency) |
+| Radius | `10px` |
+| Border | `1px solid rgba(255, 255, 255, 0.1)` |
+| Padding | `10px 12px` |
+| Text | `12px`, `#e8eaed` body; `tabular-nums` on every value |
+| Rows | Label/value rows; label at `62%` opacity (`--ds-text-secondary`), value right-aligned in `tabular-nums` |
+| Footer | 1px top rule (`rgba(255,255,255,0.08)`) before the source + freshness line, which renders at `38%` opacity |
+| Max width | `320px` |
+| Ornament | No arrow, no gradient, no glass, no icon header |
+
+**Why.** A dispatch surface is read in glances, under time pressure, by someone deciding whether to move trucks. Every extra hue is a competing signal, and every competing signal costs a glance. So the chrome is one near-black ladder and one near-white ladder, the accent appears only where the system is live or where the operator has just selected something, and hue means hazard — nothing else. The tooltip contract exists for the same reason: the operator must be able to read a population figure, its window, its source and its freshness as one block, in the same place, at the same size, every time. Consistency here is not aesthetic; it is the difference between a number that can be trusted at 3am and a number that has to be re-checked.
+
 ## Do's and Don'ts
 
 ### Do:

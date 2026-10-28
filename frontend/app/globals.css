@@ -15,6 +15,53 @@
   --color-muted: #64748b;
 }
 
+/* ── Distilled Command Surface tokens (M9 phase 174) ──────────────────────
+   Additive layer. The contract lives in DESIGN.md → "Distilled Command
+   Surface"; the typed mirror is frontend/lib/designTokens.ts. Nothing here
+   restyles an existing component: phases 175/176 opt in by consuming a
+   --ds-* variable instead of a raw hex, and the palette ratchet
+   (e2e/dashboard-palette-contract.spec.ts) enforces the ban list. */
+:root {
+  /* Surface ladder — three tones, two border weights. No fourth hex. */
+  --ds-surface-base: #080d14;
+  --ds-surface-panel: #0c1017;
+  --ds-surface-raised: #121822;
+  --ds-border-rest: rgba(255, 255, 255, 0.08);
+  --ds-border-hover: rgba(255, 255, 255, 0.15);
+
+  /* Text tiers — one near-white, three opacities. */
+  --ds-text-primary: #e8eaed;
+  --ds-text-secondary: rgba(232, 234, 237, 0.62);
+  --ds-text-dim: rgba(232, 234, 237, 0.38);
+
+  /* Emphasis — monochrome chrome, one primary action, one data accent. */
+  --ds-chrome-primary: #ffffff;
+  --ds-chrome-primary-text: #080d14;
+  --ds-accent: #38b8f8;
+
+  /* Hazard semantics only — emerald means healthy/live, never decoration. */
+  --ds-hazard-critical: #ef4444;
+  --ds-hazard-warning: #f59e0b;
+  --ds-hazard-clear: #10b981;
+
+  /* Shape */
+  --ds-radius-panel: 12px;
+  --ds-radius-control: 10px;
+  --ds-radius-pill: 999px;
+
+  /* Elevation — one soft neutral shadow, detached overlays only. */
+  --ds-elevation-overlay: 0 12px 32px rgba(0, 0, 0, 0.4);
+
+  /* Motion */
+  --ds-duration-min: 120ms;
+  --ds-duration-max: 300ms;
+  --ds-ease: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Type */
+  --ds-text-floor: 12px;
+  --ds-text-dense-table: 11px;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;

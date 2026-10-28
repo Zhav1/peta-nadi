@@ -108,6 +108,8 @@ docs/validasi/
 frontend/scripts/*
 !frontend/scripts/test_*.ts
 !frontend/scripts/copy-standalone-assets.js
+# M9 phase 174: dashboard token baseline probe (deliverable, not a build script)
+!frontend/scripts/snapshot-dashboard-tokens.mjs
 
 # Miscellaneous
 gods-eye-view

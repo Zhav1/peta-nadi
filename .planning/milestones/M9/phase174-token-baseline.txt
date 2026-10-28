@@ -1,0 +1,16 @@
+﻿# Phase 174 token baseline — computed dashboard chrome colours (PRE-rebuild).
+# command: cd frontend; node scripts/snapshot-dashboard-tokens.mjs   (standalone build on :3000)
+# Phases 175/176 diff against these rows. A row may only change in the phase that
+# deliberately restyles that surface; any other change is a regression.
+# Dashboard token baseline ΓÇö M9 phase 174
+url: http://localhost:3000/dashboard?section=map
+http: 200
+viewport: 1920x1080
+captured: 2026-10-28T03:05:42.787Z
+auth: guest (no token injected)
+
+| probe | selector | background-color | color | border-color | border | radius | font-size |
+|---|---|---|---|---|---|---|---|
+| shell | `main` | rgb(8, 13, 20) | rgb(241, 245, 249) | rgb(229, 231, 235) | 0px solid | 0px | 16px |
+| top-nav | `header` | rgb(12, 16, 23) | rgb(241, 245, 249) | rgba(255, 255, 255, 0.1) | 0px solid | 0px | 16px |
+| panel | `aside` | rgb(12, 16, 23) | rgb(241, 245, 249) | rgb(28, 36, 50) | 0px solid | 0px | 16px |
