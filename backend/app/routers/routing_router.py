@@ -622,6 +622,10 @@ FIRMS_WINDOW_HOURS = 24  # live-counter observation window (decision 3/4)
 FIRMS_REFRESH_WINDOW_S = FIRMS_REFRESH_S
 FIRMS_RENDER_CAP = 500  # map-protection cap; the count path stays uncapped
 FIRMS_EMPTY_REASON = "Tidak ada titik panas aktif di Sumatra pada jendela ini"
+# Phase 173.6: a keyed API that returns 0 (or errors) is cross-checked against
+# the keyless CSV before any empty count is published.
+FIRMS_API_EMPTY_REASON = "api empty; csv cross-check"
+FIRMS_API_ERROR_REASON = "api error; csv cross-check"
 FIRMS_CACHE_KEY = f"{SOURCE_CACHE_PREFIX}firms_hotspots"
 FIRMS_LAST_GOOD_KEY = f"{SOURCE_CACHE_PREFIX}firms_last_good"
 FIRMS_LEGACY_CACHE_KEY = f"{SOURCE_CACHE_PREFIX}nasa_firms"
@@ -788,31 +792,59 @@ def _finalise_firms_hotspots(raws: Any) -> List[Dict[str, Any]]:
 
 
 async def _fetch_live_firms(adapter: Any, has_key: bool) -> tuple:
-    """API when keyed → keyless CSV. Returns (hotspots|None, source, problems)."""
+    """API when keyed → keyless CSV, with a mandatory cross-check.
+
+    Returns ``(hotspots|None, source|None, reason|None, problems)``.
+
+    Phase 173.6: a keyed API that answers 0 rows (or errors) is NOT evidence of
+    zero hotspots — the area API's day cadence lags the static CSV files and it
+    under-reported 50 real in-bbox detections in production. Whenever the API
+    yields nothing, the keyless CSV is fetched for the same bbox/window and, if
+    it has data, that is what gets served (source ``nasa-firms-csv``) with the
+    cross-check recorded in ``reason``.
+    """
     problems: List[str] = []
+    # Set only when the API failed to produce hotspots, i.e. when the CSV is
+    # acting as a cross-check rather than as the primary source.
+    api_note: Optional[str] = None
 
     if has_key:
         try:
             raw = await adapter.fetch()
             if raw and raw.strip():
-                events = await adapter.parse(raw)
-                return _finalise_firms_hotspots(events), "nasa-firms-api", problems
-            problems.append("NASA FIRMS API tidak merespons")
+                # Count with the stateless CSV parser, NOT parse(): parse()
+                # applies the poller's 24h Redis dedup, so once ingestion has
+                # seen a detection the counter collapses to 0 for the rest of
+                # the day (measured: 140 API rows -> 0 events, 140 dedup hits).
+                events = await adapter.parse_keyless_csv(raw, FIRMS_WINDOW_HOURS)
+                hotspots = _finalise_firms_hotspots(events)
+                if hotspots:
+                    return hotspots, "nasa-firms-api", None, problems
+                api_note = FIRMS_API_EMPTY_REASON
+                problems.append("NASA FIRMS API mengembalikan 0 baris")
+            else:
+                api_note = FIRMS_API_ERROR_REASON
+                problems.append("NASA FIRMS API tidak merespons")
         except Exception as e:
             logger.warning(f"FIRMS API path failed: {e}")
+            api_note = f"{FIRMS_API_ERROR_REASON}: {e}"
             problems.append(f"NASA FIRMS API gagal: {e}")
 
     try:
         raw = await adapter.fetch_keyless_csv(FIRMS_WINDOW_HOURS)
         if raw and raw.strip():
             keyless = await adapter.parse_keyless_csv(raw, FIRMS_WINDOW_HOURS)
-            return _finalise_firms_hotspots(keyless), "nasa-firms-csv", problems
+            hotspots = _finalise_firms_hotspots(keyless)
+            if hotspots:
+                return hotspots, "nasa-firms-csv", api_note, problems
+            # CSV is healthy and agrees with the API: a verified zero.
+            return hotspots, "nasa-firms-csv", None, problems
         problems.append("CSV publik NASA FIRMS tidak tersedia (VIIRS + MODIS)")
     except Exception as e:
         logger.warning(f"FIRMS keyless CSV path failed: {e}")
         problems.append(f"CSV publik NASA FIRMS gagal: {e}")
 
-    return None, None, problems
+    return None, None, None, problems
 
 
 def _read_legacy_firms_cache() -> Optional[Dict[str, Any]]:
@@ -852,7 +884,10 @@ async def fetch_fire_hotspots(
 
     Source precedence (decision 3): MAP_KEY API when a key is configured →
     keyless public Indonesia CSV (no key, no quota) → last-known-good cache →
-    degraded. Points are never fabricated.
+    degraded. Points are never fabricated. A keyed API that answers 0 rows or
+    errors is cross-checked against the keyless CSV before an empty count is
+    published (reason: "api empty; csv cross-check" / "api error; csv
+    cross-check").
 
     Envelope contract (stable, additive to the old payload):
       hotspots    render-capped list, unchanged shape
@@ -879,7 +914,7 @@ async def fetch_fire_hotspots(
 
     settings = get_settings()
     adapter = NASAFIRMSAdapter()
-    hotspots, source, problems = await _fetch_live_firms(
+    hotspots, source, reason, problems = await _fetch_live_firms(
         adapter, bool(getattr(settings, "nasa_firms_map_key", ""))
     )
 
@@ -889,7 +924,9 @@ async def fetch_fire_hotspots(
             "hotspots": hotspots,
             "total": total,
             "status": "ok" if total > 0 else "empty",
-            "reason": None if total > 0 else FIRMS_EMPTY_REASON,
+            # A served count keeps any cross-check note; a verified zero uses
+            # the canonical empty reason.
+            "reason": (reason if total > 0 else FIRMS_EMPTY_REASON),
             "source": source,
             "updated_at": now.isoformat(),
             "window_hours": FIRMS_WINDOW_HOURS,

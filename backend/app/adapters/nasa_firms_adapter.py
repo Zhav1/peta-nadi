@@ -43,6 +43,19 @@ MODIS_GLOBAL_CSV_TEMPLATE = (
     FIRMS_KEYLESS_BASE + "/modis-c6-1/csv/MODIS_C6_1_Global_{window}.csv"
 )
 
+# ---------------------------------------------------------------------------
+# Keyed area API (Phase 173.6)
+# ---------------------------------------------------------------------------
+FIRMS_API_BASE = "https://firms.modaps.eosdis.nasa.gov/api/area/csv"
+FIRMS_API_SENSOR = "VIIRS_SNPP_NRT"
+# The area API `{day_range}` counts *calendar* days back from today, and the
+# newest NRT passes are only published once a UTC day closes. `1` therefore
+# means "today only" and answers with a header-only CSV (0 rows) until the
+# first pass of the current UTC day lands — measured 2026-10-28T01:56Z:
+#   day_range=1 -> 0 rows, day_range=2 -> 140 rows, CSV 24h file -> 190 rows
+# A rolling 24h window needs `2` (yesterday + today), not `1`.
+FIRMS_API_DAY_RANGE = 2
+
 
 async def _http_get_text(url: str, timeout: float = 15.0) -> str:
     """Single HTTP text fetch. Module-level so tests can monkeypatch it."""
@@ -116,20 +129,46 @@ class NASAFIRMSAdapter(BaseAdapter):
             # Fallback to simple status code check if status endpoint fails
             return False
 
+    def api_csv_url(
+        self,
+        map_key: str | None = None,
+        day_range: int = FIRMS_API_DAY_RANGE,
+    ) -> str:
+        """Keyed area-API CSV URL for the Sumatra bbox (never logged raw)."""
+        key = settings.nasa_firms_map_key if map_key is None else map_key
+        return f"{FIRMS_API_BASE}/{key}/{FIRMS_API_SENSOR}/{self.SUMATRA_BBOX}/{int(day_range)}"
+
     async def fetch(self) -> str:
-        """Fetch active fire hotspot CSV data from NASA FIRMS."""
+        """Fetch active fire hotspot CSV data from NASA FIRMS (keyed API).
+
+        Returns the CSV text — including a header-only CSV, which is a *real*
+        empty answer — and "" only when the upstream is unusable (non-200,
+        non-CSV error body, transport failure). Callers must distinguish the
+        two: "0 rows" can still under-report, "" cannot be trusted at all.
+        """
         if not settings.nasa_firms_map_key:
             return ""
 
-        url = f"https://firms.modaps.eosdis.nasa.gov/api/area/csv/{settings.nasa_firms_map_key}/VIIRS_SNPP_NRT/{self.SUMATRA_BBOX}/1"
+        url = self.api_csv_url()
+        redacted = url.replace(settings.nasa_firms_map_key, "***")
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
                 res = await client.get(url)
                 if res.status_code == 200:
-                    return res.text
-                logger.error(f"NASA FIRMS API returned status {res.status_code}: {res.text}")
+                    text = res.text or ""
+                    if "latitude" in text[:512].lower():
+                        return text
+                    # 200 with a non-CSV body ("Invalid MAP_KEY" and friends)
+                    # must never be parsed as an empty result set.
+                    logger.error(
+                        f"NASA FIRMS API returned a non-CSV body ({redacted}): {text[:200]}"
+                    )
+                    return ""
+                logger.error(
+                    f"NASA FIRMS API returned status {res.status_code} ({redacted}): {res.text[:200]}"
+                )
         except Exception as e:
-            logger.error(f"Failed to fetch NASA FIRMS CSV data: {e}")
+            logger.error(f"Failed to fetch NASA FIRMS CSV data ({redacted}): {e}")
         return ""
 
     # -- Phase 168: keyless public CSV -------------------------------------
