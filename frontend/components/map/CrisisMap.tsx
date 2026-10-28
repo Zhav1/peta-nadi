@@ -27,6 +27,9 @@ import {
 import { api } from '@/lib/api';
 import { resolvePopoverDualMetric } from '@/lib/tripCostCalculator';
 import { MAP_BASE_PAINT, MAP_BASE_LAYER_IDS } from '@/lib/mapBasePaint';
+import { WASPADA_DOTS_HALO_PAINT, WASPADA_DOTS_PAINT } from '@/lib/mapDataPaint';
+import { waspadaDotsFromFeatures } from '@/lib/waspadaDots';
+import { DS } from '@/lib/designTokens';
 import {
   buildFirmsClusterPopup,
   buildFirmsPopup,
@@ -275,6 +278,18 @@ function haversineKm(lon1: number, lat1: number, lon2: number, lat2: number): nu
       Math.sin(dLon / 2);
   return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
+
+/**
+ * Waspada dots are advisory-only: they are the same data as the medium
+ * weather bucket, so they follow the advisory toggle (and the radar toggle).
+ */
+function setWaspadaLayerVisibility(map: mapboxgl.Map, visible: boolean) {
+  const visibility = visible ? 'visible' : 'none';
+  for (const id of ['waspada-dots', 'waspada-dots-halo']) {
+    if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', visibility);
+  }
+}
+
 
 /** High-confidence hotspot gate for clustering: confidence >= 80 or FRP > 100. */
 function isHighConfHotspot(h: { confidence?: number; frp?: number }): boolean {
@@ -690,6 +705,7 @@ export default function CrisisMap({
         const map = mapRef.current;
         if (map && isMapLoadedRef.current) {
           applyWeatherMapboxFilter(map, next.weatherRadar, next.weatherAdvisory);
+          setWaspadaLayerVisibility(map, next.weatherRadar && next.weatherAdvisory);
         }
         return next;
       });
@@ -713,6 +729,7 @@ export default function CrisisMap({
           if (map.getLayer('weather-polygons-halo')) map.setLayoutProperty('weather-polygons-halo', 'visibility', vis);
           if (map.getLayer('weather-polygons-outline')) map.setLayoutProperty('weather-polygons-outline', 'visibility', vis);
           if (map.getLayer('weather-polygons-outline-advisory')) map.setLayoutProperty('weather-polygons-outline-advisory', 'visibility', vis);
+          setWaspadaLayerVisibility(map, next.weatherRadar && next.weatherAdvisory);
           applyWeatherMapboxFilter(map, next.weatherRadar, next.weatherAdvisory);
         }
         if (key === 'fireHotspots') {
@@ -753,9 +770,10 @@ export default function CrisisMap({
         showDisruption && !showAdvisory
           ? (['all', sevFilter, floodGate] as unknown as never)
           : (sevFilter as unknown as never);
-      // Hue follows the bucket, not severity: medium is the amber Waspada Dini
-      // sibling; high/critical is the blue Cuaca sibling. Dash arrays cannot be
-      // data-driven, so the dashed amber outline has its own filtered layer.
+      // Hue follows the bucket, not severity: medium is the violet Waspada Dini
+      // sibling (dot + ghost area); high/critical is the blue Cuaca sibling.
+      // Dash arrays cannot be data-driven, so the dashed violet outline has its
+      // own filtered layer.
       const disruptionOnly: any = ['in', ['get', 'severity'], ['literal', ['high', 'critical']]];
       const advisoryOnly: any = ['==', ['get', 'severity'], 'medium'];
       if (map.getLayer('weather-polygons-halo')) map.setFilter('weather-polygons-halo', combined);
@@ -1067,7 +1085,7 @@ export default function CrisisMap({
       // Phase M9-visual: the three hazard layers share ONE visual language —
       // filled area + solid outline + soft halo. Only the hue differs:
       //   Cuaca (active disruption, high/critical) → blue
-      //   Waspada Dini (advisory / medium forecast) → amber, dashed outline
+      //   Waspada Dini (advisory / medium forecast) → violet DOT (+ faint area)
       //   Titik Panas (FIRMS clusters) → red
       // Severity stays readable through opacity and width, never through hue.
       map.addSource('weather-polygons-source', {
@@ -1081,8 +1099,8 @@ export default function CrisisMap({
         paint: {
           'line-color': [
             'match', ['get', 'severity'],
-            'medium', 'rgba(245,158,11,0.22)',
-            'rgba(47,129,247,0.25)',
+            'medium', DS.layer.waspada.halo,
+            DS.layer.cuaca.halo,
           ],
           'line-width': 14,
           'line-blur': 8,
@@ -1096,12 +1114,14 @@ export default function CrisisMap({
         paint: {
           'fill-color': [
             'match', ['get', 'severity'],
-            'medium', '#f59e0b',
-            '#2f81f7',
+            'medium', DS.layer.waspada.fill,
+            DS.layer.cuaca.fill,
           ],
           'fill-opacity': [
             'match', ['get', 'severity'],
-            'medium', 0.18,
+            // Advisory keeps only a ghost of area for context: the dot is the
+            // signal, the footprint is just geography.
+            'medium', DS.layer.waspada.fillOpacity,
             'high', 0.20,
             'critical', 0.26,
             0.20,
@@ -1116,7 +1136,7 @@ export default function CrisisMap({
         source: 'weather-polygons-source',
         filter: ['in', ['get', 'severity'], ['literal', ['high', 'critical']]],
         paint: {
-          'line-color': '#60a5fa',
+          'line-color': DS.layer.cuaca.outline,
           'line-width': 2.0,
         },
       });
@@ -1126,10 +1146,32 @@ export default function CrisisMap({
         source: 'weather-polygons-source',
         filter: ['==', ['get', 'severity'], 'medium'],
         paint: {
-          'line-color': '#fbbf24',
-          'line-width': 1.75,
+          'line-color': DS.layer.waspada.outline,
+          'line-width': 1.5,
+          'line-opacity': 0.7,
           'line-dasharray': [3, 2],
         },
+      });
+
+      // 0b-2. Waspada Dini dots — the advisory is a forecast POINT, rendered as
+      // a violet dot sibling to the Titik Panas red dot. Centroids are derived
+      // from the advisory polygons in updateMapSources (same properties), so a
+      // click/keyboard target and the popup provenance stay identical.
+      map.addSource('waspada-dots-source', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      });
+      map.addLayer({
+        id: 'waspada-dots-halo',
+        type: 'circle',
+        source: 'waspada-dots-source',
+        paint: WASPADA_DOTS_HALO_PAINT as unknown as mapboxgl.CircleLayerSpecification['paint'],
+      });
+      map.addLayer({
+        id: 'waspada-dots',
+        type: 'circle',
+        source: 'waspada-dots-source',
+        paint: WASPADA_DOTS_PAINT as unknown as mapboxgl.CircleLayerSpecification['paint'],
       });
 
       // 0c. FIRMS VIIRS_SNPP_NRT active fire hotspots
@@ -1798,6 +1840,8 @@ export default function CrisisMap({
       map.on('click', 'weather-polygons-fill', handleWeatherClick);
       map.on('click', 'weather-polygons-outline', handleWeatherClick);
       map.on('click', 'weather-polygons-outline-advisory', handleWeatherClick);
+      map.on('click', 'waspada-dots', handleWeatherClick);
+      map.on('click', 'waspada-dots-halo', handleWeatherClick);
 
       // Q3: FIRMS hotspot click → count + FRP / conf / dist-to-corridor provenance.
       map.on('click', 'firms-dots', handleFirmsClick);
@@ -1805,7 +1849,7 @@ export default function CrisisMap({
       map.on('click', 'firms-areas-fill', handleFirmsClick);
       map.on('click', 'firms-areas-outline', handleFirmsClick);
       map.on('click', 'firms-areas-halo', handleFirmsClick);
-      ['firms-dots', 'firms-dots-outline', 'firms-areas-halo', 'firms-areas-fill', 'firms-areas-outline', 'weather-polygons-fill', 'weather-polygons-outline', 'weather-polygons-outline-advisory'].forEach((layerId) => {
+      ['firms-dots', 'firms-dots-outline', 'firms-areas-halo', 'firms-areas-fill', 'firms-areas-outline', 'weather-polygons-fill', 'weather-polygons-outline', 'weather-polygons-outline-advisory', 'waspada-dots', 'waspada-dots-halo'].forEach((layerId) => {
         map.on('mouseenter', layerId, () => {
           if (mapRef.current) mapRef.current.getCanvas().style.cursor = 'pointer';
         });
@@ -1962,18 +2006,29 @@ export default function CrisisMap({
 
     // 1. Update Weather Polygons (disruption-only default: high/critical + flood>=80 when props present).
     const weatherSource = map.getSource('weather-polygons-source') as mapboxgl.GeoJSONSource;
+    const waspadaSource = map.getSource('waspada-dots-source') as mapboxgl.GeoJSONSource | undefined;
     if (weatherSource) {
       // Suppress ambient weather polygons during active demo simulation to prevent visual clutter
-      if (demoStage == null && spatialWeatherPolygons && spatialWeatherPolygons.features && spatialWeatherPolygons.features.length > 0) {
-        const filtered = filterDisruptionFeatures(
-          spatialWeatherPolygons.features as GeoJSON.Feature[],
-          layerFilters.weatherRadar,
-          layerFilters.weatherAdvisory
-        );
-        weatherSource.setData({ type: 'FeatureCollection', features: filtered });
+      const filtered: GeoJSON.Feature[] =
+        demoStage == null && spatialWeatherPolygons && spatialWeatherPolygons.features && spatialWeatherPolygons.features.length > 0
+          ? filterDisruptionFeatures(
+              spatialWeatherPolygons.features as GeoJSON.Feature[],
+              layerFilters.weatherRadar,
+              layerFilters.weatherAdvisory
+            )
+          : [];
+      weatherSource.setData({ type: 'FeatureCollection', features: filtered });
+      if (filtered.length > 0) {
         applyWeatherMapboxFilter(map, layerFilters.weatherRadar, layerFilters.weatherAdvisory);
-      } else {
-        weatherSource.setData({ type: 'FeatureCollection', features: [] });
+      }
+      // Waspada Dini = the medium/forecast bucket, drawn as one violet dot per
+      // zone. Properties are copied verbatim so the popup, click target and
+      // confidence provenance are the same as the polygon's.
+      if (waspadaSource) {
+        waspadaSource.setData({
+          type: 'FeatureCollection',
+          features: waspadaDotsFromFeatures(filtered),
+        });
       }
     }
 

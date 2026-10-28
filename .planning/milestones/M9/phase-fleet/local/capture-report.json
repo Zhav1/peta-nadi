@@ -1,0 +1,16 @@
+{
+  "baseUrl": "http://localhost:3007",
+  "at": "2026-10-28T14:40:04.452Z",
+  "report": [
+    {
+      "file": ".planning\\milestones\\M9\\phase-fleet\\local\\after-390x844.png",
+      "suffix": "390x844",
+      "bytes": 57454
+    },
+    {
+      "file": ".planning\\milestones\\M9\\phase-fleet\\local\\after-1920x1080.png",
+      "suffix": "1920x1080",
+      "bytes": 454638
+    }
+  ]
+}

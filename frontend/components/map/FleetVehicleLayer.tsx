@@ -7,6 +7,7 @@ import { calculateRouteProgressPosition } from '@/lib/geoUtils';
 import { getHaversineDistanceKm } from '@/lib/aiDynamicRouter';
 import { corridorSnappingService } from '@/lib/corridorSnappingService';
 import { getVehicleFix } from '@/lib/fleetScope';
+import { FLEET_DOTS_PAINT, MODALITY_COLOR } from '@/lib/mapDataPaint';
 import { api } from '@/lib/api';
 import { TargetLockReticle } from './TargetLockReticle';
 import {
@@ -48,17 +49,6 @@ interface HoveredVehicleInfo {
   vehicle: FleetVehicle;
   screenPos: { x: number; y: number };
 }
-
-/**
- * Phase M9-visual — modality palette. Mirrors `DS.layer` in
- * lib/designTokens.ts; the map layer is the source of truth and the legend
- * imports the same values.
- */
-const MODALITY_COLOR: Record<string, string> = {
-  truck: '#34d399',
-  maritime: '#e2e8f0',
-  air: '#a78bfa',
-};
 
 function calculatePathDistanceKm(coords: [number, number][]): number {
   if (!coords || coords.length < 2) return 50.0;
@@ -362,55 +352,10 @@ export function FleetVehicleLayer({
           id: 'fleet-vehicle-dots',
           type: 'circle',
           source: 'fleet-vehicles-source',
-          paint: {
-            'circle-radius': [
-              'interpolate',
-              ['linear'],
-              ['zoom'],
-              4, 4,
-              8, 5.5,
-              14, 8,
-            ],
-            // Phase M9-visual: hue = modality (the operator's question is
-            // "truck, ship or aircraft?"), opacity + fill = signal quality.
-            //   Truck emerald #34d399 · Aircraft violet #a78bfa · Vessel silver #e2e8f0
-            // Estimated (ROUTE_ESTIMATED) keeps its modality hue at 45% with a
-            // hollow centre; an alert is an amber #f59e0b ring on any modality.
-            'circle-color': [
-              'case',
-              ['==', ['get', 'tracking_mode'], 'ROUTE_ESTIMATED'], 'rgba(0,0,0,0)',
-              ['==', ['get', 'modality'], 'truck'], '#34d399',
-              ['==', ['get', 'modality'], 'maritime'], '#e2e8f0',
-              ['==', ['get', 'modality'], 'air'], '#a78bfa',
-              '#e2e8f0',
-            ],
-            'circle-stroke-width': [
-              'case',
-              ['==', ['get', 'isImpacted'], true], 2.5,
-              1.5,
-            ],
-            'circle-stroke-color': [
-              'case',
-              ['==', ['get', 'isImpacted'], true], '#f59e0b',
-              ['==', ['get', 'modality'], 'truck'], '#34d399',
-              ['==', ['get', 'modality'], 'maritime'], '#e2e8f0',
-              ['==', ['get', 'modality'], 'air'], '#a78bfa',
-              '#e2e8f0',
-            ],
-            'circle-opacity': [
-              'interpolate', ['linear'], ['zoom'],
-              3.2, 0.0,
-              4.0, 1.0,
-            ],
-            'circle-stroke-opacity': [
-              'case',
-              ['all',
-                ['==', ['get', 'tracking_mode'], 'ROUTE_ESTIMATED'],
-                ['!=', ['get', 'isImpacted'], true],
-              ], 0.45,
-              ['interpolate', ['linear'], ['zoom'], 3.2, 0.0, 4.0, 1.0],
-            ],
-          },
+          // Paint lives in lib/mapDataPaint.ts so scripts/test_fleet_paint.ts can
+          // prove every expression parses in Node. A layer whose paint Mapbox
+          // rejects never gets added — silently, behind this try/catch.
+          paint: FLEET_DOTS_PAINT as unknown as mapboxgl.CircleLayerSpecification['paint'],
         });
       }
     } catch (err) {

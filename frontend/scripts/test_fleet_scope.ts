@@ -8,6 +8,7 @@
  * while REGULATOR / GUEST keep the macro view.
  */
 import {
+  getVehicleFix,
   isLiveTracked,
   isTenantAsset,
   scopeDispatcherFleet,
@@ -165,6 +166,38 @@ console.log('Helper invariants');
   check(
     'isTenantAsset rejects non-tenant macro',
     isTenantAsset(fleet[3], 'pos_logistik') === false
+  );
+}
+
+// The live API (`/api/v1/fleet/vehicles`) returns `current_coords`, `location`
+// and `current_location` as GeoJSON. getVehicleFix must read all three, and must
+// return null — never a fabricated city — when none is present.
+console.log('getVehicleFix matches the live API payload');
+{
+  const base = { ...fleet[0] };
+  check(
+    'reads current_coords [lon, lat]',
+    JSON.stringify(getVehicleFix({ ...base, current_coords: [99.75, 3.25] })) === '[99.75,3.25]'
+  );
+  check(
+    'reads location GeoJSON Point',
+    JSON.stringify(
+      getVehicleFix({ ...base, location: { type: 'Point', coordinates: [100.5, 1.5] } } as FleetVehicle)
+    ) === '[100.5,1.5]'
+  );
+  check(
+    'reads current_location GeoJSON Point',
+    JSON.stringify(
+      getVehicleFix({
+        ...base,
+        current_location: { type: 'Point', coordinates: [98.67, 3.59] },
+      } as FleetVehicle)
+    ) === '[98.67,3.59]'
+  );
+  check('no server fix is null, never a fallback city', getVehicleFix(base) === null);
+  check(
+    'null coordinates are rejected',
+    getVehicleFix({ ...base, current_coords: [null, null] } as unknown as FleetVehicle) === null
   );
 }
 
