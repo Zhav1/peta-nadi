@@ -2,9 +2,11 @@ import { test, expect, type Page } from '@playwright/test';
 import {
   DEFAULT_HAZARD_RADIUS_KM,
   calculateAIDynamicDetourRoutes,
+  directionsCache,
   fetchMapboxAlternativeDrivingRoutes,
 } from '../lib/aiDynamicRouter';
 import { fetchMapboxDirections } from '../lib/mapboxRoutingService';
+import { clearDynamicRouteCache } from '../lib/hubCorridorCache';
 import type { LonLat } from '../lib/pathDensifier';
 import type { MapboxDirectionsResponse } from '../lib/aiDynamicRouter';
 
@@ -18,6 +20,13 @@ const BELAWAN: LonLat = [98.6776, 3.7922];
 const TEBING_TINGGI: LonLat = [99.1621, 3.3251];
 const LUBUK_PAKAM_HAZARD: LonLat = [98.87, 3.56];
 const TEST_TOKEN = 'pk.test-token';
+
+// Same worker (workers=1), same module instance: a route/fetch cached by an
+// earlier spec would make the offline/live provenance tests non-hermetic.
+test.beforeEach(() => {
+  clearDynamicRouteCache();
+  directionsCache.clear();
+});
 
 const jsonResponse = (body: unknown): Response =>
   ({ ok: true, status: 200, json: async () => body }) as unknown as Response;
@@ -106,14 +115,28 @@ test('offline detour recommendations render with the SIMULASI badge, never as li
     expect(interpolated.length).toBeGreaterThan(0);
     for (const route of interpolated) {
       expect(route.description).toContain('SIMULASI/OFFLINE');
-      expect(route.safety_tag ?? '').toContain('SIMULASI/OFFLINE');
+      // contract updated 2026-10-28: phase 170 renamed the offline safety tag to
+      // 'TANPA GEOMETRI LIVE' (already pinned in toll-bypass-routing.spec.ts:241).
+      expect(route.safety_tag ?? '').toContain('TANPA GEOMETRI LIVE');
       expect(route.waypoints.length).toBeGreaterThan(0);
     }
     // No interpolated geometry may present itself with a clean live-style name.
     for (const route of routes) {
       if (route.safety_status === 'HOLD_DELAY') continue;
+      // contract updated 2026-10-28: non-viable intermodal placeholders now carry
+      // zero waypoints (no geometry at all), so they cannot misrepresent road
+      // geometry. They must still explain themselves rather than render blank.
+      if (route.waypoints.length === 0) {
+        expect((route.description ?? '').trim().length).toBeGreaterThan(0);
+        expect((route.safety_tag ?? '').trim().length).toBeGreaterThan(0);
+        continue;
+      }
+      // contract updated 2026-10-28: phase 170 labels offline geometry with
+      // 'TANPA GEOMETRI LIVE' in safety_tag instead of a 'SIMULASI' mention.
       const labeled =
-        (route.route_name ?? '').startsWith('[SIMULASI]') || (route.safety_tag ?? '').includes('SIMULASI');
+        (route.route_name ?? '').startsWith('[SIMULASI]') ||
+        (route.safety_tag ?? '').includes('SIMULASI') ||
+        (route.safety_tag ?? '').includes('TANPA GEOMETRI LIVE');
       expect(labeled).toBe(true);
     }
   } finally {
@@ -180,7 +203,9 @@ test('Stage-0 cold click fires onStart (second demo/start) rather than stalling'
   });
 
   await page.goto('/dashboard');
-  await page.getByRole('button', { name: 'Run Demo' }).click({ timeout: 30000 });
+  // contract updated 2026-10-28: the demo trigger is the stable id #run-demo-btn;
+  // its visible label is now "Demo", so the prose locator was never unique.
+  await page.locator('#run-demo-btn').click({ timeout: 30000 });
 
   const stageZero = page.getByRole('button', { name: 'Mulai Simulasi Disrupsi' });
   await expect(stageZero).toBeVisible({ timeout: 30000 });
@@ -277,8 +302,11 @@ test('guest deploy on 403 shows the sandbox toast and saves locally', async ({ p
   });
 
   // Mock approvals endpoint: GET returns empty list; POST returns 403 FORBIDDEN
+  // Count POSTs so the guest path can be proven zero-POST, not merely "no toast".
+  let approvalPosts = 0;
   await page.route('**/api/v1/approvals*', async (route) => {
     if (route.request().method() === 'POST') {
+      approvalPosts += 1;
       await route.fulfill({
         status: 403,
         contentType: 'application/json',
@@ -311,8 +339,10 @@ test('guest deploy on 403 shows the sandbox toast and saves locally', async ({ p
   await openMitigationBtn.click();
 
   // MitigationTab renders for GUEST role: shows sandbox disclaimer & SIMPAN RENCANA button
+  // contract updated 2026-10-28: guest copy now states the sandbox sends nothing at all
+  // (no POST /approvals, no TMS ping), which is the behaviour this test protects.
   await expect(
-    page.getByText('Mode Sandbox: Tindakan disimpan lokal untuk simulasi evaluasi.')
+    page.getByText(/Mode Sandbox:.*tanpa POST \/approvals, tanpa ping TMS/)
   ).toBeVisible({ timeout: 30000 });
 
 
@@ -320,13 +350,20 @@ test('guest deploy on 403 shows the sandbox toast and saves locally', async ({ p
   await expect(approveBtn).toBeVisible({ timeout: 30000 });
   await approveBtn.click();
 
-  // When POST /api/v1/approvals returns 403, MitigationTab catches it and invokes
-  // onApproveSuccess with local save confirmation toast
-  await expect(page.getByText(/tersimpan secara lokal/i)).toBeVisible({ timeout: 15000 });
+  // Guest saves stay local: the persistent sandbox note and the toast both state
+  // that nothing was dispatched, and the guest branch never POSTs /approvals.
+  // contract updated 2026-10-28: phrase is "tersimpan lokal, tidak dikirim ke armada".
+  await expect(page.getByText(/tersimpan lokal, tidak dikirim ke armada \(tanpa POST server\)/i)).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText(/rencana rute #1 tersimpan lokal, tidak dikirim ke armada/i)).toBeVisible({ timeout: 15000 });
 
-  // Route card updates optimistically to approved state
-  await expect(page.getByText('DISETUJUI & DIKIRIM')).toBeVisible({ timeout: 15000 });
-  await expect(approveBtn).toBeHidden();
+  // Phase 77 removed optimistic "approved" paint for guests: no committed state may
+  // be fabricated locally, and the sandbox CTA stays available for another preview.
+  // contract updated 2026-10-28: "DISETUJUI & DIKIRIM" copy no longer exists; the
+  // real committed marker is "Tercatat • menunggu".
+  await expect(approveBtn).toBeVisible();
+  await expect(page.getByText('Tercatat • menunggu')).toHaveCount(0);
+  // The sandbox is zero-POST: no approval ever reaches the server on this path.
+  expect(approvalPosts).toBe(0);
 
   // Audit gap verification: unlike legacy simulation tab, MitigationTab does NOT
   // persist to localStorage ('prehub_sandbox_approvals'), but only holds it in component state.
@@ -730,19 +767,17 @@ test('wave3 regulator APPROVE locked, HOLD enabled and committed', async ({ page
   const dialog = wave3Dialog(page);
   await expect(dialog).toBeVisible({ timeout: 15000 });
   await expectFiveSections(dialog);
-  // APPROVE/REJECT locked with dispatcher-only copy; HOLD stays enabled.
+  // APPROVE/REJECT locked with dispatcher-only copy; HOLD is gated on notes + 4/4.
   const approveBtn = dialog.getByRole('button', { name: 'SETUJUI [Khusus Dispatcher]' });
   await expect(approveBtn).toBeVisible();
   await expect(approveBtn).toBeDisabled();
-  await expect(dialog.getByRole('button', { name: 'TAHAN' })).toBeEnabled({ timeout: 15000 }).catch(async () => {
-    // Buttons gate on 4/4 checklist: verify the lock exists pre-checklist too.
-    await expect(approveBtn).toBeDisabled();
-  });
+  // contract updated 2026-10-28: the HOLD CTA is labelled TAHAN and stays locked
+  // until 4/4 checklist + operator notes, so it is disabled before verification.
+  await expect(dialog.getByRole('button', { name: 'TAHAN', exact: true })).toBeDisabled();
   // HOLD requires notes + 4/4 checklist, then commits one HOLD-flag POST.
-  await dialog.getByRole('button', { name: 'HOLD', exact: true }).click().catch(() => undefined);
   await wave3CheckAll(page);
   await dialog.getByPlaceholder(/Catatan operator/).fill('Tahan armada di buffer hingga koridor pulih.');
-  const holdBtn = dialog.getByRole('button', { name: 'TAHAN' });
+  const holdBtn = dialog.getByRole('button', { name: 'TAHAN', exact: true });
   await expect(holdBtn).toBeEnabled({ timeout: 15000 });
   await holdBtn.click();
   expect(approvalPosts).toBe(1);

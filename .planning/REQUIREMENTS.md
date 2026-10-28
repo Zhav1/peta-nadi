@@ -1,7 +1,7 @@
 # REQUIREMENTS: PreHub Logistics Resilience Intelligence Platform
 
-**Active Milestone:** M2 - PreHub Final Defense: Empirical Evaluation, Tactical HUD & Multi-Source Maturity
-**Previous Milestone:** M1 - Hackathon MVP (Pan-Sumatra Logistics & Swarm Intelligence) [COMPLETED]
+**Active Milestone:** M8 - Fast & Durable (phases 160–166)
+**Previous Milestone:** M7 - Live News Trust, Source Breadth & Forecast Waspada Integrity [COMPLETED]
 
 ---
 
@@ -215,5 +215,87 @@
 | NFR-11.3 (High-Contrast Glassmorphic Design) | Phase 42-45 | Planned |
 
 ---
+
+## Milestone M8: Fast & Durable (Active Scoped Requirements)
+
+Performance + reliability only; no visual redesign. Requirement IDs use the M8 category prefixes; no `AUTH`/`BOOT`/`DATA`/`PERF`/`OPS`/`VERIFY` IDs existed before this milestone, so each series starts at `01` (the numeric `FR-1..20` / `NFR-1..11` series stays closed at its last number).
+
+### AUTH — Session Durability (Phases 161, 164)
+
+- **AUTH-01 Refresh-token sync:** every Supabase `TOKEN_REFRESHED` / `SIGNED_IN` event writes the new access token into `prehub_auth_token` and local storage; the stored token is never allowed to outlive its own `exp`.
+- **AUTH-02 Magic-link session:** the redirect landing handled via `detectSessionInUrl` + `SIGNED_IN` establishes a session without a manual reload.
+- **AUTH-03 Seven-day sliding cookie:** `Max-Age=604800`, `Path=/`, `SameSite=Lax`, `Secure` in production; renewed on refresh and cleared on logout.
+- **AUTH-04 `exp` required:** middleware rejects any token without an `exp` claim; the backend stays authoritative.
+- **AUTH-05 Fail-closed 401:** a supplied-but-invalid token returns 401; guest access is granted only when no token was sent.
+- **AUTH-06 Cross-tab sync:** login and logout propagate across tabs via `storage` event or `BroadcastChannel`.
+- **AUTH-07 Logout race:** a logout during an in-flight login is not resurrected by the resolving login (auth-generation counter).
+
+### BOOT — Thin Web Process (Phase 162)
+
+- **BOOT-01 No batch pollers at boot:** zero batch ingestion pollers start in the first 60s of process life.
+- **BOOT-02 Lazy imports:** numpy/scipy/langgraph/adapters load lazily; no `init_db()` at import in production; JWKS pre-warmed after startup.
+- **BOOT-03 `/internal/tick`:** protected by `X-Internal-Token` (constant-time compare), returns `202 { accepted, due, run_id }` immediately, never waits for jobs.
+- **BOOT-04 Tick single-flight:** a Postgres advisory lock or `job_runs.locked_until` allows one tick at a time; an overlapping tick returns `202 skipped`.
+- **BOOT-05 Last-run cadence:** jobs run on `last_run_at` + cadence with a per-tick CPU budget; missed ticks catch up and a completed cycle never re-runs.
+- **BOOT-06 Deferred continuous consumers:** AIS WebSocket and Redis alert fanout start 60–90s after boot, supervised with backoff.
+
+### DATA — Bootstrap Snapshot & Read Path (Phase 163)
+
+- **DATA-01 `dashboard_snapshots` table:** DB-backed read model with per-section payload and `computed_at`.
+- **DATA-02 Bootstrap endpoint:** `GET /api/v1/dashboard/bootstrap?modality=truck|vessel|air` is auth-aware (guest → public, dispatcher → `company_id`-scoped) and returns `computed_at`, `stale`, per-section freshness.
+- **DATA-03 Lazy-mounted sections:** hidden dashboard sections do not fetch on mount; only visible sections poll.
+- **DATA-04 Weather/incidents cache:** weather (BMKG + Open-Meteo fusion) and incidents are cache-served, not recomputed live per request.
+- **DATA-05 Snapshot staleness:** missing/corrupt snapshot falls back to a 10s-capped live compute with an async snapshot write and renders a stale badge; no silent empty dashboard.
+- **DATA-06 Snapshot cache policy:** bootstrap responses are `private, no-store` and never shared across users or tenants.
+
+### PERF — Client Transport (Phases 163, 164)
+
+- **PERF-01 Timeouts/abort:** `fetchWithTimeout` at 15s default and 30s for bootstrap, one retry with backoff, no proxy fallback on timeout, abort on unmount.
+- **PERF-02 No overlapping polls:** a section never has two in-flight polls; navigation/render does not stack requests.
+- **PERF-03 No CORS preflight on GET:** no `Content-Type` header on GET requests.
+- **PERF-04 First-data SLO:** dashboard first data < 5s on throttled Fast 4G, with a request count materially below the Phase 160 baseline.
+
+### OPS — Proxy, Probe, Soak (Phases 160, 164, 165, 166)
+
+- **OPS-01 Proxy cache boundary:** authenticated GET → `Cache-Control: private, no-store`; only an explicit anonymous allowlist may use `public, s-maxage=60, stale-while-revalidate=120`; `Idempotency-Key` preserved; SSE never cached.
+- **OPS-02 GH probe artifact:** keep-alive workflow uses `--fail-with-body`, `max-time 120`, one retry, a 15-minute job timeout, a `concurrency` guard, and publishes a JSON artifact plus daily summary.
+- **OPS-03 Seven-day soak:** 10-minute probe cadence over 7 days with 0 failures; delayed runs recorded as delayed, not failed; a deploy resets the window and records a new start time.
+
+### VERIFY — Evidence (Phases 160, 165)
+
+- **VERIFY-01 Playwright local + production smoke:** local suite gates the branch; production smoke runs against `pre-hub.vercel.app` + `peta-nadi.onrender.com`.
+- **VERIFY-02 Two-user cache isolation:** two distinct authenticated users never receive each other's cached payload.
+- **VERIFY-03 SLO table:** measured cold first response, warm `/health`, warm login, first data, session survival, and request count recorded against the baseline.
+- **VERIFY-04 Audit artifact:** `BACKEND-AUDIT.md` covers all 81 routes, the 23 auth-dependent handlers, cache status, sync I/O, and persistence, with ranked findings.
+
+### Traceability (Milestone M8)
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| AUTH-01..07 (session durability) | Phase 161 | Planned |
+| BOOT-01..06 (thin web + tick) | Phase 162 | Planned |
+| DATA-01..06 (bootstrap + read path) | Phase 163 | Planned |
+| PERF-01..03 (client transport) | Phases 163–164 | Planned |
+| PERF-04 (first-data SLO) | Phase 165 | Planned |
+| OPS-01 (proxy boundary) | Phase 164 | Planned |
+| OPS-02 (probe artifact) | Phase 160 | Planned |
+| OPS-03 (7-day soak) | Phase 166 | Planned |
+| VERIFY-01 (smoke suites) | Phases 160, 165 | Planned |
+| VERIFY-02 (cache isolation) | Phase 165 | Planned |
+| VERIFY-03 (SLO table) | Phase 165 | Planned |
+| VERIFY-04 (backend audit) | Phase 160 | Planned |
+
+### Out of Scope (Milestone M8)
+
+- No visual redesign; the landing page and its 121-frame sequence are untouched.
+- No `@supabase/ssr` HttpOnly migration and no backend-owned session table.
+- No paid infrastructure; free-host migration is a fallback gate only.
+- No full async rewrite of all 81 backend routes.
+- No new product features; no route-result persistence across refresh.
+- HTTPOnly/RLS verification and classification of the 51 unauthenticated routes.
+- Landing-page media optimization, and BMKG freshness tightening below the 5-minute tick.
+- Soak verdict itself (follow-up session).
+
+---
 *Requirements defined: 2026-09-28*
-*Active Milestone: M3 - PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform*
+*Active Milestone: M8 - Fast & Durable (requirements appended 2026-10-27)*

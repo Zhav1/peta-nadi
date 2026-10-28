@@ -1,73 +1,395 @@
 name: Keep-Alive Pinger (Render & Supabase)
 
+# Secondary waker + soak prober for the free Render service.
+# Primary waker: cron-job.org, every 5 min on GET /health (docs/KEEPALIVE_RUNBOOK.md).
+#
+# Worst-case curl budget (--retry 1 == 2 attempts, so 2 x max-time + 1 delay):
+#   probe 1  /health                   2 x 120s + 10s = 250s
+#   wait  (cold-start settle)                         15s
+#   probe 2  /health (warm)            2 x 120s + 10s = 250s
+#   probe 3  /api/v1/health/sources    2 x  90s + 10s = 190s
+#   probe 4  Supabase REST             2 x  30s + 10s =  70s
+#   ------------------------------------------------------------
+#   total                                             775s (12m55s)
+# Job ceiling: 900s (timeout-minutes: 15) -> ~2 min of headroom for runner
+# setup, the summary step and the artifact upload. Keep these numbers in sync
+# with docs/KEEPALIVE_RUNBOOK.md and
+# .planning/phases/160-baseline-audit-state-repair/KEEPALIVE-FIX.md.
+
 on:
   schedule:
-    # Runs every 10 minutes (cron: '*/10 * * * *')
-    # Ensures Render never sleeps (15m idle limit) and Supabase stays active (7d inactivity rule)
-    # NOTE: cron-job.org pings GET /health every 5 min as the PRIMARY waker
-    # (see docs/KEEPALIVE_RUNBOOK.md). This workflow is the secondary safety net.
+    # Every 10 minutes. Render Free sleeps after 15 min idle; this is the safety
+    # net behind the 5-minute cron-job.org primary waker.
     - cron: '*/10 * * * *'
-  workflow_dispatch: # Allows manual trigger from GitHub Actions tab
+  workflow_dispatch:
+
+# A delayed run must not overlap the next one: queue instead of cancelling, so
+# no probe result is ever silently dropped.
+concurrency:
+  group: keep-alive
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  RENDER_URL: 'https://peta-nadi.onrender.com'
+  WARM_WAIT_S: '15'
+  WAKE_PROBE_MAX_TIME: '120'
+  SOURCES_PROBE_MAX_TIME: '90'
+  SUPABASE_PROBE_MAX_TIME: '30'
+  RETRY_DELAY_S: '10'
+  RETRIES: '1'
 
 jobs:
   ping-services:
     name: Ping Render & Supabase
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
 
     steps:
-      - name: Ping Render Backend Health
-        run: |
-          echo "=== 1. Probing Render Web Service ==="
-          RENDER_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 90 --retry 2 --retry-delay 10 "https://peta-nadi.onrender.com/health")
-          echo "Render /health HTTP Status: $RENDER_HTTP_CODE"
-          if [ "$RENDER_HTTP_CODE" -ge 200 ] && [ "$RENDER_HTTP_CODE" -lt 400 ]; then
-            echo "Render backend is alive and warm."
-          else
-            echo "Warning: Render returned status $RENDER_HTTP_CODE (cold start may be underway)"
-          fi
-
-      - name: Warm Ping Render Health (second hit after boot window)
-        run: |
-          echo "=== 2. Warm ping (wake confirmation, /health only) ==="
-          echo "Sleeping 20s to let a cold-starting instance finish booting..."
-          sleep 20
-          WARM_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 90 --retry 2 --retry-delay 10 "https://peta-nadi.onrender.com/health")
-          echo "Render /health (warm) HTTP Status: $WARM_HTTP_CODE"
-          if [ "$WARM_HTTP_CODE" -ge 200 ] && [ "$WARM_HTTP_CODE" -lt 400 ]; then
-            echo "Render backend confirmed warm."
-          else
-            echo "Warning: warm ping returned status $WARM_HTTP_CODE"
-          fi
-
-      - name: Ping Backend Data Sources (DB probe only, NOT for wake)
-        run: |
-          echo "=== 3. Probing Render Data Sources Endpoint (DB probe only) ==="
-          # NOTE: /sources is a DB health probe, never the wake mechanism.
-          # Wake uses GET /health only (cheap, no DB fan-out).
-          SOURCES_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 90 --retry 2 --retry-delay 10 "https://peta-nadi.onrender.com/api/v1/health/sources")
-          echo "Render /api/v1/health/sources HTTP Status: $SOURCES_HTTP_CODE"
-
-      - name: Directly Ping Supabase REST API (Database Activity)
+      - name: Probe endpoints and write JSON artifact
+        id: probes
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          SCHEDULE_CRON: ${{ github.event.schedule }}
+          PYTHONIOENCODING: utf-8
         run: |
-          echo "=== 4. Executing Direct REST Query against Supabase ==="
-          # Query data_sources table with count to generate genuine database query traffic
-          SB_RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" --max-time 20 \
-            -H "apikey: $SUPABASE_ANON_KEY" \
-            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
-            "$SUPABASE_URL/rest/v1/data_sources?select=name&limit=1")
-          
-          HTTP_STATUS=$(echo "$SB_RESPONSE" | grep "HTTP_STATUS" | cut -d':' -f2)
-          BODY=$(echo "$SB_RESPONSE" | grep -v "HTTP_STATUS")
-          
-          echo "Supabase REST Status: $HTTP_STATUS"
-          echo "Supabase Body: $BODY"
-          
-          if [ "$HTTP_STATUS" -eq 200 ] || [ "$HTTP_STATUS" -eq 206 ]; then
-            echo "Supabase query succeeded. Database inactivity timer refreshed."
-          else
-            echo "Supabase response code: $HTTP_STATUS"
+          # `set -e` is deliberately omitted. A failed probe must be recorded in
+          # the artifact and must NOT abort the remaining probes; the step exits
+          # non-zero at the end once every probe has run.
+          set -u -o pipefail
+
+          OUT_DIR="soak"
+          OUT_FILE="${OUT_DIR}/keepalive-${RUN_ID}.json"
+          mkdir -p "$OUT_DIR" || { echo "::error::cannot create ${OUT_DIR}"; exit 1; }
+          : > "$OUT_FILE"
+
+          FAILED=0
+          RECORD_ERRORS=0
+          STEP_STARTED_UTC="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "keep-alive run ${RUN_ID} (attempt ${RUN_ATTEMPT:-0}) started ${STEP_STARTED_UTC}"
+          echo "artifact: ${OUT_FILE}"
+
+          utc_now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+
+          emit_record() {
+            # Appends exactly one JSON object (one line) for the current probe.
+            # PROBE_* inputs are exported by run_probe() / skip_probe().
+            python3 - "$OUT_FILE" "${RUN_ID:-local}" "${RUN_ATTEMPT:-0}" "${SCHEDULE_CRON:-unscheduled}" <<'PY'
+          import json, os, sys
+
+          out_file, run_id, run_attempt, schedule = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+          env = os.environ
+
+
+          def as_http_status(value):
+              value = (value or "").strip()
+              if value in ("", "000"):
+                  return None
+              try:
+                  code = int(value)
+              except ValueError:
+                  return None
+              return code if code > 0 else None
+
+
+          def as_float(value):
+              value = (value or "").strip()
+              if value in ("", "0", "0.000000"):
+                  return None
+              try:
+                  return round(float(value), 3)
+              except ValueError:
+                  return None
+
+
+          def as_int(value):
+              value = (value or "").strip()
+              if value == "":
+                  return None
+              try:
+                  return int(value)
+              except ValueError:
+                  return None
+
+
+          def text(value):
+              # os.environ can carry undecodable bytes as lone surrogates; strip
+              # them so the JSON line is always writable UTF-8.
+              return (value or "").strip().encode("utf-8", "ignore").decode("utf-8", "ignore")
+
+
+          status = as_http_status(env.get("PROBE_HTTP_STATUS"))
+          record = {
+              "schema_version": 1,
+              "probe": text(env.get("PROBE_NAME")) or None,
+              "label": text(env.get("PROBE_LABEL")) or None,
+              "url": text(env.get("PROBE_URL")) or None,
+              "method": "GET",
+              "result": env.get("PROBE_RESULT") or None,
+              "http_status": status,
+              "http_class": ("{}xx".format(status // 100) if status else None),
+              "time_total_s": as_float(env.get("PROBE_TIME_TOTAL")),
+              "curl_exit": as_int(env.get("PROBE_CURL_EXIT")),
+              "curl_max_time_s": as_int(env.get("PROBE_MAX_TIME")),
+              "curl_retries": as_int(env.get("PROBE_RETRIES")),
+              "started_utc": text(env.get("PROBE_STARTED")) or None,
+              "finished_utc": text(env.get("PROBE_FINISHED")) or None,
+              "detail": text(env.get("PROBE_DETAIL"))[:400] or None,
+              "body_preview": text(env.get("PROBE_BODY"))[:400] or None,
+              "run_id": run_id,
+              "run_attempt": run_attempt,
+              "schedule": schedule,
+          }
+
+          with open(out_file, "a", encoding="utf-8") as handle:
+              handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+          print("recorded: {probe} -> {result} (http={http})".format(
+              probe=record["probe"], result=record["result"], http=record["http_status"]))
+          PY
+          }
+
+          run_probe() {
+            # $1 name, $2 label, $3 url, $4 max-time seconds, then extra curl args
+            local name="$1" label="$2" url="$3" max_time="$4"
+            shift 4
+            local body_file err_file rc=0 started finished meta=""
+            local status="" time_total="" preview="" detail="" result="ok"
+
+            body_file="$(mktemp)"
+            err_file="$(mktemp)"
+            started="$(utc_now)"
+
+            meta="$(curl --silent --show-error --fail-with-body \
+              --max-time "$max_time" \
+              --retry "$RETRIES" --retry-delay "$RETRY_DELAY_S" \
+              --output "$body_file" \
+              --write-out '%{http_code} %{time_total}' \
+              "$@" "$url" 2>"$err_file")" || rc=$?
+
+            finished="$(utc_now)"
+            read -r status time_total <<<"$meta" || true
+            preview="$(head -c 400 "$body_file" 2>/dev/null || true)"
+
+            if [ "$rc" -ne 0 ]; then
+              result="fail"
+              detail="curl exit ${rc}: $(tr -d '\r' < "$err_file" | sort -u | tr '\n' ' ' | cut -c1-300)"
+            elif [ -z "$status" ] || [ "$status" = "000" ]; then
+              result="fail"
+              detail="no HTTP status recorded"
+            fi
+
+            if [ "$result" = "fail" ]; then
+              FAILED=$((FAILED + 1))
+              echo "::error::${name} FAILED (${detail})"
+            else
+              echo "${name}: ok (HTTP ${status} in ${time_total}s)"
+            fi
+
+            export PROBE_NAME="$name" PROBE_LABEL="$label" PROBE_URL="$url"
+            export PROBE_RESULT="$result" PROBE_HTTP_STATUS="$status"
+            export PROBE_TIME_TOTAL="$time_total" PROBE_CURL_EXIT="$rc"
+            export PROBE_MAX_TIME="$max_time" PROBE_RETRIES="$RETRIES"
+            export PROBE_STARTED="$started" PROBE_FINISHED="$finished"
+            export PROBE_DETAIL="$detail" PROBE_BODY="$preview"
+            if ! emit_record; then
+              RECORD_ERRORS=$((RECORD_ERRORS + 1))
+              echo "::error::could not append the ${name} record to ${OUT_FILE}"
+            fi
+
+            rm -f "$body_file" "$err_file"
+          }
+
+          skip_probe() {
+            # $1 name, $2 label, $3 url, $4 reason
+            local name="$1" label="$2" url="$3" reason="$4"
+            local now
+            now="$(utc_now)"
+            echo "::warning::${name} skipped: ${reason}"
+
+            export PROBE_NAME="$name" PROBE_LABEL="$label" PROBE_URL="$url"
+            export PROBE_RESULT="skipped" PROBE_HTTP_STATUS="" PROBE_TIME_TOTAL=""
+            export PROBE_CURL_EXIT="" PROBE_MAX_TIME="" PROBE_RETRIES=""
+            export PROBE_STARTED="$now" PROBE_FINISHED="$now"
+            export PROBE_DETAIL="$reason" PROBE_BODY=""
+            if ! emit_record; then
+              RECORD_ERRORS=$((RECORD_ERRORS + 1))
+              echo "::error::could not append the ${name} record to ${OUT_FILE}"
+            fi
+          }
+
+          echo "=== probe 1/4: Render /health (cold wake) ==="
+          run_probe "render_health_cold" "Render /health (cold wake)" \
+            "${RENDER_URL}/health" "$WAKE_PROBE_MAX_TIME"
+
+          echo "=== probe 2/4: Render /health (warm confirmation, after ${WARM_WAIT_S}s) ==="
+          # The wait only lets a cold-starting instance finish booting; it is not
+          # an assertion that the instance was cold.
+          sleep "$WARM_WAIT_S"
+          run_probe "render_health_warm" "Render /health (warm confirmation)" \
+            "${RENDER_URL}/health" "$WAKE_PROBE_MAX_TIME"
+
+          echo "=== probe 3/4: Render /api/v1/health/sources (DB probe, never a wake) ==="
+          # Wake uses GET /health only (cheap, no DB fan-out). This endpoint is a
+          # database probe; a failure here is a real signal, not a sleep symptom.
+          run_probe "render_sources" "Render /api/v1/health/sources (DB probe)" \
+            "${RENDER_URL}/api/v1/health/sources" "$SOURCES_PROBE_MAX_TIME"
+
+          echo "=== probe 4/4: Supabase REST inactivity query ==="
+          SUPABASE_PROBE_URL=""
+          if [ -n "${SUPABASE_URL:-}" ]; then
+            SUPABASE_PROBE_URL="${SUPABASE_URL%/}/rest/v1/data_sources?select=name&limit=1"
           fi
+          if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_ANON_KEY:-}" ]; then
+            skip_probe "supabase_rest_inactivity" "Supabase REST data_sources query" \
+              "${SUPABASE_PROBE_URL}" \
+              "missing secret: SUPABASE_URL and/or SUPABASE_ANON_KEY not configured"
+          else
+            run_probe "supabase_rest_inactivity" "Supabase REST data_sources query" \
+              "${SUPABASE_PROBE_URL}" \
+              "$SUPABASE_PROBE_MAX_TIME" \
+              -H "apikey: ${SUPABASE_ANON_KEY}" \
+              -H "Authorization: Bearer ${SUPABASE_ANON_KEY}"
+          fi
+
+          echo "=== keep-alive summary ==="
+          echo "artifact: ${OUT_FILE}"
+          echo "failed probes: ${FAILED}"
+          echo "unwritable records: ${RECORD_ERRORS}"
+          echo "finished: $(utc_now)"
+          if [ "$RECORD_ERRORS" -ne 0 ]; then
+            echo "::error::${RECORD_ERRORS} probe record(s) could not be written; the artifact is incomplete"
+            exit 1
+          fi
+          if [ "$FAILED" -ne 0 ]; then
+            echo "::error::${FAILED} keep-alive probe(s) failed - see ${OUT_FILE}"
+            exit 1
+          fi
+          echo "all probes passed"
+
+      - name: Append human-readable summary
+        if: always()
+        env:
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          PROBE_OUTCOME: ${{ steps.probes.outcome }}
+          PYTHONIOENCODING: utf-8
+        run: |
+          set -u -o pipefail
+          OUT_FILE="soak/keepalive-${RUN_ID}.json"
+          SUMMARY_TARGET="${GITHUB_STEP_SUMMARY:-/dev/stdout}"
+
+          if [ ! -s "$OUT_FILE" ]; then
+            echo "::warning::no probe artifact at ${OUT_FILE}; summary skipped"
+            {
+              echo "## Keep-alive probe report — NO DATA"
+              echo ""
+              echo "Run \`${RUN_ID}\` (attempt \`${RUN_ATTEMPT:-0}\`) produced no probe artifact."
+              echo "The probe step was interrupted before the first record was written."
+            } >> "$SUMMARY_TARGET"
+            exit 0
+          fi
+
+          python3 - "$OUT_FILE" "$SUMMARY_TARGET" <<'PY'
+          import json, os, sys
+          from collections import Counter
+
+          out_path, summary_path = sys.argv[1], sys.argv[2]
+          records = []
+          with open(out_path, encoding="utf-8") as handle:
+              for line in handle:
+                  line = line.strip()
+                  if not line:
+                      continue
+                  try:
+                      records.append(json.loads(line))
+                  except json.JSONDecodeError:
+                      pass
+
+          counts = Counter(record.get("result") or "unknown" for record in records)
+          failed = counts.get("fail", 0)
+          if not records:
+              verdict = "NO DATA"
+          elif failed:
+              verdict = "FAIL"
+          else:
+              verdict = "PASS"
+
+          run_id = os.environ.get("RUN_ID", "unknown")
+          run_attempt = os.environ.get("RUN_ATTEMPT", "0")
+          probe_outcome = os.environ.get("PROBE_OUTCOME", "unknown")
+
+          lines = []
+          emit = lines.append
+
+
+          def cell(value):
+              return "-" if value in (None, "") else str(value)
+
+
+          emit("## Keep-alive probe report -- {}".format(verdict))
+          emit("")
+          emit("Run `{}` (attempt `{}`, probe step `{}`) - probes **{}**, ok **{}**, failed **{}**, skipped **{}**".format(
+              run_id, run_attempt, probe_outcome, len(records), counts.get("ok", 0), failed, counts.get("skipped", 0)))
+          emit("")
+          emit("| Probe | Result | HTTP | time_total (s) | curl exit | max-time (s) | Started (UTC) |")
+          emit("| --- | --- | --- | --- | --- | --- | --- |")
+          for record in records:
+              emit("| `{}` | {} | {} | {} | {} | {} | {} |".format(
+                  cell(record.get("probe")),
+                  cell(record.get("result")),
+                  cell(record.get("http_status")),
+                  cell(record.get("time_total_s")),
+                  cell(record.get("curl_exit")),
+                  cell(record.get("curl_max_time_s")),
+                  cell(record.get("started_utc")),
+              ))
+
+          problems = [record for record in records if record.get("result") == "fail"]
+          skipped = [record for record in records if record.get("result") == "skipped"]
+          if problems:
+              emit("")
+              emit("### Failures")
+              emit("")
+              for record in problems:
+                  emit("- `{}` - {}".format(
+                      cell(record.get("probe")), cell(record.get("detail"))))
+          if skipped:
+              emit("")
+              emit("### Skipped")
+              emit("")
+              for record in skipped:
+                  emit("- `{}` - {}".format(
+                      cell(record.get("probe")), cell(record.get("detail"))))
+
+          emit("")
+          emit("<details><summary>How to read this artifact</summary>")
+          emit("")
+          emit("- One JSON object per probe, appended to `soak/keepalive-<run_id>.json` (JSON Lines).")
+          emit("- `started_utc` / `finished_utc` are the wall-clock window of each probe.")
+          emit("- A gap larger than the 10-minute cron interval between consecutive runs is a")
+          emit("  **delayed GitHub schedule**, not a backend failure. The job is still green.")
+          emit("- `result: skipped` means the probe could not run (missing `SUPABASE_URL` /")
+          emit("  `SUPABASE_ANON_KEY` secrets); it never turns the job red.")
+          emit("- `curl_exit` 0 = transfer completed. 22 = HTTP >= 400 (`--fail-with-body`).")
+          emit("  28 = `--max-time` exceeded (cold start still booting, or endpoint hung).")
+          emit("")
+          emit("</details>")
+
+          # Explicit UTF-8 write: never depend on the runner's stdout encoding.
+          with open(summary_path, "a", encoding="utf-8") as handle:
+              handle.write("\n".join(lines) + "\n")
+          PY
+
+      - name: Upload keep-alive artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: keepalive-${{ github.run_id }}-${{ github.run_attempt }}
+          path: soak/keepalive-${{ github.run_id }}.json
+          retention-days: 90
+          if-no-files-found: warn

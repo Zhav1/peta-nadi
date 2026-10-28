@@ -248,6 +248,10 @@ async def get_osint_feed():
         from app.routers.news_router import get_live_news
         news_res = await get_live_news(force_refresh=False)
         articles = news_res.get("articles") or news_res.get("items") or []
+        # Phase 172.5 (M9): the OSINT feed is an intelligence surface, not the
+        # Berita display list — `regional` is display-only context and must never
+        # reach it. Untiered rows (legacy callers) are crisis by contract.
+        articles = [a for a in articles if a.get("relevance_tier", "crisis") == "crisis"]
         return {"items": articles, "total": len(articles)}
     except Exception as e:
         logger.warning(f"OSINT feed fallback: {e}")

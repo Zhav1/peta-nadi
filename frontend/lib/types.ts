@@ -185,6 +185,14 @@ export interface RouteRecommendation {
   congestion_segments?: CongestionSegment[];
   modality?: 'truck' | 'maritime' | 'air' | 'multimodal' | 'best';
   corridor_type?: 'land_primary' | 'land_detour' | 'sea_intermodal' | 'air_intermodal' | 'hold_staging';
+  /**
+   * Phase 170 provenance (decision 5): 'live' = Mapbox road geometry,
+   * 'offline-interpolated' = straight-line estimate, 'solver-hub' = CPU solver
+   * hub-graph geometry. Surfaced as `geometri jalan` / `koridor hub` /
+   * `simulasi offline`; never implied by styling alone.
+   */
+  source?: 'live' | 'offline-interpolated' | 'solver-hub';
+
   viable?: boolean;
   non_viable_reason?: string;
   economic_comparison?: HoldVsRerouteEconomics;
@@ -381,7 +389,7 @@ export type WsEvent =
 // Map layer data shapes
 export interface FireHotspot {
   coordinates: [number, number];   // [lng, lat]
-  confidence: number;               // 0–100
+  confidence: number;               // 0-100
   frp?: number;                     // Fire Radiative Power (MW, VIIRS)
   conf?: string;                    // FIRMS confidence class (l/n/h)
   dist_to_corridor_km?: number | null;
@@ -393,6 +401,38 @@ export interface FireHotspot {
   lat?: number;
   ts?: string;
   radius_km?: number;             // affected-area radius (km): 5 critical / 2.5 high / 1 medium
+  // Phase 168: raw detection provenance (keyless CSV + API parity)
+  acq_date?: string;
+  acq_time?: string;
+  satellite?: string;
+  instrument?: string;
+  daynight?: string;
+  type?: string;                    // wildfire
+}
+
+/** Phase 168: where the hotspot payload came from. */
+export type FireHotspotSource = 'nasa-firms-api' | 'nasa-firms-csv' | 'cache';
+
+/**
+ * GET /api/v1/fire/hotspots — stable envelope.
+ * count is null ONLY when unknown (degraded); status "ok" with count 0 is
+ * forbidden (healthy zero is "empty").
+ */
+export interface FireHotspotResponse {
+  /** Render-capped list (unchanged hotspot shape). */
+  hotspots: FireHotspot[];
+  /** True pre-cap count; null only when unknown. */
+  count: number | null;
+  /** Pre-cap count. */
+  total: number;
+  /** True when the render cap truncated hotspots. */
+  capped: boolean;
+  status: HazardCounterStatus;
+  reason: string | null;
+  source: FireHotspotSource;
+  updated_at: string;
+  /** Observation window in hours (24h default). */
+  window_hours: number;
 }
 
 export interface MaritimeVector {
@@ -842,6 +882,8 @@ export interface GeocodeNode {
   lon: number;
   type: 'port' | 'airport' | 'city' | 'regency' | 'kecamatan' | 'village' | 'hub';
   province: string;
+  parent?: string;
+  source?: string;
   kabupaten?: string;
   kecamatan?: string;
   corridor?: string;
@@ -854,6 +896,10 @@ export interface GeocodeSearchResult {
   lon: number;
   type: string;
   province: string;
+  /** Phase 171: enclosing kabupaten/kota (kecamatan) or province (kab/kota). */
+  parent?: string;
+  /** Phase 171: `gazetteer` (offline) or `nominatim` (live desa lookup). */
+  source?: string;
   kabupaten?: string;
   kecamatan?: string;
   corridor?: string;
@@ -1396,4 +1442,156 @@ export interface PeriodBucket {
   label: string;
   tripCount: number;
   totalSavedIdr: number;
+}
+
+/** Phase 160 — hazard counter truth states. `degraded` means unknown, not 0. */
+export type HazardCounterStatus = 'ok' | 'stale' | 'degraded' | 'empty';
+
+/** One world-truth hazard counter (cuaca = disruption, waspada = medium watch). */
+export interface HazardCounterBucket {
+  /** null ONLY when status is degraded — never a fabricated 0. */
+  count: number | null;
+  /** Uncapped total before the render cap; equals count on this endpoint. */
+  total: number | null;
+  status: HazardCounterStatus;
+  reason: string | null;
+  source: string;
+  valid_until: string | null;
+  /** Hazard window in hours (24h precipitation gate). */
+  window_hours: number;
+}
+
+/** GET /api/v1/weather/summary — toggle-independent, full-Sumatra counters. */
+export interface WeatherHazardSummary {
+  /** [minLon, minLat, maxLon, maxLat] */
+  bbox: number[];
+  generated_at: string;
+  cuaca: HazardCounterBucket;
+  waspada: HazardCounterBucket;
+}
+
+/**
+ * Phase 169 — render-cap + retention contract of a weather polygon
+ * FeatureCollection (`metadata` is the full block, `meta` the compact copy).
+ * `total` is the pre-cap qualifying count, `count` the returned polygons.
+ */
+export interface WeatherPolygonMeta {
+  status: HazardCounterStatus;
+  reason: string | null;
+  total: number | null;
+  count: number | null;
+  capped: boolean;
+  updated_at: string | null;
+  validity_hours?: number;
+  stale_ceiling_hours?: number;
+  refresh_seconds?: number;
+  max_features?: number;
+}
+
+// ==========================================
+// M8 Phase 163b: dashboard bootstrap read model
+// (`GET /api/v1/dashboard/bootstrap`)
+// ==========================================
+
+/**
+ * Per-section freshness reported by the bootstrap endpoint. `degraded` is an
+ * exception inside that one section (data is null); `timeout` means it exceeded
+ * its 5 s budget. A section can be `ok` even when the overall response is
+ * `stale` (bounded live build), so render them independently.
+ */
+export type DashboardSectionStatus = 'ok' | 'degraded' | 'timeout';
+
+export interface DashboardSection<T = unknown> {
+  status: DashboardSectionStatus;
+  data: T | null;
+  error?: string | null;
+  /** True when a degraded section reused an in-process last-good value. */
+  cached?: boolean;
+}
+
+export type DashboardBootstrapReason =
+  | 'missing_snapshot'
+  | 'snapshot_stale'
+  | 'unparseable_computed_at'
+  | 'live_build_failed'
+  | 'live_build_timeout';
+
+/** Read-time breadth metadata (`GET /api/v1/news/live` → `meta`, Phase 172 / M9). */
+export interface NewsBreadthMetaPayload {
+  source_counts?: Record<string, number>;
+  province_counts?: Record<string, number>;
+  truncated?: boolean;
+  provinces_present?: string[];
+  provinces_missing?: string[];
+  max_per_source?: number;
+  budget?: number;
+  total?: number;
+  /** Display tiers (Phase 172.5): crisis passes the gate, regional is context. */
+  tier_counts?: { crisis?: number; regional?: number };
+  crisis_count?: number;
+  regional_count?: number;
+  tier_note?: string;
+  confidence_note?: string;
+}
+
+/** `GET /api/v1/news/live` payload (also embedded as the `news` section). */
+export interface NewsLivePayload {
+  status?: string;
+  total?: number;
+  last_updated?: string | null;
+  meta?: NewsBreadthMetaPayload | null;
+  articles?: Array<Record<string, unknown>>;
+  items?: Array<Record<string, unknown>>;
+}
+
+
+export type WeatherPolygonCollection = GeoJSON.FeatureCollection & {
+  metadata?: WeatherPolygonMeta;
+  meta?: WeatherPolygonMeta;
+};
+
+export interface FleetSectionPayload {
+  vehicles: FleetVehicle[];
+  total_vehicles?: number;
+  timestamp?: string;
+}
+
+/**
+ * Known sections. The endpoint may add one, so every consumer must handle an
+ * absent key (all of them are optional here) — an unknown key is ignored rather
+ * than typed as present.
+ */
+export interface DashboardBootstrapSections {
+  incidents?: DashboardSection<{ items: IncidentSummary[]; total: number }>;
+  news?: DashboardSection<NewsLivePayload>;
+  news_market_regime?: DashboardSection<Record<string, unknown>>;
+  corridor_context?: DashboardSection<CorridorContext>;
+  weather_spatial_polygons?: DashboardSection<WeatherPolygonCollection>;
+  fire_hotspots?: DashboardSection<FireHotspotResponse>;
+  commodity_prices?: DashboardSection<{ items: Array<Record<string, unknown>>; total: number }>;
+  commodity_spikes?: DashboardSection<{ spikes: Array<Record<string, unknown>>; total: number }>;
+  approvals?: DashboardSection<ApprovalListResponse>;
+  source_health?: DashboardSection<SourceHealthResponse>;
+  evaluation_benchmark?: DashboardSection<BenchmarkReportResponse>;
+  evaluation_test_matrix?: DashboardSection<TestMatrixResponse>;
+  evaluation_corridor_efficiency?: DashboardSection<CorridorEfficiencyResponse>;
+  outcomes?: DashboardSection<OutcomeListResponse>;
+  bnpb_events?: DashboardSection<Record<string, unknown>>;
+  /** Tenant-only (DISPATCHER / REGULATOR), always built live, never stored. */
+  fleet?: DashboardSection<FleetSectionPayload>;
+  /** Tenant-only (DISPATCHER / REGULATOR). */
+  erp?: DashboardSection<ERPSummaryResponse>;
+}
+
+export interface DashboardBootstrapResponse {
+  schema_version: number;
+  /** Snapshot build time (or the live-build time when `stale` is true). */
+  computed_at: string | null;
+  stale: boolean;
+  /** Present only when `stale` is true. */
+  reason?: DashboardBootstrapReason | null;
+  role: UserRole | string;
+  company_id: string | null;
+  modality: 'truck' | 'vessel' | 'air';
+  sections: DashboardBootstrapSections;
 }

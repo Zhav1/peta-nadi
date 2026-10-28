@@ -1,7 +1,8 @@
 'use client';
 
 import React from 'react';
-import type { ChokePointItem } from '@/lib/types';
+import type { ChokePointItem, HazardCounterBucket, HazardCounterStatus, WeatherHazardSummary, WeatherPolygonMeta } from '@/lib/types';
+import { freshnessText } from '@/components/dashboard/FreshnessBadge';
 
 interface TopNavTelemetryProps {
   routingInfo?: { solver: string; compute_time_ms: number | null; savings_pct: number | null } | null;
@@ -21,17 +22,29 @@ interface TopNavTelemetryProps {
   yellowZoneCount?: number;
   // Q3: two independent overlay toggles, default ON (weather polygons + FIRMS dots+heat)
   // Disruption-only: Cuaca = high/critical biru (default ON); Waspada Dini (Advisory) = medium (default OFF).
+  // NOTE (Phase 160): these counts are world truth from GET /weather/summary —
+  // the toggles control DRAWING only, never the number.
   showWeatherPolygons?: boolean;
   onToggleWeatherPolygons?: () => void;
-  weatherPolygonCount?: number;
+  weatherPolygonCount?: number | null;
   showWeatherAdvisory?: boolean;
   onToggleWeatherAdvisory?: () => void;
-  weatherAdvisoryCount?: number;
-  weatherDisruptionCount?: number;
+  weatherAdvisoryCount?: number | null;
+  weatherDisruptionCount?: number | null;
+  /** World-truth counter source (status/count/source/window/validity per tier). */
+  weatherSummary?: WeatherHazardSummary | null;
+  /** Phase 169: render-cap + retention meta from the polygon response. */
+  weatherPolygonMeta?: WeatherPolygonMeta | null;
   showFireHotspots?: boolean;
   onToggleFireHotspots?: () => void;
   fireHotspotCount?: number;
-  fireStatus?: 'ok' | 'degraded';
+  /** Phase 168: true hotspot count (pre-cap). null = unknown → "—". */
+  fireCount?: number | null;
+  fireStatus?: HazardCounterStatus;
+  fireReason?: string | null;
+  fireSource?: import('@/lib/types').FireHotspotSource | null;
+  fireUpdatedAt?: string | null;
+  fireWindowHours?: number;
   fireTooltip?: string;
   onSelectHub?: (hub: ChokePointItem) => void;
   onFocusRoute?: () => void;
@@ -68,16 +81,23 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
   yellowZoneCount = 0,
   showWeatherPolygons = true,
   onToggleWeatherPolygons,
-  weatherPolygonCount = 0,
+  weatherPolygonCount,
   weatherDisruptionCount,
   showWeatherAdvisory = false,
   onToggleWeatherAdvisory,
-  weatherAdvisoryCount = 0,
+  weatherAdvisoryCount,
+  weatherSummary,
+  weatherPolygonMeta,
   showFireHotspots = true,
   onToggleFireHotspots,
   fireHotspotCount = 0,
+  fireCount,
   fireStatus = 'ok',
-  fireTooltip,
+  fireReason,
+  fireSource,
+  fireUpdatedAt,
+  fireWindowHours,
+  fireTooltip: _fireTooltip,
   // Dormant P2 props — accepted for API compatibility, rendered nowhere.
   routingInfo: _routingInfo,
   corridorContext: _corridorContext,
@@ -98,6 +118,87 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
   void _onSelectHub;
   void _onFocusRoute;
   void _weatherSample;
+  void _fireTooltip;
+
+  // --- Phase 160: counters are world truth, never toggle-gated ---------------
+  // Degraded/unknown renders "—"; verified-empty renders 0. The layer toggles
+  // below change what the map draws, never these numbers.
+  const cuacaCount = weatherSummary?.cuaca.count ?? weatherDisruptionCount ?? weatherPolygonCount ?? null;
+  const cuacaStatus: HazardCounterStatus =
+    weatherSummary?.cuaca.status ?? (cuacaCount == null ? 'degraded' : 'ok');
+  const waspadaCount = weatherSummary?.waspada.count ?? weatherAdvisoryCount ?? null;
+  const waspadaStatus: HazardCounterStatus =
+    weatherSummary?.waspada.status ?? (waspadaCount == null ? 'degraded' : 'ok');
+
+  const counterText = (status: HazardCounterStatus, count: number | null): string =>
+    status === 'degraded' || count == null ? '—' : String(count);
+
+  const bbox = weatherSummary?.bbox;
+  const bboxLabel =
+    bbox && bbox.length === 4
+      ? `${bbox[0]}–${bbox[2]} BT, ${bbox[1]}–${bbox[3]} LS`
+      : '94–108 BT, -6–6 LS';
+  const updatedLabel = (iso?: string | null): string => {
+    if (!iso) return 'belum ada data';
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime())
+      ? iso
+      : d.toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' });
+  };
+
+  const bucketTooltip = (
+    bucket: HazardCounterBucket | null | undefined,
+    what: string,
+    options?: { updatedAt?: string | null; capNotice?: string | null },
+  ): string => {
+    const status = bucket?.status ?? 'degraded';
+    const lines = [
+      what,
+      `Area: Sumatra ${bboxLabel}`,
+      `Jendela: ${bucket?.window_hours ?? 24} jam`,
+      `Sumber: ${bucket?.source ?? 'BMKG + Open-Meteo NWP'}`,
+      `Diperbarui: ${updatedLabel(options?.updatedAt ?? weatherSummary?.generated_at)}`,
+      `Kesegaran: ${freshnessText(status, options?.updatedAt ?? weatherSummary?.generated_at ?? null)}`,
+    ];
+    if (options?.capNotice) lines.push(options.capNotice);
+    if (status === 'degraded') {
+      lines.push(`Status: tidak diketahui — ${bucket?.reason ?? 'sumber tidak tersedia'}`);
+    } else if (status === 'stale') {
+      lines.push(`Status: data lama${bucket?.reason ? ` — ${bucket.reason}` : ''}`);
+    } else if (status === 'empty') {
+      lines.push('Status: kosong terverifikasi');
+    }
+    return lines.join('\n');
+  };
+
+  // --- Phase 168: Titik Panas uses the same tri-state rule as cuaca/waspada.
+  // Number for ok/stale/empty; "—" only when unknown (degraded). The tooltip
+  // must always name source + window + last-updated.
+  const titikPanasCount = fireCount ?? (fireStatus === 'degraded' ? null : fireHotspotCount);
+  const fireSourceLabel =
+    fireSource === 'nasa-firms-api'
+      ? 'NASA FIRMS API (MAP_KEY)'
+      : fireSource === 'cache'
+        ? 'Cache data terakhir (last-known-good)'
+        : 'NASA FIRMS CSV publik (keyless)';
+  const fireTooltipText = (() => {
+    const lines = [
+      'Titik Panas (Satelit): titik panas aktif seluruh Sumatra',
+      `Area: Sumatra ${bboxLabel}`,
+      `Jendela: ${fireWindowHours ?? 24} jam`,
+      `Sumber: ${fireSourceLabel}`,
+      `Diperbarui: ${updatedLabel(fireUpdatedAt)}`,
+      `Kesegaran: ${freshnessText(fireStatus, fireUpdatedAt)}`,
+    ];
+    if (fireStatus === 'degraded') {
+      lines.push(`Status: tidak diketahui — ${fireReason ?? 'sumber tidak tersedia'}`);
+    } else if (fireStatus === 'stale') {
+      lines.push(`Status: data lama${fireReason ? ` — ${fireReason}` : ''}`);
+    } else if (fireStatus === 'empty') {
+      lines.push('Status: kosong terverifikasi');
+    }
+    return lines.join('\n');
+  })();
 
   return (
     <div className="relative flex flex-wrap items-center gap-1.5 text-xs font-mono select-none overflow-visible">
@@ -149,12 +250,21 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
               ? 'bg-blue-950/50 border-blue-500/50 text-blue-200 '
               : 'bg-[#0c1017] border-white/5 text-slate-500 opacity-60 hover:opacity-100'
           }`}
-          title="Cuaca (gangguan, biru): hujan lebat disruptif high/critical 50mm/24j atau banjir 80%. Klik poligon = presipitasi/banjir/angin/sumber/valid_until."
+          title={bucketTooltip(weatherSummary?.cuaca, 'Cuaca: zona gangguan aktif (high/critical)', {
+            updatedAt: weatherSummary?.generated_at ?? weatherPolygonMeta?.updated_at ?? null,
+            capNotice:
+              weatherPolygonMeta?.capped
+                ? `Render: menampilkan ${weatherPolygonMeta.count ?? 0} dari ${weatherPolygonMeta.total ?? 0} poligon`
+                : null,
+          })}
         >
           <span className={`w-2 h-2 rounded-full ${showWeatherPolygons ? 'bg-blue-500 ' : 'bg-slate-600'}`} />
           <span className="font-sans text-xs font-semibold">Cuaca</span>
-          <span className="px-1 py-0.2 rounded bg-blue-500/20 text-xs font-bold text-blue-300 font-mono tabular-nums">
-            {weatherDisruptionCount ?? weatherPolygonCount}
+          <span
+            data-testid="counter-cuaca"
+            className="px-1 py-0.2 rounded bg-blue-500/20 text-xs font-bold text-blue-300 font-mono tabular-nums"
+          >
+            {counterText(cuacaStatus, cuacaCount)}
           </span>
         </button>
       )}
@@ -169,12 +279,17 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
               ? 'bg-[#0c1017] border-cyan-500/50 text-cyan-200'
               : 'bg-[#0c1017] border-white/5 text-slate-500 opacity-60 hover:opacity-100'
           }`}
-          title="Waspada Dini (Advisory): medium drizzle (mis. BMKG 60). Hanya tampil bila toggle ON. Default OFF, info-only — tanpa pengalihan rute."
+          title={bucketTooltip(weatherSummary?.waspada, 'Waspada Dini: zona pantau medium (advisory), dihitung walau layer OFF', {
+            updatedAt: weatherSummary?.generated_at ?? null,
+          })}
         >
           <span className={`w-2 h-2 rounded-full ${showWeatherAdvisory ? 'bg-cyan-300' : 'bg-slate-600'}`} />
           <span className="font-sans text-xs font-semibold">Waspada Dini</span>
-          <span className="px-1 py-0.2 rounded bg-white/5 text-xs font-bold text-slate-300 font-mono tabular-nums">
-            {weatherAdvisoryCount}
+          <span
+            data-testid="counter-waspada"
+            className="px-1 py-0.2 rounded bg-white/5 text-xs font-bold text-slate-300 font-mono tabular-nums"
+          >
+            {counterText(waspadaStatus, waspadaCount)}
           </span>
         </button>
       )}
@@ -189,12 +304,15 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
               ? 'bg-[#0c1017] border-white/20 text-slate-200'
               : 'bg-[#0c1017] border-white/5 text-slate-500 opacity-60 hover:opacity-100'
           }`}
-          title={fireTooltip ?? 'Titik Panas (Satelit) VIIRS: sorotan oranye khusus peta bila >=3 titik keyakinan tinggi dalam 5 km.'}
+          title={fireTooltipText}
         >
           <span className={`w-2 h-2 rounded-full ${showFireHotspots ? 'bg-orange-400' : 'bg-slate-600'}`} />
           <span className="font-sans text-xs font-semibold">Titik Panas</span>
-          <span className="px-1 py-0.2 rounded bg-white/5 text-xs font-bold text-slate-300 font-mono tabular-nums">
-            {fireStatus === 'degraded' ? '—' : fireHotspotCount}
+          <span
+            data-testid="counter-titik-panas"
+            className="px-1 py-0.2 rounded bg-white/5 text-xs font-bold text-slate-300 font-mono tabular-nums"
+          >
+            {counterText(fireStatus, titikPanasCount)}
           </span>
         </button>
       )}

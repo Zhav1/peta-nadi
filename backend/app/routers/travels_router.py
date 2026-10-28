@@ -23,7 +23,7 @@ from app.schemas.travel import (
     TravelListResponse,
     TravelHedgingRequest,
 )
-from app.auth.supabase_auth import get_optional_user, UserSession
+from app.auth.supabase_auth import get_optional_user, UserSession, ROLE_DISPATCHER
 from app.services import travel_ledger_service
 from app.services.travel_ledger_service import (
     TruckNotFoundError,
@@ -54,12 +54,14 @@ def _require_fleet_write(user: UserSession) -> None:
 
 
 def _effective_company_filter(user: UserSession, requested: Optional[str]) -> Optional[str]:
-    """Explicit ?company_id= wins; dispatchers default to their tenant claim."""
-    if requested:
-        return requested
-    if (user.role or "").upper() == "DISPATCHER" and user.company_id:
-        return user.company_id
-    return None
+    """Tenant claim wins for dispatchers; ``?company_id=`` can never widen it.
+
+    Regulator/guest keep the macro view and may narrow explicitly.
+    """
+    role = (user.role or "").upper() if user else ""
+    if role == ROLE_DISPATCHER:
+        return user.company_id or None
+    return requested
 
 
 # ==========================================
@@ -173,6 +175,9 @@ async def list_travels(
 ):
     """List travels/rits newest first, scoped to the caller's tenant when known."""
     effective_company = _effective_company_filter(user, company_id)
+    if (user.role or "").upper() == ROLE_DISPATCHER and not effective_company:
+        # Honest empty: a claim-less dispatcher never sees the macro ledger.
+        return TravelListResponse(total=0, items=[])
     items = travel_ledger_service.list_travels(
         company_id=effective_company,
         status=status_filter,

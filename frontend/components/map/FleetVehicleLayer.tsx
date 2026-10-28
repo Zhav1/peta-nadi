@@ -6,6 +6,7 @@ import type { FleetVehicle } from '@/lib/types';
 import { calculateRouteProgressPosition } from '@/lib/geoUtils';
 import { getHaversineDistanceKm } from '@/lib/aiDynamicRouter';
 import { corridorSnappingService } from '@/lib/corridorSnappingService';
+import { getVehicleFix } from '@/lib/fleetScope';
 import { api } from '@/lib/api';
 import { TargetLockReticle } from './TargetLockReticle';
 import {
@@ -264,13 +265,10 @@ export function FleetVehicleLayer({
     } else {
       const found = vehicles.find((v) => v.vehicle_id === selectedVehicleId);
       if (found) {
-        const pos: [number, number] =
-          Array.isArray((found as any).current_coords) && (found as any).current_coords.length >= 2
-            ? [(found as any).current_coords[0], (found as any).current_coords[1]]
-            : (found as any).current_location?.coordinates
-              ? [(found as any).current_location.coordinates[0], (found as any).current_location.coordinates[1]]
-              : [98.6722, 3.5952];
-        handleVehicleSelect(found, pos, found.heading_deg ?? 0);
+        // No server fix => no map focus. A missing GPS must never be papered
+        // over with a hardcoded city coordinate.
+        const pos = getVehicleFix(found);
+        if (pos) handleVehicleSelect(found, pos, found.heading_deg ?? 0);
       }
     }
   }, [selectedVehicleId, vehicles, map, handleVehicleSelect]);
@@ -574,18 +572,9 @@ export function FleetVehicleLayer({
         let finalPos: [number, number];
         let finalBearing: number;
 
-        const serverFix: [number, number] =
-          Array.isArray((v as any).current_coords) && (v as any).current_coords.length >= 2
-            ? [(v as any).current_coords[0], (v as any).current_coords[1]]
-            : (v as any).current_location?.coordinates
-              ? [(v as any).current_location.coordinates[0], (v as any).current_location.coordinates[1]]
-              : Array.isArray((v as any).location) && (v as any).location.length >= 2
-                ? [(v as any).location[0], (v as any).location[1]]
-                : (v as any).location?.coordinates
-                  ? [(v as any).location.coordinates[0], (v as any).location.coordinates[1]]
-                  : coords.length > 0
-                    ? coords[Math.floor(coords.length / 2)]
-                    : [98.6722, 3.5952];
+        // Server fix only. `coords` is a route corridor, not a position: a unit
+        // without a ping must not be drawn at a fabricated point.
+        const serverFix = getVehicleFix(v);
 
         const isLandTruck = v.modality === 'truck' || (v.modality as string) === 'land';
 
@@ -606,9 +595,12 @@ export function FleetVehicleLayer({
             const state = calculateRouteProgressPosition(coords, currentProgress);
             finalPos = state.currentPosition;
             finalBearing = state.bearing;
-          } else {
+          } else if (serverFix) {
             finalPos = serverFix;
             finalBearing = v.heading_deg ?? (v as any).bearing ?? 0;
+          } else {
+            // No corridor and no fix: not plottable. Skip the feature entirely.
+            continue;
           }
         } else {
           const hasSurveyedCorridor = coords.length >= 2 && calculatePathDistanceKm(coords) >= 15;
@@ -628,6 +620,9 @@ export function FleetVehicleLayer({
             const state = calculateRouteProgressPosition(coords, currentProgress);
             finalPos = state.currentPosition;
             finalBearing = state.bearing;
+          } else if (!serverFix) {
+            // Non-corridor unit without a ping: no position exists to draw.
+            continue;
           } else {
             let drState = deadReckonMapRef.current[v.vehicle_id];
             if (!drState) {

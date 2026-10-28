@@ -182,7 +182,8 @@ function searchResultBadge(item: SearchItem): string {
   const name = normalizeSearchText(item.name);
   if (type === 'port' || name.includes('pelabuhan') || name.includes('dermaga')) return 'Pelabuhan';
   if (type === 'airport' || name.includes('bandara')) return 'Bandara';
-  if (type === 'city') return 'Kota';
+  if (type === 'city' || type === 'kota') return 'Kota';
+  if (type === 'kabupaten') return 'Kabupaten';
   if (type === 'kecamatan' || type === 'subdistrict' || type === 'municipality') return 'Kecamatan';
   if (
     type === 'village' ||
@@ -435,6 +436,9 @@ export default function CrisisMap({
   const [searchResults, setSearchResults] = useState<Array<GeocodeNode | GeocodeSearchResult>>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  // Backend tells us whether the live (Nominatim) half of the lookup ran.
+  // `unavailable` + zero offline hits = a desa lookup needs a connection.
+  const [searchNominatim, setSearchNominatim] = useState<'ok' | 'unavailable' | 'skipped' | 'cached' | 'unknown'>('unknown');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   // Click-to-Pin / Right-Click / Village Context Popup State
@@ -2633,6 +2637,7 @@ export default function CrisisMap({
     if (q.length < 2) {
       setSearchResults([]);
       setSearchError(null);
+      setSearchNominatim('unknown');
       setIsSearching(false);
       setIsSearchOpen(false);
       return;
@@ -2659,8 +2664,9 @@ export default function CrisisMap({
         province: h.province || 'Sumatra',
       }));
 
-    setSearchResults(mergeSearchResults(query, hubMatches, localMatches).slice(0, 8));
+    setSearchResults(mergeSearchResults(query, hubMatches, localMatches).slice(0, 10));
     setSearchError(null);
+    setSearchNominatim('unknown');
     setIsSearchOpen(true);
 
     const seq = searchSeqRef.current;
@@ -2674,11 +2680,19 @@ export default function CrisisMap({
         if (seq !== searchSeqRef.current) return;
         const live = res?.results ?? [];
         setSearchResults((prev) => mergeSearchResults(query, prev, live));
+        setSearchNominatim(
+          res?.nominatim === 'unavailable' || res?.nominatim === 'skipped'
+            ? res.nominatim
+            : res?.nominatim === 'cached'
+              ? 'cached'
+              : 'ok'
+        );
         setSearchError(null);
       } catch (err) {
         if ((err as { name?: string })?.name === 'AbortError' || seq !== searchSeqRef.current) return;
         // Keep the offline gazetteer hits but say the live lookup failed — never
         // pretend a partial list is the full result set.
+        setSearchNominatim('unavailable');
         const detail = err instanceof Error && err.message ? ` (${err.message})` : '';
         setSearchError(`Pencarian live gagal${detail} — menampilkan hasil gazetteer lokal saja.`);
       } finally {
@@ -2722,6 +2736,13 @@ export default function CrisisMap({
     },
     []
   );
+
+  // Nominatim unreachable AND nothing matched offline: the query may well be a
+  // real desa, so say a connection is needed instead of "no results".
+  const offlineSearchNote =
+    !isSearching &&
+    searchResults.length === 0 &&
+    (searchNominatim === 'unavailable' || !!searchError);
 
   return (
     <div className={`relative w-full h-full ${isRightSidebarOpen ? 'sidebar-open' : ''}`}>
@@ -2770,7 +2791,7 @@ export default function CrisisMap({
             {/* 2. Universal Location Search Bar */}
             <div className="relative shrink-0">
  <Popover
- open={isSearchOpen && searchQuery.trim().length >= 2 && (searchResults.length > 0 || isSearching || !!searchError)}
+ open={isSearchOpen && searchQuery.trim().length >= 2 && (searchResults.length > 0 || isSearching || !!searchError || offlineSearchNote)}
  onOpenChange={setIsSearchOpen}
  >
  <PopoverTrigger asChild>
@@ -2811,7 +2832,7 @@ export default function CrisisMap({
  </PopoverTrigger>
               {isSearchOpen &&
                 searchQuery.trim().length >= 2 &&
-                (searchResults.length > 0 || isSearching || !!searchError) && (
+                (searchResults.length > 0 || isSearching || !!searchError || offlineSearchNote) && (
  <PopoverContent
  side="bottom"
  align="start"
@@ -2831,7 +2852,7 @@ export default function CrisisMap({
                     </div>
                   )}
 
-                  {searchError && (
+                  {searchError && searchResults.length > 0 && (
  <div className="px-2 py-2 text-xs text-amber-300 leading-snug space-y-1.5">
                       <p>{searchError}</p>
                       <button
@@ -2844,7 +2865,13 @@ export default function CrisisMap({
                     </div>
                   )}
 
-                  {!isSearching && !searchError && searchResults.length === 0 && (
+                  {offlineSearchNote && (
+ <div data-testid="search-offline-note" className="px-2 py-2 text-xs text-amber-300 leading-snug">
+                      Butuh koneksi untuk mencari desa.
+                    </div>
+                  )}
+
+                  {!isSearching && !searchError && searchResults.length === 0 && !offlineSearchNote && (
  <div className="px-2 py-3 text-xs text-slate-400 leading-snug">
                       Tidak ada hasil untuk “{searchQuery.trim()}”. Coba nama desa, kecamatan, kota, atau hub lain.
                     </div>
@@ -2852,8 +2879,12 @@ export default function CrisisMap({
 
                   {searchResults.map((item, idx) => {
                     const key = `${item.name}-${idx}`;
-                    const subtitle = `${item.province || 'Sumatra'}${item.kabupaten ? ' • ' + item.kabupaten : ''}`;
                     const badgeType = searchResultBadge(item);
+                    const parentLabel = item.parent || item.kabupaten;
+                    const subtitleParts = [badgeType];
+                    if (parentLabel && parentLabel !== item.name) subtitleParts.push(parentLabel);
+                    if (item.province) subtitleParts.push(item.province);
+                    const subtitle = subtitleParts.join(' · ');
                     return (
                       <div
                         key={key}

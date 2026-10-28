@@ -18,13 +18,16 @@ import {
 } from '@/lib/tripCostCalculator';
 import { api } from '@/lib/api';
 import { isForecastActive } from '@/hooks/useNewsVerification';
+import { routeProvenanceLabel, routeProvenanceTitle } from '@/lib/routeProvenance';
+// A route-detail / verification surface is not an urgent confirmation, so it
+// renders as a plain modal dialog (`role="dialog"`), not `role="alertdialog"`.
+// Focus trapping, Escape-to-close and scroll-lock still come from Base UI.
 import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/base-ui/alert-dialog';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+} from '@/components/base-ui/dialog';
 import { HoldVsRerouteCard } from './HoldVsRerouteCard';
 
 type Decision = RouteDecisionType;
@@ -118,9 +121,9 @@ export function RouteDetailModal({
     }
   }, [notes]);
 
-  /* Escape-to-close and focus trapping are provided by the AlertDialog block (Root onOpenChange + Popup). */
+  /* Escape-to-close and focus trapping are provided by the Dialog block (Root onOpenChange + Popup). */
 
-  /* Dialog visibility is controlled by the AlertDialog open prop (Watermelon block pattern). */
+  /* Dialog visibility is controlled by the Dialog open prop (Watermelon block pattern). */
 
   const isSandbox = mode === 'sandbox' || role === 'GUEST';
   const allChecked = CHECKLIST_ITEMS.every(
@@ -228,27 +231,47 @@ export function RouteDetailModal({
               ? 'Opsi Tahan di Depo Penyangga (Hold & Buffer)'
               : route.description.slice(0, 60));
 
+  // Phase 170: same provenance vocabulary as the corridor cards, so the modal
+  // can never present hub-graph or interpolated geometry as live road lines.
+  const provenance = routeProvenanceLabel(route);
+
   return (
-  <AlertDialog open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
-  <AlertDialogContent
-    aria-label="Detail rute dan verifikasi operator"
+  <Dialog open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
+  <DialogContent
+    // Accessible name = purpose + the visible corridor title (label-in-name). It is
+    // set explicitly because a base-ui <Dialog.Title> would own aria-labelledby and
+    // the visible corridor name alone does not state what this surface is for.
+    aria-label={`Detail rute dan verifikasi operator — ${title}`}
     className="max-w-2xl rounded-2xl border-white/10 bg-[#0c1017] p-0 shadow-2xl tabular-nums max-h-[90vh] overflow-y-auto"
   >
         <style>{`@keyframes wm-modal-rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}.wm-modal-rise{animation:wm-modal-rise .22s ease both}`}</style>
         {/* Header */}
-        <AlertDialogHeader className="sticky top-0 bg-[#0c1017] border-b border-white/10 p-4 flex-row items-start justify-between gap-3 text-left">
+        <DialogHeader className="sticky top-0 bg-[#0c1017] border-b border-white/10 p-4 flex-row items-start justify-between gap-3 text-left">
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs font-medium px-2 py-0.5 rounded bg-white/5 text-slate-200 border border-white/10">
                 Detail rute
               </span>
+              <span
+                data-testid="route-provenance-modal"
+                title={routeProvenanceTitle(provenance)}
+                className={`text-xs font-mono px-2 py-0.5 rounded border ${
+                  provenance === 'simulasi offline'
+                    ? 'bg-amber-500/15 text-amber-300 border-amber-500/40'
+                    : provenance === 'koridor hub'
+                    ? 'bg-white/5 text-slate-200 border-white/10'
+                    : 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30'
+                }`}
+              >
+                {provenance}
+              </span>
             </div>
-            <AlertDialogTitle className="text-sm font-bold text-white mt-1.5 leading-snug">
+            <h2 className="text-sm font-bold text-white mt-1.5 leading-snug">
               {title}
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-xs text-slate-400 mt-0.5 tabular-nums">
+            </h2>
+            <DialogDescription className="text-xs text-slate-400 mt-0.5 tabular-nums">
               {(route.distance_km ?? 0).toFixed(0)} km · {route.eta_minutes ?? 0} mnt · +{(route.fuel_increase_pct ?? 0).toFixed(0)}% BBM
-            </AlertDialogDescription>
+            </DialogDescription>
           </div>
           <button
             type="button"
@@ -258,7 +281,7 @@ export function RouteDetailModal({
           >
             <X className="w-4 h-4" />
           </button>
-        </AlertDialogHeader>
+        </DialogHeader>
 
         <div className="p-4 space-y-4">
           {/* Section 1: Risiko */}
@@ -758,7 +781,7 @@ export function RouteDetailModal({
             </p>
           </div>
         </div>
-  </AlertDialogContent>
-  </AlertDialog>
+  </DialogContent>
+  </Dialog>
    );
  }

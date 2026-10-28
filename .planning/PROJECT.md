@@ -1,13 +1,37 @@
 # PROJECT: PreHub (Logistics Resilience Intelligence Platform)
 
-**Active Milestone:** M5 - High-Fidelity Intelligence & Isolated Operations Engine [ACTIVE 🚀]
+**Active Milestone:** M8 - Fast & Durable [ACTIVE 🚀]
 **Previous Milestones:** 
 - M1 - Hackathon MVP (Pan-Sumatra Logistics & Swarm Intelligence) [COMPLETED ✅]
 - M2 - PreHub Final Defense: Empirical Evaluation, Tactical HUD & Multi-Source Maturity [COMPLETED ✅]
 - M3 - PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform [COMPLETED ✅]
 - M4 - PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability [COMPLETED ✅]
+- M5 - High-Fidelity Intelligence & Isolated Operations Engine [COMPLETED ✅]
+- M6 - 3D Globe Native Mapbox Fleet, Street-Snapping & Impeccable Cartography [COMPLETED ✅]
+- M7 - Live News Trust, Source Breadth & Forecast Waspada Integrity [COMPLETED ✅]
 
-## Current Milestone: M5 - High-Fidelity Intelligence & Isolated Operations Engine
+## Current Milestone: M8 - Fast & Durable
+
+**Goal:** Make the authenticated PreHub dashboard fast on first load and durable across sessions on the zero-cost Render/Vercel stack — by fixing Supabase session refresh and cookie policy, thinning the web process so batch ingestion moves to an idempotent external tick, serving a DB-backed dashboard bootstrap snapshot with lazy-mounted sections, hardening the proxy cache boundary, and proving it with Playwright plus a 7-day soak.
+
+**Non-goals:**
+- No visual redesign; landing page and its 121-frame sequence are untouched.
+- No `@supabase/ssr` HttpOnly migration or backend-owned session table.
+- No paid infrastructure (free-host migration is a fallback gate only, not a paid upgrade).
+- No full async rewrite of all 81 backend routes.
+- No new product features; no route-result persistence in this milestone.
+- No soak completion inside one agent session.
+
+**Phases (160–166):**
+1. **160 — Baseline, Audit, State Repair:** baseline metrics, `BACKEND-AUDIT.md` (81 routes / 23 auth-dependent), Playwright smoke scaffold, GitHub probe fix, planning-state reconciliation.
+2. **161 — Auth Session Durability:** refresh-token sync, magic-link session, 7-day sliding cookie, `exp`-required, fail-closed 401, optimistic hydration, cross-tab sync, logout race.
+3. **162 — Thin Web + Tick:** lazy imports, no batch pollers at boot, protected `/internal/tick` with DB lock/last-run, deferred AIS/fanout.
+4. **163 — Bootstrap Snapshot + Read Path:** `dashboard_snapshots`, bootstrap endpoint, client wiring, lazy sections, weather/incidents cache, timeouts/abort.
+5. **164 — Backend Hot-Path + Proxy Hardening:** client singleton, JWKS pre-warm, async I/O on auth/hot paths, news re-tier write-back, `last_fetched_at` fix, proxy cache headers.
+6. **165 — Production Verification + SLO Gate:** deploy, production smoke, SLO measurement, free-host decision.
+7. **166 — Soak Start + Review:** start the 7-day window, record the artifact URL, leave the review checklist.
+
+## Milestone M5: High-Fidelity Intelligence & Isolated Operations Engine
 
 **Goal:** Address and eliminate 4 critical architectural bottlenecks identified in the system diagnostic: (1) Zero-token pre-LLM filtering and headline+lead text clamping for DeepSeek news classification; (2) Deterministic BMKG sensor cross-validation and raw `<think>` trace suppression in the Consensus Gate; (3) Street-snapped turn-by-turn road network routing via Mapbox Directions API (Free Tier) with forced tangential hazard avoidance waypoints; and (4) Strict state decoupling between ambient global hazard alerts and client-isolated routing sessions to permanently eliminate multi-user polyline collisions.
 
@@ -39,7 +63,10 @@
 - **M2 - PreHub Final Defense: Empirical Evaluation, Tactical HUD & Multi-Source Maturity**: Completed (Phases 36 to 41). Delivered ground-truth benchmark ($N=60$), 88-test matrix, mathematical consensus formula, Brier probability calibration, deterministic CPU routing, God's-Eye HUD telemetry, and sanitized UI.
 - **M3 - PreHub MVP Pilot Operations & Multi-Persona Dispatcher Platform**: Completed (Phases 42 to 56). Delivered multi-role auth, self-serve fleet/CSV manifest ingestion, spoilage hedging economics, intermodal port synchronization, and anti-collision dock layouts.
 - **M4 - PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability**: Completed (Phases 57 to 82). Remediated all audit findings, locked corporate RBAC, ported live telemetry to GPU-instanced @deck.gl/mapbox MapboxOverlay (5,000+ units @ 60 FPS), resolved AIS/ADS-B ingestion bottlenecks, established canonical news permalinks, pure [lon, lat] coordinate graph snapping, simultaneous multi-color intermodal routing with Hold-vs-Reroute Spoilage Hedging economics, purged legacy mock Past/Future/Predict and Simulasi tabs, hardened authentic PIHPS analytics and Laporan audit ledger, eliminated telemetry OOM crashes, stabilized AIS vessel MMSI continuity with 96-vessel regional baseline, implemented 100% water-path coastal and estuary routing, delivered gazetteer search ranking and proximity deduplication, enforced token-derived tenant fleet scopes, and delivered master truck asset / travel ERP transaction split with migration 014.
-- **M5 - High-Fidelity Intelligence & Isolated Operations Engine**: Active (Phases 83 to 86). Delivers zero-token pre-LLM filtering, deterministic BMKG cross-validation, street-snapped Mapbox turn-by-turn routing, and client-isolated session state.
+- **M5 - High-Fidelity Intelligence & Isolated Operations Engine**: Completed (Phases 83 to 86). Delivers zero-token pre-LLM filtering, deterministic BMKG cross-validation, street-snapped Mapbox turn-by-turn routing, and client-isolated session state.
+- **M6 - 3D Globe Native Mapbox Fleet, Street-Snapping & Impeccable Cartography**: Completed (Phases 87 to 106). Native Mapbox WebGL fleet layers on the 3D globe, street-snapped turn-by-turn routing with dual-layer hazard avoidance, sub-second nautical/ICAO corridor precision, and dual-metric trip economics.
+- **M7 - Live News Trust, Source Breadth & Forecast Waspada Integrity**: Completed (Phases 107 to 159). Live-only news with resolve-or-drop permalinks, 23-feed source breadth, EWKB location parsing and fair intake, `FORECAST_WASPADA` as an orthogonal HOLD-only tag, plus the dashboard/FIRMS/fleet integrity pass.
+- **M8 - Fast & Durable**: Active (Phases 160 to 166). Delivers durable auth sessions, a thin web process with an external tick, a DB-backed dashboard bootstrap snapshot, a hardened proxy cache boundary, and SLO verification with a 7-day soak.
 
 ## Vision
 An AI-powered decision support platform that shifts logistics and disaster response from **reactive** to **proactive**. PreHub ingests real-time physical hazard data (weather, traffic, maritime, wildfire), detects logistics disruptions, predicts cascading economic impacts (commodity price spikes), and delivers actionable intelligence to field coordinators and government executives, all before the crisis escalates.
@@ -161,4 +188,4 @@ This document evolves at phase transitions and milestone boundaries.
 - `LRIP Master Technical Blueprint (1).md` - Authoritative system design
 
 ---
-*Last updated: 2026-10-18 after Phase 70 & 71 completion*
+*Last updated: 2026-10-27 after milestone M8 registration (Fast & Durable, phases 160–166)*

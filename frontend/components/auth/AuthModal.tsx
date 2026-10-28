@@ -45,7 +45,7 @@ interface AuthModalProps {
 }
 
 export function AuthModal({ isOpen, onClose }: AuthModalProps) {
- const { user, role, switchRole, login, signUp, loginWithMagicLink, logout, isLoading, isAuthenticated } = useAuth();
+ const { user, role, switchRole, login, signUp, loginWithMagicLink, logout, isLoading, isAuthenticated, authNotice, clearAuthNotice } = useAuth();
  const router = useRouter();
  const pathname = usePathname();
  const [activeTab, setActiveTab] = useState<'account' | 'persona' | 'password' | 'magic'>('password');
@@ -157,12 +157,12 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
  const res = await loginWithMagicLink(email);
  if (res.success) {
+ // No session exists yet: the link must be opened from the inbox. Claiming the
+ // session was already applied here was misleading and left users waiting.
  setStatusMessage({
  type: 'success',
- text: 'Tautan autentikasi telah diproses. Sesi akses aktif diterapkan.',
+ text: `Tautan masuk telah dikirim ke ${email}. Periksa kotak masuk (dan folder spam) lalu buka tautan tersebut untuk menyelesaikan proses masuk.`,
  });
- dismissGuestQuery();
- setTimeout(onClose, 1000);
  } else {
  setStatusMessage({ type: 'error', text: res.error || 'Gagal memproses Magic Link.' });
  }
@@ -267,6 +267,24 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
  <AlertCircle className="w-4 h-4 shrink-0" />
  )}
  <span>{statusMessage.text}</span>
+ </div>
+ )}
+
+ {/* Re-authentication notice: a supplied token was rejected by the backend.
+     Shown explicitly so an expired session never silently becomes a guest view. */}
+ {authNotice && !isAuthenticated && (
+ <div className="mx-6 mt-4 p-3 rounded-md border text-xs font-sans flex items-start gap-2 bg-amber-950/25 border-amber-500/30 text-amber-200">
+ <ShieldCheck className="w-4 h-4 shrink-0 text-amber-400 mt-0.5" />
+ <div className="flex-1 space-y-1">
+ <span className="block leading-relaxed">{authNotice}</span>
+ <button
+ type="button"
+ onClick={clearAuthNotice}
+ className="text-[11px] underline underline-offset-2 text-amber-300 hover:text-white transition cursor-pointer"
+ >
+ Tutup pemberitahuan
+ </button>
+ </div>
  </div>
  )}
 

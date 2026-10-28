@@ -35,11 +35,24 @@ services:
         sync: false
       - key: DEMO_OFFLINE
         value: "false"
-      # Exactly one process owns the in-process ingestion pollers. Render's
-      # default (single uvicorn worker) already satisfies this; set "false" on
-      # any extra HTTP replica to avoid duplicate polling.
+      # Phase 162 (M8): production is a THIN web process. Batch ingestion no
+      # longer runs in-process; it is driven by the protected external tick
+      # POST /internal/tick (cron-job.org, every 5 min, 90s timeout) — see
+      # docs/KEEPALIVE_RUNBOOK.md. POLLERS_ENABLED now only gates the continuous
+      # consumers (AIS WebSocket, validated-alert fan-out).
       - key: POLLERS_ENABLED
         value: "true"
+      - key: INPROCESS_BATCH_POLLERS
+        value: "false"
+      # Shared secret for X-Internal-Token (dashboard-only; never in the repo).
+      - key: INTERNAL_TICK_TOKEN
+        sync: false
+      # Per-tick admission: at most 2 jobs and 120s of work; the rest is
+      # deferred to the next tick (both are plain env overrides).
+      - key: TICK_MAX_JOBS
+        value: "2"
+      - key: TICK_BUDGET_SECONDS
+        value: "120"
       # Phase 58 LLM migration: secret values dashboard-only (sync:false, no value in yaml)
       - key: OPENCODE_API_KEY
         sync: false

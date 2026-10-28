@@ -20,6 +20,14 @@ class Settings(BaseSettings):
     supabase_jwt_secret: str = "prehub-dev-jwt-secret-key-32-chars-minimum-length-2026"
     supabase_jwks_key: str = ""
 
+    # M8 / Phase 161 — evaluator persona policy.
+    # Anonymous callers may only mint GUEST tokens for demo_sandbox. A caller is
+    # an "authenticated evaluator" when their verified company_id is demo_sandbox
+    # OR their email is in this comma-separated allowlist.
+    m8_evaluator_emails: str = "evaluator@kompetisi-lrip.id"
+    # Tenants an evaluator may mint tokens for / switch personas into.
+    m8_evaluator_companies: str = "demo_sandbox"
+
     # Redis
     redis_url: str = "redis://localhost:6379"
     redis_password: str = ""
@@ -75,6 +83,25 @@ class Settings(BaseSettings):
     # `--workers 1`. On extra replicas set POLLERS_ENABLED=false so those
     # processes only serve HTTP instead of duplicating every poller.
     pollers_enabled: bool = True
+
+    # M8 / Phase 162 — thin web + external tick.
+    # Production runs the web process thin (`INPROCESS_BATCH_POLLERS=false`) and
+    # drives batch ingestion from `POST /internal/tick` (cron-job.org, every
+    # 5 minutes), so boot and user requests never compete with 8 ingestion loops
+    # on ~0.1 CPU. Local/dev keeps the in-process loops by default.
+    inprocess_batch_pollers: bool = True
+    # Shared secret for `POST /internal/tick` (`X-Internal-Token`). Empty disables
+    # the endpoint with 404; production sets it as a Render secret (sync:false).
+    internal_tick_token: str = ""
+    # Per-tick admission: at most this many jobs and this many seconds of work.
+    # Remaining due jobs are deferred to the next tick (never dropped).
+    tick_max_jobs: int = 2
+    tick_budget_seconds: int = 120
+    # Continuous consumers (AIS WebSocket, validated-alert fan-out) are deferred
+    # this long after boot so `/health`, the first login and JWKS pre-warm get
+    # the CPU first. 60–90s is the M8 contract; 75 keeps margin under the
+    # 90s cron timeout while still starting inside the first keep-alive window.
+    continuous_task_delay_seconds: float = 75.0
 
     class Config:
         env_file = ".env"

@@ -13,10 +13,15 @@ The ERP/travel ledger is SQLite-only by design (``travel_ledger_service`` ->
 production-safe way to populate Render's ledger is through the public REST API,
 which writes to whichever SQLite file the Render process owns:
 
-    POST {BACKEND_URL}/api/v1/auth/guest-session   {"role": "DISPATCHER"} -> token
     POST {BACKEND_URL}/api/v1/fleet/trucks          (Bearer token, fleet:write)
     POST {BACKEND_URL}/api/v1/fleet/travels         (Bearer token, fleet:write)
     GET  {BACKEND_URL}/api/v1/erp/summary           (verify total_trips > 0)
+
+Since phase 161 (M8), an anonymous caller can no longer mint a DISPATCHER token:
+``POST /auth/guest-session`` is GUEST-only for anonymous visitors and requires an
+authenticated evaluator session for operator personas. A live seed therefore needs
+``DISPATCHER_TOKEN`` — mint it by signing in as the evaluator account and switching
+persona, or export the token from a browser session.
 
 Payload shape mirrors ``seed_laporan_demo.py`` (same gazetteer / commodities /
 trucks / status mix); money is derived server-side from BPJT tariffs, Pertamina
@@ -24,24 +29,23 @@ rates and the 4-tier spoilage model, so the client never sends cost figures.
 
 SAFETY: dry-run is the default. The script only performs GETs (health +
 erp/summary, read-only) unless SEED_LIVE=1 is set explicitly. No secrets are
-hardcoded; the dispatcher token is minted at runtime or passed via env.
+hardcoded; the dispatcher token must be passed via env (phase 161 removed the
+anonymous DISPATCHER mint).
 
 Usage:
     # Dry-run (default): build payloads, probe remote health + current ERP totals
     BACKEND_URL=https://peta-nadi.onrender.com python backend/scripts/seed_laporan_render.py
 
-    # Live seed (explicit opt-in, 12 travels by default):
+    # Live seed (explicit opt-in, 12 travels by default). Requires DISPATCHER_TOKEN
+    # because an anonymous caller can no longer mint an operator persona.
     BACKEND_URL=https://peta-nadi.onrender.com SEED_LIVE=1 \\
+        DISPATCHER_TOKEN=<jwt from an authenticated evaluator session> \\
         python backend/scripts/seed_laporan_render.py
-
-    # Live seed with a pre-minted dispatcher token (skips guest-session mint):
-    BACKEND_URL=https://peta-nadi.onrender.com SEED_LIVE=1 \\
-        DISPATCHER_TOKEN=<jwt> python backend/scripts/seed_laporan_render.py
 
 Env knobs (all optional except BACKEND_URL for any network step):
     BACKEND_URL       e.g. https://peta-nadi.onrender.com (no trailing slash)
     SEED_LIVE         set to "1" to actually POST; anything else = dry-run
-    DISPATCHER_TOKEN  Bearer JWT with fleet:write (else minted via guest-session)
+    DISPATCHER_TOKEN  Bearer JWT with fleet:write (required for a live seed)
     SEED_COMPANY_ID   dispatcher tenant claim (default: pos_logistik)
     SEED_COMPANY_NAME human org name (default: PT Samudera Logistik Sumatra)
     SEED_N_TRAVELS    number of travels to create live (default: 12, max: 60)
@@ -223,18 +227,16 @@ def main() -> int:
     if not SEED_LIVE:
         print("[dry-run] SEED_LIVE!=1: no POSTs sent. Sample travel payload that WOULD be sent:")
         print(json.dumps(travels[0], indent=2, ensure_ascii=False))
-        print("[dry-run] To seed for real, re-run with SEED_LIVE=1 "
-              "(optionally DISPATCHER_TOKEN=<jwt> to skip guest-session mint).")
+        print("[dry-run] To seed for real, re-run with SEED_LIVE=1 and "
+              "DISPATCHER_TOKEN=<jwt> (anonymous guest-session no longer mints operator personas).")
         return 0
 
     token = DISPATCHER_TOKEN
     if not token:
-        code, sess = _http("POST", f"{BACKEND_URL}/api/v1/auth/guest-session", {"role": "DISPATCHER"})
-        if code != 200 or not sess.get("access_token"):
-            print(f"[live] FAILED to mint dispatcher token -> {code} {str(sess)[:300]}")
-            return 1
-        token = sess["access_token"]
-        print(f"[live] minted DISPATCHER token (company={sess.get('user', {}).get('company_id')})")
+        print("[live] DISPATCHER_TOKEN is required. Phase 161 (M8) disabled anonymous "
+              "operator minting on POST /api/v1/auth/guest-session: sign in as the evaluator "
+              "account, switch to DISPATCHER, and export the resulting access token.")
+        return 1
 
     ok_trucks = 0
     for t in trucks:

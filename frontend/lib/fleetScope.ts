@@ -7,6 +7,42 @@ import type { FleetVehicle } from './types';
  * dispatcher roster so the visibility rules can be unit-tested without React.
  */
 
+function isFiniteCoordinate(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function asLonLat(value: unknown): [number, number] | null {
+  if (!Array.isArray(value) || value.length < 2) return null;
+  const [lon, lat] = value;
+  if (!isFiniteCoordinate(lon) || !isFiniteCoordinate(lat)) return null;
+  return [lon, lat];
+}
+
+/**
+ * The only coordinates a vehicle may be plotted at: a server-reported fix.
+ *
+ * Deliberately excludes route geometry midpoints and any hardcoded city
+ * fallback — a unit with no GPS ping has no location, and inventing one is a
+ * lie that outranks any map dot.
+ */
+export function getVehicleFix(vehicle: FleetVehicle): [number, number] | null {
+  const currentCoords = asLonLat((vehicle as { current_coords?: unknown }).current_coords);
+  if (currentCoords) return currentCoords;
+
+  const currentLocation = asLonLat(
+    (vehicle as { current_location?: { coordinates?: unknown } }).current_location?.coordinates,
+  );
+  if (currentLocation) return currentLocation;
+
+  const location = (vehicle as { location?: unknown }).location;
+  const locationCoords = asLonLat(
+    Array.isArray(location) ? location : (location as { coordinates?: unknown } | undefined)?.coordinates,
+  );
+  if (locationCoords) return locationCoords;
+
+  return null;
+}
+
 /** True hardware/telematics tracking — never a dead-reckoned projection. */
 export function isLiveTracked(vehicle: FleetVehicle): boolean {
   return vehicle.tracking_mode === 'LIVE_GPS';

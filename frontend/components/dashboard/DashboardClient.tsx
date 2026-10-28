@@ -34,8 +34,11 @@ import { notifyToast } from '@/components/ui/Toast';
 import { useDemoState } from '@/hooks/useDemoState';
 import { useFleetVehicles } from '@/hooks/useFleetVehicles';
 import { useCorridorContext } from '@/hooks/useCorridorContext';
-import { useNewsVerification, isForecastActive, deriveForecastValidUntil, FORECAST_TAG } from '@/hooks/useNewsVerification';
+import { useDashboardBootstrap } from '@/hooks/useDashboardBootstrap';
+import { useNewsVerification, isForecastActive, deriveForecastValidUntil, FORECAST_TAG, normalizeProvince, provinceSlug, displayTierLabel, AREA_WIDE_PROVINCE, SUMATRA_PROVINCE_ORDER, type MarketRegimeData, type NewsRelevanceTier } from '@/hooks/useNewsVerification';
+import { isDocumentVisible } from '@/lib/visibility';
 import { FreshnessBadge } from '@/components/ui/FreshnessBadge';
+import { FreshnessBadge as StatusFreshnessBadge } from '@/components/dashboard/FreshnessBadge';
 import { GuidedDemoPanel } from '@/components/demo/GuidedDemoPanel';
 import AnalyticsSection from '@/components/dashboard/AnalyticsSection';
 import ReportsSection from '@/components/dashboard/ReportsSection';
@@ -53,7 +56,8 @@ import {
 import { api } from '@/lib/api';
 import { toLonLatRing } from '@/lib/polygonGeom';
 import { regionSlugFromLatLon } from '@/lib/region';
-import type { CrisisState, WsEvent, CrisisType, Severity, RouteRecommendation, DisasterZone, HazardImpactProfile, ZoneTier, FleetVehicle, TacticalManeuver, FireHotspot, RouteDecisionType, DecisionAction } from '@/lib/types';
+import { dedupeRoutesByGeometry } from '@/lib/routeProvenance';
+import type { CrisisState, WsEvent, CrisisType, Severity, RouteRecommendation, DisasterZone, HazardImpactProfile, ZoneTier, FleetVehicle, TacticalManeuver, FireHotspot, FireHotspotResponse, RouteDecisionType, DecisionAction, WeatherHazardSummary, HazardCounterStatus, FireHotspotSource, WeatherPolygonMeta } from '@/lib/types';
 import { useAuth } from '@/lib/authContext';
 import { AuthModal } from '@/components/auth/AuthModal';
 import { FleetOnboardingModal } from '@/components/fleet/FleetOnboardingModal';
@@ -110,6 +114,15 @@ function FloatingMapLegend({
   weatherDisruptionCount = 0,
   weatherAdvisoryCount = 0,
   showWeatherAdvisory = false,
+  weatherPolygonFeatureCount = 0,
+  weatherPolygonMeta = null,
+  weatherSummary = null,
+  fireStatus = 'degraded',
+  fireUpdatedAt = null,
+  fireReason = null,
+  bootstrapComputedAt = null,
+  bootstrapStale = false,
+  bootstrapReason = null,
 }: {
   isOpen: boolean;
   onToggle: () => void;
@@ -120,6 +133,20 @@ function FloatingMapLegend({
   weatherDisruptionCount?: number;
   weatherAdvisoryCount?: number;
   showWeatherAdvisory?: boolean;
+  /** Polygons currently handed to the map (kept across failed refreshes). */
+  weatherPolygonFeatureCount?: number;
+  /** Render-cap + retention meta of the last polygon response. */
+  weatherPolygonMeta?: WeatherPolygonMeta | null;
+  /** World-truth counters (status/generated_at/reason per bucket). */
+  weatherSummary?: WeatherHazardSummary | null;
+  fireStatus?: HazardCounterStatus;
+  fireUpdatedAt?: string | null;
+  fireReason?: string | null;
+  /** Phase 163b: bootstrap snapshot build time (null = no snapshot yet). */
+  bootstrapComputedAt?: string | null;
+  /** Phase 163b: the backend served a bounded live build / stored row. */
+  bootstrapStale?: boolean;
+  bootstrapReason?: string | null;
 }) {
   return (
     <div className="relative pointer-events-auto">
@@ -152,6 +179,63 @@ function FloatingMapLegend({
             >
               <X className="w-3.5 h-3.5" />
             </button>
+          </div>
+
+          {/* Phase 169: retention truth. Freshness per layer + honest render-cap
+              notice ("menampilkan N dari M"). No new colour families. */}
+          <div className="space-y-1 pt-1.5 pb-2 border-b border-[#1c2432]">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] font-sans text-slate-500">Cuaca</span>
+              <span data-testid="freshness-cuaca">
+                <StatusFreshnessBadge
+                  status={weatherSummary?.cuaca.status ?? weatherPolygonMeta?.status ?? 'degraded'}
+                  updatedAt={weatherSummary?.generated_at ?? weatherPolygonMeta?.updated_at ?? null}
+                  reason={weatherSummary?.cuaca.reason ?? weatherPolygonMeta?.reason ?? null}
+                />
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] font-sans text-slate-500">Waspada Dini</span>
+              <span data-testid="freshness-waspada">
+                <StatusFreshnessBadge
+                  status={weatherSummary?.waspada.status ?? 'degraded'}
+                  updatedAt={weatherSummary?.generated_at ?? null}
+                  reason={weatherSummary?.waspada.reason ?? null}
+                />
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] font-sans text-slate-500">Titik Panas</span>
+              <span data-testid="freshness-titik-panas">
+                <StatusFreshnessBadge
+                  status={fireStatus}
+                  updatedAt={fireUpdatedAt}
+                  reason={fireReason}
+                />
+              </span>
+            </div>
+            {/* Phase 163b: the whole map is seeded from one snapshot; say when it
+                was built and why it is stale instead of showing a spinner over it. */}
+            {bootstrapComputedAt && (
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[10px] font-sans text-slate-500">Snapshot</span>
+                <span data-testid="freshness-snapshot">
+                  <StatusFreshnessBadge
+                    status={bootstrapStale ? 'stale' : 'ok'}
+                    updatedAt={bootstrapComputedAt}
+                    reason={bootstrapReason}
+                  />
+                </span>
+              </div>
+            )}
+            {weatherPolygonMeta?.capped && (
+              <div
+                data-testid="weather-capped-notice"
+                className="text-[10px] font-sans text-slate-400 pt-0.5"
+              >
+                menampilkan {weatherPolygonMeta.count ?? 0} dari {weatherPolygonMeta.total ?? 0}
+              </div>
+            )}
           </div>
 
           <div className="space-y-2 font-mono text-xs">
@@ -268,6 +352,12 @@ function FloatingMapLegend({
                 <div>
  <span className="text-slate-200 font-medium block">Cuaca — {weatherDisruptionCount} zona</span>
                   <span className="text-xs text-slate-400 font-sans">Hujan lebat disruptif: high/critical, presipitasi 50mm/24j atau banjir 80%. Default ON. Hazard: flood/landslide/severe_storm/marine_wave.</span>
+                  <span
+                    data-testid="weather-polygon-count"
+                    className="text-[10px] text-slate-500 font-sans tabular-nums block"
+                  >
+                    {weatherPolygonFeatureCount} poligon digambar (seluruh Sumatra)
+                  </span>
                 </div>
               </div>
 
@@ -392,8 +482,36 @@ function FloatingMapLegend({
 }
 
 export default function DashboardClient() {
-  const { user, role, isAuthenticated, openAuthModal, isAuthModalOpen, closeAuthModal } = useAuth();
-  const { incidents, refetch } = useIncidents();
+  const { user, role, isAuthenticated, isLoading: isAuthLoading, openAuthModal, isAuthModalOpen, closeAuthModal } = useAuth();
+
+  // Phase 163b (M8): one auth-aware bootstrap read seeds the map. Held until the
+  // session is resolved because the endpoint is auth-aware (tenant fleet/erp).
+  const bootstrap = useDashboardBootstrap({ modality: 'truck', enabled: !isAuthLoading });
+  const bootstrapSections = bootstrap.data?.sections;
+  const seededIncidents =
+    bootstrapSections?.incidents?.status === 'ok' ? bootstrapSections.incidents.data?.items : undefined;
+  const seededNews = bootstrapSections?.news?.status === 'ok' ? bootstrapSections.news.data : undefined;
+  const seededMarketRegime =
+    bootstrapSections?.news_market_regime?.status === 'ok'
+      ? (bootstrapSections.news_market_regime.data as unknown as MarketRegimeData | null) ?? undefined
+      : undefined;
+  const seededCorridor =
+    bootstrapSections?.corridor_context?.status === 'ok' ? bootstrapSections.corridor_context.data : undefined;
+  const seededWeatherPolygons =
+    bootstrapSections?.weather_spatial_polygons?.status === 'ok'
+      ? bootstrapSections.weather_spatial_polygons.data
+      : undefined;
+  const seededFireHotspots =
+    bootstrapSections?.fire_hotspots?.status === 'ok' ? bootstrapSections.fire_hotspots.data : undefined;
+  // `fleet` is deliberately NOT seeded: the snapshot's fleet section is built for
+  // one modality (default `truck`) while this view draws the multimodal macro
+  // slice (tenant trucks + situational vessels/air). Seeding it would blank the
+  // Kapal/Udara pills until the next 10 s sync, so the hook keeps its own read.
+
+  const { incidents, refetch } = useIncidents({
+    enabled: !bootstrap.isLoading,
+    initialData: seededIncidents,
+  });
   const {
     vehicles: activeFleetVehicles,
     refetch: refetchFleet,
@@ -409,7 +527,7 @@ export default function DashboardClient() {
     tenantVehicles: tenantFleetVehicles,
     tenantAssetCount: tenantFleetAssetCount,
     canToggleSimulation: canToggleFleetSimulation,
-  } = useFleetVehicles();
+  } = useFleetVehicles(undefined, { enabled: !bootstrap.isLoading });
 
   // Next.js App Router query parameters for session-local routing deep-linking
   const searchParams = useSearchParams();
@@ -432,8 +550,8 @@ export default function DashboardClient() {
   const initialCrisis = searchParams?.get('crisis') || null;
 
   const [isOnboardingModalOpen, setIsOnboardingModalOpen] = useState(false);
-  // Header roster trigger (dispatcher-gated): toggles the Armada Perusahaan overlay.
-  const [isRosterVisible, setIsRosterVisible] = useState(true);
+  // Header roster trigger (dispatcher-gated): opens the Armada Perusahaan drawer.
+  const [isRosterVisible, setIsRosterVisible] = useState(false);
   const [selectedCrisisId, setSelectedCrisisId] = useState<string | null>(initialCrisis);
   const [selectedCrisis, setSelectedCrisis] = useState<CrisisState | null>(null);
   const [selectedVehicle, setSelectedVehicle] = useState<FleetVehicle | null>(null);
@@ -600,6 +718,22 @@ export default function DashboardClient() {
   const isDispatcherWorkspace = role === 'DISPATCHER';
   const fleetCountVehicles = activeFleetVehicles;
 
+  // Active DSS exposure per vehicle, only when an assessment exists. No
+  // assessment means no hazard line — never a guessed hazard.
+  const fleetHazards = useMemo(() => {
+    const exposure: Record<string, { hazardType?: string; distanceKm?: number; policy?: string }> = {};
+    if (!impactAssessmentData) return exposure;
+    const hazardType = impactAssessmentData.disruption?.hazard_type;
+    for (const assessment of impactAssessmentData.impacted_vehicles ?? []) {
+      exposure[assessment.vehicle_id] = {
+        hazardType,
+        distanceKm: assessment.distance_to_hazard_km,
+        policy: assessment.optimal_policy,
+      };
+    }
+    return exposure;
+  }, [impactAssessmentData]);
+
   const isRightInspectorActive = (isSidebarOpen && !!selectedCrisis) || !!selectedVehicle;
 
   // User Transparency States (Map Legend & Sensor Info)
@@ -607,11 +741,28 @@ export default function DashboardClient() {
   const [showSensorInfo, setShowSensorInfo] = useState(false);
 
   // Live Corridor Context Telemetry Hook (BMKG + TomTom + PIHPS 30s Poller)
-  const { corridorContext, isLoading: isCorridorLoading, applyOperationalImpact } = useCorridorContext('sumatra_belawan_medan');
+  // Phase 163b: seeded by the bootstrap snapshot (`sections.corridor_context`),
+  // so the mount no longer opens a duplicate corridor request.
+  const { corridorContext, isLoading: isCorridorLoading, applyOperationalImpact } = useCorridorContext(
+    'sumatra_belawan_medan',
+    { enabled: !bootstrap.isLoading, initialData: seededCorridor }
+  );
 
   // Live OSINT News & Intelligence Hook (Google News RSS & Verified Sinyal Lapangan)
-  const { newsFeed, status: newsStatus, lastUpdated: newsLastUpdated } = useNewsVerification();
+  // Phase 163b: seeded by `sections.news` + `sections.news_market_regime`; the
+  // seed still passes through the same permalink/freshness/discourse gates.
+  const { newsFeed, status: newsStatus, lastUpdated: newsLastUpdated, meta: newsBreadthMeta } = useNewsVerification({
+    enabled: !bootstrap.isLoading,
+    initialNews: seededNews,
+    initialMarketRegime: seededMarketRegime,
+  });
   const [newsSearchQuery, setNewsSearchQuery] = useState('');
+  const [newsProvinceFilter, setNewsProvinceFilter] = useState<string>('ALL');
+  // Phase 172.5 (M9): display-tier filter. `Semua` shows both tiers; `Krisis`
+  // and `Regional` narrow to one. Defaults to Semua so the first render matches
+  // the backend's crisis-first page.
+  const [newsTierFilter, setNewsTierFilter] = useState<'ALL' | NewsRelevanceTier>('ALL');
+
   const [selectedNewsCategory, setSelectedNewsCategory] = useState<'ALL' | 'OFFICIAL' | 'WEATHER' | 'OSINT' | 'MARKET'>('ALL');
   const [selectedNewsId, setSelectedNewsId] = useState<string | null>(null);
   const [expandedNewsId, setExpandedNewsId] = useState<string | null>(null);
@@ -635,6 +786,18 @@ export default function DashboardClient() {
       if (selectedNewsCategory === 'OSINT' && item.source_type !== 'MEDSOS_OSINT') return false;
       if (selectedNewsCategory === 'MARKET' && item.source_type !== 'PIHPS_MARKET') return false;
 
+      // Province chip narrows on the article's resolved province bucket (never a
+      // guess: unlocated rows live in the area-wide "Sumatera" bucket).
+      if (newsProvinceFilter !== 'ALL' && normalizeProvince(item.province) !== newsProvinceFilter) {
+        return false;
+      }
+
+      // Tier chip (Phase 172.5): crisis = gate-passing hazard news, regional =
+      // display-only context. The filter is additive with the province chip.
+      if (newsTierFilter !== 'ALL' && (item.relevance_tier || 'crisis') !== newsTierFilter) {
+        return false;
+      }
+
       if (newsSearchQuery.trim()) {
         const q = newsSearchQuery.toLowerCase();
         return (
@@ -645,7 +808,58 @@ export default function DashboardClient() {
       }
       return true;
     });
-  }, [newsFeed, selectedNewsCategory, newsSearchQuery]);
+  }, [newsFeed, selectedNewsCategory, newsSearchQuery, newsProvinceFilter, newsTierFilter]);
+
+  // Province chips: every province the payload reports, in canonical order, plus
+  // any bucket the visible feed actually carries.
+  const newsProvinceChips = useMemo(() => {
+    const present = new Set<string>();
+    for (const province of newsBreadthMeta?.provinces_present || []) {
+      present.add(normalizeProvince(province));
+    }
+    for (const item of newsFeed) {
+      if (item.link || item.url) present.add(normalizeProvince(item.province));
+    }
+    const order = (p: string) => {
+      const idx = (SUMATRA_PROVINCE_ORDER as readonly string[]).indexOf(p);
+      return idx === -1 ? (p === AREA_WIDE_PROVINCE ? 99 : 100) : idx;
+    };
+    return Array.from(present).sort((a, b) => order(a) - order(b) || a.localeCompare(b));
+  }, [newsFeed, newsBreadthMeta]);
+
+  // Provinces the backend reported as empty in the 48h window (honest emptiness).
+  const newsProvincesMissing = useMemo(
+    () => (newsBreadthMeta?.provinces_missing || []).map((p) => normalizeProvince(p)),
+    [newsBreadthMeta]
+  );
+
+  // Group the visible feed by province. Group order follows the chip order so the
+  // list and the filter row tell the same story; order is deterministic, so an
+  // identical cached re-poll cannot re-shuffle the DOM (freeze contract).
+  // Inside a province the backend's crisis-first order is preserved: a stable
+  // sort ranks crisis before regional, so a context card never precedes a hazard.
+  const groupedNews = useMemo(() => {
+    const groups = new Map<string, typeof filteredNews>();
+    for (const item of filteredNews) {
+      const key = normalizeProvince(item.province);
+      const bucket = groups.get(key);
+      if (bucket) bucket.push(item);
+      else groups.set(key, [item]);
+    }
+    const order = (p: string) => {
+      const idx = (SUMATRA_PROVINCE_ORDER as readonly string[]).indexOf(p);
+      return idx === -1 ? (p === AREA_WIDE_PROVINCE ? 99 : 100) : idx;
+    };
+    const tierRank = (item: { relevance_tier?: NewsRelevanceTier }) =>
+      item.relevance_tier === 'regional' ? 1 : 0;
+    return Array.from(groups.entries())
+      .sort((a, b) => order(a[0]) - order(b[0]) || a[0].localeCompare(b[0]))
+      .map(([province, items]) => ({
+        province,
+        items: [...items].sort((a, b) => tierRank(a) - tierRank(b)),
+      }));
+  }, [filteredNews]);
+
 
   // 32-point polygon ring around [lon, lat] with radius rKm (RED 16km / YELLOW 20km).
   const buildZoneRing = useCallback((lon: number, lat: number, rKm: number, points = 32): [number, number][] => {
@@ -976,11 +1190,16 @@ export default function DashboardClient() {
   // Poll for pending HITL items from Supabase (only for authenticated non-guest operators)
   useEffect(() => {
     let isMounted = true;
+    let inFlight: AbortController | null = null;
     const checkHitl = async () => {
       if (role === 'GUEST' || !user) return;
+      if (!isDocumentVisible()) return;
+      inFlight?.abort();
+      const controller = new AbortController();
+      inFlight = controller;
       try {
-        const res = await api.news.hitlPending();
-        if (isMounted && res) {
+        const res = await api.news.hitlPending(controller.signal);
+        if (isMounted && !controller.signal.aborted && res) {
           setPendingHitlCount(res.count || (res.items ? res.items.length : 0));
         }
       } catch (e) {
@@ -992,6 +1211,7 @@ export default function DashboardClient() {
     return () => {
       isMounted = false;
       clearInterval(interval);
+      inFlight?.abort();
     };
   }, [role, user]);
 
@@ -1001,13 +1221,26 @@ export default function DashboardClient() {
   const [showWeatherAdvisory, setShowWeatherAdvisory] = useState<boolean>(false);
   const [showFireHotspots, setShowFireHotspots] = useState<boolean>(true);
   const [fireHotspots, setFireHotspots] = useState<FireHotspot[]>([]);
-  const [fireStatus, setFireStatus] = useState<'ok' | 'degraded'>('ok');
+  // Phase 168: tri-state (ok|empty|stale|degraded) + true count from the
+  // envelope; null count means unknown ("—"), never a fabricated 0.
+  const [fireStatus, setFireStatus] = useState<HazardCounterStatus>('degraded');
   const [fireReason, setFireReason] = useState<string | null>(null);
+  const [fireCount, setFireCount] = useState<number | null>(null);
+  const [fireSource, setFireSource] = useState<FireHotspotSource | null>(null);
+  const [fireUpdatedAt, setFireUpdatedAt] = useState<string | null>(null);
+  const [fireWindowHours, setFireWindowHours] = useState<number>(24);
+  // True once the backend returned a known count (ok/empty/stale), so a fetch
+  // failure is marked stale instead of degraded when we still hold data.
+  const fireHasDataRef = useRef(false);
   const [routingInfo, setRoutingInfo] = useState<{ solver: string; compute_time_ms: number | null; savings_pct: number | null } | null>(null);
   // Persistent route-computation status: a cold render can take 30-50s, so the
   // operator needs lasting feedback plus an explicit abort action (not a 3s toast).
   const [isRoutingLoading, setIsRoutingLoading] = useState(false);
   const [routingError, setRoutingError] = useState<string | null>(null);
+  // Phase 170: a solver refusal (too far / same hub) must be visible, not a
+  // silent early-return. Kept separate from routingError so the rendered route
+  // corridor survives and the reason stays on screen after the toast fades.
+  const [routingNoRouteReason, setRoutingNoRouteReason] = useState<string | null>(null);
   const [routingElapsedMs, setRoutingElapsedMs] = useState(0);
 
   useEffect(() => {
@@ -1024,24 +1257,101 @@ export default function DashboardClient() {
   const [fleetModalityFilter, setFleetModalityFilter] = useState<'all' | 'truck' | 'maritime' | 'air'>('all');
 
 
+  const [weatherPolygonMeta, setWeatherPolygonMeta] = useState<WeatherPolygonMeta | null>(null);
+  const spatialWeatherRef = useRef<GeoJSON.FeatureCollection | null>(null);
+  const weatherPolygonMetaRef = useRef<WeatherPolygonMeta | null>(null);
+
   useEffect(() => {
+    // Phase 163b: hold the first read until the bootstrap snapshot answered —
+    // `sections.weather_spatial_polygons` is the same payload this effect would
+    // request (high/50/80), so seeding removes a duplicate mount call.
+    if (bootstrap.isLoading) return;
     let isMounted = true;
+    let inFlight: AbortController | null = null;
+    const readMeta = (
+      geojson: GeoJSON.FeatureCollection & { metadata?: WeatherPolygonMeta; meta?: WeatherPolygonMeta },
+    ): WeatherPolygonMeta | null => geojson?.meta ?? geojson?.metadata ?? null;
+
     async function loadSpatialWeather() {
+      if (!isDocumentVisible()) return;
+      // One weather request at a time.
+      inFlight?.abort();
+      const controller = new AbortController();
+      inFlight = controller;
       try {
         // Disruption-only default: heavy rain that can cause disruptions (high/critical).
-        const geojson = await api.weather.spatialPolygons({ min_severity: 'high', min_precip: 50, min_flood: 80 });
-        if (isMounted) setSpatialWeatherPolygons(geojson);
+        const geojson = await api.weather.spatialPolygons(
+          { min_severity: 'high', min_precip: 50, min_flood: 80 },
+          controller.signal
+        );
+        if (!isMounted || controller.signal.aborted) return;
+        const meta = readMeta(geojson);
+        const previous = spatialWeatherRef.current;
+        // Phase 169: a failed refresh never clears the layer. When the backend
+        // has no cache (degraded) we keep the polygons we already drew and mark
+        // them stale instead of blanking the map.
+        if (meta?.status === 'degraded' && (previous?.features?.length ?? 0) > 0) {
+          const kept: WeatherPolygonMeta = {
+            ...(weatherPolygonMetaRef.current ?? meta),
+            status: 'stale',
+            reason: meta.reason ?? 'Gagal memperbarui; menampilkan poligon terakhir.',
+          };
+          weatherPolygonMetaRef.current = kept;
+          setWeatherPolygonMeta(kept);
+          return;
+        }
+        spatialWeatherRef.current = geojson;
+        weatherPolygonMetaRef.current = meta;
+        setSpatialWeatherPolygons(geojson);
+        setWeatherPolygonMeta(meta);
       } catch (e) {
+        // Transient failure: keep the last-good polygons/counters (never blank).
+        if (!isMounted || controller.signal.aborted) return;
         console.warn('Backend spatial weather polygons fallback:', e);
+        const previousMeta = weatherPolygonMetaRef.current;
+        if (previousMeta) {
+          const kept: WeatherPolygonMeta = {
+            ...previousMeta,
+            status: 'stale',
+            reason: 'Gagal memperbarui; menampilkan poligon terakhir yang tersimpan.',
+          };
+          weatherPolygonMetaRef.current = kept;
+          setWeatherPolygonMeta(kept);
+        } else {
+          const unknown: WeatherPolygonMeta = {
+            status: 'degraded',
+            reason: 'Sumber cuaca tidak tersedia.',
+            total: null,
+            count: null,
+            capped: false,
+            updated_at: null,
+          };
+          weatherPolygonMetaRef.current = unknown;
+          setWeatherPolygonMeta(unknown);
+        }
       }
     }
-    loadSpatialWeather();
+
+    if (seededWeatherPolygons) {
+      // Snapshot seed: same shape + meta contract as the live endpoint.
+      const seededMeta = readMeta(seededWeatherPolygons);
+      spatialWeatherRef.current = seededWeatherPolygons;
+      weatherPolygonMetaRef.current = seededMeta;
+      setSpatialWeatherPolygons(seededWeatherPolygons);
+      setWeatherPolygonMeta(seededMeta);
+    } else {
+      // No snapshot section (bootstrap failed / guest with no weather): read.
+      void loadSpatialWeather();
+    }
+
     const interval = setInterval(loadSpatialWeather, 120000);
     return () => {
       isMounted = false;
       clearInterval(interval);
+      inFlight?.abort();
     };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bootstrap.isLoading]);
 
   // Advisory (purple, default OFF): full-fidelity medium path, fetched only when toggled ON.
   useEffect(() => {
@@ -1050,10 +1360,14 @@ export default function DashboardClient() {
       return;
     }
     let isMounted = true;
+    const controller = new AbortController();
     async function loadAdvisoryWeather() {
       try {
-        const geojson = await api.weather.spatialPolygons({ min_severity: 'medium', min_precip: 0, min_flood: 0 });
-        if (!isMounted) return;
+        const geojson = await api.weather.spatialPolygons(
+          { min_severity: 'medium', min_precip: 0, min_flood: 0 },
+          controller.signal
+        );
+        if (!isMounted || controller.signal.aborted) return;
         // Keep advisory layer to medium-only to avoid double-counting disruption highs.
         const mediumOnly: GeoJSON.FeatureCollection = {
           type: 'FeatureCollection',
@@ -1070,40 +1384,116 @@ export default function DashboardClient() {
     void loadAdvisoryWeather();
     return () => {
       isMounted = false;
+      controller.abort();
     };
   }, [showWeatherAdvisory]);
 
+  // Phase 160: world-truth counters. Fetched on mount + on the weather interval
+  // regardless of layer toggles; the last good summary is kept in a ref so a
+  // failed refresh marks the counters stale instead of blanking them.
+  const [weatherSummary, setWeatherSummary] = useState<WeatherHazardSummary | null>(null);
+  const weatherSummaryRef = useRef<WeatherHazardSummary | null>(null);
+
   useEffect(() => {
     let isMounted = true;
-    async function loadFireHotspots() {
+    let inFlight: AbortController | null = null;
+
+    const asStale = (prev: WeatherHazardSummary | null): WeatherHazardSummary | null => {
+      if (!prev) return null;
+      const reason = 'Sumber cuaca tidak tersedia — angka terakhir dipertahankan';
+      return {
+        ...prev,
+        cuaca: { ...prev.cuaca, status: 'stale' as const, reason },
+        waspada: { ...prev.waspada, status: 'stale' as const, reason },
+      };
+    };
+
+    async function loadWeatherSummary() {
+      if (!isDocumentVisible()) return;
+      inFlight?.abort();
+      const controller = new AbortController();
+      inFlight = controller;
       try {
-        const res = await api.fire.hotspots();
-        if (!isMounted) return;
-        if (res.status === 'degraded') {
-          setFireHotspots([]);
-          setFireStatus('degraded');
-          setFireReason(res.reason ?? 'butuh MAP_KEY — set NASA_FIRMS_MAP_KEY di Render env / .env.local');
-        } else {
-          setFireHotspots(res.hotspots ?? []);
-          setFireStatus('ok');
-          setFireReason(res.reason ?? null);
+        const summary = await api.weather.summary(controller.signal);
+        if (!isMounted || controller.signal.aborted) return;
+        if (!summary?.cuaca || !summary?.waspada) {
+          throw new Error('weather summary shape invalid');
         }
+        weatherSummaryRef.current = summary;
+        setWeatherSummary(summary);
       } catch (e) {
-        console.warn('Backend FIRMS fire hotspots fallback (degraded):', e);
-        if (isMounted) {
-          setFireHotspots([]);
-          setFireStatus('degraded');
-          setFireReason('butuh MAP_KEY — set NASA_FIRMS_MAP_KEY di Render env / .env.local');
-        }
+        if (!isMounted || controller.signal.aborted) return;
+        console.warn('Weather summary fallback (stale counters):', e);
+        const stale = asStale(weatherSummaryRef.current);
+        if (stale) weatherSummaryRef.current = stale;
+        setWeatherSummary(stale);
       }
     }
-    loadFireHotspots();
+
+    void loadWeatherSummary();
+    const interval = setInterval(loadWeatherSummary, 120000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+      inFlight?.abort();
+    };
+  }, []);
+
+  useEffect(() => {
+    // Phase 163b: seeded by `sections.fire_hotspots` (identical envelope contract).
+    if (bootstrap.isLoading) return;
+    let isMounted = true;
+    let inFlight: AbortController | null = null;
+
+    const applyFireEnvelope = (res: FireHotspotResponse) => {
+      // The backend already separates ok/empty (healthy) from stale
+      // (last-known-good) and degraded (no data at all). Use its truth.
+      setFireHotspots(res.hotspots ?? []);
+      setFireStatus(res.status ?? (res.count == null ? 'degraded' : 'ok'));
+      setFireCount(res.count ?? null);
+      setFireReason(res.reason ?? null);
+      setFireSource(res.source ?? null);
+      setFireUpdatedAt(res.updated_at ?? null);
+      setFireWindowHours(res.window_hours ?? 24);
+      fireHasDataRef.current = res.count != null;
+    };
+
+    async function loadFireHotspots() {
+      if (!isDocumentVisible()) return;
+      inFlight?.abort();
+      const controller = new AbortController();
+      inFlight = controller;
+      try {
+        const res = await api.fire.hotspots(controller.signal);
+        if (!isMounted || controller.signal.aborted) return;
+        applyFireEnvelope(res);
+      } catch (e) {
+        // Transient failure: keep the last-good layer/count (never blank it).
+        if (!isMounted || controller.signal.aborted) return;
+        console.warn('Backend FIRMS hotspots fetch failed; keeping last-known-good layer:', e);
+        setFireStatus(fireHasDataRef.current ? 'stale' : 'degraded');
+        setFireReason(
+          fireHasDataRef.current
+            ? 'Gagal memperbarui; menampilkan data terakhir yang tersimpan.'
+            : 'Sumber Titik Panas tidak tersedia.'
+        );
+      }
+    }
+
+    if (seededFireHotspots) {
+      applyFireEnvelope(seededFireHotspots);
+    } else {
+      void loadFireHotspots();
+    }
+
     const interval = setInterval(loadFireHotspots, 300000);
     return () => {
       isMounted = false;
       clearInterval(interval);
+      inFlight?.abort();
     };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bootstrap.isLoading]);
 
   // Filtered-set counts: disruption (high/critical, biru) + advisory (medium, ungu when ON).
   const disruptionFeatures = useMemo(
@@ -1128,9 +1518,14 @@ export default function DashboardClient() {
     }
     return { type: 'FeatureCollection', features: feats } as GeoJSON.FeatureCollection;
   }, [showWeatherPolygons, showWeatherAdvisory, disruptionFeatures, advisoryFeatures, spatialWeatherPolygons]);
-  const weatherPolygonCount = combinedWeatherPolygons?.features?.length ?? 0;
-  const weatherDisruptionCount = showWeatherPolygons ? disruptionFeatures.length : 0;
-  const weatherAdvisoryCount = advisoryFeatures.length;
+  // Counters = world truth from /weather/summary (Phase 160). They are never
+  // derived from the toggle-gated map slice; null means unknown → "—".
+  const weatherDisruptionCount = weatherSummary?.cuaca.count ?? null;
+  const weatherAdvisoryCount = weatherSummary?.waspada.count ?? null;
+  const weatherPolygonCount =
+    weatherSummary?.cuaca.count != null && weatherSummary?.waspada.count != null
+      ? weatherSummary.cuaca.count + weatherSummary.waspada.count
+      : null;
   // Top-1 blue disruption sample for the TopNav BMKG popover (hazard/koridor/delay/aksi/moda/confidence).
   const weatherSample = useMemo(() => {
     const f = disruptionFeatures[0] as GeoJSON.Feature | undefined;
@@ -1159,11 +1554,9 @@ export default function DashboardClient() {
       severity: asStr(p.severity),
     };
   }, [disruptionFeatures]);
-  const fireHotspotCount = fireHotspots.length;
-  const fireTooltip =
-    fireStatus === 'degraded'
-      ? (fireReason ?? 'butuh MAP_KEY — set NASA_FIRMS_MAP_KEY di Render env / .env.local')
-      : fireReason ?? `Titik Panas (Satelit) VIIRS_SNPP_NRT: ${fireHotspotCount} titik; sorotan oranye khusus peta bila ≥3 titik keyakinan tinggi dalam 5 km. Klik area/titik = jumlah + FRP/conf/jarak koridor.`;
+  // Phase 168: counter = true pre-cap hotspot count from the envelope.
+  // null (degraded) renders "—" in TopNavTelemetry, never a 0.
+  const fireHotspotCount = fireCount;
 
 
 
@@ -1292,6 +1685,7 @@ export default function DashboardClient() {
     const isStale = () => signal.aborted || routeCalculationReqIdRef.current !== reqId;
 
     setRoutingError(null);
+    setRoutingNoRouteReason(null);
     // Never let a previous solver latency read as if it belonged to this request.
     setRoutingInfo(null);
     setIsRoutingLoading(true);
@@ -1315,6 +1709,9 @@ export default function DashboardClient() {
         ...(originInfo ? { origin_name: formatNodeId(originId, originInfo) } : {}),
         ...(destInfo ? { dest_name: formatNodeId(destId, destInfo) } : {}),
         fleet_size: 3,
+        // Phase 170: the solver must actually return up to 3 alternatives; the
+        // backend default alone is not enough when the UI expects them.
+        k_alternatives: 3,
         hazard_zones: hazardCenter ? [{ center: hazardCenter, radiusKm }] : [],
         // Forward hedging economics only when the caller supplied them;
         // no hardcoded cargo values are injected into every request.
@@ -1364,20 +1761,36 @@ export default function DashboardClient() {
         return false;
       }
 
-      // Render visual corridors immediately onto map
-      setCurrentMapRoutes(routes);
+      // Render visual corridors immediately onto map. Identical geometries
+      // (Mapbox alternatives can repeat a polyline) render once only.
+      const uniqueRoutes = dedupeRoutesByGeometry(routes);
+      setCurrentMapRoutes(uniqueRoutes);
       setSelectedCrisis((prev) =>
-        prev ? { ...prev, route_recommendations: routes } : prev
+        prev ? { ...prev, route_recommendations: uniqueRoutes } : prev
       );
 
       // 2. Asynchronously hydrate backend solver metrics & hedging economics without blocking visual render
       routingPromise
         .then((routingRes) => {
           if (isStale()) return;
-          const nested = (routingRes as { point_to_point_path?: { status?: string; message?: string } } | null)?.point_to_point_path;
-          if (nested?.status === 'no_route') {
+          const nested = (routingRes as {
+            point_to_point_path?: { status?: string; message?: string; reason?: string; reason_code?: string };
+          } | null)?.point_to_point_path;
+          // Phase 170: a refusal is never silent. The previously rendered
+          // corridor stays on the map (we only add a reason), because clearing
+          // it would leave the operator with nothing at all.
+          if (nested && (nested.status === 'no_route' || nested.status === 'no_path_found')) {
+            const reason =
+              nested.reason ||
+              nested.message ||
+              (nested.status === 'no_route'
+                ? 'Rute solver tidak tersedia untuk titik ini.'
+                : 'Jalur pada graph arteri tidak ditemukan untuk titik ini.');
+            setRoutingNoRouteReason(reason);
+            setToast({ message: reason, type: 'error' });
             return;
           }
+          setRoutingNoRouteReason(null);
           const backendPtpRoutes = (nested as { routes?: Array<{ route_index?: number; hedging?: NonNullable<RouteRecommendation['hedging']> }> } | undefined)?.routes;
           if (Array.isArray(backendPtpRoutes)) {
             backendPtpRoutes.forEach((br, order) => {
@@ -1670,18 +2083,22 @@ export default function DashboardClient() {
             );
 
             if (selectionReqId !== crisisSelectionReqRef.current) return;
-            setCurrentMapRoutes(dynamicRoutes);
+            const uniqueRoutes = dedupeRoutesByGeometry(dynamicRoutes);
+            setCurrentMapRoutes(uniqueRoutes);
             setSelectedCrisis({
               ...baseCrisis,
-              route_recommendations: dynamicRoutes,
+              route_recommendations: uniqueRoutes,
             });
           } else {
             setSelectedCrisis(baseCrisis);
           }
         } else {
           // Clean Slate: If user has not selected Start and End nodes, do not force a mockup route on the map
-          setCurrentMapRoutes(baseCrisis.route_recommendations || []);
-          setSelectedCrisis(baseCrisis);
+          const uniqueBaseRoutes = baseCrisis.route_recommendations
+            ? dedupeRoutesByGeometry(baseCrisis.route_recommendations)
+            : baseCrisis.route_recommendations;
+          setCurrentMapRoutes(uniqueBaseRoutes || []);
+          setSelectedCrisis({ ...baseCrisis, route_recommendations: uniqueBaseRoutes });
         }
       }
     }
@@ -2256,6 +2673,8 @@ export default function DashboardClient() {
 
     const siblingCitations = newsFeed
       .filter((n) => {
+        // Phase 172.5: regional context is never hazard evidence.
+        if (n.relevance_tier === 'regional') return false;
         if (!newsItem) return n.id === fallbackZone?.source_news_id;
         const sameCorridor = n.corridor_segment && newsItem?.corridor_segment
           ? n.corridor_segment === newsItem.corridor_segment
@@ -2755,10 +3174,11 @@ export default function DashboardClient() {
             <button
               type="button"
               id="fleet-roster-toggle"
+              data-testid="armada-trigger"
               onClick={() => setIsRosterVisible((v) => !v)}
               aria-pressed={isRosterVisible}
-              aria-label="Tampilkan atau sembunyikan panel Armada Perusahaan"
-              title="Armada Perusahaan — daftar aset terdaftar"
+              aria-label={`Armada Perusahaan: ${tenantFleetVehicles.length} unit · ${liveTenantVehicles.length} live GPS. Tampilkan atau sembunyikan panel.`}
+              title={`Armada Perusahaan — ${tenantFleetVehicles.length} unit · ${liveTenantVehicles.length} live GPS`}
               className="cursor-pointer px-2.5 sm:px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-slate-200 hover:text-white text-xs font-medium transition flex items-center gap-1.5"
             >
               <Truck className="w-3.5 h-3.5 text-[#00f0ff]" />
@@ -2866,6 +3286,23 @@ export default function DashboardClient() {
         }}
       />
 
+      {/* Armada Perusahaan drawer — dispatcher-only, tenant-scoped roster + detail */}
+      {isDispatcherWorkspace && (
+        <TenantFleetRoster
+          isOpen={isRosterVisible}
+          onClose={() => setIsRosterVisible(false)}
+          vehicles={tenantFleetVehicles}
+          liveVehicles={liveTenantVehicles}
+          isLoading={isFleetLoading}
+          error={fleetError}
+          isTenantScoped={isFleetTenantScoped}
+          companyId={fleetCompanyId}
+          hazardByVehicleId={fleetHazards}
+          onFocusVehicle={handleSelectVehicle}
+          onOpenOnboarding={() => setIsOnboardingModalOpen(true)}
+        />
+      )}
+
       {/* MAIN CONTENT CANVAS AREA */}
       <main className="absolute left-0 top-16 right-0 bottom-0 overflow-hidden flex">
 
@@ -2961,6 +3398,94 @@ export default function DashboardClient() {
                 ))}
               </div>
 
+              {/* Display-tier chips (Phase 172.5 / M9). `Krisis` = the rows that
+                  passed the hazard gate; `Regional` = honest 48h regional context
+                  that never claims crisis relevance. Additive with the province
+                  chips below. */}
+              <div className="flex items-center gap-1" data-testid="news-tier-filter">
+                {([
+                  { id: 'ALL', label: 'Semua', testid: 'news-tier-all' },
+                  { id: 'crisis', label: 'Krisis', testid: 'news-tier-crisis' },
+                  { id: 'regional', label: 'Regional', testid: 'news-tier-regional' },
+                ] as const).map((tier) => (
+                  <button
+                    key={tier.id}
+                    type="button"
+                    data-testid={tier.testid}
+                    onClick={() => setNewsTierFilter(tier.id)}
+                    className={`cursor-pointer px-1.5 py-0.5 rounded border text-[10px] font-mono transition ${
+                      newsTierFilter === tier.id
+                        ? tier.id === 'regional'
+                          ? 'bg-white/10 text-slate-100 border-white/25'
+                          : 'bg-white/10 text-slate-100 border-white/20'
+                        : 'bg-slate-950/50 text-slate-400 border-white/5 hover:border-white/20 hover:text-slate-200'
+                    }`}
+                    title={
+                      tier.id === 'crisis'
+                        ? 'Berita yang lolos gerbang krisis (zona merah/kuning)'
+                        : tier.id === 'regional'
+                          ? 'Konteks regional 48 jam — bukan klaim krisis'
+                          : 'Tampilkan kedua tingkat: krisis dan regional'
+                    }
+                  >
+                    {tier.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Province chips (Phase 172 / M9): the read path guarantees every
+                  province with a qualifying 48h article is present, so a chip per
+                  province is an honest map of what the window contains. Empty
+                  provinces are named, never hidden. */}
+              {(newsProvinceChips.length > 0 || newsProvincesMissing.length > 0) && (
+              <div className="flex flex-wrap items-center gap-1" data-testid="news-province-filter">
+                <button
+                  type="button"
+                  data-testid="news-province-chip-all"
+                  onClick={() => setNewsProvinceFilter('ALL')}
+                  className={`cursor-pointer px-1.5 py-0.5 rounded border text-[10px] font-mono transition ${
+                    newsProvinceFilter === 'ALL'
+                      ? 'bg-white/10 text-slate-100 border-white/20'
+                      : 'bg-slate-950/50 text-slate-400 border-white/5 hover:border-white/20 hover:text-slate-200'
+                  }`}
+                  title="Tampilkan semua provinsi"
+                >
+                  Semua
+                </button>
+                {newsProvinceChips.map((province) => {
+                  const slug = provinceSlug(province);
+                  const active = newsProvinceFilter === province;
+                  const count = newsBreadthMeta?.province_counts?.[province];
+                  return (
+                    <button
+                      key={province}
+                      type="button"
+                      data-testid={`news-province-chip-${slug}`}
+                      onClick={() => setNewsProvinceFilter(active ? 'ALL' : province)}
+                      title={`Filter provinsi: ${province}${typeof count === 'number' ? ` (${count} artikel)` : ''}`}
+                      className={`cursor-pointer px-1.5 py-0.5 rounded border text-[10px] font-mono transition ${
+                        active
+                          ? 'bg-cyan-950/60 text-cyan-200 border-cyan-500/50'
+                          : 'bg-slate-950/50 text-slate-400 border-white/5 hover:border-white/20 hover:text-slate-200'
+                      }`}
+                    >
+                      {province}
+                      {typeof count === 'number' ? <span className="ml-1 text-slate-500">{count}</span> : null}
+                    </button>
+                  );
+                })}
+                {newsProvincesMissing.length > 0 && (
+                  <span
+                    data-testid="news-provinces-missing"
+                    className="px-1.5 py-0.5 rounded border border-dashed border-white/10 text-[10px] font-mono text-slate-500"
+                    title="Provinsi tanpa artikel yang lolos gerbang 48 jam pada jendela baca ini"
+                  >
+                    {newsProvincesMissing.join(' · ')}: Tidak ada artikel 48 jam
+                  </span>
+                )}
+              </div>
+              )}
+
               {/* Compact Zona Filter Pills in Left News Drawer Header */}
               <div className="space-y-1.5 pt-1">
               <div className="flex items-center gap-1.5">
@@ -3046,7 +3571,21 @@ export default function DashboardClient() {
                   <p>Tidak ada berita yang cocok.</p>
                 </div>
               ) : (
-                filteredNews.map((item) => {
+                groupedNews.map((group) => (
+                  <div key={group.province} className="space-y-2.5">
+                    <div
+                      data-testid={`news-province-group-${provinceSlug(group.province)}`}
+                      className="sticky top-0 z-10 flex items-center justify-between gap-2 px-2 py-1 rounded-md bg-[#0c1017]/95 backdrop-blur border border-[#1c2432] text-[10px] font-mono uppercase tracking-wide text-slate-400"
+                    >
+                      <span className="truncate">{group.province}</span>
+                      <span
+                        data-testid={`news-province-count-${provinceSlug(group.province)}`}
+                        className="text-slate-300 font-bold shrink-0"
+                      >
+                        {group.items.length} artikel
+                      </span>
+                    </div>
+                    {group.items.map((item) => {
                   const isSelected = selectedNewsId === item.id;
                   const isOfficial = item.source_tier === 'TIER_1_OFFICIAL' || item.source_type === 'OFFICIAL_NEWS';
                   const isEarlyWarning = item.temporal_phase === 'forecast_early_warning';
@@ -3057,8 +3596,12 @@ export default function DashboardClient() {
                   const isExcerptExpanded = expandedNewsId === item.id;
                   const itemZoneTier = (item.zone_tier || 'RED_CONFIRMED') as ZoneTier;
                   const isForecast = isForecastActive(item.forecast_tag, item.forecast_valid_until, forecastNowMs);
+                  // Phase 172.5: regional context never renders a hazard zone badge.
+                  const isRegional = item.relevance_tier === 'regional';
 
                   const handleFocusMap = () => {
+                    // Regional context is not an incident: no zone/route audit trail.
+                    if (isRegional) return;
                     // Forecast path: info-only. No origin/dest reroute pairing and
                     // no detour calculation — inspectNewsOrZoneAuditTrail emits
                     // zero routes instead of a reroute CTA.
@@ -3106,7 +3649,18 @@ export default function DashboardClient() {
 
                       {/* Headline with external link */}
                       <div className="flex flex-wrap items-center gap-1.5">
-                        {isForecast ? (
+                        {isRegional ? (
+                          // Neutral, non-hazard label: this is regional context,
+                          // not a zone. No red/amber emphasis, no crisis claim.
+                          <span
+                            data-testid={`berita-tier-label-${item.id}`}
+                            className="flex items-center gap-1.5 text-xs text-slate-400"
+                            title="Konteks regional 48 jam — bukan klaim krisis"
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+                            Regional
+                          </span>
+                        ) : isForecast ? (
  <span className="flex items-center gap-1.5 text-xs text-cyan-300"><span className="w-1.5 h-1.5 rounded-full border border-dashed border-cyan-300 bg-cyan-400/20" />Prakiraan</span>
                         ) : itemZoneTier === 'RED_CONFIRMED' ? (
  <span className="flex items-center gap-1.5 text-xs text-slate-300"><span className="w-1.5 h-1.5 rounded-full bg-red-500" />Merah</span>
@@ -3185,16 +3739,25 @@ export default function DashboardClient() {
                           </span>
                         </div>
 
- {/* Row 2 — Keyakinan */}
-                        <div className="flex items-center justify-between text-slate-300 border-t border-[#1c2432]/60 pt-1">
- <span className="text-slate-500 text-xs font-semibold">Keyakinan:</span>
-                          <span data-testid={`berita-confidence-${item.id}`} className="px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 text-xs font-bold tabular-nums" title="Keyakinan verifikasi artikel">
-
-                              {item.confidence_score != null && Number.isFinite(Number(item.confidence_score))
-                                ? `${Math.round(Number(item.confidence_score) * 100)}%`
-                                : 'Keyakinan belum tersedia'}
-                            </span>
+ {/* Row 2 — Keyakinan (Phase 172 / M9): tier + honest label; a percentage only
+     when a calibrated consensus value exists. The static 0.86/0.94 tier
+     constant is never rendered as confidence. */}
+                        <div className="flex items-center justify-between gap-1 text-slate-300 border-t border-[#1c2432]/60 pt-1">
+ <span className="text-slate-500 text-xs font-semibold shrink-0">Keyakinan:</span>
+                          <span
+                            data-testid={`berita-confidence-${item.id}`}
+                            className="px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 text-xs font-bold tabular-nums truncate"
+                            title={`${displayTierLabel(item.display_confidence?.tier || item.source_tier)} · ${item.display_confidence?.label || 'Belum terverifikasi'}${item.display_confidence?.basis ? ` (${item.display_confidence.basis})` : ''}`}
+                          >
+                            {item.display_confidence?.value != null && Number.isFinite(Number(item.display_confidence.value))
+                              ? `${Math.round(Number(item.display_confidence.value) * 100)}% · `
+                              : ''}
+                            {displayTierLabel(item.display_confidence?.tier || item.source_tier)}
+                            {' · '}
+                            <span className="font-semibold">{item.display_confidence?.label || 'Belum terverifikasi'}</span>
+                          </span>
                         </div>
+
 
  {/* Row 3 — Jalur */}
                         <div className="flex items-center justify-between text-slate-300 border-t border-[#1c2432]/60 pt-1">
@@ -3281,7 +3844,9 @@ export default function DashboardClient() {
                       </div>
                     </div>
                   );
-                })
+                })}
+                  </div>
+                ))
               )}
             </div>
 
@@ -3377,12 +3942,18 @@ export default function DashboardClient() {
                     onToggleWeatherAdvisory={() => setShowWeatherAdvisory((v) => !v)}
                     weatherAdvisoryCount={weatherAdvisoryCount}
                     weatherDisruptionCount={weatherDisruptionCount}
+                    weatherSummary={weatherSummary}
                     weatherSample={weatherSample}
+                    weatherPolygonMeta={weatherPolygonMeta}
                     showFireHotspots={showFireHotspots}
                     onToggleFireHotspots={() => setShowFireHotspots(v => !v)}
-                    fireHotspotCount={fireHotspotCount}
+                    fireHotspotCount={fireHotspotCount ?? undefined}
+                    fireCount={fireHotspotCount}
                     fireStatus={fireStatus}
-                    fireTooltip={fireTooltip}
+                    fireReason={fireReason}
+                    fireSource={fireSource}
+                    fireUpdatedAt={fireUpdatedAt}
+                    fireWindowHours={fireWindowHours}
                     onSelectHub={(hub) => {
                       setMapFlyTo({ lon: hub.coords[0], lat: hub.coords[1], zoom: 11, ts: Date.now() });
                     }}
@@ -3483,9 +4054,22 @@ export default function DashboardClient() {
                     corridorVisibility={corridorVisibility}
                     onToggleCorridor={handleToggleCorridor}
                     onResetCorridorVisibility={handleResetCorridors}
-                    weatherDisruptionCount={weatherDisruptionCount}
-                    weatherAdvisoryCount={weatherAdvisoryCount}
+                    weatherDisruptionCount={weatherDisruptionCount ?? 0}
+                    weatherAdvisoryCount={weatherAdvisoryCount ?? 0}
                     showWeatherAdvisory={showWeatherAdvisory}
+                    weatherPolygonFeatureCount={disruptionFeatures.length}
+                    weatherPolygonMeta={weatherPolygonMeta}
+                    weatherSummary={weatherSummary}
+                    fireStatus={fireStatus}
+                    fireUpdatedAt={fireUpdatedAt}
+                    fireReason={fireReason}
+                    bootstrapComputedAt={bootstrap.data?.computed_at ?? null}
+                    bootstrapStale={bootstrap.stale}
+                    bootstrapReason={
+                      bootstrap.stale
+                        ? `Snapshot tertunda (${bootstrap.data?.reason ?? 'usia snapshot > 10 mnt'})`
+                        : 'Snapshot DB segar'
+                    }
                   />
                 }
               />
@@ -3501,8 +4085,39 @@ export default function DashboardClient() {
               error={routingError}
               elapsedMs={routingElapsedMs}
               onCancel={handleCancelRouting}
-              onDismissError={() => setRoutingError(null)}
+              onDismissError={() => {
+                setRoutingError(null);
+                setRoutingNoRouteReason(null);
+              }}
             />
+
+            {/* Phase 170: solver refusals (origin/destination too far from the
+                hub graph, or both endpoints collapsing onto one hub) used to be
+                swallowed by an early return. The reason is now always visible
+                and the already-rendered corridor is never cleared. */}
+            {routingNoRouteReason && (
+              <div
+                data-testid="routing-no-route-reason"
+                role="status"
+                aria-live="polite"
+                className="absolute left-1/2 top-16 z-[85] w-[min(92vw,32rem)] -translate-x-1/2 rounded-xl border border-amber-500/40 bg-[#0c1017]/95 px-3.5 py-2.5 text-xs font-sans text-amber-200 shadow-2xl"
+              >
+                <div className="flex items-start gap-2">
+                  <span className="mt-0.5 shrink-0 font-mono text-[10px] font-bold text-amber-300">
+                    RUTE SOLVER
+                  </span>
+                  <span className="min-w-0 flex-1 leading-relaxed">{routingNoRouteReason}</span>
+                  <button
+                    type="button"
+                    onClick={() => setRoutingNoRouteReason(null)}
+                    aria-label="Tutup alasan rute solver"
+                    className="shrink-0 cursor-pointer rounded p-0.5 text-amber-300/70 transition-colors hover:bg-white/10 hover:text-amber-100"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Decision Support System (DSS): Dispatcher Alert Queue Strip */}
             {!isAlertQueueDismissed && impactAssessmentData && impactAssessmentData.impacted_vehicles.length > 0 && (
@@ -3716,12 +4331,18 @@ export default function DashboardClient() {
               </div>
             </div>
           ) : (
-          <AnalyticsSection
-            selectedCrisis={selectedCrisis}
-            corridorContext={corridorContext}
-            activeRoutes={currentMapRoutes}
-            onSwitchTab={(tab) => setActiveSection(tab)}
-          />
+            // Phase 163b (M8): mounted only while the tab is open. Before this,
+            // all three sections rendered on every /dashboard paint (CSS-hidden)
+            // and fired their own commodity/approval/evaluation reads, which was
+            // the single largest source of first-mount requests.
+            activeSection === 'analytics' && (
+              <AnalyticsSection
+                selectedCrisis={selectedCrisis}
+                corridorContext={corridorContext}
+                activeRoutes={currentMapRoutes}
+                onSwitchTab={(tab) => setActiveSection(tab)}
+              />
+            )
           )}
         </div>
 
@@ -3759,13 +4380,15 @@ export default function DashboardClient() {
               </div>
             </div>
           ) : (
-            <ReportsSection
-              approvalsCount={approvalsCount}
-              corridorContext={corridorContext}
-              selectedCrisis={selectedCrisis}
-              activeRoutes={currentMapRoutes}
-              onCreateMitigation={() => setActiveSection('map')}
-            />
+            activeSection === 'reports' && (
+              <ReportsSection
+                approvalsCount={approvalsCount}
+                corridorContext={corridorContext}
+                selectedCrisis={selectedCrisis}
+                activeRoutes={currentMapRoutes}
+                onCreateMitigation={() => setActiveSection('map')}
+              />
+            )
           )}
         </div>
 
@@ -3803,11 +4426,13 @@ export default function DashboardClient() {
               </div>
             </div>
           ) : (
-          <EvaluationSection
-            corridorContext={corridorContext}
-            selectedCrisis={selectedCrisis}
-            activeRoutes={currentMapRoutes}
-          />
+            activeSection === 'evaluation' && (
+              <EvaluationSection
+                corridorContext={corridorContext}
+                selectedCrisis={selectedCrisis}
+                activeRoutes={currentMapRoutes}
+              />
+            )
           )}
         </div>
 

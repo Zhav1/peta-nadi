@@ -2034,6 +2034,8 @@ export async function calculateAIDynamicDetourRoutes(
     corridor_type: 'land_primary',
     viable: true,
     color: landPrimaryColor,
+    // Phase 170 provenance: Mapbox road geometry vs straight-line estimate.
+    source: primaryRes.source,
     legs: [
       {
         title: 'Koridor Darat Langsung',
@@ -2185,6 +2187,7 @@ export async function calculateAIDynamicDetourRoutes(
     corridor_type: 'land_detour',
     viable: true,
     color: isPrimaryOffline ? '#EF4444' : landDetourColor,
+    source: landDetourResult.source,
     legs: [
       {
         title: isPrimaryCompromised ? 'Pengalihan Darat / Detour' : 'Jalur Arteri Sekunder',

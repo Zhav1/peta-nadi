@@ -56,6 +56,22 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return R * c
 
 
+# ---------------------------------------------------------------------------
+# Phase 170 — snap ceiling (SPEC decision 5)
+# ---------------------------------------------------------------------------
+# The arterial graph is a 56-node skeleton. Its median nearest-neighbour spacing
+# is 38.6 km (min 7.4 km between paired hubs, widest gap 139.5 km). A coordinate
+# farther than 75 km (~2x the median hub spacing) from every node has no honest
+# hub relationship: the "connector" would be a 75-139 km straight line drawn
+# across terrain that was never routed. Beyond the ceiling the solver refuses
+# with a machine-readable reason instead of silently snapping.
+MAX_SNAP_KM = 75.0
+# Origin and destination collapsing onto ONE hub is not a route: retry the
+# destination on a hub at least this far from the origin hub before refusing.
+SAME_NODE_MIN_SEPARATION_KM = 15.0
+
+
+
 def enrich_route_with_proof(
     route: Dict[str, Any],
     hazard_zones: Optional[List[Dict[str, Any]]] = None,
@@ -541,26 +557,55 @@ class CPURoutingAdapter:
         except Exception as e:
             logger.error(f"Failed to load road graph network cache: {e}")
 
-    def _find_nearest_graph_node(self, lon: float, lat: float) -> Tuple[str, float]:
-        """
-        Finds closest node in self.nodes_dict by haversine distance.
-        Returns (node_id, distance_km).
-        """
-        best_node = None
-        best_dist = float("inf")
+    def _ranked_graph_nodes(self, lon: float, lat: float) -> List[Tuple[str, float]]:
+        """All graph nodes ordered by haversine distance to (lon, lat)."""
+        ranked: List[Tuple[str, float]] = []
         for node_id, node in self.nodes_dict.items():
             n_lat = node.get("lat")
             n_lon = node.get("lon")
             if n_lat is not None and n_lon is not None:
-                d = haversine_km(lat, lon, n_lat, n_lon)
-                if d < best_dist:
-                    best_dist = d
-                    best_node = node_id
-        if best_node is None:
+                ranked.append((node_id, haversine_km(lat, lon, n_lat, n_lon)))
+        ranked.sort(key=lambda item: item[1])
+        if not ranked:
             nodes = list(self.graph.nodes)
-            best_node = nodes[0] if nodes else "belawan_port"
-            best_dist = 0.0
-        return best_node, best_dist
+            if nodes:
+                ranked = [(nodes[0], 0.0)]
+        return ranked
+
+    def _find_nearest_graph_node(self, lon: float, lat: float) -> Tuple[str, float]:
+        """
+        Finds closest node in self.nodes_dict by haversine distance.
+        Returns (node_id, distance_km). Callers must enforce MAX_SNAP_KM.
+        """
+        ranked = self._ranked_graph_nodes(lon, lat)
+        if not ranked:
+            return "belawan_port", 0.0
+        return ranked[0]
+
+    def _find_fallback_dest_node(
+        self, lon: float, lat: float, origin_node: str, min_separation_km: float
+    ) -> Optional[Tuple[str, float]]:
+        """Nearest node to (lon, lat) that is >= min_separation_km from origin_node.
+
+        Used when origin and destination both snap to the same hub: without a
+        second hub the solver would emit a one-node path whose "geometry" is
+        nothing but the two straight-line connectors.
+        """
+        origin = self.nodes_dict.get(origin_node)
+        if not origin or origin.get("lat") is None or origin.get("lon") is None:
+            return None
+        for node_id, dist in self._ranked_graph_nodes(lon, lat):
+            if node_id == origin_node:
+                continue
+            candidate = self.nodes_dict.get(node_id)
+            if not candidate or candidate.get("lat") is None or candidate.get("lon") is None:
+                continue
+            if haversine_km(
+                origin["lat"], origin["lon"], candidate["lat"], candidate["lon"]
+            ) >= min_separation_km:
+                return node_id, dist
+        return None
+
 
     def get_node_coords(self, node_id: str) -> Optional[Tuple[float, float]]:
         """Returns (lat, lon) coordinates for a given node ID."""
@@ -580,15 +625,22 @@ class CPURoutingAdapter:
         dest_coords: Optional[List[float]],
         message: str,
         t0: float,
+        reason_code: str = "UNRESOLVED_ENDPOINT",
+        reason: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Explicit no-route result for unresolvable endpoints.
 
         Unknown IDs without coordinates must never silently snap to the first/last
         graph node (that produced whole-island Belawan -> Bakauheni lines).
+        Phase 170 adds ``reason_code`` (ORIGIN_TOO_FAR / DEST_TOO_FAR / SAME_NODE /
+        NO_GRAPH_PATH) and a human ``reason`` the UI must surface, so a refusal is
+        never a silent no-op.
         """
         return {
             "status": "no_route",
+            "reason_code": reason_code,
+            "reason": reason or message,
             "solver": "NetworkX Dijkstra / A* CPU Solver",
             "origin": origin_id,
             "origin_name": origin_name or origin_id,
@@ -634,6 +686,25 @@ class CPURoutingAdapter:
 
         if origin_coords and len(origin_coords) >= 2:
             snapped_orig_node, snap_dist = self._find_nearest_graph_node(origin_coords[0], origin_coords[1])
+            if snap_dist > MAX_SNAP_KM:
+                # No honest hub relationship: refuse instead of snapping 90 km
+                # away and drawing a straight-line "connector" as the route.
+                reason = (
+                    f"Titik asal berjarak {snap_dist:.0f} km dari node jaringan jalan terdekat "
+                    f"(batas snapping {MAX_SNAP_KM:.0f} km). Pilih titik yang lebih dekat koridor."
+                )
+                return self._build_no_route_response(
+                    origin_id=origin_id,
+                    dest_id=dest_id,
+                    origin_name=origin_name,
+                    dest_name=dest_name,
+                    origin_coords=origin_coords,
+                    dest_coords=dest_coords,
+                    message=reason,
+                    reason_code="ORIGIN_TOO_FAR",
+                    reason=reason,
+                    t0=t0,
+                )
             origin_id = snapped_orig_node
             orig_connector_km = snap_dist * 1.25
             orig_connector_time_min = (orig_connector_km / 40.0) * 60.0
@@ -666,6 +737,23 @@ class CPURoutingAdapter:
 
         if dest_coords and len(dest_coords) >= 2:
             snapped_dest_node, snap_dist = self._find_nearest_graph_node(dest_coords[0], dest_coords[1])
+            if snap_dist > MAX_SNAP_KM:
+                reason = (
+                    f"Titik tujuan berjarak {snap_dist:.0f} km dari node jaringan jalan terdekat "
+                    f"(batas snapping {MAX_SNAP_KM:.0f} km). Pilih titik yang lebih dekat koridor."
+                )
+                return self._build_no_route_response(
+                    origin_id=origin_id,
+                    dest_id=dest_id,
+                    origin_name=origin_name,
+                    dest_name=dest_name,
+                    origin_coords=origin_coords,
+                    dest_coords=dest_coords,
+                    message=reason,
+                    reason_code="DEST_TOO_FAR",
+                    reason=reason,
+                    t0=t0,
+                )
             dest_id = snapped_dest_node
             dest_connector_km = snap_dist * 1.25
             dest_connector_time_min = (dest_connector_km / 40.0) * 60.0
@@ -690,6 +778,44 @@ class CPURoutingAdapter:
                     ),
                     t0=t0,
                 )
+
+        # Same-node collapse guard (Phase 170): two endpoints that resolve to the
+        # same hub are not a route — the old code emitted a one-node path whose
+        # "geometry" was two straight-line connectors. Retry the destination on
+        # the nearest hub >= SAME_NODE_MIN_SEPARATION_KM away; otherwise refuse.
+        if snapped_orig_node == snapped_dest_node:
+            retry: Optional[Tuple[str, float]] = None
+            if dest_coords and len(dest_coords) >= 2:
+                retry = self._find_fallback_dest_node(
+                    dest_coords[0], dest_coords[1], snapped_orig_node,
+                    SAME_NODE_MIN_SEPARATION_KM,
+                )
+            if retry is None:
+                reason = (
+                    "Titik asal dan tujuan menempel pada node hub yang sama "
+                    f"({snapped_orig_node}) dan tidak ada hub lain minimal "
+                    f"{SAME_NODE_MIN_SEPARATION_KM:.0f} km darinya. Rute satu node bukan rute."
+                )
+                return self._build_no_route_response(
+                    origin_id=origin_id,
+                    dest_id=dest_id,
+                    origin_name=origin_name,
+                    dest_name=dest_name,
+                    origin_coords=origin_coords,
+                    dest_coords=dest_coords,
+                    message=reason,
+                    reason_code="SAME_NODE",
+                    reason=reason,
+                    t0=t0,
+                )
+            snapped_dest_node, alt_snap_dist = retry
+            dest_id = snapped_dest_node
+            dest_connector_km = alt_snap_dist * 1.25
+            dest_connector_time_min = (dest_connector_km / 40.0) * 60.0
+            logger.info(
+                "Same-node snap (%s) resolved via 2nd-nearest hub %s (%.1f km from destination)",
+                snapped_orig_node, snapped_dest_node, alt_snap_dist,
+            )
 
         # Build dynamic weighted copy of graph
         G = self.graph.copy()
@@ -727,11 +853,16 @@ class CPURoutingAdapter:
                         logger.debug(f"Penalized edge {u}->{v} ({penalty_mult}x) due to hazard zone.")
 
         routes = []
+        seen_geometry: set = set()
         try:
             generator = nx.shortest_simple_paths(G, origin_id, dest_id, weight="weight")
             for idx, path in enumerate(generator):
                 if idx >= k_alternatives:
                     break
+                # Never emit a 1-node path: its geometry is connectors only, not
+                # a routed corridor (Phase 170 same-node guard).
+                if not path or len(path) < 2:
+                    continue
 
                 dist_km = 0.0
                 time_min = 0.0
@@ -759,12 +890,20 @@ class CPURoutingAdapter:
                     dist_km += dest_connector_km
                     time_min += dest_connector_time_min
 
-                is_detour = (idx > 0)
+                # A distinct path may still trace the same polyline; the UI must
+                # never render two cards for one geometry.
+                geometry_key = tuple(tuple(pt) for pt in path_coords)
+                if geometry_key in seen_geometry:
+                    continue
+                seen_geometry.add(geometry_key)
+
+                out_idx = len(routes)
+                is_detour = (out_idx > 0)
                 via_nodes = [n for n in path[1:-1]]
                 via_str = f" via {', '.join(via_nodes)}" if via_nodes else ""
                 desc = (
                     f"Rute Utama Teroptimasi{via_str}" if not is_detour
-                    else f"Jalur Pengalihan Alternatif #{idx}{via_str}"
+                    else f"Jalur Pengalihan Alternatif #{out_idx}{via_str}"
                 )
 
                 leg = {
@@ -777,14 +916,14 @@ class CPURoutingAdapter:
                 }
 
                 routes.append({
-                    "route_index": idx,
+                    "route_index": out_idx,
                     "description": desc,
                     "nodes": path,
                     "coordinates": path_coords,
                     "distance_km": round(dist_km, 2),
                     "eta_minutes": int(round(time_min)),
                     "fuel_increase_pct": max(0.0, round(((dist_km - routes[0]["distance_km"]) / routes[0]["distance_km"] * 100.0), 1)) if routes and routes[0]["distance_km"] > 0 else 0.0,
-                    "risk_score": 0.12 if not is_detour else round(0.25 + (idx * 0.12), 2),
+                    "risk_score": 0.12 if not is_detour else round(0.25 + (out_idx * 0.12), 2),
                     "is_detour": is_detour,
                     "legs": [leg],
                 })
@@ -829,7 +968,7 @@ class CPURoutingAdapter:
                 routes.append({
                     "route_index": 0,
                     "description": f"Rute Maritim Pesisir Alur Laut ({orig_name_resolved} -> {dest_name_resolved})",
-                    "nodes": [snapped_orig_node, snapped_dest_node] if snapped_orig_node != snapped_dest_node else [snapped_orig_node],
+                    "nodes": [snapped_orig_node, snapped_dest_node],
                     "coordinates": coastal_coords,
                     "distance_km": c_dist,
                     "eta_minutes": c_eta,
@@ -852,7 +991,7 @@ class CPURoutingAdapter:
                 routes.append({
                     "route_index": 0,
                     "description": f"Rute Langsung Alternatif ({orig_name_resolved} -> {dest_name_resolved})",
-                    "nodes": [snapped_orig_node, snapped_dest_node] if snapped_orig_node != snapped_dest_node else [snapped_orig_node],
+                    "nodes": [snapped_orig_node, snapped_dest_node],
                     "coordinates": [orig_coords_resolved, dest_coords_resolved],
                     "distance_km": round(direct_dist, 2),
                     "eta_minutes": int(round(direct_time)),
@@ -908,8 +1047,14 @@ class CPURoutingAdapter:
             except Exception as proof_err:
                 logger.debug(f"Proof enrichment skipped: {proof_err}")
 
+        no_reason = (
+            f"Tidak ada jalur pada graph arteri antara {snapped_orig_node} dan {snapped_dest_node}. "
+            "Gunakan mode antarmoda atau titik terdekat koridor."
+        )
         return {
             "status": "success" if routes else "no_path_found",
+            "reason_code": None if routes else "NO_GRAPH_PATH",
+            "reason": None if routes else no_reason,
             "solver": "NetworkX Dijkstra / A* CPU Solver",
             "origin": origin_id,
             "origin_name": orig_name_resolved,

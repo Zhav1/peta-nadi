@@ -1,8 +1,8 @@
 # FEATURE STATUS — PreHub System Matrix
 
-**Milestone:** M4 — PreHub Pilot Hardening, E2E Audit Remediation & Multi-Tenant Operational Stability  
+**Milestone:** M8 — Fast & Durable  
 **Architecture Paradigm:** Hybrid Cognitive Swarm (NetworkX Dijkstra + Deterministic CPU Router + Google OR-Tools + Open-Meteo NWP + BMKG Radar Fusion)  
-**Last Updated:** 2026-10-18  
+**Last Updated:** 2026-10-27  
 
 ---
 

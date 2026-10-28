@@ -1,8 +1,42 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { api } from '@/lib/api';
+import { isDocumentVisible, subscribeVisibility } from '@/lib/visibility';
 
-import type { HazardImpactProfile, AffectedLocationNode, VerificationAudit, ForecastTag } from '@/lib/types';
+import type { HazardImpactProfile, AffectedLocationNode, VerificationAudit, ForecastTag, NewsLivePayload } from '@/lib/types';
+
+/** Honest confidence contract (Phase 172 / M9, SPEC decision 7). */
+export interface NewsDisplayConfidence {
+  /** Calibrated consensus value, or null when nothing corroborates the claim. */
+  value: number | null;
+  label: 'Terverifikasi sensor' | 'Terkonfirmasi multi-sumber' | 'Satu sumber' | 'Belum terverifikasi' | string;
+  basis: 'sensor_corroborated' | 'multi_source' | 'single_source' | 'unverified' | string;
+  tier: string;
+}
+
+/** Read-time breadth metadata of the returned page (Phase 172 / M9). */
+export interface NewsBreadthMeta {
+  source_counts?: Record<string, number>;
+  province_counts?: Record<string, number>;
+  truncated?: boolean;
+  provinces_present?: string[];
+  provinces_missing?: string[];
+  max_per_source?: number;
+  budget?: number;
+  total?: number;
+  /** Display tiers (Phase 172.5 / M9). */
+  tier_counts?: { crisis?: number; regional?: number };
+  crisis_count?: number;
+  regional_count?: number;
+  tier_note?: string;
+  confidence_note?: string;
+}
+
+/**
+ * Display tier (Phase 172.5 / M9). `crisis` passes the hazard gate; `regional`
+ * is honest regional context that never claims crisis relevance.
+ */
+export type NewsRelevanceTier = 'crisis' | 'regional';
 
 export interface NewsItem {
   id: string;
@@ -12,6 +46,11 @@ export interface NewsItem {
   headline: string;
   summary: string;
   location_name?: string;
+  /**
+   * Canonical province bucket ("Aceh", "Sumatera Barat", … or the area-wide
+   * "Sumatera" when nothing resolved). Never a guessed province.
+   */
+  province?: string;
   lat?: number;
   lon?: number;
   pubDate?: string;
@@ -25,7 +64,21 @@ export interface NewsItem {
   commodities_affected?: string[];
   ground_truth_metrics?: { lane_status?: string; water_level_cm?: number };
   verification_status: 'UNVERIFIED_GRASSROOTS' | 'CORROBORATED_OFFICIAL' | 'MARKET_IMPACT_CONFIRMED' | 'REJECTED_UNFOUNDED';
+  /**
+   * @deprecated for display — this is the extractor's static tier constant
+   * (0.86 / 0.94). Render `display_confidence` instead.
+   */
   confidence_score: number;
+  /** Honest display contract: label + calibrated value (or null). */
+  display_confidence?: NewsDisplayConfidence;
+
+  /**
+   * Display tier (Phase 172.5 / M9). `crisis` passed the hazard gate; `regional`
+   * is display-only regional context and is rendered with a neutral label. A
+   * legacy payload without the field is crisis (the pre-172.5 contract).
+   */
+  relevance_tier?: NewsRelevanceTier;
+
   attributions?: Array<{ source_name: string; url?: string; credibility_score?: number }>;
   originNode?: string;
   destNode?: string;
@@ -53,7 +106,113 @@ export interface NewsItem {
   verification_audit?: VerificationAudit;
 }
 
+// ---------------------------------------------------------------------------
+// Province buckets + honest confidence (Phase 172 / M9, SPEC decisions 7 + 8)
+// ---------------------------------------------------------------------------
+
+/** The ten Sumatra provinces, in display order, plus the area-wide bucket. */
+export const SUMATRA_PROVINCE_ORDER = [
+  'Aceh',
+  'Sumatera Utara',
+  'Sumatera Barat',
+  'Riau',
+  'Kepulauan Riau',
+  'Jambi',
+  'Sumatera Selatan',
+  'Bangka Belitung',
+  'Bengkulu',
+  'Lampung',
+] as const;
+
+export const AREA_WIDE_PROVINCE = 'Sumatera';
+
+const PROVINCE_ALIASES: Record<string, string> = {
+  aceh: 'Aceh',
+  sumut: 'Sumatera Utara',
+  'sumatera utara': 'Sumatera Utara',
+  sumbar: 'Sumatera Barat',
+  'sumatera barat': 'Sumatera Barat',
+  riau: 'Riau',
+  kepri: 'Kepulauan Riau',
+  'kepulauan riau': 'Kepulauan Riau',
+  jambi: 'Jambi',
+  sumsel: 'Sumatera Selatan',
+  'sumatera selatan': 'Sumatera Selatan',
+  babel: 'Bangka Belitung',
+  'bangka belitung': 'Bangka Belitung',
+  bengkulu: 'Bengkulu',
+  lampung: 'Lampung',
+  sumatera: AREA_WIDE_PROVINCE,
+  sumatra: AREA_WIDE_PROVINCE,
+  nasional: AREA_WIDE_PROVINCE,
+};
+
+/**
+ * Canonical province bucket for grouping/filtering. An article with no resolved
+ * province belongs to the area-wide bucket — the UI never guesses a province.
+ */
+export function normalizeProvince(raw: unknown): string {
+  const value = typeof raw === 'string' ? raw.trim() : '';
+  if (!value) return AREA_WIDE_PROVINCE;
+  return PROVINCE_ALIASES[value.toLowerCase()] || value;
+}
+
+/** URL/testid-safe slug for a province (`Sumatera Utara` -> `sumatera-utara`). */
+export function provinceSlug(province: string): string {
+  return province
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+/**
+ * Coerce a payload `display_confidence` into the display contract.
+ *
+ * Missing/unusable input degrades to the honest "Belum terverifikasi" — the
+ * static `confidence_score` (0.86/0.94) is NEVER used as a fallback value.
+ */
+export function normalizeDisplayConfidence(
+  raw: unknown,
+  sourceTier?: string
+): NewsDisplayConfidence {
+  const tier = typeof sourceTier === 'string' && sourceTier ? sourceTier : 'TIER_2_AUTHORITATIVE_PRESS';
+  const source = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : null;
+  if (!source) {
+    return { value: null, label: 'Belum terverifikasi', basis: 'unverified', tier };
+  }
+  const numeric = source.value == null ? NaN : Number(source.value);
+  const value = Number.isFinite(numeric) && numeric > 0 && numeric <= 1 ? numeric : null;
+  const label =
+    typeof source.label === 'string' && source.label.trim()
+      ? source.label
+      : value == null
+        ? 'Belum terverifikasi'
+        : 'Terkonfirmasi multi-sumber';
+  const basis = typeof source.basis === 'string' && source.basis.trim() ? source.basis : 'unverified';
+  const resolvedTier = typeof source.tier === 'string' && source.tier.trim() ? source.tier : tier;
+  return { value, label, basis, tier: resolvedTier };
+}
+
+/**
+ * Coerce a payload `relevance_tier` into the display tier (Phase 172.5).
+ * Absent/unknown → `crisis`: the pre-172.5 contract only ever served gate-passing
+ * rows, so a legacy payload cannot be silently downgraded to "regional".
+ */
+export function normalizeRelevanceTier(raw: unknown): NewsRelevanceTier {
+  return raw === 'regional' ? 'regional' : 'crisis';
+}
+
+/** Short, human tier badge. The raw token stays available via `title`. */
+export function displayTierLabel(tier: string | undefined): string {  const value = String(tier || '').toUpperCase();
+  if (value === 'TIER_1_OFFICIAL') return 'TIER 1 · RESMI';
+  if (value === 'TIER_2_AUTHORITATIVE_PRESS') return 'TIER 2 · PERS';
+  return value || 'TIER 2 · PERS';
+}
+
 export interface MarketRegimeData {
+
   regime: 'NORMAL' | 'ELEVATED' | 'CRISIS' | 'EARLY_WARNING_ACTIVE' | 'HIGH_DISRUPTION_RISK';
   active_crisis_indicators?: string[];
   commodity_volatility_score?: number;
@@ -292,11 +451,31 @@ export function isForecastActive(
   return parsed > nowMs;
 }
 
-export function useNewsVerification() {
+export interface UseNewsVerificationOptions {
+  /**
+   * Bootstrap seed (`sections.news.data`). Goes through the same normalisation
+   * as a live poll, so the seed can never bypass the trust gates. When present
+   * the first network read is skipped.
+   */
+  initialNews?: NewsLivePayload | null;
+  /** Bootstrap seed (`sections.news_market_regime.data`). */
+  initialMarketRegime?: MarketRegimeData | null;
+  /** False while the bootstrap snapshot is still loading (M8 phase 163b). */
+  enabled?: boolean;
+}
+
+export function useNewsVerification(options?: UseNewsVerificationOptions) {
   // M1 trust-fix "Strict live-only": no offline fixture. The feed starts empty and
   // only ever contains articles that came from the live backend and resolved to a
   // real publisher permalink.
+  const enabled = options?.enabled ?? true;
+  const seedNews = options?.initialNews ?? null;
+  const seedRegime = options?.initialMarketRegime ?? null;
+
   const [newsFeed, setNewsFeed] = useState<NewsItem[]>([]);
+  // Breadth meta of the last accepted payload (provinces present/missing, caps).
+  const [newsMeta, setNewsMeta] = useState<NewsBreadthMeta | null>(null);
+
   const [marketRegime, setMarketRegime] = useState<MarketRegimeData>({
     regime: 'NORMAL',
     critical_news_count: 0,
@@ -309,17 +488,45 @@ export function useNewsVerification() {
   // Timestamp of the last poll that actually returned a usable live feed (last-good snapshot).
   const [lastGoodAt, setLastGoodAt] = useState<string | null>(null);
   const lastArticleSignatureRef = useRef<string | null>(null);
+  const inFlightRef = useRef<AbortController | null>(null);
+  // The bootstrap seed is consumed exactly once, by the first load() after the
+  // snapshot settles (the seed arrives in the same render that flips `enabled`).
+  const seedConsumedRef = useRef(false);
+  const seedRef = useRef<{ news: NewsLivePayload | null; regime: MarketRegimeData | null }>({
+    news: seedNews,
+    regime: seedRegime,
+  });
+  seedRef.current = { news: seedNews, regime: seedRegime };
 
   useEffect(() => {
+    if (!enabled) return;
     let isMounted = true;
-    async function load() {
-      try {
-        const [newsResult, regimeResult] = await Promise.allSettled([
-          api.news.live(),
-          api.news.marketRegime()
-        ]);
 
-        if (!isMounted) return;
+    async function load(seed?: { news: NewsLivePayload | null; regime: MarketRegimeData | null }) {
+      // Never overlap polls: the previous in-flight read is cancelled first.
+      inFlightRef.current?.abort();
+      const controller = new AbortController();
+      inFlightRef.current = controller;
+      try {
+        let newsResult: PromiseSettledResult<unknown>;
+        let regimeResult: PromiseSettledResult<unknown>;
+        if (seed) {
+          // Snapshot seed: no network, but the exact same normalisation pipeline
+          // (permalink/freshness/discourse gates) still runs below.
+          newsResult = seed.news
+            ? { status: 'fulfilled', value: seed.news }
+            : { status: 'rejected', reason: new Error('no bootstrap news section') };
+          regimeResult = seed.regime
+            ? { status: 'fulfilled', value: seed.regime }
+            : { status: 'rejected', reason: new Error('no bootstrap regime section') };
+        } else {
+          [newsResult, regimeResult] = await Promise.allSettled([
+            api.news.live(controller.signal),
+            api.news.marketRegime(controller.signal)
+          ]);
+        }
+
+        if (!isMounted || controller.signal.aborted) return;
 
         if (newsResult.status === 'fulfilled') {
           const res = newsResult.value as {
@@ -327,6 +534,7 @@ export function useNewsVerification() {
             articles?: any[];
             items?: any[];
             last_updated?: string;
+            meta?: NewsBreadthMeta | null;
           };
 
           const backendLastUpdated = typeof res.last_updated === 'string' && res.last_updated.trim().length > 0
@@ -479,7 +687,14 @@ export function useNewsVerification() {
                 link: sourceLink,
                 url: sourceLink,
                 link_alive: linkAlive,
+                province: normalizeProvince(a.province ?? a.region),
+                display_confidence: normalizeDisplayConfidence(
+                  a.display_confidence,
+                  a.source_tier || (isOfficial ? 'TIER_1_OFFICIAL' : 'TIER_2_AUTHORITATIVE_PRESS')
+                ),
                 zone_tier: resolvedTier,
+                relevance_tier: normalizeRelevanceTier(a.relevance_tier),
+
                 forecast_tag: forecastActive ? forecastTagRaw : undefined,
                 forecast_valid_until: forecastActive ? forecastValidUntil : undefined,
                 tier_reason: resolvedReason,
@@ -496,7 +711,10 @@ export function useNewsVerification() {
               } as NewsItem;
             }).filter((n): n is NewsItem => {
               if (!n) return false;
-              if (n.zone_tier === 'DROPPED_IRRELEVANT') return false;
+              // Phase 172.5: a regional row is deliberately gate-rejected — it is
+              // display context, not a hazard — so it is admitted here and labelled
+              // as such, while every other DROPPED_IRRELEVANT row stays hidden.
+              if (n.zone_tier === 'DROPPED_IRRELEVANT' && n.relevance_tier !== 'regional') return false;
               if (n.is_geocoded === false) return false;
               if (!n.link && !n.url) return false;
               if (n.lat == null || n.lon == null || !Number.isFinite(n.lat) || !Number.isFinite(n.lon)) return false;
@@ -521,6 +739,8 @@ export function useNewsVerification() {
               if (signature !== lastArticleSignatureRef.current) {
                 lastArticleSignatureRef.current = signature;
                 setNewsFeed(mapped);
+                // meta always travels with the article set it describes.
+                setNewsMeta(res.meta && typeof res.meta === 'object' ? res.meta : null);
                 if (backendLastUpdated) setLastUpdated(backendLastUpdated);
               }
               setStatus('live');
@@ -529,6 +749,7 @@ export function useNewsVerification() {
               // Never substitute an offline fixture.
               setStatus('warming');
             }
+
           } else {
             setStatus('warming');
           }
@@ -540,12 +761,12 @@ export function useNewsVerification() {
           setMarketRegime(regimeResult.value as unknown as MarketRegimeData);
         }
       } catch (err) {
-        if (isMounted) {
+        if (isMounted && !controller.signal.aborted) {
           setStatus('warming');
         }
         logger_err(err);
       } finally {
-        if (isMounted) setIsLoading(false);
+        if (isMounted && !controller.signal.aborted) setIsLoading(false);
       }
     }
     
@@ -553,13 +774,32 @@ export function useNewsVerification() {
       // Network failure: last-good articles stay mounted; status flips to warming.
     }
 
-    load();
-    const interval = setInterval(load, 30000);
+    // First load consumes the bootstrap seed exactly once, then the poll owns
+    // freshness. No seed (guest/failed bootstrap) → normal network read.
+    const pendingSeed = seedRef.current;
+    const seed =
+      !seedConsumedRef.current && (pendingSeed.news || pendingSeed.regime)
+        ? pendingSeed
+        : undefined;
+    seedConsumedRef.current = true;
+    void load(seed);
+
+    const interval = setInterval(() => {
+      // A backgrounded tab must not poll the 0.1-CPU backend.
+      if (!isDocumentVisible()) return;
+      void load();
+    }, 30000);
+    const unsubscribe = subscribeVisibility((visible) => {
+      if (visible) void load();
+    });
+
     return () => {
       isMounted = false;
       clearInterval(interval);
+      unsubscribe();
+      inFlightRef.current?.abort();
     };
-  }, []);
+  }, [enabled]);
 
-  return { newsFeed, marketRegime, isLoading, status, lastUpdated, lastGoodAt };
+  return { newsFeed, marketRegime, isLoading, status, lastUpdated, lastGoodAt, meta: newsMeta };
 }
