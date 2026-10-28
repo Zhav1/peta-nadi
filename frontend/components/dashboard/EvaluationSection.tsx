@@ -347,7 +347,7 @@ function PlainMetricsSection({
   const targetF1 = thresholds?.min_f1 ?? 0.82;
   const targetBrier = thresholds?.max_brier_score ?? 0.1;
 
-  const resultLabel = isLive ? 'Hasil Live' : 'Hasil Uji';
+  const resultLabel = isLive ? 'Hasil Aktual' : 'Hasil Uji';
 
   const cards: Array<{
     title: string;
@@ -394,12 +394,12 @@ function PlainMetricsSection({
       met: brier !== null ? brier <= targetBrier : null,
     },
     {
-      title: 'Akurasi Lokasi Agen Berita (NLP)',
+      title: 'Akurasi Lokasi Berita',
       description:
-        'Ketepatan agen berita & LLM mengekstrak titik lokasi/koridor kejadian dari teks berita terhadap koordinat lapangan sebenarnya.',
+        'Seberapa tepat agen berita menemukan lokasi kejadian dari teks berita, dibandingkan dengan koordinat lapangan sebenarnya.',
       formula: 'jarak simpangan Haversine (km)',
       target: '≤25 km toleransi',
-      result: `Hasil Uji N=${location.n}: ${fmtPctID(location.resolutionRate, 0)} terpetakan (rata-rata jarak simpangan ${fmtNumID(location.meanSpatialErrorKm, 2)} km).`,
+      result: `Hasil uji skenario historis N=${location.n}: ${fmtPctID(location.resolutionRate, 0)} terpetakan (rata-rata jarak simpangan ${fmtNumID(location.meanSpatialErrorKm, 2)} km).`,
       met:
         location.resolutionRate !== null && location.meanSpatialErrorKm !== null
           ? location.resolutionRate >= 1 && location.meanSpatialErrorKm <= 25
@@ -415,16 +415,12 @@ function PlainMetricsSection({
             Arti metrik (bahasa pengguna)
           </h3>
           <p className="text-xs text-slate-400 font-sans mt-0.5">
-            Angka mengikuti tab aktif —{' '}
-            {isLive
-              ? `Aktual (live N=${n})`
-              : `Internal Skenario (uji N=${n})`}
-            . Target ambang ditampilkan di tiap kartu.
+            Angka mengikuti tab aktif. Target ambang ada di tiap kartu.
           </p>
         </div>
         <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/5 text-slate-300 border border-white/10 text-[11px] font-medium w-fit">
           <Activity className="w-3 h-3 text-emerald-400" />
-          {isLive ? `Live operasional N=${n}` : `Uji ground truth N=${n}`}
+          {isLive ? `Kejadian Aktual (N=${n})` : `Uji Skenario Historis (N=${n})`}
         </span>
       </div>
 
@@ -766,7 +762,7 @@ export default function EvaluationSection({
                 */}
                 <div className="mt-0.5 flex flex-wrap items-center gap-2">
                   <p className="text-xs text-slate-400 font-sans">
-                    Ringkasan angka validasi model — pilih uji skenario internal atau agregat aktual di bawah.
+                    Ringkasan angka validasi model. Pilih uji skenario historis atau kejadian aktual di bawah.
                   </p>
                 </div>
               </div>
@@ -793,7 +789,7 @@ export default function EvaluationSection({
               onClick={() => setActiveSubTab('internal')}
               className={`px-3.5 py-1.5 rounded-md text-xs font-medium transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 ${activeSubTab === 'internal' ? 'bg-white text-[#080d14] font-semibold' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}`}
             >
-              Internal Skenario
+              Skenario Historis
             </button>
             <button
               type="button"
@@ -803,7 +799,7 @@ export default function EvaluationSection({
               onClick={() => setActiveSubTab('aktual')}
               className={`px-3.5 py-1.5 rounded-md text-xs font-medium transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 ${activeSubTab === 'aktual' ? 'bg-white text-[#080d14] font-semibold' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}`}
             >
-              Aktual
+              Kejadian Aktual
             </button>
           </div>
 
@@ -813,10 +809,21 @@ export default function EvaluationSection({
           <div className="flex flex-wrap items-center gap-2">
             <span
               className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-500/15 text-slate-300 border border-white/10 text-[11px] font-medium"
-              title="KPI Presisi/Sensitivitas/F1/Brier dihitung dari dataset ground truth kejadian nyata Sumatra (N=60) yang bersumber dari BNPB, BPBD, BMKG, dan pemberitaan (data/benchmark/sumatra_disruptions_ground_truth.json) — bukan telemetri live operasional."
+              title="60 kejadian nyata di Sumatra dari arsip BNPB, BPBD, BMKG, dan pemberitaan (data/benchmark/sumatra_disruptions_ground_truth.json)."
             >
-              Ground truth BNPB/BPBD/BMKG/Berita N=60
+              Uji Skenario Historis (N={batchN})
             </span>
+            {report && (
+              <span
+                className={`inline-flex items-center px-2 py-0.5 rounded-md border text-[11px] font-semibold ${
+                  report.gating_passed
+                    ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                    : 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                }`}
+              >
+                Status: {report.gating_passed ? 'LULUS' : 'BELUM'}
+              </span>
+            )}
           </div>
           {/* 4 Empirical Benchmark KPI Cards (Presisi / Sensitivitas / F1 / Brier) — batch */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-white/10 border border-white/10 rounded-xl overflow-hidden">
@@ -906,18 +913,18 @@ export default function EvaluationSection({
             </summary>
             <div className="pt-3 mt-3 border-t border-white/10 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs tabular-nums">
               <div className="p-3 rounded-lg bg-white/[0.02] border border-white/10 space-y-1.5 text-slate-300">
-                <p className="text-[11px] font-sans font-bold text-slate-200 uppercase tracking-wider">Dataset & keputusan</p>
+                <p className="text-[11px] font-sans font-bold text-slate-200 uppercase tracking-wider">Dataset &amp; status</p>
                 <p>
                   <span
                     className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-500/15 text-slate-300 border border-white/10 text-[11px] font-medium normal-case tracking-normal"
-                    title="Rincian batch dari dataset ground truth kejadian nyata Sumatra (N=60) bersumber BNPB, BPBD, BMKG, dan pemberitaan (data/benchmark/sumatra_disruptions_ground_truth.json) — bukan telemetri live operasional."
+                    title="60 kejadian nyata di Sumatra dari arsip BNPB, BPBD, BMKG, dan pemberitaan (data/benchmark/sumatra_disruptions_ground_truth.json)."
                   >
-                    Ground truth BNPB/BPBD/BMKG/Berita N=60
+                    Uji Skenario Historis (N={batchN})
                   </span>
                 </p>
-                <p>N = {report?.total_scenarios ?? 60} skenario · Status: {report ? (report.gating_passed ? 'LULUS' : 'BELUM') : 'Belum dihitung'}</p>
-                <p>Matriks konfusi: TP {batchCM?.true_positives ?? '–'} (Benar Gangguan) / FP {batchCM?.false_positives ?? '–'} (Alarm Palsu) / TN {batchCM?.true_negatives ?? '–'} (Benar Normal) / FN {batchCM?.false_negatives ?? '–'} (Kebobolan)</p>
-                <p className="text-slate-400">Sumber ground truth: laporan BNPB, BPBD, BMKG, dan pemberitaan (Antara/Tribun/Waspada) — 60 kejadian nyata di Sumatra, bukan data sintetis.</p>
+                <p>N = {batchN} skenario, tiap skenario satu kejadian nyata.</p>
+                <p>Rincian hasil: TP {batchCM?.true_positives ?? '–'} (Benar Gangguan) / FP {batchCM?.false_positives ?? '–'} (Alarm Palsu) / TN {batchCM?.true_negatives ?? '–'} (Benar Normal) / FN {batchCM?.false_negatives ?? '–'} (Kebobolan)</p>
+                <p className="text-slate-400">Sumber: laporan BNPB, BPBD, BMKG, dan pemberitaan (Antara/Tribun/Waspada). 60 kejadian nyata di Sumatra.</p>
                 <p>Ambang: Presisi &gt; {(thresholds?.min_precision ?? 0.85).toFixed(2)} · Sensitivitas &gt; {(thresholds?.min_recall ?? 0.80).toFixed(2)} · F1 &gt; {(thresholds?.min_f1 ?? 0.82).toFixed(3)} · Brier ≤ {(thresholds?.max_brier_score ?? 0.10).toFixed(3)}</p>
                 {/* PHASE2: dual-scale Pmax / rumus forecast / proxy live / sensor mapping disembunyi per spec (jargon sintetis).
                 <p>Ambang deteksi: skor konsensus mentah raw_prob ge; 0.50 (setara ternormalisasi asymp; 0.727)</p>
@@ -933,7 +940,20 @@ export default function EvaluationSection({
               </div>
               <div className="p-3 rounded-lg bg-white/[0.02] border border-white/10 space-y-1.5 text-slate-300">
                 <p className="text-[11px] font-sans font-bold text-slate-200 uppercase tracking-wider">Ambang kelulusan</p>
-                <p>Brier ≤ {(thresholds?.max_brier_score ?? 0.10).toFixed(3)} · Status gerbang: {report ? (report.gating_passed ? 'LULUS' : 'BELUM LULUS') : 'Belum dihitung'}</p>
+                <p className="flex flex-wrap items-center gap-2">
+                  <span>Brier ≤ {(thresholds?.max_brier_score ?? 0.10).toFixed(3)}</span>
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded-md border text-[11px] font-semibold ${
+                      report?.gating_passed
+                        ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                        : report
+                          ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                          : 'bg-slate-500/15 text-slate-400 border-white/10'
+                    }`}
+                  >
+                    Status: {report ? (report.gating_passed ? 'LULUS' : 'BELUM') : 'Belum dihitung'}
+                  </span>
+                </p>
                 {/* PHASE4: provenance + unduhan dipulihkan di dalam collapsed <details> ini saja
                     (bukan default view, bukan tab Laporan) — gated dispatcher-atau-terautentikasi.
                     Default view tetap angka saja. */}
@@ -946,7 +966,7 @@ export default function EvaluationSection({
                     {reportHashOk === true && <span className="text-emerald-300 font-bold">✓ COCOK</span>}
                     {reportHashOk === false && <span className="text-rose-300 font-bold">✕ BERBEDA DARI {PINNED_REPORT_SHA256.slice(0, 12)}…</span>}
                   </p>
-                  <p className="break-all">Hash ground truth (sha256): <code className="text-slate-200">{gtHash ? `${gtHash.slice(0, 16)}…` : 'menghitung…'}</code>{' '}
+                  <p className="break-all">Hash dataset (sha256): <code className="text-slate-200">{gtHash ? `${gtHash.slice(0, 16)}…` : 'menghitung…'}</code>{' '}
                     {gtHashOk === true && <span className="text-emerald-300 font-bold">✓ COCOK</span>}
                     {gtHashOk === false && <span className="text-rose-300 font-bold">✕ BERBEDA DARI {PINNED_GT_SHA256.slice(0, 12)}…</span>}
                   </p>
@@ -955,7 +975,7 @@ export default function EvaluationSection({
                       <Download className="w-3.5 h-3.5" /> {REPO_REPORT_PATH} (salinan unduhan + scenario_details)
                     </a>
                     <a href={GT_COPY_URL} download className="inline-flex items-center gap-1.5 text-cyan-300 hover:text-cyan-200 underline underline-offset-2 w-fit">
-                      <Download className="w-3.5 h-3.5" /> {REPO_GT_PATH} (salinan unduhan ground truth)
+                      <Download className="w-3.5 h-3.5" /> {REPO_GT_PATH} (salinan unduhan dataset)
                     </a>
                   </p>
                 </div>
@@ -993,7 +1013,7 @@ export default function EvaluationSection({
                 </div>
                 <div>
                   <h3 className="text-sm font-semibold text-white tracking-wide font-sans flex items-center gap-2">
-                    <span>Tabel per-skenario ground truth</span>
+                    <span>Tabel per-skenario historis</span>
                     <span className="px-2 py-0.5 rounded bg-white/5 text-slate-300 border border-white/10 text-xs tabular-nums">
                       {filteredScen.length}/{scenRows.length} skenario
                     </span>
@@ -1015,7 +1035,7 @@ export default function EvaluationSection({
                     */}
                   </h3>
                   <p className="text-xs text-slate-400 font-sans mt-0.5">
-                    Hasil per skenario SUM-SCN dari kejadian nyata (BNPB/BPBD/BMKG/berita): aktual vs prediksi, lokasi NLP, keyakinan agen, dan kontribusi Brier.
+                    Hasil per skenario SUM-SCN dari kejadian nyata (BNPB/BPBD/BMKG/berita): aktual vs prediksi, lokasi berita, keyakinan agen, dan kontribusi Brier.
                   </p>
                 </div>
               </div>
@@ -1052,7 +1072,7 @@ export default function EvaluationSection({
                     <th className="h-11 px-3 text-left align-bottom">ID</th>
                     <th className="h-11 px-3 text-left align-bottom">Sumber &amp; Tanggal</th>
                     <th className="h-11 px-3 text-left align-bottom">Skenario &amp; Judul Berita</th>
-                    <th className="h-11 px-3 text-left align-bottom">Lokasi Aktual vs Hasil NLP</th>
+                    <th className="h-11 px-3 text-left align-bottom">Lokasi Aktual vs Lokasi Berita</th>
                     <th className="h-11 px-3 text-left align-bottom">Keyakinan Agen (Cuaca, Lalin, Berita, Harga)</th>
                     <th className="h-11 px-3 text-right align-bottom">Probabilitas Gangguan (%)</th>
                     <th className="h-11 px-3 text-center align-bottom">Aktual</th>
@@ -1068,7 +1088,7 @@ export default function EvaluationSection({
                   {fileState === 'error' && (
                     <tr>
                       <td colSpan={10} className="py-8 text-center text-slate-500">
-                        Belum ada data skenario — bukan 0% maupun 100%.
+                        Data skenario historis tidak tersedia.
                       </td>
                     </tr>
                   )}
@@ -1104,14 +1124,14 @@ export default function EvaluationSection({
                           Aktual: {s.corridor ?? '–'}
                         </span>
                         <span className="block text-[11px] text-slate-400 mt-0.5 leading-snug">
-                          NLP: {s.nlp_location?.matched_node ?? 'tak terpetakan'}
+                          Lokasi berita: {s.nlp_location?.matched_node ?? 'tak terpetakan'}
                         </span>
                         <span className="block text-[10px] text-slate-500 mt-0.5 leading-snug">
                           {s.nlp_location?.spatial_error_km != null
                             ? `Simpangan ${fmtNumID(s.nlp_location.spatial_error_km, 2)} km · `
                             : ''}
                           {locationPrecisionLabel(s.nlp_location?.location_precision)}
-                          {s.nlp_location?.is_geocoded === false ? ' · tak tergeocode' : ''}
+                          {s.nlp_location?.is_geocoded === false ? ' · belum terpetakan' : ''}
                         </span>
                       </td>
                       <td className="py-3 px-3 align-top whitespace-nowrap">
@@ -1179,13 +1199,13 @@ export default function EvaluationSection({
           <div className="flex flex-wrap items-center gap-2">
             <span
               className="inline-flex items-center px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[11px] font-medium"
-              title={`KPI Presisi/Sensitivitas/F1/Brier dari agregat live operasional N=${liveN} — bukan simulasi.`}
+              title={`KPI Presisi, Sensitivitas, F1, dan Brier dari ${liveN} kejadian aktual yang sudah diverifikasi lapangan.`}
             >
-              Live N={liveN}
+              Kejadian Aktual (N={liveN})
             </span>
             {!liveSufficient && (
               <span className="text-xs text-slate-500">
-                Belum ada data live yang cukup (N&lt;{LIVE_MIN_N}) — bukan 0% maupun 100%.
+                Agregat aktif setelah {LIVE_MIN_N} kejadian terverifikasi (saat ini N={liveN}).
               </span>
             )}
           </div>
@@ -1284,14 +1304,14 @@ export default function EvaluationSection({
                     Catat verifikasi lapangan
                   </h3>
                   <p className="text-xs text-slate-400 font-sans mt-0.5">
-                    Pencatatan memakai OutcomeVerificationForm yang sama dengan tab Laporan — dibuka inline di sini.
+                    Formulir yang sama dengan tab Laporan, dibuka langsung di sini.
                   </p>
                 </div>
               </div>
               <button
                 type="button"
                 data-testid="catat-verifikasi-button"
-                title={isDispatcher ? 'Catat verifikasi lapangan (OutcomeVerificationForm)' : verifyDisabledHint}
+                title={isDispatcher ? 'Catat hasil verifikasi lapangan' : verifyDisabledHint}
                 disabled={!isDispatcher}
                 onClick={() => setShowVerifyModal(true)}
                 className="cursor-pointer px-4 py-2 rounded-md bg-white text-[#080d14] text-xs font-semibold hover:bg-slate-200 transition w-fit focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
@@ -1321,7 +1341,7 @@ export default function EvaluationSection({
                 <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
                   <div>
                     <h3 className="text-sm font-medium text-white">Verifikasi lapangan</h3>
-                    <p className="text-xs text-slate-500 tabular-nums font-mono">OutcomeVerificationForm</p>
+                    <p className="text-xs text-slate-500">Isi hasil pengamatan lapangan.</p>
                   </div>
                   <button
                     type="button"
@@ -1370,7 +1390,7 @@ export default function EvaluationSection({
                     Verifikasi lapangan (T+12h / T+24h)
                   </h3>
                   <p className="text-xs text-slate-400">
-                    {outcomes.length === 0 ? 'Belum ada data verifikasi lapangan — bukan 0% maupun 100%.' : `${outcomes.length} kejadian tercatat`}
+                    {outcomes.length === 0 ? 'Belum ada verifikasi lapangan tercatat.' : `${outcomes.length} kejadian tercatat`}
                   </p>
                 </div>
               </div>
@@ -1448,7 +1468,7 @@ export default function EvaluationSection({
                   {outcomes.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="py-8 text-center text-xs text-slate-500">
-                        Belum ada data verifikasi lapangan — bukan 0% maupun 100%.
+                        Belum ada verifikasi lapangan tercatat.
                       </td>
                     </tr>
                   ) : (
@@ -1487,7 +1507,7 @@ export default function EvaluationSection({
 
                           <td className="py-3 px-3 text-slate-300 text-xs whitespace-nowrap">
                             <span className="block">{item.verified_by}</span>
-                            <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[11px] text-slate-300" title="Sumber verifikasi — baris DISPATCHER_APPROVAL adalah echo sistem dan dikecualikan dari agregat live">
+                            <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[11px] text-slate-300" title="Sumber verifikasi. Baris DISPATCHER_APPROVAL adalah echo sistem dan tidak masuk agregat.">
                               {item.verification_source || 'tak tercatat'}
                             </span>
                           </td>

@@ -2,9 +2,9 @@
 """Lampiran N=60 entry point.
 
 Kept as a stable command for CI and documentation. It builds the same canonical
-merged document as `generate_validation_sheet.py`: the N=60 table is Section 8
-of the document, and the Lampiran file is a byte-identical copy of the canonical
-Lembar Validasi Internal.
+merged document as `generate_validation_sheet.py`: the 60-scenario table is
+Section 5 of the document, and the Lampiran file is a byte-identical copy of the
+canonical Lembar Validasi Internal.
 
 Outputs (all in Final-Gemastik/):
   - Lembar_Validasi_Internal_PreHub.docx / .pdf

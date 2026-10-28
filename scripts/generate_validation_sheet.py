@@ -2,7 +2,7 @@
 """Canonical entry point for the merged PreHub validation document.
 
 The legacy two-page sheet has been superseded by a single exhaustive document
-built from the live evaluation artifacts. This script and
+built from `Lembar_Validasi_Internal_PreHub.md`. This script and
 `generate_n60_appendix.py` both delegate to `generate_merged_validation_doc.py`
 so the canonical file and the Lampiran N=60 copy never drift.
 
