@@ -3429,3 +3429,91 @@ M8 makes the authenticated dashboard fast on first load and durable across sessi
 - [ ] A deliberately delayed run is recorded as delayed, not failed.
 - [ ] Soak start time and artifact URL are recorded in `.planning/`.
 - [ ] 7-day verdict explicitly deferred to the follow-up session (0 failures target).
+
+---
+
+# M9 — Operational Truth & Distilled Command Surface
+
+**Status:** ACTIVE 🚀 — Wave 1 deployed (R1/R1.1), Wave 2 deployed (R2), final polish in flight.
+**Spec:** `SPEC.md` (root). **Ledger:** `.planning/milestones/M9/PROGRESS.md`.
+**Note:** M8 "Fast & Durable" (phases 160–166) remains valid and independent. M9 owns 167–176.
+
+## Phase 167: World-Truth Hazard Counters
+**Status:** COMPLETE ✅ (`51b3903`, shared with M8 phase 160)
+Counters read `/weather/summary`, independent of layer toggles; uncapped count path; tri-state (`ok|stale|empty|degraded`) with `—` for unknown.
+**Verification:** 17 pytest, tsc 0, build 0, 4 Playwright; production `waspada` 0 → 22.
+
+## Phase 168: Keyless FIRMS Fallback
+**Status:** COMPLETE ✅ (`e8567b1`)
+Per-country CSV endpoints 404 in production → Global 24h CSV + server-side bbox filter; tri-state hotspot envelope with `count`/`total`/`capped`/`source`.
+**Verification:** 12 pytest, 8 Playwright; live CSV 50 in-bbox rows.
+
+## Phase 169: Whole-Sumatra Retention
+**Status:** COMPLETE ✅ (`ef0148a`)
+Corridor filter removed from rendering; Open-Meteo grid 23 → 58 points (≥4 per province); stale-while-revalidate (600s refresh / 6h validity / 24h ceiling); freshness badges; capped notice.
+**Verification:** 13 pytest, 11 Playwright; upstream calls 16,704 → 8,352/day.
+
+## Phase 170: Small-Town Routing Truth
+**Status:** COMPLETE ✅ (`bb9b61b`)
+`MAX_SNAP_KM = 75` (median hub spacing 38.6 km); same-node collapse via 2nd-nearest ≥15 km; `no_route` surfaced with `reason_code` instead of swallowed; provenance badge `geometri jalan · koridor hub · simulasi offline`; `k_alternatives: 3`.
+**Verification:** 25 pytest, 5 Playwright.
+
+## Phase 171: Sumatra Gazetteer
+**Status:** COMPLETE ✅ (`2783c10`)
+2,096 records (118 kabupaten + 34 kota + 1,944 kecamatan) across 10 provinces; fuzzy + diacritic matching; province/parent/alias fields. 23 rows honestly unplaceable (Natuna, Belitung Timur, 21 kecamatan).
+**Verification:** 19 + 43 pytest; 10/10 city spot-checks within 15 km.
+
+## Phase 172: Berita Honesty & Breadth
+**Status:** COMPLETE ✅ (`83a12fe`, `269324c`)
+Measured truth: 149/150 newest articles failed the crisis gate — Aceh dominance was a gate artefact, not a feed bias. Added a labelled `regional` tier (hazard pipeline stays `crisis`-only, five guards), per-source cap 12, province round-robin, calibrated confidence replacing the constant 86%.
+**Verification:** 50 pytest, 11 Playwright; 0 crisis → 39 regional across 9 provinces.
+
+## Phase 173: Armada Drawer
+**Status:** COMPLETE ✅ (`69840d4`)
+Tenant-scoped drawer restored (was imported but never rendered); roster + per-vehicle detail; `{total} unit · {live} live GPS`; Medan coordinate fallback removed; `?company_id=` widening closed in `travels_router.py`.
+**Verification:** 50 pytest, 6 Playwright.
+
+## Phase 173.5: Frozen E2E Reconciliation
+**Status:** COMPLETE ✅ (`40359c2`)
+`phase57` was red at HEAD from earlier renames. Restored `role="dialog"`, fixed a dead-ending Guided Demo stage-0 click, documented the offline-tag rename, replaced prose locators with stable ids, strengthened the guest assertion with a POST counter.
+**Verification:** full suite 16 failed → 0.
+
+## Phase 173.6: FIRMS Day-Range Fix
+**Status:** COMPLETE ✅ (`299b4f9`, deployed `c250a09`)
+Root cause: `day_range=1` means "today (UTC) only" and NASA has not published it → header-only 200 parsed as 0; the counter also used the poller's dedup parser. Fixed to `day_range=2` + stateless parse + CSV cross-check.
+**Verification:** 9 pytest; production hotspots 0 → 140.
+
+## Phase 174: Distilled Command Surface Contract
+**Status:** COMPLETE ✅ (`1f5485c`)
+DESIGN.md normative table (surfaces, text tiers, one accent `#38b8f8`, hazard-only red/amber/emerald, 14 banned chrome values, type floor, radius, elevation, motion, overlay contract); `--ds-*` tokens; palette ratchet spec.
+**Verification:** 6 palette specs, full suite 97.
+
+## Phase 175: Chrome & Map Paint Distillation
+**Status:** COMPLETE ✅ (`cf2a1bb`)
+Five-hue pills → one recipe; legend collapsed to shape + label; active tabs white; map paint reduced to sanctioned palette; before/after captures.
+**Verification:** 21 targeted, full suite 101.
+
+## Phase 176: Zone Tooltips, Motion, Overlays
+**Status:** COMPLETE ✅ (`57641f2`)
+`mapPopup.ts` pure builders with full HTML escaping; `.ds-popup` contract; Mapbox container resets; purposeful motion 120–300ms; one live pulse; reduced-motion honoured; overlay contract applied.
+**Verification:** 13 targeted, full suite 106; XSS payloads render as text.
+
+## Phase 176.5: Mobile & Map Legibility
+**Status:** COMPLETE ✅ (`95fc6a1`)
+Icon nav + overflow below `xl`; Berita bottom sheet; dock wraps; land `#0d1219` / water `#070a10`; popup close button restyled.
+**Verification:** 19 targeted, full suite 112.
+
+## Phase 176.6: Mobile Counter Pinning
+**Status:** COMPLETE ✅ (`904c4fe`)
+Cuaca/Waspada/Titik Panas pinned as three equal pills below `md`; legend/filters in a separate scroll row; Berita toggle labelled.
+**Verification:** 8 mobile tests, full suite 116.
+
+## Phase 176.7: Feed Supply & Type Vocabulary
+**Status:** COMPLETE ✅ (`44f0ee4`)
+8 verified feeds (2 Jambi, 3 Babel, 3 Bengkulu); `Kepulauan Bangka Belitung` alias fix; gazetteer `type` normalised to `kabupaten|kota|kecamatan`.
+**Verification:** 69 targeted + 127 news/geo pytest.
+
+## Phase 176.8: Legibility & Cache Version
+**Status:** IN PROGRESS
+News card honesty label must never ellipsise; guest banner must not cover cards; geocode cache key bumped so stale `regency` values cannot be served.
+
