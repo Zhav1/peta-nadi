@@ -3434,7 +3434,7 @@ M8 makes the authenticated dashboard fast on first load and durable across sessi
 
 # M9 — Operational Truth & Distilled Command Surface
 
-**Status:** ACTIVE 🚀 — Wave 1 deployed (R1/R1.1), Wave 2 deployed (R2), final polish in flight.
+**Status:** COMPLETE ✅ — Wave 1 deployed (R1/R1.1), Wave 2 deployed (R2), final polish deployed (R2.1, `c84018d`).
 **Spec:** `SPEC.md` (root). **Ledger:** `.planning/milestones/M9/PROGRESS.md`.
 **Note:** M8 "Fast & Durable" (phases 160–166) remains valid and independent. M9 owns 167–176.
 
@@ -3514,6 +3514,8 @@ Cuaca/Waspada/Titik Panas pinned as three equal pills below `md`; legend/filters
 **Verification:** 69 targeted + 127 news/geo pytest.
 
 ## Phase 176.8: Legibility & Cache Version
-**Status:** IN PROGRESS
-News card honesty label must never ellipsise; guest banner must not cover cards; geocode cache key bumped so stale `regency` values cannot be served.
+**Status:** COMPLETE ✅ (`378e58d`, deployed `c84018d`)
+News card honesty label never ellipsises; guest banner publishes its own occlusion so the panel can pad; geocode cache key bumped `v2` → `v3` so stale `regency` values cannot be served.
+**Verification:** 27 pytest geo-cache, full suite 120/9/0; live `?q=natuna` and `?q=belitung%20timur` → `type:"kabupaten"`, `cached:false`.
+**Open:** at 390×844 the sheet still overflows and the last card sits 17.6 px behind the banner — see `.planning/milestones/M9/COMPLETION.md` §5.1.
 

@@ -1,7 +1,7 @@
 # M9 — Operational Truth & Distilled Command Surface
 
-**Status:** IN PROGRESS — Wave 1 deployed (R1/R1.1), Wave 2 complete pending R2
-**Branches:** `m9-operational-truth` (merged to `main`), `m9-distilled-surface` (unmerged)
+**Status:** COMPLETE ✅ — Wave 1 (R1/R1.1), Wave 2 (R2) and final polish (R2.1) deployed. Two live defects open; see `COMPLETION.md` §5.
+**Branches:** `m9-operational-truth` (merged), `m9-distilled-surface` (merged, `3d5f3b5`), `m9-r2.1` (merged, `c84018d`)
 **Spec:** `SPEC.md` (root) — reconciliation with M8 recorded there
 **Started:** 2026-10-27 · **Deployed:** 2026-10-28
 
@@ -40,8 +40,9 @@
 | 175 | `cf2a1bb` | Chrome + map paint distilled to one accent; legend collapsed to shape+label | 21 targeted, full suite 101, before/after captures |
 | 176 | `57641f2` | Branded zone tooltips, overlay contract, purposeful motion, reduced-motion | 13 targeted, full suite 106, XSS escaping proven |
 | 176.5 | `95fc6a1` | Mobile layout, map legibility (land `#0d1219` / water `#070a10`), popup chrome | 19 targeted, full suite 112 |
-| 176.6 | *(in flight)* | Pin the three hazard counters on mobile | — |
+| 176.6 | `904c4fe` | Three hazard counters pinned as equal pills below `md` | 8 mobile tests, full suite 116 |
 | 176.7 | `44f0ee4` | 8 verified feeds for Jambi/Babel/Bengkulu; `Kepulauan Bangka Belitung` alias fix; gazetteer `type` normalised | 69 targeted + 127 news/geo pytest |
+| 176.8 | `378e58d` | Honesty label never ellipsised; guest banner clearance; geocode cache key `v2` → `v3` | 27 pytest geo-cache, live `kabupaten` + `cached:false` |
 
 ---
 
@@ -51,7 +52,8 @@
 |---|---|---|---|
 | R1 | `bfa3337` | `pre-m9-r1` (`b1ebf7b`) | Deployed. Waspada 22, FIRMS empty (bug), summary endpoint live |
 | R1.1 | `c250a09` | `pre-m9-r1.1` (`bfa3337`) | Deployed. FIRMS 140→145 hotspots, Waspada 28 |
-| R2 | *(pending)* | — | Distilled surface |
+| R2 | `3d5f3b5` | `pre-m9-r2` (`c250a09`) | Deployed. Distilled surface; stale v2 geocode cache discovered |
+| R2.1 | `c84018d` | `pre-m9-r2.1` (`df11f58`) | Deployed. Geocode cache v3 live (`kabupaten` + `cached:false`), waspada 28, hotspots 145; 390px banner overlap still open |
 
 Production targets: `https://pre-hub.vercel.app` · `https://peta-nadi.onrender.com`
 
@@ -67,9 +69,10 @@ Production targets: `https://pre-hub.vercel.app` · `https://peta-nadi.onrender.
 
 ## Known open items
 
+0. **390×844: the guest banner overlaps the last Berita card by 17.6 px** (last card `711.6` vs banner top `694.0`). The `68vh` sheet overflows 26 px past the viewport, so `--guest-banner-clearance` is measured against the wrong edge. Reproducible 3/3 via `r2-production-capture.spec.ts › R2.1 banner clearance at 390x844`. See `COMPLETION.md` §5.1.
 1. `/health` reports `environment:"development"` on Render despite `render.yaml` — the service is not synced from the blueprint. Cosmetic today; fix at the Render dashboard or derive from `RENDER=true`.
-2. News breadth 7/10 provinces in production; 176.7 adds supply for the missing three.
-3. Gazetteer `type` returns `regency` for Natuna/Belitung Timur; 176.7 normalises to `kabupaten`.
+2. News breadth 9/10 provinces in production; Kepulauan Riau still has no live feed (0 articles / 48 h).
+3. Gazetteer `type` now returns `kabupaten` for Natuna/Belitung Timur (fixed in 176.7/176.8); 21 kecamatan remain honestly unplaceable.
 4. Watch item: `cuaca.count` was 1 at audit time — a supply problem, not a contract bug.
 5. BMKG province-level DigitalForecast is deferred: the documented endpoints 301 away and no public province contract remains.
 6. DESA-level offline gazetteer deliberately out of scope (25k records, unreliable centroids).
