@@ -213,7 +213,9 @@ async function handleProxy(req: NextRequest, context: RouteContext) {
         message,
         targetUrl,
       },
-      { status: 502, headers: { 'cache-control': NO_STORE_CACHE_CONTROL } }
+      // Same contract as every other non-public response: private + no-store, so a
+      // shared cache can never store (and later serve) a failed proxy response.
+      { status: 502, headers: { 'cache-control': PRIVATE_CACHE_CONTROL } }
     );
   }
 }

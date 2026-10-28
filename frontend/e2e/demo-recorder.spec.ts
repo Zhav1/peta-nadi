@@ -16,7 +16,9 @@ test('Record 90-Second PetaNadi Product Pitch Demo', async ({ page }) => {
 
   // 1. Navigate to Command Center
   await page.goto('http://localhost:3000/dashboard');
-  await page.waitForLoadState('networkidle');
+  // contract updated 2026-10-28: `networkidle` never fires on the dashboard (it
+  // holds long-lived status/news polling), so anchor on the demo dock instead.
+  await expect(page.locator('#run-demo-btn')).toBeVisible({ timeout: 60000 });
   await page.waitForTimeout(2000);
 
   // Segment 1: Hazard Polygon & 4D Spatiotemporal Mesh (0:00 - 0:15)
@@ -29,7 +31,8 @@ test('Record 90-Second PetaNadi Product Pitch Demo', async ({ page }) => {
 
   // Segment 2: Direct 2-Node Route Picking (0:15 - 0:40)
   // Trigger Run Demo or click nodes
-  const runDemoBtn = page.locator('button:has-text("Run Demo")');
+  // contract updated 2026-10-28: demo trigger id #run-demo-btn (label is "Demo").
+  const runDemoBtn = page.locator('#run-demo-btn');
   if (await runDemoBtn.isVisible()) {
     await runDemoBtn.click();
   }

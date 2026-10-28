@@ -447,7 +447,14 @@ export function GuidedDemoPanel({
  onClick={(e) => {
  e.preventDefault();
  e.stopPropagation();
+ // Phase 57 WP-A2 (D7), restored in 173.5: a Stage-0 cold click must START the
+ // demo (crisisId is still null, so onAdvance would early-return and the click
+ // would silently stall). Pass the selected corridor so offline labels match.
+ if (stage === 0) {
+ onStart({ origin: selectedOrigin ?? undefined, destination: selectedDestination ?? undefined });
+ } else {
  onAdvance();
+ }
  }}
  className={`flex-1 py-2 px-3 rounded-md text-xs font-semibold transition-colors shadow-sm flex items-center justify-center gap-1.5 ${
  (stage === 0 && (!selectedOrigin || !selectedDestination)) || isCalculatingRoute

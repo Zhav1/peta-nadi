@@ -12,12 +12,17 @@ import {
   isPolylineIntersectingHazardCircle,
   type MapboxDirectionsResponse,
 } from '../lib/aiDynamicRouter';
+import { clearDynamicRouteCache } from '../lib/hubCorridorCache';
 
 // The in-memory Mapbox cache persists across tests in this file (same worker,
 // identical coord keys), so a stale hit can mask fetch entirely — proven: the
 // NoRoute test passes alone but fails in full-file runs. Clear per test.
+// contract updated 2026-10-28: also clear the route-level cache, because with
+// workers=1 a previous spec (phase57) computes the same quantized key and the
+// cached routes skip Mapbox entirely.
 test.beforeEach(() => {
   directionsCache.clear();
+  clearDynamicRouteCache();
 });
 import type { LonLat } from '../lib/pathDensifier';
 

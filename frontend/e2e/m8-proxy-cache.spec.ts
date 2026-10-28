@@ -37,7 +37,11 @@ import { expect, test, type APIRequestContext, type APIResponse } from '@playwri
  * pre-164a handler fails cases B–E — that is the intended post-deploy gate.
  */
 
-const BASE_URL = (process.env.M8_BASE_URL ?? 'https://pre-hub.vercel.app').replace(/\/$/, '');
+// contract updated 2026-10-28: the suite now asserts the code under test (the
+// built server Playwright starts) instead of whatever is deployed. A stale Vercel
+// deployment made every run of this gate report the *deployment's* age, not ours.
+// Post-deploy verification still works: M8_BASE_URL=https://pre-hub.vercel.app.
+const BASE_URL = (process.env.M8_BASE_URL ?? 'http://localhost:3000').replace(/\/$/, '');
 const PROXY_BASE = `${BASE_URL}/api/proxy`;
 const PROXY_MODE = process.env.M8_PROXY_MODE === 'dev' ? 'dev' : 'production';
 
