@@ -2,7 +2,6 @@
 
 import { Suspense } from 'react';
 import dynamic from 'next/dynamic';
-import { GuestEvaluationBanner } from '../../components/dashboard/GuestEvaluationBanner';
 
 const DashboardClient = dynamic(() => import('../../components/dashboard/DashboardClient'), {
   ssr: false,
@@ -20,22 +19,19 @@ const DashboardClient = dynamic(() => import('../../components/dashboard/Dashboa
 
 export default function DashboardPage() {
   return (
-    <>
-      <GuestEvaluationBanner />
-      <Suspense
-        fallback={
-          <div className="w-full h-screen bg-[#080d14] flex items-center justify-center">
-            <div className="flex flex-col items-center gap-4">
-              <div className="w-12 h-12 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
-              <span className="text-slate-400 text-sm tracking-widest uppercase font-mono">
-                Loading PreHub Session...
-              </span>
-            </div>
+    <Suspense
+      fallback={
+        <div className="w-full h-screen bg-[#080d14] flex items-center justify-center">
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-12 h-12 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+            <span className="text-slate-400 text-sm tracking-widest uppercase font-mono">
+              Loading PreHub Session...
+            </span>
           </div>
-        }
-      >
-        <DashboardClient />
-      </Suspense>
-    </>
+        </div>
+      }
+    >
+      <DashboardClient />
+    </Suspense>
   );
 }

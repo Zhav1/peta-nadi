@@ -1,0 +1,150 @@
+{
+  "390x844": {
+    "atTop": {
+      "innerWidth": 390,
+      "innerHeight": 844,
+      "sheet": {
+        "x": 0,
+        "y": 270.1,
+        "w": 390,
+        "h": 573.9,
+        "bottom": 844
+      },
+      "list": {
+        "x": 14,
+        "y": 484.1,
+        "w": 362,
+        "h": 254.9,
+        "bottom": 739
+      },
+      "banner": {
+        "x": 14,
+        "y": 747,
+        "w": 362,
+        "h": 50,
+        "bottom": 797
+      },
+      "footer": {
+        "x": 364,
+        "y": 816,
+        "w": 12,
+        "h": 12,
+        "bottom": 828
+      },
+      "feedScrollHeight": 2622,
+      "feedClientHeight": 255,
+      "documentScrollWidth": 390,
+      "documentClientWidth": 390
+    },
+    "atBottom": {
+      "innerWidth": 390,
+      "innerHeight": 844,
+      "sheet": {
+        "x": 0,
+        "y": 270.1,
+        "w": 390,
+        "h": 573.9,
+        "bottom": 844
+      },
+      "list": {
+        "x": 14,
+        "y": 484.1,
+        "w": 362,
+        "h": 254.9,
+        "bottom": 739
+      },
+      "banner": {
+        "x": 14,
+        "y": 747,
+        "w": 362,
+        "h": 50,
+        "bottom": 797
+      },
+      "footer": {
+        "x": 364,
+        "y": 816,
+        "w": 12,
+        "h": 12,
+        "bottom": 828
+      },
+      "feedScrollHeight": 2622,
+      "feedClientHeight": 255,
+      "documentScrollWidth": 390,
+      "documentClientWidth": 390
+    }
+  },
+  "1920x1080": {
+    "atTop": {
+      "innerWidth": 1920,
+      "innerHeight": 1080,
+      "sheet": {
+        "x": 0,
+        "y": 64,
+        "w": 352,
+        "h": 1016,
+        "bottom": 1080
+      },
+      "list": {
+        "x": 14,
+        "y": 389,
+        "w": 323,
+        "h": 578,
+        "bottom": 967
+      },
+      "banner": {
+        "x": 14,
+        "y": 979,
+        "w": 323,
+        "h": 50,
+        "bottom": 1029
+      },
+      "footer": {
+        "x": 325,
+        "y": 1052,
+        "w": 12,
+        "h": 12,
+        "bottom": 1064
+      },
+      "feedScrollHeight": 2754,
+      "feedClientHeight": 578,
+      "documentScrollWidth": 1920,
+      "documentClientWidth": 1920
+    },
+    "atBottom": {
+      "innerWidth": 1920,
+      "innerHeight": 1080,
+      "sheet": {
+        "x": 0,
+        "y": 64,
+        "w": 352,
+        "h": 1016,
+        "bottom": 1080
+      },
+      "list": {
+        "x": 14,
+        "y": 389,
+        "w": 323,
+        "h": 578,
+        "bottom": 967
+      },
+      "banner": {
+        "x": 14,
+        "y": 979,
+        "w": 323,
+        "h": 50,
+        "bottom": 1029
+      },
+      "footer": {
+        "x": 325,
+        "y": 1052,
+        "w": 12,
+        "h": 12,
+        "bottom": 1064
+      },
+      "feedScrollHeight": 2754,
+      "feedClientHeight": 578,
+      "documentScrollWidth": 1920,
+      "documentClientWidth": 1920
+    }
+  }
+}
