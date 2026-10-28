@@ -196,3 +196,139 @@ test('R2.1 banner clearance at 390x844: last card clears the guest banner', asyn
   await openDashboard(page, 390, 844);
   await assertLastCardClearsGuestBanner(page, 390);
 });
+
+// ---------------------------------------------------------------------------
+// M9 R2.3 / Phase 176.10 — the pinned counters never truncate their label.
+//
+// Live defect at 390px: `Titik Panas` rendered as `Titik Pa…` because the label
+// shared one line with the number. R2.3 stacks label over number below `md`
+// (and keeps the single inline row at `md`+). These tests are the production
+// proof: the full word is rendered, its box does not overflow, and it is still
+// the label's accessible name.
+// ---------------------------------------------------------------------------
+const PHASE_176_10_DIR = path.resolve(__dirname, '../../.planning/milestones/M9/phase176.10');
+
+const STACKED_LABELS = [
+  { counter: 'counter-cuaca', label: 'hazard-label-cuaca', name: 'Cuaca' },
+  { counter: 'counter-waspada', label: 'hazard-label-waspada', name: 'Waspada Dini' },
+  { counter: 'counter-titik-panas', label: 'hazard-label-titik-panas', name: 'Titik Panas' },
+] as const;
+
+async function openCounters(page: Page, width: number, height: number): Promise<void> {
+  const res = await page.goto('/dashboard', { waitUntil: 'domcontentloaded', timeout: 90000 });
+  expect(res, 'dashboard navigation returned no response').not.toBeNull();
+  expect(res!.status(), `GET /dashboard -> ${res!.status()}`).toBe(200);
+  await page.setViewportSize({ width, height });
+  await dismissOverlays(page);
+  await expect(page.getByTestId('counter-strip')).toBeVisible({ timeout: 30000 });
+  // The live counts hydrate from /weather/summary + /fire/hotspots.
+  await expect
+    .poll(async () => (await page.getByTestId('counter-titik-panas').innerText()).trim(), {
+      timeout: 60000,
+    })
+    .toMatch(/^[0-9]/);
+  await page.waitForTimeout(500);
+}
+
+/** Returns the measured labels plus the stacking evidence for the screenshots. */
+async function assertCounterLabels(page: Page, width: number, stacked: boolean) {
+  const measured: Array<Record<string, unknown>> = [];
+  for (const item of STACKED_LABELS) {
+    const label = page.getByTestId(item.label);
+    await expect(label, `${item.name} label missing at ${width}px`).toBeVisible();
+
+    const metrics = await label.evaluate((el) => {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const box = el.getBoundingClientRect();
+      const text = range.getBoundingClientRect();
+      return {
+        scrollWidth: el.scrollWidth,
+        clientWidth: el.clientWidth,
+        whiteSpace: getComputedStyle(el).whiteSpace,
+        textOverflow: getComputedStyle(el).textOverflow,
+        overflow: getComputedStyle(el).overflow,
+        text: (el.textContent ?? '').trim(),
+        boxWidth: +box.width.toFixed(1),
+        textWidth: +text.width.toFixed(1),
+      };
+    });
+
+    expect(
+      metrics.scrollWidth,
+      `${item.name} label overflows at ${width}px (${metrics.scrollWidth}px in ${metrics.clientWidth}px)`,
+    ).toBeLessThanOrEqual(metrics.clientWidth + EDGE_TOLERANCE);
+    expect(
+      metrics.text,
+      `${item.name} label text differs at ${width}px`,
+    ).toBe(item.name);
+    if (stacked) {
+      // Below `md` the label must not even declare an ellipsis.
+      expect(
+        metrics.textOverflow,
+        `${item.name} label is ellipsised at ${width}px`,
+      ).not.toBe('ellipsis');
+    }
+    // A bare span has no accessible name of its own; what AT reads is the text
+    // node (exactly the full word) and the control name that wraps it.
+    const axText = await label.ariaSnapshot();
+    expect(axText.trim(), `${item.name} is not exposed to AT as "${item.name}" at ${width}px`).toBe(
+      `- text: ${item.name}`,
+    );
+    const pill = page.locator(`[data-testid="counter-pill"]:has([data-testid="${item.counter}"])`);
+    const count = (await page.getByTestId(item.counter).innerText()).trim();
+    await expect(
+      pill,
+      `${item.name} control accessible name at ${width}px`,
+    ).toHaveAccessibleName(`${item.name} ${count}`);
+
+    const labelBox = await label.boundingBox();
+    const numberBox = await page.getByTestId(item.counter).boundingBox();
+    expect(labelBox, `${item.name} label box at ${width}px`).not.toBeNull();
+    expect(numberBox, `${item.name} number box at ${width}px`).not.toBeNull();
+    if (stacked) {
+      expect(
+        numberBox!.y,
+        `${item.name} number is not stacked below the label at ${width}px`,
+      ).toBeGreaterThanOrEqual(labelBox!.y + labelBox!.height - 1);
+    } else {
+      expect(
+        Math.abs(labelBox!.y - numberBox!.y),
+        `${item.name} label/number are not on one desktop row at ${width}px`,
+      ).toBeLessThan(labelBox!.height);
+    }
+
+    measured.push({
+      id: item.counter,
+      name: item.name,
+      scrollWidth: metrics.scrollWidth,
+      clientWidth: metrics.clientWidth,
+      textWidth: metrics.textWidth,
+      ellipsis: metrics.textOverflow,
+      labelY: +labelBox!.y.toFixed(1),
+      numberY: +numberBox!.y.toFixed(1),
+    });
+  }
+  console.log(`R2.3 counter labels @${width}px: ${JSON.stringify(measured)}`);
+  return measured;
+}
+
+test('R2.3 counter labels at 390x844: full word, stacked, never truncated', async ({ page }) => {
+  await openCounters(page, 390, 844);
+  await assertCounterLabels(page, 390, true);
+  fs.mkdirSync(PHASE_176_10_DIR, { recursive: true });
+  await page.screenshot({
+    path: path.join(PHASE_176_10_DIR, 'live-390.png'),
+    fullPage: false,
+  });
+});
+
+test('R2.3 counter labels at 1920x1080: full word, single inline row', async ({ page }) => {
+  await openCounters(page, 1920, 1080);
+  await assertCounterLabels(page, 1920, false);
+  fs.mkdirSync(PHASE_176_10_DIR, { recursive: true });
+  await page.screenshot({
+    path: path.join(PHASE_176_10_DIR, 'live-1920.png'),
+    fullPage: false,
+  });
+});
