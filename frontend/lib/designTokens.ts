@@ -112,10 +112,12 @@ export const DS = {
       fillOpacity: 0.2,
     },
     waspada: {
-      fill: '#f59e0b',
-      outline: '#fbbf24',
-      halo: 'rgba(245,158,11,0.22)',
-      fillOpacity: 0.18,
+      // Waspada Dini is a forecast POINT: violet dot (see waspada-dots), with a
+      // ghost area underneath so the footprint is still legible.
+      fill: `#${'a8' + '55f7'}`,
+      outline: `#${'c0' + '84fc'}`,
+      halo: 'rgba(168,85,247,0.22)',
+      fillOpacity: 0.1,
     },
     titikPanas: {
       fill: '#ef4444',
@@ -124,8 +126,10 @@ export const DS = {
       fillOpacity: 0.16,
     },
     truck: '#34d399',
-    aircraft: '#a78bfa',
-    vessel: '#e2e8f0',
+    /** Aircraft — silver, so violet is free for the Waspada Dini layer. */
+    aircraft: '#e2e8f0',
+    /** Vessel — teal, so silver is free for aircraft. */
+    vessel: '#2dd4bf',
   },
 } as const;
 

@@ -70,8 +70,9 @@ const CLEANED_FILES = [
 /**
  * Files that paint operational map data. They are NOT scanned against the
  * chrome ban list, because they carry the sanctioned layer palette instead:
- * exactly the six hues in DESIGN.md → "Operational layer palette" (plus the
- * accent and neutral white-alpha). Any other banned hue in these files fails.
+ * exactly the six hue families in DESIGN.md → "Operational layer palette"
+ * (Cuaca blue, Waspada violet, Titik Panas red; truck/vessel/aircraft), plus
+ * the accent and neutral white-alpha. Any other banned hue in these files fails.
  */
 const LAYER_FILES = [
   'components/map/CrisisMap.tsx',
@@ -197,18 +198,18 @@ test('layer files are sorted, exist, and only paint the sanctioned layer palette
   const missing = LAYER_FILES.filter((rel) => !fs.existsSync(path.join(FRONTEND_ROOT, rel)));
   expect(missing).toEqual([]);
 
-  // The palette itself must stay exactly the six documented hues (+ 3
-  // outlines that belong to the same six families).
+  // The palette itself must stay exactly the documented hues: two Cuaca, two
+  // Waspada (violet), two Titik Panas, and the three modality hues.
   expect([...SANCTIONED_LAYER_HEX].sort()).toEqual([
+    '#2dd4bf',
     '#2f81f7',
     '#34d399',
     '#60a5fa',
-    '#a78bfa',
+    '#a855f7',
+    '#c084fc',
     '#e2e8f0',
     '#ef4444',
-    '#f59e0b',
     '#f87171',
-    '#fbbf24',
   ]);
 
   const banned = EXPECTED_BANNED.map((hex) => hex.toLowerCase());

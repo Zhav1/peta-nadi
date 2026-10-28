@@ -329,28 +329,23 @@ function FloatingMapLegend({
             <div className="flex items-center gap-2">
               <span className="w-4 h-0 border-t-2 border-dashed border-[#f59e0b] shrink-0" />
               <div>
-                <span className="text-[#e8eaed] font-medium block">Prakiraan Waspada Dini (tanpa isi)</span>
-                <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Garis putus-putus amber: prakiraan YELLOW_CLARIFY yang belum terkonfirmasi — info pantauan saja, tanpa pengalihan rute maupun penahanan armada.</span>
+                <span className="text-[#e8eaed] font-medium block">Prakiraan Zona Bencana (tanpa isi)</span>
+                <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Garis putus-putus amber: prakiraan zona YELLOW_CLARIFY yang belum terkonfirmasi — info pantauan saja, tanpa pengalihan rute maupun penahanan armada. (Berbeda dari titik violet Waspada Dini cuaca di bawah.)</span>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
               <span
                 data-live-hazard={liveHazardPulse === 'cluster' ? 'cluster' : undefined}
-                className={`shrink-0 rounded-[4px] p-[2px] ${liveHazardPulse === 'cluster' ? 'ds-live-pulse' : ''}`}
-                style={{ backgroundColor: DS.layer.titikPanas.halo }}
-              >
-                <span
-                  className="block w-3 h-3 rounded-[2px]"
-                  style={{
-                    backgroundColor: 'rgba(239,68,68,0.16)',
-                    border: `1.5px solid ${DS.layer.titikPanas.outline}`,
-                  }}
-                />
-              </span>
+                className={`shrink-0 w-2.5 h-2.5 rounded-full ${liveHazardPulse === 'cluster' ? 'ds-live-pulse' : ''}`}
+                style={{
+                  backgroundColor: DS.layer.titikPanas.outline,
+                  boxShadow: `0 0 0 4px ${DS.layer.titikPanas.halo}`,
+                }}
+              />
               <div>
                 <span className="text-[#e8eaed] font-medium block">Titik Panas (Satelit) — sorotan bila ≥3 titik keyakinan tinggi dalam 5 km</span>
-                <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Saudara merah: titik deteksi VIIRS merah dengan area isi + garis + halo yang sama seperti Cuaca dan Waspada. Ukuran titik naik mengikuti severity, bukan warna. Klik area/titik = jumlah + FRP/conf/jarak koridor.</span>
+                <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Titik merah: satu deteksi VIIRS = satu titik. Ukuran titik naik mengikuti severity, bukan warna; sorotan area merah hanya bila ≥3 titik keyakinan tinggi (conf ≥80 atau FRP&gt;100) dalam 5 km. Klik titik/area = jumlah + FRP/conf/jarak koridor.</span>
               </div>
             </div>
 
@@ -487,15 +482,16 @@ function FloatingMapLegend({
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="shrink-0 rounded-[4px] p-[2px]" style={{ backgroundColor: DS.layer.waspada.halo }}>
-                  <span
-                    className="block w-3 h-3 rounded-[2px]"
-                    style={{ backgroundColor: 'rgba(245,158,11,0.18)', border: `1.5px dashed ${DS.layer.waspada.outline}` }}
-                  />
-                </span>
+                <span
+                  className="w-2.5 h-2.5 rounded-full shrink-0"
+                  style={{
+                    backgroundColor: DS.layer.waspada.fill,
+                    boxShadow: `0 0 0 4px ${DS.layer.waspada.halo}`,
+                  }}
+                />
                 <div>
                   <span className="text-[#e8eaed] font-medium block">Waspada Dini (Advisory) — {weatherAdvisoryCount} zona {showWeatherAdvisory ? '(ON)' : '(OFF)'}</span>
-                  <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Amber, saudara prakiraan: medium drizzle (mis. BMKG 60), isi 18% + garis putus-putus + halo amber. Hanya tampil bila toggle waspada dini ON. Default OFF, info-only.</span>
+                  <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Violet, saudara prakiraan: satu titik per zona (medium drizzle, mis. BMKG 60) dengan halo violet; di bawahnya hanya bayangan area 10% + garis putus-putus violet sebagai cue prakiraan. Ukuran titik 4/5/6 px mengikuti severity. Hanya tampil bila toggle waspada dini ON. Default OFF, info-only.</span>
                 </div>
               </div>
             </div>
