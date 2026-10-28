@@ -6,6 +6,10 @@ use a fake Supabase client.
 
 Pinned here:
 
+* the map-bootstrap plan is exactly the four seeded sections (no weather,
+  corridor, commodity, approval, health, evaluation, outcome or BNPB sections);
+* the news section is a direct 40-article Supabase read — it never calls
+  ``get_live_news`` (breadth contract, re-tier, ingestion scheduling);
 * a failing section and a timing-out section are isolated (`degraded` /
   `timeout`) while the healthy sections stay `ok`;
 * a failed section reuses its last good value when this process has one;
@@ -108,7 +112,78 @@ def _snapshot(**overrides):
 
 
 # ---------------------------------------------------------------------------
-# 1. Builder isolation
+# 1. Map-bootstrap plan
+# ---------------------------------------------------------------------------
+
+def test_section_plan_is_the_four_map_bootstrap_sections():
+    plan = svc.section_plan()
+
+    assert set(plan) == {"incidents", "news", "news_market_regime", "fire_hotspots"}
+    assert len(plan) == 4
+    # Removed in the 2026-10-28 payload trim: the frontend fetches weather and
+    # corridor live and lazy-mounts Analitik/Laporan/Evaluasi.
+    for removed in (
+        "corridor_context",
+        "weather_spatial_polygons",
+        "commodity_prices",
+        "commodity_spikes",
+        "approvals",
+        "source_health",
+        "evaluation_benchmark",
+        "evaluation_test_matrix",
+        "evaluation_corridor_efficiency",
+        "outcomes",
+        "bnpb_events",
+    ):
+        assert removed not in plan
+
+
+@pytest.mark.asyncio
+async def test_news_section_reads_40_articles_directly(monkeypatch):
+    from app.routers import news_router
+    from app.services import news_aggregator
+
+    calls: list[dict] = []
+
+    async def fake_fetch(**kwargs):
+        calls.append(kwargs)
+        return [{"id": "N-1"}, {"id": "N-2"}]
+
+    def must_not_run(*args, **kwargs):
+        raise AssertionError("the snapshot news section must never call get_live_news")
+
+    monkeypatch.setattr(news_aggregator, "fetch_news_from_supabase", fake_fetch)
+    monkeypatch.setattr(news_router, "get_live_news", must_not_run)
+
+    section = await svc.section_plan()["news"]()
+
+    assert calls == [{"limit": 40, "include_regional": True}]
+    assert section["status"] == "ok"
+    assert section["total"] == 2
+    assert section["last_updated"]
+    assert section["articles"] == [{"id": "N-1"}, {"id": "N-2"}]
+
+
+@pytest.mark.asyncio
+async def test_incidents_section_uses_limit_50(monkeypatch):
+    from app.routers import incidents as incidents_router
+
+    calls: list[dict] = []
+
+    async def fake_list(**kwargs):
+        calls.append(kwargs)
+        return {"items": [], "total": 0}
+
+    monkeypatch.setattr(incidents_router, "list_incidents", fake_list)
+
+    payload = await svc.section_plan()["incidents"]()
+
+    assert calls == [{"status": None, "severity": None, "limit": 50}]
+    assert payload == {"items": [], "total": 0}
+
+
+# ---------------------------------------------------------------------------
+# 2. Builder isolation
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
@@ -192,7 +267,7 @@ async def test_sync_section_runs_in_thread_and_stays_jsonable(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# 2. Persistence
+# 3. Persistence
 # ---------------------------------------------------------------------------
 
 def test_store_read_round_trip_with_fake_client(monkeypatch):
@@ -250,7 +325,7 @@ def test_snapshot_age_seconds_is_none_without_timestamp():
 
 
 # ---------------------------------------------------------------------------
-# 3. Tick entry point
+# 4. Tick entry point
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio

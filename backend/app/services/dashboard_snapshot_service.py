@@ -1,18 +1,22 @@
 """DB-backed dashboard bootstrap snapshot (Phase 163a / M8).
 
 The first dashboard paint used to fan out to ~25-30 endpoints (phase 160
-baseline: 50-94 requests, 9.8-73.8 s first data). This module composes those
-public sections **once per tick** and persists them in Supabase
-``dashboard_snapshots`` (migration 024) so the browser can read one row instead
-of recomputing the world.
+baseline: 50-94 requests, 9.8-73.8 s first data). This module composes the
+dashboard **map bootstrap** sections **once per tick** and persists them in
+Supabase ``dashboard_snapshots`` (migration 024) so the browser can read one row
+instead of recomputing the world.
 
 Contract
 --------
-* :func:`build_global_snapshot` composes every public section **in parallel**
-  with a per-section timeout (:data:`SECTION_TIMEOUT_SECONDS`) and full
-  isolation: a failed or slow section is marked ``degraded``/``timeout`` and
-  never fails the snapshot. The last good value for that section, if this
+* :func:`build_global_snapshot` composes the four map-bootstrap sections
+  (``incidents``, ``news``, ``news_market_regime``, ``fire_hotspots``)
+  **in parallel** with a per-section timeout (:data:`SECTION_TIMEOUT_SECONDS`)
+  and full isolation: a failed or slow section is marked ``degraded``/``timeout``
+  and never fails the snapshot. The last good value for that section, if this
   process has one, is served with ``cached: true``.
+* The frontend fetches weather/corridor live and lazy-mounts Analitik/Laporan/
+  Evaluasi, so those sections are deliberately **not** composed here (they were
+  ~800 KB of mostly-unread payload every tick).
 * :func:`store_global_snapshot` upserts the row (``snapshot_key='global'``).
   Only the tick calls it: the read path (``GET /api/v1/dashboard/bootstrap``)
   only reads, so dashboard traffic can never trigger snapshot writes.
@@ -23,8 +27,9 @@ Contract
 
 Sections are composed with the *existing* service/router functions (no internal
 HTTP). Sync functions that hit Supabase run via ``asyncio.to_thread`` so they do
-not block the event loop. All heavy imports are inside the section bodies, so
-importing this module stays cheap.
+not block the event loop; the underlying news/incidents reads were moved
+off-loop for the same reason. All heavy imports are inside the section bodies,
+so importing this module stays cheap.
 """
 
 from __future__ import annotations
@@ -179,64 +184,50 @@ def _failure_section(
 
 
 # ---------------------------------------------------------------------------
-# Public section plan
+# Map bootstrap section plan (4 sections)
 # ---------------------------------------------------------------------------
 
-class _NoopBackgroundTasks:
-    """Absorb ``BackgroundTasks.add_task`` so a read never triggers ingestion.
-
-    ``get_live_news`` schedules an ingestion cycle when its 30 s cache is cold.
-    The tick owns ingestion; the snapshot build must stay a read.
-    """
-
-    def add_task(self, func, *args, **kwargs):  # noqa: ANN001 - FastAPI signature
-        return None
-
-
 def section_plan(corridor_id: str = DEFAULT_CORRIDOR_ID) -> dict[str, Callable[[], Awaitable[Any]]]:
-    """Return the ordered public-section factories (name -> async callable).
+    """Return the map-bootstrap section factories (name -> async callable).
+
+    Only the four sections the dashboard actually seeds from
+    ``GET /api/v1/dashboard/bootstrap`` are composed. Weather/corridor are
+    fetched live by the frontend, and Analitik/Laporan/Evaluasi are lazy-mounted,
+    so persisting them every tick only inflated the row (~796 KB, of which
+    ~785 KB was news).
+
+    ``corridor_id`` is kept for call-site compatibility (the bootstrap endpoint
+    passes it) even though no remaining section is corridor-scoped.
 
     Exposed as a function so tests can substitute a small plan without touching
-    the real services, and so a future phase can add/remove a section in one
-    place.
+    the real services.
     """
-    corridor = corridor_id or DEFAULT_CORRIDOR_ID
-
     async def incidents():
         from app.routers.incidents import list_incidents
 
-        return await list_incidents(status=None, severity=None, limit=100)
+        return await list_incidents(status=None, severity=None, limit=50)
 
     async def news_live():
-        from app.routers.news_router import get_live_news
+        """Direct 40-article read — not ``get_live_news``.
 
-        return await get_live_news(
-            background_tasks=_NoopBackgroundTasks(),
-            province=None,
-            severity=None,
-            force_refresh=False,
-        )
+        ``get_live_news`` runs the 150-article breadth contract, the re-tier
+        write-back and may schedule ingestion. The snapshot needs a compact
+        display payload, so it reads the table directly.
+        """
+        from app.services.news_aggregator import fetch_news_from_supabase
+
+        articles = await fetch_news_from_supabase(limit=40, include_regional=True)
+        return {
+            "status": "ok",
+            "total": len(articles),
+            "last_updated": datetime.now(timezone.utc).isoformat(),
+            "articles": articles,
+        }
 
     async def news_market_regime():
         from app.routers.news_router import get_market_regime
 
         return await get_market_regime()
-
-    async def corridor_context():
-        from app.services.corridor_service import get_corridor_context
-
-        return await get_corridor_context(corridor)
-
-    async def weather_spatial_polygons():
-        from app.auth.supabase_auth import default_guest_session
-        from app.routers.routing_router import fetch_spatial_weather_polygons
-
-        return await fetch_spatial_weather_polygons(
-            current_user=default_guest_session(),
-            min_severity="high",
-            min_precip=50.0,
-            min_flood=80.0,
-        )
 
     async def fire_hotspots():
         from app.auth.supabase_auth import default_guest_session
@@ -244,67 +235,11 @@ def section_plan(corridor_id: str = DEFAULT_CORRIDOR_ID) -> dict[str, Callable[[
 
         return await fetch_fire_hotspots(current_user=default_guest_session())
 
-    async def commodity_prices():
-        from app.routers.commodity_router import get_commodity_prices
-
-        return await get_commodity_prices(commodity=None, region=None, limit=30)
-
-    async def commodity_spikes():
-        from app.routers.commodity_router import get_commodity_spikes
-
-        return await get_commodity_spikes(region=None)
-
-    async def approvals():
-        from app.routers.approvals import list_approvals
-
-        return await list_approvals(incident_id=None, limit=50)
-
-    async def source_health():
-        from app.routers.health import source_health_check
-
-        return await source_health_check()
-
-    async def evaluation_benchmark():
-        from app.routers.evaluation_router import get_benchmark_report
-
-        return await get_benchmark_report()
-
-    async def evaluation_test_matrix():
-        from app.routers.evaluation_router import get_test_matrix
-
-        return await get_test_matrix(fr_id=None, search=None)
-
-    async def evaluation_corridor_efficiency():
-        from app.routers.evaluation_router import get_corridor_efficiency
-
-        return await get_corridor_efficiency()
-
-    async def outcomes():
-        from app.routers.outcomes_router import list_outcomes
-
-        return await list_outcomes(incident_id=None, horizon=None, limit=50)
-
-    async def bnpb_events():
-        from app.routers.bnpb_router import get_bnpb_events
-
-        return await get_bnpb_events(limit=50)
-
     return {
         "incidents": incidents,
         "news": news_live,
         "news_market_regime": news_market_regime,
-        "corridor_context": corridor_context,
-        "weather_spatial_polygons": weather_spatial_polygons,
         "fire_hotspots": fire_hotspots,
-        "commodity_prices": commodity_prices,
-        "commodity_spikes": commodity_spikes,
-        "approvals": approvals,
-        "source_health": source_health,
-        "evaluation_benchmark": evaluation_benchmark,
-        "evaluation_test_matrix": evaluation_test_matrix,
-        "evaluation_corridor_efficiency": evaluation_corridor_efficiency,
-        "outcomes": outcomes,
-        "bnpb_events": bnpb_events,
     }
 
 
@@ -317,7 +252,7 @@ async def build_global_snapshot(
     corridor_id: Optional[str] = None,
     timeout: Optional[float] = None,
 ) -> dict:
-    """Compose the public dashboard sections in parallel.
+    """Compose the map-bootstrap dashboard sections in parallel.
 
     Returns ``{snapshot_key, schema_version, computed_at, source_freshness,
     payload}`` where ``payload`` is ``{section: {data, status}}``. Section

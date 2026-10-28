@@ -332,3 +332,60 @@ must re-run with `M8_REQUIRE_BOOTSTRAP=1` against the deployed backend.
 - No async rewrite of the fleet/incidents/ERP services (phase 164, audit F4).
 - No route-result persistence and no visual redesign.
 - No `SPEC.md` edit, no `.planning/baseline-pytest.txt` edit, no commit, no deploy.
+
+---
+
+## Snapshot payload trim (2026-10-28)
+
+Production tick works, but the first measurement showed the snapshot is a **full-world
+dump**: **796 KB** row, **~785 KB of it news**, **~15 s** build, several sections timing
+out at 12-15 s, and a **50 s** first bootstrap request. The 5 s per-section budget in
+`run_section` was not effective because the underlying Supabase reads were synchronous and
+blocked the single event loop, so "parallel" sections ran one behind another.
+
+### What changed
+
+| Area | Before | After |
+|---|---|---|
+| Sections | 15 ("all public sections") | **4 map-bootstrap sections** |
+| Snapshot row | 796 KB | **target < 250 KB** (measure after redeploy/tick) |
+| Build | ~15 s | **target < 5 s** (measure after redeploy/tick) |
+| `news` | `get_live_news` (150-article breadth contract + re-tier + may schedule ingestion) | direct `fetch_news_from_supabase(limit=40, include_regional=True)` -> **40 articles max** |
+| `incidents` | `list_incidents(limit=100)` | `list_incidents(limit=50)` |
+| `fetch_news_from_supabase` | `query.execute()` on the loop | `await asyncio.to_thread(query.execute)` |
+| `list_incidents` | `_fetch_incident_rows(...)` on the loop | `await asyncio.to_thread(_fetch_incident_rows, ...)` |
+| `persist_re_tiered_news_rows` | already off-loop | unchanged (`asyncio.to_thread`) |
+
+### New section list (4)
+
+| Section | Factory |
+|---|---|
+| `incidents` | `app.routers.incidents.list_incidents(status=None, severity=None, limit=50)` |
+| `news` | `fetch_news_from_supabase(limit=40, include_regional=True)` wrapped in `{status,total,last_updated,articles}` |
+| `news_market_regime` | `app.routers.news_router.get_market_regime` |
+| `fire_hotspots` | `app.routers.routing_router.fetch_fire_hotspots` (M9 surface, read-only, unchanged) |
+
+Removed from the plan (still served by their own routers when the frontend asks):
+`corridor_context`, `weather_spatial_polygons`, `commodity_prices`, `commodity_spikes`,
+`approvals`, `source_health`, `evaluation_benchmark`, `evaluation_test_matrix`,
+`evaluation_corridor_efficiency`, `outcomes`, `bnpb_events`. Rationale: the frontend
+fetches weather/corridor live (phase 163b seeds them from the snapshot, but they are cheap
+and M9-owned) and only mounts Analitik/Laporan/Evaluasi when the tab is opened, so writing
+them every 5 minutes was pure waste.
+
+The old `_NoopBackgroundTasks` helper is gone: the news section no longer calls
+`get_live_news`, so there is nothing for a cold news cache to schedule.
+
+### Notes / non-changes
+
+1. `run_section` isolation, timeout and last-good-cache behaviour is **unchanged**. The
+   `to_thread` fixes are what make the budget real; without them a 12 s sync read blew
+   past it because nothing could preempt the blocking call.
+2. The breadth/tiering logic in `news_aggregator` is untouched. Only the read moved off the
+   event loop; the v7 re-tier and the batched `persist_re_tiered_news_rows` write-back are
+   unchanged (and were already off-loop).
+3. `section_plan()` keeps its `corridor_id` parameter for call-site compatibility; no
+   remaining section is corridor-scoped, so it is ignored.
+4. **No production size/timing claim.** 796 KB -> < 250 KB and ~15 s -> < 5 s are targets;
+   they must be measured on the first tick after redeploy (phase 165).
+

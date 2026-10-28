@@ -575,3 +575,33 @@ isolation against the deployed proxy — is owned by phase 165.
 | Phase 164a code (proxy + news read path) | on `m9-operational-truth`, **uncommitted** (pending the 164b sweep / M8 branch cherry-pick) |
 | Phase 164a plan + this evidence | `.planning/phases/164-backend-hotpath-proxy-hardening/PLAN.md`, this file |
 | Untracked by design (repo convention: run artifacts are not committed) | `.planning/phases/160-baseline-audit-state-repair/artifacts/`, `.planning/baseline-pytest.txt` |
+
+---
+
+## Snapshot payload trim (2026-10-28)
+
+The first production tick proved the read path works but the row is a full-world dump:
+**796 KB** total, of which **~785 KB was the news section**, the build took **~15 s**, and
+several sections timed out at 12-15 s because sync Supabase reads blocked the single event
+loop (the first bootstrap request took 50 s).
+
+| Change | Before | After |
+|---|---|---|
+| Snapshot sections | 15 ("all public sections") | **4** map-bootstrap sections: `incidents`, `news`, `news_market_regime`, `fire_hotspots` |
+| Snapshot payload | 796 KB | **target < 250 KB** (not yet measured in production) |
+| News section | `get_live_news` (150-article breadth contract, re-tier, may schedule ingestion) | direct `fetch_news_from_supabase(limit=40, include_regional=True)` -> **40 articles max** |
+| Incidents section | `limit=100` | `limit=50` |
+| News PostgREST read | sync `query.execute()` on the event loop | `await asyncio.to_thread(query.execute)` |
+| Incidents PostgREST read | sync `_fetch_incident_rows(...)` on the event loop | `await asyncio.to_thread(_fetch_incident_rows, ...)` |
+| Re-tier write-back | (already off-loop) | unchanged: `asyncio.to_thread(persist_re_tiered_news_rows, ...)` |
+| Expected build | ~15 s | **< 5 s** (expected; re-measure on the next redeploy/tick) |
+
+Dropped from the tick write (the frontend fetches them live, and Analitik/Laporan/Evaluasi
+only mount when opened): `corridor_context`, `weather_spatial_polygons`, `commodity_prices`,
+`commodity_spikes`, `approvals`, `source_health`, `evaluation_benchmark`,
+`evaluation_test_matrix`, `evaluation_corridor_efficiency`, `outcomes`, `bnpb_events`.
+
+`run_section` isolation/timeouts are unchanged; the `to_thread` fixes are what make the 5 s
+per-section budget effective instead of decorative. **No production size/build-time claim
+until the redeploy and a fresh tick.**
+

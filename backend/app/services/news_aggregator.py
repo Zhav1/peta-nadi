@@ -1820,7 +1820,10 @@ async def fetch_news_from_supabase(
         if severity:
             query = query.eq("severity", severity)
 
-        res = query.execute()
+        # PostgREST read is sync and can take 10s+ on a cold connection; run it
+        # off the event loop so a snapshot/tick section cannot stall every
+        # other concurrent request (phase 163 follow-up).
+        res = await asyncio.to_thread(query.execute)
         rows = res.data or []
     except Exception as e:
         logger.warning(f"Error fetching news articles from Supabase: {e}")

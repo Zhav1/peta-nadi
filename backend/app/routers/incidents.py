@@ -199,7 +199,9 @@ async def list_incidents(
     try:
         from app.db.supabase_client import get_client
         sb = get_client()
-        result = _fetch_incident_rows(sb, limit, status, severity)
+        # Sync PostgREST read -> worker thread; blocking the single event loop
+        # here stalled every concurrent dashboard/snapshot section.
+        result = await asyncio.to_thread(_fetch_incident_rows, sb, limit, status, severity)
         items = result.data or []
         
         # Map incident_id or id for IncidentResponse pydantic model
