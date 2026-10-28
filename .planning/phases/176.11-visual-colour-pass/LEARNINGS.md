@@ -2,6 +2,8 @@
 
 **Window:** 2026-10-28 · Grounded facts only.
 
+> **Superseded by 176.12:** Waspada is now violet dots `#a855f7` — the amber treatment below is the state as of 176.11.
+
 ## 1. The single most valuable lesson
 
 **User visual feedback supersedes a self-imposed palette.** Phase 174

@@ -3,6 +3,8 @@
 **Mode:** docs-only record of built work; read-only inspection this pass.
 **Trigger:** direct user feedback on the shipped visual state.
 
+> **Superseded by 176.12:** Waspada is now violet dots `#a855f7` — the amber treatment below is the state as of 176.11.
+
 ## What was done
 
 1. Read the `a1b6e1b` diffstat: 11 files, +743/−293.

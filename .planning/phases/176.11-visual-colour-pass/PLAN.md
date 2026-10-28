@@ -5,6 +5,8 @@
 · merge `2d7991d`
 **Diff size (verified):** `a1b6e1b` — 11 files, +743/−293
 
+> **Superseded by 176.12:** Waspada is now violet dots `#a855f7` — the amber treatment below is the state as of 176.11.
+
 ## Objective
 
 Direct user feedback overrode two decisions from the earlier contract:
