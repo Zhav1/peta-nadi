@@ -242,9 +242,8 @@ export function RouteDetailModal({
     // set explicitly because a base-ui <Dialog.Title> would own aria-labelledby and
     // the visible corridor name alone does not state what this surface is for.
     aria-label={`Detail rute dan verifikasi operator — ${title}`}
-    className="max-w-2xl rounded-2xl border-white/10 bg-[#0c1017] p-0 shadow-2xl tabular-nums max-h-[90vh] overflow-y-auto"
+    className="max-w-2xl rounded-xl border-white/10 bg-[#0c1017] p-0 shadow-[0_12px_32px_rgba(0,0,0,0.4)] tabular-nums max-h-[90vh] overflow-y-auto"
   >
-        <style>{`@keyframes wm-modal-rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}.wm-modal-rise{animation:wm-modal-rise .22s ease both}`}</style>
         {/* Header */}
         <DialogHeader className="sticky top-0 bg-[#0c1017] border-b border-white/10 p-4 flex-row items-start justify-between gap-3 text-left">
           <div className="min-w-0">
@@ -260,7 +259,7 @@ export function RouteDetailModal({
                     ? 'bg-amber-500/15 text-amber-300 border-amber-500/40'
                     : provenance === 'koridor hub'
                     ? 'bg-white/5 text-slate-200 border-white/10'
-                    : 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30'
+                    : 'bg-[#121822] text-[#38b8f8] border-white/10'
                 }`}
               >
                 {provenance}
@@ -277,7 +276,7 @@ export function RouteDetailModal({
             type="button"
             onClick={onClose}
             aria-label="Tutup detail rute"
-            className="cursor-pointer p-1.5 rounded-lg border border-white/10 hover:bg-white/5 text-slate-400 hover:text-white transition shrink-0"
+            className="cursor-pointer p-1.5 rounded-[10px] border border-white/10 hover:bg-white/5 text-[rgba(232,234,237,0.62)] hover:text-white ds-pressable shrink-0"
           >
             <X className="w-4 h-4" />
           </button>
@@ -285,17 +284,17 @@ export function RouteDetailModal({
 
         <div className="p-4 space-y-4">
           {/* Section 1: Risiko */}
-          <section aria-label="Risiko" className="wm-modal-rise border border-white/10 rounded-xl bg-[#080d14] p-3 space-y-2">
+          <section aria-label="Risiko" className="rounded-xl bg-[#080d14] p-3 space-y-2">
             <h3 className="text-xs font-bold font-sans text-slate-100">
               <span>1. Risiko</span>
             </h3>
             <div className="text-xs font-mono space-y-1.5 text-slate-300">
               <div className="flex justify-between gap-2">
                 <span className="text-slate-400">Status keselamatan:</span>
-                <span className="font-semibold text-cyan-300 text-right">{route.safety_status ?? 'Tidak tersedia'}</span>
+                <span className="font-semibold text-[#38b8f8] text-right">{route.safety_status ?? 'Tidak tersedia'}</span>
               </div>
               {route.safety_tag && (
-                <div className="p-2 rounded bg-[#0c1017] border border-white/10 text-slate-200">
+                <div className="p-2 rounded-[10px] bg-[#0c1017] text-slate-200">
                   {route.safety_tag}
                 </div>
               )}
@@ -307,7 +306,7 @@ export function RouteDetailModal({
               </div>
               <div className="flex justify-between gap-2">
                 <span className="text-slate-400">Passabilitas koridor:</span>
-                <span className={passability === 'BLOCKED' ? 'font-bold text-rose-400' : passability === 'CAUTION' ? 'font-semibold text-amber-300' : 'font-semibold text-cyan-300'}>{passability}</span>
+                <span className={passability === 'BLOCKED' ? 'font-bold text-rose-400' : passability === 'CAUTION' ? 'font-semibold text-amber-300' : 'font-semibold text-[#38b8f8]'}>{passability}</span>
               </div>
               <div className="flex justify-between gap-2">
                 <span className="text-slate-400">Bahaya:</span>
@@ -326,14 +325,14 @@ export function RouteDetailModal({
           </section>
 
           {/* Section 2: Dampak & Biaya */}
-          <section aria-label="Dampak dan Biaya" className="wm-modal-rise border border-white/10 rounded-xl bg-[#080d14] p-3 space-y-2.5" style={{ animationDelay: '.05s' }}>
+          <section aria-label="Dampak dan Biaya" className="rounded-xl bg-[#080d14] p-3 space-y-2.5">
             <h3 className="text-xs font-bold font-sans text-slate-100">
               <span>2. Dampak &amp; Biaya</span>
             </h3>
             <div className="text-xs font-mono space-y-1.5 text-slate-300">
               <div className="flex justify-between gap-2">
                 <span className="text-slate-400">Deviasi waktu:</span>
-                <span className="font-semibold text-cyan-300">
+                <span className="font-semibold text-[#38b8f8]">
                   {route.tradeoff_analysis
                     ? formatDelay(route.tradeoff_analysis.time_delta_minutes)
                     : 'Data tidak tersedia'}
@@ -346,11 +345,11 @@ export function RouteDetailModal({
               <div className="flex justify-between items-center gap-2">
                 <span className="text-slate-400">Penghematan bersih (hedging):</span>
                 {route.hedging ? (
-                  <span className="font-semibold text-cyan-300 font-mono">
+                  <span className="font-semibold text-[#38b8f8] font-mono">
                     {formatIDR(route.hedging.net_savings_idr)}
                   </span>
                 ) : (
-                  <span className="text-slate-500 font-mono text-[11px] italic">Kargo belum dipilih</span>
+                  <span className="text-slate-500 font-mono text-xs italic">Kargo belum dipilih</span>
                 )}
               </div>
               <div className="flex justify-between items-center gap-2">
@@ -360,15 +359,15 @@ export function RouteDetailModal({
                     {formatIDR(route.hedging.spoilage_loss_idr)}
                   </span>
                 ) : (
-                  <span className="text-slate-500 font-mono text-[11px] italic">Kargo belum dipilih</span>
+                  <span className="text-slate-500 font-mono text-xs italic">Kargo belum dipilih</span>
                 )}
               </div>
               {reeferGensetCost > 0 && (
-                <div className="flex justify-between items-center gap-2 p-2 rounded-lg bg-[#0c1017] border border-white/10 text-xs font-mono">
+                <div className="flex justify-between items-center gap-2 p-2 rounded-[10px] bg-[#0c1017] text-xs font-mono">
                   <span className="text-slate-400 font-sans font-medium">
                     Genset reefer ({previewPolicy}):
                   </span>
-                  <span className="font-semibold text-cyan-300 font-mono">
+                  <span className="font-semibold text-[#38b8f8] font-mono">
                     {formatIDR(reeferGensetCost)}
                   </span>
                 </div>
@@ -376,7 +375,7 @@ export function RouteDetailModal({
               {route.hedging?.optimal_policy && (
                 <div className="flex justify-between items-center gap-2 text-xs font-mono pt-1">
                   <span className="text-slate-400">Kebijakan optimal:</span>
-                  <span className={`px-2 py-0.5 rounded text-[11px] font-semibold font-mono border ${
+                  <span className={`px-2 py-0.5 rounded text-xs font-semibold font-mono border ${
                     route.hedging.optimal_policy === 'HOLD'
                       ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
                       : 'bg-white/5 text-slate-200 border-white/10'
@@ -386,7 +385,7 @@ export function RouteDetailModal({
                 </div>
               )}
               {(activePolicyBreakdown?.explanation || route.hedging?.recommendation_reason) && (
-                <p className="text-[11px] font-sans text-slate-300 leading-relaxed p-2 rounded bg-[#0c1017] border border-white/5">
+                <p className="text-xs font-sans text-slate-300 leading-relaxed p-2 rounded-[10px] bg-[#0c1017]">
                   {activePolicyBreakdown?.explanation || route.hedging?.recommendation_reason}
                 </p>
               )}
@@ -404,7 +403,7 @@ export function RouteDetailModal({
 
             {route.tradeoff_analysis && (
               <div className="grid grid-cols-2 gap-2 text-xs leading-relaxed">
-                <div className="p-2 rounded-md bg-[#0c1017] border border-white/10">
+                <div className="p-2 rounded-[10px] bg-[#0c1017]">
                   <span className="block text-xs font-semibold text-slate-200 mb-1 font-sans">
                     Manfaat
                   </span>
@@ -414,7 +413,7 @@ export function RouteDetailModal({
                     ))}
                   </ul>
                 </div>
-                <div className="p-2 rounded-md bg-[#0c1017] border border-white/10">
+                <div className="p-2 rounded-[10px] bg-[#0c1017]">
                   <span className="block text-xs font-semibold text-slate-200 mb-1 font-sans">
                     Konsekuensi
                   </span>
@@ -428,13 +427,13 @@ export function RouteDetailModal({
             )}
 
             {/* Rincian Biaya Operasional Total */}
-            <div className="p-3 rounded-lg bg-[#0c1017] border border-white/10 space-y-2 mt-2 font-mono">
+            <div className="p-3 rounded-[10px] bg-[#0c1017] space-y-2 mt-2 font-mono">
               <div className="flex justify-between items-center pb-2 border-b border-white/10">
                 <span className="text-xs font-sans font-semibold text-slate-200">
                   Total Estimasi Biaya Rit:
                 </span>
                 <div className="flex items-baseline gap-1.5">
-                  <span className="text-sm font-bold text-cyan-300 font-mono tabular-nums">
+                  <span className="text-sm font-bold text-[#38b8f8] font-mono tabular-nums">
                     {formatTripCostIDR(totalTripCost)}
                   </span>
                   <span className="text-xs font-mono text-slate-500 tabular-nums">
@@ -467,7 +466,7 @@ export function RouteDetailModal({
                         <span className="font-sans text-slate-400">
                           Genset Reefer:
                         </span>
-                        <span className="tabular-nums text-cyan-300">Rp {operationalCostBreakdown.reefer_genset_cost_idr.toLocaleString('id-ID')}</span>
+                        <span className="tabular-nums text-[#38b8f8]">Rp {operationalCostBreakdown.reefer_genset_cost_idr.toLocaleString('id-ID')}</span>
                       </div>
                     )}
                     <div className="flex justify-between gap-2">
@@ -487,7 +486,7 @@ export function RouteDetailModal({
                     ? 'Tambahan Biaya Alih Antarmoda:'
                     : 'Tambahan Biaya Pengalihan:'}
                 </span>
-                <span className={detourAdditionalCost > 0 && !isBaseline ? "font-semibold text-cyan-300 tabular-nums" : "text-slate-400 tabular-nums"}>
+                <span className={detourAdditionalCost > 0 && !isBaseline ? "font-semibold text-[#38b8f8] tabular-nums" : "text-slate-400 tabular-nums"}>
                   {detourAdditionalCost > 0 && !isBaseline
                     ? `+Rp ${detourAdditionalCost.toLocaleString('id-ID')}`
                     : 'Rp 0 (Jalur Normal Acuan)'}
@@ -503,12 +502,12 @@ export function RouteDetailModal({
                 selectedAction={previewPolicy === 'CONTINUE' ? 'CONTINUE' : previewPolicy}
               />
             ) : (
-              <div className="p-2.5 rounded-xl bg-[#0c1017] border border-white/10 space-y-2">
+              <div className="p-2.5 rounded-xl bg-[#0c1017] space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold font-sans text-slate-200">
+                  <span className="text-xs font-bold font-sans text-slate-200">
                     Pratinjau kebijakan (Hold vs Reroute)
                   </span>
-                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-slate-400 border border-white/10">
+                  <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-white/5 text-slate-400 border border-white/10">
                     Simulasi
                   </span>
                 </div>
@@ -518,14 +517,14 @@ export function RouteDetailModal({
                       key={t}
                       type="button"
                       onClick={() => setPreviewPolicy(t)}
-                      className={`cursor-pointer py-1.5 px-2 rounded-lg border text-xs font-mono transition-all flex flex-col items-center justify-center gap-0.5 ${
+                      className={`cursor-pointer py-1.5 px-2 rounded-[10px] border text-xs font-mono transition-all flex flex-col items-center justify-center gap-0.5 ${
                         previewPolicy === t
-                          ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200 font-bold shadow-sm'
+                          ? 'bg-[#38b8f8]/15 border-[#38b8f8] text-[#38b8f8] font-bold shadow-sm'
                           : 'bg-[#121822] border-white/10 text-slate-400 hover:text-white'
                       }`}
                     >
-                      <span className="text-[11px] font-semibold">{t}</span>
-                      <span className="text-[9px] text-slate-400 font-sans">
+                      <span className="text-xs font-semibold">{t}</span>
+                      <span className="text-xs text-slate-400 font-sans">
                         {t === 'REROUTE' ? 'Pengalihan' : t === 'HOLD' ? 'Tahan Depo' : 'Jalur Asal'}
                       </span>
                     </button>
@@ -536,7 +535,7 @@ export function RouteDetailModal({
           </section>
 
           {/* Section 3: Verifikasi */}
-          <section aria-label="Verifikasi" className="wm-modal-rise border border-white/10 rounded-xl bg-[#080d14] p-3 space-y-2.5" style={{ animationDelay: '.1s' }}>
+          <section aria-label="Verifikasi" className="rounded-xl bg-[#080d14] p-3 space-y-2.5">
             <h3 className="text-xs font-bold font-sans text-slate-100">
               <span>3. Verifikasi</span>
             </h3>
@@ -572,12 +571,12 @@ export function RouteDetailModal({
 
             {/* Provenance */}
             <div className="pt-2.5 border-t border-white/5 space-y-1.5">
-              <span className="text-[10px] font-sans text-slate-400 font-bold uppercase tracking-wider block">
+              <span className="text-xs font-sans text-slate-400 font-bold uppercase tracking-wider block">
                 Sumber data
               </span>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                 <div
-                  className={`p-1.5 rounded border text-[10px] font-mono flex flex-col items-center text-center transition ${
+                  className={`p-1.5 rounded border text-xs font-mono flex flex-col items-center text-center transition ${
                     corridorIsFallback
                       ? 'bg-amber-500/10 border-amber-500/30 text-amber-300'
                       : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
@@ -589,21 +588,21 @@ export function RouteDetailModal({
                   }
                 >
                   <span className="font-bold">{corridorIsFallback ? '[SEED FALLBACK]' : '[LIVE TOMTOM]'}</span>
-                  <span className="text-[9px] text-slate-400">Trafik Jalan</span>
+                  <span className="text-xs text-slate-400">Trafik Jalan</span>
                 </div>
                 <div
-                  className="p-1.5 rounded border text-[10px] font-mono flex flex-col items-center text-center bg-cyan-500/10 border-cyan-500/30 text-cyan-300"
+                  className="p-1.5 rounded border text-xs font-mono flex flex-col items-center text-center bg-[#121822] border-white/10 text-[#38b8f8]"
                   title="Live: Radar cuaca presipitasi BMKG 10 provinsi Sumatra + spatial fusion Open-Meteo NWP"
                 >
                   <span className="font-bold">[BMKG RADAR]</span>
-                  <span className="text-[9px] text-slate-400">Cuaca Ekstrem</span>
+                  <span className="text-xs text-slate-400">Cuaca Ekstrem</span>
                 </div>
                 <div
-                  className="p-1.5 rounded border text-[10px] font-mono flex flex-col items-center text-center bg-sky-500/10 border-sky-500/30 text-sky-300"
+                  className="p-1.5 rounded border text-xs font-mono flex flex-col items-center text-center bg-[#121822] border-white/10 text-[#e8eaed]"
                   title="Live: AIS Stream satelit pelacakan posisi kapal kargo Selat Malaka, Selat Sunda, dan Pelabuhan Belawan"
                 >
                   <span className="font-bold">[AIS STREAM]</span>
-                  <span className="text-[9px] text-slate-400">Vessel Selat</span>
+                  <span className="text-xs text-slate-400">Vessel Selat</span>
                 </div>
                 {onOpenEvaluation ? (
                   <button
@@ -612,33 +611,33 @@ export function RouteDetailModal({
                       onClose();
                       onOpenEvaluation();
                     }}
-                    className="cursor-pointer p-1.5 rounded border text-[10px] font-mono flex flex-col items-center text-center bg-purple-500/10 hover:bg-purple-500/25 border-purple-500/30 hover:border-purple-400/60 text-purple-300 transition"
+                    className="cursor-pointer p-1.5 rounded border text-xs font-mono flex flex-col items-center text-center bg-[#121822] hover:bg-[#121822] border-white/10 hover:border-white/15 text-[#e8eaed] transition"
                     title={`Buka Benchmark Empiris N=${benchN ?? '–'} Skenario Disrupsi Sumatra: ${benchSummary}`}
                   >
                     <span className="font-bold flex items-center gap-0.5">
                       [BENCHMARK N={benchN ?? '–'}]
-                      <span className="text-[9px] text-purple-400">↗</span>
+                      <span className="text-xs text-[rgba(232,234,237,0.62)]">↗</span>
                     </span>
-                    <span className="text-[9px] text-purple-400/80">{benchShort}</span>
+                    <span className="text-xs text-[rgba(232,234,237,0.62)]">{benchShort}</span>
                   </button>
                 ) : (
                   <div
-                    className="p-1.5 rounded border text-[10px] font-mono flex flex-col items-center text-center bg-purple-500/10 border-purple-500/30 text-purple-300"
+                    className="p-1.5 rounded border text-xs font-mono flex flex-col items-center text-center bg-[#121822] border-white/10 text-[#e8eaed]"
                     title={`Benchmark Empiris N=${benchN ?? '–'} Skenario Disrupsi Sumatra: ${benchSummary}`}
                   >
                     <span className="font-bold">[BENCHMARK N={benchN ?? '–'}]</span>
-                    <span className="text-[9px] text-slate-400">{benchShort}</span>
+                    <span className="text-xs text-slate-400">{benchShort}</span>
                   </div>
                 )}
               </div>
             </div>
 
             {isForecast ? (
-              <p className="text-xs font-sans text-cyan-100/80 leading-relaxed p-2.5 rounded-lg bg-cyan-950/30 border border-cyan-500/40">
+              <p className="text-xs font-sans text-amber-200 leading-relaxed p-2.5 rounded-[10px] bg-[#121822] border border-amber-500/40">
                 Prakiraan waspada dini — belum terkonfirmasi sebagai bencana aktif. Waspada — pantau, belum perlu tindakan; tanpa pengalihan rute maupun penahanan armada.
               </p>
             ) : role === 'GUEST' ? (
-              <p className="text-xs font-sans text-slate-400 leading-relaxed p-2.5 rounded-lg bg-[#0c1017] border border-white/10">
+              <p className="text-xs font-sans text-slate-400 leading-relaxed p-2.5 rounded-[10px] bg-[#0c1017]">
                 Pratinjau read-only — masuk sebagai Dispatcher untuk verifikasi operator dan commit.
               </p>
             ) : (
@@ -649,13 +648,13 @@ export function RouteDetailModal({
                 return (
                   <label
                     key={item.id}
-                    className="flex items-start gap-2.5 p-2 rounded-lg bg-[#0c1017] border border-white/10 cursor-pointer hover:border-cyan-500/40 transition text-xs font-sans text-slate-200"
+                    className="flex items-start gap-2.5 p-2 rounded-[10px] bg-[#0c1017] cursor-pointer hover:border-white/15 transition text-xs font-sans text-slate-200"
                   >
                     <input
                       type="checkbox"
                       checked={isChecked}
                       onChange={() => toggleCheck(item.id)}
-                      className="mt-0.5 w-4 h-4 accent-cyan-400 cursor-pointer"
+                      className="mt-0.5 w-4 h-4 accent-[#38b8f8] cursor-pointer"
                     />
                     <span>{item.label}</span>
                   </label>
@@ -667,15 +666,15 @@ export function RouteDetailModal({
             </div>
 
             {isSandbox ? (
-              <p className="text-xs font-sans text-slate-400 leading-relaxed p-2.5 rounded-lg bg-[#0c1017] border border-white/10">
+              <p className="text-xs font-sans text-slate-400 leading-relaxed p-2.5 rounded-[10px] bg-[#0c1017]">
                 Pratinjau read-only — tidak ada commit operasional pada peran ini.
               </p>
             ) : (
               <>
                 <div className="space-y-1">
-                  <label htmlFor="operator-notes" className="text-[11px] font-sans font-medium text-slate-300 flex items-center justify-between">
+                  <label htmlFor="operator-notes" className="text-xs font-sans font-medium text-slate-300 flex items-center justify-between">
                     <span>Catatan operator</span>
-                    <span className="text-[10px] font-mono text-amber-400/90">*Wajib untuk HOLD &amp; OVERRIDE</span>
+                    <span className="text-xs font-mono text-amber-400/90">*Wajib untuk HOLD &amp; OVERRIDE</span>
                   </label>
                   <textarea
                     id="operator-notes"
@@ -683,7 +682,7 @@ export function RouteDetailModal({
                     onChange={(e) => setNotes(e.target.value)}
                     placeholder="Catatan operator: alasan penahanan depo / justifikasi rute asal (HOLD / OVERRIDE)..."
                     rows={2}
-                    className="w-full bg-[#0c1017] border border-white/10 focus:border-cyan-500/50 rounded-lg p-2.5 text-xs font-mono text-slate-200 placeholder:text-slate-500 focus:outline-none transition-colors"
+                    className="w-full bg-[#0c1017] border border-white/10 focus:border-white/15 rounded-[10px] p-2.5 text-xs font-mono text-slate-200 placeholder:text-slate-500 focus:outline-none transition-colors"
                   />
                 </div>
                 {!hasEvidence && (
@@ -707,7 +706,7 @@ export function RouteDetailModal({
                         ? 'Lengkapi 4/4 verifikasi checklist'
                         : 'Setujui pengalihan rute armada'
                     }
-                    className="cursor-pointer py-2.5 px-3 rounded-lg bg-cyan-500 hover:bg-cyan-400 disabled:opacity-40 disabled:cursor-not-allowed text-[#080d14] text-xs font-sans font-bold flex items-center justify-center gap-1.5 transition-all shadow-lg shadow-cyan-950/40"
+                    className="cursor-pointer py-2.5 px-3 rounded-[10px] bg-white hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed text-[#080d14] text-xs font-sans font-bold flex items-center justify-center gap-1.5 transition-all "
                   >
                     <span>Setujui Pengalihan</span>
                   </button>
@@ -723,7 +722,7 @@ export function RouteDetailModal({
                         ? 'Lengkapi 4/4 verifikasi checklist'
                         : 'Tahan armada di buffer zone / depo'
                     }
-                    className="cursor-pointer py-2.5 px-3 rounded-lg bg-amber-600/90 hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-sans font-semibold flex items-center justify-center gap-1.5 transition-all shadow-lg shadow-amber-950/40"
+                    className="cursor-pointer py-2.5 px-3 rounded-[10px] bg-amber-600/90 hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-sans font-semibold flex items-center justify-center gap-1.5 transition-all "
                   >
                     <span>Tahan Armada</span>
                   </button>
@@ -743,7 +742,7 @@ export function RouteDetailModal({
                         ? 'Lengkapi 4/4 verifikasi checklist'
                         : 'Lanjut rute asal dengan justifikasi operator'
                     }
-                    className="cursor-pointer py-2.5 px-3 rounded-lg bg-[#121822] hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 border border-white/10 text-xs font-sans font-medium flex items-center justify-center gap-1.5 transition-all"
+                    className="cursor-pointer py-2.5 px-3 rounded-[10px] bg-[#121822] hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 border border-white/10 text-xs font-sans font-medium flex items-center justify-center gap-1.5 transition-all"
                   >
                     <span>Lanjut Jalur Asal</span>
                   </button>
@@ -752,7 +751,7 @@ export function RouteDetailModal({
                   type="button"
                   onClick={onClose}
                   disabled={isActing}
-                  className="cursor-pointer w-full py-2 px-3 rounded-lg bg-transparent hover:bg-white/5 disabled:opacity-40 text-slate-400 hover:text-slate-200 text-xs font-sans transition-all text-center border border-white/5"
+                  className="cursor-pointer w-full py-2 px-3 rounded-[10px] bg-transparent hover:bg-white/5 disabled:opacity-40 text-slate-400 hover:text-slate-200 text-xs font-sans transition-all text-center border border-white/5"
                 >
                   Batal / Tutup
                 </button>
@@ -772,7 +771,7 @@ export function RouteDetailModal({
           </section>
 
           {/* Prinsip Operasional 20/80 */}
-          <div className="p-3 rounded-xl bg-[#080d14] border border-white/10 text-[11px] font-sans text-slate-400 leading-relaxed space-y-1">
+          <div className="p-3 rounded-xl bg-[#080d14] border border-white/10 text-xs font-sans text-slate-400 leading-relaxed space-y-1">
             <span className="font-semibold text-slate-200">
               <span>Prinsip Operasional 20/80</span>
             </span>

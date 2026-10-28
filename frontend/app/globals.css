@@ -146,3 +146,258 @@ html, body, #__next {
 .mapboxgl-compact {
   display: none !important;
 }
+
+/* ── Overlay motion (M9 phase 176) ────────────────────────────────────────
+   Purposeful only: drawers slide from the right, modals fade + scale .98 → 1,
+   popovers fade + 2px rise. Transform/opacity only, one easing, 220–260ms for
+   enters, 120–150ms for hover. No bounce, no spring overshoot, never animated
+   layout height. All of it collapses under prefers-reduced-motion below. */
+:root {
+  --ds-duration-enter: 240ms;
+  --ds-duration-modal: 220ms;
+  --ds-duration-hover: 140ms;
+}
+
+/* Drawers (Armada roster, HITL review) — slide in from the right edge. */
+[data-slot="hitl-drawer-content"],
+[data-slot="armada-drawer-content"] {
+  transition:
+    transform var(--ds-duration-enter) var(--ds-ease),
+    opacity var(--ds-duration-enter) var(--ds-ease);
+}
+
+[data-slot="hitl-drawer-content"][data-starting-style],
+[data-slot="hitl-drawer-content"][data-ending-style],
+[data-slot="armada-drawer-content"][data-starting-style],
+[data-slot="armada-drawer-content"][data-ending-style] {
+  opacity: 0;
+  transform: translateX(100%);
+}
+
+/* Modals (route detail, auth) — fade + scale from .98, never a slide. */
+[data-slot="alert-dialog-content"] {
+  transition:
+    transform var(--ds-duration-modal) var(--ds-ease),
+    opacity var(--ds-duration-modal) var(--ds-ease);
+}
+
+[data-slot="alert-dialog-content"][data-starting-style],
+[data-slot="alert-dialog-content"][data-ending-style] {
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.98);
+}
+
+/* Backdrops ride the same clock so the panel never floats over a hard cut. */
+[data-slot="hitl-drawer-backdrop"],
+[data-slot="armada-drawer-backdrop"],
+[data-slot="alert-dialog-backdrop"] {
+  transition: opacity var(--ds-duration-modal) var(--ds-ease);
+}
+
+[data-slot="hitl-drawer-backdrop"][data-starting-style],
+[data-slot="hitl-drawer-backdrop"][data-ending-style],
+[data-slot="armada-drawer-backdrop"][data-starting-style],
+[data-slot="armada-drawer-backdrop"][data-ending-style],
+[data-slot="alert-dialog-backdrop"][data-starting-style],
+[data-slot="alert-dialog-backdrop"][data-ending-style] {
+  opacity: 0;
+}
+
+/* Hover/press — 140ms, opacity/transform only. */
+.ds-pressable {
+  transition:
+    opacity var(--ds-duration-hover) var(--ds-ease),
+    transform var(--ds-duration-hover) var(--ds-ease);
+}
+.ds-pressable:hover {
+  opacity: 0.92;
+}
+.ds-pressable:active {
+  transform: scale(0.99);
+}
+
+/* ── Live hazard pulse (2.4s, CSS only) ───────────────────────────────────
+   Exactly one element per viewport, and only while a genuinely live hazard
+   feed is present. Never on a resting status dot. */
+@keyframes ds-live-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.18);
+  }
+}
+
+.ds-live-pulse {
+  animation: ds-live-pulse 2.4s var(--ds-ease) infinite;
+}
+
+/* ── Map tooltip / popover contract (M9 phase 176) ────────────────────────
+   Mapbox renders popups outside the React tree, so this surface must live in
+   global CSS. #0c1017, 1px white-alpha border, 10px radius, 12px text, no
+   arrow, no gradient, one soft shadow, 320px max. */
+.mapboxgl-popup {
+  max-width: 320px !important;
+}
+
+.mapboxgl-popup-content {
+  background: transparent !important;
+  border-radius: 10px !important;
+  box-shadow: none !important;
+  color: #e8eaed;
+  font-size: 12px;
+  padding: 0 !important;
+}
+
+/* No arrow ornament: the container is a plain rectangle. */
+.mapboxgl-popup-tip {
+  display: none !important;
+}
+
+.mapboxgl-popup-close-button {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(232, 234, 237, 0.38);
+  font-size: 14px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.mapboxgl-popup-close-button:hover {
+  color: #e8eaed;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.ds-popup {
+  box-sizing: border-box;
+  min-width: 180px;
+  max-width: 320px;
+  padding: 10px 12px;
+  background: #0c1017;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  color: #e8eaed;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: left;
+  animation: ds-popup-rise 140ms var(--ds-ease) both;
+}
+
+/* Popover entrance: fade + 2px rise. Never a scale, never a bounce. */
+@keyframes ds-popup-rise {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ds-popup__title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 18px 8px 0;
+}
+
+.ds-popup__name {
+  color: #e8eaed;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ds-popup__meta {
+  color: rgba(232, 234, 237, 0.62);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ds-popup__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ds-popup__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.ds-popup__label {
+  color: rgba(232, 234, 237, 0.62);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.ds-popup__value {
+  color: #e8eaed;
+  font-size: 12px;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.ds-popup__value--num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+.ds-popup__rule {
+  height: 1px;
+  margin: 8px 0 6px;
+  border: 0;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.ds-popup__footer {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: rgba(232, 234, 237, 0.38);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.ds-popup__source,
+.ds-popup__updated {
+  overflow-wrap: anywhere;
+}
+
+/* ── Reduced motion ───────────────────────────────────────────────────────
+   Honoured everywhere, no exceptions: transitions to ~0s, animations off
+   (including the live hazard pulse and the popup rise). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0s !important;
+    transition-delay: 0s !important;
+    scroll-behavior: auto !important;
+  }
+
+  .ds-live-pulse,
+  .ds-popup {
+    animation: none !important;
+  }
+
+  .ds-pressable:active {
+    transform: none !important;
+  }
+}

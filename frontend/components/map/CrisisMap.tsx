@@ -27,6 +27,11 @@ import {
 import { api } from '@/lib/api';
 import { resolvePopoverDualMetric } from '@/lib/tripCostCalculator';
 import {
+  buildFirmsClusterPopup,
+  buildFirmsPopup,
+  buildWeatherPopup,
+} from '@/components/map/mapPopup';
+import {
   Layers,
   Check,
   Search,
@@ -273,6 +278,21 @@ function isHighConfHotspot(h: { confidence?: number; frp?: number }): boolean {
   const conf = Number(h.confidence ?? 0) || 0;
   const frp = Number(h.frp ?? 0) || 0;
   return conf >= 80 || frp > 100;
+}
+
+/**
+ * Phase 176: gate for the narrow map-tooltip E2E hook. Production builds never
+ * install it — the hook exists only when the harness builds with
+ * NEXT_PUBLIC_E2E=1 or explicitly opts in with `?e2e=1`.
+ */
+export function isE2EHookEnabled(): boolean {
+  if (process.env.NEXT_PUBLIC_E2E === '1') return true;
+  if (typeof window === 'undefined') return false;
+  try {
+    return new URLSearchParams(window.location.search).get('e2e') === '1';
+  } catch {
+    return false;
+  }
 }
 
 export interface HotspotCluster {
@@ -779,6 +799,115 @@ export default function CrisisMap({
     if (typeof window !== 'undefined') {
       (window as any)._mapboxMap = map;
       (window as any).mapboxMap = map;
+    }
+
+    // ── Phase 176 map tooltips ────────────────────────────────────────────
+    // Weather polygons and FIRMS hotspots open the single distilled popup
+    // (components/map/mapPopup.ts): one surface, escaped values, 6-row budget,
+    // rule + source/freshness footer. Defined before style load so the E2E hook
+    // below can drive the exact same handler a real click uses.
+    const POPUP_TEST_LNGLAT = { lng: 98.6722, lat: 3.5952 };
+
+    const fakePopupEvent = (properties: Record<string, unknown>) =>
+      ({
+        features: [{ properties }],
+        lngLat: POPUP_TEST_LNGLAT,
+        point: { x: 0, y: 0 },
+      }) as unknown as mapboxgl.MapLayerMouseEvent;
+
+    const openDistilledPopup = (event: mapboxgl.MapLayerMouseEvent, html: string) => {
+      new mapboxgl.Popup({ closeButton: true, closeOnClick: true, maxWidth: '320px' })
+        .setLngLat(event.lngLat)
+        .setHTML(html)
+        .addTo(map);
+    };
+
+    // Weather polygon click → dispatch-enriched provenance popup (hazard/impact/corridor/delay/action/modalities/confidence).
+    const handleWeatherClick = (e: mapboxgl.MapLayerMouseEvent) => {
+      if (isClickTargetingRef.current) return;
+      if (!e.features || e.features.length === 0) return;
+      const props: any = e.features[0].properties || {};
+      let modalities = props.affected_modalities ?? '-';
+      try {
+        if (typeof modalities === 'string' && modalities.trim().startsWith('[')) {
+          modalities = (JSON.parse(modalities) as unknown[]).join(', ');
+        } else if (Array.isArray(modalities)) {
+          modalities = (modalities as unknown[]).join(', ');
+        }
+      } catch { /* keep raw */ }
+      openDistilledPopup(
+        e,
+        buildWeatherPopup({
+          name: props.name || 'Waspada Dini',
+          severity: props.severity,
+          bmkgCode: props.bmkg_code,
+          hazardType: props.hazard_type,
+          precipitationMm24h: props.precipitation_mm_24h,
+          floodRiskPct: props.flood_risk_pct,
+          windspeedKmh: props.windspeed_kmh ?? props.wind_speed_kmh,
+          corridorId: props.corridor_id ?? props.corridor_intersect,
+          corridorSegment: props.corridor_segment
+            ?? (typeof props.corridor_intersect === 'string' ? props.corridor_intersect : undefined),
+          distToCorridorKm: props.dist_to_corridor_km,
+          delayHours: props.delay_hours ?? props.estimated_delay_hours,
+          action: props.advisory_action,
+          modalities,
+          confidence: props.confidence,
+          observedVsForecast: props.observed_vs_forecast,
+          source: props.source || props.bmkg_source || 'BMKG / Open-Meteo',
+          updatedAt: props.valid_until || props.updated_at || '-',
+        }),
+      );
+    };
+
+    // Q3: FIRMS hotspot click → count + FRP / conf / dist-to-corridor provenance.
+    // Cluster highlight circles report the cluster; raw dots report the single detection.
+    const handleFirmsClick = (e: mapboxgl.MapLayerMouseEvent) => {
+      if (isClickTargetingRef.current) return;
+      if (!e.features || e.features.length === 0) return;
+      const props: any = e.features[0].properties || {};
+      const clusterCount = Number(props.cluster_count ?? 0) || 0;
+      const updatedAt = props.ts || props.updated_at || props.date || '-';
+      if (clusterCount >= 3) {
+        openDistilledPopup(
+          e,
+          buildFirmsClusterPopup({
+            count: clusterCount,
+            maxFrp: props.max_frp,
+            maxConfidence: props.max_confidence,
+            minDistKm: props.min_dist_km,
+            radiusKm: props.radius_km,
+            source: props.source || 'VIIRS_SNPP_NRT',
+            updatedAt,
+          }),
+        );
+        return;
+      }
+      openDistilledPopup(
+        e,
+        buildFirmsPopup({
+          title: props.title || 'Titik Panas VIIRS',
+          frp: props.frp,
+          conf: props.conf ?? props.confidence,
+          severity: props.severity,
+          distToCorridorKm: props.dist_to_corridor_km,
+          radiusKm: props.radius_km,
+          nearSegment: props.near_segment,
+          source: props.source || 'VIIRS_SNPP_NRT',
+          updatedAt,
+        }),
+      );
+    };
+
+    // Narrow E2E hook: opens the production popup path with synthetic feature
+    // properties. Production never installs it unless NEXT_PUBLIC_E2E=1.
+    if (typeof window !== 'undefined' && isE2EHookEnabled()) {
+      (window as any).__crisisMapTest = {
+        openWeatherPopup: (properties: Record<string, unknown>) =>
+          handleWeatherClick(fakePopupEvent(properties)),
+        openFirmsPopup: (properties: Record<string, unknown>) =>
+          handleFirmsClick(fakePopupEvent(properties)),
+      };
     }
 
     map.on('mousedown', (e) => {
@@ -1568,90 +1697,12 @@ export default function CrisisMap({
         });
       });
 
-      // Weather polygon click → dispatch-enriched provenance popup (hazard/impact/corridor/delay/action/modalities/confidence).
-      const handleWeatherClick = (e: mapboxgl.MapLayerMouseEvent) => {
-        if (isClickTargetingRef.current) return;
-        if (!e.features || e.features.length === 0) return;
-        const props: any = e.features[0].properties || {};
-        const source = props.source || props.bmkg_source || 'BMKG / Open-Meteo';
-        const validUntil = props.valid_until || props.updated_at || '-';
-        const name = props.name || 'Waspada Dini';
-        const precip = props.precipitation_mm_24h ?? '?';
-        const flood = props.flood_risk_pct ?? '?';
-        const wind = props.windspeed_kmh ?? props.wind_speed_kmh ?? '?';
-        const sev = props.severity ?? '?';
-        const code = props.bmkg_code ?? '-';
-        const hazardType = props.hazard_type ?? '-';
-        const corridorId = props.corridor_id ?? props.corridor_intersect ?? '-';
-        const corridorSeg = props.corridor_segment ?? (typeof props.corridor_intersect === 'string' ? props.corridor_intersect : '-');
-        const corridorDist = props.dist_to_corridor_km ?? '?';
-        const delayH = props.delay_hours ?? props.estimated_delay_hours ?? '?';
-        const action = props.advisory_action ?? '-';
-        let modalities = props.affected_modalities ?? '-';
-        try {
-          if (typeof modalities === 'string' && modalities.trim().startsWith('[')) {
-            modalities = (JSON.parse(modalities) as unknown[]).join(', ');
-          } else if (Array.isArray(modalities)) {
-            modalities = (modalities as unknown[]).join(', ');
-          }
-        } catch { /* keep raw */ }
-        const conf = props.confidence ?? '?';
-        const obsFc = props.observed_vs_forecast ?? '-';
-        new mapboxgl.Popup({ closeButton: true, closeOnClick: true })
-          .setLngLat(e.lngLat)
-          .setHTML(
-            `<div style="font:12px system-ui;color:#0c1017;max-width:280px"><strong>${String(name).slice(0, 120)}</strong><br/>` +
-            `severity: ${String(sev).slice(0, 16)}${code !== '-' ? ` · BMKG code ${String(code).slice(0, 8)}` : ''} · hazard: ${String(hazardType).slice(0, 24)}<br/>` +
-            `presipitasi: ${String(precip)} mm/24j · banjir: ${String(flood)}% · angin: ${String(wind)} km/j<br/>` +
-            `koridor: ${String(corridorId).slice(0, 80)} · ${String(corridorSeg).slice(0, 80)} (${String(corridorDist)} km)<br/>` +
-            `dampak: +${String(delayH)} jam · aksi: ${String(action).slice(0, 32)} · moda: ${String(modalities).slice(0, 60)}<br/>` +
-            `confidence: ${String(conf)} (${String(obsFc).slice(0, 16)})<br/>` +
-            `sumber: ${String(source).slice(0, 120)}<br/>valid_until: ${String(validUntil).slice(0, 64)}</div>`
-          )
-          .addTo(map);
-      };
+      // Weather polygon click → dispatch-enriched provenance popup. The handler
+      // (and its distilled HTML) is defined above the style-load block.
       map.on('click', 'weather-polygons-fill', handleWeatherClick);
       map.on('click', 'weather-polygons-outline', handleWeatherClick);
 
       // Q3: FIRMS hotspot click → count + FRP / conf / dist-to-corridor provenance.
-      // Cluster highlight circles report the cluster; raw dots report the single detection.
-      const handleFirmsClick = (e: mapboxgl.MapLayerMouseEvent) => {
-        if (isClickTargetingRef.current) return;
-        if (!e.features || e.features.length === 0) return;
-        const props: any = e.features[0].properties || {};
-        const clusterCount = Number(props.cluster_count ?? 0) || 0;
-        if (clusterCount >= 3) {
-          const maxFrp = props.max_frp ?? '?';
-          const maxConf = props.max_confidence ?? '?';
-          const minDist = props.min_dist_km ?? '?';
-          new mapboxgl.Popup({ closeButton: true, closeOnClick: true })
-            .setLngLat(e.lngLat)
-            .setHTML(
-              `<div style="font:12px system-ui;color:#0c1017"><strong>Zona Titik Panas (Satelit) — ${clusterCount} titik</strong><br/>` +
-              `FRP maks: ${String(maxFrp)} MW · conf maks: ${String(maxConf)}<br/>` +
-              `jarak koridor terdekat: ${String(minDist)} km · radius: ${String(props.radius_km ?? '?')} km<br/>` +
-              `sumber: VIIRS_SNPP_NRT (sorotan bila ≥3 titik keyakinan tinggi dalam 5 km)</div>`
-            )
-            .addTo(map);
-          return;
-        }
-        const frp = props.frp ?? '?';
-        const conf = props.conf ?? props.confidence ?? '?';
-        const dist = props.dist_to_corridor_km ?? '?';
-        const radiusKm = props.radius_km ?? '?';
-        const severity = props.severity ?? '-';
-        const nearSeg = props.near_segment ?? '-';
-        const title = props.title || 'Titik Panas VIIRS';
-        new mapboxgl.Popup({ closeButton: true, closeOnClick: true })
-          .setLngLat(e.lngLat)
-          .setHTML(
-            `<div style="font:12px system-ui;color:#0c1017"><strong>${String(title).slice(0, 120)}</strong><br/>` +
-            `FRP: ${String(frp)} MW · conf: ${String(conf)} · severity: ${String(severity)}<br/>` +
-            `jarak koridor: ${String(dist)} km · radius: ${String(radiusKm)} km<br/>` +
-            `segmen: ${String(nearSeg).slice(0, 120)}</div>`
-          )
-          .addTo(map);
-      };
       map.on('click', 'firms-dots', handleFirmsClick);
       map.on('click', 'firms-dots-outline', handleFirmsClick);
       map.on('click', 'firms-areas-fill', handleFirmsClick);

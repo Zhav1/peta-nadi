@@ -81,7 +81,7 @@ export const DS = {
     durationMax: 300,
     ease: 'cubic-bezier(0.4, 0, 0.2, 1)',
     /** Exactly one live-hazard pulse per viewport; reduced-motion kills it. */
-    livePulseMs: 1800,
+    livePulseMs: 2400,
     reducedMotionQuery: '(prefers-reduced-motion: reduce)',
   },
   /** Phase 176 overlay contract — one tooltip/popover system. */

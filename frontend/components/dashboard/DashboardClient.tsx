@@ -141,6 +141,7 @@ function FloatingMapLegend({
   bootstrapComputedAt = null,
   bootstrapStale = false,
   bootstrapReason = null,
+  liveFireCluster = false,
 }: {
   isOpen: boolean;
   onToggle: () => void;
@@ -165,7 +166,14 @@ function FloatingMapLegend({
   /** Phase 163b: the backend served a bounded live build / stored row. */
   bootstrapStale?: boolean;
   bootstrapReason?: string | null;
+  /** Phase 176: >=3 high-confidence FIRMS detections — genuinely live cluster. */
+  liveFireCluster?: boolean;
 }) {
+  // Exactly one live pulse per viewport, only while the feed is genuinely live:
+  // a critical weather zone wins over a FIRMS cluster. Never at rest.
+  const liveHazardPulse: 'critical' | 'cluster' | null =
+    weatherDisruptionCount > 0 ? 'critical' : liveFireCluster ? 'cluster' : null;
+
   return (
     <div className="relative pointer-events-auto">
       <button
@@ -286,7 +294,12 @@ function FloatingMapLegend({
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full border border-[#ef4444] bg-[#ef4444]/15 shrink-0" />
+              <span
+                data-live-hazard={liveHazardPulse === 'critical' ? 'critical' : undefined}
+                className={`w-2.5 h-2.5 rounded-full border border-[#ef4444] bg-[#ef4444]/15 shrink-0 ${
+                  liveHazardPulse === 'critical' ? 'ds-live-pulse' : ''
+                }`}
+              />
               <div>
                 <span className="text-[#e8eaed] font-medium block">Zona Radius Bahaya (Shockwave)</span>
                 <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Area bahaya hasil konsensus BMKG dan OSINT.</span>
@@ -302,7 +315,12 @@ function FloatingMapLegend({
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-[#f59e0b]/70 shrink-0" />
+              <span
+                data-live-hazard={liveHazardPulse === 'cluster' ? 'cluster' : undefined}
+                className={`w-2.5 h-2.5 rounded-full bg-[#f59e0b]/70 shrink-0 ${
+                  liveHazardPulse === 'cluster' ? 'ds-live-pulse' : ''
+                }`}
+              />
               <div>
                 <span className="text-[#e8eaed] font-medium block">Titik Panas (Satelit) — sorotan bila ≥3 titik keyakinan tinggi dalam 5 km</span>
                 <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Titik netral per deteksi VIIRS; sorotan amber khusus peta bila ≥3 titik keyakinan tinggi (conf ≥80 atau FRP&gt;100) dalam 5 km. Klik area/titik = jumlah + FRP/conf/jarak koridor.</span>
@@ -700,6 +718,31 @@ export default function DashboardClient() {
   const [isAlertQueueDismissed, setIsAlertQueueDismissed] = useState(false);
   const [isHitlDrawerOpen, setIsHitlDrawerOpen] = useState(false);
   const [pendingHitlCount, setPendingHitlCount] = useState<number>(0);
+
+  /**
+   * Phase 176 — narrow test-only hook. The HITL drawer has no production
+   * trigger in the current shell, so the reduced-motion gate needs a way to
+   * mount it. Gated exactly like the map tooltip hook: never installed unless
+   * the harness opts in with NEXT_PUBLIC_E2E=1 or `?e2e=1`.
+   */
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    let enabled = process.env.NEXT_PUBLIC_E2E === '1';
+    if (!enabled) {
+      try {
+        enabled = new URLSearchParams(window.location.search).get('e2e') === '1';
+      } catch {
+        enabled = false;
+      }
+    }
+    if (!enabled) return;
+    (window as any).__dsTest = {
+      openHitlDrawer: () => setIsHitlDrawerOpen(true),
+    };
+    return () => {
+      delete (window as any).__dsTest;
+    };
+  }, []);
 
   // Crisis switches must never leave the previous incident's DSS queue on screen:
   // the alert card and the Mitigation vehicle card both read these two states.
@@ -1594,6 +1637,17 @@ export default function DashboardClient() {
   // Phase 168: counter = true pre-cap hotspot count from the envelope.
   // null (degraded) renders "—" in TopNavTelemetry, never a 0.
   const fireHotspotCount = fireCount;
+
+  // Phase 176: the one live-hazard pulse. A cluster only counts as live when
+  // >=3 high-confidence detections exist — the same per-point gate the map's
+  // 5 km single-link cluster highlight uses (conf >= 80 or FRP > 100).
+  const liveFireCluster = useMemo(
+    () =>
+      (fireHotspots ?? []).filter(
+        (h) => (Number(h.confidence ?? 0) || 0) >= 80 || (Number(h.frp ?? 0) || 0) > 100
+      ).length >= 3,
+    [fireHotspots]
+  );
 
 
 
@@ -4091,6 +4145,7 @@ export default function DashboardClient() {
                         ? `Snapshot tertunda (${bootstrap.data?.reason ?? 'usia snapshot > 10 mnt'})`
                         : 'Snapshot DB segar'
                     }
+                    liveFireCluster={liveFireCluster}
                   />
                 }
               />

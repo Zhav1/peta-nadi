@@ -39,13 +39,13 @@ export function DialogContent({ className, children, ...props }: DialogContentPr
     <BaseDialog.Portal>
       <BaseDialog.Backdrop
         data-slot="dialog-backdrop"
-        className="fixed inset-0 z-50 bg-black/70"
+        className="fixed inset-0 z-50 bg-[#080d14]/80"
       />
       <BaseDialog.Popup
         data-slot="dialog-content"
         {...props}
         className={cn(
-          'fixed left-1/2 top-1/2 z-50 w-[calc(100vw-32px)] max-w-[420px] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-white/10 bg-[#0c1017] p-6 text-xs text-slate-100 shadow-2xl outline-none',
+          'fixed left-1/2 top-1/2 z-50 w-[calc(100vw-32px)] max-w-[420px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-white/10 bg-[#0c1017] p-6 text-xs text-[#e8eaed] shadow-[0_12px_32px_rgba(0,0,0,0.4)] outline-none',
           className,
         )}
       >

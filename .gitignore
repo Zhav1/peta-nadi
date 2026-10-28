@@ -107,6 +107,8 @@ docs/validasi/
 # Manual and HKI build scripts
 frontend/scripts/*
 !frontend/scripts/test_*.ts
+# M9 phase 176: popup contract node test is a committed deliverable
+!frontend/scripts/test-*.ts
 !frontend/scripts/copy-standalone-assets.js
 # M9 phase 174: dashboard token baseline probe (deliverable, not a build script)
 !frontend/scripts/snapshot-dashboard-tokens.mjs

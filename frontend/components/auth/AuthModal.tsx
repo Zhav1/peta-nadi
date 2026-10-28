@@ -170,11 +170,11 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
  return (
  <AlertDialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
- <AlertDialogContent className="max-w-xl rounded-2xl border-white/10 bg-[#0c1017] p-0 shadow-2xl tabular-nums max-h-[90vh] overflow-hidden flex flex-col">
+ <AlertDialogContent className="max-w-xl rounded-xl border-white/10 bg-[#0c1017] p-0 shadow-[0_12px_32px_rgba(0,0,0,0.4)] tabular-nums max-h-[90vh] overflow-hidden flex flex-col">
  {/* Modal Header */}
  <AlertDialogHeader className="flex-row items-center justify-between gap-3 border-b border-white/10 px-6 py-4">
  <div className="flex items-center gap-3">
- <div className="w-8 h-8 rounded-md bg-[#0c1017] border border-white/10 flex items-center justify-center text-slate-300">
+ <div className="w-8 h-8 rounded-[10px] bg-white/5 flex items-center justify-center text-slate-300">
  <Shield className="w-4 h-4" />
  </div>
  <div>
@@ -192,7 +192,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
  id="close-auth-modal-btn"
  onClick={onClose}
  aria-label="Tutup dialog"
- className="p-1.5 rounded-md border border-white/10 bg-[#0c1017] text-slate-400 hover:text-white transition cursor-pointer"
+ className="p-1.5 rounded-[10px] border border-white/10 bg-[#0c1017] text-slate-400 hover:text-white transition cursor-pointer"
  title="Tutup dialog"
  >
  <X className="w-4 h-4" />
@@ -211,7 +211,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
  className={`cursor-pointer px-4 py-2 border-b-2 font-medium transition flex items-center gap-1.5 ${
  activeTab === 'password'
  ? 'border-white text-white bg-[#0c1017]'
- : 'border-transparent text-slate-400 hover:text-slate-200'
+ : 'border-transparent text-slate-400 hover:text-[#e8eaed]'
  }`}
  >
  <KeyRound className="w-3.5 h-3.5" />
@@ -227,7 +227,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
  className={`cursor-pointer px-4 py-2 border-b-2 font-medium transition flex items-center gap-1.5 ${
  activeTab === 'persona'
  ? 'border-white text-white bg-[#0c1017]'
- : 'border-transparent text-slate-400 hover:text-slate-200'
+ : 'border-transparent text-slate-400 hover:text-[#e8eaed]'
  }`}
  >
  <Sparkles className="w-3.5 h-3.5" />
@@ -243,7 +243,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
  className={`cursor-pointer px-4 py-2 border-b-2 font-medium transition flex items-center gap-1.5 ${
  activeTab === 'magic'
  ? 'border-white text-white bg-[#0c1017]'
- : 'border-transparent text-slate-400 hover:text-slate-200'
+ : 'border-transparent text-slate-400 hover:text-[#e8eaed]'
  }`}
  >
  <Mail className="w-3.5 h-3.5" />
@@ -255,7 +255,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
  {/* Status Alerts */}
  {statusMessage && (
  <div
- className={`mx-6 mt-4 p-3 rounded-md border text-xs font-sans flex items-center gap-2 ${
+ className={`mx-6 mt-4 p-3 rounded-[10px] border text-xs font-sans flex items-center gap-2 ${
  statusMessage.type === 'success'
  ? 'bg-emerald-950/30 border-emerald-500/30 text-emerald-300'
  : 'bg-red-950/30 border-red-500/30 text-red-300'
@@ -273,14 +273,14 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
  {/* Re-authentication notice: a supplied token was rejected by the backend.
      Shown explicitly so an expired session never silently becomes a guest view. */}
  {authNotice && !isAuthenticated && (
- <div className="mx-6 mt-4 p-3 rounded-md border text-xs font-sans flex items-start gap-2 bg-amber-950/25 border-amber-500/30 text-amber-200">
+ <div className="mx-6 mt-4 p-3 rounded-[10px] border text-xs font-sans flex items-start gap-2 bg-amber-950/25 border-amber-500/30 text-amber-200">
  <ShieldCheck className="w-4 h-4 shrink-0 text-amber-400 mt-0.5" />
  <div className="flex-1 space-y-1">
  <span className="block leading-relaxed">{authNotice}</span>
  <button
  type="button"
  onClick={clearAuthNotice}
- className="text-[11px] underline underline-offset-2 text-amber-300 hover:text-white transition cursor-pointer"
+ className="text-xs underline underline-offset-2 text-amber-300 hover:text-white transition cursor-pointer"
  >
  Tutup pemberitahuan
  </button>
@@ -293,10 +293,10 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
  {/* TAB 0: PROFIL AKUN (ACTIVE FOR AUTHENTICATED USERS) */}
  {activeTab === 'account' && (
  <div className="space-y-4">
- <div className="p-4 rounded-md bg-[#121822] border border-[#1c2432] space-y-4">
+ <div className="p-4 rounded-xl bg-[#121822] space-y-4">
  <div className="flex items-start justify-between">
  <div className="flex items-center gap-3">
- <div className="w-12 h-12 rounded-full bg-[#080d14] border border-white/20 flex items-center justify-center text-white font-bold text-base">
+ <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center text-white font-bold text-base">
  {user.name ? user.name.slice(0, 2).toUpperCase() : 'US'}
  </div>
  <div>
@@ -312,13 +312,13 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
  </div>
 
  <span className="flex items-center gap-1.5 text-xs text-slate-300">
- <span className={`w-1.5 h-1.5 rounded-full ${role === 'DISPATCHER' ? 'bg-cyan-400' : role === 'REGULATOR' ? 'bg-amber-400' : 'bg-emerald-400'}`} />
+ <span className={`w-1.5 h-1.5 rounded-full ${role === 'DISPATCHER' ? 'bg-[#38b8f8]' : role === 'REGULATOR' ? 'bg-amber-400' : 'bg-emerald-400'}`} />
  {role === 'DISPATCHER' ? 'Dispatcher' : role === 'REGULATOR' ? 'Regulator' : 'Tamu'}
  </span>
  </div>
 
  {/* Permissions Breakdown */}
- <div className="pt-3 border-t border-[#1c2432] space-y-2">
+ <div className="pt-3 border-t border-white/10 space-y-2">
  <span className="text-xs font-mono font-semibold text-slate-300 flex items-center gap-1.5">
  <ShieldCheck className="w-3.5 h-3.5 text-slate-400" />
  <span>Akses aktif:</span>
@@ -326,31 +326,31 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
  <div className="grid grid-cols-1 gap-1.5 text-xs font-sans text-slate-300">
  {role === 'DISPATCHER' && (
  <>
- <div className="p-2 rounded bg-[#080d14] border border-[#1c2432] flex items-center gap-2">
- <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+ <div className="p-2 rounded bg-[#080d14] flex items-center gap-2">
+ <CheckCircle2 className="w-3.5 h-3.5 text-[#38b8f8] shrink-0" />
  <span>Persetujuan Pengalihan Rute Darurat & Detour Operasional</span>
  </div>
- <div className="p-2 rounded bg-[#080d14] border border-[#1c2432] flex items-center gap-2">
- <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+ <div className="p-2 rounded bg-[#080d14] flex items-center gap-2">
+ <CheckCircle2 className="w-3.5 h-3.5 text-[#38b8f8] shrink-0" />
  <span>Pendaftaran Armada Baru & Integrasi Webhook GPS TMS</span>
  </div>
- <div className="p-2 rounded bg-[#080d14] border border-[#1c2432] flex items-center gap-2">
- <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+ <div className="p-2 rounded bg-[#080d14] flex items-center gap-2">
+ <CheckCircle2 className="w-3.5 h-3.5 text-[#38b8f8] shrink-0" />
  <span>Disposisi Instruksi Mitigasi ke WhatsApp Pengemudi</span>
  </div>
  </>
  )}
  {role === 'REGULATOR' && (
  <>
- <div className="p-2 rounded bg-[#080d14] border border-[#1c2432] flex items-center gap-2">
+ <div className="p-2 rounded bg-[#080d14] flex items-center gap-2">
  <CheckCircle2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
  <span>Pemantauan Spasial Makro & Heatmap Kerentanan Cuaca BMKG</span>
  </div>
- <div className="p-2 rounded bg-[#080d14] border border-[#1c2432] flex items-center gap-2">
+ <div className="p-2 rounded bg-[#080d14] flex items-center gap-2">
  <CheckCircle2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
  <span>Pemodelan Ekonometrika Pangan & Disparitas Harga PIHPS</span>
  </div>
- <div className="p-2 rounded bg-[#080d14] border border-[#1c2432] flex items-center gap-2">
+ <div className="p-2 rounded bg-[#080d14] flex items-center gap-2">
  <CheckCircle2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
  <span>Ekspor Laporan Situasi Kabinet B2G (Hanya Akses Tinjau/Read-Only)</span>
  </div>
@@ -358,15 +358,15 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
  )}
  {role === 'GUEST' && (
  <>
- <div className="p-2 rounded bg-[#080d14] border border-[#1c2432] flex items-center gap-2">
+ <div className="p-2 rounded bg-[#080d14] flex items-center gap-2">
  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
  <span>Pratinjau Peta & Koridor Logistik Sumatra</span>
  </div>
- <div className="p-2 rounded bg-[#080d14] border border-[#1c2432] flex items-center gap-2">
+ <div className="p-2 rounded bg-[#080d14] flex items-center gap-2">
  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
  <span>Simulasi Benchmark N=60 & Deteksi Anomali</span>
  </div>
- <div className="p-2 rounded bg-[#080d14] border border-[#1c2432] flex items-center gap-2">
+ <div className="p-2 rounded bg-[#080d14] flex items-center gap-2">
  <AlertCircle className="w-3.5 h-3.5 text-slate-400 shrink-0" />
  <span className="text-slate-400">Pendaftaran armada & mutasi rute terkunci (khusus operator terverifikasi)</span>
  </div>
@@ -376,8 +376,8 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
  </div>
 
  {/* Session Security Policy Note */}
- <div className="p-3 rounded-md bg-[#080d14] border border-[#1c2432] text-xs text-slate-300 space-y-1">
- <div className="flex items-center gap-1.5 text-slate-200 font-medium">
+ <div className="p-3 rounded-[10px] bg-[#080d14] text-xs text-slate-300 space-y-1">
+ <div className="flex items-center gap-1.5 text-[#e8eaed] font-medium">
  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
  <span>Sesi aktif</span>
  </div>
@@ -387,7 +387,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
  </div>
 
  {/* Logout Action */}
- <div className="pt-3 border-t border-[#1c2432] flex items-center justify-between">
+ <div className="pt-3 border-t border-white/10 flex items-center justify-between">
  <span className="text-xs text-slate-400 font-sans">
  Sesi tersinkronisasi aman melalui Supabase Auth
  </span>
@@ -395,7 +395,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
  type="button"
  onClick={handleLogout}
  disabled={isLoading}
- className="cursor-pointer px-3.5 py-1.5 rounded-md bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 text-rose-300 hover:text-white text-xs font-semibold transition flex items-center gap-1.5 shadow-sm"
+ className="cursor-pointer px-3.5 py-1.5 rounded-[10px] bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 text-rose-300 hover:text-white text-xs font-semibold transition flex items-center gap-1.5 shadow-sm"
  >
  <LogOut className="w-3.5 h-3.5" />
  <span>Keluar dari Sesi</span>
@@ -408,7 +408,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
  {activeTab === 'persona' && (
  <div className="space-y-4">
  {!isAuthenticated ? (
- <div className="p-3 rounded-md bg-amber-950/30 border border-amber-500/30 text-xs font-sans text-amber-200 leading-relaxed flex items-start gap-2.5">
+ <div className="p-3 rounded-[10px] bg-amber-950/30 border border-amber-500/30 text-xs font-sans text-amber-200 leading-relaxed flex items-start gap-2.5">
  <Lock className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
  <div className="space-y-2">
  <div>
@@ -423,7 +423,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
  setStatusMessage(null);
  setActiveTab('password');
  }}
- className="cursor-pointer px-2.5 py-1 rounded-md bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 hover:text-white text-xs font-semibold transition flex items-center gap-1.5"
+ className="cursor-pointer px-2.5 py-1 rounded-[10px] bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 hover:text-white text-xs font-semibold transition flex items-center gap-1.5"
  >
  <KeyRound className="w-3 h-3" />
  <span>Masuk dengan Kata Sandi / Akun</span>
@@ -431,7 +431,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
  </div>
  </div>
  ) : !isSandboxAccount ? (
- <div className="p-3.5 rounded-md bg-amber-950/20 border border-amber-500/30 text-xs font-sans text-amber-200">
+ <div className="p-3.5 rounded-[10px] bg-amber-950/20 border border-amber-500/30 text-xs font-sans text-amber-200">
  <div className="flex items-center gap-2 font-semibold text-amber-300">
  <Lock className="w-4 h-4 text-amber-400 shrink-0" />
  <span>Akun Organisasi Enterprise Terkunci</span>
@@ -441,7 +441,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
  </p>
  </div>
  ) : (
- <div className="p-3 rounded-md bg-[#121822] border border-[#1c2432] text-xs font-sans text-slate-300 leading-relaxed">
+ <div className="p-3 rounded-[10px] bg-[#121822] text-xs font-sans text-slate-300 leading-relaxed">
  Pilih persona di bawah untuk menguji adaptasi antarmuka, hak akses navigasi, dan wewenang operasional secara instan dalam lingkungan sandbox.
  </div>
  )}
@@ -452,17 +452,17 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
  type="button"
  onClick={() => handlePersonaSelect('DISPATCHER')}
  disabled={isLoading || !isSandboxAccount}
- className={`w-full text-left p-4 rounded-md border transition-colors duration-150 flex flex-col gap-2 relative overflow-hidden group ${
+ className={`w-full text-left p-4 rounded-[10px] border transition-colors duration-150 flex flex-col gap-2 relative overflow-hidden group ${
  !isAuthenticated || !isSandboxAccount ? 'opacity-50 cursor-not-allowed ' : 'cursor-pointer '
  }${
  role === 'DISPATCHER'
  ? 'bg-[#121822] border-white shadow-sm'
- : 'bg-[#0c1017] border-[#1c2432] hover:border-slate-500 hover:bg-[#121822]'
+ : 'bg-[#0c1017] border-white/10 hover:border-slate-500 hover:bg-[#121822]'
  }`}
  >
  <div className="flex items-center justify-between">
  <div className="flex items-center gap-2.5">
- <div className="w-8 h-8 rounded-md bg-[#0c1017] border border-[#1c2432] text-slate-300 flex items-center justify-center">
+ <div className="w-8 h-8 rounded-[10px] bg-white/5 text-slate-300 flex items-center justify-center">
  <Truck className="w-4 h-4" />
  </div>
  <div>
@@ -489,14 +489,14 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
  Wewenang penuh koordinasi rute bypass, manajemen armada truk/kapal, manifest kargo, serta menyetujui pengalihan rute darurat.
  </p>
 
- <div className="flex items-center gap-1.5 pt-1 border-t border-[#1c2432] text-xs font-mono text-slate-400">
- <span className="px-1.5 py-0.5 rounded bg-[#080d14] border border-[#1c2432]">
+ <div className="flex items-center gap-1.5 pt-1 border-t border-white/10 text-xs font-mono text-slate-400">
+ <span className="px-1.5 py-0.5 rounded bg-white/5">
  Rute Darurat
  </span>
- <span className="px-1.5 py-0.5 rounded bg-[#080d14] border border-[#1c2432]">
+ <span className="px-1.5 py-0.5 rounded bg-white/5">
  Persetujuan Detour
  </span>
- <span className="px-1.5 py-0.5 rounded bg-[#080d14] border border-[#1c2432]">
+ <span className="px-1.5 py-0.5 rounded bg-white/5">
  Unggah Manifest
  </span>
  </div>
@@ -507,17 +507,17 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
  type="button"
  onClick={() => handlePersonaSelect('REGULATOR')}
  disabled={isLoading || !isSandboxAccount}
- className={`w-full text-left p-4 rounded-md border transition-colors duration-150 flex flex-col gap-2 relative overflow-hidden group ${
+ className={`w-full text-left p-4 rounded-[10px] border transition-colors duration-150 flex flex-col gap-2 relative overflow-hidden group ${
  !isAuthenticated || !isSandboxAccount ? 'opacity-50 cursor-not-allowed ' : 'cursor-pointer '
  }${
  role === 'REGULATOR'
  ? 'bg-[#121822] border-white shadow-sm'
- : 'bg-[#0c1017] border-[#1c2432] hover:border-slate-500 hover:bg-[#121822]'
+ : 'bg-[#0c1017] border-white/10 hover:border-slate-500 hover:bg-[#121822]'
  }`}
  >
  <div className="flex items-center justify-between">
  <div className="flex items-center gap-2.5">
- <div className="w-8 h-8 rounded-md bg-[#0c1017] border border-[#1c2432] text-slate-300 flex items-center justify-center">
+ <div className="w-8 h-8 rounded-[10px] bg-white/5 text-slate-300 flex items-center justify-center">
  <Scale className="w-4 h-4" />
  </div>
  <div>
@@ -544,14 +544,14 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
  Pengawasan stabilitas koridor makro, analisis disparitas harga komoditas pangan PIHPS, dan ekspor laporan kabinet B2G.
  </p>
 
- <div className="flex items-center gap-1.5 pt-1 border-t border-[#1c2432] text-xs font-mono text-slate-400">
- <span className="px-1.5 py-0.5 rounded bg-[#080d14] border border-[#1c2432]">
+ <div className="flex items-center gap-1.5 pt-1 border-t border-white/10 text-xs font-mono text-slate-400">
+ <span className="px-1.5 py-0.5 rounded bg-white/5">
  Heatmap Kerentanan
  </span>
- <span className="px-1.5 py-0.5 rounded bg-[#080d14] border border-[#1c2432]">
+ <span className="px-1.5 py-0.5 rounded bg-white/5">
  Analitik PIHPS
  </span>
- <span className="px-1.5 py-0.5 rounded bg-[#080d14] border border-[#1c2432]">
+ <span className="px-1.5 py-0.5 rounded bg-white/5">
  Briefing Kabinet
  </span>
  </div>
@@ -562,17 +562,17 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
  type="button"
  onClick={() => handlePersonaSelect('GUEST')}
  disabled={isLoading || !isSandboxAccount}
- className={`w-full text-left p-4 rounded-md border transition-colors duration-150 flex flex-col gap-2 relative overflow-hidden group ${
+ className={`w-full text-left p-4 rounded-[10px] border transition-colors duration-150 flex flex-col gap-2 relative overflow-hidden group ${
  !isAuthenticated || !isSandboxAccount ? 'opacity-50 cursor-not-allowed ' : 'cursor-pointer '
  }${
  role === 'GUEST'
  ? 'bg-[#121822] border-white shadow-sm'
- : 'bg-[#0c1017] border-[#1c2432] hover:border-slate-500 hover:bg-[#121822]'
+ : 'bg-[#0c1017] border-white/10 hover:border-slate-500 hover:bg-[#121822]'
  }`}
  >
  <div className="flex items-center justify-between">
  <div className="flex items-center gap-2.5">
- <div className="w-8 h-8 rounded-md bg-[#0c1017] border border-[#1c2432] text-slate-300 flex items-center justify-center">
+ <div className="w-8 h-8 rounded-[10px] bg-white/5 text-slate-300 flex items-center justify-center">
  <FlaskConical className="w-4 h-4" />
  </div>
  <div>
@@ -599,14 +599,14 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
  Mode Pratinjau Terbatas (Evaluasi Tamu): Akses pemantauan peta dasar tanpa hak wewenang persetujuan atau mutasi rute operasional.
  </p>
 
- <div className="flex items-center gap-1.5 pt-1 border-t border-[#1c2432] text-xs font-mono text-slate-400">
- <span className="px-1.5 py-0.5 rounded bg-[#080d14] border border-[#1c2432]">
+ <div className="flex items-center gap-1.5 pt-1 border-t border-white/10 text-xs font-mono text-slate-400">
+ <span className="px-1.5 py-0.5 rounded bg-white/5">
  Sandbox Peta
  </span>
- <span className="px-1.5 py-0.5 rounded bg-[#080d14] border border-[#1c2432]">
+ <span className="px-1.5 py-0.5 rounded bg-white/5">
  Audit Benchmark
  </span>
- <span className="px-1.5 py-0.5 rounded bg-[#080d14] border border-[#1c2432]">
+ <span className="px-1.5 py-0.5 rounded bg-white/5">
  Akses Terbatas
  </span>
  </div>
@@ -628,7 +628,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
  value={email}
  onChange={(e) => setEmail(e.target.value)}
  placeholder="operator@logistik.id"
- className="w-full px-3.5 py-2 rounded-md bg-[#080d14] border border-[#1c2432] text-xs text-white placeholder-slate-500 focus:outline-none focus:border-slate-400 font-sans transition"
+ className="w-full px-3.5 py-2 rounded-[10px] bg-[#080d14] border border-white/10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-slate-400 font-sans transition"
  required
  />
  </div>
@@ -643,7 +643,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
  value={password}
  onChange={(e) => setPassword(e.target.value)}
  placeholder="••••••••"
- className="w-full px-3.5 py-2 rounded-md bg-[#080d14] border border-[#1c2432] text-xs text-white placeholder-slate-500 focus:outline-none focus:border-slate-400 font-sans transition"
+ className="w-full px-3.5 py-2 rounded-[10px] bg-[#080d14] border border-white/10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-slate-400 font-sans transition"
  required
  />
  </div>
@@ -658,7 +658,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
  <select
  value={selectedCompanyId}
  onChange={(e) => setSelectedCompanyId(e.target.value)}
- className="w-full px-3.5 py-2 rounded-md bg-[#080d14] border border-[#1c2432] text-xs text-white focus:outline-none focus:border-slate-400 font-sans transition cursor-pointer"
+ className="w-full px-3.5 py-2 rounded-[10px] bg-[#080d14] border border-white/10 text-xs text-white focus:outline-none focus:border-slate-400 font-sans transition cursor-pointer"
  >
  {PILOT_ORGANIZATIONS.map((org) => (
  <option key={org.id} value={org.id}>
@@ -668,7 +668,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
  </select>
  </div>
 
- <div className="p-2.5 rounded-md bg-[#121822] border border-[#1c2432] text-xs font-sans text-slate-400 leading-relaxed flex items-start gap-2">
+ <div className="p-2.5 rounded-[10px] bg-[#121822] text-xs font-sans text-slate-400 leading-relaxed flex items-start gap-2">
  <AlertCircle className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
  <span>
  Pendaftaran mandiri baru otomatis diberikan akses Tamu (Sandbox). Wewenang operasional Dispatcher dan Regulator memerlukan undangan resmi atau persetujuan operator.
@@ -680,7 +680,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
  <button
  type="submit"
  disabled={isLoading}
- className="w-full py-2.5 rounded-md bg-white hover:bg-slate-200 text-[#080d14] text-xs font-semibold font-sans transition shadow-sm cursor-pointer flex items-center justify-center gap-2"
+ className="w-full py-2.5 rounded-[10px] bg-white hover:bg-slate-200 text-[#080d14] text-xs font-semibold font-sans transition shadow-sm cursor-pointer flex items-center justify-center gap-2"
  >
  {isLoading ? (
  <span>Memproses...</span>
@@ -708,7 +708,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
  {/* TAB 3: MAGIC LINK */}
  {activeTab === 'magic' && (
  <form onSubmit={handleMagicLinkSubmit} className="space-y-4">
- <div className="p-3 rounded-md bg-[#121822] border border-[#1c2432] text-xs font-sans text-slate-300 leading-relaxed">
+ <div className="p-3 rounded-[10px] bg-[#121822] text-xs font-sans text-slate-300 leading-relaxed">
  Masuk tanpa sandi menggunakan tautan instan yang dikirim langsung ke alamat email Anda melalui Supabase Auth.
  </div>
 
@@ -722,7 +722,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
  value={email}
  onChange={(e) => setEmail(e.target.value)}
  placeholder="operator@logistik.id"
- className="w-full px-3.5 py-2 rounded-md bg-[#080d14] border border-[#1c2432] text-xs text-white placeholder-slate-500 focus:outline-none focus:border-slate-400 font-sans transition"
+ className="w-full px-3.5 py-2 rounded-[10px] bg-[#080d14] border border-white/10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-slate-400 font-sans transition"
  required
  />
  </div>
@@ -730,7 +730,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
  <button
  type="submit"
  disabled={isLoading}
- className="w-full py-2.5 rounded-md bg-white hover:bg-slate-200 text-[#080d14] text-xs font-semibold font-sans transition shadow-sm cursor-pointer flex items-center justify-center gap-2"
+ className="w-full py-2.5 rounded-[10px] bg-white hover:bg-slate-200 text-[#080d14] text-xs font-semibold font-sans transition shadow-sm cursor-pointer flex items-center justify-center gap-2"
  >
  {isLoading ? <span>Mengirim...</span> : <span>Kirim Tautan Masuk Instan</span>}
  </button>
@@ -742,7 +742,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
  <div className="px-6 py-3 border-t border-white/10 bg-[#0c1017] flex items-center justify-between text-xs text-slate-400 tabular-nums">
  <div className="flex items-center gap-1.5">
  <User className="w-3.5 h-3.5 text-slate-400" />
- <span>Sesi: <strong className="text-slate-200">{isAuthenticated ? (user?.name || 'Terautentikasi') : 'Tamu'}</strong></span>
+ <span>Sesi: <strong className="text-[#e8eaed]">{isAuthenticated ? (user?.name || 'Terautentikasi') : 'Tamu'}</strong></span>
  </div>
  <span className="flex items-center gap-1.5 text-slate-300">
  <span className="w-1.5 h-1.5 rounded-full bg-slate-500" />

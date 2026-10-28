@@ -263,12 +263,12 @@ export function TenantFleetRoster({
           data-testid="armada-drawer"
           data-slot="armada-drawer-content"
           aria-label="Armada Perusahaan"
-          className="fixed top-0 right-0 bottom-0 z-[100] w-full max-w-2xl bg-[#0c1017] border-l border-white/10 shadow-2xl flex flex-col text-xs text-slate-200 tabular-nums outline-none"
+          className="fixed top-0 right-0 bottom-0 z-[100] w-full max-w-2xl bg-[#0c1017] border-l border-white/10 rounded-l-xl shadow-[0_12px_32px_rgba(0,0,0,0.4)] flex flex-col text-xs text-[#e8eaed] tabular-nums outline-none"
         >
           {/* Header — both numbers stated, never one unlabelled badge. */}
           <div className="p-4 border-b border-white/10 flex items-start justify-between gap-3 bg-[#0c1017]">
             <div className="flex items-start gap-2 min-w-0">
-              <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 shrink-0">
+              <div className="w-8 h-8 rounded-[10px] bg-[#121822] border border-white/10 flex items-center justify-center text-[#38b8f8] shrink-0">
                 <Radio className="w-4 h-4" />
               </div>
               <div className="min-w-0">
@@ -294,7 +294,7 @@ export function TenantFleetRoster({
               type="button"
               onClick={onClose}
               aria-label="Tutup panel Armada Perusahaan"
-              className="cursor-pointer p-1.5 rounded-lg border border-white/10 hover:bg-white/5 text-slate-400 hover:text-white transition shrink-0"
+              className="cursor-pointer p-1.5 rounded-lg border border-white/10 hover:bg-white/5 text-[rgba(232,234,237,0.62)] hover:text-white ds-pressable shrink-0"
             >
               <X className="w-4 h-4" />
             </button>
@@ -328,7 +328,7 @@ export function TenantFleetRoster({
                 <button
                   type="button"
                   onClick={onOpenOnboarding}
-                  className="cursor-pointer flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-md bg-white text-[#080d14] text-xs font-medium hover:bg-slate-200 transition"
+                  className="cursor-pointer flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-[10px] bg-white text-[#080d14] text-xs font-medium hover:bg-slate-200 transition"
                 >
                   <PlusCircle className="w-3.5 h-3.5" />
                   Tambah armada
@@ -384,7 +384,7 @@ export function TenantFleetRoster({
                             }
                           }}
                           tabIndex={0}
-                          className="hover:bg-white/5 cursor-pointer data-[state=selected]:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/50"
+                          className="hover:bg-white/5 cursor-pointer data-[state=selected]:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
                         >
                           <TableCell className="py-2">
                             <div className="flex items-center gap-2 min-w-0">
@@ -453,7 +453,7 @@ export function TenantFleetRoster({
                       <button
                         type="button"
                         onClick={() => handleFocus(selectedVehicle)}
-                        className="cursor-pointer flex items-center gap-1 px-2 py-1 rounded-md border border-white/10 hover:bg-white/5 text-xs text-slate-300"
+                        className="cursor-pointer flex items-center gap-1 px-2 py-1 rounded-[10px] border border-white/10 hover:bg-white/5 text-xs text-slate-300"
                         title="Fokus unit ini di peta"
                       >
                         <Crosshair className="w-3 h-3" />
@@ -464,7 +464,7 @@ export function TenantFleetRoster({
                       type="button"
                       onClick={() => setSelectedVehicleId(null)}
                       aria-label="Tutup detail unit"
-                      className="cursor-pointer p-1 rounded-md border border-white/10 hover:bg-white/5 text-slate-400 hover:text-white"
+                      className="cursor-pointer p-1 rounded-[10px] border border-white/10 hover:bg-white/5 text-slate-400 hover:text-white"
                     >
                       <ChevronUp className="w-3.5 h-3.5" />
                     </button>
@@ -472,11 +472,11 @@ export function TenantFleetRoster({
                 </div>
 
                 <dl className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="rounded-lg border border-white/10 bg-[#0c1017] p-2">
+                  <div className="rounded-[10px] bg-[#0c1017] p-2">
                     <dt className="text-slate-500">Plat / ID</dt>
                     <dd className="text-slate-100 font-mono mt-0.5 break-all">{identifier(selectedVehicle)}</dd>
                   </div>
-                  <div className="rounded-lg border border-white/10 bg-[#0c1017] p-2">
+                  <div className="rounded-[10px] bg-[#0c1017] p-2">
                     <dt className="text-slate-500">Pengemudi</dt>
                     <dd className="text-slate-100 mt-0.5">
                       {selectedVehicle.driver_name || 'Belum ada pengemudi'}
@@ -485,11 +485,11 @@ export function TenantFleetRoster({
                       )}
                     </dd>
                   </div>
-                  <div className="rounded-lg border border-white/10 bg-[#0c1017] p-2">
+                  <div className="rounded-[10px] bg-[#0c1017] p-2">
                     <dt className="text-slate-500">Status</dt>
                     <dd className="text-slate-100 mt-0.5">{statusLabel(selectedVehicle)}</dd>
                   </div>
-                  <div className="rounded-lg border border-white/10 bg-[#0c1017] p-2">
+                  <div className="rounded-[10px] bg-[#0c1017] p-2">
                     <dt className="text-slate-500">Provenance</dt>
                     <dd className={`mt-0.5 ${provenanceLabel(selectedVehicle) === 'live' ? 'text-emerald-300' : 'text-slate-300'}`}>
                       {provenanceLabel(selectedVehicle)}
@@ -497,7 +497,7 @@ export function TenantFleetRoster({
                   </div>
                 </dl>
 
-                <div className="rounded-lg border border-white/10 bg-[#0c1017] p-2 space-y-1">
+                <div className="rounded-[10px] bg-[#0c1017] p-2 space-y-1">
                   <p className="text-xs text-slate-500 flex items-center gap-1.5">
                     <Route className="w-3 h-3" />
                     Koridor / segmen
@@ -507,7 +507,7 @@ export function TenantFleetRoster({
                   </p>
                 </div>
 
-                <div className="rounded-lg border border-white/10 bg-[#0c1017] p-2 space-y-1">
+                <div className="rounded-[10px] bg-[#0c1017] p-2 space-y-1">
                   <p className="text-xs text-slate-500 flex items-center gap-1.5">
                     <MapPin className="w-3 h-3" />
                     Koordinat terakhir
@@ -524,7 +524,7 @@ export function TenantFleetRoster({
                   )}
                 </div>
 
-                <div className="rounded-lg border border-white/10 bg-[#0c1017] p-2 space-y-1">
+                <div className="rounded-[10px] bg-[#0c1017] p-2 space-y-1">
                   <p className="text-xs text-slate-500 flex items-center gap-1.5">
                     <ShieldAlert className="w-3 h-3" />
                     Paparan bahaya
@@ -540,7 +540,7 @@ export function TenantFleetRoster({
                   )}
                 </div>
 
-                <div className="rounded-lg border border-white/10 bg-[#0c1017] p-2 space-y-1">
+                <div className="rounded-[10px] bg-[#0c1017] p-2 space-y-1">
                   <p className="text-xs text-slate-500">Rit hari ini</p>
                   {selectedVehicle.modality !== 'truck' && (
                     <p className="text-xs text-slate-400">Rit hanya dicatat untuk armada truk.</p>
@@ -579,7 +579,7 @@ export function TenantFleetRoster({
               <button
                 type="button"
                 onClick={onOpenOnboarding}
-                className="w-full cursor-pointer flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-slate-200 text-xs font-medium hover:bg-white/5 transition"
+                className="w-full cursor-pointer flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-[10px] text-slate-200 text-xs font-medium hover:bg-white/5 transition"
               >
                 <PlusCircle className="w-3 h-3" />
                 Tambah armada
