@@ -1,16 +1,17 @@
 import { test, expect, type Locator, type Page } from '@playwright/test';
 
 /**
- * Phase 176.8 (M9) — Berita card legibility + guest banner clearance.
+ * Phase 176.8/176.9 (M9) — Berita card legibility + guest banner docking.
  *
  * The R2 production capture showed the honesty label cut to
  * `TIER 2 · PERS · Belum terver…` and `Jalur: Terputus total · Pangan` ellipsised.
  * "Belum terverifikasi" replaced the fake 86% and is the single most important
  * string on the card, so it must render in full at every width.
  *
- * Also guards the floating guest banner: it sat on top of the last card in the
- * news feed. The panel now reserves the banner's measured clearance, so the
- * last card can always be scrolled clear of it.
+ * Phase 176.9 removed the floating guest banner: it is now a `shrink-0` row in
+ * the panel's flex column, below the only scroll container. These tests prove the
+ * structure — no card can intersect the banner at top/middle/bottom on desktop,
+ * and on phones the sheet, banner and footer all stay inside the viewport.
  *
  * Hermetic: `/api/v1/news/live` is stubbed (fixtures mirror
  * news-honesty-breadth.spec.ts); the backend is not running.
@@ -187,12 +188,64 @@ async function assertNoEllipsisAncestor(card: Locator, value: Locator, label: st
   expect(offenders, `${label} has an ellipsis-clipping ancestor`).toEqual([]);
 }
 
-async function scrollFeedToBottom(page: Page) {
+/** Scroll the feed to a fraction of its range: 0 = top, 0.5 = middle, 1 = bottom. */
+async function scrollFeedTo(page: Page, fraction: number) {
   const scroller = page.getByTestId('news-feed-scroll');
-  await scroller.evaluate((el) => {
-    el.scrollTop = el.scrollHeight;
+  await scroller.evaluate((el, f) => {
+    el.scrollTop = Math.round((el.scrollHeight - el.clientHeight) * f);
+  }, fraction);
+  await page.waitForTimeout(250);
+}
+
+type OverlapProbe = {
+  hits: string[];
+  visibleCards: number;
+  listBottom: number;
+  bannerTop: number;
+  bannerBottom: number;
+  innerHeight: number;
+};
+
+/**
+ * Structural proof that the docked banner cannot cover the feed: for every card
+ * that is actually visible inside the scroll viewport, its clipped rectangle
+ * must not intersect the banner rectangle.
+ */
+async function probeBannerOverlap(page: Page): Promise<OverlapProbe> {
+  return page.evaluate(() => {
+    const scroller = document.querySelector('[data-testid="news-feed-scroll"]') as HTMLElement | null;
+    const banner = document.querySelector('[data-testid="guest-evaluation-banner"]') as HTMLElement | null;
+    if (!scroller || !banner) throw new Error('feed scroller or guest banner missing');
+    const s = scroller.getBoundingClientRect();
+    const b = banner.getBoundingClientRect();
+    const cards = Array.from(
+      scroller.querySelectorAll<HTMLElement>('[data-testid^="berita-card-"]')
+    );
+    const hits: string[] = [];
+    let visibleCards = 0;
+    for (const card of cards) {
+      const c = card.getBoundingClientRect();
+      const top = Math.max(c.top, s.top);
+      const bottom = Math.min(c.bottom, s.bottom);
+      if (bottom - top <= 0) continue; // scrolled out of the viewport: not visible
+      visibleCards += 1;
+      const overlaps =
+        top < b.bottom && bottom > b.top && c.left < b.right && c.right > b.left;
+      if (overlaps) {
+        hits.push(
+          `${card.getAttribute('data-testid')} visible ${top.toFixed(1)}..${bottom.toFixed(1)} vs banner ${b.top.toFixed(1)}..${b.bottom.toFixed(1)}`
+        );
+      }
+    }
+    return {
+      hits,
+      visibleCards,
+      listBottom: s.bottom,
+      bannerTop: b.top,
+      bannerBottom: b.bottom,
+      innerHeight: window.innerHeight,
+    };
   });
-  await page.waitForTimeout(200);
 }
 
 test.describe('desktop 1920x1080', () => {
@@ -264,81 +317,153 @@ test.describe('desktop 1920x1080', () => {
     expect((await card.innerText()).replace(/\s+/g, ' ')).toContain('Belum terverifikasi');
   });
 
-  test('the last card never intersects the guest banner', async ({ page }) => {
+  test('no card intersects the guest banner at top, middle or bottom scroll', async ({ page }) => {
     await openDashboard(page, longFeedArticles());
     await waitForFonts(page);
 
     const banner = page.getByTestId('guest-evaluation-banner');
     await expect(banner).toBeVisible();
-
-    await scrollFeedToBottom(page);
-
-    const lastCard = articleCards(page).last();
-    const cardBox = await boxOf(lastCard);
     const bannerBox = await boxOf(banner);
-
-    const cardBottom = cardBox.y + cardBox.height;
-    expect(cardBottom, 'last card overlaps the guest banner').toBeLessThanOrEqual(
-      bannerBox.y + 1
+    // Docked below the feed — not floating over it.
+    const scrollerBox = await boxOf(page.getByTestId('news-feed-scroll'));
+    expect(bannerBox.y, 'banner top starts below the feed viewport').toBeGreaterThanOrEqual(
+      scrollerBox.y + scrollerBox.height - 1
     );
-    expect(await page.evaluate(() => document.documentElement.dataset.guestBanner)).toBe('open');
-  });
-});
+    expect(bannerBox.y + bannerBox.height, 'banner ends inside the viewport').toBeLessThanOrEqual(
+      1080 + 1
+    );
 
-test.describe('mobile 390x844', () => {
-  test.use({ viewport: { width: 390, height: 844 } });
-
-  test('the Berita sheet keeps the same legibility and banner clearance', async ({ page }) => {
-    await openDashboard(page, longFeedArticles());
-    await waitForFonts(page);
-
-    // openDashboard already opened the sheet at this width; confirm the panel.
-    await expect(page.getByTestId('news-sheet')).toBeVisible();
-    await waitForFonts(page);
-
-    const cards = articleCards(page);
-    for (let i = 0; i < 3; i += 1) {
-      const card = cards.nth(i);
-      const cardBox = await boxOf(card);
-      const cardBottom = cardBox.y + cardBox.height;
-
-      const confidence = card.locator('[data-testid^="berita-confidence-"]');
-      await assertNoHorizontalClip(confidence, `mobile card ${i} confidence`);
-      const confidenceBox = await boxOf(confidence);
-      expect(confidenceBox.y + confidenceBox.height, `mobile card ${i} confidence bottom`).toBeLessThanOrEqual(
-        cardBottom + 1
-      );
-      await expect(confidence).toContainText('TIER 2 · PERS');
-      await expect(confidence).toContainText('Belum terverifikasi');
-      await assertNoEllipsisAncestor(card, confidence, `mobile card ${i} confidence`);
-
-      const route = card.locator('[data-testid^="berita-route-"]');
-      await assertNoHorizontalClip(route, `mobile card ${i} route`);
-      const routeBox = await boxOf(route);
-      expect(routeBox.y + routeBox.height, `mobile card ${i} route bottom`).toBeLessThanOrEqual(
-        cardBottom + 1
-      );
+    for (const [label, fraction] of [
+      ['top', 0],
+      ['middle', 0.5],
+      ['bottom', 1],
+    ] as const) {
+      await scrollFeedTo(page, fraction);
+      const probe = await probeBannerOverlap(page);
+      expect(probe.visibleCards, `no card visible at ${label} scroll`).toBeGreaterThan(0);
+      expect(
+        probe.hits,
+        `guest banner covers cards at ${label} scroll: ${probe.hits.join('; ')}`
+      ).toEqual([]);
+      expect(
+        probe.listBottom,
+        `feed viewport bottom passes the banner at ${label} scroll`
+      ).toBeLessThanOrEqual(probe.bannerTop + 1);
     }
-
-    // The honest label is visibly whole on mobile too.
-    const label = cards.first().getByText('Belum terverifikasi', { exact: true });
-    await expect(label).toBeVisible();
-    const firstCardBox = await boxOf(cards.first());
-    const labelBox = await boxOf(label);
-    expect(labelBox.x + labelBox.width, 'mobile label right inside card').toBeLessThanOrEqual(
-      firstCardBox.x + firstCardBox.width + 1
-    );
-
-    // Banner clearance holds with the sheet open.
-    const banner = page.getByTestId('guest-evaluation-banner');
-    await expect(banner).toBeVisible();
-    await scrollFeedToBottom(page);
-
-    const lastCard = articleCards(page).last();
-    const lastCardBox = await boxOf(lastCard);
-    const bannerBox = await boxOf(banner);
-    expect(lastCardBox.y + lastCardBox.height, 'mobile last card overlaps the guest banner').toBeLessThanOrEqual(
-      bannerBox.y + 1
-    );
   });
 });
+
+for (const viewport of [
+  { width: 390, height: 844 },
+  { width: 360, height: 740 },
+] as const) {
+  test.describe(`mobile ${viewport.width}x${viewport.height}`, () => {
+    test.use({ viewport: { width: viewport.width, height: viewport.height } });
+
+    test('sheet, banner and footer fit the viewport; cards stay clear', async ({ page }) => {
+      await openDashboard(page, longFeedArticles());
+      await waitForFonts(page);
+
+      // openDashboard already opened the sheet at this width; confirm the panel.
+      await expect(page.getByTestId('news-sheet')).toBeVisible();
+      await waitForFonts(page);
+
+      const cards = articleCards(page);
+      for (let i = 0; i < 3; i += 1) {
+        const card = cards.nth(i);
+        const cardBox = await boxOf(card);
+        const cardBottom = cardBox.y + cardBox.height;
+
+        const confidence = card.locator('[data-testid^="berita-confidence-"]');
+        await assertNoHorizontalClip(confidence, `mobile card ${i} confidence`);
+        const confidenceBox = await boxOf(confidence);
+        expect(confidenceBox.y + confidenceBox.height, `mobile card ${i} confidence bottom`).toBeLessThanOrEqual(
+          cardBottom + 1
+        );
+        await expect(confidence).toContainText('TIER 2 · PERS');
+        await expect(confidence).toContainText('Belum terverifikasi');
+        await assertNoEllipsisAncestor(card, confidence, `mobile card ${i} confidence`);
+
+        const route = card.locator('[data-testid^="berita-route-"]');
+        await assertNoHorizontalClip(route, `mobile card ${i} route`);
+        const routeBox = await boxOf(route);
+        expect(routeBox.y + routeBox.height, `mobile card ${i} route bottom`).toBeLessThanOrEqual(
+          cardBottom + 1
+        );
+      }
+
+      // The honest label is visibly whole on mobile too.
+      const label = cards.first().getByText('Belum terverifikasi', { exact: true });
+      await expect(label).toBeVisible();
+      const firstCardBox = await boxOf(cards.first());
+      const labelBox = await boxOf(label);
+      expect(labelBox.x + labelBox.width, 'mobile label right inside card').toBeLessThanOrEqual(
+        firstCardBox.x + firstCardBox.width + 1
+      );
+
+      // --- Phase 176.9 structural fit: nothing may extend past the viewport ---
+      const scroller = page.getByTestId('news-feed-scroll');
+      const banner = page.getByTestId('guest-evaluation-banner');
+      const footerLink = page.getByTestId('news-footer-data');
+      await expect(banner).toBeVisible();
+      await expect(footerLink).toBeVisible();
+
+      const scrollerBox = await boxOf(scroller);
+      const bannerBox = await boxOf(banner);
+      const footerBox = await boxOf(footerLink);
+
+      expect(
+        scrollerBox.y + scrollerBox.height,
+        'feed viewport bottom extends past innerHeight'
+      ).toBeLessThanOrEqual(viewport.height + 1);
+
+      // Banner fully inside the viewport.
+      expect(bannerBox.y, 'banner top above the viewport').toBeGreaterThanOrEqual(0);
+      expect(bannerBox.y + bannerBox.height, 'banner bottom past innerHeight').toBeLessThanOrEqual(
+        viewport.height + 1
+      );
+      expect(bannerBox.x, 'banner left of the viewport').toBeGreaterThanOrEqual(0);
+      expect(bannerBox.x + bannerBox.width, 'banner right past innerWidth').toBeLessThanOrEqual(
+        viewport.width + 1
+      );
+
+      // Footer link ("Transparansi Data") fully on screen.
+      expect(footerBox.y, 'footer link top above the viewport').toBeGreaterThanOrEqual(0);
+      expect(footerBox.y + footerBox.height, 'footer link bottom past innerHeight').toBeLessThanOrEqual(
+        viewport.height + 1
+      );
+
+      // At max scroll the last card sits above the banner and no card intersects it.
+      await scrollFeedTo(page, 1);
+      const last = await boxOf(cards.last());
+      const listAtBottom = await boxOf(scroller);
+      const visibleBottom = Math.min(last.y + last.height, listAtBottom.y + listAtBottom.height);
+      expect(visibleBottom, 'mobile last card overlaps the guest banner').toBeLessThanOrEqual(
+        bannerBox.y + 1
+      );
+
+      const probe = await probeBannerOverlap(page);
+      expect(probe.visibleCards, 'no card visible at max scroll').toBeGreaterThan(0);
+      expect(probe.hits, `mobile banner covers cards: ${probe.hits.join('; ')}`).toEqual([]);
+
+      // --- No horizontal overflow at this width ---
+      const pageMetrics = await page.evaluate(() => ({
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+        innerWidth: window.innerWidth,
+      }));
+      expect(
+        pageMetrics.scrollWidth,
+        'document overflows horizontally'
+      ).toBeLessThanOrEqual(pageMetrics.innerWidth + 1);
+
+      const sheetMetrics = await page.getByTestId('news-sheet').evaluate((el) => ({
+        scrollWidth: el.scrollWidth,
+        clientWidth: el.clientWidth,
+      }));
+      expect(sheetMetrics.scrollWidth, 'Berita sheet overflows horizontally').toBeLessThanOrEqual(
+        sheetMetrics.clientWidth + 1
+      );
+    });
+  });
+}

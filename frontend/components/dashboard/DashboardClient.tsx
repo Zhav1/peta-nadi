@@ -27,6 +27,7 @@ import {
   Lock,
   Map as MapIcon,
   MoreHorizontal,
+  SlidersHorizontal,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useIncidents } from '@/hooks/useIncidents';
@@ -70,6 +71,7 @@ import { TopNavTelemetry, HazardLegendPills } from '@/components/dashboard/TopNa
 import { RoutingStatusBanner } from '@/components/dashboard/RoutingStatusBanner';
 import { DispatcherAlertQueue } from '@/components/dashboard/DispatcherAlertQueue';
 import { HitlDecisionDrawer } from '@/components/dashboard/HitlDecisionDrawer';
+import { GuestEvaluationBanner } from '@/components/dashboard/GuestEvaluationBanner';
 import { RouteDetailModal } from '@/components/sidebar/RouteDetailModal';
 import type { DisruptionImpactResponse, ImpactedVehicleAssessment } from '@/lib/types';
 
@@ -777,6 +779,10 @@ export default function DashboardClient() {
   const [activeTab, setActiveTab] = useState<'Evidence' | 'Mitigation' | 'Economic'>('Evidence');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState(false);
+  // Phase 176.9 (M9): on phones the Berita filter block (tier + province chips
+  // and the hazard/modality pills) folds behind one "Filter" disclosure so the
+  // sheet's fixed height is spent on the feed, the guest banner and the footer.
+  const [isNewsFilterOpen, setIsNewsFilterOpen] = useState(false);
   const [isNavOverflowOpen, setIsNavOverflowOpen] = useState(false);
   const [approvalsCount, setApprovalsCount] = useState<number>(14);
 
@@ -3508,13 +3514,17 @@ export default function DashboardClient() {
         {/* SECTION 1: 4D GIS MAP WITH RESTORED FIGMA COMMAND CENTER GRID */}
         <div className={`w-full h-full relative overflow-hidden ${activeSection === 'map' ? 'flex' : 'hidden'}`}>
 
-          {/* COLUMN 1: COLLAPSIBLE LEFT OSINT & NEWS SIDEBAR (GLOBOT STYLE) */}
+          {/* COLUMN 1: COLLAPSIBLE LEFT OSINT & NEWS SIDEBAR (GLOBOT STYLE)
+              Phase 176.9 (M9): one flex column at every breakpoint —
+              header → search/filters → scrolling feed → guest banner → footer.
+              Only the feed scrolls (`flex-1 min-h-0`), so the docked banner and
+              the footer link are always on screen and can never be covered. */}
           <aside
             data-testid="news-sheet"
-            className={`bg-[#0c1017] flex flex-col gap-3 overflow-hidden pointer-events-auto transition-all duration-300 ease-in-out ${
+            className={`bg-[#0c1017] flex flex-col gap-2 md:gap-3 overflow-hidden pointer-events-auto transition-all duration-300 ease-in-out ${
               isLeftSidebarCollapsed
                 ? 'hidden md:flex md:w-0 md:p-0 md:border-r-0 md:opacity-0 md:pointer-events-none shrink-0'
-                : 'absolute inset-x-0 bottom-0 z-40 h-[68vh] w-full rounded-t-xl border-t border-white/10 p-3.5 md:relative md:inset-auto md:z-30 md:h-full md:max-h-none md:w-[352px] md:rounded-none md:border-t-0 md:border-r md:border-white/10 md:opacity-100'
+                : 'absolute inset-x-0 bottom-0 z-40 h-[min(68vh,640px)] max-h-full w-full rounded-t-xl border-t border-white/10 p-3.5 md:relative md:inset-auto md:z-30 md:h-full md:max-h-none md:w-[352px] md:rounded-none md:border-t-0 md:border-r md:border-white/10 md:opacity-100'
             }`}
           >
             {/* Mobile sheet handle + close — the sheet never traps the map. */}
@@ -3612,6 +3622,31 @@ export default function DashboardClient() {
                   </button>
                 ))}
               </div>
+
+              {/* Phase 176.9 (M9): below `md` the tier/province chips and the
+                  hazard pills fold behind one disclosure — the fixed-height
+                  sheet must spend its room on the feed, banner and footer. On
+                  `md`+ the block is always expanded, so every testid stays
+                  mounted and usable for the breadth specs. */}
+              <button
+                type="button"
+                data-testid="news-filter-disclosure"
+                aria-expanded={isNewsFilterOpen}
+                aria-controls="news-filter-block"
+                onClick={() => setIsNewsFilterOpen((v) => !v)}
+                className="md:hidden cursor-pointer flex items-center justify-between gap-2 px-2 py-1 rounded-lg bg-[#080d14] border border-white/10 text-xs font-mono text-[rgba(232,234,237,0.62)] hover:text-[#e8eaed] hover:border-white/20 transition-colors shrink-0"
+              >
+                <span className="flex items-center gap-1.5">
+                  <SlidersHorizontal className="w-3 h-3" />
+                  Filter
+                </span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isNewsFilterOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              <div
+                id="news-filter-block"
+                className={`${isNewsFilterOpen ? 'flex' : 'hidden'} flex-col gap-2 md:flex`}
+              >
 
               {/* Display-tier chips (Phase 172.5 / M9). `Krisis` = the rows that
                   passed the hazard gate; `Regional` = honest 48h regional context
@@ -3752,15 +3787,17 @@ export default function DashboardClient() {
                   </span>
                 </button>
               </div>
+              {/* /filter disclosure block */}
+              </div>
             </div>
 
-            {/* Scrollable Feed List. Phase 176.8 (M9): reserve the floating
-                guest-banner's measured occlusion as bottom padding so the last
-                card can always be scrolled clear of it (never covered). */}
+            {/* Scrollable Feed List — Phase 176.9 (M9): the ONLY scroll
+                container in the panel (`flex-1 min-h-0`). The guest banner and
+                footer below are in-flow siblings, so no card can ever reach them
+                at any scroll position (no measured padding, no clearance var). */}
             <div
               data-testid="news-feed-scroll"
-              className="flex-1 overflow-y-auto custom-scrollbar space-y-2.5 pr-0.5"
-              style={{ paddingBottom: 'var(--guest-banner-clearance, 0px)' }}
+              className="flex-1 min-h-0 overflow-y-auto custom-scrollbar space-y-2.5 pr-0.5"
             >
               {newsFeed.length === 0 ? (
                 <div className="p-6 text-center text-[rgba(232,234,237,0.62)] font-mono text-xs space-y-1">
@@ -4076,12 +4113,21 @@ export default function DashboardClient() {
               )}
             </div>
 
+            {/* Guest evaluation banner — docked in-flow (Phase 176.9). It sits
+                between the scrolling feed and the data footer, so it can never
+                overlay a card. Hidden automatically for authenticated sessions. */}
+            <GuestEvaluationBanner />
+
             {/* Data-integrity provenance lives in the FreshnessBadge tooltip (title attr) — no 3-col grid. */}
-            <div className="border-t border-white/10 pt-2.5 text-xs font-mono text-[rgba(232,234,237,0.62)] space-y-1.5 shrink-0">
+            <div
+              data-testid="news-panel-footer"
+              className="border-t border-white/10 pt-2 text-xs font-mono text-[rgba(232,234,237,0.62)] space-y-1.5 shrink-0"
+            >
               <div className="flex items-center justify-between">
                 <span className="text-[rgba(232,234,237,0.62)] font-bold">Data</span>
                 <button
                   type="button"
+                  data-testid="news-footer-data"
                   onClick={() => setShowSensorInfo(v => !v)}
                   className="cursor-pointer text-[rgba(232,234,237,0.62)] hover:text-[#e8eaed] transition-colors"
                   title="Transparansi Data"
