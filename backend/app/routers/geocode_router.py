@@ -13,6 +13,7 @@ from fastapi import APIRouter, Query, HTTPException
 from app.nlp.gazetteer_data import (
     PAN_SUMATRA_GAZETTEER,
     SUMATRA_BOUNDING_BOX,
+    normalize_place_type,
     rank_admin_gazetteer,
 )
 from app.services.adm_boundary_service import get_adm_boundaries
@@ -137,7 +138,13 @@ def _merge_ranked(rows: List[Tuple[int, int, int, Dict[str, Any]]]) -> List[Dict
 
 
 def _gazetteer_result_type(data: Dict[str, Any]) -> str:
-    """Honest structural type for a gazetteer hit (used for UI badges)."""
+    """Honest structural type for a gazetteer hit (used for UI badges).
+
+    Phase 176.7: returns the canonical Indonesian vocabulary only
+    (``kabupaten``/``kota``/``kecamatan``). It used to emit ``"regency"`` for
+    every tier-2 hub node (e.g. Natuna, Belitung Timur), which fell through
+    every UI badge keyed on kota|kabupaten|kecamatan.
+    """
     precision = data.get("precision_tier")
     if precision == "corridor_point":
         return "hub"
@@ -147,8 +154,13 @@ def _gazetteer_result_type(data: Dict[str, Any]) -> str:
     if tier == 1:
         return "kecamatan"
     if tier == 2:
-        return "regency"
+        return "kabupaten"
     return "hub"
+
+
+def _normalized_result_type(value: Any, fallback: str = "hub") -> str:
+    """Canonical type for an external (Nominatim) hit, else the honest fallback."""
+    return normalize_place_type(value) or (str(value).strip().lower() if value else fallback)
 
 
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -332,14 +344,17 @@ async def search_places(
                         village = addr.get("village") or addr.get("hamlet") or addr.get("suburb") or addr.get("neighbourhood") or ""
 
                         place_name = village or kec or item.get("name") or query_clean.title()
-                        p_type = item.get("type") or item.get("addresstype") or "village"
+                        # `addresstype` is the address role (county/city/district
+                        # /village); `type` is the raw OSM tag ("administrative").
+                        # Prefer the role so the canonical mapping can fire.
+                        p_type = item.get("addresstype") or item.get("type") or "village"
 
                         candidate = {
                             "name": place_name,
                             "display_name": item.get("display_name", f"{place_name}, {kab}, {prov}"),
                             "lat": round(lat, 6),
                             "lon": round(lon, 6),
-                            "type": p_type,
+                            "type": _normalized_result_type(p_type, fallback="village"),
                             "province": prov,
                             "parent": kec or kab or prov,
                             "kabupaten": kab,
@@ -474,7 +489,9 @@ async def reverse_geocode(
                     "display_name": data.get("display_name", f"{name}, {kab}, {prov}"),
                     "lat": lat,
                     "lon": lon,
-                    "type": data.get("type", "village"),
+                    "type": _normalized_result_type(
+                        data.get("addresstype") or data.get("type"), fallback="village"
+                    ),
                     "province": prov,
                     "kabupaten": kab,
                     "kecamatan": kec,

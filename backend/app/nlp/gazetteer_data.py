@@ -481,6 +481,36 @@ ADMIN_GAZETTEER_PROVINCES = (
 
 ADMIN_GAZETTEER_TYPES = ("kabupaten", "kota", "kecamatan")
 
+# Phase 176.7: one `type` vocabulary at the API boundary. Nominatim/OSM and a
+# few legacy rows used English administrative words, so a UI badge keyed on
+# kota|kabupaten|kecamatan silently fell through on a `regency` row.
+PLACE_TYPE_ALIASES = {
+    # administrative level (canonical)
+    "regency": "kabupaten",
+    "kabupaten": "kabupaten",
+    "county": "kabupaten",
+    "city": "kota",
+    "kota": "kota",
+    "district": "kecamatan",
+    "subdistrict": "kecamatan",
+    "sub_district": "kecamatan",
+    "kecamatan": "kecamatan",
+}
+
+
+def normalize_place_type(value: Any) -> Optional[str]:
+    """Map a place `type` onto the canonical vocabulary, or None.
+
+    ``regency``/``county`` -> ``kabupaten``, ``city`` -> ``kota``,
+    ``district``/``subdistrict`` -> ``kecamatan``. Unknown values return None
+    so callers can decide (drop it, or keep their own honest descriptor) instead
+    of inventing an administrative level.
+    """
+    if value is None:
+        return None
+    return PLACE_TYPE_ALIASES.get(str(value).strip().lower())
+
+
 # Ranking tiers (lower is better). Fuzzy is the weakest tier by construction.
 TIER_EXACT = 0
 TIER_PREFIX = 1
@@ -567,7 +597,11 @@ def load_admin_gazetteer() -> List[Dict[str, Any]]:
         try:
             name = str(raw["name"]).strip()
             province = str(raw["province"]).strip()
-            kind = str(raw["type"]).strip()
+            # Phase 176.7: normalise the dataset's `type` vocabulary on load so
+            # a stale/regenerated file using `regency`/`city`/`district` still
+            # resolves to the canonical kota|kabupaten|kecamatan instead of
+            # being dropped as an unknown kind.
+            kind = normalize_place_type(raw["type"]) or ""
             lat = float(raw["lat"])
             lon = float(raw["lon"])
         except (KeyError, TypeError, ValueError):

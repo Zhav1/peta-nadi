@@ -120,6 +120,7 @@ _PROVINCE_ALIASES = {
     "south sumatra": "Sumatera Selatan",
     "babel": "Bangka Belitung",
     "bangka belitung": "Bangka Belitung",
+    "kepulauan bangka belitung": "Bangka Belitung",
     "bengkulu": "Bengkulu",
     "lampung": "Lampung",
     "aceh": "Aceh",
