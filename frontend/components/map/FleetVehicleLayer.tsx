@@ -305,7 +305,7 @@ export function FleetVehicleLayer({
             'line-cap': 'round',
           },
           paint: {
-            'line-color': '#00f0ff',
+            'line-color': '#38b8f8',
             'line-width': 2.5,
             'line-dasharray': [2, 1],
             'line-opacity': 0.85,
@@ -332,12 +332,12 @@ export function FleetVehicleLayer({
             ],
             'circle-color': [
               'case',
-              ['==', ['get', 'isSelected'], true], 'rgba(0, 240, 255, 0.25)',
-              'rgba(245, 158, 11, 0.25)',
+              ['==', ['get', 'isSelected'], true], 'rgba(56, 184, 248, 0.22)',
+              'rgba(245, 158, 11, 0.22)',
             ],
             'circle-stroke-color': [
               'case',
-              ['==', ['get', 'isSelected'], true], 'rgba(0, 240, 255, 0.85)',
+              ['==', ['get', 'isSelected'], true], 'rgba(56, 184, 248, 0.85)',
               'rgba(245, 158, 11, 0.85)',
             ],
             'circle-stroke-width': 1.5,
@@ -360,15 +360,21 @@ export function FleetVehicleLayer({
               8, 5.5,
               14, 8,
             ],
+            // Phase 175: one accent for live, neutral for estimated, amber for
+            // alert. Modality is no longer a hue (see legend: label + shape).
             'circle-color': [
               'case',
-              ['==', ['get', 'isSelected'], true], '#00f0ff',
-              ['==', ['get', 'modality'], 'maritime'], '#06b6d4',
-              ['==', ['get', 'modality'], 'air'], '#a855f7',
-              '#10b981',
+              ['==', ['get', 'isImpacted'], true], '#f59e0b',
+              ['==', ['get', 'tracking_mode'], 'ROUTE_ESTIMATED'], 'rgba(232, 234, 237, 0.35)',
+              '#38b8f8',
             ],
             'circle-stroke-width': 1.5,
-            'circle-stroke-color': '#0c0e12',
+            'circle-stroke-color': [
+              'case',
+              ['==', ['get', 'isImpacted'], true], '#f59e0b',
+              ['==', ['get', 'tracking_mode'], 'ROUTE_ESTIMATED'], 'rgba(232, 234, 237, 0.55)',
+              '#0c1017',
+            ],
             'circle-opacity': [
               'interpolate', ['linear'], ['zoom'],
               3.2, 0.0,
@@ -800,7 +806,7 @@ export function FleetVehicleLayer({
       {/* Impeccable Hover Micro-Tooltip */}
       {hoveredVehicle && !selectedVehicle && (
         <div
-          className="fixed pointer-events-none z-50 bg-[#0c1017] border border-white/10 px-2.5 py-1.5 rounded-lg shadow-xl text-slate-100 font-sans"
+          className="fixed pointer-events-none z-50 bg-[#0c1017] border border-white/10 px-2.5 py-1.5 rounded-lg shadow-[0_12px_32px_rgba(0,0,0,0.4)] text-[#e8eaed] font-sans"
           style={{
             left: Math.min(
               hoveredVehicle.screenPos.x + 12,
@@ -811,24 +817,18 @@ export function FleetVehicleLayer({
         >
           <div className="flex items-center gap-1.5">
             <span
-              className={`w-2 h-2 rounded-full ${
-                hoveredVehicle.vehicle.modality === 'maritime'
-                  ? 'bg-[#06b6d4]'
-                  : hoveredVehicle.vehicle.modality === 'air'
-                    ? 'bg-[#a855f7]'
-                    : 'bg-[#10b981]'
-              }`}
+              className="w-2 h-2 rounded-full bg-[rgba(232,234,237,0.38)]"
             />
             <span className="text-xs font-semibold text-white">
               {hoveredVehicle.vehicle.name || hoveredVehicle.vehicle.vehicle_id}
             </span>
           </div>
-          <div className="flex items-center gap-2 mt-1 text-xs text-slate-300 font-mono tabular-nums">
+          <div className="flex items-center gap-2 mt-1 text-xs text-[rgba(232,234,237,0.62)] font-mono tabular-nums">
             <span>{hoveredVehicle.vehicle.speed_kmh || 0} km/j</span>
             {hoveredVehicle.vehicle.cargo && (
               <>
-                <span className="text-slate-600">·</span>
-                <span className="text-slate-400 truncate max-w-[160px]">{hoveredVehicle.vehicle.cargo}</span>
+                <span className="text-[rgba(232,234,237,0.38)]">·</span>
+                <span className="text-[rgba(232,234,237,0.62)] truncate max-w-[160px]">{hoveredVehicle.vehicle.cargo}</span>
               </>
             )}
           </div>
@@ -837,19 +837,15 @@ export function FleetVehicleLayer({
 
       {/* Telemetry Inspector Console — Docked in Right Tactical Inspector Slot */}
       {selectedVehicle && (
- <div className="absolute top-16 right-3 bottom-4 z-40 w-[calc(100vw-1.5rem)] sm:w-[390px] bg-[#0c1017] border border-white/10 shadow-xl rounded-lg p-4 text-slate-100 duration-300 pointer-events-auto space-y-3 font-sans overflow-y-auto no-scrollbar">
+ <div className="absolute top-16 right-3 bottom-4 z-40 w-[calc(100vw-1.5rem)] sm:w-[390px] bg-[#0c1017] border border-white/10 shadow-[0_12px_32px_rgba(0,0,0,0.4)] rounded-lg p-4 text-[#e8eaed] duration-300 pointer-events-auto space-y-3 font-sans overflow-y-auto no-scrollbar">
           {/* Header Bar */}
  <div className="flex items-start justify-between border-b border-white/10 pb-3">
             <div className="flex items-center gap-2.5">
               <div
                 className={`p-2 rounded-lg border ${
                   isEstimated
-                    ? 'bg-amber-950/50 text-amber-400 border-amber-500/30'
-                    : isMaritime
-                      ? 'bg-sky-950/50 text-sky-400 border-sky-500/30'
-                      : isAir
-                        ? 'bg-purple-950/50 text-purple-400 border-purple-500/30'
-                        : 'bg-emerald-950/50 text-emerald-400 border-emerald-500/30'
+                    ? 'bg-white/[0.06] text-[rgba(232,234,237,0.62)] border-white/10'
+                    : 'bg-[#121822] text-[#e8eaed] border-white/10'
                 }`}
               >
                 {isMaritime ? (
@@ -866,13 +862,13 @@ export function FleetVehicleLayer({
                   {selectedVehicle.vehicle.name}
                 </h3>
                 <div className="flex items-center gap-2 mt-1">
- <span className="text-xs font-mono tabular-nums text-slate-400">
+ <span className="text-xs font-mono tabular-nums text-[rgba(232,234,237,0.62)]">
                     {transponderId}
                   </span>
-                  <span className="text-slate-600">·</span>
+                  <span className="text-[rgba(232,234,237,0.38)]">·</span>
  {statusLabel ? (
- <span className="flex items-center gap-1.5 text-xs text-slate-400">
- <span className="h-1.5 w-1.5 rounded-full bg-rose-400/60" />
+ <span className="flex items-center gap-1.5 text-xs text-[rgba(232,234,237,0.62)]">
+ <span className="h-1.5 w-1.5 rounded-full bg-[#f59e0b]" />
                     <span>{statusLabel}</span>
                   </span>
  ) : null}
@@ -883,7 +879,7 @@ export function FleetVehicleLayer({
             <button
               type="button"
               onClick={handleDismissSelection}
- className="cursor-pointer p-1 rounded-md bg-transparent text-slate-400 hover:text-white border border-white/10 transition"
+ className="cursor-pointer p-1 rounded-md bg-transparent text-[rgba(232,234,237,0.62)] hover:text-white border border-white/10 transition"
               title="Tutup Inspeksi Armada"
             >
               <X className="w-3.5 h-3.5" />
@@ -894,8 +890,8 @@ export function FleetVehicleLayer({
  <div className="py-3 border-t border-white/10 space-y-2.5">
  <div className="flex items-baseline justify-between border-b border-white/10 pb-2">
               <div>
- <span className="text-xs font-medium text-slate-400 flex items-center gap-1.5">
-                  <Navigation className="w-3.5 h-3.5 text-slate-400" />
+ <span className="text-xs font-medium text-[rgba(232,234,237,0.62)] flex items-center gap-1.5">
+                  <Navigation className="w-3.5 h-3.5 text-[rgba(232,234,237,0.62)]" />
                   <span>Kecepatan Telemetri</span>
                 </span>
                 <span className="text-xl font-semibold text-white font-mono tabular-nums leading-none tracking-tight mt-1 inline-block">
@@ -905,16 +901,16 @@ export function FleetVehicleLayer({
                       ? `${(selectedVehicle.vehicle.ground_speed_kts ?? (selectedVehicle.vehicle.speed_kmh / 1.852)).toFixed(0)} kts`
                       : `${selectedVehicle.vehicle.speed_kmh} km/j`}
                 </span>
-                <span className="text-xs font-mono tabular-nums text-slate-400 ml-1.5">
+                <span className="text-xs font-mono tabular-nums text-[rgba(232,234,237,0.62)] ml-1.5">
                   ({selectedVehicle.vehicle.speed_kmh} km/j)
                 </span>
               </div>
 
               <div className="text-right">
- <span className="text-xs font-medium text-slate-400 block">
+ <span className="text-xs font-medium text-[rgba(232,234,237,0.62)] block">
                   Heading
                 </span>
-                <span className="text-xs font-mono tabular-nums text-slate-200 mt-1 inline-block">
+                <span className="text-xs font-mono tabular-nums text-[#e8eaed] mt-1 inline-block">
                   {Math.round(selectedVehicle.bearing)}° {getCardinalDirection(selectedVehicle.bearing)}
                 </span>
               </div>
@@ -922,10 +918,10 @@ export function FleetVehicleLayer({
 
             <div className="grid grid-cols-2 gap-2 text-xs pt-0.5">
               <div>
-                <span className="text-slate-400 block">
+                <span className="text-[rgba(232,234,237,0.62)] block">
                   {isMaritime ? 'Draught Kapal:' : isAir ? 'Ketinggian ADS-B:' : 'Elevasi Radar:'}
                 </span>
-                <span className="text-slate-200 font-mono tabular-nums font-medium">
+                <span className="text-[#e8eaed] font-mono tabular-nums font-medium">
                   {isMaritime
                     ? `${selectedVehicle.vehicle.draught_m ?? 7.2} m`
                     : isAir
@@ -934,8 +930,8 @@ export function FleetVehicleLayer({
                 </span>
               </div>
               <div>
-                <span className="text-slate-400 block">Koordinat:</span>
-                <span className="text-slate-300 font-mono tabular-nums">
+                <span className="text-[rgba(232,234,237,0.62)] block">Koordinat:</span>
+                <span className="text-[rgba(232,234,237,0.62)] font-mono tabular-nums">
                   {selectedVehicle.currentPos[1].toFixed(3)}°N, {selectedVehicle.currentPos[0].toFixed(3)}°E
                 </span>
               </div>
@@ -945,13 +941,13 @@ export function FleetVehicleLayer({
           {/* Strategic Cargo & Cold-Chain */}
  <div className="py-3 border-t border-white/10 space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-slate-400">Muatan Logistik:</span>
+              <span className="text-xs font-medium text-[rgba(232,234,237,0.62)]">Muatan Logistik:</span>
               {(isTruck || vehicle?.temperature_c !== undefined) && (
                 <div
                   className={`px-2 py-0.5 rounded border text-xs font-mono flex items-center gap-1 ${
                     temp <= 4.0
-                      ? 'bg-emerald-950/40 text-emerald-400 border-emerald-500/30'
-                      : 'bg-amber-950/40 text-amber-400 border-amber-500/30'
+                      ? 'bg-[#10b981]/10 text-[#10b981] border-[#10b981]/30'
+                      : 'bg-[#f59e0b]/10 text-[#f59e0b] border-[#f59e0b]/30'
                   }`}
                 >
                   <Thermometer className="w-3 h-3" />
@@ -961,7 +957,7 @@ export function FleetVehicleLayer({
                 </div>
               )}
             </div>
-            <p className="text-xs text-slate-200 font-medium">
+            <p className="text-xs text-[#e8eaed] font-medium">
               {selectedVehicle.vehicle.cargo || 'Logistik Pangan Nasional'}
             </p>
           </div>
@@ -969,17 +965,17 @@ export function FleetVehicleLayer({
           {/* Route & Signal Freshness */}
  <div className="py-3 border-t border-white/10 space-y-2 text-xs">
             <div className="flex items-center justify-between">
-              <span className="text-slate-400">Koridor Rute:</span>
-              <span className="text-slate-200 font-medium truncate max-w-[200px]">
+              <span className="text-[rgba(232,234,237,0.62)]">Koridor Rute:</span>
+              <span className="text-[#e8eaed] font-medium truncate max-w-[200px]">
                 {selectedVehicle.vehicle.origin || 'Asal'} → {selectedVehicle.vehicle.destination || 'Tujuan'}
               </span>
             </div>
- <div className="flex items-center justify-between text-slate-400 pt-1.5 border-t border-white/10">
+ <div className="flex items-center justify-between text-[rgba(232,234,237,0.62)] pt-1.5 border-t border-white/10">
               <span className="flex items-center gap-1.5">
- <span className="h-1.5 w-1.5 rounded-full bg-emerald-400/60"></span>
+ <span className="h-1.5 w-1.5 rounded-full bg-[#10b981]"></span>
                 <span>Latensi Telemetri:</span>
               </span>
-              <span className="text-slate-300 font-mono tabular-nums">
+              <span className="text-[rgba(232,234,237,0.62)] font-mono tabular-nums">
                 {selectedVehicle.vehicle.last_ping_seconds_ago ?? 1.2}s lalu
               </span>
             </div>
@@ -1004,7 +1000,7 @@ export function FleetVehicleLayer({
               className={`w-full py-2 px-3 rounded-md border text-xs font-medium flex items-center justify-center gap-2 cursor-pointer transition-colors duration-150 ${
                 isFollowCamActive
                   ? 'bg-white text-[#080d14] border-white font-semibold'
- : 'bg-transparent text-slate-200 hover:text-white hover:bg-white/5 border-white/10'
+ : 'bg-transparent text-[#e8eaed] hover:text-white hover:bg-white/5 border-white/10'
               }`}
             >
               <Video className="w-3.5 h-3.5" />
@@ -1014,7 +1010,7 @@ export function FleetVehicleLayer({
             <button
               type="button"
               onClick={handleDismissSelection}
-              className="w-full py-1 text-xs text-slate-400 hover:text-slate-200 flex items-center justify-center gap-1.5 cursor-pointer transition"
+              className="w-full py-1 text-xs text-[rgba(232,234,237,0.62)] hover:text-[#e8eaed] flex items-center justify-center gap-1.5 cursor-pointer transition"
             >
               <Crosshair className="w-3 h-3" />
               <span>Tutup Inspeksi</span>

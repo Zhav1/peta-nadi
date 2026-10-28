@@ -65,11 +65,17 @@ interface TopNavTelemetryProps {
 
 /**
  * Minimalist map-critical header: Merah/Kuning filters (collapsed drawer),
- * Cuaca disruption (biru, default ON), Waspada Dini advisory (default OFF),
+ * Cuaca disruption (default ON), Waspada Dini advisory (default OFF),
  * and Titik Panas satelit. Rute/latency, lalin, BMKG, intermodal hub, and
  * Tinjau pills stay dormant — the 15s `api.news.hitlPending` poll +
  * `HitlDecisionDrawer` + `hitlAction` wiring in `DashboardClient` are
  * untouched.
+ *
+ * Phase 175 — one neutral pill recipe for all five counters. Chrome is
+ * monochrome: the enabled layer is the white pill (selected state), the rest are
+ * near-black with a white-alpha border. Hue appears only on the number, and only
+ * when a hazard is actually being represented (DESIGN.md → Distilled Command
+ * Surface). No cyan/orange/yellow chrome survives here.
  */
 export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
   isLeftSidebarCollapsed = false,
@@ -200,6 +206,40 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
     return lines.join('\n');
   })();
 
+  // --- Phase 175: shared pill recipe ----------------------------------------
+  // One surface, one border, one text tier. `active` means the layer is ON and
+  // is the only state that fills white (the selected signal). Hazard hue is
+  // carried by the number alone, never by the pill surface or its label.
+  const PILL_BASE =
+    'cursor-pointer flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs font-mono tabular-nums transition-colors duration-150';
+  const pillClass = (active: boolean): string =>
+    active
+      ? `${PILL_BASE} bg-white text-[#080d14] border-white font-semibold`
+      : `${PILL_BASE} bg-[#0c1017] text-[rgba(232,234,237,0.62)] border-white/[0.08] hover:border-white/15 hover:text-[#e8eaed]`;
+  const chipClass = (active: boolean): string =>
+    active
+      ? 'px-1 py-0.5 rounded bg-black/10 text-xs font-bold tabular-nums'
+      : 'px-1 py-0.5 rounded bg-white/[0.06] text-xs font-bold tabular-nums';
+  /** Marker dot: solid on an enabled pill, hollow neutral when the layer is off. */
+  const dotClass = (active: boolean, hazard: 'critical' | 'warning' | null): string => {
+    if (!active) return 'w-2 h-2 rounded-full border border-white/25 bg-transparent shrink-0';
+    if (hazard === 'critical') return 'w-2 h-2 rounded-full bg-[#ef4444] shrink-0';
+    if (hazard === 'warning') return 'w-2 h-2 rounded-full bg-[#f59e0b] shrink-0';
+    return 'w-2 h-2 rounded-full bg-[#080d14] shrink-0';
+  };
+  /**
+   * A hazard-bearing ok bucket: verified present hazard (not empty, not stale,
+   * not unknown). Only then may the number carry hazard hue.
+   */
+  const isPresentHazard = (status: HazardCounterStatus, count: number | null): boolean =>
+    status === 'ok' && count != null && count > 0;
+  /** Number tone: hazard hue only for a present hazard, never for a label. */
+  const numberTone = (hazard: 'critical' | 'warning' | null, active: boolean): string => {
+    if (hazard === 'critical') return 'text-[#ef4444]';
+    if (hazard === 'warning') return 'text-[#f59e0b]';
+    return active ? 'text-[#080d14]' : 'text-[rgba(232,234,237,0.62)]';
+  };
+
   return (
     <div className="relative flex flex-wrap items-center gap-1.5 text-xs font-mono select-none overflow-visible">
       {/* Compact Zone Filter Pills when Left OSINT Drawer is Collapsed */}
@@ -207,33 +247,31 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
         <div className="flex items-center gap-1 shrink-0">
           <button
             type="button"
+            data-testid="counter-pill"
             onClick={onToggleRedZones}
-            className={`cursor-pointer flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs font-mono transition-all duration-150 ${
-              showRedZones
-                ? 'bg-red-950/50 border-red-500/50 text-red-200 '
-                : 'bg-[#0c1017] border-white/5 text-slate-500 opacity-60 hover:opacity-100'
-            }`}
+            className={pillClass(showRedZones)}
             title="Filter Peta: Zona Merah (Bencana Terkonfirmasi)"
           >
-            <span className={`w-2 h-2 rounded-full ${showRedZones ? 'bg-red-500 ' : 'bg-slate-600'}`} />
+            <span className={dotClass(showRedZones, 'critical')} />
             <span className="font-sans text-xs font-semibold">Merah</span>
-            <span className="px-1 py-0.2 rounded bg-red-500/20 text-xs font-bold text-red-300 font-mono tabular-nums">
+            <span
+              className={`${chipClass(showRedZones)} ${numberTone(redZoneCount > 0 ? 'critical' : null, showRedZones)}`}
+            >
               {redZoneCount}
             </span>
           </button>
           <button
             type="button"
+            data-testid="counter-pill"
             onClick={onToggleYellowZones}
-            className={`cursor-pointer flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs font-mono transition-all duration-150 ${
-              showYellowZones
-                ? 'bg-yellow-950/50 border-yellow-500/50 text-yellow-200 '
-                : 'bg-[#0c1017] border-white/5 text-slate-500 opacity-60 hover:opacity-100'
-            }`}
+            className={pillClass(showYellowZones)}
             title="Filter Peta: Zona Kuning (Perlu Klarifikasi / Waspada)"
           >
-            <span className={`w-2 h-2 rounded-full ${showYellowZones ? 'bg-yellow-400 ' : 'bg-slate-600'}`} />
+            <span className={dotClass(showYellowZones, 'warning')} />
             <span className="font-sans text-xs font-semibold">Kuning</span>
-            <span className="px-1 py-0.2 rounded bg-yellow-500/20 text-xs font-bold text-yellow-300 font-mono tabular-nums">
+            <span
+              className={`${chipClass(showYellowZones)} ${numberTone(yellowZoneCount > 0 ? 'warning' : null, showYellowZones)}`}
+            >
               {yellowZoneCount}
             </span>
           </button>
@@ -244,12 +282,9 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
       {onToggleWeatherPolygons && (
         <button
           type="button"
+          data-testid="counter-pill"
           onClick={onToggleWeatherPolygons}
-          className={`cursor-pointer flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs font-mono transition-all duration-150 ${
-            showWeatherPolygons
-              ? 'bg-blue-950/50 border-blue-500/50 text-blue-200 '
-              : 'bg-[#0c1017] border-white/5 text-slate-500 opacity-60 hover:opacity-100'
-          }`}
+          className={pillClass(showWeatherPolygons)}
           title={bucketTooltip(weatherSummary?.cuaca, 'Cuaca: zona gangguan aktif (high/critical)', {
             updatedAt: weatherSummary?.generated_at ?? weatherPolygonMeta?.updated_at ?? null,
             capNotice:
@@ -258,59 +293,62 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
                 : null,
           })}
         >
-          <span className={`w-2 h-2 rounded-full ${showWeatherPolygons ? 'bg-blue-500 ' : 'bg-slate-600'}`} />
+          <span className={dotClass(showWeatherPolygons, null)} />
           <span className="font-sans text-xs font-semibold">Cuaca</span>
           <span
             data-testid="counter-cuaca"
-            className="px-1 py-0.2 rounded bg-blue-500/20 text-xs font-bold text-blue-300 font-mono tabular-nums"
+            className={`${chipClass(showWeatherPolygons)} ${numberTone(
+              isPresentHazard(cuacaStatus, cuacaCount) ? 'critical' : null,
+              showWeatherPolygons,
+            )}`}
           >
             {counterText(cuacaStatus, cuacaCount)}
           </span>
         </button>
       )}
 
-      {/* Waspada Dini advisory (medium drizzle, default OFF, info-only). Off-map: single slate/cyan dot. */}
+      {/* Waspada Dini advisory (medium drizzle, default OFF, info-only). */}
       {onToggleWeatherAdvisory && (
         <button
           type="button"
+          data-testid="counter-pill"
           onClick={onToggleWeatherAdvisory}
-          className={`cursor-pointer flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs font-mono transition-all duration-150 ${
-            showWeatherAdvisory
-              ? 'bg-[#0c1017] border-cyan-500/50 text-cyan-200'
-              : 'bg-[#0c1017] border-white/5 text-slate-500 opacity-60 hover:opacity-100'
-          }`}
+          className={pillClass(showWeatherAdvisory)}
           title={bucketTooltip(weatherSummary?.waspada, 'Waspada Dini: zona pantau medium (advisory), dihitung walau layer OFF', {
             updatedAt: weatherSummary?.generated_at ?? null,
           })}
         >
-          <span className={`w-2 h-2 rounded-full ${showWeatherAdvisory ? 'bg-cyan-300' : 'bg-slate-600'}`} />
+          <span className={dotClass(showWeatherAdvisory, null)} />
           <span className="font-sans text-xs font-semibold">Waspada Dini</span>
           <span
             data-testid="counter-waspada"
-            className="px-1 py-0.2 rounded bg-white/5 text-xs font-bold text-slate-300 font-mono tabular-nums"
+            className={`${chipClass(showWeatherAdvisory)} ${numberTone(
+              isPresentHazard(waspadaStatus, waspadaCount) ? 'warning' : null,
+              showWeatherAdvisory,
+            )}`}
           >
             {counterText(waspadaStatus, waspadaCount)}
           </span>
         </button>
       )}
 
-      {/* Titik Panas satelit (FIRMS VIIRS). Off-map: single slate dot; ON: single orange dot (map-only exception). */}
+      {/* Titik Panas satelit (FIRMS VIIRS). */}
       {onToggleFireHotspots && (
         <button
           type="button"
+          data-testid="counter-pill"
           onClick={onToggleFireHotspots}
-          className={`cursor-pointer flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs font-mono transition-all duration-150 ${
-            showFireHotspots
-              ? 'bg-[#0c1017] border-white/20 text-slate-200'
-              : 'bg-[#0c1017] border-white/5 text-slate-500 opacity-60 hover:opacity-100'
-          }`}
+          className={pillClass(showFireHotspots)}
           title={fireTooltipText}
         >
-          <span className={`w-2 h-2 rounded-full ${showFireHotspots ? 'bg-orange-400' : 'bg-slate-600'}`} />
+          <span className={dotClass(showFireHotspots, null)} />
           <span className="font-sans text-xs font-semibold">Titik Panas</span>
           <span
             data-testid="counter-titik-panas"
-            className="px-1 py-0.2 rounded bg-white/5 text-xs font-bold text-slate-300 font-mono tabular-nums"
+            className={`${chipClass(showFireHotspots)} ${numberTone(
+              titikPanasCount != null && titikPanasCount > 0 ? 'warning' : null,
+              showFireHotspots,
+            )}`}
           >
             {counterText(fireStatus, titikPanasCount)}
           </span>

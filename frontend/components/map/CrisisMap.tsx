@@ -797,25 +797,25 @@ export default function CrisisMap({
           id: 'gl-draw-polygon-fill-active',
           type: 'fill',
           filter: ['all', ['==', '$type', 'Polygon'], ['!=', 'mode', 'static']],
-          paint: { 'fill-color': '#f97316', 'fill-opacity': 0.35 },
+          paint: { 'fill-color': '#f59e0b', 'fill-opacity': 0.35 },
         },
         {
           id: 'gl-draw-polygon-stroke-active',
           type: 'line',
           filter: ['all', ['==', '$type', 'Polygon'], ['!=', 'mode', 'static']],
-          paint: { 'line-color': '#f97316', 'line-width': 3 },
+          paint: { 'line-color': '#f59e0b', 'line-width': 3 },
         },
         {
           id: 'gl-draw-line-active',
           type: 'line',
           filter: ['all', ['==', '$type', 'LineString'], ['!=', 'mode', 'static']],
-          paint: { 'line-color': '#f97316', 'line-width': 3, 'line-dasharray': [0.2, 2] },
+          paint: { 'line-color': '#f59e0b', 'line-width': 3, 'line-dasharray': [0.2, 2] },
         },
         {
           id: 'gl-draw-polygon-and-line-vertex-active',
           type: 'circle',
           filter: ['all', ['==', 'meta', 'vertex'], ['==', '$type', 'Point'], ['!=', 'mode', 'static']],
-          paint: { 'circle-radius': 6, 'circle-color': '#00F0FF', 'circle-stroke-width': 2, 'circle-stroke-color': '#ffffff' },
+          paint: { 'circle-radius': 6, 'circle-color': '#38b8f8', 'circle-stroke-width': 2, 'circle-stroke-color': '#ffffff' },
         },
       ],
     });
@@ -848,8 +848,8 @@ export default function CrisisMap({
         paint: {
           'line-color': [
             'match', ['get', 'type'],
-            'maritime', '#1e40af',
-            '#334155'
+            'maritime', 'rgba(232, 234, 237, 0.28)',
+            'rgba(232, 234, 237, 0.16)'
           ],
           'line-width': 2.0,
           'line-dasharray': [3, 2],
@@ -873,8 +873,8 @@ export default function CrisisMap({
           'text-keep-upright': true,
         },
         paint: {
-          'text-color': '#60a5fa',
-          'text-halo-color': '#0b0f17',
+          'text-color': 'rgba(232, 234, 237, 0.55)',
+          'text-halo-color': '#080d14',
           'text-halo-width': 1.5,
           'text-opacity': 0.85,
         },
@@ -890,8 +890,22 @@ export default function CrisisMap({
         type: 'fill',
         source: 'weather-polygons-source',
         paint: {
-          'fill-color': ['coalesce', ['get', 'fill_color'], 'rgba(239, 68, 68, 0.15)'],
-          'fill-opacity': 0.85,
+          // Phase 175: paint derives from severity, never from the payload hue.
+          // Critical/high = hazard red, medium advisory = warning amber.
+          'fill-color': [
+            'match', ['get', 'severity'],
+            'medium', '#f59e0b',
+            'high', '#ef4444',
+            'critical', '#ef4444',
+            '#ef4444',
+          ],
+          'fill-opacity': [
+            'match', ['get', 'severity'],
+            'medium', 0.14,
+            'high', 0.22,
+            'critical', 0.28,
+            0.18,
+          ],
         },
       });
       map.addLayer({
@@ -899,7 +913,11 @@ export default function CrisisMap({
         type: 'line',
         source: 'weather-polygons-source',
         paint: {
-          'line-color': ['coalesce', ['get', 'stroke_color'], '#ef4444'],
+          'line-color': [
+            'match', ['get', 'severity'],
+            'medium', '#f59e0b',
+            '#ef4444',
+          ],
           'line-width': 2.0,
           'line-dasharray': [4, 3],
         },
@@ -939,12 +957,14 @@ export default function CrisisMap({
             500, 60,
           ],
           'heatmap-opacity': 0.85,
+          // Phase 175: two-hue heat ramp only — warning amber at low density,
+          // hazard red at the peak. No orange/cyan.
           'heatmap-color': [
             'interpolate', ['linear'], ['heatmap-density'],
-            0, 'rgba(255,140,0,0)',
-            0.4, 'rgba(255,140,0,0.55)',
-            0.7, 'rgba(249,115,22,0.85)',
-            1, 'rgba(255,50,0,1)',
+            0, 'rgba(245, 158, 11, 0)',
+            0.4, 'rgba(245, 158, 11, 0.45)',
+            0.7, 'rgba(245, 158, 11, 0.80)',
+            1, 'rgba(239, 68, 68, 1)',
           ],
         },
       });
@@ -955,7 +975,7 @@ export default function CrisisMap({
         type: 'fill',
         source: 'firms-areas-source',
         paint: {
-          'fill-color': '#f97316',
+          'fill-color': '#f59e0b',
           'fill-opacity': 0.22,
         },
       });
@@ -964,7 +984,7 @@ export default function CrisisMap({
         type: 'line',
         source: 'firms-areas-source',
         paint: {
-          'line-color': '#fb923c',
+          'line-color': '#ef4444',
           'line-width': 1.5,
           'line-opacity': 0.9,
         },
@@ -977,10 +997,10 @@ export default function CrisisMap({
           // Raw detections stay small + neutral (slate): only cluster
           // highlight circles carry the orange map-only exception.
           'circle-radius': 3,
-          'circle-color': '#cbd5e1',
+          'circle-color': '#e8eaed',
           'circle-opacity': 0.8,
           'circle-stroke-width': 1,
-          'circle-stroke-color': '#64748b',
+          'circle-stroke-color': 'rgba(232, 234, 237, 0.38)',
         },
       });
       map.addLayer({
@@ -993,7 +1013,7 @@ export default function CrisisMap({
           'circle-color': 'rgba(203,213,225,0)',
           'circle-opacity': 0,
           'circle-stroke-width': 1,
-          'circle-stroke-color': '#94a3b8',
+          'circle-stroke-color': 'rgba(232, 234, 237, 0.45)',
           'circle-stroke-opacity': 0.5,
         },
       });
@@ -1011,26 +1031,20 @@ export default function CrisisMap({
           'fill-color': [
             'match', ['get', 'zone_tier'],
             'RED_CONFIRMED', '#ef4444',
-            'YELLOW_CLARIFY', '#eab308',
-            // Fallback when zone_tier not set: color by legacy type, else red.
-            ['match', ['get', 'type'],
-              'flood', 'rgba(6, 182, 212, 0.35)',
-              'earthquake', 'rgba(244, 63, 94, 0.35)',
-              'landslide', 'rgba(217, 119, 6, 0.35)',
-              'wildfire', 'rgba(249, 115, 22, 0.35)',
-              'congestion', 'rgba(234, 179, 8, 0.30)',
-              'rgba(239, 68, 68, 0.35)'
-            ]
+            'YELLOW_CLARIFY', '#f59e0b',
+            // Fallback when zone_tier is not set: an unclassified zone is
+            // painted as a warning, by opacity not by a new hue.
+            'rgba(245, 158, 11, 0.30)'
           ],
           'fill-opacity': [
-            // Forecast (Prakiraan Waspada Dini): zero fill — dotted cyan outline
+            // Forecast (Prakiraan Waspada Dini): zero fill — dashed amber outline
             // only, so an advisory never reads as a confirmed hazard area.
             'case',
             ['==', ['get', 'forecast_tag'], 'FORECAST_WASPADA'], 0,
             ['match', ['get', 'zone_tier'],
               'RED_CONFIRMED', 0.32,
-              'YELLOW_CLARIFY', 0.28,
-              0.85
+              'YELLOW_CLARIFY', 0.26,
+              0.30
             ]
           ],
         },
@@ -1046,28 +1060,21 @@ export default function CrisisMap({
           'line-color': [
             'match', ['get', 'zone_tier'],
             'RED_CONFIRMED', '#ef4444',
-            'YELLOW_CLARIFY', '#facc15',
-            ['match', ['get', 'type'],
-              'flood', '#06b6d4',
-              'earthquake', '#f43f5e',
-              'landslide', '#d97706',
-              'wildfire', '#f97316',
-              'congestion', '#eab308',
-              '#ef4444'
-            ]
+            'YELLOW_CLARIFY', '#f59e0b',
+            'rgba(245, 158, 11, 0.85)'
           ],
           'line-width': 2.5,
         },
       });
-      // Forecast-only dashed cyan outline (line-dasharray is not data-driven in
-      // Mapbox GL, so it lives on its own filtered layer).
+      // Forecast-only dashed warning outline (line-dasharray is not data-driven
+      // in Mapbox GL, so it lives on its own filtered layer).
       map.addLayer({
         id: 'disaster-zones-forecast-outline',
         type: 'line',
         source: 'disaster-zones-source',
         filter: ['==', ['get', 'forecast_tag'], 'FORECAST_WASPADA'],
         paint: {
-          'line-color': '#22d3ee',
+          'line-color': '#f59e0b',
           'line-width': 2,
           'line-dasharray': [2, 1.5],
           'line-opacity': 0.95,
@@ -1107,7 +1114,7 @@ export default function CrisisMap({
           'line-join': 'round',
         },
         paint: {
-          'line-color': ['coalesce', ['get', 'color'], '#10b981'],
+          'line-color': ['coalesce', ['get', 'color'], '#38b8f8'],
           // Direct-land corridors are the highlighted/default story; island-ring legs stay thinner.
           'line-width': ['case', ['==', ['get', 'isDirectLand'], true], 6.5, 5],
           'line-opacity': 0.95,
@@ -1125,7 +1132,7 @@ export default function CrisisMap({
           'line-join': 'round',
         },
         paint: {
-          'line-color': ['coalesce', ['get', 'color'], '#38bdf8'],
+          'line-color': ['coalesce', ['get', 'color'], '#38b8f8'],
           'line-width': 4,
           'line-opacity': 0.70,
           'line-dasharray': [2, 2],
@@ -1150,8 +1157,8 @@ export default function CrisisMap({
             'match',
             ['get', 'level'],
             'heavy', '#ef4444',
-            'moderate', '#eab308',
-            '#22c55e'
+            'moderate', '#f59e0b',
+            'rgba(232, 234, 237, 0.45)'
           ],
           'line-width': 5,
           'line-opacity': 0.85,
@@ -1203,10 +1210,9 @@ export default function CrisisMap({
           ],
           'circle-color': [
             'case',
-            ['get', 'isTransferHub'],
-            ['match', ['get', 'type'], 'port', '#3b82f6', 'airport', '#00f0ff', '#22d3ee'],
-            ['get', 'isKeyNode'], '#22d3ee',
-            '#00f0ff'
+            ['get', 'isTransferHub'], '#38b8f8',
+            ['get', 'isKeyNode'], '#e8eaed',
+            '#e8eaed'
           ],
           'circle-opacity': [
             'case',
@@ -1224,9 +1230,8 @@ export default function CrisisMap({
           ],
           'circle-stroke-color': [
             'case',
-            ['get', 'isTransferHub'],
-            ['match', ['get', 'type'], 'port', '#3b82f6', 'airport', '#00f0ff', '#22d3ee'],
-            '#22d3ee'
+            ['get', 'isTransferHub'], '#38b8f8',
+            '#e8eaed'
           ],
           'circle-stroke-opacity': 0.85,
         },
@@ -1243,10 +1248,9 @@ export default function CrisisMap({
             5
           ],
           'circle-color': [
-            'match', ['get', 'type'],
-            'port', '#38bdf8',
-            'airport', '#c084fc',
-            '#34d399'
+            'case',
+            ['get', 'isTransferHub'], '#38b8f8',
+            '#e8eaed'
           ],
           'circle-stroke-width': ['case', ['get', 'isKeyNode'], 2.5, 1.5],
           'circle-stroke-color': '#ffffff',
@@ -1267,7 +1271,7 @@ export default function CrisisMap({
           'text-ignore-placement': false,
         },
         paint: {
-          'text-color': '#f8fafc',
+          'text-color': '#e8eaed',
           'text-halo-color': '#0c1017',
           'text-halo-width': 2.0,
         },
@@ -1311,7 +1315,7 @@ export default function CrisisMap({
         minzoom: 7.5,
         paint: {
           'circle-radius': getMapboxZoomLODExpression('regency-node'),
-          'circle-color': '#64748b',
+          'circle-color': 'rgba(232, 234, 237, 0.38)',
           'circle-stroke-width': 1.5,
           'circle-stroke-color': '#0c1017',
           'circle-opacity': 0.85,
@@ -1336,7 +1340,7 @@ export default function CrisisMap({
           'text-ignore-placement': false,
         },
         paint: {
-          'text-color': '#cbd5e1',
+          'text-color': 'rgba(232, 234, 237, 0.62)',
           'text-halo-color': '#0c1017',
           'text-halo-width': 2.0,
         },
@@ -1383,17 +1387,17 @@ export default function CrisisMap({
           'circle-radius': 14,
           'circle-color': [
             'match', ['get', 'role'],
-            'origin', '#00f0ff',
-            'dest', '#22c55e',
-            '#f59e0b'
+            'origin', '#e8eaed',
+            'dest', '#38b8f8',
+            '#e8eaed'
           ],
           'circle-opacity': 0.25,
           'circle-stroke-width': 2,
           'circle-stroke-color': [
             'match', ['get', 'role'],
-            'origin', '#00f0ff',
-            'dest', '#22c55e',
-            '#f59e0b'
+            'origin', '#e8eaed',
+            'dest', '#38b8f8',
+            '#e8eaed'
           ],
         },
       });
@@ -1405,9 +1409,9 @@ export default function CrisisMap({
           'circle-radius': 6.5,
           'circle-color': [
             'match', ['get', 'role'],
-            'origin', '#00f0ff',
-            'dest', '#22c55e',
-            '#f59e0b'
+            'origin', '#e8eaed',
+            'dest', '#38b8f8',
+            '#e8eaed'
           ],
           'circle-stroke-width': 2,
           'circle-stroke-color': '#ffffff',
@@ -1666,9 +1670,9 @@ export default function CrisisMap({
         ['settlement-subdivision-label', 'settlement-minor-label', 'settlement-major-label'].forEach((layerId) => {
           if (map.getLayer(layerId)) {
             try {
-              map.setPaintProperty(layerId, 'text-halo-color', '#05070a');
+              map.setPaintProperty(layerId, 'text-halo-color', '#080d14');
               map.setPaintProperty(layerId, 'text-halo-width', 2.0);
-              map.setPaintProperty(layerId, 'text-color', '#e2e8f0');
+              map.setPaintProperty(layerId, 'text-color', '#e8eaed');
             } catch {}
           }
         });
@@ -1974,11 +1978,7 @@ export default function CrisisMap({
                   : densifyPath(legCoords, 15));
               const legColor =
                 leg.color ||
-                (legMode === 'maritime'
-                  ? '#3B82F6'
-                  : legMode === 'air'
-                    ? '#00F0FF'
-                    : '#10B981');
+                '#38b8f8';
               routeFeatures.push({
                 type: 'Feature',
                 geometry: {
@@ -2017,16 +2017,7 @@ export default function CrisisMap({
             (routeCorridorClass === 'land' || rawWaypoints.length > 5
               ? rawWaypoints
               : densifyPath(rawWaypoints, 25));
-          const defaultColor =
-            r.modality === 'maritime' || r.corridor_type === 'sea_intermodal'
-              ? '#3B82F6'
-              : r.modality === 'air' || r.corridor_type === 'air_intermodal'
-                ? '#00F0FF'
-                : isRouteActive
-                  ? '#10B981'
-                  : origIdx === 1
-                    ? '#38BDF8'
-                    : '#00F0FF';
+          const defaultColor = '#38b8f8';
           routeFeatures.push({
             type: 'Feature',
             geometry: {
@@ -2338,7 +2329,7 @@ export default function CrisisMap({
             properties: {
               routeIndex: idx,
               label,
-              textColor: r.is_compromised ? '#fca5a5' : isHold ? '#fcd34d' : isActive ? '#00f0ff' : '#94a3b8',
+              textColor: r.is_compromised ? '#ef4444' : isHold ? '#f59e0b' : isActive ? '#38b8f8' : 'rgba(232, 234, 237, 0.62)',
             },
           });
         });
@@ -2780,10 +2771,10 @@ export default function CrisisMap({
               <button
                 type="button"
                 onClick={onExpandSidebar}
- className="cursor-pointer px-3 py-1.5 rounded-md bg-[#0c1017] border border-white/10 text-slate-300 hover:text-white hover:bg-white/5 shadow-xl transition-colors flex items-center gap-1.5 text-xs font-semibold shrink-0"
+ className="cursor-pointer px-3 py-1.5 rounded-md bg-[#0c1017] border border-white/10 text-[rgba(232,234,237,0.62)] hover:text-white hover:bg-white/5 shadow-[0_12px_32px_rgba(0,0,0,0.4)] transition-colors flex items-center gap-1.5 text-xs font-semibold shrink-0"
                 title="Tampilkan Panel Berita"
               >
-                <PanelLeftOpen className="w-4 h-4 text-slate-300" />
+                <PanelLeftOpen className="w-4 h-4 text-[rgba(232,234,237,0.62)]" />
  <span>Berita</span>
               </button>
             )}
@@ -2795,8 +2786,8 @@ export default function CrisisMap({
  onOpenChange={setIsSearchOpen}
  >
  <PopoverTrigger asChild>
- <div className="flex items-center bg-[#0c1017] border border-white/10 focus-within:border-cyan-500/50 rounded-lg px-2.5 py-1.5 shadow-xl transition-all w-52 sm:w-60 lg:w-68">
-                <Search className="w-3.5 h-3.5 text-slate-400 mr-2 shrink-0" />
+ <div className="flex items-center bg-[#0c1017] border border-white/10 focus-within:border-white/40 rounded-lg px-2.5 py-1.5 shadow-[0_12px_32px_rgba(0,0,0,0.4)] transition-colors w-52 sm:w-60 lg:w-68">
+                <Search className="w-3.5 h-3.5 text-[rgba(232,234,237,0.62)] mr-2 shrink-0" />
                 <input
                   type="text"
                   value={searchQuery}
@@ -2807,10 +2798,10 @@ export default function CrisisMap({
                     if (searchQuery.trim().length >= 2) setIsSearchOpen(true);
                   }}
                   placeholder="Cari desa, kecamatan, kota, atau hub..."
-                  className="bg-transparent text-xs text-slate-200 placeholder-slate-500 outline-none w-full font-sans"
+                  className="bg-transparent text-xs text-[#e8eaed] placeholder:text-[rgba(232,234,237,0.38)] outline-none w-full font-sans"
                 />
                 {isSearching ? (
-                  <Loader2 className="w-3.5 h-3.5 text-cyan-400 animate-spin shrink-0 ml-1.5" />
+                  <Loader2 className="w-3.5 h-3.5 text-[rgba(232,234,237,0.62)] animate-spin shrink-0 ml-1.5" />
                 ) : searchQuery ? (
                   <button
                     type="button"
@@ -2823,7 +2814,7 @@ export default function CrisisMap({
                       setIsSearching(false);
                       setIsSearchOpen(false);
                     }}
-                    className="text-slate-400 hover:text-white p-0.5 rounded cursor-pointer"
+                    className="text-[rgba(232,234,237,0.62)] hover:text-white p-0.5 rounded cursor-pointer"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -2840,14 +2831,14 @@ export default function CrisisMap({
  collisionPadding={12}
  className="w-80 max-w-[calc(100vw-32px)] max-h-80 overflow-y-auto no-scrollbar p-2 space-y-1.5"
  >
- <div className="font-sans font-medium text-xs text-slate-400 px-1 pb-1 border-b border-white/10 flex items-center justify-between">
+ <div className="font-sans font-medium text-xs text-[rgba(232,234,237,0.62)] px-1 pb-1 border-b border-white/10 flex items-center justify-between">
  <span>Hasil</span>
- <span className="text-slate-500 lowercase tabular-nums">{searchResults.length} titik</span>
+ <span className="text-[rgba(232,234,237,0.38)] lowercase tabular-nums">{searchResults.length} titik</span>
                   </div>
 
                   {isSearching && (
- <div className="px-2 py-2 text-xs text-slate-400 flex items-center gap-2">
-                      <Loader2 className="w-3 h-3 text-cyan-400 animate-spin shrink-0" />
+ <div className="px-2 py-2 text-xs text-[rgba(232,234,237,0.62)] flex items-center gap-2">
+                      <Loader2 className="w-3 h-3 text-[rgba(232,234,237,0.62)] animate-spin shrink-0" />
                       <span>Mencari gazetteer desa / kecamatan / kota…</span>
                     </div>
                   )}
@@ -2872,7 +2863,7 @@ export default function CrisisMap({
                   )}
 
                   {!isSearching && !searchError && searchResults.length === 0 && !offlineSearchNote && (
- <div className="px-2 py-3 text-xs text-slate-400 leading-snug">
+ <div className="px-2 py-3 text-xs text-[rgba(232,234,237,0.62)] leading-snug">
                       Tidak ada hasil untuk “{searchQuery.trim()}”. Coba nama desa, kecamatan, kota, atau hub lain.
                     </div>
                   )}
@@ -2893,13 +2884,13 @@ export default function CrisisMap({
                         <div className="flex items-start justify-between gap-1.5">
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5">
-                              <MapPin className="w-3 h-3 text-cyan-400 shrink-0" />
-                              <span className="font-medium text-slate-100 truncate">{item.name}</span>
- <span className="text-xs px-1.5 py-0.5 rounded bg-white/5 text-slate-300">
+                              <MapPin className="w-3 h-3 text-[rgba(232,234,237,0.62)] shrink-0" />
+                              <span className="font-medium text-[#e8eaed] truncate">{item.name}</span>
+ <span className="text-xs px-1.5 py-0.5 rounded bg-white/5 text-[rgba(232,234,237,0.62)]">
                                 {badgeType}
                               </span>
                             </div>
- <div className="text-xs text-slate-400 truncate pl-4.5 mt-0.5">{subtitle}</div>
+ <div className="text-xs text-[rgba(232,234,237,0.62)] truncate pl-4.5 mt-0.5">{subtitle}</div>
                           </div>
                         </div>
 
@@ -2907,7 +2898,7 @@ export default function CrisisMap({
                           <button
                             type="button"
                             onClick={() => handleSelectSearchResult(item, 'origin')}
- className="cursor-pointer px-2 py-0.5 rounded bg-cyan-950/60 hover:bg-cyan-900 text-cyan-300 border border-cyan-800/50 text-xs flex items-center gap-1 transition-colors"
+ className="cursor-pointer px-2 py-0.5 rounded bg-[#121822] hover:bg-white/10 text-[#e8eaed] border border-white/10 text-xs flex items-center gap-1 transition-colors"
                           >
                             <ArrowUpRight className="w-2.5 h-2.5" />
  <span>Asal</span>
@@ -2923,7 +2914,7 @@ export default function CrisisMap({
                           <button
                             type="button"
                             onClick={() => handleSelectSearchResult(item, 'focus')}
- className="cursor-pointer px-2 py-0.5 rounded hover:bg-white/5 text-slate-300 border border-white/10 text-xs flex items-center gap-1 transition-colors"
+ className="cursor-pointer px-2 py-0.5 rounded hover:bg-white/5 text-[rgba(232,234,237,0.62)] border border-white/10 text-xs flex items-center gap-1 transition-colors"
                           >
                             <Crosshair className="w-2.5 h-2.5" />
                             <span>Fokus</span>
@@ -2954,7 +2945,7 @@ export default function CrisisMap({
                     setInternalHiddenRouteIndices(new Set());
                     onResetCorridorVisibility?.();
                   }}
- className="cursor-pointer px-3 py-1.5 rounded-md bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-xs font-semibold flex items-center gap-1.5 shadow-xl transition-all duration-200"
+ className="cursor-pointer px-3 py-1.5 rounded-md bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-xs font-semibold flex items-center gap-1.5 shadow-[0_12px_32px_rgba(0,0,0,0.4)] transition-all duration-200"
                   title="Tampilkan kembali seluruh koridor rute yang disembunyikan"
                 >
                   <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
@@ -2969,14 +2960,14 @@ export default function CrisisMap({
  <PopoverTrigger asChild>
                 <button
                   type="button"
-                  className={`cursor-pointer px-3 py-1.5 rounded-md border text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-xl ${
+                  className={`cursor-pointer px-3 py-1.5 rounded-md border text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-[0_12px_32px_rgba(0,0,0,0.4)] ${
                     showLayerFilterMenu
                       ? 'bg-white text-[#080d14] border-white'
- : 'bg-[#0c1017] text-slate-300 border-white/10 hover:text-white hover:bg-white/5'
+ : 'bg-[#0c1017] text-[rgba(232,234,237,0.62)] border-white/10 hover:text-white hover:bg-white/5'
                   }`}
  title="Filter Lapisan"
                 >
-                  <Layers className="w-3.5 h-3.5 text-slate-400" />
+                  <Layers className="w-3.5 h-3.5 text-[rgba(232,234,237,0.62)]" />
  <span>Lapisan</span>
                 </button>
  </PopoverTrigger>
@@ -2989,7 +2980,7 @@ export default function CrisisMap({
  collisionPadding={12}
  className="w-64 max-w-[calc(100vw-32px)] p-3 space-y-2"
  >
- <div className="font-sans font-medium text-xs text-slate-300 border-b border-white/10 pb-1.5">
+ <div className="font-sans font-medium text-xs text-[rgba(232,234,237,0.62)] border-b border-white/10 pb-1.5">
  Lapisan
                     </div>
 
@@ -2999,7 +2990,7 @@ export default function CrisisMap({
                         onClick={() => toggleLayerFilter('baselineCorridors')}
  className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-white/5 transition"
                       >
-                        <span className="text-slate-200">Koridor Utama</span>
+                        <span className="text-[#e8eaed]">Koridor Utama</span>
                         <span className={`w-4 h-4 rounded flex items-center justify-center border ${
  layerFilters.baselineCorridors ? 'bg-white border-white text-[#080d14]' : 'border-white/10'
                         }`}>
@@ -3012,7 +3003,7 @@ export default function CrisisMap({
                         onClick={() => toggleLayerFilter('bottlenecks')}
  className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-white/5 transition"
                       >
- <span className="text-slate-200">Macet</span>
+ <span className="text-[#e8eaed]">Macet</span>
                         <span className={`w-4 h-4 rounded flex items-center justify-center border ${
  layerFilters.bottlenecks ? 'bg-white border-white text-[#080d14]' : 'border-white/10'
                         }`}>
@@ -3026,8 +3017,8 @@ export default function CrisisMap({
  className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-white/5 transition"
                         title="Disruption-only: hujan lebat high/critical (biru). Default ON."
                       >
-                        <span className="text-slate-200 flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+                        <span className="text-[#e8eaed] flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-[#38b8f8] shrink-0" />
  <span>Gangguan</span>
                         </span>
                         <span className={`w-4 h-4 rounded flex items-center justify-center border ${
@@ -3043,8 +3034,8 @@ export default function CrisisMap({
  className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-white/5 transition"
                         title="Waspada Dini: medium drizzle termasuk BMKG 60. Default OFF."
                       >
-                        <span className="text-slate-200 flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-slate-400 border border-cyan-400 shrink-0" />
+                        <span className="text-[#e8eaed] flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-transparent border border-dashed border-[#f59e0b] shrink-0" />
  <span>Waspada Dini (Advisory)</span>
                         </span>
                         <span className={`w-4 h-4 rounded flex items-center justify-center border ${
@@ -3059,8 +3050,8 @@ export default function CrisisMap({
                         onClick={() => toggleLayerFilter('fireHotspots')}
  className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-white/5 transition"
                       >
- <span className="text-slate-200 flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-slate-400 shrink-0" />
+ <span className="text-[#e8eaed] flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-white/30 shrink-0" />
                           <span>Titik Panas (Satelit)</span>
                         </span>
                         <span className={`w-4 h-4 rounded flex items-center justify-center border ${
@@ -3075,7 +3066,7 @@ export default function CrisisMap({
                         onClick={() => toggleLayerFilter('fleetVehicles')}
  className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-white/5 transition"
                       >
- <span className="text-slate-200">Armada</span>
+ <span className="text-[#e8eaed]">Armada</span>
                         <span className={`w-4 h-4 rounded flex items-center justify-center border ${
  layerFilters.fleetVehicles ? 'bg-white border-white text-[#080d14]' : 'border-white/10'
                         }`}>
@@ -3112,27 +3103,27 @@ export default function CrisisMap({
             top: Math.max(70, (contextPopup.screenPos?.y || 200) - 160),
           }}
         >
- <div className="w-72 bg-[#0c1017] border border-white/10 p-3 rounded-xl shadow-2xl space-y-2.5 text-xs">
+ <div className="w-72 bg-[#0c1017] border border-white/10 p-3 rounded-xl shadow-[0_12px_32px_rgba(0,0,0,0.4)] space-y-2.5 text-xs">
  <div className="flex items-start justify-between gap-2 border-b border-white/10 pb-1.5">
               <div className="flex items-center gap-1.5 min-w-0">
-                <MapPin className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                <span className="font-semibold text-slate-100 truncate">{contextPopup.name}</span>
+                <MapPin className="w-3.5 h-3.5 text-[rgba(232,234,237,0.62)] shrink-0" />
+                <span className="font-semibold text-[#e8eaed] truncate">{contextPopup.name}</span>
               </div>
               <button
                 type="button"
                 onClick={() => setContextPopup(null)}
-                className="text-slate-400 hover:text-white p-0.5 rounded cursor-pointer"
+                className="text-[rgba(232,234,237,0.62)] hover:text-white p-0.5 rounded cursor-pointer"
  title="Tutup"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
 
- <div className="flex items-center justify-between text-xs text-slate-400">
- <span className="px-1.5 py-0.5 rounded bg-white/5 text-slate-300 text-xs">
+ <div className="flex items-center justify-between text-xs text-[rgba(232,234,237,0.62)]">
+ <span className="px-1.5 py-0.5 rounded bg-white/5 text-[rgba(232,234,237,0.62)] text-xs">
                 {contextPopup.type}
               </span>
- <span className="font-mono tabular-nums text-xs text-slate-400">
+ <span className="font-mono tabular-nums text-xs text-[rgba(232,234,237,0.62)]">
                 {contextPopup.coords[0].toFixed(3)}°, {contextPopup.coords[1].toFixed(3)}°
               </span>
             </div>
@@ -3150,7 +3141,7 @@ export default function CrisisMap({
                   onNodeSelectedRef.current?.(nodeId);
                   setContextPopup(null);
                 }}
-                className="cursor-pointer px-2.5 py-1.5 rounded bg-cyan-950/80 hover:bg-cyan-900 text-cyan-200 border border-cyan-700/60 font-medium text-xs flex items-center justify-center gap-1 transition-colors"
+                className="cursor-pointer px-2.5 py-1.5 rounded-lg bg-white text-[#080d14] border border-white font-semibold text-xs flex items-center justify-center gap-1 transition-colors"
               >
                 <ArrowUpRight className="w-3.5 h-3.5" />
  <span>Asal</span>
@@ -3180,9 +3171,9 @@ export default function CrisisMap({
               onClick={() => {
                 mapRef.current?.flyTo({ center: contextPopup.coords, zoom: 12, duration: 1000 });
               }}
- className="cursor-pointer w-full py-1 rounded hover:bg-white/5 text-slate-300 border border-white/10 text-xs flex items-center justify-center gap-1 transition-colors"
+ className="cursor-pointer w-full py-1 rounded hover:bg-white/5 text-[rgba(232,234,237,0.62)] border border-white/10 text-xs flex items-center justify-center gap-1 transition-colors"
             >
-              <Crosshair className="w-3 h-3 text-slate-400" />
+              <Crosshair className="w-3 h-3 text-[rgba(232,234,237,0.62)]" />
  <span>Fokus</span>
             </button>
           </div>
@@ -3201,16 +3192,16 @@ export default function CrisisMap({
             top: Math.max(70, selectedRoutePopover.screenPos.y - 190),
           }}
         >
- <div className="w-80 bg-[#0c1017] border border-white/10 p-3.5 rounded-xl shadow-2xl space-y-3 text-xs text-slate-100 font-sans">
+ <div className="w-80 bg-[#0c1017] border border-white/10 p-3.5 rounded-xl shadow-[0_12px_32px_rgba(0,0,0,0.4)] space-y-3 text-xs text-[#e8eaed] font-sans">
             {/* Header: Corridor Name & Modality Badge */}
             <div className="flex items-start justify-between gap-2 border-b border-white/10 pb-2">
               <div className="flex items-center gap-2 min-w-0">
                 <div
                   className={`p-1.5 rounded-lg border shrink-0 ${
                     selectedRoutePopover.route.corridor_type === 'sea_intermodal' || selectedRoutePopover.route.modality === 'maritime'
-                      ? 'bg-blue-500/20 text-blue-300 border-blue-500/30'
+                      ? 'bg-white text-[#080d14] border-white font-semibold'
                       : selectedRoutePopover.route.corridor_type === 'air_intermodal' || selectedRoutePopover.route.modality === 'air'
-                        ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30'
+                        ? 'bg-white text-[#080d14] border-white font-semibold'
                         : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
                   }`}
                 >
@@ -3227,7 +3218,7 @@ export default function CrisisMap({
                     {selectedRoutePopover.route.description || selectedRoutePopover.route.route_name || `Koridor #${selectedRoutePopover.routeIndex + 1}`}
                   </h4>
  <div className="flex items-center gap-1.5 mt-0.5 text-xs">
- <span className="text-slate-400">
+ <span className="text-[rgba(232,234,237,0.62)]">
                       {selectedRoutePopover.route.corridor_type === 'sea_intermodal' || selectedRoutePopover.route.modality === 'maritime'
  ? 'Laut + darat'
                         : selectedRoutePopover.route.corridor_type === 'air_intermodal' || selectedRoutePopover.route.modality === 'air'
@@ -3244,7 +3235,7 @@ export default function CrisisMap({
               <button
                 type="button"
                 onClick={() => setSelectedRoutePopover(null)}
-                className="text-slate-400 hover:text-white p-1 rounded hover:bg-white/5 cursor-pointer transition-colors"
+                className="text-[rgba(232,234,237,0.62)] hover:text-white p-1 rounded hover:bg-white/5 cursor-pointer transition-colors"
  title="Tutup"
               >
                 <X className="w-3.5 h-3.5" />
@@ -3254,14 +3245,14 @@ export default function CrisisMap({
             {/* Metrics Grid */}
  <div className="grid grid-cols-2 gap-2 py-2 border-t border-white/10 text-xs">
               <div>
- <span className="text-slate-400 block text-xs">ETA</span>
+ <span className="text-[rgba(232,234,237,0.62)] block text-xs">ETA</span>
  <span className="font-semibold text-white font-mono tabular-nums">
                   {selectedRoutePopover.route.eta_minutes == null ||
                   !Number.isFinite(Number(selectedRoutePopover.route.eta_minutes))
                     ? 'Belum terverifikasi'
                     : `${Math.floor(selectedRoutePopover.route.eta_minutes / 60)}j ${Math.round(selectedRoutePopover.route.eta_minutes % 60)}m`}
                 </span>
- <span className="text-xs text-slate-400 block tabular-nums">
+ <span className="text-xs text-[rgba(232,234,237,0.62)] block tabular-nums">
                   {selectedRoutePopover.route.distance_km == null ||
                   !Number.isFinite(Number(selectedRoutePopover.route.distance_km))
                     ? 'Jarak belum terverifikasi'
@@ -3270,7 +3261,7 @@ export default function CrisisMap({
               </div>
 
               <div>
-                <span className="text-[11px] font-sans text-slate-400 block uppercase tracking-wider">Est. Operasional</span>
+                <span className="text-xs font-sans text-[rgba(232,234,237,0.62)] block uppercase tracking-wider">Est. Operasional</span>
                 {(() => {
                   const currentRoute = activeRoutes?.[selectedRoutePopover.routeIndex] ?? selectedRoutePopover.route;
                   const telemetry = resolvePopoverDualMetric(
@@ -3289,10 +3280,10 @@ export default function CrisisMap({
                           {telemetry.totalDisplay}
                         </span>
                         <span
-                          className={`text-[10px] font-mono px-1.5 py-0.5 rounded border w-fit ${
+                          className={`text-xs font-mono px-1.5 py-0.5 rounded border w-fit ${
                             telemetry.badgeType === 'detour' || telemetry.badgeType === 'savings'
                               ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
-                              : 'text-slate-400 bg-white/5 border-white/10'
+                              : 'text-[rgba(232,234,237,0.62)] bg-white/5 border-white/10'
                           }`}
                         >
                           {telemetry.badge}
@@ -3347,10 +3338,10 @@ export default function CrisisMap({
                   onToggleCorridor?.(mod);
                   setSelectedRoutePopover(null);
                 }}
-                className="cursor-pointer py-1.5 px-2.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 text-xs font-medium flex items-center justify-center gap-1.5 transition-all duration-200"
+                className="cursor-pointer py-1.5 px-2.5 rounded-lg bg-white/5 hover:bg-white/10 text-[rgba(232,234,237,0.62)] hover:text-white border border-white/10 text-xs font-medium flex items-center justify-center gap-1.5 transition-all duration-200"
                 title="Sembunyikan rute ini dari peta"
               >
-                <EyeOff className="w-3.5 h-3.5 text-slate-400" />
+                <EyeOff className="w-3.5 h-3.5 text-[rgba(232,234,237,0.62)]" />
                 <span>Sembunyikan</span>
               </button>
             </div>
@@ -3359,12 +3350,12 @@ export default function CrisisMap({
       )}
 
       {drawModeActive && (
- <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[360] px-3.5 py-1.5 rounded-md bg-[#1a120b] border border-amber-500/40 shadow-xl flex items-center gap-2.5 duration-200">
- <span className="h-2 w-2 rounded-full bg-amber-400/60"></span>
-          <span className="text-xs font-medium text-amber-300">
+ <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[360] px-3.5 py-1.5 rounded-lg bg-[#0c1017] border border-[#f59e0b]/40 shadow-[0_12px_32px_rgba(0,0,0,0.4)] flex items-center gap-2.5 duration-200">
+ <span className="h-2 w-2 rounded-full bg-[#f59e0b]/60"></span>
+          <span className="text-xs font-medium text-[#f59e0b]">
             Gambar Poligon Area Disrupsi
           </span>
-          <span className="text-xs text-amber-200/60 border-l border-amber-500/30 pl-2">
+          <span className="text-xs text-[rgba(232,234,237,0.62)] border-l border-white/10 pl-2">
             Klik titik pada peta untuk menutup bentuk poligon
           </span>
         </div>

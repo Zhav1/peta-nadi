@@ -69,25 +69,29 @@ export const FreshnessBadge: React.FC<FreshnessBadgeProps> = ({
   }, [status]);
 
   const text = freshnessText(status, updatedAt, nowMs);
+  // Phase 175 — freshness is chrome: neutral text tiers only. Amber is the one
+  // permitted exception, and only when the payload is genuinely stale (a
+  // last-known-good value the operator must not mistake for fresh). Degraded is
+  // dim, not red: unknown data is not a hazard.
   const tone =
-    status === 'degraded'
-      ? 'text-slate-500 border-slate-600/60'
-      : status === 'stale'
-        ? 'text-slate-400 border-[#1c2432]'
-        : 'text-slate-500 border-[#1c2432]';
+    status === 'stale'
+      ? 'text-[#f59e0b] border-white/10'
+      : status === 'degraded'
+        ? 'text-[rgba(232,234,237,0.38)] border-white/10'
+        : 'text-[rgba(232,234,237,0.62)] border-white/10';
 
   return (
     <span
-      className={`inline-flex items-center gap-1 border rounded px-1.5 py-0.5 text-[10px] font-sans tabular-nums whitespace-nowrap ${tone} ${className}`}
+      className={`inline-flex items-center gap-1 border rounded px-1.5 py-0.5 text-xs font-sans tabular-nums whitespace-nowrap ${tone} ${className}`}
       title={reason ?? text}
     >
       <span
         className={`w-1.5 h-1.5 rounded-full shrink-0 ${
           status === 'degraded'
-            ? 'border border-slate-500'
+            ? 'border border-white/25'
             : status === 'stale'
-              ? 'border border-dashed border-slate-400'
-              : 'bg-slate-400'
+              ? 'border border-dashed border-[#f59e0b]'
+              : 'bg-white/45'
         }`}
       />
       {text}

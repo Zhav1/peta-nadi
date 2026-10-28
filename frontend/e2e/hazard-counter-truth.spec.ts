@@ -113,13 +113,14 @@ test('Waspada Dini counts backend truth even with every weather layer OFF', asyn
   await expect(cuaca).toHaveText('5', { timeout: 30000 });
   await expect(waspada).toHaveText('27');
 
-  // Waspada Dini layer defaults OFF — the count must still be backend truth.
-  await expect(waspadaPill(page)).toHaveClass(/border-white\/5/);
+  // Phase 175: the pill recipe is monochrome — the enabled layer is the white
+  // fill, everything else is the near-black panel. Waspada Dini defaults OFF.
+  await expect(waspadaPill(page)).toHaveCSS('background-color', 'rgb(12, 16, 23)');
 
   // Toggle the Cuaca (disruption) layer OFF: drawing stops, the number does not.
-  await expect(cuacaPill(page)).toHaveClass(/border-blue-500\/50/);
+  await expect(cuacaPill(page)).toHaveCSS('background-color', 'rgb(255, 255, 255)');
   await cuacaPill(page).click();
-  await expect(cuacaPill(page)).toHaveClass(/border-white\/5/);
+  await expect(cuacaPill(page)).toHaveCSS('background-color', 'rgb(12, 16, 23)');
 
   await expect(cuaca).toHaveText('5');
   await expect(waspada).toHaveText('27');

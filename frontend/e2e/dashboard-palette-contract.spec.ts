@@ -50,8 +50,13 @@ const EXPECTED_BANNED = [
  * Keep the array sorted and deduplicated (asserted below).
  */
 const CLEANED_FILES = [
+  'components/dashboard/DashboardClient.tsx',
+  'components/dashboard/FreshnessBadge.tsx',
+  'components/dashboard/TopNavTelemetry.tsx',
   'components/dashboard/analytics/AnalyticsTip.tsx',
   'components/dashboard/analytics/KpiStrip.tsx',
+  'components/map/CrisisMap.tsx',
+  'components/map/FleetVehicleLayer.tsx',
   'lib/designTokens.ts',
 ];
 

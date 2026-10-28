@@ -261,6 +261,8 @@ Enforced by `frontend/e2e/dashboard-palette-contract.spec.ts`, which scans `CLEA
 
 `components/map/FleetVehicleLayer.tsx:816–818` (hover-tooltip modality dot) is chrome, not data paint, and is **not** excepted. No other exception exists: every occurrence in `components/dashboard/**`, `components/sidebar/**`, `components/fleet/**`, `components/auth/**`, `components/ui/**` and `components/base-ui/**` must reach zero by the end of phase 176.
 
+**Status after phase 175.** Both enumerated map files now paint exclusively with critical `#ef4444`, warning `#f59e0b`, accent `#38b8f8`, and neutral white-alpha; no banned literal survives in either. The ranges above remain the only place a banned hue could legally return — the table is a ceiling, not a licence.
+
 ### Type
 
 | Rule | Value |
