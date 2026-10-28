@@ -199,6 +199,21 @@ test.describe('M8 phase 163b — dashboard bootstrap read path', () => {
     const firstDataSignal = await waitForFirstDashboardData(page, 180000);
     const firstDataMs = Date.now() - mountStart;
 
+    // First paint can beat the snapshot response (especially while the snapshot
+    // row is missing and the endpoint takes its bounded live path). The hard gate
+    // must observe the status, not race it.
+    if (process.env.M8_REQUIRE_BOOTSTRAP === '1' && bootstrapStatus === null) {
+      const bootstrapResponse = await page
+        .waitForResponse((r) => /\/api\/v1\/dashboard\/bootstrap/.test(r.url()), {
+          timeout: 120000,
+        })
+        .catch(() => null);
+      if (bootstrapResponse) {
+        bootstrapStatus = bootstrapResponse.status();
+        bootstrapAtMs = Date.now() - mountStart;
+      }
+    }
+
     recorder.stop();
     page.off('response', onResponse);
 
