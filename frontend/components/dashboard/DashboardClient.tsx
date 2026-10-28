@@ -66,7 +66,7 @@ import { FleetOnboardingModal } from '@/components/fleet/FleetOnboardingModal';
 import { TenantFleetRoster } from '@/components/fleet/TenantFleetRoster';
 import { useCrisisSimulationStream } from '@/hooks/useCrisisSimulationStream';
 
-import { TopNavTelemetry } from '@/components/dashboard/TopNavTelemetry';
+import { TopNavTelemetry, HazardLegendPills } from '@/components/dashboard/TopNavTelemetry';
 import { RoutingStatusBanner } from '@/components/dashboard/RoutingStatusBanner';
 import { DispatcherAlertQueue } from '@/components/dashboard/DispatcherAlertQueue';
 import { HitlDecisionDrawer } from '@/components/dashboard/HitlDecisionDrawer';
@@ -4109,6 +4109,7 @@ export default function DashboardClient() {
                 routingInfo={routingInfo}
                 isLeftSidebarCollapsed={isLeftSidebarCollapsed}
                 onExpandSidebar={() => setIsLeftSidebarCollapsed(false)}
+                onCollapseSidebar={() => setIsLeftSidebarCollapsed(true)}
                 fleetModalityFilter={fleetModalityFilter}
                 simSpeed={simSpeed}
                 isRightSidebarOpen={isRightInspectorActive}
@@ -4168,7 +4169,28 @@ export default function DashboardClient() {
                 }
                 fleetModalitySlot={
                   !(isSidebarOpen && selectedCrisis) ? (
- <div className="flex items-center gap-1 p-1 rounded-xl bg-[#0c1017] border border-white/10 shadow-[0_12px_32px_rgba(0,0,0,0.4)] overflow-x-auto no-scrollbar snap-x snap-mandatory max-w-[calc(100vw-2rem)]">
+ <div data-testid="filter-strip" className="flex items-center gap-1 p-1 rounded-xl bg-[#0c1017] border border-white/10 shadow-[0_12px_32px_rgba(0,0,0,0.4)] overflow-x-auto no-scrollbar snap-x snap-mandatory max-w-[calc(100vw-2rem)]">
+                      {/*
+                        Phase 176.6 — Row 2 below `md`: the Merah/Kuning legend
+                        toggles open this same scroll strip, so the counters above
+                        are the only pinned line. At `md`+ the legend lives back in
+                        the telemetry row and this stays the modality bar.
+                      */}
+                      {isLeftSidebarCollapsed && (
+                        <>
+                          <div className="md:hidden flex items-center gap-1 shrink-0 snap-start">
+                            <HazardLegendPills
+                              showRedZones={showRedZones}
+                              onToggleRedZones={() => setShowRedZones((v) => !v)}
+                              redZoneCount={liveNewsZoneCounts.red}
+                              showYellowZones={showYellowZones}
+                              onToggleYellowZones={() => setShowYellowZones((v) => !v)}
+                              yellowZoneCount={liveNewsZoneCounts.yellow}
+                            />
+                          </div>
+                          <div className="md:hidden w-[1px] h-4 bg-white/10 mx-0.5 shrink-0" aria-hidden="true" />
+                        </>
+                      )}
                       {[
  { id: 'all', label: 'Semua', count: fleetCountVehicles.length, icon: null },
  { id: 'truck', label: 'Truk', count: fleetCountVehicles.filter((v) => v.modality === 'truck').length, icon: Truck },

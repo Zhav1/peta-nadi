@@ -63,6 +63,107 @@ interface TopNavTelemetryProps {
   } | null;
 }
 
+// --- Phase 175/176.6: shared pill recipe --------------------------------
+// One surface, one border, one text tier. `active` means the layer is ON and
+// is the only state that fills white (the selected signal). Hazard hue is
+// carried by the number alone, never by the pill surface or its label.
+// `grow` is the Phase 176.6 mobile treatment: the three hazard counters are the
+// product's primary signal, so below `md` they share one pinned row as three
+// equal columns instead of scrolling out of reach.
+const PILL_BASE =
+  'cursor-pointer flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs font-mono tabular-nums transition-colors duration-150 snap-start';
+const pillClass = (active: boolean, grow = false): string =>
+  `${PILL_BASE} ${grow ? 'flex-1 basis-0 min-w-0 md:flex-none' : 'flex-none'} ${
+    active
+      ? 'bg-white text-[#080d14] border-white font-semibold'
+      : 'bg-[#0c1017] text-[rgba(232,234,237,0.62)] border-white/[0.08] hover:border-white/15 hover:text-[#e8eaed]'
+  }`;
+const chipClass = (active: boolean): string =>
+  active
+    ? 'shrink-0 whitespace-nowrap px-1 py-0.5 rounded bg-black/10 text-xs font-bold tabular-nums'
+    : 'shrink-0 whitespace-nowrap px-1 py-0.5 rounded bg-white/[0.06] text-xs font-bold tabular-nums';
+/** Only a one-line-hint label may truncate; the number never does. */
+const pillLabelClass = (grow: boolean): string =>
+  `font-sans text-xs font-semibold ${grow ? 'truncate min-w-0' : 'whitespace-nowrap'}`;
+/** Marker dot: solid on an enabled pill, hollow neutral when the layer is off. */
+const dotClass = (active: boolean, hazard: 'critical' | 'warning' | null): string => {
+  if (!active) return 'w-2 h-2 rounded-full border border-white/25 bg-transparent shrink-0';
+  if (hazard === 'critical') return 'w-2 h-2 rounded-full bg-[#ef4444] shrink-0';
+  if (hazard === 'warning') return 'w-2 h-2 rounded-full bg-[#f59e0b] shrink-0';
+  return 'w-2 h-2 rounded-full bg-[#080d14] shrink-0';
+};
+/**
+ * A hazard-bearing ok bucket: verified present hazard (not empty, not stale,
+ * not unknown). Only then may the number carry hazard hue.
+ */
+const isPresentHazard = (status: HazardCounterStatus, count: number | null): boolean =>
+  status === 'ok' && count != null && count > 0;
+/** Number tone: hazard hue only for a present hazard, never for a label. */
+const numberTone = (hazard: 'critical' | 'warning' | null, active: boolean): string => {
+  if (hazard === 'critical') return 'text-[#ef4444]';
+  if (hazard === 'warning') return 'text-[#f59e0b]';
+  return active ? 'text-[#080d14]' : 'text-[rgba(232,234,237,0.62)]';
+};
+
+export interface HazardLegendPillsProps {
+  showRedZones: boolean;
+  onToggleRedZones?: () => void;
+  redZoneCount: number;
+  showYellowZones: boolean;
+  onToggleYellowZones?: () => void;
+  yellowZoneCount: number;
+  /** Extra classes per pill — used to relocate the pills across breakpoints. */
+  pillClassName?: string;
+}
+
+/**
+ * Phase 176.6 — the compact Merah/Kuning legend toggles, extracted so the same
+ * two pills can sit in the desktop telemetry row and in the mobile filter row
+ * (below `md` the counters own their own row and the filters scroll).
+ */
+export const HazardLegendPills: React.FC<HazardLegendPillsProps> = ({
+  showRedZones,
+  onToggleRedZones,
+  redZoneCount,
+  showYellowZones,
+  onToggleYellowZones,
+  yellowZoneCount,
+  pillClassName = '',
+}) => (
+  <>
+    <button
+      type="button"
+      data-testid="counter-pill"
+      onClick={onToggleRedZones}
+      className={`${pillClass(showRedZones)} ${pillClassName}`}
+      title="Filter Peta: Zona Merah (Bencana Terkonfirmasi)"
+    >
+      <span className={dotClass(showRedZones, 'critical')} />
+      <span className={pillLabelClass(false)}>Merah</span>
+      <span
+        className={`${chipClass(showRedZones)} ${numberTone(redZoneCount > 0 ? 'critical' : null, showRedZones)}`}
+      >
+        {redZoneCount}
+      </span>
+    </button>
+    <button
+      type="button"
+      data-testid="counter-pill"
+      onClick={onToggleYellowZones}
+      className={`${pillClass(showYellowZones)} ${pillClassName}`}
+      title="Filter Peta: Zona Kuning (Perlu Klarifikasi / Waspada)"
+    >
+      <span className={dotClass(showYellowZones, 'warning')} />
+      <span className={pillLabelClass(false)}>Kuning</span>
+      <span
+        className={`${chipClass(showYellowZones)} ${numberTone(yellowZoneCount > 0 ? 'warning' : null, showYellowZones)}`}
+      >
+        {yellowZoneCount}
+      </span>
+    </button>
+  </>
+);
+
 /**
  * Minimalist map-critical header: Merah/Kuning filters (collapsed drawer),
  * Cuaca disruption (default ON), Waspada Dini advisory (default OFF),
@@ -215,157 +316,117 @@ export const TopNavTelemetry: React.FC<TopNavTelemetryProps> = ({
     return lines.join('\n');
   })();
 
-  // --- Phase 175: shared pill recipe ----------------------------------------
-  // One surface, one border, one text tier. `active` means the layer is ON and
-  // is the only state that fills white (the selected signal). Hazard hue is
-  // carried by the number alone, never by the pill surface or its label.
-  const PILL_BASE =
-    'cursor-pointer flex-none flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs font-mono tabular-nums transition-colors duration-150 snap-start';
-  const pillClass = (active: boolean): string =>
-    active
-      ? `${PILL_BASE} bg-white text-[#080d14] border-white font-semibold`
-      : `${PILL_BASE} bg-[#0c1017] text-[rgba(232,234,237,0.62)] border-white/[0.08] hover:border-white/15 hover:text-[#e8eaed]`;
-  const chipClass = (active: boolean): string =>
-    active
-      ? 'px-1 py-0.5 rounded bg-black/10 text-xs font-bold tabular-nums'
-      : 'px-1 py-0.5 rounded bg-white/[0.06] text-xs font-bold tabular-nums';
-  /** Marker dot: solid on an enabled pill, hollow neutral when the layer is off. */
-  const dotClass = (active: boolean, hazard: 'critical' | 'warning' | null): string => {
-    if (!active) return 'w-2 h-2 rounded-full border border-white/25 bg-transparent shrink-0';
-    if (hazard === 'critical') return 'w-2 h-2 rounded-full bg-[#ef4444] shrink-0';
-    if (hazard === 'warning') return 'w-2 h-2 rounded-full bg-[#f59e0b] shrink-0';
-    return 'w-2 h-2 rounded-full bg-[#080d14] shrink-0';
-  };
-  /**
-   * A hazard-bearing ok bucket: verified present hazard (not empty, not stale,
-   * not unknown). Only then may the number carry hazard hue.
-   */
-  const isPresentHazard = (status: HazardCounterStatus, count: number | null): boolean =>
-    status === 'ok' && count != null && count > 0;
-  /** Number tone: hazard hue only for a present hazard, never for a label. */
-  const numberTone = (hazard: 'critical' | 'warning' | null, active: boolean): string => {
-    if (hazard === 'critical') return 'text-[#ef4444]';
-    if (hazard === 'warning') return 'text-[#f59e0b]';
-    return active ? 'text-[#080d14]' : 'text-[rgba(232,234,237,0.62)]';
-  };
-
   return (
     <div
       ref={stripRef}
       data-testid="counter-strip"
-      className="relative flex items-center gap-1.5 text-xs font-mono select-none overflow-x-auto no-scrollbar [overflow-anchor:none] snap-x snap-mandatory w-full min-w-0 md:w-auto md:flex-wrap md:overflow-visible md:snap-none"
+      className="relative flex flex-wrap items-center gap-1.5 text-xs font-mono select-none [overflow-anchor:none] w-full min-w-0 md:w-auto"
     >
-      {/* Compact Zone Filter Pills when Left OSINT Drawer is Collapsed */}
+      {/*
+        Phase 176.6 — Row 1 below `md`: the three hazard counters, pinned and
+        non-scrolling, three equal columns so none of them can be clipped or
+        require a swipe. At `md`+ this wrapper disappears (`display: contents`)
+        and the pills rejoin the single desktop row exactly as before.
+      */}
+      <div
+        data-testid="counter-row"
+        className="flex w-full min-w-0 items-center gap-1.5 md:contents"
+      >
+        {/* Disruption-only weather (biru, default ON) — the single map-critical hazard count. */}
+        {onToggleWeatherPolygons && (
+          <button
+            type="button"
+            data-testid="counter-pill"
+            onClick={onToggleWeatherPolygons}
+            className={pillClass(showWeatherPolygons, true)}
+            title={bucketTooltip(weatherSummary?.cuaca, 'Cuaca: zona gangguan aktif (high/critical)', {
+              updatedAt: weatherSummary?.generated_at ?? weatherPolygonMeta?.updated_at ?? null,
+              capNotice:
+                weatherPolygonMeta?.capped
+                  ? `Render: menampilkan ${weatherPolygonMeta.count ?? 0} dari ${weatherPolygonMeta.total ?? 0} poligon`
+                  : null,
+            })}
+          >
+            <span className={dotClass(showWeatherPolygons, null)} />
+            <span className={pillLabelClass(true)}>Cuaca</span>
+            <span
+              data-testid="counter-cuaca"
+              className={`${chipClass(showWeatherPolygons)} ${numberTone(
+                isPresentHazard(cuacaStatus, cuacaCount) ? 'critical' : null,
+                showWeatherPolygons,
+              )}`}
+            >
+              {counterText(cuacaStatus, cuacaCount)}
+            </span>
+          </button>
+        )}
+
+        {/* Waspada Dini advisory (medium drizzle, default OFF, info-only). */}
+        {onToggleWeatherAdvisory && (
+          <button
+            type="button"
+            data-testid="counter-pill"
+            onClick={onToggleWeatherAdvisory}
+            className={pillClass(showWeatherAdvisory, true)}
+            title={bucketTooltip(weatherSummary?.waspada, 'Waspada Dini: zona pantau medium (advisory), dihitung walau layer OFF', {
+              updatedAt: weatherSummary?.generated_at ?? null,
+            })}
+          >
+            <span className={dotClass(showWeatherAdvisory, null)} />
+            <span className={pillLabelClass(true)}>Waspada Dini</span>
+            <span
+              data-testid="counter-waspada"
+              className={`${chipClass(showWeatherAdvisory)} ${numberTone(
+                isPresentHazard(waspadaStatus, waspadaCount) ? 'warning' : null,
+                showWeatherAdvisory,
+              )}`}
+            >
+              {counterText(waspadaStatus, waspadaCount)}
+            </span>
+          </button>
+        )}
+
+        {/* Titik Panas satelit (FIRMS VIIRS). */}
+        {onToggleFireHotspots && (
+          <button
+            type="button"
+            data-testid="counter-pill"
+            onClick={onToggleFireHotspots}
+            className={pillClass(showFireHotspots, true)}
+            title={fireTooltipText}
+          >
+            <span className={dotClass(showFireHotspots, null)} />
+            <span className={pillLabelClass(true)}>Titik Panas</span>
+            <span
+              data-testid="counter-titik-panas"
+              className={`${chipClass(showFireHotspots)} ${numberTone(
+                titikPanasCount != null && titikPanasCount > 0 ? 'warning' : null,
+                showFireHotspots,
+              )}`}
+            >
+              {counterText(fireStatus, titikPanasCount)}
+            </span>
+          </button>
+        )}
+      </div>
+
+      {/*
+        Desktop legend (md+): the Merah/Kuning toggles keep their old slot at the
+        head of the single row (`order-first`). Below `md` they render in the
+        mobile filter row instead, next to the modality filters.
+      */}
       {isLeftSidebarCollapsed && (
-        <div className="flex items-center gap-1 shrink-0 snap-start">
-          <button
-            type="button"
-            data-testid="counter-pill"
-            onClick={onToggleRedZones}
-            className={pillClass(showRedZones)}
-            title="Filter Peta: Zona Merah (Bencana Terkonfirmasi)"
-          >
-            <span className={dotClass(showRedZones, 'critical')} />
-            <span className="font-sans text-xs font-semibold">Merah</span>
-            <span
-              className={`${chipClass(showRedZones)} ${numberTone(redZoneCount > 0 ? 'critical' : null, showRedZones)}`}
-            >
-              {redZoneCount}
-            </span>
-          </button>
-          <button
-            type="button"
-            data-testid="counter-pill"
-            onClick={onToggleYellowZones}
-            className={pillClass(showYellowZones)}
-            title="Filter Peta: Zona Kuning (Perlu Klarifikasi / Waspada)"
-          >
-            <span className={dotClass(showYellowZones, 'warning')} />
-            <span className="font-sans text-xs font-semibold">Kuning</span>
-            <span
-              className={`${chipClass(showYellowZones)} ${numberTone(yellowZoneCount > 0 ? 'warning' : null, showYellowZones)}`}
-            >
-              {yellowZoneCount}
-            </span>
-          </button>
+        <div data-testid="counter-legend-desktop" className="hidden md:contents">
+          <HazardLegendPills
+            showRedZones={showRedZones}
+            onToggleRedZones={onToggleRedZones}
+            redZoneCount={redZoneCount}
+            showYellowZones={showYellowZones}
+            onToggleYellowZones={onToggleYellowZones}
+            yellowZoneCount={yellowZoneCount}
+            pillClassName="md:order-first"
+          />
         </div>
-      )}
-
-      {/* Disruption-only weather (biru, default ON) — the single map-critical hazard count. */}
-      {onToggleWeatherPolygons && (
-        <button
-          type="button"
-          data-testid="counter-pill"
-          onClick={onToggleWeatherPolygons}
-          className={pillClass(showWeatherPolygons)}
-          title={bucketTooltip(weatherSummary?.cuaca, 'Cuaca: zona gangguan aktif (high/critical)', {
-            updatedAt: weatherSummary?.generated_at ?? weatherPolygonMeta?.updated_at ?? null,
-            capNotice:
-              weatherPolygonMeta?.capped
-                ? `Render: menampilkan ${weatherPolygonMeta.count ?? 0} dari ${weatherPolygonMeta.total ?? 0} poligon`
-                : null,
-          })}
-        >
-          <span className={dotClass(showWeatherPolygons, null)} />
-          <span className="font-sans text-xs font-semibold">Cuaca</span>
-          <span
-            data-testid="counter-cuaca"
-            className={`${chipClass(showWeatherPolygons)} ${numberTone(
-              isPresentHazard(cuacaStatus, cuacaCount) ? 'critical' : null,
-              showWeatherPolygons,
-            )}`}
-          >
-            {counterText(cuacaStatus, cuacaCount)}
-          </span>
-        </button>
-      )}
-
-      {/* Waspada Dini advisory (medium drizzle, default OFF, info-only). */}
-      {onToggleWeatherAdvisory && (
-        <button
-          type="button"
-          data-testid="counter-pill"
-          onClick={onToggleWeatherAdvisory}
-          className={pillClass(showWeatherAdvisory)}
-          title={bucketTooltip(weatherSummary?.waspada, 'Waspada Dini: zona pantau medium (advisory), dihitung walau layer OFF', {
-            updatedAt: weatherSummary?.generated_at ?? null,
-          })}
-        >
-          <span className={dotClass(showWeatherAdvisory, null)} />
-          <span className="font-sans text-xs font-semibold">Waspada Dini</span>
-          <span
-            data-testid="counter-waspada"
-            className={`${chipClass(showWeatherAdvisory)} ${numberTone(
-              isPresentHazard(waspadaStatus, waspadaCount) ? 'warning' : null,
-              showWeatherAdvisory,
-            )}`}
-          >
-            {counterText(waspadaStatus, waspadaCount)}
-          </span>
-        </button>
-      )}
-
-      {/* Titik Panas satelit (FIRMS VIIRS). */}
-      {onToggleFireHotspots && (
-        <button
-          type="button"
-          data-testid="counter-pill"
-          onClick={onToggleFireHotspots}
-          className={pillClass(showFireHotspots)}
-          title={fireTooltipText}
-        >
-          <span className={dotClass(showFireHotspots, null)} />
-          <span className="font-sans text-xs font-semibold">Titik Panas</span>
-          <span
-            data-testid="counter-titik-panas"
-            className={`${chipClass(showFireHotspots)} ${numberTone(
-              titikPanasCount != null && titikPanasCount > 0 ? 'warning' : null,
-              showFireHotspots,
-            )}`}
-          >
-            {counterText(fireStatus, titikPanasCount)}
-          </span>
-        </button>
       )}
     </div>
   );

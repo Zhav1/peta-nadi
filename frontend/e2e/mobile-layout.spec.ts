@@ -177,5 +177,66 @@ for (const viewport of VIEWPORTS) {
         expect(restLeft, 'counter strip at rest after sheet close').toBe(0);
       }
     });
+
+    // Phase 176.6 — the three hazard numbers are the product's primary signal.
+    test(`primary hazard counters are pinned and visible ${label}`, async ({ page }) => {
+      const inner = await page.evaluate(() => window.innerWidth);
+      const COUNTERS = ['counter-cuaca', 'counter-waspada', 'counter-titik-panas'] as const;
+
+      // 1. All three counters are fully inside the viewport at rest — no swipe.
+      for (const id of COUNTERS) {
+        await expect(page.getByTestId(id), `${id} number rendered`).toBeVisible();
+        const pill = page.locator(`button:has([data-testid="${id}"])`);
+        const box = await pill.boundingBox();
+        expect(box, `${id} pill box`).not.toBeNull();
+        expect(box!.width, `${id} pill non-zero width`).toBeGreaterThan(0);
+        expect(box!.x, `${id} pill left edge`).toBeGreaterThanOrEqual(-0.5);
+        expect(box!.x + box!.width, `${id} pill right edge at ${label}`).toBeLessThanOrEqual(inner + 0.5);
+      }
+
+      // 2. The counter row itself never overflows horizontally.
+      const row = await page.getByTestId('counter-row').evaluate((el) => ({
+        scrollWidth: el.scrollWidth,
+        clientWidth: el.clientWidth,
+      }));
+      expect(row.scrollWidth, `counter row scrollWidth at ${label}`).toBeLessThanOrEqual(row.clientWidth + 1);
+
+      // 3. The filter row below still scrolls: only the counters are pinned.
+      if (viewport.width < 768) {
+        const filterStrip = page.getByTestId('filter-strip');
+        await expect(filterStrip).toBeVisible();
+        const filterBox = await filterStrip.evaluate((el) => ({
+          scrollWidth: el.scrollWidth,
+          clientWidth: el.clientWidth,
+        }));
+        expect(filterBox.clientWidth, `filter strip width at ${label}`).toBeGreaterThan(0);
+        expect(filterBox.scrollWidth, `legend + modality filters still scroll at ${label}`).toBeGreaterThan(
+          filterBox.clientWidth + 1,
+        );
+      }
+
+      // 4. The Berita sheet toggle is named, 32x32, and reports its open state.
+      if (viewport.width < 768) {
+        const toggle = page.getByTestId('news-sheet-toggle');
+        await expect(toggle).toBeVisible();
+        const name = (await toggle.getAttribute('aria-label'))?.trim() ?? '';
+        expect(name, 'news sheet toggle accessible name').not.toBe('');
+        await expect(toggle).toHaveAccessibleName('Buka Berita');
+        await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+        const toggleBox = await toggle.boundingBox();
+        expect(toggleBox).not.toBeNull();
+        expect(Math.round(toggleBox!.width), 'toggle width').toBe(32);
+        expect(Math.round(toggleBox!.height), 'toggle height').toBe(32);
+
+        const sheet = page.getByTestId('news-sheet');
+        await toggle.click();
+        await expect(sheet).toBeVisible();
+        await expect(toggle, 'toggle survives the open state').toBeVisible();
+        await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+        await toggle.click();
+        await expect(sheet).toBeHidden();
+        await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      }
+    });
   });
 }

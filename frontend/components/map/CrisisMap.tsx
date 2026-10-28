@@ -48,7 +48,7 @@ import {
   Plane,
   EyeOff,
   RotateCcw,
-  PanelLeftOpen,
+  Newspaper,
 } from 'lucide-react';
 import {
  Popover,
@@ -95,6 +95,8 @@ export interface CrisisMapProps {
   routingInfo?: { solver: string; compute_time_ms: number | null; savings_pct: number | null } | null;
   isLeftSidebarCollapsed?: boolean;
   onExpandSidebar?: () => void;
+  /** Phase 176.6: lets the same toggle close the mobile Berita sheet. */
+  onCollapseSidebar?: () => void;
   fleetModalityFilter?: 'all' | 'truck' | 'maritime' | 'air';
   simSpeed?: number;
   isRightSidebarOpen?: boolean;
@@ -420,6 +422,7 @@ export default function CrisisMap({
   routingInfo,
   isLeftSidebarCollapsed = false,
   onExpandSidebar,
+  onCollapseSidebar,
   fleetModalityFilter = 'all',
   simSpeed = 1,
   isRightSidebarOpen = false,
@@ -2854,18 +2857,29 @@ export default function CrisisMap({
         <div className="flex items-center justify-between gap-2 w-full min-w-0">
           {/* Left Group: Expand Button + Universal Search Bar + TopNavTelemetry */}
           <div className="flex flex-wrap items-center gap-1.5 pointer-events-auto min-w-0 flex-1">
-            {/* 1. Expand Left Sidebar Button when Collapsed */}
-            {isLeftSidebarCollapsed && onExpandSidebar && (
+            {/* 1. Berita sheet toggle — stays mounted while the sheet is open so
+                `aria-expanded` reports the real state and the control can also
+                close the sheet. Icon-only 32x32 (Phase 176.6). */}
+            {(onExpandSidebar || onCollapseSidebar) && (
               <button
                 type="button"
                 data-testid="news-sheet-toggle"
-                onClick={onExpandSidebar}
- aria-label="Buka panel Berita"
- className="cursor-pointer px-3 sm:px-3 py-1.5 rounded-md bg-[#0c1017] border border-white/10 text-[rgba(232,234,237,0.62)] hover:text-white hover:bg-white/5 shadow-[0_12px_32px_rgba(0,0,0,0.4)] transition-colors flex items-center justify-center gap-1.5 text-xs font-semibold shrink-0"
-                title="Tampilkan Panel Berita"
+                onClick={() => {
+                  if (isLeftSidebarCollapsed) onExpandSidebar?.();
+                  else onCollapseSidebar?.();
+                }}
+                aria-label={isLeftSidebarCollapsed ? 'Buka Berita' : 'Tutup Berita'}
+                aria-expanded={!isLeftSidebarCollapsed}
+                title="Berita"
+                className={`cursor-pointer h-8 w-8 md:h-8 md:w-auto md:px-3 md:gap-1.5 rounded-md border transition-colors flex items-center justify-center shrink-0 ${
+                  isLeftSidebarCollapsed
+                    ? 'bg-[#0c1017] border-white/10 text-[rgba(232,234,237,0.62)] hover:text-white hover:bg-white/5'
+                    : 'bg-white/[0.08] border-white/25 text-[#e8eaed]'
+                } shadow-[0_12px_32px_rgba(0,0,0,0.4)] ${isLeftSidebarCollapsed ? 'flex' : 'md:hidden'}`}
               >
-                <PanelLeftOpen className="w-4 h-4 text-[rgba(232,234,237,0.62)]" />
- <span className="hidden sm:inline">Berita</span>
+                <Newspaper className="w-4 h-4" />
+                {/* Desktop keeps the word it always had; phones stay icon-only 32x32. */}
+                <span className="hidden md:inline font-sans text-xs font-semibold">Berita</span>
               </button>
             )}
 
@@ -3173,9 +3187,10 @@ export default function CrisisMap({
           )}
         </div>
 
-        {/* Row 2: Fleet Modality Bar */}
+        {/* Row 2: hazard legend + fleet modality filters. Below `md` this is the
+            single scrolling filter row that the pinned counters sit above. */}
         {fleetModalitySlot && (
-          <div className="flex items-center gap-2 pointer-events-auto">
+          <div className="flex items-center gap-2 pointer-events-auto min-w-0">
             {fleetModalitySlot}
           </div>
         )}

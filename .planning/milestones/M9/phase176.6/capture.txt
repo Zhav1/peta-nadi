@@ -1,0 +1,194 @@
+[
+  {
+    "suffix": "390x844",
+    "file": "D:\\College\\Pidi.id\\.planning\\milestones\\M9\\phase176.6\\after-dashboard-390x844.png",
+    "innerWidth": 390,
+    "counters": {
+      "cuaca": {
+        "text": "6",
+        "chip": {
+          "x": 73,
+          "right": 88,
+          "width": 15
+        },
+        "pill": {
+          "x": 12,
+          "right": 130,
+          "width": 118
+        }
+      },
+      "waspada": {
+        "text": "18",
+        "chip": {
+          "x": 223,
+          "right": 245,
+          "width": 22
+        },
+        "pill": {
+          "x": 136,
+          "right": 254,
+          "width": 118
+        }
+      },
+      "titikPanas": {
+        "text": "12",
+        "chip": {
+          "x": 346,
+          "right": 368,
+          "width": 22
+        },
+        "pill": {
+          "x": 260,
+          "right": 378,
+          "width": 118
+        }
+      }
+    },
+    "counterRow": {
+      "scrollWidth": 366,
+      "clientWidth": 366
+    },
+    "filterStrip": {
+      "scrollWidth": 807,
+      "clientWidth": 356
+    },
+    "pageOverflow": {
+      "doc": 390,
+      "body": 390
+    },
+    "toggle": {
+      "label": "Buka Berita",
+      "expanded": "false",
+      "w": 32,
+      "h": 32
+    }
+  },
+  {
+    "suffix": "360x740",
+    "file": "D:\\College\\Pidi.id\\.planning\\milestones\\M9\\phase176.6\\after-dashboard-360x740.png",
+    "innerWidth": 360,
+    "counters": {
+      "cuaca": {
+        "text": "6",
+        "chip": {
+          "x": 73,
+          "right": 88,
+          "width": 15
+        },
+        "pill": {
+          "x": 12,
+          "right": 120,
+          "width": 108
+        }
+      },
+      "waspada": {
+        "text": "18",
+        "chip": {
+          "x": 203,
+          "right": 225,
+          "width": 22
+        },
+        "pill": {
+          "x": 126,
+          "right": 234,
+          "width": 108
+        }
+      },
+      "titikPanas": {
+        "text": "12",
+        "chip": {
+          "x": 317,
+          "right": 339,
+          "width": 22
+        },
+        "pill": {
+          "x": 240,
+          "right": 348,
+          "width": 108
+        }
+      }
+    },
+    "counterRow": {
+      "scrollWidth": 336,
+      "clientWidth": 336
+    },
+    "filterStrip": {
+      "scrollWidth": 807,
+      "clientWidth": 326
+    },
+    "pageOverflow": {
+      "doc": 360,
+      "body": 360
+    },
+    "toggle": {
+      "label": "Buka Berita",
+      "expanded": "false",
+      "w": 32,
+      "h": 32
+    }
+  },
+  {
+    "suffix": "1920x1080",
+    "file": "D:\\College\\Pidi.id\\.planning\\milestones\\M9\\phase176.6\\after-dashboard-1920x1080.png",
+    "innerWidth": 1920,
+    "counters": {
+      "cuaca": {
+        "text": "6",
+        "chip": {
+          "x": 671,
+          "right": 686,
+          "width": 15
+        },
+        "pill": {
+          "x": 610,
+          "right": 695,
+          "width": 85
+        }
+      },
+      "waspada": {
+        "text": "18",
+        "chip": {
+          "x": 804,
+          "right": 826,
+          "width": 22
+        },
+        "pill": {
+          "x": 701,
+          "right": 835,
+          "width": 134
+        }
+      },
+      "titikPanas": {
+        "text": "12",
+        "chip": {
+          "x": 927,
+          "right": 949,
+          "width": 22
+        },
+        "pill": {
+          "x": 841,
+          "right": 958,
+          "width": 117
+        }
+      }
+    },
+    "counterRow": {
+      "scrollWidth": 0,
+      "clientWidth": 0
+    },
+    "filterStrip": {
+      "scrollWidth": 612,
+      "clientWidth": 612
+    },
+    "pageOverflow": {
+      "doc": 1920,
+      "body": 1920
+    },
+    "toggle": {
+      "label": "Tutup Berita",
+      "expanded": "true",
+      "w": 0,
+      "h": 0
+    }
+  }
+]
