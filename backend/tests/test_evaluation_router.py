@@ -22,8 +22,10 @@ def test_get_benchmark_report():
     # Verify confusion matrix
     cm = data["confusion_matrix"]
     assert cm["true_positives"] + cm["false_positives"] + cm["true_negatives"] + cm["false_negatives"] == 60
-    assert cm["true_positives"] == 35
-    assert cm["false_positives"] == 0
+    assert cm["true_positives"] == 32
+    assert cm["false_positives"] == 3
+    assert cm["true_negatives"] == 22
+    assert cm["false_negatives"] == 3
 
     # Verify empirical metrics meet threshold invariants
     metrics = data["metrics"]

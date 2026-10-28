@@ -1,40 +1,41 @@
 ---
 gsd_state_version: "1.0"
-milestone: M8
-milestone_name: Fast & Durable
-current_phase: 165
-current_phase_name: Production Verification + SLO Gate
-status: blocked
-stopped_at: "Phases 160-163 complete, 164a complete; 164b deferred; 165 waiting on M9 commit + Render/cron env"
-last_updated: "2026-10-27T00:00:00.000Z"
-last_activity: 2026-10-27
-last_activity_desc: "Completed auth, thin-web tick, bootstrap read path, proxy/news hardening; applied Supabase migrations 023/024."
+milestone: M9
+milestone_name: Operational Truth & Distilled Command Surface
+current_phase: 176.12
+current_phase_name: Fleet Regression & Waspada Dots
+status: complete
+stopped_at: "M9 complete and deployed through R2.3 / visual / fleet; 8 open items carried in .planning/milestones/M9/COMPLETION.md"
+last_updated: 2026-10-28
+last_activity: 2026-10-28
+last_activity_desc: "Completed M9 phases 167-176.12, deployed R1 through R2.3 plus the visual and fleet passes, and closed the milestone with .planning/milestones/M9/LEARNINGS.md."
 state_head: HEAD
 progress:
-  total_phases: 7
-  completed_phases: 4
+  total_phases: 21
+  completed_phases: 21
   total_plans: 0
   completed_plans: 0
-  percent: 57.1
+  percent: 100
 ---
 
 # STATE: PreHub Project Memory
 
-**Last Updated:** 2026-10-27
-**Active Milestone:** M8 - Fast & Durable [ACTIVE 🚀]
-**Previous Milestones:** M1-M5 [COMPLETED ✅], M6 - 3D Globe Native Mapbox Fleet, Street-Snapping & Impeccable Cartography [COMPLETED ✅], M7 - Live News Trust, Source Breadth & Forecast Waspada Integrity [COMPLETED ✅]
-**Current Phase:** 165
+**Last Updated:** 2026-10-28
+**Active Milestone:** M9 - Operational Truth & Distilled Command Surface [COMPLETE ✅]
+**Previous Milestones:** M1-M5 [COMPLETED ✅], M6 - 3D Globe Native Mapbox Fleet, Street-Snapping & Impeccable Cartography [COMPLETED ✅], M7 - Live News Trust, Source Breadth & Forecast Waspada Integrity [COMPLETED ✅], M8 - Fast & Durable [COMPLETED ✅]
+**Current Phase:** 176.12
 
 ---
 
 ## Current Position
 
-Phase: 165 — Production Verification + SLO Gate
-Plan: `.planning/phases/165-production-verification-slo/PLAN.md`
-Status: Blocked — waiting on M9 geocode/gazetteer commit, Render env, cron-job.org switch
-Last activity: 2026-10-27 — Phases 160–163 and 164a complete; Supabase migrations 023/024 applied
-Previous: M7 complete through Phase 159. M8: 160 baseline/audit, 161 auth, 162 thin web/tick, 163 bootstrap read path, 164a proxy/news.
-Next action: commit M9 work, merge `m9-operational-truth` to `main`, set Render env, switch cron to `POST /internal/tick`, run the production SLO gate.
+Phase: 176.12 — Fleet Regression & Waspada Dots. Milestone M9 is **complete** (21 phases, 167 → 176.12).
+Plan: `.planning/phases/176.12-fleet-regression-waspada-dots/PLAN.md` · Ledger: `.planning/milestones/M9/PROGRESS.md`
+Status: Complete and deployed. All eight original complaints closed; two live defects from R2.1 were closed in R2.2; the remainder are listed as open items below.
+Deploy chain: **R1** (`bfa3337`) → **R1.1** (`c250a09`, FIRMS day-range fix) → **R2** (`3d5f3b5`, distilled surface) → **R2.1** (`c84018d`, geocode cache v3) → **R2.2** (`6db893a`, docked guest banner + prod assertions 4/4) → **R2.3** (`fe4c876`, mobile counter labels) → **visual** (`a1b6e1b`, layer/modality colour pass) → **fleet** (`a1b68de`, fleet telemetry + Waspada violet dots).
+Last activity: 2026-10-28 — documentation and learning-extraction pass for M9; `.planning/milestones/M9/LEARNINGS.md` written, `STATE.md` and `PROJECT.md` brought back in line with the shipped code.
+Previous: M8 "Fast & Durable" (160–166) remains valid and independent; M9 was numbered after it and absorbed none of its phases.
+Next action: work the eight open items in `.planning/milestones/M9/COMPLETION.md` §5 and §7 (start with `/health` environment, Riau/Kepri feed supply, and the four baseline backend failures).
 
 
 

@@ -1,0 +1,71 @@
+{
+  "generated_at": "2026-10-28T22:08:52",
+  "version": "v2026-10-28-N60",
+  "build": "95fc6a1 (m9-176.5)",
+  "pdf_engine": "word_com",
+  "source": {
+    "report": {
+      "path": "frontend/public/data/benchmark_evaluation_report.json",
+      "sha256": "fe927fb4deda43314a5d681a16c5a6f2ee8e01818658c429cf74052fca4f5ec7",
+      "timestamp": "2026-10-28T21:29:08.290684"
+    },
+    "dataset": {
+      "path": "data/benchmark/sumatra_disruptions_ground_truth.json",
+      "sha256": "ab4d5d86ba75151d11e5d492469282c5975fcd3c177676d6f2eabcfb2b7e1350",
+      "n": 60
+    },
+    "live_ledger": {
+      "path": "backend/data/prehub_local.db",
+      "source": "ledger_sqlite",
+      "n": 20,
+      "tp": 11,
+      "fp": 1,
+      "tn": 7,
+      "fn": 1,
+      "brier": 0.060885
+    }
+  },
+  "document": {
+    "tables": 39,
+    "n60_rows": 61,
+    "n60_columns": 11,
+    "pdf_pages": 13,
+    "pdf_ids_found": 77,
+    "docx_chars": 58146
+  },
+  "files": [
+    {
+      "path": "Final-Gemastik/Lembar_Validasi_Internal_PreHub.docx",
+      "bytes": 78836,
+      "sha256": "ab781fd4a8062cc433a36b88057e0bf733c0dcaeb668322c59630aa27305fbe1",
+      "kind": "docx"
+    },
+    {
+      "path": "Final-Gemastik/Lampiran_N60_PreHub.docx",
+      "bytes": 78836,
+      "sha256": "ab781fd4a8062cc433a36b88057e0bf733c0dcaeb668322c59630aa27305fbe1",
+      "kind": "docx"
+    },
+    {
+      "path": "Final-Gemastik/Lembar_Validasi_Internal_PreHub.pdf",
+      "bytes": 673057,
+      "sha256": "11d97c98b1f56ad2620a468183b64693a40e28da0d5816faff3a23c666d3adad",
+      "kind": "pdf",
+      "pages": 13
+    },
+    {
+      "path": "Final-Gemastik/Lampiran_N60_PreHub.pdf",
+      "bytes": 673057,
+      "sha256": "11d97c98b1f56ad2620a468183b64693a40e28da0d5816faff3a23c666d3adad",
+      "kind": "pdf",
+      "pages": 13
+    }
+  ],
+  "backups": [
+    "Final-Gemastik/Lampiran_N60_PreHub.docx.bak-20261028-214402",
+    "Final-Gemastik/Lampiran_N60_PreHub.pdf.bak-20261028-214402",
+    "Final-Gemastik/Lembar_Validasi_Internal_PreHub.docx.bak-20261028-214402",
+    "Final-Gemastik/Lembar_Validasi_Internal_PreHub.pdf.bak-20261028-214402"
+  ],
+  "backups_note": "Cadangan asli sebelum dokumen digabungkan; backup antara dari uji ulang dibersihkan."
+}

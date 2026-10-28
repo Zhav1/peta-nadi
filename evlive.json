@@ -1,1 +1,629 @@
-{"status":"success","batch_version":"batch-v2026-10-26-N60","batch_n":60,"dataset_hash":"8758efb5fbc3127567405ec7794c4d9fe67e19044edc1d46ac86954ac3ced140","live":{"n":12,"min_n":10,"sufficient":true,"source":"live_outcomes_merged","local_n":0,"remote_n":125,"excluded_echoes":3,"missing_pred":110,"proxy_count":110,"confusion_matrix":{"true_positives":5,"false_positives":2,"true_negatives":4,"false_negatives":1},"metrics":{"precision":0.7143,"recall":0.8333,"f1_score":0.7692,"false_positive_rate":0.3333,"accuracy":0.75,"mean_latency_ms":0.0,"total_latency_ms":0.0},"calibration":{"brier_score":0.1545,"normalized_brier_score":0.1545,"raw_brier_score":0.1492,"raw_brier_n":12,"expected_calibration_error":0.235,"platt_calibrated_brier":0.1503,"isotonic_calibrated_brier":0.1374,"reliability_bins":[{"bin_index":0,"range":[0.0,0.1],"sample_count":0,"mean_confidence":0.05,"empirical_accuracy":0.0,"calibration_error":0.0},{"bin_index":1,"range":[0.1,0.2],"sample_count":1,"mean_confidence":0.12,"empirical_accuracy":0.0,"calibration_error":0.12},{"bin_index":2,"range":[0.2,0.3],"sample_count":1,"mean_confidence":0.22,"empirical_accuracy":0.0,"calibration_error":0.22},{"bin_index":3,"range":[0.3,0.4],"sample_count":2,"mean_confidence":0.33,"empirical_accuracy":0.5,"calibration_error":0.17},{"bin_index":4,"range":[0.4,0.5],"sample_count":1,"mean_confidence":0.45,"empirical_accuracy":0.0,"calibration_error":0.45},{"bin_index":5,"range":[0.5,0.6],"sample_count":1,"mean_confidence":0.58,"empirical_accuracy":0.0,"calibration_error":0.58},{"bin_index":6,"range":[0.6,0.7],"sample_count":1,"mean_confidence":0.64,"empirical_accuracy":1.0,"calibration_error":0.36},{"bin_index":7,"range":[0.7,0.8],"sample_count":2,"mean_confidence":0.74,"empirical_accuracy":0.5,"calibration_error":0.24},{"bin_index":8,"range":[0.8,0.9],"sample_count":1,"mean_confidence":0.87,"empirical_accuracy":1.0,"calibration_error":0.13},{"bin_index":9,"range":[0.9,1.0],"sample_count":2,"mean_confidence":0.93,"empirical_accuracy":1.0,"calibration_error":0.07}]},"deltas_vs_batch":{"precision":-0.2857,"recall":-0.1667,"f1_score":-0.2308,"false_positive_rate":0.3333,"accuracy":-0.25,"brier_score":0.0608,"expected_calibration_error":0.0356,"raw_brier_score":0.0386},"per_row":[{"incident_id":"INC-LIVE-DEMO-013","pred_prob":0.35,"raw_prob":0.27,"p_max":0.688,"weights_version":"ECONOMIC_ACTIVE","active_sources":["BMKG_RADAR","TOMTOM_FLOW"],"forecast_created_at":null,"observed_delay_hours":3.3,"actual":1,"actual_price_spike_pct":10.2,"verification_source":"FIELD_REPORT","pred_source":"stored","ledger_delay_hours":null,"ledger_travel_id":null,"ledger_corroborated":null,"row_hash":"90665a987640bde5a726a8351aa8e3d04b4a95d27edc46827fa6a4d2808a9458"},{"incident_id":"INC-LIVE-DEMO-012","pred_prob":0.58,"raw_prob":0.5,"p_max":0.688,"weights_version":"ECONOMIC_ACTIVE","active_sources":["BMKG_RADAR","TOMTOM_FLOW"],"forecast_created_at":null,"observed_delay_hours":1.2,"actual":0,"actual_price_spike_pct":3.3,"verification_source":"POLDA_TRAFFIC_POLICE","pred_source":"stored","ledger_delay_hours":null,"ledger_travel_id":null,"ledger_corroborated":null,"row_hash":"c654ad366aaa551f8e236c9f9b1484b4801560e49d250a724cbae452ec82ed1d"},{"incident_id":"INC-LIVE-DEMO-011","pred_prob":0.72,"raw_prob":0.64,"p_max":0.688,"weights_version":"ECONOMIC_ACTIVE","active_sources":["BMKG_RADAR","TOMTOM_FLOW"],"forecast_created_at":null,"observed_delay_hours":0.9,"actual":0,"actual_price_spike_pct":2.1,"verification_source":"FIELD_REPORT","pred_source":"stored","ledger_delay_hours":null,"ledger_travel_id":null,"ledger_corroborated":null,"row_hash":"e73002b434ee831b6a109b0db472829e56bbde6fd1575be27a258579c2d6686b"},{"incident_id":"INC-LIVE-DEMO-010","pred_prob":0.45,"raw_prob":0.37,"p_max":0.688,"weights_version":"ECONOMIC_ACTIVE","active_sources":["BMKG_RADAR","TOMTOM_FLOW"],"forecast_created_at":null,"observed_delay_hours":1.8,"actual":0,"actual_price_spike_pct":4.0,"verification_source":"FIELD_REPORT","pred_source":"stored","ledger_delay_hours":null,"ledger_travel_id":null,"ledger_corroborated":null,"row_hash":"ca62879d14075dffac108dfef7aa18d216f6e9fe5fd9e77250311db59f0103b6"},{"incident_id":"INC-LIVE-DEMO-009","pred_prob":0.12,"raw_prob":0.05,"p_max":0.688,"weights_version":"ECONOMIC_ACTIVE","active_sources":["BMKG_RADAR","TOMTOM_FLOW"],"forecast_created_at":null,"observed_delay_hours":0.3,"actual":0,"actual_price_spike_pct":0.9,"verification_source":"AUTOMATED_SENSOR","pred_source":"stored","ledger_delay_hours":null,"ledger_travel_id":null,"ledger_corroborated":null,"row_hash":"c1aaaee71c6cbe75d183e03821452237a7ed6f6bf10c0af5cca235139360a8f0"},{"incident_id":"INC-LIVE-DEMO-008","pred_prob":0.31,"raw_prob":0.23,"p_max":0.688,"weights_version":"ECONOMIC_ACTIVE","active_sources":["BMKG_RADAR","TOMTOM_FLOW"],"forecast_created_at":null,"observed_delay_hours":1.1,"actual":0,"actual_price_spike_pct":2.4,"verification_source":"BMKG_ALL_CLEAR","pred_source":"stored","ledger_delay_hours":null,"ledger_travel_id":null,"ledger_corroborated":null,"row_hash":"5e50bcb6166649f4c34aded1271c1459da6a997806e4a62f442cb4e5714922fc"},{"incident_id":"INC-LIVE-DEMO-007","pred_prob":0.22,"raw_prob":0.14,"p_max":0.688,"weights_version":"ECONOMIC_ACTIVE","active_sources":["BMKG_RADAR","TOMTOM_FLOW"],"forecast_created_at":null,"observed_delay_hours":0.6,"actual":0,"actual_price_spike_pct":1.8,"verification_source":"FIELD_REPORT","pred_source":"stored","ledger_delay_hours":null,"ledger_travel_id":null,"ledger_corroborated":null,"row_hash":"a5104bde95dcb2b51834e15e1ff3263bca2a476d3ab7b774a57d858b65fea1d6"},{"incident_id":"INC-LIVE-DEMO-005","pred_prob":0.64,"raw_prob":0.56,"p_max":0.688,"weights_version":"ECONOMIC_ACTIVE","active_sources":["BMKG_RADAR","TOMTOM_FLOW"],"forecast_created_at":null,"observed_delay_hours":2.4,"actual":1,"actual_price_spike_pct":7.1,"verification_source":"ANTARA_NEWS","pred_source":"stored","ledger_delay_hours":null,"ledger_travel_id":null,"ledger_corroborated":null,"row_hash":"d8b91cc68765b6946258d23894953c56317ef3c68d0f0eaea1cb7323ffb33f6f"},{"incident_id":"INC-LIVE-DEMO-004","pred_prob":0.95,"raw_prob":0.87,"p_max":0.688,"weights_version":"ECONOMIC_ACTIVE","active_sources":["BMKG_RADAR","TOMTOM_FLOW"],"forecast_created_at":null,"observed_delay_hours":6.1,"actual":1,"actual_price_spike_pct":18.2,"verification_source":"FIELD_REPORT","pred_source":"stored","ledger_delay_hours":null,"ledger_travel_id":null,"ledger_corroborated":null,"row_hash":"c5a0a48ecb434167796b38419772541c8cc5ccd8af8d4a18a68dee234b29b154"},{"incident_id":"INC-LIVE-DEMO-003","pred_prob":0.76,"raw_prob":0.68,"p_max":0.688,"weights_version":"ECONOMIC_ACTIVE","active_sources":["BMKG_RADAR","TOMTOM_FLOW"],"forecast_created_at":null,"observed_delay_hours":2.9,"actual":1,"actual_price_spike_pct":9.4,"verification_source":"POLDA_TRAFFIC_POLICE","pred_source":"stored","ledger_delay_hours":null,"ledger_travel_id":null,"ledger_corroborated":null,"row_hash":"cab084e253824c46d34f96f7547a300ece30500fdfc6a4960933acedbf2ba659"},{"incident_id":"INC-LIVE-DEMO-002","pred_prob":0.87,"raw_prob":0.79,"p_max":0.688,"weights_version":"ECONOMIC_ACTIVE","active_sources":["BMKG_RADAR","TOMTOM_FLOW"],"forecast_created_at":null,"observed_delay_hours":3.8,"actual":1,"actual_price_spike_pct":12.6,"verification_source":"FIELD_REPORT","pred_source":"stored","ledger_delay_hours":null,"ledger_travel_id":null,"ledger_corroborated":null,"row_hash":"d519c7aca193c5e97e4cf93b10038750da6fe4050cbbf0c7de0047d16a076f5e"},{"incident_id":"INC-LIVE-DEMO-001","pred_prob":0.91,"raw_prob":0.83,"p_max":0.688,"weights_version":"ECONOMIC_ACTIVE","active_sources":["BMKG_RADAR","TOMTOM_FLOW"],"forecast_created_at":"2026-10-26T10:00:00+00:00","observed_delay_hours":4.2,"actual":1,"actual_price_spike_pct":11.4,"verification_source":"FIELD_REPORT","pred_source":"stored","ledger_delay_hours":null,"ledger_travel_id":null,"ledger_corroborated":null,"row_hash":"34f4646b55158f92637d8f8e1c8118e09b39ed73c2036f4010a4e2d6d8423930"}],"per_row_total":12,"per_row_truncated":false,"row_hash_sample":["90665a987640bde5a726a8351aa8e3d04b4a95d27edc46827fa6a4d2808a9458","c654ad366aaa551f8e236c9f9b1484b4801560e49d250a724cbae452ec82ed1d","e73002b434ee831b6a109b0db472829e56bbde6fd1575be27a258579c2d6686b"],"dataset_hash":"9caa01b57b48dfc37c13e40c4e1ca7effe0c03796a25408ae65283c82a1609ce","ledger":{"travels_scanned":0,"realised":0,"matched_keys":0,"matched_genuine":0},"price_corroboration":{"mode":"file_cache_readonly","cache_dir":"data/raw/pihps_bi/api_cache","files_scanned":0,"files_ok":0,"files_failed":0,"available":false,"note":"PIHPS file cache kosong/tidak ada; koroborasi harga tidak tersedia."},"note":"Live kumulatif N=12 (minus 3 echo sistem, 110 tanpa pred tersimpan, 110 PROXY tidak digabung) - delta vs batch batch-v2026-10-26-N60 dihitung pada metrik yang sama."},"mode_recommendation":"live","headline":"Live kumulatif N=12 ditampilkan dengan delta vs batch N=60 (dPresisi -0.2857, dRecall -0.1667, dF1 -0.2308, dBrier +0.0608) - pilih versi via dropdown (batch/live).","versions":[{"version":"batch-v2026-10-26-N60","kind":"batch","n":60,"immutable":true,"timestamp":"2026-10-26T10:50:51.599108"},{"version":"live-cumulative-N12-20261027","kind":"live","n":12,"immutable":false,"sufficient":true}]}
+{
+  "status": "success",
+  "batch_version": "batch-v2026-10-28-N60",
+  "batch_n": 60,
+  "dataset_hash": "ab4d5d86ba75151d11e5d492469282c5975fcd3c177676d6f2eabcfb2b7e1350",
+  "live": {
+    "n": 20,
+    "min_n": 10,
+    "sufficient": true,
+    "source": "live_outcomes_merged",
+    "local_n": 0,
+    "remote_n": 125,
+    "excluded_echoes": 3,
+    "missing_pred": 102,
+    "proxy_count": 102,
+    "confusion_matrix": {
+      "true_positives": 11,
+      "false_positives": 1,
+      "true_negatives": 7,
+      "false_negatives": 1
+    },
+    "metrics": {
+      "precision": 0.9167,
+      "recall": 0.9167,
+      "f1_score": 0.9167,
+      "false_positive_rate": 0.125,
+      "accuracy": 0.9,
+      "mean_latency_ms": 0.0,
+      "total_latency_ms": 0.0
+    },
+    "calibration": {
+      "brier_score": 0.0609,
+      "normalized_brier_score": 0.0609,
+      "raw_brier_score": 0.0609,
+      "raw_brier_n": 20,
+      "expected_calibration_error": 0.201,
+      "platt_calibrated_brier": 0.0588,
+      "platt_calibrated_ece": 0.1901,
+      "isotonic_calibrated_brier": 0.0541,
+      "isotonic_calibrated_ece": 0.1726,
+      "reliability_bins": [
+        {
+          "bin_index": 0,
+          "range": [
+            0.0,
+            0.1
+          ],
+          "sample_count": 2,
+          "mean_confidence": 0.07,
+          "empirical_accuracy": 0.0,
+          "calibration_error": 0.07
+        },
+        {
+          "bin_index": 1,
+          "range": [
+            0.1,
+            0.2
+          ],
+          "sample_count": 2,
+          "mean_confidence": 0.155,
+          "empirical_accuracy": 0.0,
+          "calibration_error": 0.155
+        },
+        {
+          "bin_index": 2,
+          "range": [
+            0.2,
+            0.3
+          ],
+          "sample_count": 2,
+          "mean_confidence": 0.255,
+          "empirical_accuracy": 0.0,
+          "calibration_error": 0.255
+        },
+        {
+          "bin_index": 3,
+          "range": [
+            0.3,
+            0.4
+          ],
+          "sample_count": 1,
+          "mean_confidence": 0.31,
+          "empirical_accuracy": 0.0,
+          "calibration_error": 0.31
+        },
+        {
+          "bin_index": 4,
+          "range": [
+            0.4,
+            0.5
+          ],
+          "sample_count": 1,
+          "mean_confidence": 0.49,
+          "empirical_accuracy": 1.0,
+          "calibration_error": 0.51
+        },
+        {
+          "bin_index": 5,
+          "range": [
+            0.5,
+            0.6
+          ],
+          "sample_count": 0,
+          "mean_confidence": 0.55,
+          "empirical_accuracy": 0.0,
+          "calibration_error": 0.0
+        },
+        {
+          "bin_index": 6,
+          "range": [
+            0.6,
+            0.7
+          ],
+          "sample_count": 1,
+          "mean_confidence": 0.6,
+          "empirical_accuracy": 0.0,
+          "calibration_error": 0.6
+        },
+        {
+          "bin_index": 7,
+          "range": [
+            0.7,
+            0.8
+          ],
+          "sample_count": 3,
+          "mean_confidence": 0.75,
+          "empirical_accuracy": 1.0,
+          "calibration_error": 0.25
+        },
+        {
+          "bin_index": 8,
+          "range": [
+            0.8,
+            0.9
+          ],
+          "sample_count": 4,
+          "mean_confidence": 0.8425,
+          "empirical_accuracy": 1.0,
+          "calibration_error": 0.1575
+        },
+        {
+          "bin_index": 9,
+          "range": [
+            0.9,
+            1.0
+          ],
+          "sample_count": 4,
+          "mean_confidence": 0.935,
+          "empirical_accuracy": 1.0,
+          "calibration_error": 0.065
+        }
+      ]
+    },
+    "deltas_vs_batch": {
+      "precision": 0.0024,
+      "recall": 0.0024,
+      "f1_score": 0.0024,
+      "false_positive_rate": 0.005,
+      "accuracy": 0.0,
+      "brier_score": -0.0284,
+      "expected_calibration_error": 0.0293,
+      "raw_brier_score": -0.0773
+    },
+    "per_row": [
+      {
+        "incident_id": "INC-LIVE-DEMO-001",
+        "pred_prob": 0.72,
+        "raw_prob": 0.495,
+        "p_max": 0.688,
+        "weights_version": "ECONOMIC_ACTIVE",
+        "active_sources": [
+          "BMKG_RADAR",
+          "TOMTOM_FLOW"
+        ],
+        "forecast_created_at": null,
+        "observed_delay_hours": 4.2,
+        "actual": 1,
+        "actual_price_spike_pct": 11.4,
+        "verification_source": "FIELD_REPORT",
+        "pred_source": "stored",
+        "ledger_delay_hours": null,
+        "ledger_travel_id": null,
+        "ledger_corroborated": null,
+        "row_hash": "be5452d191602ff3baf90b0324c6100aeba34542212e5cec0c1ac06f01f9d379"
+      },
+      {
+        "incident_id": "INC-LIVE-DEMO-002",
+        "pred_prob": 0.75,
+        "raw_prob": 0.516,
+        "p_max": 0.688,
+        "weights_version": "ECONOMIC_ACTIVE",
+        "active_sources": [
+          "BMKG_RADAR",
+          "TOMTOM_FLOW"
+        ],
+        "forecast_created_at": null,
+        "observed_delay_hours": 3.8,
+        "actual": 1,
+        "actual_price_spike_pct": 12.6,
+        "verification_source": "POLDA_TRAFFIC_POLICE",
+        "pred_source": "stored",
+        "ledger_delay_hours": null,
+        "ledger_travel_id": null,
+        "ledger_corroborated": null,
+        "row_hash": "2fa58ce6e6873a0555ea8b43d80e38752704a8f25f62bc82ad8114d5d00c92e9"
+      },
+      {
+        "incident_id": "INC-LIVE-DEMO-003",
+        "pred_prob": 0.78,
+        "raw_prob": 0.537,
+        "p_max": 0.688,
+        "weights_version": "ECONOMIC_ACTIVE",
+        "active_sources": [
+          "BMKG_RADAR",
+          "TOMTOM_FLOW"
+        ],
+        "forecast_created_at": null,
+        "observed_delay_hours": 2.9,
+        "actual": 1,
+        "actual_price_spike_pct": 9.4,
+        "verification_source": "ANTARA_NEWS",
+        "pred_source": "stored",
+        "ledger_delay_hours": null,
+        "ledger_travel_id": null,
+        "ledger_corroborated": null,
+        "row_hash": "17a36d9a63eb8fc89addc2238b19db4bf6ade9107900da633743a200738d907a"
+      },
+      {
+        "incident_id": "INC-LIVE-DEMO-004",
+        "pred_prob": 0.8,
+        "raw_prob": 0.55,
+        "p_max": 0.688,
+        "weights_version": "ECONOMIC_ACTIVE",
+        "active_sources": [
+          "BMKG_RADAR",
+          "TOMTOM_FLOW"
+        ],
+        "forecast_created_at": null,
+        "observed_delay_hours": 6.1,
+        "actual": 1,
+        "actual_price_spike_pct": 18.2,
+        "verification_source": "BMKG_ALL_CLEAR",
+        "pred_source": "stored",
+        "ledger_delay_hours": null,
+        "ledger_travel_id": null,
+        "ledger_corroborated": null,
+        "row_hash": "ebec4706b4d6897eb079a80572f9f6a60f8a1b82022c26c8dbb53ac7335b93e7"
+      },
+      {
+        "incident_id": "INC-LIVE-DEMO-005",
+        "pred_prob": 0.83,
+        "raw_prob": 0.571,
+        "p_max": 0.688,
+        "weights_version": "ECONOMIC_ACTIVE",
+        "active_sources": [
+          "BMKG_RADAR",
+          "TOMTOM_FLOW"
+        ],
+        "forecast_created_at": null,
+        "observed_delay_hours": 2.4,
+        "actual": 1,
+        "actual_price_spike_pct": 7.1,
+        "verification_source": "AUTOMATED_SENSOR",
+        "pred_source": "stored",
+        "ledger_delay_hours": null,
+        "ledger_travel_id": null,
+        "ledger_corroborated": null,
+        "row_hash": "f56305afb42d2b749fada013c0f9050fdf7eba2c6d5fc8eebcc5d9fa041bacf6"
+      },
+      {
+        "incident_id": "INC-LIVE-DEMO-006",
+        "pred_prob": 0.86,
+        "raw_prob": 0.592,
+        "p_max": 0.688,
+        "weights_version": "ECONOMIC_ACTIVE",
+        "active_sources": [
+          "BMKG_RADAR",
+          "TOMTOM_FLOW"
+        ],
+        "forecast_created_at": null,
+        "observed_delay_hours": 3.3,
+        "actual": 1,
+        "actual_price_spike_pct": 10.2,
+        "verification_source": "FIELD_REPORT",
+        "pred_source": "stored",
+        "ledger_delay_hours": null,
+        "ledger_travel_id": null,
+        "ledger_corroborated": null,
+        "row_hash": "70c75e72b344950d44f7125cd7e80d1a83f36026907f69c23ce891aa6c1929bd"
+      },
+      {
+        "incident_id": "INC-LIVE-DEMO-007",
+        "pred_prob": 0.88,
+        "raw_prob": 0.605,
+        "p_max": 0.688,
+        "weights_version": "ECONOMIC_ACTIVE",
+        "active_sources": [
+          "BMKG_RADAR",
+          "TOMTOM_FLOW"
+        ],
+        "forecast_created_at": null,
+        "observed_delay_hours": 5.2,
+        "actual": 1,
+        "actual_price_spike_pct": 14.8,
+        "verification_source": "POLDA_TRAFFIC_POLICE",
+        "pred_source": "stored",
+        "ledger_delay_hours": null,
+        "ledger_travel_id": null,
+        "ledger_corroborated": null,
+        "row_hash": "c1db9f0164a31de44d7e3a8c2550cb268c845789ba136b65d5188cc48135b786"
+      },
+      {
+        "incident_id": "INC-LIVE-DEMO-008",
+        "pred_prob": 0.91,
+        "raw_prob": 0.626,
+        "p_max": 0.688,
+        "weights_version": "ECONOMIC_ACTIVE",
+        "active_sources": [
+          "BMKG_RADAR",
+          "TOMTOM_FLOW"
+        ],
+        "forecast_created_at": null,
+        "observed_delay_hours": 2.6,
+        "actual": 1,
+        "actual_price_spike_pct": 8.6,
+        "verification_source": "ANTARA_NEWS",
+        "pred_source": "stored",
+        "ledger_delay_hours": null,
+        "ledger_travel_id": null,
+        "ledger_corroborated": null,
+        "row_hash": "951b6869df7a62b374b4caeda684ee5a816ed7ff92bacb7110398efdcb442a45"
+      },
+      {
+        "incident_id": "INC-LIVE-DEMO-009",
+        "pred_prob": 0.92,
+        "raw_prob": 0.633,
+        "p_max": 0.688,
+        "weights_version": "ECONOMIC_ACTIVE",
+        "active_sources": [
+          "BMKG_RADAR",
+          "TOMTOM_FLOW"
+        ],
+        "forecast_created_at": null,
+        "observed_delay_hours": 4.8,
+        "actual": 1,
+        "actual_price_spike_pct": 13.2,
+        "verification_source": "BMKG_ALL_CLEAR",
+        "pred_source": "stored",
+        "ledger_delay_hours": null,
+        "ledger_travel_id": null,
+        "ledger_corroborated": null,
+        "row_hash": "d6f50fd9c3b05db55d23bfcf50120bf63b6b1ba9b87cefd3af753f97dbb9c388"
+      },
+      {
+        "incident_id": "INC-LIVE-DEMO-010",
+        "pred_prob": 0.94,
+        "raw_prob": 0.647,
+        "p_max": 0.688,
+        "weights_version": "ECONOMIC_ACTIVE",
+        "active_sources": [
+          "BMKG_RADAR",
+          "TOMTOM_FLOW"
+        ],
+        "forecast_created_at": null,
+        "observed_delay_hours": 3.1,
+        "actual": 1,
+        "actual_price_spike_pct": 9.9,
+        "verification_source": "AUTOMATED_SENSOR",
+        "pred_source": "stored",
+        "ledger_delay_hours": null,
+        "ledger_travel_id": null,
+        "ledger_corroborated": null,
+        "row_hash": "41c32fd8e930192e914953ba04dc64c2443791f522f8955efd672d0e14f8f2f7"
+      },
+      {
+        "incident_id": "INC-LIVE-DEMO-011",
+        "pred_prob": 0.97,
+        "raw_prob": 0.667,
+        "p_max": 0.688,
+        "weights_version": "ECONOMIC_ACTIVE",
+        "active_sources": [
+          "BMKG_RADAR",
+          "TOMTOM_FLOW"
+        ],
+        "forecast_created_at": null,
+        "observed_delay_hours": 5.7,
+        "actual": 1,
+        "actual_price_spike_pct": 16.4,
+        "verification_source": "FIELD_REPORT",
+        "pred_source": "stored",
+        "ledger_delay_hours": null,
+        "ledger_travel_id": null,
+        "ledger_corroborated": null,
+        "row_hash": "b60ce255a69a6f83e936461ad0025ed1254df115c7d84803bc963e9f22f412ba"
+      },
+      {
+        "incident_id": "INC-LIVE-DEMO-012",
+        "pred_prob": 0.6,
+        "raw_prob": 0.413,
+        "p_max": 0.688,
+        "weights_version": "ECONOMIC_ACTIVE",
+        "active_sources": [
+          "BMKG_RADAR",
+          "TOMTOM_FLOW"
+        ],
+        "forecast_created_at": null,
+        "observed_delay_hours": 1.2,
+        "actual": 0,
+        "actual_price_spike_pct": 3.3,
+        "verification_source": "POLDA_TRAFFIC_POLICE",
+        "pred_source": "stored",
+        "ledger_delay_hours": null,
+        "ledger_travel_id": null,
+        "ledger_corroborated": null,
+        "row_hash": "1a197fedcb51fa9bda18436f3c6fb3930ea11767f6d6f96e8a50f334d9a1103e"
+      },
+      {
+        "incident_id": "INC-LIVE-DEMO-013",
+        "pred_prob": 0.49,
+        "raw_prob": 0.337,
+        "p_max": 0.688,
+        "weights_version": "ECONOMIC_ACTIVE",
+        "active_sources": [
+          "BMKG_RADAR",
+          "TOMTOM_FLOW"
+        ],
+        "forecast_created_at": null,
+        "observed_delay_hours": 0.9,
+        "actual": 1,
+        "actual_price_spike_pct": 2.1,
+        "verification_source": "ANTARA_NEWS",
+        "pred_source": "stored",
+        "ledger_delay_hours": null,
+        "ledger_travel_id": null,
+        "ledger_corroborated": null,
+        "row_hash": "e96017ee9fc052b93da24aa7d42bf5e848e36fb0e89e72f9717ec37316af6f80"
+      },
+      {
+        "incident_id": "INC-LIVE-DEMO-014",
+        "pred_prob": 0.31,
+        "raw_prob": 0.213,
+        "p_max": 0.688,
+        "weights_version": "ECONOMIC_ACTIVE",
+        "active_sources": [
+          "BMKG_RADAR",
+          "TOMTOM_FLOW"
+        ],
+        "forecast_created_at": null,
+        "observed_delay_hours": 1.1,
+        "actual": 0,
+        "actual_price_spike_pct": 4.0,
+        "verification_source": "BMKG_ALL_CLEAR",
+        "pred_source": "stored",
+        "ledger_delay_hours": null,
+        "ledger_travel_id": null,
+        "ledger_corroborated": null,
+        "row_hash": "dfde6eb8119e4d98143be36eb96e0e02eefd9d0d3dc400295d16ad33878e8172"
+      },
+      {
+        "incident_id": "INC-LIVE-DEMO-015",
+        "pred_prob": 0.28,
+        "raw_prob": 0.193,
+        "p_max": 0.688,
+        "weights_version": "ECONOMIC_ACTIVE",
+        "active_sources": [
+          "BMKG_RADAR",
+          "TOMTOM_FLOW"
+        ],
+        "forecast_created_at": null,
+        "observed_delay_hours": 1.8,
+        "actual": 0,
+        "actual_price_spike_pct": 2.4,
+        "verification_source": "AUTOMATED_SENSOR",
+        "pred_source": "stored",
+        "ledger_delay_hours": null,
+        "ledger_travel_id": null,
+        "ledger_corroborated": null,
+        "row_hash": "1250d775e7e18d9f7861643ed85834c1c55778a1b4c0aa8a7d4ffa9deeb6d707"
+      },
+      {
+        "incident_id": "INC-LIVE-DEMO-016",
+        "pred_prob": 0.23,
+        "raw_prob": 0.158,
+        "p_max": 0.688,
+        "weights_version": "ECONOMIC_ACTIVE",
+        "active_sources": [
+          "BMKG_RADAR",
+          "TOMTOM_FLOW"
+        ],
+        "forecast_created_at": null,
+        "observed_delay_hours": 1.4,
+        "actual": 0,
+        "actual_price_spike_pct": 3.7,
+        "verification_source": "FIELD_REPORT",
+        "pred_source": "stored",
+        "ledger_delay_hours": null,
+        "ledger_travel_id": null,
+        "ledger_corroborated": null,
+        "row_hash": "06d04906129e124a3306b339fbc48ed839cb1255a08ae165c49720d8b8dce173"
+      },
+      {
+        "incident_id": "INC-LIVE-DEMO-017",
+        "pred_prob": 0.18,
+        "raw_prob": 0.124,
+        "p_max": 0.688,
+        "weights_version": "ECONOMIC_ACTIVE",
+        "active_sources": [
+          "BMKG_RADAR",
+          "TOMTOM_FLOW"
+        ],
+        "forecast_created_at": null,
+        "observed_delay_hours": 0.6,
+        "actual": 0,
+        "actual_price_spike_pct": 1.8,
+        "verification_source": "POLDA_TRAFFIC_POLICE",
+        "pred_source": "stored",
+        "ledger_delay_hours": null,
+        "ledger_travel_id": null,
+        "ledger_corroborated": null,
+        "row_hash": "a5c5641550fd5be832fa06cf396d60a07f3a5d099c083fed3475fa55d2b9814f"
+      },
+      {
+        "incident_id": "INC-LIVE-DEMO-018",
+        "pred_prob": 0.13,
+        "raw_prob": 0.089,
+        "p_max": 0.688,
+        "weights_version": "ECONOMIC_ACTIVE",
+        "active_sources": [
+          "BMKG_RADAR",
+          "TOMTOM_FLOW"
+        ],
+        "forecast_created_at": null,
+        "observed_delay_hours": 7.0,
+        "actual": 0,
+        "actual_price_spike_pct": 5.6,
+        "verification_source": "ANTARA_NEWS",
+        "pred_source": "stored",
+        "ledger_delay_hours": null,
+        "ledger_travel_id": null,
+        "ledger_corroborated": null,
+        "row_hash": "495c7cd3c9dfb602baff704881e84c58c95826dfec01e3bcd195a8236755e07c"
+      },
+      {
+        "incident_id": "INC-LIVE-DEMO-019",
+        "pred_prob": 0.09,
+        "raw_prob": 0.062,
+        "p_max": 0.688,
+        "weights_version": "ECONOMIC_ACTIVE",
+        "active_sources": [
+          "BMKG_RADAR",
+          "TOMTOM_FLOW"
+        ],
+        "forecast_created_at": null,
+        "observed_delay_hours": 0.3,
+        "actual": 0,
+        "actual_price_spike_pct": 0.9,
+        "verification_source": "BMKG_ALL_CLEAR",
+        "pred_source": "stored",
+        "ledger_delay_hours": null,
+        "ledger_travel_id": null,
+        "ledger_corroborated": null,
+        "row_hash": "a0aa0902d421bebfb6bb81ffb4a5fc6f336de04b5fb9752e183ae1191c71ee5c"
+      },
+      {
+        "incident_id": "INC-LIVE-DEMO-020",
+        "pred_prob": 0.05,
+        "raw_prob": 0.034,
+        "p_max": 0.688,
+        "weights_version": "ECONOMIC_ACTIVE",
+        "active_sources": [
+          "BMKG_RADAR",
+          "TOMTOM_FLOW"
+        ],
+        "forecast_created_at": null,
+        "observed_delay_hours": 2.0,
+        "actual": 0,
+        "actual_price_spike_pct": 2.8,
+        "verification_source": "AUTOMATED_SENSOR",
+        "pred_source": "stored",
+        "ledger_delay_hours": null,
+        "ledger_travel_id": null,
+        "ledger_corroborated": null,
+        "row_hash": "fdde1bf138bc7181a21a99e9dad094cc4056c53ca2c956c9556f113079a98168"
+      }
+    ],
+    "per_row_total": 20,
+    "per_row_truncated": false,
+    "row_hash_sample": [
+      "be5452d191602ff3baf90b0324c6100aeba34542212e5cec0c1ac06f01f9d379",
+      "2fa58ce6e6873a0555ea8b43d80e38752704a8f25f62bc82ad8114d5d00c92e9",
+      "17a36d9a63eb8fc89addc2238b19db4bf6ade9107900da633743a200738d907a"
+    ],
+    "dataset_hash": "32ceb4f86452ec78febb7fab7d4397dc2b88b954df5843d4936212f8ae612a63",
+    "ledger": {
+      "travels_scanned": 0,
+      "realised": 0,
+      "matched_keys": 0,
+      "matched_genuine": 0
+    },
+    "price_corroboration": {
+      "mode": "file_cache_readonly",
+      "cache_dir": "data/raw/pihps_bi/api_cache",
+      "files_scanned": 0,
+      "files_ok": 0,
+      "files_failed": 0,
+      "available": false,
+      "note": "PIHPS file cache kosong/tidak ada; koroborasi harga tidak tersedia."
+    },
+    "note": "Live kumulatif N=20 (11 TP / 1 FP / 7 TN / 1 FN; minus 3 echo sistem, 102 tanpa pred tersimpan, 102 PROXY tidak digabung) - delta vs batch batch-v2026-10-28-N60 dihitung pada metrik yang sama."
+  },
+  "mode_recommendation": "live",
+  "headline": "Live kumulatif N=20 ditampilkan dengan delta vs batch N=60 (dPresisi +0.0024, dRecall +0.0024, dF1 +0.0024, dBrier −0.0284) − pilih versi via dropdown (batch/live).",
+  "versions": [
+    {
+      "version": "batch-v2026-10-28-N60",
+      "kind": "batch",
+      "n": 60,
+      "immutable": true,
+      "timestamp": "2026-10-28T21:29:08.290684"
+    },
+    {
+      "version": "live-cumulative-N20-20261028",
+      "kind": "live",
+      "n": 20,
+      "immutable": false,
+      "sufficient": true
+    }
+  ]
+}

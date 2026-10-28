@@ -1,0 +1,66 @@
+{
+  "run_started_at": "2026-10-27T08:13:29.475Z",
+  "run_finished_at": "2026-10-27T08:13:48.120Z",
+  "base_url": "https://pre-hub.vercel.app",
+  "throttle": "off",
+  "accounts": [
+    {
+      "account": "REGULATOR",
+      "email_masked": "reg******@bapanas.go.id",
+      "expected_company_id": "bapanas",
+      "started_at": "2026-10-27T08:13:30.116Z",
+      "login_ms": 13848,
+      "login_signal": "failed",
+      "login_error": "3 mggu",
+      "supabase_auth_responses": [
+        {
+          "status": 200,
+          "error": null,
+          "error_code": null,
+          "msg": null,
+          "error_description": null
+        }
+      ],
+      "token": {
+        "present": false,
+        "length": 0,
+        "exp": null,
+        "iat": null,
+        "lifetime_s": null,
+        "exp_iso": null,
+        "iat_iso": null,
+        "role_claim_app_metadata": null,
+        "role_claim_user_metadata": null,
+        "company_id_claim": null,
+        "email_claim": null,
+        "role_matches_expected": null,
+        "company_matches_expected": null
+      },
+      "dashboard": {
+        "ready_ms": 945,
+        "first_data_ms": null,
+        "first_data_signal": null,
+        "signal_fallback_used": false,
+        "request_total": 0,
+        "request_distinct": 0,
+        "requests_by_host": {},
+        "top_urls": []
+      },
+      "session": {
+        "survived_reload": null,
+        "url_after_reload": null,
+        "guest_param_present": null,
+        "guest_banner_visible": null,
+        "role_badge_text": null,
+        "token_present_after_reload": null,
+        "same_subject_after_reload": null,
+        "exp_after_reload": null
+      },
+      "page_errors": [],
+      "console_errors": [],
+      "notes": [
+        "initial_url=https://pre-hub.vercel.app/dashboard?guest=1"
+      ]
+    }
+  ]
+}

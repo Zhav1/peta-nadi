@@ -164,8 +164,17 @@ export function CorrelationMatrix({
           title={`Overlap maks n=${maxN}/10 · ${validCount}/${cells.length} pasangan terhitung · syarat 10${maxN < 10 ? ` · kurang ${10 - maxN} titik` : ' · tercapai'}`}
         >
           <span>
+            Overlap maks <span className="font-bold text-white">n={maxN}/10</span>
+            {' · '}
             {validCount} dari {cells.length} pasangan terhitung
           </span>
+          {/* The remaining-points hint stays visible: it is the actionable half of
+              the hard n≥10 threshold, not a hover-only detail. */}
+          {maxN < 10 ? (
+            <span className="shrink-0 text-slate-400">butuh {10 - maxN} titik lagi</span>
+          ) : (
+            <span className="shrink-0 text-slate-400">ambang terpenuhi</span>
+          )}
         </div>
         <div
           className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/10"

@@ -1,0 +1,438 @@
+........................................................................ [ 18%]
+........................................................................ [ 37%]
+........................F.............................................F. [ 56%]
+........................................................................ [ 75%]
+..........................................................F.F........... [ 93%]
+........................                                                 [100%]
+================================== FAILURES ===================================
+_____________ test_disruption_impact_assessment_spatial_filtering _____________
+
+    @pytest.mark.asyncio
+    async def test_disruption_impact_assessment_spatial_filtering():
+        """
+        Test that placing a 15km flood hazard at Tebing Tinggi correctly flags TRK-003
+        (Belawan -> Tebing Tinggi / Pekanbaru) as impacted while ignoring distant trucks (e.g. Lampung/Aceh).
+        """
+        req = DisruptionImpactRequest(
+            incident_id="INC-TEBINGTINGGI-TEST",
+            lat=3.3285,
+            lon=99.1625,
+            radius_km=15.0,
+            hazard_type="flood",
+            severity="critical",
+            title="Banjir Luapan Tebing Tinggi Km 42"
+        )
+    
+        # Initial warm-up of CPU graph and local SQLite
+        await impact_assessment_service.assess_disruption_impact(req)
+    
+        t0 = time.perf_counter()
+        res = await impact_assessment_service.assess_disruption_impact(req)
+        latency_ms = (time.perf_counter() - t0) * 1000.0
+    
+        assert res.total_fleet_scanned >= 20
+        assert res.impacted_vehicles_count >= 1
+>       assert latency_ms < 250.0  # Fast execution on standard CPU
+E       assert 494.2631999729201 < 250.0
+
+tests\test_impact_assessment.py:47: AssertionError
+______________ test_news_stampede_guard_prevents_duplicate_runs _______________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x000002D4ED5540C0>
+
+    @pytest.mark.asyncio
+    async def test_news_stampede_guard_prevents_duplicate_runs(monkeypatch):
+        """Multiple concurrent calls to run_background_news_ingestion must not run concurrently."""
+        import asyncio
+        from app.routers import news_router
+    
+        calls = 0
+    
+        async def fake_ingest(force_refresh=False):
+            nonlocal calls
+            calls += 1
+            await asyncio.sleep(0.05)
+    
+        monkeypatch.setattr(news_router, "_acquire_cross_process_ingestion_lock", lambda: True)
+        monkeypatch.setattr(news_router, "_release_cross_process_ingestion_lock", lambda: None)
+        monkeypatch.setattr(news_router.unified_news_ingestor, "run_ingestion_cycle", fake_ingest)
+    
+        # Launch two ingestion triggers simultaneously
+        task1 = asyncio.create_task(news_router.run_background_news_ingestion(force=True))
+        task2 = asyncio.create_task(news_router.run_background_news_ingestion(force=True))
+    
+>       await asyncio.gather(task1, task2)
+
+tests\test_news_pipeline.py:264: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+app\routers\news_router.py:226: in run_background_news_ingestion
+    async with _ingestion_lock:
+C:\Python313\Lib\asyncio\locks.py:14: in __aenter__
+    await self.acquire()
+C:\Python313\Lib\asyncio\locks.py:105: in acquire
+    fut = self._get_loop().create_future()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <asyncio.locks.Lock object at 0x000002D4AF894440 [locked]>
+
+    def _get_loop(self):
+        loop = events._get_running_loop()
+    
+        if self._loop is None:
+            with _global_lock:
+                if self._loop is None:
+                    self._loop = loop
+        if loop is not self._loop:
+>           raise RuntimeError(f'{self!r} is bound to a different event loop')
+E           RuntimeError: <asyncio.locks.Lock object at 0x000002D4AF894440 [locked]> is bound to a different event loop
+
+C:\Python313\Lib\asyncio\mixins.py:20: RuntimeError
+____________________ test_patch_120L_for_73km_rejected_422 ____________________
+
+travel_id = '6a7ba84b-555d-4110-aa93-1620d8e943f4'
+payload = TravelUpdate(status=<TravelStatus.DELIVERED: 'delivered'>, actual_time_hours=2.5, actual_fuel_liters=120.0, actual_tol...e, rerouted=None, disruption_id=None, cargo_value_idr=None, inflation_shock_factor=None, notes=None, delivered_at=None)
+user = UserSession(id='guest-dispatcher-1793089537', email='dispatcher@samudera-logistik.co.id', role='DISPATCHER', company_i...:write', 'routes:plan', 'approvals:write', 'manifests:upload', 'scenarios:run'], is_offline_guest=True, exp=1793262337)
+
+    @router.patch("/travels/{travel_id}", response_model=TravelResponse)
+    async def update_travel(
+        travel_id: str,
+        payload: TravelUpdate,
+        user: UserSession = Depends(get_optional_user),
+    ):
+        """Record realised time/fuel/toll/status and recompute the savings split."""
+        _require_fleet_write(user)
+        try:
+>           updated = travel_ledger_service.update_travel(travel_id, payload)
+
+app\routers\travels_router.py:209: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+app\services\travel_ledger_service.py:711: in update_travel
+    validate_actual_fuel_plausibility(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    def validate_actual_fuel_plausibility(
+        *,
+        distance_km: float,
+        actual_fuel_liters: float,
+        baseline_fuel_expected: Optional[float] = None,
+    ) -> None:
+        """Reject demo-typo fuel (e.g. 120L/73km = 0.61 km/L) with a clear ID message."""
+        try:
+            d = float(distance_km)
+            a = float(actual_fuel_liters)
+        except (TypeError, ValueError):
+            return
+        if d <= 0 or a <= 0:
+            return
+        econ = d / a
+        msg = (
+            f"BBM aktual {a:g}L untuk {d:g}km = {econ:.2f} km/L "
+            f"tidak wajar (batas 1.5–25 km/L). Cek ulang input."
+        )
+        if econ < MIN_PLAUSIBLE_KMPL or econ > MAX_PLAUSIBLE_KMPL:
+>           raise FuelPlausibilityError(msg)
+E           app.services.travel_ledger_service.FuelPlausibilityError: BBM aktual 120L untuk 73km = 0.61 km/L tidak wajar (batas 1.5–25 km/L). Cek ulang input.
+
+app\services\travel_ledger_service.py:264: FuelPlausibilityError
+
+During handling of the above exception, another exception occurred:
+
+    def test_patch_120L_for_73km_rejected_422():
+        _register_truck()
+        created = _create_planned_73km()
+>       res = client.patch(
+            f"/api/v1/fleet/travels/{created['id']}",
+            headers=DISPATCHER,
+            json={"actual_time_hours": 2.5, "actual_fuel_liters": 120.0, "status": "delivered"},
+        )
+
+tests\test_travel_fuel_guard.py:93: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+.venv\Lib\site-packages\starlette\testclient.py:663: in patch
+    return super().patch(
+.venv\Lib\site-packages\httpx\_client.py:1219: in patch
+    return self.request(
+.venv\Lib\site-packages\starlette\testclient.py:488: in request
+    return super().request(
+.venv\Lib\site-packages\httpx\_client.py:827: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+.venv\Lib\site-packages\httpx\_client.py:914: in send
+    response = self._send_handling_auth(
+.venv\Lib\site-packages\httpx\_client.py:942: in _send_handling_auth
+    response = self._send_handling_redirects(
+.venv\Lib\site-packages\httpx\_client.py:979: in _send_handling_redirects
+    response = self._send_single_request(request)
+.venv\Lib\site-packages\httpx\_client.py:1015: in _send_single_request
+    response = transport.handle_request(request)
+.venv\Lib\site-packages\starlette\testclient.py:381: in handle_request
+    raise exc
+.venv\Lib\site-packages\starlette\testclient.py:378: in handle_request
+    portal.call(self.app, scope, receive, send)
+.venv\Lib\site-packages\anyio\from_thread.py:338: in call
+    return cast(T_Retval, self.start_task_soon(func, *args).result())
+C:\Python313\Lib\concurrent\futures\_base.py:456: in result
+    return self.__get_result()
+C:\Python313\Lib\concurrent\futures\_base.py:401: in __get_result
+    raise self._exception
+.venv\Lib\site-packages\anyio\from_thread.py:263: in _call_func
+    retval = await retval_or_awaitable
+.venv\Lib\site-packages\fastapi\applications.py:1054: in __call__
+    await super().__call__(scope, receive, send)
+.venv\Lib\site-packages\starlette\applications.py:113: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv\Lib\site-packages\starlette\middleware\errors.py:187: in __call__
+    raise exc
+.venv\Lib\site-packages\starlette\middleware\errors.py:165: in __call__
+    await self.app(scope, receive, _send)
+.venv\Lib\site-packages\starlette\middleware\cors.py:85: in __call__
+    await self.app(scope, receive, send)
+.venv\Lib\site-packages\starlette\middleware\exceptions.py:62: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+.venv\Lib\site-packages\starlette\_exception_handler.py:62: in wrapped_app
+    raise exc
+.venv\Lib\site-packages\starlette\_exception_handler.py:51: in wrapped_app
+    await app(scope, receive, sender)
+.venv\Lib\site-packages\starlette\routing.py:715: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv\Lib\site-packages\starlette\routing.py:735: in app
+    await route.handle(scope, receive, send)
+.venv\Lib\site-packages\starlette\routing.py:288: in handle
+    await self.app(scope, receive, send)
+.venv\Lib\site-packages\starlette\routing.py:76: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+.venv\Lib\site-packages\starlette\_exception_handler.py:62: in wrapped_app
+    raise exc
+.venv\Lib\site-packages\starlette\_exception_handler.py:51: in wrapped_app
+    await app(scope, receive, sender)
+.venv\Lib\site-packages\starlette\routing.py:73: in app
+    response = await f(request)
+.venv\Lib\site-packages\fastapi\routing.py:301: in app
+    raw_response = await run_endpoint_function(
+.venv\Lib\site-packages\fastapi\routing.py:212: in run_endpoint_function
+    return await dependant.call(**values)
+app\routers\travels_router.py:214: in update_travel
+    raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e))
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+name = 'HTTP_422_UNPROCESSABLE_CONTENT'
+
+    def __getattr__(name: str) -> int:
+        deprecation_changes = {
+            "WS_1004_NO_STATUS_RCVD": "WS_1005_NO_STATUS_RCVD",
+            "WS_1005_ABNORMAL_CLOSURE": "WS_1006_ABNORMAL_CLOSURE",
+        }
+        deprecated = __deprecated__.get(name)
+        if deprecated:
+            warnings.warn(
+                f"'{name}' is deprecated. Use '{deprecation_changes[name]}' instead.",
+                category=DeprecationWarning,
+                stacklevel=3,
+            )
+            return deprecated
+>       raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+E       AttributeError: module 'starlette.status' has no attribute 'HTTP_422_UNPROCESSABLE_CONTENT'. Did you mean: 'HTTP_422_UNPROCESSABLE_ENTITY'?
+
+.venv\Lib\site-packages\starlette\status.py:197: AttributeError
+________________ test_patch_1L_for_73km_rejected_too_efficient ________________
+
+travel_id = 'e0e3be12-da89-4bc7-b32d-a090ba6bd828'
+payload = TravelUpdate(status=<TravelStatus.DELIVERED: 'delivered'>, actual_time_hours=2.5, actual_fuel_liters=1.0, actual_toll_...e, rerouted=None, disruption_id=None, cargo_value_idr=None, inflation_shock_factor=None, notes=None, delivered_at=None)
+user = UserSession(id='guest-dispatcher-1793089537', email='dispatcher@samudera-logistik.co.id', role='DISPATCHER', company_i...:write', 'routes:plan', 'approvals:write', 'manifests:upload', 'scenarios:run'], is_offline_guest=True, exp=1793262337)
+
+    @router.patch("/travels/{travel_id}", response_model=TravelResponse)
+    async def update_travel(
+        travel_id: str,
+        payload: TravelUpdate,
+        user: UserSession = Depends(get_optional_user),
+    ):
+        """Record realised time/fuel/toll/status and recompute the savings split."""
+        _require_fleet_write(user)
+        try:
+>           updated = travel_ledger_service.update_travel(travel_id, payload)
+
+app\routers\travels_router.py:209: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+app\services\travel_ledger_service.py:711: in update_travel
+    validate_actual_fuel_plausibility(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    def validate_actual_fuel_plausibility(
+        *,
+        distance_km: float,
+        actual_fuel_liters: float,
+        baseline_fuel_expected: Optional[float] = None,
+    ) -> None:
+        """Reject demo-typo fuel (e.g. 120L/73km = 0.61 km/L) with a clear ID message."""
+        try:
+            d = float(distance_km)
+            a = float(actual_fuel_liters)
+        except (TypeError, ValueError):
+            return
+        if d <= 0 or a <= 0:
+            return
+        econ = d / a
+        msg = (
+            f"BBM aktual {a:g}L untuk {d:g}km = {econ:.2f} km/L "
+            f"tidak wajar (batas 1.5–25 km/L). Cek ulang input."
+        )
+        if econ < MIN_PLAUSIBLE_KMPL or econ > MAX_PLAUSIBLE_KMPL:
+>           raise FuelPlausibilityError(msg)
+E           app.services.travel_ledger_service.FuelPlausibilityError: BBM aktual 1L untuk 73km = 73.00 km/L tidak wajar (batas 1.5–25 km/L). Cek ulang input.
+
+app\services\travel_ledger_service.py:264: FuelPlausibilityError
+
+During handling of the above exception, another exception occurred:
+
+    def test_patch_1L_for_73km_rejected_too_efficient():
+        _register_truck()
+        created = _create_planned_73km()
+>       res = client.patch(
+            f"/api/v1/fleet/travels/{created['id']}",
+            headers=DISPATCHER,
+            json={"actual_time_hours": 2.5, "actual_fuel_liters": 1.0, "status": "delivered"},
+        )
+
+tests\test_travel_fuel_guard.py:121: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+.venv\Lib\site-packages\starlette\testclient.py:663: in patch
+    return super().patch(
+.venv\Lib\site-packages\httpx\_client.py:1219: in patch
+    return self.request(
+.venv\Lib\site-packages\starlette\testclient.py:488: in request
+    return super().request(
+.venv\Lib\site-packages\httpx\_client.py:827: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+.venv\Lib\site-packages\httpx\_client.py:914: in send
+    response = self._send_handling_auth(
+.venv\Lib\site-packages\httpx\_client.py:942: in _send_handling_auth
+    response = self._send_handling_redirects(
+.venv\Lib\site-packages\httpx\_client.py:979: in _send_handling_redirects
+    response = self._send_single_request(request)
+.venv\Lib\site-packages\httpx\_client.py:1015: in _send_single_request
+    response = transport.handle_request(request)
+.venv\Lib\site-packages\starlette\testclient.py:381: in handle_request
+    raise exc
+.venv\Lib\site-packages\starlette\testclient.py:378: in handle_request
+    portal.call(self.app, scope, receive, send)
+.venv\Lib\site-packages\anyio\from_thread.py:338: in call
+    return cast(T_Retval, self.start_task_soon(func, *args).result())
+C:\Python313\Lib\concurrent\futures\_base.py:456: in result
+    return self.__get_result()
+C:\Python313\Lib\concurrent\futures\_base.py:401: in __get_result
+    raise self._exception
+.venv\Lib\site-packages\anyio\from_thread.py:263: in _call_func
+    retval = await retval_or_awaitable
+.venv\Lib\site-packages\fastapi\applications.py:1054: in __call__
+    await super().__call__(scope, receive, send)
+.venv\Lib\site-packages\starlette\applications.py:113: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv\Lib\site-packages\starlette\middleware\errors.py:187: in __call__
+    raise exc
+.venv\Lib\site-packages\starlette\middleware\errors.py:165: in __call__
+    await self.app(scope, receive, _send)
+.venv\Lib\site-packages\starlette\middleware\cors.py:85: in __call__
+    await self.app(scope, receive, send)
+.venv\Lib\site-packages\starlette\middleware\exceptions.py:62: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+.venv\Lib\site-packages\starlette\_exception_handler.py:62: in wrapped_app
+    raise exc
+.venv\Lib\site-packages\starlette\_exception_handler.py:51: in wrapped_app
+    await app(scope, receive, sender)
+.venv\Lib\site-packages\starlette\routing.py:715: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv\Lib\site-packages\starlette\routing.py:735: in app
+    await route.handle(scope, receive, send)
+.venv\Lib\site-packages\starlette\routing.py:288: in handle
+    await self.app(scope, receive, send)
+.venv\Lib\site-packages\starlette\routing.py:76: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+.venv\Lib\site-packages\starlette\_exception_handler.py:62: in wrapped_app
+    raise exc
+.venv\Lib\site-packages\starlette\_exception_handler.py:51: in wrapped_app
+    await app(scope, receive, sender)
+.venv\Lib\site-packages\starlette\routing.py:73: in app
+    response = await f(request)
+.venv\Lib\site-packages\fastapi\routing.py:301: in app
+    raw_response = await run_endpoint_function(
+.venv\Lib\site-packages\fastapi\routing.py:212: in run_endpoint_function
+    return await dependant.call(**values)
+app\routers\travels_router.py:214: in update_travel
+    raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e))
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+name = 'HTTP_422_UNPROCESSABLE_CONTENT'
+
+    def __getattr__(name: str) -> int:
+        deprecation_changes = {
+            "WS_1004_NO_STATUS_RCVD": "WS_1005_NO_STATUS_RCVD",
+            "WS_1005_ABNORMAL_CLOSURE": "WS_1006_ABNORMAL_CLOSURE",
+        }
+        deprecated = __deprecated__.get(name)
+        if deprecated:
+            warnings.warn(
+                f"'{name}' is deprecated. Use '{deprecation_changes[name]}' instead.",
+                category=DeprecationWarning,
+                stacklevel=3,
+            )
+            return deprecated
+>       raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+E       AttributeError: module 'starlette.status' has no attribute 'HTTP_422_UNPROCESSABLE_CONTENT'. Did you mean: 'HTTP_422_UNPROCESSABLE_ENTITY'?
+
+.venv\Lib\site-packages\starlette\status.py:197: AttributeError
+============================== warnings summary ===============================
+app\config.py:6
+  D:\College\Pidi.id\backend\app\config.py:6: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class Settings(BaseSettings):
+
+.venv\Lib\site-packages\supabase\_async\auth_client.py:3
+  D:\College\Pidi.id\backend\.venv\Lib\site-packages\supabase\_async\auth_client.py:3: DeprecationWarning: The `gotrue` package is deprecated, is not going to receive updates in the future. Please, use `supabase_auth` instead.
+    from gotrue import (
+
+.venv\Lib\site-packages\langgraph\checkpoint\base\__init__.py:24
+  D:\College\Pidi.id\backend\.venv\Lib\site-packages\langgraph\checkpoint\base\__init__.py:24: LangChainPendingDeprecationWarning: The default value of `allowed_objects` will change in a future version. Pass an explicit value (e.g., allowed_objects='messages' or allowed_objects='core') to suppress this warning.
+    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+
+.venv\Lib\site-packages\starlette\formparsers.py:12
+  D:\College\Pidi.id\backend\.venv\Lib\site-packages\starlette\formparsers.py:12: PendingDeprecationWarning: Please use `import python_multipart` instead.
+    import multipart
+
+tests/test_auth_rbac.py::test_forged_signature_token_rejected
+tests/test_auth_rbac.py::test_api_switch_role_rejects_forged_signature
+  D:\College\Pidi.id\backend\.venv\Lib\site-packages\jwt\api_jwt.py:147: InsecureKeyLengthWarning: The HMAC key is 26 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+    return self._jws.encode(
+
+tests/test_cross_workstream_integration.py::test_fleet_vehicles_canonical_schema
+tests/test_fleet_ingest.py::test_registered_truck_visible_to_owning_dispatcher
+tests/test_fleet_ingest.py::test_master_truck_asset_appears_in_owning_dispatcher_fleet
+tests/test_impact_assessment.py::test_impact_assessment_api_endpoint
+tests/test_vehicles_telemetry.py::test_fleet_tenancy_filter_by_dispatcher_jwt
+tests/test_vehicles_telemetry.py::test_fleet_modality_and_status_all_filters
+  C:\Python313\Lib\json\decoder.py:361: RuntimeWarning: coroutine 'connect_tcp.<locals>.try_connect' was never awaited
+    obj, end = self.scan_once(s, idx)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/test_impact_assessment.py::test_impact_assessment_api_endpoint
+  C:\Python313\Lib\json\decoder.py:361: RuntimeWarning: coroutine 'TelemetryService.fetch_live_sumatra_aircraft.<locals>._fetch_endpoint' was never awaited
+    obj, end = self.scan_once(s, idx)
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/test_pilot_e2e.py::test_drill3_sitinjau_lauik_operator_override_with_notes
+  D:\College\Pidi.id\backend\.venv\Lib\site-packages\_pytest\unraisableexception.py:80: PytestUnraisableExceptionWarning: Exception ignored in: <coroutine object run_background_news_ingestion at 0x000002D4ED7EA980>
+  
+  Traceback (most recent call last):
+    File "C:\Python313\Lib\concurrent\futures\thread.py", line 165, in submit
+      def submit(self, fn, /, *args, **kwargs):
+      
+  RuntimeError: coroutine ignored GeneratorExit
+  
+    warnings.warn(pytest.PytestUnraisableExceptionWarning(msg))
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_impact_assessment.py::test_disruption_impact_assessment_spatial_filtering
+FAILED tests/test_news_pipeline.py::test_news_stampede_guard_prevents_duplicate_runs
+FAILED tests/test_travel_fuel_guard.py::test_patch_120L_for_73km_rejected_422
+FAILED tests/test_travel_fuel_guard.py::test_patch_1L_for_73km_rejected_too_efficient
+4 failed, 380 passed, 14 warnings in 436.77s (0:07:16)

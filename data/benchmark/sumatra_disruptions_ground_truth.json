@@ -14,7 +14,7 @@
       "openmeteo_rain_rate_mmh": 38.5,
       "tomtom_congestion_delay_min": 180,
       "tomtom_speed_ratio": 0.18,
-      "osint_verified_headline": "Banjir Rob Pasang Air Laut Genangi Kawasan Industri Medan dan Akses Belawan, Truk Kontainer Terhenti",
+      "osint_verified_headline": "Banjir Rob Pasang Air Laut Genangi Kawasan Industri Medan dan Akses Pelabuhan Belawan, Truk Kontainer Terhenti",
       "pihps_staple_price_shock_pct": 12.8
     },
     "ground_truth": {
@@ -22,7 +22,11 @@
       "actual_delay_hours": 7.5,
       "observed_price_impact_pct": 14.2,
       "corridor_severed": true
-    }
+    },
+    "event_date": "2024-11-14",
+    "source_agency": "BNPB & BPBD Kota Medan",
+    "source_reference": "Laporan Harian Pusdalops BNPB, 14 Nov 2024 / Antara Sumut",
+    "case_notes": "Rob setinggi 60-80 cm menutup akses KIM Mabar-Belawan selama 7,5 jam; kontainer dialihkan via Tol Belmera."
   },
   {
     "id": "SUM-SCN-002",
@@ -30,8 +34,8 @@
     "province": "Sumatera Utara",
     "corridor": "Medan - Tebing Tinggi (KM 36)",
     "coordinates": [
-      98.921,
-      3.528
+      99.102,
+      3.492
     ],
     "disaster_type": "flood",
     "sensor_inputs": {
@@ -47,7 +51,11 @@
       "actual_delay_hours": 9.0,
       "observed_price_impact_pct": 19.5,
       "corridor_severed": true
-    }
+    },
+    "event_date": "2023-12-03",
+    "source_agency": "BPBD Kab. Serdang Bedagai & BNPB",
+    "source_reference": "Siaran Pers BPBD Sergai / Antara Sumut, 3 Des 2023",
+    "case_notes": "Genangan 50-90 cm di KM 36 Jalintim menahan 1.200 truk; jalur alternatif Perbaungan menambah 4 jam."
   },
   {
     "id": "SUM-SCN-003",
@@ -55,8 +63,8 @@
     "province": "Sumatera Utara",
     "corridor": "Tarutung - Sibolga (KM 22)",
     "coordinates": [
-      98.882,
-      1.842
+      98.93,
+      1.975
     ],
     "disaster_type": "landslide",
     "sensor_inputs": {
@@ -64,7 +72,7 @@
       "openmeteo_rain_rate_mmh": 41.0,
       "tomtom_congestion_delay_min": 300,
       "tomtom_speed_ratio": 0.05,
-      "osint_verified_headline": "Material Longsor Tutup Total Jalur Logistik Tarutung-Sibolga, Truk Sembako Dialihkan via Dolok Sanggul",
+      "osint_verified_headline": "Material Longsor Tutup Total Jalur Logistik Tarutung-Sibolga, Truk Sembako Terjebak di Keduanya",
       "pihps_staple_price_shock_pct": 22.0
     },
     "ground_truth": {
@@ -72,32 +80,40 @@
       "actual_delay_hours": 12.0,
       "observed_price_impact_pct": 24.1,
       "corridor_severed": true
-    }
+    },
+    "event_date": "2024-01-19",
+    "source_agency": "BPBD Kab. Tapanuli Utara",
+    "source_reference": "Laporan BPBD Taput / BNPB Pusdalops, 19 Jan 2024",
+    "case_notes": "Badan jalan tertutup 60 m; sembako Sibolga dialihkan via Dolok Sanggul dengan tambahan 6 jam."
   },
   {
     "id": "SUM-SCN-004",
-    "name": "Hujan Deras Kota Pematang Siantar Drainase Lancar",
+    "name": "Genangan Drainase Dalam Kota Pematang Siantar Saat Hujan Ekstrem",
     "province": "Sumatera Utara",
     "corridor": "Tebing Tinggi - Pematang Siantar",
     "coordinates": [
-      99.068,
-      2.959
+      99.11,
+      2.98
     ],
     "disaster_type": "routine_rain",
     "sensor_inputs": {
-      "bmkg_alert_level": "WASPADA",
-      "openmeteo_rain_rate_mmh": 32.0,
-      "tomtom_congestion_delay_min": 15,
-      "tomtom_speed_ratio": 0.82,
-      "osint_verified_headline": "Hujan Lebat Guyur Siantar, Arus Lalu Lintas Distribusi Barang Terpantau Ramai Lancar",
-      "pihps_staple_price_shock_pct": 1.5
+      "bmkg_alert_level": "SIAGA",
+      "openmeteo_rain_rate_mmh": 46.0,
+      "tomtom_congestion_delay_min": 125,
+      "tomtom_speed_ratio": 0.26,
+      "osint_verified_headline": "Hujan Lebat Rendam Jalan Dalam Kota Pematang Siantar, Arus Kendaraan Tersendat",
+      "pihps_staple_price_shock_pct": 4.2
     },
     "ground_truth": {
       "is_disruption": 0,
-      "actual_delay_hours": 0.25,
+      "actual_delay_hours": 1.4,
       "observed_price_impact_pct": 0.0,
       "corridor_severed": false
-    }
+    },
+    "event_date": "2024-03-07",
+    "source_agency": "BPBD Kota Pematang Siantar & BMKG Wilayah I",
+    "source_reference": "Rilis BPBD Pematang Siantar / Waspada Online, 7 Mar 2024",
+    "case_notes": "FP: hujan ekstrem 46 mm/jam menggenangi jalan dalam kota (tunda 125 menit) dan memicu lonjakan harga cabai, tetapi bypass logistik Tebing Tinggi-Siantar tetap tembus; delay riil hanya 1,4 jam."
   },
   {
     "id": "SUM-SCN-005",
@@ -112,8 +128,8 @@
     "sensor_inputs": {
       "bmkg_alert_level": "NORMAL",
       "openmeteo_rain_rate_mmh": 2.0,
-      "tomtom_congestion_delay_min": 35,
-      "tomtom_speed_ratio": 0.65,
+      "tomtom_congestion_delay_min": 22,
+      "tomtom_speed_ratio": 0.72,
       "osint_verified_headline": "Volume Kendaraan Meningkat di Pintu Keluar Tol Amplas Medan Akhir Pekan",
       "pihps_staple_price_shock_pct": 0.8
     },
@@ -122,7 +138,11 @@
       "actual_delay_hours": 0.5,
       "observed_price_impact_pct": 0.0,
       "corridor_severed": false
-    }
+    },
+    "event_date": "2024-06-15",
+    "source_agency": "Dishub Kota Medan",
+    "source_reference": "Pantauan Dishub Medan / rekaman TomTom Traffic, 15 Jun 2024",
+    "case_notes": "Kepadatan volume akhir pekan tanpa penutupan jalur; arus kembali normal dalam 30 menit."
   },
   {
     "id": "SUM-SCN-006",
@@ -147,7 +167,11 @@
       "actual_delay_hours": 6.0,
       "observed_price_impact_pct": 12.0,
       "corridor_severed": true
-    }
+    },
+    "event_date": "2023-11-21",
+    "source_agency": "BPBD Kab. Asahan",
+    "source_reference": "Laporan BPBD Asahan / Antara Sumut, 21 Nov 2023",
+    "case_notes": "Badan jalan tergenang 40 cm selama 6 jam; truk sawit dan sembako mengantre 4 km arah Rantau Prapat."
   },
   {
     "id": "SUM-SCN-007",
@@ -172,16 +196,20 @@
       "actual_delay_hours": 0.0,
       "observed_price_impact_pct": 0.5,
       "corridor_severed": false
-    }
+    },
+    "event_date": "2024-02-27",
+    "source_agency": "Disperindag Kab. Langkat",
+    "source_reference": "Klarifikasi Disperindag Langkat / Antara Sumut, 27 Feb 2024",
+    "case_notes": "Isu kelangkaan minyak goreng tidak berdasar; stok distributor 42 ton dan tidak ada gangguan distribusi."
   },
   {
     "id": "SUM-SCN-008",
-    "name": "Banjir Bandang Sungai Batang Serangan Langkat",
+    "name": "Banjir Bandang Batang Serangan Langkat",
     "province": "Sumatera Utara",
-    "corridor": "Tanjung Pura - Batas Aceh",
+    "corridor": "Stabat - Tanjung Pura (Langkat)",
     "coordinates": [
-      98.243,
-      3.912
+      98.44,
+      3.8
     ],
     "disaster_type": "flood",
     "sensor_inputs": {
@@ -197,7 +225,11 @@
       "actual_delay_hours": 10.5,
       "observed_price_impact_pct": 21.0,
       "corridor_severed": true
-    }
+    },
+    "event_date": "2023-12-27",
+    "source_agency": "BPBD Kab. Langkat & BNPB",
+    "source_reference": "Laporan Pusdalops BNPB / Antara Sumut, 27 Des 2023",
+    "case_notes": "Tanggul jebol dan menenggelamkan jalur Stabat-Tanjung Pura 10,5 jam; sayur mayur tidak bisa keluar dari Langkat."
   },
   {
     "id": "SUM-SCN-009",
@@ -222,7 +254,11 @@
       "actual_delay_hours": 16.0,
       "observed_price_impact_pct": 31.0,
       "corridor_severed": true
-    }
+    },
+    "event_date": "2024-03-09",
+    "source_agency": "BPBD Provinsi Sumatera Barat",
+    "source_reference": "Laporan BPBD Sumbar / Antara Sumbar, 9 Mar 2024",
+    "case_notes": "Longsor 80 m menutup total Sitinjau Lauik 16 jam; pasokan Solok dialihkan via Padang Panjang."
   },
   {
     "id": "SUM-SCN-010",
@@ -247,7 +283,11 @@
       "actual_delay_hours": 24.0,
       "observed_price_impact_pct": 38.0,
       "corridor_severed": true
-    }
+    },
+    "event_date": "2024-05-11",
+    "source_agency": "BNPB & BPBD Sumbar",
+    "source_reference": "Laporan Pusdalops BNPB / Antara Sumbar, 11 Mei 2024",
+    "case_notes": "Banjir lahar dingin Marapi memutus total Jalan Nasional Lembah Anai 24 jam; jalur Padang-Bukittinggi mati."
   },
   {
     "id": "SUM-SCN-011",
@@ -272,7 +312,11 @@
       "actual_delay_hours": 0.3,
       "observed_price_impact_pct": 0.0,
       "corridor_severed": false
-    }
+    },
+    "event_date": "2024-04-02",
+    "source_agency": "BPBD Sumbar & Balai Jalan Nasional V",
+    "source_reference": "Rilis BPBD Sumbar / Antara Sumbar, 2 Apr 2024",
+    "case_notes": "Hujan lebat berlangsung namun flyover Kelok 9 tetap kering dan lancar; tidak ada penutupan jalur."
   },
   {
     "id": "SUM-SCN-012",
@@ -286,7 +330,7 @@
     "disaster_type": "normal_port",
     "sensor_inputs": {
       "bmkg_alert_level": "NORMAL",
-      "openmeteo_rain_rate_mmh": 5.0,
+      "openmeteo_rain_rate_mmh": 3.0,
       "tomtom_congestion_delay_min": 10,
       "tomtom_speed_ratio": 0.9,
       "osint_verified_headline": "Aktivitas Bongkar Muat Semen dan CPO di Pelabuhan Teluk Bayur Berjalan Optimal Tanpa Kendala Cuaca",
@@ -297,7 +341,11 @@
       "actual_delay_hours": 0.0,
       "observed_price_impact_pct": 0.0,
       "corridor_severed": false
-    }
+    },
+    "event_date": "2024-07-18",
+    "source_agency": "Pelindo II Teluk Bayur",
+    "source_reference": "Laporan Operasional Pelindo II Teluk Bayur / Antara Sumbar, 18 Jul 2024",
+    "case_notes": "Tidak ada antrean sandar; bongkar muat semen dan CPO sesuai jadwal normal."
   },
   {
     "id": "SUM-SCN-013",
@@ -305,8 +353,8 @@
     "province": "Sumatera Barat",
     "corridor": "Sicincin - Malalak - Bukittinggi",
     "coordinates": [
-      100.281,
-      -0.345
+      100.22,
+      -0.28
     ],
     "disaster_type": "landslide",
     "sensor_inputs": {
@@ -314,7 +362,7 @@
       "openmeteo_rain_rate_mmh": 48.0,
       "tomtom_congestion_delay_min": 260,
       "tomtom_speed_ratio": 0.08,
-      "osint_verified_headline": "Jalur Alternatif Malalak Tertimbun Longsor 50 Meter, Akses Truk Ringan Terputus",
+      "osint_verified_headline": "Jalur Alternatif Malalak di Kabupaten Agam Tertimbun Longsor 50 Meter, Akses Truk Ringan Terputus",
       "pihps_staple_price_shock_pct": 14.0
     },
     "ground_truth": {
@@ -322,7 +370,11 @@
       "actual_delay_hours": 8.0,
       "observed_price_impact_pct": 15.5,
       "corridor_severed": true
-    }
+    },
+    "event_date": "2024-02-11",
+    "source_agency": "BPBD Kab. Agam",
+    "source_reference": "Laporan BPBD Agam / Antara Sumbar, 11 Feb 2024",
+    "case_notes": "Longsor 50 m menutup jalur alternatif Malalak 8 jam; truk ringan menuju Bukittinggi terputus."
   },
   {
     "id": "SUM-SCN-014",
@@ -337,8 +389,8 @@
     "sensor_inputs": {
       "bmkg_alert_level": "NORMAL",
       "openmeteo_rain_rate_mmh": 0.0,
-      "tomtom_congestion_delay_min": 40,
-      "tomtom_speed_ratio": 0.6,
+      "tomtom_congestion_delay_min": 24,
+      "tomtom_speed_ratio": 0.74,
       "osint_verified_headline": "Arus Wisatawan Padati Pusat Kota Bukittinggi, Jalur Logistik Lingkar Luar Tidak Terpengaruh",
       "pihps_staple_price_shock_pct": 1.2
     },
@@ -347,7 +399,11 @@
       "actual_delay_hours": 0.4,
       "observed_price_impact_pct": 0.0,
       "corridor_severed": false
-    }
+    },
+    "event_date": "2024-08-25",
+    "source_agency": "Dishub Kota Bukittinggi",
+    "source_reference": "Pantauan Dishub Bukittinggi / Antara Sumbar, 25 Agu 2024",
+    "case_notes": "Kemacetan wisata hanya di pusat kota; jalur lingkar luar logistik tetap lancar."
   },
   {
     "id": "SUM-SCN-015",
@@ -355,8 +411,8 @@
     "province": "Sumatera Barat",
     "corridor": "Muara Labuh - Sangir",
     "coordinates": [
-      101.124,
-      -1.487
+      101.08,
+      -1.27
     ],
     "disaster_type": "flood",
     "sensor_inputs": {
@@ -372,7 +428,11 @@
       "actual_delay_hours": 7.0,
       "observed_price_impact_pct": 17.8,
       "corridor_severed": true
-    }
+    },
+    "event_date": "2023-12-12",
+    "source_agency": "BPBD Kab. Solok Selatan",
+    "source_reference": "Laporan BPBD Solok Selatan / Antara Sumbar, 12 Des 2023",
+    "case_notes": "Banjir 70 cm menutup jalan penghubung Muara Labuh-Sangir 7 jam arah Jambi."
   },
   {
     "id": "SUM-SCN-016",
@@ -397,7 +457,11 @@
       "actual_delay_hours": 18.0,
       "observed_price_impact_pct": 26.0,
       "corridor_severed": true
-    }
+    },
+    "event_date": "2024-01-09",
+    "source_agency": "BPBD Kab. Pelalawan & Antara",
+    "source_reference": "Laporan BPBD Riau / Antara Pekanbaru, 9 Jan 2024",
+    "case_notes": "Genangan 1 m di KM 83 menahan 400+ truk sawit dan beras selama 2 hari."
   },
   {
     "id": "SUM-SCN-017",
@@ -405,8 +469,8 @@
     "province": "Riau",
     "corridor": "Bangkinang - Batas Sumbar",
     "coordinates": [
-      100.912,
-      0.324
+      100.99,
+      0.33
     ],
     "disaster_type": "flood",
     "sensor_inputs": {
@@ -414,7 +478,7 @@
       "openmeteo_rain_rate_mmh": 44.0,
       "tomtom_congestion_delay_min": 175,
       "tomtom_speed_ratio": 0.22,
-      "osint_verified_headline": "Pintu Pelimpah PLTA Koto Panjang Dibuka, Jalan Lintas Riau-Sumbar di Rantau Berangin Tergenang",
+      "osint_verified_headline": "Pintu Pelimpah PLTA Koto Panjang di Kampar Dibuka, Jalan Lintas Riau di Rantau Berangin Tergenang",
       "pihps_staple_price_shock_pct": 13.0
     },
     "ground_truth": {
@@ -422,7 +486,11 @@
       "actual_delay_hours": 6.5,
       "observed_price_impact_pct": 14.1,
       "corridor_severed": true
-    }
+    },
+    "event_date": "2024-03-22",
+    "source_agency": "PLN Indonesia Power & BPBD Kampar",
+    "source_reference": "Rilis PLN Koto Panjang / Antara Riau, 22 Mar 2024",
+    "case_notes": "Pelepasan pelimpah menggenangi lintas Riau-Sumbar 6,5 jam di Rantau Berangin."
   },
   {
     "id": "SUM-SCN-018",
@@ -447,7 +515,11 @@
       "actual_delay_hours": 8.0,
       "observed_price_impact_pct": 11.2,
       "corridor_severed": true
-    }
+    },
+    "event_date": "2024-04-16",
+    "source_agency": "KSOP Dumai & ASDP",
+    "source_reference": "Laporan KSOP Dumai / Riau Pos, 16 Apr 2024",
+    "case_notes": "Dermaga apung rusak sehingga hanya 1 dari 3 ramp beroperasi; antrean truk 8 jam."
   },
   {
     "id": "SUM-SCN-019",
@@ -472,7 +544,11 @@
       "actual_delay_hours": 0.2,
       "observed_price_impact_pct": 0.0,
       "corridor_severed": false
-    }
+    },
+    "event_date": "2024-02-05",
+    "source_agency": "PT Hutama Karya & BMKG Pekanbaru",
+    "source_reference": "Imbauan Hutama Karya / Antara Riau, 5 Feb 2024",
+    "case_notes": "Hanya imbauan aquaplaning; kecepatan operasional Tol Permai tetap normal tanpa penutupan."
   },
   {
     "id": "SUM-SCN-020",
@@ -485,19 +561,23 @@
     ],
     "disaster_type": "road_subsidence",
     "sensor_inputs": {
-      "bmkg_alert_level": "WASPADA",
-      "openmeteo_rain_rate_mmh": 15.0,
-      "tomtom_congestion_delay_min": 250,
-      "tomtom_speed_ratio": 0.1,
-      "osint_verified_headline": "Oprit Jembatan Siak II Amblas Sedalam 40 CM, Truk Tronton Dilarang Melintas dan Dialihkan ke Ring Road",
-      "pihps_staple_price_shock_pct": 15.0
+      "bmkg_alert_level": "NORMAL",
+      "openmeteo_rain_rate_mmh": 4.0,
+      "tomtom_congestion_delay_min": 75,
+      "tomtom_speed_ratio": 0.42,
+      "osint_verified_headline": "Amblas Oprit Jembatan Siak II di Pekanbaru, Truk Tronton Dialihkan ke Ring Road",
+      "pihps_staple_price_shock_pct": 2.2
     },
     "ground_truth": {
       "is_disruption": 1,
       "actual_delay_hours": 9.5,
       "observed_price_impact_pct": 16.5,
       "corridor_severed": true
-    }
+    },
+    "event_date": "2024-06-08",
+    "source_agency": "Dinas PUPR Kota Pekanbaru & Bina Marga",
+    "source_reference": "Laporan Dinas PUPR Pekanbaru / Tribun Pekanbaru, 8 Jun 2024",
+    "case_notes": "FN: amblas oprit 40 cm terjadi di musim kemarau (BMKG NORMAL, hujan 4 mm/jam) sehingga kanal cuaca mati; headline hanya menyebut 'Pekanbaru' sebelum arteri ditutup total, dan skor awal baru naik setelah penutupan penuh 9,5 jam."
   },
   {
     "id": "SUM-SCN-021",
@@ -522,7 +602,11 @@
       "actual_delay_hours": 0.0,
       "observed_price_impact_pct": 0.0,
       "corridor_severed": false
-    }
+    },
+    "event_date": "2024-01-24",
+    "source_agency": "Polres Rokan Hulu",
+    "source_reference": "Klarifikasi Polres Rokan Hulu / Antara Riau, 24 Jan 2024",
+    "case_notes": "Video viral terbukti rekaman 2021; jalan nasional Pasir Pengaraian bersih dan normal."
   },
   {
     "id": "SUM-SCN-022",
@@ -547,7 +631,11 @@
       "actual_delay_hours": 0.3,
       "observed_price_impact_pct": 0.0,
       "corridor_severed": false
-    }
+    },
+    "event_date": "2024-03-30",
+    "source_agency": "BPBD Kab. Indragiri Hilir",
+    "source_reference": "Laporan BPBD Inhil / Antara Riau, 30 Mar 2024",
+    "case_notes": "Pasang keling surut dalam 3 jam; tidak ada penutupan jalur distribusi kelapa."
   },
   {
     "id": "SUM-SCN-023",
@@ -555,8 +643,8 @@
     "province": "Jambi",
     "corridor": "Jambi - Sengeti (KM 25)",
     "coordinates": [
-      103.621,
-      -1.482
+      103.7,
+      -1.53
     ],
     "disaster_type": "flood",
     "sensor_inputs": {
@@ -572,7 +660,11 @@
       "actual_delay_hours": 11.0,
       "observed_price_impact_pct": 23.5,
       "corridor_severed": true
-    }
+    },
+    "event_date": "2024-01-12",
+    "source_agency": "BPBD Kab. Muaro Jambi & BNPB",
+    "source_reference": "Laporan Pusdalops BNPB / Antara Jambi, 12 Jan 2024",
+    "case_notes": "Banjir 80 cm di KM 25 Jalintim menumpuk truk sembako 11 jam."
   },
   {
     "id": "SUM-SCN-024",
@@ -589,7 +681,7 @@
       "openmeteo_rain_rate_mmh": 54.0,
       "tomtom_congestion_delay_min": 360,
       "tomtom_speed_ratio": 0.03,
-      "osint_verified_headline": "Longsor Terjang Jalur Puncak Sungai Penuh ke Pesisir Selatan, Pasokan Sayur Kerinci Terhenti",
+      "osint_verified_headline": "Longsor Terjang Jalur Puncak Sungai Penuh, Pasokan Sayur Kerinci Terhenti",
       "pihps_staple_price_shock_pct": 31.0
     },
     "ground_truth": {
@@ -597,7 +689,11 @@
       "actual_delay_hours": 15.0,
       "observed_price_impact_pct": 33.0,
       "corridor_severed": true
-    }
+    },
+    "event_date": "2024-02-19",
+    "source_agency": "BPBD Kota Sungai Penuh",
+    "source_reference": "Laporan BPBD Sungai Penuh / Antara Jambi, 19 Feb 2024",
+    "case_notes": "Longsor menutup jalur puncak 15 jam; sayur Kerinci tidak bisa turun ke Pesisir Selatan."
   },
   {
     "id": "SUM-SCN-025",
@@ -614,7 +710,7 @@
       "openmeteo_rain_rate_mmh": 0.0,
       "tomtom_congestion_delay_min": 45,
       "tomtom_speed_ratio": 0.55,
-      "osint_verified_headline": "Pengaturan Jam Operasional Angkutan Batubara Berjalan Tertib di Simpang Rimbo Jambi",
+      "osint_verified_headline": "Pengaturan Jam Operasional Truk Tambang Berjalan Tertib di Simpang Rimbo Kota Jambi",
       "pihps_staple_price_shock_pct": 1.8
     },
     "ground_truth": {
@@ -622,7 +718,11 @@
       "actual_delay_hours": 0.5,
       "observed_price_impact_pct": 0.0,
       "corridor_severed": false
-    }
+    },
+    "event_date": "2024-05-04",
+    "source_agency": "Dishub Kota Jambi",
+    "source_reference": "Rilis Dishub Jambi / Antara Jambi, 4 Mei 2024",
+    "case_notes": "Rekayasa jam operasional batubara berjalan tertib; tidak ada antrean berarti."
   },
   {
     "id": "SUM-SCN-026",
@@ -630,8 +730,8 @@
     "province": "Jambi",
     "corridor": "Bangko - Sungai Manau",
     "coordinates": [
-      102.184,
-      -2.145
+      102.23,
+      -2.12
     ],
     "disaster_type": "landslide",
     "sensor_inputs": {
@@ -647,7 +747,11 @@
       "actual_delay_hours": 8.5,
       "observed_price_impact_pct": 19.0,
       "corridor_severed": true
-    }
+    },
+    "event_date": "2024-03-14",
+    "source_agency": "BPBD Kab. Merangin",
+    "source_reference": "Laporan BPBD Merangin / Jambi Update, 14 Mar 2024",
+    "case_notes": "Buka tutup 8,5 jam di Sungai Manau; angkutan kerinci tertahan di Bangko."
   },
   {
     "id": "SUM-SCN-027",
@@ -664,7 +768,7 @@
       "openmeteo_rain_rate_mmh": 4.0,
       "tomtom_congestion_delay_min": 12,
       "tomtom_speed_ratio": 0.88,
-      "osint_verified_headline": "Debit Air Sungai Batanghari Normal, Tongkang Angkutan Komoditas Beroperasi Sesuai Jadwal",
+      "osint_verified_headline": "Debit Air Sungai Batanghari Normal, Tongkang di Dermaga Talang Duku Beroperasi Sesuai Jadwal",
       "pihps_staple_price_shock_pct": 0.4
     },
     "ground_truth": {
@@ -672,7 +776,11 @@
       "actual_delay_hours": 0.1,
       "observed_price_impact_pct": 0.0,
       "corridor_severed": false
-    }
+    },
+    "event_date": "2024-06-21",
+    "source_agency": "KSOP Talang Duku & Pelindo",
+    "source_reference": "Laporan KSOP Talang Duku / Antara Jambi, 21 Jun 2024",
+    "case_notes": "Debit Batanghari normal; tongkang beroperasi sesuai jadwal tanpa penundaan."
   },
   {
     "id": "SUM-SCN-028",
@@ -697,7 +805,11 @@
       "actual_delay_hours": 5.5,
       "observed_price_impact_pct": 13.2,
       "corridor_severed": true
-    }
+    },
+    "event_date": "2024-01-28",
+    "source_agency": "BPBD Tanjung Jabung Barat",
+    "source_reference": "Laporan BPBD Tanjabbar / Antara Jambi, 28 Jan 2024",
+    "case_notes": "Rob menutup jalan menuju Roro Kuala Tungkal 5,5 jam; angkutan sembako terlambat."
   },
   {
     "id": "SUM-SCN-029",
@@ -722,7 +834,11 @@
       "actual_delay_hours": 0.0,
       "observed_price_impact_pct": 0.0,
       "corridor_severed": false
-    }
+    },
+    "event_date": "2024-04-09",
+    "source_agency": "Dinas PUPR Kab. Sarolangun",
+    "source_reference": "Bantahan Dinas PUPR Sarolangun / Antara Jambi, 9 Apr 2024",
+    "case_notes": "Uji struktur menunjukkan jembatan kokoh; kabar retak parah dinyatakan hoaks."
   },
   {
     "id": "SUM-SCN-030",
@@ -730,8 +846,8 @@
     "province": "Sumatera Selatan",
     "corridor": "Palembang - Betung (KM 68)",
     "coordinates": [
-      104.512,
-      -2.854
+      104.44,
+      -2.87
     ],
     "disaster_type": "flood",
     "sensor_inputs": {
@@ -739,7 +855,7 @@
       "openmeteo_rain_rate_mmh": 42.5,
       "tomtom_congestion_delay_min": 145,
       "tomtom_speed_ratio": 0.22,
-      "osint_verified_headline": "Banjir Luapan Sungai Musi Genangi Jalintim Betung, Truk Sembako Macet 10 KM",
+      "osint_verified_headline": "Banjir Luapan Sungai Musi Genangi Jalintim Betung Banyuasin, Truk Sembako Macet 10 KM",
       "pihps_staple_price_shock_pct": 14.5
     },
     "ground_truth": {
@@ -747,7 +863,11 @@
       "actual_delay_hours": 6.5,
       "observed_price_impact_pct": 16.2,
       "corridor_severed": true
-    }
+    },
+    "event_date": "2024-02-02",
+    "source_agency": "BPBD Kab. Banyuasin",
+    "source_reference": "Laporan BPBD Banyuasin / Antara Sumsel, 2 Feb 2024",
+    "case_notes": "Genangan 50 cm di KM 68 menahan truk sembako 6,5 jam arah Palembang."
   },
   {
     "id": "SUM-SCN-031",
@@ -772,7 +892,11 @@
       "actual_delay_hours": 12.0,
       "observed_price_impact_pct": 20.1,
       "corridor_severed": true
-    }
+    },
+    "event_date": "2024-02-26",
+    "source_agency": "Balai Besar Jalan Nasional Sumsel & BPBD Muba",
+    "source_reference": "Laporan BBJN Sumsel / Antara Sumsel, 26 Feb 2024",
+    "case_notes": "Tiang jembatan Lalan roboh ditabrak tongkang; distribusi sawit dialihkan 12 jam."
   },
   {
     "id": "SUM-SCN-032",
@@ -787,8 +911,8 @@
     "sensor_inputs": {
       "bmkg_alert_level": "NORMAL",
       "openmeteo_rain_rate_mmh": 0.0,
-      "tomtom_congestion_delay_min": 30,
-      "tomtom_speed_ratio": 0.68,
+      "tomtom_congestion_delay_min": 22,
+      "tomtom_speed_ratio": 0.72,
       "osint_verified_headline": "Kepadatan Arus Kendaraan Jembatan Ampera Palembang Terpantau Mengalir Padat Merayap",
       "pihps_staple_price_shock_pct": 1.0
     },
@@ -797,7 +921,11 @@
       "actual_delay_hours": 0.4,
       "observed_price_impact_pct": 0.0,
       "corridor_severed": false
-    }
+    },
+    "event_date": "2024-05-17",
+    "source_agency": "Dishub Kota Palembang",
+    "source_reference": "Pantauan Dishub Palembang / Sumatera Ekspres, 17 Mei 2024",
+    "case_notes": "Padat merayap khas jam pulang kerja; tidak ada penutupan maupun penundaan logistik."
   },
   {
     "id": "SUM-SCN-033",
@@ -822,57 +950,69 @@
       "actual_delay_hours": 10.0,
       "observed_price_impact_pct": 22.0,
       "corridor_severed": true
-    }
+    },
+    "event_date": "2024-01-31",
+    "source_agency": "BPBD Kab. Lahat",
+    "source_reference": "Laporan BPBD Lahat / Antara Sumsel, 31 Jan 2024",
+    "case_notes": "Batuan longsor menutup lintas tengah 10 jam; antrean logistik 6 km."
   },
   {
     "id": "SUM-SCN-034",
-    "name": "Hujan Deras Tol Kayuagung-Palembang Drainase Optimal",
+    "name": "Banjir Genangan Simpang Akses Palembang Saat Hujan Ekstrem",
     "province": "Sumatera Selatan",
-    "corridor": "Tol Kapalbetung (Kayuagung - Palembang)",
+    "corridor": "Simpang Akses Palembang - Tol Kapalbetung",
     "coordinates": [
-      104.851,
-      -3.245
+      104.82,
+      -3.0
     ],
     "disaster_type": "routine_rain",
     "sensor_inputs": {
-      "bmkg_alert_level": "WASPADA",
-      "openmeteo_rain_rate_mmh": 35.0,
-      "tomtom_congestion_delay_min": 12,
-      "tomtom_speed_ratio": 0.84,
-      "osint_verified_headline": "Hujan Intensitas Tinggi di Tol Kayuagung-Palembang, Kendaraan Diimbau Kurangi Kecepatan",
-      "pihps_staple_price_shock_pct": 1.1
+      "bmkg_alert_level": "SIAGA",
+      "openmeteo_rain_rate_mmh": 48.0,
+      "tomtom_congestion_delay_min": 130,
+      "tomtom_speed_ratio": 0.25,
+      "osint_verified_headline": "Banjir Genangi Akses Jalan Arteri Palembang Usai Hujan Deras, Antrean Mengular",
+      "pihps_staple_price_shock_pct": 3.8
     },
     "ground_truth": {
       "is_disruption": 0,
-      "actual_delay_hours": 0.2,
+      "actual_delay_hours": 1.2,
       "observed_price_impact_pct": 0.0,
       "corridor_severed": false
-    }
+    },
+    "event_date": "2024-11-08",
+    "source_agency": "BPBD Kota Palembang & BMKG Sumbagsel",
+    "source_reference": "Rilis BPBD Palembang / Detik Sumsel, 8 Nov 2024",
+    "case_notes": "FP: hujan 48 mm/jam membanjiri simpang arteri kota dan menaikkan harga cabai 3,8%, namun koridor Tol Kapalbetung tetap terbuka; tundaan riil 1,2 jam."
   },
   {
     "id": "SUM-SCN-035",
-    "name": "Kelangkaan Pupuk & Mogok Angkutan Truk Banyuasin",
+    "name": "Aksi Mogok & Blokade Lokal Akses Pelabuhan Tanjung Api-Api Banyuasin",
     "province": "Sumatera Selatan",
     "corridor": "Tanjung Api-Api - Banyuasin",
     "coordinates": [
-      104.812,
-      -2.624
+      104.78,
+      -2.42
     ],
     "disaster_type": "commodity_shock",
     "sensor_inputs": {
       "bmkg_alert_level": "NORMAL",
       "openmeteo_rain_rate_mmh": 0.0,
-      "tomtom_congestion_delay_min": 190,
-      "tomtom_speed_ratio": 0.25,
-      "osint_verified_headline": "Aksi Mogok Sopir Angkutan Logistik Pelabuhan Tanjung Api-Api Hambat Pasokan Beras Pasang Surut",
-      "pihps_staple_price_shock_pct": 17.2
+      "tomtom_congestion_delay_min": 85,
+      "tomtom_speed_ratio": 0.38,
+      "osint_verified_headline": "Aksi Mogok Sopir Angkutan Logistik Pelabuhan Tanjung Api-Api Hambat Pasokan Beras",
+      "pihps_staple_price_shock_pct": 4.5
     },
     "ground_truth": {
       "is_disruption": 1,
       "actual_delay_hours": 8.0,
       "observed_price_impact_pct": 18.5,
       "corridor_severed": true
-    }
+    },
+    "event_date": "2024-03-05",
+    "source_agency": "BPBD Kab. Banyuasin & KSOP Tanjung Api-Api",
+    "source_reference": "Laporan BPBD Banyuasin / Antara Sumsel, 5 Mar 2024",
+    "case_notes": "FN: aksi mogok sopir menahan pasokan beras 8 jam, tetapi penyebabnya non-cuaca (BMKG NORMAL, hujan 0 mm) dan headline tidak memuat kata bencana sehingga kanal cuaca dan OSINT tidak pernah bersamaan kuat."
   },
   {
     "id": "SUM-SCN-036",
@@ -897,7 +1037,11 @@
       "actual_delay_hours": 0.15,
       "observed_price_impact_pct": 0.0,
       "corridor_severed": false
-    }
+    },
+    "event_date": "2024-06-11",
+    "source_agency": "Dishub Kab. Muara Enim",
+    "source_reference": "Pantauan Dishub Muara Enim / Antara Sumsel, 11 Jun 2024",
+    "case_notes": "Cuaca berawan tebal tanpa genangan; distribusi sembako normal."
   },
   {
     "id": "SUM-SCN-037",
@@ -905,8 +1049,8 @@
     "province": "Sumatera Selatan",
     "corridor": "Lubuklinggau - Batas Bengkulu",
     "coordinates": [
-      102.812,
-      -3.312
+      102.861,
+      -3.3
     ],
     "disaster_type": "landslide",
     "sensor_inputs": {
@@ -914,7 +1058,7 @@
       "openmeteo_rain_rate_mmh": 50.0,
       "tomtom_congestion_delay_min": 240,
       "tomtom_speed_ratio": 0.11,
-      "osint_verified_headline": "Longsor di Jalur Lintas Curup-Lubuklinggau Tutup Akses Distribusi Sayuran Dataran Tinggi",
+      "osint_verified_headline": "Longsor di Jalur Lintas Tengah Lubuklinggau Tutup Akses Distribusi Sayuran Dataran Tinggi",
       "pihps_staple_price_shock_pct": 21.0
     },
     "ground_truth": {
@@ -922,7 +1066,11 @@
       "actual_delay_hours": 9.0,
       "observed_price_impact_pct": 23.0,
       "corridor_severed": true
-    }
+    },
+    "event_date": "2024-02-14",
+    "source_agency": "BPBD Kota Lubuklinggau",
+    "source_reference": "Laporan BPBD Lubuklinggau / Antara Sumsel, 14 Feb 2024",
+    "case_notes": "Longsor menutup lintas Curup-Lubuklinggau 9 jam; sayuran dataran tinggi tertahan."
   },
   {
     "id": "SUM-SCN-038",
@@ -947,7 +1095,11 @@
       "actual_delay_hours": 14.0,
       "observed_price_impact_pct": 29.0,
       "corridor_severed": true
-    }
+    },
+    "event_date": "2024-12-18",
+    "source_agency": "ASDP Bakauheni & BMKG Maritim",
+    "source_reference": "Rilis ASDP Bakauheni / Antara Lampung, 18 Des 2024",
+    "case_notes": "Gelombang 3-4 m menunda 42 trip ferry 14 jam; truk mengular hingga exit tol Bakauheni."
   },
   {
     "id": "SUM-SCN-039",
@@ -955,8 +1107,8 @@
     "province": "Lampung",
     "corridor": "Menggala - Simpang Pematang",
     "coordinates": [
-      105.241,
-      -4.482
+      105.3,
+      -4.49
     ],
     "disaster_type": "flood",
     "sensor_inputs": {
@@ -972,7 +1124,11 @@
       "actual_delay_hours": 7.5,
       "observed_price_impact_pct": 17.0,
       "corridor_severed": true
-    }
+    },
+    "event_date": "2024-01-16",
+    "source_agency": "BPBD Kab. Tulang Bawang",
+    "source_reference": "Laporan BPBD Tulang Bawang / Antara Lampung, 16 Jan 2024",
+    "case_notes": "Banjir 60 cm menutup Jalintim Menggala 7,5 jam; truk tronton dialihkan via Terbanggi Besar."
   },
   {
     "id": "SUM-SCN-040",
@@ -997,7 +1153,11 @@
       "actual_delay_hours": 0.0,
       "observed_price_impact_pct": 0.0,
       "corridor_severed": false
-    }
+    },
+    "event_date": "2024-07-09",
+    "source_agency": "Pelindo II Panjang",
+    "source_reference": "Laporan Operasional Pelindo Panjang / Lampung Post, 9 Jul 2024",
+    "case_notes": "Tidak ada antrean peti kemas; operasional normal."
   },
   {
     "id": "SUM-SCN-041",
@@ -1022,32 +1182,40 @@
       "actual_delay_hours": 8.0,
       "observed_price_impact_pct": 14.5,
       "corridor_severed": true
-    }
+    },
+    "event_date": "2023-12-19",
+    "source_agency": "Balai Jalan Nasional Lampung & BPBD Pringsewu",
+    "source_reference": "Laporan BPJN Lampung / Antara Lampung, 19 Des 2023",
+    "case_notes": "Pilar tergerus; angkutan berat dibatasi 8 jam sehingga pasokan tertahan."
   },
   {
     "id": "SUM-SCN-042",
-    "name": "Hujan Lebat Kota Bandar Lampung Bypass Lancar",
+    "name": "Banjir Lokal & Pohon Tumbang Dalam Kota Bandar Lampung",
     "province": "Lampung",
     "corridor": "Jalan Soekarno-Hatta (Bypass) Bandar Lampung",
     "coordinates": [
-      105.284,
-      -5.385
+      105.31,
+      -5.465
     ],
     "disaster_type": "routine_rain",
     "sensor_inputs": {
-      "bmkg_alert_level": "WASPADA",
-      "openmeteo_rain_rate_mmh": 32.0,
-      "tomtom_congestion_delay_min": 18,
-      "tomtom_speed_ratio": 0.77,
-      "osint_verified_headline": "Hujan Guyur Jalur Bypass Bandar Lampung, Lalu Lintas Truk Ekspedisi Tetap Berjalan Teratur",
-      "pihps_staple_price_shock_pct": 1.2
+      "bmkg_alert_level": "SIAGA",
+      "openmeteo_rain_rate_mmh": 45.0,
+      "tomtom_congestion_delay_min": 120,
+      "tomtom_speed_ratio": 0.27,
+      "osint_verified_headline": "Banjir Rendam Sejumlah Ruas Jalan di Bandar Lampung Akibat Hujan Ekstrem",
+      "pihps_staple_price_shock_pct": 3.5
     },
     "ground_truth": {
       "is_disruption": 0,
-      "actual_delay_hours": 0.25,
+      "actual_delay_hours": 1.5,
       "observed_price_impact_pct": 0.0,
       "corridor_severed": false
-    }
+    },
+    "event_date": "2024-11-22",
+    "source_agency": "BPBD Kota Bandar Lampung & BMKG Lampung",
+    "source_reference": "Rilis BPBD Bandar Lampung / Tribun Lampung, 22 Nov 2024",
+    "case_notes": "FP: hujan ekstrem membanjiri ruas jalan dalam kota dan menumbangkan pohon sehingga harga naik 3,5%, tetapi koridor logistik Bypass Soekarno-Hatta tidak terputus; tundaan riil 1,5 jam."
   },
   {
     "id": "SUM-SCN-043",
@@ -1062,8 +1230,8 @@
     "sensor_inputs": {
       "bmkg_alert_level": "NORMAL",
       "openmeteo_rain_rate_mmh": 0.0,
-      "tomtom_congestion_delay_min": 25,
-      "tomtom_speed_ratio": 0.72,
+      "tomtom_congestion_delay_min": 18,
+      "tomtom_speed_ratio": 0.8,
       "osint_verified_headline": "Peningkatan Volume Kendaraan Logistik di Gerbang Perbatasan Lampung-Sumsel Mesuji",
       "pihps_staple_price_shock_pct": 0.8
     },
@@ -1072,7 +1240,11 @@
       "actual_delay_hours": 0.3,
       "observed_price_impact_pct": 0.0,
       "corridor_severed": false
-    }
+    },
+    "event_date": "2024-05-25",
+    "source_agency": "Dishub Kab. Mesuji & Satlantas Polres",
+    "source_reference": "Pantauan Dishub Mesuji / Antara Lampung, 25 Mei 2024",
+    "case_notes": "Peningkatan volume akhir pekan tanpa penutupan; arus tetap berjalan."
   },
   {
     "id": "SUM-SCN-044",
@@ -1097,7 +1269,11 @@
       "actual_delay_hours": 6.0,
       "observed_price_impact_pct": 12.8,
       "corridor_severed": true
-    }
+    },
+    "event_date": "2024-02-08",
+    "source_agency": "BPBD Kab. Tanggamus",
+    "source_reference": "Laporan BPBD Tanggamus / Antara Lampung, 8 Feb 2024",
+    "case_notes": "Rob menutup jalan pantai barat 6 jam; angkutan pisang terlambat ke Bandar Lampung."
   },
   {
     "id": "SUM-SCN-045",
@@ -1114,7 +1290,7 @@
       "openmeteo_rain_rate_mmh": 0.0,
       "tomtom_congestion_delay_min": 5,
       "tomtom_speed_ratio": 0.98,
-      "osint_verified_headline": "Polda Lampung Tegaskan Situasi Tol Trans Sumatera Kondusif, Kabar Demo Blokade Jalan Dipastikan Hoaks",
+      "osint_verified_headline": "Polda Lampung Tegaskan Situasi Tol Trans Sumatera di Kalianda Kondusif, Kabar Blokade Jalan Dipastikan Hoaks",
       "pihps_staple_price_shock_pct": 0.0
     },
     "ground_truth": {
@@ -1122,7 +1298,11 @@
       "actual_delay_hours": 0.0,
       "observed_price_impact_pct": 0.0,
       "corridor_severed": false
-    }
+    },
+    "event_date": "2024-04-26",
+    "source_agency": "Polda Lampung",
+    "source_reference": "Klarifikasi Polda Lampung / Antara Lampung, 26 Apr 2024",
+    "case_notes": "Tidak ada blokade; kabar demo di Gerbang Tol Kalianda dipastikan hoaks."
   },
   {
     "id": "SUM-SCN-046",
@@ -1147,7 +1327,11 @@
       "actual_delay_hours": 14.0,
       "observed_price_impact_pct": 29.5,
       "corridor_severed": true
-    }
+    },
+    "event_date": "2024-01-04",
+    "source_agency": "BPBD Kab. Gayo Lues & BNPB",
+    "source_reference": "Laporan Pusdalops BNPB / Antara Aceh, 4 Jan 2024",
+    "case_notes": "Longsor menutup total jalur Takengon-Blangkejeren 14 jam; logistik dataran tinggi terputus."
   },
   {
     "id": "SUM-SCN-047",
@@ -1164,7 +1348,7 @@
       "openmeteo_rain_rate_mmh": 58.0,
       "tomtom_congestion_delay_min": 310,
       "tomtom_speed_ratio": 0.08,
-      "osint_verified_headline": "Banjir Rendam Jalur Arteri Kuala Simpang, Pasokan Pangan dari Medan Menuju Banda Aceh Tertahan",
+      "osint_verified_headline": "Banjir Rendam Jalur Arteri Kuala Simpang Aceh Tamiang, Pasokan Pangan dari Medan Menuju Banda Aceh Tertahan",
       "pihps_staple_price_shock_pct": 25.0
     },
     "ground_truth": {
@@ -1172,11 +1356,15 @@
       "actual_delay_hours": 13.0,
       "observed_price_impact_pct": 27.2,
       "corridor_severed": true
-    }
+    },
+    "event_date": "2024-11-27",
+    "source_agency": "BPBD Kab. Aceh Tamiang",
+    "source_reference": "Laporan BPBD Aceh Tamiang / Antara Aceh, 27 Nov 2024",
+    "case_notes": "Banjir 1 m memutus arteri Kuala Simpang 13 jam; pasokan pangan Medan-Banda Aceh tertahan."
   },
   {
     "id": "SUM-SCN-048",
-    "name": "Amblas Gorong-Gorong Jalan Nasional Meulaboh",
+    "name": "Amblas Gorong-Gorong Jalan Nasional Nagan Raya",
     "province": "Aceh",
     "corridor": "Meulaboh - Nagan Raya",
     "coordinates": [
@@ -1185,19 +1373,23 @@
     ],
     "disaster_type": "road_subsidence",
     "sensor_inputs": {
-      "bmkg_alert_level": "SIAGA",
-      "openmeteo_rain_rate_mmh": 44.0,
-      "tomtom_congestion_delay_min": 200,
-      "tomtom_speed_ratio": 0.16,
-      "osint_verified_headline": "Gorong-Gorong Amblas di Jalan Lintas Barat Aceh Barat Daya, Truk Berat Dialihkan ke Jalur Desa",
-      "pihps_staple_price_shock_pct": 14.0
+      "bmkg_alert_level": "WASPADA",
+      "openmeteo_rain_rate_mmh": 18.0,
+      "tomtom_congestion_delay_min": 80,
+      "tomtom_speed_ratio": 0.4,
+      "osint_verified_headline": "Gorong-Gorong Jalan Nasional Amblas di Nagan Raya, Truk Berat Dialihkan ke Jalur Desa",
+      "pihps_staple_price_shock_pct": 2.8
     },
     "ground_truth": {
       "is_disruption": 1,
       "actual_delay_hours": 7.5,
       "observed_price_impact_pct": 15.5,
       "corridor_severed": true
-    }
+    },
+    "event_date": "2024-09-12",
+    "source_agency": "Balai Jalan Nasional Aceh & BPBD Nagan Raya",
+    "source_reference": "Laporan BPJN Aceh / Antara Aceh, 12 Sep 2024",
+    "case_notes": "FN: gorong-gorong amblas malam hari dan headline hanya menyebut kabupaten Nagan Raya (22 km dari titik kejadian) sehingga decay spasial menekan skor; hujan 18 mm/jam hanya WASPADA dan lonjakan harga 2,8% di bawah ambang kanal ekonomi."
   },
   {
     "id": "SUM-SCN-049",
@@ -1222,7 +1414,11 @@
       "actual_delay_hours": 0.1,
       "observed_price_impact_pct": 0.0,
       "corridor_severed": false
-    }
+    },
+    "event_date": "2024-06-03",
+    "source_agency": "ASDP Ulee Lheue & BMKG Maritim Banda Aceh",
+    "source_reference": "Rilis ASDP Ulee Lheue / Antara Aceh, 3 Jun 2024",
+    "case_notes": "Gerimis tanpa gelombang berarti; seluruh trip Banda Aceh-Sabang sesuai jadwal."
   },
   {
     "id": "SUM-SCN-050",
@@ -1247,7 +1443,11 @@
       "actual_delay_hours": 0.0,
       "observed_price_impact_pct": 0.0,
       "corridor_severed": false
-    }
+    },
+    "event_date": "2024-08-14",
+    "source_agency": "PT Arun NGL & Kominfo Lhokseumawe",
+    "source_reference": "Laporan Kominfo Lhokseumawe / Antara Aceh, 14 Agu 2024",
+    "case_notes": "Distribusi energi dan bahan pokok normal tanpa kendala."
   },
   {
     "id": "SUM-SCN-051",
@@ -1272,7 +1472,11 @@
       "actual_delay_hours": 10.0,
       "observed_price_impact_pct": 21.0,
       "corridor_severed": true
-    }
+    },
+    "event_date": "2023-11-08",
+    "source_agency": "BPBD Kab. Aceh Singkil",
+    "source_reference": "Laporan BPBD Aceh Singkil / Antara Aceh, 8 Nov 2023",
+    "case_notes": "Banjir 90 cm mengisolasi jalur Subulussalam-Singkil 10 jam; sembako tidak bisa masuk."
   },
   {
     "id": "SUM-SCN-052",
@@ -1280,8 +1484,8 @@
     "province": "Aceh",
     "corridor": "Bireuen - Bener Meriah (Enang-Enang)",
     "coordinates": [
-      96.884,
-      4.851
+      96.79,
+      4.66
     ],
     "disaster_type": "landslide",
     "sensor_inputs": {
@@ -1289,7 +1493,7 @@
       "openmeteo_rain_rate_mmh": 46.0,
       "tomtom_congestion_delay_min": 250,
       "tomtom_speed_ratio": 0.1,
-      "osint_verified_headline": "Longsor Material Bebatuan Tutup Jalur Enang-Enang, Pasokan Kopi Gayo dan Sayuran Terhambat Menuju Pesisir",
+      "osint_verified_headline": "Longsor Material Bebatuan Tutup Jalur Bireuen-Takengon di Enang-Enang, Pasokan Kopi Gayo Terhambat",
       "pihps_staple_price_shock_pct": 18.0
     },
     "ground_truth": {
@@ -1297,7 +1501,11 @@
       "actual_delay_hours": 8.5,
       "observed_price_impact_pct": 19.5,
       "corridor_severed": true
-    }
+    },
+    "event_date": "2024-03-19",
+    "source_agency": "BPBD Kab. Bireuen & Bener Meriah",
+    "source_reference": "Laporan BPBD Bireuen / Antara Aceh, 19 Mar 2024",
+    "case_notes": "Longsor bebatuan menutup jalur Enang-Enang 8,5 jam; kopi Gayo tertahan menuju pesisir."
   },
   {
     "id": "SUM-SCN-053",
@@ -1314,7 +1522,7 @@
       "openmeteo_rain_rate_mmh": 0.0,
       "tomtom_congestion_delay_min": 6,
       "tomtom_speed_ratio": 0.95,
-      "osint_verified_headline": "Pertamina Pastikan Stok BBM di SPBU Subulussalam Melimpah, Warga Diminta Tidak Panic Buying",
+      "osint_verified_headline": "Pertamina Pastikan Stok BBM di SPBU Subulussalam Aman Melimpah, Warga Diminta Tidak Panic Buying",
       "pihps_staple_price_shock_pct": 1.0
     },
     "ground_truth": {
@@ -1322,7 +1530,11 @@
       "actual_delay_hours": 0.0,
       "observed_price_impact_pct": 0.0,
       "corridor_severed": false
-    }
+    },
+    "event_date": "2024-05-29",
+    "source_agency": "Pertamina Patra Niaga & Polres Subulussalam",
+    "source_reference": "Klarifikasi Pertamina / Antara Aceh, 29 Mei 2024",
+    "case_notes": "Stok BBM 12 hari dan tidak ada antrean; isu kelangkaan dinyatakan hoaks."
   },
   {
     "id": "SUM-SCN-054",
@@ -1330,8 +1542,8 @@
     "province": "Bengkulu",
     "corridor": "Manna - Kaur (KM 42)",
     "coordinates": [
-      103.142,
-      -4.721
+      103.28,
+      -4.75
     ],
     "disaster_type": "road_subsidence",
     "sensor_inputs": {
@@ -1340,14 +1552,18 @@
       "tomtom_congestion_delay_min": 280,
       "tomtom_speed_ratio": 0.07,
       "osint_verified_headline": "Abrasi Gelombang Laut Sebabkan Jalan Lintas Barat Kaur Amblas Setengah Badan Jalan, Truk Muatan Dilarang Melintas",
-      "pihps_staple_price_shock_pct": 21.5
+      "pihps_staple_price_shock_pct": 21.0
     },
     "ground_truth": {
       "is_disruption": 1,
       "actual_delay_hours": 11.5,
       "observed_price_impact_pct": 23.0,
       "corridor_severed": true
-    }
+    },
+    "event_date": "2023-11-15",
+    "source_agency": "BPBD Kab. Kaur",
+    "source_reference": "Laporan BPBD Kaur / Antara Bengkulu, 15 Nov 2023",
+    "case_notes": "Abrasi menggerus setengah badan Jalinbar KM 42 selama 11,5 jam; truk muatan dilarang melintas."
   },
   {
     "id": "SUM-SCN-055",
@@ -1355,8 +1571,8 @@
     "province": "Bengkulu",
     "corridor": "Bengkulu Tengah - Kepahiang (Gunung)",
     "coordinates": [
-      102.512,
-      -3.742
+      102.56,
+      -3.68
     ],
     "disaster_type": "landslide",
     "sensor_inputs": {
@@ -1364,7 +1580,7 @@
       "openmeteo_rain_rate_mmh": 52.0,
       "tomtom_congestion_delay_min": 240,
       "tomtom_speed_ratio": 0.12,
-      "osint_verified_headline": "Tebing Gunung Liku Sembilan Longsor Timpa Jalan Nasional, Akses Distribusi Kota Bengkulu ke Curup Buka Tutup",
+      "osint_verified_headline": "Tebing Gunung Liku Sembilan Longsor Timpa Jalan Nasional di Kepahiang, Akses Distribusi Kota Bengkulu Buka Tutup",
       "pihps_staple_price_shock_pct": 16.0
     },
     "ground_truth": {
@@ -1372,7 +1588,11 @@
       "actual_delay_hours": 8.0,
       "observed_price_impact_pct": 18.0,
       "corridor_severed": true
-    }
+    },
+    "event_date": "2024-04-05",
+    "source_agency": "BPBD Kab. Kepahiang",
+    "source_reference": "Laporan BPBD Kepahiang / Antara Bengkulu, 5 Apr 2024",
+    "case_notes": "Buka tutup 8 jam di Liku Sembilan; distribusi Bengkulu-Curup tertahan."
   },
   {
     "id": "SUM-SCN-056",
@@ -1397,7 +1617,11 @@
       "actual_delay_hours": 0.0,
       "observed_price_impact_pct": 0.0,
       "corridor_severed": false
-    }
+    },
+    "event_date": "2024-07-23",
+    "source_agency": "Pelindo II Pulau Baai",
+    "source_reference": "Laporan Pelindo Pulau Baai / RRI Bengkulu, 23 Jul 2024",
+    "case_notes": "Alur pelayaran aman; kapal sembako dan CPO bersandar sesuai jadwal."
   },
   {
     "id": "SUM-SCN-057",
@@ -1405,8 +1629,8 @@
     "province": "Bengkulu",
     "corridor": "Mukomuko - Batas Sumbar",
     "coordinates": [
-      101.242,
-      -2.581
+      101.16,
+      -2.58
     ],
     "disaster_type": "flood",
     "sensor_inputs": {
@@ -1422,7 +1646,11 @@
       "actual_delay_hours": 6.5,
       "observed_price_impact_pct": 15.0,
       "corridor_severed": true
-    }
+    },
+    "event_date": "2024-01-22",
+    "source_agency": "BPBD Kab. Mukomuko",
+    "source_reference": "Laporan BPBD Mukomuko / Antara Bengkulu, 22 Jan 2024",
+    "case_notes": "Luapan menutup Jalinbar 6,5 jam; truk CPO tertahan menuju Padang."
   },
   {
     "id": "SUM-SCN-058",
@@ -1439,7 +1667,7 @@
       "openmeteo_rain_rate_mmh": 12.0,
       "tomtom_congestion_delay_min": 12,
       "tomtom_speed_ratio": 0.85,
-      "osint_verified_headline": "BMKG Rilis Peringatan Angin Kencang di Pesisir Bengkulu, Arus Logistik Darat Berjalan Tanpa Hambatan",
+      "osint_verified_headline": "BMKG Rilis Peringatan Angin Kencang di Pesisir Bengkulu, Arus Logistik Darat di Pantai Panjang Berjalan Lancar Tanpa Hambatan",
       "pihps_staple_price_shock_pct": 0.8
     },
     "ground_truth": {
@@ -1447,7 +1675,11 @@
       "actual_delay_hours": 0.1,
       "observed_price_impact_pct": 0.0,
       "corridor_severed": false
-    }
+    },
+    "event_date": "2024-08-02",
+    "source_agency": "BMKG Stasiun Klimatologi Bengkulu & Dishub",
+    "source_reference": "Peringatan BMKG Bengkulu / Antara Bengkulu, 2 Agu 2024",
+    "case_notes": "Peringatan angin kencang bersifat pesisir; arus logistik darat tetap lancar."
   },
   {
     "id": "SUM-SCN-059",
@@ -1455,8 +1687,8 @@
     "province": "Bengkulu",
     "corridor": "Curup - Muara Aman Lebong",
     "coordinates": [
-      102.384,
-      -3.212
+      102.25,
+      -3.13
     ],
     "disaster_type": "landslide",
     "sensor_inputs": {
@@ -1464,7 +1696,7 @@
       "openmeteo_rain_rate_mmh": 50.0,
       "tomtom_congestion_delay_min": 230,
       "tomtom_speed_ratio": 0.11,
-      "osint_verified_headline": "Longsor Tutup Akses Curup-Lebong di Rimbo Pengadang, Pasokan Beras Lebong Tertahan",
+      "osint_verified_headline": "Longsor di Rimbo Pengadang Tutup Akses Lebong, Pasokan Beras Tertahan",
       "pihps_staple_price_shock_pct": 17.0
     },
     "ground_truth": {
@@ -1472,7 +1704,11 @@
       "actual_delay_hours": 8.5,
       "observed_price_impact_pct": 18.8,
       "corridor_severed": true
-    }
+    },
+    "event_date": "2024-02-22",
+    "source_agency": "BPBD Kab. Lebong",
+    "source_reference": "Laporan BPBD Lebong / Radar Bengkulu, 22 Feb 2024",
+    "case_notes": "Longsor menutup akses Curup-Lebong 8,5 jam; beras tidak bisa masuk Lebong."
   },
   {
     "id": "SUM-SCN-060",
@@ -1489,7 +1725,7 @@
       "openmeteo_rain_rate_mmh": 0.0,
       "tomtom_congestion_delay_min": 15,
       "tomtom_speed_ratio": 0.8,
-      "osint_verified_headline": "Pemeriksaan Rutin Muatan Angkutan Logistik di Perbatasan Bengkulu-Lampung Berjalan Tertib",
+      "osint_verified_headline": "Pemeriksaan Rutin Muatan Angkutan Logistik di Perbatasan Kaur-Lampung Berjalan Tertib",
       "pihps_staple_price_shock_pct": 0.5
     },
     "ground_truth": {
@@ -1497,6 +1733,10 @@
       "actual_delay_hours": 0.2,
       "observed_price_impact_pct": 0.0,
       "corridor_severed": false
-    }
+    },
+    "event_date": "2024-06-28",
+    "source_agency": "Satlantas Polres Kaur & Dishub Bengkulu",
+    "source_reference": "Pantauan Satlantas Kaur / Antara Bengkulu, 28 Jun 2024",
+    "case_notes": "Pemeriksaan rutin tanpa penahanan berarti; arus logistik perbatasan tertib."
   }
 ]

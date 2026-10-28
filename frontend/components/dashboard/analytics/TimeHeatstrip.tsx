@@ -49,7 +49,13 @@ export function TimeHeatstrip({
         className="flex flex-col gap-2"
         title={`Streak mingguan butuh ≥ ${minPoints} titik harga per komoditas — data filter ini belum cukup (bukan streak 0). Bedakan: "data kurang" berarti deret <${minPoints} titik; "0 mggu" berarti data cukup tapi pekan terakhir turun. Perpanjang window atau pilih Semua wilayah.`}
       >
-        <AnalyticsEmpty message={`Data kurang — butuh ≥ ${minPoints} titik.`} />
+        {/* The threshold and the "not a zero" distinction stay VISIBLE (not only in
+            the tooltip): they are the honesty claim, and hover-only text is
+            unreachable on touch/keyboard. */}
+        <AnalyticsEmpty
+          title={`Streak mingguan butuh ≥ ${minPoints} titik.`}
+          message={'Bedakan: "data kurang" berarti deret belum cukup; "0 mggu" berarti data cukup tapi pekan terakhir turun.'}
+        />
       </div>
     );
   }
@@ -71,7 +77,7 @@ export function TimeHeatstrip({
           role="note"
           title={`Fallback agregat Sumatera aktif — filter wilayah sempit <${minPoints} titik, memakai deret agregat PIHPS agar streak tetap terhitung (real backfill, bukan sintetis).`}
         >
-          Agregat Sumatera aktif.
+          Fallback agregat Sumatera aktif — deret wilayah sempit ditambal agregat PIHPS.
         </p>
       ) : null}
       <div className="overflow-x-auto">

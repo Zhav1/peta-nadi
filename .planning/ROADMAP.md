@@ -3434,9 +3434,9 @@ M8 makes the authenticated dashboard fast on first load and durable across sessi
 
 # M9 — Operational Truth & Distilled Command Surface
 
-**Status:** COMPLETE ✅ — Wave 1 deployed (R1/R1.1), Wave 2 deployed (R2), final polish deployed (R2.1, `c84018d`).
-**Spec:** `SPEC.md` (root). **Ledger:** `.planning/milestones/M9/PROGRESS.md`.
-**Note:** M8 "Fast & Durable" (phases 160–166) remains valid and independent. M9 owns 167–176.
+**Status:** COMPLETE ✅ — Wave 1 deployed (R1/R1.1), Wave 2 deployed (R2), final polish deployed (R2.1, `c84018d`), layout fix deployed (R2.2, `6db893a`), counter labels (R2.3, `fe4c876`), visual colour pass (`a1b6e1b`), fleet regression (`a1b68de`).
+**Spec:** `SPEC.md` (root). **Ledger:** `.planning/milestones/M9/PROGRESS.md`. **Learnings:** `.planning/milestones/M9/LEARNINGS.md`.
+**Note:** M8 "Fast & Durable" (phases 160–166) remains valid and independent. M9 owns 167–176.12.
 
 ## Phase 167: World-Truth Hazard Counters
 **Status:** COMPLETE ✅ (`51b3903`, shared with M8 phase 160)
@@ -3517,5 +3517,25 @@ Cuaca/Waspada/Titik Panas pinned as three equal pills below `md`; legend/filters
 **Status:** COMPLETE ✅ (`378e58d`, deployed `c84018d`)
 News card honesty label never ellipsises; guest banner publishes its own occlusion so the panel can pad; geocode cache key bumped `v2` → `v3` so stale `regency` values cannot be served.
 **Verification:** 27 pytest geo-cache, full suite 120/9/0; live `?q=natuna` and `?q=belitung%20timur` → `type:"kabupaten"`, `cached:false`.
-**Open:** at 390×844 the sheet still overflows and the last card sits 17.6 px behind the banner — see `.planning/milestones/M9/COMPLETION.md` §5.1.
+
+## Phase 176.9: Guest Banner Dock
+**Status:** COMPLETE ✅ (`fa2edc9` / `92b2adc`, deployed `6db893a`)
+The 176.8 clearance measurement was deleted, not tuned: the news panel is one column (header → filters → `min-h-0` scroll list → docked banner → footer), so siblings cannot overlap. R2.2 then removed a duplicated `<GuestEvaluationBanner />` mount (`page.tsx:24`) that the local green run had not seen.
+**Verification:** production assertions 4/4 on ETag `325815fc…`; measured clearance +12.0 px at 1920×1080 and +8.0 px at 390×844 (was −17.6 px).
+
+## Phase 176.10: Mobile Counter Label
+**Status:** COMPLETE ✅ (`63b0ad2` / `fe4c876`, R2.3)
+Label and number stack below `md` instead of sharing one line, so `Titik Panas` is never truncated to `Titik Pa.`; desktop arrangement untouched; accessible names preserved.
+**Verification:** `scrollWidth`/`clientWidth` = 99/99 on all three pills; live captures `phase176.10/live-1920.png`, `live-390.png`.
+
+## Phase 176.11: Visual Colour Pass
+**Status:** COMPLETE ✅ (`a1b6e1b`, merge `2d7991d`)
+Cuaca blue, Waspada violet, Titik Panas red share one recipe with three hues; land `#121b24` / water `#0a121a`; modality colours (truck `#34d399`, aircraft `#e2e8f0`, vessel `#2dd4bf`); `Filter · N` modal. `DESIGN.md` § Operational layer palette and the ratchet `LAYER_FILES` allowlist amended in the same commit.
+**Verification:** `tsc`, build and map-popup unit only — Playwright explicitly waived by the user (filter-modal layout unverified).
+
+## Phase 176.12: Fleet Regression & Waspada Dots
+**Status:** COMPLETE ✅ (`a1b68de`, merge `c5ea49d`)
+Nested `['zoom']` inside a `case` branch made `addLayer` throw and a silent `try/catch` hid it, so fleet telemetry was counted but never drawn. Paint extracted to `frontend/lib/mapDataPaint.ts`, validated with Mapbox style-spec (including a deliberately broken control), `addLayer` failures logged. Waspada became violet centroid dots with halo.
+**Verification:** `test_fleet_paint.ts`, `test_fleet_scope.ts`; live guest payload 379 vehicles, 0 null coordinates; captures in `phase-fleet/`.
+**Open:** `/health` still reports `environment:"development"` (Render blueprint unsynced); Riau and Kepulauan Riau had no articles in the 48 h window at the R2.2 smoke — see `.planning/milestones/M9/COMPLETION.md` §5 and §7.
 

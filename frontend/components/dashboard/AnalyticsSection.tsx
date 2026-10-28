@@ -1046,7 +1046,9 @@ export default function DashboardAnalyticsSection({
             </div>
           ) : filteredSpikes.length === 0 || spikeRecordsTotal < 3 ? (
             <div title={spikeEmptyFull}>
-              <Empty message={spikeEmptyMessage} />
+              {/* The "fewer than 3 records" guard is VISIBLE, not hover-only: it is
+                  the honesty claim that stops a 0-spike table from reading as data. */}
+              <Empty message={spikeRecordsTotal < 3 ? spikeEmptyFull : spikeEmptyMessage} />
             </div>
           ) : (
             <div className="overflow-x-auto rounded-lg border border-white/10">

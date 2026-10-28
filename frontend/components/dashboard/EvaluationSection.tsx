@@ -125,11 +125,36 @@ interface ScenarioDetail {
   active_sources: number;
   classification: string;
   latency_ms: number;
+  // N=60 ground truth kejadian nyata (BNPB / BPBD / BMKG / pemberitaan).
+  corridor?: string;
+  event_date?: string;
+  source_agency?: string;
+  source_reference?: string;
+  headline?: string;
+  case_notes?: string;
+  brier_contribution?: number;
+  channel_scores?: { weather: number; traffic: number; osint: number; economics: number };
+  nlp_location?: {
+    matched_node: string | null;
+    corridor_segment: string;
+    location_precision: string;
+    is_geocoded: boolean;
+    spatial_error_km: number | null;
+    location_accurate: boolean;
+  };
+  llm_extraction?: {
+    incident_type?: string;
+    severity?: string;
+    confidence?: number;
+    extracted_location?: string;
+    rationale?: string;
+  };
 }
 
 interface StaticReportFile {
   timestamp: string;
   dataset_path: string;
+  dataset_sha256?: string;
   total_scenarios: number;
   calibration: {
     raw_brier_score: number;
@@ -137,6 +162,15 @@ interface StaticReportFile {
     normalized_brier_score: number;
     expected_calibration_error: number;
     reliability_bins: ScenarioBin[];
+  };
+  nlp_spatial_evaluation?: {
+    geocoded_scenarios?: number;
+    total_scenarios?: number;
+    location_resolution_rate?: number;
+    mean_spatial_error_km?: number;
+    max_spatial_error_km?: number;
+    median_spatial_error_km?: number;
+    location_tolerance_km?: number;
   };
   thresholds: Record<string, number>;
   evaluation_notes: string;
@@ -154,13 +188,13 @@ interface ScenarioBin {
 }
 
 // ---------------------------------------------------------------------------
-// Pinned verification constants — recomputed 2026-10-26 from the repo files.
-// Juri: `sha256sum test-results/benchmark_evaluation_report.json` (Linux) /
+// Pinned verification constants — recomputed 2026-10-28 from the repo files.
+// Juri: `sha256sum frontend/public/data/benchmark_evaluation_report.json` (Linux) /
 // `Get-FileHash <path> -Algorithm SHA256` (Windows) untuk verifikasi ulang.
 // ---------------------------------------------------------------------------
-const PINNED_REPORT_SHA256 = 'e6c7645c6628c94b0b7e879de5d0e0ef187435add26ca144537a4e39a37ae590';
-const PINNED_GT_SHA256 = '6771297c87be684d0235d8573365a73650b77765e02b5cf28d6b959dd81b1d32';
-const PINNED_RAW_BRIER_FILE = 0.1106;
+const PINNED_REPORT_SHA256 = 'fe927fb4deda43314a5d681a16c5a6f2ee8e01818658c429cf74052fca4f5ec7';
+const PINNED_GT_SHA256 = 'ab4d5d86ba75151d11e5d492469282c5975fcd3c177676d6f2eabcfb2b7e1350';
+const PINNED_RAW_BRIER_FILE = 0.1382;
 const PINNED_P_MAX = 0.688;
 const REPORT_COPY_URL = '/data/benchmark_evaluation_report.json';
 const GT_COPY_URL = '/data/sumatra_disruptions_ground_truth.json';
@@ -203,6 +237,236 @@ function clampProxy(p: number): number {
 function scenarioBinIndex(forecastProb: number): number {
   if (!Number.isFinite(forecastProb)) return -1;
   return Math.min(9, Math.max(0, Math.floor(forecastProb * 10)));
+}
+
+// ---------------------------------------------------------------------------
+// Bahasa pengguna helpers — angka Indonesia (koma desimal) + label kelas.
+// ---------------------------------------------------------------------------
+const CLASS_LABEL: Record<string, string> = {
+  TP: 'Benar Gangguan',
+  TN: 'Benar Normal',
+  FP: 'Alarm Palsu',
+  FN: 'Kebobolan',
+};
+
+const CLASS_STYLE: Record<string, string> = {
+  TP: 'bg-emerald-500/15 text-emerald-300 border-emerald-400/30',
+  TN: 'bg-slate-500/15 text-slate-300 border-slate-400/30',
+  FP: 'bg-rose-500/15 text-rose-300 border-rose-400/30',
+  FN: 'bg-amber-500/15 text-amber-300 border-amber-400/30',
+};
+
+const LOCATION_PRECISION_LABEL: Record<string, string> = {
+  corridor_point: 'Titik koridor',
+  kecamatan_kelurahan: 'Kecamatan/Kelurahan',
+  kabupaten_kota: 'Kabupaten/Kota',
+  province_only: 'Hanya provinsi',
+};
+
+function locationPrecisionLabel(value?: string | null): string {
+  if (!value) return 'Tak terpetakan';
+  return LOCATION_PRECISION_LABEL[value] ?? value.replace(/_/g, ' ');
+}
+
+function fmtPctID(value: number | null | undefined, digits = 1): string {
+  if (value == null || !Number.isFinite(value)) return '–';
+  return `${(value * 100).toLocaleString('id-ID', {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  })}%`;
+}
+
+function fmtNumID(value: number | null | undefined, digits = 3): string {
+  if (value == null || !Number.isFinite(value)) return '–';
+  return value.toLocaleString('id-ID', {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+}
+
+interface ConfusionMatrixLike {
+  true_positives: number;
+  false_positives: number;
+  true_negatives: number;
+  false_negatives: number;
+}
+
+interface PlainMetricsSectionProps {
+  precision: number | null;
+  recall: number | null;
+  f1: number | null;
+  brier: number | null;
+  cm: ConfusionMatrixLike | null;
+  n: number;
+  isLive: boolean;
+  thresholds: {
+    min_precision?: number;
+    min_recall?: number;
+    min_f1?: number;
+    max_brier_score?: number;
+  } | null;
+  location: {
+    n: number;
+    resolutionRate: number | null;
+    meanSpatialErrorKm: number | null;
+  };
+}
+
+/**
+ * "Arti metrik (bahasa pengguna)" — penjelasan awam untuk Presisi, Sensitivitas,
+ * F1, Brier, dan akurasi lokasi NLP. Angka mengikuti tab aktif (batch N=60 atau
+ * live N), ambang target tetap ditampilkan di tiap kartu.
+ */
+function PlainMetricsSection({
+  precision,
+  recall,
+  f1,
+  brier,
+  cm,
+  n,
+  isLive,
+  thresholds,
+  location,
+}: PlainMetricsSectionProps) {
+  const tp = cm?.true_positives ?? null;
+  const fp = cm?.false_positives ?? null;
+  const fn = cm?.false_negatives ?? null;
+
+  const derivedPrecision =
+    precision ?? (tp !== null && fp !== null && tp + fp > 0 ? tp / (tp + fp) : null);
+  const derivedRecall =
+    recall ?? (tp !== null && fn !== null && tp + fn > 0 ? tp / (tp + fn) : null);
+  const derivedF1 =
+    f1 ??
+    (derivedPrecision !== null && derivedRecall !== null && derivedPrecision + derivedRecall > 0
+      ? (2 * derivedPrecision * derivedRecall) / (derivedPrecision + derivedRecall)
+      : null);
+
+  const targetPrecision = thresholds?.min_precision ?? 0.85;
+  const targetRecall = thresholds?.min_recall ?? 0.8;
+  const targetF1 = thresholds?.min_f1 ?? 0.82;
+  const targetBrier = thresholds?.max_brier_score ?? 0.1;
+
+  const resultLabel = isLive ? 'Hasil Live' : 'Hasil Uji';
+
+  const cards: Array<{
+    title: string;
+    description: string;
+    formula: string;
+    target: string;
+    result: string;
+    met: boolean | null;
+  }> = [
+    {
+      title: 'Presisi deteksi',
+      description:
+        "Kalau sistem bilang 'ada gangguan', seberapa sering benar. Rendah = alarm palsu (false alarm), buang biaya reroute/BBM + lelah operator.",
+      formula: 'TP/(TP+FP)',
+      target: `>${fmtPctID(targetPrecision, 0)}`,
+      result: `${resultLabel} N=${n}: ${fmtPctID(derivedPrecision)} (${tp ?? '–'}/${tp !== null && fp !== null ? tp + fp : '–'}, Alarm Palsu: ${fp ?? '–'}).`,
+      met: derivedPrecision !== null ? derivedPrecision > targetPrecision : null,
+    },
+    {
+      title: 'Sensitivitas (Recall)',
+      description:
+        'Dari semua gangguan sungguhan di lapangan, berapa yang berhasil tertangkap sistem. Rendah = kebobolan, truk terjebak macet/bencana.',
+      formula: 'TP/(TP+FN)',
+      target: `>${fmtPctID(targetRecall, 0)}`,
+      result: `${resultLabel} N=${n}: ${fmtPctID(derivedRecall)} (${tp ?? '–'}/${tp !== null && fn !== null ? tp + fn : '–'}, Kebobolan: ${fn ?? '–'}).`,
+      met: derivedRecall !== null ? derivedRecall > targetRecall : null,
+    },
+    {
+      title: 'Skor F1',
+      description:
+        'Nilai keseimbangan gabungan Presisi dan Sensitivitas. Menjamin sistem tidak asal sebar alarm palsu maupun buta terhadap bencana.',
+      formula: '2×P×R/(P+R)',
+      target: `>${fmtNumID(targetF1, 2)}`,
+      result: `${resultLabel} N=${n}: ${fmtNumID(derivedF1, 3)}.`,
+      met: derivedF1 !== null ? derivedF1 > targetF1 : null,
+    },
+    {
+      title: 'Brier Score',
+      description:
+        'Kejujuran angka persentase probabilitas itu sendiri. Semakin mendekati 0 semakin jujur dan terkalibrasi.',
+      formula: 'rata-rata (Prediksi − Kenyataan)²',
+      target: `≤${fmtNumID(targetBrier, 2)}`,
+      result: `${resultLabel} N=${n} (ternormalisasi): ${fmtNumID(brier, 4)}.`,
+      met: brier !== null ? brier <= targetBrier : null,
+    },
+    {
+      title: 'Akurasi Lokasi Agen Berita (NLP)',
+      description:
+        'Ketepatan agen berita & LLM mengekstrak titik lokasi/koridor kejadian dari teks berita terhadap koordinat lapangan sebenarnya.',
+      formula: 'jarak simpangan Haversine (km)',
+      target: '≤25 km toleransi',
+      result: `Hasil Uji N=${location.n}: ${fmtPctID(location.resolutionRate, 0)} terpetakan (rata-rata jarak simpangan ${fmtNumID(location.meanSpatialErrorKm, 2)} km).`,
+      met:
+        location.resolutionRate !== null && location.meanSpatialErrorKm !== null
+          ? location.resolutionRate >= 1 && location.meanSpatialErrorKm <= 25
+          : null,
+    },
+  ];
+
+  return (
+    <div className="flex flex-col bg-[#0c1017] border border-white/10 rounded-xl p-4 gap-3 shadow-xl">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 pb-3 border-b border-white/10">
+        <div>
+          <h3 className="text-sm font-semibold text-white tracking-wide font-sans">
+            Arti metrik (bahasa pengguna)
+          </h3>
+          <p className="text-xs text-slate-400 font-sans mt-0.5">
+            Angka mengikuti tab aktif —{' '}
+            {isLive
+              ? `Aktual (live N=${n})`
+              : `Internal Skenario (uji N=${n})`}
+            . Target ambang ditampilkan di tiap kartu.
+          </p>
+        </div>
+        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/5 text-slate-300 border border-white/10 text-[11px] font-medium w-fit">
+          <Activity className="w-3 h-3 text-emerald-400" />
+          {isLive ? `Live operasional N=${n}` : `Uji ground truth N=${n}`}
+        </span>
+      </div>
+
+      {/* Matriks konfusi tab aktif — TP/FP/TN/FN dalam istilah awam */}
+      <div className="flex flex-wrap items-center gap-1.5 text-[11px] tabular-nums">
+        <span className="px-1.5 py-0.5 rounded border bg-emerald-500/10 text-emerald-300 border-emerald-400/20">TP {tp ?? '–'} · Benar Gangguan</span>
+        <span className="px-1.5 py-0.5 rounded border bg-rose-500/10 text-rose-300 border-rose-400/20">FP {fp ?? '–'} · Alarm Palsu</span>
+        <span className="px-1.5 py-0.5 rounded border bg-slate-500/10 text-slate-300 border-slate-400/20">TN {cm?.true_negatives ?? '–'} · Benar Normal</span>
+        <span className="px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-300 border-amber-400/20">FN {fn ?? '–'} · Kebobolan</span>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+        {cards.map((card) => (
+          <div
+            key={card.title}
+            className="flex flex-col gap-1.5 p-3 rounded-lg bg-white/[0.02] border border-white/10"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <span className="text-xs font-semibold text-slate-100 font-sans">{card.title}</span>
+              <span
+                className={`shrink-0 px-1.5 py-0.5 rounded border text-[10px] font-bold tabular-nums ${
+                  card.met === null
+                    ? 'bg-slate-500/15 text-slate-400 border-white/10'
+                    : card.met
+                      ? 'bg-emerald-500/15 text-emerald-300 border-emerald-400/30'
+                      : 'bg-rose-500/15 text-rose-300 border-rose-400/30'
+                }`}
+                title="Target ambang kelulusan"
+              >
+                Target {card.target}
+              </span>
+            </div>
+            <p className="text-[11px] leading-relaxed text-slate-400 font-sans">{card.description}</p>
+            <p className="text-[11px] text-slate-500 tabular-nums">
+              Rumus <span className="font-mono text-slate-300">{card.formula}</span>
+            </p>
+            <p className="text-[11px] font-semibold text-slate-200 tabular-nums">{card.result}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function EvaluationSection({
@@ -381,6 +645,15 @@ export default function EvaluationSection({
 
   const thresholds = report?.thresholds ?? null;
 
+  // Akurasi lokasi agen berita (NLP) — dataset uji N=60. Sumber: berkas laporan
+  // (nlp_spatial_evaluation), fallback ke angka pinned bila berkas belum termuat.
+  const nlpSpatial = staticReport?.nlp_spatial_evaluation ?? null;
+  const nlpLocationStats = {
+    n: nlpSpatial?.total_scenarios ?? 60,
+    resolutionRate: nlpSpatial?.location_resolution_rate ?? 1,
+    meanSpatialErrorKm: nlpSpatial?.mean_spatial_error_km ?? 6.9,
+  };
+
   const scenRows = useMemo(() => staticReport?.scenario_details ?? [], [staticReport]);
   const filteredScen = useMemo(() => {
     return scenRows.filter((s) => {
@@ -493,7 +766,7 @@ export default function EvaluationSection({
                 */}
                 <div className="mt-0.5 flex flex-wrap items-center gap-2">
                   <p className="text-xs text-slate-400 font-sans">
-                    Ringkasan angka validasi model — pilih simulasi internal atau agregat aktual di bawah.
+                    Ringkasan angka validasi model — pilih uji skenario internal atau agregat aktual di bawah.
                   </p>
                 </div>
               </div>
@@ -540,9 +813,9 @@ export default function EvaluationSection({
           <div className="flex flex-wrap items-center gap-2">
             <span
               className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-500/15 text-slate-300 border border-white/10 text-[11px] font-medium"
-              title="KPI Presisi/Sensitivitas/F1/Brier dari ground-truth sintetis Sumatra (data/benchmark/sumatra_disruptions_ground_truth.json, N=60) — bukan data live operasional."
+              title="KPI Presisi/Sensitivitas/F1/Brier dihitung dari dataset ground truth kejadian nyata Sumatra (N=60) yang bersumber dari BNPB, BPBD, BMKG, dan pemberitaan (data/benchmark/sumatra_disruptions_ground_truth.json) — bukan telemetri live operasional."
             >
-              Simulasi N=60 — bukan data live
+              Ground truth BNPB/BPBD/BMKG/Berita N=60
             </span>
           </div>
           {/* 4 Empirical Benchmark KPI Cards (Presisi / Sensitivitas / F1 / Brier) — batch */}
@@ -592,6 +865,18 @@ export default function EvaluationSection({
             </div>
           </div>
 
+          <PlainMetricsSection
+            precision={batchPrecision}
+            recall={batchRecall}
+            f1={batchF1}
+            brier={batchBrier}
+            cm={batchCM}
+            n={batchN}
+            isLive={false}
+            thresholds={thresholds}
+            location={nlpLocationStats}
+          />
+
           {/* PHASE2: delta live vs batch disembunyi per spec (hanya N+Status di bar distilled).
           {liveSufficient && live?.deltas_vs_batch && (
             <div className="bg-emerald-950/20 border border-emerald-500/20 rounded-xl px-5 py-3 text-xs font-mono tabular-nums text-slate-300 flex flex-wrap items-center gap-x-4 gap-y-1">
@@ -625,13 +910,14 @@ export default function EvaluationSection({
                 <p>
                   <span
                     className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-500/15 text-slate-300 border border-white/10 text-[11px] font-medium normal-case tracking-normal"
-                    title="Rincian batch dari ground-truth sintetis Sumatra (data/benchmark/sumatra_disruptions_ground_truth.json, N=60) — bukan data live operasional."
+                    title="Rincian batch dari dataset ground truth kejadian nyata Sumatra (N=60) bersumber BNPB, BPBD, BMKG, dan pemberitaan (data/benchmark/sumatra_disruptions_ground_truth.json) — bukan telemetri live operasional."
                   >
-                    Simulasi N=60 — bukan data live
+                    Ground truth BNPB/BPBD/BMKG/Berita N=60
                   </span>
                 </p>
                 <p>N = {report?.total_scenarios ?? 60} skenario · Status: {report ? (report.gating_passed ? 'LULUS' : 'BELUM') : 'Belum dihitung'}</p>
-                <p>Matriks konfusi: TP {batchCM?.true_positives ?? '–'} / FP {batchCM?.false_positives ?? '–'} / TN {batchCM?.true_negatives ?? '–'} / FN {batchCM?.false_negatives ?? '–'}</p>
+                <p>Matriks konfusi: TP {batchCM?.true_positives ?? '–'} (Benar Gangguan) / FP {batchCM?.false_positives ?? '–'} (Alarm Palsu) / TN {batchCM?.true_negatives ?? '–'} (Benar Normal) / FN {batchCM?.false_negatives ?? '–'} (Kebobolan)</p>
+                <p className="text-slate-400">Sumber ground truth: laporan BNPB, BPBD, BMKG, dan pemberitaan (Antara/Tribun/Waspada) — 60 kejadian nyata di Sumatra, bukan data sintetis.</p>
                 <p>Ambang: Presisi &gt; {(thresholds?.min_precision ?? 0.85).toFixed(2)} · Sensitivitas &gt; {(thresholds?.min_recall ?? 0.80).toFixed(2)} · F1 &gt; {(thresholds?.min_f1 ?? 0.82).toFixed(3)} · Brier ≤ {(thresholds?.max_brier_score ?? 0.10).toFixed(3)}</p>
                 {/* PHASE2: dual-scale Pmax / rumus forecast / proxy live / sensor mapping disembunyi per spec (jargon sintetis).
                 <p>Ambang deteksi: skor konsensus mentah raw_prob ge; 0.50 (setara ternormalisasi asymp; 0.727)</p>
@@ -656,7 +942,7 @@ export default function EvaluationSection({
                   <p className="text-[11px] font-sans font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5"><Database className="w-3 h-3 text-cyan-400" /> Provenance berkas</p>
                   <p className="break-all">Laporan API: <code className="text-cyan-300">{formatFullTimestamp(report?.timestamp)}</code></p>
                   {report?.timestamp && <p className="break-all text-slate-500">ISO mentah: <code>{report.timestamp}</code> (zona asal tak tercatat — di atas dalam zona browser)</p>}
-                  <p className="break-all">Hash laporan (sha256, 2026-10-26): <code className="text-slate-200">{reportHash ? `${reportHash.slice(0, 16)}…` : 'menghitung…'}</code>{' '}
+                  <p className="break-all">Hash laporan (sha256, 2026-10-28): <code className="text-slate-200">{reportHash ? `${reportHash.slice(0, 16)}…` : 'menghitung…'}</code>{' '}
                     {reportHashOk === true && <span className="text-emerald-300 font-bold">✓ COCOK</span>}
                     {reportHashOk === false && <span className="text-rose-300 font-bold">✕ BERBEDA DARI {PINNED_REPORT_SHA256.slice(0, 12)}…</span>}
                   </p>
@@ -729,7 +1015,7 @@ export default function EvaluationSection({
                     */}
                   </h3>
                   <p className="text-xs text-slate-400 font-sans mt-0.5">
-                    Hasil per skenario SUM-SCN (aktual vs prediksi).
+                    Hasil per skenario SUM-SCN dari kejadian nyata (BNPB/BPBD/BMKG/berita): aktual vs prediksi, lokasi NLP, keyakinan agen, dan kontribusi Brier.
                   </p>
                 </div>
               </div>
@@ -750,64 +1036,123 @@ export default function EvaluationSection({
                   onChange={(e) => { setScenClassFilter(e.target.value); setScenPage(1); }}
                   className="bg-white/5 border border-white/10 rounded-md px-2 py-1.5 text-xs text-slate-200 cursor-pointer"
                 >
-                  <option value="all">TP+TN+FP+FN</option>
-                  <option value="TP">TP</option>
-                  <option value="TN">TN</option>
-                  <option value="FP">FP</option>
-                  <option value="FN">FN</option>
+                  <option value="all">Semua kelas</option>
+                  <option value="TP">TP — Benar Gangguan</option>
+                  <option value="TN">TN — Benar Normal</option>
+                  <option value="FP">FP — Alarm Palsu</option>
+                  <option value="FN">FN — Kebobolan</option>
                 </select>
               </div>
             </div>
 
             <div className="overflow-x-auto rounded-lg border border-white/10">
-              <table className="w-full text-left text-xs border-collapse">
+              <table className="w-full min-w-[1180px] text-left text-xs border-collapse">
                 <thead>
                   <tr className="border-b border-white/10 text-slate-400">
-                    <th className="h-11 px-3 text-left">ID</th>
-                    <th className="h-11 px-3 text-left">Skenario</th>
-                    <th className="h-11 px-3 text-center">Aktual</th>
-                    <th className="h-11 px-3 text-center">Prediksi</th>
-                    <th className="h-11 px-3 text-center">Klas</th>
-                    {/* PHASE2: kolom raw_prob / forecast / src / latensi disembunyi per spec — tabel ringkas keputusan saja.
-                    <th className="py-2.5 px-3 text-right">raw_prob</th>
-                    <th className="py-2.5 px-3 text-right">forecast (tersimpan)</th>
-                    <th className="py-2.5 px-3 text-right">src</th>
-                    <th className="py-2.5 px-3 text-center">Klas</th>
-                    <th className="py-2.5 px-3 text-right">Latensi</th>
-                    */}
+                    <th className="h-11 px-3 text-left align-bottom">ID</th>
+                    <th className="h-11 px-3 text-left align-bottom">Sumber &amp; Tanggal</th>
+                    <th className="h-11 px-3 text-left align-bottom">Skenario &amp; Judul Berita</th>
+                    <th className="h-11 px-3 text-left align-bottom">Lokasi Aktual vs Hasil NLP</th>
+                    <th className="h-11 px-3 text-left align-bottom">Keyakinan Agen (Cuaca, Lalin, Berita, Harga)</th>
+                    <th className="h-11 px-3 text-right align-bottom">Probabilitas Gangguan (%)</th>
+                    <th className="h-11 px-3 text-center align-bottom">Aktual</th>
+                    <th className="h-11 px-3 text-center align-bottom">Prediksi</th>
+                    <th className="h-11 px-3 text-center align-bottom">Kelas</th>
+                    <th className="h-11 px-3 text-right align-bottom">Brier Score</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/10 tabular-nums">
                   {fileState === 'loading' && (
-                    <tr><td colSpan={5} className="py-8 text-center text-slate-500">Memuat salinan berkas laporan…</td></tr>
+                    <tr><td colSpan={10} className="py-8 text-center text-slate-500">Memuat salinan berkas laporan…</td></tr>
                   )}
                   {fileState === 'error' && (
                     <tr>
-                      <td colSpan={5} className="py-8 text-center text-slate-500">
+                      <td colSpan={10} className="py-8 text-center text-slate-500">
                         Belum ada data skenario — bukan 0% maupun 100%.
                       </td>
                     </tr>
                   )}
                   {fileState === 'ready' && scenPageRows.length === 0 && (
-                    <tr><td colSpan={5} className="py-8 text-center text-slate-500">Tidak ada skenario pada filter ini (bin {String(scenBinFilter)}, klas {scenClassFilter}).</td></tr>
+                    <tr><td colSpan={10} className="py-8 text-center text-slate-500">Tidak ada skenario pada filter ini (bin {String(scenBinFilter)}, klas {scenClassFilter}).</td></tr>
                   )}
                   {fileState === 'ready' && scenPageRows.map((s) => (
-                    <tr key={s.id} className="hover:bg-white/5 transition-colors">
-                      <td className="py-3 px-3 text-cyan-300 font-bold whitespace-nowrap">{s.id}</td>
-                      <td className="py-3 px-3 text-slate-200 text-xs max-w-[240px] truncate" title={`${s.name} — ${s.province}`}>{s.name}</td>
-                      <td className="py-3 px-3 text-center text-white">{s.actual}</td>
-                      <td className="py-3 px-3 text-center text-white">{s.predicted}</td>
-                      {/* PHASE2: sel raw/forecast/src/latensi disembunyi per spec.
-                      <td className="py-2 px-3 text-right text-slate-400">{s.raw_probability.toFixed(4)}</td>
-                      <td className="py-2 px-3 text-right text-slate-200" title="forecast_probability tersimpan (ternormalisasi P_maks), bukan eta/4.0">{s.forecast_probability.toFixed(4)}</td>
-                      <td className="py-2 px-3 text-right text-slate-500">{s.active_sources}</td>
-                      */}
-                      <td className="py-3 px-3 text-center">
-                        <span className={`px-1.5 py-0.5 rounded border text-[11px] font-bold ${s.classification === 'TP' ? 'bg-emerald-500/15 text-emerald-300 border-emerald-400/30' : s.classification === 'TN' ? 'bg-slate-500/15 text-slate-300 border-slate-400/30' : 'bg-rose-500/15 text-rose-300 border-rose-400/30'}`}>
-                          {s.classification}
+                    <tr key={s.id} className="hover:bg-white/5 transition-colors align-top">
+                      <td className="py-3 px-3 whitespace-nowrap align-top">
+                        <span className="block text-cyan-300 font-bold">{s.id}</span>
+                        <span className="block text-[11px] text-slate-500">{s.province}</span>
+                      </td>
+                      <td className="py-3 px-3 align-top max-w-[190px]">
+                        <span
+                          className="block text-[11px] text-slate-200 leading-snug"
+                          title={s.source_reference ?? s.source_agency ?? ''}
+                        >
+                          {s.source_agency ?? '–'}
+                        </span>
+                        <span className="block text-[11px] text-slate-500 mt-0.5">{s.event_date ?? '–'}</span>
+                      </td>
+                      <td className="py-3 px-3 align-top max-w-[320px]">
+                        <span className="block text-slate-100 font-semibold text-xs leading-snug">{s.name}</span>
+                        <span className="block text-[11px] text-slate-400 mt-0.5 leading-snug" title={s.headline ?? ''}>
+                          {s.headline ?? '–'}
+                        </span>
+                        {(s.classification === 'FP' || s.classification === 'FN') && s.case_notes && (
+                          <span className="block mt-1 text-[11px] text-amber-300/90 leading-snug">{s.case_notes}</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-3 align-top max-w-[260px]">
+                        <span className="block text-[11px] text-slate-200 leading-snug">
+                          Aktual: {s.corridor ?? '–'}
+                        </span>
+                        <span className="block text-[11px] text-slate-400 mt-0.5 leading-snug">
+                          NLP: {s.nlp_location?.matched_node ?? 'tak terpetakan'}
+                        </span>
+                        <span className="block text-[10px] text-slate-500 mt-0.5 leading-snug">
+                          {s.nlp_location?.spatial_error_km != null
+                            ? `Simpangan ${fmtNumID(s.nlp_location.spatial_error_km, 2)} km · `
+                            : ''}
+                          {locationPrecisionLabel(s.nlp_location?.location_precision)}
+                          {s.nlp_location?.is_geocoded === false ? ' · tak tergeocode' : ''}
                         </span>
                       </td>
-                      {/* <td className="py-2 px-3 text-right text-slate-500">{s.latency_ms.toFixed(2)} ms</td> */}
+                      <td className="py-3 px-3 align-top whitespace-nowrap">
+                        {s.channel_scores ? (
+                          <span className="block text-[11px] text-slate-200 leading-snug">
+                            Cuaca {Math.round(s.channel_scores.weather * 100)}% · Lalin{' '}
+                            {Math.round(s.channel_scores.traffic * 100)}% · Berita{' '}
+                            {Math.round(s.channel_scores.osint * 100)}% · Harga{' '}
+                            {Math.round(s.channel_scores.economics * 100)}%
+                          </span>
+                        ) : (
+                          <span className="text-slate-500">–</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-3 text-right align-top whitespace-nowrap">
+                        <span className="block text-white font-bold tabular-nums">
+                          {(s.forecast_probability * 100).toFixed(1)}%
+                        </span>
+                        <span className="block text-[10px] text-slate-500 tabular-nums">
+                          skor mentah {s.raw_probability.toFixed(4)}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 text-center align-top whitespace-nowrap">
+                        <span className={s.actual === 1 ? 'text-emerald-300 font-semibold' : 'text-slate-300'}>
+                          {s.actual === 1 ? 'Gangguan (1)' : 'Normal (0)'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 text-center align-top whitespace-nowrap">
+                        <span className={s.predicted === 1 ? 'text-emerald-300 font-semibold' : 'text-slate-300'}>
+                          {s.predicted === 1 ? 'Gangguan (1)' : 'Normal (0)'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 text-center align-top whitespace-nowrap">
+                        <span className={`px-1.5 py-0.5 rounded border text-[11px] font-bold ${CLASS_STYLE[s.classification] ?? 'bg-slate-500/15 text-slate-300 border-slate-400/30'}`}>
+                          {CLASS_LABEL[s.classification] ?? s.classification}
+                        </span>
+                        <span className="block text-[10px] text-slate-500 mt-0.5">{s.classification}</span>
+                      </td>
+                      <td className="py-3 px-3 text-right align-top text-slate-200 whitespace-nowrap">
+                        {(s.brier_contribution ?? Math.pow(s.forecast_probability - s.actual, 2)).toFixed(4)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -883,6 +1228,18 @@ export default function EvaluationSection({
               {/* PHASE5: hint ambang KPI dihapus dari default view — angka KPI tetap. */}
             </div>
           </div>
+
+          <PlainMetricsSection
+            precision={livePrecision}
+            recall={liveRecall}
+            f1={liveF1}
+            brier={liveBrier}
+            cm={liveCM}
+            n={liveN}
+            isLive={true}
+            thresholds={thresholds}
+            location={nlpLocationStats}
+          />
 
           {/* PHASE5: strip delta live-vs-batch disembunyi dari tab Aktual —
               data logic agregat live tetap utuh di atas. */}

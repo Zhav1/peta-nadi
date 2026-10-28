@@ -1,0 +1,80 @@
+# M9 publish manifest — captured BEFORE staging
+
+**Captured:** 2026-10-28 22:32:13 +07:00
+**Branch / HEAD:** `main` @ `f00bffc` (in sync with `origin/main`, 0 ahead / 0 behind)
+**Command:** `git status --porcelain` — 75 entries (32 tracked-modified, 43 untracked)
+**User authorisation:** `git add .` explicitly authorised for this commit.
+
+Ownership legend
+- **M9-docs** — created/edited by this documentation pass (LEARNINGS, STATE, PROJECT, ROADMAP).
+- **M9-phase** — phase 167–176.12 deliverables that were never committed.
+- **M8-160** — phase 160 audit artifacts (M8), present in the tree and uncommitted before M9.
+- **M9-scratch** — probe/verification artifacts produced while measuring M9.
+- **OTHER** — belongs to a concurrent session (not part of M9).
+
+---
+
+## 1. Tracked modifications (32)
+
+| # | Path | Owner | Note |
+|---|---|---|---|
+| 1 | `.planning/PROJECT.md` | M9-docs | M9 added to milestones; M8 section preserved |
+| 2 | `.planning/ROADMAP.md` | M9-docs | M9 block: status line + phases 176.9–176.12, stale 17.6 px "Open" note replaced |
+| 3 | `.planning/STATE.md` | M9-docs | front matter → M9 / 176.12 / complete; Current Position rewritten |
+| 4 | `SPEC.md` | OTHER | not referenced by any M9 phase; belongs to the N60 evaluation work |
+| 5 | `backend/app/routers/evaluation_router.py` | OTHER | evaluation/N60 work |
+| 6 | `backend/scripts/seed_live_demo.py` | OTHER | demo seeding for the evaluation work |
+| 7 | `backend/tests/test_evaluation_router.py` | OTHER | evaluation tests |
+| 8 | `bench.json` | OTHER | benchmark output |
+| 9 | `data/benchmark/sumatra_disruptions_ground_truth.json` | OTHER | ground-truth dataset |
+| 10–21 | `docs/screenshots/01_onboarding_hero.png` … `vercel-06-evaluasi.png` (12 files) | OTHER | named in `COMPLETION.md` §2 as the other session's untouched files |
+| 22 | `evlive.json` | OTHER | live evaluation output |
+| 23 | `frontend/components/dashboard/AnalyticsSection.tsx` | OTHER | named in `COMPLETION.md` §2 |
+| 24 | `frontend/components/dashboard/EvaluationSection.tsx` | OTHER | evaluation UI |
+| 25 | `frontend/components/dashboard/ReliabilityDiagram.tsx` | OTHER | evaluation UI |
+| 26 | `frontend/components/dashboard/ReportsSection.tsx` | OTHER | named in `COMPLETION.md` §2 |
+| 27 | `frontend/components/dashboard/analytics/CorrelationMatrix.tsx` | OTHER | named in `COMPLETION.md` §2 |
+| 28 | `frontend/components/dashboard/analytics/TimeHeatstrip.tsx` | OTHER | named in `COMPLETION.md` §2 |
+| 29 | `frontend/public/data/benchmark_evaluation_report.json` | OTHER | benchmark output |
+| 30 | `frontend/public/data/sumatra_disruptions_ground_truth.json` | OTHER | ground-truth copy |
+| 31 | `scripts/build_benchmark_dataset.py` | OTHER | benchmark tooling |
+| 32 | `scripts/evaluate_metrics.py` | OTHER | benchmark tooling |
+
+## 2. Untracked (43)
+
+| # | Path | Owner | Note |
+|---|---|---|---|
+| 1 | `.planning/baseline-pytest.txt` | M8-160 | backend baseline capture |
+| 2 | `.planning/milestones/M9/LEARNINGS.md` | M9-docs | milestone learning extraction (this pass) |
+| 3 | `.planning/phases/160-baseline-audit-state-repair/BASELINE.md` | M8-160 | M8 phase-160 audit |
+| 4 | `.planning/phases/160-baseline-audit-state-repair/artifacts/` | M8-160 | M8 phase-160 artifacts |
+| 5–25 | `.planning/phases/167-…` through `.planning/phases/176.12-…` (21 folders, each PLAN.md + WALKTHROUGH.md + LEARNINGS.md) | M9-phase | the 21 phase folders |
+| 26 | `Final-Gemastik/Lampiran_N60_PreHub.docx.bak-20261028-214402` | OTHER | doc backup, written 21:44 |
+| 27 | `Final-Gemastik/Lampiran_N60_PreHub.pdf.bak-20261028-214402` | OTHER | doc backup, written 21:44 |
+| 28 | `Final-Gemastik/SPEC_N60_EVALUATION.md` | OTHER | N60 evaluation doc |
+| 29 | `Final-Gemastik/validation_doc_manifest.json` | OTHER | validation-doc manifest |
+| 30 | `backend/data/backups/` | OTHER | two `ground_truth_outcomes_*.json` exports (21:18–21:19), 518 KB + 32 KB |
+| 31 | `data/benchmark/llm_extraction_cache.json` | OTHER | benchmark cache |
+| 32 | `frontend/probe-counters.mjs` | M9-scratch | production counter probe (167–176.6 measurement) |
+| 33 | `frontend/tmp-debug.cjs` | M9-scratch | temporary Playwright probe |
+| 34 | `frontend/tmp-probe-1920.png` | M9-scratch | probe capture |
+| 35 | `frontend/tmp-probe-390.png` | M9-scratch | probe capture |
+| 36 | `map-popup-test.txt` | M9-scratch | output of `frontend/scripts/test-map-popup.ts` (176.11 map-popup unit) |
+| 37–42 | `scripts/_patch_headlines.py`, `scripts/generate_internal_testing_doc.py`, `scripts/generate_merged_validation_doc.py`, `scripts/generate_n60_appendix.py`, `scripts/generate_simple_testing_form.py`, `scripts/generate_validation_sheet.py` | OTHER | documentation generators for Final-Gemastik |
+| 43 | — | — | (21 phase folders are counted as one row above) |
+
+---
+
+## 3. Staging and build record
+
+1. `git add .` — executed as authorised; `warning:` lines were CRLF→LF normalisation only.
+2. **Staged:** 136 files changed, 36,879 insertions(+), 2,485 deletions(−).
+3. **Build gate:** `cd frontend; npm run build` — **PASSED**
+   - `✓ Compiled successfully`
+   - `Checking validity of types` — no errors
+   - `✓ Generating static pages (7/7)`
+   - `Successfully copied .next/static and public to standalone server directory.`
+   - Routes: `/`, `/_not-found`, `/api/proxy/[...path]`, `/dashboard`, `/demo-remote`; middleware 26.7 kB.
+   - The PowerShell `NativeCommandError` line is npm writing its notices to stderr, not a build failure.
+4. **Unstaged to keep production safe:** none. No file was removed from the index after staging.
+5. **Not committed:** `.next/` build output (git-ignored).

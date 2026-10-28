@@ -727,7 +727,7 @@ export default function ReportsSection({
  <FileText className="w-8 h-8 text-slate-600 mb-1" aria-hidden="true" />
  <p className="text-sm font-medium text-slate-300">Belum ada catatan persetujuan mitigasi</p>
  <p className="text-xs text-slate-500 max-w-md leading-relaxed" title="Audit terisi otomatis setelah Dispatcher commit dari Peta Operasi via POST /approvals. Mode Sandbox tamu tidak dapat mengisi audit.">
- Buka Peta sebagai Dispatcher untuk mencatat mitigasi.
+ Buka Peta sebagai Dispatcher untuk mencatat mitigasi. Audit terisi otomatis via POST /approvals; Mode Sandbox tamu tidak dapat mengisi audit.
  </p>
  <div className="flex flex-wrap items-center justify-center gap-2 mt-3">
  <button

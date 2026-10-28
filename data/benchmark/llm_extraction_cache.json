@@ -1,0 +1,2172 @@
+{
+  "schema_version": 2,
+  "created_at": "2026-10-28T21:26:45.932148",
+  "extraction_mode": "live_llm",
+  "llm_model": "deepseek-v4.1-flash",
+  "llm_errors": {},
+  "note": "Structured extraction cache for the Sumatra disruption benchmark. Regenerate with `python scripts/evaluate_metrics.py --live-llm --refresh-cache`.",
+  "scenarios": {
+    "SUM-SCN-001": {
+      "location_source": "headline",
+      "matched_node": "Pelabuhan Belawan",
+      "latitude": 3.7944,
+      "longitude": 98.6913,
+      "resolved_province": "Sumatera Utara",
+      "corridor_segment": "Akses Pelabuhan Belawan",
+      "location_precision": "corridor_point",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Pelabuhan Belawan",
+        "Medan"
+      ],
+      "spatial_error_km": 1.19,
+      "heuristic": {
+        "event_type": "flood",
+        "severity": "medium",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Akses Pelabuhan Belawan",
+        "corridor_nodes": [
+          "Pelabuhan Belawan",
+          "Belawan",
+          "Medan"
+        ],
+        "location_precision": "corridor_point",
+        "confidence_score": 0.86,
+        "region": "Sumatera Utara"
+      },
+      "llm": {
+        "is_active_disaster": true,
+        "incident_type": "flood",
+        "severity": "high",
+        "passability": "BLOCKED",
+        "verified_sumatra_location": "Kawasan Industri Medan dan Akses Pelabuhan Belawan",
+        "reason": "Banjir rob menggenangi kawasan industri dan akses Pelabuhan Belawan sehingga truk kontainer terhenti."
+      }
+    },
+    "SUM-SCN-002": {
+      "location_source": "headline",
+      "matched_node": "Serdang Bedagai",
+      "latitude": 3.4833,
+      "longitude": 99.1333,
+      "resolved_province": "Sumatera Utara",
+      "corridor_segment": "Jalinsum Sergai",
+      "location_precision": "corridor_point",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Serdang Bedagai"
+      ],
+      "spatial_error_km": 3.61,
+      "heuristic": {
+        "event_type": "other_disruption",
+        "severity": "medium",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Jalinsum Sergai",
+        "corridor_nodes": [
+          "Serdang Bedagai",
+          "Lintas Sumatera"
+        ],
+        "location_precision": "corridor_point",
+        "confidence_score": 0.86,
+        "region": "Sumatera Utara"
+      },
+      "llm": {
+        "is_active_disaster": true,
+        "incident_type": "flood",
+        "severity": "high",
+        "passability": "RESTRICTED",
+        "verified_sumatra_location": "Jalur Arteri Lintas Sumatera KM 36, Serdang Bedagai, Sumatera Utara",
+        "reason": "Luapan Sungai Ular merendam jalur arteri Lintas Sumatera di Serdang Bedagai dan memicu antrean logistik sepanjang 8 km."
+      }
+    },
+    "SUM-SCN-003": {
+      "location_source": "headline",
+      "matched_node": "Tarutung",
+      "latitude": 2.0167,
+      "longitude": 98.9667,
+      "resolved_province": "Sumatera Utara",
+      "corridor_segment": "Jalinteng Tarutung (Tapanuli Utara)",
+      "location_precision": "corridor_point",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Tarutung",
+        "Sibolga"
+      ],
+      "spatial_error_km": 6.18,
+      "heuristic": {
+        "event_type": "landslide",
+        "severity": "high",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Jalinteng Tarutung (Tapanuli Utara)",
+        "corridor_nodes": [
+          "Tarutung",
+          "Sibolga"
+        ],
+        "location_precision": "corridor_point",
+        "confidence_score": 0.86,
+        "region": "Sumatera Utara"
+      },
+      "llm": {
+        "is_active_disaster": true,
+        "incident_type": "landslide",
+        "severity": "high",
+        "passability": "BLOCKED",
+        "verified_sumatra_location": "Tarutung-Sibolga (KM 22), Sumatera Utara",
+        "reason": "Material longsor menutup total jalur logistik Tarutung-Sibolga KM 22 sehingga truk sembako terjebak."
+      }
+    },
+    "SUM-SCN-004": {
+      "location_source": "headline",
+      "matched_node": "Pematang Siantar",
+      "latitude": 2.9595,
+      "longitude": 99.0682,
+      "resolved_province": "Sumatera Utara",
+      "corridor_segment": "Jalur Siantar - Parapat",
+      "location_precision": "kabupaten_kota",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Pematang Siantar"
+      ],
+      "spatial_error_km": 5.17,
+      "heuristic": {
+        "event_type": "other_disruption",
+        "severity": "high",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Jalur Siantar - Parapat",
+        "corridor_nodes": [
+          "Pematang Siantar"
+        ],
+        "location_precision": "kabupaten_kota",
+        "confidence_score": 0.86,
+        "region": "Sumatera Utara"
+      },
+      "llm": {
+        "is_active_disaster": true,
+        "incident_type": "flood",
+        "severity": "medium",
+        "passability": "RESTRICTED",
+        "verified_sumatra_location": "Pematang Siantar, Sumatera Utara",
+        "reason": "Hujan lebat menyebabkan genangan di jalan dalam Kota Pematang Siantar sehingga arus kendaraan tersendat."
+      }
+    },
+    "SUM-SCN-005": {
+      "location_source": "headline",
+      "matched_node": "Medan",
+      "latitude": 3.5952,
+      "longitude": 98.6722,
+      "resolved_province": "Sumatera Utara",
+      "corridor_segment": "Jalinsum Arteri Utama",
+      "location_precision": "kabupaten_kota",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Medan"
+      ],
+      "spatial_error_km": 8.41,
+      "heuristic": {
+        "event_type": "other_disruption",
+        "severity": "medium",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Jalinsum Arteri Utama",
+        "corridor_nodes": [
+          "Medan"
+        ],
+        "location_precision": "kabupaten_kota",
+        "confidence_score": 0.86,
+        "region": "Sumatera Utara"
+      },
+      "llm": {
+        "is_active_disaster": false,
+        "incident_type": "congestion",
+        "severity": "low",
+        "passability": "CAUTION",
+        "verified_sumatra_location": "Pintu Keluar Tol Amplas Medan",
+        "reason": "Peningkatan volume kendaraan di pintu keluar Tol Amplas Medan berpotensi menimbulkan kepadatan lalu lintas pada akhir pekan."
+      }
+    },
+    "SUM-SCN-006": {
+      "location_source": "headline",
+      "matched_node": "Asahan",
+      "latitude": 2.9833,
+      "longitude": 99.6167,
+      "resolved_province": "Sumatera Utara",
+      "corridor_segment": "Jalintim Asahan",
+      "location_precision": "kabupaten_kota",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Asahan"
+      ],
+      "spatial_error_km": 2.71,
+      "heuristic": {
+        "event_type": "flood",
+        "severity": "high",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Jalintim Asahan",
+        "corridor_nodes": [
+          "Asahan",
+          "Jalan Lintas Sumatera",
+          "Lintas Sumatera"
+        ],
+        "location_precision": "kabupaten_kota",
+        "confidence_score": 0.86,
+        "region": "Sumatera Utara"
+      },
+      "llm": {
+        "is_active_disaster": true,
+        "incident_type": "flood",
+        "severity": "high",
+        "passability": "RESTRICTED",
+        "verified_sumatra_location": "Jalan Lintas Sumatera KM 15 Kisaran-Rantau Prapat, Sumatera Utara",
+        "reason": "Luapan Sungai Asahan merendam badan Jalan Lintas Sumatera sehingga akses truk sawit dan sembako tersendat."
+      }
+    },
+    "SUM-SCN-007": {
+      "location_source": "headline",
+      "matched_node": "Langkat",
+      "latitude": 3.7506,
+      "longitude": 98.4486,
+      "resolved_province": "Sumatera Utara",
+      "corridor_segment": "Jalinsum Langkat - Aceh",
+      "location_precision": "kabupaten_kota",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Langkat"
+      ],
+      "spatial_error_km": 1.19,
+      "heuristic": {
+        "event_type": "other_disruption",
+        "severity": "low",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Jalinsum Langkat - Aceh",
+        "corridor_nodes": [
+          "Langkat"
+        ],
+        "location_precision": "kabupaten_kota",
+        "confidence_score": 0.86,
+        "region": "Sumatera Utara"
+      },
+      "llm": {
+        "is_active_disaster": false,
+        "incident_type": "hoax",
+        "severity": "low",
+        "passability": "OPEN",
+        "verified_sumatra_location": "Langkat",
+        "reason": "Disperindag Langkat mengklarifikasi isu kelangkaan minyak goreng dan menyatakan pasokan distributor aman terkendali."
+      }
+    },
+    "SUM-SCN-008": {
+      "location_source": "headline",
+      "matched_node": "Langkat",
+      "latitude": 3.7506,
+      "longitude": 98.4486,
+      "resolved_province": "Sumatera Utara",
+      "corridor_segment": "Jalinsum Langkat - Aceh",
+      "location_precision": "kabupaten_kota",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Langkat",
+        "Medan"
+      ],
+      "spatial_error_km": 5.58,
+      "heuristic": {
+        "event_type": "other_disruption",
+        "severity": "medium",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Jalinsum Langkat - Aceh",
+        "corridor_nodes": [
+          "Langkat",
+          "Medan"
+        ],
+        "location_precision": "kabupaten_kota",
+        "confidence_score": 0.86,
+        "region": "Sumatera Utara"
+      },
+      "llm": {
+        "is_active_disaster": true,
+        "incident_type": "flood",
+        "severity": "high",
+        "passability": "BLOCKED",
+        "verified_sumatra_location": "Batang Serangan, Langkat, Sumatera Utara",
+        "reason": "Tanggul Batang Serangan jebol dan membuat jalur distribusi sayur dari Langkat ke Medan lumpuh."
+      }
+    },
+    "SUM-SCN-009": {
+      "location_source": "headline",
+      "matched_node": "Sitinjau Lauik",
+      "latitude": -0.9525,
+      "longitude": 100.5183,
+      "resolved_province": "Sumatera Barat",
+      "corridor_segment": "Sitinjau Lauik KM 22 (Padang - Solok)",
+      "location_precision": "corridor_point",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Sitinjau Lauik",
+        "Solok"
+      ],
+      "spatial_error_km": 0.34,
+      "heuristic": {
+        "event_type": "landslide",
+        "severity": "high",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Sitinjau Lauik KM 22 (Padang - Solok)",
+        "corridor_nodes": [
+          "Sitinjau Lauik",
+          "Padang",
+          "Solok"
+        ],
+        "location_precision": "corridor_point",
+        "confidence_score": 0.86,
+        "region": "Sumatera Barat"
+      },
+      "llm": {
+        "is_active_disaster": true,
+        "incident_type": "landslide",
+        "severity": "critical",
+        "passability": "BLOCKED",
+        "verified_sumatra_location": "Sitinjau Lauik, Padang-Solok, Sumatera Barat",
+        "reason": "Longsor besar di Sitinjau Lauik menutup total akses logistik utama Padang-Solok dan alat berat telah dikerahkan."
+      }
+    },
+    "SUM-SCN-010": {
+      "location_source": "headline",
+      "matched_node": "Lembah Anai",
+      "latitude": -0.481,
+      "longitude": 100.339,
+      "resolved_province": "Sumatera Barat",
+      "corridor_segment": "Lembah Anai (Padang - Bukittinggi)",
+      "location_precision": "corridor_point",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Lembah Anai",
+        "Marapi"
+      ],
+      "spatial_error_km": 1.73,
+      "heuristic": {
+        "event_type": "flood",
+        "severity": "critical",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Lembah Anai (Padang - Bukittinggi)",
+        "corridor_nodes": [
+          "Lembah Anai",
+          "Marapi"
+        ],
+        "location_precision": "corridor_point",
+        "confidence_score": 0.86,
+        "region": "Sumatera Barat"
+      },
+      "llm": {
+        "is_active_disaster": true,
+        "incident_type": "road_subsidence",
+        "severity": "critical",
+        "passability": "BLOCKED",
+        "verified_sumatra_location": "Lembah Anai, Sumatera Barat",
+        "reason": "Jalan Nasional Lembah Anai amblas tergerus banjir lahar dingin Marapi sehingga jalur Padang-Bukittinggi terputus."
+      }
+    },
+    "SUM-SCN-011": {
+      "location_source": "headline",
+      "matched_node": "Kelok Sembilan",
+      "latitude": -0.0714,
+      "longitude": 100.6989,
+      "resolved_province": "Sumatera Barat",
+      "corridor_segment": "Kelok 9 (Payakumbuh - Pekanbaru)",
+      "location_precision": "corridor_point",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Kelok Sembilan"
+      ],
+      "spatial_error_km": 7.85,
+      "heuristic": {
+        "event_type": "other_disruption",
+        "severity": "medium",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Kelok 9 (Payakumbuh - Pekanbaru)",
+        "corridor_nodes": [
+          "Kelok Sembilan",
+          "Lima Puluh Kota"
+        ],
+        "location_precision": "corridor_point",
+        "confidence_score": 0.86,
+        "region": "Sumatera Barat"
+      },
+      "llm": {
+        "is_active_disaster": false,
+        "incident_type": "normal",
+        "severity": "low",
+        "passability": "OPEN",
+        "verified_sumatra_location": "Flyover Kelok Sembilan, Lima Puluh Kota",
+        "reason": "Flyover Kelok Sembilan dilaporkan aman dilalui kendaraan logistik meski hujan mengguyur Lima Puluh Kota."
+      }
+    },
+    "SUM-SCN-012": {
+      "location_source": "headline",
+      "matched_node": "Pelabuhan Teluk Bayur",
+      "latitude": -0.9992,
+      "longitude": 100.3753,
+      "resolved_province": "Sumatera Barat",
+      "corridor_segment": "Pelabuhan Teluk Bayur",
+      "location_precision": "corridor_point",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Pelabuhan Teluk Bayur"
+      ],
+      "spatial_error_km": 0.33,
+      "heuristic": {
+        "event_type": "other_disruption",
+        "severity": "medium",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Pelabuhan Teluk Bayur",
+        "corridor_nodes": [
+          "Pelabuhan Teluk Bayur",
+          "Teluk Bayur"
+        ],
+        "location_precision": "corridor_point",
+        "confidence_score": 0.86,
+        "region": "Sumatera Barat"
+      },
+      "llm": {
+        "is_active_disaster": false,
+        "incident_type": "normal",
+        "severity": "low",
+        "passability": "OPEN",
+        "verified_sumatra_location": "Pelabuhan Teluk Bayur, Padang, Sumatera Barat",
+        "reason": "Aktivitas bongkar muat semen dan CPO di Pelabuhan Teluk Bayur berjalan optimal tanpa kendala cuaca."
+      }
+    },
+    "SUM-SCN-013": {
+      "location_source": "headline",
+      "matched_node": "Agam",
+      "latitude": -0.25,
+      "longitude": 100.1667,
+      "resolved_province": "Sumatera Barat",
+      "corridor_segment": "Jalur Kelok 44 Maninjau",
+      "location_precision": "kabupaten_kota",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Agam"
+      ],
+      "spatial_error_km": 6.8,
+      "heuristic": {
+        "event_type": "landslide",
+        "severity": "critical",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Jalur Kelok 44 Maninjau",
+        "corridor_nodes": [
+          "Agam"
+        ],
+        "location_precision": "kabupaten_kota",
+        "confidence_score": 0.86,
+        "region": "Sumatera Barat"
+      },
+      "llm": {
+        "is_active_disaster": true,
+        "incident_type": "landslide",
+        "severity": "high",
+        "passability": "BLOCKED",
+        "verified_sumatra_location": "Malalak, Kabupaten Agam, Sumatera Barat",
+        "reason": "Longsor sepanjang 50 meter menutup Jalur Alternatif Malalak dan memutus akses truk ringan."
+      }
+    },
+    "SUM-SCN-014": {
+      "location_source": "headline",
+      "matched_node": "Bukittinggi",
+      "latitude": -0.3056,
+      "longitude": 100.3692,
+      "resolved_province": "Sumatera Barat",
+      "corridor_segment": "Jalinteng Padang - Bukittinggi",
+      "location_precision": "kabupaten_kota",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Bukittinggi"
+      ],
+      "spatial_error_km": 0.07,
+      "heuristic": {
+        "event_type": "other_disruption",
+        "severity": "medium",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Jalinteng Padang - Bukittinggi",
+        "corridor_nodes": [
+          "Bukittinggi"
+        ],
+        "location_precision": "kabupaten_kota",
+        "confidence_score": 0.86,
+        "region": "Sumatera Barat"
+      },
+      "llm": {
+        "is_active_disaster": false,
+        "incident_type": "congestion",
+        "severity": "low",
+        "passability": "OPEN",
+        "verified_sumatra_location": "Bukittinggi",
+        "reason": "Kepadatan wisatawan terjadi di pusat Kota Bukittinggi, tetapi jalur logistik lingkar luar tidak terpengaruh."
+      }
+    },
+    "SUM-SCN-015": {
+      "location_source": "headline",
+      "matched_node": "Solok Selatan",
+      "latitude": -1.2,
+      "longitude": 101.1,
+      "resolved_province": "Sumatera Barat",
+      "corridor_segment": "Jalinteng Solok Selatan",
+      "location_precision": "kabupaten_kota",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Solok Selatan",
+        "Solok"
+      ],
+      "spatial_error_km": 8.09,
+      "heuristic": {
+        "event_type": "flood",
+        "severity": "medium",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Jalinteng Solok Selatan",
+        "corridor_nodes": [
+          "Solok Selatan",
+          "Solok",
+          "Jambi"
+        ],
+        "location_precision": "kabupaten_kota",
+        "confidence_score": 0.86,
+        "region": "Sumatera Barat"
+      },
+      "llm": {
+        "is_active_disaster": true,
+        "incident_type": "flood",
+        "severity": "high",
+        "passability": "RESTRICTED",
+        "verified_sumatra_location": "Muara Labuh - Sangir, Solok Selatan, Sumatera Barat",
+        "reason": "Banjir luapan Batang Hari merendam permukiman dan jalan penghubung Solok Selatan ke Jambi sehingga akses terganggu."
+      }
+    },
+    "SUM-SCN-016": {
+      "location_source": "headline",
+      "matched_node": "Pelalawan",
+      "latitude": 0.3333,
+      "longitude": 101.9,
+      "resolved_province": "Riau",
+      "corridor_segment": "Jalintim Pangkalan Kerinci",
+      "location_precision": "corridor_point",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Pelalawan"
+      ],
+      "spatial_error_km": 8.98,
+      "heuristic": {
+        "event_type": "flood",
+        "severity": "medium",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Jalintim Pangkalan Kerinci",
+        "corridor_nodes": [
+          "Pelalawan",
+          "Jalintim"
+        ],
+        "location_precision": "corridor_point",
+        "confidence_score": 0.86,
+        "region": "Riau"
+      },
+      "llm": {
+        "is_active_disaster": true,
+        "incident_type": "flood",
+        "severity": "high",
+        "passability": "BLOCKED",
+        "verified_sumatra_location": "Jalintim Pelalawan KM 83",
+        "reason": "Genangan air setinggi 1 meter di Jalintim Pelalawan KM 83 membuat ratusan truk muatan sawit dan beras terjebak selama dua hari."
+      }
+    },
+    "SUM-SCN-017": {
+      "location_source": "headline",
+      "matched_node": "Kampar",
+      "latitude": 0.3344,
+      "longitude": 101.0253,
+      "resolved_province": "Riau",
+      "corridor_segment": "Tol Pekanbaru - Bangkinang - Koto Kampar",
+      "location_precision": "kabupaten_kota",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Kampar"
+      ],
+      "spatial_error_km": 3.96,
+      "heuristic": {
+        "event_type": "other_disruption",
+        "severity": "medium",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Tol Pekanbaru - Bangkinang - Koto Kampar",
+        "corridor_nodes": [
+          "Kampar"
+        ],
+        "location_precision": "kabupaten_kota",
+        "confidence_score": 0.86,
+        "region": "Riau"
+      },
+      "llm": {
+        "is_active_disaster": true,
+        "incident_type": "flood",
+        "severity": "medium",
+        "passability": "RESTRICTED",
+        "verified_sumatra_location": "Rantau Berangin, Kampar, Riau",
+        "reason": "Pembukaan pintu pelimpah PLTA Koto Panjang menyebabkan jalan lintas Riau di Rantau Berangin tergenang dan menghambat lalu lintas."
+      }
+    },
+    "SUM-SCN-018": {
+      "location_source": "headline",
+      "matched_node": "Dumai",
+      "latitude": 1.6784,
+      "longitude": 101.4503,
+      "resolved_province": "Riau",
+      "corridor_segment": "Pelabuhan Ekspor CPO Dumai",
+      "location_precision": "corridor_point",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Dumai"
+      ],
+      "spatial_error_km": 0.92,
+      "heuristic": {
+        "event_type": "other_disruption",
+        "severity": "high",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Pelabuhan Ekspor CPO Dumai",
+        "corridor_nodes": [
+          "Dumai"
+        ],
+        "location_precision": "corridor_point",
+        "confidence_score": 0.86,
+        "region": "Riau"
+      },
+      "llm": {
+        "is_active_disaster": true,
+        "incident_type": "congestion",
+        "severity": "high",
+        "passability": "RESTRICTED",
+        "verified_sumatra_location": "Pelabuhan Ro-Ro Dumai, Riau",
+        "reason": "Kerusakan dermaga apung menyebabkan antrean panjang truk ekspedisi dan menghambat arus logistik di Pelabuhan Ro-Ro Dumai."
+      }
+    },
+    "SUM-SCN-019": {
+      "location_source": "headline",
+      "matched_node": "Dumai",
+      "latitude": 1.6784,
+      "longitude": 101.4503,
+      "resolved_province": "Riau",
+      "corridor_segment": "Pelabuhan Ekspor CPO Dumai",
+      "location_precision": "corridor_point",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Dumai",
+        "Pekanbaru"
+      ],
+      "spatial_error_km": 62.9,
+      "heuristic": {
+        "event_type": "other_disruption",
+        "severity": "low",
+        "temporal_phase": "forecast_early_warning",
+        "lead_time_hours": 4.0,
+        "corridor_segment": "Pelabuhan Ekspor CPO Dumai",
+        "corridor_nodes": [
+          "Dumai",
+          "Pekanbaru"
+        ],
+        "location_precision": "corridor_point",
+        "confidence_score": 0.86,
+        "region": "Riau"
+      },
+      "llm": {
+        "is_active_disaster": false,
+        "incident_type": "normal",
+        "severity": "low",
+        "passability": "CAUTION",
+        "verified_sumatra_location": "Tol Pekanbaru-Dumai, Riau",
+        "reason": "Pengelola tol mengimbau pengemudi waspada aquaplaning saat hujan lebat, namun arus lalu lintas tol dilaporkan normal."
+      }
+    },
+    "SUM-SCN-020": {
+      "location_source": "headline",
+      "matched_node": "Pekanbaru",
+      "latitude": 0.5071,
+      "longitude": 101.4478,
+      "resolved_province": "Riau",
+      "corridor_segment": "Tol Pekanbaru - Dumai",
+      "location_precision": "corridor_point",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Pekanbaru",
+        "Siak"
+      ],
+      "spatial_error_km": 7.29,
+      "heuristic": {
+        "event_type": "landslide",
+        "severity": "medium",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Tol Pekanbaru - Dumai",
+        "corridor_nodes": [
+          "Pekanbaru",
+          "Siak"
+        ],
+        "location_precision": "corridor_point",
+        "confidence_score": 0.86,
+        "region": "Riau"
+      },
+      "llm": {
+        "is_active_disaster": true,
+        "incident_type": "road_subsidence",
+        "severity": "medium",
+        "passability": "RESTRICTED",
+        "verified_sumatra_location": "Jembatan Siak II, Pekanbaru, Riau",
+        "reason": "Oprit Jembatan Siak II di Pekanbaru ambles sehingga truk tronton dialihkan ke Ring Road dan akses jalan dibatasi."
+      }
+    },
+    "SUM-SCN-021": {
+      "location_source": "headline",
+      "matched_node": "Rokan Hulu",
+      "latitude": 0.9,
+      "longitude": 100.5333,
+      "resolved_province": "Riau",
+      "corridor_segment": "Jalur Pasir Pengaraian",
+      "location_precision": "kabupaten_kota",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Rokan Hulu"
+      ],
+      "spatial_error_km": 23.82,
+      "heuristic": {
+        "event_type": "other_disruption",
+        "severity": "medium",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Jalur Pasir Pengaraian",
+        "corridor_nodes": [
+          "Rokan Hulu"
+        ],
+        "location_precision": "kabupaten_kota",
+        "confidence_score": 0.86,
+        "region": "Riau"
+      },
+      "llm": {
+        "is_active_disaster": false,
+        "incident_type": "hoax",
+        "severity": "low",
+        "passability": "OPEN",
+        "verified_sumatra_location": "Rokan Hulu, Riau",
+        "reason": "Polres Rokan Hulu memastikan video tumpahan minyak sawit di jalan raya adalah video lawas tahun 2021, bukan insiden aktif."
+      }
+    },
+    "SUM-SCN-022": {
+      "location_source": "headline",
+      "matched_node": "Tembilahan",
+      "latitude": -0.3333,
+      "longitude": 103.15,
+      "resolved_province": "Riau",
+      "corridor_segment": "Pelabuhan Kuala Enok",
+      "location_precision": "corridor_point",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Tembilahan"
+      ],
+      "spatial_error_km": 1.39,
+      "heuristic": {
+        "event_type": "other_disruption",
+        "severity": "low",
+        "temporal_phase": "clearing_recovery",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Pelabuhan Kuala Enok",
+        "corridor_nodes": [
+          "Tembilahan"
+        ],
+        "location_precision": "corridor_point",
+        "confidence_score": 0.86,
+        "region": "Riau"
+      },
+      "llm": {
+        "is_active_disaster": false,
+        "incident_type": "flood",
+        "severity": "low",
+        "passability": "OPEN",
+        "verified_sumatra_location": "Tembilahan, Riau",
+        "reason": "Pasang Keling di Tembilahan cepat surut dan distribusi kelapa serta sembako berjalan lancar terkendali."
+      }
+    },
+    "SUM-SCN-023": {
+      "location_source": "headline",
+      "matched_node": "Muaro Jambi",
+      "latitude": -1.55,
+      "longitude": 103.8,
+      "resolved_province": "Jambi",
+      "corridor_segment": "Kawasan Pelabuhan Talang Duku",
+      "location_precision": "kabupaten_kota",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Muaro Jambi",
+        "Batanghari"
+      ],
+      "spatial_error_km": 11.34,
+      "heuristic": {
+        "event_type": "other_disruption",
+        "severity": "medium",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Kawasan Pelabuhan Talang Duku",
+        "corridor_nodes": [
+          "Muaro Jambi",
+          "Batanghari",
+          "Jambi",
+          "Jalan Lintas Timur",
+          "Lintas Timur"
+        ],
+        "location_precision": "kabupaten_kota",
+        "confidence_score": 0.86,
+        "region": "Jambi"
+      },
+      "llm": {
+        "is_active_disaster": true,
+        "incident_type": "flood",
+        "severity": "high",
+        "passability": "RESTRICTED",
+        "verified_sumatra_location": "Jalan Lintas Timur Sumatera, Muaro Jambi, Jambi",
+        "reason": "Luapan Sungai Batanghari merendam Jalan Lintas Timur Sumatera di Muaro Jambi sehingga truk sembako menumpuk."
+      }
+    },
+    "SUM-SCN-024": {
+      "location_source": "headline",
+      "matched_node": "Sungai Penuh",
+      "latitude": -2.0667,
+      "longitude": 101.4,
+      "resolved_province": "Jambi",
+      "corridor_segment": "Jalur Sungai Penuh - Kerinci",
+      "location_precision": "kabupaten_kota",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Sungai Penuh"
+      ],
+      "spatial_error_km": 8.45,
+      "heuristic": {
+        "event_type": "landslide",
+        "severity": "high",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Jalur Sungai Penuh - Kerinci",
+        "corridor_nodes": [
+          "Sungai Penuh",
+          "Kerinci"
+        ],
+        "location_precision": "kabupaten_kota",
+        "confidence_score": 0.86,
+        "region": "Jambi"
+      },
+      "llm": {
+        "is_active_disaster": true,
+        "incident_type": "landslide",
+        "severity": "high",
+        "passability": "BLOCKED",
+        "verified_sumatra_location": "Jalur Puncak Sungai Penuh, Jambi",
+        "reason": "Longsor menerjang Jalur Puncak Sungai Penuh sehingga pasokan sayur dari Kerinci terhenti."
+      }
+    },
+    "SUM-SCN-025": {
+      "location_source": "headline",
+      "matched_node": "Jambi",
+      "latitude": -1.6101,
+      "longitude": 103.6131,
+      "resolved_province": "Jambi",
+      "corridor_segment": "Jalur Arteri Logistik Sumatera",
+      "location_precision": "province_only",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Jambi"
+      ],
+      "spatial_error_km": 3.55,
+      "heuristic": {
+        "event_type": "other_disruption",
+        "severity": "medium",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Jalur Arteri Logistik Sumatera",
+        "corridor_nodes": [
+          "Jambi"
+        ],
+        "location_precision": "province_only",
+        "confidence_score": 0.86,
+        "region": "Jambi"
+      },
+      "llm": {
+        "is_active_disaster": false,
+        "incident_type": "normal",
+        "severity": "low",
+        "passability": "OPEN",
+        "verified_sumatra_location": "Simpang Rimbo, Kota Jambi",
+        "reason": "Pengaturan jam operasional truk tambang di Simpang Rimbo Kota Jambi berjalan tertib dan tidak menunjukkan gangguan logistik atau bencana."
+      }
+    },
+    "SUM-SCN-026": {
+      "location_source": "headline",
+      "matched_node": "Bangko",
+      "latitude": -2.1167,
+      "longitude": 102.2667,
+      "resolved_province": "Jambi",
+      "corridor_segment": "Jalinteng Bangko",
+      "location_precision": "corridor_point",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Bangko",
+        "Kerinci"
+      ],
+      "spatial_error_km": 4.09,
+      "heuristic": {
+        "event_type": "landslide",
+        "severity": "high",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Jalinteng Bangko",
+        "corridor_nodes": [
+          "Bangko",
+          "Merangin",
+          "Kerinci"
+        ],
+        "location_precision": "corridor_point",
+        "confidence_score": 0.86,
+        "region": "Jambi"
+      },
+      "llm": {
+        "is_active_disaster": true,
+        "incident_type": "landslide",
+        "severity": "high",
+        "passability": "RESTRICTED",
+        "verified_sumatra_location": "Merangin, Jambi",
+        "reason": "Tebing longsor menimpa jalan nasional penghubung Bangko ke Kerinci sehingga akses diberlakukan buka tutup."
+      }
+    },
+    "SUM-SCN-027": {
+      "location_source": "headline",
+      "matched_node": "Talang Duku",
+      "latitude": -1.52,
+      "longitude": 103.78,
+      "resolved_province": "Jambi",
+      "corridor_segment": "Pelabuhan Sungai Talang Duku Jambi",
+      "location_precision": "corridor_point",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Talang Duku",
+        "Batanghari"
+      ],
+      "spatial_error_km": 10.95,
+      "heuristic": {
+        "event_type": "flood",
+        "severity": "low",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Pelabuhan Sungai Talang Duku Jambi",
+        "corridor_nodes": [
+          "Talang Duku",
+          "Batanghari"
+        ],
+        "location_precision": "corridor_point",
+        "confidence_score": 0.86,
+        "region": "Jambi"
+      },
+      "llm": {
+        "is_active_disaster": false,
+        "incident_type": "normal",
+        "severity": "low",
+        "passability": "OPEN",
+        "verified_sumatra_location": "Dermaga Talang Duku, Batanghari, Jambi",
+        "reason": "Debit air Sungai Batanghari normal dan tongkang di Dermaga Talang Duku beroperasi sesuai jadwal."
+      }
+    },
+    "SUM-SCN-028": {
+      "location_source": "headline",
+      "matched_node": "Kuala Tungkal",
+      "latitude": -0.8167,
+      "longitude": 103.4667,
+      "resolved_province": "Jambi",
+      "corridor_segment": "Pelabuhan Roro Kuala Tungkal",
+      "location_precision": "corridor_point",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Kuala Tungkal"
+      ],
+      "spatial_error_km": 0.66,
+      "heuristic": {
+        "event_type": "flood",
+        "severity": "medium",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Pelabuhan Roro Kuala Tungkal",
+        "corridor_nodes": [
+          "Kuala Tungkal"
+        ],
+        "location_precision": "corridor_point",
+        "confidence_score": 0.86,
+        "region": "Jambi"
+      },
+      "llm": {
+        "is_active_disaster": true,
+        "incident_type": "flood",
+        "severity": "medium",
+        "passability": "RESTRICTED",
+        "verified_sumatra_location": "Jalan Utama Menuju Pelabuhan Roro Kuala Tungkal, Kuala Tungkal, Jambi",
+        "reason": "Banjir rob menggenangi jalan utama menuju Pelabuhan Roro Kuala Tungkal sehingga akses logistik terganggu."
+      }
+    },
+    "SUM-SCN-029": {
+      "location_source": "headline",
+      "matched_node": "Sarolangun",
+      "latitude": -2.3,
+      "longitude": 102.65,
+      "resolved_province": "Jambi",
+      "corridor_segment": "Jalinteng Sarolangun",
+      "location_precision": "corridor_point",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Sarolangun"
+      ],
+      "spatial_error_km": 1.41,
+      "heuristic": {
+        "event_type": "other_disruption",
+        "severity": "high",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Jalinteng Sarolangun",
+        "corridor_nodes": [
+          "Sarolangun"
+        ],
+        "location_precision": "corridor_point",
+        "confidence_score": 0.86,
+        "region": "Jambi"
+      },
+      "llm": {
+        "is_active_disaster": false,
+        "incident_type": "hoax",
+        "severity": "low",
+        "passability": "OPEN",
+        "verified_sumatra_location": "Jembatan Beatrix, Sarolangun, Jambi",
+        "reason": "Dinas PUPR Sarolangun membantah kabar viral keretakan parah Jembatan Beatrix dan menyatakan kondisi struktur kokoh."
+      }
+    },
+    "SUM-SCN-030": {
+      "location_source": "headline",
+      "matched_node": "Banyuasin",
+      "latitude": -2.8833,
+      "longitude": 104.3833,
+      "resolved_province": "Sumatera Selatan",
+      "corridor_segment": "Pelabuhan Tanjung Carat / Jalintim",
+      "location_precision": "kabupaten_kota",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Banyuasin"
+      ],
+      "spatial_error_km": 6.47,
+      "heuristic": {
+        "event_type": "flood",
+        "severity": "medium",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Pelabuhan Tanjung Carat / Jalintim",
+        "corridor_nodes": [
+          "Banyuasin",
+          "Jalintim"
+        ],
+        "location_precision": "corridor_point",
+        "confidence_score": 0.86,
+        "region": "Sumatera Selatan"
+      },
+      "llm": {
+        "is_active_disaster": true,
+        "incident_type": "flood",
+        "severity": "high",
+        "passability": "RESTRICTED",
+        "verified_sumatra_location": "Jalintim Betung, Banyuasin (KM 68)",
+        "reason": "Luapan Sungai Musi menggenangi Jalintim Betung Banyuasin sehingga truk sembako mengalami kemacetan 10 km."
+      }
+    },
+    "SUM-SCN-031": {
+      "location_source": "headline",
+      "matched_node": "Muba",
+      "latitude": -2.9,
+      "longitude": 103.8,
+      "resolved_province": "Sumatera Selatan",
+      "corridor_segment": "Jalur Sekayu Muba",
+      "location_precision": "corridor_point",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Muba"
+      ],
+      "spatial_error_km": 5.12,
+      "heuristic": {
+        "event_type": "landslide",
+        "severity": "medium",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Jalur Sekayu Muba",
+        "corridor_nodes": [
+          "Muba"
+        ],
+        "location_precision": "corridor_point",
+        "confidence_score": 0.86,
+        "region": "Sumatera Selatan"
+      },
+      "llm": {
+        "is_active_disaster": true,
+        "incident_type": "road_subsidence",
+        "severity": "high",
+        "passability": "BLOCKED",
+        "verified_sumatra_location": "Muba, Sumatera Selatan",
+        "reason": "Jembatan penghubung kecamatan di Muba amblas setelah ditabrak tongkang sehingga distribusi sawit terhambat."
+      }
+    },
+    "SUM-SCN-032": {
+      "location_source": "headline",
+      "matched_node": "Palembang",
+      "latitude": -2.9761,
+      "longitude": 104.7754,
+      "resolved_province": "Sumatera Selatan",
+      "corridor_segment": "Jalintim Palembang / Tol Kayuagung",
+      "location_precision": "corridor_point",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Palembang"
+      ],
+      "spatial_error_km": 2.09,
+      "heuristic": {
+        "event_type": "other_disruption",
+        "severity": "medium",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Jalintim Palembang / Tol Kayuagung",
+        "corridor_nodes": [
+          "Palembang"
+        ],
+        "location_precision": "corridor_point",
+        "confidence_score": 0.86,
+        "region": "Sumatera Selatan"
+      },
+      "llm": {
+        "is_active_disaster": false,
+        "incident_type": "congestion",
+        "severity": "medium",
+        "passability": "RESTRICTED",
+        "verified_sumatra_location": "Jembatan Ampera, Palembang",
+        "reason": "Arus kendaraan di Jembatan Ampera Palembang terpantau padat merayap akibat kepadatan lalu lintas."
+      }
+    },
+    "SUM-SCN-033": {
+      "location_source": "headline",
+      "matched_node": "Lahat",
+      "latitude": -3.7833,
+      "longitude": 103.5333,
+      "resolved_province": "Sumatera Selatan",
+      "corridor_segment": "Jalinteng Lahat",
+      "location_precision": "kabupaten_kota",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Lahat"
+      ],
+      "spatial_error_km": 0.86,
+      "heuristic": {
+        "event_type": "landslide",
+        "severity": "high",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Jalinteng Lahat",
+        "corridor_nodes": [
+          "Lahat",
+          "Lintas Tengah"
+        ],
+        "location_precision": "kabupaten_kota",
+        "confidence_score": 0.86,
+        "region": "Sumatera Selatan"
+      },
+      "llm": {
+        "is_active_disaster": true,
+        "incident_type": "landslide",
+        "severity": "high",
+        "passability": "BLOCKED",
+        "verified_sumatra_location": "Bukit Serelo, Jalur Lintas Tengah Lahat, Sumatera Selatan",
+        "reason": "Longsor batuan tebing Bukit Serelo menimpa Jalur Lintas Tengah Lahat sehingga antrean kendaraan logistik mengular."
+      }
+    },
+    "SUM-SCN-034": {
+      "location_source": "headline",
+      "matched_node": "Palembang",
+      "latitude": -2.9761,
+      "longitude": 104.7754,
+      "resolved_province": "Sumatera Selatan",
+      "corridor_segment": "Jalintim Palembang / Tol Kayuagung",
+      "location_precision": "kabupaten_kota",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Palembang"
+      ],
+      "spatial_error_km": 5.62,
+      "heuristic": {
+        "event_type": "flood",
+        "severity": "medium",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Jalintim Palembang / Tol Kayuagung",
+        "corridor_nodes": [
+          "Palembang"
+        ],
+        "location_precision": "kabupaten_kota",
+        "confidence_score": 0.86,
+        "region": "Sumatera Selatan"
+      },
+      "llm": {
+        "is_active_disaster": true,
+        "incident_type": "flood",
+        "severity": "medium",
+        "passability": "RESTRICTED",
+        "verified_sumatra_location": "Akses Jalan Arteri Palembang",
+        "reason": "Banjir akibat hujan deras menggenangi akses jalan arteri Palembang sehingga menimbulkan antrean kendaraan."
+      }
+    },
+    "SUM-SCN-035": {
+      "location_source": "headline",
+      "matched_node": "Pelabuhan Tanjung Api-Api",
+      "latitude": -2.3667,
+      "longitude": 104.7667,
+      "resolved_province": "Sumatera Selatan",
+      "corridor_segment": "Pelabuhan Tanjung Api-Api",
+      "location_precision": "corridor_point",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Pelabuhan Tanjung Api-Api"
+      ],
+      "spatial_error_km": 6.11,
+      "heuristic": {
+        "event_type": "other_disruption",
+        "severity": "medium",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Pelabuhan Tanjung Api-Api",
+        "corridor_nodes": [
+          "Pelabuhan Tanjung Api-Api",
+          "Tanjung Api-Api"
+        ],
+        "location_precision": "corridor_point",
+        "confidence_score": 0.86,
+        "region": "Sumatera Selatan"
+      },
+      "llm": {
+        "is_active_disaster": false,
+        "incident_type": "congestion",
+        "severity": "medium",
+        "passability": "RESTRICTED",
+        "verified_sumatra_location": "Pelabuhan Tanjung Api-Api, Banyuasin, Sumatera Selatan",
+        "reason": "Aksi mogok sopir angkutan logistik di Pelabuhan Tanjung Api-Api menghambat pasokan beras."
+      }
+    },
+    "SUM-SCN-036": {
+      "location_source": "headline",
+      "matched_node": "Prabumulih",
+      "latitude": -3.43,
+      "longitude": 104.23,
+      "resolved_province": "Sumatera Selatan",
+      "corridor_segment": "Tol Indralaya - Prabumulih",
+      "location_precision": "kabupaten_kota",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Prabumulih",
+        "Muara Enim"
+      ],
+      "spatial_error_km": 36.45,
+      "heuristic": {
+        "event_type": "other_disruption",
+        "severity": "medium",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Tol Indralaya - Prabumulih",
+        "corridor_nodes": [
+          "Prabumulih",
+          "Muara Enim"
+        ],
+        "location_precision": "kabupaten_kota",
+        "confidence_score": 0.86,
+        "region": "Sumatera Selatan"
+      },
+      "llm": {
+        "is_active_disaster": false,
+        "incident_type": "normal",
+        "severity": "low",
+        "passability": "OPEN",
+        "verified_sumatra_location": "Prabumulih - Muara Enim, Sumatera Selatan",
+        "reason": "Jalur distribusi sembako dari Prabumulih ke Muara Enim terpantau lancar meski cuaca berawan tebal."
+      }
+    },
+    "SUM-SCN-037": {
+      "location_source": "headline",
+      "matched_node": "Lubuklinggau",
+      "latitude": -3.2958,
+      "longitude": 102.8617,
+      "resolved_province": "Sumatera Selatan",
+      "corridor_segment": "Jalinteng Musi Rawas - Bengkulu",
+      "location_precision": "kabupaten_kota",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Lubuklinggau"
+      ],
+      "spatial_error_km": 0.47,
+      "heuristic": {
+        "event_type": "landslide",
+        "severity": "high",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Jalinteng Musi Rawas - Bengkulu",
+        "corridor_nodes": [
+          "Lubuklinggau",
+          "Lintas Tengah"
+        ],
+        "location_precision": "kabupaten_kota",
+        "confidence_score": 0.86,
+        "region": "Sumatera Selatan"
+      },
+      "llm": {
+        "is_active_disaster": true,
+        "incident_type": "landslide",
+        "severity": "high",
+        "passability": "BLOCKED",
+        "verified_sumatra_location": "Jalur Lintas Tengah Lubuklinggau, Sumatera Selatan",
+        "reason": "Longsor di Jalur Lintas Tengah Lubuklinggau menutup akses distribusi sayuran dari dataran tinggi."
+      }
+    },
+    "SUM-SCN-038": {
+      "location_source": "headline",
+      "matched_node": "Bakauheni",
+      "latitude": -5.8697,
+      "longitude": 105.7533,
+      "resolved_province": "Lampung",
+      "corridor_segment": "Pelabuhan Penyeberangan Bakauheni - Merak",
+      "location_precision": "corridor_point",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Bakauheni"
+      ],
+      "spatial_error_km": 0.16,
+      "heuristic": {
+        "event_type": "other_disruption",
+        "severity": "medium",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Pelabuhan Penyeberangan Bakauheni - Merak",
+        "corridor_nodes": [
+          "Bakauheni",
+          "Selat Sunda"
+        ],
+        "location_precision": "corridor_point",
+        "confidence_score": 0.86,
+        "region": "Lampung"
+      },
+      "llm": {
+        "is_active_disaster": true,
+        "incident_type": "congestion",
+        "severity": "medium",
+        "passability": "RESTRICTED",
+        "verified_sumatra_location": "Pelabuhan Bakauheni, Lampung",
+        "reason": "Cuaca buruk di Selat Sunda menunda jadwal kapal ferry dan menyebabkan antrean truk logistik hingga jalan tol."
+      }
+    },
+    "SUM-SCN-039": {
+      "location_source": "headline",
+      "matched_node": "Menggala",
+      "latitude": -4.5,
+      "longitude": 105.3333,
+      "resolved_province": "Lampung",
+      "corridor_segment": "Jalintim Menggala",
+      "location_precision": "corridor_point",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Menggala"
+      ],
+      "spatial_error_km": 3.86,
+      "heuristic": {
+        "event_type": "flood",
+        "severity": "medium",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Jalintim Menggala",
+        "corridor_nodes": [
+          "Menggala",
+          "Tulang Bawang",
+          "Jalan Lintas Timur",
+          "Lintas Timur"
+        ],
+        "location_precision": "corridor_point",
+        "confidence_score": 0.86,
+        "region": "Lampung"
+      },
+      "llm": {
+        "is_active_disaster": true,
+        "incident_type": "flood",
+        "severity": "high",
+        "passability": "RESTRICTED",
+        "verified_sumatra_location": "Jalan Lintas Timur Menggala, Tulang Bawang, Lampung",
+        "reason": "Banjir luapan Sungai Tulang Bawang merendam Jalan Lintas Timur Menggala sehingga truk tronton dialihkan rute."
+      }
+    },
+    "SUM-SCN-040": {
+      "location_source": "headline",
+      "matched_node": "Pelabuhan Panjang",
+      "latitude": -5.4744,
+      "longitude": 105.3183,
+      "resolved_province": "Lampung",
+      "corridor_segment": "Pelabuhan Samudera Panjang",
+      "location_precision": "corridor_point",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Pelabuhan Panjang"
+      ],
+      "spatial_error_km": 1.52,
+      "heuristic": {
+        "event_type": "other_disruption",
+        "severity": "medium",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Pelabuhan Samudera Panjang",
+        "corridor_nodes": [
+          "Pelabuhan Panjang"
+        ],
+        "location_precision": "corridor_point",
+        "confidence_score": 0.86,
+        "region": "Lampung"
+      },
+      "llm": {
+        "is_active_disaster": false,
+        "incident_type": "normal",
+        "severity": "low",
+        "passability": "OPEN",
+        "verified_sumatra_location": "Pelabuhan Panjang, Bandar Lampung",
+        "reason": "Arus logistik peti kemas di Pelabuhan Panjang berjalan lancar sesuai prosedur standar tanpa indikasi gangguan."
+      }
+    },
+    "SUM-SCN-041": {
+      "location_source": "headline+name",
+      "matched_node": "Pringsewu",
+      "latitude": -5.35,
+      "longitude": 104.9667,
+      "resolved_province": "Lampung",
+      "corridor_segment": "Jalinbar Pringsewu",
+      "location_precision": "corridor_point",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Pringsewu"
+      ],
+      "spatial_error_km": 1.64,
+      "heuristic": {
+        "event_type": "other_disruption",
+        "severity": "high",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "unknown",
+        "corridor_nodes": [],
+        "location_precision": "none",
+        "confidence_score": 0.86,
+        "region": "Lampung"
+      },
+      "llm": {
+        "is_active_disaster": true,
+        "incident_type": "road_subsidence",
+        "severity": "high",
+        "passability": "RESTRICTED",
+        "verified_sumatra_location": "Jembatan Way Sekampung, Lampung",
+        "reason": "Pilar Jembatan Way Sekampung tergerus arus deras sehingga diberlakukan pembatasan tonase ketat bagi angkutan berat."
+      }
+    },
+    "SUM-SCN-042": {
+      "location_source": "headline",
+      "matched_node": "Bandar Lampung",
+      "latitude": -5.4297,
+      "longitude": 105.2625,
+      "resolved_province": "Lampung",
+      "corridor_segment": "Akses Pelabuhan Panjang / JTTS",
+      "location_precision": "kabupaten_kota",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Bandar Lampung"
+      ],
+      "spatial_error_km": 6.56,
+      "heuristic": {
+        "event_type": "flood",
+        "severity": "medium",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Akses Pelabuhan Panjang / JTTS",
+        "corridor_nodes": [
+          "Bandar Lampung"
+        ],
+        "location_precision": "kabupaten_kota",
+        "confidence_score": 0.86,
+        "region": "Lampung"
+      },
+      "llm": {
+        "is_active_disaster": true,
+        "incident_type": "flood",
+        "severity": "medium",
+        "passability": "RESTRICTED",
+        "verified_sumatra_location": "Jalan Soekarno-Hatta (Bypass) Bandar Lampung",
+        "reason": "Banjir akibat hujan ekstrem merendam sejumlah ruas jalan di Bandar Lampung sehingga akses lalu lintas terganggu."
+      }
+    },
+    "SUM-SCN-043": {
+      "location_source": "headline",
+      "matched_node": "Mesuji",
+      "latitude": -4.05,
+      "longitude": 105.4,
+      "resolved_province": "Lampung",
+      "corridor_segment": "Jalintim Mesuji (Perbatasan Lampung - Sumsel)",
+      "location_precision": "kabupaten_kota",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Mesuji"
+      ],
+      "spatial_error_km": 4.43,
+      "heuristic": {
+        "event_type": "other_disruption",
+        "severity": "medium",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Jalintim Mesuji (Perbatasan Lampung - Sumsel)",
+        "corridor_nodes": [
+          "Mesuji"
+        ],
+        "location_precision": "kabupaten_kota",
+        "confidence_score": 0.86,
+        "region": "Lampung"
+      },
+      "llm": {
+        "is_active_disaster": false,
+        "incident_type": "congestion",
+        "severity": "low",
+        "passability": "CAUTION",
+        "verified_sumatra_location": "Gerbang Perbatasan Lampung-Sumsel Mesuji",
+        "reason": "Terjadi peningkatan volume kendaraan logistik di Gerbang Perbatasan Lampung-Sumsel Mesuji yang berpotensi menimbulkan kepadatan."
+      }
+    },
+    "SUM-SCN-044": {
+      "location_source": "headline",
+      "matched_node": "Tanggamus",
+      "latitude": -5.5167,
+      "longitude": 104.6167,
+      "resolved_province": "Lampung",
+      "corridor_segment": "Jalinbar Tanggamus",
+      "location_precision": "kabupaten_kota",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Tanggamus"
+      ],
+      "spatial_error_km": 0.96,
+      "heuristic": {
+        "event_type": "other_disruption",
+        "severity": "medium",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Jalinbar Tanggamus",
+        "corridor_nodes": [
+          "Tanggamus"
+        ],
+        "location_precision": "kabupaten_kota",
+        "confidence_score": 0.86,
+        "region": "Lampung"
+      },
+      "llm": {
+        "is_active_disaster": true,
+        "incident_type": "marine_wave",
+        "severity": "medium",
+        "passability": "RESTRICTED",
+        "verified_sumatra_location": "Pantai Barat Tanggamus, Lampung",
+        "reason": "Gelombang pasang merendam jalan pantai barat Tanggamus sehingga angkutan komoditas pisang mengalami keterlambatan."
+      }
+    },
+    "SUM-SCN-045": {
+      "location_source": "headline",
+      "matched_node": "Kalianda",
+      "latitude": -5.5833,
+      "longitude": 105.6,
+      "resolved_province": "Lampung",
+      "corridor_segment": "Koridor JTTS Kalianda",
+      "location_precision": "corridor_point",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Kalianda"
+      ],
+      "spatial_error_km": 14.45,
+      "heuristic": {
+        "event_type": "road_closure",
+        "severity": "high",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Koridor JTTS Kalianda",
+        "corridor_nodes": [
+          "Kalianda",
+          "Tol Trans Sumatera",
+          "Trans Sumatera"
+        ],
+        "location_precision": "corridor_point",
+        "confidence_score": 0.86,
+        "region": "Lampung"
+      },
+      "llm": {
+        "is_active_disaster": false,
+        "incident_type": "hoax",
+        "severity": "low",
+        "passability": "OPEN",
+        "verified_sumatra_location": "Kalianda, Lampung",
+        "reason": "Kabar blokade Jalan Tol Trans Sumatera di Kalianda dipastikan hoaks dan situasi dilaporkan kondusif."
+      }
+    },
+    "SUM-SCN-046": {
+      "location_source": "headline",
+      "matched_node": "Gayo Lues",
+      "latitude": 3.9833,
+      "longitude": 97.3333,
+      "resolved_province": "Aceh",
+      "corridor_segment": "Koridor Tengah Gayo Lues",
+      "location_precision": "kabupaten_kota",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Gayo Lues"
+      ],
+      "spatial_error_km": 4.3,
+      "heuristic": {
+        "event_type": "landslide",
+        "severity": "critical",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Koridor Tengah Gayo Lues",
+        "corridor_nodes": [
+          "Gayo Lues"
+        ],
+        "location_precision": "kabupaten_kota",
+        "confidence_score": 0.86,
+        "region": "Aceh"
+      },
+      "llm": {
+        "is_active_disaster": true,
+        "incident_type": "landslide",
+        "severity": "high",
+        "passability": "BLOCKED",
+        "verified_sumatra_location": "KM 45 Takengon–Blangkejeren, Gayo Lues, Aceh",
+        "reason": "Timbunan tanah longsor menutup total badan jalan lintas Dataran Tinggi Gayo Lues sehingga pasokan logistik terputus."
+      }
+    },
+    "SUM-SCN-047": {
+      "location_source": "headline",
+      "matched_node": "Aceh Tamiang",
+      "latitude": 4.25,
+      "longitude": 98.05,
+      "resolved_province": "Aceh",
+      "corridor_segment": "Gerbang Perbatasan Aceh - Sumut",
+      "location_precision": "kabupaten_kota",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Aceh Tamiang",
+        "Banda Aceh"
+      ],
+      "spatial_error_km": 3.48,
+      "heuristic": {
+        "event_type": "flood",
+        "severity": "medium",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Gerbang Perbatasan Aceh - Sumut",
+        "corridor_nodes": [
+          "Aceh Tamiang",
+          "Banda Aceh",
+          "Medan"
+        ],
+        "location_precision": "kabupaten_kota",
+        "confidence_score": 0.86,
+        "region": "Aceh"
+      },
+      "llm": {
+        "is_active_disaster": true,
+        "incident_type": "flood",
+        "severity": "high",
+        "passability": "BLOCKED",
+        "verified_sumatra_location": "Kuala Simpang, Aceh Tamiang",
+        "reason": "Banjir merendam jalur arteri Kuala Simpang, Aceh Tamiang, sehingga pasokan pangan dari Medan menuju Banda Aceh tertahan."
+      }
+    },
+    "SUM-SCN-048": {
+      "location_source": "headline",
+      "matched_node": "Nagan Raya",
+      "latitude": 4.1667,
+      "longitude": 96.3833,
+      "resolved_province": "Aceh",
+      "corridor_segment": "Jalinsum Barat Aceh (Meulaboh - Nagan Raya)",
+      "location_precision": "kecamatan_kelurahan",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Nagan Raya"
+      ],
+      "spatial_error_km": 22.45,
+      "heuristic": {
+        "event_type": "landslide",
+        "severity": "high",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Jalinsum Barat Aceh (Meulaboh - Nagan Raya)",
+        "corridor_nodes": [
+          "Nagan Raya"
+        ],
+        "location_precision": "kecamatan_kelurahan",
+        "confidence_score": 0.86,
+        "region": "Aceh"
+      },
+      "llm": {
+        "is_active_disaster": true,
+        "incident_type": "road_subsidence",
+        "severity": "high",
+        "passability": "RESTRICTED",
+        "verified_sumatra_location": "Nagan Raya, Aceh",
+        "reason": "Gorong-gorong jalan nasional di Nagan Raya amblas sehingga truk berat dialihkan ke jalur desa."
+      }
+    },
+    "SUM-SCN-049": {
+      "location_source": "headline",
+      "matched_node": "Banda Aceh",
+      "latitude": 5.5483,
+      "longitude": 95.3238,
+      "resolved_province": "Aceh",
+      "corridor_segment": "Tol Sigli - Banda Aceh (Sibanceh)",
+      "location_precision": "kabupaten_kota",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Banda Aceh",
+        "Sabang"
+      ],
+      "spatial_error_km": 4.45,
+      "heuristic": {
+        "event_type": "other_disruption",
+        "severity": "medium",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Tol Sigli - Banda Aceh (Sibanceh)",
+        "corridor_nodes": [
+          "Banda Aceh",
+          "Sabang"
+        ],
+        "location_precision": "kabupaten_kota",
+        "confidence_score": 0.86,
+        "region": "Aceh"
+      },
+      "llm": {
+        "is_active_disaster": false,
+        "incident_type": "normal",
+        "severity": "low",
+        "passability": "OPEN",
+        "verified_sumatra_location": "Pelabuhan Penyeberangan Ulee Lheue Banda Aceh",
+        "reason": "Jadwal kapal cepat dan ferry Banda Aceh ke Sabang beroperasi normal sesuai jadwal meski cuaca gerimis."
+      }
+    },
+    "SUM-SCN-050": {
+      "location_source": "headline",
+      "matched_node": "Lhokseumawe",
+      "latitude": 5.1801,
+      "longitude": 97.1507,
+      "resolved_province": "Aceh",
+      "corridor_segment": "Pelabuhan Krueng Geukueh",
+      "location_precision": "kabupaten_kota",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Lhokseumawe"
+      ],
+      "spatial_error_km": 1.06,
+      "heuristic": {
+        "event_type": "other_disruption",
+        "severity": "medium",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Pelabuhan Krueng Geukueh",
+        "corridor_nodes": [
+          "Lhokseumawe"
+        ],
+        "location_precision": "kabupaten_kota",
+        "confidence_score": 0.86,
+        "region": "Aceh"
+      },
+      "llm": {
+        "is_active_disaster": false,
+        "incident_type": "normal",
+        "severity": "low",
+        "passability": "OPEN",
+        "verified_sumatra_location": "Kawasan Industri Arun Lhokseumawe",
+        "reason": "Distribusi logistik energi dan bahan pokok di Kawasan Industri Lhokseumawe berjalan terjadwal tanpa gangguan bencana."
+      }
+    },
+    "SUM-SCN-051": {
+      "location_source": "headline",
+      "matched_node": "Singkil",
+      "latitude": 2.2889,
+      "longitude": 97.7889,
+      "resolved_province": "Aceh",
+      "corridor_segment": "Koridor Pantai Barat Singkil",
+      "location_precision": "corridor_point",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Singkil"
+      ],
+      "spatial_error_km": 6.34,
+      "heuristic": {
+        "event_type": "other_disruption",
+        "severity": "medium",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Koridor Pantai Barat Singkil",
+        "corridor_nodes": [
+          "Singkil",
+          "Aceh Singkil"
+        ],
+        "location_precision": "corridor_point",
+        "confidence_score": 0.86,
+        "region": "Aceh"
+      },
+      "llm": {
+        "is_active_disaster": true,
+        "incident_type": "flood",
+        "severity": "high",
+        "passability": "BLOCKED",
+        "verified_sumatra_location": "Sungai Soraya, Subulussalam - Rimo Singkil, Aceh",
+        "reason": "Luapan Sungai Soraya merendam badan jalan penghubung ke Aceh Singkil sehingga angkutan sembako terisolasi."
+      }
+    },
+    "SUM-SCN-052": {
+      "location_source": "headline",
+      "matched_node": "Takengon",
+      "latitude": 4.6167,
+      "longitude": 96.8167,
+      "resolved_province": "Aceh",
+      "corridor_segment": "Jalur Takengon",
+      "location_precision": "corridor_point",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Takengon",
+        "Bireuen"
+      ],
+      "spatial_error_km": 5.65,
+      "heuristic": {
+        "event_type": "landslide",
+        "severity": "high",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Jalur Takengon",
+        "corridor_nodes": [
+          "Takengon",
+          "Bireuen"
+        ],
+        "location_precision": "corridor_point",
+        "confidence_score": 0.86,
+        "region": "Aceh"
+      },
+      "llm": {
+        "is_active_disaster": true,
+        "incident_type": "landslide",
+        "severity": "high",
+        "passability": "BLOCKED",
+        "verified_sumatra_location": "Enang-Enang, Jalur Bireuen-Takengon, Aceh",
+        "reason": "Longsor material bebatuan menutup Jalur Bireuen-Takengon di Enang-Enang sehingga pasokan Kopi Gayo terhambat."
+      }
+    },
+    "SUM-SCN-053": {
+      "location_source": "headline",
+      "matched_node": "Subulussalam",
+      "latitude": 2.75,
+      "longitude": 98.0,
+      "resolved_province": "Aceh",
+      "corridor_segment": "Jalur Perbatasan Aceh - Pakpak Bharat",
+      "location_precision": "kabupaten_kota",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Subulussalam"
+      ],
+      "spatial_error_km": 11.09,
+      "heuristic": {
+        "event_type": "other_disruption",
+        "severity": "medium",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Jalur Perbatasan Aceh - Pakpak Bharat",
+        "corridor_nodes": [
+          "Subulussalam"
+        ],
+        "location_precision": "kabupaten_kota",
+        "confidence_score": 0.86,
+        "region": "Aceh"
+      },
+      "llm": {
+        "is_active_disaster": false,
+        "incident_type": "normal",
+        "severity": "low",
+        "passability": "OPEN",
+        "verified_sumatra_location": "Kota Subulussalam, Aceh",
+        "reason": "Pertamina memastikan stok BBM di SPBU Subulussalam aman dan mengimbau warga tidak panic buying."
+      }
+    },
+    "SUM-SCN-054": {
+      "location_source": "headline",
+      "matched_node": "Kaur",
+      "latitude": -4.7833,
+      "longitude": 103.35,
+      "resolved_province": "Bengkulu",
+      "corridor_segment": "Jalinbar Kaur (Bengkulu - Lampung)",
+      "location_precision": "kabupaten_kota",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Kaur"
+      ],
+      "spatial_error_km": 8.6,
+      "heuristic": {
+        "event_type": "landslide",
+        "severity": "medium",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Jalinbar Kaur (Bengkulu - Lampung)",
+        "corridor_nodes": [
+          "Kaur",
+          "Jalan Lintas Barat",
+          "Lintas Barat"
+        ],
+        "location_precision": "kabupaten_kota",
+        "confidence_score": 0.86,
+        "region": "Bengkulu"
+      },
+      "llm": {
+        "is_active_disaster": true,
+        "incident_type": "road_subsidence",
+        "severity": "high",
+        "passability": "RESTRICTED",
+        "verified_sumatra_location": "Jalan Lintas Barat Kaur KM 42, Manna - Kaur, Bengkulu",
+        "reason": "Abrasi gelombang laut menyebabkan setengah badan Jalan Lintas Barat Kaur amblas sehingga truk muatan dilarang melintas."
+      }
+    },
+    "SUM-SCN-055": {
+      "location_source": "headline",
+      "matched_node": "Kepahiang",
+      "latitude": -3.6333,
+      "longitude": 102.5667,
+      "resolved_province": "Bengkulu",
+      "corridor_segment": "Jalur Kepahiang - Curup",
+      "location_precision": "kabupaten_kota",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Kepahiang"
+      ],
+      "spatial_error_km": 5.25,
+      "heuristic": {
+        "event_type": "landslide",
+        "severity": "high",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Jalur Kepahiang - Curup",
+        "corridor_nodes": [
+          "Kepahiang",
+          "Bengkulu"
+        ],
+        "location_precision": "kabupaten_kota",
+        "confidence_score": 0.86,
+        "region": "Bengkulu"
+      },
+      "llm": {
+        "is_active_disaster": true,
+        "incident_type": "landslide",
+        "severity": "high",
+        "passability": "RESTRICTED",
+        "verified_sumatra_location": "Gunung Liku Sembilan, Kepahiang, Bengkulu",
+        "reason": "Longsor tebing Gunung Liku Sembilan menimpa jalan nasional di Kepahiang sehingga akses distribusi Kota Bengkulu diberlakukan buka tutup."
+      }
+    },
+    "SUM-SCN-056": {
+      "location_source": "headline",
+      "matched_node": "Pelabuhan Pulau Baai",
+      "latitude": -3.9,
+      "longitude": 102.3,
+      "resolved_province": "Bengkulu",
+      "corridor_segment": "Pelabuhan Samudera Pulau Baai",
+      "location_precision": "corridor_point",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Pelabuhan Pulau Baai"
+      ],
+      "spatial_error_km": 1.88,
+      "heuristic": {
+        "event_type": "other_disruption",
+        "severity": "medium",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Pelabuhan Samudera Pulau Baai",
+        "corridor_nodes": [
+          "Pelabuhan Pulau Baai",
+          "Pulau Baai"
+        ],
+        "location_precision": "corridor_point",
+        "confidence_score": 0.86,
+        "region": "Bengkulu"
+      },
+      "llm": {
+        "is_active_disaster": false,
+        "incident_type": "normal",
+        "severity": "low",
+        "passability": "OPEN",
+        "verified_sumatra_location": "Pelabuhan Pulau Baai, Kota Bengkulu",
+        "reason": "Alur masuk kapal di Pelabuhan Pulau Baai terpantau aman dan dapat dilalui kapal pengangkut sembako serta CPO."
+      }
+    },
+    "SUM-SCN-057": {
+      "location_source": "headline",
+      "matched_node": "Mukomuko",
+      "latitude": -2.5833,
+      "longitude": 101.1167,
+      "resolved_province": "Bengkulu",
+      "corridor_segment": "Jalinbar Mukomuko (Bengkulu - Sumbar)",
+      "location_precision": "kabupaten_kota",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Mukomuko",
+        "Padang"
+      ],
+      "spatial_error_km": 4.82,
+      "heuristic": {
+        "event_type": "other_disruption",
+        "severity": "medium",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Jalinbar Mukomuko (Bengkulu - Sumbar)",
+        "corridor_nodes": [
+          "Mukomuko",
+          "Padang",
+          "Jalinbar"
+        ],
+        "location_precision": "kabupaten_kota",
+        "confidence_score": 0.86,
+        "region": "Bengkulu"
+      },
+      "llm": {
+        "is_active_disaster": true,
+        "incident_type": "flood",
+        "severity": "high",
+        "passability": "BLOCKED",
+        "verified_sumatra_location": "Jalinbar Mukomuko, Bengkulu",
+        "reason": "Luapan Sungai Air Manjunto menggenangi Jalinbar Mukomuko sehingga truk muatan CPO menuju Padang tertahan."
+      }
+    },
+    "SUM-SCN-058": {
+      "location_source": "headline",
+      "matched_node": "Bengkulu",
+      "latitude": -3.8004,
+      "longitude": 102.2655,
+      "resolved_province": "Bengkulu",
+      "corridor_segment": "Jalur Arteri Logistik Sumatera",
+      "location_precision": "province_only",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Bengkulu"
+      ],
+      "spatial_error_km": 2.3,
+      "heuristic": {
+        "event_type": "other_disruption",
+        "severity": "medium",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Jalur Arteri Logistik Sumatera",
+        "corridor_nodes": [
+          "Bengkulu"
+        ],
+        "location_precision": "province_only",
+        "confidence_score": 0.86,
+        "region": "Bengkulu"
+      },
+      "llm": {
+        "is_active_disaster": false,
+        "incident_type": "normal",
+        "severity": "low",
+        "passability": "OPEN",
+        "verified_sumatra_location": "Pantai Panjang, Bengkulu",
+        "reason": "BMKG mengeluarkan peringatan angin kencang di pesisir Bengkulu, tetapi arus logistik darat di Pantai Panjang dilaporkan lancar tanpa hambatan."
+      }
+    },
+    "SUM-SCN-059": {
+      "location_source": "headline",
+      "matched_node": "Lebong",
+      "latitude": -3.1,
+      "longitude": 102.2,
+      "resolved_province": "Bengkulu",
+      "corridor_segment": "Jalur Muara Aman Lebong",
+      "location_precision": "kabupaten_kota",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Lebong"
+      ],
+      "spatial_error_km": 6.48,
+      "heuristic": {
+        "event_type": "landslide",
+        "severity": "high",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Jalur Muara Aman Lebong",
+        "corridor_nodes": [
+          "Lebong"
+        ],
+        "location_precision": "kabupaten_kota",
+        "confidence_score": 0.86,
+        "region": "Bengkulu"
+      },
+      "llm": {
+        "is_active_disaster": true,
+        "incident_type": "landslide",
+        "severity": "high",
+        "passability": "BLOCKED",
+        "verified_sumatra_location": "Rimbo Pengadang, Lebong, Bengkulu",
+        "reason": "Longsor di Rimbo Pengadang menutup akses Lebong sehingga pasokan beras tertahan."
+      }
+    },
+    "SUM-SCN-060": {
+      "location_source": "headline",
+      "matched_node": "Kaur",
+      "latitude": -4.7833,
+      "longitude": 103.35,
+      "resolved_province": "Bengkulu",
+      "corridor_segment": "Jalinbar Kaur (Bengkulu - Lampung)",
+      "location_precision": "kabupaten_kota",
+      "is_geocoded": true,
+      "affected_locations": [
+        "Kaur"
+      ],
+      "spatial_error_km": 20.38,
+      "heuristic": {
+        "event_type": "other_disruption",
+        "severity": "medium",
+        "temporal_phase": "active_disruption",
+        "lead_time_hours": 0.0,
+        "corridor_segment": "Jalinbar Kaur (Bengkulu - Lampung)",
+        "corridor_nodes": [
+          "Kaur"
+        ],
+        "location_precision": "kabupaten_kota",
+        "confidence_score": 0.86,
+        "region": "Bengkulu"
+      },
+      "llm": {
+        "is_active_disaster": false,
+        "incident_type": "normal",
+        "severity": "low",
+        "passability": "OPEN",
+        "verified_sumatra_location": "Nasal Kaur - Batas Lampung, Bengkulu",
+        "reason": "Pemeriksaan rutin muatan angkutan logistik di perbatasan Kaur-Lampung berjalan tertib tanpa indikasi gangguan bencana atau hambatan perjalanan."
+      }
+    }
+  },
+  "dataset_sha256": "ab4d5d86ba75151d11e5d492469282c5975fcd3c177676d6f2eabcfb2b7e1350"
+}

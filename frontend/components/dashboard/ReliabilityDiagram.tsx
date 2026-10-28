@@ -33,20 +33,20 @@ export default function ReliabilityDiagram({
 }: ReliabilityDiagramProps) {
   const [hoveredBin, setHoveredBin] = useState<ReliabilityBinItem | null>(null);
 
-  // Illustrative fallback 10 bins (synced 2026-10-26 to the canonical report).
+  // Illustrative fallback 10 bins (synced 2026-10-28 to the canonical report).
   // NEVER silent: parent passes isFallback=true and we render a FALLBACK badge.
   const usingFallback = isFallback || bins.length === 0;
   const activeBins: ReliabilityBinItem[] = bins.length > 0 ? bins : [
   { bin_index: 0, range: [0.0, 0.1], sample_count: 0, mean_confidence: 0.05, empirical_accuracy: 0.0, calibration_error: 0.0 },
-  { bin_index: 1, range: [0.1, 0.2], sample_count: 0, mean_confidence: 0.15, empirical_accuracy: 0.0, calibration_error: 0.0 },
-  { bin_index: 2, range: [0.2, 0.3], sample_count: 7, mean_confidence: 0.2604, empirical_accuracy: 0.0, calibration_error: 0.2604 },
-  { bin_index: 3, range: [0.3, 0.4], sample_count: 5, mean_confidence: 0.3758, empirical_accuracy: 0.0, calibration_error: 0.3758 },
-  { bin_index: 4, range: [0.4, 0.5], sample_count: 6, mean_confidence: 0.4414, empirical_accuracy: 0.0, calibration_error: 0.4414 },
-  { bin_index: 5, range: [0.5, 0.6], sample_count: 4, mean_confidence: 0.5227, empirical_accuracy: 0.0, calibration_error: 0.5227 },
-  { bin_index: 6, range: [0.6, 0.7], sample_count: 3, mean_confidence: 0.6299, empirical_accuracy: 0.0, calibration_error: 0.6299 },
-  { bin_index: 7, range: [0.7, 0.8], sample_count: 0, mean_confidence: 0.75, empirical_accuracy: 0.0, calibration_error: 0.0 },
-  { bin_index: 8, range: [0.8, 0.9], sample_count: 1, mean_confidence: 0.8483, empirical_accuracy: 1.0, calibration_error: 0.1517 },
-  { bin_index: 9, range: [0.9, 1.0], sample_count: 34, mean_confidence: 0.9731, empirical_accuracy: 1.0, calibration_error: 0.0269 }
+  { bin_index: 1, range: [0.1, 0.2], sample_count: 4, mean_confidence: 0.1783, empirical_accuracy: 0.0, calibration_error: 0.1783 },
+  { bin_index: 2, range: [0.2, 0.3], sample_count: 6, mean_confidence: 0.2513, empirical_accuracy: 0.0, calibration_error: 0.2513 },
+  { bin_index: 3, range: [0.3, 0.4], sample_count: 8, mean_confidence: 0.3476, empirical_accuracy: 0.0, calibration_error: 0.3476 },
+  { bin_index: 4, range: [0.4, 0.5], sample_count: 4, mean_confidence: 0.4506, empirical_accuracy: 0.0, calibration_error: 0.4506 },
+  { bin_index: 5, range: [0.5, 0.6], sample_count: 2, mean_confidence: 0.5675, empirical_accuracy: 1.0, calibration_error: 0.4325 },
+  { bin_index: 6, range: [0.6, 0.7], sample_count: 1, mean_confidence: 0.6509, empirical_accuracy: 1.0, calibration_error: 0.3491 },
+  { bin_index: 7, range: [0.7, 0.8], sample_count: 8, mean_confidence: 0.7748, empirical_accuracy: 0.75, calibration_error: 0.0248 },
+  { bin_index: 8, range: [0.8, 0.9], sample_count: 17, mean_confidence: 0.8503, empirical_accuracy: 0.9412, calibration_error: 0.0909 },
+  { bin_index: 9, range: [0.9, 1.0], sample_count: 10, mean_confidence: 0.9461, empirical_accuracy: 1.0, calibration_error: 0.0539 }
   ];
 
   // SVG Geometry Dimensions
@@ -92,11 +92,11 @@ export default function ReliabilityDiagram({
   Diagram kalibrasi
   {/* PHASE2: badge FALLBACK/SIMULASI + LIVE disembunyi per spec — hanya diagram + N.
   {usingFallback ? (
-  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/30 font-mono text-[10px] font-bold" title="Bin ilustratif sinkron 2026-10-26 — API /benchmark tak terjangkau, bukan pengukuran live">
+  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/30 font-mono text-[10px] font-bold" title="Bin ilustratif sinkron 2026-10-28 — API /benchmark tak terjangkau, bukan pengukuran live">
   <FlaskConical className="w-3 h-3" /> FALLBACK/SIMULASI
   </span>
   ) : (
-  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 font-mono text-[10px] font-bold" title="Bin dari API /evaluation/benchmark (berkas laporan 2026-10-26)">
+  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 font-mono text-[10px] font-bold" title="Bin dari API /evaluation/benchmark (berkas laporan 2026-10-28)">
   <Radio className="w-3 h-3" /> LIVE
   </span>
   )}
@@ -421,7 +421,7 @@ export default function ReliabilityDiagram({
   {rawBrier != null ? (
   <strong className="text-slate-300 tabular-nums">{rawBrier.toFixed(4)}</strong>
   ) : (
-  <span className="text-slate-500">tak diekspos API /benchmark — berkas laporan → calibration.raw_brier_score (= 0.1106 pada berkas 2026-10-26)</span>
+  <span className="text-slate-500">tak diekspos API /benchmark — berkas laporan → calibration.raw_brier_score (= 0.1382 pada berkas 2026-10-28)</span>
   )}
   </span>
   </div>

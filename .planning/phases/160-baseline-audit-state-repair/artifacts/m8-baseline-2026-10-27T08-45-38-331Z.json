@@ -1,0 +1,518 @@
+{
+  "run_started_at": "2026-10-27T08:45:38.331Z",
+  "run_finished_at": "2026-10-27T08:48:12.234Z",
+  "base_url": "https://pre-hub.vercel.app",
+  "throttle": "fast4g",
+  "accounts": [
+    {
+      "account": "DISPATCHER",
+      "email_masked": "pil*************@gmail.com",
+      "expected_company_id": "pos_logistik",
+      "started_at": "2026-10-27T08:45:38.978Z",
+      "login_ms": 10708,
+      "login_signal": "auth_modal_closed_and_token_persisted",
+      "login_error": null,
+      "login_breakdown_ms": {
+        "supabase_signin": 519,
+        "backend_auth_me": 9758
+      },
+      "supabase_auth_responses": [
+        {
+          "status": 200,
+          "error": null,
+          "error_code": null,
+          "msg": null,
+          "error_description": null
+        }
+      ],
+      "token": {
+        "present": true,
+        "length": 1042,
+        "exp": 1793094343,
+        "iat": 1793090743,
+        "lifetime_s": 3600,
+        "exp_iso": "2026-10-27T09:45:43.000Z",
+        "iat_iso": "2026-10-27T08:45:43.000Z",
+        "role_claim_app_metadata": "DISPATCHER",
+        "role_claim_user_metadata": null,
+        "company_id_claim": "pos_logistik",
+        "email_claim": "pil*************@gmail.com",
+        "role_matches_expected": true,
+        "company_matches_expected": true
+      },
+      "dashboard": {
+        "ready_ms": null,
+        "first_data_ms": 15220,
+        "first_data_signal": "news_verified_sources",
+        "signal_fallback_used": false,
+        "request_total": 72,
+        "request_distinct": 66,
+        "requests_by_host": {
+          "pre-hub.vercel.app": 25,
+          "peta-nadi.onrender.com": 29,
+          "blob": 2,
+          "api.mapbox.com": 13,
+          "events.mapbox.com": 3
+        },
+        "top_urls": [
+          {
+            "url": "https://events.mapbox.com/events/v2?access_token=[redacted]",
+            "method": "POST",
+            "resourceType": "fetch",
+            "count": 3
+          },
+          {
+            "url": "blob:https://pre-hub.vercel.app/73076bda-df1c-4562-9911-7e996ce3df87",
+            "method": "GET",
+            "resourceType": "script",
+            "count": 2
+          },
+          {
+            "url": "https://peta-nadi.onrender.com/api/v1/fire/hotspots",
+            "method": "GET",
+            "resourceType": "fetch",
+            "count": 2
+          },
+          {
+            "url": "https://peta-nadi.onrender.com/api/v1/fleet/vehicles?include_geometry=false",
+            "method": "GET",
+            "resourceType": "fetch",
+            "count": 2
+          },
+          {
+            "url": "https://peta-nadi.onrender.com/api/v1/weather/spatial-polygons?min_severity=high&min_precip=50&min_flood=80",
+            "method": "GET",
+            "resourceType": "fetch",
+            "count": 2
+          },
+          {
+            "url": "https://api.mapbox.com/fonts/v1/mapbox/Arial%20Unicode%20MS%20Regular/0-255.pbf?access_token=[redacted]",
+            "method": "GET",
+            "resourceType": "fetch",
+            "count": 1
+          },
+          {
+            "url": "https://api.mapbox.com/fonts/v1/mapbox/Arial%20Unicode%20MS%20Regular/256-511.pbf?access_token=[redacted]",
+            "method": "GET",
+            "resourceType": "fetch",
+            "count": 1
+          },
+          {
+            "url": "https://api.mapbox.com/fonts/v1/mapbox/Arial%20Unicode%20MS%20Regular/7680-7935.pbf?access_token=[redacted]",
+            "method": "GET",
+            "resourceType": "fetch",
+            "count": 1
+          },
+          {
+            "url": "https://api.mapbox.com/fonts/v1/mapbox/Arial%20Unicode%20MS%20Regular/8192-8447.pbf?access_token=[redacted]",
+            "method": "GET",
+            "resourceType": "fetch",
+            "count": 1
+          },
+          {
+            "url": "https://api.mapbox.com/fonts/v1/mapbox/DIN%20Pro%20Italic/0-255.pbf?access_token=[redacted]",
+            "method": "GET",
+            "resourceType": "fetch",
+            "count": 1
+          },
+          {
+            "url": "https://api.mapbox.com/fonts/v1/mapbox/DIN%20Pro%20Medium/0-255.pbf?access_token=[redacted]",
+            "method": "GET",
+            "resourceType": "fetch",
+            "count": 1
+          },
+          {
+            "url": "https://api.mapbox.com/fonts/v1/mapbox/DIN%20Pro%20Regular/0-255.pbf?access_token=[redacted]",
+            "method": "GET",
+            "resourceType": "fetch",
+            "count": 1
+          },
+          {
+            "url": "https://api.mapbox.com/fonts/v1/mapbox/DIN%20Pro%20Regular/256-511.pbf?access_token=[redacted]",
+            "method": "GET",
+            "resourceType": "fetch",
+            "count": 1
+          },
+          {
+            "url": "https://api.mapbox.com/fonts/v1/mapbox/DIN%20Pro%20Regular/7680-7935.pbf?access_token=[redacted]",
+            "method": "GET",
+            "resourceType": "fetch",
+            "count": 1
+          },
+          {
+            "url": "https://api.mapbox.com/fonts/v1/mapbox/DIN%20Pro%20Regular/8192-8447.pbf?access_token=[redacted]",
+            "method": "GET",
+            "resourceType": "fetch",
+            "count": 1
+          }
+        ]
+      },
+      "session": {
+        "post_login_url": "https://pre-hub.vercel.app/dashboard?guest=1&commodity=beras&days=7",
+        "post_login_guest_param_present": true,
+        "guest_flag_cleared_by_app": false,
+        "clean_nav_url": "https://pre-hub.vercel.app/dashboard?commodity=beras&days=7",
+        "clean_nav_guest_param_present": false,
+        "auth_restore_ms": 145,
+        "auth_me_status": 200,
+        "role_badge_text": "DISPATCHERPT Samudera Logistik Sumatra",
+        "guest_banner_visible": false,
+        "token_present_after_restore": true,
+        "same_subject_after_restore": true,
+        "exp_after_restore": 1793094343,
+        "survived_clean_nav": true,
+        "reload_url": "https://pre-hub.vercel.app/dashboard?commodity=beras&days=7",
+        "reload_guest_param_present": false,
+        "reload_restored_ms": 4678,
+        "survived_reload": true
+      },
+      "page_errors": [],
+      "console_errors": [],
+      "notes": [
+        "initial_url=https://pre-hub.vercel.app/dashboard?guest=1",
+        "user_metadata.role is absent; role only present in app_metadata.role",
+        "post-login URL still carries guest=1; the app did not clear the middleware guest flag after login",
+        "reload_total_ms=5282"
+      ]
+    },
+    {
+      "account": "REGULATOR",
+      "email_masked": "reg******@bapanas.go.id",
+      "expected_company_id": "bapanas",
+      "started_at": "2026-10-27T08:46:16.329Z",
+      "login_ms": 7246,
+      "login_signal": "auth_modal_closed_and_token_persisted",
+      "login_error": null,
+      "login_breakdown_ms": {
+        "supabase_signin": 606,
+        "backend_auth_me": 7129
+      },
+      "supabase_auth_responses": [
+        {
+          "status": 200,
+          "error": null,
+          "error_code": null,
+          "msg": null,
+          "error_description": null
+        }
+      ],
+      "token": {
+        "present": true,
+        "length": 912,
+        "exp": 1793094381,
+        "iat": 1793090781,
+        "lifetime_s": 3600,
+        "exp_iso": "2026-10-27T09:46:21.000Z",
+        "iat_iso": "2026-10-27T08:46:21.000Z",
+        "role_claim_app_metadata": "REGULATOR",
+        "role_claim_user_metadata": "REGULATOR",
+        "company_id_claim": "bapanas",
+        "email_claim": "reg******@bapanas.go.id",
+        "role_matches_expected": true,
+        "company_matches_expected": true
+      },
+      "dashboard": {
+        "ready_ms": null,
+        "first_data_ms": 26388,
+        "first_data_signal": "news_verified_sources",
+        "signal_fallback_used": false,
+        "request_total": 79,
+        "request_distinct": 70,
+        "requests_by_host": {
+          "pre-hub.vercel.app": 25,
+          "peta-nadi.onrender.com": 31,
+          "blob": 2,
+          "api.mapbox.com": 18,
+          "events.mapbox.com": 3
+        },
+        "top_urls": [
+          {
+            "url": "https://events.mapbox.com/events/v2?access_token=[redacted]",
+            "method": "POST",
+            "resourceType": "fetch",
+            "count": 3
+          },
+          {
+            "url": "https://peta-nadi.onrender.com/api/v1/fleet/vehicles?include_geometry=false",
+            "method": "GET",
+            "resourceType": "fetch",
+            "count": 3
+          },
+          {
+            "url": "blob:https://pre-hub.vercel.app/f34b8690-5923-47b8-86e1-3953d6355add",
+            "method": "GET",
+            "resourceType": "script",
+            "count": 2
+          },
+          {
+            "url": "https://peta-nadi.onrender.com/api/v1/fire/hotspots",
+            "method": "GET",
+            "resourceType": "fetch",
+            "count": 2
+          },
+          {
+            "url": "https://peta-nadi.onrender.com/api/v1/incidents?limit=100",
+            "method": "GET",
+            "resourceType": "fetch",
+            "count": 2
+          },
+          {
+            "url": "https://peta-nadi.onrender.com/api/v1/news/hitl-pending",
+            "method": "GET",
+            "resourceType": "fetch",
+            "count": 2
+          },
+          {
+            "url": "https://peta-nadi.onrender.com/api/v1/weather/spatial-polygons?min_severity=high&min_precip=50&min_flood=80",
+            "method": "GET",
+            "resourceType": "fetch",
+            "count": 2
+          },
+          {
+            "url": "https://api.mapbox.com/fonts/v1/mapbox/Arial%20Unicode%20MS%20Regular/0-255.pbf?access_token=[redacted]",
+            "method": "GET",
+            "resourceType": "fetch",
+            "count": 1
+          },
+          {
+            "url": "https://api.mapbox.com/fonts/v1/mapbox/Arial%20Unicode%20MS%20Regular/256-511.pbf?access_token=[redacted]",
+            "method": "GET",
+            "resourceType": "fetch",
+            "count": 1
+          },
+          {
+            "url": "https://api.mapbox.com/fonts/v1/mapbox/Arial%20Unicode%20MS%20Regular/7680-7935.pbf?access_token=[redacted]",
+            "method": "GET",
+            "resourceType": "fetch",
+            "count": 1
+          },
+          {
+            "url": "https://api.mapbox.com/fonts/v1/mapbox/Arial%20Unicode%20MS%20Regular/8192-8447.pbf?access_token=[redacted]",
+            "method": "GET",
+            "resourceType": "fetch",
+            "count": 1
+          },
+          {
+            "url": "https://api.mapbox.com/fonts/v1/mapbox/DIN%20Pro%20Italic/0-255.pbf?access_token=[redacted]",
+            "method": "GET",
+            "resourceType": "fetch",
+            "count": 1
+          },
+          {
+            "url": "https://api.mapbox.com/fonts/v1/mapbox/DIN%20Pro%20Medium/0-255.pbf?access_token=[redacted]",
+            "method": "GET",
+            "resourceType": "fetch",
+            "count": 1
+          },
+          {
+            "url": "https://api.mapbox.com/fonts/v1/mapbox/DIN%20Pro%20Regular/0-255.pbf?access_token=[redacted]",
+            "method": "GET",
+            "resourceType": "fetch",
+            "count": 1
+          },
+          {
+            "url": "https://api.mapbox.com/fonts/v1/mapbox/DIN%20Pro%20Regular/256-511.pbf?access_token=[redacted]",
+            "method": "GET",
+            "resourceType": "fetch",
+            "count": 1
+          }
+        ]
+      },
+      "session": {
+        "post_login_url": "https://pre-hub.vercel.app/dashboard?guest=1&commodity=beras&days=7",
+        "post_login_guest_param_present": true,
+        "guest_flag_cleared_by_app": false,
+        "clean_nav_url": "https://pre-hub.vercel.app/dashboard?commodity=beras&days=7",
+        "clean_nav_guest_param_present": false,
+        "auth_restore_ms": 196,
+        "auth_me_status": 200,
+        "role_badge_text": "REGULATORBadan Pangan Nasional / Kemenhub",
+        "guest_banner_visible": false,
+        "token_present_after_restore": true,
+        "same_subject_after_restore": true,
+        "exp_after_restore": 1793094381,
+        "survived_clean_nav": true,
+        "reload_url": "https://pre-hub.vercel.app/dashboard?commodity=beras&days=7",
+        "reload_guest_param_present": false,
+        "reload_restored_ms": 20050,
+        "survived_reload": true
+      },
+      "page_errors": [],
+      "console_errors": [],
+      "notes": [
+        "initial_url=https://pre-hub.vercel.app/dashboard?guest=1",
+        "post-login URL still carries guest=1; the app did not clear the middleware guest flag after login",
+        "reload_total_ms=20730"
+      ]
+    },
+    {
+      "account": "GUEST",
+      "email_masked": "eva******@kompetisi-lrip.id",
+      "expected_company_id": "demo_sandbox",
+      "started_at": "2026-10-27T08:47:15.460Z",
+      "login_ms": 45220,
+      "login_signal": "auth_modal_closed_and_token_persisted",
+      "login_error": null,
+      "login_breakdown_ms": {
+        "supabase_signin": 473,
+        "backend_auth_me": 44449
+      },
+      "supabase_auth_responses": [
+        {
+          "status": 200,
+          "error": null,
+          "error_code": null,
+          "msg": null,
+          "error_description": null
+        }
+      ],
+      "token": {
+        "present": true,
+        "length": 903,
+        "exp": 1793094440,
+        "iat": 1793090840,
+        "lifetime_s": 3600,
+        "exp_iso": "2026-10-27T09:47:20.000Z",
+        "iat_iso": "2026-10-27T08:47:20.000Z",
+        "role_claim_app_metadata": "GUEST",
+        "role_claim_user_metadata": "GUEST",
+        "company_id_claim": "demo_sandbox",
+        "email_claim": "eva******@kompetisi-lrip.id",
+        "role_matches_expected": true,
+        "company_matches_expected": true
+      },
+      "dashboard": {
+        "ready_ms": null,
+        "first_data_ms": 3198,
+        "first_data_signal": "news_verified_sources",
+        "signal_fallback_used": false,
+        "request_total": 50,
+        "request_distinct": 47,
+        "requests_by_host": {
+          "pre-hub.vercel.app": 23,
+          "peta-nadi.onrender.com": 9,
+          "blob": 2,
+          "api.mapbox.com": 13,
+          "events.mapbox.com": 3
+        },
+        "top_urls": [
+          {
+            "url": "https://events.mapbox.com/events/v2?access_token=[redacted]",
+            "method": "POST",
+            "resourceType": "fetch",
+            "count": 3
+          },
+          {
+            "url": "blob:https://pre-hub.vercel.app/b482b777-33a8-4deb-8aa6-7beec33c8efb",
+            "method": "GET",
+            "resourceType": "script",
+            "count": 2
+          },
+          {
+            "url": "https://api.mapbox.com/fonts/v1/mapbox/Arial%20Unicode%20MS%20Regular/0-255.pbf?access_token=[redacted]",
+            "method": "GET",
+            "resourceType": "fetch",
+            "count": 1
+          },
+          {
+            "url": "https://api.mapbox.com/fonts/v1/mapbox/Arial%20Unicode%20MS%20Regular/256-511.pbf?access_token=[redacted]",
+            "method": "GET",
+            "resourceType": "fetch",
+            "count": 1
+          },
+          {
+            "url": "https://api.mapbox.com/fonts/v1/mapbox/Arial%20Unicode%20MS%20Regular/7680-7935.pbf?access_token=[redacted]",
+            "method": "GET",
+            "resourceType": "fetch",
+            "count": 1
+          },
+          {
+            "url": "https://api.mapbox.com/fonts/v1/mapbox/Arial%20Unicode%20MS%20Regular/8192-8447.pbf?access_token=[redacted]",
+            "method": "GET",
+            "resourceType": "fetch",
+            "count": 1
+          },
+          {
+            "url": "https://api.mapbox.com/fonts/v1/mapbox/DIN%20Pro%20Italic/0-255.pbf?access_token=[redacted]",
+            "method": "GET",
+            "resourceType": "fetch",
+            "count": 1
+          },
+          {
+            "url": "https://api.mapbox.com/fonts/v1/mapbox/DIN%20Pro%20Medium/0-255.pbf?access_token=[redacted]",
+            "method": "GET",
+            "resourceType": "fetch",
+            "count": 1
+          },
+          {
+            "url": "https://api.mapbox.com/fonts/v1/mapbox/DIN%20Pro%20Regular/0-255.pbf?access_token=[redacted]",
+            "method": "GET",
+            "resourceType": "fetch",
+            "count": 1
+          },
+          {
+            "url": "https://api.mapbox.com/fonts/v1/mapbox/DIN%20Pro%20Regular/256-511.pbf?access_token=[redacted]",
+            "method": "GET",
+            "resourceType": "fetch",
+            "count": 1
+          },
+          {
+            "url": "https://api.mapbox.com/fonts/v1/mapbox/DIN%20Pro%20Regular/7680-7935.pbf?access_token=[redacted]",
+            "method": "GET",
+            "resourceType": "fetch",
+            "count": 1
+          },
+          {
+            "url": "https://api.mapbox.com/fonts/v1/mapbox/DIN%20Pro%20Regular/8192-8447.pbf?access_token=[redacted]",
+            "method": "GET",
+            "resourceType": "fetch",
+            "count": 1
+          },
+          {
+            "url": "https://api.mapbox.com/map-sessions/v1?sku=101jpZTWrnwLM&access_token=[redacted]",
+            "method": "GET",
+            "resourceType": "fetch",
+            "count": 1
+          },
+          {
+            "url": "https://api.mapbox.com/styles/v1/mapbox/dark-v11?sdk=js-3.25.0&access_token=[redacted]",
+            "method": "GET",
+            "resourceType": "fetch",
+            "count": 1
+          },
+          {
+            "url": "https://api.mapbox.com/styles/v1/mapbox/dark-v11/iconset.pbf?access_token=[redacted]",
+            "method": "GET",
+            "resourceType": "fetch",
+            "count": 1
+          }
+        ]
+      },
+      "session": {
+        "post_login_url": "https://pre-hub.vercel.app/dashboard",
+        "post_login_guest_param_present": false,
+        "guest_flag_cleared_by_app": true,
+        "clean_nav_url": "https://pre-hub.vercel.app/dashboard",
+        "clean_nav_guest_param_present": false,
+        "auth_restore_ms": 158,
+        "auth_me_status": 200,
+        "role_badge_text": "GUESTKompetisi LRIP Demo Sandbox",
+        "guest_banner_visible": false,
+        "token_present_after_restore": true,
+        "same_subject_after_restore": true,
+        "exp_after_restore": 1793094440,
+        "survived_clean_nav": true,
+        "reload_url": "https://pre-hub.vercel.app/dashboard",
+        "reload_guest_param_present": false,
+        "reload_restored_ms": 2182,
+        "survived_reload": true
+      },
+      "page_errors": [],
+      "console_errors": [],
+      "notes": [
+        "initial_url=https://pre-hub.vercel.app/dashboard?guest=1",
+        "reload_total_ms=2670"
+      ]
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 # PROJECT: PreHub (Logistics Resilience Intelligence Platform)
 
-**Active Milestone:** M8 - Fast & Durable [ACTIVE 🚀]
+**Active Milestone:** M9 - Operational Truth & Distilled Command Surface [COMPLETE ✅]
 **Previous Milestones:** 
 - M1 - Hackathon MVP (Pan-Sumatra Logistics & Swarm Intelligence) [COMPLETED ✅]
 - M2 - PreHub Final Defense: Empirical Evaluation, Tactical HUD & Multi-Source Maturity [COMPLETED ✅]
@@ -9,8 +9,17 @@
 - M5 - High-Fidelity Intelligence & Isolated Operations Engine [COMPLETED ✅]
 - M6 - 3D Globe Native Mapbox Fleet, Street-Snapping & Impeccable Cartography [COMPLETED ✅]
 - M7 - Live News Trust, Source Breadth & Forecast Waspada Integrity [COMPLETED ✅]
+- M8 - Fast & Durable [COMPLETED ✅]
 
-## Current Milestone: M8 - Fast & Durable
+## Current Milestone: M9 - Operational Truth & Distilled Command Surface
+
+**Goal:** Make every number on the command surface answer a question about the world rather than about the UI — hazard counters independent of layer toggles, whole-Sumatra coverage, honest small-town routing, a real gazetteer, a labelled regional news tier, a dispatcher-visible fleet drawer, and a distilled monochrome chrome with one accent.
+
+**Phases (167–176.12):** 167 world-truth hazard counters · 168 keyless FIRMS CSV fallback · 169 whole-Sumatra retention · 170 small-town routing · 171 Sumatra gazetteer · 172 Berita honesty & breadth · 172.5 regional news tier · 173 Armada drawer · 173.5 frozen E2E reconciliation · 173.6 FIRMS day-range fix · 174 design contract · 175 chrome distillation · 176 tooltips & motion · 176.5 mobile/map legibility · 176.6 mobile counter pinning · 176.7 feed supply & type vocabulary · 176.8 news legibility & geocode cache v3 · 176.9 guest banner dock · 176.10 mobile counter label · 176.11 visual colour pass · 176.12 fleet regression & Waspada dots.
+
+**Note:** M8 "Fast & Durable" (phases 160–166) remains valid and independent; M9 was numbered after it and absorbed none of its phases.
+
+## Milestone M8: Fast & Durable
 
 **Goal:** Make the authenticated PreHub dashboard fast on first load and durable across sessions on the zero-cost Render/Vercel stack — by fixing Supabase session refresh and cookie policy, thinning the web process so batch ingestion moves to an idempotent external tick, serving a DB-backed dashboard bootstrap snapshot with lazy-mounted sections, hardening the proxy cache boundary, and proving it with Playwright plus a 7-day soak.
 
@@ -67,6 +76,7 @@
 - **M6 - 3D Globe Native Mapbox Fleet, Street-Snapping & Impeccable Cartography**: Completed (Phases 87 to 106). Native Mapbox WebGL fleet layers on the 3D globe, street-snapped turn-by-turn routing with dual-layer hazard avoidance, sub-second nautical/ICAO corridor precision, and dual-metric trip economics.
 - **M7 - Live News Trust, Source Breadth & Forecast Waspada Integrity**: Completed (Phases 107 to 159). Live-only news with resolve-or-drop permalinks, 23-feed source breadth, EWKB location parsing and fair intake, `FORECAST_WASPADA` as an orthogonal HOLD-only tag, plus the dashboard/FIRMS/fleet integrity pass.
 - **M8 - Fast & Durable**: Active (Phases 160 to 166). Delivers durable auth sessions, a thin web process with an external tick, a DB-backed dashboard bootstrap snapshot, a hardened proxy cache boundary, and SLO verification with a 7-day soak.
+- **M9 - Operational Truth & Distilled Command Surface**: Completed (Phases 167 to 176.12). Closed all eight operator complaints: hazard counters now report world truth (Waspada 28, Titik Panas 145 live), whole-Sumatra coverage replaced the corridor filter, small-town routing is bounded and honest, a 2,096-record gazetteer with 23 declared gaps replaced slug matching, news breadth moved from a single Aceh feed to 9/10 Sumatra provinces with a labelled `regional` tier and no fabricated 86%, the Armada drawer renders again, and the chrome was distilled to one accent under a written DESIGN.md contract.
 
 ## Vision
 An AI-powered decision support platform that shifts logistics and disaster response from **reactive** to **proactive**. PreHub ingests real-time physical hazard data (weather, traffic, maritime, wildfire), detects logistics disruptions, predicts cascading economic impacts (commodity price spikes), and delivers actionable intelligence to field coordinators and government executives, all before the crisis escalates.
