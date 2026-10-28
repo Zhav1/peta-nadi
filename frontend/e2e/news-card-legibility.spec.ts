@@ -133,6 +133,9 @@ async function openDashboard(page: Page, articles: MockArticle[]) {
   await firstLiveResponse;
   // Phones/tablets open with the Berita sheet collapsed: open it so the panel
   // (and its cards) are visible for measurement.
+  // Phase M9-visual: this spec never touches the filter controls, so moving the
+  // tier/category/province block into NewsFilterModal needs no selector change
+  // here. Reviewed by inspection; not executed in the visual pass.
   if ((page.viewportSize()?.width ?? 1920) < 768) {
     await page.getByTestId('news-sheet-toggle').click();
   }

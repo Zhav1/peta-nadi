@@ -110,6 +110,25 @@ async function openDashboard(page: Page) {
   return sidebar;
 }
 
+/**
+ * Phase M9-visual — the tier row, category row and province chip grid moved
+ * into NewsFilterModal behind `news-filter-open`. Tests must open the modal
+ * before touching those controls, and close it with `Terapkan` (the changes
+ * preview live, so the underlying feed already reflects the selection).
+ * NOTE: updated by inspection only during the visual pass; not executed.
+ */
+async function openNewsFilters(sidebar: Awaited<ReturnType<typeof openDashboard>>) {
+  await sidebar.getByTestId('news-filter-open').click();
+  const modal = sidebar.page().getByTestId('news-filter-modal');
+  await expect(modal).toBeVisible();
+  return modal;
+}
+
+async function applyNewsFilters(page: Page) {
+  await page.getByTestId('news-filter-apply').click();
+  await expect(page.getByTestId('news-filter-modal')).toBeHidden();
+}
+
 // ---------------------------------------------------------------------------
 // 1. province chips + sticky grouping headers + per-province filtering
 // ---------------------------------------------------------------------------
@@ -188,10 +207,12 @@ test('(a) province chips group the feed and narrow it', async ({ page }) => {
   const sidebar = await openDashboard(page);
   await expect(articleCards(page)).toHaveCount(articles.length, { timeout: 30_000 });
 
-  // A chip exists per province in the window.
-  await expect(sidebar.getByTestId('news-province-chip-aceh')).toBeVisible();
-  await expect(sidebar.getByTestId('news-province-chip-sumatera-utara')).toBeVisible();
-  await expect(sidebar.getByTestId('news-province-chip-lampung')).toBeVisible();
+  // A chip exists per province in the window — now inside the filter modal.
+  let filterModal = await openNewsFilters(sidebar);
+  await expect(filterModal.getByTestId('news-province-chip-aceh')).toBeVisible();
+  await expect(filterModal.getByTestId('news-province-chip-sumatera-utara')).toBeVisible();
+  await expect(filterModal.getByTestId('news-province-chip-lampung')).toBeVisible();
+  await applyNewsFilters(page);
 
   // Grouping headers carry the honest per-province count.
   await expect(sidebar.getByTestId('news-province-count-aceh')).toContainText('2 artikel');
@@ -199,7 +220,9 @@ test('(a) province chips group the feed and narrow it', async ({ page }) => {
   await expect(sidebar.getByTestId('news-province-count-lampung')).toContainText('1 artikel');
 
   // Filtering by one province narrows the list and keeps the search box working.
-  await sidebar.getByTestId('news-province-chip-sumatera-utara').click();
+  filterModal = await openNewsFilters(sidebar);
+  await filterModal.getByTestId('news-province-chip-sumatera-utara').click();
+  await applyNewsFilters(page);
   await expect(articleCards(page)).toHaveCount(2, { timeout: 10_000 });
   await expect(
     sidebar.getByRole('heading', { name: 'Banjir rendam jalur logistik di Medan' })
@@ -213,7 +236,9 @@ test('(a) province chips group the feed and narrow it', async ({ page }) => {
   await expect(articleCards(page)).toHaveCount(1, { timeout: 10_000 });
   await search.fill('');
 
-  await sidebar.getByTestId('news-province-chip-all').click();
+  filterModal = await openNewsFilters(sidebar);
+  await filterModal.getByTestId('news-province-chip-all').click();
+  await applyNewsFilters(page);
   await expect(articleCards(page)).toHaveCount(articles.length, { timeout: 10_000 });
 });
 
@@ -329,11 +354,13 @@ test('(d) a province with no 48h article shows the honest empty label', async ({
   const sidebar = await openDashboard(page);
   await expect(articleCards(page)).toHaveCount(1, { timeout: 30_000 });
 
-  const missing = sidebar.getByTestId('news-provinces-missing');
+  const filterModal = await openNewsFilters(sidebar);
+  const missing = filterModal.getByTestId('news-provinces-missing');
   await expect(missing).toBeVisible();
   await expect(missing).toContainText('Bengkulu');
   await expect(missing).toContainText('Lampung');
   await expect(missing).toContainText('Tidak ada artikel 48 jam');
+  await applyNewsFilters(page);
 });
 
 // ---------------------------------------------------------------------------
@@ -423,9 +450,11 @@ test('(e) tier chips split crisis from regional, label context, keep crisis firs
     );
 
   // Semua (default) shows both tiers, crisis first inside the province group.
-  await expect(sidebar.getByTestId('news-tier-all')).toBeVisible();
-  await expect(sidebar.getByTestId('news-tier-crisis')).toBeVisible();
-  await expect(sidebar.getByTestId('news-tier-regional')).toBeVisible();
+  let filterModal = await openNewsFilters(sidebar);
+  await expect(filterModal.getByTestId('news-tier-all')).toBeVisible();
+  await expect(filterModal.getByTestId('news-tier-crisis')).toBeVisible();
+  await expect(filterModal.getByTestId('news-tier-regional')).toBeVisible();
+  await applyNewsFilters(page);
   expect(await renderedIds(), 'crisis block must precede regional context').toEqual([
     'berita-card-tier-crisis-new',
     'berita-card-tier-crisis-old',
@@ -446,7 +475,9 @@ test('(e) tier chips split crisis from regional, label context, keep crisis firs
   ).toBe(0);
 
   // Krisis chip: only gate-passing rows.
-  await sidebar.getByTestId('news-tier-crisis').click();
+  filterModal = await openNewsFilters(sidebar);
+  await filterModal.getByTestId('news-tier-crisis').click();
+  await applyNewsFilters(page);
   await expect(articleCards(page)).toHaveCount(2, { timeout: 10_000 });
   expect(await renderedIds()).toEqual([
     'berita-card-tier-crisis-new',
@@ -454,7 +485,9 @@ test('(e) tier chips split crisis from regional, label context, keep crisis firs
   ]);
 
   // Regional chip: only context rows, still labelled.
-  await sidebar.getByTestId('news-tier-regional').click();
+  filterModal = await openNewsFilters(sidebar);
+  await filterModal.getByTestId('news-tier-regional').click();
+  await applyNewsFilters(page);
   await expect(articleCards(page)).toHaveCount(2, { timeout: 10_000 });
   expect(await renderedIds()).toEqual([
     'berita-card-tier-regional-aceh',
@@ -465,16 +498,26 @@ test('(e) tier chips split crisis from regional, label context, keep crisis firs
   ).toBeVisible();
 
   // Back to Semua: the full page returns.
-  await sidebar.getByTestId('news-tier-all').click();
+  filterModal = await openNewsFilters(sidebar);
+  await filterModal.getByTestId('news-tier-all').click();
+  await applyNewsFilters(page);
   await expect(articleCards(page)).toHaveCount(articles.length, { timeout: 10_000 });
 
   // Province chips (172) still compose with the tier chips (172.5).
-  await sidebar.getByTestId('news-province-chip-aceh').click();
+  filterModal = await openNewsFilters(sidebar);
+  await filterModal.getByTestId('news-province-chip-aceh').click();
+  await applyNewsFilters(page);
   await expect(articleCards(page)).toHaveCount(3, { timeout: 10_000 });
-  await sidebar.getByTestId('news-tier-crisis').click();
+  filterModal = await openNewsFilters(sidebar);
+  await filterModal.getByTestId('news-tier-crisis').click();
+  await applyNewsFilters(page);
   await expect(articleCards(page)).toHaveCount(2, { timeout: 10_000 });
-  await sidebar.getByTestId('news-province-chip-all').click();
+  filterModal = await openNewsFilters(sidebar);
+  await filterModal.getByTestId('news-province-chip-all').click();
+  await applyNewsFilters(page);
   await expect(articleCards(page)).toHaveCount(2, { timeout: 10_000 });
-  await sidebar.getByTestId('news-tier-all').click();
+  filterModal = await openNewsFilters(sidebar);
+  await filterModal.getByTestId('news-tier-all').click();
+  await applyNewsFilters(page);
   await expect(articleCards(page)).toHaveCount(articles.length, { timeout: 10_000 });
 });

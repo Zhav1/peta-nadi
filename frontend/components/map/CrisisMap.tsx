@@ -710,12 +710,15 @@ export default function CrisisMap({
         if (key === 'weatherRadar') {
           const vis = next.weatherRadar ? 'visible' : 'none';
           if (map.getLayer('weather-polygons-fill')) map.setLayoutProperty('weather-polygons-fill', 'visibility', vis);
+          if (map.getLayer('weather-polygons-halo')) map.setLayoutProperty('weather-polygons-halo', 'visibility', vis);
           if (map.getLayer('weather-polygons-outline')) map.setLayoutProperty('weather-polygons-outline', 'visibility', vis);
+          if (map.getLayer('weather-polygons-outline-advisory')) map.setLayoutProperty('weather-polygons-outline-advisory', 'visibility', vis);
           applyWeatherMapboxFilter(map, next.weatherRadar, next.weatherAdvisory);
         }
         if (key === 'fireHotspots') {
           const vis = next.fireHotspots ? 'visible' : 'none';
           if (map.getLayer('firms-heat')) map.setLayoutProperty('firms-heat', 'visibility', vis);
+          if (map.getLayer('firms-areas-halo')) map.setLayoutProperty('firms-areas-halo', 'visibility', vis);
           if (map.getLayer('firms-areas-fill')) map.setLayoutProperty('firms-areas-fill', 'visibility', vis);
           if (map.getLayer('firms-areas-outline')) map.setLayoutProperty('firms-areas-outline', 'visibility', vis);
           if (map.getLayer('firms-dots')) map.setLayoutProperty('firms-dots', 'visibility', vis);
@@ -750,8 +753,19 @@ export default function CrisisMap({
         showDisruption && !showAdvisory
           ? (['all', sevFilter, floodGate] as unknown as never)
           : (sevFilter as unknown as never);
+      // Hue follows the bucket, not severity: medium is the amber Waspada Dini
+      // sibling; high/critical is the blue Cuaca sibling. Dash arrays cannot be
+      // data-driven, so the dashed amber outline has its own filtered layer.
+      const disruptionOnly: any = ['in', ['get', 'severity'], ['literal', ['high', 'critical']]];
+      const advisoryOnly: any = ['==', ['get', 'severity'], 'medium'];
+      if (map.getLayer('weather-polygons-halo')) map.setFilter('weather-polygons-halo', combined);
       if (map.getLayer('weather-polygons-fill')) map.setFilter('weather-polygons-fill', combined);
-      if (map.getLayer('weather-polygons-outline')) map.setFilter('weather-polygons-outline', combined);
+      if (map.getLayer('weather-polygons-outline')) {
+        map.setFilter('weather-polygons-outline', ['all', combined, disruptionOnly]);
+      }
+      if (map.getLayer('weather-polygons-outline-advisory')) {
+        map.setFilter('weather-polygons-outline-advisory', ['all', combined, advisoryOnly]);
+      }
     } catch {
       // quiet fallback: unfiltered render
     }
@@ -1050,45 +1064,71 @@ export default function CrisisMap({
       });
 
       // 0b. Regional Weather & Radar Polygons Layer
+      // Phase M9-visual: the three hazard layers share ONE visual language —
+      // filled area + solid outline + soft halo. Only the hue differs:
+      //   Cuaca (active disruption, high/critical) → blue
+      //   Waspada Dini (advisory / medium forecast) → amber, dashed outline
+      //   Titik Panas (FIRMS clusters) → red
+      // Severity stays readable through opacity and width, never through hue.
       map.addSource('weather-polygons-source', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
+      });
+      map.addLayer({
+        id: 'weather-polygons-halo',
+        type: 'line',
+        source: 'weather-polygons-source',
+        paint: {
+          'line-color': [
+            'match', ['get', 'severity'],
+            'medium', 'rgba(245,158,11,0.22)',
+            'rgba(47,129,247,0.25)',
+          ],
+          'line-width': 14,
+          'line-blur': 8,
+          'line-opacity': 0.9,
+        },
       });
       map.addLayer({
         id: 'weather-polygons-fill',
         type: 'fill',
         source: 'weather-polygons-source',
         paint: {
-          // Phase 175: paint derives from severity, never from the payload hue.
-          // Critical/high = hazard red, medium advisory = warning amber.
           'fill-color': [
             'match', ['get', 'severity'],
             'medium', '#f59e0b',
-            'high', '#ef4444',
-            'critical', '#ef4444',
-            '#ef4444',
+            '#2f81f7',
           ],
           'fill-opacity': [
             'match', ['get', 'severity'],
-            'medium', 0.14,
-            'high', 0.22,
-            'critical', 0.28,
-            0.18,
+            'medium', 0.18,
+            'high', 0.20,
+            'critical', 0.26,
+            0.20,
           ],
         },
       });
+      // Solid blue outline: disruption only (advisory gets its own dashed layer
+      // because line-dasharray cannot be data-driven in Mapbox GL).
       map.addLayer({
         id: 'weather-polygons-outline',
         type: 'line',
         source: 'weather-polygons-source',
+        filter: ['in', ['get', 'severity'], ['literal', ['high', 'critical']]],
         paint: {
-          'line-color': [
-            'match', ['get', 'severity'],
-            'medium', '#f59e0b',
-            '#ef4444',
-          ],
+          'line-color': '#60a5fa',
           'line-width': 2.0,
-          'line-dasharray': [4, 3],
+        },
+      });
+      map.addLayer({
+        id: 'weather-polygons-outline-advisory',
+        type: 'line',
+        source: 'weather-polygons-source',
+        filter: ['==', ['get', 'severity'], 'medium'],
+        paint: {
+          'line-color': '#fbbf24',
+          'line-width': 1.75,
+          'line-dasharray': [3, 2],
         },
       });
 
@@ -1126,26 +1166,38 @@ export default function CrisisMap({
             500, 60,
           ],
           'heatmap-opacity': 0.85,
-          // Phase 175: two-hue heat ramp only — warning amber at low density,
-          // hazard red at the peak. No orange/cyan.
+          // Phase M9-visual: Titik Panas is the red sibling — one red density
+          // ramp, no second hue competing with Waspada amber.
           'heatmap-color': [
             'interpolate', ['linear'], ['heatmap-density'],
-            0, 'rgba(245, 158, 11, 0)',
-            0.4, 'rgba(245, 158, 11, 0.45)',
-            0.7, 'rgba(245, 158, 11, 0.80)',
-            1, 'rgba(239, 68, 68, 1)',
+            0, 'rgba(239, 68, 68, 0)',
+            0.4, 'rgba(239, 68, 68, 0.40)',
+            0.7, 'rgba(239, 68, 68, 0.75)',
+            1, 'rgba(239, 68, 68, 0.95)',
           ],
         },
       });
       // Radius-area polygons: TRUE highlight footprint per cluster only
-      // (>=3 high-conf points within 5 km). Map-only orange exception.
+      // (>=3 high-conf points within 5 km). Same fill + solid outline + halo
+      // recipe as Cuaca/Waspada, hue shifted to the Titik Panas red.
+      map.addLayer({
+        id: 'firms-areas-halo',
+        type: 'line',
+        source: 'firms-areas-source',
+        paint: {
+          'line-color': 'rgba(239,68,68,0.22)',
+          'line-width': 16,
+          'line-blur': 8,
+          'line-opacity': 0.9,
+        },
+      });
       map.addLayer({
         id: 'firms-areas-fill',
         type: 'fill',
         source: 'firms-areas-source',
         paint: {
-          'fill-color': '#f59e0b',
-          'fill-opacity': 0.22,
+          'fill-color': '#ef4444',
+          'fill-opacity': 0.16,
         },
       });
       map.addLayer({
@@ -1153,7 +1205,7 @@ export default function CrisisMap({
         type: 'line',
         source: 'firms-areas-source',
         paint: {
-          'line-color': '#ef4444',
+          'line-color': '#f87171',
           'line-width': 1.5,
           'line-opacity': 0.9,
         },
@@ -1163,13 +1215,17 @@ export default function CrisisMap({
         type: 'circle',
         source: 'firms-source',
         paint: {
-          // Raw detections stay small + neutral (slate): only cluster
-          // highlight circles carry the orange map-only exception.
-          'circle-radius': 3,
-          'circle-color': '#e8eaed',
-          'circle-opacity': 0.8,
+          // Severity is size, not hue: the sibling stays red at every tier.
+          'circle-radius': [
+            'match', ['get', 'severity'],
+            'critical', 4.5,
+            'high', 3.5,
+            3,
+          ],
+          'circle-color': '#f87171',
+          'circle-opacity': 0.85,
           'circle-stroke-width': 1,
-          'circle-stroke-color': 'rgba(232, 234, 237, 0.38)',
+          'circle-stroke-color': 'rgba(12,16,23,0.85)',
         },
       });
       map.addLayer({
@@ -1177,12 +1233,12 @@ export default function CrisisMap({
         type: 'circle',
         source: 'firms-source',
         paint: {
-          // Transparent click halo around each center dot (neutral, map-only).
+          // Transparent click halo around each center dot.
           'circle-radius': 8,
-          'circle-color': 'rgba(203,213,225,0)',
+          'circle-color': 'rgba(248,113,113,0)',
           'circle-opacity': 0,
           'circle-stroke-width': 1,
-          'circle-stroke-color': 'rgba(232, 234, 237, 0.45)',
+          'circle-stroke-color': 'rgba(248,113,113,0.45)',
           'circle-stroke-opacity': 0.5,
         },
       });
@@ -1741,13 +1797,15 @@ export default function CrisisMap({
       // (and its distilled HTML) is defined above the style-load block.
       map.on('click', 'weather-polygons-fill', handleWeatherClick);
       map.on('click', 'weather-polygons-outline', handleWeatherClick);
+      map.on('click', 'weather-polygons-outline-advisory', handleWeatherClick);
 
       // Q3: FIRMS hotspot click → count + FRP / conf / dist-to-corridor provenance.
       map.on('click', 'firms-dots', handleFirmsClick);
       map.on('click', 'firms-dots-outline', handleFirmsClick);
       map.on('click', 'firms-areas-fill', handleFirmsClick);
       map.on('click', 'firms-areas-outline', handleFirmsClick);
-      ['firms-dots', 'firms-dots-outline', 'firms-areas-fill', 'firms-areas-outline', 'weather-polygons-fill'].forEach((layerId) => {
+      map.on('click', 'firms-areas-halo', handleFirmsClick);
+      ['firms-dots', 'firms-dots-outline', 'firms-areas-halo', 'firms-areas-fill', 'firms-areas-outline', 'weather-polygons-fill', 'weather-polygons-outline', 'weather-polygons-outline-advisory'].forEach((layerId) => {
         map.on('mouseenter', layerId, () => {
           if (mapRef.current) mapRef.current.getCanvas().style.cursor = 'pointer';
         });
@@ -3122,7 +3180,7 @@ export default function CrisisMap({
                         title="Disruption-only: hujan lebat high/critical (biru). Default ON."
                       >
                         <span className="text-[#e8eaed] flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-[#38b8f8] shrink-0" />
+                          <span className="w-2 h-2 rounded-full bg-[#2f81f7] border border-[#60a5fa] shrink-0" />
  <span>Gangguan</span>
                         </span>
                         <span className={`w-4 h-4 rounded flex items-center justify-center border ${
@@ -3155,7 +3213,7 @@ export default function CrisisMap({
  className="cursor-pointer w-full flex items-center justify-between p-1.5 rounded hover:bg-white/5 transition"
                       >
  <span className="text-[#e8eaed] flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-white/30 shrink-0" />
+                          <span className="w-2 h-2 rounded-full bg-[#ef4444]/20 border border-[#f87171] shrink-0" />
                           <span>Titik Panas (Satelit)</span>
                         </span>
                         <span className={`w-4 h-4 rounded flex items-center justify-center border ${

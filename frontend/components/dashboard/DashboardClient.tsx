@@ -40,6 +40,7 @@ import { useCorridorContext } from '@/hooks/useCorridorContext';
 import { useDashboardBootstrap } from '@/hooks/useDashboardBootstrap';
 import { useNewsVerification, isForecastActive, deriveForecastValidUntil, FORECAST_TAG, normalizeProvince, provinceSlug, displayTierLabel, AREA_WIDE_PROVINCE, SUMATRA_PROVINCE_ORDER, type MarketRegimeData, type NewsRelevanceTier } from '@/hooks/useNewsVerification';
 import { isDocumentVisible } from '@/lib/visibility';
+import { DS } from '@/lib/designTokens';
 import { FreshnessBadge } from '@/components/ui/FreshnessBadge';
 import { FreshnessBadge as StatusFreshnessBadge } from '@/components/dashboard/FreshnessBadge';
 import { GuidedDemoPanel } from '@/components/demo/GuidedDemoPanel';
@@ -72,6 +73,7 @@ import { RoutingStatusBanner } from '@/components/dashboard/RoutingStatusBanner'
 import { DispatcherAlertQueue } from '@/components/dashboard/DispatcherAlertQueue';
 import { HitlDecisionDrawer } from '@/components/dashboard/HitlDecisionDrawer';
 import { GuestEvaluationBanner } from '@/components/dashboard/GuestEvaluationBanner';
+import { NewsFilterModal } from '@/components/dashboard/NewsFilterModal';
 import { RouteDetailModal } from '@/components/sidebar/RouteDetailModal';
 import type { DisruptionImpactResponse, ImpactedVehicleAssessment } from '@/lib/types';
 
@@ -335,13 +337,20 @@ function FloatingMapLegend({
             <div className="flex items-center gap-2">
               <span
                 data-live-hazard={liveHazardPulse === 'cluster' ? 'cluster' : undefined}
-                className={`w-2.5 h-2.5 rounded-full bg-[#f59e0b]/70 shrink-0 ${
-                  liveHazardPulse === 'cluster' ? 'ds-live-pulse' : ''
-                }`}
-              />
+                className={`shrink-0 rounded-[4px] p-[2px] ${liveHazardPulse === 'cluster' ? 'ds-live-pulse' : ''}`}
+                style={{ backgroundColor: DS.layer.titikPanas.halo }}
+              >
+                <span
+                  className="block w-3 h-3 rounded-[2px]"
+                  style={{
+                    backgroundColor: 'rgba(239,68,68,0.16)',
+                    border: `1.5px solid ${DS.layer.titikPanas.outline}`,
+                  }}
+                />
+              </span>
               <div>
                 <span className="text-[#e8eaed] font-medium block">Titik Panas (Satelit) — sorotan bila ≥3 titik keyakinan tinggi dalam 5 km</span>
-                <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Titik netral per deteksi VIIRS; sorotan amber khusus peta bila ≥3 titik keyakinan tinggi (conf ≥80 atau FRP&gt;100) dalam 5 km. Klik area/titik = jumlah + FRP/conf/jarak koridor.</span>
+                <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Saudara merah: titik deteksi VIIRS merah dengan area isi + garis + halo yang sama seperti Cuaca dan Waspada. Ukuran titik naik mengikuti severity, bukan warna. Klik area/titik = jumlah + FRP/conf/jarak koridor.</span>
               </div>
             </div>
 
@@ -398,33 +407,68 @@ function FloatingMapLegend({
               </span>
 
               <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#38b8f8] shrink-0" />
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: DS.layer.truck }} />
                 <div>
-                  <span className="text-[#e8eaed] font-medium block">Armada Live (AIS · ADS-B · GPS)</span>
-                  <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Kapal, truk, dan kargo udara dengan transponder aktif.</span>
+                  <span className="text-[#e8eaed] font-medium block">Truk — darat</span>
+                  <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Emerald: unit darat live via GPS.</span>
                 </div>
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full border border-white/25 shrink-0" />
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: DS.layer.vessel }} />
+                <div>
+                  <span className="text-[#e8eaed] font-medium block">Kapal — laut</span>
+                  <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Silver: unit maritim live via AIS.</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: DS.layer.aircraft }} />
+                <div>
+                  <span className="text-[#e8eaed] font-medium block">Pesawat — udara</span>
+                  <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Violet: kargo udara live via ADS-B.</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span
+                  className="w-2.5 h-2.5 rounded-full border shrink-0"
+                  style={{ borderColor: `color-mix(in srgb, ${DS.layer.truck} 45%, transparent)` }}
+                />
                 <div>
                   <span className="text-[#e8eaed] font-medium block">Proyeksi Rute Estimasi</span>
-                  <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Lintasan terencana berbasis manifes pelayaran — posisi tanpa sinyal live.</span>
+                  <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Hue modalitas yang sama pada 45% dengan pusat kosong — posisi terencana tanpa sinyal live.</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span
+                  className="w-2.5 h-2.5 rounded-full border-2 shrink-0"
+                  style={{ borderColor: DS.hazard.warning }}
+                />
+                <div>
+                  <span className="text-[#e8eaed] font-medium block">Peringatan Armada</span>
+                  <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Cincin amber pada modalitas apa pun: unit terganggu atau dialihkan.</span>
                 </div>
               </div>
             </div>
 
-            {/* Weather: disruption is critical, advisory is warning. */}
+            {/* Weather: three siblings — blue Cuaca, amber Waspada, red Titik Panas. */}
             <div className="pt-2 mt-2 border-t border-white/10 space-y-2">
               <span className="text-[rgba(232,234,237,0.62)] font-sans font-semibold text-xs block">
                 Cuaca
               </span>
 
               <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#ef4444] shrink-0" />
+                <span className="shrink-0 rounded-[4px] p-[2px]" style={{ backgroundColor: DS.layer.cuaca.halo }}>
+                  <span
+                    className="block w-3 h-3 rounded-[2px]"
+                    style={{ backgroundColor: 'rgba(47,129,247,0.20)', border: `1.5px solid ${DS.layer.cuaca.outline}` }}
+                  />
+                </span>
                 <div>
                   <span className="text-[#e8eaed] font-medium block">Cuaca — {weatherDisruptionCount} zona</span>
-                  <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Hujan lebat disruptif: high/critical, presipitasi 50mm/24j atau banjir 80%. Default ON. Hazard: flood/landslide/severe_storm/marine_wave.</span>
+                  <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Biru, saudara aktif: hujan lebat disruptif high/critical, presipitasi 50mm/24j atau banjir 80%. Default ON. Halo biru + garis penuh; opacity naik mengikuti severity.</span>
                   <span
                     data-testid="weather-polygon-count"
                     className="text-xs text-[rgba(232,234,237,0.38)] font-sans tabular-nums block"
@@ -443,10 +487,15 @@ function FloatingMapLegend({
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full border border-dashed border-[#f59e0b] shrink-0" />
+                <span className="shrink-0 rounded-[4px] p-[2px]" style={{ backgroundColor: DS.layer.waspada.halo }}>
+                  <span
+                    className="block w-3 h-3 rounded-[2px]"
+                    style={{ backgroundColor: 'rgba(245,158,11,0.18)', border: `1.5px dashed ${DS.layer.waspada.outline}` }}
+                  />
+                </span>
                 <div>
                   <span className="text-[#e8eaed] font-medium block">Waspada Dini (Advisory) — {weatherAdvisoryCount} zona {showWeatherAdvisory ? '(ON)' : '(OFF)'}</span>
-                  <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Medium drizzle (mis. BMKG 60): hanya tampil bila toggle waspada dini ON. Default OFF, info-only.</span>
+                  <span className="text-xs text-[rgba(232,234,237,0.62)] font-sans">Amber, saudara prakiraan: medium drizzle (mis. BMKG 60), isi 18% + garis putus-putus + halo amber. Hanya tampil bila toggle waspada dini ON. Default OFF, info-only.</span>
                 </div>
               </div>
             </div>
@@ -967,6 +1016,35 @@ export default function DashboardClient() {
     () => (newsBreadthMeta?.provinces_missing || []).map((p) => normalizeProvince(p)),
     [newsBreadthMeta]
   );
+
+  // Phase M9-visual — the filter block moved into NewsFilterModal. These two
+  // derive the trigger badge (`Filter · 2`) and the one-line "what is active"
+  // summary under the search row, so the operator never has to open the modal
+  // to know why the list looks the way it does.
+  const activeNewsFilterCount =
+    (newsTierFilter !== 'ALL' ? 1 : 0) +
+    (selectedNewsCategory !== 'ALL' ? 1 : 0) +
+    (newsProvinceFilter !== 'ALL' ? 1 : 0);
+
+  const newsFilterSummary = useMemo(() => {
+    if (activeNewsFilterCount === 0) return null;
+    const parts: string[] = [];
+    if (newsTierFilter !== 'ALL') parts.push(newsTierFilter === 'crisis' ? 'Krisis' : 'Regional');
+    if (selectedNewsCategory !== 'ALL') {
+      parts.push(
+        selectedNewsCategory === 'OFFICIAL'
+          ? 'ANTARA'
+          : selectedNewsCategory === 'WEATHER'
+            ? 'BMKG'
+            : selectedNewsCategory === 'MARKET'
+              ? 'Harga'
+              : 'OSINT',
+      );
+    }
+    if (newsProvinceFilter !== 'ALL') parts.push(newsProvinceFilter);
+    parts.push(`${filteredNews.length} artikel`);
+    return parts.join(' · ');
+  }, [activeNewsFilterCount, newsTierFilter, selectedNewsCategory, newsProvinceFilter, filteredNews.length]);
 
   // Group the visible feed by province. Group order follows the chip order so the
   // list and the filter row tell the same story; order is deterministic, so an
@@ -3458,6 +3536,28 @@ export default function DashboardClient() {
       {/* Multi-Role Workspace Auth Modal */}
       <AuthModal isOpen={isAuthModalOpen} onClose={closeAuthModal} />
 
+      {/* Berita filter modal — tier / category / province, live preview.
+          Bottom sheet at 390px, centred dialog above `sm`. */}
+      <NewsFilterModal
+        isOpen={isNewsFilterOpen}
+        onClose={() => setIsNewsFilterOpen(false)}
+        tier={newsTierFilter}
+        onTierChange={setNewsTierFilter}
+        category={selectedNewsCategory}
+        onCategoryChange={setSelectedNewsCategory}
+        province={newsProvinceFilter}
+        onProvinceChange={setNewsProvinceFilter}
+        provinces={newsProvinceChips}
+        provincesMissing={newsProvincesMissing}
+        provinceCounts={newsBreadthMeta?.province_counts ?? null}
+        activeCount={activeNewsFilterCount}
+        onReset={() => {
+          setNewsTierFilter('ALL');
+          setSelectedNewsCategory('ALL');
+          setNewsProvinceFilter('ALL');
+        }}
+      />
+
       {/* Self-Serve Fleet Onboarding Modal */}
       <FleetOnboardingModal
         isOpen={isOnboardingModalOpen}
@@ -3580,215 +3680,68 @@ export default function DashboardClient() {
               </div>
             </div>
 
-            {/* Quick Search & Category Filter */}
-            <div className="space-y-2 shrink-0">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[rgba(232,234,237,0.62)]" />
-                <input
-                  type="text"
-                  value={newsSearchQuery}
-                  onChange={(e) => setNewsSearchQuery(e.target.value)}
-                  placeholder="Cari berita atau lokasi..."
-                  className="w-full pl-8 pr-7 py-1.5 rounded-lg bg-[#080d14] border border-white/10 text-xs text-[#e8eaed] placeholder:text-[rgba(232,234,237,0.38)] focus:outline-none focus:border-white/40 transition-colors font-sans"
-                />
-                {newsSearchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => setNewsSearchQuery('')}
-                    className="cursor-pointer absolute right-2 top-1/2 -translate-y-1/2 text-[rgba(232,234,237,0.62)] hover:text-white p-0.5"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                )}
-              </div>
-
-              <div className="grid grid-cols-4 gap-1 py-0.5 text-xs font-mono">
-                {[
-                  { id: 'ALL', label: 'Semua' },
-                  { id: 'OFFICIAL', label: 'ANTARA' },
-                  { id: 'WEATHER', label: 'BMKG' },
-                  { id: 'MARKET', label: 'Harga' },
-                ].map((tab) => (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => setSelectedNewsCategory(tab.id as 'ALL' | 'OFFICIAL' | 'WEATHER' | 'OSINT' | 'MARKET')}
-                    className={`cursor-pointer px-1.5 py-1 text-center rounded-lg border font-medium transition-colors text-xs ${selectedNewsCategory === tab.id
-                        ? 'bg-white text-[#080d14] border-white font-semibold'
-                        : 'bg-[#080d14] text-[rgba(232,234,237,0.62)] border-white/[0.08] hover:border-white/15 hover:text-[#e8eaed]'
-                      }`}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* Phase 176.9 (M9): below `md` the tier/province chips and the
-                  hazard pills fold behind one disclosure — the fixed-height
-                  sheet must spend its room on the feed, banner and footer. On
-                  `md`+ the block is always expanded, so every testid stays
-                  mounted and usable for the breadth specs. */}
-              <button
-                type="button"
-                data-testid="news-filter-disclosure"
-                aria-expanded={isNewsFilterOpen}
-                aria-controls="news-filter-block"
-                onClick={() => setIsNewsFilterOpen((v) => !v)}
-                className="md:hidden cursor-pointer flex items-center justify-between gap-2 px-2 py-1 rounded-lg bg-[#080d14] border border-white/10 text-xs font-mono text-[rgba(232,234,237,0.62)] hover:text-[#e8eaed] hover:border-white/20 transition-colors shrink-0"
-              >
-                <span className="flex items-center gap-1.5">
-                  <SlidersHorizontal className="w-3 h-3" />
-                  Filter
-                </span>
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isNewsFilterOpen ? 'rotate-180' : ''}`} />
-              </button>
-
-              <div
-                id="news-filter-block"
-                className={`${isNewsFilterOpen ? 'flex' : 'hidden'} flex-col gap-2 md:flex`}
-              >
-
-              {/* Display-tier chips (Phase 172.5 / M9). `Krisis` = the rows that
-                  passed the hazard gate; `Regional` = honest 48h regional context
-                  that never claims crisis relevance. Additive with the province
-                  chips below. */}
-              <div className="flex items-center gap-1" data-testid="news-tier-filter">
-                {([
-                  { id: 'ALL', label: 'Semua', testid: 'news-tier-all' },
-                  { id: 'crisis', label: 'Krisis', testid: 'news-tier-crisis' },
-                  { id: 'regional', label: 'Regional', testid: 'news-tier-regional' },
-                ] as const).map((tier) => (
-                  <button
-                    key={tier.id}
-                    type="button"
-                    data-testid={tier.testid}
-                    onClick={() => setNewsTierFilter(tier.id)}
-                    className={`cursor-pointer px-1.5 py-0.5 rounded border text-xs font-mono transition-colors ${
-                      newsTierFilter === tier.id
-                        ? 'bg-white text-[#080d14] border-white font-semibold'
-                        : 'bg-[#080d14] text-[rgba(232,234,237,0.62)] border-white/[0.08] hover:border-white/15 hover:text-[#e8eaed]'
-                    }`}
-                    title={
-                      tier.id === 'crisis'
-                        ? 'Berita yang lolos gerbang krisis (zona merah/kuning)'
-                        : tier.id === 'regional'
-                          ? 'Konteks regional 48 jam — bukan klaim krisis'
-                          : 'Tampilkan kedua tingkat: krisis dan regional'
-                    }
-                  >
-                    {tier.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* Province chips (Phase 172 / M9): the read path guarantees every
-                  province with a qualifying 48h article is present, so a chip per
-                  province is an honest map of what the window contains. Empty
-                  provinces are named, never hidden. */}
-              {(newsProvinceChips.length > 0 || newsProvincesMissing.length > 0) && (
-              <div className="flex flex-wrap items-center gap-1" data-testid="news-province-filter">
-                <button
-                  type="button"
-                  data-testid="news-province-chip-all"
-                  onClick={() => setNewsProvinceFilter('ALL')}
-                  className={`cursor-pointer px-1.5 py-0.5 rounded border text-xs font-mono transition-colors ${
-                    newsProvinceFilter === 'ALL'
-                      ? 'bg-white text-[#080d14] border-white font-semibold'
-                      : 'bg-[#080d14] text-[rgba(232,234,237,0.62)] border-white/[0.08] hover:border-white/15 hover:text-[#e8eaed]'
-                  }`}
-                  title="Tampilkan semua provinsi"
-                >
-                  Semua
-                </button>
-                {newsProvinceChips.map((province) => {
-                  const slug = provinceSlug(province);
-                  const active = newsProvinceFilter === province;
-                  const count = newsBreadthMeta?.province_counts?.[province];
-                  return (
-                    <button
-                      key={province}
-                      type="button"
-                      data-testid={`news-province-chip-${slug}`}
-                      onClick={() => setNewsProvinceFilter(active ? 'ALL' : province)}
-                      title={`Filter provinsi: ${province}${typeof count === 'number' ? ` (${count} artikel)` : ''}`}
-                      className={`cursor-pointer px-1.5 py-0.5 rounded border text-xs font-mono transition-colors ${
-                        active
-                          ? 'bg-white text-[#080d14] border-white font-semibold'
-                          : 'bg-[#080d14] text-[rgba(232,234,237,0.62)] border-white/[0.08] hover:border-white/15 hover:text-[#e8eaed]'
-                      }`}
-                    >
-                      {province}
-                      {typeof count === 'number' ? <span className="ml-1 text-[rgba(232,234,237,0.38)] tabular-nums">{count}</span> : null}
-                    </button>
-                  );
-                })}
-                {newsProvincesMissing.length > 0 && (
-                  <span
-                    data-testid="news-provinces-missing"
-                    className="px-1.5 py-0.5 rounded border border-dashed border-white/10 text-xs font-mono text-[rgba(232,234,237,0.38)]"
-                    title="Provinsi tanpa artikel yang lolos gerbang 48 jam pada jendela baca ini"
-                  >
-                    {newsProvincesMissing.join(' · ')}: Tidak ada artikel 48 jam
-                  </span>
-                )}
-              </div>
-              )}
-
-              {/* Compact Zona Filter Pills in Left News Drawer Header */}
-              <div className="space-y-1.5 pt-1">
+            {/* Quick Search + one compact Filter trigger (M9 visual).
+                The category row, tier row and 10-province chip grid used to be
+                always visible here and ate the top of the 390px sheet. They now
+                live in NewsFilterModal behind this one button, and the summary
+                line below says what is active without opening it. */}
+            <div className="space-y-1.5 shrink-0">
               <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setShowRedZones((v) => !v)}
-                  className={`${pillClass(showRedZones)} flex-1 justify-between`}
-                  title="Filter Peta: Zona Merah (Bencana Terkonfirmasi)"
-                >
-                  <span className="flex items-center gap-1.5">
- <span className={`w-2 h-2 rounded-full ${showRedZones ? 'bg-[#ef4444]' : 'border border-white/25'}`} />
- <span className="font-sans text-xs font-semibold">Merah</span>
-                  </span>
- <span className={`${chipClass(showRedZones)} ${liveNewsZoneCounts.red > 0 ? 'text-[#ef4444]' : ''}`}>
-                    {liveNewsZoneCounts.red}
-                  </span>
-                </button>
+                <div className="relative flex-1 min-w-0">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[rgba(232,234,237,0.62)]" />
+                  <input
+                    type="text"
+                    value={newsSearchQuery}
+                    onChange={(e) => setNewsSearchQuery(e.target.value)}
+                    placeholder="Cari berita atau lokasi..."
+                    className="w-full pl-8 pr-7 py-1.5 rounded-lg bg-[#080d14] border border-white/10 text-xs text-[#e8eaed] placeholder:text-[rgba(232,234,237,0.38)] focus:outline-none focus:border-white/40 transition-colors font-sans"
+                  />
+                  {newsSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setNewsSearchQuery('')}
+                      className="cursor-pointer absolute right-2 top-1/2 -translate-y-1/2 text-[rgba(232,234,237,0.62)] hover:text-white p-0.5"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
 
                 <button
                   type="button"
-                  onClick={() => setShowYellowZones((v) => !v)}
-                  className={`${pillClass(showYellowZones)} flex-1 justify-between`}
-                  title="Filter Peta: Zona Kuning (Perlu Klarifikasi / Waspada)"
+                  data-testid="news-filter-open"
+                  onClick={() => setIsNewsFilterOpen(true)}
+                  aria-haspopup="dialog"
+                  aria-expanded={isNewsFilterOpen}
+                  title="Buka filter Berita (tingkat, kategori, wilayah)"
+                  className={`cursor-pointer shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-mono transition-colors ${
+                    activeNewsFilterCount > 0
+                      ? 'bg-white text-[#080d14] border-white font-semibold'
+                      : 'bg-[#080d14] text-[rgba(232,234,237,0.62)] border-white/10 hover:border-white/20 hover:text-[#e8eaed]'
+                  }`}
                 >
-                  <span className="flex items-center gap-1.5">
- <span className={`w-2 h-2 rounded-full ${showYellowZones ? 'bg-[#f59e0b]' : 'border border-white/25'}`} />
- <span className="font-sans text-xs font-semibold">Kuning</span>
-                  </span>
- <span className={`${chipClass(showYellowZones)} ${liveNewsZoneCounts.yellow > 0 ? 'text-[#f59e0b]' : ''}`}>
-                    {liveNewsZoneCounts.yellow}
-                  </span>
+                  <SlidersHorizontal className="w-3.5 h-3.5" />
+                  <span>Filter</span>
+                  {activeNewsFilterCount > 0 && (
+                    <span
+                      data-testid="news-filter-active-count"
+                      className="px-1 rounded bg-[#080d14] text-white font-bold tabular-nums"
+                    >
+                      {activeNewsFilterCount}
+                    </span>
+                  )}
                 </button>
               </div>
 
-                {/* 4th chip: forecast (Prakiraan) — amber dashed swatch, own counter.
-                    Forecasts keep YELLOW_CLARIFY on the wire but are never counted
-                    in the Kuning bucket above (48h admission stays independent). */}
-                <button
-                  type="button"
-                  onClick={() => setShowForecastZones((v) => !v)}
-                  className={`${pillClass(showForecastZones)} w-full justify-between`}
-                  title="Filter Peta: Prakiraan Waspada Dini (YELLOW_CLARIFY, garis putus-putus amber — belum terkonfirmasi)"
+              {newsFilterSummary && (
+                <div
+                  data-testid="news-filter-summary"
+                  className="truncate text-xs font-mono text-[rgba(232,234,237,0.62)] tabular-nums"
+                  title={newsFilterSummary}
                 >
-                  <span className="flex items-center gap-1.5">
-                    <span className={`w-2 h-2 rounded-full border border-dashed ${showForecastZones ? 'border-[#f59e0b] bg-[#f59e0b]/25' : 'border-white/25 bg-transparent'}`} />
-                    <span className="font-sans text-xs font-semibold">Prakiraan</span>
-                    <span className={`font-sans text-xs font-normal ${showForecastZones ? 'opacity-70' : 'text-[rgba(232,234,237,0.38)]'}`}>Waspada Dini</span>
-                  </span>
-                  <span className={`${chipClass(showForecastZones)} ${liveNewsZoneCounts.forecast > 0 ? 'text-[#f59e0b]' : ''}`}>
-                    {liveNewsZoneCounts.forecast}
-                  </span>
-                </button>
-              </div>
-              {/* /filter disclosure block */}
-              </div>
+                  {newsFilterSummary}
+                </div>
+              )}
             </div>
 
             {/* Scrollable Feed List — Phase 176.9 (M9): the ONLY scroll
