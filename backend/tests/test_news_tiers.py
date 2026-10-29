@@ -370,6 +370,36 @@ def test_regional_tier_never_rewrites_zone_tier():
 # ---------------------------------------------------------------------------
 
 
+def test_foreign_conflict_story_is_not_regional_context():
+    gaza = row(
+        9400,
+        province="Aceh",
+        source="Tribun Aceh",
+        zone_tier="DROPPED_IRRELEVANT",
+        title="Pengungsi Gaza Terancam Hujan, Angin Kencang, dan Banjir",
+    )
+    assert news_router.is_regional_context(gaza) is False
+    assert news_router.classify_relevance_tier(gaza) == "dropped"
+
+    hormuz = row(
+        9401,
+        province="Aceh",
+        source="Tribun Aceh",
+        zone_tier="DROPPED_IRRELEVANT",
+        title="IRGC Klaim Tiga Kapal Tanker Terbakar di Selat Hormuz",
+    )
+    assert news_router.is_regional_context(hormuz) is False
+
+    local = row(
+        9402,
+        province="Aceh",
+        source="ANTARA News Aceh",
+        zone_tier="DROPPED_IRRELEVANT",
+        title="BPBD Pidie Jaya koordinasikan penanganan darurat cegah banjir",
+    )
+    assert news_router.is_regional_context(local) is True
+
+
 def test_yield_report_exposes_regional_counters(monkeypatch):
     news_yield.reset_yield_counters()
     monkeypatch.setattr(news_yield, "_redis", lambda: None)

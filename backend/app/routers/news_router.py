@@ -104,6 +104,28 @@ _REGIONAL_TOPIC_RE = re.compile(
     re.IGNORECASE,
 )
 
+# A foreign conflict story can be geocoded to a Sumatra province by a source
+# dateline and still match a broad topic word ("banjir", "kapal"). It is not
+# honest Sumatra regional context, so these markers veto the display tier.
+# Keep this deliberately narrow: local stories may mention other countries.
+_FOREIGN_CONTEXT_KEYWORDS = (
+    "gaza",
+    "palestina",
+    "israel",
+    "iran",
+    "hormuz",
+    "lebanon",
+    "teheran",
+    "ukraina",
+    "rusia",
+    "suriah",
+    "yaman",
+)
+_FOREIGN_CONTEXT_RE = re.compile(
+    r"\b(?:" + "|".join(re.escape(k) for k in _FOREIGN_CONTEXT_KEYWORDS) + r")\b",
+    re.IGNORECASE,
+)
+
 _PROVINCE_ALIASES = {
     "sumut": "Sumatera Utara",
     "sumatera utara": "Sumatera Utara",
@@ -189,7 +211,9 @@ def is_regional_context(article: Dict[str, Any], now: Optional[datetime] = None)
     * geocoded to one of the ten Sumatra provinces (never the area-wide
       `"Sumatera"` bucket, never `"Nasional"`, never an unknown label),
     * published within `REGIONAL_MAX_AGE_HOURS` (no timestamp → not provable),
-    * the headline/lead matches the broad regional topic set.
+    * the headline/lead matches the broad regional topic set,
+    * the headline/lead is not a foreign/global conflict story that a source
+      dateline happened to geocode into a Sumatra province.
 
     This is a DISPLAY predicate only. It never promotes a row to crisis and it
     never rewrites `zone_tier`.
@@ -218,6 +242,8 @@ def is_regional_context(article: Dict[str, Any], now: Optional[datetime] = None)
         str(article.get(key) or "")
         for key in ("title", "headline", "summary", "raw_description", "lead")
     )
+    if _FOREIGN_CONTEXT_RE.search(text):
+        return False
     return bool(_REGIONAL_TOPIC_RE.search(text))
 
 

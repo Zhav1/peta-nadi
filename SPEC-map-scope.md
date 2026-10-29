@@ -187,5 +187,6 @@ Out-of-scope dead reckoning resets to the last in-scope fix or hides; it is neve
 - Snapshot section truth now mirrors inner fire/weather status (`ok`/`stale`/`degraded`); degraded payloads are never stored as last-good.
 - Bootstrap schedules a detached single-flight refresh when a fresh stored row has degraded/stale fire or weather, while still returning the row immediately.
 - Snapshot news `last_updated` is the newest kept article's publish time (not wall-clock now), and rows are classified into the `crisis`/`regional` display tiers before seeding.
+- The regional display tier vetoes foreign/global conflict stories (Gaza, Israel, Iran, Hormuz, etc.) that a source dateline can mis-geocode into a Sumatra province.
 - Cache keys were bumped to `prehub.news.v2` / `prehub.weather.v2`; the news hook distrusts a `last_updated` more than 10 minutes ahead of its article data clock.
 - Verified: 7/7 `dashboard-first-paint` Playwright tests on a clean standalone server; backend snapshot/bootstrap/news suites pass.
