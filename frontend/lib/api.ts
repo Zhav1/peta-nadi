@@ -205,12 +205,13 @@ export const api = {
      * bounded live build (or the last stored row) instead of a fresh snapshot.
      */
     bootstrap: (
-      params?: { modality?: 'truck' | 'vessel' | 'air'; corridor_id?: string },
+      params?: { modality?: 'truck' | 'vessel' | 'air'; corridor_id?: string; sections?: 'all' | 'public' | 'tenant' },
       signal?: AbortSignal
     ) => {
       const sp = new URLSearchParams();
       if (params?.modality) sp.append('modality', params.modality);
       if (params?.corridor_id) sp.append('corridor_id', params.corridor_id);
+      if (params?.sections) sp.append('sections', params.sections);
       const qs = sp.toString() ? `?${sp.toString()}` : '';
       return request<import('./types').DashboardBootstrapResponse>(
         `/api/v1/dashboard/bootstrap${qs}`,

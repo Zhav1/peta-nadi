@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 from app.config import get_settings
+from app.services.sumatra_scope import scope_asset_status
 import logging
 import asyncio
 import time
@@ -217,7 +218,13 @@ async def source_health_check():
         logger.warning(f"Supabase data_sources unavailable; using Redis/env health only: {e}")
 
     sources = [_build_source_entry(spec, redis_health, db_map) for spec in _SOURCE_SPECS]
-    payload = {"sources": sources}
+    payload = {
+        "sources": sources,
+        # Filtered aircraft/FIRMS layers fail closed when this asset is gone.
+        # Surfacing it here makes a missing scope asset observable instead of
+        # silently blanking two map layers.
+        "map_scope": scope_asset_status(),
+    }
     _SOURCES_CACHE["data"] = payload
     _SOURCES_CACHE["timestamp"] = now
     return payload

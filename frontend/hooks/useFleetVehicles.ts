@@ -231,14 +231,14 @@ const FALLBACK_FLEET: FleetVehicle[] = [
   // Air Cargo (Live ADS-B Flights OpenSky Network & Commercial Cargo)
   {
     vehicle_id: 'AIR-001-KNO-CGK',
-    name: 'Garuda Cargo GA-7101 (KNO -> CGK)',
+    name: 'Garuda Indonesia Cargo 101 (KNO -> PLM)',
     modality: 'air',
-    path: [[98.8780, 3.6421], [101.5000, 0.5000], [104.5000, -3.0000], [106.6500, -6.1256]],
-    current_coords: [101.5000, 0.5000],
-    route_geometry: { type: 'LineString', coordinates: [[98.8780, 3.6421], [101.5000, 0.5000], [104.5000, -3.0000], [106.6500, -6.1256]] },
-    speed_kmh: 620.0, status: 'moving', progress: 0.35, cargo: '8.5 Ton Daging Beku & Vaksin', origin: 'Bandara Kualanamu (KNO)', destination: 'Soekarno-Hatta (CGK)',
+    path: [[98.8780, 3.6421], [99.8500, 2.4500], [101.4478, 0.5071], [103.6444, -1.6389], [104.7000, -2.8983]],
+    current_coords: [101.4478, 0.5071],
+    route_geometry: { type: 'LineString', coordinates: [[98.8780, 3.6421], [99.8500, 2.4500], [101.4478, 0.5071], [103.6444, -1.6389], [104.7000, -2.8983]] },
+    speed_kmh: 620.0, status: 'moving', progress: 0.35, cargo: '8.5 Ton Daging Beku & Vaksin', origin: 'Bandara Kualanamu (KNO)', destination: 'Bandara Sultan Mahmud Badaruddin II (PLM)',
     telemetry_source: 'ADSB_LIVE', signal_status: 'LIVE_STREAM', tracking_mode: 'LIVE_GPS', icao24: '8a011b', callsign: 'GIA7101',
-    heading_deg: 145
+    heading_deg: 142
   },
   {
     vehicle_id: 'AIR-002-PKU-BIM',

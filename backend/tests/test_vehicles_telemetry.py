@@ -449,3 +449,67 @@ def test_vehicle_geometry_caching_and_not_found():
     assert res_404.status_code == 404
 
 
+@pytest.mark.asyncio
+async def test_live_adsb_kl_plane_is_dropped_by_scope():
+    """Unit A: a mocked live ADS-B payload with one KL plane and in-scope
+    Sumatra planes must drop the KL plane at admission.
+
+    The live path only returns when >=5 planes survive, so the mock serves
+    5 in-scope planes (Medan, Belawan, Padang, Palembang, Pekanbaru) plus 1
+    KL plane (101.6869,3.1390, on Malaysia land inside the loose bbox).
+    """
+    from app.services import telemetry_service as ts_module
+
+    def _plane(hex_id, lon, lat, flight):
+        return {
+            "hex": hex_id,
+            "lat": lat,
+            "lon": lon,
+            "flight": flight,
+            "alt_baro": 30000,
+            "gs": 400.0,
+            "track": 90.0,
+            "t": "B738",
+        }
+
+    mock_planes = [
+        _plane("KL0001", 101.6869, 3.1390, "KL-OUT"),
+        _plane("MED001", 98.6722, 3.5952, "MED-IN"),
+        _plane("BEL001", 98.6776, 3.7922, "BEL-IN"),
+        _plane("PDG001", 100.3543, -0.9492, "PDG-IN"),
+        _plane("PLM001", 104.7565, -2.9909, "PLM-IN"),
+        _plane("PKU001", 101.4478, 0.5071, "PKU-IN"),
+    ]
+
+    class _FakeResp:
+        status_code = 200
+
+        def json(self):
+            return {"ac": mock_planes}
+
+    class _FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def get(self, url):
+            return _FakeResp()
+
+    service = ts_module.TelemetryService()
+    with patch.object(ts_module.httpx, "AsyncClient", _FakeClient):
+        planes = await service.fetch_live_sumatra_aircraft()
+
+    hexes = {p.get("icao24") for p in planes}
+    assert "KL0001" not in hexes, "KL plane must be dropped by the scope guard"
+    assert "MED001" in hexes, "Medan plane must survive"
+    assert len(planes) == 5
+    for p in planes:
+        assert p["modality"] == "air"
+        cc = p["current_coords"]
+        assert len(cc) == 2
+

@@ -139,13 +139,21 @@ def _reset_news_state(monkeypatch):
     monkeypatch.setattr(
         news_router,
         "_NEWS_CACHE",
-        {"articles": [], "last_fetched_at": 0.0, "last_updated": None},
+        {"articles": [], "last_fetched_at": 0.0, "last_updated": None, "meta": None},
     )
     monkeypatch.setattr(news_router, "_is_ingesting", False)
     monkeypatch.setattr(news_router, "_last_cycle_completed_at", None)
     monkeypatch.setattr(news_router, "_acquire_cross_process_ingestion_lock", lambda: True)
     monkeypatch.setattr(news_router, "_release_cross_process_ingestion_lock", lambda: None)
+    try:
+        news_router.reset_news_read_lock()
+    except Exception:
+        pass
     yield
+    try:
+        news_router.reset_news_read_lock()
+    except Exception:
+        pass
 
 
 def _install_heuristic(monkeypatch) -> List[str]:
@@ -376,3 +384,34 @@ async def test_router_write_back_covers_rows_the_guard_repaired(monkeypatch):
     assert len(calls) == 1
     assert len(fake.upserts) == 1
     assert fake.upserts[0]["rows"][0]["ground_truth_metrics"]["schema_version"] == 7
+
+
+@pytest.mark.asyncio
+async def test_concurrent_live_reads_coalesce_to_one_fetch(monkeypatch):
+    """Two simultaneous cache misses run one 150-row scan; second hits cache."""
+    import asyncio
+
+    fetches: list[int] = []
+
+    async def fake_fetch(limit: int = 150, province=None, severity=None, **_kwargs):
+        fetches.append(limit)
+        await asyncio.sleep(0.2)
+        return [_fresh_v7_row()]
+
+    monkeypatch.setattr(news_router, "fetch_news_from_supabase", fake_fetch)
+
+    async def caller():
+        return await news_router.get_live_news(
+            background_tasks=BackgroundTasks(),
+            province=None,
+            severity=None,
+            force_refresh=False,
+        )
+
+    first, second = await asyncio.gather(caller(), caller())
+
+    assert len(fetches) == 1, "concurrent cold misses must share one fetch"
+    assert first["status"] == "live"
+    assert second["status"] == "live"
+    assert second.get("cached") is True
+    assert first["articles"] == second["articles"]

@@ -29,6 +29,7 @@ from app.services.retention import (
     human_age_id,
 )
 from app.services.redis_client import SOURCE_CACHE_PREFIX, cache_get, cache_set
+from app.services.sumatra_scope import is_in_sumatra_scope
 from app.services.cpu_routing_service import optimize_fleet_routes_cpu, CORRIDOR_JUNCTION_NODES
 from app.adapters.cpu_routing_adapter import get_cpu_router
 from app.adapters.tomtom_adapter import TomTomAdapter
@@ -265,6 +266,22 @@ def _write_fusion_cache(snapshot: Dict[str, Any], now: Any) -> None:
         logger.debug(f"Fusion snapshot cache write failed: {e}")
 
 
+# Single-flight registry for concurrent cold misses, keyed by event loop.
+# One upstream call runs; the rest await it via ``asyncio.shield`` so a client
+# abort never cancels the shared fetch.
+_FUSION_INFLIGHT: Dict[int, asyncio.Task] = {}
+
+
+def reset_fusion_inflight() -> None:
+    """Drop in-flight fusion fetches (used by tests)."""
+    for task in list(_FUSION_INFLIGHT.values()):
+        try:
+            task.cancel()
+        except Exception:
+            pass
+    _FUSION_INFLIGHT.clear()
+
+
 async def _load_fusion_snapshot() -> tuple:
     """Return ``(snapshot, last_known_good, failure_reason)``.
 
@@ -281,12 +298,33 @@ async def _load_fusion_snapshot() -> tuple:
         if age_s is not None and age_s <= WEATHER_REFRESH_S:
             return cached.get("snapshot"), cached, None
 
+    # Single-flight the upstream fetch: concurrent cold misses share one call.
+    try:
+        loop_id = id(asyncio.get_running_loop())
+    except RuntimeError:
+        loop_id = 0
+    task = _FUSION_INFLIGHT.get(loop_id)
+    if task is None or task.done():
+        async def _fetch() -> Optional[Dict[str, Any]]:
+            return await asyncio.wait_for(
+                get_fusion_snapshot(), timeout=WEATHER_SUMMARY_TIMEOUT_S
+            )
+
+        task = asyncio.create_task(_fetch())
+
+        def _cleanup(t: asyncio.Task, k: int = loop_id) -> None:
+            if _FUSION_INFLIGHT.get(k) is t:
+                _FUSION_INFLIGHT.pop(k, None)
+
+        task.add_done_callback(_cleanup)
+        _FUSION_INFLIGHT[loop_id] = task
+
     failure_reason: Optional[str] = None
     snapshot: Optional[Dict[str, Any]] = None
     try:
-        snapshot = await asyncio.wait_for(
-            get_fusion_snapshot(), timeout=WEATHER_SUMMARY_TIMEOUT_S
-        )
+        snapshot = await asyncio.shield(task)
+    except asyncio.CancelledError:
+        raise
     except asyncio.TimeoutError:
         failure_reason = f"timeout {WEATHER_SUMMARY_TIMEOUT_S:g}s"
         logger.warning("Shared weather fusion timed out after %ss", WEATHER_SUMMARY_TIMEOUT_S)
@@ -709,6 +747,9 @@ def _firms_hotspot(raw: Any) -> Optional[Dict[str, Any]]:
         SUMATRA_BBOX[1] <= lat <= SUMATRA_BBOX[3]
         and SUMATRA_BBOX[0] <= lon <= SUMATRA_BBOX[2]
     ):
+        return None
+
+    if not is_in_sumatra_scope(lon, lat, "fire"):
         return None
 
     # Legacy API events store the raw CSV row; recover frp/confidence from it.

@@ -326,3 +326,46 @@ async def test_fresh_cache_is_served_without_refetching(summary_env):
     assert summary["cuaca"]["count"] == 4
     assert summary["waspada"]["count"] == 9
     assert summary["generated_at"] == fresh_iso
+
+
+@pytest.mark.asyncio
+async def test_concurrent_cold_fusion_misses_share_one_upstream(summary_env):
+    """Two concurrent cold misses coalesce: one upstream call, both served."""
+    import asyncio
+
+    summary_env["store"].clear()
+    try:
+        routing_router.reset_fusion_inflight()
+    except Exception:
+        pass
+
+    calls: list[int] = []
+    release = asyncio.Event()
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    async def fake_fusion():
+        calls.append(1)
+        await release.wait()
+        return {
+            "candidates": [],
+            "upstream": {"degraded": False},
+            "generated_at": now_iso,
+        }
+
+    summary_env["monkeypatch"].setattr(routing_router, "get_fusion_snapshot", fake_fusion)
+
+    async def caller():
+        return await routing_router._load_fusion_snapshot()
+
+    t1 = asyncio.create_task(caller())
+    t2 = asyncio.create_task(caller())
+    await asyncio.sleep(0.05)
+    assert len(calls) == 1, "concurrent cold misses must share one upstream fetch"
+    release.set()
+    (snap1, _, _), (snap2, _, _) = await asyncio.gather(t1, t2)
+    assert len(calls) == 1
+    assert snap1 is not None and snap2 is not None
+    try:
+        routing_router.reset_fusion_inflight()
+    except Exception:
+        pass

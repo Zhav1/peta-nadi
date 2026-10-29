@@ -8,8 +8,9 @@ instead of recomputing the world.
 
 Contract
 --------
-* :func:`build_global_snapshot` composes the four map-bootstrap sections
-  (``incidents``, ``news``, ``news_market_regime``, ``fire_hotspots``)
+* :func:`build_global_snapshot` composes the five map-bootstrap sections
+  (``incidents``, ``news``, ``news_market_regime``, ``fire_hotspots``,
+  ``weather_summary``)
   **in parallel** with a per-section timeout (:data:`SECTION_TIMEOUT_SECONDS`)
   and full isolation: a failed or slow section is marked ``degraded``/``timeout``
   and never fails the snapshot. The last good value for that section, if this
@@ -184,17 +185,18 @@ def _failure_section(
 
 
 # ---------------------------------------------------------------------------
-# Map bootstrap section plan (4 sections)
+# Map bootstrap section plan (5 sections)
 # ---------------------------------------------------------------------------
 
 def section_plan(corridor_id: str = DEFAULT_CORRIDOR_ID) -> dict[str, Callable[[], Awaitable[Any]]]:
     """Return the map-bootstrap section factories (name -> async callable).
 
-    Only the four sections the dashboard actually seeds from
-    ``GET /api/v1/dashboard/bootstrap`` are composed. Weather/corridor are
+    The five sections the dashboard seeds from
+    ``GET /api/v1/dashboard/bootstrap``. Weather/corridor are
     fetched live by the frontend, and Analitik/Laporan/Evaluasi are lazy-mounted,
     so persisting them every tick only inflated the row (~796 KB, of which
-    ~785 KB was news).
+    ~785 KB was news). ``weather_summary`` is counts-only (same shape as
+    ``GET /api/v1/weather/summary``), never polygons.
 
     ``corridor_id`` is kept for call-site compatibility (the bootstrap endpoint
     passes it) even though no remaining section is corridor-scoped.
@@ -235,11 +237,25 @@ def section_plan(corridor_id: str = DEFAULT_CORRIDOR_ID) -> dict[str, Callable[[
 
         return await fetch_fire_hotspots(current_user=default_guest_session())
 
+    async def weather_summary():
+        """Counts-only weather counters (same shape as /weather/summary).
+
+        Delegates to the existing summary builder with a default guest
+        session. Isolation in ``run_section`` marks timeouts/failures as
+        ``timeout``/``degraded`` with ``data: None`` (or the last-good
+        payload) — never a fake zero.
+        """
+        from app.auth.supabase_auth import default_guest_session
+        from app.routers.routing_router import fetch_weather_summary
+
+        return await fetch_weather_summary(current_user=default_guest_session())
+
     return {
         "incidents": incidents,
         "news": news_live,
         "news_market_regime": news_market_regime,
         "fire_hotspots": fire_hotspots,
+        "weather_summary": weather_summary,
     }
 
 

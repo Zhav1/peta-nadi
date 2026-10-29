@@ -30,9 +30,14 @@ export interface UseDashboardBootstrapOptions {
   modality?: 'truck' | 'vessel' | 'air';
   corridorId?: string;
   /**
-   * Hold the fetch until the session is resolved. The endpoint is auth-aware
-   * (DISPATCHER gets tenant `fleet`/`erp`), so firing before `setAuthToken` runs
-   * would fetch the guest shape and seed an operator with empty tenant data.
+   * Unit D: `public` is auth-blind (no tenant fleet/erp) and paints immediately.
+   * Hold the fetch with `enabled: false` when the caller needs the session first.
+   */
+  sections?: 'all' | 'public' | 'tenant';
+  /**
+   * Hold the fetch until the session is resolved. Only needed for `all`/`tenant`
+   * (the endpoint is auth-aware for tenant `fleet`/`erp`); `public` can fire
+   * immediately because it ignores `Authorization` entirely.
    */
   enabled?: boolean;
   refreshIntervalMs?: number;
@@ -59,6 +64,7 @@ export function useDashboardBootstrap(
   const enabled = options?.enabled ?? true;
   const modality = options?.modality ?? 'truck';
   const corridorId = options?.corridorId;
+  const sections = options?.sections;
   const refreshIntervalMs = options?.refreshIntervalMs ?? DEFAULT_REFRESH_INTERVAL_MS;
 
   const [data, setData] = useState<DashboardBootstrapResponse | null>(null);
@@ -80,7 +86,7 @@ export function useDashboardBootstrap(
     if (!hasAnswerRef.current) setIsLoading(true);
     try {
       const response = await api.dashboard.bootstrap(
-        { modality, ...(corridorId ? { corridor_id: corridorId } : {}) },
+        { modality, ...(corridorId ? { corridor_id: corridorId } : {}), ...(sections ? { sections } : {}) },
         controller.signal
       );
       if (controller.signal.aborted || !mountedRef.current) return;
@@ -100,7 +106,7 @@ export function useDashboardBootstrap(
         setIsLoading(false);
       }
     }
-  }, [enabled, modality, corridorId]);
+  }, [enabled, modality, corridorId, sections]);
 
   useEffect(() => {
     mountedRef.current = true;

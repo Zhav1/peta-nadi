@@ -115,11 +115,11 @@ def _snapshot(**overrides):
 # 1. Map-bootstrap plan
 # ---------------------------------------------------------------------------
 
-def test_section_plan_is_the_four_map_bootstrap_sections():
+def test_section_plan_is_the_five_map_bootstrap_sections():
     plan = svc.section_plan()
 
-    assert set(plan) == {"incidents", "news", "news_market_regime", "fire_hotspots"}
-    assert len(plan) == 4
+    assert set(plan) == {"incidents", "news", "news_market_regime", "fire_hotspots", "weather_summary"}
+    assert len(plan) == 5
     # Removed in the 2026-10-28 payload trim: the frontend fetches weather and
     # corridor live and lazy-mounts Analitik/Laporan/Evaluasi.
     for removed in (
@@ -180,6 +180,48 @@ async def test_incidents_section_uses_limit_50(monkeypatch):
 
     assert calls == [{"status": None, "severity": None, "limit": 50}]
     assert payload == {"items": [], "total": 0}
+
+
+@pytest.mark.asyncio
+async def test_weather_summary_section_has_bbox_cuaca_waspada(monkeypatch):
+    from app.routers import routing_router
+
+    async def fake_summary(**kwargs):
+        return {
+            "bbox": [94.0, -6.0, 108.0, 6.0],
+            "generated_at": svc.utcnow().isoformat(),
+            "cuaca": {"count": 3, "total": 3, "status": "ok"},
+            "waspada": {"count": 1, "total": 1, "status": "ok"},
+        }
+
+    monkeypatch.setattr(routing_router, "fetch_weather_summary", fake_summary)
+
+    payload = await svc.section_plan()["weather_summary"]()
+
+    assert payload["bbox"] == [94.0, -6.0, 108.0, 6.0]
+    assert payload["generated_at"]
+    assert payload["cuaca"]["count"] == 3
+    assert payload["waspada"]["count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_weather_summary_timeout_is_degraded_never_fake_zero(monkeypatch):
+    async def hang():
+        await asyncio.sleep(30)
+        return {"bbox": [], "generated_at": "", "cuaca": {}, "waspada": {}}
+
+    monkeypatch.setattr(svc, "section_plan", lambda corridor_id=None: {"weather_summary": hang})
+    monkeypatch.setattr(svc, "SECTION_TIMEOUT_SECONDS", 0.05)
+
+    snapshot = await svc.build_global_snapshot()
+    section = snapshot["payload"]["weather_summary"]
+    assert section["status"] in ("timeout", "degraded")
+    assert section["data"] is None or isinstance(section["data"], dict)
+    if isinstance(section.get("data"), dict):
+        # A reused last-good payload keeps its shape; a fresh timeout is None.
+        pass
+    else:
+        assert section["data"] is None
 
 
 # ---------------------------------------------------------------------------

@@ -9,6 +9,7 @@ import json
 
 from app.adapters.base import BaseAdapter
 from app.services.redis_client import STREAM_NASA_FIRMS, get_redis
+from app.services.sumatra_scope import is_in_sumatra_scope
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -274,6 +275,8 @@ class NASAFIRMSAdapter(BaseAdapter):
             return None
         if not (self.MIN_LAT <= lat <= self.MAX_LAT and self.MIN_LON <= lon <= self.MAX_LON):
             return None
+        if not is_in_sumatra_scope(lon, lat, "fire"):
+            return None
 
         try:
             frp = float(row.get("frp") or 0)
@@ -375,6 +378,12 @@ class NASAFIRMSAdapter(BaseAdapter):
 
                     # 2. Filter geographically for Pan-Sumatra bbox
                     if not (self.MIN_LAT <= lat <= self.MAX_LAT and self.MIN_LON <= lon <= self.MAX_LON):
+                        continue
+
+                    # 2b. Sumatra land scope (Unit A): drop sea flares and
+                    # foreign-land rows admitted by the loose bbox. The helper
+                    # import is top-level; a missing asset fails closed inside.
+                    if not is_in_sumatra_scope(lon, lat, "fire"):
                         continue
 
                     # 3. Nearest Trans-Sumatra Highway spine segment — provenance only

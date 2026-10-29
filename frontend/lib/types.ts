@@ -1496,10 +1496,11 @@ export interface WeatherPolygonMeta {
 /**
  * Per-section freshness reported by the bootstrap endpoint. `degraded` is an
  * exception inside that one section (data is null); `timeout` means it exceeded
- * its 5 s budget. A section can be `ok` even when the overall response is
- * `stale` (bounded live build), so render them independently.
+ * its 5 s budget; `stale` means the section reused its last-good value. A
+ * section can be `ok` even when the overall response is `stale` (bounded live
+ * build), so render them independently.
  */
-export type DashboardSectionStatus = 'ok' | 'degraded' | 'timeout';
+export type DashboardSectionStatus = 'ok' | 'stale' | 'degraded' | 'timeout';
 
 export interface DashboardSection<T = unknown> {
   status: DashboardSectionStatus;
@@ -1566,6 +1567,8 @@ export interface DashboardBootstrapSections {
   news?: DashboardSection<NewsLivePayload>;
   news_market_regime?: DashboardSection<Record<string, unknown>>;
   corridor_context?: DashboardSection<CorridorContext>;
+  /** World-truth weather counters snapshot (Unit D public-first first paint). */
+  weather_summary?: DashboardSection<WeatherHazardSummary>;
   weather_spatial_polygons?: DashboardSection<WeatherPolygonCollection>;
   fire_hotspots?: DashboardSection<FireHotspotResponse>;
   commodity_prices?: DashboardSection<{ items: Array<Record<string, unknown>>; total: number }>;

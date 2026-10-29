@@ -38,8 +38,10 @@ ALIAS_URL = "/dashboard/bootstrap"
 def _clean_section_cache():
     """Keep the service's last-good cache from leaking between tests."""
     svc.reset_section_cache()
+    dashboard_bootstrap.reset_inflight()
     yield
     svc.reset_section_cache()
+    dashboard_bootstrap.reset_inflight()
 
 
 # ---------------------------------------------------------------------------
@@ -254,24 +256,32 @@ def test_missing_snapshot_triggers_bounded_live_fallback(monkeypatch):
 
 
 def test_stale_snapshot_triggers_live_fallback_and_reports_reason(monkeypatch):
-    monkeypatch.setattr(
-        svc, "read_global_snapshot", lambda: _stored_snapshot(age_seconds=svc.STALE_AFTER_SECONDS + 60)
-    )
+    """Stale-first: a stale row is served immediately, refresh runs in backgnd.
 
-    live = _live_snapshot()
+    The live build is deliberately hung: the response must still answer fast
+    with the stored payload (stale=true / snapshot_stale), proving the caller
+    was not blocked.
+    """
+    stored = _stored_snapshot(age_seconds=svc.STALE_AFTER_SECONDS + 60)
+    monkeypatch.setattr(svc, "read_global_snapshot", lambda: stored)
 
-    async def fake_build(**kwargs):
-        return live
+    async def hang(**kwargs):
+        await asyncio.sleep(30)
+        return _live_snapshot()
 
-    monkeypatch.setattr(svc, "build_global_snapshot", fake_build)
+    monkeypatch.setattr(svc, "build_global_snapshot", hang)
 
+    started = time.perf_counter()
     res = client.get(URL)
+    elapsed = time.perf_counter() - started
     body = res.json()
 
     assert res.status_code == 200
     assert body["stale"] is True
     assert body["reason"] == "snapshot_stale"
-    assert body["computed_at"] == live["computed_at"]
+    assert body["computed_at"] == stored["computed_at"]
+    assert body["sections"]["incidents"]["data"]["total"] == 1
+    assert elapsed < 3.0
 
 
 def test_hung_live_build_does_not_hang_the_request(monkeypatch):
@@ -297,6 +307,11 @@ def test_hung_live_build_does_not_hang_the_request(monkeypatch):
 
 
 def test_failed_live_build_falls_back_to_the_stored_snapshot(monkeypatch):
+    """A failing background refresh keeps serving the stored row (stale-first).
+
+    The caller never blocks on the build, so the reason stays
+    ``snapshot_stale``; the background failure is only logged.
+    """
     stale = _stored_snapshot(age_seconds=svc.STALE_AFTER_SECONDS + 60)
     monkeypatch.setattr(svc, "read_global_snapshot", lambda: stale)
 
@@ -310,7 +325,7 @@ def test_failed_live_build_falls_back_to_the_stored_snapshot(monkeypatch):
 
     assert res.status_code == 200
     assert body["stale"] is True
-    assert body["reason"] == "live_build_failed"
+    assert body["reason"] == "snapshot_stale"
     assert body["sections"]["incidents"]["data"]["total"] == 1
     assert body["computed_at"] == stale["computed_at"]
 
@@ -369,3 +384,185 @@ def test_failing_tenant_sections_are_degraded_and_still_200(monkeypatch):
     assert body["sections"]["erp"]["status"] == "degraded"
     assert body["sections"]["erp"]["error"]
     assert res.headers["Cache-Control"] == "private, no-store"
+
+
+# ---------------------------------------------------------------------------
+# 6. sections=public|tenant|all
+# ---------------------------------------------------------------------------
+
+def test_sections_public_is_auth_blind_and_cacheable(monkeypatch):
+    monkeypatch.setattr(svc, "read_global_snapshot", lambda: _stored_snapshot())
+    _no_build(monkeypatch)
+
+    # Even a valid dispatcher token must not leak tenant data in public mode.
+    res = client.get(
+        URL,
+        params={"sections": "public"},
+        headers=_bearer(_token(ROLE_DISPATCHER, "pos_logistik")),
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["role"] == ROLE_GUEST
+    assert body["company_id"] is None
+    assert "fleet" not in body["sections"]
+    assert "erp" not in body["sections"]
+    assert body["sections"]["incidents"]["data"]["total"] == 1
+    assert res.headers["Cache-Control"] == "public, s-maxage=30, stale-while-revalidate=60"
+
+
+def test_sections_public_ignores_invalid_token(monkeypatch):
+    monkeypatch.setattr(svc, "read_global_snapshot", lambda: _stored_snapshot())
+    _no_build(monkeypatch)
+
+    res = client.get(URL, params={"sections": "public"}, headers=_bearer("invalid.token.value"))
+    assert res.status_code == 200
+    assert res.json()["role"] == ROLE_GUEST
+    assert res.headers["Cache-Control"].startswith("public,")
+
+
+def test_sections_tenant_guest_gets_empty_sections(monkeypatch):
+    monkeypatch.setattr(svc, "read_global_snapshot", lambda: _stored_snapshot())
+    _no_build(monkeypatch)
+
+    res = client.get(URL, params={"sections": "tenant"})
+    assert res.status_code == 200
+    body = res.json()
+    assert body["role"] == ROLE_GUEST
+    assert body["sections"] == {}
+    assert res.headers["Cache-Control"] == "private, no-store"
+
+
+def test_sections_tenant_dispatcher_gets_only_tenant_sections(monkeypatch):
+    monkeypatch.setattr(svc, "read_global_snapshot", lambda: _stored_snapshot())
+
+    from app.routers import vehicles_router
+    from app.services import travel_ledger_service
+
+    async def fake_fleet(**kwargs):
+        return {"status": "success", "vehicles": []}
+
+    def fake_erp(**kwargs):
+        return {"company_id": kwargs.get("company_id")}
+
+    monkeypatch.setattr(vehicles_router, "get_active_fleet", fake_fleet)
+    monkeypatch.setattr(travel_ledger_service, "build_erp_summary", fake_erp)
+
+    res = client.get(
+        URL,
+        params={"sections": "tenant"},
+        headers=_bearer(_token(ROLE_DISPATCHER, "pos_logistik")),
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert set(body["sections"]) == {"fleet", "erp"}
+    assert "incidents" not in body["sections"]
+    assert body["company_id"] == "pos_logistik"
+    assert res.headers["Cache-Control"] == "private, no-store"
+
+
+def test_sections_invalid_is_400_with_no_store(monkeypatch):
+    monkeypatch.setattr(svc, "read_global_snapshot", lambda: _stored_snapshot())
+
+    res = client.get(URL, params={"sections": "everything"})
+    assert res.status_code == 400
+    assert res.json()["detail"]["error"] == "INVALID_SECTIONS"
+    assert res.headers["Cache-Control"] == "private, no-store"
+
+
+def test_sections_all_preserves_default_behaviour(monkeypatch):
+    stored = _stored_snapshot()
+    monkeypatch.setattr(svc, "read_global_snapshot", lambda: stored)
+    _no_build(monkeypatch)
+
+    default = client.get(URL)
+    explicit = client.get(URL, params={"sections": "all"})
+    assert default.json() == explicit.json()
+    assert explicit.headers["Cache-Control"] == "private, no-store"
+
+
+# ---------------------------------------------------------------------------
+# 7. Single-flight + memory cache (direct _resolve_sections, deterministic)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_concurrent_missing_snapshots_trigger_one_build(monkeypatch):
+    monkeypatch.setattr(svc, "read_global_snapshot", lambda: None)
+    dashboard_bootstrap.reset_inflight()
+
+    calls: list[int] = []
+    release = asyncio.Event()
+
+    async def fake_build(**kwargs):
+        calls.append(1)
+        await release.wait()
+        return _live_snapshot()
+
+    monkeypatch.setattr(svc, "build_global_snapshot", fake_build)
+
+    async def caller():
+        return await dashboard_bootstrap._resolve_sections(None)
+
+    t1 = asyncio.create_task(caller())
+    t2 = asyncio.create_task(caller())
+    await asyncio.sleep(0.05)
+    assert len(calls) == 1
+    release.set()
+    r1, r2 = await asyncio.gather(t1, t2)
+
+    assert len(calls) == 1
+    for sections, computed_at, stale, reason in (r1, r2):
+        assert stale is True
+        assert reason == "missing_snapshot"
+        assert sections["incidents"]["status"] == "ok"
+    dashboard_bootstrap.reset_inflight()
+
+
+@pytest.mark.asyncio
+async def test_client_abort_does_not_cancel_shared_build(monkeypatch):
+    monkeypatch.setattr(svc, "read_global_snapshot", lambda: None)
+    dashboard_bootstrap.reset_inflight()
+
+    release = asyncio.Event()
+
+    async def fake_build(**kwargs):
+        await release.wait()
+        return _live_snapshot()
+
+    monkeypatch.setattr(svc, "build_global_snapshot", fake_build)
+
+    first = asyncio.create_task(dashboard_bootstrap._resolve_sections(None))
+    await asyncio.sleep(0.05)
+    first.cancel()
+    try:
+        await first
+    except asyncio.CancelledError:
+        pass
+
+    release.set()
+    sections, computed_at, stale, reason = await dashboard_bootstrap._resolve_sections(None)
+    assert stale is True
+    assert reason == "missing_snapshot"
+    assert sections["incidents"]["status"] == "ok"
+    dashboard_bootstrap.reset_inflight()
+
+
+@pytest.mark.asyncio
+async def test_memory_cache_serves_fresh_without_rebuild(monkeypatch):
+    live = _live_snapshot()
+    dashboard_bootstrap.reset_inflight()
+    dashboard_bootstrap._store_memory_snapshot(None, live)
+
+    def must_not_read():
+        raise AssertionError("memory hit must not touch the DB")
+
+    def must_not_build(**kwargs):
+        raise AssertionError("memory hit must not rebuild")
+
+    monkeypatch.setattr(svc, "read_global_snapshot", must_not_read)
+    monkeypatch.setattr(svc, "build_global_snapshot", must_not_build)
+
+    sections, computed_at, stale, reason = await dashboard_bootstrap._resolve_sections(None)
+    assert stale is False
+    assert reason is None
+    assert computed_at == live["computed_at"]
+    dashboard_bootstrap.reset_inflight()

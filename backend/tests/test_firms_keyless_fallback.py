@@ -176,6 +176,30 @@ async def test_keyless_csv_serves_bbox_filtered_hotspots(firms_env):
 
 
 # ---------------------------------------------------------------------------
+# 1b. Unit A: in-bbox but out-of-scope rows (KL + SCS) are dropped at source.
+# KL (101.6869,3.139) sits on Malaysia land inside the loose bbox; SCS
+# (105,5) is open water. Both must never reach the client even though the
+# bbox admits them. Existing envelope contract is unchanged.
+# ---------------------------------------------------------------------------
+
+KL_ROW = _csv_row(3.1390, 101.6869, 45.0)
+SCS_ROW = _csv_row(5.0, 105.0, 30.0)
+
+
+@pytest.mark.asyncio
+async def test_in_bbox_out_of_scope_rows_are_dropped(firms_env):
+    firms_env["serve_csv"](_csv(IN_BBOX_ROWS + [KL_ROW, SCS_ROW]))
+
+    body = await _get_hotspots()
+
+    assert body["status"] == "ok"
+    assert body["count"] == 3
+    assert body["total"] == 3
+    assert len(body["hotspots"]) == 3
+    assert {round(h["lat"], 2) for h in body["hotspots"]} == {3.6, -2.98, -5.45}
+
+
+# ---------------------------------------------------------------------------
 # 2. Keyless CSV unreachable -> degraded, null count, truthy reason
 # ---------------------------------------------------------------------------
 

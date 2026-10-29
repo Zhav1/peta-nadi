@@ -39,6 +39,7 @@ _fleet_schema.FleetVehicleTelemetry.model_rebuild(force=True)
 _fleet_schema.FleetTelemetryListResponse.model_rebuild(force=True)
 
 from app.services.redis_client import get_redis, STREAM_AISSTREAM
+from app.services.sumatra_scope import is_in_sumatra_scope
 from app.db.local_storage import (
     save_custom_vehicle,
     save_batch_custom_vehicles,
@@ -1286,6 +1287,9 @@ class TelemetryService:
                             if not (-6.5 <= lat <= 6.5 and 94.5 <= lon <= 109.0):
                                 continue
 
+                            if not is_in_sumatra_scope(lon, lat, "air"):
+                                continue
+
                             if hex_id not in live_planes:
                                 callsign = str(plane.get("flight") or plane.get("r") or f"FLT-{hex_id}").strip()
                                 alt = float(plane.get("alt_baro") or plane.get("alt_geom") or 28000.0) if plane.get("alt_baro") != "ground" else 0.0
@@ -1348,6 +1352,10 @@ class TelemetryService:
                         callsign = str(s[1] or f"FLT-{hex_id}").strip()
                         lon = float(s[5])
                         lat = float(s[6])
+                        if not (-6.5 <= lat <= 6.5 and 94.5 <= lon <= 109.0):
+                            continue
+                        if not is_in_sumatra_scope(lon, lat, "air"):
+                            continue
                         alt = float((s[7] or 8000.0) * 3.28084)
                         speed_kts = float((s[9] or 220.0) * 1.94384)
                         track = float(s[10] or 0.0)
@@ -2044,6 +2052,33 @@ class TelemetryService:
 
         # Full Unified Fleet
         full_fleet = enriched_trucks + enriched_custom + maritime_units + aviation_units
+
+        # Sumatra scope guard (Unit A): drop any air unit whose current fix is
+        # outside the scope mask, including baseline/simulated units. Vessels
+        # and trucks are not filtered. Units without a usable fix are kept so
+        # a transient enrichment gap never collapses offline fallback counts.
+        scoped_fleet: List[Dict[str, Any]] = []
+        dropped_air = 0
+        for unit in full_fleet:
+            if unit.get("modality") == "air":
+                cc = unit.get("current_coords")
+                try:
+                    lon_c = float(cc[0]) if cc and len(cc) >= 2 else None
+                    lat_c = float(cc[1]) if cc and len(cc) >= 2 else None
+                except (TypeError, ValueError, IndexError):
+                    lon_c, lat_c = None, None
+                if lon_c is not None and lat_c is not None:
+                    if not is_in_sumatra_scope(lon_c, lat_c, "air"):
+                        dropped_air += 1
+                        continue
+            scoped_fleet.append(unit)
+        if dropped_air:
+            logger.info(
+                "Sumatra scope guard dropped %d out-of-scope air units (%d kept)",
+                dropped_air,
+                sum(1 for v in scoped_fleet if v.get("modality") == "air"),
+            )
+        full_fleet = scoped_fleet
 
         # 5. Apply Query Filters
         filtered_fleet = full_fleet

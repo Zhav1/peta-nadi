@@ -470,6 +470,43 @@ def _schedule_continuous(name: str, runner, delay: float):
     return task
 
 
+async def _prewarm_dashboard() -> None:
+    """One-shot dashboard prewarm: snapshot build+store and fusion warm.
+
+    Runs detached after boot; never raises, never blocks startup. A failure is
+    logged and the 5-minute external tick remains the steady-state writer, so
+    this never duplicates periodic work.
+    """
+    try:
+        from app.services import dashboard_snapshot_service
+
+        status = await dashboard_snapshot_service.build_and_store_global_snapshot()
+        if isinstance(status, dict) and status.get("status") == "ok":
+            logger.info(
+                "BOOT: dashboard prewarm ok (%s sections, computed_at=%s)",
+                status.get("sections"),
+                status.get("computed_at"),
+            )
+        else:
+            logger.warning(
+                "BOOT: dashboard prewarm did not store a snapshot: %s",
+                (status or {}).get("error", status),
+            )
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        logger.warning(f"BOOT: dashboard prewarm snapshot failed (non-fatal): {exc}")
+    try:
+        from app.routers import routing_router
+
+        await routing_router._load_fusion_snapshot()
+        logger.info("BOOT: weather fusion prewarm done")
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        logger.warning(f"BOOT: weather fusion prewarm failed (non-fatal): {exc}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application startup and shutdown lifecycle."""
@@ -565,6 +602,17 @@ async def lifespan(app: FastAPI):
             logger.warning(f"JWKS pre-warm not scheduled (non-fatal): {e}")
     else:
         logger.info("BOOT: JWKS pre-warm skipped (no SUPABASE_URL / SUPABASE_JWKS_KEY)")
+
+    # Unit B prewarm: build+store the global snapshot and warm the weather
+    # fusion once after boot. Detached so startup is never blocked; tracked in
+    # `tasks` so shutdown cancels it. The 5-minute external tick stays the only
+    # periodic writer.
+    try:
+        prewarm_task = asyncio.create_task(_prewarm_dashboard(), name="prehub:dashboard-prewarm")
+        tasks.append(prewarm_task)
+        logger.info("BOOT: dashboard prewarm scheduled")
+    except Exception as e:
+        logger.warning(f"BOOT: dashboard prewarm not scheduled (non-fatal): {e}")
 
     yield  # Application runs here
 

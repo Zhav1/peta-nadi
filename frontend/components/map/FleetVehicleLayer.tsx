@@ -154,7 +154,7 @@ export function FleetVehicleLayer({
       if (map) {
         try {
           const routeSource = map.getSource('fleet-selected-route-source') as mapboxgl.GeoJSONSource | undefined;
-          let coords = (
+          const coords = (
             v.route_geometry?.coordinates ||
             (v as any).route_coordinates ||
             corridorSnappingService.getCorridorCoordinates(v.vehicle_id) ||
@@ -599,6 +599,12 @@ export function FleetVehicleLayer({
           } else if (!serverFix) {
             // Non-corridor unit without a ping: no position exists to draw.
             continue;
+          } else if (v.modality === 'air') {
+            // Scope guard: the backend guarantees the server fix is in scope,
+            // so draw it directly. Dead-reckoning a fast jet between 30 s fixes
+            // can drift it over Malaysia/Java; direct positioning cannot.
+            finalPos = serverFix;
+            finalBearing = v.heading_deg ?? (v as any).bearing ?? 0;
           } else {
             let drState = deadReckonMapRef.current[v.vehicle_id];
             if (!drState) {
@@ -627,13 +633,13 @@ export function FleetVehicleLayer({
                 ? v.sog_knots * 1.852
                 : v.ground_speed_kts
                   ? v.ground_speed_kts * 1.852
-                  : (v.speed_kmh || (v.modality === 'air' ? 520 : 25));
+                  : (v.speed_kmh || 25); // air draws server fixes directly above, never reaches dead-reckoning
 
             const effectiveBearing = v.cog_deg ?? v.heading_deg ?? (v as any).bearing ?? 0;
             finalBearing = effectiveBearing;
 
             if (effectiveSpeedKmh > 0) {
-              const speedScale = v.modality === 'air' ? 2.5 : 4.0;
+              const speedScale = 4.0; // air draws server fixes directly above, never dead-reckons
               const distKm = (effectiveSpeedKmh / 3600) * deltaSec * simSpeedMultiplier * speedScale;
               finalPos = deadReckonPosition(drState.currentPos, effectiveBearing, distKm);
 

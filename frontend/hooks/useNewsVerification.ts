@@ -2,6 +2,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { api } from '@/lib/api';
 import { isDocumentVisible, subscribeVisibility } from '@/lib/visibility';
+import {
+  PUBLIC_CACHE_TTL_MS,
+  PUBLIC_NEWS_CACHE_KEY,
+  readPublicCache,
+  writePublicCache,
+} from '@/lib/publicCache';
 
 import type { HazardImpactProfile, AffectedLocationNode, VerificationAudit, ForecastTag, NewsLivePayload } from '@/lib/types';
 
@@ -451,6 +457,30 @@ export function isForecastActive(
   return parsed > nowMs;
 }
 
+/** Timestamp precedence for the last-good cache (Unit D). Unparseable → 0. */
+function safeNewsTimestamp(value: unknown): number {
+  if (typeof value !== 'string' || !value.trim()) return 0;
+  const parsed = Date.parse(value.trim());
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+/** Newest article publish time in a normalized feed (fallback data clock). */
+function maxFeedArticleTimestamp(feed: NewsItem[]): number {
+  let max = 0;
+  for (const item of feed) {
+    const ts = safeNewsTimestamp(item.published_at ?? item.pubDate);
+    if (ts > max) max = ts;
+  }
+  return max;
+}
+
+/** Versioned `prehub.news.v1` payload: normalized feed + its data clock. */
+interface CachedNewsPayload {
+  feed: NewsItem[];
+  meta: NewsBreadthMeta | null;
+  lastUpdated: string | null;
+}
+
 export interface UseNewsVerificationOptions {
   /**
    * Bootstrap seed (`sections.news.data`). Goes through the same normalisation
@@ -487,6 +517,9 @@ export function useNewsVerification(options?: UseNewsVerificationOptions) {
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   // Timestamp of the last poll that actually returned a usable live feed (last-good snapshot).
   const [lastGoodAt, setLastGoodAt] = useState<string | null>(null);
+  // Mirror of `lastUpdated` for the timestamp-precedence check below. A ref
+  // (not the state) because `load()` resolves across renders.
+  const lastUpdatedRef = useRef<string | null>(null);
   const lastArticleSignatureRef = useRef<string | null>(null);
   const inFlightRef = useRef<AbortController | null>(null);
   // The bootstrap seed is consumed exactly once, by the first load() after the
@@ -497,6 +530,28 @@ export function useNewsVerification(options?: UseNewsVerificationOptions) {
     regime: seedRegime,
   });
   seedRef.current = { news: seedNews, regime: seedRegime };
+
+  // Unit D last-good cache: hydrate the public feed on mount so first paint
+  // shows cached news (< 2 h) instead of a skeleton. Independent of `enabled`
+  // (the bootstrap may still be in flight). Cached content is never labelled
+  // live: status stays `warming` until a seed/live payload passes the gates.
+  useEffect(() => {
+    const cached = readPublicCache<CachedNewsPayload>(PUBLIC_NEWS_CACHE_KEY, PUBLIC_CACHE_TTL_MS);
+    if (!cached || !Array.isArray(cached.feed) || cached.feed.length === 0) return;
+    const valid = cached.feed.filter(
+      (item) => item && typeof item.id === 'string' && (item.link || item.url)
+    );
+    if (valid.length === 0) return;
+    lastArticleSignatureRef.current = valid.map((n) => n.id).sort().join('|');
+    setNewsFeed(valid);
+    setNewsMeta(cached.meta ?? null);
+    if (typeof cached.lastUpdated === 'string' && cached.lastUpdated) {
+      setLastUpdated(cached.lastUpdated);
+      lastUpdatedRef.current = cached.lastUpdated;
+    }
+    setStatus('warming');
+    setIsLoading(false);
+  }, []);
 
   useEffect(() => {
     if (!enabled) return;
@@ -731,17 +786,51 @@ export function useNewsVerification(options?: UseNewsVerificationOptions) {
               return true;
             });
             if (mapped.length > 0) {
-              // "Freeze + per-article timestamp": the identity of the feed is its article-id set.
-              // A CDN-cached body (`s-maxage=60`, frozen `last_updated`) with the same ids must not
-              // re-derive the feed, advance per-article pubDate, or move the global "diperbarui" clock.
+              // Unit D cache precedence: never replace a newer cached feed with
+              // an older seed/live payload, and never move the freshness clock
+              // backward. The article-ID set remains the feed identity: an
+              // unchanged set is frozen (the existing CDN-replay contract), so
+              // a replay cannot re-derive per-article timestamps or advance the
+              // global clock. A changed set is accepted only when its data
+              // timestamp is same-or-newer than the painted feed.
               const signature = mapped.map((n) => n.id).sort().join('|');
-              setLastGoodAt(new Date().toISOString());
-              if (signature !== lastArticleSignatureRef.current) {
+              const signatureChanged = signature !== lastArticleSignatureRef.current;
+              const incomingTs = backendLastUpdated
+                ? safeNewsTimestamp(backendLastUpdated)
+                : maxFeedArticleTimestamp(mapped);
+              const currentTs = safeNewsTimestamp(lastUpdatedRef.current);
+              const hasCurrent = lastUpdatedRef.current != null;
+              let accept: boolean;
+              if (!hasCurrent) {
+                accept = true;
+              } else if (!signatureChanged) {
+                accept = false;
+              } else if (incomingTs <= 0 || currentTs <= 0) {
+                accept = true;
+              } else {
+                accept = incomingTs >= currentTs;
+              }
+              if (accept) {
+                const nextMeta = res.meta && typeof res.meta === 'object' ? res.meta : null;
+                const articleTs = maxFeedArticleTimestamp(mapped);
+                const nextStamp =
+                  backendLastUpdated ?? (articleTs > 0 ? new Date(articleTs).toISOString() : null);
                 lastArticleSignatureRef.current = signature;
+                setLastGoodAt(new Date().toISOString());
                 setNewsFeed(mapped);
                 // meta always travels with the article set it describes.
-                setNewsMeta(res.meta && typeof res.meta === 'object' ? res.meta : null);
-                if (backendLastUpdated) setLastUpdated(backendLastUpdated);
+                setNewsMeta(nextMeta);
+                if (nextStamp) {
+                  setLastUpdated(nextStamp);
+                  lastUpdatedRef.current = nextStamp;
+                }
+                // Public data only (the news feed is public); written after the
+                // permalink/freshness/discourse gates above already passed.
+                writePublicCache<CachedNewsPayload>(PUBLIC_NEWS_CACHE_KEY, {
+                  feed: mapped,
+                  meta: nextMeta,
+                  lastUpdated: nextStamp ?? lastUpdatedRef.current,
+                });
               }
               setStatus('live');
             } else {

@@ -43,6 +43,12 @@ import { isDocumentVisible } from '@/lib/visibility';
 import { DS } from '@/lib/designTokens';
 import { FreshnessBadge } from '@/components/ui/FreshnessBadge';
 import { FreshnessBadge as StatusFreshnessBadge } from '@/components/dashboard/FreshnessBadge';
+import {
+  PUBLIC_CACHE_TTL_MS,
+  PUBLIC_WEATHER_CACHE_KEY,
+  readPublicCache,
+  writePublicCache,
+} from '@/lib/publicCache';
 import { GuidedDemoPanel } from '@/components/demo/GuidedDemoPanel';
 import AnalyticsSection from '@/components/dashboard/AnalyticsSection';
 import ReportsSection from '@/components/dashboard/ReportsSection';
@@ -113,6 +119,21 @@ const NAV_TABS = [
 
 function isAbortError(err: unknown): boolean {
   return !!err && typeof err === 'object' && (err as { name?: string }).name === 'AbortError';
+}
+
+/** Unit D: `generated_at` comparison clock. Unparseable/missing → 0 (unknown). */
+function parseGeneratedAt(value: unknown): number {
+  if (typeof value !== 'string' || !value.trim()) return 0;
+  const parsed = Date.parse(value.trim());
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+/** Advisory layer is medium-only (never double-counts disruption highs). */
+function mediumOnlyAdvisoryFeatures(features: GeoJSON.Feature[]): GeoJSON.Feature[] {
+  return (features ?? []).filter((f) => {
+    const sev = String((f.properties as Record<string, unknown>)?.severity ?? 'medium').toLowerCase();
+    return sev === 'medium' || sev === 'low';
+  });
 }
 
 // Applies operational approval styling: the approved corridor takes the single
@@ -602,9 +623,10 @@ function FloatingMapLegend({
 export default function DashboardClient() {
   const { user, role, isAuthenticated, isLoading: isAuthLoading, openAuthModal, isAuthModalOpen, closeAuthModal } = useAuth();
 
-  // Phase 163b (M8): one auth-aware bootstrap read seeds the map. Held until the
-  // session is resolved because the endpoint is auth-aware (tenant fleet/erp).
-  const bootstrap = useDashboardBootstrap({ modality: 'truck', enabled: !isAuthLoading });
+  // Unit D public-first: the main snapshot is `sections=public` (auth-blind, no
+  // tenant fleet/erp) so it fires on mount instead of waiting for the session.
+  // Tenant fleet/ERP and role-gated controls stay auth-driven below.
+  const bootstrap = useDashboardBootstrap({ modality: 'truck', enabled: true, sections: 'public' });
   const bootstrapSections = bootstrap.data?.sections;
   const seededIncidents =
     bootstrapSections?.incidents?.status === 'ok' ? bootstrapSections.incidents.data?.items : undefined;
@@ -621,6 +643,12 @@ export default function DashboardClient() {
       : undefined;
   const seededFireHotspots =
     bootstrapSections?.fire_hotspots?.status === 'ok' ? bootstrapSections.fire_hotspots.data : undefined;
+  // Unit D: snapshot seed for the world-truth counters (`ok` or `stale`).
+  const seededWeatherSummary =
+    bootstrapSections?.weather_summary?.status === 'ok' ||
+    bootstrapSections?.weather_summary?.status === 'stale'
+      ? bootstrapSections.weather_summary.data
+      : undefined;
   // `fleet` is deliberately NOT seeded: the snapshot's fleet section is built for
   // one modality (default `truck`) while this view draws the multimodal macro
   // slice (tenant trucks + situational vessels/air). Seeding it would blank the
@@ -645,7 +673,7 @@ export default function DashboardClient() {
     tenantVehicles: tenantFleetVehicles,
     tenantAssetCount: tenantFleetAssetCount,
     canToggleSimulation: canToggleFleetSimulation,
-  } = useFleetVehicles(undefined, { enabled: !bootstrap.isLoading });
+  } = useFleetVehicles(undefined, { enabled: !isAuthLoading });
 
   // Next.js App Router query parameters for session-local routing deep-linking
   const searchParams = useSearchParams();
@@ -1562,46 +1590,123 @@ export default function DashboardClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bootstrap.isLoading]);
 
-  // Advisory (purple, default OFF): full-fidelity medium path, fetched only when toggled ON.
+  // Waspada advisory (purple, default OFF): never rendered unless toggled ON
+  // (`advisoryFeatures` gates it). Unit D: prefetch the medium polygons on idle
+  // once the world-truth counter resolves, so the ON toggle opens instantly.
+  const [weatherAdvisoryLoading, setWeatherAdvisoryLoading] = useState(false);
+  // Phase 160 world-truth counters (declared here so the prefetch below can
+  // read them; hydration/seed/live effects live further down).
+  const [weatherSummary, setWeatherSummary] = useState<WeatherHazardSummary | null>(null);
+  const weatherSummaryRef = useRef<WeatherHazardSummary | null>(null);
+
+  // Prefetch (OFF path): fills the cache without ever lighting the loading
+  // state and without blocking first paint (idle or ~1.5 s, aborted on unmount).
+  useEffect(() => {
+    if (!weatherSummary || showWeatherAdvisory || advisoryWeatherPolygons) return;
+    let cancelled = false;
+    const controller = new AbortController();
+    const run = async () => {
+      try {
+        const geojson = await api.weather.spatialPolygons(
+          { min_severity: 'medium', min_precip: 0, min_flood: 0 },
+          controller.signal
+        );
+        if (cancelled || controller.signal.aborted) return;
+        setAdvisoryWeatherPolygons({
+          type: 'FeatureCollection',
+          features: mediumOnlyAdvisoryFeatures(geojson.features ?? []),
+        });
+      } catch {
+        // Quiet: the ON-toggle path retries immediately.
+      }
+    };
+    const idleOwner = window as unknown as {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    if (typeof idleOwner.requestIdleCallback === 'function') {
+      const idleId = idleOwner.requestIdleCallback(() => { void run(); }, { timeout: 2000 });
+      return () => {
+        cancelled = true;
+        controller.abort();
+        idleOwner.cancelIdleCallback?.(idleId);
+      };
+    }
+    const timer = setTimeout(() => { void run(); }, 1500);
+    return () => {
+      cancelled = true;
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [weatherSummary, showWeatherAdvisory, advisoryWeatherPolygons]);
+
+  // Toggle (ON path): fetches immediately when the prefetch missed, with a
+  // "Memuat..." loading state until it settles.
   useEffect(() => {
     if (!showWeatherAdvisory) {
-      setAdvisoryWeatherPolygons(null);
+      setWeatherAdvisoryLoading(false);
       return;
     }
+    if (advisoryWeatherPolygons) return;
     let isMounted = true;
     const controller = new AbortController();
-    async function loadAdvisoryWeather() {
+    setWeatherAdvisoryLoading(true);
+    (async () => {
       try {
         const geojson = await api.weather.spatialPolygons(
           { min_severity: 'medium', min_precip: 0, min_flood: 0 },
           controller.signal
         );
         if (!isMounted || controller.signal.aborted) return;
-        // Keep advisory layer to medium-only to avoid double-counting disruption highs.
-        const mediumOnly: GeoJSON.FeatureCollection = {
+        setAdvisoryWeatherPolygons({
           type: 'FeatureCollection',
-          features: (geojson.features ?? []).filter((f) => {
-            const sev = String((f.properties as Record<string, unknown>)?.severity ?? 'medium').toLowerCase();
-            return sev === 'medium' || sev === 'low';
-          }),
-        };
-        setAdvisoryWeatherPolygons(mediumOnly);
+          features: mediumOnlyAdvisoryFeatures(geojson.features ?? []),
+        });
       } catch (e) {
+        if (!isMounted || controller.signal.aborted) return;
         console.warn('Backend advisory weather polygons fallback:', e);
+      } finally {
+        if (isMounted && !controller.signal.aborted) setWeatherAdvisoryLoading(false);
       }
-    }
-    void loadAdvisoryWeather();
+    })();
     return () => {
       isMounted = false;
       controller.abort();
     };
-  }, [showWeatherAdvisory]);
+  }, [showWeatherAdvisory, advisoryWeatherPolygons]);
 
   // Phase 160: world-truth counters. Fetched on mount + on the weather interval
   // regardless of layer toggles; the last good summary is kept in a ref so a
   // failed refresh marks the counters stale instead of blanking them.
-  const [weatherSummary, setWeatherSummary] = useState<WeatherHazardSummary | null>(null);
-  const weatherSummaryRef = useRef<WeatherHazardSummary | null>(null);
+  // Unit D: the counter also paints from the last-good cache/snapshot without
+  // waiting for the live fetch; the FreshnessBadge shows the real data timestamp.
+  // (State lives above, next to the advisory prefetch that reads it.)
+
+  // Last-good cache first paint (effect, never a render-time read: avoids a
+  // hydration mismatch between server and client HTML).
+  useEffect(() => {
+    const cached = readPublicCache<WeatherHazardSummary>(PUBLIC_WEATHER_CACHE_KEY, PUBLIC_CACHE_TTL_MS);
+    if (cached?.cuaca && cached?.waspada) {
+      weatherSummaryRef.current = cached;
+      setWeatherSummary(cached);
+    }
+  }, []);
+
+  // Bootstrap snapshot seed: accepted only with both buckets, and never over a
+  // newer cached/live summary (the data timestamp, not the fetch time, decides).
+  useEffect(() => {
+    if (!seededWeatherSummary?.cuaca || !seededWeatherSummary?.waspada) return;
+    const current = weatherSummaryRef.current;
+    if (current) {
+      const incomingTs = parseGeneratedAt(seededWeatherSummary.generated_at);
+      if (incomingTs <= 0) return;
+      const currentTs = parseGeneratedAt(current.generated_at);
+      if (currentTs > 0 && incomingTs <= currentTs) return;
+    }
+    weatherSummaryRef.current = seededWeatherSummary;
+    setWeatherSummary(seededWeatherSummary);
+    writePublicCache(PUBLIC_WEATHER_CACHE_KEY, seededWeatherSummary);
+  }, [seededWeatherSummary]);
 
   useEffect(() => {
     let isMounted = true;
@@ -1628,8 +1733,18 @@ export default function DashboardClient() {
         if (!summary?.cuaca || !summary?.waspada) {
           throw new Error('weather summary shape invalid');
         }
+        // Cache precedence: only a same-or-newer data timestamp may replace the
+        // painted summary, so the freshness clock never moves backward.
+        const current = weatherSummaryRef.current;
+        if (current) {
+          const incomingTs = parseGeneratedAt(summary.generated_at);
+          if (incomingTs <= 0) return;
+          const currentTs = parseGeneratedAt(current.generated_at);
+          if (currentTs > 0 && incomingTs <= currentTs) return;
+        }
         weatherSummaryRef.current = summary;
         setWeatherSummary(summary);
+        writePublicCache(PUBLIC_WEATHER_CACHE_KEY, summary);
       } catch (e) {
         if (!isMounted || controller.signal.aborted) return;
         console.warn('Weather summary fallback (stale counters):', e);
@@ -4125,6 +4240,7 @@ export default function DashboardClient() {
                 corridorContext={corridorContext}
                 spatialWeatherPolygons={combinedWeatherPolygons}
                 showWeatherAdvisory={showWeatherAdvisory}
+                weatherAdvisoryLoading={weatherAdvisoryLoading}
                 onToggleWeatherAdvisory={() => setShowWeatherAdvisory((v) => !v)}
                 routingInfo={routingInfo}
                 isLeftSidebarCollapsed={isLeftSidebarCollapsed}

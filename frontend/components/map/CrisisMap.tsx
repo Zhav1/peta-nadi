@@ -27,7 +27,7 @@ import {
 import { api } from '@/lib/api';
 import { resolvePopoverDualMetric } from '@/lib/tripCostCalculator';
 import { MAP_BASE_PAINT, MAP_BASE_LAYER_IDS } from '@/lib/mapBasePaint';
-import { WASPADA_DOTS_HALO_PAINT, WASPADA_DOTS_PAINT } from '@/lib/mapDataPaint';
+import { MAP_KEYLINE, WASPADA_DOTS_HALO_PAINT, WASPADA_DOTS_PAINT } from '@/lib/mapDataPaint';
 import { waspadaDotsFromFeatures } from '@/lib/waspadaDots';
 import { DS } from '@/lib/designTokens';
 import {
@@ -94,6 +94,8 @@ export interface CrisisMapProps {
   corridorContext?: import('@/lib/types').CorridorContext | null;
   spatialWeatherPolygons?: GeoJSON.FeatureCollection | null;
   showWeatherAdvisory?: boolean;
+  /** Unit D: true while the ON-toggle advisory fetch is in flight. */
+  weatherAdvisoryLoading?: boolean;
   onToggleWeatherAdvisory?: () => void;
   routingInfo?: { solver: string; compute_time_ms: number | null; savings_pct: number | null } | null;
   isLeftSidebarCollapsed?: boolean;
@@ -285,7 +287,7 @@ function haversineKm(lon1: number, lat1: number, lon2: number, lat2: number): nu
  */
 function setWaspadaLayerVisibility(map: mapboxgl.Map, visible: boolean) {
   const visibility = visible ? 'visible' : 'none';
-  for (const id of ['waspada-dots', 'waspada-dots-halo']) {
+  for (const id of ['waspada-dots', 'waspada-dots-halo', 'waspada-dots-hit']) {
     if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', visibility);
   }
 }
@@ -433,6 +435,7 @@ export default function CrisisMap({
   corridorContext,
   spatialWeatherPolygons,
   showWeatherAdvisory = false,
+  weatherAdvisoryLoading = false,
   onToggleWeatherAdvisory,
   routingInfo,
   isLeftSidebarCollapsed = false,
@@ -1173,6 +1176,19 @@ export default function CrisisMap({
         source: 'waspada-dots-source',
         paint: WASPADA_DOTS_PAINT as unknown as mapboxgl.CircleLayerSpecification['paint'],
       });
+      // Transparent click target: the visible halo shrinks at low zoom for
+      // legibility, but the click area stays at radius 10. Added right after
+      // the visible dots so it never sits above unrelated (firms/fleet) layers.
+      map.addLayer({
+        id: 'waspada-dots-hit',
+        type: 'circle',
+        source: 'waspada-dots-source',
+        paint: {
+          'circle-radius': 10,
+          'circle-color': 'rgba(0,0,0,0)',
+          'circle-opacity': 0,
+        },
+      });
 
       // 0c. FIRMS VIIRS_SNPP_NRT active fire hotspots
       // (FRP-weighted heat + radius-area polygons + FRP-sized center dots)
@@ -1228,9 +1244,9 @@ export default function CrisisMap({
         source: 'firms-areas-source',
         paint: {
           'line-color': 'rgba(239,68,68,0.22)',
-          'line-width': 16,
+          'line-width': ['interpolate', ['linear'], ['zoom'], 4, 12, 8, 16],
           'line-blur': 8,
-          'line-opacity': 0.9,
+          'line-opacity': ['interpolate', ['linear'], ['zoom'], 4, 0.5, 8, 0.9],
         },
       });
       map.addLayer({
@@ -1266,8 +1282,8 @@ export default function CrisisMap({
           ],
           'circle-color': '#f87171',
           'circle-opacity': 0.85,
-          'circle-stroke-width': 1,
-          'circle-stroke-color': 'rgba(12,16,23,0.85)',
+          'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 4, 1.25, 7, 1.25, 8, 1],
+          'circle-stroke-color': MAP_KEYLINE,
         },
       });
       map.addLayer({
@@ -1275,13 +1291,15 @@ export default function CrisisMap({
         type: 'circle',
         source: 'firms-source',
         paint: {
-          // Transparent click halo around each center dot.
+          // Transparent click halo around each center dot. Radius stays 8 so
+          // the click target never shrinks; only the visible stroke fades at
+          // low zoom.
           'circle-radius': 8,
           'circle-color': 'rgba(248,113,113,0)',
           'circle-opacity': 0,
           'circle-stroke-width': 1,
           'circle-stroke-color': 'rgba(248,113,113,0.45)',
-          'circle-stroke-opacity': 0.5,
+          'circle-stroke-opacity': ['interpolate', ['linear'], ['zoom'], 4, 0.2, 8, 0.5],
         },
       });
 
@@ -1842,6 +1860,7 @@ export default function CrisisMap({
       map.on('click', 'weather-polygons-outline-advisory', handleWeatherClick);
       map.on('click', 'waspada-dots', handleWeatherClick);
       map.on('click', 'waspada-dots-halo', handleWeatherClick);
+      map.on('click', 'waspada-dots-hit', handleWeatherClick);
 
       // Q3: FIRMS hotspot click → count + FRP / conf / dist-to-corridor provenance.
       map.on('click', 'firms-dots', handleFirmsClick);
@@ -1849,7 +1868,7 @@ export default function CrisisMap({
       map.on('click', 'firms-areas-fill', handleFirmsClick);
       map.on('click', 'firms-areas-outline', handleFirmsClick);
       map.on('click', 'firms-areas-halo', handleFirmsClick);
-      ['firms-dots', 'firms-dots-outline', 'firms-areas-halo', 'firms-areas-fill', 'firms-areas-outline', 'weather-polygons-fill', 'weather-polygons-outline', 'weather-polygons-outline-advisory', 'waspada-dots', 'waspada-dots-halo'].forEach((layerId) => {
+      ['firms-dots', 'firms-dots-outline', 'firms-areas-halo', 'firms-areas-fill', 'firms-areas-outline', 'weather-polygons-fill', 'weather-polygons-outline', 'weather-polygons-outline-advisory', 'waspada-dots', 'waspada-dots-halo', 'waspada-dots-hit'].forEach((layerId) => {
         map.on('mouseenter', layerId, () => {
           if (mapRef.current) mapRef.current.getCanvas().style.cursor = 'pointer';
         });
@@ -3254,6 +3273,15 @@ export default function CrisisMap({
                         <span className="text-[#e8eaed] flex items-center gap-1.5">
                           <span className="w-2 h-2 rounded-full bg-transparent border border-dashed border-[#f59e0b] shrink-0" />
  <span>Waspada Dini (Advisory)</span>
+                          {layerFilters.weatherAdvisory && weatherAdvisoryLoading && (
+                            <span
+                              data-testid="weather-advisory-loading"
+                              className="flex items-center gap-1 text-[rgba(232,234,237,0.62)]"
+                            >
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                              <span>Memuat...</span>
+                            </span>
+                          )}
                         </span>
                         <span className={`w-4 h-4 rounded flex items-center justify-center border ${
  layerFilters.weatherAdvisory ? 'bg-white border-white text-[#080d14]' : 'border-white/10'

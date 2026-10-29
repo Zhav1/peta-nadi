@@ -560,6 +560,32 @@ def _lock_for_running_loop() -> asyncio.Lock:
     return _ingestion_lock
 
 
+# Read-path coalescing (Unit B): serialize cache-miss reads so two simultaneous
+# ``/news/live`` requests do not both run the 150-row re-tier scan. The 30 s
+# cache fast path stays lock-free; only misses take this lock, and the second
+# caller re-hits the cache after the first finishes (double-checked inside the
+# inner implementation). Per-loop rebound, same pattern as the ingestion lock.
+_READ_LOCK = asyncio.Lock()
+_READ_LOCK_LOOP: Optional[asyncio.AbstractEventLoop] = None
+
+
+def _read_lock_for_running_loop() -> asyncio.Lock:
+    """The read-path lock, rebound when called from a different event loop."""
+    global _READ_LOCK, _READ_LOCK_LOOP
+    loop = asyncio.get_running_loop()
+    if _READ_LOCK_LOOP is not loop:
+        _READ_LOCK = asyncio.Lock()
+        _READ_LOCK_LOOP = loop
+    return _READ_LOCK
+
+
+def reset_news_read_lock() -> None:
+    """Drop the read-path lock state (used by tests)."""
+    global _READ_LOCK, _READ_LOCK_LOOP
+    _READ_LOCK = asyncio.Lock()
+    _READ_LOCK_LOOP = None
+
+
 # Cross-process guard: uvicorn --workers > 1 (or several replicas) each own a
 # separate in-process asyncio.Lock, so a best-effort Redis NX lock keeps a single
 # RSS/LLM cycle per interval. Non-fatal by design — if Redis is down the worker
@@ -669,6 +695,47 @@ async def get_live_news(
     province: Optional[str] = Query(None, description="Filter by Sumatra province (e.g. 'Sumatera Barat', 'Sumatera Utara')"),
     severity: Optional[str] = Query(None, description="Filter by severity ('critical', 'high', 'medium', 'low')"),
     force_refresh: bool = Query(False, description="Force dynamic re-scrape from RSS & Google News into Supabase")
+):
+    """Coalescing wrapper: fast-path stays lock-free, misses serialize.
+
+    Two simultaneous cache misses share one 150-row re-tier scan: the first
+    caller holds the per-loop read lock while running the inner
+    implementation, the second waits and then re-hits the 30 s cache inside
+    the inner fast path. Response shape is unchanged.
+    """
+    now = datetime.now(timezone.utc).timestamp()
+    if not force_refresh and not province and not severity and _NEWS_CACHE["articles"]:
+        if (now - _NEWS_CACHE.get("last_fetched_at", 0.0)) <= CACHE_TTL_SECONDS:
+            cached_articles = _NEWS_CACHE["articles"]
+            return {
+                "status": "live",
+                "storage": "supabase_postgis",
+                "cached": True,
+                "count": len(cached_articles),
+                "total": len(cached_articles),
+                "last_updated": (
+                    _NEWS_CACHE.get("last_updated")
+                    or _max_published_at_iso(cached_articles)
+                    or datetime.now(timezone.utc).isoformat()
+                ),
+                "meta": _NEWS_CACHE.get("meta"),
+                "articles": cached_articles,
+                "items": cached_articles
+            }
+    async with _read_lock_for_running_loop():
+        return await _get_live_news_inner(
+            background_tasks=background_tasks,
+            province=province,
+            severity=severity,
+            force_refresh=force_refresh,
+        )
+
+
+async def _get_live_news_inner(
+    background_tasks: BackgroundTasks = None,
+    province: Optional[str] = None,
+    severity: Optional[str] = None,
+    force_refresh: bool = False
 ):
     """
     Returns aggregated real-time news articles from Supabase public.news_articles,

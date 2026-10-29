@@ -14,6 +14,7 @@
 import { createRequire } from 'node:module';
 import {
   FLEET_DOTS_PAINT,
+  MAP_KEYLINE,
   WASPADA_DOTS_PAINT,
   WASPADA_DOTS_HALO_PAINT,
   MODALITY_COLOR,
@@ -140,8 +141,64 @@ console.log('Waspada is a violet dot, not an amber area');
   );
   check(
     'halo is the violet wash',
-    WASPADA_DOTS_HALO_PAINT['circle-color'] === 'rgba(168,85,247,0.22)',
+    WASPADA_DOTS_HALO_PAINT['circle-color'] === 'rgba(168,85,247,1)',
     WASPADA_DOTS_HALO_PAINT['circle-color'],
+  );
+}
+
+console.log('Unit C dot legibility (dark keyline + smaller low-zoom halos)');
+{
+  check('keyline token', MAP_KEYLINE === 'rgba(12,16,23,0.9)', MAP_KEYLINE);
+
+  const fleetStrokeColor = JSON.stringify(FLEET_DOTS_PAINT['circle-stroke-color']);
+  check('fleet normal dots use the dark keyline', fleetStrokeColor.includes('rgba(12,16,23,0.9)'), fleetStrokeColor);
+  check('fleet impacted ring stays amber', fleetStrokeColor.includes('#f59e0b'), fleetStrokeColor);
+  check(
+    'fleet estimated hollow keeps modality hue',
+    fleetStrokeColor.includes('ROUTE_ESTIMATED') &&
+      fleetStrokeColor.includes('#34d399') &&
+      fleetStrokeColor.includes('#2dd4bf') &&
+      fleetStrokeColor.includes('#e2e8f0'),
+    fleetStrokeColor,
+  );
+  check(
+    'fleet stroke width 1.5 at z4-8, 1.25 at z12+, impacted 2.5',
+    JSON.stringify(FLEET_DOTS_PAINT['circle-stroke-width']) ===
+      JSON.stringify([
+        'interpolate',
+        ['linear'],
+        ['zoom'],
+        4, ['case', ['==', ['get', 'isImpacted'], true], 2.5, 1.5],
+        8, ['case', ['==', ['get', 'isImpacted'], true], 2.5, 1.5],
+        12, ['case', ['==', ['get', 'isImpacted'], true], 2.5, 1.25],
+      ]),
+    FLEET_DOTS_PAINT['circle-stroke-width'],
+  );
+
+  check('waspada dots use the dark keyline', WASPADA_DOTS_PAINT['circle-stroke-color'] === MAP_KEYLINE, WASPADA_DOTS_PAINT['circle-stroke-color']);
+  check(
+    'waspada keyline 1.25 below z7, 1 above',
+    JSON.stringify(WASPADA_DOTS_PAINT['circle-stroke-width']) ===
+      JSON.stringify(['interpolate', ['linear'], ['zoom'], 4, 1.25, 7, 1.25, 8, 1]),
+    WASPADA_DOTS_PAINT['circle-stroke-width'],
+  );
+  check(
+    'waspada halo radius 6@z4 -> 8@z8 -> 9@z12',
+    JSON.stringify(WASPADA_DOTS_HALO_PAINT['circle-radius']) ===
+      JSON.stringify(['interpolate', ['linear'], ['zoom'], 4, 6, 8, 8, 12, 9]),
+    WASPADA_DOTS_HALO_PAINT['circle-radius'],
+  );
+  check(
+    'waspada halo opacity 0.12 -> 0.18 -> 0.22',
+    JSON.stringify(WASPADA_DOTS_HALO_PAINT['circle-opacity']) ===
+      JSON.stringify(['interpolate', ['linear'], ['zoom'], 4, 0.12, 8, 0.18, 12, 0.22]),
+    WASPADA_DOTS_HALO_PAINT['circle-opacity'],
+  );
+  check(
+    'waspada halo stroke opacity 0.35 -> 0.5',
+    JSON.stringify(WASPADA_DOTS_HALO_PAINT['circle-stroke-opacity']) ===
+      JSON.stringify(['interpolate', ['linear'], ['zoom'], 4, 0.35, 8, 0.5]),
+    WASPADA_DOTS_HALO_PAINT['circle-stroke-opacity'],
   );
 }
 
