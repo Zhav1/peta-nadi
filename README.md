@@ -13,7 +13,7 @@ Multisource Telemetry (BMKG Sensor, TomTom Speed Flow, Google News RSS, PIHPS Pr
                    Redis 7 Pub/Sub & OSINT Ingestion Queue
                                       |
                                       v
-               LangGraph 6-Agent Swarm (DeepSeek R1 / Gemini)
+               LangGraph 6-Agent Swarm (OpenCode Go / Free / NIM)
                                       |
                                       v
                    Consensus Gate & Grounding Verification
@@ -29,6 +29,48 @@ Multisource Telemetry (BMKG Sensor, TomTom Speed Flow, Google News RSS, PIHPS Pr
 ```
 
 ---
+
+## Backend LLM fallbacks
+
+Chat requests try the requested OpenCode Go model first, then these fallbacks:
+
+1. `deepseek-v4.1-flash-free` (Zen)
+2. `glm-5.3-flash-free` (Zen)
+3. `beam-free` (Go)
+4. `iceman-contributor-free` (Go)
+5. NVIDIA NIM, if its key is configured.
+This applies to both driver and reasoning calls, including Go quota errors
+(`429 GoUsageLimitError`). Gemini remains embeddings-only.
+
+Configure the ordered free ladder using backend environment variables:
+
+```dotenv
+OPENCODE_FREE_MODELS=deepseek-v4.1-flash-free,glm-5.3-flash-free,beam-free,iceman-contributor-free
+OPENCODE_FREE_MODELS_MIN_TOKENS=1500
+```
+
+The free models use the existing `OPENCODE_API_KEY`; no extra key is needed.
+Live probes on 2026-10-29 returned `429 FreeUsageLimitError` for DeepSeek/GLM
+Free on Zen; they are deliberately tried first and fall through to Beam/Iceman
+when unavailable. Go and Zen quotas are separate. Existing environment
+overrides of `OPENCODE_FREE_MODELS` must be updated to use the new order.
+The token floor leaves room for reasoning before the final answer. Empty,
+reasoning-only, and token-truncated OpenCode completions advance to the next
+model; exhausting all providers raises an explicit error. Set
+`OPENCODE_FREE_MODELS=""` to disable the free ladder.
+
+Live verification (from the repo root, using the backend Python environment):
+
+```sh
+python scripts/verify_opencode_fallbacks.py
+```
+
+This sends only synthetic severity/JSON prompts, checks each free model
+independently for a valid answer and reported zero cost, and exercises both
+configured paid roles through the real gateway. Paid-role probes may consume
+Go allowance if it is available. Free-model availability and terms can change;
+rerun the check before relying on a new model. Restart/redeploy the backend
+after changing its environment or gateway code.
 
 ## Core Capabilities & Technical Implementations
 

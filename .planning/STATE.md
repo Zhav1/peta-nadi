@@ -462,3 +462,12 @@ These scripts validate the economic correlation hypotheses that underpin Agent 5
 - Warning carried forward: `render.yaml` and `backend/app/config.py` still declare
   `TICK_MAX_JOBS=2` / `TICK_BUDGET_SECONDS=120`; production is dashboard-overridden to `3`/`180`.
   A blueprint re-sync re-starves news/bmkg/PIHPS.
+
+## Phase 177 Log (2026-10-29)
+
+- Phase 177 (Sumatra Scope + Public-First + Refresh Reliability) logged as COMPLETE - code deployed and verified.
+- Commits: `3914e83`, `833ba8a`, `4735a74`.
+- Scope mask, aircraft/FIRMS admission filters, dot keyline/halos, public-first bootstrap, stale-first snapshot, cache v2, Waspada seed, news data clock/tiers/foreign blocklist.
+- Verification: 62 + 115 + 30 targeted backend tests; tsc/build; 50 paint assertions; 7/7 Playwright; production health/bootstrap/live Vercel counters 0/20/12 and 9 cards; cache keys v2.
+- Docs: `.planning/phases/177-sumatera-scope-public-first-refresh-reliability/`.
+- Open: near-duplicate regional rows, broad regional feed, raster coastal flips, industrial flares, broad geocoding, per-process coalescing, edge/CDN caching, live first-paint timing, full backend suite not rerun clean.

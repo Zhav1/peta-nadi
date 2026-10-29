@@ -3539,3 +3539,16 @@ Nested `['zoom']` inside a `case` branch made `addLayer` throw and a silent `try
 **Verification:** `test_fleet_paint.ts`, `test_fleet_scope.ts`; live guest payload 379 vehicles, 0 null coordinates; captures in `phase-fleet/`.
 **Open:** `/health` still reports `environment:"development"` (Render blueprint unsynced); Riau and Kepulauan Riau had no articles in the 48 h window at the R2.2 smoke — see `.planning/milestones/M9/COMPLETION.md` §5 and §7.
 
+
+## Phase 177: Sumatra Scope + Public-First + Refresh Reliability
+**Status:** COMPLETE (code deployed) (`3914e83`, `833ba8a`, `4735a74`)
+**Window:** 2026-10-29
+**Milestone:** post-M9 hardening (does not change the M8 soak gate)
+
+Fixed aircraft over Peninsular Malaysia, fire hotspots in the South China Sea, slow Waspada/news first paint, and dots merging at overview zoom. Filtering moved to data admission so counters, clusters, and map agree. Added a Sumatra raster scope mask (0.01 deg, [94,-7,109,7], 1500x1400), aircraft 25 km mainland / 5 km satellite profiles, fires land-only, foreign land subtracted, and dark keyline/smaller low-zoom halos. Added public-first bootstrap (`sections=public|tenant|all`), stale-first snapshot, 60 s memory cache, single-flight, snapshot `weather_summary`, Waspada seed, advisory prewarm, and cache keys v2. After deploy, fixed seed suppression, degraded weather timestamp veto, news wall-clock `last_updated`, missing `relevance_tier`, degraded section status, and foreign datelines (Gaza/Hormuz) mis-geocoded into Aceh.
+
+**Verification:** 62 + 115 + 30 targeted backend tests; `tsc --noEmit`; `npm run build`; 50 paint assertions; 7/7 first-paint Playwright; production health `map_scope.ok: true`; bootstrap fire 12, waspada 20, cuaca 0, news 9; live Vercel counters 0/20/12 and 9 cards; cache keys v2.
+
+**Open:** near-duplicate TNI regional rows, broad regional feed, raster coastal flips, industrial flares not filtered, broad news geocoding, per-process coalescing, edge/CDN caching unverified, full backend suite not rerun clean.
+
+Docs: `.planning/phases/177-sumatera-scope-public-first-refresh-reliability/` (`PLAN.md`, `WALKTHROUGH.md`, `LEARNINGS.md`, `CONTEXT.md`).

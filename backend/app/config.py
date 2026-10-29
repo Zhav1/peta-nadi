@@ -49,16 +49,22 @@ class Settings(BaseSettings):
     # full re-embed (one-way distribution shift) — see infra/supabase/migrations.
     gemini_embedding_model: str = "models/gemini-embedding-001"
     opencode_api_key: str = ""
-    # opencode Go subscription model IDs (https://opencode.ai/docs/go). The
-    # `mimo-v2.6-flash-free` *-free variant is IDE-only and 403s on third-party
-    # /chat/completions calls; mimo-v2.6-pro is the Go plan reasoning model
-    # ($0.435/$0.87 per 1M, $15/mo allowance — step-up from flash, still cheap).
-    # See the long comment block in
-    # agents/llm_gateway.py before changing any of these — endpoint ↔ ID must
-    # match (Console vs Go have separate catalogs).
+    # Go endpoint model IDs (not interchangeable with the Console catalog).
+    # See agents/llm_gateway.py for endpoint details.
     opencode_reasoning_model: str = "mimo-v2.6-pro"
     opencode_driver_model: str = "deepseek-v4.1-flash"
     opencode_reasoning_effort: Optional[str] = None
+    # Ordered fallbacks after the requested Go model, before NVIDIA NIM.
+    # DeepSeek/GLM Free use Zen (currently quota-limited); Beam/Iceman use Go
+    # and returned final answers with usage.cost=0. Availability may change;
+    # rerun scripts/verify_opencode_fallbacks.py to verify with the active key.
+    # Set OPENCODE_FREE_MODELS="" to disable this ladder.
+    opencode_free_models: str = (
+        "deepseek-v4.1-flash-free,glm-5.3-flash-free,"
+        "beam-free,iceman-contributor-free"
+    )
+    # Minimum max_tokens for ladder models (reasoning models eat the budget).
+    opencode_free_models_min_tokens: int = 1500
     deepseek_api_key: str = ""
     nvidia_deepseek_v4_pro: str = ""
     nvidia_deepseek_v4_flash: str = ""
@@ -112,6 +118,10 @@ class Settings(BaseSettings):
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",")]
+
+    @property
+    def opencode_free_model_list(self) -> list[str]:
+        return [m.strip() for m in self.opencode_free_models.split(",") if m.strip()]
 
 
 @lru_cache()
