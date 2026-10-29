@@ -474,7 +474,33 @@ function maxFeedArticleTimestamp(feed: NewsItem[]): number {
   return max;
 }
 
-/** Versioned `prehub.news.v1` payload: normalized feed + its data clock. */
+/**
+ * A `last_updated` more than this far ahead of the article data clock cannot
+ * describe the returned articles (a wall-clock snapshot seed, or a rebuild
+ * stamp). It is distrusted and the article data clock is used instead — that
+ * stamp would otherwise freeze the feed against every real newer payload.
+ */
+const NEWS_LAST_UPDATED_MAX_SKEW_MS = 10 * 60 * 1000;
+
+/**
+ * Distrusts a seed/live `last_updated` that is clearly ahead of the returned
+ * article set's own clock. Falls back to `maxFeedArticleTimestamp` when the
+ * stamp parses but the skew exceeds the limit above.
+ */
+function distrustSkewedLastUpdated(
+  lastUpdated: string | null,
+  articleTs: number
+): string | null {
+  if (!lastUpdated) return null;
+  const stampTs = safeNewsTimestamp(lastUpdated);
+  if (stampTs <= 0 || articleTs <= 0) return lastUpdated;
+  if (stampTs - articleTs > NEWS_LAST_UPDATED_MAX_SKEW_MS) {
+    return new Date(articleTs).toISOString();
+  }
+  return lastUpdated;
+}
+
+/** Versioned `prehub.news.v2` payload: normalized feed + its data clock. */
 interface CachedNewsPayload {
   feed: NewsItem[];
   meta: NewsBreadthMeta | null;
@@ -774,8 +800,9 @@ export function useNewsVerification(options?: UseNewsVerificationOptions) {
               if (!n.link && !n.url) return false;
               if (n.lat == null || n.lon == null || !Number.isFinite(n.lat) || !Number.isFinite(n.lon)) return false;
               // M5 Phase A Q1 client mirror: hard Sumatra island bbox
-              // 94-108E / -6..6N — out-of-Sumatra never renders a zone.
-              if (n.lat < -6 || n.lat > 6 || n.lon < 94 || n.lon > 108) return false;
+              // 94-108E / -6.5..6.5N — out-of-Sumatra never renders a zone
+              // (matches the backend strict Sumatra bbox).
+              if (n.lat < -6.5 || n.lat > 6.5 || n.lon < 94 || n.lon > 108) return false;
               const check = validateClientNewsFreshnessAndDiscourse(
                 n.headline || '',
                 n.summary || '',
@@ -795,9 +822,14 @@ export function useNewsVerification(options?: UseNewsVerificationOptions) {
               // timestamp is same-or-newer than the painted feed.
               const signature = mapped.map((n) => n.id).sort().join('|');
               const signatureChanged = signature !== lastArticleSignatureRef.current;
-              const incomingTs = backendLastUpdated
-                ? safeNewsTimestamp(backendLastUpdated)
-                : maxFeedArticleTimestamp(mapped);
+              const articleTs = maxFeedArticleTimestamp(mapped);
+              // The feed clock is trusted only when it agrees with the article
+              // data it stamps: a wall-clock seed stamp (or a fusion rebuild
+              // stamp) must never freeze a changed feed.
+              const trustedLastUpdated = distrustSkewedLastUpdated(backendLastUpdated, articleTs);
+              const incomingTs = trustedLastUpdated
+                ? safeNewsTimestamp(trustedLastUpdated)
+                : articleTs;
               const currentTs = safeNewsTimestamp(lastUpdatedRef.current);
               const hasCurrent = lastUpdatedRef.current != null;
               let accept: boolean;
@@ -812,9 +844,7 @@ export function useNewsVerification(options?: UseNewsVerificationOptions) {
               }
               if (accept) {
                 const nextMeta = res.meta && typeof res.meta === 'object' ? res.meta : null;
-                const articleTs = maxFeedArticleTimestamp(mapped);
-                const nextStamp =
-                  backendLastUpdated ?? (articleTs > 0 ? new Date(articleTs).toISOString() : null);
+                const nextStamp = trustedLastUpdated ?? (articleTs > 0 ? new Date(articleTs).toISOString() : null);
                 lastArticleSignatureRef.current = signature;
                 setLastGoodAt(new Date().toISOString());
                 setNewsFeed(mapped);

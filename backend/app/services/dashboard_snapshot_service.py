@@ -55,6 +55,18 @@ STALE_AFTER_SECONDS = 600
 # ~one timeout in the worst case, not N x timeout.
 SECTION_TIMEOUT_SECONDS = 5.0
 
+# Slow upstream sections get their own budget: the 5 s default cancelled the
+# snapshot's weather read (the weather builder's own timeout is 12 s) and the
+# FIRMS hotspot read, so the tick always stored a ``timeout``/degraded section
+# instead of real data. Sections run in parallel, so the build still costs
+# ~max() ~15 s — inside the tick's 30 s snapshot budget
+# (:data:`internal_tick.SNAPSHOT_BUILD_TIMEOUT_SECONDS`). An explicit
+# caller-supplied ``timeout`` (tests) is always kept verbatim.
+SLOW_SECTION_TIMEOUTS: dict[str, float] = {
+    "fire_hotspots": 15.0,
+    "weather_summary": 12.0,
+}
+
 # Existing default corridor (corridor_router / corridor_service default).
 DEFAULT_CORRIDOR_ID = "sumatra_belawan_medan"
 
@@ -65,6 +77,38 @@ _LAST_GOOD: dict[str, Any] = {}
 def reset_section_cache() -> None:
     """Drop the in-process last-good section cache (used by tests)."""
     _LAST_GOOD.clear()
+
+
+def _section_truth(name: str, data: Any) -> str:
+    """Map a successfully returned section payload to ``ok`` | ``stale`` | ``degraded``.
+
+    ``fetch_fire_hotspots`` / ``fetch_weather_summary`` never raise: they return
+    a degraded/stale envelope instead. A non-raising return used to look like
+    ``ok`` and got stored with a fresh ``computed_at`` (the frontend then seeded
+    a degraded payload as current data), so this helper reads the inner payload
+    to keep the section truth aligned with the data actually being served.
+    """
+    if not isinstance(data, dict):
+        return "ok"
+    if name == "fire_hotspots":
+        inner = str(data.get("status") or "").lower()
+        if inner in ("degraded", "timeout"):
+            return "degraded"
+        if inner == "stale":
+            return "stale"
+        return "ok"
+    if name == "weather_summary":
+        inner_statuses: list[str] = []
+        for key in ("cuaca", "waspada"):
+            sub = data.get(key)
+            if isinstance(sub, dict):
+                inner_statuses.append(str(sub.get("status") or "").lower())
+        if any(s in ("degraded", "timeout") for s in inner_statuses):
+            return "degraded"
+        if any(s == "stale" for s in inner_statuses):
+            return "stale"
+        return "ok"
+    return "ok"
 
 
 def utcnow() -> datetime:
@@ -137,6 +181,10 @@ async def run_section(
     for a section-level failure; ``CancelledError`` is always re-raised so a
     cancelled build can still be cancelled.
 
+    A non-raising factory return can still yield ``stale`` or ``degraded`` when
+    the inner payload says so (:func:`_section_truth`): ``degraded`` payloads
+    are never stored as last-good, ``stale`` ones are.
+
     ``cache=False`` must be used for anything tenant-scoped: the last-good cache
     is keyed by section name only, and reusing a payload across callers would
     leak one tenant's fleet into another tenant's response.
@@ -148,9 +196,26 @@ async def run_section(
         if inspect.isawaitable(value):
             value = await asyncio.wait_for(value, timeout=max(0.001, limit))
         data = _jsonable(value)
+        ms = _elapsed_ms(started)
+        truth = _section_truth(name, data)
+        if truth == "degraded":
+            # The upstream returned an envelope instead of raising (fire /
+            # weather do): the section must not look fresh nor be stored as
+            # last-good — a degraded read is not a good value by definition.
+            error = "upstream degraded"
+            logger.warning("dashboard snapshot section %s: %s", name, error)
+            return (
+                {"status": "degraded", "data": data, "error": error},
+                {"status": "degraded", "ms": ms, "error": error},
+            )
+        if truth == "stale":
+            # Real data, just not current: serve it with stale=true and keep
+            # it eligible as the last-good value for a later failure.
+            if cache:
+                _LAST_GOOD[name] = data
+            return {"status": "stale", "data": data}, {"status": "stale", "ms": ms}
         if cache:
             _LAST_GOOD[name] = data
-        ms = _elapsed_ms(started)
         return {"status": "ok", "data": data}, {"status": "ok", "ms": ms}
     except asyncio.CancelledError:
         raise
@@ -210,20 +275,37 @@ def section_plan(corridor_id: str = DEFAULT_CORRIDOR_ID) -> dict[str, Callable[[
         return await list_incidents(status=None, severity=None, limit=50)
 
     async def news_live():
-        """Direct 40-article read — not ``get_live_news``.
+        """Direct display read — not ``get_live_news``.
 
         ``get_live_news`` runs the 150-article breadth contract, the re-tier
         write-back and may schedule ingestion. The snapshot needs a compact
-        display payload, so it reads the table directly.
+        display payload, so it reads the table directly, classifies every row
+        with the same ``relevance_tier`` the live endpoint uses, and keeps
+        only display-eligible tiers (``crisis`` / ``regional``; regional rows
+        are display context the frontend would otherwise receive and then
+        drop). ``last_updated`` is the newest kept article's publish time —
+        never wall-clock ``now``, which would freeze the frontend clock on
+        the seed.
         """
+        # Local import: news_router is a heavy module and this service must stay
+        # cheap to import (all section helpers live inside the section bodies).
+        from app.routers.news_router import _max_published_at_iso, classify_relevance_tier
         from app.services.news_aggregator import fetch_news_from_supabase
 
         articles = await fetch_news_from_supabase(limit=40, include_regional=True)
+        kept: list[Any] = []
+        for row in articles:
+            if not isinstance(row, dict):
+                continue
+            row["relevance_tier"] = classify_relevance_tier(row)
+            if row["relevance_tier"] in ("crisis", "regional"):
+                kept.append(row)
+        last_updated = _max_published_at_iso(kept) or datetime.now(timezone.utc).isoformat()
         return {
             "status": "ok",
-            "total": len(articles),
-            "last_updated": datetime.now(timezone.utc).isoformat(),
-            "articles": articles,
+            "total": len(kept),
+            "last_updated": last_updated,
+            "articles": kept,
         }
 
     async def news_market_regime():
@@ -280,7 +362,20 @@ async def build_global_snapshot(
     started = time.perf_counter()
 
     results = await asyncio.gather(
-        *(run_section(name, factory, timeout=timeout) for name, factory in plan.items())
+        *(
+            run_section(
+                name,
+                factory,
+                # An explicit caller-supplied budget (tests) wins; the default
+                # is the per-section budget (slow sections get the bigger one).
+                timeout=(
+                    timeout
+                    if timeout is not None
+                    else SLOW_SECTION_TIMEOUTS.get(name, SECTION_TIMEOUT_SECONDS)
+                ),
+            )
+            for name, factory in plan.items()
+        )
     )
 
     payload: dict[str, dict] = {}

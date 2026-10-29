@@ -83,7 +83,7 @@ Out-of-scope dead reckoning resets to the last in-scope fix or hides; it is neve
 
 **Prewarm** snapshot + weather fusion on boot and after the existing 5-minute internal tick.
 
-**Last-good cache:** `prehub.news.v1` and `prehub.weather.v1` in `localStorage`, 2 h TTL, public data only, versioned. Compare timestamps and never replace a newer cached feed with an older bootstrap seed. Freshness badge shows the real data timestamp; cached data is never labelled live.
+**Last-good cache:** `prehub.news.v2` and `prehub.weather.v2` in `localStorage`, 2 h TTL, public data only, versioned. The v2 cutover discards v1 entries that could hold a degraded weather seed or a wall-clock-frozen one-item news feed. Compare data clocks and never replace a newer cached feed with an older bootstrap seed. Freshness badge shows the real data timestamp; cached data is never labelled live.
 
 **Waspada layer:** stays default OFF. Prefetch the medium advisory polygons on idle after the counter resolves (one derived render, no extra upstream when fusion is warm). Toggle shows a “Memuat lapisan…” state; failure shows a stale/error badge, never a blank map.
 
@@ -179,3 +179,13 @@ Out-of-scope dead reckoning resets to the last in-scope fix or hides; it is neve
 - Snapshot now includes `weather_summary`; bootstrap supports `sections=public|tenant|all`, stale-first, single-flight, 60 s memory cache, and boot prewarm.
 - Frontend uses public-first bootstrap, last-good news/weather caches, Waspada advisory prefetch, and dark-keyline dot paint.
 - Verified: backend `590 passed, 4 deselected` (the four documented pre-existing baseline failures); targeted 89 passed; `tsc --noEmit` pass; `npm run build` pass; 50 paint assertions pass; Playwright `dashboard-first-paint` + `news-live-audit` 10/10 pass on a clean standalone server.
+
+### 8.1 Refresh regression fix (2026-10-29)
+
+- Fire and weather polygons now paint a snapshot seed **and always issue the live read on mount**; a seed can no longer suppress revalidation for 5 minutes.
+- Weather summary precedence is completeness-aware: a degraded/null-count seed cannot veto a complete live summary; only complete summaries are cached.
+- Snapshot section truth now mirrors inner fire/weather status (`ok`/`stale`/`degraded`); degraded payloads are never stored as last-good.
+- Bootstrap schedules a detached single-flight refresh when a fresh stored row has degraded/stale fire or weather, while still returning the row immediately.
+- Snapshot news `last_updated` is the newest kept article's publish time (not wall-clock now), and rows are classified into the `crisis`/`regional` display tiers before seeding.
+- Cache keys were bumped to `prehub.news.v2` / `prehub.weather.v2`; the news hook distrusts a `last_updated` more than 10 minutes ahead of its article data clock.
+- Verified: 7/7 `dashboard-first-paint` Playwright tests on a clean standalone server; backend snapshot/bootstrap/news suites pass.

@@ -128,6 +128,22 @@ function parseGeneratedAt(value: unknown): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+/**
+ * Unit D: a counters summary is **complete** when both buckets resolved a
+ * number. A degraded snapshot seed can carry `generated_at = now` with null
+ * counts; such a row must never be cached nor veto (via timestamp precedence)
+ * a good live summary whose fusion rebuild stamp is older.
+ */
+function isCompleteWeatherSummary(
+  summary: WeatherHazardSummary | null | undefined
+): summary is WeatherHazardSummary {
+  return (
+    !!summary &&
+    summary.cuaca?.count != null &&
+    summary.waspada?.count != null
+  );
+}
+
 /** Advisory layer is medium-only (never double-counts disruption highs). */
 function mediumOnlyAdvisoryFeatures(features: GeoJSON.Feature[]): GeoJSON.Feature[] {
   return (features ?? []).filter((f) => {
@@ -637,12 +653,21 @@ export default function DashboardClient() {
       : undefined;
   const seededCorridor =
     bootstrapSections?.corridor_context?.status === 'ok' ? bootstrapSections.corridor_context.data : undefined;
+  // A degraded snapshot section (inner status degraded/timeout or null count)
+  // must not seed the layer: it would blank Titik Panas and block the live read
+  // for the whole poll interval. `empty` with count 0 is healthy and may seed.
+  const fireSection = bootstrapSections?.fire_hotspots;
+  const seededFireHotspots =
+    fireSection?.status === 'ok' &&
+    fireSection.data != null &&
+    !['degraded', 'timeout'].includes(fireSection.data.status as string) &&
+    fireSection.data.count != null
+      ? fireSection.data
+      : undefined;
   const seededWeatherPolygons =
     bootstrapSections?.weather_spatial_polygons?.status === 'ok'
       ? bootstrapSections.weather_spatial_polygons.data
       : undefined;
-  const seededFireHotspots =
-    bootstrapSections?.fire_hotspots?.status === 'ok' ? bootstrapSections.fire_hotspots.data : undefined;
   // Unit D: snapshot seed for the world-truth counters (`ok` or `stale`).
   const seededWeatherSummary =
     bootstrapSections?.weather_summary?.status === 'ok' ||
@@ -1570,16 +1595,17 @@ export default function DashboardClient() {
     }
 
     if (seededWeatherPolygons) {
-      // Snapshot seed: same shape + meta contract as the live endpoint.
+      // Snapshot seed: instant paint for the first frame.
       const seededMeta = readMeta(seededWeatherPolygons);
       spatialWeatherRef.current = seededWeatherPolygons;
       weatherPolygonMetaRef.current = seededMeta;
       setSpatialWeatherPolygons(seededWeatherPolygons);
       setWeatherPolygonMeta(seededMeta);
-    } else {
-      // No snapshot section (bootstrap failed / guest with no weather): read.
-      void loadSpatialWeather();
     }
+    // Always read live on mount — a degraded/empty snapshot seed must never
+    // suppress the live read until the next 120 s tick. The live envelope
+    // overwrites the painted seed.
+    void loadSpatialWeather();
 
     const interval = setInterval(loadSpatialWeather, 120000);
     return () => {
@@ -1683,29 +1709,37 @@ export default function DashboardClient() {
   // (State lives above, next to the advisory prefetch that reads it.)
 
   // Last-good cache first paint (effect, never a render-time read: avoids a
-  // hydration mismatch between server and client HTML).
+  // hydration mismatch between server and client HTML). Only a complete
+  // summary hydrates: the v2 key also guarantees old v1 (possibly
+  // null-count-poisoned) entries are ignored.
   useEffect(() => {
     const cached = readPublicCache<WeatherHazardSummary>(PUBLIC_WEATHER_CACHE_KEY, PUBLIC_CACHE_TTL_MS);
-    if (cached?.cuaca && cached?.waspada) {
+    if (isCompleteWeatherSummary(cached)) {
       weatherSummaryRef.current = cached;
       setWeatherSummary(cached);
     }
   }, []);
 
-  // Bootstrap snapshot seed: accepted only with both buckets, and never over a
-  // newer cached/live summary (the data timestamp, not the fetch time, decides).
+  // Bootstrap snapshot seed: accepted only when complete, and never over a
+  // good current summary (the data timestamp, not the fetch time, decides).
   useEffect(() => {
-    if (!seededWeatherSummary?.cuaca || !seededWeatherSummary?.waspada) return;
+    if (!isCompleteWeatherSummary(seededWeatherSummary)) return;
     const current = weatherSummaryRef.current;
     if (current) {
-      const incomingTs = parseGeneratedAt(seededWeatherSummary.generated_at);
-      if (incomingTs <= 0) return;
-      const currentTs = parseGeneratedAt(current.generated_at);
-      if (currentTs > 0 && incomingTs <= currentTs) return;
+      if (!isCompleteWeatherSummary(current)) {
+        // Incomplete current + complete incoming: accept regardless of
+        // `generated_at` (a degraded seed stamp cannot veto real counters).
+      } else {
+        const incomingTs = parseGeneratedAt(seededWeatherSummary.generated_at);
+        if (incomingTs <= 0) return;
+        const currentTs = parseGeneratedAt(current.generated_at);
+        if (currentTs > 0 && incomingTs <= currentTs) return;
+      }
     }
-    weatherSummaryRef.current = seededWeatherSummary;
-    setWeatherSummary(seededWeatherSummary);
-    writePublicCache(PUBLIC_WEATHER_CACHE_KEY, seededWeatherSummary);
+    const next = seededWeatherSummary;
+    weatherSummaryRef.current = next;
+    setWeatherSummary(next);
+    writePublicCache(PUBLIC_WEATHER_CACHE_KEY, next);
   }, [seededWeatherSummary]);
 
   useEffect(() => {
@@ -1733,18 +1767,29 @@ export default function DashboardClient() {
         if (!summary?.cuaca || !summary?.waspada) {
           throw new Error('weather summary shape invalid');
         }
-        // Cache precedence: only a same-or-newer data timestamp may replace the
-        // painted summary, so the freshness clock never moves backward.
+        // Precedence (data timestamp vs completeness):
+        //  - incomplete current + complete incoming  → accept (regardless of
+        //    `generated_at`; a degraded row's stamp means nothing);
+        //  - complete current + incomplete incoming  → keep current;
+        //  - otherwise compare `generated_at` as before.
+        // Only a complete summary is ever written to the last-good cache.
         const current = weatherSummaryRef.current;
         if (current) {
-          const incomingTs = parseGeneratedAt(summary.generated_at);
-          if (incomingTs <= 0) return;
-          const currentTs = parseGeneratedAt(current.generated_at);
-          if (currentTs > 0 && incomingTs <= currentTs) return;
+          const incomingComplete = isCompleteWeatherSummary(summary);
+          const currentComplete = isCompleteWeatherSummary(current);
+          if (!incomingComplete && currentComplete) return;
+          if (!(incomingComplete && !currentComplete)) {
+            const incomingTs = parseGeneratedAt(summary.generated_at);
+            if (incomingTs <= 0) return;
+            const currentTs = parseGeneratedAt(current.generated_at);
+            if (currentTs > 0 && incomingTs <= currentTs) return;
+          }
         }
         weatherSummaryRef.current = summary;
         setWeatherSummary(summary);
-        writePublicCache(PUBLIC_WEATHER_CACHE_KEY, summary);
+        if (isCompleteWeatherSummary(summary)) {
+          writePublicCache(PUBLIC_WEATHER_CACHE_KEY, summary);
+        }
       } catch (e) {
         if (!isMounted || controller.signal.aborted) return;
         console.warn('Weather summary fallback (stale counters):', e);
@@ -1772,6 +1817,13 @@ export default function DashboardClient() {
     const applyFireEnvelope = (res: FireHotspotResponse) => {
       // The backend already separates ok/empty (healthy) from stale
       // (last-known-good) and degraded (no data at all). Use its truth.
+      if (res.count == null && fireHasDataRef.current) {
+        // A degraded envelope while we still hold a last-good layer/count:
+        // keep what is painted (never blank Titik Panas) and mark it stale.
+        setFireStatus('stale');
+        setFireReason(res.reason ?? 'Titik Panas tidak tersedia; menampilkan data terakhir.');
+        return;
+      }
       setFireHotspots(res.hotspots ?? []);
       setFireStatus(res.status ?? (res.count == null ? 'degraded' : 'ok'));
       setFireCount(res.count ?? null);
@@ -1805,10 +1857,14 @@ export default function DashboardClient() {
     }
 
     if (seededFireHotspots) {
+      // Snapshot seed: instant paint for the first frame. The layer is still
+      // verified against the live envelope right after — a snapshot seed is a
+      // hint, never a reason to skip the mount read.
       applyFireEnvelope(seededFireHotspots);
-    } else {
-      void loadFireHotspots();
     }
+    // Always read live on mount (incl. degraded/timeout/null-count seeds, which
+    // no longer seed at all): the live envelope overwrites the painted seed.
+    void loadFireHotspots();
 
     const interval = setInterval(loadFireHotspots, 300000);
     return () => {

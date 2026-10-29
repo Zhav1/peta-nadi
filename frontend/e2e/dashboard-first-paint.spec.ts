@@ -9,11 +9,15 @@
 // What is pinned here:
 //  1. A delayed public bootstrap still paints the shell + counter/news
 //     skeletons first, fires with `sections=public`, then fills in.
-//  2. Cached weather/news (< 2 h, `prehub.weather.v1` / `prehub.news.v1`)
+//  2. Cached weather/news (< 2 h, `prehub.weather.v2` / `prehub.news.v2`)
 //     paint before any network dependency resolves.
 //  3. A newer live payload replaces an older cached payload, while an older
 //     payload never moves the data timestamp backward (counters, stored
 //     cache, and the news feed clock).
+//  4. A snapshot seed never suppresses the mount live read: a seeded
+//     fire/weather section still triggers an immediate live request.
+//  5. A degraded (null-count) seeded weather summary never vetoes a good live
+//     summary, and never poisons the last-good cache.
 
 import { test, expect, type Page } from '@playwright/test';
 
@@ -80,7 +84,7 @@ function rawNewsArticle(overrides: MockArticle = {}): MockArticle {
 
 const GOOD_LINK = (id: string, slug: string) => `https://www.antaranews.com/berita/${id}/${slug}`;
 
-/** Normalized (already gated) article as stored in `prehub.news.v1`. */
+/** Normalized (already gated) article as stored in `prehub.news.v2`. */
 function cachedNewsItem(id: string, headline: string, updatedIso: string): MockArticle {
   return {
     id,
@@ -195,11 +199,55 @@ function emptyPolygonsPayload() {
   };
 }
 
+/** A healthy, populated fire seed (`sections.fire_hotspots`), pre-fix regressed. */
+function populatedFireSeed() {
+  return {
+    ...emptyFirePayload(),
+    status: 'ok',
+    count: 3,
+    total: 3,
+    hotspots: [
+      { id: 'seed-fire-1', lat: 3.5, lon: 98.7, confidence: 90, frp: 120, severity: 'high' },
+      { id: 'seed-fire-2', lat: 2.1, lon: 99.4, confidence: 85, frp: 80, severity: 'medium' },
+      { id: 'seed-fire-3', lat: 0.4, lon: 101.2, confidence: 92, frp: 140, severity: 'high' },
+    ],
+  };
+}
+
+/** A healthy, populated polygon seed (`sections.weather_spatial_polygons`). */
+function populatedPolygonSeed() {
+  return {
+    type: 'FeatureCollection',
+    features: [
+      {
+        type: 'Feature',
+        geometry: {
+          type: 'Polygon',
+          coordinates: [[[98.5, 3.4], [99.0, 3.4], [99.0, 3.9], [98.5, 3.9], [98.5, 3.4]]],
+        },
+        properties: { hazard_type: 'flood', severity: 'high', corridor_id: 'sumatra_belawan_medan' },
+      },
+    ],
+    meta: {
+      status: 'ok',
+      reason: null,
+      total: 1,
+      count: 1,
+      capped: false,
+      updated_at: new Date().toISOString(),
+    },
+  };
+}
+
 interface BootstrapOptions {
   newsArticles?: MockArticle[] | null;
   newsLastUpdated?: string | null;
   includeMarketRegime?: boolean;
   summary: unknown;
+  /** `sections.fire_hotspots.data` seed (defaults to a healthy empty payload). */
+  fireSeed?: unknown;
+  /** `sections.weather_spatial_polygons.data` seed (defaults to a healthy empty payload). */
+  polygonSeed?: unknown;
 }
 
 function bootstrapPayload(opts: BootstrapOptions) {
@@ -207,8 +255,8 @@ function bootstrapPayload(opts: BootstrapOptions) {
     incidents: { status: 'ok', data: { items: [], total: 0 } },
     corridor_context: { status: 'ok', data: corridorPayload() },
     weather_summary: { status: 'ok', data: opts.summary },
-    weather_spatial_polygons: { status: 'ok', data: emptyPolygonsPayload() },
-    fire_hotspots: { status: 'ok', data: emptyFirePayload() },
+    weather_spatial_polygons: { status: 'ok', data: opts.polygonSeed ?? emptyPolygonsPayload() },
+    fire_hotspots: { status: 'ok', data: opts.fireSeed ?? emptyFirePayload() },
   };
   if (opts.newsArticles && opts.newsLastUpdated) {
     sections.news = {
@@ -243,9 +291,15 @@ interface ApiMocks {
   bootstrap: unknown;
   summary: unknown;
   newsLive: unknown;
+  /** GET /api/v1/fire/hotspots response (defaults to the healthy empty payload). */
+  fireLive?: unknown;
+  /** GET /api/v1/weather/spatial-polygons response (defaults to the empty payload). */
+  polygonsLive?: unknown;
   bootstrapGate?: Promise<void>;
   summaryGate?: Promise<void>;
   newsGate?: Promise<void>;
+  fireGate?: Promise<void>;
+  polygonsGate?: Promise<void>;
 }
 
 /** Single /api/ dispatcher: auth/shell fixtures + the contracts under test. */
@@ -280,8 +334,14 @@ async function mockDashboardApi(page: Page, mocks: ApiMocks) {
     if (url.includes('/api/v1/news/hitl-pending')) {
       return ok({ count: 0, items: [], pending_approvals: [] });
     }
-    if (url.includes('/api/v1/weather/spatial-polygons')) return ok(emptyPolygonsPayload());
-    if (url.includes('/api/v1/fire/hotspots')) return ok(emptyFirePayload());
+    if (url.includes('/api/v1/weather/spatial-polygons')) {
+      if (mocks.polygonsGate) await mocks.polygonsGate;
+      return ok(mocks.polygonsLive ?? emptyPolygonsPayload());
+    }
+    if (url.includes('/api/v1/fire/hotspots')) {
+      if (mocks.fireGate) await mocks.fireGate;
+      return ok(mocks.fireLive ?? emptyFirePayload());
+    }
     if (url.includes('/api/v1/corridor/context')) return ok(corridorPayload());
     return ok({
       status: 'ok',
@@ -304,12 +364,12 @@ async function seedPublicCache(
   await page.addInitScript((value) => {
     try {
       if (value.news) {
-        localStorage.setItem('prehub.news.v1', JSON.stringify({ v: 1, at: Date.now(), data: value.news }));
+        localStorage.setItem('prehub.news.v2', JSON.stringify({ v: 2, at: Date.now(), data: value.news }));
       }
       if (value.weather) {
         localStorage.setItem(
-          'prehub.weather.v1',
-          JSON.stringify({ v: 1, at: Date.now(), data: value.weather }),
+          'prehub.weather.v2',
+          JSON.stringify({ v: 2, at: Date.now(), data: value.weather }),
         );
       }
     } catch {
@@ -327,7 +387,7 @@ function newsSidebar(page: Page) {
 }
 
 async function storedWeatherGeneratedAt(page: Page): Promise<string | null> {
-  const raw = await page.evaluate(() => localStorage.getItem('prehub.weather.v1'));
+  const raw = await page.evaluate(() => localStorage.getItem('prehub.weather.v2'));
   try {
     return (JSON.parse(raw ?? '') as { data?: { generated_at?: string } })?.data?.generated_at ?? null;
   } catch {
@@ -336,7 +396,7 @@ async function storedWeatherGeneratedAt(page: Page): Promise<string | null> {
 }
 
 async function storedNewsLastUpdated(page: Page): Promise<string | null> {
-  const raw = await page.evaluate(() => localStorage.getItem('prehub.news.v1'));
+  const raw = await page.evaluate(() => localStorage.getItem('prehub.news.v2'));
   try {
     return (JSON.parse(raw ?? '') as { data?: { lastUpdated?: string } })?.data?.lastUpdated ?? null;
   } catch {
@@ -545,5 +605,140 @@ test.describe('Unit D — dashboard first paint', () => {
     await expect(page.getByTestId('berita-card-news-cache-new-b')).toBeVisible();
     await expect(page.getByTestId('berita-card-news-live-old-a')).toHaveCount(0);
     expect(await storedNewsLastUpdated(page)).toBe(newAt);
+  });
+
+  test('a seeded fire/weather section still triggers an immediate live refresh on mount', async ({ page }) => {
+    const fireGate = gate();
+    const polygonsGate = gate();
+    const generatedAt = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const summary = summaryPayload({ count: 5, status: 'ok' }, { count: 27, status: 'ok' }, generatedAt);
+    // The maximum risk seed: healthy sections with data, so the pre-fix client
+    // skipped both mount reads until the first 300 s / 120 s poll tick.
+    await mockDashboardApi(page, {
+      bootstrap: bootstrapPayload({ summary, fireSeed: populatedFireSeed(), polygonSeed: populatedPolygonSeed() }),
+      summary,
+      newsLive: { status: 'warming', articles: [], items: [], total: 0, count: 0, last_updated: generatedAt },
+      fireGate: fireGate.wait,
+      polygonsGate: polygonsGate.wait,
+    });
+
+    // Set up the request watchers before navigation: the mount read must be
+    // immediate, not deferred to a poll interval.
+    const fireRequest = page.waitForRequest(
+      (req) => req.url().includes('/api/v1/fire/hotspots'),
+      { timeout: 30_000 },
+    );
+    const polygonsRequest = page.waitForRequest(
+      (req) =>
+        req.url().includes('/api/v1/weather/spatial-polygons') &&
+        req.url().includes('min_severity=high'),
+      { timeout: 30_000 },
+    );
+
+    await page.goto(DASHBOARD_URL, { waitUntil: 'domcontentloaded' });
+    await fireRequest;
+    await polygonsRequest;
+
+    // Watchers first, then release: a fulfilled response can arrive before the
+    // next waitForResponse setup otherwise.
+    const fireResponse = page.waitForResponse(
+      (res) => res.url().includes('/api/v1/fire/hotspots'),
+      { timeout: 30_000 },
+    );
+    const polygonsResponse = page.waitForResponse(
+      (res) =>
+        res.url().includes('/api/v1/weather/spatial-polygons') &&
+        res.url().includes('min_severity=high'),
+      { timeout: 30_000 },
+    );
+
+    // The live envelopes settle and overwrite the painted seeds.
+    fireGate.release();
+    polygonsGate.release();
+    await fireResponse;
+    await polygonsResponse;
+  });
+
+  test('a degraded seeded weather summary never vetoes a good live summary', async ({ page }) => {
+    const summaryGate = gate();
+    // Degraded snapshot: `generated_at` = wall-clock now with null counts.
+    const degradedSummary = summaryPayload(
+      { count: null, status: 'degraded' },
+      { count: null, status: 'degraded' },
+      new Date().toISOString(),
+    );
+    // Good live fusion: real counts with an older `generated_at`.
+    const liveStamp = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const liveSummary = summaryPayload({ count: 7, status: 'ok' }, { count: 12, status: 'ok' }, liveStamp);
+    await mockDashboardApi(page, {
+      bootstrap: bootstrapPayload({ summary: degradedSummary, includeMarketRegime: false }),
+      summary: liveSummary,
+      newsLive: { status: 'warming', articles: [], items: [], total: 0, count: 0, last_updated: liveStamp },
+      summaryGate: summaryGate.wait,
+    });
+
+    await page.goto(DASHBOARD_URL, { waitUntil: 'domcontentloaded' });
+
+    // The incomplete seed paints nothing (counters stay unknown) and it is
+    // never cached — so it cannot veto the live summary below.
+    await expect(page.getByTestId('counter-cuaca')).toHaveText('—', { timeout: 60_000 });
+    expect(await storedWeatherGeneratedAt(page)).toBeNull();
+
+    summaryGate.release();
+    await page.waitForResponse((res) => res.url().includes('/weather/summary'), { timeout: 30_000 });
+
+    // The good live summary wins despite its older fusion stamp.
+    await expect(page.getByTestId('counter-cuaca')).toHaveText('7', { timeout: 30_000 });
+    await expect(page.getByTestId('counter-waspada')).toHaveText('12');
+    await expect.poll(() => storedWeatherGeneratedAt(page), { timeout: 30_000 }).toBe(liveStamp);
+  });
+
+  test('a wall-clock seeded news clock never freezes a newer live feed', async ({ page }) => {
+    const bootstrapGate = gate();
+    const newsGate = gate();
+    const articleTs = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    // Seed stamp is wall-clock now — more than 10 min ahead of the article data.
+    const seedArticle = rawNewsArticle({
+      id: 'news-seed-clock-1',
+      title: 'Banjir lumpuh jalur utama Belawan',
+      link: GOOD_LINK('4567890', 'banjir-lumpuh-belawan'),
+      url: GOOD_LINK('4567890', 'banjir-lumpuh-belawan'),
+    });
+    const liveArticles = [
+      seedArticle,
+      rawNewsArticle({
+        id: 'news-live-clock-2',
+        title: 'Longsor tutup jalur lintas barat',
+        summary: 'Longsor menutup badan jalan lintas barat dan antrean kendaraan mengular.',
+        latitude: -0.9492,
+        longitude: 100.3543,
+        link: GOOD_LINK('4567891', 'longsor-tutup-jalur-barat'),
+        url: GOOD_LINK('4567891', 'longsor-tutup-jalur-barat'),
+      }),
+    ];
+    await mockDashboardApi(page, {
+      // Live `last_updated` = the article data clock (max published_at),
+      // older than the wall-clock seed stamp.
+      bootstrap: bootstrapPayload({
+        newsArticles: [seedArticle],
+        newsLastUpdated: new Date().toISOString(),
+        summary: summaryPayload({ count: 5, status: 'ok' }, { count: 27, status: 'ok' }, articleTs),
+      }),
+      summary: summaryPayload({ count: 5, status: 'ok' }, { count: 27, status: 'ok' }, articleTs),
+      newsLive: liveNewsPayload(liveArticles, articleTs),
+      bootstrapGate: bootstrapGate.wait,
+      newsGate: newsGate.wait,
+    });
+
+    await page.goto(DASHBOARD_URL, { waitUntil: 'domcontentloaded' });
+
+    // Seed paints first (its stamp is repaired down to the article clock).
+    bootstrapGate.release();
+    await expect(page.getByTestId('berita-card-news-seed-clock-1')).toBeVisible({ timeout: 60_000 });
+
+    // The changed article set with a same-or-newer data clock must replace
+    // the feed — the fabricated seed stamp must not freeze it.
+    newsGate.release();
+    await expect(page.getByTestId('berita-card-news-live-clock-2')).toBeVisible({ timeout: 60_000 });
   });
 });

@@ -7,6 +7,9 @@ made. Tokens are signed locally with the dev HS256 secret (phase 161 pattern).
 Contract pinned here:
 
 * guest + fresh stored snapshot -> 200, `stale=false`, no tenant sections;
+* a *fresh* stored (or 60 s memory) row whose `source_freshness` marks
+  fire/weather degraded/stale still schedules exactly one background build
+  (single-flight) while the stored row is served immediately;
 * dispatcher -> `fleet`/`erp` included, scoped to the JWT `company_id`; a
   `?company_id=` query never widens or overrides the claim;
 * missing/stale snapshot -> bounded live fallback, `stale=true` + `reason`,
@@ -78,6 +81,32 @@ def _live_snapshot() -> dict:
         "source_freshness": {"incidents": {"status": "ok", "ms": 7}},
         "payload": {"incidents": {"status": "ok", "data": {"items": [], "total": 0}}},
     }
+
+
+def _degraded_fresh_snapshot(age_seconds: int = 0) -> dict:
+    """Fresh stored row whose fire/weather freshness says degraded/stale.
+
+    The section payloads themselves are healthy-shaped (what a degraded run
+    would still have embedded); the verdict lives in ``source_freshness``.
+    """
+    snapshot = _stored_snapshot(
+        fire_hotspots={"status": "ok", "data": {"hotspots": []}},
+        weather_summary={
+            "status": "ok",
+            "data": {"cuaca": {"status": "ok"}, "waspada": {"status": "ok"}},
+        },
+        age_seconds=age_seconds,
+    )
+    snapshot["source_freshness"]["fire_hotspots"] = {
+        "status": "degraded",
+        "ms": 12,
+        "error": "upstream degraded",
+    }
+    snapshot["source_freshness"]["weather_summary"] = {
+        "status": "stale",
+        "ms": 8,
+    }
+    return snapshot
 
 
 def _no_build(monkeypatch):
@@ -565,4 +594,74 @@ async def test_memory_cache_serves_fresh_without_rebuild(monkeypatch):
     assert stale is False
     assert reason is None
     assert computed_at == live["computed_at"]
+    dashboard_bootstrap.reset_inflight()
+
+
+# ---------------------------------------------------------------------------
+# 8. Degraded/stale fire-weather freshness is revalidated even when the row
+#    is fresh (in DB or in memory) — the caller still gets the row at once
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_fresh_degraded_sections_schedule_one_background_refresh(monkeypatch):
+    dashboard_bootstrap.reset_inflight()
+    stored = _degraded_fresh_snapshot()
+    monkeypatch.setattr(svc, "read_global_snapshot", lambda: stored)
+
+    calls: list[dict] = []
+
+    async def fake_build(**kwargs):
+        calls.append(kwargs)
+        await asyncio.sleep(30)
+        return _live_snapshot()
+
+    monkeypatch.setattr(svc, "build_global_snapshot", fake_build)
+
+    sections, computed_at, stale, reason = await dashboard_bootstrap._resolve_sections(None)
+
+    # The stored row is served immediately: fresh row, no reason, real data.
+    assert stale is False
+    assert reason is None
+    assert computed_at == stored["computed_at"]
+    assert sections["fire_hotspots"]["data"]["hotspots"] == []
+
+    await asyncio.sleep(0.05)  # let the detached build start once
+    assert len(calls) == 1
+
+    # A concurrent caller shares the same in-flight rebuild (single-flight):
+    # still exactly one build, and the fresh row is still served as fresh.
+    sections2, _at2, stale2, reason2 = await dashboard_bootstrap._resolve_sections(None)
+    assert stale2 is False
+    assert reason2 is None
+    assert len(calls) == 1
+    dashboard_bootstrap.reset_inflight()
+
+
+@pytest.mark.asyncio
+async def test_memory_cached_degraded_snapshot_still_schedules_refresh(monkeypatch):
+    """A 60 s memory hit does not swallow the revalidation of a degraded row."""
+    dashboard_bootstrap.reset_inflight()
+    dashboard_bootstrap._store_memory_snapshot(None, _degraded_fresh_snapshot())
+
+    def must_not_read():
+        raise AssertionError("memory hit must not touch the DB")
+
+    calls: list[dict] = []
+
+    async def fake_build(**kwargs):
+        calls.append(kwargs)
+        await asyncio.sleep(30)
+        return _live_snapshot()
+
+    monkeypatch.setattr(svc, "read_global_snapshot", must_not_read)
+    monkeypatch.setattr(svc, "build_global_snapshot", fake_build)
+
+    sections, computed_at, stale, reason = await dashboard_bootstrap._resolve_sections(None)
+
+    assert stale is False
+    assert reason is None
+    assert sections["weather_summary"]["data"]["cuaca"]["status"] == "ok"
+
+    await asyncio.sleep(0.05)
+    assert len(calls) == 1  # the memory cache did not suppress the refresh
     dashboard_bootstrap.reset_inflight()

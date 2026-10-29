@@ -3,16 +3,20 @@
 /**
  * Unit D — public-first last-good cache.
  *
- * `prehub.news.v1` and `prehub.weather.v1` in `localStorage`, 2 h TTL, public
+ * `prehub.news.v2` and `prehub.weather.v2` in `localStorage`, 2 h TTL, public
  * data only (fleet/ERP/auth are never cached). Versioned envelope so a schema
  * change can bump the key version and discard older entries. SSR-guarded:
  * every access is a no-op outside the browser.
+ *
+ * v2 (2026): v1 entries could be poisoned by degraded snapshot seeds (null
+ * counter counts / wall-clock `last_updated`), so the key version was bumped —
+ * old v1 payloads are silently discarded by the version check below.
  */
 
-export const PUBLIC_NEWS_CACHE_KEY = 'prehub.news.v1';
-export const PUBLIC_WEATHER_CACHE_KEY = 'prehub.weather.v1';
+export const PUBLIC_NEWS_CACHE_KEY = 'prehub.news.v2';
+export const PUBLIC_WEATHER_CACHE_KEY = 'prehub.weather.v2';
 export const PUBLIC_CACHE_TTL_MS = 2 * 60 * 60 * 1000;
-const PUBLIC_CACHE_VERSION = 1;
+const PUBLIC_CACHE_VERSION = 2;
 
 interface PublicCacheEnvelope<T> {
   v: number;

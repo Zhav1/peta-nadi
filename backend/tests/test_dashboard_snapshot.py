@@ -6,10 +6,16 @@ use a fake Supabase client.
 
 Pinned here:
 
-* the map-bootstrap plan is exactly the four seeded sections (no weather,
-  corridor, commodity, approval, health, evaluation, outcome or BNPB sections);
-* the news section is a direct 40-article Supabase read — it never calls
-  ``get_live_news`` (breadth contract, re-tier, ingestion scheduling);
+* the map-bootstrap plan is exactly the five seeded sections (no weather
+  polygons, corridor, commodity, approval, health, evaluation, outcome or BNPB
+  sections);
+* the news section is a direct display read — it never calls
+  ``get_live_news`` (breadth contract, re-tier, ingestion scheduling), keeps
+  only display-eligible tiers (crisis / regional) and reports the newest
+  publish time as ``last_updated`` (never wall-clock now on the seed);
+* a degraded/stale inner fire/weather payload is mirrored by the section
+  (``degraded`` / ``stale``), and a degraded payload is never stored as
+  last-good;
 * a failing section and a timing-out section are isolated (`degraded` /
   `timeout`) while the healthy sections stay `ok`;
 * a failed section reuses its last good value when this process has one;
@@ -139,7 +145,7 @@ def test_section_plan_is_the_five_map_bootstrap_sections():
 
 
 @pytest.mark.asyncio
-async def test_news_section_reads_40_articles_directly(monkeypatch):
+async def test_news_section_classifies_tiers_and_uses_max_publish_time(monkeypatch):
     from app.routers import news_router
     from app.services import news_aggregator
 
@@ -147,21 +153,130 @@ async def test_news_section_reads_40_articles_directly(monkeypatch):
 
     async def fake_fetch(**kwargs):
         calls.append(kwargs)
-        return [{"id": "N-1"}, {"id": "N-2"}]
+        return [
+            {"id": "N-1", "published_at": "2026-10-28T08:00:00+00:00"},
+            {
+                "id": "N-2",
+                "published_at": "2026-10-28T09:30:00+00:00",
+                "zone_tier": "DROPPED_IRRELEVANT",
+            },
+        ]
+
+    def fake_regional(article, now=None):
+        return article.get("id") == "N-2"
 
     def must_not_run(*args, **kwargs):
         raise AssertionError("the snapshot news section must never call get_live_news")
 
     monkeypatch.setattr(news_aggregator, "fetch_news_from_supabase", fake_fetch)
+    monkeypatch.setattr(news_router, "is_regional_context", fake_regional)
     monkeypatch.setattr(news_router, "get_live_news", must_not_run)
 
     section = await svc.section_plan()["news"]()
 
     assert calls == [{"limit": 40, "include_regional": True}]
     assert section["status"] == "ok"
+    # Both display tiers are kept and every row carries its own tier.
+    assert [a["id"] for a in section["articles"]] == ["N-1", "N-2"]
+    assert section["articles"][0]["relevance_tier"] == "crisis"
+    assert section["articles"][1]["relevance_tier"] == "regional"
     assert section["total"] == 2
-    assert section["last_updated"]
-    assert section["articles"] == [{"id": "N-1"}, {"id": "N-2"}]
+    # The data clock is the newest kept article's publish time, never now().
+    assert section["last_updated"] == "2026-10-28T09:30:00+00:00"
+
+
+@pytest.mark.asyncio
+async def test_news_section_keeps_real_regional_row_and_drops_politics(monkeypatch):
+    from datetime import datetime, timezone
+
+    from app.services import news_aggregator
+
+    now = datetime.now(timezone.utc).isoformat()
+
+    async def fake_fetch(**kwargs):
+        return [
+            {
+                "id": "CRISIS",
+                "title": "Banjir lumpuh jalur utama Belawan",
+                "published_at": now,
+                "zone_tier": "RED_CONFIRMED",
+            },
+            {
+                "id": "REGIONAL",
+                "title": "Pemkab Aceh Timur bangun jalan terdampak banjir",
+                "published_at": now,
+                "zone_tier": "DROPPED_IRRELEVANT",
+                "province": "Aceh",
+                "latitude": 4.6167,
+                "longitude": 97.6167,
+                "is_geocoded": True,
+            },
+            {
+                "id": "POLITICS",
+                "title": "Ketua DPW PPP Aceh Dukung Pemberhentian Waketum",
+                "published_at": now,
+                "zone_tier": "DROPPED_IRRELEVANT",
+                "province": "Aceh",
+                "latitude": 5.5483,
+                "longitude": 95.3238,
+                "is_geocoded": True,
+            },
+        ]
+
+    monkeypatch.setattr(news_aggregator, "fetch_news_from_supabase", fake_fetch)
+
+    section = await svc.section_plan()["news"]()
+
+    assert [a["id"] for a in section["articles"]] == ["CRISIS", "REGIONAL"]
+    assert section["articles"][0]["relevance_tier"] == "crisis"
+    assert section["articles"][1]["relevance_tier"] == "regional"
+
+
+@pytest.mark.asyncio
+async def test_news_section_drops_rows_that_neither_pass_nor_read_regional(monkeypatch):
+    from app.routers import news_router
+    from app.services import news_aggregator
+
+    async def fake_fetch(**kwargs):
+        return [
+            {"id": "N-1", "published_at": "2026-10-28T08:00:00+00:00"},
+            {
+                "id": "N-2",
+                "published_at": "2026-10-28T09:30:00+00:00",
+                "zone_tier": "DROPPED_IRRELEVANT",
+            },
+        ]
+
+    monkeypatch.setattr(news_aggregator, "fetch_news_from_supabase", fake_fetch)
+    monkeypatch.setattr(news_router, "is_regional_context", lambda article, now=None: False)
+
+    section = await svc.section_plan()["news"]()
+
+    # The dropped row never reaches the seed: total reflects the kept rows and
+    # the clock is the newest kept article, not a fabricated wall-clock now.
+    assert [a["id"] for a in section["articles"]] == ["N-1"]
+    assert section["total"] == 1
+    assert section["last_updated"] == "2026-10-28T08:00:00+00:00"
+
+
+@pytest.mark.asyncio
+async def test_news_section_last_updated_falls_back_to_now_without_timestamps(monkeypatch):
+    from datetime import datetime, timezone
+
+    from app.routers import news_router
+    from app.services import news_aggregator
+
+    async def fake_fetch(**kwargs):
+        return [{"id": "N-1"}]  # no published_at on any row
+
+    monkeypatch.setattr(news_aggregator, "fetch_news_from_supabase", fake_fetch)
+
+    section = await svc.section_plan()["news"]()
+
+    assert section["status"] == "ok"
+    assert section["total"] == 1
+    parsed = datetime.fromisoformat(section["last_updated"])
+    assert (datetime.now(timezone.utc) - parsed).total_seconds() < 120
 
 
 @pytest.mark.asyncio
@@ -222,6 +337,122 @@ async def test_weather_summary_timeout_is_degraded_never_fake_zero(monkeypatch):
         pass
     else:
         assert section["data"] is None
+
+
+# ---------------------------------------------------------------------------
+# 1b. Section truth from the inner payloads (fire / weather never raise)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_degraded_inner_fire_and_weather_payloads_are_degraded(monkeypatch):
+    async def fire():
+        return {"status": "degraded", "hotspots": []}
+
+    async def fire_inner_timeout():
+        return {"status": "timeout", "hotspots": []}
+
+    async def weather():
+        return {
+            "bbox": [],
+            "generated_at": svc.utcnow().isoformat(),
+            # One degraded counter is enough: the snapshot used to store this
+            # payload as ok with a fresh timestamp.
+            "cuaca": {"count": 0, "total": 0, "status": "degraded"},
+            "waspada": {"count": 0, "total": 0, "status": "ok"},
+        }
+
+    monkeypatch.setattr(
+        svc,
+        "section_plan",
+        lambda corridor_id=None: {"fire_hotspots": fire, "weather_summary": weather},
+    )
+
+    snapshot = await svc.build_global_snapshot()
+    payload = snapshot["payload"]
+    freshness = snapshot["source_freshness"]
+
+    assert payload["fire_hotspots"]["status"] == "degraded"
+    assert payload["fire_hotspots"]["error"] == "upstream degraded"
+    assert payload["fire_hotspots"]["data"]["status"] == "degraded"
+    assert freshness["fire_hotspots"]["status"] == "degraded"
+    assert "fire_hotspots" not in svc._LAST_GOOD
+
+    assert payload["weather_summary"]["status"] == "degraded"
+    assert payload["weather_summary"]["error"] == "upstream degraded"
+    assert freshness["weather_summary"]["status"] == "degraded"
+    assert "weather_summary" not in svc._LAST_GOOD
+
+    # A fire envelope that itself timed out is degraded the same way.
+    monkeypatch.setattr(
+        svc, "section_plan", lambda corridor_id=None: {"fire_hotspots": fire_inner_timeout}
+    )
+    snapshot = await svc.build_global_snapshot()
+    assert snapshot["payload"]["fire_hotspots"]["status"] == "degraded"
+    assert snapshot["source_freshness"]["fire_hotspots"]["status"] == "degraded"
+    assert "fire_hotspots" not in svc._LAST_GOOD
+
+
+@pytest.mark.asyncio
+async def test_stale_inner_payloads_are_stale_and_stay_last_good_eligible(monkeypatch):
+    async def fire():
+        return {"status": "stale", "hotspots": ["A"]}
+
+    async def weather():
+        return {
+            "bbox": [],
+            "generated_at": svc.utcnow().isoformat(),
+            "cuaca": {"count": 1, "total": 1, "status": "ok"},
+            "waspada": {"count": 0, "total": 0, "status": "stale"},
+        }
+
+    monkeypatch.setattr(
+        svc,
+        "section_plan",
+        lambda corridor_id=None: {"fire_hotspots": fire, "weather_summary": weather},
+    )
+
+    snapshot = await svc.build_global_snapshot()
+    payload = snapshot["payload"]
+    freshness = snapshot["source_freshness"]
+
+    assert payload["fire_hotspots"]["status"] == "stale"
+    assert payload["fire_hotspots"]["data"]["hotspots"] == ["A"]
+    assert freshness["fire_hotspots"]["status"] == "stale"
+
+    assert payload["weather_summary"]["status"] == "stale"
+    assert freshness["weather_summary"]["status"] == "stale"
+
+    # Stale data is real data: it still counts as the last-good value.
+    assert "fire_hotspots" in svc._LAST_GOOD
+    assert "weather_summary" in svc._LAST_GOOD
+
+
+@pytest.mark.asyncio
+async def test_ok_and_empty_inner_payloads_stay_ok(monkeypatch):
+    async def fire_empty():
+        return {"status": "empty", "hotspots": []}
+
+    async def weather_ok():
+        return {
+            "bbox": [],
+            "generated_at": svc.utcnow().isoformat(),
+            "cuaca": {"count": 3, "total": 3, "status": "ok"},
+            "waspada": {"count": 1, "total": 1, "status": "ok"},
+        }
+
+    monkeypatch.setattr(
+        svc,
+        "section_plan",
+        lambda corridor_id=None: {"fire_hotspots": fire_empty, "weather_summary": weather_ok},
+    )
+
+    snapshot = await svc.build_global_snapshot()
+    payload = snapshot["payload"]
+
+    assert payload["fire_hotspots"]["status"] == "ok"
+    assert payload["weather_summary"]["status"] == "ok"
+    assert "fire_hotspots" in svc._LAST_GOOD
+    assert "weather_summary" in svc._LAST_GOOD
 
 
 # ---------------------------------------------------------------------------

@@ -7,7 +7,12 @@ One auth-aware request replaces the ~25-30 endpoint first-paint fan-out:
 * a stored row is served immediately (stale-first): fresh (<= 600 s) with
   ``stale=false``; stale (> 600 s) with ``stale=true`` + ``snapshot_stale``
   while a detached background refresh rebuilds (single-flight, never blocks);
-* no stored row triggers a bounded single-flight live build (8 s cap);
+* a *fresh* (or in-memory) row whose ``source_freshness`` marks fire/weather
+  degraded/stale is still served immediately, but it schedules the same
+  background refresh (a degraded read must not suppress revalidation);
+* no stored row triggers a bounded single-flight live build (the build itself
+  is capped at 16 s to cover slow fire/weather sections, while the caller waits
+  at most the 8 s first-paint budget and the build continues to cache);
 * ``DISPATCHER`` / ``REGULATOR`` additionally get tenant-scoped ``fleet`` and
   ``erp`` sections, built live from the existing service/router caches.
 
@@ -55,9 +60,15 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["dashboard"])
 
-# Overall cap on the live fallback. The per-section budget is 5 s and the
-# sections run in parallel, so a healthy build lands well inside this.
-LIVE_BUILD_TIMEOUT_SECONDS = 8.0
+# Overall cap on a single-flight snapshot build run on this module's behalf.
+# It must cover the slow per-section budgets (fire 15 s / weather 12 s) since
+# the sections only run in parallel inside the build: a revalidation build that
+# is cancelled before it finishes would never refresh a degraded row.
+LIVE_BUILD_TIMEOUT_SECONDS = 16.0
+# The missing-row caller must not hold first paint for the full slow-section
+# budget. It waits at most this long; the shielded build continues and caches
+# its result for the next request.
+FIRST_PAINT_BUILD_TIMEOUT_SECONDS = 8.0
 TENANT_SECTION_TIMEOUT_SECONDS = 5.0
 
 CACHE_CONTROL: dict[str, str] = {"Cache-Control": "private, no-store"}
@@ -242,6 +253,31 @@ def _store_memory_snapshot(corridor_id: Optional[str], snapshot: dict) -> None:
     }
 
 
+# Sections whose stored truth must be revalidated even while their row is
+# otherwise fresh: a degraded/stale fire or weather payload is real data and
+# gets served immediately, but it must not suppress a background refresh (the
+# 5-minute tick alone would leave it degraded for up to one full cadence).
+SLOW_REVALIDATION_SECTIONS = ("fire_hotspots", "weather_summary")
+
+
+def _needs_revalidation(snapshot: dict) -> bool:
+    """True when the stored snapshot marks a slow section degraded/stale.
+
+    The verdict lives in ``source_freshness`` (written by
+    :func:`dashboard_snapshot_service.run_section`), never in the section
+    payload itself. Absent entries are treated as healthy: only a stored row
+    that explicitly carries a non-``ok`` status schedules a refresh.
+    """
+    freshness = snapshot.get("source_freshness") or {}
+    for name in SLOW_REVALIDATION_SECTIONS:
+        entry = freshness.get(name)
+        if isinstance(entry, dict):
+            status = entry.get("status")
+            if status and status != "ok":
+                return True
+    return False
+
+
 async def _run_build(corridor_id: Optional[str]) -> dict:
     """Bounded build shared by every concurrent caller.
 
@@ -287,7 +323,12 @@ def _get_or_create_build_task(corridor_id: Optional[str]) -> asyncio.Task:
 
 
 def _schedule_background_refresh(corridor_id: Optional[str]) -> None:
-    """Schedule a detached refresh; concurrent callers share one build."""
+    """Schedule a detached refresh; concurrent callers share one build.
+
+    No memory-cache short circuit: a fresh memory snapshot that itself carries
+    degraded/stale fire or weather freshness must still be refreshed here
+    (single-flight via ``_INFLIGHT``; never a duplicate build).
+    """
     try:
         asyncio.get_running_loop()
     except RuntimeError:
@@ -295,8 +336,6 @@ def _schedule_background_refresh(corridor_id: Optional[str]) -> None:
     key = _inflight_key(corridor_id)
     existing = _INFLIGHT.get(key)
     if existing is not None and not existing.done():
-        return
-    if _get_memory_snapshot(corridor_id) is not None:
         return
     try:
         task = _get_or_create_build_task(corridor_id)
@@ -332,6 +371,11 @@ async def _resolve_sections(corridor_id: Optional[str]) -> tuple[dict, Optional[
         if mem is not None:
             mem_age = snapshots.snapshot_age_seconds(mem)
             if mem_age is not None and mem_age <= snapshots.STALE_AFTER_SECONDS:
+                if _needs_revalidation(mem):
+                    try:
+                        _schedule_background_refresh(corridor_id)
+                    except Exception as exc:
+                        logger.warning("dashboard bootstrap: background refresh failed: %s", exc)
                 return dict(mem.get("payload") or {}), mem.get("computed_at"), False, None
     except Exception:
         pass
@@ -340,6 +384,14 @@ async def _resolve_sections(corridor_id: Optional[str]) -> tuple[dict, Optional[
     age = snapshots.snapshot_age_seconds(snapshot)
 
     if snapshot is not None and age is not None and age <= snapshots.STALE_AFTER_SECONDS:
+        # Stale-first: the stored row is served immediately. Degraded/stale
+        # fire or weather freshness does not suppress the refresh either — the
+        # caller gets the row, the rebuild runs detached.
+        if _needs_revalidation(snapshot):
+            try:
+                _schedule_background_refresh(corridor_id)
+            except Exception as exc:
+                logger.warning("dashboard bootstrap: background refresh failed: %s", exc)
         return dict(snapshot.get("payload") or {}), snapshot.get("computed_at"), False, None
 
     if snapshot is not None:
@@ -354,9 +406,10 @@ async def _resolve_sections(corridor_id: Optional[str]) -> tuple[dict, Optional[
         task = _get_or_create_build_task(corridor_id)
         live = await asyncio.wait_for(
             asyncio.shield(task),
-            # The task owns the real timeout; leave a small margin so its
-            # TimeoutError wins over the caller's outer timeout.
-            timeout=LIVE_BUILD_TIMEOUT_SECONDS + 0.5,
+            # The task owns the real timeout; the caller only waits the
+            # first-paint budget (and never longer than the task margin used by
+            # tests that monkeypatch LIVE_BUILD_TIMEOUT_SECONDS very low).
+            timeout=min(FIRST_PAINT_BUILD_TIMEOUT_SECONDS, LIVE_BUILD_TIMEOUT_SECONDS + 0.5),
         )
         sections = dict(live.get("payload") or {})
         if sections:
