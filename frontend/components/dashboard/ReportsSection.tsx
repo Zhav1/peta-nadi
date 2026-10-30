@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
  FileText, 
  Printer, 
@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/authContext';
+import { DashboardRequestSignals, dashboardDataKey, dashboardIdentityKey } from '@/lib/dashboardMemoryCache';
+import { useDashboardCachedResource } from '@/hooks/useDashboardCachedResource';
 import type { CorridorContext, CrisisState, RouteRecommendation, DecisionAction, TacticalManeuver } from '@/lib/types';
 import ERPSavingsPanel from '@/components/dashboard/ERPSavingsPanel';
 import { OutcomeVerificationForm } from '@/components/dashboard/LaporanAktualModal';
@@ -43,6 +45,8 @@ interface ApprovalLogItem {
  is_demo?: boolean;
  recommended_route?: RouteRecommendation;
 }
+
+const EMPTY_APPROVALS: ApprovalLogItem[] = [];
 
 function isDemoApproval(item: { id?: string; incident_id?: string; notes?: string; is_demo?: boolean }): boolean {
  if (item.is_demo === true) return true;
@@ -75,75 +79,59 @@ function formatDateTime(isoString?: string): string {
 }
 
 export default function ReportsSection({
- approvalsCount = 0,
  corridorContext,
  selectedCrisis,
  activeRoutes,
  onCreateMitigation
 }: ReportsSectionProps) {
- const { role } = useAuth();
+ const { user, role } = useAuth();
+ const identityScope = dashboardIdentityKey({ id: user?.id, role, companyId: user?.company_id });
+ const requestSignalsRef = useRef(new DashboardRequestSignals());
+ const requestSignals = requestSignalsRef.current;
+ useEffect(() => {
+   requestSignals.activate();
+   return () => requestSignals.dispose();
+ }, [requestSignals]);
  const isDispatcher = role === 'DISPATCHER';
  const verifyDisabledHint = 'Hanya peran Dispatcher yang dapat mencatat verifikasi.';
- const [liveApprovals, setLiveApprovals] = useState<number>(approvalsCount);
- const [healthScore, setHealthScore] = useState<number>(92);
- const [approvalList, setApprovalList] = useState<ApprovalLogItem[]>([]);
- const [isLoading, setIsLoading] = useState<boolean>(true);
+ const approvalsResource = useDashboardCachedResource<{ total: number; items: ApprovalLogItem[] }>(
+   dashboardDataKey(identityScope, 'reports.approvals'),
+   async () => {
+     const signal = requestSignals.signal('reports.approvals', dashboardDataKey(identityScope, 'reports.approvals'));
+     const response = await api.approvals.list(undefined, signal);
+     const items = Array.isArray(response?.items)
+       ? response.items.map((item) => ({ ...item, is_demo: isDemoApproval(item) }))
+       : [];
+     return {
+       total: typeof response?.total === 'number' ? response.total : items.length,
+       items,
+     };
+   },
+ );
+ const healthResource = useDashboardCachedResource<number | null>(
+   dashboardDataKey(identityScope, 'reports.source-health'),
+   async () => {
+     const signal = requestSignals.signal('reports.source-health', dashboardDataKey(identityScope, 'reports.source-health'));
+     const response = await api.sourceHealth.get(signal);
+     if (!Array.isArray(response?.sources) || response.sources.length === 0) return null;
+     const healthyCount = response.sources.filter((source: { status: string }) => source.status === 'healthy').length;
+     return Math.round((healthyCount / response.sources.length) * 100);
+   },
+ );
+ const liveApprovals = approvalsResource.data?.total ?? null;
+ const approvalList = approvalsResource.data?.items ?? EMPTY_APPROVALS;
+ const healthScore = healthResource.data ?? null;
+ const isLoading = approvalsResource.isLoading;
  // Hybrid C (secondary): audit-row deep-link -> OutcomeVerificationForm pre-fill incident_id.
  const [verifyIncidentId, setVerifyIncidentId] = useState<string | null>(null);
  const [reportView, setReportView] = useState<'erp' | 'audit'>('erp');
  const [erpRefreshKey, setErpRefreshKey] = useState(0);
- const [reloadTick, setReloadTick] = useState(0);
 
  // Client-side filter states
  const [searchQuery, setSearchQuery] = useState<string>('');
  const [statusFilter, setStatusFilter] = useState<string>('ALL');
  const [startDate, setStartDate] = useState<string>('');
  const [endDate, setEndDate] = useState<string>('');
-
- useEffect(() => {
- let isMounted = true;
- async function loadStats() {
- setIsLoading(true);
- try {
- const [appRes, healthRes] = await Promise.all([
- api.approvals.list(),
- api.sourceHealth.get()
- ]);
- if (!isMounted) return;
-
- if (appRes && typeof appRes.total === 'number') {
- setLiveApprovals(appRes.total);
- if (Array.isArray(appRes.items)) setApprovalList(appRes.items.map((it) => ({ ...it, is_demo: isDemoApproval(it) })));
- } else if (appRes && Array.isArray(appRes.items)) {
- setLiveApprovals(appRes.items.length);
- setApprovalList(appRes.items.map((it) => ({ ...it, is_demo: isDemoApproval(it) })));
- } else {
- setLiveApprovals(0);
- setApprovalList([]);
- }
- 
- let totalSources = 0;
- let okSources = 0;
- if (healthRes && Array.isArray(healthRes.sources)) {
- healthRes.sources.forEach((source: { status: string }) => {
- totalSources += 1;
- if (source.status === 'healthy') okSources += 1;
- });
- }
- if (totalSources > 0) {
- setHealthScore(Math.round((okSources / totalSources) * 100));
- }
- } catch (err) {
- console.error('Failed to load stats for ReportsSection:', err);
- } finally {
- if (isMounted) setIsLoading(false);
- }
- }
- loadStats();
- return () => {
- isMounted = false;
- };
- }, [reloadTick]);
 
  // Derive corridor status from actual crisis and corridor metrics
  const corridorStatus = useMemo(() => {
@@ -242,7 +230,10 @@ export default function ReportsSection({
  setSearchQuery('');
  };
 
- const handleReloadAudit = () => setReloadTick((k) => k + 1);
+ const handleReloadAudit = () => {
+   approvalsResource.refresh();
+   healthResource.refresh();
+ };
 
  const handleGeneratePDF = () => {
  if (typeof window === 'undefined') return;
@@ -330,7 +321,7 @@ export default function ReportsSection({
  </div>
  <div class="meta">
  <div><strong>Diterbitkan:</strong> ${timestamp}</div>
- <div><strong>Integritas Data:</strong> ${healthScore}% OPERASIONAL</div>
+ <div><strong>Integritas Data:</strong> ${healthScore == null ? 'N/A' : String(healthScore) + '%'} OPERASIONAL</div>
  <div><strong>Otoritas:</strong> Pusat Kendali PreHub</div>
  </div>
  </div>
@@ -338,11 +329,11 @@ export default function ReportsSection({
  <div class="kpi-grid">
  <div class="kpi-card">
  <div class="kpi-label">Pengalihan tercatat</div>
- <div class="kpi-value">${filteredList.length} <span style="font-size: 13px; font-weight: normal; color: #64748b;">/ ${liveApprovals} Total</span></div>
+ <div class="kpi-value">${filteredList.length} <span style="font-size: 13px; font-weight: normal; color: #64748b;">/ ${liveApprovals ?? 'N/A'} Total</span></div>
  </div>
  <div class="kpi-card">
  <div class="kpi-label">Integritas sumber</div>
- <div class="kpi-value">${healthScore}%</div>
+ <div class="kpi-value">${healthScore == null ? 'N/A' : String(healthScore) + '%'}</div>
  </div>
  <div class="kpi-card">
  <div class="kpi-label">Status koridor</div>
@@ -468,10 +459,12 @@ export default function ReportsSection({
  Pengalihan tercatat
  </span>
  <p className="text-2xl font-bold text-white tabular-nums">
- {liveApprovals} Tindakan
+ {liveApprovals == null ? '—' : liveApprovals} Tindakan
  </p>
  <p className="text-xs text-slate-400 tabular-nums mt-1">
- {hasActiveFilters && filteredList.length !== liveApprovals
+ {liveApprovals == null
+ ? 'Data persetujuan belum tersedia'
+ : hasActiveFilters && filteredList.length !== liveApprovals
  ? `${filteredList.length} ditampilkan pada filter`
  : 'Terekam dalam Catatan Audit'}
  </p>
@@ -482,7 +475,7 @@ export default function ReportsSection({
  <span className="text-xs font-medium text-slate-400 block mb-1">
  Integritas sumber
  </span>
- <p className="text-2xl font-bold text-white tabular-nums">{healthScore}%</p>
+ <p className="text-2xl font-bold text-white tabular-nums" data-testid="source-health-value">{healthScore == null ? '—' : `${healthScore}%`}</p>
  <p className="text-xs text-slate-400 tabular-nums mt-1">
  BMKG, TomTom, & PIHPS Terverifikasi
  </p>
@@ -501,6 +494,18 @@ export default function ReportsSection({
  </p>
  </div>
 
+ </div>
+
+ <div className="text-xs" aria-live="polite" data-testid="reports-refresh-status">
+ {approvalsResource.isRefreshing || healthResource.isRefreshing ? (
+ <p className="text-slate-400">Memperbarui data laporan…</p>
+ ) : (approvalsResource.updatedAt || healthResource.updatedAt) ? (
+ <p className="text-slate-500">
+ Data terakhir diperbarui {new Date(Math.max(approvalsResource.updatedAt ?? 0, healthResource.updatedAt ?? 0)).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+ </p>
+ ) : null}
+ {approvalsResource.error && <p role="alert" className="text-amber-300">Catatan audit gagal diperbarui. Data terakhir tetap ditampilkan. {approvalsResource.error}</p>}
+ {healthResource.error && <p role="alert" className="text-amber-300">Integritas sumber gagal diperbarui. Data terakhir tetap ditampilkan. {healthResource.error}</p>}
  </div>
 
  {/* MAIN AUDIT LEDGER WORKSPACE */}
@@ -523,7 +528,7 @@ export default function ReportsSection({
  </div>
  <div className="text-right flex flex-col items-end gap-1.5">
  <span className="text-xs text-slate-400 tabular-nums">
- {filteredList.length} dari {liveApprovals} Catatan
+ {filteredList.length} dari {liveApprovals ?? '—'} Catatan
  </span>
  {approvalList.length > 0 && (
  <span className="flex items-center gap-1.5" aria-label="Label keaslian data">

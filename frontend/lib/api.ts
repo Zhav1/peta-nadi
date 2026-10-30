@@ -67,6 +67,7 @@ function createTimeoutError(path: string, timeoutMs: number): Error {
 
 interface FetchAttempt {
   response?: Response;
+  data?: unknown;
   /** Our own deadline fired (not a caller abort). */
   timedOut: boolean;
   /** The caller's signal aborted the attempt. */
@@ -91,18 +92,35 @@ async function fetchAttempt(
   const controller = new AbortController();
   let timedOut = false;
   const forwardAbort = () => controller.abort();
+  const rejectOnAbort = () => createAbortError();
+  let rejectAbort!: (error: Error) => void;
+  const abortPromise = new Promise<never>((_, reject) => {
+    rejectAbort = reject;
+  });
+  const onAttemptAbort = () => rejectAbort(rejectOnAbort());
   if (callerSignal) callerSignal.addEventListener('abort', forwardAbort, { once: true });
+  controller.signal.addEventListener('abort', onAttemptAbort, { once: true });
 
   const timer = setTimeout(() => {
     timedOut = true;
     controller.abort();
   }, timeoutMs);
 
+  let response: Response | undefined;
   try {
-    const response = await fetch(url, { ...init, signal: controller.signal });
-    return { response, timedOut, aborted: false };
+    response = await Promise.race([
+      fetch(url, { ...init, signal: controller.signal }),
+      abortPromise,
+    ]);
+    if (!response.ok) return { response, timedOut, aborted: false };
+
+    // Keep the deadline and caller cancellation active until the JSON body has
+    // been consumed; fetch() itself resolves as soon as headers arrive.
+    const data = await Promise.race([response.json(), abortPromise]);
+    return { response, data, timedOut, aborted: false };
   } catch (error) {
     return {
+      response,
       timedOut,
       // A caller abort wins over our deadline: same-request cancellation must
       // surface as AbortError (callers treat it as "no work was done").
@@ -112,6 +130,7 @@ async function fetchAttempt(
   } finally {
     clearTimeout(timer);
     callerSignal?.removeEventListener('abort', forwardAbort);
+    controller.signal.removeEventListener('abort', onAttemptAbort);
   }
 }
 
@@ -146,21 +165,21 @@ async function request<T>(path: string, options?: ApiRequestInit): Promise<T> {
   const directUrl = `${baseUrl}${path}`;
   let attempt = await fetchAttempt(directUrl, { ...init, headers }, callerSignal, budgetMs);
 
-  if (!attempt.response) {
+  if (!attempt.response || attempt.timedOut || attempt.aborted) {
     if (attempt.aborted) throw createAbortError();
 
     if (attempt.timedOut) {
-      // Cold backend: exactly one direct retry after a short backoff. Never the
-      // proxy — a timed-out read must not be replayed through a second hop that
-      // would restart the same slow work.
+      // A timed-out write may already have been processed, even if its response
+      // body stalled. Never replay it; only retry safe reads, exactly once.
+      if (!isRead) throw createTimeoutError(path, budgetMs);
+      // Cold backend: one direct retry after a short backoff. Never use the
+      // proxy for a timed-out read because that would restart the same slow work.
       await new Promise((resolve) => setTimeout(resolve, TIMEOUT_RETRY_BACKOFF_MS));
       if (callerSignal?.aborted) throw createAbortError();
       attempt = await fetchAttempt(directUrl, { ...init, headers }, callerSignal, budgetMs);
-      if (!attempt.response) {
-        if (attempt.aborted) throw createAbortError();
-        if (attempt.timedOut) throw createTimeoutError(path, budgetMs);
-        // Second attempt failed as a network/CORS error → proxy fallback below.
-      }
+      if (attempt.aborted) throw createAbortError();
+      if (attempt.timedOut) throw createTimeoutError(path, budgetMs);
+      // Second attempt failed as a network/CORS error → proxy fallback below.
     }
 
     if (!attempt.response) {
@@ -175,8 +194,9 @@ async function request<T>(path: string, options?: ApiRequestInit): Promise<T> {
         callerSignal,
         budgetMs,
       );
-      if (!proxied.response) {
+      if (!proxied.response || proxied.timedOut || proxied.aborted) {
         if (proxied.aborted) throw createAbortError();
+        if (proxied.timedOut) throw createTimeoutError(path, budgetMs);
         throw proxied.error ?? createTimeoutError(path, budgetMs);
       }
       attempt = proxied;
@@ -193,7 +213,8 @@ async function request<T>(path: string, options?: ApiRequestInit): Promise<T> {
     error.status = res.status;
     throw error;
   }
-  return res.json() as Promise<T>;
+  if (attempt.error) throw attempt.error;
+  return attempt.data as T;
 }
 
 export const api = {
@@ -271,9 +292,9 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(body),
       }),
-    list: (incidentId?: string) => {
+    list: (incidentId?: string, signal?: AbortSignal) => {
       const qs = incidentId ? `?incident_id=${incidentId}` : '';
-      return request<import('./types').ApprovalListResponse>(`/api/v1/approvals${qs}`);
+      return request<import('./types').ApprovalListResponse>(`/api/v1/approvals${qs}`, { signal });
     },
   },
   outcomes: {
@@ -303,19 +324,20 @@ export const api = {
       request<any>('/api/v1/outcomes/benchmark/summary'),
   },
   sourceHealth: {
-    get: () =>
-      request<import('./types').SourceHealthResponse>('/api/v1/health/sources'),
+    get: (signal?: AbortSignal) =>
+      request<import('./types').SourceHealthResponse>('/api/v1/health/sources', { signal }),
   },
   commodities: {
-    prices: (params?: { commodity?: string; region?: string; limit?: number }) => {
+    prices: (params?: { commodity?: string; region?: string; limit?: number }, signal?: AbortSignal) => {
       const qs = params
         ? '?' + new URLSearchParams(Object.entries(params).filter(([, v]) => v != null) as string[][]).toString()
         : '';
       return request<{ items: Array<{ time: string; commodity: string; region: string; price_idr: number; source: string; metadata: Record<string, unknown> }>; total: number }>(
-        `/api/v1/commodities/prices${qs}`
+        `/api/v1/commodities/prices${qs}`,
+        { signal }
       );
     },
-    spikes: (params?: { region?: string }) => {
+    spikes: (params?: { region?: string }, signal?: AbortSignal) => {
       const qs = params?.region
         ? `?region=${encodeURIComponent(params.region)}`
         : '';
@@ -331,7 +353,7 @@ export const api = {
           detected_at: string;
         }>;
         total: number;
-      }>(`/api/v1/commodities/spikes${qs}`);
+      }>(`/api/v1/commodities/spikes${qs}`, { signal });
     }
   },
   corridor: {
@@ -366,7 +388,7 @@ export const api = {
       request<import('./types').FireHotspotResponse>('/api/v1/fire/hotspots', { signal }),
   },
   bnpb: {
-    events: (params?: { limit?: number }) => {
+    events: (params?: { limit?: number }, signal?: AbortSignal) => {
       const qs = params?.limit != null ? `?limit=${encodeURIComponent(String(params.limit))}` : '';
       return request<{
         events: Array<{
@@ -385,7 +407,7 @@ export const api = {
         reason?: string | null;
         source?: string;
         updated_at?: string | null;
-      }>(`/api/v1/bnpb/events${qs}`);
+      }>(`/api/v1/bnpb/events${qs}`, { signal });
     },
   },
   traffic: {
@@ -657,9 +679,9 @@ export const api = {
       ),
   },
   erp: {
-    summary: (company_id?: string) => {
+    summary: (company_id?: string, signal?: AbortSignal) => {
       const qs = company_id ? `?company_id=${encodeURIComponent(company_id)}` : '';
-      return request<import('./types').ERPSummaryResponse>(`/api/v1/erp/summary${qs}`);
+      return request<import('./types').ERPSummaryResponse>(`/api/v1/erp/summary${qs}`, { signal });
     },
   },
   news: {

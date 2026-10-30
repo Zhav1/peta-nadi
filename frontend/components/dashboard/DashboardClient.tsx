@@ -121,6 +121,12 @@ function isAbortError(err: unknown): boolean {
   return !!err && typeof err === 'object' && (err as { name?: string }).name === 'AbortError';
 }
 
+function initialDashboardSection(): 'map' | 'analytics' | 'reports' | 'evaluation' {
+  if (typeof window === 'undefined') return 'map';
+  const section = new URLSearchParams(window.location.search).get('section');
+  return section === 'analytics' || section === 'reports' || section === 'evaluation' ? section : 'map';
+}
+
 /** Unit D: `generated_at` comparison clock. Unparseable/missing → 0 (unknown). */
 function parseGeneratedAt(value: unknown): number {
   if (typeof value !== 'string' || !value.trim()) return 0;
@@ -611,6 +617,7 @@ function FloatingMapLegend({
 
 export default function DashboardClient() {
   const { user, role, isAuthenticated, isLoading: isAuthLoading, openAuthModal, isAuthModalOpen, closeAuthModal } = useAuth();
+  const [activeSection, setActiveSection] = useState<'map' | 'analytics' | 'reports' | 'evaluation'>(initialDashboardSection);
 
   // Unit D public-first: the main snapshot is `sections=public` (auth-blind, no
   // tenant fleet/erp) so it fires on mount instead of waiting for the session.
@@ -653,7 +660,7 @@ export default function DashboardClient() {
   // Kapal/Udara pills until the next 10 s sync, so the hook keeps its own read.
 
   const { incidents, refetch } = useIncidents({
-    enabled: !bootstrap.isLoading,
+    enabled: !bootstrap.isLoading && activeSection === 'map',
     initialData: seededIncidents,
   });
   const {
@@ -671,7 +678,7 @@ export default function DashboardClient() {
     tenantVehicles: tenantFleetVehicles,
     tenantAssetCount: tenantFleetAssetCount,
     canToggleSimulation: canToggleFleetSimulation,
-  } = useFleetVehicles(undefined, { enabled: !isAuthLoading });
+  } = useFleetVehicles(undefined, { enabled: !isAuthLoading && activeSection === 'map' });
 
   // Next.js App Router query parameters for session-local routing deep-linking
   const searchParams = useSearchParams();
@@ -871,7 +878,6 @@ export default function DashboardClient() {
   }, []);
 
   // Layout & Navigation States
-  const [activeSection, setActiveSection] = useState<'map' | 'analytics' | 'reports' | 'evaluation'>('map');
   const [activeTab, setActiveTab] = useState<'Evidence' | 'Mitigation' | 'Economic'>('Evidence');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState(false);
@@ -976,14 +982,14 @@ export default function DashboardClient() {
   // so the mount no longer opens a duplicate corridor request.
   const { corridorContext, isLoading: isCorridorLoading } = useCorridorContext(
     'sumatra_belawan_medan',
-    { enabled: !bootstrap.isLoading, initialData: seededCorridor }
+    { enabled: !bootstrap.isLoading && (activeSection === 'map' || activeSection === 'reports'), initialData: seededCorridor }
   );
 
   // Live OSINT News & Intelligence Hook (Google News RSS & Verified Sinyal Lapangan)
   // Phase 163b: seeded by `sections.news` + `sections.news_market_regime`; the
   // seed still passes through the same permalink/freshness/discourse gates.
   const { newsFeed, status: newsStatus, lastUpdated: newsLastUpdated, meta: newsBreadthMeta } = useNewsVerification({
-    enabled: !bootstrap.isLoading,
+    enabled: !bootstrap.isLoading && activeSection === 'map',
     initialNews: seededNews,
     initialMarketRegime: seededMarketRegime,
   });
@@ -1522,10 +1528,8 @@ export default function DashboardClient() {
   const weatherPolygonMetaRef = useRef<WeatherPolygonMeta | null>(null);
 
   useEffect(() => {
-    // Phase 163b: hold the first read until the bootstrap snapshot answered —
-    // `sections.weather_spatial_polygons` is the same payload this effect would
-    // request (high/50/80), so seeding removes a duplicate mount call.
-    if (bootstrap.isLoading) return;
+    // Spatial layers are map-only; stop polling while another section is active.
+    if (bootstrap.isLoading || activeSection !== 'map') return;
     let isMounted = true;
     let inFlight: AbortController | null = null;
     const readMeta = (
@@ -1533,9 +1537,7 @@ export default function DashboardClient() {
     ): WeatherPolygonMeta | null => geojson?.meta ?? geojson?.metadata ?? null;
 
     async function loadSpatialWeather() {
-      if (!isDocumentVisible()) return;
-      // One weather request at a time.
-      inFlight?.abort();
+      if (!isDocumentVisible() || (inFlight && !inFlight.signal.aborted)) return;
       const controller = new AbortController();
       inFlight = controller;
       try {
@@ -1589,6 +1591,8 @@ export default function DashboardClient() {
           weatherPolygonMetaRef.current = unknown;
           setWeatherPolygonMeta(unknown);
         }
+      } finally {
+        if (inFlight === controller) inFlight = null;
       }
     }
 
@@ -1612,7 +1616,7 @@ export default function DashboardClient() {
       inFlight?.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bootstrap.isLoading]);
+  }, [bootstrap.isLoading, activeSection]);
 
   // Waspada advisory (purple, default OFF): never rendered unless toggled ON
   // (`advisoryFeatures` gates it). Unit D: prefetch the medium polygons on idle
@@ -1626,7 +1630,7 @@ export default function DashboardClient() {
   // Prefetch (OFF path): fills the cache without ever lighting the loading
   // state and without blocking first paint (idle or ~1.5 s, aborted on unmount).
   useEffect(() => {
-    if (!weatherSummary || showWeatherAdvisory || advisoryWeatherPolygons) return;
+    if (activeSection !== 'map' || !weatherSummary || showWeatherAdvisory || advisoryWeatherPolygons) return;
     let cancelled = false;
     const controller = new AbortController();
     const run = async () => {
@@ -1662,11 +1666,15 @@ export default function DashboardClient() {
       controller.abort();
       clearTimeout(timer);
     };
-  }, [weatherSummary, showWeatherAdvisory, advisoryWeatherPolygons]);
+  }, [activeSection, weatherSummary, showWeatherAdvisory, advisoryWeatherPolygons]);
 
   // Toggle (ON path): fetches immediately when the prefetch missed, with a
   // "Memuat..." loading state until it settles.
   useEffect(() => {
+    if (activeSection !== 'map') {
+      setWeatherAdvisoryLoading(false);
+      return;
+    }
     if (!showWeatherAdvisory) {
       setWeatherAdvisoryLoading(false);
       return;
@@ -1697,7 +1705,7 @@ export default function DashboardClient() {
       isMounted = false;
       controller.abort();
     };
-  }, [showWeatherAdvisory, advisoryWeatherPolygons]);
+  }, [activeSection, showWeatherAdvisory, advisoryWeatherPolygons]);
 
   // Phase 160: world-truth counters. Fetched on mount + on the weather interval
   // regardless of layer toggles; the last good summary is kept in a ref so a
@@ -1741,6 +1749,7 @@ export default function DashboardClient() {
   }, [seededWeatherSummary]);
 
   useEffect(() => {
+    if (activeSection !== 'map') return;
     let isMounted = true;
     let inFlight: AbortController | null = null;
 
@@ -1755,8 +1764,7 @@ export default function DashboardClient() {
     };
 
     async function loadWeatherSummary() {
-      if (!isDocumentVisible()) return;
-      inFlight?.abort();
+      if (!isDocumentVisible() || (inFlight && !inFlight.signal.aborted)) return;
       const controller = new AbortController();
       inFlight = controller;
       try {
@@ -1794,6 +1802,8 @@ export default function DashboardClient() {
         const stale = asStale(weatherSummaryRef.current);
         if (stale) weatherSummaryRef.current = stale;
         setWeatherSummary(stale);
+      } finally {
+        if (inFlight === controller) inFlight = null;
       }
     }
 
@@ -1804,11 +1814,11 @@ export default function DashboardClient() {
       clearInterval(interval);
       inFlight?.abort();
     };
-  }, []);
+  }, [activeSection]);
 
   useEffect(() => {
     // Phase 163b: seeded by `sections.fire_hotspots` (identical envelope contract).
-    if (bootstrap.isLoading) return;
+    if (bootstrap.isLoading || activeSection !== 'map') return;
     let isMounted = true;
     let inFlight: AbortController | null = null;
 
@@ -1833,8 +1843,7 @@ export default function DashboardClient() {
     };
 
     async function loadFireHotspots() {
-      if (!isDocumentVisible()) return;
-      inFlight?.abort();
+      if (!isDocumentVisible() || (inFlight && !inFlight.signal.aborted)) return;
       const controller = new AbortController();
       inFlight = controller;
       try {
@@ -1851,6 +1860,8 @@ export default function DashboardClient() {
             ? 'Gagal memperbarui; menampilkan data terakhir yang tersimpan.'
             : 'Sumber Titik Panas tidak tersedia.'
         );
+      } finally {
+        if (inFlight === controller) inFlight = null;
       }
     }
 
@@ -1871,7 +1882,7 @@ export default function DashboardClient() {
       inFlight?.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bootstrap.isLoading]);
+  }, [bootstrap.isLoading, activeSection]);
 
   // Filtered-set counts: disruption (high/critical, biru) + advisory (medium, ungu when ON).
   const disruptionFeatures = useMemo(

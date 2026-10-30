@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
+import { useAuth } from '@/lib/authContext';
+import { SingleFlightRequest } from '@/lib/dashboardMemoryCache';
 import { isDocumentVisible, subscribeVisibility } from '@/lib/visibility';
 import type { DashboardBootstrapResponse } from '@/lib/types';
 
@@ -66,22 +68,26 @@ export function useDashboardBootstrap(
   const corridorId = options?.corridorId;
   const sections = options?.sections;
   const refreshIntervalMs = options?.refreshIntervalMs ?? DEFAULT_REFRESH_INTERVAL_MS;
+  const { user, role } = useAuth();
+  const identityKey = JSON.stringify([user?.id ?? 'guest', role, user?.company_id ?? null]);
 
   const [data, setData] = useState<DashboardBootstrapResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [localStale, setLocalStale] = useState(false);
 
-  const abortRef = useRef<AbortController | null>(null);
+  const requestGateRef = useRef(new SingleFlightRequest());
   const mountedRef = useRef(false);
   const lastFetchAtRef = useRef<number>(0);
   const hasAnswerRef = useRef(false);
+  const identityKeyRef = useRef(identityKey);
+  identityKeyRef.current = identityKey;
 
   const fetchBootstrap = useCallback(async () => {
     if (!enabled) return;
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
+    const requestIdentity = identityKey;
+    const controller = requestGateRef.current.begin();
+    if (!controller) return;
 
     if (!hasAnswerRef.current) setIsLoading(true);
     try {
@@ -89,35 +95,62 @@ export function useDashboardBootstrap(
         { modality, ...(corridorId ? { corridor_id: corridorId } : {}), ...(sections ? { sections } : {}) },
         controller.signal
       );
-      if (controller.signal.aborted || !mountedRef.current) return;
+      if (
+        controller.signal.aborted ||
+        !mountedRef.current ||
+        identityKeyRef.current !== requestIdentity
+      ) return;
       setData(response);
       setLocalStale(isLocallyStale(response.computed_at));
       setError(null);
       lastFetchAtRef.current = Date.now();
     } catch (err) {
-      if (controller.signal.aborted || !mountedRef.current) return;
+      if (
+        controller.signal.aborted ||
+        !mountedRef.current ||
+        identityKeyRef.current !== requestIdentity
+      ) return;
       if ((err as { name?: string })?.name === 'AbortError') return;
       setError(err instanceof Error ? err.message : 'Gagal memuat snapshot dasbor');
       // Never clear `data`: a failed refresh must keep the last good snapshot on
       // screen (the badge marks it stale instead of blanking the dashboard).
     } finally {
-      if (!controller.signal.aborted && mountedRef.current) {
+      requestGateRef.current.finish(controller);
+      if (
+        !controller.signal.aborted &&
+        mountedRef.current &&
+        identityKeyRef.current === requestIdentity
+      ) {
         hasAnswerRef.current = true;
         setIsLoading(false);
       }
     }
-  }, [enabled, modality, corridorId, sections]);
+  }, [enabled, modality, corridorId, sections, identityKey]);
 
   useEffect(() => {
+    const requestGate = requestGateRef.current;
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      abortRef.current?.abort();
+      requestGate.abort();
     };
   }, []);
 
+  const previousIdentityKeyRef = useRef(identityKey);
+  useEffect(() => {
+    if (previousIdentityKeyRef.current === identityKey) return;
+    previousIdentityKeyRef.current = identityKey;
+    hasAnswerRef.current = false;
+    lastFetchAtRef.current = 0;
+    setData(null);
+    setIsLoading(true);
+    setError(null);
+    setLocalStale(false);
+  }, [identityKey]);
+
   useEffect(() => {
     if (!enabled) return;
+    const requestGate = requestGateRef.current;
     void fetchBootstrap();
 
     const interval = setInterval(() => {
@@ -136,7 +169,7 @@ export function useDashboardBootstrap(
     return () => {
       clearInterval(interval);
       unsubscribe();
-      abortRef.current?.abort();
+      requestGate.abort();
     };
   }, [enabled, fetchBootstrap, refreshIntervalMs]);
 

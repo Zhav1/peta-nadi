@@ -1,6 +1,8 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import { api } from '@/lib/api';
+import { useAuth } from '@/lib/authContext';
+import { SingleFlightRequest } from '@/lib/dashboardMemoryCache';
 import { isDocumentVisible, subscribeVisibility } from '@/lib/visibility';
 import {
   PUBLIC_CACHE_TTL_MS,
@@ -521,6 +523,8 @@ export interface UseNewsVerificationOptions {
 }
 
 export function useNewsVerification(options?: UseNewsVerificationOptions) {
+  const { user, role } = useAuth();
+  const identityKey = JSON.stringify([user?.id ?? 'guest', role, user?.company_id ?? null]);
   // M1 trust-fix "Strict live-only": no offline fixture. The feed starts empty and
   // only ever contains articles that came from the live backend and resolved to a
   // real publisher permalink.
@@ -547,7 +551,9 @@ export function useNewsVerification(options?: UseNewsVerificationOptions) {
   // (not the state) because `load()` resolves across renders.
   const lastUpdatedRef = useRef<string | null>(null);
   const lastArticleSignatureRef = useRef<string | null>(null);
-  const inFlightRef = useRef<AbortController | null>(null);
+  const requestGateRef = useRef(new SingleFlightRequest());
+  const identityKeyRef = useRef(identityKey);
+  identityKeyRef.current = identityKey;
   // The bootstrap seed is consumed exactly once, by the first load() after the
   // snapshot settles (the seed arrives in the same render that flips `enabled`).
   const seedConsumedRef = useRef(false);
@@ -581,13 +587,12 @@ export function useNewsVerification(options?: UseNewsVerificationOptions) {
 
   useEffect(() => {
     if (!enabled) return;
+    const requestGate = requestGateRef.current;
     let isMounted = true;
 
     async function load(seed?: { news: NewsLivePayload | null; regime: MarketRegimeData | null }) {
-      // Never overlap polls: the previous in-flight read is cancelled first.
-      inFlightRef.current?.abort();
-      const controller = new AbortController();
-      inFlightRef.current = controller;
+      const controller = requestGate.begin();
+      if (!controller) return;
       try {
         let newsResult: PromiseSettledResult<unknown>;
         let regimeResult: PromiseSettledResult<unknown>;
@@ -607,7 +612,7 @@ export function useNewsVerification(options?: UseNewsVerificationOptions) {
           ]);
         }
 
-        if (!isMounted || controller.signal.aborted) return;
+        if (!isMounted || controller.signal.aborted || identityKeyRef.current !== identityKey) return;
 
         if (newsResult.status === 'fulfilled') {
           const res = newsResult.value as {
@@ -880,12 +885,13 @@ export function useNewsVerification(options?: UseNewsVerificationOptions) {
           setMarketRegime(regimeResult.value as unknown as MarketRegimeData);
         }
       } catch (err) {
-        if (isMounted && !controller.signal.aborted) {
+        if (isMounted && !controller.signal.aborted && identityKeyRef.current === identityKey) {
           setStatus('warming');
         }
         logger_err(err);
       } finally {
-        if (isMounted && !controller.signal.aborted) setIsLoading(false);
+        requestGate.finish(controller);
+        if (isMounted && !controller.signal.aborted && identityKeyRef.current === identityKey) setIsLoading(false);
       }
     }
     
@@ -916,9 +922,9 @@ export function useNewsVerification(options?: UseNewsVerificationOptions) {
       isMounted = false;
       clearInterval(interval);
       unsubscribe();
-      inFlightRef.current?.abort();
+      requestGate.abort();
     };
-  }, [enabled]);
+  }, [enabled, identityKey]);
 
   return { newsFeed, marketRegime, isLoading, status, lastUpdated, lastGoodAt, meta: newsMeta };
 }

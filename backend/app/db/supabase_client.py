@@ -4,8 +4,12 @@ Provides a typed client for all database operations.
 """
 import logging
 import threading
-from typing import Optional
+from typing import Any, Optional, cast
 from supabase import create_client, Client
+try:
+    from supabase.lib.client_options import SyncClientOptions as ClientOptions
+except ImportError:
+    from supabase.lib.client_options import ClientOptions
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -17,6 +21,21 @@ _supabase_client: Optional[Client] = None
 # singleton; the lock keeps concurrent first calls from racing two clients.
 _service_client: Optional[Client] = None
 _service_client_lock = threading.Lock()
+POSTGREST_CLIENT_TIMEOUT_SECONDS = 10
+
+
+def _create_supabase_client(url: str, key: str) -> Client:
+    """Build a client with a bounded timeout for Data API requests."""
+    return create_client(
+        url,
+        key,
+        options=cast(
+            Any,
+            ClientOptions(
+                postgrest_client_timeout=POSTGREST_CLIENT_TIMEOUT_SECONDS
+            ),
+        ),
+    )
 
 # Pilot health flag: surfaced via Redis so ops can see *why* incident writes are
 # being skipped instead of a silent RLS denial on the anon client.
@@ -103,7 +122,7 @@ def get_client() -> Client:
                 "Supabase credentials not configured. "
                 "Set SUPABASE_URL and SUPABASE_ANON_KEY in .env"
             )
-        _supabase_client = create_client(
+        _supabase_client = _create_supabase_client(
             settings.supabase_url,
             settings.supabase_anon_key,
         )
@@ -128,7 +147,7 @@ def get_service_client() -> Client:
         return _service_client
     with _service_client_lock:
         if _service_client is None:
-            _service_client = create_client(
+            _service_client = _create_supabase_client(
                 settings.supabase_url,
                 settings.supabase_service_role_key,
             )

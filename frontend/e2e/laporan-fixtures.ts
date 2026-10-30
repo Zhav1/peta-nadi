@@ -223,6 +223,9 @@ interface MockLaporanApiOptions {
   onPatchTravel?: (url: string, body: unknown) => unknown;
   /** Override the /api/v1/approvals payload (default: empty ledger). Additive; existing callers unaffected. */
   approvals?: () => unknown;
+  sourceHealth?: () => unknown;
+  failApprovals?: boolean;
+  failSourceHealth?: boolean;
   /** Override the POST /api/v1/fleet/travels/:id/hedging payload (default: {status:'ok'}). Additive; existing callers unaffected. */
   onPostHedging?: (url: string, body: unknown) => unknown;
 }
@@ -275,8 +278,20 @@ export async function mockLaporanApi(page: Page, opts: MockLaporanApiOptions = {
           : { status: 'ok', travel_id: '', hedging: {} }
       );
     }
-    if (url.includes('/api/v1/approvals')) return ok(opts.approvals ? opts.approvals() : { items: [], total: 0 });
-    if (url.includes('/health/sources')) return ok({ sources: [] });
+    if (url.includes('/api/v1/approvals')) {
+      if (opts.failApprovals) {
+        await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ detail: 'mock approval failure' }) });
+        return;
+      }
+      return ok(opts.approvals ? opts.approvals() : { items: [], total: 0 });
+    }
+    if (url.includes('/health/sources')) {
+      if (opts.failSourceHealth) {
+        await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ detail: 'mock source health failure' }) });
+        return;
+      }
+      return ok(opts.sourceHealth ? opts.sourceHealth() : { sources: [] });
+    }
     return ok({ status: 'ok', items: [], total: 0, sources: [] });
   });
 }

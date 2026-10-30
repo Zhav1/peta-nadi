@@ -6,6 +6,7 @@ import { api, getBaseUrl, getAuthToken } from '@/lib/api';
 import { useAuth } from '@/lib/authContext';
 import { isLiveTracked, selectTenantVehicles } from '@/lib/fleetScope';
 import { corridorSnappingService } from '@/lib/corridorSnappingService';
+import { SingleFlightRequest } from '@/lib/dashboardMemoryCache';
 import { isDocumentVisible, subscribeVisibility } from '@/lib/visibility';
 
 export { isLiveTracked, isTenantAsset } from '@/lib/fleetScope';
@@ -377,6 +378,7 @@ export function useFleetVehicles(
   const claimCompanyId = user?.company_id;
   const effectiveCompanyId = isDispatcher ? claimCompanyId : undefined;
   const isTenantScoped = isDispatcher && Boolean(effectiveCompanyId);
+  const identityKey = JSON.stringify([user?.id ?? 'guest', role, user?.company_id ?? null, modality ?? null]);
 
   const enabled = options?.enabled ?? true;
   const seededVehicles = Array.isArray(options?.initialVehicles) ? options.initialVehicles : null;
@@ -389,18 +391,30 @@ export function useFleetVehicles(
   const [isLoading, setIsLoading] = useState(!hasSeed);
   const [error, setError] = useState<string | null>(null);
 
-  const inFlightRef = useRef<AbortController | null>(null);
+  const requestGateRef = useRef(new SingleFlightRequest());
+  const identityKeyRef = useRef(identityKey);
+  identityKeyRef.current = identityKey;
   const hasSeedRef = useRef<boolean>(hasSeed);
   hasSeedRef.current = hasSeed;
 
   // 90-second sliding TTL vehicle cache to prevent vessel count drops during partial polling
   const vehicleCacheRef = useRef<Map<string, { vehicle: FleetVehicle; timestamp: number }>>(new Map());
 
-  // Cache entries must never outlive a tenant/role switch (e.g. regulator →
-  // dispatcher) or a previous tenant's assets would linger in the new view.
+  // Cache entries and visible assets must not survive an identity/company switch.
+  const previousIdentityKeyRef = useRef(identityKey);
+  const refreshAfterIdentityChangeRef = useRef(false);
   useEffect(() => {
+    if (previousIdentityKeyRef.current === identityKey) {
+      vehicleCacheRef.current.clear();
+      return;
+    }
+    previousIdentityKeyRef.current = identityKey;
+    refreshAfterIdentityChangeRef.current = true;
     vehicleCacheRef.current.clear();
-  }, [effectiveCompanyId, isDispatcher]);
+    setRawVehicles([]);
+    setIsLoading(true);
+    setError(null);
+  }, [identityKey]);
 
   const mergeWithCache = (incoming: FleetVehicle[]): FleetVehicle[] => {
     const now = Date.now();
@@ -432,12 +446,11 @@ export function useFleetVehicles(
   }, [seededVehicles]);
 
   const fetchFleet = useCallback(async () => {
-    inFlightRef.current?.abort();
-    const controller = new AbortController();
-    inFlightRef.current = controller;
+    const controller = requestGateRef.current.begin();
+    if (!controller) return;
     try {
       const vehicles = await fetchFleetWithFallback(modality, effectiveCompanyId, controller.signal);
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted || identityKeyRef.current !== identityKey) return;
       const merged = mergeWithCache(vehicles);
       if (merged.length > 0) {
         setRawVehicles(merged);
@@ -446,62 +459,70 @@ export function useFleetVehicles(
         setRawVehicles([]);
       }
     } catch (err: unknown) {
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted || identityKeyRef.current !== identityKey) return;
       // PRESERVE previous live units from 90s cache across transient network/cold-start errors!
       const cached = mergeWithCache([]);
       setRawVehicles((prev) => (cached.length > 0 ? cached : prev.length > 0 ? prev : []));
       setError(err instanceof Error ? err.message : 'Gagal memuat telemetri armada');
     } finally {
-      if (!controller.signal.aborted) setIsLoading(false);
+      requestGateRef.current.finish(controller);
+      if (!controller.signal.aborted && identityKeyRef.current === identityKey) setIsLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modality, effectiveCompanyId]);
+  }, [modality, effectiveCompanyId, identityKey]);
 
   useEffect(() => {
     if (!enabled) return;
+    const requestGate = requestGateRef.current;
     let isMounted = true;
 
     async function initialFetch() {
-      const controller = new AbortController();
-      inFlightRef.current?.abort();
-      inFlightRef.current = controller;
+      const controller = requestGate.begin();
+      if (!controller) return;
       let lastErr: unknown = null;
-      for (let attempt = 0; attempt < 3; attempt++) {
-        if (!isMounted || controller.signal.aborted) return;
-        try {
-          const vehicles = await fetchFleetWithFallback(modality, effectiveCompanyId, controller.signal);
-          if (isMounted && !controller.signal.aborted) {
-            const merged = mergeWithCache(vehicles);
-            if (merged.length > 0) {
-              setRawVehicles(merged);
-              setError(null);
-            } else {
-              setRawVehicles([]);
+      try {
+        for (let attempt = 0; attempt < 3; attempt++) {
+          if (!isMounted || controller.signal.aborted || identityKeyRef.current !== identityKey) return;
+          try {
+            const vehicles = await fetchFleetWithFallback(modality, effectiveCompanyId, controller.signal);
+            if (isMounted && !controller.signal.aborted && identityKeyRef.current === identityKey) {
+              const merged = mergeWithCache(vehicles);
+              if (merged.length > 0) {
+                setRawVehicles(merged);
+                setError(null);
+              } else {
+                setRawVehicles([]);
+              }
+              setIsLoading(false);
+              return;
             }
-            setIsLoading(false);
-            return;
-          }
-        } catch (err: unknown) {
-          lastErr = err;
-          if (attempt < 2) {
-            const backoffMs = attempt === 0 ? 1500 : 3000;
-            await new Promise((r) => setTimeout(r, backoffMs));
+          } catch (err: unknown) {
+            lastErr = err;
+            if (attempt < 2) {
+              const backoffMs = attempt === 0 ? 1500 : 3000;
+              await new Promise((r) => setTimeout(r, backoffMs));
+            }
           }
         }
-      }
 
-      if (isMounted && !controller.signal.aborted) {
-        // Retain any cached vehicles if available, otherwise fallback handles display
-        const cached = mergeWithCache([]);
-        setRawVehicles((prev) => (cached.length > 0 ? cached : prev.length > 0 ? prev : []));
-        setError(lastErr instanceof Error ? lastErr.message : 'Gagal memuat telemetri armada');
-        setIsLoading(false);
+        if (isMounted && !controller.signal.aborted && identityKeyRef.current === identityKey) {
+          // Retain any cached vehicles if available, otherwise fallback handles display
+          const cached = mergeWithCache([]);
+          setRawVehicles((prev) => (cached.length > 0 ? cached : prev.length > 0 ? prev : []));
+          setError(lastErr instanceof Error ? lastErr.message : 'Gagal memuat telemetri armada');
+          setIsLoading(false);
+        }
+      } finally {
+        requestGate.finish(controller);
       }
     }
 
     // Seeded by the bootstrap snapshot: no duplicate mount request, the 10 s
-    // sync takes over immediately.
-    if (!hasSeedRef.current) void initialFetch();
+    // sync takes over immediately. Identity changes need a fresh read even when
+    // the prior identity had seeded the hook.
+    const identityChanged = refreshAfterIdentityChangeRef.current;
+    refreshAfterIdentityChangeRef.current = false;
+    if (!hasSeedRef.current || identityChanged) void initialFetch();
 
     const tick = () => {
       if (!isDocumentVisible()) return;
@@ -516,10 +537,10 @@ export function useFleetVehicles(
       isMounted = false;
       clearInterval(interval);
       unsubscribe();
-      inFlightRef.current?.abort();
+      requestGate.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modality, effectiveCompanyId, isDispatcher, enabled]);
+  }, [modality, effectiveCompanyId, isDispatcher, enabled, identityKey]);
 
   // Evaluate whether a vehicle has an active hardware transponder or live GPS ping
   const isTransponderActive = (v: FleetVehicle): boolean => {

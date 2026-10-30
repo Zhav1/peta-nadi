@@ -4,6 +4,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Building2, RefreshCw, Scale, Wallet } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/authContext';
+import { DashboardRequestSignals, dashboardDataKey, dashboardIdentityKey } from '@/lib/dashboardMemoryCache';
+import { useDashboardCachedResource } from '@/hooks/useDashboardCachedResource';
 import { notifyToast } from '@/components/ui/Toast';
 import type { ERPSummaryResponse, ERPTripRow, LaporanFilters } from '@/lib/types';
 import LaporanHybridPanel from '@/components/dashboard/LaporanHybridPanel';
@@ -36,13 +38,35 @@ interface ERPSavingsPanelProps {
 
 export default function ERPSavingsPanel({ refreshKey = 0 }: ERPSavingsPanelProps) {
   const { user, role } = useAuth();
-  const [summary, setSummary] = useState<ERPSummaryResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const companyId = role === 'DISPATCHER' ? user?.company_id : undefined;
+  const identityScope = dashboardIdentityKey({ id: user?.id, role, companyId: user?.company_id });
+  const summaryKey = dashboardDataKey(identityScope, 'reports.erp-summary', { companyId: companyId ?? null });
+  const requestSignalsRef = useRef(new DashboardRequestSignals());
+  const requestSignals = requestSignalsRef.current;
+  useEffect(() => {
+    requestSignals.activate();
+    return () => requestSignals.dispose();
+  }, [requestSignals]);
+  const summaryResource = useDashboardCachedResource<ERPSummaryResponse>(
+    summaryKey,
+    () => api.erp.summary(companyId, requestSignals.signal('reports.erp-summary', summaryKey)),
+  );
+  const summary = summaryResource.data;
+  const isLoading = summaryResource.isLoading;
+  const [actionError, setActionError] = useState<string | null>(null);
   const [solvingTripId, setSolvingTripId] = useState<string | null>(null);
   // Double-submit guard sinkron untuk handler hedging legacy (hidden E2E):
   // state solvingTripId update async, ref menahan klik kedua langsung.
   const solvingGuardRef = useRef<string | null>(null);
+  const previousRefreshKeyRef = useRef(refreshKey);
+
+  const refreshSummary = summaryResource.refresh;
+
+  useEffect(() => {
+    if (previousRefreshKeyRef.current === refreshKey) return;
+    previousRefreshKeyRef.current = refreshKey;
+    refreshSummary();
+  }, [refreshKey, refreshSummary]);
 
   // M8 Phase 2: global laporan filter state (shared by FilterBar + HybridPanel).
   const [filters, setFilters] = useState<LaporanFilters>(EMPTY_FILTERS);
@@ -52,28 +76,10 @@ export default function ERPSavingsPanel({ refreshKey = 0 }: ERPSavingsPanelProps
   const isDispatcher = role === 'DISPATCHER';
   const disabledHint = 'Hanya peran Dispatcher yang dapat mengubah data Trip.';
 
-  const loadSummary = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const companyId = role === 'DISPATCHER' ? user?.company_id : undefined;
-      const data = await api.erp.summary(companyId);
-      setSummary(data);
-    } catch (err: unknown) {
-      setSummary(null);
-      setError(
-        err instanceof Error
-          ? `Gagal memuat laporan (${err.message}).`
-          : 'Gagal memuat laporan.'
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  }, [role, user?.company_id]);
-
-  useEffect(() => {
-    loadSummary();
-  }, [loadSummary, refreshKey]);
+  const loadSummary = refreshSummary;
+  const error = actionError ?? (summaryResource.error
+    ? `Gagal memuat laporan (${summaryResource.error}). Data terakhir yang tersedia tetap ditampilkan.`
+    : null);
 
   const hasActiveFilters = useMemo(
     () =>
@@ -102,7 +108,7 @@ export default function ERPSavingsPanel({ refreshKey = 0 }: ERPSavingsPanelProps
     if (solvingGuardRef.current === travelId) return;
     solvingGuardRef.current = travelId;
     setSolvingTripId(travelId);
-    setError(null);
+    setActionError(null);
     try {
       await api.fleet.solveTravelHedging(travelId, {});
       await loadSummary();
@@ -111,7 +117,7 @@ export default function ERPSavingsPanel({ refreshKey = 0 }: ERPSavingsPanelProps
         err instanceof Error
           ? `Gagal menghitung hedging Trip ${travelId} (${err.message}).`
           : `Gagal menghitung hedging Trip ${travelId}.`;
-      setError(message);
+      setActionError(message);
       if (err instanceof Error && /403/.test(err.message)) {
         notifyToast({ message: 'Aksi ditolak (403): hedging hanya untuk Dispatcher.', type: 'error' });
       }
@@ -157,10 +163,10 @@ export default function ERPSavingsPanel({ refreshKey = 0 }: ERPSavingsPanelProps
           <button
             type="button"
             onClick={loadSummary}
-            disabled={isLoading}
+            disabled={summaryResource.isRefreshing}
             className="px-3 py-1.5 rounded-md bg-transparent hover:bg-white/5 border border-white/10 text-xs text-slate-200 flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${summaryResource.isRefreshing ? 'animate-spin' : ''}`} />
             Muat Ulang
           </button>
         </div>
@@ -172,6 +178,13 @@ export default function ERPSavingsPanel({ refreshKey = 0 }: ERPSavingsPanelProps
           <span>{error}</span>
         </div>
       )}
+      <p className="text-xs text-slate-500" aria-live="polite" data-testid="erp-refresh-status">
+        {summaryResource.isRefreshing
+          ? 'Memperbarui ringkasan…'
+          : summaryResource.updatedAt !== null
+            ? `Data terakhir diperbarui ${new Date(summaryResource.updatedAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`
+            : 'Ringkasan belum tersedia'}
+      </p>
 
       {isAggregateOnly && (
         <div

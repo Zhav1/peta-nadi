@@ -5,6 +5,7 @@ All figures come from the persisted travel/rit ledger, which derives cost from
 BPJT toll tariffs, Pertamina fuel rates, and 4-tier spoilage decay. This router
 never invents a savings percentage.
 """
+import asyncio
 import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, Query
@@ -38,7 +39,8 @@ async def get_erp_summary(
 
     include_trips = role not in ("REGULATOR", "GUEST")
 
-    return build_erp_summary(
+    return await asyncio.to_thread(
+        build_erp_summary,
         company_id=effective_company,
         include_trips=include_trips,
         limit=limit,

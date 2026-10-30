@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { api, setAuthToken } from '@/lib/api';
 import { getSupabaseClient } from '@/lib/supabaseClient';
+import { dashboardIdentityKey, dashboardMemoryCache } from '@/lib/dashboardMemoryCache';
 import type { UserProfile, UserRole } from '@/lib/types';
 
 // Unauthenticated visitors enter a restricted guest mode: no operational
@@ -183,6 +184,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   /** Single write path for token + profile + transport + persistence. */
   const commitAuth = useCallback((nextToken: string | null, nextUser: UserProfile) => {
+    dashboardMemoryCache.setIdentity(
+      nextToken
+        ? dashboardIdentityKey({ id: nextUser.id, role: nextUser.role, companyId: nextUser.company_id })
+        : null,
+    );
     tokenRef.current = nextToken;
     setAuthToken(nextToken);
     if (isMountedRef.current) {
@@ -641,6 +647,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // login that resolves after this point cannot restore the session.
     authGenerationRef.current += 1;
     intentionalSignOutRef.current = true;
+    dashboardMemoryCache.setIdentity(null);
     setIsLoading(true);
     try {
       const sb = getSupabaseClient();

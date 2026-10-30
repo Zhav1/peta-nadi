@@ -1,6 +1,8 @@
 'use client';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '@/lib/api';
+import { useAuth } from '@/lib/authContext';
+import { SingleFlightRequest } from '@/lib/dashboardMemoryCache';
 import { isDocumentVisible, subscribeVisibility } from '@/lib/visibility';
 import type { IncidentSummary } from '@/lib/types';
 
@@ -22,6 +24,8 @@ function isAbortError(err: unknown): boolean {
 }
 
 export function useIncidents(options?: UseIncidentsOptions) {
+  const { user, role } = useAuth();
+  const identityKey = JSON.stringify([user?.id ?? 'guest', role, user?.company_id ?? null]);
   const enabled = options?.enabled ?? true;
   const seeded = Array.isArray(options?.initialData) ? options.initialData : null;
   const hasSeed = seeded !== null;
@@ -31,40 +35,56 @@ export function useIncidents(options?: UseIncidentsOptions) {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-  const inFlightRef = useRef<AbortController | null>(null);
+  const requestGateRef = useRef(new SingleFlightRequest());
+  const identityKeyRef = useRef(identityKey);
+  identityKeyRef.current = identityKey;
   const hasSeedRef = useRef(hasSeed);
+  const wasDisabledRef = useRef(false);
   hasSeedRef.current = hasSeed;
 
+  const previousIdentityKeyRef = useRef(identityKey);
+  useEffect(() => {
+    if (previousIdentityKeyRef.current === identityKey) return;
+    previousIdentityKeyRef.current = identityKey;
+    setIncidents(seeded ?? []);
+    setLoading(!hasSeed);
+    setError(null);
+    setLastUpdated(null);
+  }, [identityKey, seeded, hasSeed]);
+
   const fetchIncidents = useCallback(async () => {
-    // One request at a time: a slow poll must never stack behind the previous one.
-    inFlightRef.current?.abort();
-    const controller = new AbortController();
-    inFlightRef.current = controller;
+    const requestIdentity = identityKey;
+    const controller = requestGateRef.current.begin();
+    if (!controller) return;
     try {
       const res = await api.incidents.list({ limit: 100 }, controller.signal);
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted || identityKeyRef.current !== requestIdentity) return;
       setIncidents(res.items);
       setLastUpdated(new Date());
       setError(null);
     } catch (err) {
-      if (isAbortError(err) || controller.signal.aborted) return;
+      if (isAbortError(err) || controller.signal.aborted || identityKeyRef.current !== requestIdentity) return;
       setError(err instanceof Error ? err.message : 'Failed to load incidents');
     } finally {
-      if (!controller.signal.aborted) setLoading(false);
+      requestGateRef.current.finish(controller);
+      if (!controller.signal.aborted && identityKeyRef.current === requestIdentity) setLoading(false);
     }
-  }, []);
+  }, [identityKey]);
 
   // A seed can arrive after mount (bootstrap resolves a few hundred ms later).
   // Apply it once, and only when we still have nothing of our own.
   useEffect(() => {
-    if (!seeded) return;
+    if (!seeded || identityKeyRef.current !== identityKey) return;
     setIncidents((prev) => (prev.length > 0 ? prev : seeded));
     setLastUpdated((prev) => prev ?? new Date());
     setLoading(false);
-  }, [seeded]);
+  }, [seeded, identityKey]);
 
   useEffect(() => {
     if (!enabled) return;
+    const requestGate = requestGateRef.current;
+    const shouldRefreshSeed = wasDisabledRef.current;
+    wasDisabledRef.current = false;
 
     const tick = () => {
       if (!isDocumentVisible()) return;
@@ -73,7 +93,7 @@ export function useIncidents(options?: UseIncidentsOptions) {
 
     // Seeded: the snapshot is the first answer, so wait for the first poll
     // instead of duplicating it on mount.
-    if (!hasSeedRef.current) tick();
+    if (!hasSeedRef.current || shouldRefreshSeed) tick();
 
     const timer = setInterval(tick, POLL_INTERVAL_MS);
     // Resume immediately when a hidden tab becomes visible again.
@@ -84,7 +104,8 @@ export function useIncidents(options?: UseIncidentsOptions) {
     return () => {
       clearInterval(timer);
       unsubscribe();
-      inFlightRef.current?.abort();
+      wasDisabledRef.current = true;
+      requestGate.abort();
     };
   }, [enabled, fetchIncidents]);
 

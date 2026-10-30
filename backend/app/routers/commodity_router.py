@@ -1,10 +1,12 @@
-import logging
-import json
-from fastapi import APIRouter, Query, status
-from typing import Optional, List, Dict, Any
-from pydantic import BaseModel
-from datetime import datetime, timedelta, timezone
 import asyncio
+import json
+import logging
+from collections.abc import Callable, Coroutine
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional, TypeVar
+
+from fastapi import APIRouter, Query
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +17,50 @@ router = APIRouter(prefix="/commodities", tags=["commodities"])
 _COMMODITY_CACHE_TTL_SECONDS = 60
 _PRICES_CACHE_PREFIX = "lrip:cache:commodity:prices:"
 _SPIKES_CACHE_PREFIX = "lrip:cache:commodity:spikes:"
+_T = TypeVar("_T")
+_INFLIGHT_CACHE_LOADS: Dict[tuple[int, str], asyncio.Task] = {}
+
+
+async def _singleflight(
+    cache_key: str, loader: Callable[[], Coroutine[Any, Any, _T]]
+) -> _T:
+    """Share one cache-miss load among concurrent requests in this event loop."""
+    loop = asyncio.get_running_loop()
+    flight_key = (id(loop), cache_key)
+    task = _INFLIGHT_CACHE_LOADS.get(flight_key)
+    if task is None or task.done():
+        task = loop.create_task(loader())
+        _INFLIGHT_CACHE_LOADS[flight_key] = task
+
+        def _cleanup(
+            completed: asyncio.Task[Any], key: tuple[int, str] = flight_key
+        ) -> None:
+            if _INFLIGHT_CACHE_LOADS.get(key) is completed:
+                _INFLIGHT_CACHE_LOADS.pop(key, None)
+            if not completed.cancelled():
+                completed.exception()
+
+        task.add_done_callback(_cleanup)
+    return await asyncio.shield(task)
+
+
+def _resolve_default(value: Any) -> Any:
+    return getattr(value, "default", value)
+
+
+def _prices_cache_key(commodity: Any, region: Any, limit: Any) -> str:
+    clean_commodity = commodity.strip() if isinstance(commodity, str) and commodity.strip() else None
+    clean_region = region.strip() if isinstance(region, str) and region.strip() else None
+    try:
+        clean_limit = int(limit)
+    except (TypeError, ValueError):
+        clean_limit = 30
+    return f"{_PRICES_CACHE_PREFIX}{clean_commodity or 'all'}:{clean_region or 'agg'}:{clean_limit}"
+
+
+def _spikes_cache_key(region: Any) -> str:
+    clean_region = region.strip() if isinstance(region, str) and region.strip() else None
+    return f"{_SPIKES_CACHE_PREFIX}{clean_region or 'all'}"
 
 
 def _cache_read(key: str) -> Optional[str]:
@@ -108,17 +154,28 @@ async def get_commodity_prices(
     region: Optional[str] = Query(None, description="Filter by region (e.g. north_sumatra, medan)"),
     limit: int = Query(30, ge=1, le=100)
 ):
+    key = _prices_cache_key(
+        _resolve_default(commodity), _resolve_default(region), _resolve_default(limit)
+    )
+    return await _singleflight(
+        key,
+        lambda: _get_commodity_prices(commodity=commodity, region=region, limit=limit),
+    )
+
+
+async def _get_commodity_prices(
+    commodity: Optional[str] = Query(None, description="Filter by commodity name (e.g. beras, cabai_merah)"),
+    region: Optional[str] = Query(None, description="Filter by region (e.g. north_sumatra, medan)"),
+    limit: int = Query(30, ge=1, le=100)
+):
     """
     Get commodity price history from Supabase (TimescaleDB).
     Falls back to generating realistic mock data if Supabase is offline.
     """
     # Resolve FastAPI Query defaults when invoked directly as a Python function
-    if hasattr(commodity, "default"):
-        commodity = commodity.default
-    if hasattr(region, "default"):
-        region = region.default
-    if hasattr(limit, "default"):
-        limit = limit.default
+    commodity = _resolve_default(commodity)
+    region = _resolve_default(region)
+    limit = _resolve_default(limit)
 
     clean_commodity = commodity.strip() if isinstance(commodity, str) and commodity.strip() else None
     clean_region = region.strip() if isinstance(region, str) and region.strip() else None
@@ -128,8 +185,8 @@ async def get_commodity_prices(
         clean_limit = 30
 
     # Phase 5 perf: cache the exact (commodity, region, limit) response 60s.
-    cache_key = f"{_PRICES_CACHE_PREFIX}{clean_commodity or 'all'}:{clean_region or 'agg'}:{clean_limit}"
-    cached_raw = _cache_read(cache_key)
+    cache_key = _prices_cache_key(clean_commodity, clean_region, clean_limit)
+    cached_raw = await asyncio.to_thread(_cache_read, cache_key)
     if cached_raw:
         try:
             return CommodityPriceResponse(**json.loads(cached_raw))
@@ -216,7 +273,7 @@ async def get_commodity_prices(
                     items=aggregate_items,
                     total=len(aggregate_items)
                 )
-                _cache_write(cache_key, resp.model_dump_json())
+                await asyncio.to_thread(_cache_write, cache_key, resp.model_dump_json())
                 return resp
 
         else:
@@ -246,7 +303,7 @@ async def get_commodity_prices(
                     ],
                     total=len(items)
                 )
-                _cache_write(cache_key, resp.model_dump_json())
+                await asyncio.to_thread(_cache_write, cache_key, resp.model_dump_json())
                 return resp
 
     except Exception as e:
@@ -260,6 +317,15 @@ async def get_commodity_prices(
 async def get_commodity_spikes(
     region: Optional[str] = Query(None, description="Filter by region")
 ):
+    key = _spikes_cache_key(_resolve_default(region))
+    return await _singleflight(
+        key, lambda: _get_commodity_spikes(region=region)
+    )
+
+
+async def _get_commodity_spikes(
+    region: Optional[str] = Query(None, description="Filter by region")
+):
     """
     Returns detected price spike anomalies for active regional food commodities.
     Per D5: computes percent change vs 30-day baseline from Supabase commodity_prices
@@ -267,16 +333,15 @@ async def get_commodity_spikes(
     returning an honest empty list if data is insufficient.
     """
     # Resolve FastAPI Query defaults when invoked directly as a Python function
-    if hasattr(region, "default"):
-        region = region.default
+    region = _resolve_default(region)
     clean_region = region.strip() if isinstance(region, str) and region.strip() else None
 
     MIN_RECORDS_GUARD = 3
     spikes: List[Dict[str, Any]] = []
 
     # Phase 5 perf: spikes response cached 60s per region filter.
-    spikes_key = f"{_SPIKES_CACHE_PREFIX}{clean_region or 'all'}"
-    cached_spikes = _cache_read(spikes_key)
+    spikes_key = _spikes_cache_key(clean_region)
+    cached_spikes = await asyncio.to_thread(_cache_read, spikes_key)
     if cached_spikes:
         try:
             return json.loads(cached_spikes)
@@ -301,7 +366,9 @@ async def get_commodity_spikes(
 
         # SQL-first baseline means (one RPC for the whole 30-day window);
         # falls back to the Python mean over fetched rows when unavailable.
-        sql_means = _rpc_window_means(sb, thirty_days_ago, clean_region)
+        sql_means = await asyncio.to_thread(
+            _rpc_window_means, sb, thirty_days_ago, clean_region
+        )
 
         # Group by commodity (and region if not explicitly filtered)
         grouped: Dict[tuple, List[Dict[str, Any]]] = {}
@@ -373,5 +440,7 @@ async def get_commodity_spikes(
         logger.warning(f"Error querying commodity_prices for spikes: {e}")
 
     payload = {"spikes": spikes, "total": len(spikes)}
-    _cache_write(spikes_key, json.dumps(payload, default=str))
+    await asyncio.to_thread(
+        _cache_write, spikes_key, json.dumps(payload, default=str)
+    )
     return payload

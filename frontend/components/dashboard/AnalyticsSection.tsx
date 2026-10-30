@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   TrendingUp,
   Info,
@@ -9,6 +9,9 @@ import {
   FileText
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { DashboardRequestSignals, dashboardDataKey, dashboardIdentityKey } from '@/lib/dashboardMemoryCache';
+import { useDashboardCachedResource } from '@/hooks/useDashboardCachedResource';
+import { useAuth } from '@/lib/authContext';
 import type { CrisisState, CorridorContext, RouteRecommendation } from '@/lib/types';
 import { Badge } from '@/components/base-ui/badge';
 import { Card } from '@/components/base-ui/card';
@@ -110,10 +113,34 @@ function regionToDb(slug: string): string | undefined {
   return REGION_TO_DB[slug];
 }
 
+function isAbortError(error: unknown): boolean {
+  return !!error && typeof error === 'object' && (error as { name?: string }).name === 'AbortError';
+}
+
 const DAY_OPTIONS = [7, 14, 30] as const;
 
 // Semua komoditas untuk matriks lintas-komoditas (heatmap/korelasi/streak).
 const ALL_COMMODITIES = COMMODITY_OPTIONS.map((o) => o.value);
+
+interface AnalyticsFilters {
+  commodity: string;
+  priceRegion: string;
+  days: number;
+}
+
+function readInitialAnalyticsFilters(): AnalyticsFilters {
+  const defaults: AnalyticsFilters = { commodity: 'beras', priceRegion: '', days: 7 };
+  if (typeof window === 'undefined') return defaults;
+  const params = new URLSearchParams(window.location.search);
+  const commodity = params.get('commodity');
+  const priceRegion = params.get('region');
+  const days = Number(params.get('days'));
+  return {
+    commodity: commodity && COMMODITY_OPTIONS.some((option) => option.value === commodity) ? commodity : defaults.commodity,
+    priceRegion: priceRegion !== null && REGION_OPTIONS.some((option) => option.value === priceRegion) ? priceRegion : defaults.priceRegion,
+    days: (DAY_OPTIONS as readonly number[]).includes(days) ? days : defaults.days,
+  };
+}
 
 interface PricePoint {
   price: number;
@@ -167,6 +194,54 @@ interface SpikeItem {
   detected_at: string;
 }
 
+interface AnalyticsPrices {
+  ricePrice: number | null;
+  priceHistory: number[];
+  priceTimes: string[];
+}
+
+interface AnalyticsSpikes {
+  spikes: SpikeItem[];
+  recordsTotal: number;
+}
+
+interface AnalyticsMultiSeries {
+  series: Record<string, PricePoint[]>;
+  fallback: boolean;
+  warning: string | null;
+}
+
+interface AnalyticsDisasterSummary {
+  weatherCount: number | null;
+  fireCount: number | null;
+  fireFresh: boolean;
+  sourceErrors: string[];
+}
+
+interface AnalyticsBnpbEvent {
+  source: string;
+  event_type: string;
+  severity: string;
+  lat: string | number;
+  lon: string | number;
+  radius_km?: number;
+  title: string;
+  ts: string;
+  dedup_key: string;
+}
+
+interface AnalyticsBnpb {
+  events: AnalyticsBnpbEvent[];
+  updatedAt: string | null;
+  available: boolean;
+}
+
+const EMPTY_PRICE_HISTORY: number[] = [];
+const EMPTY_PRICE_TIMES: string[] = [];
+const EMPTY_SPIKES: SpikeItem[] = [];
+const EMPTY_SERIES: Record<string, PricePoint[]> = {};
+const EMPTY_BNPB_EVENTS: AnalyticsBnpbEvent[] = [];
+
 function severityBadge(severity: string): string {
   const s = (severity || '').toLowerCase();
   if (s === 'critical') return 'bg-red-500/15 text-red-300 border-red-400/30';
@@ -208,65 +283,137 @@ export default function DashboardAnalyticsSection({
   void corridorContext;
   void activeRoutes;
 
-  const [ricePrice, setRicePrice] = useState<number | null>(null);
-  const [priceHistory, setPriceHistory] = useState<number[]>([]);
-  const [priceTimes, setPriceTimes] = useState<string[]>([]);
-  const [isLoadingPrices, setIsLoadingPrices] = useState<boolean>(true);
-
-  const [commodity, setCommodity] = useState<string>('beras');
-  const [priceRegion, setPriceRegion] = useState<string>('');
-  const [days, setDays] = useState<number>(7);
-
-  const [spikes, setSpikes] = useState<SpikeItem[]>([]);
-  const [spikesLoading, setSpikesLoading] = useState<boolean>(true);
-  const [spikeRecordsTotal, setSpikeRecordsTotal] = useState<number>(0);
-
-  // Lintas-komoditas: deret harga per komoditas (korelasi + streak mingguan).
-  const [multiSeries, setMultiSeries] = useState<Record<string, PricePoint[]>>({});
-  const [multiLoading, setMultiLoading] = useState<boolean>(true);
-  // True bila sebagian deret memakai fallback agregat Sumatera (filter sempit <14 titik).
-  const [multiFallback, setMultiFallback] = useState<boolean>(false);
-
-  // Bencana GET-only: poligon cuaca (BMKG), hotspot (FIRMS).
-  const [weatherCount, setWeatherCount] = useState<number | null>(null);
-  const [fireCount, setFireCount] = useState<number | null>(null);
-  const [fireFresh, setFireFresh] = useState<boolean>(false);
-  const [bencanaLoading, setBencanaLoading] = useState<boolean>(true);
-
-  // BNPB disaster events — fully independent async fetch (never blocks prices/spikes).
-  interface BnpbEvent {
-    source: string;
-    event_type: string;
-    severity: string;
-    lat: string | number;
-    lon: string | number;
-    radius_km?: number;
-    title: string;
-    ts: string;
-    dedup_key: string;
-  }
-  const [bnpbEvents, setBnpbEvents] = useState<BnpbEvent[]>([]);
-  const [bnpbLoading, setBnpbLoading] = useState<boolean>(true);
-  const [bnpbUpdatedAt, setBnpbUpdatedAt] = useState<string | null>(null);
-  const [bnpbAvailable, setBnpbAvailable] = useState<boolean>(true);
-
-  // URL sync (?commodity&region&days) — local state fallback when absent.
+  const { user, role } = useAuth();
+  const identityScope = dashboardIdentityKey({ id: user?.id, role, companyId: user?.company_id });
+  const requestSignalsRef = useRef(new DashboardRequestSignals());
+  const requestSignals = requestSignalsRef.current;
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      const sp = new URLSearchParams(window.location.search);
-      const c = sp.get('commodity');
-      const r = sp.get('region');
-      const d = sp.get('days');
-      if (c && COMMODITY_OPTIONS.some((o) => o.value === c)) setCommodity(c);
-      if (r !== null && REGION_OPTIONS.some((o) => o.value === r)) setPriceRegion(r);
-      if (d && (DAY_OPTIONS as readonly number[]).includes(Number(d))) setDays(Number(d));
-    } catch {
-      /* local state only */
+    requestSignals.activate();
+    return () => requestSignals.dispose();
+  }, [requestSignals]);
+  const [initialFilters] = useState(readInitialAnalyticsFilters);
+  const [commodity, setCommodity] = useState(initialFilters.commodity);
+  const [priceRegion, setPriceRegion] = useState(initialFilters.priceRegion);
+  const [days, setDays] = useState(initialFilters.days);
+
+  const pricesKey = dashboardDataKey(identityScope, 'analytics.prices', { commodity, priceRegion, days });
+  const pricesResource = useDashboardCachedResource<AnalyticsPrices>(pricesKey, async () => {
+    const signal = requestSignalsRef.current.signal('analytics.prices', pricesKey);
+    const res = await api.commodities.prices({ commodity, region: regionToDb(priceRegion), limit: days }, signal);
+    const items = res?.items ?? [];
+    return {
+      ricePrice: items[0]?.price_idr ?? null,
+      priceHistory: items.map((item) => item.price_idr).reverse(),
+      priceTimes: items.map((item) => item.time).reverse(),
+    };
+  });
+  const ricePrice = pricesResource.data?.ricePrice ?? null;
+  const priceHistory = pricesResource.data?.priceHistory ?? EMPTY_PRICE_HISTORY;
+  const priceTimes = pricesResource.data?.priceTimes ?? EMPTY_PRICE_TIMES;
+  const isLoadingPrices = pricesResource.isLoading;
+
+  const spikesKey = dashboardDataKey(identityScope, 'analytics.spikes', { commodity });
+  const spikesResource = useDashboardCachedResource<AnalyticsSpikes>(spikesKey, async () => {
+    const signal = requestSignalsRef.current.signal('analytics.spikes', spikesKey);
+    const [spikeRes, priceRes] = await Promise.all([
+      api.commodities.spikes(undefined, signal),
+      api.commodities.prices({ commodity, limit: 100 }, signal),
+    ]);
+    return {
+      spikes: Array.isArray(spikeRes?.spikes) ? spikeRes.spikes : [],
+      recordsTotal: Array.isArray(priceRes?.items) ? priceRes.items.length : 0,
+    };
+  });
+  const spikes = spikesResource.data?.spikes ?? EMPTY_SPIKES;
+  const spikesLoading = spikesResource.isLoading;
+  const spikeRecordsTotal = spikesResource.data?.recordsTotal ?? 0;
+
+  // Lintas-komoditas: keep each region-filter result separately in the memory cache.
+  const multiKey = dashboardDataKey(identityScope, 'analytics.multi-series', { priceRegion });
+  const multiResource = useDashboardCachedResource<AnalyticsMultiSeries>(multiKey, async () => {
+    const mapped = regionToDb(priceRegion);
+    const signal = requestSignalsRef.current.signal('analytics.multi-series', multiKey);
+    const fetchSeries = async (c: string, region?: string) => {
+      try {
+        const res = await api.commodities.prices({ commodity: c, region, limit: 60 }, signal);
+        const items: PricePoint[] = (res?.items ?? []).map((item) => ({ price: item.price_idr, time: item.time })).reverse();
+        return { commodity: c, items, error: null as string | null };
+      } catch (err) {
+        if (isAbortError(err) || signal.aborted) throw err;
+        return { commodity: c, items: [] as PricePoint[], error: err instanceof Error ? err.message : 'Gagal memuat deret harga.' };
+      }
+    };
+
+    const results = await Promise.all(ALL_COMMODITIES.map((value) => fetchSeries(value, mapped)));
+    const merged: Record<string, PricePoint[]> = Object.fromEntries(results.map(({ commodity: value, items }) => [value, items]));
+    const failures = results.filter((result) => result.error).map((result) => result.error as string);
+    let usedFallback = false;
+    if (mapped) {
+      const thin = ALL_COMMODITIES.filter((value) => (merged[value] ?? []).length < 14);
+      const aggregateResults = await Promise.all(thin.map((value) => fetchSeries(value)));
+      for (const result of aggregateResults) {
+        if (result.error) failures.push(result.error);
+        if (result.items.length >= 14 && result.items.length > (merged[result.commodity] ?? []).length) {
+          merged[result.commodity] = result.items;
+          usedFallback = true;
+        }
+      }
     }
-    // mount-only: read initial URL
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    return {
+      series: merged,
+      fallback: usedFallback,
+      warning: failures.length > 0 ? 'Sebagian deret harga tidak berhasil diperbarui.' : null,
+    };
+  });
+  const multiSeries = multiResource.data?.series ?? EMPTY_SERIES;
+  const multiLoading = multiResource.isLoading;
+  const multiFallback = multiResource.data?.fallback ?? false;
+
+  const disasterKey = dashboardDataKey(identityScope, 'analytics.disaster-summary');
+  const disasterResource = useDashboardCachedResource<AnalyticsDisasterSummary>(disasterKey, async () => {
+    const signal = requestSignalsRef.current.signal('analytics.disaster-summary', disasterKey);
+    const handleError = (error: unknown) => {
+      if (isAbortError(error) || signal.aborted) throw error;
+      return error;
+    };
+    const [wx, fire] = await Promise.all([
+      api.weather.spatialPolygons(undefined, signal).then(
+        (response) => ({ ok: true as const, count: response?.features?.length ?? 0 }),
+        (error: unknown) => ({ ok: false as const, count: null, error: handleError(error) }),
+      ),
+      api.fire.hotspots(signal).then(
+        (response) => ({ ok: true as const, response }),
+        (error: unknown) => ({ ok: false as const, response: null, error: handleError(error) }),
+      ),
+    ]);
+    const nowMs = Date.now();
+    const hotspots = fire.ok ? fire.response.hotspots ?? [] : [];
+    return {
+      weatherCount: wx.ok ? wx.count : null,
+      fireCount: fire.ok && fire.response.status !== 'degraded' ? hotspots.length : null,
+      fireFresh: fire.ok && hotspots.length > 0 && hotspots.some((hotspot) => !hotspot.ts || withinHours(hotspot.ts, 48, nowMs)),
+      sourceErrors: [!wx.ok ? 'BMKG' : null, !fire.ok ? 'FIRMS' : null].filter((name): name is string => name !== null),
+    };
+  });
+  const weatherCount = disasterResource.data?.weatherCount ?? null;
+  const fireCount = disasterResource.data?.fireCount ?? null;
+  const fireFresh = disasterResource.data?.fireFresh ?? false;
+  const bencanaLoading = disasterResource.isLoading;
+
+  const bnpbKey = dashboardDataKey(identityScope, 'analytics.bnpb');
+  const bnpbResource = useDashboardCachedResource<AnalyticsBnpb>(bnpbKey, async () => {
+    const signal = requestSignalsRef.current.signal('analytics.bnpb', bnpbKey);
+    const response = await api.bnpb.events({ limit: 20 }, signal);
+    return {
+      events: Array.isArray(response?.events) ? response.events : [],
+      updatedAt: response?.updated_at ?? null,
+      available: response?.status === 'ok',
+    };
+  });
+  const bnpbEvents = bnpbResource.data?.events ?? EMPTY_BNPB_EVENTS;
+  const bnpbLoading = bnpbResource.isLoading;
+  const bnpbUpdatedAt = bnpbResource.data?.updatedAt ?? null;
+  const bnpbAvailable = bnpbResource.data?.available ?? false;
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -282,202 +429,6 @@ export default function DashboardAnalyticsSection({
     }
   }, [commodity, priceRegion, days]);
 
-  // Fetch real PIHPS prices for the selected filter combo.
-  useEffect(() => {
-    let isMounted = true;
-    async function loadPrices() {
-      setIsLoadingPrices(true);
-      try {
-        const mapped = regionToDb(priceRegion);
-        const res = await api.commodities.prices({
-          commodity,
-          region: mapped,
-          limit: days,
-        });
-        if (!isMounted) return;
-        const items = res?.items ?? [];
-        if (items.length > 0) {
-          setRicePrice(items[0].price_idr);
-          setPriceHistory(items.map((item: { price_idr: number; time: string }) => item.price_idr).reverse());
-          setPriceTimes(items.map((item: { price_idr: number; time: string }) => item.time).reverse());
-        } else {
-          setRicePrice(null);
-          setPriceHistory([]);
-          setPriceTimes([]);
-        }
-      } catch (err) {
-        console.error('Failed to load prices for AnalyticsSection:', err);
-        if (isMounted) {
-          setRicePrice(null);
-          setPriceHistory([]);
-          setPriceTimes([]);
-        }
-      } finally {
-        if (isMounted) setIsLoadingPrices(false);
-      }
-    }
-    loadPrices();
-    return () => {
-      isMounted = false;
-    };
-  }, [commodity, priceRegion, days]);
-
-  // Spikes (semua wilayah; filter region dilakukan lokal agar heatmap
-  // Wilayah x Komoditas tetap punya data penuh) + record-total guard source.
-  useEffect(() => {
-    let isMounted = true;
-    async function loadSpikes() {
-      setSpikesLoading(true);
-      try {
-        const [spikeRes, priceRes] = await Promise.all([
-          api.commodities.spikes(),
-          api.commodities.prices({ commodity, limit: 100 }),
-        ]);
-        if (!isMounted) return;
-        const spikeItems: SpikeItem[] = Array.isArray(spikeRes?.spikes) ? spikeRes.spikes : [];
-        const priceItems = Array.isArray(priceRes?.items) ? priceRes.items : [];
-        setSpikes(spikeItems);
-        setSpikeRecordsTotal(priceItems.length);
-      } catch (err) {
-        console.error('Failed to load spikes for AnalyticsSection:', err);
-        if (isMounted) {
-          setSpikes([]);
-          setSpikeRecordsTotal(0);
-        }
-      } finally {
-        if (isMounted) setSpikesLoading(false);
-      }
-    }
-    loadSpikes();
-    return () => { isMounted = false; };
-  }, [commodity]);
-
-  // Deret per komoditas untuk korelasi + streak (GET-only, region-aware).
-  // Window 60 titik (real PIHPS backfill 180 hari mingguan — bukan sintetis);
-  // bila filter wilayah sempit menghasilkan <14 titik, fallback ke agregat
-  // Sumatera untuk komoditas tersebut (satu Promise.all tambahan, hanya bila perlu).
-  useEffect(() => {
-    let isMounted = true;
-    async function loadMulti() {
-      setMultiLoading(true);
-      setMultiFallback(false);
-      try {
-        const mapped = regionToDb(priceRegion);
-        const fetchSeries = async (c: string, region?: string): Promise<[string, PricePoint[]]> => {
-          try {
-            const res = await api.commodities.prices({ commodity: c, region, limit: 60 });
-            const items: PricePoint[] = (res?.items ?? []).map((it: { price_idr: number; time: string }) => ({
-              price: it.price_idr,
-              time: it.time,
-            })).reverse();
-            return [c, items];
-          } catch {
-            return [c, []];
-          }
-        };
-        const results = await Promise.all(
-          ALL_COMMODITIES.map((c) => fetchSeries(c, mapped)),
-        );
-        if (!isMounted) return;
-        const merged: Record<string, PricePoint[]> = Object.fromEntries(results);
-        // Fallback agregat Sumatera bila filter sempit: hanya untuk deret <14 titik.
-        let usedFallback = false;
-        if (mapped) {
-          const thin = ALL_COMMODITIES.filter((c) => (merged[c] ?? []).length < 14);
-          if (thin.length > 0) {
-            const aggResults = await Promise.all(thin.map((c) => fetchSeries(c, undefined)));
-            if (!isMounted) return;
-            for (const [c, items] of aggResults) {
-              if (items.length >= 14 && items.length > (merged[c] ?? []).length) {
-                merged[c] = items;
-                usedFallback = true;
-              }
-            }
-          }
-        }
-        if (!isMounted) return;
-        setMultiSeries(merged);
-        setMultiFallback(usedFallback);
-      } catch (err) {
-        console.error('Failed to load multi-commodity prices:', err);
-        if (isMounted) {
-          setMultiSeries({});
-          setMultiFallback(false);
-        }
-      } finally {
-        if (isMounted) setMultiLoading(false);
-      }
-    }
-    loadMulti();
-    return () => { isMounted = false; };
-  }, [priceRegion]);
-
-  // Bencana GET-only: poligon cuaca (BMKG) + hotspot (FIRMS).
-  // Baris BNPB memakai feed bnpbEvents (efek independen di bawah).
-  // Tiap sumber dibungkus try/catch sendiri agar satu sumber mati tidak
-  // menenggelamkan yang lain (honest-empty per baris).
-  useEffect(() => {
-    let isMounted = true;
-    async function loadBencana() {
-      setBencanaLoading(true);
-      try {
-        const [wx, fire] = await Promise.all([
-          api.weather.spatialPolygons().then(
-            (g) => ({ ok: true as const, n: g?.features?.length ?? 0 }),
-            () => ({ ok: false as const, n: 0 }),
-          ),
-          api.fire.hotspots().then(
-            (r) => ({ ok: true as const, r }),
-            () => ({ ok: false as const, r: null as unknown as { hotspots: Array<{ ts?: string }>; status: string } }),
-          ),
-        ]);
-        if (!isMounted) return;
-        setWeatherCount(wx.ok ? wx.n : null);
-        const nowMs = Date.now();
-        if (fire.ok && fire.r && fire.r.status !== 'degraded') {
-          const hs = fire.r.hotspots ?? [];
-          setFireCount(hs.length);
-          setFireFresh(hs.length > 0 && hs.some((h) => !h.ts || withinHours(h.ts, 48, nowMs)));
-        } else {
-          setFireCount(null);
-          setFireFresh(false);
-        }
-      } finally {
-        if (isMounted) setBencanaLoading(false);
-      }
-    }
-    loadBencana();
-    return () => { isMounted = false; };
-  }, []);
-
-  // BNPB feed — mount-only, fire-and-forget, isolated from price/spike state.
-  useEffect(() => {
-    let isMounted = true;
-    async function loadBnpb() {
-      setBnpbLoading(true);
-      try {
-        const res = await api.bnpb.events({ limit: 20 });
-        if (!isMounted) return;
-        setBnpbEvents(Array.isArray(res?.events) ? res.events : []);
-        setBnpbUpdatedAt(res?.updated_at ?? null);
-        setBnpbAvailable(res?.status === 'ok');
-      } catch (err) {
-        console.error('Failed to load BNPB events for AnalyticsSection:', err);
-        if (isMounted) {
-          setBnpbEvents([]);
-          setBnpbUpdatedAt(null);
-          setBnpbAvailable(false);
-        }
-      } finally {
-        if (isMounted) setBnpbLoading(false);
-      }
-    }
-    loadBnpb();
-    return () => { isMounted = false; };
-    // mount-only: BNPB refresh is poller-driven (1h), not filter-driven
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const bnpbStale = useMemo(() => {
     if (!bnpbUpdatedAt) return false;
     try {
@@ -486,6 +437,20 @@ export default function DashboardAnalyticsSection({
       return false;
     }
   }, [bnpbUpdatedAt]);
+
+  const analyticsResources = [pricesResource, spikesResource, multiResource, disasterResource, bnpbResource];
+  const analyticsIsRefreshing = analyticsResources.some((resource) => resource.isRefreshing);
+  const analyticsErrors = [
+    ...analyticsResources.map((resource) => resource.error).filter((error): error is string => Boolean(error)),
+    ...(disasterResource.data?.sourceErrors.length
+      ? [`Sumber bencana tidak tersedia: ${disasterResource.data.sourceErrors.join(', ')}.`]
+      : []),
+    ...(multiResource.data?.warning ? [multiResource.data.warning] : []),
+  ];
+  const analyticsUpdatedAt = analyticsResources.reduce<number | null>(
+    (latest, resource) => resource.updatedAt === null ? latest : Math.max(latest ?? 0, resource.updatedAt),
+    null,
+  );
 
   const commodityLabel = COMMODITY_OPTIONS.find((o) => o.value === commodity)?.label ?? commodity;
   const lastTime = priceTimes.length > 0 ? priceTimes[priceTimes.length - 1] : null;
@@ -850,6 +815,19 @@ export default function DashboardAnalyticsSection({
 
       {/* 7 KPI Analitik — useMemo dari GETs yang ada */}
       <KpiStrip kpis={kpis} loading={spikesLoading || isLoadingPrices} />
+      <div className="min-h-5 text-xs" aria-live="polite" data-testid="analytics-refresh-status">
+        {analyticsIsRefreshing && <p className="text-slate-400">Memperbarui data analitik…</p>}
+        {!analyticsIsRefreshing && analyticsUpdatedAt !== null && (
+          <p className="text-slate-500">
+            Data terakhir diperbarui {new Date(analyticsUpdatedAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+          </p>
+        )}
+        {analyticsErrors.length > 0 && (
+          <p role="alert" className="text-amber-300">
+            Sebagian data tidak dapat diperbarui. Data terakhir yang tersedia tetap ditampilkan. {analyticsErrors.join(' ')}
+          </p>
+        )}
+      </div>
 
       {/* Mixed dashboard grid (map canvas removed): tren 8 + donat 4 · heatmap 6+6 · korelasi 6+6 · tabel 8 + BNPB 4 */}
       <div className="w-full grid grid-cols-12 gap-4">

@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { CorridorContext } from '@/lib/types';
 import { api } from '@/lib/api';
+import { useAuth } from '@/lib/authContext';
+import { SingleFlightRequest } from '@/lib/dashboardMemoryCache';
 import { isDocumentVisible, subscribeVisibility } from '@/lib/visibility';
 
 const DEFAULT_FALLBACK_CORRIDOR: CorridorContext = {
@@ -149,6 +151,8 @@ export function useCorridorContext(
   corridorId: string = 'sumatra_belawan_medan',
   options?: UseCorridorContextOptions
 ) {
+  const { user, role } = useAuth();
+  const identityKey = JSON.stringify([user?.id ?? 'guest', role, user?.company_id ?? null]);
   const enabled = options?.enabled ?? true;
   const seed = options?.initialData ?? null;
   const hasSeed = seed !== null;
@@ -159,46 +163,50 @@ export function useCorridorContext(
   const [isLoading, setIsLoading] = useState<boolean>(!hasSeed);
   const [error, setError] = useState<string | null>(null);
   const activeImpactRef = useRef<OperationalImpact | null>(null);
-  const inFlightRef = useRef<AbortController | null>(null);
+  const requestGateRef = useRef(new SingleFlightRequest());
+  const identityKeyRef = useRef(identityKey);
+  identityKeyRef.current = identityKey;
   const hasSeedRef = useRef<boolean>(hasSeed);
+  const wasDisabledRef = useRef(false);
   hasSeedRef.current = hasSeed;
   // True once live telemetry (not the fallback/seed) is on screen.
   const fetchedRef = useRef<boolean>(false);
 
   const fetchCorridor = useCallback(async () => {
-    inFlightRef.current?.abort();
-    const controller = new AbortController();
-    inFlightRef.current = controller;
+    const requestIdentity = identityKey;
+    const controller = requestGateRef.current.begin();
+    if (!controller) return;
     try {
       // Resolve through getBaseUrl() (via the shared api client) so this hook
       // never points at a stale NEXT_PUBLIC_API_URL or skips the proxy fallback.
       const data = await api.corridor.context(corridorId, controller.signal);
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted || identityKeyRef.current !== requestIdentity) return;
       const fresh: CorridorContext = { ...data, is_fallback: data.is_fallback === true };
       const activeImpact = activeImpactRef.current;
       setCorridorContext(activeImpact ? applyImpactToContext(fresh, activeImpact) : fresh);
       setError(null);
       fetchedRef.current = true;
     } catch (err: unknown) {
-      if (isAbortError(err) || controller.signal.aborted) return;
+      if (isAbortError(err) || controller.signal.aborted || identityKeyRef.current !== requestIdentity) return;
       const msg = err instanceof Error ? err.message : 'Failed to fetch corridor telemetry';
       setError(msg);
       // If we don't have context yet, initialize with default fallback so UI doesn't break
       setCorridorContext((prev) => prev || DEFAULT_FALLBACK_CORRIDOR);
     } finally {
-      if (!controller.signal.aborted) setIsLoading(false);
+      requestGateRef.current.finish(controller);
+      if (!controller.signal.aborted && identityKeyRef.current === requestIdentity) setIsLoading(false);
     }
-  }, [corridorId]);
+  }, [corridorId, identityKey]);
 
   // Seed arriving after mount: never overwrite live telemetry or an applied
   // operational impact with an older snapshot row.
   useEffect(() => {
-    if (!seed) return;
+    if (!seed || identityKeyRef.current !== identityKey) return;
     if (fetchedRef.current || activeImpactRef.current) return;
     setCorridorContext({ ...seed, is_fallback: seed.is_fallback === true });
     setError(null);
     setIsLoading(false);
-  }, [seed]);
+  }, [seed, identityKey]);
 
   // Persist the latest approved-detour impact so the 30s poll can re-base on
   // fresh backend telemetry and reapply the impact instead of losing it.
@@ -209,6 +217,9 @@ export function useCorridorContext(
 
   useEffect(() => {
     if (!enabled) return;
+    const requestGate = requestGateRef.current;
+    const shouldRefreshSeed = wasDisabledRef.current;
+    wasDisabledRef.current = false;
 
     const tick = () => {
       if (!isDocumentVisible()) return;
@@ -217,7 +228,7 @@ export function useCorridorContext(
 
     // Seeded by the bootstrap snapshot: the first poll owns freshness, no
     // duplicate mount request.
-    if (!hasSeedRef.current) tick();
+    if (!hasSeedRef.current || shouldRefreshSeed) tick();
 
     const interval = setInterval(tick, 30000); // 30s polling
     const unsubscribe = subscribeVisibility((visible) => {
@@ -227,7 +238,8 @@ export function useCorridorContext(
     return () => {
       clearInterval(interval);
       unsubscribe();
-      inFlightRef.current?.abort();
+      wasDisabledRef.current = true;
+      requestGate.abort();
     };
   }, [enabled, fetchCorridor]);
 

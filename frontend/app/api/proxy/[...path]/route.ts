@@ -123,6 +123,9 @@ function isStreamingContent(contentType: string | null | undefined): boolean {
   return /^text\/event-stream/i.test(contentType);
 }
 
+const PROXY_READ_TIMEOUT_MS = 30_000;
+const PROXY_WRITE_TIMEOUT_MS = 60_000;
+
 async function handleProxy(req: NextRequest, context: RouteContext) {
   const resolvedParams = await Promise.resolve(context.params);
   const pathSegments = resolvedParams?.path || [];
@@ -150,24 +153,58 @@ async function handleProxy(req: NextRequest, context: RouteContext) {
     if (value) forwardHeaders[name] = value;
   }
 
-  let body: string | undefined = undefined;
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
-    try {
-      const text = await req.text();
-      if (text && text.length > 0) {
-        body = text;
-      }
-    } catch {
-      // body empty or cannot be read
-    }
-  }
+  const upstreamController = new AbortController();
+  let timedOut = false;
+  let clientAborted = req.signal.aborted;
+  const forwardAbort = () => {
+    clientAborted = true;
+    upstreamController.abort();
+  };
+  if (!clientAborted) req.signal.addEventListener('abort', forwardAbort, { once: true });
+
+  const timeoutMs = req.method === 'GET' || req.method === 'HEAD'
+    ? PROXY_READ_TIMEOUT_MS
+    : PROXY_WRITE_TIMEOUT_MS;
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    upstreamController.abort();
+  }, timeoutMs);
+
+  let rejectAbort!: (error: Error) => void;
+  const abortPromise = new Promise<never>((_, reject) => {
+    rejectAbort = reject;
+  });
+  const rejectOnAbort = () => {
+    const error = new Error(clientAborted ? 'Client closed the request' : 'Upstream request timed out');
+    error.name = clientAborted ? 'AbortError' : 'TimeoutError';
+    rejectAbort(error);
+  };
+  upstreamController.signal.addEventListener('abort', rejectOnAbort, { once: true });
+
+  const cleanup = () => {
+    clearTimeout(timeout);
+    req.signal.removeEventListener('abort', forwardAbort);
+    upstreamController.signal.removeEventListener('abort', rejectOnAbort);
+  };
 
   try {
-    const upstreamRes = await fetch(targetUrl, {
-      method: req.method,
-      headers: forwardHeaders,
-      body,
-    });
+    if (clientAborted) throw new Error('Client closed the request');
+
+    let body: string | undefined;
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      const text = await Promise.race([req.text(), abortPromise]);
+      if (text) body = text;
+    }
+
+    const upstreamRes = await Promise.race([
+      fetch(targetUrl, {
+        method: req.method,
+        headers: forwardHeaders,
+        body,
+        signal: upstreamController.signal,
+      }),
+      abortPromise,
+    ]);
 
     const upstreamContentType = upstreamRes.headers.get('content-type') || 'application/json';
     const streaming = isStreamingContent(upstreamContentType);
@@ -195,18 +232,64 @@ async function handleProxy(req: NextRequest, context: RouteContext) {
       responseHeaders['vary'] = 'Authorization, Cookie';
     }
 
-    // An event stream must not be buffered (`.text()` would never resolve), and
-    // it is never cached. JSON keeps the existing buffered pass-through.
-    const upstreamBody: BodyInit | null = streaming
-      ? upstreamRes.body
-      : await upstreamRes.text();
+    if (streaming) {
+      // Bound connection setup, but not the lifetime of an event stream. Keep
+      // forwarding client disconnects until the stream closes or is cancelled.
+      clearTimeout(timeout);
+      upstreamController.signal.removeEventListener('abort', rejectOnAbort);
+      const stream = upstreamRes.body;
+      if (!stream) {
+        cleanup();
+        return new NextResponse(null, { status: upstreamRes.status, headers: responseHeaders });
+      }
 
+      const reader = stream.getReader();
+      const responseStream = new ReadableStream<Uint8Array>({
+        async pull(controller) {
+          try {
+            const chunk = await reader.read();
+            if (chunk.done) {
+              controller.close();
+              cleanup();
+            } else {
+              controller.enqueue(chunk.value);
+            }
+          } catch (error) {
+            controller.error(error);
+            cleanup();
+          }
+        },
+        async cancel(reason) {
+          upstreamController.abort();
+          cleanup();
+          await reader.cancel(reason);
+        },
+      });
+      return new NextResponse(responseStream, { status: upstreamRes.status, headers: responseHeaders });
+    }
+
+    // Buffer ordinary responses under the same deadline as connection setup.
+    const upstreamBody = await Promise.race([upstreamRes.text(), abortPromise]);
+    cleanup();
     return new NextResponse(upstreamBody, {
       status: upstreamRes.status,
       headers: responseHeaders,
     });
   } catch (err: unknown) {
+    cleanup();
     const message = err instanceof Error ? err.message : 'Upstream request failed';
+    if (clientAborted) {
+      return NextResponse.json(
+        { error: 'Client closed request', message },
+        { status: 499, headers: { 'cache-control': PRIVATE_CACHE_CONTROL } },
+      );
+    }
+    if (timedOut) {
+      return NextResponse.json(
+        { error: 'Upstream request timed out', message: `Upstream did not complete within ${timeoutMs} ms` },
+        { status: 504, headers: { 'cache-control': PRIVATE_CACHE_CONTROL } },
+      );
+    }
     return NextResponse.json(
       {
         error: 'Proxy forwarding failed',
