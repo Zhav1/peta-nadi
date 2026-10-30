@@ -29,8 +29,8 @@ import {
   DialogHeader,
 } from '@/components/base-ui/dialog';
 import { HoldVsRerouteCard } from './HoldVsRerouteCard';
+import { OperationalTripSelect } from '@/components/fleet/OperationalTripSelect';
 
-type Decision = RouteDecisionType;
 
 const CHECKLIST_ITEMS = [
   {
@@ -47,7 +47,7 @@ const CHECKLIST_ITEMS = [
   },
   {
     id: 'notes',
-    label: 'Catatan operator diisi untuk HOLD / OVERRIDE',
+    label: 'Rasional operator diisi untuk tindakan operasional / HOLD / OVERRIDE',
   },
 ] as const;
 
@@ -77,6 +77,10 @@ export function RouteDetailModal({
   isActing,
   corridorIsFallback = false,
   onOpenEvaluation,
+  operationalTrips = [],
+  selectedTravelId = '',
+  onSelectTravel,
+  tripsLoading = false,
 }: RouteDetailModalProps) {
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [notes, setNotes] = useState('');
@@ -137,20 +141,23 @@ export function RouteDetailModal({
     ((crisis.news_attributions?.length ?? 0) > 0 ||
       (crisis.verified_news_citations?.length ?? 0) > 0 ||
       !!crisis.evidence?.osint_text?.trim() ||
-      !!crisis.validated);
+      !!crisis.evidence?.osint_author?.trim());
+  const routeMetadata = route as unknown as { source?: string; proof?: string; is_simulated?: boolean; simulation_mode?: boolean };
   const routeProof =
-    !!route.safety_status ||
-    !!route.dasar_risiko ||
-    !!route.dampak ||
-    !!route.tradeoff_analysis ||
-    !!route.hedging;
+    Boolean(routeMetadata.proof?.trim()) ||
+    Boolean(route.dasar_risiko?.trim()) ||
+    Boolean(route.dampak?.trim());
   const hasEvidence = crisisEvidence || routeProof;
+  const routeLabel = `${route.route_name ?? ''} ${route.description ?? ''} ${route.safety_tag ?? ''} ${routeMetadata.source ?? ''}`;
+  const isSimulatedRoute = Boolean(crisis?.is_simulated) || corridorIsFallback || Boolean(routeMetadata.is_simulated || routeMetadata.simulation_mode) || /SIMULASI|OFFLINE/i.test(routeLabel) || !route.safety_status;
+  const eligibleTrips = operationalTrips.filter((trip) => ['planned', 'moving', 'rerouted'].includes(trip.status));
+  const selectedTrip = eligibleTrips.find((trip) => trip.id === selectedTravelId);
 
   // Forecast info-only: every decision CTA stays disabled — pantau saja.
   const isForecast = !!crisis && isForecastActive(crisis.forecast_tag, crisis.forecast_valid_until);
-  const canApprove = !isForecast && !isSandbox && allChecked && !isActing && role !== 'REGULATOR' && hasEvidence;
+  const canApprove = !isForecast && !isSandbox && allChecked && !isActing && role !== 'REGULATOR' && hasEvidence && !isSimulatedRoute && !!selectedTrip;
   const canHold = !isForecast && !isSandbox && allChecked && !isActing && notes.trim().length > 0;
-  const canOverride = !isForecast && !isSandbox && allChecked && !isActing && notes.trim().length > 0 && role !== 'REGULATOR' && hasEvidence;
+  const canOverride = !isForecast && !isSandbox && allChecked && !isActing && notes.trim().length > 0 && role !== 'REGULATOR' && hasEvidence && !isSimulatedRoute && !!selectedTrip;
 
   const passability =
     crisis?.impact_profile?.passability ??
@@ -211,9 +218,11 @@ export function RouteDetailModal({
     if (isSandbox) return;
     if (role === 'REGULATOR' && decision !== 'HOLD') return;
     if (!allChecked) return;
-    if ((decision === 'HOLD' || decision === 'OVERRIDE' || decision === 'REJECT') && !notes.trim()) return;
+    if ((decision !== 'APPROVE' || tacticalAction !== 'HOLD') && !notes.trim()) return;
     // Evidence gate: only HOLD may pass without grounded evidence.
     if (decision !== 'HOLD' && !hasEvidence) return;
+    if (decision !== 'HOLD' && decision !== 'REJECT' && !selectedTrip) return;
+    if (decision !== 'HOLD' && isSimulatedRoute) return;
     void onAction(decision, tacticalAction, notes.trim() || undefined);
   };
 
@@ -690,6 +699,20 @@ export function RouteDetailModal({
                     Belum terverifikasi — rute simulasi/offline atau bukti belum tersedia. Approval dinonaktifkan, hanya TAHAN yang diizinkan.
                   </p>
                 )}
+                {role === 'DISPATCHER' && (
+                  <OperationalTripSelect
+                    trips={operationalTrips}
+                    selectedTripId={selectedTravelId}
+                    onSelect={onSelectTravel || (() => undefined)}
+                    loading={tripsLoading}
+                  />
+                )}
+                {role === 'DISPATCHER' && !selectedTrip && (
+                  <p className="text-xs text-amber-300/90">Pilih trip eligible sebelum menyetujui perubahan rute.</p>
+                )}
+                {isSimulatedRoute && (
+                  <p className="text-xs text-amber-300/90">Rute simulasi/offline atau belum grounded; perubahan operasional dinonaktifkan.</p>
+                )}
                 {/* Single CTA row */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <button
@@ -700,8 +723,10 @@ export function RouteDetailModal({
                     title={
                       role === 'REGULATOR'
                         ? 'Memerlukan peran Dispatcher [Khusus Dispatcher]'
-                        : !hasEvidence
-                        ? 'Belum terverifikasi — approval dinonaktifkan'
+                        : !hasEvidence || isSimulatedRoute
+                        ? 'Bukti atau rute grounded belum memenuhi syarat'
+                        : !selectedTrip
+                        ? 'Pilih trip eligible terlebih dahulu'
                         : !allChecked
                         ? 'Lengkapi 4/4 verifikasi checklist'
                         : 'Setujui pengalihan rute armada'
@@ -720,11 +745,11 @@ export function RouteDetailModal({
                         ? 'Wajib mengisi catatan operator untuk aksi HOLD'
                         : !allChecked
                         ? 'Lengkapi 4/4 verifikasi checklist'
-                        : 'Tahan armada di buffer zone / depo'
+                        : 'Catat review HOLD; belum ada instruksi eksternal'
                     }
                     className="cursor-pointer py-2.5 px-3 rounded-[10px] bg-amber-600/90 hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-sans font-semibold flex items-center justify-center gap-1.5 transition-all "
                   >
-                    <span>Tahan Armada</span>
+                    <span>Catat HOLD</span>
                   </button>
                   <button
                     type="button"

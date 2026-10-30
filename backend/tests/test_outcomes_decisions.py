@@ -126,8 +126,8 @@ def test_outcomes_storage_sqlite(tmp_path):
     assert records[0]["actual_price_spike_pct"] == 14.2
 
 
-def test_approvals_endpoint_multi_action(client):
-    """Test FastAPI /api/v1/approvals endpoint with multi-action payloads."""
+def test_approvals_endpoint_incident_only_actions(client):
+    """Incident-only actions remain available without pretending to apply a trip route."""
     operator_headers = {"Authorization": f"Bearer {create_guest_token(role=ROLE_DISPATCHER)}"}
 
     # 1. Post ACCEPT
@@ -135,26 +135,28 @@ def test_approvals_endpoint_multi_action(client):
         "incident_id": "INC-API-01",
         "route_id": "0",
         "action": "ACCEPT",
-        "tactical_action": "REROUTE",
+        "tactical_action": "HOLD",
+        "notes": "Incident review only; no trip is changed.",
         "operator_id": "op-unit-1"
     }, headers=operator_headers)
     assert resp1.status_code == 201
     data1 = resp1.json()
     assert data1["action"] == "ACCEPT"
-    assert data1["tactical_action"] == "REROUTE"
+    assert data1["tactical_action"] == "HOLD"
+    assert data1["application_status"] in {"decision_recorded", "decision_recorded_locally"}
 
-    # 2. Post OVERRIDE with notes
+    # 2. Post OVERRIDE with notes; HOLD is an incident-only review here.
     resp2 = client.post("/api/v1/approvals", json={
         "incident_id": "INC-API-01",
         "route_id": "1",
-        "action": "OVERRIDE",
+        "action": "ACCEPT",
         "tactical_action": "HOLD",
         "operator_id": "op-unit-1",
         "notes": "Delaying departure until daylight hours due to landslide risk."
     }, headers=operator_headers)
     assert resp2.status_code == 201
     data2 = resp2.json()
-    assert data2["action"] == "OVERRIDE"
+    assert data2["action"] == "ACCEPT"
 
     # 3. GET approvals list
     get_resp = client.get("/api/v1/approvals?incident_id=INC-API-01")

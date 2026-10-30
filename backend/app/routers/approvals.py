@@ -1,16 +1,16 @@
 import logging
 import asyncio
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, cast
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.schemas.decision_schemas import (
     DecisionAction,
+    DecisionScope,
     TacticalManeuver,
     DecisionTraceCreate,
     DecisionTraceResponse,
-    DecisionTraceListResponse,
-    OutcomeHorizon
+    DecisionTraceListResponse
 )
 from app.db import local_storage
 from app.auth.supabase_auth import UserSession, get_optional_user
@@ -127,48 +127,124 @@ async def create_approval(
     payload: DecisionTraceCreate,
     current_user: UserSession = Depends(get_optional_user),
 ):
-    """
-    Log an operator decision trace in Supabase with local SQLite fallback.
-    Supports multi-action decisions: ACCEPT, REJECT, and OVERRIDE with tactical maneuvers.
-    RBAC: Requires the 'approvals:write' permission (Dispatcher). GUEST and REGULATOR roles are denied with 403.
-    """
+    """Record incident reviews or atomically apply a route to one canonical trip."""
     if "approvals:write" not in (current_user.permissions or []):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "error": "FORBIDDEN",
-                "message": f"Akses ditolak: Hanya operator dengan wewenang 'approvals:write' (Dispatcher) yang dapat menyetujui pengalihan rute armada. Peran Anda saat ini adalah {current_user.role}.",
+                "message": "Akses ditolak: memerlukan wewenang 'approvals:write'.",
                 "current_role": current_user.role,
                 "required_permissions": ["approvals:write"],
-            }
+            },
         )
 
-    inc_id = payload.incident_id or payload.crisis_id or "INC-DEFAULT"
-    # Operator identity precedence: authenticated session wins; no unauthenticated fallback.
-    op_id = payload.operator_id or payload.approved_by or current_user.id
+    # The authenticated principal is authoritative; caller-supplied operator IDs
+    # remain accepted only as historical request fields, never as audit identity.
+    op_id = current_user.id
     committed_by_role = current_user.role
-
-    # WS-LIVE: persist the decision-time forecast with the approval so a later
-    # FIELD_REPORT outcome can auto-join it into the live aggregate. Missing
-    # forecasts stay NULL (missing_pred) with a notes audit flag — never defaulted.
-    route_dict_forecast = payload.recommended_route or {}
-    forecast, pred_source = _resolve_approval_forecast(
-        inc_id, route_dict_forecast if isinstance(route_dict_forecast, dict) else {}
+    route_dict = payload.recommended_route or {}
+    inc_id = payload.incident_id or payload.crisis_id
+    changes_route = payload.action != DecisionAction.REJECT and payload.tactical_action != TacticalManeuver.HOLD
+    is_trip_operation = payload.decision_scope == DecisionScope.OPERATIONAL_ROUTE or (
+        payload.decision_scope is None and changes_route
     )
-    forecast_notes_flag = "" if forecast else " pred_unavailable(no stored forecast at decision time)"
+    if payload.decision_scope == DecisionScope.OPERATIONAL_ROUTE and not changes_route:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Operational route scope requires a route-changing action.")
+    if payload.decision_scope == DecisionScope.INCIDENT_REVIEW and payload.travel_id:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Incident-only review cannot target a trip.")
 
+    if not inc_id:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="incident_id is required for an incident review or operational route change.")
+
+    if is_trip_operation:
+        required_permissions = {"approvals:write", "fleet:write"}
+        if committed_by_role != "DISPATCHER" or not required_permissions.issubset(set(current_user.permissions or [])):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Trip route changes require Dispatcher approvals:write and fleet:write permissions.")
+        if not payload.travel_id:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="travel_id is required for an operational route change.")
+
+        if payload.expected_route_version is None or payload.idempotency_key is None:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="expected_route_version and idempotency_key are required for an operational route change.")
+        if not payload.notes or not payload.notes.strip():
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Operator rationale is required for an operational route change.")
+        route_text = " ".join(str(route_dict.get(k) or "") for k in ("route_name", "description", "safety_tag", "source")).upper()
+        if payload.simulation_mode or route_dict.get("is_simulated") is True or route_dict.get("simulation_mode") is True or not route_dict.get("safety_status") or "SIMULASI" in route_text or "OFFLINE" in route_text:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Operational approval requires a grounded, non-simulated route.")
+        proof = any(str(route_dict.get(k) or "").strip() for k in ("proof", "dampak", "dasar_risiko"))
+        refs = [str(ref).strip() for ref in payload.evidence_refs if str(ref).strip()]
+        if not proof and not refs:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Operational approval requires reviewed evidence references or route proof.")
+
+        rpc_params = {
+            "p_travel_id": payload.travel_id,
+            "p_incident_id": inc_id,
+            "p_route_id": payload.route_id,
+            "p_action": payload.action.value,
+            "p_tactical_action": payload.tactical_action.value,
+            "p_operator_id": op_id,
+            "p_company_id": current_user.company_id,
+            "p_expected_route_version": payload.expected_route_version,
+            "p_requested_vehicle_id": str((payload.custom_constraints or {}).get("vehicle_id") or route_dict.get("vehicle_id")) if ((payload.custom_constraints or {}).get("vehicle_id") or route_dict.get("vehicle_id")) else None,
+            "p_idempotency_key": str(payload.idempotency_key),
+            "p_recommended_route": route_dict,
+            "p_evidence_refs": refs,
+            "p_notes": payload.notes,
+        }
+        try:
+            from app.db.supabase_client import get_write_client
+
+            sb = get_write_client()
+            result = await asyncio.to_thread(lambda: sb.rpc("apply_trip_route_decision", rpc_params).execute())
+            data = getattr(result, "data", None)
+            applied = data[0] if isinstance(data, list) and data else data
+            if not isinstance(applied, dict) or not applied.get("approval_id"):
+                raise RuntimeError("Trip decision RPC returned no committed approval record")
+            return {
+                **applied,
+                "id": str(applied["approval_id"]),
+                "action": payload.action.value,
+                "tactical_action": payload.tactical_action.value,
+                "decision_scope": DecisionScope.OPERATIONAL_ROUTE.value,
+                "operator_id": op_id,
+                "status": applied.get("application_status"),
+            }
+        except HTTPException:
+            raise
+        except Exception as exc:
+            message = str(exc)
+            known_errors = {
+                "TRIP_NOT_FOUND": (status.HTTP_404_NOT_FOUND, "Trip tidak ditemukan."),
+                "TRIP_FORBIDDEN": (status.HTTP_403_FORBIDDEN, "Trip berada di luar tenant Dispatcher."),
+                "TRIP_INELIGIBLE": (status.HTTP_409_CONFLICT, "Trip tidak lagi eligible untuk perubahan rute."),
+                "TRIP_INCIDENT_MISMATCH": (status.HTTP_409_CONFLICT, "Trip sudah terikat ke insiden yang berbeda."),
+                "TRIP_VEHICLE_MISMATCH": (status.HTTP_409_CONFLICT, "Vehicle pada rekomendasi tidak cocok dengan assignment trip."),
+                "TRIP_STALE": (status.HTTP_409_CONFLICT, "Versi rute trip berubah; muat ulang trip dan bandingkan kembali."),
+                "IDEMPOTENCY_KEY_REQUIRED": (status.HTTP_422_UNPROCESSABLE_ENTITY, "Kunci idempotensi wajib diisi."),
+                "IDEMPOTENCY_KEY_CONFLICT": (status.HTTP_409_CONFLICT, "Kunci idempotensi sudah dipakai untuk keputusan lain."),
+            }
+            for marker, (http_status, detail) in known_errors.items():
+                if marker in message:
+                    raise HTTPException(status_code=http_status, detail=detail) from exc
+            logger.exception("Atomic trip route decision failed; no applied success returned")
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Trip decision could not be durably applied. No applied success was recorded.") from exc
+
+    # Incident/news review remains trip-independent. Historical approvals have
+    # no trip link and are never backfilled to whichever trip happens to be latest.
+    forecast, pred_source = _resolve_approval_forecast(inc_id, route_dict if isinstance(route_dict, dict) else {})
+    forecast_notes_flag = "" if forecast else " pred_unavailable(no stored forecast at decision time)"
     db_payload = {
         "incident_id": inc_id,
         "route_id": payload.route_id,
         "action": payload.action.value,
         "tactical_action": payload.tactical_action.value,
+        "decision_scope": DecisionScope.INCIDENT_REVIEW.value,
         "operator_id": op_id,
-        "recommended_route": payload.recommended_route or {},
+        "recommended_route": route_dict,
         "custom_constraints": payload.custom_constraints or {},
-        # committed_by_role tracked in notes + response + local mirror (no schema
-        # migration on route_approvals); server identity stays op_id (current_user.id).
         "notes": (payload.notes or f"committed_by {op_id} ({committed_by_role})") + forecast_notes_flag,
         "sync_status": "synced",
+        "execution_status": "decision_recorded",
         "pred_prob": (forecast or {}).get("pred_prob"),
         "raw_prob": (forecast or {}).get("raw_prob"),
         "p_max": (forecast or {}).get("p_max"),
@@ -176,109 +252,51 @@ async def create_approval(
         "active_sources": (forecast or {}).get("active_sources"),
         "forecast_created_at": (forecast or {}).get("forecast_created_at"),
     }
-    # Local mirror keeps the structured role field for audit without Supabase migration.
     local_extra = {"committed_by_role": committed_by_role}
 
-    # Closed-loop Fleet Reroute Sync: If recommended route has geometry, bind it to target vehicle
-    try:
-        route_dict = payload.recommended_route or {}
-        target_vid = (payload.custom_constraints or {}).get("vehicle_id") or route_dict.get("vehicle_id") or "TRK-003-BELAWAN-TEBING"
-        rec_geom = route_dict.get("route_geometry") or route_dict.get("geometry")
-        if rec_geom and target_vid and payload.action != DecisionAction.REJECT:
-            from app.services.telemetry_service import telemetry_service
-            telemetry_service.reroute_vehicle(
-                vehicle_id=target_vid,
-                new_route_geometry=rec_geom,
-                new_eta_minutes=float(route_dict.get("eta_minutes") or 120.0)
-            )
-            logger.info(f"Closed-loop sync: rerouted fleet vehicle {target_vid} following operator approval.")
-    except Exception as re_err:
-        logger.debug(f"Fleet reroute sync notice: {re_err}")
-
-    # Attempt Supabase cloud insertion
     try:
         from app.db.supabase_client import get_write_client
         sb = get_write_client()
-
-        # Insert into route_decision_traces or legacy route_approvals
         result = await _insert_row_resilient(sb, "route_approvals", db_payload)
-        
         if result.data and len(result.data) > 0:
             item = result.data[0]
             record_id = item.get("id") or f"DEC-{inc_id}"
             approved_at = item.get("approved_at") or item.get("created_at") or datetime.now().isoformat()
-            
-            # Also mirror locally as synced
             local_payload = dict(db_payload, id=record_id, created_at=approved_at, sync_status="synced")
             local_payload.update(local_extra)
             local_storage.save_decision_trace(local_payload)
-            
-            # Register closed-loop outcome verification tracking
-            try:
-                route_dict = payload.recommended_route or {}
-                delay_hrs = float(route_dict.get("eta_hours") or ((route_dict.get("eta_minutes") or 150) / 60.0))
-                local_storage.save_ground_truth_outcome({
-                    "incident_id": inc_id,
-                    "horizon": OutcomeHorizon.T_12H.value,
-                    "observed_delay_hours": delay_hrs,
-                    "actual_price_spike_pct": 12.0,
-                    "verified_by": op_id,
-                    "verification_source": "DISPATCHER_APPROVAL",
-                    "notes": f"Decision: {payload.action.value} ({payload.tactical_action.value}) via route {payload.route_id}"
-                })
-            except Exception as oe:
-                logger.debug(f"Outcome registration note: {oe}")
-
-            logger.info(f"Decision trace logged in Supabase & synced locally: id={record_id}")
             return {
                 "id": record_id,
                 "approval_id": record_id,
                 "approved_at": approved_at,
                 "action": payload.action.value,
                 "tactical_action": payload.tactical_action.value,
+                "decision_scope": DecisionScope.INCIDENT_REVIEW.value,
                 "operator_id": op_id,
                 "committed_by_role": committed_by_role,
-                "status": "success",
+                "status": "decision_recorded",
+                "application_status": "decision_recorded",
                 "pred_source": pred_source,
                 "pred_prob": db_payload.get("pred_prob"),
             }
-    except Exception as e:
-        logger.warning(f"Supabase unavailable for decision log, persisting to local SQLite: {e}")
+    except Exception as exc:
+        logger.warning("Supabase unavailable for incident-only review, queuing locally: %s", exc)
 
-    # Offline / Local fallback
     db_payload["sync_status"] = "pending"
     offline_payload = dict(db_payload)
     offline_payload.update(local_extra)
     saved = local_storage.save_decision_trace(offline_payload)
-
-    # Register closed-loop outcome verification tracking in local fallback
-    try:
-        route_dict = payload.recommended_route or {}
-        delay_hrs = float(route_dict.get("eta_hours") or ((route_dict.get("eta_minutes") or 150) / 60.0))
-        local_storage.save_ground_truth_outcome({
-            "incident_id": inc_id,
-            "horizon": OutcomeHorizon.T_12H.value,
-            "observed_delay_hours": delay_hrs,
-            "actual_price_spike_pct": 12.0,
-            "verified_by": op_id,
-            "verification_source": "DISPATCHER_APPROVAL",
-            "notes": f"Decision: {payload.action.value} ({payload.tactical_action.value}) via route {payload.route_id}"
-        })
-    except Exception as oe:
-        logger.debug(f"Outcome registration note (offline): {oe}")
-
-    logger.info(
-        f"[OFFLINE-DECISION-LOG] operator={op_id} | incident={inc_id} | action={payload.action.value} | tactical={payload.tactical_action.value}"
-    )
     return {
         "id": saved["id"],
         "approval_id": saved["id"],
         "approved_at": saved["created_at"],
         "action": payload.action.value,
         "tactical_action": payload.tactical_action.value,
+        "decision_scope": DecisionScope.INCIDENT_REVIEW.value,
         "operator_id": op_id,
         "committed_by_role": committed_by_role,
         "status": "local_queued",
+        "application_status": "decision_recorded_locally",
         "pred_source": pred_source,
         "pred_prob": db_payload.get("pred_prob"),
     }
@@ -300,7 +318,7 @@ async def list_approvals(
             query = query.eq("incident_id", incident_id)
             
         result = await asyncio.to_thread(lambda: query.execute())
-        items = result.data or []
+        items = cast(List[Dict[str, Any]], result.data or [])
         if items:
             responses = []
             for item in items:
@@ -319,7 +337,12 @@ async def list_approvals(
                         notes=item.get("notes"),
                         sync_status="synced",
                         created_at=created_dt,
-                        approved_at=created_dt
+                        approved_at=created_dt,
+                        travel_id=item.get("travel_id"),
+                        applied_vehicle_id=item.get("applied_vehicle_id"),
+                        decision_scope=item.get("decision_scope"),
+                        trip_version=item.get("trip_version"),
+                        application_status=item.get("execution_status"),
                     )
                 )
             return DecisionTraceListResponse(items=responses, total=len(responses))
@@ -348,7 +371,11 @@ async def list_approvals(
                 notes=item.get("notes"),
                 sync_status=item.get("sync_status", "pending"),
                 created_at=created_dt,
-                approved_at=created_dt
+                approved_at=created_dt,
+                travel_id=item.get("travel_id"),
+                applied_vehicle_id=item.get("applied_vehicle_id"),
+                decision_scope=item.get("decision_scope"),
+                application_status=item.get("execution_status"),
             )
         )
     return DecisionTraceListResponse(items=responses, total=len(responses))

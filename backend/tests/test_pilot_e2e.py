@@ -92,29 +92,8 @@ def test_drill1_belawan_pekanbaru_spoilage_hedging_e2e():
     assert route_result["compute_time_ms"] < 25.0
 
 
-def test_drill1_whatsapp_link_generation_and_decision_logging():
-    """
-    Drill 1: Generates driver WhatsApp dispatch URI and logs decision trace to SQLite.
-    - Validates phone format (6281234567891), plate, commodity, and detour name.
-    - Authenticates as ROLE_DISPATCHER and logs ACCEPT / REROUTE trace to /api/v1/approvals.
-    """
-    driver_phone = "6281234567891"
-    vehicle_plate = "BK 8812 XL"
-    commodity = "Cabai Merah Keriting"
-    detour_name = "MEDAN_TEBINGTINGGI"
-
-    message = (
-        f"PREHUB DISPATCH: Kendaraan {vehicle_plate} muatan {commodity} "
-        f"dialihkan via {detour_name} karena banjir Tebing Tinggi Km 42."
-    )
-    encoded_text = urllib.parse.quote(message)
-    whatsapp_uri = f"https://wa.me/{driver_phone}?text={encoded_text}"
-
-    # Assert URI structure and content
-    assert "wa.me/6281234567891" in whatsapp_uri
-    assert "BK%208812%20XL" in whatsapp_uri or "BK+8812+XL" in whatsapp_uri or "BK" in whatsapp_uri
-    assert "MEDAN_TEBINGTINGGI" in whatsapp_uri
-
+def test_drill1_incident_review_is_not_driver_dispatch():
+    """Incident-only review records no trip application or driver dispatch."""
     # Authenticate as Dispatcher
     token = create_guest_token(role=ROLE_DISPATCHER)
     headers = {"Authorization": f"Bearer {token}"}
@@ -123,32 +102,19 @@ def test_drill1_whatsapp_link_generation_and_decision_logging():
     approval_payload = {
         "incident_id": incident_id,
         "route_id": "0",
-        "action": "ACCEPT",
+        "action": "REJECT",
         "tactical_action": "REROUTE",
-        "operator_id": "DISPATCHER_MEDAN_01",
-        "recommended_route": {
-            "route_name": "MEDAN_TEBINGTINGGI_DETOUR",
-            "detour_km": 85.0,
-            "vehicle_plate": vehicle_plate,
-            "whatsapp_dispatched": True,
-            "whatsapp_uri": whatsapp_uri
-        },
-        "notes": f"Dispatched via WhatsApp to driver ({driver_phone}) for flood avoidance."
+        "notes": "Incident review only; no trip or driver is changed.",
     }
 
     res = client.post("/api/v1/approvals", json=approval_payload, headers=headers)
     assert res.status_code == 201
     data = res.json()
-    assert data["action"] == "ACCEPT"
+    assert data["action"] == "REJECT"
     assert data["tactical_action"] == "REROUTE"
-
-    # Verify stored in SQLite
-    traces = local_storage.list_decision_traces(incident_id=incident_id)
-    assert len(traces) >= 1
-    found = next((t for t in traces if t["operator_id"] == "DISPATCHER_MEDAN_01"), None)
-    assert found is not None
-    assert found["action"] == "ACCEPT"
-    assert found["tactical_action"] == "REROUTE"
+    assert data["application_status"] in {"decision_recorded", "decision_recorded_locally"}
+    assert data.get("travel_id") is None
+    assert data["operator_id"] != "DISPATCHER_MEDAN_01"
 
 
 def test_drill1_outcome_verification_t12h():
@@ -334,7 +300,7 @@ def test_drill3_sitinjau_lauik_operator_override_with_notes():
         "incident_id": incident_id,
         "route_id": "0",
         "action": "OVERRIDE",
-        "tactical_action": "CONTINUE",
+        "tactical_action": "HOLD",
         "operator_id": "DISPATCHER_WEST_SUMATRA",
         "notes": "Satgas Pangan emergency grain relief convoy with official Dishub police escort.",
         "custom_constraints": {
@@ -424,7 +390,7 @@ def test_pilot_real_data_integrity_invariants():
     assert "DRY_BULK" in PERISHABILITY_TIERS
 
 
-def test_drill4_closed_loop_orchestration_and_rerouting_e2e():
+def test_drill4_simulated_scenario_cannot_apply_operational_route():
     """
     Drill 4: Closed-Loop Swarm Orchestration, Spoilage Hedging Detour Approval & Telematics Re-Route.
     1. Triggers real-time SSE stream for simulated disruption at Lubuk Pakam KM 42.
@@ -485,33 +451,12 @@ def test_drill4_closed_loop_orchestration_and_rerouting_e2e():
         "tactical_action": "REROUTE",
         "operator_id": "OP-SUMUT-CHIEF",
         "recommended_route": routes[0],
-        "notes": "Setujui pengalihan rute via Tol MKTT untuk mengamankan nilai muatan cabai."
+        "simulation_mode": True,
+        "notes": "Preview only; not an operational dispatch instruction."
     }
 
     res_appr = client.post("/api/v1/approvals", json=approval_payload, headers=auth_headers)
-    assert res_appr.status_code in (200, 201)
-    appr_data = res_appr.json()
-    assert appr_data.get("action") == "ACCEPT"
-    assert appr_data.get("tactical_action") == "REROUTE"
-
-    # 3. Outbound Telematics Ping
-    ping_payload = {
-        "vehicle_id": "TRK-003-BELAWAN-TEBING",
-        "latitude": 3.6013,
-        "longitude": 98.6712,
-        "speed_kmh": 65.0,
-        "heading_deg": 135.0,
-        "temperature_c": 4.5,
-        "ignition": True
-    }
-    res_ping = client.post("/api/v1/fleet/telemetry/simulate-ping", json=ping_payload, headers=auth_headers)
-    assert res_ping.status_code == 200
-    ping_data = res_ping.json()
-    assert ping_data.get("status") == "success"
-
-    # 4. Verify Outcome Evaluation Registered
-    outcomes = local_storage.list_ground_truth_outcomes(incident_id=crisis_id)
-    assert len(outcomes) > 0
-    assert outcomes[0]["incident_id"] == crisis_id
-    assert outcomes[0]["horizon"] in ("T+12h", "12h")
+    assert res_appr.status_code == 422
+    assert "travel_id" in res_appr.json()["detail"]
+    # A preview and approval attempt create neither dispatch telemetry nor outcomes.
 

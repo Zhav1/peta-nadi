@@ -268,6 +268,8 @@ class TravelResponse(BaseModel):
     rerouted: bool
     disruption_id: Optional[str] = None
     status: str
+    approved_route: Optional[dict] = None
+    route_version: int = 0
     hedging: Optional[dict] = None
     hedging_policy: Optional[str] = None
     hedging_net_savings_idr: Optional[float] = None

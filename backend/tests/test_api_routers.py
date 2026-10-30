@@ -319,6 +319,9 @@ def test_approvals_endpoints():
     approval_payload = {
         "incident_id": "INC-TEST-001",
         "route_id": "ROUTE-ALT-2",
+        "action": "REJECT",
+        "tactical_action": "REROUTE",
+        "notes": "Incident review only; no trip is modified.",
         "recommended_route": {
             "path_name": "Belawan Detour via Tol Tebing",
             "eta_hours": 3.5,
@@ -335,7 +338,8 @@ def test_approvals_endpoints():
     assert res_post.status_code in [200, 201]
     post_data = res_post.json()
     assert "approval_id" in post_data
-    assert "status" in post_data
+    assert post_data["status"] in {"decision_recorded", "local_queued"}
+    assert post_data.get("travel_id") is None
 
 
 def test_commodity_endpoints():

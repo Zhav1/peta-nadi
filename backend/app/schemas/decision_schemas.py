@@ -4,6 +4,7 @@ Pydantic v2 schemas for closed-loop operator decision traces and ground-truth ou
 from enum import Enum
 from typing import Optional, List, Dict, Any
 from datetime import datetime
+from uuid import UUID
 from pydantic import BaseModel, Field, model_validator
 
 
@@ -17,6 +18,11 @@ class TacticalManeuver(str, Enum):
     REROUTE = "REROUTE"
     HOLD = "HOLD"
     CONTINUE = "CONTINUE"
+
+
+class DecisionScope(str, Enum):
+    INCIDENT_REVIEW = "incident_review"
+    OPERATIONAL_ROUTE = "operational_route"
 
 
 class DecisionTraceCreate(BaseModel):
@@ -33,6 +39,12 @@ class DecisionTraceCreate(BaseModel):
     route_name: Optional[str] = None
     origin: Optional[str] = None
     destination: Optional[str] = None
+    travel_id: Optional[str] = Field(None, min_length=1, description="Canonical travels.id for an operational route decision")
+    expected_route_version: Optional[int] = Field(None, ge=0, description="Trip route version shown when the decision was prepared")
+    idempotency_key: Optional[UUID] = Field(None, description="Stable key for safe operational decision retries")
+    evidence_refs: List[str] = Field(default_factory=list, description="Evidence identifiers or source URLs reviewed")
+    simulation_mode: bool = Field(False, description="Explicitly marks preview/simulation submissions")
+    decision_scope: Optional[DecisionScope] = Field(None, description="Separates incident-only review from a trip route change")
 
     @model_validator(mode="after")
     def validate_mandatory_notes(self) -> "DecisionTraceCreate":
@@ -65,6 +77,11 @@ class DecisionTraceResponse(BaseModel):
     sync_status: str = "synced"
     created_at: datetime
     approved_at: Optional[datetime] = None
+    travel_id: Optional[str] = None
+    applied_vehicle_id: Optional[str] = None
+    decision_scope: Optional[str] = None
+    trip_version: Optional[int] = None
+    application_status: Optional[str] = None
 
 
 class DecisionTraceListResponse(BaseModel):

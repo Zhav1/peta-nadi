@@ -258,6 +258,10 @@ export interface RouteDetailModalProps {
   isActing: boolean;
   corridorIsFallback?: boolean;
   onOpenEvaluation?: () => void;
+  operationalTrips?: TravelRecord[];
+  selectedTravelId?: string;
+  onSelectTravel?: (travelId: string) => void;
+  tripsLoading?: boolean;
 }
 
 export interface HitlPendingCreatePayload {
@@ -491,6 +495,12 @@ export interface ApprovalPayload {
   approved_by?: string;
   custom_constraints?: Record<string, any>;
   notes?: string;
+  travel_id?: string;
+  expected_route_version?: number;
+  idempotency_key?: string;
+  evidence_refs?: string[];
+  simulation_mode?: boolean;
+  decision_scope?: 'incident_review' | 'operational_route';
 }
 
 export interface ApprovalResponse {
@@ -501,6 +511,13 @@ export interface ApprovalResponse {
   action?: DecisionAction;
   tactical_action?: TacticalManeuver;
   status: string;
+  decision_scope?: 'incident_review' | 'operational_route';
+  travel_id?: string;
+  vehicle_id?: string;
+  trip_version?: number;
+  application_status?: string;
+  external_dispatch_status?: string;
+  observed_outcome?: string;
 }
 
 export interface ApprovalItem {
@@ -514,6 +531,11 @@ export interface ApprovalItem {
   custom_constraints?: Record<string, any>;
   notes?: string;
   sync_status?: string;
+  decision_scope?: 'incident_review' | 'operational_route' | 'legacy_unlinked';
+  travel_id?: string;
+  applied_vehicle_id?: string;
+  trip_version?: number;
+  application_status?: string;
   approved_at?: string;
   created_at?: string;
 }
@@ -1292,6 +1314,8 @@ export interface TravelRecord {
   rerouted: boolean;
   disruption_id?: string;
   status: TravelStatus;
+  approved_route?: RouteRecommendation | null;
+  route_version?: number;
   hedging?: Record<string, unknown> | null;
   hedging_policy?: string | null;
   hedging_net_savings_idr?: number | null;

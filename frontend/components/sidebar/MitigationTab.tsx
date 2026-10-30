@@ -11,7 +11,7 @@ import type {
 } from '@/lib/types';
 import { 
  AlertTriangle, 
- CheckCircle2, 
+ CheckCircle2,
  MapPin, 
  Clock, 
  Fuel, 
@@ -28,7 +28,7 @@ import {
  FileText,
  Scale,
  Shield,
- MessageSquare,
+
  AlertCircle
 } from 'lucide-react';
 import { useAuth } from '@/lib/authContext';
@@ -37,15 +37,20 @@ import { routeProvenanceLabel, routeProvenanceTitle } from '@/lib/routeProvenanc
 import { SpoilageHedgingCard } from './SpoilageHedgingCard';
 import { ComplianceInspectorCard } from './ComplianceInspectorCard';
 import { HoldVsRerouteCard } from './HoldVsRerouteCard';
+import { OperationalTripSelect } from '@/components/fleet/OperationalTripSelect';
 
 interface MitigationTabProps {
  crisis: CrisisState;
  activeRouteIdx: number | null;
  onSelectRoute: (idx: number) => void;
  onApproveSuccess?: (msg: string) => void;
- onCommitOperationalRoute?: (route: RouteRecommendation, action: DecisionAction, tactical: TacticalManeuver) => void;
+ onCommitOperationalRoute?: (route: RouteRecommendation, action: DecisionAction, tactical: TacticalManeuver, notes?: string) => Promise<import('@/lib/types').ApprovalResponse>;
  selectedImpactedVehicle?: import('@/lib/types').ImpactedVehicleAssessment | null;
  selectedCommodity?: string | null;
+ operationalTrips?: import('@/lib/types').TravelRecord[];
+ selectedTravelId?: string;
+ onSelectTravel?: (travelId: string) => void;
+ tripsLoading?: boolean;
 }
 
 interface RouteCardProps {
@@ -56,9 +61,12 @@ interface RouteCardProps {
  isApproved: boolean;
  approvalData?: ApprovalItem | null;
  approving: boolean;
+ decisionNotes: string;
  onApprove: (action: DecisionAction, tacticalAction: TacticalManeuver, notes?: string) => Promise<void>;
  selectedImpactedVehicle?: import('@/lib/types').ImpactedVehicleAssessment | null;
  crisisHasEvidence: boolean;
+ hasSelectedTrip: boolean;
+ crisisIsSimulated: boolean;
  /** Prakiraan Waspada Dini: info-only, no actions. */
  isForecast?: boolean;
 }
@@ -72,13 +80,13 @@ const HITL_UNVERIFIED_COPY =
 // confirmed disaster. Info-only: no reroute, no HOLD, no approval CTA.
 const FORECAST_INFO_COPY =
  'Prakiraan waspada dini — belum terkonfirmasi sebagai bencana aktif. Waspada — pantau, belum perlu tindakan; tanpa pengalihan rute maupun penahanan armada.';
-const HITL_PENDING_COPY = 'Tercatat sebagai HITL pending — belum dikirim ke armada';
+const HITL_PENDING_COPY = 'Keputusan tercatat; belum dikirim ke armada';
 
 function isSimulatedRoute(route: RouteRecommendation): boolean {
- const combined = `${route.route_name ?? ''} ${route.description ?? ''} ${route.safety_tag ?? ''}`;
- if (/SIMULASI/i.test(combined) || /OFFLINE/i.test(combined)) return true;
- const source = (route as unknown as { source?: string }).source;
- if (source === 'offline-interpolated') return true;
+ const routeMetadata = route as unknown as { source?: string; is_simulated?: boolean; simulation_mode?: boolean };
+ const source = routeMetadata.source;
+ const combined = `${route.route_name ?? ''} ${route.description ?? ''} ${route.safety_tag ?? ''} ${source ?? ''}`;
+ if (routeMetadata.is_simulated || routeMetadata.simulation_mode || /SIMULASI|OFFLINE/i.test(combined)) return true;
  // No safety_status means the corridor was never grounded by live routing.
  if (!route.safety_status) return true;
  return false;
@@ -146,9 +154,12 @@ function RouteCard({
  isApproved,
  approvalData,
  approving,
+ decisionNotes,
  onApprove,
  selectedImpactedVehicle,
  crisisHasEvidence,
+ hasSelectedTrip,
+ crisisIsSimulated,
  isForecast = false,
 }: RouteCardProps) {
  const { role } = useAuth();
@@ -166,12 +177,12 @@ function RouteCard({
  const hasEvidence = crisisHasEvidence || hasRouteProof(route);
  // HITL gate extension: a forecast zone may never POST a reroute — the tag keeps
  // no card actions render for a forecast, even when route proof exists.
- const hitlBlocked = isSimulated || !hasEvidence || isForecast;
+ const hitlBlocked = crisisIsSimulated || isSimulated || !hasEvidence || isForecast;
  const blockedCopy = isForecast ? FORECAST_INFO_COPY : HITL_UNVERIFIED_COPY;
  const provenance = routeProvenanceLabel(route);
  // GUEST sandbox is zero-POST local preview, so its buttons stay enabled;
  // the gate only locks real ledger writes. HOLD tactics stay allowed for all roles.
- const approveLocked = (hitlBlocked && !isHoldStaging && role !== 'GUEST') || (isForecast && role !== 'GUEST');
+ const approveLocked = (hitlBlocked && !isHoldStaging && role !== 'GUEST') || (isForecast && role !== 'GUEST') || (!hasSelectedTrip && !isHoldStaging && role === 'DISPATCHER');
 
  const cardBorderColor = isCompromised
  ? 'border-red-500/50 bg-red-950/20'
@@ -492,11 +503,11 @@ function RouteCard({
  {approvalData?.tactical_action === 'HOLD' ? 'Tahan' : approvalData?.tactical_action === 'CONTINUE' ? 'Lanjut' : 'Alih'}
  </span>
  </div>
- {approvalData?.action !== 'OVERRIDE' && (
  <p className="text-xs font-mono text-slate-400 leading-relaxed">
- {HITL_PENDING_COPY}
+ {approvalData?.application_status === 'applied_to_trip'
+ ? `Keputusan diterapkan pada ledger Trip ${approvalData.travel_id}; belum dikirim ke armada.`
+ : HITL_PENDING_COPY}
  </p>
- )}
  {approvalData?.notes && (
  <div className="text-xs font-normal p-2 rounded border border-[#1c2432] bg-[#0c1017] text-slate-300 flex items-start gap-1.5 mt-1 font-mono">
  <FileText className="w-3.5 h-3.5 shrink-0 mt-0.5 text-slate-400" />
@@ -504,49 +515,9 @@ function RouteCard({
  </div>
  )}
 
- {/* WhatsApp Driver Dispatch Action (Phase 45/48 Drill 1) */}
- {(() => {
- const targetPhone = (selectedImpactedVehicle?.driver_phone || '6281234567891').replace(/^\+/, '').replace(/\s+/g, '');
- const targetTruck = selectedImpactedVehicle?.vehicle_id || 'TRK-003-BELAWAN-TEBING';
- const targetVehicleName = selectedImpactedVehicle?.vehicle_name || 'Unit Logistik';
- const targetCargo = selectedImpactedVehicle ? `${selectedImpactedVehicle.cargo_tonnage}T ${selectedImpactedVehicle.commodity_key}` : 'Cabai Merah';
- const tacticalAction = approvalData?.tactical_action || 'REROUTE';
- const actionLabel =
- tacticalAction === 'HOLD'
- ? 'Tahan Armada di Depo (HOLD)'
- : tacticalAction === 'CONTINUE'
- ? 'Lanjut Rute Asal (OVERRIDE)'
- : 'Alih Rute Alternatif (REROUTE)';
- const statusGuidance =
- tacticalAction === 'HOLD'
- ? 'Jalur utama terblokir gangguan. Tahan armada di buffer zone / depo terdekat.'
- : tacticalAction === 'CONTINUE'
- ? 'Jalur utama berstatus darurat. Lanjut rute asal atas justifikasi operator.'
- : 'Jalur utama terblokir gangguan. Ikuti koordinat alternatif mitigasi.';
-
- return (
- <a
- href={`https://wa.me/${targetPhone}?text=${encodeURIComponent(
- `PERINTAH DISPATCH RESMI - PIDI\n` +
- `Armada: ${targetTruck} (${targetVehicleName})\n` +
- `Muatan: ${targetCargo}\n` +
- `Tindakan: ${actionLabel}\n` +
- `Rute Pengalihan: ${route.route_name || route.description}\n` +
- `Status: ${statusGuidance}\n` +
- (approvalData?.notes ? `Catatan: ${approvalData.notes}\n` : '') +
- `Harap segera konfirmasi penerimaan instruksi ini.`
- )}`}
- target="_blank"
- rel="noreferrer"
- onClick={(e) => e.stopPropagation()}
- className="w-full mt-2 py-2 px-3 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-sm"
- title="Kirim instruksi pengalihan rute ke WhatsApp Pengemudi"
- >
- <MessageSquare className="w-3.5 h-3.5 shrink-0" />
- <span>Kirim Disposisi WhatsApp ke Driver ({targetTruck})</span>
- </a>
- );
- })()}
+ <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
+ Keputusan tercatat pada ledger trip. Tidak ada koneksi dispatch atau konfirmasi pengemudi.
+ </p>
  </div>
  ) : isCompromised ? (
  <div className="w-full py-2 px-3 rounded-md bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs font-mono font-semibold text-center flex items-center justify-center gap-1.5">
@@ -618,12 +589,12 @@ function RouteCard({
  onClick={(e) => {
  e.stopPropagation();
  if (isHoldStaging) {
- onApprove('ACCEPT', 'HOLD', 'Armada diinstruksikan menahan laju di depo penyangga aman.');
+ onApprove('ACCEPT', 'HOLD', decisionNotes);
  } else {
- onApprove('ACCEPT', 'REROUTE');
+ onApprove('ACCEPT', 'REROUTE', decisionNotes);
  }
  }}
- disabled={approving || isNonViable || approveLocked}
+ disabled={approving || isNonViable || approveLocked || (role === 'DISPATCHER' && !decisionNotes.trim())}
  className={`py-2 px-2.5 rounded-md text-xs font-semibold transition-colors shadow-sm flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
  isHoldStaging
  ? 'bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold'
@@ -636,7 +607,9 @@ function RouteCard({
  ? 'Koridor ini tidak viabel untuk eksekusi langsung'
  : role === 'GUEST'
  ? 'Simpan rencana rute dalam sandbox evaluasi tamu'
- : 'Setujui dan instruksikan armada'
+ : !hasSelectedTrip && !isHoldStaging
+ ? 'Pilih trip eligible terlebih dahulu'
+ : 'Catat keputusan pada trip terpilih'
  }
  >
  {isHoldStaging ? (
@@ -660,14 +633,14 @@ function RouteCard({
  type="button"
  onClick={(e) => {
  e.stopPropagation();
- onApprove('ACCEPT', 'HOLD', 'Armada diinstruksikan menahan laju di safe point terdekat.');
+ onApprove('ACCEPT', 'HOLD', decisionNotes);
  }}
- disabled={approving}
+ disabled={approving || (role === 'DISPATCHER' && !decisionNotes.trim())}
  className="py-2 px-2.5 rounded-md text-xs font-semibold bg-[#121822] hover:bg-slate-800 border border-[#1c2432] text-amber-300 transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
- title={role === 'GUEST' ? 'Simulasi tahan armada dalam sandbox' : 'Instruksikan armada parkir aman sementara waktu'}
+ title={role === 'GUEST' ? 'Pratinjau HOLD dalam sandbox' : 'Catat review HOLD; belum ada instruksi eksternal'}
  >
  <PauseCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
- <span>Tahan armada</span>
+ <span>Catat HOLD</span>
  </button>
  </div>
 
@@ -775,7 +748,7 @@ function RouteCard({
  <button
  type="button"
  onClick={handleExecuteOverride}
- disabled={approving || !overrideNotes.trim() || (hitlBlocked && overrideTactical !== 'HOLD' && role !== 'GUEST')}
+ disabled={approving || !overrideNotes.trim() || (hitlBlocked && overrideTactical !== 'HOLD' && role !== 'GUEST') || (overrideTactical !== 'HOLD' && role === 'DISPATCHER' && !hasSelectedTrip)}
  className="w-full py-2 rounded-md bg-white hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed text-[#080d14] text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition-colors shadow-sm"
  >
  <Send className="w-3.5 h-3.5 text-[#080d14]" />
@@ -799,6 +772,10 @@ export function MitigationTab({
  onCommitOperationalRoute,
  selectedImpactedVehicle,
  selectedCommodity,
+ operationalTrips = [],
+ selectedTravelId = '',
+ onSelectTravel,
+ tripsLoading = false,
 }: MitigationTabProps) {
  const { user, role } = useAuth();
  const [approvedRouteId, setApprovedRouteId] = useState<string | null>(null);
@@ -806,6 +783,7 @@ export function MitigationTab({
  const [approvingIdx, setApprovingIdx] = useState<number | null>(null);
  // Phase 77: guest/403 sandbox preview — local-only, never approved/committed.
  const [sandboxNote, setSandboxNote] = useState<string | null>(null);
+ const [routeApprovalNotes, setRouteApprovalNotes] = useState('');
  // Prakiraan Waspada Dini: advisory-only crisis: info-only, no route actions rendered.
  const isForecast = isForecastActive(crisis.forecast_tag, crisis.forecast_valid_until);
 
@@ -815,10 +793,12 @@ export function MitigationTab({
  if (!crisis.crisis_id) return;
  try {
  const res = await api.approvals.list(crisis.crisis_id);
- if (res.items && res.items.length > 0) {
- const latest = res.items[0];
- setApprovedRouteId(latest.route_id);
- setLatestApproval(latest);
+ const appliedToSelectedTrip = res.items?.find((item) =>
+ item.application_status === 'applied_to_trip' && item.travel_id === selectedTravelId
+ );
+ if (appliedToSelectedTrip) {
+ setApprovedRouteId(appliedToSelectedTrip.route_id);
+ setLatestApproval(appliedToSelectedTrip);
  } else {
  setApprovedRouteId(null);
  setLatestApproval(null);
@@ -828,7 +808,7 @@ export function MitigationTab({
  }
  }
  loadApprovals();
- }, [crisis.crisis_id]);
+ }, [crisis.crisis_id, selectedTravelId]);
 
  const handleApprove = async (
  idx: number, 
@@ -865,7 +845,7 @@ export function MitigationTab({
  // never POST an Approve/Reroute. HOLD stays allowed (safe action, ledger).
  // Sandbox 403 path below is unchanged.
  if (
- (isSimulatedRoute(route) || !(hasCrisisEvidence(crisis) || hasRouteProof(route))) &&
+ (crisis.is_simulated || isSimulatedRoute(route) || !(hasCrisisEvidence(crisis) || hasRouteProof(route))) &&
  tacticalAction !== 'HOLD'
  ) {
  if (onApproveSuccess) {
@@ -873,20 +853,26 @@ export function MitigationTab({
  }
  return;
  }
+ const changesTripRoute = action !== 'REJECT' && tacticalAction !== 'HOLD';
+ const rationale = (notes || routeApprovalNotes).trim();
+ if (action !== 'REJECT' && !rationale) {
+ if (onApproveSuccess) onApproveSuccess('Isi alasan keputusan sebelum mencatat atau menerapkan tindakan.');
+ return;
+ }
+ if (changesTripRoute && !selectedTravelId) {
+ if (onApproveSuccess) onApproveSuccess('Pilih trip/rit yang akan menerima perubahan rute.');
+ return;
+ }
  setApprovingIdx(idx);
- const opId = user?.name || user?.email || user?.id || 'OP-CHIEF-01';
+ const opId = user?.id || 'unknown-operator';
  try {
- const res = await api.approvals.create({
- incident_id: incId,
- route_id: String(idx),
- recommended_route: route,
- action,
- tactical_action: tacticalAction,
- operator_id: opId,
- approved_by: opId,
- notes,
- });
- setApprovedRouteId(String(idx));
+ if (!onCommitOperationalRoute) throw new Error('Trip-linked approval handler is unavailable.');
+ const res = await onCommitOperationalRoute(route, action, tacticalAction, rationale);
+ setApprovedRouteId(
+   res.application_status === 'applied_to_trip' && res.travel_id === selectedTravelId
+     ? String(idx)
+     : null
+ );
  setLatestApproval({
  id: res.approval_id || res.id || String(Date.now()),
  incident_id: incId,
@@ -895,20 +881,21 @@ export function MitigationTab({
  tactical_action: tacticalAction,
  recommended_route: route,
  operator_id: opId,
- notes,
+ notes: rationale || notes,
  approved_at: res.approved_at || new Date().toISOString(),
+ travel_id: res.travel_id,
+ trip_version: res.trip_version,
+ application_status: res.application_status,
  });
 
- if (onCommitOperationalRoute) {
- onCommitOperationalRoute(route, action, tacticalAction);
- }
+
 
  if (onApproveSuccess) {
- const actionLabel = action === 'OVERRIDE' 
- ? 'Override rute tersimpan' 
- : tacticalAction === 'HOLD' 
- ? 'Tercatat sebagai HITL pending (HOLD) — belum dikirim ke armada' 
- : HITL_PENDING_COPY;
+ const actionLabel = res.application_status === 'applied_to_trip'
+ ? `Keputusan diterapkan pada Trip ${res.travel_id}; belum dikirim ke armada`
+ : tacticalAction === 'HOLD'
+ ? 'Review HOLD tercatat — tidak ada trip yang diubah'
+ : 'Keputusan insiden tercatat — tidak ada trip yang diubah';
  onApproveSuccess(`${actionLabel} (#${idx + 1})!`);
  }
  } catch (err) {
@@ -967,7 +954,28 @@ export function MitigationTab({
  const inflationCommodity = crisis.inflation_forecast?.commodity;
 
  return (
- <div className="flex flex-col gap-4 text-slate-100"><style>{`@keyframes wm-route-rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}.wm-route-rise{animation:wm-route-rise .22s ease both}`}</style>
+ <div className="flex flex-col gap-4 text-slate-100"><style>{`@keyframes wm-route-rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}.wm-route-rise{animation:wm-route-rise .22s ease both`}</style>
+ {role === 'DISPATCHER' && !isForecast && (
+ <>
+ <OperationalTripSelect
+ trips={operationalTrips}
+ selectedTripId={selectedTravelId}
+ onSelect={onSelectTravel || (() => undefined)}
+ loading={tripsLoading}
+ />
+ <label className="block space-y-1.5 text-xs text-slate-300">
+ <span className="font-semibold">Alasan keputusan operator</span>
+ <textarea
+ aria-label="Alasan keputusan operator"
+ value={routeApprovalNotes}
+ onChange={(event) => setRouteApprovalNotes(event.target.value)}
+ rows={2}
+ placeholder="Catat alasan memilih tindakan ini"
+ className="w-full rounded-md border border-white/10 bg-[#0c1017] px-2.5 py-2 text-xs text-white placeholder:text-slate-500"
+ />
+ </label>
+ </>
+ )}
  {/* Phase 77: sandbox notice — local-only preview, zero server POST */}
  {sandboxNote && (
  <div className="bg-amber-950/30 border border-amber-500/40 p-3 rounded-md text-xs font-sans text-amber-200 leading-relaxed">
@@ -1348,11 +1356,14 @@ export function MitigationTab({
  key={idx}
  route={route}
  idx={idx}
+ hasSelectedTrip={operationalTrips.some((trip) => trip.id === selectedTravelId && ['planned', 'moving', 'rerouted'].includes(trip.status))}
+ crisisIsSimulated={crisis.is_simulated}
  isActive={isActive}
  onSelect={() => onSelectRoute(idx)}
  isApproved={isApproved}
  approvalData={isApproved ? latestApproval : null}
  approving={approving}
+ decisionNotes={routeApprovalNotes}
  onApprove={(action, tacticalAction, notes) => handleApprove(idx, route, action, tacticalAction, notes)}
  selectedImpactedVehicle={selectedImpactedVehicle}
  crisisHasEvidence={crisisHasEvidence}

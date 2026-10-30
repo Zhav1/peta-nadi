@@ -218,15 +218,15 @@ def test_api_roles_catalog():
     assert ROLE_GUEST in role_ids
 
 
-def test_rbac_approval_allowed_for_dispatcher():
-    """Verify that DISPATCHER can submit an approval (201 Created)."""
+def test_rbac_incident_review_allowed_for_dispatcher():
+    """A Dispatcher may review an incident without implying a trip was changed."""
     token = create_guest_token(role=ROLE_DISPATCHER, name="Dispatcher Budi")
     approval_payload = {
         "incident_id": "test-inc-42-disp",
         "route_id": "route-bypass-01",
-        "action": "ACCEPT",
+        "action": "REJECT",
         "tactical_action": "REROUTE",
-        "notes": "Disetujui oleh Dispatcher armada."
+        "notes": "Review insiden saja; tidak ada trip yang diubah."
     }
     response = client.post(
         "/api/v1/approvals",
@@ -235,7 +235,8 @@ def test_rbac_approval_allowed_for_dispatcher():
     )
     assert response.status_code in [200, 201]
     data = response.json()
-    assert data["action"] == "ACCEPT"
+    assert data["action"] == "REJECT"
+    assert data["application_status"] in {"decision_recorded", "decision_recorded_locally"}
 
 
 def test_rbac_approval_rejected_for_regulator():

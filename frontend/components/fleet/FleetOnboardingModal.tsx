@@ -40,13 +40,14 @@ import type {
  TruckAssetCreatePayload,
  TravelCreatePayload,
  TravelStatus,
+ TravelRecord,
 } from '@/lib/types';
 import { GOLONGAN_DEFAULT_KMPL } from '@/lib/types';
 
 interface FleetOnboardingModalProps {
  isOpen: boolean;
  onClose: () => void;
- onSuccess?: () => void;
+ onSuccess?: (createdTravel?: TravelRecord) => void;
  userRole?: string;
  companyId?: string;
  companyName?: string;
@@ -409,7 +410,7 @@ export function FleetOnboardingModal({
  created.baseline_cost_idr
  ).toLocaleString('id-ID')} • penghematan tercatat saat hasil aktual diisi.`,
  });
- onSuccess?.();
+ onSuccess?.(created);
  setTimeout(() => onClose(), 1600);
  } catch (err: unknown) {
  setFeedback({

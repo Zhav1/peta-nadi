@@ -81,7 +81,7 @@ import { HitlDecisionDrawer } from '@/components/dashboard/HitlDecisionDrawer';
 import { GuestEvaluationBanner } from '@/components/dashboard/GuestEvaluationBanner';
 import { NewsFilterModal } from '@/components/dashboard/NewsFilterModal';
 import { RouteDetailModal } from '@/components/sidebar/RouteDetailModal';
-import type { DisruptionImpactResponse, ImpactedVehicleAssessment } from '@/lib/types';
+import type { ApprovalResponse, DisruptionImpactResponse, ImpactedVehicleAssessment, TravelRecord } from '@/lib/types';
 
 // Dynamic import for map to avoid SSR issues
 const CrisisMap = dynamic(() => import('@/components/map/CrisisMap'), { ssr: false });
@@ -152,33 +152,6 @@ function mediumOnlyAdvisoryFeatures(features: GeoJSON.Feature[]): GeoJSON.Featur
   });
 }
 
-// Applies operational approval styling: the approved corridor takes the single
-// data accent (live/selected), its alternatives recede to a neutral steel line.
-// Shared by handleDeployUnifiedActionPlan and handleCommitOperationalRoute so both route stores stay identical.
-function styleApprovedRoutes(routes: RouteRecommendation[], approved: RouteRecommendation): RouteRecommendation[] {
-  return routes.map((r) =>
-    (r.id && r.id === approved.id) || (r.description && r.description === approved.description)
-      ? { ...r, color: '#38b8f8', is_compromised: false, safety_status: 'SAFE_DETOUR' }
-      : { ...r, color: '#334155' }
-  );
-}
-
-// Relative detour delay: approved ETA minus the fastest ETA in the same route set
-// (never the total ETA, never a hardcoded baseline).
-function resolveApprovedDelayMinutes(
-  approved: RouteRecommendation | undefined,
-  routes: RouteRecommendation[]
-): number {
-  const approvedEta = approved?.eta_minutes;
-  if (typeof approvedEta !== 'number' || !Number.isFinite(approvedEta)) return 0;
-
-  const etaMinutes = routes
-    .map((r) => r.eta_minutes)
-    .filter((eta): eta is number => typeof eta === 'number' && Number.isFinite(eta));
-  if (etaMinutes.length === 0) return 0;
-
-  return Math.max(0, approvedEta - Math.min(...etaMinutes));
-}
 
 function FloatingMapLegend({
   isOpen,
@@ -731,6 +704,11 @@ export default function DashboardClient() {
   // Phase 77: single selection entry point state — modal opens on every select.
   const [routeModalIdx, setRouteModalIdx] = useState<number | null>(null);
   const [isActing, setIsActing] = useState(false);
+  const [operationalTrips, setOperationalTrips] = useState<TravelRecord[]>([]);
+  const [selectedTravelId, setSelectedTravelId] = useState('');
+  const [tripsLoading, setTripsLoading] = useState(false);
+  const routeDecisionGuardRef = useRef(false);
+  const routeDecisionKeysRef = useRef(new Map<string, string>());
   const [selectedCommodity, setSelectedCommodity] = useState<string | null>(null);
   const selectedCommodityRef = useRef<string | null>(selectedCommodity);
   selectedCommodityRef.current = selectedCommodity;
@@ -823,9 +801,29 @@ export default function DashboardClient() {
  // Toasts render via the global Sonner <Toaster> (app/layout.tsx). setToast is a
  // thin compat alias so existing call sites keep working unchanged; null is a no-op.
  const setToast = useCallback((t: { message: string; type?: 'success' | 'error' | 'info'; duration?: number } | null) => {
- if (!t) return;
- notifyToast({ message: t.message, type: t.type, duration: t.duration });
+   if (!t) return;
+   notifyToast({ message: t.message, type: t.type, duration: t.duration });
  }, []);
+
+ const refreshOperationalTrips = useCallback(async () => {
+   setTripsLoading(true);
+   try {
+     const response = await api.fleet.listTravels({ limit: 200 });
+     setOperationalTrips(response.items ?? []);
+   } catch {
+     setOperationalTrips([]);
+   } finally {
+     setTripsLoading(false);
+   }
+ }, []);
+
+ useEffect(() => {
+   if (role === 'DISPATCHER') void refreshOperationalTrips();
+   else {
+     setOperationalTrips([]);
+     setSelectedTravelId('');
+   }
+ }, [role, user?.company_id, refreshOperationalTrips]);
   const isDemoRunningRef = useRef<boolean>(false);
 
   // Decision Support System (DSS) Impact Assessment States
@@ -976,7 +974,7 @@ export default function DashboardClient() {
   // Live Corridor Context Telemetry Hook (BMKG + TomTom + PIHPS 30s Poller)
   // Phase 163b: seeded by the bootstrap snapshot (`sections.corridor_context`),
   // so the mount no longer opens a duplicate corridor request.
-  const { corridorContext, isLoading: isCorridorLoading, applyOperationalImpact } = useCorridorContext(
+  const { corridorContext, isLoading: isCorridorLoading } = useCorridorContext(
     'sumatra_belawan_medan',
     { enabled: !bootstrap.isLoading, initialData: seededCorridor }
   );
@@ -3244,168 +3242,137 @@ export default function DashboardClient() {
   }, [updateUrlParams]);
 
   const handleCommitOperationalRoute = useCallback(
-    async (route: RouteRecommendation, action: any, tactical: any) => {
-      if (action === 'REJECT') {
-        setToast({
-          message: 'Rekomendasi rute berhasil ditolak. Armada tetap pada jalur operasional awal.',
-          type: 'info',
-        });
-        return;
-      }
-      // 1. Highlight approved route on BOTH route stores so the cyan operational corridor
-      //    reflects instantly on the map canvas (single source of truth, no state fighting)
-      setCurrentMapRoutes((prev) => styleApprovedRoutes(prev.length > 0 ? prev : [route], route));
-      setSelectedCrisis((prev) =>
-        prev
-          ? {
-            ...prev,
-            route_recommendations: styleApprovedRoutes(
-              prev.route_recommendations && prev.route_recommendations.length > 0
-                ? prev.route_recommendations
-                : [route],
-              route
-            ),
-          }
-          : prev
-      );
-      setActiveRouteIdx(0);
+    async (
+      route: RouteRecommendation,
+      action: DecisionAction,
+      tactical: TacticalManeuver,
+      notes?: string
+    ): Promise<ApprovalResponse> => {
+      if (routeDecisionGuardRef.current) throw new Error('A route decision is already being submitted.');
+      routeDecisionGuardRef.current = true;
+      try {
+        const trip = operationalTrips.find((item) => item.id === selectedTravelId);
+        const changesTripRoute = action !== 'REJECT' && tactical !== 'HOLD';
+        if (changesTripRoute && !trip) throw new Error('Pilih trip eligible sebelum menerapkan perubahan rute.');
 
-      // 2. Extract detour coordinates from waypoints
-      // Phase 77: TMS ping only on dispatcher success — guest/regulator never ping.
-      const waypoints = route.waypoints || [];
-      if (waypoints.length > 0 && role === 'DISPATCHER') {
-        const startWp = waypoints[0];
-        // 3. Trigger outbound telematics dispatch ping
-        try {
-          await api.fleet.simulatePing({
-            vehicle_id: 'TRK-003-BELAWAN-TEBING',
-            latitude: startWp.lat,
-            longitude: startWp.lon,
-            speed_kmh: 65.0,
-            heading_deg: 135.0,
-            temperature_c: 4.2,
-            ignition: true,
-          });
-        } catch (pingErr) {
-          console.debug('Fleet telematics ping note:', pingErr);
+        const routes = currentMapRoutes.length > 0 ? currentMapRoutes : (selectedCrisis?.route_recommendations ?? []);
+        const routeIndex = routes.findIndex((item) => (route.id && item.id === route.id) || item === route);
+        const incidentId = selectedCrisis?.crisis_id || route.incident_id;
+        if (!incidentId) {
+          throw new Error(changesTripRoute
+            ? 'Pilih insiden yang terverifikasi sebelum mengubah rute trip.'
+            : 'ID insiden diperlukan untuk mencatat review.');
         }
-      }
+        const evidenceRefs = [
+          ...(selectedCrisis?.verified_news_citations ?? []).map((citation) => citation.url),
+          ...(selectedCrisis?.news_attributions ?? []).map((citation) => citation.url),
+        ].filter((ref): ref is string => Boolean(ref));
+        if (selectedCrisis && (selectedCrisis.evidence?.osint_text || selectedCrisis.evidence?.osint_author || selectedCrisis.verified_news_citations?.length || selectedCrisis.news_attributions?.length)) {
+          evidenceRefs.push(`incident:${selectedCrisis.crisis_id}`);
+        }
 
-      // 4. Reactive telemetry: propagate the approved route's detour cost into the
-      //    corridor context so delays, congestion, and commodity prices update instantly.
-      applyOperationalImpact({
-        delayMinutes: resolveApprovedDelayMinutes(
+        const decisionFingerprint = JSON.stringify([
+          trip?.id ?? null,
+          trip?.route_version ?? null,
+          incidentId ?? null,
+          route.id ?? routeIndex,
+          action,
+          tactical,
+          notes?.trim() ?? '',
           route,
-          currentMapRoutes.length > 0 ? currentMapRoutes : [route]
-        ),
-        fuelIncreasePct: route.fuel_increase_pct || 0,
-      });
+        ]);
+        let idempotencyKey = routeDecisionKeysRef.current.get(decisionFingerprint);
+        if (changesTripRoute && !idempotencyKey) {
+          idempotencyKey = crypto.randomUUID();
+          routeDecisionKeysRef.current.set(decisionFingerprint, idempotencyKey);
+        }
 
-      setToast({
-        message: `Armada TRK-003 berhasil dialihkan ke koridor operasional aktif (${tactical}). Telemetri TMS terverifikasi.`,
-        type: 'success',
-      });
+        const result = await api.approvals.create({
+          incident_id: incidentId,
+          route_id: routeIndex >= 0 ? String(routeIndex) : String(route.id ?? '0'),
+          recommended_route: route,
+          action,
+          tactical_action: tactical,
+          route_name: route.route_name || route.description,
+          travel_id: changesTripRoute ? trip?.id : undefined,
+          expected_route_version: changesTripRoute ? (trip?.route_version ?? 0) : undefined,
+          idempotency_key: changesTripRoute ? idempotencyKey : undefined,
+          evidence_refs: evidenceRefs,
+          simulation_mode: Boolean(selectedCrisis?.is_simulated || corridorContext?.is_fallback),
+          decision_scope: changesTripRoute ? 'operational_route' : 'incident_review',
+          notes,
+        });
+
+        if (changesTripRoute) {
+          if (result.application_status !== 'applied_to_trip' || !result.approval_id) {
+            throw new Error('Keputusan belum terkonfirmasi diterapkan ke ledger trip.');
+          }
+          const highlight = (items: RouteRecommendation[]) => items.map((item) =>
+            (route.id && item.id === route.id) || item === route
+              ? { ...item, color: '#38b8f8' }
+              : { ...item, color: '#334155' }
+          );
+          setCurrentMapRoutes((prev) => highlight(prev.length > 0 ? prev : [route]));
+          setSelectedCrisis((prev) => prev ? {
+            ...prev,
+            route_recommendations: highlight(prev.route_recommendations ?? [route]),
+          } : prev);
+          setActiveRouteIdx(routeIndex >= 0 ? routeIndex : 0);
+          setToast({
+            message: `Keputusan rute diterapkan pada Trip ${trip?.id} (${trip?.truck_id}). Belum dikirim ke dispatch/pengemudi; belum ada outcome lapangan.`,
+            type: 'success',
+          });
+          await refreshOperationalTrips();
+        } else {
+          setToast({
+            message: action === 'REJECT' ? 'Penolakan insiden tercatat; tidak ada trip yang diubah.' : 'Review insiden tercatat; tidak ada trip yang diubah.',
+            type: 'info',
+          });
+        }
+        await refreshHitlCount();
+        return result;
+      } finally {
+        routeDecisionGuardRef.current = false;
+      }
     },
-    [applyOperationalImpact, currentMapRoutes, role]
+    [corridorContext?.is_fallback, currentMapRoutes, operationalTrips, refreshHitlCount, refreshOperationalTrips, selectedCrisis, selectedTravelId, setToast]
   );
 
-  // Phase 107: unified modal decision commit path — role-branched. Dispatcher commits + TMS ping
-  // (via handleCommitOperationalRoute); regulator HOLD-only; guest sandbox only.
   const handleModalAction = useCallback(async (
     decision: RouteDecisionType,
     tactical: TacticalManeuver,
     notes?: string
   ) => {
-    const routes =
-      currentMapRoutes.length > 0
-        ? currentMapRoutes
-        : (selectedCrisis?.route_recommendations || []);
+    const routes = currentMapRoutes.length > 0 ? currentMapRoutes : (selectedCrisis?.route_recommendations || []);
     const idx = routeModalIdx ?? activeRouteIdx ?? 0;
     const route = routes[idx];
     if (!route) return;
     if (role === 'GUEST') {
-      setToast({
-        message: 'Mode Sandbox: rencana tersimpan lokal, tidak dikirim ke armada.',
-        type: 'info',
-      });
+      setToast({ message: 'Mode Sandbox: pratinjau lokal; tidak ada perubahan trip yang dikirim.', type: 'info' });
       return;
     }
     if (role === 'REGULATOR' && decision !== 'HOLD') {
-      setToast({
-        message: 'Akses Regulator: hanya HOLD yang diizinkan. Persetujuan dispatch memerlukan peran Dispatcher.',
-        type: 'info',
-      });
+      setToast({ message: 'Regulator hanya dapat mencatat HOLD; perubahan rute memerlukan Dispatcher.', type: 'info' });
       return;
     }
-
-    const incidentId =
-      selectedCrisis?.crisis_id ||
-      route.incident_id ||
-      (activeRouteIdx != null ? `INC-CORRIDOR-${activeRouteIdx}` : 'INC-ADHOC-CORRIDOR');
-
     setIsActing(true);
     try {
-      const action: DecisionAction =
-        decision === 'REJECT' ? 'REJECT' : decision === 'OVERRIDE' ? 'OVERRIDE' : 'ACCEPT';
-      const tacticalAction: TacticalManeuver =
-        decision === 'HOLD' ? 'HOLD' : decision === 'OVERRIDE' ? 'CONTINUE' : tactical;
-
-      const originName =
-        formatNodeId(selectedOriginNode, resolveNodeInfo(selectedOriginNode)) || undefined;
-      const destName =
-        formatNodeId(selectedDestNode, resolveNodeInfo(selectedDestNode)) || undefined;
-
-      await api.approvals.create({
-        incident_id: incidentId,
-        route_id: String(idx),
-        recommended_route: route,
-        action,
-        tactical_action: tacticalAction,
-        operator_id: user?.name || user?.email || user?.id || 'OP-CHIEF-01',
-        approved_by: user?.name || user?.email || user?.id || 'OP-CHIEF-01',
-        route_name: route.route_name || route.description,
-        origin: originName,
-        destination: destName,
-        notes,
-      });
-
-      if (action === 'REJECT') {
-        setToast({
-          message: 'Rekomendasi rute berhasil ditolak. Armada tetap pada jalur operasional awal.',
-          type: 'info',
-        });
-        setRouteModalIdx(null);
-        await refreshHitlCount();
-        return;
-      }
-
-      await handleCommitOperationalRoute(route, action, tacticalAction);
-      await refreshHitlCount();
+      const action: DecisionAction = decision === 'REJECT' ? 'REJECT' : decision === 'OVERRIDE' ? 'OVERRIDE' : 'ACCEPT';
+      const tacticalAction: TacticalManeuver = decision === 'HOLD' ? 'HOLD' : decision === 'OVERRIDE' ? 'CONTINUE' : tactical;
+      await handleCommitOperationalRoute(route, action, tacticalAction, notes);
       setRouteModalIdx(null);
-
-      if (!selectedCrisis?.crisis_id) {
-        setToast({
-          message: 'Keputusan koridor berhasil dicatat (Mode Ad-Hoc / Koridor Mandiri).',
-          type: 'success',
-        });
-      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes('403') || msg.includes('Forbidden')) {
-        setToast({
-          message: 'Mode Sandbox: rencana tersimpan lokal, tidak dikirim ke armada (403 memerlukan akun Dispatcher).',
-          type: 'info',
-        });
-      } else {
-        setToast({
-          message: 'Gagal menyimpan keputusan rute. Rute belum disetujui.',
-          type: 'error',
-        });
-      }
+      setToast({
+        message: msg.includes('403') || msg.includes('Forbidden')
+          ? 'Akses ditolak: akun Dispatcher dengan izin trip diperlukan.'
+          : `Gagal mencatat keputusan; trip tidak dinyatakan berubah. ${msg}`,
+        type: 'error',
+      });
     } finally {
       setIsActing(false);
     }
-  }, [currentMapRoutes, selectedCrisis, routeModalIdx, activeRouteIdx, role, user, selectedOriginNode, selectedDestNode, resolveNodeInfo, handleCommitOperationalRoute, refreshHitlCount]);
+  }, [activeRouteIdx, currentMapRoutes, handleCommitOperationalRoute, role, routeModalIdx, selectedCrisis, setToast]);
 
   // Triggered by Game-Like Map Location Click
   const handleMapPointTargeted = useCallback((
@@ -3733,10 +3700,14 @@ export default function DashboardClient() {
           // Pick up a truck asset that was saved without completing a rit yet.
           refetchFleet();
         }}
-        onSuccess={() => {
+        onSuccess={(createdTravel) => {
           refetchFleet();
+          void refreshOperationalTrips();
+          if (createdTravel) setSelectedTravelId(createdTravel.id);
           setToast({
-            message: 'Sinkronisasi armada kustom berhasil diperbarui.',
+            message: createdTravel
+              ? `Trip ${createdTravel.id} dipilih untuk review rute berikutnya.`
+              : 'Sinkronisasi armada kustom berhasil diperbarui.',
             type: 'success',
           });
         }}
@@ -4681,6 +4652,10 @@ export default function DashboardClient() {
                 onCommitOperationalRoute={handleCommitOperationalRoute}
                 selectedImpactedVehicle={selectedImpactedVehicle}
                 selectedCommodity={selectedCommodity}
+                operationalTrips={operationalTrips}
+                selectedTravelId={selectedTravelId}
+                onSelectTravel={setSelectedTravelId}
+                tripsLoading={tripsLoading}
               />
             )}
             {/* Phase 77: Route Detail Modal — opened by every select path */}
@@ -4703,6 +4678,10 @@ export default function DashboardClient() {
                   onAction={handleModalAction}
                   isActing={isActing}
                   corridorIsFallback={!!corridorContext?.is_fallback}
+                  operationalTrips={operationalTrips}
+                  selectedTravelId={selectedTravelId}
+                  onSelectTravel={setSelectedTravelId}
+                  tripsLoading={tripsLoading}
                   onOpenEvaluation={() => {
                     setRouteModalIdx(null);
                     setActiveSection('evaluation');

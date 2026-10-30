@@ -19,9 +19,13 @@ interface CrisisSidebarProps {
  onApproveSuccess?: (msg: string) => void;
  activeTab?: Tab;
  setActiveTab?: (tab: Tab) => void;
- onCommitOperationalRoute?: (route: RouteRecommendation, action: any, tactical: any) => void;
+ onCommitOperationalRoute?: (route: RouteRecommendation, action: import('@/lib/types').DecisionAction, tactical: import('@/lib/types').TacticalManeuver, notes?: string) => Promise<import('@/lib/types').ApprovalResponse>;
  selectedImpactedVehicle?: import('@/lib/types').ImpactedVehicleAssessment | null;
  selectedCommodity?: string | null;
+ operationalTrips?: import('@/lib/types').TravelRecord[];
+ selectedTravelId?: string;
+ onSelectTravel?: (travelId: string) => void;
+ tripsLoading?: boolean;
  /** P3 zone evidence-only gate: true once a route is chosen/available. */
  hasRoute?: boolean;
 }
@@ -37,6 +41,10 @@ export function CrisisSidebar({
  setActiveTab: controlledSetActiveTab,
  selectedImpactedVehicle,
  selectedCommodity,
+ operationalTrips,
+ selectedTravelId,
+ onSelectTravel,
+ tripsLoading,
  hasRoute: hasRouteProp,
 }: CrisisSidebarProps) {
  const [internalTab, setInternalTab] = useState<Tab>('Evidence');
@@ -175,7 +183,11 @@ export function CrisisSidebar({
  onCommitOperationalRoute={onCommitOperationalRoute}
  selectedImpactedVehicle={selectedImpactedVehicle}
  selectedCommodity={selectedCommodity}
- />
+ operationalTrips={operationalTrips}
+ selectedTravelId={selectedTravelId}
+ onSelectTravel={onSelectTravel}
+ tripsLoading={tripsLoading}
+/>
  )}
  {hasRoute && effectiveTab === 'Economic' && <EconomicTab crisis={crisis} />}
  </div>
