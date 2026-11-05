@@ -505,6 +505,11 @@ export interface ApprovalPayload {
 
 export interface ApprovalResponse {
   id?: string;
+  shadow_mode?: boolean;
+  applied?: boolean;
+  recorded?: boolean;
+  persistence_status?: 'shadow_preview' | 'shadow_recorded' | string;
+  external_dispatch_disabled?: boolean;
   approval_id?: string;
   approved_at?: string;
   created_at?: string;
@@ -1524,7 +1529,7 @@ export interface WeatherPolygonMeta {
  * section can be `ok` even when the overall response is `stale` (bounded live
  * build), so render them independently.
  */
-export type DashboardSectionStatus = 'ok' | 'stale' | 'degraded' | 'timeout';
+export type DashboardSectionStatus = 'ok' | 'stale' | 'degraded' | 'timeout' | 'unknown';
 
 export interface DashboardSection<T = unknown> {
   status: DashboardSectionStatus;
@@ -1532,6 +1537,9 @@ export interface DashboardSection<T = unknown> {
   error?: string | null;
   /** True when a degraded section reused an in-process last-good value. */
   cached?: boolean;
+  observed_at?: string | null;
+  valid_until?: string | null;
+  source?: string | null;
 }
 
 export type DashboardBootstrapReason =
@@ -1594,6 +1602,11 @@ export interface DashboardBootstrapSections {
   /** World-truth weather counters snapshot (Unit D public-first first paint). */
   weather_summary?: DashboardSection<WeatherHazardSummary>;
   weather_spatial_polygons?: DashboardSection<WeatherPolygonCollection>;
+  weather_advisory_polygons?: DashboardSection<WeatherPolygonCollection>;
+  corridor_contexts?: DashboardSection<Record<string, unknown> | unknown[]>;
+  traffic_flow_segments?: DashboardSection<GeoJSON.FeatureCollection | { segments?: Array<Record<string, unknown>> }>;
+  disaster_reports?: DashboardSection<GeoJSON.FeatureCollection | { items?: Array<Record<string, unknown>>; features?: GeoJSON.Feature[] }>;
+  official_warnings?: DashboardSection<GeoJSON.FeatureCollection | { items?: Array<Record<string, unknown>>; features?: GeoJSON.Feature[] }>;
   fire_hotspots?: DashboardSection<FireHotspotResponse>;
   commodity_prices?: DashboardSection<{ items: Array<Record<string, unknown>>; total: number }>;
   commodity_spikes?: DashboardSection<{ spikes: Array<Record<string, unknown>>; total: number }>;
@@ -1612,13 +1625,17 @@ export interface DashboardBootstrapSections {
 
 export interface DashboardBootstrapResponse {
   schema_version: number;
-  /** Snapshot build time (or the live-build time when `stale` is true). */
+  snapshot_key?: string;
+  /** Snapshot build time from the owner; never replaced with a fetch timestamp. */
   computed_at: string | null;
   stale: boolean;
+  shadow_mode?: boolean;
+  source_freshness?: Record<string, unknown>;
+  coverage?: Record<string, unknown>;
   /** Present only when `stale` is true. */
   reason?: DashboardBootstrapReason | null;
-  role: UserRole | string;
-  company_id: string | null;
-  modality: 'truck' | 'vessel' | 'air';
+  role?: UserRole | string | null;
+  company_id?: string | null;
+  modality?: 'truck' | 'vessel' | 'air' | string | null;
   sections: DashboardBootstrapSections;
 }

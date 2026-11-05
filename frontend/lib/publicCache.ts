@@ -15,6 +15,7 @@
 
 export const PUBLIC_NEWS_CACHE_KEY = 'prehub.news.v2';
 export const PUBLIC_WEATHER_CACHE_KEY = 'prehub.weather.v2';
+export const PUBLIC_DASHBOARD_CACHE_KEY = 'prehub.dashboard.public.v1';
 export const PUBLIC_CACHE_TTL_MS = 2 * 60 * 60 * 1000;
 const PUBLIC_CACHE_VERSION = 2;
 

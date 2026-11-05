@@ -651,6 +651,9 @@ export function RouteDetailModal({
               </p>
             ) : (
               <>
+            <div role="note" className="rounded-[10px] border border-amber-500/30 bg-amber-950/20 p-2.5 text-xs leading-relaxed text-amber-200">
+              Mode pilot shadow: keputusan adalah pratinjau riset saja — tidak tersimpan sebagai approval, tidak mengubah trip, dan tidak mengirim dispatch. Hasil server menentukan status akhirnya.
+            </div>
             <div className="space-y-1.5 pt-1">
               {CHECKLIST_ITEMS.map((item) => {
                 const isChecked = !!checked[item.id] || (item.id === 'notes' && notes.trim().length > 0);
@@ -733,7 +736,7 @@ export function RouteDetailModal({
                     }
                     className="cursor-pointer py-2.5 px-3 rounded-[10px] bg-white hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed text-[#080d14] text-xs font-sans font-bold flex items-center justify-center gap-1.5 transition-all "
                   >
-                    <span>Setujui Pengalihan</span>
+                    <span>Pratinjau Pengalihan</span>
                   </button>
                   <button
                     type="button"
@@ -749,7 +752,7 @@ export function RouteDetailModal({
                     }
                     className="cursor-pointer py-2.5 px-3 rounded-[10px] bg-amber-600/90 hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-sans font-semibold flex items-center justify-center gap-1.5 transition-all "
                   >
-                    <span>Catat HOLD</span>
+                    <span>Pratinjau HOLD</span>
                   </button>
                   <button
                     type="button"
@@ -769,7 +772,7 @@ export function RouteDetailModal({
                     }
                     className="cursor-pointer py-2.5 px-3 rounded-[10px] bg-[#121822] hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 border border-white/10 text-xs font-sans font-medium flex items-center justify-center gap-1.5 transition-all"
                   >
-                    <span>Lanjut Jalur Asal</span>
+                    <span>Pratinjau Jalur Asal</span>
                   </button>
                 </div>
                 <button

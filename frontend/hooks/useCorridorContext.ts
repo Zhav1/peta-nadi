@@ -7,53 +7,6 @@ import { useAuth } from '@/lib/authContext';
 import { SingleFlightRequest } from '@/lib/dashboardMemoryCache';
 import { isDocumentVisible, subscribeVisibility } from '@/lib/visibility';
 
-const DEFAULT_FALLBACK_CORRIDOR: CorridorContext = {
-  corridor_id: 'sumatra_belawan_medan',
-  corridor_name: 'Koridor Arteri Utama Belawan–Medan–Tebing Tinggi',
-  timestamp: new Date().toISOString(),
-  is_fallback: true,
-  fallback_reasons: [
-    'corridor context API unreachable; seeded Belawan–Medan fallback telemetry in use'
-  ],
-  weather: {
-    status: 'MODERATE_RAIN',
-    rainfall_mm: 68.5,
-    visibility: '7 km',
-    alert_summary: 'Peringatan Dini BMKG: Hujan Lebat Disertai Angin Kencang di Sektor Belawan-Medan',
-    code: 60,
-    location: 'Medan-Belawan'
-  },
-  traffic: {
-    congestion_level_pct: 74.2,
-    delay_minutes: 35,
-    active_incidents: 2,
-    flow_speed_kmh: 22.5,
-    status: 'HEAVY_CONGESTION',
-    checkpoints: [
-      { name: 'Belawan Toll Gate', speed: 18.0, congestion_pct: 82.0, status: 'critical' },
-      { name: 'Tanjung Mulia Interchange', speed: 25.0, congestion_pct: 65.0, status: 'medium' },
-      { name: 'Binjai Km 18', speed: 45.0, congestion_pct: 30.0, status: 'low' }
-    ]
-  },
-  commodity_prices: {
-    chili_price: 48500,
-    rice_price: 14200,
-    cooking_oil_price: 18500,
-    price_anomaly_detected: true,
-    inflation_trend_pct: 12.8,
-    commodities: [
-      { name: 'Cabai Merah', price_idr: 48500, deviation_pct: 18.2, status: 'spike' },
-      { name: 'Beras Medium', price_idr: 14200, deviation_pct: 4.5, status: 'normal' },
-      { name: 'Minyak Goreng', price_idr: 18500, deviation_pct: 6.8, status: 'elevated' }
-    ]
-  },
-  data_integrity: {
-    bmkg_status: 'ONLINE',
-    tomtom_status: 'ONLINE',
-    pihps_status: 'ONLINE',
-    consensus_confidence: 0.92
-  }
-};
 
 export interface OperationalImpact {
   delayMinutes: number;
@@ -69,6 +22,8 @@ export interface UseCorridorContextOptions {
   initialData?: CorridorContext | null;
   /** False while the bootstrap snapshot is still loading (M8 phase 163b). */
   enabled?: boolean;
+  /** Seed only from the shared public snapshot; no provider/backend polling. */
+  snapshotOnly?: boolean;
 }
 
 function isAbortError(err: unknown): boolean {
@@ -110,7 +65,6 @@ function applyImpactToContext(base: CorridorContext, impact: OperationalImpact):
 
   return {
     ...base,
-    timestamp: new Date().toISOString(),
     traffic: {
       ...base.traffic,
       congestion_level_pct: round1(congestionPct),
@@ -154,13 +108,12 @@ export function useCorridorContext(
   const { user, role } = useAuth();
   const identityKey = JSON.stringify([user?.id ?? 'guest', role, user?.company_id ?? null]);
   const enabled = options?.enabled ?? true;
+  const snapshotOnly = options?.snapshotOnly ?? false;
   const seed = options?.initialData ?? null;
   const hasSeed = seed !== null;
 
-  const [corridorContext, setCorridorContext] = useState<CorridorContext | null>(
-    seed ?? DEFAULT_FALLBACK_CORRIDOR
-  );
-  const [isLoading, setIsLoading] = useState<boolean>(!hasSeed);
+  const [corridorContext, setCorridorContext] = useState<CorridorContext | null>(seed);
+  const [isLoading, setIsLoading] = useState<boolean>(!hasSeed && enabled && !snapshotOnly);
   const [error, setError] = useState<string | null>(null);
   const activeImpactRef = useRef<OperationalImpact | null>(null);
   const requestGateRef = useRef(new SingleFlightRequest());
@@ -190,8 +143,7 @@ export function useCorridorContext(
       if (isAbortError(err) || controller.signal.aborted || identityKeyRef.current !== requestIdentity) return;
       const msg = err instanceof Error ? err.message : 'Failed to fetch corridor telemetry';
       setError(msg);
-      // If we don't have context yet, initialize with default fallback so UI doesn't break
-      setCorridorContext((prev) => prev || DEFAULT_FALLBACK_CORRIDOR);
+      // Keep last-known-good context; an unavailable source remains unknown.
     } finally {
       requestGateRef.current.finish(controller);
       if (!controller.signal.aborted && identityKeyRef.current === requestIdentity) setIsLoading(false);
@@ -201,12 +153,18 @@ export function useCorridorContext(
   // Seed arriving after mount: never overwrite live telemetry or an applied
   // operational impact with an older snapshot row.
   useEffect(() => {
-    if (!seed || identityKeyRef.current !== identityKey) return;
-    if (fetchedRef.current || activeImpactRef.current) return;
+    if (identityKeyRef.current !== identityKey) return;
+    if (snapshotOnly) {
+      setCorridorContext(seed ? { ...seed, is_fallback: seed.is_fallback === true } : null);
+      setError(null);
+      setIsLoading(false);
+      return;
+    }
+    if (!seed || fetchedRef.current || activeImpactRef.current) return;
     setCorridorContext({ ...seed, is_fallback: seed.is_fallback === true });
     setError(null);
     setIsLoading(false);
-  }, [seed, identityKey]);
+  }, [seed, identityKey, snapshotOnly]);
 
   // Persist the latest approved-detour impact so the 30s poll can re-base on
   // fresh backend telemetry and reapply the impact instead of losing it.
@@ -216,7 +174,7 @@ export function useCorridorContext(
   }, []);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || snapshotOnly) return;
     const requestGate = requestGateRef.current;
     const shouldRefreshSeed = wasDisabledRef.current;
     wasDisabledRef.current = false;

@@ -67,6 +67,7 @@ import { api } from '@/lib/api';
 import { toLonLatRing } from '@/lib/polygonGeom';
 import { regionSlugFromLatLon } from '@/lib/region';
 import { dedupeRoutesByGeometry } from '@/lib/routeProvenance';
+import { buildHazardEvidenceContext, publicSectionFeatureCollection } from '@/lib/publicSnapshot';
 import type { CrisisState, WsEvent, CrisisType, Severity, RouteRecommendation, DisasterZone, HazardImpactProfile, ZoneTier, FleetVehicle, TacticalManeuver, FireHotspot, FireHotspotResponse, RouteDecisionType, DecisionAction, WeatherHazardSummary, HazardCounterStatus, FireHotspotSource, WeatherPolygonMeta } from '@/lib/types';
 import { useAuth } from '@/lib/authContext';
 import { AuthModal } from '@/components/auth/AuthModal';
@@ -624,35 +625,48 @@ export default function DashboardClient() {
   // Tenant fleet/ERP and role-gated controls stay auth-driven below.
   const bootstrap = useDashboardBootstrap({ modality: 'truck', enabled: true, sections: 'public' });
   const bootstrapSections = bootstrap.data?.sections;
+  const seededIncidentsSection = bootstrapSections?.incidents;
   const seededIncidents =
-    bootstrapSections?.incidents?.status === 'ok' ? bootstrapSections.incidents.data?.items : undefined;
-  const seededNews = bootstrapSections?.news?.status === 'ok' ? bootstrapSections.news.data : undefined;
-  const seededMarketRegime =
-    bootstrapSections?.news_market_regime?.status === 'ok'
-      ? (bootstrapSections.news_market_regime.data as unknown as MarketRegimeData | null) ?? undefined
+    ['ok', 'stale'].includes(seededIncidentsSection?.status ?? '')
+      ? seededIncidentsSection?.data?.items
       : undefined;
-  const seededCorridor =
-    bootstrapSections?.corridor_context?.status === 'ok' ? bootstrapSections.corridor_context.data : undefined;
+  const seededNewsSection = bootstrapSections?.news;
+  const seededNews = ['ok', 'stale'].includes(seededNewsSection?.status ?? '')
+    ? seededNewsSection?.data
+    : undefined;
+  const seededMarketSection = bootstrapSections?.news_market_regime;
+  const seededMarketRegime = ['ok', 'stale'].includes(seededMarketSection?.status ?? '')
+    ? (seededMarketSection?.data as unknown as MarketRegimeData | null) ?? undefined
+    : undefined;
+  const seededCorridorSection = bootstrapSections?.corridor_context;
+  const seededCorridor = ['ok', 'stale'].includes(seededCorridorSection?.status ?? '')
+    ? seededCorridorSection?.data
+    : undefined;
+  const seededCorridorContexts = bootstrapSections?.corridor_contexts;
+  const seededTrafficSection = bootstrapSections?.traffic_flow_segments;
+  const trafficFlowFeatureCollection = publicSectionFeatureCollection(seededTrafficSection, 'traffic_flow_segments');
+  const disasterReportsFeatureCollection = publicSectionFeatureCollection(bootstrapSections?.disaster_reports, 'disaster_reports');
+  const officialWarningsFeatureCollection = publicSectionFeatureCollection(bootstrapSections?.official_warnings, 'official_warnings');
   // A degraded snapshot section (inner status degraded/timeout or null count)
   // must not seed the layer: it would blank Titik Panas and block the live read
   // for the whole poll interval. `empty` with count 0 is healthy and may seed.
   const fireSection = bootstrapSections?.fire_hotspots;
   const seededFireHotspots =
-    fireSection?.status === 'ok' &&
-    fireSection.data != null &&
-    !['degraded', 'timeout'].includes(fireSection.data.status as string) &&
-    fireSection.data.count != null
+    ['ok', 'stale'].includes(fireSection?.status ?? '') && fireSection?.data != null
       ? fireSection.data
       : undefined;
-  const seededWeatherPolygons =
-    bootstrapSections?.weather_spatial_polygons?.status === 'ok'
-      ? bootstrapSections.weather_spatial_polygons.data
-      : undefined;
+  const seededWeatherSection = bootstrapSections?.weather_spatial_polygons;
+  const seededWeatherPolygons = ['ok', 'stale'].includes(seededWeatherSection?.status ?? '')
+    ? seededWeatherSection?.data
+    : undefined;
+  const seededAdvisorySection = bootstrapSections?.weather_advisory_polygons;
+  const seededWeatherAdvisory = ['ok', 'stale'].includes(seededAdvisorySection?.status ?? '')
+    ? seededAdvisorySection?.data
+    : undefined;
   // Unit D: snapshot seed for the world-truth counters (`ok` or `stale`).
   const seededWeatherSummary =
-    bootstrapSections?.weather_summary?.status === 'ok' ||
-    bootstrapSections?.weather_summary?.status === 'stale'
-      ? bootstrapSections.weather_summary.data
+    ['ok', 'stale'].includes(bootstrapSections?.weather_summary?.status ?? '')
+      ? bootstrapSections?.weather_summary?.data
       : undefined;
   // `fleet` is deliberately NOT seeded: the snapshot's fleet section is built for
   // one modality (default `truck`) while this view draws the multimodal macro
@@ -660,8 +674,10 @@ export default function DashboardClient() {
   // Kapal/Udara pills until the next 10 s sync, so the hook keeps its own read.
 
   const { incidents, refetch } = useIncidents({
-    enabled: !bootstrap.isLoading && activeSection === 'map',
+    enabled: false,
+    snapshotOnly: true,
     initialData: seededIncidents,
+    observedAt: seededIncidentsSection?.observed_at,
   });
   const {
     vehicles: activeFleetVehicles,
@@ -678,7 +694,7 @@ export default function DashboardClient() {
     tenantVehicles: tenantFleetVehicles,
     tenantAssetCount: tenantFleetAssetCount,
     canToggleSimulation: canToggleFleetSimulation,
-  } = useFleetVehicles(undefined, { enabled: !isAuthLoading && activeSection === 'map' });
+  } = useFleetVehicles(undefined, { enabled: !isAuthLoading && activeSection === 'map', enableSimulationFallback: false });
 
   // Next.js App Router query parameters for session-local routing deep-linking
   const searchParams = useSearchParams();
@@ -982,7 +998,7 @@ export default function DashboardClient() {
   // so the mount no longer opens a duplicate corridor request.
   const { corridorContext, isLoading: isCorridorLoading } = useCorridorContext(
     'sumatra_belawan_medan',
-    { enabled: !bootstrap.isLoading && (activeSection === 'map' || activeSection === 'reports'), initialData: seededCorridor }
+    { enabled: false, snapshotOnly: true, initialData: seededCorridor }
   );
 
   // Live OSINT News & Intelligence Hook (Google News RSS & Verified Sinyal Lapangan)
@@ -990,6 +1006,7 @@ export default function DashboardClient() {
   // seed still passes through the same permalink/freshness/discourse gates.
   const { newsFeed, status: newsStatus, lastUpdated: newsLastUpdated, meta: newsBreadthMeta } = useNewsVerification({
     enabled: !bootstrap.isLoading && activeSection === 'map',
+    snapshotOnly: true,
     initialNews: seededNews,
     initialMarketRegime: seededMarketRegime,
   });
@@ -1528,95 +1545,29 @@ export default function DashboardClient() {
   const weatherPolygonMetaRef = useRef<WeatherPolygonMeta | null>(null);
 
   useEffect(() => {
-    // Spatial layers are map-only; stop polling while another section is active.
     if (bootstrap.isLoading || activeSection !== 'map') return;
-    let isMounted = true;
-    let inFlight: AbortController | null = null;
-    const readMeta = (
-      geojson: GeoJSON.FeatureCollection & { metadata?: WeatherPolygonMeta; meta?: WeatherPolygonMeta },
-    ): WeatherPolygonMeta | null => geojson?.meta ?? geojson?.metadata ?? null;
-
-    async function loadSpatialWeather() {
-      if (!isDocumentVisible() || (inFlight && !inFlight.signal.aborted)) return;
-      const controller = new AbortController();
-      inFlight = controller;
-      try {
-        // Disruption-only default: heavy rain that can cause disruptions (high/critical).
-        const geojson = await api.weather.spatialPolygons(
-          { min_severity: 'high', min_precip: 50, min_flood: 80 },
-          controller.signal
-        );
-        if (!isMounted || controller.signal.aborted) return;
-        const meta = readMeta(geojson);
-        const previous = spatialWeatherRef.current;
-        // Phase 169: a failed refresh never clears the layer. When the backend
-        // has no cache (degraded) we keep the polygons we already drew and mark
-        // them stale instead of blanking the map.
-        if (meta?.status === 'degraded' && (previous?.features?.length ?? 0) > 0) {
-          const kept: WeatherPolygonMeta = {
-            ...(weatherPolygonMetaRef.current ?? meta),
-            status: 'stale',
-            reason: meta.reason ?? 'Gagal memperbarui; menampilkan poligon terakhir.',
-          };
-          weatherPolygonMetaRef.current = kept;
-          setWeatherPolygonMeta(kept);
-          return;
-        }
-        spatialWeatherRef.current = geojson;
-        weatherPolygonMetaRef.current = meta;
-        setSpatialWeatherPolygons(geojson);
-        setWeatherPolygonMeta(meta);
-      } catch (e) {
-        // Transient failure: keep the last-good polygons/counters (never blank).
-        if (!isMounted || controller.signal.aborted) return;
-        console.warn('Backend spatial weather polygons fallback:', e);
-        const previousMeta = weatherPolygonMetaRef.current;
-        if (previousMeta) {
-          const kept: WeatherPolygonMeta = {
-            ...previousMeta,
-            status: 'stale',
-            reason: 'Gagal memperbarui; menampilkan poligon terakhir yang tersimpan.',
-          };
-          weatherPolygonMetaRef.current = kept;
-          setWeatherPolygonMeta(kept);
-        } else {
-          const unknown: WeatherPolygonMeta = {
-            status: 'degraded',
-            reason: 'Sumber cuaca tidak tersedia.',
-            total: null,
-            count: null,
-            capped: false,
-            updated_at: null,
-          };
-          weatherPolygonMetaRef.current = unknown;
-          setWeatherPolygonMeta(unknown);
-        }
-      } finally {
-        if (inFlight === controller) inFlight = null;
-      }
-    }
-
+    const section = seededWeatherSection;
     if (seededWeatherPolygons) {
-      // Snapshot seed: instant paint for the first frame.
-      const seededMeta = readMeta(seededWeatherPolygons);
+      const seededMeta = seededWeatherPolygons.meta ?? seededWeatherPolygons.metadata ?? null;
       spatialWeatherRef.current = seededWeatherPolygons;
       weatherPolygonMetaRef.current = seededMeta;
       setSpatialWeatherPolygons(seededWeatherPolygons);
       setWeatherPolygonMeta(seededMeta);
+      return;
     }
-    // Always read live on mount — a degraded/empty snapshot seed must never
-    // suppress the live read until the next 120 s tick. The live envelope
-    // overwrites the painted seed.
-    void loadSpatialWeather();
-
-    const interval = setInterval(loadSpatialWeather, 120000);
-    return () => {
-      isMounted = false;
-      clearInterval(interval);
-      inFlight?.abort();
+    spatialWeatherRef.current = null;
+    const unknown: WeatherPolygonMeta = {
+      status: section?.status === 'stale' ? 'stale' : 'degraded',
+      reason: section?.error ?? 'Cakupan poligon cuaca tidak tersedia pada snapshot.',
+      total: null,
+      count: null,
+      capped: false,
+      updated_at: section?.observed_at ?? null,
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bootstrap.isLoading, activeSection]);
+    weatherPolygonMetaRef.current = unknown;
+    setSpatialWeatherPolygons(null);
+    setWeatherPolygonMeta(unknown);
+  }, [bootstrap.isLoading, activeSection, seededWeatherPolygons, seededWeatherSection]);
 
   // Waspada advisory (purple, default OFF): never rendered unless toggled ON
   // (`advisoryFeatures` gates it). Unit D: prefetch the medium polygons on idle
@@ -1627,85 +1578,21 @@ export default function DashboardClient() {
   const [weatherSummary, setWeatherSummary] = useState<WeatherHazardSummary | null>(null);
   const weatherSummaryRef = useRef<WeatherHazardSummary | null>(null);
 
-  // Prefetch (OFF path): fills the cache without ever lighting the loading
-  // state and without blocking first paint (idle or ~1.5 s, aborted on unmount).
+  // The advisory toggle is seeded with its own forecast/risk section. It never
+  // starts an independent weather-provider request when the section is unknown.
   useEffect(() => {
-    if (activeSection !== 'map' || !weatherSummary || showWeatherAdvisory || advisoryWeatherPolygons) return;
-    let cancelled = false;
-    const controller = new AbortController();
-    const run = async () => {
-      try {
-        const geojson = await api.weather.spatialPolygons(
-          { min_severity: 'medium', min_precip: 0, min_flood: 0 },
-          controller.signal
-        );
-        if (cancelled || controller.signal.aborted) return;
-        setAdvisoryWeatherPolygons({
-          type: 'FeatureCollection',
-          features: mediumOnlyAdvisoryFeatures(geojson.features ?? []),
-        });
-      } catch {
-        // Quiet: the ON-toggle path retries immediately.
-      }
-    };
-    const idleOwner = window as unknown as {
-      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
-      cancelIdleCallback?: (id: number) => void;
-    };
-    if (typeof idleOwner.requestIdleCallback === 'function') {
-      const idleId = idleOwner.requestIdleCallback(() => { void run(); }, { timeout: 2000 });
-      return () => {
-        cancelled = true;
-        controller.abort();
-        idleOwner.cancelIdleCallback?.(idleId);
-      };
-    }
-    const timer = setTimeout(() => { void run(); }, 1500);
-    return () => {
-      cancelled = true;
-      controller.abort();
-      clearTimeout(timer);
-    };
-  }, [activeSection, weatherSummary, showWeatherAdvisory, advisoryWeatherPolygons]);
-
-  // Toggle (ON path): fetches immediately when the prefetch missed, with a
-  // "Memuat..." loading state until it settles.
-  useEffect(() => {
-    if (activeSection !== 'map') {
-      setWeatherAdvisoryLoading(false);
+    setWeatherAdvisoryLoading(false);
+    if (!seededWeatherAdvisory) {
+      setAdvisoryWeatherPolygons(null);
       return;
     }
-    if (!showWeatherAdvisory) {
-      setWeatherAdvisoryLoading(false);
-      return;
-    }
-    if (advisoryWeatherPolygons) return;
-    let isMounted = true;
-    const controller = new AbortController();
-    setWeatherAdvisoryLoading(true);
-    (async () => {
-      try {
-        const geojson = await api.weather.spatialPolygons(
-          { min_severity: 'medium', min_precip: 0, min_flood: 0 },
-          controller.signal
-        );
-        if (!isMounted || controller.signal.aborted) return;
-        setAdvisoryWeatherPolygons({
-          type: 'FeatureCollection',
-          features: mediumOnlyAdvisoryFeatures(geojson.features ?? []),
-        });
-      } catch (e) {
-        if (!isMounted || controller.signal.aborted) return;
-        console.warn('Backend advisory weather polygons fallback:', e);
-      } finally {
-        if (isMounted && !controller.signal.aborted) setWeatherAdvisoryLoading(false);
-      }
-    })();
-    return () => {
-      isMounted = false;
-      controller.abort();
-    };
-  }, [activeSection, showWeatherAdvisory, advisoryWeatherPolygons]);
+    setAdvisoryWeatherPolygons({
+      type: 'FeatureCollection',
+      features: mediumOnlyAdvisoryFeatures(seededWeatherAdvisory.features ?? []),
+      ...(seededWeatherAdvisory.meta ? { meta: seededWeatherAdvisory.meta } : {}),
+      ...(seededWeatherAdvisory.metadata ? { metadata: seededWeatherAdvisory.metadata } : {}),
+    });
+  }, [seededWeatherAdvisory]);
 
   // Phase 160: world-truth counters. Fetched on mount + on the weather interval
   // regardless of layer toggles; the last good summary is kept in a ref so a

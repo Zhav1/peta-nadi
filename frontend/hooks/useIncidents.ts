@@ -15,8 +15,11 @@ export interface UseIncidentsOptions {
    * 15 s poll runs. An empty array is a real seed (verified empty), not "no seed".
    */
   initialData?: IncidentSummary[] | null;
+  observedAt?: string | null;
   /** False while the bootstrap snapshot is still loading (M8 phase 163b). */
   enabled?: boolean;
+  /** Consume only the shared public snapshot; never poll a per-section endpoint. */
+  snapshotOnly?: boolean;
 }
 
 function isAbortError(err: unknown): boolean {
@@ -27,13 +30,16 @@ export function useIncidents(options?: UseIncidentsOptions) {
   const { user, role } = useAuth();
   const identityKey = JSON.stringify([user?.id ?? 'guest', role, user?.company_id ?? null]);
   const enabled = options?.enabled ?? true;
+  const snapshotOnly = options?.snapshotOnly ?? false;
   const seeded = Array.isArray(options?.initialData) ? options.initialData : null;
   const hasSeed = seeded !== null;
+  const observedAt = options?.observedAt ?? null;
+  const seededDate = observedAt && Number.isFinite(Date.parse(observedAt)) ? new Date(observedAt) : null;
 
   const [incidents, setIncidents] = useState<IncidentSummary[]>(seeded ?? []);
-  const [loading, setLoading] = useState(!hasSeed);
+  const [loading, setLoading] = useState(!hasSeed && enabled && !snapshotOnly);
   const [error, setError] = useState<string | null>(null);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(seededDate);
 
   const requestGateRef = useRef(new SingleFlightRequest());
   const identityKeyRef = useRef(identityKey);
@@ -47,12 +53,13 @@ export function useIncidents(options?: UseIncidentsOptions) {
     if (previousIdentityKeyRef.current === identityKey) return;
     previousIdentityKeyRef.current = identityKey;
     setIncidents(seeded ?? []);
-    setLoading(!hasSeed);
+    setLoading(!hasSeed && enabled && !snapshotOnly);
     setError(null);
-    setLastUpdated(null);
-  }, [identityKey, seeded, hasSeed]);
+    setLastUpdated(seededDate);
+  }, [identityKey, seeded, hasSeed, observedAt, enabled, snapshotOnly]);
 
   const fetchIncidents = useCallback(async () => {
+    if (snapshotOnly) return;
     const requestIdentity = identityKey;
     const controller = requestGateRef.current.begin();
     if (!controller) return;
@@ -69,19 +76,27 @@ export function useIncidents(options?: UseIncidentsOptions) {
       requestGateRef.current.finish(controller);
       if (!controller.signal.aborted && identityKeyRef.current === requestIdentity) setLoading(false);
     }
-  }, [identityKey]);
+  }, [identityKey, snapshotOnly]);
 
-  // A seed can arrive after mount (bootstrap resolves a few hundred ms later).
-  // Apply it once, and only when we still have nothing of our own.
+  // The shared snapshot owns public freshness. Empty data is still an answer;
+  // timestamps are copied only from the source envelope, never from fetch time.
   useEffect(() => {
-    if (!seeded || identityKeyRef.current !== identityKey) return;
+    if (identityKeyRef.current !== identityKey) return;
+    if (snapshotOnly) {
+      setIncidents(seeded ?? []);
+      setLastUpdated(seededDate);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+    if (!seeded) return;
     setIncidents((prev) => (prev.length > 0 ? prev : seeded));
-    setLastUpdated((prev) => prev ?? new Date());
+    setLastUpdated((prev) => prev ?? seededDate);
     setLoading(false);
-  }, [seeded, identityKey]);
+  }, [seeded, observedAt, identityKey, snapshotOnly]);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || snapshotOnly) return;
     const requestGate = requestGateRef.current;
     const shouldRefreshSeed = wasDisabledRef.current;
     wasDisabledRef.current = false;

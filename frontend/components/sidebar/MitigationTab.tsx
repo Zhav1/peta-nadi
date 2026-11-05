@@ -609,7 +609,7 @@ function RouteCard({
  ? 'Simpan rencana rute dalam sandbox evaluasi tamu'
  : !hasSelectedTrip && !isHoldStaging
  ? 'Pilih trip eligible terlebih dahulu'
- : 'Catat keputusan pada trip terpilih'
+ : 'Kirim permintaan pratinjau; tidak mengonfirmasi perubahan trip'
  }
  >
  {isHoldStaging ? (
@@ -624,7 +624,7 @@ function RouteCard({
  ? 'Tahan'
  : isNonViable
  ? 'TIDAK VIABEL'
- : 'SETUJUI RUTE'}
+ : 'PRATINJAU RUTE'}
  </span>
  </button>
 
@@ -637,10 +637,10 @@ function RouteCard({
  }}
  disabled={approving || (role === 'DISPATCHER' && !decisionNotes.trim())}
  className="py-2 px-2.5 rounded-md text-xs font-semibold bg-[#121822] hover:bg-slate-800 border border-[#1c2432] text-amber-300 transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
- title={role === 'GUEST' ? 'Pratinjau HOLD dalam sandbox' : 'Catat review HOLD; belum ada instruksi eksternal'}
+ title={role === 'GUEST' ? 'Pratinjau HOLD dalam sandbox' : 'Pratinjau HOLD; tidak disimpan dan belum ada instruksi eksternal'}
  >
  <PauseCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
- <span>Catat HOLD</span>
+ <span>Pratinjau HOLD</span>
  </button>
  </div>
 
@@ -780,6 +780,7 @@ export function MitigationTab({
  const { user, role } = useAuth();
  const [approvedRouteId, setApprovedRouteId] = useState<string | null>(null);
  const [latestApproval, setLatestApproval] = useState<ApprovalItem | null>(null);
+ const [shadowPreviewNote, setShadowPreviewNote] = useState<string | null>(null);
  const [approvingIdx, setApprovingIdx] = useState<number | null>(null);
  // Phase 77: guest/403 sandbox preview — local-only, never approved/committed.
  const [sandboxNote, setSandboxNote] = useState<string | null>(null);
@@ -864,10 +865,24 @@ export function MitigationTab({
  return;
  }
  setApprovingIdx(idx);
+ setShadowPreviewNote(null);
  const opId = user?.id || 'unknown-operator';
  try {
  if (!onCommitOperationalRoute) throw new Error('Trip-linked approval handler is unavailable.');
  const res = await onCommitOperationalRoute(route, action, tacticalAction, rationale);
+ const previewResult = res as typeof res & {
+   shadow_mode?: boolean;
+   applied?: boolean;
+   recorded?: boolean;
+   persistence_status?: string;
+ };
+ if (previewResult.shadow_mode && previewResult.applied === false) {
+   setApprovedRouteId(null);
+   setLatestApproval(null);
+   setShadowPreviewNote('Pratinjau riset tercatat hanya pada respons ini; tidak disimpan, tidak mengubah trip/rute, dan tidak dikirim ke armada.');
+   onApproveSuccess?.('Pratinjau shadow — tidak diterapkan, tidak disimpan, dan tidak ada dispatch.');
+   return;
+ }
  setApprovedRouteId(
    res.application_status === 'applied_to_trip' && res.travel_id === selectedTravelId
      ? String(idx)
@@ -904,7 +919,12 @@ export function MitigationTab({
  // network failures also leave the card unapproved with an honest toast.
  const msg = err instanceof Error ? err.message : String(err);
  console.error('Failed to approve route:', err);
- if (msg.includes('403') || msg.includes('Forbidden')) {
+ if (msg.includes('Keputusan belum terkonfirmasi diterapkan')) {
+   setApprovedRouteId(null);
+   setLatestApproval(null);
+   setShadowPreviewNote('Server tidak mengonfirmasi penerapan. Permintaan ditampilkan sebagai pratinjau saja: tidak disimpan, tidak mengubah trip/rute, dan tidak dikirim ke armada.');
+   onApproveSuccess?.('Pratinjau server — penerapan dan dispatch tidak dikonfirmasi.');
+ } else if (msg.includes('403') || msg.includes('Forbidden')) {
  setSandboxNote(
  `Mode Sandbox: rencana rute #${idx + 1} tersimpan lokal, tidak dikirim ke armada (403 memerlukan akun Dispatcher).`
  );
@@ -1344,6 +1364,11 @@ export function MitigationTab({
  <span className="text-xs font-mono text-slate-400 font-semibold">
  Rekomendasi jalur
  </span>
+ {shadowPreviewNote && (
+ <div role="status" className="rounded-md border border-amber-500/30 bg-amber-950/20 p-3 text-xs leading-relaxed text-amber-200">
+ {shadowPreviewNote}
+ </div>
+ )}
 
  {crisis.route_recommendations && crisis.route_recommendations.length > 0 ? (
  crisis.route_recommendations.map((route, idx) => {

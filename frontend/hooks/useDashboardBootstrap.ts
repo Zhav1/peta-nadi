@@ -2,23 +2,27 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
-import { useAuth } from '@/lib/authContext';
 import { SingleFlightRequest } from '@/lib/dashboardMemoryCache';
 import { isDocumentVisible, subscribeVisibility } from '@/lib/visibility';
+import { PUBLIC_DASHBOARD_CACHE_KEY, readPublicCache, writePublicCache } from '@/lib/publicCache';
+import {
+  isUsefulPublicSnapshot,
+  markPublicSnapshotStale,
+  normalizePublicSnapshot,
+} from '@/lib/publicSnapshot';
 import type { DashboardBootstrapResponse } from '@/lib/types';
 
 /**
  * Phase 163b (M8) — the dashboard's single first-paint read.
  *
- * Replaces ~25-30 per-section first-mount requests with one auth-aware request
- * that reads the DB-backed snapshot (phase 163a). Live hooks stay mounted on top
- * of it for freshness; this hook only owns the seed.
+ * Reads one shared, anonymous snapshot for both guest and authenticated users.
+ * Public data never waits for auth and never fans out to live providers from here.
  *
  * Behaviour contract:
- * - one fetch per mount (and per identity change), aborted on unmount;
+ * - one shared fetch per mount, aborted on unmount;
  * - no `isLoading` flicker on refresh: `isLoading` is only true before the first
  *   answer, so a caller can gate dependent hooks on it without re-mounting them;
- * - a 60 s refresh only while the document is visible, plus a manual `refresh()`;
+ * - a bounded 30 s public-snapshot refresh only while visible, plus manual refresh;
  * - `stale` mirrors the backend flag and additionally reports a locally-old
  *   `computed_at` (> 600 s = 2 x the 5-minute tick), so a cached 200 cannot look
  *   fresh after the tab slept for an hour.
@@ -26,21 +30,14 @@ import type { DashboardBootstrapResponse } from '@/lib/types';
 
 /** Snapshot older than 2 x the 300 s tick cadence counts as stale (server rule). */
 const STALE_AFTER_MS = 600_000;
-const DEFAULT_REFRESH_INTERVAL_MS = 60_000;
+const DEFAULT_REFRESH_INTERVAL_MS = 30_000;
 
 export interface UseDashboardBootstrapOptions {
   modality?: 'truck' | 'vessel' | 'air';
   corridorId?: string;
-  /**
-   * Unit D: `public` is auth-blind (no tenant fleet/erp) and paints immediately.
-   * Hold the fetch with `enabled: false` when the caller needs the session first.
-   */
+  /** Compatibility option; this hook always reads the public-only snapshot. */
   sections?: 'all' | 'public' | 'tenant';
-  /**
-   * Hold the fetch until the session is resolved. Only needed for `all`/`tenant`
-   * (the endpoint is auth-aware for tenant `fleet`/`erp`); `public` can fire
-   * immediately because it ignores `Authorization` entirely.
-   */
+  /** False only when the public snapshot request itself must be paused. */
   enabled?: boolean;
   refreshIntervalMs?: number;
 }
@@ -64,13 +61,8 @@ export function useDashboardBootstrap(
   options?: UseDashboardBootstrapOptions
 ): UseDashboardBootstrapResult {
   const enabled = options?.enabled ?? true;
-  const modality = options?.modality ?? 'truck';
-  const corridorId = options?.corridorId;
-  const sections = options?.sections;
-  const refreshIntervalMs = options?.refreshIntervalMs ?? DEFAULT_REFRESH_INTERVAL_MS;
-  const { user, role } = useAuth();
-  const identityKey = JSON.stringify([user?.id ?? 'guest', role, user?.company_id ?? null]);
 
+  const refreshIntervalMs = options?.refreshIntervalMs ?? DEFAULT_REFRESH_INTERVAL_MS;
   const [data, setData] = useState<DashboardBootstrapResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -80,73 +72,84 @@ export function useDashboardBootstrap(
   const mountedRef = useRef(false);
   const lastFetchAtRef = useRef<number>(0);
   const hasAnswerRef = useRef(false);
-  const identityKeyRef = useRef(identityKey);
-  identityKeyRef.current = identityKey;
+  const latestSnapshotRef = useRef<DashboardBootstrapResponse | null>(null);
+  const dataReadyMarkedRef = useRef(false);
 
   const fetchBootstrap = useCallback(async () => {
     if (!enabled) return;
-    const requestIdentity = identityKey;
     const controller = requestGateRef.current.begin();
     if (!controller) return;
 
     if (!hasAnswerRef.current) setIsLoading(true);
     try {
-      const response = await api.dashboard.bootstrap(
-        { modality, ...(corridorId ? { corridor_id: corridorId } : {}), ...(sections ? { sections } : {}) },
-        controller.signal
-      );
-      if (
-        controller.signal.aborted ||
-        !mountedRef.current ||
-        identityKeyRef.current !== requestIdentity
-      ) return;
-      setData(response);
-      setLocalStale(isLocallyStale(response.computed_at));
+      const raw = await api.dashboard.publicSnapshot(controller.signal);
+      if (controller.signal.aborted || !mountedRef.current) return;
+      const response = normalizePublicSnapshot(raw);
       setError(null);
+      if (isUsefulPublicSnapshot(response)) {
+        latestSnapshotRef.current = response;
+        setData(response);
+        writePublicCache(PUBLIC_DASHBOARD_CACHE_KEY, response);
+        if (!dataReadyMarkedRef.current && typeof performance !== 'undefined') {
+          performance.mark('dashboard-public-data-ready');
+          dataReadyMarkedRef.current = true;
+        }
+        setLocalStale(isLocallyStale(response.computed_at) || response.stale);
+      } else if (!isUsefulPublicSnapshot(latestSnapshotRef.current ?? response)) {
+        latestSnapshotRef.current = response;
+        setData(response);
+        setLocalStale(false);
+      } else {
+        const retained = markPublicSnapshotStale(latestSnapshotRef.current as DashboardBootstrapResponse);
+        latestSnapshotRef.current = retained;
+        setData(retained);
+        setLocalStale(true);
+      }
       lastFetchAtRef.current = Date.now();
     } catch (err) {
-      if (
-        controller.signal.aborted ||
-        !mountedRef.current ||
-        identityKeyRef.current !== requestIdentity
-      ) return;
+      if (controller.signal.aborted || !mountedRef.current) return;
       if ((err as { name?: string })?.name === 'AbortError') return;
-      setError(err instanceof Error ? err.message : 'Gagal memuat snapshot dasbor');
-      // Never clear `data`: a failed refresh must keep the last good snapshot on
-      // screen (the badge marks it stale instead of blanking the dashboard).
+      setError(err instanceof Error ? err.message : 'Gagal memuat snapshot publik');
+      const lastGood = latestSnapshotRef.current;
+      if (lastGood && isUsefulPublicSnapshot(lastGood)) {
+        const retained = markPublicSnapshotStale(lastGood);
+        latestSnapshotRef.current = retained;
+        setData(retained);
+        setLocalStale(true);
+      }
     } finally {
       requestGateRef.current.finish(controller);
-      if (
-        !controller.signal.aborted &&
-        mountedRef.current &&
-        identityKeyRef.current === requestIdentity
-      ) {
+      if (!controller.signal.aborted && mountedRef.current) {
         hasAnswerRef.current = true;
         setIsLoading(false);
       }
     }
-  }, [enabled, modality, corridorId, sections, identityKey]);
+  }, [enabled]);
 
   useEffect(() => {
     const requestGate = requestGateRef.current;
     mountedRef.current = true;
+    const cached = readPublicCache<DashboardBootstrapResponse>(PUBLIC_DASHBOARD_CACHE_KEY);
+    if (cached) {
+      const normalized = normalizePublicSnapshot(cached);
+      if (isUsefulPublicSnapshot(normalized)) {
+        const stale = markPublicSnapshotStale(normalized);
+        latestSnapshotRef.current = stale;
+        setData(stale);
+        setLocalStale(true);
+        hasAnswerRef.current = true;
+        setIsLoading(false);
+        if (!dataReadyMarkedRef.current && typeof performance !== 'undefined') {
+          performance.mark('dashboard-public-data-ready');
+          dataReadyMarkedRef.current = true;
+        }
+      }
+    }
     return () => {
       mountedRef.current = false;
       requestGate.abort();
     };
   }, []);
-
-  const previousIdentityKeyRef = useRef(identityKey);
-  useEffect(() => {
-    if (previousIdentityKeyRef.current === identityKey) return;
-    previousIdentityKeyRef.current = identityKey;
-    hasAnswerRef.current = false;
-    lastFetchAtRef.current = 0;
-    setData(null);
-    setIsLoading(true);
-    setError(null);
-    setLocalStale(false);
-  }, [identityKey]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -173,11 +176,10 @@ export function useDashboardBootstrap(
     };
   }, [enabled, fetchBootstrap, refreshIntervalMs]);
 
-  // Local clock moves independently of the network: recompute staleness on the
-  // same 60 s cadence so the badge tells the truth between refreshes.
+  // Local clock moves independently of the network: recompute staleness between refreshes.
   useEffect(() => {
     const timer = setInterval(() => {
-      setLocalStale(isLocallyStale(data?.computed_at));
+      setLocalStale(Boolean(data?.stale) || isLocallyStale(data?.computed_at));
     }, refreshIntervalMs);
     return () => clearInterval(timer);
   }, [data?.computed_at, refreshIntervalMs]);

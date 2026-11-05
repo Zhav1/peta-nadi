@@ -219,6 +219,28 @@ async function request<T>(path: string, options?: ApiRequestInit): Promise<T> {
 
 export const api = {
   dashboard: {
+    /** Public curated snapshot. This same-origin read deliberately omits cookies and auth. */
+    publicSnapshot: async (signal?: AbortSignal) => {
+      const controller = new AbortController();
+      const forwardAbort = () => controller.abort();
+      if (signal?.aborted) controller.abort();
+      else signal?.addEventListener('abort', forwardAbort, { once: true });
+      const timeout = setTimeout(() => controller.abort(), 2500);
+      try {
+        const response = await fetch('/api/public/dashboard', {
+          method: 'GET',
+          credentials: 'omit',
+          cache: 'no-store',
+          headers: { Accept: 'application/json' },
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error(`Public dashboard snapshot unavailable (${response.status})`);
+        return await response.json() as import('./types').DashboardBootstrapResponse;
+      } finally {
+        clearTimeout(timeout);
+        signal?.removeEventListener('abort', forwardAbort);
+      }
+    },
     /**
      * Phase 163 (M8): one auth-aware read replaces the per-section first-paint
      * fan-out. Public sections come from the DB snapshot; DISPATCHER/REGULATOR

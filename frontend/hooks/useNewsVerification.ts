@@ -520,6 +520,8 @@ export interface UseNewsVerificationOptions {
   initialMarketRegime?: MarketRegimeData | null;
   /** False while the bootstrap snapshot is still loading (M8 phase 163b). */
   enabled?: boolean;
+  /** Use the shared public snapshot for refreshes; never call provider endpoints. */
+  snapshotOnly?: boolean;
 }
 
 export function useNewsVerification(options?: UseNewsVerificationOptions) {
@@ -529,6 +531,7 @@ export function useNewsVerification(options?: UseNewsVerificationOptions) {
   // only ever contains articles that came from the live backend and resolved to a
   // real publisher permalink.
   const enabled = options?.enabled ?? true;
+  const snapshotOnly = options?.snapshotOnly ?? false;
   const seedNews = options?.initialNews ?? null;
   const seedRegime = options?.initialMarketRegime ?? null;
 
@@ -542,7 +545,7 @@ export function useNewsVerification(options?: UseNewsVerificationOptions) {
     early_warning_count: 0
   });
   const [isLoading, setIsLoading] = useState(true);
-  const [status, setStatus] = useState<'live' | 'warming' | 'idle'>('warming');
+  const [status, setStatus] = useState<'live' | 'snapshot' | 'warming' | 'idle'>('warming');
   // Global timestamp: backend `last_updated`, advanced only when the article set changes.
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   // Timestamp of the last poll that actually returned a usable live feed (last-good snapshot).
@@ -867,7 +870,7 @@ export function useNewsVerification(options?: UseNewsVerificationOptions) {
                   lastUpdated: nextStamp ?? lastUpdatedRef.current,
                 });
               }
-              setStatus('live');
+              setStatus(seed ? 'snapshot' : 'live');
             } else {
               // Strict live-only: keep last-good articles (if any) and report warming.
               // Never substitute an offline fixture.
@@ -899,18 +902,24 @@ export function useNewsVerification(options?: UseNewsVerificationOptions) {
       // Network failure: last-good articles stay mounted; status flips to warming.
     }
 
-    // First load consumes the bootstrap seed exactly once, then the poll owns
-    // freshness. No seed (guest/failed bootstrap) → normal network read.
+    // Public mode always consumes the same snapshot response, including an
+    // explicit empty/unknown envelope; it never falls through to provider reads.
     const pendingSeed = seedRef.current;
-    const seed =
-      !seedConsumedRef.current && (pendingSeed.news || pendingSeed.regime)
+    const seed = snapshotOnly
+      ? pendingSeed
+      : !seedConsumedRef.current && (pendingSeed.news || pendingSeed.regime)
         ? pendingSeed
         : undefined;
     seedConsumedRef.current = true;
     void load(seed);
 
+    if (snapshotOnly) {
+      return () => {
+        isMounted = false;
+        requestGate.abort();
+      };
+    }
     const interval = setInterval(() => {
-      // A backgrounded tab must not poll the 0.1-CPU backend.
       if (!isDocumentVisible()) return;
       void load();
     }, 30000);
@@ -924,7 +933,7 @@ export function useNewsVerification(options?: UseNewsVerificationOptions) {
       unsubscribe();
       requestGate.abort();
     };
-  }, [enabled, identityKey]);
+  }, [enabled, identityKey, snapshotOnly, seedNews, seedRegime]);
 
   return { newsFeed, marketRegime, isLoading, status, lastUpdated, lastGoodAt, meta: newsMeta };
 }

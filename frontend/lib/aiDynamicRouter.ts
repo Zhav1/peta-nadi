@@ -1,7 +1,7 @@
 import type { LonLat } from './pathDensifier';
 export type { LonLat };
 import type { RouteRecommendation, CongestionSegment, RouteLeg, HoldVsRerouteEconomics, CrisisType, HazardImpactProfile, RouteTradeoffAnalysis } from './types';
-import { getCachedDynamicRoutes, setCachedDynamicRoutes, findPrecomputedHubCorridor } from './hubCorridorCache';
+import { findPrecomputedHubCorridor } from './hubCorridorCache';
 import {
   DEPOT_HOURLY_FEE_IDR,
   DRIVER_LABOR_HOURLY_RATE,
@@ -12,6 +12,41 @@ import {
 } from './tripCostCalculator';
 
 export type TransportModality = 'best' | 'truck' | 'maritime' | 'air' | 'multimodal' | 'auto';
+
+export const HAZARD_EVIDENCE_VERSION = 'hazard-evidence-v1' as const;
+export type HazardEvidenceClassification = 'CONFIRMED_BLOCKAGE' | 'PRECAUTIONARY_RISK' | 'UNKNOWN';
+export interface HazardEvidenceItem {
+  evidence_id: string;
+  version: typeof HAZARD_EVIDENCE_VERSION;
+  classification: HazardEvidenceClassification;
+  reason?: string;
+  hazard_type?: string;
+  geometry?: { type: 'Polygon' | 'MultiPolygon'; coordinates: unknown } | null;
+  geometry_provenance?: 'observed' | 'generated' | 'unknown' | string;
+  point?: LonLat | null;
+  risk_center?: LonLat | null;
+  radius_km?: number | null;
+  is_current?: boolean;
+  is_forecast?: boolean;
+  source_names?: string[];
+}
+export interface HazardEvidenceContext {
+  version: typeof HAZARD_EVIDENCE_VERSION;
+  coverage_status?: 'complete' | 'verified_complete' | 'partial' | 'unknown' | string;
+  items?: HazardEvidenceItem[];
+  evidence_id?: string;
+  classification?: HazardEvidenceClassification;
+  reason?: string;
+  hazard_type?: string;
+  geometry?: HazardEvidenceItem['geometry'];
+  geometry_provenance?: string;
+  point?: LonLat | null;
+  risk_center?: LonLat | null;
+  radius_km?: number | null;
+  is_current?: boolean;
+  is_forecast?: boolean;
+  source_names?: string[];
+}
 
 export const HAZARD_RADIUS_OPTIONS_KM = [5, 8, 15] as const;
 export const DEFAULT_HAZARD_RADIUS_KM = 8;
@@ -184,18 +219,16 @@ export function isSeaportBlockedByHazard(
   hazardCenter: LonLat | null,
   radiusKm: number,
   hazardType: CrisisType = 'flood',
-  affectedModalities: Array<string> = ['land']
+  affectedModalities: Array<string> = ['land'],
+  hazardEvidence?: HazardEvidenceContext
 ): boolean {
-  if (!hazardCenter) return false;
-  const distKm = getHaversineDistanceKm(portCoords, hazardCenter);
-  const seaAffecting =
-    hazardType === 'port_closure' ||
-    hazardType === 'marine_wave' ||
-    affectedModalities.includes('sea');
-  if (seaAffecting) {
-    return distKm <= Math.max(radiusKm + 8, 22);
-  }
-  return distKm <= radiusKm + 2.0;
+  void hazardCenter;
+  void radiusKm;
+  void hazardType;
+  void affectedModalities;
+  // Legacy circles may guide a precautionary review, but cannot close a port.
+  // Only an observed, current, versioned confirmed footprint can exclude it.
+  return assessRouteHazardEvidence([portCoords], hazardEvidence).status === 'BLOCKED';
 }
 
 /**
@@ -207,14 +240,15 @@ export function findClosestOpenSeaport(
   radiusKm: number,
   hazardType: CrisisType = 'flood',
   affectedModalities: Array<string> = ['land'],
-  excludePortIds: string[] = []
+  excludePortIds: string[] = [],
+  hazardEvidence?: HazardEvidenceContext
 ): typeof CARGO_SEAPORT_NODES[0] | null {
   const sorted = [...CARGO_SEAPORT_NODES].sort(
     (a, b) => getHaversineDistanceKm(target, a.coords) - getHaversineDistanceKm(target, b.coords)
   );
   for (const port of sorted) {
     if (excludePortIds.includes(port.id)) continue;
-    if (!isSeaportBlockedByHazard(port.coords, hazardCenter, radiusKm, hazardType, affectedModalities)) {
+    if (!isSeaportBlockedByHazard(port.coords, hazardCenter, radiusKm, hazardType, affectedModalities, hazardEvidence)) {
       return port;
     }
   }
@@ -805,6 +839,160 @@ export function calculateHazardExposureMetrics(
   };
 }
 
+export interface RouteHazardAssessment {
+  status: 'CLEAR' | 'BLOCKED' | 'PRECAUTIONARY_RISK' | 'UNKNOWN';
+  clearance_status: 'CLEAR' | 'BLOCKED' | 'REVIEW';
+  dispatchable: boolean;
+  verified: boolean;
+  risk_score: number | null;
+  evidence_ids: string[];
+  evidence_version: typeof HAZARD_EVIDENCE_VERSION;
+  label: string;
+}
+
+function _pointInRing(point: LonLat, ring: LonLat[]): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    const crosses = (yi > point[1]) !== (yj > point[1]) &&
+      point[0] < ((xj - xi) * (point[1] - yi)) / ((yj - yi) || Number.EPSILON) + xi;
+    if (crosses) inside = !inside;
+  }
+  return inside;
+}
+
+function _segmentsIntersect(a: LonLat, b: LonLat, c: LonLat, d: LonLat): boolean {
+  const orient = (p: LonLat, q: LonLat, r: LonLat) =>
+    (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
+  const o1 = orient(a, b, c), o2 = orient(a, b, d);
+  const o3 = orient(c, d, a), o4 = orient(c, d, b);
+  const onSegment = (p: LonLat, q: LonLat, r: LonLat) =>
+    Math.min(p[0], r[0]) <= q[0] && q[0] <= Math.max(p[0], r[0]) &&
+    Math.min(p[1], r[1]) <= q[1] && q[1] <= Math.max(p[1], r[1]);
+  if ((o1 < 0) !== (o2 < 0) && (o3 < 0) !== (o4 < 0)) return true;
+  return (o1 === 0 && onSegment(a, c, b)) || (o2 === 0 && onSegment(a, d, b)) ||
+    (o3 === 0 && onSegment(c, a, d)) || (o4 === 0 && onSegment(c, b, d));
+}
+
+function _geometryRings(geometry: HazardEvidenceItem['geometry']): LonLat[][] {
+  if (!geometry || !Array.isArray(geometry.coordinates)) return [];
+  const asRing = (value: unknown): LonLat[] => Array.isArray(value)
+    ? value.filter((point): point is LonLat => Array.isArray(point) && point.length >= 2 &&
+      Number.isFinite(Number(point[0])) && Number.isFinite(Number(point[1])))
+      .map((point) => [Number(point[0]), Number(point[1])])
+    : [];
+  if (geometry.type === 'Polygon') {
+    return (geometry.coordinates as unknown[]).map(asRing).filter((ring) => ring.length >= 3);
+  }
+  if (geometry.type === 'MultiPolygon') {
+    return (geometry.coordinates as unknown[]).flatMap((polygon) =>
+      Array.isArray(polygon) ? polygon.map(asRing).filter((ring) => ring.length >= 3) : []);
+  }
+  return [];
+}
+
+function _routeIntersectsGeometry(polyline: LonLat[], geometry: HazardEvidenceItem['geometry']): boolean {
+  const rings = _geometryRings(geometry);
+  if (rings.length === 0 || polyline.length === 0) return false;
+  if (polyline.some((point) => rings.some((ring) => _pointInRing(point, ring)))) return true;
+  return polyline.slice(1).some((end, index) => rings.some((ring) =>
+    ring.slice(1).some((ringEnd, edgeIndex) =>
+      _segmentsIntersect(polyline[index], end, ring[edgeIndex], ringEnd))));
+}
+
+function _pointDistanceToRouteKm(point: LonLat, route: LonLat[]): number {
+  if (route.length === 0) return Infinity;
+  const segments = route.length === 1 ? [[route[0], route[0]] as const] :
+    route.slice(1).map((end, index) => [route[index], end] as const);
+  return Math.min(...segments.map(([start, end]) => {
+    const scaleX = 111.32 * Math.max(0.01, Math.cos(((start[1] + end[1] + point[1]) / 3) * Math.PI / 180));
+    const ax = start[0] * scaleX, ay = start[1] * 111.32;
+    const bx = end[0] * scaleX, by = end[1] * 111.32;
+    const px = point[0] * scaleX, py = point[1] * 111.32;
+    const dx = bx - ax, dy = by - ay;
+    const lengthSq = dx * dx + dy * dy;
+    const t = lengthSq ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lengthSq)) : 0;
+    return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+  }));
+}
+
+/** Evaluate exact source footprints; the old center/radius API remains advisory only. */
+export function assessRouteHazardEvidence(
+  route: LonLat[],
+  context?: HazardEvidenceContext,
+  legacyCircle?: { center: LonLat | null; radiusKm: number }
+): RouteHazardAssessment {
+  const items = context?.items ?? (context?.evidence_id ? [context as HazardEvidenceItem] : []);
+  const evidenceIds: string[] = [];
+  let precautionary = false;
+  let unknown = false;
+
+  for (const item of items) {
+    if (item.version !== HAZARD_EVIDENCE_VERSION) {
+      unknown = true;
+      continue;
+    }
+    if (item.evidence_id) evidenceIds.push(item.evidence_id);
+    const rings = _geometryRings(item.geometry);
+    const isGenerated = item.geometry_provenance === 'generated' || item.geometry_provenance === 'modeled';
+    const point = item.point ?? item.risk_center;
+    const radius = Number.isFinite(item.radius_km) && Number(item.radius_km) > 0 ? Number(item.radius_km) : null;
+    const intersects = _routeIntersectsGeometry(route, item.geometry) ||
+      Boolean(point && _pointDistanceToRouteKm(point, route) <= (radius ?? 0.1));
+
+    if (item.classification === 'CONFIRMED_BLOCKAGE' && !isGenerated && item.is_current !== false &&
+      (rings.length > 0 || item.point)) {
+      if (intersects) {
+        return {
+          status: 'BLOCKED', clearance_status: 'BLOCKED', dispatchable: false, verified: true,
+          risk_score: 1, evidence_ids: evidenceIds, evidence_version: HAZARD_EVIDENCE_VERSION,
+          label: 'BLOKIRAN TERKONFIRMASI — JANGAN DISPATCH',
+        };
+      }
+      continue;
+    }
+
+    if (item.classification === 'PRECAUTIONARY_RISK' || isGenerated) {
+      if (intersects) precautionary = true;
+      continue;
+    }
+    unknown = true;
+  }
+
+  if (precautionary) {
+    return {
+      status: 'PRECAUTIONARY_RISK', clearance_status: 'REVIEW', dispatchable: false, verified: false,
+      risk_score: 0.35, evidence_ids: evidenceIds, evidence_version: HAZARD_EVIDENCE_VERSION,
+      label: 'RISIKO PERKIRAAN / MODEL — PERLU TINJAUAN',
+    };
+  }
+
+  if (legacyCircle?.center) {
+    const withinLegacyCircle = _pointDistanceToRouteKm(legacyCircle.center, route) <= legacyCircle.radiusKm;
+    return {
+      status: 'UNKNOWN', clearance_status: 'REVIEW', dispatchable: false, verified: false,
+      risk_score: withinLegacyCircle ? 0.5 : null, evidence_ids: evidenceIds,
+      evidence_version: HAZARD_EVIDENCE_VERSION,
+      label: withinLegacyCircle ? 'RADIUS LINGKARAN BELUM TERVERIFIKASI — RISIKO TIDAK PASTI' : 'BUKTI BAHAYA BELUM TERVERIFIKASI',
+    };
+  }
+
+  const complete = context?.coverage_status === 'complete' || context?.coverage_status === 'verified_complete';
+  if (complete && !unknown) {
+    return {
+      status: 'CLEAR', clearance_status: 'CLEAR', dispatchable: true, verified: true,
+      risk_score: 0, evidence_ids: evidenceIds, evidence_version: HAZARD_EVIDENCE_VERSION,
+      label: 'BUKTI TERKINI — TIDAK BERIRISAN',
+    };
+  }
+  return {
+    status: 'UNKNOWN', clearance_status: 'REVIEW', dispatchable: false, verified: false,
+    risk_score: null, evidence_ids: evidenceIds, evidence_version: HAZARD_EVIDENCE_VERSION,
+    label: 'BUKTI / CAKUPAN TIDAK TERSEDIA — TINJAUAN DIPERLUKAN',
+  };
+}
+
 export interface MapboxRouteManeuver {
   instruction: string;
   distance_meters: number;
@@ -1383,7 +1571,8 @@ export async function calculateSeaIntermodalCorridor(
   radiusKm: number = DEFAULT_HAZARD_RADIUS_KM,
   hazardType: CrisisType = 'flood',
   affectedModalities?: Array<'land' | 'sea' | 'air'>,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  hazardEvidence?: HazardEvidenceContext
 ): Promise<RouteRecommendation> {
   throwIfAborted(signal);
   const odDistanceKm = getHaversineDistanceKm(origin, destination);
@@ -1391,25 +1580,25 @@ export async function calculateSeaIntermodalCorridor(
   const nearestOriginPort = findClosestSeaport(origin).seaport;
   const nearestDestPort = findClosestSeaport(destination).seaport;
 
-  const originBlocked = isSeaportBlockedByHazard(nearestOriginPort.coords, hazardCenter, radiusKm, hazardType, modalities);
-  const destBlocked = isSeaportBlockedByHazard(nearestDestPort.coords, hazardCenter, radiusKm, hazardType, modalities);
+  const originBlocked = isSeaportBlockedByHazard(nearestOriginPort.coords, hazardCenter, radiusKm, hazardType, modalities, hazardEvidence);
+  const destBlocked = isSeaportBlockedByHazard(nearestDestPort.coords, hazardCenter, radiusKm, hazardType, modalities, hazardEvidence);
 
   let originPort = nearestOriginPort;
   let destPort = nearestDestPort;
   let altOriginPort: typeof CARGO_SEAPORT_NODES[0] | null = null;
   let altDestPort: typeof CARGO_SEAPORT_NODES[0] | null = null;
   if (originBlocked) {
-    altOriginPort = findClosestOpenSeaport(origin, hazardCenter, radiusKm, hazardType, modalities, [nearestOriginPort.id]);
+    altOriginPort = findClosestOpenSeaport(origin, hazardCenter, radiusKm, hazardType, modalities, [nearestOriginPort.id], hazardEvidence);
     if (altOriginPort) originPort = altOriginPort;
   }
   if (destBlocked) {
     const exclude = destPort.id === originPort.id ? [destPort.id, nearestOriginPort.id] : [nearestDestPort.id];
     // Avoid picking the (possibly already alternate) origin port as destination unless no choice.
     if (originPort.id !== nearestDestPort.id) exclude.push(originPort.id);
-    altDestPort = findClosestOpenSeaport(destination, hazardCenter, radiusKm, hazardType, modalities, exclude);
+    altDestPort = findClosestOpenSeaport(destination, hazardCenter, radiusKm, hazardType, modalities, exclude, hazardEvidence);
     if (!altDestPort && originBlocked && altOriginPort) {
       // Fallback: try any open port distinct from originPort
-      altDestPort = findClosestOpenSeaport(destination, hazardCenter, radiusKm, hazardType, modalities, [originPort.id]);
+      altDestPort = findClosestOpenSeaport(destination, hazardCenter, radiusKm, hazardType, modalities, [originPort.id], hazardEvidence);
     }
     if (altDestPort) destPort = altDestPort;
   }
@@ -1968,18 +2157,23 @@ export async function calculateAIDynamicDetourRoutes(
     commodity?: string | null;
     vehicleGolongan?: string | null;
     tollCostIdr?: number | null;
-  }
+  },
+  hazardEvidence?: HazardEvidenceContext
 ): Promise<RouteRecommendation[]> {
   void zoneTier;
+  void _modality;
   throwIfAborted(signal);
-  // Fast in-memory quantized cache check (<1 ms)
-  const cached = getCachedDynamicRoutes<RouteRecommendation>(origin, destination, hazardCenter, radiusKm, _modality);
-  if (cached && cached.length > 0) {
-    attachOperationalCostsToCorridors(cached, costOptions);
-    return cached;
-  }
+  // Route results are evidence-context-sensitive; do not reuse the legacy cache
+  // without an evidence/version key (which would mix owners or stale snapshots).
   const affectedModalities = getAffectedModalities(hazardType, impactProfile);
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+  const evidenceItems = hazardEvidence?.items ?? (hazardEvidence?.evidence_id ? [hazardEvidence as HazardEvidenceItem] : []);
+  const verifiedPoint = evidenceItems.find((item) =>
+    item.version === HAZARD_EVIDENCE_VERSION &&
+    item.classification === 'CONFIRMED_BLOCKAGE' && item.is_current !== false &&
+    item.geometry_provenance !== 'generated' && item.point
+  )?.point ?? null;
+  const verifiedExclusionPoints: LonLat[] = verifiedPoint ? [verifiedPoint] : [];
   const excludeToll = hazardCenter ? isHazardNearTollCorridor(hazardCenter, radiusKm) : false;
 
   // STEP 1: Compute Land Routes (Primary & Alternative / Bypass)
@@ -1990,12 +2184,10 @@ export async function calculateAIDynamicDetourRoutes(
     : { isIntersecting: false, exposureKm: 0, penetrationRatio: 0, minDistanceToCenterKm: 9999, maxProximity: 0, riskPenaltyScore: 0 };
   // Port-closure near origin/destination blocks port access roads even when the
   // polyline itself skirts the circle: users often click "near Pelabuhan Asal".
-  const portAccessThresholdKm = Math.max(radiusKm + 6, 18);
   const portAccessBlocked =
-    hazardCenter != null &&
     hazardType === 'port_closure' &&
-    (getHaversineDistanceKm(origin, hazardCenter) <= portAccessThresholdKm ||
-      getHaversineDistanceKm(destination, hazardCenter) <= portAccessThresholdKm);
+    (assessRouteHazardEvidence([origin], hazardEvidence).status === 'BLOCKED' ||
+      assessRouteHazardEvidence([destination], hazardEvidence).status === 'BLOCKED');
   const isPrimaryCompromised = primaryMetrics.isIntersecting || portAccessBlocked;
 
   // Corridor 1: Fastest Direct Land Corridor
@@ -2061,7 +2253,7 @@ export async function calculateAIDynamicDetourRoutes(
   // actively solve detour around hazard / closed-port perimeter via Dual-Layer Hazard Avoidance.
   if (hazardCenter && isPrimaryCompromised && token) {
     let foundDetour = false;
-    const isPointObstacle = radiusKm < 0.5; // Scale < 500m (e.g. point landslide, bridge outage)
+    const isPointObstacle = radiusKm < 0.5 && verifiedExclusionPoints.length > 0;
     const evalBufferKm = isPointObstacle ? 0.05 : 0.1; // 50m margin for point obstacles, 100m for wide polygons
 
     // LAYER 1: Point Obstacle Avoidance via &exclude=point(lon lat)
@@ -2069,7 +2261,7 @@ export async function calculateAIDynamicDetourRoutes(
       throwIfAborted(signal);
       const pointExcludeOpts: ExcludeOptions = {
         excludeToll,
-        excludePoints: [hazardCenter],
+        excludePoints: verifiedExclusionPoints,
       };
       const pointBypassResults = await fetchMapboxAlternativeDrivingRoutes(
         origin,
@@ -2107,7 +2299,7 @@ export async function calculateAIDynamicDetourRoutes(
 
       const bypassExcludeOpts: ExcludeOptions = {
         excludeToll,
-        excludePoints: [hazardCenter],
+        excludePoints: verifiedExclusionPoints,
       };
 
       for (const cand of scoredNodes.slice(0, 4)) {
@@ -2135,7 +2327,7 @@ export async function calculateAIDynamicDetourRoutes(
 
       const tangentExcludeOpts: ExcludeOptions = {
         excludeToll,
-        excludePoints: [hazardCenter],
+        excludePoints: verifiedExclusionPoints,
       };
 
       for (const ang of candidateAngles) {
@@ -2206,7 +2398,7 @@ export async function calculateAIDynamicDetourRoutes(
   // STEP 2: Simultaneously Compute Intermodal Corridors (Sea & Air)
   // Sea corridor is hazard-aware: blocked ports fail over to the nearest open port.
   const [seaCorridor, airCorridor] = await Promise.all([
-    calculateSeaIntermodalCorridor(origin, destination, hazardCenter, radiusKm, hazardType, affectedModalities, signal),
+    calculateSeaIntermodalCorridor(origin, destination, hazardCenter, radiusKm, hazardType, affectedModalities, signal, hazardEvidence),
     calculateAirIntermodalCorridor(origin, destination, signal),
   ]);
 
@@ -2274,6 +2466,70 @@ export async function calculateAIDynamicDetourRoutes(
     allCorridors.push(holdCorridor);
   }
 
+  // Every modality and feeder leg gets the same evidence-versioned clearance
+  // check. Legacy center/radius callers remain supported but are always marked
+  // unverified and can never make a route dispatchable.
+  for (const route of allCorridors) {
+    const legAssessments = (route.legs ?? []).map((leg) => {
+      const assessment = assessRouteHazardEvidence(leg.coordinates ?? [], hazardEvidence, {
+        center: hazardCenter,
+        radiusKm,
+      });
+      const mode = leg.modality ?? leg.mode;
+      if ((mode === 'maritime' || mode === 'air') && !(leg as typeof leg & { navigation_safety_checked?: boolean }).navigation_safety_checked) {
+        return { ...assessment, status: 'UNKNOWN' as const, clearance_status: 'REVIEW' as const,
+          dispatchable: false, verified: false, risk_score: null,
+          label: `${mode.toUpperCase()} NAVIGATION BELUM DIVERIFIKASI` };
+      }
+      return assessment;
+    });
+    if (legAssessments.length === 0) {
+      legAssessments.push(assessRouteHazardEvidence([], hazardEvidence, { center: hazardCenter, radiusKm }));
+    }
+    const status = route.source === 'offline-interpolated' ? 'UNKNOWN'
+      : legAssessments.some((item) => item.status === 'BLOCKED') ? 'BLOCKED'
+        : legAssessments.some((item) => item.status === 'PRECAUTIONARY_RISK') ? 'PRECAUTIONARY_RISK'
+          : legAssessments.every((item) => item.status === 'CLEAR') ? 'CLEAR' : 'UNKNOWN';
+    const assessment: RouteHazardAssessment = {
+      status,
+      clearance_status: status === 'CLEAR' ? 'CLEAR' : status === 'BLOCKED' ? 'BLOCKED' : 'REVIEW',
+      dispatchable: status === 'CLEAR' && route.corridor_type !== 'hold_staging',
+      verified: status === 'CLEAR' || status === 'BLOCKED',
+      risk_score: status === 'BLOCKED' ? 1 : status === 'PRECAUTIONARY_RISK' ? 0.35
+        : status === 'CLEAR' ? 0 : route.risk_score ?? null,
+      evidence_ids: Array.from(new Set(legAssessments.flatMap((item) => item.evidence_ids))),
+      evidence_version: HAZARD_EVIDENCE_VERSION,
+      label: route.source === 'offline-interpolated'
+        ? 'GEOMETRI OFFLINE — RUTE TIDAK TERVERIFIKASI'
+        : legAssessments.find((item) => item.status !== 'CLEAR')?.label ?? 'BUKTI TERKINI — TIDAK BERIRISAN',
+    };
+    Object.assign(route, {
+      hazard_assessment: assessment,
+      hazard_evidence_version: HAZARD_EVIDENCE_VERSION,
+      hazard_evidence_ids: assessment.evidence_ids,
+      viable: assessment.dispatchable,
+      is_compromised: status === 'BLOCKED' || status === 'PRECAUTIONARY_RISK',
+      safety_status: status === 'CLEAR' && route.corridor_type !== 'hold_staging' ? 'CLEAR' : status === 'BLOCKED' ? 'COMPROMISED' : 'HOLD_DELAY',
+      safety_tag: assessment.label,
+      non_viable_reason: assessment.dispatchable ? undefined : assessment.label,
+      risk_score: assessment.risk_score ?? route.risk_score,
+    });
+  }
+
+  const safeRouteAvailable = allCorridors.some((route) => route.viable === true);
+  if (!safeRouteAvailable) {
+    for (const route of allCorridors) {
+      if (route.safety_status !== 'COMPROMISED') {
+        route.safety_status = 'HOLD_DELAY';
+        route.safety_tag = `${route.safety_tag ?? 'Rute'} • TAHAN / TINJAUAN — TIDAK ADA RUTE AMAN TERVERIFIKASI`;
+        route.viable = false;
+      }
+    }
+    Object.assign(allCorridors, { decision_status: 'HOLD_DELAY', safety_review_required: true });
+  } else {
+    Object.assign(allCorridors, { decision_status: 'SAFE_ROUTE_AVAILABLE', safety_review_required: false });
+  }
+
   // STEP 4: Attach structured tradeoff analysis (pros/cons + delay & cost) to EVERY option.
   const sharedEcon = allCorridors.find((r) => r.economic_comparison)?.economic_comparison;
   for (const route of allCorridors) {
@@ -2287,6 +2543,5 @@ export async function calculateAIDynamicDetourRoutes(
   // STEP 5 (Phase 106): Attach first-principles trip operational cost engine to ALL corridors
   attachOperationalCostsToCorridors(allCorridors, costOptions);
 
-  setCachedDynamicRoutes(origin, destination, hazardCenter, radiusKm, _modality, allCorridors);
   return allCorridors;
 }

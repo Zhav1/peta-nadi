@@ -62,6 +62,7 @@ export function OutcomeVerificationForm({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isDone, setIsDone] = useState(false);
+  const [shadowPreview, setShadowPreview] = useState<string | null>(null);
 
   useEffect(() => {
     setIncidentId(initialIncidentId);
@@ -73,6 +74,7 @@ export function OutcomeVerificationForm({
     setFieldError(null);
     setSubmitError(null);
     setIsDone(false);
+    setShadowPreview(null);
   }, [initialIncidentId, initialObservedDelay]);
 
   const handleVerifySubmit = async () => {
@@ -111,7 +113,7 @@ export function OutcomeVerificationForm({
       }).create
         ? (api.outcomes as unknown as { create: (b: unknown) => Promise<unknown> }).create
         : (api.outcomes as unknown as { record: (b: unknown) => Promise<unknown> }).record;
-      await submit({
+      const result = await submit({
         incident_id: incidentId.trim(),
         horizon,
         observed_delay_hours: delayH,
@@ -121,6 +123,11 @@ export function OutcomeVerificationForm({
         verification_source: 'FIELD_REPORT',
         ...(notes.trim() ? { notes: notes.trim() } : {}),
       });
+      const resultFlags = result as { shadow_mode?: boolean; applied?: boolean } | null;
+      if (resultFlags?.shadow_mode && resultFlags.applied === false) {
+        setShadowPreview('Pratinjau riset diterima server, tetapi tidak disimpan dan tidak masuk ke ledger outcome.');
+        return;
+      }
       setIsDone(true);
       notifyToast({ message: `Verifikasi ${incidentId.trim()} (${horizon}) tersimpan.`, type: 'success' });
       onSubmitted?.();
@@ -145,6 +152,11 @@ export function OutcomeVerificationForm({
         <div className="p-3 rounded-lg bg-amber-950/20 border border-amber-500/25 text-xs text-amber-200/90 flex items-start gap-2">
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
           <span>{disabledHint}</span>
+        </div>
+      )}
+      {shadowPreview && (
+        <div role="status" className="p-2.5 rounded-lg bg-amber-950/20 border border-amber-500/30 text-xs text-amber-200">
+          {shadowPreview}
         </div>
       )}
       {isDone && (
@@ -320,6 +332,7 @@ export default function LaporanAktualModal({
   const [noToll, setNoToll] = useState(false);
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [shadowPreview, setShadowPreview] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   // Double-submit guard: ref flips synchronously on first click, so a second
   // click / StrictMode remount cannot fire a duplicate PATCH+hedging pair
@@ -344,6 +357,7 @@ export default function LaporanAktualModal({
       setNoToll(false);
       setFieldError(null);
       setSubmitError(null);
+      setShadowPreview(null);
       setHedgeSuggest(null);
       setStep('aktual');
       setVerifyPrefill(null);
@@ -440,6 +454,12 @@ export default function LaporanAktualModal({
           },
           idemKey ? { idempotencyKey: idemKey } : undefined
         );
+        const updateFlags = updated as unknown as { shadow_mode?: boolean; applied?: boolean };
+        if (updateFlags?.shadow_mode && updateFlags.applied === false) {
+          submitGuardRef.current = false;
+          setShadowPreview('Pratinjau riset diterima server. Aktual trip tidak disimpan, hedging tidak dijalankan, dan tidak ada perubahan operasional.');
+          return;
+        }
       } catch (err: unknown) {
         const rawMsg = err instanceof Error ? err.message : `Gagal menyimpan aktual Trip ${trip.id}.`;
         // PATCH belum tersimpan — buka guard agar retry diperbolehkan.
@@ -617,6 +637,11 @@ export default function LaporanAktualModal({
                     </p>
                   ))}
 
+              {shadowPreview && (
+                <div role="status" className="rounded-md border border-amber-500/30 bg-amber-950/20 p-3 text-xs leading-relaxed text-amber-200">
+                  {shadowPreview}
+                </div>
+              )}
               {fieldError && <p className="text-xs text-rose-300">{fieldError}</p>}
               {submitError && <p className="text-xs text-rose-300">{submitError}</p>}
             </div>
