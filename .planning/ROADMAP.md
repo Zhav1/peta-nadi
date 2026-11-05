@@ -3552,3 +3552,16 @@ Fixed aircraft over Peninsular Malaysia, fire hotspots in the South China Sea, s
 **Open:** near-duplicate TNI regional rows, broad regional feed, raster coastal flips, industrial flares not filtered, broad news geocoding, per-process coalescing, edge/CDN caching unverified, full backend suite not rerun clean.
 
 Docs: `.planning/phases/177-sumatera-scope-public-first-refresh-reliability/` (`PLAN.md`, `WALKTHROUGH.md`, `LEARNINGS.md`, `CONTEXT.md`).
+
+
+## Phase 178: Mainland Sumatra Shadow Pilot
+**Status:** COMPLETE ✅ (architecture & implementation verified)
+**Window:** 2026-11-05
+**Milestone:** post-M9 hardening / operational grounding
+
+Established a hardened, fail-closed operational pilot architecture for mainland Sumatra logistics corridors (Pelindo Belawan, BKHIT, BPJT tolls, PIHPS food commodities). Built a dedicated public snapshot projection (`public.public_dashboard_snapshots`, singleton `sumatra_mainland`) serving anonymous/public requests under 1.5s with strict tenant and PII isolation. Implemented distributed single-writer coordination via PostgreSQL monotonic fencing leases (`private.refresh_leases`, `acquire_refresh_lease`, `publish_public_dashboard_snapshot`). Added fail-closed provider budget governance (`private.provider_budget_counters`, `reserve_provider_budget`) enforcing daily caps across BMKG, TomTom, Open-Meteo, FIRMS, and PetaBencana. Integrated grounded disaster adapters (BMKG CAP nowcasts and PetaBencana crowdsourced reports with ISO 3166-2 mainland admin bounds) and established the conservative `hazard-evidence-v1` contract separating physical road blockages (`CONFIRMED_BLOCKAGE`) from weather warnings (`PRECAUTIONARY_RISK`) without synthetic circular buffers. Enforced server-side research shadow safety (`pilot_safety.py`) intercepting approvals with non-mutating preview responses and zero durable side effects on `route_approvals` or `travels`.
+
+**Verification:** 55 Phase 178 targeted tests passing (`test_hazard_routing_evidence.py`, `test_news_hitl_shadow.py`, `test_observed_disaster_service.py`, `test_pilot_shadow_safety.py`, `test_public_operational_cache.py`, `test_public_snapshot_coordination.py`, `test_shared_news_reads.py`); 68 affected backend regression tests passing (`test_dashboard_bootstrap.py`, `test_dashboard_snapshot.py`, `test_internal_tick.py`, `test_news_read_path.py`, `test_trip_linked_approvals.py`); 123 total backend tests green.
+
+Docs: `.planning/phases/178-mainland-sumatra-shadow-pilot/` (`178-SPEC.md`, `178-01-PLAN.md`, `178-01-SUMMARY.md`).
+

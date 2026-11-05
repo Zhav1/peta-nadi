@@ -6,9 +6,9 @@ current_phase: 166
 current_phase_name: Soak start + review
 status: in_progress
 stopped_at: "M8 160-164 done and deployed; 165 implementation-green with the SLO gate partially closed (cold start, 2 h session, PIHPS retry, /health p95 open); 166 7-day soak NOT STARTED. Handoff: .planning/milestones/M8/HANDOFF.md"
-last_updated: 2026-10-28
-last_activity: 2026-10-28
-last_activity_desc: "Recorded M8 phase 163/164/165/166 artifacts, milestone HANDOFF.md, and production evidence; no code changes."
+last_updated: 2026-11-05
+last_activity: 2026-11-05
+last_activity_desc: "Recorded Phase 178 (Mainland Sumatra Shadow Pilot) artifacts across infra, services, adapters, routers, and frontend."
 state_head: HEAD
 progress:
   total_phases: 7
@@ -471,3 +471,14 @@ These scripts validate the economic correlation hypotheses that underpin Agent 5
 - Verification: 62 + 115 + 30 targeted backend tests; tsc/build; 50 paint assertions; 7/7 Playwright; production health/bootstrap/live Vercel counters 0/20/12 and 9 cards; cache keys v2.
 - Docs: `.planning/phases/177-sumatera-scope-public-first-refresh-reliability/`.
 - Open: near-duplicate regional rows, broad regional feed, raster coastal flips, industrial flares, broad geocoding, per-process coalescing, edge/CDN caching, live first-paint timing, full backend suite not rerun clean.
+
+## Phase 178 Log (2026-11-05)
+
+- Phase 178 (Mainland Sumatra Shadow Pilot) logged as COMPLETE - architecture and implementation verified.
+- Database: migration `20261105060029_public_snapshot_coordination.sql` (`public.public_dashboard_snapshots`, `public.public_operational_source_cache`, `private.refresh_leases`, `private.public_snapshot_sections`, `private.provider_budget_counters`, `private.provider_budget_reservations` + 6 PL/pgSQL stored procedures).
+- Backend Services: `refresh_coordinator.py` (fenced single-writer leasing), `public_snapshot_service.py` (curated `sumatra_mainland` singleton across 8 mainland provinces), `provider_budget.py` (daily provider limits & atomic reservation), `public_operational_cache.py` (independent source TTLs & SWR read model), `hazard_evidence.py` (`hazard-evidence-v1` conservative contract with 4 explicit tiers and 0.1 km tolerance), `observed_disaster_service.py` (multi-source disaster ingestion), `pilot_safety.py` (server-enforced shadow mode with non-mutating preview and zero side effects in `route_approvals`/`travels`).
+- Adapters & Routers: `bmkg_cap_adapter.py` (native CAP polygon parsing), `petabencana_adapter.py` (crowdsourced reports with ISO 3166-2 mainland bounds & CC BY-NC 4.0 attribution), `cpu_routing_adapter.py` (deterministic CPU routing honoring `hazard-evidence-v1`), `approvals.py`, `news_router.py`, `travels_router.py`, `outcomes_router.py`, `dashboard_bootstrap.py`, `internal_tick.py`.
+- Frontend: `app/api/public/dashboard/route.ts` (Next.js Edge route querying Supabase PostgREST singleton read with 30s cache), `lib/publicSnapshot.ts` (TypeScript contracts and normalizer), `hooks/useDashboardBootstrap.ts`, `DashboardClient.tsx`.
+- Verification: 55/55 Phase 178 targeted backend tests passed; 68/68 regression tests passed (123 total backend tests green).
+- Docs: `.planning/phases/178-mainland-sumatra-shadow-pilot/` (`178-SPEC.md`, `178-01-PLAN.md`, `178-01-SUMMARY.md`).
+
