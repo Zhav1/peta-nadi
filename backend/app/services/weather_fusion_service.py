@@ -5,11 +5,10 @@ into organic GeoJSON coverage polygons for Sumatra corridors.
 Zero GPU overhead.
 """
 import logging
-import asyncio
 import json
 import math
 from typing import Dict, Any, List, Optional, Tuple
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from app.adapters.bmkg_adapter import BMKGAdapter
 from app.adapters.open_meteo_adapter import OpenMeteoAdapter
@@ -223,7 +222,7 @@ def _extract_openmeteo_numbers(ev: Dict[str, Any]):
     raw = ev.get("raw_payload") or {}
     preds = raw.get("predictions") or {}
     precip = preds.get("precipitation_mm_24h", ev.get("precipitation_mm_24h"))
-    flood = preds.get("flood_risk_pct", ev.get("flood_risk_pct"))
+    flood = preds.get("modeled_risk_pct", preds.get("flood_risk_pct", ev.get("modeled_risk_pct", ev.get("flood_risk_pct"))))
     wind = preds.get("wind_speed_kmh", preds.get("windspeed_kmh", ev.get("windspeed_kmh", ev.get("wind_speed_kmh"))))
     try:
         precip_f = float(precip) if precip is not None else None
@@ -241,11 +240,7 @@ def _extract_openmeteo_numbers(ev: Dict[str, Any]):
 
 
 def _extract_bmkg_numbers(ev: Dict[str, Any]):
-    """Parse BMKG weather code + mapped disruption numerics.
-
-    Code 60 = medium drizzle (non-disruption, filtered by default).
-    Codes 95/97 = thunderstorm/severe (disruption, mapped to sim-grade numerics).
-    """
+    """Parse provider-published BMKG forecast values without numeric synthesis."""
     code: Optional[int] = None
     raw = ev.get("raw")
     warning: Dict[str, Any] = {}
@@ -276,65 +271,38 @@ def _extract_bmkg_numbers(ev: Dict[str, Any]):
         wind_f = float(wind) if wind is not None else None
     except (TypeError, ValueError):
         wind_f = None
-    # Fallback mapping when BMKG carries no numerics (current API: desc+code only).
-    if precip_f is None and flood_f is None:
-        if code == 60:
-            precip_f, flood_f = 25.0, 55.0
-            if wind_f is None:
-                wind_f = 20.0
-        elif code in (95, 97):
-            precip_f, flood_f = 65.5, 87.5
-            if wind_f is None:
-                wind_f = 42.0
-        elif ev.get("severity") in ("high", "critical"):
-            precip_f, flood_f = 65.5, 87.5
-            if wind_f is None:
-                wind_f = 42.0
+    # BMKG codes/description remain source evidence. Do not invent rainfall,
+    # wind, or flood-probability numbers when the provider did not publish them.
     return code, precip_f, flood_f, wind_f
 
 
 async def _collect_weather_events() -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], Dict[str, Any]]:
-    """Fetch BMKG + Open-Meteo events once and report honest upstream health.
+    """Collect normalized observations from the shared cache only."""
+    from app.services.public_operational_cache import read_cached_source_observations
 
-    Returns ``(bmkg_events, openmeteo_events, upstream)``. A source that raises
-    is unhealthy; a source that answers with zero weather events is
-    healthy-but-empty. Callers must never turn ``degraded`` into a zero count.
-    """
-    # Parallel gather: BMKG quake+weather and OM 23-pt bulk grid concurrently
-    # so the fused response stays well inside the 8 s proof timeout.
-    async def _safe_bmkg():
-        try:
-            bmkg = BMKGAdapter()
-            raw_bmkg = await bmkg.fetch()
-            return await bmkg.parse(raw_bmkg), None
-        except Exception as e:
-            logger.warning(f"Failed to fetch BMKG for weather fusion: {e}")
-            return [], f"bmkg_error: {e}"
-
-    async def _safe_om():
-        try:
-            openmeteo = OpenMeteoAdapter()
-            raw_om = await openmeteo.fetch()
-            return await openmeteo.parse(raw_om), None
-        except Exception as e:
-            logger.warning(f"Failed to fetch Open-Meteo data for weather fusion: {e}")
-            return [], f"open_meteo_error: {e}"
-
-    (bmkg_events, bmkg_err), (openmeteo_events, om_err) = await asyncio.gather(
-        _safe_bmkg(), _safe_om()
-    )
-
-    errors = [e for e in (bmkg_err, om_err) if e]
+    records = read_cached_source_observations()
+    bmkg = records.get("bmkg")
+    openmeteo = records.get("open_meteo")
+    bmkg_events = list((bmkg or {}).get("events") or [])
+    openmeteo_events = list((openmeteo or {}).get("events") or [])
+    errors = []
+    for name, record in (("bmkg", bmkg), ("open_meteo", openmeteo)):
+        if not isinstance(record, dict):
+            errors.append(f"{name}: no cached source data")
+        elif record.get("error"):
+            errors.append(f"{name}: {record['error']}")
     upstream = {
-        "bmkg_ok": bmkg_err is None,
-        "open_meteo_ok": om_err is None,
-        # Only a total upstream outage is degraded; one healthy source still
-        # yields real zones (reason records the partial outage).
-        "degraded": bmkg_err is not None and om_err is not None,
+        "bmkg_ok": isinstance(bmkg, dict) and bmkg.get("status") not in ("degraded", "down"),
+        "open_meteo_ok": isinstance(openmeteo, dict) and openmeteo.get("status") not in ("degraded", "down"),
+        "degraded": not isinstance(bmkg, dict) and not isinstance(openmeteo, dict),
         "errors": errors,
         "reason": "; ".join(errors) if errors else None,
+        "source_records": {
+            key: {k: value.get(k) for k in ("fetched_at", "observed_at", "valid_until", "status")}
+            for key, value in (("bmkg", bmkg), ("open_meteo", openmeteo)) if isinstance(value, dict)
+        },
     }
-    return bmkg_events or [], openmeteo_events or [], upstream
+    return bmkg_events, openmeteo_events, upstream
 
 
 def _passes_numeric_gate(
@@ -401,8 +369,13 @@ def _build_weather_candidates(
         return False
 
     for ev in weather_warnings:
-        lat = float(ev.get("lat", 3.58))
-        lon = float(ev.get("lon", 98.67))
+        try:
+            lat = float(ev["lat"])
+            lon = float(ev["lon"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if not math.isfinite(lat) or not math.isfinite(lon) or not -90 <= lat <= 90 or not -180 <= lon <= 180:
+            continue
         severity = str(ev.get("severity", "medium")).lower()
         is_om = ev.get("source") in ("openmeteo", "open_meteo", "open-meteo", "open-meteo-sim")
         # Carry numeric disruption props from each source (fallback sim 65.5/87.5 keeps high).
@@ -459,7 +432,8 @@ def _build_weather_candidates(
             confidence = 0.75 if severity == "critical" else 0.65
         else:
             confidence = 0.8 if bmkg_code in (95, 97) else 0.5
-        observed_vs_forecast = "forecast" if is_om else "observation"
+        is_forecast = bool(is_om or ev.get("is_forecast") or ev.get("modeled"))
+        observed_vs_forecast = "forecast" if is_forecast else "observation"
 
         # Priority score for the MAX_WEATHER_FEATURES cap: severity rank first,
         # then flood/precip magnitude, then corridor proximity (nearer = kept).
@@ -483,18 +457,26 @@ def _build_weather_candidates(
                     "lat": lat,
                     "lon": lon,
                     "severity": severity,
-                    "status_label": "PROYEKSI PRESIPITASI EKSTREM OPEN-METEO" if is_om else "PERINGATAN CUACA EKSTREM BMKG",
+                    "status_label": "MODELLED OPEN-METEO FORECAST RISK" if is_om else "BMKG PUBLISHED WEATHER FORECAST",
+                    "geometry_role": "forecast_area" if is_forecast else "risk_zone",
+                    "is_forecast": is_forecast,
+                    "modeled": bool(is_om or ev.get("modeled")),
+                    "evidence_id": ev.get("crisis_id") or ev.get("dedup_key"),
+                    "source_clock": ev.get("source_clock") or ("forecast_valid_time" if is_forecast else "observation_time"),
+                    "source_observed_at": ev.get("forecast_issued_at") or ev.get("observed_at") or ev.get("created_at"),
+                    "forecast_valid_at": ev.get("forecast_valid_at"),
+                    "source_fields": (ev.get("raw_payload") or {}).get("source_fields") if is_om else ev.get("raw"),
                     "fill_color": fill_color,
                     "stroke_color": stroke_color,
                     # Q3(A) provenance click contract: source + valid_until always present.
                     "source": "Open-Meteo NWP (ECMWF/GFS)" if is_om else "BMKG Stasiun Klimatologi & Geofisika",
-                    "valid_until": datetime.fromtimestamp(now.timestamp() + 6 * 3600, tz=timezone.utc).isoformat(),
+                    "valid_until": ev.get("valid_until") or (datetime.fromtimestamp(now.timestamp() + 6 * 3600, tz=timezone.utc).isoformat() if is_om else None),
                     "bmkg_source": "BMKG Stasiun Klimatologi & Geofisika",
                     "nwp_source": "Open-Meteo Global NWP (ECMWF/GFS)",
                     "updated_at": now.isoformat(),
                     # Disruption numerics: parsed from BMKG/Open-Meteo sources.
                     "precipitation_mm_24h": precip_mm,
-                    "flood_risk_pct": flood_pct,
+                    "modeled_risk_pct": flood_pct if is_om else None,
                     "windspeed_kmh": wind_kmh,
                     "wind_speed_kmh": wind_kmh,
                     "bmkg_code": bmkg_code,
@@ -517,34 +499,70 @@ def _build_weather_candidates(
     return candidates
 
 
-async def get_fusion_snapshot() -> Dict[str, Any]:
-    """ONE upstream fusion pass: BMKG + Open-Meteo at full fidelity.
-
-    Returns the UNCAPPED candidate list plus upstream health. This is the only
-    function that touches the metered weather upstreams; the router caches its
-    result once (keyed by bbox + window only) and every weather endpoint —
-    ``/weather/summary`` and the polygon endpoints — derives from it. Filtering
-    by severity/precip/flood happens in memory, so a second endpoint can never
-    trigger a second upstream fetch.
-    """
-    logger.info("Fusing BMKG weather alerts + Open-Meteo atmospheric forecasts...")
-
-    bmkg_events, openmeteo_events, upstream = await _collect_weather_events()
+def get_cached_fusion_snapshot(*, records=None) -> Dict[str, Any] | None:
+    """Synchronously build fusion from already-persisted source observations."""
+    if records is None:
+        from app.services.public_operational_cache import read_cached_source_observations
+        records = read_cached_source_observations()
+    if not records or not any(isinstance(records.get(name), dict) for name in ("bmkg", "open_meteo")):
+        return None
+    bmkg = records.get("bmkg") or {}
+    openmeteo = records.get("open_meteo") or {}
+    bmkg_events = list(bmkg.get("events") or [])
+    openmeteo_events = list(openmeteo.get("events") or [])
+    errors = [f"{name}: {record['error']}" for name, record in (("bmkg", bmkg), ("open_meteo", openmeteo)) if record.get("error")]
+    bmkg_ok = bool(bmkg) and bmkg.get("status") not in ("degraded", "down")
+    om_ok = bool(openmeteo) and openmeteo.get("status") not in ("degraded", "down")
+    upstream = {
+        "bmkg_ok": bmkg_ok,
+        "open_meteo_ok": om_ok,
+        "degraded": not bmkg_ok and not om_ok,
+        "errors": errors,
+        "reason": "; ".join(errors) if errors else None,
+        "source_records": {
+            name: {key: record.get(key) for key in ("fetched_at", "observed_at", "valid_until", "status")}
+            for name, record in (("bmkg", bmkg), ("open_meteo", openmeteo)) if record
+        },
+    }
     candidates = _build_weather_candidates(
         bmkg_events, openmeteo_events, min_severity="low", min_precip=None, min_flood=None
     )
-
     now = datetime.now(timezone.utc)
+    expiries = [
+        datetime.fromisoformat(record["valid_until"].replace("Z", "+00:00"))
+        for record in (bmkg, openmeteo) if record.get("valid_until")
+    ]
+    valid_until = min(expiries).isoformat() if expiries else (now + timedelta(hours=WEATHER_VALIDITY_HOURS)).isoformat()
     return {
         "bbox": list(SUMATRA_BBOX),
-        "generated_at": now.isoformat(),
-        "valid_until": datetime.fromtimestamp(
-            now.timestamp() + WEATHER_VALIDITY_HOURS * 3600, tz=timezone.utc
-        ).isoformat(),
+        "generated_at": max((r.get("fetched_at", "") for r in (bmkg, openmeteo)), default="") or now.isoformat(),
+        "valid_until": valid_until,
         "window_hours": HAZARD_WINDOW_HOURS,
         "source": WEATHER_SUMMARY_SOURCE,
         "candidates": candidates,
         "upstream": upstream,
+    }
+
+
+async def get_fusion_snapshot(
+    *, refresh: bool = False, source: str | None = None, reserve_provider_budget=None
+) -> Dict[str, Any]:
+    """Fuse cached source records; refresh, when explicit, is source-scoped.
+
+    Source jobs own independent cadences. An unscoped call never refreshes
+    either provider, even when ``refresh=True`` is accidentally passed.
+    """
+    if refresh and source:
+        from app.services.public_operational_cache import refresh_public_operational_cache
+        await refresh_public_operational_cache(source=source, reserve_provider_budget=reserve_provider_budget)
+    snapshot = get_cached_fusion_snapshot()
+    if snapshot is not None:
+        return snapshot
+    now = datetime.now(timezone.utc)
+    return {
+        "bbox": list(SUMATRA_BBOX), "generated_at": now.isoformat(), "valid_until": None,
+        "window_hours": HAZARD_WINDOW_HOURS, "source": WEATHER_SUMMARY_SOURCE,
+        "candidates": [], "upstream": {"degraded": True, "errors": ["No cached source data"], "reason": "No cached source data"},
     }
 
 
@@ -568,7 +586,7 @@ def filter_candidates(
         if _SEVERITY_RANK.get(severity, 1) < min_rank:
             continue
         if not _passes_numeric_gate(
-            props.get("precipitation_mm_24h"), props.get("flood_risk_pct"),
+            props.get("precipitation_mm_24h"), props.get("modeled_risk_pct", props.get("flood_risk_pct")),
             min_precip, min_flood,
         ):
             continue
@@ -616,7 +634,7 @@ def render_polygon_payload(
         published_count = count
 
     metadata = {
-        "fusion_engine": "BMKG Radar Observation + Open-Meteo NWP Forecast",
+        "fusion_engine": "BMKG published weather forecast + Open-Meteo NWP forecast",
         "timestamp": generated_at,
         "updated_at": generated_at,
         # total = qualifying zones BEFORE the render cap. count = polygons
@@ -675,7 +693,7 @@ async def get_fused_spatial_weather(
 
     now_iso = datetime.now(timezone.utc).isoformat()
     metadata = {
-        "fusion_engine": "BMKG Radar Observation + Open-Meteo NWP Forecast",
+        "fusion_engine": "BMKG published weather forecast + Open-Meteo NWP forecast",
         "timestamp": now_iso,
         "updated_at": now_iso,
         # total = qualifying zones BEFORE the render cap. count = polygons

@@ -134,6 +134,12 @@ class FakeSupabase:
 def operator_client(monkeypatch):
     from app.db import local_storage, supabase_client
     from app.routers import approvals
+    from app.services import pilot_safety
+
+    # These are explicit live-path characterization tests. Shadow-mode coverage
+    # lives in test_pilot_shadow_safety.py and keeps all DB/dispatch calls hermetic.
+    monkeypatch.setattr(pilot_safety, "get_settings", lambda: SimpleNamespace(pilot_shadow_mode=False))
+    monkeypatch.setattr(approvals, "validate_live_route_decision", lambda *_args: None)
 
     db = FakeSupabase({
         "RIT-A": {

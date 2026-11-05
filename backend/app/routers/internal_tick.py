@@ -12,8 +12,8 @@ Contract
   ``404`` — an empty supplied token never matches.
 * Overlap: a process-local ``asyncio.Lock``. A second concurrent call gets
   ``202 {"accepted": false, "reason": "already_running"}`` and no work.
-* Cross-process / cross-restart overlap is handled in ``job_scheduler`` by the
-  per-job ``locked_until`` in Supabase.
+* Cross-process / cross-restart overlap is handled by owner/fence-checked
+  Supabase leases for both the tick and each scheduled job.
 * `GET /health` never touches this module; a tick cannot starve liveness checks
   because all job bodies run in a background task and Supabase/Redis work is
   pushed to a thread.
@@ -45,12 +45,10 @@ router = APIRouter(tags=["internal"])
 # waits before the 202; a hung Supabase must not hold the request open.
 _TICK_PLAN_TIMEOUT_SECONDS = 10.0
 
-# Phase 163a: after the batch jobs, the tick refreshes the dashboard read model
-# (dashboard_snapshots). The build already caps every section at 5 s and runs
-# them in parallel; this is the outer bound so a hung upstream can never hold the
-# tick lock open indefinitely. It runs inside the background task, never before
-# the 202 response.
-SNAPSHOT_BUILD_TIMEOUT_SECONDS = 30.0
+# A tick has a 180s total job budget; keep the durable lease alive for 240s to
+# leave margin for publication and owner-checked release before the next 5m tick.
+TICK_LEASE_TTL_SECONDS = 240
+SNAPSHOT_BUILD_TIMEOUT_SECONDS = 20.0
 
 _tick_lock = asyncio.Lock()
 _tick_tasks: set[asyncio.Task] = set()
@@ -84,19 +82,14 @@ def _state_unavailable_skips() -> list[dict]:
     ]
 
 
-async def _refresh_dashboard_snapshot(run_id: str) -> None:
-    """Build + store the dashboard snapshot after the jobs. Never raises.
-
-    This is the *only* writer of ``dashboard_snapshots`` (Phase 163a). It runs
-    on every tick - including a tick with no batch job due - so the read model
-    stays inside the 600 s staleness window even when nothing else is scheduled.
-    """
-    from app.services import dashboard_snapshot_service
+async def _refresh_dashboard_snapshot(run_id: str, lease) -> None:
+    """Publish the curated shared projection under the active tick fence."""
+    from app.services import public_snapshot_service
 
     started = time.monotonic()
     try:
         status = await asyncio.wait_for(
-            dashboard_snapshot_service.build_and_store_global_snapshot(),
+            public_snapshot_service.refresh_public_snapshot(lease=lease),
             timeout=SNAPSHOT_BUILD_TIMEOUT_SECONDS,
         )
     except asyncio.CancelledError:
@@ -129,21 +122,35 @@ async def _refresh_dashboard_snapshot(run_id: str) -> None:
         )
 
 
-async def _run_tick(plan: job_scheduler.TickPlan, run_id: str) -> None:
+async def _run_tick(plan: job_scheduler.TickPlan, run_id: str, lease) -> None:
+    from app.services.refresh_coordinator import release_refresh_lease
+
     try:
         try:
-            await job_scheduler.run_tick(plan=plan, run_id=run_id)
+            # Await each real cycle and durable completion before publication;
+            # the HTTP 202 only acknowledges acceptance, not job completion.
+            result = await job_scheduler.run_tick(plan=plan, run_id=run_id)
+            tick_result = result if isinstance(result, dict) else {}
+            logger.info(
+                "internal tick %s cycles complete: executed=%d deferred=%d",
+                run_id,
+                len(tick_result.get("executed") or []),
+                len(tick_result.get("deferred") or []),
+            )
         except asyncio.CancelledError:
             logger.info("internal tick %s cancelled", run_id)
             raise
         except Exception as exc:  # a background tick must never surface as an error
             logger.warning("internal tick %s failed: %s", run_id, exc)
 
-        # Phase 163a: refresh the dashboard read model in the same background
-        # task, after the jobs (and even when no job was due). The 202 has
-        # already been returned; a failed snapshot never fails the tick.
-        await _refresh_dashboard_snapshot(run_id)
+        await _refresh_dashboard_snapshot(run_id, lease)
     finally:
+        try:
+            released = await release_refresh_lease(lease)
+            if not released:
+                logger.warning("internal tick %s fenced release rejected", run_id)
+        except Exception as exc:
+            logger.warning("internal tick %s lease release failed: %s", run_id, exc)
         if _tick_lock.locked():
             _tick_lock.release()
 
@@ -180,18 +187,59 @@ async def internal_tick(
             },
         )
 
-    # No await between the check and the acquire, so this is atomic on the loop.
+    # The process lock avoids wasted local reads; the DB lease is authoritative
+    # across Render instances, restarts, and overlapping cron deliveries.
     await _tick_lock.acquire()
     run_id = job_scheduler.new_run_id()
+    from app.services.refresh_coordinator import (
+        CoordinationUnavailable,
+        acquire_refresh_lease,
+        release_refresh_lease,
+    )
+
+    try:
+        lease = await acquire_refresh_lease(
+            "internal_tick", ttl_seconds=TICK_LEASE_TTL_SECONDS
+        )
+        if lease is None:
+            _tick_lock.release()
+            return JSONResponse(
+                status_code=202,
+                content={
+                    "accepted": False,
+                    "reason": "already_running",
+                    "due": [],
+                    "skipped": [],
+                    "run_id": run_id,
+                },
+            )
+    except asyncio.CancelledError:
+        _tick_lock.release()
+        raise
+    except CoordinationUnavailable as exc:
+        _tick_lock.release()
+        logger.warning("internal tick %s cannot acquire shared lease: %s", run_id, exc)
+        return JSONResponse(
+            status_code=202,
+            content={
+                "accepted": False,
+                "reason": "state_unavailable",
+                "due": [],
+                "skipped": _state_unavailable_skips(),
+                "run_id": run_id,
+            },
+        )
 
     try:
         plan = await asyncio.wait_for(
             job_scheduler.plan_tick(), timeout=_TICK_PLAN_TIMEOUT_SECONDS
         )
     except asyncio.CancelledError:
+        await release_refresh_lease(lease)
         _tick_lock.release()
         raise
     except Exception as exc:
+        await release_refresh_lease(lease)
         _tick_lock.release()
         logger.warning("internal tick %s could not plan (%s); nothing scheduled", run_id, exc)
         return {
@@ -202,7 +250,9 @@ async def internal_tick(
             "run_id": run_id,
         }
 
-    task = asyncio.create_task(_run_tick(plan, run_id), name=f"prehub:internal-tick:{run_id}")
+    task = asyncio.create_task(
+        _run_tick(plan, run_id, lease), name=f"prehub:internal-tick:{run_id}"
+    )
     _tick_tasks.add(task)
     task.add_done_callback(_tick_tasks.discard)
 

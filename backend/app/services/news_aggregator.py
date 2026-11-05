@@ -16,7 +16,6 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any, Optional
 import httpx
-from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -608,33 +607,64 @@ async def resolve_canonical_article_url_async(
 
     clean_url = raw_url.strip()
 
-    # Fast check: already a direct publisher URL with deep path
+    # Unwrap simple Google redirect URLs without network access.
     try:
-        p = urlparse(clean_url)
-        if p.netloc and "google." not in p.netloc and p.path not in ("", "/"):
-            # Reject dummy test IDs / Antara URLs missing their numeric CMS id
+        parsed = urlparse(clean_url)
+        if parsed.netloc and "google." in parsed.netloc:
+            path = parsed.path.rstrip("/")
+            if path in ("/url", "/redirect"):
+                query = dict(urllib.parse.parse_qsl(parsed.query))
+                target = (query.get("q") or query.get("url") or "").strip()
+                if target.startswith(("http://", "https://")):
+                    clean_url = target
+            elif parsed.path.startswith("/amp/s/"):
+                target_host = parsed.path[len("/amp/s/"):]
+                if target_host:
+                    clean_url = "https://" + target_host + (f"?{parsed.query}" if parsed.query else "")
+    except Exception:
+        pass
+
+    try:
+        parsed = urlparse(clean_url)
+        is_google_host = bool(parsed.netloc and "google." in parsed.netloc)
+        if parsed.netloc and not is_google_host and parsed.path not in ("", "/"):
             if _is_unresolvable_article_url(clean_url):
                 return _map_publisher_deep_fallback(title, source, clean_url)
             return clean_url
     except Exception:
-        pass
+        is_google_host = False
 
-    # First check CBMi synchronous decode (also unwraps Google search/redirect hosts)
-    resolved = resolve_canonical_article_url(clean_url, title, source)
-    if resolved:
-        return resolved
-
-    # Handle Google News wrapper async
-    if "news.google.com" in clean_url and ("/articles/" in clean_url or "/rss/articles/" in clean_url or "/read/" in clean_url):
+    # Opaque Google News tokens are always decoded through async HTTP here. Do
+    # not call the sync resolver: its legacy fallback performs blocking requests.
+    if is_google_host and "news.google.com" in clean_url and any(
+        marker in clean_url for marker in ("/articles/", "/rss/articles/", "/read/")
+    ):
         token_match = re.search(r'/(?:articles|read)/([a-zA-Z0-9_-]+)', clean_url)
         if token_match:
             token = token_match.group(1)
-            # 1. Try batchexecute RPC async
+            if "CBMi" in token:
+                try:
+                    b64_sub = token[token.find("CBMi"):]
+                    padded = b64_sub + "=" * (-len(b64_sub) % 4)
+                    raw_bytes = base64.urlsafe_b64decode(padded)
+                    url_match = re.search(
+                        rb'https?://[a-zA-Z0-9.\-_~:/?#\[\]@!$&\'()*+,;=%]+',
+                        raw_bytes,
+                    )
+                    if url_match:
+                        extracted = url_match.group(0).decode("utf-8", errors="ignore").rstrip(
+                            "\\\x00\x01\x02\x03\x04\x05\x06\x07\x08\t\r\n"
+                        )
+                        target = urlparse(extracted)
+                        if target.netloc and "google.com" not in target.netloc and target.path not in ("", "/"):
+                            return extracted
+                except Exception as exc:
+                    logger.debug("CBMi local decode failed for %s: %s", token, exc)
+
             decoded = await _decode_google_news_token_async(token, client=client, timeout=timeout)
             if decoded:
                 return decoded
 
-            # 2. Try following HTTP GET redirects with desktop browser User-Agent
             close_client = False
             if client is None:
                 client = httpx.AsyncClient(follow_redirects=True, timeout=timeout)
@@ -642,20 +672,21 @@ async def resolve_canonical_article_url_async(
             try:
                 resp = await client.get(
                     f"https://news.google.com/rss/articles/{token}?hl=id-ID&gl=ID&ceid=ID:id",
-                    headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+                    headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
                 )
                 final_url = str(resp.url)
-                p = urlparse(final_url)
-                if p.netloc and "google.com" not in p.netloc and p.path not in ("", "/"):
+                target = urlparse(final_url)
+                if target.netloc and "google.com" not in target.netloc and target.path not in ("", "/"):
                     return final_url
-            except Exception as e:
-                logger.debug(f"Async redirect check failed for {clean_url}: {e}")
+            except Exception as exc:
+                logger.debug("Async redirect check failed for %s: %s", clean_url, exc)
             finally:
                 if close_client:
                     await client.aclose()
 
-    # Unresolvable (undecodable wrapper / Google landing / bare root) → drop.
-    return _map_publisher_deep_fallback(title, source, clean_url)
+    # Remaining resolver logic is local-only now; no Google wrapper can reach
+    # the synchronous decoder above this point.
+    return resolve_canonical_article_url(clean_url, title, source)
 
 
 LOGISTICS_DISASTER_KEYWORDS = (
@@ -1187,6 +1218,29 @@ async def fetch_all_multi_outlet_news() -> List[Dict[str, Any]]:
     return unique_articles
 
 
+def _execute_news_upsert(records: List[Dict[str, Any]]) -> int:
+    if not records:
+        return 0
+    try:
+        from app.db.supabase_client import get_service_client
+        sb = get_service_client()
+    except Exception as e:
+        logger.warning("Supabase client unavailable for news upsert: %s", e)
+        return 0
+
+    upsert_count = 0
+    for start in range(0, len(records), 50):
+        chunk = records[start:start + 50]
+        try:
+            res = sb.table("news_articles").upsert(chunk, on_conflict="link").execute()
+            if res.data:
+                upsert_count += len(res.data)
+        except Exception as exc:
+            logger.error("Error upserting news chunk to Supabase: %s", exc)
+    logger.info("Successfully upserted %s articles to Supabase public.news_articles", upsert_count)
+    return upsert_count
+
+
 async def upsert_articles_to_supabase(articles: List[Dict[str, Any]]) -> int:
     """
     Persists structured articles with PostGIS coordinates directly into Supabase public.news_articles.
@@ -1195,14 +1249,6 @@ async def upsert_articles_to_supabase(articles: List[Dict[str, Any]]) -> int:
     if not articles:
         return 0
 
-    try:
-        from app.db.supabase_client import get_service_client
-        sb = get_service_client()
-    except Exception as e:
-        logger.warning(f"Supabase client unavailable for news upsert: {e}")
-        return 0
-
-    upsert_count = 0
     records = []
     
     for a in articles:
@@ -1304,22 +1350,13 @@ async def upsert_articles_to_supabase(articles: List[Dict[str, Any]]) -> int:
             "raw_description": a.get("raw_description") or a.get("summary"),
             "summary": a.get("summary") or a.get("title"),
             "link_alive": a.get("link_alive", "unknown"),
-            "published_at": a.get("published_at") or _pub_iso or datetime.now(timezone.utc).isoformat()
         }
+        source_published_at = a.get("published_at") or _pub_iso
+        if source_published_at is not None:
+            record["published_at"] = source_published_at
         records.append(record)
 
-    # Batch upsert in chunks of 50
-    chunk_size = 50
-    for i in range(0, len(records), chunk_size):
-        chunk = records[i:i + chunk_size]
-        try:
-            res = sb.table("news_articles").upsert(chunk, on_conflict="link").execute()
-            if res.data:
-                upsert_count += len(res.data)
-        except Exception as ue:
-            logger.error(f"Error upserting news chunk to Supabase: {ue}")
-
-    logger.info(f"Successfully upserted {upsert_count} articles to Supabase public.news_articles")
+    upsert_count = await asyncio.to_thread(_execute_news_upsert, records)
     # Remember everything in-process so the next 5-min cycle skips LLM calls
     # even if Supabase is unreachable.
     for a in articles:
@@ -1789,6 +1826,7 @@ async def fetch_news_from_supabase(
     province: Optional[str] = None,
     severity: Optional[str] = None,
     include_regional: bool = False,
+    raise_on_error: bool = False,
 ) -> List[Dict[str, Any]]:
     """
     Retrieves dynamic verified news articles from Supabase public.news_articles.
@@ -1805,28 +1843,30 @@ async def fetch_news_from_supabase(
     (`DROPPED_IRRELEVANT`) so nothing downstream can mistake them for hazards.
     The read path decides `crisis | regional | dropped` and drops the marker.
 
-    Rows repaired by that heuristic are written back to Supabase in one batched
-    upsert before returning (`persist_re_tiered_news_rows`), so the next read
-    sees `schema_version == 7` and never runs the heuristic again. The write-back
-    is best effort and can never fail this read.
+    The function is a stored-data read: heuristic repairs are response-local and
+    are never written back. Set `raise_on_error=True` when the caller must
+    distinguish an unavailable database from a healthy empty result.
     """
-    try:
+    def _read_rows():
         from app.db.supabase_client import get_client
-        sb = get_client()
-        query = sb.table("news_articles").select("*").order("created_at", desc=True).limit(limit)
 
+        query = get_client().table("news_articles").select("*").order(
+            "created_at", desc=True
+        ).limit(limit)
         if province:
             query = query.eq("province", province)
         if severity:
             query = query.eq("severity", severity)
+        return query.execute()
 
-        # PostgREST read is sync and can take 10s+ on a cold connection; run it
-        # off the event loop so a snapshot/tick section cannot stall every
-        # other concurrent request (phase 163 follow-up).
-        res = await asyncio.to_thread(query.execute)
+    try:
+        # Client construction, query execution and response parsing stay off-loop.
+        res = await asyncio.to_thread(_read_rows)
         rows = res.data or []
     except Exception as e:
-        logger.warning(f"Error fetching news articles from Supabase: {e}")
+        logger.warning("Error fetching news articles from Supabase: %s", e)
+        if raise_on_error:
+            raise
         return []
 
     # Lazy import to avoid cycles; fallback to inline minimal tiering if unavailable.
@@ -1836,14 +1876,11 @@ async def fetch_news_from_supabase(
         _re_tier = None
 
     cleaned: List[Dict[str, Any]] = []
-    re_tiered_rows: List[Dict[str, Any]] = []
     for row in rows:
-        _unpack_applied: List[Dict[str, Any]] = []
         try:
-            row = _unpack_ground_truth_metrics(dict(row), _unpack_applied)
+            row = _unpack_ground_truth_metrics(dict(row))
         except Exception:
             continue
-        _was_re_tiered = bool(_unpack_applied)
         # Legacy rows missing zone_tier or carrying stale schema: re-run
         # fast heuristic on read (schema_version != 7 forces v7 re-tier).
         _needs_retier = (not row.get("zone_tier"))
@@ -1901,7 +1938,6 @@ async def fetch_news_from_supabase(
                 # Always refresh ground_truth_metrics to v7.
                 try:
                     row["ground_truth_metrics"] = re_tiered.get("ground_truth_metrics", row.get("ground_truth_metrics"))
-                    _was_re_tiered = True
                 except Exception:
                     pass
             except Exception:
@@ -1954,15 +1990,5 @@ async def fetch_news_from_supabase(
             # Old rows that only matched a fallback province centroid without a
             # real location carry no usable coordinates → hide from map.
             continue
-        if _was_re_tiered:
-            re_tiered_rows.append(row)
         cleaned.append(row)
-
-    # One batched write-back for exactly the rows this read re-tiered. Never
-    # fails the read, never rewrites an already-v7 row.
-    if re_tiered_rows:
-        try:
-            await asyncio.to_thread(persist_re_tiered_news_rows, re_tiered_rows)
-        except Exception as e:
-            logger.warning(f"News re-tier write-back skipped: {e}")
     return cleaned

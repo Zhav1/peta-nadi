@@ -22,25 +22,23 @@ listing are both unreachable, fetch() returns {"status": "unavailable",
 "items": []} and parse() returns [] so GET /api/v1/bnpb/events serves an
 honest [] with status=unavailable.
 
-Emitted event shape:
-    {source: bnpb, event_type: flood|landslide|earthquake|wildfire|storm|
-     drought|tsunami|coastal|other, severity, lat, lon, radius_km,
-     title, raw, ts, dedup_key: bnpb:dibi:{id}}
+Bulletin reports are marked `reported_unverified`; coordinates are included
+only when the provider supplies a point, with no inferred radius or footprint.
+CKAN aggregate rows are marked `stats` and carry an aggregate reference point;
+they are not included as active disaster reports.
 Severity derives from korban/mengungsi counts in the bulletin text:
   meninggal >= 1 or mengungsi >= 1000 -> critical
   mengungsi >= 100 or luka >= 10 or terdampak >= 500 -> high
   else medium.
-Coordinates resolve gazetteer-first (PAN_SUMATRA_GAZETTEER longest-key
-match), then the shared geocode_router/gazetteer Nominatim path via
-app.nlp.geocoding_service.geocode; unresolvable or out-of-Sumatra
-(94-108E / -6.5..6.5N) items are dropped, never centroid-fabricated.
 """
 import asyncio
 import hashlib
+import inspect
 import json
 import logging
+import math
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
@@ -90,6 +88,7 @@ CKAN_PAGE_LIMIT = 500          # datastore_search limit per request
 CKAN_MAX_PAGES_PER_RESOURCE = 12
 CKAN_MAX_ROWS_TOTAL = 5000
 CKAN_POLITE_DELAY_SECONDS = 1.0  # <=1 req/s politeness (tests patch to 0)
+MAX_HTTP_REQUESTS_PER_FETCH = 12
 # Formalized bulletin listing fallback.
 BNPB_BULLETIN_URLS = [
     "https://bnpb.go.id/berita",
@@ -108,7 +107,6 @@ EVENT_KEYWORDS: List[Tuple[str, Tuple[str, ...]]] = [
     ("coastal", ("abrasi", "gelombang tinggi", "gelombang pasang")),
 ]
 
-SEVERITY_RADIUS_KM = {"critical": 10.0, "high": 5.0, "medium": 2.5, "low": 1.0}
 
 # CKAN datastore hazard-column -> event_type mapping (substring match on the
 # UPPERCASED column name; each column is claimed by the first matching type).
@@ -127,7 +125,13 @@ CKAN_HAZARD_COLUMNS: List[Tuple[str, Tuple[str, ...]]] = [
 
 CKAN_GEO_KEYS = ("latitude", "longitude", "lat", "lon", "lintang", "bujur")
 CKAN_ID_KEYS = ("_id", "id", "id_kejadian")
-CKAN_LEVEL_RADIUS_KM = {"kab": 10.0, "prov": 25.0}
+
+# Mainland-only tokens for current bulletin observations; island provinces are
+# intentionally not folded into this eight-province observed-data slice.
+MAINLAND_PROVINCE_TOKENS = (
+    "sumatera utara", "sumut", "sumatera barat", "sumbar",
+    "sumatera selatan", "sumsel", "aceh", "riau", "jambi", "bengkulu", "lampung",
+)
 
 # Sumatra-only province tokens (incl. Babel + Kepri variants).
 SUMATRA_PROVINCE_TOKENS = (
@@ -145,6 +149,38 @@ SUMATRA_PROVINCE_TOKENS = (
 )
 
 _NUM = r"(\d[\d\.]*)"
+
+
+def _parse_source_datetime(raw: Any) -> Optional[datetime]:
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed.astimezone(timezone.utc)
+
+
+def _source_coordinates(row: Dict[str, Any]) -> Tuple[Optional[float], Optional[float]]:
+    """Read only an explicit provider point; never geocode or assign a radius."""
+    lat_raw = row.get("lat", row.get("latitude", row.get("Latitude")))
+    lon_raw = row.get("lon", row.get("longitude", row.get("Longitude")))
+    if (
+        isinstance(lat_raw, bool) or not isinstance(lat_raw, (int, float, str))
+        or isinstance(lon_raw, bool) or not isinstance(lon_raw, (int, float, str))
+    ):
+        return None, None
+    try:
+        lat, lon = float(lat_raw), float(lon_raw)
+    except ValueError:
+        return None, None
+    if not (math.isfinite(lat) and math.isfinite(lon)):
+        return None, None
+    if not (-6.5 <= lat <= 6.5 and 94.0 <= lon <= 105.8):
+        return None, None
+    return lat, lon
 
 
 def _to_int(raw: Optional[str]) -> int:
@@ -349,7 +385,7 @@ def ckan_row_in_sumatra(row: Dict[str, Any], lat: float, lon: float) -> bool:
 
 
 def ckan_row_level(row: Dict[str, Any]) -> str:
-    """'kab' for kabupaten/kota-level rows, else 'prov' (drives radius_km)."""
+    """Return the provider row's kabupaten/kota or province aggregation level."""
     if isinstance(row.get("_ckan_level"), str) and row["_ckan_level"] in ("kab", "prov"):
         return str(row["_ckan_level"])
     lowered_keys = {str(k).strip().lower() for k in row.keys() if isinstance(k, str)}
@@ -367,81 +403,118 @@ class BNPBAdapter(BaseAdapter):
     stream_key = STREAM_BNPB
     poll_interval_seconds = 3600  # 1h async cadence
 
-    async def health_check(self) -> bool:
+    def __init__(self, reserve_provider_budget=None):
+        super().__init__()
+        self.reserve_provider_budget = reserve_provider_budget
+        self.deduplicate = True
+        self._request_count = 0
+        self._successful_ckan_calls = 0
+        self._budget_denied = False
+        self._request_id = "bnpb"
+
+    async def _request(self, client, method: str, url: str, **kwargs):
+        """Reserve one provider unit before every outgoing HTTP request."""
+        if self.reserve_provider_budget is None or self._request_count >= MAX_HTTP_REQUESTS_PER_FETCH:
+            self._budget_denied = True
+            return None
         try:
-            async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
-                res = await client.head("https://bnpb.go.id/", headers={"User-Agent": "PreHubSumatraLogistics/1.0"})
-                if res.status_code == 200:
+            allowed = self.reserve_provider_budget(
+                self.source_name,
+                units=1,
+                request_id=f"{self._request_id}:{self._request_count + 1}",
+            )
+            if inspect.isawaitable(allowed):
+                allowed = await allowed
+        except Exception as exc:
+            logger.warning("BNPB request budget check failed closed: %s", exc)
+            self._budget_denied = True
+            return None
+        if not allowed:
+            self._budget_denied = True
+            return None
+        self._request_count += 1
+        return await getattr(client, method)(url, **kwargs)
+
+    async def health_check(self) -> bool:
+        """Fail closed when the poll coordinator has not supplied a budget."""
+        if self.reserve_provider_budget is None:
+            return False
+        try:
+            headers = {"User-Agent": "PreHub non-commercial Sumatra shadow pilot (contact@pidi.id)"}
+            async with httpx.AsyncClient(timeout=5.0, follow_redirects=False, headers=headers) as client:
+                res = await self._request(client, "head", "https://bnpb.go.id/")
+                if res is not None and res.status_code == 200:
                     return True
-                # CKAN Action API counts as healthy too (Tier-0 feed).
-                try:
-                    cres = await client.get(
-                        f"{CKAN_BASE}/status_show",
-                        headers={"User-Agent": "PreHubSumatraLogistics/1.0"},
-                    )
-                    if cres.status_code == 200:
-                        return True
-                except Exception as ce:
-                    logger.debug(f"BNPB CKAN health probe failed: {ce}")
-                res = await client.get("https://bnpb.go.id/", headers={"User-Agent": "PreHubSumatraLogistics/1.0"})
-                return res.status_code == 200
+                cres = await self._request(client, "get", f"{CKAN_BASE}/status_show")
+                return bool(cres is not None and cres.status_code == 200)
         except Exception as e:
             logger.warning(f"BNPB health check failed: {e}")
             return False
 
-    async def fetch(self) -> Dict[str, Any]:
-        """Tier-0 CKAN Action API first; then DIBI guesses; then bulletin; else honest empty."""
-        headers = {"User-Agent": "PreHubSumatraLogistics/1.0 (Live Fleet Pilot Sumatra; contact@pidi.id)"}
-        async with httpx.AsyncClient(timeout=12.0, follow_redirects=True, headers=headers) as client:
+    async def fetch(self, *, reserve_provider_budget=None) -> Dict[str, Any]:
+        """Tier-0 CKAN first; valid empty results differ from unavailable feeds."""
+        if reserve_provider_budget is not None:
+            self.reserve_provider_budget = reserve_provider_budget
+        self._request_count = 0
+        self._successful_ckan_calls = 0
+        self._budget_denied = False
+        headers = {"User-Agent": "PreHub non-commercial Sumatra shadow pilot (contact@pidi.id)"}
+        async with httpx.AsyncClient(timeout=12.0, follow_redirects=False, headers=headers) as client:
             try:
                 ckan_items = await self._fetch_ckan(client)
-                if ckan_items:
-                    logger.info(f"BNPB adapter: CKAN hit ({len(ckan_items)} rows)")
+                if self._budget_denied:
+                    return {"status": "budget_denied", "endpoint": None, "items": []}
+                if self._successful_ckan_calls:
                     return {"status": "ckan", "endpoint": CKAN_BASE, "items": ckan_items}
             except Exception as e:
                 logger.debug(f"BNPB CKAN tier failed, falling through: {e}")
             for url in DIBI_CANDIDATES:
                 try:
-                    res = await client.get(url)
-                    if res.status_code != 200:
+                    res = await self._request(client, "get", url)
+                    if res is None or res.status_code != 200:
                         continue
                     try:
                         payload = res.json()
                     except Exception:
                         continue
                     items = payload if isinstance(payload, list) else payload.get("data") or payload.get("items") or []
-                    if isinstance(items, list) and items:
-                        logger.info(f"BNPB adapter: DIBI hit {url} ({len(items)} rows)")
+                    if isinstance(items, list):
                         return {"status": "dibi", "endpoint": url, "items": items}
                 except Exception as e:
                     logger.debug(f"BNPB DIBI candidate {url} failed: {e}")
                     continue
+            bulletin_items = []
+            bulletin_reachable = False
             for url in BNPB_BULLETIN_URLS:
                 try:
-                    res = await client.get(url)
-                    if res.status_code == 200 and res.text:
-                        items = self._bulletin_items(res.text, url)
-                        if items:
-                            logger.info(f"BNPB adapter: bulletin hit {url} ({len(items)} items)")
-                            return {"status": "bulletin", "endpoint": url, "items": items}
+                    res = await self._request(client, "get", url)
+                    if res is not None and res.status_code == 200 and res.text:
+                        bulletin_reachable = True
+                        bulletin_items.extend(self._bulletin_items(res.text, url))
                 except Exception as e:
                     logger.debug(f"BNPB bulletin fallback {url} failed: {e}")
                     continue
-        logger.warning("BNPB adapter: DIBI + bulletin unreachable — honest empty")
-        return {"status": "unavailable", "endpoint": None, "items": []}
+            if bulletin_reachable:
+                return {"status": "bulletin", "endpoint": BNPB_BULLETIN_URLS[0], "items": bulletin_items[:30]}
+        status = "budget_denied" if self._budget_denied else "unavailable"
+        logger.warning("BNPB fetch produced %s", status)
+        return {"status": status, "endpoint": None, "items": []}
 
     async def _ckan_get(self, client: httpx.AsyncClient, action: str,
                         params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """GET one CKAN Action API call; None on any failure (never raises)."""
         try:
-            res = await client.get(f"{CKAN_BASE}/{action}", params=params)
-            if res.status_code != 200:
+            res = await self._request(client, "get", f"{CKAN_BASE}/{action}", params=params)
+            if res is None or res.status_code != 200:
                 return None
             payload = res.json()
             if not isinstance(payload, dict) or not payload.get("success"):
                 return None
             result = payload.get("result")
-            return result if isinstance(result, dict) else None
+            if isinstance(result, dict):
+                self._successful_ckan_calls += 1
+                return result
+            return None
         except Exception as e:
             logger.debug(f"BNPB CKAN {action} failed: {e}")
             return None
@@ -578,7 +651,6 @@ class BNPBAdapter(BaseAdapter):
             r = get_redis()
         except Exception:
             r = None
-        now_iso = datetime.now(timezone.utc).isoformat()
         for row in items:
             try:
                 if not isinstance(row, dict):
@@ -589,39 +661,45 @@ class BNPBAdapter(BaseAdapter):
                     continue
                 text = f"{title} {body}"
                 lowered = text.lower()
-                # Sumatra-only: require a Q8 region token or gazetteer hit.
-                if not any(reg in lowered for reg in Q8_REGIONS) and not gazetteer_coords(text):
+                province = next((p for p in MAINLAND_PROVINCE_TOKENS if p in lowered), None)
+                if not province:
+                    continue
+                raw_ts = row.get("ts") or row.get("created_at") or row.get("published_at") or row.get("tanggal") or row.get("date")
+                parsed_ts = _parse_source_datetime(raw_ts)
+                if not parsed_ts or parsed_ts < datetime.now(timezone.utc) - timedelta(days=7):
                     continue
                 event_type = detect_event_type(text)
-                severity, impact = severity_from_impact(text)
-                geo = await resolve_coords(text)
-                if not geo:
+                if event_type == "other":
                     continue
-                lat, lon, matched = geo
+                severity, impact = severity_from_impact(text)
+                lat, lon = _source_coordinates(row)
                 raw_id = str(row.get("id") or row.get("id_kejadian") or hashlib.md5(title.encode("utf-8")).hexdigest()[:12])
                 dedup_key = f"bnpb:dibi:{raw_id}"
-                if r is not None:
+                if self.deduplicate and r is not None:
                     try:
                         if r.get(f"lrip:dedup:{dedup_key}"):
                             continue
                         r.set(f"lrip:dedup:{dedup_key}", "1", ex=7 * 86400)
                     except Exception as de:
                         logger.debug(f"BNPB dedup skipped: {de}")
-                events.append({
+                event = {
                     "source": self.source_name,
                     "event_type": event_type,
                     "severity": severity,
-                    "lat": str(lat),
-                    "lon": str(lon),
-                    "radius_km": SEVERITY_RADIUS_KM.get(severity, 2.5),
                     "title": title[:220],
                     "link": row.get("link"),
-                    "matched_region": matched,
+                    "matched_region": province,
                     "impact": json.dumps(impact),
                     "raw": json.dumps(row, default=str)[:4000],
-                    "ts": now_iso,
+                    "ts": parsed_ts.isoformat(),
+                    "status": "reported_unverified",
+                    "verification_status": "unverified_official_bulletin_report",
+                    "geometry_role": "source_report_point" if lat is not None else "extent_unknown",
                     "dedup_key": dedup_key,
-                })
+                }
+                if lat is not None and lon is not None:
+                    event.update({"lat": str(lat), "lon": str(lon)})
+                events.append(event)
             except Exception as e:
                 logger.debug(f"BNPB parse row skipped: {e}")
                 continue
@@ -656,7 +734,7 @@ class BNPBAdapter(BaseAdapter):
                     continue
                 region = ckan_row_region(row) or "Sumatera"
                 level = ckan_row_level(row)
-                radius = CKAN_LEVEL_RADIUS_KM.get(level, 25.0)
+
                 resource_id = str(row.get("_ckan_resource_id") or "bootstrap")
                 dataset = str(row.get("_ckan_dataset") or "")
                 ts = str(row.get("_ckan_updated_at") or now_iso) or now_iso
@@ -670,7 +748,7 @@ class BNPBAdapter(BaseAdapter):
                 for event_type in sorted(hazards):
                     count = hazards[event_type]
                     dedup_key = f"bnpb:ckan:{resource_id}:{record_id}:{event_type}"
-                    if r is not None:
+                    if self.deduplicate and r is not None:
                         try:
                             if r.get(f"lrip:dedup:{dedup_key}"):
                                 continue
@@ -689,7 +767,7 @@ class BNPBAdapter(BaseAdapter):
                         "status": "stats",
                         "lat": str(lat),
                         "lon": str(lon),
-                        "radius_km": radius,
+                        "geometry_role": "aggregate_reference_point",
                         "title": title[:220],
                         "link": link,
                         "matched_region": region[:80],

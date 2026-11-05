@@ -2,17 +2,11 @@
 
 One auth-aware request replaces the ~25-30 endpoint first-paint fan-out:
 
-* public sections come from the DB-backed read model
-  (``dashboard_snapshots``, written by the external tick);
-* a stored row is served immediately (stale-first): fresh (<= 600 s) with
-  ``stale=false``; stale (> 600 s) with ``stale=true`` + ``snapshot_stale``
-  while a detached background refresh rebuilds (single-flight, never blocks);
-* a *fresh* (or in-memory) row whose ``source_freshness`` marks fire/weather
-  degraded/stale is still served immediately, but it schedules the same
-  background refresh (a degraded read must not suppress revalidation);
-* no stored row triggers a bounded single-flight live build (the build itself
-  is capped at 16 s to cover slow fire/weather sections, while the caller waits
-  at most the 8 s first-paint budget and the build continues to cache);
+* public sections come only from ``public.public_dashboard_snapshots``;
+* the request path never refreshes sources, builds a snapshot, or schedules work;
+* a stored row is served stale-first with durable per-section source clocks;
+* a missing/unavailable row returns honest ``unknown`` sections and waits for a
+  later scheduled tick rather than reaching upstream providers;
 * ``DISPATCHER`` / ``REGULATOR`` additionally get tenant-scoped ``fleet`` and
   ``erp`` sections, built live from the existing service/router caches.
 
@@ -23,13 +17,13 @@ Contract
   ``sections=public`` is auth-blind: it ignores ``Authorization`` entirely.
 * ``sections=all|public|tenant`` (default ``all``). Invalid -> 400 +
   ``Cache-Control: private, no-store``.
-* ``sections=public`` returns role GUEST, no company_id/fleet/erp,
-  ``Cache-Control: public, s-maxage=30, stale-while-revalidate=60``.
+* ``sections=public`` returns the curated singleton projection (no fleet, ERP,
+  company identifiers, or tenant data) with a bounded persisted read.
 * ``sections=tenant`` skips public sections, builds fleet/erp only,
   ``private, no-store``; a guest gets empty sections (200), never 401.
 * ``sections=all`` preserves the previous behaviour exactly.
-* This endpoint only reads/builds. It never runs a tick, never ingests, and
-  never writes a snapshot (background refreshes cache in memory only).
+* This endpoint is strictly read-only. Snapshot publication is performed only
+  by the fenced scheduled tick.
 """
 
 from __future__ import annotations
@@ -357,83 +351,24 @@ def _schedule_background_refresh(corridor_id: Optional[str]) -> None:
         pass
 
 
-async def _resolve_sections(corridor_id: Optional[str]) -> tuple[dict, Optional[str], bool, Optional[str]]:
-    """Return ``(sections, computed_at, stale, reason)``.
+async def _resolve_sections(corridor_id: Optional[str]) -> tuple[dict, Optional[str], bool, Optional[str], dict]:
+    """Read the persisted public singleton only; never build or trigger refresh."""
+    from app.services import public_snapshot_service
 
-    Stale-first: a stored row is served immediately (fresh -> ``stale=false``;
-    older than 600 s -> ``stale=true``/``snapshot_stale`` with a detached
-    background refresh). No stored row -> single-flight bounded live build.
-    Never raises (except ``CancelledError`` on client abort, which never
-    cancels the shared build thanks to ``asyncio.shield``).
-    """
-    try:
-        mem = _get_memory_snapshot(corridor_id)
-        if mem is not None:
-            mem_age = snapshots.snapshot_age_seconds(mem)
-            if mem_age is not None and mem_age <= snapshots.STALE_AFTER_SECONDS:
-                if _needs_revalidation(mem):
-                    try:
-                        _schedule_background_refresh(corridor_id)
-                    except Exception as exc:
-                        logger.warning("dashboard bootstrap: background refresh failed: %s", exc)
-                return dict(mem.get("payload") or {}), mem.get("computed_at"), False, None
-    except Exception:
-        pass
+    snapshot = await public_snapshot_service.read_public_snapshot()
+    if snapshot is None:
+        empty = public_snapshot_service.empty_public_snapshot()
+        return empty["sections"], None, True, "missing_snapshot", empty
 
-    snapshot = await asyncio.to_thread(snapshots.read_global_snapshot)
-    age = snapshots.snapshot_age_seconds(snapshot)
-
-    if snapshot is not None and age is not None and age <= snapshots.STALE_AFTER_SECONDS:
-        # Stale-first: the stored row is served immediately. Degraded/stale
-        # fire or weather freshness does not suppress the refresh either — the
-        # caller gets the row, the rebuild runs detached.
-        if _needs_revalidation(snapshot):
-            try:
-                _schedule_background_refresh(corridor_id)
-            except Exception as exc:
-                logger.warning("dashboard bootstrap: background refresh failed: %s", exc)
-        return dict(snapshot.get("payload") or {}), snapshot.get("computed_at"), False, None
-
-    if snapshot is not None:
-        try:
-            _schedule_background_refresh(corridor_id)
-        except Exception as exc:
-            logger.warning("dashboard bootstrap: background refresh failed: %s", exc)
-        return dict(snapshot.get("payload") or {}), snapshot.get("computed_at"), True, "snapshot_stale"
-
-    reason = "missing_snapshot"
-    try:
-        task = _get_or_create_build_task(corridor_id)
-        live = await asyncio.wait_for(
-            asyncio.shield(task),
-            # The task owns the real timeout; the caller only waits the
-            # first-paint budget (and never longer than the task margin used by
-            # tests that monkeypatch LIVE_BUILD_TIMEOUT_SECONDS very low).
-            timeout=min(FIRST_PAINT_BUILD_TIMEOUT_SECONDS, LIVE_BUILD_TIMEOUT_SECONDS + 0.5),
-        )
-        sections = dict(live.get("payload") or {})
-        if sections:
-            try:
-                _store_memory_snapshot(corridor_id, live)
-            except Exception:
-                pass
-            return sections, live.get("computed_at"), True, reason
-        logger.warning("dashboard bootstrap: live build produced no sections (%s)", reason)
-    except asyncio.TimeoutError:
-        reason = "live_build_timeout"
-        logger.warning(
-            "dashboard bootstrap: live build exceeded %.1fs; serving the stored row if any",
-            LIVE_BUILD_TIMEOUT_SECONDS,
-        )
-    except asyncio.CancelledError:
-        raise
-    except Exception as exc:
-        reason = "live_build_failed"
-        logger.warning("dashboard bootstrap: live build failed: %s", exc)
-
-    if snapshot is not None:
-        return dict(snapshot.get("payload") or {}), snapshot.get("computed_at"), True, reason
-    return {}, None, True, reason
+    stale = public_snapshot_service.snapshot_is_stale(snapshot)
+    reason = "snapshot_stale" if stale else None
+    return (
+        dict(snapshot.get("sections") or {}),
+        snapshot.get("computed_at"),
+        stale,
+        reason,
+        snapshot,
+    )
 
 
 @router.get("/api/v1/dashboard/bootstrap")
@@ -475,15 +410,19 @@ async def dashboard_bootstrap(
         # Auth-blind by construction: bootstrap_user already returned a guest,
         # and tenant sections are never built here even when a dispatcher
         # token was supplied.
-        public_sections, computed_at, stale, reason = await _resolve_sections(corridor_id)
+        public_sections, computed_at, stale, reason, snapshot = await _resolve_sections(corridor_id)
         body = {
-            "schema_version": snapshots.SNAPSHOT_SCHEMA_VERSION,
+            "schema_version": snapshot.get("schema_version", 1),
+            "snapshot_key": snapshot.get("snapshot_key", "sumatra_mainland"),
             "computed_at": computed_at,
             "stale": stale,
             "role": ROLE_GUEST,
             "company_id": None,
             "modality": requested,
             "sections": public_sections,
+            "source_freshness": snapshot.get("source_freshness") or {},
+            "shadow_mode": True,
+            "coverage": snapshot.get("coverage") or {},
         }
         if stale:
             body["reason"] = reason
@@ -517,7 +456,7 @@ async def dashboard_bootstrap(
         }
         return JSONResponse(content=jsonable_encoder(body), headers=dict(CACHE_CONTROL))
 
-    sections_data, computed_at, stale, reason = await _resolve_sections(corridor_id)
+    sections_data, computed_at, stale, reason, snapshot = await _resolve_sections(corridor_id)
 
     role = (user.role or ROLE_GUEST).upper()
     if role in TENANT_ROLES:
@@ -534,13 +473,17 @@ async def dashboard_bootstrap(
                 )
 
     body = {
-        "schema_version": snapshots.SNAPSHOT_SCHEMA_VERSION,
+        "schema_version": snapshot.get("schema_version", 1),
+        "snapshot_key": snapshot.get("snapshot_key", "sumatra_mainland"),
         "computed_at": computed_at,
         "stale": stale,
         "role": role,
         "company_id": (user.company_id or None),
         "modality": requested,
         "sections": sections_data,
+        "source_freshness": snapshot.get("source_freshness") or {},
+        "shadow_mode": True,
+        "coverage": snapshot.get("coverage") or {},
     }
     if stale:
         body["reason"] = reason

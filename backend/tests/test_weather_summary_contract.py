@@ -23,6 +23,7 @@ from fastapi import FastAPI
 
 from app.routers import routing_router
 from app.services import weather_fusion_service as fusion
+from app.services import public_operational_cache as operational_cache
 from app.services.weather_fusion_service import MAX_WEATHER_FEATURES, get_fused_spatial_weather
 
 
@@ -110,14 +111,28 @@ def summary_env(monkeypatch):
 
     monkeypatch.setattr(routing_router, "cache_get", fake_get)
     monkeypatch.setattr(routing_router, "cache_set", fake_set)
+    monkeypatch.setattr(operational_cache, "cache_get", fake_get)
+    monkeypatch.setattr(operational_cache, "cache_set", fake_set)
+    monkeypatch.setattr(operational_cache, "_read_durable", lambda key: None)
+    monkeypatch.setattr(operational_cache, "_write_durable", lambda key, payload, source: True)
 
     def install(bmkg_events=None, om_events=None, bmkg_error=None, om_error=None):
-        monkeypatch.setattr(
-            fusion, "BMKGAdapter", lambda: _FakeBMKG(bmkg_events, bmkg_error)
-        )
-        monkeypatch.setattr(
-            fusion, "OpenMeteoAdapter", lambda: _FakeOpenMeteo(om_events, om_error)
-        )
+        now = datetime.now(timezone.utc)
+        records = {}
+        for source, events, error, seconds in (
+            ("bmkg", bmkg_events or [], bmkg_error, 300),
+            ("open_meteo", om_events or [], om_error, 21600),
+        ):
+            record = {
+                "source": source, "raw": {}, "events": list(events),
+                "fetched_at": now.isoformat(), "observed_at": now.isoformat(),
+                "valid_until": (now + timedelta(seconds=seconds)).isoformat(),
+                "status": "degraded" if error else "ok", "error": str(error) if error else None,
+            }
+            records[source] = record
+            store[f"{operational_cache.RAW_KEY_PREFIX}{source}"] = json.dumps(record)
+        sections = operational_cache._build_sections(records)
+        store[operational_cache.CACHE_KEY] = json.dumps({"sections": sections})
 
     return {"store": store, "install": install, "monkeypatch": monkeypatch}
 
@@ -284,11 +299,18 @@ async def test_stale_cache_preserves_last_known_good_count(summary_env):
             "window_hours": 24,
         },
     }
-    summary_env["store"][routing_router.WEATHER_SUMMARY_CACHE_KEY] = json.dumps(cached)
+    summary_env["store"][operational_cache.CACHE_KEY] = json.dumps({
+        "sections": {name: {"status": "stale", "data": cached, "valid_until": old_iso, "error": "upstream outage"}
+                     for name in operational_cache.SECTION_NAMES}
+    })
     summary_env["install"](
         bmkg_error=RuntimeError("bmkg unreachable"),
         om_error=RuntimeError("open-meteo unreachable"),
     )
+    summary_env["store"][operational_cache.CACHE_KEY] = json.dumps({
+        "sections": {name: {"status": "stale", "data": cached, "valid_until": old_iso, "error": "upstream outage"}
+                     for name in operational_cache.SECTION_NAMES}
+    })
 
     summary = await _get_summary()
 
@@ -314,12 +336,15 @@ async def test_fresh_cache_is_served_without_refetching(summary_env):
                     "source": fusion.WEATHER_SUMMARY_SOURCE, "valid_until": None,
                     "window_hours": 24},
     }
-    summary_env["store"][routing_router.WEATHER_SUMMARY_CACHE_KEY] = json.dumps(cached)
+    summary_env["install"]()
+    summary_env["store"][operational_cache.CACHE_KEY] = json.dumps({
+        "sections": {name: {"status": "ok", "data": cached, "valid_until": (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()}
+                     for name in operational_cache.SECTION_NAMES}
+    })
 
     def _boom():
-        raise AssertionError("fresh cache must not re-hit the upstream adapters")
+        raise AssertionError("GET must not call a provider adapter")
 
-    summary_env["install"]()
     summary_env["monkeypatch"].setattr(fusion, "BMKGAdapter", _boom)
 
     summary = await _get_summary()

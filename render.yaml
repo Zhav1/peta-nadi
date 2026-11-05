@@ -35,6 +35,13 @@ services:
         sync: false
       - key: DEMO_OFFLINE
         value: "false"
+      # Real public sources remain shadow/read-only for operator workflows.
+      - key: BMKG_CAP_ENABLED
+        value: "true"
+      - key: PETABENCANA_NONCOMMERCIAL_ENABLED
+        value: "true"
+      - key: BNPB_OBSERVED_ENABLED
+        value: "true"
       # Phase 162 (M8): production is a THIN web process. Batch ingestion no
       # longer runs in-process; it is driven by the protected external tick
       # POST /internal/tick (cron-job.org, every 5 min, 90s timeout) — see
@@ -47,12 +54,19 @@ services:
       # Shared secret for X-Internal-Token (dashboard-only; never in the repo).
       - key: INTERNAL_TICK_TOKEN
         sync: false
-      # Per-tick admission: at most 2 jobs and 120s of work; the rest is
-      # deferred to the next tick (both are plain env overrides).
+      # Three scheduled job slots per five-minute tick; 180s work budget stays
+      # below the 240s fenced lease and leaves recovery margin before the next tick.
       - key: TICK_MAX_JOBS
-        value: "2"
+        value: "3"
       - key: TICK_BUDGET_SECONDS
-        value: "120"
+        value: "180"
+      # Application-side caps only; these are not claimed provider quotas.
+      - key: PROVIDER_BUDGET_DAILY_LIMITS
+        value: "bmkg=288,bmkg_cap=288,open_meteo=4,firms=8,tomtom=48,petabencana=96,bnpb=24,news=288,pihps=1,social=24"
+      - key: PILOT_SHADOW_MODE
+        value: "true"
+      - key: SHARED_SNAPSHOT_READS_ONLY
+        value: "true"
       # Phase 58 LLM migration: secret values dashboard-only (sync:false, no value in yaml)
       - key: OPENCODE_API_KEY
         sync: false

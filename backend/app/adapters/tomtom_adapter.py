@@ -254,7 +254,10 @@ class TomTomAdapter(BaseAdapter):
         return min(cls._active_key_index, len(keys) - 1)
 
     @classmethod
-    async def _get_with_key_fallback(cls, client, url: str, params: Dict[str, Any], endpoint: str):
+    async def _get_with_key_fallback(
+        cls, client, url: str, params: Dict[str, Any], endpoint: str,
+        *, reserve_provider_budget=None, budget_adapter=None,
+    ):
         """GET trying keys in order. Returns (response, key_index, all_exhausted).
 
         On a credit-classified 403 the used key is marked exhausted and the
@@ -265,6 +268,10 @@ class TomTomAdapter(BaseAdapter):
         for i, key in enumerate(keys):
             if i in cls._exhausted_key_indexes:
                 continue
+            if budget_adapter is None or not await budget_adapter.reserve_request_budget(
+                callback=reserve_provider_budget
+            ):
+                return None, i, True
             p = dict(params)
             p["key"] = key
             try:
@@ -448,7 +455,8 @@ class TomTomAdapter(BaseAdapter):
             }
             async with httpx.AsyncClient(timeout=5.0) as client:
                 res, _idx, all_out = await self._get_with_key_fallback(
-                    client, self.FLOW_URL, params, endpoint=f"health:{checkpoint['name']}"
+                    client, self.FLOW_URL, params, endpoint=f"health:{checkpoint['name']}",
+                    budget_adapter=self,
                 )
                 if res is None:
                     return False
@@ -463,7 +471,7 @@ class TomTomAdapter(BaseAdapter):
             logger.warning(f"TomTom health check failed: {e}")
             return False
 
-    async def fetch(self) -> Dict[str, Any]:
+    async def fetch(self, *, reserve_provider_budget=None) -> Dict[str, Any]:
         """
         Fetch segment flow data for all checkpoints plus traffic incidents across
         corridor-anchored tiles (each <= 10,000 km2), deduplicated by incident ID.
@@ -498,6 +506,8 @@ class TomTomAdapter(BaseAdapter):
             "tiles_total": 0,
             "tiles_queried": 0,
             "tiles_failed": 0,
+            "expected_checkpoint_count": len(self.CHECKPOINTS),
+            "observed_checkpoint_count": 0,
         }
 
         if not tomtom_api_keys():
@@ -531,7 +541,8 @@ class TomTomAdapter(BaseAdapter):
                         "point": f"{cp['lat']},{cp['lon']}"
                     }
                     res, _idx, all_out = await self._get_with_key_fallback(
-                        client, self.FLOW_URL, params, endpoint=f"flow:{cp['name']}"
+                        client, self.FLOW_URL, params, endpoint=f"flow:{cp['name']}",
+                        reserve_provider_budget=reserve_provider_budget, budget_adapter=self,
                     )
                     if res is None:
                         flow_failures += 1
@@ -551,6 +562,7 @@ class TomTomAdapter(BaseAdapter):
                         flow_json["_lat"] = cp["lat"]
                         flow_json["_lon"] = cp["lon"]
                         data["flow"].append(flow_json)
+                        data["observed_checkpoint_count"] = len(data["flow"])
                     else:
                         flow_failures += 1
                         logger.warning(f"TomTom flow segment {cp['name']} returned HTTP {res.status_code}")
@@ -580,7 +592,8 @@ class TomTomAdapter(BaseAdapter):
                             "fields": self.INCIDENT_FIELDS,
                         }
                         res, _idx, all_out = await self._get_with_key_fallback(
-                            client, self.INCIDENT_URL, params, endpoint=f"incidents:{tile['bbox']}"
+                            client, self.INCIDENT_URL, params, endpoint=f"incidents:{tile['bbox']}",
+                            reserve_provider_budget=reserve_provider_budget, budget_adapter=self,
                         )
                         data["tiles_queried"] += 1
                         if res is None:
@@ -639,6 +652,11 @@ class TomTomAdapter(BaseAdapter):
             data["credit_exhausted_until"] = self.credit_exhausted_until_iso()
             data["api_keys_configured"] = len(tomtom_api_keys())
             data["api_key_index"] = self.active_key_index()
+            if data["observed_checkpoint_count"] < data["expected_checkpoint_count"] and flow_successes:
+                data["status"] = "degraded"
+                degraded_reasons.append(
+                    f"partial_flow_coverage:{data['observed_checkpoint_count']}/{data['expected_checkpoint_count']}"
+                )
             data["degraded_reason"] = "; ".join(degraded_reasons) or None
 
         return data

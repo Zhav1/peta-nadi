@@ -1,18 +1,7 @@
-"""
-Phase 164a (M8) — news read-path defects.
+"""Hermetic tests for the passive `/news/live` stored-data read contract.
 
-Two audit findings, both on the `/news/live` read path:
-
-1. **`last_fetched_at` self-invalidation (audit F8).** A completed ingestion
-   cycle wrote `0.0` into the cache timestamp, so the very next poll missed the
-   30 s window and queued another cycle. On the 0.1-CPU free tier that is a
-   continuous ingestion loop competing with request handling.
-2. **Re-tier write-back (audit F8).** `fetch_news_from_supabase` and the router
-   guard re-ran the v7 heuristic for every legacy row (`schema_version != 7`) on
-   every request and never persisted the result, so it never converged.
-
-Hermetic: Supabase (`get_client` / `get_write_client`) and the heuristic are
-monkeypatched. Redis ingestion locks are stubbed, so no network is touched.
+Supabase and the heuristic are monkeypatched. Redis ingestion locks are stubbed,
+so no network or production service is touched.
 """
 
 from datetime import datetime, timezone
@@ -252,8 +241,8 @@ async def test_two_live_reads_within_ttl_do_not_reingest(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_expired_cache_still_rearms_ingestion(monkeypatch):
-    """Contrast case: proves the assertion above is load-bearing, not vacuous."""
+async def test_expired_cache_read_never_schedules_ingestion(monkeypatch):
+    """An expired process cache causes a stored read, never an ingest task."""
     async def fake_fetch(limit: int = 150, province=None, severity=None, **_kwargs):
         return [_fresh_v7_row()]
 
@@ -266,12 +255,12 @@ async def test_expired_cache_still_rearms_ingestion(monkeypatch):
     await news_router.get_live_news(
         background_tasks=tasks, province=None, severity=None, force_refresh=False
     )
-    assert len(tasks.tasks) >= 1, "an expired cache must re-arm the poller"
+    assert tasks.tasks == [], "an expired cache must not schedule ingestion from GET"
 
 
 @pytest.mark.asyncio
-async def test_force_refresh_still_schedules_ingestion(monkeypatch):
-    """The poller's force path is unchanged by the timestamp fix."""
+async def test_force_refresh_bypasses_cache_without_scheduling_ingestion(monkeypatch):
+    """The public compatibility flag only bypasses cached stored data."""
     async def fake_fetch(limit: int = 150, province=None, severity=None, **_kwargs):
         return [_fresh_v7_row()]
 
@@ -283,7 +272,7 @@ async def test_force_refresh_still_schedules_ingestion(monkeypatch):
     await news_router.get_live_news(
         background_tasks=tasks, province=None, severity=None, force_refresh=True
     )
-    assert len(tasks.tasks) >= 1, "force_refresh must still trigger ingestion"
+    assert tasks.tasks == [], "force_refresh on GET must never trigger ingestion"
 
 
 # ---------------------------------------------------------------------------
@@ -292,7 +281,7 @@ async def test_force_refresh_still_schedules_ingestion(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_legacy_row_is_re_tiered_once_persisted_and_not_recomputed(monkeypatch):
+async def test_legacy_row_is_re_tiered_in_response_without_writeback(monkeypatch):
     calls = _install_heuristic(monkeypatch)
     fake = _FakeSupabase()
     fake.rows = [_legacy_row()]
@@ -304,27 +293,19 @@ async def test_legacy_row_is_re_tiered_once_persisted_and_not_recomputed(monkeyp
     assert first[0]["zone_tier"] == "YELLOW_CLARIFY"
     assert calls == ["https://sumut.antaranews.com/berita/legacy-1"]
 
-    # One batched upsert, keyed on the unique column, carrying the v7 stamp.
-    assert len(fake.upserts) == 1, "the read path must write back in a single batched upsert"
-    assert fake.upserts[0]["on_conflict"] == "link"
-    written = fake.upserts[0]["rows"]
-    assert len(written) == 1
-    assert written[0]["link"] == "https://sumut.antaranews.com/berita/legacy-1"
-    assert written[0]["id"] == "11111111-1111-1111-1111-111111111111"
-    assert written[0]["zone_tier"] == "YELLOW_CLARIFY"
-    assert written[0]["latitude"] == 3.3285
-    assert written[0]["ground_truth_metrics"]["schema_version"] == 7
+    # Repairs are response-local. Reads never upsert even when legacy rows need
+    # the v7 heuristic; ingestion owns convergence of persisted schema.
+    assert fake.upserts == []
+    assert first[0]["ground_truth_metrics"]["schema_version"] == 7
 
-    # Second read: the row is now v7 in the store, so the heuristic never runs
-    # again and no second write happens (unchanged rows are never rewritten).
     second = await news_aggregator.fetch_news_from_supabase(limit=10)
     assert len(second) == 1
-    assert len(calls) == 1, "a persisted v7 row must not be re-tiered on the next read"
-    assert len(fake.upserts) == 1, "an unchanged row must not be rewritten"
+    assert len(calls) == 2
+    assert fake.upserts == []
 
 
 @pytest.mark.asyncio
-async def test_write_back_is_one_batched_upsert_for_many_rows(monkeypatch):
+async def test_many_legacy_rows_are_never_written_by_a_read(monkeypatch):
     _install_heuristic(monkeypatch)
     fake = _FakeSupabase()
     fake.rows = [
@@ -337,12 +318,11 @@ async def test_write_back_is_one_batched_upsert_for_many_rows(monkeypatch):
 
     await news_aggregator.fetch_news_from_supabase(limit=10)
 
-    assert len(fake.upserts) == 1, "N re-tiered rows must not become N upserts"
-    assert len(fake.upserts[0]["rows"]) == 3
+    assert fake.upserts == []
 
 
 @pytest.mark.asyncio
-async def test_write_back_failure_never_fails_the_read(monkeypatch):
+async def test_read_does_not_attempt_writeback_when_write_client_is_unavailable(monkeypatch):
     _install_heuristic(monkeypatch)
     fake = _FakeSupabase()
     fake.rows = [_legacy_row()]
@@ -356,11 +336,12 @@ async def test_write_back_failure_never_fails_the_read(monkeypatch):
     rows = await news_aggregator.fetch_news_from_supabase(limit=10)
     assert len(rows) == 1
     assert rows[0]["zone_tier"] == "YELLOW_CLARIFY"
+    assert fake.upserts == []
 
 
 @pytest.mark.asyncio
-async def test_router_write_back_covers_rows_the_guard_repaired(monkeypatch):
-    """The router guard also persists what it re-tiered (defensive path)."""
+async def test_router_guard_repairs_legacy_rows_without_persisting_them(monkeypatch):
+    """The router's defensive response guard is read-only as well."""
     calls = _install_heuristic(monkeypatch)
     fake = _FakeSupabase()
     monkeypatch.setattr("app.db.supabase_client.get_write_client", lambda: fake)
@@ -382,8 +363,7 @@ async def test_router_write_back_covers_rows_the_guard_repaired(monkeypatch):
 
     assert res["status"] == "live"
     assert len(calls) == 1
-    assert len(fake.upserts) == 1
-    assert fake.upserts[0]["rows"][0]["ground_truth_metrics"]["schema_version"] == 7
+    assert fake.upserts == []
 
 
 @pytest.mark.asyncio

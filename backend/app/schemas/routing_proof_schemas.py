@@ -35,7 +35,7 @@ class DasarRisiko(BaseModel):
     safety_status: Literal["CLEAR", "SAFE_DETOUR", "COMPROMISED", "HOLD_DELAY"] = Field(
         ..., description="Canonical safety status consumed by the modal"
     )
-    is_compromised: bool = Field(..., description="True when risk_score crosses the compromise threshold")
+    is_compromised: bool = Field(..., description="True when evidence indicates a blocked or precautionary route")
     passability: Literal["BLOCKED", "RESTRICTED", "CAUTION", "CLEAR"] = Field(
         default="CAUTION", description="Corridor passability from impact_profile or hazard proximity"
     )

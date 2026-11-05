@@ -1,6 +1,8 @@
 import asyncio
 import json
 import logging
+import inspect
+import uuid
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
@@ -20,7 +22,7 @@ class BaseAdapter(ABC):
             raise TypeError("Adapters must define 'source_name' and 'stream_key'")
 
     @abstractmethod
-    async def fetch(self) -> Any:
+    async def fetch(self, *, reserve_provider_budget=None) -> Any:
         """Fetch raw data from the external API."""
         pass
 
@@ -33,6 +35,28 @@ class BaseAdapter(ABC):
     async def health_check(self) -> bool:
         """Check if the external API endpoint is responsive."""
         pass
+
+    async def reserve_request_budget(
+        self, *, units: int = 1, callback=None, provider_source: str | None = None
+    ) -> bool:
+        """Fail closed unless the coordinator admits this provider request."""
+        source = provider_source or self.source_name
+        reserver = callback
+        if reserver is None:
+            try:
+                from app.services.provider_budget import reserve_provider_budget
+                reserver = reserve_provider_budget
+            except ImportError:
+                logger.warning("Provider budget coordinator unavailable; refusing %s request", source)
+                return False
+        result = reserver(
+            source,
+            units=units,
+            request_id=f"{source}:{uuid.uuid4().hex}",
+        )
+        if inspect.isawaitable(result):
+            result = await result
+        return result is True
 
     async def run(self):
         """Continuous polling loop: health check -> fetch -> parse -> publish -> cache."""

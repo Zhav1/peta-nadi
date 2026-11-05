@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import sys
+import uuid
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 
@@ -51,180 +52,93 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-async def _run_bmkg_cycle():
-    """One BMKG earthquake/warning ingestion pass."""
-    from app.adapters.bmkg_adapter import BMKGAdapter
+async def _reserve_provider_attempt(
+    source: str, *, units: int = 1, request_id: str | None = None
+) -> bool:
+    """Count every reservation call as an attempt, including adapter retries."""
+    from app.services.provider_budget import reserve_provider_budget
 
-    adapter = BMKGAdapter()
-    raw = await adapter.fetch()
-    events = await adapter.parse(raw)
-    if events:
-        r = get_redis()
-        for ev in events:
-            r.lpush("lrip:live_events", json.dumps(ev))
-        r.ltrim("lrip:live_events", 0, 49)  # Retain top 50 recent events
-        logger.info(f"Ingested {len(events)} live BMKG events into Redis lrip:live_events")
-    return len(events or [])
+    unique_request_id = f"{source}:{request_id or 'attempt'}:{uuid.uuid4()}"
+    return await reserve_provider_budget(
+        source, units=units, request_id=unique_request_id
+    )
+
+
+async def _run_bmkg_cycle():
+    """Refresh cached BMKG operations and capped observations in one job."""
+    from app.services.observed_disaster_service import refresh_observed_disasters
+    from app.services.public_operational_cache import refresh_public_operational_cache
+
+    operational = await refresh_public_operational_cache(
+        source="bmkg", reserve_provider_budget=_reserve_provider_attempt
+    )
+    capped = await refresh_observed_disasters(
+        "bmkg_cap", reserve_provider_budget=_reserve_provider_attempt
+    )
+    return {"operational": operational, "observed": capped}
 
 
 async def _run_tomtom_cycle():
-    """One TomTom traffic-speed pass (single fetch; health derived from status).
+    """Refresh the shared TomTom cache under an app-side budget reservation."""
+    from app.services.public_operational_cache import refresh_public_operational_cache
 
-    Writes lrip:tomtom:segment:* for cache sharing with corridor/routing services.
-    """
-    from app.adapters.tomtom_adapter import TomTomAdapter, tomtom_poll_seconds
-
-    adapter = TomTomAdapter()
-    try:
-        raw = await adapter.fetch()
-        flow_items = raw.get("flow", [])
-        if flow_items:
-            r = get_redis()
-            cache_ex = tomtom_poll_seconds()
-            for item in flow_items:
-                seg = item.get("flowSegmentData", {})
-                name = item.get("_checkpoint_name", "checkpoint")
-                free_speed = max(1.0, float(seg.get("freeFlowSpeed", 60.0)))
-                curr_speed = float(seg.get("currentSpeed", 30.0))
-                delay_min = max(0.0, (1.0 - (curr_speed / free_speed)) * 45.0)
-
-                payload = {
-                    "name": name,
-                    "lat": item.get("_lat"),
-                    "lon": item.get("_lon"),
-                    "delay_min": round(delay_min, 1),
-                    "currentTravelTime": seg.get("currentTravelTime", 0),
-                    "currentSpeed": curr_speed,
-                    "freeFlowSpeed": free_speed,
-                    "timestamp": datetime.now(timezone.utc).timestamp()
-                }
-                r.set(f"lrip:tomtom:segment:{name}", json.dumps(payload), ex=cache_ex)
-            logger.info(f"TomTom poller cached {len(flow_items)} segment delays in Redis.")
-
-        fetch_status = raw.get("status", "ok")
-        if fetch_status == "down":
-            adapter.update_source_health("down")
-        elif fetch_status == "degraded":
-            adapter.update_source_health("degraded")
-        else:
-            adapter.update_source_health("ok")
-        return len(flow_items)
-    except Exception:
-        try:
-            adapter.update_source_health("down")
-        except Exception:
-            pass
-        raise
+    return await refresh_public_operational_cache(
+        source="tomtom", reserve_provider_budget=_reserve_provider_attempt
+    )
 
 
 async def _run_open_meteo_cycle():
-    """One Open-Meteo atmospheric forecast pass."""
-    from app.adapters.open_meteo_adapter import OpenMeteoAdapter
+    """Refresh the shared Open-Meteo cache under an app-side budget."""
+    from app.services.public_operational_cache import refresh_public_operational_cache
 
-    adapter = OpenMeteoAdapter()
-    raw = await adapter.fetch()
-    if not raw:
-        return 0
-    events = await adapter.parse(raw)
-    if not events:
-        # Never clobber a good cache with an empty parse result.
-        logger.debug("Open-Meteo poll returned no events; retaining cached forecast")
-        return 0
-    r = get_redis()
-    r.set("lrip:cache:open_meteo", json.dumps(events), ex=25200)
-    logger.info("Open-Meteo weather forecast cached in Redis.")
-    return len(events)
+    return await refresh_public_operational_cache(
+        source="open_meteo", reserve_provider_budget=_reserve_provider_attempt
+    )
 
 
 async def _run_firms_cycle():
-    """One NASA FIRMS VIIRS_SNPP_NRT hotspot pass (3h satellite cadence).
+    """Refresh the shared FIRMS cache; absent keys stay honestly degraded."""
+    from app.services.public_operational_cache import refresh_public_operational_cache
 
-    Provision path: NASA_FIRMS_MAP_KEY via Render env (sync:false) + .env.local
-    locally (never commit). Without a key the job stays honest-degraded and
-    never fabricates hotspots — GET /api/v1/fire/hotspots returns degraded.
-    Events land in lrip:events:nasa_firms with Redis 24h dedup (adapter-level).
-    """
-    from app.adapters.nasa_firms_adapter import NASAFIRMSAdapter
-    from app.services.redis_client import SOURCE_CACHE_PREFIX
-
-    adapter = NASAFIRMSAdapter()
-    if not settings.nasa_firms_map_key:
-        logger.warning("NASA_FIRMS_MAP_KEY missing — FIRMS poller honest-degraded (butuh MAP_KEY)")
-        adapter.update_source_health("degraded")
-        return 0
-    try:
-        raw = await adapter.fetch()
-        events = await adapter.parse(raw)
-        r = get_redis()
-        if events:
-            for ev in events:
-                r.lpush("lrip:events:nasa_firms", json.dumps(ev))
-            r.ltrim("lrip:events:nasa_firms", 0, 999)
-            r.set(f"{SOURCE_CACHE_PREFIX}nasa_firms", json.dumps(events), ex=10800)
-            logger.info(f"Ingested {len(events)} FIRMS hotspot events into Redis lrip:events:nasa_firms")
-        else:
-            logger.debug("FIRMS poll: no new corridor hotspots in this pass")
-        adapter.update_source_health("ok")
-        return len(events or [])
-    except Exception:
-        try:
-            adapter.update_source_health("down")
-        except Exception:
-            pass
-        raise
+    return await refresh_public_operational_cache(
+        source="firms", reserve_provider_budget=_reserve_provider_attempt
+    )
 
 
 async def _run_bnpb_cycle():
-    """One BNPB DIBI/bulletin disaster-event pass.
+    """Refresh the BNPB source in the shared observed-disaster cache."""
+    from app.services.observed_disaster_service import refresh_observed_disasters
 
-    Honest-degraded by design: DIBI + bnpb.go.id both unreachable means an
-    empty parse, so the last-known-good cache is retained and
-    GET /api/v1/bnpb/events keeps serving [] with status=unavailable.
-    Events land in lrip:events:bnpb with adapter-level 7d Redis dedup.
-    """
-    from app.adapters.bnpb_adapter import BNPBAdapter
-    from app.services.redis_client import SOURCE_CACHE_PREFIX, STREAM_BNPB
+    return await refresh_observed_disasters(
+        "bnpb", reserve_provider_budget=_reserve_provider_attempt
+    )
 
-    adapter = BNPBAdapter()
-    try:
-        healthy = await adapter.health_check()
-        if not healthy:
-            adapter.update_source_health("degraded")
-            logger.warning("BNPB health check failed; retaining cached disaster events")
-            return 0
-        raw = await adapter.fetch()
-        events = await adapter.parse(raw)
-        r = get_redis()
-        if events:
-            for ev in events:
-                r.lpush(STREAM_BNPB, json.dumps(ev))
-            r.ltrim(STREAM_BNPB, 0, 999)
-            r.set(f"{SOURCE_CACHE_PREFIX}bnpb", json.dumps(events), ex=86400)
-            logger.info(f"Ingested {len(events)} BNPB disaster events into Redis {STREAM_BNPB}")
-        else:
-            logger.debug("BNPB poll: no new Sumatra disaster events in this pass")
-        adapter.update_source_health("ok")
-        return len(events or [])
-    except Exception:
-        try:
-            adapter.update_source_health("down")
-        except Exception:
-            pass
-        raise
+
+async def _run_petabencana_cycle():
+    """Refresh Petabencana observations on its 15-minute schedule."""
+    from app.services.observed_disaster_service import refresh_observed_disasters
+
+    return await refresh_observed_disasters(
+        "petabencana", reserve_provider_budget=_reserve_provider_attempt
+    )
 
 
 async def _run_news_cycle():
-    """One Google News RSS ingestion pass (Supabase dedupe owned by the router)."""
-    from app.routers.news_router import get_live_news
+    """Run one awaited news ingestion cycle; public GETs remain passive."""
+    from app.routers.news_router import run_background_news_ingestion
 
-    await get_live_news(force_refresh=True)
+    if not await _reserve_provider_attempt("news"):
+        raise RuntimeError("news provider application budget exhausted or unavailable")
+    await run_background_news_ingestion(force=True)
     return True
 
 
 async def _run_pihps_cycle():
-    """One Bank Indonesia PIHPS commodity-price pass (no sleep)."""
+    """One Bank Indonesia PIHPS pass after an app-side budget reservation."""
     from app.scrapers.pihps_scraper import PIHPSScraper
 
+    if not await _reserve_provider_attempt("pihps"):
+        raise RuntimeError("PIHPS provider application budget exhausted or unavailable")
     return await PIHPSScraper().run_once()
 
 
@@ -252,6 +166,8 @@ async def _run_social_cycle():
         return 0
     from app.scrapers.social_scraper import SocialScraper
 
+    if not await _reserve_provider_attempt("social"):
+        raise RuntimeError("social provider application budget exhausted or unavailable")
     return await SocialScraper().run_once()
 
 
@@ -471,40 +387,22 @@ def _schedule_continuous(name: str, runner, delay: float):
 
 
 async def _prewarm_dashboard() -> None:
-    """One-shot dashboard prewarm: snapshot build+store and fusion warm.
-
-    Runs detached after boot; never raises, never blocks startup. A failure is
-    logged and the 5-minute external tick remains the steady-state writer, so
-    this never duplicates periodic work.
-    """
+    """Read only the persisted projection at boot; scheduled jobs own refreshes."""
     try:
-        from app.services import dashboard_snapshot_service
+        from app.services.public_snapshot_service import read_public_snapshot
 
-        status = await dashboard_snapshot_service.build_and_store_global_snapshot()
-        if isinstance(status, dict) and status.get("status") == "ok":
+        snapshot = await read_public_snapshot()
+        if snapshot:
             logger.info(
-                "BOOT: dashboard prewarm ok (%s sections, computed_at=%s)",
-                status.get("sections"),
-                status.get("computed_at"),
+                "BOOT: public dashboard snapshot present (computed_at=%s)",
+                snapshot.get("computed_at"),
             )
         else:
-            logger.warning(
-                "BOOT: dashboard prewarm did not store a snapshot: %s",
-                (status or {}).get("error", status),
-            )
+            logger.info("BOOT: no persisted public dashboard snapshot yet")
     except asyncio.CancelledError:
         raise
     except Exception as exc:
-        logger.warning(f"BOOT: dashboard prewarm snapshot failed (non-fatal): {exc}")
-    try:
-        from app.routers import routing_router
-
-        await routing_router._load_fusion_snapshot()
-        logger.info("BOOT: weather fusion prewarm done")
-    except asyncio.CancelledError:
-        raise
-    except Exception as exc:
-        logger.warning(f"BOOT: weather fusion prewarm failed (non-fatal): {exc}")
+        logger.warning("BOOT: public dashboard snapshot read failed (non-fatal): %s", exc)
 
 
 @asynccontextmanager
@@ -603,10 +501,8 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("BOOT: JWKS pre-warm skipped (no SUPABASE_URL / SUPABASE_JWKS_KEY)")
 
-    # Unit B prewarm: build+store the global snapshot and warm the weather
-    # fusion once after boot. Detached so startup is never blocked; tracked in
-    # `tasks` so shutdown cancels it. The 5-minute external tick stays the only
-    # periodic writer.
+    # Read the persisted public projection only. Source freshness and snapshot
+    # publication are owned by scheduled cycles, never startup or HTTP requests.
     try:
         prewarm_task = asyncio.create_task(_prewarm_dashboard(), name="prehub:dashboard-prewarm")
         tasks.append(prewarm_task)

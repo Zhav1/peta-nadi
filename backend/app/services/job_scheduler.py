@@ -35,7 +35,7 @@ import logging
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any, Callable, Optional
 
 from app.config import get_settings
@@ -46,7 +46,7 @@ SCHEDULER_TABLE = "scheduler_jobs"
 
 # A job lock must outlive the per-tick budget (default 120s) plus the slowest
 # single job, otherwise a slow cycle could be executed twice by the next tick.
-LOCK_TTL_SECONDS = 600
+LOCK_TTL_SECONDS = 240
 DEFAULT_RETRY_BACKOFF_SECONDS = 120
 MAX_ERROR_CHARS = 500
 
@@ -80,6 +80,7 @@ JOB_SPECS: dict[str, JobSpec] = {
         _spec("pihps", 86400, "_run_pihps_cycle"),
         _spec("social", 3600, "_run_social_cycle"),
         _spec("bnpb", 3600, "_run_bnpb_cycle"),
+        _spec("petabencana", 900, "_run_petabencana_cycle"),
     )
 }
 
@@ -137,10 +138,10 @@ def _is_missing_rpc(exc: Exception) -> bool:
 
 
 def _client():
-    """Service-role-first Supabase client (never expose it to the frontend)."""
-    from app.db.supabase_client import get_write_client
+    """Require the service-role client for durable scheduler state."""
+    from app.db.supabase_client import get_service_client
 
-    return get_write_client()
+    return get_service_client()
 
 
 # ---------------------------------------------------------------------------
@@ -161,113 +162,61 @@ def load_states() -> dict[str, dict]:
     return states
 
 
-def _acquire_optimistic(client, job: str, ttl_seconds: int) -> bool:
-    """Compare-and-set fallback used when the acquire RPC is missing.
-
-    Limitation: one extra round-trip (read, then conditional update). The update
-    is still atomic — it only matches when ``locked_until`` is unchanged (or
-    still null), so two concurrent processes cannot both win.
-    """
-    now = utcnow()
-    expires = (now + timedelta(seconds=max(1, int(ttl_seconds)))).isoformat()
-    table = client.table(SCHEDULER_TABLE)
-    try:
-        rows = table.select("job_name,locked_until").eq("job_name", job).limit(1).execute().data or []
-    except Exception as exc:
-        raise SchedulerStateUnavailable(f"read {SCHEDULER_TABLE}/{job} failed: {exc}") from exc
-
-    if not rows:
-        try:
-            table.insert(
-                {"job_name": job, "locked_until": expires, "last_started_at": now.isoformat()}
-            ).execute()
-            return True
-        except Exception:
-            # Another process inserted the row first; fall through to the CAS.
-            try:
-                rows = table.select("job_name,locked_until").eq("job_name", job).limit(1).execute().data or []
-            except Exception as exc:
-                raise SchedulerStateUnavailable(f"read {SCHEDULER_TABLE}/{job} failed: {exc}") from exc
-
-    current = rows[0].get("locked_until") if rows else None
-    query = table.update(
-        {"locked_until": expires, "last_started_at": now.isoformat()}
-    ).eq("job_name", job)
-    query = query.is_("locked_until", "null") if not current else query.eq("locked_until", current)
-    try:
-        return bool(query.execute().data)
-    except Exception as exc:
-        raise SchedulerStateUnavailable(f"lock {SCHEDULER_TABLE}/{job} failed: {exc}") from exc
-
-
-def acquire(job: str, ttl_seconds: int = LOCK_TTL_SECONDS) -> bool:
-    """Try to take the cross-process lock for ``job``. True when this caller won."""
-    client = _client()
-    try:
-        result = client.rpc(
-            "acquire_scheduler_job",
-            {"p_job": job, "p_ttl_seconds": int(ttl_seconds)},
-        ).execute()
-        return _as_bool(result.data)
-    except Exception as exc:
-        if not _is_missing_rpc(exc):
-            raise SchedulerStateUnavailable(f"acquire {job} failed: {exc}") from exc
-    logger.warning(
-        "scheduler: acquire_scheduler_job() missing (migration 023 not applied?); "
-        "falling back to an optimistic locked_until update"
+def acquire(job: str, ttl_seconds: int = LOCK_TTL_SECONDS):
+    """Take a fenced per-job lease; no optimistic or process-local fallback."""
+    from app.services.refresh_coordinator import (
+        CoordinationUnavailable,
+        RefreshLease,
+        _rpc_sync,
     )
-    return _acquire_optimistic(client, job, ttl_seconds)
+
+    owner_id = str(uuid.uuid4())
+    try:
+        result = _rpc_sync(
+            "acquire_refresh_lease",
+            {
+                "p_lease_name": f"scheduler_job:{job}",
+                "p_owner_id": owner_id,
+                "p_ttl_seconds": max(1, int(ttl_seconds)),
+            },
+        )
+    except CoordinationUnavailable as exc:
+        raise SchedulerStateUnavailable(f"acquire {job} failed: {exc}") from exc
+    if not isinstance(result, dict) or not result.get("acquired"):
+        return None
+    return RefreshLease(
+        lease_name=str(result["lease_name"]),
+        owner_id=str(result["owner_id"]),
+        fence=int(result["fence"]),
+        expires_at=str(result.get("expires_at") or "") or None,
+    )
 
 
 def release(
+    lease,
     job: str,
     status: str,
     error: Optional[str] = None,
     retry_after_seconds: int = DEFAULT_RETRY_BACKOFF_SECONDS,
-) -> None:
-    """Release the lock and persist the outcome.
+) -> bool:
+    """Persist completion only while this exact job owner/fence still holds."""
+    from app.services.refresh_coordinator import CoordinationUnavailable, _rpc_sync
 
-    ``last_finished_at`` moves only for ``status == "ok"``; a failure keeps the
-    job due and sets ``retry_after`` so the next tick can retry without hammering.
-    """
-    error = (error or "")[:MAX_ERROR_CHARS] or None
-    client = _client()
     try:
-        client.rpc(
-            "release_scheduler_job",
+        result = _rpc_sync(
+            "complete_scheduled_job",
             {
-                "p_job": job,
-                "p_status": status,
-                "p_error": error,
-                "p_retry_after_seconds": int(retry_after_seconds),
+                "p_job_name": str(job),
+                "p_owner_id": lease.owner_id,
+                "p_fence": lease.fence,
+                "p_status": str(status),
+                "p_error": (str(error)[:MAX_ERROR_CHARS] if error else None),
+                "p_retry_after_seconds": max(1, int(retry_after_seconds)),
             },
-        ).execute()
-        return
-    except Exception as exc:
-        if not _is_missing_rpc(exc):
-            raise SchedulerStateUnavailable(f"release {job} failed: {exc}") from exc
-    logger.warning(
-        "scheduler: release_scheduler_job() missing (migration 023 not applied?); "
-        "falling back to a direct locked_until update"
-    )
-
-    now = utcnow()
-    payload: dict[str, Any] = {
-        "locked_until": None,
-        "last_status": status,
-        "last_error": error,
-    }
-    if status == "ok":
-        payload["last_finished_at"] = now.isoformat()
-        payload["retry_after"] = None
-    else:
-        payload["retry_after"] = (
-            now + timedelta(seconds=max(1, int(retry_after_seconds)))
-        ).isoformat()
-    try:
-        client.table(SCHEDULER_TABLE).update(payload).eq("job_name", job).execute()
-    except Exception as exc:
-        raise SchedulerStateUnavailable(f"release {job} failed: {exc}") from exc
+        )
+    except CoordinationUnavailable as exc:
+        raise SchedulerStateUnavailable(f"complete {job} failed: {exc}") from exc
+    return bool(result)
 
 
 # ---------------------------------------------------------------------------
@@ -367,17 +316,17 @@ async def _invoke(fn: Callable[[], Any]) -> Any:
     return result
 
 
-async def _acquire_job(name: str) -> Optional[str]:
-    """Return None when the lease was won, else the skip reason for this job."""
+async def _acquire_job(name: str):
+    """Return ``(lease, skip_reason)``; coordination failures fail closed."""
     try:
-        won = await asyncio.to_thread(acquire, name, LOCK_TTL_SECONDS)
+        lease = await asyncio.to_thread(acquire, name, LOCK_TTL_SECONDS)
     except SchedulerStateUnavailable as exc:
         logger.warning("scheduler: cannot lock %s (%s); skipping this tick", name, exc)
-        return "state_unavailable"
-    return None if won else "locked"
+        return None, "state_unavailable"
+    return (lease, None) if lease is not None else (None, "locked")
 
 
-async def _execute_job(name: str, timeout: float, run_id: str) -> dict:
+async def _execute_job(name: str, timeout: float, run_id: str, lease) -> dict:
     started = time.monotonic()
     status = "ok"
     error: Optional[str] = None
@@ -399,7 +348,11 @@ async def _execute_job(name: str, timeout: float, run_id: str) -> dict:
         logger.warning("scheduler[%s]: %s failed in %dms — %s", run_id, name, duration_ms, error)
 
     try:
-        await asyncio.to_thread(release, name, status, error, DEFAULT_RETRY_BACKOFF_SECONDS)
+        completed = await asyncio.to_thread(
+            release, lease, name, status, error, DEFAULT_RETRY_BACKOFF_SECONDS
+        )
+        if not completed:
+            logger.warning("scheduler: fenced completion rejected for %s", name)
     except SchedulerStateUnavailable as exc:
         logger.warning("scheduler: could not record %s outcome (%s)", name, exc)
 
@@ -452,12 +405,12 @@ async def run_tick(
             )
             break
 
-        skip_reason = await _acquire_job(name)
+        lease, skip_reason = await _acquire_job(name)
         if skip_reason:
             skipped.append({"job": name, "reason": skip_reason})
             continue
 
-        executed.append(await _execute_job(name, remaining, run_id))
+        executed.append(await _execute_job(name, remaining, run_id, lease))
 
     return {
         "run_id": run_id,

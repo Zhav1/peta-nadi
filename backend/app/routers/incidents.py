@@ -3,7 +3,7 @@ import math
 import re
 import struct
 from fastapi import APIRouter, HTTPException, Query
-from typing import Optional
+from typing import Any, Optional
 from pydantic import BaseModel
 from datetime import datetime
 import uuid
@@ -151,11 +151,14 @@ class IncidentResponse(BaseModel):
     lat: Optional[float] = None
     lon: Optional[float] = None
     created_at: datetime
+    affected_area: Optional[Any] = None
+    geometry_role: Optional[str] = None
 
 
 class IncidentListResponse(BaseModel):
     items: list[IncidentResponse]
     total: int
+    status: str = "ok"
 
 
 @router.get("", response_model=IncidentListResponse)
@@ -170,6 +173,7 @@ async def list_incidents(
     Includes in-memory demo incidents.
     """
     formatted_items = []
+    database_degraded = False
     
     # First get from DEMO_STORE if available
     try:
@@ -220,6 +224,13 @@ async def list_incidents(
                 lon = lon if lon is not None else loc_lon
             item_copy["lat"] = lat
             item_copy["lon"] = lon
+            affected_area = item_copy.get("affected_area")
+            if affected_area is not None:
+                # The persisted geometry is returned verbatim, but its source role
+                # is not established by this read contract; do not call it observed.
+                item_copy["geometry_role"] = item_copy.get("geometry_role") or "unverified"
+            else:
+                item_copy["geometry_role"] = item_copy.get("geometry_role")
             if (lat is None or lon is None) and item_copy.get("location"):
                 logger.warning(
                     f"Incidents: unparseable location (WKT/EWKB) for incident {item_copy['id']}: "
@@ -231,6 +242,7 @@ async def list_incidents(
             formatted_items.append(IncidentResponse(**item_copy))
 
     except Exception as e:
+        database_degraded = True
         logger.warning(
             f"Supabase incidents query failed ({type(e).__name__}: {e}); returning {len(formatted_items)} items",
             exc_info=True,
@@ -239,6 +251,7 @@ async def list_incidents(
     return IncidentListResponse(
         items=formatted_items,
         total=len(formatted_items),
+        status="degraded" if database_degraded else "ok",
     )
 
 

@@ -250,95 +250,12 @@ def _failure_section(
 
 
 # ---------------------------------------------------------------------------
-# Map bootstrap section plan (5 sections)
+# Public snapshot facade
 # ---------------------------------------------------------------------------
 
 def section_plan(corridor_id: str = DEFAULT_CORRIDOR_ID) -> dict[str, Callable[[], Awaitable[Any]]]:
-    """Return the map-bootstrap section factories (name -> async callable).
-
-    The five sections the dashboard seeds from
-    ``GET /api/v1/dashboard/bootstrap``. Weather/corridor are
-    fetched live by the frontend, and Analitik/Laporan/Evaluasi are lazy-mounted,
-    so persisting them every tick only inflated the row (~796 KB, of which
-    ~785 KB was news). ``weather_summary`` is counts-only (same shape as
-    ``GET /api/v1/weather/summary``), never polygons.
-
-    ``corridor_id`` is kept for call-site compatibility (the bootstrap endpoint
-    passes it) even though no remaining section is corridor-scoped.
-
-    Exposed as a function so tests can substitute a small plan without touching
-    the real services.
-    """
-    async def incidents():
-        from app.routers.incidents import list_incidents
-
-        return await list_incidents(status=None, severity=None, limit=50)
-
-    async def news_live():
-        """Direct display read — not ``get_live_news``.
-
-        ``get_live_news`` runs the 150-article breadth contract, the re-tier
-        write-back and may schedule ingestion. The snapshot needs a compact
-        display payload, so it reads the table directly, classifies every row
-        with the same ``relevance_tier`` the live endpoint uses, and keeps
-        only display-eligible tiers (``crisis`` / ``regional``; regional rows
-        are display context the frontend would otherwise receive and then
-        drop). ``last_updated`` is the newest kept article's publish time —
-        never wall-clock ``now``, which would freeze the frontend clock on
-        the seed.
-        """
-        # Local import: news_router is a heavy module and this service must stay
-        # cheap to import (all section helpers live inside the section bodies).
-        from app.routers.news_router import _max_published_at_iso, classify_relevance_tier
-        from app.services.news_aggregator import fetch_news_from_supabase
-
-        articles = await fetch_news_from_supabase(limit=40, include_regional=True)
-        kept: list[Any] = []
-        for row in articles:
-            if not isinstance(row, dict):
-                continue
-            row["relevance_tier"] = classify_relevance_tier(row)
-            if row["relevance_tier"] in ("crisis", "regional"):
-                kept.append(row)
-        last_updated = _max_published_at_iso(kept) or datetime.now(timezone.utc).isoformat()
-        return {
-            "status": "ok",
-            "total": len(kept),
-            "last_updated": last_updated,
-            "articles": kept,
-        }
-
-    async def news_market_regime():
-        from app.routers.news_router import get_market_regime
-
-        return await get_market_regime()
-
-    async def fire_hotspots():
-        from app.auth.supabase_auth import default_guest_session
-        from app.routers.routing_router import fetch_fire_hotspots
-
-        return await fetch_fire_hotspots(current_user=default_guest_session())
-
-    async def weather_summary():
-        """Counts-only weather counters (same shape as /weather/summary).
-
-        Delegates to the existing summary builder with a default guest
-        session. Isolation in ``run_section`` marks timeouts/failures as
-        ``timeout``/``degraded`` with ``data: None`` (or the last-good
-        payload) — never a fake zero.
-        """
-        from app.auth.supabase_auth import default_guest_session
-        from app.routers.routing_router import fetch_weather_summary
-
-        return await fetch_weather_summary(current_user=default_guest_session())
-
-    return {
-        "incidents": incidents,
-        "news": news_live,
-        "news_market_regime": news_market_regime,
-        "fire_hotspots": fire_hotspots,
-        "weather_summary": weather_summary,
-    }
+    """Legacy plan hook kept empty to prevent request-path provider access."""
+    return {}
 
 
 # ---------------------------------------------------------------------------
@@ -350,55 +267,20 @@ async def build_global_snapshot(
     corridor_id: Optional[str] = None,
     timeout: Optional[float] = None,
 ) -> dict:
-    """Compose the map-bootstrap dashboard sections in parallel.
+    """Build the curated projection from scheduled source-cache/DB readers only."""
+    from app.services.public_snapshot_service import build_public_snapshot
 
-    Returns ``{snapshot_key, schema_version, computed_at, source_freshness,
-    payload}`` where ``payload`` is ``{section: {data, status}}``. Section
-    failures are isolated; this function only raises on a programming error in
-    the gather itself (the callers still guard it).
-    """
-    corridor = corridor_id or DEFAULT_CORRIDOR_ID
-    plan = section_plan(corridor)
-    started = time.perf_counter()
-
-    results = await asyncio.gather(
-        *(
-            run_section(
-                name,
-                factory,
-                # An explicit caller-supplied budget (tests) wins; the default
-                # is the per-section budget (slow sections get the bigger one).
-                timeout=(
-                    timeout
-                    if timeout is not None
-                    else SLOW_SECTION_TIMEOUTS.get(name, SECTION_TIMEOUT_SECONDS)
-                ),
-            )
-            for name, factory in plan.items()
-        )
-    )
-
-    payload: dict[str, dict] = {}
-    freshness: dict[str, dict] = {}
-    for name, (section, fresh) in zip(plan.keys(), results):
-        payload[name] = section
-        freshness[name] = fresh
-
-    snapshot = {
-        "snapshot_key": GLOBAL_SNAPSHOT_KEY,
-        "schema_version": SNAPSHOT_SCHEMA_VERSION,
-        "computed_at": utcnow().isoformat(),
-        "source_freshness": freshness,
-        "payload": payload,
+    public = await build_public_snapshot()
+    return {
+        "snapshot_key": public.get("snapshot_key"),
+        "schema_version": public.get("schema_version"),
+        "computed_at": public.get("computed_at"),
+        "source_freshness": public.get("source_freshness") or {},
+        "payload": public.get("sections") or {},
+        "coverage": public.get("coverage") or {},
+        "stale": public.get("stale", True),
+        "shadow_mode": True,
     }
-    ok = sum(1 for entry in freshness.values() if entry.get("status") == "ok")
-    logger.info(
-        "dashboard snapshot composed: %d/%d sections ok in %dms",
-        ok,
-        len(freshness),
-        _elapsed_ms(started),
-    )
-    return snapshot
 
 
 # ---------------------------------------------------------------------------
@@ -413,57 +295,29 @@ def _client():
 
 
 def store_global_snapshot(snapshot: dict) -> dict:
-    """Upsert ``snapshot_key='global'``. Raises on a Supabase failure."""
-    row = {
-        "snapshot_key": snapshot.get("snapshot_key") or GLOBAL_SNAPSHOT_KEY,
-        "payload": snapshot.get("payload") or {},
-        "computed_at": snapshot.get("computed_at") or utcnow().isoformat(),
-        "schema_version": int(snapshot.get("schema_version") or SNAPSHOT_SCHEMA_VERSION),
-        "source_freshness": snapshot.get("source_freshness") or {},
-    }
-    _client().table(SNAPSHOT_TABLE).upsert(row, on_conflict="snapshot_key").execute()
-    return row
+    """Reject legacy writes; the private ``dashboard_snapshots`` table is unchanged."""
+    raise RuntimeError(
+        "dashboard_snapshots writes are disabled; publish the fenced public projection instead"
+    )
 
 
 def read_global_snapshot() -> Optional[dict]:
-    """Read the global row. ``None`` on missing / unreachable / version mismatch."""
+    """Compatibility reader backed by the new public singleton, never the old table."""
     try:
-        result = (
-            _client()
-            .table(SNAPSHOT_TABLE)
-            .select("*")
-            .eq("snapshot_key", GLOBAL_SNAPSHOT_KEY)
-            .limit(1)
-            .execute()
-        )
-    except Exception as exc:  # network, RLS, missing table, no key configured
-        logger.warning("dashboard snapshot read failed: %s", exc)
-        return None
+        from app.services.public_snapshot_service import _read_public_snapshot_sync
 
-    rows = getattr(result, "data", None) or []
-    if not rows:
+        public = _read_public_snapshot_sync()
+    except Exception as exc:
+        logger.warning("public dashboard snapshot read failed: %s", exc)
         return None
-
-    row = rows[0] or {}
-    try:
-        version = int(row.get("schema_version") or SNAPSHOT_SCHEMA_VERSION)
-    except (TypeError, ValueError):
-        version = -1
-    if version != SNAPSHOT_SCHEMA_VERSION:
-        logger.warning(
-            "dashboard snapshot schema_version=%s != %s; treating as a miss",
-            row.get("schema_version"),
-            SNAPSHOT_SCHEMA_VERSION,
-        )
+    if not public:
         return None
-
-    computed_at = _parse_timestamp(row.get("computed_at"))
     return {
-        "snapshot_key": str(row.get("snapshot_key") or GLOBAL_SNAPSHOT_KEY),
-        "schema_version": version,
-        "computed_at": computed_at.isoformat() if computed_at else None,
-        "source_freshness": row.get("source_freshness") or {},
-        "payload": row.get("payload") or {},
+        "snapshot_key": public.get("snapshot_key"),
+        "schema_version": public.get("schema_version"),
+        "computed_at": public.get("computed_at"),
+        "source_freshness": public.get("source_freshness") or {},
+        "payload": public.get("sections") or {},
     }
 
 
@@ -481,36 +335,10 @@ def snapshot_age_seconds(snapshot: Optional[dict], now: Optional[datetime] = Non
 # Tick entry point
 # ---------------------------------------------------------------------------
 
-async def build_and_store_global_snapshot(
-    *,
-    corridor_id: Optional[str] = None,
-) -> dict:
-    """Build + persist the snapshot. Never raises; returns a status dict."""
-    started = time.perf_counter()
-    try:
-        snapshot = await build_global_snapshot(corridor_id=corridor_id)
-        await asyncio.to_thread(store_global_snapshot, snapshot)
-    except asyncio.CancelledError:
-        raise
-    except Exception as exc:
-        logger.warning("snapshot_failed: %s", exc)
-        return {
-            "status": "error",
-            "error": f"{type(exc).__name__}: {exc}",
-            "ms": _elapsed_ms(started),
-        }
+async def build_and_store_global_snapshot(*, lease=None, corridor_id: Optional[str] = None) -> dict:
+    """Compatibility entry point requiring a live fenced publication lease."""
+    if lease is None:
+        return {"status": "error", "error": "active fenced lease required"}
+    from app.services.public_snapshot_service import refresh_public_snapshot
 
-    status = {
-        "status": "ok",
-        "snapshot_key": snapshot.get("snapshot_key"),
-        "computed_at": snapshot.get("computed_at"),
-        "sections": len(snapshot.get("payload") or {}),
-        "ms": _elapsed_ms(started),
-    }
-    logger.info(
-        "snapshot_built: %s sections, computed_at=%s, %dms",
-        status["sections"],
-        status["computed_at"],
-        status["ms"],
-    )
-    return status
+    return await refresh_public_snapshot(lease=lease)

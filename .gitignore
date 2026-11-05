@@ -116,6 +116,9 @@ frontend/scripts/*
 # Miscellaneous
 gods-eye-view
 Globot  
+Final-Gemastik
+infra/supabase/.temp/
+docs/video/dispatcher-pitch/
 # Generated document backups (kept in .backups/ so the folder stays clean)
 *.bak-*
 Final-Gemastik/.backups/

@@ -101,8 +101,16 @@ class Settings(BaseSettings):
     internal_tick_token: str = ""
     # Per-tick admission: at most this many jobs and this many seconds of work.
     # Remaining due jobs are deferred to the next tick (never dropped).
-    tick_max_jobs: int = 2
-    tick_budget_seconds: int = 120
+    tick_max_jobs: int = 3
+    tick_budget_seconds: int = 180
+    # These are application-side daily reservation caps, not upstream quota claims.
+    provider_budget_daily_limits: str = (
+        "bmkg=288,bmkg_cap=288,open_meteo=4,firms=8,tomtom=48,"
+        "petabencana=96,bnpb=24,news=288,pihps=1,social=24"
+    )
+    # Public API reads only the persisted shared projection; no guest fallback fetch.
+    pilot_shadow_mode: bool = True
+    shared_snapshot_reads_only: bool = True
     # Continuous consumers (AIS WebSocket, validated-alert fan-out) are deferred
     # this long after boot so `/health`, the first login and JWKS pre-warm get
     # the CPU first. 60–90s is the M8 contract; 75 keeps margin under the

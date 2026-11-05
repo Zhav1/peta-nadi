@@ -47,18 +47,19 @@ def _clean_tick_state():
 
 @pytest.fixture(autouse=True)
 def _stub_dashboard_snapshot(monkeypatch):
-    """The tick refreshes the dashboard read model (Phase 163a).
-
-    Stub it for every tick test: the real builder composes 15 live sections and
-    would reach Supabase/BMKG/Open-Meteo. Tests that care about the hook set
-    their own fake on top of this one.
-    """
-    from app.services import dashboard_snapshot_service
+    """Keep shared leases and projection publication hermetic in tick tests."""
+    from app.services import public_snapshot_service, refresh_coordinator
 
     calls: list[dict] = []
 
-    async def _record(**kwargs):
-        calls.append(kwargs)
+    async def acquire(name, *, ttl_seconds, owner_id=None):
+        return refresh_coordinator.RefreshLease(name, "test-owner", 1)
+
+    async def release(lease):
+        return True
+
+    async def _record(*, lease):
+        calls.append({"lease": lease})
         return {
             "status": "ok",
             "sections": 0,
@@ -66,9 +67,9 @@ def _stub_dashboard_snapshot(monkeypatch):
             "ms": 0,
         }
 
-    monkeypatch.setattr(
-        dashboard_snapshot_service, "build_and_store_global_snapshot", _record
-    )
+    monkeypatch.setattr(refresh_coordinator, "acquire_refresh_lease", acquire)
+    monkeypatch.setattr(refresh_coordinator, "release_refresh_lease", release)
+    monkeypatch.setattr(public_snapshot_service, "refresh_public_snapshot", _record)
     return calls
 
 
@@ -109,6 +110,12 @@ def _stub_lifespan_dependencies(monkeypatch, calls):
     monkeypatch.setattr(app_main.settings, "supabase_url", "")
     monkeypatch.setattr(app_main.settings, "supabase_jwks_key", "")
     monkeypatch.setattr(app_main.settings, "pollers_enabled", True)
+    from app.services import public_snapshot_service
+
+    async def _read_snapshot():
+        return None
+
+    monkeypatch.setattr(public_snapshot_service, "read_public_snapshot", _read_snapshot)
     monkeypatch.setattr("app.db.supabase_client.init_write_health", lambda: "enabled")
     monkeypatch.setattr(
         "app.services.alert_fanout.consume_validated_alerts_stream",
@@ -277,14 +284,16 @@ async def test_job_lease_prevents_duplicate_execution(monkeypatch):
     async def fake_cycle():
         calls.append(1)
 
+    from app.services.refresh_coordinator import RefreshLease
+
     monkeypatch.setattr(job_scheduler, "get_job_callable", lambda name: fake_cycle)
-    leases = iter([True, False])  # second tick loses the per-job lease
+    leases = iter([RefreshLease("scheduler_job:bmkg", "owner", 1), None])
     monkeypatch.setattr(job_scheduler, "acquire", lambda job, ttl: next(leases))
     released = []
     monkeypatch.setattr(
         job_scheduler,
         "release",
-        lambda job, status, error=None, retry_after_seconds=120: released.append((job, status)),
+        lambda lease, job, status, error=None, retry_after_seconds=120: released.append((job, status)),
     )
 
     first = await job_scheduler.run_tick(plan=job_scheduler.TickPlan(due=["bmkg"]), run_id="a")
@@ -304,11 +313,13 @@ async def test_failed_job_records_error_and_retries_after_backoff(monkeypatch):
     async def boom():
         raise RuntimeError("bmkg upstream down")
 
+    from app.services.refresh_coordinator import RefreshLease
+
     monkeypatch.setattr(job_scheduler, "get_job_callable", lambda name: boom)
-    monkeypatch.setattr(job_scheduler, "acquire", lambda job, ttl: True)
+    monkeypatch.setattr(job_scheduler, "acquire", lambda job, ttl: RefreshLease(f"scheduler_job:{job}", "owner", 1))
     released = []
 
-    def fake_release(job, status, error=None, retry_after_seconds=120):
+    def fake_release(lease, job, status, error=None, retry_after_seconds=120):
         released.append(
             {"job": job, "status": status, "error": error, "retry": retry_after_seconds}
         )
@@ -352,9 +363,11 @@ async def test_tick_respects_job_cap_and_defers_the_rest(monkeypatch):
     async def fake_cycle():
         calls.append(1)
 
+    from app.services.refresh_coordinator import RefreshLease
+
     monkeypatch.setattr(job_scheduler, "get_job_callable", lambda name: fake_cycle)
-    monkeypatch.setattr(job_scheduler, "acquire", lambda job, ttl: True)
-    monkeypatch.setattr(job_scheduler, "release", lambda *args, **kwargs: None)
+    monkeypatch.setattr(job_scheduler, "acquire", lambda job, ttl: RefreshLease(f"scheduler_job:{job}", "owner", 1))
+    monkeypatch.setattr(job_scheduler, "release", lambda *args, **kwargs: True)
 
     result = await job_scheduler.run_tick(
         plan=job_scheduler.TickPlan(due=["bmkg", "firms"]), run_id="cap"
@@ -424,6 +437,7 @@ def test_registry_cadences_match_the_m8_contract():
         "pihps": 86400,
         "social": 3600,
         "bnpb": 3600,
+        "petabencana": 900,
     }
 
 
@@ -498,7 +512,7 @@ async def test_continuous_consumer_starts_after_the_delay(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_tick_refreshes_the_dashboard_snapshot_after_jobs(monkeypatch, tick_token):
-    from app.services import dashboard_snapshot_service
+    from app.services import public_snapshot_service
 
     order = []
 
@@ -509,7 +523,7 @@ async def test_tick_refreshes_the_dashboard_snapshot_after_jobs(monkeypatch, tic
         order.append("jobs")
         return {}
 
-    async def fake_snapshot(**kwargs):
+    async def fake_snapshot(*, lease):
         order.append("snapshot")
         return {
             "status": "ok",
@@ -521,7 +535,7 @@ async def test_tick_refreshes_the_dashboard_snapshot_after_jobs(monkeypatch, tic
     monkeypatch.setattr(job_scheduler, "plan_tick", fake_plan)
     monkeypatch.setattr(job_scheduler, "run_tick", fake_run)
     monkeypatch.setattr(
-        dashboard_snapshot_service, "build_and_store_global_snapshot", fake_snapshot
+        public_snapshot_service, "refresh_public_snapshot", fake_snapshot
     )
 
     await internal_tick.internal_tick(x_internal_token=TOKEN)
@@ -535,7 +549,7 @@ async def test_tick_refreshes_the_dashboard_snapshot_after_jobs(monkeypatch, tic
 
 @pytest.mark.asyncio
 async def test_snapshot_failure_never_fails_the_tick(monkeypatch, tick_token):
-    from app.services import dashboard_snapshot_service
+    from app.services import public_snapshot_service
 
     async def fake_plan():
         return job_scheduler.TickPlan(due=[])
@@ -543,12 +557,12 @@ async def test_snapshot_failure_never_fails_the_tick(monkeypatch, tick_token):
     async def fake_run(plan=None, run_id=None):
         return {}
 
-    async def boom(**kwargs):
+    async def boom(*, lease):
         raise RuntimeError("supabase down")
 
     monkeypatch.setattr(job_scheduler, "plan_tick", fake_plan)
     monkeypatch.setattr(job_scheduler, "run_tick", fake_run)
-    monkeypatch.setattr(dashboard_snapshot_service, "build_and_store_global_snapshot", boom)
+    monkeypatch.setattr(public_snapshot_service, "refresh_public_snapshot", boom)
 
     body = await internal_tick.internal_tick(x_internal_token=TOKEN)
     await internal_tick.wait_for_pending_ticks()
@@ -559,7 +573,7 @@ async def test_snapshot_failure_never_fails_the_tick(monkeypatch, tick_token):
 
 @pytest.mark.asyncio
 async def test_snapshot_build_is_bounded_and_never_holds_the_lock(monkeypatch, tick_token):
-    from app.services import dashboard_snapshot_service
+    from app.services import public_snapshot_service
 
     async def fake_plan():
         return job_scheduler.TickPlan(due=[])
@@ -567,12 +581,12 @@ async def test_snapshot_build_is_bounded_and_never_holds_the_lock(monkeypatch, t
     async def fake_run(plan=None, run_id=None):
         return {}
 
-    async def hang(**kwargs):
+    async def hang(*, lease):
         await asyncio.sleep(30)
 
     monkeypatch.setattr(job_scheduler, "plan_tick", fake_plan)
     monkeypatch.setattr(job_scheduler, "run_tick", fake_run)
-    monkeypatch.setattr(dashboard_snapshot_service, "build_and_store_global_snapshot", hang)
+    monkeypatch.setattr(public_snapshot_service, "refresh_public_snapshot", hang)
     monkeypatch.setattr(internal_tick, "SNAPSHOT_BUILD_TIMEOUT_SECONDS", 0.05)
 
     started = asyncio.get_running_loop().time()

@@ -690,7 +690,7 @@ async def write_incident(
 # available and id-only rows still normalize.
 _HAZARD_COLUMNS = (
     "id, incident_id, title, type, severity, status, lat, lon, affected_area, "
-    "location, evidence"
+    "location, evidence, confidence, created_at, updated_at"
 )
 
 # Provenance tag written by backend.app.services.unified_news_ingestor into
@@ -811,14 +811,13 @@ async def get_hazard_polygons(
                 or row.get("affected_polygon")
                 or row.get("polygon")
             )
-            if not polygon_raw:
-                continue
-            # Always hand the map a GeoJSON polygon; invalid storage degrades to None
-            # (the row is still reported as a hazard, just without drawable geometry).
-            polygon = _normalize_geojson_polygon(polygon_raw)
-
             row_lat = _coerce_float(row.get("lat"))
             row_lon = _coerce_float(row.get("lon"))
+            if not polygon_raw and (row_lat is None or row_lon is None):
+                continue
+            # Preserve grounded source points when no areal footprint exists.
+            # Invalid/missing polygon geometry stays explicit as None.
+            polygon = _normalize_geojson_polygon(polygon_raw) if polygon_raw else None
             distance_km = None
             if row_lat is not None and row_lon is not None:
                 distance_km = _haversine_km(center_lat, center_lon, row_lat, row_lon)
@@ -831,6 +830,11 @@ async def get_hazard_polygons(
                 "title": row.get("title") or "",
                 "type": row.get("type") or "unknown",
                 "severity": severity or "medium",
+                "status": status,
+                "confidence": row.get("confidence"),
+                "evidence": row.get("evidence"),
+                "created_at": row.get("created_at"),
+                "updated_at": row.get("updated_at"),
                 "polygon": polygon,
                 "geometry": polygon,
                 "geometry_format": "geojson" if polygon else None,
@@ -844,6 +848,8 @@ async def get_hazard_polygons(
             if distance_km is not None:
                 # Additive field: safe for existing SSE consumers.
                 hazard["distance_km"] = round(distance_km, 3)
+            from app.services.hazard_evidence import normalize_hazard_evidence
+            hazard["hazard_evidence"] = normalize_hazard_evidence(hazard)
             hazards.append(hazard)
         return hazards
     except Exception as e:

@@ -11,6 +11,13 @@ import time
 import logging
 from typing import Dict, Any, List, Optional, Tuple
 import networkx as nx
+from app.services.hazard_evidence import (
+    HAZARD_EVIDENCE_VERSION,
+    assess_route_hazards,
+    normalize_hazard_evidence,
+    route_intersects_geometry,
+    route_intersects_point,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +105,7 @@ def enrich_route_with_proof(
         # Fallback when schemas module is unavailable (offline import order):
         # return a minimal dict so callers never crash.
         return {
-            "dasar_risiko": {"safety_tag": "WASPADA", "safety_status": "SAFE_DETOUR",
+            "dasar_risiko": {"safety_tag": "BUKTI TIDAK TERSEDIA", "safety_status": "HOLD_DELAY",
                              "is_compromised": False, "passability": "CAUTION",
                              "hazard_type": None, "hazard_radius_km": None, "evidence": []},
             "dampak_uncertainty": {"time_delta_minutes": None, "congestion_levels": [],
@@ -110,27 +117,29 @@ def enrich_route_with_proof(
                                   "warnings": [], "evidence": []},
         }
 
-    risk_raw = route.get("risk_score", 0.2)
+    risk_raw = route.get("risk_score")
     try:
-        risk = float(risk_raw)
+        risk = float(risk_raw) if risk_raw is not None else None
     except (TypeError, ValueError):
-        risk = 0.2
+        risk = None
+    if risk is not None and not math.isfinite(risk):
+        risk = None
 
-    if risk >= 0.6:
-        safety_tag, safety_status, is_compromised = "BERISIKO", "COMPROMISED", True
-    elif risk >= 0.3:
-        safety_tag, safety_status, is_compromised = "WASPADA", "SAFE_DETOUR", False
-    else:
-        safety_tag, safety_status, is_compromised = "AMAN", "CLEAR", False
-
-    if risk >= 0.8:
+    assessment = route.get("hazard_assessment") or {}
+    clearance = assessment.get("clearance_status") or "REVIEW"
+    is_compromised = clearance in {"BLOCKED", "REVIEW"} and assessment.get("status") != "UNKNOWN"
+    if clearance == "BLOCKED":
+        safety_tag, safety_status = "BLOKIR TERKONFIRMASI", "COMPROMISED"
         passability = "BLOCKED"
-    elif risk >= 0.5:
-        passability = "RESTRICTED"
-    elif risk >= 0.3:
+    elif clearance == "CLEAR":
+        safety_tag, safety_status = "BUKTI TERKINI — TIDAK BERIRISAN", "CLEAR"
+        passability = "CLEAR"
+    elif assessment.get("status") == "PRECAUTIONARY_RISK":
+        safety_tag, safety_status = "RISIKO PRECAUTIONARY — TINJAUAN DIPERLUKAN", "HOLD_DELAY"
         passability = "CAUTION"
     else:
-        passability = "CLEAR"
+        safety_tag, safety_status = "BUKTI / CAKUPAN TIDAK TERSEDIA — TINJAUAN DIPERLUKAN", "HOLD_DELAY"
+        passability = "CAUTION"
 
     hazard_type = None
     hazard_radius = None
@@ -141,9 +150,10 @@ def enrich_route_with_proof(
             or hz0.get("event_type") or hz0.get("hazard_type") or "unknown"
         )
         try:
-            hazard_radius = float(hz0.get("radiusKm", hz0.get("radius_km", 10.0)))
+            radius_raw = hz0.get("radiusKm", hz0.get("radius_km"))
+            hazard_radius = float(radius_raw) if radius_raw is not None else None
         except (TypeError, ValueError):
-            hazard_radius = 10.0
+            hazard_radius = None
 
     dasar = DasarRisiko(
         safety_tag=safety_tag,
@@ -153,11 +163,14 @@ def enrich_route_with_proof(
         hazard_type=hazard_type,
         hazard_radius_km=hazard_radius,
         evidence=[
-            RiskEvidenceItem(source="router", label="risk_score", value=round(risk, 3),
-                             confidence=0.9, detail="NetworkX hazard-penalized weight"),
-            RiskEvidenceItem(source="hazard", label="hazard_type", value=hazard_type or "none",
-                             confidence=0.8 if hazard_type else 0.5,
-                             detail=f"radius_km={hazard_radius}" if hazard_radius else "no hazard zone"),
+            RiskEvidenceItem(source="router", label="risk_score", value=round(risk, 3) if risk is not None else None,
+                             confidence=0.9 if risk is not None else 0.0,
+                             detail="route hazard assessment" if risk is not None else "risk unavailable"),
+            RiskEvidenceItem(
+                source="hazard", label="hazard_evidence", value=assessment.get("status", "UNKNOWN"),
+                confidence=1.0 if assessment.get("status") in {"BLOCKED", "CLEAR"} else 0.0,
+                detail=f"{assessment.get('evidence_version', HAZARD_EVIDENCE_VERSION)}; ids={','.join(assessment.get('evidence_ids') or [])}; {assessment.get('reason')}",
+            ),
         ],
     )
 
@@ -641,6 +654,8 @@ class CPURoutingAdapter:
             "status": "no_route",
             "reason_code": reason_code,
             "reason": reason or message,
+            "decision_status": "HOLD_DELAY",
+            "safety_review_required": True,
             "solver": "NetworkX Dijkstra / A* CPU Solver",
             "origin": origin_id,
             "origin_name": origin_name or origin_id,
@@ -671,6 +686,7 @@ class CPURoutingAdapter:
         news_context: Optional[List[Dict[str, Any]]] = None,
         include_proof: bool = True,
         is_fallback: bool = False,
+        hazard_evidence_coverage: str = "unknown",
     ) -> Dict[str, Any]:
         """
         Computes k-shortest simple paths on CPU with dynamic hazard avoidance penalties.
@@ -817,40 +833,59 @@ class CPURoutingAdapter:
                 snapped_orig_node, snapped_dest_node, alt_snap_dist,
             )
 
-        # Build dynamic weighted copy of graph
+        # Normalize evidence once; all edge and route decisions use this v1 contract.
+        normalized_hazards = [
+            normalize_hazard_evidence(hz)
+            for hz in (hazard_zones or [])
+            if isinstance(hz, dict)
+        ]
         G = self.graph.copy()
+        hard_blocked_edges = []
 
-        # Apply hazard penalties to intersecting edges
-        if hazard_zones:
-            for u, v, d in G.edges(data=True):
-                n1 = self.nodes_dict.get(u)
-                n2 = self.nodes_dict.get(v)
-                if not n1 or not n2:
+        # A current verified blockage removes intersecting edges. Forecast and
+        # uncertain evidence only increase cost; absent radius/footprint is never
+        # replaced with a guessed buffer.
+        for u, v, data in list(G.edges(data=True)):
+            n1, n2 = self.nodes_dict.get(u), self.nodes_dict.get(v)
+            if not n1 or not n2:
+                continue
+            edge_coords = [[n1["lon"], n1["lat"]], [n2["lon"], n2["lat"]]]
+            hard_block = False
+            penalty_multiplier = 1.0
+            for evidence in normalized_hazards:
+                intersects = route_intersects_geometry(edge_coords, evidence.get("geometry"))
+                point = evidence.get("point")
+                if not intersects and point:
+                    intersects = route_intersects_point(edge_coords, point)
+                risk_center = evidence.get("risk_center") or point
+                radius = evidence.get("radius_km")
+                if not intersects and risk_center and evidence.get("classification") == "PRECAUTIONARY_RISK":
+                    intersects = route_intersects_point(edge_coords, risk_center)
+                if not intersects and risk_center and radius:
+                    try:
+                        nearest = min(
+                            haversine_km((n1["lat"] + n2["lat"]) / 2.0, (n1["lon"] + n2["lon"]) / 2.0, risk_center[1], risk_center[0]),
+                            haversine_km(n1["lat"], n1["lon"], risk_center[1], risk_center[0]),
+                            haversine_km(n2["lat"], n2["lon"], risk_center[1], risk_center[0]),
+                        )
+                        intersects = nearest <= radius
+                    except (TypeError, ValueError, IndexError):
+                        intersects = False
+                if not intersects:
                     continue
-
-                mid_lat = (n1["lat"] + n2["lat"]) / 2.0
-                mid_lon = (n1["lon"] + n2["lon"]) / 2.0
-
-                for hz in hazard_zones:
-                    center = hz.get("center") or [hz.get("lon", 98.68), hz.get("lat", 3.75)]
-                    radius = hz.get("radiusKm", 10.0)
-
-                    dist_mid = haversine_km(mid_lat, mid_lon, center[1], center[0])
-                    dist_n1 = haversine_km(n1["lat"], n1["lon"], center[1], center[0])
-                    dist_n2 = haversine_km(n2["lat"], n2["lon"], center[1], center[0])
-                    min_dist_to_hazard = min(dist_mid, dist_n1, dist_n2)
-
-                    effective_radius = radius + 2.0
-                    if min_dist_to_hazard <= effective_radius:
-                        # Tiered least-risk penalty cost
-                        if min_dist_to_hazard <= radius * 0.5:
-                            penalty_mult = 50.0  # Epicenter core
-                        elif min_dist_to_hazard <= radius:
-                            penalty_mult = 15.0  # Inner hazard zone
-                        else:
-                            penalty_mult = 3.5   # Outer fringe buffer
-                        G[u][v]["weight"] = G[u][v]["travel_time_min"] * penalty_mult
-                        logger.debug(f"Penalized edge {u}->{v} ({penalty_mult}x) due to hazard zone.")
+                if evidence.get("classification") == "CONFIRMED_BLOCKAGE":
+                    hard_block = True
+                    break
+                penalty_multiplier = max(
+                    penalty_multiplier,
+                    3.0 if evidence.get("classification") == "PRECAUTIONARY_RISK" else 1.5,
+                )
+            if hard_block:
+                hard_blocked_edges.append((u, v))
+                G.remove_edge(u, v)
+            elif penalty_multiplier > 1.0:
+                G[u][v]["weight"] = data["travel_time_min"] * penalty_multiplier
+                logger.debug("Precautionary hazard cost %.1fx on %s -> %s", penalty_multiplier, u, v)
 
         routes = []
         seen_geometry: set = set()
@@ -915,6 +950,13 @@ class CPURoutingAdapter:
                     "eta_minutes": int(round(time_min)),
                 }
 
+                assessment = assess_route_hazards(
+                    path_coords, normalized_hazards,
+                    coverage_status=hazard_evidence_coverage,
+                )
+                if assessment["status"] == "BLOCKED":
+                    continue
+                is_clear = assessment["status"] == "CLEAR"
                 routes.append({
                     "route_index": out_idx,
                     "description": desc,
@@ -923,7 +965,12 @@ class CPURoutingAdapter:
                     "distance_km": round(dist_km, 2),
                     "eta_minutes": int(round(time_min)),
                     "fuel_increase_pct": max(0.0, round(((dist_km - routes[0]["distance_km"]) / routes[0]["distance_km"] * 100.0), 1)) if routes and routes[0]["distance_km"] > 0 else 0.0,
-                    "risk_score": 0.12 if not is_detour else round(0.25 + (out_idx * 0.12), 2),
+                    "risk_score": assessment.get("risk_score"),
+                    "hazard_assessment": assessment,
+                    "is_compromised": not is_clear and assessment["status"] != "UNKNOWN",
+                    "safety_status": "CLEAR" if is_clear else "HOLD_DELAY",
+                    "viable": is_clear,
+                    "non_viable_reason": None if is_clear else assessment.get("reason"),
                     "is_detour": is_detour,
                     "legs": [leg],
                 })
@@ -953,11 +1000,10 @@ class CPURoutingAdapter:
                     r["is_detour"] = True
                 routes.insert(0, im_route)
 
-        # Fallback if no path could be generated between nodes
+        # Do not fabricate a truck route when the graph has no path. Maritime
+        # fallbacks still use their nautical graph, then receive the same evidence
+        # recheck as every other emitted alternative.
         if not routes and orig_coords_resolved and dest_coords_resolved:
-            direct_dist = haversine_km(orig_coords_resolved[1], orig_coords_resolved[0], dest_coords_resolved[1], dest_coords_resolved[0]) * 1.35
-            direct_time = (direct_dist / 40.0) * 60.0
-
             if modality == "maritime":
                 coastal_coords = generate_nautical_coastal_route(orig_coords_resolved, dest_coords_resolved)
                 c_dist = 0.0
@@ -987,26 +1033,31 @@ class CPURoutingAdapter:
                         "to_name": dest_name_resolved,
                     }]
                 })
-            else:
-                routes.append({
-                    "route_index": 0,
-                    "description": f"Rute Langsung Alternatif ({orig_name_resolved} -> {dest_name_resolved})",
-                    "nodes": [snapped_orig_node, snapped_dest_node],
-                    "coordinates": [orig_coords_resolved, dest_coords_resolved],
-                    "distance_km": round(direct_dist, 2),
-                    "eta_minutes": int(round(direct_time)),
-                    "fuel_increase_pct": 0.0,
-                    "risk_score": 0.2,
-                    "is_detour": False,
-                    "legs": [{
-                        "modality": "truck",
-                        "mode": "truck",
-                        "color": "#10B981",
-                        "coordinates": [orig_coords_resolved, dest_coords_resolved],
-                        "distance_km": round(direct_dist, 2),
-                        "eta_minutes": int(round(direct_time)),
-                    }]
-                })
+
+        # Recheck every emitted alternative, including intermodal routes. A route
+        # is dispatchable only with complete current evidence and no intersection.
+        for route in routes:
+            assessment = assess_route_hazards(
+                route.get("coordinates") or [], normalized_hazards,
+                coverage_status=hazard_evidence_coverage,
+            )
+            route_mode = route.get("modality")
+            if route_mode in {"maritime", "air"} and not route.get("navigation_safety_checked"):
+                assessment = {
+                    **assessment,
+                    "status": "UNKNOWN",
+                    "clearance_status": "REVIEW",
+                    "risk_score": None,
+                    "reason": f"{route_mode}_navigation_safety_not_checked",
+                }
+            route["hazard_assessment"] = assessment
+            route["risk_score"] = assessment.get("risk_score")
+            route["is_compromised"] = assessment["status"] in {"BLOCKED", "PRECAUTIONARY_RISK"}
+            route["safety_status"] = "CLEAR" if assessment["status"] == "CLEAR" else "COMPROMISED" if assessment["status"] == "BLOCKED" else "HOLD_DELAY"
+            route["viable"] = assessment["status"] == "CLEAR"
+            route["non_viable_reason"] = None if route["viable"] else assessment.get("reason")
+            route["hazard_evidence_version"] = HAZARD_EVIDENCE_VERSION
+            route["hazard_evidence_ids"] = assessment.get("evidence_ids", [])
 
         elapsed_ms = (time.perf_counter() - t0) * 1000.0
 
@@ -1066,6 +1117,11 @@ class CPURoutingAdapter:
             "snapped_dest_node": snapped_dest_node,
             "routes_count": len(routes),
             "routes": routes,
+            "hazard_evidence_version": HAZARD_EVIDENCE_VERSION,
+            "hazard_evidence": normalized_hazards,
+            "hard_excluded_edge_count": len(hard_blocked_edges),
+            "decision_status": "SAFE_ROUTE_AVAILABLE" if any(r.get("viable") for r in routes) else "HOLD_DELAY",
+            "safety_review_required": not any(r.get("viable") for r in routes),
             "compute_time_ms": round(elapsed_ms, 3)
         }
 

@@ -30,6 +30,12 @@ from app.services.travel_ledger_service import (
     TravelNotFoundError,
     FuelPlausibilityError,
 )
+from app.services.pilot_safety import (
+    get_tenant_trip,
+    is_pilot_shadow_mode,
+    require_tenant_claim,
+    shadow_mutation_response,
+)
 from app.routers.vehicles_router import clear_fleet_cache
 
 logger = logging.getLogger(__name__)
@@ -68,19 +74,30 @@ def _effective_company_filter(user: UserSession, requested: Optional[str]) -> Op
 # STEP 1 — TRUCK ASSET MASTER
 # ==========================================
 
-@router.post("/trucks", response_model=TruckAssetResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/trucks", status_code=status.HTTP_201_CREATED)
 async def create_truck_asset(
     payload: TruckAssetCreate,
     user: UserSession = Depends(get_optional_user),
 ):
     """Register a master truck asset (nopol, VIN, golongan, driver, company) once."""
     _require_fleet_write(user)
+    company_id = require_tenant_claim(user)
+    if payload.company_id and payload.company_id != company_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Aset tidak dapat dibuat untuk tenant lain.")
 
     data = payload.model_dump()
-    data["company_id"] = data.get("company_id") or user.company_id or "org-prehub-pilot"
+    data["company_id"] = company_id
     data["company_name"] = data.get("company_name") or user.org_name
     data["created_by"] = user.name
     data["sync_status"] = "pending"
+
+    if is_pilot_shadow_mode():
+        return shadow_mutation_response(
+            resource="truck_asset",
+            action="create",
+            resource_id=payload.truck_id,
+            preview=data,
+        )
 
     existing = travel_ledger_service.get_truck_asset_master(payload.truck_id)
     if existing and existing.get("company_id") != data["company_id"]:
@@ -126,6 +143,20 @@ async def delete_truck_asset(
 ):
     """Delete a master truck asset. Historical travels keep their snapshot."""
     _require_fleet_write(user)
+    company_id = require_tenant_claim(user)
+    asset = travel_ledger_service.resolve_truck_asset(truck_id)
+    if not asset:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                f"Aset truk master '{truck_id}' tidak ditemukan. "
+                "Aset legacy hanya dapat dihapus melalui DELETE /api/v1/fleet/custom/{vehicle_id}."
+            ),
+        )
+    if str(asset.get("company_id") or "") != company_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Aset berada di luar tenant Dispatcher.")
+    if is_pilot_shadow_mode():
+        return shadow_mutation_response(resource="truck_asset", action="delete", resource_id=truck_id)
     deleted = travel_ledger_service.delete_truck_asset(truck_id)
     if not deleted:
         raise HTTPException(
@@ -143,7 +174,7 @@ async def delete_truck_asset(
 # STEP 2 — TRAVEL / RIT LEDGER
 # ==========================================
 
-@router.post("/travels", response_model=TravelResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/travels", status_code=status.HTTP_201_CREATED)
 async def create_travel(
     payload: TravelCreate,
     user: UserSession = Depends(get_optional_user),
@@ -153,6 +184,21 @@ async def create_travel(
     from BPJT tariffs, Pertamina rates, and 4-tier spoilage decay.
     """
     _require_fleet_write(user)
+    company_id = require_tenant_claim(user)
+    truck = travel_ledger_service.resolve_truck_asset(payload.truck_id)
+    if not truck:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Truk '{payload.truck_id}' tidak terdaftar untuk tenant Dispatcher.",
+        )
+    if str(truck.get("company_id") or "") != company_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Aset truk berada di luar tenant Dispatcher.")
+    if is_pilot_shadow_mode():
+        return shadow_mutation_response(
+            resource="travel",
+            action="create",
+            preview={"requested_truck_id": payload.truck_id, "proposed": payload.model_dump(mode="json")},
+        )
     try:
         created = travel_ledger_service.create_travel(payload, actor=user.name)
         clear_fleet_cache()
@@ -202,7 +248,7 @@ async def get_travel(travel_id: str):
     return TravelResponse(**travel)
 
 
-@router.patch("/travels/{travel_id}", response_model=TravelResponse)
+@router.patch("/travels/{travel_id}")
 async def update_travel(
     travel_id: str,
     payload: TravelUpdate,
@@ -210,6 +256,14 @@ async def update_travel(
 ):
     """Record realised time/fuel/toll/status and recompute the savings split."""
     _require_fleet_write(user)
+    get_tenant_trip(user, travel_id)
+    if is_pilot_shadow_mode():
+        return shadow_mutation_response(
+            resource="travel",
+            action="update",
+            resource_id=travel_id,
+            preview=payload.model_dump(exclude_unset=True, mode="json"),
+        )
     try:
         updated = travel_ledger_service.update_travel(travel_id, payload)
         clear_fleet_cache()
@@ -233,6 +287,14 @@ async def solve_travel_hedging(
     and the 4-tier spoilage model, then persist the decision on that rit.
     """
     _require_fleet_write(user)
+    get_tenant_trip(user, travel_id)
+    if is_pilot_shadow_mode():
+        return shadow_mutation_response(
+            resource="travel",
+            action="solve_hedging",
+            resource_id=travel_id,
+            preview=payload.model_dump(exclude_unset=True, mode="json"),
+        )
     try:
         solved = travel_ledger_service.solve_and_persist_hedging(travel_id, payload)
     except TravelNotFoundError as e:

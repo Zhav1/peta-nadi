@@ -108,13 +108,15 @@ class NASAFIRMSAdapter(BaseAdapter):
         {"name": "Bakauheni Port Gateway", "lat": -5.87, "lon": 105.75},
     ]
 
-    async def health_check(self) -> bool:
-        """Check connection by querying FIRMS mapkey status (or status of API)."""
+    async def health_check(self, *, reserve_provider_budget=None) -> bool:
+        """Check FIRMS reachability under the provider request budget."""
         if not settings.nasa_firms_map_key:
             logger.warning("NASA FIRMS API key not configured")
             return False
 
         try:
+            if not await self.reserve_request_budget(callback=reserve_provider_budget, provider_source="firms"):
+                return False
             # Check key status endpoint
             url = f"https://firms.modaps.eosdis.nasa.gov/mapserver/mapkey_status/?MAP_KEY={settings.nasa_firms_map_key}"
             async with httpx.AsyncClient(timeout=5.0) as client:
@@ -139,7 +141,7 @@ class NASAFIRMSAdapter(BaseAdapter):
         key = settings.nasa_firms_map_key if map_key is None else map_key
         return f"{FIRMS_API_BASE}/{key}/{FIRMS_API_SENSOR}/{self.SUMATRA_BBOX}/{int(day_range)}"
 
-    async def fetch(self) -> str:
+    async def fetch(self, *, reserve_provider_budget=None) -> str:
         """Fetch active fire hotspot CSV data from NASA FIRMS (keyed API).
 
         Returns the CSV text — including a header-only CSV, which is a *real*
@@ -153,6 +155,8 @@ class NASAFIRMSAdapter(BaseAdapter):
         url = self.api_csv_url()
         redacted = url.replace(settings.nasa_firms_map_key, "***")
         try:
+            if not await self.reserve_request_budget(callback=reserve_provider_budget, provider_source="firms"):
+                raise RuntimeError("NASA FIRMS request denied by provider budget")
             async with httpx.AsyncClient(timeout=15.0) as client:
                 res = await client.get(url)
                 if res.status_code == 200:
@@ -196,13 +200,15 @@ class NASAFIRMSAdapter(BaseAdapter):
         ]
 
     async def fetch_keyless_csv(
-        self, window_hours: int = FIRMS_KEYLESS_WINDOW_HOURS
+        self, window_hours: int = FIRMS_KEYLESS_WINDOW_HOURS, *, reserve_provider_budget=None
     ) -> str:
         """Fetch the keyless Indonesia CSV (no MAP_KEY, no quota).
 
         Returns "" when every candidate fails — never a fabricated payload.
         """
         for url in self.keyless_csv_urls(window_hours):
+            if not await self.reserve_request_budget(callback=reserve_provider_budget, provider_source="firms"):
+                return ""
             try:
                 text = await _http_get_text(url)
             except Exception as e:

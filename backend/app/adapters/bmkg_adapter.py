@@ -39,12 +39,14 @@ class BMKGAdapter(BaseAdapter):
         # Medan weather forecast URL (adm4 for Medan Kota)
         self.weather_url = "https://api.bmkg.go.id/publik/prakiraan-cuaca?adm4=12.71.01.1001"
         self._last_weather_poll = 0
-        self.weather_poll_interval = 1800 # 30 mins
+        self.weather_poll_interval = 300 # 5 minutes; source job owns this cadence
         self._weather_cache: Dict[str, Any] = {}
 
-    async def health_check(self) -> bool:
-        """Verify BMKG is reachable by hitting the earthquake endpoint."""
+    async def health_check(self, *, reserve_provider_budget=None) -> bool:
+        """Verify BMKG reachability under the provider request budget."""
         try:
+            if not await self.reserve_request_budget(callback=reserve_provider_budget):
+                return False
             async with httpx.AsyncClient(timeout=5.0) as client:
                 res = await client.head(self.earthquake_url)
                 return res.status_code == 200
@@ -59,18 +61,17 @@ class BMKGAdapter(BaseAdapter):
             for name, adm4 in self.hub_adm4.items() if adm4
         }
 
-    async def fetch(self) -> Dict[str, Any]:
+    async def fetch(self, *, reserve_provider_budget=None) -> Dict[str, Any]:
         """Fetch earthquake data, and optionally weather data if interval has passed."""
         import asyncio
         data: Dict[str, Any] = {"earthquake": None, "weather": None, "weather_list": []}
 
         async with httpx.AsyncClient(timeout=10.0) as client:
-            try:
-                res = await client.get(self.earthquake_url)
-                if res.status_code == 200:
-                    data["earthquake"] = res.json()
-            except Exception as e:
-                logger.error(f"Failed to fetch BMKG earthquake data: {e}")
+            if not await self.reserve_request_budget(callback=reserve_provider_budget):
+                raise RuntimeError("BMKG request denied by provider budget")
+            res = await client.get(self.earthquake_url)
+            res.raise_for_status()
+            data["earthquake"] = res.json()
 
             # Fetch weather every 30 minutes (cached); one call per known adm4, in parallel.
             now = datetime.now(timezone.utc).timestamp()
@@ -78,13 +79,11 @@ class BMKGAdapter(BaseAdapter):
                 urls = self._weather_urls()
 
                 async def _get(name: str, url: str):
-                    try:
-                        r = await client.get(url)
-                        if r.status_code == 200:
-                            return name, r.json()
-                    except Exception as e:
-                        logger.error(f"Failed to fetch BMKG weather for {name}: {e}")
-                    return name, None
+                    if not await self.reserve_request_budget(callback=reserve_provider_budget):
+                        raise RuntimeError(f"BMKG weather request denied by provider budget for {name}")
+                    r = await client.get(url)
+                    r.raise_for_status()
+                    return name, r.json()
 
                 try:
                     results = await asyncio.gather(*[_get(n, u) for n, u in urls.items()])
@@ -97,6 +96,7 @@ class BMKGAdapter(BaseAdapter):
                     data["weather"] = weather_list[0]["payload"] if weather_list else None
                 except Exception as e:
                     logger.error(f"Failed to fetch BMKG weather forecast data: {e}")
+                    raise
             else:
                 # Serve 30-min cache without new HTTP calls.
                 cached = [{"hub": n, "payload": p} for n, p in self._weather_cache.items()]
@@ -184,9 +184,11 @@ class BMKGAdapter(BaseAdapter):
                 
                 for location_data in data_list:
                     loc_info = location_data.get("lokasi", {})
-                    loc_name = loc_info.get("kotkab") or loc_info.get("provinsi") or "Medan"
-                    loc_lat = loc_info.get("lat", "3.5852")
-                    loc_lon = loc_info.get("lon", "98.6667")
+                    loc_name = loc_info.get("kotkab") or loc_info.get("provinsi") or "Unknown location"
+                    loc_lat = loc_info.get("lat")
+                    loc_lon = loc_info.get("lon")
+                    if loc_lat is None or loc_lon is None:
+                        continue
                     cuaca_forecasts = location_data.get("cuaca", [])
                     for time_slice in cuaca_forecasts:
                         for forecast in time_slice:
@@ -207,9 +209,11 @@ class BMKGAdapter(BaseAdapter):
                 if warnings_found:
                     # Select the most immediate warning
                     warning = warnings_found[0]
-                    loc_name = warning.get("location_name", "Medan")
-                    loc_lat = warning.get("lat", "3.5852")
-                    loc_lon = warning.get("lon", "98.6667")
+                    loc_name = warning.get("location_name", "Unknown location")
+                    loc_lat = warning.get("lat")
+                    loc_lon = warning.get("lon")
+                    if loc_lat is None or loc_lon is None:
+                        continue
                     dedup_key = f"bmkg:weather:{loc_name.lower()}:{warning['time']}:{warning['code']}"
                     
                     r = get_redis()
@@ -222,9 +226,15 @@ class BMKGAdapter(BaseAdapter):
                             "severity": "medium" if warning['code'] == 60 else "high",
                             "lat": str(loc_lat),
                             "lon": str(loc_lon),
-                            "title": f"Weather Warning: {warning['desc']} expected in {loc_name}",
+                            "title": f"BMKG forecast: {warning['desc']} expected in {loc_name}",
                             "raw": json.dumps(warning),
                             "ts": datetime.now(timezone.utc).isoformat(),
+                            "forecast_valid_at": warning.get("time"),
+                            "is_forecast": True,
+                            "modeled": False,
+                            "geometry_role": "forecast_area",
+                            "source_clock": "forecast_valid_time",
+                            "forecast_issued_at": datetime.now(timezone.utc).isoformat(),
                             "dedup_key": dedup_key
                         })
             except Exception as e:

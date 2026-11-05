@@ -13,6 +13,13 @@ from datetime import datetime, timezone
 
 from app.adapters.cpu_routing_adapter import get_cpu_router, haversine_km
 from app.adapters.tomtom_adapter import TomTomAdapter, read_cached_flow_items
+from app.services.hazard_evidence import (
+    HAZARD_EVIDENCE_VERSION,
+    assess_route_hazards,
+    normalize_hazard_evidence,
+    route_intersects_geometry,
+    route_intersects_point,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -80,11 +87,15 @@ async def _fetch_live_checkpoint_speeds() -> Tuple[Dict[str, float], bool, Optio
 
 
 def _build_cost_matrix(checkpoint_speeds: Dict[str, float], hazard_zones: Optional[List[Dict[str, Any]]]) -> List[List[float]]:
-    """Builds the N x N travel time matrix (minutes) from checkpoint speeds + hazard penalties."""
+    """Build a CPU travel-time matrix; only verified footprints can remove an edge."""
     nodes = CORRIDOR_JUNCTION_NODES
     N = len(nodes)
 
     avg_corridor_speed = sum(checkpoint_speeds.values()) / max(1, len(checkpoint_speeds))
+    normalized_hazards = [
+        normalize_hazard_evidence(hz)
+        for hz in (hazard_zones or []) if isinstance(hz, dict)
+    ]
 
     matrix = [[0.0] * N for _ in range(N)]
 
@@ -102,40 +113,30 @@ def _build_cost_matrix(checkpoint_speeds: Dict[str, float], hazard_zones: Option
             speed_kmh = max(15.0, avg_corridor_speed)
             travel_time_min = (actual_road_dist / speed_kmh) * 60.0
 
-            if hazard_zones:
-                mid_lat = (n1["lat"] + n2["lat"]) / 2.0
-                mid_lon = (n1["lon"] + n2["lon"]) / 2.0
-                n1_id = str(n1.get("id", "")).lower()
-                n2_id = str(n2.get("id", "")).lower()
-                is_port_access_edge = (
-                    "belawan" in n1_id or "belawan" in n2_id
-                    or "port" in n1_id or "port" in n2_id
-                    or "pelabuhan" in n1_id or "pelabuhan" in n2_id
-                )
-                for hz in hazard_zones:
-                    hz_center = hz.get("center") or [hz.get("lon", 98.68), hz.get("lat", 3.75)]
-                    hz_radius = hz.get("radiusKm", 10.0)
-                    hz_type = str(
-                        hz.get("incident_type") or hz.get("type")
-                        or hz.get("event_type") or hz.get("hazard_type") or ""
-                    ).lower()
-                    sea_affecting = hz_type in ("port_closure", "port_congestion", "marine_wave")
-                    # Port/corridor nodes get a generous capture radius (r + 8.0 km
-                    # minimum, mirroring frontend isSeaportBlockedByHazard) so a
-                    # port_closure clicked near Pelabuhan Asal penalizes the primary
-                    # port access edge (e.g. PORT_BELAWAN / belawan_port) and
-                    # promotes alternative corridors.
-                    if sea_affecting or is_port_access_edge:
-                        effective_radius = hz_radius + 8.0
-                    else:
-                        effective_radius = hz_radius + 2.0
-                    dist_mid = haversine_km(mid_lat, mid_lon, hz_center[1], hz_center[0])
-                    dist_n1 = haversine_km(n1["lat"], n1["lon"], hz_center[1], hz_center[0])
-                    dist_n2 = haversine_km(n2["lat"], n2["lon"], hz_center[1], hz_center[0])
-                    dist_to_hazard = min(dist_mid, dist_n1, dist_n2)
-                    if dist_to_hazard <= effective_radius:
-                        travel_time_min *= 10.0
-                        logger.debug(f"Penalized segment {n1['id']} -> {n2['id']} for hazard avoidance.")
+            edge_coords = [[n1["lon"], n1["lat"]], [n2["lon"], n2["lat"]]]
+            for evidence in normalized_hazards:
+                intersects = route_intersects_geometry(edge_coords, evidence.get("geometry"))
+                point = evidence.get("point")
+                if not intersects and point:
+                    intersects = route_intersects_point(edge_coords, point)
+                radius = evidence.get("radius_km")
+                center = evidence.get("risk_center") or point
+                if not intersects and center and evidence.get("classification") == "PRECAUTIONARY_RISK":
+                    intersects = route_intersects_point(edge_coords, center)
+                if not intersects and radius and center:
+                    center_lat, center_lon = float(center[1]), float(center[0])
+                    dist_mid = haversine_km((n1["lat"] + n2["lat"]) / 2.0, (n1["lon"] + n2["lon"]) / 2.0, center_lat, center_lon)
+                    dist_n1 = haversine_km(n1["lat"], n1["lon"], center_lat, center_lon)
+                    dist_n2 = haversine_km(n2["lat"], n2["lon"], center_lat, center_lon)
+                    intersects = min(dist_mid, dist_n1, dist_n2) <= radius
+                if not intersects:
+                    continue
+                if evidence.get("classification") == "CONFIRMED_BLOCKAGE":
+                    travel_time_min = math.inf
+                    break
+                # Unverified, stale, modeled and forecast inputs can influence
+                # relative cost, but never become a closure or a guessed-radius block.
+                travel_time_min *= 3.0 if evidence.get("classification") == "PRECAUTIONARY_RISK" else 1.5
 
             matrix[i][j] = round(travel_time_min, 2)
 
@@ -156,7 +157,8 @@ async def optimize_fleet_routes_cpu(
     origin_id: str = "belawan_port",
     dest_id: str = "tebing_tinggi",
     fleet_size: int = 3,
-    hazard_zones: Optional[List[Dict[str, Any]]] = None
+    hazard_zones: Optional[List[Dict[str, Any]]] = None,
+    hazard_evidence_coverage: str = "unknown",
 ) -> Dict[str, Any]:
     """
     Solves multi-vehicle routing with dynamic TomTom traffic speeds and hazard avoidance.
@@ -169,6 +171,10 @@ async def optimize_fleet_routes_cpu(
     speeds, tomtom_live, degraded_reason = await _fetch_live_checkpoint_speeds()
     cost_matrix = _build_cost_matrix(speeds, hazard_zones)
     locations = [node["id"] for node in CORRIDOR_JUNCTION_NODES]
+    normalized_hazards = [
+        normalize_hazard_evidence(hz)
+        for hz in (hazard_zones or []) if isinstance(hz, dict)
+    ]
 
     # 2. Invoke deterministic CPU routing solver
     router = get_cpu_router()
@@ -179,6 +185,33 @@ async def optimize_fleet_routes_cpu(
         vehicle_capacity=120.0
     )
 
+    node_by_id = {node["id"]: node for node in CORRIDOR_JUNCTION_NODES}
+    checked_vehicle_routes = []
+    for vehicle_route in vrp_solution.get("vehicle_routes", []):
+        route_nodes = vehicle_route.get("route") or []
+        route_coords = [
+            [node_by_id[node]["lon"], node_by_id[node]["lat"]]
+            for node in route_nodes if node in node_by_id
+        ]
+        assessment = assess_route_hazards(
+            route_coords, normalized_hazards, coverage_status=hazard_evidence_coverage
+        )
+        has_unavailable_edge = any(
+            not math.isfinite(cost_matrix[locations.index(a)][locations.index(b)])
+            for a, b in zip(route_nodes, route_nodes[1:])
+            if a in locations and b in locations
+        )
+        if has_unavailable_edge or assessment["status"] == "BLOCKED":
+            continue
+        vehicle_route["hazard_assessment"] = assessment
+        vehicle_route["viable"] = assessment["status"] == "CLEAR"
+        checked_vehicle_routes.append(vehicle_route)
+    no_safe_route = not checked_vehicle_routes or not any(route.get("viable") for route in checked_vehicle_routes)
+    degraded_sources = []
+    if hazard_evidence_coverage not in {"complete", "verified_complete"}:
+        degraded_sources.append("hazard_coverage_unknown")
+    if any(item.get("classification") == "UNKNOWN" for item in normalized_hazards):
+        degraded_sources.append("hazard_evidence_unknown")
     solver_compute_ms = vrp_solution.get("compute_time_ms")
     elapsed_ms = round((datetime.now(timezone.utc) - start_time).total_seconds() * 1000.0, 1)
     if solver_compute_ms is None:
@@ -188,7 +221,10 @@ async def optimize_fleet_routes_cpu(
     avg_corridor_speed = round(sum(speeds.values()) / max(1, len(speeds)), 1)
 
     return {
-        "status": "success",
+        "status": "no_safe_route" if no_safe_route else "success",
+        "decision_status": "HOLD_DELAY" if no_safe_route else "SAFE_ROUTE_AVAILABLE",
+        "safety_review_required": no_safe_route,
+        "degraded_sources": degraded_sources,
         "is_fallback": not tomtom_live,
         "degraded_reason": telemetry_reason,
         "traffic_telemetry": {
@@ -200,13 +236,20 @@ async def optimize_fleet_routes_cpu(
         "compute_time_ms": solver_compute_ms,
         "total_pipeline_time_ms": elapsed_ms,
         "locations": locations,
-        "cost_matrix_sample": cost_matrix[:3],
+        "cost_matrix_sample": [
+            [value if math.isfinite(value) else None for value in row]
+            for row in cost_matrix[:3]
+        ],
         "routing_solution": {
-            "routes": {f"truck_{i+1}": r["route"] for i, r in enumerate(vrp_solution["vehicle_routes"])},
-            "vehicle_details": vrp_solution["vehicle_routes"]
+            "routes": {f"truck_{i+1}": r["route"] for i, r in enumerate(checked_vehicle_routes)},
+            "vehicle_details": checked_vehicle_routes
         },
+        "hazard_evidence_version": HAZARD_EVIDENCE_VERSION,
+        "hazard_evidence": normalized_hazards,
         "optimization_summary": {
-            "hazard_segments_avoided": len(hazard_zones) if hazard_zones else 0,
+            "hazard_segments_avoided": sum(
+                1 for row in cost_matrix for value in row if not math.isfinite(value)
+            ),
             "avg_corridor_speed_kmh": avg_corridor_speed,
             "speed_source": "tomtom_live" if tomtom_live else "seed_fallback",
             # No honest baseline exists for % savings (no free-flow reference run),

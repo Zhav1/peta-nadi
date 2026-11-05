@@ -6,23 +6,20 @@ crisis intelligence, and manages Globot-style Human-In-The-Loop review workflows
 """
 import logging
 import asyncio
+import os
 import re
 import time
 import uuid
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
-from urllib.parse import urlparse
+
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks, Header, status
 from pydantic import BaseModel
 
 from app.auth.supabase_auth import UserSession, get_current_user
 
 from app.services.redis_client import get_redis
-from app.services.news_aggregator import (
-    fetch_news_from_supabase,
-    persist_re_tiered_news_rows,
-    resolve_canonical_article_url,
-)
+from app.services.news_aggregator import fetch_news_from_supabase
 from app.services.unified_news_ingestor import unified_news_ingestor
 from app.services import news_yield
 from app.services.news_confidence import build_display_confidence
@@ -612,54 +609,99 @@ def reset_news_read_lock() -> None:
     _READ_LOCK_LOOP = None
 
 
-# Cross-process guard: uvicorn --workers > 1 (or several replicas) each own a
-# separate in-process asyncio.Lock, so a best-effort Redis NX lock keeps a single
-# RSS/LLM cycle per interval. Non-fatal by design — if Redis is down the worker
-# still ingests (the in-process lock already serializes it).
+# Cross-process guard: shared deployments require Redis for a durable lease;
+# local-only mode may use the in-process lock if Redis is unavailable.
 _INGESTION_REDIS_LOCK_KEY = "lrip:lock:news_ingestor"
 _INGESTION_REDIS_LOCK_TTL = 240
-_INGESTION_LOCK_TOKEN = uuid.uuid4().hex
+_INGESTION_LOCK_TOKEN = ""
+_INGESTION_LEASE_RENEW_SECONDS = _INGESTION_REDIS_LOCK_TTL // 3
+_NEWS_SHARED_MODE = str(os.getenv("NEWS_SHARED_MODE", "true")).strip().lower() not in {
+    "0", "false", "no", "off"
+}
 # Monotonic timestamp of the last completed cycle. A caller that queued behind a
 # running cycle is *already satisfied* by that cycle and must not start another.
 _last_cycle_completed_at: Optional[float] = None
 
 
 def _acquire_cross_process_ingestion_lock() -> bool:
-    """Non-blocking Redis lock acquire; True when this worker may ingest.
-
-    Returns False only when another worker provably holds the lock. Any Redis
-    failure degrades to True so a Redis outage never stalls ingestion.
-    """
+    """Acquire a shared Redis lease, failing closed in shared mode."""
+    global _INGESTION_LOCK_TOKEN
+    token = uuid.uuid4().hex
     try:
         r = get_redis()
         if r is None:
-            return True
-        return bool(
+            return not _NEWS_SHARED_MODE
+        acquired = bool(
             r.set(
                 _INGESTION_REDIS_LOCK_KEY,
-                _INGESTION_LOCK_TOKEN,
+                token,
                 nx=True,
                 ex=_INGESTION_REDIS_LOCK_TTL,
             )
         )
+        if acquired:
+            _INGESTION_LOCK_TOKEN = token
+        return acquired
     except Exception as lock_err:
-        logger.debug(
-            f"Redis news ingestion lock unavailable ({lock_err}); "
-            "continuing with in-process lock only"
-        )
+        logger.warning("Redis news ingestion lease unavailable: %s", lock_err)
+        return not _NEWS_SHARED_MODE
+
+
+def _renew_cross_process_ingestion_lock() -> bool:
+    """Extend the lease only if Redis still records this worker as its owner."""
+    if not _NEWS_SHARED_MODE:
         return True
+    token = _INGESTION_LOCK_TOKEN
+    if not token:
+        return False
+    try:
+        r = get_redis()
+        if r is None:
+            return False
+        renewed = r.eval(
+            "if redis.call('get', KEYS[1]) == ARGV[1] then "
+            "return redis.call('expire', KEYS[1], ARGV[2]) else return 0 end",
+            1,
+            _INGESTION_REDIS_LOCK_KEY,
+            token,
+            _INGESTION_REDIS_LOCK_TTL,
+        )
+        return bool(renewed)
+    except Exception as lock_err:
+        logger.warning("Redis news ingestion lease renewal failed: %s", lock_err)
+        return False
 
 
 def _release_cross_process_ingestion_lock() -> None:
-    """Best-effort release, only when this worker still owns the token."""
+    """Atomically release the lease only if this worker still owns it."""
+    global _INGESTION_LOCK_TOKEN
+    token = _INGESTION_LOCK_TOKEN
+    if not token:
+        return
     try:
         r = get_redis()
         if r is None:
             return
-        if r.get(_INGESTION_REDIS_LOCK_KEY) == _INGESTION_LOCK_TOKEN:
-            r.delete(_INGESTION_REDIS_LOCK_KEY)
+        r.eval(
+            "if redis.call('get', KEYS[1]) == ARGV[1] then "
+            "return redis.call('del', KEYS[1]) else return 0 end",
+            1,
+            _INGESTION_REDIS_LOCK_KEY,
+            token,
+        )
     except Exception as lock_err:
-        logger.debug(f"Redis news ingestion lock release skipped: {lock_err}")
+        logger.debug("Redis news ingestion lease release skipped: %s", lock_err)
+    finally:
+        if _INGESTION_LOCK_TOKEN == token:
+            _INGESTION_LOCK_TOKEN = ""
+
+
+async def _renew_ingestion_lease_until_cancelled() -> None:
+    while True:
+        await asyncio.sleep(_INGESTION_LEASE_RENEW_SECONDS)
+        if not await asyncio.to_thread(_renew_cross_process_ingestion_lock):
+            logger.error("News ingestion lease ownership lost; continuing current cycle without lease renewal")
+            return
 
 
 async def run_background_news_ingestion(force: bool = False):
@@ -698,6 +740,11 @@ async def run_background_news_ingestion(force: bool = False):
             )
             return
         _is_ingesting = True
+        renewal_task = (
+            asyncio.create_task(_renew_ingestion_lease_until_cancelled())
+            if _NEWS_SHARED_MODE
+            else None
+        )
         try:
             logger.info("Executing background news ingestion cycle into Supabase...")
             await unified_news_ingestor.run_ingestion_cycle(force_refresh=force)
@@ -710,6 +757,12 @@ async def run_background_news_ingestion(force: bool = False):
         except Exception as ie:
             logger.warning(f"Background news ingestion error: {ie}")
         finally:
+            if renewal_task is not None:
+                renewal_task.cancel()
+                try:
+                    await renewal_task
+                except asyncio.CancelledError:
+                    pass
             _is_ingesting = False
             _last_cycle_completed_at = time.monotonic()
             await asyncio.to_thread(_release_cross_process_ingestion_lock)
@@ -720,14 +773,12 @@ async def get_live_news(
     background_tasks: BackgroundTasks = None,
     province: Optional[str] = Query(None, description="Filter by Sumatra province (e.g. 'Sumatera Barat', 'Sumatera Utara')"),
     severity: Optional[str] = Query(None, description="Filter by severity ('critical', 'high', 'medium', 'low')"),
-    force_refresh: bool = Query(False, description="Force dynamic re-scrape from RSS & Google News into Supabase")
+    force_refresh: bool = Query(False, description="Bypass the process cache and reread stored news; does not trigger ingestion")
 ):
-    """Coalescing wrapper: fast-path stays lock-free, misses serialize.
+    """Read stored news only; a refresh flag may bypass cache but never ingest.
 
-    Two simultaneous cache misses share one 150-row re-tier scan: the first
-    caller holds the per-loop read lock while running the inner
-    implementation, the second waits and then re-hits the 30 s cache inside
-    the inner fast path. Response shape is unchanged.
+    Two simultaneous cache misses share one 150-row stored-data scan. Ingestion
+    is owned by the scheduler, not by a public GET request.
     """
     now = datetime.now(timezone.utc).timestamp()
     if not force_refresh and not province and not severity and _NEWS_CACHE["articles"]:
@@ -739,11 +790,7 @@ async def get_live_news(
                 "cached": True,
                 "count": len(cached_articles),
                 "total": len(cached_articles),
-                "last_updated": (
-                    _NEWS_CACHE.get("last_updated")
-                    or _max_published_at_iso(cached_articles)
-                    or datetime.now(timezone.utc).isoformat()
-                ),
+                "last_updated": _NEWS_CACHE.get("last_updated") or _max_published_at_iso(cached_articles),
                 "meta": _NEWS_CACHE.get("meta"),
                 "articles": cached_articles,
                 "items": cached_articles
@@ -764,9 +811,9 @@ async def _get_live_news_inner(
     force_refresh: bool = False
 ):
     """
-    Returns aggregated real-time news articles from Supabase public.news_articles,
-    enriched with PostGIS coordinates, corridor impact metrics, and official citations.
-    Non-blocking: ingestion runs in background, returning cached/current data immediately.
+    Returns stored news articles from Supabase public.news_articles with the
+    existing display filters. This request never schedules ingestion or mutates
+    persisted news.
     """
     now = datetime.now(timezone.utc).timestamp()
 
@@ -780,35 +827,52 @@ async def _get_live_news_inner(
                 "cached": True,
                 "count": len(cached_articles),
                 "total": len(cached_articles),
-                # Replay the stored fetch-time value; never datetime.now() on a hit.
-                "last_updated": (
-                    _NEWS_CACHE.get("last_updated")
-                    or _max_published_at_iso(cached_articles)
-                    or datetime.now(timezone.utc).isoformat()
-                ),
+                # Replay only the stored publisher timestamp on a cache hit.
+                "last_updated": _NEWS_CACHE.get("last_updated") or _max_published_at_iso(cached_articles),
                 # Replay the breadth meta captured with these exact articles.
                 "meta": _NEWS_CACHE.get("meta"),
                 "articles": cached_articles,
                 "items": cached_articles
             }
 
-
-    # If force refresh requested or cache expired (5 min), trigger background ingestion
-    if force_refresh or (now - _NEWS_CACHE.get("last_fetched_at", 0.0) > 300):
-        if background_tasks is not None:
-            background_tasks.add_task(run_background_news_ingestion, force_refresh)
-        else:
-            asyncio.create_task(run_background_news_ingestion(force_refresh))
-
-    # Query latest articles immediately from Supabase
+    # Query the persisted article rows; the legacy force_refresh parameter only
+    # bypasses the in-process cache and has no upstream side effects.
     # Over-fetch (150) so the 48h / tier / geo filters below have candidates;
     # a 60-row window let valid rows get pushed out by dropped ones.
     # `include_regional=True` is DISPLAY-ONLY: it lets the read path classify rows
     # the crisis gate rejected. Every other caller of the service keeps the
     # default (False) and therefore never sees a regional row.
-    articles = await fetch_news_from_supabase(
-        limit=150, province=province, severity=severity, include_regional=True
-    )
+    try:
+        articles = await fetch_news_from_supabase(
+            limit=150,
+            province=province,
+            severity=severity,
+            include_regional=True,
+            raise_on_error=True,
+        )
+    except Exception as read_error:
+        logger.warning("Stored news read unavailable: %s", read_error)
+        stale_articles = list(_NEWS_CACHE.get("articles") or [])
+        if province:
+            stale_articles = [a for a in stale_articles if a.get("province") == province]
+        if severity:
+            stale_articles = [a for a in stale_articles if a.get("severity") == severity]
+        last_updated = _NEWS_CACHE.get("last_updated") or _max_published_at_iso(stale_articles)
+        meta = _NEWS_CACHE.get("meta") if stale_articles else None
+        return {
+            "status": "degraded",
+            "storage": "supabase_postgis",
+            "cached": bool(stale_articles),
+            "stale": bool(stale_articles),
+            "source_status": "unavailable",
+            "count": len(stale_articles),
+            "total": len(stale_articles),
+            "last_updated": last_updated,
+            "meta": meta,
+            "message": "Stored news is temporarily unavailable; showing stale data when available.",
+            "articles": stale_articles,
+            "items": stale_articles,
+        }
 
     # Defensive on-read guard: fetch_news_from_supabase already unpacks
     # ground_truth_metrics + re-tiers legacy rows, but re-apply here so legacy
@@ -822,11 +886,9 @@ async def _get_live_news_inner(
     except Exception:
         _router_fresh = None  # type: ignore
     _guarded: list[dict] = []
-    _router_retiered: list[dict] = []
     for _r in articles or []:
         try:
             _row = dict(_r)
-            _row_was_retiered = False
             _gtm = _row.get("ground_truth_metrics") or {}
             if isinstance(_gtm, str):
                 import json as _js
@@ -863,11 +925,7 @@ async def _get_live_news_inner(
                            "affected_locations", "radius_km", "geometry_polygon", "verification_audit"):
                     if _re.get(_k) is not None and (_row.get(_k) is None or _k.startswith("zone") or _k.startswith("tier") or _sv_row != 7):
                         _row[_k] = _re[_k]
-                try:
-                    _row["ground_truth_metrics"] = _re.get("ground_truth_metrics", _row.get("ground_truth_metrics"))
-                    _row_was_retiered = True
-                except Exception:
-                    pass
+                _row["ground_truth_metrics"] = _re.get("ground_truth_metrics", _row.get("ground_truth_metrics"))
             # Strict 48h freshness gate on read (archival URL or stale pubDate).
             if _router_fresh is not None:
                 try:
@@ -878,7 +936,6 @@ async def _get_live_news_inner(
                         max_age_hours=48,
                     )
                     if not _fr.get("is_fresh"):
-                        news_yield.record_read_drop(_row.get("id"), _row.get("source"), "dropped_stale", _row.get("province"))
                         continue
                 except Exception:
                     pass
@@ -888,21 +945,14 @@ async def _get_live_news_inner(
             # else. A regional row is only ever added to the display page.
             _row["relevance_tier"] = classify_relevance_tier(_row)
             if _row["relevance_tier"] == TIER_DROPPED:
-                news_yield.record_read_drop(_row.get("id"), _row.get("source"), "dropped_gate", _row.get("province"))
-                news_yield.record_read_drop(_row.get("id"), _row.get("source"), "regional_dropped", _row.get("province"))
                 continue
             if _row["relevance_tier"] == TIER_REGIONAL:
-                news_yield.record_read_drop(_row.get("id"), _row.get("source"), "regional_admitted", _row.get("province"))
                 _guarded.append(_row)
                 continue
             if _row.get("is_geocoded") is False:
-                news_yield.record_read_drop(_row.get("id"), _row.get("source"), "dropped_ungeocoded", _row.get("province"))
                 continue
             if _row.get("latitude") is None or _row.get("longitude") is None:
-                news_yield.record_read_drop(_row.get("id"), _row.get("source"), "dropped_ungeocoded", _row.get("province"))
                 continue
-            if _row_was_retiered:
-                _router_retiered.append(_row)
             _guarded.append(_row)
         except Exception:
             continue
@@ -913,94 +963,36 @@ async def _get_live_news_inner(
     articles, breadth_meta = apply_tiered_breadth_contract(_guarded, max_total=NEWS_READ_BUDGET)
 
 
-    # Phase 164a (M8): persist what the read path just re-tiered, once, so the
-    # heuristic stops running on every request (audit F8). `fetch_news_from_supabase`
-    # already writes back its own re-tiers, so this only fires for rows this
-    # router guard repaired. Batched + best effort: a failure is logged and the
-    # read still answers.
-    if _router_retiered:
-        try:
-            await asyncio.to_thread(persist_re_tiered_news_rows, _router_retiered)
-        except Exception as _wb_err:
-            logger.warning(f"Router news re-tier write-back skipped: {_wb_err}")
-
-    # If Supabase is cold or empty, trigger background ingestion and return honest warming state
+    # Empty stored results are warming, not permission for a public read to ingest.
     if not articles:
-        if background_tasks is not None:
-            background_tasks.add_task(run_background_news_ingestion, True)
-        else:
-            asyncio.create_task(run_background_news_ingestion(True))
         return {
             "status": "warming",
             "storage": "supabase_postgis",
+            "cached": False,
+            "stale": False,
             "count": 0,
             "total": 0,
-            "message": "Indeks intelijen berita sedang disinkronkan di latar belakang...",
-            "last_updated": datetime.now(timezone.utc).isoformat(),
+            "message": "No qualifying stored news is currently available.",
+            "last_updated": None,
             "meta": breadth_meta,
             "articles": [],
-            "items": []
+            "items": [],
         }
 
-    # Honest last_updated: the newest real published_at only (no ingested_at /
-    # pubDate guesses, no datetime.now()). Fall back to now only if truly empty.
+    # last_updated is sourced only from publisher publication timestamps.
     latest_ts_iso = _max_published_at_iso(articles)
-    newest_dt = None
-    if latest_ts_iso:
-        try:
-            newest_dt = datetime.fromisoformat(latest_ts_iso)
-        except Exception:
-            newest_dt = None
 
-    if not latest_ts_iso:
-        latest_ts_iso = datetime.now(timezone.utc).isoformat()
-
-    # Detect if articles are older than 30 minutes or contain legacy search URLs
-    needs_refresh = False
-    now_utc = datetime.now(timezone.utc)
-    if newest_dt:
-        dt_cmp = newest_dt if newest_dt.tzinfo else newest_dt.replace(tzinfo=timezone.utc)
-        if (now_utc - dt_cmp).total_seconds() > 1800:
-            needs_refresh = True
-    else:
-        needs_refresh = True
-
-    has_legacy_search_links = any(
-        "news.google.com/search" in str(a.get("link", "")) or "news.google.com/search" in str(a.get("url", ""))
-        for a in articles
-    )
-    if has_legacy_search_links:
-        needs_refresh = True
-
-    # If force refresh requested or background refresh needed, trigger ingestion
-    if force_refresh or needs_refresh or (now - _NEWS_CACHE.get("last_fetched_at", 0.0) > 300):
-        if background_tasks is not None:
-            background_tasks.add_task(run_background_news_ingestion, force_refresh or needs_refresh)
-        else:
-            asyncio.create_task(run_background_news_ingestion(force_refresh or needs_refresh))
-
-    # Ensure every article has both link and url as deep permalinks and link_alive="alive"
+    # Publisher links and source-provided link status are immutable on reads. URL
+    # canonicalization/probing belongs to ingestion and is never done here.
     enriched_articles = []
     for a in articles:
         art = dict(a)
-        raw_l = art.get("link") or art.get("url") or ""
-        clean_l = str(raw_l).strip()
-
-        if "news.google.com/search" in clean_l:
-            clean_l = resolve_canonical_article_url(clean_l, art.get("title", ""), art.get("source", ""))
-            if not clean_l:
-                # M1: unresolvable link → drop the row, never surface a search page.
-                continue
-
-        art["link"] = clean_l
-        art["url"] = clean_l
-
-        p = urlparse(clean_l)
-        if clean_l and p.netloc and p.path not in ("", "/"):
-            if art.get("link_alive") != "dead":
-                art["link_alive"] = "alive"
-        elif not clean_l or p.path in ("", "/"):
-            art["link_alive"] = "dead"
+        raw_l = art.get("link") or art.get("url")
+        if raw_l is not None:
+            if art.get("link") is None:
+                art["link"] = raw_l
+            if art.get("url") is None:
+                art["url"] = raw_l
 
         # Phase 172 (M9): honest per-article confidence. `confidence_score` is the
         # extractor's static tier constant (0.86/0.94) and is DEPRECATED for
@@ -1017,8 +1009,7 @@ async def _get_live_news_inner(
 
         enriched_articles.append(art)
 
-    # Re-derive the breadth meta from exactly the rows being returned (the
-    # permalink pass above can drop a row, and a stale count would be a lie).
+    # Re-derive the breadth meta from exactly the rows being returned.
     breadth_meta = build_breadth_meta(
         enriched_articles,
         per_source_cap=MAX_NEWS_PER_SOURCE,
@@ -1306,10 +1297,10 @@ async def submit_hitl_operator_action(
     req: HitlActionRequest,
     current_user: UserSession = Depends(get_current_user),
 ):
-    """
-    Executes a Human-In-The-Loop dispatcher action (Approve Detour, Hold, or Dismiss).
-    Persists decision to Supabase public.route_approvals and broadcasts to telemetry.
-    RBAC: requires 'approvals:write' (Dispatcher only); GUEST/REGULATOR get 403.
+    """Preview a research decision in shadow mode; otherwise attempt a scoped live action.
+
+    Shadow mode never reads or mutates an approval row. Live actions require a
+    tenant-scoped approval record; deployments without that ownership field fail closed.
     """
     try:
         uuid.UUID(str(req.approval_id))
@@ -1319,15 +1310,36 @@ async def submit_hitl_operator_action(
             detail="Invalid UUID format for approval_id"
         )
 
-    # RBAC: only Dispatcher (approvals:write) may commit HITL actions.
-    if "approvals:write" not in (current_user.permissions or []):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "error": "FORBIDDEN",
-                "message": f"Akses ditolak: Hanya Dispatcher dengan wewenang 'approvals:write' yang dapat mengeksekusi HITL. Peran Anda saat ini adalah {current_user.role}.",
-                "current_role": current_user.role,
-                "required_permissions": ["approvals:write"],
+    from app.services.pilot_safety import (
+        is_pilot_shadow_mode,
+        require_dispatcher_write,
+        shadow_decision_response,
+    )
+
+    # This verifies both the Dispatcher permission and tenant claim before any
+    # row lookup. Shadow previews deliberately do not inspect an approval row.
+    tenant_id = require_dispatcher_write(current_user, "approvals:write")
+    raw_action = (req.decision or req.action or "APPROVE").upper()
+    action_verb = "ACCEPT" if raw_action in ["APPROVE", "ACCEPT"] else ("DISMISS" if raw_action in ["REJECT", "DISMISS"] else "HOLD")
+    op_id = current_user.id or req.approved_by or req.operator_id
+    committed_by_role = current_user.role
+
+    if is_pilot_shadow_mode():
+        return shadow_decision_response(
+            action=action_verb,
+            decision_scope="news_hitl_candidate_research_preview",
+            operator_id=op_id,
+            tactical_action=req.tactical_action,
+            preview={
+                "approval_id": str(req.approval_id),
+                "candidate_only": True,
+                "existing_approval_validation": "not_performed",
+                "tenant_record_ownership": "not_checked",
+                "tenant_claim_present": True,
+                "message": (
+                    "Research preview only: no existing approval was read, "
+                    "validated, recorded, or dispatched."
+                ),
             },
         )
 
@@ -1335,29 +1347,33 @@ async def submit_hitl_operator_action(
         from app.db.supabase_client import get_service_client
         sb = get_service_client()
 
-        raw_action = (req.decision or req.action or "APPROVE").upper()
-        # Normalize action keywords
-        action_verb = "ACCEPT" if raw_action in ["APPROVE", "ACCEPT"] else ("DISMISS" if raw_action in ["REJECT", "DISMISS"] else "HOLD")
-
         # ---- FORECAST_WASPADA HITL guard (orthogonal display tag) ----
         # APPROVE/ACCEPT on a forecast-tagged item is only legal after an
         # explicit RED conversion (zone_tier == RED_CONFIRMED). HOLD stays
         # allowed so operators can park a forecast without fabricating an
         # incident; DISMISS is also unaffected.
-        approval_row: Dict[str, Any] = {}
         try:
             _sel = (
                 sb.table("route_approvals")
                 .select("*")
                 .eq("id", req.approval_id)
+                .eq("company_id", tenant_id)
                 .limit(1)
                 .execute()
             )
-            if getattr(_sel, "data", None):
-                approval_row = _sel.data[0] or {}
         except Exception as _se:
-            logger.debug(f"HITL approval pre-read skipped: {_se}")
-            approval_row = {}
+            logger.warning("Tenant-scoped HITL approval lookup unavailable: %s", _se)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Tenant-scoped approval ownership could not be established; action refused.",
+            ) from _se
+
+        approval_rows = getattr(_sel, "data", None) or []
+        if not approval_rows:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Approval not found in this tenant")
+        approval_row: Dict[str, Any] = approval_rows[0] or {}
+        if str(approval_row.get("company_id") or "") != tenant_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Approval not found in this tenant")
 
         forecast_tag = _approval_forecast_tag(approval_row)
         forecast_zone_tier = _approval_zone_tier(approval_row)
@@ -1394,10 +1410,6 @@ async def submit_hitl_operator_action(
                 },
             )
 
-        # approved_by precedence: authenticated session wins over client-supplied aliases.
-        op_id = current_user.id or req.approved_by or req.operator_id
-        committed_by_role = current_user.role
-
         update_payload = {
             "action": action_verb,
             "tactical_action": req.tactical_action,
@@ -1407,7 +1419,13 @@ async def submit_hitl_operator_action(
             "approved_at": datetime.now(timezone.utc).isoformat()
         }
         
-        res = sb.table("route_approvals").update(update_payload).eq("id", req.approval_id).execute()
+        res = (
+            sb.table("route_approvals")
+            .update(update_payload)
+            .eq("id", req.approval_id)
+            .eq("company_id", tenant_id)
+            .execute()
+        )
         if not res.data:
             raise HTTPException(status_code=404, detail="Approval ID not found in Supabase")
             

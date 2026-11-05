@@ -1,7 +1,7 @@
 """BNPB CKAN Action API tier tests (Tier-0 datastore rows -> aggregate events).
 
 - Aceh prov sample row -> flood event with correct lat/lon + dedup key.
-- Kab-level row -> event with kab radius (10 km).
+- Kab-level row -> aggregate reference point without an invented radius.
 - Non-Sumatra / missing-geo / all-zero rows are dropped.
 - Honest unavailable when the network is down (fetch -> unavailable, parse -> []).
 """
@@ -64,7 +64,8 @@ async def test_ckan_mapper_aceh_row_yields_flood_event(mock_get_redis):
     assert flood["lon"] == "96.9103"
     assert flood["severity"] == "low"  # aggregates are never live alerts
     assert flood["status"] == "stats"
-    assert flood["radius_km"] == 25.0  # province-level radius
+    assert flood["geometry_role"] == "aggregate_reference_point"
+    assert "radius_km" not in flood
     assert flood["dedup_key"] == (
         "bnpb:ckan:df39e8c3-117e-40fa-b518-ff1037743955:1:flood"
     )
@@ -76,7 +77,7 @@ async def test_ckan_mapper_aceh_row_yields_flood_event(mock_get_redis):
 
 @pytest.mark.asyncio
 @patch("app.adapters.bnpb_adapter.get_redis")
-async def test_ckan_mapper_kab_row_uses_kab_radius(mock_get_redis):
+async def test_ckan_mapper_kab_row_uses_aggregate_reference_point(mock_get_redis):
     mock_get_redis.return_value = _fresh_redis()
     adapter = BNPBAdapter()
     events = await adapter.parse({"status": "ckan", "items": [dict(KAB_ROW)]})
@@ -84,7 +85,8 @@ async def test_ckan_mapper_kab_row_uses_kab_radius(mock_get_redis):
     assert len(events) == 1
     event = events[0]
     assert event["event_type"] == "flood"
-    assert event["radius_km"] == 10.0  # kabupaten/kota-level radius
+    assert event["geometry_role"] == "aggregate_reference_point"
+    assert "radius_km" not in event
     assert event["dedup_key"].startswith("bnpb:ckan:a4daec53-kab-bootstrap:7:")
     assert "DELI SERDANG" in event["title"] or "SUMATERA UTARA" in event["title"]
 
@@ -113,7 +115,7 @@ async def test_ckan_mapper_drops_non_sumatra_no_geo_zero_rows(mock_get_redis):
 @pytest.mark.asyncio
 async def test_ckan_fetch_unavailable_when_network_down():
     """All tiers unreachable -> honest unavailable (never fabricated)."""
-    adapter = BNPBAdapter()
+    adapter = BNPBAdapter(reserve_provider_budget=lambda *args, **kwargs: True)
     with patch("app.adapters.bnpb_adapter.httpx.AsyncClient") as mock_client_cls:
         mock_client = AsyncMock()
         mock_client.get.side_effect = RuntimeError("network down")
@@ -131,7 +133,7 @@ async def test_ckan_fetch_unavailable_when_network_down():
 async def test_ckan_fetch_paging_uses_limit_offset(monkeypatch):
     """package_show resolves resources dynamically; datastore_search pages."""
     monkeypatch.setattr(bnpb_adapter, "CKAN_POLITE_DELAY_SECONDS", 0)
-    adapter = BNPBAdapter()
+    adapter = BNPBAdapter(reserve_provider_budget=lambda *args, **kwargs: True)
 
     package_payload = {
         "success": True,
@@ -211,4 +213,5 @@ def test_bnpb_events_router_serves_cached_ckan_events():
     assert body["status"] == "ok"
     assert body["total"] == 1
     assert body["events"][0]["event_type"] == "flood"
+    assert "radius_km" not in body["events"][0]
     assert set(body) >= {"events", "total", "status", "source", "updated_at"}

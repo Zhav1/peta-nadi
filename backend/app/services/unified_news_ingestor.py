@@ -18,7 +18,6 @@ import httpx
 from app.services.news_aggregator import (
     fetch_all_multi_outlet_news,
     upsert_articles_to_supabase,
-    resolve_canonical_article_url,
     resolve_canonical_article_url_async,
     fetch_existing_processed_articles_map,
     remember_processed_article,
@@ -27,7 +26,7 @@ from app.services.news_aggregator import (
 from app.nlp.news_extractor import extract_structured_news, extract_structured_news_batch
 from app.services.redis_client import get_redis
 from app.services import news_yield
-from app.config import get_settings
+
 
 
 logger = logging.getLogger(__name__)
@@ -117,6 +116,8 @@ class UnifiedNewsIngestor:
 
     LINK_CHECK_TIMEOUT_SECONDS = 4.0
     LINK_CHECK_CONCURRENCY = 5
+    CANONICAL_RESOLVE_TIMEOUT_SECONDS = 4.0
+    CANONICAL_RESOLVE_CONCURRENCY = 5
     LINK_LIVENESS_TTL_SECONDS = 900.0
     LINK_ALIVE = "alive"
     LINK_DEAD = "dead"
@@ -187,7 +188,9 @@ class UnifiedNewsIngestor:
                     pre_links.append(str(_l))
                 # Probe deterministic heuristic id used by extractor
                 pre_ids.append(f"NEWS-{_hl.md5(f'{_t}:{_l}'.encode()).hexdigest()[:8]}")
-            existing_map = fetch_existing_processed_articles_map(pre_ids, pre_links)
+            existing_map = await asyncio.to_thread(
+                fetch_existing_processed_articles_map, pre_ids, pre_links
+            )
         except Exception:
             existing_map = {}
 
@@ -254,16 +257,7 @@ class UnifiedNewsIngestor:
                 fallback = await asyncio.gather(*tasks, return_exceptions=True)
                 structured_articles.extend([a for a in fallback if isinstance(a, dict)])
 
-        # Ensure canonical article URLs and permalinks are resolved asynchronously across all items
-        async def resolve_item(art: Dict[str, Any]):
-            raw_url = art.get("link") or art.get("url") or ""
-            title = art.get("title", "")
-            source = art.get("source", "")
-            resolved_url = await resolve_canonical_article_url_async(raw_url, title, source)
-            art["link"] = resolved_url
-            art["url"] = resolved_url
-
-        await asyncio.gather(*(resolve_item(a) for a in structured_articles))
+        await self._resolve_canonical_links(structured_articles)
 
         # 3. Verify original source links (dead / alive / unknown provenance)
         await self._attach_link_liveness(structured_articles)
@@ -329,6 +323,30 @@ class UnifiedNewsIngestor:
             "disruptions_triggered": disruptions_triggered,
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
+
+    async def _resolve_canonical_links(self, articles: List[Dict[str, Any]]) -> None:
+        """Resolve links with async HTTP and a strict per-cycle concurrency cap."""
+        if not articles:
+            return
+        semaphore = asyncio.Semaphore(self.CANONICAL_RESOLVE_CONCURRENCY)
+        async with httpx.AsyncClient(
+            follow_redirects=True,
+            timeout=self.CANONICAL_RESOLVE_TIMEOUT_SECONDS,
+        ) as client:
+            async def resolve(article: Dict[str, Any]) -> None:
+                raw_url = article.get("link") or article.get("url") or ""
+                async with semaphore:
+                    resolved = await resolve_canonical_article_url_async(
+                        raw_url,
+                        article.get("title", ""),
+                        article.get("source", ""),
+                        client=client,
+                        timeout=self.CANONICAL_RESOLVE_TIMEOUT_SECONDS,
+                    )
+                article["link"] = resolved
+                article["url"] = resolved
+
+            await asyncio.gather(*(resolve(article) for article in articles))
 
     @staticmethod
     def _same_host(original_url: str, final_url: str) -> bool:
@@ -833,7 +851,7 @@ class UnifiedNewsIngestor:
         """
         try:
             from app.db.supabase_client import get_service_client
-            sb = get_service_client()
+            sb = await asyncio.to_thread(get_service_client)
         except Exception as se:
             logger.warning(f"Supabase client unavailable: {se}")
             return False
@@ -921,7 +939,9 @@ class UnifiedNewsIngestor:
 
         try:
             # idempotent: re-running the cycle for the same article updates this row
-            sb.table("incidents").upsert(incident_row, on_conflict="id").execute()
+            await asyncio.to_thread(
+                lambda: sb.table("incidents").upsert(incident_row, on_conflict="id").execute()
+            )
             logger.info(f"Synthesized new incident in Supabase: {title[:60]} (ID: {incident_uuid})")
         except Exception as ie:
             logger.error(f"Error inserting incident into Supabase: {ie}")
@@ -929,10 +949,12 @@ class UnifiedNewsIngestor:
 
         # Link incident_id back to news_articles
         try:
-            sb.table("news_articles").update({
-                "is_incident_triggered": True,
-                "incident_id": incident_uuid
-            }).eq("id", art.get("id")).execute()
+            await asyncio.to_thread(
+                lambda: sb.table("news_articles").update({
+                    "is_incident_triggered": True,
+                    "incident_id": incident_uuid,
+                }).eq("id", art.get("id")).execute()
+            )
         except Exception:
             pass
 
@@ -968,7 +990,9 @@ class UnifiedNewsIngestor:
                     "impacted_vehicles": [v.dict() for v in impact_res.impacted_vehicles],
                     "evaluated_at": datetime.now(timezone.utc).isoformat()
                 }
-                sb.table("incident_impact_assessments").insert(assessment_row).execute()
+                await asyncio.to_thread(
+                    lambda: sb.table("incident_impact_assessments").insert(assessment_row).execute()
+                )
             except Exception as se_imp:
                 logger.debug(f"Incident impact assessment Supabase logging skipped: {se_imp}")
 
@@ -1010,9 +1034,11 @@ class UnifiedNewsIngestor:
 
             # ignore_duplicates: first write wins, so replaying the cycle never
             # resets an operator's ACCEPT/DISMISS back to PENDING_REVIEW.
-            sb.table("route_approvals").upsert(
-                approval_row, on_conflict="id", ignore_duplicates=True
-            ).execute()
+            await asyncio.to_thread(
+                lambda: sb.table("route_approvals").upsert(
+                    approval_row, on_conflict="id", ignore_duplicates=True
+                ).execute()
+            )
             logger.info(f"Created pending Globot HITL route approval in Supabase for incident {incident_uuid}")
             return True
 
@@ -1038,7 +1064,7 @@ class UnifiedNewsIngestor:
 
         try:
             from app.db.supabase_client import get_service_client
-            sb = get_service_client()
+            sb = await asyncio.to_thread(get_service_client)
         except Exception as se:
             logger.warning(f"Incident remediation skipped: Supabase unavailable ({se})")
             return {"status": "failed", "reason": str(se)}
@@ -1047,7 +1073,11 @@ class UnifiedNewsIngestor:
         details = []
 
         try:
-            res = sb.table("incidents").select("incident_id, title, description, lat, lon, location, status, severity, type").execute()
+            res = await asyncio.to_thread(
+                lambda: sb.table("incidents").select(
+                    "incident_id, title, description, lat, lon, location, status, severity, type"
+                ).execute()
+            )
             rows = res.data or []
 
             for row in rows:
@@ -1123,7 +1153,10 @@ class UnifiedNewsIngestor:
                     action = "Marked resolved (unresolvable false coordinate)"
 
                 try:
-                    sb.table("incidents").update(update_payload).eq("incident_id", i_id).execute()
+                    await asyncio.to_thread(
+                        lambda: sb.table("incidents").update(update_payload)
+                        .eq("incident_id", i_id).execute()
+                    )
                     remediated_count += 1
                     details.append({"incident_id": i_id, "action": action, "updates": update_payload})
                     logger.info(f"Remediated false panjang incident {i_id}: {action}")

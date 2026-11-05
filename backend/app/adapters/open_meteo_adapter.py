@@ -104,12 +104,14 @@ class OpenMeteoAdapter(BaseAdapter):
     stream_key = "lrip:events:open_meteo"
     poll_interval_seconds = 21600  # 6 hours
 
-    async def health_check(self) -> bool:
-        """Checks if the weather forecast endpoint is accessible."""
+    async def health_check(self, *, reserve_provider_budget=None) -> bool:
+        """Check reachability under the provider's billable location budget."""
         if settings.demo_offline:
             return True
 
         try:
+            if not await self.reserve_request_budget(units=1, callback=reserve_provider_budget):
+                return False
             async with httpx.AsyncClient(timeout=5.0) as client:
                 res = await client.get(
                     OPEN_METEO_URL,
@@ -119,7 +121,7 @@ class OpenMeteoAdapter(BaseAdapter):
         except Exception:
             return False
 
-    async def fetch(self) -> Any:
+    async def fetch(self, *, reserve_provider_budget=None) -> Any:
         """Fetch per-point NWP predictions for the full-Sumatra grid in ONE bulk HTTP call."""
         points = _grid_points()
         if settings.demo_offline:
@@ -135,33 +137,33 @@ class OpenMeteoAdapter(BaseAdapter):
             "timezone": "Asia/Jakarta",
         }
 
-        try:
-            async with httpx.AsyncClient(timeout=12.0) as client:
-                response = await client.get(OPEN_METEO_URL, params=params)
-                if response.status_code == 200:
-                    logger.info("Open-Meteo Adapter: Successfully fetched live bulk grid (%d pts).", len(points))
-                    return self._parse_bulk_open_meteo(response.json(), points)
-                else:
-                    logger.warning(f"Open-Meteo returned status {response.status_code}. Using simulation fallback.")
-                    return self._generate_sim_grid(points)
-        except Exception as e:
-            logger.error(f"Error calling weather API: {e}. Falling back to simulation.")
-            return self._generate_sim_grid(points)
+        if not await self.reserve_request_budget(
+            units=len(points), callback=reserve_provider_budget
+        ):
+            raise RuntimeError("Open-Meteo request denied by provider budget")
+        async with httpx.AsyncClient(timeout=12.0) as client:
+            response = await client.get(OPEN_METEO_URL, params=params)
+            response.raise_for_status()
+            return self._parse_bulk_open_meteo(response.json(), points)
 
-    def _point_predictions(self, hourly: dict) -> Dict[str, float]:
-        precip = hourly.get("precipitation", [0.0]) or [0.0]
-        wind = hourly.get("windspeed_10m", [0.0]) or [0.0]
-        temp = hourly.get("temperature_2m", [27.5]) or [27.5]
-        precip_24h = float(sum(precip[:24]))
-        max_wind = float(max(wind[:24]))
-        avg_temp = float(sum(temp[:24]) / len(temp[:24]))
-        flood_risk = min(100.0, max(10.0, precip_24h * 1.5))
-        return {
-            "precipitation_mm_24h": round(precip_24h, 1),
-            "wind_speed_kmh": round(max_wind, 1),
-            "flood_risk_pct": round(flood_risk, 1),
-            "temperature_c": round(avg_temp, 1),
-        }
+    def _point_predictions(self, hourly: dict) -> Dict[str, Any]:
+        predictions: Dict[str, Any] = {}
+        precip = hourly.get("precipitation")
+        wind = hourly.get("windspeed_10m")
+        temp = hourly.get("temperature_2m")
+        try:
+            if isinstance(precip, list) and precip:
+                precip_24h = float(sum(precip[:24]))
+                predictions["precipitation_mm_24h"] = round(precip_24h, 1)
+                predictions["modeled_risk_pct"] = round(min(100.0, max(10.0, precip_24h * 1.5)), 1)
+                predictions["risk_metric"] = "precipitation_proxy_not_validated_probability"
+            if isinstance(wind, list) and wind:
+                predictions["wind_speed_kmh"] = round(float(max(wind[:24])), 1)
+            if isinstance(temp, list) and temp:
+                predictions["temperature_c"] = round(float(sum(temp[:24]) / len(temp[:24])), 1)
+        except (TypeError, ValueError):
+            return {}
+        return predictions
 
     def _parse_bulk_open_meteo(self, data: Any, points: List[Dict[str, Any]]) -> dict:
         """Parse bulk (list) or single (dict) Open-Meteo responses into per-point predictions."""
@@ -172,25 +174,37 @@ class OpenMeteoAdapter(BaseAdapter):
         elif isinstance(data, dict):
             payloads = [data]
         else:
-            return self._generate_sim_grid(points)
+            raise ValueError("Open-Meteo response has an unsupported payload shape")
 
         out_points = []
         for i, p in enumerate(points):
-            hourly = {}
-            if i < len(payloads) and isinstance(payloads[i], dict):
-                hourly = payloads[i].get("hourly", {}) or {}
+            if i >= len(payloads) or not isinstance(payloads[i], dict):
+                continue
+            hourly = payloads[i].get("hourly", {}) or {}
+            if not isinstance(hourly, dict) or not hourly:
+                continue
             preds = self._point_predictions(hourly)
+            point_payload = payloads[i]
+            hourly_times = (hourly or {}).get("time") or []
             out_points.append({
                 "name": p["name"],
                 "latitude": p["lat"],
                 "longitude": p["lon"],
                 "predictions": preds,
+                "source_fields": point_payload,
+                "forecast_valid_until": hourly_times[-1] if hourly_times else None,
             })
+        if not out_points or not any(isinstance(p, dict) and p.get("hourly") for p in payloads):
+            raise ValueError("Open-Meteo response is missing hourly forecast data")
         result = {
             "model": "open-meteo",
             "source": "open-meteo",
             "points": out_points,
+            "source_payload": payloads,
+            "expected_point_count": len(points),
+            "observed_point_count": len(out_points),
             "timestamp": datetime.now(timezone.utc).isoformat(),
+            "forecast_issued_at": datetime.now(timezone.utc).isoformat(),
         }
         # Backward compat: legacy single-point consumers read top-level predictions.
         if out_points:
@@ -234,12 +248,12 @@ class OpenMeteoAdapter(BaseAdapter):
         for pt in points:
             predictions = pt.get("predictions", {})
             precip_24h = predictions.get("precipitation_mm_24h", 0.0)
-            flood_risk = predictions.get("flood_risk_pct", 0.0)
+            modeled_risk = predictions.get("modeled_risk_pct")
 
             severity = "low"
-            if flood_risk >= 80.0 or precip_24h > 50.0:
+            if (modeled_risk is not None and modeled_risk >= 80.0) or precip_24h > 50.0:
                 severity = "high"
-            elif flood_risk >= 50.0 or precip_24h > 20.0:
+            elif (modeled_risk is not None and modeled_risk >= 50.0) or precip_24h > 20.0:
                 severity = "medium"
 
             if severity in ["medium", "high"]:
@@ -253,10 +267,17 @@ class OpenMeteoAdapter(BaseAdapter):
                     "region": name,
                     "lat": float(pt.get("latitude", 3.59)),
                     "lon": float(pt.get("longitude", 98.67)),
+                    "is_forecast": True,
+                    "modeled": True,
+                    "geometry_role": "forecast_area",
+                    "source_clock": "forecast_valid_time",
+                    "forecast_issued_at": raw_data.get("forecast_issued_at"),
+                    "valid_until": pt.get("forecast_valid_until") or raw_data.get("forecast_valid_until"),
                     "raw_payload": {
                         "model": raw_data.get("model"),
                         "source": raw_data.get("source"),
                         "predictions": predictions,
+                        "source_fields": pt.get("source_fields"),
                         "latitude": pt.get("latitude"),
                         "longitude": pt.get("longitude"),
                         "region": name,

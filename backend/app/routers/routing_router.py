@@ -36,6 +36,8 @@ from app.adapters.tomtom_adapter import TomTomAdapter
 from app.adapters.nasa_firms_adapter import NASAFIRMSAdapter
 from app.auth.supabase_auth import UserSession, get_optional_user
 from app.config import get_settings
+from app.services.public_operational_cache import read_public_operational_cache
+from app.services.hazard_evidence import HAZARD_EVIDENCE_VERSION, normalize_hazard_evidence
 
 logger = logging.getLogger(__name__)
 
@@ -44,78 +46,71 @@ router = APIRouter(tags=["Routing Optimization & Spatial Telemetry"])
 PROOF_FETCH_TIMEOUT_S = 8.0
 
 
+def _normalize_route_hazards(hazards: Any) -> List[Dict[str, Any]]:
+    return [normalize_hazard_evidence(item) for item in hazards or [] if isinstance(item, dict)]
+
+
+def _downgrade_unverified_clear(value: Any, coverage: str) -> None:
+    """Do not publish CLEAR when evidence coverage was not verified complete."""
+    if coverage in ("complete", "verified_complete"):
+        return
+    if isinstance(value, dict):
+        if str(value.get("safety_status") or "").upper() == "CLEAR":
+            value["safety_status"] = "UNKNOWN"
+            value["safety_review_required"] = True
+        for child in value.values():
+            _downgrade_unverified_clear(child, coverage)
+    elif isinstance(value, list):
+        for child in value:
+            _downgrade_unverified_clear(child, coverage)
+
+
 async def _fetch_proof_context() -> Dict[str, Any]:
-    """
-    Fetches weather + TomTom + news in parallel with an 8s timeout each.
-    Any failure degrades to seed_fallback instead of failing the route call.
-    """
-    weather: Dict[str, Any] = {}
-    tomtom_raw: Dict[str, Any] = {"flow": [], "incidents": []}
-    news_articles: List[Dict[str, Any]] = []
+    """Build route proof only from the shared cached operational snapshot."""
+    cache = read_public_operational_cache()
+    weather_section = cache.get("weather_spatial_polygons") or {}
+    traffic_section = cache.get("traffic_flow_segments") or {}
+    weather = weather_section.get("data") if isinstance(weather_section, dict) else None
+    traffic = traffic_section.get("data") if isinstance(traffic_section, dict) else None
+    weather = weather if isinstance(weather, dict) else {"type": "FeatureCollection", "features": []}
+    traffic = traffic if isinstance(traffic, dict) else {"segments": [], "incidents": []}
     reasons: List[str] = []
+    if weather_section.get("status") not in ("ok", "partial"):
+        reasons.append(f"weather_cache_{weather_section.get('status', 'unknown')}")
+    if traffic_section.get("status") not in ("ok", "partial"):
+        reasons.append(f"traffic_cache_{traffic_section.get('status', 'unknown')}")
+    reasons.append("news_context_not_in_public_operational_cache")
 
-    try:
-        weather = await asyncio.wait_for(get_fused_spatial_weather(), timeout=PROOF_FETCH_TIMEOUT_S)
-    except asyncio.TimeoutError:
-        reasons.append("weather_timeout_8s")
-        logger.warning("Proof context: weather fusion timed out after 8s, using fallback")
-    except Exception as e:
-        reasons.append(f"weather_error: {e}")
-        logger.warning(f"Proof context: weather fusion failed: {e}")
+    congestion_segments = list(traffic.get("segments") or [])
+    hazards = []
+    for feature in weather.get("features") or []:
+        properties = dict(feature.get("properties") or {})
+        geometry = feature.get("geometry")
+        hazards.append(normalize_hazard_evidence({
+            **properties,
+            "incident_id": properties.get("evidence_id"),
+            "type": properties.get("hazard_type") or "weather_forecast",
+            "source": properties.get("source"),
+            "geometry": geometry,
+            "is_forecast": properties.get("is_forecast", True),
+            "modeled": properties.get("modeled", True),
+            "observed_at": properties.get("source_observed_at"),
+            "valid_until": properties.get("valid_until"),
+            "status": "active",
+        }))
 
-    try:
-        tomtom_raw = await asyncio.wait_for(TomTomAdapter().fetch(), timeout=PROOF_FETCH_TIMEOUT_S)
-    except asyncio.TimeoutError:
-        reasons.append("tomtom_timeout_8s")
-        logger.warning("Proof context: TomTom fetch timed out after 8s, using seed_fallback")
-    except Exception as e:
-        reasons.append(f"tomtom_error: {e}")
-        logger.warning(f"Proof context: TomTom fetch failed: {e}")
-
-    try:
-        from app.services.news_aggregator import fetch_news_from_supabase
-
-        news_articles = await asyncio.wait_for(
-            fetch_news_from_supabase(limit=20), timeout=PROOF_FETCH_TIMEOUT_S
-        )
-    except asyncio.TimeoutError:
-        reasons.append("news_timeout_8s")
-        logger.warning("Proof context: news fetch timed out after 8s, using fallback")
-    except Exception as e:
-        reasons.append(f"news_error: {e}")
-        logger.warning(f"Proof context: news fetch failed: {e}")
-
-    # Normalize TomTom flow into congestion_segments for proof enrichment
-    congestion_segments: List[Dict[str, Any]] = []
-    try:
-        for flow in (tomtom_raw or {}).get("flow", []):
-            seg = flow.get("flowSegmentData", {})
-            curr = seg.get("currentSpeed", 30)
-            free = seg.get("freeFlowSpeed", 60)
-            score = max(0.0, 1.0 - (curr / free)) if free > 0 else 0.0
-            level = "heavy" if score >= 0.6 else "moderate" if score >= 0.3 else "low"
-            congestion_segments.append({
-                "checkpoint": flow.get("_checkpoint_name"),
-                "lat": flow.get("_lat"),
-                "lon": flow.get("_lon"),
-                "congestion_level": level,
-                "level": level,
-                "current_speed_kmh": curr,
-                "free_flow_speed_kmh": free,
-            })
-    except Exception as e:
-        reasons.append(f"congestion_parse_error: {e}")
-
-    live_flow = bool((tomtom_raw or {}).get("flow"))
-    is_fallback = (not live_flow) or bool(reasons)
+    coverage = "unknown"
     return {
         "weather": weather,
-        "tomtom_raw": tomtom_raw,
-        "news_context": news_articles or [],
+        "tomtom_raw": traffic,
+        "news_context": [],
         "congestion_segments": congestion_segments,
-        "is_fallback": is_fallback,
+        "hazard_evidence": hazards,
+        "hazard_evidence_version": HAZARD_EVIDENCE_VERSION,
+        "hazard_evidence_coverage": coverage,
+        "is_fallback": True,
         "fallback_reasons": reasons,
-        "speed_source": "tomtom_live" if live_flow else "seed_fallback",
+        "speed_source": "tomtom_cached" if congestion_segments else "unknown",
     }
 
 
@@ -408,7 +403,7 @@ def _degraded_polygon_payload(now: Any, upstream_reason: Optional[str]) -> Dict[
     if upstream_reason:
         reason = f"{reason}: {upstream_reason}"
     metadata = {
-        "fusion_engine": "BMKG Radar Observation + Open-Meteo NWP Forecast",
+        "fusion_engine": "BMKG published weather forecast + Open-Meteo NWP forecast",
         "timestamp": now.isoformat(),
         "updated_at": now.isoformat(),
         "total": None,
@@ -431,41 +426,57 @@ def _degraded_polygon_payload(now: Any, upstream_reason: Optional[str]) -> Dict[
 async def _served_weather_polygons(
     sev: str, eff_precip: Optional[float], eff_flood: Optional[float]
 ) -> Dict[str, Any]:
-    """Stale-while-revalidate around the ONE shared fusion snapshot.
-
-    The per-filter payload below is a derived render cache: its TTL is the same
-    10 min window, but a miss never reaches the upstream on its own. Only
-    ``_load_fusion_snapshot()`` may fetch, and it is shared with /weather/summary.
-    """
+    """Render from cached GeoJSON only; this GET never refreshes providers."""
+    cache = read_public_operational_cache()
+    section_name = "weather_spatial_polygons" if sev in ("high", "critical") else "weather_advisory_polygons"
+    section = cache.get(section_name) or {}
+    payload = section.get("data") if isinstance(section, dict) else None
     now = datetime.now(timezone.utc)
-    key = _polygon_cache_key(sev, eff_precip, eff_flood)
-    cached = _read_polygon_cache(key)
+    if not isinstance(payload, dict) or not isinstance(payload.get("features"), list):
+        return _degraded_polygon_payload(now, section.get("error") or "No cached weather snapshot")
+    result = dict(payload)
+    meta = dict(result.get("metadata") or result.get("meta") or {})
+    status = section.get("status", "unknown")
+    if status not in ("ok", "empty", "partial", "stale"):
+        status = "degraded"
 
-    if cached is not None:
-        age_s = _age_seconds(cached.get("fetched_at"), now)
-        # Fresh render: serve without even touching the shared snapshot.
-        if age_s is not None and age_s <= WEATHER_REFRESH_S:
-            return cached["payload"]
-
-    snapshot, last_good, failure_reason = await _load_fusion_snapshot()
-    if snapshot is not None:
-        payload = render_polygon_payload(snapshot, sev, eff_precip, eff_flood)
-        metadata = payload.get("metadata") or {}
-        if metadata.get("status") in ("ok", "empty"):
-            _write_polygon_cache(key, payload, now)
-            return payload
-        failure_reason = failure_reason or metadata.get("reason")
-
-    if cached is not None:
-        return _stale_polygon_payload(cached, now, failure_reason)
-
-    last_good_snapshot = (last_good or {}).get("snapshot")
-    if last_good_snapshot is not None:
-        return _stale_polygon_from_snapshot(
-            last_good_snapshot, sev, eff_precip, eff_flood, now, failure_reason
-        )
-
-    return _degraded_polygon_payload(now, failure_reason)
+    # Apply query filters only to cached geometry. If the cached render was
+    # capped, its unrendered candidate count is unknown after further filtering.
+    original_filter = meta.get("filter") or {}
+    filters_match = (
+        sev == original_filter.get("min_severity")
+        and eff_precip == original_filter.get("min_precip")
+        and eff_flood == original_filter.get("min_flood")
+    )
+    if not filters_match:
+        ranks = {"all": -1, "low": 0, "medium": 1, "high": 2, "critical": 3}
+        min_rank = ranks.get(sev, 2)
+        kept = []
+        for feature in result["features"]:
+            properties = feature.get("properties") or {}
+            if ranks.get(str(properties.get("severity", "")).lower(), 1) < min_rank:
+                continue
+            precip = properties.get("precipitation_mm_24h")
+            modeled_risk = properties.get("modeled_risk_pct")
+            has_values = precip is not None or modeled_risk is not None
+            if has_values:
+                precip_ok = eff_precip is None or (precip is not None and float(precip) >= eff_precip)
+                risk_ok = eff_flood is None or (modeled_risk is not None and float(modeled_risk) >= eff_flood)
+                passed = (precip_ok or risk_ok) if eff_precip is not None and eff_flood is not None else precip_ok and risk_ok
+                if not passed:
+                    continue
+            kept.append(feature)
+        result["features"] = kept
+        meta["total"] = None if meta.get("capped") else len(kept)
+        meta["count"] = len(kept)
+        meta["capped"] = bool(meta.get("capped"))
+        meta["filter"] = {"min_severity": sev, "min_precip": eff_precip, "min_flood": eff_flood}
+    if status in ("partial", "stale"):
+        meta["status"] = status
+        meta["reason"] = section.get("error") or meta.get("reason") or "Cached source coverage is incomplete"
+    result["metadata"] = meta
+    result["meta"] = compact_polygon_meta(meta)
+    return result
 
 
 WEATHER_SUMMARY_CACHE_KEY = f"{SOURCE_CACHE_PREFIX}weather_summary"
@@ -614,41 +625,25 @@ async def fetch_weather_summary(
     endpoints, so polling both costs a single metered Open-Meteo batch per
     refresh window instead of two.
     """
-    now = datetime.now(timezone.utc)
-    cached = _read_weather_summary_cache()
-
-    if cached is not None:
-        age_s = _weather_summary_age_seconds(cached.get("generated_at"), now)
-        if age_s is not None and age_s <= WEATHER_SUMMARY_REFRESH_S:
-            return cached
-
-    snapshot, last_good, failure_reason = await _load_fusion_snapshot()
-    if snapshot is not None:
-        payload = _summary_payload_from_inventory(count_weather_zones(snapshot), now)
-        _write_weather_summary_cache(payload)
-        return payload
-
-    # Upstream unavailable: serve last-known-good if we have it (never a 0).
-    if cached is not None:
-        return _stale_weather_summary(cached, now, failure_reason)
-
-    last_good_snapshot = (last_good or {}).get("snapshot")
-    if last_good_snapshot is not None:
-        stale = _summary_payload_from_inventory(count_weather_zones(last_good_snapshot), now)
-        return _stale_weather_summary(stale, now, failure_reason)
-
-    reason = "Sumber cuaca tidak tersedia"
-    if failure_reason:
-        reason = f"{reason}: {failure_reason}"
-    bucket = _weather_counter_bucket(
-        None, "degraded", reason, WEATHER_SUMMARY_SOURCE, None, HAZARD_WINDOW_HOURS
-    )
-    return {
-        "bbox": list(SUMATRA_BBOX),
-        "generated_at": now.isoformat(),
-        "cuaca": dict(bucket),
-        "waspada": dict(bucket),
-    }
+    section = read_public_operational_cache().get("weather_summary") or {}
+    data = section.get("data") if isinstance(section, dict) else None
+    if not isinstance(data, dict):
+        now = datetime.now(timezone.utc).isoformat()
+        reason = section.get("error") or "No cached weather summary"
+        unknown = {"count": None, "total": None, "status": "unknown", "reason": reason,
+                   "source": WEATHER_SUMMARY_SOURCE, "valid_until": None, "window_hours": HAZARD_WINDOW_HOURS}
+        return {"bbox": list(SUMATRA_BBOX), "generated_at": now, "cuaca": dict(unknown), "waspada": dict(unknown)}
+    result = dict(data)
+    status = section.get("status")
+    if status in ("stale", "partial", "degraded", "unknown"):
+        for key in ("cuaca", "waspada"):
+            bucket = dict(result.get(key) or {})
+            bucket["status"] = status
+            bucket["reason"] = section.get("error") or bucket.get("reason") or f"Cached weather source status: {status}"
+            if status in ("degraded", "unknown"):
+                bucket["count"] = bucket["total"] = None
+            result[key] = bucket
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -945,68 +940,18 @@ async def fetch_fire_hotspots(
     → high. Radius-area: critical 5 km, high 2.5 km, medium 1 km.
     Redis: short refresh cache (1h) + separate last-known-good (6h ceiling).
     """
-    now = datetime.now(timezone.utc)
-
-    cached = _read_firms_payload(FIRMS_CACHE_KEY)
-    if cached is not None:
-        age_s = _firms_age_seconds(cached.get("updated_at"), now)
-        if age_s is not None and age_s <= FIRMS_REFRESH_S:
-            return _firms_envelope_from_cache(cached)
-
-    settings = get_settings()
-    adapter = NASAFIRMSAdapter()
-    hotspots, source, reason, problems = await _fetch_live_firms(
-        adapter, bool(getattr(settings, "nasa_firms_map_key", ""))
-    )
-
-    if hotspots is not None:
-        total = len(hotspots)
-        payload = {
-            "hotspots": hotspots,
-            "total": total,
-            "status": "ok" if total > 0 else "empty",
-            # A served count keeps any cross-check note; a verified zero uses
-            # the canonical empty reason.
-            "reason": (reason if total > 0 else FIRMS_EMPTY_REASON),
-            "source": source,
-            "updated_at": now.isoformat(),
-            "window_hours": FIRMS_WINDOW_HOURS,
-        }
-        _write_firms_payload(FIRMS_CACHE_KEY, payload, FIRMS_REFRESH_S)
-        _write_firms_payload(FIRMS_LAST_GOOD_KEY, payload, FIRMS_STALE_CEILING_HOURS * 3600)
-        return _firms_envelope_from_cache(payload)
-
-    # Upstream unavailable: serve last-known-good, clearly marked stale.
-    last_good = _read_firms_payload(FIRMS_LAST_GOOD_KEY)
-    if last_good is None:
-        last_good = _read_legacy_firms_cache()
-    if last_good is not None:
-        age_s = _firms_age_seconds(last_good.get("updated_at"), now)
-        if age_s is None:
-            age_s = float(FIRMS_STALE_CEILING_HOURS * 3600)
-        suffix = "; ".join(p for p in problems if p) or "sumber live tidak tersedia"
-        payload = dict(last_good)
-        # A failed refresh always reports stale (never a silent "ok").
-        payload["status"] = "stale"
-        payload["source"] = "cache"
-        payload["reason"] = (
-            f"Data terakhir {human_age_id(age_s)} lalu (batas {FIRMS_STALE_CEILING_HOURS} jam); {suffix}"
-        )
-        return _firms_envelope_from_cache(payload)
-
-    reason = "Sumber Titik Panas tidak tersedia"
-    if problems:
-        reason = f"{reason}: {'; '.join(problems)}"
+    section = read_public_operational_cache().get("fire_hotspots") or {}
+    data = section.get("data") if isinstance(section, dict) else None
+    if isinstance(data, dict):
+        result = dict(data)
+        result["status"] = section.get("status", result.get("status", "unknown"))
+        if section.get("error"):
+            result["reason"] = section["error"]
+        return result
     return {
-        "hotspots": [],
-        "count": None,
-        "total": 0,
-        "capped": False,
-        "status": "degraded",
-        "reason": reason,
-        "source": "nasa-firms-csv",
-        "updated_at": now.isoformat(),
-        "window_hours": FIRMS_WINDOW_HOURS,
+        "hotspots": [], "count": None, "total": None, "capped": False,
+        "status": "unknown", "reason": section.get("error") or "No cached fire hotspot data",
+        "source": "unknown", "updated_at": None, "window_hours": FIRMS_WINDOW_HOURS,
     }
 
 
@@ -1040,21 +985,26 @@ async def optimize_routing(payload: RoutingRequestPayload = Body(...)) -> Dict[s
     Also supports point-to-point shortest path calculation when origin_coords/dest_coords are provided.
     """
     try:
+        proof_ctx: Dict[str, Any] = {"hazard_evidence_coverage": "unknown", "hazard_evidence": []}
+        if payload.include_proof:
+            proof_ctx = await _fetch_proof_context()
+        normalized_hazards = _normalize_route_hazards(list(payload.hazard_zones or []) + list(proof_ctx.get("hazard_evidence") or []))
         result = await optimize_fleet_routes_cpu(
             origin_id=payload.origin_id or "belawan_port",
             dest_id=payload.dest_id or "tebing_tinggi",
             fleet_size=payload.fleet_size or 3,
-            hazard_zones=payload.hazard_zones
+            hazard_zones=normalized_hazards,
+            hazard_evidence_coverage=proof_ctx.get("hazard_evidence_coverage", "unknown"),
         )
+        _downgrade_unverified_clear(result, proof_ctx.get("hazard_evidence_coverage", "unknown"))
         if payload.origin_coords or payload.dest_coords or payload.origin_name or payload.dest_name:
-            proof_ctx: Dict[str, Any] = {"congestion_segments": [], "news_context": [], "is_fallback": True}
-            if payload.include_proof:
-                proof_ctx = await _fetch_proof_context()
+            proof_ctx.setdefault("congestion_segments", [])
+            proof_ctx.setdefault("news_context", [])
             router_adapter = get_cpu_router()
             path_solution = router_adapter.solve_shortest_path(
                 origin_id=payload.origin_id,
                 dest_id=payload.dest_id,
-                hazard_zones=payload.hazard_zones,
+                hazard_zones=normalized_hazards,
                 k_alternatives=payload.k_alternatives or 3,
                 origin_coords=payload.origin_coords,
                 dest_coords=payload.dest_coords,
@@ -1072,9 +1022,11 @@ async def optimize_routing(payload: RoutingRequestPayload = Body(...)) -> Dict[s
             result["routes"] = path_solution.get("routes", [])
             if payload.include_proof:
                 result["proof_context"] = {
-                    "is_fallback": proof_ctx.get("is_fallback"),
-                    "speed_source": proof_ctx.get("speed_source"),
+                    "is_fallback": proof_ctx.get("is_fallback", True),
+                    "speed_source": proof_ctx.get("speed_source", "unknown"),
                     "fallback_reasons": proof_ctx.get("fallback_reasons", []),
+                    "hazard_evidence_version": HAZARD_EVIDENCE_VERSION,
+                    "hazard_evidence_coverage": proof_ctx.get("hazard_evidence_coverage", "unknown"),
                 }
         return result
     except Exception as e:
@@ -1141,14 +1093,15 @@ async def solve_routing_path(payload: RoutingRequestPayload = Body(...)) -> Dict
     and connects with last-mile road connectors).
     """
     try:
-        proof_ctx: Dict[str, Any] = {"congestion_segments": [], "news_context": [], "is_fallback": True}
+        proof_ctx: Dict[str, Any] = {"congestion_segments": [], "news_context": [], "is_fallback": True, "hazard_evidence_coverage": "unknown", "hazard_evidence": []}
         if payload.include_proof:
             proof_ctx = await _fetch_proof_context()
+        normalized_hazards = _normalize_route_hazards(list(payload.hazard_zones or []) + list(proof_ctx.get("hazard_evidence") or []))
         router_adapter = get_cpu_router()
         result = router_adapter.solve_shortest_path(
             origin_id=payload.origin_id,
             dest_id=payload.dest_id,
-            hazard_zones=payload.hazard_zones,
+            hazard_zones=normalized_hazards,
             k_alternatives=payload.k_alternatives or 3,
             origin_coords=payload.origin_coords,
             dest_coords=payload.dest_coords,
@@ -1160,11 +1113,14 @@ async def solve_routing_path(payload: RoutingRequestPayload = Body(...)) -> Dict
             include_proof=bool(payload.include_proof),
             is_fallback=bool(proof_ctx.get("is_fallback", True)),
         )
+        _downgrade_unverified_clear(result, proof_ctx.get("hazard_evidence_coverage", "unknown"))
         if payload.include_proof:
             result["proof_context"] = {
-                "is_fallback": proof_ctx.get("is_fallback"),
-                "speed_source": proof_ctx.get("speed_source"),
+                "is_fallback": proof_ctx.get("is_fallback", True),
+                "speed_source": proof_ctx.get("speed_source", "unknown"),
                 "fallback_reasons": proof_ctx.get("fallback_reasons", []),
+                "hazard_evidence_version": HAZARD_EVIDENCE_VERSION,
+                "hazard_evidence_coverage": proof_ctx.get("hazard_evidence_coverage", "unknown"),
             }
         _enrich_routes_with_hedging(result, payload)
         return result
@@ -1177,51 +1133,22 @@ async def solve_routing_path(payload: RoutingRequestPayload = Body(...)) -> Dict
 async def fetch_tomtom_flow_segments(
     current_user: UserSession = Depends(get_optional_user),
 ) -> Dict[str, Any]:
-    """
-    Returns live TomTom traffic flow checkpoints & active incidents for Mapbox segment coloring.
-    Read endpoint: optional auth (guest-safe), user attached for telemetry only.
-    """
-    try:
-        tomtom = TomTomAdapter()
-        raw = await tomtom.fetch()
-        events = await tomtom.parse(raw)
-
-        segments = []
-        for flow in raw.get("flow", []):
-            cp_name = flow.get("_checkpoint_name")
-            lat = flow.get("_lat")
-            lon = flow.get("_lon")
-            seg = flow.get("flowSegmentData", {})
-            curr_speed = seg.get("currentSpeed", 30)
-            free_speed = seg.get("freeFlowSpeed", 60)
-
-            c_score = max(0.0, 1.0 - (curr_speed / free_speed)) if free_speed > 0 else 0.0
-            level = "heavy" if c_score >= 0.6 else "moderate" if c_score >= 0.3 else "low"
-
-            segments.append({
-                "checkpoint": cp_name,
-                "lat": lat,
-                "lon": lon,
-                "current_speed_kmh": curr_speed,
-                "free_flow_speed_kmh": free_speed,
-                "congestion_level": level,
-                "delay_seconds": max(0, int((1.0 / max(5, curr_speed) - 1.0 / max(10, free_speed)) * 3600))
-            })
-
-        return {
-            "segments": segments,
-            "incidents": raw.get("incidents", []),
-            "total_segments": len(segments),
-            "total_incidents": len(raw.get("incidents", [])),
-            "status": raw.get("status", "ok"),
-            "degraded_reason": raw.get("degraded_reason"),
-            "credit_exhausted": raw.get("credit_exhausted", False),
-            "credit_exhausted_until": raw.get("credit_exhausted_until", ""),
-            "is_fallback": not bool(raw.get("flow")),
-        }
-    except Exception as e:
-        logger.error(f"Error fetching TomTom traffic flow segments: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    """Return TomTom data from the shared cache without an upstream request."""
+    section = read_public_operational_cache().get("traffic_flow_segments") or {}
+    data = section.get("data") if isinstance(section, dict) else None
+    if isinstance(data, dict):
+        result = dict(data)
+        result["status"] = section.get("status", result.get("status", "unknown"))
+        result["is_fallback"] = result["status"] in ("unknown", "degraded", "stale")
+        result["degraded_reason"] = section.get("error") or result.get("degraded_reason")
+        return result
+    return {
+        "segments": [], "incidents": [], "total_segments": None, "total_incidents": None,
+        "expected_checkpoint_count": None, "observed_checkpoint_count": 0,
+        "coverage": "unknown", "status": "unknown",
+        "degraded_reason": section.get("error") or "No cached TomTom flow data",
+        "credit_exhausted": False, "credit_exhausted_until": "", "is_fallback": True,
+    }
 
 
 @router.post("/traffic/tomtom/reset-latch")

@@ -11,6 +11,16 @@ from app.adapters.aisstream_adapter import AISstreamAdapter
 from app.adapters.nasa_firms_adapter import NASAFIRMSAdapter
 from app.adapters.open_meteo_adapter import OpenMeteoAdapter
 
+
+@pytest.fixture(autouse=True)
+def allow_mocked_provider_requests(monkeypatch):
+    """Unit tests use fake HTTP clients, so admit their requests locally."""
+    async def allow(*args, **kwargs):
+        return True
+
+    monkeypatch.setattr("app.services.provider_budget.reserve_provider_budget", allow)
+
+
 # ==============================================================================
 # BMKG Adapter Tests
 # ==============================================================================

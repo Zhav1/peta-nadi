@@ -1,22 +1,9 @@
-"""Phase 163a — `GET /api/v1/dashboard/bootstrap`.
+"""Contract tests for `GET /api/v1/dashboard/bootstrap`.
 
-Hermetic: the read model (`read_global_snapshot` / `build_global_snapshot`) and
-the tenant sections are monkeypatched, so no Supabase/Redis/upstream call is
-made. Tokens are signed locally with the dev HS256 secret (phase 161 pattern).
-
-Contract pinned here:
-
-* guest + fresh stored snapshot -> 200, `stale=false`, no tenant sections;
-* a *fresh* stored (or 60 s memory) row whose `source_freshness` marks
-  fire/weather degraded/stale still schedules exactly one background build
-  (single-flight) while the stored row is served immediately;
-* dispatcher -> `fleet`/`erp` included, scoped to the JWT `company_id`; a
-  `?company_id=` query never widens or overrides the claim;
-* missing/stale snapshot -> bounded live fallback, `stale=true` + `reason`,
-  and a hung build still answers (it does not hang the request);
-* invalid token -> 401;
-* `Cache-Control: private, no-store` on every response (200 and 401);
-* a failing fleet/erp section is `degraded` and still 200.
+The public read is a persisted-only shared projection; missing data stays
+explicitly unknown, and no public request builds or refreshes a snapshot. Tests
+adapt the old compatibility reader to a fake public projection and keep tenant
+section checks isolated. Tokens are signed locally with the dev HS256 secret.
 """
 
 import asyncio
@@ -30,6 +17,7 @@ from app.auth.supabase_auth import ROLE_DISPATCHER, ROLE_GUEST, ROLE_REGULATOR, 
 from app.main import app
 from app.routers import dashboard_bootstrap
 from app.services import dashboard_snapshot_service as svc
+from app.services import public_snapshot_service as public_snapshots
 
 client = TestClient(app)
 
@@ -38,10 +26,32 @@ ALIAS_URL = "/dashboard/bootstrap"
 
 
 @pytest.fixture(autouse=True)
-def _clean_section_cache():
-    """Keep the service's last-good cache from leaking between tests."""
+def _clean_section_cache(monkeypatch):
+    """Keep tests hermetic while modeling the new persisted public projection."""
     svc.reset_section_cache()
     dashboard_bootstrap.reset_inflight()
+
+    async def read_public_snapshot():
+        legacy = svc.read_global_snapshot()
+        if not isinstance(legacy, dict):
+            return None
+        freshness = legacy.get("source_freshness") or {}
+        sections = legacy.get("payload") or {}
+        return {
+            "snapshot_key": "sumatra_mainland",
+            "schema_version": legacy.get("schema_version", 1),
+            "computed_at": legacy.get("computed_at"),
+            "stale": any(
+                isinstance(value, dict) and value.get("status") != "ok"
+                for value in freshness.values()
+            ) or (svc.snapshot_age_seconds(legacy) or 0) > svc.STALE_AFTER_SECONDS,
+            "sections": sections,
+            "source_freshness": freshness,
+            "shadow_mode": True,
+            "coverage": {"scope": "mainland_sumatra", "expected_province_count": 8},
+        }
+
+    monkeypatch.setattr(public_snapshots, "read_public_snapshot", read_public_snapshot)
     yield
     svc.reset_section_cache()
     dashboard_bootstrap.reset_inflight()
@@ -258,20 +268,12 @@ def test_regulator_gets_aggregate_erp_and_public_fleet(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# 3. Live fallback (missing / stale) — bounded
+# 3. Persisted-only read behavior
 # ---------------------------------------------------------------------------
 
-def test_missing_snapshot_triggers_bounded_live_fallback(monkeypatch):
+def test_missing_snapshot_returns_unknown_without_live_fallback(monkeypatch):
     monkeypatch.setattr(svc, "read_global_snapshot", lambda: None)
-
-    live = _live_snapshot()
-    calls: list[dict] = []
-
-    async def fake_build(**kwargs):
-        calls.append(kwargs)
-        return live
-
-    monkeypatch.setattr(svc, "build_global_snapshot", fake_build)
+    _no_build(monkeypatch)
 
     res = client.get(URL)
 
@@ -279,26 +281,15 @@ def test_missing_snapshot_triggers_bounded_live_fallback(monkeypatch):
     body = res.json()
     assert body["stale"] is True
     assert body["reason"] == "missing_snapshot"
-    assert body["computed_at"] == live["computed_at"]
-    assert body["sections"]["incidents"]["status"] == "ok"
-    assert len(calls) == 1
+    assert body["computed_at"] is None
+    assert body["sections"]["incidents"]["status"] == "unknown"
+    assert body["sections"]["incidents"]["data"] is None
 
 
-def test_stale_snapshot_triggers_live_fallback_and_reports_reason(monkeypatch):
-    """Stale-first: a stale row is served immediately, refresh runs in backgnd.
-
-    The live build is deliberately hung: the response must still answer fast
-    with the stored payload (stale=true / snapshot_stale), proving the caller
-    was not blocked.
-    """
+def test_stale_snapshot_is_served_without_refresh(monkeypatch):
     stored = _stored_snapshot(age_seconds=svc.STALE_AFTER_SECONDS + 60)
     monkeypatch.setattr(svc, "read_global_snapshot", lambda: stored)
-
-    async def hang(**kwargs):
-        await asyncio.sleep(30)
-        return _live_snapshot()
-
-    monkeypatch.setattr(svc, "build_global_snapshot", hang)
+    _no_build(monkeypatch)
 
     started = time.perf_counter()
     res = client.get(URL)
@@ -313,41 +304,25 @@ def test_stale_snapshot_triggers_live_fallback_and_reports_reason(monkeypatch):
     assert elapsed < 3.0
 
 
-def test_hung_live_build_does_not_hang_the_request(monkeypatch):
+def test_public_get_does_not_wait_for_or_call_a_live_build(monkeypatch):
     monkeypatch.setattr(svc, "read_global_snapshot", lambda: None)
     monkeypatch.setattr(dashboard_bootstrap, "LIVE_BUILD_TIMEOUT_SECONDS", 0.05)
-
-    async def hang(**kwargs):
-        await asyncio.sleep(30)
-
-    monkeypatch.setattr(svc, "build_global_snapshot", hang)
+    _no_build(monkeypatch)
 
     started = time.perf_counter()
     res = client.get(URL)
     elapsed = time.perf_counter() - started
 
     assert res.status_code == 200
-    body = res.json()
-    assert body["stale"] is True
-    assert body["reason"] == "live_build_timeout"
-    assert body["sections"] == {}
+    assert res.json()["reason"] == "missing_snapshot"
     assert elapsed < 3.0
     assert res.headers["Cache-Control"] == "private, no-store"
 
 
-def test_failed_live_build_falls_back_to_the_stored_snapshot(monkeypatch):
-    """A failing background refresh keeps serving the stored row (stale-first).
-
-    The caller never blocks on the build, so the reason stays
-    ``snapshot_stale``; the background failure is only logged.
-    """
+def test_failed_background_build_is_irrelevant_to_public_get(monkeypatch):
     stale = _stored_snapshot(age_seconds=svc.STALE_AFTER_SECONDS + 60)
     monkeypatch.setattr(svc, "read_global_snapshot", lambda: stale)
-
-    async def boom(**kwargs):
-        raise RuntimeError("weather upstream down")
-
-    monkeypatch.setattr(svc, "build_global_snapshot", boom)
+    _no_build(monkeypatch)
 
     res = client.get(URL)
     body = res.json()
@@ -510,158 +485,85 @@ def test_sections_all_preserves_default_behaviour(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# 7. Single-flight + memory cache (direct _resolve_sections, deterministic)
+# 7. Persisted-only behavior (direct _resolve_sections, deterministic)
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_concurrent_missing_snapshots_trigger_one_build(monkeypatch):
+async def test_concurrent_missing_snapshot_reads_never_build(monkeypatch):
     monkeypatch.setattr(svc, "read_global_snapshot", lambda: None)
-    dashboard_bootstrap.reset_inflight()
+    _no_build(monkeypatch)
 
-    calls: list[int] = []
-    release = asyncio.Event()
+    first, second = await asyncio.gather(
+        dashboard_bootstrap._resolve_sections(None),
+        dashboard_bootstrap._resolve_sections(None),
+    )
 
-    async def fake_build(**kwargs):
-        calls.append(1)
-        await release.wait()
-        return _live_snapshot()
-
-    monkeypatch.setattr(svc, "build_global_snapshot", fake_build)
-
-    async def caller():
-        return await dashboard_bootstrap._resolve_sections(None)
-
-    t1 = asyncio.create_task(caller())
-    t2 = asyncio.create_task(caller())
-    await asyncio.sleep(0.05)
-    assert len(calls) == 1
-    release.set()
-    r1, r2 = await asyncio.gather(t1, t2)
-
-    assert len(calls) == 1
-    for sections, computed_at, stale, reason in (r1, r2):
+    for sections, computed_at, stale, reason, snapshot in (first, second):
         assert stale is True
         assert reason == "missing_snapshot"
-        assert sections["incidents"]["status"] == "ok"
-    dashboard_bootstrap.reset_inflight()
+        assert computed_at is None
+        assert sections["incidents"]["status"] == "unknown"
+        assert snapshot["snapshot_key"] == "sumatra_mainland"
 
 
 @pytest.mark.asyncio
-async def test_client_abort_does_not_cancel_shared_build(monkeypatch):
+async def test_public_reads_do_not_create_detached_refresh_tasks(monkeypatch):
+    calls = []
+    monkeypatch.setattr(svc, "read_global_snapshot", lambda: calls.append("read") or None)
+    _no_build(monkeypatch)
+
+    first = await dashboard_bootstrap._resolve_sections(None)
+    second = await dashboard_bootstrap._resolve_sections(None)
+
+    assert calls == ["read", "read"]
+    assert first[3] == second[3] == "missing_snapshot"
+    assert first[0]["incidents"]["status"] == "unknown"
+    assert second[0]["incidents"]["status"] == "unknown"
+
+
+@pytest.mark.asyncio
+async def test_process_memory_snapshot_is_not_a_public_source_of_truth(monkeypatch):
+    dashboard_bootstrap._store_memory_snapshot(None, _live_snapshot())
     monkeypatch.setattr(svc, "read_global_snapshot", lambda: None)
-    dashboard_bootstrap.reset_inflight()
+    _no_build(monkeypatch)
 
-    release = asyncio.Event()
-
-    async def fake_build(**kwargs):
-        await release.wait()
-        return _live_snapshot()
-
-    monkeypatch.setattr(svc, "build_global_snapshot", fake_build)
-
-    first = asyncio.create_task(dashboard_bootstrap._resolve_sections(None))
-    await asyncio.sleep(0.05)
-    first.cancel()
-    try:
-        await first
-    except asyncio.CancelledError:
-        pass
-
-    release.set()
-    sections, computed_at, stale, reason = await dashboard_bootstrap._resolve_sections(None)
+    sections, computed_at, stale, reason, snapshot = await dashboard_bootstrap._resolve_sections(None)
     assert stale is True
     assert reason == "missing_snapshot"
-    assert sections["incidents"]["status"] == "ok"
-    dashboard_bootstrap.reset_inflight()
-
-
-@pytest.mark.asyncio
-async def test_memory_cache_serves_fresh_without_rebuild(monkeypatch):
-    live = _live_snapshot()
-    dashboard_bootstrap.reset_inflight()
-    dashboard_bootstrap._store_memory_snapshot(None, live)
-
-    def must_not_read():
-        raise AssertionError("memory hit must not touch the DB")
-
-    def must_not_build(**kwargs):
-        raise AssertionError("memory hit must not rebuild")
-
-    monkeypatch.setattr(svc, "read_global_snapshot", must_not_read)
-    monkeypatch.setattr(svc, "build_global_snapshot", must_not_build)
-
-    sections, computed_at, stale, reason = await dashboard_bootstrap._resolve_sections(None)
-    assert stale is False
-    assert reason is None
-    assert computed_at == live["computed_at"]
-    dashboard_bootstrap.reset_inflight()
+    assert computed_at is None
+    assert sections["incidents"]["status"] == "unknown"
+    assert snapshot["snapshot_key"] == "sumatra_mainland"
 
 
 # ---------------------------------------------------------------------------
-# 8. Degraded/stale fire-weather freshness is revalidated even when the row
-#    is fresh (in DB or in memory) — the caller still gets the row at once
+# 8. Degraded/stale fire-weather freshness remains explicit without GET refresh
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_fresh_degraded_sections_schedule_one_background_refresh(monkeypatch):
-    dashboard_bootstrap.reset_inflight()
+async def test_degraded_snapshot_is_served_without_request_path_revalidation(monkeypatch):
     stored = _degraded_fresh_snapshot()
     monkeypatch.setattr(svc, "read_global_snapshot", lambda: stored)
+    _no_build(monkeypatch)
 
-    calls: list[dict] = []
+    sections, computed_at, stale, reason, snapshot = await dashboard_bootstrap._resolve_sections(None)
 
-    async def fake_build(**kwargs):
-        calls.append(kwargs)
-        await asyncio.sleep(30)
-        return _live_snapshot()
-
-    monkeypatch.setattr(svc, "build_global_snapshot", fake_build)
-
-    sections, computed_at, stale, reason = await dashboard_bootstrap._resolve_sections(None)
-
-    # The stored row is served immediately: fresh row, no reason, real data.
-    assert stale is False
-    assert reason is None
+    assert stale is True
+    assert reason == "snapshot_stale"
     assert computed_at == stored["computed_at"]
     assert sections["fire_hotspots"]["data"]["hotspots"] == []
-
-    await asyncio.sleep(0.05)  # let the detached build start once
-    assert len(calls) == 1
-
-    # A concurrent caller shares the same in-flight rebuild (single-flight):
-    # still exactly one build, and the fresh row is still served as fresh.
-    sections2, _at2, stale2, reason2 = await dashboard_bootstrap._resolve_sections(None)
-    assert stale2 is False
-    assert reason2 is None
-    assert len(calls) == 1
-    dashboard_bootstrap.reset_inflight()
+    assert snapshot["shadow_mode"] is True
 
 
 @pytest.mark.asyncio
-async def test_memory_cached_degraded_snapshot_still_schedules_refresh(monkeypatch):
-    """A 60 s memory hit does not swallow the revalidation of a degraded row."""
-    dashboard_bootstrap.reset_inflight()
+async def test_degraded_snapshot_is_not_served_from_process_memory(monkeypatch):
     dashboard_bootstrap._store_memory_snapshot(None, _degraded_fresh_snapshot())
+    monkeypatch.setattr(svc, "read_global_snapshot", lambda: None)
+    _no_build(monkeypatch)
 
-    def must_not_read():
-        raise AssertionError("memory hit must not touch the DB")
+    sections, computed_at, stale, reason, snapshot = await dashboard_bootstrap._resolve_sections(None)
 
-    calls: list[dict] = []
-
-    async def fake_build(**kwargs):
-        calls.append(kwargs)
-        await asyncio.sleep(30)
-        return _live_snapshot()
-
-    monkeypatch.setattr(svc, "read_global_snapshot", must_not_read)
-    monkeypatch.setattr(svc, "build_global_snapshot", fake_build)
-
-    sections, computed_at, stale, reason = await dashboard_bootstrap._resolve_sections(None)
-
-    assert stale is False
-    assert reason is None
-    assert sections["weather_summary"]["data"]["cuaca"]["status"] == "ok"
-
-    await asyncio.sleep(0.05)
-    assert len(calls) == 1  # the memory cache did not suppress the refresh
-    dashboard_bootstrap.reset_inflight()
+    assert stale is True
+    assert reason == "missing_snapshot"
+    assert computed_at is None
+    assert sections["weather_summary"]["status"] == "unknown"
+    assert snapshot["snapshot_key"] == "sumatra_mainland"

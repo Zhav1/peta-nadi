@@ -25,6 +25,7 @@ from fastapi import FastAPI
 from app.adapters.open_meteo_adapter import SUMATRA_GRID, _grid_points
 from app.routers import routing_router
 from app.services import weather_fusion_service as fusion
+from app.services import public_operational_cache as operational_cache
 from app.services.weather_fusion_service import (
     MAX_WEATHER_FEATURES,
     get_fused_spatial_weather,
@@ -127,14 +128,28 @@ def weather_env(monkeypatch):
 
     monkeypatch.setattr(routing_router, "cache_get", fake_get)
     monkeypatch.setattr(routing_router, "cache_set", fake_set)
+    monkeypatch.setattr(operational_cache, "cache_get", fake_get)
+    monkeypatch.setattr(operational_cache, "cache_set", fake_set)
+    monkeypatch.setattr(operational_cache, "_read_durable", lambda key: None)
+    monkeypatch.setattr(operational_cache, "_write_durable", lambda key, payload, source: True)
 
     def install(bmkg_events=None, om_events=None, bmkg_error=None, om_error=None):
-        monkeypatch.setattr(
-            fusion, "BMKGAdapter", lambda: _FakeBMKG(bmkg_events, bmkg_error)
-        )
-        monkeypatch.setattr(
-            fusion, "OpenMeteoAdapter", lambda: _FakeOpenMeteo(om_events, om_error)
-        )
+        now = datetime.now(timezone.utc)
+        records = {}
+        for source, events, error, seconds in (
+            ("bmkg", bmkg_events or [], bmkg_error, 300),
+            ("open_meteo", om_events or [], om_error, 21600),
+        ):
+            record = {
+                "source": source, "raw": {}, "events": list(events),
+                "fetched_at": now.isoformat(), "observed_at": now.isoformat(),
+                "valid_until": (now + timedelta(seconds=seconds)).isoformat(),
+                "status": "degraded" if error else "ok", "error": str(error) if error else None,
+            }
+            records[source] = record
+            store[f"{operational_cache.RAW_KEY_PREFIX}{source}"] = json.dumps(record)
+        sections = operational_cache._build_sections(records)
+        store[operational_cache.CACHE_KEY] = json.dumps({"sections": sections})
 
     return {"store": store, "install": install, "monkeypatch": monkeypatch}
 
@@ -231,19 +246,20 @@ async def test_upstream_failure_with_cache_serves_stale_polygons(weather_env):
             "total": 5,
             "count": 1,
             "capped": True,
+            "filter": {"min_severity": "high", "min_precip": 50.0, "min_flood": 80.0},
             "updated_at": older,
             "validity_hours": 6,
             "stale_ceiling_hours": 24,
             "max_features": MAX_WEATHER_FEATURES,
         },
     }
-    weather_env["store"][_default_polygon_cache_key()] = json.dumps(
-        {"payload": cached_payload, "fetched_at": older}
-    )
     weather_env["install"](
         bmkg_error=RuntimeError("bmkg unreachable"),
         om_error=RuntimeError("open-meteo unreachable"),
     )
+    sections = {name: {"status": "stale", "data": cached_payload, "valid_until": older, "error": "open-meteo unreachable"}
+                for name in operational_cache.SECTION_NAMES}
+    weather_env["store"][operational_cache.CACHE_KEY] = json.dumps({"sections": sections})
 
     payload = await _get_polygons()
 
@@ -325,45 +341,33 @@ def test_open_meteo_grid_covers_every_sumatra_province():
 
 
 # ---------------------------------------------------------------------------
-# 7. Phase 170 — summary + polygons share ONE upstream fusion snapshot
+# 7. Provider cadence and shared read-model contract
 # ---------------------------------------------------------------------------
 
-# Metered Open-Meteo math, hard-coded so a future grid/window change fails here
-# instead of 429-ing production. Free tier = 10,000 location-calls/day.
 GRID_POINTS = 58
-POLLS_PER_DAY = 24 * 3600 // 600  # 600 s refresh window => 144 polls
-LOCATION_CALLS_PER_DAY = GRID_POINTS * POLLS_PER_DAY
 
 
-def test_shared_cache_call_budget_is_under_the_free_tier():
-    from app.services.retention import WEATHER_REFRESH_S
-
-    assert WEATHER_REFRESH_S == 600, "call math below assumes the 600 s window"
-    assert POLLS_PER_DAY == 144
-    assert GRID_POINTS == 58, "grid grew: update the metered budget, do not raise it silently"
-    assert LOCATION_CALLS_PER_DAY == 8_352
-    # One shared cache stays under the free ceiling...
-    assert LOCATION_CALLS_PER_DAY < 9_000
-    # ...while the old two independent 600 s caches (summary + polygons) did not.
-    assert LOCATION_CALLS_PER_DAY * 2 == 16_704
-    assert LOCATION_CALLS_PER_DAY * 2 > 10_000
+def test_source_cadence_is_not_the_readmodel_ttl():
+    assert operational_cache.SOURCE_TTL_SECONDS["bmkg"] == 300
+    assert operational_cache.SOURCE_TTL_SECONDS["open_meteo"] == 6 * 60 * 60
+    assert GRID_POINTS == 58, "metered bulk locations are reserved together by the source job"
 
 
 @pytest.mark.asyncio
-async def test_summary_then_polygons_perform_exactly_one_upstream_fetch(weather_env):
-    """Cold cache: /weather/summary then /weather/spatial-polygons => 1 fetch."""
+async def test_summary_and_polygons_do_not_refetch_cached_sources(weather_env):
+    """Weather reads consume one shared cached snapshot and do no provider I/O."""
+    weather_env["install"](
+        bmkg_events=[_om_event(0, "high", -3.0, 102.0)],
+        om_events=[_om_event(1, "high", -2.98, 104.77)],
+    )
     calls = {"bmkg": 0, "open_meteo": 0}
 
-    def _bmkg_factory():
-        calls["bmkg"] += 1
-        return _FakeBMKG([_om_event(0, "high", -3.0, 102.0)])
-
-    def _om_factory():
+    async def forbidden(*args, **kwargs):
         calls["open_meteo"] += 1
-        return _FakeOpenMeteo([_om_event(1, "high", -2.98, 104.77)])
+        raise AssertionError("provider fetch from read route")
 
-    weather_env["monkeypatch"].setattr(fusion, "BMKGAdapter", _bmkg_factory)
-    weather_env["monkeypatch"].setattr(fusion, "OpenMeteoAdapter", _om_factory)
+    weather_env["monkeypatch"].setattr(fusion, "BMKGAdapter", forbidden)
+    weather_env["monkeypatch"].setattr(fusion, "OpenMeteoAdapter", forbidden)
 
     app = FastAPI()
     app.include_router(routing_router.router, prefix="/api/v1")
@@ -379,15 +383,12 @@ async def test_summary_then_polygons_perform_exactly_one_upstream_fetch(weather_
         )
         assert advisory.status_code == 200, advisory.text
 
-    assert calls == {"bmkg": 1, "open_meteo": 1}, (
-        "summary and polygons must share ONE fusion snapshot; "
-        f"got {calls} upstream fetches"
-    )
+    assert calls == {"bmkg": 0, "open_meteo": 0}, "GET readers must never fetch providers"
     body = polygons.json()
     assert body["meta"]["status"] == "ok"
     assert body["meta"]["total"] >= 2
     assert summary.json()["cuaca"]["count"] == 2
     # The shared snapshot is keyed by bbox/window only — never by the filters.
-    assert routing_router.WEATHER_FUSION_CACHE_KEY in weather_env["store"]
-    assert "min_severity" not in routing_router.WEATHER_FUSION_CACHE_KEY
+    assert operational_cache.CACHE_KEY in weather_env["store"]
+    assert "min_severity" not in operational_cache.CACHE_KEY
 

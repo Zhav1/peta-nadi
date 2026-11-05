@@ -14,6 +14,14 @@ from app.schemas.decision_schemas import (
 )
 from app.db import local_storage
 from app.auth.supabase_auth import UserSession, get_optional_user
+from app.services.pilot_safety import (
+    ELIGIBLE_TRIP_STATUSES,
+    get_tenant_trip,
+    is_pilot_shadow_mode,
+    require_tenant_claim,
+    shadow_decision_response,
+    validate_live_route_decision,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -168,6 +176,33 @@ async def create_approval(
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="expected_route_version and idempotency_key are required for an operational route change.")
         if not payload.notes or not payload.notes.strip():
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Operator rationale is required for an operational route change.")
+
+        if is_pilot_shadow_mode():
+            trip = get_tenant_trip(current_user, payload.travel_id)
+            if str(trip.get("status") or "").lower() not in ELIGIBLE_TRIP_STATUSES:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Trip tidak lagi eligible untuk evaluasi rute.")
+            if int(trip.get("route_version") or 0) != payload.expected_route_version:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Versi rute trip berubah; muat ulang sebelum evaluasi.")
+            requested_vehicle = (payload.custom_constraints or {}).get("vehicle_id") or route_dict.get("vehicle_id")
+            if requested_vehicle and str(requested_vehicle) != str(trip.get("truck_id") or ""):
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Vehicle pada rekomendasi tidak cocok dengan assignment trip.")
+            if trip.get("disruption_id") and str(trip["disruption_id"]) != str(inc_id):
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Trip sudah terikat ke insiden yang berbeda.")
+            return shadow_decision_response(
+                action=payload.action.value,
+                tactical_action=payload.tactical_action.value,
+                decision_scope=DecisionScope.OPERATIONAL_ROUTE.value,
+                incident_id=inc_id,
+                route_id=payload.route_id,
+                travel_id=payload.travel_id,
+                operator_id=op_id,
+                preview={
+                    "recommended_route": route_dict,
+                    "expected_route_version": payload.expected_route_version,
+                    "client_safety_claims_unverified": True,
+                },
+            )
+
         route_text = " ".join(str(route_dict.get(k) or "") for k in ("route_name", "description", "safety_tag", "source")).upper()
         if payload.simulation_mode or route_dict.get("is_simulated") is True or route_dict.get("simulation_mode") is True or not route_dict.get("safety_status") or "SIMULASI" in route_text or "OFFLINE" in route_text:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Operational approval requires a grounded, non-simulated route.")
@@ -175,6 +210,7 @@ async def create_approval(
         refs = [str(ref).strip() for ref in payload.evidence_refs if str(ref).strip()]
         if not proof and not refs:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Operational approval requires reviewed evidence references or route proof.")
+        validate_live_route_decision(inc_id, payload.route_id, route_dict)
 
         rpc_params = {
             "p_travel_id": payload.travel_id,
@@ -229,8 +265,25 @@ async def create_approval(
             logger.exception("Atomic trip route decision failed; no applied success returned")
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Trip decision could not be durably applied. No applied success was recorded.") from exc
 
-    # Incident/news review remains trip-independent. Historical approvals have
-    # no trip link and are never backfilled to whichever trip happens to be latest.
+    # Incident/news review remains trip-independent. In shadow mode it is an
+    # evaluation only: no route_approvals row or local decision trace is written.
+    if is_pilot_shadow_mode():
+        require_tenant_claim(current_user)
+        return shadow_decision_response(
+            action=payload.action.value,
+            tactical_action=payload.tactical_action.value,
+            decision_scope=DecisionScope.INCIDENT_REVIEW.value,
+            incident_id=inc_id,
+            route_id=payload.route_id,
+            operator_id=op_id,
+            preview={
+                "recommended_route": route_dict,
+                "client_safety_claims_unverified": True,
+            },
+        )
+
+    # Historical approvals have no trip link and are never backfilled to
+    # whichever trip happens to be latest.
     forecast, pred_source = _resolve_approval_forecast(inc_id, route_dict if isinstance(route_dict, dict) else {})
     forecast_notes_flag = "" if forecast else " pred_unavailable(no stored forecast at decision time)"
     db_payload = {

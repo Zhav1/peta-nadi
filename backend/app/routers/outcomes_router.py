@@ -7,7 +7,7 @@ import logging
 import asyncio
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.schemas.decision_schemas import (
     OutcomeHorizon,
@@ -17,6 +17,13 @@ from app.schemas.decision_schemas import (
     OutcomeListResponse
 )
 from app.db import local_storage
+from app.auth.supabase_auth import UserSession, get_optional_user
+from app.services.pilot_safety import (
+    is_pilot_shadow_mode,
+    require_dispatcher_write,
+    require_tenant_outcome_link,
+    shadow_decision_response,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -164,11 +171,31 @@ def _response_pred_fields(item: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @router.post("", response_model=Dict[str, Any], status_code=status.HTTP_201_CREATED)
-async def record_outcome(payload: OutcomeCreate):
+async def record_outcome(
+    payload: OutcomeCreate,
+    current_user: UserSession = Depends(get_optional_user),
+):
     """
     Record a verified ground-truth field outcome for an incident.
     Persists to Supabase cloud with automatic fallback to local SQLite.
     """
+    company_id = require_dispatcher_write(current_user)
+    if is_pilot_shadow_mode():
+        return shadow_decision_response(
+            action="record_outcome",
+            decision_scope="ground_truth_outcome",
+            incident_id=payload.incident_id,
+            operator_id=current_user.id,
+            preview={
+                "tenant_id": company_id,
+                "horizon": payload.horizon.value,
+                "observed_delay_hours": payload.observed_delay_hours,
+                "actual_price_spike_pct": payload.actual_price_spike_pct,
+                "verification_source": payload.verification_source.value,
+            },
+        )
+    require_tenant_outcome_link(current_user, payload.incident_id)
+
     clearance_str = payload.actual_clearance_time.isoformat() if payload.actual_clearance_time else None
     # WS-LIVE: persist the stored decision-time forecast with the row so the
     # live aggregate (pred_prob in [0, 1] + non-echo source) can count it.
