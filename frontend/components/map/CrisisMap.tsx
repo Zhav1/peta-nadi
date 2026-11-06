@@ -1495,25 +1495,7 @@ export default function CrisisMap({
         },
       });
 
-      // 2b. Solid active route corridor
-      map.addLayer({
-        id: 'route-paths-line',
-        type: 'line',
-        source: 'route-paths-source',
-        filter: ['==', ['get', 'isActive'], true],
-        layout: {
-          'line-cap': 'round',
-          'line-join': 'round',
-        },
-        paint: {
-          'line-color': ['coalesce', ['get', 'color'], '#38b8f8'],
-          // Direct-land corridors are the highlighted/default story; island-ring legs stay thinner.
-          'line-width': ['case', ['==', ['get', 'isDirectLand'], true], 6.5, 5],
-          'line-opacity': 0.95,
-        },
-      });
-
-      // 2c. Distinct dashed alternative route corridors
+      // 2b. Distinct dashed alternative route corridors (rendered underneath active route)
       map.addLayer({
         id: 'route-paths-alternative',
         type: 'line',
@@ -1533,6 +1515,24 @@ export default function CrisisMap({
           'line-width': 4,
           'line-opacity': 0.85,
           'line-dasharray': [2, 2],
+        },
+      });
+
+      // 2c. Solid active route corridor (rendered on top of alternative detours)
+      map.addLayer({
+        id: 'route-paths-line',
+        type: 'line',
+        source: 'route-paths-source',
+        filter: ['==', ['get', 'isActive'], true],
+        layout: {
+          'line-cap': 'round',
+          'line-join': 'round',
+        },
+        paint: {
+          'line-color': ['coalesce', ['get', 'color'], '#38b8f8'],
+          // Direct-land corridors are the highlighted/default story; island-ring legs stay thinner.
+          'line-width': ['case', ['==', ['get', 'isDirectLand'], true], 6.5, 5],
+          'line-opacity': 0.95,
         },
       });
 
@@ -2350,7 +2350,7 @@ export default function CrisisMap({
       const targetIdx = activeRouteIdx ?? 0;
       const isCorridorVisible = (r: RouteRecommendation, origIdx: number) => {
         // Do NOT hide alternative routes (origIdx > 0 or r.is_detour) when r.viable === false
-        const isAlt = origIdx > 0 || (r as any).is_detour || r.corridor_type === 'land_detour';
+        const isAlt = origIdx > 0 || (r as any).is_detour || r.corridor_type === 'land_detour' || (r.corridor_type as string) === 'detour' || r.corridor_type === 'sea_intermodal' || r.corridor_type === 'air_intermodal';
         if (r.viable === false && !isAlt) return false;
         if (hiddenRouteIndices.has(origIdx)) return false;
         const type = r.corridor_type;
@@ -2486,17 +2486,24 @@ export default function CrisisMap({
       }
 
       for (const seg of macroSegments) {
-        const coords = seg.coordinates || [];
-        if (Array.isArray(coords) && coords.length >= 2) {
+        const rawCoords =
+          seg.coordinates ||
+          seg.geometry?.coordinates ||
+          (seg.lon != null && seg.lat != null
+            ? [[Number(seg.lon) - 0.02, Number(seg.lat) - 0.02], [Number(seg.lon), Number(seg.lat)], [Number(seg.lon) + 0.02, Number(seg.lat) + 0.02]]
+            : []);
+        if (Array.isArray(rawCoords) && rawCoords.length >= 2) {
           features.push({
             type: 'Feature',
             geometry: {
               type: 'LineString',
-              coordinates: coords.map((c: any) => [Number(c[0] ?? c.lon), Number(c[1] ?? c.lat)]),
+              coordinates: rawCoords.map((c: any) => [Number(c[0] ?? c.lon), Number(c[1] ?? c.lat)]),
             },
             properties: {
-              level: seg.level || 'moderate',
-              road_name: seg.road_name || 'Koridor Lintas Sumatera',
+              level: String(seg.level || seg.congestion_level || seg.status || 'moderate').toLowerCase(),
+              road_name: seg.road_name || seg.checkpoint || seg.name || 'Koridor Lintas Sumatera',
+              current_speed_kmh: seg.current_speed_kmh ?? seg.current_speed,
+              free_flow_speed_kmh: seg.free_flow_speed_kmh ?? seg.free_flow_speed,
             },
           });
         }
@@ -2515,6 +2522,8 @@ export default function CrisisMap({
       for (const z of disasterZones) {
         const ring = toLonLatRing(z.polygon);
         if (!ring) continue;
+        const centerLon = Array.isArray((z as any).center) ? (z as any).center[0] : ((z as any).center?.lon ?? (z as any).lon ?? null);
+        const centerLat = Array.isArray((z as any).center) ? (z as any).center[1] : ((z as any).center?.lat ?? (z as any).lat ?? null);
         zoneFeatures.push({
           type: 'Feature',
           geometry: {
@@ -2533,9 +2542,12 @@ export default function CrisisMap({
             tier_reason: (z as any).tier_reason || '',
             custom_hazard_label: (z as any).custom_hazard_label || '',
             source_news_id: (z as any).source_news_id || '',
-            center_lon: (z as any).center?.[0] ?? null,
-            center_lat: (z as any).center?.[1] ?? null,
-            radiusKm: (z as any).radiusKm ?? 15,
+            source: (z as any).source || (z as any).source_name || 'BMKG CAP / GloFAS / GDACS',
+            source_name: (z as any).source_name || (z as any).source || 'BMKG CAP / GloFAS / GDACS',
+            impacted_corridors: (z as any).impacted_corridors || (z as any).impacted_corridor || (z as any).tier_reason || 'Jalan Lintas Sumatera',
+            center_lon: centerLon != null ? Number(centerLon) : null,
+            center_lat: centerLat != null ? Number(centerLat) : null,
+            radiusKm: (z as any).radiusKm ?? (z as any).radius_km ?? 15,
             impact_profile_json: (z as any).impact_profile ? JSON.stringify((z as any).impact_profile) : '',
           },
         } as GeoJSON.Feature<GeoJSON.Polygon>);
@@ -2551,13 +2563,16 @@ export default function CrisisMap({
     if (markersSource) {
       const markerFeatures: GeoJSON.Feature<GeoJSON.Point>[] = [];
       for (const z of disasterZones) {
-        const center = (z as any).center;
-        if (Array.isArray(center) && center.length >= 2 && Number.isFinite(center[0]) && Number.isFinite(center[1])) {
+        const centerLon = Array.isArray((z as any).center) ? (z as any).center[0] : ((z as any).center?.lon ?? (z as any).lon);
+        const centerLat = Array.isArray((z as any).center) ? (z as any).center[1] : ((z as any).center?.lat ?? (z as any).lat);
+        if (centerLon != null && centerLat != null && Number.isFinite(Number(centerLon)) && Number.isFinite(Number(centerLat))) {
+          const lon = Number(centerLon);
+          const lat = Number(centerLat);
           markerFeatures.push({
             type: 'Feature',
             geometry: {
               type: 'Point',
-              coordinates: [center[0], center[1]],
+              coordinates: [lon, lat],
             },
             properties: {
               id: (z as any).id || (z as any).crisis_id || '',
@@ -2566,10 +2581,10 @@ export default function CrisisMap({
               display_label: (z as any).custom_hazard_label || (z as any).title || 'Peringatan Bencana',
               zone_tier: (z as any).zone_tier || 'RED_CONFIRMED',
               radiusKm: (z as any).radiusKm ?? (z as any).radius_km ?? 20,
-              source: (z as any).source_name || 'BMKG CAP / GloFAS / GDACS',
-              impacted_corridors: (z as any).impacted_corridor || (z as any).tier_reason || 'Jalan Lintas Sumatera',
-              center_lon: center[0],
-              center_lat: center[1],
+              source: (z as any).source || (z as any).source_name || 'BMKG CAP / GloFAS / GDACS',
+              impacted_corridors: (z as any).impacted_corridors || (z as any).impacted_corridor || (z as any).tier_reason || 'Jalan Lintas Sumatera',
+              center_lon: lon,
+              center_lat: lat,
             },
           });
         }

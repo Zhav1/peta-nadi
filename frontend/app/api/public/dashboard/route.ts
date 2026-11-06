@@ -44,7 +44,7 @@ function timestampIsStale(computedAt: string | null): boolean {
   return !Number.isFinite(stamp) || Date.now() - stamp > 10 * 60_000;
 }
 
-export function buildDeterministicSumatraBaseline(): DashboardBootstrapResponse {
+function buildDeterministicSumatraBaseline(): DashboardBootstrapResponse {
   const nowIso = new Date().toISOString();
   return {
     schema_version: 1,

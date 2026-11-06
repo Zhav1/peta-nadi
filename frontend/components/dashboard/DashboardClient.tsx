@@ -1835,23 +1835,38 @@ export default function DashboardClient() {
       },
     ];
 
-    const rawReports =
-      (bootstrapSections?.disaster_reports?.data as any)?.reports ??
-      (bootstrapSections as any)?.observed_disasters?.reports ??
-      [];
+    const disasterReportsData = bootstrapSections?.disaster_reports?.data as any;
+    const observedDisastersData = (bootstrapSections as any)?.observed_disasters?.data as any;
+    const rawReports: any[] = Array.isArray(disasterReportsData)
+      ? disasterReportsData
+      : Array.isArray(disasterReportsData?.items)
+        ? disasterReportsData.items
+        : Array.isArray(disasterReportsData?.reports)
+          ? disasterReportsData.reports
+          : Array.isArray(observedDisastersData?.disaster_reports)
+            ? observedDisastersData.disaster_reports
+            : Array.isArray(observedDisastersData?.reports)
+              ? observedDisastersData.reports
+              : Array.isArray(observedDisastersData?.items)
+                ? observedDisastersData.items
+                : [];
 
     const combinedReports = [...NORTHERN_SUMATRA_ACTIVE_DISASTERS];
     for (const rep of rawReports) {
-      if (rep && rep.lon != null && rep.lat != null && !combinedReports.some((c) => c.id === rep.id)) {
+      const lat = rep.lat ?? rep.latitude ?? rep.center?.lat ?? (Array.isArray(rep.center) ? rep.center[1] : undefined) ?? rep.coordinates?.[1];
+      const lon = rep.lon ?? rep.longitude ?? rep.center?.lon ?? (Array.isArray(rep.center) ? rep.center[0] : undefined) ?? rep.coordinates?.[0];
+      if (rep && lat != null && lon != null && !combinedReports.some((c) => c.id === String(rep.id))) {
         combinedReports.push({
           id: String(rep.id),
-          title: rep.title || 'Laporan Bencana Sumatera',
-          type: (rep.type || 'flood') as CrisisType,
-          center: [Number(rep.lon), Number(rep.lat)],
-          radiusKm: Number(rep.radius_km || 20),
+          title: rep.title || rep.name || 'Laporan Bencana Sumatera',
+          type: (rep.type || rep.hazard_type || rep.disaster_type || 'flood') as CrisisType,
+          center: [Number(lon), Number(lat)],
+          radiusKm: Number(rep.radius_km || rep.radiusKm || 20),
           severity: rep.severity || 'high',
-          source: rep.source || 'BMKG CAP / GloFAS / GDACS',
-          impactedCorridors: rep.impacted_corridor || 'Koridor Logistik Sumatera',
+          source: rep.source || rep.source_name || 'BMKG CAP / GloFAS / GDACS',
+          impactedCorridors: Array.isArray(rep.impacted_corridors)
+            ? rep.impacted_corridors.join(', ')
+            : (rep.impacted_corridor || rep.impacted_corridors || 'Koridor Logistik Sumatera'),
         });
       }
     }
@@ -1892,9 +1907,17 @@ export default function DashboardClient() {
   }, [bootstrap.isLoading, bootstrapSections, buildHazardSpecificZoneGeometry]);
 
   const tomtomSegments = useMemo(() => {
-    const segData = (bootstrapSections?.traffic_flow_segments?.data as any)?.segments;
-    if (Array.isArray(segData) && segData.length > 0) return segData;
-    return [];
+    const tfData = bootstrapSections?.traffic_flow_segments?.data as any;
+    const ttData = (bootstrapSections as any)?.tomtom_traffic?.data as any;
+    return Array.isArray(tfData)
+      ? tfData
+      : Array.isArray(tfData?.segments)
+        ? tfData.segments
+        : Array.isArray(ttData?.segments)
+          ? ttData.segments
+          : Array.isArray(ttData)
+            ? ttData
+            : [];
   }, [bootstrapSections]);
 
   // Filtered-set counts: disruption (high/critical, biru) + advisory (medium, ungu when ON).

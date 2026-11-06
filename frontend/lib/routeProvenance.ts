@@ -55,6 +55,16 @@ function geometryKey(route: RouteRecommendation): string {
         coords.push([Number(Number(pt[0]).toFixed(5)), Number(Number(pt[1]).toFixed(5))]);
       }
     }
+  } else if (Array.isArray(route.legs) && route.legs.length > 0) {
+    for (const leg of route.legs) {
+      if (Array.isArray(leg.coordinates) && leg.coordinates.length > 0) {
+        for (const pt of leg.coordinates) {
+          if (Array.isArray(pt) && pt.length >= 2) {
+            coords.push([Number(Number(pt[0]).toFixed(5)), Number(Number(pt[1]).toFixed(5))]);
+          }
+        }
+      }
+    }
   }
 
   const corridorTag = route.corridor_type ?? ((route as any).is_detour ? 'detour' : 'primary');

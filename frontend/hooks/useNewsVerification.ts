@@ -630,7 +630,7 @@ export function useNewsVerification(options?: UseNewsVerificationOptions) {
             ? res.last_updated
             : null;
 
-          const rawArticles = res.articles || res.items || [];
+          const rawArticles = Array.isArray(res) ? res : (res?.articles || res?.items || []);
           if (rawArticles && rawArticles.length > 0) {
             const ALLOWED_INCIDENT_TYPES = new Set([
               'flood', 'port_closure', 'marine_wave', 'road_closure', 'landslide',

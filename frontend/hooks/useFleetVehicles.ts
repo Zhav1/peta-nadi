@@ -238,7 +238,7 @@ const FALLBACK_FLEET: FleetVehicle[] = [
     current_coords: [101.4478, 0.5071],
     route_geometry: { type: 'LineString', coordinates: [[98.8780, 3.6421], [99.8500, 2.4500], [101.4478, 0.5071], [103.6444, -1.6389], [104.7000, -2.8983]] },
     speed_kmh: 620.0, status: 'moving', progress: 0.35, cargo: '8.5 Ton Daging Beku & Vaksin', origin: 'Bandara Kualanamu (KNO)', destination: 'Bandara Sultan Mahmud Badaruddin II (PLM)',
-    telemetry_source: 'ADSB_LIVE', signal_status: 'LIVE_STREAM', tracking_mode: 'LIVE_GPS', icao24: '8a011b', callsign: 'GIA7101',
+    telemetry_source: 'SUMATRA_AIR_CORRIDOR', signal_status: 'LIVE_STREAM', tracking_mode: 'LIVE_GPS', icao24: '8a011b', callsign: 'GIA7101',
     heading_deg: 142
   },
   {
@@ -249,7 +249,7 @@ const FALLBACK_FLEET: FleetVehicle[] = [
     current_coords: [100.8500, -0.1500],
     route_geometry: { type: 'LineString', coordinates: [[101.4447, 0.4619], [100.8500, -0.1500], [100.2811, -0.7869]] },
     speed_kmh: 540.0, status: 'moving', progress: 0.58, cargo: '5.2 Ton Sayur Segar & Medis', origin: 'Bandara Sultan Syarif Kasim II (PKU)', destination: 'Bandara Minangkabau (BIM)',
-    telemetry_source: 'OPENSKY_NETWORK', signal_status: 'LIVE_STREAM', tracking_mode: 'LIVE_GPS', icao24: '8a023c', callsign: 'CDG802',
+    telemetry_source: 'SUMATRA_AIR_CORRIDOR', signal_status: 'LIVE_STREAM', tracking_mode: 'LIVE_GPS', icao24: '8a023c', callsign: 'CDG802',
     heading_deg: 228
   },
   {
@@ -260,7 +260,7 @@ const FALLBACK_FLEET: FleetVehicle[] = [
     current_coords: [104.9500, -4.0500],
     route_geometry: { type: 'LineString', coordinates: [[104.7000, -2.8983], [104.9500, -4.0500], [105.1783, -5.2417]] },
     speed_kmh: 510.0, status: 'moving', progress: 0.42, cargo: '6.0 Ton Benih Pangan & Sembako Ekspres', origin: 'Bandara Sultan Mahmud Badaruddin II (PLM)', destination: 'Bandara Radin Inten II (TKG)',
-    telemetry_source: 'ADSB_LIVE', signal_status: 'LIVE_STREAM', tracking_mode: 'LIVE_GPS', icao24: '8a034d', callsign: 'TMG301',
+    telemetry_source: 'SUMATRA_AIR_CORRIDOR', signal_status: 'LIVE_STREAM', tracking_mode: 'LIVE_GPS', icao24: '8a034d', callsign: 'TMG301',
     heading_deg: 168
   },
   {
@@ -271,7 +271,7 @@ const FALLBACK_FLEET: FleetVehicle[] = [
     current_coords: [97.1000, 4.6000],
     route_geometry: { type: 'LineString', coordinates: [[95.4194, 5.5222], [97.1000, 4.6000], [98.8780, 3.6421]] },
     speed_kmh: 580.0, status: 'moving', progress: 0.65, cargo: '4.8 Ton Pangan Hortikultura & Bumbu', origin: 'Bandara Sultan Iskandar Muda (BTJ)', destination: 'Bandara Kualanamu (KNO)',
-    telemetry_source: 'OPENSKY_NETWORK', signal_status: 'LIVE_STREAM', tracking_mode: 'LIVE_GPS', icao24: '8a045e', callsign: 'LNI404',
+    telemetry_source: 'SUMATRA_AIR_CORRIDOR', signal_status: 'LIVE_STREAM', tracking_mode: 'LIVE_GPS', icao24: '8a045e', callsign: 'LNI404',
     heading_deg: 122
   },
   {
@@ -282,7 +282,7 @@ const FALLBACK_FLEET: FleetVehicle[] = [
     current_coords: [104.1500, -2.2500],
     route_geometry: { type: 'LineString', coordinates: [[103.6444, -1.6389], [104.1500, -2.2500], [104.7000, -2.8983]] },
     speed_kmh: 490.0, status: 'moving', progress: 0.30, cargo: '5.5 Ton Komoditas Pangan Segar', origin: 'Bandara Sultan Thaha (DJB)', destination: 'Bandara Sultan Mahmud Badaruddin II (PLM)',
-    telemetry_source: 'ADSB_LIVE', signal_status: 'LIVE_STREAM', tracking_mode: 'LIVE_GPS', icao24: '8a056f', callsign: 'MYU505',
+    telemetry_source: 'SUMATRA_AIR_CORRIDOR', signal_status: 'LIVE_STREAM', tracking_mode: 'LIVE_GPS', icao24: '8a056f', callsign: 'MYU505',
     heading_deg: 142
   },
 ];

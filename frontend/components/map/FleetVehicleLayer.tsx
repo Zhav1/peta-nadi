@@ -581,7 +581,15 @@ export function FleetVehicleLayer({
         } else {
           const isAir = v.modality === 'air' || (v as any).type === 'plane' || (v as any).vehicle_type === 'AIR_CARGO';
           const hasSurveyedCorridor = coords.length >= 2 && (calculatePathDistanceKm(coords) >= 15 || isAir);
-          const hasFreshServerFix = Boolean(serverFix && (v.telemetry_source === 'ADSB_LIVE' || v.telemetry_source === 'OPENSKY_NETWORK'));
+          const isScheduledAirCorridor =
+            v.telemetry_source === 'SUMATRA_AIR_CORRIDOR' ||
+            v.vehicle_id?.startsWith('AIR-00') ||
+            Boolean((v as any).id?.startsWith('AIR-00'));
+          const hasFreshServerFix = Boolean(
+            serverFix &&
+            (v.telemetry_source === 'ADSB_LIVE' || v.telemetry_source === 'OPENSKY_NETWORK') &&
+            !isScheduledAirCorridor
+          );
 
           if ((v.modality === 'maritime' || isAir) && hasSurveyedCorridor && !hasFreshServerFix) {
             const baseSpeed = isAir
