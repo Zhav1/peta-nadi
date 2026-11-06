@@ -872,9 +872,83 @@ export function useNewsVerification(options?: UseNewsVerificationOptions) {
               }
               setStatus(seed ? 'snapshot' : 'live');
             } else {
-              // Strict live-only: keep last-good articles (if any) and report warming.
-              // Never substitute an offline fixture.
-              setStatus('warming');
+              // Strict live-only: check operational cache before falling back to live fetch
+              const cached = readPublicCache<CachedNewsPayload>(PUBLIC_NEWS_CACHE_KEY, PUBLIC_CACHE_TTL_MS);
+              if (cached && Array.isArray(cached.feed) && cached.feed.length > 0) {
+                setNewsFeed(cached.feed);
+                setNewsMeta(cached.meta ?? null);
+                if (cached.lastUpdated) {
+                  setLastUpdated(cached.lastUpdated);
+                  lastUpdatedRef.current = cached.lastUpdated;
+                }
+                setLastGoodAt(new Date().toISOString());
+                setStatus('snapshot');
+              } else if (snapshotOnly && isMounted && !controller.signal.aborted) {
+                // If snapshotOnly receives an empty initialNews array after bootstrap finishes,
+                // perform a single coalesced fallback fetch to api.news.live()
+                try {
+                  const liveRes = await api.news.live(controller.signal);
+                  if (isMounted && !controller.signal.aborted && liveRes && Array.isArray(liveRes.items) && liveRes.items.length > 0) {
+                    const fallbackMapped = liveRes.items.map((raw: any) => {
+                      const headline = raw.headline || raw.title || '';
+                      const summaryText = raw.summary || raw.description || '';
+                      const sourceLink = raw.link || raw.url || '';
+                      const rawPub = raw.published_at || raw.pubDate || new Date().toISOString();
+                      const province = normalizeProvince(raw.province || raw.location_name || '');
+                      return {
+                        id: String(raw.id || `live-news-${Math.random().toString(36).slice(2)}`),
+                        source_type: raw.source_type || 'OFFICIAL_NEWS',
+                        source_tier: raw.source_tier,
+                        source_name: raw.source_name || 'Sumber Resmi Berita',
+                        headline,
+                        summary: summaryText,
+                        location_name: raw.location_name,
+                        province,
+                        lat: raw.lat ?? raw.latitude,
+                        lon: raw.lon ?? raw.longitude,
+                        pubDate: rawPub,
+                        published_at: rawPub,
+                        category: raw.category,
+                        incident_type: raw.hazardType || raw.incident_type,
+                        hazardType: raw.hazardType || raw.incident_type,
+                        severity: raw.severity || 'high',
+                        verification_status: raw.verification_status || 'CORROBORATED_OFFICIAL',
+                        confidence_score: raw.confidence_score ?? 0.9,
+                        relevance_tier: raw.relevance_tier || 'crisis',
+                        zone_tier: raw.zone_tier || 'RED_CONFIRMED',
+                        link: sourceLink,
+                        url: sourceLink,
+                        affected_locations: raw.affected_locations,
+                        impact_profile: raw.impact_profile,
+                      } as NewsItem;
+                    }).filter((n): n is NewsItem => {
+                      if (!n) return false;
+                      if (n.lat == null || n.lon == null || !Number.isFinite(n.lat) || !Number.isFinite(n.lon)) return false;
+                      if (n.lat < -6.5 || n.lat > 6.5 || n.lon < 94 || n.lon > 108) return false;
+                      return true;
+                    });
+                    if (fallbackMapped.length > 0) {
+                      setNewsFeed(fallbackMapped);
+                      setNewsMeta((liveRes as any).meta ?? null);
+                      setStatus('live');
+                      setLastGoodAt(new Date().toISOString());
+                      writePublicCache<CachedNewsPayload>(PUBLIC_NEWS_CACHE_KEY, {
+                        feed: fallbackMapped,
+                        meta: (liveRes as any).meta ?? null,
+                        lastUpdated: new Date().toISOString(),
+                      });
+                    } else {
+                      setStatus('warming');
+                    }
+                  } else {
+                    setStatus('warming');
+                  }
+                } catch {
+                  setStatus('warming');
+                }
+              } else {
+                setStatus('warming');
+              }
             }
 
           } else {

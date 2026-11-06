@@ -24,7 +24,8 @@ SOURCE_TTL_SECONDS = {
     "bmkg": 300,
     "open_meteo": 6 * 60 * 60,
     "firms": 3 * 60 * 60,
-    "tomtom": 30 * 60,
+    "tomtom": 10 * 60,
+    "observed_disasters": 30 * 60,
 }
 SECTION_NAMES = (
     "weather_summary",
@@ -34,8 +35,10 @@ SECTION_NAMES = (
     "corridor_context",
     "corridor_contexts",
     "traffic_flow_segments",
+    "observed_disasters",
+    "tomtom_traffic",
 )
-VALID_SOURCES = {"bmkg", "open_meteo", "firms", "tomtom"}
+VALID_SOURCES = {"bmkg", "open_meteo", "firms", "tomtom", "observed_disasters"}
 BudgetReserver = Callable[..., bool | Awaitable[bool]]
 
 
@@ -193,6 +196,33 @@ def read_public_operational_cache() -> dict[str, Any]:
                 stale_reason = f"{stale_reason}; {result['error']}"
             result["error"] = stale_reason
         output[name] = result
+
+    if output.get("observed_disasters", {}).get("status") == "unknown":
+        try:
+            from app.services.observed_disaster_service import read_observed_disasters
+            obs = read_observed_disasters()
+            output["observed_disasters"] = _envelope(
+                obs.get("status", "ok"),
+                obs,
+                observed_at=obs.get("updated_at"),
+                cached=True,
+            )
+        except Exception as exc:
+            logger.debug("Failed populating fallback observed_disasters: %s", exc)
+
+    if output.get("tomtom_traffic", {}).get("status") == "unknown":
+        try:
+            from app.adapters.tomtom_adapter import get_cached_sumatra_traffic
+            traf = get_cached_sumatra_traffic()
+            output["tomtom_traffic"] = _envelope(
+                traf.get("status", "ok"),
+                traf,
+                observed_at=traf.get("updated_at"),
+                cached=True,
+            )
+        except Exception as exc:
+            logger.debug("Failed populating fallback tomtom_traffic: %s", exc)
+
     return output
 
 
@@ -273,6 +303,23 @@ async def _fetch_source(source: str, reserve_provider_budget: BudgetReserver | N
             "valid_until": _iso(fetched_at + timedelta(seconds=SOURCE_TTL_SECONDS[source])),
             "status": source_status,
             "error": raw.get("degraded_reason"),
+        }
+    elif source == "observed_disasters":
+        from app.services.observed_disaster_service import refresh_observed_disasters, read_observed_disasters
+        try:
+            await refresh_observed_disasters("glofas", reserve_provider_budget=reserve_provider_budget)
+        except Exception:
+            pass
+        obs = read_observed_disasters()
+        return {
+            "source": source,
+            "raw": obs,
+            "events": obs.get("disaster_reports", []),
+            "fetched_at": _iso(fetched_at),
+            "observed_at": obs.get("updated_at"),
+            "valid_until": _iso(fetched_at + timedelta(seconds=SOURCE_TTL_SECONDS[source])),
+            "status": obs.get("status", "ok"),
+            "error": None,
         }
     else:
         raise ValueError(f"Unsupported provider source: {source}")
@@ -501,6 +548,31 @@ def _build_sections(records: dict[str, dict[str, Any]]) -> dict[str, dict[str, A
         observed_at=traffic_record.get("observed_at") if isinstance(traffic_record, dict) else None,
         valid_until=traffic_record.get("valid_until") if isinstance(traffic_record, dict) else None,
     )
+
+    try:
+        from app.services.observed_disaster_service import read_observed_disasters
+        disasters = read_observed_disasters()
+        sections["observed_disasters"] = _envelope(
+            disasters.get("status", "ok"),
+            disasters,
+            observed_at=disasters.get("updated_at"),
+            cached=True,
+        )
+    except Exception as exc:
+        logger.debug("Failed populating sections observed_disasters: %s", exc)
+
+    try:
+        from app.adapters.tomtom_adapter import get_cached_sumatra_traffic
+        traffic_sumatra = get_cached_sumatra_traffic()
+        sections["tomtom_traffic"] = _envelope(
+            traffic_sumatra.get("status", "ok"),
+            traffic_sumatra,
+            observed_at=traffic_sumatra.get("updated_at"),
+            cached=True,
+        )
+    except Exception as exc:
+        logger.debug("Failed populating sections tomtom_traffic: %s", exc)
+
     return sections
 
 

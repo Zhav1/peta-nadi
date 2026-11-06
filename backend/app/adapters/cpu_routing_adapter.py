@@ -833,6 +833,26 @@ class CPURoutingAdapter:
                 snapped_orig_node, snapped_dest_node, alt_snap_dist,
             )
 
+        # Auto-load active observed disasters if not passed
+        if hazard_zones is None:
+            try:
+                from app.services.observed_disaster_service import read_observed_disasters
+                obs_data = read_observed_disasters()
+                hazard_zones = (obs_data.get("disaster_reports") or []) + (obs_data.get("official_warnings") or [])
+            except Exception as e:
+                logger.debug(f"Could not load observed disasters in CPU router: {e}")
+                hazard_zones = []
+
+        # Auto-load active TomTom traffic congestion if not passed
+        if congestion_segments is None:
+            try:
+                from app.adapters.tomtom_adapter import get_cached_sumatra_traffic
+                traffic_payload = get_cached_sumatra_traffic()
+                congestion_segments = traffic_payload.get("segments") or []
+            except Exception as e:
+                logger.debug(f"Could not load TomTom congestion in CPU router: {e}")
+                congestion_segments = []
+
         # Normalize evidence once; all edge and route decisions use this v1 contract.
         normalized_hazards = [
             normalize_hazard_evidence(hz)
@@ -880,12 +900,38 @@ class CPURoutingAdapter:
                     penalty_multiplier,
                     3.0 if evidence.get("classification") == "PRECAUTIONARY_RISK" else 1.5,
                 )
+            # Check TomTom traffic congestion on edge
+            traffic_penalty = 1.0
+            if congestion_segments and not hard_block:
+                for seg in congestion_segments:
+                    s_lat = seg.get("lat")
+                    s_lon = seg.get("lon")
+                    if s_lat is None or s_lon is None:
+                        continue
+                    try:
+                        d_edge = min(
+                            haversine_km((n1["lat"] + n2["lat"]) / 2.0, (n1["lon"] + n2["lon"]) / 2.0, s_lat, s_lon),
+                            haversine_km(n1["lat"], n1["lon"], s_lat, s_lon),
+                            haversine_km(n2["lat"], n2["lon"], s_lat, s_lon),
+                        )
+                        if d_edge <= 15.0:
+                            lvl = str(seg.get("congestion_level") or "").lower()
+                            c_ratio = float(seg.get("congestion_ratio") or 0.0)
+                            if lvl == "heavy" or c_ratio >= 0.6:
+                                traffic_penalty = max(traffic_penalty, 2.5)
+                            elif lvl == "moderate" or c_ratio >= 0.3:
+                                traffic_penalty = max(traffic_penalty, 1.5)
+                    except Exception:
+                        pass
+
             if hard_block:
                 hard_blocked_edges.append((u, v))
                 G.remove_edge(u, v)
-            elif penalty_multiplier > 1.0:
-                G[u][v]["weight"] = data["travel_time_min"] * penalty_multiplier
-                logger.debug("Precautionary hazard cost %.1fx on %s -> %s", penalty_multiplier, u, v)
+            else:
+                combined_cost_mult = penalty_multiplier * traffic_penalty
+                if combined_cost_mult > 1.0:
+                    G[u][v]["weight"] = data["travel_time_min"] * combined_cost_mult
+                    logger.debug("Precautionary hazard/traffic cost %.1fx on %s -> %s", combined_cost_mult, u, v)
 
         routes = []
         seen_geometry: set = set()
@@ -957,20 +1003,42 @@ class CPURoutingAdapter:
                 if assessment["status"] == "BLOCKED":
                     continue
                 is_clear = assessment["status"] == "CLEAR"
+
+                # Detour routes that avoid confirmed disaster blockages are viable alternatives!
+                if is_clear:
+                    safety_status = "SAFE_REROUTE" if is_detour else "CLEAR"
+                    viable = True
+                elif is_detour:
+                    safety_status = "SAFE_REROUTE"
+                    viable = True
+                elif hazard_evidence_coverage not in ("complete", "verified_complete"):
+                    safety_status = "PRECAUTIONARY_RISK"
+                    viable = True
+                else:
+                    safety_status = "HOLD_DELAY"
+                    viable = False
+
+                waypoints = [{"lat": c[1], "lon": c[0]} for c in path_coords]
+                corridor_type = "detour" if is_detour else "primary"
+                leg["waypoints"] = waypoints
+                leg["corridor_type"] = corridor_type
+
                 routes.append({
                     "route_index": out_idx,
                     "description": desc,
                     "nodes": path,
                     "coordinates": path_coords,
+                    "waypoints": waypoints,
+                    "corridor_type": corridor_type,
                     "distance_km": round(dist_km, 2),
                     "eta_minutes": int(round(time_min)),
                     "fuel_increase_pct": max(0.0, round(((dist_km - routes[0]["distance_km"]) / routes[0]["distance_km"] * 100.0), 1)) if routes and routes[0]["distance_km"] > 0 else 0.0,
                     "risk_score": assessment.get("risk_score"),
                     "hazard_assessment": assessment,
                     "is_compromised": not is_clear and assessment["status"] != "UNKNOWN",
-                    "safety_status": "CLEAR" if is_clear else "HOLD_DELAY",
-                    "viable": is_clear,
-                    "non_viable_reason": None if is_clear else assessment.get("reason"),
+                    "safety_status": safety_status,
+                    "viable": viable,
+                    "non_viable_reason": None if viable else assessment.get("reason"),
                     "is_detour": is_detour,
                     "legs": [leg],
                 })
@@ -1053,8 +1121,19 @@ class CPURoutingAdapter:
             route["hazard_assessment"] = assessment
             route["risk_score"] = assessment.get("risk_score")
             route["is_compromised"] = assessment["status"] in {"BLOCKED", "PRECAUTIONARY_RISK"}
-            route["safety_status"] = "CLEAR" if assessment["status"] == "CLEAR" else "COMPROMISED" if assessment["status"] == "BLOCKED" else "HOLD_DELAY"
-            route["viable"] = assessment["status"] == "CLEAR"
+            is_detour = bool(route.get("is_detour") or route.get("corridor_type") == "detour")
+            if assessment["status"] == "CLEAR":
+                route["safety_status"] = "SAFE_REROUTE" if is_detour else "CLEAR"
+                route["viable"] = True
+            elif is_detour and assessment["status"] != "BLOCKED":
+                route["safety_status"] = "SAFE_REROUTE"
+                route["viable"] = True
+            elif assessment["status"] == "BLOCKED":
+                route["safety_status"] = "COMPROMISED"
+                route["viable"] = False
+            else:
+                route["safety_status"] = "HOLD_DELAY"
+                route["viable"] = False
             route["non_viable_reason"] = None if route["viable"] else assessment.get("reason")
             route["hazard_evidence_version"] = HAZARD_EVIDENCE_VERSION
             route["hazard_evidence_ids"] = assessment.get("evidence_ids", [])

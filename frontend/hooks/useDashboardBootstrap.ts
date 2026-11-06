@@ -110,7 +110,7 @@ export function useDashboardBootstrap(
       if (controller.signal.aborted || !mountedRef.current) return;
       if ((err as { name?: string })?.name === 'AbortError') return;
       setError(err instanceof Error ? err.message : 'Gagal memuat snapshot publik');
-      const lastGood = latestSnapshotRef.current;
+      const lastGood = latestSnapshotRef.current ?? readPublicCache<DashboardBootstrapResponse>(PUBLIC_DASHBOARD_CACHE_KEY);
       if (lastGood && isUsefulPublicSnapshot(lastGood)) {
         const retained = markPublicSnapshotStale(lastGood);
         latestSnapshotRef.current = retained;

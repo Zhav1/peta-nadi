@@ -579,14 +579,19 @@ export function FleetVehicleLayer({
             continue;
           }
         } else {
-          const hasSurveyedCorridor = coords.length >= 2 && calculatePathDistanceKm(coords) >= 15;
-          if (v.modality === 'maritime' && hasSurveyedCorridor) {
-            const baseSpeed = (v.sog_knots ? v.sog_knots * 1.852 : v.speed_kmh) || 22;
-            const totalDistanceKm = calculatePathDistanceKm(coords);
-            const simScale = 4.0 * simSpeedMultiplier;
-            const increment = v.status === 'anchored' ? 0 : (baseSpeed / 3600) * deltaSec * (simScale / totalDistanceKm);
+          const isAir = v.modality === 'air' || (v as any).type === 'plane' || (v as any).vehicle_type === 'AIR_CARGO';
+          const hasSurveyedCorridor = coords.length >= 2 && (calculatePathDistanceKm(coords) >= 15 || isAir);
+          const hasFreshServerFix = Boolean(serverFix && (v.telemetry_source === 'ADSB_LIVE' || v.telemetry_source === 'OPENSKY_NETWORK'));
 
-            const prevProg = progressMapRef.current[v.vehicle_id] ?? (v.progress ?? 0.35);
+          if ((v.modality === 'maritime' || isAir) && hasSurveyedCorridor && !hasFreshServerFix) {
+            const baseSpeed = isAir
+              ? ((v.ground_speed_kts ? v.ground_speed_kts * 1.852 : v.speed_kmh) || 450)
+              : ((v.sog_knots ? v.sog_knots * 1.852 : v.speed_kmh) || 22);
+            const totalDistanceKm = calculatePathDistanceKm(coords);
+            const simScale = (isAir ? 1.0 : 4.0) * simSpeedMultiplier;
+            const increment = v.status === 'anchored' ? 0 : (baseSpeed / 3600) * deltaSec * (simScale / (totalDistanceKm > 0 ? totalDistanceKm : 100));
+
+            const prevProg = progressMapRef.current[v.vehicle_id] ?? (v.progress ?? (isAir ? 0.25 : 0.35));
             let currentProgress = prevProg + increment;
             if (currentProgress > 1.0) {
               currentProgress = 0.0;
@@ -599,10 +604,8 @@ export function FleetVehicleLayer({
           } else if (!serverFix) {
             // Non-corridor unit without a ping: no position exists to draw.
             continue;
-          } else if (v.modality === 'air') {
-            // Scope guard: the backend guarantees the server fix is in scope,
-            // so draw it directly. Dead-reckoning a fast jet between 30 s fixes
-            // can drift it over Malaysia/Java; direct positioning cannot.
+          } else if (isAir) {
+            // Live server ADS-B fix override
             finalPos = serverFix;
             finalBearing = v.heading_deg ?? (v as any).bearing ?? 0;
           } else {

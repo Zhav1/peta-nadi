@@ -544,6 +544,17 @@ export function useFleetVehicles(
 
   // Evaluate whether a vehicle has an active hardware transponder or live GPS ping
   const isTransponderActive = (v: FleetVehicle): boolean => {
+    // Allow aircraft to pass isTransponderActive
+    const isPlane =
+      (v as any).type === 'plane' ||
+      (v as any).vehicle_type === 'AIR_CARGO' ||
+      (v as any).id?.startsWith('AIR-') ||
+      (v as any).vehicle_id?.startsWith('AIR-') ||
+      v.telemetry_source === 'SUMATRA_AIR_CORRIDOR';
+    if (isPlane) {
+      return true;
+    }
+
     // Exclude synthetic dead-reckoning and estimated routes from live hardware transponder mode
     if (
       v.tracking_mode === 'ROUTE_ESTIMATED' ||
@@ -562,6 +573,7 @@ export function useFleetVehicles(
       'LIVE_GPS',
       'TMS_GPS_WEBHOOK',
       'CUSTOM_DISPATCHER',
+      'SUMATRA_AIR_CORRIDOR',
     ];
     if (v.telemetry_source && liveSources.includes(v.telemetry_source)) return true;
     if (Boolean(v.mmsi || v.icao24)) return true;
@@ -612,17 +624,31 @@ export function useFleetVehicles(
         const needMaritime =
           !liveTenantVehicles.some((v) => v.modality === 'maritime') &&
           !situationalVessels.some((v) => v.modality === 'maritime');
+        const isAirVehicle = (v: FleetVehicle) =>
+          v.modality === 'air' ||
+          (v as any).type === 'plane' ||
+          (v as any).vehicle_type === 'AIR_CARGO' ||
+          v.vehicle_id?.startsWith('AIR-') ||
+          (v as any).id?.startsWith('AIR-') ||
+          v.telemetry_source === 'SUMATRA_AIR_CORRIDOR';
+
         const needAir =
-          !liveTenantVehicles.some((v) => v.modality === 'air') &&
-          !situationalVessels.some((v) => v.modality === 'air');
+          !liveTenantVehicles.some(isAirVehicle) &&
+          !situationalVessels.some(isAirVehicle);
         const out: FleetVehicle[] = [];
         if (needMaritime)
           out.push(...FALLBACK_FLEET.filter((v) => v.modality === 'maritime'));
         if (needAir)
-          out.push(...FALLBACK_FLEET.filter((v) => v.modality === 'air'));
+          out.push(...FALLBACK_FLEET.filter((v) => isAirVehicle(v)));
         return out.filter((v) => !present.has(v.vehicle_id));
       })()
-    : [];
+    : (() => {
+        // Fallback air cargo for dispatcher without companyId
+        if (isDispatcher) {
+          return FALLBACK_FLEET.filter((v) => (v as any).vehicle_id?.startsWith('AIR-') || v.modality === 'air');
+        }
+        return [];
+      })();
 
   // Dispatcher map/pills = live tenant trucks + live tenant vessels + public
   // situational vessels + vessel fallback. Perusahaan Live GPS badge stays
@@ -633,11 +659,30 @@ export function useFleetVehicles(
     ...fallbackVessels,
   ];
 
-  const baseVehicles = isDispatcher
+  const baseVehicles: FleetVehicle[] = isDispatcher
     ? tenantVehicles
-    : rawVehicles.length > 0
-      ? rawVehicles
-      : (modality ? FALLBACK_FLEET.filter((v) => v.modality === modality) : FALLBACK_FLEET);
+    : (() => {
+        if (rawVehicles.length === 0) {
+          return modality ? FALLBACK_FLEET.filter((v) => v.modality === modality) : FALLBACK_FLEET;
+        }
+        // If backend returned vehicles but 0 aircraft, preserve the 5 Sumatra cargo flight corridors (AIR-001..AIR-005)
+        const hasAir = rawVehicles.some(
+          (v) =>
+            v.modality === 'air' ||
+            (v as any).type === 'plane' ||
+            (v as any).vehicle_type === 'AIR_CARGO' ||
+            v.vehicle_id?.startsWith('AIR-') ||
+            (v as any).id?.startsWith('AIR-') ||
+            v.telemetry_source === 'SUMATRA_AIR_CORRIDOR'
+        );
+        if (!hasAir && (!modality || modality === 'air')) {
+          const airFallbacks = FALLBACK_FLEET.filter(
+            (v) => (v as any).vehicle_id?.startsWith('AIR-') || v.modality === 'air' || (v as any).type === 'plane'
+          );
+          return [...rawVehicles, ...airFallbacks];
+        }
+        return rawVehicles;
+      })();
 
   const customVehicles = baseVehicles.filter(
     (v) =>

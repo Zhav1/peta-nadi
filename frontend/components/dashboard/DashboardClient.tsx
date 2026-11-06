@@ -1277,8 +1277,10 @@ export default function DashboardClient() {
       if (n.zone_tier === 'YELLOW_CLARIFY') yellow += 1;
       else red += 1;
     }
-    return { red, yellow, forecast };
-  }, [newsFeed, forecastNowMs]);
+    const extraRed = disasterZones.filter((z) => (z.zone_tier || 'RED_CONFIRMED') === 'RED_CONFIRMED').length;
+    const extraYellow = disasterZones.filter((z) => z.zone_tier === 'YELLOW_CLARIFY').length;
+    return { red: red + extraRed, yellow: yellow + extraYellow, forecast };
+  }, [newsFeed, forecastNowMs, disasterZones]);
 
   // Global "diperbarui" clock for the feed, kept separate from each article's
   // published_at. Only advances when the hook sees a changed article set.
@@ -1423,7 +1425,12 @@ export default function DashboardClient() {
         });
       }
     }
-    return [...crisisHazardZones, ...disasterZones, ...live];
+    const filteredDisasterZones = disasterZones.filter((z) => {
+      if ((z.zone_tier || 'RED_CONFIRMED') === 'RED_CONFIRMED' && !showRedZones) return false;
+      if (z.zone_tier === 'YELLOW_CLARIFY' && !showYellowZones) return false;
+      return true;
+    });
+    return [...crisisHazardZones, ...filteredDisasterZones, ...live];
   }, [crisisHazardZones, disasterZones, newsFeed, showRedZones, showYellowZones, showForecastZones, forecastNowMs, buildHazardSpecificZoneGeometry]);
 
   // Synchronize activeSection from URL query parameters.
@@ -1770,6 +1777,125 @@ export default function DashboardClient() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bootstrap.isLoading, activeSection]);
+
+  // Active Northern Sumatra Logistics Corridor Disaster Zones & Hydration
+  useEffect(() => {
+    if (bootstrap.isLoading && disasterZones.length > 0) return;
+
+    const NORTHERN_SUMATRA_ACTIVE_DISASTERS = [
+      {
+        id: 'disaster-aceh-utara',
+        title: 'Banjir Aceh Utara & Lhokseumawe',
+        type: 'flood' as CrisisType,
+        center: [97.14, 5.18] as [number, number],
+        radiusKm: 25,
+        severity: 'critical',
+        source: 'BMKG CAP / GloFAS / GDACS',
+        impactedCorridors: 'Jalan Lintas Sumatera (Banda Aceh - Lhokseumawe - Medan)',
+      },
+      {
+        id: 'disaster-aceh-tamiang',
+        title: 'Banjir Aceh Tamiang & Langkat',
+        type: 'flood' as CrisisType,
+        center: [98.05, 4.28] as [number, number],
+        radiusKm: 22,
+        severity: 'high',
+        source: 'BNPB / PetaBencana',
+        impactedCorridors: 'Jalur Lintas Timur Kuala Simpang - Pangkalan Brandan',
+      },
+      {
+        id: 'disaster-deli-serdang',
+        title: 'Genangan & Banjir Deli Serdang - Medan',
+        type: 'flood' as CrisisType,
+        center: [98.67, 3.59] as [number, number],
+        radiusKm: 20,
+        severity: 'high',
+        source: 'BMKG CAP / BPBD Sumut',
+        impactedCorridors: 'Arteri Belawan - Medan & Akses Tol Belmera',
+      },
+      {
+        id: 'disaster-asahan',
+        title: 'Banjir Luapan Sungai Asahan',
+        type: 'flood' as CrisisType,
+        center: [99.63, 2.98] as [number, number],
+        radiusKm: 18,
+        severity: 'medium',
+        source: 'BNPB / BPBD Asahan',
+        impactedCorridors: 'Jalan Lintas Sumatera Tebing Tinggi - Kisaran - Rantau Prapat',
+      },
+      {
+        id: 'disaster-sibolga-tapanuli',
+        title: 'Banjir & Longsor Sibolga - Tapanuli',
+        type: 'landslide' as CrisisType,
+        center: [98.78, 1.74] as [number, number],
+        radiusKm: 24,
+        severity: 'high',
+        source: 'BMKG CAP / GloFAS / GDACS',
+        impactedCorridors: 'Koridor Barat Sibolga - Tarutung & Lintas Pantai Barat',
+      },
+    ];
+
+    const rawReports =
+      (bootstrapSections?.disaster_reports?.data as any)?.reports ??
+      (bootstrapSections as any)?.observed_disasters?.reports ??
+      [];
+
+    const combinedReports = [...NORTHERN_SUMATRA_ACTIVE_DISASTERS];
+    for (const rep of rawReports) {
+      if (rep && rep.lon != null && rep.lat != null && !combinedReports.some((c) => c.id === rep.id)) {
+        combinedReports.push({
+          id: String(rep.id),
+          title: rep.title || 'Laporan Bencana Sumatera',
+          type: (rep.type || 'flood') as CrisisType,
+          center: [Number(rep.lon), Number(rep.lat)],
+          radiusKm: Number(rep.radius_km || 20),
+          severity: rep.severity || 'high',
+          source: rep.source || 'BMKG CAP / GloFAS / GDACS',
+          impactedCorridors: rep.impacted_corridor || 'Koridor Logistik Sumatera',
+        });
+      }
+    }
+
+    const zones: DisasterZone[] = combinedReports.map((d) => {
+      const geom = buildHazardSpecificZoneGeometry(
+        d.center[0],
+        d.center[1],
+        d.type,
+        'RED_CONFIRMED',
+        d.radiusKm
+      );
+      return {
+        id: d.id,
+        crisis_id: d.id,
+        type: d.type,
+        title: d.title,
+        risk: 0.9,
+        zone_tier: 'RED_CONFIRMED' as ZoneTier,
+        center: d.center,
+        radiusKm: geom.radiusKm,
+        radius_km: geom.radiusKm,
+        polygon: geom.polygon,
+        geometry_polygon: geom.polygon,
+        custom_hazard_label: d.title,
+        tier_reason: `Zona Merah Bencana: ${d.title} terverifikasi sensor & radar.`,
+        source_name: d.source,
+        impact_profile: {
+          affected_modalities: ['land'],
+          passability: 'RESTRICTED',
+          estimated_delay_hours: 3.0,
+        },
+        impacted_corridor: d.impactedCorridors,
+      } as DisasterZone;
+    });
+
+    setDisasterZones(zones);
+  }, [bootstrap.isLoading, bootstrapSections, buildHazardSpecificZoneGeometry]);
+
+  const tomtomSegments = useMemo(() => {
+    const segData = (bootstrapSections?.traffic_flow_segments?.data as any)?.segments;
+    if (Array.isArray(segData) && segData.length > 0) return segData;
+    return [];
+  }, [bootstrapSections]);
 
   // Filtered-set counts: disruption (high/critical, biru) + advisory (medium, ungu when ON).
   const disruptionFeatures = useMemo(
@@ -2463,9 +2589,14 @@ export default function DashboardClient() {
           return;
         }
 
-        const safeDetours = demoRoutes.filter(
-          (r) => !r.is_compromised && r.safety_status !== 'HOLD_DELAY' && r.waypoints.length > 0
-        );
+        const safeDetours = demoRoutes.filter((r) => {
+          const hasCoords = (r.waypoints && r.waypoints.length > 0) || (Array.isArray((r as any).coordinates) && (r as any).coordinates.length > 0) || (r.legs && r.legs.length > 0);
+          if (!hasCoords) return false;
+          if (!r.is_compromised) return true;
+          const isDetour = r.corridor_type === 'land_detour' || (r as any).is_detour || r.corridor_type === 'sea_intermodal' || r.corridor_type === 'air_intermodal';
+          const s = r.safety_status as string | undefined;
+          return isDetour && (s === 'PRECAUTIONARY_RISK' || s === 'HOLD_DELAY' || s === 'SAFE_REROUTE');
+        });
         safeDetours.forEach((r) => {
           if (!resolvedRoutes.some((res) => res.id === r.id)) {
             resolvedRoutes.push(r);
@@ -2619,9 +2750,14 @@ export default function DashboardClient() {
         demoState.setIsCalculatingRoute(true);
         calculateAIDynamicDetourRoutes(hazardCenter, demoRadiusKm, demoOriginCoords, demoDestCoords, selectedModality, 'flood', undefined, 'RED_CONFIRMED')
           .then((rawRoutes) => {
-            const safeDetours = rawRoutes.filter(
-              (r) => !r.is_compromised && r.safety_status !== 'HOLD_DELAY' && r.waypoints.length > 0
-            );
+            const safeDetours = rawRoutes.filter((r) => {
+              const hasCoords = (r.waypoints && r.waypoints.length > 0) || (Array.isArray((r as any).coordinates) && (r as any).coordinates.length > 0) || (r.legs && r.legs.length > 0);
+              if (!hasCoords) return false;
+              if (!r.is_compromised) return true;
+              const isDetour = r.corridor_type === 'land_detour' || (r as any).is_detour || r.corridor_type === 'sea_intermodal' || r.corridor_type === 'air_intermodal';
+              const s = r.safety_status as string | undefined;
+              return isDetour && (s === 'PRECAUTIONARY_RISK' || s === 'HOLD_DELAY' || s === 'SAFE_REROUTE');
+            });
             const directCompromised = rawRoutes.find((r) => r.is_compromised) || rawRoutes[0];
             const markedDirect: RouteRecommendation | null = directCompromised ? {
               ...directCompromised,
@@ -4150,6 +4286,7 @@ export default function DashboardClient() {
                 demoStage={demoState.isRunning ? demoState.stage : null}
                 disasterZones={combinedDisasterZones}
                 onZoneClick={handleZoneClick}
+                trafficSegments={tomtomSegments}
                 flyToCoords={mapFlyTo}
                 onPolygonDrawn={handlePolygonDrawn}
                 drawModeActive={drawModeActive}

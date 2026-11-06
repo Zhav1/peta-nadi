@@ -351,19 +351,55 @@ def _schedule_background_refresh(corridor_id: Optional[str]) -> None:
         pass
 
 
+def _attach_operational_sections(sections_dict: dict[str, Any], default_stamp: Optional[str] = None) -> None:
+    if "observed_disasters" not in sections_dict or sections_dict["observed_disasters"].get("status") == "unknown":
+        try:
+            from app.services.observed_disaster_service import read_observed_disasters
+            obs = read_observed_disasters()
+            sections_dict["observed_disasters"] = {
+                "status": obs.get("status", "ok"),
+                "data": obs,
+                "cached": True,
+                "observed_at": obs.get("updated_at") or default_stamp,
+            }
+        except Exception:
+            pass
+
+    if "tomtom_traffic" not in sections_dict or sections_dict["tomtom_traffic"].get("status") == "unknown":
+        try:
+            from app.adapters.tomtom_adapter import get_cached_sumatra_traffic
+            traf = get_cached_sumatra_traffic()
+            sections_dict["tomtom_traffic"] = {
+                "status": traf.get("status", "ok"),
+                "data": traf,
+                "cached": True,
+                "observed_at": default_stamp or traf.get("updated_at"),
+            }
+        except Exception:
+            pass
+
+
 async def _resolve_sections(corridor_id: Optional[str]) -> tuple[dict, Optional[str], bool, Optional[str], dict]:
-    """Read the persisted public singleton only; never build or trigger refresh."""
+    """Read public sections with single-flight background refresh coalescing and fast-seeded fallback."""
     from app.services import public_snapshot_service
 
     snapshot = await public_snapshot_service.read_public_snapshot()
     if snapshot is None:
         empty = public_snapshot_service.empty_public_snapshot()
-        return empty["sections"], None, True, "missing_snapshot", empty
+        empty_sections = dict(empty["sections"])
+        _attach_operational_sections(empty_sections)
+        return empty_sections, None, True, "missing_snapshot", empty
 
     stale = public_snapshot_service.snapshot_is_stale(snapshot)
     reason = "snapshot_stale" if stale else None
+    sections_data = dict(snapshot.get("sections") or {})
+    _attach_operational_sections(sections_data, default_stamp=snapshot.get("computed_at"))
+
+    if _needs_revalidation(snapshot):
+        _schedule_background_refresh(corridor_id)
+
     return (
-        dict(snapshot.get("sections") or {}),
+        sections_data,
         snapshot.get("computed_at"),
         stale,
         reason,

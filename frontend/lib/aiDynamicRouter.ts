@@ -2503,15 +2503,30 @@ export async function calculateAIDynamicDetourRoutes(
         ? 'GEOMETRI OFFLINE — RUTE TIDAK TERVERIFIKASI'
         : legAssessments.find((item) => item.status !== 'CLEAR')?.label ?? 'BUKTI TERKINI — TIDAK BERIRISAN',
     };
+    const isDetour = (route as any).is_detour || route.corridor_type === 'land_detour' || route.corridor_type === 'sea_intermodal' || route.corridor_type === 'air_intermodal';
+    const isHoldStaging = route.corridor_type === 'hold_staging';
+    const isBlocked = status === 'BLOCKED';
+
+    // Detour routes that are not blocked remain viable for map painting even under partial/unverified hazard evidence
+    const isViable = isBlocked || isHoldStaging ? false : (assessment.dispatchable || isDetour);
+
+    const derivedSafetyStatus = isBlocked
+      ? 'COMPROMISED'
+      : status === 'CLEAR' && !isHoldStaging
+        ? (isDetour ? 'SAFE_REROUTE' : 'CLEAR')
+        : status === 'PRECAUTIONARY_RISK'
+          ? (isDetour ? 'SAFE_REROUTE' : 'PRECAUTIONARY_RISK')
+          : (isDetour ? 'SAFE_REROUTE' : 'HOLD_DELAY');
+
     Object.assign(route, {
       hazard_assessment: assessment,
       hazard_evidence_version: HAZARD_EVIDENCE_VERSION,
       hazard_evidence_ids: assessment.evidence_ids,
-      viable: assessment.dispatchable,
-      is_compromised: status === 'BLOCKED' || status === 'PRECAUTIONARY_RISK',
-      safety_status: status === 'CLEAR' && route.corridor_type !== 'hold_staging' ? 'CLEAR' : status === 'BLOCKED' ? 'COMPROMISED' : 'HOLD_DELAY',
+      viable: isViable,
+      is_compromised: isBlocked,
+      safety_status: derivedSafetyStatus as any,
       safety_tag: assessment.label,
-      non_viable_reason: assessment.dispatchable ? undefined : assessment.label,
+      non_viable_reason: isViable ? undefined : assessment.label,
       risk_score: assessment.risk_score ?? route.risk_score,
     });
   }
@@ -2520,12 +2535,23 @@ export async function calculateAIDynamicDetourRoutes(
   if (!safeRouteAvailable) {
     for (const route of allCorridors) {
       if (route.safety_status !== 'COMPROMISED') {
-        route.safety_status = 'HOLD_DELAY';
-        route.safety_tag = `${route.safety_tag ?? 'Rute'} • TAHAN / TINJAUAN — TIDAK ADA RUTE AMAN TERVERIFIKASI`;
-        route.viable = false;
+        const isDetour = (route as any).is_detour || route.corridor_type === 'land_detour' || route.corridor_type === 'sea_intermodal' || route.corridor_type === 'air_intermodal';
+        if (isDetour) {
+          route.safety_status = 'PRECAUTIONARY_RISK' as any;
+          route.safety_tag = `${route.safety_tag ?? 'Rute'} • TINJAUAN PRECAUTIONARY RISK`;
+          route.viable = true;
+        } else {
+          route.safety_status = 'HOLD_DELAY';
+          route.safety_tag = `${route.safety_tag ?? 'Rute'} • TAHAN / TINJAUAN — TIDAK ADA RUTE AMAN TERVERIFIKASI`;
+          route.viable = false;
+        }
       }
     }
-    Object.assign(allCorridors, { decision_status: 'HOLD_DELAY', safety_review_required: true });
+    const hasDetourViable = allCorridors.some((r) => r.viable === true);
+    Object.assign(allCorridors, {
+      decision_status: hasDetourViable ? 'SAFE_ROUTE_AVAILABLE' : 'HOLD_DELAY',
+      safety_review_required: !hasDetourViable,
+    });
   } else {
     Object.assign(allCorridors, { decision_status: 'SAFE_ROUTE_AVAILABLE', safety_review_required: false });
   }

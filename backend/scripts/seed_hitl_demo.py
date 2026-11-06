@@ -287,7 +287,7 @@ def _persist_outcome(incident_id: str, observed_delay_hours: float,
 
 
 def _solve_cpu(sc: dict):
-    """Real CPU routing solve (hazard-aware). Returns (cpu_route, cpu_distance, baseline_dist)."""
+    """Real CPU routing solve (hazard-aware). Returns (cpu_route, cpu_distance, baseline_dist, routes)."""
     from app.adapters.cpu_routing_adapter import get_cpu_router
     hz, tcfg = sc["hazard"], sc["travel"]
     origin, dest = GAZ[tcfg["origin_name"]], GAZ[tcfg["destination_name"]]
@@ -301,14 +301,14 @@ def _solve_cpu(sc: dict):
     )
     routes = cpu_res.get("routes", []) or []
     cpu_route = routes[0] if routes else {}
-    return cpu_route, float(cpu_route.get("distance_km") or baseline_dist), baseline_dist
+    return cpu_route, float(cpu_route.get("distance_km") or baseline_dist), baseline_dist, routes
 
 
 def _ensure_incident(sc: dict) -> str:
     """Upsert the real incident row via the production write path (idempotent)."""
     from agents.tools.supabase_tools import write_incident
     hz, tcfg = sc["hazard"], sc["travel"]
-    cpu_route, _, _ = _solve_cpu(sc)
+    cpu_route, _, _, all_routes = _solve_cpu(sc)
     supabase_incident_id = asyncio.run(write_incident({
         "crisis_id": sc["incident_id"],
         "title": hz["title"],
@@ -319,7 +319,7 @@ def _ensure_incident(sc: dict) -> str:
         "lat": hz["lat"],
         "lon": hz["lon"],
         "overall_confidence": 0.8,
-        "route_recommendations": [cpu_route] if cpu_route else [],
+        "route_recommendations": all_routes if all_routes else ([cpu_route] if cpu_route else []),
         "is_simulated": True,
         "region": "Sumatera Utara",
     }))
@@ -435,7 +435,7 @@ def _run_scenario(sc: dict) -> dict:
         logger.debug("telemetry register note: %s", exc)
 
     # 3. CPU consensus routing solve (real backend, hazard-aware).
-    cpu_route, cpu_distance, _ = _solve_cpu(sc)
+    cpu_route, cpu_distance, _, all_routes = _solve_cpu(sc)
 
     # 3b. Real incident row (uuid PK) via the production write path, so the
     # Supabase route_approvals FK is satisfied. Deterministic UUIDv5 from the
@@ -451,7 +451,7 @@ def _run_scenario(sc: dict) -> dict:
         "lat": hz["lat"],
         "lon": hz["lon"],
         "overall_confidence": 0.8,
-        "route_recommendations": [cpu_route] if cpu_route else [],
+        "route_recommendations": all_routes if all_routes else ([cpu_route] if cpu_route else []),
         "is_simulated": True,
         "region": "Sumatera Utara",
     }))

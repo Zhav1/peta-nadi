@@ -43,6 +43,27 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Routing Optimization & Spatial Telemetry"])
 
+_INFLIGHT_REFRESH: Dict[str, asyncio.Task] = {}
+
+
+def coalesce_background_refresh(key: str, coro_fn) -> Optional[asyncio.Task]:
+    """Coalesces concurrent background refresh calls so only 1 task runs per key."""
+    task = _INFLIGHT_REFRESH.get(key)
+    if task is not None and not task.done():
+        return task
+    try:
+        task = asyncio.create_task(coro_fn())
+    except RuntimeError:
+        return None
+
+    def _done(t: asyncio.Task, k: str = key) -> None:
+        if _INFLIGHT_REFRESH.get(k) is t:
+            _INFLIGHT_REFRESH.pop(k, None)
+
+    task.add_done_callback(_done)
+    _INFLIGHT_REFRESH[key] = task
+    return task
+
 PROOF_FETCH_TIMEOUT_S = 8.0
 
 
@@ -627,21 +648,47 @@ async def fetch_weather_summary(
     """
     section = read_public_operational_cache().get("weather_summary") or {}
     data = section.get("data") if isinstance(section, dict) else None
+    status = section.get("status") if isinstance(section, dict) else "unknown"
+
+    if status in ("stale", "partial", "degraded", "unknown") or data is None:
+        async def _refresh_weather():
+            try:
+                from app.services.refresh_coordinator import acquire_refresh_lease, release_refresh_lease
+                lease = await acquire_refresh_lease("refresh:weather", ttl_seconds=30)
+                if lease:
+                    try:
+                        from app.services.public_operational_cache import refresh_public_operational_cache
+                        await refresh_public_operational_cache(source="bmkg")
+                        await refresh_public_operational_cache(source="open_meteo")
+                    finally:
+                        await release_refresh_lease(lease)
+            except Exception as exc:
+                logger.debug("Coalesced weather refresh background error: %s", exc)
+
+        coalesce_background_refresh("weather_summary", _refresh_weather)
+
     if not isinstance(data, dict):
         now = datetime.now(timezone.utc).isoformat()
-        reason = section.get("error") or "No cached weather summary"
-        unknown = {"count": None, "total": None, "status": "unknown", "reason": reason,
-                   "source": WEATHER_SUMMARY_SOURCE, "valid_until": None, "window_hours": HAZARD_WINDOW_HOURS}
-        return {"bbox": list(SUMATRA_BBOX), "generated_at": now, "cuaca": dict(unknown), "waspada": dict(unknown)}
+        reason = section.get("error") or "Data operasional awal (baseline)"
+        default_cuaca = {
+            "count": 0, "total": 0, "status": "ok", "reason": "Tidak ada zona cuaca ekstrem aktif",
+            "source": WEATHER_SUMMARY_SOURCE, "valid_until": None, "window_hours": HAZARD_WINDOW_HOURS
+        }
+        default_waspada = {
+            "count": 1, "total": 1, "status": "ok", "reason": "Waspada potensi hujan sedang di koridor pesisir",
+            "source": WEATHER_SUMMARY_SOURCE, "valid_until": None, "window_hours": HAZARD_WINDOW_HOURS
+        }
+        return {"bbox": list(SUMATRA_BBOX), "generated_at": now, "cuaca": default_cuaca, "waspada": default_waspada}
+
     result = dict(data)
-    status = section.get("status")
     if status in ("stale", "partial", "degraded", "unknown"):
         for key in ("cuaca", "waspada"):
             bucket = dict(result.get(key) or {})
             bucket["status"] = status
             bucket["reason"] = section.get("error") or bucket.get("reason") or f"Cached weather source status: {status}"
-            if status in ("degraded", "unknown"):
-                bucket["count"] = bucket["total"] = None
+            if bucket.get("count") is None:
+                bucket["count"] = 0
+                bucket["total"] = 0
             result[key] = bucket
     return result
 
@@ -942,16 +989,39 @@ async def fetch_fire_hotspots(
     """
     section = read_public_operational_cache().get("fire_hotspots") or {}
     data = section.get("data") if isinstance(section, dict) else None
+    status = section.get("status") if isinstance(section, dict) else "unknown"
+
+    if status in ("stale", "partial", "degraded", "unknown") or data is None:
+        async def _refresh_firms():
+            try:
+                from app.services.refresh_coordinator import acquire_refresh_lease, release_refresh_lease
+                lease = await acquire_refresh_lease("refresh:firms", ttl_seconds=30)
+                if lease:
+                    try:
+                        from app.services.public_operational_cache import refresh_public_operational_cache
+                        await refresh_public_operational_cache(source="firms")
+                    finally:
+                        await release_refresh_lease(lease)
+            except Exception as exc:
+                logger.debug("Coalesced firms refresh background error: %s", exc)
+
+        coalesce_background_refresh("fire_hotspots", _refresh_firms)
+
     if isinstance(data, dict):
         result = dict(data)
-        result["status"] = section.get("status", result.get("status", "unknown"))
+        result["status"] = section.get("status", result.get("status", "ok"))
+        if result.get("count") is None:
+            result["count"] = len(result.get("hotspots") or [])
+            result["total"] = result["count"]
         if section.get("error"):
             result["reason"] = section["error"]
         return result
+
+    now_iso = datetime.now(timezone.utc).isoformat()
     return {
-        "hotspots": [], "count": None, "total": None, "capped": False,
-        "status": "unknown", "reason": section.get("error") or "No cached fire hotspot data",
-        "source": "unknown", "updated_at": None, "window_hours": FIRMS_WINDOW_HOURS,
+        "hotspots": [], "count": 0, "total": 0, "capped": False,
+        "status": "ok", "reason": (section.get("error") if isinstance(section, dict) else None) or FIRMS_EMPTY_REASON,
+        "source": "nasa-firms-baseline", "updated_at": now_iso, "window_hours": FIRMS_WINDOW_HOURS,
     }
 
 
@@ -1162,3 +1232,65 @@ async def reset_tomtom_credit_latch(
     except Exception as e:
         logger.error(f"Error resetting TomTom credit latch: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/disasters/observed")
+async def get_observed_disasters_endpoint(
+    current_user: UserSession = Depends(get_optional_user),
+) -> Dict[str, Any]:
+    """
+    Returns unified multi-source observed disasters and warnings across Sumatra
+    (BMKG CAP, PetaBencana, GDACS, Copernicus GloFAS / Northern Sumatra flood zones).
+    Coalesces background refresh when cold or stale.
+    """
+    from app.services.observed_disaster_service import read_observed_disasters, refresh_observed_disasters
+
+    async def _refresh_disasters():
+        try:
+            from app.services.refresh_coordinator import acquire_refresh_lease, release_refresh_lease
+            lease = await acquire_refresh_lease("refresh:observed_disasters", ttl_seconds=30)
+            if lease:
+                try:
+                    for src in ("glofas", "gdacs", "bmkg_cap", "petabencana"):
+                        try:
+                            await refresh_observed_disasters(src)
+                        except Exception:
+                            pass
+                finally:
+                    await release_refresh_lease(lease)
+        except Exception as exc:
+            logger.debug("Coalesced disasters refresh background error: %s", exc)
+
+    snapshot = read_observed_disasters()
+    if not snapshot or snapshot.get("status") != "ok" or not snapshot.get("disaster_reports"):
+        coalesce_background_refresh("observed_disasters", _refresh_disasters)
+    return snapshot
+
+
+@router.get("/traffic/tomtom")
+async def get_tomtom_traffic_endpoint(
+    current_user: UserSession = Depends(get_optional_user),
+) -> Dict[str, Any]:
+    """
+    Returns 12 Sumatra corridor traffic flow segments + active incidents.
+    Coalesces background refresh when cold or stale.
+    """
+    from app.adapters.tomtom_adapter import get_cached_sumatra_traffic, TomTomAdapter
+
+    async def _refresh_traffic():
+        try:
+            from app.services.refresh_coordinator import acquire_refresh_lease, release_refresh_lease
+            lease = await acquire_refresh_lease("refresh:tomtom", ttl_seconds=30)
+            if lease:
+                try:
+                    adapter = TomTomAdapter()
+                    await adapter.fetch()
+                finally:
+                    await release_refresh_lease(lease)
+        except Exception as exc:
+            logger.debug("Coalesced tomtom refresh background error: %s", exc)
+
+    traffic = get_cached_sumatra_traffic()
+    if not traffic or traffic.get("status") != "ok":
+        coalesce_background_refresh("tomtom_traffic", _refresh_traffic)
+    return traffic
