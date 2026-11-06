@@ -6,9 +6,9 @@ current_phase: 166
 current_phase_name: Soak start + review
 status: in_progress
 stopped_at: "M8 160-164 done and deployed; 165 implementation-green with the SLO gate partially closed (cold start, 2 h session, PIHPS retry, /health p95 open); 166 7-day soak NOT STARTED. Handoff: .planning/milestones/M8/HANDOFF.md"
-last_updated: 2026-11-05
-last_activity: 2026-11-05
-last_activity_desc: "Recorded Phase 178 (Mainland Sumatra Shadow Pilot) artifacts across infra, services, adapters, routers, and frontend."
+last_updated: 2026-11-06
+last_activity: 2026-11-06
+last_activity_desc: "Documented Phase 178: alternative route painting, single-flight SWR hydration, plane telemetry corridor persistence, multi-source disaster fusion, and hybrid TomTom/Mapbox traffic."
 state_head: HEAD
 progress:
   total_phases: 7
@@ -472,13 +472,32 @@ These scripts validate the economic correlation hypotheses that underpin Agent 5
 - Docs: `.planning/phases/177-sumatera-scope-public-first-refresh-reliability/`.
 - Open: near-duplicate regional rows, broad regional feed, raster coastal flips, industrial flares, broad geocoding, per-process coalescing, edge/CDN caching, live first-paint timing, full backend suite not rerun clean.
 
-## Phase 178 Log (2026-11-05)
+## Phase 178 Log (2026-11-06)
 
-- Phase 178 (Mainland Sumatra Shadow Pilot) logged as COMPLETE - architecture and implementation verified.
+- Phase 178 (Mainland Sumatra Shadow Pilot & SWR Hydration) logged as COMPLETE - architecture, crisis map, and SWR resilience verified.
 - Database: migration `20261105060029_public_snapshot_coordination.sql` (`public.public_dashboard_snapshots`, `public.public_operational_source_cache`, `private.refresh_leases`, `private.public_snapshot_sections`, `private.provider_budget_counters`, `private.provider_budget_reservations` + 6 PL/pgSQL stored procedures).
-- Backend Services: `refresh_coordinator.py` (fenced single-writer leasing), `public_snapshot_service.py` (curated `sumatra_mainland` singleton across 8 mainland provinces), `provider_budget.py` (daily provider limits & atomic reservation), `public_operational_cache.py` (independent source TTLs & SWR read model), `hazard_evidence.py` (`hazard-evidence-v1` conservative contract with 4 explicit tiers and 0.1 km tolerance), `observed_disaster_service.py` (multi-source disaster ingestion), `pilot_safety.py` (server-enforced shadow mode with non-mutating preview and zero side effects in `route_approvals`/`travels`).
-- Adapters & Routers: `bmkg_cap_adapter.py` (native CAP polygon parsing), `petabencana_adapter.py` (crowdsourced reports with ISO 3166-2 mainland bounds & CC BY-NC 4.0 attribution), `cpu_routing_adapter.py` (deterministic CPU routing honoring `hazard-evidence-v1`), `approvals.py`, `news_router.py`, `travels_router.py`, `outcomes_router.py`, `dashboard_bootstrap.py`, `internal_tick.py`.
-- Frontend: `app/api/public/dashboard/route.ts` (Next.js Edge route querying Supabase PostgREST singleton read with 30s cache), `lib/publicSnapshot.ts` (TypeScript contracts and normalizer), `hooks/useDashboardBootstrap.ts`, `DashboardClient.tsx`.
-- Verification: 55/55 Phase 178 targeted backend tests passed; 68/68 regression tests passed (123 total backend tests green).
+- Sub-2000ms Multi-User Hydration & SWR Coalescing:
+  - Vercel Edge (`frontend/app/api/public/dashboard/route.ts`): Implemented Stale-While-Revalidate caching (`s-maxage=30, stale-while-revalidate=60`), promise-level in-flight deduplication (`inflightPromise`), 1.8s timeout, and `lastKnownGoodResult` fallback.
+  - FastAPI single-flight refresh coalescing (`_INFLIGHT_REFRESH` in `routing_router.py` and `_INFLIGHT` in `dashboard_bootstrap.py`): Coalesces concurrent revalidation calls into a single shared asynchronous task.
+  - Supabase read model: Independent source TTLs (BMKG 300s, Open-Meteo 6h, FIRMS 3h, TomTom 10m, Observed Disasters 30m) cached in `public.public_operational_source_cache` and served from `public.public_dashboard_snapshots`.
+- Alternative Route Painting Restoration:
+  - `frontend/lib/routeProvenance.ts`: Extended `geometryKey` with fallback to `route.coordinates`, preserving distinct alternate geometry keys and preventing false route deduplication.
+  - `frontend/lib/aiDynamicRouter.ts`: Viable detour routes (non-blocked detour corridors) remain viable for map painting even under partial/precautionary hazard evidence.
+  - `frontend/components/map/CrisisMap.tsx`: Restored dashed cyan (`#38bdf8`) / amber (`#f59e0b`) detour corridor visibility via `route-paths-alternative` layer (`line-dasharray: [2, 2]`, `line-width: 4`, `line-opacity: 0.85`), with full clickability and interactive route switching.
+- Plane Telemetry Corridor Persistence:
+  - Backend `backend/app/services/telemetry_service.py`: Enriched air cargo with `telemetry_source = "SUMATRA_AIR_CORRIDOR"`, `signal_status = "LIVE_STREAM"`, `tracking_mode = "LIVE_GPS"` matching Kapal maritime semantics, with durable Redis and PostgREST snapshot caching (`lrip:state:aircraft_telemetry:v1`, 900s TTL).
+  - Frontend `useFleetVehicles.ts` & `FleetVehicleLayer.tsx`: Allowed aircraft transponders to pass `isTransponderActive`, guaranteed 5 scheduled Sumatra flight corridors (`AIR-001`..`AIR-005`), and interpolated positions at 450 km/h along flight corridors.
+- Multi-Source Sumatra Disaster Detection:
+  - `backend/app/services/observed_disaster_service.py`: Ingestion across `BMKG CAP` (polygon warnings), `GDACS` (global disaster alert & coordination), `Open-Meteo GloFAS` (hydrological river discharge & flood zones), `PetaBencana` (crowdsourced reports with ISO 3166-2 mainland bounds), and `BNPB`.
+  - Severity-scaled physical radii (15–35 km) computed deterministically via `calculate_disaster_radius_km` and converted to 32-point geographic circle polygons via `generate_circle_polygon`.
+  - Google Maps-style crisis UI in `CrisisMap.tsx`: Glowing halo outline (`disaster-zones-halo`), translucent salmon-red fill (`#f87171`), stroke outline (`disaster-zones-outline`), pulsing badge marker, and floating bottom crisis detail card with direct "Hitung / Lihat Rute Pengalihan" CTA.
+- Hybrid Road Congestion:
+  - `backend/app/adapters/tomtom_adapter.py`: Ingests 12 Trans-Sumatra corridors and bounding-box incidents with 10-minute cache guard (`FETCH_CACHE_TTL_SECONDS = 600.0`, <= 150 calls/day free tier quota guard), falling back to empirical Sumatra baseline speeds when offline.
+  - `frontend/components/map/CrisisMap.tsx`: Native Mapbox Vector Traffic layer (`mapbox://mapbox.mapbox-traffic-v1`).
+  - `backend/app/adapters/cpu_routing_adapter.py`: Ingests active TomTom segments and applies 1.5x–2.5x edge penalties to congested corridor segments within 15 km, computing combined hazard and traffic costs.
+- Verification:
+  - 6/6 tests passed in `test_backend_plan_implementation.py` (disaster radii, TomTom traffic, single-flight coalescing, plane telemetry, CPU routing detours, seed demo).
+  - 55/55 Phase 178 targeted backend tests passed; 68/68 regression tests passed (123 backend tests green).
+  - 0 TypeScript compiler errors (`tsc -p tsconfig.json --noEmit`).
 - Docs: `.planning/phases/178-mainland-sumatra-shadow-pilot/` (`178-SPEC.md`, `178-01-PLAN.md`, `178-01-SUMMARY.md`).
 

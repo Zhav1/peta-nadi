@@ -196,6 +196,22 @@ after changing its environment or gateway code.
 - **No invented UI values:** confidence, calibrated probability, ETA, distance, radius and cost render as unavailable when the payload lacks them; `degraded_sources` distinguishes a quiet network from a dead path.
 - **Operational rule:** one ingestion process (`--workers 1`); extra replicas run with `POLLERS_ENABLED=false`.
 
+### 20. Mainland Sumatra Shadow Pilot, Multi-Source Disaster Fusion & SWR Hydration (Phase 178)
+- **Alternative Route Painting Restoration:** Extended `frontend/lib/routeProvenance.ts` `geometryKey` with fallback to `route.coordinates` and detour classification, preventing false route deduplication. Restored dashed cyan (`#38bdf8`) and amber (`#f59e0b`) detour corridor polylines in `frontend/components/map/CrisisMap.tsx` (`route-paths-alternative` layer: `line-dasharray: [2, 2]`, `line-width: 4`, `line-opacity: 0.85`), with full clickability and interactive route switching.
+- **Sub-2000ms Multi-User Hydration via SWR & Single-Flight Coalescing:**
+  - *Vercel Edge Handler (`frontend/app/api/public/dashboard/route.ts`)*: Implemented Next.js route handler querying Supabase PostgREST singleton read (`public_dashboard_snapshots?snapshot_key=eq.sumatra_mainland`) with HTTP `Cache-Control: public, s-maxage=30, stale-while-revalidate=60`, promise-level in-flight deduplication (`inflightPromise`), 1.8s timeout, and `lastKnownGoodResult` fallback.
+  - *FastAPI Single-Flight Task Coalescing*: Background revalidation calls (`_INFLIGHT_REFRESH` in `routing_router.py` and `_INFLIGHT` in `dashboard_bootstrap.py`) coalesce concurrent requests into a single shared asynchronous task, eliminating redundant backend and database load.
+  - *PostgreSQL Monotonic Fencing Leases*: Migration `20261105060029_public_snapshot_coordination.sql` provides atomic leasing (`private.refresh_leases`) and daily fail-closed provider budget quotas (`private.provider_budget_counters`).
+- **Aviation Telemetry Corridor Persistence:** Air cargo flights carry `SUMATRA_AIR_CORRIDOR` / `LIVE_GPS` / `LIVE_STREAM` with populated flight waypoints matching Kapal maritime semantics in `telemetry_service.py`, backed by durable Redis and PostgREST snapshot caching (`lrip:state:aircraft_telemetry:v1`, 900s TTL). Interpolated in `FleetVehicleLayer.tsx` along 5 scheduled cargo corridors (`AIR-001`..`AIR-005`) at 450 km/h.
+- **Multi-Source Sumatra Disaster Detection & Empirical Severity Radii:**
+  - Multi-source spatial fusion in `observed_disaster_service.py` across `BMKG CAP` (polygon warnings), `GDACS` (global disaster alert & coordination), `Open-Meteo GloFAS` (hydrological river discharge & flood zones), `PetaBencana` (crowdsourced reports with ISO 3166-2 mainland bounds), and `BNPB`.
+  - Severity-scaled physical radii (15–35 km) computed deterministically via `calculate_disaster_radius_km` and converted to 32-point closed circle polygons via `generate_circle_polygon`.
+  - Google Maps-style crisis UI in `CrisisMap.tsx`: Glowing halo outline (`disaster-zones-halo`), translucent salmon-red fill (`#f87171`), crisp stroke outline (`disaster-zones-outline`), pulsing badge marker, and floating bottom crisis detail card with direct "Hitung / Lihat Rute Pengalihan" CTA.
+- **Hybrid Road Congestion (TomTom 12 Corridors + Mapbox Vector Traffic):**
+  - `backend/app/adapters/tomtom_adapter.py`: Ingests 12 Trans-Sumatra corridors and bounding-box incidents with 10-minute cache guard (`FETCH_CACHE_TTL_SECONDS = 600.0`, <= 150 calls/day free tier quota guard), falling back to empirical Sumatra baseline speeds when offline.
+  - `frontend/components/map/CrisisMap.tsx`: Integrated native Mapbox Vector Traffic layer (`mapbox://mapbox.mapbox-traffic-v1`).
+  - `backend/app/adapters/cpu_routing_adapter.py`: Ingests active TomTom segments and applies 1.5x–2.5x edge penalties to congested corridor segments within 15 km, computing combined hazard and traffic costs.
+
 ---
 
 ## Technology Stack
