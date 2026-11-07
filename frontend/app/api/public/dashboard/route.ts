@@ -1,4 +1,4 @@
-import { sanitizeBaseUrl } from '@/lib/baseUrl';
+import { PRODUCTION_API_BASE_URL, sanitizeBaseUrl } from '@/lib/baseUrl';
 import {
   createUnknownPublicSnapshot,
   markPublicSnapshotStale,
@@ -184,7 +184,7 @@ async function fetchFromBackendBootstrap(timeoutMs: number): Promise<DashboardBo
   const backendBase =
     sanitizeBaseUrl(process.env.API_PROXY_TARGET) ||
     sanitizeBaseUrl(process.env.NEXT_PUBLIC_API_URL) ||
-    'http://localhost:8000';
+    (process.env.NODE_ENV === 'production' ? PRODUCTION_API_BASE_URL : 'http://localhost:8000');
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -233,7 +233,7 @@ async function executeGetSnapshot(): Promise<SnapshotResult> {
   }
 
   const endpoint = new URL('/rest/v1/public_dashboard_snapshots', supabaseUrl);
-  endpoint.searchParams.set('select', 'snapshot_key,schema_version,computed_at,payload,version');
+  endpoint.searchParams.set('select', '*');
   endpoint.searchParams.set('snapshot_key', `eq.${PUBLIC_DASHBOARD_SNAPSHOT_KEY}`);
   endpoint.searchParams.set('limit', '1');
 
