@@ -1362,8 +1362,13 @@ class TelemetryService:
                             if not (-6.2 <= lat <= 6.2 and 94.5 <= lon <= 106.5):
                                 continue
 
-                            # Exclude Peninsular Malaysia domestic traffic
-                            if lat > 1.5 and lon > 100.4:
+                            # Exclude Peninsular Malaysia domestic traffic while keeping Dumai/Riau in scope
+                            if (
+                                (lat > 3.8 and lon > 100.0)
+                                or (lat > 2.3 and lon > 101.0)
+                                or (lat > 1.2 and lon > 102.2)
+                                or (lat > 0.5 and lon > 103.5)
+                            ):
                                 continue
 
                             if not is_in_sumatra_scope(lon, lat, "air"):

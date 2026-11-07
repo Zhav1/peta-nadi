@@ -402,15 +402,35 @@ def _entry_from_source(cache: dict, observed: Any, section: str) -> dict:
     return _normalize_entry(entry)
 
 
+def _filter_disruption_db_rows(rows: list[dict]) -> list[dict]:
+    """Filter out legacy pre-Phase-179 DB rows that fail the logistics disruption prefilter."""
+    try:
+        from app.nlp.news_extractor import passes_logistics_disruption_prefilter
+    except Exception:
+        return rows
+
+    filtered: list[dict] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        title = str(row.get("title") or row.get("headline") or "").strip()
+        summary = str(row.get("summary") or row.get("description") or "").strip()
+        if title and not passes_logistics_disruption_prefilter(title, summary):
+            continue
+        filtered.append(row)
+    return filtered
+
+
 def _db_entry(rows: list[dict], error: Optional[str]) -> dict:
     if error:
         return {"status": "unavailable", "data": None, "error": error[:240]}
+    clean_rows = _filter_disruption_db_rows(rows)
     observed = None
-    for row in rows:
+    for row in clean_rows:
         observed = _iso(row.get("observed_at") or row.get("published_at") or row.get("updated_at") or row.get("created_at")) or observed
     return {
         "status": "ok",
-        "data": _curate(rows),
+        "data": _curate(clean_rows),
         "observed_at": observed or _now().isoformat(),
         "valid_until": (_now() + timedelta(minutes=10)).isoformat(),
     }
@@ -451,9 +471,14 @@ async def _build_fleet_entry(built_at: str, operational: dict) -> tuple[dict, li
     """Build unified fleet telemetry section from live feeds and durable caches."""
     vehicles: list[dict] = []
     try:
-        from app.services.telemetry_service import TelemetryService
+        from app.services.telemetry_service import telemetry_service as ts
 
-        ts = TelemetryService()
+        if not getattr(ts, "_aircraft_cache", None):
+            try:
+                await ts.fetch_live_sumatra_aircraft()
+            except Exception as air_exc:
+                logger.debug("Live ADS-B refresh in snapshot builder skipped: %s", air_exc)
+
         result = await asyncio.to_thread(ts.get_unified_fleet, include_geometry=False)
         if isinstance(result, list):
             vehicles = result

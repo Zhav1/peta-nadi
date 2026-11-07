@@ -2456,11 +2456,17 @@ export default function CrisisMap({
 
       const features: GeoJSON.Feature<GeoJSON.LineString>[] = [];
 
+      const isPeninsularMalaysiaOrSg = (lon: number, lat: number) =>
+        (lat > 3.8 && lon > 100.0) ||
+        (lat > 2.3 && lon > 101.0) ||
+        (lat > 1.2 && lon > 102.2) ||
+        (lat > 0.5 && lon > 103.5);
+
       for (const seg of routeSegments) {
         const rawCoords = seg.coordinates || (seg as any).geometry?.coordinates;
         if (Array.isArray(rawCoords) && rawCoords.length >= 2) {
           const coords: [number, number][] = rawCoords.map((c: any) => [Number(c.lon ?? c[0]), Number(c.lat ?? c[1])]);
-          const isOutsideSumatra = coords.some(([lon, lat]) => (lat > 1.2 && lon > 100.15) || (lat > 0.5 && lon > 103.5));
+          const isOutsideSumatra = coords.some(([lon, lat]) => isPeninsularMalaysiaOrSg(lon, lat));
           if (isOutsideSumatra) continue;
           features.push({
             type: 'Feature',
@@ -2479,7 +2485,7 @@ export default function CrisisMap({
         const rawCoords = (seg as any).coordinates || (seg as any).geometry?.coordinates;
         if (Array.isArray(rawCoords) && rawCoords.length >= 2) {
           const coords: [number, number][] = rawCoords.map((c: any) => [Number(c[0] ?? c.lon), Number(c[1] ?? c.lat)]);
-          const isOutsideSumatra = coords.some(([lon, lat]) => (lat > 1.2 && lon > 100.15) || (lat > 0.5 && lon > 103.5));
+          const isOutsideSumatra = coords.some(([lon, lat]) => isPeninsularMalaysiaOrSg(lon, lat));
           if (isOutsideSumatra) continue;
           features.push({
             type: 'Feature',

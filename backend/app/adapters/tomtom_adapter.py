@@ -84,9 +84,12 @@ def is_in_sumatra_bounds(arg1: float, arg2: float) -> bool:
         return False
     if lon_f < 94.5 or lon_f > 109.0:
         return False
-    if lat_f > 1.2 and lon_f > 100.15:
-        return False
-    if lat_f > 0.5 and lon_f > 103.5:
+    if (
+        (lat_f > 3.8 and lon_f > 100.0)
+        or (lat_f > 2.3 and lon_f > 101.0)
+        or (lat_f > 1.2 and lon_f > 102.2)
+        or (lat_f > 0.5 and lon_f > 103.5)
+    ):
         return False
     return True
 
