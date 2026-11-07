@@ -96,7 +96,7 @@ PUBLIC_FIELDS = frozenset(
         "wind_speed_kmh", "humidity", "weather_code", "current_speed", "current_speed_kmh",
         "free_flow_speed", "free_flow_speed_kmh", "flow_speed_kmh", "delay_minutes",
         "congestion_level_pct", "count", "total", "value", "unit", "status_text",
-        "display_name", "source_url", "event_id", "id", "valid_from", "valid_to",
+        "display_name", "source_url", "event_id", "id", "incident_id", "valid_from", "valid_to",
         "area", "affected_area", "impact", "impact_level", "recommendation",
         # Incident fusion fields
         "tier", "sources", "source_count", "evidence_count", "evidence_items",
@@ -421,6 +421,51 @@ def _filter_disruption_db_rows(rows: list[dict]) -> list[dict]:
     return filtered
 
 
+def _normalize_incident_rows(rows: list[dict]) -> list[dict]:
+    """Normalize incident rows: ensure 'id' is populated from 'incident_id' (or vice versa),
+    and decode PostGIS EWKB hex 'location' into 'lat' and 'lon' if they are None/empty."""
+    try:
+        from app.routers.incidents import _parse_location_coords, _coerce_coord
+    except Exception:
+        _parse_location_coords = None
+        _coerce_coord = None
+
+    normalized: list[dict] = []
+    for raw in rows:
+        if not isinstance(raw, dict):
+            continue
+        item = dict(raw)
+
+        raw_id = item.get("id") or item.get("incident_id")
+        if raw_id is not None:
+            id_str = str(raw_id)
+            if not item.get("id"):
+                item["id"] = id_str
+            if not item.get("incident_id"):
+                item["incident_id"] = id_str
+
+        lat = item.get("lat")
+        lon = item.get("lon")
+        if _coerce_coord is not None:
+            lat = _coerce_coord(lat)
+            lon = _coerce_coord(lon)
+
+        if (lat is None or lon is None) and item.get("location") and _parse_location_coords is not None:
+            loc_lat, loc_lon = _parse_location_coords(item.get("location"))
+            if lat is None and loc_lat is not None:
+                lat = loc_lat
+            if lon is None and loc_lon is not None:
+                lon = loc_lon
+
+        if lat is not None:
+            item["lat"] = lat
+        if lon is not None:
+            item["lon"] = lon
+
+        normalized.append(item)
+    return normalized
+
+
 def _db_entry(rows: list[dict], error: Optional[str]) -> dict:
     if error:
         return {"status": "unavailable", "data": None, "error": error[:240]}
@@ -458,6 +503,8 @@ def _merge_last_good(section: str, current: dict, previous: dict) -> dict:
             if section == "fleet"
             else last.get("data")
             if section == "source_health"
+            else _normalize_incident_rows(_curate(last.get("data")))
+            if section == "incidents" and isinstance(last.get("data"), list)
             else _curate(last.get("data"))
         ),
         "error": current.get("error") or "source refresh unavailable; retaining durable last-good data",
@@ -616,7 +663,7 @@ async def build_public_snapshot() -> dict:
     sections: dict[str, dict] = {}
     for name in SECTION_NAMES:
         if name == "incidents":
-            current = _db_entry(incident_rows, incident_error)
+            current = _db_entry(_normalize_incident_rows(incident_rows), incident_error)
         elif name == "news":
             current = _db_entry(news_rows, news_error)
         elif name == "fleet":

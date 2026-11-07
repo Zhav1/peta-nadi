@@ -694,12 +694,19 @@ export default function DashboardClient() {
 
   const bootstrapSections = realtimeSections ?? bootstrap.data?.sections;
   const seededIncidentsSection = bootstrapSections?.incidents;
-  const seededIncidents =
+  const rawSeededIncidents =
     ['ok', 'stale'].includes(seededIncidentsSection?.status ?? '')
       ? (Array.isArray(seededIncidentsSection?.data)
           ? (seededIncidentsSection?.data as any)
           : (seededIncidentsSection?.data as any)?.items)
       : undefined;
+  const seededIncidents = Array.isArray(rawSeededIncidents)
+    ? rawSeededIncidents.map((item: any, idx: number) => {
+        if (!item || typeof item !== 'object') return item;
+        const id = String(item.id || item.incident_id || `seeded-incident-${idx}`);
+        return { ...item, id, incident_id: item.incident_id || id };
+      })
+    : undefined;
   const seededNewsSection = bootstrapSections?.news;
   const seededNews = ['ok', 'stale'].includes(seededNewsSection?.status ?? '')
     ? seededNewsSection?.data
@@ -3627,8 +3634,8 @@ const SUMATRA_LOCATION_FALLBACK_MAP: Array<{ keywords: string[]; coords: [number
   }, [selectedOriginNode, selectedDestNode, selectedModality, updateBaselineMapboxRoute, clearImpactAssessment]);
 
   // Live Dynamic Ingested Incidents (Earthquakes, Floods, CCTV alerts)
-  const activeIncidents = incidents.filter(
-    (i) => i.status !== 'resolved' && !i.id.includes('predict') && i.type !== 'port_closure'
+  const activeIncidents = (Array.isArray(incidents) ? incidents : []).filter(
+    (i) => Boolean(i) && i.status !== 'resolved' && !String(i.id ?? (i as any)?.incident_id ?? '').includes('predict') && i.type !== 'port_closure'
   );
 
   const isCrisisDrawerOpen = isRightInspectorActive;

@@ -249,7 +249,6 @@ async function executeGetSnapshot(): Promise<SnapshotResult> {
         Accept: 'application/json',
       },
       signal: controller.signal,
-      cache: 'force-cache',
       next: { revalidate: 15 },
     });
 

@@ -73,6 +73,131 @@ const SECTION_STATUSES = new Set<string>([
   'empty',
 ]);
 
+export function parseLocationCoords(value: unknown): { lat: number; lon: number } | null {
+  if (!value) return null;
+  if (typeof value === 'object' && value !== null) {
+    const obj = value as Record<string, unknown>;
+    if (obj.type === 'Point' && Array.isArray(obj.coordinates) && obj.coordinates.length >= 2) {
+      const lon = Number(obj.coordinates[0]);
+      const lat = Number(obj.coordinates[1]);
+      if (Number.isFinite(lon) && Number.isFinite(lat)) return { lat, lon };
+    }
+    return null;
+  }
+  const str = String(value).trim();
+  if (!str) return null;
+
+  // 1. WKT: POINT(lon lat)
+  const wktMatch = str.match(/POINT\s*\(\s*([-+]?\d+(?:\.\d+)?)\s+([-+]?\d+(?:\.\d+)?)\s*\)/i);
+  if (wktMatch) {
+    const lon = Number(wktMatch[1]);
+    const lat = Number(wktMatch[2]);
+    if (Number.isFinite(lon) && Number.isFinite(lat)) return { lat, lon };
+  }
+
+  // 2. GeoJSON serialized string
+  if (str.startsWith('{') && str.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(str);
+      if (parsed?.type === 'Point' && Array.isArray(parsed.coordinates) && parsed.coordinates.length >= 2) {
+        const lon = Number(parsed.coordinates[0]);
+        const lat = Number(parsed.coordinates[1]);
+        if (Number.isFinite(lon) && Number.isFinite(lat)) return { lat, lon };
+      }
+    } catch {}
+  }
+
+  // 3. PostGIS EWKB / WKB hex (e.g. 0101000020E6100000...)
+  let hex = str;
+  if (hex.startsWith('0x') || hex.startsWith('0X')) hex = hex.slice(2);
+  if (hex.length >= 42 && hex.length % 2 === 0 && /^[0-9a-fA-F]+$/.test(hex)) {
+    try {
+      const bytes = new Uint8Array(hex.length / 2);
+      for (let i = 0; i < hex.length; i += 2) {
+        bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+      }
+      const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      const byteOrder = view.getUint8(0);
+      if (byteOrder === 0 || byteOrder === 1) {
+        const littleEndian = byteOrder === 1;
+        const geomType = view.getUint32(1, littleEndian);
+        const baseType = geomType & 0x0fffffff;
+        if (baseType === 1) { // Point type
+          let offset = 5;
+          if ((geomType & 0x20000000) !== 0) {
+            // PostGIS SRID flag present
+            offset += 4;
+          }
+          if (view.byteLength >= offset + 16) {
+            const lon = view.getFloat64(offset, littleEndian);
+            const lat = view.getFloat64(offset + 8, littleEndian);
+            if (Number.isFinite(lon) && Number.isFinite(lat)) return { lat, lon };
+          }
+        }
+      }
+    } catch {}
+  }
+
+  return null;
+}
+
+export function normalizeIncidentItem(item: unknown, index: number): Record<string, unknown> {
+  const raw = (item && typeof item === 'object') ? { ...(item as Record<string, unknown>) } : {};
+
+  // Ensure deterministic, non-empty id
+  const rawId = raw.id ?? raw.incident_id ?? raw.crisis_id ?? raw.event_id;
+  let id = rawId != null ? String(rawId).trim() : '';
+  if (!id) {
+    const titlePart = String(raw.title || raw.name || 'incident').slice(0, 20);
+    const timePart = String(raw.created_at || raw.observed_at || raw.updated_at || index);
+    id = `incident-${titlePart}-${timePart}`.replace(/\s+/g, '-').toLowerCase();
+  }
+  raw.id = id;
+  if (!raw.incident_id) {
+    raw.incident_id = id;
+  }
+
+  // Ensure lat and lon
+  let lat = raw.lat != null && raw.lat !== '' ? Number(raw.lat) : (raw.latitude != null && raw.latitude !== '' ? Number(raw.latitude) : null);
+  let lon = raw.lon != null && raw.lon !== '' ? Number(raw.lon) : (raw.longitude != null && raw.longitude !== '' ? Number(raw.longitude) : (raw.lng != null && raw.lng !== '' ? Number(raw.lng) : null));
+
+  if ((lat == null || !Number.isFinite(lat) || lon == null || !Number.isFinite(lon)) && raw.location) {
+    const coords = parseLocationCoords(raw.location);
+    if (coords) {
+      if (lat == null || !Number.isFinite(lat)) lat = coords.lat;
+      if (lon == null || !Number.isFinite(lon)) lon = coords.lon;
+    }
+  }
+
+  if (Number.isFinite(lat)) {
+    raw.lat = lat as number;
+    raw.latitude = lat as number;
+  }
+  if (Number.isFinite(lon)) {
+    raw.lon = lon as number;
+    raw.longitude = lon as number;
+  }
+
+  return raw;
+}
+
+export function normalizeIncidentsSectionData(data: unknown): unknown {
+  if (Array.isArray(data)) {
+    return data.map((item, idx) => normalizeIncidentItem(item, idx));
+  }
+  if (data && typeof data === 'object') {
+    const dataObj = { ...(data as Record<string, unknown>) };
+    if (Array.isArray(dataObj.items)) {
+      dataObj.items = dataObj.items.map((item, idx) => normalizeIncidentItem(item, idx));
+    }
+    if (Array.isArray(dataObj.data)) {
+      dataObj.data = dataObj.data.map((item, idx) => normalizeIncidentItem(item, idx));
+    }
+    return dataObj;
+  }
+  return data;
+}
+
 export function normalizePublicSnapshot(value: unknown): PublicDashboardSnapshotEnvelope {
   if (!value || typeof value !== 'object') return createUnknownPublicSnapshot();
   const raw = value as Record<string, unknown>;
@@ -98,7 +223,10 @@ export function normalizePublicSnapshot(value: unknown): PublicDashboardSnapshot
           ? (rawStatus as DashboardSectionStatus)
           : 'unknown';
 
-    let data = section.data ?? null;
+    let data: unknown = section.data ?? null;
+    if (name === 'incidents' && data) {
+      data = normalizeIncidentsSectionData(data);
+    }
     if (name === 'source_health' && data && typeof data === 'object') {
       const dataObj = data as Record<string, unknown>;
       if (!Array.isArray(dataObj.sources)) {
@@ -222,8 +350,17 @@ function featureForItem(
   } else if (raw.type === 'Point' && validPosition(raw.coordinates)) {
     geometry = { type: 'Point', coordinates: [Number(raw.coordinates[0]), Number(raw.coordinates[1])] };
   } else {
-    const lon = Number(raw.lon ?? raw.longitude ?? raw.lng);
-    const lat = Number(raw.lat ?? raw.latitude);
+    let lon = Number(raw.lon ?? raw.longitude ?? raw.lng);
+    let lat = Number(raw.lat ?? raw.latitude);
+    if (!Number.isFinite(lon) || !Number.isFinite(lat)) {
+      if (raw.location) {
+        const parsed = parseLocationCoords(raw.location);
+        if (parsed) {
+          lat = parsed.lat;
+          lon = parsed.lon;
+        }
+      }
+    }
     if (Number.isFinite(lon) && Number.isFinite(lat)) {
       geometry = { type: 'Point', coordinates: [lon, lat] };
     } else {
