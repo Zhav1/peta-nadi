@@ -224,14 +224,24 @@ def _iso(value: Any) -> Optional[str]:
 
 def _curate_vehicle(value: Any) -> Any:
     if isinstance(value, dict):
-        return {
-            str(key): _curate_vehicle(item)
-            for key, item in value.items()
-            if str(key).lower() in FLEET_PUBLIC_FIELDS or str(key).lower() in PUBLIC_FIELDS
-        }
+        out = {}
+        for key, item in value.items():
+            k_lower = str(key).lower()
+            if k_lower == "route_geometry":
+                continue
+            if k_lower in FLEET_PUBLIC_FIELDS or k_lower in PUBLIC_FIELDS:
+                if k_lower == "path" and isinstance(item, (list, tuple)) and len(item) > 8:
+                    step = max(1, (len(item) - 1) // 7)
+                    sampled = [item[i] for i in range(0, len(item) - 1, step)][:7] + [item[-1]]
+                    out[str(key)] = _curate_vehicle(sampled)
+                else:
+                    out[str(key)] = _curate_vehicle(item)
+        return out
     if isinstance(value, (list, tuple)):
         return [_curate_vehicle(item) for item in value]
-    if value is None or isinstance(value, (str, int, float, bool)):
+    if isinstance(value, float):
+        return round(value, 4)
+    if value is None or isinstance(value, (str, int, bool)):
         return value
     if isinstance(value, datetime):
         return value.astimezone(timezone.utc).isoformat() if value.tzinfo else value.replace(tzinfo=timezone.utc).isoformat()
@@ -444,7 +454,7 @@ async def _build_fleet_entry(built_at: str, operational: dict) -> tuple[dict, li
         from app.services.telemetry_service import TelemetryService
 
         ts = TelemetryService()
-        result = await asyncio.to_thread(ts.get_unified_fleet, include_geometry=True)
+        result = await asyncio.to_thread(ts.get_unified_fleet, include_geometry=False)
         if isinstance(result, list):
             vehicles = result
     except Exception as exc:
@@ -751,11 +761,13 @@ def _ensure_snapshot_persisted(snapshot: dict, version: int) -> bool:
         from app.db.supabase_client import get_service_client
 
         client = get_service_client()
+        payload_dict = dict(snapshot)
+        payload_dict["version"] = version
         row_with_version = {
             "snapshot_key": SNAPSHOT_KEY,
             "schema_version": SCHEMA_VERSION,
             "computed_at": snapshot.get("computed_at") or _now().isoformat(),
-            "payload": snapshot,
+            "payload": payload_dict,
             "version": version,
         }
         try:
@@ -774,7 +786,7 @@ def _ensure_snapshot_persisted(snapshot: dict, version: int) -> bool:
                     "snapshot_key": SNAPSHOT_KEY,
                     "schema_version": SCHEMA_VERSION,
                     "computed_at": snapshot.get("computed_at") or _now().isoformat(),
-                    "payload": snapshot,
+                    "payload": payload_dict,
                 }
                 client.table("public_dashboard_snapshots").upsert(
                     row_without_version, on_conflict="snapshot_key"
