@@ -67,7 +67,9 @@ import { api } from '@/lib/api';
 import { toLonLatRing } from '@/lib/polygonGeom';
 import { regionSlugFromLatLon } from '@/lib/region';
 import { dedupeRoutesByGeometry } from '@/lib/routeProvenance';
-import { buildHazardEvidenceContext, publicSectionFeatureCollection } from '@/lib/publicSnapshot';
+import { buildHazardEvidenceContext, publicSectionFeatureCollection, normalizePublicSnapshot } from '@/lib/publicSnapshot';
+import { getSupabaseClient } from '@/lib/supabaseClient';
+import type { DashboardBootstrapSections } from '@/lib/types';
 import type { CrisisState, WsEvent, CrisisType, Severity, RouteRecommendation, DisasterZone, HazardImpactProfile, ZoneTier, FleetVehicle, TacticalManeuver, FireHotspot, FireHotspotResponse, RouteDecisionType, DecisionAction, WeatherHazardSummary, HazardCounterStatus, FireHotspotSource, WeatherPolygonMeta } from '@/lib/types';
 import { useAuth } from '@/lib/authContext';
 import { AuthModal } from '@/components/auth/AuthModal';
@@ -624,11 +626,79 @@ export default function DashboardClient() {
   // tenant fleet/erp) so it fires on mount instead of waiting for the session.
   // Tenant fleet/ERP and role-gated controls stay auth-driven below.
   const bootstrap = useDashboardBootstrap({ modality: 'truck', enabled: true, sections: 'public' });
-  const bootstrapSections = bootstrap.data?.sections;
+  const [realtimeSections, setRealtimeSections] = useState<DashboardBootstrapSections | null>(null);
+  const currentSnapshotVersionRef = useRef<number>(1);
+  const refetchFleetRef = useRef<(() => void) | null>(null);
+
+  // Keep snapshot version in sync with initial bootstrap data
+  useEffect(() => {
+    if (bootstrap.data) {
+      const v = (bootstrap.data as any)?.version;
+      if (typeof v === 'number' && v > currentSnapshotVersionRef.current) {
+        currentSnapshotVersionRef.current = v;
+      }
+    }
+  }, [bootstrap.data]);
+
+  // D6: Supabase Realtime Broadcast Nudge Listener (broadcast 'snapshot_updated' & postgres_changes)
+  useEffect(() => {
+    const client = getSupabaseClient();
+    if (!client) return;
+
+    const channel = client.channel('prehub-snapshot-nudge')
+      .on('broadcast', { event: 'snapshot_updated' }, async (payload) => {
+        const v = payload.payload?.version ?? (payload as any).version;
+        if (typeof v === 'number' && v > currentSnapshotVersionRef.current) {
+          currentSnapshotVersionRef.current = v;
+          try {
+            const res = await fetch(`/api/public/dashboard?v=${v}`);
+            if (res.ok) {
+              const json = await res.json();
+              const normalized = normalizePublicSnapshot(json);
+              if (normalized?.sections) {
+                setRealtimeSections(normalized.sections);
+                refetchFleetRef.current?.();
+              }
+            }
+          } catch (err) {
+            console.warn('Failed to fetch snapshot on broadcast nudge:', err);
+          }
+        }
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'public_dashboard_snapshots' }, async (payload) => {
+        const newRow = payload.new as Record<string, unknown>;
+        const v = (newRow?.payload as any)?.version ?? newRow?.version;
+        if (typeof v === 'number' && v > currentSnapshotVersionRef.current) {
+          currentSnapshotVersionRef.current = v;
+          try {
+            const res = await fetch(`/api/public/dashboard?v=${v}`);
+            if (res.ok) {
+              const json = await res.json();
+              const normalized = normalizePublicSnapshot(json);
+              if (normalized?.sections) {
+                setRealtimeSections(normalized.sections);
+                refetchFleetRef.current?.();
+              }
+            }
+          } catch (err) {
+            console.warn('Failed to fetch snapshot on postgres_changes nudge:', err);
+          }
+        }
+      })
+      .subscribe();
+
+    return () => {
+      client.removeChannel(channel);
+    };
+  }, []);
+
+  const bootstrapSections = realtimeSections ?? bootstrap.data?.sections;
   const seededIncidentsSection = bootstrapSections?.incidents;
   const seededIncidents =
     ['ok', 'stale'].includes(seededIncidentsSection?.status ?? '')
-      ? seededIncidentsSection?.data?.items
+      ? (Array.isArray(seededIncidentsSection?.data)
+          ? (seededIncidentsSection?.data as any)
+          : (seededIncidentsSection?.data as any)?.items)
       : undefined;
   const seededNewsSection = bootstrapSections?.news;
   const seededNews = ['ok', 'stale'].includes(seededNewsSection?.status ?? '')
@@ -652,26 +722,23 @@ export default function DashboardClient() {
   // for the whole poll interval. `empty` with count 0 is healthy and may seed.
   const fireSection = bootstrapSections?.fire_hotspots;
   const seededFireHotspots =
-    ['ok', 'stale'].includes(fireSection?.status ?? '') && fireSection?.data != null
+    ['ok', 'stale', 'empty'].includes(fireSection?.status ?? '') && fireSection?.data != null
       ? fireSection.data
       : undefined;
   const seededWeatherSection = bootstrapSections?.weather_spatial_polygons;
-  const seededWeatherPolygons = ['ok', 'stale'].includes(seededWeatherSection?.status ?? '')
+  const seededWeatherPolygons = ['ok', 'stale', 'empty'].includes(seededWeatherSection?.status ?? '')
     ? seededWeatherSection?.data
     : undefined;
   const seededAdvisorySection = bootstrapSections?.weather_advisory_polygons;
-  const seededWeatherAdvisory = ['ok', 'stale'].includes(seededAdvisorySection?.status ?? '')
+  const seededWeatherAdvisory = ['ok', 'stale', 'empty'].includes(seededAdvisorySection?.status ?? '')
     ? seededAdvisorySection?.data
     : undefined;
-  // Unit D: snapshot seed for the world-truth counters (`ok` or `stale`).
+  // Unit D: snapshot seed for the world-truth counters (`ok`, `stale`, or `empty`).
   const seededWeatherSummary =
-    ['ok', 'stale'].includes(bootstrapSections?.weather_summary?.status ?? '')
+    ['ok', 'stale', 'empty'].includes(bootstrapSections?.weather_summary?.status ?? '')
       ? bootstrapSections?.weather_summary?.data
       : undefined;
-  // `fleet` is deliberately NOT seeded: the snapshot's fleet section is built for
-  // one modality (default `truck`) while this view draws the multimodal macro
-  // slice (tenant trucks + situational vessels/air). Seeding it would blank the
-  // Kapal/Udara pills until the next 10 s sync, so the hook keeps its own read.
+  const seededFleetVehicles = (bootstrapSections as any)?.fleet?.data?.vehicles;
 
   const { incidents, refetch } = useIncidents({
     enabled: false,
@@ -694,7 +761,12 @@ export default function DashboardClient() {
     tenantVehicles: tenantFleetVehicles,
     tenantAssetCount: tenantFleetAssetCount,
     canToggleSimulation: canToggleFleetSimulation,
-  } = useFleetVehicles(undefined, { enabled: !isAuthLoading && activeSection === 'map', enableSimulationFallback: false });
+  } = useFleetVehicles(undefined, {
+    enabled: !isAuthLoading && activeSection === 'map',
+    enableSimulationFallback: false,
+    initialVehicles: Array.isArray(seededFleetVehicles) && seededFleetVehicles.length > 0 ? seededFleetVehicles : undefined,
+  });
+  refetchFleetRef.current = refetchFleet;
 
   // Next.js App Router query parameters for session-local routing deep-linking
   const searchParams = useSearchParams();
@@ -1029,11 +1101,24 @@ export default function DashboardClient() {
     return () => clearInterval(id);
   }, []);
 
+  const NON_DISRUPTION_CSR_PATTERNS = useMemo(() => [
+    /pelatihan\s+motor\s+listrik/i,
+    /bagikan\s+helm/i,
+    /kompetensi\s+siswa/i,
+    /beasiswa/i,
+  ], []);
+
   const filteredNews = useMemo(() => {
     return newsFeed.filter((item) => {
       // Strict live-only + "Drop unresolvable": items without a real publisher
       // permalink are never rendered (no search-page substitutes).
       if (!item.link && !item.url) return false;
+
+      // Safety Filter: never render routine CSR, ceremony, regional, or dropped/irrelevant news
+      if (item.relevance_tier === 'regional') return false;
+      if (item.zone_tier === 'DROPPED_IRRELEVANT' || (item as any).zone_tier === 'HELD_BACK_LLM_UNAVAILABLE') return false;
+      const textToScan = `${item.headline || ''} ${(item as any).title || ''} ${item.summary || ''}`;
+      if (NON_DISRUPTION_CSR_PATTERNS.some((pat) => pat.test(textToScan))) return false;
 
       if (selectedNewsCategory === 'OFFICIAL' && item.source_type !== 'OFFICIAL_NEWS') return false;
       if (selectedNewsCategory === 'WEATHER' && item.source_type !== 'BMKG_WEATHER') return false;
@@ -1631,9 +1716,8 @@ export default function DashboardClient() {
         // `generated_at` (a degraded seed stamp cannot veto real counters).
       } else {
         const incomingTs = parseGeneratedAt(seededWeatherSummary.generated_at);
-        if (incomingTs <= 0) return;
         const currentTs = parseGeneratedAt(current.generated_at);
-        if (currentTs > 0 && incomingTs <= currentTs) return;
+        if (incomingTs > 0 && currentTs > 0 && incomingTs <= currentTs) return;
       }
     }
     const next = seededWeatherSummary;
@@ -1701,14 +1785,17 @@ export default function DashboardClient() {
       }
     }
 
-    void loadWeatherSummary();
+    // Stop direct Render polling on initial load if bootstrap snapshot already seeded weather
+    if (!seededWeatherSummary) {
+      void loadWeatherSummary();
+    }
     const interval = setInterval(loadWeatherSummary, 120000);
     return () => {
       isMounted = false;
       clearInterval(interval);
       inFlight?.abort();
     };
-  }, [activeSection]);
+  }, [activeSection, seededWeatherSummary]);
 
   useEffect(() => {
     // Phase 163b: seeded by `sections.fire_hotspots` (identical envelope contract).
@@ -1760,14 +1847,12 @@ export default function DashboardClient() {
     }
 
     if (seededFireHotspots) {
-      // Snapshot seed: instant paint for the first frame. The layer is still
-      // verified against the live envelope right after — a snapshot seed is a
-      // hint, never a reason to skip the mount read.
+      // Snapshot seed: instant paint for the first frame.
       applyFireEnvelope(seededFireHotspots);
+    } else {
+      // Only read live from backend if no bootstrap snapshot was available
+      void loadFireHotspots();
     }
-    // Always read live on mount (incl. degraded/timeout/null-count seeds, which
-    // no longer seed at all): the live envelope overwrites the painted seed.
-    void loadFireHotspots();
 
     const interval = setInterval(loadFireHotspots, 300000);
     return () => {
@@ -1776,64 +1861,14 @@ export default function DashboardClient() {
       inFlight?.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bootstrap.isLoading, activeSection]);
+  }, [bootstrap.isLoading, activeSection, seededFireHotspots]);
 
   // Active Northern Sumatra Logistics Corridor Disaster Zones & Hydration
   useEffect(() => {
     if (bootstrap.isLoading && disasterZones.length > 0) return;
 
-    const NORTHERN_SUMATRA_ACTIVE_DISASTERS = [
-      {
-        id: 'disaster-aceh-utara',
-        title: 'Banjir Aceh Utara & Lhokseumawe',
-        type: 'flood' as CrisisType,
-        center: [97.14, 5.18] as [number, number],
-        radiusKm: 25,
-        severity: 'critical',
-        source: 'BMKG CAP / GloFAS / GDACS',
-        impactedCorridors: 'Jalan Lintas Sumatera (Banda Aceh - Lhokseumawe - Medan)',
-      },
-      {
-        id: 'disaster-aceh-tamiang',
-        title: 'Banjir Aceh Tamiang & Langkat',
-        type: 'flood' as CrisisType,
-        center: [98.05, 4.28] as [number, number],
-        radiusKm: 22,
-        severity: 'high',
-        source: 'BNPB / PetaBencana',
-        impactedCorridors: 'Jalur Lintas Timur Kuala Simpang - Pangkalan Brandan',
-      },
-      {
-        id: 'disaster-deli-serdang',
-        title: 'Genangan & Banjir Deli Serdang - Medan',
-        type: 'flood' as CrisisType,
-        center: [98.67, 3.59] as [number, number],
-        radiusKm: 20,
-        severity: 'high',
-        source: 'BMKG CAP / BPBD Sumut',
-        impactedCorridors: 'Arteri Belawan - Medan & Akses Tol Belmera',
-      },
-      {
-        id: 'disaster-asahan',
-        title: 'Banjir Luapan Sungai Asahan',
-        type: 'flood' as CrisisType,
-        center: [99.63, 2.98] as [number, number],
-        radiusKm: 18,
-        severity: 'medium',
-        source: 'BNPB / BPBD Asahan',
-        impactedCorridors: 'Jalan Lintas Sumatera Tebing Tinggi - Kisaran - Rantau Prapat',
-      },
-      {
-        id: 'disaster-sibolga-tapanuli',
-        title: 'Banjir & Longsor Sibolga - Tapanuli',
-        type: 'landslide' as CrisisType,
-        center: [98.78, 1.74] as [number, number],
-        radiusKm: 24,
-        severity: 'high',
-        source: 'BMKG CAP / GloFAS / GDACS',
-        impactedCorridors: 'Koridor Barat Sibolga - Tarutung & Lintas Pantai Barat',
-      },
-    ];
+    // Purged synthetic disasters: only real fused reports from Supabase/bootstrap are used!
+    const NORTHERN_SUMATRA_ACTIVE_DISASTERS: any[] = [];
 
     const disasterReportsData = bootstrapSections?.disaster_reports?.data as any;
     const observedDisastersData = (bootstrapSections as any)?.observed_disasters?.data as any;
@@ -1851,7 +1886,7 @@ export default function DashboardClient() {
                 ? observedDisastersData.items
                 : [];
 
-    const combinedReports = [...NORTHERN_SUMATRA_ACTIVE_DISASTERS];
+    const combinedReports: any[] = [...NORTHERN_SUMATRA_ACTIVE_DISASTERS];
     for (const rep of rawReports) {
       const lat = rep.lat ?? rep.latitude ?? rep.center?.lat ?? (Array.isArray(rep.center) ? rep.center[1] : undefined) ?? rep.coordinates?.[1];
       const lon = rep.lon ?? rep.longitude ?? rep.center?.lon ?? (Array.isArray(rep.center) ? rep.center[0] : undefined) ?? rep.coordinates?.[0];
@@ -1861,43 +1896,74 @@ export default function DashboardClient() {
           title: rep.title || rep.name || 'Laporan Bencana Sumatera',
           type: (rep.type || rep.hazard_type || rep.disaster_type || 'flood') as CrisisType,
           center: [Number(lon), Number(lat)],
-          radiusKm: Number(rep.radius_km || rep.radiusKm || 20),
+          radiusKm: Number(rep.radius_km ?? rep.radiusKm ?? 0.6),
           severity: rep.severity || 'high',
           source: rep.source || rep.source_name || 'BMKG CAP / GloFAS / GDACS',
           impactedCorridors: Array.isArray(rep.impacted_corridors)
             ? rep.impacted_corridors.join(', ')
             : (rep.impacted_corridor || rep.impacted_corridors || 'Koridor Logistik Sumatera'),
+          polygon: rep.polygon ?? rep.geometry_polygon,
+          geometry: rep.geometry,
+          tier: rep.tier,
+          sources: rep.sources,
+          source_count: rep.source_count,
+          confidence: rep.confidence,
         });
       }
     }
 
     const zones: DisasterZone[] = combinedReports.map((d) => {
-      const geom = buildHazardSpecificZoneGeometry(
-        d.center[0],
-        d.center[1],
-        d.type,
-        'RED_CONFIRMED',
-        d.radiusKm
-      );
+      let realPolygon: [number, number][] | null = null;
+      if (Array.isArray(d.polygon) && d.polygon.length >= 3) {
+        realPolygon = d.polygon as [number, number][];
+      } else if (Array.isArray(d.geometry?.coordinates?.[0]) && d.geometry.coordinates[0].length >= 3) {
+        realPolygon = d.geometry.coordinates[0] as [number, number][];
+      }
+
+      const sourcesList = Array.isArray(d.sources) && d.sources.length > 0 ? d.sources : [d.source];
+      const sourceCount = Number(d.source_count ?? sourcesList.length);
+      const tier = d.tier || (sourceCount >= 2 ? 'CONFIRMED' : 'WATCH');
+      const zoneTier: ZoneTier = tier === 'WATCH' ? 'YELLOW_CLARIFY' : 'RED_CONFIRMED';
+      const effectiveRadiusKm = Math.min(Number(d.radiusKm ?? 0.6), 1.5);
+
+      const geom = realPolygon
+        ? { polygon: realPolygon, radiusKm: Number(d.radiusKm ?? 0.6) }
+        : buildHazardSpecificZoneGeometry(
+            d.center[0],
+            d.center[1],
+            d.type,
+            zoneTier,
+            effectiveRadiusKm
+          );
+
+      const tierReason = tier === 'CONFIRMED'
+        ? `Zona Merah Bencana: ${d.title} terverifikasi sensor & radar (${sourcesList.join(', ')}).`
+        : `Zona Waspada: ${d.title} terdeteksi oleh ${sourcesList.join(', ')}, menunggu konfirmasi multi-sumber.`;
+
       return {
         id: d.id,
         crisis_id: d.id,
         type: d.type,
         title: d.title,
-        risk: 0.9,
-        zone_tier: 'RED_CONFIRMED' as ZoneTier,
+        risk: tier === 'CONFIRMED' ? 0.9 : 0.6,
+        tier,
+        sources: sourcesList,
+        source_count: sourceCount,
+        confidence: d.confidence,
+        zone_tier: zoneTier,
         center: d.center,
         radiusKm: geom.radiusKm,
         radius_km: geom.radiusKm,
         polygon: geom.polygon,
         geometry_polygon: geom.polygon,
         custom_hazard_label: d.title,
-        tier_reason: `Zona Merah Bencana: ${d.title} terverifikasi sensor & radar.`,
+        tier_reason: tierReason,
+        source: d.source,
         source_name: d.source,
         impact_profile: {
           affected_modalities: ['land'],
-          passability: 'RESTRICTED',
-          estimated_delay_hours: 3.0,
+          passability: tier === 'CONFIRMED' ? 'RESTRICTED' : 'CAUTION',
+          estimated_delay_hours: tier === 'CONFIRMED' ? 3.0 : 1.0,
         },
         impacted_corridor: d.impactedCorridors,
       } as DisasterZone;
@@ -3015,6 +3081,36 @@ export default function DashboardClient() {
     );
   }, [selectedOriginNode, selectedDestNode, selectedModality, selectedVehicle, triggerSimulation, clearImpactAssessment]);
 
+const SUMATRA_LOCATION_FALLBACK_MAP: Array<{ keywords: string[]; coords: [number, number]; zoom?: number }> = [
+  { keywords: ['belawan'], coords: [98.6850, 3.7850], zoom: 12 },
+  { keywords: ['deli serdang', 'lubuk pakam'], coords: [98.8750, 3.5550], zoom: 11.5 },
+  { keywords: ['binjai'], coords: [98.4850, 3.6000], zoom: 11.5 },
+  { keywords: ['tebing tinggi', 'tebingtinggi'], coords: [99.1625, 3.3285], zoom: 11.5 },
+  { keywords: ['pematangsiantar', 'pematang siantar', 'siantar'], coords: [99.0680, 2.9600], zoom: 11.5 },
+  { keywords: ['asahan', 'kisaran'], coords: [99.6180, 2.9830], zoom: 11.5 },
+  { keywords: ['sibolga', 'tapanuli tengah'], coords: [98.7850, 1.7480], zoom: 11.5 },
+  { keywords: ['tapanuli selatan', 'batang toru', 'sipirok'], coords: [99.0650, 1.4850], zoom: 11.5 },
+  { keywords: ['tarutung', 'tapanuli utara'], coords: [98.9600, 2.0150], zoom: 11.5 },
+  { keywords: ['banda aceh'], coords: [95.3238, 5.5483], zoom: 11.5 },
+  { keywords: ['aceh utara', 'lhokseumawe', 'lhoksukon'], coords: [97.1420, 5.1780], zoom: 11.5 },
+  { keywords: ['aceh tamiang', 'kuala simpang'], coords: [98.0580, 4.2850], zoom: 11.5 },
+  { keywords: ['pekanbaru'], coords: [101.4478, 0.5071], zoom: 11.5 },
+  { keywords: ['dumai'], coords: [101.4480, 1.6810], zoom: 11.5 },
+  { keywords: ['padang'], coords: [100.3543, -0.9471], zoom: 11.5 },
+  { keywords: ['bukittinggi', 'agam'], coords: [100.3692, -0.3056], zoom: 11.5 },
+  { keywords: ['jambi'], coords: [103.6131, -1.6101], zoom: 11.5 },
+  { keywords: ['palembang'], coords: [104.7458, -2.9909], zoom: 11.5 },
+  { keywords: ['bengkulu'], coords: [102.2608, -3.7928], zoom: 11.5 },
+  { keywords: ['bandar lampung', 'lampung'], coords: [105.2667, -5.4292], zoom: 11.5 },
+  { keywords: ['bakauheni'], coords: [105.7520, -5.8680], zoom: 12 },
+  { keywords: ['batam'], coords: [104.0305, 1.0456], zoom: 11.5 },
+  { keywords: ['medan', 'sumatera utara', 'sumut'], coords: [98.6722, 3.5952], zoom: 11.5 },
+  { keywords: ['aceh'], coords: [96.7494, 4.6951], zoom: 9 },
+  { keywords: ['sumatera barat', 'sumbar'], coords: [100.3543, -0.9471], zoom: 9 },
+  { keywords: ['riau'], coords: [101.4478, 0.5071], zoom: 9 },
+  { keywords: ['sumatera selatan', 'sumsel'], coords: [104.7458, -2.9909], zoom: 9 },
+];
+
   // Unified stored-audit-trail inspection for news "Fokus" & map zone clicks (zero extra LLM cost).
   const inspectNewsOrZoneAuditTrail = useCallback(async (
     newsItem: (typeof newsFeed)[number] | undefined,
@@ -3053,11 +3149,11 @@ export default function DashboardClient() {
     let lat: number | undefined = (newsItem?.lat as number | undefined) ?? fallbackZone?.center?.[1];
     let flyLon = lon;
     let flyLat = lat;
-    let flyZoom = 9.5;
+    let flyZoom = 11.5;
     if (fallbackZone?.center) {
       flyLon = fallbackZone.center[0];
       flyLat = fallbackZone.center[1];
-      flyZoom = 9.5;
+      flyZoom = 11.5;
       lon = lon ?? flyLon;
       lat = lat ?? flyLat;
     } else if (newsItem?.affected_locations && newsItem.affected_locations.length > 1) {
@@ -3069,16 +3165,43 @@ export default function DashboardClient() {
         const cLat = validLocs.reduce((s, l) => s + l.latitude, 0) / validLocs.length;
         flyLon = cLon;
         flyLat = cLat;
-        flyZoom = 8.0;
+        flyZoom = 11.5;
         if (lon == null || lat == null) {
           lon = cLon;
           lat = cLat;
         }
       }
     }
+
+    // Client-side Sumatra Location Fallback Map resolution
     if (lon == null || lat == null || !Number.isFinite(lon) || !Number.isFinite(lat)) {
-      setToast({ message: 'Koordinat zona belum tersedia untuk inspeksi audit.', type: 'info' });
-      return;
+      const textToScan = [
+        newsItem?.headline,
+        (newsItem as any)?.title,
+        newsItem?.location_name,
+        newsItem?.corridor_segment,
+        (newsItem as any)?.corridor,
+        newsItem?.province,
+        newsItem?.summary,
+      ].filter(Boolean).join(' ').toLowerCase();
+
+      for (const loc of SUMATRA_LOCATION_FALLBACK_MAP) {
+        if (loc.keywords.some((kw) => textToScan.includes(kw))) {
+          lon = loc.coords[0];
+          lat = loc.coords[1];
+          flyLon = lon;
+          flyLat = lat;
+          flyZoom = loc.zoom ?? 11.5;
+          break;
+        }
+      }
+      if (lon == null || lat == null || !Number.isFinite(lon) || !Number.isFinite(lat)) {
+        lon = 98.6722;
+        lat = 3.5952;
+        flyLon = lon;
+        flyLat = lat;
+        flyZoom = 11.5;
+      }
     }
     const agentRadiusKm: number | undefined =
       newsItem?.affected_locations?.[0]?.radius_km
@@ -3102,8 +3225,8 @@ export default function DashboardClient() {
     const affectedModalities = impactProfile?.affected_modalities?.join(', ') || 'Darat';
     const passability = impactProfile?.passability || (zoneTier === 'RED_CONFIRMED' ? 'BLOCKED' : 'CAUTION');
 
-    // Smooth camera fly + highlight news card.
-    setMapFlyTo({ lon: flyLon as number, lat: flyLat as number, zoom: flyZoom, ts: Date.now() });
+    // Smooth camera fly + highlight news card (always runs so Fokus reliably centers the map)
+    setMapFlyTo({ lon: flyLon as number, lat: flyLat as number, zoom: flyZoom ?? 11.5, ts: Date.now() });
     if (newsItem) setSelectedNewsId(newsItem.id);
 
     const nowIso = new Date().toISOString();
@@ -3992,8 +4115,6 @@ export default function DashboardClient() {
                   const isRegional = item.relevance_tier === 'regional';
 
                   const handleFocusMap = () => {
-                    // Regional context is not an incident: no zone/route audit trail.
-                    if (isRegional) return;
                     // Forecast path: info-only. No origin/dest reroute pairing and
                     // no detour calculation — inspectNewsOrZoneAuditTrail emits
                     // zero routes instead of a reroute CTA.

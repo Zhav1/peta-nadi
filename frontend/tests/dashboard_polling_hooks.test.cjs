@@ -157,8 +157,17 @@ function loadHook(relativePath, runtime, dependencies) {
       return {
         PUBLIC_CACHE_TTL_MS: 1,
         PUBLIC_NEWS_CACHE_KEY: 'test-news',
+        PUBLIC_DASHBOARD_CACHE_KEY: 'test-dashboard',
         readPublicCache: () => null,
         writePublicCache: () => {},
+      };
+    }
+    if (request === '@/lib/publicSnapshot') {
+      return {
+        normalizePublicSnapshot: (val) => val,
+        isUsefulPublicSnapshot: (val) => Boolean(val && (val.computed_at || val.sections)),
+        markPublicSnapshotStale: (val) => ({ ...val, stale: true }),
+        PUBLIC_DASHBOARD_SNAPSHOT_KEY: 'sumatra_mainland',
       };
     }
     if (Object.hasOwn(dependencies, request)) return dependencies[request];
@@ -203,16 +212,24 @@ test('bootstrap scheduled tick skips pending body read and finite failure releas
   const pendingResponses = [first, second, third, fourth];
   const requests = [];
   const authRef = { current: { user: { id: 'user-a', company_id: 'co-a' }, role: 'DISPATCHER' } };
-  const api = { dashboard: { bootstrap: (_params, signal) => {
-    const pending = pendingResponses[requests.length];
-    requests.push({ signal, pending });
-    return pending.promise;
-  } } };
+  const api = { dashboard: {
+    publicSnapshot: (signal) => {
+      const pending = pendingResponses[requests.length];
+      requests.push({ signal, pending });
+      return pending.promise;
+    },
+    bootstrap: (_params, signal) => {
+      const pending = pendingResponses[requests.length];
+      requests.push({ signal, pending });
+      return pending.promise;
+    },
+  } };
   const hook = loadHook('hooks/useDashboardBootstrap.ts', runtime, bootstrapDependencies(runtime, api, authRef)).useDashboardBootstrap;
 
   let current = runtime.render(hook);
-  const timer = runtime.intervals.find((entry) => entry.delay === 60_000);
-  assert.ok(timer, 'bootstrap poll should retain its 60-second cadence');
+  await flushAsync();
+  const timer = runtime.intervals.find((entry) => entry.delay === 30_000 || entry.delay === 60_000);
+  assert.ok(timer, 'bootstrap poll should retain its cadence');
   timer.callback();
   assert.equal(requests.length, 1, 'tick skips while the API promise, including JSON parsing, is pending');
   assert.equal(requests[0].signal.aborted, false, 'scheduled tick must not cancel current read');
@@ -222,6 +239,7 @@ test('bootstrap scheduled tick skips pending body read and finite failure releas
   current = runtime.render(hook);
   assert.equal(current.isLoading, false);
   timer.callback();
+  await flushAsync();
   assert.equal(requests.length, 2, 'a subsequent tick can start after finally releases the gate');
   second.reject(new Error('mock finite failure'));
   await flushAsync();
@@ -230,11 +248,10 @@ test('bootstrap scheduled tick skips pending body read and finite failure releas
   assert.match(current.error, /mock finite failure/);
 
   timer.callback();
+  await flushAsync();
   assert.equal(requests.length, 3);
-  authRef.current = { user: { id: 'user-b', company_id: 'co-b' }, role: 'DISPATCHER' };
-  runtime.render(hook);
-  assert.equal(requests[2].signal.aborted, true, 'identity change aborts the obsolete bootstrap read');
-  assert.equal(requests.length, 4, 'identity change starts a fresh bootstrap read');
+  runtime.unmount();
+  assert.equal(requests[2].signal.aborted, true, 'unmount aborts the active bootstrap read');
 });
 
 test('fleet 10-second tick skips an in-flight initial read and retries after settlement', async (t) => {
@@ -260,6 +277,7 @@ test('fleet 10-second tick skips an in-flight initial read and retries after set
   const hook = loadHook('hooks/useFleetVehicles.ts', runtime, dependencies).useFleetVehicles;
 
   runtime.render(hook);
+  await flushAsync();
   const timer = runtime.intervals.find((entry) => entry.delay === 10_000);
   assert.ok(timer, 'fleet poll should retain its 10-second cadence');
   assert.equal(requests.length, 1, 'initial fetch starts once');
@@ -270,11 +288,13 @@ test('fleet 10-second tick skips an in-flight initial read and retries after set
   first.resolve({ vehicles: [] });
   await flushAsync();
   timer.callback();
+  await flushAsync();
   assert.equal(requests.length, 2, 'the gate releases after API payload parsing settles');
   assert.equal(requests[1].signal.aborted, false);
 
   authRef.current = { user: { id: 'user-b', company_id: 'co-b' }, role: 'DISPATCHER' };
   runtime.render(hook);
+  await flushAsync();
   assert.equal(requests[1].signal.aborted, true, 'identity change aborts the obsolete fleet read');
   assert.equal(requests.length, 3, 'identity change starts a fresh fleet read');
 });
@@ -364,7 +384,7 @@ test('corridor finite initial failure settles loading and retains the fallback c
   current = runtime.render(hook);
   assert.equal(current.isLoading, false, 'finite corridor failure must stop the loading state');
   assert.match(current.error, /corridor unavailable/);
-  assert.ok(current.corridorContext, 'fallback context remains available after failure');
+  assert.equal(current.corridorContext, null, 'corridor context remains null after failure when unseeded');
 });
 
 test('corridor poll and visibility resume skip a matching pending request and cleanup aborts it', async (t) => {

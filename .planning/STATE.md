@@ -2,12 +2,12 @@
 gsd_state_version: "1.0"
 milestone: M8
 milestone_name: Fast & Durable
-current_phase: 166
-current_phase_name: Soak start + review
+current_phase: 179
+current_phase_name: "Realtime Fusion Early Warning"
 status: in_progress
-stopped_at: "M8 160-164 done and deployed; 165 implementation-green with the SLO gate partially closed (cold start, 2 h session, PIHPS retry, /health p95 open); 166 7-day soak NOT STARTED. Handoff: .planning/milestones/M8/HANDOFF.md"
-last_updated: 2026-11-06
-last_activity: 2026-11-06
+stopped_at: "Phase 179 completed across Tracks A-E; acceptance gates verified."
+last_updated: 2026-11-07
+last_activity: 2026-11-07
 last_activity_desc: "Documented Phase 178: alternative route painting, single-flight SWR hydration, plane telemetry corridor persistence, multi-source disaster fusion, and hybrid TomTom/Mapbox traffic."
 state_head: HEAD
 progress:
@@ -500,4 +500,27 @@ These scripts validate the economic correlation hypotheses that underpin Agent 5
   - 55/55 Phase 178 targeted backend tests passed; 68/68 regression tests passed (123 backend tests green).
   - 0 TypeScript compiler errors (`tsc -p tsconfig.json --noEmit`).
 - Docs: `.planning/phases/178-mainland-sumatra-shadow-pilot/` (`178-SPEC.md`, `178-01-PLAN.md`, `178-01-SUMMARY.md`).
+
+## Phase 179 Log (2026-11-07)
+
+- **Domain**: Realtime Fusion Early Warning, Honest Disasters & Fleet, TomTom Road Polylines, Versioned Snapshots, Acceptance Gate Suite.
+- **Root Cause Solutions**:
+  - Purged all hardcoded baselines (`NORTHERN_SUMATRA_FLOOD_BASINS`, synthetic 15–35 km circles, fake AIS vessels, fake ADS-B flights, diagonal TomTom stubs, and deterministic baseline synthesizers). Empty feeds now return honest `[]` accompanied by per-source health status pills (`OK` / `STALE` / `DOWN`).
+  - Implemented `backend/app/services/spatial_fusion_engine.py`: Axial H3 res-8 spatial indexer (~460 m) fusing multi-source evidence (BMKG CAP, PetaBencana, FIRMS, TomTom, News) into single deduplicated incidents with realistic localized bounds (<= 1.5 km) and deterministic authority tiering (`CONFIRMED` >= 2 sources vs `WATCH` single source).
+  - Hardened logistics news rubric: 5-category logistics disruption prefilter in `news_extractor.py`, eliminated regional display leaks, and replaced heuristic LLM fallback with safe hold-backs (`HELD_BACK_LLM_UNAVAILABLE`).
+  - Whole-Sumatra TomTom & clean telemetry: 20 strategic Sumatra logistics chokepoints with real multi-vertex road `LineString` polylines preserved from `flowSegmentData.coordinates.coordinate`, vector tile corridor sampling, strict boundary filtering excluding Malaysia/Singapore, and global Mapbox traffic layer removal.
+  - Versioned snapshot coordination & single-flight worker: Monotonic `version BIGINT`, `ingest_runs` audit table, Supabase Realtime nudge channel (`prehub-snapshot-nudge`), and background tick coalescing where 5 parallel calls execute at most 1 upstream run while 4 are coalesced as `skipped_locked` in < 4 ms.
+  - Fixed news card "Fokus" button camera navigation: Removed `if (isRegional) return;` guard and added frontend gazetteer fallback coordinates.
+- **Empirical Verification Outputs**:
+  - `python scripts/verify_phase179_fusion_golden.py`: Exit 0 (all 4 cases passed).
+  - `python scripts/verify_phase179_fanout.py`: Exit 0 (5 concurrent triggers coalesced to 1 executed run in < 4 ms; 20 concurrent snapshot reads returned HTTP 200 with monotonic version >= 1, fleet, and source_health).
+  - `node scripts/probe_live.mjs`: Exit 0 (Part A static assertions passed; Part B live edge probe across 5 parallel requests passed in 1628 ms with p95 1249 ms).
+  - Frontend typecheck: `tsc --noEmit` passed with 0 errors.
+  - Backend regression tests: 44 targeted tests passed in `test_internal_tick.py` and `test_dashboard_bootstrap.py`.
+- **Artifacts**:
+  - Decision record: `.planning/phases/179-realtime-fusion-early-warning/179-CONTEXT.md`
+  - Plan: `.planning/phases/179-realtime-fusion-early-warning/179-01-PLAN.md`
+  - Summary: `.planning/phases/179-realtime-fusion-early-warning/179-01-SUMMARY.md`
+  - Migration: `infra/supabase/migrations/20261107210000_phase179_versioned_snapshot_realtime.sql`
+  - Koyeb deployment spec: `koyeb.yaml`
 

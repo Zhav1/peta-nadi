@@ -201,59 +201,36 @@ def _parse_published_at(article: Dict[str, Any]) -> Optional[datetime]:
 
 
 def is_regional_context(article: Dict[str, Any], now: Optional[datetime] = None) -> bool:
-    """True when a gate-rejected row is honest regional display context.
-
-    ALL of the following must hold — a single miss means the row stays dropped:
-
-    * geocoded to one of the ten Sumatra provinces (never the area-wide
-      `"Sumatera"` bucket, never `"Nasional"`, never an unknown label),
-    * published within `REGIONAL_MAX_AGE_HOURS` (no timestamp → not provable),
-    * the headline/lead matches the broad regional topic set,
-    * the headline/lead is not a foreign/global conflict story that a source
-      dateline happened to geocode into a Sumatra province.
-
-    This is a DISPLAY predicate only. It never promotes a row to crisis and it
-    never rewrites `zone_tier`.
-    """
-    if article.get("is_geocoded") is False:
-        return False
-    if article.get("latitude") is None or article.get("longitude") is None:
-        return False
-    province = normalize_province(article.get("province") or article.get("region"))
-    if province not in SUMATRA_PROVINCES:
-        return False
-
-    reference = now or datetime.now(timezone.utc)
-    if reference.tzinfo is None:
-        reference = reference.replace(tzinfo=timezone.utc)
-    published = _parse_published_at(article)
-    if published is None:
-        return False
-    if (reference - published).total_seconds() > REGIONAL_MAX_AGE_HOURS * 3600:
-        return False
-    if (published - reference).total_seconds() > REGIONAL_MAX_AGE_HOURS * 3600:
-        # A publication time far in the future is not evidence of freshness.
-        return False
-
-    text = " ".join(
-        str(article.get(key) or "")
-        for key in ("title", "headline", "summary", "raw_description", "lead")
-    )
-    if _FOREIGN_CONTEXT_RE.search(text):
-        return False
-    return bool(_REGIONAL_TOPIC_RE.search(text))
+    """Phase 179 (D4, D7): Regional display leak purged. Always returns False."""
+    return False
 
 
 def classify_relevance_tier(article: Dict[str, Any], now: Optional[datetime] = None) -> str:
-    """`crisis` (existing gate passed) | `regional` (display context) | `dropped`.
-
-    `crisis` reuses the gate verbatim: a row is crisis exactly when the
-    extractor did not tier it `DROPPED_IRRELEVANT`. Nothing in this function
-    changes a row's `zone_tier`.
+    """Classifies display relevance tier for Phase 179 (D4, D7).
+    
+    Regional display leak is purged: only valid disruption items ('crisis')
+    are displayed. Ceremonial/CSR items, items failing the logistics disruption
+    prefilter, and items held back on LLM failure always return 'dropped'.
     """
-    if str(article.get("zone_tier") or "") != "DROPPED_IRRELEVANT":
-        return TIER_CRISIS
-    return TIER_REGIONAL if is_regional_context(article, now=now) else TIER_DROPPED
+    zone_tier = str(article.get("zone_tier") or "").upper()
+    if zone_tier in ("DROPPED_IRRELEVANT", "HELD_BACK_LLM_UNAVAILABLE"):
+        return TIER_DROPPED
+
+    title = str(article.get("title") or "")
+    desc = str(article.get("raw_description") or article.get("summary") or article.get("lead") or "")
+
+    # Fast strict logistics disruption prefilter
+    from app.nlp.news_extractor import passes_logistics_disruption_prefilter, ROUTINE_CEREMONY_CSR_EXCLUSIONS
+    if not passes_logistics_disruption_prefilter(title, desc):
+        return TIER_DROPPED
+
+    # Ensure no ceremony/CSR patterns even if older cached row had a different tier
+    combined = f"{title} {desc}".lower()
+    for exc in ROUTINE_CEREMONY_CSR_EXCLUSIONS:
+        if exc in combined:
+            return TIER_DROPPED
+
+    return TIER_CRISIS
 
 
 def apply_breadth_contract(

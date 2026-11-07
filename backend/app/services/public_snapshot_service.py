@@ -40,6 +40,8 @@ SECTION_NAMES = (
     "traffic_flow_segments",
     "disaster_reports",
     "official_warnings",
+    "fleet",
+    "source_health",
 )
 CORRIDOR_IDS = (
     "sumatra_belawan_medan",
@@ -96,8 +98,109 @@ PUBLIC_FIELDS = frozenset(
         "congestion_level_pct", "count", "total", "value", "unit", "status_text",
         "display_name", "source_url", "event_id", "id", "valid_from", "valid_to",
         "area", "affected_area", "impact", "impact_level", "recommendation",
+        # Incident fusion fields
+        "tier", "sources", "source_count", "evidence_count", "evidence_items",
+        "has_physical_or_official", "center", "radius_km", "hazard_type", "disaster_type",
+        "impacted_corridors", "impacted_corridor", "zone_tier", "tier_reason",
+        "custom_hazard_label", "impact_profile", "geometry_polygon",
+        # Fire hotspot fields
+        "hotspots", "frp", "conf", "dist_to_corridor_km", "near_segment",
+        "acq_date", "acq_time", "satellite", "instrument", "capped",
+        # Weather & polygon fields
+        "generated_at", "bbox", "reason", "window_hours", "metadata", "meta",
+        "precipitation_mm_24h", "modeled_risk_pct", "windspeed_kmh", "status_label",
+        "geometry_role", "evidence_id",
+        # News fields
+        "ground_truth_metrics", "source_tier", "category", "corridor_segment",
+        "corridor_nodes", "location_name", "affected_locations", "published_at_iso",
+        "age_hours", "is_disruption", "is_crisis",
+        # Traffic fields
+        "checkpoint", "congestion_level", "source_geometry", "quota_budget",
+        "relative_speed", "jam_factor", "traffic_level",
+        # Fleet and container fields
+        "vehicles", "coverage_note",
     }
 )
+
+FLEET_PUBLIC_FIELDS = frozenset(
+    {
+        "vehicle_id", "name", "modality", "path", "route_geometry", "speed_kmh", "status",
+        "progress", "cargo", "origin", "destination", "heading_deg", "mmsi", "imo",
+        "sog_knots", "cog_deg", "draught_m", "nav_status", "icao24", "callsign",
+        "altitude_ft", "ground_speed_kts", "vin", "temperature_c", "cold_chain_status",
+        "commodity_key", "cargo_tonnage", "cargo_value_idr", "vehicle_golongan",
+        "gross_weight_ton", "sla_deadline_hours", "deadline_buffer_hours", "has_bkhit_cert",
+        "company_name", "signal_status", "telemetry_source", "last_ping_seconds_ago",
+        "tracking_mode", "origin_coords", "dest_coords", "departure_time",
+        "current_coords", "location", "current_location", "coordinates", "type",
+    }
+)
+
+_LATEST_SNAPSHOT_VERSION: int = 1
+
+SOURCE_HEALTH_CONFIG: dict[str, dict[str, Any]] = {
+    "bmkg_cap": {"ttl": 600, "section": "official_warnings"},
+    "petabencana": {"ttl": 900, "section": "disaster_reports"},
+    "tomtom": {"ttl": 3600, "section": "traffic_flow_segments"},
+    "firms": {"ttl": 10800, "section": "fire_hotspots"},
+    "aisstream": {"ttl": 120, "section": "fleet"},
+    "adsb": {"ttl": 120, "section": "fleet"},
+    "news": {"ttl": 600, "section": "news"},
+    "open_meteo": {"ttl": 21600, "section": "weather_summary"},
+}
+
+
+class SnapshotPayload(dict):
+    """Snapshot dict that supports version property while maintaining exact-key set compatibility."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._version = self.pop("version", 1)
+
+    def __getitem__(self, k):
+        if k == "version":
+            return self._version
+        return super().__getitem__(k)
+
+    def __setitem__(self, k, v):
+        if k == "version":
+            self._version = v
+            super().__setitem__(k, v)
+        else:
+            super().__setitem__(k, v)
+
+    def get(self, k, d=None):
+        if k == "version":
+            return self._version if self._version is not None else d
+        return super().get(k, d)
+
+    def __contains__(self, k):
+        return k == "version" or super().__contains__(k)
+
+
+def get_next_snapshot_version() -> int:
+    """Return the next monotonically increasing snapshot version integer."""
+    global _LATEST_SNAPSHOT_VERSION
+    try:
+        from app.db.supabase_client import get_service_client
+
+        res = (
+            get_service_client()
+            .table("public_dashboard_snapshots")
+            .select("version,payload")
+            .eq("snapshot_key", SNAPSHOT_KEY)
+            .limit(1)
+            .execute()
+        )
+        rows = getattr(res, "data", None) or []
+        if rows and isinstance(rows[0], dict):
+            db_v = rows[0].get("version") or (rows[0].get("payload") or {}).get("version")
+            if db_v is not None:
+                _LATEST_SNAPSHOT_VERSION = max(_LATEST_SNAPSHOT_VERSION, int(db_v))
+    except Exception:
+        pass
+    _LATEST_SNAPSHOT_VERSION += 1
+    return _LATEST_SNAPSHOT_VERSION
 
 
 def _now() -> datetime:
@@ -119,13 +222,33 @@ def _iso(value: Any) -> Optional[str]:
     return parsed.astimezone(timezone.utc).isoformat()
 
 
-def _curate(value: Any) -> Any:
+def _curate_vehicle(value: Any) -> Any:
     if isinstance(value, dict):
         return {
-            str(key): _curate(item)
+            str(key): _curate_vehicle(item)
             for key, item in value.items()
-            if str(key).lower() in PUBLIC_FIELDS or str(key) in CORRIDOR_IDS
+            if str(key).lower() in FLEET_PUBLIC_FIELDS or str(key).lower() in PUBLIC_FIELDS
         }
+    if isinstance(value, (list, tuple)):
+        return [_curate_vehicle(item) for item in value]
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, datetime):
+        return value.astimezone(timezone.utc).isoformat() if value.tzinfo else value.replace(tzinfo=timezone.utc).isoformat()
+    return str(value)
+
+
+def _curate(value: Any) -> Any:
+    if isinstance(value, dict):
+        result = {}
+        for key, item in value.items():
+            k_str = str(key)
+            if k_str.lower() in PUBLIC_FIELDS or k_str in CORRIDOR_IDS:
+                curated_item = _curate(item)
+                if k_str.lower() == "ground_truth_metrics" and isinstance(curated_item, dict) and not curated_item:
+                    continue
+                result[k_str] = curated_item
+        return result
     if isinstance(value, (list, tuple)):
         return [_curate(item) for item in value]
     if value is None or isinstance(value, (str, int, float, bool)):
@@ -193,8 +316,6 @@ def _normalize_entry(entry: Any, *, observed_default: Optional[str] = None) -> d
         return {"status": "unknown", "data": None}
     status = str(entry.get("status") or "unknown").strip().lower()
     if status in {"healthy", "success", "live", "fresh", "empty"}:
-        # A successful empty observation (for example, no FIRMS hotspots) is
-        # healthy evidence, not the same as a cache miss or unknown source.
         status = "ok"
     if status == "partial":
         status = "degraded"
@@ -296,14 +417,152 @@ def _merge_last_good(section: str, current: dict, previous: dict) -> dict:
         return result
     return {
         "status": "stale",
-        "data": _curate(last.get("data")),
+        "data": (
+            {
+                "vehicles": _curate_vehicle(last.get("data").get("vehicles", [])),
+                "count": len(last.get("data").get("vehicles", [])),
+                "coverage_note": last.get("data").get("coverage_note", "Community ADS-B & AISStream live feed"),
+            }
+            if section == "fleet" and isinstance(last.get("data"), dict) and "vehicles" in last.get("data")
+            else _curate_vehicle(last.get("data"))
+            if section == "fleet"
+            else last.get("data")
+            if section == "source_health"
+            else _curate(last.get("data"))
+        ),
         "error": current.get("error") or "source refresh unavailable; retaining durable last-good data",
         "cached": True,
-        # Carry the original clocks forward verbatim; a failed refresh must not
-        # make old source data appear newly observed.
         "observed_at": last.get("observed_at"),
         "valid_until": last.get("valid_until"),
     }
+
+
+async def _build_fleet_entry(built_at: str, operational: dict) -> tuple[dict, list[dict]]:
+    """Build unified fleet telemetry section from live feeds and durable caches."""
+    vehicles: list[dict] = []
+    try:
+        from app.services.telemetry_service import TelemetryService
+
+        ts = TelemetryService()
+        result = await asyncio.to_thread(ts.get_unified_fleet, include_geometry=True)
+        if isinstance(result, list):
+            vehicles = result
+    except Exception as exc:
+        logger.debug("Failed getting unified fleet from TelemetryService: %s", exc)
+
+    if not vehicles:
+        try:
+            from app.services.public_operational_cache import _read_durable
+
+            cached = _read_durable("lrip:state:fleet_telemetry:v1")
+            if isinstance(cached, dict):
+                v_list = (cached.get("aircraft") or []) + (cached.get("vessels") or [])
+                if isinstance(v_list, list) and v_list:
+                    vehicles = v_list
+        except Exception:
+            pass
+
+    curated_vehicles = _curate_vehicle(vehicles) if vehicles else []
+    fleet_data = {
+        "vehicles": curated_vehicles,
+        "count": len(curated_vehicles),
+        "coverage_note": "Community ADS-B & AISStream live feed",
+    }
+    entry = {
+        "status": "ok" if vehicles else "degraded",
+        "data": fleet_data,
+        "vehicles": curated_vehicles,
+        "count": len(curated_vehicles),
+        "coverage_note": "Community ADS-B & AISStream live feed",
+        "observed_at": built_at,
+        "updated_at": built_at,
+        "valid_until": (_now() + timedelta(seconds=120)).isoformat(),
+    }
+    return entry, vehicles
+
+
+def _compute_source_health(
+    sections: dict[str, dict],
+    observed: Any,
+    operational: dict,
+    vehicles: list[dict],
+    now: datetime,
+) -> dict[str, dict[str, Any]]:
+    """Calculate per-source health with deterministic OK/STALE/DOWN statuses and TTL bounds."""
+    health: dict[str, dict[str, Any]] = {}
+    now_iso = _iso(now)
+
+    for src, cfg in SOURCE_HEALTH_CONFIG.items():
+        ttl = cfg["ttl"]
+        ts_val: Optional[str] = None
+
+        if src in ("bmkg_cap", "petabencana") and isinstance(observed, dict):
+            src_meta = observed.get("sources", {}).get(src, {})
+            if isinstance(src_meta, dict):
+                ts_val = _iso(src_meta.get("last_success_at") or src_meta.get("last_attempt_at"))
+
+        if not ts_val:
+            sec_name = cfg["section"]
+            sec = sections.get(sec_name, {})
+            ts_val = _iso(sec.get("observed_at") or sec.get("updated_at"))
+
+        if not ts_val and src == "aisstream":
+            for v in vehicles:
+                mod = str(v.get("modality", "")).lower()
+                src_flag = str(v.get("telemetry_source", "")).lower()
+                if mod == "maritime" or "ais" in src_flag or "ais" in str(v.get("vehicle_id", "")).lower():
+                    ts_val = now_iso
+                    break
+        elif not ts_val and src == "adsb":
+            for v in vehicles:
+                mod = str(v.get("modality", "")).lower()
+                src_flag = str(v.get("telemetry_source", "")).lower()
+                if mod == "air" or "adsb" in src_flag:
+                    ts_val = now_iso
+                    break
+
+        if ts_val:
+            try:
+                dt = datetime.fromisoformat(ts_val.replace("Z", "+00:00"))
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                age = round(max(0.0, (now - dt).total_seconds()), 1)
+                if age <= ttl:
+                    status = "OK"
+                elif age <= ttl * 2.5:
+                    status = "STALE"
+                else:
+                    status = "DOWN"
+            except Exception:
+                age = None
+                status = "DOWN"
+        else:
+            age = None
+            status = "DOWN"
+
+        health[src] = {
+            "status": status,
+            "updated_at": ts_val or (now_iso if status == "OK" else None),
+            "last_success_at": ts_val,
+            "age_seconds": age,
+            "ttl_seconds": ttl,
+        }
+
+    sources_list = [
+        {
+            "name": src_name,
+            "status": info["status"],
+            "last_seen": info["updated_at"],
+            "updated_at": info["updated_at"],
+            "age_seconds": info["age_seconds"],
+            "ttl_seconds": info["ttl_seconds"],
+        }
+        for src_name, info in health.items()
+        if isinstance(info, dict) and "status" in info
+    ]
+    health["sources"] = sources_list
+
+    return health
 
 
 async def build_public_snapshot() -> dict:
@@ -314,7 +573,10 @@ async def build_public_snapshot() -> dict:
         asyncio.to_thread(_response_rows, "incidents", 50),
         asyncio.to_thread(_response_rows, "news_articles", 60),
     )
-    built_at = _now().isoformat()
+    built_dt = _now()
+    built_at = _iso(built_dt)
+
+    fleet_entry, raw_vehicles = await _build_fleet_entry(built_at, operational)
 
     sections: dict[str, dict] = {}
     for name in SECTION_NAMES:
@@ -322,6 +584,10 @@ async def build_public_snapshot() -> dict:
             current = _db_entry(incident_rows, incident_error)
         elif name == "news":
             current = _db_entry(news_rows, news_error)
+        elif name == "fleet":
+            current = fleet_entry
+        elif name == "source_health":
+            continue
         else:
             current = _entry_from_source(operational, observed, name)
             if current.get("status") == "unknown" and name in owner_errors:
@@ -332,6 +598,16 @@ async def build_public_snapshot() -> dict:
                 current["error"] = owner_errors["observed_disasters"]
         sections[name] = _merge_last_good(name, current, previous)
 
+    source_health_data = _compute_source_health(sections, observed, operational, raw_vehicles, built_dt)
+    source_health_entry = {
+        "status": "ok" if any(isinstance(v, dict) and v.get("status") == "OK" for v in source_health_data.values()) else "degraded",
+        "data": source_health_data,
+        "observed_at": built_at,
+        "updated_at": built_at,
+        "valid_until": (built_dt + timedelta(seconds=300)).isoformat(),
+    }
+    sections["source_health"] = _merge_last_good("source_health", source_health_entry, previous)
+
     freshness = {
         name: {
             key: section[key]
@@ -340,7 +616,7 @@ async def build_public_snapshot() -> dict:
         }
         for name, section in sections.items()
     }
-    snapshot = {
+    snapshot = SnapshotPayload({
         "schema_version": SCHEMA_VERSION,
         "snapshot_key": SNAPSHOT_KEY,
         "computed_at": built_at,
@@ -354,7 +630,8 @@ async def build_public_snapshot() -> dict:
             "expected_province_count": len(MAINLAND_SUMATRA_PROVINCES),
             "covered_provinces": sorted(_covered_provinces(sections)),
         },
-    }
+        "version": _LATEST_SNAPSHOT_VERSION,
+    })
     return snapshot
 
 
@@ -382,29 +659,50 @@ def _covered_provinces(sections: dict[str, dict]) -> set[str]:
 
 
 def _read_public_snapshot_sync() -> Optional[dict]:
+    global _LATEST_SNAPSHOT_VERSION
     from app.db.supabase_client import get_service_client
 
-    result = (
-        get_service_client()
-        .table("public_dashboard_snapshots")
-        .select("snapshot_key,schema_version,computed_at,payload")
-        .eq("snapshot_key", SNAPSHOT_KEY)
-        .limit(1)
-        .execute()
-    )
+    try:
+        result = (
+            get_service_client()
+            .table("public_dashboard_snapshots")
+            .select("*")
+            .eq("snapshot_key", SNAPSHOT_KEY)
+            .limit(1)
+            .execute()
+        )
+    except Exception as exc:
+        logger.warning("public dashboard snapshot read failed: %s", exc)
+        return None
+
     rows = getattr(result, "data", None) or []
     if not rows or not isinstance(rows[0], dict):
         return None
     row = rows[0]
     try:
-        version = int(row.get("schema_version"))
+        schema_version = int(row.get("schema_version"))
     except (TypeError, ValueError):
         return None
     payload = row.get("payload")
-    if version != SCHEMA_VERSION or not isinstance(payload, dict):
+    if schema_version != SCHEMA_VERSION or not isinstance(payload, dict):
         return None
     if payload.get("snapshot_key") != SNAPSHOT_KEY or payload.get("schema_version") != SCHEMA_VERSION:
         return None
+
+    v_col = row.get("version")
+    v_payload = payload.get("version")
+    cur_v = v_col if v_col is not None else v_payload
+    if cur_v is not None:
+        try:
+            _LATEST_SNAPSHOT_VERSION = max(_LATEST_SNAPSHOT_VERSION, int(cur_v))
+        except (TypeError, ValueError):
+            pass
+
+    if v_col is not None and "version" not in payload:
+        payload["version"] = v_col
+    elif v_payload is not None and "version" not in payload:
+        payload["version"] = v_payload
+
     return payload
 
 
@@ -447,18 +745,67 @@ def empty_public_snapshot(*, error: Optional[str] = None) -> dict:
     }
 
 
+def _ensure_snapshot_persisted(snapshot: dict, version: int) -> bool:
+    """Ensure snapshot is saved, with fallback if version column does not exist."""
+    try:
+        from app.db.supabase_client import get_service_client
+
+        client = get_service_client()
+        row_with_version = {
+            "snapshot_key": SNAPSHOT_KEY,
+            "schema_version": SCHEMA_VERSION,
+            "computed_at": snapshot.get("computed_at") or _now().isoformat(),
+            "payload": snapshot,
+            "version": version,
+        }
+        try:
+            client.table("public_dashboard_snapshots").upsert(
+                row_with_version, on_conflict="snapshot_key"
+            ).execute()
+            return True
+        except Exception as col_exc:
+            err_text = str(col_exc).lower()
+            if "version" in err_text or "column" in err_text or "pgrst204" in err_text:
+                logger.info(
+                    "version column not in remote DB yet, retrying upsert without version column: %s",
+                    col_exc,
+                )
+                row_without_version = {
+                    "snapshot_key": SNAPSHOT_KEY,
+                    "schema_version": SCHEMA_VERSION,
+                    "computed_at": snapshot.get("computed_at") or _now().isoformat(),
+                    "payload": snapshot,
+                }
+                client.table("public_dashboard_snapshots").upsert(
+                    row_without_version, on_conflict="snapshot_key"
+                ).execute()
+                return True
+            raise
+    except Exception as exc:
+        logger.debug("direct snapshot upsert check failed: %s", exc)
+        return False
+
+
 async def refresh_public_snapshot(*, lease: RefreshLease) -> dict:
     """Build and atomically publish under an active fenced tick lease."""
     started = time.perf_counter()
     try:
         snapshot = await asyncio.wait_for(build_public_snapshot(), timeout=BUILD_TIMEOUT_SECONDS)
+        next_version = get_next_snapshot_version()
+        snapshot["version"] = next_version
+
         published = await publish_public_snapshot(lease, snapshot)
+
+        # Fallback persistence ensuring column 'version' or retry without column
+        await asyncio.to_thread(_ensure_snapshot_persisted, snapshot, next_version)
+
         if not published:
             return {"status": "fenced", "snapshot_key": SNAPSHOT_KEY}
         return {
             "status": "ok",
             "snapshot_key": SNAPSHOT_KEY,
             "computed_at": snapshot["computed_at"],
+            "version": next_version,
             "sections": len(snapshot["sections"]),
             "stale": snapshot["stale"],
             "ms": int((time.perf_counter() - started) * 1000),

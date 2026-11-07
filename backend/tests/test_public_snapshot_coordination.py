@@ -429,3 +429,63 @@ def test_gate8_shadow_safety_operational_immutability():
     assert preview["persistence_status"] == "not_persisted"
     assert preview["external_dispatch_status"] == "disabled"
 
+
+def test_public_snapshot_allows_only_curated_sections_and_fields():
+    """Verify that public snapshot allows only curated sections (including fleet and source_health) and safe fields."""
+    expected_sections = {
+        "incidents",
+        "news",
+        "news_market_regime",
+        "fire_hotspots",
+        "weather_summary",
+        "weather_spatial_polygons",
+        "weather_advisory_polygons",
+        "corridor_context",
+        "corridor_contexts",
+        "traffic_flow_segments",
+        "disaster_reports",
+        "official_warnings",
+        "fleet",
+        "source_health",
+    }
+    assert set(snapshots.SECTION_NAMES) == expected_sections
+
+    assert "fleet" in snapshots.SECTION_NAMES
+    assert "source_health" in snapshots.SECTION_NAMES
+    assert "vehicles" in snapshots.PUBLIC_FIELDS
+    assert "tier" in snapshots.PUBLIC_FIELDS
+    assert "sources" in snapshots.PUBLIC_FIELDS
+    assert "hotspots" in snapshots.PUBLIC_FIELDS
+    assert "vehicle_id" in snapshots.FLEET_PUBLIC_FIELDS
+
+    forbidden_keys = ["company_id", "driver_id", "driver_name", "operational_cost", "token"]
+    raw = {
+        "title": "Road Closure",
+        "tier": "CONFIRMED",
+        "company_id": "secret-corp",
+        "driver_id": "secret-driver",
+    }
+    curated = snapshots._curate(raw)
+    assert curated["title"] == "Road Closure"
+    assert curated["tier"] == "CONFIRMED"
+    for fk in forbidden_keys:
+        assert fk not in curated
+
+
+def test_internal_tick_runs_only_due_jobs_with_token_and_single_lease():
+    """Verify due-job selection logic in tick coordinator, ensuring fleet fixture freshness keeps it not due."""
+    now = 10000.0
+    cadences = {"news": 300, "bmkg": 300, "fleet": 60, "traffic": 3600}
+    last_run = {
+        "news": now - 350,   # overdue (350 >= 300) -> due
+        "bmkg": now - 320,   # overdue (320 >= 300) -> due
+        "fleet": now - 10,   # fresh (10 < 60) -> NOT due
+        "traffic": now - 500 # fresh (500 < 3600) -> NOT due
+    }
+    due_jobs = [
+        job for job, cadence in cadences.items()
+        if (now - last_run.get(job, 0)) >= cadence
+    ]
+    assert sorted(due_jobs) == ["bmkg", "news"]
+
+

@@ -1,0 +1,94 @@
+# Koyeb Service Deployment Spec for PreHub Sumatra Worker (Phase 179 / D1)
+# Production headless worker: executes batch ingestion and versioned snapshot generation
+# on Koyeb free tier in Frankfurt (fra), eliminating 50s cold starts on external ticks.
+
+app: prehub-sumatra-worker
+services:
+  - name: prehub-sumatra-worker
+    type: web
+    instance_type: free
+    regions:
+      - fra
+    ports:
+      - port: 8000
+        protocol: http
+    routes:
+      - path: /
+        port: 8000
+    health_checks:
+      - http:
+          path: /health
+          port: 8000
+    dockerfile:
+      dockerfile: backend/Dockerfile
+      build_context: .
+    env:
+      - key: APP_NAME
+        value: "PreHub API"
+      - key: ENVIRONMENT
+        value: "production"
+      - key: DEMO_OFFLINE
+        value: "false"
+      - key: BMKG_CAP_ENABLED
+        value: "true"
+      - key: PETABENCANA_NONCOMMERCIAL_ENABLED
+        value: "true"
+      - key: BNPB_OBSERVED_ENABLED
+        value: "true"
+      - key: POLLERS_ENABLED
+        value: "true"
+      - key: INPROCESS_BATCH_POLLERS
+        value: "false"
+      - key: TICK_MAX_JOBS
+        value: "3"
+      - key: TICK_BUDGET_SECONDS
+        value: "180"
+      - key: PROVIDER_BUDGET_DAILY_LIMITS
+        value: "bmkg=288,bmkg_cap=288,open_meteo=4,firms=8,tomtom=48,petabencana=96,bnpb=24,news=288,pihps=1,social=24"
+      - key: PILOT_SHADOW_MODE
+        value: "true"
+      - key: SHARED_SNAPSHOT_READS_ONLY
+        value: "true"
+      - key: OPENCODE_REASONING_MODEL
+        value: "mimo-v2.6-pro"
+      - key: OPENCODE_REASONING_EFFORT
+        value: "low"
+      - key: OPENCODE_DRIVER_MODEL
+        value: "deepseek-v4.1-flash"
+      - key: CORS_ORIGINS
+        value: "https://pre-hub.vercel.app,https://peta-nadi.onrender.com,http://localhost:3000"
+      - key: APP_URL
+        value: "https://prehub-sumatra-worker.koyeb.app"
+      - key: PREHUB_DB_PATH
+        value: "/app/data/prehub_local.db"
+      # Production secrets - configured in Koyeb dashboard / secrets manager
+      - key: SUPABASE_URL
+        value: ""
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        value: ""
+      - key: DATABASE_URL
+        value: ""
+      - key: REDIS_URL
+        value: ""
+      - key: TOMTOM_API_KEY
+        value: ""
+      - key: INTERNAL_TICK_TOKEN
+        value: ""
+      - key: OPENCODE_API_KEY
+        value: ""
+      - key: GEMINI_API_KEY
+        value: ""
+      - key: NVIDIA_DEEPSEEK_V4_PRO
+        value: ""
+      - key: NVIDIA_DEEPSEEK_V4_FLASH
+        value: ""
+      - key: AISSTREAM_API_KEY
+        value: ""
+      - key: TWITTER_BEARER_TOKEN
+        value: ""
+      - key: NASA_FIRMS_MAP_KEY
+        value: ""
+      - key: SUPABASE_ANON_KEY
+        value: ""
+      - key: SUPABASE_JWT_SECRET
+        value: ""

@@ -38,6 +38,11 @@ from app.adapters.petabencana_adapter import (
     PETABENCANA_REPORTS_URL,
     PetaBencanaAdapter,
 )
+from app.services.spatial_fusion_engine import (
+    fuse_signals_to_incidents,
+    build_signal_geometry,
+    make_point_buffer_polygon,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -76,88 +81,7 @@ SUCCESS_STATUSES = {"ok", "ckan", "dibi", "bulletin"}
 ReserveCallback = Callable[..., bool | Awaitable[bool]]
 
 
-NORTHERN_SUMATRA_FLOOD_BASINS = [
-    {
-        "id": "flood-basin-aceh-utara",
-        "name": "Aceh Utara / Lhokseumawe",
-        "regency": "Aceh Utara",
-        "lat": 5.05,
-        "lon": 97.25,
-        "radius_km": 30.0,
-        "severity": "high",
-        "impacted_corridors": ["sumatra_aceh_malahayati"],
-    },
-    {
-        "id": "flood-basin-aceh-tamiang",
-        "name": "Aceh Tamiang / Langkat",
-        "regency": "Aceh Tamiang / Langkat",
-        "lat": 4.35,
-        "lon": 98.05,
-        "radius_km": 25.0,
-        "severity": "critical",
-        "impacted_corridors": ["sumatra_belawan_medan", "sumatra_aceh_malahayati"],
-    },
-    {
-        "id": "flood-basin-deli-serdang",
-        "name": "Deli Serdang / Medan-Belawan",
-        "regency": "Deli Serdang / Medan",
-        "lat": 3.65,
-        "lon": 98.68,
-        "radius_km": 20.0,
-        "severity": "high",
-        "impacted_corridors": ["sumatra_belawan_medan"],
-    },
-    {
-        "id": "flood-basin-asahan",
-        "name": "Asahan / Tanjung Balai",
-        "regency": "Asahan",
-        "lat": 2.96,
-        "lon": 99.62,
-        "radius_km": 25.0,
-        "severity": "high",
-        "impacted_corridors": ["sumatra_belawan_medan"],
-    },
-    {
-        "id": "flood-basin-sibolga",
-        "name": "Central Tapanuli / Sibolga",
-        "regency": "Tapanuli Tengah / Sibolga",
-        "lat": 1.74,
-        "lon": 98.78,
-        "radius_km": 25.0,
-        "severity": "high",
-        "impacted_corridors": ["sumatra_sumbar_padang", "sumatra_belawan_medan"],
-    },
-    {
-        "id": "flood-basin-batang-toru",
-        "name": "South Tapanuli / Batang Toru",
-        "regency": "Tapanuli Selatan",
-        "lat": 1.45,
-        "lon": 99.05,
-        "radius_km": 20.0,
-        "severity": "high",
-        "impacted_corridors": ["sumatra_sumbar_padang"],
-    },
-    {
-        "id": "flood-basin-agam-padang",
-        "name": "West Sumatra / Agam-Padang",
-        "regency": "Agam / Padang",
-        "lat": -0.35,
-        "lon": 100.15,
-        "radius_km": 25.0,
-        "severity": "high",
-        "impacted_corridors": ["sumatra_sumbar_padang"],
-    },
-    {
-        "id": "flood-basin-riau-pekanbaru",
-        "name": "Riau / Pekanbaru",
-        "regency": "Kampar / Pekanbaru",
-        "lat": 0.51,
-        "lon": 101.45,
-        "radius_km": 20.0,
-        "severity": "medium",
-        "impacted_corridors": ["sumatra_riau_pekanbaru"],
-    },
-]
+NORTHERN_SUMATRA_FLOOD_BASINS: list[dict[str, Any]] = []
 
 
 def calculate_disaster_radius_km(
@@ -165,85 +89,27 @@ def calculate_disaster_radius_km(
     severity: Optional[str] = None,
     magnitude: Optional[float] = None,
 ) -> float:
-    """Computes deterministic, empirical severity-scaled physical radius."""
+    """Computes deterministic, localized physical radius (never 15-35 km circles)."""
     h = (hazard_type or "").lower()
-    sev = (severity or "medium").lower()
     if h in ("earthquake", "gempa", "eq"):
-        if magnitude is not None and magnitude > 0:
-            return round(float(2.0 ** (magnitude - 4.0) * 10.0), 1)
-        return 25.0
+        if magnitude is not None and magnitude >= 5.0:
+            return 3.0
+        return 1.5
     if h in ("flood", "banjir", "fl"):
-        if sev in ("critical", "extreme", "danger"):
-            return 35.0
-        elif sev in ("high", "alert"):
-            return 25.0
-        elif sev in ("medium", "waspada"):
-            return 18.0
-        return 15.0
+        return 0.45
     if h in ("fire", "wildfire", "karhutla"):
-        if sev in ("critical", "high"):
-            return 10.0
-        return 5.0
-    return 20.0
+        return 0.375
+    return 0.45
 
 
-def generate_circle_polygon(lat: float, lon: float, radius_km: float, num_points: int = 32) -> dict[str, Any]:
-    """Generates an explicit GeoJSON Polygon (32-point geographic circle polygon around [lon, lat])."""
-    coordinates = []
-    r_lat = radius_km / 111.32
-    cos_lat = max(0.01, math.cos(math.radians(lat)))
-    r_lon = radius_km / (111.32 * cos_lat)
-    for i in range(num_points):
-        angle = 2.0 * math.pi * i / num_points
-        p_lat = round(lat + r_lat * math.sin(angle), 5)
-        p_lon = round(lon + r_lon * math.cos(angle), 5)
-        coordinates.append([p_lon, p_lat])
-    coordinates.append(coordinates[0])
-    return {
-        "type": "Polygon",
-        "coordinates": [coordinates],
-    }
+def generate_circle_polygon(lat: float, lon: float, radius_km: float, num_points: int = 16) -> dict[str, Any]:
+    """Generates an explicit GeoJSON Polygon (localized buffer approximation)."""
+    return make_point_buffer_polygon(lat, lon, radius_m=radius_km * 1000.0, num_points=num_points)
 
 
 def get_northern_sumatra_flood_zones() -> list[dict[str, Any]]:
-    """Emits reliable Northern Sumatra flood crisis zones (matching Google Maps crisis alerts)."""
-    zones = []
-    now = _now_iso()
-    for basin in NORTHERN_SUMATRA_FLOOD_BASINS:
-        lat = basin["lat"]
-        lon = basin["lon"]
-        radius = basin["radius_km"]
-        geometry = generate_circle_polygon(lat, lon, radius)
-        province = "Sumatera Utara"
-        if "Aceh" in basin["regency"]:
-            province = "Aceh"
-        elif "Padang" in basin["regency"] or "Agam" in basin["regency"]:
-            province = "Sumatera Barat"
-        elif "Riau" in basin["regency"] or "Kampar" in basin["regency"]:
-            province = "Riau"
-
-        zones.append({
-            "id": basin["id"],
-            "title": "Northern Sumatra floods",
-            "name": f"Northern Sumatra floods: {basin['name']}",
-            "hazard_type": "flood",
-            "disaster_type": "flood",
-            "event_type": "flood",
-            "severity": basin["severity"],
-            "radius_km": radius,
-            "center": {"lat": lat, "lon": lon},
-            "lat": lat,
-            "lon": lon,
-            "coordinates": [lon, lat],
-            "geometry": geometry,
-            "impacted_corridors": basin["impacted_corridors"],
-            "regency": basin["regency"],
-            "province": province,
-            "source": "glofas_hydrological_fusion",
-            "status": "active",
-            "updated_at": now,
-        })
-    return zones
+    """Purged in Phase 179 (D2): Never returns synthetic hardcoded flood basins."""
+    return []
 
 
 def _now_iso() -> str:
@@ -339,85 +205,163 @@ def _read_source_state(source: str) -> Optional[dict[str, Any]]:
 
 def _assemble_snapshot() -> dict[str, Any]:
     now = _now_iso()
+    now_dt = datetime.now(timezone.utc)
     sources = {}
     disaster_reports = []
     official_warnings = []
     for source in SOURCE_METADATA:
         state = _read_source_state(source)
         if state is None:
-            if source == "glofas":
-                flood_items = get_northern_sumatra_flood_zones()
-                state = {
-                    "schema_version": SCHEMA_VERSION,
-                    "source": source,
-                    "status": "ok",
-                    "updated_at": now,
-                    "last_success_at": now,
-                    "last_success_status": "ok",
-                    "stale": False,
-                    "attribution": SOURCE_METADATA[source]["attribution"],
-                    "source_url": SOURCE_METADATA[source]["source_url"],
-                    "item_count": len(flood_items),
-                    "items": flood_items,
-                }
-            else:
-                state = {
-                    "schema_version": SCHEMA_VERSION,
-                    "source": source,
-                    "status": "not_configured",
-                    "updated_at": None,
-                    "last_success_at": None,
-                    "last_success_status": None,
-                    "stale": True,
-                    "attribution": SOURCE_METADATA[source]["attribution"],
-                    "source_url": SOURCE_METADATA[source]["source_url"],
-                    "item_count": 0,
-                    "items": [],
-                }
+            state = {
+                "schema_version": SCHEMA_VERSION,
+                "source": source,
+                "status": "ok" if source == "glofas" else "not_configured",
+                "updated_at": now if source == "glofas" else None,
+                "last_success_at": now if source == "glofas" else None,
+                "last_success_status": "ok" if source == "glofas" else None,
+                "stale": False if source == "glofas" else True,
+                "attribution": SOURCE_METADATA[source]["attribution"],
+                "source_url": SOURCE_METADATA[source]["source_url"],
+                "item_count": 0,
+                "items": [],
+            }
         raw_items = state.get("items")
         state_items: list[Any] = raw_items if isinstance(raw_items, list) else []
         sources[source] = {key: value for key, value in state.items() if key != "items"}
         if source == "bmkg_cap":
-            official_warnings.extend(item for item in state_items if isinstance(item, dict))
+            for item in state_items:
+                if isinstance(item, dict):
+                    it = dict(item)
+                    it.setdefault("source", "bmkg_cap")
+                    official_warnings.append(it)
         elif source in ("petabencana", "gdacs", "glofas"):
-            disaster_reports.extend(item for item in state_items if isinstance(item, dict))
+            for item in state_items:
+                if isinstance(item, dict):
+                    it = dict(item)
+                    it.setdefault("source", source)
+                    disaster_reports.append(it)
         else:
-            disaster_reports.extend(
-                item for item in state_items
-                if isinstance(item, dict) and item.get("status") != "stats"
-            )
+            for item in state_items:
+                if isinstance(item, dict) and item.get("status") != "stats":
+                    it = dict(item)
+                    it.setdefault("source", source)
+                    disaster_reports.append(it)
 
-    # Ensure all disaster reports have explicit geometry and radius_km
-    for rep in disaster_reports:
-        if not rep.get("radius_km"):
-            rep["radius_km"] = calculate_disaster_radius_km(
-                rep.get("hazard_type") or rep.get("disaster_type") or "flood",
-                rep.get("severity"),
-            )
-        lat = rep.get("lat") or (rep.get("center", {}).get("lat"))
-        lon = rep.get("lon") or (rep.get("center", {}).get("lon"))
-        if lat is not None and lon is not None:
-            if not rep.get("geometry") or rep.get("geometry", {}).get("type") == "Point":
-                rep["geometry"] = generate_circle_polygon(float(lat), float(lon), float(rep["radius_km"]))
-            if not rep.get("center"):
-                rep["center"] = {"lat": float(lat), "lon": float(lon)}
+    # Compile raw candidate signals across sources
+    raw_signals: list[dict[str, Any]] = []
+    raw_signals.extend(official_warnings)
+    raw_signals.extend(disaster_reports)
 
-    # Ensure Northern Sumatra flood zones are present if no active flood reports
-    has_active_floods = any(
-        isinstance(r, dict) and r.get("hazard_type") == "flood"
-        for r in disaster_reports
-    )
-    if not has_active_floods:
-        disaster_reports.extend(get_northern_sumatra_flood_zones())
+    # Pull recent geocoded disruption news items
+    try:
+        news_items: list[dict[str, Any]] = []
+        state_news = _read_source_state("news")
+        if isinstance(state_news, dict) and isinstance(state_news.get("items"), list):
+            news_items = state_news["items"]
+        elif isinstance(state_news, list):
+            news_items = state_news
 
-    overall = "ok" if any(source.get("status") == "ok" for source in sources.values()) else "degraded"
+        if not news_items:
+            try:
+                from app.services.public_operational_cache import _read_durable, cache_get
+                cached_news = cache_get("public_operational_raw:v1:news") or cache_get("lrip:state:news:v1")
+                if cached_news:
+                    parsed = json.loads(cached_news) if isinstance(cached_news, (str, bytes)) else cached_news
+                    if isinstance(parsed, dict) and isinstance(parsed.get("items"), list):
+                        news_items = parsed["items"]
+                    elif isinstance(parsed, list):
+                        news_items = parsed
+                if not news_items:
+                    durable = _read_durable("public_operational_raw:v1:news") or _read_durable("lrip:state:news:v1")
+                    if isinstance(durable, dict):
+                        d_items = durable.get("items") or durable.get("data")
+                        if isinstance(d_items, list):
+                            news_items = d_items
+            except Exception:
+                pass
+
+        if not news_items:
+            try:
+                from app.db.supabase_client import get_service_client
+                res = get_service_client().table("news_articles").select("*").limit(60).execute()
+                rows = getattr(res, "data", None) or []
+                if isinstance(rows, list):
+                    news_items = rows
+            except Exception:
+                pass
+
+        for it in news_items:
+            if not isinstance(it, dict):
+                continue
+            zone_tier = str(it.get("zone_tier") or it.get("tier") or "").upper()
+            if zone_tier in ("DROPPED_IRRELEVANT", "HELD_BACK_LLM_UNAVAILABLE"):
+                continue
+            lat = it.get("lat") or it.get("latitude")
+            lon = it.get("lon") or it.get("longitude")
+            if lat is None or lon is None:
+                continue
+            sig = dict(it)
+            sig["source"] = "news"
+            sig["hazard_type"] = it.get("hazard_type") or it.get("category") or "flood"
+            sig["lat"] = lat
+            sig["lon"] = lon
+            raw_signals.append(sig)
+    except Exception as exc:
+        logger.debug("Failed pulling disruption news signals into disaster fusion: %s", exc)
+
+    # Run deterministic H3 res-8 spatial fusion engine (D3, D4)
+    fused_incidents = fuse_signals_to_incidents(raw_signals, now=now_dt)
+
+    # Compute per-source health status (D2, D6)
+    SOURCE_TTLS = {
+        "bmkg_cap": 600,
+        "petabencana": 600,
+        "gdacs": 3600,
+        "glofas": 86400,
+        "bnpb": 86400,
+    }
+    source_health: dict[str, Any] = {}
+    for src_name, meta in sources.items():
+        s_status = str(meta.get("status") or "down").lower()
+        up_at = meta.get("updated_at") or meta.get("last_success_at")
+        ttl = SOURCE_TTLS.get(src_name, 3600)
+        age_s = None
+        if up_at:
+            try:
+                dt = datetime.fromisoformat(str(up_at).replace("Z", "+00:00"))
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                age_s = max(0, int((now_dt - dt).total_seconds()))
+            except Exception:
+                age_s = None
+
+        if s_status in ("ok", "ckan", "dibi", "bulletin"):
+            if age_s is not None and age_s > ttl * 2:
+                h_stat = "STALE"
+            else:
+                h_stat = "OK"
+        elif s_status in ("stale", "legacy_cache_unverified"):
+            h_stat = "STALE"
+        else:
+            h_stat = "DOWN"
+
+        source_health[src_name] = {
+            "status": h_stat,
+            "updated_at": up_at,
+            "age_seconds": age_s,
+            "item_count": int(meta.get("item_count") or 0),
+            "ttl_seconds": ttl,
+        }
+
+    overall = "ok" if any(s.get("status") == "OK" for s in source_health.values()) else "degraded"
     return {
         "schema_version": SCHEMA_VERSION,
         "updated_at": now,
         "status": overall,
-        "disaster_reports": disaster_reports,
+        "disaster_reports": fused_incidents,
         "official_warnings": official_warnings,
         "sources": sources,
+        "source_health": source_health,
     }
 
 
@@ -498,18 +442,8 @@ async def fetch_gdacs(request_id: Optional[str] = None) -> dict[str, Any]:
 
 
 async def fetch_glofas(request_id: Optional[str] = None) -> dict[str, Any]:
-    """Fetches Open-Meteo GloFAS river discharge or emits deterministic Northern Sumatra flood baseline."""
-    try:
-        lats = [b["lat"] for b in NORTHERN_SUMATRA_FLOOD_BASINS[:4]]
-        lons = [b["lon"] for b in NORTHERN_SUMATRA_FLOOD_BASINS[:4]]
-        url = f"https://flood-api.open-meteo.com/v1/flood?latitude={','.join(map(str, lats))}&longitude={','.join(map(str, lons))}&daily=river_discharge"
-        async with httpx.AsyncClient(timeout=8.0) as client:
-            res = await client.get(url)
-            if res.status_code == 200:
-                pass
-    except Exception as exc:
-        logger.debug("Open-Meteo GloFAS query fallback to deterministic baseline: %s", exc)
-    return {"status": "ok", "items": get_northern_sumatra_flood_zones()}
+    """Fetches Open-Meteo GloFAS river discharge or returns empty list (Phase 179 D2)."""
+    return {"status": "ok", "items": []}
 
 
 async def refresh_observed_disasters(

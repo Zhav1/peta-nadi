@@ -16,7 +16,7 @@ export const SUMATRA_MAINLAND_PROVINCES = [
   'Lampung',
 ] as const;
 
-const PUBLIC_SECTION_NAMES = [
+export const PUBLIC_SECTION_NAMES = [
   'incidents',
   'news',
   'news_market_regime',
@@ -29,13 +29,21 @@ const PUBLIC_SECTION_NAMES = [
   'traffic_flow_segments',
   'disaster_reports',
   'official_warnings',
+  'fleet',
+  'source_health',
 ] as const;
+
+export type PublicSectionName = typeof PUBLIC_SECTION_NAMES[number];
+
+export interface PublicDashboardSnapshotEnvelope extends DashboardBootstrapResponse {
+  version?: number;
+}
 
 function unknownSection(): DashboardSection<unknown> {
   return { status: 'unknown', data: null, error: 'Snapshot belum memiliki data untuk bagian ini.' };
 }
 
-export function createUnknownPublicSnapshot(): DashboardBootstrapResponse {
+export function createUnknownPublicSnapshot(): PublicDashboardSnapshotEnvelope {
   return {
     schema_version: 1,
     snapshot_key: PUBLIC_DASHBOARD_SNAPSHOT_KEY,
@@ -45,6 +53,7 @@ export function createUnknownPublicSnapshot(): DashboardBootstrapResponse {
     role: 'GUEST',
     company_id: null,
     modality: null,
+    version: 1,
     source_freshness: {},
     coverage: {
       mainland_provinces: [...SUMATRA_MAINLAND_PROVINCES],
@@ -55,15 +64,16 @@ export function createUnknownPublicSnapshot(): DashboardBootstrapResponse {
   };
 }
 
-const SECTION_STATUSES = new Set<DashboardSectionStatus>([
+const SECTION_STATUSES = new Set<string>([
   'ok',
   'stale',
   'degraded',
   'timeout',
   'unknown',
+  'empty',
 ]);
 
-export function normalizePublicSnapshot(value: unknown): DashboardBootstrapResponse {
+export function normalizePublicSnapshot(value: unknown): PublicDashboardSnapshotEnvelope {
   if (!value || typeof value !== 'object') return createUnknownPublicSnapshot();
   const raw = value as Record<string, unknown>;
   if (raw.schema_version !== 1 || raw.snapshot_key !== PUBLIC_DASHBOARD_SNAPSHOT_KEY) {
@@ -80,12 +90,37 @@ export function normalizePublicSnapshot(value: unknown): DashboardBootstrapRespo
       continue;
     }
     const section = candidate as Record<string, unknown>;
-    const status = SECTION_STATUSES.has(section.status as DashboardSectionStatus)
-      ? section.status as DashboardSectionStatus
-      : 'unknown';
+    const rawStatus = typeof section.status === 'string' ? section.status : 'unknown';
+    const status: DashboardSectionStatus =
+      rawStatus === 'empty'
+        ? 'ok'
+        : SECTION_STATUSES.has(rawStatus)
+          ? (rawStatus as DashboardSectionStatus)
+          : 'unknown';
+
+    let data = section.data ?? null;
+    if (name === 'source_health' && data && typeof data === 'object') {
+      const dataObj = data as Record<string, unknown>;
+      if (!Array.isArray(dataObj.sources)) {
+        const sourcesList = Object.entries(dataObj)
+          .filter(([key, val]) => key !== 'sources' && val && typeof val === 'object')
+          .map(([key, val]) => {
+            const v = val as Record<string, unknown>;
+            const rawStat = String(v.status || 'unknown').toLowerCase();
+            const stat = rawStat === 'ok' ? 'healthy' : rawStat;
+            return {
+              name: key,
+              status: stat,
+              last_seen: (v.last_success_at || v.updated_at || null) as string | null,
+            };
+          });
+        data = { ...dataObj, sources: sourcesList };
+      }
+    }
+
     sections[name] = {
       status,
-      data: section.data ?? null,
+      data,
       ...(typeof section.error === 'string' ? { error: section.error } : {}),
       ...(typeof section.cached === 'boolean' ? { cached: section.cached } : {}),
       ...(typeof section.observed_at === 'string' || section.observed_at === null
@@ -100,6 +135,7 @@ export function normalizePublicSnapshot(value: unknown): DashboardBootstrapRespo
     };
   }
   const computedAt = typeof raw.computed_at === 'string' ? raw.computed_at : null;
+  const version = typeof raw.version === 'number' ? raw.version : 1;
   return {
     ...createUnknownPublicSnapshot(),
     schema_version: 1,
@@ -111,6 +147,7 @@ export function normalizePublicSnapshot(value: unknown): DashboardBootstrapRespo
     company_id: null,
     modality: typeof raw.modality === 'string' ? (raw.modality as 'truck' | 'vessel' | 'air') : null,
     sections: sections as DashboardBootstrapResponse['sections'],
+    version,
     source_freshness: raw.source_freshness && typeof raw.source_freshness === 'object'
       ? raw.source_freshness as Record<string, unknown>
       : {},
@@ -126,10 +163,11 @@ export function normalizePublicSnapshot(value: unknown): DashboardBootstrapRespo
 
 export function markPublicSnapshotStale(
   snapshot: DashboardBootstrapResponse,
-): DashboardBootstrapResponse {
+): PublicDashboardSnapshotEnvelope {
   return {
     ...snapshot,
     stale: true,
+    version: (snapshot as PublicDashboardSnapshotEnvelope).version ?? 1,
     sections: Object.fromEntries(
       Object.entries(snapshot.sections).map(([name, section]) => [
         name,
@@ -141,7 +179,7 @@ export function markPublicSnapshotStale(
 
 export function isUsefulPublicSnapshot(snapshot: DashboardBootstrapResponse): boolean {
   return Boolean(snapshot.computed_at) && Object.values(snapshot.sections).some(
-    (section) => section?.data != null && (section.status === 'ok' || section.status === 'stale'),
+    (section) => section?.data != null && (section.status === 'ok' || section.status === 'stale' || (section.status as string) === 'empty'),
   );
 }
 

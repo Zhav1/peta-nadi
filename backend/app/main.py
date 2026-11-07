@@ -538,11 +538,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS : allow Next.js frontend on localhost, 127.0.0.1, Vercel deployments, and Render
+# CORS : allow Next.js frontend on localhost, 127.0.0.1, Vercel deployments, Koyeb, and Render
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
-    allow_origin_regex=r"https?://((localhost|127\.0\.0\.1)(:\d+)?|.*\.vercel\.app|.*\.onrender\.com)",
+    allow_origin_regex=r"https?://((localhost|127\.0\.0\.1)(:\d+)?|.*\.vercel\.app|.*\.koyeb\.app|.*\.onrender\.com)",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -620,6 +620,8 @@ export default function CrisisMap({
   const onZoneClickRef = useRef(onZoneClick);
   onZoneClickRef.current = onZoneClick;
 
+  const pendingFlyToRef = useRef<{ lon: number; lat: number; zoom?: number; ts?: number } | null>(null);
+
   const mouseDownPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const lastFocusedCrisisIdRef = useRef<string | null>(null);
   const lastFocusedShockwaveKeyRef = useRef<string | null>(null);
@@ -1363,6 +1365,7 @@ export default function CrisisMap({
           'fill-opacity': [
             'case',
             ['==', ['get', 'forecast_tag'], 'FORECAST_WASPADA'], 0,
+            ['==', ['get', 'tier'], 'WATCH'], 0.14,
             ['match', ['get', 'zone_tier'],
               'RED_CONFIRMED', 0.28,
               'YELLOW_CLARIFY', 0.24,
@@ -1385,8 +1388,16 @@ export default function CrisisMap({
             'YELLOW_CLARIFY', '#f59e0b',
             '#f87171',
           ],
-          'line-width': 2.5,
-          'line-opacity': 0.95,
+          'line-width': [
+            'case',
+            ['==', ['get', 'tier'], 'WATCH'], 1.5,
+            2.5,
+          ],
+          'line-opacity': [
+            'case',
+            ['==', ['get', 'tier'], 'WATCH'], 0.65,
+            0.95,
+          ],
         },
       });
 
@@ -1536,55 +1547,7 @@ export default function CrisisMap({
         },
       });
 
-      // 2b. Native Mapbox Vector Traffic Source (mapbox-traffic-v1)
-      if (!map.getSource('mapbox-traffic-source')) {
-        try {
-          map.addSource('mapbox-traffic-source', {
-            type: 'vector',
-            url: 'mapbox://mapbox.mapbox-traffic-v1',
-          });
-          map.addLayer({
-            id: 'traffic-moderate',
-            type: 'line',
-            source: 'mapbox-traffic-source',
-            'source-layer': 'traffic',
-            filter: ['==', 'congestion', 'moderate'],
-            paint: {
-              'line-color': '#f59e0b',
-              'line-width': ['interpolate', ['linear'], ['zoom'], 5, 1.2, 10, 2.5, 15, 4.5],
-              'line-opacity': 0.75,
-            },
-          });
-          map.addLayer({
-            id: 'traffic-heavy',
-            type: 'line',
-            source: 'mapbox-traffic-source',
-            'source-layer': 'traffic',
-            filter: ['==', 'congestion', 'heavy'],
-            paint: {
-              'line-color': '#ef4444',
-              'line-width': ['interpolate', ['linear'], ['zoom'], 5, 1.6, 10, 3.2, 15, 5.5],
-              'line-opacity': 0.85,
-            },
-          });
-          map.addLayer({
-            id: 'traffic-severe',
-            type: 'line',
-            source: 'mapbox-traffic-source',
-            'source-layer': 'traffic',
-            filter: ['==', 'congestion', 'severe'],
-            paint: {
-              'line-color': '#dc2626',
-              'line-width': ['interpolate', ['linear'], ['zoom'], 5, 2.0, 10, 4.0, 15, 6.5],
-              'line-opacity': 0.95,
-            },
-          });
-        } catch (trafficErr) {
-          console.warn('Mapbox native traffic source init notice:', trafficErr);
-        }
-      }
-
-      // 2b. Traffic Congestion Segments Layer (Google Maps Traffic Style)
+      // 2b. Traffic Congestion Segments Layer (Google Maps Traffic Style - Sumatra only)
       map.addSource('congestion-segments-source', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
@@ -2189,6 +2152,29 @@ export default function CrisisMap({
         }
       });
 
+      if (pendingFlyToRef.current) {
+        const p = pendingFlyToRef.current;
+        pendingFlyToRef.current = null;
+        map.flyTo({
+          center: [p.lon, p.lat],
+          zoom: p.zoom ?? 11.2,
+          duration: 1200,
+          essential: true,
+        });
+      }
+      map.once('idle', () => {
+        if (pendingFlyToRef.current) {
+          const p = pendingFlyToRef.current;
+          pendingFlyToRef.current = null;
+          map.flyTo({
+            center: [p.lon, p.lat],
+            zoom: p.zoom ?? 11.2,
+            duration: 1200,
+            essential: true,
+          });
+        }
+      });
+
       updateMapSources();
     });
 
@@ -2471,12 +2457,16 @@ export default function CrisisMap({
       const features: GeoJSON.Feature<GeoJSON.LineString>[] = [];
 
       for (const seg of routeSegments) {
-        if (seg.coordinates && seg.coordinates.length >= 2) {
+        const rawCoords = seg.coordinates || (seg as any).geometry?.coordinates;
+        if (Array.isArray(rawCoords) && rawCoords.length >= 2) {
+          const coords: [number, number][] = rawCoords.map((c: any) => [Number(c.lon ?? c[0]), Number(c.lat ?? c[1])]);
+          const isOutsideSumatra = coords.some(([lon, lat]) => (lat > 1.2 && lon > 100.15) || (lat > 0.5 && lon > 103.5));
+          if (isOutsideSumatra) continue;
           features.push({
             type: 'Feature',
             geometry: {
               type: 'LineString',
-              coordinates: seg.coordinates.map((c: any) => [c.lon ?? c[0], c.lat ?? c[1]]),
+              coordinates: coords,
             },
             properties: {
               level: seg.level || 'moderate',
@@ -2486,18 +2476,16 @@ export default function CrisisMap({
       }
 
       for (const seg of macroSegments) {
-        const rawCoords =
-          seg.coordinates ||
-          seg.geometry?.coordinates ||
-          (seg.lon != null && seg.lat != null
-            ? [[Number(seg.lon) - 0.02, Number(seg.lat) - 0.02], [Number(seg.lon), Number(seg.lat)], [Number(seg.lon) + 0.02, Number(seg.lat) + 0.02]]
-            : []);
+        const rawCoords = (seg as any).coordinates || (seg as any).geometry?.coordinates;
         if (Array.isArray(rawCoords) && rawCoords.length >= 2) {
+          const coords: [number, number][] = rawCoords.map((c: any) => [Number(c[0] ?? c.lon), Number(c[1] ?? c.lat)]);
+          const isOutsideSumatra = coords.some(([lon, lat]) => (lat > 1.2 && lon > 100.15) || (lat > 0.5 && lon > 103.5));
+          if (isOutsideSumatra) continue;
           features.push({
             type: 'Feature',
             geometry: {
               type: 'LineString',
-              coordinates: rawCoords.map((c: any) => [Number(c[0] ?? c.lon), Number(c[1] ?? c.lat)]),
+              coordinates: coords,
             },
             properties: {
               level: String(seg.level || seg.congestion_level || seg.status || 'moderate').toLowerCase(),
@@ -2524,6 +2512,10 @@ export default function CrisisMap({
         if (!ring) continue;
         const centerLon = Array.isArray((z as any).center) ? (z as any).center[0] : ((z as any).center?.lon ?? (z as any).lon ?? null);
         const centerLat = Array.isArray((z as any).center) ? (z as any).center[1] : ((z as any).center?.lat ?? (z as any).lat ?? null);
+        const sourceCount = Number((z as any).source_count ?? (Array.isArray((z as any).sources) ? (z as any).sources.length : ((z as any).source ? 1 : 1)));
+        const tier = (z as any).tier || (sourceCount >= 2 ? 'CONFIRMED' : 'WATCH');
+        const sourcesLabel = Array.isArray((z as any).sources) ? (z as any).sources.join(', ') : ((z as any).source || (z as any).source_name || 'sensor');
+
         zoneFeatures.push({
           type: 'Feature',
           geometry: {
@@ -2532,6 +2524,8 @@ export default function CrisisMap({
           },
           properties: {
             id: (z as any).id || (z as any).crisis_id || '',
+            tier,
+            sources_label: sourcesLabel,
             type: z.type,
             risk: z.risk,
             crisis_id: (z as any).crisis_id || (z as any).id || '',
@@ -2547,7 +2541,7 @@ export default function CrisisMap({
             impacted_corridors: (z as any).impacted_corridors || (z as any).impacted_corridor || (z as any).tier_reason || 'Jalan Lintas Sumatera',
             center_lon: centerLon != null ? Number(centerLon) : null,
             center_lat: centerLat != null ? Number(centerLat) : null,
-            radiusKm: (z as any).radiusKm ?? (z as any).radius_km ?? 15,
+            radiusKm: (z as any).radiusKm ?? (z as any).radius_km ?? 0.6,
             impact_profile_json: (z as any).impact_profile ? JSON.stringify((z as any).impact_profile) : '',
           },
         } as GeoJSON.Feature<GeoJSON.Polygon>);
@@ -2580,7 +2574,7 @@ export default function CrisisMap({
               title: (z as any).title || 'Zona Bencana',
               display_label: (z as any).custom_hazard_label || (z as any).title || 'Peringatan Bencana',
               zone_tier: (z as any).zone_tier || 'RED_CONFIRMED',
-              radiusKm: (z as any).radiusKm ?? (z as any).radius_km ?? 20,
+              radiusKm: (z as any).radiusKm ?? (z as any).radius_km ?? 0.6,
               source: (z as any).source || (z as any).source_name || 'BMKG CAP / GloFAS / GDACS',
               impacted_corridors: (z as any).impacted_corridors || (z as any).impacted_corridor || (z as any).tier_reason || 'Jalan Lintas Sumatera',
               center_lon: lon,
@@ -3034,16 +3028,32 @@ export default function CrisisMap({
 
   // External camera focus (news "Fokus" / zone click) — independent of shockwave focus.
   useEffect(() => {
-    if (!flyToCoords || !mapRef.current) return;
-    try {
-      mapRef.current.flyTo({
-        center: [flyToCoords.lon, flyToCoords.lat],
-        zoom: flyToCoords.zoom ?? 9.2,
-        duration: 1200,
-        essential: true,
-      });
-    } catch {
-      // quiet fallback when map not ready
+    if (!flyToCoords) return;
+    pendingFlyToRef.current = flyToCoords;
+    const map = mapRef.current;
+    if (map && isMapLoadedRef.current) {
+      try {
+        map.flyTo({
+          center: [flyToCoords.lon, flyToCoords.lat],
+          zoom: flyToCoords.zoom ?? 11.2,
+          duration: 1200,
+          essential: true,
+        });
+        pendingFlyToRef.current = null;
+      } catch {
+        map.once('idle', () => {
+          if (pendingFlyToRef.current) {
+            const p = pendingFlyToRef.current;
+            pendingFlyToRef.current = null;
+            map.flyTo({
+              center: [p.lon, p.lat],
+              zoom: p.zoom ?? 11.2,
+              duration: 1200,
+              essential: true,
+            });
+          }
+        });
+      }
     }
   }, [flyToCoords?.lon, flyToCoords?.lat, flyToCoords?.zoom, flyToCoords?.ts]);
 

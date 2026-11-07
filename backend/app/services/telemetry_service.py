@@ -1155,6 +1155,35 @@ class TelemetryService:
             logger.debug(f"Failed reading aircraft durable cache: {e}")
         return None
 
+    def _save_vessels_durable_cache(self, vessels_list: List[Dict[str, Any]]):
+        if not vessels_list:
+            return
+        try:
+            from app.services.public_operational_cache import _write_durable
+            from app.services.redis_client import cache_set
+            payload = {"vessels": vessels_list, "updated_at": time.time()}
+            serialized = json.dumps(payload, default=str)
+            cache_set("lrip:state:vessels_telemetry:v1", serialized, ex=1800)
+            _write_durable("lrip:state:vessels_telemetry:v1", payload, "aisstream_sumatra")
+        except Exception as e:
+            logger.debug(f"Failed writing vessels durable cache: {e}")
+
+    def _load_vessels_durable_cache(self) -> Optional[List[Dict[str, Any]]]:
+        try:
+            from app.services.public_operational_cache import _read_durable
+            from app.services.redis_client import cache_get
+            raw = cache_get("lrip:state:vessels_telemetry:v1")
+            payload = json.loads(raw) if raw else None
+            if not payload or not isinstance(payload, dict):
+                payload = _read_durable("lrip:state:vessels_telemetry:v1")
+            if isinstance(payload, dict) and payload.get("vessels"):
+                ts = float(payload.get("updated_at", 0))
+                if time.time() - ts < 1800.0:  # 30 minutes
+                    return payload["vessels"]
+        except Exception as e:
+            logger.debug(f"Failed reading vessels durable cache: {e}")
+        return None
+
     """
     Multi-modal telemetry ingestion and cache service.
     Combines live Redis AIS streams, rate-limited OpenSky ADS-B flights (60s cache),
@@ -1256,12 +1285,19 @@ class TelemetryService:
     async def fetch_live_sumatra_aircraft(self) -> List[Dict[str, Any]]:
         """
         Fetches live regional Sumatra airspace flights querying multiple open ADS-B endpoints
-        concurrently via asyncio.gather with 2.5s timeouts across North, Central, and South Sumatra.
-        Providers:
-          1. https://api.airplanes.live/v2/point/{lat}/{lon}/250
+        concurrently via asyncio.gather across 6 circles (250 nm radius) covering all of Sumatra:
+          1. Banda Aceh / Sabang (5.52, 95.42)
+          2. Medan / Kualanamu (3.64, 98.88)
+          3. Pekanbaru (0.46, 101.44)
+          4. Padang (-0.79, 100.28)
+          5. Batam / Riau Islands (1.12, 104.11)
+          6. Palembang / Lampung (-3.60, 104.70)
+        Providers in order:
+          1. https://api.adsb.lol/v2/point/{lat}/{lon}/250
           2. https://opendata.adsb.fi/api/v2/lat/{lat}/lon/{lon}/dist/250
-          3. https://api.adsb.lol/v2/point/{lat}/{lon}/250
-        Falls back to OpenSky Network states, and then to 45 realistic Pan-Sumatra regional flights.
+          3. https://api.airplanes.live/v2/point/{lat}/{lon}/250
+        Strictly filters out Peninsular Malaysia domestic traffic (lat > 1.5 and lon > 100.4).
+        Purged baseline fallbacks (D2, D9): if 0 live aircraft + durable cache empty, returns [].
         """
         now = time.time()
         if self._aircraft_cache and (now - self._aircraft_cache_ts < self._aircraft_ttl_seconds):
@@ -1273,20 +1309,24 @@ class TelemetryService:
             self._aircraft_cache_ts = now
             return self._aircraft_cache
 
+        # Whole-Sumatra 6-Circle ADS-B Coverage (radius 250 nm)
         points = [
-            ("0.5", "101.5"),   # Central Sumatra (Riau/Sumbar)
-            ("3.5", "98.5"),    # North Sumatra (KNO / Medan)
-            ("-3.5", "104.5"),  # South Sumatra (PLM / Palembang / Lampung)
+            ("5.52", "95.42"),   # Banda Aceh / Sabang
+            ("3.64", "98.88"),   # Medan / Kualanamu (KNO)
+            ("0.46", "101.44"),  # Pekanbaru (PKU)
+            ("-0.79", "100.28"), # Padang (PDG)
+            ("1.12", "104.11"),  # Batam (BTH) / Riau Islands
+            ("-3.60", "104.70"), # Palembang (PLM) / Lampung
         ]
 
         live_planes: Dict[str, Dict[str, Any]] = {}
 
-        # Build query tasks across 3 independent open ADS-B aggregators
+        # Build query tasks across 3 open ADS-B aggregators in order: adsb.lol -> adsb.fi -> airplanes.live
         query_configs = []
         for lat_pt, lon_pt in points:
-            query_configs.append((f"https://api.airplanes.live/v2/point/{lat_pt}/{lon_pt}/250", "AIRPLANES_LIVE"))
-            query_configs.append((f"https://opendata.adsb.fi/api/v2/lat/{lat_pt}/lon/{lon_pt}/dist/250", "ADSB_FI"))
             query_configs.append((f"https://api.adsb.lol/v2/point/{lat_pt}/{lon_pt}/250", "ADSB_LOL"))
+            query_configs.append((f"https://opendata.adsb.fi/api/v2/lat/{lat_pt}/lon/{lon_pt}/dist/250", "ADSB_FI"))
+            query_configs.append((f"https://api.airplanes.live/v2/point/{lat_pt}/{lon_pt}/250", "AIRPLANES_LIVE"))
 
         async def _fetch_endpoint(client: httpx.AsyncClient, url: str, source_tag: str):
             try:
@@ -1318,7 +1358,12 @@ class TelemetryService:
                             except (ValueError, TypeError):
                                 continue
 
-                            if not (-6.5 <= lat <= 6.5 and 94.5 <= lon <= 109.0):
+                            # Operational area: lat -6.2 to 6.2, lon 94.5 to 106.5
+                            if not (-6.2 <= lat <= 6.2 and 94.5 <= lon <= 106.5):
+                                continue
+
+                            # Exclude Peninsular Malaysia domestic traffic
+                            if lat > 1.5 and lon > 100.4:
                                 continue
 
                             if not is_in_sumatra_scope(lon, lat, "air"):
@@ -1367,9 +1412,9 @@ class TelemetryService:
                                     "last_ping_seconds_ago": 0.8
                                 }
         except Exception as e:
-            logger.warning(f"Error querying parallel ADS-B feeds: {e}. Falling back to OpenSky / baseline transponders.")
+            logger.warning(f"Error querying parallel ADS-B feeds: {e}. Falling back to OpenSky / durable cache.")
 
-        if len(live_planes) >= 5:
+        if live_planes:
             self._aircraft_cache = list(live_planes.values())
             self._aircraft_cache_ts = now
             self._save_aircraft_durable_cache(self._aircraft_cache)
@@ -1387,7 +1432,9 @@ class TelemetryService:
                         callsign = str(s[1] or f"FLT-{hex_id}").strip()
                         lon = float(s[5])
                         lat = float(s[6])
-                        if not (-6.5 <= lat <= 6.5 and 94.5 <= lon <= 109.0):
+                        if not (-6.2 <= lat <= 6.2 and 94.5 <= lon <= 106.5):
+                            continue
+                        if lat > 1.5 and lon > 100.4:
                             continue
                         if not is_in_sumatra_scope(lon, lat, "air"):
                             continue
@@ -1438,18 +1485,17 @@ class TelemetryService:
         except Exception as e:
             logger.debug(f"OpenSky fallback error: {e}")
 
-        # Fallback 2: Enriched active baseline air cargo transponders
-        simulated_flights = []
-        for unit in MASTER_FLEET_DEFINITIONS:
-            if unit.get("modality") == "air":
-                enriched = self._enrich_air_cargo(unit)
-                assign_baseline_tenancy(enriched)
-                simulated_flights.append(enriched)
+        # Fallback 2 (D2, D9): Check durable cache from public_operational_source_cache (< 15 min old)
+        durable = self._load_aircraft_durable_cache()
+        if durable:
+            self._aircraft_cache = durable
+            self._aircraft_cache_ts = now
+            return self._aircraft_cache
 
-        self._aircraft_cache = simulated_flights
+        # Purged synthetic baselines (D2, D9): 0 live aircraft and no durable cache returns []
+        self._aircraft_cache = []
         self._aircraft_cache_ts = now
-        self._save_aircraft_durable_cache(self._aircraft_cache)
-        return self._aircraft_cache
+        return []
 
     def _resolve_vehicle_path(self, origin: Optional[str], destination: Optional[str]) -> List[List[float]]:
         """Synthesizes coordinate waypoints for an origin and destination pair using Sumatra strategic hubs."""
@@ -2004,11 +2050,16 @@ class TelemetryService:
                 assign_baseline_tenancy(enriched)
                 enriched_trucks.append(enriched)
 
-        # 3. Maritime: Live AIS Vessels from AISstreamAdapter (or 85+ realistic fallback)
+        # 3. Maritime: Live AIS Vessels from AISstreamAdapter (or durable cache < 30 min old)
         maritime_units: List[Dict[str, Any]] = []
         try:
             from app.adapters.aisstream_adapter import get_live_ais_vessels
             raw_vessels = get_live_ais_vessels()
+            if not raw_vessels:
+                raw_vessels = self._load_vessels_durable_cache() or []
+            else:
+                self._save_vessels_durable_cache(raw_vessels)
+
             for v in raw_vessels:
                 vid = f"AIS-{v.get('mmsi')}"
                 lon = float(v.get("lon", 98.67))
@@ -2055,15 +2106,9 @@ class TelemetryService:
         except Exception as e:
             logger.error(f"Error fetching live AIS vessels: {e}")
 
-        # If live AIS returned nothing, fallback to baseline maritime units
-        if not maritime_units:
-            for unit in MASTER_FLEET_DEFINITIONS:
-                if unit.get("modality") == "maritime":
-                    enriched = self._enrich_maritime_vessel(unit, {})
-                    assign_baseline_tenancy(enriched)
-                    maritime_units.append(enriched)
+        # Ground-truth integrity (D2, D9): Purged fallback to baseline maritime units from MASTER_FLEET_DEFINITIONS!
 
-        # 4. Aviation: Live Sumatra Aircraft (adsb.lol / OpenSky / active baseline)
+        # 4. Aviation: Live Sumatra Aircraft (adsb.lol / OpenSky / durable cache)
         try:
             loop = asyncio.get_running_loop()
             if time.time() - self._aircraft_cache_ts > self._aircraft_ttl_seconds:
@@ -2072,12 +2117,7 @@ class TelemetryService:
             pass
 
         aviation_units = list(self._aircraft_cache)
-        if not aviation_units:
-            for unit in MASTER_FLEET_DEFINITIONS:
-                if unit.get("modality") == "air":
-                    enriched = self._enrich_air_cargo(unit)
-                    assign_baseline_tenancy(enriched)
-                    aviation_units.append(enriched)
+        # Ground-truth integrity (D2, D9): Purged fallback to baseline air units from MASTER_FLEET_DEFINITIONS!
 
         # Enforce coordinate invariants on all maritime and aviation units (true current coordinate p_curr, progress: 0.5)
         for m in maritime_units:

@@ -207,6 +207,59 @@ SUMATRA_GEO_REGEX = re.compile(
 )
 
 
+LOGISTICS_DISRUPTION_TERMS = (
+    "banjir", "terendam", "luapan", "longsor", "amblas", "jalan putus",
+    "jembatan putus", "macet total", "lumpuh", "kecelakaan", "truk terbalik",
+    "kontainer", "penutupan jalan", "tol ", "pelabuhan", "belawan",
+    "bakauheni", "merak", "dumai", "teluk bayur", "cuaca ekstrem",
+    "gelombang tinggi", "gempa", "karhutla", "kabut asap", "antrean bbm",
+    "kelangkaan solar", "kelangkaan bbm", "spbu", "blokade jalan",
+    "unjuk rasa", "demo ", "pungli", "pemalakan", "pemerasan", "bajing loncat",
+    "mogok", "penutupan", "hambatan", "macet", "jalan rusak", "jalan berlubang",
+    "lintas sumatera", "jalinsum"
+)
+
+ROUTINE_CEREMONY_CSR_EXCLUSIONS = (
+    "pelatihan motor listrik", "bagikan helm", "sosialisasi", "kunjungan kerja",
+    "penghargaan", "turnamen", "olahraga", "beasiswa", "vaksinasi",
+    "donor darah", "santunan", "lomba", "festival", "pelantikan",
+    "seminar", "workshop", "kompetensi siswa"
+)
+
+
+def passes_logistics_disruption_prefilter(title: str, summary: str = "") -> bool:
+    """Strict prefilter for Sumatra logistics disruptions (Phase 179 D7).
+    
+    Must match at least one disruption/logistics hazard term AND must NOT match
+    any routine non-disruption ceremonial / CSR patterns.
+    """
+    combined = f"{title or ''} {summary or ''}".lower()
+    for exc in ROUTINE_CEREMONY_CSR_EXCLUSIONS:
+        if exc in combined:
+            return False
+    for term in LOGISTICS_DISRUPTION_TERMS:
+        if term in combined:
+            return True
+    return False
+
+
+def _hold_back_llm(item: Dict[str, Any], reason: str = "") -> None:
+    """Holds back an article when Gate-1 LLM is unavailable or fails (D4).
+    
+    Never falls back to heuristic extraction as a crisis.
+    """
+    item["zone_tier"] = "HELD_BACK_LLM_UNAVAILABLE"
+    item["is_disruption"] = False
+    item["is_crisis"] = False
+    item["llm_status"] = "held_back"
+    item["severity"] = "none"
+    item["tier_reason"] = f"Ditahan: Ekstraksi LLM tidak tersedia atau gagal ({reason}); tidak meloloskan heuristik sembarangan."
+    gtm = dict(item.get("ground_truth_metrics") or {})
+    gtm["zone_tier"] = "HELD_BACK_LLM_UNAVAILABLE"
+    gtm["tier_reason"] = item["tier_reason"]
+    item["ground_truth_metrics"] = gtm
+
+
 def passes_disaster_regex_gate(title: str, text: str) -> bool:
     """
     Deterministic 2-factor pre-LLM gate:
@@ -1386,9 +1439,13 @@ def _apply_batch_llm_item(structured: Dict[str, Any], item: Dict[str, Any]) -> D
                 pass
             return structured
         if item.get("incident_type"):
-            structured["incident_type"] = item["incident_type"]
+            if not (item["incident_type"] == "other_disruption" and structured.get("incident_type") and structured.get("incident_type") != "other_disruption"):
+                structured["incident_type"] = item["incident_type"]
+                structured["disaster_type"] = item["incident_type"]
         if item.get("severity"):
-            structured["severity"] = item["severity"]
+            _sev_rank = {"none": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
+            if _sev_rank.get(str(item["severity"]).lower(), 0) >= _sev_rank.get(str(structured.get("severity") or "").lower(), 0):
+                structured["severity"] = item["severity"]
         if item.get("custom_hazard_label"):
             structured["custom_hazard_label"] = item["custom_hazard_label"]
         if item.get("concise_summary"):
@@ -1423,6 +1480,8 @@ def _apply_batch_llm_item(structured: Dict[str, Any], item: Dict[str, Any]) -> D
         llm_tier = (item.get("zone_tier") or "").upper()
         llm_loc = item.get("verified_sumatra_location")
         llm_locs = item.get("verified_sumatra_locations")
+        if llm_loc:
+            structured["verified_sumatra_location"] = str(llm_loc)
         # Deterministic gate is never overridden by the LLM.
         try:
             _audit = structured.get("verification_audit") or {}
@@ -1552,6 +1611,23 @@ def _apply_batch_llm_item(structured: Dict[str, Any], item: Dict[str, Any]) -> D
                     structured["location_precision"] = _top.get("location_precision", "exact_node")
         except Exception:
             pass
+
+        # Geocoding fallback: resolve coordinates via Sumatra gazetteer if missing
+        if (structured.get("latitude") is None or structured.get("longitude") is None) and structured.get("zone_tier") not in ("DROPPED_IRRELEVANT", "HELD_BACK_LLM_UNAVAILABLE"):
+            try:
+                from app.services.spatial_fusion_engine import resolve_sumatra_location
+                resolved = resolve_sumatra_location(structured)
+                if resolved:
+                    structured["latitude"] = resolved["lat"]
+                    structured["longitude"] = resolved["lon"]
+                    structured["lat"] = resolved["lat"]
+                    structured["lon"] = resolved["lon"]
+                    structured["is_geocoded"] = True
+                    structured["location_precision"] = "corridor_point"
+                    if not structured.get("verified_sumatra_location"):
+                        structured["verified_sumatra_location"] = resolved["name"]
+            except Exception as ge:
+                logger.debug(f"Gazetteer fallback geocoding failed: {ge}")
         # Mark LLM verification + content length analyzed.
         try:
             _va2 = dict(structured.get("verification_audit") or {})
@@ -1600,41 +1676,8 @@ def _apply_batch_llm_item(structured: Dict[str, Any], item: Dict[str, Any]) -> D
 
 
 def _needs_gate2_review(structured: Dict[str, Any]) -> bool:
-    """SPEC-LOCKED Q2+Q7 Gate-2 selector: ONLY uncertain items cost extra calls.
-
-    Returns True when the Gate-1 verdict is still ambiguous:
-    - zone_tier == YELLOW_CLARIFY, or
-    - confidence_score < 0.7, or
-    - ambiguous discourse (prevention_ceremonial / solution_policy /
-      academic_commentary / retrospective_aid without physical blockage), or
-    - geocoded exact-node with impact NOT corroborated.
-    RED_CONFIRMED and DROPPED_IRRELEVANT never enter Gate-2.
-    """
-    try:
-        if not isinstance(structured, dict):
-            return False
-        zone = str(structured.get("zone_tier") or "").upper()
-        if zone in ("RED_CONFIRMED", "DROPPED_IRRELEVANT"):
-            return False
-        try:
-            conf = float(structured.get("confidence_score") or 1.0)
-        except (TypeError, ValueError):
-            conf = 1.0
-        if conf < GATE2_CONFIDENCE_THRESHOLD:
-            return True
-        if zone == "YELLOW_CLARIFY":
-            return True
-        audit = structured.get("verification_audit") or {}
-        disc = str(audit.get("discourse_type") or structured.get("discourse_type") or "incident_report")
-        if disc in ("prevention_ceremonial", "solution_policy_discourse",
-                    "academic_commentary", "retrospective_aid", "ceremonial_economic",
-                    "non_incident_discourse"):
-            return True
-        if (structured.get("is_geocoded") and audit.get("impact_corroborated") is False):
-            return True
-        return False
-    except Exception:
-        return False
+    """Phase 179 D8: Gate-2 mimo-v2.6-pro dropped. Always returns False."""
+    return False
 
 
 async def _gate2_web_search_verify(title: str, link: str = "", timeout: float = 8.0) -> Optional[bool]:
@@ -1977,48 +2020,7 @@ async def run_gate2_async_verification(
     timeout_seconds: float = GATE2_TIMEOUT_SECONDS,
     max_concurrency: int = GATE2_MAX_CONCURRENCY,
 ) -> List[Dict[str, Any]]:
-    """Selective async Gate-2 for uncertain items (Q2+Q7). Never raises.
-
-    Gate-1 (DB-first + deepseek-v4.1-flash single-item concurrent sync) stays the hot path;
-    only items where _needs_gate2_review() is True spend the mimo-v2.6-pro
-    low-effort + single web-search + consensus re-check budget, at most
-    `max_concurrency` (default 5) in flight with `timeout_seconds` (default
-    60s) per item. Results carry schema_version 7. Still-uncertain items are
-    DROPPED with a koroborasi-kurang tier_reason (admit uncertainty).
-    """
-    if not structured_articles:
-        return []
-    _sem = asyncio.Semaphore(max(1, int(max_concurrency or GATE2_MAX_CONCURRENCY)))
-
-    async def _guarded(item: Dict[str, Any]) -> Dict[str, Any]:
-        async with _sem:
-            try:
-                return await asyncio.wait_for(
-                    _gate2_verify_single_item(item),
-                    timeout=float(timeout_seconds or GATE2_TIMEOUT_SECONDS),
-                )
-            except asyncio.TimeoutError:
-                try:
-                    item["zone_tier"] = "DROPPED_IRRELEVANT"
-                    item["tier_reason"] = ("Verifikasi lanjutan Gate-2 melampaui batas waktu; "
-                                           "koroborasi kurang, ditahan demi presisi.")
-                    _vat = dict(item.get("verification_audit") or {})
-                    _vat.update({"gate2_reviewed": True, "gate2_verdict": "TIMEOUT_DROP",
-                                 "schema_version": EXTRACTION_SCHEMA_VERSION})
-                    item["verification_audit"] = _vat
-                except Exception:
-                    pass
-                return item
-            except Exception:
-                return item
-
-    _targets = [a for a in structured_articles if isinstance(a, dict) and _needs_gate2_review(a)]
-    if not _targets:
-        return structured_articles
-    try:
-        await asyncio.gather(*[_guarded(a) for a in _targets])
-    except Exception as e:
-        logger.debug(f"Gate-2 batch review skipped: {e}")
+    """Phase 179 D8: Gate-2 mimo-v2.6-pro dropped. No-op returning original articles."""
     return structured_articles
 
 
@@ -2070,7 +2072,7 @@ async def extract_structured_news_batch(articles: List[Dict[str, Any]]) -> List[
     for _b in baselines:
         apply_forecast_tag(_b)
 
-    # Only send non-dropped candidates that pass the 2-factor regex gate to the LLM.
+    # Only send non-dropped candidates that pass the logistics prefilter AND 2-factor regex gate to the LLM.
     # Non-matches drop immediately with 0 LLM tokens spent.
     candidates: List[Dict[str, Any]] = []
     for b in baselines:
@@ -2078,8 +2080,22 @@ async def extract_structured_news_batch(articles: List[Dict[str, Any]]) -> List[
             continue
         _title = b.get("title") or ""
         _desc = (b.get("raw_description") or b.get("concise_summary") or b.get("summary") or "")
+        if not passes_logistics_disruption_prefilter(_title, _desc):
+            b["zone_tier"] = "DROPPED_IRRELEVANT"
+            b["is_disruption"] = False
+            b["is_crisis"] = False
+            b["severity"] = "none"
+            b["tier_reason"] = "Gagal filter relevansi disrupsi logistik (non-disrupsi/seremonial atau bukan bahaya pergerakan logistik)."
+            gtm = dict(b.get("ground_truth_metrics") or {})
+            gtm["zone_tier"] = "DROPPED_IRRELEVANT"
+            gtm["tier_reason"] = b["tier_reason"]
+            b["ground_truth_metrics"] = gtm
+            continue
         if not passes_disaster_regex_gate(_title, _desc):
             b["zone_tier"] = "DROPPED_IRRELEVANT"
+            b["is_disruption"] = False
+            b["is_crisis"] = False
+            b["severity"] = "none"
             b["tier_reason"] = "Gagal pra-filter deterministik 2-faktor (tidak terdeteksi kata kunci bencana dan jangkar geografis Sumatera)."
             gtm = dict(b.get("ground_truth_metrics") or {})
             gtm["zone_tier"] = "DROPPED_IRRELEVANT"
@@ -2094,6 +2110,8 @@ async def extract_structured_news_batch(articles: List[Dict[str, Any]]) -> List[
         settings = get_settings()
         opencode_key = getattr(settings, "opencode_api_key", "")
         if not opencode_key or opencode_key.startswith("your-"):
+            for cand in candidates:
+                _hold_back_llm(cand, "LLM gateway not configured")
             return baselines
         from agents.llm_gateway import LLMGateway
         _sem = asyncio.Semaphore(8)
@@ -2142,22 +2160,44 @@ async def extract_structured_news_batch(articles: List[Dict[str, Any]]) -> List[
                         timeout=25.0,
                     )
                     if not gen_text:
+                        _hold_back_llm(b, "LLM returned empty response")
                         return
                     parsed = json.loads(_clean_llm_json(gen_text))
                     it = parsed if isinstance(parsed, dict) else None
                     if isinstance(parsed, list) and parsed and isinstance(parsed[0], dict):
                         it = parsed[0]
                     if not isinstance(it, dict):
+                        _hold_back_llm(b, "LLM output invalid JSON")
                         return
                     it.setdefault("id", b.get("id"))
                     _apply_batch_llm_item(b, it)
                 except Exception as _ce:
-                    logger.debug(f"Single LLM unavailable for {b.get('id')} ({type(_ce).__name__}); keeping heuristics.")
+                    logger.debug(f"Single LLM unavailable for {b.get('id')} ({type(_ce).__name__}); holding back per D4.")
+                    _hold_back_llm(b, f"{type(_ce).__name__}")
 
         await asyncio.gather(*[_llm_single(b) for b in candidates])
     except Exception as e:
-        logger.warning(f"Batched LLM extraction unavailable ({type(e).__name__}: {e}); using heuristics.")
+        logger.warning(f"Batched LLM extraction unavailable ({type(e).__name__}: {e}); holding back candidates per D4.")
+        for cand in candidates:
+            _hold_back_llm(cand, f"Batch LLM error: {type(e).__name__}")
+
     for _b in baselines:
+        if _b.get("zone_tier") not in ("DROPPED_IRRELEVANT", "HELD_BACK_LLM_UNAVAILABLE"):
+            if _b.get("latitude") is None or _b.get("longitude") is None:
+                try:
+                    from app.services.spatial_fusion_engine import resolve_sumatra_location
+                    resolved = resolve_sumatra_location(_b)
+                    if resolved:
+                        _b["latitude"] = resolved["lat"]
+                        _b["longitude"] = resolved["lon"]
+                        _b["lat"] = resolved["lat"]
+                        _b["lon"] = resolved["lon"]
+                        _b["is_geocoded"] = True
+                        _b["location_precision"] = "corridor_point"
+                        if not _b.get("verified_sumatra_location"):
+                            _b["verified_sumatra_location"] = resolved["name"]
+                except Exception:
+                    pass
         apply_forecast_tag(_b)
     return baselines
 
@@ -2165,7 +2205,7 @@ async def extract_structured_news_batch(articles: List[Dict[str, Any]]) -> List[
 async def extract_structured_news(art: Dict[str, Any]) -> Dict[str, Any]:
     """
     Extracts structured crisis intelligence from raw news item.
-    Uses cached result if present, otherwise attempts opencode driver with heuristic fallback.
+    Uses cached result if present, otherwise attempts opencode driver with hold-back fallback (D4).
     """
     title = art.get("title", "") or ""
     source = art.get("source", "Media")
@@ -2174,13 +2214,33 @@ async def extract_structured_news(art: Dict[str, Any]) -> Dict[str, Any]:
     if cache_key in _EXTRACTION_CACHE:
         return _EXTRACTION_CACHE[cache_key]
 
-    # Baseline heuristic (already includes expanded taxonomy + tiering)
+    # Baseline heuristic
     structured = _fast_heuristic_extraction(art)
 
-    # Deterministic 2-factor regex pre-LLM gate check: drop immediately if non-matching
+    # Fast strict logistics disruption prefilter check (D7)
     _desc = (art.get("raw_description") or art.get("summary") or "")
+    if not passes_logistics_disruption_prefilter(title, _desc):
+        structured["zone_tier"] = "DROPPED_IRRELEVANT"
+        structured["is_disruption"] = False
+        structured["is_crisis"] = False
+        structured["severity"] = "none"
+        structured["tier_reason"] = "Gagal filter relevansi disrupsi logistik (non-disrupsi/seremonial atau bukan bahaya pergerakan logistik)."
+        gtm = dict(structured.get("ground_truth_metrics") or {})
+        gtm["zone_tier"] = "DROPPED_IRRELEVANT"
+        gtm["tier_reason"] = structured["tier_reason"]
+        structured["ground_truth_metrics"] = gtm
+        structured = apply_forecast_tag(structured)
+        if len(_EXTRACTION_CACHE) > MAX_CACHE_ENTRIES:
+            _EXTRACTION_CACHE.clear()
+        _EXTRACTION_CACHE[cache_key] = structured
+        return structured
+
+    # Deterministic 2-factor regex pre-LLM gate check: drop immediately if non-matching
     if not passes_disaster_regex_gate(title, _desc):
         structured["zone_tier"] = "DROPPED_IRRELEVANT"
+        structured["is_disruption"] = False
+        structured["is_crisis"] = False
+        structured["severity"] = "none"
         structured["tier_reason"] = "Gagal pra-filter deterministik 2-faktor (tidak terdeteksi kata kunci bencana dan jangkar geografis Sumatera)."
         gtm = dict(structured.get("ground_truth_metrics") or {})
         gtm["zone_tier"] = "DROPPED_IRRELEVANT"
@@ -2246,10 +2306,35 @@ async def extract_structured_news(art: Dict[str, Any]) -> Dict[str, Any]:
                         structured["commodities_affected"] = parsed["commodities_affected"]
                     if parsed.get("ground_truth_metrics"):
                         structured["ground_truth_metrics"].update(parsed["ground_truth_metrics"])
+                else:
+                    _hold_back_llm(structured, "Invalid LLM JSON response")
+            else:
+                _hold_back_llm(structured, "Empty LLM response")
         except Exception as e:
             logger.warning(
-                f"LLM structured extraction unavailable for '{title[:30]}' ({type(e).__name__}: {e}); using heuristic baseline."
+                f"LLM structured extraction unavailable for '{title[:30]}' ({type(e).__name__}: {e}); holding back per D4."
             )
+            _hold_back_llm(structured, f"{type(e).__name__}: {e}")
+    else:
+        _hold_back_llm(structured, "LLM gateway not configured")
+
+    # Geocoding fallback: resolve coordinates via Sumatra gazetteer if missing
+    if structured.get("zone_tier") not in ("DROPPED_IRRELEVANT", "HELD_BACK_LLM_UNAVAILABLE"):
+        if structured.get("latitude") is None or structured.get("longitude") is None:
+            try:
+                from app.services.spatial_fusion_engine import resolve_sumatra_location
+                resolved = resolve_sumatra_location(structured)
+                if resolved:
+                    structured["latitude"] = resolved["lat"]
+                    structured["longitude"] = resolved["lon"]
+                    structured["lat"] = resolved["lat"]
+                    structured["lon"] = resolved["lon"]
+                    structured["is_geocoded"] = True
+                    structured["location_precision"] = "corridor_point"
+                    if not structured.get("verified_sumatra_location"):
+                        structured["verified_sumatra_location"] = resolved["name"]
+            except Exception:
+                pass
 
     # Store in memory cache
     if len(_EXTRACTION_CACHE) > MAX_CACHE_ENTRIES:

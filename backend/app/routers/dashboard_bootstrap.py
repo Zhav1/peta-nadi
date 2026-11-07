@@ -379,6 +379,8 @@ def _attach_operational_sections(sections_dict: dict[str, Any], default_stamp: O
             pass
 
 
+
+
 async def _resolve_sections(corridor_id: Optional[str]) -> tuple[dict, Optional[str], bool, Optional[str], dict]:
     """Read public sections with single-flight background refresh coalescing and fast-seeded fallback."""
     from app.services import public_snapshot_service
@@ -448,6 +450,7 @@ async def dashboard_bootstrap(
         # token was supplied.
         public_sections, computed_at, stale, reason, snapshot = await _resolve_sections(corridor_id)
         body = {
+            "version": int(snapshot.get("version") or 1),
             "schema_version": snapshot.get("schema_version", 1),
             "snapshot_key": snapshot.get("snapshot_key", "sumatra_mainland"),
             "computed_at": computed_at,
@@ -509,6 +512,7 @@ async def dashboard_bootstrap(
                 )
 
     body = {
+        "version": int(snapshot.get("version") or 1),
         "schema_version": snapshot.get("schema_version", 1),
         "snapshot_key": snapshot.get("snapshot_key", "sumatra_mainland"),
         "computed_at": computed_at,

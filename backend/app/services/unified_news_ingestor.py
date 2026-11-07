@@ -283,9 +283,28 @@ class UnifiedNewsIngestor:
         except Exception as _g2e:
             logger.debug(f"Gate-2 background scheduling skipped: {_g2e}")
 
-        # Filter DROPPED_IRRELEVANT before publishing to Redis / synthesizing incidents.
+        # Geocoding fallback via Sumatra gazetteer for un-geocoded disruption items
+        for a in structured_articles:
+            if str(a.get("zone_tier") or "").upper() not in ("DROPPED_IRRELEVANT", "HELD_BACK_LLM_UNAVAILABLE"):
+                if a.get("latitude") is None or a.get("longitude") is None:
+                    try:
+                        from app.services.spatial_fusion_engine import resolve_sumatra_location
+                        resolved = resolve_sumatra_location(a)
+                        if resolved:
+                            a["latitude"] = resolved["lat"]
+                            a["longitude"] = resolved["lon"]
+                            a["lat"] = resolved["lat"]
+                            a["lon"] = resolved["lon"]
+                            a["is_geocoded"] = True
+                            a["location_precision"] = "corridor_point"
+                            if not a.get("verified_sumatra_location"):
+                                a["verified_sumatra_location"] = resolved["name"]
+                    except Exception:
+                        pass
+
+        # Filter DROPPED_IRRELEVANT & HELD_BACK before publishing to Redis / synthesizing incidents.
         publishable = [a for a in structured_articles
-                       if a.get("zone_tier") != "DROPPED_IRRELEVANT"
+                       if str(a.get("zone_tier") or "").upper() not in ("DROPPED_IRRELEVANT", "HELD_BACK_LLM_UNAVAILABLE")
                        and a.get("is_geocoded") is not False
                        and a.get("latitude") is not None
                        and a.get("longitude") is not None]
@@ -765,45 +784,8 @@ class UnifiedNewsIngestor:
         return final_tier, audit_payload
 
     async def run_gate2_background_review(self, articles: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Selective async Gate-2 background review (SPEC-LOCKED Q2+Q7).
-
-        Only uncertain / YELLOW / conf<0.7 / ambiguous items (per
-        news_extractor._needs_gate2_review) spend the mimo-v2.6-pro
-        low-effort + single web-search + W/T/I/E re-check budget at
-        5-concurrency with a 60s/item timeout (MD5-cached, schema v7).
-        Still-uncertain items resolve to DROPPED_IRRELEVANT with a
-        koroborasi-kurang tier_reason. Refined rows are upserted so the
-        next cycle's DB-first reuse serves the Gate-2 verdict with 0 LLM
-        calls. Never raises.
-        """
-        try:
-            from app.nlp.news_extractor import run_gate2_async_verification, _needs_gate2_review
-        except Exception as ie:
-            logger.debug(f"Gate-2 background review skipped (import): {ie}")
-            return {"status": "skipped", "reason": "import_unavailable", "reviewed": 0}
-        targets = [a for a in (articles or []) if isinstance(a, dict) and _needs_gate2_review(a)]
-        if not targets:
-            return {"status": "success", "reviewed": 0, "message": "no uncertain candidates"}
-        try:
-            await run_gate2_async_verification(targets)
-        except Exception as ge:
-            logger.debug(f"Gate-2 background verification skipped: {ge}")
-            return {"status": "degraded", "reviewed": len(targets), "reason": str(ge)}
-        # Persist refined verdicts (DROPPED stays remembered, never re-tested).
-        try:
-            await upsert_articles_to_supabase([a for a in targets if isinstance(a, dict) and a.get("link")])
-            for _art in targets:
-                try:
-                    remember_processed_article(_art)
-                except Exception:
-                    pass
-        except Exception as ue:
-            logger.debug(f"Gate-2 refined upsert skipped: {ue}")
-        try:
-            _dropped = sum(1 for a in targets if str(a.get("zone_tier") or "").upper() == "DROPPED_IRRELEVANT")
-        except Exception:
-            _dropped = 0
-        return {"status": "success", "reviewed": len(targets), "dropped_uncertain": _dropped}
+        """Phase 179 D8: Gate-2 mimo-v2.6-pro dropped. No-op."""
+        return {"status": "success", "reviewed": 0, "message": "Gate-2 dropped (Phase 179 D8)"}
 
     async def _process_critical_disruptions(self, articles: List[Dict[str, Any]]) -> int:
         """
@@ -812,8 +794,8 @@ class UnifiedNewsIngestor:
         """
         count = 0
         for art in articles:
-            zone_tier = str(art.get("zone_tier") or art.get("ground_truth_metrics", {}).get("zone_tier") or "")
-            if zone_tier == "DROPPED_IRRELEVANT":
+            zone_tier = str(art.get("zone_tier") or art.get("ground_truth_metrics", {}).get("zone_tier") or "").upper()
+            if zone_tier in ("DROPPED_IRRELEVANT", "HELD_BACK_LLM_UNAVAILABLE"):
                 continue
             if art.get("latitude") is None or art.get("longitude") is None:
                 continue

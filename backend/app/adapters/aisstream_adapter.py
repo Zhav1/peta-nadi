@@ -135,60 +135,12 @@ FALLBACK_VESSEL_BASELINES = [
 
 
 def generate_sumatra_maritime_fallback() -> List[Dict[str, Any]]:
+    """Purged synthetic maritime baseline generator (D2, D9).
+
+    Never returns hardcoded synthetic vessels from FALLBACK_VESSEL_BASELINES.
+    Always returns empty list to uphold empirical ground-truth integrity.
     """
-    Generates a deterministic, realistic regional Malacca Strait & Sumatra maritime
-    dataset (85+ active cargo/tanker/feeder vessels along Malacca Strait, Sunda Strait,
-    Belawan, Dumai, Kuala Tanjung, Panjang, Bakauheni, Teluk Bayur shipping lanes).
-    Positions have subtle deterministic drift based on current epoch time so movement
-    is natural and alive on Render (peta-nadi.onrender.com).
-    """
-    now_iso = datetime.now(timezone.utc).isoformat()
-    t = time.time()
-    vessels = []
-
-    for v in FALLBACK_VESSEL_BASELINES:
-        mmsi = v["mmsi"]
-        base_lat = v["lat"]
-        base_lon = v["lon"]
-        sog = v["sog"]
-        cog = v["cog"]
-
-        # Deterministic micro-drift along course vector
-        if sog > 0.5:
-            drift_scale = 0.003
-            cog_rad = math.radians(cog)
-            # Cycle every 600s
-            cycle_phase = (t % 600.0) / 600.0
-            d_lat = math.cos(cog_rad) * drift_scale * math.sin(cycle_phase * 2.0 * math.pi)
-            d_lon = math.sin(cog_rad) * drift_scale * math.sin(cycle_phase * 2.0 * math.pi)
-            cur_lat = round(base_lat + d_lat, 4)
-            cur_lon = round(base_lon + d_lon, 4)
-            cur_heading = cog
-        else:
-            cur_lat = base_lat
-            cur_lon = base_lon
-            cur_heading = cog
-
-        vessels.append({
-            "mmsi": str(mmsi),
-            "ship_name": v["name"],
-            "name": v["name"],
-            "lat": cur_lat,
-            "lon": cur_lon,
-            "sog": sog,
-            "sog_knots": sog,
-            "cog": cog,
-            "cog_deg": cog,
-            "heading": cur_heading,
-            "heading_deg": cur_heading,
-            "ship_type": v["type"],
-            "port_origin": v.get("origin", "Pelabuhan Sumatra"),
-            "last_seen": now_iso,
-            "telemetry_source": "MARITIME_RADAR_FALLBACK",
-            "current_coords": [round(cur_lon, 4), round(cur_lat, 4)],
-        })
-
-    return vessels
+    return []
 
 
 # =============================================================================
@@ -264,6 +216,7 @@ class AISstreamAdapter(BaseAdapter):
         self.vessels: Dict[int, Dict[str, Any]] = {}
         self._ws_connected = False
         self._last_msg_ts: float = 0.0
+        self._connect_ts: float = 0.0
         self._current_ws: Optional[Any] = None
 
     async def fetch(self) -> Any:
@@ -281,12 +234,29 @@ class AISstreamAdapter(BaseAdapter):
     async def _watchdog_loop(self):
         """
         aisWatchdog pattern: Auto-reconnect resilience if socket is connected
-        but silent for > 90 seconds.
+        but silent for > 90 seconds, or proactive reset after 11.5 hours (41400s)
+        so Koyeb's 12-hour WebSocket reset is handled gracefully before hard drop.
         """
         while True:
             await asyncio.sleep(15)
             if self._ws_connected:
-                idle_sec = time.time() - self._last_msg_ts
+                now_t = time.time()
+                idle_sec = now_t - self._last_msg_ts
+                connected_sec = now_t - self._connect_ts if self._connect_ts > 0 else 0
+
+                # Proactive reset before Koyeb 12h boundary (11.5h = 41400s)
+                if connected_sec > 41400.0:
+                    logger.info(
+                        f"AIS Watchdog: Connection active for {connected_sec / 3600:.1f}h. "
+                        "Triggering proactive 11.5h reconnect before Koyeb 12h reset..."
+                    )
+                    if self._current_ws:
+                        try:
+                            await self._current_ws.close()
+                        except Exception as e:
+                            logger.debug(f"Watchdog proactive close exception: {e}")
+                    continue
+
                 if idle_sec > 90.0:
                     logger.warning(f"AIS Watchdog: No position reports for {idle_sec:.1f}s. Triggering auto-reconnect...")
                     if self._current_ws:
@@ -319,6 +289,7 @@ class AISstreamAdapter(BaseAdapter):
                     self._current_ws = ws
                     self._ws_connected = True
                     self._last_msg_ts = time.time()
+                    self._connect_ts = time.time()
                     self.update_source_health("ok")
                     reconnect_delay = 1  # Reset backoff on successful connect
 
@@ -332,6 +303,10 @@ class AISstreamAdapter(BaseAdapter):
                     logger.info("AISstream subscription sent successfully for Sumatra & Malacca Strait Macro BBox")
 
                     async for message in ws:
+                        # Graceful reconnect check inside message loop
+                        if time.time() - self._connect_ts > 41400.0:
+                            logger.info("AISstream: Proactive 11.5h reconnect triggering in message loop")
+                            break
                         try:
                             data = json.loads(message)
                             await self._handle_raw_message(data)
@@ -442,26 +417,73 @@ class AISstreamAdapter(BaseAdapter):
             await self._process_queue()
             await asyncio.sleep(self.poll_interval_seconds)
 
+    def evict_stale_vessels(self, max_age_seconds: int = 1800):
+        """Evicts vessels whose last_seen timestamp is older than max_age_seconds (30 min / 1800s)."""
+        now = datetime.now(timezone.utc)
+        to_delete = []
+        for mmsi, info in self.vessels.items():
+            try:
+                last_seen_str = info.get("last_seen")
+                if last_seen_str:
+                    last_seen = datetime.fromisoformat(last_seen_str)
+                    if (now - last_seen).total_seconds() > max_age_seconds:
+                        to_delete.append(mmsi)
+            except Exception:
+                pass
+        for mmsi in to_delete:
+            self.vessels.pop(mmsi, None)
+
+    def get_vessels(self, max_limit: int = 500) -> List[Dict[str, Any]]:
+        """
+        Returns live vessels capped at max_limit (500), evicting records older than 30 minutes (1800s).
+        Prioritizes vessels located inside the 8 Sumatra priority port bounding boxes,
+        then Malacca and Sunda Strait shipping corridors, to keep snapshot payloads compact.
+        """
+        self.evict_stale_vessels(1800)
+        vessel_items = list(self.vessels.values())
+        if not vessel_items:
+            return []
+
+        def _vessel_priority(v: Dict[str, Any]):
+            v_lat = v.get("lat")
+            v_lon = v.get("lon")
+            in_port = False
+            if v_lat is not None and v_lon is not None:
+                for pdata in self.PORTS.values():
+                    bbox = pdata["bbox"]
+                    lat_min = min(bbox[0][0], bbox[1][0])
+                    lat_max = max(bbox[0][0], bbox[1][0])
+                    lon_min = min(bbox[0][1], bbox[1][1])
+                    lon_max = max(bbox[0][1], bbox[1][1])
+                    if lat_min <= v_lat <= lat_max and lon_min <= v_lon <= lon_max:
+                        in_port = True
+                        break
+            last_seen_iso = v.get("last_seen") or ""
+            # Port vessels get priority 0, others priority 1; then by last_seen descending
+            return (0 if in_port else 1, -time.mktime(datetime.fromisoformat(last_seen_iso).timetuple()) if last_seen_iso else 0)
+
+        try:
+            sorted_vessels = sorted(vessel_items, key=_vessel_priority)
+        except Exception:
+            sorted_vessels = vessel_items
+
+        capped = sorted_vessels[:max_limit]
+        for v in capped:
+            lat = v.get("lat")
+            lon = v.get("lon")
+            if lat is not None and lon is not None:
+                v["current_coords"] = [round(float(lon), 4), round(float(lat), 4)]
+        return capped
+
     async def _process_queue(self):
         """Analyze vessel registry once and emit events if threshold exceeded."""
         r = get_redis()
         current_hour = datetime.now(timezone.utc).strftime("%Y%m%d%H")
         
         try:
-            # Cleanup vessels not seen in the last 45 minutes (2700s)
+            # Cleanup vessels not seen in the last 30 minutes (1800s)
+            self.evict_stale_vessels(1800)
             now = datetime.now(timezone.utc)
-            to_delete = []
-            for mmsi, info in self.vessels.items():
-                try:
-                    last_seen = datetime.fromisoformat(info["last_seen"])
-                    if (now - last_seen).total_seconds() > 2700:
-                        to_delete.append(mmsi)
-                except Exception:
-                    pass
-            
-            for mmsi in to_delete:
-                if mmsi in self.vessels:
-                    del self.vessels[mmsi]
 
             # Group vessels by port based on bounding box
             port_vessels: Dict[str, List[Dict[str, Any]]] = {pid: [] for pid in self.PORTS.keys()}
@@ -537,33 +559,11 @@ def get_aisstream_adapter() -> AISstreamAdapter:
 
 def get_live_ais_vessels() -> List[Dict[str, Any]]:
     """
-    Returns live maritime vessels across Sumatra and Malacca Strait.
-    Starts with the 96-vessel regional Sumatra fallback baseline and overlays/merges
-    all active live AISStream vessels on top of it so live vessels enrich and expand
-    the maritime fleet without ever discarding the Sumatra baseline.
-    Every vessel includes current_coords: [round(lon, 4), round(lat, 4)] (p_curr).
+    Returns live maritime vessels across Sumatra and Malacca Strait (D2, D9).
+    Purged synthetic fallbacks: never returns synthetic baseline ships.
+    Evicts vessels older than 30 minutes, prioritizes vessels within the 8 Sumatra
+    port bounding boxes, and caps the list to at most 500 live vessels.
+    Every vessel includes current_coords: [round(lon, 4), round(lat, 4)].
     """
     adapter = get_aisstream_adapter()
-    baseline_vessels = generate_sumatra_maritime_fallback()
-    vessels_dict: Dict[str, Dict[str, Any]] = {
-        str(v.get("mmsi") or v.get("vehicle_id")): dict(v)
-        for v in baseline_vessels
-    }
-
-    # Overlay active live AISStream vessels on top of baseline
-    for mmsi_key, live_v in adapter.vessels.items():
-        v_key = str(live_v.get("mmsi") or mmsi_key)
-        if v_key in vessels_dict:
-            vessels_dict[v_key].update(live_v)
-        else:
-            vessels_dict[v_key] = dict(live_v)
-
-    # Ensure every vessel object includes current_coords: [round(lon, 4), round(lat, 4)] (p_curr)
-    result = []
-    for v in vessels_dict.values():
-        lat = v.get("lat")
-        lon = v.get("lon")
-        if lat is not None and lon is not None:
-            v["current_coords"] = [round(float(lon), 4), round(float(lat), 4)]
-        result.append(v)
-    return result
+    return adapter.get_vessels(500)

@@ -3565,3 +3565,14 @@ Established a hardened, fail-closed operational pilot architecture for mainland 
 
 Docs: `.planning/phases/178-mainland-sumatra-shadow-pilot/` (`178-SPEC.md`, `178-01-PLAN.md`, `178-01-SUMMARY.md`).
 
+### Phase 179: Realtime Fusion Early Warning
+**Status:** COMPLETE ✅ (architecture, implementation & acceptance gates verified)
+**Window:** 2026-11-07
+**Milestone:** post-M9 hardening / operational grounding
+
+Established an honest, near-realtime early warning architecture for Sumatra logistics dispatchers. Purged all synthetic fallbacks across backend and frontend (removed `NORTHERN_SUMATRA_FLOOD_BASINS`, synthetic 15–35 km disaster circles, fake AIS vessels, fake ADS-B flights, and deterministic baseline synthesizers). Built `backend/app/services/spatial_fusion_engine.py` featuring an H3 res-8 (~460 m edge) spatial indexer and localized footprint generator merging multi-source corroborated evidence (BMKG CAP, PetaBencana, FIRMS, TomTom, News) into single deduplicated incidents with realistic localized bounds (<= 1.5 km) and deterministic authority tiering (`CONFIRMED` >= 2 sources vs `WATCH` single source). Enforced a strict 5-category logistics disruption rubric in `news_extractor.py`, purged regional news display leaks, and eliminated regex fallback on LLM failure (`HELD_BACK_LLM_UNAVAILABLE`). Expanded TomTom to 20 strategic Sumatra logistics chokepoints preserving multi-vertex road `LineString` polylines and added vector tile corridor sampling while purging global Mapbox traffic layers. Architected monotonic versioned snapshots (`version BIGINT`, `ingest_runs` audit table) and single-flight worker execution coalescing concurrent triggers. Fixed the news card "Fokus" camera navigation button.
+
+**Verification:** All 3 acceptance scripts green (`verify_phase179_fusion_golden.py` exit 0, `verify_phase179_fanout.py` exit 0 with 5 concurrent triggers coalescing to 1 executed run in < 4 ms and 20 concurrent snapshot reads, `probe_live.mjs` exit 0 with static assertions and 5 parallel live edge requests); 0 TypeScript errors (`tsc --noEmit`); 44 targeted backend regression tests passing (`test_internal_tick.py`, `test_dashboard_bootstrap.py`).
+
+Docs: `.planning/phases/179-realtime-fusion-early-warning/` (`179-CONTEXT.md`, `179-01-PLAN.md`, `179-01-SUMMARY.md`).
+
