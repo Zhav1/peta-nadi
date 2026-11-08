@@ -12,10 +12,17 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 from app.db import local_storage
+from app.paths import data_path
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_BENCHMARK_PATH = Path(__file__).resolve().parent.parent.parent.parent / "data" / "benchmark" / "sumatra_disruptions_ground_truth.json"
+# Layout-agnostic (repo checkout vs. Docker image); see app/paths.py.
+DEFAULT_BENCHMARK_PATH = data_path("benchmark", "sumatra_disruptions_ground_truth.json")
+if not DEFAULT_BENCHMARK_PATH.exists():
+    logger.info(
+        "Benchmark dataset not found at %s; outcome evaluation returns an empty report.",
+        DEFAULT_BENCHMARK_PATH,
+    )
 
 
 class VarianceMetrics(BaseModel):
@@ -245,7 +252,13 @@ LIVE_BATCH_VERSION = "batch-v2026-10-26-N60"
 
 # WS-B: offline ledger-join evidence (additive — batch immutable, LIVE_MIN_N kept).
 PER_ROW_CAP = 200
-PIHPS_CACHE_DIR = Path(__file__).resolve().parent.parent.parent.parent / "data" / "raw" / "pihps_bi" / "api_cache"
+# Layout-agnostic (repo checkout vs. Docker image); see app/paths.py.
+PIHPS_CACHE_DIR = data_path("raw", "pihps_bi", "api_cache")
+if not PIHPS_CACHE_DIR.exists():
+    logger.info(
+        "PIHPS price cache not found at %s; price corroboration unavailable (file-cache mode).",
+        PIHPS_CACHE_DIR,
+    )
 PROXY_LABEL = "PROXY"
 
 

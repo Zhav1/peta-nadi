@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Query, HTTPException, status
 
+from app.paths import repo_path
 from app.schemas.evaluation import (
     ConfusionMatrix,
     EvaluationMetrics,
@@ -27,7 +28,15 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/evaluation", tags=["Evaluation & Benchmark Dashboard"])
 
-BENCHMARK_REPORT_PATH = Path(__file__).resolve().parent.parent.parent.parent / "test-results" / "benchmark_evaluation_report.json"
+# Layout-agnostic (repo checkout vs. Docker image); see app/paths.py.
+# test-results/ is gitignored, so inside the image this is absent by design and
+# the embedded DEFAULT_BENCHMARK_REPORT is served instead.
+BENCHMARK_REPORT_PATH = repo_path("test-results", "benchmark_evaluation_report.json")
+if not BENCHMARK_REPORT_PATH.exists():
+    logger.info(
+        "Benchmark report not found at %s; serving embedded default benchmark report.",
+        BENCHMARK_REPORT_PATH,
+    )
 
 # Static Fallback Benchmark Dataset (Ground-Truth Sumatra N=60)
 # Synced 2026-10-28 to canonical scripts/evaluate_metrics.py output

@@ -9,6 +9,7 @@ import time
 import random
 import logging
 import asyncio
+import threading
 from typing import Optional, List, Dict, Any, Tuple
 from datetime import datetime, timezone
 import httpx
@@ -53,6 +54,12 @@ from app.db.local_storage import (
 )
 
 logger = logging.getLogger(__name__)
+
+# get_unified_fleet runs on worker threads (run_in_threadpool) and reads the
+# shared instance state (_custom_vehicles_extra, _live_pings, _active_reroutes,
+# _snapped_corridors) that writers mutate from the event loop. RLock (not Lock)
+# so nested/re-entrant acquisition on the same thread cannot deadlock.
+_FLEET_STATE_LOCK = threading.RLock()
 
 # Known Sumatra strategic hub coordinates [lng, lat] for automatic route synthesis
 SUMATRA_STRATEGIC_HUBS: Dict[str, List[float]] = {
@@ -1957,6 +1964,28 @@ class TelemetryService:
         awareness (they are not another tenant's private live GPS). Trucks
         remain strictly tenant-scoped so no other company's live GPS leaks.
         """
+        with _FLEET_STATE_LOCK:
+            return self._build_unified_fleet(
+                modality=modality,
+                status=status,
+                company_id=company_id,
+                db_path=db_path,
+                org_name=org_name,
+                tenant_only=tenant_only,
+                include_geometry=include_geometry,
+            )
+
+    def _build_unified_fleet(
+        self,
+        modality: Optional[str] = None,
+        status: Optional[str] = None,
+        company_id: Optional[str] = None,
+        db_path: Optional[str] = None,
+        org_name: Optional[str] = None,
+        tenant_only: bool = False,
+        include_geometry: bool = True,
+    ) -> List[Dict[str, Any]]:
+        """Body of get_unified_fleet; callers must hold _FLEET_STATE_LOCK."""
         # 1. Custom registered vehicles from SQLite
         enriched_custom: List[Dict[str, Any]] = []
         try:

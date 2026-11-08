@@ -4,6 +4,7 @@ Provides real-time AISstream vessel positions, OpenSky ADS-B flights,
 and dynamic ground food logistics fleet telemetry with GeoJSON route_geometry.
 """
 from fastapi import APIRouter, Query, Depends, Response
+from fastapi.concurrency import run_in_threadpool
 from datetime import timezone, datetime
 from typing import Optional, Dict, Any, Tuple, List
 import logging
@@ -97,7 +98,10 @@ async def get_active_fleet(
     if cached_base and (now - cached_base[0]) < FLEET_CACHE_TTL_SECONDS:
         base_fleet = cached_base[1]
     else:
-        base_fleet = telemetry_service.get_unified_fleet(
+        # get_unified_fleet does blocking SQLite reads and Supabase HTTP calls;
+        # run it off the event loop so /health (and every other request) stays responsive.
+        base_fleet = await run_in_threadpool(
+            telemetry_service.get_unified_fleet,
             company_id=effective_company,
             org_name=org_name,
             tenant_only=tenant_only,
@@ -186,7 +190,11 @@ async def get_vehicle_geometry(
         if cached and (now - cached[0]) < FLEET_CACHE_TTL_SECONDS:
             vehicles = cached[1]
         else:
-            vehicles = telemetry_service.get_unified_fleet(include_geometry=True)
+            # Blocking SQLite/Supabase work — keep it off the event loop.
+            vehicles = await run_in_threadpool(
+                telemetry_service.get_unified_fleet,
+                include_geometry=True,
+            )
             _fleet_cache[macro_key] = (now, vehicles)
         target = next((v for v in vehicles if v.get("vehicle_id") == vehicle_id), None)
 
