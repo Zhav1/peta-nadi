@@ -67,6 +67,11 @@ services:
         value: "true"
       - key: SHARED_SNAPSHOT_READS_ONLY
         value: "true"
+      # Mistral PRIMARY chat provider — secret value dashboard-only (sync:false, no value in yaml)
+      - key: MISTRAL_API_KEY
+        sync: false
+      - key: MISTRAL_MODEL
+        value: "deepseek-v4-1-flash-1017"
       # Phase 58 LLM migration: secret values dashboard-only (sync:false, no value in yaml)
       - key: OPENCODE_API_KEY
         sync: false
@@ -78,11 +83,6 @@ services:
         value: "deepseek-v4.1-flash"
       # GEMINI_API_KEY kept — LTM embeddings stay on Google models/text-embedding-004
       - key: GEMINI_API_KEY
-        sync: false
-      # NVIDIA NIM fallback keys — secret values dashboard-only (sync:false, no value in yaml)
-      - key: NVIDIA_DEEPSEEK_V4_PRO
-        sync: false
-      - key: NVIDIA_DEEPSEEK_V4_FLASH
         sync: false
       - key: AISSTREAM_API_KEY
         sync: false

@@ -11,6 +11,7 @@ from app.config import Settings
 @pytest.fixture(autouse=True)
 def deterministic_opencode_settings(monkeypatch):
     """Keep routing and token budgets independent of local environment settings."""
+    monkeypatch.setattr(llm_gateway.settings, "mistral_model", "mistral-test-model")
     monkeypatch.setattr(llm_gateway.settings, "opencode_driver_model", "paid-test")
     monkeypatch.setattr(llm_gateway.settings, "opencode_free_models", "free-first,free-second")
     monkeypatch.setattr(llm_gateway.settings, "opencode_free_models_min_tokens", 1600)
@@ -20,22 +21,29 @@ def deterministic_opencode_settings(monkeypatch):
 
 @pytest.fixture
 def unavailable_providers(monkeypatch):
-    """Force all chat providers unconfigured: opencode + NVIDIA NIM keyless (embedding key irrelevant to chat)."""
+    """Force all chat providers unconfigured: Mistral + opencode keyless (embedding key irrelevant to chat)."""
     monkeypatch.setattr(llm_gateway.settings, "demo_offline", False)
+    monkeypatch.setattr(llm_gateway.settings, "mistral_api_key", "")
     monkeypatch.setattr(llm_gateway.settings, "opencode_api_key", "")
     monkeypatch.setattr(llm_gateway.settings, "gemini_api_key", "")
-    for key in ("nvidia_deepseek_v4_pro", "nvidia_deepseek_v4_flash"):
-        monkeypatch.setattr(llm_gateway.settings, key, "")
 
 
 @pytest.fixture
 def opencode_keyed(monkeypatch):
     """Route generate_content into the opencode branch with all other providers off."""
     monkeypatch.setattr(llm_gateway.settings, "demo_offline", False)
+    monkeypatch.setattr(llm_gateway.settings, "mistral_api_key", "")
     monkeypatch.setattr(llm_gateway.settings, "opencode_api_key", "oc-test-key")
     monkeypatch.setattr(llm_gateway.settings, "gemini_api_key", "")
-    for key in ("nvidia_deepseek_v4_pro", "nvidia_deepseek_v4_flash"):
-        monkeypatch.setattr(llm_gateway.settings, key, "")
+
+
+@pytest.fixture
+def mistral_keyed(monkeypatch):
+    """Route generate_content into the Mistral branch with all other providers off."""
+    monkeypatch.setattr(llm_gateway.settings, "demo_offline", False)
+    monkeypatch.setattr(llm_gateway.settings, "mistral_api_key", "mistral-test-key")
+    monkeypatch.setattr(llm_gateway.settings, "opencode_api_key", "")
+    monkeypatch.setattr(llm_gateway.settings, "gemini_api_key", "")
 
 
 def _mock_httpx_client(monkeypatch, *, status=200, payload=None, exc=None):
@@ -75,6 +83,10 @@ def _requested_models(client):
 
 def _opencode_payload(text):
     return {"choices": [{"message": {"content": text}}]}
+
+
+def _mistral_url():
+    return f"{llm_gateway.MISTRAL_BASE_URL}{llm_gateway.OPENCODE_CHAT_COMPLETIONS_PATH}"
 
 
 @pytest.mark.asyncio
@@ -133,9 +145,10 @@ async def test_explicit_zen_free_model_routes_directly(opencode_keyed, monkeypat
     assert client.post.call_args.kwargs["json"]["max_tokens"] == 1600
 
 
-def test_nim_primary_model_is_catalog_verified():
-    """The retired 'deepseek-ai/deepseek-r1' ID must not be used (404 on the account catalog)."""
-    assert llm_gateway.PRIMARY_NIM_MODEL == "deepseek-ai/deepseek-v4.1-flash"
+def test_mistral_primary_model_is_catalog_verified():
+    """Mistral serves the 1017 snapshot of DeepSeek V4.1 Flash (edu/pro plan catalog)."""
+    assert llm_gateway.MISTRAL_PRIMARY_MODEL == "deepseek-v4-1-flash-1017"
+    assert Settings(_env_file=None).mistral_model == llm_gateway.MISTRAL_PRIMARY_MODEL
 
 
 @pytest.mark.asyncio
@@ -146,10 +159,8 @@ async def test_gateway_raises_when_no_provider_available(unavailable_providers):
 
 
 @pytest.mark.asyncio
-async def test_gateway_raises_on_nim_failure(unavailable_providers, monkeypatch):
-    """A failed NIM call => explicit LLMGatewayUnavailable, never a fallback briefing string."""
-    monkeypatch.setattr(LLMGateway, "get_nvidia_key", staticmethod(lambda: "nvapi-test-key"))
-
+async def test_gateway_raises_when_mistral_fails_and_opencode_keyless(mistral_keyed, monkeypatch):
+    """A failed Mistral call with no opencode key => explicit LLMGatewayUnavailable, never a fallback briefing string."""
     mock_client = AsyncMock()
     mock_client.post.side_effect = RuntimeError("connection refused")
     mock_client_cls = MagicMock()
@@ -194,7 +205,8 @@ async def test_opencode_branch_raises_on_empty_completion(opencode_keyed, monkey
 
 @pytest.mark.asyncio
 async def test_chat_never_touches_embedding_key(monkeypatch):
-    """Chat must be opencode-only even when the embedding key is set.
+    """Chat must use the opencode branch (Mistral unconfigured here) and never
+    the embedding key even when it is set.
 
     Phase 59 embeddings-only lock: GEMINI_API_KEY serves ltm.py embeddings
     only. With both keys configured, generate_content must serve from the
@@ -204,6 +216,7 @@ async def test_chat_never_touches_embedding_key(monkeypatch):
     """
     assert not hasattr(llm_gateway, "genai"), "gateway must not import the Gemini chat SDK"
     monkeypatch.setattr(llm_gateway.settings, "demo_offline", False)
+    monkeypatch.setattr(llm_gateway.settings, "mistral_api_key", "")
     monkeypatch.setattr(llm_gateway.settings, "opencode_api_key", "oc-test-key")
     monkeypatch.setattr(llm_gateway.settings, "gemini_api_key", "AQ-test-embedding-key")
 
@@ -313,26 +326,27 @@ async def test_exhausted_ladder_chains_last_opencode_failure(opencode_keyed, mon
 
 
 @pytest.mark.asyncio
-async def test_nim_runs_only_after_all_opencode_models_fail(opencode_keyed, monkeypatch):
-    monkeypatch.setattr(llm_gateway.settings, "nvidia_deepseek_v4_pro", "nvapi-test-key")
+async def test_opencode_runs_only_after_mistral_fails(mistral_keyed, monkeypatch):
+    """Mistral first; the opencode ladder runs only after the Mistral rung fails."""
+    monkeypatch.setattr(llm_gateway.settings, "opencode_api_key", "oc-test-key")
     client = _mock_httpx_responses(
         monkeypatch,
-        _http_response(429, {"error": "paid exhausted"}),
-        _http_response(403, {"error": "first free unavailable"}),
-        _http_response(404, {"error": "second free unavailable"}),
-        _http_response(200, _opencode_payload("NIM answer"), url=llm_gateway.NVIDIA_NIM_URL),
+        _http_response(429, {"error": "mistral exhausted"}, url=_mistral_url()),
+        _http_response(403, {"error": "paid unavailable"}),
+        _http_response(404, {"error": "first free unavailable"}),
+        _http_response(200, _opencode_payload("opencode answer")),
     )
 
     assert await LLMGateway.generate_content(
         prompt="original prompt", system_instruction="original system", temperature=0.37,
         max_tokens=321,
-    ) == "NIM answer"
+    ) == "opencode answer"
     assert _requested_models(client) == [
-        "paid-test", "free-first", "free-second", llm_gateway.PRIMARY_NIM_MODEL,
+        "mistral-test-model", "paid-test", "free-first", "free-second",
     ]
     opencode_url = f"{llm_gateway.OPENCODE_BASE_URL}{llm_gateway.OPENCODE_CHAT_COMPLETIONS_PATH}"
     assert [call.args[0] for call in client.post.call_args_list] == [
-        opencode_url, opencode_url, opencode_url, llm_gateway.NVIDIA_NIM_URL,
+        _mistral_url(), opencode_url, opencode_url, opencode_url,
     ]
     for call in client.post.call_args_list:
         assert call.kwargs["json"]["messages"] == [
@@ -340,39 +354,45 @@ async def test_nim_runs_only_after_all_opencode_models_fail(opencode_keyed, monk
             {"role": "user", "content": "original prompt"},
         ]
         assert call.kwargs["json"]["temperature"] == 0.37
-    assert client.post.call_args.kwargs["headers"]["Authorization"] == "Bearer nvapi-test-key"
-    assert client.post.call_args.kwargs["json"]["max_tokens"] == 321
+    assert [call.kwargs["json"]["max_tokens"] for call in client.post.call_args_list] == [
+        321, 321, 1600, 1600,
+    ]
+    assert client.post.call_args_list[0].kwargs["headers"]["Authorization"] == "Bearer mistral-test-key"
+    assert client.post.call_args.kwargs["headers"]["Authorization"] == "Bearer oc-test-key"
 
 
 @pytest.mark.asyncio
-async def test_all_providers_exhausted_raise(opencode_keyed, monkeypatch):
-    monkeypatch.setattr(llm_gateway.settings, "nvidia_deepseek_v4_pro", "nvapi-test-key")
+async def test_all_providers_exhausted_raise(mistral_keyed, monkeypatch):
+    monkeypatch.setattr(llm_gateway.settings, "opencode_api_key", "oc-test-key")
     client = _mock_httpx_responses(
         monkeypatch,
+        _http_response(401, {"error": "mistral unauthorized"}, url=_mistral_url()),
         _http_response(429, {"error": "paid exhausted"}),
         _http_response(403, {"error": "first free unavailable"}),
         _http_response(404, {"error": "second free unavailable"}),
-        _http_response(401, {"error": "NIM unauthorized"}, url=llm_gateway.NVIDIA_NIM_URL),
     )
 
     with pytest.raises(LLMGatewayUnavailable) as caught:
         await LLMGateway.generate_content(prompt="ping")
     assert _requested_models(client) == [
-        "paid-test", "free-first", "free-second", llm_gateway.PRIMARY_NIM_MODEL,
+        "mistral-test-model", "paid-test", "free-first", "free-second",
     ]
-    assert isinstance(caught.value.__cause__, httpx.HTTPStatusError)
-    assert caught.value.__cause__.response.status_code == 401
+    last_failure = caught.value.__cause__
+    assert isinstance(last_failure, LLMGatewayUnavailable)
+    assert "free-second" in str(last_failure)
+    assert isinstance(last_failure.__cause__, httpx.HTTPStatusError)
+    assert last_failure.__cause__.response.status_code == 404
 
 
 @pytest.mark.asyncio
-async def test_healthy_paid_model_never_falls_back(opencode_keyed, monkeypatch):
-    monkeypatch.setattr(llm_gateway.settings, "nvidia_deepseek_v4_pro", "nvapi-test-key")
+async def test_healthy_mistral_model_never_falls_back(mistral_keyed, monkeypatch):
+    monkeypatch.setattr(llm_gateway.settings, "opencode_api_key", "oc-test-key")
     client = _mock_httpx_responses(
-        monkeypatch, _http_response(200, _opencode_payload("paid answer")),
+        monkeypatch, _http_response(200, _opencode_payload("mistral answer"), url=_mistral_url()),
     )
 
-    assert await LLMGateway.generate_content(prompt="ping", max_tokens=123) == "paid answer"
-    assert _requested_models(client) == ["paid-test"]
+    assert await LLMGateway.generate_content(prompt="ping", max_tokens=123) == "mistral answer"
+    assert _requested_models(client) == ["mistral-test-model"]
     assert client.post.call_args.kwargs["json"]["max_tokens"] == 123
 
 

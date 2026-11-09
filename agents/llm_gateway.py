@@ -8,8 +8,11 @@ from app.config import get_settings
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
-PRIMARY_NIM_MODEL = "deepseek-ai/deepseek-v4.1-flash"
-NVIDIA_NIM_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
+# Mistral is the PRIMARY chat provider (OpenAI-compatible API; same
+# /chat/completions path and response shape as opencode).
+MISTRAL_BASE_URL = "https://api.mistral.ai/v1"
+# Mistral catalog serves the 1017 snapshot of DeepSeek V4.1 Flash.
+MISTRAL_PRIMARY_MODEL = "deepseek-v4-1-flash-1017"
 
 # Go serves paid models and Beam/Iceman; Zen serves the other free models.
 #
@@ -96,21 +99,10 @@ def strip_thinking_tags(text: str) -> str:
 
 
 class LLMGatewayUnavailable(RuntimeError):
-    """Raised when no LLM provider (opencode-go or NVIDIA NIM) can produce a real completion."""
+    """Raised when no LLM provider (Mistral or opencode) can produce a real completion."""
 
 
 class LLMGateway:
-    @staticmethod
-    def get_nvidia_key() -> str:
-        """Helper to get a valid NVIDIA API Key from configuration, prioritizing DeepSeek Pro."""
-        for key in [
-            settings.nvidia_deepseek_v4_pro,
-            settings.nvidia_deepseek_v4_flash
-        ]:
-            if key and not key.startswith("your-") and key != "":
-                return key
-        return ""
-
     @classmethod
     async def _opencode_attempt(
         cls,
@@ -121,15 +113,18 @@ class LLMGateway:
         max_tokens: int,
         reasoning_effort: Optional[str],
         max_retries: int = 2,
+        base_url: Optional[str] = None,
+        provider: str = "opencode",
     ) -> str:
-        """One opencode model attempt: HTTP with the Phase 58 retry semantics.
+        """One OpenAI-compatible model attempt (opencode or Mistral) with the
+        Phase 58 retry semantics.
 
         Retries network/timeout errors and transient 502/503/504 with
         exponential backoff; every other failure (401/403/404/429, empty
         content, malformed response) fails the model instantly. Raises
         LLMGatewayUnavailable on any final failure — never canned prose.
         """
-        url = f"{opencode_base_url(model_id)}{OPENCODE_CHAT_COMPLETIONS_PATH}"
+        url = f"{base_url or opencode_base_url(model_id)}{OPENCODE_CHAT_COMPLETIONS_PATH}"
         payload = {
             "model": model_id,
             "messages": messages,
@@ -141,46 +136,46 @@ class LLMGateway:
 
         for attempt in range(max_retries + 1):
             try:
-                logger.info(f"LLMGateway: Attempting opencode call ({model_id}), attempt {attempt + 1}/{max_retries + 1}...")
+                logger.info(f"LLMGateway: Attempting {provider} call ({model_id}), attempt {attempt + 1}/{max_retries + 1}...")
                 async with httpx.AsyncClient() as client:
                     response = await client.post(url, headers=headers, json=payload, timeout=30.0)
                     response.raise_for_status()
                     res_data = response.json()
                     choice = res_data["choices"][0]
                     if choice.get("finish_reason") == "length":
-                        raise ValueError("opencode completion exhausted its token budget")
+                        raise ValueError(f"{provider} completion exhausted its token budget")
                     # Reasoning is not a final answer; downstream callers may
                     # require strict JSON or a single severity classification.
                     text = strip_thinking_tags(choice["message"].get("content") or "")
                     if not text:
-                        raise ValueError("opencode returned an empty final completion")
-                    logger.info("LLMGateway: opencode call succeeded (%s).", model_id)
+                        raise ValueError(f"{provider} returned an empty final completion")
+                    logger.info("LLMGateway: %s call succeeded (%s).", provider, model_id)
                     return text
             except (httpx.TimeoutException, httpx.NetworkError) as net_err:
                 if attempt < max_retries:
                     backoff = 1.0 * (2 ** attempt)
                     logger.warning(
-                        f"LLMGateway: opencode network/timeout error ({type(net_err).__name__}: {net_err}). "
+                        f"LLMGateway: {provider} network/timeout error ({type(net_err).__name__}: {net_err}). "
                         f"Retrying in {backoff:.1f}s (attempt {attempt + 1}/{max_retries + 1})..."
                     )
                     await asyncio.sleep(backoff)
                     continue
-                logger.error(f"LLMGateway: opencode call failed after {max_retries + 1} attempts ({model_id}): {net_err}", exc_info=True)
-                raise LLMGatewayUnavailable(f"opencode call failed ({model_id}): {net_err}") from net_err
+                logger.error(f"LLMGateway: {provider} call failed after {max_retries + 1} attempts ({model_id}): {net_err}", exc_info=True)
+                raise LLMGatewayUnavailable(f"{provider} call failed ({model_id}): {net_err}") from net_err
             except httpx.HTTPStatusError as http_err:
                 if http_err.response.status_code in (502, 503, 504) and attempt < max_retries:
                     backoff = 1.0 * (2 ** attempt)
                     logger.warning(
-                        f"LLMGateway: opencode HTTP {http_err.response.status_code} error. "
+                        f"LLMGateway: {provider} HTTP {http_err.response.status_code} error. "
                         f"Retrying in {backoff:.1f}s (attempt {attempt + 1}/{max_retries + 1})..."
                     )
                     await asyncio.sleep(backoff)
                     continue
-                logger.error(f"LLMGateway: opencode call failed ({model_id}): {http_err}", exc_info=True)
-                raise LLMGatewayUnavailable(f"opencode call failed ({model_id}): {http_err}") from http_err
+                logger.error(f"LLMGateway: {provider} call failed ({model_id}): {http_err}", exc_info=True)
+                raise LLMGatewayUnavailable(f"{provider} call failed ({model_id}): {http_err}") from http_err
             except Exception as oc_err:
-                logger.error(f"LLMGateway: opencode call failed ({model_id}): {oc_err}", exc_info=True)
-                raise LLMGatewayUnavailable(f"opencode call failed ({model_id}): {oc_err}") from oc_err
+                logger.error(f"LLMGateway: {provider} call failed ({model_id}): {oc_err}", exc_info=True)
+                raise LLMGatewayUnavailable(f"{provider} call failed ({model_id}): {oc_err}") from oc_err
 
     @classmethod
     async def generate_content(
@@ -193,16 +188,16 @@ class LLMGateway:
         reasoning_effort: Optional[str] = None
     ) -> str:
         """
-        opencode-first, fail-loud, with a free-model ladder (Phase 60).
+        Mistral-first, fail-loud, with an opencode fallback ladder.
 
-        Ladder: the caller's model (or the configured Go driver) first, then
-        the configured free ladder (DeepSeek Free → GLM Free → Beam →
-        Iceman), then NVIDIA NIM DeepSeek as the last network fallback.
-        Zen-only free models use their own endpoint. Each model failure —
-        including GoUsageLimitError and FreeUsageLimitError — drops to the
-        next rung without retrying quota errors.
-        Free-ladder models are reasoning models, so their max_tokens budget
-        is raised to settings.opencode_free_models_min_tokens.
+        Chain: the configured Mistral model (DeepSeek V4.1 Flash served via
+        Mistral's OpenAI-compatible API) first, then the caller's opencode
+        model (or the configured Go driver) and the configured free ladder
+        (DeepSeek Free → GLM Free → Beam → Iceman). Zen-only free models use
+        their own endpoint. Each model failure — including GoUsageLimitError
+        and FreeUsageLimitError — drops to the next rung without retrying
+        quota errors. Free-ladder models are reasoning models, so their
+        max_tokens budget is raised to settings.opencode_free_models_min_tokens.
 
         Raises LLMGatewayUnavailable when every rung fails; never returns
         canned prose. Gemini serves embeddings only (agents/memory/ltm.py)
@@ -215,13 +210,47 @@ class LLMGateway:
 
         max_retries = 2
 
-        # --- Phase 58 branch 1: opencode-go (first priority) ---
+        messages = []
+        if system_instruction:
+            messages.append({"role": "system", "content": system_instruction})
+        messages.append({"role": "user", "content": prompt})
+
+        last_model_error: Optional[LLMGatewayUnavailable] = None
+
+        # --- Mistral (primary, OpenAI-compatible /v1 API) ---
+        mistral_available = (
+            settings.mistral_api_key
+            and not settings.mistral_api_key.startswith("your-")
+            and settings.mistral_api_key.strip() != ""
+        )
+        if mistral_available:
+            try:
+                return await cls._opencode_attempt(
+                    model_id=settings.mistral_model,
+                    base_url=MISTRAL_BASE_URL,
+                    headers={
+                        "Authorization": f"Bearer {settings.mistral_api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    # reasoning_effort is an opencode-side knob; pass through the
+                    # caller's explicit value only.
+                    reasoning_effort=reasoning_effort,
+                    max_retries=max_retries,
+                    provider="Mistral",
+                )
+            except LLMGatewayUnavailable as mistral_err:
+                last_model_error = mistral_err
+                logger.warning(f"LLMGateway: Mistral rung failed; dropping to the opencode ladder ({mistral_err})")
+
+        # --- Phase 58 branch: opencode-go (fallback) ---
         opencode_available = (
             settings.opencode_api_key
             and not settings.opencode_api_key.startswith("your-")
             and settings.opencode_api_key.strip() != ""
         )
-        last_model_error: Optional[LLMGatewayUnavailable] = None
         if opencode_available:
             driver = model_name or settings.opencode_driver_model
             free_models = settings.opencode_free_model_list
@@ -235,10 +264,6 @@ class LLMGateway:
                 # clients without a stable session id get throttled or rejected.
                 "x-opencode-session": "prehub-backend",
             }
-            messages = []
-            if system_instruction:
-                messages.append({"role": "system", "content": system_instruction})
-            messages.append({"role": "user", "content": prompt})
             eff = reasoning_effort if reasoning_effort is not None else getattr(settings, "opencode_reasoning_effort", None)
 
             for opencode_model in ladder:
@@ -268,71 +293,11 @@ class LLMGateway:
 
         # --- Phase 59: Gemini chat removed (embeddings-only lock). GEMINI_API_KEY
         # serves agents/memory/ltm.py embed_content only and is never read here.
-        # Fallback to NVIDIA NIM (DeepSeek V4.1 Flash)
-        nvidia_key = cls.get_nvidia_key()
-        if not nvidia_key:
-            logger.error("LLMGateway: No usable API keys or ladder rungs found (all opencode rungs failed and NVIDIA NIM key missing).")
-            raise LLMGatewayUnavailable(
-                "No LLM provider succeeded: OpenCode models failed or its key is missing, "
-                "and no NVIDIA NIM key is available."
-            ) from last_model_error
-
-        logger.info(f"LLMGateway: Routing LLM request to NVIDIA NIM ({PRIMARY_NIM_MODEL})...")
-        url = NVIDIA_NIM_URL
-        
-        headers = {
-            "Authorization": f"Bearer {nvidia_key}",
-            "Content-Type": "application/json"
-        }
-        
-        messages = []
-        if system_instruction:
-            messages.append({"role": "system", "content": system_instruction})
-        messages.append({"role": "user", "content": prompt})
-        
-        payload = {
-            "model": PRIMARY_NIM_MODEL,
-            "messages": messages,
-            "temperature": temperature,
-            "max_tokens": max_tokens
-        }
-        
-        for attempt in range(max_retries + 1):
-            try:
-                async with httpx.AsyncClient() as client:
-                    response = await client.post(url, headers=headers, json=payload, timeout=30.0)
-                    response.raise_for_status()
-                    res_data = response.json()
-                    message = res_data["choices"][0]["message"]
-                    text = (message.get("content") or "").strip()
-                    if not text and message.get("reasoning_content"):
-                        text = message["reasoning_content"].strip()
-                    if not text:
-                        raise ValueError("NVIDIA NIM returned an empty completion")
-                    logger.info("LLMGateway: NVIDIA NIM DeepSeek call succeeded.")
-                    return strip_thinking_tags(text)
-            except (httpx.TimeoutException, httpx.NetworkError) as net_err:
-                if attempt < max_retries:
-                    backoff = 1.0 * (2 ** attempt)
-                    logger.warning(
-                        f"LLMGateway: NVIDIA NIM network/timeout error ({type(net_err).__name__}: {net_err}). "
-                        f"Retrying in {backoff:.1f}s (attempt {attempt + 1}/{max_retries + 1})..."
-                    )
-                    await asyncio.sleep(backoff)
-                    continue
-                logger.error(f"LLMGateway: NVIDIA NIM call failed after {max_retries + 1} attempts ({PRIMARY_NIM_MODEL}): {net_err}", exc_info=True)
-                raise LLMGatewayUnavailable(f"NVIDIA NIM call failed ({PRIMARY_NIM_MODEL}): {net_err}") from net_err
-            except httpx.HTTPStatusError as http_err:
-                if http_err.response.status_code in (502, 503, 504) and attempt < max_retries:
-                    backoff = 1.0 * (2 ** attempt)
-                    logger.warning(
-                        f"LLMGateway: NVIDIA NIM HTTP {http_err.response.status_code} error. "
-                        f"Retrying in {backoff:.1f}s (attempt {attempt + 1}/{max_retries + 1})..."
-                    )
-                    await asyncio.sleep(backoff)
-                    continue
-                logger.error(f"LLMGateway: NVIDIA NIM call failed ({PRIMARY_NIM_MODEL}): {http_err}", exc_info=True)
-                raise LLMGatewayUnavailable(f"NVIDIA NIM call failed ({PRIMARY_NIM_MODEL}): {http_err}") from http_err
-            except Exception as nim_err:
-                logger.error(f"LLMGateway: NVIDIA NIM call failed ({PRIMARY_NIM_MODEL}): {nim_err}", exc_info=True)
-                raise LLMGatewayUnavailable(f"NVIDIA NIM call failed ({PRIMARY_NIM_MODEL}): {nim_err}") from nim_err
+        logger.error(
+            "LLMGateway: No usable API keys or ladder rungs found (Mistral failed or key missing; "
+            "all opencode rungs failed or OPENCODE_API_KEY missing)."
+        )
+        raise LLMGatewayUnavailable(
+            "No LLM provider succeeded: Mistral failed or its key is missing, "
+            "and OpenCode models failed or their key is missing."
+        ) from last_model_error

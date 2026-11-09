@@ -78,10 +78,11 @@ services:
         value: ""
       - key: GEMINI_API_KEY
         value: ""
-      - key: NVIDIA_DEEPSEEK_V4_PRO
+      # Mistral PRIMARY chat provider (OpenAI-compatible https://api.mistral.ai/v1)
+      - key: MISTRAL_API_KEY
         value: ""
-      - key: NVIDIA_DEEPSEEK_V4_FLASH
-        value: ""
+      - key: MISTRAL_MODEL
+        value: "deepseek-v4-1-flash-1017"
       - key: AISSTREAM_API_KEY
         value: ""
       - key: TWITTER_BEARER_TOKEN

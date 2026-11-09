@@ -331,7 +331,7 @@ def _parse_json_object(text: str) -> dict:
 
 
 async def _run_live_llm(scenarios, model_name: str, concurrency: int = 4) -> dict:
-    """Runs structured LLM extraction through the opencode/NIM driver gateway."""
+    """Runs structured LLM extraction through the shared LLM gateway (Mistral primary, opencode fallback)."""
     from agents.llm_gateway import LLMGateway
 
     sem = asyncio.Semaphore(concurrency)
@@ -798,7 +798,7 @@ def main():
     parser.add_argument("--dataset", type=str, default=DEFAULT_DATASET, help="Path to benchmark dataset JSON")
     parser.add_argument("--output", type=str, default=DEFAULT_REPORT, help="Path to export JSON report")
     parser.add_argument("--cache", type=str, default=DEFAULT_CACHE, help="Path to NLP/LLM extraction cache")
-    parser.add_argument("--live-llm", action="store_true", help="Run live opencode/NIM LLM structured extraction")
+    parser.add_argument("--live-llm", action="store_true", help="Run live LLM structured extraction via the gateway (Mistral primary, opencode fallback)")
     parser.add_argument("--llm-model", type=str, default=None, help="Override the LLM driver model id")
     parser.add_argument("--refresh-cache", action="store_true", help="Rebuild the extraction cache")
     parser.add_argument("--no-sync-frontend", action="store_true", help="Skip copying artifacts to frontend/public/data")

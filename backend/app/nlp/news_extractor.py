@@ -1,6 +1,6 @@
 """
 PreHub: Structured News & Early Warning Information Extractor
-Uses the opencode driver model via LLMGateway to extract structured crisis intelligence:
+Uses the shared LLM gateway (Mistral primary → opencode fallback) to extract structured crisis intelligence:
 - Incident type (expanded taxonomy), severity, temporal phase
 - Economical 3-tier gatekeeper: RED_CONFIRMED | YELLOW_CLARIFY | DROPPED_IRRELEVANT
 - Dynamic ImpactProfile (custom_hazard_label, affected_modalities, passability, estimated_delay_hours)
@@ -1877,11 +1877,9 @@ async def _gate2_verify_single_item(structured: Dict[str, Any]) -> Dict[str, Any
 
         async def _call_mimo() -> Optional[str]:
             try:
-                from app.config import get_settings as _gs
-                _settings = _gs()
-                _key = getattr(_settings, "opencode_api_key", "")
-                if not _key or str(_key).startswith("your-"):
-                    return None
+                # Shared gateway chain: Mistral primary → opencode fallback. No
+                # opencode-key pre-gate — the gateway raises
+                # LLMGatewayUnavailable when no provider is usable.
                 from agents.llm_gateway import LLMGateway
                 _desc = (structured.get("raw_description") or structured.get("summary") or "")[:2500]
                 _prompt = (
@@ -2108,11 +2106,10 @@ async def extract_structured_news_batch(articles: List[Dict[str, Any]]) -> List[
         return baselines
     try:
         settings = get_settings()
-        opencode_key = getattr(settings, "opencode_api_key", "")
-        if not opencode_key or opencode_key.startswith("your-"):
-            for cand in candidates:
-                _hold_back_llm(cand, "LLM gateway not configured")
-            return baselines
+        # Shared gateway chain (Mistral primary → opencode fallback). No
+        # opencode-key pre-gate: the gateway raises LLMGatewayUnavailable when
+        # no provider is usable, which maps to the D4 hold-back below (and each
+        # item's own hold-back inside _llm_single).
         from agents.llm_gateway import LLMGateway
         _sem = asyncio.Semaphore(8)
 
@@ -2205,7 +2202,8 @@ async def extract_structured_news_batch(articles: List[Dict[str, Any]]) -> List[
 async def extract_structured_news(art: Dict[str, Any]) -> Dict[str, Any]:
     """
     Extracts structured crisis intelligence from raw news item.
-    Uses cached result if present, otherwise attempts opencode driver with hold-back fallback (D4).
+    Uses cached result if present, otherwise attempts the shared LLM gateway
+    (Mistral primary → opencode fallback) with hold-back fallback (D4).
     """
     title = art.get("title", "") or ""
     source = art.get("source", "Media")
@@ -2253,70 +2251,69 @@ async def extract_structured_news(art: Dict[str, Any]) -> Dict[str, Any]:
         return structured
 
     settings = get_settings()
-    opencode_key = getattr(settings, "opencode_api_key", "")
-    if opencode_key and not opencode_key.startswith("your-"):
-        try:
-            from agents.llm_gateway import LLMGateway
-            prompt = (
-                "Extract structured disaster & food supply chain intelligence from this Indonesian news report. "
-                "Return ONLY a clean JSON object (no markdown, no backticks, no commentary) with this exact schema:\n"
-                "{\n"
-                '  "incident_type": "flood | landslide | earthquake | wildfire | port_closure | marine_wave | road_closure | congestion | volcanic_eruption | other_disruption",\n'
-                '  "severity": "low | medium | high | critical",\n'
-                '  "temporal_phase": "forecast_early_warning | active_disruption | clearing_recovery",\n'
-                '  "lead_time_hours": 0.0,\n'
-                '  "corridor_nodes": ["City/Port names"],\n'
-                '  "corridor_segment": "Road name or KM marker",\n'
-                '  "commodities_affected": ["Beras BULOG", "Cabai Merah", "Minyak Goreng", etc],\n'
-                '  "concise_summary": "1 sentence operational factual summary in Indonesian",\n'
-                '  "zone_tier": "RED_CONFIRMED | YELLOW_CLARIFY | DROPPED_IRRELEVANT",\n'
-                '  "tier_reason": "1 sentence in Indonesian",\n'
-                '  "custom_hazard_label": "short Indonesian label",\n'
-                '  "verified_sumatra_location": "city/port/road from body only, never bureau name, or null",\n'
-                '  "affected_modalities": ["land | sea | air"],\n'
-                '  "passability": "BLOCKED | RESTRICTED | CAUTION",\n'
-                '  "estimated_delay_hours": 0,\n'
-                '  "ground_truth_metrics": {"lane_status": "BLOCKED | RESTRICTED | CLEAR", "water_level_cm": 0}\n'
-                "}\n\n"
-                f"Title: {title[:120]}\n"
-                f"Source: {source} ({art.get('source_tier', 'TIER_2')})\n"
-                f"Content: {_desc[:400]}"
-            )
+    try:
+        # Shared gateway chain: Mistral primary → opencode fallback. No
+        # opencode-key pre-gate — the gateway raises LLMGatewayUnavailable when
+        # no provider is usable, which maps to the D4 hold-back below.
+        from agents.llm_gateway import LLMGateway
+        prompt = (
+            "Extract structured disaster & food supply chain intelligence from this Indonesian news report. "
+            "Return ONLY a clean JSON object (no markdown, no backticks, no commentary) with this exact schema:\n"
+            "{\n"
+            '  "incident_type": "flood | landslide | earthquake | wildfire | port_closure | marine_wave | road_closure | congestion | volcanic_eruption | other_disruption",\n'
+            '  "severity": "low | medium | high | critical",\n'
+            '  "temporal_phase": "forecast_early_warning | active_disruption | clearing_recovery",\n'
+            '  "lead_time_hours": 0.0,\n'
+            '  "corridor_nodes": ["City/Port names"],\n'
+            '  "corridor_segment": "Road name or KM marker",\n'
+            '  "commodities_affected": ["Beras BULOG", "Cabai Merah", "Minyak Goreng", etc],\n'
+            '  "concise_summary": "1 sentence operational factual summary in Indonesian",\n'
+            '  "zone_tier": "RED_CONFIRMED | YELLOW_CLARIFY | DROPPED_IRRELEVANT",\n'
+            '  "tier_reason": "1 sentence in Indonesian",\n'
+            '  "custom_hazard_label": "short Indonesian label",\n'
+            '  "verified_sumatra_location": "city/port/road from body only, never bureau name, or null",\n'
+            '  "affected_modalities": ["land | sea | air"],\n'
+            '  "passability": "BLOCKED | RESTRICTED | CAUTION",\n'
+            '  "estimated_delay_hours": 0,\n'
+            '  "ground_truth_metrics": {"lane_status": "BLOCKED | RESTRICTED | CLEAR", "water_level_cm": 0}\n'
+            "}\n\n"
+            f"Title: {title[:120]}\n"
+            f"Source: {source} ({art.get('source_tier', 'TIER_2')})\n"
+            f"Content: {_desc[:400]}"
+        )
 
-            gen_text = await asyncio.wait_for(
-                LLMGateway.generate_content(prompt=prompt, model_name=settings.opencode_driver_model, max_tokens=400),
-                timeout=25.0
-            )
-            if gen_text:
-                parsed = json.loads(_clean_llm_json(gen_text))
-                if isinstance(parsed, dict):
-                    _apply_batch_llm_item(structured, {"id": structured.get("id"), **parsed})
-                    if parsed.get("temporal_phase"):
-                        structured["temporal_phase"] = parsed["temporal_phase"]
-                    if parsed.get("lead_time_hours") is not None:
-                        try:
-                            structured["lead_time_hours"] = float(parsed["lead_time_hours"])
-                        except Exception:
-                            pass
-                    if parsed.get("corridor_nodes"):
-                        structured["corridor_nodes"] = parsed["corridor_nodes"]
-                    if parsed.get("corridor_segment"):
-                        structured["corridor_segment"] = parsed["corridor_segment"]
-                    if parsed.get("commodities_affected"):
-                        structured["commodities_affected"] = parsed["commodities_affected"]
-                    if parsed.get("ground_truth_metrics"):
-                        structured["ground_truth_metrics"].update(parsed["ground_truth_metrics"])
-                else:
-                    _hold_back_llm(structured, "Invalid LLM JSON response")
+        gen_text = await asyncio.wait_for(
+            LLMGateway.generate_content(prompt=prompt, model_name=settings.opencode_driver_model, max_tokens=400),
+            timeout=25.0
+        )
+        if gen_text:
+            parsed = json.loads(_clean_llm_json(gen_text))
+            if isinstance(parsed, dict):
+                _apply_batch_llm_item(structured, {"id": structured.get("id"), **parsed})
+                if parsed.get("temporal_phase"):
+                    structured["temporal_phase"] = parsed["temporal_phase"]
+                if parsed.get("lead_time_hours") is not None:
+                    try:
+                        structured["lead_time_hours"] = float(parsed["lead_time_hours"])
+                    except Exception:
+                        pass
+                if parsed.get("corridor_nodes"):
+                    structured["corridor_nodes"] = parsed["corridor_nodes"]
+                if parsed.get("corridor_segment"):
+                    structured["corridor_segment"] = parsed["corridor_segment"]
+                if parsed.get("commodities_affected"):
+                    structured["commodities_affected"] = parsed["commodities_affected"]
+                if parsed.get("ground_truth_metrics"):
+                    structured["ground_truth_metrics"].update(parsed["ground_truth_metrics"])
             else:
-                _hold_back_llm(structured, "Empty LLM response")
-        except Exception as e:
-            logger.warning(
-                f"LLM structured extraction unavailable for '{title[:30]}' ({type(e).__name__}: {e}); holding back per D4."
-            )
-            _hold_back_llm(structured, f"{type(e).__name__}: {e}")
-    else:
-        _hold_back_llm(structured, "LLM gateway not configured")
+                _hold_back_llm(structured, "Invalid LLM JSON response")
+        else:
+            _hold_back_llm(structured, "Empty LLM response")
+    except Exception as e:
+        logger.warning(
+            f"LLM structured extraction unavailable for '{title[:30]}' ({type(e).__name__}: {e}); holding back per D4."
+        )
+        _hold_back_llm(structured, f"{type(e).__name__}: {e}")
 
     # Geocoding fallback: resolve coordinates via Sumatra gazetteer if missing
     if structured.get("zone_tier") not in ("DROPPED_IRRELEVANT", "HELD_BACK_LLM_UNAVAILABLE"):

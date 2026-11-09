@@ -48,6 +48,11 @@ class Settings(BaseSettings):
     # vector(768) column contract. Changing model OR dims requires a migration +
     # full re-embed (one-way distribution shift) — see infra/supabase/migrations.
     gemini_embedding_model: str = "models/gemini-embedding-001"
+    # Mistral — PRIMARY chat provider (OpenAI-compatible https://api.mistral.ai/v1).
+    # The Mistral catalog serves the 1017 snapshot of DeepSeek V4.1 Flash.
+    mistral_api_key: str = ""
+    mistral_model: str = "deepseek-v4-1-flash-1017"
+    # opencode — FALLBACK chat provider.
     opencode_api_key: str = ""
     # Go endpoint model IDs (not interchangeable with the Console catalog).
     # See agents/llm_gateway.py for endpoint details.
@@ -66,8 +71,6 @@ class Settings(BaseSettings):
     # Minimum max_tokens for ladder models (reasoning models eat the budget).
     opencode_free_models_min_tokens: int = 1500
     deepseek_api_key: str = ""
-    nvidia_deepseek_v4_pro: str = ""
-    nvidia_deepseek_v4_flash: str = ""
     whatsapp_token: str = ""
     whatsapp_phone_number_id: str = ""
     whatsapp_recipient_number: str = ""

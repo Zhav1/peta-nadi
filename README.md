@@ -13,7 +13,7 @@ Multisource Telemetry (BMKG Sensor, TomTom Speed Flow, Google News RSS, PIHPS Pr
                    Redis 7 Pub/Sub & OSINT Ingestion Queue
                                       |
                                       v
-               LangGraph 6-Agent Swarm (OpenCode Go / Free / NIM)
+               LangGraph 6-Agent Swarm (Mistral / OpenCode Go / Free)
                                       |
                                       v
                    Consensus Gate & Grounding Verification
@@ -32,13 +32,15 @@ Multisource Telemetry (BMKG Sensor, TomTom Speed Flow, Google News RSS, PIHPS Pr
 
 ## Backend LLM fallbacks
 
-Chat requests try the requested OpenCode Go model first, then these fallbacks:
+Chat requests try the configured Mistral model first (DeepSeek V4.1 Flash,
+served via Mistral's OpenAI-compatible API with `MISTRAL_API_KEY`). When
+Mistral is unavailable it falls back to the requested OpenCode Go model, then
+these fallbacks:
 
 1. `deepseek-v4.1-flash-free` (Zen)
 2. `glm-5.3-flash-free` (Zen)
 3. `beam-free` (Go)
 4. `iceman-contributor-free` (Go)
-5. NVIDIA NIM, if its key is configured.
 This applies to both driver and reasoning calls, including Go quota errors
 (`429 GoUsageLimitError`). Gemini remains embeddings-only.
 

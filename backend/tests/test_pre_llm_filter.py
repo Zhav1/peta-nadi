@@ -97,8 +97,26 @@ def test_passes_disaster_regex_gate_cases():
 
 
 @pytest.mark.asyncio
-async def test_batch_extraction_pre_filter_drops_irrelevant():
+async def test_batch_extraction_pre_filter_drops_irrelevant(monkeypatch):
     """Verifies non-matching articles are flagged as DROPPED_IRRELEVANT without calling the LLM."""
+    from app.nlp import news_extractor as nx
+    from agents import llm_gateway as gw
+
+    llm_calls = []
+
+    async def fake_generate_content(prompt, model_name=None, **kw):
+        llm_calls.append(prompt)
+        import re as _re
+        m = _re.search(r'"id":\s*"([^"]+)"', prompt)
+        _id = m.group(1) if m else "art_disaster_sumatra"
+        return (
+            '{"id": "%s", "is_active_disaster": true, '
+            '"zone_tier": "YELLOW_CLARIFY", "tier_reason": "uji", '
+            '"verified_sumatra_location": "Kampar"}' % _id
+        )
+
+    monkeypatch.setattr(gw.LLMGateway, "generate_content", fake_generate_content)
+
     test_articles = [
         {
             "id": "art_disaster_sumatra",
@@ -134,6 +152,11 @@ async def test_batch_extraction_pre_filter_drops_irrelevant():
 
     results = await extract_structured_news_batch(test_articles)
     assert len(results) == 3
+
+    # Exactly one article reached the LLM; the two non-matching ones were
+    # dropped pre-LLM with 0 gateway calls.
+    assert len(llm_calls) == 1
+    assert "art_disaster_sumatra" in llm_calls[0]
 
     by_id = {r["id"]: r for r in results}
 
@@ -185,10 +208,29 @@ def test_strip_thinking_tags():
 
 
 @pytest.mark.asyncio
-async def test_social_disruption_nlp_ingestion():
+async def test_social_disruption_nlp_ingestion(monkeypatch):
     """Phase 103 WP3: Ditmawalumni USU social disruption ingestion (pungli, civil blockades).
     Validates articles pass 2-factor regex gate and map to road_closure with high severity.
     """
+    from agents import llm_gateway as gw
+
+    async def fake_generate_content(prompt, model_name=None, **kw):
+        # Deterministic gateway verdict per article; the verified location must
+        # be verbatim in the article body (hallucination guard).
+        if "Rantauprapat" in prompt:
+            loc = "Rantauprapat"
+        elif "Tebing Tinggi" in prompt:
+            loc = "Tebing Tinggi"
+        else:
+            loc = "Jalinsum Asahan"
+        return (
+            '{"is_active_disaster": true, "zone_tier": "YELLOW_CLARIFY", '
+            '"tier_reason": "uji", "incident_type": "road_closure", '
+            '"severity": "high", "verified_sumatra_location": "%s"}' % loc
+        )
+
+    monkeypatch.setattr(gw.LLMGateway, "generate_content", fake_generate_content)
+
     # 1. Regex gate check
     assert passes_disaster_regex_gate(
         title="Pos pungli Lintas Sumatera resahkan sopir logistik",

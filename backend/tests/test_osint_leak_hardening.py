@@ -249,7 +249,9 @@ async def test_batch_single_item_no_bleed(monkeypatch):
         )
 
     monkeypatch.setattr(gw.LLMGateway, "generate_content", fake_generate_content)
-    monkeypatch.setattr(nx, "get_settings", lambda: type("S", (), {"opencode_api_key": "test-key"})())
+    # The extractor no longer pre-gates on opencode_api_key; it only reads the
+    # driver model id before delegating to the (mocked) gateway chain.
+    monkeypatch.setattr(nx, "get_settings", lambda: type("S", (), {"opencode_driver_model": "paid-test"})())
 
     arts = [
         {"id": "A1", "title": "Banjir putus jalan Sitinjau Lauik Padang Solok",
