@@ -505,43 +505,103 @@ def _build_weather_candidates(
     return candidates
 
 
+def _parse_ts(value: Any) -> Optional[datetime]:
+    """Parse an ISO timestamp into an aware UTC datetime (None when unusable)."""
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    return parsed.replace(tzinfo=timezone.utc) if parsed.tzinfo is None else parsed.astimezone(timezone.utc)
+
+
+def _split_by_validity(
+    records: Dict[str, Any], now: datetime
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """Partition weather source records into publishable and abandoned evidence.
+
+    A record fetched more than ``WEATHER_STALE_CEILING_HOURS`` ago is never
+    fused: its predictions are days old and would otherwise be published as if
+    they described today, and (because ``valid_until`` is the minimum across
+    sources) it would also pin the whole section's validity window days in the
+    past while a fresh source kept ``observed_at`` looking current.
+
+    A record that is merely past its *poll* TTL is still usable evidence — the
+    poll TTL says "we have not re-polled lately", not "the forecast is false" —
+    but the snapshot's ``generated_at``/``valid_until`` are then derived from
+    that record too, so the published age stays truthful.
+    """
+    usable: Dict[str, Any] = {}
+    expired: Dict[str, Any] = {}
+    ceiling = now - timedelta(hours=WEATHER_STALE_CEILING_HOURS)
+    for name in ("bmkg", "open_meteo"):
+        record = records.get(name)
+        if not isinstance(record, dict):
+            continue
+        reference = _parse_ts(record.get("fetched_at")) or _parse_ts(record.get("valid_until"))
+        if reference is not None and reference < ceiling:
+            expired[name] = record
+        else:
+            usable[name] = record
+    return usable, expired
+
+
 def get_cached_fusion_snapshot(*, records=None) -> Dict[str, Any] | None:
-    """Synchronously build fusion from already-persisted source observations."""
+    """Synchronously build fusion from already-persisted, still-valid observations."""
     if records is None:
         from app.services.public_operational_cache import read_cached_source_observations
         records = read_cached_source_observations()
-    if not records or not any(isinstance(records.get(name), dict) for name in ("bmkg", "open_meteo")):
+    if not records:
         return None
-    bmkg = records.get("bmkg") or {}
-    openmeteo = records.get("open_meteo") or {}
+    now = datetime.now(timezone.utc)
+    usable, expired = _split_by_validity(records, now)
+    if not usable:
+        # Nothing current: publish no fusion at all so the caller serves a
+        # truthful stale/degraded envelope instead of days-old weather.
+        return None
+    bmkg = usable.get("bmkg") or {}
+    openmeteo = usable.get("open_meteo") or {}
     bmkg_events = list(bmkg.get("events") or [])
     openmeteo_events = list(openmeteo.get("events") or [])
-    errors = [f"{name}: {record['error']}" for name, record in (("bmkg", bmkg), ("open_meteo", openmeteo)) if record.get("error")]
+    errors = [f"{name}: {record['error']}" for name, record in usable.items() if record.get("error")]
+    for name, record in expired.items():
+        errors.append(
+            f"{name}: past the {WEATHER_STALE_CEILING_HOURS}h stale ceiling "
+            f"(fetched_at {record.get('fetched_at')}); excluded from fusion"
+        )
     bmkg_ok = bool(bmkg) and bmkg.get("status") not in ("degraded", "down")
     om_ok = bool(openmeteo) and openmeteo.get("status") not in ("degraded", "down")
     upstream = {
         "bmkg_ok": bmkg_ok,
         "open_meteo_ok": om_ok,
         "degraded": not bmkg_ok and not om_ok,
+        # A source we could not verify: counts may not be published as a
+        # verified zero (see render_polygon_payload / the summary builder).
+        "incomplete": bool(expired),
         "errors": errors,
         "reason": "; ".join(errors) if errors else None,
+        "expired_sources": sorted(expired),
         "source_records": {
             name: {key: record.get(key) for key in ("fetched_at", "observed_at", "valid_until", "status")}
-            for name, record in (("bmkg", bmkg), ("open_meteo", openmeteo)) if record
+            for name, record in {**usable, **expired}.items() if record
         },
     }
     candidates = _build_weather_candidates(
         bmkg_events, openmeteo_events, min_severity="low", min_precip=None, min_flood=None
     )
-    now = datetime.now(timezone.utc)
-    expiries = [
-        datetime.fromisoformat(record["valid_until"].replace("Z", "+00:00"))
-        for record in (bmkg, openmeteo) if record.get("valid_until")
-    ]
-    valid_until = min(expiries).isoformat() if expiries else (now + timedelta(hours=WEATHER_VALIDITY_HOURS)).isoformat()
+    # ``generated_at`` and ``valid_until`` must describe the SAME contributing
+    # evidence: the oldest fetch that went into the fusion, and the earliest
+    # expiry among those same records. Using max(fetched_at) with
+    # min(valid_until) produced "observed 9 minutes ago / valid until 4 days
+    # ago" — a fresh-looking stamp on days-old data.
+    fetched = [stamp for stamp in (_parse_ts(record.get("fetched_at")) for record in usable.values()) if stamp]
+    expiries = [stamp for stamp in (_parse_ts(record.get("valid_until")) for record in usable.values()) if stamp]
+    generated_at = (min(fetched) if fetched else now).isoformat()
+    valid_until = (min(expiries) if expiries else now + timedelta(hours=WEATHER_VALIDITY_HOURS)).isoformat()
     return {
         "bbox": list(SUMATRA_BBOX),
-        "generated_at": max((r.get("fetched_at", "") for r in (bmkg, openmeteo)), default="") or now.isoformat(),
+        "generated_at": generated_at,
         "valid_until": valid_until,
         "window_hours": HAZARD_WINDOW_HOURS,
         "source": WEATHER_SUMMARY_SOURCE,
@@ -626,9 +686,12 @@ def render_polygon_payload(
 
     upstream = snapshot.get("upstream") or {}
     degraded = bool(upstream.get("degraded"))
+    # An expired/unverifiable source means the true count is unknown, so an
+    # empty render must publish null counts instead of a verified-looking zero.
+    incomplete = bool(upstream.get("incomplete"))
     generated_at = snapshot.get("generated_at")
 
-    if degraded and count == 0:
+    if (degraded or incomplete) and count == 0:
         # Unknown, not zero: a total outage publishes null counts.
         status, reason = "degraded", upstream.get("reason") or "Sumber cuaca tidak tersedia"
         published_total: Optional[int] = None

@@ -433,6 +433,9 @@ def _build_sections(records: dict[str, dict[str, Any]]) -> dict[str, dict[str, A
             weather_status = "degraded"
         elif meta.get("errors") and weather_status == "ok":
             weather_status = "partial"
+        if meta.get("expired_sources"):
+            expired_note = "sumber kedaluwarsa: " + ", ".join(meta["expired_sources"])
+            weather_error = f"{weather_error}; {expired_note}" if weather_error else expired_note
         summary = {
             "bbox": list(SUMATRA_BBOX),
             "generated_at": generated_at,
@@ -452,7 +455,17 @@ def _build_sections(records: dict[str, dict[str, Any]]) -> dict[str, dict[str, A
         if meta.get("degraded"):
             for key in ("cuaca", "waspada"):
                 summary[key].update({"count": None, "total": None, "status": "degraded", "reason": meta.get("reason")})
-        weather_observed = _section_status(records, ("bmkg", "open_meteo"))[1]
+        elif meta.get("incomplete") and not inventory["cuaca_total"] and not inventory["waspada_total"]:
+            # One weather source could not be verified (expired/excluded), so an
+            # empty inventory is "unknown", never a verified zero.
+            note = "Sebagian sumber cuaca tidak dapat diverifikasi"
+            for key in ("cuaca", "waspada"):
+                summary[key].update({"count": None, "total": None, "status": "degraded", "reason": note})
+        # observed_at must describe the same evidence as valid_until: the
+        # snapshot's own generated_at (oldest contributing fetch), never the
+        # newest source fetch. Restamping it from max(fetched_at) is what made a
+        # four-day-old validity window look nine minutes old.
+        weather_observed = generated_at or _section_status(records, ("bmkg", "open_meteo"))[1]
         high_payload = render_polygon_payload(snapshot, "high", 50.0, 80.0)
         advisory_payload = render_polygon_payload(snapshot, "low", None, None)
         summary_status = weather_status
@@ -570,17 +583,24 @@ def _build_sections(records: dict[str, dict[str, Any]]) -> dict[str, dict[str, A
         }
     if isinstance(traffic_raw, dict):
         # Exact checkpoint-to-corridor assignments only; unknown checkpoints do not
-        # inherit the latest corridor's record.
-        assignments = {
-            "Belawan Toll Gate": "sumatra_belawan_medan", "Tanjung Mulia Interchange": "sumatra_belawan_medan",
-            "Binjai Km 18": "sumatra_belawan_medan", "Tebing Tinggi Toll Gate": "sumatra_belawan_medan",
-            "Pematangsiantar Km 128": "sumatra_belawan_medan", "Pekanbaru Toll Gate": "sumatra_riau_pekanbaru",
-            "Dumai Port Corridor": "sumatra_riau_pekanbaru", "Padang By Pass Km 12": "sumatra_sumbar_padang",
-            "Bukittinggi Aur Kuning": "sumatra_sumbar_padang", "Palembang Kramasan Interchange": "sumatra_sumsel_palembang",
-            "Terbanggi Besar Toll Gate": "sumatra_lampung_bakauheni", "Bakauheni Toll Terminal": "sumatra_lampung_bakauheni",
+        # inherit the latest corridor's record. The mapping is owned by the adapter
+        # (keyed by checkpoint id AND live display name) — a local copy of the
+        # *legacy* names silently matched nothing, so every corridor stayed
+        # "unknown" and the section could never refresh.
+        from app.adapters.tomtom_adapter import CHECKPOINT_CORRIDOR_MAP
+
+        # The adapter still carries two legacy corridor ids that no consumer
+        # knows; fold them onto the canonical corridor set served here.
+        corridor_alias = {
+            "sumatra_aceh_banda": "sumatra_aceh_malahayati",
+            "sumatra_jambi_palembang": "sumatra_sumsel_palembang",
         }
         for item in traffic_raw.get("flow") or []:
-            corridor_id = assignments.get(item.get("_checkpoint_name"))
+            mapped = (
+                CHECKPOINT_CORRIDOR_MAP.get(item.get("_checkpoint_id"))
+                or CHECKPOINT_CORRIDOR_MAP.get(item.get("_checkpoint_name"))
+            )
+            corridor_id = corridor_alias.get(mapped, mapped)
             if corridor_id and corridor_id in contexts:
                 corridor_traffic = contexts[corridor_id]["traffic"]
                 if not isinstance(corridor_traffic.get("data"), list):
@@ -599,7 +619,13 @@ def _build_sections(records: dict[str, dict[str, Any]]) -> dict[str, dict[str, A
             context["traffic"] = {"status": "unknown", "data": None}
     corridor_status = "unknown"
     if isinstance(traffic_record, dict):
-        corridor_status = "partial" if any(c["traffic"].get("status") == "ok" for c in contexts.values()) else "degraded"
+        covered = sum(1 for c in contexts.values() if c["traffic"].get("status") == "ok")
+        if covered == len(contexts):
+            corridor_status = "ok"
+        elif covered:
+            corridor_status = "partial"
+        else:
+            corridor_status = "degraded"
     sections["corridor_contexts"] = _envelope(corridor_status, contexts, cached=True)
     default_context = contexts.get("sumatra_belawan_medan")
     sections["corridor_context"] = _envelope(

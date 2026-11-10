@@ -668,17 +668,20 @@ async def fetch_weather_summary(
         coalesce_background_refresh("weather_summary", _refresh_weather)
 
     if not isinstance(data, dict):
-        now = datetime.now(timezone.utc).isoformat()
-        reason = section.get("error") or "Data operasional awal (baseline)"
-        default_cuaca = {
-            "count": 0, "total": 0, "status": "ok", "reason": "Tidak ada zona cuaca ekstrem aktif",
+        # No verified weather evidence. Publish null counts: a hard-coded
+        # baseline ("waspada count 1") would be invented weather, and a 0 would
+        # claim a verified empty sky we never checked.
+        reason = section.get("error") or "Data cuaca belum tersedia"
+        unknown_bucket = {
+            "count": None, "total": None, "status": "unknown", "reason": reason,
             "source": WEATHER_SUMMARY_SOURCE, "valid_until": None, "window_hours": HAZARD_WINDOW_HOURS
         }
-        default_waspada = {
-            "count": 1, "total": 1, "status": "ok", "reason": "Waspada potensi hujan sedang di koridor pesisir",
-            "source": WEATHER_SUMMARY_SOURCE, "valid_until": None, "window_hours": HAZARD_WINDOW_HOURS
+        return {
+            "bbox": list(SUMATRA_BBOX),
+            "generated_at": section.get("observed_at"),
+            "cuaca": dict(unknown_bucket),
+            "waspada": dict(unknown_bucket),
         }
-        return {"bbox": list(SUMATRA_BBOX), "generated_at": now, "cuaca": default_cuaca, "waspada": default_waspada}
 
     result = dict(data)
     if status in ("stale", "partial", "degraded", "unknown"):
@@ -686,9 +689,8 @@ async def fetch_weather_summary(
             bucket = dict(result.get(key) or {})
             bucket["status"] = status
             bucket["reason"] = section.get("error") or bucket.get("reason") or f"Cached weather source status: {status}"
-            if bucket.get("count") is None:
-                bucket["count"] = 0
-                bucket["total"] = 0
+            # A null count means "unknown" and must stay null — rewriting it to 0
+            # publishes a verified zero for data we could not verify.
             result[key] = bucket
     return result
 

@@ -92,6 +92,8 @@ PUBLIC_FIELDS = frozenset(
         "regency", "city", "district", "location", "region", "scope", "corridor_id",
         "corridor_name", "corridor_context", "corridor_contexts", "direction",
         "items", "reports", "warnings", "segments", "weather", "cuaca", "waspada",
+        # Corridor context blocks (public operational evidence, no tenant data)
+        "traffic", "data_integrity", "verified_sources", "is_fallback", "fallback_reasons",
         "temperature", "temperature_c", "rainfall_mm", "precipitation_mm", "wind_speed",
         "wind_speed_kmh", "humidity", "weather_code", "current_speed", "current_speed_kmh",
         "free_flow_speed", "free_flow_speed_kmh", "flow_speed_kmh", "delay_minutes",
@@ -572,6 +574,18 @@ def _db_entry(rows: list[dict], error: Optional[str]) -> dict:
     }
 
 
+def _freshness_stamp(entry: dict) -> Optional[datetime]:
+    """Latest moment an entry's data can still be trusted (valid_until, else observed_at)."""
+    for key in ("valid_until", "observed_at"):
+        normalized = _iso(entry.get(key))
+        if normalized:
+            try:
+                return datetime.fromisoformat(normalized)
+            except ValueError:
+                continue
+    return None
+
+
 def _merge_last_good(section: str, current: dict, previous: dict) -> dict:
     if current.get("status") in {"ok", "stale"} and current.get("data") is not None:
         return current
@@ -581,6 +595,14 @@ def _merge_last_good(section: str, current: dict, previous: dict) -> dict:
         if current.get("error"):
             result["error"] = current["error"]
         return result
+    # A degraded/partial refresh that still carries data is FRESHER evidence than
+    # the durable row. Preferring the durable row here is what froze sections at
+    # their last fully-ok timestamp: every tick merged the days-old row back in,
+    # restamping the section with its old observed_at/valid_until forever.
+    if current.get("data") is not None:
+        current_stamp, last_stamp = _freshness_stamp(current), _freshness_stamp(last)
+        if current_stamp is not None and (last_stamp is None or current_stamp > last_stamp):
+            return current
     return {
         "status": "stale",
         "data": (
