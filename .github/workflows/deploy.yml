@@ -1,0 +1,183 @@
+# CD pipeline — deploy the backend to the Hostinger VPS (thin-web prod).
+#
+# Frontend deploys stay on Vercel. Migrations are applied MANUALLY upstream —
+# this workflow deliberately does NOT run `supabase db push` / any migration.
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Never let two deploys overlap on the VPS.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE_OWNER: ${{ github.repository_owner }}
+
+jobs:
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Backend tests
+        run: |
+          pip install -r backend/requirements.txt
+          cd backend
+          pytest -q
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Frontend build
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_API_URL: https://placeholder.invalid
+          NEXT_PUBLIC_WS_URL: wss://placeholder.invalid
+        run: |
+          npm ci
+          npm run build
+
+  build:
+    name: Build & push image (GHCR)
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      # GHCR requires lowercase image names; the repo name may not be.
+      - name: Resolve image name
+        id: image
+        run: |
+          OWNER_LC="${IMAGE_OWNER,,}"
+          REPO_LC="${GITHUB_REPOSITORY##*/}"
+          REPO_LC="${REPO_LC,,}"
+          echo "name=ghcr.io/${OWNER_LC}/${REPO_LC}/backend" >> "$GITHUB_OUTPUT"
+
+      - name: Build & push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: backend/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.image.outputs.name }}:${{ github.sha }}
+            ${{ steps.image.outputs.name }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    needs: build
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT }}
+      VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+      DEPLOY_DIR: ${{ secrets.DEPLOY_DIR }}
+      HEALTHCHECK_URL: ${{ secrets.HEALTHCHECK_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve image name (must match build job)
+        id: image
+        run: |
+          OWNER_LC="${IMAGE_OWNER,,}"
+          REPO_LC="${GITHUB_REPOSITORY##*/}"
+          REPO_LC="${REPO_LC,,}"
+          echo "name=ghcr.io/${OWNER_LC}/${REPO_LC}/backend" >> "$GITHUB_OUTPUT"
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "$VPS_PORT" "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Capture previous image tag (for rollback)
+        id: prev
+        run: |
+          PREV=$(ssh -i ~/.ssh/deploy_key -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" \
+            "cat '$DEPLOY_DIR/.deployed_sha' 2>/dev/null || true")
+          echo "sha=$PREV" >> "$GITHUB_OUTPUT"
+          echo "Previous deployed SHA: ${PREV:-<none>}"
+
+      - name: Pull & start new release
+        run: |
+          NEW_SHA='${{ github.sha }}'
+          IMAGE="${{ steps.image.outputs.name }}"
+          ssh -i ~/.ssh/deploy_key -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" "
+            set -e
+            cd '$DEPLOY_DIR'
+            test -f .env || { echo 'FATAL: $DEPLOY_DIR/.env missing — see docs/VPS_DEPLOY.md'; exit 1; }
+            export IMAGE='$IMAGE' IMAGE_TAG='$NEW_SHA'
+            docker compose -f docker-compose.yml pull backend scheduler
+            docker compose -f docker-compose.yml up -d --no-deps backend scheduler
+            echo '$NEW_SHA' > .deploying_sha
+          "
+
+      - name: Poll health (up to 90 s)
+        id: health
+        run: |
+          for i in $(seq 1 18); do
+            if curl -fsS -m 5 "$HEALTHCHECK_URL/health" > /dev/null 2>&1; then
+              echo "Healthy after $((i * 5)) s"
+              echo "ok=1" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Health check never passed within 90 s"
+          echo "ok=0" >> "$GITHUB_OUTPUT"
+          exit 1
+
+      - name: Promote release
+        if: steps.health.outputs.ok == '1'
+        run: |
+          ssh -i ~/.ssh/deploy_key -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" \
+            "printf '%s\n' '${{ github.sha }}' > '$DEPLOY_DIR/.deployed_sha'"
+          echo "Deployed ${{ github.sha }}"
+
+      - name: Rollback to previous release
+        if: steps.health.outputs.ok != '1'
+        run: |
+          PREV='${{ steps.prev.outputs.sha }}'
+          IMAGE="${{ steps.image.outputs.name }}"
+          if [ -z "$PREV" ]; then
+            echo "FATAL: unhealthy release and no previous SHA recorded — leaving the failed release up for investigation."
+            exit 1
+          fi
+          ssh -i ~/.ssh/deploy_key -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" "
+            set -e
+            cd '$DEPLOY_DIR'
+            export IMAGE='$IMAGE' IMAGE_TAG='$PREV'
+            docker compose -f docker-compose.yml up -d --no-deps backend scheduler
+            echo '$PREV' > .deployed_sha
+            rm -f .deploying_sha
+          "
+          echo "Rolled back to $PREV"
+          exit 1

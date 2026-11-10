@@ -1,9 +1,30 @@
 services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: prehub-caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      # Used by Caddyfile: `{$API_DOMAIN}` (automatic TLS for api.<DOMAIN>).
+      - API_DOMAIN=${API_DOMAIN:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: always
+
   redis:
     image: redis:7-alpine
     container_name: prehub-redis
-    ports:
-      - "6379:6379"
+    # Production hardening: no host port publish — Redis is only reachable on
+    # the compose network (backend connects to prehub-redis:6379). Local dev
+    # that needs Redis on the host should add `6379:6379` in
+    # docker-compose.override.yml (the dev-only file).
+    command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redis_data:/data
     restart: always
@@ -15,17 +36,28 @@ services:
       start_period: 5s
 
   backend:
+    # Production image name is injected by the deploy pipeline (.env on the VPS
+    # or shell env: IMAGE=ghcr.io/<owner>/<repo>/backend, IMAGE_TAG=<sha>).
+    # Keep both image + build: `docker compose pull` targets GHCR in prod,
+    # while local dev (`docker compose up`) still builds when the image is
+    # missing. IMAGE_TAG can be moved back to a previous SHA for rollback.
+    image: ${IMAGE:-prehub-backend}:${IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: backend/Dockerfile
     container_name: prehub-backend
     ports:
-      - "8000:8000"
+      # Loopback only: Caddy terminates TLS and is the single public entry
+      # point. Publishing 0.0.0.0:8000 would expose the API unencrypted and
+      # bypass the reverse proxy.
+      - "127.0.0.1:8000:8000"
     volumes:
       - prehub_data:/app/data
-    # Keep ONE worker: lifespan pollers (BMKG/TomTom/news/PIHPS/social) run
-    # in-process, so --workers >1 duplicates ingestion. Scale HTTP separately
-    # with POLLERS_ENABLED=false replicas.
+    # Keep ONE worker. In production (INPROCESS_BATCH_POLLERS=false) the batch
+    # pollers are driven by the scheduler sidecar, but the lifespan still starts
+    # the AIS WebSocket and the validated-alert fan-out consumer per process —
+    # the fan-out is NOT gated on POLLERS_ENABLED — so --workers >1 duplicates
+    # both. In dev (override file) the full in-process poller set also runs.
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
     env_file:
       - .env
@@ -45,6 +77,48 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+  scheduler:
+    # Thin-web sidecar (Phase 162): POSTs /internal/tick every 300 s so batch
+    # ingestion never competes with boot on the single uvicorn worker.
+    # - 202/200 → accepted, sleep 300 s (curl --max-time 90 bounded).
+    # - transient failure (backend restarting, network hiccup) → exponential
+    #   backoff 15s..180s instead of a crash loop.
+    # - 404 → INTERNAL_TICK_TOKEN is not set in the backend env; run to a
+    #   halt so the misconfiguration is loud in `docker compose logs scheduler`.
+    image: curlimages/curl:latest
+    container_name: prehub-scheduler
+    environment:
+      # Compose interpolates this from the VPS .env; the escaping `$$` defers
+      # the token read to the container shell so it never ends up in command.
+      - INTERNAL_TICK_TOKEN=${INTERNAL_TICK_TOKEN:-}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -u
+        fail_count=0
+        while true; do
+          code=$$(curl -s -o /dev/null -w '%{http_code}' --max-time 90 \
+            -X POST http://backend:8000/internal/tick \
+            -H "X-Internal-Token: $${INTERNAL_TICK_TOKEN}" || echo curl_error)
+          echo "[scheduler] $$(date -u '+%Y-%m-%dT%H:%M:%SZ') POST /internal/tick -> $${code}"
+          if [ "$$code" = "202" ] || [ "$$code" = "200" ]; then
+            fail_count=0
+            sleep 300
+          elif [ "$$code" = "404" ]; then
+            echo "[scheduler] FATAL: backend returned 404 — INTERNAL_TICK_TOKEN not set; stopping."
+            exit 1
+          else
+            # Transport error (backend still starting / restarting) or an unexpected
+            # status: back off instead of crash-looping, then try again.
+            fail_count=$$((fail_count + 1))
+            if [ "$$fail_count" -gt 12 ]; then sleep 180; else sleep $$((fail_count * 15)); fi
+          fi
+        done
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: always
 
   frontend:
     build:
@@ -75,3 +149,7 @@ volumes:
     name: prehub_data
   redis_data:
     name: prehub_redis_data
+  caddy_data:
+    name: prehub_caddy_data
+  caddy_config:
+    name: prehub_caddy_config

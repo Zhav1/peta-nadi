@@ -1,0 +1,34 @@
+# PreHub Backend — reverse proxy on the Hostinger VPS.
+#
+# Automatic TLS (Let's Encrypt / ZeroSSL) is negotiated for {$API_DOMAIN}, so
+# DNS for api.<DOMAIN> must point at this host and ports 80/443 must be open
+# before first start. If API_DOMAIN is empty, Caddy fails fast at config load
+# (that is intentional — an empty host would serve an invalid certificate).
+#
+# Global options
+{
+	servers {
+		# 5-minute idle timeout on long-lived connections (i.e. /ws/crisis/*
+		# WebSocket streams). After the 101 upgrade Caddy copies frames raw
+		# with no read deadline; the app's ping/pong traffic keeps the stream
+		# awake, while a connection idle for 5m is reaped.
+		timeouts {
+			idle 5m
+		}
+	}
+}
+
+{$API_DOMAIN} {
+	encode gzip
+
+	reverse_proxy backend:8000 {
+		transport http {
+			# Backend should accept in <10s; longer means it is wedged.
+			dial_timeout 10s
+			# Sane end-to-end request timeout: hot paths (auth/JWKS, CRUD,
+			# chat completion) answer well inside this, and POST /internal/tick
+			# returns 202 immediately. The scheduler uses --max-time 90.
+			response_header_timeout 90s
+		}
+	}
+}
