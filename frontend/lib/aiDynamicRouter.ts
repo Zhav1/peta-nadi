@@ -2178,6 +2178,48 @@ export async function calculateAIDynamicDetourRoutes(
 
   // STEP 1: Compute Land Routes (Primary & Alternative / Bypass)
   const mapboxResults = await fetchMapboxAlternativeDrivingRoutes(origin, destination, [], excludeToll, signal);
+
+  // When Mapbox alternatives=true returns only 1 route (so mapboxResults[1] is undefined),
+  // actively request an alternative driving route via a secondary arterial junction from HIGHWAY_JUNCTION_NODES
+  // with fetchMapboxRouteWithForcedWaypoint using Mapbox Directions. This guarantees the alternative route
+  // has genuine curved road coordinates from Mapbox rather than falling back to straight-line chords.
+  if (mapboxResults.length === 1 && token) {
+    const odDist = getHaversineDistanceKm(origin, destination);
+    const minEndDist = Math.min(15, odDist * 0.1);
+
+    const safeCandidateNodes = HIGHWAY_JUNCTION_NODES.filter((node) => {
+      const dOrigin = getHaversineDistanceKm(origin, node.coords);
+      const dDest = getHaversineDistanceKm(destination, node.coords);
+      if (dOrigin < minEndDist || dDest < minEndDist) return false;
+      if (hazardCenter && getHaversineDistanceKm(node.coords, hazardCenter) < radiusKm + 2.0) return false;
+      return true;
+    });
+
+    const scoredNodes = safeCandidateNodes.map((node) => ({
+      node,
+      score: getHaversineDistanceKm(origin, node.coords) + getHaversineDistanceKm(node.coords, destination),
+    })).sort((a, b) => a.score - b.score);
+
+    for (const item of scoredNodes.slice(0, 3)) {
+      throwIfAborted(signal);
+      const altResult = await fetchMapboxRouteWithForcedWaypoint(
+        origin,
+        destination,
+        item.node.coords,
+        token,
+        excludeToll,
+        signal
+      );
+      if (altResult && altResult.coordinates.length > 2) {
+        mapboxResults.push({
+          ...altResult,
+          summary: `Alternatif via ${item.node.name}`,
+        });
+        break;
+      }
+    }
+  }
+
   const primaryRes = mapboxResults[0];
   const primaryMetrics = hazardCenter
     ? calculateHazardExposureMetrics(primaryRes.coordinates, hazardCenter, radiusKm)

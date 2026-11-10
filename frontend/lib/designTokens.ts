@@ -126,9 +126,9 @@ export const DS = {
       fillOpacity: 0.16,
     },
     truck: '#34d399',
-    /** Aircraft — silver, so violet is free for the Waspada Dini layer. */
-    aircraft: '#e2e8f0',
-    /** Vessel — teal, so silver is free for aircraft. */
+    /** Aircraft — bright cyan, so violet is free for the Waspada Dini layer. */
+    aircraft: '#38bdf8',
+    /** Vessel — teal, so bright cyan is free for aircraft. */
     vessel: '#2dd4bf',
   },
 } as const;

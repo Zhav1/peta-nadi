@@ -460,6 +460,7 @@ export interface DisasterZone {
   tier_reason?: string;
   custom_hazard_label?: string;
   source_news_id?: string;
+  sibling_news_ids?: string[];
   center?: [number, number];
   radiusKm?: number;
   radius_km?: number;
@@ -673,7 +674,7 @@ export interface DemoStatus {
 
 // Phase 25, 28 & 39: Multi-Modal Fleet Vehicle & Transponder Types
 export type VehicleModality = 'truck' | 'maritime' | 'air';
-export type TelemetrySignalStatus = 'LIVE_STREAM' | 'CACHE_FALLBACK' | 'SIMULATION_CACHE';
+export type TelemetrySignalStatus = 'LIVE_STREAM' | 'CACHE_FALLBACK' | 'SIMULATION_CACHE' | 'ADSB_LIVE' | 'AIS_LIVE';
 export type ColdChainStatus = 'NORMAL' | 'WARNING_EXCURSION';
 
 export interface FleetVehicle {

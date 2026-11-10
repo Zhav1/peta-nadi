@@ -218,6 +218,47 @@ class AISstreamAdapter(BaseAdapter):
         self._last_msg_ts: float = 0.0
         self._connect_ts: float = 0.0
         self._current_ws: Optional[Any] = None
+        self._last_cache_save_ts: float = 0.0
+        self._load_vessels_from_redis()
+
+    def _save_vessels_to_redis(self):
+        """Persist vessel registry to Redis STM with resilient 12h TTL."""
+        if not self.vessels:
+            return
+        try:
+            from app.services.redis_client import cache_set
+            from app.services.public_operational_cache import _write_durable
+            vessel_items = list(self.vessels.values())
+            payload = {"vessels": vessel_items, "updated_at": time.time()}
+            serialized = json.dumps(payload, default=str)
+            cache_set("lrip:state:vessels_telemetry:v1", serialized, ex=43200)
+            _write_durable("lrip:state:vessels_telemetry:v1", payload, "aisstream_sumatra")
+        except Exception as e:
+            logger.debug(f"Failed saving AIS vessels to Redis: {e}")
+
+    def _load_vessels_from_redis(self):
+        """Restore vessel registry from Redis STM when in-memory dict is empty."""
+        try:
+            from app.services.redis_client import cache_get
+            from app.services.public_operational_cache import _read_durable
+            raw = cache_get("lrip:state:vessels_telemetry:v1")
+            payload = json.loads(raw) if raw else None
+            if not payload or not isinstance(payload, dict):
+                payload = _read_durable("lrip:state:vessels_telemetry:v1")
+            if isinstance(payload, dict) and payload.get("vessels"):
+                ts = float(payload.get("updated_at", 0))
+                # Resilient 12-hour recovery window (43200s)
+                if time.time() - ts < 43200.0 or not self.vessels:
+                    for v in payload["vessels"]:
+                        if isinstance(v, dict) and v.get("mmsi"):
+                            try:
+                                mmsi = int(v["mmsi"])
+                                self.vessels[mmsi] = v
+                            except (ValueError, TypeError):
+                                pass
+                    logger.info("Loaded %d vessels from Redis resilient cache.", len(self.vessels))
+        except Exception as e:
+            logger.debug(f"Failed loading AIS vessels from Redis: {e}")
 
     async def fetch(self) -> Any:
         """For streaming, fetch is not called directly in a polling loop."""
@@ -390,6 +431,10 @@ class AISstreamAdapter(BaseAdapter):
                 "telemetry_source": "AISSTREAM_WS",
                 "current_coords": [round(float(lon), 4), round(float(lat), 4)],
             }
+            now_ts = time.time()
+            if now_ts - self._last_cache_save_ts >= 15.0:
+                self._save_vessels_to_redis()
+                self._last_cache_save_ts = now_ts
 
         elif msg_type == "ShipStaticData" and mmsi in self.vessels:
             static_data = data.get("Message", {}).get("ShipStaticData", {})
@@ -417,8 +462,8 @@ class AISstreamAdapter(BaseAdapter):
             await self._process_queue()
             await asyncio.sleep(self.poll_interval_seconds)
 
-    def evict_stale_vessels(self, max_age_seconds: int = 1800):
-        """Evicts vessels whose last_seen timestamp is older than max_age_seconds (30 min / 1800s)."""
+    def evict_stale_vessels(self, max_age_seconds: int = 43200):
+        """Evicts vessels whose last_seen timestamp is older than max_age_seconds (default 12 hours / 43200s)."""
         now = datetime.now(timezone.utc)
         to_delete = []
         for mmsi, info in self.vessels.items():
@@ -435,11 +480,16 @@ class AISstreamAdapter(BaseAdapter):
 
     def get_vessels(self, max_limit: int = 500) -> List[Dict[str, Any]]:
         """
-        Returns live vessels capped at max_limit (500), evicting records older than 30 minutes (1800s).
+        Returns live vessels capped at max_limit (500), evicting records older than resilient 12h TTL (43200s).
         Prioritizes vessels located inside the 8 Sumatra priority port bounding boxes,
         then Malacca and Sunda Strait shipping corridors, to keep snapshot payloads compact.
+        Loads from Redis STM if in-memory dict is empty.
         """
-        self.evict_stale_vessels(1800)
+        if not self.vessels:
+            self._load_vessels_from_redis()
+        self.evict_stale_vessels(43200)
+        if not self.vessels:
+            self._load_vessels_from_redis()
         vessel_items = list(self.vessels.values())
         if not vessel_items:
             return []
@@ -478,11 +528,12 @@ class AISstreamAdapter(BaseAdapter):
     async def _process_queue(self):
         """Analyze vessel registry once and emit events if threshold exceeded."""
         r = get_redis()
+        self._save_vessels_to_redis()
         current_hour = datetime.now(timezone.utc).strftime("%Y%m%d%H")
         
         try:
-            # Cleanup vessels not seen in the last 30 minutes (1800s)
-            self.evict_stale_vessels(1800)
+            # Cleanup vessels older than 12 hours (43200s)
+            self.evict_stale_vessels(43200)
             now = datetime.now(timezone.utc)
 
             # Group vessels by port based on bounding box

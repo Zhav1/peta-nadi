@@ -40,6 +40,14 @@ export function getVehicleFix(vehicle: FleetVehicle): [number, number] | null {
   );
   if (locationCoords) return locationCoords;
 
+  // Fallback extraction for lat and lon (or latitude / longitude)
+  const vAny = vehicle as any;
+  const lon = vAny.lon ?? vAny.longitude;
+  const lat = vAny.lat ?? vAny.latitude;
+  if (typeof lon === 'number' && typeof lat === 'number' && Number.isFinite(lon) && Number.isFinite(lat)) {
+    return [lon, lat];
+  }
+
   return null;
 }
 

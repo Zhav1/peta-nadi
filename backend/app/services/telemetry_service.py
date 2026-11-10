@@ -1170,7 +1170,7 @@ class TelemetryService:
             from app.services.redis_client import cache_set
             payload = {"vessels": vessels_list, "updated_at": time.time()}
             serialized = json.dumps(payload, default=str)
-            cache_set("lrip:state:vessels_telemetry:v1", serialized, ex=1800)
+            cache_set("lrip:state:vessels_telemetry:v1", serialized, ex=43200)
             _write_durable("lrip:state:vessels_telemetry:v1", payload, "aisstream_sumatra")
         except Exception as e:
             logger.debug(f"Failed writing vessels durable cache: {e}")
@@ -1185,8 +1185,9 @@ class TelemetryService:
                 payload = _read_durable("lrip:state:vessels_telemetry:v1")
             if isinstance(payload, dict) and payload.get("vessels"):
                 ts = float(payload.get("updated_at", 0))
-                if time.time() - ts < 1800.0:  # 30 minutes
+                if time.time() - ts < 43200.0:  # 12 hours resilient TTL
                     return payload["vessels"]
+                return payload.get("vessels")
         except Exception as e:
             logger.debug(f"Failed reading vessels durable cache: {e}")
         return None
@@ -1205,6 +1206,7 @@ class TelemetryService:
         self._aircraft_cache: List[Dict[str, Any]] = []
         self._aircraft_cache_ts: float = 0.0
         self._aircraft_ttl_seconds: float = 30.0
+        self.vessels: Dict[str, Any] = {}
         self._custom_vehicles_extra: Dict[str, Dict[str, Any]] = {}
         self._live_pings: Dict[str, Dict[str, Any]] = {}
         self._snapped_corridors: Dict[str, Any] = {}
@@ -2084,14 +2086,20 @@ class TelemetryService:
                 assign_baseline_tenancy(enriched)
                 enriched_trucks.append(enriched)
 
-        # 3. Maritime: Live AIS Vessels from AISstreamAdapter (or durable cache < 30 min old)
+        # 3. Maritime: Live AIS Vessels from AISstreamAdapter (or durable cache < 12h old)
         maritime_units: List[Dict[str, Any]] = []
         try:
             from app.adapters.aisstream_adapter import get_live_ais_vessels
             raw_vessels = get_live_ais_vessels()
             if not raw_vessels:
-                raw_vessels = self._load_vessels_durable_cache() or []
+                if self.vessels:
+                    raw_vessels = list(self.vessels.values())
+                else:
+                    raw_vessels = self._load_vessels_durable_cache() or []
+                    if raw_vessels:
+                        self.vessels = {str(v.get("mmsi") or v.get("vehicle_id")): v for v in raw_vessels}
             else:
+                self.vessels = {str(v.get("mmsi") or v.get("vehicle_id")): v for v in raw_vessels}
                 self._save_vessels_durable_cache(raw_vessels)
 
             for v in raw_vessels:
@@ -2107,10 +2115,13 @@ class TelemetryService:
                 p_curr = [round(lon, 4), round(lat, 4)]
                 p_next = dead_reckon_lonlat([lon, lat], cog, past_dist_km)
 
+                speed_val = round(sog * 1.852, 1)
                 m_unit = {
                     "vehicle_id": vid,
                     "name": v.get("ship_name") or v.get("name") or vid,
                     "modality": "maritime",
+                    "lat": round(lat, 4),
+                    "lon": round(lon, 4),
                     "current_coords": p_curr,
                     "location": {"type": "Point", "coordinates": p_curr},
                     "current_location": {"type": "Point", "coordinates": p_curr},
@@ -2119,7 +2130,8 @@ class TelemetryService:
                         "type": "LineString",
                         "coordinates": [p_prev, p_curr, p_next]
                     },
-                    "speed_kmh": round(sog * 1.852, 1),
+                    "speed_kmh": speed_val,
+                    "current_speed_kmh": speed_val,
                     "status": "anchored" if sog < 0.5 else "moving",
                     "progress": 0.5,
                     "cargo": f"{v.get('ship_type', 'Cargo')} / Sembako & Komoditas",

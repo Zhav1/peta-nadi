@@ -586,9 +586,11 @@ export function FleetVehicleLayer({
             v.vehicle_id?.startsWith('AIR-00') ||
             Boolean((v as any).id?.startsWith('AIR-00'));
           const hasFreshServerFix = Boolean(
-            serverFix &&
-            (v.telemetry_source === 'ADSB_LIVE' || v.telemetry_source === 'OPENSKY_NETWORK') &&
-            !isScheduledAirCorridor
+            serverFix && (
+              v.telemetry_source === 'ADSB_LIVE' ||
+              v.signal_status === 'ADSB_LIVE' ||
+              v.telemetry_source === 'OPENSKY_NETWORK'
+            )
           );
 
           if ((v.modality === 'maritime' || isAir) && hasSurveyedCorridor && !hasFreshServerFix) {
@@ -805,7 +807,7 @@ export function FleetVehicleLayer({
           <div className="flex items-center gap-1.5">
             <span
               className="w-2 h-2 rounded-full"
-              style={{ backgroundColor: MODALITY_COLOR[hoveredVehicle.vehicle.modality || 'truck'] ?? '#e2e8f0' }}
+              style={{ backgroundColor: MODALITY_COLOR[hoveredVehicle.vehicle.modality || 'truck'] ?? '#38bdf8' }}
             />
             <span className="text-xs font-semibold text-white">
               {hoveredVehicle.vehicle.name || hoveredVehicle.vehicle.vehicle_id}

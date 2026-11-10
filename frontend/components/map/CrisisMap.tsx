@@ -903,15 +903,15 @@ export default function CrisisMap({
           severity: props.severity,
           bmkgCode: props.bmkg_code,
           hazardType: props.hazard_type,
-          precipitationMm24h: props.precipitation_mm_24h,
-          floodRiskPct: props.flood_risk_pct,
-          windspeedKmh: props.windspeed_kmh ?? props.wind_speed_kmh,
+          precipitationMm24h: props.precipitation_mm_24h ?? props.presipitasi ?? props.precip_mm,
+          floodRiskPct: props.flood_risk_pct ?? props.modeled_risk_pct,
+          windspeedKmh: props.windspeed_kmh ?? props.wind_speed_kmh ?? props.angin ?? props.wind_kmh,
           corridorId: props.corridor_id ?? props.corridor_intersect,
           corridorSegment: props.corridor_segment
             ?? (typeof props.corridor_intersect === 'string' ? props.corridor_intersect : undefined),
           distToCorridorKm: props.dist_to_corridor_km,
-          delayHours: props.delay_hours ?? props.estimated_delay_hours,
-          action: props.advisory_action,
+          delayHours: props.delay_hours ?? props.estimated_delay_hours ?? props.dampak,
+          action: props.advisory_action ?? props.aksi ?? props.action,
           modalities,
           confidence: props.confidence,
           observedVsForecast: props.observed_vs_forecast,
@@ -1567,7 +1567,7 @@ export default function CrisisMap({
             'severe', '#dc2626',
             'heavy', '#ef4444',
             'moderate', '#f59e0b',
-            'rgba(232, 234, 237, 0.45)'
+            '#10b981'
           ],
           'line-width': 5,
           'line-opacity': 0.85,
@@ -2337,7 +2337,16 @@ export default function CrisisMap({
       const isCorridorVisible = (r: RouteRecommendation, origIdx: number) => {
         // Do NOT hide alternative routes (origIdx > 0 or r.is_detour) when r.viable === false
         const isAlt = origIdx > 0 || (r as any).is_detour || r.corridor_type === 'land_detour' || (r.corridor_type as string) === 'detour' || r.corridor_type === 'sea_intermodal' || r.corridor_type === 'air_intermodal';
-        if (r.viable === false && !isAlt) return false;
+        // Do NOT hide the primary route (origIdx === 0) if viable is false due to precautionary/hold status; show it with its appropriate warning color
+        const safetyStatus = r.safety_status as string | undefined;
+        const isPrecautionaryOrHold = origIdx === 0 && (
+          safetyStatus === 'PRECAUTIONARY_RISK' ||
+          safetyStatus === 'HOLD_DELAY' ||
+          r.corridor_type === 'hold_staging' ||
+          r.is_compromised === true ||
+          (r.non_viable_reason ? /precaution|hold|tunda|siaga|kompromi|compromised|hazard/i.test(r.non_viable_reason) : true)
+        );
+        if (r.viable === false && !isAlt && !isPrecautionaryOrHold) return false;
         if (hiddenRouteIndices.has(origIdx)) return false;
         const type = r.corridor_type;
         if (!type) return true;
@@ -2370,9 +2379,12 @@ export default function CrisisMap({
                 (legCorridorClass === 'land' || legCoords.length > 5
                   ? legCoords
                   : densifyPath(legCoords, 15));
+              const legSafety = r.safety_status as string | undefined;
               const legColor =
                 leg.color ||
-                '#38b8f8';
+                (r.viable === false || legSafety === 'PRECAUTIONARY_RISK' || legSafety === 'HOLD_DELAY'
+                  ? '#f59e0b'
+                  : '#38b8f8');
               routeFeatures.push({
                 type: 'Feature',
                 geometry: {
@@ -2415,7 +2427,7 @@ export default function CrisisMap({
               : densifyPath(rawWaypoints, 25));
           const s = r.safety_status as string | undefined;
           const defaultColor =
-            s === 'PRECAUTIONARY_RISK' || s === 'HOLD_DELAY'
+            s === 'PRECAUTIONARY_RISK' || s === 'HOLD_DELAY' || r.viable === false || r.is_compromised
               ? '#f59e0b'
               : '#38bdf8';
           routeFeatures.push({

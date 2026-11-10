@@ -123,3 +123,32 @@ docs/video/dispatcher-pitch/
 *.bak-*
 Final-Gemastik/.backups/
 
+# Gemastik Report & Proposal documentation
+docs/Proposal/*
+!docs/Proposal/Hasil review codex.md
+!docs/Proposal/Panduan-GEMASTIK-2026.md
+docs/KUMPUL/
+docs/video/*.mp4
+docs/video/demo_frames/
+docs/video/pitch_frames/
+docs/video/naskah*
+docs/video/NASKAH_VIDEO_KARYA_AKHIR_GEMASTIK_XIX.md
+exports/
+*.pptx
+
+# Document audit & presentation scratch scripts
+check_*.py
+print_*.py
+inspect_*.py
+verify_*.py
+update_*.py
+search_slop_b.py
+generate_prehub_pptx.mjs
+presenton_repo/
+tools/
+scripts/generate_prehub_presentation*.py
+scripts/export_presentation_previews.py
+scripts/add_lampiran2_matrix.py
+scripts/drive_existing_window.mjs
+scripts/record_live_demo.mjs
+

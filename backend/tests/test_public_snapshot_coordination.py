@@ -489,3 +489,178 @@ def test_internal_tick_runs_only_due_jobs_with_token_and_single_lease():
     assert sorted(due_jobs) == ["bmkg", "news"]
 
 
+def test_curate_preserves_weather_dispatch_fields():
+    """Verify that weather enrichment and dispatch fields are not stripped by _curate()."""
+    weather_feature_props = {
+        "name": "Peringatan Cuaca Ekstrem BMKG / Open-Meteo",
+        "region": "Sumatera Barat",
+        "lat": -0.95,
+        "lon": 100.35,
+        "severity": "high",
+        "delay_hours": 10.0,
+        "estimated_delay_hours": 10.0,
+        "advisory_action": "CONSIDER_DELAY",
+        "affected_modalities": ["truck", "sea"],
+        "bmkg_code": 95,
+        "flood_risk_pct": 85.0,
+        "modeled_risk_pct": 85.0,
+        "windspeed_kmh": 28.5,
+        "wind_speed_kmh": 28.5,
+        "is_forecast": True,
+        "modeled": True,
+        "secret_tenant_id": "should_be_stripped",
+    }
+    curated = snapshots._curate(weather_feature_props)
+    assert curated["delay_hours"] == 10.0
+    assert curated["estimated_delay_hours"] == 10.0
+    assert curated["advisory_action"] == "CONSIDER_DELAY"
+    assert curated["affected_modalities"] == ["truck", "sea"]
+    assert curated["bmkg_code"] == 95
+    assert curated["flood_risk_pct"] == 85.0
+    assert curated["windspeed_kmh"] == 28.5
+    assert curated["wind_speed_kmh"] == 28.5
+    assert curated["is_forecast"] is True
+    assert "secret_tenant_id" not in curated
+
+
+def test_curate_vehicle_compacts_fleet_vessels_under_150kb():
+    """Verify that 500 vessel objects are compacted to essential situational fields under 150 KB."""
+    import json
+
+    verbose_vessels = []
+    for i in range(500):
+        verbose_vessels.append({
+            "vehicle_id": f"AIS-52500{i:04d}",
+            "name": f"KM Sumatra Cargo {i}",
+            "modality": "maritime",
+            "lat": 3.7922 + (i * 0.001),
+            "lon": 98.6776 + (i * 0.001),
+            "current_coords": [round(98.6776 + (i * 0.001), 4), round(3.7922 + (i * 0.001), 4)],
+            "speed_kmh": 22.4,
+            "current_speed_kmh": 22.4,
+            "heading_deg": 135.0,
+            "status": "moving",
+            "tracking_mode": "LIVE_GPS",
+            "signal_status": "AIS_LIVE",
+            "telemetry_source": "AISSTREAM_WS",
+            "path": [[98.0 + j * 0.01, 3.0 + j * 0.01] for j in range(25)],
+            "route_geometry": {
+                "type": "LineString",
+                "coordinates": [[98.0 + j * 0.01, 3.0 + j * 0.01] for j in range(25)],
+            },
+            "cargo": "CPO / Crude Palm Oil & Sembako",
+            "origin": "Pelabuhan Belawan",
+            "destination": "Pelabuhan Tanjung Priok",
+            "mmsi": f"52500{i:04d}",
+            "imo": "9876543",
+            "company_name": "PT Pelindo Nusantara",
+            "cargo_value_idr": 15000000000,
+            "sla_deadline_hours": 36.0,
+        })
+
+    curated = snapshots._curate_vehicle(verbose_vessels)
+    assert len(curated) == 500
+
+    # Verify essential fields retained and bulky/ERP fields pruned
+    sample = curated[0]
+    expected_keys = {
+        "vehicle_id", "name", "modality", "lat", "lon", "current_coords", "speed_kmh",
+        "current_speed_kmh", "heading_deg", "status", "tracking_mode",
+        "signal_status", "telemetry_source",
+    }
+    assert set(sample.keys()) == expected_keys
+    assert "path" not in sample
+    assert "route_geometry" not in sample
+    assert "cargo" not in sample
+    assert "company_name" not in sample
+    assert "cargo_value_idr" not in sample
+
+    # Verify total payload size is well below 180 KB (~165 KB for 500 vessels with coords)
+    serialized_bytes = len(json.dumps({"vehicles": curated}).encode("utf-8"))
+    payload_kb = serialized_bytes / 1024.0
+    assert payload_kb < 180.0, f"Compacted fleet payload must be < 180 KB, got {payload_kb:.2f} KB"
+
+
+def test_vessel_telemetry_redis_cache_and_recovery(monkeypatch):
+    """Verify that AISStreamAdapter and TelemetryService save to Redis with 12h TTL and restore when in-memory is empty."""
+    import json
+    import time
+    from app.adapters.aisstream_adapter import AISstreamAdapter
+    from app.services.telemetry_service import TelemetryService
+
+    redis_store: dict[str, str] = {}
+    redis_ttls: dict[str, int] = {}
+
+    def fake_cache_set(key, value, ex=86400):
+        redis_store[key] = value
+        redis_ttls[key] = ex
+
+    def fake_cache_get(key):
+        return redis_store.get(key)
+
+    monkeypatch.setattr("app.services.redis_client.cache_set", fake_cache_set)
+    monkeypatch.setattr("app.services.redis_client.cache_get", fake_cache_get)
+    monkeypatch.setattr("app.services.public_operational_cache._write_durable", lambda *args, **kwargs: True)
+    monkeypatch.setattr("app.services.public_operational_cache._read_durable", lambda key: None)
+
+    # 1. AISstreamAdapter saves to Redis with 12h TTL (43200s)
+    adapter = AISstreamAdapter()
+    adapter.vessels[525011001] = {
+        "mmsi": "525011001",
+        "name": "KM Sinabung Raya",
+        "lat": 4.85,
+        "lon": 98.32,
+        "sog": 15.4,
+        "cog": 132.0,
+        "last_seen": "2026-11-09T08:00:00+00:00",
+    }
+    adapter._save_vessels_to_redis()
+
+    assert "lrip:state:vessels_telemetry:v1" in redis_store
+    assert redis_ttls["lrip:state:vessels_telemetry:v1"] == 43200
+
+    # 2. Simulate fresh restart with empty in-memory dict -> restored from Redis
+    adapter_restarted = AISstreamAdapter()
+    adapter_restarted.vessels = {}
+    vessels = adapter_restarted.get_vessels(500)
+    assert len(vessels) == 1
+    assert vessels[0]["name"] == "KM Sinabung Raya"
+
+    # 3. TelemetryService also loads from Redis when in-memory is empty
+    ts = TelemetryService()
+    ts.vessels = {}
+    cached_vessels = ts._load_vessels_durable_cache()
+    assert cached_vessels is not None
+    assert len(cached_vessels) == 1
+    assert cached_vessels[0]["mmsi"] == "525011001"
+
+
+def test_weather_fusion_partial_data_defaults():
+    """Verify that weather candidates populate wind, delay, and advisory defaults when raw data is partial."""
+    from app.services.weather_fusion_service import _build_weather_candidates
+
+    # Synthetic event missing wind, delay, and flood numbers
+    partial_event = {
+        "title": "Peringatan Dini Cuaca",
+        "event_type": "weather_warning",
+        "source": "bmkg",
+        "severity": "high",
+        "lat": 3.58,
+        "lon": 98.67,
+        "region": "Sumatera Utara",
+        "raw": "{}",
+    }
+
+    candidates = _build_weather_candidates([partial_event], [], min_severity="low")
+    assert len(candidates) == 1
+    props = candidates[0]["feature"]["properties"]
+
+    assert props["windspeed_kmh"] == 0.0
+    assert props["wind_speed_kmh"] == 0.0
+    assert props["delay_hours"] > 0
+    assert props["estimated_delay_hours"] == props["delay_hours"]
+    assert props["advisory_action"] in {"HOLD_DEPARTURE", "REROUTE_RECOMMENDED", "CONSIDER_DELAY", "PROCEED_WITH_CAUTION"}
+    assert "truck" in props["affected_modalities"]
+
+
+

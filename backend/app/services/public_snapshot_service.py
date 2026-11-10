@@ -108,8 +108,12 @@ PUBLIC_FIELDS = frozenset(
         "acq_date", "acq_time", "satellite", "instrument", "capped",
         # Weather & polygon fields
         "generated_at", "bbox", "reason", "window_hours", "metadata", "meta",
-        "precipitation_mm_24h", "modeled_risk_pct", "windspeed_kmh", "status_label",
-        "geometry_role", "evidence_id",
+        "precipitation_mm_24h", "modeled_risk_pct", "flood_risk_pct", "windspeed_kmh", "status_label",
+        "geometry_role", "evidence_id", "delay_hours", "estimated_delay_hours", "advisory_action",
+        "affected_modalities", "bmkg_code", "is_forecast", "modeled", "source_clock", "source_observed_at",
+        "forecast_valid_at", "source_fields", "fill_color", "stroke_color", "bmkg_source", "nwp_source",
+        "corridor_intersect", "observed_vs_forecast", "cuaca_total", "waspada_total", "below_advisory_total",
+        "total_regions", "fusion_engine",
         # News fields
         "ground_truth_metrics", "source_tier", "category", "corridor_segment",
         "corridor_nodes", "location_name", "affected_locations", "published_at_iso",
@@ -124,7 +128,7 @@ PUBLIC_FIELDS = frozenset(
 
 FLEET_PUBLIC_FIELDS = frozenset(
     {
-        "vehicle_id", "name", "modality", "path", "route_geometry", "speed_kmh", "status",
+        "vehicle_id", "name", "modality", "path", "route_geometry", "speed_kmh", "current_speed_kmh", "status",
         "progress", "cargo", "origin", "destination", "heading_deg", "mmsi", "imo",
         "sog_knots", "cog_deg", "draught_m", "nav_status", "icao24", "callsign",
         "altitude_ft", "ground_speed_kts", "vin", "temperature_c", "cold_chain_status",
@@ -133,6 +137,7 @@ FLEET_PUBLIC_FIELDS = frozenset(
         "company_name", "signal_status", "telemetry_source", "last_ping_seconds_ago",
         "tracking_mode", "origin_coords", "dest_coords", "departure_time",
         "current_coords", "location", "current_location", "coordinates", "type",
+        "lat", "lon",
     }
 )
 
@@ -224,6 +229,92 @@ def _iso(value: Any) -> Optional[str]:
 
 def _curate_vehicle(value: Any) -> Any:
     if isinstance(value, dict):
+        modality = str(value.get("modality", "")).lower()
+        is_vessel = (
+            modality == "maritime"
+            or "ais" in str(value.get("telemetry_source", "")).lower()
+            or str(value.get("vehicle_id", "")).startswith("AIS-")
+        )
+        if is_vessel:
+            # Compact vessel representation: retain only essential situational fields
+            # and prune bulky path arrays / ERP metadata to keep fleet payload under ~150 KB.
+            lat = value.get("lat")
+            lon = value.get("lon")
+            if lat is None or lon is None:
+                coords = value.get("current_coords")
+                if not coords and isinstance(value.get("location"), dict):
+                    coords = value.get("location", {}).get("coordinates")
+                if not coords and isinstance(value.get("current_location"), dict):
+                    coords = value.get("current_location", {}).get("coordinates")
+                if isinstance(coords, (list, tuple)) and len(coords) >= 2:
+                    lon, lat = coords[0], coords[1]
+
+            speed = value.get("speed_kmh")
+            if speed is None and value.get("current_speed_kmh") is not None:
+                speed = value.get("current_speed_kmh")
+            elif speed is None and value.get("sog_knots") is not None:
+                try:
+                    speed = round(float(value["sog_knots"]) * 1.852, 1)
+                except (ValueError, TypeError):
+                    speed = 0.0
+            elif speed is not None:
+                try:
+                    speed = round(float(speed), 1)
+                except (ValueError, TypeError):
+                    speed = 0.0
+            else:
+                speed = 0.0
+
+            curr_speed = value.get("current_speed_kmh")
+            if curr_speed is None:
+                curr_speed = speed
+            else:
+                try:
+                    curr_speed = round(float(curr_speed), 1)
+                except (ValueError, TypeError):
+                    curr_speed = speed
+
+            heading = value.get("heading_deg")
+            if heading is None:
+                heading = value.get("cog_deg", value.get("heading", 0.0))
+            try:
+                heading = round(float(heading), 1)
+            except (ValueError, TypeError):
+                heading = 0.0
+
+            try:
+                lat_val = round(float(lat), 4) if lat is not None else None
+            except (ValueError, TypeError):
+                lat_val = None
+            try:
+                lon_val = round(float(lon), 4) if lon is not None else None
+            except (ValueError, TypeError):
+                lon_val = None
+
+            vid = str(value.get("vehicle_id") or (f"AIS-{value.get('mmsi')}" if value.get("mmsi") else ""))
+            name = str(value.get("name") or value.get("ship_name") or vid)
+            status = str(value.get("status") or ("anchored" if speed < 1.0 else "moving"))
+            tracking_mode = str(value.get("tracking_mode") or "LIVE_GPS")
+            signal_status = str(value.get("signal_status") or "AIS_LIVE")
+            telemetry_source = str(value.get("telemetry_source") or "AISSTREAM_WS")
+
+            return {
+                "vehicle_id": vid,
+                "name": name,
+                "modality": "maritime",
+                "lat": lat_val,
+                "lon": lon_val,
+                "current_coords": [lon_val, lat_val] if lon_val is not None and lat_val is not None else None,
+                "speed_kmh": speed,
+                "current_speed_kmh": curr_speed,
+                "heading_deg": heading,
+                "status": status,
+                "tracking_mode": tracking_mode,
+                "signal_status": signal_status,
+                "telemetry_source": telemetry_source,
+            }
+
+        # Non-vessel vehicles: standard curation
         out = {}
         for key, item in value.items():
             k_lower = str(key).lower()

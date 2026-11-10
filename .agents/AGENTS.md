@@ -16,7 +16,7 @@ To reduce LLM token usage and optimize command execution outputs, all shell comm
 
 ## REASONING & EXECUTION PROTOCOL (ARGON HIGH REASONING)
 
-Semua tugas pemrograman, arsitektur, refactoring, dan debugging WAJIB menerapkan skill `.agents/skills/argon-high-reasoning/SKILL.md` dan aturan `.agents/rules/argon-high-reasoning.md`:
+Semua tugas pemrograman, arsitektur, refactoring, dan debugging WAJIB menerapkan skill global `argon-high-reasoning` dan aturan `.agents/rules/argon-high-reasoning.md`:
 1. **Grounding Empiris**: Wajib inspeksi codebase aktual sebelum menulis kode (dilarang menebak file/fungsi). Tandai yang spekulatif dengan `[tidak pasti]`.
 2. **Scope Lock**: Kunci daftar file yang boleh diubah dan file kritis yang dilarang disentuh sebelum mulai coding. Cegah regresi & scope creep.
 3. **Tanpa Raw Chain-of-Thought**: Salurkan penalaran ke struktur rencana dan bukti verifikasi, bukan monolog internal panjang di chat.

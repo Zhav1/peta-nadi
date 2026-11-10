@@ -770,7 +770,7 @@ export default function DashboardClient() {
     canToggleSimulation: canToggleFleetSimulation,
   } = useFleetVehicles(undefined, {
     enabled: !isAuthLoading && activeSection === 'map',
-    enableSimulationFallback: false,
+    enableSimulationFallback: true,
     initialVehicles: Array.isArray(seededFleetVehicles) && seededFleetVehicles.length > 0 ? seededFleetVehicles : undefined,
   });
   refetchFleetRef.current = refetchFleet;
@@ -1517,12 +1517,70 @@ export default function DashboardClient() {
         });
       }
     }
+
+    // Spatial deduplication: group news zones by spatial proximity (~1.5 km) and hazard type
+    // into a single consolidated DisasterZone with the primary/highest-risk headline and related sibling news IDs.
+    // This prevents duplicate overlapping dots when multiple articles report the exact same incident.
+    const consolidatedLive: DisasterZone[] = [];
+    const clusters: DisasterZone[][] = [];
+
+    for (const zone of live) {
+      if (!zone.center) {
+        consolidatedLive.push(zone);
+        continue;
+      }
+      let matchedCluster: DisasterZone[] | null = null;
+      for (const cluster of clusters) {
+        const rep = cluster[0];
+        if (rep.type === zone.type && rep.center) {
+          const distKm = getHaversineDistanceKm(zone.center, rep.center);
+          if (distKm <= 1.5) {
+            matchedCluster = cluster;
+            break;
+          }
+        }
+      }
+      if (matchedCluster) {
+        matchedCluster.push(zone);
+      } else {
+        clusters.push([zone]);
+      }
+    }
+
+    for (const cluster of clusters) {
+      if (cluster.length === 1) {
+        consolidatedLive.push({
+          ...cluster[0],
+          sibling_news_ids: cluster[0].source_news_id ? [cluster[0].source_news_id] : [],
+        });
+      } else {
+        // Sort by risk (descending), then RED_CONFIRMED over YELLOW_CLARIFY, then radius
+        const sorted = [...cluster].sort((a, b) => {
+          if (b.risk !== a.risk) return b.risk - a.risk;
+          const aTier = a.zone_tier === 'RED_CONFIRMED' ? 2 : 1;
+          const bTier = b.zone_tier === 'RED_CONFIRMED' ? 2 : 1;
+          if (bTier !== aTier) return bTier - aTier;
+          return (b.radiusKm ?? 0) - (a.radiusKm ?? 0);
+        });
+
+        const primary = sorted[0];
+        const allSiblingIds = Array.from(
+          new Set(cluster.map((z) => z.source_news_id).filter((id): id is string => Boolean(id)))
+        );
+
+        consolidatedLive.push({
+          ...primary,
+          sibling_news_ids: allSiblingIds,
+        });
+      }
+    }
+
     const filteredDisasterZones = disasterZones.filter((z) => {
       if ((z.zone_tier || 'RED_CONFIRMED') === 'RED_CONFIRMED' && !showRedZones) return false;
       if (z.zone_tier === 'YELLOW_CLARIFY' && !showYellowZones) return false;
       return true;
     });
-    return [...crisisHazardZones, ...filteredDisasterZones, ...live];
+    return [...crisisHazardZones, ...filteredDisasterZones, ...consolidatedLive];
   }, [crisisHazardZones, disasterZones, newsFeed, showRedZones, showYellowZones, showForecastZones, forecastNowMs, buildHazardSpecificZoneGeometry]);
 
   // Synchronize activeSection from URL query parameters.

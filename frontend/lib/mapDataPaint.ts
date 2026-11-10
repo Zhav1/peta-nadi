@@ -12,7 +12,7 @@
  * `scripts/test_fleet_paint.ts` prove they parse before they ship.
  *
  * Palette (mirrors `DS.layer` in lib/designTokens.ts):
- *   Truck emerald #34d399 · Vessel teal #2dd4bf · Aircraft silver #e2e8f0
+ *   Truck emerald #34d399 · Vessel teal #2dd4bf · Aircraft cyan #38bdf8
  *   Waspada Dini violet #a855f7 · Cuaca blue #2f81f7 · Titik Panas red #ef4444
  */
 
@@ -23,7 +23,7 @@ export const MAP_KEYLINE = 'rgba(12,16,23,0.9)';
 export const MODALITY_COLOR: Record<string, string> = {
   truck: '#34d399',
   maritime: '#2dd4bf',
-  air: '#e2e8f0',
+  air: '#38bdf8',
 };
 
 /**

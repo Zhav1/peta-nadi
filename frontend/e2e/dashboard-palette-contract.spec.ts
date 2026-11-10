@@ -204,10 +204,10 @@ test('layer files are sorted, exist, and only paint the sanctioned layer palette
     '#2dd4bf',
     '#2f81f7',
     '#34d399',
+    '#38bdf8',
     '#60a5fa',
     '#a855f7',
     '#c084fc',
-    '#e2e8f0',
     '#ef4444',
     '#f87171',
   ]);

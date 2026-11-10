@@ -203,19 +203,38 @@ export function buildWeatherPopup(props: WeatherPopupProps): string {
       : `${formatNumber(props.distToCorridorKm, 1)} km`,
   ]) || UNKNOWN;
 
+  // Graceful fallbacks for weather disruption numerics and operational advisories
+  const precipVal = formatNumber(props.precipitationMm24h, 1);
+  const precipText = precipVal !== UNKNOWN ? `${precipVal} mm/24j` : 'Tidak terukur';
+
+  const floodVal = formatNumber(props.floodRiskPct, 0);
+  const floodText = floodVal !== UNKNOWN ? `${floodVal}%` : UNKNOWN;
+
+  const windVal = formatNumber(props.windspeedKmh, 0);
+  const windText = windVal !== UNKNOWN ? `${windVal} km/j` : 'Tenang / normal';
+
+  const delayVal = props.delayHours != null && props.delayHours !== '' && props.delayHours !== '-'
+    ? formatNumber(props.delayHours, 1)
+    : null;
+  const delayText = delayVal && delayVal !== UNKNOWN
+    ? (Number(props.delayHours) > 0 ? `+${delayVal} jam` : 'Minim (0 jam)')
+    : 'Dalam pemantauan';
+
+  const rawAction = props.action != null && props.action !== '' && props.action !== '-'
+    ? cap(props.action, 40)
+    : null;
+  const actionText = joinParts([
+    rawAction || 'Waspada kecepatan normal',
+    modalityText(props.modalities) ? `moda ${cap(modalityText(props.modalities), 60)}` : null,
+  ]) || 'Waspada kecepatan normal';
+
   const rows = [
-    row('presipitasi', `${formatNumber(props.precipitationMm24h, 1)} mm/24j`, { numeric: true }),
-    row('banjir', `${formatNumber(props.floodRiskPct, 0)}%`, { numeric: true }),
-    row('angin', `${formatNumber(props.windspeedKmh, 0)} km/j`, { numeric: true }),
+    row('presipitasi', precipText, { numeric: precipVal !== UNKNOWN }),
+    row('banjir', floodText, { numeric: floodVal !== UNKNOWN }),
+    row('angin', windText, { numeric: windVal !== UNKNOWN }),
     row('koridor', corridor),
-    row('dampak', `+${formatNumber(props.delayHours, 1)} jam`, { numeric: true }),
-    row(
-      'aksi',
-      joinParts([
-        props.action == null || props.action === '' || props.action === '-' ? null : cap(props.action, 32),
-        modalityText(props.modalities) ? `moda ${cap(modalityText(props.modalities), 60)}` : null,
-      ]) || UNKNOWN,
-    ),
+    row('dampak', delayText, { numeric: Boolean(delayVal && delayVal !== UNKNOWN && Number(props.delayHours) > 0) }),
+    row('aksi', actionText),
   ].slice(0, POPUP_LIMITS.zone);
 
   return shell(titleHtml, rows, footer(props.source || 'BMKG / Open-Meteo', props.updatedAt, 'valid_until'));

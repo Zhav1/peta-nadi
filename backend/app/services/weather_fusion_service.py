@@ -423,8 +423,13 @@ def _build_weather_candidates(
         }
         base_delay = _HAZARD_BASE_DELAY.get(hazard_type, 8.0)
         delay_hours = round(base_delay * _SEVERITY_MULT.get(severity, 1.0), 1)
-        advisory_action = _advisory_action(hazard_type, severity)
+        if delay_hours is None or delay_hours <= 0:
+            delay_hours = 4.0
+        advisory_action = _advisory_action(hazard_type, severity) or "PROCEED_WITH_CAUTION"
         affected_modalities = _affected_modalities(hazard_type, wind_kmh, lon, lat)
+        if not affected_modalities:
+            affected_modalities = ["truck"]
+        wind_val = round(float(wind_kmh), 1) if wind_kmh is not None else 0.0
         agree = _has_cross_agreement(lat, lon, is_om)
         if agree:
             confidence = 0.9 if severity == "critical" else 0.85
@@ -477,8 +482,9 @@ def _build_weather_candidates(
                     # Disruption numerics: parsed from BMKG/Open-Meteo sources.
                     "precipitation_mm_24h": precip_mm,
                     "modeled_risk_pct": flood_pct if is_om else None,
-                    "windspeed_kmh": wind_kmh,
-                    "wind_speed_kmh": wind_kmh,
+                    "flood_risk_pct": flood_pct,
+                    "windspeed_kmh": wind_val,
+                    "wind_speed_kmh": wind_val,
                     "bmkg_code": bmkg_code,
                     # Dispatch enrichment: weather-caused logistics impacts.
                     "hazard_type": hazard_type,

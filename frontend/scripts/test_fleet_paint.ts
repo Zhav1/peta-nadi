@@ -123,10 +123,10 @@ console.log('Modality palette');
 {
   check('truck emerald', MODALITY_COLOR.truck === '#34d399', MODALITY_COLOR.truck);
   check('vessel teal', MODALITY_COLOR.maritime === '#2dd4bf', MODALITY_COLOR.maritime);
-  check('aircraft silver', MODALITY_COLOR.air === '#e2e8f0', MODALITY_COLOR.air);
+  check('aircraft cyan', MODALITY_COLOR.air === '#38bdf8', MODALITY_COLOR.air);
   const color = JSON.stringify(FLEET_DOTS_PAINT['circle-color']);
   check('fleet paint carries the vessel teal', color.includes('#2dd4bf'), color);
-  check('fleet paint carries the aircraft silver', color.includes('#e2e8f0'), color);
+  check('fleet paint carries the aircraft cyan', color.includes('#38bdf8'), color);
   check('violet is not used for aircraft', !color.includes('#a78bfa'), color);
 }
 
@@ -158,7 +158,7 @@ console.log('Unit C dot legibility (dark keyline + smaller low-zoom halos)');
     fleetStrokeColor.includes('ROUTE_ESTIMATED') &&
       fleetStrokeColor.includes('#34d399') &&
       fleetStrokeColor.includes('#2dd4bf') &&
-      fleetStrokeColor.includes('#e2e8f0'),
+      fleetStrokeColor.includes('#38bdf8'),
     fleetStrokeColor,
   );
   check(

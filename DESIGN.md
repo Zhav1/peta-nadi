@@ -273,8 +273,8 @@ The map-data hues below are the sanctioned operational palette (M9 visual revisi
 | Waspada Dini (advisory/forecast) | `#a855f7` @ 10% ghost area | `#c084fc` dashed `[3,2]` | `rgba(168,85,247,0.22)` | Violet **dot** per zone (radius 4/5/6 by severity) + faint footprint: forecast, not yet confirmed |
 | Titik Panas (FIRMS hotspot) | `#ef4444` @ 16% | `#f87171` solid | `rgba(239,68,68,0.22)` | Red **dot** per VIIRS detection (size = severity) + red cluster area |
 | Truck | `#34d399` | `#34d399` | - | Live ground unit |
-| Aircraft | `#e2e8f0` | `#e2e8f0` | - | Live air unit (silver - violet is reserved for Waspada) |
-| Vessel | `#2dd4bf` | `#2dd4bf` | - | Live maritime unit (teal - silver is reserved for aircraft) |
+| Aircraft | `#38bdf8` | `#38bdf8` | - | Live air unit (bright cyan - violet is reserved for Waspada) |
+| Vessel | `#2dd4bf` | `#2dd4bf` | - | Live maritime unit (teal - bright cyan is reserved for aircraft) |
 
 The three hazard layers share **one** visual recipe. Cuaca is an **area** (filled footprint + solid outline + soft halo); Waspada Dini and Titik Panas are **dots** (one point per zone / per detection, soft halo, size = severity) with a faint area underneath for context only. Only the hue distinguishes the three families. Severity is expressed through opacity and size, never through a second hue. Fleet units keep their modality hue at 45% with a hollow centre when the position is an estimate, and an amber `#f59e0b` ring whenever the unit is alerted. The tokens live in `frontend/lib/designTokens.ts` as `DS.layer`; the paint expressions live in `frontend/lib/mapDataPaint.ts` so a Node test can prove they parse before a Mapbox layer silently fails to load.
 

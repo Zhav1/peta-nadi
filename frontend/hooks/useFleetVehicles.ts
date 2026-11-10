@@ -40,7 +40,7 @@ function buildFleetQuery(modality?: string, company_id?: string, include_geometr
 
 async function fetchFleetFromPublicSnapshot(signal?: AbortSignal): Promise<FleetVehicle[] | null> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 1800);
+  const timer = setTimeout(() => controller.abort(), 4000);
   const forwardAbort = () => controller.abort();
   if (signal) {
     if (signal.aborted) controller.abort();
@@ -79,7 +79,7 @@ async function fetchFleetWithFallback(
   // Edge snapshot first: avoid calling sleeping Render backend directly for public macro awareness
   if (!companyId) {
     const publicVehicles = await fetchFleetFromPublicSnapshot(signal);
-    if (publicVehicles !== null) {
+    if (publicVehicles !== null && publicVehicles.length > 0) {
       if (modality && modality !== 'all') {
         return publicVehicles.filter((v) => v.modality === modality);
       }
@@ -176,7 +176,6 @@ export function useFleetVehicles(
   const refreshAfterIdentityChangeRef = useRef(false);
   useEffect(() => {
     if (previousIdentityKeyRef.current === identityKey) {
-      vehicleCacheRef.current.clear();
       return;
     }
     previousIdentityKeyRef.current = identityKey;
@@ -227,7 +226,9 @@ export function useFleetVehicles(
         setRawVehicles(merged);
         setError(null);
       } else {
-        setRawVehicles([]);
+        // Retain existing cached vehicles instead of clearing rawVehicles to empty
+        const cached = mergeWithCache([]);
+        setRawVehicles((prev) => (cached.length > 0 ? cached : prev.length > 0 ? prev : []));
       }
     } catch (err: unknown) {
       if (controller.signal.aborted || identityKeyRef.current !== identityKey) return;
@@ -262,7 +263,9 @@ export function useFleetVehicles(
                 setRawVehicles(merged);
                 setError(null);
               } else {
-                setRawVehicles([]);
+                // Retain existing cached vehicles instead of clearing rawVehicles to empty
+                const cached = mergeWithCache([]);
+                setRawVehicles((prev) => (cached.length > 0 ? cached : prev.length > 0 ? prev : []));
               }
               setIsLoading(false);
               return;
