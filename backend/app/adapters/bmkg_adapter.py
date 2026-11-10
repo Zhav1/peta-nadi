@@ -192,13 +192,13 @@ class BMKGAdapter(BaseAdapter):
                     cuaca_forecasts = location_data.get("cuaca", [])
                     for time_slice in cuaca_forecasts:
                         for forecast in time_slice:
-                            desc = forecast.get("desc", "").lower()
+                            desc = forecast.get("weather_desc", "").lower()
                             # 60 = heavy rain, 95 = thunderstorm, 97 = severe thunderstorm
-                            code = int(forecast.get("code", 0))
+                            code = int(forecast.get("weather") or 0)
                             
                             if "lebat" in desc or "petir" in desc or code in [60, 95, 97]:
                                 warnings_found.append({
-                                    "desc": forecast.get("desc"),
+                                    "desc": forecast.get("weather_desc"),
                                     "time": forecast.get("local_datetime"),
                                     "code": code,
                                     "location_name": loc_name,
