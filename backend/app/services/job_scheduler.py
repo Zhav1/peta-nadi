@@ -303,8 +303,19 @@ def select_due(
             due.append((float("inf"), index, name))
             continue
         age = (now - last_finished).total_seconds()
-        if age >= spec.cadence_seconds:
-            due.append((age / spec.cadence_seconds, index, name))
+        # A job is due at the first tick at or after its cadence — never one tick
+        # late, and never before half its cadence. ``age >= cadence`` compares two
+        # numbers of the same size whenever the cadence equals the tick period
+        # (fleet/news/bmkg are all 300 s): a job that finished 266 s ago was "not
+        # due", so it only ran on the FOLLOWING tick, i.e. every 600 s. bmkg's
+        # published window is 300 s, so weather_summary lapsed for half of every
+        # cycle while the job logged ok. Every job now fires on its own cadence
+        # tick, which is also the rate the provider budget caps are sized for
+        # (bmkg 288 attempts/day, tomtom 48/day).
+        cadence = spec.cadence_seconds
+        min_age = max(cadence - TICK_PERIOD_SECONDS, cadence * 0.5)
+        if age >= min_age:
+            due.append((age / cadence, index, name))
         else:
             skipped.append({"job": name, "reason": "not_due"})
 

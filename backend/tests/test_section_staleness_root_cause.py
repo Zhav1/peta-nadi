@@ -331,3 +331,49 @@ def test_news_rows_are_read_newest_first(monkeypatch):
     assert error is None
     assert rows == [{"id": "NEWS-1"}]
     assert calls == [("published_at", True)]
+
+
+# ---------------------------------------------------------------------------
+# 5. Scheduler: a 300 s job must fire on every 300 s tick
+# ---------------------------------------------------------------------------
+
+def _state(age_seconds: int) -> dict:
+    now = datetime.now(timezone.utc)
+    return {"last_finished_at": _iso(now - timedelta(seconds=age_seconds))}
+
+
+def test_a_cadence_equals_tick_job_is_due_on_every_tick():
+    """bmkg finished 266 s ago (the tick's own runtime): it is still due.
+
+    ``age >= cadence`` skipped it, so bmkg polled every 600 s while its
+    published window is 300 s — weather_summary was stale half of every cycle.
+    """
+    from app.services import job_scheduler
+
+    now = datetime.now(timezone.utc)
+    due, skipped = job_scheduler.select_due({"bmkg": _state(266)}, now=now)
+
+    assert "bmkg" in due
+    assert {"job": "bmkg", "reason": "not_due"} not in skipped
+
+
+def test_a_just_finished_job_is_not_due_again():
+    from app.services import job_scheduler
+
+    now = datetime.now(timezone.utc)
+    due, _ = job_scheduler.select_due({"news": _state(10)}, now=now)
+
+    assert "news" not in due
+
+
+def test_a_long_cadence_job_is_not_pulled_a_tick_early():
+    from app.services import job_scheduler
+
+    now = datetime.now(timezone.utc)
+    # Five ticks after the last TomTom run: not due yet.
+    early, _ = job_scheduler.select_due({"tomtom": _state(1495)}, now=now)
+    assert "tomtom" not in early
+
+    # Its own 1800 s tick (the run finished ~5 s into the previous tick).
+    on_time, _ = job_scheduler.select_due({"tomtom": _state(1795)}, now=now)
+    assert "tomtom" in on_time
