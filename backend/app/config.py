@@ -107,9 +107,37 @@ class Settings(BaseSettings):
     tick_max_jobs: int = 3
     tick_budget_seconds: int = 180
     # These are application-side daily reservation caps, not upstream quota claims.
+    #
+    # Sizing rule: 2-3x the SCHEDULED need (attempts/day = 86400 / cadence from
+    # job_scheduler.py), so a retry, a deploy restart or a duplicate tick is an
+    # anomaly instead of a day-long outage. The previous values were sized
+    # EXACTLY to the cadence with zero slack, which is why
+    # private.provider_budget_counters showed bmkg_cap pinned at 288/288 on
+    # 2026-11-07/08/09 and tomtom at 48/48 every day: once the cap was hit the
+    # source was denied until UTC midnight and the section went stale.
+    #
+    # Measured max daily usage before the fix: bmkg 254, bmkg_cap 288,
+    # tomtom 48 (capped), firms 7, news 155, petabencana 36, bnpb 24, pihps 1.
+    # Caps are deliberately NOT sized to a hypothetical worst case: a cap large
+    # enough to never bind is not a cap, and 21k BMKG calls/day would get the
+    # application rate-limited by a public agency.
+    #   bmkg        2 measured units/attempt x 288 scheduled = 576; the adapter
+    #               has 3 reserve call sites (feed + 2 hub paths) so worst case
+    #               is 864 -> 1200
+    #   bmkg_cap    288 measured / 288 scheduled -> 900 (headroom for CAP detail
+    #               fetches; the per-attempt fan-out is unmeasured — instrument
+    #               it before raising this further)
+    #   open_meteo  58 grid locations x 4 (21600s) = 232 -> 500
+    #   firms       <=5/attempt x 8 (10800s) = 40 -> 80
+    #   tomtom      20 flow checkpoints x 24 (3600s) = 480 -> 1000
+    #   petabencana >=1/attempt x 96 (900s) = 96 -> 250
+    #   bnpb        >=1/attempt x 24 (3600s) = 24 -> 96
+    #   news        1/attempt x 288 (300s) = 288 -> 700
+    #   pihps       1/attempt x 1 (86400s) -> 4 (manual reruns)
+    #   social      1/attempt x 24 (3600s) = 24 -> 72
     provider_budget_daily_limits: str = (
-        "bmkg=288,bmkg_cap=288,open_meteo=4,firms=8,tomtom=48,"
-        "petabencana=96,bnpb=24,news=288,pihps=1,social=24"
+        "bmkg=1200,bmkg_cap=900,open_meteo=500,firms=80,tomtom=1000,"
+        "petabencana=250,bnpb=96,news=700,pihps=4,social=72"
     )
     # Public API reads only the persisted shared projection; no guest fallback fetch.
     pilot_shadow_mode: bool = True

@@ -1010,7 +1010,9 @@ async def fetch_fire_hotspots(
     if isinstance(data, dict):
         result = dict(data)
         result["status"] = section.get("status", result.get("status", "ok"))
-        if result.get("count") is None:
+        if result.get("count") is None and result.get("hotspots"):
+            # Materialise a count only when data exists behind it; a null count
+            # on a degraded/unknown section stays null (never a fabricated 0).
             result["count"] = len(result.get("hotspots") or [])
             result["total"] = result["count"]
         if section.get("error"):
@@ -1018,9 +1020,13 @@ async def fetch_fire_hotspots(
         return result
 
     now_iso = datetime.now(timezone.utc).isoformat()
+    # Phase 174: the cold-miss baseline must NOT claim "ok" with a fabricated
+    # count 0 — on a denied/budget-starved upstream this publishes a fake
+    # zero for the whole day. No data behind it => degraded, count null.
+    section_error = section.get("error") if isinstance(section, dict) else None
     return {
-        "hotspots": [], "count": 0, "total": 0, "capped": False,
-        "status": "ok", "reason": (section.get("error") if isinstance(section, dict) else None) or FIRMS_EMPTY_REASON,
+        "hotspots": [], "count": None, "total": None, "capped": False,
+        "status": "degraded", "reason": section_error or FIRMS_EMPTY_REASON,
         "source": "nasa-firms-baseline", "updated_at": now_iso, "window_hours": FIRMS_WINDOW_HOURS,
     }
 

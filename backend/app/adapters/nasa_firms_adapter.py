@@ -204,11 +204,14 @@ class NASAFIRMSAdapter(BaseAdapter):
     ) -> str:
         """Fetch the keyless Indonesia CSV (no MAP_KEY, no quota).
 
-        Returns "" when every candidate fails — never a fabricated payload.
+        Returns "" when every configured candidate fails upstream — never a
+        fabricated payload. A provider-budget DENIAL is not candidate failure:
+        it raises so the composer records a truthful denial (status stale,
+        last-good kept, retried next tick) instead of a misleading "".
         """
         for url in self.keyless_csv_urls(window_hours):
             if not await self.reserve_request_budget(callback=reserve_provider_budget, provider_source="firms"):
-                return ""
+                raise RuntimeError("NASA FIRMS keyless CSV denied by provider budget")
             try:
                 text = await _http_get_text(url)
             except Exception as e:

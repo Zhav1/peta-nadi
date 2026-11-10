@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Awaitable, Callable
 
@@ -40,6 +41,32 @@ SECTION_NAMES = (
 )
 VALID_SOURCES = {"bmkg", "open_meteo", "firms", "tomtom", "observed_disasters"}
 BudgetReserver = Callable[..., bool | Awaitable[bool]]
+
+# Phase 174: a provider-budget denial must be retried on the NEXT TICK, not
+# blocked until UTC midnight. Denials consume no units (compare-and-set RPC), so
+# this is only a short hammer guard between the 5-minute scheduler ticks and the
+# dashboard's coalesced stale-read refreshes. Cadences are >= 300s, so a job's
+# next scheduled tick is never blocked by this backoff.
+DENIAL_RETRY_SECONDS = 120
+_denial_retry_after: dict[str, float] = {}
+
+
+def _is_budget_denial(exc: Exception) -> bool:
+    return "provider budget" in str(exc).lower()
+
+
+def _now_monotonic() -> float:
+    return time.monotonic()
+
+
+def _backoff_active(source: str) -> bool:
+    deadline = _denial_retry_after.get(source)
+    return bool(deadline and _now_monotonic() < deadline)
+
+
+def _defer_denial(source: str) -> None:
+    """Record a short retry_after window; the next scheduler tick is unaffected."""
+    _denial_retry_after[source] = _now_monotonic() + DENIAL_RETRY_SECONDS
 
 
 def _now() -> datetime:
@@ -270,12 +297,36 @@ async def _fetch_source(source: str, reserve_provider_budget: BudgetReserver | N
         adapter = NASAFIRMSAdapter()
         raw = await adapter.fetch(reserve_provider_budget=reserve_provider_budget)
         selected = "nasa-firms-api"
+        cross_check_note: str | None = None
         if not raw or not raw.strip():
+            # "" = denied / errored / no key — never evidence of zero hotspots;
+            # the keyless CSV is the fallback source here, not a cross-check.
             raw = await adapter.fetch_keyless_csv(reserve_provider_budget=reserve_provider_budget)
             selected = "nasa-firms-csv"
+        events = (
+            await adapter.parse_keyless_csv(raw, 24) if raw and raw.strip() else []
+        )
+        if selected == "nasa-firms-api" and not events:
+            # Phase 173.6/174: a keyed API answering 0 rows (e.g. a header-only
+            # CSV before the current UTC day's NRT pass lands) under-reports
+            # (50 real in-bbox detections were published as count 0 in prod).
+            # The keyless CSV is a MANDATORY cross-check before count: 0.
+            cross_raw = await adapter.fetch_keyless_csv(reserve_provider_budget=reserve_provider_budget)
+            cross_events = (
+                await adapter.parse_keyless_csv(cross_raw, 24)
+                if cross_raw and cross_raw.strip()
+                else []
+            )
+            if cross_events:
+                raw, events = cross_raw, cross_events
+                selected = "nasa-firms-csv"
+                cross_check_note = "api empty; csv cross-check"
+            else:
+                cross_check_note = "api empty; csv cross-check verified empty"
         if not raw or not raw.strip():
+            # Denied or errored upstream with no fallback: raise so the composer
+            # keeps last-good data with status stale (see the except branch).
             raise RuntimeError("NASA FIRMS returned no usable CSV")
-        events = await adapter.parse_keyless_csv(raw, 24)
         return {
             "source": source,
             "provider_source": selected,
@@ -285,7 +336,7 @@ async def _fetch_source(source: str, reserve_provider_budget: BudgetReserver | N
             "observed_at": max((str(e.get("ts")) for e in events if e.get("ts")), default=None),
             "valid_until": _iso(fetched_at + timedelta(seconds=SOURCE_TTL_SECONDS[source])),
             "status": "ok" if events else "empty",
-            "error": None,
+            "error": cross_check_note,
         }
     elif source == "tomtom":
         from app.adapters.tomtom_adapter import TomTomAdapter
@@ -431,9 +482,18 @@ def _build_sections(records: dict[str, dict[str, Any]]) -> dict[str, dict[str, A
     firms = records.get("firms")
     if isinstance(firms, dict):
         hotspots = firms.get("events") or []
+        firm_status = firms.get("status", "unknown")
+        if not hotspots and firm_status not in ("ok", "empty"):
+            # Denied / errored / degraded upstream with no cached points: the
+            # true count is unknown — publish null, never a fabricated 0
+            # (production published {"count": 0, source nasa-firms-api} for
+            # hours off a denied upstream, Phase 174).
+            count = total = None
+        else:
+            count = total = len(hotspots)
         sections["fire_hotspots"] = _envelope(
-            firms.get("status", "unknown"),
-            {"hotspots": hotspots, "count": len(hotspots), "total": len(hotspots), "capped": False,
+            firm_status,
+            {"hotspots": hotspots, "count": count, "total": total, "capped": False,
              "source": firms.get("provider_source", "nasa-firms-csv"), "window_hours": 24,
              "updated_at": firms.get("observed_at") or firms.get("fetched_at")},
             observed_at=firms.get("observed_at"), valid_until=firms.get("valid_until"), error=firms.get("error"),
@@ -587,7 +647,15 @@ async def refresh_public_operational_cache(
     if source is not None and source not in VALID_SOURCES:
         raise ValueError(f"source must be one of {sorted(VALID_SOURCES)} or None")
     records = read_cached_source_observations()
-    if source is not None:
+    if source is not None and _backoff_active(source):
+        # Denial backoff (Phase 174): keep the last-good record and recompose;
+        # the next scheduler tick (cadence >= 300s) retries the source.
+        logger.debug(
+            "Public operational refresh for %s deferred (denial backoff %ds)",
+            source,
+            DENIAL_RETRY_SECONDS,
+        )
+    elif source is not None:
         try:
             fresh = await _fetch_source(source, reserve_provider_budget)
             records[source] = fresh
@@ -602,7 +670,29 @@ async def refresh_public_operational_cache(
                     "error": str(exc), "fetched_at": _iso(_now()), "valid_until": None,
                 }
             else:
+                # Keep last-good data verbatim; only status/age error change.
+                # A denial is retried on the next tick (short backoff above),
+                # never blocked until UTC midnight.
                 records[source] = dict(previous, status="stale", error=str(exc))
+            # Persist the truthful status. Without this the stale/degraded marker
+            # only lives in the composed snapshot and the next read of the raw
+            # source resurrects status "ok" — the exact "job says ok while the
+            # section is empty" symptom this fix exists to remove.
+            _write_json(
+                f"{RAW_KEY_PREFIX}{source}",
+                records[source],
+                source,
+                max(SOURCE_TTL_SECONDS[source], 24 * 60 * 60),
+            )
+            if _is_budget_denial(exc):
+                _defer_denial(source)
+                if previous is None:
+                    # Cold start + denial: surface the failure to the scheduler
+                    # so the job's last_status is a truthful error with a 120s
+                    # retry_after — never a false "ok" next to an empty cache
+                    # (production: firms reported ok while fire_hotspots said
+                    # count 0 for hours).
+                    raise
 
     sections = _build_sections(records)
     snapshot = {"version": 1, "updated_at": _iso(_now()), "sections": sections}
