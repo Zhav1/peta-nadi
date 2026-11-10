@@ -941,49 +941,6 @@ def empty_public_snapshot(*, error: Optional[str] = None) -> dict:
     }
 
 
-def _ensure_snapshot_persisted(snapshot: dict, version: int) -> bool:
-    """Ensure snapshot is saved, with fallback if version column does not exist."""
-    try:
-        from app.db.supabase_client import get_service_client
-
-        client = get_service_client()
-        payload_dict = dict(snapshot)
-        payload_dict["version"] = version
-        row_with_version = {
-            "snapshot_key": SNAPSHOT_KEY,
-            "schema_version": SCHEMA_VERSION,
-            "computed_at": snapshot.get("computed_at") or _now().isoformat(),
-            "payload": payload_dict,
-            "version": version,
-        }
-        try:
-            client.table("public_dashboard_snapshots").upsert(
-                row_with_version, on_conflict="snapshot_key"
-            ).execute()
-            return True
-        except Exception as col_exc:
-            err_text = str(col_exc).lower()
-            if "version" in err_text or "column" in err_text or "pgrst204" in err_text:
-                logger.info(
-                    "version column not in remote DB yet, retrying upsert without version column: %s",
-                    col_exc,
-                )
-                row_without_version = {
-                    "snapshot_key": SNAPSHOT_KEY,
-                    "schema_version": SCHEMA_VERSION,
-                    "computed_at": snapshot.get("computed_at") or _now().isoformat(),
-                    "payload": payload_dict,
-                }
-                client.table("public_dashboard_snapshots").upsert(
-                    row_without_version, on_conflict="snapshot_key"
-                ).execute()
-                return True
-            raise
-    except Exception as exc:
-        logger.debug("direct snapshot upsert check failed: %s", exc)
-        return False
-
-
 async def refresh_public_snapshot(*, lease: RefreshLease) -> dict:
     """Build and atomically publish under an active fenced tick lease."""
     started = time.perf_counter()
@@ -994,9 +951,10 @@ async def refresh_public_snapshot(*, lease: RefreshLease) -> dict:
 
         published = await publish_public_snapshot(lease, snapshot)
 
-        # Fallback persistence ensuring column 'version' or retry without column
-        await asyncio.to_thread(_ensure_snapshot_persisted, snapshot, next_version)
-
+        # Single writer: the fenced RPC is the only path allowed to persist the
+        # snapshot. A direct table upsert would bypass both the lease fence and
+        # the per-section freshness guard, letting a worker holding an older
+        # observation overwrite fresher section data and the served payload.
         if not published:
             return {"status": "fenced", "snapshot_key": SNAPSHOT_KEY}
         return {

@@ -379,3 +379,134 @@ async def test_weather_summary_degraded_null_counts_are_not_rewritten_to_zero(mo
     for key in ("cuaca", "waspada"):
         assert body[key]["count"] is None, "a null count must stay null, never become a verified 0"
         assert body[key]["status"] == "degraded"
+
+
+# ---------------------------------------------------------------------------
+# Q3 — two workers, two Redis caches: a stale section must never win
+#
+# The guard itself lives in SQL (public.publish_public_dashboard_snapshot,
+# migration 20261110120000_phase180_section_freshness_guard.sql). These tests
+# pin the two Python-side invariants it depends on: the caller forwards each
+# section's true evidence clock, and nothing else writes the snapshot.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_publish_rpc_forwards_section_evidence_timestamps_verbatim(monkeypatch):
+    """A stale worker must send its own old observed_at, never computed_at.
+
+    If the caller restamped sections with the (always fresh) computed_at, the
+    SQL freshness guard would have nothing to compare and the stale worker
+    would win again.
+    """
+    from app.services import refresh_coordinator
+
+    lease = refresh_coordinator.RefreshLease("internal_tick", "owner-1", 7)
+    sent = []
+
+    def rpc(function, params):
+        sent.append((function, params))
+        return True
+
+    monkeypatch.setattr(refresh_coordinator, "_rpc_sync", rpc)
+
+    snapshot = {
+        "schema_version": 1,
+        "snapshot_key": "sumatra_mainland",
+        "computed_at": "2026-11-10T10:14:00+00:00",
+        "sections": {
+            # The Render worker's 43-minute-old traffic evidence.
+            "traffic_flow_segments": {
+                "status": "stale",
+                "data": {"segments": []},
+                "observed_at": "2026-11-10T09:31:46+00:00",
+                "valid_until": "2026-11-10T10:01:46+00:00",
+                "error": "Data terakhir 43 menit lalu",
+            },
+            # fire_hotspots publishes a null observation; the SQL fallback is valid_until.
+            "fire_hotspots": {
+                "status": "ok",
+                "data": {"hotspots": []},
+                "observed_at": None,
+                "valid_until": "2026-11-10T11:46:31+00:00",
+            },
+        },
+    }
+
+    assert await refresh_coordinator.publish_public_snapshot(lease, snapshot) is True
+
+    function, params = sent[0]
+    assert function == "publish_public_dashboard_snapshot"
+    assert params["p_owner_id"] == "owner-1"
+    assert params["p_fence"] == 7
+
+    published = params["p_snapshot"]
+    assert published["computed_at"] == "2026-11-10T10:14:00+00:00"
+    traffic = published["sections"]["traffic_flow_segments"]
+    assert traffic["observed_at"] == "2026-11-10T09:31:46+00:00", "evidence clock must not be laundered"
+    assert traffic["valid_until"] == "2026-11-10T10:01:46+00:00"
+    fire = published["sections"]["fire_hotspots"]
+    assert fire["observed_at"] is None, "a null observation must stay null for the SQL fallback"
+    assert fire["valid_until"] == "2026-11-10T11:46:31+00:00"
+
+
+@pytest.mark.asyncio
+async def test_refresh_publishes_only_through_the_guarded_rpc(monkeypatch):
+    """No direct table upsert may bypass the fence + per-section freshness guard."""
+    from app.services import refresh_coordinator
+
+    async def fake_build():
+        return {
+            "schema_version": 1,
+            "snapshot_key": "sumatra_mainland",
+            "computed_at": "2026-11-10T10:14:00+00:00",
+            "sections": {"traffic_flow_segments": {"status": "stale", "data": {"segments": []}}},
+            "source_freshness": {},
+            "stale": True,
+        }
+
+    published = []
+
+    async def fake_publish(lease, snapshot):
+        published.append(snapshot)
+        return True
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("the snapshot must only be persisted by the fenced, guarded RPC")
+
+    monkeypatch.setattr(snapshots, "build_public_snapshot", fake_build)
+    monkeypatch.setattr(snapshots, "get_next_snapshot_version", lambda: 42)
+    monkeypatch.setattr(snapshots, "publish_public_snapshot", fake_publish)
+    monkeypatch.setattr("app.db.supabase_client.get_service_client", forbidden)
+
+    result = await snapshots.refresh_public_snapshot(
+        lease=refresh_coordinator.RefreshLease("internal_tick", "owner-1", 7)
+    )
+
+    assert result["status"] == "ok"
+    assert result["version"] == 42
+    assert len(published) == 1
+    assert published[0]["version"] == 42
+
+
+def test_publish_guard_migration_ships_the_evidence_guard_and_keeps_the_fence():
+    """The guard must be on the section write itself, and the fence must be intact."""
+    from pathlib import Path
+
+    migration = (
+        Path(__file__).resolve().parents[2]
+        / "infra/supabase/migrations/20261110120000_phase180_section_freshness_guard.sql"
+    )
+    sql = migration.read_text(encoding="utf-8")
+
+    # Evidence stamp = observed_at, else valid_until (computed_at is not evidence).
+    assert "coalesce(EXCLUDED.observed_at, EXCLUDED.valid_until)" in sql
+    assert "coalesce(stored.observed_at, stored.valid_until)" in sql
+    # Null-observed fallback: only replace an evidence-free row or a lapsed window.
+    assert "stored.valid_until < clock_timestamp()" in sql
+    # The guard is part of the conflict resolution, not just the payload projection.
+    assert "ON CONFLICT (section_name) DO UPDATE" in sql
+    # Lease fencing is untouched.
+    assert "v_lease.owner_id <> p_owner_id" in sql
+    assert "v_lease.fence <> p_fence" in sql
+    assert "v_lease.expires_at <= clock_timestamp()" in sql
+
