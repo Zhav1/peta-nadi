@@ -52,6 +52,30 @@ def _clean_section_cache(monkeypatch):
         }
 
     monkeypatch.setattr(public_snapshots, "read_public_snapshot", read_public_snapshot)
+
+    # `_attach_operational_sections` reads the observed-disaster snapshot from
+    # Redis. With a live local Redis that returns a stored row (stable
+    # `updated_at`); with no Redis (CI) the cache is empty, so
+    # `read_observed_disasters()` re-assembles on every call and stamps a fresh
+    # `updated_at`. Pin it so two requests in one test return identical bodies.
+    from app.services import observed_disaster_service
+
+    def read_stub_observed_disasters():
+        return {
+            "schema_version": 1,
+            "updated_at": "2026-01-01T00:00:00+00:00",
+            "status": "ok",
+            "disaster_reports": [],
+            "official_warnings": [],
+            "sources": {},
+            "source_health": {},
+        }
+
+    monkeypatch.setattr(
+        observed_disaster_service,
+        "read_observed_disasters",
+        read_stub_observed_disasters,
+    )
     yield
     svc.reset_section_cache()
     dashboard_bootstrap.reset_inflight()
