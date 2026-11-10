@@ -693,6 +693,9 @@ export default function DashboardClient() {
   }, []);
 
   const bootstrapSections = realtimeSections ?? bootstrap.data?.sections;
+  // M10 honest snapshot staleness: derive the badge age from `computed_at`
+  // (FreshnessBadge does that) and keep the data painted — never blanked.
+  const snapshotKnownStale = bootstrap.stale && !!bootstrap.data;
   const seededIncidentsSection = bootstrapSections?.incidents;
   const rawSeededIncidents =
     ['ok', 'stale'].includes(seededIncidentsSection?.status ?? '')
@@ -1235,6 +1238,14 @@ export default function DashboardClient() {
       }));
   }, [filteredNews]);
 
+
+  // Per-section honesty (M10): a degraded/unknown `news` section (null data)
+  // plus an empty live feed means the data is not available — say so instead of
+  // the generic "no verified news" line that reads like "no news today".
+  const newsSection = bootstrapSections?.news;
+  const newsSectionCarriesData =
+    ['ok', 'stale'].includes(newsSection?.status ?? '') && newsSection?.data != null;
+  const newsDataBelumTersedia = !bootstrap.isLoading && !newsSectionCarriesData;
 
   // 32-point polygon ring around [lon, lat] with radius rKm (RED 16km / YELLOW 20km).
   const buildZoneRing = useCallback((lon: number, lat: number, rKm: number, points = 32): [number, number][] => {
@@ -4048,6 +4059,18 @@ const SUMATRA_LOCATION_FALLBACK_MAP: Array<{ keywords: string[]; coords: [number
                       <FreshnessBadge lastUpdated={newsLastUpdatedDate} sourceLabel="" />
                     </span>
                   )}
+                  {snapshotKnownStale && bootstrap.data && (
+                    <span
+                      data-testid="snapshot-stale-badge"
+                      title="Snapshot publik tertunda — data terakhir tetap ditampilkan"
+                    >
+                      <StatusFreshnessBadge
+                        status="stale"
+                        updatedAt={bootstrap.data.computed_at ?? null}
+                        reason={null}
+                      />
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -4139,11 +4162,17 @@ const SUMATRA_LOCATION_FALLBACK_MAP: Array<{ keywords: string[]; coords: [number
                 <div className="p-6 text-center text-[rgba(232,234,237,0.62)] font-mono text-xs space-y-1">
                   <Radio className="w-6 h-6 mx-auto text-[rgba(232,234,237,0.38)] mb-2" />
                   <p>
-                    {newsStatus === 'warming'
-                      ? 'Belum ada berita live terverifikasi.'
-                      : 'Belum ada berita live yang lolos verifikasi.'}
+                    {newsDataBelumTersedia
+                      ? 'Data belum tersedia.'
+                      : newsStatus === 'warming'
+                        ? 'Belum ada berita live terverifikasi.'
+                        : 'Belum ada berita live yang lolos verifikasi.'}
                   </p>
-                  <p className="text-[rgba(232,234,237,0.38)]">Menunggu feed live — tidak ada data cadangan.</p>
+                  <p className="text-[rgba(232,234,237,0.38)]">
+                    {newsDataBelumTersedia
+                      ? 'Snapshot tidak memuat Berita dan sumber live sedang tidak dapat dihubungi.'
+                      : 'Menunggu feed live — tidak ada data cadangan.'}
+                  </p>
                 </div>
               ) : filteredNews.length === 0 ? (
                 <div className="p-6 text-center text-[rgba(232,234,237,0.62)] font-mono text-xs space-y-1">

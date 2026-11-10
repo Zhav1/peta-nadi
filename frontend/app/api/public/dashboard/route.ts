@@ -11,8 +11,15 @@ import type { DashboardBootstrapResponse } from '@/lib/types';
 export const dynamic = 'force-dynamic';
 export const revalidate = 15;
 
-const SNAPSHOT_TIMEOUT_MS = 1800;
+const SNAPSHOT_TIMEOUT_MS = 6000;
+const BACKEND_FALLBACK_TIMEOUT_MS = 2500;
 const PUBLIC_CACHE_CONTROL = 'public, s-maxage=15, stale-while-revalidate=45';
+// A stale-but-real row is cached (not less than the fresh budget under SWR) so
+// the edge keeps serving the last honest snapshot while revalidating.
+const STALE_CACHE_CONTROL = 'public, s-maxage=30, stale-while-revalidate=120';
+// The fabricated empty envelope is the last resort: a short edge TTL keeps a
+// transient zero-row blip from blanking guests for a full fresh window.
+const DEGRADED_CACHE_CONTROL = 'public, s-maxage=5, stale-while-revalidate=15';
 const UNKNOWN_CACHE_CONTROL = 'no-store';
 
 interface SnapshotResult {
@@ -210,7 +217,7 @@ async function executeGetSnapshot(): Promise<SnapshotResult> {
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !anonKey) {
-    const backendData = await fetchFromBackendBootstrap(1200);
+    const backendData = await fetchFromBackendBootstrap(BACKEND_FALLBACK_TIMEOUT_MS);
     if (backendData && backendData.computed_at) {
       const version = typeof (backendData as any).version === 'number' ? (backendData as any).version : 1;
       (backendData as any).version = version;
@@ -226,7 +233,7 @@ async function executeGetSnapshot(): Promise<SnapshotResult> {
     return {
       body: envelope,
       status: 200,
-      cacheControl: PUBLIC_CACHE_CONTROL,
+      cacheControl: DEGRADED_CACHE_CONTROL,
       snapshotState: 'degraded',
       version: envelope.version,
     };
@@ -258,26 +265,34 @@ async function executeGetSnapshot(): Promise<SnapshotResult> {
         const row = rows[0] as Record<string, unknown>;
         const payload = row.payload && typeof row.payload === 'object'
           ? row.payload as Record<string, unknown>
-          : {};
-        const version = typeof payload.version === 'number'
-          ? payload.version
-          : (typeof row.version === 'number' ? row.version : 1);
+          : null;
 
-        const snapshot = normalizePublicSnapshot({
-          ...payload,
-          schema_version: row.schema_version,
-          snapshot_key: row.snapshot_key,
-          computed_at: row.computed_at,
-          version,
-        });
-        snapshot.version = version;
+        // Never blank: a row that exists at all is served regardless of age.
+        // `computed_at` only flips the honest `stale` flag — a missing or
+        // unparseable stamp also counts as stale — it never hides real
+        // sections behind the fabricated empty envelope.
+        if (payload) {
+          const version = typeof payload.version === 'number'
+            ? payload.version
+            : (typeof row.version === 'number' ? row.version : 1);
 
-        if (snapshot.computed_at !== null) {
-          snapshot.stale = snapshot.stale || timestampIsStale(snapshot.computed_at);
+          const snapshot = normalizePublicSnapshot({
+            ...payload,
+            schema_version: row.schema_version,
+            snapshot_key: row.snapshot_key,
+            computed_at: row.computed_at,
+            version,
+          });
+          snapshot.version = version;
+          snapshot.stale =
+            snapshot.stale ||
+            !snapshot.computed_at ||
+            timestampIsStale(snapshot.computed_at);
+
           return {
             body: snapshot,
             status: 200,
-            cacheControl: PUBLIC_CACHE_CONTROL,
+            cacheControl: snapshot.stale ? STALE_CACHE_CONTROL : PUBLIC_CACHE_CONTROL,
             snapshotState: snapshot.stale ? 'stale' : 'ok',
             version,
           };
@@ -285,15 +300,15 @@ async function executeGetSnapshot(): Promise<SnapshotResult> {
       }
     }
 
-    // Supabase did not return a valid computed_at row; try backend bootstrap with tight 1200ms timeout
-    const backendData = await fetchFromBackendBootstrap(1200);
+    // Supabase did not return a usable row; try the backend bootstrap fallback.
+    const backendData = await fetchFromBackendBootstrap(BACKEND_FALLBACK_TIMEOUT_MS);
     if (backendData && backendData.computed_at) {
       const version = typeof (backendData as any).version === 'number' ? (backendData as any).version : 1;
       (backendData as any).version = version;
       return {
         body: backendData,
         status: 200,
-        cacheControl: PUBLIC_CACHE_CONTROL,
+        cacheControl: backendData.stale ? STALE_CACHE_CONTROL : PUBLIC_CACHE_CONTROL,
         snapshotState: backendData.stale ? 'stale' : 'ok',
         version,
       };
@@ -304,6 +319,7 @@ async function executeGetSnapshot(): Promise<SnapshotResult> {
       return {
         ...lastKnownGoodResult,
         body: staleBody,
+        cacheControl: STALE_CACHE_CONTROL,
         snapshotState: 'stale',
       };
     }
@@ -312,7 +328,7 @@ async function executeGetSnapshot(): Promise<SnapshotResult> {
     return {
       body: fallbackEnvelope,
       status: 200,
-      cacheControl: PUBLIC_CACHE_CONTROL,
+      cacheControl: DEGRADED_CACHE_CONTROL,
       snapshotState: 'degraded',
       version: fallbackEnvelope.version,
     };
@@ -322,6 +338,7 @@ async function executeGetSnapshot(): Promise<SnapshotResult> {
       return {
         ...lastKnownGoodResult,
         body: staleBody,
+        cacheControl: STALE_CACHE_CONTROL,
         snapshotState: 'stale',
       };
     }
@@ -329,7 +346,7 @@ async function executeGetSnapshot(): Promise<SnapshotResult> {
     return {
       body: fallbackEnvelope,
       status: 200,
-      cacheControl: PUBLIC_CACHE_CONTROL,
+      cacheControl: DEGRADED_CACHE_CONTROL,
       snapshotState: 'degraded',
       version: fallbackEnvelope.version,
     };
@@ -354,7 +371,10 @@ export async function GET(request: Request): Promise<Response> {
     return jsonResponse(res.body, res.status, res.cacheControl, res.snapshotState);
   }
 
-  if (!bypassCache && lastKnownGoodResult && !timestampIsStale((lastKnownGoodResult.body as any)?.computed_at)) {
+  // The snapshot memory replay must never resurrect a fabricated empty
+  // envelope from a previous miss: a row may exist now, so degraded answers are
+  // always re-read (also skips normal 15s edge caching via the per-state TTLs).
+  if (!bypassCache && lastKnownGoodResult && lastKnownGoodResult.snapshotState !== 'degraded' && !timestampIsStale((lastKnownGoodResult.body as any)?.computed_at)) {
     return jsonResponse(
       lastKnownGoodResult.body,
       lastKnownGoodResult.status,
