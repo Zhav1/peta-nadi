@@ -589,7 +589,8 @@ def test_configured_tick_capacity_covers_registry_demand():
     """The tick must be able to serve the registry it declares.
 
     Measured on the VPS 2026-11-10: 12 ticks/hour against a registry demanding
-    43.5 slots/hour. At ``tick_max_jobs=3`` that was 36 slots/hour (83%), so
+    44.5 slots/hour (43.5 before the TomTom cadence moved to 1800 s). At
+    ``tick_max_jobs=3`` that was 36 slots/hour (83%), so
     bmkg — 300 s cadence *and* 300 s TTL — was usually past its window when its
     slot came up, and weather_summary published stale while the job logged `ok`.
     """
@@ -620,7 +621,15 @@ def test_configured_tick_capacity_covers_registry_demand():
 
 
 def test_registry_cadences_match_the_m8_contract():
+    """The real registry, not a call-stack shim.
+
+    This assertion used to pass through a ``JobSpecsDict.items()`` override that
+    returned a legacy dict whenever the caller frame was this test, so it
+    asserted tomtom=1800 while production ran 3600 — the cadence/TTL mismatch
+    that kept traffic_flow_segments stale 50 minutes of every hour.
+    """
     assert {name: spec.cadence_seconds for name, spec in job_scheduler.JOB_SPECS.items()} == {
+        "fleet": 300,
         "news": 300,
         "bmkg": 300,
         "tomtom": 1800,

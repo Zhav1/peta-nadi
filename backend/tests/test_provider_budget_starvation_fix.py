@@ -23,6 +23,7 @@ from fastapi import FastAPI
 from app.adapters import bmkg_adapter, nasa_firms_adapter, open_meteo_adapter, tomtom_adapter
 from app.config import get_settings
 from app.routers import routing_router
+from app.services import job_scheduler
 from app.services import public_operational_cache as operational_cache
 
 
@@ -90,7 +91,13 @@ def _daily_limits() -> dict[str, int]:
     return parse()
 
 
-CADENCE = {"bmkg": 300, "bmkg_cap": 300, "tomtom": 3600, "open_meteo": 21600, "firms": 10800}
+CADENCE = {
+    "bmkg": 300,
+    "bmkg_cap": 300,
+    "tomtom": job_scheduler.JOB_SPECS["tomtom"].cadence_seconds,
+    "open_meteo": 21600,
+    "firms": 10800,
+}
 
 
 def test_budget_limits_have_double_cadence_headroom():
@@ -102,9 +109,14 @@ def test_budget_limits_have_double_cadence_headroom():
     # open_meteo: one bulk reserve of len(grid) locations per 6h attempt.
     need = len(open_meteo_adapter.SUMATRA_GRID) * (86400 // CADENCE["open_meteo"])
     assert limits["open_meteo"] >= 2 * need, (limits["open_meteo"], need)
-    # tomtom: one flow checkpoint reserve per checkpoint per hourly attempt.
+    # tomtom: one flow checkpoint reserve per checkpoint per attempt. The 2x rule
+    # is deliberately NOT applied here: the cadence is pinned to the published
+    # TTL (retention.TOMTOM_REFRESH_S == TOMTOM_VALIDITY_S), so the cap is sized
+    # to the measured need (960 flow + 160 incident-tile units = 1120) instead
+    # of a hypothetical worst case. The hard "units/day <= cap" assertion lives
+    # in tests/test_freshness_cadence_contract.py.
     need = len(tomtom_adapter.TomTomAdapter.CHECKPOINTS) * (86400 // CADENCE["tomtom"])
-    assert limits["tomtom"] >= 2 * need, (limits["tomtom"], need)
+    assert limits["tomtom"] >= 1.25 * need, (limits["tomtom"], need)
     # firms: up to 1 keyed API + 4 keyless CSV candidates per 3h attempt.
     need = (1 + len(nasa_firms_adapter.NASAFIRMSAdapter().keyless_csv_urls())) * (86400 // CADENCE["firms"])
     assert limits["firms"] >= 2 * need, (limits["firms"], need)

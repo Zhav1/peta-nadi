@@ -19,9 +19,9 @@ Contract
   registry-order queue would let the two 5-minute jobs consume the entire budget
   and starve the daily ones; the overdue ratio cannot starve anything.
 * Capacity is a measured invariant, not a guess: the registry demands
-  ``sum(3600 / cadence)`` = 43.5 job slots/hour and one tick per
+  ``sum(3600 / cadence)`` = 44.5 job slots/hour and one tick per
   ``TICK_PERIOD_SECONDS`` supplies ``tick_max_jobs`` slots, so 6/tick = 72/hour
-  (1.65x). ``tests/test_internal_tick.py`` asserts that coverage, that no
+  (1.62x). ``tests/test_internal_tick.py`` asserts that coverage, that no
   cadence is shorter than the tick period, and that ``tick_budget_seconds``
   stays inside ``LOCK_TTL_SECONDS``.
 * One tick at a time: :mod:`app.routers.internal_tick` holds a process-local
@@ -56,6 +56,7 @@ from functools import partial
 from typing import Any, Callable, Optional
 
 from app.config import get_settings
+from app.services.retention import TOMTOM_REFRESH_S
 
 logger = logging.getLogger(__name__)
 
@@ -106,30 +107,8 @@ def _spec(name: str, cadence_seconds: int, cycle_attr: str) -> JobSpec:
     return JobSpec(name=name, cadence_seconds=cadence_seconds, cycle_attr=cycle_attr)
 
 
-class JobSpecsDict(dict):
-    """Dictionary of JobSpecs with backwards-compatibility for legacy Phase 162 contract tests."""
-
-    def items(self):
-        import inspect
-        for frame in inspect.stack():
-            if frame.function == "test_registry_cadences_match_the_m8_contract":
-                m8_legacy = {
-                    "news": _spec("news", 300, "_run_news_cycle"),
-                    "bmkg": _spec("bmkg", 300, "_run_bmkg_cycle"),
-                    "tomtom": _spec("tomtom", 1800, "_run_tomtom_cycle"),
-                    "open_meteo": _spec("open_meteo", 21600, "_run_open_meteo_cycle"),
-                    "firms": _spec("firms", 10800, "_run_firms_cycle"),
-                    "pihps": _spec("pihps", 86400, "_run_pihps_cycle"),
-                    "social": _spec("social", 3600, "_run_social_cycle"),
-                    "bnpb": _spec("bnpb", 3600, "_run_bnpb_cycle"),
-                    "petabencana": _spec("petabencana", 900, "_run_petabencana_cycle"),
-                }
-                return m8_legacy.items()
-        return super().items()
-
-
 # Order is the deterministic tie-break for jobs that are equally overdue.
-JOB_SPECS: dict[str, JobSpec] = JobSpecsDict({
+JOB_SPECS: dict[str, JobSpec] = {
     spec.name: spec
     for spec in (
         # fleet used to declare 60 s. Nothing can honour that: the only driver is
@@ -141,7 +120,12 @@ JOB_SPECS: dict[str, JobSpec] = JobSpecsDict({
         _spec("fleet", TICK_PERIOD_SECONDS, "_run_fleet_cycle"),
         _spec("news", 300, "_run_news_cycle"),
         _spec("bmkg", 300, "_run_bmkg_cycle"),
-        _spec("tomtom", 3600, "_run_tomtom_cycle"),
+        # Cadence comes from retention.TOMTOM_REFRESH_S, the same constant that
+        # drives the published validity window. It used to be a literal 3600
+        # here while the TTL was 600, so the section was stale 50 minutes of
+        # every hour; a call-stack-sensitive JobSpecsDict shim made the M8
+        # contract test assert 1800 while production ran 3600. One constant now.
+        _spec("tomtom", TOMTOM_REFRESH_S, "_run_tomtom_cycle"),
         _spec("open_meteo", 21600, "_run_open_meteo_cycle"),
         _spec("firms", 10800, "_run_firms_cycle"),
         _spec("pihps", 86400, "_run_pihps_cycle"),
@@ -149,7 +133,7 @@ JOB_SPECS: dict[str, JobSpec] = JobSpecsDict({
         _spec("bnpb", 3600, "_run_bnpb_cycle"),
         _spec("petabencana", 900, "_run_petabencana_cycle"),
     )
-})
+}
 
 
 @dataclass

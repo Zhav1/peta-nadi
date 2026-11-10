@@ -15,6 +15,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Awaitable, Callable
 
 from app.services.redis_client import cache_get, cache_set
+from app.services.retention import TOMTOM_VALIDITY_S
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,10 @@ SOURCE_TTL_SECONDS = {
     "bmkg": 300,
     "open_meteo": 6 * 60 * 60,
     "firms": 3 * 60 * 60,
-    "tomtom": 10 * 60,
+    # Validity == the TomTom job cadence (retention.TOMTOM_REFRESH_S). A shorter
+    # TTL than cadence makes the section stale by construction, which is exactly
+    # what a 600 s TTL behind a 3600 s job did in production.
+    "tomtom": TOMTOM_VALIDITY_S,
     "observed_disasters": 30 * 60,
 }
 SECTION_NAMES = (

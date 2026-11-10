@@ -106,14 +106,15 @@ class Settings(BaseSettings):
     # Remaining due jobs are deferred to the next tick (never dropped).
     #
     # Capacity is sized from the registry, measured 2026-11-10:
-    #   demand  = sum(3600 / cadence) over job_scheduler.JOB_SPECS = 43.5 slots/h
-    #             (fleet/news/bmkg 12/h each, petabencana 4/h, tomtom/bnpb/social
-    #             1/h each, firms 0.33/h, open_meteo 0.17/h, pihps 0.04/h)
+    #   demand  = sum(3600 / cadence) over job_scheduler.JOB_SPECS = 44.5 slots/h
+    #             (fleet/news/bmkg 12/h each, tomtom 2/h, petabencana 4/h,
+    #             bnpb/social 1/h each, firms 0.33/h, open_meteo 0.17/h,
+    #             pihps 0.04/h)
     #   supply  = 12 ticks/h (scheduler sidecar sleeps 300 s) x tick_max_jobs
     # 3/tick gave 36 slots/h against 43.5 -> 83% coverage, so bmkg (300 s cadence
     # AND 300 s TTL) was routinely past its window when its slot came up and
     # weather_summary published stale even though the job logged `ok`.
-    # 6/tick = 72 slots/h = 1.65x demand. The budget stays below the 240 s job
+    # 6/tick = 72 slots/h = 1.62x demand. The budget stays below the 240 s job
     # lease (LOCK_TTL_SECONDS) so a slow job cannot be executed twice, and the
     # tick still answers 202 before any job runs. tests/test_internal_tick.py
     # asserts both invariants so this cannot silently regress.
@@ -145,14 +146,18 @@ class Settings(BaseSettings):
     #               it before raising this further)
     #   open_meteo  58 grid locations x 4 (21600s) = 232 -> 500
     #   firms       <=5/attempt x 8 (10800s) = 40 -> 80
-    #   tomtom      20 flow checkpoints x 24 (3600s) = 480 -> 1000
+    #   tomtom      20 flow checkpoints x 48 (1800s) = 960, plus 20 incident
+    #               tiles x 8 (every 6th cycle) = 160 -> 1120 measured need;
+    #               cap 1200 (1.07x). The 1800 s cadence is what makes the
+    #               published TTL honest, so the cap is sized to it, not to a
+    #               hypothetical worst case.
     #   petabencana >=1/attempt x 96 (900s) = 96 -> 250
     #   bnpb        >=1/attempt x 24 (3600s) = 24 -> 96
     #   news        1/attempt x 288 (300s) = 288 -> 700
     #   pihps       1/attempt x 1 (86400s) -> 4 (manual reruns)
     #   social      1/attempt x 24 (3600s) = 24 -> 72
     provider_budget_daily_limits: str = (
-        "bmkg=1200,bmkg_cap=900,open_meteo=500,firms=80,tomtom=1000,"
+        "bmkg=1200,bmkg_cap=900,open_meteo=500,firms=80,tomtom=1200,"
         "petabencana=250,bnpb=96,news=700,pihps=4,social=72"
     )
     # Public API reads only the persisted shared projection; no guest fallback fetch.

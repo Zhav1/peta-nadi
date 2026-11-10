@@ -10,17 +10,18 @@ import json
 
 from app.adapters.base import BaseAdapter
 from app.services.redis_client import STREAM_TOMTOM, get_redis, dedup_seen_or_mark
+from app.services.retention import TOMTOM_REFRESH_S
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
 def tomtom_poll_seconds() -> int:
-    """Poll interval for TomTom (default 1800s). Read dynamically so tests can monkeypatch env."""
+    """Poll interval for TomTom (default retention.TOMTOM_REFRESH_S). Read dynamically so tests can monkeypatch env."""
     try:
-        return int(os.getenv("TOMTOM_POLL_SECONDS", "1800") or 1800)
+        return int(os.getenv("TOMTOM_POLL_SECONDS", str(TOMTOM_REFRESH_S)) or TOMTOM_REFRESH_S)
     except (TypeError, ValueError):
-        return 1800
+        return TOMTOM_REFRESH_S
 
 
 def tomtom_incidents_enabled() -> bool:
@@ -227,7 +228,7 @@ def read_cached_flow_items(redis_client=None, max_age_seconds: Optional[int] = N
 class TomTomAdapter(BaseAdapter):
     source_name = "tomtom"
     stream_key = STREAM_TOMTOM
-    poll_interval_seconds = 1800  # Default 30 min; overridden per-instance from TOMTOM_POLL_SECONDS
+    poll_interval_seconds = TOMTOM_REFRESH_S  # Default; overridden per-instance from TOMTOM_POLL_SECONDS
 
     FLOW_URL = "https://api.tomtom.com/traffic/services/4/flowSegmentData/absolute/10/json"
     INCIDENT_URL = "https://api.tomtom.com/traffic/services/5/incidentDetails"
@@ -282,7 +283,14 @@ class TomTomAdapter(BaseAdapter):
     _fetch_cycle: int = 0
     _fetch_cache: Optional[Dict[str, Any]] = None
     _fetch_cache_time: float = 0.0
-    FETCH_CACHE_TTL_SECONDS: float = 3600.0  # 60 minutes cache guard (480 calls/day, ~14,400/month < 20,000 free limit)
+    # In-process duplicate guard. It must never outlive the job cadence: a
+    # 3600 s cache behind a 1800 s cadence turned every second scheduled refresh
+    # into a cache hit that still restamped ``valid_until`` from the new
+    # ``fetched_at`` — fresh-looking sections over hour-old evidence. TTL ==
+    # cadence keeps it a de-duplicator (dashboard on-demand + scheduled cycle
+    # within one window), not a freshness lie. 48 fetches/day x 20 checkpoints
+    # = 960 flow units/day (see tests/test_freshness_cadence_contract.py).
+    FETCH_CACHE_TTL_SECONDS: float = float(TOMTOM_REFRESH_S)
     FLOW_SEGMENT_MONTHLY_MAX: int = 18000
     VECTOR_TILES_MONTHLY_MAX: int = 150000
     INCIDENTS_MONTHLY_MAX: int = 2200
@@ -292,7 +300,7 @@ class TomTomAdapter(BaseAdapter):
         try:
             self.poll_interval_seconds = tomtom_poll_seconds()
         except Exception:
-            self.poll_interval_seconds = 1800
+            self.poll_interval_seconds = TOMTOM_REFRESH_S
 
     @classmethod
     def shared_latch_enabled(cls) -> bool:
@@ -347,7 +355,7 @@ class TomTomAdapter(BaseAdapter):
 
     @classmethod
     def reset_fetch_cache(cls):
-        """Clear the 10-minute fetch cache (tests)."""
+        """Clear the in-process fetch cache (tests)."""
         cls._fetch_cache = None
         cls._fetch_cache_time = 0.0
 
@@ -597,7 +605,8 @@ class TomTomAdapter(BaseAdapter):
         """
         Fetch segment flow data for all checkpoints plus traffic incidents across
         corridor-anchored tiles (each <= 10,000 km2), deduplicated by incident ID.
-        Guarded by a 10-minute cache to stay well under free tier limits.
+        Guarded by an in-process cache no longer than one job cadence
+        (retention.TOMTOM_REFRESH_S) so a scheduled refresh is never a cache hit.
 
 
         Flow is fetched every cycle. Incident tiles are fetched only when

@@ -5,6 +5,7 @@ Single source of truth for every freshness number the backend publishes:
 * **weather** (BMKG + Open-Meteo fusion): 10-minute refresh, 6 h validity,
   24 h stale ceiling (last-known-good may be served up to 24 h).
 * **FIRMS** (Titik Panas): 1 h refresh, 6 h validity, 6 h stale ceiling.
+* **traffic** (TomTom flow + incidents): 30-minute refresh, validity == cadence.
 
 The router imports these names; nothing else may declare its own copy. Changing
 a number here changes the cache TTL, the stale threshold and the human-readable
@@ -21,6 +22,16 @@ WEATHER_STALE_CEILING_HOURS = 24  # stop serving last-known-good after 24 h
 FIRMS_REFRESH_S = 3600  # 1 h poll window
 FIRMS_VALIDITY_HOURS = 6  # detection window validity
 FIRMS_STALE_CEILING_HOURS = 6  # 6 h stale ceiling
+
+# --- Traffic (TomTom flow segments + incidents) ----------------------------
+# Cadence and published validity are deliberately the SAME number: a 600 s TTL
+# behind a 3600 s cadence made ``traffic_flow_segments`` / ``corridor_context``
+# honestly "stale" for 50 of every 60 minutes by construction (production
+# 2026-11-10: observed_at 06:47:32, valid_until 06:57:32, expired by 2515 s).
+# With TTL == cadence a section can only go stale when a refresh is actually
+# missed, never because the arithmetic was wrong.
+TOMTOM_REFRESH_S = 1800  # 30-min poll window (was 3600)
+TOMTOM_VALIDITY_S = 1800  # published validity window, == TOMTOM_REFRESH_S (was 600)
 
 
 def human_age_id(seconds: Optional[float]) -> str:
@@ -54,5 +65,7 @@ __all__ = [
     "FIRMS_REFRESH_S",
     "FIRMS_VALIDITY_HOURS",
     "FIRMS_STALE_CEILING_HOURS",
+    "TOMTOM_REFRESH_S",
+    "TOMTOM_VALIDITY_S",
     "human_age_id",
 ]

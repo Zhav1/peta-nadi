@@ -19,6 +19,7 @@ from app.services.refresh_coordinator import (
     publish_public_snapshot,
     read_public_snapshot_sections,
 )
+from app.services.retention import TOMTOM_VALIDITY_S
 
 logger = logging.getLogger(__name__)
 
@@ -148,7 +149,7 @@ _LATEST_SNAPSHOT_VERSION: int = 1
 SOURCE_HEALTH_CONFIG: dict[str, dict[str, Any]] = {
     "bmkg_cap": {"ttl": 600, "section": "official_warnings"},
     "petabencana": {"ttl": 900, "section": "disaster_reports"},
-    "tomtom": {"ttl": 3600, "section": "traffic_flow_segments"},
+    "tomtom": {"ttl": TOMTOM_VALIDITY_S, "section": "traffic_flow_segments"},
     "firms": {"ttl": 10800, "section": "fire_hotspots"},
     "aisstream": {"ttl": 120, "section": "fleet"},
     "adsb": {"ttl": 120, "section": "fleet"},
