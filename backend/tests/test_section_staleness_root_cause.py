@@ -224,6 +224,36 @@ def test_partial_tomtom_section_is_degraded_with_fresh_evidence(isolated_section
     assert _parse(traffic["valid_until"]) > now
 
 
+def test_republishing_the_same_observation_is_not_downgraded_to_stale(isolated_sections):
+    """Between TomTom fetches every tick republishes the same observation.
+
+    A strict ``current_stamp > last_stamp`` compared the durable row with itself
+    and returned it as "stale", so a fresh degraded section flipped to stale on
+    every other tick — the production row read ``stale`` with 790 s of validity
+    left.
+    """
+    now = datetime.now(timezone.utc)
+    record = _partial_traffic_record(fetched_at=now)
+    sections = operational_cache._build_sections({"tomtom": record})
+    current = snapshots._entry_from_source(sections, None, "traffic_flow_segments")
+
+    previous = {
+        "traffic_flow_segments": {
+            "status": "degraded",
+            "data": current["data"],
+            "observed_at": current["observed_at"],
+            "valid_until": current["valid_until"],
+        }
+    }
+
+    merged = snapshots._merge_last_good("traffic_flow_segments", current, previous)
+
+    assert merged["status"] == "degraded"
+    assert merged["observed_at"] == current["observed_at"]
+    assert merged["valid_until"] == current["valid_until"]
+    assert "retaining durable last-good" not in (merged.get("error") or "")
+
+
 def test_phase181_guard_persists_degraded_sections_with_the_same_evidence_rule():
     """The SQL guard must store degraded evidence, or fresh partials never land."""
     sql = (

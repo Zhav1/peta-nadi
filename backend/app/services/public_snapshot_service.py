@@ -652,9 +652,14 @@ def _merge_last_good(section: str, current: dict, previous: dict) -> dict:
     # the durable row. Preferring the durable row here is what froze sections at
     # their last fully-ok timestamp: every tick merged the days-old row back in,
     # restamping the section with its old observed_at/valid_until forever.
+    #
+    # Ties are accepted, exactly like the SQL guard: between two TomTom fetches
+    # every tick republishes the SAME observation, so a strict ``>`` compared the
+    # durable row with itself and returned it as "stale" — flipping a fresh
+    # degraded section to stale on every other tick.
     if current.get("data") is not None:
         current_stamp, last_stamp = _freshness_stamp(current), _freshness_stamp(last)
-        if current_stamp is not None and (last_stamp is None or current_stamp > last_stamp):
+        if current_stamp is not None and (last_stamp is None or current_stamp >= last_stamp):
             return current
     return {
         "status": "stale",
