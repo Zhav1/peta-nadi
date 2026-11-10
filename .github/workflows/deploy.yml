@@ -189,6 +189,14 @@ jobs:
             set -e
             cd '$DEPLOY_DIR'
             test -f .env || { echo 'FATAL: $DEPLOY_DIR/.env missing — see docs/VPS_DEPLOY.md'; exit 1; }
+            # Sync the git checkout so docker-compose.yml, Caddyfile and docs/
+            # changes reach production too — the image only carries app code.
+            # Fast-forward only: never force, never reset. A dirty tree or a
+            # diverged history aborts the deploy instead of shipping a
+            # mismatched checkout. .env is gitignored, so it cannot be clobbered.
+            git fetch --prune origin
+            git checkout main
+            git pull --ff-only origin main
             export IMAGE='$IMAGE' IMAGE_TAG='$NEW_SHA'
             docker compose -f docker-compose.yml pull backend scheduler
             docker compose -f docker-compose.yml up -d --no-deps backend scheduler
