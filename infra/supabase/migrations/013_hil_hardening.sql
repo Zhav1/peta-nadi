@@ -44,23 +44,51 @@ CREATE INDEX IF NOT EXISTS route_approvals_route_id_idx
   ON public.route_approvals (route_id);
 
 -- 2. incidents.incident_id (public/text incident key used by ingestors).
-ALTER TABLE public.incidents
-  ADD COLUMN IF NOT EXISTS incident_id TEXT;
-
--- Backfill from PK so pre-existing rows satisfy by-incident_id reads.
-UPDATE public.incidents
-SET incident_id = id::text
-WHERE incident_id IS NULL;
-
--- Uniqueness for 005/008-style FK references; name-guarded for reruns.
+--
+-- Schema divergence (discovered 2026-11-10 against the live database): a later
+-- design already made incident_id the UUID PRIMARY KEY. On that shape there is
+-- no "id" column to backfill from and uniqueness is already guaranteed, so the
+-- statements below are skipped. Both shapes are handled so this file is safe on
+-- either database instead of failing with `column "id" does not exist`.
 DO $$
+DECLARE
+  v_type TEXT;
 BEGIN
+  SELECT data_type INTO v_type
+    FROM information_schema.columns
+   WHERE table_schema = 'public'
+     AND table_name = 'incidents'
+     AND column_name = 'incident_id';
+
+  IF v_type IS NULL THEN
+    ALTER TABLE public.incidents ADD COLUMN incident_id TEXT;
+    v_type := 'text';
+  END IF;
+
+  IF v_type <> 'text' THEN
+    -- UUID primary-key shape: identity and uniqueness already exist.
+    RETURN;
+  END IF;
+
+  -- Backfill from PK so pre-existing rows satisfy by-incident_id reads.
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_schema = 'public'
+       AND table_name = 'incidents'
+       AND column_name = 'id'
+  ) THEN
+    UPDATE public.incidents
+       SET incident_id = id::text
+     WHERE incident_id IS NULL;
+  END IF;
+
+  -- Uniqueness for 005/008-style FK references; name-guarded for reruns.
   IF NOT EXISTS (
     SELECT 1 FROM pg_constraint WHERE conname = 'incidents_incident_id_key'
   ) THEN
     ALTER TABLE public.incidents ADD CONSTRAINT incidents_incident_id_key UNIQUE (incident_id);
   END IF;
-END $$;
 
-CREATE INDEX IF NOT EXISTS incidents_incident_id_idx
-  ON public.incidents (incident_id);
+  CREATE INDEX IF NOT EXISTS incidents_incident_id_idx
+    ON public.incidents (incident_id);
+END $$;
