@@ -362,12 +362,29 @@ def _curate(value: Any) -> Any:
     return str(value)
 
 
+# Documented read-model validity for DB-backed sections (news poll TTL). A row
+# set is only "current" while its newest observation is inside this window.
+DB_SECTION_VALIDITY_SECONDS = 600
+
+# Newest-first ordering per DB-backed section. Without it PostgREST returns rows
+# in physical order, so ``limit 60`` handed the builder the OLDEST 60 rows: the
+# news section published month-old articles while the table held today's.
+_ROW_ORDER = {
+    "news_articles": "published_at",
+    "incidents": "created_at",
+}
+
+
 def _response_rows(table_name: str, limit: int) -> tuple[list[dict], Optional[str]]:
     """Read persisted public-operational rows; never initiate source refreshes."""
     try:
         from app.db.supabase_client import get_service_client
 
-        result = get_service_client().table(table_name).select("*").limit(limit).execute()
+        query = get_service_client().table(table_name).select("*")
+        order_by = _ROW_ORDER.get(table_name)
+        if order_by:
+            query = query.order(order_by, desc=True)
+        result = query.limit(limit).execute()
         rows = getattr(result, "data", None) or []
         return [row for row in rows if isinstance(row, dict)], None
     except Exception as exc:
@@ -560,18 +577,53 @@ def _normalize_incident_rows(rows: list[dict]) -> list[dict]:
     return normalized
 
 
-def _db_entry(rows: list[dict], error: Optional[str]) -> dict:
+def _db_entry(
+    rows: list[dict],
+    error: Optional[str],
+    *,
+    ttl_seconds: int = DB_SECTION_VALIDITY_SECONDS,
+    now: Optional[datetime] = None,
+) -> dict:
     if error:
         return {"status": "unavailable", "data": None, "error": error[:240]}
     clean_rows = _filter_disruption_db_rows(rows)
-    observed = None
+    # The observation is the NEWEST row we actually hold, not whichever row the
+    # database happened to return last. Iterating and keeping the final stamp
+    # published ``observed_at 2026-10-09`` for a table whose newest article was
+    # from today, while ``valid_until`` was stamped ``now + 10 min`` — a fresh
+    # validity window over month-old evidence.
+    stamps: list[datetime] = []
     for row in clean_rows:
-        observed = _iso(row.get("observed_at") or row.get("published_at") or row.get("updated_at") or row.get("created_at")) or observed
+        normalized = _iso(
+            row.get("observed_at")
+            or row.get("published_at")
+            or row.get("updated_at")
+            or row.get("created_at")
+        )
+        if normalized:
+            try:
+                stamps.append(datetime.fromisoformat(normalized))
+            except ValueError:
+                continue
+    if not stamps:
+        # A successful read that returned no rows is an empty list, not fresh
+        # evidence: publish no stamps rather than inventing "now".
+        return {
+            "status": "ok",
+            "data": _curate(clean_rows),
+            "observed_at": None,
+            "valid_until": None,
+        }
+    observed = max(stamps)
+    # Validity is derived from the same evidence as observed_at, so the section
+    # can only read "ok" while its newest observation is inside the window.
+    valid_until = observed + timedelta(seconds=ttl_seconds)
+    status = "ok" if valid_until > (now or _now()) else "stale"
     return {
-        "status": "ok",
+        "status": status,
         "data": _curate(clean_rows),
-        "observed_at": observed or _now().isoformat(),
-        "valid_until": (_now() + timedelta(minutes=10)).isoformat(),
+        "observed_at": _iso(observed),
+        "valid_until": _iso(valid_until),
     }
 
 
@@ -779,7 +831,11 @@ async def build_public_snapshot() -> dict:
         if name == "incidents":
             current = _db_entry(_normalize_incident_rows(incident_rows), incident_error)
         elif name == "news":
-            current = _db_entry(news_rows, news_error)
+            current = _db_entry(
+                news_rows,
+                news_error,
+                ttl_seconds=SOURCE_HEALTH_CONFIG["news"]["ttl"],
+            )
         elif name == "fleet":
             current = fleet_entry
         elif name == "source_health":

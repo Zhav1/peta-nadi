@@ -158,20 +158,62 @@ def _write_durable(cache_key: str, payload: dict[str, Any], source: str) -> bool
         return False
 
 
-def _read_json(key: str, *, durable: bool = False) -> dict[str, Any] | None:
+# Fields that say WHEN the payload's evidence was observed, most specific first.
+# A raw source record is stamped ``fetched_at``; the composed snapshot is stamped
+# ``computed_at``; both also carry ``observed_at``.
+_STAMP_FIELDS = ("fetched_at", "computed_at", "observed_at", "updated_at")
+
+
+def _payload_stamp(payload: Any) -> datetime | None:
+    """Return the evidence clock of a cached payload, or None when it has none."""
+    if not isinstance(payload, dict):
+        return None
+    for field in _STAMP_FIELDS:
+        parsed = _parse_time(payload.get(field))
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def _read_json(
+    key: str, *, durable: bool = False, freshest: bool = False
+) -> dict[str, Any] | None:
+    """Read a cached payload, optionally resolving Redis against the durable row.
+
+    Each worker has its OWN Redis. Only the worker that wins the job lease writes
+    a fresh source record to its local Redis; every other worker keeps whatever
+    it last saw there. Returning the Redis copy first therefore let a stale local
+    cache shadow a fresher durable record forever: the worker recomposed (and
+    republished) hour-old evidence while the shared table already held the fresh
+    observation. With ``freshest=True`` the two copies are compared on their own
+    evidence clock and the newer one wins; Redis stays the fast path and the
+    durable row is the tie-breaker/fallback.
+    """
+    redis_payload: dict[str, Any] | None = None
     try:
         raw = cache_get(key)
         if raw:
             parsed = json.loads(raw)
             if isinstance(parsed, dict):
-                return parsed
+                redis_payload = parsed
     except Exception as exc:
         logger.debug("Operational cache Redis read failed (%s): %s", key, exc)
-    if durable:
-        record = _read_durable(key)
-        if record is not None:
+    if not durable:
+        return redis_payload
+    record = _read_durable(key)
+    if record is None:
+        return redis_payload
+    if redis_payload is None:
+        return record
+    if freshest:
+        local_stamp, shared_stamp = _payload_stamp(redis_payload), _payload_stamp(record)
+        if (
+            local_stamp is not None
+            and shared_stamp is not None
+            and shared_stamp > local_stamp
+        ):
             return record
-    return None
+    return redis_payload
 
 
 def _write_json(key: str, payload: dict[str, Any], source: str, ttl: int) -> None:
@@ -183,7 +225,7 @@ def _write_json(key: str, payload: dict[str, Any], source: str, ttl: int) -> Non
 
 
 def _read_source_record(source: str) -> dict[str, Any] | None:
-    return _read_json(f"{RAW_KEY_PREFIX}{source}", durable=True)
+    return _read_json(f"{RAW_KEY_PREFIX}{source}", durable=True, freshest=True)
 
 
 def read_cached_source_observations() -> dict[str, dict[str, Any]]:
@@ -198,7 +240,7 @@ def read_public_operational_cache() -> dict[str, Any]:
     provider request or initiates a refresh.
     """
     now = _now()
-    cached = _read_json(CACHE_KEY, durable=True)
+    cached = _read_json(CACHE_KEY, durable=True, freshest=True)
     sections = cached.get("sections") if isinstance(cached, dict) else None
     output: dict[str, Any] = {}
     for name in SECTION_NAMES:
