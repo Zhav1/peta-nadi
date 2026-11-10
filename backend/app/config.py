@@ -147,17 +147,20 @@ class Settings(BaseSettings):
     #   open_meteo  58 grid locations x 4 (21600s) = 232 -> 500
     #   firms       <=5/attempt x 8 (10800s) = 40 -> 80
     #   tomtom      20 flow checkpoints x 48 (1800s) = 960, plus 20 incident
-    #               tiles x 8 (every 6th cycle) = 160 -> 1120 measured need;
-    #               cap 1200 (1.07x). The 1800 s cadence is what makes the
-    #               published TTL honest, so the cap is sized to it, not to a
-    #               hypothetical worst case.
+    #               tiles x 8 (every 6th cycle) = 160 -> 1120 measured/day at
+    #               the 1800 s cadence. cap 1200 was only 1.07x that, so two
+    #               retry-heavy cycles could deny the source until UTC
+    #               midnight; cap 1500 gives ~1.34x headroom and still sits
+    #               well under TomTom's 2500/day free tier. The 1800 s cadence
+    #               is what makes the published TTL honest, so the cap is
+    #               sized to it, not to a hypothetical worst case.
     #   petabencana >=1/attempt x 96 (900s) = 96 -> 250
     #   bnpb        >=1/attempt x 24 (3600s) = 24 -> 96
     #   news        1/attempt x 288 (300s) = 288 -> 700
     #   pihps       1/attempt x 1 (86400s) -> 4 (manual reruns)
     #   social      1/attempt x 24 (3600s) = 24 -> 72
     provider_budget_daily_limits: str = (
-        "bmkg=1200,bmkg_cap=900,open_meteo=500,firms=80,tomtom=1200,"
+        "bmkg=1200,bmkg_cap=900,open_meteo=500,firms=80,tomtom=1500,"
         "petabencana=250,bnpb=96,news=700,pihps=4,social=72"
     )
     # Public API reads only the persisted shared projection; no guest fallback fetch.
