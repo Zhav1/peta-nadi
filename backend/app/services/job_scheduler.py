@@ -15,9 +15,15 @@ Contract
   the durable ``last_run_at``: it advances **only** after a successful cycle, so
   a crash or a failure leaves the job due.
 * Due selection is *fair*: jobs are ordered by ``age / cadence`` (most overdue
-  first), never-run jobs first. With ``TICK_MAX_JOBS=2`` every 5 minutes, a
+  first), never-run jobs first. With ``TICK_MAX_JOBS=6`` every 5 minutes, a
   registry-order queue would let the two 5-minute jobs consume the entire budget
   and starve the daily ones; the overdue ratio cannot starve anything.
+* Capacity is a measured invariant, not a guess: the registry demands
+  ``sum(3600 / cadence)`` = 43.5 job slots/hour and one tick per
+  ``TICK_PERIOD_SECONDS`` supplies ``tick_max_jobs`` slots, so 6/tick = 72/hour
+  (1.65x). ``tests/test_internal_tick.py`` asserts that coverage, that no
+  cadence is shorter than the tick period, and that ``tick_budget_seconds``
+  stays inside ``LOCK_TTL_SECONDS``.
 * One tick at a time: :mod:`app.routers.internal_tick` holds a process-local
   ``asyncio.Lock``; ``acquire_scheduler_job`` holds a per-job ``locked_until``
   across processes (and across restarts).
@@ -44,11 +50,17 @@ logger = logging.getLogger(__name__)
 
 SCHEDULER_TABLE = "scheduler_jobs"
 
-# A job lock must outlive the per-tick budget (default 120s) plus the slowest
+# A job lock must outlive the per-tick budget (default 200s) plus the slowest
 # single job, otherwise a slow cycle could be executed twice by the next tick.
 LOCK_TTL_SECONDS = 240
 DEFAULT_RETRY_BACKOFF_SECONDS = 120
 MAX_ERROR_CHARS = 500
+
+# How often the scheduler sidecar POSTs /internal/tick (docker-compose.yml:
+# `sleep 300` after every 202). This is the hard floor on any cadence below:
+# a 60 s cadence cannot be honoured by a 300 s tick, so declaring one only
+# inflates the demand the capacity test is supposed to check.
+TICK_PERIOD_SECONDS = 300
 
 
 class SchedulerStateUnavailable(RuntimeError):
@@ -94,7 +106,13 @@ class JobSpecsDict(dict):
 JOB_SPECS: dict[str, JobSpec] = JobSpecsDict({
     spec.name: spec
     for spec in (
-        _spec("fleet", 60, "_run_fleet_cycle"),
+        # fleet used to declare 60 s. Nothing can honour that: the only driver is
+        # the 300 s tick, and the job's own cache TTL is 300 s (see
+        # _run_fleet_cycle), so it already ran once per tick. Declaring 60 s only
+        # made it permanently "overdue" (age/cadence >= 1 at every tick), which
+        # outranked bmkg in due selection and inflated the demand the capacity
+        # test checks. Cadence below the tick period is a lie, not a target.
+        _spec("fleet", TICK_PERIOD_SECONDS, "_run_fleet_cycle"),
         _spec("news", 300, "_run_news_cycle"),
         _spec("bmkg", 300, "_run_bmkg_cycle"),
         _spec("tomtom", 3600, "_run_tomtom_cycle"),

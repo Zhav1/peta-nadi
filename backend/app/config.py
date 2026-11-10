@@ -104,8 +104,24 @@ class Settings(BaseSettings):
     internal_tick_token: str = ""
     # Per-tick admission: at most this many jobs and this many seconds of work.
     # Remaining due jobs are deferred to the next tick (never dropped).
-    tick_max_jobs: int = 3
-    tick_budget_seconds: int = 180
+    #
+    # Capacity is sized from the registry, measured 2026-11-10:
+    #   demand  = sum(3600 / cadence) over job_scheduler.JOB_SPECS = 43.5 slots/h
+    #             (fleet/news/bmkg 12/h each, petabencana 4/h, tomtom/bnpb/social
+    #             1/h each, firms 0.33/h, open_meteo 0.17/h, pihps 0.04/h)
+    #   supply  = 12 ticks/h (scheduler sidecar sleeps 300 s) x tick_max_jobs
+    # 3/tick gave 36 slots/h against 43.5 -> 83% coverage, so bmkg (300 s cadence
+    # AND 300 s TTL) was routinely past its window when its slot came up and
+    # weather_summary published stale even though the job logged `ok`.
+    # 6/tick = 72 slots/h = 1.65x demand. The budget stays below the 240 s job
+    # lease (LOCK_TTL_SECONDS) so a slow job cannot be executed twice, and the
+    # tick still answers 202 before any job runs. tests/test_internal_tick.py
+    # asserts both invariants so this cannot silently regress.
+    tick_max_jobs: int = 6
+    # Measured p50 job cost: news 97 s, bnpb 60 s, tomtom 22 s, bmkg 21 s,
+    # firms 11 s, petabencana 5 s, fleet 3 s. 200 s fits the slowest single job
+    # (news, max 162 s) when it starts first, and stays under the 240 s lease.
+    tick_budget_seconds: int = 200
     # These are application-side daily reservation caps, not upstream quota claims.
     #
     # Sizing rule: 2-3x the SCHEDULED need (attempts/day = 86400 / cadence from

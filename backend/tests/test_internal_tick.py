@@ -427,6 +427,44 @@ async def test_state_unavailable_skips_the_tick_without_raising(monkeypatch):
     assert result["executed"] == []
 
 
+# ---------------------------------------------------------------------------
+# 3b. Capacity vs registry demand
+# ---------------------------------------------------------------------------
+
+def test_configured_tick_capacity_covers_registry_demand():
+    """The tick must be able to serve the registry it declares.
+
+    Measured on the VPS 2026-11-10: 12 ticks/hour against a registry demanding
+    43.5 slots/hour. At ``tick_max_jobs=3`` that was 36 slots/hour (83%), so
+    bmkg — 300 s cadence *and* 300 s TTL — was usually past its window when its
+    slot came up, and weather_summary published stale while the job logged `ok`.
+    """
+    settings = job_scheduler.get_settings()
+    ticks_per_hour = 3600 / job_scheduler.TICK_PERIOD_SECONDS
+    demand_per_hour = sum(
+        3600 / spec.cadence_seconds for spec in job_scheduler.JOB_SPECS.values()
+    )
+    capacity_per_hour = settings.tick_max_jobs * ticks_per_hour
+
+    # 25% headroom: a deferred job (locked / retry_after / budget) must not push
+    # the next run of a 300 s job past its own TTL.
+    assert capacity_per_hour >= demand_per_hour * 1.25, (
+        f"tick capacity {capacity_per_hour:.1f} slots/h cannot serve registry "
+        f"demand {demand_per_hour:.1f} slots/h with headroom"
+    )
+    assert settings.tick_max_jobs >= demand_per_hour / ticks_per_hour
+
+    # No cadence may be shorter than the tick period: the tick is the only
+    # driver in production, so a shorter cadence is unsatisfiable by design.
+    shortest = min(spec.cadence_seconds for spec in job_scheduler.JOB_SPECS.values())
+    assert shortest >= job_scheduler.TICK_PERIOD_SECONDS
+
+    # A job lease must outlive the tick budget, or a slow job could be executed
+    # twice, and the budget must leave room for publication + fenced release.
+    assert settings.tick_budget_seconds <= 200
+    assert settings.tick_budget_seconds < job_scheduler.LOCK_TTL_SECONDS
+
+
 def test_registry_cadences_match_the_m8_contract():
     assert {name: spec.cadence_seconds for name, spec in job_scheduler.JOB_SPECS.items()} == {
         "news": 300,
