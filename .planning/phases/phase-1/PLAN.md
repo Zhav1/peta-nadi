@@ -424,8 +424,8 @@ pytest-asyncio==0.23.7    # Async test support
 
 Create actual `backend/.env` with real credentials (not in git):
 ```
-TOMTOM_API_KEY=WTTzRq2Ta8ePqH5OAjOz5mSL10TaAywr
-AISSTREAM_API_KEY=07caf41281cc2f2ac75591927858dbe6794a27ea
+TOMTOM_API_KEY=your_tomtom_api_key_here
+AISSTREAM_API_KEY=your_aisstream_api_key_here
 # NASA FIRMS MAP_KEY — get from https://firms.modaps.eosdis.nasa.gov/api/
 NASA_FIRMS_MAP_KEY=
 ```

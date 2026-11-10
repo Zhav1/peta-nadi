@@ -113,7 +113,7 @@ SUPABASE_SERVICE_ROLE_KEY="your-supabase-key"
 
 #### B. Frontend Environment (`frontend/.env.local`)
 ```ini
-NEXT_PUBLIC_MAPBOX_TOKEN=pk.eyJ1IjoicWhhbmFraW56aGF2aSIsImEiOiJjbXI4cG8zN2wxazE5MnhweGwweHY0d2F2In0.rdp0gPLafjh-8X3IZttVog
+NEXT_PUBLIC_MAPBOX_TOKEN=pk.your_mapbox_public_token_here
 NEXT_PUBLIC_SUPABASE_URL=https://ulpmmacsdkohwkmyhlwj.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
 NEXT_PUBLIC_API_URL=http://localhost:8000
